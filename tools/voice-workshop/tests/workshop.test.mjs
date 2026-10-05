@@ -111,6 +111,83 @@ test('starting tests validates the generator first and repeated requests do not 
   await workshop.action('generate', { voiceId: voice.id, tests: true });
   assert.equal(workshop.state.jobs.length, 4); assert.equal(workshop.state.jobs.at(-1).sentenceId, 'test_neutral');
 });
+
+test('uploaded reference text is required, persisted and frozen into Ultimate jobs', async t => {
+  const root = await temp(t); const workshop = new Workshop(root, {}); await workshop.initialize();
+  await workshop.action('voice', { name: 'Dateistimme', consentGenerate: true });
+  const voice = workshop.state.voices[0];
+  const upload = { voiceId: voice.id, source: 'upload', audio: tone(10).toString('base64'), start: 1, end: 9 };
+  for (const transcript of [undefined, '', '   ', 'x'.repeat(5001)]) {
+    await assert.rejects(workshop.action('reference', { ...upload, transcript }), /gesprochenen Text/);
+  }
+  await assert.rejects(workshop.action('reference', { ...upload, source: 'unknown', transcript: 'Hallo.' }), /Referenzquelle/);
+  assert.equal(voice.referenceRevision, 0);
+  const transcript = 'Hier spricht meine eigene Referenz. Grüße an die nächste Runde!';
+  await workshop.action('reference', { ...upload, transcript: `  ${transcript}  ` });
+  assert.equal(voice.referenceSource, 'upload'); assert.equal(voice.referenceTextId, null);
+  assert.equal(voice.transcript, transcript); assert.equal(voice.referenceInfo.duration, 8);
+  await workshop.action('generate', { voiceId: voice.id, testId: 'test_neutral' });
+  const job = workshop.state.jobs.at(-1); assert.equal(job.referenceTranscript, transcript);
+  await workshop.action('cancel');
+  await workshop.action('reference', { ...upload, transcript: 'Ein neuer exakter Wortlaut.' });
+  assert.equal(workshop.stale(job), true); assert.equal(job.referenceTranscript, transcript);
+  const restored = new Workshop(root, {}); await restored.initialize();
+  assert.equal(restored.state.voices[0].transcript, voice.transcript);
+  assert.equal(restored.state.voices[0].referenceSource, 'upload');
+});
+
+test('profile catalogs isolate edits, inherit defaults and never revive obsolete takes after reset', async t => {
+  const root = await temp(t); const workshop = new Workshop(root, { generate: async () => tone() }); await workshop.initialize();
+  for (const name of ['Alice', 'Bob']) await workshop.action('voice', { name, consentGenerate: true, consentLan: true });
+  const [alice, bob] = workshop.state.voices;
+  for (const voice of [alice, bob]) Object.assign(voice, { reference: 'fixture.wav', transcript: 'Referenz.', referenceRevision: 1 });
+  const [sentence, second] = workshop.state.catalog;
+  workshop.state.catalog.forEach(s => { s.active = s.id === sentence.id || s.id === second.id; });
+  const queue = async voice => {
+    await workshop.action('generate', { voiceId: voice.id, sentenceId: sentence.id });
+    const job = workshop.state.jobs.at(-1); await workshop.action('cancel'); return job;
+  };
+  const originalAlice = await queue(alice); const originalBob = await queue(bob);
+  // Historical jobs have no profile revision and remain valid until their profile changes.
+  delete originalAlice.sentenceProfileRevision; delete originalBob.sentenceProfileRevision;
+  assert.equal(workshop.stale(originalAlice), false);
+  const custom = { ...sentence, voiceId: alice.id, text: 'Alices eigener Spruch.', style: 'Fröhlich', cloningMode: 'controllable' };
+  await workshop.action('sentence', custom);
+  assert.equal(workshop.stale(originalAlice), true); assert.equal(workshop.stale(originalBob), false);
+  assert.equal(originalAlice.text, sentence.text, 'Queued input remains frozen');
+  const customJob = await queue(alice);
+  assert.equal(customJob.text, custom.text); assert.equal(customJob.style, custom.style);
+  await workshop.action('sentence', custom);
+  assert.equal(workshop.stale(customJob), false, 'Saving identical fields must not invalidate audio');
+  await workshop.action('sentence', { ...sentence, text: 'Neuer Standardtext.' });
+  assert.equal(workshop.stale(customJob), false); assert.equal(workshop.stale(originalBob), true);
+  assert.equal(workshop.view().voices[0].catalog[0].text, custom.text);
+  assert.equal(workshop.view().voices[1].catalog[0].text, 'Neuer Standardtext.');
+  await workshop.action('sentence-reset', { voiceId: alice.id, id: sentence.id });
+  assert.equal(workshop.stale(customJob), true);
+  assert.equal(workshop.view().voices[0].catalog[0].customized, false);
+  const resetJob = await queue(alice);
+  await workshop.action('sentence', custom);
+  assert.equal(workshop.stale(customJob), true, 'Recreating an override cannot revive its earlier takes');
+  await workshop.action('sentence-reset', { voiceId: alice.id, id: sentence.id });
+  assert.equal(workshop.stale(resetJob), true, 'Resetting again cannot revive earlier inherited takes');
+  await workshop.action('sentence', custom);
+  await workshop.action('sentence', { ...second, voiceId: alice.id, active: false });
+  await workshop.action('generate', { voiceId: alice.id, lan: true });
+  const queued = workshop.state.jobs.filter(j => j.status === 'waiting');
+  assert.equal(queued.length, 1); assert.equal(queued[0].text, custom.text);
+  workshop.paused = false; await workshop.pump();
+  assert.equal(workshop.releaseSummary(alice.id, true).jobs[0].text, custom.text);
+  await workshop.action('lan-release', { voiceId: alice.id });
+  const bundle = await workshop.bundle([workshop.state.packages.at(-1).checksum]);
+  assert.equal(bundle.packages[0].manifest.clips.length, 1);
+  const restored = new Workshop(root, {}); await restored.initialize();
+  assert.equal(restored.view().voices[0].catalog[0].text, custom.text);
+  assert.equal(restored.view().voices[1].catalog[0].text, 'Neuer Standardtext.');
+  assert.equal(restored.view().voices[1].catalog[1].active, true);
+  assert.equal(restored.stale(restored.job(customJob.id)), true);
+  assert.equal(restored.releaseSummary(alice.id, true).jobs.length, 1);
+});
 test('LAN production skips listening gates and exports current selected takes without inventing hearing decisions', async t => {
   const root = await temp(t);
   const gameVoiceRoot = path.join(root, 'game-voices');

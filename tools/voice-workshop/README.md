@@ -46,17 +46,25 @@ im privaten, ignorierten Arbeitsbereich und wird nicht als Paket exportiert.
 ## Ablauf und Cloning-Modi
 
 Die Oberfläche bietet einen direkten LAN-Ablauf: **Referenz → Produktion → ins Spiel übernehmen**.
-Technische Werkstattaktionen liegen unter „Werkstatt verwalten“; Stimmproben,
-Einzelbearbeitung, Katalog und frühere Pakete sind optional aufklappbar.
+„Stimmprofile“ enthält Aufnahme und Upload; „Texte & Voice-Lines“ zeigt Texte und
+Audioplayer gemeinsam, nach Spielanlass gruppiert. Technische Werkstattaktionen
+liegen unter „Werkstatt verwalten“; Darbietung, Audioschnitt, Stimmproben und frühere
+Pakete sind aufklappbar.
 
 1. Anzeigenamen und einmal die gemeinsame Zustimmung für Generierung und Nutzung
    in der LAN-Runde speichern. Öffentliche Weitergabe ist eine getrennte optionale
    Profileinstellung; bestehende Zustimmungen werden nicht automatisch erweitert.
-2. Den **festen Vorlesetext vollständig und wortgetreu** aufnehmen oder eine Aufnahme
-   desselben Texts importieren. Der Text wird automatisch als Transkript gespeichert.
+2. Standardmäßig den **festen Vorlesetext vollständig und wortgetreu** aufnehmen oder
+   eine Aufnahme desselben Texts importieren. Der Text wird automatisch als Transkript
+   gespeichert. Alternativ **Eigene Datei + Text** wählen, eine Referenzdatei hochladen
+   und den exakten gesprochenen Text des Ausschnitts eingeben. Beide Quellen behalten
+   beim Umschalten ihre eigenen ungespeicherten Audioentwürfe.
    Start und Ende in der Wellenform ziehen, optional anhören und mit **Referenz
    speichern & weiter** direkt zur Produktion wechseln. Nur Pausen entfernen.
-3. **Alle LAN-Sprüche erzeugen** startet den Katalog ohne verpflichtende Stimmtests
+3. Unter **Texte je Stimmprofil** eine Stimme wählen und die Texte bei Bedarf direkt
+   anpassen. **Standardkatalog** bearbeitet die Vorlage für alle unveränderten
+   Profiltexte. **Standard wiederherstellen** entfernt die Anpassung eines Satzes.
+   **Alle Voice-Lines erzeugen** startet den Profilkatalog ohne verpflichtende Stimmtests
    oder Hörfreigaben. Fertige aktuelle Sprüche werden automatisch fürs Paket
    ausgewählt. Ein erneuter Start erzeugt keine doppelten fertigen/wartenden Takes;
    bewusst weggelassene Sprüche bleiben weggelassen. Fehlgeschlagene Aufträge können
@@ -72,9 +80,13 @@ Einzelbearbeitung, Katalog und frühere Pakete sind optional aufklappbar.
    Runden behalten ihre Zuordnung bis zum Rundenwechsel. Bei einer neuen Paketversion
    die gewünschte Stimme erneut auswählen; Prüfsummen werden nicht still ersetzt.
 
-Anhören ist optional und blockiert die Übernahme nicht. Unter „Sprüche anhören oder
-ändern“ lassen sich einzelne Sprüche weglassen, wieder aufnehmen, neu erzeugen oder
-schneiden. Die Auswahl ist keine behauptete Hörprüfung: Der LAN-Export setzt keine
+Anhören ist optional und blockiert die Übernahme nicht. Direkt neben jedem Text
+stehen der Audioplayer, der Paketstatus und die Einzelgenerierung. Darunter lassen
+sich Sprüche aus dem Paket nehmen oder schneiden. Veraltete Aufnahmen bleiben mit
+ihrem ursprünglichen Text anhörbar, kommen aber nicht ins neue Paket. Textentwürfe
+bleiben beim Profilwechsel und bei Statusaktualisierungen erhalten; **Speichern &
+erzeugen** speichert vor der Einzelgenerierung, die Sammelgenerierung speichert alle
+offenen Texte des gewählten Profils. Die Auswahl ist keine behauptete Hörprüfung: Der LAN-Export setzt keine
 Hörentscheidungen auf „angenommen“. Die strengere bestehende Review-API bleibt für
 explizite Hörentscheidungen verfügbar. Stimmproben sind separat und kommen nie ins
 Spielpaket; überholte und fehlgeschlagene Takes werden ebenfalls nicht exportiert.
@@ -89,7 +101,11 @@ Emotionale Sprüche nutzen **Controllable Cloning** mit separater Darbietungsvor
 Beide Modi übergeben den Zieltext unverändert. Änderungen am Katalog und einzelne
 Neugenerierungen sind optional; eine Stilvorgabe garantiert keine Modellqualität.
 
-Text-, Modus- und Darbietungsänderungen erhöhen die Satzrevision. Neue oder erneut
+Text-, Modus- und Darbietungsänderungen erhöhen die Satzrevision im jeweiligen
+Katalog. Profilanpassungen bleiben von Änderungen am Standard unabhängig; geerbte
+Sätze übernehmen diese Änderungen. Zurücksetzen auf den Standard entwertet ältere
+Profil-Takes ebenfalls. Bestehende Werkstätten behalten ihren bisherigen Katalog
+als Standard und ihre bisherigen Aufnahmen. Neue oder erneut
 geschnittene Referenzen erhöhen die Referenzrevision. Betroffene Entwürfe sind
 überholt und gelangen nicht in neue Freigaben. Bereits freigegebene Pakete bleiben
 unverändert. Jeder Auftrag speichert Modus, Revisionen, Seed und Generatornachweis
@@ -99,7 +115,9 @@ Migration des Katalogs entwertet sie für neue Freigaben.
 Der feste Text liegt versioniert in `reference-text.json`; Oberfläche und Backend
 verwenden dieselbe Quelle. Ein alter Browserstand kann keinen abweichenden Text
 unbemerkt hinterlegen. Vorhandene ältere Referenzen behalten ihre bisherigen
-Transkripte; für den einheitlichen Aufnahmeablauf müssen sie neu aufgenommen werden.
+Transkripte und lassen sich als eigene Datei mit Text erneut bearbeiten. Eigene
+Referenztexte werden zusammen mit der Audiodatei gespeichert und bei Ultimate
+Cloning in den Auftrag eingefroren.
 Die Wellenform prüft keine gesprochenen Wörter automatisch: bei Versprechern neu
 aufnehmen und beim Schneiden den ganzen Text erhalten.
 

@@ -54,11 +54,17 @@ export class Workshop {
   voice(id) { return requireValue(this.state.voices.find(v => v.id === id), 'Stimme nicht gefunden.'); }
   job(id) { return requireValue(this.state.jobs.find(j => j.id === id), 'Take nicht gefunden.'); }
   file(name) { requireValue(/^[a-zA-Z0-9_.-]+$/.test(name), 'Ungültiger Medienpfad.'); return path.join(this.root, 'media', name); }
-  stale(job) {
-    const voice = this.voice(job.voiceId); const sentence = [...this.state.catalog, ...TESTS].find(s => s.id === job.sentenceId);
-    return !sentence || voice.referenceRevision !== job.referenceRevision || sentence.revision !== job.sentenceRevision;
+  catalog(voice) {
+    return this.state.catalog.map(sentence => ({ ...sentence, ...voice.sentences?.[sentence.id],
+      customized: !!voice.sentences?.[sentence.id] }));
   }
-  view() { return { ...this.state, paused: this.paused, jobs: this.state.jobs.map(j => ({ ...j, stale: this.stale(j) })) }; }
+  stale(job) {
+    const voice = this.voice(job.voiceId); const sentence = (job.test ? TESTS : this.catalog(voice)).find(s => s.id === job.sentenceId);
+    return !sentence || voice.referenceRevision !== job.referenceRevision || sentence.revision !== job.sentenceRevision
+      || (!job.test && (job.sentenceProfileRevision ?? 0) !== (voice.sentenceRevisions?.[job.sentenceId] ?? 0));
+  }
+  view() { return { ...this.state, voices: this.state.voices.map(v => ({ ...v, catalog: this.catalog(v) })),
+    paused: this.paused, jobs: this.state.jobs.map(j => ({ ...j, stale: this.stale(j) })) }; }
   async action(action, data = {}) {
     switch (action) {
       case 'voice': {
@@ -74,12 +80,17 @@ export class Workshop {
         const voice = this.voice(data.voiceId);
         requireValue(!this.state.jobs.some(j => j.voiceId === voice.id && ACTIVE.includes(j.status)), 'Zuerst laufende Produktion abschließen oder abbrechen.');
         requireValue(typeof data.audio === 'string' && data.audio.length < 40 * 1024 * 1024, 'Referenzdatei zu groß.');
-        requireValue(data.referenceTextId === REFERENCE_TEXT.id, 'Vorlesetext hat sich geändert. Werkstatt neu laden und den vorgegebenen Text aufnehmen.');
+        const source = data.source ?? 'script';
+        requireValue(['script', 'upload'].includes(source), 'Unbekannte Referenzquelle.');
+        if (source === 'script') requireValue(data.referenceTextId === REFERENCE_TEXT.id, 'Vorlesetext hat sich geändert. Werkstatt neu laden und den vorgegebenen Text aufnehmen.');
+        else requireValue(typeof data.transcript === 'string' && data.transcript.trim() && data.transcript.length <= 5000,
+          'Gib den gesprochenen Text der Referenzdatei ein (maximal 5000 Zeichen).');
+        const transcript = source === 'script' ? REFERENCE_TEXT.text : data.transcript.trim();
         const revision = voice.referenceRevision + 1;
         const name = `${voice.id}-reference-${revision}-${randomUUID()}.wav`;
         const info = await processAudio(Buffer.from(data.audio, 'base64'), this.file(name), { reference: true, start: data.start ?? 0, end: data.end ?? null });
         Object.assign(voice, { reference: name, referenceRevision: revision, referenceInfo: info,
-          referenceTextId: REFERENCE_TEXT.id, transcript: REFERENCE_TEXT.text, testedRevision: 0 });
+          referenceSource: source, referenceTextId: source === 'script' ? REFERENCE_TEXT.id : null, transcript, testedRevision: 0 });
         break;
       }
       case 'delete-reference': {
@@ -91,16 +102,35 @@ export class Workshop {
         }
         const { readdir } = await import('node:fs/promises');
         for (const name of await readdir(path.join(this.root, 'media'))) if (name.startsWith(`${voice.id}-reference-`) && name.endsWith('.wav')) await unlink(this.file(name));
-        voice.reference = null; voice.transcript = ''; voice.referenceTextId = null; voice.referenceRevision++; voice.consentGenerate = false; voice.testedRevision = 0;
+        voice.reference = null; voice.transcript = ''; voice.referenceTextId = null; voice.referenceSource = null; voice.referenceRevision++; voice.consentGenerate = false; voice.testedRevision = 0;
         break;
       }
       case 'sentence': {
-        const sentence = requireValue(this.state.catalog.find(s => s.id === data.id), 'Satz fehlt.');
+        const voice = data.voiceId ? this.voice(data.voiceId) : null;
+        const sentence = requireValue((voice ? this.catalog(voice) : this.state.catalog).find(s => s.id === data.id), 'Satz fehlt.');
         const cloningMode = data.cloningMode ?? sentence.cloningMode;
         requireValue(['ultimate', 'controllable'].includes(cloningMode), 'Unbekannter Cloning-Modus.');
         const style = cloningMode === 'controllable' ? shortText(data.style) : typeof data.style === 'string' ? data.style.trim().slice(0, 300) : '';
-        Object.assign(sentence, { text: shortText(data.text), style, cloningMode, active: data.active === true, revision: sentence.revision + 1 });
-        this.state.catalogVersion++;
+        const fields = { text: shortText(data.text), style, cloningMode, active: data.active === true };
+        if (Object.entries(fields).every(([key, value]) => sentence[key] === value)) break;
+        if (voice) {
+          voice.sentenceRevisions ??= {}; voice.sentences ??= {};
+          voice.sentenceRevisions[sentence.id] = (voice.sentenceRevisions[sentence.id] ?? 0) + 1;
+          voice.sentences[sentence.id] = { ...fields, revision: voice.sentenceRevisions[sentence.id] };
+        } else {
+          Object.assign(sentence, fields, { revision: sentence.revision + 1 });
+          this.state.catalogVersion++;
+        }
+        break;
+      }
+      case 'sentence-reset': {
+        const voice = this.voice(data.voiceId);
+        requireValue(this.state.catalog.some(s => s.id === data.id), 'Satz fehlt.');
+        if (voice.sentences?.[data.id]) {
+          delete voice.sentences[data.id];
+          // Keep the profile epoch even while inheriting: resetting must not revive old audio.
+          voice.sentenceRevisions[data.id]++;
+        }
         break;
       }
       case 'generate': {
@@ -111,15 +141,16 @@ export class Workshop {
         if (data.testId) sentences = [requireValue(TESTS.find(s => s.id === data.testId), 'Stimmtest nicht gefunden.')];
         else if (data.tests === true) sentences = TESTS.filter(s => !this.state.jobs.some(j => j.voiceId === voice.id && j.sentenceId === s.id && !this.stale(j)
           && (ACTIVE.includes(j.status) || (j.status === 'review' && j.decision !== 'rejected'))));
-        else if (data.sentenceId) sentences = [requireValue(this.state.catalog.find(s => s.id === data.sentenceId), 'Satz fehlt.')];
+        else if (data.sentenceId) sentences = [requireValue(this.catalog(voice).find(s => s.id === data.sentenceId), 'Satz fehlt.')];
         else {
           requireValue(data.lan === true || voice.testedRevision === voice.referenceRevision, 'Zuerst drei Stimmtests anhören und bestätigen.');
-          sentences = this.state.catalog.filter(s => s.active && !this.state.jobs.some(j => j.voiceId === voice.id && j.sentenceId === s.id && !this.stale(j) && ((j.status === 'review' && (data.lan === true || j.decision !== 'rejected')) || ACTIVE.includes(j.status))));
+          sentences = this.catalog(voice).filter(s => s.active && !this.state.jobs.some(j => j.voiceId === voice.id && j.sentenceId === s.id && !this.stale(j) && ((j.status === 'review' && (data.lan === true || j.decision !== 'rejected')) || ACTIVE.includes(j.status))));
         }
         requireValue(this.state.jobs.filter(j => ACTIVE.includes(j.status)).length + sentences.length <= 80, 'Warteschlange voll.');
-        requireValue(!sentences.some(s => s.cloningMode === 'ultimate') || voice.transcript?.trim(), 'Diese ältere Referenz hat kein Transkript. Unter Stimmen den vorgegebenen Text neu aufnehmen.');
+        requireValue(!sentences.some(s => s.cloningMode === 'ultimate') || voice.transcript?.trim(), 'Referenztext fehlt. Im Stimmprofil eine Referenz mit Text speichern.');
         if (data.start === true) await this.generator.preflight();
         for (const sentence of sentences) this.state.jobs.push({ id: randomUUID(), voiceId: voice.id, sentenceId: sentence.id, sentenceRevision: sentence.revision,
+          sentenceProfileRevision: voice.sentenceRevisions?.[sentence.id] ?? 0,
           referenceRevision: voice.referenceRevision, reference: voice.reference, text: sentence.text, style: sentence.style, event: sentence.event,
           cloningMode: sentence.cloningMode, referenceTranscript: sentence.cloningMode === 'ultimate' ? voice.transcript : '',
           seed: randomInt(0, 2147483647), status: 'waiting', decision: null, test: data.tests === true || !!data.testId, createdAt: Date.now() });
@@ -206,7 +237,7 @@ export class Workshop {
   releaseSummary(voiceId, lan = false) {
     const voice = this.voice(voiceId); const chosen = new Map();
     for (const job of this.state.jobs) if (job.voiceId === voice.id && !job.test && !this.stale(job) && job.status === 'review' && job.audio && (lan || job.decision === 'accepted')
-      && this.state.catalog.some(s => s.id === job.sentenceId && s.active)) chosen.set(job.sentenceId, job);
+      && this.catalog(voice).some(s => s.id === job.sentenceId && s.active)) chosen.set(job.sentenceId, job);
     const jobs = [...chosen.values()].filter(j => !lan || j.decision !== 'rejected');
     return { jobs, missingEvents: VOICE_EVENTS.filter(event => !jobs.some(j => j.event === event)),
       bytes: jobs.reduce((n, j) => n + j.audioInfo.bytes, 0), seconds: jobs.reduce((n, j) => n + j.audioInfo.duration, 0) };

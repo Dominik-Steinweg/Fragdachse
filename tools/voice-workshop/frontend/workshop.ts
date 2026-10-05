@@ -12,6 +12,13 @@ let notice = ''; let noticeError = false;
 let recordingStream: MediaStream | null = null; let recordingContext: AudioContext | null = null;
 let poll: number;
 const referenceDrafts = new Map<string, ReferenceDraft>();
+type ReferenceSource = 'script' | 'upload';
+const referenceInputs = new Map<string, { source: ReferenceSource; transcript: string; filename: string }>();
+interface SentenceFields { text: string; style: string; cloningMode: string; active: boolean }
+const sentenceDrafts = new Map<string, SentenceFields>();
+let catalogScope = 'profile';
+let eventFilter = 'all';
+const eventNames: Record<string, string> = { ready: 'Rundenstart', kill: 'Abschuss', leader: 'In Führung', ultimate: 'Ultimate', damage_burst: 'Unter Beschuss', victory: 'Sieg' };
 let referenceEditor: WaveformEditor | null = null;
 let recordingPending = false;
 let pageActive = true;
@@ -62,6 +69,7 @@ function optionalSection(title: string, id: string) {
 function audio(parent: HTMLElement, file: string, onEnd?: () => void) {
   const a = el('audio'); a.controls = true; a.preload = 'none'; a.src = `/media/${encodeURIComponent(file)}?token=${token}`; a.onended = onEnd ?? null;
   a.onerror = () => message('Die Aufnahme konnte nicht abgespielt werden. Prüfe, ob die Werkstatt läuft, und lade die Seite neu. Falls nur diese Datei betroffen ist, erzeuge den Take erneut.', true);
+  a.onplay = () => document.querySelectorAll('audio').forEach(other => { if (other !== a) other.pause(); });
   parent.append(a); return a;
 }
 const status: Record<string, string> = { waiting: 'Wartend', checking: 'Voraussetzungen prüfen', generating: 'Generierung läuft', processing: 'Audio aufbereiten', review: 'Prüfbereit', failed: 'Fehlgeschlagen', cancelled: 'Abgebrochen', interrupted: 'Unterbrochen' };
@@ -79,12 +87,11 @@ function render() {
   button('Generator prüfen', async () => { const result = await api('generator'); message(result.ok ? 'Generator bereit. Du kannst den Stimmtest starten.' : explainError(new Error(result.message)), !result.ok); }, controls);
   button('Dienst beenden', async () => { await api('shutdown', {}); clearInterval(poll); message('Werkstatt beendet. Zum Weiterarbeiten den Dienst neu starten und diese Seite neu laden.'); }, controls).classList.add('danger'); headerActions.append(settings); header.append(headerActions); app.append(header);
   const hero = el('section', '', 'page-heading'); const heroCopy = el('div');
-  heroCopy.append(el('div', tab === 'Referenzen' ? 'DEIN PERSÖNLICHES VOICE-STUDIO' : 'VON DER STIMME ZUM SPIEL', 'eyebrow'), el('h2', tab === 'Referenzen' ? 'Deine Stimme. Dein Charakter.' : 'Gib deinen Sprüchen Leben.'),
-    el('p', tab === 'Referenzen' ? 'Eine gute Aufnahme ist der Anfang. Den Rest machst du hier.' : 'Teste deine Stimme, produziere deine Sprüche und stelle dein Paket zusammen.'));
+  heroCopy.append(el('div', 'DEIN PERSÖNLICHES VOICE-STUDIO', 'eyebrow'), el('h2', tab === 'Referenzen' ? 'Deine Stimme. Dein Charakter.' : 'Deine Texte. Deine Voice-Lines.'));
   const voiceCount = state.voices.filter((v: any) => !v.archived).length;
   const library = el('div', '', 'library-count'); library.append(el('strong', String(voiceCount)), el('span', `${voiceCount === 1 ? 'Stimme' : 'Stimmen'} in deiner Werkstatt`)); hero.append(heroCopy, library); app.append(hero);
   const nav = el('nav', '', 'main-nav'); nav.setAttribute('aria-label', 'Arbeitsbereich');
-  for (const [index, [name, label, description]] of [['Referenzen', 'Referenzen aufnehmen', 'Name & kurze Aufnahme'], ['Produktion', 'Für die LAN produzieren', 'Sprüche erzeugen & ins Spiel übernehmen']].entries()) {
+  for (const [index, [name, label, description]] of [['Referenzen', 'Stimmprofile', 'Aufnehmen oder Referenz hochladen'], ['Produktion', 'Texte & Voice-Lines', 'Anpassen · anhören · ins Spiel übernehmen']].entries()) {
     const b = button('', () => changeView(() => { tab = name; }), nav); b.append(icon(index === 0 ? 'mic' : 'wave'));
     const copy = el('span', '', 'nav-copy'); copy.append(el('strong', label), el('small', description)); b.append(copy, el('span', `0${index + 1}`, 'nav-index'));
     b.setAttribute('aria-current', String(name === tab));
@@ -100,7 +107,7 @@ function render() {
   const running = state.jobs.find((j: any) => ['checking', 'generating', 'processing'].includes(j.status));
   const ready = state.jobs.filter((j: any) => !j.stale && j.status === 'review' && !j.decision).length;
   footer.append(el('span', running ? 'IN ARBEIT' : queued ? 'WARTESCHLANGE' : 'STUDIO', `queue-badge${running ? ' running' : ''}`));
-  footer.append(el('span', running ? `${status[running.status]}: ${running.text} · ${queued} weitere wartend` : queued ? `${queued} Aufträge warten · ${state.paused ? 'pausiert' : 'werden nacheinander erzeugt'}` : ready ? `${ready} Aufnahmen fertig · Anhören ist optional.` : 'Bereit für deine nächste Stimme.'));
+  footer.append(el('span', running ? `${status[running.status]}: ${running.text} · ${queued} weitere wartend` : queued ? `${queued} Aufträge warten · ${state.paused ? 'pausiert' : 'werden nacheinander erzeugt'}` : ready ? `${ready} Aufnahmen fertig` : 'Bereit für deine nächste Stimme.'));
   if (queued || running) {
     button(state.paused ? 'Warteschlange fortsetzen' : 'Nach aktuellem Take pausieren', () => mutate(state.paused ? 'resume' : 'pause', {}), footer);
     button('Warteschlange abbrechen', () => mutate('cancel', {}), footer);
@@ -120,29 +127,42 @@ function renderVoices(main: HTMLElement) {
   if (!state.voices.length) list.append(el('p', 'Deine erste Stimme beginnt mit einer kurzen Aufnahme.', 'sidebar-hint'));
   const voice = state.voices.find((v: any) => v.id === voiceId);
   detail.append(el('div', voice ? 'REFERENZAUFNAHME' : 'LOS GEHT’S', 'eyebrow'));
-  detail.append(el('h2', voice ? `Referenz für ${voice.name}` : 'Neue Stimme anlegen'), el('p', 'Hier bereitest du die Stimme vor: Profil speichern → Text aufnehmen → Ausschnitt anhören und speichern. Die Generierung folgt im Bereich Produktion.', 'intro'));
+  detail.append(el('h2', voice ? `Referenz für ${voice.name}` : 'Neue Stimme anlegen'));
   const form = el('article', '', 'profile-card'); form.append(el('h3', '1 · Profil und Zustimmung')); const name = field(form, 'Anzeigename', voice?.name ?? '');
   const consent = check(form, 'Die sprechende Person ist mit Generierung und Nutzung in unserer LAN-Runde einverstanden.', !!voice?.consentGenerate && !!voice?.consentLan);
   const more = el('details', '', 'profile-more'); more.append(el('summary', 'Weitere Profileinstellungen'));
   const publicUse = check(more, 'Öffentliche Weitergabe gesondert erlaubt (keine automatische Veröffentlichung).', voice?.consentPublic ?? false);
   const archived = check(more, 'Stimme archivieren und neue Generierungen sperren', voice?.archived ?? false); form.append(more);
-  button('Profil speichern & aufnehmen', async () => { state = await api('voice', { id: voice?.id, name: name.value, consentGenerate: consent.checked, consentLan: consent.checked, consentPublic: publicUse.checked, archived: archived.checked }); voiceId = voice?.id ?? state.voices.at(-1).id; message('Profil gespeichert. Jetzt den Vorlesetext aufnehmen.'); render(); }, form).classList.add('primary');
+  button(voice ? 'Profil speichern' : 'Profil anlegen', async () => { state = await api('voice', { id: voice?.id, name: name.value, consentGenerate: consent.checked, consentLan: consent.checked, consentPublic: publicUse.checked, archived: archived.checked }); voiceId = voice?.id ?? state.voices.at(-1).id; message('Profil gespeichert.'); render(); }, form).classList.add('primary');
   if (voice?.reference && voice.consentGenerate && voice.consentLan) {
     const profile = el('details', '', 'profile-settings'); const summary = el('summary', '1 · Profil und Zustimmung'); summary.append(el('span', 'Gespeichert', 'saved-label'));
     profile.append(summary, form); detail.append(profile);
   } else detail.append(form);
   if (!voice) return;
-  const record = el('article', '', 'recording-card'); record.append(el('h2', '2 · Vorlesetext aufnehmen'), el('p', 'Lies immer diesen vollständigen Text wortgetreu und natürlich vor, ohne Schauspiel oder Hintergrundmusik. Lass vor und nach dem Text eine kurze Pause.'),
-    el('blockquote', referenceText.text, 'reference-script'), el('p', 'Der Vorlesetext wird automatisch als Referenztranskript übernommen. Abtippen ist nicht nötig. Schneide nur Pausen am Anfang und Ende ab, keine gesprochenen Wörter.'));
-  const inputStrip = el('div', '', 'input-strip'); record.append(inputStrip);
+  const savedSource: ReferenceSource = voice.referenceSource === 'upload' || (voice.transcript && voice.transcript !== referenceText.text) ? 'upload' : 'script';
+  if (!referenceInputs.has(voice.id)) referenceInputs.set(voice.id, { source: savedSource, transcript: savedSource === 'upload' ? voice.transcript ?? '' : '', filename: '' });
+  const input = referenceInputs.get(voice.id)!;
+  const record = el('article', '', 'recording-card'); record.append(el('h2', '2 · Referenz'));
+  const modes = el('div', '', 'segmented'); modes.setAttribute('aria-label', 'Referenzquelle'); record.append(modes);
+  for (const [source, label] of [['script', 'Vorlesetext aufnehmen'], ['upload', 'Eigene Datei + Text']] as const) {
+    const b = button(label, () => changeView(() => { input.source = source; }), modes); b.setAttribute('aria-pressed', String(input.source === source));
+  }
+  const microphone = el('div'); microphone.hidden = input.source !== 'script'; record.append(microphone);
+  microphone.append(el('blockquote', referenceText.text, 'reference-script'), el('small', 'Vollständig und wortgetreu vorlesen · Text wird automatisch übernommen'));
+  const upload = el('div'); upload.hidden = input.source !== 'upload'; record.append(upload);
+  const transcriptLabel = el('label', 'Gesprochener Text der Datei'); const transcript = el('textarea');
+  transcript.value = input.transcript; transcript.maxLength = 5000; transcript.placeholder = 'Exakter Wortlaut des ausgewählten Ausschnitts …';
+  transcript.oninput = () => { input.transcript = transcript.value; }; transcriptLabel.append(transcript);
+  const inputStrip = el('div', '', 'input-strip'); microphone.append(inputStrip);
   const deviceLabel = el('label', 'MIKROFON'); const devices = el('select'); devices.setAttribute('aria-label', 'Mikrofon'); const defaultDevice = el('option', 'Standardmikrofon'); defaultDevice.value = ''; devices.append(defaultDevice); deviceLabel.append(devices); inputStrip.append(deviceLabel);
   void navigator.mediaDevices?.enumerateDevices().then(items => { for (const d of items.filter(d => d.kind === 'audioinput' && d.deviceId)) { const o = el('option', d.label || `Mikrofon ${devices.length}`); o.value = d.deviceId; devices.append(o); } });
   const meter = el('meter'); meter.min = 0; meter.max = 1; meter.setAttribute('aria-label', 'Mikrofonpegel'); const elapsed = el('span', '0 s', 'recording-time'); inputStrip.append(meter, elapsed);
-  const recordButtons = el('div', '', 'row'); record.append(recordButtons);
-  record.append(el('h3', '3 · Zuschneiden, anhören und speichern'));
+  const recordButtons = el('div', '', 'row'); microphone.append(recordButtons);
   const sourceVoiceId = voice.id;
-  const editor = new WaveformEditor(record, referenceDrafts.get(sourceVoiceId) ?? null,
-    draft => referenceDrafts.set(sourceVoiceId, draft), text => message(explainError(new Error(text)), true)); referenceEditor = editor;
+  const draftKey = `${sourceVoiceId}:${input.source}`;
+  const cut = el('div', '', 'reference-cut'); cut.append(el('h3', '3 · Ausschnitt & Vorschau'), el('small', 'Empfohlen: 10–20 Sekunden · Ganzen Text erhalten')); record.append(cut);
+  const editor = new WaveformEditor(cut, referenceDrafts.get(draftKey) ?? null,
+    draft => referenceDrafts.set(draftKey, draft), text => message(explainError(new Error(text)), true)); referenceEditor = editor;
   const recordButton = button('Aufnehmen / neu aufnehmen', async () => {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('Mikrofon benötigt localhost und eine Browserberechtigung. Alternativ Datei importieren.');
     if (recording || recordingPending) return;
@@ -165,55 +185,127 @@ function renderVoices(main: HTMLElement) {
   }, recordButtons);
   recordButton.classList.add('record-button');
   button('Stoppen', () => { if (recording?.state === 'recording') recording.stop(); }, recordButtons);
-  const file = field(record, 'Oder Aufnahme desselben Vorlesetexts importieren', '', 'file'); file.accept = 'audio/*'; file.onchange = () => {
-    if (recording || recordingPending) { message('Bitte zuerst die Aufnahme stoppen.'); return; }
-    if (file.files?.[0]) void editor.load(file.files[0]).catch(error => message(explainError(error), true));
+  const fileParent = input.source === 'script' ? microphone : upload;
+  const file = field(fileParent, input.source === 'script' ? 'Vorlesetext als Datei importieren' : 'Referenzdatei hochladen', '', 'file'); file.accept = 'audio/*';
+  if (input.source === 'upload') { if (input.filename) upload.append(el('small', input.filename)); upload.append(transcriptLabel); }
+  file.onchange = async () => {
+    if (recording || recordingPending || editor.busy) { message('Bitte zuerst Aufnahme oder Wiedergabe stoppen.'); return; }
+    const selected = file.files?.[0]; if (!selected) return;
+    try { await editor.load(selected); if (input.source === 'upload') input.filename = selected.name; }
+    catch (error) { message(explainError(error), true); }
   };
   button('Referenz speichern & weiter', async () => {
     if (recording || recordingPending || editor.busy) throw new Error('Aufnahme oder Wiedergabe zuerst stoppen und Laden der Wellenform abwarten.');
-    const draft = referenceDrafts.get(sourceVoiceId); if (!draft) throw new Error('Zuerst aufnehmen oder eine Datei wählen.');
+    const draft = referenceDrafts.get(draftKey); if (!draft) throw new Error('Zuerst aufnehmen oder eine Datei wählen.');
+    if (input.source === 'upload' && !input.transcript.trim()) { transcript.focus(); throw new Error('Gib den gesprochenen Text der Referenzdatei ein.'); }
     const { start, end } = draft.selection;
-    const encoded = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(',')[1]); reader.onerror = reject; reader.readAsDataURL(draft.blob); });
-    state = await api('reference', { voiceId: sourceVoiceId, audio: encoded, referenceTextId: referenceText.id, start, end });
-    referenceDrafts.delete(sourceVoiceId); tab = 'Produktion'; message('Referenz gespeichert. Jetzt die LAN-Sprüche erzeugen – sie laufen ohne einzelne Freigaben durch.'); render();
+    const metadata = { source: input.source, ...(input.source === 'script' ? { referenceTextId: referenceText.id } : { transcript: input.transcript }) };
+    recordingPending = true; editor.setLocked(true);
+    try {
+      const encoded = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(',')[1]); reader.onerror = reject; reader.readAsDataURL(draft.blob); });
+      state = await api('reference', { voiceId: sourceVoiceId, audio: encoded, ...metadata, start, end });
+    } finally { recordingPending = false; editor.setLocked(false); }
+    referenceDrafts.delete(draftKey); tab = 'Produktion'; message('Referenz gespeichert.'); render();
   }, record).classList.add('primary');
   if (voice.reference) {
     record.append(el('p', `Gespeicherte Referenz · ${voice.referenceInfo.duration.toFixed(1)} s · ${voice.referenceInfo.warnings.join(' · ')}`)); audio(record, voice.reference);
-    if (voice.referenceTextId === referenceText.id || voice.transcript === referenceText.text) button('Gespeicherte Referenz in Wellenform bearbeiten', async () => {
-      if (recording || recordingPending) throw new Error('Aufnahme zuerst stoppen.');
+    const savedText = el('details'); savedText.append(el('summary', 'Gespeicherter Referenztext'), el('p', voice.transcript)); record.append(savedText);
+    button('Gespeicherte Referenz bearbeiten', async () => {
+      if (recording || recordingPending || editor.busy) throw new Error('Aufnahme oder Wiedergabe zuerst stoppen.');
+      input.source = savedSource; input.transcript = voice.transcript; render();
+      const savedEditor = referenceEditor!;
       recordingPending = true;
       try {
         const response = await fetch(`/media/${encodeURIComponent(voice.reference)}?token=${token}`);
         if (!response.ok) throw new Error('Gespeicherte Referenz konnte nicht geladen werden.');
-        await editor.load(await response.blob());
+        await savedEditor.load(await response.blob());
       } finally { recordingPending = false; }
     }, record);
-    else record.append(el('p', 'Diese ältere Referenz verwendet noch einen eigenen Text. Für den einheitlichen Vorlesetext bitte neu aufnehmen.', 'warning'));
-    button('Alle lokalen Referenzen löschen', async () => { state = await api('delete-reference', { voiceId: sourceVoiceId }); referenceDrafts.delete(sourceVoiceId); render(); }, record);
+    button('Alle lokalen Referenzen löschen', async () => {
+      if (recording || recordingPending || editor.busy) throw new Error('Aufnahme oder Wiedergabe zuerst stoppen.');
+      state = await api('delete-reference', { voiceId: sourceVoiceId }); referenceDrafts.delete(`${sourceVoiceId}:script`); referenceDrafts.delete(`${sourceVoiceId}:upload`); referenceInputs.delete(sourceVoiceId); render();
+    }, record).classList.add('danger');
   }
   detail.append(record);
-  const next = el('article', '', 'next-step'); next.append(el('h3', 'Referenz bereit? Weiter zur Produktion'), el('p', voice.reference ? 'Die Referenz ist gespeichert. Du kannst direkt alle LAN-Sprüche erzeugen.' : 'Speichere zuerst eine Referenz. Danach geht es hier mit der Produktion weiter.'));
-  button('Weiter zur LAN-Produktion', () => changeView(() => { tab = 'Produktion'; }), next, !voice.reference); detail.append(next);
+  if (voice.reference) button('Weiter zu Texten & Voice-Lines →', () => changeView(() => { tab = 'Produktion'; }), detail);
 }
 function stopTracks() { recordingStream?.getTracks().forEach(track => track.stop()); recordingStream = null; void recordingContext?.close(); recordingContext = null; }
 window.addEventListener('pagehide', () => { pageActive = false; if (recording?.state === 'recording') recording.stop(); stopTracks(); referenceEditor?.destroy(); referenceDrafts.clear(); });
 window.addEventListener('pageshow', event => { pageActive = true; if (event.persisted && state) render(); });
-function renderCatalog(main: HTMLElement) {
-  main.append(el('h2', `Gemeinsamer Satzkatalog · Revision ${state.catalogVersion}`), el('p', 'Normale, eher neutrale Sprüche nutzen Ultimate Cloning. Emotionale Sprüche nutzen Controllable Cloning mit Darbietungsvorgabe. Änderungen machen Entwürfe überholt; freigegebene Pakete bleiben unverändert.'));
-  for (const sentence of state.catalog) {
-    const card = el('article'); card.append(el('h3', `${sentence.id} · ${sentence.event}`)); const row = el('div', '', 'sentence');
-    const text = el('textarea'); text.value = sentence.text; text.setAttribute('aria-label', 'Zieltext'); const style = el('textarea'); style.value = sentence.style; style.setAttribute('aria-label', 'Darbietung'); row.append(text, style); card.append(row);
-    const modeLabel = el('label', 'Generierungsmodus'); const mode = el('select');
-    for (const [value, label] of [['ultimate', 'Neutral · Ultimate Cloning'], ['controllable', 'Emotionen · Controllable Cloning']]) { const option = el('option', label); option.value = value; mode.append(option); }
-    mode.value = sentence.cloningMode; modeLabel.append(mode); card.append(modeLabel);
-    const hint = el('p'); card.append(hint);
-    const updateMode = () => { style.disabled = mode.value === 'ultimate'; hint.textContent = style.disabled ? 'Darbietung wie die Referenz; die Stilvorgabe wird nicht verwendet.' : 'Die Stilvorgabe steuert Emotion und Darbietung bei gleicher Referenzstimme.'; }; mode.onchange = updateMode; updateMode();
-    const active = check(card, 'Aktiv', sentence.active);
-    button('Neue Satzrevision speichern', () => mutate('sentence', { id: sentence.id, text: text.value, style: style.value, cloningMode: mode.value, active: active.checked }), card);
-    const selectedVoice = state.voices.find((v: any) => v.id === voiceId);
-    if (voiceId) button('Diesen Satz erzeugen', () => startGeneration({ voiceId, sentenceId: sentence.id }), card,
-      !productionProgress(selectedVoice, state.jobs.filter((j: any) => j.voiceId === voiceId), true).canProduce);
-    main.append(card);
+async function saveSentenceDrafts(scope: string, sentenceId?: string) {
+  for (const [key, draft] of sentenceDrafts) {
+    if (!key.startsWith(`${scope}:`)) continue;
+    const id = key.slice(scope.length + 1); if (sentenceId && id !== sentenceId) continue;
+    state = await api('sentence', { ...draft, id, ...(scope === 'default' ? {} : { voiceId: scope }) });
+    if (sentenceDrafts.get(key) === draft) sentenceDrafts.delete(key);
+  }
+}
+function renderCatalog(main: HTMLElement, voice?: any) {
+  const scope = voice?.id ?? 'default';
+  const catalog = voice ? voice.catalog : state.catalog;
+  const jobs = state.jobs.filter((j: any) => j.voiceId === voice?.id && !j.test);
+  const canProduce = !!voice && productionProgress(voice, jobs, true).canProduce;
+  const filters = el('div', '', 'catalog-filters'); filters.setAttribute('aria-label', 'Sprüche nach Anlass filtern');
+  for (const [value, label] of [['all', 'Alle'], ...Object.entries(eventNames)]) {
+    const b = button(label, () => changeView(() => { eventFilter = value; }), filters); b.setAttribute('aria-pressed', String(eventFilter === value));
+  }
+  main.append(filters);
+  for (const [event, label] of Object.entries(eventNames)) {
+    if (eventFilter !== 'all' && eventFilter !== event) continue;
+    const sentences = catalog.filter((s: any) => s.event === event); if (!sentences.length) continue;
+    const group = el('section', '', 'sentence-group'); group.append(el('h3', `${label} · ${sentences.length}`)); main.append(group);
+    for (const sentence of sentences) {
+      const key = `${scope}:${sentence.id}`; const initial = sentenceDrafts.get(key) ?? sentence;
+      const card = el('article', '', 'sentence-card'); group.append(card);
+      const edit = el('div', '', 'sentence-edit'); const listen = el('div', '', 'sentence-listen'); card.append(edit); if (voice) card.append(listen);
+      const meta = el('div', '', 'take-meta'); const source = el('span', voice ? sentence.customized ? 'Eigener Text' : 'Standardtext' : 'Standardtext', 'status-badge');
+      const dirtyBadge = el('span', 'Ungespeichert', 'status-badge attention'); meta.append(source, dirtyBadge); edit.append(meta);
+      const textLabel = el('label', 'Text', 'sentence-text-label'); const text = el('textarea'); text.rows = 2; text.maxLength = 300; text.value = initial.text; textLabel.append(text); edit.append(textLabel);
+      const options = optionalSection('Darbietung & Verwendung', `sentence:${key}`); edit.append(options);
+      const modeLabel = el('label', 'Darbietung'); const mode = el('select');
+      for (const [value, title] of [['ultimate', 'Wie die Referenz'], ['controllable', 'Mit Emotion']]) { const option = el('option', title); option.value = value; mode.append(option); }
+      mode.value = initial.cloningMode; modeLabel.append(mode); options.append(modeLabel);
+      const styleLabel = el('label', 'Emotion / Sprechweise'); const style = el('input'); style.value = initial.style; style.maxLength = 300; styleLabel.append(style); options.append(styleLabel);
+      const active = check(options, 'Im Katalog verwenden', initial.active);
+      const actions = el('div', '', 'row'); edit.append(actions);
+      const save = button('Text speichern', async () => { await saveSentenceDrafts(scope, sentence.id); message('Text gespeichert.'); render(); }, actions);
+      const discard = button('Verwerfen', () => { sentenceDrafts.delete(key); render(); }, actions);
+      if (sentence.customized && voice) button('Standard wiederherstellen', async () => {
+        state = await api('sentence-reset', { voiceId: scope, id: sentence.id }); sentenceDrafts.delete(key); render();
+      }, options);
+      const lineJobs = jobs.filter((j: any) => j.sentenceId === sentence.id);
+      const current = lineJobs.filter((j: any) => !j.stale);
+      const pending = current.findLast((j: any) => ACTIVE_JOBS.includes(j.status));
+      const latest = current.at(-1);
+      const playable = current.findLast((j: any) => j.status === 'review' && j.audio) ?? lineJobs.findLast((j: any) => j.status === 'review' && j.audio);
+      const audioStatus = el('span', '', 'status-badge'); listen.append(audioStatus);
+      if (playable) {
+        const oldText = el('p', playable.text, 'previous-text'); oldText.hidden = !playable.stale; listen.append(oldText);
+        audio(listen, playable.audio).setAttribute('aria-label', `Voice-Line: ${playable.text}`);
+        const warnings = playable.audioInfo?.warnings ?? []; if (warnings.length) listen.append(el('small', warnings.join(' · '), 'warning'));
+        if (!playable.stale) button(playable.decision === 'rejected' ? 'Ins Paket aufnehmen' : 'Aus Paket nehmen', () => mutate('lan-selection', { id: playable.id, include: playable.decision === 'rejected' }), listen);
+        const more = optionalSection('Audio bearbeiten', `audio:${key}`); listen.append(more);
+        if (playable.raw) {
+          const start = field(more, 'Anfang (Sekunden)', '0', 'number'); const end = field(more, 'Ende (Sekunden)', '', 'number');
+          button('Schnitt speichern', () => mutate('trim', { id: playable.id, start: Number(start.value), end: end.value ? Number(end.value) : null }), more, playable.stale);
+          const raw = el('details'); raw.append(el('summary', 'Original anhören')); audio(raw, playable.raw); more.append(raw);
+        }
+      } else listen.append(el('div', 'Noch keine Voice-Line', 'audio-empty'));
+      if (latest?.error) listen.append(el('p', explainError(new Error(latest.error)), 'notice error'));
+      const generate = voice ? button('', () => startGeneration({ voiceId: scope, sentenceId: sentence.id }), listen) : null;
+      const update = () => {
+        const dirty = sentenceDrafts.has(key); dirtyBadge.hidden = !dirty; save.hidden = !dirty; discard.hidden = !dirty;
+        styleLabel.hidden = mode.value === 'ultimate';
+        audioStatus.textContent = pending ? status[pending.status] : !active.checked ? 'Deaktiviert' : playable?.stale ? 'Veraltete Aufnahme' : dirty && playable ? 'Aufnahme vor Textänderung' : latest && ['failed', 'interrupted', 'cancelled'].includes(latest.status) ? status[latest.status] : playable ? playable.decision === 'rejected' ? 'Weggelassen' : 'Im Paket' : 'Noch nicht erzeugt';
+        if (generate) { generate.textContent = dirty ? 'Speichern & erzeugen' : playable ? 'Neu erzeugen' : 'Voice-Line erzeugen'; generate.disabled = !canProduce || !!pending || !active.checked; }
+      };
+      const changed = () => {
+        const draft = { text: text.value, style: style.value, cloningMode: mode.value, active: active.checked };
+        if (Object.entries(draft).every(([field, value]) => sentence[field] === value)) sentenceDrafts.delete(key); else sentenceDrafts.set(key, draft);
+        update();
+      };
+      text.oninput = changed; style.oninput = changed; mode.onchange = changed; active.onchange = changed; update();
+    }
   }
 }
 function renderJob(parent: HTMLElement, job: any) {
@@ -241,58 +333,56 @@ function renderJob(parent: HTMLElement, job: any) {
   const details = el('details'); details.append(el('summary', 'Produktionsnachweis'), el('pre', JSON.stringify({ cloningMode: job.cloningMode, referenceRevision: job.referenceRevision, sentenceRevision: job.sentenceRevision, seed: job.seed, generator: job.generator, processing: job.audioInfo }, null, 2))); card.append(details); parent.append(card);
 }
 async function startGeneration(data: Record<string, unknown>) {
+  if (!data.tests && !data.testId) await saveSentenceDrafts(String(data.voiceId), data.sentenceId as string | undefined);
   message('Generator wird geprüft. Die Aufträge starten anschließend automatisch.');
   state = await api('generate', { ...data, lan: true, start: true });
   message('Produktion läuft. Fertige Sprüche sind automatisch für das LAN-Paket ausgewählt.'); render();
 }
 function renderProduction(main: HTMLElement) {
-  main.append(el('h2', 'Deine Stimme direkt ins Spiel'), el('p', 'Referenz speichern → Sprüche erzeugen → ins Spiel übernehmen. Anhören und Nachbearbeiten sind optional.', 'intro'));
-  const selector = el('label', 'Deine Stimme'); const filter = el('select');
+  const scopes = el('div', '', 'segmented catalog-scopes'); scopes.setAttribute('aria-label', 'Textkatalog'); main.append(scopes);
+  for (const [value, label] of [['profile', 'Texte je Stimmprofil'], ['default', 'Standardkatalog']]) {
+    const b = button(label, () => changeView(() => { catalogScope = value; }), scopes); b.setAttribute('aria-pressed', String(catalogScope === value));
+  }
+  if (catalogScope === 'default') {
+    main.append(el('h2', 'Standardkatalog'), el('small', 'Vorlage für alle Profile · Eigene Profiltexte bleiben erhalten', 'catalog-caption'));
+    renderCatalog(main); return;
+  }
+  const selector = el('label', 'Stimmprofil', 'profile-selector'); const filter = el('select');
   const none = el('option', 'Stimme auswählen …'); none.value = ''; filter.append(none);
   for (const v of state.voices.filter((v: any) => !v.archived)) { const o = el('option', v.name); o.value = v.id; filter.append(o); }
   filter.value = voiceId; filter.onchange = () => changeView(() => { voiceId = filter.value; }); selector.append(filter); main.append(selector);
   const voice = state.voices.find((v: any) => v.id === voiceId);
   const jobs = state.jobs.filter((j: any) => j.voiceId === voiceId);
   const progress = productionProgress(voice, jobs, true);
-  if (progress.reason) { const missing = el('article', '', 'next-step'); missing.append(el('h3', 'Zuerst die Referenz vorbereiten'), el('p', progress.reason)); button('Zu den Referenzen', () => changeView(() => { tab = 'Referenzen'; }), missing); main.append(missing); return; }
-  const catalog = state.catalog.filter((s: any) => s.active);
-  const current = catalog.map((s: any) => {
-    const candidates = jobs.filter((j: any) => !j.test && !j.stale && j.sentenceId === s.id);
-    return candidates.findLast((j: any) => ACTIVE_JOBS.includes(j.status)) ?? candidates.at(-1);
-  }).filter(Boolean);
+  if (!voice) { button('Stimmprofil anlegen', () => changeView(() => { tab = 'Referenzen'; voiceId = ''; }), main); return; }
+  if (progress.reason) { const missing = el('article', '', 'next-step'); missing.append(el('p', progress.reason)); button('Referenz vorbereiten', () => changeView(() => { tab = 'Referenzen'; }), missing); main.append(missing); }
+  const catalog = voice.catalog.filter((s: any) => s.active);
   const ready = new Map<string, any>();
   for (const j of jobs) if (!j.test && !j.stale && j.status === 'review' && j.audio && catalog.some((s: any) => s.id === j.sentenceId)) ready.set(j.sentenceId, j);
   const included = [...ready.values()].filter(j => j.decision !== 'rejected');
   const excluded = ready.size - included.length;
   const remaining = catalog.length - ready.size;
-  const next = el('article', '', 'next-step');
-  next.append(el('div', 'LAN-PRODUKTION', 'eyebrow'), el('h3', progress.active ? 'Deine Sprüche entstehen' : remaining ? 'Alles bereit für deine Stimme' : 'Dein Spielpaket ist bereit'));
-  next.append(el('p', included.length + ' von ' + catalog.length + ' Sprüchen im Paket' + (excluded ? ' · ' + excluded + ' bewusst weggelassen' : '') + (progress.active ? ' · ' + progress.active + ' Aufträge offen' : '')));
+  const next = el('article', '', 'next-step production-bar');
+  next.append(el('h3', `${included.length} / ${catalog.length} Voice-Lines im Paket`));
+  if (excluded || progress.active) next.append(el('small', [excluded ? `${excluded} weggelassen` : '', progress.active ? `${progress.active} in Arbeit` : ''].filter(Boolean).join(' · ')));
   const bar = el('progress'); bar.max = Math.max(1, catalog.length); bar.value = ready.size; bar.setAttribute('aria-label', 'Fertige Spielsprüche'); next.append(bar);
-  next.append(el('p', 'Neutrale Sprüche nutzen Ultimate Cloning, emotionale Sprüche Controllable Cloning. Die Produktion läuft ohne einzelne Bestätigungen durch.'));
   if (progress.active && state.paused) button('Produktion fortsetzen', () => mutate('resume', {}), next).classList.add('primary');
-  else if (remaining > 0) button(ready.size ? 'Fehlende Sprüche erzeugen' : 'Alle LAN-Sprüche erzeugen', () => startGeneration({ voiceId }), next, progress.active > 0).classList.add('primary');
-  if (current.some((j: any) => ['failed', 'interrupted'].includes(j.status))) next.append(el('p', 'Einzelne Aufträge sind fehlgeschlagen. Fertige Sprüche bleiben erhalten. Details und erneuten Versuch findest du unten.', 'warning'));
+  else button(ready.size ? 'Fehlende Voice-Lines erzeugen' : 'Alle Voice-Lines erzeugen', () => startGeneration({ voiceId }), next, !progress.canProduce || progress.active > 0).classList.add('primary');
   if (included.length) {
     button(remaining > 0 || progress.active ? 'Fertige Sprüche ins Spiel übernehmen' : 'Ins Spiel übernehmen', async () => {
+      if ([...sentenceDrafts.keys()].some(key => key.startsWith(`${voiceId}:`) || key.startsWith('default:'))) throw new Error('Offene Textänderungen zuerst speichern oder verwerfen.');
       state = await api('install-game', { voiceId });
       message('Ins Projekt übernommen. Jetzt npm run build ausführen, das Spiel neu laden und die Stimme unter PROFIL → STIMME auswählen.'); render();
     }, next).classList.add('primary');
-    next.append(el('small', 'Enthält alle fertigen, nicht weggelassenen Sprüche. Fehlende Kategorien bleiben im Spiel stumm.'));
   }
+  if (voice.gamePackage) next.append(el('small', `Version ${voice.gamePackage.version} im Projekt · ${voice.gamePackage.clips} Voice-Lines`));
   main.append(next);
-  const use = el('article', '', 'import-guide'); use.append(el('h3', voice.gamePackage ? `Version ${voice.gamePackage.version} ins Projekt übernommen` : 'Einmal übernehmen, für alle verfügbar'), el('p', 'Die Werkstatt legt die fertige Stimme direkt im Spielprojekt ab. Danach npm run build ausführen und den neuen Spielstand öffnen. Alle Spieler können die Stimme unter PROFIL → STIMME auswählen – kein Dateiimport nötig.'));
-  if (voice.gamePackage) use.append(el('small', `${voice.gamePackage.clips} Sprüche übernommen. Bei Änderungen erneut „Ins Spiel übernehmen“ und anschließend neu bauen.`)); main.append(use);
-  const takes = optionalSection('Sprüche anhören oder ändern (optional) · ' + current.length, 'takes');
-  if (!current.length) takes.append(el('p', 'Hier erscheinen deine erzeugten Sprüche.'));
-  const grid = el('div', '', 'test-grid'); for (const job of current) renderJob(grid, job); takes.append(grid); main.append(takes);
-  const tests = optionalSection('Vorab drei kurze Stimmproben erzeugen (optional)', 'tests');
-  tests.append(el('p', 'Zum Ausprobieren vor der gesamten Produktion. Die Proben müssen nicht freigegeben werden und kommen nicht ins Spielpaket.'));
-  button('Stimmproben erzeugen', () => startGeneration({ voiceId, tests: true }), tests, progress.active > 0 || progress.testsAvailable === 3);
+  renderCatalog(main, voice);
+  const tests = optionalSection('Stimmproben', 'tests');
+  button('Drei Stimmproben erzeugen', () => startGeneration({ voiceId, tests: true }), tests, !progress.canTest || progress.active > 0 || progress.testsAvailable === 3);
   const testGrid = el('div', '', 'test-grid');
   for (const id of TEST_IDS) { const job = jobs.findLast((j: any) => !j.stale && j.sentenceId === id); if (job) renderJob(testGrid, job); }
   tests.append(testGrid); main.append(tests);
-  const advanced = optionalSection('Satzkatalog und Emotionen anpassen (optional)', 'catalog'); renderCatalog(advanced); main.append(advanced);
   const packages = optionalSection('Gespeicherte Pakete & gemeinsames LAN-Bundle', 'packages'); renderPackages(packages); main.append(packages);
 }
 function renderPackages(main: HTMLElement) {

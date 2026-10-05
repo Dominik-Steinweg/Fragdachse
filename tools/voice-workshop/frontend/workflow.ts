@@ -9,8 +9,8 @@ export function productionProgress(voice: Voice | undefined, jobs: Job[], lan = 
   const reason = !voice ? 'Wähle eine Stimme aus.' : voice.archived ? 'Die Stimme ist archiviert. Aktiviere sie im Bereich Referenzen.'
     : !voice.consentGenerate ? 'Speichere zuerst die Zustimmung zur Generierung im Bereich Referenzen.'
     : lan && !voice.consentLan ? 'Aktiviere im Profil die gemeinsame Zustimmung für Generierung und LAN-Nutzung.'
-    : !voice.reference ? 'Nimm zuerst den Vorlesetext auf und speichere die Referenz.'
-    : !voice.transcript ? 'Diese ältere Referenz hat keinen Vorlesetext. Bitte im Bereich Referenzen neu aufnehmen.' : '';
+    : !voice.reference ? 'Referenz aufnehmen oder eine Datei mit Text hochladen.'
+    : !voice.transcript ? 'Referenztext fehlt. Bearbeite die Referenz im Stimmprofil.' : '';
   const tested = !!voice && voice.referenceRevision > 0 && voice.testedRevision === voice.referenceRevision;
   return { reason, testsAccepted, testsAvailable, tested, canTest: !reason, canProduce: !reason && (lan || tested),
     active: current.filter(j => ACTIVE_JOBS.includes(j.status)).length,

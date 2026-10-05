@@ -51,7 +51,9 @@ export class WaveformEditor {
   constructor(parent: HTMLElement, draft: ReferenceDraft | null, onChange: (draft: ReferenceDraft) => void, onError: (text: string) => void) {
     this.onChange = onChange; this.onError = onError;
     const root = document.createElement('section'); root.className = 'wave-editor'; parent.append(root);
-    const help = document.createElement('p'); help.textContent = 'Start und Ende direkt an den Markierungen ziehen. Oder eine Schnittmarke wählen und in die Wellenform klicken. Pfeiltasten: 10 ms, mit Umschalt: 100 ms.'; root.append(help);
+    const help = document.createElement('details'); const helpTitle = document.createElement('summary'); helpTitle.textContent = 'Schnittsteuerung';
+    const helpText = document.createElement('p'); helpText.textContent = 'Start und Ende ziehen oder eine Schnittmarke wählen und in die Wellenform klicken. Pfeiltasten: 10 ms, mit Umschalt: 100 ms.';
+    help.append(helpTitle, helpText); root.append(help);
     const toolbar = document.createElement('div'); toolbar.className = 'row'; root.append(toolbar);
     for (const marker of ['start', 'end'] as const) {
       const b = this.button(toolbar, marker === 'start' ? 'Start setzen' : 'Ende setzen', () => this.selectMarker(marker));

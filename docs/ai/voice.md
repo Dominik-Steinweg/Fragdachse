@@ -8,6 +8,12 @@ Hörentscheidungen. Cloning-Modus und Eingaben werden beim Einreihen eingefroren
 Änderungen an Satz oder Referenz entwerten Entwürfe, nicht veröffentlichte Pakete.
 Das Spiel kennt weder Generator noch private Produktionsdaten.
 
+Der [Workshop](../../tools/voice-workshop/workshop.mjs) löst den Standardkatalog
+mit den Satzanpassungen des jeweiligen Stimmprofils auf. Produktion, Gültigkeitsprüfung
+und Export verwenden diesen aufgelösten Katalog. Standardänderungen betreffen nur
+geerbte Sätze; Profilanpassungen bleiben eigenständig. Auch das Zurücksetzen auf den
+Standard entwertet frühere Takes dieses Profils, statt alte Freigaben wiederzubeleben.
+
 [VoicePackage](../../src/voice/VoicePackage.ts) ist der gemeinsame strikte
 Laufzeitvertrag für Export und Import: versioniertes Manifest, Hash-Identität und
 OGG/Vorbis-Clips. Zusätzliche Felder werden zurückgewiesen. Referenz-/Workflowdaten
