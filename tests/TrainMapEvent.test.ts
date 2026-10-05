@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   COOP_DEFENSE_MAP_CONFIGS,
   normalizeCoopDefenseMapConfig,
+  resolveCoopDefenseMapEncounterConfigs,
   type CoopDefenseMapConfig,
 } from '../src/config/coopDefenseMaps';
 import {
@@ -13,6 +14,8 @@ import {
 import { CoopDefenseMapEventDirector } from '../src/systems/CoopDefenseMapEventDirector';
 import type { CoopDefenseMapEventCycleFinished } from '../src/systems/CoopDefenseMapEventDirector';
 import { TRAIN } from '../src/train/TrainConfig';
+import { CoopDefenseTrainEventHandler } from '../src/train/CoopDefenseTrainEventHandler';
+import { CoopDefenseMapDirector } from '../src/systems/CoopDefenseMapDirector';
 
 function buildMap(overrides: Partial<CoopDefenseMapConfig>): CoopDefenseMapConfig {
   return normalizeCoopDefenseMapConfig({
@@ -67,6 +70,102 @@ const ENCOUNTER_TRIGGERED_TRAIN = {
 } as const;
 
 describe('Train as a standalone map event', () => {
+  function realTrainEvents(
+    events: NonNullable<CoopDefenseMapConfig['mapEvents']>,
+    overrides: Partial<CoopDefenseMapConfig> = {},
+  ) {
+    let now = 10_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    let onExited = () => {};
+    const manager = { getTrackX: () => 640,
+      setExitedCallback: (callback: () => void) => { onExited = callback; },
+      prepareReentry: vi.fn(), spawn: vi.fn(), update: vi.fn(), getSegObjects: () => [],
+    };
+    const replication = { publish: vi.fn(), clear: vi.fn() };
+    const handler = new CoopDefenseTrainEventHandler(manager as never,
+      { setTrainSegments: vi.fn() }, 1, replication);
+    const setFinished = vi.spyOn(handler, 'setCycleFinishedCallback');
+    const map = buildMap({ ...overrides, mapEvents: events });
+    const director = new CoopDefenseMapEventDirector(map.mapEvents!, [handler]);
+    return { map, director, manager, replication,
+      finish: setFinished.mock.calls[0][0]!, exit: () => onExited(),
+      tick: (delta: number) => { now += delta; director.hostUpdate(delta, false); },
+      now: () => now,
+    };
+  }
+
+  it.each([false, true])('does not starve another due train behind repeats (second repeats: %s)', repeating => {
+    const f = realTrainEvents([
+      { id: 'repeat', type: 'train', start: { type: 'time', atMs: 0 }, repeatAfterExitMs: 1_000 },
+      { id: 'second', type: 'train', start: { type: 'time', atMs: 1 },
+        ...(repeating ? { repeatAfterExitMs: 2_000 } : {}) },
+    ]);
+    try {
+      f.tick(0);
+      for (let cycle = 0; cycle < 12; cycle++) { f.tick(1_000); f.exit(); }
+      const state = f.director.getPresentationState()!;
+      expect(state.find(event => event.eventId === 'repeat')!.occurrence).toBeGreaterThan(1);
+      if (repeating) expect(state.find(event => event.eventId === 'second')!.occurrence).toBeGreaterThan(1);
+      else expect(f.director.isEventCompleted('second')).toBe(true);
+    } finally { f.director.reset(); vi.restoreAllMocks(); }
+  });
+
+  it('keeps the announced repeat delay for a single train', () => {
+    const f = realTrainEvents([
+      { id: 'repeat', type: 'train', start: { type: 'time', atMs: 0 }, repeatAfterExitMs: 7_000 },
+    ]);
+    try {
+      f.tick(0); f.tick(100); f.exit();
+      expect(f.replication.publish).toHaveBeenLastCalledWith(expect.objectContaining({ spawnAt: f.now() + 7_000 }));
+      f.tick(6_999);
+      expect(f.manager.spawn).toHaveBeenCalledTimes(1);
+      f.tick(1);
+      expect(f.manager.spawn).toHaveBeenCalledTimes(2);
+      expect(f.director.getPresentationState()?.[0]).toMatchObject({ state: 'active', occurrence: 2 });
+    } finally { f.director.reset(); vi.restoreAllMocks(); }
+  });
+
+  it('unblocks a required encounter after the finite train completes', () => {
+    const f = realTrainEvents([
+      { id: 'repeat', type: 'train', start: { type: 'time', atMs: 0 }, repeatAfterExitMs: 1_000 },
+      { id: 'once', type: 'train', start: { type: 'time', atMs: 1 } },
+    ], { objective: 'repel-assault', surviveDurationSec: undefined, respawnsPerPlayer: undefined, encounters: [{ id: 'last',
+      start: { type: 'after-event', eventId: 'once' },
+      groups: [{ enemyKind: 'zombie-badger', count: 1 }],
+    }] });
+    const spawn = vi.fn(() => ['enemy']);
+    const encounters = new CoopDefenseMapDirector(resolveCoopDefenseMapEncounterConfigs(f.map, 1), spawn, {
+      mode: 'repel-assault',
+      isEncounterStartSatisfied: start => start.type === 'after-event' && f.director.isEventCompleted(start.eventId),
+    });
+    try {
+      f.tick(0);
+      for (let cycle = 0; cycle < 10; cycle++) {
+        f.tick(1_000); f.exit(); encounters.hostUpdate(1_000, false);
+      }
+      expect(f.director.isEventCompleted('once')).toBe(true);
+      expect(spawn).toHaveBeenCalledTimes(1);
+    } finally { f.director.reset(); vi.restoreAllMocks(); }
+  });
+
+  it('ignores stale completions and clears a blocked repeat on reset', () => {
+    const f = realTrainEvents([
+      { id: 'repeat', type: 'train', start: { type: 'time', atMs: 0 }, repeatAfterExitMs: 1_000 },
+      { id: 'second', type: 'train', start: { type: 'time', atMs: 1 }, delayMs: 2_000 },
+    ]);
+    try {
+      f.tick(0); f.tick(1_000); f.exit();
+      expect(f.director.getPresentationState()?.find(event => event.eventId === 'second'))
+        .toMatchObject({ state: 'scheduled', occurrence: 1 });
+      const state = f.director.getPresentationState();
+      f.finish({ eventId: 'repeat', occurrence: 1, completedAtMs: 1_000, nextActionAtMs: 2_000 });
+      expect(f.director.getPresentationState()).toBe(state);
+      f.director.reset();
+      expect(f.director.getPresentationState()?.every(event => event.state === 'dormant' && event.occurrence === 0)).toBe(true);
+      expect(f.replication.clear).toHaveBeenCalled();
+    } finally { f.director.reset(); vi.restoreAllMocks(); }
+  });
+
   it('schedules authored trains from their configured trigger and warning delay', () => {
     for (const map of COOP_DEFENSE_MAP_CONFIGS) {
       for (const event of map.mapEvents ?? []) {

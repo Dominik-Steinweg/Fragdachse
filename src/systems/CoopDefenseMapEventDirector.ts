@@ -50,6 +50,8 @@ interface MapEventRuntimeState {
   occurrence: number;
   stateChangedAtMs: number;
   nextActionAtMs: number | null;
+  /** Waiting repeat whose single physical train slot has not been admitted yet. */
+  pendingTrainRepeat: boolean;
 }
 
 export interface CoopDefenseMapEventDirectorOptions {
@@ -83,6 +85,7 @@ export class CoopDefenseMapEventDirector {
       occurrence: 0,
       stateChangedAtMs: 0,
       nextActionAtMs: null,
+      pendingTrainRepeat: false,
     }));
 
     for (const handler of handlers) {
@@ -100,14 +103,15 @@ export class CoopDefenseMapEventDirector {
     if (countdownActive) return;
     this.elapsedMs += Number.isFinite(deltaMs) ? Math.max(0, deltaMs) : 0;
 
+    this.scheduleWaitingTrains();
     for (const runtime of this.runtimes) {
-      if (runtime.state === 'dormant' && this.isStartSatisfied(runtime.config.start)) {
+      if (runtime.config.type !== 'train' && runtime.state === 'dormant' && this.isStartSatisfied(runtime.config.start)) {
         // A progressive front follows its authored timeline even after a delayed host frame.
         const startedAt = runtime.config.type === 'ground-hazard' && runtime.config.spread
           && runtime.config.start.type === 'time' ? runtime.config.start.atMs : this.elapsedMs;
         this.scheduleOccurrence(runtime, 1, startedAt + (runtime.config.delayMs ?? 0));
       }
-      if (runtime.state === 'scheduled' || runtime.state === 'waiting-repeat') {
+      if (!runtime.pendingTrainRepeat && (runtime.state === 'scheduled' || runtime.state === 'waiting-repeat')) {
         if (runtime.nextActionAtMs !== null && this.elapsedMs >= runtime.nextActionAtMs) {
           runtime.state = 'active';
           runtime.stateChangedAtMs = runtime.nextActionAtMs;
@@ -131,6 +135,7 @@ export class CoopDefenseMapEventDirector {
       runtime.occurrence = 0;
       runtime.stateChangedAtMs = 0;
       runtime.nextActionAtMs = null;
+      runtime.pendingTrainRepeat = false;
     }
     this.presentationStateDirty = true;
   }
@@ -171,6 +176,7 @@ export class CoopDefenseMapEventDirector {
     if (!handler) return;
 
     if (handler.schedule(runtime.config, occurrence, actionAtMs, this.elapsedMs) === false) return;
+    runtime.pendingTrainRepeat = false;
     runtime.occurrence = occurrence;
     runtime.state = occurrence === 1 ? 'scheduled' : 'waiting-repeat';
     runtime.stateChangedAtMs = this.elapsedMs;
@@ -194,10 +200,36 @@ export class CoopDefenseMapEventDirector {
       runtime.stateChangedAtMs = completedAtMs;
       runtime.nextActionAtMs = null;
       this.presentationStateDirty = true;
+      if (runtime.config.type === 'train') this.scheduleWaitingTrains();
       return;
     }
     const nextActionAtMs = Math.max(completedAtMs, Math.floor(completion.nextActionAtMs));
+    if (runtime.config.type === 'train') {
+      runtime.occurrence += 1;
+      runtime.state = 'waiting-repeat';
+      runtime.stateChangedAtMs = this.elapsedMs;
+      runtime.nextActionAtMs = Math.max(nextActionAtMs, this.elapsedMs);
+      runtime.pendingTrainRepeat = true;
+      this.presentationStateDirty = true;
+      this.scheduleWaitingTrains();
+      return;
+    }
     this.scheduleOccurrence(runtime, runtime.occurrence + 1, nextActionAtMs);
+  }
+
+  private scheduleWaitingTrains(): void {
+    // A just-freed track admits due first occurrences before reserving a future repeat.
+    // Already accepted warnings and active trains remain owned by the handler.
+    for (const runtime of this.runtimes) {
+      if (runtime.config.type !== 'train' || runtime.state !== 'dormant'
+        || !this.isStartSatisfied(runtime.config.start)) continue;
+      this.scheduleOccurrence(runtime, 1, this.elapsedMs + (runtime.config.delayMs ?? 0));
+    }
+    const waiting = this.runtimes.filter(runtime => runtime.pendingTrainRepeat)
+      .sort((first, second) => first.nextActionAtMs! - second.nextActionAtMs!);
+    for (const runtime of waiting) {
+      this.scheduleOccurrence(runtime, runtime.occurrence, runtime.nextActionAtMs!);
+    }
   }
 
   private isStartSatisfied(start: CoopDefenseMapEventStart): boolean {
