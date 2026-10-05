@@ -59,6 +59,8 @@ interface BeerVisual {
 
 export class CaptureTheBeerRenderer {
   private readonly visuals = new Map<string, BeerVisual>();
+  private readonly transients = new Set<Phaser.GameObjects.GameObject>();
+  private readonly emitterTimers = new Map<Phaser.Time.TimerEvent, readonly Phaser.GameObjects.Particles.ParticleEmitter[]>();
   private cameraFeedback: CameraFeedbackController | null = null;
   private lighting: LightingSystem | null = null;
 
@@ -309,6 +311,19 @@ export class CaptureTheBeerRenderer {
       this.destroyVisual(visual);
     }
     this.visuals.clear();
+    for (const object of this.transients) {
+      this.scene.tweens.killTweensOf(object);
+      this.releaseTransient(object);
+    }
+    for (const [timer, emitters] of this.emitterTimers) {
+      timer.remove(false);
+      for (const emitter of emitters) destroyEmitter(emitter);
+    }
+    this.emitterTimers.clear();
+  }
+
+  private releaseTransient(object: Phaser.GameObjects.GameObject): void {
+    if (this.transients.delete(object)) object.destroy();
   }
 
   private createVisual(state: SyncedCaptureTheBeerBeer): BeerVisual {
@@ -445,6 +460,7 @@ export class CaptureTheBeerRenderer {
       0.58,
       visual.palette.foam,
     ).setScale(0.12 + Phaser.Math.FloatBetween(0.02, 0.06));
+    this.transients.add(foam);
 
     const bubble = configureAdditiveImage(
       this.scene.add.image(x + Phaser.Math.FloatBetween(-3, 3), y + Phaser.Math.FloatBetween(-3, 3), TEX_BEER_BUBBLE),
@@ -452,6 +468,7 @@ export class CaptureTheBeerRenderer {
       0.7,
       mixColors(visual.palette.core, 0xffffff, 0.35),
     ).setScale(0.18 + Phaser.Math.FloatBetween(0.03, 0.07));
+    this.transients.add(bubble);
 
     this.scene.tweens.add({
       targets: foam,
@@ -461,7 +478,7 @@ export class CaptureTheBeerRenderer {
       alpha: 0,
       duration: Phaser.Math.Between(540, 880),
       ease: 'Quad.easeOut',
-      onComplete: () => foam.destroy(),
+      onComplete: () => this.releaseTransient(foam),
     });
     this.scene.tweens.add({
       targets: bubble,
@@ -471,7 +488,7 @@ export class CaptureTheBeerRenderer {
       alpha: 0,
       duration: Phaser.Math.Between(460, 760),
       ease: 'Sine.easeOut',
-      onComplete: () => bubble.destroy(),
+      onComplete: () => this.releaseTransient(bubble),
     });
   }
 
@@ -511,13 +528,14 @@ export class CaptureTheBeerRenderer {
       isTarget ? 0.92 : 0.72,
       palette.foam,
     ).setScale(isTarget ? 0.18 : 0.36);
+    this.transients.add(halo);
     this.scene.tweens.add({
       targets: halo,
       scale: isTarget ? 2.4 : 0.16,
       alpha: 0,
       duration: isTarget ? 420 : 280,
       ease: isTarget ? 'Cubic.easeOut' : 'Quad.easeIn',
-      onComplete: () => halo.destroy(),
+      onComplete: () => this.releaseTransient(halo),
     });
 
     this.playRing(x, y, palette.glow, isTarget ? 12 : 24, isTarget ? 64 : 10, isTarget ? 420 : 260, 3.5);
@@ -537,6 +555,7 @@ export class CaptureTheBeerRenderer {
         0.8,
         index % 3 === 0 ? 0xffffff : palette.foam,
       ).setScale(Phaser.Math.FloatBetween(0.12, 0.26));
+      this.transients.add(bubble);
 
       this.scene.tweens.add({
         targets: bubble,
@@ -546,7 +565,7 @@ export class CaptureTheBeerRenderer {
         scale: outward ? bubble.scale * Phaser.Math.FloatBetween(1.6, 2.4) : bubble.scale * 0.4,
         duration: outward ? Phaser.Math.Between(300, 460) : Phaser.Math.Between(220, 320),
         ease: outward ? 'Cubic.easeOut' : 'Cubic.easeIn',
-        onComplete: () => bubble.destroy(),
+        onComplete: () => this.releaseTransient(bubble),
       });
     }
   }
@@ -587,10 +606,12 @@ export class CaptureTheBeerRenderer {
     }, DEPTH_FX + 0.7, undefined, 'captureTheBeer');
     bubbleEmitter.explode(bubbleCount, 0, 0);
 
-    this.scene.time.delayedCall(1100, () => {
+    const timer = this.scene.time.delayedCall(1100, () => {
+      if (!this.emitterTimers.delete(timer)) return;
       destroyEmitter(foamEmitter);
       destroyEmitter(bubbleEmitter);
     });
+    this.emitterTimers.set(timer, [foamEmitter, bubbleEmitter]);
   }
 
   private playPulseHalo(
@@ -608,24 +629,27 @@ export class CaptureTheBeerRenderer {
       alpha,
       tint,
     ).setScale(startScale);
+    this.transients.add(halo);
     this.scene.tweens.add({
       targets: halo,
       scale: endScale,
       alpha: 0,
       duration,
       ease: 'Sine.easeOut',
-      onComplete: () => halo.destroy(),
+      onComplete: () => this.releaseTransient(halo),
     });
   }
 
   private playScoreScreenFlash(palette: TeamPalette): void {
     const colorWash = this.scene.add.rectangle(GAME_WIDTH * 0.5, GAME_HEIGHT * 0.5, GAME_WIDTH, GAME_HEIGHT, palette.glow, 0.24);
+    this.transients.add(colorWash);
     registerGraphicsObject(this.scene, 'captureObjectiveEffects', colorWash);
     colorWash.setScrollFactor(0);
     colorWash.setDepth(DEPTH_FX + 1.75);
     makeAdditive(colorWash);
 
     const whiteWash = this.scene.add.rectangle(GAME_WIDTH * 0.5, GAME_HEIGHT * 0.5, GAME_WIDTH, GAME_HEIGHT, 0xffffff, 0.18);
+    this.transients.add(whiteWash);
     registerGraphicsObject(this.scene, 'captureObjectiveEffects', whiteWash);
     whiteWash.setScrollFactor(0);
     whiteWash.setDepth(DEPTH_FX + 1.8);
@@ -637,6 +661,7 @@ export class CaptureTheBeerRenderer {
       0.46,
       palette.foam,
     ).setScrollFactor(0).setScale(1.05);
+    this.transients.add(centerHalo);
 
     const centerCore = configureAdditiveImage(
       this.scene.add.image(GAME_WIDTH * 0.5, GAME_HEIGHT * 0.5, TEX_BEER_FLASH),
@@ -644,20 +669,21 @@ export class CaptureTheBeerRenderer {
       0.44,
       0xffffff,
     ).setScrollFactor(0).setScale(0.64);
+    this.transients.add(centerCore);
 
     this.scene.tweens.add({
       targets: colorWash,
       alpha: 0,
       duration: 420,
       ease: 'Quad.easeOut',
-      onComplete: () => colorWash.destroy(),
+      onComplete: () => this.releaseTransient(colorWash),
     });
     this.scene.tweens.add({
       targets: whiteWash,
       alpha: 0,
       duration: 240,
       ease: 'Quad.easeOut',
-      onComplete: () => whiteWash.destroy(),
+      onComplete: () => this.releaseTransient(whiteWash),
     });
     this.scene.tweens.add({
       targets: centerHalo,
@@ -665,7 +691,7 @@ export class CaptureTheBeerRenderer {
       alpha: 0,
       duration: 760,
       ease: 'Expo.easeOut',
-      onComplete: () => centerHalo.destroy(),
+      onComplete: () => this.releaseTransient(centerHalo),
     });
     this.scene.tweens.add({
       targets: centerCore,
@@ -673,7 +699,7 @@ export class CaptureTheBeerRenderer {
       alpha: 0,
       duration: 440,
       ease: 'Expo.easeOut',
-      onComplete: () => centerCore.destroy(),
+      onComplete: () => this.releaseTransient(centerCore),
     });
   }
 
@@ -688,6 +714,7 @@ export class CaptureTheBeerRenderer {
 
     for (const spec of beamSpecs) {
       const beam = this.scene.add.rectangle(x, y, spec.width, spec.height, beamColor, spec.alpha);
+      this.transients.add(beam);
       registerGraphicsObject(this.scene, 'captureObjectiveEffects', beam);
       beam.setDepth(DEPTH_FX + 0.95);
       makeAdditive(beam);
@@ -699,7 +726,7 @@ export class CaptureTheBeerRenderer {
         alpha: 0,
         duration: 520,
         ease: 'Expo.easeOut',
-        onComplete: () => beam.destroy(),
+        onComplete: () => this.releaseTransient(beam),
       });
     }
 
@@ -709,6 +736,7 @@ export class CaptureTheBeerRenderer {
       0.95,
       0xffffff,
     ).setScale(0.32);
+    this.transients.add(core);
 
     const corona = configureAdditiveImage(
       this.scene.add.image(x, y, TEX_BEER_INNER_GLOW),
@@ -716,6 +744,7 @@ export class CaptureTheBeerRenderer {
       0.8,
       palette.foam,
     ).setScale(0.56);
+    this.transients.add(corona);
 
     this.scene.tweens.add({
       targets: core,
@@ -723,7 +752,7 @@ export class CaptureTheBeerRenderer {
       alpha: 0,
       duration: 420,
       ease: 'Expo.easeOut',
-      onComplete: () => core.destroy(),
+      onComplete: () => this.releaseTransient(core),
     });
     this.scene.tweens.add({
       targets: corona,
@@ -731,7 +760,7 @@ export class CaptureTheBeerRenderer {
       alpha: 0,
       duration: 660,
       ease: 'Expo.easeOut',
-      onComplete: () => corona.destroy(),
+      onComplete: () => this.releaseTransient(corona),
     });
   }
 
@@ -771,10 +800,12 @@ export class CaptureTheBeerRenderer {
     }, DEPTH_FX + 0.88, undefined, 'captureTheBeer');
     plume.explode(132, 0, 0);
 
-    this.scene.time.delayedCall(1900, () => {
+    const timer = this.scene.time.delayedCall(1900, () => {
+      if (!this.emitterTimers.delete(timer)) return;
       destroyEmitter(shell);
       destroyEmitter(plume);
     });
+    this.emitterTimers.set(timer, [shell, plume]);
   }
 
   private playRing(
@@ -787,6 +818,7 @@ export class CaptureTheBeerRenderer {
     lineWidth: number,
   ): void {
     const ring = this.scene.add.circle(x, y, startRadius);
+    this.transients.add(ring);
     registerGraphicsObject(this.scene, 'captureObjectiveEffects', ring);
     ring.setStrokeStyle(lineWidth, color, 0.9);
     ring.setFillStyle(0, 0);
@@ -798,7 +830,7 @@ export class CaptureTheBeerRenderer {
       alpha: 0,
       duration,
       ease: 'Linear',
-      onComplete: () => ring.destroy(),
+      onComplete: () => this.releaseTransient(ring),
     });
   }
 
@@ -809,13 +841,14 @@ export class CaptureTheBeerRenderer {
       alpha,
       palette.foam,
     ).setScale(0.34);
+    this.transients.add(afterglow);
     this.scene.tweens.add({
       targets: afterglow,
       scale: 1.08,
       alpha: 0,
       duration,
       ease: 'Sine.easeOut',
-      onComplete: () => afterglow.destroy(),
+      onComplete: () => this.releaseTransient(afterglow),
     });
   }
 
