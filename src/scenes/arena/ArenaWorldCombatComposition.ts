@@ -116,7 +116,6 @@ export function composeWorldCombatGameplay(
     ? gameplay.player?.isControllingTurret(id) ?? false
     : !!bridge.getLatestGameState()?.players[id]?.turretControl);
   worldRuntime.bind({ destroy: () => combatSystem.setPlayerMountedResolver(null) });
-  worldRuntime.bind({ destroy: () => combatSystem.setPlayerMountedResolver(null) });
   // Eine Basisaenderung trifft alle Felder gemeinsam: Der Coordinator verschickt den Patch
   // prioritaer und sperrt die entfallenen Zielzellen sofort, bis das neue Feld aktiv ist.
   const syncActiveBaseIds = (): void => {

@@ -432,7 +432,6 @@ export class AdrenalineEssenceRuntime {
     this.transfers.clear();
     this.cargo.clear();
     this.rockets.clear();
-    this.rockets.clear();
     this.mergeGrid.clear();
     this.seenRewards.clear();
     this.rewardRetention.length = 0;
