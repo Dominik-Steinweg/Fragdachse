@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="icon" type="image/png" href="./assets/sprites/32x32dachs.png" />
+  <link rel="icon" type="image/png" href="./assets/sprites/32x32dachs.png?v=e155ad0a4eedb919e762ff18e52b2285fe8720952793c24d3ca2d72ac191e0ce" />
   <title>FRAGDACHSE</title>
   <!--
     Die UI-Schriften werden vorgeladen, weil Phaser-Text seine Glyphen beim Anlegen einmalig
     rastert: was beim ersten `setText` nicht da ist, bleibt im Fallback stehen. Details und die
     Nachrasterung: src/ui/uiFonts.ts.
   -->
-  <link rel="preload" href="./assets/fonts/chakra-petch-700.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="./assets/fonts/chakra-petch-500.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="./assets/fonts/jetbrains-mono-variable.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="./assets/fonts/chakra-petch-700.woff2?v=ce5095dc1cb200aaa939e38067a0677018d10e9f26ec38cdcf1557ac524fc775" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="./assets/fonts/chakra-petch-500.woff2?v=36ad966cb653de70ba37355c41003b02de8940b2df6cbcd46480a6ad8cadd65d" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="./assets/fonts/jetbrains-mono-variable.woff2?v=83c005d49d8a6a50474c73a5a36ac0468076e9c4a29da7bdb14995d80560a5be" as="font" type="font/woff2" crossorigin />
   <style>
     /*
       Beide Familien stehen unter SIL OFL 1.1; die Lizenztexte liegen neben den Dateien in
@@ -24,14 +24,14 @@
       font-style: normal;
       font-weight: 500;
       font-display: block;
-      src: url('assets/fonts/chakra-petch-500.woff2') format('woff2');
+      src: url('./assets/fonts/chakra-petch-500.woff2?v=36ad966cb653de70ba37355c41003b02de8940b2df6cbcd46480a6ad8cadd65d') format('woff2');
     }
     @font-face {
       font-family: 'Chakra Petch';
       font-style: normal;
       font-weight: 700;
       font-display: block;
-      src: url('assets/fonts/chakra-petch-700.woff2') format('woff2');
+      src: url('./assets/fonts/chakra-petch-700.woff2?v=ce5095dc1cb200aaa939e38067a0677018d10e9f26ec38cdcf1557ac524fc775') format('woff2');
     }
     /* Variabler Schnitt: eine Datei bedient die gesamte Gewichtsachse. */
     @font-face {
@@ -39,7 +39,7 @@
       font-style: normal;
       font-weight: 100 800;
       font-display: block;
-      src: url('assets/fonts/jetbrains-mono-variable.woff2') format('woff2');
+      src: url('./assets/fonts/jetbrains-mono-variable.woff2?v=83c005d49d8a6a50474c73a5a36ac0468076e9c4a29da7bdb14995d80560a5be') format('woff2');
     }
 
     * { margin: 0; padding: 0; }
@@ -148,8 +148,9 @@
       .boot-bar-fill.boot-bar-indeterminate:not(.boot-bar-measured) { transform: scaleX(.35); }
     }
   </style>
-  <script type="module" crossorigin src="./assets/index-QYJo4tSX.js"></script>
-  <link rel="modulepreload" crossorigin href="./assets/vendor-CcPL2-_s.js">
+  <script type="module" crossorigin src="./assets/index-BfLwrmAq.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/vendor-0E2ChdsG.js">
+  <link rel="stylesheet" crossorigin href="./assets/index-Dgxx4FEr.css">
 </head>
 <body>
   <div id="game-container">
@@ -163,6 +164,7 @@
         <div id="boot-detail" class="boot-detail"></div>
       </div>
     </div>
-  </div>
+  </div>
+  <script>performance.setResourceTimingBufferSize(10000);</script>
 </body>
 </html>
