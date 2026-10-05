@@ -555,7 +555,7 @@ export function createFakeArenaScene() {
         return (key: string) => {
           if (!sources.has(key)) sources.set(key, { width: 32, height: 32 });
           const source = sources.get(key)!;
-          return { getSourceImage: () => source };
+          return { getSourceImage: () => source, getWebGLTexture: () => undefined };
         };
       })(),
       createCanvas: (key: string, width: number, height: number) => ({

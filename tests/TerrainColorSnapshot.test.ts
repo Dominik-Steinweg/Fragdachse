@@ -268,7 +268,7 @@ describe('TerrainColorSnapshot', () => {
         },
       };
       stampBlobSurfaceMottle(
-        { textures: { exists: () => true } } as never,
+        { textures: { exists: () => true, get: () => ({ getWebGLTexture: () => undefined }) } } as never,
         layer as never,
         ROCK_BLOB_SURFACE_PROFILE,
         ROCK_BLOB_SURFACE_PROFILE.additionalMottleLayers![0],

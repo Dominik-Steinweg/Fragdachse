@@ -18,6 +18,8 @@ import { hashCell01 as hash01 } from './CellHash';
 import { getBlobSurfaceMottleTextureKey } from './BlobSurfaceProfile';
 import type { BlobSurfaceMottleConfig, BlobSurfaceProfile } from './BlobSurfaceProfile';
 
+const bakedStorage = new WeakMap<Phaser.Textures.Texture, WebGLTexture | null | undefined>();
+
 /**
  * Falloff textures are keyed by their gradient, not by the profile: identical falloffs are
  * common across layers and profiles, and a per-layer key would allocate the same 32 px canvas
@@ -39,12 +41,15 @@ function resolveLiftAlpha(gain: number, materialPeak: number): number {
 /** Creates a reusable, layer-scoped material mottle texture. */
 export function ensureBlobSurfaceMottleTexture(scene: Phaser.Scene, profile: BlobSurfaceProfile, mottle: BlobSurfaceMottleConfig, layerIndex = 0): string {
   const key = getBlobSurfaceMottleTextureKey(profile, mottle, layerIndex);
-  if (scene.textures.exists(key)) return key;
+  let texture = scene.textures.exists(key) ? scene.textures.get(key) as Phaser.Textures.DynamicTexture : null;
+  // The game-owned Texture/Frame survives WebGL restoration; its GPU-only contents do not.
+  if (texture && bakedStorage.get(texture) === texture.getWebGLTexture()?.webGLTexture) return key;
 
   const falloffKey = falloffTextureKey(mottle.textureSize, mottle.falloff);
   fillRadialGradientTexture(scene.textures, falloffKey, mottle.textureSize, mottle.falloff);
-  const texture = scene.textures.addDynamicTexture(key, mottle.textureSize, mottle.textureSize);
+  texture ??= scene.textures.addDynamicTexture(key, mottle.textureSize, mottle.textureSize);
   if (!texture) return key;
+  texture.clear();
   // NEAREST although the game filters linearly via `smoothPixelArt`: the stamp is scaled to
   // 0.6–4.8 cells, and linear filtering would smooth away exactly the mid-frequency detail it
   // uses to cover the tile motif.
@@ -90,6 +95,7 @@ export function ensureBlobSurfaceMottleTexture(scene: Phaser.Scene, profile: Blo
   texture.render();
   falloff.destroy();
   for (const source of sources) source.destroy();
+  bakedStorage.set(texture, texture.getWebGLTexture()?.webGLTexture);
   return key;
 }
 

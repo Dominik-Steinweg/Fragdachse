@@ -46,7 +46,7 @@ function stampsOf(cells: readonly RockCell[], drawOffsetX = 0, drawOffsetY = 0):
       return layer;
     },
   };
-  const scene = { textures: { exists: () => true } };
+  const scene = { textures: { exists: () => true, get: () => ({ getWebGLTexture: () => undefined }) } };
 
   const configs = [ROCK_BLOB_SURFACE_PROFILE.mottle, ...(ROCK_BLOB_SURFACE_PROFILE.additionalMottleLayers ?? [])];
   for (let layerIndex = 0; layerIndex < configs.length; layerIndex += 1) {
