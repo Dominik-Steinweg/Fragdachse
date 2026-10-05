@@ -1037,6 +1037,8 @@ export interface CoopDefensePendingItemReward {
 
 /** Entscheidung fuer ein offenes Item-Angebot. */
 export type CoopDefenseItemRewardAction = 'take' | 'equip';
+/** Offer and owned stash items may share a UID, so a UI choice carries its source. */
+export type CoopDefenseItemSalvageTarget = 'offer' | 'stash';
 
 /** Im ersten Inspector-Prototyp verfuegbare Konstruktionen. */
 export type ConstructionId =

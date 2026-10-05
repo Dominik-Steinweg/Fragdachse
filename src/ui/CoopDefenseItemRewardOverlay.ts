@@ -8,7 +8,7 @@ import {
   getCoopDefenseItemRarityDefinition,
   getCoopDefenseItemSlotDefinition,
 } from '../config/coopDefenseItems';
-import type { CoopDefenseItem, CoopDefenseItemRewardAction, CoopDefenseRoundIdentity } from '../types';
+import type { CoopDefenseItem, CoopDefenseItemRewardAction, CoopDefenseItemSalvageTarget, CoopDefenseRoundIdentity } from '../types';
 import {
   describeCoopDefenseItem,
   formatCoopDefenseItemValue,
@@ -168,6 +168,7 @@ export class CoopDefenseItemRewardOverlay {
       salvageUid?: string,
       action?: CoopDefenseItemRewardAction,
       roundIdentity?: CoopDefenseRoundIdentity | null,
+      salvageTarget?: CoopDefenseItemSalvageTarget,
     ) => boolean,
     /** Liefert den aktuellen Stand nach jeder Aenderung; `null` schliesst den Layer. */
     private readonly getPresentation: (roundEndedAt?: number, roundIdentity?: CoopDefenseRoundIdentity) => MatchItemRewardPresentation | null,
@@ -693,16 +694,17 @@ export class CoopDefenseItemRewardOverlay {
     // Beim Ausruesten kann das Angebot selbst nur verworfen werden; ein vorhandenes
     // ungetragenes Teil macht dagegen Platz fuer das bisher ausgeruestete Item.
     const action = rowIndex === 0 ? 'take' : this.salvageAction;
-    this.applyClaim(option.item.uid, salvageUid, action);
+    this.applyClaim(option.item.uid, salvageUid, action, rowIndex === 0 ? 'offer' : 'stash');
   }
 
   private applyClaim(
     offerUid: string,
     salvageUid?: string,
     action: CoopDefenseItemRewardAction = 'take',
+    salvageTarget?: CoopDefenseItemSalvageTarget,
   ): void {
     const roundEndedAt = this.presentation?.roundEndedAt;
-    if (roundEndedAt === undefined || !this.onClaim(roundEndedAt, offerUid, salvageUid, action, this.presentation?.roundIdentity ?? null)) return;
+    if (roundEndedAt === undefined || !this.onClaim(roundEndedAt, offerUid, salvageUid, action, this.presentation?.roundIdentity ?? null, salvageTarget)) return;
     if (this.closeAfterClaim) {
       this.hide();
       this.onClosed();

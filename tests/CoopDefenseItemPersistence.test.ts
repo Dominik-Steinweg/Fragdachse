@@ -298,6 +298,17 @@ describe('coop-defense item persistence', () => {
     expect(getStoredPendingCoopDefenseItemRewards()).toEqual([]);
   });
 
+  it.each(['equipped', 'other-slot', 'missing', undefined])('rejects an invalid explicit stash target atomically (%s)', salvageUid => {
+    addStoredCoopDefenseItem(item({ uid: 'equipped' }));
+    equipStoredCoopDefenseItem('equipped');
+    addStoredCoopDefenseItem(item({ uid: 'other-slot', slot: 'boots', baseValue: 0.05 }));
+    // The equipped item's UID also names the offer; it must not turn a rejected stash claim into a discard.
+    setStoredPendingCoopDefenseItemReward({ roundEndedAt: 7, offers: [item({ uid: 'equipped', itemLevel: 2 })] });
+    const before = getStoredCoopDefenseProgress();
+    expect(claimStoredPendingCoopDefenseItemReward(7, 'equipped', salvageUid, 'equip', null, 'stash')).toBeNull();
+    expect(getStoredCoopDefenseProgress()).toEqual(before);
+  });
+
   it('marks a claimed item as unseen until the item screen was opened', () => {
     expect(getStoredCoopDefenseProgress().unseenItems).toBe(false);
     setStoredPendingCoopDefenseItemReward({ roundEndedAt: 7, offers: [item({ uid: 'offer-armor' })] });

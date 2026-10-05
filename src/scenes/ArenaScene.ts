@@ -918,8 +918,8 @@ export class ArenaScene extends Phaser.Scene {
     yield 'upgrade-overlay';
     this.itemRewardOverlay = new CoopDefenseItemRewardOverlay(
       this,
-      (roundEndedAt, offerUid, salvageUid, action, roundIdentity) => Boolean(
-        this.meta?.claimItemReward(roundEndedAt, offerUid, salvageUid, action, roundIdentity),
+      (roundEndedAt, offerUid, salvageUid, action, roundIdentity, salvageTarget) => Boolean(
+        this.meta?.claimItemReward(roundEndedAt, offerUid, salvageUid, action, roundIdentity, salvageTarget),
       ),
       (roundEndedAt, roundIdentity) => this.meta?.getItemRewardPresentation(roundEndedAt, roundIdentity) ?? null,
       () => {

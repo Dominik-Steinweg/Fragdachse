@@ -14,6 +14,7 @@ import type {
   CoopDefenseClassId,
   CoopDefenseItem,
   CoopDefenseItemRewardAction,
+  CoopDefenseItemSalvageTarget,
   CoopDefenseItemSlot,
   CoopDefensePendingItemReward,
   CoopDefenseRoundIdentity,
@@ -108,6 +109,7 @@ export interface ArenaMetaProgressStore {
     salvageUid?: string,
     action?: CoopDefenseItemRewardAction,
     roundIdentity?: CoopDefenseRoundIdentity | null,
+    salvageTarget?: CoopDefenseItemSalvageTarget,
   ): ArenaMetaItemRewardClaim | null;
 }
 
@@ -965,6 +967,7 @@ export class ArenaMetaController {
     salvageUid?: string,
     action: CoopDefenseItemRewardAction = 'take',
     roundIdentity?: CoopDefenseRoundIdentity | null,
+    salvageTarget?: CoopDefenseItemSalvageTarget,
   ): ArenaMetaItemRewardClaim | null {
     if (this.destroyed) return null;
     const beforeLevel = this.readStoredLevel();
@@ -974,6 +977,7 @@ export class ArenaMetaController {
       salvageUid,
       action,
       roundIdentity,
+      salvageTarget,
     );
     if (!claim) return null;
 

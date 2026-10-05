@@ -14,6 +14,7 @@ import type {
   ConstructionId,
   CoopDefenseItem,
   CoopDefenseItemRewardAction,
+  CoopDefenseItemSalvageTarget,
   CoopDefenseItemSlot,
   CoopDefensePendingItemReward,
   CoopDefenseRoundIdentity,
@@ -2179,6 +2180,8 @@ export interface CoopDefenseItemRewardClaim {
  * `salvageUid === offerUid` zerlegt das Angebot selbst. Bei `action === 'equip'` wird das
  * bisher ausgeruestete Teil in den Stash verschoben; reicht der Platz dafuer nicht, bleibt die
  * gesamte Transaktion unveraendert.
+ * `salvageTarget` trennt gleichnamige Angebote und Stash-Items; ohne Zielart gilt die alte
+ * `salvageUid === offerUid`-Bedeutung fuer bestehende Aufrufer.
  */
 export function claimStoredPendingCoopDefenseItemReward(
   roundEndedAt: number,
@@ -2186,6 +2189,7 @@ export function claimStoredPendingCoopDefenseItemReward(
   salvageUid?: string,
   action?: CoopDefenseItemRewardAction,
   roundIdentity?: CoopDefenseRoundIdentity | null,
+  salvageTarget?: CoopDefenseItemSalvageTarget,
 ): CoopDefenseItemRewardClaim | null;
 /** @deprecated Nur fuer alte Aufrufer; bei mehreren gleichen offerUid ist der Claim bewusst ungueltig. */
 export function claimStoredPendingCoopDefenseItemReward(
@@ -2199,6 +2203,7 @@ export function claimStoredPendingCoopDefenseItemReward(
   salvageUidOrAction?: string | CoopDefenseItemRewardAction,
   action: CoopDefenseItemRewardAction = 'take',
   roundIdentity?: CoopDefenseRoundIdentity | null,
+  salvageTarget?: CoopDefenseItemSalvageTarget,
 ): CoopDefenseItemRewardClaim | null {
   const current = readPreferences();
   const progress = current.progression.coopDefense;
@@ -2254,9 +2259,10 @@ export function claimStoredPendingCoopDefenseItemReward(
     return { acquired, salvagedXp };
   };
 
-  if (salvageUid === offerUid) {
+  if (salvageTarget === 'offer' || (salvageTarget === undefined && salvageUid === offerUid)) {
     return commit([...progress.items], getCoopDefenseItemSalvageXp(offer), null);
   }
+  if (salvageTarget === 'stash' && !salvageUid) return null;
 
   const salvaged = salvageUid
     ? progress.items.find((entry) => (

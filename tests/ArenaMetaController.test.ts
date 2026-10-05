@@ -451,7 +451,9 @@ describe('ArenaMetaController', () => {
     expect(controller.levelUpUpgrade('unlock_rock_barrier')).toBe(true);
     expect(playSound.mock.calls).toEqual([['sfx_upgrade_purchased']]);
     vi.mocked(store.claimPendingItemReward).mockReturnValueOnce({ acquired: null, salvagedXp: 0 }).mockReturnValue(null);
-    controller.claimItemReward(42, 'offer'); controller.claimItemReward(42, 'offer');
+    controller.claimItemReward(42, 'offer', 'offer', 'equip', null, 'stash');
+    expect(store.claimPendingItemReward).toHaveBeenLastCalledWith(42, 'offer', 'offer', 'equip', null, 'stash');
+    controller.claimItemReward(42, 'offer');
     expect(playSound.mock.calls).toEqual([['sfx_upgrade_purchased'], ['sfx_item_selected']]);
     vi.mocked(store.salvageItem).mockImplementationOnce(() => {
       stored.totalXp = getCoopDefenseXpThresholdForLevel(25); return 1000;

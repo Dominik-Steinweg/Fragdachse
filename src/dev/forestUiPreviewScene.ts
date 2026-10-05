@@ -152,9 +152,12 @@ class ForestUiPreview extends Phaser.Scene {
         () => { select('menu').value = 'rewards'; this.open(); }, closed);
       this.overlay = overlay; overlay.build(); overlay.show();
     } else if (menu === 'rewards') {
-      const overlay = new CoopDefenseItemRewardOverlay(this, (_round, uid, salvageUid, action) => {
-        const item = offers.find(i => i.uid === uid)!; items = items.filter(i => i.uid !== salvageUid); items.push(item);
-        if (action === 'equip') equipped[item.slot] = uid;
+      const overlay = new CoopDefenseItemRewardOverlay(this, (_round, uid, salvageUid, action, _identity, salvageTarget) => {
+        const item = offers.find(i => i.uid === uid)!;
+        if (salvageTarget !== 'offer') {
+          items = items.filter(i => i.uid !== salvageUid); items.push(item);
+          if (action === 'equip') equipped[item.slot] = uid;
+        }
         pending = false; status('Angebot im Testzustand übernommen'); return true;
       }, reward, closed);
       this.overlay = overlay; overlay.build(); overlay.show(reward()!);

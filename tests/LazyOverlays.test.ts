@@ -4,6 +4,13 @@ import { LazyOverlayGate } from '../src/ui/LazyOverlayGate';
 import { CoopDefenseUpgradesOverlay } from '../src/ui/CoopDefenseUpgradesOverlay';
 import { CoopDefenseItemsOverlay } from '../src/ui/CoopDefenseItemsOverlay';
 import { CoopDefenseItemRewardOverlay } from '../src/ui/CoopDefenseItemRewardOverlay';
+import { createMatchItemRewardPresentation } from '../src/ui/MatchResultsModel';
+import {
+  claimStoredPendingCoopDefenseItemReward,
+  exportStoredGameProgressJson,
+  getStoredCoopDefenseProgress,
+  importStoredGameProgressJson,
+} from '../src/utils/localPreferences';
 const assets = vi.hoisted(() => ({ ready: vi.fn(), ensure: vi.fn() }));
 vi.mock('../src/ui/OverlayAssets', () => ({ getOverlayAssets: () => assets }));
 vi.mock('phaser', () => ({ BlendModes: { ADD: 1 }, Math: { Clamp: (v: number, min: number, max: number) => Math.max(min, Math.min(max, v)) } }));
@@ -116,6 +123,46 @@ describe('lazy opening lifecycle', () => {
     const overlay: any = new CoopDefenseItemRewardOverlay(h.scene, claim, vi.fn(), vi.fn());
     overlay.presentation = { roundEndedAt: 42, roundIdentity };
     overlay.applyClaim('shared-offer');
-    expect(claim).toHaveBeenCalledWith(42, 'shared-offer', undefined, 'take', roundIdentity ?? null);
+    expect(claim).toHaveBeenCalledWith(42, 'shared-offer', undefined, 'take', roundIdentity ?? null, undefined);
+  });
+  it.each([
+    { action: 'take', target: 'stash' }, { action: 'equip', target: 'stash' },
+    { action: 'take', target: 'offer' }, { action: 'equip', target: 'offer' },
+  ] as const)('salvages the selected imported $target when its UID matches the reward ($action)', ({ action, target }) => {
+    const h = setup();
+    const values = new Map<string, string>();
+    Object.assign(window, { localStorage: {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
+    } });
+    const imported = JSON.parse(exportStoredGameProgressJson());
+    const armor = { uid: 'equipped', slot: 'armor', rarity: 'white', itemLevel: 1, baseValue: 25, affixes: [] };
+    imported.progress.coopDefense.items = [armor, ...Array.from({ length: 10 }, (_, index) => ({
+      ...armor, uid: index === 0 ? 'shared' : `stash-${index}`,
+    }))];
+    imported.progress.coopDefense.equippedItemIds = { armor: 'equipped' };
+    const reward = { ...armor, uid: 'shared', itemLevel: 2, baseValue: 37 };
+    imported.progress.coopDefense.pendingItemRewards = [{ roundEndedAt: 42, offers: [reward] }];
+    expect(importStoredGameProgressJson(JSON.stringify(imported)).ok).toBe(true);
+    const progress = getStoredCoopDefenseProgress();
+    const presentation = createMatchItemRewardPresentation(progress.pendingItemRewards[0], progress.items, progress.equippedItemIds)!;
+    const option = presentation.options[0];
+    expect(option.freeStashSlots).toBe(0);
+    const selectedRow = target === 'offer' ? 0 : option.stash.findIndex(entry => entry.uid === 'shared') + 1;
+    if (target === 'stash') expect(selectedRow).toBeGreaterThan(0);
+    const claim = vi.fn((...args: Parameters<ConstructorParameters<typeof CoopDefenseItemRewardOverlay>[1]>) => (
+      Boolean(claimStoredPendingCoopDefenseItemReward(...args))
+    ));
+    const overlay: any = new CoopDefenseItemRewardOverlay(h.scene, claim, () => null, vi.fn());
+    overlay.presentation = presentation; overlay.view = 'salvage'; overlay.salvageOption = option;
+    overlay.salvageAction = action; overlay.closeAfterClaim = true; overlay.hide = vi.fn();
+    overlay.handleSalvageChoice(selectedRow);
+    const after = getStoredCoopDefenseProgress();
+    expect(claim).toHaveBeenCalledWith(42, 'shared', 'shared', target === 'offer' ? 'take' : action, null, target);
+    expect(after.items.find(entry => entry.uid === 'shared')).toEqual(target === 'offer' ? { ...armor, uid: 'shared' } : reward);
+    expect(after.items).toHaveLength(progress.items.length);
+    expect(after.pendingItemRewards).toEqual([]);
+    expect(after.equippedItemIds).toEqual({ armor: target === 'stash' && action === 'equip' ? 'shared' : 'equipped' });
   });
 });
