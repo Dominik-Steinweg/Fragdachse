@@ -129,12 +129,22 @@ export function getTextResolution(scale: Phaser.Scale.ScaleManager): number {
 export class RenderResolutionController {
   private maxRenderScale = DEFAULT_MAX_RENDER_SCALE;
   private applying = false;
+  private disposed = false;
 
   constructor(private readonly game: Phaser.Game) {}
 
   install(): void {
     this.game.scale.on(Phaser.Scale.Events.RESIZE, this.sync, this);
+    this.game.events.once(Phaser.Core.Events.DESTROY, this.destroy, this);
     this.sync();
+  }
+
+  destroy(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.game.scale.off(Phaser.Scale.Events.RESIZE, this.sync, this);
+    this.game.events.off(Phaser.Core.Events.DESTROY, this.destroy, this);
+    if (activeController === this) activeController = null;
   }
 
   /** Deckelt die Renderauflösung, etwa aus der Grafikqualität heraus. */
@@ -147,7 +157,7 @@ export class RenderResolutionController {
   sync(): void {
     // `setGameSize()` löst selbst ein RESIZE aus; ohne Sperre riefe sich das hier direkt
     // wieder auf. Andere RESIZE-Hörer (Kameras, Szene) bekommen das Ereignis weiterhin.
-    if (this.applying) return;
+    if (this.disposed || this.applying) return;
 
     const scale = this.game.scale;
     if (!(scale.displaySize.width > 0)) return;
@@ -173,6 +183,7 @@ export class RenderResolutionController {
 let activeController: RenderResolutionController | null = null;
 
 export function installRenderResolution(game: Phaser.Game): RenderResolutionController {
+  activeController?.destroy();
   activeController = new RenderResolutionController(game);
   activeController.install();
   return activeController;

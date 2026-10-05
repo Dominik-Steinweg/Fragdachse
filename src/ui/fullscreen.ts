@@ -47,6 +47,7 @@ export type FullscreenToggleResult =
   | 'unsupported';
 
 let installedGame: Phaser.Game | null = null;
+let uninstall: (() => void) | null = null;
 const listeners = new Set<() => void>();
 
 function isApiFullscreen(): boolean {
@@ -115,12 +116,25 @@ function onKeyDown(event: KeyboardEvent): void {
  * Vollbild-Button, und beide melden ihre Aenderung an {@link onFullscreenChange}.
  */
 export function installFullscreenSupport(game: Phaser.Game): void {
+  uninstall?.();
   installedGame = game;
   if (typeof window === 'undefined') return;
 
+  const media = window.matchMedia(BROWSER_FULLSCREEN_QUERY);
   document.addEventListener('fullscreenchange', notify);
   // Erkennt Browser-Vollbild, das die Fullscreen-API nicht meldet (F11, Browsermenue).
-  window.matchMedia(BROWSER_FULLSCREEN_QUERY).addEventListener('change', notify);
+  media.addEventListener('change', notify);
   // Capture-Phase: vor Phasers Tastatur-Plugin und vor jedem Overlay-Handler.
   window.addEventListener('keydown', onKeyDown, true);
+  const dispose = () => {
+    if (installedGame !== game) return;
+    document.removeEventListener('fullscreenchange', notify);
+    media.removeEventListener('change', notify);
+    window.removeEventListener('keydown', onKeyDown, true);
+    game.events.off(Phaser.Core.Events.DESTROY, dispose);
+    installedGame = null;
+    uninstall = null;
+  };
+  uninstall = dispose;
+  game.events.once(Phaser.Core.Events.DESTROY, dispose);
 }
