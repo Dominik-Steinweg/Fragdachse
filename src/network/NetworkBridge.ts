@@ -4940,22 +4940,6 @@ export class NetworkBridge {
 
   // ── Raum-Statistik: pro Spieler, bewusst nicht rundengebunden ──────────
 
-  /** Liest den kumulierten, tatsächlich verursachten Schaden eines Spielers. */
-  getPlayerRoomDamage(playerId: string): number {
-    const entry = isHost()
-      ? this.roomStatistics.get(playerId)
-      : this.getRoomPlayerStatistics().find((candidate) => candidate.id === playerId);
-    return entry?.damageDealt ?? 0;
-  }
-
-  /** Liest die kumulierten tatsächlichen Spielertode eines Spielers. */
-  getPlayerRoomDeaths(playerId: string): number {
-    const entry = isHost()
-      ? this.roomStatistics.get(playerId)
-      : this.getRoomPlayerStatistics().find((candidate) => candidate.id === playerId);
-    return (entry?.pvpDeaths ?? 0) + (entry?.pveDeaths ?? 0);
-  }
-
   /** Host-only: addiert tatsächlich verursachten Schaden ohne Rundungs-/Overkill-Verlust. */
   addRoomStatistic(playerId: string, counter: RoomStatisticsCounter, amount = 1): void {
     if (!isHost() || !this.canPlayerReceiveRoundRewards(playerId)) return;

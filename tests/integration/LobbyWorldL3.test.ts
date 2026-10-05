@@ -544,8 +544,9 @@ describe('LobbyWorld L3 – PvP und keine Match-Konsequenzen', () => {
     host.recordPlayerDeath('p1');
     host.addPlayerRoomDamage('p0', 75);
     expect(host.getPlayerFrags('p0')).toBe(0);
-    expect(host.getPlayerRoomDamage('p0')).toBe(0);
-    expect(host.getPlayerRoomDeaths('p1')).toBe(0);
+    const roomStatistics = host.getRoomPlayerStatistics();
+    expect(roomStatistics.find((entry) => entry.id === 'p0')).toMatchObject({ damageDealt: 0 });
+    expect(roomStatistics.find((entry) => entry.id === 'p1')).toMatchObject({ pvpDeaths: 0, pveDeaths: 0 });
     expect(host.getRoundResultEligiblePlayerIds()).toEqual([]);
 
     const drop = vi.fn();
