@@ -1,5 +1,5 @@
 import type { RoundState } from '../../network/NetworkBridge';
-import type { GameMode, CoopDefenseItem, LoadoutCommitSnapshot } from '../../types';
+import type { GameMode, CoopDefenseItem, CoopDefenseRoundIdentity, LoadoutCommitSnapshot } from '../../types';
 import { getCoopDefenseMapBalanceSignature, getCoopDefenseMapBalanceSignatureCandidates } from './analyzer';
 import type {
   BalanceBuildSnapshot,
@@ -7,7 +7,7 @@ import type {
   BalanceRoundFeedback,
   BalanceRoundRecord,
 } from './types';
-import { COOP_DEFENSE_BALANCE_RULESET_VERSION } from './types';
+import { COOP_DEFENSE_BALANCE_RULESET_VERSION, getBalanceRoundKey } from './types';
 import {
   getStoredCoopDefenseBalanceLab,
   setStoredCoopDefenseBalanceRecordingEnabled,
@@ -20,6 +20,7 @@ import { COOP_DEFENSE_MAP_CONFIGS } from '../../config/coopDefenseMaps';
 export interface BalanceRuntimeCapture {
   readonly gameMode: GameMode;
   readonly roundState: RoundState;
+  readonly roundIdentity?: CoopDefenseRoundIdentity;
   readonly mapConfig: CoopDefenseMapConfig;
   readonly outcome: 'victory' | 'defeat';
   readonly sharedXp: number | null;
@@ -106,22 +107,25 @@ export class CoopDefenseBalanceTracker {
     if (capture.roundState.coopDefenseHumanPlayerCount !== 1) return false;
     if (capture.outcome !== 'victory' && capture.outcome !== 'defeat') return false;
     this.pending = {
-      capture,
+      capture: { ...capture, ...(capture.roundIdentity ? { roundIdentity: { ...capture.roundIdentity } } : {}) },
       mapBalanceSignature: getCoopDefenseMapBalanceSignature(capture.mapConfig),
     };
     return true;
   }
 
-  finalizePendingRound(roundEndedAt: number): BalanceRoundRecord | null {
+  finalizePendingRound(roundEndedAt: number, roundIdentity?: CoopDefenseRoundIdentity): BalanceRoundRecord | null {
     const pending = this.pending;
     this.pending = null;
     if (!pending || !Number.isFinite(roundEndedAt) || roundEndedAt <= 0) return null;
     const { capture } = pending;
+    if (getBalanceRoundKey({ roundEndedAt, roundIdentity })
+      !== getBalanceRoundKey({ roundEndedAt, roundIdentity: capture.roundIdentity })) return null;
     const durationMs = Number.isFinite(capture.roundState.roundStartTime)
       ? Math.max(0, Math.floor(roundEndedAt - capture.roundState.roundStartTime))
       : null;
     const record: BalanceRoundRecord = {
       roundEndedAt: Math.floor(roundEndedAt),
+      ...(capture.roundIdentity ? { roundIdentity: { ...capture.roundIdentity } } : {}),
       mapId: capture.mapConfig.mapId,
       outcome: capture.outcome,
       durationMs,
@@ -146,26 +150,26 @@ export class CoopDefenseBalanceTracker {
     const currentSignatures = new Map(
       COOP_DEFENSE_MAP_CONFIGS.map((mapConfig) => [mapConfig.mapId, getCoopDefenseMapBalanceSignatureCandidates(mapConfig)]),
     );
-    const staleRoundEndedAt = getStoredCoopDefenseBalanceLab().rounds
+    const staleRounds = getStoredCoopDefenseBalanceLab().rounds
       .filter((entry) => (
         entry.rulesetVersion !== COOP_DEFENSE_BALANCE_RULESET_VERSION
         || !currentSignatures.get(entry.mapId)?.includes(entry.mapBalanceSignature)
-      ))
-      .map((entry) => entry.roundEndedAt);
-    upsertStoredCoopDefenseBalanceRound(record, staleRoundEndedAt);
+      ));
+    upsertStoredCoopDefenseBalanceRound(record, staleRounds);
     return record;
   }
 
-  getRound(roundEndedAt: number): BalanceRoundRecord | null {
-    return getStoredCoopDefenseBalanceLab().rounds.find((round) => round.roundEndedAt === roundEndedAt) ?? null;
+  getRound(roundEndedAt: number, roundIdentity?: CoopDefenseRoundIdentity): BalanceRoundRecord | null {
+    const key = getBalanceRoundKey({ roundEndedAt, roundIdentity });
+    return getStoredCoopDefenseBalanceLab().rounds.find((round) => getBalanceRoundKey(round) === key) ?? null;
   }
 
-  hasRound(roundEndedAt: number): boolean {
-    return this.getRound(roundEndedAt) !== null;
+  hasRound(roundEndedAt: number, roundIdentity?: CoopDefenseRoundIdentity): boolean {
+    return this.getRound(roundEndedAt, roundIdentity) !== null;
   }
 
-  updateFeedback(roundEndedAt: number, feedback: BalanceRoundFeedback | null): boolean {
-    return updateStoredCoopDefenseBalanceFeedback(roundEndedAt, feedback);
+  updateFeedback(roundEndedAt: number, feedback: BalanceRoundFeedback | null, roundIdentity?: CoopDefenseRoundIdentity): boolean {
+    return updateStoredCoopDefenseBalanceFeedback(roundEndedAt, feedback, roundIdentity);
   }
 
   getRounds(): readonly BalanceRoundRecord[] {

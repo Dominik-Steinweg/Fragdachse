@@ -538,6 +538,17 @@ describe('room-scoped round progression', () => {
     f.controller.destroy();
   });
 
+  it('passes capture identity to Balance finalization and retains it for result replay after a room change', () => {
+    const f = creditingInput();
+    f.setRound('AAAAAA', 100, 100_000);
+    const finalizeBalanceRound = vi.fn(() => true);
+    f.controller.beginMatchResults(); f.controller.tryFinalizeMatchResults({ finalizeBalanceRound });
+    expect(finalizeBalanceRound).toHaveBeenCalledExactlyOnceWith(100_000, { roomCode: 'AAAAAA', roundRevision: 100 });
+    vi.mocked(f.session.getRoomCode).mockReturnValue('BBBBBB');
+    expect(f.controller.getLastMatchResultsPresentation()?.roundIdentity).toEqual({ roomCode: 'AAAAAA', roundRevision: 100 });
+    f.controller.destroy();
+  });
+
   it('opens rewards for a newer revision even when its end timestamp equals a previous round', () => {
     const f = creditingInput();
     f.setRound('AAAAAA', 100, 100_000); f.apply(); f.controller.startAfterRoundFlow();

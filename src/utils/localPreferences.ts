@@ -73,6 +73,7 @@ import {
   COOP_DEFENSE_BALANCE_MAX_ROUNDS,
   COOP_DEFENSE_BALANCE_STORAGE_KEY,
   COOP_DEFENSE_BALANCE_STORAGE_SCHEMA_VERSION,
+  getBalanceRoundKey,
 } from '../debug/coopDefenseBalance/types';
 import {
   clonePersistentBaseState,
@@ -628,6 +629,11 @@ function sanitizeBalanceRound(value: unknown): BalanceRoundRecord | null {
     || !isRecord(value.build)) return null;
   const build = sanitizeBalanceBuild(value.build);
   if (!build) return null;
+  const identity = value.roundIdentity;
+  if (identity !== undefined && (!isRecord(identity)
+    || typeof identity.roomCode !== 'string' || !/^[A-Z0-9]{1,64}$/.test(identity.roomCode)
+    || typeof identity.roundRevision !== 'number' || !Number.isSafeInteger(identity.roundRevision)
+    || identity.roundRevision <= 0)) return null;
   const numericKeys = [
     'durationMs', 'sharedXp', 'frags', 'playerHp', 'playerMaxHp', 'playerHpPercent', 'armor',
     'ownMainBaseHp', 'ownMainBaseMaxHp', 'ownMainBaseHpPercent', 'hostileMainBaseHp',
@@ -642,6 +648,9 @@ function sanitizeBalanceRound(value: unknown): BalanceRoundRecord | null {
   if (value.feedback !== null && feedback === null) return null;
   return {
     roundEndedAt: Math.floor(value.roundEndedAt),
+    ...(identity === undefined ? {} : { roundIdentity: {
+      roomCode: identity.roomCode as string, roundRevision: identity.roundRevision as number,
+    } }),
     mapId: value.mapId,
     outcome: value.outcome,
     durationMs: numbers.durationMs,
@@ -669,11 +678,11 @@ function sanitizeBalanceLabDocument(raw: unknown): CoopDefenseBalanceLabDocument
   if (!isRecord(raw) || raw.schemaVersion !== COOP_DEFENSE_BALANCE_STORAGE_SCHEMA_VERSION
     || typeof raw.recordingEnabled !== 'boolean' || !Array.isArray(raw.rounds)) return null;
   const rounds: BalanceRoundRecord[] = [];
-  const seen = new Set<number>();
+  const seen = new Set<string>();
   for (const value of raw.rounds.slice(0, COOP_DEFENSE_BALANCE_MAX_ROUNDS * 2)) {
     const round = sanitizeBalanceRound(value);
-    if (!round || seen.has(round.roundEndedAt)) continue;
-    seen.add(round.roundEndedAt);
+    if (!round || seen.has(getBalanceRoundKey(round))) continue;
+    seen.add(getBalanceRoundKey(round));
     rounds.push(round);
   }
   rounds.sort((a, b) => a.roundEndedAt - b.roundEndedAt);
@@ -1114,14 +1123,17 @@ export function setStoredCoopDefenseBalanceRecordingEnabled(enabled: boolean): v
 
 export function upsertStoredCoopDefenseBalanceRound(
   round: BalanceRoundRecord,
-  staleRoundEndedAt: readonly number[] = [],
+  staleRounds: readonly BalanceRoundRecord[] = [],
 ): void {
+  const sanitized = sanitizeBalanceRound(round);
+  if (!sanitized) return;
   const current = readBalanceLabDocument();
-  const candidates = [...current.rounds.filter((entry) => entry.roundEndedAt !== round.roundEndedAt), round]
+  const key = getBalanceRoundKey(sanitized);
+  const candidates = [...current.rounds.filter((entry) => getBalanceRoundKey(entry) !== key), sanitized]
     .sort((a, b) => a.roundEndedAt - b.roundEndedAt)
-  const staleIds = new Set(staleRoundEndedAt);
+  const staleIds = new Set(staleRounds.map(getBalanceRoundKey));
   while (candidates.length > COOP_DEFENSE_BALANCE_MAX_ROUNDS) {
-    const staleIndex = candidates.findIndex((entry) => staleIds.has(entry.roundEndedAt));
+    const staleIndex = candidates.findIndex((entry) => staleIds.has(getBalanceRoundKey(entry)));
     candidates.splice(staleIndex >= 0 ? staleIndex : 0, 1);
   }
   const rounds = candidates;
@@ -1131,9 +1143,11 @@ export function upsertStoredCoopDefenseBalanceRound(
 export function updateStoredCoopDefenseBalanceFeedback(
   roundEndedAt: number,
   feedback: BalanceRoundFeedback | null,
+  roundIdentity?: CoopDefenseRoundIdentity,
 ): boolean {
   const current = readBalanceLabDocument();
-  const index = current.rounds.findIndex((round) => round.roundEndedAt === roundEndedAt);
+  const key = getBalanceRoundKey({ roundEndedAt, roundIdentity });
+  const index = current.rounds.findIndex((round) => getBalanceRoundKey(round) === key);
   if (index < 0) return false;
   const rounds = [...current.rounds];
   rounds[index] = { ...rounds[index], feedback };
@@ -1141,10 +1155,10 @@ export function updateStoredCoopDefenseBalanceFeedback(
   return true;
 }
 
-export function deleteStoredCoopDefenseBalanceStaleRounds(roundEndedAt: readonly number[]): number {
-  const ids = new Set(roundEndedAt);
+export function deleteStoredCoopDefenseBalanceStaleRounds(rounds: readonly BalanceRoundRecord[]): number {
+  const ids = new Set(rounds.map(getBalanceRoundKey));
   const current = readBalanceLabDocument();
-  const next = current.rounds.filter((round) => !ids.has(round.roundEndedAt));
+  const next = current.rounds.filter((round) => !ids.has(getBalanceRoundKey(round)));
   if (next.length === current.rounds.length) return 0;
   writeBalanceLabDocument({ ...current, rounds: next });
   return current.rounds.length - next.length;

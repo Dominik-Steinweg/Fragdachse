@@ -73,6 +73,7 @@ export interface MatchItemRewardPresentation {
 }
 
 export interface MatchResultsPresentation {
+  readonly roundIdentity?: CoopDefenseRoundIdentity;
   outcome: MatchResultOutcome;
   mode: GameMode;
   modeLabel: string;

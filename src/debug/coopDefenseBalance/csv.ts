@@ -78,6 +78,7 @@ export function toBalanceRoundsCsv(report: CoopDefenseBalanceReport): string {
     'Feindliche Main-Basis-HP', 'Feindliche Main-Basis-Max-HP', 'Feindliche Basis (%)',
     'Rest-Respawns', 'Coop-XP vor Runde', 'Level vor Runde', 'Klasse', 'Weapon1', 'Weapon2', 'Utility', 'Ultimate',
     'Upgrade-Profil', 'Items', 'Schwierigkeit', 'Pacing', 'Kommentar', 'Map-Balance-Signatur', 'Ruleset-Version',
+    'Room-Code', 'Rundenrevision',
   ])];
   const snapshots = new Map(report.maps.map((map) => [map.snapshot.mapId, map.snapshot]));
   for (const entry of report.rounds) {
@@ -118,6 +119,8 @@ export function toBalanceRoundsCsv(report: CoopDefenseBalanceReport): string {
       round.feedback?.comment ?? '',
       round.mapBalanceSignature,
       round.rulesetVersion,
+      round.roundIdentity?.roomCode,
+      round.roundIdentity?.roundRevision,
     ]));
   }
   return `\uFEFF${lines.join('\r\n')}\r\n`;

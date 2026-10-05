@@ -8,6 +8,7 @@ import {
 import { toBalanceRoundsCsv, toBalanceSummaryCsv } from '../debug/coopDefenseBalance/csv';
 import { buildCoopDefenseBalanceReport } from '../debug/coopDefenseBalance/report';
 import type { BalanceRoundFeedback } from '../debug/coopDefenseBalance/types';
+import type { CoopDefenseRoundIdentity } from '../types';
 import {
   deleteAllStoredCoopDefenseBalanceRounds,
   deleteStoredCoopDefenseBalanceStaleRounds,
@@ -64,7 +65,7 @@ export class CoopDefenseBalanceReportOverlay {
       makeButton(t('ui.balanceReport.deleteStale'), () => {
         const staleIds = report.rounds
           .filter((round) => round.status === 'STALE')
-          .map((round) => round.record.roundEndedAt);
+          .map((round) => round.record);
         if (staleIds.length === 0) return;
         if (window.confirm(t('ui.balanceReport.confirmDeleteStale', { count: staleIds.length }))) {
           deleteStoredCoopDefenseBalanceStaleRounds(staleIds);
@@ -103,10 +104,10 @@ export class CoopDefenseBalanceReportOverlay {
     this.mount(panel);
   }
 
-  showFeedback(roundEndedAt: number): void {
+  showFeedback(roundEndedAt: number, roundIdentity?: CoopDefenseRoundIdentity): void {
     this.hide();
     if (typeof document === 'undefined') return;
-    const round = this.tracker.getRound(roundEndedAt);
+    const round = this.tracker.getRound(roundEndedAt, roundIdentity);
     if (!round) return;
     const panel = this.createPanel(t('ui.balanceReport.feedback'), true);
     const description = document.createElement('div');
@@ -137,7 +138,7 @@ export class CoopDefenseBalanceReportOverlay {
           difficulty: Number(difficulty.input.value) as BalanceRoundFeedback['difficulty'],
           pacing: Number(pacing.input.value) as BalanceRoundFeedback['pacing'],
           comment: comment.value.slice(0, 500),
-        });
+        }, roundIdentity);
         this.onFeedbackSaved();
         this.hide();
       }),

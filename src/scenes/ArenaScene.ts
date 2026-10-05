@@ -1154,7 +1154,7 @@ export class ArenaScene extends Phaser.Scene {
         !!presentation
         && isCoopDefenseMode(presentation.mode)
         && roundEndedAt !== null
-        && this.coopDefenseBalanceTracker.hasRound(roundEndedAt),
+        && this.coopDefenseBalanceTracker.hasRound(roundEndedAt, presentation.roundIdentity),
       );
     });
     this.lobbyOverlay.setRoomStatisticsDetailHandler(() => {
@@ -1929,9 +1929,9 @@ export class ArenaScene extends Phaser.Scene {
       }
       if (this.meta?.isMatchResultsPending()) {
         this.meta.tryFinalizeMatchResults({
-          finalizeBalanceRound: (roundEndedAt) => {
-            this.coopDefenseBalanceTracker.finalizePendingRound(roundEndedAt);
-            return this.coopDefenseBalanceTracker.hasRound(roundEndedAt);
+          finalizeBalanceRound: (roundEndedAt, roundIdentity) => {
+            this.coopDefenseBalanceTracker.finalizePendingRound(roundEndedAt, roundIdentity);
+            return this.coopDefenseBalanceTracker.hasRound(roundEndedAt, roundIdentity);
           },
         });
       }
@@ -2938,9 +2938,9 @@ export class ArenaScene extends Phaser.Scene {
         this.arenaRuntime.syncRoomOwners();
         this.meta?.beginMatchResults();
         this.meta?.tryFinalizeMatchResults({
-          finalizeBalanceRound: (roundEndedAt) => {
-            this.coopDefenseBalanceTracker.finalizePendingRound(roundEndedAt);
-            return this.coopDefenseBalanceTracker.hasRound(roundEndedAt);
+          finalizeBalanceRound: (roundEndedAt, roundIdentity) => {
+            this.coopDefenseBalanceTracker.finalizePendingRound(roundEndedAt, roundIdentity);
+            return this.coopDefenseBalanceTracker.hasRound(roundEndedAt, roundIdentity);
           },
         });
         overlay.hide();
@@ -2989,6 +2989,9 @@ export class ArenaScene extends Phaser.Scene {
     this.coopDefenseBalanceTracker.preparePendingRound({
       gameMode,
       roundState,
+      ...(roundState.roundRevision === undefined ? {} : {
+        roundIdentity: { roomCode: bridge.getRoomCode(), roundRevision: roundState.roundRevision },
+      }),
       mapConfig: getCoopDefenseMapConfig(this.resolveConfiguredCoopDefenseMapId('ARENA')),
       outcome,
       sharedXp: bridge.getCoopDefenseRoundXp(),
@@ -3013,7 +3016,7 @@ export class ArenaScene extends Phaser.Scene {
     const presentation = this.meta?.getLastMatchResultsPresentation();
     if (!presentation || !isCoopDefenseMode(presentation.mode)) return;
     const roundEndedAt = presentation.leaderboard[0]?.roundEndedAt;
-    if (!roundEndedAt || !this.coopDefenseBalanceTracker.hasRound(roundEndedAt)) return;
-    this.coopDefenseBalanceReportOverlay?.showFeedback(roundEndedAt);
+    if (!roundEndedAt || !this.coopDefenseBalanceTracker.hasRound(roundEndedAt, presentation.roundIdentity)) return;
+    this.coopDefenseBalanceReportOverlay?.showFeedback(roundEndedAt, presentation.roundIdentity);
   }
 }

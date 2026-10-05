@@ -8,9 +8,11 @@ import {
 } from '../../src/debug/coopDefenseBalance/analyzer';
 import { buildCoopDefenseBalanceReport, classifyBalanceRound } from '../../src/debug/coopDefenseBalance/report';
 import { toBalanceRoundsCsv, toBalanceSummaryCsv } from '../../src/debug/coopDefenseBalance/csv';
+import { CoopDefenseBalanceTracker } from '../../src/debug/coopDefenseBalance/tracker';
 import {
   COOP_DEFENSE_BALANCE_MAX_ROUNDS,
   COOP_DEFENSE_BALANCE_RULESET_VERSION,
+  COOP_DEFENSE_BALANCE_STORAGE_KEY,
   type BalanceBuildSnapshot,
   type BalanceRoundRecord,
 } from '../../src/debug/coopDefenseBalance/types';
@@ -18,6 +20,7 @@ import { COOP_DEFENSE_ENEMY_CONFIGS } from '../../src/config/coopDefenseEnemies'
 import { COOP_DEFENSE_MAP_CONFIGS } from '../../src/config/coopDefenseMaps';
 import {
   exportStoredGameProgressJson,
+  deleteStoredCoopDefenseBalanceStaleRounds,
   getStoredCoopDefenseBalanceLab,
   invalidateLocalStorageCache,
   resetStoredCoopDefenseCharacter,
@@ -196,6 +199,89 @@ describe('Coop Defense Balance Lab', () => {
     const rounds = getStoredCoopDefenseBalanceLab().rounds;
     expect(rounds).toHaveLength(COOP_DEFENSE_BALANCE_MAX_ROUNDS);
     expect(rounds[0].roundEndedAt).toBe(101);
+  });
+
+  it('captures equal end times by room and revision and retains the identity after reload and export', () => {
+    const tracker = new CoopDefenseBalanceTracker();
+    tracker.setRecordingEnabled(true);
+    const identities = [
+      { roomCode: 'AAAAAA', roundRevision: 1 },
+      { roomCode: 'AAAAAA', roundRevision: 2 },
+      { roomCode: 'BBBBBB', roundRevision: 1 },
+    ];
+    for (const roundIdentity of identities) {
+      expect(tracker.preparePendingRound({ gameMode: 'coop_defense', roundIdentity,
+        roundState: { status: 'active', roundStartTime: 10, roundRevision: roundIdentity.roundRevision, coopDefenseHumanPlayerCount: 1 },
+        mapConfig: COOP_DEFENSE_MAP_CONFIGS[0], ...round(100_000),
+      })).toBe(true);
+      expect(tracker.finalizePendingRound(100_000, roundIdentity)?.roundIdentity).toEqual(roundIdentity);
+    }
+    upsertStoredCoopDefenseBalanceRound(round(100_000)); // Historical record stays separate.
+    invalidateLocalStorageCache();
+    expect(tracker.getRounds()).toHaveLength(4);
+    for (const identity of identities) expect(tracker.getRound(100_000, identity)?.roundIdentity).toEqual(identity);
+    expect(tracker.getRound(100_000)?.roundIdentity).toBeUndefined();
+    const report = buildCoopDefenseBalanceReport(buildAllCoopDefenseBalanceMapSnapshots(), tracker.getRounds());
+    const csv = toBalanceRoundsCsv(report);
+    expect(csv).toContain('"Room-Code";"Rundenrevision"');
+    expect(csv).toContain('"AAAAAA";"2"');
+    expect(csv).toContain('"BBBBBB";"1"');
+  });
+
+  it('updates, rates and deletes only the selected round when timestamps collide', () => {
+    const first = { ...round(42), roundIdentity: { roomCode: 'AAAAAA', roundRevision: 1 } };
+    const second = { ...round(42), roundIdentity: { roomCode: 'AAAAAA', roundRevision: 2 } };
+    upsertStoredCoopDefenseBalanceRound(first);
+    upsertStoredCoopDefenseBalanceRound(second);
+    upsertStoredCoopDefenseBalanceRound({ ...first, roundEndedAt: 43, sharedXp: 999 });
+    expect(getStoredCoopDefenseBalanceLab().rounds).toHaveLength(2);
+    expect(updateStoredCoopDefenseBalanceFeedback(42, { difficulty: 5, pacing: 4, comment: 'second' }, second.roundIdentity)).toBe(true);
+    expect(updateStoredCoopDefenseBalanceFeedback(42, { difficulty: 1, pacing: 1, comment: 'ambiguous' })).toBe(false);
+    expect(deleteStoredCoopDefenseBalanceStaleRounds([first])).toBe(1);
+    expect(getStoredCoopDefenseBalanceLab().rounds).toEqual([{ ...second, feedback: { difficulty: 5, pacing: 4, comment: 'second' } }]);
+  });
+
+  it('rejects malformed optional identities without turning them into legacy records', () => {
+    const valid = { ...round(42), roundIdentity: { roomCode: 'AAAAAA', roundRevision: 1 } };
+    for (const identity of [null, {}, { roomCode: '__proto__', roundRevision: 1 },
+      { roomCode: 'AAAAAA', roundRevision: 0 }, { roomCode: 'AAAAAA', roundRevision: 1.5 }]) {
+      storage.setItem(COOP_DEFENSE_BALANCE_STORAGE_KEY, JSON.stringify({ schemaVersion: 1, recordingEnabled: true,
+        rounds: [valid, { ...round(43), roundIdentity: identity }, round(44)] }));
+      invalidateLocalStorageCache();
+      expect(getStoredCoopDefenseBalanceLab().rounds).toEqual([valid, round(44)]);
+    }
+  });
+
+  it('evicts a stale identified round without evicting its current timestamp twin', () => {
+    const current = { ...round(1), roundIdentity: { roomCode: 'AAAAAA', roundRevision: 1 } };
+    const stale = { ...round(1), roundIdentity: { roomCode: 'AAAAAA', roundRevision: 2 } };
+    storage.setItem(COOP_DEFENSE_BALANCE_STORAGE_KEY, JSON.stringify({ schemaVersion: 1, recordingEnabled: true,
+      rounds: [current, stale, ...Array.from({ length: COOP_DEFENSE_BALANCE_MAX_ROUNDS - 2 }, (_, i) => round(i + 2))] }));
+    upsertStoredCoopDefenseBalanceRound(round(999), [stale]);
+    const rounds = getStoredCoopDefenseBalanceLab().rounds;
+    expect(rounds).toHaveLength(COOP_DEFENSE_BALANCE_MAX_ROUNDS);
+    expect(rounds.some(entry => entry.roundIdentity?.roundRevision === 1)).toBe(true);
+    expect(rounds.some(entry => entry.roundIdentity?.roundRevision === 2)).toBe(false);
+  });
+
+  it('finalizes only matching captures and keeps the historical identity-free path', () => {
+    const tracker = new CoopDefenseBalanceTracker(); tracker.setRecordingEnabled(true);
+    const capture = { gameMode: 'coop_defense' as const, ...round(42), mapConfig: COOP_DEFENSE_MAP_CONFIGS[0],
+      roundState: { status: 'active' as const, roundStartTime: 1, coopDefenseHumanPlayerCount: 1 } };
+    const original = { roomCode: 'AAAAAA', roundRevision: 1 };
+    tracker.preparePendingRound({ ...capture, roundIdentity: original });
+    original.roundRevision = 2;
+    expect(tracker.finalizePendingRound(42, { roomCode: 'AAAAAA', roundRevision: 1 })?.roundIdentity?.roundRevision).toBe(1);
+    for (const identity of [undefined, { roomCode: 'BBBBBB', roundRevision: 1 }, { roomCode: 'AAAAAA', roundRevision: 2 }]) {
+      tracker.preparePendingRound({ ...capture, roundIdentity: { roomCode: 'AAAAAA', roundRevision: 1 } });
+      expect(tracker.finalizePendingRound(43, identity)).toBeNull();
+    }
+    tracker.preparePendingRound(capture);
+    expect(tracker.finalizePendingRound(42)).not.toBeNull();
+    expect(tracker.getRounds()).toHaveLength(2);
+    const read = tracker.getRound(42, { roomCode: 'AAAAAA', roundRevision: 1 })!;
+    (read.roundIdentity as { roundRevision: number }).roundRevision = 99;
+    expect(tracker.getRound(42, { roomCode: 'AAAAAA', roundRevision: 1 })).not.toBeNull();
   });
 
   it('speichert Feedback per Upsert auf derselben Runde und trennt den Progress-Export', () => {

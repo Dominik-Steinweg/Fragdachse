@@ -2,6 +2,7 @@ import type {
   CoopDefenseClassId,
   CoopDefenseItemRarity,
   CoopDefenseItemSlot,
+  CoopDefenseRoundIdentity,
 } from '../../types';
 import type { CoopDefenseMapObjective } from '../../config/coopDefenseMaps';
 
@@ -125,6 +126,8 @@ export interface BalanceRoundFeedback {
 
 export interface BalanceRoundRecord {
   readonly roundEndedAt: number;
+  /** Absent for historical captures whose originating room/revision is unknown. */
+  readonly roundIdentity?: CoopDefenseRoundIdentity;
   readonly mapId: string;
   readonly outcome: BalanceRoundOutcome;
   readonly durationMs: number | null;
@@ -145,6 +148,12 @@ export interface BalanceRoundRecord {
   readonly mapBalanceSignature: string;
   readonly rulesetVersion: number;
   readonly feedback: BalanceRoundFeedback | null;
+}
+
+export function getBalanceRoundKey(round: Pick<BalanceRoundRecord, 'roundEndedAt' | 'roundIdentity'>): string {
+  return round.roundIdentity
+    ? `${round.roundIdentity.roomCode}:${round.roundIdentity.roundRevision}`
+    : `legacy:${round.roundEndedAt}`;
 }
 
 export interface CoopDefenseBalanceLabDocument {

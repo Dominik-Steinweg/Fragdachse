@@ -204,7 +204,7 @@ export interface ArenaMetaRefreshOptions {
 
 export interface ArenaMetaMatchResultsFinalizeOptions {
   /** Balance-Diagnose bleibt ein Scene-langlebiger, rein optionaler Presentation-Hook. */
-  readonly finalizeBalanceRound?: (roundEndedAt: number) => boolean;
+  readonly finalizeBalanceRound?: (roundEndedAt: number, roundIdentity?: CoopDefenseRoundIdentity) => boolean;
 }
 
 /**
@@ -748,8 +748,10 @@ export class ArenaMetaController {
       || this.isUnprocessedCoopRound(roundState!);
     const outcome = resolvePersonalMatchOutcome(mode, this.input.session.getLocalPlayerId(), results, roundState);
     if (outcome === 'syncing') return;
+    const roundIdentity = isCoopDefenseMode(mode) && firstResult.roundRevision !== undefined
+      ? { roomCode: this.input.session.getRoomCode(), roundRevision: firstResult.roundRevision } : undefined;
     const balanceFeedbackAvailable = isCoopDefenseMode(mode)
-      ? options.finalizeBalanceRound?.(firstResult.roundEndedAt) ?? false
+      ? options.finalizeBalanceRound?.(firstResult.roundEndedAt, roundIdentity) ?? false
       : false;
     const progress = isCoopDefenseMode(mode)
       ? this.processCoopDefenseRoundProgress(this.matchResultsProgressBefore ?? this.getProgress())
@@ -757,6 +759,7 @@ export class ArenaMetaController {
     if (isCoopDefenseMode(mode) && !progress) return;
 
     const presentation: MatchResultsPresentation = {
+      ...(roundIdentity ? { roundIdentity } : {}),
       outcome,
       mode,
       modeLabel: getLocalizedGameModeLabel(mode),
@@ -772,8 +775,7 @@ export class ArenaMetaController {
     this.lastMatchResultsPresentation = presentation;
     if (freshProgress && progress) {
       this.afterRoundEndedAt = firstResult.roundEndedAt;
-      this.afterRoundIdentity = firstResult.roundRevision === undefined ? undefined
-        : { roomCode: this.input.session.getRoomCode(), roundRevision: firstResult.roundRevision };
+      this.afterRoundIdentity = roundIdentity;
       const steps: AfterRoundStep[] = [];
       if (presentation.itemReward) steps.push('items');
       if (progress.after.level > progress.before.level || progress.newBossPoints > 0
