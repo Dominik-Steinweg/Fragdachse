@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   RoomStatisticsLedger,
-  calculateRoomWinRate,
   resolvePvpWinnerIds,
 } from '../src/network/RoomStatistics';
-import { formatRoomWinRate, sortRoomStatistics } from '../src/ui/RoomStatisticsModel';
+import { formatRoomWinRate, getRoomWinRate, sortRoomStatistics } from '../src/ui/RoomStatisticsModel';
 
 const profile = (id: string, name = id, teamId: 'blue' | 'red' | null = null) => ({
   id,
@@ -65,8 +64,8 @@ describe('host room statistics ledger', () => {
     expect(winner).toMatchObject({ pvpMatchesPlayed: 2, pvpWins: 1 });
     expect(drawn).toMatchObject({ pvpMatchesPlayed: 2, pvpWins: 0 });
     expect(spectator).toMatchObject({ pvpMatchesPlayed: 0, pvpWins: 0 });
-    expect(calculateRoomWinRate(winner)).toBe(0.5);
-    expect(calculateRoomWinRate({ pvpWins: 0, pvpMatchesPlayed: 0 })).toBeNull();
+    expect(getRoomWinRate(winner)).toBe(0.5);
+    expect(getRoomWinRate({ pvpWins: 0, pvpMatchesPlayed: 0 })).toBeNull();
     expect(formatRoomWinRate({ pvpWins: 0, pvpMatchesPlayed: 0 })).toBe('—');
   });
 

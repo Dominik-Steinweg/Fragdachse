@@ -77,10 +77,6 @@ function emptyCounters(): RoomStatisticsCounters {
   };
 }
 
-export function calculateRoomWinRate(entry: Pick<RoomPlayerStatistics, 'pvpWins' | 'pvpMatchesPlayed'>): number | null {
-  return entry.pvpMatchesPlayed > 0 ? entry.pvpWins / entry.pvpMatchesPlayed : null;
-}
-
 export interface RoomStatisticsProfile {
   id: string;
   name: string;
