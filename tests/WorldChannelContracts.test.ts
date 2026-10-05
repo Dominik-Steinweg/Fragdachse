@@ -4,7 +4,7 @@ import { NetworkBridge } from '../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 import type { ActivityDescriptor } from '../src/world/ActivityDescriptor';
 import type { WorldDescriptor } from '../src/world/WorldDescriptor';
-import { FakeNetwork, addClientRoom, createHostRoom, type TestRoom } from './fakePeerNetwork';
+import { FakeNetwork, addClientRoom, createHostRoom, dropConnection, type TestRoom } from './fakePeerNetwork';
 import { AdrenalineEssenceClientReplica, AdrenalineEssenceReplication } from '../src/adrenalineEssence/AdrenalineEssenceReplication';
 import type { EssenceState, EssenceTransferReceipt } from '../src/adrenalineEssence/AdrenalineEssenceTypes';
 
@@ -54,6 +54,111 @@ async function createRoom(playerCount: number): Promise<TestRoom[]> {
 }
 
 describe('World-Kanal – Replikation', () => {
+  it('reliably stops local input before the next frame and fences delayed fast movement without blocking fresh input', async () => {
+    const [hostRoom, clientRoom, observerRoom] = await createRoom(3);
+    const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    try {
+      const host = bridgeFor(hostRoom); host.publishWorldAndActivity(world(), null);
+      const client = bridgeFor(clientRoom);
+      vi.spyOn(client, 'getLocalWorldParticipation').mockReturnValue('interactive');
+      client.sendLocalInput({ dx: 1, dy: 0, aim: 128, dashHeld: true }); clientRoom.room.update();
+      client.sendLocalInput({ dx: 0, dy: 1, aim: 128, dashHeld: true });
+      const link = clientRoom.transport.links[0];
+      link.fastReady = false; clientRoom.room.update(); link.fastReady = true;
+      const delayed = link.sent[link.sent.length - 1];
+      client.cancelLocalInput();
+      const stoppedSequence = client.getLocalMovementInput()!.movementSequence!;
+      expect(client.getLocalMovementInput()).toMatchObject({ dx: 0, dy: 0, dashHeld: false });
+      use(hostRoom);
+      expect(host.getPlayerInput('p1')).toMatchObject({ dx: 0, dy: 0, aim: 128, dashHeld: false });
+      link.send(delayed.message, delayed.channel);
+      expect(host.getPlayerInput('p1')).toMatchObject({ dx: 0, dy: 0, movementSequence: stoppedSequence });
+      expect(observerRoom.room.getPlayerState('p1', 'ist')).toBeUndefined();
+
+      use(clientRoom); clientRoom.room.update();
+      client.sendLocalInput({ dx: 0, dy: 0, aim: 64, dashHeld: true }); clientRoom.room.update();
+      use(hostRoom);
+      expect(host.getPlayerInput('p1')).toMatchObject({ dx: 0, dy: 0, dashHeld: true });
+      expect(host.getPlayerInput('p1')!.movementSequence).toBeGreaterThan(stoppedSequence);
+
+      use(clientRoom);
+      client.sendLocalInput({ dx: -1, dy: 0, aim: 64 }); clientRoom.room.update();
+      use(hostRoom);
+      expect(host.getPlayerInput('p1')).toMatchObject({ dx: -1, dy: 0 });
+      expect(host.getPlayerInput('p1')!.movementSequence).toBeGreaterThan(stoppedSequence);
+    } finally { clearActiveSession(); clientRoom.room.destroy(); observerRoom.room.destroy(); hostRoom.room.destroy(); }
+  });
+
+  it('ignores stale-world and malformed stop fences and rejects another player as their target', async () => {
+    const [hostRoom, clientRoom] = await createRoom(2);
+    const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    try {
+      const host = bridgeFor(hostRoom); host.publishWorldAndActivity(world(), null);
+      host.sendLocalInput({ dx: 1, dy: 0, aim: 0 });
+      const client = bridgeFor(clientRoom);
+      vi.spyOn(client, 'getLocalWorldParticipation').mockReturnValue('interactive');
+      client.sendLocalInput({ dx: 1, dy: 0, aim: 0 }); clientRoom.room.update();
+      for (const stop of [null, [], {}, { worldRevision: 12 },
+        ...[0, -1, 1.5, '100', NaN, Infinity, Number.MAX_SAFE_INTEGER + 1].map(movementSequence => ({ worldRevision: 12, movementSequence })),
+        ...[11, 13, '12', null, NaN].map(worldRevision => ({ worldRevision, movementSequence: 100 }))]) {
+        clientRoom.room.setPlayerState('p1', 'ist', stop, true);
+        use(hostRoom);
+        expect(host.getPlayerInput('p1')?.dx, JSON.stringify(stop)).toBe(1);
+      }
+      clientRoom.transport.links[0].send({ t: 'b', p: [['p0', 'ist', { worldRevision: 12, movementSequence: 100 }]] }, 'rel');
+      expect(hostRoom.room.getPlayerState('p0', 'ist')).toBeUndefined();
+
+      use(clientRoom); client.cancelLocalInput();
+      use(hostRoom); host.publishWorldAndActivity(world({ worldRevision: 13 }), null);
+      use(clientRoom); client.sendLocalInput({ dx: -1, dy: 0, aim: 0 }); clientRoom.room.update();
+      use(hostRoom); expect(host.getPlayerInput('p1')?.dx).toBe(-1);
+    } finally { clearActiveSession(); clientRoom.room.destroy(); hostRoom.room.destroy(); }
+  });
+
+  it('does not let an older reliable stop cancel a later movement or prediction restart', async () => {
+    const [hostRoom, clientRoom] = await createRoom(2);
+    const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    try {
+      const host = bridgeFor(hostRoom); host.publishWorldAndActivity(world(), null);
+      const client = bridgeFor(clientRoom);
+      vi.spyOn(client, 'getLocalWorldParticipation').mockReturnValue('interactive');
+      client.sendLocalInput({ dx: 1, dy: 0, aim: 0 }); clientRoom.room.update();
+      client.cancelLocalInput();
+      const stop = clientRoom.room.getPlayerState('p1', 'ist');
+      client.restartLocalMovementInput(100);
+      client.sendLocalInput({ dx: 0, dy: -1, aim: 0 }); clientRoom.room.update();
+      clientRoom.room.setPlayerState('p1', 'ist', stop, true);
+      use(hostRoom);
+      expect(host.getPlayerInput('p1')).toMatchObject({ dx: 0, dy: -1 });
+      expect(host.getPlayerInput('p1')!.movementSequence).toBeGreaterThan(100);
+    } finally { clearActiveSession(); clientRoom.room.destroy(); hostRoom.room.destroy(); }
+  });
+
+  it('clears the old stop fence when a reloaded client resumes the same player with a new sequence', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const firstRoom = await addClientRoom(network, [], 'input-stop-reload-token');
+    const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    let reloadedRoom: TestRoom | undefined;
+    try {
+      const host = bridgeFor(hostRoom); host.publishWorldAndActivity(world(), null);
+      const first = bridgeFor(firstRoom);
+      vi.spyOn(first, 'getLocalWorldParticipation').mockReturnValue('interactive');
+      first.restartLocalMovementInput(100);
+      first.sendLocalInput({ dx: 1, dy: 0, aim: 0 }); firstRoom.room.update(); first.cancelLocalInput();
+      use(hostRoom); expect(host.getPlayerInput('p1')?.dx).toBe(0);
+      firstRoom.transport.destroy(); dropConnection(firstRoom);
+      reloadedRoom = await addClientRoom(network, [], 'input-stop-reload-token');
+      expect(reloadedRoom.room.getLocalPlayerId()).toBe('p1');
+      expect(reloadedRoom.room.getPlayerState('p1', 'ist')).toBeUndefined();
+      const reloaded = bridgeFor(reloadedRoom);
+      vi.spyOn(reloaded, 'getLocalWorldParticipation').mockReturnValue('interactive');
+      reloaded.sendLocalInput({ dx: -1, dy: 0, aim: 0 }); reloadedRoom.room.update();
+      use(hostRoom);
+      expect(host.getPlayerInput('p1')).toMatchObject({ dx: -1, movementSequence: 1 });
+    } finally { clearActiveSession(); reloadedRoom?.room.destroy(); firstRoom.room.destroy(); hostRoom.room.destroy(); }
+  });
+
   it('rejects malformed aim bytes before remote input reaches player rotation or shield targeting', async () => {
     const [hostRoom, clientRoom] = await createRoom(2);
     try {

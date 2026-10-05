@@ -104,6 +104,13 @@ Freigabe für normales Laufen und die hostseitig aufgelöste Geschwindigkeit. Cl
 Clientposition steuern die Hostbewegung nicht. Verlorene Zwischenzustände werden nicht
 nachträglich auf dem Host ausgeführt.
 
+Fokusverlust beendet Bewegung auch ohne einen weiteren Client-Frame: `InputSystem` sendet
+über `NetworkBridge` eine zuverlässige, nur vom Host gelesene Stop-Grenze mit World-Revision
+und Bewegungssequenz. Frühere Fast-Eingaben können diesen Stop nicht aufheben; der nächste
+frische Input beginnt eine neue Sequenz, auch ohne Richtungswechsel. Die Grenze gilt nur für
+die aktuelle World und den aktuellen Link. Bei bestätigtem Resume entfernt der Host die alte
+Grenze, damit ein neu geladener Client seinen Sequenzzähler neu beginnen darf.
+
 [`PlayerMovementAcknowledgements`](../../src/systems/PlayerMovementAcknowledgements.ts)
 trennt die Auswahl einer Geschwindigkeit von ihrem Verbrauch im Arcade-`worldstep` und der
 Veröffentlichung nach `POST_UPDATE`. Position und ACK müssen denselben abgeschlossenen

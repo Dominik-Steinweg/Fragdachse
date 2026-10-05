@@ -10,8 +10,8 @@
  */
 
 /** Wird im Handshake verglichen; unterschiedliche Deploys dürfen sich nicht verbinden. */
-// Scope weapons require an identified host-timed hold/release/cancel gesture.
-export const PEER_PROTOCOL_VERSION = 24;
+// Input cancellation reliably fences earlier fast movement states by World and sequence.
+export const PEER_PROTOCOL_VERSION = 25;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

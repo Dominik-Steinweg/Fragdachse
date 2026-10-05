@@ -30,6 +30,9 @@ vi.mock('../src/ui/RadialActionMenu', () => ({ RadialActionMenu: class {
   destroy() {}
 } }));
 import { InputSystem } from '../src/systems/InputSystem';
+import { NetworkBridge } from '../src/network/NetworkBridge';
+import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
+import { addClientRoom, createHostRoom, FakeNetwork, type TestRoom } from './fakePeerNetwork';
 import { ShootingRangeRuntime } from '../src/shootingRange/ShootingRangeRuntime';
 import { shootingRangeControlPosition } from '../src/shootingRange/ShootingRangeLayout';
 import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
@@ -57,6 +60,7 @@ function createSystem(position = { x: 0, y: 0 }) {
     getActiveGameMode: () => 'coop_defense',
     getSynchronizedNow: () => Date.now(),
     sendLocalInput: vi.fn(),
+    cancelLocalInput: vi.fn(),
     sendLocalPlacementPreview: vi.fn(),
     sendLoadoutUse: vi.fn(),
     sendHeldActionStart: vi.fn(),
@@ -78,6 +82,66 @@ function createSystem(position = { x: 0, y: 0 }) {
 }
 
 describe('focus loss during charged input', () => {
+  it.each(['blur', 'hidden', 'shutdown'])('stops host movement on %s without another client frame', async event => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network, ['inp']);
+    const clientRoom = await addClientRoom(network, ['inp']);
+    const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    hostRoom.room.setGlobal('wld', { worldRevision: 1, definitionId: 'world:lobby', seed: 1,
+      generatorVersion: 1, layoutFingerprint: 'lobby' }, true);
+    use(hostRoom);
+    const host = new NetworkBridge();
+    host.activate();
+    use(clientRoom);
+    const client = new NetworkBridge();
+    vi.spyOn(client, 'getLocalWorldParticipation').mockReturnValue('interactive');
+    const keyboard = new Map<string, TestKey & EventEmitter>();
+    const events = new EventEmitter();
+    const gameEvents = new EventEmitter();
+    const scene = {
+      events, game: { events: gameEvents },
+      input: {
+        keyboard: { addKey: (code: string) => {
+          const button = Object.assign(new EventEmitter(), key());
+          keyboard.set(code, button);
+          return button;
+        } },
+        activePointer: { x: 100, y: 0, leftButtonDown: () => false, rightButtonDown: () => false },
+      },
+    };
+    const input = new InputSystem(scene as never, client, () => ({ x: 0, y: 0 }) as never);
+    try {
+      input.setup();
+      keyboard.get('D')!.isDown = true;
+      input.update();
+      clientRoom.room.update();
+      use(hostRoom);
+      expect(host.getPlayerInput('p1')).toMatchObject({ dx: 1, dy: 0 });
+
+      use(clientRoom);
+      for (const button of keyboard.values()) button.isDown = false;
+      (event === 'shutdown' ? events : gameEvents).emit(event);
+      // A hidden browser can keep WebRTC alive while suspending requestAnimationFrame.
+      // Neither InputSystem.update nor room.update runs after this event.
+      use(hostRoom);
+      expect(host.getPlayerInput('p1')).toMatchObject({ dx: 0, dy: 0, dashHeld: false });
+      if (event === 'shutdown') return;
+
+      use(clientRoom);
+      keyboard.get('A')!.isDown = true;
+      input.update();
+      clientRoom.room.update();
+      use(hostRoom);
+      expect(host.getPlayerInput('p1')).toMatchObject({ dx: -1, dy: 0 });
+    } finally {
+      use(clientRoom);
+      events.emit('shutdown');
+      clearActiveSession();
+      clientRoom.room.destroy();
+      hostRoom.room.destroy();
+    }
+  });
+
   it.each([['blur', false], ['hidden', false], ['blur', true], ['hidden', true], ['shutdown', false]] as const)(
     'discards a held scope shot on %s, including latched Shift=%s', (event, latchedShift) => {
     vi.useFakeTimers();

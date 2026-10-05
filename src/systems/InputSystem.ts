@@ -413,6 +413,7 @@ export class InputSystem {
     this.scene.input.mouse?.disableContextMenu();
     this.radialActionMenu = new RadialActionMenu(this.scene);
     const cancelOnInputLoss = () => {
+      this.bridge.cancelLocalInput();
       this.shiftPressPending = false;
       this.cancelScopeAim();
       this.cancelUtilityInteraction();

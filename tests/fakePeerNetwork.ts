@@ -173,9 +173,9 @@ export async function startRoom(
   resumeToken?: string,
 ): Promise<TestRoom> {
   const room = new PeerRoom(transport, {
-    hostOnlyPlayerKeys,
-    welcomeExcludedPlayerKeys: ['inp', 'ppv'],
-    clientOwnedPlayerKeys: ['fpp', 'inp', 'ppv', 'png', 'pnm', 'isr', 'wlr', 'dar',
+    hostOnlyPlayerKeys: [...hostOnlyPlayerKeys, 'ist'],
+    welcomeExcludedPlayerKeys: ['inp', 'ist', 'ppv'],
+    clientOwnedPlayerKeys: ['fpp', 'inp', 'ist', 'ppv', 'png', 'pnm', 'isr', 'wlr', 'dar',
       'lw1', 'lw2', 'lut', 'lul', 'lcm', 'llp', 'cxp', 'pbo', 'pbas', 'vpk'],
     resumeToken,
   });

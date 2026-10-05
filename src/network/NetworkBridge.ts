@@ -190,6 +190,7 @@ function getState(key: string): unknown {
 
 // ── Interne State-Keys – nie nach außen exportiert ───────────────────────────
 const KEY_INPUT        = 'inp';
+const KEY_INPUT_STOP = 'ist'; // per-player reliable: world-bound movement sequence fence
 const KEY_PLACEMENT_PREVIEW = 'ppv';
 const KEY_PLAYERS      = 'plr';
 const KEY_READY        = 'isr';   // per-player boolean: isReady
@@ -274,12 +275,12 @@ export type KickPlayerResult = { ok: true } | { ok: false; reason: KickPlayerFai
  * KEY_INPUT wird ausschließlich vom Host gelesen. Die visuelle Platzierungsvorschau nutzt
  * den separaten, relaybaren KEY_PLACEMENT_PREVIEW.
  */
-const HOST_ONLY_PLAYER_KEYS: readonly string[] = [KEY_FAST_PING_PROBE, KEY_INPUT];
-const WELCOME_EXCLUDED_PLAYER_KEYS: readonly string[] = [KEY_INPUT, KEY_PLACEMENT_PREVIEW];
+const HOST_ONLY_PLAYER_KEYS: readonly string[] = [KEY_FAST_PING_PROBE, KEY_INPUT, KEY_INPUT_STOP];
+const WELCOME_EXCLUDED_PLAYER_KEYS: readonly string[] = [KEY_INPUT, KEY_INPUT_STOP, KEY_PLACEMENT_PREVIEW];
 // Every other player key and every global key is authored by the host. The room enforces
 // this allowlist on received traffic as well as local writes, independently of UI policy.
 const CLIENT_OWNED_PLAYER_KEYS: readonly string[] = [
-  KEY_FAST_PING_PROBE, KEY_INPUT, KEY_PLACEMENT_PREVIEW, KEY_PING,
+  KEY_FAST_PING_PROBE, KEY_INPUT, KEY_INPUT_STOP, KEY_PLACEMENT_PREVIEW, KEY_PING,
   KEY_NAME, KEY_READY, KEY_WORLD_LOAD_READY, KEY_DEFERRED_ASSETS_READY,
   KEY_LOADOUT_W1, KEY_LOADOUT_W2, KEY_LOADOUT_UT, KEY_LOADOUT_UL,
   KEY_LOADOUT_COMMITTED, KEY_LOBBY_LOADOUT_PREVIEW, KEY_COOP_XP,
@@ -895,6 +896,7 @@ export class NetworkBridge {
   private kickedCbs: Array<() => void> = [];
   private lastSentInput: PlayerInput | null = null;
   private localMovementInput: PlayerInput | null = null;
+  private localMovementCancelled = false;
   private localMovementSequence = 0;
   private localMovementChangedAtMs = -Infinity;
   private lastInputSentAtMs = 0;
@@ -1046,6 +1048,10 @@ export class NetworkBridge {
     this.setupTransportDiagnostics();
 
     requireRoom().onReconnectStatus((status) => {
+      if (status.state === 'player-resumed' && isHost()) {
+        // The old link is retired; a reloaded client may restart its input sequence.
+        requireRoom().setPlayerState(status.playerId, KEY_INPUT_STOP, null, true);
+      }
       if (status.state === 'resumed') {
         this.resetGameStateCache();
         this.lastObservedRttSampleCount = 0;
@@ -1631,10 +1637,11 @@ export class NetworkBridge {
     input.dx = Number.isFinite(input.dx) ? Math.max(-1, Math.min(1, input.dx)) : 0;
     input.dy = Number.isFinite(input.dy) ? Math.max(-1, Math.min(1, input.dy)) : 0;
     const previous = this.localMovementInput;
-    if (!previous || previous.worldRevision !== worldRevision || previous.dx !== input.dx || previous.dy !== input.dy) {
+    if (this.localMovementCancelled || !previous || previous.worldRevision !== worldRevision || previous.dx !== input.dx || previous.dy !== input.dy) {
       this.localMovementSequence++;
       this.localMovementChangedAtMs = Date.now();
     }
+    this.localMovementCancelled = false;
     input.movementSequence = this.localMovementSequence;
     this.localMovementInput = input;
     const now = Date.now();
@@ -1665,6 +1672,22 @@ export class NetworkBridge {
     if (input) this.sendLocalInput(input);
   }
 
+  /** Stop even if the browser suspends the next frame and its fast-buffer flush. */
+  cancelLocalInput(): void {
+    if (!getActiveSession()) return;
+    const world = this.getWorldDescriptor();
+    if (!world) return;
+    const aim = this.localMovementInput?.aim ?? 0;
+    this.localMovementInput = null;
+    this.lastSentInput = null;
+    this.sendLocalInput({ dx: 0, dy: 0, aim, dashHeld: false });
+    myPlayer().setState(KEY_INPUT_STOP, {
+      worldRevision: world.worldRevision, movementSequence: this.localMovementSequence,
+    }, true);
+    // The next fresh sample may remain stationary while starting a dash or turret input.
+    this.localMovementCancelled = true;
+  }
+
   /** Sendet den rein visuellen Placement-Presence-State über den ersetzbaren Kanal. */
   sendLocalPlacementPreview(preview: PlacementPreviewNetState | null): void {
     let next = normalizePlacementPreview(preview);
@@ -1687,13 +1710,23 @@ export class NetworkBridge {
     const input = this.playerStateMap.get(playerId)?.getState(KEY_INPUT) as PlayerInput | undefined;
     const world = this.getWorldDescriptor();
     if (!world) return undefined;
-    return input?.worldRevision !== undefined
+    const valid = input?.worldRevision !== undefined
       && isCurrentWorldRevision(world.worldRevision, input.worldRevision)
       && Number.isFinite(input.dx) && Math.abs(input.dx) <= 1
       && Number.isFinite(input.dy) && Math.abs(input.dy) <= 1
       && Number.isInteger(input.aim) && input.aim >= 0 && input.aim <= 255
       ? input
       : undefined;
+    if (!valid) return undefined;
+    const stop = this.playerStateMap.get(playerId)?.getState(KEY_INPUT_STOP);
+    if (isRecord(stop) && Number.isSafeInteger(stop.worldRevision)
+      && stop.worldRevision === world.worldRevision && Number.isSafeInteger(stop.movementSequence)
+      && (stop.movementSequence as number) > 0
+      && (!Number.isSafeInteger(valid.movementSequence) || valid.movementSequence! <= (stop.movementSequence as number))) {
+      return { dx: 0, dy: 0, aim: valid.aim, dashHeld: false,
+        worldRevision: world.worldRevision, movementSequence: stop.movementSequence as number };
+    }
+    return valid;
   }
 
   getPlayerTurretControlInput(playerId: string): { input: import('../types').TurretControlInput; receivedAt: number } | null {
