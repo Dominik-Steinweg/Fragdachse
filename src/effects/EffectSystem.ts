@@ -135,6 +135,8 @@ export class EffectSystem implements EnemyVisualSink {
   private burrowVisuals = new Map<string, BurrowEmitterVisual>();
   private readonly burrowEffects = new Set<Phaser.GameObjects.GameObject>();
   private readonly burrowEffectTimers = new Set<Phaser.Time.TimerEvent>();
+  private readonly mobilityEffects = new Set<Phaser.GameObjects.GameObject>();
+  private readonly mobilityEffectTimers = new Set<Phaser.Time.TimerEvent>();
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
   private asmdPrimaryRenderer: AsmdPrimaryRenderer | null = null;
   private plasmaBurnerRenderer: PlasmaBurnerRenderer | null = null;
@@ -290,6 +292,7 @@ export class EffectSystem implements EnemyVisualSink {
     this.holyExplosionRenderer = null;
     this.clearZeusUpgrades();
     this.clearAllBurrowStates();
+    this.clearMobilityEffects();
     this.damageVignetteTween?.destroy();
     this.damageVignetteTween = null;
     this.damageVignetteTop?.destroy();
@@ -537,6 +540,7 @@ export class EffectSystem implements EnemyVisualSink {
     baseSize = PLAYER_SIZE,
   ): void {
     const ghost = this.scene.add.image(x, y, textureKey);
+    this.trackMobilityEffect(ghost);
     ghost.setDisplaySize(baseSize * scale, baseSize * scale);
     ghost.setRotation(rotation);
     ghost.setTint(color);
@@ -547,7 +551,7 @@ export class EffectSystem implements EnemyVisualSink {
       alpha:      0,
       duration:   150,
       ease:       'Linear',
-      onComplete: () => ghost.destroy(),
+      onComplete: () => this.releaseMobilityEffect(ghost),
     });
   }
 
@@ -572,9 +576,31 @@ export class EffectSystem implements EnemyVisualSink {
       frequency: -1,
       quantity:  7,
     }));
+    this.trackMobilityEffect(sparks);
     sparks.setDepth(DEPTH_FX + 0.35);
     sparks.explode(7);
-    this.scene.time.delayedCall(400, () => { if (sparks.active) sparks.destroy(); });
+    const timer = this.scene.time.delayedCall(400, () => {
+      if (this.mobilityEffectTimers.delete(timer)) this.releaseMobilityEffect(sparks);
+    });
+    this.mobilityEffectTimers.add(timer);
+  }
+
+  clearMobilityEffects(): void {
+    for (const timer of this.mobilityEffectTimers) timer.remove(false);
+    this.mobilityEffectTimers.clear();
+    for (const effect of this.mobilityEffects) {
+      this.scene.tweens.killTweensOf(effect);
+      this.releaseMobilityEffect(effect);
+    }
+  }
+
+  private trackMobilityEffect(effect: Phaser.GameObjects.GameObject): void {
+    this.mobilityEffects.add(effect);
+    effect.once('destroy', () => this.mobilityEffects.delete(effect));
+  }
+
+  private releaseMobilityEffect(effect: Phaser.GameObjects.GameObject): void {
+    if (this.mobilityEffects.delete(effect)) effect.destroy();
   }
 
   playStealthTransitionEffect(x: number, y: number, revealing: boolean, color: number = COLORS.GREY_2): void {
