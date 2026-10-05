@@ -122,10 +122,6 @@ export class LocalDistortionComposer {
     return plan;
   }
 
-  getLastPlan(): DistortionFramePlan {
-    return this.lastPlan;
-  }
-
   getTextureKey(): string {
     return DISTORTION_MAP_TEXTURE_KEY;
   }
