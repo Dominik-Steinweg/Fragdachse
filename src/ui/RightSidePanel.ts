@@ -203,8 +203,6 @@ export class RightSidePanel {
     return this.arenaOverlayVisible;
   }
 
-  updateTimer(_secs: number): void { /* no-op */ }
-
   addKillFeedEntry(
     killerName: string, killerColor: number,
     sourceId:   string,
@@ -265,14 +263,6 @@ export class RightSidePanel {
       }
     }
   }
-
-  setTrainArrival(_arrivalTimerSecs: number): void { /* no-op */ }
-
-  updateTrainHP(_hp: number, _maxHp: number): void { /* no-op */ }
-
-  showTrainDestroyed(): void { /* no-op */ }
-
-  hideTrainWidget(): void { /* no-op */ }
 
   private buildGameContainer(): void {
     this.gameContainer = this.scene.add.container(0, -GAME_HEIGHT);
