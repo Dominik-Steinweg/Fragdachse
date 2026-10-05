@@ -844,6 +844,7 @@ export class LobbyOverlay {
 
   /** Bestaetigt den Kopiervorgang am Raum-Chip und direkt in der Einladen-Zeile. */
   showCopySuccess(): void {
+    if (!this.container) return;
     this.roomChip.setIcon('check');
     this.inviteRow.setIcon('check').setLabel(t('ui.lobby.linkCopied'));
     this.inviteCopyIcon?.setVisible(false);

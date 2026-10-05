@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { EventEmitter } from 'node:events';
 import { getDeferredAssets } from '../../src/assets/DeferredAssets';
 import { WaterSurfaceRenderer } from '../../src/arena/WaterSurfaceRenderer';
@@ -84,6 +85,7 @@ import { getAimAngleFromPlayerSpriteRotation, getPlayerSpriteRotationFromAimAngl
 import { DEFAULT_LOADOUT, WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig';
 import { LobbyOverlay } from '../../src/scenes/LobbyOverlay';
 import { LeftSidePanel } from '../../src/ui/LeftSidePanel';
+import { UiButton } from '../../src/ui/UiButton';
 import { BootScreen } from '../../src/ui/BootScreen';
 import { getOverlayAssets } from '../../src/ui/OverlayAssets';
 import { clearActiveSession, setActiveSession } from '../../src/network/peer/session';
@@ -681,6 +683,44 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     scene.lobbyOverlay = overlay.overlay;
     return { scene, reveal, progress, fade, finishFade: () => finishFade(), ...overlay };
   }
+
+  it.each([false, true])('keeps clipboard completion within the live Lobby UI (destroyed=%s)', async destroyed => {
+    const textureComponent = createRequire(import.meta.url)('../../node_modules/phaser/src/gameobjects/components/Texture.js');
+    const { overlay, container, uiScene } = overlayFixture();
+    const delayedCall = vi.fn();
+    Object.assign(uiScene, { time: { delayedCall } });
+    Object.assign(container, { destroy: vi.fn() });
+    const button = () => {
+      const icon = { scene: { sys: { textures: { get: () => ({}) } } } as any,
+        setVisible() { return this; }, setTexture: textureComponent.setTexture,
+        setFrame() { return this; }, setDisplaySize() { return this; } };
+      const value = Object.create(UiButton.prototype) as any;
+      Object.assign(value, { iconImage: icon, currentIcon: 'copy', options: {},
+        iconTexture: () => 'icon', layoutContent: vi.fn(),
+        // Phaser GameObject.destroy clears the scene reference used by Texture.setTexture.
+        root: { destroy: () => { icon.scene = undefined; } },
+      });
+      return value;
+    };
+    overlay.roomChip = button();
+    overlay.inviteRow = button();
+    let copied!: () => void;
+    const pendingClipboard = new Promise<void>(resolve => { copied = resolve; });
+    vi.stubGlobal('window', { location: { href: 'https://example.test/' } });
+    vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn(() => pendingClipboard) } });
+    vi.spyOn(bridge, 'getRoomCode').mockReturnValue('ABC123');
+    const scene = Object.create(ArenaScene.prototype) as any;
+    scene.lobbyOverlay = overlay;
+    try {
+      const pending = scene.onCopyRoomLink();
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://example.test/#r=ABC123');
+      if (destroyed) overlay.destroy();
+      copied();
+      await expect(pending).resolves.toBeUndefined();
+      expect(delayedCall).toHaveBeenCalledTimes(destroyed ? 0 : 1);
+      if (!destroyed) expect(overlay.roomChip.currentIcon).toBe('check');
+    } finally { vi.unstubAllGlobals(); }
+  });
 
   it('bindet die Reveal-Barriere an das fertige Renderbild und entfernt sie beim Shutdown', () => {
     const scene = read('src/scenes/ArenaScene.ts');
