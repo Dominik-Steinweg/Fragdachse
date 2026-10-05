@@ -57,10 +57,12 @@ export class StinkCloudBody {
     return !!this.quad.renderNode.programManager.getCurrentProgramSuite();
   }
 
-  destroy(): void { this.quad.destroy(); }
+  destroy(): void {
+    if (this.quad.renderNode) disposeShaderWarmupNode(this.quad.renderNode);
+    this.quad.destroy();
+  }
 
   destroyShaderProbe(): void {
-    disposeShaderWarmupNode(this.quad.renderNode);
     this.destroy();
   }
 }

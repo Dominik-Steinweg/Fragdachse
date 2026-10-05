@@ -1,5 +1,6 @@
 import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 import * as Phaser from 'phaser';
+import { disposeShaderWarmupNode } from '../graphics/disposeShaderWarmupNode';
 import { DEPTH } from '../config';
 import type { WaterCell } from '../types';
 import { ARENA_RENDER_CHUNK_SIZE, ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX, ARENA_RENDER_CHUNK_RELEASE_MARGIN_PX,
@@ -68,7 +69,7 @@ export class WaterSurfaceRenderer {
     this.sunlight=state;
     if(this.destroyed||!variantChanged)return;
     for(const chunk of this.chunks.values()) {
-      chunk.quad.destroy();
+      this.destroyQuad(chunk.quad);
       chunk.quad=this.createQuad(chunk.x,chunk.y,chunk.key);
     }
   }
@@ -94,7 +95,7 @@ export class WaterSurfaceRenderer {
       && y + size >= view.y - margin && x <= view.x + view.width + margin && y <= view.y + view.height + margin;
     for (const [id, chunk] of this.chunks) {
       if (intersects(chunk.x, chunk.y, ARENA_RENDER_CHUNK_RELEASE_MARGIN_PX)) continue;
-      chunk.quad.destroy(); this.scene.textures.remove(chunk.key); this.chunks.delete(id);
+      this.destroyQuad(chunk.quad); this.scene.textures.remove(chunk.key); this.chunks.delete(id);
     }
     const margin = ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX;
     const minX = Math.max(0, Math.floor((view.x - margin - this.frame.offsetX) / size));
@@ -135,13 +136,18 @@ export class WaterSurfaceRenderer {
       return quad;
   }
 
+  private destroyQuad(quad: Phaser.GameObjects.Shader): void {
+    if (quad.renderNode) disposeShaderWarmupNode(quad.renderNode);
+    quad.destroy();
+  }
+
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
     this.preparation?.return();
     this.preparation = null;
     this.masks.clear();
-    for (const chunk of this.chunks.values()) { chunk.quad.destroy(); this.scene.textures.remove(chunk.key); }
+    for (const chunk of this.chunks.values()) { this.destroyQuad(chunk.quad); this.scene.textures.remove(chunk.key); }
     this.chunks.clear();
   }
 }

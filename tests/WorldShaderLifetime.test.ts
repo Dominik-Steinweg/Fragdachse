@@ -6,6 +6,7 @@ vi.mock('phaser', async () => {
   const require = createRequire(import.meta.url);
   const ShaderQuad = require(process.cwd() + '/node_modules/phaser/src/renderer/webgl/renderNodes/ShaderQuad.js');
   return {
+    Textures: { FilterMode: { LINEAR: 1 } },
     BlendModes: { NORMAL: 0 }, Math: { Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)) },
     GameObjects: { Shader: class extends InstalledShader {
       callbacks: Array<() => void> = [];
@@ -31,6 +32,9 @@ vi.mock('../src/graphics/GraphicsQuality', () => ({ getGraphicsQualityProfile: (
 import { CoopDefenseMissionProgressRenderer } from '../src/effects/CoopDefenseMissionProgressRenderer';
 import { TeslaNovaRenderer } from '../src/effects/TeslaNovaRenderer';
 import { TeslaFieldVisual } from '../src/effects/TeslaFieldVisual';
+import { WaterSurfaceRenderer } from '../src/arena/WaterSurfaceRenderer';
+import { StinkCloudBody } from '../src/effects/StinkCloudBody';
+import * as Phaser from 'phaser';
 
 function fixture() {
   const sharedIndex = { destroy: vi.fn() }, programs = new Map<string, { destroy: ReturnType<typeof vi.fn>; compiling: boolean }>();
@@ -53,8 +57,20 @@ function fixture() {
   renderer.renderNodes = { renderer, getNode: () => ({}), finishBatch: vi.fn() };
   const quads: any[] = [];
   const scene = {
-    sys: { renderer }, textures: { get: () => ({}) }, time: { now: 0 },
-    add: { existing: (quad: any) => { quads.push(quad); return quad; } },
+    sys: { renderer }, textures: {
+      get: () => ({}), remove: vi.fn(),
+      createCanvas: () => ({ context: {
+        createImageData: (w: number, h: number) => ({ data: new Uint8ClampedArray(w * h * 4) }),
+        putImageData() {},
+      }, refresh() {}, setFilter() {} }),
+    }, time: { now: 0 },
+    add: {
+      existing: (quad: any) => { quads.push(quad); return quad; },
+      shader: (...args: any[]) => {
+        const quad = new (Phaser.GameObjects.Shader as any)(scene, ...args);
+        quads.push(quad); return quad;
+      },
+    },
   };
   return { scene, buffers, vaos, quads, programs, sharedIndex };
 }
@@ -71,10 +87,14 @@ function mission(scene: any) {
 }
 
 describe('World shader effects release private Phaser GPU resources', () => {
-  it.each(['mission', 'nova-expiry', 'nova-teardown', 'tesla-field'] as const)('releases %s without retiring another owner or shared programs', kind => {
+  it.each(['mission', 'nova-expiry', 'nova-teardown', 'tesla-field', 'stink', 'stink-probe'] as const)('releases %s without retiring another owner or shared programs', kind => {
     const f = fixture();
     const create = () => {
       if (kind === 'mission') return mission(f.scene);
+      if (kind.startsWith('stink')) {
+        const owner = new StinkCloudBody(f.scene as never, f.quads.length, 'stink');
+        return () => kind === 'stink-probe' ? owner.destroyShaderProbe() : owner.destroy();
+      }
       if (kind === 'tesla-field') {
         const owner = new TeslaFieldVisual(f.scene as never, { seed: 1, depth: 1, boltDepth: 2, register() {} },
           { x: 100, y: 100, radius: 80 } as never);
@@ -109,5 +129,52 @@ describe('World shader effects release private Phaser GPU resources', () => {
     expect(f.buffers).toEqual([f.sharedIndex]);
     expect(f.vaos).toEqual([]);
     firstSuites.forEach(suite => expect(suite.program.destroy).not.toHaveBeenCalled());
+  });
+
+  it.each(['eviction', 'sunlight', 'destroy'] as const)('releases water private nodes on %s while preserving another resident owner', transition => {
+    const f = fixture();
+    const near = { x: 0, y: 0, width: 256, height: 256 };
+    const createWater = () => {
+      const owner = new WaterSurfaceRenderer(f.scene as never, { offsetX: 0, offsetY: 0, width: 256, height: 256 },
+        [{ gridX: 2, gridY: 2 }], 1);
+      while (!owner.isPrepared()) owner.prepareMasks();
+      owner.updateResidency(near);
+      return owner;
+    };
+    const first = createWater(), second = createWater();
+    const oldQuad = f.quads[0], control = f.quads[1], oldNode = oldQuad.renderNode;
+    const oldSuite = oldNode.programManager.getCurrentProgramSuite();
+    const controlNode = control.renderNode, controlSuite = controlNode.programManager.getCurrentProgramSuite();
+    expect(oldSuite.program).toBe(controlSuite.program);
+    if (transition === 'sunlight') first.setSunlight({} as never);
+    else if (transition === 'eviction') first.updateResidency({ x: 4000, y: 0, width: 100, height: 100 });
+    else first.destroy();
+    expect(oldQuad.destroyed).toBe(true);
+    expect(f.buffers).not.toContain(oldNode.vertexBufferLayout.buffer);
+    expect(f.vaos).not.toContain(oldSuite.vao);
+    expect(f.buffers).toContain(controlNode.vertexBufferLayout.buffer);
+    expect(f.vaos).toContain(controlSuite.vao);
+    expect(control.destroyed).not.toBe(true);
+    expect(oldSuite.program.destroy).not.toHaveBeenCalled();
+
+    if (transition === 'eviction') first.updateResidency(near);
+    if (transition === 'sunlight') {
+      const sunQuad = f.quads.at(-1), sunNode = sunQuad.renderNode;
+      const sunSuite = sunNode.programManager.getCurrentProgramSuite();
+      first.setSunlight(undefined);
+      expect(sunQuad.destroyed).toBe(true);
+      expect(f.buffers).not.toContain(sunNode.vertexBufferLayout.buffer);
+      expect(f.vaos).not.toContain(sunSuite.vao);
+    }
+    if (transition !== 'destroy') {
+      const replacement = f.quads.at(-1);
+      expect(replacement.destroyed).not.toBe(true);
+      expect(replacement.renderNode.programManager.getCurrentProgramSuite().program).toBe(oldSuite.program);
+    }
+    first.destroy(); first.destroy(); second.destroy();
+    expect(f.buffers).toEqual([f.sharedIndex]);
+    expect(f.vaos).toEqual([]);
+    expect(f.sharedIndex.destroy).not.toHaveBeenCalled();
+    expect([...f.programs.values()].every(program => program.destroy.mock.calls.length === 0)).toBe(true);
   });
 });
