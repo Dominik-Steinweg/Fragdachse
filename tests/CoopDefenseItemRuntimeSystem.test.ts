@@ -13,13 +13,11 @@ function build(options: {
   affixes?: Record<string, number>;
   hp?: Record<string, { hp: number; maxHp: number }>;
   positions?: Record<string, { x: number; y: number }>;
-  classIds?: Record<string, string | null>;
   rolls?: number[];
 } = {}): CoopDefenseItemRuntimeSystem {
   const affixes = options.affixes ?? {};
   const hp = options.hp ?? {};
   const positions = options.positions ?? {};
-  const classIds = options.classIds ?? {};
   const rolls = options.rolls ?? [0];
   let index = 0;
   return new CoopDefenseItemRuntimeSystem(
@@ -27,7 +25,6 @@ function build(options: {
       getAffixValue: (_playerId, affixId) => affixes[affixId] ?? 0,
       getPlayerHp: (playerId) => hp[playerId] ?? null,
       getPlayerPosition: (playerId) => positions[playerId] ?? null,
-      getPlayerClassId: (playerId) => classIds[playerId] ?? null,
     },
     () => rolls[index++ % rolls.length],
   );
@@ -334,7 +331,6 @@ describe('Neue Positions-Affixe', () => {
     const system = build({
       affixes: { remote_control: 0.15 },
       positions: { p: { x: 0, y: 0 } },
-      classIds: { p: 'inspector_gadachs' },
     });
 
     expect(system.getRemoteControlTarget('p', sources)?.id).toBe(2);
@@ -345,18 +341,16 @@ describe('Neue Positions-Affixe', () => {
     }]);
   });
 
-  it('wendet ein aufgeloestes Fernsteuerungs-Affix unabhaengig vom Klassennamen an', () => {
+  it('wendet Fernsteuerung genau bei vorhandenem aufgeloestem Affix an', () => {
     const source = { id: 1, x: 0, y: 0, ownerId: 'p', ownerColor: 0xffffff };
     const owner = build({
       affixes: { remote_control: 0.15 },
       positions: { p: { x: 0, y: 0 } },
-      classIds: { p: 'dachs_of_steel' },
     });
     expect(owner.getRemoteControlTarget('p', [source])).toEqual(source);
 
     const noAffix = build({
       positions: { p: { x: 0, y: 0 } },
-      classIds: { p: 'inspector_gadachs' },
     });
     expect(noAffix.getRemoteControlDamageMultiplier('p', source, [source])).toBe(1);
   });

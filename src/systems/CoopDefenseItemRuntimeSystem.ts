@@ -25,8 +25,6 @@ export interface CoopDefenseItemRuntimeDeps {
   getPlayerHp(playerId: string): { hp: number; maxHp: number } | null;
   /** Position des Spielers fuer ortsbezogene Konstrukt-Affixe. */
   getPlayerPosition?(playerId: string): { x: number; y: number } | null;
-  /** Klassen-ID fuer klassenexklusive Laufzeit-Affixe. */
-  getPlayerClassId?(playerId: string): string | null;
 }
 
 export interface RemoteControlSource {

@@ -521,7 +521,6 @@ export class WorldPlayerGameplayRuntime implements
         const player = options.playerManager.getPlayer(playerId);
         return player ? { x: player.x, y: player.y } : null;
       },
-      getPlayerClassId: (playerId) => playerModifier.getClassId(playerId) ?? null,
     });
     itemRuntime.setTargetStatusSystem(options.getTargetStatusSystem());
 
