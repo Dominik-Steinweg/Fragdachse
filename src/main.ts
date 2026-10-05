@@ -2,6 +2,7 @@ import { BUTTON_CURSOR } from './ui/gameCursor';
 import * as Phaser from 'phaser';
 import { installPhaserAlphaZero } from './graphics/PhaserAlphaZero';
 import { installPhaserFramebufferBindings } from './graphics/PhaserFramebufferBindings';
+import { installPhaserGpuLayerTextures } from './graphics/PhaserGpuLayerTextures';
 import { beginPerformanceBoot, labMarker, failPerformanceLab } from './debug/performanceLab/boot';
 import { bridge }         from './network/bridge';
 import { NetworkBridge }  from './network/NetworkBridge';
@@ -106,6 +107,7 @@ function installPageLeave(): void {
 async function boot(): Promise<void> {
   installPhaserAlphaZero(Phaser.Renderer.WebGL.ProgramManager.prototype);
   installPhaserFramebufferBindings(Phaser.Renderer.WebGL.Wrappers.WebGLFramebufferWrapper.prototype);
+  installPhaserGpuLayerTextures(Phaser.GameObjects.SpriteGPULayer.prototype);
   if (__PERFORMANCE_LAB__) beginPerformanceBoot();
   if (__PERFORMANCE_LAB__ && new URLSearchParams(location.search).has('network-probe')) {
     (await import('./debug/performanceLab/networkProbe')).prepareNetworkProbe();

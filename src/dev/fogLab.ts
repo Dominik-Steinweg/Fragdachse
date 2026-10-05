@@ -3,6 +3,7 @@ import { preloadPowerUpAssets } from '../assets/PowerUpAssets';
 import { UTILITY_CONFIGS } from '../loadout/LoadoutConfig';
 import type { ProjectileStyle } from '../types';
 import * as Phaser from 'phaser';
+import { installPhaserGpuLayerTextures } from '../graphics/PhaserGpuLayerTextures';
 import { runFogGpuContracts } from './fogGpuContracts';
 import { GroundFogSystem } from '../effects/groundFog/GroundFogSystem';
 import { FOG, type FogDebug, type FogQuality } from '../effects/groundFog/FogConfig';
@@ -365,6 +366,7 @@ class FogLab extends Phaser.Scene {
     const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = 'fragdachse-fog-lab.json'; a.click(); URL.revokeObjectURL(url);
   }
 }
+installPhaserGpuLayerTextures(Phaser.GameObjects.SpriteGPULayer.prototype);
 new Phaser.Game({ type: Phaser.WEBGL, parent: 'stage', width: 1920, height: 1080, backgroundColor: '#334937',
   // A controlled 60 Hz lab cadence also runs when the embedded browser throttles RAF.
   // The report rejects runs where the host throttles timers as well.
