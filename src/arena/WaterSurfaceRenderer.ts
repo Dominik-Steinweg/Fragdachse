@@ -69,7 +69,7 @@ export class WaterSurfaceRenderer {
     this.sunlight=state;
     if(this.destroyed||!variantChanged)return;
     for(const chunk of this.chunks.values()) {
-      this.destroyQuad(chunk.quad);
+      chunk.quad.destroy();
       chunk.quad=this.createQuad(chunk.x,chunk.y,chunk.key);
     }
   }
@@ -95,7 +95,7 @@ export class WaterSurfaceRenderer {
       && y + size >= view.y - margin && x <= view.x + view.width + margin && y <= view.y + view.height + margin;
     for (const [id, chunk] of this.chunks) {
       if (intersects(chunk.x, chunk.y, ARENA_RENDER_CHUNK_RELEASE_MARGIN_PX)) continue;
-      this.destroyQuad(chunk.quad); this.scene.textures.remove(chunk.key); this.chunks.delete(id);
+      chunk.quad.destroy(); this.scene.textures.remove(chunk.key); this.chunks.delete(id);
     }
     const margin = ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX;
     const minX = Math.max(0, Math.floor((view.x - margin - this.frame.offsetX) / size));
@@ -131,14 +131,11 @@ export class WaterSurfaceRenderer {
           if(sun) { set('uWorldOffset',this.worldOffset);setWaterSunUniforms(set,this.sunlight); }
         },
       }, x + size / 2, y + size / 2, size, size, [key]);
+      const node = quad.renderNode;
+      if (node) quad.once('destroy', () => disposeShaderWarmupNode(node));
       quad.setDepth(DEPTH.WATER).setBlendMode(Phaser.BlendModes.NORMAL);
       this.scene.add.existing(quad);
       return quad;
-  }
-
-  private destroyQuad(quad: Phaser.GameObjects.Shader): void {
-    if (quad.renderNode) disposeShaderWarmupNode(quad.renderNode);
-    quad.destroy();
   }
 
   destroy(): void {
@@ -147,7 +144,7 @@ export class WaterSurfaceRenderer {
     this.preparation?.return();
     this.preparation = null;
     this.masks.clear();
-    for (const chunk of this.chunks.values()) { this.destroyQuad(chunk.quad); this.scene.textures.remove(chunk.key); }
+    for (const chunk of this.chunks.values()) { chunk.quad.destroy(); this.scene.textures.remove(chunk.key); }
     this.chunks.clear();
   }
 }

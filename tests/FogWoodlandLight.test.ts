@@ -7,10 +7,12 @@ vi.mock('phaser',()=>({
     constructor(_scene:unknown,_x:number,_y:number,public width:number,public height:number){}
     clear(){}render(){}stamp(){}
   },Shader:class {
+    destroyCallbacks:Array<()=>void>=[];destroyed=false;
     visible=false;depth=0;texture={setFilter(){}};textures:any[];drawingContext={state:{blend:{}}};
     renderNode={programManager:{programs:{},getCurrentProgramSuite:()=>({program:{webGLProgram:{}}})},
-      renderer:{deleteBuffer(){},glVAOWrappers:[]},vertexBufferLayout:{buffer:{}}};
-    destroy=vi.fn();
+      renderer:{deleteBuffer:vi.fn(),glVAOWrappers:[]},vertexBufferLayout:{buffer:{}}};
+    once(_event:string,callback:()=>void){this.destroyCallbacks.push(callback);return this;}
+    destroy=vi.fn(()=>{if(this.destroyed)return;this.destroyed=true;(this as any).renderNode=null;this.destroyCallbacks.forEach(callback=>callback());});
     constructor(_scene:unknown,public config:any,_x:number,_y:number,public width:number,public height:number,textures:any[]){this.textures=textures;fake.shaders.push(this);}
     setRenderToTexture(){return this;}setOrigin(){return this;}setDepth(value:number){this.depth=value;return this;}setVisible(value:boolean){this.visible=value;return this;}
     setPosition(){return this;}setDisplaySize(){return this;}setTextures(value:any[]){this.textures=value;return this;}
@@ -28,6 +30,21 @@ import { ENEMY_SHADOW_DEPTH } from '../src/effects/EnemyMeshShadowModel';
 
 afterEach(()=>{fake.shaders.length=0;vi.clearAllMocks();});
 describe('optional fog woodland presentation',()=>{
+  it('releases display nodes after display-list teardown precedes the field owner',()=>{
+    const gl={DITHER:1,MAX_TEXTURE_SIZE:2,MAX_TEXTURE_IMAGE_UNITS:3,FRAMEBUFFER_COMPLETE:4,
+      isEnabled:()=>false,getParameter:(key:number)=>key===2?8192:8,getShaderPrecisionFormat:()=>({precision:23}),
+      getProgramParameter:()=>true,checkFramebufferStatus:()=>4,texSubImage2D(){},disable(){},enable(){}};
+    const listed:any[]=[],scene={sys:{renderer:{gl,createTexture2D:()=>({}),glTextureUnits:{bind(){}},glWrapper:{updateTexturing(){},update(){}}}},
+      textures:{addGLTexture:()=>({}),get:()=>({}),remove(){}},add:{existing:(value:any)=>{listed.push(value);return value;}}};
+    const terrain=new FogTerrainModel({offsetX:0,offsetY:0,width:512,height:512},[]),tuning=fogTuning(1);
+    const field=new FogGpuField(scene as never,terrain,1,tuning,10),view={x:0,y:0,width:512,height:512};
+    field.prepare(view,0);field.step([], [.3,.5],tuning,0);field.render(view,256,256,'normal',1,[],'low');
+    expect(listed).toHaveLength(1);
+    const node=listed[0].renderNode;
+    listed.forEach(quad=>quad.destroy());
+    field.destroy();field.destroy();
+    expect(node.renderer.deleteBuffer).toHaveBeenCalledExactlyOnceWith(node.vertexBufferLayout.buffer);
+  });
   it.each([8,16])('packs borrowed rock lighting without extra passes on a %i-sampler renderer',units=>{
     const gl={ZERO:0,ONE:1,ONE_MINUS_SRC_ALPHA:771,FUNC_ADD:32774,DITHER:1,MAX_TEXTURE_SIZE:2,MAX_TEXTURE_IMAGE_UNITS:3,FRAMEBUFFER_COMPLETE:4,
       isEnabled:()=>false,getParameter:(key:number)=>key===2?8192:units,getShaderPrecisionFormat:()=>({precision:23}),

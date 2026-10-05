@@ -532,14 +532,6 @@ export class LightingSystem {
     this.occlusionCachePool.length = 0;
     this.activeExplosionCacheCount = 0;
     if (this.lightBleed) {
-      // Shader.preDestroy in Phaser 4.2.1 leaves its private VAOs/buffer alive.
-      const node = this.lightBleed.renderNode;
-      for (const suite of Object.values(node.programManager.programs)) {
-        Phaser.Utils.Array.Remove(node.renderer.glVAOWrappers, suite.vao);
-        suite.vao.destroy();
-      }
-      node.programManager.programs = {};
-      node.renderer.deleteBuffer(node.vertexBufferLayout.buffer);
       this.lightBleed.destroy();
       this.lightBleed = null;
     }
@@ -1666,6 +1658,16 @@ export class LightingSystem {
           set('uBleedFactor', this.sky.bleedFactor);
         },
       }, lightMap.x, lightMap.y, lightMap.displayWidth, lightMap.displayHeight, [lightMap.texture]);
+      // Capture before Shader.preDestroy clears renderNode, including DisplayList shutdown.
+      const node = quad.renderNode;
+      quad.once('destroy', () => {
+        for (const suite of Object.values(node.programManager.programs)) {
+          Phaser.Utils.Array.Remove(node.renderer.glVAOWrappers, suite.vao);
+          suite.vao.destroy();
+        }
+        node.programManager.programs = {};
+        node.renderer.deleteBuffer(node.vertexBufferLayout.buffer);
+      });
       quad.setTextureCoordinatesFromFrame(lightMap.frame);
       // SCREEN = dst + bleed * (1 - dst): an additive contribution with remaining
       // headroom, so even overlapping lights cannot hard-clip the world to white.

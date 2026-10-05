@@ -2,11 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 
 vi.mock('phaser', async () => {
-  const { InstalledShader } = await import('./CharacterShadowPhaserHarness');
+  const { InstalledShader, installedDisplayListMethods } = await import('./CharacterShadowPhaserHarness');
   const { createRequire } = await import('node:module');
   const require = createRequire(import.meta.url);
   const ShaderQuad = require(process.cwd() + '/node_modules/phaser/src/renderer/webgl/renderNodes/ShaderQuad.js');
   return {
+    GameObjectsDisplayList: installedDisplayListMethods,
     Textures: { FilterMode: { LINEAR: 1 } },
     Scenes: { Events: { SHUTDOWN: 'shutdown', UPDATE: 'update', DESTROY: 'destroy' } },
     BlendModes: { NORMAL: 0, ADD: 1 }, Math: {
@@ -272,7 +273,7 @@ describe('Shader owners release private Phaser GPU resources', () => {
     expect(f.sharedIndex.destroy).not.toHaveBeenCalled();
   });
 
-  it.each(['eviction', 'sunlight', 'destroy'] as const)('releases water private nodes on %s while preserving another resident owner', transition => {
+  it.each(['eviction', 'sunlight', 'destroy', 'scene-shutdown'] as const)('releases water private nodes on %s while preserving another resident owner', transition => {
     const f = fixture();
     const near = { x: 0, y: 0, width: 256, height: 256 };
     const createWater = () => {
@@ -289,7 +290,14 @@ describe('Shader owners release private Phaser GPU resources', () => {
     expect(oldSuite.program).toBe(controlSuite.program);
     if (transition === 'sunlight') first.setSunlight({} as never);
     else if (transition === 'eviction') first.updateResidency({ x: 4000, y: 0, width: 100, height: 100 });
-    else first.destroy();
+    else {
+      if (transition === 'scene-shutdown') {
+        // DisplayList.start registers before Scene.create's owner SHUTDOWN hooks.
+        const displayList = { ...(Phaser as any).GameObjectsDisplayList, list: [oldQuad], events: f.scene.events };
+        displayList.shutdown();
+      }
+      first.destroy();
+    }
     expect(oldQuad.destroyed).toBe(true);
     expect(f.buffers).not.toContain(oldNode.vertexBufferLayout.buffer);
     expect(f.vaos).not.toContain(oldSuite.vao);
@@ -307,7 +315,7 @@ describe('Shader owners release private Phaser GPU resources', () => {
       expect(f.buffers).not.toContain(sunNode.vertexBufferLayout.buffer);
       expect(f.vaos).not.toContain(sunSuite.vao);
     }
-    if (transition !== 'destroy') {
+    if (transition !== 'destroy' && transition !== 'scene-shutdown') {
       const replacement = f.quads.at(-1);
       expect(replacement.destroyed).not.toBe(true);
       expect(replacement.renderNode.programManager.getCurrentProgramSuite().program).toBe(oldSuite.program);

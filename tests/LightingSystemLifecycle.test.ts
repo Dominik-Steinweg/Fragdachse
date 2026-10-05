@@ -7,6 +7,8 @@ vi.mock('phaser', () => ({
   Renderer: { WebGL: { Utils: { getTintAppendFloatAlpha: (color: number) => color } } },
   Math: { Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)) },
   GameObjects: { Shader: class {
+    destroyCallbacks: Array<() => void> = [];
+    destroyed = false;
     visible = true;
     depth = 0;
     blendMode = 0;
@@ -16,7 +18,14 @@ vi.mock('phaser', () => ({
       renderer: { glVAOWrappers: [this.vao], deleteBuffer: vi.fn() },
       vertexBufferLayout: { buffer: {} },
     };
-    destroy = vi.fn();
+    once(_event: string, callback: () => void) { this.destroyCallbacks.push(callback); return this; }
+    destroy = vi.fn(() => {
+      if (this.destroyed) return;
+      this.destroyed = true;
+      // Installed Shader.preDestroy runs before GameObject's DESTROY event.
+      (this as any).renderNode = null;
+      this.destroyCallbacks.forEach(callback => callback());
+    });
     constructor(_scene: unknown, public config: { setupUniforms: (set: (name: string, value: unknown) => void) => void },
       public x: number, public y: number, public width: number, public height: number, public textures: unknown[]) {}
     setupUniforms(set: (name: string, value: unknown) => void) { this.config.setupUniforms(set); }
@@ -90,6 +99,20 @@ function fixture(quality: GraphicsQuality = 'high') {
 }
 
 describe('light bleed lifecycle', () => {
+  it('releases light-bleed nodes when the Scene display list is destroyed before the lighting owner', () => {
+    const { lighting, shaders, qualityController } = fixture();
+    lighting.setLight('source', 'muzzleFlash', 100, 100);
+    lighting.update();
+    expect(shaders).toHaveLength(1);
+    const quad = shaders[0], node = quad.renderNode, suite = Object.values(node.programManager.programs)[0];
+    quad.destroy();
+    expect(() => lighting.destroy()).not.toThrow();
+    expect(node.renderer.deleteBuffer).toHaveBeenCalledExactlyOnceWith(node.vertexBufferLayout.buffer);
+    expect(suite.vao.destroy).toHaveBeenCalledOnce();
+    expect(node.renderer.glVAOWrappers).toHaveLength(0);
+    lighting.destroy(); qualityController.setLevel('low'); qualityController.destroy();
+    expect(node.renderer.deleteBuffer).toHaveBeenCalledOnce();
+  });
   it('skips a zero bleed factor even with visible lights and non-neutral ambient', () => {
     const resolver = vi.spyOn(TimeOfDay, 'resolveSkyState')
       .mockReturnValue({ ...resolveSkyState(0), bleedFactor: 0 });

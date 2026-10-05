@@ -61,16 +61,15 @@ class FogDataTexture {
 }
 
 /** Shader.preDestroy does not release its private VAOs/buffer in Phaser 4.2.1. */
-export function destroyFogShader(shader: Phaser.GameObjects.Shader): void {
+function ownFogShader(shader: Phaser.GameObjects.Shader): void {
   const node = shader.renderNode;
-  if (node) {
+  shader.once('destroy', () => {
     for (const suite of Object.values(node.programManager.programs)) {
       Phaser.Utils.Array.Remove(node.renderer.glVAOWrappers, suite.vao); suite.vao.destroy();
     }
     node.programManager.programs = {};
     node.renderer.deleteBuffer(node.vertexBufferLayout.buffer);
-  }
-  shader.destroy();
+  });
 }
 
 /** GPU-only dynamics. CPU arrays below contain terrain/topology/observations, never density. */
@@ -206,6 +205,7 @@ export class FogGpuField {
         }
       },
     }, 0, 0, width, height, Array(8).fill('__DEFAULT'));
+    ownFogShader(shader);
     try {
       shader.setRenderToTexture(this.prefix + name);
       const renderer = this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer, gl = renderer.gl;
@@ -218,7 +218,7 @@ export class FogGpuField {
       shader.drawingContext!.state.blend = { ...shader.drawingContext!.state.blend, enabled: false };
       shader.texture!.setFilter(Phaser.Textures.FilterMode.NEAREST);
       return shader;
-    } catch (error) { destroyFogShader(shader); throw error; }
+    } catch (error) { shader.destroy(); throw error; }
   }
   private draw(shader: Phaser.GameObjects.Shader, state: Phaser.GameObjects.Shader, velocity: Phaser.GameObjects.Shader): void {
     shader.setTextures([state.texture!, velocity.texture!, this.terrainTexture.texture, this.metaTexture.texture,
@@ -381,6 +381,7 @@ export class FogGpuField {
         this.setLightingUniforms(set);
       },
     }, 0, 0, width, height, ['__DEFAULT', '__DEFAULT']);
+    ownFogShader(display);
     // Optional mineral-only optical mix, above attached foliage and below the fog.
     // Preserve scene alpha explicitly: subsequent Phaser ADD draws use DST_ALPHA.
     // Scope the private PMA RGB mix to this draw.
@@ -424,9 +425,9 @@ export class FogGpuField {
     const prelit=canPrelightFog(this.woodlandLight?.sunCompositeTuning,this.textureUnits,debug==='normal');
     if (!this.material || this.material.width !== w || this.material.height !== h || prelit!==this.prelit) {
       this.prelit=prelit;
-      if (this.display) destroyFogShader(this.display);
-      if (this.rockAerial) { destroyFogShader(this.rockAerial);this.rockAerial=null; }
-      if (this.material) destroyFogShader(this.material);
+      this.display?.destroy();
+      if (this.rockAerial) { this.rockAerial.destroy();this.rockAerial=null; }
+      this.material?.destroy();
       this.material = this.makePass(prelit?'materialLit':'material',prelit?FOG_K_MATERIAL_FRAGMENT:FOG_MATERIAL_FRAGMENT,w,h);
       this.material.texture!.setFilter(Phaser.Textures.FilterMode.LINEAR);
       this.display = this.makeDisplay(w, h);
@@ -438,7 +439,7 @@ export class FogGpuField {
       }
       const tw = Math.max(2, Math.ceil(trailWidth / 2) * 2), th = Math.max(2, Math.ceil(trailHeight / 2) * 2);
       if (!this.trailMask || this.trailMask.width !== tw || this.trailMask.height !== th) {
-        if (this.trailMask) destroyFogShader(this.trailMask);
+        this.trailMask?.destroy();
         this.trailMask = this.makePass('trails', FOG_TRAIL_FRAGMENT, tw, th, FOG_TRAIL_VERTEX);
         this.trailMask.texture!.setFilter(Phaser.Textures.FilterMode.LINEAR);
         this.trailRenderer = new FogTrailRenderer(this.trailMask, this.terrain.frame);
@@ -451,7 +452,7 @@ export class FogGpuField {
       if(this.surfaceMask?.width!==mw||this.surfaceMask?.height!==mh) {
         this.surfaceMask?.destroy();
         this.surfaceMask=new Phaser.GameObjects.RenderTexture(this.scene,0,0,mw,mh);
-        if(this.packedSurface)destroyFogShader(this.packedSurface);
+        this.packedSurface?.destroy();
         this.packedSurface=this.makeSurfacePass(mw,mh);
       }
       const mask = this.surfaceMask; mask.clear();
@@ -484,7 +485,7 @@ export class FogGpuField {
   setRockLighting(strength: [number, number]): void { this.rockFogStrength=strength; }
   setRockAerialStrength(strength: number): void {
     this.rockAerialStrength=strength;
-    if(strength===0&&this.rockAerial){destroyFogShader(this.rockAerial);this.rockAerial=null;}
+    if(strength===0&&this.rockAerial){this.rockAerial.destroy();this.rockAerial=null;}
   }
   setRockCoverage(binding: FormationCoverageBinding | null): void {
     this.rockCoverage=binding;this.syncBoundary();
@@ -556,13 +557,13 @@ export class FogGpuField {
     this.woodlandLight=null;
     this.rockCoverage=null;
     this.boundary?.destroy();this.boundary=null;this.boundaryBuilder=null;
-    if (this.display) destroyFogShader(this.display); this.display = null;
-    if (this.rockAerial) destroyFogShader(this.rockAerial); this.rockAerial = null;
+    this.display?.destroy(); this.display = null;
+    this.rockAerial?.destroy(); this.rockAerial = null;
     this.surfaceMask?.destroy(); this.surfaceMask = null;
-    if(this.packedSurface)destroyFogShader(this.packedSurface);this.packedSurface=null;
-    if (this.material) destroyFogShader(this.material);
-    if (this.trailMask) destroyFogShader(this.trailMask);
-    for (const shader of [...this.states, ...this.velocities, this.impulse]) if (shader) destroyFogShader(shader);
+    this.packedSurface?.destroy();this.packedSurface=null;
+    this.material?.destroy();
+    this.trailMask?.destroy();
+    for (const shader of [...this.states, ...this.velocities, this.impulse]) shader?.destroy();
     for (const dispose of this.resources.splice(0)) dispose();
     this.trails.clear();
     this.residency.clear();

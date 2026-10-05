@@ -12,6 +12,10 @@ function moduleWith(path: string, overrides: Record<string, unknown>) {
   return module.exports as any;
 }
 const definition = function (value: unknown) { return value; };
+export const installedDisplayListMethods = moduleWith('gameobjects/DisplayList.js', {
+  '../utils/Class': definition, '../structs/List': function () {},
+  '../plugins/PluginCache': { register() {} }, '../utils/array/StableSort': () => {},
+});
 const quadMethods = moduleWith('renderer/webgl/renderNodes/ShaderQuad.js', { '../../../utils/Class': definition,
   '../wrappers/WebGLVertexBufferLayoutWrapper': function () {}, '../ProgramManager': function () {}, './RenderNode': function () {} });
 const transformMethods = moduleWith('renderer/webgl/renderNodes/transformer/TransformerImage.js', { '../../../../utils/Class': definition, '../RenderNode': function () {} });
