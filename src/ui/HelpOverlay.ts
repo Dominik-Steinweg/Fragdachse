@@ -47,16 +47,14 @@ export class HelpOverlay {
 
   private dismissDelay: Phaser.Time.TimerEvent | null = null;
   private keyHandler:   ((e: KeyboardEvent) => void) | null = null;
+  private visibilityTween: Phaser.Tweens.Tween | null = null;
 
   constructor(private scene: Phaser.Scene) {}
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   build(): void {
-    if (this.container) {
-      this.container.destroy(true);
-      this.container = null;
-    }
+    this.destroy();
 
     const objects: Phaser.GameObjects.GameObject[] = [];
 
@@ -129,7 +127,8 @@ export class HelpOverlay {
     // Sofort sichtbar mit Eingangsanimation
     this.container.setVisible(true);
     this.container.setAlpha(0);
-    this.scene.tweens.add({
+    this.visibilityTween?.remove();
+    this.visibilityTween = this.scene.tweens.add({
       targets: this.container,
       alpha: 1,
       duration: 150,
@@ -165,7 +164,8 @@ export class HelpOverlay {
     }
 
     // Ausgangsanimation
-    this.scene.tweens.add({
+    this.visibilityTween?.remove();
+    this.visibilityTween = this.scene.tweens.add({
       targets: this.container,
       alpha: 0,
       duration: 100,
@@ -179,7 +179,11 @@ export class HelpOverlay {
   }
 
   destroy(): void {
+    this.visible = false;
+    this.visibilityTween?.remove();
+    this.visibilityTween = null;
     this.dismissDelay?.destroy();
+    this.dismissDelay = null;
     if (this.keyHandler) {
       this.scene.input.keyboard?.off('keydown', this.keyHandler);
       this.keyHandler = null;

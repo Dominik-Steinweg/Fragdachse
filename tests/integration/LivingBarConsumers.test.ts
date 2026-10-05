@@ -55,6 +55,7 @@ import { CoopDefenseItemsOverlay } from '../../src/ui/CoopDefenseItemsOverlay';
 import { CoopDefenseItemRewardOverlay } from '../../src/ui/CoopDefenseItemRewardOverlay';
 import { MatchResultsOverlay } from '../../src/ui/MatchResultsOverlay';
 import { getCoopDefenseProgressSnapshot } from '../../src/utils/coopDefenseProgression';
+import { HelpOverlay } from '../../src/ui/HelpOverlay';
 
 class UiObject extends EventEmitter {
   visible = true;
@@ -131,6 +132,7 @@ class UiObject extends EventEmitter {
 
 function sceneStub() {
   const tweens: any[] = [];
+  const timers: any[] = [];
   const scene: any = {
     input: Object.assign(new EventEmitter(), { setDraggable() {}, dragDistanceThreshold: 3, keyboard: new EventEmitter() }),
     events: new EventEmitter(), load: new EventEmitter(),
@@ -139,7 +141,11 @@ function sceneStub() {
       tweens.push(tween);
       return tween;
     } },
-    time: { now: 0, delayedCall: () => ({ destroy() {}, remove() {} }) },
+    time: { now: 0, delayedCall: (_delay: number, callback: () => void) => {
+      const timer = { callback, removed: false, destroy() { this.removed = true; }, remove() { this.removed = true; } };
+      timers.push(timer);
+      return timer;
+    } },
     textures: {
       exists: () => true, remove() {},
       get: () => ({ has: () => true }),
@@ -158,7 +164,7 @@ function sceneStub() {
       particles: () => new UiObject('particles'),
     },
   };
-  return { scene, tweens };
+  return { scene, tweens, timers };
 }
 
 beforeEach(() => { effects.length = 0; });
@@ -247,6 +253,35 @@ describe('reopened overlay language and ownership', () => {
 });
 
 describe('living UI consumer ownership', () => {
+  it.each([false, true])('keeps reopened help visible across its previous fade (rebuild: %s)', rebuild => {
+    const { scene, tweens, timers } = sceneStub();
+    const help: any = new HelpOverlay(scene);
+    help.build(); help.show();
+    timers.at(-1).callback();
+    expect(scene.input.keyboard.listenerCount('keydown')).toBe(1);
+    help.hide();
+    expect(scene.input.keyboard.listenerCount('keydown')).toBe(0);
+    const fadingOut = tweens.at(-1);
+    if (rebuild) help.build(); // LeftSidePanel.refreshLocale uses this same owner boundary.
+    help.show();
+    // Phaser only advances a tween that has not been removed from its manager.
+    if (!fadingOut.removed) { fadingOut.targets.alpha = 0; fadingOut.onComplete(); }
+    expect(help.isOpen()).toBe(true);
+    expect(help.container.visible).toBe(true);
+    expect(fadingOut.removed).toBe(true);
+    help.hide();
+    tweens.at(-1).onComplete();
+    expect(help.container.visible).toBe(false);
+    expect(help.isOpen()).toBe(false);
+    help.show();
+    const pendingDismiss = timers.at(-1), fadingIn = tweens.at(-1);
+    help.destroy();
+    expect(pendingDismiss.removed).toBe(true);
+    expect(fadingIn.removed).toBe(true);
+    expect(help.isOpen()).toBe(false);
+    expect(scene.input.keyboard.listenerCount('keydown')).toBe(0);
+  });
+
   it('sounds central buttons once at their configured activation edge and keeps rejected or disabled actions silent', () => {
     const { scene } = sceneStub();
     const playLocalSound = vi.fn();
