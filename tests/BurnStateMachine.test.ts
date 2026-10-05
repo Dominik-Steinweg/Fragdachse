@@ -6,6 +6,30 @@ import {
 import { BURN_TICK_INTERVAL_MS } from '../src/config';
 
 describe('BurnStateMachine (Phaser-unabhängiger Shared Burn Core)', () => {
+  it('keeps staggered stacks with equal expiry separate until their own first tick', () => {
+    const sm = new BurnStateMachine();
+    const tick = BURN_TICK_INTERVAL_MS;
+    const hit = { targetId: 'dummy', attackerId: 'p1', sourceKey: 'glock', sourceId: 'weapon.GLOCK', damagePerTick: 2 };
+    sm.applyHit({ ...hit, now: 0, durationMs: 4 * tick });
+    sm.applyHit({ ...hit, now: 2 * tick, durationMs: 2 * tick });
+    expect(sm.getStackCount('dummy', 2 * tick)).toBe(2);
+    expect(sm.advanceTo(3 * tick).map(({ tickAt, damage }) => [tickAt, damage])).toEqual([
+      [tick, 2], [2 * tick, 2], [3 * tick, 4],
+    ]);
+    expect(sm.advanceTo(4 * tick)).toEqual([]);
+    expect(sm.getStackCount('dummy', 4 * tick)).toBe(0);
+  });
+
+  it.each([0, -1])('starts a new stack on the first global tick strictly after its hit (%dms offset)', offset => {
+    const sm = new BurnStateMachine();
+    const tick = BURN_TICK_INTERVAL_MS;
+    sm.advanceTo(tick);
+    sm.applyHit({ targetId: 'dummy', attackerId: 'p1', sourceKey: 'glock', sourceId: 'weapon.GLOCK',
+      damagePerTick: 2, now: 3 * tick + offset, durationMs: 3 * tick });
+    expect(sm.advanceTo(3 * tick).map(entry => entry.tickAt)).toEqual(offset < 0 ? [3 * tick] : []);
+    expect(sm.advanceTo(4 * tick).map(entry => entry.tickAt)).toEqual([4 * tick]);
+  });
+
   it('1. Ein Burn-Hit erzeugt exakt 1 Stack mit korrekt gerundeter Expiration', () => {
     const sm = new BurnStateMachine();
     const applied = sm.applyHit({

@@ -70,6 +70,20 @@ describe('CombatSystem & BurnStateMachine Parity', () => {
     return { cs, damageCalls, now: () => now, setNow: (value: number) => { now = value; } };
   }
 
+  it('does not backdate an immediate Burn hit into ticks before the host execution', () => {
+    const { cs, damageCalls, setNow } = createTestSetup();
+    cs.advanceStatuses(1_000);
+    setNow(1_500);
+    cs.applyBurnHit('p_target', 'p1', 1_000, 5, 'glock', 'weapon.GLOCK');
+    cs.advanceStatuses(1_500);
+    expect(damageCalls).toEqual([]);
+    expect(cs.getBurnStackCount('p_target', 1_500)).toBe(1);
+    setNow(1_750);
+    cs.advanceStatuses(1_750);
+    expect(damageCalls).toHaveLength(1);
+    expect(damageCalls[0]).toMatchObject({ damage: 5, damageKind: 'burn' });
+  });
+
   it('retains captured drone attribution through ground contact and every later burn tick', () => {
     const {cs}=createTestSetup();
     const source=cs.captureWorldDamageSource('p1','ground_fire.attack_drone','ground',{

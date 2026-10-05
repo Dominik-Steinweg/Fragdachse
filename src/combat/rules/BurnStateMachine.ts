@@ -4,6 +4,7 @@ import type { BurnOrigin, GroundFireVisualStyle } from '../../types';
 export const MAX_BURN_CATCH_UP_TICKS = 4;
 
 export interface BurnStackBucket {
+  firstTickAt: number;
   expiresAt: number;
   damagePerTick: number;
   stackCount: number;
@@ -58,7 +59,7 @@ export interface DueBurnContribution {
  *
  * Regeln:
  * - Jeder Brandtreffer erzeugt genau 1 Stack.
- * - Stacks mit identischem (expiresAt, damagePerTick) teilen sich einen Bucket.
+ * - Stacks mit identischem (firstTickAt, expiresAt, damagePerTick) teilen sich einen Bucket.
  * - Expiration wird immer auf das Ende des globalen Brand-Ticks gerundet:
  *   `Math.ceil((now + durationMs) / BURN_TICK_INTERVAL_MS) * BURN_TICK_INTERVAL_MS`.
  * - Ticks sind global auf Vielfache von `BURN_TICK_INTERVAL_MS` ausgerichtet.
@@ -123,14 +124,15 @@ export class BurnStateMachine {
       sourceState.visualStyle = visualStyle;
     }
 
+    const firstTickAt = Math.floor(now / this.tickIntervalMs) * this.tickIntervalMs + this.tickIntervalMs;
     const expiresAt = Math.ceil((now + durationMs) / this.tickIntervalMs) * this.tickIntervalMs;
     const bucket = sourceState.stacks.find(
-      (entry) => entry.expiresAt === expiresAt && entry.damagePerTick === damagePerTick,
+      (entry) => entry.firstTickAt === firstTickAt && entry.expiresAt === expiresAt && entry.damagePerTick === damagePerTick,
     );
     if (bucket) {
       bucket.stackCount += 1;
     } else {
-      sourceState.stacks.push({ expiresAt, damagePerTick, stackCount: 1 });
+      sourceState.stacks.push({ firstTickAt, expiresAt, damagePerTick, stackCount: 1 });
     }
 
     return true;
@@ -194,7 +196,8 @@ export class BurnStateMachine {
         }
 
         const damage = state.stacks.reduce(
-          (sum, bucket) => sum + bucket.damagePerTick * bucket.stackCount,
+          // Immediate actions can precede PreCombat while older global ticks are still due.
+          (sum, bucket) => sum + (tickAt >= bucket.firstTickAt ? bucket.damagePerTick * bucket.stackCount : 0),
           0,
         );
 
