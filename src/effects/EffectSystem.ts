@@ -585,6 +585,7 @@ export class EffectSystem implements EnemyVisualSink {
     this.mobilityEffectTimers.add(timer);
   }
 
+  /** Transient dash ghosts, train-burrow sparks and player stealth transitions. */
   clearMobilityEffects(): void {
     for (const timer of this.mobilityEffectTimers) timer.remove(false);
     this.mobilityEffectTimers.clear();
@@ -607,6 +608,7 @@ export class EffectSystem implements EnemyVisualSink {
     this.ensureTextures();
     const particleCount = revealing ? 28 : 22;
     const core = this.scene.add.circle(x, y, revealing ? 16 : 12, color, revealing ? 0.34 : 0.24);
+    this.trackMobilityEffect(core);
     registerGraphicsObject(this.scene, 'effectSystemGraphics', core);
     core.setDepth(DEPTH_FX + 0.2);
     makeAdditive(core);
@@ -617,10 +619,11 @@ export class EffectSystem implements EnemyVisualSink {
       alpha: 0,
       duration: revealing ? 380 : 320,
       ease: 'Cubic.easeOut',
-      onComplete: () => core.destroy(),
+      onComplete: () => this.releaseMobilityEffect(core),
     });
 
     const ring = this.scene.add.circle(x, y, revealing ? 16 : 12, 0, 0);
+    this.trackMobilityEffect(ring);
     registerGraphicsObject(this.scene, 'effectSystemGraphics', ring);
     ring.setDepth(DEPTH_FX + 0.16);
     ring.setStrokeStyle(revealing ? 6 : 5, color, revealing ? 0.7 : 0.54);
@@ -632,10 +635,11 @@ export class EffectSystem implements EnemyVisualSink {
       alpha: 0,
       duration: revealing ? 440 : 360,
       ease: 'Quart.easeOut',
-      onComplete: () => ring.destroy(),
+      onComplete: () => this.releaseMobilityEffect(ring),
     });
 
     const outerRing = this.scene.add.circle(x, y, revealing ? 22 : 18, 0, 0);
+    this.trackMobilityEffect(outerRing);
     registerGraphicsObject(this.scene, 'effectSystemGraphics', outerRing);
     outerRing.setDepth(DEPTH_FX + 0.12);
     outerRing.setStrokeStyle(revealing ? 10 : 8, color, revealing ? 0.24 : 0.18);
@@ -646,7 +650,7 @@ export class EffectSystem implements EnemyVisualSink {
       alpha: 0,
       duration: revealing ? 520 : 420,
       ease: 'Cubic.easeOut',
-      onComplete: () => outerRing.destroy(),
+      onComplete: () => this.releaseMobilityEffect(outerRing),
     });
 
     for (let i = 0; i < particleCount; i++) {
@@ -654,6 +658,7 @@ export class EffectSystem implements EnemyVisualSink {
       const travel = Phaser.Math.Between(revealing ? 24 : 14, revealing ? 68 : 42);
       const size = Phaser.Math.Between(2, 5);
       const pixel = this.scene.add.rectangle(x, y, size, size, color, revealing ? 0.82 : 0.6);
+      this.trackMobilityEffect(pixel);
       registerGraphicsObject(this.scene, 'effectSystemGraphics', pixel);
       pixel.setDepth(DEPTH_FX + 0.1);
       pixel.setRotation(Math.random() * Math.PI);
@@ -667,7 +672,7 @@ export class EffectSystem implements EnemyVisualSink {
         angle: Phaser.Math.Between(-160, 160),
         duration: revealing ? 440 : 340,
         ease: 'Quad.easeOut',
-        onComplete: () => pixel.destroy(),
+        onComplete: () => this.releaseMobilityEffect(pixel),
       });
     }
 
@@ -681,9 +686,13 @@ export class EffectSystem implements EnemyVisualSink {
       tint: { min: color, max: color },
     });
     dust.setDepth(DEPTH_FX + 0.05);
+    this.trackMobilityEffect(dust);
     dust.addEmitZone(circleZone(revealing ? 8 : 6, particleCount));
     dust.explode(particleCount);
-    this.scene.time.delayedCall(560, () => dust.destroy());
+    const dustTimer = this.scene.time.delayedCall(560, () => {
+      if (this.mobilityEffectTimers.delete(dustTimer)) this.releaseMobilityEffect(dust);
+    });
+    this.mobilityEffectTimers.add(dustTimer);
 
     const spark = this.scene.add.particles(x, y, '_living_blob', {
       lifespan: { min: 180, max: 360 },
@@ -696,9 +705,13 @@ export class EffectSystem implements EnemyVisualSink {
       blendMode: Phaser.BlendModes.ADD,
     });
     spark.setDepth(DEPTH_FX + 0.22);
+    this.trackMobilityEffect(spark);
     spark.addEmitZone(circleZone(revealing ? 10 : 8, revealing ? 18 : 12));
     spark.explode(revealing ? 18 : 12);
-    this.scene.time.delayedCall(420, () => spark.destroy());
+    const sparkTimer = this.scene.time.delayedCall(420, () => {
+      if (this.mobilityEffectTimers.delete(sparkTimer)) this.releaseMobilityEffect(spark);
+    });
+    this.mobilityEffectTimers.add(sparkTimer);
   }
 
   /** Player phase reconciliation binds continuous GPU churn without replaying a discrete burst. */
