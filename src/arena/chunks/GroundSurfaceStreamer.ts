@@ -108,8 +108,6 @@ export class GroundSurfaceStreamer {
   private readonly dirtCells: readonly DirtCell[];
   /** Water cells only feed the riverbank of the soil layer; the water itself renders elsewhere. */
   private readonly waterCells: readonly WaterCell[];
-  private readonly gridCols: number;
-  private readonly gridRows: number;
   private readonly groundCoverPlacements: readonly GroundCoverPlacement[];
   private readonly groundDecals: readonly DecalCell[];
   private readonly dirtIndex: ArenaCellBucketIndex;
@@ -126,7 +124,6 @@ export class GroundSurfaceStreamer {
   private persistentBaseGravelState: PersistentBaseGravelState | null = null;
   private persistentBaseGravelKey = 'none';
   private persistentBaseGravelCells: readonly PersistentBaseGravelCell[] = [];
-  private persistentBaseGravelCellKeys: ReadonlySet<string> = new Set();
   private persistentBaseGravelDecorations: readonly PersistentBaseGravelDecoration[] = [];
   private readonly persistentBaseGravelIndex: ArenaCellBucketIndex;
   private readonly persistentBaseGravelDecorationIndex: ArenaPointBucketIndex<PersistentBaseGravelDecoration>;
@@ -146,8 +143,6 @@ export class GroundSurfaceStreamer {
   constructor(options: GroundSurfaceStreamerOptions) {
     this.scene = options.scene;
     this.frame = options.frame;
-    this.gridCols = Math.max(1, Math.floor(options.frame.width / CELL_SIZE));
-    this.gridRows = Math.max(1, Math.floor(options.frame.height / CELL_SIZE));
     this.dirtCells = options.layout.dirt ?? [];
     this.groundCoverPlacements = options.groundCoverPlacements;
     const groundDecals: DecalCell[] = [];
@@ -340,7 +335,6 @@ export class GroundSurfaceStreamer {
     this.persistentBaseGravelState = nextState;
     this.persistentBaseGravelKey = nextKey;
     this.persistentBaseGravelCells = nextState?.cells ?? [];
-    this.persistentBaseGravelCellKeys = nextState?.cellKeys ?? new Set();
     this.persistentBaseGravelDecorations = nextState?.decorations ?? [];
     this.persistentBaseGravelDecorationQueryRadius = nextState
       ? getPersistentBaseGravelDecorationReachPx()
@@ -554,7 +548,6 @@ export class GroundSurfaceStreamer {
     this.persistentBaseGravelDecorationIndex.clear();
     this.persistentBaseGravelState = null;
     this.persistentBaseGravelCells = [];
-    this.persistentBaseGravelCellKeys = new Set();
     this.persistentBaseGravelDecorations = [];
   }
 

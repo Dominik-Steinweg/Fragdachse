@@ -153,17 +153,6 @@ export class AutomatedWeaponExecutionAdapter implements AutomatedWeaponExecution
 
 }
 
-function calculateDecayLifetime(range: number, projectileSpeed: number, decay: number): number {
-  if (decay >= 1 || decay <= 0) return (range / projectileSpeed) * 1000;
-
-  const lnDecay = Math.log(decay);
-  const maxDist = projectileSpeed / -lnDecay;
-  const distRatio = range / maxDist;
-  if (distRatio >= 1) return 3000;
-
-  return Math.log(1 - distRatio) / lnDecay * 1000;
-}
-
 function scaleAutomatedWeaponDamage(
   config: WeaponConfig,
   directDamageMultiplier: number,
