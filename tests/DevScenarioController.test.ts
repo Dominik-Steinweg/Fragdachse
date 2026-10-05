@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { runInNewContext } from 'node:vm';
+import EventEmitter from 'eventemitter3';
 import type * as Phaser from 'phaser';
 import type { ArenaRuntime } from '../src/scenes/arena/ArenaRuntime';
 import { defaultScenario, encodeScenario } from '../src/dev/scenario/config';
 import { resolveRockAerialPerspective } from '../src/effects/groundFog/FogRockLighting';
 import { DevScenarioController } from '../src/dev/scenario/controller';
 import { WorldLightingMeasurement } from '../src/dev/scenario/WorldLightingMeasurement';
+import { onBootSceneTeardown } from '../src/ui/BootPreparation';
 
 const host = vi.hoisted(() => ({ phase: 'LOBBY', started: false, lobbyMinute:480 }));
 const arenaSystem = vi.hoisted(() => ({ pause: vi.fn(), resume: vi.fn(), setVisible: vi.fn(), isActive: () => true, settings: { visible: true } }));
@@ -530,3 +535,59 @@ it.each([[960, 540, 0], [1920, 1080, 0], [3840, 2160, 0], [1920, 1080, .5]])(
     camera.scrollX += 50000;
     expect(controller.snapshot()).toMatchObject({ train: { visible: false, fullyVisible: false } });
   });
+// Scene plugins register their shutdown before ArenaScene installs its own teardown.
+function bindActualCameraShutdown(): () => void {
+  const source = new URL('../node_modules/phaser/src/cameras/2d/CameraManager.js', import.meta.url);
+  const require = createRequire(source);
+  const module = { exports: {} };
+  runInNewContext(readFileSync(source, 'utf8'), {
+    module,
+    exports: module.exports,
+    require: (id: string) => {
+      if (id === '../../utils/Class') return function (definition: object) { return definition; };
+      if (id === '../../plugins/PluginCache') return { register() {} };
+      if (id === '../../scene/events' || id === '../../scale/events') return require(id);
+      return function () {};
+    },
+  });
+  const methods = module.exports as Record<string, Function>;
+  const scene = (controller as any).scene;
+  const events = new EventEmitter();
+  const camera = { ...scene.cameras.main, destroy: vi.fn() };
+  scene.cameras = { ...methods, main: camera, cameras: [camera], systems: { events } };
+  methods.start.call(scene.cameras);
+  onBootSceneTeardown(events, () => controller.destroy());
+  return () => events.emit('shutdown');
+}
+
+it('completes pending readiness and restores the clock after real camera shutdown', async () => {
+  controller.start(defaultScenario());
+  const api = window.devScenario!;
+  const pending = api.whenReady();
+  const { nativeNow, original } = controller.clock as any;
+  const shutdown = bindActualCameraShutdown();
+  expect(() => shutdown()).not.toThrow();
+  await expect(pending).resolves.toMatchObject({ ok: false, error: 'Dev-Szenario wurde beendet.', status: { ready: false } });
+  expect(window.devScenario).toBeUndefined();
+  expect(Date.now).toBe(nativeNow);
+  expect((controller as any).scene.game.loop.callback).toBe(original);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('returns terminal API results without reading a destroyed scene after capture cancellation', async () => {
+  enter(); controller.afterHostFrame();
+  const api = window.devScenario!;
+  const pending = api.capture();
+  const shutdown = bindActualCameraShutdown();
+  shutdown();
+  const snapshot = vi.spyOn(controller, 'snapshot');
+  const fail = vi.spyOn(controller, 'fail');
+  await expect(pending).resolves.toMatchObject({ ok: false, status: { ready: false } });
+  expect(api.status()).toMatchObject({ ready: false });
+  expect(api.run({ action: 'resume' })).toMatchObject({ ok: false, status: { ready: false } });
+  await expect(api.whenReady()).resolves.toMatchObject({ ok: false, status: { ready: false } });
+  await expect(api.saveReport()).resolves.toMatchObject({ ok: false, status: { ready: false } });
+  expect(snapshot).not.toHaveBeenCalled();
+  expect(fail).not.toHaveBeenCalled();
+  snapshot.mockRestore(); fail.mockRestore();
+});

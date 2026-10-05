@@ -210,7 +210,9 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
 export function installScenarioApi(controller: DevScenarioController) {
   let active = true;
   const waiters = new Set<() => void>();
-  const status = () => structuredClone(controller.snapshot());
+  // Phaser's Scene plugins can already be shut down when this API is detached.
+  const status = (): Record<string, unknown> => active ? structuredClone(controller.snapshot())
+    : { state: 'error', ready: false, message: 'Dev-Szenario wurde beendet.', isolated: true, network: 'local-only' };
   const failure = (error: unknown): ScenarioResult => ({ ok: false, error: error instanceof Error ? error.message : String(error), status: status() });
   const api: DevScenarioApi = {
     version: 1, status,
@@ -219,9 +221,9 @@ export function installScenarioApi(controller: DevScenarioController) {
         if (!active) throw new Error('Dev-Szenario wurde beendet.');
         const result = runScenarioCommand(controller, command);
         if (result) return result.then((): ScenarioResult => ({ ok: true, status: status() }))
-          .catch(error => { controller.fail(error); return failure(error); });
+          .catch(error => { if (active) controller.fail(error); return failure(error); });
         return { ok: true, status: status() };
-      } catch (error) { controller.fail(error); return failure(error); }
+      } catch (error) { if (active) controller.fail(error); return failure(error); }
     },
     whenReady(timeoutMs = 180000) {
       try { number(timeoutMs, 1, 180000); } catch (error) { return Promise.resolve(failure(error)); }
@@ -242,14 +244,14 @@ export function installScenarioApi(controller: DevScenarioController) {
       try {
         if(!active)throw new Error('Dev-Szenario wurde beendet.');
         return {ok:true,...await controller.saveReportToWorkspace()};
-      }catch(error){controller.fail(error);return failure(error);}
+      }catch(error){if(active)controller.fail(error);return failure(error);}
     },
     async capture() {
       try {
         if (!active) throw new Error('Dev-Szenario wurde beendet.');
         const result = await controller.captureToWorkspace();
         return { ok: true, ...result };
-      } catch (error) { controller.fail(error); return failure(error); }
+      } catch (error) { if (active) controller.fail(error); return failure(error); }
     },
   };
   window.devScenario = api;
