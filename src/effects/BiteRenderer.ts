@@ -40,6 +40,7 @@ export class BiteRenderer {
   private volumeFlecks?: Phaser.GameObjects.Particles.ParticleEmitter;
   private impactBlood?: Phaser.GameObjects.Particles.ParticleEmitter;
   private impactChips?: Phaser.GameObjects.Particles.ParticleEmitter;
+  private readonly transients = new Set<Phaser.GameObjects.GameObject>();
   private readonly contours = new Map<string, ClawPath[][]>();
   private readonly fillLayers = new WeakMap<readonly ClawPath[], Map<string, readonly StaticPolygonLayer[]>>();
   private readonly clawSamples = new WeakMap<ClawPath, readonly {
@@ -49,10 +50,18 @@ export class BiteRenderer {
 
   /** Scene-owned emitters retain their pools; a World handoff clears all live particles. */
   clear(): void {
+    for (const object of this.transients) {
+      this.scene.tweens.killTweensOf(object);
+      this.releaseTransient(object);
+    }
     for (const emitter of [this.volumeBlood, this.volumeFlecks, this.impactBlood, this.impactChips]) {
       if (emitter) killAllAndResetParticlePositions(emitter);
     }
     this.contours.clear();
+  }
+
+  private releaseTransient(object: Phaser.GameObjects.GameObject): void {
+    if (this.transients.delete(object)) object.destroy();
   }
 
   generateTextures(): void {
@@ -110,6 +119,7 @@ export class BiteRenderer {
     const clawPaths = this.contourVariant(`swing:${resolvedRange}:${halfArcRad}`,
       () => this.buildClawPaths(resolvedRange, halfArcRad));
     const slash = this.scene.add.container(x, y);
+    this.transients.add(slash);
     slash.setDepth(DEPTH_TRACE + 0.04);
     slash.setRotation(angle + rotationJitter);
 
@@ -130,10 +140,7 @@ export class BiteRenderer {
       scaleY: 1.08,
       duration: BITE_LINGER_MS,
       ease: 'Cubic.easeOut',
-      onComplete: () => {
-        slash.removeAll(true);
-        slash.destroy();
-      },
+      onComplete: () => this.releaseTransient(slash),
     });
 
     this.playClawWake(x, y, angle + rotationJitter, clawPaths);
@@ -282,6 +289,7 @@ export class BiteRenderer {
     clawPaths: readonly ClawPath[],
   ): void {
     const wake = this.scene.add.container(x, y);
+    this.transients.add(wake);
     wake.setDepth(DEPTH_TRACE + 0.08);
     wake.setRotation(angle);
     wake.add([
@@ -298,10 +306,7 @@ export class BiteRenderer {
       scaleY: 1.08,
       duration: 190,
       ease: 'Quad.easeOut',
-      onComplete: () => {
-        wake.removeAll(true);
-        wake.destroy();
-      },
+      onComplete: () => this.releaseTransient(wake),
     });
   }
 
@@ -387,6 +392,9 @@ export class BiteRenderer {
       .setTint(BITE_PALETTE.ivory)
       .setAlpha(0.18)
       .setDisplaySize(52 * bloodEffectMultiplier, 52 * bloodEffectMultiplier);
+    this.transients.add(mark);
+    this.transients.add(gore);
+    this.transients.add(mist);
 
     this.scene.tweens.add({
       targets: [mark, gore, mist],
@@ -396,10 +404,9 @@ export class BiteRenderer {
       duration: 210,
       ease: 'Quad.easeOut',
       onComplete: () => {
-        mark.removeAll(true);
-        mark.destroy();
-        gore.destroy();
-        mist.destroy();
+        this.releaseTransient(mark);
+        this.releaseTransient(gore);
+        this.releaseTransient(mist);
       },
     });
 
@@ -444,6 +451,7 @@ export class BiteRenderer {
     if (!isPointInsideArena(x, y)) return;
 
     const snap = this.scene.add.graphics();
+    this.transients.add(snap);
     registerGraphicsObject(this.scene, 'biteEffects', snap);
     snap.setDepth(DEPTH_TRACE + 0.12);
     snap.setBlendMode(Phaser.BlendModes.NORMAL);
@@ -462,7 +470,7 @@ export class BiteRenderer {
       scaleY: 1.08,
       duration: 120,
       ease: 'Quad.easeOut',
-      onComplete: () => snap.destroy(),
+      onComplete: () => this.releaseTransient(snap),
     });
   }
 

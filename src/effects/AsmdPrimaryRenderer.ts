@@ -18,8 +18,26 @@ const ASMD_MAX_LIGHTS = 5;
 export class AsmdPrimaryRenderer {
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
   private lighting: LightingSystem | null = null;
+  private readonly transients = new Set<Phaser.GameObjects.GameObject>();
+  private readonly emitterTimers = new Map<Phaser.Time.TimerEvent, readonly Phaser.GameObjects.Particles.ParticleEmitter[]>();
 
   constructor(private readonly scene: Phaser.Scene) {}
+
+  clear(): void {
+    for (const object of this.transients) {
+      this.scene.tweens.killTweensOf(object);
+      this.releaseTransient(object);
+    }
+    for (const [timer, emitters] of this.emitterTimers) {
+      timer.remove(false);
+      for (const emitter of emitters) destroyEmitter(emitter);
+    }
+    this.emitterTimers.clear();
+  }
+
+  private releaseTransient(object: Phaser.GameObjects.GameObject): void {
+    if (this.transients.delete(object)) object.destroy();
+  }
 
   setMuzzleFlashRenderer(renderer: MuzzleFlashRenderer | null): void {
     this.muzzleFlashRenderer = renderer;
@@ -123,6 +141,7 @@ export class AsmdPrimaryRenderer {
       const segmentX = Phaser.Math.Linear(startX, renderEndX, centerT);
       const segmentY = Phaser.Math.Linear(startY, renderEndY, centerT);
       const segment = this.scene.add.container(segmentX, segmentY);
+      this.transients.add(segment);
       segment.setDepth(DEPTH_TRACE + 0.02 + centerT * 0.05);
       segment.setRotation(angle);
       segment.setAlpha(Phaser.Math.Linear(0.78, 1, centerT));
@@ -158,10 +177,7 @@ export class AsmdPrimaryRenderer {
         delay: Math.round(startT * 92 * lingerMultiplier),
         duration: Math.round(Phaser.Math.Linear(96, 190, endT) * lingerMultiplier),
         ease: 'Cubic.easeOut',
-        onComplete: () => {
-          segment.removeAll(true);
-          segment.destroy();
-        },
+        onComplete: () => this.releaseTransient(segment),
       });
     }
 
@@ -203,6 +219,7 @@ export class AsmdPrimaryRenderer {
     const baseColor = mixColors(playerColor, COLORS.BLUE_1, 0.48);
     const haloRadius = Math.max(thickness * (impactKind === 'player' ? 2.6 : 3.4), impactKind === 'player' ? 7 : 9);
     const halo = this.scene.add.circle(x, y, haloRadius, baseColor, 0.42);
+    this.transients.add(halo);
     registerGraphicsObject(this.scene, 'asmdEffects', halo);
     halo.setDepth(DEPTH_TRACE + 0.1);
     makeAdditive(halo);
@@ -213,11 +230,12 @@ export class AsmdPrimaryRenderer {
       scaleY: 1.8,
       duration: 170,
       ease: 'Quad.easeOut',
-      onComplete: () => halo.destroy(),
+      onComplete: () => this.releaseTransient(halo),
     });
 
     const flashColor = mixColors(playerColor, 0xffffff, impactKind === 'player' ? 0.58 : 0.42);
     const flash = this.scene.add.circle(x, y, Math.max(thickness * (impactKind === 'player' ? 1.8 : 1.35), 3), flashColor, 0.72);
+    this.transients.add(flash);
     registerGraphicsObject(this.scene, 'asmdEffects', flash);
     flash.setDepth(DEPTH_TRACE + 0.13);
     makeAdditive(flash);
@@ -228,7 +246,7 @@ export class AsmdPrimaryRenderer {
       scaleY: impactKind === 'player' ? 1.7 : 1.45,
       duration: impactKind === 'player' ? 120 : 100,
       ease: 'Quad.easeOut',
-      onComplete: () => flash.destroy(),
+      onComplete: () => this.releaseTransient(flash),
     });
 
     const sparks = createEmitter(this.scene, x, y, TEX_ASMD_SPARK, {
@@ -248,7 +266,10 @@ export class AsmdPrimaryRenderer {
     const impactSparkCount = impactKind === 'player' ? 9 : 15;
     sparks.explode(impactSparkCount);
     recordParticleSpawn(this.scene, 'asmdPrimary', impactSparkCount);
-    this.scene.time.delayedCall(Math.round(320 * lingerMultiplier), () => destroyEmitter(sparks));
+    const timer = this.scene.time.delayedCall(Math.round(320 * lingerMultiplier), () => {
+      if (this.emitterTimers.delete(timer)) destroyEmitter(sparks);
+    });
+    this.emitterTimers.set(timer, [sparks]);
 
     this.playImpactArcs(
       x,
@@ -296,6 +317,9 @@ export class AsmdPrimaryRenderer {
       .setAlpha(0.78)
       .setRotation(angle)
       .setDisplaySize(Math.max(beamThickness * 4.1, 22), Math.max(beamThickness * 0.7, 3));
+    this.transients.add(bloom);
+    this.transients.add(flare);
+    this.transients.add(core);
 
     this.scene.tweens.add({
       targets: [bloom, flare, core],
@@ -305,9 +329,9 @@ export class AsmdPrimaryRenderer {
       duration: Math.round(120 * 1.25),
       ease: 'Quad.easeOut',
       onComplete: () => {
-        bloom.destroy();
-        flare.destroy();
-        core.destroy();
+        this.releaseTransient(bloom);
+        this.releaseTransient(flare);
+        this.releaseTransient(core);
       },
     });
 
@@ -326,7 +350,10 @@ export class AsmdPrimaryRenderer {
     }, DEPTH_TRACE + 0.13, undefined, 'asmdPrimary');
     sparks.explode(12);
     recordParticleSpawn(this.scene, 'asmdPrimary', 12);
-    this.scene.time.delayedCall(Math.round(220 * lingerMultiplier), () => destroyEmitter(sparks));
+    const timer = this.scene.time.delayedCall(Math.round(220 * lingerMultiplier), () => {
+      if (this.emitterTimers.delete(timer)) destroyEmitter(sparks);
+    });
+    this.emitterTimers.set(timer, [sparks]);
   }
 
   private playBeamParticles(
@@ -394,10 +421,12 @@ export class AsmdPrimaryRenderer {
     front.explode(frontQuantity);
     recordParticleSpawn(this.scene, 'asmdPrimary', frontQuantity);
 
-    this.scene.time.delayedCall(Math.round(320 * lingerMultiplier), () => {
+    const timer = this.scene.time.delayedCall(Math.round(320 * lingerMultiplier), () => {
+      if (!this.emitterTimers.delete(timer)) return;
       destroyEmitter(flow);
       destroyEmitter(front);
     });
+    this.emitterTimers.set(timer, [flow, front]);
   }
 
   private createArcOverlay(
@@ -453,6 +482,7 @@ export class AsmdPrimaryRenderer {
     duration: number,
   ): void {
     const gfx = this.scene.add.graphics();
+    this.transients.add(gfx);
     registerGraphicsObject(this.scene, 'asmdEffects', gfx);
     gfx.setPosition(x, y);
     gfx.setDepth(DEPTH_TRACE + 0.14);
@@ -489,7 +519,7 @@ export class AsmdPrimaryRenderer {
       scaleY: 1.12,
       duration,
       ease: 'Quad.easeOut',
-      onComplete: () => gfx.destroy(),
+      onComplete: () => this.releaseTransient(gfx),
     });
   }
 }

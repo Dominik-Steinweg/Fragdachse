@@ -52,7 +52,7 @@ describe('Bite particle lifetime', () => {
   it('reuses bounded immutable contours and releases the World cache', () => {
     mocks.contours.mockClear();
     const scene = { add: { particles: (x: number, y: number) => new Emitter(x, y),
-      container: mocks.visual, graphics: mocks.visual, image: mocks.visual }, tweens: { add: vi.fn() } };
+      container: mocks.visual, graphics: mocks.visual, image: mocks.visual }, tweens: { add: vi.fn(), killTweensOf: vi.fn() } };
     const renderer = new BiteRenderer(scene as unknown as Phaser.Scene);
     for (let hit = 0; hit < 200; hit++) renderer.playSwing(500, 500, hit / 10, 45, 40, 0);
     const calls = mocks.contours.mock.calls as unknown as [unknown, object][];
@@ -71,7 +71,7 @@ describe('Bite particle lifetime', () => {
     const scene = { add: {
       particles: (x: number, y: number) => { const emitter = new Emitter(x, y); emitters.push(emitter); return emitter; },
       container: mocks.visual, graphics: mocks.visual, image: mocks.visual,
-    }, tweens: { add: vi.fn() }, time: { delayedCall: vi.fn() } };
+    }, tweens: { add: vi.fn(), killTweensOf: vi.fn() }, time: { delayedCall: vi.fn() } };
     const renderer = new BiteRenderer(scene as unknown as Phaser.Scene);
     renderer.playSwing(500, 500, 0, 45, 40, 0, true, 520, 510);
     const impact = emitters.find(emitter => emitter.alive.some(p => p.x === 520 && p.y === 510))!;
