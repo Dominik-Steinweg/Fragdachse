@@ -3,7 +3,7 @@ import { selectTurretCandidate, turretCandidateScore, TurretControlSystem, TURRE
 import { COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID } from '../src/config';
 import type { AutomatedTurret } from '../src/systems/TurretSystem';
 import type { TurretControlInput } from '../src/types';
-import { getCoopDefenseNumericStatTotals, getCoopDefenseUpgradeDefinition, sanitizeCoopDefenseUpgradeProfile, getAvailableCoopDefenseUpgradePoints } from '../src/utils/coopDefenseUpgrades';
+import { getCoopDefenseNumericStatTotals, getCoopDefenseUpgradeCategories, levelUpCoopDefenseUpgrade, sanitizeCoopDefenseUpgradeProfile, getAvailableCoopDefenseUpgradePoints } from '../src/utils/coopDefenseUpgrades';
 import { COOP_DEFENSE_CLASS_IDS } from '../src/config/coopDefenseClasses';
 import { encodePlayerStates, decodePlayerStates } from '../src/network/playerStateCodec';
 import { WorldPlayerGameplayRuntime } from '../src/world/WorldPlayerGameplayRuntime';
@@ -264,11 +264,15 @@ describe('manual turret occupancy', () => {
     expect(getCoopDefenseNumericStatTotals(clean, 'inspector_gadachs')['player.turretControlEnabled']).toBe(1);
   });
 
-  it('resolves the authored feature for every Coop class', () => {
-    const upgrade = getCoopDefenseUpgradeDefinition('turret_control')!;
-    for (const classId of COOP_DEFENSE_CLASS_IDS) {
-      const stats = getCoopDefenseNumericStatTotals({ upgrades: { turret_control: { unlocked: true, level: 1 } } } as never, classId);
-      expect(stats['player.turretControlEnabled']).toBe(upgrade.effects[0].value);
-    }
+  it.each(COOP_DEFENSE_CLASS_IDS)('keeps turret control intrinsic to Inspector and refunds legacy purchases for %s', (classId) => {
+    const raw = { upgrades: { turret_control: { unlocked: true, level: 1 } } } as never;
+    const clean = sanitizeCoopDefenseUpgradeProfile(raw, classId);
+    expect(clean.upgrades.turret_control.level).toBe(0);
+    expect(getAvailableCoopDefenseUpgradePoints(2, clean, classId)).toBe(1);
+    expect(levelUpCoopDefenseUpgrade(clean, 'turret_control', 100, 100, classId)).toBeNull();
+    expect(getCoopDefenseUpgradeCategories(classId).flatMap(category => category.upgrades)
+      .some(upgrade => upgrade.id === 'turret_control')).toBe(false);
+    const stats = getCoopDefenseNumericStatTotals(raw, classId);
+    expect(stats['player.turretControlEnabled'] ?? 0).toBe(classId === 'inspector_gadachs' ? 1 : 0);
   });
 });

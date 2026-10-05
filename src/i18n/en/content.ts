@@ -54,7 +54,7 @@ export const enContent = {
   "class.dachs_of_steel.tooltip.1": "Strength: stops enemy waves at the base.",
   "class.inspector_gadachs.name": "Inspector Gadachs",
   "class.inspector_gadachs.role": "Engineer",
-  "class.inspector_gadachs.description": "Builds permanent structures using a fixed build-capacity budget.",
+  "class.inspector_gadachs.description": "Builds permanent structures using a fixed build-capacity budget and can man turrets.",
   "class.inspector_gadachs.tooltip.0": "Loadout: Weapon 1, Plasma Burner on RMB, multiple Utility slots, Ultimate.",
   "class.inspector_gadachs.tooltip.1": "Structures use build capacity (100 points) instead of adrenaline.",
   "class.inspector_gadachs.tooltip.2": "Hold R to open the Utility wheel, press E to place the selection.",

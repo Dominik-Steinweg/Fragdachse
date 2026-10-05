@@ -6,6 +6,7 @@
                            "upgrades":  [
                                             {
                                                 "id": "turret_control",
+                                                "availableClasses": [],
                                                 "code": "A23",
                                                 "kind": "upgrade",
                                                 "maxLevel": 1,

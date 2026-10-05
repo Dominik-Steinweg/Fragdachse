@@ -54,7 +54,7 @@ export const deContent = {
   "class.dachs_of_steel.tooltip.1": "Stärke: hält Gegnerwellen direkt an der Basis auf.",
   "class.inspector_gadachs.name": "Inspector Gadachs",
   "class.inspector_gadachs.role": "Ingenieur",
-  "class.inspector_gadachs.description": "Baut dauerhafte Konstruktionen mit einer festen Baukapazität.",
+  "class.inspector_gadachs.description": "Baut dauerhafte Konstruktionen mit einer festen Baukapazität und kann Türme bemannen.",
   "class.inspector_gadachs.tooltip.0": "Loadout: Waffe 1, Plasmabrenner auf RMB, mehrere Utility-Slots, Ultimate.",
   "class.inspector_gadachs.tooltip.1": "Konstrukte belegen Baukapazität (100 Punkte) statt Adrenalin.",
   "class.inspector_gadachs.tooltip.2": "R hält das Utility-Rad offen, E setzt die Auswahl ein.",
