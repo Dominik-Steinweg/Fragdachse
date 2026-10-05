@@ -11,6 +11,7 @@
 
 /** Wird im Handshake verglichen; unterschiedliche Deploys dürfen sich nicht verbinden. */
 // Input stops fence old movement; Tunnel commits require a host-observed first selection.
+// Ready is lobby-revision-bound; active rounds use the host-frozen loadout snapshot.
 export const PEER_PROTOCOL_VERSION = 25;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */

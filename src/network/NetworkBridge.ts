@@ -124,7 +124,7 @@ import { COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS, isConstructionId, normalizeConstru
 import { TURRET_VISUALS } from '../config/turretVisuals';
 import { POWERUP_DEFS } from '../powerups/PowerUpConfig';
 import { getCoopDefenseLevelForXp } from '../utils/coopDefenseProgression';
-import { sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
+import { cloneCoopDefenseUpgradeProfile, sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
 import { sanitizeCoopDefenseEquippedItems } from '../utils/coopDefenseItems';
 import { DEFAULT_LOBBY_TIME_OF_DAY_MINUTES, normalizeTimeOfDay } from '../effects/TimeOfDay';
 import { isCoopDefenseClassId } from '../config/coopDefenseClasses';
@@ -235,6 +235,7 @@ const KEY_COOP_XP      = 'cxp';   // per-player: number (lokal persistierte Coop
 const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschluss-Snapshot)
 const KEY_ROUND_STATE  = 'rds';   // global reliable: RoundState | null (aktueller/finaler Rundenstatus)
 const KEY_ROUND_PARTICIPATION = 'rpt'; // global reliable: RoundParticipationState | null
+const KEY_ROUND_LOADOUTS = 'rlc'; // global reliable: host-frozen { roundRevision, loadouts }
 const KEY_COOP_RESPAWN_BUDGET = 'crb'; // global reliable: CoopDefenseRespawnBudgetState | null
 const KEY_COOP_ENCOUNTER_PRESENTATION = 'cep'; // global reliable: CoopDefenseEncounterPresentationState | null
 const KEY_COOP_MAP_EVENT_PRESENTATION = 'cme'; // global reliable: CoopDefenseMapEventPresentationState | null
@@ -1866,7 +1867,19 @@ export class NetworkBridge {
    * referenzbasierte Caches der Aufrufer grundsaetzlich nie trafen.
    */
   getPlayerCommittedLoadout(playerId: string): LoadoutCommitSnapshot | null {
-    const raw = this.playerStateMap.get(playerId)?.getState(KEY_LOADOUT_COMMITTED) as Partial<LoadoutCommitSnapshot> | null | undefined;
+    let raw: Partial<LoadoutCommitSnapshot> | null | undefined;
+    if (this.getGamePhase() === 'ARENA') {
+      const frozen = getState(KEY_ROUND_LOADOUTS) as {
+        roundRevision?: unknown; loadouts?: Record<string, LoadoutCommitSnapshot>;
+      } | null | undefined;
+      const roundRevision = this.getActiveRoundRevision();
+      raw = roundRevision !== null && frozen?.roundRevision === roundRevision
+        && frozen.loadouts && typeof frozen.loadouts === 'object' && !Array.isArray(frozen.loadouts)
+        && Object.prototype.hasOwnProperty.call(frozen.loadouts, playerId)
+        ? frozen.loadouts[playerId] : null;
+    } else {
+      raw = this.playerStateMap.get(playerId)?.getState(KEY_LOADOUT_COMMITTED) as Partial<LoadoutCommitSnapshot> | null | undefined;
+    }
     const cached = this.committedLoadoutCache.get(playerId);
     if (cached && cached.raw === raw) return cached.value;
     const value = this.buildCommittedLoadout(raw);
@@ -1959,6 +1972,18 @@ export class NetworkBridge {
   ): void {
     if (!isHost()) return;
     const participation = createRoundParticipationState(roundStartTime, participantIds, roundRevision);
+    // Capture independent sanitized values before participation/phase can expose this round.
+    // The client-owned lobby commit may subsequently change or disappear, including on resume.
+    const loadouts = Object.fromEntries(participation.participantIds.flatMap(playerId => {
+      const raw = this.playerStateMap.get(playerId)?.getState(KEY_LOADOUT_COMMITTED) as Partial<LoadoutCommitSnapshot> | null | undefined;
+      const snapshot = this.buildCommittedLoadout(raw);
+      if (snapshot?.coopDefenseProfile) {
+        // Sanitization memoizes profiles; the round must not share that lobby cache entry.
+        snapshot.coopDefenseProfile = cloneCoopDefenseUpgradeProfile(snapshot.coopDefenseProfile, snapshot.coopDefenseClassId ?? undefined);
+      }
+      return snapshot ? [[playerId, snapshot]] : [];
+    }));
+    setState(KEY_ROUND_LOADOUTS, { roundRevision, loadouts }, true);
     setState(
       KEY_ROUND_PARTICIPATION,
       participation,
@@ -2107,6 +2132,7 @@ export class NetworkBridge {
   hostResetRoundParticipation(): void {
     if (!isHost()) return;
     setState(KEY_ROUND_PARTICIPATION, null, true);
+    setState(KEY_ROUND_LOADOUTS, null, true);
   }
 
   getRoundRole(playerId: string): import('../types').RoundPlayerRole {

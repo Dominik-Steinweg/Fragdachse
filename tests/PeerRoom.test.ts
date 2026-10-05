@@ -13,6 +13,7 @@ import { clearActiveSession, setActiveSession } from '../src/network/peer/sessio
 import { PEER_PROTOCOL_VERSION, type PeerChannelKind, type PeerMessage } from '../src/network/peer/protocol';
 import type { LoadoutCommitSnapshot } from '../src/types';
 import { DEFAULT_LOADOUT } from '../src/loadout/LoadoutConfig';
+import { CoopDefensePlayerModifierSystem } from '../src/systems/CoopDefensePlayerModifierSystem';
 
 import {
   FailingClientTransport,
@@ -1344,5 +1345,133 @@ describe('NetworkBridge placement preview presence', () => {
       clearActiveSession();
       vi.useRealTimers();
     }
+  });
+});
+
+describe('host-frozen round loadouts', () => {
+  type Room = Awaited<ReturnType<typeof createHostRoom>>;
+  const use = (room: Room) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+  const activate = (room: Room) => {
+    use(room); const bridge = new NetworkBridge(); bridge.activate(); return bridge;
+  };
+  const commit = (hp = 2): LoadoutCommitSnapshot => ({
+    weapon1: DEFAULT_LOADOUT.weapon1.id, weapon2: DEFAULT_LOADOUT.weapon2.id,
+    utility: DEFAULT_LOADOUT.utility.id, ultimate: DEFAULT_LOADOUT.ultimate.id,
+    coopDefenseClassId: null,
+    coopDefenseProfile: { upgrades: { hp: { unlocked: true, level: hp } }, toolLoadout: [] },
+  });
+  const start = (host: NetworkBridge, revision = 1) => {
+    host.hostStartRoundParticipants(host.getConnectedPlayerIds(), 0, revision);
+    host.publishWorldAndActivity({ worldRevision: revision, definitionId: 'world:coop-defense:1',
+      seed: 1, generatorVersion: 1, layoutFingerprint: '12345678', parameters: {} }, {
+      worldRevision: revision, activityRevision: revision, kind: 'coop-mission', definitionId: 'activity:coop-mission:1',
+    });
+    host.setGamePhase('ARENA');
+  };
+
+  it.each(['replace', 'clear'] as const)('keeps the actual modifiers and weapons when a client tries to %s its commit', async action => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network), clientRoom = await addClientRoom(network), observerRoom = await addClientRoom(network);
+    try {
+      const host = activate(hostRoom), client = activate(clientRoom), observer = activate(observerRoom);
+      use(hostRoom); host.setGameMode('coop_defense');
+      use(clientRoom); client.setLocalReadyWithCommittedLoadout(commit());
+      use(hostRoom); start(host);
+      const modifiers = new CoopDefensePlayerModifierSystem();
+      modifiers.syncPlayer('p1', host.getPlayerCurrentLoadoutSnapshot('p1'));
+      const initialHp = modifiers.getMaxHp('p1');
+      expect(initialHp).toBeGreaterThan(100);
+      use(clientRoom);
+      if (action === 'replace') client.setLocalReadyWithCommittedLoadout({ ...commit(8), weapon1: 'AK47' });
+      else client.setLocalReady(false);
+      for (const [room, bridge] of [[hostRoom, host], [clientRoom, client], [observerRoom, observer]] as const) {
+        use(room);
+        const snapshot = bridge.getPlayerCurrentLoadoutSnapshot('p1');
+        expect(snapshot?.weapon1).toBe(DEFAULT_LOADOUT.weapon1.id);
+        modifiers.syncPlayer('p1', snapshot);
+        expect(modifiers.getMaxHp('p1')).toBe(initialHp);
+      }
+    } finally {
+      clearActiveSession(); observerRoom.room.destroy(); clientRoom.room.destroy(); hostRoom.room.destroy();
+    }
+  });
+
+  it('captures independent nested Host values before the round starts and keeps lobby selection for the next round', async () => {
+    const network = new FakeNetwork(), hostRoom = await createHostRoom(network);
+    try {
+      const host = activate(hostRoom);
+      host.setGameMode('coop_defense');
+      const raw = { ...commit(), equippedItems: [{ uid: 'armor', slot: 'armor' as const,
+        rarity: 'white' as const, itemLevel: 1, baseValue: 25, affixes: [] }] };
+      host.setLocalReadyWithCommittedLoadout(raw);
+      const lobbySnapshot = host.getPlayerCommittedLoadout('p0')!;
+      start(host);
+      const published = hostRoom.room.getGlobal('rlc') as { loadouts: Record<string, LoadoutCommitSnapshot> };
+      expect(published.loadouts.p0.coopDefenseProfile).not.toBe(lobbySnapshot.coopDefenseProfile);
+      const frozen = host.getPlayerCommittedLoadout('p0')!;
+      expect(frozen).not.toBe(lobbySnapshot);
+      expect(frozen.coopDefenseProfile).not.toBe(lobbySnapshot.coopDefenseProfile);
+      raw.coopDefenseProfile!.upgrades.hp.level = 8;
+      lobbySnapshot.coopDefenseProfile!.upgrades.hp.level = 8;
+      raw.equippedItems[0].baseValue = 0;
+      host.setLocalReadyWithCommittedLoadout({ ...commit(8), weapon1: 'AK47' });
+      expect(host.getPlayerCommittedLoadout('p0')).toMatchObject({
+        weapon1: DEFAULT_LOADOUT.weapon1.id, coopDefenseProfile: { upgrades: { hp: { level: 2 } } },
+        equippedItems: [{ baseValue: 25 }],
+      });
+      host.hostResetRoundParticipation();
+      host.clearWorldAndActivity(); host.setGamePhase('LOBBY');
+      expect(hostRoom.room.getGlobal('rlc')).toBeNull();
+      expect(host.getPlayerCommittedLoadout('p0')?.weapon1).toBe('AK47');
+      host.setLocalLoadoutSlot('weapon1', 'AK47');
+      expect(host.getPlayerCurrentLoadoutSnapshot('p0')?.weapon1).toBe('AK47');
+      start(host, 2);
+      expect(host.getPlayerCommittedLoadout('p0')?.weapon1).toBe('AK47');
+      host.setLocalReady(false);
+      expect(host.getPlayerCommittedLoadout('p0')?.weapon1).toBe('AK47');
+    } finally { clearActiveSession(); hostRoom.room.destroy(); }
+  });
+
+  it('retains the frozen snapshot across resume and admits late joiners only as spectators', async () => {
+    const network = new FakeNetwork(), hostRoom = await createHostRoom(network), clientRoom = await addClientRoom(network);
+    let late: Room | undefined;
+    try {
+      const host = activate(hostRoom), client = activate(clientRoom);
+      use(clientRoom); client.setLocalReadyWithCommittedLoadout(commit());
+      use(hostRoom); start(host);
+      use(clientRoom); client.setLocalReadyWithCommittedLoadout({ ...commit(8), weapon1: 'AK47' });
+      use(hostRoom); dropConnection(clientRoom); await Promise.resolve();
+      use(clientRoom);
+      expect(client.getPlayerCommittedLoadout('p1')?.weapon1).toBe(DEFAULT_LOADOUT.weapon1.id);
+      expect(client.getPlayerCommittedLoadout('p1')?.coopDefenseProfile?.upgrades.hp.level).toBe(2);
+      use(hostRoom); late = await addClientRoom(network);
+      const spectator = activate(late);
+      spectator.setLocalReadyWithCommittedLoadout(commit(8));
+      expect(spectator.getPlayerCommittedLoadout('p1')?.weapon1).toBe(DEFAULT_LOADOUT.weapon1.id);
+      expect(spectator.getPlayerCommittedLoadout('p2')).toBeNull();
+      expect(spectator.isLocalSpectator()).toBe(true);
+      use(hostRoom); expect(host.getPlayerCommittedLoadout('p2')).toBeNull();
+    } finally { clearActiveSession(); late?.room.destroy(); clientRoom.room.destroy(); hostRoom.room.destroy(); }
+  });
+
+  it('never falls back to client commits for missing, mismatched or inherited round entries', async () => {
+    const network = new FakeNetwork(), hostRoom = await createHostRoom(network), clientRoom = await addClientRoom(network);
+    try {
+      const host = activate(hostRoom), client = activate(clientRoom);
+      use(clientRoom); client.setLocalReadyWithCommittedLoadout(commit());
+      use(hostRoom); start(host);
+      for (const raw of [null, {}, { roundRevision: 2, loadouts: { p1: commit(8) } },
+        { roundRevision: 1, loadouts: [] }, { roundRevision: 1, loadouts: Object.create({ p1: commit(8) }) }]) {
+        hostRoom.room.setGlobal('rlc', raw, true);
+        expect(host.getPlayerCommittedLoadout('p1')).toBeNull();
+        use(clientRoom); expect(client.getPlayerCommittedLoadout('p1')).toBeNull();
+        use(hostRoom);
+      }
+      hostRoom.room.setGlobal('rlc', { roundRevision: 1, loadouts: {} }, true);
+      expect(host.getPlayerCommittedLoadout('constructor')).toBeNull();
+      // A client cannot author the host-owned snapshot even through a raw batch.
+      clientRoom.transport.links[0].send({ t: 'b', g: [['rlc', { roundRevision: 1, loadouts: { p1: commit(8) } }]] }, 'rel');
+      expect(host.getPlayerCommittedLoadout('p1')).toBeNull();
+    } finally { clearActiveSession(); clientRoom.room.destroy(); hostRoom.room.destroy(); }
   });
 });
