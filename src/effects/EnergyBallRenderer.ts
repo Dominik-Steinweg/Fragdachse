@@ -122,6 +122,8 @@ const ENERGY_BALL_PRESETS: Record<EnergyBallVariant, EnergyBallVisualPreset> = {
 
 export class EnergyBallRenderer {
   private visuals = new Map<number, EnergyBallVisual>();
+  private readonly impactImages = new Set<Phaser.GameObjects.Image>();
+  private readonly impactTimers = new Map<Phaser.GameObjects.Particles.ParticleEmitter, Phaser.Time.TimerEvent>();
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -325,6 +327,16 @@ export class EnergyBallRenderer {
     for (const id of this.getActiveIds()) {
       this.destroyVisual(id);
     }
+    for (const image of this.impactImages) {
+      this.scene.tweens.killTweensOf(image);
+      image.destroy();
+    }
+    this.impactImages.clear();
+    for (const [emitter, timer] of this.impactTimers) {
+      timer.remove(false);
+      destroyEmitter(emitter);
+    }
+    this.impactTimers.clear();
   }
 
   playImpact(x: number, y: number, color: number, variant: EnergyBallVariant = DEFAULT_VARIANT, scale = 1): void {
@@ -341,6 +353,7 @@ export class EnergyBallRenderer {
       glowTint,
     ).setScale((preset.minGlowScale + scale * 0.7) * (variant === 'plasma' ? 1.15 : 1.35));
 
+    this.impactImages.add(glow);
     this.scene.tweens.add({
       targets: glow,
       alpha: 0,
@@ -348,7 +361,9 @@ export class EnergyBallRenderer {
       scaleY: glow.scaleY * 1.6,
       duration: variant === 'plasma' ? 180 : 240,
       ease: 'Quad.easeOut',
-      onComplete: () => glow.destroy(),
+      onComplete: () => {
+        if (this.impactImages.delete(glow)) glow.destroy();
+      },
     });
 
     const shell = configureAdditiveImage(
@@ -357,6 +372,7 @@ export class EnergyBallRenderer {
       variant === 'plasma' ? 0.82 : 0.76,
       shellTint,
     ).setScale((preset.minShellScale + scale * 0.5) * 0.95);
+    this.impactImages.add(shell);
     this.scene.tweens.add({
       targets: shell,
       alpha: 0,
@@ -365,7 +381,9 @@ export class EnergyBallRenderer {
       rotation: Math.PI * 0.65,
       duration: variant === 'plasma' ? 160 : 220,
       ease: 'Cubic.easeOut',
-      onComplete: () => shell.destroy(),
+      onComplete: () => {
+        if (this.impactImages.delete(shell)) shell.destroy();
+      },
     });
 
     const sparkEmitter = createEmitter(this.scene, x, y, textureSet.spark, {
@@ -383,7 +401,10 @@ export class EnergyBallRenderer {
       emitting: false,
     }, DEPTH.PROJECTILES + 1.45, undefined, 'energyBall');
     sparkEmitter.explode(variant === 'plasma' ? 12 : 16);
-    this.scene.time.delayedCall(420, () => destroyEmitter(sparkEmitter));
+    const timer = this.scene.time.delayedCall(420, () => {
+      if (this.impactTimers.delete(sparkEmitter)) destroyEmitter(sparkEmitter);
+    });
+    this.impactTimers.set(sparkEmitter, timer);
   }
 
   private mixColor(source: number, target: number, t: number): number {
