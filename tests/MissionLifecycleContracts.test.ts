@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ARENA_COUNTDOWN_SEC } from '../src/config';
 import { NetworkBridge } from '../src/network/NetworkBridge';
 import type { RoundConclusion } from '../src/types';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
+import type { PeerChannelKind, PeerMessage } from '../src/network/peer/protocol';
 import { resolveArenaStartTime } from '../src/scenes/arena/ArenaStartTiming';
 import { FakeNetwork, addClientRoom, createHostRoom, type TestRoom } from './fakePeerNetwork';
 
@@ -94,6 +95,77 @@ async function createRoom(playerCount: number): Promise<TestRoom[]> {
   for (let i = 1; i < playerCount; i += 1) rooms.push(await addClientRoom(network));
   return rooms;
 }
+
+describe('mission lifecycle – spectator requests', () => {
+  it.each(['world', 'round', 'current'])('binds an in-flight spectator request to its %s identity', async boundary => {
+    const [hostRoom, clientRoom] = await createRoom(2);
+    const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    try {
+      const host = bridgeFor(hostRoom);
+      hostStartMission(host, 10);
+      const removed = vi.fn();
+      host.onSpectatorEntered(removed);
+      const client = bridgeFor(clientRoom);
+      const link = clientRoom.transport.links[0];
+      const send = link.send.bind(link);
+      let delayed: { message: PeerMessage; channel: PeerChannelKind } | undefined;
+      const capture = vi.spyOn(link, 'send').mockImplementation((message, channel) => {
+        if (message.t === 'rpc' && message.n === 'spt') delayed = { message, channel };
+        else send(message, channel);
+      });
+      const result = client.requestSpectatorMode();
+      expect(delayed).toBeDefined();
+      capture.mockRestore();
+      use(hostRoom);
+      if (boundary === 'world') {
+        hostCompleteMission(host, 'victory', 2000);
+        hostStartMission(host, 11);
+      } else if (boundary === 'round') {
+        host.hostResetRoundParticipation();
+        host.setGamePhase('LOBBY');
+        host.hostStartRoundParticipants(['p0', 'p1'], 0, 11);
+        host.publishActivity({ worldRevision: 10, activityRevision: 11,
+          kind: 'coop-mission', definitionId: 'activity:coop-mission:1' });
+        host.setGamePhase('ARENA');
+      }
+      send(delayed!.message, delayed!.channel);
+      expect(await result).toBe(boundary === 'current');
+      expect(host.isRoundSpectator('p1')).toBe(boundary === 'current');
+      expect(removed).toHaveBeenCalledTimes(boundary === 'current' ? 1 : 0);
+      expect(host.isRoundSpectator('p0')).toBe(false);
+    } finally {
+      clearActiveSession();
+      clientRoom.room.destroy();
+      hostRoom.room.destroy();
+    }
+  });
+
+  it('rejects missing or malformed spectator identities and always uses the real sender', async () => {
+    const [hostRoom, clientRoom] = await createRoom(2);
+    try {
+      const host = bridgeFor(hostRoom);
+      hostStartMission(host, 20);
+      const removed = vi.fn();
+      host.onSpectatorEntered(removed);
+      for (const payload of [null, [], 'spt', {}, { wr: 20 }, { rr: 20 },
+        ...[0, -1, 1.5, '20', null, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, 19, 21].flatMap(value => [
+          { wr: 20, rr: value }, { wr: value, rr: 20 },
+        ])]) {
+        await expect(clientRoom.room.callHost('spt', payload, 500), JSON.stringify(payload)).resolves.toBe(false);
+        expect(host.isRoundSpectator('p1')).toBe(false);
+      }
+      expect(removed).not.toHaveBeenCalled();
+      await expect(clientRoom.room.callHost('spt', { wr: 20, rr: 20, playerId: 'p0' }, 500)).resolves.toBe(true);
+      expect(host.isRoundSpectator('p1')).toBe(true);
+      expect(host.isRoundSpectator('p0')).toBe(false);
+      expect(removed).toHaveBeenCalledExactlyOnceWith('p1');
+    } finally {
+      clearActiveSession();
+      clientRoom.room.destroy();
+      hostRoom.room.destroy();
+    }
+  });
+});
 
 describe('mission lifecycle – durable scores', () => {
   it.each(['increment', 'award', 'reset'] as const)('delivers a one-time %s even when fast state is lost', async action => {

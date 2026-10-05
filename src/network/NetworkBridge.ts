@@ -921,7 +921,10 @@ export class NetworkBridge {
       return this.hostHandleTeamRequest(teamId, caller.id);
     });
 
-    this.registerHostRpcHandler('spt', (_payload: unknown, caller: PlayerState): boolean => {
+    this.registerHostRpcHandler('spt', (payload: unknown, caller: PlayerState): boolean => {
+      if (!isHost() || !this.acceptsWorldRpc(payload)) return false;
+      const roundRevision = this.getActiveRoundRevision();
+      if (roundRevision === null || payload.rr !== roundRevision) return false;
       return this.hostEnterSpectator(caller.id);
     });
 
@@ -2066,7 +2069,10 @@ export class NetworkBridge {
     const localId = this.getLocalPlayerId();
     if (!this.canPlayerAct(localId)) return false;
     if (isHost()) return this.hostEnterSpectator(localId);
-    const result = await this.callHostRpc('spt', {}, 1_000).catch(() => false);
+    const world = this.getWorldDescriptor();
+    const roundRevision = this.getActiveRoundRevision();
+    if (!world || roundRevision === null) return false;
+    const result = await this.callHostRpc('spt', { wr: world.worldRevision, rr: roundRevision }, 1_000).catch(() => false);
     return result === true;
   }
 
