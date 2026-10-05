@@ -65,7 +65,7 @@ function fixture(){
    addGLTexture:(key:string,wrapper:any)=>{const t=makeTexture(key,wrapper);textures.set(key,t);return t;},remove:vi.fn((key:string)=>textures.delete(key))}};
  scene.sys.renderer.renderNodes={renderer:scene.sys.renderer,finishBatch(){},startStandAloneRender(){}};
  scene.cameras.main.getViewMatrix=()=>new Matrix();
- const files:any[]=[];scene.load={scene,textureManager:scene.textures,addFile:(file:any)=>files.push(file)};
+ const files:any[]=[];scene.load={scene,systems:{game:{}},textureManager:scene.textures,addFile:(file:any)=>files.push(file)};
  const receiver=new CharacterShadowReceiver(scene,{minX:0,minY:0,maxX:640,maxY:640});
  const clouds={tuning:createSunTuning(),timeSec:123,strength:1,sunPath:resolveSunPath(720,null,createSunPath())};
  const renderer=new CharacterShadowRenderer(scene,clouds,receiver);
