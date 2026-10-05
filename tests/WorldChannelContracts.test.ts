@@ -7,6 +7,8 @@ import type { WorldDescriptor } from '../src/world/WorldDescriptor';
 import { FakeNetwork, addClientRoom, createHostRoom, dropConnection, type TestRoom } from './fakePeerNetwork';
 import { AdrenalineEssenceClientReplica, AdrenalineEssenceReplication } from '../src/adrenalineEssence/AdrenalineEssenceReplication';
 import type { EssenceState, EssenceTransferReceipt } from '../src/adrenalineEssence/AdrenalineEssenceTypes';
+import { RockRegistry } from '../src/arena/RockRegistry';
+import type { ArenaLayout } from '../src/types';
 
 /**
  * Der eine kanonische World-Kanal.
@@ -54,6 +56,75 @@ async function createRoom(playerCount: number): Promise<TestRoom[]> {
 }
 
 describe('World-Kanal – Replikation', () => {
+  it.each(['reload', 'reconnect'] as const)('refreshes the reliable full snapshot after %s resumes the same player', async (kind) => {
+    vi.useFakeTimers();
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const firstRoom = await addClientRoom(network, [], 'resume-full-token');
+    const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    let resumedRoom: TestRoom | undefined;
+    const emptyWorldState: Parameters<NetworkBridge['publishGameState']>[0] = {
+      roundStartTime: 0, players: {}, projectiles: null, enemies: null, rocks: null,
+      placeableRocks: [], reinforcementMatrices: [], energyInjectorEffects: [], energyInjectorFocus: [],
+      remoteControlTurrets: [], decoys: [], smokes: [], fires: [], powerups: null, pedestals: null,
+      nukes: [], airstrikes: [], meteors: [], tunnels: [], train: null, bases: [], captureTheBeer: null,
+      coopDefenseCarry: [], stinkClouds: [], timeBubbles: [], teslaDomes: [], energyShields: [],
+      guardianSpirits: [], repairDrones: [], slimeTrail: { cells: [], affectedEnemies: [] },
+      targetVulnerabilities: [], ak47StrategicTargets: [], burningGround: { cells: [] },
+    };
+    try {
+      const host = bridgeFor(hostRoom);
+      host.publishWorldAndActivity(world({ definitionId: 'world:lobby' }), null);
+      const rocks = new RockRegistry({ rocks: [{}] } as ArenaLayout);
+      rocks.applyDamage(0, 10);
+      const previousHp = rocks.getHP(0);
+      host.publishGameState({ ...emptyWorldState, rocks: rocks.getNetSnapshot() }, true);
+      hostRoom.room.update();
+      host.consumeFullGameStateRequest();
+      const first = bridgeFor(firstRoom);
+      expect(first.getLatestGameState()?.rocks).toEqual([{ id: 0, hp: previousHp }]);
+
+      use(hostRoom);
+      if (kind === 'reload') firstRoom.transport.destroy();
+      else firstRoom.transport.reconnectEnabled = false;
+      dropConnection(firstRoom);
+      await vi.advanceTimersByTimeAsync(0);
+      rocks.applyDamage(0, 20);
+      host.publishGameState({ ...emptyWorldState, rocks: rocks.getNetSnapshot() });
+      hostRoom.room.update();
+      const unchangedRocks = rocks.getNetSnapshot();
+      expect(unchangedRocks).toBeNull();
+      host.publishGameState({ ...emptyWorldState, rocks: unchangedRocks });
+      hostRoom.room.update();
+
+      if (kind === 'reload') resumedRoom = await addClientRoom(network, [], 'resume-full-token');
+      else {
+        firstRoom.transport.reconnectEnabled = true;
+        await vi.advanceTimersByTimeAsync(500);
+        resumedRoom = firstRoom;
+      }
+      expect(resumedRoom.room.getLocalPlayerId()).toBe('p1');
+      const fullRequested = host.consumeFullGameStateRequest();
+      expect(fullRequested).toBe(true);
+      expect(host.consumeFullGameStateRequest()).toBe(false);
+      // The actual host net-tick consumes the request before collecting each slice.
+      if (fullRequested) rocks.requestFullNetSnapshot();
+      resumedRoom.transport.links.at(-1)!.counterpart.fastReady = false;
+      host.publishGameState({ ...emptyWorldState, rocks: rocks.getNetSnapshot() }, fullRequested);
+      hostRoom.room.update();
+      use(resumedRoom);
+      const resumed = kind === 'reload' ? bridgeFor(resumedRoom) : first;
+      resumed.getLatestGameState();
+      expect(resumed.getLatestGameState()?.rocks).toEqual([{ id: 0, hp: rocks.getHP(0) }]);
+    } finally {
+      clearActiveSession();
+      resumedRoom?.room.destroy();
+      firstRoom.room.destroy();
+      hostRoom.room.destroy();
+      vi.useRealTimers();
+    }
+  });
+
   it('reliably stops local input before the next frame and fences delayed fast movement without blocking fresh input', async () => {
     const [hostRoom, clientRoom, observerRoom] = await createRoom(3);
     const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });

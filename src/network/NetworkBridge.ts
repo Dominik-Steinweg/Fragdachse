@@ -1055,6 +1055,8 @@ export class NetworkBridge {
       if (status.state === 'player-resumed' && isHost()) {
         // The old link is retired; a reloaded client may restart its input sequence.
         requireRoom().setPlayerState(status.playerId, KEY_INPUT_STOP, null, true);
+        // Welcome can contain an old bootstrap and only the newest delta, not missed slices.
+        if (this.getWorldDescriptor()) this.requestFullGameState();
       }
       if (status.state === 'resumed') {
         this.resetGameStateCache();
