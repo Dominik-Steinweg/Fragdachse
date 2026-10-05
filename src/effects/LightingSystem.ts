@@ -271,6 +271,10 @@ export class LightingSystem {
    * `DynamicTexture.render()` steigt bei leerem Command-Buffer sofort aus.
    */
   private lightMapHoldsAmbientOnly = false;
+  private readonly onContextRestored = (): void => {
+    this.lightMapHoldsAmbientOnly = false;
+    for (const light of this.lights) if (light.occlusionCache) light.occlusionCache.valid = false;
+  };
   private lastCostMs = 0;
   private lastPerformance = emptyPerformanceMetrics();
   private performanceMetricsEnabled = false;
@@ -285,6 +289,7 @@ export class LightingSystem {
       this.setGraphicsQuality(profile);
     }) ?? null;
     this.ensureTextures();
+    scene.sys?.renderer?.on(Phaser.Renderer.Events.RESTORE_WEBGL, this.onContextRestored);
   }
 
   // ── Lebenszyklus ───────────────────────────────────────────────────────────
@@ -509,6 +514,7 @@ export class LightingSystem {
   }
 
   destroy(): void {
+    this.scene.sys?.renderer?.off(Phaser.Renderer.Events.RESTORE_WEBGL, this.onContextRestored);
     this.clear();
     this.enemyEyeBatch?.destroy();
     this.enemyEyeBatch = null;

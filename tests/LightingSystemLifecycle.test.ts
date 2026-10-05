@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
+import EventEmitter from 'eventemitter3';
 
 vi.mock('phaser', () => ({
   BlendModes: { MULTIPLY: 2, ADD: 1, SCREEN: 3 },
   Utils: { Array: { Remove: (items: object[], item: object) => { items.splice(items.indexOf(item), 1); } } },
   Textures: { FilterMode: { LINEAR: 1 } },
-  Renderer: { WebGL: { Utils: { getTintAppendFloatAlpha: (color: number) => color } } },
+  Renderer: { Events: { RESTORE_WEBGL: 'restorewebgl' }, WebGL: { Utils: { getTintAppendFloatAlpha: (color: number) => color } } },
   Math: { Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)) },
   GameObjects: { Shader: class {
     destroyCallbacks: Array<() => void> = [];
@@ -48,12 +49,15 @@ vi.mock('phaser', () => ({
   }, Image: class {
     setOrigin() { return this; }
     setBlendMode() { return this; }
+    setAlpha() { return this; } setTint() { return this; }
+    setVisible() { return this; } setPosition() { return this; }
     destroy() {}
   } },
 }));
 
 import { AdrenalineEssenceLighting } from '../src/adrenalineEssence/AdrenalineEssenceLighting';
 import { LightingSystem } from '../src/effects/LightingSystem';
+import { LightOccluderIndex } from '../src/effects/LightOccluderIndex';
 import * as Phaser from 'phaser';
 import { resolveSkyState } from '../src/effects/TimeOfDay';
 import * as TimeOfDay from '../src/effects/TimeOfDay';
@@ -66,11 +70,13 @@ function fixture(quality: GraphicsQuality = 'high') {
   const fills = vi.fn();
   const shaders: Phaser.GameObjects.Shader[] = [];
   const targets: { texture: object; visible: boolean; depth: number }[] = [];
+  const renderer = new EventEmitter();
   const scene = {
+    sys: { renderer },
     time: { now: 100 },
     textures: { exists: () => true, get: () => ({}) },
     cameras: { main: { scrollX: 0, scrollY: 0 } },
-    make: { graphics: () => ({ destroy() {} }) },
+    make: { graphics: () => ({ commandBuffer: [], clear() {}, fillStyle() {}, destroy() {} }) },
     add: {
       particles: vi.fn(),
       existing: (shader: Phaser.GameObjects.Shader) => { shaders.push(shader); return shader; },
@@ -83,7 +89,7 @@ function fixture(quality: GraphicsQuality = 'high') {
           setScrollFactor() { return this; }, setDepth(depth: number) { this.depth = depth; return this; },
           setBlendMode() { return this; }, setRenderMode() { return this; },
           setVisible(value: boolean) { this.visible = value; return this; },
-          fill: fills, draw: draws, stamp: stamps, destroy() {},
+          fill: fills, draw: draws, stamp: stamps, clear() {}, render() {}, erase() {}, destroy() {},
         };
         targets.push(target);
         return target;
@@ -95,10 +101,57 @@ function fixture(quality: GraphicsQuality = 'high') {
   const lighting = new LightingSystem(scene as never);
   lighting.setTimeOfDay(0);
   lighting.setActive(true);
-  return { scene, lighting, stamps, draws, fills, shaders, targets, qualityController };
+  return { scene, lighting, stamps, draws, fills, shaders, targets, qualityController, renderer };
 }
 
 describe('light bleed lifecycle', () => {
+  it('refills restored ambient once without changing time or allocating new targets', () => {
+    const { lighting, fills, targets, renderer } = fixture();
+    lighting.update();
+    const initialFills = fills.mock.calls.length;
+    const targetCount = targets.length;
+    expect(initialFills).toBeGreaterThan(0);
+    lighting.update();
+    expect(fills).toHaveBeenCalledTimes(initialFills);
+
+    renderer.emit('restorewebgl');
+    expect(fills).toHaveBeenCalledTimes(initialFills);
+    lighting.update();
+    expect(fills).toHaveBeenCalledTimes(initialFills + 1);
+    expect(fills.mock.lastCall?.[0]).toBe(lighting.getAmbientColor());
+    expect(targets).toHaveLength(targetCount);
+    lighting.update();
+    expect(fills).toHaveBeenCalledTimes(initialFills + 1);
+    lighting.destroy();
+    expect(renderer.listenerCount('restorewebgl')).toBe(0);
+    renderer.emit('restorewebgl');
+    expect(targets).toHaveLength(targetCount);
+  });
+
+  it('rebuilds restored explosion caches before reusing them at unchanged simulation time', () => {
+    const { lighting, targets, renderer } = fixture();
+    lighting.setOccluderIndex(new LightOccluderIndex({
+      rocks: () => [], trunks: () => [], baseCells: () => [], baseGeneration: () => 0,
+    }));
+    lighting.setPerformanceMetricsEnabled(true);
+    lighting.pulse('explosion', 100, 100);
+    lighting.update();
+    expect(lighting.getPerformanceMetrics().explosionOcclusionRefreshes).toBe(1);
+    const targetCount = targets.length;
+    lighting.update();
+    expect(lighting.getPerformanceMetrics().explosionOcclusionRefreshes).toBe(0);
+    expect(lighting.getPerformanceMetrics().occlusionCacheHits).toBe(1);
+
+    renderer.emit('restorewebgl');
+    lighting.update();
+    expect(lighting.getPerformanceMetrics().explosionOcclusionRefreshes).toBe(1);
+    expect(lighting.getPerformanceMetrics().occlusionCacheHits).toBe(1);
+    expect(targets).toHaveLength(targetCount);
+    lighting.update();
+    expect(lighting.getPerformanceMetrics().explosionOcclusionRefreshes).toBe(0);
+    lighting.destroy();
+  });
+
   it('releases light-bleed nodes when the Scene display list is destroyed before the lighting owner', () => {
     const { lighting, shaders, qualityController } = fixture();
     lighting.setLight('source', 'muzzleFlash', 100, 100);
