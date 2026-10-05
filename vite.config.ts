@@ -51,15 +51,23 @@ export default defineConfig(({ mode }) => {
       });
       server.middlewares.use('/__navigation-report', (request, response, next) => {
         if (request.method !== 'POST') return next();
-        let body = '', tooLarge = false;
-        request.on('data', chunk => {
-          body += chunk;
-          if (body.length > 20_000_000) { tooLarge = true; request.destroy(); }
+        const host = request.headers.host;
+        const localHost = /^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(host ?? '');
+        if (!localHost || !['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(request.socket.remoteAddress ?? '')
+          || request.headers.origin !== `http://${host}`) {
+          response.writeHead(403); response.end('Local same-origin request required.'); return;
+        }
+        const chunks: Buffer[] = []; let size = 0, tooLarge = false;
+        request.on('data', (chunk: Buffer) => {
+          size += chunk.length;
+          if (size > 20_000_000) { tooLarge = true; chunks.length = 0; }
+          else if (!tooLarge) chunks.push(chunk);
         });
         request.on('end', () => {
           void (async () => {
             try {
-              if (tooLarge) throw new Error('Report too large');
+              if (tooLarge) { response.writeHead(413); response.end('Report too large'); return; }
+              const body = Buffer.concat(chunks).toString('utf8');
               const report = JSON.parse(body);
               const env = report.environment;
               if (!env || typeof env.scenario !== 'string' || !/^[a-z-]+$/.test(env.scenario)
