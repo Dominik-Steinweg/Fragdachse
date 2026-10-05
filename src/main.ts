@@ -193,6 +193,8 @@ async function boot(): Promise<void> {
 }
 
 function handleBootError(error: unknown): void {
+  // A failed game startup must also release a session admitted before Phaser was created.
+  bridge.leaveRoom();
   if (__PERFORMANCE_LAB__) failPerformanceLab(error);
   console.error(error);
   if (isWebGLStartupError(error)) {
