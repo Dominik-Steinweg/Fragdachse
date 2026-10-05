@@ -519,13 +519,13 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     }));
     const residency = vi.spyOn(ArenaBuilder, 'updateSurfaceResidency').mockImplementation(() => {});
     try {
-      binding.syncSurfaceResidency(true);
-      expect(wildlife.update).toHaveBeenLastCalledWith(16, [], expect.any(Object), 22 * 60, expect.any(Object));
+      binding.syncSurfaceResidency(true, 0);
+      expect(wildlife.update).toHaveBeenLastCalledWith(0, [], expect.any(Object), 22 * 60, expect.any(Object));
       players.push({ id: 'visible', active: true, displayObject: { visible: true, alpha: 1, x: 120, y: 90 } },
         { id: 'hidden', active: true, displayObject: { visible: false, alpha: 1, x: 0, y: 0 } },
         { id: 'absent', active: false, displayObject: null });
-      binding.syncSurfaceResidency(true);
-      expect(wildlife.update).toHaveBeenLastCalledWith(16, [{ id: 'visible', x: 120, y: 90 }], expect.any(Object), 22 * 60, expect.any(Object));
+      binding.syncSurfaceResidency(true, 25);
+      expect(wildlife.update).toHaveBeenLastCalledWith(25, [{ id: 'visible', x: 120, y: 90 }], expect.any(Object), 22 * 60, expect.any(Object));
       binding.notifyWildlifeShot('visible');
       binding.notifyWildlifeShot('hidden');
       binding.notifyWildlifeShot('absent');

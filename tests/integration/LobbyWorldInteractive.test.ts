@@ -1177,7 +1177,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     scene.arenaRuntime = { syncArenaEntryTransition: () => {}, isArenaEntryProtected: () => false,
       detectPhaseChange: () => {}, hostSyncLobbyWorld: () => {}, syncRoomOwners: () => {},
       detectWorldChange: () => {}, update: () => {}, presentation: {
-        syncWorldCamera: vi.fn(), syncWorldSurfaceResidency: (active: boolean) => frame.syncSurfaceResidency(active),
+        syncWorldCamera: vi.fn(), syncWorldSurfaceResidency: (active: boolean, delta: number) => frame.syncSurfaceResidency(active, delta),
       } };
     scene.inputBindings = { updateFrame: () => { throw afterSurfaces; } };
     vi.spyOn(bridge, 'updateNetwork').mockImplementation(() => {});

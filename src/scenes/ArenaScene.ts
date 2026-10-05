@@ -1548,7 +1548,7 @@ export class ArenaScene extends Phaser.Scene {
     // Sicherheitsrand deckt den Kamera-Feedback-Versatz mit ab, der erst am Frame-Ende
     // dazukommt.
     if (prepareWorldSurfaces) {
-      this.arenaRuntime.presentation.syncWorldSurfaceResidency(prepareWorldSurfaces);
+      this.arenaRuntime.presentation.syncWorldSurfaceResidency(prepareWorldSurfaces, delta);
     }
     // Der Owner loest die zentrale Policy auf und taktet den vorhandenen InputSystem; die Scene
     // liefert nur den bereits orchestrierten World-/Round-/UI-Framekontext.

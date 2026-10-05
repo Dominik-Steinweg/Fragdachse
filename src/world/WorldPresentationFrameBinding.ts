@@ -413,7 +413,7 @@ export class WorldPresentationFrameBinding {
    * zuletzt residente Stand unangetastet stehen, die Welt verschwindet also nicht, sie waechst
    * nur nicht mit. Nach `destroy()` wirkungslos.
    */
-  syncSurfaceResidency(showWorld: boolean): void {
+  syncSurfaceResidency(showWorld: boolean, deltaMs = 0): void {
     if (this.destroyed) return;
     this.syncSunlight();
     const fog = this.prepareGroundFog();
@@ -440,7 +440,7 @@ export class WorldPresentationFrameBinding {
         if (player.active && sprite?.visible && sprite.alpha > .1)
           this.wildlifePlayers.push({ id: player.id, x: sprite.x, y: sprite.y });
       }
-      wildlife.update(this.input.scene.game.loop.delta, this.wildlifePlayers, worldView,
+      wildlife.update(deltaMs, this.wildlifePlayers, worldView,
         this.input.lighting.getTimeOfDayMinutes(), this.input.lighting);
     }
     this.input.shadow.updateStaticResidency(worldView);

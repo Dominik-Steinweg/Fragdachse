@@ -46,7 +46,7 @@ export interface ArenaRuntimePresentationPort {
   readonly syncGroundFog: (deltaMs: number, showWorld: boolean) => void;
   readonly syncConstructionOwnership: (showWorld: boolean) => void;
   readonly syncWorldCamera: (deltaMs: number, showWorld: boolean) => void;
-  readonly syncWorldSurfaceResidency: (showWorld: boolean) => void;
+  readonly syncWorldSurfaceResidency: (showWorld: boolean, deltaMs: number) => void;
   readonly syncWorldClientPresentation: (
     state: WorldClientPresentationState | undefined,
     delta: number,
