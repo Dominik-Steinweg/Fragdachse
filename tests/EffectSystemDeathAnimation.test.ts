@@ -97,6 +97,7 @@ describe('EffectSystem player death animation', () => {
       ensureTextures: vi.fn(), playHitEffect: vi.fn(), zeusAudioUses: new Map(),
       burrowVisuals: new Map(), burrowEffects: new Set(), burrowEffectTimers: new Set(),
       mobilityEffects: new Set(), mobilityEffectTimers: new Set(),
+      bloodStainTimers: new Set(),
       damageVignetteTop: edges[0], damageVignetteBottom: edges[1],
       damageVignetteLeft: edges[2], damageVignetteRight: edges[3],
       scene: { tweens: { add: (config: any) => {

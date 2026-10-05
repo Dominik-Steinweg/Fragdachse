@@ -30,6 +30,15 @@ function unregisterBloodStain(stain: Phaser.GameObjects.Image): void {
   }
 }
 
+/** World teardown must not remove decals owned by another Scene. */
+export function clearBloodStains(scene: Phaser.Scene): void {
+  for (const stain of [...activeBloodStains]) {
+    if (stain.scene !== scene) continue;
+    scene.tweens.killTweensOf(stain);
+    stain.destroy();
+  }
+}
+
 function resolveTextures(target: Phaser.Scene | Phaser.Textures.TextureManager): Phaser.Textures.TextureManager {
   return 'textures' in target ? target.textures : target;
 }
@@ -330,7 +339,9 @@ export function spawnBloodStain(scene: Phaser.Scene, config: BloodStainSpawnConf
     delay: config.stainDelayMs,
     duration: config.fadeMs,
     ease: 'Sine.easeIn',
-    onComplete: () => stain.destroy(),
+    onComplete: () => {
+      if (activeBloodStains.includes(stain)) stain.destroy();
+    },
   });
 
   return stain;

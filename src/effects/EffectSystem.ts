@@ -15,6 +15,7 @@ import {
   ensureBloodEdgeTextures,
   ensureBloodHitTextures,
   spawnBloodStain,
+  clearBloodStains as clearSceneBloodStains,
 } from './BloodEffectShared';
 import { circleZone, edgeZone, ensureCanvasTexture, makeAdditive, mixColors, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
 import {
@@ -137,6 +138,7 @@ export class EffectSystem implements EnemyVisualSink {
   private readonly burrowEffectTimers = new Set<Phaser.Time.TimerEvent>();
   private readonly mobilityEffects = new Set<Phaser.GameObjects.GameObject>();
   private readonly mobilityEffectTimers = new Set<Phaser.Time.TimerEvent>();
+  private readonly bloodStainTimers = new Set<Phaser.Time.TimerEvent>();
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
   private asmdPrimaryRenderer: AsmdPrimaryRenderer | null = null;
   private plasmaBurnerRenderer: PlasmaBurnerRenderer | null = null;
@@ -293,6 +295,7 @@ export class EffectSystem implements EnemyVisualSink {
     this.clearZeusUpgrades();
     this.clearAllBurrowStates();
     this.clearMobilityEffects();
+    this.clearBloodStains();
     this.damageVignetteTween?.destroy();
     this.damageVignetteTween = null;
     this.damageVignetteTop?.destroy();
@@ -1693,9 +1696,17 @@ export class EffectSystem implements EnemyVisualSink {
     rotation: number,
     flightDelayMs: number,
   ): void {
-    this.scene.time.delayedCall(Math.max(0, flightDelayMs), () => {
+    const timer = this.scene.time.delayedCall(Math.max(0, flightDelayMs), () => {
+      if (!this.bloodStainTimers.delete(timer)) return;
       this.spawnBloodStain(x, y, scale, alpha, fadeMs, tint, rotation);
     });
+    this.bloodStainTimers.add(timer);
+  }
+
+  clearBloodStains(): void {
+    for (const timer of this.bloodStainTimers) timer.remove(false);
+    this.bloodStainTimers.clear();
+    clearSceneBloodStains(this.scene);
   }
 
   private ensureDamageVignette(): void {

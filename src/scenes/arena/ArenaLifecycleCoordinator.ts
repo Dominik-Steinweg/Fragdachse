@@ -2967,6 +2967,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.stinkCloudSystem.destroyAll();
     this.ctx.effectSystem.clearAllBurrowStates();
     this.ctx.effectSystem.clearMobilityEffects();
+    this.ctx.effectSystem.clearBloodStains();
     this.ctx.effectSystem.clearEnemyClawEffects();
     this.ctx.effectSystem.clearSpawnEffects();
     this.ctx.effectSystem.clearXpTexts();

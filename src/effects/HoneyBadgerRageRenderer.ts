@@ -73,6 +73,7 @@ export class HoneyBadgerRageRenderer {
   private readonly ringAura: Phaser.GameObjects.Image;
   private readonly bloodEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly transient = new Set<Phaser.GameObjects.GameObject>();
+  private destroyed = false;
   private active = false;
   private nextBurstAt = 0;
 
@@ -181,6 +182,8 @@ export class HoneyBadgerRageRenderer {
   }
 
   destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
     destroyEmitter(this.bloodEmitter);
     this.outerAura.destroy();
     this.coreAura.destroy();
@@ -188,6 +191,7 @@ export class HoneyBadgerRageRenderer {
 
     for (const object of this.transient) {
       if ('destroy' in object && typeof object.destroy === 'function') {
+        this.scene.tweens.killTweensOf(object);
         object.destroy();
       }
     }
@@ -246,6 +250,7 @@ export class HoneyBadgerRageRenderer {
         .setScale(Phaser.Math.FloatBetween(0.35, 1.15))
         .setAlpha(0.84);
       this.transient.add(streak);
+      streak.once('destroy', () => this.transient.delete(streak));
 
       const leaveStain = index < streakCount - 1 || Phaser.Math.Between(0, 100) < 45;
       this.scene.tweens.add({
@@ -258,7 +263,7 @@ export class HoneyBadgerRageRenderer {
         duration: Phaser.Math.Between(210, 320),
         ease: 'Cubic.easeOut',
         onComplete: () => {
-          this.transient.delete(streak);
+          if (!this.transient.delete(streak)) return;
           streak.destroy();
           if (leaveStain) {
             spawnBloodStain(this.scene, {
@@ -292,6 +297,7 @@ export class HoneyBadgerRageRenderer {
         .setRotation(Phaser.Math.FloatBetween(-Math.PI, Math.PI))
         .setAlpha(0.88);
       this.transient.add(droplet);
+      droplet.once('destroy', () => this.transient.delete(droplet));
 
       this.scene.tweens.add({
         targets: droplet,
@@ -301,7 +307,7 @@ export class HoneyBadgerRageRenderer {
         duration: Phaser.Math.Between(170, 260),
         ease: 'Quad.easeOut',
         onComplete: () => {
-          this.transient.delete(droplet);
+          if (!this.transient.delete(droplet)) return;
           droplet.destroy();
         },
       });
