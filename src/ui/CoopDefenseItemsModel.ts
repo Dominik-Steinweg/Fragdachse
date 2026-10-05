@@ -192,12 +192,6 @@ export function buildCoopDefenseItemTooltip(
   };
 }
 
-/** Kurzform fuer die Belohnungsvorschau: eine Zeile je Item. */
-export function describeCoopDefenseItemShort(item: CoopDefenseItem): string {
-  const description = describeCoopDefenseItem(item, getLocale());
-  return `${description.slotLabel} · ${description.rarityLabel} · ${t('ui.items.level')} ${description.itemLevel}`;
-}
-
 /**
  * Summe aller Werte der getragenen Teile. Ersetzt die Zahlen, die durch die reine
  * Symboldarstellung von den Ausruestungsplaetzen verschwinden.

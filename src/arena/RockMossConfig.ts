@@ -96,11 +96,6 @@ export function getRockMossTextureKey(fileName: string): string {
   return fileName.replace(/\.[^.]+$/, '');
 }
 
-/** Groesster Ueberstand eines Moosflecks ueber seine Ankerzelle hinaus, in Weltpixeln. */
-export function getRockMossReachPx(config: RockMossLayerConfig = ROCK_MOSS_CONFIG): number {
-  return (config.maxSizeCells * CELL_SIZE) / 2 + config.jitterCells * CELL_SIZE;
-}
-
 export function preloadRockMossAssets(loader: Phaser.Loader.LoaderPlugin): void {
   for (const variant of ROCK_MOSS_CONFIG.variants) {
     loader.image(getRockMossTextureKey(variant.fileName), `${ROCK_MOSS_ASSET_PATH}/${variant.fileName}`);

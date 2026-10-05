@@ -447,54 +447,6 @@ export function ensureIconTexture(
   return key;
 }
 
-/**
- * Weiche Glasflaeche hinter den Lobby-Seitenspalten.
- *
- * Ohne sie steht der Text direkt auf dem Gras der Menuevorschau. Bewusst ohne Kontur: den
- * Rahmen bilden die Felszeilen der Vorschau, ein zweiter Rand daneben wirkt doppelt. Die
- * Kante zur Bildmitte laeuft aus, damit die Flaeche nicht als Kasten aufsetzt.
- *
- * `fadeEdge`: `right` blendet zur rechten Kante aus (linke Spalte), `left` umgekehrt.
- */
-export function ensureGlassColumnTexture(
-  scene: Phaser.Scene, key: string, w: number, h: number,
-  color: number, fadeEdge: 'left' | 'right',
-  topAlpha = 0.62, bottomAlpha = 0.46,
-  /** Anteil der Breite, ueber den die Innenkante ausblendet. */
-  fadeRatio = 0.38,
-): string {
-  if (scene.textures.exists(key)) return key;
-
-  const iw = Math.max(1, Math.round(w));
-  const ih = Math.max(1, Math.round(h));
-  const ct = scene.textures.createCanvas(key, iw, ih);
-  if (!ct) return key;
-  const ctx = ct.context;
-  ctx.clearRect(0, 0, iw, ih);
-
-  const vertical = ctx.createLinearGradient(0, 0, 0, ih);
-  vertical.addColorStop(0, rgbStr(color, topAlpha));
-  vertical.addColorStop(1, rgbStr(color, bottomAlpha));
-  ctx.fillStyle = vertical;
-  ctx.fillRect(0, 0, iw, ih);
-
-  // Auslaufende Kante: nimmt der Flaeche zur Bildmitte hin die Deckkraft.
-  ctx.save();
-  ctx.globalCompositeOperation = 'destination-out';
-  const fadeWidth = Math.max(1, iw * fadeRatio);
-  const fade = fadeEdge === 'right'
-    ? ctx.createLinearGradient(iw - fadeWidth, 0, iw, 0)
-    : ctx.createLinearGradient(fadeWidth, 0, 0, 0);
-  fade.addColorStop(0, 'rgba(0,0,0,0)');
-  fade.addColorStop(1, 'rgba(0,0,0,1)');
-  ctx.fillStyle = fade;
-  ctx.fillRect(0, 0, iw, ih);
-  ctx.restore();
-
-  ct.refresh();
-  return key;
-}
-
 /** Sektions-Panel mit dezenter Farb-Toenung + farbigem Rand (wie der Upgrade-Inhaltsbereich). */
 export function ensureTintedSectionTexture(
   scene: Phaser.Scene, key: string, w: number, h: number,

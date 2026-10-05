@@ -23,23 +23,6 @@ import type {
 import { getTopDownMuzzleOrigin, type MuzzleOrigin } from '../config';
 import { resolveRocketExplosion } from './RocketLauncherConfig';
 
-/**
- * Fire-Typen, die über einen gemeinsamen, zustandsarmen Pfad laufen und deshalb auch ohne
- * Activity-spezifische Ressourcen- und Netzwerkvertraege benutzbar sind.
- *
- * Alle übrigen Typen – Flammenwerfer, Laubbläser, Tesla-Kuppel, Heilaura, Energieschild,
- * Verstärkungsmatrix, Energieinjektor – hängen an Ressourcen-, Runden- oder Netzwerkzustand.
- * Sie laufen deshalb nicht über diesen zustandsarmen Pfad.
- */
-export const AMBIENT_COMPATIBLE_FIRE_TYPES = ['projectile', 'hitscan', 'melee'] as const;
-
-export type AmbientCompatibleFireType = typeof AMBIENT_COMPATIBLE_FIRE_TYPES[number];
-
-/** Ist der Fire-Typ dieser Waffe über den gemeinsamen, zustandsarmen Executor abbildbar? */
-export function isAmbientCompatibleWeapon(config: WeaponConfig): boolean {
-  return (AMBIENT_COMPATIBLE_FIRE_TYPES as readonly string[]).includes(config.fire.type);
-}
-
 /** Normalisierter Hitscan-Schuss – frei von Waffen-, Ressourcen- und Netzwerkwissen. */
 export interface HitscanShotRequest {
   sourceCarrierBaseId?: string;

@@ -28,10 +28,6 @@ export function usesTeamColors(mode: GameMode): boolean {
   return mode === 'team_deathmatch' || mode === CAPTURE_THE_BEER_MODE;
 }
 
-export function usesExpandedArena(mode: GameMode): boolean {
-  return mode === CAPTURE_THE_BEER_MODE;
-}
-
 export function usesDynamicCamera(mode: GameMode): boolean {
   return mode === CAPTURE_THE_BEER_MODE;
 }

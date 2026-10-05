@@ -74,13 +74,6 @@ export function resolveConstructionAccess(
   return { constructionId, definition, allowed: true, unlocked: true, active: true };
 }
 
-export function getAccessibleConstructionIds(context: ConstructionAccessContext): readonly ConstructionId[] {
-  return Object.keys(COOP_DEFENSE_CONSTRUCTIONS)
-    .map((id) => resolveConstructionAccess(id, context))
-    .filter((result) => result.allowed)
-    .map((result) => result.constructionId as ConstructionId);
-}
-
 /** Returns only construction tools that are both unlocked and currently equipped. */
 export function getActiveConstructionToolRefs(context: ConstructionAccessContext): readonly LoadoutToolRef[] {
   const tools = context.loadout?.tools ?? (context.loadout?.utility ? [{ kind: 'utility', id: context.loadout.utility } satisfies LoadoutToolRef] : []);

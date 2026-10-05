@@ -456,10 +456,3 @@ export function getGroundCoverVariantsForAnchor(
 ): readonly GroundCoverVariantConfig[] {
   return config.variants.filter((variant) => !variant.anchors || variant.anchors.includes(anchor));
 }
-
-export function getGroundCoverAnchorConfig(
-  anchor: GroundCoverAnchor,
-  config: GroundCoverLayerConfig = GROUND_COVER_CONFIG,
-): GroundCoverAnchorConfig | undefined {
-  return config[anchor];
-}

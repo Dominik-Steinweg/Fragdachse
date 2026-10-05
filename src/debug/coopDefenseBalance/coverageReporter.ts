@@ -298,13 +298,3 @@ export function generateWeaponBalanceCoverageDataForScenarios(
     weapons: [...single.weapons, ...five.weapons],
   };
 }
-
-/** Formatiert den gemeinsamen machine-generated ST-/5T-Abschlussbericht. */
-export function generateWeaponBalanceCoverageReportForScenarios(
-  weaponIds: readonly string[],
-  options?: Omit<CoverageReportOptions, 'scenario'>,
-): string {
-  return formatWeaponBalanceCoverageMarkdown(
-    generateWeaponBalanceCoverageDataForScenarios(weaponIds, options),
-  );
-}
