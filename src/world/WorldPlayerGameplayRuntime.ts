@@ -1581,7 +1581,16 @@ export class WorldPlayerGameplayRuntime implements
 
   isControllingTurret(playerId: string): boolean { return this.turretControl.isOccupied(playerId); }
   getTurretControlState(playerId: string): import('../types').TurretControlState | undefined { return this.turretControl.getState(playerId); }
-  getManualTurretControl(id: number | string, now: number) { return this.turretControl.getManualControl(id, now); }
+  getManualTurretControl(id: number | string, now: number) {
+    const control = this.turretControl.getManualControl(id, now);
+    if (control && (this.systems.burrow.isStunned(control.playerId)
+      || this.options.combatSystem.isStunned?.(control.playerId, now))) {
+      // Keep the occupied turret out of automatic mode; existing stale-input handling also
+      // interrupts pending bursts and discards Tesla catch-up ticks while its pilot is stunned.
+      return { ...control, fresh: false, fireHeld: false };
+    }
+    return control;
+  }
   requestTurretControl(id: string, request: import('../types').TurretControlRequest): boolean { return this.turretControl.request(id, request); }
   bindArtificialAdrenalineSupply(eligible: (id: string) => boolean): { destroy: () => void } {
     this.systems.resource.setArtificialAdrenalineSupply(eligible);

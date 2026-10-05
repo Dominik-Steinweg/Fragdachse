@@ -8,8 +8,18 @@ import { COOP_DEFENSE_CLASS_IDS } from '../src/config/coopDefenseClasses';
 import { encodePlayerStates, decodePlayerStates } from '../src/network/playerStateCodec';
 import { WorldPlayerGameplayRuntime } from '../src/world/WorldPlayerGameplayRuntime';
 import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
+import { TurretSystem } from '../src/systems/TurretSystem';
+import { TeslaDomeSystem } from '../src/systems/TeslaDomeSystem';
+import { CombatStunStatusSystem } from '../src/systems/CombatStunStatusSystem';
+import { UTILITY_CONFIGS, WEAPON_CONFIGS, type PlaceableTurretUtilityConfig, type TeslaDomeWeaponFireConfig, type WeaponConfig } from '../src/loadout/LoadoutConfig';
+import type { CombatTargetRef } from '../src/combat/CombatScope';
 
-vi.mock('phaser', () => ({ Math: { Clamp: (v: number, min: number, max: number) => Math.max(min, Math.min(max, v)) } }));
+vi.mock('phaser', () => ({ Math: {
+  Clamp: (v: number, min: number, max: number) => Math.max(min, Math.min(max, v)),
+  Angle: { Between: (x: number, y: number, tx: number, ty: number) => Math.atan2(ty - y, tx - x) },
+  Distance: { Between: (x: number, y: number, tx: number, ty: number) => Math.hypot(tx - x, ty - y) },
+  DegToRad: (degrees: number) => degrees * Math.PI / 180,
+} }));
 
 function service(overrides: Record<string, unknown> = {}): any {
   return new Proxy(overrides, { get(target, key) {
@@ -32,6 +42,90 @@ function fixture() {
 }
 
 describe('manual turret occupancy', () => {
+  it.each([
+    ['combat', 'projectile'], ['burrow', 'projectile'], ['combat', 'tesla'], ['burrow', 'tesla'],
+  ] as const)('pauses manual %s-stunned %s fire without losing occupancy or catching up on recovery', (stunOwner, weaponKind) => {
+    let now = 1_000;
+    let burrowStunned = false;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const player = { id: 'pilot', x: 0, y: 0, rotation: 0, active: true,
+      setPosition(x: number, y: number) { this.x = x; this.y = y; } };
+    const source = { ...turret(1), weaponId: 'TURRET_ROCKET_BURST' as const };
+    const target: CombatTargetRef = { kind: 'player', id: player.id,
+      scope: { worldRevision: 1, runtimeGeneration: 1 }, instance: { entityGeneration: 1 } };
+    const stuns = new CombatStunStatusSystem();
+    const combat = service({ isAlive: () => true, isStunned: () => stuns.isStunned(target, now),
+      isBurrowed: () => false, canDamageTarget: (_owner: string, id: string) => id === 'enemy', applyDamage: vi.fn() });
+    const players = service({ getAllPlayers: () => [player], getPlayer: () => player,
+      getWorldSpawnPoint: () => ({ x: -50, y: 0 }) });
+    const runtime = new WorldPlayerGameplayRuntime({
+      playerManager: players, getTurrets: () => [source], isFriendlyTurret: () => true,
+      getTurretControlInput: () => ({ input: { ...runtime.getTurretControlState('pilot')!,
+        targetX: 200, targetY: 0, fireHeld: true }, receivedAt: now }),
+      projectileSpawn: service(), projectileTravelReadPort: service(), projectileEnvironmentInteractionPort: service(),
+      translocatorProjectilePort: { spawnPuck: () => 1, getPuckPosition: () => null, consumePuck: () => false },
+      combatSystem: combat, hostPhysics: service({ getDashPhase: () => 0, hasForcedMovement: () => false,
+        observeMovementSteps: () => vi.fn() }),
+      fireSystem: service(), placementSystem: service(), gameAudioSystem: service(), decoySystem: service(),
+      worldMetrics: resolveActiveArenaWorldMetrics(), getEnemyManager: () => null, getTargetStatusSystem: () => null,
+      getPowerUpSystem: () => null, getPlayerCapabilities: () => ({ canMove: true, canInteract: true, canUseCombat: true } as never),
+      resetPlayerPosition: vi.fn(), dropBeer: vi.fn(), createLoadoutManager: () => service(),
+      createBurrowSystem: () => service({ getPhase: () => 'idle', isTunnelTransit: () => false, isStunned: () => burrowStunned }),
+      weaponExecution: service(), relationship: { isEnemyPair: () => false },
+      network: { input: { getPlayerInput: () => undefined }, presentation: service(), loadout: service(), roundStats: service() },
+    });
+    vi.spyOn((runtime as any).systems.playerModifier, 'getNumericStat').mockReturnValue(1);
+    const fire = weaponKind === 'projectile' ? vi.fn() : combat.applyDamage;
+    const projectile = new TurretSystem(players, combat);
+    projectile.setTurretProvider(() => [source], null);
+    projectile.setManualControlProvider((id, time) => runtime.getManualTurretControl(id, time));
+    projectile.setFireHandler(fire);
+    const teslaConfig = WEAPON_CONFIGS.TURRET_TESLA as WeaponConfig & { fire: TeslaDomeWeaponFireConfig };
+    const tesla = new TeslaDomeSystem(players, combat, service());
+    tesla.setConstructionSourceProvider(() => [{ id: source.id, ownerId: source.ownerId,
+      x: source.x, y: source.y, color: source.ownerColor, config: teslaConfig }]);
+    tesla.setEnemyTargetProvider(() => [{ id: 'enemy', x: source.x + 50, y: source.y }]);
+    tesla.setLineOfSightChecker(() => true);
+    tesla.setManualControlProvider((id, time) => runtime.getManualTurretControl(id, time));
+    const interval = weaponKind === 'projectile'
+      ? WEAPON_CONFIGS.TURRET_ROCKET_BURST.turretBurst!.intervalMs : teslaConfig.fire.tickInterval;
+    const tick = () => {
+      runtime.runHostPrePhysicsStage(16, now, false);
+      if (weaponKind === 'projectile') {
+        projectile.hostUpdate(now, UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPORES, 16);
+      } else tesla.hostUpdate(now);
+    };
+    try {
+      expect(runtime.requestTurretControl('pilot', { action: 'enter', turretId: source.id })).toBe(true);
+      const occupancy = runtime.getTurretControlState('pilot');
+      tick();
+      if (weaponKind === 'tesla') { now += interval; tick(); }
+      expect(fire).toHaveBeenCalledOnce();
+      const stunnedAt = now;
+      const stunDuration = Math.max(interval * 10, WEAPON_CONFIGS.TURRET_ROCKET_BURST.cooldown + interval);
+      if (stunOwner === 'combat') stuns.apply(target, stunDuration, now);
+      else burrowStunned = true;
+      now += interval;
+      tick();
+      expect(fire).toHaveBeenCalledOnce();
+      expect(runtime.getManualTurretControl(source.id, now)).toMatchObject({ fresh: false, fireHeld: false });
+      expect(runtime.getTurretControlState('pilot')).toEqual(occupancy);
+
+      now = stunnedAt + stunDuration - 1;
+      tick();
+      expect(fire).toHaveBeenCalledOnce();
+      burrowStunned = false;
+      now += interval;
+      tick();
+      expect(runtime.getManualTurretControl(source.id, now)?.fresh).toBe(true);
+      expect(fire).toHaveBeenCalledTimes(2);
+      expect(runtime.getTurretControlState('pilot')).toEqual(occupancy);
+    } finally {
+      runtime.destroy();
+      clock.mockRestore();
+    }
+  });
+
   it('enforces runtime action and lifecycle boundaries and cancels pending channels without discharging', () => {
     const player = { id: 'pilot', x: 0, y: 0, rotation: 0, hp: 71, armor: 23,
       setPosition(x: number, y: number) { this.x = x; this.y = y; } };
