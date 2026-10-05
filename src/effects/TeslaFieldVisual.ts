@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { disposeShaderWarmupNode } from '../graphics/disposeShaderWarmupNode';
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
 import { mixColors } from './EffectUtils';
 import { getEmissiveScale } from './EmissiveScale';
@@ -226,8 +227,12 @@ export class TeslaFieldVisual {
   }
 
   destroy(): void {
+    if (this.dome?.renderNode) disposeShaderWarmupNode(this.dome.renderNode);
     this.dome?.destroy();
-    for (const slot of this.bolts) slot.quad?.destroy();
+    for (const slot of this.bolts) {
+      if (slot.quad?.renderNode) disposeShaderWarmupNode(slot.quad.renderNode);
+      slot.quad?.destroy();
+    }
     this.bolts.length = 0;
   }
 

@@ -4,6 +4,7 @@ import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, COLORS, DEPTH } from '../con
 import type { ResolvedCoopDefenseMapMissionProgressConfig } from '../config/coopDefenseMaps';
 import type { CoopDefenseMissionProgressPresentationState } from '../types';
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
+import { disposeShaderWarmupNode } from '../graphics/disposeShaderWarmupNode';
 import { registerGraphicsObject } from './EffectUtils';
 import {
   CHECKPOINT_ACTIVATION_MS,
@@ -107,7 +108,10 @@ export class CoopDefenseMissionProgressRenderer {
 
   clear(): void {
     if (this.destroyed) return;
-    for (const visual of this.checkpoints) visual.quad.destroy();
+    for (const visual of this.checkpoints) {
+      if (visual.quad.renderNode) disposeShaderWarmupNode(visual.quad.renderNode);
+      visual.quad.destroy();
+    }
     this.checkpoints.length = 0;
     for (const image of this.barrierImages.values()) image.destroy();
     this.barrierImages.clear();

@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import { mixColors, registerGraphicsObject } from './EffectUtils';
 import { getEmissiveScale } from './EmissiveScale';
+import { disposeShaderWarmupNode } from '../graphics/disposeShaderWarmupNode';
 import type { LightingSystem } from './LightingSystem';
 import { TESLA_ELECTRIC_RECIPE, createTeslaPalette, hasWebGl, writeTeslaPalette, type TeslaPalette } from './TeslaFieldVisual';
 import { TESLA_NOVA_FRAGMENT_SOURCE, TESLA_NOVA_OUTER_REACH, TESLA_NOVA_SHADER_NAME } from './teslaDomeShader';
@@ -144,6 +145,7 @@ export class TeslaNovaRenderer {
 
   private destroyWave(wave: NovaWave): void {
     this.lighting?.releaseLight(wave.lightKey);
+    if (wave.quad?.renderNode) disposeShaderWarmupNode(wave.quad.renderNode);
     wave.quad?.destroy();
     wave.quad = null;
   }

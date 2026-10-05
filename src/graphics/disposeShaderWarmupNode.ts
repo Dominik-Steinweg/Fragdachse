@@ -4,7 +4,7 @@ type ProbeNode = Phaser.Renderer.WebGL.RenderNodes.ShaderQuad
   | Phaser.Renderer.WebGL.RenderNodes.SubmitterSpriteGPULayer;
 
 /** Phaser 4.2.1 GameObject.destroy leaves these private nodes' buffers/VAOs alive.
- * Only for disposable probes: shader programs and the generic quad index buffer are shared.
+ * Only the object's private node is released; programs and the generic quad index buffer are shared.
  */
 export function disposeShaderWarmupNode(node: ProbeNode): void {
   const renderer = node.manager.renderer;
