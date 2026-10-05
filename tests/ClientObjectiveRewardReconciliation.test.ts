@@ -105,6 +105,7 @@ describe('B6 client mission reward reconciliation', () => {
 
   it('falls back when the selected temporary instance is no longer host-confirmed', () => {
     vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('player-a');
+    vi.spyOn(bridge, 'getGamePhase').mockReturnValue('LOBBY');
     vi.spyOn(bridge, 'getPlayerTemporaryUtilityInstances').mockReturnValue([]);
     const coordinator = makeCoordinator();
     coordinator.ctx.inputSystem.getSelectedRadialActionForHud.mockReturnValue({
