@@ -7,6 +7,7 @@ import {
   type CoopDefenseMapObjective,
   type CoopDefenseMapConfig,
 } from '../src/config/coopDefenseMaps';
+import { CoopDefenseMapDirector } from '../src/systems/CoopDefenseMapDirector';
 
 function makeMap(
   encounters: CoopDefenseMapConfig['encounters'],
@@ -33,6 +34,41 @@ function makeMap(
 }
 
 describe('Coop defense encounters', () => {
+  it.each(['direct', 'via-event'] as const)('rejects a %s dependency on a later sequential repel encounter', path => {
+    expect(() => normalizeCoopDefenseMapConfig(makeMap([
+      { id: 'first', start: path === 'direct'
+        ? { type: 'after-encounter', encounterId: 'second' }
+        : { type: 'after-event', eventId: 'bridge' },
+      groups: [{ enemyKind: 'zombie-badger', count: 1 }] },
+      { id: 'second', start: { type: 'time', atMs: 0 },
+        groups: [{ enemyKind: 'zombie-badger', count: 1 }] },
+    ], 'repel-assault', [], path === 'direct' ? {} : {
+      mapEvents: [{ id: 'bridge', type: 'airstrike', pattern: 'zone-barrage',
+        start: { type: 'after-encounter', encounterId: 'second' }, strikeCount: 1,
+        area: { gridX: 4, gridY: 4, widthCells: 2, heightCells: 2 } }],
+    }))).toThrow(/cyclic mission dependency/);
+  });
+
+  it('keeps forward encounter references valid in the concurrent scheduled mode', () => {
+    const normalized = normalizeCoopDefenseMapConfig(makeMap([
+      { id: 'first', start: { type: 'after-encounter', encounterId: 'second' },
+        groups: [{ enemyKind: 'zombie-badger', count: 1, spawnStaggerMs: 0 }] },
+      { id: 'second', start: { type: 'time', atMs: 0 },
+        groups: [{ enemyKind: 'zombie-badger', count: 1, spawnStaggerMs: 0 }] },
+    ], 'survive', [], { surviveDurationSec: 60, respawnsPerPlayer: 0 }));
+    const spawned: string[] = [];
+    const director = new CoopDefenseMapDirector(resolveCoopDefenseMapEncounterConfigs(normalized, 1),
+      (_kind, _count, encounterId) => { spawned.push(encounterId); return [encounterId]; }, {
+        mode: 'scheduled', isEnemyActive: () => false,
+        isEncounterStartSatisfied: start => start.type === 'after-encounter'
+          && director.isEncounterCleared(start.encounterId),
+      });
+    director.hostUpdate(0, false);
+    director.hostUpdate(0, false);
+    expect(spawned).toEqual(['second', 'first']);
+    expect(director.isEncounterCleared('first')).toBe(true);
+  });
+
   it('normalizes ids and non-negative times while resolving scaled group counts', () => {
     const normalized = normalizeCoopDefenseMapConfig(makeMap([
       {

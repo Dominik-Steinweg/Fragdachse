@@ -1142,6 +1142,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
   );
   validateMissionDependencyGraph(
     mapConfig.mapId,
+    objective,
     encounters ?? [],
     mapEvents,
     secondaryObjectives ?? [],
@@ -2781,6 +2782,7 @@ type MissionDependencyNode =
 
 function validateMissionDependencyGraph(
   mapId: string,
+  objective: CoopDefenseMapObjective,
   encounters: readonly ResolvedCoopDefenseMapEncounterConfig[],
   events: readonly ResolvedCoopDefenseMapEventConfig[],
   objectives: readonly CoopDefenseMapSecondaryObjectiveConfig[],
@@ -2836,6 +2838,10 @@ function validateMissionDependencyGraph(
     const encounter = encounters[index];
     const dependent = `encounter:${encounter.id}` as const;
     addNode(dependent);
+    // Repel assault consumes the authored sequence even when a start uses another trigger.
+    if (objective === 'repel-assault' && index > 0) {
+      addDependency(`encounter:${encounters[index - 1].id}`, dependent);
+    }
     if (encounter.start.type === 'after-previous') {
       const previous = encounters[index - 1];
       if (!previous) {
