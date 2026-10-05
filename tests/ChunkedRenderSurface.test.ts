@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
+import EventEmitter from 'eventemitter3';
+import { createRequire } from 'node:module';
+
+const TextureWrapper = createRequire(import.meta.url)('../node_modules/phaser/src/renderer/webgl/wrappers/WebGLTextureWrapper.js');
 
 // Phaser braucht beim Laden ein DOM. Der Chunk-Pfad ruft davon nichts auf; die Attrappe stellt nur
 // so viel bereit, dass die Modulkette importierbar bleibt.
 vi.mock('phaser', () => ({
+  Renderer: { Events: { RESTORE_WEBGL: 'restorewebgl' } },
   BlendModes: { NORMAL: 0, MULTIPLY: 1, ADD: 2, ERASE: 17 },
   Textures: { FilterMode: { LINEAR: 0, NEAREST: 1 } },
   Math: { Clamp: (v: number, min: number, max: number) => Math.min(max, Math.max(min, v)) },
@@ -123,9 +128,10 @@ class FakeRenderTexture {
   }
 }
 
-function createScene() {
+function createScene(renderer = new EventEmitter()) {
   let created = 0;
   return {
+    sys: { renderer },
     add: {
       renderTexture: (_x: number, _y: number, w: number, h: number) =>
         new FakeRenderTexture(`rt_${created++}`, w, h),
@@ -137,7 +143,8 @@ const FRAME = { offsetX: 0, offsetY: 12, width: 12_800, height: 2_560 };
 const LAYERS = [{ id: 'a', depth: 2 }, { id: 'b', depth: 3 }];
 
 function createSurface(frame = FRAME, onBake?: (region: ChunkBakeRegion) => void) {
-  const scene = createScene();
+  const renderer = new EventEmitter();
+  const scene = createScene(renderer);
   const regions: ChunkBakeRegion[] = [];
   const scratch = new FakeRenderTexture('scratch', ARENA_RENDER_CHUNK_SIZE, ARENA_RENDER_CHUNK_SIZE);
   const surface = new ChunkedRenderSurface(scene, {
@@ -150,13 +157,34 @@ function createSurface(frame = FRAME, onBake?: (region: ChunkBakeRegion) => void
       for (const layer of LAYERS) sink.blit(layer.id, scratch as never);
     },
   });
-  return { surface, regions, scene };
+  return { surface, regions, scene, renderer };
 }
 
 const VIEW = { x: 0, y: 12, width: 1920, height: 1080 };
 
 function drain(scene: object): void {
   ChunkedRenderSurface.drainBakeQueue(scene as never);
+}
+
+/** Actual Phaser restoration; only GL storage and the draw-command contents are simulated. */
+function attachRestorableStorage(target: FakeRenderTexture) {
+  let bound: { writes: FakeRenderTexture['writes'] };
+  const renderer = {
+    gl: {
+      LINEAR: 1, RGBA: 2, CLAMP_TO_EDGE: 3,
+      isContextLost: () => false, createTexture: () => ({ writes: [] }), texParameteri() {},
+      texImage2D(...args: unknown[]) {
+        expect(args.at(-1)).toBeNull(); // DrawingContext creates framebuffer textures with no CPU pixels.
+        bound.writes = [];
+      },
+    },
+    glTextureUnits: { bind(wrapper: { webGLTexture: typeof bound }) { bound = wrapper.webGLTexture; } },
+    glWrapper: { updateTexturing() {} },
+  };
+  const wrapper = new TextureWrapper(renderer, 0, 1, 1, 3, 3, 2, null, target.width, target.height);
+  wrapper.webGLTexture.writes = target.writes;
+  Object.defineProperty(target, 'writes', { get: () => wrapper.webGLTexture.writes });
+  return wrapper;
 }
 
 function updateSurface(
@@ -169,6 +197,66 @@ function updateSurface(
 }
 
 describe('chunked render surface', () => {
+  it('rebakes restored resident textures through the existing budget at an unchanged camera view', () => {
+    const { surface, regions, scene, renderer } = createSurface();
+    updateSurface(surface, scene, VIEW);
+    const fullBakeCount = regions.length;
+    const allocated = surface.getStats().allocatedTextures;
+    const target = surface.getChunkTexture('a', 0, 0) as unknown as FakeRenderTexture;
+    expect(target.writes.length).toBeGreaterThan(0);
+    regions.length = 0;
+
+    // WebGLRenderer recreates wrappers before emitting the restoration event.
+    const wrapper = attachRestorableStorage(target);
+    wrapper.createResource();
+    expect(target.writes).toEqual([]);
+    renderer.emit('restorewebgl');
+    surface.updateResidency(VIEW);
+    expect(surface.getWorkingSet(VIEW).ready).toBe(false);
+    expect(target.visible).toBe(false);
+    expect(regions).toEqual([]);
+    expect(surface.getStats().allocatedTextures).toBe(allocated);
+    ChunkedRenderSurface.flushBakeBudget(scene);
+    expect(regions.length).toBeGreaterThan(0);
+    expect(regions.length).toBeLessThan(fullBakeCount);
+    drain(scene);
+    expect(surface.getWorkingSet(VIEW).ready).toBe(true);
+    expect(target.visible).toBe(true);
+    expect(target.writes.some(write => write.content === 'scratch')).toBe(true);
+    expect(regions).toHaveLength(fullBakeCount);
+
+    regions.length = 0;
+    updateSurface(surface, scene, VIEW);
+    expect(regions).toEqual([]);
+    surface.destroy();
+  });
+
+  it('coalesces restore invalidation with pending work and detaches the released owner', () => {
+    const { surface, regions, scene, renderer } = createSurface();
+    surface.updateResidency(VIEW);
+    ChunkedRenderSurface.flushBakeBudget(scene);
+    expect(regions.length).toBeGreaterThan(0);
+    expect(surface.getStats().pendingRegions).toBeGreaterThan(0);
+    const unfinished = surface.getStats().pendingRegions;
+    regions.length = 0;
+    renderer.emit('restorewebgl');
+    const pending = surface.getStats().pendingRegions;
+    expect(pending).toBeGreaterThan(unfinished);
+    renderer.emit('restorewebgl');
+    expect(surface.getStats().pendingRegions).toBe(pending);
+    drain(scene);
+    expect(surface.getWorkingSet(VIEW).ready).toBe(true);
+    expect(regions.length).toBe(pending);
+    expect(renderer.listenerCount('restorewebgl')).toBe(1);
+
+    surface.destroy();
+    surface.destroy();
+    expect(renderer.listenerCount('restorewebgl')).toBe(0);
+    renderer.emit('restorewebgl');
+    drain(scene);
+    expect(surface.getStats().allocatedTextures).toBe(0);
+  });
+
   it('queues acquisition and reveals a chunk only after all dirty regions are baked', () => {
     const { surface, regions, scene } = createSurface();
     surface.updateResidency(VIEW);

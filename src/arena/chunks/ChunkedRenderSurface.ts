@@ -217,6 +217,7 @@ export class ChunkedRenderSurface {
   private textureCapacityPerLayer = 0;
   private hasPreparedInitialResidency = false;
   private runtimeTextureCreations = 0;
+  private readonly onContextRestored = (): void => this.refreshAll();
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -233,6 +234,8 @@ export class ChunkedRenderSurface {
     this.gutterPx = Math.max(0, Math.trunc(options.gutterPx ?? CHUNK_SAMPLING_GUTTER_PX));
     this.chunkTextureSize = this.grid.chunkSize + this.gutterPx * 2;
     for (const layer of this.layers) this.layerVisibility.set(layer.id, true);
+    // Phaser restores framebuffer storage empty; retain residency and rebake with the usual budget.
+    scene.sys?.renderer?.on(Phaser.Renderer.Events.RESTORE_WEBGL, this.onContextRestored);
   }
 
   /**
@@ -499,6 +502,7 @@ export class ChunkedRenderSurface {
 
   destroy(): void {
     this.destroyed = true;
+    this.scene.sys?.renderer?.off(Phaser.Renderer.Events.RESTORE_WEBGL, this.onContextRestored);
     this.scheduler.cancelOwner(this);
     for (const chunk of this.resident.values()) {
       for (const texture of chunk.textures.values()) {
