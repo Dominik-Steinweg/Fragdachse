@@ -1,13 +1,11 @@
 import {
   getCatalog as getCatalogForLocale,
-  getTranslationParityIssues,
   translate as resolveTranslation,
 } from './catalog';
 import {
   getStoredLocale,
   setStoredLocale,
 } from '../utils/localPreferences';
-import { formatDate, formatDuration, formatNumber, formatPercent, formatTime } from './format';
 import { isLocale, resolveBrowserLocale, type Locale } from './types';
 
 export type { Locale } from './types';
@@ -32,7 +30,6 @@ export {
 export type { TranslationSegment } from './catalog';
 
 let activeLocale: Locale = getStoredLocale() ?? resolveBrowserLocale();
-const localeListeners = new Set<(locale: Locale) => void>();
 
 /** Resolves a semantic presentation key in the currently selected player language. */
 export function t(key: string, params?: Record<string, string | number>): string {
@@ -55,10 +52,4 @@ export function setLocale(locale: Locale): void {
   if (!isLocale(locale) || locale === activeLocale) return;
   activeLocale = locale;
   setStoredLocale(locale);
-  for (const listener of localeListeners) listener(locale);
-}
-
-export function subscribeLocale(listener: (locale: Locale) => void): () => void {
-  localeListeners.add(listener);
-  return () => localeListeners.delete(listener);
 }

@@ -79,8 +79,3 @@ export function whenUiFontsReady(callback: () => void): () => void {
 
   return () => { cancelled = true; };
 }
-
-/** Nur fuer Tests: verwirft die zwischengespeicherte Zusage. */
-export function resetUiFontsForTesting(): void {
-  loadPromise = null;
-}

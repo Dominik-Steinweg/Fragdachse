@@ -1,22 +1,12 @@
 import { getDomainCatalog, getDomainKeys, translate } from './catalog';
 import type { Locale } from './types';
 
-export interface LocalizedText {
-  readonly de: string;
-  readonly en: string;
-}
-
 function fallbackText(id: string): string {
   return id.replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function contentKey(key: string, locale: Locale, fallback = fallbackText(key)): string {
   return getDomainCatalog('en', 'content')[key] !== undefined ? translate(locale, key) : fallback;
-}
-
-/** Kept for presentation-helper compatibility; authored values normally come from the catalogs. */
-export function localizedText(text: LocalizedText, locale: Locale): string {
-  return text[locale];
 }
 
 export function getLoadoutItemName(id: string, locale: Locale): string {
@@ -45,10 +35,6 @@ export function getClassDescription(id: string, locale: Locale): string {
 
 export function getConstructionName(id: string, locale: Locale): string {
   return contentKey(`construction.${id}.name`, locale, fallbackText(id));
-}
-
-export function getConstructionDescription(id: string, locale: Locale): string {
-  return contentKey(`construction.${id}.description`, locale, '');
 }
 
 export function getPowerUpName(id: string, locale: Locale): string {
@@ -115,8 +101,4 @@ export function getContentDisplayName(id: string, locale: Locale): string {
 
 export function getContentTranslationKeys(): readonly string[] {
   return getDomainKeys('content');
-}
-
-export function getContentTranslation(key: string, locale: Locale): string | undefined {
-  return getDomainCatalog('en', 'content')[key] === undefined ? undefined : translate(locale, key);
 }
