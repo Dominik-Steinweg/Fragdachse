@@ -27,7 +27,6 @@ import type { RendererBundle }    from './RendererBundle';
 import type { PlayerEntity }      from '../../entities/PlayerEntity';
 import type { HitscanSupportEffect, LoadoutSlot, PlayerAimNetState, PlayerNetState, RadialDamageFalloffConfig, SupportProjectileImpact, SyncedActiveHudBuff, SyncedReinforcementMatrix, TeamId } from '../../types';
 import type { BaseManager } from '../../entities/BaseManager';
-import type { AutomatedTurret, AutomatedTurretId } from '../../systems/TurretSystem';
 import { emitArenaMapGridChanged } from './ArenaEvents';
 import { hasCoopDefenseEnemyKind } from '../../config/coopDefenseEnemies';
 import { BlackHoleSystem } from '../../systems/BlackHoleSystem';
@@ -69,8 +68,6 @@ import type { AdrenalineEssenceBinding } from '../../adrenalineEssence/Adrenalin
 const SUPPORT_BASE_TURRET_SEARCH_RADIUS = 64;
 /** Toleranz fuer Streiftreffer an der Nachbarzelle eines platzierten Turms. */
 const SUPPORT_TURRET_GRAZE_RADIUS = 24;
-/** Sichtbare Groesse des Regenerationsstosses; bewusst klein gehalten. */
-const SUPPORT_REGENERATION_EFFECT_RADIUS = 30;
 
 export interface HostUpdatePerformanceMetrics {
   navIntentMs?: number;
@@ -2112,12 +2109,6 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     };
   }
 
-  /** Heilt die dem Einschlag naechstgelegene lebende Basis; liefert die zugefuehrten HP. */
-  private healBaseNear(x: number, y: number, amount: number): number {
-    const base = this.findNearestBase(x, y, 'friendly');
-    return base ? this.healBase(base.id, amount) : 0;
-  }
-
   private findNearestBase(
     x: number,
     y: number,
@@ -2135,12 +2126,6 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       bestDistance = surface.distance;
     }
     return bestBase;
-  }
-
-  private healBase(baseId: string, amount: number, supporterId = '__world__'): number {
-    if (amount <= 0) return 0;
-    const outcome = this.worldMutation?.applyRepair('base', baseId, amount, supporterId, 'support.base_repair');
-    return outcome?.kind === 'support-applied' ? outcome.actualAmount : 0;
   }
 
   applyEnergyInjectorTargetHit(
@@ -2166,34 +2151,12 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     bridge.broadcastExplosionEffect(x, y, 18, payload.color, 'energy', undefined, 'ENERGY_INJECTOR');
   }
 
-  private findTurretById(turretId: AutomatedTurretId): AutomatedTurret | undefined {
-    return this.combatSystems?.turret?.getTurrets().find((turret) => turret.id === turretId);
-  }
-
-  private findNearestTurret(x: number, y: number, maxDistance: number): AutomatedTurret | undefined {
-    let best: AutomatedTurret | undefined;
-    let bestDistanceSq = maxDistance * maxDistance;
-    for (const turret of this.combatSystems?.turret?.getTurrets() ?? []) {
-      const dx = turret.x - x;
-      const dy = turret.y - y;
-      const distanceSq = dx * dx + dy * dy;
-      if (distanceSq > bestDistanceSq) continue;
-      best = turret;
-      bestDistanceSq = distanceSq;
-    }
-    return best;
-  }
-
   private getTeamBuffHudBuff(playerId: string, now: number): SyncedActiveHudBuff | null {
     return this.coopMissionRuntime?.coopDefenseTeamBuffSystem?.getHudBuff(
       now,
       bridge.canPlayerReceiveRoundRewards(playerId),
       this.ctx.getWorldCombatCore()!.isAlive(playerId),
     ) ?? null;
-  }
-
-  private emitRegenerationEffect(x: number, y: number, color: number): void {
-    bridge.broadcastExplosionEffect(x, y, SUPPORT_REGENERATION_EFFECT_RADIUS, color, 'regeneration', undefined, 'silent');
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────

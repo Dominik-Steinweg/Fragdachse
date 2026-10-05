@@ -504,17 +504,6 @@ export class ArenaHUD {
     };
   }
 
-  /**
-   * Map the former particle intensity directly to the shared living field (0 = base,
-   * 1 = maximum). This is used for unbounded buffs such as the Negev kill streak.
-   */
-  private setBarEnergyIntensity(bundle: BarBundle, intensity: number): void {
-    const t = Phaser.Math.Clamp(intensity, 0, 1);
-    if (Math.abs(bundle.energyIntensity - t) < 0.01) return;
-    bundle.energyIntensity = t;
-    if (bundle.energized) bundle.idleEffect.setEnergyIntensity(t);
-  }
-
   private divider(y: number): Phaser.GameObjects.Rectangle {
     const divider = this.scene.add.rectangle(BAR_X, y, barWidth, 1, COL_DIVIDER, 0.5)
       .setOrigin(0, 0).setScrollFactor(0);

@@ -51,7 +51,6 @@ import {
   getStoredCoopDefenseLoadoutSlot,
   getStoredCoopDefenseProgress,
   getStoredCoopDefenseUpgradeProfile,
-  getStoredLoadoutSlot,
   getStoredPlayerName,
   importStoredGameProgressFile,
   setStoredCoopDefenseLoadoutSlot,
@@ -1445,22 +1444,6 @@ export class LeftSidePanel {
     if (!storedName) return;
     this.bridge.setLocalName(storedName);
     this.localNameText?.setText(storedName);
-  }
-
-  private resolveInitialLoadoutId(slot: LoadoutSlot): string | null {
-    const items = this.getSlotItems(slot);
-    if (items.length === 0) return null;
-
-    const localPlayerId = this.bridge.getLocalPlayerId();
-    const currentBridgeId = this.bridge.getPlayerLoadoutSlot(localPlayerId, slot);
-    const activeClassId = this.getActiveCoopDefenseLoadoutClassId();
-    const storedId = activeClassId
-      ? getStoredCoopDefenseLoadoutSlot(activeClassId, slot)
-      : getStoredLoadoutSlot(slot);
-    if (storedId && items.some((item) => item.id === storedId)) return storedId;
-    if (currentBridgeId && items.some((item) => item.id === currentBridgeId)) return currentBridgeId;
-
-    return items[0].id;
   }
 
   private openSaveMenu(pointer: Phaser.Input.Pointer): void {

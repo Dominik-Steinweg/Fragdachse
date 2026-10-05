@@ -2031,11 +2031,6 @@ export class InputSystem {
     return cfg?.type === 'airstrike' ? cfg : undefined;
   }
 
-  private getTunnelUltimateConfig(): TunnelUltimateConfig | undefined {
-    const cfg = this.getLocalUltimateConfig?.();
-    return cfg?.type === 'tunnel' ? cfg : undefined;
-  }
-
   private getChargeableUtilityConfig(): ChargeableUtilityConfig | undefined {
     const cfg = this.getLocalUtilityConfig?.();
     if (!cfg || (cfg.activation.type !== 'charged_throw' && cfg.activation.type !== 'charged_gate' && cfg.activation.type !== 'charged_alternate')) return undefined;

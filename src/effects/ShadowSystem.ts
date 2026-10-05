@@ -933,20 +933,6 @@ export class ShadowSystem {
     };
   }
 
-  private shadowBoundsIntersectChunk(
-    x: number,
-    y: number,
-    preset: ShadowCasterConfig,
-    chunk: ShadowDirtyChunk,
-    profile: ShadowProfile,
-  ): boolean {
-    const bounds = this.getShadowBounds(x, y, preset, profile);
-    return bounds.maxX > chunk.x
-      && bounds.minX < chunk.x + SHADOW_DIRTY_CHUNK_SIZE
-      && bounds.maxY > chunk.y
-      && bounds.minY < chunk.y + SHADOW_DIRTY_CHUNK_SIZE;
-  }
-
   syncDynamicShadows(
     players: readonly PlayerEntity[],
     projectiles: readonly ShadowProjectileSample[],
