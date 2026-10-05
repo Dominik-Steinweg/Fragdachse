@@ -2209,6 +2209,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
 
   private checkLocalPickup(powerups: import('../../types').SyncedPowerUp[]): void {
     const localId = bridge.getLocalPlayerId();
+    if (this.playerCapabilitiesResolver?.(localId).canInteract === false) return;
     const player  = this.ctx.playerManager.getPlayer(localId);
     if (!player || !player.active) return;
     if (this.playerGameplayRuntime?.isBurrowed(localId)) return;
