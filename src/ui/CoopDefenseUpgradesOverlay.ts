@@ -333,8 +333,6 @@ export class CoopDefenseUpgradesOverlay {
   private visible = false;
   private visibilityTween: Phaser.Tweens.Tween | null = null;
   private activeCategoryIndex = 0;
-  private dismissDelay: Phaser.Time.TimerEvent | null = null;
-  private keyHandler: ((event: KeyboardEvent) => void) | null = null;
 
   // Per-render decoration tracking (must be torn down before each re-render).
   private nodeEffects: LivingBarEffect[] = [];
@@ -687,8 +685,6 @@ export class CoopDefenseUpgradesOverlay {
       return;
     }
     this.visible = false;
-    this.dismissDelay?.destroy();
-    this.dismissDelay = null;
     this.picker?.close();
     this.closeRespecMenu();
     this.dimRect?.disableInteractive().removeAllListeners();
@@ -722,17 +718,12 @@ export class CoopDefenseUpgradesOverlay {
     this.visible = false;
     this.visibilityTween?.remove();
     this.visibilityTween = null;
-    this.dismissDelay?.destroy();
     this.loadoutHintTimer?.destroy();
     this.loadoutHintTimer = null;
     this.picker?.close();
     this.picker = null;
     this.closeRespecMenu();
     this.respecMenu = null;
-    if (this.keyHandler) {
-      this.scene.input.keyboard?.off('keydown', this.keyHandler);
-      this.keyHandler = null;
-    }
     this.clearNodeDecorations();
     this.clearTabDecorations();
     this.clearClassDecorations();
