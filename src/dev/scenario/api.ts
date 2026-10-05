@@ -220,8 +220,9 @@ export function installScenarioApi(controller: DevScenarioController) {
       try {
         if (!active) throw new Error('Dev-Szenario wurde beendet.');
         const result = runScenarioCommand(controller, command);
+        const config = controller.config;
         if (result) return result.then((): ScenarioResult => ({ ok: true, status: status() }))
-          .catch(error => { if (active) controller.fail(error); return failure(error); });
+          .catch(error => { if (active && controller.isCurrentScenario(config)) controller.fail(error); return failure(error); });
         return { ok: true, status: status() };
       } catch (error) { if (active) controller.fail(error); return failure(error); }
     },
@@ -241,17 +242,19 @@ export function installScenarioApi(controller: DevScenarioController) {
       });
     },
     async saveReport() {
+      const config = controller.config;
       try {
         if(!active)throw new Error('Dev-Szenario wurde beendet.');
         return {ok:true,...await controller.saveReportToWorkspace()};
-      }catch(error){if(active)controller.fail(error);return failure(error);}
+      }catch(error){if(active&&controller.isCurrentScenario(config))controller.fail(error);return failure(error);}
     },
     async capture() {
+      const config = controller.config;
       try {
         if (!active) throw new Error('Dev-Szenario wurde beendet.');
         const result = await controller.captureToWorkspace();
         return { ok: true, ...result };
-      } catch (error) { if (active) controller.fail(error); return failure(error); }
+      } catch (error) { if (active && controller.isCurrentScenario(config)) controller.fail(error); return failure(error); }
     },
   };
   window.devScenario = api;

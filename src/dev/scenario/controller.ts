@@ -114,6 +114,7 @@ export class DevScenarioController {
     if (imported) { this.config = imported; this.panel.sync(); this.start(imported); }
   }
   requireReadyForBots(): void { this.requireReady(); }
+  isCurrentScenario(config: DevScenario): boolean { return !this.disposed && this.config === config; }
   hidesAim(): boolean { return this.state === 'ready' && this.config.hideAim; }
   private requireReady(): void {
     if (this.state !== 'ready' || !bridge.isArenaStarted() || this.runtime.isMatchTerminated()) throw new Error('Szenario ist noch nicht bereit oder die Runde ist beendet.');

@@ -82,16 +82,19 @@ function integer(value: unknown, label: string, max: number): number {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > max) throw new Error(`Invalid ${label}`);
   return value;
 }
-async function nextFrame(controller: DevScenarioController): Promise<void> {
+async function nextFrame(controller: DevScenarioController, assertCurrent: () => void): Promise<void> {
+  assertCurrent();
   const before = controller.clock.now;
   controller.step(1);
   const start = performance.now();
   // Poll a real wall clock: the presentation clock is deliberately stopped between samples.
   while (controller.clock.now < before + 1000 / 60 - .001) {
+    assertCurrent();
     if (controller.state !== 'ready') throw new Error('Reference lost its ready world');
     if (performance.now() - start > 10000) throw new Error('Reference step timed out');
     await new Promise<void>(resolve => setTimeout(resolve, 4));
   }
+  assertCurrent();
 }
 
 /** Only the new API action uses this runner. No normal gameplay / controller update hooks. */
@@ -117,13 +120,20 @@ export async function runDepthReferenceScene(controller: DevScenarioController, 
   if (input.timeOfDay !== undefined && input.timeOfDay !== run.recipe.scenario.timeOfDay) throw new Error('Time differs from prepared reference');
   if (frame < run.frame) throw new Error('Backward sampling requires prepare + whenReady (deterministic replay)');
   if (controller.snapshot().ready !== true) throw new Error('Await devScenario.whenReady() first');
+  const isCurrent = () => controller.isCurrentScenario(run.config);
+  const assertCurrent = () => {
+    if (!isCurrent()) throw new Error('Reference scenario was replaced or destroyed');
+  };
   controller.pause(); run.busy = true;
   const nativeRandom = Math.random;
   try {
     if (run.origin === null) {
       // Let camera/time-of-day settle through the regular frame binding before the cue origin.
       controller.aim = { ...run.recipe.focus }; controller.zoom = run.recipe.zoom; controller.cameraAtTarget = true;
-      for (let i = 0; i < 120; i++) await nextFrame(controller);
+      for (let i = 0; i < 120; i++) {
+        await nextFrame(controller, assertCurrent);
+        assertCurrent();
+      }
       run.origin = controller.clock.now;
     } else if (Math.abs(controller.clock.now - run.origin - Math.max(0, run.frame) * 1000 / 60) > .01) {
       throw new Error('Clock changed outside reference; prepare again');
@@ -131,7 +141,9 @@ export async function runDepthReferenceScene(controller: DevScenarioController, 
     Math.random = run.random;
     for (let at = Math.max(0, run.frame + 1); at <= frame; at++) {
       for (const cue of run.recipe.cues.filter(c => c.frame === at)) {
+        assertCurrent();
         await execute(cue.command);
+        assertCurrent();
         run.log.push({ frame: at, command: cue.command, result: structuredClone(controller.lastAction) });
         const result = controller.lastAction as { ok?: boolean; reason?: string } | null;
         if (result?.ok === false) throw new Error(`Reference action rejected: ${result.reason ?? JSON.stringify(result)}`);
@@ -139,7 +151,8 @@ export async function runDepthReferenceScene(controller: DevScenarioController, 
       }
       controller.aim = { ...run.recipe.focus }; controller.zoom = run.recipe.zoom; controller.cameraAtTarget = true;
       controller.syncCamera();
-      await nextFrame(controller);
+      await nextFrame(controller, assertCurrent);
+      assertCurrent();
       // Frame zero is the first rendered fixture, after pose/camera reconciliation.
       if (at === 0) run.origin = controller.clock.now;
       run.frame = at;
@@ -150,5 +163,9 @@ export async function runDepthReferenceScene(controller: DevScenarioController, 
       wallTimeMs: Date.now(),
       determinism: 'Fixed input frames and seeded Math.random during sampling. Fresh page per comparison; wall epoch, GPU/worker/ambient animation is not a bitwise replay.' } };
   } catch (error) { run.failed = true; throw error; }
-  finally { Math.random = nativeRandom; controller.clock.paused = true; run.busy = false; }
+  finally {
+    if (Math.random === run.random) Math.random = nativeRandom;
+    if (isCurrent()) controller.clock.paused = true;
+    run.busy = false;
+  }
 }

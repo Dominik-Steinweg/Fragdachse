@@ -16,7 +16,8 @@ describe('depth reference recipes', () => {
   });
   function controller() {
     const c:any={clock:{now:0,paused:false},state:'ready',lastAction:null, config:{}, aim:{},zoom:1,cameraAtTarget:false,
-      start(config:unknown){this.config=structuredClone(config);}, snapshot(){return {ready:this.state==='ready'};},
+      start(config:unknown){this.config=structuredClone(config);this.clock.paused=false;}, snapshot(){return {ready:this.state==='ready'};},
+      isCurrentScenario(config:unknown){return config===this.config;},
       pause(){this.clock.paused=true;},step(){this.clock.now+=1000/60;},syncCamera(){},syncPanel(){}};
     return c;
   }
@@ -52,5 +53,22 @@ describe('depth reference recipes', () => {
     await runDepthReferenceScene(c,{phase:'sample',frame:1},()=>{c.lastAction={ok:true};});
     c.clock.now+=1;
     await expect(runDepthReferenceScene(c,{phase:'sample',frame:2},()=>{})).rejects.toThrow('Clock changed');
+  });
+  it('does not publish old cues or pause a new scenario after an awaited command', async () => {
+    const c = controller(), nativeRandom = Math.random;
+    await runDepthReferenceScene(c, { scene: 'flight' }, () => {});
+    let enterCue!: () => void, finishCue!: () => void;
+    const entered = new Promise<void>(resolve => { enterCue = resolve; });
+    const command = new Promise<void>(resolve => { finishCue = resolve; });
+    const sample = runDepthReferenceScene(c, { phase: 'sample', frame: 0 }, () => {
+      enterCue(); return command;
+    });
+    await entered;
+    c.start({ seed: 777 }); c.lastAction = { scenario: 'new' };
+    finishCue();
+    await expect(sample).rejects.toThrow('Reference scenario was replaced or destroyed');
+    expect(c.clock.paused).toBe(false);
+    expect(c.lastAction).toEqual({ scenario: 'new' });
+    expect(Math.random).toBe(nativeRandom);
   });
 });

@@ -591,3 +591,47 @@ it('returns terminal API results without reading a destroyed scene after capture
   expect(fail).not.toHaveBeenCalled();
   snapshot.mockRestore(); fail.mockRestore();
 });
+it('does not let an old depth sample pause or fail a newly started scenario', async () => {
+  const api = window.devScenario!;
+  await expect(api.run({ action: 'depthReferenceScene', scene: 'flight' })).resolves.toMatchObject({ ok: true });
+  controller.update(); controller.update();
+  host.phase = 'ARENA'; host.started = true; controller.update(); controller.afterHostFrame();
+  expect(controller.snapshot().ready).toBe(true);
+  const sampling = api.run({ action: 'depthReferenceScene', phase: 'sample', frame: 0 });
+  expect(controller.clock.pendingSteps).toBe(1);
+  controller.start({ ...defaultScenario(), seed: 777 });
+  const message = controller.message;
+  expect(controller.clock.paused).toBe(false);
+  await vi.advanceTimersByTimeAsync(4);
+  await expect(sampling).resolves.toMatchObject({ ok: false });
+  expect(controller.clock.paused).toBe(false);
+  expect(controller.message).toBe(message);
+  expect(controller.config.seed).toBe(777);
+});
+
+it('cancels a pending depth frame promptly after real Scene shutdown', async () => {
+  const api = window.devScenario!;
+  await api.run({ action: 'depthReferenceScene', scene: 'flight' });
+  controller.update(); controller.update();
+  host.phase = 'ARENA'; host.started = true; controller.update(); controller.afterHostFrame();
+  const sampling = api.run({ action: 'depthReferenceScene', phase: 'sample', frame: 0 });
+  expect(controller.clock.pendingSteps).toBe(1);
+  bindActualCameraShutdown()();
+  let result: unknown;
+  void Promise.resolve(sampling).then(value => { result = value; });
+  await vi.advanceTimersByTimeAsync(4);
+  expect(result).toMatchObject({ ok: false, error: 'Reference scenario was replaced or destroyed' });
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it.each(['capture', 'saveReport'] as const)('keeps a late %s failure out of the next scenario', async method => {
+  enter(); controller.afterHostFrame();
+  let rejectReport!: (reason: Error) => void;
+  vi.stubGlobal('fetch', vi.fn(() => new Promise((_resolve, reject) => { rejectReport = reject; })));
+  const pending = window.devScenario![method]();
+  controller.start({ ...defaultScenario(), seed: 777 });
+  const message = controller.message;
+  if (method === 'saveReport') rejectReport(new Error('Old report request failed'));
+  await expect(pending).resolves.toMatchObject({ ok: false });
+  expect(controller.message).toBe(message);
+});
