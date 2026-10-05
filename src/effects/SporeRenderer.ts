@@ -33,6 +33,8 @@ interface SporeVisual {
 export class SporeRenderer {
   private visuals = new Map<number, SporeVisual>();
   private trailPuffs = new Set<Phaser.GameObjects.Image>();
+  private readonly impactImages = new Set<Phaser.GameObjects.Image>();
+  private readonly impactTimers = new Map<Phaser.Time.TimerEvent, readonly Phaser.GameObjects.Particles.ParticleEmitter[]>();
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -256,9 +258,20 @@ export class SporeRenderer {
       this.destroyVisual(id);
     }
     for (const puff of this.trailPuffs) {
+      this.scene.tweens.killTweensOf(puff);
       puff.destroy();
     }
     this.trailPuffs.clear();
+    for (const image of this.impactImages) {
+      this.scene.tweens.killTweensOf(image);
+      image.destroy();
+    }
+    this.impactImages.clear();
+    for (const [timer, emitters] of this.impactTimers) {
+      timer.remove(false);
+      for (const emitter of emitters) destroyEmitter(emitter);
+    }
+    this.impactTimers.clear();
   }
 
   playImpact(
@@ -313,6 +326,9 @@ export class SporeRenderer {
     }, DEPTH.FIRE + 0.2, undefined, 'spore');
     haze.explode(10, 0, 0);
 
+    this.impactImages.add(glow);
+    this.impactImages.add(cluster);
+
     this.scene.tweens.add({
       targets: glow,
       alpha: 0,
@@ -320,7 +336,7 @@ export class SporeRenderer {
       scaleY: glow.scaleY * 1.7,
       duration: 260,
       ease: 'Quad.easeOut',
-      onComplete: () => glow.destroy(),
+      onComplete: () => { if (this.impactImages.delete(glow)) glow.destroy(); },
     });
     this.scene.tweens.add({
       targets: cluster,
@@ -330,12 +346,14 @@ export class SporeRenderer {
       rotation: cluster.rotation + 0.9,
       duration: 220,
       ease: 'Cubic.easeOut',
-      onComplete: () => cluster.destroy(),
+      onComplete: () => { if (this.impactImages.delete(cluster)) cluster.destroy(); },
     });
-    this.scene.time.delayedCall(560, () => {
+    const timer = this.scene.time.delayedCall(560, () => {
+      if (!this.impactTimers.delete(timer)) return;
       destroyEmitter(burst);
       destroyEmitter(haze);
     });
+    this.impactTimers.set(timer, [burst, haze]);
   }
 
   private spawnTrailPuff(x: number, y: number, size: number, rotation: number, isVoid: boolean): void {
@@ -357,8 +375,7 @@ export class SporeRenderer {
       duration: 280,
       ease: 'Quad.easeOut',
       onComplete: () => {
-        this.trailPuffs.delete(puff);
-        puff.destroy();
+        if (this.trailPuffs.delete(puff)) puff.destroy();
       },
     });
   }

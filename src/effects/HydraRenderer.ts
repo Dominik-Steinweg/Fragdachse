@@ -29,6 +29,8 @@ interface HydraVisual {
 export class HydraRenderer {
   private visuals = new Map<number, HydraVisual>();
   private trailWisps = new Set<Phaser.GameObjects.Image>();
+  private readonly impactImages = new Set<Phaser.GameObjects.Image>();
+  private readonly impactTimers = new Map<Phaser.GameObjects.Particles.ParticleEmitter, Phaser.Time.TimerEvent>();
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -284,9 +286,20 @@ export class HydraRenderer {
       this.destroyVisual(id);
     }
     for (const wisp of this.trailWisps) {
+      this.scene.tweens.killTweensOf(wisp);
       wisp.destroy();
     }
     this.trailWisps.clear();
+    for (const image of this.impactImages) {
+      this.scene.tweens.killTweensOf(image);
+      image.destroy();
+    }
+    this.impactImages.clear();
+    for (const [emitter, timer] of this.impactTimers) {
+      timer.remove(false);
+      destroyEmitter(emitter);
+    }
+    this.impactTimers.clear();
   }
 
   playImpact(x: number, y: number, color: number, scale = 1): void {
@@ -326,6 +339,10 @@ export class HydraRenderer {
     }, DEPTH.PROJECTILES + 1.75, undefined, 'hydra');
     burst.explode(20, 0, 0);
 
+    this.impactImages.add(glow);
+    this.impactImages.add(membrane);
+    this.impactImages.add(cluster);
+
     this.scene.tweens.add({
       targets: glow,
       alpha: 0,
@@ -333,7 +350,7 @@ export class HydraRenderer {
       scaleY: glow.scaleY * 1.45,
       duration: 200,
       ease: 'Quad.easeOut',
-      onComplete: () => glow.destroy(),
+      onComplete: () => { if (this.impactImages.delete(glow)) glow.destroy(); },
     });
     this.scene.tweens.add({
       targets: membrane,
@@ -343,7 +360,7 @@ export class HydraRenderer {
       rotation: Math.PI * 0.72,
       duration: 210,
       ease: 'Cubic.easeOut',
-      onComplete: () => membrane.destroy(),
+      onComplete: () => { if (this.impactImages.delete(membrane)) membrane.destroy(); },
     });
     this.scene.tweens.add({
       targets: cluster,
@@ -353,9 +370,12 @@ export class HydraRenderer {
       rotation: 0.9,
       duration: 220,
       ease: 'Cubic.easeOut',
-      onComplete: () => cluster.destroy(),
+      onComplete: () => { if (this.impactImages.delete(cluster)) cluster.destroy(); },
     });
-    this.scene.time.delayedCall(420, () => destroyEmitter(burst));
+    const timer = this.scene.time.delayedCall(420, () => {
+      if (this.impactTimers.delete(burst)) destroyEmitter(burst);
+    });
+    this.impactTimers.set(burst, timer);
   }
 
   playSplitImpact(x: number, y: number, color: number, childAngles: number[], scale = 1): void {
@@ -370,6 +390,8 @@ export class HydraRenderer {
       color,
     ).setScale(Math.max(1.2, scale * 1.15));
 
+    this.impactImages.add(pulse);
+
     this.scene.tweens.add({
       targets: pulse,
       alpha: 0,
@@ -377,7 +399,7 @@ export class HydraRenderer {
       scaleY: pulse.scaleY * 2.2,
       duration: 190,
       ease: 'Quad.easeOut',
-      onComplete: () => pulse.destroy(),
+      onComplete: () => { if (this.impactImages.delete(pulse)) pulse.destroy(); },
     });
 
     for (const angle of childAngles) {
@@ -396,7 +418,10 @@ export class HydraRenderer {
         emitting: false,
       }, DEPTH.PROJECTILES + 1.85, undefined, 'hydra');
       emitter.explode(7, 0, 0);
-      this.scene.time.delayedCall(320, () => destroyEmitter(emitter));
+      const timer = this.scene.time.delayedCall(320, () => {
+        if (this.impactTimers.delete(emitter)) destroyEmitter(emitter);
+      });
+      this.impactTimers.set(emitter, timer);
 
       const wisp = this.scene.add.image(x, y, TEX_HYDRA_WISP)
         .setDepth(DEPTH.PROJECTILES + 0.9)
@@ -416,8 +441,7 @@ export class HydraRenderer {
         duration: 220,
         ease: 'Cubic.easeOut',
         onComplete: () => {
-          this.trailWisps.delete(wisp);
-          wisp.destroy();
+          if (this.trailWisps.delete(wisp)) wisp.destroy();
         },
       });
     }
