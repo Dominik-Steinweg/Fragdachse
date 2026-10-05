@@ -15,6 +15,9 @@ export class WoodlandImageFile extends Phaser.Loader.FileTypes.ImageFile {
     if(asset.kind==='coverage') this.cache=loader.cacheManager.binary;
   }
   onProcessComplete(): void {
+    // Match LoaderPlugin.fileProcessComplete before our custom cache/GPU publication.
+    const game = this.loader?.systems?.game as (Phaser.Game & { pendingDestroy?: boolean }) | undefined;
+    if (!this.loader?.scene || !game || game.pendingDestroy) return;
     const measuredAt = loadingTimeline.start();
     try {
       const a=this.asset,image=this.data as HTMLImageElement;

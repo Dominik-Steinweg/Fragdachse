@@ -1,4 +1,8 @@
 import { it, expect, vi, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { runInNewContext } from 'node:vm';
+import EventEmitter from 'eventemitter3';
 // The baked-mask path stays covered while it is disabled in production.
 vi.mock('../src/effects/ShadowConfig', async (load) => ({ ...(await load<typeof import('../src/effects/ShadowConfig')>()), CHARACTER_SHADOW_MASKS_ENABLED: true }));
 vi.mock('phaser',()=>({Textures:{FilterMode:{LINEAR:0}},Loader:{FileTypes:{ImageFile:class {
@@ -8,6 +12,8 @@ vi.mock('phaser',()=>({Textures:{FilterMode:{LINEAR:0}},Loader:{FileTypes:{Image
 }}}}));
 import { preloadWoodlandAssets, assertWoodlandAssetsReady, WoodlandImageFile } from '../src/assets/WoodlandAssets';
 import { woodlandAssetFiles, woodlandAssetBytes, WOODLAND_ROCK_COLOUR_KEY, WOODLAND_ROCK_COVERAGE_KEY } from '../src/assets/WoodlandAssetManifest';
+import { preloadCharacterMaterialAssets } from '../src/assets/CharacterMaterialAssets';
+import { CHARACTER_MATERIAL_PAGES } from '../src/assets/CharacterMaterialAssetManifest';
 afterEach(()=>vi.unstubAllGlobals());
 function fixture(limit=8192){
   const entries=new Map(),binaryEntries=new Map(),files:any[]=[];
@@ -16,7 +22,7 @@ function fixture(limit=8192){
   for(const method of ['addImage','addAtlas','addSpriteSheet','addGLTexture'])textures[method]=vi.fn((key:string)=>{const t={setFilter:vi.fn()};entries.set(key,t);return t;});
   const renderer={gl:{MAX_TEXTURE_SIZE:1,getParameter:()=>limit,LINEAR:2,CLAMP_TO_EDGE:3,RGBA:4},createTexture2D:vi.fn(()=>({destroy:vi.fn()}))};
   const scene:any={sys:{renderer},textures,cache:{binary}};
-  scene.load={scene,textureManager:textures,cacheManager:{binary},addFile:(f:any)=>files.push(f)};
+  scene.load={scene,systems:{game:{}},textureManager:textures,cacheManager:{binary},addFile:(f:any)=>files.push(f)};
   return {scene,files,entries,binaryEntries,renderer,textures};
 }
 it.each([4096,4351,4352,8192])('downloads one selected V7 atlas and scales every frame parameter at limit %i',limit=>{
@@ -67,4 +73,56 @@ it('loads only shared character mask pages through the non-PMA upload and boot r
  }
  expect(()=>assertCharacterShadowAssetsReady(f.scene)).not.toThrow();
  const count=f.files.length;preloadCharacterShadowAssets(f.scene);expect(f.files).toHaveLength(count);
+});
+
+function loadPhaserLoaderMethods(relative: string, Image?: unknown): Record<string, Function> {
+  const source = new URL('../node_modules/phaser/src/loader/' + relative, import.meta.url);
+  const require = createRequire(source), module = { exports: {} };
+  runInNewContext(readFileSync(source, 'utf8'), {
+    module, exports: module.exports, Image,
+    require: (id: string) => {
+      if (id.endsWith('/Class')) return function (definition: object) { return definition; };
+      if (id.endsWith('/PluginCache') || id.endsWith('/FileTypesManager')) return { register() {} };
+      if (id === '../File') return { createObjectURL() {}, revokeObjectURL() {} };
+      return require(id);
+    },
+  });
+  return module.exports as Record<string, Function>;
+}
+
+it.each([
+  ['woodland', 'loader-destroy'], ['woodland', 'game-destroy'],
+  ['character', 'loader-destroy'], ['character', 'game-destroy'],
+] as const)('ignores late %s decoding after %s through the installed Loader lifecycle', (kind, boundary) => {
+  const f = fixture();
+  const game = { config: {}, pendingDestroy: false };
+  const methods = loadPhaserLoaderMethods('LoaderPlugin.js');
+  const loader: any = Object.assign(new EventEmitter(), f.scene.load, {
+    ...methods, systems: { game, settings: { loader: {} }, events: new EventEmitter() },
+    list: new Set(), inflight: new Set(), queue: new Set(),
+  });
+  f.scene.load = loader;
+  let file: any, width: number, height: number;
+  if (kind === 'woodland') {
+    const asset = woodlandAssetFiles(8192).find(asset => asset.kind === 'data')!;
+    file = new WoodlandImageFile(loader, asset); width = asset.width; height = asset.height;
+  } else {
+    loader.image = (key: string, url: string) => {
+      const imageFile = { key, url, loader, onProcessComplete: vi.fn(), onProcessError: vi.fn() };
+      loader.emit('addfile', key, 'image', loader, imageFile);
+      f.files.push(imageFile);
+    };
+    preloadCharacterMaterialAssets(f.scene);
+    file = f.files[0]; width = CHARACTER_MATERIAL_PAGES[0].width; height = CHARACTER_MATERIAL_PAGES[0].height;
+  }
+  class DecodingImage { width = width; height = height; onload!: () => void; }
+  const imageMethods = loadPhaserLoaderMethods('filetypes/ImageFile.js', DecodingImage);
+  file.xhrLoader = { response: new Blob() };
+  imageMethods.onProcess.call(file);
+  const decodedImage = file.data as DecodingImage;
+  if (boundary === 'loader-destroy') methods.destroy.call(loader);
+  else game.pendingDestroy = true;
+  expect(() => decodedImage.onload()).not.toThrow();
+  expect(f.renderer.createTexture2D).not.toHaveBeenCalled();
+  expect(f.textures.addGLTexture).not.toHaveBeenCalled();
 });

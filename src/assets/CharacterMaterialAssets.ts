@@ -11,6 +11,9 @@ export function preloadCharacterMaterialAssets(scene: Phaser.Scene): void {
       if (key!==page.key || type!=='image') return;
       const complete=file.onProcessComplete;
       file.onProcessComplete=():void=>{
+        // The custom upload precedes Phaser's ordinary completion guard.
+        const game = file.loader?.systems?.game as (Phaser.Game & { pendingDestroy?: boolean }) | undefined;
+        if (!file.loader?.scene || !game || game.pendingDestroy) return;
         const started = loadingTimeline.start();
         try {
           const image=file.data as HTMLImageElement;

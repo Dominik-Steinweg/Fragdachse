@@ -105,9 +105,10 @@ function fixture() {
     addGLTexture:(key:string,wrapper:any)=>{const texture={source:[{glTexture:wrapper}]};textureMap.set(key,texture);return texture;}},
     load:{on:(name:string,fn:Function)=>listeners.set(name,fn),off:(name:string)=>listeners.delete(name),image:(key:string,url:string)=>{
       const page=CHARACTER_MATERIAL_PAGES.find(p=>p.key===key)!;
-      const file={data:{width:page.width,height:page.height},onProcessComplete:vi.fn(),onProcessError:vi.fn(),addToCache:vi.fn(),key,url};
+      const file={loader:scene.load,data:{width:page.width,height:page.height},onProcessComplete:vi.fn(),onProcessError:vi.fn(),addToCache:vi.fn(),key,url};
       listeners.get('addfile')!(key,'image',scene.load,file);files.push(file);
     }}};
+  scene.load.scene=scene;scene.load.systems={game:{}};
   const lighting:any={sampleCharacterMaterialLights:vi.fn((_x:number,_y:number,lights:any[])=>{for(const light of lights)light.weight=0;})};
   let customDraws=0,beautyDraws=0;
   const image=()=>{
