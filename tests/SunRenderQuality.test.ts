@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import EventEmitter from 'eventemitter3';
 const fake=vi.hoisted(()=>({shaders:[] as any[]}));
-vi.mock('phaser',()=>({BlendModes:{NORMAL:0,SCREEN:3},Textures:{FilterMode:{LINEAR:0}},Utils:{Array:{Remove:(a:any[],v:any)=>{const i=a.indexOf(v);if(i>=0)a.splice(i,1);}}},
+vi.mock('phaser',()=>({Renderer:{Events:{RESTORE_WEBGL:'restorewebgl'}},BlendModes:{NORMAL:0,SCREEN:3},Textures:{FilterMode:{LINEAR:0}},Utils:{Array:{Remove:(a:any[],v:any)=>{const i=a.indexOf(v);if(i>=0)a.splice(i,1);}}},
   GameObjects:{Shader:class {
     scene:any;config:any;width:number;height:number;renderNode:any;texture:any;glTexture:any;drawingContext:any;
     textures:any[];renderToTexture=false;callbacks:(()=>void)[]=[];uniforms:Record<string,any>={};destroyed=false;
@@ -35,9 +36,9 @@ import type { SunCloudState } from '../src/effects/sunlight/cloudShadow';
 
 function fixture(canopies:any[]=[]){
   fake.shaders.length=0;
-  const renderer={gl:{ZERO:0,ONE:1,DST_COLOR:774,SRC_COLOR:768,FUNC_ADD:32774,MAX_TEXTURE_IMAGE_UNITS:4,CLAMP_TO_EDGE:33071,LINEAR:9729,TEXTURE_2D:3553,TEXTURE_WRAP_S:10242,TEXTURE_WRAP_T:10243,TEXTURE_MIN_FILTER:10241,TEXTURE_MAG_FILTER:10240,texParameteri:vi.fn(),getParameter:()=>16},
+  const renderer=Object.assign(new EventEmitter(),{gl:{ZERO:0,ONE:1,DST_COLOR:774,SRC_COLOR:768,FUNC_ADD:32774,MAX_TEXTURE_IMAGE_UNITS:4,CLAMP_TO_EDGE:33071,LINEAR:9729,TEXTURE_2D:3553,TEXTURE_WRAP_S:10242,TEXTURE_WRAP_T:10243,TEXTURE_MIN_FILTER:10241,TEXTURE_MAG_FILTER:10240,texParameteri:vi.fn(),getParameter:()=>16},
     createTexture2D:vi.fn(()=>({})),blendModes:Array.from({length:18},()=>({enabled:true,func:[1,771,1,771],equation:[3,3]})),addBlendMode:vi.fn(function(this:any,func:number[],equation:number){return this.blendModes.push({enabled:true,func:[...func,...func],equation:[equation,equation]})-2;}),updateBlendMode:vi.fn(function(this:any,index:number,func:number[],equation:number){this.blendModes[index]={enabled:true,func:func.slice(),equation:[equation,equation]};}),glVAOWrappers:[],deleteBuffer:vi.fn(),deleteProgram:vi.fn(),shaderProgramFactory:{programs:{}},
-    glTextureUnits:{bind:vi.fn()},glWrapper:{update:vi.fn(),updateBlend:vi.fn()},renderNodes:{finishBatch:vi.fn()}};
+    glTextureUnits:{bind:vi.fn()},glWrapper:{update:vi.fn(),updateBlend:vi.fn()},renderNodes:{finishBatch:vi.fn()}});
   const source={glTexture:{}},texture={source:[source],get:()=>({source})};
   const scene={sys:{renderer},textures:{get:()=>texture,addGLTexture:vi.fn((key:string)=>({...texture,key})),remove:vi.fn()},add:{particles:vi.fn(),existing:(x:any)=>x}};
   const quality=new GraphicsQualityController();quality.attach(scene as never);
@@ -101,6 +102,34 @@ it('keeps the cloud texture independent of solar direction, invalidates optics a
  for(const key of ['cloudWarp','cloudSoftness','cloudDensity','cloudCover'] as const){f.clouds.tuning[key]+=.01;
   f.owner.prepareClouds(0,0,1000,1000);expect(f.owner.diagnostics.clouds!.builds).toBe(++builds);unchanged();}
  f.owner.destroy();f.quality.destroy();
+});
+
+it.each([0, .4, 1])('redraws a restored cloud target even at unchanged time and cloud cover %s', cloudCover => {
+  const f = fixture();
+  f.clouds.tuning.cloudCover = cloudCover;
+  const shader = fake.shaders.find(entry => entry.config.name.includes('CloudField'));
+  const draw = vi.spyOn(shader, 'renderWebGLStep');
+  try {
+    f.owner.prepareClouds(0, 0, 1000, 1000);
+    expect(draw).toHaveBeenCalledOnce();
+    f.owner.prepareClouds(0, 0, 1000, 1000);
+    expect(draw).toHaveBeenCalledOnce();
+
+    // Phaser recreates render-target storage before emitting this renderer event.
+    // Neither the paused clock nor unchanged weather can invalidate that lost content.
+    f.renderer.emit('restorewebgl', f.renderer);
+    f.owner.prepareClouds(0, 0, 1000, 1000);
+    expect(draw).toHaveBeenCalledTimes(2);
+    f.owner.prepareClouds(0, 0, 1000, 1000);
+    expect(draw).toHaveBeenCalledTimes(2);
+  } finally {
+    f.owner.destroy();
+    f.quality.destroy();
+  }
+  expect(f.renderer.listenerCount('restorewebgl')).toBe(0);
+  f.renderer.emit('restorewebgl', f.renderer);
+  f.owner.prepareClouds(0, 0, 1000, 1000);
+  expect(draw).toHaveBeenCalledTimes(2);
 });
 
 it('program disposal cannot disable the regular sprite VAO (Phaser 4.2.1 regression)',async()=>{

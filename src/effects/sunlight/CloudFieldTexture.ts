@@ -1,6 +1,6 @@
 import {bakeSunCanopyMask,type SunCanopy} from './SunCanopyMask';
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
-import type * as Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { CLOUD_SHADOW_GLSL, setCloudUniforms, type SunCloudState, type CloudFieldBinding } from './cloudShadow';
 import { SunRenderTarget } from './SunRenderTarget';
 import { getGraphicsQualityProfile } from '../../graphics/GraphicsQuality';
@@ -28,6 +28,8 @@ export class CloudFieldTexture implements CloudFieldBinding {
   private readonly renderer: Phaser.Renderer.WebGL.WebGLRenderer;
   private readonly target: SunRenderTarget | null;
   private readonly previous=new Float64Array(14).fill(NaN);
+  // Render-target storage is empty after restoration, even when presentation time is paused.
+  private readonly onContextRestored=():void=>{this.previous.fill(NaN);};
   private readonly size=[0,0];
   private builds=0;
   private dirty=false;
@@ -42,6 +44,7 @@ export class CloudFieldTexture implements CloudFieldBinding {
     this.target=gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS)>8?new SunRenderTarget(scene,'CloudField',CLOUD_FIELD_FRAGMENT,set=>{
       setCloudUniforms(set,state,false);set('uFieldWorld',this.world);set('uSpotCanopy',0);set('uSpotCanopyEnabled',this.canopyTexture?1:0);
     }):null;
+    if(this.target)this.renderer.on(Phaser.Renderer.Events.RESTORE_WEBGL,this.onContextRestored);
   }
   bind():void { if(this.target&&!this.disposed)this.renderer.glTextureUnits.bind(this.target.shader.glTexture!,8); }
   update(x:number,y:number,width:number,height:number):void {
@@ -78,5 +81,5 @@ export class CloudFieldTexture implements CloudFieldBinding {
   get diagnostics(){const width=this.target?.shader.width??0,height=this.target?.shader.height??0;
     return {width,height,builds:this.builds,rgbaBytes:width*height*4,canopyBytes:this.canopyBytes,
       worldTexelX:this.world[2]/Math.max(1,width),worldTexelY:this.world[3]/Math.max(1,height)};}
-  destroy():void {if(this.disposed)return;this.disposed=true;if(this.state.cache===this)this.state.cache=undefined;this.target?.destroy();if(this.canopyTexture)this.scene.textures.remove(this.canopyTexture.key);this.canopyTexture=null;this.canopyBytes=0;}
+  destroy():void {if(this.disposed)return;this.disposed=true;this.renderer.off(Phaser.Renderer.Events.RESTORE_WEBGL,this.onContextRestored);if(this.state.cache===this)this.state.cache=undefined;this.target?.destroy();if(this.canopyTexture)this.scene.textures.remove(this.canopyTexture.key);this.canopyTexture=null;this.canopyBytes=0;}
 }
