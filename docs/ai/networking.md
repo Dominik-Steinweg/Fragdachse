@@ -83,6 +83,13 @@ Reliable-Befehle werden nicht still verworfen.
 
 Game-State wird als vollständiger Bootstrap oder als Delta übertragen. Bei Deltas dürfen unveränderte Slices fehlen; ein vollständiger Bootstrap muss alle erforderlichen Slices enthalten und wird durch [FullGameStateBootstrap.ts](../../src/network/FullGameStateBootstrap.ts) validiert. Nach World- oder Round-Wechsel wird der Delta-Cache zurückgesetzt.
 
+Jeder Game-State benennt mit `_b` die Sequenz seiner vollständigen Basis in derselben World;
+ein Full-Snapshot setzt `_b = _s`. Ein Client verarbeitet Deltas erst nach dieser Basis,
+auch wenn Fast-Nachrichten den zuverlässigen Full-Snapshot überholen. Eine bereits ältere
+Full-Basis darf neueren Zustand nicht zurücksetzen. Die explizite Basis `0` erhält nur den
+bestehenden Lobby-Start vor dem ersten Full-Snapshot; ARENA-Latejoin benötigt weiterhin einen
+vollständigen Bootstrap. Das ersetzt nicht den periodischen Refresh verlorener Fast-Deltas.
+
 Replizierte Entities und langlebige Zustände brauchen stabile Identitäten. Bei einem neuen Zustand sind Owner, Channel, Update-Frequenz, Lebensdauer und Baseline zu klären; ein Array-Index oder eine lokale Scene-Referenz ist keine Netzidentität.
 
 Bei delta-gemergten Slices bedeutet ein fehlender Slice unverändert, nicht leer. Der Übergang auf eine leere Sammlung muss im Slice-Vertrag ausdrücklich codiert werden, etwa als leere Voll-Liste, explizite Removals oder vollständiger Snapshot. Eine abweichende Semantik ist nur zulässig, wenn der konkrete Codec sie ausdrücklich definiert.

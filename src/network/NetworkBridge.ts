@@ -3013,6 +3013,8 @@ export class NetworkBridge {
   private cachedGameStateWorldRevision: number | null = null;
   // Host-seitige Sequenznummer: wird bei jedem publishGameState() inkrementiert
   private publishSeq = 0;
+  private publishedGameStateBaseline: { worldRevision: number; sequence: number } | null = null;
+  private consumedGameStateBaseline = 0;
   private burningGroundPublishTicks = 0;
   private lastPublishedGroundHadWarnings = false;
   private readonly lastPublishedBurningGround = new Map<number, EncodedBurningGroundCell>();
@@ -3040,6 +3042,8 @@ export class NetworkBridge {
     this.cachedGameState = undefined;
     this.cachedGameStateWorldRevision = this.getWorldDescriptor()?.worldRevision ?? null;
     this.lastSeenSeq = -1;
+    this.publishedGameStateBaseline = null;
+    this.consumedGameStateBaseline = 0;
     this.burningGroundPublishTicks = 0;
     this.lastPublishedGroundHadWarnings = false;
     this.lastPublishedBurningGround.clear();
@@ -3066,6 +3070,8 @@ export class NetworkBridge {
       wr: worldRevision,
       p: encodePlayerStates(state.players),
       _s: ++this.publishSeq,
+      _b: this.publishedGameStateBaseline?.worldRevision === worldRevision
+        ? this.publishedGameStateBaseline.sequence : 0,
     };
     payload.rt = state.roundStartTime;
     payload.sr = encodeShootingRange(state.shootingRange);
@@ -3174,10 +3180,13 @@ export class NetworkBridge {
 
   /** Baut einen vollstaendigen Bootstrap-Payload und veroeffentlicht ihn reliable. */
   private publishFullGameState(state: OutboundGameState, worldRevision: number): void {
+    const sequence = ++this.publishSeq;
+    this.publishedGameStateBaseline = { worldRevision, sequence };
     const payload: Record<string, unknown> = {
       wr: worldRevision,
       p: encodePlayerStates(state.players),
-      _s: ++this.publishSeq,
+      _s: sequence,
+      _b: sequence,
       _full: true,
       ae: state.adrenalineEssence ? encodeEssenceSnapshot(state.adrenalineEssence) : null,
       sr: encodeShootingRange(state.shootingRange),
@@ -3239,6 +3248,11 @@ export class NetworkBridge {
     const inArena = this.getGamePhase() === 'ARENA' && expectedRoundStartTime > 0;
     const isCurrentRound = (candidate: Record<string, unknown> | undefined): boolean => {
       if (!candidate || !candidate.p || !isCurrentWorldRevision(expectedWorldRevision, candidate.wr)) return false;
+      if (typeof candidate._s !== 'number' || !Number.isSafeInteger(candidate._s) || candidate._s <= 0
+        || typeof candidate._b !== 'number' || !Number.isSafeInteger(candidate._b)
+        || candidate._b < 0 || candidate._b > candidate._s) return false;
+      if (candidate._full === true
+        && (candidate._b !== candidate._s || !isCompleteGameStatePayload(candidate))) return false;
       if (!inArena) return true;
       return candidate.rt === expectedRoundStartTime;
     };
@@ -3251,23 +3265,22 @@ export class NetworkBridge {
     // reliable Full-Snapshot, statt fehlende Slices fälschlich als leere Arena zu behandeln.
     if (inArena && !this.cachedGameState && !validInitial) return undefined;
 
+    // A newer delta can overtake its reliable full basis. Do not advance the sequence or
+    // merge it into an older basis. After the initial ARENA bootstrap above, either channel
+    // may supply the next full basis before its dependent deltas.
     const candidates = [validFast, validInitial].filter(
-      (candidate): candidate is Record<string, unknown> => candidate !== undefined,
+      (candidate): candidate is Record<string, unknown> => candidate !== undefined
+        && (candidate._full === true || (candidate._b === this.consumedGameStateBaseline
+          && (candidate._b !== 0 || !validInitial))),
     );
     if (candidates.length === 0) return this.cachedGameState;
-    const raw = !this.cachedGameState && validInitial
-      ? validInitial
-      : candidates.sort((left, right) => {
-        const leftSeq = typeof left._s === 'number' ? left._s : -1;
-        const rightSeq = typeof right._s === 'number' ? right._s : -1;
-        if (leftSeq !== rightSeq) return rightSeq - leftSeq;
-        return left._full === true ? -1 : 1;
-      })[0];
+    const raw = candidates.sort((left, right) => (right._s as number) - (left._s as number))[0];
 
     // Sequenznummer vergleichen: nur parsen wenn neue Daten vom Host eingetroffen sind.
     const seq = raw._s as number | undefined;
     if (seq !== undefined && seq <= this.lastSeenSeq) return this.cachedGameState;
     if (seq !== undefined) this.lastSeenSeq = seq;
+    if (raw._full === true) this.consumedGameStateBaseline = raw._s as number;
 
     const roundStartTime = (raw.rt as number | undefined) ?? 0;
     if (this.getGamePhase() === 'ARENA' && expectedRoundStartTime > 0 && roundStartTime !== expectedRoundStartTime) {
@@ -3354,6 +3367,8 @@ export class NetworkBridge {
     this.cachedGameStateWorldRevision = worldRevision;
     this.cachedGameState = undefined;
     this.lastSeenSeq = -1;
+    if (this.publishedGameStateBaseline?.worldRevision !== worldRevision) this.publishedGameStateBaseline = null;
+    this.consumedGameStateBaseline = 0;
     this.projectileStaticCache.clear();
   }
 

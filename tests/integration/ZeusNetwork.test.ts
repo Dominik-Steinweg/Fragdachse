@@ -38,12 +38,14 @@ describe('Zeus World replication', () => {
       expect(client.getLatestGameState()).toBe(same);
       // A sparse delta must retain the previous Zeus slice.
       use(hostRoom);
+      host.publishGameState({ ...base, zeus: snapshot() });
       const raw = { ...(hostRoom.room.getGlobal('gs') as Record<string, unknown>) };
-      delete raw.zs; delete raw._full; raw._s = (raw._s as number) + 1;
+      delete raw.zs;
       hostRoom.room.setGlobal('gs', raw, false); hostRoom.room.update();
       use(clientRoom);
       expect(client.getLatestGameState()!.zeus).toEqual(snapshot());
       publish(250, true);
+      expect(client.getLatestGameState()!.zeus).toEqual(snapshot());
       const lateRoom = await addClientRoom(network), late = bridge(lateRoom);
       expect(late.getLatestGameState()!.zeus).toEqual(snapshot());
       // Skip an intermediate state, then explicitly transmit the end twice.

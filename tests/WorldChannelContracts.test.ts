@@ -48,6 +48,23 @@ function activity(overrides: Partial<ActivityDescriptor> = {}): ActivityDescript
   };
 }
 
+function snapshot(x: number, rocks: Parameters<NetworkBridge['publishGameState']>[0]['rocks'] = null): Parameters<NetworkBridge['publishGameState']>[0] {
+  return {
+    roundStartTime: 0,
+    players: { p0: { x, y: 0, rot: 0, hp: 100, maxHp: 100, armor: 0, alive: true,
+      adrenaline: 0, rage: 0, isBurrowed: false, isStunned: false, burrowPhase: 'idle',
+      isRaging: false, burnStacks: 0, dashPhase: 0,
+      aim: { revision: 0, isMoving: false, weapon1DynamicSpread: 0, weapon2DynamicSpread: 0 } } },
+    rocks, projectiles: null, enemies: null, placeableRocks: [], reinforcementMatrices: [],
+    energyInjectorEffects: [], energyInjectorFocus: [], remoteControlTurrets: [], decoys: [],
+    smokes: [], fires: [], powerups: null, pedestals: null, nukes: [], airstrikes: [], meteors: [],
+    tunnels: [], train: null, bases: [], captureTheBeer: null, coopDefenseCarry: [], stinkClouds: [],
+    timeBubbles: [], teslaDomes: [], energyShields: [], guardianSpirits: [], repairDrones: [],
+    slimeTrail: { cells: [], affectedEnemies: [] }, targetVulnerabilities: [], ak47StrategicTargets: [],
+    burningGround: { cells: [] },
+  };
+}
+
 async function createRoom(playerCount: number): Promise<TestRoom[]> {
   const network = new FakeNetwork();
   const rooms = [await createHostRoom(network)];
@@ -56,6 +73,202 @@ async function createRoom(playerCount: number): Promise<TestRoom[]> {
 }
 
 describe('World-Kanal – Replikation', () => {
+  it('can consume the fast full copy before its reliable copy and keeps ordinary delta loss recoverable', async () => {
+    const [hostRoom, clientRoom] = await createRoom(2);
+    const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    try {
+      const host = bridgeFor(hostRoom);
+      host.publishWorldAndActivity(world(), null);
+      host.publishGameState(snapshot(10), true);
+      hostRoom.room.update();
+      const client = bridgeFor(clientRoom);
+      expect(client.getLatestGameState()?.players.p0.x).toBe(10);
+      const link = hostRoom.transport.links[0];
+      const send = link.send.bind(link);
+      let delayed: Parameters<typeof link.send> | undefined;
+      vi.spyOn(link, 'send').mockImplementation((message, channel) => {
+        if (channel === 'rel' && message.t === 'b' && message.g?.some(([key]) => key === 'gsi')) {
+          delayed = [message, channel];
+        } else send(message, channel);
+      });
+      use(hostRoom);
+      host.publishGameState(snapshot(20), true);
+      hostRoom.room.update();
+      // Host-side display reads must not discard the just-published basis.
+      expect(host.getLatestGameState()?.players.p0.x).toBe(20);
+      use(clientRoom);
+      expect(client.getLatestGameState()?.players.p0.x).toBe(20);
+      use(hostRoom);
+      link.fastReady = false;
+      host.publishGameState(snapshot(30));
+      hostRoom.room.update();
+      link.fastReady = true;
+      host.publishGameState(snapshot(40));
+      hostRoom.room.update();
+      use(clientRoom);
+      const latest = client.getLatestGameState();
+      expect(latest?.players.p0.x).toBe(40);
+      expect(delayed).toBeDefined();
+      send(...delayed!);
+      expect(client.getLatestGameState()).toBe(latest);
+    } finally { clearActiveSession(); clientRoom.room.destroy(); hostRoom.room.destroy(); }
+  });
+
+  it.each(['World', 'cache'] as const)('rebuilds the baseline after a %s reset and preserves pre-bootstrap Lobby publication', async (reset) => {
+    const [hostRoom, clientRoom] = await createRoom(2);
+    const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    try {
+      const host = bridgeFor(hostRoom);
+      host.publishWorldAndActivity(world(), null);
+      host.publishGameState(snapshot(10), true);
+      hostRoom.room.update();
+      const oldFull = hostRoom.room.getGlobal('gsi');
+      const client = bridgeFor(clientRoom);
+      expect(client.getLatestGameState()?.players.p0.x).toBe(10);
+      use(hostRoom);
+      if (reset === 'World') host.publishWorldAndActivity(world({ worldRevision: 13 }), null);
+      else host.resetGameStateCache();
+      host.publishGameState(snapshot(20));
+      hostRoom.room.update();
+      expect(hostRoom.room.getGlobal('gs')).toMatchObject({ _b: 0 });
+      use(clientRoom);
+      if (reset === 'cache') client.resetGameStateCache();
+      expect(client.getLatestGameState()?.players.p0.x).toBe(reset === 'World' ? 20 : 10);
+      use(hostRoom);
+      host.publishGameState(snapshot(30), true);
+      hostRoom.room.update();
+      use(clientRoom);
+      expect(client.getLatestGameState()?.players.p0.x).toBe(30);
+      use(hostRoom);
+      host.publishGameState(snapshot(40));
+      hostRoom.room.update();
+      use(clientRoom);
+      const latest = client.getLatestGameState();
+      expect(latest?.players.p0.x).toBe(40);
+      clientRoom.transport.links[0].counterpart.send({ t: 'b', g: [['gsi', oldFull]] }, 'rel');
+      expect(client.getLatestGameState()).toBe(latest);
+    } finally { clearActiveSession(); clientRoom.room.destroy(); hostRoom.room.destroy(); }
+  });
+
+  it('requires explicit valid baseline metadata and keeps ARENA behind its complete bootstrap', async () => {
+    const [hostRoom, clientRoom] = await createRoom(2);
+    const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    try {
+      const host = bridgeFor(hostRoom);
+      host.publishWorldAndActivity(world(), null);
+      host.setGamePhase('ARENA');
+      host.setArenaStartTime(100);
+      host.publishGameState({ ...snapshot(10), roundStartTime: 100 });
+      hostRoom.room.update();
+      const client = bridgeFor(clientRoom);
+      expect(client.getLatestGameState()).toBeUndefined();
+      const sender = clientRoom.transport.links[0].counterpart;
+      const send = sender.send.bind(sender);
+      let reliableFull: Parameters<typeof sender.send> | undefined;
+      const intercept = vi.spyOn(sender, 'send').mockImplementation((message, channel) => {
+        if (channel === 'rel' && message.t === 'b' && message.g?.some(([key]) => key === 'gsi')) {
+          reliableFull = [message, channel];
+        } else send(message, channel);
+      });
+      use(hostRoom);
+      host.publishGameState({ ...snapshot(20), roundStartTime: 100 }, true);
+      hostRoom.room.update();
+      const full = hostRoom.room.getGlobal('gsi') as Record<string, unknown>;
+      use(clientRoom);
+      expect(clientRoom.room.getGlobal('gs')).toMatchObject({ _full: true });
+      expect(client.getLatestGameState()).toBeUndefined();
+      expect(reliableFull).toBeDefined();
+      send(...reliableFull!);
+      intercept.mockRestore();
+      const accepted = client.getLatestGameState();
+      expect(accepted?.players.p0.x).toBe(20);
+      for (const baseline of [undefined, null, '2', -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, 100]) {
+        sender.send({ t: 'b', g: [['gs', { ...full, _s: 3, _b: baseline }]] }, 'rel');
+        expect(client.getLatestGameState(), `invalid full basis ${String(baseline)}`).toBe(accepted);
+        sender.send({ t: 'b', g: [['gs', { ...full, _full: false, _s: 3, _b: baseline }]] }, 'rel');
+        expect(client.getLatestGameState(), `invalid delta basis ${String(baseline)}`).toBe(accepted);
+      }
+      use(hostRoom);
+      host.publishGameState({ ...snapshot(30), roundStartTime: 100 });
+      hostRoom.room.update();
+      use(clientRoom);
+      expect(client.getLatestGameState()?.players.p0.x).toBe(30);
+    } finally { clearActiveSession(); clientRoom.room.destroy(); hostRoom.room.destroy(); }
+  });
+
+  it.each(['live', 'late join', 'resume'] as const)('waits for an overtaken full baseline on %s without rolling newer state back', async (connection) => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const firstRoom = await addClientRoom(network, [], 'ordered-full-token');
+    const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    let receiverRoom = firstRoom;
+    try {
+      const host = bridgeFor(hostRoom);
+      host.publishWorldAndActivity(world({ definitionId: 'world:lobby' }), null);
+      const rocks = new RockRegistry({ rocks: [{}] } as ArenaLayout);
+      rocks.applyDamage(0, 10);
+      host.publishGameState(snapshot(10, rocks.getNetSnapshot()), true);
+      hostRoom.room.update();
+      const originalFull = hostRoom.room.getGlobal('gsi');
+      const first = bridgeFor(firstRoom);
+      expect(first.getLatestGameState()?.players.p0.x).toBe(10);
+      use(hostRoom);
+      firstRoom.transport.links[0].counterpart.fastReady = false;
+      if (connection === 'resume') {
+        firstRoom.transport.destroy();
+        dropConnection(firstRoom);
+      }
+      rocks.applyDamage(0, 20);
+      host.publishGameState(snapshot(20, rocks.getNetSnapshot()));
+      hostRoom.room.update();
+      host.publishGameState(snapshot(30, rocks.getNetSnapshot()));
+      hostRoom.room.update();
+      if (connection !== 'live') {
+        receiverRoom = await addClientRoom(network, [], connection === 'resume' ? 'ordered-full-token' : undefined);
+      }
+      const receiver = connection === 'live' ? first : bridgeFor(receiverRoom);
+      use(receiverRoom);
+      receiver.getLatestGameState();
+      const before = receiver.getLatestGameState();
+      const hostLink = receiverRoom.transport.links.at(-1)!.counterpart;
+      const send = hostLink.send.bind(hostLink);
+      const delayed: Parameters<typeof hostLink.send>[] = [];
+      vi.spyOn(hostLink, 'send').mockImplementation((message, channel) => {
+        if (channel === 'rel' && message.t === 'b' && message.g?.some(([key]) => key === 'gsi')) {
+          delayed.push([message, channel]);
+        } else send(message, channel);
+      });
+      use(hostRoom);
+      rocks.requestFullNetSnapshot();
+      hostLink.fastReady = false;
+      host.publishGameState(snapshot(200, rocks.getNetSnapshot()), true);
+      hostRoom.room.update();
+      const refreshedFull = hostRoom.room.getGlobal('gsi');
+      hostLink.fastReady = true;
+      host.publishGameState(snapshot(300, rocks.getNetSnapshot()));
+      hostRoom.room.update();
+      use(receiverRoom);
+      expect.soft(receiver.getLatestGameState()).toBe(before);
+      expect(delayed).toHaveLength(1);
+      for (const args of delayed) send(...args);
+      const full = receiver.getLatestGameState();
+      expect.soft(full?.players.p0.x).toBe(200);
+      expect.soft(full?.rocks).toEqual([{ id: 0, hp: rocks.getHP(0) }]);
+      const newer = receiver.getLatestGameState();
+      expect(newer?.players.p0.x).toBe(300);
+      expect.soft(newer?.rocks).toEqual([{ id: 0, hp: rocks.getHP(0) }]);
+      const version = receiver.getGameStateVersion();
+      send({ t: 'b', g: [['gsi', originalFull], ['gs', refreshedFull]] }, 'rel');
+      expect(receiver.getLatestGameState()).toBe(newer);
+      expect(receiver.getGameStateVersion()).toBe(version);
+    } finally {
+      clearActiveSession();
+      receiverRoom.room.destroy();
+      firstRoom.room.destroy();
+      hostRoom.room.destroy();
+    }
+  });
+
   it.each(['reload', 'reconnect'] as const)('refreshes the reliable full snapshot after %s resumes the same player', async (kind) => {
     vi.useFakeTimers();
     const network = new FakeNetwork();

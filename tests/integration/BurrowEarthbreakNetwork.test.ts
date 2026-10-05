@@ -50,6 +50,7 @@ describe('Earthbreak authoritative replication', () => {
       expect(client.getLatestGameState()!.earthbreak).toEqual(runtime.snapshot());
       expect(hits).toHaveLength(1); // Reading replicas never executes gameplay explosions.
       publish(true);
+      expect(client.getLatestGameState()!.earthbreak).toEqual(runtime.snapshot());
       const oldWorldPacket = { ...(hostRoom.room.getGlobal('gs') as Record<string, unknown>) };
       const joining = bridge(await addClientRoom(network));
       expect(joining.getLatestGameState()!.earthbreak).toEqual(runtime.snapshot());

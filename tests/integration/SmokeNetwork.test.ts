@@ -38,6 +38,7 @@ describe('smoke World replication', () => {
       expect(client.getLatestGameState()!.smokes).toEqual(runtime.getSnapshots(200));
       expect(client.getLatestGameState()!.smokeTargets).toEqual([]);
       publish(250, true);
+      expect(client.getLatestGameState()!.smokes).toEqual(runtime.getSnapshots(250));
       const lateRoom = await addClientRoom(network), late = bridge(lateRoom);
       expect(late.getLatestGameState()!.smokes).toEqual(runtime.getSnapshots(250));
       runtime.clear(); publish(300); publish(350); // Repeated empty state repairs a missed removal.
