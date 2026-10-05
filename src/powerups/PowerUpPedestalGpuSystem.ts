@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { configureGpuLayerCameraTransform } from '../graphics/GpuLayerCameraTransform';
+import { disposeShaderWarmupNode } from '../graphics/disposeShaderWarmupNode';
 import { DEPTH } from '../config';
 import type { SyncedPowerUpPedestal } from '../types';
 import { POWERUP_DEFS, POWERUP_PEDESTAL_CONFIG, TIMED_POWERUP_PEDESTAL_CONFIGS } from './PowerUpConfig';
@@ -74,6 +75,7 @@ type GpuMember = Partial<Phaser.Types.GameObjects.SpriteGPULayer.Member>;
  * GpuVfxSystem besitzt sie langlebige Slots, die nur bei Snapshot-Aenderungen editiert werden.
  */
 export class PowerUpPedestalGpuSystem {
+  private destroyed = false;
   private readonly texture: Phaser.Textures.Texture;
   private readonly baseLayer: Phaser.GameObjects.SpriteGPULayer;
   private readonly ownerLayer: Phaser.GameObjects.SpriteGPULayer;
@@ -156,7 +158,13 @@ export class PowerUpPedestalGpuSystem {
   }
 
   destroy(): void {
-    this.clear(); this.baseLayer.destroy(); this.ownerLayer.destroy(); this.additiveLayer.destroy();
+    if (this.destroyed) return;
+    this.clear();
+    for (const layer of [this.baseLayer, this.ownerLayer, this.additiveLayer]) {
+      if (layer.submitterNode?.programManager) disposeShaderWarmupNode(layer.submitterNode);
+      layer.destroy();
+    }
+    this.destroyed = true;
   }
 
   getActiveCount(): number {

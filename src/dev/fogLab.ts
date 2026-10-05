@@ -185,7 +185,7 @@ class FogLab extends Phaser.Scene {
     bind('benchmarkFull', () => startBenchmark(2));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.disposers.forEach(dispose => dispose()); this.disposers = [];
-      this.pickups?.clear(); this.pickups = null; this.smoke?.destroyAll(); this.smoke = null;
+      this.pickups?.destroy(); this.pickups = null; this.smoke?.destroyAll(); this.smoke = null;
       this.essence?.destroy(); this.essence = null;
       this.cameraFeedback.destroy();
       this.flame?.destroyAll(); this.flame = null; this.leaf?.destroyAll(); this.leaf = null;

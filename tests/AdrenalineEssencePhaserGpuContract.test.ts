@@ -10,6 +10,9 @@ vi.mock('../src/graphics/GraphicsQuality', () => ({ getGraphicsQualityProfile: (
 import { AdrenalineEssenceGpuRenderer } from '../src/adrenalineEssence/AdrenalineEssenceGpuRenderer';
 import { ESSENCE_LIQUID_FRAMES, ESSENCE_LIQUID_TAIL_FRAME } from '../src/adrenalineEssence/AdrenalineEssenceLiquidFrames';
 import type { EssenceState } from '../src/adrenalineEssence/AdrenalineEssenceTypes';
+import { ConstructionOwnershipGpuSystem } from '../src/effects/ConstructionOwnershipGpuSystem';
+import { PowerUpPedestalGpuSystem } from '../src/powerups/PowerUpPedestalGpuSystem';
+import { resolveCoopDefenseWorldMetrics } from '../src/world/WorldMetrics';
 
 /**
  * Execute the installed Phaser member encoder, not a copy of its implementation. Only
@@ -57,14 +60,19 @@ function makeBufferScene() {
     shaderProgramFactory: { getKey: () => 'shared', getShaderProgram: () => program },
   };
   const layers: any[] = [];
-  const frames = ['__void', 'death-glow', ...ESSENCE_LIQUID_FRAMES.map(frame => frame.frame), ESSENCE_LIQUID_TAIL_FRAME];
+  const frames = ['__void', 'death-glow', ...ESSENCE_LIQUID_FRAMES.map(frame => frame.frame), ESSENCE_LIQUID_TAIL_FRAME,
+    'aura', 'glow', 'core', 'outer-glow', 'owner-ring', 'base:HEALTH_PACK', 'base:fallback'];
   const scene = {
+    textures: { exists: () => true, get: () => ({ get: (name: string) => ({ name }) }) },
     add: {
       spriteGPULayer: (_key: string, size: number) => {
         const bytes = new ArrayBuffer(size * 42 * 4);
         const scratch = new ArrayBuffer(42 * 4);
         const layer: any = Object.assign(Object.create(methods), {
           size, memberCount: 0, timeElapsed: 1_000, visible: true,
+          EASE: require('../node_modules/phaser/src/gameobjects/spritegpulayer/EasingEncoding.js'),
+          EASE_CODES: require('../node_modules/phaser/src/gameobjects/spritegpulayer/EasingNaming.js'),
+          _animationsEnabled: {},
           bufferUpdateSegmentSize: Math.ceil(size / 24), bufferUpdateSegments: 0,
           MAX_BUFFER_UPDATE_SEGMENTS_FULL: 0xffffff,
           nextMemberF32: new Float32Array(scratch), nextMemberU32: new Uint32Array(scratch),
@@ -77,6 +85,7 @@ function makeBufferScene() {
           setDepth: (depth: number) => { layer.depth = depth; return layer; },
           setBlendMode: (mode: number) => { layer.blendMode = mode; return layer; },
           setVisible: (visible: boolean) => { layer.visible = visible; return layer; },
+          setAnimationEnabled: () => layer,
           destroy: () => {
             if (layer.destroyed) return;
             methods.preDestroy.call(layer); layer.destroyed = true;
@@ -102,6 +111,39 @@ const state: EssenceState = {
 };
 
 describe('essence compatibility with installed Phaser GPU buffers', () => {
+  it.each(['construction', 'pedestal'] as const)('releases %s World/Editor layers after real member writes without retiring a second owner', kind => {
+    const f = makeBufferScene();
+    const create = () => {
+      if (kind === 'construction') {
+        const owner = new ConstructionOwnershipGpuSystem(f.scene as never);
+        owner.sync([{ id: 1, kind: 'rock', constructionId: 'rock_barrier', ownership: 'guest-session',
+          gridX: 1, gridY: 2, ownerId: 'p1', ownerColor: 0x33aaff, hp: 100, maxHp: 100,
+          expiresAt: 0, warningStartsAt: 0, angle: 0 }], new Set([1]), resolveCoopDefenseWorldMetrics(30, 30), true, true);
+        return owner;
+      }
+      const owner = new PowerUpPedestalGpuSystem(f.scene as never);
+      owner.upsert({ id: 1, defId: 'HEALTH_PACK', x: 100, y: 100, hasPowerUp: true, nextRespawnAt: 0 }, 'ready');
+      return owner;
+    };
+    const first = create(), firstLayers = [...f.layers], second = create(), secondLayers = f.layers.slice(firstLayers.length);
+    expect(firstLayers.every(layer => layer.memberCount > 0)).toBe(true);
+    const firstNodes = firstLayers.map(layer => layer.submitterNode), secondNodes = secondLayers.map(layer => layer.submitterNode);
+    firstNodes.forEach(node => node.programManager.getCurrentProgramSuite());
+    const secondSuites = secondNodes.map(node => node.programManager.getCurrentProgramSuite());
+    firstLayers.forEach(layer => layer.destroy()); // Phaser DisplayList may retire GOs before their World/Editor owner.
+    expect(() => first.destroy()).not.toThrow();
+    expect(f.buffers).toHaveLength(secondLayers.length * 2);
+    expect(f.vaos).toEqual(secondSuites.map(suite => suite.vao));
+    expect(secondLayers.every(layer => !layer.destroyed)).toBe(true);
+    expect(f.program.destroy).not.toHaveBeenCalled();
+    first.destroy();
+    firstNodes.forEach(node => {
+      expect(node.instanceBufferLayout.buffer.destroy).toHaveBeenCalledOnce();
+      expect(node.vertexBufferLayout.buffer.destroy).toHaveBeenCalledOnce();
+    });
+    second.destroy(); expect(f.buffers).toEqual([]); expect(f.vaos).toEqual([]);
+  });
+
   it.each(['owner', 'display-list-first'] as const)('releases private layer resources once after %s cleanup and preserves another Activity', order => {
     const f = makeBufferScene();
     const first = new AdrenalineEssenceGpuRenderer(f.scene as never, () => null);

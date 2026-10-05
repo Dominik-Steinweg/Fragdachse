@@ -5,6 +5,7 @@ import { getTurretVisualSpec } from '../config/turretVisuals';
 import type { SyncedPlaceableRock } from '../types';
 import { worldCellCenter, type WorldMetrics } from '../world/WorldMetrics';
 import { ensureCanvasTexture } from './EffectUtils';
+import { disposeShaderWarmupNode } from '../graphics/disposeShaderWarmupNode';
 
 const TEXTURE = '__construction_ownership';
 const EASE = 'Sine.easeInOut';
@@ -117,7 +118,10 @@ export class ConstructionOwnershipGpuSystem {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    this.passiveLayer.destroy(); this.activeLayer.destroy();
+    for (const layer of [this.passiveLayer, this.activeLayer]) {
+      if (layer.submitterNode?.programManager) disposeShaderWarmupNode(layer.submitterNode);
+      layer.destroy();
+    }
     this.markers.clear(); this.free.length = 0; this.ownTargets.length = 0; this.seen.clear();
     // Immutable atlas belongs to the Scene TextureManager, reused by subsequent worlds.
   }
