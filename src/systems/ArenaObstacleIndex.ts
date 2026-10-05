@@ -83,15 +83,8 @@ export type ObstacleCircleVisitor = (
   centerX: number, centerY: number, radius: number,
 ) => boolean;
 
-// Slab-Zwischenergebnis des zuletzt geprüften Segment/Box-Paares. Modulweit statt als
-// Rückgabeobjekt, damit die Bucket-Vorauswahl ohne Allokation läuft. Wird ausschließlich
-// unmittelbar nach `overlapsBox()` gelesen, nie über einen Besucheraufruf hinweg.
-let slabEnter = 0;
-let slabExit = 0;
-
 /**
- * Prüft per Slab-Test, ob das Segment die Box berührt, und legt Ein-/Austritts-Parameter
- * in `slabEnter`/`slabExit` ab. Ein Segment, das vollständig innerhalb der Box liegt,
+ * Prüft per Slab-Test, ob das Segment die Box berührt. Ein Segment, das vollständig innerhalb der Box liegt,
  * gilt als Berührung (wichtig für die Bucket-Vorauswahl).
  */
 function overlapsBox(
@@ -125,8 +118,6 @@ function overlapsBox(
     if (enter > exit) return false;
   }
 
-  slabEnter = enter;
-  slabExit = exit;
   return true;
 }
 

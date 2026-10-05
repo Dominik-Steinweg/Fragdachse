@@ -265,7 +265,6 @@ export class PlayerStatusRing {
   private readonly essenceArrivalPoint = { x: 0, y: 0 };
   private prevAdrFrac = 0;
   private rageFrac = 0;
-  private prevRageFrac = 0;
 
   private armorFrac = 0;
   private adrenalineBoostActive = false;
@@ -434,7 +433,6 @@ export class PlayerStatusRing {
 
     this.prevHpFrac = nextHpFrac;
     this.prevAdrFrac = nextAdrFrac;
-    this.prevRageFrac = nextRageFrac;
 
     this.render(now);
   }
