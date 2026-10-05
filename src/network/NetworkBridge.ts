@@ -4482,7 +4482,8 @@ export class NetworkBridge {
   /** Liest die Loadout-Auswahl eines Spielers für einen Slot. */
   getPlayerLoadoutSlot(playerId: string, slot: LoadoutSlot): string | undefined {
     const key = { weapon1: KEY_LOADOUT_W1, weapon2: KEY_LOADOUT_W2, utility: KEY_LOADOUT_UT, ultimate: KEY_LOADOUT_UL }[slot];
-    return this.playerStateMap.get(playerId)?.getState(key) as string | undefined;
+    const value = this.playerStateMap.get(playerId)?.getState(key);
+    return typeof value === 'string' ? value : undefined;
   }
 
   /**

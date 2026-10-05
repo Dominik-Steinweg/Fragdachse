@@ -11,6 +11,7 @@ import { NetworkBridge } from '../src/network/NetworkBridge';
 import { createPeerNetworkError } from '../src/network/peer/PeerSignaling';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 import { PEER_PROTOCOL_VERSION } from '../src/network/peer/protocol';
+import { DEFAULT_LOADOUT } from '../src/loadout/LoadoutConfig';
 
 import {
   FailingClientTransport,
@@ -915,6 +916,43 @@ describe('arena loading barrier', () => {
     } finally {
       clearActiveSession();
     }
+  });
+});
+
+describe('NetworkBridge remote loadout selection', () => {
+  it('keeps non-string JSON slot values out of host reconciliation and live snapshots', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const senderRoom = await addClientRoom(network);
+    const observerRoom = await addClientRoom(network);
+    const use = (room: typeof hostRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    try {
+      use(hostRoom); const host = new NetworkBridge(); host.activate();
+      use(observerRoom); const observer = new NetworkBridge(); observer.activate();
+      for (const [slot, key] of [['weapon1', 'lw1'], ['weapon2', 'lw2'], ['utility', 'lut'], ['ultimate', 'lul']] as const) {
+        for (const value of [{ toString: null }, { valueOf: 1, toString: 2 }, [], [DEFAULT_LOADOUT[slot].id], null, 42, true]) {
+          senderRoom.room.setPlayerState('p1', key, value, true);
+          senderRoom.room.update(); hostRoom.room.update();
+          use(hostRoom);
+          // The real host consumer used to throw while converting a JSON object to a registry key.
+          expect(() => host.hostReconcileLoadoutsForMode('deathmatch')).not.toThrow();
+          // Re-send after reconciliation, which legitimately replaces invalid selections with defaults.
+          senderRoom.room.setPlayerState('p1', key, value, true);
+          senderRoom.room.update(); hostRoom.room.update();
+          for (const [room, bridge] of [[hostRoom, host], [observerRoom, observer]] as const) {
+            use(room);
+            expect(bridge.getPlayerLoadoutSlot('p1', slot)).toBeUndefined();
+            expect(bridge.getPlayerCurrentLoadoutSnapshot('p1')?.[slot]).toBe(DEFAULT_LOADOUT[slot].id);
+          }
+        }
+        for (const value of [DEFAULT_LOADOUT[slot].id, '']) {
+          senderRoom.room.setPlayerState('p1', key, value, true);
+          senderRoom.room.update(); hostRoom.room.update();
+          use(hostRoom); expect(host.getPlayerLoadoutSlot('p1', slot)).toBe(value);
+          use(observerRoom); expect(observer.getPlayerLoadoutSlot('p1', slot)).toBe(value);
+        }
+      }
+    } finally { clearActiveSession(); }
   });
 });
 
