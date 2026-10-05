@@ -4966,11 +4966,6 @@ export class NetworkBridge {
     this.roomStatistics.recordCompletedPvpMatch(eligiblePlayerIds, winnerIds);
   }
 
-  /** Host-only: erhöht den Raum-Todeszähler für einen bestätigten Spielertod. */
-  incrementPlayerRoomDeaths(playerId: string): void {
-    this.recordPlayerDeath(playerId);
-  }
-
   /** Liefert die Raumstatistik für alle aktuell verbundenen Spieler. */
   getRoomPlayerStatistics(): RoomPlayerStatistics[] {
     if (isHost()) {
