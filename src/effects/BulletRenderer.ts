@@ -444,9 +444,8 @@ export class BulletRenderer {
   private scene: Phaser.Scene;
   private bullets = new Map<number, BulletVisual>();
 
-  // Pool für Impact-Emitter (auto-destroy nach Lifespan)
-  private activeSparkEmitters: Phaser.GameObjects.Particles.ParticleEmitter[] = [];
-  // Kurzlebige Druckwellen-Klingen der Sturmboe (per Tween selbst aufräumend)
+  private readonly impactFlashes = new Set<Phaser.GameObjects.Image>();
+  private readonly sparkTimers = new Map<Phaser.Time.TimerEvent, Phaser.GameObjects.Particles.ParticleEmitter>();
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -937,6 +936,7 @@ export class BulletRenderer {
       cfg.impactFlashAlpha,
       bv?.accentColor ?? _color,
     );
+    this.impactFlashes.add(impactFlash);
     this.scene.tweens.add({
       targets: impactFlash,
       alpha: 0,
@@ -944,15 +944,14 @@ export class BulletRenderer {
       scaleY: cfg.impactFlashScale * 1.45,
       duration: cfg.impactFlashDuration,
       ease: 'Quad.easeOut',
-      onComplete: () => { if (impactFlash.scene) impactFlash.destroy(); },
+      onComplete: () => { if (this.impactFlashes.delete(impactFlash) && impactFlash.scene) impactFlash.destroy(); },
     });
 
-    this.activeSparkEmitters.push(emitter);
-    this.scene.time.delayedCall(cfg.sparkLifespan + 80, () => {
-      const idx = this.activeSparkEmitters.indexOf(emitter);
-      if (idx !== -1) this.activeSparkEmitters.splice(idx, 1);
+    const timer = this.scene.time.delayedCall(cfg.sparkLifespan + 80, () => {
+      if (!this.sparkTimers.delete(timer)) return;
       if (emitter.scene) emitter.destroy();
     });
+    this.sparkTimers.set(timer, emitter);
   }
 
   /** Prüft ob ein Visual für diese ID existiert. */
@@ -978,10 +977,15 @@ export class BulletRenderer {
     }
     this.bullets.clear();
 
-    for (const e of this.activeSparkEmitters) {
-      if (e.scene) e.destroy();
+    for (const flash of this.impactFlashes) {
+      this.scene.tweens.killTweensOf(flash);
+      if (flash.scene) flash.destroy();
     }
-    this.activeSparkEmitters.length = 0;
-
+    this.impactFlashes.clear();
+    for (const [timer, emitter] of this.sparkTimers) {
+      timer.remove(false);
+      if (emitter.scene) emitter.destroy();
+    }
+    this.sparkTimers.clear();
   }
 }

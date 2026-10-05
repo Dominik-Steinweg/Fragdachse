@@ -13,6 +13,7 @@ vi.mock('../src/effects/EffectUtils', () => ({
 import { HydraRenderer } from '../src/effects/HydraRenderer';
 import { SporeRenderer } from '../src/effects/SporeRenderer';
 import { RocketRenderer } from '../src/effects/RocketRenderer';
+import { BulletRenderer } from '../src/effects/BulletRenderer';
 import { ProjectilePresentationRuntime } from '../src/projectile/ProjectilePresentationRuntime';
 
 function fixture() {
@@ -20,10 +21,11 @@ function fixture() {
   function makeObject() {
     const object = {
       active: true, scaleX: 1, scaleY: 1, rotation: 0,
+      scene: {} as object | undefined,
       setScale: () => object, setDepth: () => object, setBlendMode: () => object,
       setAlpha: () => object, setTint: () => object, setRotation: () => object,
       setStrokeStyle: () => object,
-      explode: vi.fn(), destroy: vi.fn(() => { object.active = false; }),
+      explode: vi.fn(), destroy: vi.fn(() => { object.active = false; object.scene = undefined; }),
     };
     objects.push(object); return object;
   }
@@ -38,16 +40,18 @@ function fixture() {
   };
   const hydra = new HydraRenderer(scene as never), spore = new SporeRenderer(scene as never);
   const rocket = new RocketRenderer(scene as never);
+  const bullet = new BulletRenderer(scene as never);
   const owner = new ProjectilePresentationRuntime(scene as never);
-  owner.bindRenderers({ hydra, spore, rocket } as never, null);
+  owner.bindRenderers({ hydra, spore, rocket, bullet } as never, null);
   return { scene, objects, timers, tweens, hydra, spore, rocket, owner };
 }
 
 describe('projectile one-shot effects belong to their World presentation', () => {
-  it.each(['hydra', 'hydra-split', 'spore', 'spore_void', 'rocket-collection'] as const)(
+  it.each(['hydra', 'hydra-split', 'spore', 'spore_void', 'rocket-collection', 'bullet-bounce'] as const)(
     'clears %s impacts and ignores callbacks retired by a World transition', kind => {
       const f = fixture();
       const impact = () => kind === 'hydra' ? f.hydra.playImpact(300, 300, 0xffffff)
+        : kind === 'bullet-bounce' ? f.owner.playBounceImpact(1, 300, 300, 120, 0, 0xffffff, 'bullet')
         : kind === 'hydra-split' ? f.hydra.playSplitImpact(300, 300, 0xffffff, [0, 1])
         : kind === 'rocket-collection' ? f.rocket.playCollection(300, 300, 0xffffff)
         : f.spore.playImpact(300, 300, 0xffffff, 1, kind);
@@ -67,6 +71,7 @@ describe('projectile one-shot effects belong to their World presentation', () =>
       expect(f.objects.slice(retired.length).every(object => object.active)).toBe(true);
       f.tweens.slice(retiredTweens.length).forEach(tween => tween.onComplete());
       f.timers.slice(retiredTimers.length).forEach(timer => timer.callback());
+      expect(f.objects.slice(retired.length).every(object => !object.active)).toBe(true);
       f.owner.releaseWorldPresentation();
       expect(f.objects.every(object => object.destroy.mock.calls.length === 1)).toBe(true);
     },
