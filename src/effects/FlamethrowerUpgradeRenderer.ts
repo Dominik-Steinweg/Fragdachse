@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { GroundHazardWarningRenderer } from './GroundHazardWarningRenderer';
 import { DEPTH } from '../config';
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
+import { disposeShaderWarmupNode } from '../graphics/disposeShaderWarmupNode';
 import type { OwnerVisualSource } from '../entities/OwnerVisualSource';
 import type { FireChunkFlight, GroundFireVisualStyle, PlayerNetState, SyncedBurningGroundSnapshot } from '../types';
 import { registerGraphicsObject } from './EffectUtils';
@@ -365,6 +366,7 @@ export class FlamethrowerUpgradeRenderer {
   private destroyRingVisual(playerId: string, visual: RingVisual): void {
     this.releaseRingLights(playerId);
     this.ringVisuals.delete(playerId);
+    if (visual.quad.renderNode) disposeShaderWarmupNode(visual.quad.renderNode);
     visual.quad.destroy();
   }
 

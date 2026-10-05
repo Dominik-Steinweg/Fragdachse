@@ -7,6 +7,7 @@ import {
   isPointInsideArena,
 } from '../config';
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
+import { disposeShaderWarmupNode } from '../graphics/disposeShaderWarmupNode';
 import type { HitscanImpactKind } from '../types';
 import {
   ensureCanvasTexture,
@@ -286,13 +287,18 @@ export class PlasmaBurnerRenderer {
   clear(): void {
     for (const [beamId, visual] of this.beams) {
       this.releaseBeamLights(beamId);
-      visual.quad?.destroy();
+      this.destroyBeamVisual(visual);
     }
     this.beams.clear();
     this.pulseSegments.clear();
 
-    for (const visual of this.beamPool) visual.quad?.destroy();
+    for (const visual of this.beamPool) this.destroyBeamVisual(visual);
     this.beamPool.length = 0;
+  }
+
+  private destroyBeamVisual(visual: PlasmaBeamVisual): void {
+    if (visual.quad?.renderNode) disposeShaderWarmupNode(visual.quad.renderNode);
+    visual.quad?.destroy();
   }
 
   shutdown(): void {

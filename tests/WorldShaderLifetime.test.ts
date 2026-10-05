@@ -7,7 +7,12 @@ vi.mock('phaser', async () => {
   const ShaderQuad = require(process.cwd() + '/node_modules/phaser/src/renderer/webgl/renderNodes/ShaderQuad.js');
   return {
     Textures: { FilterMode: { LINEAR: 1 } },
-    BlendModes: { NORMAL: 0 }, Math: { Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)) },
+    Scenes: { Events: { SHUTDOWN: 'shutdown' } },
+    BlendModes: { NORMAL: 0 }, Math: {
+      Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)),
+      Linear: (a: number, b: number, t: number) => a + (b - a) * t,
+      Easing: { Quadratic: { Out: (t: number) => t * (2 - t) } },
+    },
     GameObjects: { Shader: class extends InstalledShader {
       callbacks: Array<() => void> = [];
       constructor(scene: any, config: any, ...args: any[]) {
@@ -26,7 +31,10 @@ vi.mock('phaser', async () => {
     } },
   };
 });
-vi.mock('../src/effects/EffectUtils', () => ({ registerGraphicsObject() {}, mixColors: (color: number) => color }));
+vi.mock('../src/effects/EffectUtils', () => ({
+  registerGraphicsObject() {}, mixColors: (color: number) => color,
+  ensureCanvasTexture() {}, fillRadialGradientTexture() {},
+}));
 vi.mock('../src/graphics/GraphicsQuality', () => ({ getGraphicsQualityProfile: () => ({ level: 'high' }) }));
 
 import { CoopDefenseMissionProgressRenderer } from '../src/effects/CoopDefenseMissionProgressRenderer';
@@ -34,6 +42,8 @@ import { TeslaNovaRenderer } from '../src/effects/TeslaNovaRenderer';
 import { TeslaFieldVisual } from '../src/effects/TeslaFieldVisual';
 import { WaterSurfaceRenderer } from '../src/arena/WaterSurfaceRenderer';
 import { StinkCloudBody } from '../src/effects/StinkCloudBody';
+import { FlamethrowerUpgradeRenderer } from '../src/effects/FlamethrowerUpgradeRenderer';
+import { PlasmaBurnerRenderer } from '../src/effects/PlasmaBurnerRenderer';
 import * as Phaser from 'phaser';
 
 function fixture() {
@@ -63,7 +73,7 @@ function fixture() {
         createImageData: (w: number, h: number) => ({ data: new Uint8ClampedArray(w * h * 4) }),
         putImageData() {},
       }, refresh() {}, setFilter() {} }),
-    }, time: { now: 0 },
+    }, time: { now: 0 }, events: { once: vi.fn() },
     add: {
       existing: (quad: any) => { quads.push(quad); return quad; },
       shader: (...args: any[]) => {
@@ -87,7 +97,7 @@ function mission(scene: any) {
 }
 
 describe('World shader effects release private Phaser GPU resources', () => {
-  it.each(['mission', 'nova-expiry', 'nova-teardown', 'tesla-field', 'stink', 'stink-probe'] as const)('releases %s without retiring another owner or shared programs', kind => {
+  it.each(['mission', 'nova-expiry', 'nova-teardown', 'tesla-field', 'stink', 'stink-probe', 'flame-expiry', 'flame-teardown'] as const)('releases %s without retiring another owner or shared programs', kind => {
     const f = fixture();
     const create = () => {
       if (kind === 'mission') return mission(f.scene);
@@ -100,6 +110,17 @@ describe('World shader effects release private Phaser GPU resources', () => {
           { x: 100, y: 100, radius: 80 } as never);
         owner.setBolt(0, { endX: 120, endY: 120, thickness: 1, amplitude: 0, branch: 0, impact: 0, surge: 0 });
         return () => owner.destroy();
+      }
+      if (kind.startsWith('flame')) {
+        const owner = new FlamethrowerUpgradeRenderer(f.scene as never,
+          { getOwnerVisualState: () => ({ x: 100, y: 100, visible: true }) } as never);
+        owner.syncRings({ p: { flameRingRadius: 64, alive: true, isBurrowed: false } } as never);
+        owner.update(0);
+        return () => {
+          if (kind === 'flame-expiry') {
+            owner.syncRings({}); f.scene.time.now += 10_000; owner.update(f.scene.time.now);
+          } else owner.clear();
+        };
       }
       const owner = new TeslaNovaRenderer(f.scene as never);
       owner.play(100, 100, 80, 0xffffff);
@@ -129,6 +150,38 @@ describe('World shader effects release private Phaser GPU resources', () => {
     expect(f.buffers).toEqual([f.sharedIndex]);
     expect(f.vaos).toEqual([]);
     firstSuites.forEach(suite => expect(suite.program.destroy).not.toHaveBeenCalled());
+  });
+
+  it.each(['active', 'pooled'] as const)('reuses plasma GPU nodes until the %s beam is cleared with its World', finalState => {
+    const f = fixture();
+    const first = new PlasmaBurnerRenderer(f.scene as never), second = new PlasmaBurnerRenderer(f.scene as never);
+    const fire = (owner: PlasmaBurnerRenderer) => owner.playTracer(100, 100, 200, 100, 0xffffff, 3);
+    fire(first); fire(second);
+    const quad = f.quads[0], control = f.quads[1], node = quad.renderNode, controlNode = control.renderNode;
+    const suite = node.programManager.getCurrentProgramSuite(), controlSuite = controlNode.programManager.getCurrentProgramSuite();
+    expect(suite.program).toBe(controlSuite.program);
+    first.update();
+    expect(quad.visible).toBe(true);
+    f.scene.time.now += 10_000; first.update();
+    expect(quad.visible).toBe(false);
+    expect(quad.destroyed).not.toBe(true);
+    expect(f.buffers).toContain(node.vertexBufferLayout.buffer);
+    expect(f.vaos).toContain(suite.vao);
+    fire(first); first.update();
+    expect(f.quads).toHaveLength(2);
+    expect(quad.visible).toBe(true);
+    if (finalState === 'pooled') { f.scene.time.now += 10_000; first.update(); }
+    first.clear(); first.clear();
+    expect(quad.destroyed).toBe(true);
+    expect(f.buffers).toEqual([f.sharedIndex, controlNode.vertexBufferLayout.buffer]);
+    expect(f.vaos).toEqual([controlSuite.vao]);
+    expect(suite.vao.destroy).toHaveBeenCalledOnce();
+    expect(control.destroyed).not.toBe(true);
+    expect(suite.program.destroy).not.toHaveBeenCalled();
+    second.shutdown();
+    expect(f.buffers).toEqual([f.sharedIndex]);
+    expect(f.vaos).toEqual([]);
+    expect(f.sharedIndex.destroy).not.toHaveBeenCalled();
   });
 
   it.each(['eviction', 'sunlight', 'destroy'] as const)('releases water private nodes on %s while preserving another resident owner', transition => {
