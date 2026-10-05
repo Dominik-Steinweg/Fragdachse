@@ -104,7 +104,7 @@ Freigabe für normales Laufen und die hostseitig aufgelöste Geschwindigkeit. Cl
 Clientposition steuern die Hostbewegung nicht. Verlorene Zwischenzustände werden nicht
 nachträglich auf dem Host ausgeführt.
 
-Fokusverlust beendet Bewegung auch ohne einen weiteren Client-Frame: `InputSystem` sendet
+Fokusverlust neutralisiert Bewegungseingaben auch ohne weiteren Client-Frame: `InputSystem` sendet
 über `NetworkBridge` eine zuverlässige, nur vom Host gelesene Stop-Grenze mit World-Revision
 und Bewegungssequenz. Frühere Fast-Eingaben können diesen Stop nicht aufheben; der nächste
 frische Input beginnt eine neue Sequenz, auch ohne Richtungswechsel. Die Grenze gilt nur für
@@ -180,6 +180,13 @@ schreibbarem Session-Storage korrigiert eine zur Geste passende Host-Ablehnung d
 erst ein neuer physischer Tastendruck darf erneut beginnen. Cancel ist
 Lifecycle-Cleanup und passiert die lokalen und hostseitigen Combat-Sperren, bleibt aber
 an die aktuelle World-/Activity-Identität gebunden.
+
+Tunnel-Platzierung hat eine hostseitig gespeicherte erste Auswahl im
+[PlayerUltimateBehaviorRuntime](../../src/world/PlayerUltimateBehaviorRuntime.ts).
+Der Host prüft deren Rasterzelle an der aktuellen Spielerposition; der spätere Commit
+verwendet diese gespeicherte Zelle, sodass der Spieler zwischen beiden Enden laufen kann.
+Begin und Commit gehören zur aktuellen Activity, ID-gebundenes Cancel bleibt World-Cleanup.
+Das echte Activity-Ende verwirft die Auswahl; technisches Detach derselben Activity erhält sie.
 
 ## Maßgebliche Tests
 

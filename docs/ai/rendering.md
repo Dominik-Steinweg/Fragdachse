@@ -79,6 +79,16 @@ gegen die installierten Phaser-Methoden mit und ohne Kamera-Framebuffer und bei 
 
 ## Runtime und Renderer
 
+Phasers `RESTORE_WEBGL` stellt die WebGL-Ressourcen wieder her, rekonstruiert aber nicht
+den zuvor ausschliesslich auf der GPU gezeichneten Inhalt von Render-Targets.
+Owner solcher Inhalts-Caches invalidieren deshalb ihre Gueltigkeitsmerkmale und zeichnen
+ueber ihren bestehenden Update- oder Bake-Pfad erneut, auch wenn Kamera und Zeit unveraendert sind.
+[ChunkedRenderSurface.ts](../../src/arena/chunks/ChunkedRenderSurface.ts) behaelt dabei seine
+budgetierte Chunk-Bereitschaft; [LightingSystem.ts](../../src/effects/LightingSystem.ts) und
+[CloudFieldTexture.ts](../../src/effects/sunlight/CloudFieldTexture.ts) erneuern ihre jeweils
+gecachten Licht- und Wolkeninhalte beim naechsten Update.
+Der jeweilige Owner meldet seinen Renderer-Listener beim Teardown wieder ab.
+
 Phaser 4.2.1 verwendet fuer WebGL-`ADD` die Faktoren `(ONE, DST_ALPHA)` auch fuer RGB.
 Farbmodulation auf deckenden World-/Kamerazielen muss deshalb deren Ziel-Alpha erhalten:
 Schon ein abgesenktes Alpha laesst spaetere additive Draws den Hintergrund abdunkeln,
