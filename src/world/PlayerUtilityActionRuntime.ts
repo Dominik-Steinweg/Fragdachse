@@ -145,7 +145,6 @@ interface UtilityChargeStock {
   config: UtilityConfig;
   stock: RechargeableCharges;
   lockoutUntil: number;
-  revision: number;
   lastCommittedAttemptId?: string;
   published?: UtilityChargeState;
 }
@@ -300,6 +299,8 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   }
   private readonly decoyCooldowns = new Map<string, { utilityId: string; until: number }>();
   private readonly chargeStocks = new Map<string, Map<string, UtilityChargeStock>>();
+  /** Stocks may be recreated on Player reentry while the client still knows this World's revisions. */
+  private nextChargeRevision = 0;
   private hostFrameNowMs = 0;
   private readonly temporaryUtilities = new TemporaryUtilityCollection();
   private readonly equippedUtilities = new Map<string, GenericUtility>();
@@ -984,7 +985,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       rechargeMode: 'preserve-progress' as const };
     let entry = stocks.get(config.id);
     if (!entry) {
-      entry = { config, stock: new RechargeableCharges(chargeConfig, now), lockoutUntil: 0, revision: 0 };
+      entry = { config, stock: new RechargeableCharges(chargeConfig, now), lockoutUntil: 0 };
       stocks.set(config.id, entry);
     } else if (entry.config !== config) {
       entry.stock.reconfigure(chargeConfig, now);
@@ -1000,7 +1001,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     if (old && old.availableCharges === snapshot.availableCharges && old.maxCharges === snapshot.maxCharges
       && old.nextChargeAt === snapshot.nextChargeAt && old.rechargeIntervalMs === snapshot.rechargeIntervalMs
       && old.lockoutUntil === entry.lockoutUntil && old.lastCommittedAttemptId === entry.lastCommittedAttemptId) return old;
-    const state: UtilityChargeState = { ...snapshot, utilityId: entry.config.id, revision: ++entry.revision,
+    const state: UtilityChargeState = { ...snapshot, utilityId: entry.config.id, revision: ++this.nextChargeRevision,
       lockoutUntil: entry.lockoutUntil, lastCommittedAttemptId: entry.lastCommittedAttemptId };
     entry.published = state;
     this.options.network.loadout.publishUtilityChargeState?.(playerId, entry.config.id, state);
