@@ -90,7 +90,7 @@ export class ArenaTimeOfDayController {
         durationMs: transition.durationMs,
       });
     }
-    this.scheduledTransitions = scheduled.sort((left, right) => left.startAtMs - right.startAtMs);
+    this.scheduledTransitions = scheduled;
     this.bossPhaseTransitions = bossPhases.sort((left, right) => left.phase - right.phase);
   }
 
@@ -140,16 +140,9 @@ export class ArenaTimeOfDayController {
     const bossSpawnedAtMs = Number.isFinite(signals.bossSpawnedAtMs)
       ? signals.bossSpawnedAtMs!
       : null;
-    let transitionCompleted = false;
-    let automatic = this.resolveScheduledMinutes(elapsedMs, bossSpawnedAtMs);
-
-    for (const transition of this.scheduledTransitions) {
-      const startAtMs = this.resolveTransitionStartAtMs(transition, bossSpawnedAtMs);
-      if (startAtMs === null || elapsedMs < startAtMs + transition.durationMs) continue;
-      if (this.reportedCompletions.has(transition.index)) continue;
-      this.reportedCompletions.add(transition.index);
-      transitionCompleted = true;
-    }
+    const scheduled = this.resolveScheduledMinutes(elapsedMs, bossSpawnedAtMs);
+    let transitionCompleted = scheduled.transitionCompleted;
+    let automatic = scheduled.minutes;
 
     const bossPhase = Math.max(0, Math.floor(signals.bossPhase ?? 0));
     for (const transition of this.bossPhaseTransitions) {
@@ -170,39 +163,58 @@ export class ArenaTimeOfDayController {
     };
   }
 
-  private resolveScheduledMinutes(elapsedMs: number, bossSpawnedAtMs: number | null): number {
+  private resolveScheduledMinutes(
+    elapsedMs: number,
+    bossSpawnedAtMs: number | null,
+  ): { minutes: number; transitionCompleted: boolean } {
     let segmentStartMs = 0;
     let segmentStartMinutes = this.startMinutes;
+    let transitionCompleted = false;
+    const scheduled = this.scheduledTransitions.flatMap(transition => {
+      const startAtMs = this.resolveTransitionStartAtMs(transition, bossSpawnedAtMs);
+      return startAtMs === null ? [] : [{ transition, startAtMs }];
+    }).sort((left, right) => left.startAtMs - right.startAtMs || left.transition.index - right.transition.index);
 
-    for (const transition of this.scheduledTransitions) {
-      const resolvedStartAtMs = this.resolveTransitionStartAtMs(transition, bossSpawnedAtMs);
-      if (resolvedStartAtMs === null) continue;
+    for (const { transition, startAtMs: resolvedStartAtMs } of scheduled) {
       const startAtMs = Math.max(segmentStartMs, resolvedStartAtMs);
       const sourceMinutes = normalizeTimeOfDay(
         segmentStartMinutes + (startAtMs - segmentStartMs) * this.minutesPerSecond / 1000,
       );
       if (elapsedMs < startAtMs) {
-        return normalizeTimeOfDay(
-          segmentStartMinutes + (elapsedMs - segmentStartMs) * this.minutesPerSecond / 1000,
-        );
+        return {
+          minutes: normalizeTimeOfDay(
+            segmentStartMinutes + (elapsedMs - segmentStartMs) * this.minutesPerSecond / 1000,
+          ),
+          transitionCompleted,
+        };
       }
 
       const endAtMs = startAtMs + transition.durationMs;
       if (elapsedMs < endAtMs) {
-        return interpolateForward(
-          sourceMinutes,
-          transition.targetMinutes,
-          smoothstep01((elapsedMs - startAtMs) / transition.durationMs),
-        );
+        return {
+          minutes: interpolateForward(
+            sourceMinutes,
+            transition.targetMinutes,
+            smoothstep01((elapsedMs - startAtMs) / transition.durationMs),
+          ),
+          transitionCompleted,
+        };
       }
 
+      if (!this.reportedCompletions.has(transition.index)) {
+        this.reportedCompletions.add(transition.index);
+        transitionCompleted = true;
+      }
       segmentStartMs = endAtMs;
       segmentStartMinutes = transition.targetMinutes;
     }
 
-    return normalizeTimeOfDay(
-      segmentStartMinutes + (elapsedMs - segmentStartMs) * this.minutesPerSecond / 1000,
-    );
+    return {
+      minutes: normalizeTimeOfDay(
+        segmentStartMinutes + (elapsedMs - segmentStartMs) * this.minutesPerSecond / 1000,
+      ),
+      transitionCompleted,
+    };
   }
 
   private resolveTransitionStartAtMs(
