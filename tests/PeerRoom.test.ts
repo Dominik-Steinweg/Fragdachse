@@ -36,6 +36,31 @@ function connectUnadmittedClient(network: FakeNetwork) {
 }
 
 describe('PeerRoom handshake and roster', () => {
+  it.each(['team_deathmatch', 'capture_the_beer'] as const)('keeps the team fixed during %s even if its client clears ready', async mode => {
+    const network = new FakeNetwork();
+    const host = await createHostRoom(network);
+    const client = await addClientRoom(network);
+    try {
+      setActiveSession({ room: host.room, transport: host.transport, roomCode: 'ABC123' });
+      const bridge = new NetworkBridge();
+      bridge.activate();
+      bridge.setGameMode(mode);
+      bridge.setGamePhase('LOBBY');
+      const hostTeam = bridge.getPlayerTeam('p0')!;
+      await expect(client.room.callHost('tmr', { teamId: hostTeam }, 500)).resolves.toBe(true);
+      expect(bridge.getPlayerTeam('p1')).toBe(hostTeam);
+      client.room.setPlayerState('p1', 'isr', true, true);
+      const otherTeam = hostTeam === 'blue' ? 'red' : 'blue';
+      await expect(client.room.callHost('tmr', { teamId: otherTeam }, 500)).resolves.toBe(false);
+      bridge.setGamePhase('ARENA');
+      client.room.setPlayerState('p1', 'isr', false, true);
+      expect(bridge.getPlayerReady('p1')).toBe(false);
+      await expect(client.room.callHost('tmr', { teamId: otherTeam }, 500)).resolves.toBe(false);
+      expect(bridge.getPlayerTeam('p1')).toBe(hostTeam);
+      expect(bridge.areTeammates('p0', 'p1')).toBe(true);
+    } finally { clearActiveSession(); client.room.destroy(); host.room.destroy(); }
+  });
+
   it('expires a ready but unadmitted client even when it keeps answering heartbeats', async () => {
     vi.useFakeTimers();
     const network = new FakeNetwork();

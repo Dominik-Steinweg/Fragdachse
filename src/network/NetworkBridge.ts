@@ -1546,7 +1546,7 @@ export class NetworkBridge {
   }
 
   canPlayerChangeTeam(playerId: string, targetTeamId?: TeamId): boolean {
-    if (!hasTeamSelection(this.getGameMode()) || this.getPlayerReady(playerId)) return false;
+    if (this.getGamePhase() !== 'LOBBY' || !hasTeamSelection(this.getGameMode()) || this.getPlayerReady(playerId)) return false;
     const currentTeam = this.getPlayerTeam(playerId);
     const target = targetTeamId ?? (currentTeam === 'blue' ? 'red' : 'blue');
     if (target === currentTeam) return true;
