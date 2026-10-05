@@ -60,6 +60,19 @@ function fixture(width=512,height=512,gridX=4,gridY=4,heightKey?: string,colourK
 }
 afterEach(()=>{vi.unstubAllGlobals();vi.clearAllMocks();fake.quads.length=0;});
 describe('formation lighting ownership and incremental updates',()=>{
+  it.each(['Worker module failed', ''])('reports a fatal worker failure after readiness (%j)', message => {
+    const f = fixture();
+    settle(f);
+    expect(f.lighting.getPreparationState().ready).toBe(true);
+    (f.worker.onerror as (event: { message: string }) => void)({ message });
+    f.lighting.tick();
+    expect(f.lighting.getPreparationState()).toMatchObject({ ready: false, error: expect.any(String) });
+    expect(f.lighting.getPreparationState().error).toBeTruthy();
+    expect(f.lighting.getCoverageBinding()).toBeNull();
+    f.lighting.destroy();
+    expect(f.worker.onerror).toBeNull();
+    expect(f.worker.terminate).toHaveBeenCalledOnce();
+  });
   it('waits for halo jobs and publication, including a superseding repair and teardown',()=>{
     const f=fixture(2048,512);
     expect(f.lighting.getPreparationState().ready).toBe(false);

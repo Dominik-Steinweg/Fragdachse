@@ -560,6 +560,12 @@ export class WorldPresentationFrameBinding {
     this.releaseView = null;
   }
 
+  /** Fatal preparation is observed by the World owner, never acted on by a render/read query. */
+  getPreparationError(): string | null {
+    if (this.destroyed) return null;
+    return this.input.getArenaResult()?.rockVisualSystem?.getPreparationState().error ?? null;
+  }
+
   /** One local World gate shared by boot reveal and replicated World readiness.
    * Two actual renders let dependent receivers consume the last published worker/mask result.
    * No timer, Round resource or callback can survive this active World owner. */

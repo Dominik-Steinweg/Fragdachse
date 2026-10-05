@@ -1106,6 +1106,14 @@ export class ArenaLifecycleCoordinator {
     if (this.arenaExitPresentationActive || this.isArenaEntryProtected()) return;
     this.adrenalineEssence?.prepare();
     this.worldRuntime?.update(deltaMs);
+    // Async preparation failures end the World before Scene frame consumers borrow its owners.
+    // Readiness queries may run inside those consumers and must remain free of teardown.
+    const preparationError = this.worldRuntime?.presentationFrame?.getPreparationError();
+    if (!this.matchTerminated && preparationError) {
+      console.error('[ArenaLifecycleCoordinator] World presentation failed:', preparationError);
+      this.terminateMatch(t('ui.lobby.arenaBuildFailed'));
+      return;
+    }
     // The boot reveal also waits for these resources in the LobbyWorld, where the
     // arena-only replicated load barrier is never ticked. Keep preparation world-scoped.
     if (!this.matchTerminated && this.arenaBuilt && this.worldRuntime

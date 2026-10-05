@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { EventEmitter } from 'node:events';
 import { getDeferredAssets } from '../../src/assets/DeferredAssets';
 import { WaterSurfaceRenderer } from '../../src/arena/WaterSurfaceRenderer';
+import { RockFormationLighting } from '../../src/arena/rocks/RockFormationLighting';
+import { RockVisualSystem } from '../../src/arena/rocks/RockVisualSystem';
 import { ArenaBuilder } from '../../src/arena/ArenaBuilder';
 import { WorldPresentationFrameBinding } from '../../src/world/WorldPresentationFrameBinding';
 import { resolve } from 'node:path';
@@ -15,6 +17,17 @@ vi.mock('phaser', () => ({
   Scenes: { Events: { RENDER: 'render' } },
   GameObjects: {
     Image: class {}, Sprite: class {}, Container: class {},
+    Shader: class {
+      renderNode = { programManager: { programs: {} }, vertexBufferLayout: { buffer: {} },
+        renderer: { deleteBuffer() {}, glVAOWrappers: [] } };
+      setOrigin() { return this; }
+      setDepth() { return this; }
+      setBlendMode() { return this; }
+      setVisible() { return this; }
+      setPosition() { return this; }
+      setDisplaySize() { return this; }
+      destroy() {}
+    },
     Particles: { ParticleProcessor: class {} },
   },
   Math: {
@@ -710,7 +723,8 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     coordinator.combatPresentationPrepared = false;
     coordinator.worldRuntime = {
       update: vi.fn(), materialization: { arena: {} }, presentation: { layout: {} },
-      presentationFrame: { getWorldRenderWork: () => ({ pending: 0, resident: 1, renderReady: true }) },
+      presentationFrame: { getPreparationError: () => null,
+        getWorldRenderWork: () => ({ pending: 0, resident: 1, renderReady: true }) },
     };
     let fragmentTicks = 0;
     let xpTicks = 0;
@@ -867,6 +881,112 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     },
   );
 
+  it.each(['LOBBY', 'ARENA'] as const)(
+    'surfaces a Formation Worker failure at the World update boundary in %s', (phase) => {
+      const { scene, overlay, fade } = bootFixture();
+      overlay.statusText = new DisplayObject();
+      overlay.readyBtn = new DisplayObject();
+      overlay.updateRoomActionButtons = vi.fn();
+      overlay.lobbyAlertBanner = { showAlert: vi.fn() };
+      class FormationWorker {
+        static instance: FormationWorker;
+        onmessage: ((event: unknown) => void) | null = null;
+        onerror: ((event: { message: string }) => void) | null = null;
+        postMessage = vi.fn();
+        terminate = vi.fn();
+        constructor() { FormationWorker.instance = this; }
+      }
+      vi.stubGlobal('Worker', FormationWorker);
+      vi.stubGlobal('document', { getElementById: () => null, createElement: () => ({ getContext: () => ({
+        drawImage() {}, getImageData: () => ({ data: new Uint8ClampedArray(16).fill(255) }),
+      }) }) });
+      const renderer = { gl: { texSubImage2D() {} }, createTexture2D: () => ({}),
+        glTextureUnits: { bind() {} }, glWrapper: { updateTexturing() {} } };
+      const formation = new RockFormationLighting({
+        cache: { binary: { get: () => new Uint8Array(4).fill(255) } },
+        sys: { renderer }, textures: { get: () => ({ getSourceImage: () => ({ width: 2, height: 2 }) }),
+          addGLTexture: () => ({}), remove() {} }, add: { existing: (object: unknown) => object },
+      } as never, { offsetX: 0, offsetY: 0, width: 512, height: 512 }, [],
+      { enabled: true, normals: false, strength: 1, sun: [0, 0, 1], material: 'mineral' });
+      const view = { x: 0, y: 0, width: 100, height: 100 };
+      formation.updateView(view);
+      formation.tick();
+      const rocks = Object.create(RockVisualSystem.prototype) as any;
+      Object.assign(rocks, { formation, view, store: { pendingChanges: 0 } });
+      const arena = { rockVisualSystem: rocks, canopyObjects: [],
+        groundSurface: { isReadyForView: () => true, getWorkingSet: () => null },
+        rockOverlaySurface: { isReadyForView: () => true, getWorkingSet: () => null } };
+      const frame = new WorldPresentationFrameBinding({ getArenaResult: () => arena,
+        getWorldLayout: () => null, scene: { cameras: scene.cameras, events: new EventEmitter(),
+          game: { events: new EventEmitter() } }, getLocalPlayerSprite: () => null,
+        getTrainVisual: () => null, syncTurretLights() {}, syncBaseLights() {},
+        persistentBasePreview: { syncLights() {} }, lighting: { setDynamicOccluderSource() {},
+          clearDynamicOccluderSource() {}, update() {} }, shadow: {
+          getStaticSurfaceWorkingSet: () => null, isStaticReadyForView: () => true,
+          updateStaticResidency() {},
+        } } as never);
+      frame.syncWorldLighting(false, false);
+      frame.syncCanopyTransparency(true);
+      const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
+      Object.assign(coordinator, {
+        arenaBuilt: true, builtWorldRevision: 7, terrainSnapshotReady: true,
+        combatPresentationPrepared: true, worldRuntime: { update: vi.fn(), materialization: { arena },
+          presentation: { layout: {} }, presentationFrame: frame },
+        renderers: { gpuVfx: { isShaderWarmupComplete: () => true } },
+        getLocalWorldPresentation: () => ({ required: true }),
+        isArenaEntryProtected: () => false, syncAuthoritativeRoundStartAnchors: vi.fn(),
+        tryScheduleArenaStart: vi.fn(), cancelArenaEntry: vi.fn(),
+        persistentBase: { rollbackPersistentBaseMissionIfActive: vi.fn() },
+        ctx: { leftPanel: { setLobbyFieldsLocked: vi.fn() } },
+        syncLobbySurface: vi.fn(), hostUpdate: { setActive: vi.fn() },
+        worldLifecycle: { endInstance: vi.fn() }, clearWorldAdmission: vi.fn(),
+        lobbyOverlay: overlay,
+        tearDownArena: vi.fn(() => { frame.destroy(); formation.destroy(); }),
+      });
+      vi.spyOn(overlay, 'setReadyButtonState').mockImplementation(() => {});
+      vi.spyOn(bridge, 'isHost').mockReturnValue(false);
+      vi.spyOn(bridge, 'getGamePhase').mockReturnValue(phase);
+      vi.spyOn(bridge, 'isArenaStarted').mockReturnValue(false);
+      vi.spyOn(bridge, 'getWorldDescriptor').mockReturnValue({ worldRevision: 7 } as any);
+      vi.spyOn(bridge, 'setLocalReady').mockImplementation(() => {});
+      const publish = vi.spyOn(bridge, 'setLocalWorldLoadProgress').mockImplementation(() => {});
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      scene.arenaRuntime = coordinator;
+      try {
+        coordinator.updateWorldRuntime(16);
+        if (phase === 'LOBBY') scene.syncBootReveal();
+        expect(scene.bootRevealPending).toBe(true);
+        expect(fade).not.toHaveBeenCalled();
+        expect(coordinator.tearDownArena).not.toHaveBeenCalled();
+        FormationWorker.instance.onerror!({ message: 'Formation module failed to load' });
+        formation.tick();
+        expect(formation.getDiagnostics().error).toBe('Formation module failed to load');
+        // Readiness queries must not destroy a World while a consumer is still using it.
+        expect(coordinator.getWorldRevealState(view).ready).toBe(false);
+        expect(coordinator.tearDownArena).not.toHaveBeenCalled();
+        coordinator.updateWorldRuntime(16);
+        coordinator.syncArenaLoadReady(view);
+        scene.syncBootReveal();
+        expect(overlay.hasTerminalFailure()).toBe(true);
+        expect(scene.bootRevealPending).toBe(false);
+        expect(fade).toHaveBeenCalledOnce();
+        expect(coordinator.tearDownArena).toHaveBeenCalledOnce();
+        expect(FormationWorker.instance.terminate).toHaveBeenCalledOnce();
+        expect(FormationWorker.instance.onerror).toBeNull();
+        expect(frame.getPreparationError()).toBeNull();
+        expect(publish.mock.calls.some(call => call[3] === true)).toBe(false);
+        coordinator.updateWorldRuntime(16);
+        coordinator.syncArenaLoadReady(view);
+        scene.syncBootReveal();
+        expect(coordinator.tearDownArena).toHaveBeenCalledOnce();
+      } finally {
+        frame.destroy();
+        formation.destroy();
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+
   it('wartet bei sichtbarer World auf Shader-Warmup vor Reveal und replizierter Ladefreigabe', () => {
     let warmupComplete = false;
     let presentationRequired = true;
@@ -878,7 +998,8 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
       update: vi.fn(),
       materialization: { arena: {} },
       presentation: { layout: {} },
-      presentationFrame: { getWorldRenderWork: () => ({ pending: 0, resident: 1, renderReady: true }) },
+      presentationFrame: { getPreparationError: () => null,
+        getWorldRenderWork: () => ({ pending: 0, resident: 1, renderReady: true }) },
     };
     let fragmentsReady = false;
     let xpReady = false;

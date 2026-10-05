@@ -183,7 +183,7 @@ export class RockFormationLighting {
       else this.pending=event.data as FormationWorkerResult;
       this.busy=false;
     };
-    this.worker.onerror=(event)=>{this.error=event.message;this.busy=false;};
+    this.worker.onerror=(event)=>{this.error=event.message||'Formation worker failed';this.busy=false;};
     this.surface=this.makeQuad(false);
     rollback.push(()=>this.destroyQuad(this.surface));
     this.ground=this.makeQuad(true);
@@ -474,7 +474,7 @@ export class RockFormationLighting {
     return light;
   }
   /** The current start view includes the bounded residency halo, not the whole map. */
-  getPreparationState(): { ready: boolean; pending: number; resident: number } {
+  getPreparationState(): { ready: boolean; pending: number; resident: number; error?: string } {
     const pendingChunks = this.wanted.filter(key => {
       const chunk = this.resident.get(key);
       return !chunk?.ready || chunk.dirty || chunk.repair;
@@ -485,6 +485,7 @@ export class RockFormationLighting {
       ready: !this.disposed && !this.error && !this.overflow && this.viewKey !== '' && pending === 0,
       pending,
       resident: this.resident.size,
+      ...(this.error ? { error: this.error } : {}),
     };
   }
 
