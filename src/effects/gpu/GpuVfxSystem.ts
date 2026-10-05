@@ -21,6 +21,7 @@ import { createFlightRibbonLayer, type FlightRibbonLayer } from './GpuFlightRibb
 import type { ProjectileTrailSegment } from '../../projectile/ProjectileFlightPath';
 import type { ShaderWarmupProbe } from '../../graphics/ShaderWarmupProbe';
 import { beginShaderPrograms } from '../../graphics/compileShaderPrograms';
+import { disposeShaderWarmupNode } from '../../graphics/disposeShaderWarmupNode';
 
 /**
  * GpuVfxSystem – das gemeinsame GPU-VFX-Backend einer Szene.
@@ -652,7 +653,10 @@ export class GpuVfxSystem {
     this.stopShaderWarmup();
     this.releaseAll();
     this.ribbonLayer?.image.destroy();
-    for (const lane of this.lanes) lane.layer.destroy();
+    for (const lane of this.lanes) {
+      if (lane.layer.submitterNode?.instanceBufferLayout) disposeShaderWarmupNode(lane.layer.submitterNode);
+      lane.layer.destroy();
+    }
     this.lanes.length = 0;
     this.ticks.length = 0;
     this.quality.destroy();

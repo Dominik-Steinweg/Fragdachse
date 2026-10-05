@@ -115,6 +115,72 @@ afterEach(() => {
 });
 
 describe('gpu vfx system: lanes', () => {
+  it.each(['owner', 'display-list-first'] as const)('retires the private SpriteGPU nodes on %s teardown after clearing live pool members', async order => {
+    const { createRequire } = await import('node:module');
+    const { readFileSync } = await import('node:fs');
+    const { runInNewContext } = await import('node:vm');
+    const require = createRequire(import.meta.url);
+    const Submitter = require('../node_modules/phaser/src/renderer/webgl/renderNodes/submitter/SubmitterSpriteGPULayer.js');
+    const file = new URL('../node_modules/phaser/src/gameobjects/spritegpulayer/SpriteGPULayer.js', import.meta.url);
+    const localRequire = createRequire(file), module = { exports: {} as any };
+    runInNewContext(readFileSync(file, 'utf8'), { module, require: (id: string) => {
+      if (id.endsWith('/Class')) return function (value: unknown) { return value; };
+      if (id === '../components' || id === './SpriteGPULayerRender.js') return {};
+      if (id === '../GameObject.js' || id === '../../structs/Map' || id.endsWith('/SubmitterSpriteGPULayer.js')) return function () {};
+      return localRequire(id);
+    } });
+    const methods = module.exports;
+    const buffers: any[] = [], vaos: any[] = [], program = { compiling: false, destroy: vi.fn() };
+    const renderer = {
+      gl: { FLOAT: 5126, UNSIGNED_BYTE: 5121, STATIC_DRAW: 35044, DYNAMIC_DRAW: 35048 },
+      shaderSetters: { constants: { 5126: { size: 1, bytes: 4 }, 5121: { size: 1, bytes: 1 } } },
+      glVAOWrappers: vaos,
+      createVertexBuffer: (data: ArrayBuffer) => {
+        const buffer: any = { update() {}, setData(bytes: ArrayBuffer) {
+          this.viewF32 = new Float32Array(bytes); this.viewU32 = new Uint32Array(bytes); this.viewU8 = new Uint8Array(bytes);
+        } };
+        buffer.destroy = vi.fn(() => { buffer.viewF32 = buffer.viewU32 = buffer.viewU8 = null; });
+        buffer.setData(data); buffers.push(buffer); return buffer;
+      },
+      deleteBuffer: (buffer: any) => { buffers.splice(buffers.indexOf(buffer), 1); buffer.destroy(); },
+      createVAO: () => { const vao = { destroy: vi.fn() }; vaos.push(vao); return vao; },
+      shaderProgramFactory: { getKey: () => 'shared', getShaderProgram: () => program },
+    };
+    const scene = makeFakeGpuVfxScene(), addLayer = scene.add.spriteGPULayer;
+    scene.add.spriteGPULayer = ((key: string, size: number) => {
+      const layer: any = addLayer(key, size), destroy = layer.destroy;
+      layer.submitterNode = new Submitter({ renderer }, {}, layer);
+      layer.submitterNode.instanceBufferLayout.buffer.setData(new ArrayBuffer(size * 42 * 4));
+      layer.frameDataTexture = { destroy: vi.fn() };
+      layer.setSegmentNeedsUpdate = () => {};
+      layer.patchMember = methods.patchMember.bind(layer);
+      layer.destroy = () => { if (layer.destroyed) return; methods.preDestroy.call(layer); destroy(); };
+      return layer;
+    }) as typeof scene.add.spriteGPULayer;
+    const system = new GpuVfxSystem(scene as never);
+    const layers = [...scene.layers] as any[], nodes = layers.map(layer => layer.submitterNode);
+    const suites = nodes.map(node => node.programManager.getCurrentProgramSuite());
+    const control: any = scene.add.spriteGPULayer('control', 1);
+    const controlNode = control.submitterNode, controlSuite = controlNode.programManager.getCurrentProgramSuite();
+    expect(suites[0].program).toBe(controlSuite.program);
+    const handle = createGpuVfxMemberHandle();
+    system.spawn(spawnSpec(system, GpuVfxEffectId.MuzzleFlashBody), -1, 0, 0, handle);
+    expect(system.isMemberLive(handle)).toBe(true);
+    expect(buffers).toHaveLength((layers.length + 1) * 2);
+    if (order === 'display-list-first') layers.forEach(layer => layer.destroy());
+    expect(() => system.destroy()).not.toThrow();
+    expect(buffers).toHaveLength(2);
+    expect(buffers).toEqual([controlNode.instanceBufferLayout.buffer, controlNode.vertexBufferLayout.buffer]);
+    expect(vaos).toEqual([controlSuite.vao]); expect(control.destroyed).toBe(false);
+    expect(program.destroy).not.toHaveBeenCalled();
+    expect(system.isMemberLive(handle)).toBe(false);
+    system.destroy();
+    for (const node of nodes) {
+      expect(node.instanceBufferLayout.buffer.destroy).toHaveBeenCalledOnce();
+      expect(node.vertexBufferLayout.buffer.destroy).toHaveBeenCalledOnce();
+    }
+  });
+
   it('profiles lanes 0 and 32 independently without numeric-mask aliasing', () => {
     const { system } = setup();
     system.spawn(spawnSpec(system, GpuVfxEffectId.MovementFootprint), -1, 0);
