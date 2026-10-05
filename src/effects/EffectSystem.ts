@@ -133,6 +133,8 @@ export class EffectSystem implements EnemyVisualSink {
   private processedSyncedTracerKeys = new Map<string, number>();
   private processedMeleeSwingKeys   = new Map<string, number>();
   private burrowVisuals = new Map<string, BurrowEmitterVisual>();
+  private readonly burrowEffects = new Set<Phaser.GameObjects.GameObject>();
+  private readonly burrowEffectTimers = new Set<Phaser.Time.TimerEvent>();
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
   private asmdPrimaryRenderer: AsmdPrimaryRenderer | null = null;
   private plasmaBurnerRenderer: PlasmaBurnerRenderer | null = null;
@@ -287,7 +289,7 @@ export class EffectSystem implements EnemyVisualSink {
     this.clearHolyExplosions();
     this.holyExplosionRenderer = null;
     this.clearZeusUpgrades();
-    this.burrowGpuRenderer?.clearAllUnderground();
+    this.clearAllBurrowStates();
     this.damageVignetteTween?.destroy();
     this.damageVignetteTween = null;
     this.damageVignetteTop?.destroy();
@@ -701,18 +703,36 @@ export class EffectSystem implements EnemyVisualSink {
 
     visual.dirt.stop();
     visual.dust.stop();
-    this.scene.time.delayedCall(500, () => {
-      visual.dirt.destroy();
-      visual.dust.destroy();
-    });
+    this.releaseBurrowEffectsAfter([visual.dirt, visual.dust], 500);
     this.burrowVisuals.delete(playerId);
   }
 
   clearAllBurrowStates(): void {
     this.burrowGpuRenderer?.clearAllUnderground();
-    for (const playerId of [...this.burrowVisuals.keys()]) {
-      this.clearBurrowState(playerId);
+    this.burrowVisuals.clear();
+    for (const timer of this.burrowEffectTimers) timer.remove(false);
+    this.burrowEffectTimers.clear();
+    for (const effect of this.burrowEffects) {
+      this.scene.tweens.killTweensOf(effect);
+      this.releaseBurrowEffect(effect);
     }
+  }
+
+  private trackBurrowEffect(effect: Phaser.GameObjects.GameObject): void {
+    this.burrowEffects.add(effect);
+    effect.once('destroy', () => this.burrowEffects.delete(effect));
+  }
+
+  private releaseBurrowEffect(effect: Phaser.GameObjects.GameObject): void {
+    if (this.burrowEffects.delete(effect)) effect.destroy();
+  }
+
+  private releaseBurrowEffectsAfter(effects: Phaser.GameObjects.GameObject[], delay: number): void {
+    const timer = this.scene.time.delayedCall(delay, () => {
+      if (!this.burrowEffectTimers.delete(timer)) return;
+      for (const effect of effects) this.releaseBurrowEffect(effect);
+    });
+    this.burrowEffectTimers.add(timer);
   }
 
   private ensureBurrowVisual(playerId: string, sprite: Phaser.GameObjects.Image): void {
@@ -732,6 +752,7 @@ export class EffectSystem implements EnemyVisualSink {
       quantity: 3,
       rotate: { min: -90, max: 90 },
     });
+    this.trackBurrowEffect(dirt);
     dirt.setDepth(DEPTH_FX - 0.2);
     dirt.addEmitZone(circleZone(12, 2));
     dirt.startFollow(sprite);
@@ -744,6 +765,7 @@ export class EffectSystem implements EnemyVisualSink {
       frequency: 58,
       quantity: 2,
     });
+    this.trackBurrowEffect(dust);
     dust.setDepth(DEPTH_FX - 0.25);
     dust.addEmitZone(circleZone(14, 1));
     dust.startFollow(sprite);
@@ -762,6 +784,7 @@ export class EffectSystem implements EnemyVisualSink {
 
     if (phase === 'windup') {
       const ring = this.scene.add.circle(x, y + 2, 12, 0, 0);
+      this.trackBurrowEffect(ring);
       registerGraphicsObject(this.scene, 'effectSystemGraphics', ring);
       ring.setDepth(DEPTH_FX + 0.05);
       ring.setStrokeStyle(4, 0x6f4a33, 0.8);
@@ -772,7 +795,7 @@ export class EffectSystem implements EnemyVisualSink {
         alpha: 0,
         duration: 150,
         ease: 'Cubic.easeIn',
-        onComplete: () => ring.destroy(),
+        onComplete: () => this.releaseBurrowEffect(ring),
       });
 
       const dirtBurst = this.scene.add.particles(x, y + 2, TEX_BURROW_DIRT, {
@@ -783,10 +806,11 @@ export class EffectSystem implements EnemyVisualSink {
         frequency: -1,
         quantity: 10,
       });
+      this.trackBurrowEffect(dirtBurst);
       dirtBurst.setDepth(DEPTH_FX + 0.08);
       dirtBurst.addEmitZone(circleZone(8, 10));
       dirtBurst.explode(10);
-      this.scene.time.delayedCall(320, () => dirtBurst.destroy());
+      this.releaseBurrowEffectsAfter([dirtBurst], 320);
       return;
     }
 
@@ -799,10 +823,11 @@ export class EffectSystem implements EnemyVisualSink {
         frequency: -1,
         quantity: 14,
       });
+      this.trackBurrowEffect(plume);
       plume.setDepth(DEPTH_FX + 0.1);
       plume.addEmitZone(circleZone(9, 14));
       plume.explode(14);
-      this.scene.time.delayedCall(400, () => plume.destroy());
+      this.releaseBurrowEffectsAfter([plume], 400);
     }
   }
 

@@ -56,7 +56,8 @@ describe('authoritative Burrow presentation', () => {
     const add = { circle: vi.fn(), graphics: vi.fn(), particles: vi.fn() };
     const tweens = { add: vi.fn() };
     const effects = Object.assign(Object.create(EffectSystem.prototype), {
-      burrowGpuRenderer: renderer, burrowVisuals: new Map(), scene: { add, tweens },
+      burrowGpuRenderer: renderer, burrowVisuals: new Map(),
+      burrowEffects: new Set(), burrowEffectTimers: new Set(), scene: { add, tweens },
     }) as EffectSystem;
     const legacy = vi.spyOn(effects, 'syncBurrowState');
     const discrete = vi.spyOn(effects, 'playPlayerBurrowPhaseEffect');
