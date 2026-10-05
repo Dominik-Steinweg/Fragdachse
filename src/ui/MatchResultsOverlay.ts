@@ -4,6 +4,7 @@ import { ensureResultsBanner, ensureResultsPanel, ensureResultsTitle } from './m
 import { MATCH_RESULTS_BANNER, MATCH_RESULTS_BACKGROUND, MATCH_RESULTS_TITLE } from './MatchResultsAssets';
 import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, mountForestModal } from './ForestModal';
 import * as Phaser from 'phaser';
+import { overlayTransitionView, type AfterRoundView } from './AfterRoundTransition';
 import { activateUi } from './UiAudio';
 import { resolvePersistentBaseBuildAreaForStage } from '../persistentBase/PersistentBaseCore';
 import { getPersistentBaseRewardDefinition } from '../persistentBase/PersistentBaseRewardCatalog';
@@ -284,7 +285,7 @@ export class MatchResultsOverlay {
 
   constructor(
     private readonly scene: Phaser.Scene,
-    private readonly onContinue: () => void,
+    private readonly onContinue: () => boolean | void,
     private readonly onBalanceFeedback: () => void = () => undefined,
     private readonly restartActions?: MatchResultsRestartActions,
   ) {}
@@ -534,6 +535,7 @@ export class MatchResultsOverlay {
   }
 
   hide(): void {
+    this.continuing = false;
     this.resetRestart();
     this.rewardTooltip?.hide();
     this.stopSequence();
@@ -1381,11 +1383,19 @@ export class MatchResultsOverlay {
     this.completeSequence();
   }
 
+  private continuing = false;
+
+  getTransitionView(): AfterRoundView | null {
+    return this.visible && this.container ? overlayTransitionView(this.container, () => this.hide()) : null;
+  }
+
   continueToLobby(): void {
-    if (!this.isVisible()) return;
+    if (!this.isVisible() || this.continuing) return;
+    this.continuing = true;
     const wasReplay = this.replayOnly;
+    this.rewardTooltip?.hide();
+    if (!wasReplay && this.onContinue() === true) return;
     this.hide();
-    if (!wasReplay) this.onContinue();
   }
 
   // ── Effekte ────────────────────────────────────────────────────────────────

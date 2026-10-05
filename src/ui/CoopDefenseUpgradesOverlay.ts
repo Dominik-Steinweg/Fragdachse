@@ -7,6 +7,7 @@ import { ensureUpgradeSurface, ensureUpgradeIcon, ensureUpgradeFrame, ensureUpgr
 import { BUTTON_CURSOR } from './gameCursor';
 import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureModalFrame, ensureModalPanelTexture, ensureGlossyButtonTexture } from './ForestModal';
 import * as Phaser from 'phaser';
+import { overlayTransitionView, type AfterRoundView, type AfterRoundOpening } from './AfterRoundTransition';
 import { LazyOverlayGate } from './LazyOverlayGate';
 import { activateUi, playUiHover, playUiActivation } from './UiAudio';
 import {
@@ -361,7 +362,7 @@ export class CoopDefenseUpgradesOverlay {
     private readonly onSelectLoadoutItem: (slot: LoadoutSlot, itemId: string) => boolean,
     private readonly onCancel: () => void,
     private readonly onApply: () => void,
-    private readonly onClosed: () => void = () => {},
+    private readonly onClosed: () => boolean | void = () => {},
     canOpen: () => boolean = () => true,
   ) {
     this.lazy = new LazyOverlayGate(scene, 'upgrades', canOpen);
@@ -634,20 +635,28 @@ export class CoopDefenseUpgradesOverlay {
     this.renderActiveCategory(progress);
   }
 
-  show(): void {
+  show(opening?: AfterRoundOpening): void {
     if (this.visible) return;
-    this.lazy.open(() => this.showLoaded(), () => this.closeWithCancel());
+    this.closing = false;
+    opening?.onCancel(() => this.hide(undefined, true));
+    this.lazy.open(() => this.showLoaded(opening), () => this.closeWithCancel(), opening?.unavailable);
   }
 
-  private showLoaded(): void {
+  private showLoaded(opening?: AfterRoundOpening): void {
     if (!this.container || this.builtLocale !== getLocale()) this.build();
     if (this.visible || !this.container) return;
     this.visible = true;
+    this.closing = false;
     this.xpBarEffect?.start();
     this.refresh();
 
     this.container.setVisible(true);
     this.visibilityTween?.remove();
+    if (opening) {
+      this.dimRect?.setInteractive();
+      opening.ready(this.getTransitionView()!);
+      return;
+    }
     this.container.setAlpha(0);
     this.visibilityTween = this.scene.tweens.add({
       targets: this.container,
@@ -663,20 +672,37 @@ export class CoopDefenseUpgradesOverlay {
 
   /** Verwirft alle Aenderungen seit dem Oeffnen und schliesst. */
   closeWithCancel(): void {
-    if (!this.isOpen()) return;
+    if (!this.isOpen() || this.closing) return;
+    this.closing = true;
     this.onCancel();
     this.refresh();
-    this.hide(this.onClosed);
+    this.closeAfterAction();
   }
 
   /** Uebernimmt die Aenderungen und schliesst. */
   private closeWithApply(): void {
-    if (!this.visible) return;
+    if (!this.visible || this.closing) return;
+    this.closing = true;
     this.onApply();
-    this.hide(this.onClosed);
+    this.closeAfterAction();
   }
 
-  hide(afterHidden?: () => void): void {
+  private closing = false;
+
+  private closeAfterAction(): void {
+    this.lazy.cancel();
+    this.tooltip?.hide();
+    this.picker?.close();
+    this.closeRespecMenu();
+    if (this.onClosed() !== true) this.hide();
+  }
+
+  getTransitionView(): AfterRoundView | null {
+    return this.visible && this.container ? overlayTransitionView(this.container, () => this.hide(undefined, true)) : null;
+  }
+
+  hide(afterHidden?: () => void, immediate = false): void {
+    this.closing = false;
     const pending = this.lazy.isPending();
     this.lazy.cancel();
     if (!this.visible || !this.container) {
@@ -694,6 +720,7 @@ export class CoopDefenseUpgradesOverlay {
     this.xpBarEffect?.stop();
 
     this.visibilityTween?.remove();
+    if (immediate) { this.container.setVisible(false); afterHidden?.(); return; }
     this.visibilityTween = this.scene.tweens.add({
       targets: this.container,
       alpha: 0,

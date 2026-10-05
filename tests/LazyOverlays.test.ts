@@ -89,6 +89,42 @@ describe('lazy opening lifecycle', () => {
     return new CoopDefenseUpgradesOverlay(scene, vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(),
       vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn());
   }
+  it('reports a denied destination so an after-round handoff cannot stay blocked', async () => {
+    const h = setup(); let allowed = true;
+    const gate = new LazyOverlayGate(h.scene, 'items', () => allowed), unavailable = vi.fn(), show = vi.fn();
+    gate.open(show, vi.fn(), unavailable);
+    allowed = false; h.events.emit('update'); h.resolve(); await h.done;
+    expect(unavailable).toHaveBeenCalledOnce(); expect(show).not.toHaveBeenCalled();
+    expect(gate.isPending()).toBe(false);
+  });
+
+  it.each(['upgrades', 'rewards'] as const)('retains %s after close and ignores repeated actions until retirement', kind => {
+    const h = setup(), closed = vi.fn(() => true), apply = vi.fn(), claim = vi.fn(() => true);
+    const overlay: any = kind === 'upgrades' ? upgrades(h.scene)
+      : new CoopDefenseItemRewardOverlay(h.scene, claim, vi.fn(), closed);
+    if (kind === 'upgrades') { overlay.onClosed = closed; overlay.onApply = apply; }
+    const root = { depth: 10, setVisible: vi.fn(), setAlpha: vi.fn(() => root), setDepth: vi.fn(() => root) };
+    overlay.container = root; overlay.visible = true;
+    overlay.presentation = { roundEndedAt: 42 }; overlay.closeAfterClaim = true;
+    const close = () => kind === 'upgrades' ? overlay.closeWithApply() : overlay.applyClaim('offer');
+    close(); close();
+    expect(closed).toHaveBeenCalledOnce();
+    expect(kind === 'upgrades' ? apply : claim).toHaveBeenCalledOnce();
+    expect(root.setVisible).not.toHaveBeenCalledWith(false);
+    overlay.getTransitionView().retire();
+    expect(root.setVisible).toHaveBeenCalledWith(false);
+  });
+
+  it('reports readiness only after loading and building the destination', async () => {
+    const h = setup(), overlay: any = upgrades(h.scene), ready = vi.fn();
+    overlay.build = vi.fn(() => { overlay.container = { depth: 10, setVisible() {}, setAlpha() {}, setDepth() {} }; });
+    overlay.refresh = vi.fn();
+    overlay.show({ ready, unavailable: vi.fn(), onCancel: vi.fn() });
+    expect(ready).not.toHaveBeenCalled();
+    h.resolve(); await h.done;
+    expect(overlay.build).toHaveBeenCalledOnce(); expect(ready).toHaveBeenCalledOnce();
+    expect(h.scene.tweens.add).not.toHaveBeenCalled();
+  });
   it.each(['upgrades', 'items', 'rewards'] as const)('%s builds once; pending visibility supports Escape routing', async kind => {
     const h = setup(), closed = vi.fn();
     const overlay: any = kind === 'upgrades' ? upgrades(h.scene) : kind === 'items'
@@ -96,7 +132,7 @@ describe('lazy opening lifecycle', () => {
       : new CoopDefenseItemRewardOverlay(h.scene, vi.fn(), () => ({}) as never, closed);
     overlay.build = vi.fn(() => { overlay.container = { setVisible() {}, setAlpha() {} }; });
     overlay.refresh = vi.fn(); overlay.showOffers = vi.fn();
-    const open = () => overlay.show({}), visible = () => kind === 'rewards' ? overlay.isVisible() : overlay.isOpen();
+    const open = () => kind === 'rewards' ? overlay.show({}) : overlay.show(), visible = () => kind === 'rewards' ? overlay.isVisible() : overlay.isOpen();
     const close = () => kind === 'upgrades' ? overlay.closeWithCancel() : kind === 'rewards' ? overlay.dismiss() : overlay.hide();
     expect(overlay.build).not.toHaveBeenCalled(); open(); expect(visible()).toBe(true); expect(overlay.build).not.toHaveBeenCalled();
     close(); expect(visible()).toBe(false); open(); h.resolve(); await h.done;

@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import type { AfterRoundView } from '../ui/AfterRoundTransition';
 import { CELL_SIZE, GAME_WIDTH, GAME_HEIGHT } from '../config';
 import { GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { getStoredGraphicsQuality } from '../utils/localPreferences';
@@ -39,6 +40,8 @@ export interface PersistentBaseEditorOptions {
   readonly newRewardIds: readonly PersistentBaseRewardId[];
   readonly save: () => Promise<boolean>;
   readonly close: () => void;
+  readonly presented?: (view: AfterRoundView) => void;
+  readonly retire?: () => void;
 }
 
 /** Menu-only input over a small regular World. No avatar, movement bindings or rotation. */
@@ -176,6 +179,25 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       }
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.dispose());
+    if (this.options.presented) {
+      this.setTransitionInputBlocked(true);
+      this.options.presented(this.getTransitionView());
+    }
+  }
+
+  getTransitionView(): AfterRoundView {
+    return {
+      depth: 0,
+      // This Scene is rendered above ArenaScene, including both of its cameras.
+      setDepth: () => {},
+      setAlpha: alpha => { for (const camera of this.cameras.cameras) camera.setAlpha(alpha); },
+      retire: () => this.options.retire?.(),
+    };
+  }
+
+  setTransitionInputBlocked(blocked: boolean): void {
+    this.input.enabled = !blocked;
+    if (this.input.keyboard) { this.input.keyboard.resetKeys(); this.input.keyboard.enabled = !blocked; }
   }
   dispose(): void {
     if (this.disposed) return;

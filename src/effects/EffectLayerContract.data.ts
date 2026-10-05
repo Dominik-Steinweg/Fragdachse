@@ -2783,6 +2783,10 @@ export const GPU_EFFECT_CONTRACTS = {
   }
 } as const satisfies Record<keyof typeof GpuVfxEffectId, LayerContract & {readonly lanes: readonly (keyof typeof GpuVfxLaneId)[]}>;
 export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
+  {"id":"cpu:ui/AfterRoundTransition.ts:overlayTransitionView/root/setDepth/0","owner":"ui/AfterRoundTransition.ts","component":"overlayTransitionView/root/setDepth/0","height":"body","lighting":"material","camera":"clarity","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"overlayTransitionView/root/setDepth/0","expression":"value"}},
+  {"id":"cpu:ui/AfterRoundTransition.ts:overlayTransitionView/root/setDepth/1","owner":"ui/AfterRoundTransition.ts","component":"overlayTransitionView/root/setDepth/1","height":"body","lighting":"material","camera":"clarity","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"overlayTransitionView/root/setDepth/1","expression":"depth"}},
+  {"id":"cpu:ui/AfterRoundTransition.ts:opening/view/setDepth/0","owner":"ui/AfterRoundTransition.ts","component":"opening/view/setDepth/0","height":"body","lighting":"material","camera":"clarity","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"opening/view/setDepth/0","expression":"Math.max(view.depth, (this.source?.depth ?? view.depth) + 1)"}},
+  {"id":"cpu:ui/AfterRoundTransition.ts:opening/view/setDepth/1","owner":"ui/AfterRoundTransition.ts","component":"opening/view/setDepth/1","height":"body","lighting":"material","camera":"clarity","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"opening/view/setDepth/1","expression":"view.depth"}},
   {"id":"cpu:effects/EnemyReadabilityRenderer.ts:prepareShader/this.warmupLayer/depth/0","owner":"effects/EnemyReadabilityRenderer.ts","component":"prepareShader/this.warmupLayer/depth/0","height":"ground","lighting":"material","camera":"world","depths":[0],"blends":["NORMAL"],"profiles":["G"],"role":"pass","source":{"selector":"prepareShader/this.warmupLayer/depth/0","expression":"0"}},
   {"id":"cpu:effects/EnemyMeshShadowRenderer.ts:module/this.display/setDepth/0","owner":"effects/EnemyMeshShadowRenderer.ts","component":"module/this.display/setDepth/0","height":"ground","lighting":"material","camera":"world","depths":[9.92],"blends":["MULTIPLY"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.display/setDepth/0","expression":"ENEMY_SHADOW_DEPTH"}},
   {"id":"cpu:adrenalineEssence/AdrenalineEssenceGpuRenderer.ts:module/this.glow/setDepth/0","owner":"adrenalineEssence/AdrenalineEssenceGpuRenderer.ts","component":"module/this.glow/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[9.39],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.glow/setDepth/0","expression":"GLOW_DEPTH"}},
@@ -3258,6 +3262,41 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:ui/UiContextMenu.ts:open/this.container/setDepth/0","owner":"ui/UiContextMenu.ts","component":"open/this.container/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[103],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"open/this.container/setDepth/0","expression":"this.standaloneDepth"}},
 ];
 export const CPU_SOURCE_CONTRACTS = {
+  "ui/AfterRoundTransition.ts": {
+  "blends": [],
+  "cameras": [],
+  "sites": [
+    {
+      "key": "overlayTransitionView/root/setDepth/0",
+      "expression": "value",
+      "blends": [
+        "NORMAL"
+      ]
+    },
+    {
+      "key": "overlayTransitionView/root/setDepth/1",
+      "expression": "depth",
+      "blends": [
+        "NORMAL"
+      ]
+    },
+    {
+      "key": "opening/view/setDepth/0",
+      "expression": "Math.max(view.depth, (this.source?.depth ?? view.depth) + 1)",
+      "blends": [
+        "NORMAL"
+      ]
+    },
+    {
+      "key": "opening/view/setDepth/1",
+      "expression": "view.depth",
+      "blends": [
+        "NORMAL"
+      ]
+    }
+  ],
+  "bindings": {}
+},
   "effects/EnemyMeshShadowRenderer.ts": {"blends":["Phaser.BlendModes.MULTIPLY"],"cameras":[],"sites":[{"key":"module/this.display/setDepth/0","expression":"ENEMY_SHADOW_DEPTH","blends":["MULTIPLY"]}],"bindings":{}},
   "adrenalineEssence/AdrenalineEssenceGpuRenderer.ts": {
     "blends": [

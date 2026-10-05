@@ -149,6 +149,8 @@ export interface ArenaMetaPresentationPort {
   hideDebugOverlay(): void;
   showBaseOverlay(newRewardIds: readonly PersistentBaseRewardId[]): void;
   showUpgradeOverlay(): void;
+  finishAfterRoundPresentation?(): void;
+  cancelAfterRoundPresentation?(): void;
   showItemsOverlay(): void;
   refreshItemsOverlay(): void;
   isItemsOverlayOpen(): boolean;
@@ -835,10 +837,16 @@ export class ArenaMetaController {
     this.presentAfterRoundStep(this.afterRound.finish(step));
   }
 
-  cancelAfterRoundFlow(): void { this.afterRound.cancel(); this.afterRoundEndedAt = undefined; this.afterRoundIdentity = undefined; this.pendingAfterRoundStep = null; }
+  cancelAfterRoundFlow(): void {
+    this.afterRound.cancel(); this.afterRoundEndedAt = undefined; this.afterRoundIdentity = undefined; this.pendingAfterRoundStep = null;
+    this.input.presentation.cancelAfterRoundPresentation?.();
+  }
 
   private presentAfterRoundStep(step: AfterRoundStep | null): void {
-    if (!step) return;
+    if (!step) {
+      if (!this.afterRound.active) this.input.presentation.finishAfterRoundPresentation?.();
+      return;
+    }
     if (this.input.session.getGamePhase() !== 'LOBBY') { this.cancelAfterRoundFlow(); return; }
     if (step === 'base' && !this.input.session.isHost()) {
       this.pendingAfterRoundStep = null;
@@ -853,15 +861,18 @@ export class ArenaMetaController {
       if (!this.getItemRewardPresentation(this.afterRoundEndedAt, this.afterRoundIdentity)) { this.finishAfterRoundStep(step); return; }
       this.openItemRewardOverlay(this.afterRoundEndedAt, true, this.afterRoundIdentity);
     } else if (step === 'upgrades') this.openUpgradeOverlay();
-    else this.openBaseOverlay(this.input.progressStore.getProgress().persistentBaseRewardUnlocks.filter(id => !this.baseRewardIdsBeforeRound.includes(id)));
+    else if (!this.openBaseOverlay(this.input.progressStore.getProgress().persistentBaseRewardUnlocks.filter(id => !this.baseRewardIdsBeforeRound.includes(id)))) {
+      this.finishAfterRoundStep(step);
+    }
   }
 
-  openBaseOverlay(newRewardIds: readonly PersistentBaseRewardId[] = []): void {
+  openBaseOverlay(newRewardIds: readonly PersistentBaseRewardId[] = []): boolean {
     if (this.destroyed || !this.input.session.isHost() || this.input.session.getGamePhase() !== 'LOBBY'
       || !isCoopDefenseMode(this.input.session.getGameMode()) || this.input.session.isLocalReady()
-      || this.input.session.isAuthoritativeLocalReady() || !this.readFreshStoredProgress().persistentBaseUnlocked) return;
+      || this.input.session.isAuthoritativeLocalReady() || !this.readFreshStoredProgress().persistentBaseUnlocked) return false;
     this.input.presentation.hideDebugOverlay();
     this.input.presentation.showBaseOverlay(newRewardIds);
+    return true;
   }
 
   replayMatchResults(balanceFeedbackAvailable = false): void {

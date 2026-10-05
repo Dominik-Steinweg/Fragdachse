@@ -14,6 +14,7 @@ import { getPipelineAssetForTexture } from '../config/pipelineAssets';
 import { preloadAttackDroneAssets } from '../effects/AttackDroneRenderer';
 import { preloadRepairDroneAssets } from '../effects/repairDroneVisuals';
 import * as Phaser from 'phaser';
+import { AfterRoundTransition, type AfterRoundView } from '../ui/AfterRoundTransition';
 import { composeArenaVoice } from './arena/ArenaVoiceComposition';
 import { bindUiAudio } from '../ui/UiAudio';
 import { BackdropBlur } from '../effects/postfx/BackdropBlur';
@@ -294,6 +295,7 @@ export class ArenaScene extends Phaser.Scene {
 
   // ── Lobby / Room-quality (not round-scoped) ───────────────────────────────
   private lobbyOverlay!: LobbyOverlay;
+  private afterRoundTransition: AfterRoundTransition | null = null;
   private roomQualityMonitor!: RoomQualityMonitor;
   private roomQualitySnapshot: RoomQualitySnapshot | null = null;
   private timeOfDayDebugOverlay: TimeOfDayDebugOverlay | null = null;
@@ -489,6 +491,8 @@ export class ArenaScene extends Phaser.Scene {
     assertPowerUpAssetsReady(this);
     assertRuntimeAtlasesReady(this.textures);
     onBootSceneTeardown(this.events, () => {
+      this.afterRoundTransition?.cancel();
+      this.afterRoundTransition = null;
       this.cancelArenaExitRenderWait();
       this.arenaExitFadeOverlay?.destroy();
       this.arenaExitFadeOverlay = null;
@@ -820,11 +824,13 @@ export class ArenaScene extends Phaser.Scene {
         refreshColorIndicator: () => this.ctx.leftPanel.refreshColorIndicator(),
         hideDebugOverlay: () => this.coopDefenseDebugOverlay?.hide(),
         showBaseOverlay: (ids) => this.openBaseEditor(ids),
-        showUpgradeOverlay: () => this.coopDefenseUpgradesOverlay?.show(),
+        showUpgradeOverlay: () => this.coopDefenseUpgradesOverlay?.show(this.afterRoundOpening()),
+        finishAfterRoundPresentation: () => this.afterRoundTransition?.finish(),
+        cancelAfterRoundPresentation: () => this.afterRoundTransition?.cancel(),
         showItemsOverlay: () => this.itemsOverlay?.show(),
         refreshItemsOverlay: () => this.itemsOverlay?.refresh(),
         isItemsOverlayOpen: () => this.itemsOverlay?.isOpen() ?? false,
-        showItemRewardOverlay: (presentation, closeAfterClaim) => this.itemRewardOverlay?.show(presentation, closeAfterClaim),
+        showItemRewardOverlay: (presentation, closeAfterClaim) => this.itemRewardOverlay?.show(presentation, closeAfterClaim, this.afterRoundOpening()),
         isItemRewardOverlayVisible: () => this.itemRewardOverlay?.isVisible() ?? false,
         showMatchResultsSyncing: (modeLabel, mapLabel) => this.matchResultsOverlay?.showSyncing(modeLabel, mapLabel),
         hideMatchResults: () => this.matchResultsOverlay?.hide(),
@@ -912,7 +918,7 @@ export class ArenaScene extends Phaser.Scene {
       (slot, itemId) => this.meta?.selectLoadoutItem(slot, itemId) ?? false,
       () => this.meta?.cancelUpgradeChanges(),
       () => this.meta?.applyUpgradeChanges(),
-      () => this.meta?.finishAfterRoundStep('upgrades'),
+      () => this.advanceAfterRound('upgrades', this.coopDefenseUpgradesOverlay?.getTransitionView() ?? null),
       canOpenMetaOverlay,
     );
     yield 'upgrade-overlay';
@@ -925,7 +931,7 @@ export class ArenaScene extends Phaser.Scene {
       () => {
         this.lobbyOverlay.setReadyButtonState(false);
         this.itemsOverlay?.refresh();
-        this.meta?.finishAfterRoundStep('items');
+        return this.advanceAfterRound('items', this.itemRewardOverlay?.getTransitionView() ?? null);
       },
       canOpenMetaOverlay,
     );
@@ -942,10 +948,10 @@ export class ArenaScene extends Phaser.Scene {
     );
     yield "items-overlay";
     this.matchResultsOverlay = new MatchResultsOverlay(this, () => {
-      // Die Netzwerkphase ist bereits LOBBY. Der lokale Layer gibt lediglich die darunter
-      // Lobby frei, auch wenn ihr Aufbau noch laeuft; Ready bleibt weiterhin false.
+      this.beginAfterRoundTransition(this.matchResultsOverlay?.getTransitionView() ?? null);
       this.lobbyOverlay.setReadyButtonState(false);
       this.meta?.startAfterRoundFlow();
+      return true;
     }, () => this.openBalanceFeedback(), {
       getState: () => ({
         available: this.canRestartDefeatedMap(),
@@ -1410,7 +1416,7 @@ export class ArenaScene extends Phaser.Scene {
         isCoopDefenseMode: () => isCoopDefenseMode(bridge.getGameMode()),
         canLeaveLocalLobbyWorld: () => this.canLeaveLocalLobbyWorld(),
         requestLocalLobbyWorldLeave: () => this.requestLocalLobbyWorldLeave(),
-        isHotkeyInputBlocked: () => (this.ctx.leftPanel.isHotkeyInputBlocked() || this.lobbyOverlay.isHotkeyInputBlocked()),
+        isHotkeyInputBlocked: () => (this.afterRoundTransition?.active || this.ctx.leftPanel.isHotkeyInputBlocked() || this.lobbyOverlay.isHotkeyInputBlocked()),
         isHelpOverlayOpen: () => this.ctx.leftPanel.isHelpOverlayOpen(),
         hideHelpOverlay: () => this.ctx.leftPanel.hideHelpOverlay(),
         isOptionsOverlayOpen: () => this.ctx.leftPanel.isOptionsOverlayOpen(),
@@ -1822,7 +1828,7 @@ export class ArenaScene extends Phaser.Scene {
     if (phase !== 'LOBBY' || terminated || !isCoopDefenseMode(configuredGameMode)) {
       this.closeBaseEditor(false); this.meta?.cancelAfterRoundFlow();
     }
-    const optionsOpen = !!this.baseEditor || (this.ctx?.leftPanel.isOptionsOverlayOpen() ?? false);
+    const optionsOpen = !!this.baseEditor || !!this.afterRoundTransition?.active || (this.ctx?.leftPanel.isOptionsOverlayOpen() ?? false);
 
     // Teilnahme haengt an der World, nicht an der Rundenphase - deshalb steht der Abgleich
     // ausdruecklich vor und unabhaengig von der Rundenrolle. Ohne Activity taktet niemand den
@@ -2189,11 +2195,19 @@ export class ArenaScene extends Phaser.Scene {
     const baseline = getStoredCoopDefenseProgress();
     const model = new PersistentBaseEditorModel({ ...baseline, personalBaseContribution: getStoredPersonalBaseContribution() });
     const revision = bridge.getCurrentWorldRevision();
-    if (revision === null) return;
+    if (revision === null) {
+      if (this.afterRoundTransition?.active) this.meta?.finishAfterRoundStep('base');
+      return;
+    }
     bridge.setLocalReady(false); this.arenaRuntime.setIsLocalReady(false);
     this.lobbyOverlay.setReadyButtonState(false);
+    const opening = this.afterRoundOpening();
     const editor = new PersistentBaseEditorScene({ model, newRewardIds, color: bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? 0xffffff,
-      close: () => this.closeBaseEditor(true),
+      presented: opening?.ready,
+      retire: () => { if (this.baseEditor === editor) this.closeBaseEditor(false); },
+      close: () => {
+        if (!this.advanceAfterRound('base', editor.getTransitionView())) this.closeBaseEditor(false);
+      },
       save: async () => {
         const canSave = () => this.baseEditor === editor && bridge.isHost() && bridge.getGamePhase() === 'LOBBY'
           && bridge.getCurrentWorldRevision() === revision && !bridge.getPlayerReady(bridge.getLocalPlayerId());
@@ -2217,9 +2231,30 @@ export class ArenaScene extends Phaser.Scene {
       },
     });
     this.baseEditor = editor;
+    opening?.onCancel(() => { if (this.baseEditor === editor) this.closeBaseEditor(false); });
     this.input.enabled = false;
     if (this.input.keyboard) { this.input.keyboard.resetKeys(); this.input.keyboard.enabled = false; }
     this.scene.add(PersistentBaseEditorScene.KEY, editor, true);
+  }
+
+  private beginAfterRoundTransition(view: AfterRoundView | null): void {
+    this.afterRoundTransition ??= new AfterRoundTransition(this, blocked => {
+      this.input.enabled = !blocked && !this.baseEditor;
+      if (this.input.keyboard) { this.input.keyboard.resetKeys(); this.input.keyboard.enabled = this.input.enabled; }
+      this.baseEditor?.setTransitionInputBlocked(blocked);
+    });
+    this.afterRoundTransition.begin(view);
+  }
+
+  private afterRoundOpening() {
+    return this.afterRoundTransition?.opening(() => this.meta?.cancelAfterRoundFlow());
+  }
+
+  private advanceAfterRound(step: 'items' | 'upgrades' | 'base', view: AfterRoundView | null): boolean {
+    if (!this.meta?.isAfterRoundFlowActive()) return false;
+    this.beginAfterRoundTransition(view);
+    this.meta.finishAfterRoundStep(step);
+    return true;
   }
 
   private closeBaseEditor(advance: boolean): void {
@@ -2227,8 +2262,8 @@ export class ArenaScene extends Phaser.Scene {
     this.baseEditor.dispose();
     this.baseEditor = null;
     this.scene.stop(PersistentBaseEditorScene.KEY); this.scene.remove(PersistentBaseEditorScene.KEY);
-    this.input.enabled = true;
-    if (this.input.keyboard) this.input.keyboard.enabled = true;
+    this.input.enabled = !this.afterRoundTransition?.active;
+    if (this.input.keyboard) this.input.keyboard.enabled = this.input.enabled;
     if (advance) this.meta?.finishAfterRoundStep('base');
   }
 

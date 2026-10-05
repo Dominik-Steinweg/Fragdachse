@@ -1,6 +1,7 @@
 import { BUTTON_CURSOR } from './gameCursor';
 import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureGlossyButtonTexture, ensureModalPanelTexture, mountForestModal, ensureTintedSectionTexture } from './ForestModal';
 import * as Phaser from 'phaser';
+import { overlayTransitionView, type AfterRoundView, type AfterRoundOpening } from './AfterRoundTransition';
 import { LazyOverlayGate } from './LazyOverlayGate';
 import { playUiActivation, playUiHover } from './UiAudio';
 import { COLORS, DEPTH, GAME_HEIGHT, GAME_WIDTH } from '../config';
@@ -172,7 +173,7 @@ export class CoopDefenseItemRewardOverlay {
     ) => boolean,
     /** Liefert den aktuellen Stand nach jeder Aenderung; `null` schliesst den Layer. */
     private readonly getPresentation: (roundEndedAt?: number, roundIdentity?: CoopDefenseRoundIdentity) => MatchItemRewardPresentation | null,
-    private readonly onClosed: () => void,
+    private readonly onClosed: () => boolean | void,
     canOpen: () => boolean = () => true,
   ) {
     this.lazy = new LazyOverlayGate(scene, 'items', canOpen);
@@ -249,8 +250,7 @@ export class CoopDefenseItemRewardOverlay {
     this.footerButton.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, event: Phaser.Types.Input.EventData) => {
       event?.stopPropagation();
       playUiActivation(this.scene);
-      this.hide();
-      this.onClosed();
+      this.dismiss();
     });
     attachHoverEffect(this.scene, this.footerButton, this.footerLabel);
     objects.push(this.footerButton, this.footerLabel);
@@ -266,7 +266,9 @@ export class CoopDefenseItemRewardOverlay {
     promoteToClarityCamera(this.scene, this.container);
   }
 
-  show(presentation: MatchItemRewardPresentation, closeAfterClaim = false): void {
+  show(presentation: MatchItemRewardPresentation, closeAfterClaim = false, opening?: AfterRoundOpening): void {
+    this.closing = false;
+    opening?.onCancel(() => this.hide());
     // Preserve synchronous callers; after a download, re-read rewards instead of
     // displaying an offer that may have been claimed or replaced in the meantime.
     let immediate = true;
@@ -274,7 +276,8 @@ export class CoopDefenseItemRewardOverlay {
       const current = immediate ? presentation : this.getPresentation(presentation.roundEndedAt, presentation.roundIdentity);
       if (!current) { this.hide(); this.onClosed(); return; }
       this.showLoaded(current, closeAfterClaim);
-    }, () => this.dismiss());
+      if (opening) opening.ready(this.getTransitionView()!);
+    }, () => this.dismiss(), opening?.unavailable);
     immediate = false;
   }
 
@@ -283,6 +286,7 @@ export class CoopDefenseItemRewardOverlay {
     this.presentation = presentation;
     this.closeAfterClaim = closeAfterClaim;
     this.visible = true;
+    this.closing = false;
     this.container!.setVisible(true);
     this.showOffers();
   }
@@ -292,11 +296,25 @@ export class CoopDefenseItemRewardOverlay {
   }
 
   dismiss(): void {
-    if (!this.isVisible()) return;
-    this.hide(); this.onClosed();
+    if (!this.isVisible() || this.closing) return;
+    this.closeAfterAction();
+  }
+
+  private closing = false;
+
+  private closeAfterAction(): void {
+    this.closing = true;
+    this.lazy.cancel();
+    this.tooltip?.hide();
+    if (this.onClosed() !== true) this.hide();
+  }
+
+  getTransitionView(): AfterRoundView | null {
+    return this.visible && this.container ? overlayTransitionView(this.container, () => this.hide()) : null;
   }
 
   hide(): void {
+    this.closing = false;
     this.lazy.cancel();
     this.visible = false;
     this.presentation = null;
@@ -703,17 +721,16 @@ export class CoopDefenseItemRewardOverlay {
     action: CoopDefenseItemRewardAction = 'take',
     salvageTarget?: CoopDefenseItemSalvageTarget,
   ): void {
+    if (this.closing) return;
     const roundEndedAt = this.presentation?.roundEndedAt;
     if (roundEndedAt === undefined || !this.onClaim(roundEndedAt, offerUid, salvageUid, action, this.presentation?.roundIdentity ?? null, salvageTarget)) return;
     if (this.closeAfterClaim) {
-      this.hide();
-      this.onClosed();
+      this.closeAfterAction();
       return;
     }
     const next = this.getPresentation();
     if (!next) {
-      this.hide();
-      this.onClosed();
+      this.closeAfterAction();
       return;
     }
     this.presentation = next;

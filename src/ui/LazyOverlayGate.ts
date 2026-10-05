@@ -25,8 +25,8 @@ export class LazyOverlayGate {
 
   isPending(): boolean { return this.pending; }
 
-  open(show: () => void, close: () => void): void {
-    if (this.disposed || !this.canOpen()) return;
+  open(show: () => void, close: () => void, unavailable?: () => void): void {
+    if (this.disposed || !this.canOpen()) { unavailable?.(); return; }
     if (!this.bound) {
       this.bound = true;
       this.scene.events.once('shutdown', () => { this.disposed = true; this.cancel(); });
@@ -37,6 +37,7 @@ export class LazyOverlayGate {
     const generation = this.generation;
     this.pending = true;
     this.close = close;
+    this.unavailable = unavailable ?? null;
     this.padPressed = this.readPadCancel();
     window.addEventListener('keydown', this.onKey, true);
     this.scene.events.on('update', this.checkContext, this);
@@ -75,6 +76,7 @@ export class LazyOverlayGate {
       if (!this.pending || this.generation !== generation) return;
       const allowed = this.canOpen(); this.cancel();
       if (allowed && !this.disposed) show();
+      else unavailable?.();
     }, () => {
       if (!this.pending || this.generation !== generation) return;
       if (this.timer !== null) clearTimeout(this.timer);
@@ -90,6 +92,7 @@ export class LazyOverlayGate {
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
     this.close = null;
+    this.unavailable = null;
     if (typeof window !== 'undefined') window.removeEventListener('keydown', this.onKey, true);
     this.scene.events.off('update', this.checkContext, this);
     this.spinner?.cancel(); this.spinner = null;
@@ -116,8 +119,10 @@ export class LazyOverlayGate {
     } catch { return false; } // Browser policy may disable Gamepad access.
   }
 
+  private unavailable: (() => void) | null = null;
+
   private checkContext(): void {
-    if (!this.canOpen()) { this.cancel(); return; }
+    if (!this.canOpen()) { const unavailable = this.unavailable; this.cancel(); unavailable?.(); return; }
     const pressed = this.readPadCancel();
     if (pressed && !this.padPressed) this.close?.();
     this.padPressed = pressed;

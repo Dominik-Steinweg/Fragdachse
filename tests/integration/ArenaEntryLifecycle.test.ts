@@ -24,8 +24,63 @@ import { ArenaGenerator } from '../../src/arena/ArenaGenerator';
 import { ChunkedRenderSurface } from '../../src/arena/chunks/ChunkedRenderSurface';
 import { ArenaCountdownOverlay } from '../../src/ui/ArenaCountdownOverlay';
 import { MatchResultsOverlay } from '../../src/ui/MatchResultsOverlay';
+import { PersistentBaseEditorScene } from '../../src/scenes/PersistentBaseEditorScene';
 import { bridge } from '../../src/network/bridge';
 import * as config from '../../src/config';
+
+describe('ArenaScene after-round handoff', () => {
+  it('hands input to the base Scene only after both cameras have faded in, then returns to the lobby', () => {
+    const scene = Object.create(ArenaScene.prototype) as any;
+    const animations: any[] = [];
+    Object.assign(scene, { baseEditor: null, afterRoundTransition: null,
+      input: { enabled: true, keyboard: { enabled: true, resetKeys: vi.fn() } },
+      tweens: { add: (config: any) => { animations.push(config); return { remove: vi.fn() }; } },
+      scene: { stop: vi.fn(), remove: vi.fn() },
+    });
+    const source = { depth: 105, setDepth: vi.fn(), setAlpha: vi.fn(), retire: vi.fn() };
+    scene.beginAfterRoundTransition(source);
+    expect(scene.input.enabled).toBe(false);
+    expect(scene.input.keyboard.enabled).toBe(false);
+
+    const editor = Object.create(PersistentBaseEditorScene.prototype) as any;
+    const cameras = [{ setAlpha: vi.fn() }, { setAlpha: vi.fn() }];
+    Object.assign(editor, { input: { enabled: true, keyboard: { enabled: true, resetKeys: vi.fn() } },
+      cameras: { cameras }, dispose: vi.fn(), options: { retire: () => scene.closeBaseEditor(false) } });
+    scene.baseEditor = editor;
+    editor.setTransitionInputBlocked(true);
+    scene.afterRoundOpening().ready(editor.getTransitionView());
+    for (const camera of cameras) expect(camera.setAlpha).toHaveBeenLastCalledWith(0);
+    expect(source.retire).not.toHaveBeenCalled();
+    expect(editor.input.enabled).toBe(false);
+    animations.at(-1).onComplete();
+    for (const camera of cameras) expect(camera.setAlpha).toHaveBeenLastCalledWith(1);
+    expect(source.retire).toHaveBeenCalledOnce();
+    expect(editor.input.enabled).toBe(true);
+    expect(editor.input.keyboard.enabled).toBe(true);
+    expect(scene.input.enabled).toBe(false);
+
+    scene.beginAfterRoundTransition(editor.getTransitionView());
+    scene.afterRoundTransition.finish();
+    expect(editor.input.enabled).toBe(false);
+    expect(editor.dispose).not.toHaveBeenCalled();
+    animations.at(-1).onComplete();
+    expect(editor.dispose).toHaveBeenCalledOnce();
+    expect(scene.baseEditor).toBeNull();
+    expect(scene.input.enabled).toBe(true);
+    expect(scene.input.keyboard.enabled).toBe(true);
+  });
+
+  it('retains original results exactly once but closes a replay without entering the reward flow', () => {
+    const overlay = Object.create(MatchResultsOverlay.prototype) as any;
+    Object.assign(overlay, { visible: true, continuing: false, replayOnly: false,
+      onContinue: vi.fn(() => true), hide: vi.fn() });
+    overlay.continueToLobby(); overlay.continueToLobby();
+    expect(overlay.onContinue).toHaveBeenCalledOnce(); expect(overlay.hide).not.toHaveBeenCalled();
+    overlay.continuing = false; overlay.replayOnly = true;
+    overlay.continueToLobby();
+    expect(overlay.onContinue).toHaveBeenCalledOnce(); expect(overlay.hide).toHaveBeenCalledOnce();
+  });
+});
 
 function fixture(host = false, visibleLobby = true) {
   const lobby = { definitionId: 'world:lobby', worldRevision: 10, seed: 1, generatorVersion: 1, layoutFingerprint: 'lobby' };

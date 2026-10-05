@@ -3,6 +3,8 @@
   "arenaWidthCells": 312,
   "arenaHeightCells": 56,
   "timeOfDay": "17:00",
+  "tutorialPersistent": true,
+  "tutorialAnchor": { "gridX": 15, "gridY": 18 },
   "rockFillRatio": 0.475,
   "trackPosition": {
     "kind": "grid",

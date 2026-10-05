@@ -1,7 +1,7 @@
 import { generateArenaWithActiveMetrics } from './ArenaGeneratorTestHelper';
 import { afterEach, describe, expect, it } from 'vitest';
 import { COOP_DEFENSE_BASE_OBSTACLE_CLEARANCE_CELLS, resolveCoopDefenseBases } from '../src/arena/BaseRegistry';
-import { COOP_DEFENSE_MAP_CONFIGS, getCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
+import { COOP_DEFENSE_MAP_CONFIGS, getCoopDefenseMapConfig, resolveCoopDefenseMapMissionProgress } from '../src/config/coopDefenseMaps';
 import {
   ARENA_OFFSET_X,
   ARENA_OFFSET_Y,
@@ -26,6 +26,48 @@ import { getMapTutorial } from '../src/i18n/contentPresentation';
 describe('Coop defense tutorial arena formation', () => {
   afterEach(() => {
     applyArenaMetricsForMode('deathmatch', 'LOBBY');
+  });
+
+  it.each([1, 42, 4242])('keeps the Map 7 tutorial above a free, connected start area (seed %i)', (seed) => {
+    const map = getCoopDefenseMapConfig('7');
+    const mission = resolveCoopDefenseMapMissionProgress(map)!;
+    const start = mission.startArea!;
+    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
+    const centerX = getCoopDefenseTutorialPanelCenterX(map.tutorialAnchor) - ARENA_OFFSET_X;
+    const topY = getCoopDefenseTutorialPanelTopY(map.tutorialAnchor) - ARENA_OFFSET_Y;
+    expect(centerX - COOP_DEFENSE_TUTORIAL_PANEL_WIDTH / 2).toBeGreaterThanOrEqual(0);
+    expect(centerX + COOP_DEFENSE_TUTORIAL_PANEL_WIDTH / 2).toBeLessThanOrEqual(GRID_COLS * CELL_SIZE);
+    expect(topY).toBeGreaterThanOrEqual(0);
+    expect(topY + COOP_DEFENSE_TUTORIAL_PANEL_HEIGHT).toBeLessThan((start.gridY - start.radiusCells) * CELL_SIZE);
+
+    const layout = generateArenaWithActiveMetrics(seed, map);
+    const key = (x: number, y: number) => `${x}:${y}`;
+    const blocked = new Set([
+      ...layout.rocks, ...layout.trees, ...(layout.water ?? []),
+      ...resolveCoopDefenseBases(map).flatMap((base) => base.cells),
+    ].map((cell) => key(cell.gridX, cell.gridY)));
+    for (let y = start.gridY - start.radiusCells; y <= start.gridY + start.radiusCells; y++) {
+      for (let x = start.gridX - start.radiusCells; x <= start.gridX + start.radiusCells; x++) {
+        if (Math.hypot(x - start.gridX, y - start.gridY) <= start.radiusCells) {
+          expect(blocked.has(key(x, y)), `spawn cell ${x}:${y}`).toBe(false);
+        }
+      }
+    }
+    const reached = new Set([key(start.gridX, start.gridY)]);
+    const queue = [{ gridX: start.gridX, gridY: start.gridY }];
+    for (let i = 0; i < queue.length; i++) {
+      const cell = queue[i];
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const x = cell.gridX + dx;
+        const y = cell.gridY + dy;
+        const next = key(x, y);
+        if (x < 0 || x >= GRID_COLS || y < 0 || y >= GRID_ROWS || blocked.has(next) || reached.has(next)) continue;
+        reached.add(next);
+        queue.push({ gridX: x, gridY: y });
+      }
+    }
+    const checkpoint = mission.checkpoints[0];
+    expect(reached.has(key(checkpoint.gridX, checkpoint.gridY))).toBe(true);
   });
 
   it('uses one shared panel footprint large enough for all tutorial maps', () => {

@@ -82,6 +82,8 @@ function makeInput(): {
     hideDebugOverlay: vi.fn(),
     showUpgradeOverlay: vi.fn(),
     showBaseOverlay: vi.fn(),
+    finishAfterRoundPresentation: vi.fn(),
+    cancelAfterRoundPresentation: vi.fn(),
     setCoopDefenseItemsState: vi.fn(),
     showItemsOverlay: vi.fn(),
     refreshItemsOverlay: vi.fn(),
@@ -188,9 +190,11 @@ describe('ArenaMetaController', () => {
     expect(presentation.showUpgradeOverlay).toHaveBeenCalledTimes(1);
     expect(presentation.showBaseOverlay).not.toHaveBeenCalled();
     controller.finishAfterRoundStep('upgrades');
+    expect(presentation.finishAfterRoundPresentation).toHaveBeenCalledTimes(host ? 0 : 1);
     if (host) expect(presentation.showBaseOverlay).toHaveBeenCalledWith(['base_spore_turret']);
     else expect(controller.isAfterRoundFlowActive()).toBe(false);
     controller.finishAfterRoundStep('base');
+    expect(presentation.finishAfterRoundPresentation).toHaveBeenCalled();
     controller.startAfterRoundFlow();
     expect(controller.isAfterRoundFlowActive()).toBe(false);
     expect(presentation.showBaseOverlay).toHaveBeenCalledTimes(host ? 1 : 0);
