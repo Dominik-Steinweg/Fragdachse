@@ -143,14 +143,20 @@ describe('Decoy World lifecycle without a renderer', () => {
     const reveal = vi.fn(); let accepted = false; let sustained = false;
     const actions = new PlayerActionRuntime({ getPlayer: () => ({ x: 0, y: 0, color: 0 }), canInteract: () => true,
       isAlive: () => true, isWeaponBlocked: () => false, isDashBurst: () => false, breakStealth: reveal },
-    { getEquippedWeaponConfig: () => WEAPON_CONFIGS.AWP, noteWeaponAction() {} },
+    { getEquippedWeaponConfig: () => sustained ? WEAPON_CONFIGS.TESLA_DOME : WEAPON_CONFIGS.AWP,
+      noteWeaponAction() {}, clearHeldWeaponAction() {} },
     { claimWeaponAction() {}, activateWeapon: () => sustained ? { ok: accepted } : null } as never,
-    { activateWeapon: () => ({ ok: accepted }), noteWeaponFired() {} });
-    const request = { category: 'weapon' as const, playerId: 'owner', slot: 'weapon1' as const,
+    { canStartScope: () => ({ ok: true }), activateWeapon: () => ({ ok: accepted }), noteWeaponFired() {} });
+    const request = { category: 'weapon' as const, playerId: 'owner', slot: 'weapon2' as const,
       angle: 0, targetX: 100, targetY: 0, hostNowMs: 1000 };
-    actions.execute({ ...request, params: { scopeHolding: true } }); actions.execute(request);
+    const scope = (id: number, phase: 'hold' | 'release') => actions.execute({ ...request, params: { scope: { id, phase } } });
+    expect(scope(1, 'hold').ok).toBe(true);
     expect(reveal).not.toHaveBeenCalled();
-    accepted = true; actions.execute(request); expect(reveal).toHaveBeenCalledTimes(1);
+    expect(scope(1, 'release').ok).toBe(false);
+    expect(reveal).not.toHaveBeenCalled();
+    accepted = true; expect(scope(2, 'hold').ok).toBe(true);
+    expect(reveal).not.toHaveBeenCalled();
+    expect(scope(2, 'release').ok).toBe(true); expect(reveal).toHaveBeenCalledTimes(1);
     sustained = true; accepted = false; actions.execute(request); expect(reveal).toHaveBeenCalledTimes(1);
     accepted = true; actions.execute(request); expect(reveal).toHaveBeenCalledTimes(2); actions.destroy();
   });
