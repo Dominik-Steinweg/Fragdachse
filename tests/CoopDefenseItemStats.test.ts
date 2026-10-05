@@ -52,6 +52,25 @@ function resolveLikeClient(
 }
 
 describe('equipped items in the runtime stat pipeline', () => {
+  it.each([
+    { itemLevel: 1e307, baseValue: 1.2e308, affixValue: 8e307, accepted: false },
+    { itemLevel: 1e305, baseValue: 1.2e306, affixValue: 8e305, accepted: true },
+  ])('admits remote item HP only when its combined stat is finite ($accepted)', ({ itemLevel, baseValue, affixValue, accepted }) => {
+    const equippedItems = sanitizeCoopDefenseEquippedItems([item({
+      itemLevel, rarity: 'blue', baseValue,
+      affixes: [{ affixId: 'max_hp', value: affixValue }],
+    })]);
+    expect(equippedItems).toHaveLength(accepted ? 1 : 0);
+    const system = new CoopDefensePlayerModifierSystem();
+    system.syncPlayer('p', commit({ equippedItems }));
+    expect(Number.isFinite(system.getMaxHp('p'))).toBe(true);
+    if (accepted) {
+      expect(system.getMaxHp('p')).toBe(baseValue + affixValue);
+    } else {
+      expect(system.getMaxHp('p')).toBe(HP_MAX);
+    }
+  });
+
   it('feeds the item base value into max health without extra wiring', () => {
     const system = new CoopDefensePlayerModifierSystem();
     system.syncPlayer('p', commit({ equippedItems: [item({ baseValue: 30 })] }));

@@ -25,6 +25,7 @@ import type {
 } from '../types';
 import type { Locale } from '../i18n/types';
 import { formatNumber } from '../i18n/format';
+import { getCoopDefenseItemEffectTotals } from './coopDefenseItemEffects';
 import {
   getItemAffixName,
   getItemAffixText,
@@ -647,7 +648,10 @@ export function sanitizeCoopDefenseItem(raw: unknown): CoopDefenseItem | null {
 
   const { rarity, affixes } = reconcileRarity(raw.rarity, sanitizeAffixes(raw.affixes, raw.slot, itemLevel));
   const item = { uid: raw.uid, slot: raw.slot, rarity, itemLevel, baseValue, affixes };
-  return affixes.every(affix => Number.isFinite(affix.value)) && Number.isFinite(getCoopDefenseItemSalvageXp(item))
+  if (!affixes.every(affix => Number.isFinite(affix.value)) || !Number.isFinite(getCoopDefenseItemSalvageXp(item))) return null;
+  // Finite fields can still overflow when the item's base and affixes share a stat.
+  const totals = getCoopDefenseItemEffectTotals([item]);
+  return [...Object.values(totals.additive), ...Object.values(totals.percentage)].every(Number.isFinite)
     ? item : null;
 }
 

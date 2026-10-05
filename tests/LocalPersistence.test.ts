@@ -124,11 +124,15 @@ describe('local progress generation', () => {
     }
   });
 
-  it.each(['xp', 'item'] as const)('rejects a finite imported %s value whose derived runtime state overflows', kind => {
+  it.each(['xp', 'item', 'item-total'] as const)('rejects a finite imported %s value whose derived runtime state overflows', kind => {
     setStoredCoopDefenseTotalXp(123);
     const validExport = exportStoredGameProgressJson();
     const corrupt = JSON.parse(validExport);
     if (kind === 'xp') corrupt.progress.coopDefense.totalXp = 1e308;
+    else if (kind === 'item-total') corrupt.progress.coopDefense.items = [{
+      uid: 'overflow', slot: 'armor', rarity: 'blue', itemLevel: 1e307, baseValue: 1.2e308,
+      affixes: [{ affixId: 'max_hp', value: 8e307 }],
+    }];
     else corrupt.progress.coopDefense.items = [{
       uid: 'overflow', slot: 'armor', rarity: 'blue', itemLevel: 1e308, baseValue: 25,
       affixes: [{ affixId: 'max_armor', value: 1 }],
@@ -146,6 +150,24 @@ describe('local progress generation', () => {
     resetStoredCoopDefenseCharacter();
     expect(importStoredGameProgressJson(exported).ok).toBe(true);
     expect(getStoredCoopDefenseProgress().totalXp).toBe(123);
+  });
+
+  it('preserves large items with finite combined stats through import, reload and export', () => {
+    const item = {
+      uid: 'large-finite', slot: 'armor', rarity: 'blue', itemLevel: 1e305, baseValue: 1.2e306,
+      affixes: [{ affixId: 'max_hp', value: 8e305 }],
+    };
+    const imported = JSON.parse(exportStoredGameProgressJson());
+    imported.progress.coopDefense.items = [item];
+    imported.progress.coopDefense.equippedItemIds = { armor: item.uid };
+    expect(importStoredGameProgressJson(JSON.stringify(imported)).ok).toBe(true);
+    invalidateLocalStorageCache();
+    expect(getStoredCoopDefenseProgress().items).toEqual([item]);
+    const exported = exportStoredGameProgressJson();
+    resetStoredCoopDefenseCharacter();
+    expect(importStoredGameProgressJson(exported).ok).toBe(true);
+    expect(getStoredCoopDefenseProgress().items).toEqual([item]);
+    expect(getStoredCoopDefenseProgress().equippedItemIds).toEqual({ armor: item.uid });
   });
 
   it('preserves monotone per-room round credits through reload, export/import and reset', () => {
