@@ -1120,9 +1120,9 @@ export interface LoadoutUseParams {
   scopeProgress?: number;  // Client preview only; the action owner replaces it from host elapsed time.
   scopeChargeProgress?: number; // Client preview only; never authorizes charge damage.
   scopeHolding?: boolean;  // Legacy wire hint, rejected by the action owner.
-  tunnelAction?: 'commit';
-  tunnelStartX?: number;
-  tunnelStartY?: number;
+  tunnelAction?: 'begin' | 'commit' | 'cancel';
+  /** Identifies the first endpoint validated and held by the host. */
+  tunnelPlacementId?: string;
   tunnelStartGridX?: number;
   tunnelStartGridY?: number;
   constructionId?: ConstructionId;

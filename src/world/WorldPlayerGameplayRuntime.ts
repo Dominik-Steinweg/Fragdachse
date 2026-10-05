@@ -1415,6 +1415,7 @@ export class WorldPlayerGameplayRuntime implements
    */
   invalidateHeldActionsOnActivityEnd(): void {
     this.systems.playerAction.cancelAllScopes();
+    this.systems.ultimateBehavior.cancelTunnelSelections();
     this.earthbreak.clear();
     this.systems.plasmaBurner.clearAll();
     this.turretControl.clear();

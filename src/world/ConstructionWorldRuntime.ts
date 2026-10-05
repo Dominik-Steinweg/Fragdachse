@@ -643,6 +643,13 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     return { ok: true };
   }
 
+  canStartTunnel(cfg: TunnelUltimateConfig, originX: number, originY: number,
+    targetX: number, targetY: number, gridX: number, gridY: number): boolean {
+    const cell = this.options.placementSystem.getClampedTargetCell(originX, originY, targetX, targetY, cfg.placement.range);
+    return !!cell && cell.gridX === gridX && cell.gridY === gridY
+      && this.options.placementSystem.canPlaceSingleCell(gridX, gridY);
+  }
+
   placeTunnel(cfg: TunnelUltimateConfig, playerId: string, originX: number, originY: number, targetX: number, targetY: number, playerColor: number, params?: LoadoutUseParams): boolean {
     if (params?.tunnelStartGridX === undefined || params.tunnelStartGridY === undefined) return false;
     const placed = this.options.tunnelPlacementPort?.tryPlaceTunnel(cfg, playerId, playerColor, originX, originY, params.tunnelStartGridX, params.tunnelStartGridY, targetX, targetY) ?? false;

@@ -220,6 +220,10 @@ export class RpcCoordinator {
       if ((params?.rocketMagazine || params?.scope) && params.activityRevision !== bridge.getActivityDescriptor()?.activityRevision) {
         return { ok: false, reason: 'invalid' };
       }
+      if (params?.tunnelAction && params.tunnelAction !== 'cancel'
+        && params.activityRevision !== bridge.getActivityDescriptor()?.activityRevision) {
+        return { ok: false, reason: 'invalid' };
+      }
       if (slot === 'weapon2' && (params?.rocketMagazine?.phase === 'cancel' || params?.scope?.phase === 'cancel')) {
         return this.playerLoadout.usePlayerAction({ category: 'weapon', playerId: senderId, slot,
           angle, targetX, targetY, hostNowMs, params });
@@ -227,10 +231,11 @@ export class RpcCoordinator {
       const isGaussCancellation = slot === 'ultimate'
         && params?.ultimateAction === 'cancel'
         && params?.gaussChargeId !== undefined;
+      const isTunnelCancellation = slot === 'ultimate' && params?.tunnelAction === 'cancel';
 
-      // A Gauss cancel is an authoritative lifecycle cleanup command. Route it directly to the
-      // Ultimate owner so a stun, burrow, countdown or input teardown cannot strand the charge.
-      if (isGaussCancellation && params) {
+      // Ultimate cancellation is cleanup. It must reach its owner across stun, burrow,
+      // countdown and input teardown to release charges and pending tunnel selections.
+      if ((isGaussCancellation || isTunnelCancellation) && params) {
         return this.playerLoadout.usePlayerAction({
           category: 'ultimate',
           playerId: senderId,

@@ -4,6 +4,7 @@ const bridgeMock = vi.hoisted(() => ({
   isHost: vi.fn(() => true),
   getLocalPlayerId: vi.fn(() => 'host'),
   getCurrentWorldRevision: vi.fn(() => 1),
+  getActivityDescriptor: vi.fn(() => ({ activityRevision: 31 })),
   isArenaCountdownActive: vi.fn(() => false),
   getGamePhase: vi.fn(() => 'ARENA'),
   getGameMode: vi.fn(() => 'coop_defense'),
@@ -245,6 +246,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   bridgeMock.isHost.mockReturnValue(true);
   bridgeMock.isArenaCountdownActive.mockReturnValue(false);
+  bridgeMock.getActivityDescriptor.mockReturnValue({ activityRevision: 31 });
   bridgeMock.getGamePhase.mockReturnValue('ARENA');
   bridgeMock.getGameMode.mockReturnValue('coop_defense');
   bridgeMock.getSynchronizedNow.mockReturnValue(424_242);
@@ -253,6 +255,27 @@ beforeEach(() => {
 });
 
 describe('radial action RPC classification', () => {
+  it.each(['begin', 'commit'] as const)('binds tunnel %s to the current Activity while allowing Activity-less Worlds', tunnelAction => {
+    const f = createFixture(); const handle = registerLoadoutHandler(f.coordinator);
+    const params = { tunnelAction, tunnelPlacementId: 'selected', tunnelStartGridX: 1, tunnelStartGridY: 2 };
+    expect(handle('ultimate', 0, 10, 20, 'p1', undefined, { ...params, activityRevision: 30 }).ok).toBe(false);
+    expect(f.usePlayerAction).not.toHaveBeenCalled();
+    expect(handle('ultimate', 0, 10, 20, 'p1', undefined, { ...params, activityRevision: 31 }).ok).toBe(true);
+    expect(f.usePlayerAction).toHaveBeenCalledOnce();
+    bridgeMock.getActivityDescriptor.mockReturnValue(null as never);
+    expect(handle('ultimate', 0, 10, 20, 'p1', undefined, params).ok).toBe(true);
+    expect(f.usePlayerAction).toHaveBeenCalledTimes(2);
+  });
+
+  it('routes tunnel cleanup after Activity replacement even when combat is unavailable', () => {
+    const f = createFixture(); const handle = registerLoadoutHandler(f.coordinator);
+    f.lifecycle.getPlayerCapabilities.mockReturnValue({ canInteract: false } as never);
+    bridgeMock.isArenaCountdownActive.mockReturnValue(true);
+    const params = { tunnelAction: 'cancel' as const, tunnelPlacementId: 'old', activityRevision: 30 };
+    expect(handle('ultimate', 0, 0, 0, 'p1', undefined, params).ok).toBe(true);
+    expect(f.usePlayerAction).toHaveBeenCalledWith(expect.objectContaining({ category: 'ultimate', params }));
+  });
+
   it.each([
     { scopeProgress: 'garbage' },
     { scopeProgress: null },

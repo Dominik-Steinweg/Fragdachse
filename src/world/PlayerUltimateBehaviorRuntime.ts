@@ -41,6 +41,8 @@ export interface PlayerUltimateAirstrikeCapability {
 
 /** Construction-owned placement capability for the player Tunnel activation. */
 export interface PlayerUltimateTunnelPlacementCapability {
+  canStartTunnel(config: TunnelUltimateConfig, originX: number, originY: number,
+    targetX: number, targetY: number, gridX: number, gridY: number): boolean;
   placeTunnel(
     config: TunnelUltimateConfig,
     playerId: string,
@@ -115,6 +117,9 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
   private readonly committedAttempts = new Map<string, Map<string, LoadoutUseResult>>();
   private readonly gaussCharges = new Map<string, GaussChargeState>();
   private readonly gaussChargeHistory = new Map<string, Map<string, GaussChargeEndReason>>();
+  private readonly tunnelSelections = new Map<string, {
+    id: string; configId: string; gridX: number; gridY: number;
+  }>();
   private armageddon: PlayerUltimateArmageddonCapability | null = null;
   private airstrike: PlayerUltimateAirstrikeCapability | null = null;
   private tunnelPlacement: PlayerUltimateTunnelPlacementCapability | null = null;
@@ -158,8 +163,14 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
     }
 
     const playerId = request.playerId;
+    if (request.params?.tunnelAction === 'cancel') {
+      const selection = this.tunnelSelections.get(playerId);
+      if (selection?.id === request.params.tunnelPlacementId) this.tunnelSelections.delete(playerId);
+      return { ok: true };
+    }
     const config = this.options.loadout.getEquippedUltimateConfig(playerId);
     if (!config) return { ok: false, reason: 'invalid' };
+    if (request.params?.tunnelAction !== undefined && config.type !== 'tunnel') return { ok: false, reason: 'invalid' };
 
     // Gauss cancellation is a lifecycle cleanup command. It must still reach this owner when
     // stun, burrow or another input gate has already made ordinary combat actions unavailable.
@@ -188,7 +199,8 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
       default:
         return { ok: false, reason: 'invalid' };
     }
-    if (result.ok && (config.type !== 'gauss' || request.params?.ultimateAction === 'release')) {
+    if (result.ok && (config.type !== 'gauss' || request.params?.ultimateAction === 'release')
+      && (config.type !== 'tunnel' || request.params?.tunnelAction === 'commit')) {
       this.options.breakStealth?.(playerId, request.hostNowMs);
     }
     return result;
@@ -265,7 +277,12 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
     config: TunnelUltimateConfig,
     attemptKey: string | null,
   ): LoadoutUseResult {
-    if (request.params?.tunnelAction !== 'commit') return { ok: false, reason: 'blocked' };
+    const params = request.params;
+    if (params?.tunnelAction !== 'begin' && params?.tunnelAction !== 'commit') return { ok: false, reason: 'blocked' };
+    const selectionId = params.tunnelPlacementId;
+    if (typeof selectionId !== 'string' || !selectionId.length || selectionId.length > 160) {
+      return { ok: false, reason: 'blocked' };
+    }
     const player = this.options.playerManager.getPlayer(request.playerId);
     if (!player) return { ok: false, reason: 'invalid' };
     if (this.options.resourceSystem.getRage(request.playerId) < config.rageRequired) {
@@ -277,6 +294,19 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
       || !Number.isFinite(request.targetX) || !Number.isFinite(request.targetY)) {
       return { ok: false, reason: 'invalid' };
     }
+    if (params.tunnelAction === 'begin') {
+      const gridX = params.tunnelStartGridX, gridY = params.tunnelStartGridY;
+      if (typeof gridX !== 'number' || typeof gridY !== 'number'
+        || !Number.isInteger(gridX) || !Number.isInteger(gridY)
+        || !this.tunnelPlacement?.canStartTunnel(config, originX, originY,
+          request.targetX, request.targetY, gridX, gridY)) return { ok: false, reason: 'placement' };
+      this.tunnelSelections.set(request.playerId, { id: selectionId, configId: config.id, gridX, gridY });
+      return { ok: true };
+    }
+    const selection = this.tunnelSelections.get(request.playerId);
+    if (!selection || selection.id !== selectionId || selection.configId !== config.id) {
+      return { ok: false, reason: 'blocked' };
+    }
     if (!this.tunnelPlacement?.placeTunnel(
       config,
       request.playerId,
@@ -285,10 +315,11 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
       request.targetX,
       request.targetY,
       player.color,
-      request.params,
+      { ...params, tunnelStartGridX: selection.gridX, tunnelStartGridY: selection.gridY },
     )) {
       return { ok: false, reason: 'blocked' };
     }
+    this.tunnelSelections.delete(request.playerId);
     return this.commitRageUltimate(request.playerId, config.rageCost, attemptKey);
   }
 
@@ -485,13 +516,19 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
   }
 
   interruptCombat(playerId: string, nowMs: number): void {
+    this.tunnelSelections.delete(playerId);
     const charge = this.gaussCharges.get(playerId);
     if (charge) this.endGaussCharge(playerId, charge.chargeId, 'cancelled');
     const state = this.states.get(playerId);
     if (state?.active) this.finishState(playerId, state, nowMs);
   }
 
+  cancelTunnelSelections(): void {
+    this.tunnelSelections.clear();
+  }
+
   resetPlayer(playerId: string): void {
+    this.tunnelSelections.delete(playerId);
     const state = this.states.get(playerId);
     if (state?.config.armageddon) this.armageddon?.deactivate(playerId);
     this.states.delete(playerId);
@@ -517,6 +554,7 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
     this.committedAttempts.clear();
     this.gaussCharges.clear();
     this.gaussChargeHistory.clear();
+    this.tunnelSelections.clear();
     this.armageddon = null;
     this.airstrike = null;
     this.tunnelPlacement = null;

@@ -10,7 +10,7 @@
  */
 
 /** Wird im Handshake verglichen; unterschiedliche Deploys dürfen sich nicht verbinden. */
-// Input cancellation reliably fences earlier fast movement states by World and sequence.
+// Input stops fence old movement; Tunnel commits require a host-observed first selection.
 export const PEER_PROTOCOL_VERSION = 25;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */

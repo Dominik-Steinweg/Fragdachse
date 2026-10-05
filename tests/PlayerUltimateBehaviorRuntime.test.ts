@@ -132,6 +132,7 @@ function makeActivationHarness(config: any, initialRage = 400) {
   const rage = new Map([['p1', initialRage]]);
   const scheduleStrike = vi.fn(() => true);
   const placeTunnel = vi.fn(() => true);
+  const canStartTunnel = vi.fn(() => true);
   const fireGauss = vi.fn(() => true);
   const canInteract = vi.fn(() => true);
   const recordUltimateUsed = vi.fn();
@@ -157,11 +158,31 @@ function makeActivationHarness(config: any, initialRage = 400) {
     roundStats: { recordUltimateUsed },
   });
   behavior.setAirstrikeCapability({ scheduleStrike });
-  behavior.setTunnelPlacementCapability({ placeTunnel });
-  return { behavior, reveal, rage, scheduleStrike, placeTunnel, fireGauss, canInteract, recordUltimateUsed };
+  behavior.setTunnelPlacementCapability({ placeTunnel, canStartTunnel });
+  return { behavior, reveal, rage, scheduleStrike, placeTunnel, canStartTunnel, fireGauss, canInteract, recordUltimateUsed };
 }
 
 describe('PlayerUltimateBehaviorRuntime – Airstrike/Tunnel/Gauss-Commit', () => {
+  it('does not turn a delayed tunnel selection into a newly equipped ultimate', () => {
+    const f = makeActivationHarness(ULTIMATE_CONFIGS.AIRSTRIKE);
+    expect(f.behavior.execute({ category: 'ultimate', playerId: 'p1', angle: 0,
+      targetX: 100, targetY: 200, hostNowMs: 10, params: { tunnelAction: 'begin',
+        tunnelPlacementId: 'old-tunnel', tunnelStartGridX: 1, tunnelStartGridY: 2 },
+    }).ok).toBe(false);
+    expect(f.scheduleStrike).not.toHaveBeenCalled();
+    expect(f.rage.get('p1')).toBe(400);
+  });
+
+  it('rejects a tunnel commit without a host-observed first selection', () => {
+    const f = makeActivationHarness(ULTIMATE_CONFIGS.DACHS_TUNNEL);
+    expect(f.behavior.execute({ category: 'ultimate', playerId: 'p1', angle: 0,
+      targetX: 100, targetY: 200, hostNowMs: 10,
+      params: { tunnelAction: 'commit', tunnelStartGridX: 40, tunnelStartGridY: 40 },
+    })).toEqual({ ok: false, reason: 'blocked' });
+    expect(f.placeTunnel).not.toHaveBeenCalled();
+    expect(f.rage.get('p1')).toBe(400);
+  });
+
   it('committet Airstrike at-most-once und reicht die Host-Zeit an den Support-Owner', () => {
     const { behavior, rage, scheduleStrike, recordUltimateUsed } = makeActivationHarness(ULTIMATE_CONFIGS.AIRSTRIKE);
     const request = {
@@ -193,9 +214,13 @@ describe('PlayerUltimateBehaviorRuntime – Airstrike/Tunnel/Gauss-Commit', () =
 
     const tunnel = makeActivationHarness(ULTIMATE_CONFIGS.DACHS_TUNNEL);
     tunnel.placeTunnel.mockReturnValue(false);
+    expect(tunnel.behavior.execute({ category: 'ultimate', playerId: 'p1', angle: 0,
+      targetX: 10, targetY: 20, hostNowMs: 10,
+      params: { tunnelAction: 'begin', tunnelPlacementId: 'selection', tunnelStartGridX: 1, tunnelStartGridY: 2 },
+    }).ok).toBe(true);
     expect(tunnel.behavior.execute({
       category: 'ultimate', playerId: 'p1', angle: 0, targetX: 100, targetY: 200, hostNowMs: 20,
-      params: { tunnelAction: 'commit', tunnelStartGridX: 1, tunnelStartGridY: 2 },
+      params: { tunnelAction: 'commit', tunnelPlacementId: 'selection' },
     })).toEqual({ ok: false, reason: 'blocked' });
     expect(tunnel.rage.get('p1')).toBe(400);
     expect(tunnel.recordUltimateUsed).not.toHaveBeenCalled();
@@ -211,10 +236,15 @@ describe('PlayerUltimateBehaviorRuntime – Airstrike/Tunnel/Gauss-Commit', () =
       targetY: 200,
       hostNowMs: 30,
       attemptId: 'tunnel-1',
-      params: { tunnelAction: 'commit' as const, tunnelStartGridX: 1, tunnelStartGridY: 2 },
+      params: { tunnelAction: 'commit' as const, tunnelPlacementId: 'selection' },
       clientPosition: { x: 12, y: 24 },
     };
 
+    expect(behavior.execute({ ...request, attemptId: undefined, params: {
+      tunnelAction: 'begin', tunnelPlacementId: 'selection', tunnelStartGridX: 1, tunnelStartGridY: 2,
+    } })).toEqual({ ok: true });
+    expect(rage.get('p1')).toBe(400);
+    expect(recordUltimateUsed).not.toHaveBeenCalled();
     expect(behavior.execute(request)).toEqual({ ok: true });
     expect(behavior.execute({ ...request, hostNowMs: 40 })).toEqual({ ok: true });
     expect(placeTunnel).toHaveBeenCalledOnce();
@@ -226,10 +256,47 @@ describe('PlayerUltimateBehaviorRuntime – Airstrike/Tunnel/Gauss-Commit', () =
       100,
       200,
       0xabcdef,
-      request.params,
+      { ...request.params, tunnelStartGridX: 1, tunnelStartGridY: 2 },
     );
     expect(rage.get('p1')).toBe(200);
     expect(recordUltimateUsed).toHaveBeenCalledOnce();
+  });
+
+  it.each(['cancel', 'interrupt', 'reset', 'remove', 'destroy'])('invalidates the tunnel selection on %s', boundary => {
+    const f = makeActivationHarness(ULTIMATE_CONFIGS.DACHS_TUNNEL);
+    const request = { category: 'ultimate' as const, playerId: 'p1', angle: 0,
+      targetX: 10, targetY: 20, hostNowMs: 10 };
+    expect(f.behavior.execute({ ...request, params: { tunnelAction: 'begin',
+      tunnelPlacementId: 'a', tunnelStartGridX: 1, tunnelStartGridY: 2 } }).ok).toBe(true);
+    expect(f.reveal).not.toHaveBeenCalled();
+    if (boundary === 'cancel') {
+      f.canInteract.mockReturnValue(false);
+      expect(f.behavior.execute({ ...request, params: { tunnelAction: 'cancel', tunnelPlacementId: 'a' } }).ok).toBe(true);
+      f.canInteract.mockReturnValue(true);
+    }
+    if (boundary === 'interrupt') f.behavior.interruptCombat('p1', 11);
+    if (boundary === 'reset') f.behavior.resetPlayer('p1');
+    if (boundary === 'remove') f.behavior.removePlayer('p1');
+    if (boundary === 'destroy') f.behavior.destroy();
+    expect(f.behavior.execute({ ...request, params: { tunnelAction: 'commit', tunnelPlacementId: 'a' } }).ok).toBe(false);
+    expect(f.placeTunnel).not.toHaveBeenCalled();
+    expect(f.rage.get('p1')).toBe(400);
+  });
+
+  it('isolates a new selection from old cancels and forged commit coordinates', () => {
+    const f = makeActivationHarness(ULTIMATE_CONFIGS.DACHS_TUNNEL);
+    const request = { category: 'ultimate' as const, playerId: 'p1', angle: 0,
+      targetX: 10, targetY: 20, hostNowMs: 10 };
+    for (const id of ['a', 'b']) expect(f.behavior.execute({ ...request, params: { tunnelAction: 'begin',
+      tunnelPlacementId: id, tunnelStartGridX: 1, tunnelStartGridY: 2 } }).ok).toBe(true);
+    f.behavior.execute({ ...request, params: { tunnelAction: 'cancel', tunnelPlacementId: 'a' } });
+    expect(f.behavior.execute({ ...request, params: { tunnelAction: 'commit', tunnelPlacementId: 'a' } }).ok).toBe(false);
+    expect(f.behavior.execute({ ...request, params: { tunnelAction: 'commit', tunnelPlacementId: 'b',
+      tunnelStartGridX: 100, tunnelStartGridY: 100 } }).ok).toBe(true);
+    expect(f.placeTunnel.mock.calls[0].at(-1)).toMatchObject({ tunnelStartGridX: 1, tunnelStartGridY: 2 });
+    expect(f.behavior.execute({ ...request, params: { tunnelAction: 'commit', tunnelPlacementId: 'b' } }).ok).toBe(false);
+    expect(f.placeTunnel).toHaveBeenCalledOnce();
+    expect(f.rage.get('p1')).toBe(200);
   });
 
   it('berechnet Gauss-Vollladung ausschließlich aus Host-Zeit und hält Charge bei Execution-Reject', () => {

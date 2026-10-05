@@ -82,6 +82,64 @@ function createSystem(position = { x: 0, y: 0 }) {
 }
 
 describe('focus loss during charged input', () => {
+  it('sends the first tunnel selection before its commit and releases it on input cancellation', () => {
+    const position = { x: 0, y: 0 }, f = createSystem(position);
+    const cfg = ULTIMATE_CONFIGS.DACHS_TUNNEL;
+    f.system.setupUltimateConfigProvider(() => cfg);
+    f.system.setupLocalRageProvider(() => cfg.rageRequired);
+    f.system.setupUltimatePlacementPreviewProvider(() => ({ angle: 0, targetX: position.x + 100,
+      targetY: 0, gridX: position.x === 0 ? 1 : 10, gridY: 2, isValid: true,
+    } as never));
+    const uses = vi.fn(); f.system.setupLoadoutListener(uses);
+    const start = () => {
+      f.keys.keyQ.justDown = true; f.system.update(); f.keys.keyQ.justDown = false;
+      f.pointerState.left = true; f.system.update(); f.pointerState.left = false; f.system.update();
+    };
+    start();
+    const first = uses.mock.calls[0][4];
+    expect(first).toMatchObject({ tunnelAction: 'begin', tunnelPlacementId: expect.any(String),
+      tunnelStartGridX: 1, tunnelStartGridY: 2 });
+    position.x = 1000;
+    f.pointerState.left = true; f.system.update(); f.pointerState.left = false; f.system.update();
+    expect(uses.mock.calls.map(call => call[4].tunnelAction)).toEqual(['begin', 'commit', 'cancel']);
+    expect(uses.mock.calls[1][4]).toEqual({ inputStarted: true, tunnelAction: 'commit', tunnelPlacementId: first.tunnelPlacementId });
+    expect(f.system.isUltimatePlacementActive()).toBe(false);
+    start();
+    const second = uses.mock.calls[3][4];
+    expect(second.tunnelPlacementId).not.toBe(first.tunnelPlacementId);
+    f.system.handleTunnelActionResult(first, { ok: false });
+    expect(f.system.isUltimatePlacementActive()).toBe(true);
+    f.system.setInputEnabled(false);
+    expect(uses.mock.calls[4][4]).toEqual({ tunnelAction: 'cancel', tunnelPlacementId: second.tunnelPlacementId });
+    expect(f.system.getUltimatePlacementAnchor()).toBeNull();
+    f.system.setInputEnabled(false);
+    expect(uses).toHaveBeenCalledTimes(5);
+  });
+
+  it.each(['blur', 'hidden', 'shutdown'])('cancels the selected tunnel endpoint on %s', event => {
+    const f = createSystem(), keyboard = new Map<string, TestKey & EventEmitter>();
+    Object.assign(f.scene.input, { keyboard: { addKey: (code: string) => {
+      const button = Object.assign(new EventEmitter(), key(), { consumeEdge: true });
+      keyboard.set(code, button); return button;
+    } } });
+    const events = new EventEmitter(), gameEvents = new EventEmitter();
+    Object.assign(f.scene, { events, game: { events: gameEvents } });
+    f.system.setup();
+    const cfg = ULTIMATE_CONFIGS.DACHS_TUNNEL;
+    f.system.setupUltimateConfigProvider(() => cfg);
+    f.system.setupLocalRageProvider(() => cfg.rageRequired);
+    f.system.setupUltimatePlacementPreviewProvider(() => ({ angle: 0, targetX: 100, targetY: 0,
+      gridX: 1, gridY: 2, isValid: true } as never));
+    const uses = vi.fn(); f.system.setupLoadoutListener(uses);
+    keyboard.get('Q')!.justDown = true; f.system.update();
+    f.pointerState.left = true; f.system.update();
+    (event === 'shutdown' ? events : gameEvents).emit(event);
+    expect(uses.mock.calls.map(call => call[4].tunnelAction)).toEqual(['begin', 'cancel']);
+    expect(uses.mock.calls[1][4].tunnelPlacementId).toBe(uses.mock.calls[0][4].tunnelPlacementId);
+    expect(f.system.getUltimatePlacementAnchor()).toBeNull();
+    if (event !== 'shutdown') events.emit('shutdown');
+  });
+
   it.each(['blur', 'hidden', 'shutdown'])('stops host movement on %s without another client frame', async event => {
     const network = new FakeNetwork();
     const hostRoom = await createHostRoom(network, ['inp']);

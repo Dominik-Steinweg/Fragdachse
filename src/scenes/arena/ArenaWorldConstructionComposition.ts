@@ -192,6 +192,9 @@ export function composeWorldConstruction(
     constructionRuntime.placePlaceableRock(cfg, playerId, x, y, targetX, targetY, now, playerColor, params)
   ));
   playerGameplay.setTunnelPlacementCapability({
+    canStartTunnel: (cfg, originX, originY, targetX, targetY, gridX, gridY) => (
+      constructionRuntime.canStartTunnel(cfg, originX, originY, targetX, targetY, gridX, gridY)
+    ),
     placeTunnel: (cfg, playerId, originX, originY, targetX, targetY, playerColor, params) => (
       constructionRuntime.placeTunnel(cfg, playerId, originX, originY, targetX, targetY, playerColor, params)
     ),

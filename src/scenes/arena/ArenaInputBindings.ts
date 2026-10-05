@@ -706,6 +706,10 @@ export class ArenaInputBindings {
         void actions.sendLoadoutUse(slot, angle, targetX, targetY, undefined, params);
         return;
       }
+      if (slot === 'ultimate' && params?.tunnelAction === 'cancel') {
+        void actions.sendLoadoutUse(slot, angle, targetX, targetY, undefined, params);
+        return;
+      }
       const isGaussLifecycleAction = slot === 'ultimate'
         && (params?.ultimateAction === 'release' || params?.ultimateAction === 'cancel')
         && params?.gaussChargeId !== undefined;
@@ -736,7 +740,10 @@ export class ArenaInputBindings {
         if (slot === 'weapon2' && params?.scope) void actions.sendLoadoutUse(slot, angle, targetX, targetY,
           undefined, { scope: { id: params.scope.id, phase: 'cancel' } });
       };
-      const rejectPendingCharge = () => inputSystem.handleUtilityChargeResult(params?.attemptId, null);
+      const rejectPendingCharge = () => {
+        inputSystem.handleUtilityChargeResult(params?.attemptId, null);
+        if (params?.tunnelAction) inputSystem.handleTunnelActionResult(params, null);
+      };
       if (!capabilities.canInteract) { cancelRejectedScope(); rejectPendingCharge(); return; }
       const dismantleAction = params?.dismantle === true || params?.globalDismantle === true;
       const constructionAction = params?.constructionId !== undefined
@@ -831,8 +838,7 @@ export class ArenaInputBindings {
         && inputSystem.isUtilityPlacementActive()
         && utilityConfig?.activation.type === 'placement_mode';
       const isUltimatePlacementAction = slot === 'ultimate'
-          && inputSystem.isUltimatePlacementActive()
-          && params?.tunnelAction === 'commit';
+          && (params?.tunnelAction === 'begin' || params?.tunnelAction === 'commit');
       const isConstructionAction = params?.toolRef?.kind === 'construction';
       const isToolUtilityAction = params?.toolRef?.kind === 'utility';
       const isTemporaryUtilityAction = params?.temporaryUtilityInstanceId !== undefined;
@@ -867,6 +873,7 @@ export class ArenaInputBindings {
       }
       if (awaitResult) {
         void loadoutPromise.then((result) => {
+          if (isUltimatePlacementAction) inputSystem.handleTunnelActionResult(params!, result);
           if (isChargeUtilityAction) inputSystem.handleUtilityChargeResult(params?.attemptId, result);
           if (isGaussLifecycleAction) {
             inputSystem.handleGaussActionResult(params!, result);
@@ -889,6 +896,7 @@ export class ArenaInputBindings {
           }
           handleLocalLoadoutFailure(slot, result, inputStarted);
         }).catch(() => {
+          if (isUltimatePlacementAction) inputSystem.handleTunnelActionResult(params!, null);
           if (isChargeUtilityAction) rejectPendingCharge();
           if (isConstructionAction) {
             actions.feedback.showPlacementError(t('ui.errors.blocked'));

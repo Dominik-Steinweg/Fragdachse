@@ -27,6 +27,8 @@ import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 import { resolvePersistentBaseCoreCells } from '../src/persistentBase/PersistentBaseCore';
 import { PlacementSystem } from '../src/systems/PlacementSystem';
 import { TunnelSystem } from '../src/systems/TunnelSystem';
+import { ConstructionWorldRuntime } from '../src/world/ConstructionWorldRuntime';
+import { PlayerUltimateBehaviorRuntime } from '../src/world/PlayerUltimateBehaviorRuntime';
 import type { ArenaLayout } from '../src/types';
 
 const layout: ArenaLayout = {
@@ -69,6 +71,51 @@ function createPlacement(bases: readonly BaseSpec[] = []): PlacementSystem {
 }
 
 describe('PlacementSystem tunnel raster contract', () => {
+  it('authorizes the first endpoint at selection time and permits walking before the second', () => {
+    const placement = createPlacement();
+    const cfg = ULTIMATE_CONFIGS.DACHS_TUNNEL as TunnelUltimateConfig;
+    const metrics = resolveActiveArenaWorldMetrics();
+    const start = placement.getWorldPointForCell(2, 4);
+    const end = placement.getWorldPointForCell(metrics.gridCols - 4, metrics.gridRows - 4);
+    const actor = { id: 'p', color: 0xffffff, ...start };
+    const tunnel = new TunnelSystem(noPlayers, {} as never, placement, {} as never, {} as never);
+    const construction = new ConstructionWorldRuntime({ placementSystem: placement,
+      tunnelPlacementPort: tunnel, gameAudioSystem: { playSound: vi.fn() } } as never);
+    let rage = cfg.rageRequired;
+    const behavior = new PlayerUltimateBehaviorRuntime({
+      playerManager: { getPlayer: () => actor } as never,
+      loadout: { getEquippedUltimateConfig: () => cfg },
+      resourceSystem: { getRage: () => rage, getMaxRage: () => rage, addRage: (_id: string, amount: number) => { rage += amount; } },
+      canInteract: () => true, isAlive: () => true, isUltimateBlocked: () => false,
+      roundStats: { recordUltimateUsed: vi.fn() },
+    } as never);
+    behavior.setTunnelPlacementCapability(construction);
+    const request = { category: 'ultimate' as const, playerId: 'p', angle: 0, hostNowMs: 10 };
+    // The same remote grid is rejected both when forged on commit and when selected out of range.
+    expect(behavior.execute({ ...request, targetX: start.x, targetY: start.y, params: {
+      tunnelAction: 'commit', tunnelPlacementId: 'forged',
+      tunnelStartGridX: metrics.gridCols - 4, tunnelStartGridY: metrics.gridRows - 4,
+    } }).ok).toBe(false);
+    expect(behavior.execute({ ...request, targetX: end.x, targetY: end.y, params: {
+      tunnelAction: 'begin', tunnelPlacementId: 'forged',
+      tunnelStartGridX: metrics.gridCols - 4, tunnelStartGridY: metrics.gridRows - 4,
+    } }).ok).toBe(false);
+    expect(behavior.execute({ ...request, targetX: start.x, targetY: start.y, params: {
+      tunnelAction: 'begin', tunnelPlacementId: 'walk', tunnelStartGridX: 2, tunnelStartGridY: 4,
+    } }).ok).toBe(true);
+    expect(tunnel.getSnapshot()).toEqual([]);
+    expect(rage).toBe(cfg.rageRequired);
+    Object.assign(actor, end);
+    expect(behavior.execute({ ...request, targetX: end.x, targetY: end.y, params: {
+      tunnelAction: 'commit', tunnelPlacementId: 'walk',
+    } }).ok).toBe(true);
+    expect(tunnel.getSnapshot()[0]).toMatchObject({
+      entranceA: { gridX: 2, gridY: 4, ...start },
+      entranceB: { gridX: metrics.gridCols - 4, gridY: metrics.gridRows - 4, ...end },
+    });
+    expect(rage).toBe(cfg.rageRequired - cfg.rageCost);
+  });
+
   it.each([
     ['fractional X', 3.5, 3], ['fractional Y', 3, 3.5],
     ['string X', 'bad', 3], ['string Y', 3, 'bad'],

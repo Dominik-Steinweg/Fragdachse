@@ -287,6 +287,7 @@ export class InputSystem {
   private getUltimatePlacementPreviewProvider: (() => UtilityPlacementPreviewState | undefined) | null = null;
   private placementPreviewState: PlacementPreviewNetState | null = null;
   private tunnelPlacementAnchor: { x: number; y: number; gridX: number; gridY: number } | null = null;
+  private tunnelPlacementId: string | null = null;
   private prevLeftPointerDown = false;
   private prevRightPointerDown = false;
   private consumedPointerButtons = 0;
@@ -418,6 +419,7 @@ export class InputSystem {
       this.cancelScopeAim();
       this.cancelUtilityInteraction();
       this.cancelUltimateCharge();
+      this.cancelUltimatePlacement();
     };
     this.scene.game.events.on('blur', cancelOnInputLoss);
     this.scene.game.events.on('hidden', cancelOnInputLoss);
@@ -1091,6 +1093,13 @@ export class InputSystem {
     this.ultimateTargetingActive = false;
   }
 
+  /** Reject only the pending selection whose first endpoint the host declined. */
+  handleTunnelActionResult(params: LoadoutUseParams, result: LoadoutUseResult | null): void {
+    if (params.tunnelAction === 'begin' && params.tunnelPlacementId === this.tunnelPlacementId && !result?.ok) {
+      this.cancelUltimatePlacement();
+    }
+  }
+
   /** Reconcile the local Gauss preview with the authoritative lifecycle result. */
   handleGaussActionResult(params: LoadoutUseParams, result: LoadoutUseResult | null): void {
     const chargeId = params.gaussChargeId;
@@ -1701,6 +1710,11 @@ export class InputSystem {
               gridX: preview.gridX,
               gridY: preview.gridY,
             };
+            this.tunnelPlacementId = this.createHeldActionId('tunnel');
+            this.onLoadoutUse?.('ultimate', preview.angle, preview.targetX, preview.targetY, {
+              inputStarted: true, tunnelAction: 'begin', tunnelPlacementId: this.tunnelPlacementId,
+              tunnelStartGridX: preview.gridX, tunnelStartGridY: preview.gridY,
+            });
             this.syncPlacementPreviewState(this.getUltimatePlacementPreviewState());
             return;
           }
@@ -1708,11 +1722,12 @@ export class InputSystem {
           this.onLoadoutUse?.('ultimate', preview.angle, preview.targetX, preview.targetY, {
             inputStarted: true,
             tunnelAction: 'commit',
-            tunnelStartX: this.tunnelPlacementAnchor.x,
-            tunnelStartY: this.tunnelPlacementAnchor.y,
-            tunnelStartGridX: this.tunnelPlacementAnchor.gridX,
-            tunnelStartGridY: this.tunnelPlacementAnchor.gridY,
+            tunnelPlacementId: this.tunnelPlacementId ?? undefined,
           });
+          // Both messages share the ordered reliable channel. Cleanup also releases a
+          // selection when commit is rejected before it reaches the placement owner.
+          this.cancelUltimatePlacement();
+          return;
         }
         this.cancelUltimatePlacement();
         return;
@@ -2264,9 +2279,13 @@ export class InputSystem {
   }
 
   private cancelUltimatePlacement(): void {
+    const id = this.tunnelPlacementId;
+    this.tunnelPlacementId = null;
     this.ultimatePlacementActive = false;
     this.tunnelPlacementAnchor = null;
     this.placementPreviewState = null;
+    if (id !== null) this.onLoadoutUse?.('ultimate', 0, 0, 0,
+      { tunnelAction: 'cancel', tunnelPlacementId: id });
   }
 
   private cancelUtilityInteraction(): void {

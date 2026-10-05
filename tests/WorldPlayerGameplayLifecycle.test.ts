@@ -14,8 +14,10 @@ vi.mock('phaser', () => ({
 
 import { WorldPlayerGameplayRuntime } from '../src/world/WorldPlayerGameplayRuntime';
 import { LoadoutManager } from '../src/loadout/LoadoutManager';
-import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { ULTIMATE_CONFIGS, WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { PlayerActionRuntime } from '../src/world/PlayerActionRuntime';
+import { PlayerUltimateBehaviorRuntime } from '../src/world/PlayerUltimateBehaviorRuntime';
+import { ActivityLifecycle } from '../src/world/ActivityLifecycle';
 import { CoopDefenseItemRuntimeSystem } from '../src/systems/CoopDefenseItemRuntimeSystem';
 import { CoopDefensePlayerModifierSystem } from '../src/systems/CoopDefensePlayerModifierSystem';
 import { HostHeldActionSystem } from '../src/systems/HostHeldActionSystem';
@@ -83,6 +85,7 @@ function makeRuntime() {
       destroy: tag('weaponActivation.destroy'),
     },
     ultimateBehavior: {
+      cancelTunnelSelections: vi.fn(),
       resetPlayer: tag('ultimateBehavior.resetPlayer'),
       removePlayer: tag('ultimateBehavior.removePlayer'),
       destroy: tag('ultimateBehavior.destroy'),
@@ -425,6 +428,55 @@ describe('WorldPlayerGameplayRuntime – öffentliche Lifecycle-Grenze (2A)', ()
     expect(systems.plasmaBurner.resetPlayer).toHaveBeenCalledWith('p1');
     expect(systems.plasmaBurner.clearAll).toHaveBeenCalledOnce();
   });
+
+  it.each(['technical detach', 'identity end'])('binds a selected tunnel endpoint to Activity identity across %s', boundary => {
+    const { runtime, systems } = makeRuntime();
+    const config = ULTIMATE_CONFIGS.DACHS_TUNNEL;
+    let rage = config.rageRequired;
+    const placeTunnel = vi.fn(() => true);
+    const ultimate = new PlayerUltimateBehaviorRuntime({
+      playerManager: { getPlayer: () => ({ id: 'p1', x: 10, y: 20, color: 0xffffff }) } as never,
+      combatSystem: { addArmor: vi.fn(), applyAoeDamage: vi.fn() },
+      resourceSystem: {
+        getRage: () => rage, getMaxRage: () => config.rageRequired,
+        addRage: (_id, amount) => { rage += amount; },
+      },
+      loadout: { getEquippedUltimateConfig: () => config },
+      physics: { addRecoil: vi.fn() },
+      gaussExecution: { fireGauss: vi.fn() },
+      canInteract: () => true, isAlive: () => true, isUltimateBlocked: () => false,
+      relationship: { isEnemyPair: () => false },
+      roundStats: { recordUltimateUsed: vi.fn() },
+    });
+    ultimate.setTunnelPlacementCapability({ canStartTunnel: () => true, placeTunnel });
+    systems.ultimateBehavior = ultimate;
+    const activity = new ActivityLifecycle({ attach: vi.fn(), detach: vi.fn() }, () => true,
+      { begin: vi.fn(), end: () => runtime.invalidateHeldActionsOnActivityEnd() });
+    activity.begin({ worldRevision: 1, activityRevision: 1, kind: 'coop-mission', definitionId: 'activity:coop-mission:7' });
+    activity.activate();
+    const request = { category: 'ultimate' as const, playerId: 'p1', angle: 0,
+      targetX: 10, targetY: 20, hostNowMs: 10 };
+    const begin = (id: string) => runtime.usePlayerAction({ ...request, params: {
+      tunnelAction: 'begin', tunnelPlacementId: id, tunnelStartGridX: 1, tunnelStartGridY: 2,
+    } });
+    expect(begin('old').ok).toBe(true);
+    if (boundary === 'technical detach') { activity.detachRuntime(); activity.activate(); }
+    else activity.end();
+    expect(runtime.usePlayerAction({ ...request, params: {
+      tunnelAction: 'commit', tunnelPlacementId: 'old',
+    } }).ok).toBe(boundary === 'technical detach');
+    expect(placeTunnel).toHaveBeenCalledTimes(boundary === 'technical detach' ? 1 : 0);
+    if (boundary === 'identity end') {
+      expect(rage).toBe(config.rageRequired);
+      activity.begin({ worldRevision: 1, activityRevision: 2, kind: 'coop-mission', definitionId: 'activity:coop-mission:7' });
+      activity.activate();
+      expect(begin('new').ok).toBe(true);
+      expect(runtime.usePlayerAction({ ...request, params: {
+        tunnelAction: 'commit', tunnelPlacementId: 'new',
+      } }).ok).toBe(true);
+    }
+    ultimate.destroy();
+  });
 });
 
 describe('Decoy passive adrenaline integration', () => {
@@ -533,7 +585,8 @@ describe('WorldPlayerGameplayRuntime – Idempotenz-Gate (2A)', () => {
     const heldAction = new HostHeldActionSystem();
     const runtime = createRuntimeShell();
     runtime.turretControl = emptyTurretControl();
-    runtime.systems = { playerAction: scopeStub(), plasmaBurner: plasmaStub(), heldAction, translocator: { clear: vi.fn() } };
+    runtime.systems = { playerAction: scopeStub(), ultimateBehavior: { cancelTunnelSelections: vi.fn() },
+      plasmaBurner: plasmaStub(), heldAction, translocator: { clear: vi.fn() } };
 
     expect(heldAction.start('p1', 'action-p1', 'charged_throw', 100, 0)).toBe(true);
     expect(heldAction.start('p2', 'action-p2', 'charged_throw', 100, 0)).toBe(true);

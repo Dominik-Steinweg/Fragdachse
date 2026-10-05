@@ -69,6 +69,7 @@ function makeInput(): {
     setupTranslocatorRecallCheck: vi.fn(),
     setupLoadoutListener: vi.fn(),
     handleUtilityChargeResult: vi.fn(),
+    handleTunnelActionResult: vi.fn(),
     getSelectedRadialActionForHud: vi.fn(() => null),
     getSelectedUtilityCooldownUntil: vi.fn(() => 0),
     isUtilityPlacementActive: vi.fn(() => false),
@@ -200,6 +201,25 @@ function makeInput(): {
 }
 
 describe('ArenaInputBindings', () => {
+  it('awaits first tunnel selection approval and forwards cleanup across input gates', async () => {
+    const { binding, actions, inputSystem } = makeInput();
+    vi.mocked(actions.getPlayerCapabilities).mockReturnValue({ canInteract: true, canUseCombat: true } as never);
+    vi.mocked(actions.isLocalPlayerAlive).mockReturnValue(true);
+    vi.mocked(actions.sendLoadoutUse).mockResolvedValue({ ok: false, reason: 'placement' });
+    binding.setup();
+    const use = inputSystem.setupLoadoutListener.mock.calls[0][0];
+    const params = { tunnelAction: 'begin', tunnelPlacementId: 'selected', tunnelStartGridX: 1, tunnelStartGridY: 2 };
+    use('ultimate', 0, 100, 0, params);
+    await Promise.resolve();
+    expect(actions.sendLoadoutUse).toHaveBeenCalledWith('ultimate', 0, 100, 0, undefined, params,
+      undefined, undefined, true, undefined);
+    expect(inputSystem.handleTunnelActionResult).toHaveBeenCalledWith(params, { ok: false, reason: 'placement' });
+    vi.mocked(actions.getPlayerCapabilities).mockReturnValue({ canInteract: false } as never);
+    const cancel = { tunnelAction: 'cancel', tunnelPlacementId: 'selected' };
+    use('ultimate', 0, 0, 0, cancel);
+    expect(actions.sendLoadoutUse).toHaveBeenLastCalledWith('ultimate', 0, 0, 0, undefined, cancel);
+  });
+
   it('verdrahtet statische InputSystem-Provider und Arena-Tasten', () => {
     const { binding, inputSystem, keyboard, keys, debugCallback, onFlowFieldDebugHotkey } = makeInput();
 
