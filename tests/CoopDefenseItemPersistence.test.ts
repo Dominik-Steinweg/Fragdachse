@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   addStoredCoopDefenseItem,
   claimStoredPendingCoopDefenseItemReward,
-  clearStoredPendingCoopDefenseItemReward,
   equipStoredCoopDefenseItem,
   getStoredCoopDefenseEquippedItemIds,
   getStoredCoopDefenseItems,
@@ -10,7 +9,6 @@ import {
   getStoredCoopDefenseProgress,
   getStoredEquippedCoopDefenseItems,
   getStoredPendingCoopDefenseItemRewards,
-  getStoredPendingCoopDefenseItemReward,
   importStoredGameProgressJson,
   exportStoredGameProgressJson,
   invalidateLocalStorageCache,
@@ -114,13 +112,11 @@ describe('coop-defense item persistence', () => {
     expect(getStoredCoopDefenseItems().map((entry) => entry.uid)).toEqual(['armor-1', 'boots-1']);
     expect(getStoredCoopDefenseEquippedItemIds()).toEqual({ armor: 'armor-1' });
     expect(getStoredEquippedCoopDefenseItems().map((entry) => entry.uid)).toEqual(['armor-1']);
-    expect(getStoredPendingCoopDefenseItemReward()?.roundEndedAt).toBe(42);
-    expect(getStoredPendingCoopDefenseItemReward()?.mapId).toBe('15');
+    expect(getStoredPendingCoopDefenseItemRewards()[0]?.roundEndedAt).toBe(42);
+    expect(getStoredPendingCoopDefenseItemRewards()[0]?.mapId).toBe('15');
 
     expect(unequipStoredCoopDefenseItem('armor')).toBe(true);
     expect(getStoredCoopDefenseEquippedItemIds()).toEqual({});
-    clearStoredPendingCoopDefenseItemReward();
-    expect(getStoredPendingCoopDefenseItemReward()).toBeNull();
   });
 
   it('refuses to store an item once the category is full, ignoring the equipped one', () => {
@@ -167,7 +163,7 @@ describe('coop-defense item persistence', () => {
     expect(claim?.acquired?.uid).toBe('offer-boots');
     expect(claim?.salvagedXp).toBe(0);
     expect(getStoredCoopDefenseItems().map((entry) => entry.uid)).toEqual(['offer-boots']);
-    expect(getStoredPendingCoopDefenseItemReward()).toBeNull();
+    expect(getStoredPendingCoopDefenseItemRewards()).toEqual([]);
   });
 
   it('equips a claimed reward directly when its category has no equipped item', () => {
@@ -227,7 +223,7 @@ describe('coop-defense item persistence', () => {
 
     expect(claimStoredPendingCoopDefenseItemReward('offer-armor')).toBeNull();
     // Nichts darf sich veraendert haben: die Belohnung bleibt abholbar.
-    expect(getStoredPendingCoopDefenseItemReward()?.offers[0].uid).toBe('offer-armor');
+    expect(getStoredPendingCoopDefenseItemRewards()[0]?.offers[0].uid).toBe('offer-armor');
     expect(getStoredCoopDefenseItems()).toHaveLength(COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT + 1);
   });
 
@@ -242,7 +238,7 @@ describe('coop-defense item persistence', () => {
 
     expect(claimStoredPendingCoopDefenseItemReward('offer-armor', undefined, 'equip')).toBeNull();
     expect(getStoredCoopDefenseItems()).toEqual(before);
-    expect(getStoredPendingCoopDefenseItemReward()?.offers[0].uid).toBe('offer-armor');
+    expect(getStoredPendingCoopDefenseItemRewards()[0]?.offers[0].uid).toBe('offer-armor');
   });
 
   it('equips after salvaging a stash item when the category was full', () => {
@@ -299,7 +295,7 @@ describe('coop-defense item persistence', () => {
     expect(claim?.acquired).toBeNull();
     expect(claim?.salvagedXp).toBeGreaterThan(0);
     expect(getStoredCoopDefenseItems()).toEqual([]);
-    expect(getStoredPendingCoopDefenseItemReward()).toBeNull();
+    expect(getStoredPendingCoopDefenseItemRewards()).toEqual([]);
   });
 
   it('marks a claimed item as unseen until the item screen was opened', () => {
@@ -330,13 +326,13 @@ describe('coop-defense item persistence', () => {
 
     expect(claimStoredPendingCoopDefenseItemReward('does-not-exist')).toBeNull();
     expect(claimStoredPendingCoopDefenseItemReward('offer-armor', 'boots-1')).toBeNull();
-    expect(getStoredPendingCoopDefenseItemReward()).not.toBeNull();
+    expect(getStoredPendingCoopDefenseItemRewards()).toHaveLength(1);
   });
 
   it('keeps an already open reward of the same round untouched', () => {
     setStoredPendingCoopDefenseItemReward({ roundEndedAt: 7, offers: [item({ uid: 'first' })] });
     expect(setStoredPendingCoopDefenseItemReward({ roundEndedAt: 7, offers: [item({ uid: 'second' })] })).toBe(false);
-    expect(getStoredPendingCoopDefenseItemReward()?.offers[0].uid).toBe('first');
+    expect(getStoredPendingCoopDefenseItemRewards()[0]?.offers[0].uid).toBe('first');
 
     expect(setStoredPendingCoopDefenseItemReward({ roundEndedAt: 8, offers: [item({ uid: 'third' })] })).toBe(true);
     expect(getStoredPendingCoopDefenseItemRewards().map((reward) => reward.offers[0].uid)).toEqual([

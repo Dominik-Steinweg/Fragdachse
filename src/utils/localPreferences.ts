@@ -2126,14 +2126,6 @@ export function getStoredPendingCoopDefenseItemRewards(): CoopDefensePendingItem
 }
 
 /**
- * Kompatibilitaets-Getter fuer alte Aufrufer: liefert den aeltesten offenen Reward.
- * Neue Flows sollen die pluralische Queue-API verwenden.
- */
-export function getStoredPendingCoopDefenseItemReward(): CoopDefensePendingItemReward | null {
-  return getStoredPendingCoopDefenseItemRewards()[0] ?? null;
-}
-
-/**
  * Haengt ein Angebot an. Ein bereits offenes Angebot derselben Runde bleibt bestehen, damit eine
  * wiederholte Auswertung derselben Runde die bereits gezeigten Items nicht austauscht.
  */
@@ -2156,22 +2148,6 @@ export function setStoredPendingCoopDefenseItemReward(reward: CoopDefensePending
     },
   });
   return true;
-}
-
-/** Entfernt alle offenen Rewards; fuer einen einzelnen Claim wird die Claim-API verwendet. */
-export function clearStoredPendingCoopDefenseItemRewards(): void {
-  updatePreferences((current) => ({
-    ...current,
-    progression: {
-      ...current.progression,
-      coopDefense: { ...current.progression.coopDefense, pendingItemRewards: [] },
-    },
-  }));
-}
-
-/** Legacy-Alias: bewusst weiterhin "alles leeren" fuer bestehende Reset-/Test-Aufrufer. */
-export function clearStoredPendingCoopDefenseItemReward(): void {
-  clearStoredPendingCoopDefenseItemRewards();
 }
 
 export interface CoopDefenseItemRewardClaim {
