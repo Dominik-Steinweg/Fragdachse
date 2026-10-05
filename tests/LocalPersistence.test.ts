@@ -756,3 +756,116 @@ describe('local progress generation', () => {
     expect(getStoredCoopDefenseProgress().totalXp).toBe(42);
   });
 });
+
+describe('settings changes from another tab', () => {
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.resetModules(); });
+
+  async function twoTabs() {
+    const storage = new MemoryStorage();
+    const browserWindow = Object.assign(new EventTarget(), { localStorage: storage });
+    vi.stubGlobal('window', browserWindow);
+    vi.resetModules();
+    const first = await import('../src/utils/localPreferences');
+    first.getStoredCoopDefenseProgress();
+    vi.resetModules();
+    const second = await import('../src/utils/localPreferences');
+    second.getStoredCoopDefenseProgress();
+    const notify = (key: string | null, storageArea: Storage = storage, newValue = storage.getItem(LOCAL_SETTINGS_STORAGE_KEY)) => {
+      browserWindow.dispatchEvent(Object.assign(new Event('storage'), { key, storageArea, newValue }));
+    };
+    return { first, second, storage, notify };
+  }
+
+  it('preserves the other tab music setting when changing only master volume', async () => {
+    const { first, second, storage, notify } = await twoTabs();
+    first.setStoredMusicVolume(0.2);
+    notify(LOCAL_SETTINGS_STORAGE_KEY);
+    second.setStoredMasterVolume(0.8);
+    expect(JSON.parse(storage.getItem(LOCAL_SETTINGS_STORAGE_KEY)!).audio)
+      .toMatchObject({ musicVolume: 0.2, masterVolume: 0.8 });
+  });
+
+  it('refreshes only settings and keeps both the active progress and the external save untouched', async () => {
+    const { first, second, storage, notify } = await twoTabs();
+    const activeOwnerId = second.getStoredLocalOwnerId();
+    first.setStoredCoopDefenseTotalXp(250);
+    first.setStoredGraphicsQuality('low');
+    const externalProgress = storage.getItem(LOCAL_PROGRESS_STORAGE_KEY);
+    const read = vi.spyOn(storage, 'getItem');
+    const writesBefore = storage.writes;
+    notify(LOCAL_SETTINGS_STORAGE_KEY, storage, null);
+    expect(read).toHaveBeenCalledWith(LOCAL_SETTINGS_STORAGE_KEY);
+    expect(read.mock.calls.every(([key]) => key === LOCAL_SETTINGS_STORAGE_KEY)).toBe(true);
+    expect(storage.writes).toBe(writesBefore);
+    expect(second.getStoredGraphicsQuality()).toBe('low');
+    expect(second.getStoredCoopDefenseProgress().totalXp).toBe(0);
+    expect(second.getStoredLocalOwnerId()).toBe(activeOwnerId);
+    second.setStoredMasterVolume(0.8);
+    expect(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)).toBe(externalProgress);
+  });
+
+  it('reads the current settings instead of an older queued event and keeps subsequent reads cached', async () => {
+    const { first, second, storage, notify } = await twoTabs();
+    first.setStoredMusicVolume(0.2);
+    const olderValue = storage.getItem(LOCAL_SETTINGS_STORAGE_KEY);
+    first.setStoredMusicVolume(0.6);
+    notify(LOCAL_SETTINGS_STORAGE_KEY, storage, olderValue);
+    const readsAfterEvent = storage.reads;
+    expect(second.getStoredMusicVolume()).toBe(0.6);
+    second.getStoredGraphicsQuality();
+    second.getStoredMasterVolume();
+    second.getStoredCoopDefenseProgress();
+    expect(storage.reads).toBe(readsAfterEvent);
+  });
+
+  it('ignores another storage area, progress and unrelated keys', async () => {
+    const { first, second, storage, notify } = await twoTabs();
+    first.setStoredMusicVolume(0.2);
+    const readsBefore = storage.reads;
+    notify(LOCAL_SETTINGS_STORAGE_KEY, new MemoryStorage(), null);
+    notify(LOCAL_PROGRESS_STORAGE_KEY, storage, null);
+    notify('unrelated', storage, null);
+    expect(storage.reads).toBe(readsBefore);
+    expect(second.getStoredMusicVolume()).not.toBe(0.2);
+  });
+
+  it.each([LOCAL_SETTINGS_STORAGE_KEY, null])('resets only settings after deletion or clear (%s)', async (key) => {
+    const { second, storage, notify } = await twoTabs();
+    const defaultMusic = second.getStoredMusicVolume();
+    second.setStoredMusicVolume(0.2);
+    second.setStoredCoopDefenseTotalXp(123);
+    if (key === null) storage.clear();
+    else storage.removeItem(LOCAL_SETTINGS_STORAGE_KEY);
+    const writesBefore = storage.writes;
+    notify(key, storage, null);
+    expect(second.getStoredMusicVolume()).toBe(defaultMusic);
+    expect(second.getStoredCoopDefenseProgress().totalXp).toBe(123);
+    expect(storage.writes).toBe(writesBefore);
+  });
+
+  it('sanitizes external settings and retains the cached settings if storage becomes unavailable', async () => {
+    const { second, storage, notify } = await twoTabs();
+    const document = JSON.parse(storage.getItem(LOCAL_SETTINGS_STORAGE_KEY)!);
+    storage.setItem(LOCAL_SETTINGS_STORAGE_KEY, JSON.stringify({ ...document, audio: { ...document.audio, musicVolume: 2 } }));
+    notify(LOCAL_SETTINGS_STORAGE_KEY);
+    expect(second.getStoredMusicVolume()).toBe(1);
+    const read = vi.spyOn(storage, 'getItem').mockImplementation(() => { throw new Error('unavailable'); });
+    expect(() => notify(LOCAL_SETTINGS_STORAGE_KEY, storage, null)).not.toThrow();
+    expect(second.getStoredMusicVolume()).toBe(1);
+    read.mockRestore();
+    storage.setItem(LOCAL_SETTINGS_STORAGE_KEY, '{broken');
+    notify(LOCAL_SETTINGS_STORAGE_KEY);
+    expect(second.getStoredMusicVolume()).toBe(document.audio.musicVolume);
+  });
+
+  it('updates stored locale without changing the active language owner', async () => {
+    const { first, second, notify } = await twoTabs();
+    const localeOwner = await import('../src/i18n');
+    const activeLocale = localeOwner.getLocale();
+    const otherLocale = activeLocale === 'de' ? 'en' : 'de';
+    first.setStoredLocale(otherLocale);
+    notify(LOCAL_SETTINGS_STORAGE_KEY);
+    expect(second.getStoredLocale()).toBe(otherLocale);
+    expect(localeOwner.getLocale()).toBe(activeLocale);
+  });
+});

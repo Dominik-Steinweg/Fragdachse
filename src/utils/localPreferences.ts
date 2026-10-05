@@ -1041,10 +1041,40 @@ function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDoc
 
 let preferencesCache: LocalPreferences | null = null;
 let cachedStorage: Storage | null = null;
+let settingsStorageWindow: Window | null = null;
 let balanceLabCache: CoopDefenseBalanceLabDocument | null = null;
 let balanceLabCachedStorage: Storage | null = null;
 
+function refreshExternalSettings(event: StorageEvent): void {
+  if (!preferencesCache || !cachedStorage || event.storageArea !== cachedStorage
+    || (event.key !== LOCAL_SETTINGS_STORAGE_KEY && event.key !== null)) return;
+  // A queued event can describe an older write. Read only the latest settings document here,
+  // never progress: its active owners require their own explicit replacement boundary.
+  let raw: string | null;
+  try { raw = cachedStorage.getItem(LOCAL_SETTINGS_STORAGE_KEY); } catch { return; }
+  let settings: LocalSettingsDocumentV2 | null = null;
+  if (raw) {
+    try { settings = sanitizeSettingsDocument(JSON.parse(raw)); } catch { settings = null; }
+  }
+  preferencesCache = {
+    ...preferencesCache,
+    locale: settings?.locale ?? resolveBrowserLocale(),
+    audio: { ...(settings?.audio ?? DEFAULT_PREFERENCES.audio) },
+    graphics: { ...(settings?.graphics ?? DEFAULT_PREFERENCES.graphics) },
+  };
+}
+
+function installSettingsStorageListener(): void {
+  if (typeof window === 'undefined' || typeof window.addEventListener !== 'function'
+    || settingsStorageWindow === window) return;
+  settingsStorageWindow?.removeEventListener('storage', refreshExternalSettings);
+  settingsStorageWindow = window;
+  // Device settings outlive Scenes; active audio/locale/graphics owners are not changed here.
+  window.addEventListener('storage', refreshExternalSettings);
+}
+
 function readPreferences(): LocalPreferences {
+  installSettingsStorageListener();
   const storage = getLocalStorage();
   if (preferencesCache && cachedStorage === storage) return preferencesCache;
   const defaults = buildDefaultPreferences();
