@@ -37,6 +37,7 @@ export function appendVoiceProfileControls(parent: HTMLElement, channel: VoiceAu
     }
     select.value = readVoicePreferences().checksum ?? '';
     if (select.selectedIndex < 0) select.value = '';
+    if (voiceLibrary.cleanupWarning) feedback.textContent = de ? voiceLibrary.cleanupWarning : 'Deleted voices are disabled, but their browser copies could not be fully removed. Allow browser storage and reload the game.';
     updatePreview();
   };
   select.onchange = () => {

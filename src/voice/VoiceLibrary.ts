@@ -1,5 +1,6 @@
 import { isVoiceChecksum, validateVoiceBundle, voiceBytes, VOICE_LIMITS, type VoicePackage } from './VoicePackage';
 import { loadBundledVoices } from './BundledVoices';
+import { loadVoiceDeletions } from './VoiceDeletions';
 
 export interface VoicePreferences { checksum: string | null; enabled: boolean; volume: number }
 const SETTINGS_KEY = 'fragdachse.voice.v1';
@@ -40,20 +41,43 @@ async function transaction<T>(mode: IDBTransactionMode, action: (store: IDBObjec
 export class VoiceLibrary {
   readonly packages = new Map<string, VoicePackage>();
   private readonly bundled = new Set<string>();
+  private readonly deletedVoices = new Set<string>();
+  private readonly deletedChecksums = new Set<string>();
+  cleanupWarning = '';
   isBundled(checksum: string): boolean { return this.bundled.has(checksum); }
   revision = 0;
   private loading: Promise<void> | null = null;
   load(): Promise<void> {
     return this.loading ??= (async () => {
-      for (const pack of await loadBundledVoices()) { this.packages.set(pack.checksum, pack); this.bundled.add(pack.checksum); }
+      const deleted = await loadVoiceDeletions();
+      deleted.voiceIds.forEach(id => this.deletedVoices.add(id));
+      deleted.checksums.forEach(sum => this.deletedChecksums.add(sum));
+      for (const pack of await loadBundledVoices()) {
+        if (this.isDeleted(pack)) { this.deletedChecksums.add(pack.checksum); continue; }
+        this.packages.set(pack.checksum, pack); this.bundled.add(pack.checksum);
+      }
       // Storage failure must not hide the voices shipped with the game.
-      const stored = await transaction<VoicePackage[]>('readonly', store => store.getAll()).catch(() => []);
+      const stored = await transaction<VoicePackage[]>('readonly', store => store.getAll()).catch(() => {
+        if (this.deletedVoices.size || this.deletedChecksums.size) this.cleanupWarning = 'Browserspeicher ist gesperrt. Importierte Kopien gelöschter Stimmen konnten noch nicht geprüft und entfernt werden. Browserspeicher freigeben und das Spiel neu laden.';
+        return [];
+      });
+      const obsolete: string[] = [];
       for (const pack of stored ?? []) {
+        if (this.isDeleted(pack)) { obsolete.push(pack.checksum); this.deletedChecksums.add(pack.checksum); continue; }
         try { await validateVoiceBundle({ format: 'fragdachse-voice', schema: 1, packages: [pack] }); this.packages.set(pack.checksum, pack); }
         catch { /* Corrupt optional content never prevents joining. */ }
       }
+      if (obsolete.length) {
+        try { await transaction('readwrite', store => { for (const sum of obsolete) store.delete(sum); }); }
+        catch { this.cleanupWarning = 'Gelöschte Stimmen sind gesperrt; ihre Browserkopien konnten noch nicht entfernt werden. Browserspeicher freigeben und das Spiel neu laden.'; }
+      }
+      const preferences = readVoicePreferences();
+      if (preferences.checksum && this.deletedChecksums.has(preferences.checksum)) saveVoicePreferences({ ...preferences, checksum: null });
       this.revision++;
     })().catch(() => { /* IndexedDB may be disabled; voice remains optional. */ });
+  }
+  private isDeleted(pack: VoicePackage): boolean {
+    return this.deletedVoices.has(pack?.manifest?.voiceId) || this.deletedChecksums.has(pack?.checksum);
   }
   async import(file: File, context: BaseAudioContext): Promise<number> {
     await this.load();
@@ -61,6 +85,7 @@ export class VoiceLibrary {
     const bundle = await validateVoiceBundle(JSON.parse(await file.text()));
     const existing = [...this.packages.values()];
     for (const pack of bundle.packages) {
+      if (this.isDeleted(pack)) throw new Error('Diese Stimme wurde in der Voice-Werkstatt endgültig gelöscht und kann nicht erneut importiert werden.');
       const conflict = existing.find(p => p.manifest.packageId === pack.manifest.packageId && p.manifest.version === pack.manifest.version && p.checksum !== pack.checksum);
       if (conflict) throw new Error('Diese Paketversion existiert bereits mit anderem Inhalt.');
       // Decode serially, then release the buffer. Verify the actual duration, not the extension.

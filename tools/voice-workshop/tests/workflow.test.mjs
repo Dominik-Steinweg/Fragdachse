@@ -40,7 +40,7 @@ test('ComfyUI Windows separators are accepted only for the exact owned output fo
   assert.equal(isOwnAudioOutput({ ...output, type: 'input' }, 'voice-workshop/job'), false);
 });
 
-async function frontendFixture(initial = { voices: [{ id: 'speaker', name: 'Test', consentGenerate: true, consentLan: true, catalog: [] }], catalog: [], jobs: [], packages: [] }) {
+async function frontendFixture(initial = { voices: [{ id: 'speaker', name: 'Test', consentGenerate: true, consentLan: true, catalog: [] }], catalog: [], jobs: [], packages: [] }, respond) {
   const elements = [], recorders = [], tracks = [], contexts = [], frames = [], editors = [];
   const requests = []; let poll;
   const makeNode = tag => {
@@ -88,7 +88,7 @@ async function frontendFixture(initial = { voices: [{ id: 'speaker', name: 'Test
     } } },
     fetch: async (url, options) => {
       if (options?.body) requests.push({ url, data: JSON.parse(options.body) });
-      return { ok: true, json: async () => structuredClone(initial) };
+      return { ok: true, json: async () => structuredClone(respond?.(url, options) ?? initial) };
     },
     require: id => id.endsWith('WaveformEditor') ? { WaveformEditor: Editor }
       : id.endsWith('workflow') ? { productionProgress, explainError, TEST_IDS, ACTIVE_JOBS }
@@ -99,6 +99,19 @@ async function frontendFixture(initial = { voices: [{ id: 'speaker', name: 'Test
   const visible = (root = app) => root.hidden ? [] : [root, ...root.children.flatMap(visible)];
   return { app, elements, recorders, tracks, contexts, frames, editors, requests, nodes, visible, poll };
 }
+
+test('voice deletion requires the displayed name and clears the removed profile from the editor', async () => {
+  const initial = { voices: [{ id: 'speaker', name: 'Test', consentGenerate: true, consentLan: true, catalog: [] }], catalog: [], jobs: [], packages: [] };
+  const fixture = await frontendFixture(initial, url => url === '/api/delete-voice' ? { ...initial, voices: [] } : initial);
+  const section = fixture.nodes().find(n => n.tag === 'details' && n.children.some(c => c.textContent === 'Stimme löschen'));
+  const input = fixture.nodes(section).find(n => n.tag === 'input');
+  const remove = fixture.nodes(section).find(n => n.textContent === 'Stimme endgültig löschen');
+  assert.equal(remove.disabled, true); input.value = 'Anders'; input.oninput(); assert.equal(remove.disabled, true);
+  input.value = 'Test'; input.oninput(); assert.equal(remove.disabled, false); await remove.onclick();
+  assert.deepEqual(JSON.parse(JSON.stringify(fixture.requests.at(-1))), { url: '/api/delete-voice', data: { voiceId: 'speaker', confirmName: 'Test' } });
+  assert.ok(fixture.nodes().some(n => n.textContent === 'Neue Stimme anlegen'));
+  assert.ok(!fixture.nodes().some(n => n.textContent === 'Referenz für Test'));
+});
 
 test('a failed microphone recorder cannot stop or overwrite the next recording', async () => {
   const { app, elements, recorders, tracks, contexts, frames, editors } = await frontendFixture();
@@ -150,7 +163,7 @@ test('reference upload switches from the default script and submits the matching
 });
 
 test('profile text drafts survive switching and polling while playback stays beside its own sentence', async () => {
-  const sentence = { id: 'ready_01', event: 'ready', text: 'Standard.', style: 'Ruhig', cloningMode: 'ultimate', active: true };
+  const sentence = { id: 'ready_01', event: 'ready', text: 'Standard.', directionHint: '', active: true };
   const initial = { voices: ['alice', 'bob'].map(id => ({ id, name: id, reference: `${id}.wav`, transcript: 'Test reference',
     referenceInfo: { duration: 10, warnings: [] }, consentGenerate: true, consentLan: true, referenceRevision: 1,
     catalog: [{ ...sentence, text: `${id} spricht.` }] })), catalog: [sentence], packages: [], jobs: [
@@ -165,6 +178,9 @@ test('profile text drafts survive switching and polling while playback stays bes
   assert.equal(nodes(card).find(node => node.tag === 'textarea').value, 'alice spricht.');
   assert.match(nodes(card).find(node => node.tag === 'audio').src, /alice\.ogg/);
   const text = nodes(card).find(node => node.tag === 'textarea'); text.value = 'Alice angepasst.'; text.oninput();
+  const hint = nodes(card).find(node => node.tag === 'label' && node.textContent === 'Zusätzliche Regiehinweise').children[0];
+  hint.value = 'Schlusswort betonen.'; hint.oninput();
+  assert.equal(nodes(card).some(node => node.tag === 'select'), false, 'No alternate cloning mode or sound preset');
   const select = () => nodes(find('Stimmprofil')).find(node => node.tag === 'select');
   select().value = 'bob'; select().onchange();
   assert.equal(visible().find(node => node.tag === 'textarea').value, 'bob spricht.');
@@ -172,9 +188,12 @@ test('profile text drafts survive switching and polling while playback stays bes
   select().value = 'alice'; select().onchange();
   initial.jobs[1].status = 'failed'; await poll();
   assert.equal(visible().find(node => node.tag === 'textarea').value, 'Alice angepasst.');
+  assert.equal(find('Zusätzliche Regiehinweise').children[0].value, 'Schlusswort betonen.');
   await find('Speichern & erzeugen').onclick();
   assert.equal(requests[0].url, '/api/sentence'); assert.equal(requests[0].data.voiceId, 'alice');
   assert.equal(requests[0].data.text, 'Alice angepasst.');
+  assert.equal(requests[0].data.directionHint, 'Schlusswort betonen.');
+  assert.equal(requests[0].data.cloningMode, undefined); assert.equal(requests[0].data.style, undefined);
   assert.equal(requests[1].url, '/api/generate'); assert.equal(requests[1].data.voiceId, 'alice');
   assert.equal(requests[1].data.sentenceId, sentence.id);
   await find('Standardkatalog').onclick();
@@ -182,4 +201,21 @@ test('profile text drafts survive switching and polling while playback stays bes
   const standard = visible().find(node => node.tag === 'textarea'); standard.value = 'Neuer Standard.'; standard.oninput();
   await find('Text speichern').onclick();
   assert.equal(requests.at(-1).url, '/api/sentence'); assert.equal(requests.at(-1).data.voiceId, undefined);
+});
+
+test('failed audio processing exposes the raw take for cutting without selecting it for export', async () => {
+  const sentence = { id: 'ready_01', event: 'ready', text: 'Zu langer Spruch.', directionHint: '', active: true };
+  const initial = { voices: [{ id: 'speaker', name: 'Test', reference: 'ref.wav', transcript: 'Referenz', referenceRevision: 1,
+    consentGenerate: true, consentLan: true, catalog: [sentence] }], catalog: [sentence], packages: [], jobs: [
+    { id: 'failed-take', voiceId: 'speaker', sentenceId: sentence.id, text: sentence.text, status: 'failed', raw: 'original.flac', error: 'Sprache zu lang.' },
+  ] };
+  const { nodes, visible, requests } = await frontendFixture(initial);
+  const production = visible().find(node => node.tag === 'button' && nodes(node).some(child => child.textContent === 'Texte & Voice-Lines'));
+  await production.onclick();
+  assert.match(visible().find(node => node.tag === 'audio').src, /original\.flac/);
+  assert.equal(visible().some(node => node.textContent === 'Aus Paket nehmen' || node.textContent === 'Ins Paket aufnehmen'), false);
+  const end = visible().find(node => node.textContent === 'Ende (Sekunden)').children[0]; end.value = '4';
+  await visible().find(node => node.textContent === 'Schnitt speichern').onclick();
+  assert.equal(requests.at(-1).url, '/api/trim'); assert.equal(requests.at(-1).data.id, 'failed-take');
+  assert.equal(requests.at(-1).data.end, 4);
 });

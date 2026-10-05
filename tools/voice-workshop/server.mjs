@@ -8,7 +8,9 @@ import { VoxGenerator } from './generator.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export async function createWorkshopServer({ port = 8092, root = process.env.VOICE_WORKSPACE ?? path.join(here, '.voice-workspace'), generator,
-  gameVoiceRoot = path.resolve(here, '../../src/voice/bundled') } = {}) {
+  gameVoiceRoot = path.resolve(here, '../../src/voice/bundled'),
+  deletionRegistry = path.resolve(here, '../../public/voice-deletions.json'),
+  gameBuildRoots = [path.resolve(here, '../../dist'), path.resolve(here, '../../build')] } = {}) {
   const resolved = path.resolve(root);
   for (const publicRoot of [path.resolve(here, '../../public'), path.join(here, 'dist'), path.join(here, 'frontend')]) {
     if (resolved === publicRoot || resolved.startsWith(publicRoot + path.sep)) throw new Error('Privater Arbeitsbereich darf nicht öffentlich ausgeliefert werden.');
@@ -21,7 +23,7 @@ export async function createWorkshopServer({ port = 8092, root = process.env.VOI
     url: process.env.VOICE_COMFY_URL ?? config.comfyUrl,
     inputRoot: process.env.VOICE_COMFY_INPUT ?? config.comfyInput,
     outputRoot: process.env.VOICE_COMFY_OUTPUT ?? config.comfyOutput,
-  }), { gameVoiceRoot }); await workshop.initialize();
+  }), { gameVoiceRoot, deletionRegistry, gameBuildRoots }); await workshop.initialize();
   const token = randomBytes(32).toString('hex');
   let serial = Promise.resolve();
   const server = http.createServer(async (req, res) => {

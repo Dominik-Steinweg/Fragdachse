@@ -1,21 +1,26 @@
-import { readFile, unlink, readdir, realpath } from 'node:fs/promises';
+import { readFile, unlink, readdir, realpath, rmdir } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { ANNOUNCER, announcerDirection } from './announcer.mjs';
 
-export const WORKFLOW_VERSION = 'rh-voxcpm2-dual-cloning-v2';
+export const WORKFLOW_VERSION = 'rh-voxcpm2-announcer-v3';
 export function isOwnAudioOutput(output, folder) {
   return output?.type === 'output' && typeof output.subfolder === 'string'
     && output.subfolder.replaceAll('\\', '/') === folder && /^take_[a-zA-Z0-9_.-]+\.flac$/.test(output.filename);
 }
-export function makeWorkflow(reference, text, style, seed, prefix, { mode = 'controllable', transcript = '' } = {}) {
-  if (!['ultimate', 'controllable'].includes(mode)) throw new Error('Unbekannter Cloning-Modus.');
-  const ultimate = mode === 'ultimate';
-  if (ultimate && !transcript.trim()) throw new Error('Ultimate Cloning benötigt das exakte Transkript der Referenzaufnahme.');
+export function isOwnHistory(record, jobId) {
+  const prompt = record?.prompt; const graph = prompt?.[2]; const folder = `voice-workshop/${jobId}`;
+  return prompt?.[3]?.client_id === `voice-workshop-${jobId}`
+    && graph?.['2']?.class_type === 'LoadAudio' && graph['2'].inputs?.audio === `${folder}/reference.wav`
+    && graph?.['4']?.class_type === 'SaveAudio' && graph['4'].inputs?.filename_prefix === `${folder}/take`;
+}
+export function makeWorkflow(reference, text, controlInstruction, seed, prefix) {
+  if (typeof controlInstruction !== 'string' || !controlInstruction.trim()) throw new Error('Announcer-Regie fehlt.');
   return {
     '1': { class_type: 'RunningHub_VoxCPM_LoadModel', inputs: { model_name: 'VoxCPM2', optimize: false, lora_name: 'None' } },
     '2': { class_type: 'LoadAudio', inputs: { audio: reference } },
     '3': { class_type: 'RunningHub_VoxCPM_Generate', inputs: { model: ['1', 0], reference_audio: ['2', 0],
-      text, control_instruction: ultimate ? '' : style, ultimate_clone: ultimate, reference_audio_text: ultimate ? transcript : '', normalize_text: false,
+      text, control_instruction: controlInstruction, ultimate_clone: false, reference_audio_text: '', normalize_text: false,
       denoise_reference: false, cfg_value: 2, inference_steps: 10, seed, max_len: 1024, retry_badcase: true } },
     '4': { class_type: 'SaveAudio', inputs: { audio: ['3', 0], filename_prefix: prefix } },
   };
@@ -37,7 +42,7 @@ export class VoxGenerator {
   }
   async preflight() {
     const nodes = await (await this.request('/object_info')).json();
-    const workflow = makeWorkflow('reference.wav', 'Test.', 'Neutral', 1, 'voice-workshop/test');
+    const workflow = makeWorkflow('reference.wav', 'Test.', announcerDirection('ready'), 1, 'voice-workshop/test');
     for (const node of Object.values(workflow)) {
       const spec = nodes[node.class_type];
       if (!spec) throw new Error(`ComfyUI-Node fehlt: ${node.class_type}`);
@@ -54,8 +59,8 @@ export class VoxGenerator {
   }
   async generate(job, referencePath, onSubmitted, cancelled) {
     const folder = `voice-workshop/${job.id}`;
-    const workflow = makeWorkflow(`${folder}/reference.wav`, job.text, job.style, job.seed, `${folder}/take`,
-      { mode: job.cloningMode ?? 'controllable', transcript: job.referenceTranscript ?? '' });
+    if (job.productionVersion !== ANNOUNCER.productionVersion || !job.controlInstruction) throw new Error('Alten Auftrag mit Announcer-Regie neu erzeugen.');
+    const workflow = makeWorkflow(`${folder}/reference.wav`, job.text, job.controlInstruction, job.seed, `${folder}/take`);
     const metadata = await this.preflight();
     // Journal ownership before the first private copy, including uncertain submit outcomes.
     await onSubmitted({ ...metadata, promptId: null, privateCopiesPending: true });
@@ -100,7 +105,7 @@ export class VoxGenerator {
     }
   }
 
-  async cleanup(job) {
+  async cleanup(job, { purge = false } = {}) {
     if (!/^[a-f0-9-]{36}$/.test(job.id) || !this.inputRoot || !this.outputRoot) throw new Error('Bereinigung benötigt konfigurierte ComfyUI-Verzeichnisse.');
     const queue = await (await this.request('/queue')).json();
     const folder = `voice-workshop/${job.id}`;
@@ -115,6 +120,15 @@ export class VoxGenerator {
       for (const file of await readdir(dir, { withFileTypes: true })) {
         if (file.isFile() && (file.name === 'reference.wav' || /^take_[a-zA-Z0-9_.-]+\.flac$/.test(file.name))) await unlink(path.join(dir, file.name));
       }
+      if (purge) await rmdir(dir); // Refuse success if unexpected files remain; never follow links.
+    }
+    if (purge) {
+      const knownId = job.generator?.promptId;
+      const history = await (await this.request(knownId ? `/history/${encodeURIComponent(knownId)}` : '/history')).json();
+      if (knownId && history[knownId] && !isOwnHistory(history[knownId], job.id)) throw new Error('ComfyUI-History gehört nicht eindeutig zu diesem Auftrag. Keine History-Einträge gelöscht.');
+      // An uncertain submit can lose its receipt; all three exact ownership fields must agree.
+      const ids = Object.entries(history).filter(([id, record]) => (!knownId || id === knownId) && isOwnHistory(record, job.id)).map(([id]) => id);
+      if (ids.length) await this.request('/history', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ delete: ids }) });
     }
   }
 }

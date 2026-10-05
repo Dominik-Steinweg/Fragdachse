@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import * as bundled from '../src/voice/BundledVoices';
-import { VoiceLibrary } from '../src/voice/VoiceLibrary';
+import { VoiceLibrary, readVoicePreferences, saveVoicePreferences } from '../src/voice/VoiceLibrary';
+import * as deletions from '../src/voice/VoiceDeletions';
 import { canonicalJson, voiceHash, VOICE_EVENTS, type VoiceManifest } from '../src/voice/VoicePackage';
 
 // Minimal identification page for the package boundary; audio decoding is tested separately.
@@ -34,4 +35,57 @@ it('offers built-in voices even when IndexedDB is unavailable and does not delet
   expect(library.revision).toBe(1);
   await expect(library.remove(pack.checksum)).rejects.toThrow('im Spiel enthalten');
   expect(library.packages.has(pack.checksum)).toBe(true);
+});
+
+function browserStorage(initial: unknown[]) {
+  const items = new Map(initial.map(value => [(value as { checksum: string }).checksum, value]));
+  const local = new Map<string, string>();
+  vi.stubGlobal('window', new EventTarget());
+  vi.stubGlobal('localStorage', { getItem: (key: string) => local.get(key) ?? null, setItem: (key: string, value: string) => local.set(key, value) });
+  vi.stubGlobal('indexedDB', { open: () => {
+    const request: any = {};
+    request.result = { close() {}, transaction: () => {
+      const tx: any = { objectStore: () => ({ getAll: () => ({ result: [...items.values()] }), delete: (sum: string) => items.delete(sum) }) };
+      queueMicrotask(() => tx.oncomplete()); return tx;
+    } };
+    queueMicrotask(() => request.onsuccess()); return request;
+  } });
+  return { items, local };
+}
+
+it('purges every imported version of a deleted voice, hides cached build copies, clears selection and refuses reimport', async () => {
+  const { pack, text } = await fixture(); const previous = structuredClone(pack); previous.checksum = 'a'.repeat(64);
+  const keep = structuredClone(pack); keep.manifest.voiceId = 'other'; keep.manifest.packageId = 'other';
+  keep.checksum = await voiceHash(canonicalJson(keep.manifest));
+  const { items } = browserStorage([pack, previous, keep]);
+  saveVoicePreferences({ checksum: previous.checksum, enabled: true, volume: 0.6 });
+  vi.spyOn(deletions, 'loadVoiceDeletions').mockResolvedValue({ voiceIds: ['fixture'], checksums: [pack.checksum] });
+  vi.spyOn(bundled, 'loadBundledVoices').mockResolvedValue([pack]);
+  const library = new VoiceLibrary(); await library.load();
+  expect([...items.keys()]).toEqual([keep.checksum]); expect([...library.packages.keys()]).toEqual([keep.checksum]);
+  expect(readVoicePreferences()).toEqual({ checksum: null, enabled: true, volume: 0.6 });
+  const decodeAudioData = vi.fn();
+  await expect(library.import({ size: text.length, text: async () => text } as File, { decodeAudioData } as unknown as BaseAudioContext)).rejects.toThrow('endgültig gelöscht');
+  expect(decodeAudioData).not.toHaveBeenCalled();
+});
+
+it('remembers downloaded deletions when the static game registry is temporarily unavailable', async () => {
+  const { pack } = await fixture(); browserStorage([]);
+  const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ voiceIds: ['fixture'], checksums: [pack.checksum] }) });
+  vi.stubGlobal('fetch', request);
+  expect(await deletions.loadVoiceDeletions()).toEqual({ voiceIds: ['fixture'], checksums: [pack.checksum] });
+  request.mockRejectedValue(new Error('offline'));
+  expect(await deletions.loadVoiceDeletions()).toEqual({ voiceIds: ['fixture'], checksums: [pack.checksum] });
+  expect(request).toHaveBeenCalledWith(expect.stringContaining('voice-deletions.json'), expect.objectContaining({ cache: 'no-store' }));
+});
+
+it('keeps deleted voices unavailable and reports blocked browser cleanup', async () => {
+  const { pack } = await fixture(); browserStorage([]);
+  saveVoicePreferences({ checksum: pack.checksum, enabled: true, volume: 0.6 });
+  vi.spyOn(deletions, 'loadVoiceDeletions').mockResolvedValue({ voiceIds: ['fixture'], checksums: [pack.checksum] });
+  vi.spyOn(bundled, 'loadBundledVoices').mockResolvedValue([pack]);
+  vi.stubGlobal('indexedDB', { open: () => { throw new Error('blocked'); } });
+  const library = new VoiceLibrary(); await library.load();
+  expect(library.packages.size).toBe(0); expect(library.cleanupWarning).toContain('Browserspeicher');
+  expect(readVoicePreferences().checksum).toBeNull();
 });

@@ -2,14 +2,14 @@
 
 Eigenständige lokale Produktion persönlicher Spielerstimmen. Enthält Aufnahme/Import,
 Referenzschnitt, drei Stimmtests, den editierbaren Startkatalog mit 24 Sätzen, serielle
-VoxCPM2-Produktion, Hörprüfung und unveränderliche `.fdvoice`-Pakete/LAN-Bundles.
+VoxCPM2-Produktion mit festem Action-Announcer-Sound, Hörprüfung und unveränderliche `.fdvoice`-Pakete/LAN-Bundles.
 Das Spiel benötigt weder ComfyUI noch die Werkstatt. Automatischer Lobby-Transfer
 und Aufnahmen auf fremden Client-Rechnern sind spätere Ausbaustufen des Fachkonzepts.
 
 ## Start unter Windows
 
 Node.js 24 und die installierten Projektabhängigkeiten verwenden. FFmpeg mit
-`libvorbis` muss über PATH oder `VOICE_FFMPEG` verfügbar sein. ComfyUI separat
+`libvorbis`, `rubberband`, `afir` sowie den EQ-, Dynamik- und Lautheitsfiltern muss über PATH oder `VOICE_FFMPEG` verfügbar sein. ComfyUI separat
 starten, VoxCPM2 samt `rh_voxcpm` lokal installieren und die tatsächlichen
 gemeinsamen Ein-/Ausgabeordner konfigurieren. Beispiel für diese Installation:
 
@@ -43,7 +43,7 @@ Alternativ lassen sich die Einstellungen einmalig in
 Nach einer Konfigurationsänderung den Werkstatt-Dienst neu starten. Die Datei bleibt
 im privaten, ignorierten Arbeitsbereich und wird nicht als Paket exportiert.
 
-## Ablauf und Cloning-Modi
+## Ablauf und Action-Announcer
 
 Die Oberfläche bietet einen direkten LAN-Ablauf: **Referenz → Produktion → ins Spiel übernehmen**.
 „Stimmprofile“ enthält Aufnahme und Upload; „Texte & Voice-Lines“ zeigt Texte und
@@ -55,7 +55,8 @@ Pakete sind aufklappbar.
    in der LAN-Runde speichern. Öffentliche Weitergabe ist eine getrennte optionale
    Profileinstellung; bestehende Zustimmungen werden nicht automatisch erweitert.
 2. Standardmäßig den **festen Vorlesetext vollständig und wortgetreu** aufnehmen oder
-   eine Aufnahme desselben Texts importieren. Der Text wird automatisch als Transkript
+   eine Aufnahme desselben Texts importieren. Klar, selbstbewusst und mit Energie sprechen;
+   vorhandene Referenzen bleiben nutzbar. Der Text wird automatisch als Transkript
    gespeichert. Alternativ **Eigene Datei + Text** wählen, eine Referenzdatei hochladen
    und den exakten gesprochenen Text des Ausschnitts eingeben. Beide Quellen behalten
    beim Umschalten ihre eigenen ungespeicherten Audioentwürfe.
@@ -96,28 +97,36 @@ verfügbar. Mitgelieferte Stimmen benötigen keine IndexedDB und können im Spie
 nicht als lokaler Import gelöscht werden. Die Dateien unter `src/voice/bundled/`
 sind Spielinhalt und werden mit dem Build ausgeliefert.
 
-Neutrale Sprüche nutzen **Ultimate Cloning** mit dem exakten Referenztranskript.
-Emotionale Sprüche nutzen **Controllable Cloning** mit separater Darbietungsvorgabe.
-Beide Modi übergeben den Zieltext unverändert. Änderungen am Katalog und einzelne
-Neugenerierungen sind optional; eine Stilvorgabe garantiert keine Modellqualität.
+Alle neuen Sprüche und Stimmproben nutzen **Controllable Cloning** mit einer festen
+Announcer-Grundregie und passenden Nuancen je Spielanlass. **Zusätzliche Regiehinweise**
+ergänzen optional die Betonung pro Satz; der kraftvolle, klare Grundstil bleibt verbindlich.
+Der Zieltext wird unverändert und getrennt von der Regie übergeben. Die Oberfläche
+bietet genau einen Sound, ohne Presetauswahl, Effektstärke oder alternative Cloning-Modi.
+Eine Regievorgabe garantiert keine Modellqualität: Original und Exportfassung anhören.
 
-Text-, Modus- und Darbietungsänderungen erhöhen die Satzrevision im jeweiligen
-Katalog. Profilanpassungen bleiben von Änderungen am Standard unabhängig; geerbte
-Sätze übernehmen diese Änderungen. Zurücksetzen auf den Standard entwertet ältere
-Profil-Takes ebenfalls. Bestehende Werkstätten behalten ihren bisherigen Katalog
-als Standard und ihre bisherigen Aufnahmen. Neue oder erneut
-geschnittene Referenzen erhöhen die Referenzrevision. Betroffene Entwürfe sind
-überholt und gelangen nicht in neue Freigaben. Bereits freigegebene Pakete bleiben
-unverändert. Jeder Auftrag speichert Modus, Revisionen, Seed und Generatornachweis
-privat. Alte Aufträge ohne Modus bleiben als Controllable dokumentiert; eine
-Migration des Katalogs entwertet sie für neue Freigaben.
+Beim ersten Öffnen einer älteren Werkstatt bleiben Texte, Referenzen, Profilanpassungen,
+Roh-Takes und gespeicherte Pakete erhalten. Alte Emotionsfelder werden privat als
+`legacyDirection` aufbewahrt, nicht als neue Regie verwendet. Zusatzhinweise starten
+leer. Frühere Produktionsversionen sind überholt: **Alle Voice-Lines erzeugen** produziert
+alle aktiven Sprüche mit der neuen Regie neu, einschließlich früher weggelassener Takes.
+Weitere Sammelstarts ergänzen nur fehlende Ergebnisse; neue bewusste Ausschlüsse bleiben
+erhalten. Der Dienst startet keine Produktion von selbst.
+
+Text- und Regiehinweisänderungen erhöhen die Satzrevision im jeweiligen Katalog.
+Profilanpassungen bleiben von Änderungen am Standard unabhängig; geerbte Sätze
+übernehmen diese Änderungen. Zurücksetzen auf den Standard entwertet ältere
+Profil-Takes ebenfalls. Neue oder erneut geschnittene Referenzen erhöhen die
+Referenzrevision. Betroffene Entwürfe gelangen nicht in neue Freigaben.
+Jeder Auftrag friert Produktions-/Effektversion, vollständige Regie, Eingaben und Seed ein.
+Alte Takes behalten ihren ursprünglichen Nachweis und lassen sich durch Nachschneiden
+nicht wieder freigeben. Bereits veröffentlichte Pakete bleiben unverändert.
 
 Der feste Text liegt versioniert in `reference-text.json`; Oberfläche und Backend
 verwenden dieselbe Quelle. Ein alter Browserstand kann keinen abweichenden Text
 unbemerkt hinterlegen. Vorhandene ältere Referenzen behalten ihre bisherigen
 Transkripte und lassen sich als eigene Datei mit Text erneut bearbeiten. Eigene
-Referenztexte werden zusammen mit der Audiodatei gespeichert und bei Ultimate
-Cloning in den Auftrag eingefroren.
+Referenztexte bleiben zusammen mit der Audiodatei privat gespeichert. Neue
+Controllable-Aufträge übertragen kein Referenztranskript an den Generator.
 Die Wellenform prüft keine gesprochenen Wörter automatisch: bei Versprechern neu
 aufnehmen und beim Schneiden den ganzen Text erhalten.
 
@@ -125,9 +134,8 @@ aufnehmen und beim Schneiden den ganzen Text erhalten.
 
 Der Adapter prüft die tatsächlichen ComfyUI-Node-Eingaben vor jedem Auftrag:
 `RunningHub_VoxCPM_LoadModel`, `LoadAudio`, `RunningHub_VoxCPM_Generate`, `SaveAudio`.
-Die lokal geprüfte Erweiterung unterstützt beide VoxCPM2-Modi. Die
-[offizielle VoxCPM2-Dokumentation](https://github.com/OpenBMB/VoxCPM#-controllable-voice-cloning)
-beschreibt deren Referenz-/Prompt-Unterschied ebenfalls. Die Werkstatt importiert
+Die verwendete Erweiterung muss Controllable Cloning mit separater Regie unterstützen;
+siehe [VoxCPM2-Dokumentation](https://github.com/OpenBMB/VoxCPM#-controllable-voice-cloning). Die Werkstatt importiert
 keine Module des Audio-Studios, lädt keine Modelle herunter und unterbricht keine
 fremden GPU-Aufträge. Eine belegte Queue hält die Produktion an.
 
@@ -144,11 +152,62 @@ ComfyUI-Kopien. Private Produktionsnachweise einschließlich Transkripten und ei
 Roh-Takes bleiben im Arbeitsordner; Referenzlöschung ist keine vollständige Löschung
 aller Produktionsdaten. Bereits weitergegebene Pakete lassen sich nicht zurückrufen.
 
-FFmpeg dekodiert lokal, entfernt Randstille, begrenzt Pegelanhebung und exportiert
-Mono-OGG/Vorbis ohne Quellmetadaten. Freigaben enthalten ausschließlich das streng
+Das feste versionierte Rezept liegt in [announcer.json](announcer.json). FFmpeg
+schneidet zunächst die Rohfassung und entfernt Randstille. Danach folgen EQ,
+De-Esser und Kompression mit erhaltenem Stimmeinsatz. Die unverstimmte Hauptstimme
+trägt den Klang. Eine vor und nach der Sättigung gefilterte Parallelspur verdichtet
+die Mitten; eine präsente, unverzerrte Tiefoktave verstärkt Bass und untere Mitten.
+Der kurze Faltungshall verwendet eine reproduzierbare Raumimpulsantwort aus einem
+gedämpften, diffus gemischten Delaynetz. Er erhält nur die unverstimmte Stimme und
+wird während der Wörter automatisch abgesenkt; in den Pausen kommt der Raum zurück.
+Lautheitsabgleich und Limiter schließen die Kette ab. Das bleibt ein einziges festes
+Rezept ohne Effektregler. Änderungen der Effektversion entwerten ältere Takes für
+neue Pakete; bestehende Pakete und Originalaufnahmen bleiben erhalten.
+Exportiert wird Mono-OGG/Vorbis mit 48 kHz ohne Quellmetadaten. Die tatsächliche Dauer
+und der Spitzenpegel werden nach dem Encodieren überprüft; Vorschau und Paket
+verwenden dieselbe Datei. Maximal 5,4 Sekunden geschnittene Sprache lassen Platz
+für den Hall innerhalb der sechssekündigen Paketgrenze. Zu lange Takes kürzen oder
+neu erzeugen; der Workshop schneidet keine Wörter für den Hall ab.
+
+Referenzen werden ohne Announcer-Effekte gespeichert. Jeder erneute Schnitt arbeitet
+wieder aus dem Roh-Take. Fehler beim Bearbeiten lassen die vorherige Exportfassung
+und Auswahl bestehen. Fehlende FFmpeg-Filter werden vor einer neuen Produktion
+mit einer konkreten Fehlermeldung angezeigt. Freigaben enthalten ausschließlich das streng
 validierte Manifest und Audiodateien mit SHA-256-Prüfsummen. Referenzen, Transkripte,
 Workflows und Zustimmungen werden nie exportiert. Paketgrenzen stehen im gemeinsamen
 [Validator](../../src/voice/VoicePackage.ts).
+
+## Stimmen endgültig löschen
+
+Unter **Stimmprofile → Stimme löschen** den angezeigten Namen bestätigen und
+**Stimme endgültig löschen** wählen. Die Produktion vorher pausieren und einen
+laufenden Take beenden lassen. Die Löschung entfernt das Profil, seine Texte und
+Produktionsnachweise, alle gespeicherten Referenzversionen, Roh-Takes, Exporte,
+ältere Schnitte und Hörproben. Sie bereinigt auch `state.*.json`-/`state.*.bak`-
+Datensicherungen im privaten Arbeitsordner sowie lokale Paketdateien. Andere
+Stimmen in einem gemeinsamen Paket oder einer Sicherung bleiben erhalten.
+
+Die zugehörigen ComfyUI-Auftragsordner und History-Einträge werden gezielt entfernt;
+dafür muss ComfyUI erreichbar sein. Es gibt keinen globalen Interrupt oder eine
+Löschung fremder Aufträge. Ein unvollständiger Löschvorgang bleibt am Profil sichtbar,
+sperrt weitere Produktion/Exporte und lässt sich nach Fehlerbehebung über
+**Löschung fortsetzen** wiederaufnehmen, auch nach einem Dienstneustart.
+
+Die Spielquelle unter `src/voice/bundled/` und die eigenen Vite-Stimmmodule samt
+Source-Maps in `dist/` und `build/` werden entfernt. Ein kleines Löschregister
+`public/voice-deletions.json` enthält nur Stimm-IDs und Paketprüfsummen, keine Namen,
+Texte oder Audiodaten. Es wird auch in vorhandene lokale Builds mit HTML-Einstieg
+geschrieben. **Das Spiel anschließend neu laden:** Das Register sperrt auch gecachte
+Spielpakete, löscht passende importierte IndexedDB-Pakete und setzt die betreffende
+Profilauswahl zurück. Ein gelöschtes Paket kann nicht wieder importiert werden.
+Ein beim Laden bekanntes Löschregister bleibt auch bei späterem Netzausfall gültig.
+
+Das ist keine rechnerweite oder forensische Löschung: ursprüngliche Upload-Dateien
+außerhalb der Werkstatt, frei gespeicherte Downloads, Browser-HTTP-Caches,
+Git-Historie, externe Sicherungen und fremde Rechner sind nicht durch die Werkstatt
+kontrollierbar. Solche Kopien gegebenenfalls dort separat entfernen. Bereits laufende
+Spiele oder extern veröffentlichte alte Builds müssen neu geladen beziehungsweise
+aktualisiert werden; ein entfernter Rechner wird nicht automatisch angesprochen.
 
 ## Spielintegration und Prüfung
 
@@ -168,7 +227,8 @@ npm run check
 ```
 
 Die Werkstatt-Tests benötigen FFmpeg; sie nutzen synthetische Audiodaten und einen
-Generatorersatz. Sie prüfen beide Cloning-Modi, Revisionen, Hörfreigabe, echten
-Vorbis-Export, Paketvalidierung und den lokalen HTTP-Zugang. Vor Produktiveinsatz
+Generatorersatz. Sie prüfen Announcer-Regie und Migration, Revisionen, Hörfreigabe, Oktave und
+Hallausklang, sichere Pegel, echten Vorbis-Export, Paketvalidierung sowie den lokalen
+HTTP-Zugang. Tuningwerte werden nicht als Testsnapshots festgeschrieben. Vor Produktiveinsatz
 noch mit autorisierter Referenz real generieren und hören, Mikrofon/Browserablauf
 prüfen sowie CPU/RAM und Sprechverhalten in einer Mehrspielerpartie messen.
