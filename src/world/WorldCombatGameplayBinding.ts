@@ -432,8 +432,6 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combatSystem.setRockDamageCallback(null);
     combatSystem.setBaseDamageCallback(null);
     combatSystem.setTrainDamageCallback(null);
-    combatSystem.setPlayerImpulseCallback(null);
-    combatSystem.setEnemyImpulseCallback(null);
     combatSystem.setKillCallback(() => { /* noop */ });
     combatSystem.setDeathCallback(null);
     combatSystem.setEnemyDeathCallback(null);
@@ -768,8 +766,6 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       const resolvedDamage = p?.modifier.resolveOutgoingDamage(attackerId, 'train', damage, false).amount ?? damage;
       this.requireWorldMutation().applyResolvedDamage('train', 'main', resolvedDamage, attackerId, 'combat.train');
     });
-    combat.setPlayerImpulseCallback((playerId, vx, vy, durationMs, sourcePlayerId) => hostPhysics.addRecoil(playerId, vx, vy, durationMs, sourcePlayerId));
-    combat.setEnemyImpulseCallback((enemyId, vx, vy, durationMs, sourcePlayerId) => hostPhysics.addRecoil(enemyId, vx, vy, durationMs, sourcePlayerId));
     combat.setDeathCallback((playerId, x, y) => {
       const generation = this.activityGeneration;
       const current = () => !this.destroyed && generation === this.activityGeneration;

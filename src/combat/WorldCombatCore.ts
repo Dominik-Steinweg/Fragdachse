@@ -470,8 +470,6 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   // Callbacks für Objekt-Schaden (gesetzt von ArenaScene)
   private onRockDamage:  ((rockIndex: number, damage: number, attackerId: string) => void) | null = null;
   private onTrainDamage: ((damage: number, attackerId: string) => void) | null = null;
-  private onPlayerImpulse: ((playerId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null = null;
-  private onEnemyImpulse: ((enemyId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null = null;
   private playerMaxHpResolver: ((playerId: string) => number) | null = null;
   private playerDamageReductionResolver: ((playerId: string, nowMs: number) => number) | null = null;
   private playerHpRegenPerSecondResolver: ((playerId: string, nowMs: number) => number) | null = null;
@@ -1112,14 +1110,6 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
   setTrainDamageCallback(cb: ((damage: number, attackerId: string) => void) | null): void {
     this.onTrainDamage = cb;
-  }
-
-  setPlayerImpulseCallback(cb: ((playerId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null): void {
-    this.onPlayerImpulse = cb;
-  }
-
-  setEnemyImpulseCallback(cb: ((enemyId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null): void {
-    this.onEnemyImpulse = cb;
   }
 
   /** Setzt den Kill-Callback (Host-only). */
