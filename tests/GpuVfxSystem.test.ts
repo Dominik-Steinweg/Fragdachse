@@ -299,6 +299,45 @@ describe('gpu vfx system: lanes', () => {
     system.destroy();
   });
 
+  it.each(['shutdown', 'destroy'] as const)(
+    'finishes teardown after a deferred optional shader link fails before the first render on %s', outcome => {
+      const scene = makeFakeGpuVfxScene(), events = makeWarmupEvents(), context = makeWarmupContext();
+      const failure = new Error('driver rejected deferred shader link');
+      const program = { compiling: true, _completeProgram: vi.fn(() => { throw failure; }) };
+      const cache: Record<string, typeof program> = { pending: program };
+      const renderer = {
+        game: { config: { skipUnreadyShaders: false } },
+        baseDrawingContext: { getClone: () => context },
+        shaderProgramFactory: { programs: cache, getShaderProgram: () => program },
+        glWrapper: { update: vi.fn() }, deleteProgram: vi.fn(),
+      };
+      Object.assign(scene, { events, cameras: { main: {} }, renderer });
+      const addLayer = scene.add.spriteGPULayer;
+      scene.add.spriteGPULayer = ((key: string, size: number) => Object.assign(addLayer(key, size), {
+        submitterNode: { updateRenderOptions() {}, run: vi.fn(),
+          programManager: { currentConfig: {}, getCurrentProgramSuite: () => ({}) } },
+      })) as typeof scene.add.spriteGPULayer;
+      const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const probe = { name: 'pending', prepare: vi.fn(), destroy: vi.fn() };
+      const system = new GpuVfxSystem(scene as never, [probe]);
+      const remainingTeardown = vi.fn();
+      events.on('shutdown', () => { system.destroy(); remainingTeardown(); });
+      expect(program._completeProgram).not.toHaveBeenCalled();
+
+      expect(() => outcome === 'shutdown' ? events.emit('shutdown') : system.destroy()).not.toThrow();
+      expect(scene.layers.every(layer => layer.destroyed)).toBe(true);
+      expect(probe.destroy).toHaveBeenCalledOnce(); expect(probe.prepare).not.toHaveBeenCalled();
+      expect(events.count('prerender')).toBe(0);
+      expect(system.getShaderWarmupState()).toBe('failed');
+      expect(renderer.shaderProgramFactory.programs).toEqual({});
+      expect(renderer.deleteProgram).toHaveBeenCalledWith(program);
+      expect(renderer.game.config.skipUnreadyShaders).toBe(false);
+      expect(warning).toHaveBeenCalledOnce();
+      if (outcome === 'shutdown') expect(remainingTeardown).toHaveBeenCalledOnce();
+      system.destroy(); events.emit('prerender');
+      expect(program._completeProgram).toHaveBeenCalledOnce(); expect(probe.destroy).toHaveBeenCalledOnce();
+    });
+
   it.each(['complete', 'shutdown', 'failure', 'destroy'] as const)(
     'owns additional probes through pending links and releases them once on %s', outcome => {
       const scene = makeFakeGpuVfxScene(), events = makeWarmupEvents(), context = makeWarmupContext();

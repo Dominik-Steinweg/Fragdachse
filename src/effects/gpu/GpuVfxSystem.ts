@@ -320,7 +320,8 @@ export class GpuVfxSystem {
   }
 
   private stopShaderWarmup(): void {
-    this.completeLaneLinks();
+    try { this.completeLaneLinks(); }
+    catch (error) { this.reportShaderWarmupFailure(error); }
     if (this.shaderWarmupActive) {
       this.shaderWarmupActive = false;
       this.scene.events.off(Phaser.Scenes.Events.PRE_RENDER, this.runShaderWarmup, this);
@@ -333,6 +334,11 @@ export class GpuVfxSystem {
   }
 
   private failShaderWarmup(reason: unknown): void {
+    this.reportShaderWarmupFailure(reason);
+    this.stopShaderWarmup();
+  }
+
+  private reportShaderWarmupFailure(reason: unknown): void {
     this.shaderWarmupState = 'failed';
     if (!this.shaderWarmupWarningIssued) {
       this.shaderWarmupWarningIssued = true;
@@ -342,7 +348,6 @@ export class GpuVfxSystem {
       );
       this.diagnosticEventSink?.('gpu:vfx_shader_warmup_failed');
     }
-    this.stopShaderWarmup();
   }
 
   /** No pending warmup work remains; failed warmup deliberately falls back to normal rendering. */
