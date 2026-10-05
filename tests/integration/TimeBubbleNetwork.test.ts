@@ -30,9 +30,11 @@ describe('TimeBubble reliable utility state without an Activity', () => {
     try {
       publish(base, true);
       expect(client.getLatestGameState()!.timeBubbles).toEqual([bubble]);
+      client.flushNetwork();
       bubble.charge = bubble.chargeCapacity;
       publish(base, true);
       expect(client.getLatestGameState()!.timeBubbles[0].charge).toBe(bubble.charge);
+      client.flushNetwork();
       const late = connect(await addClientRoom(network));
       expect(late.getLatestGameState()!.timeBubbles).toEqual([bubble]);
       use(hostRoom); host.broadcastExplosionEffect(bubble.x, bubble.y, bubble.radius, 0xff5b18, 'time_bubble_release', bubble.charge, 'TIME_BUBBLE');

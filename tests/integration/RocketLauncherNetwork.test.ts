@@ -31,6 +31,7 @@ describe('Rocket network state', () => {
     try {
       publish();
       expect(client.getLatestGameState()!.players.p).toMatchObject(player);
+      client.flushNetwork();
       const late = connect(await addClientRoom(network));
       expect(late.getLatestGameState()!.players.p.rocketMagazine).toEqual(player.rocketMagazine);
       const targets = [{ x: 10, y: 20, landsAt: 1001 }, { x: 40, y: 50, landsAt: 1270 }];

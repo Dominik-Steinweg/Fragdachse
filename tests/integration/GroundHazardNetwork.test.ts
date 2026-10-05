@@ -22,6 +22,7 @@ async function setup() {
     targetVulnerabilities: [], ak47StrategicTargets: [], burningGround: { cells: [] },
   };
   const publish = (full = false) => {
+    use(clientRoom); client.flushNetwork();
     use(hostRoom); host.publishGameState(state, full); hostRoom.room.update(); use(clientRoom);
     client.getLatestGameState();
   };
@@ -41,6 +42,7 @@ describe('ground hazard and base burn replication', () => {
     try {
       use(hostRoom); host.publishGameState(state, true); hostRoom.room.update(); use(clientRoom);
       expect(client.getLatestGameState()!.burningGround).toEqual(state.burningGround);
+      client.flushNetwork();
       synchronizedClock.mockReturnValue(hostNow + 5_000);
       localClock.mockReturnValue(hostNow + 5_000 + offset);
       use(hostRoom); host.publishGameState(state); hostRoom.room.update(); use(clientRoom);

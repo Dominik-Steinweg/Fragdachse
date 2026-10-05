@@ -30,10 +30,12 @@ describe('attack drone World replication', () => {
       const resumed = connect(resumedRoom);
       expect(resumed.getLatestGameState()!.attackDrones).toEqual(h.system.getSnapshot());
       expect(resumed.getLatestGameState()!.attackDroneBombs).toEqual(late.getLatestGameState()!.attackDroneBombs);
+      resumed.flushNetwork();
       // Several host updates intentionally have no publication. The next complete projection heals the gap.
       h.run(2000);h.owner.available=false;h.run(1500);publish();
       use(resumedRoom); expect(resumed.getLatestGameState()!.attackDrones).toEqual(h.system.getSnapshot());
       const oldSnapshot = resumedRoom.room.getGlobal('gsi');
+      resumed.flushNetwork();
       h.system.clear();h.bombs.length=0;publish();
       use(resumedRoom); expect(resumed.getLatestGameState()!.attackDrones).toEqual([]);expect(resumed.getLatestGameState()!.attackDroneBombs).toEqual([]);
       use(hostRoom);host.publishWorldAndActivity({...world,worldRevision:2},null);use(resumedRoom);

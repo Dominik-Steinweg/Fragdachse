@@ -221,6 +221,7 @@ describe('World snapshot essence transport', () => {
     expect(received?.players.p1.adrenaline).toBe(0.125);
     expect(replica.apply(received?.adrenalineEssence)).toBe(true);
     expect(replica.getState().clusters).toEqual([cluster]);
+    client.flushNetwork();
     useRoom(hostRoom);
     host.publishGameState(base);
     hostRoom.room.update();
@@ -349,6 +350,7 @@ describe('LobbyWorld L3 – Preview ist passiv, aber aktuell', () => {
     expect(state?.rockRemovals).toEqual([8]);
     expect(state?.placeableRocks).toEqual([construction]);
     expect(explosionFx).toHaveBeenCalledWith(120, 160, 48, 0xffaa44, 'rocket', undefined, 'ROCKET_LAUNCHER');
+    preview.flushNetwork();
 
     // Movement, Death/Respawn und Dismantle bleiben normale World-Snapshots.
     useRoom(hostRoom);
@@ -362,6 +364,7 @@ describe('LobbyWorld L3 – Preview ist passiv, aber aktuell', () => {
     expect(state?.players.p0).toMatchObject({ x: 180, y: 200 });
     expect(state?.players.p1.alive).toBe(false);
     expect(state?.placeableRocks).toEqual([]);
+    preview.flushNetwork();
 
     useRoom(hostRoom);
     host.publishGameState(worldSnapshot(

@@ -27,6 +27,7 @@ describe('Earthbreak authoritative replication', () => {
       targetVulnerabilities: [], ak47StrategicTargets: [], burningGround: { cells: [] },
     };
     const publish = (full = false) => {
+      use(clientRoom); client.flushNetwork();
       use(hostRoom); host.publishGameState({ ...base, earthbreak: runtime.snapshot() }, full);
       hostRoom.room.update(); use(clientRoom);
     };

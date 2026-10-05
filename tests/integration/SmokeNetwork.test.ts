@@ -26,6 +26,7 @@ describe('smoke World replication', () => {
       targetVulnerabilities: [], ak47StrategicTargets: [], burningGround: { cells: [] },
     };
     const publish = (now: number, full = false) => {
+      use(clientRoom); client.flushNetwork();
       use(hostRoom); host.publishGameState({ ...base, smokes: runtime.getSnapshots(now), smokeTargets: runtime.getTargetSnapshots(now) }, full);
       hostRoom.room.update(); use(clientRoom);
     };

@@ -34,6 +34,7 @@ describe('plasma burner World replication', () => {
     try {
       publish();
       expect(client.getLatestGameState()!.players.p.plasmaBurnerOverload).toEqual(player.plasmaBurnerOverload);
+      client.flushNetwork();
       const late = connect(await addClientRoom(network));
       expect(late.getLatestGameState()!.players.p.plasmaBurnerOverload).toEqual(player.plasmaBurnerOverload);
       use(hostRoom); host.broadcastPlasmaBurnerPulse(pulse);

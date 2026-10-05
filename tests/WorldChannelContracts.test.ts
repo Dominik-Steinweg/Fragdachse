@@ -83,6 +83,7 @@ describe('World-Kanal – Replikation', () => {
       hostRoom.room.update();
       const client = bridgeFor(clientRoom);
       expect(client.getLatestGameState()?.players.p0.x).toBe(10);
+      client.flushNetwork();
       const link = hostRoom.transport.links[0];
       const send = link.send.bind(link);
       let delayed: Parameters<typeof link.send> | undefined;
@@ -98,6 +99,7 @@ describe('World-Kanal – Replikation', () => {
       expect(host.getLatestGameState()?.players.p0.x).toBe(20);
       use(clientRoom);
       expect(client.getLatestGameState()?.players.p0.x).toBe(20);
+      client.flushNetwork();
       use(hostRoom);
       link.fastReady = false;
       host.publishGameState(snapshot(30));
@@ -134,11 +136,13 @@ describe('World-Kanal – Replikation', () => {
       use(clientRoom);
       if (reset === 'cache') client.resetGameStateCache();
       expect(client.getLatestGameState()?.players.p0.x).toBe(reset === 'World' ? 20 : 10);
+      client.flushNetwork();
       use(hostRoom);
       host.publishGameState(snapshot(30), true);
       hostRoom.room.update();
       use(clientRoom);
       expect(client.getLatestGameState()?.players.p0.x).toBe(30);
+      client.flushNetwork();
       use(hostRoom);
       host.publishGameState(snapshot(40));
       hostRoom.room.update();
@@ -182,6 +186,7 @@ describe('World-Kanal – Replikation', () => {
       intercept.mockRestore();
       const accepted = client.getLatestGameState();
       expect(accepted?.players.p0.x).toBe(20);
+      client.flushNetwork();
       for (const baseline of [undefined, null, '2', -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, 100]) {
         sender.send({ t: 'b', g: [['gs', { ...full, _s: 3, _b: baseline }]] }, 'rel');
         expect(client.getLatestGameState(), `invalid full basis ${String(baseline)}`).toBe(accepted);
@@ -212,6 +217,7 @@ describe('World-Kanal – Replikation', () => {
       const originalFull = hostRoom.room.getGlobal('gsi');
       const first = bridgeFor(firstRoom);
       expect(first.getLatestGameState()?.players.p0.x).toBe(10);
+      first.flushNetwork();
       use(hostRoom);
       firstRoom.transport.links[0].counterpart.fastReady = false;
       if (connection === 'resume') {
@@ -230,6 +236,7 @@ describe('World-Kanal – Replikation', () => {
       use(receiverRoom);
       receiver.getLatestGameState();
       const before = receiver.getLatestGameState();
+      receiver.flushNetwork();
       const hostLink = receiverRoom.transport.links.at(-1)!.counterpart;
       const send = hostLink.send.bind(hostLink);
       const delayed: Parameters<typeof hostLink.send>[] = [];
@@ -254,6 +261,8 @@ describe('World-Kanal – Replikation', () => {
       const full = receiver.getLatestGameState();
       expect.soft(full?.players.p0.x).toBe(200);
       expect.soft(full?.rocks).toEqual([{ id: 0, hp: rocks.getHP(0) }]);
+      expect(receiver.getLatestGameState()).toBe(full);
+      receiver.flushNetwork();
       const newer = receiver.getLatestGameState();
       expect(newer?.players.p0.x).toBe(300);
       expect.soft(newer?.rocks).toEqual([{ id: 0, hp: rocks.getHP(0) }]);
@@ -530,6 +539,7 @@ describe('World-Kanal – Replikation', () => {
       };
       publish(true); use(clientRoom);
       expect(client.getLatestGameState()!.players[pilot].turretControl).toEqual(occupied);
+      client.flushNetwork();
       const joining = bridgeFor(await addClientRoom(network));
       expect(joining.getLatestGameState()!.players[pilot].turretControl).toEqual(occupied);
       publish(); use(clientRoom);
@@ -795,6 +805,8 @@ describe('World-Kanal – Essenz im Lobby-Testgelaende', () => {
       host.publishWorldAndActivity(world({ definitionId: 'world:lobby' }), null);
       const client = bridgeFor(clientRoom);
       const publish = (next: EssenceState, now: number, full = false) => {
+        useRoom(clientRoom);
+        client.flushNetwork();
         useRoom(hostRoom);
         host.publishGameState({ ...emptyWorldState, adrenalineEssence: publisher.build(next, now, full) }, full);
         hostRoom.room.update();
@@ -828,6 +840,7 @@ describe('World-Kanal – Essenz im Lobby-Testgelaende', () => {
       const joinedReplica = new AdrenalineEssenceClientReplica(scope);
       expect(joinedReplica.apply(joining.getLatestGameState()!.adrenalineEssence)).toBe(true);
       expect(joinedReplica.getState()).toEqual(replica.getState());
+      joining.flushNetwork();
       const repeatedReceipt = publish(state(4, 0.125), 1050);
       expect(replica.apply(repeatedReceipt)).toBe(true);
       expect(replica.drainReceipts()).toEqual([receipt]);

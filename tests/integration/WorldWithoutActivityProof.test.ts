@@ -289,6 +289,7 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
       expect(baseline).toBeDefined();
       expect(baseline?.placeableRocks).toEqual([]);
       client.setLocalWorldLoadReady(WORLD.worldRevision);
+      client.flushNetwork();
       useRoom(hostRoom);
       expect(host.areWorldParticipantsLoadReady()).toBe(true);
 
@@ -485,6 +486,7 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
         gridX: firstTargetGrid.gridX,
         gridY: firstTargetGrid.gridY,
       });
+      client.flushNetwork();
 
       useRoom(hostRoom);
       hostPlacement.applyDamage(placed!.id, 40, clientId);
@@ -494,6 +496,7 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
       replicated = client.getLatestGameState();
       clientPlacement.syncFromSnapshot(replicated!.placeableRocks);
       expect(replicated?.placeableRocks[0]).toMatchObject({ hp: construction.maxHp - 40, angle: Math.PI / 3 });
+      client.flushNetwork();
 
       // 7. Repositionieren erzeugt einen neuen autoritativen Runtime-Eintrag; der alte wird entfernt.
       useRoom(hostRoom);
@@ -537,6 +540,7 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
         gridX: secondTargetGrid.gridX,
         gridY: secondTargetGrid.gridY,
       });
+      client.flushNetwork();
 
       // 8. Dismantle, Player-Detach und World-Zerstoerung lassen den Room bestehen.
       useRoom(hostRoom);

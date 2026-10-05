@@ -9,9 +9,17 @@ import { ArenaBuilder } from '../../src/arena/ArenaBuilder';
 import { WorldPresentationFrameBinding } from '../../src/world/WorldPresentationFrameBinding';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { EnemyManager } from '../../src/entities/EnemyManager';
+import { ClientUpdateCoordinator } from '../../src/scenes/arena/ClientUpdateCoordinator';
+import { resolveCoopDefenseEnemyConfigs } from '../../src/config/coopDefenseEnemies';
+import { healthBarTestScene } from '../healthBarTestScene';
 
 // Die Boot-Barriere und die echten Overlay-Methoden laufen ohne GPU/DOM.
 vi.mock('../../src/assets/WoodlandAssets',()=>({preloadWoodlandAssets:vi.fn(),assertWoodlandAssetsReady:vi.fn()}));
+vi.mock('../../src/effects/PlasmaChargeRenderer', async importOriginal => ({
+  ...await importOriginal<typeof import('../../src/effects/PlasmaChargeRenderer')>(),
+  PlasmaChargeRenderer: class { sync() {} destroy() {} },
+}));
 vi.mock('phaser', () => ({
   Scene: class {},
   Core: { Events: { POST_RENDER: 'postrender' } },
@@ -32,6 +40,7 @@ vi.mock('phaser', () => ({
     Particles: { ParticleProcessor: class {} },
   },
   Math: {
+    Angle: { Wrap: (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle)) },
     Vector2: class {},
     Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)),
     Linear: (a: number, b: number, t: number) => a + (b - a) * t,
@@ -115,6 +124,93 @@ import { exportStoredGameProgressJson, getStoredCoopDefenseProgress, invalidateL
  */
 
 const LOBBY_WORLD = getLobbyWorldDefinition();
+
+describe('Client full snapshots at the Scene frame boundary', () => {
+  it.each(['none', 'train HUD', 'input between frames', 'protected entry'] as const)('delivers the full enemy baseline after an earlier %s read', async reader => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const clientRoom = await addClientRoom(network);
+    const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    const configs = resolveCoopDefenseEnemyConfigs(1);
+    const hostEnemies = new EnemyManager(healthBarTestScene().scene, configs);
+    const clientEnemies = new EnemyManager(healthBarTestScene().scene, configs);
+    const state: Parameters<NetworkBridge['publishGameState']>[0] = {
+      roundStartTime: 0, players: {}, projectiles: null, enemies: null, rocks: null,
+      placeableRocks: [], reinforcementMatrices: [], energyInjectorEffects: [], energyInjectorFocus: [],
+      remoteControlTurrets: [], decoys: [], smokes: [], fires: [], powerups: null, pedestals: null,
+      nukes: [], airstrikes: [], meteors: [], tunnels: [], train: null, bases: [], captureTheBeer: null,
+      coopDefenseCarry: [], stinkClouds: [], timeBubbles: [], teslaDomes: [], energyShields: [],
+      guardianSpirits: [], repairDrones: [], slimeTrail: { cells: [], affectedEnemies: [] },
+      targetVulnerabilities: [], ak47StrategicTargets: [], burningGround: { cells: [] },
+    };
+    try {
+      use(hostRoom);
+      const host = new NetworkBridge();
+      host.activate();
+      host.publishWorldAndActivity({ worldRevision: 12, definitionId: 'world:lobby', seed: 4242,
+        generatorVersion: 3, layoutFingerprint: 'deadbeef' }, null);
+      host.publishGameState({ ...state, enemies: hostEnemies.getNetSnapshot() }, true);
+      hostRoom.room.update();
+      use(clientRoom);
+      bridge.resetGameStateCache();
+      clientEnemies.applySnapshot(bridge.getLatestGameState()!.enemies);
+      bridge.flushNetwork();
+      use(hostRoom);
+      const firstEnemy = hostEnemies.hostSpawnAtWorld(64, 128, 'rabid-badger');
+      const secondEnemy = hostEnemies.hostSpawnAtWorld(96, 128, 'rabid-badger');
+      hostEnemies.requestFullNetSnapshot();
+      host.publishGameState({ ...state, enemies: hostEnemies.getNetSnapshot() }, true);
+      hostRoom.room.update();
+      host.publishGameState({ ...state, enemies: hostEnemies.getNetSnapshot() });
+      hostRoom.room.update();
+      use(clientRoom);
+      if (reader === 'input between frames') {
+        Object.create(ClientUpdateCoordinator.prototype).getLocalRage();
+      }
+      bridge.updateNetwork();
+      vi.spyOn(bridge, 'getTrainEvent').mockReturnValue(reader === 'train HUD' ? { spawnAt: 0 } as never : null);
+      vi.spyOn(bridge, 'computeSecondsLeft').mockReturnValue(10);
+      const noop = () => {};
+      const scene = Object.create(ArenaScene.prototype) as any;
+      scene.ctx = { centerHUD: { updateTimer: noop, hideTrainWidget: noop, updateTrainHP: noop, setTrainArrival: noop } };
+      scene.captureTheBeerPresentation = { syncClient: noop };
+      scene.resolveArenaTimeOfDaySignals = () => ({});
+      scene.arenaRuntime = {
+        getMissionNow: () => 0, isTrainDestroyedShown: () => false,
+        runClientFrame: () => clientEnemies.applySnapshot(bridge.getLatestGameState()!.enemies),
+        getLocalWorldPresentation: () => ({ required: false }),
+        getPowerUpPedestalSnapshot: () => [], syncRuntimeTimeOfDay: () => false,
+        presentation: { syncWorldClientPresentation: noop, requestWorldStaticShadowBake: noop },
+      };
+      if (reader === 'protected entry') {
+        // Entry keeps the previous frame until its final flush. Materialization then resets
+        // the merge cache through the existing lifecycle boundary before the new owner reads.
+        bridge.getLatestGameState();
+        scene.renderers = { gpuVfx: { update: noop } };
+        scene.getArenaLoadingScreenState = () => ({});
+        scene.updateProtectedArenaEntry(16);
+        bridge.resetGameStateCache();
+      }
+      scene.runArenaRoleFrame(16, 'ARENA', 'ffa', null, true, false, false, null);
+      expect(clientEnemies.getEnemy(firstEnemy.id)).toBeDefined();
+      expect(clientEnemies.getEnemy(secondEnemy.id)).toBeDefined();
+      const full = bridge.getLatestGameState();
+      bridge.flushNetwork();
+      bridge.updateNetwork();
+      expect(bridge.getLatestGameState()).not.toBe(full);
+      scene.runArenaRoleFrame(16, 'ARENA', 'ffa', null, true, false, false, null);
+      expect(clientEnemies.getEnemy(firstEnemy.id)).toBeDefined();
+      expect(clientEnemies.getEnemy(secondEnemy.id)).toBeDefined();
+    } finally {
+      vi.restoreAllMocks();
+      hostEnemies.destroy();
+      clientEnemies.destroy();
+      clearActiveSession();
+      clientRoom.room.destroy();
+      hostRoom.room.destroy();
+    }
+  });
+});
 
 function read(path: string): string {
   return readFileSync(resolve(process.cwd(), path), 'utf8');

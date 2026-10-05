@@ -31,6 +31,7 @@ describe('plague World replication', () => {
       runtime.applyDirect(targets[0],plagueSource('p1',{pandemicEnabled:1}),0); runtime.spread(targets,0);
       publish(0,true);
       expect(client.getLatestGameState()!.stinkPlague).toEqual(runtime.getSnapshot(0));
+      client.flushNetwork();
       use(hostRoom); const active={ utilityId:'STINK_CLOUD' as const,phase:'active' as const,cloudId:2,activeUntil:4000,
         cooldownDurationMs:8000,moveSpeedBonus:.2,damageReduction:.2 };
       host.publishStinkCloudUtilityState('p1',active);

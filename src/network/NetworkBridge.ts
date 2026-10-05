@@ -1132,6 +1132,7 @@ export class NetworkBridge {
    */
   flushNetwork(): void {
     requireRoom().update();
+    this.holdFullGameStateUntilFlush = false;
   }
 
   /** Meldet den Abriss der Verbindung (Host weg, Broker weg, kein direkter Weg moeglich). */
@@ -3015,6 +3016,7 @@ export class NetworkBridge {
   private publishSeq = 0;
   private publishedGameStateBaseline: { worldRevision: number; sequence: number } | null = null;
   private consumedGameStateBaseline = 0;
+  private holdFullGameStateUntilFlush = false;
   private burningGroundPublishTicks = 0;
   private lastPublishedGroundHadWarnings = false;
   private readonly lastPublishedBurningGround = new Map<number, EncodedBurningGroundCell>();
@@ -3044,6 +3046,7 @@ export class NetworkBridge {
     this.lastSeenSeq = -1;
     this.publishedGameStateBaseline = null;
     this.consumedGameStateBaseline = 0;
+    this.holdFullGameStateUntilFlush = false;
     this.burningGroundPublishTicks = 0;
     this.lastPublishedGroundHadWarnings = false;
     this.lastPublishedBurningGround.clear();
@@ -3241,6 +3244,9 @@ export class NetworkBridge {
     const expectedWorldRevision = this.getWorldDescriptor()?.worldRevision ?? null;
     this.ensureGameStateWorldRevision(expectedWorldRevision);
     if (expectedWorldRevision === null) return undefined;
+    // HUD and input may read first, including between frames. Preserve a full snapshot until
+    // the frame-end flush so the entity consumers see its baseline before any following delta.
+    if (this.holdFullGameStateUntilFlush && !isHost()) return this.cachedGameState;
 
     const fastRaw = getState(KEY_GAME_STATE) as Record<string, unknown> | undefined;
     const initialRaw = getState(KEY_GAME_STATE_INITIAL) as Record<string, unknown> | undefined;
@@ -3358,6 +3364,7 @@ export class NetworkBridge {
       coopDefenseCarry: (raw.cc as SyncedCoopDefenseCarryState | undefined) ?? [],
     };
     this.cachedGameState = state;
+    if (raw._full === true && !isHost()) this.holdFullGameStateUntilFlush = true;
     this.gameStateVersion++;
     return state;
   }
@@ -3369,6 +3376,7 @@ export class NetworkBridge {
     this.lastSeenSeq = -1;
     if (this.publishedGameStateBaseline?.worldRevision !== worldRevision) this.publishedGameStateBaseline = null;
     this.consumedGameStateBaseline = 0;
+    this.holdFullGameStateUntilFlush = false;
     this.projectileStaticCache.clear();
   }
 

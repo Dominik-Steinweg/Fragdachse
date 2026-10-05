@@ -22,6 +22,7 @@ describe('MG World replication',()=>{
     try {
       h.runtime.hit('p1','t1',h.target,0);publish(0,true);
       expect(client.getLatestGameState()!.mgAttrition).toEqual(h.runtime.snapshot(0));
+      client.flushNetwork();
       const late=connect(await addClientRoom(network));expect(late.getLatestGameState()!.mgAttrition).toEqual(h.runtime.snapshot(0));
       const recipient=mgTarget('next',50);h.setTargets([recipient]);h.runtime.death(h.target,100);
       publish(100);publish(101);

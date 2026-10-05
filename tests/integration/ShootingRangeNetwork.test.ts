@@ -43,6 +43,7 @@ describe('shooting range World requests and replication', () => {
       runtime.recordDamage(runtime.snapshot().targets[0]!, 80, 0);
       publish(0, true); use(clientRoom);
       expect(client.getLatestGameState()?.shootingRange).toEqual(runtime.snapshot());
+      client.flushNetwork();
       const link = hostRoom.transport.links[0], send = link.send;
       link.send = () => {}; publish(250); link.send = send;
       publish(500); use(clientRoom);
