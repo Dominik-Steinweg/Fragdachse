@@ -919,6 +919,56 @@ describe('arena loading barrier', () => {
 });
 
 describe('NetworkBridge placement preview presence', () => {
+  it('rejects malformed relayed previews before they reach host or client renderers', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const senderRoom = await addClientRoom(network);
+    const observerRoom = await addClientRoom(network);
+    const use = (room: typeof hostRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    try {
+      use(hostRoom);
+      const host = new NetworkBridge(); host.activate();
+      host.publishWorldAndActivity({ worldRevision: 11, definitionId: 'world:test', seed: 5,
+        generatorVersion: 1, layoutFingerprint: 'feedface' }, null);
+      use(observerRoom);
+      const observer = new NetworkBridge(); observer.activate();
+      const preview = { active: true, kind: 'turret', worldRevision: 11,
+        gridX: 3, gridY: 4, x: 224, y: 288, isValid: true, frame: 1 };
+      const send = (value: unknown) => {
+        senderRoom.room.setPlayerState('p1', 'ppv', value);
+        senderRoom.room.update(); hostRoom.room.update();
+      };
+      const invalid = [
+        { constructionId: 'missing-construction' }, { constructionId: 'constructor' },
+        { turretWeaponId: 'missing-weapon' }, { turretWeaponId: 'constructor' },
+        { kind: 'missing-kind' }, { active: 'true' }, { isValid: 'false' },
+        { x: null }, { x: '224' }, { y: Infinity }, { gridX: 1.5 }, { gridY: '4' },
+        { frame: -1 }, { frame: {} }, { stage: 3 }, { anchorX: {} },
+        { anchorY: '1' }, { anchorGridX: .5 }, { anchorGridY: null },
+        { powerUpDefId: 'constructor' }, { powerUpDefId: {} },
+      ];
+      for (const overrides of invalid) {
+        send({ ...preview, ...overrides });
+        use(hostRoom);
+        expect(host.getPlayerPlacementPreview('p1'), JSON.stringify(overrides)).toBeNull();
+        use(observerRoom);
+        expect(observer.getPlayerPlacementPreview('p1'), JSON.stringify(overrides)).toBeNull();
+      }
+      for (const valid of [
+        preview,
+        { ...preview, constructionId: 'spore_turret', turretWeaponId: 'SPORE_TURRET_PLASMA' },
+        { ...preview, kind: 'rock', gridX: -1, x: -32, isValid: false },
+        { ...preview, kind: 'pedestal', powerUpDefId: 'HEALTH_PACK' },
+        { ...preview, kind: 'drone_station', constructionId: 'attack_drone_station' },
+        { ...preview, kind: 'tunnel', stage: 2, anchorX: -32, anchorY: 0, anchorGridX: -1, anchorGridY: 0 },
+      ]) {
+        send(valid);
+        use(hostRoom); expect(host.getPlayerPlacementPreview('p1')).toEqual(valid);
+        use(observerRoom); expect(observer.getPlayerPlacementPreview('p1')).toEqual(valid);
+      }
+    } finally { clearActiveSession(); }
+  });
+
   it('sends changes immediately, refreshes active previews, and expires remote state', async () => {
     vi.useFakeTimers();
     try {

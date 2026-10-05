@@ -120,7 +120,9 @@ import { DEFAULT_LOADOUT, getUtilityBaseId, ULTIMATE_CONFIGS, UTILITY_CONFIGS, W
 import type { HeldItemSlot } from '../loadout/HeldItemSlotTracker';
 import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { getWorldDefinition } from '../config/authoring/authoredScenarios';
-import { COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS, normalizeConstructionId } from '../config/coopDefenseConstructions';
+import { COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS, isConstructionId, normalizeConstructionId } from '../config/coopDefenseConstructions';
+import { TURRET_VISUALS } from '../config/turretVisuals';
+import { POWERUP_DEFS } from '../powerups/PowerUpConfig';
 import { getCoopDefenseLevelForXp } from '../utils/coopDefenseProgression';
 import { sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
 import { sanitizeCoopDefenseEquippedItems } from '../utils/coopDefenseItems';
@@ -647,8 +649,24 @@ function isSamePlacementPreview(
     && left.powerUpDefId === right.powerUpDefId;
 }
 
-function normalizePlacementPreview(preview: PlacementPreviewNetState | null): PlacementPreviewNetState | null {
-  return preview?.active ? preview : null;
+function normalizePlacementPreview(preview: unknown): PlacementPreviewNetState | null {
+  if (!isRecord(preview) || preview.active !== true || typeof preview.isValid !== 'boolean') return null;
+  if (preview.kind !== 'rock' && preview.kind !== 'turret' && preview.kind !== 'pedestal'
+    && preview.kind !== 'tunnel' && preview.kind !== 'drone_station') return null;
+  if (!Number.isFinite(preview.x) || !Number.isFinite(preview.y)
+    || !Number.isSafeInteger(preview.gridX) || !Number.isSafeInteger(preview.gridY)
+    || typeof preview.frame !== 'number' || !Number.isSafeInteger(preview.frame) || preview.frame < 0) return null;
+  if (preview.stage !== undefined && preview.stage !== 1 && preview.stage !== 2) return null;
+  if ((preview.anchorX !== undefined && !Number.isFinite(preview.anchorX))
+    || (preview.anchorY !== undefined && !Number.isFinite(preview.anchorY))
+    || (preview.anchorGridX !== undefined && !Number.isSafeInteger(preview.anchorGridX))
+    || (preview.anchorGridY !== undefined && !Number.isSafeInteger(preview.anchorGridY))) return null;
+  if (preview.constructionId !== undefined && !isConstructionId(preview.constructionId)) return null;
+  if (preview.turretWeaponId !== undefined && (typeof preview.turretWeaponId !== 'string'
+    || !Object.prototype.hasOwnProperty.call(TURRET_VISUALS, preview.turretWeaponId))) return null;
+  if (preview.powerUpDefId !== undefined && (typeof preview.powerUpDefId !== 'string'
+    || !Object.prototype.hasOwnProperty.call(POWERUP_DEFS, preview.powerUpDefId))) return null;
+  return preview as unknown as PlacementPreviewNetState;
 }
 
 function isSamePlayerInput(input: PlayerInput, previous: PlayerInput | null): boolean {
@@ -1720,9 +1738,8 @@ export class NetworkBridge {
   }
 
   getPlayerPlacementPreview(playerId: string): PlacementPreviewNetState | null {
-    const preview = this.playerStateMap.get(playerId)?.getState(KEY_PLACEMENT_PREVIEW) as
-      PlacementPreviewNetState | null | undefined;
-    if (!preview?.active) return null;
+    const preview = normalizePlacementPreview(this.playerStateMap.get(playerId)?.getState(KEY_PLACEMENT_PREVIEW));
+    if (!preview) return null;
     const world = this.getWorldDescriptor();
     if (!world || preview.worldRevision !== world.worldRevision) return null;
     if (playerId === this.getLocalPlayerId()) return preview;
