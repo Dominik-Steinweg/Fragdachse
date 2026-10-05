@@ -42,8 +42,6 @@ export class CameraFeedbackController {
     clamped: false,
   };
 
-  private zoomPulseEnabled = false;
-
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly deps: CameraFeedbackDeps,
@@ -87,17 +85,6 @@ export class CameraFeedbackController {
 
     camera.scrollX = baseScrollX + output.offsetX;
     camera.scrollY = baseScrollY + output.offsetY;
-
-    // Zoom bleibt in Stufe 1 bewusst ungenutzt: bei `origin = (0, 0)` skaliert er um die
-    // Bildschirmecke, und das bildschirmfeste HUD liegt noch auf derselben Kamera. Erst mit
-    // der Klarheitskamera aus Stufe 2 lässt sich das sauber trennen.
-    if (this.zoomPulseEnabled && output.zoomScale !== 1) {
-      void output.zoomScale;
-    }
-  }
-
-  setZoomPulseEnabled(enabled: boolean): void {
-    this.zoomPulseEnabled = enabled;
   }
 
   /** World-Teardown: alle laufenden Quellen fallen lassen, damit nichts in die nächste World überläuft. */

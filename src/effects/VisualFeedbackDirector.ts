@@ -103,9 +103,6 @@ export class VisualFeedbackDirector {
     this.distortion.setTextureRebuiltHandler(() => {
       this.postFx.rebindDistortionTexture(this.distortion.getTextureKey());
     });
-    // Erst mit der Klarheitskamera aus Stufe 2 ist ein Zoom-Puls unbedenklich: vorher zöge er
-    // das bildschirmfeste HUD aus der Bildecke.
-    this.camera.setZoomPulseEnabled(this.postFx.isActive());
   }
 
   /** Kurzzeitige globale Reaktion. Nur die Ereignisse aus der Whitelist sind erlaubt. */
