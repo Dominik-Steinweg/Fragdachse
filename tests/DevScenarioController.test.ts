@@ -153,6 +153,31 @@ describe('Dev scenario automation lifecycle', () => {
     expect(window.devScenario).toBeUndefined();
     expect(api.run({ action: 'resume' })).toMatchObject({ ok: false });
   });
+  it.each(['render', 'blob', 'live'] as const)('retains capture ownership at the %s boundary', async boundary => {
+    enter(); controller.afterHostFrame();
+    class SnapshotImage { src = 'data:image/png;base64,fixture'; }
+    vi.stubGlobal('HTMLImageElement', SnapshotImage);
+    let render!: (image: SnapshotImage) => void;
+    (controller as any).scene.game.renderer.snapshot = (callback: typeof render) => { render = callback; };
+    let finishBlob!: (blob: Blob) => void;
+    const conversion = new Promise<Blob>(resolve => { finishBlob = resolve; });
+    const readBlob = vi.fn(() => boundary === 'blob' ? conversion : Promise.resolve(new Blob(['png'])));
+    const fetch = vi.fn(async (_url: string, options?: RequestInit) => options?.method === 'POST'
+      ? { ok: true, json: async () => ({ path: 'capture.png', url: '/capture.png' }) }
+      : { blob: readBlob });
+    vi.stubGlobal('fetch', fetch);
+    const pending = controller.captureToWorkspace();
+    render(new SnapshotImage());
+    if (boundary === 'blob') {
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+      expect(readBlob).toHaveBeenCalledOnce();
+    }
+    if (boundary !== 'live') controller.start({ ...defaultScenario(), seed: 777 });
+    finishBlob(new Blob(['png']));
+    if (boundary === 'live') await expect(pending).resolves.toMatchObject({ path: 'capture.png', url: '/capture.png' });
+    else await expect(pending).rejects.toThrow(/beendeten Szenario/);
+    expect(fetch.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(boundary === 'live');
+  });
 });
 
 it('restores world output diagnostics and rejects unknown passes before mutating the world',()=>{

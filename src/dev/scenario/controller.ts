@@ -805,12 +805,17 @@ export class DevScenarioController {
   }
   async captureToWorkspace(): Promise<{ path: string; url: string; status: Record<string, unknown> }> {
     const revision = this.captureRevision;
+    const assertCurrent = () => {
+      if (revision !== this.captureRevision || this.disposed) throw new Error('Aufnahme gehört zu einem inzwischen beendeten Szenario.');
+    };
     const url = await this.capture();
+    assertCurrent();
     const status = structuredClone(this.snapshot());
     const png = await (await fetch(url)).blob();
+    assertCurrent();
     const response = await fetch('/__dev-scenario-capture', { method: 'POST', headers: { 'content-type': 'image/png' }, body: png, signal: AbortSignal.timeout(15000) });
     const result = await response.json();
-    if (revision !== this.captureRevision || this.disposed) throw new Error('Aufnahme gehört zu einem inzwischen beendeten Szenario.');
+    assertCurrent();
     if (!response.ok) throw new Error(result.error ?? 'PNG konnte nicht gespeichert werden.');
     return { path: result.path, url: result.url, status };
   }
