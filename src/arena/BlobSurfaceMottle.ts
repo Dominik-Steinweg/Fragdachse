@@ -18,22 +18,6 @@ import { hashCell01 as hash01 } from './CellHash';
 import { getBlobSurfaceMottleTextureKey } from './BlobSurfaceProfile';
 import type { BlobSurfaceMottleConfig, BlobSurfaceProfile } from './BlobSurfaceProfile';
 
-export interface BlobSurfaceMottleMetrics {
-  offsetX: number;
-  offsetY: number;
-}
-
-export interface BlobSurfaceMottleBakeBounds extends BlobSurfaceMottleMetrics {
-  width: number;
-  height: number;
-  layerDepth: number;
-}
-
-export interface BlobSurfaceMottleBakeResult {
-  layers: Phaser.GameObjects.RenderTexture[];
-  silhouetteCutout: Phaser.GameObjects.RenderTexture | null;
-}
-
 /**
  * Falloff textures are keyed by their gradient, not by the profile: identical falloffs are
  * common across layers and profiles, and a per-layer key would allocate the same 32 px canvas
@@ -161,64 +145,4 @@ export function stampBlobSurfaceMottle(
       }
     }
   }
-}
-
-/**
- * Bakes and silhouette-clips the profile-selected material layers for any 47-Blob surface.
- *
- * `cells` is the **material source** and `silhouetteImages` the **current outline**; the two are
- * deliberately separate parameters. For a destructible rock field the source must stay the full
- * inventory of the round while the outline shrinks – otherwise every destruction re-scatters the
- * stamps of untouched neighbours (see `RockOverlayRegions`).
- */
-export function bakeBlobSurfaceMottle(
-  scene: Phaser.Scene,
-  profile: BlobSurfaceProfile,
-  cells: readonly { gridX: number; gridY: number }[],
-  silhouetteImages: readonly Phaser.GameObjects.Image[],
-  bounds: BlobSurfaceMottleBakeBounds,
-  existingLayers: readonly Phaser.GameObjects.RenderTexture[] = [],
-  existingSilhouetteCutout: Phaser.GameObjects.RenderTexture | null = null,
-): BlobSurfaceMottleBakeResult {
-  const configs = [profile.mottle, ...(profile.additionalMottleLayers ?? [])];
-  // Ohne Quelle gibt es nichts zu stempeln, ohne Silhouette bliebe alles Gestempelte weggeschnitten.
-  if (cells.length === 0 || silhouetteImages.length === 0) {
-    for (const layer of existingLayers) layer.clear();
-    return { layers: [...existingLayers], silhouetteCutout: existingSilhouetteCutout };
-  }
-  const cutout = existingSilhouetteCutout ?? scene.add.renderTexture(bounds.offsetX, bounds.offsetY, bounds.width, bounds.height);
-  cutout.setOrigin(0, 0);
-  cutout.setDepth(bounds.layerDepth);
-  cutout.camera.setScroll(bounds.offsetX, bounds.offsetY);
-  // 'redraw': the command buffer is flushed, the scratch texture itself is never drawn.
-  cutout.setRenderMode('redraw');
-  cutout.clear();
-  cutout.fill(0x000000, 1);
-  cutout.erase(silhouetteImages);
-  cutout.render();
-
-  const layers: Phaser.GameObjects.RenderTexture[] = [];
-  for (let layerIndex = 0; layerIndex < configs.length; layerIndex += 1) {
-    const mottle = configs[layerIndex];
-    const layer = existingLayers[layerIndex]
-      ? existingLayers[layerIndex]
-      : scene.add.renderTexture(bounds.offsetX, bounds.offsetY, bounds.width, bounds.height);
-    layer.setOrigin(0, 0);
-    layer.setDepth(bounds.layerDepth + 0.05 + layerIndex * 0.01);
-    // Die sichtbare RenderTexture steht bereits an `bounds.offset`. Ihr Inhalt bleibt dagegen
-    // dauerhaft texturlokal. Der Regional-Rebuild arbeitet ebenfalls in diesem Raum; eine hier
-    // gescrollte interne Kamera verschiebt im WebGL-Vollbake die Mottle-Struktur um den Arena-
-    // Offset und laesst sie beim ersten Chunk-Neubau sichtbar springen.
-    layer.camera.setScroll(0, 0);
-    layer.setBlendMode(mottle.blend === 'multiply' ? Phaser.BlendModes.MULTIPLY : Phaser.BlendModes.NORMAL);
-    layer.clear();
-    stampBlobSurfaceMottle(scene, layer, profile, mottle, cells, layerIndex);
-    layer.render();
-    // Auch der Schnitt liest nur die Cutout-Textur. So gelangt das weltpositionierte Hilfs-Image
-    // nicht wieder durch eine zweite, von `bounds.offset` abhaengige Kameratransformation.
-    layer.erase(cutout.texture.key, bounds.width * 0.5, bounds.height * 0.5);
-    layer.render();
-    layers.push(layer);
-  }
-  return { layers, silhouetteCutout: cutout };
 }

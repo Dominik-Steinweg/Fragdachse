@@ -1,4 +1,4 @@
-import * as Phaser from 'phaser';
+import type * as Phaser from 'phaser';
 import type { RockMossPlacement } from './RockMossField';
 
 /**
@@ -18,18 +18,6 @@ import type { RockMossPlacement } from './RockMossField';
  * Der Verlauf folgt immer der *aktuellen* Silhouette, weil die Maskenframes am selben
  * Autotile-Index haengen wie die Felsen selbst.
  */
-
-export interface RockMossBakeBounds {
-  offsetX: number;
-  offsetY: number;
-  width: number;
-  height: number;
-}
-
-export interface RockMossBakeResult {
-  layer: Phaser.GameObjects.RenderTexture | null;
-  cutout: Phaser.GameObjects.RenderTexture | null;
-}
 
 /**
  * Legt die Stanzform an: vollflaechig deckend, abzueglich der Verlaufsmasken der stehenden Felsen.
@@ -71,50 +59,4 @@ export function stampRockMoss(
       scaleY: placement.mirrorY ? -scale : scale,
     });
   }
-}
-
-/**
- * Backt die gesamte Moosschicht neu.
- *
- * Layer und Stanzform werden bewusst wiederverwendet statt neu erzeugt: Beide sind arenagross,
- * und sie bei jeder Hindernisaenderung neu zu allokieren waere auf den breiten Karten ein
- * spuerbarer Ruckler – dieselbe Ueberlegung wie bei den Fels-Mottle-Layern.
- */
-export function bakeRockMossLayer(
-  scene: Phaser.Scene,
-  placements: readonly RockMossPlacement[],
-  maskImages: readonly Phaser.GameObjects.Image[],
-  bounds: RockMossBakeBounds,
-  depth: number,
-  existing: RockMossBakeResult = { layer: null, cutout: null },
-  layerAlpha = 1,
-): RockMossBakeResult {
-  if (placements.length === 0) {
-    existing.layer?.clear();
-    return existing;
-  }
-
-  const cutout = existing.cutout ?? scene.add.renderTexture(bounds.offsetX, bounds.offsetY, bounds.width, bounds.height);
-  cutout.setOrigin(0, 0);
-  cutout.setDepth(depth);
-  cutout.camera.setScroll(bounds.offsetX, bounds.offsetY);
-  // 'redraw': Der Kommandopuffer wird geleert, die Stanzform selbst nie gezeichnet.
-  cutout.setRenderMode('redraw');
-  fillRockMossCutout(cutout, maskImages);
-
-  const layer = existing.layer ?? scene.add.renderTexture(bounds.offsetX, bounds.offsetY, bounds.width, bounds.height);
-  layer.setOrigin(0, 0);
-  layer.setDepth(depth);
-  // Die sichtbare RenderTexture steht bereits am Arena-Offset; ihr Inhalt bleibt wie beim
-  // regionalen Scratch-Rebuild texturlokal. Andernfalls springt die Moosstruktur beim ersten
-  // Chunk-Neubau um denselben vertikalen Offset.
-  layer.camera.setScroll(0, 0);
-  layer.clear();
-  stampRockMoss(scene, layer, placements, -bounds.offsetX, -bounds.offsetY, layerAlpha);
-  layer.render();
-
-  layer.erase(cutout.texture.key, bounds.width * 0.5, bounds.height * 0.5);
-  layer.render();
-
-  return { layer, cutout };
 }

@@ -1,4 +1,4 @@
-import * as Phaser from 'phaser';
+import type * as Phaser from 'phaser';
 import type { RockVegetationPlacement } from './RockVegetationField';
 
 /**
@@ -20,18 +20,6 @@ import type { RockVegetationPlacement } from './RockVegetationField';
  * ueber die eigene Kante hinausreicht, franst die Matte an der neu entstandenen Grenze aus, statt
  * dort abgeschnitten zu werden.
  */
-
-export interface RockVegetationBakeBounds {
-  offsetX: number;
-  offsetY: number;
-  width: number;
-  height: number;
-}
-
-export interface RockVegetationBakeResult {
-  layer: Phaser.GameObjects.RenderTexture | null;
-  cutout: Phaser.GameObjects.RenderTexture | null;
-}
 
 /**
  * Legt die Stanzform an: vollflaechig deckend, abzueglich der Reichweitenmasken der stehenden
@@ -79,49 +67,4 @@ export function stampRockVegetation(
       scaleY: placement.bandPx / frame.height,
     });
   }
-}
-
-/**
- * Backt die gesamte Vegetationsschicht neu.
- *
- * Layer und Stanzform werden bewusst wiederverwendet statt neu erzeugt: Beide sind arenagross,
- * und sie bei jeder Hindernisaenderung neu zu allokieren waere auf den breiten Karten ein
- * spuerbarer Ruckler – dieselbe Ueberlegung wie bei den Fels-Mottle- und Moos-Layern.
- */
-export function bakeRockVegetationLayer(
-  scene: Phaser.Scene,
-  placements: readonly RockVegetationPlacement[],
-  maskImages: readonly Phaser.GameObjects.Image[],
-  bounds: RockVegetationBakeBounds,
-  depth: number,
-  existing: RockVegetationBakeResult = { layer: null, cutout: null },
-  layerAlpha = 1,
-): RockVegetationBakeResult {
-  if (placements.length === 0) {
-    existing.layer?.clear();
-    return existing;
-  }
-
-  const cutout = existing.cutout ?? scene.add.renderTexture(bounds.offsetX, bounds.offsetY, bounds.width, bounds.height);
-  cutout.setOrigin(0, 0);
-  cutout.setDepth(depth);
-  cutout.camera.setScroll(bounds.offsetX, bounds.offsetY);
-  // 'redraw': Der Kommandopuffer wird geleert, die Stanzform selbst nie gezeichnet.
-  cutout.setRenderMode('redraw');
-  fillRockVegetationCutout(cutout, maskImages);
-
-  const layer = existing.layer ?? scene.add.renderTexture(bounds.offsetX, bounds.offsetY, bounds.width, bounds.height);
-  layer.setOrigin(0, 0);
-  layer.setDepth(depth);
-  // Dieselbe Koordinatengrenze wie bei Moos: GameObject-Position traegt den Arena-Offset,
-  // Texturinhalt und Regional-Rebuild bleiben dauerhaft lokal.
-  layer.camera.setScroll(0, 0);
-  layer.clear();
-  stampRockVegetation(scene, layer, placements, -bounds.offsetX, -bounds.offsetY, layerAlpha);
-  layer.render();
-
-  layer.erase(cutout.texture.key, bounds.width * 0.5, bounds.height * 0.5);
-  layer.render();
-
-  return { layer, cutout };
 }
