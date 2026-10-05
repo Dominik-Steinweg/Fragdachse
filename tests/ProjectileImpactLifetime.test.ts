@@ -7,10 +7,12 @@ vi.mock('../src/effects/EffectUtils', () => ({
   destroyEmitter: (emitter: { destroy(): void }) => emitter.destroy(),
   mixColors: (color: number) => color,
   setCircleEmitZone() {},
+  registerGraphicsObject() {}, registerParticleEmitter() {}, recordParticleSpawn() {},
 }));
 
 import { HydraRenderer } from '../src/effects/HydraRenderer';
 import { SporeRenderer } from '../src/effects/SporeRenderer';
+import { RocketRenderer } from '../src/effects/RocketRenderer';
 import { ProjectilePresentationRuntime } from '../src/projectile/ProjectilePresentationRuntime';
 
 function fixture() {
@@ -20,6 +22,7 @@ function fixture() {
       active: true, scaleX: 1, scaleY: 1, rotation: 0,
       setScale: () => object, setDepth: () => object, setBlendMode: () => object,
       setAlpha: () => object, setTint: () => object, setRotation: () => object,
+      setStrokeStyle: () => object,
       explode: vi.fn(), destroy: vi.fn(() => { object.active = false; }),
     };
     objects.push(object); return object;
@@ -27,24 +30,26 @@ function fixture() {
   const tweens: Array<{ targets: unknown; onComplete(): void }> = [];
   const timers: Array<{ callback(): void; remove: ReturnType<typeof vi.fn> }> = [];
   const scene = {
-    add: { image: makeObject, particles: makeObject },
+    add: { image: makeObject, particles: makeObject, circle: makeObject },
     tweens: { add: (config: typeof tweens[number]) => { tweens.push(config); }, killTweensOf: vi.fn() },
     time: { delayedCall: (_delay: number, callback: () => void) => {
       const timer = { callback, remove: vi.fn() }; timers.push(timer); return timer;
     } },
   };
   const hydra = new HydraRenderer(scene as never), spore = new SporeRenderer(scene as never);
+  const rocket = new RocketRenderer(scene as never);
   const owner = new ProjectilePresentationRuntime(scene as never);
-  owner.bindRenderers({ hydra, spore } as never, null);
-  return { scene, objects, timers, tweens, hydra, spore, owner };
+  owner.bindRenderers({ hydra, spore, rocket } as never, null);
+  return { scene, objects, timers, tweens, hydra, spore, rocket, owner };
 }
 
 describe('projectile one-shot effects belong to their World presentation', () => {
-  it.each(['hydra', 'hydra-split', 'spore', 'spore_void'] as const)(
+  it.each(['hydra', 'hydra-split', 'spore', 'spore_void', 'rocket-collection'] as const)(
     'clears %s impacts and ignores callbacks retired by a World transition', kind => {
       const f = fixture();
       const impact = () => kind === 'hydra' ? f.hydra.playImpact(300, 300, 0xffffff)
         : kind === 'hydra-split' ? f.hydra.playSplitImpact(300, 300, 0xffffff, [0, 1])
+        : kind === 'rocket-collection' ? f.rocket.playCollection(300, 300, 0xffffff)
         : f.spore.playImpact(300, 300, 0xffffff, 1, kind);
       impact();
       expect(f.objects.length).toBeGreaterThan(0);

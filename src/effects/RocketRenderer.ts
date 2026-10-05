@@ -85,6 +85,8 @@ const SMOKE_SCALE_GROWTH = 1.3;
 
 export class RocketRenderer {
   private rockets = new Map<number, RocketVisual>();
+  private readonly collectionRings = new Set<Phaser.GameObjects.Arc>();
+  private readonly collectionTimers = new Map<Phaser.GameObjects.Particles.ParticleEmitter, Phaser.Time.TimerEvent>();
   /** Parallel zur Map, damit der Emissions-Tick ohne Iterator-Allokation laufen kann. */
   private readonly activeRockets: RocketVisual[] = [];
   private gpuVfx: GpuVfxSystem | null = null;
@@ -455,13 +457,14 @@ export class RocketRenderer {
       .setStrokeStyle(2, color, 0.95)
       .setBlendMode(Phaser.BlendModes.ADD);
     registerGraphicsObject(this.scene, 'rocketLifecycleGraphics', ring);
+    this.collectionRings.add(ring);
     this.scene.tweens.add({
       targets: ring,
       radius: 38,
       alpha: 0,
       duration: 420,
       ease: 'Cubic.easeOut',
-      onComplete: () => ring.destroy(),
+      onComplete: () => { if (this.collectionRings.delete(ring)) ring.destroy(); },
     });
 
     const burst = this.scene.add.particles(x, y, TEX_ROCKET_EXHAUST, {
@@ -479,7 +482,10 @@ export class RocketRenderer {
     // ein zusaetzliches explode(count, x, y) wuerde die Weltposition verdoppeln.
     burst.explode(18);
     recordParticleSpawn(this.scene, 'rocketLifecycleBurst', 18);
-    this.scene.time.delayedCall(520, () => burst.destroy());
+    const timer = this.scene.time.delayedCall(520, () => {
+      if (this.collectionTimers.delete(burst)) burst.destroy();
+    });
+    this.collectionTimers.set(burst, timer);
   }
 
   playSpentDestruction(x: number, y: number, color: number): void {
@@ -537,6 +543,16 @@ export class RocketRenderer {
 
   destroyAll(): void {
     this.pendingSmoke.length = 0; this.trailSamplers.clear();
+    for (const ring of this.collectionRings) {
+      this.scene.tweens.killTweensOf(ring);
+      ring.destroy();
+    }
+    this.collectionRings.clear();
+    for (const [emitter, timer] of this.collectionTimers) {
+      timer.remove(false);
+      emitter.destroy();
+    }
+    this.collectionTimers.clear();
     for (const id of this.getActiveIds()) {
       this.destroyVisual(id);
     }
