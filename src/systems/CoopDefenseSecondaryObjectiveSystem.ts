@@ -236,14 +236,6 @@ export class CoopDefenseSecondaryObjectiveSystem {
     return accepted;
   }
 
-  /** Host-only Naht für Archetypen mit einer echten Fail-Bedingung. */
-  reportObjectiveFailed(objectiveId: string): boolean {
-    const state = this.findObjectiveState(objectiveId);
-    if (!state || state.state !== 'active') return false;
-    this.failObjective(state);
-    return true;
-  }
-
   getPresentationState(): CoopDefenseSecondaryObjectivePresentationState {
     return this.objectiveStates
       .map((state, index) => ({ state, index }))

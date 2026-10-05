@@ -508,7 +508,7 @@ describe('Coop defense secondary objectives', () => {
   it('activates from time and encounter-clear triggers', () => {
     let encounterCleared = false;
     const system = new CoopDefenseSecondaryObjectiveSystem([
-      resolvedObjective({ start: { type: 'time', atMs: 100 } }),
+      resolvedObjective({ type: 'hold', holdDurationMs: 1_000, start: { type: 'time', atMs: 100 } }),
       resolvedObjective({
         id: 'after-clear',
         start: { type: 'after-encounter', encounterId: 'assault-1' },
@@ -520,7 +520,7 @@ describe('Coop defense secondary objectives', () => {
     system.hostUpdate(1, false);
     expect(system.getPresentationState().find((entry) => entry.objectiveId === 'destroy-front'))
       .toMatchObject({ state: 'active', focused: true });
-    system.reportObjectiveFailed('destroy-front');
+    system.reportTargetDestroyed('destroy-front', 'target-a');
     encounterCleared = true;
     system.hostUpdate(0, false);
     expect(system.getPresentationState().find((entry) => entry.objectiveId === 'after-clear'))
@@ -810,9 +810,11 @@ describe('Coop defense secondary objectives', () => {
   });
 
   it('makes failed terminal without creating a round outcome', () => {
-    const system = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective()]);
+    const system = new CoopDefenseSecondaryObjectiveSystem([
+      resolvedObjective({ type: 'hold', holdDurationMs: 1_000 }),
+    ]);
     system.hostUpdate(0, false);
-    expect(system.reportObjectiveFailed('destroy-front')).toBe(true);
+    expect(system.reportTargetDestroyed('destroy-front', 'target-a')).toBe(0);
     expect(system.getPresentationState()).toMatchObject([{ state: 'failed', focused: false }]);
     expect(system.reportTargetDestroyed('destroy-front', 'target-a')).toBe(0);
     system.hostUpdate(1_000, false);
