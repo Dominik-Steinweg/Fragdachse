@@ -49,6 +49,8 @@ import { bridge } from '../../src/network/bridge';
 import * as devScenarioMode from '../../src/utils/devScenarioMode';
 import { DEFAULT_COOP_DEFENSE_MAP_ID } from '../../src/config/coopDefenseMaps';
 import { registerDiagnosticMap, getCoopDefenseMapConfig, WEAPON_BALANCE_LAB_MAP_ID } from '../../src/config/coopDefenseMaps';
+import { CoopDefenseBalanceTracker } from '../../src/debug/coopDefenseBalance/tracker';
+import { invalidateLocalStorageCache } from '../../src/utils/localPreferences';
 
 function fixture(host: boolean, outcome = 'victory') {
   let phase = 'LOBBY';
@@ -88,6 +90,64 @@ function fixture(host: boolean, outcome = 'victory') {
 }
 afterEach(() => vi.restoreAllMocks());
 describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
+  it('preserves the real Ready round identity through pre-completion balance capture and finalization', () => {
+    const { flow, scene } = fixture(true);
+    let roundState: any = null;
+    let roundRevision = 0;
+    const tracker = new CoopDefenseBalanceTracker();
+    vi.spyOn(tracker, 'isRecordingEnabled').mockReturnValue(true);
+    for (const method of ['publishLobbySync', 'setMatchHostId', 'resetAllFrags', 'resetCoopDefenseRoundXp',
+      'publishRoundResults', 'publishCoopDefenseEncounterPresentationState', 'publishCoopDefenseMapEventPresentationState',
+      'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState',
+      'setArenaStartTime', 'setRoundEndTime', 'requestFullGameState'] as const) {
+      vi.spyOn(bridge, method).mockImplementation(() => {});
+    }
+    vi.spyOn(bridge, 'areAllPlayersReady').mockReturnValue(true);
+    vi.spyOn(bridge, 'getLobbyTimeOfDayMinutes').mockReturnValue(720);
+    vi.spyOn(bridge, 'getCoopDefenseMapId').mockReturnValue(DEFAULT_COOP_DEFENSE_MAP_ID);
+    vi.spyOn(bridge, 'getConnectedPlayerIds').mockReturnValue(['local']);
+    vi.spyOn(bridge, 'getConnectedPlayers').mockReturnValue([{ id: 'local', name: 'Local', colorHex: 0xffffff }]);
+    vi.spyOn(bridge, 'hostStartRoundParticipants').mockImplementation((_ids, _time, revision) => { roundRevision = revision!; });
+    vi.spyOn(bridge, 'publishRoundState').mockImplementation(value => { roundState = value; });
+    vi.mocked(bridge.getRoundState).mockImplementation(() => roundState);
+    vi.spyOn(bridge, 'getRoundParticipation').mockImplementation(() => ({
+      roundRevision, roundStartTime: 0, participantIds: ['local'], spectatorIds: [],
+    }));
+    vi.spyOn(bridge, 'getRoomCode').mockReturnValue('BALANCE');
+    vi.spyOn(bridge, 'getPlayerCommittedLoadout').mockReturnValue(null);
+    vi.spyOn(bridge, 'getCoopDefenseRoundXp').mockReturnValue(20);
+    vi.spyOn(bridge, 'getPlayerFrags').mockReturnValue(0);
+    vi.spyOn(bridge, 'getLocalCoopDefenseRespawnBudgetState').mockReturnValue(null);
+    vi.spyOn(bridge, 'getArenaStartTime').mockReturnValue(100);
+    vi.spyOn(bridge, 'getRoundResultEligiblePlayerIds').mockReturnValue(['local']);
+    Object.assign(flow, {
+      lastRoundRevision: 10, roundStartPending: false,
+      roomQualityMonitor: { shouldBlockStart: () => false },
+      lobbyOverlay: { lockButton: vi.fn() }, onTransitionToArena: vi.fn(),
+      getCoopDefenseBaseHpSummary: () => ({ ownBase: null, hostileBase: null }),
+      publishRoundConclusion: (ArenaLifecycleCoordinator.prototype as any).publishRoundConclusion,
+    });
+    Object.assign(scene, {
+      resolveConfiguredGameMode: () => 'coop_defense',
+      resolveConfiguredCoopDefenseMapId: () => DEFAULT_COOP_DEFENSE_MAP_ID,
+      coopDefenseBalanceTracker: tracker,
+      ctx: { getWorldCombatCore: () => ({ getHP: () => 100, getMaxHp: () => 100, getArmor: () => 0 }) },
+      meta: { getStoredProgress: () => ({ totalXp: 0 }), getProgress: () => ({ level: 1 }) },
+    });
+    invalidateLocalStorageCache();
+    try {
+      flow.hostCheckReadyToStart();
+      // ArenaScene captures while the real lifecycle-published RoundState is still active.
+      scene.prepareCoopDefenseBalanceRound('victory');
+      flow.publishRoundConclusion('victory', 1_000);
+      const identity = { roomCode: bridge.getRoomCode(), roundRevision: roundState.roundRevision };
+      const record = tracker.finalizePendingRound(roundState.endedAt, identity);
+      expect(record?.roundIdentity).toEqual(identity);
+      expect(tracker.getRound(roundState.endedAt, identity)).toMatchObject({ outcome: 'victory', sharedXp: 20 });
+    } finally {
+      invalidateLocalStorageCache();
+    }
+  });
   it.each([[false, true, false], [true, false, false], [true, true, true]])(
     'only an isolated dev host may discard campaign rounds (dev=%s host=%s)', (dev, host, allowed) => {
       vi.spyOn(devScenarioMode, 'isDevScenarioMode').mockReturnValue(dev);

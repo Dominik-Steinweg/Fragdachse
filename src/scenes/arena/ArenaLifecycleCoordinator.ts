@@ -1764,6 +1764,7 @@ export class ArenaLifecycleCoordinator {
     const roundState: RoundState = {
       status: 'active',
       roundStartTime: 0,
+      roundRevision,
       timeOfDayMinutes,
       coopDefenseHumanPlayerCount: isCoopDefenseMode(bridge.getGameMode())
         ? Math.max(1, bridge.getConnectedPlayers().length)
