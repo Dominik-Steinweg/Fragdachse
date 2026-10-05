@@ -155,10 +155,10 @@ function renderVoices(main: HTMLElement) {
       recordingContext.createMediaStreamSource(recordingStream).connect(analyser);
       const chunks: BlobPart[] = []; const recorder = new MediaRecorder(recordingStream); recording = recorder; const began = performance.now();
       recorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
-      recorder.onstop = () => { const blob = new Blob(chunks, { type: recorder.mimeType }); stopTracks(); recording = null; meter.value = 0; recordButton.disabled = false; editor.setLocked(false); void editor.load(blob).then(() => message('Aufnahme beendet. Wähle den Ausschnitt, höre ihn an und speichere die Referenz.')).catch(error => message(explainError(error), true)); };
-      recorder.onerror = () => { stopTracks(); recording = null; recordButton.disabled = false; editor.setLocked(false); message('Aufnahme fehlgeschlagen. Bitte erneut aufnehmen.'); };
+      recorder.onstop = () => { if (recording !== recorder) return; const blob = new Blob(chunks, { type: recorder.mimeType }); stopTracks(); recording = null; meter.value = 0; recordButton.disabled = false; editor.setLocked(false); void editor.load(blob).then(() => message('Aufnahme beendet. Wähle den Ausschnitt, höre ihn an und speichere die Referenz.')).catch(error => message(explainError(error), true)); };
+      recorder.onerror = () => { if (recording !== recorder) return; stopTracks(); recording = null; recordButton.disabled = false; editor.setLocked(false); message('Aufnahme fehlgeschlagen. Bitte erneut aufnehmen.'); };
       const sample = new Uint8Array(analyser.fftSize);
-      const tick = () => { if (!recording) return; analyser.getByteTimeDomainData(sample); meter.value = Math.max(...sample.map(x => Math.abs(x - 128))) / 128; elapsed.textContent = `${((performance.now() - began) / 1000).toFixed(1)} s`; if (performance.now() - began > 29000) recorder.stop(); else requestAnimationFrame(tick); };
+      const tick = () => { if (recording !== recorder || recorder.state !== 'recording') return; analyser.getByteTimeDomainData(sample); meter.value = Math.max(...sample.map(x => Math.abs(x - 128))) / 128; elapsed.textContent = `${((performance.now() - began) / 1000).toFixed(1)} s`; if (performance.now() - began > 29000) recorder.stop(); else requestAnimationFrame(tick); };
       recorder.start(); tick();
     } catch (error) { stopTracks(); recording = null; throw error; }
     finally { recordingPending = false; if (!recording) editor.setLocked(false); }
