@@ -209,7 +209,10 @@ export class TranslocatorSystem implements PortalQueryPort {
           transfers++;
           const use = this.uses.get(hit.pair.ownerId);
           if (actor.kind === 'player' && use && this.world.isFriendly(hit.pair.ownerId, actor.id)) this.applyBuffs(actor.id, use.config, now);
-          if (actor.kind === 'player') this.checkTrainHazard(actor.id, to.x, to.y, actor.radius);
+          if (actor.kind === 'player') {
+            this.checkTrainHazard(actor.id, to.x, to.y, actor.radius);
+            if (!this.combatSystem.isAlive(actor.id)) break;
+          }
         }
       }
       this.positions.set(actor.id, { ...actor, x: to.x, y: to.y, revision: actor.revision + transfers });

@@ -176,6 +176,29 @@ describe('Translocator use lifetime', () => {
     expect(w.actors.get('enemy-boss')).toMatchObject({x: 50, y: 50, revision: 0});
     expect(w.system.getPortalPairs()).toHaveLength(1);
   });
+  it.each([true, false])('continues a portal chain only while its traveler survives the exit hazard (dies=%s)', dies => {
+    const w = world({ portalEnabled: 1 });
+    const first = w.throwPuck();
+    expect(w.system.followup('p', first, 1001)).toBe('opened');
+    w.add('owner2', 600, 50);
+    const second = w.throwPuck('owner2', 1010);
+    expect(w.system.followup('owner2', second, 1011)).toBe('opened');
+    expect(w.system.getPortalPairs()).toHaveLength(2);
+    w.add('friend-traveler', 50, 50);
+    w.system.setTrainManager({ getSegmentPositions: () => [{ x: 250, y: 50 }] } as never);
+    w.combat.applyDamage.mockImplementation((id: string) => {
+      if (dies && id === 'friend-traveler') w.actors.set(id, { ...w.actors.get(id)!, alive: false });
+    });
+    vi.mocked(w.port.transferActor).mockClear();
+
+    w.system.transferActors(1020);
+
+    expect(w.combat.applyDamage).toHaveBeenCalledWith('friend-traveler', 9999, true,
+      'train', 'Zug', { sourceX: 250, sourceY: 50 });
+    expect(w.actors.get('friend-traveler')).toMatchObject({ alive: !dies, x: dies ? 250 : 600, y: 50 });
+    expect(vi.mocked(w.port.transferActor).mock.calls.filter(([actor]) => actor.id === 'friend-traveler'))
+      .toHaveLength(dies ? 1 : 2);
+  });
   it('presents ordinary portal closure once but never turns cleanup into a collapse', () => {
     const w = world({portalEnabled: 1}); const use = w.throwPuck();
     w.system.followup('p', use, 1001); w.system.followup('p', use, 1002);
