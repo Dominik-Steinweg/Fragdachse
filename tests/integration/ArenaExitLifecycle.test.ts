@@ -258,6 +258,39 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     expect(publish).toHaveBeenCalledTimes(1);
     expect(flow.worldLifecycle.endInstance).not.toHaveBeenCalled();
   });
+  it.each([
+    { mode: 'coop_defense', outcome: 'victory', tied: false, speaker: 'top' },
+    { mode: 'coop_defense', outcome: 'victory', tied: true, speaker: 'top' },
+    { mode: 'coop_defense', outcome: 'defeat', tied: false, speaker: null },
+    { mode: 'deathmatch', outcome: 'victory', tied: false, speaker: 'top' },
+    { mode: 'deathmatch', outcome: 'victory', tied: true, speaker: null },
+    { mode: 'team_deathmatch', outcome: 'victory', tied: false, speaker: 'top' },
+    { mode: 'team_deathmatch', outcome: 'victory', tied: true, speaker: null },
+    { mode: 'capture_the_beer', outcome: 'victory', tied: false, speaker: 'other' },
+  ])('gives the final voice to the leaderboard leader: $mode / $outcome / tied=$tied', ({ mode, outcome, tied, speaker }) => {
+    fixture(true, outcome);
+    const victory = vi.fn();
+    vi.spyOn(bridge, 'getRoundState').mockReturnValue({ status: outcome, roundStartTime: 100 } as any);
+    vi.spyOn(bridge, 'getRoundResultEligiblePlayerIds').mockReturnValue(['other', 'top']);
+    vi.spyOn(bridge, 'getConnectedPlayers').mockReturnValue([
+      { id: 'other', name: 'Zoe', colorHex: 0xffffff },
+      { id: 'top', name: 'Anna', colorHex: 0xffffff },
+    ]);
+    vi.spyOn(bridge, 'getPlayerFrags').mockImplementation(id => id === 'top' || tied ? 10 : 2);
+    vi.spyOn(bridge, 'getCoopDefenseRoundXp').mockReturnValue(20);
+    vi.spyOn(bridge, 'getPlayerTeam').mockImplementation(id => id === 'top' ? 'blue' : 'red');
+    vi.spyOn(bridge, 'publishRoundResults').mockImplementation(() => {});
+    vi.spyOn(bridge, 'recordCompletedPvpMatch').mockImplementation(() => {});
+    vi.spyOn(bridge, 'hostPublishRoomStatistics').mockImplementation(() => {});
+    const resultContext = {
+      ctx: { voice: { victory } }, resolveConfiguredGameMode: () => mode,
+      resolveConfiguredCoopDefenseMapId: () => DEFAULT_COOP_DEFENSE_MAP_ID,
+      captureTheBeerActivityRuntime: { system: { getTeamScore: (team: string) => team === 'red' ? 3 : 1 } },
+    };
+    ArenaLifecycleCoordinator.prototype.hostSaveRoundResults.call(resultContext as any, 1000, true);
+    if (speaker) expect(victory).toHaveBeenCalledExactlyOnceWith([speaker]);
+    else expect(victory).not.toHaveBeenCalled();
+  });
   it('preserves the completed round revision in state and results after live participation is cleared', () => {
     const { flow, setPhase } = fixture(true);
     const activity = { kind: 'coop-mission', definitionId: 'mission:test', worldRevision: 40, activityRevision: 41 };

@@ -56,6 +56,7 @@ import type {
 } from '../../types';
 import type { RoundResult, RoundState } from '../../network/NetworkBridge';
 import { resolvePvpWinnerIds } from '../../network/RoomStatistics';
+import { sortMatchLeaderboard } from '../../ui/MatchResultsModel';
 import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
 import { CAPTURE_THE_BEER_MODE, isCoopDefenseMode, isTeamGameMode } from '../../gameModes';
 import {
@@ -2047,12 +2048,15 @@ export class ArenaLifecycleCoordinator {
         };
       });
     bridge.publishRoundResults(results);
+    const leadingPlayer = sortMatchLeaderboard(results)[0];
     if (countPvpMatch && !isCoopDefenseMode(gameMode)) {
       const winnerIds = resolvePvpWinnerIds(gameMode, results);
       bridge.recordCompletedPvpMatch([...eligibleIds], winnerIds);
-      this.ctx.voice?.victory([...winnerIds]);
+      if (winnerIds.size > 0 && leadingPlayer) this.ctx.voice?.victory([leadingPlayer.id]);
     }
-    if (isCoopDefenseMode(gameMode) && roundState?.status === 'victory') this.ctx.voice?.victory([...eligibleIds]);
+    if (isCoopDefenseMode(gameMode) && roundState?.status === 'victory' && leadingPlayer) {
+      this.ctx.voice?.victory([leadingPlayer.id]);
+    }
     bridge.hostPublishRoomStatistics();
   }
 
