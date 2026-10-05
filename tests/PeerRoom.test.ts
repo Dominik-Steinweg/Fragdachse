@@ -10,7 +10,8 @@ import { PeerRoom, type PeerPlayerHandle } from '../src/network/peer/PeerRoom';
 import { NetworkBridge } from '../src/network/NetworkBridge';
 import { createPeerNetworkError } from '../src/network/peer/PeerSignaling';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
-import { PEER_PROTOCOL_VERSION } from '../src/network/peer/protocol';
+import { PEER_PROTOCOL_VERSION, type PeerMessage } from '../src/network/peer/protocol';
+import type { LoadoutCommitSnapshot } from '../src/types';
 import { DEFAULT_LOADOUT } from '../src/loadout/LoadoutConfig';
 
 import {
@@ -218,6 +219,105 @@ describe('PeerRoom handshake and roster', () => {
 });
 
 describe('PeerRoom replicated state', () => {
+  it.each(['name', 'ready', 'unready', 'committed-ready'] as const)(
+    'delivers the one-time %s decision to host and observers even if fast packets are lost',
+    async action => {
+      const network = new FakeNetwork();
+      const host = await createHostRoom(network);
+      const client = await addClientRoom(network);
+      const observer = await addClientRoom(network);
+      const playerId = client.room.getLocalPlayerId();
+      const commit: LoadoutCommitSnapshot = {
+        ...DEFAULT_LOADOUT, coopDefenseClassId: null, coopDefenseProfile: null,
+      };
+      try {
+        host.room.setPlayerState(playerId, 'isr', action === 'unready', true);
+        for (const room of [host, client, observer]) {
+          for (const link of room.transport.links) link.fastReady = false;
+        }
+        setActiveSession({ room: client.room, transport: client.transport, roomCode: 'ABC123' });
+        const bridge = new NetworkBridge();
+        if (action === 'name') bridge.setLocalName('Neuer Dachs');
+        else if (action === 'committed-ready') bridge.setLocalReadyWithCommittedLoadout(commit);
+        else bridge.setLocalReady(action === 'ready');
+        client.room.update();
+        host.room.update();
+
+        const key = action === 'name' ? 'pnm' : 'isr';
+        const expected = action === 'name' ? 'Neuer Dachs' : action !== 'unready';
+        for (const room of [host, observer]) {
+          expect(room.room.getPlayerState(playerId, key)).toBe(expected);
+          if (action === 'committed-ready') expect(room.room.getPlayerState(playerId, 'lcm')).toEqual(commit);
+          if (action === 'unready') expect(room.room.getPlayerState(playerId, 'lcm')).toBeNull();
+        }
+      } finally {
+        clearActiveSession();
+        client.room.destroy(); observer.room.destroy(); host.room.destroy();
+      }
+    },
+  );
+
+  it('orders a new player name after the reliable join even when fast traffic overtakes the roster', async () => {
+    const network = new FakeNetwork();
+    const host = await createHostRoom(network);
+    const observer = await addClientRoom(network);
+    const observerLink = host.transport.links[0];
+    const send = observerLink.send.bind(observerLink);
+    const reliableQueue: PeerMessage[] = [];
+    observerLink.send = (message, channel) => {
+      if (channel === 'rel') reliableQueue.push(message);
+      else send(message, channel);
+    };
+    const newcomer = await addClientRoom(network);
+    try {
+      const playerId = newcomer.room.getLocalPlayerId();
+      setActiveSession({ room: newcomer.room, transport: newcomer.transport, roomCode: 'ABC123' });
+      new NetworkBridge().setLocalName('Neuer Dachs');
+      newcomer.room.update();
+      host.room.update();
+      expect(host.room.getPlayerState(playerId, 'pnm')).toBe('Neuer Dachs');
+      expect(observer.room.getPlayerIds()).not.toContain(playerId);
+      expect(reliableQueue[0]?.t).toBe('join');
+
+      for (const message of reliableQueue) send(message, 'rel');
+      expect(observer.room.getPlayerState(playerId, 'pnm')).toBe('Neuer Dachs');
+    } finally {
+      clearActiveSession();
+      newcomer.room.destroy(); observer.room.destroy(); host.room.destroy();
+    }
+  });
+
+  it('keeps ordinary Bridge movement input replaceable and on the host-only fast channel', async () => {
+    const network = new FakeNetwork();
+    const host = await createHostRoom(network, ['inp']);
+    const client = await addClientRoom(network, ['inp']);
+    const observer = await addClientRoom(network, ['inp']);
+    try {
+      host.room.setGlobal('wld', {
+        worldRevision: 1, definitionId: 'world:lobby', seed: 1,
+        generatorVersion: 1, layoutFingerprint: 'lobby',
+      }, true);
+      setActiveSession({ room: client.room, transport: client.transport, roomCode: 'ABC123' });
+      const bridge = new NetworkBridge();
+      vi.spyOn(bridge, 'getLocalWorldParticipation').mockReturnValue('interactive');
+      bridge.sendLocalInput({ dx: 1, dy: 0, aim: 0 });
+      bridge.sendLocalInput({ dx: 0, dy: 1, aim: 128 });
+      expect(host.room.getPlayerState('p1', 'inp')).toBeUndefined();
+      client.room.update();
+      host.room.update();
+
+      expect(host.room.getPlayerState('p1', 'inp')).toMatchObject({ dx: 0, dy: 1, aim: 128 });
+      expect(observer.room.getPlayerState('p1', 'inp')).toBeUndefined();
+      const inputPackets = client.transport.links[0].sent.filter(entry =>
+        entry.message.t === 'b' && entry.message.p?.some(([, key]) => key === 'inp'));
+      expect(inputPackets).toHaveLength(1);
+      expect(inputPackets[0].channel).toBe('fast');
+    } finally {
+      clearActiveSession();
+      client.room.destroy(); observer.room.destroy(); host.room.destroy();
+    }
+  });
+
   it.each(['rel', 'fast'] as const)('accepts only admitted client-owned state from its origin on %s', async (channel) => {
     const network = new FakeNetwork();
     const host = await createHostRoom(network, ['inp']);

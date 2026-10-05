@@ -1753,17 +1753,17 @@ export class NetworkBridge {
 
   /** Setzt den eigenen Anzeigenamen (ersetzt den Platzhalter aus der Spieler-ID). */
   setLocalName(name: string): void {
-    myPlayer().setState(KEY_NAME, sanitizePlayerName(name) || 'Player');
+    myPlayer().setState(KEY_NAME, sanitizePlayerName(name) || 'Player', true);
   }
 
   // ── Bereitschaftsstatus: pro Spieler ──────────────────────────────────────
   setLocalReady(ready: boolean): void {
     if (!ready) {
-      myPlayer().setState(KEY_READY, false);
+      myPlayer().setState(KEY_READY, false, true);
       myPlayer().setState(KEY_LOADOUT_COMMITTED, null, true);
       return;
     }
-    myPlayer().setState(KEY_READY, ready);
+    myPlayer().setState(KEY_READY, ready, true);
   }
 
   /**
@@ -1772,7 +1772,7 @@ export class NetworkBridge {
    */
   setLocalReadyWithCommittedLoadout(snapshot: LoadoutCommitSnapshot): void {
     myPlayer().setState(KEY_LOADOUT_COMMITTED, snapshot, true);
-    myPlayer().setState(KEY_READY, true);
+    myPlayer().setState(KEY_READY, true, true);
   }
 
   /** Dev scenario only: writes the client-owned state of a scripted bot peer on the offline host. */
