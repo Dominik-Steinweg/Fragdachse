@@ -10,7 +10,7 @@ import { PeerRoom, type PeerPlayerHandle } from '../src/network/peer/PeerRoom';
 import { NetworkBridge } from '../src/network/NetworkBridge';
 import { createPeerNetworkError } from '../src/network/peer/PeerSignaling';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
-import { PEER_PROTOCOL_VERSION, type PeerMessage } from '../src/network/peer/protocol';
+import { PEER_PROTOCOL_VERSION, type PeerChannelKind, type PeerMessage } from '../src/network/peer/protocol';
 import type { LoadoutCommitSnapshot } from '../src/types';
 import { DEFAULT_LOADOUT } from '../src/loadout/LoadoutConfig';
 
@@ -49,7 +49,7 @@ describe('PeerRoom handshake and roster', () => {
       const hostTeam = bridge.getPlayerTeam('p0')!;
       await expect(client.room.callHost('tmr', { teamId: hostTeam }, 500)).resolves.toBe(true);
       expect(bridge.getPlayerTeam('p1')).toBe(hostTeam);
-      client.room.setPlayerState('p1', 'isr', true, true);
+      bridge.hostSetPlayerReady('p1', true);
       const otherTeam = hostTeam === 'blue' ? 'red' : 'blue';
       await expect(client.room.callHost('tmr', { teamId: otherTeam }, 500)).resolves.toBe(false);
       bridge.setGamePhase('ARENA');
@@ -243,6 +243,135 @@ describe('PeerRoom handshake and roster', () => {
   });
 });
 
+describe('lobby Ready revision', () => {
+  it.each(['mode change', 'same configuration reset', 'mode round trip'])(
+    'rejects an old in-flight Ready after %s and accepts a fresh Ready', async boundary => {
+      const network = new FakeNetwork();
+      const hostRoom = await createHostRoom(network);
+      const clientRoom = await addClientRoom(network);
+      const useHost = () => setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'ABC123' });
+      const useClient = () => setActiveSession({ room: clientRoom.room, transport: clientRoom.transport, roomCode: 'ABC123' });
+      useHost();
+      const host = new NetworkBridge();
+      host.activate();
+      host.setGameMode('deathmatch');
+      useClient();
+      const client = new NetworkBridge();
+      client.activate();
+      const commit: LoadoutCommitSnapshot = {
+        weapon1: DEFAULT_LOADOUT.weapon1.id, weapon2: DEFAULT_LOADOUT.weapon2.id,
+        utility: DEFAULT_LOADOUT.utility.id, ultimate: DEFAULT_LOADOUT.ultimate.id,
+      };
+      const link = clientRoom.transport.links[0];
+      const send = link.send.bind(link);
+      const delayed: Array<{ message: PeerMessage; channel: PeerChannelKind }> = [];
+      const capture = vi.spyOn(link, 'send').mockImplementation((message, channel) => {
+        delayed.push({ message, channel });
+      });
+      try {
+        expect(client.getLobbySyncConsistency().consistent).toBe(true);
+        client.setLocalReadyWithCommittedLoadout(commit);
+        expect(delayed.length).toBeGreaterThan(0);
+        capture.mockRestore();
+        useHost();
+        if (boundary === 'same configuration reset') host.hostResetAllLobbyReady();
+        else {
+          host.setGameMode('team_deathmatch');
+          if (boundary === 'mode round trip') host.setGameMode('deathmatch');
+        }
+        expect(host.getPlayerReady('p1')).toBe(false);
+        host.setLocalReadyWithCommittedLoadout(commit);
+        for (const packet of delayed) send(packet.message, packet.channel);
+        expect(host.getPlayerReady('p1')).toBe(false);
+        expect(host.areAllPlayersReady()).toBe(false);
+
+        useClient();
+        expect(client.getPlayerReady('p1')).toBe(false);
+        client.setLocalReadyWithCommittedLoadout(commit);
+        useHost();
+        expect(host.getPlayerReady('p1')).toBe(true);
+        expect(host.areAllPlayersReady()).toBe(true);
+        // Republishing the same lobby snapshot is not another readiness reset.
+        host.publishLobbySync();
+        host.publishLobbySync();
+        expect(host.areAllPlayersReady()).toBe(true);
+      } finally {
+        capture.mockRestore();
+        clearActiveSession();
+        clientRoom.room.destroy();
+        hostRoom.room.destroy();
+      }
+    },
+  );
+});
+
+describe('lobby Ready revision across peer lifetimes', () => {
+  it('inherits the current Ready revision on joining and reloading the same player', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const useHost = () => setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'ABC123' });
+    useHost();
+    const host = new NetworkBridge();
+    host.activate();
+    host.hostResetAllLobbyReady();
+    host.hostResetAllLobbyReady();
+    const joined = await addClientRoom(network, [], 'ready-reload-token');
+    let reloaded: typeof joined | undefined;
+    try {
+      setActiveSession({ room: joined.room, transport: joined.transport, roomCode: 'ABC123' });
+      const joinedBridge = new NetworkBridge();
+      joinedBridge.activate();
+      joinedBridge.setLocalReady(true);
+      useHost();
+      expect(host.getPlayerReady('p1')).toBe(true);
+
+      // A browser reload creates a fresh Bridge, while the room retains the player's identity.
+      joined.room.destroy();
+      dropConnection(joined);
+      host.hostResetAllLobbyReady();
+      reloaded = await addClientRoom(network, [], 'ready-reload-token');
+      expect(reloaded.room.getLocalPlayerId()).toBe('p1');
+      setActiveSession({ room: reloaded.room, transport: reloaded.transport, roomCode: 'ABC123' });
+      const reloadedBridge = new NetworkBridge();
+      reloadedBridge.activate();
+      expect(reloadedBridge.getPlayerReady('p1')).toBe(false);
+      reloadedBridge.setLocalReady(true);
+      useHost();
+      expect(host.getPlayerReady('p1')).toBe(true);
+    } finally {
+      clearActiveSession();
+      reloaded?.room.destroy();
+      joined.room.destroy();
+      hostRoom.room.destroy();
+    }
+  });
+
+  it('requires a current numeric Ready revision instead of truthy or malformed client state', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const clientRoom = await addClientRoom(network);
+    setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'ABC123' });
+    const host = new NetworkBridge();
+    host.activate();
+    host.hostResetAllLobbyReady();
+    host.hostSetPlayerReady('p1', true);
+    const current = hostRoom.room.getPlayerState('p1', 'isr') as { r: number };
+    try {
+      for (const ready of [true, false, null, 1, 'ready', [], {}, { r: null }, { r: String(current.r) },
+        { r: current.r - 1 }, { r: current.r + 1 }, { r: -1 }, { r: 1.5 }, { r: Number.MAX_SAFE_INTEGER + 1 }]) {
+        clientRoom.room.setPlayerState('p1', 'isr', ready, true);
+        expect(host.getPlayerReady('p1')).toBe(false);
+      }
+      clientRoom.room.setPlayerState('p1', 'isr', current, true);
+      expect(host.getPlayerReady('p1')).toBe(true);
+    } finally {
+      clearActiveSession();
+      clientRoom.room.destroy();
+      hostRoom.room.destroy();
+    }
+  });
+});
+
 describe('PeerRoom replicated state', () => {
   it.each(['name', 'ready', 'unready', 'committed-ready'] as const)(
     'delivers the one-time %s decision to host and observers even if fast packets are lost',
@@ -253,10 +382,15 @@ describe('PeerRoom replicated state', () => {
       const observer = await addClientRoom(network);
       const playerId = client.room.getLocalPlayerId();
       const commit: LoadoutCommitSnapshot = {
-        ...DEFAULT_LOADOUT, coopDefenseClassId: null, coopDefenseProfile: null,
+        weapon1: DEFAULT_LOADOUT.weapon1.id, weapon2: DEFAULT_LOADOUT.weapon2.id,
+        utility: DEFAULT_LOADOUT.utility.id, ultimate: DEFAULT_LOADOUT.ultimate.id,
+        coopDefenseClassId: null, coopDefenseProfile: null,
       };
       try {
-        host.room.setPlayerState(playerId, 'isr', action === 'unready', true);
+        setActiveSession({ room: host.room, transport: host.transport, roomCode: 'ABC123' });
+        const hostBridge = new NetworkBridge();
+        hostBridge.activate();
+        hostBridge.hostSetPlayerReady(playerId, action === 'unready');
         for (const room of [host, client, observer]) {
           for (const link of room.transport.links) link.fastReady = false;
         }
@@ -271,7 +405,10 @@ describe('PeerRoom replicated state', () => {
         const key = action === 'name' ? 'pnm' : 'isr';
         const expected = action === 'name' ? 'Neuer Dachs' : action !== 'unready';
         for (const room of [host, observer]) {
-          expect(room.room.getPlayerState(playerId, key)).toBe(expected);
+          setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+          const receiver = room === host ? hostBridge : new NetworkBridge();
+          receiver.activate();
+          expect(action === 'name' ? room.room.getPlayerState(playerId, key) : receiver.getPlayerReady(playerId)).toBe(expected);
           if (action === 'committed-ready') expect(room.room.getPlayerState(playerId, 'lcm')).toEqual(commit);
           if (action === 'unready') expect(room.room.getPlayerState(playerId, 'lcm')).toBeNull();
         }

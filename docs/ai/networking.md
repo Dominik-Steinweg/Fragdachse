@@ -45,6 +45,11 @@ bevor die lebende RoundParticipation gelöscht wird. Die lokale Ergebnisbuchung 
 begrenzt den Revisions-Namensraum für persistente Einmaligkeit; ein Host-Zeitstempel allein
 ist über verschiedene Rooms hinweg keine geordnete Rundenidentität.
 
+Ein Ready gilt nur für die aktuelle hosteigene Ready-Revision des Lobby-Snapshots. Jede
+autoritative Invalidierung aller Ready-Zustände erhöht diese Revision, auch bei unveränderter
+Konfiguration. Erneute Snapshot-Publikation, Join und Resume erhalten sie. Damit kann ein vor
+dem Reset gesendetes Ready den Reset nach verspäteter Zustellung nicht rückgängig machen.
+
 Die LobbyWorld repliziert pro Spieler zusaetzlich einen kleinen Live-Build getrennt vom Ready-Commit. Er umfasst Coop-Klasse, sanitisiertes Upgrade-Profil, ausgeruestete Items und Inspector-Tools; die laufenden Waffen-, Utility- und Ultimate-Slots bleiben die bestehenden per-player States. Ohne Activity ist dieser Live-Build die hostseitige Quelle fuer World-Gameplay und wird laufend reconciled, waehrend ein aktiver Ready-Commit die unveraenderliche Activity-Auswahl bleibt. Aendert sich daraus die fuer das Persistent-Base-Composite relevante Besitzersicht (insbesondere Klasse, Construction-Loadout, Freischaltungen oder effektive Construction-Werte), reconciled der Host das bestehende Composite erneut; `not-in-loadout` bleibt dabei regulaere Dormancy. Preview-Peers konsumieren die Projektion nur zur Darstellung und erhalten keine eigene Player-Runtime.
 
 ## WorldParticipation ist kein Round-State

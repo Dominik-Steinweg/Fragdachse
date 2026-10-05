@@ -193,7 +193,7 @@ const KEY_INPUT        = 'inp';
 const KEY_INPUT_STOP = 'ist'; // per-player reliable: world-bound movement sequence fence
 const KEY_PLACEMENT_PREVIEW = 'ppv';
 const KEY_PLAYERS      = 'plr';
-const KEY_READY        = 'isr';   // per-player boolean: isReady
+const KEY_READY        = 'isr';   // per-player: false or { r: lobby Ready revision }
 const KEY_WORLD_LOAD_READY = 'wlr'; // per-player reliable: WorldLoadReadyState
 const KEY_DEFERRED_ASSETS_READY = 'dar'; // per-player reliable, independent of lobby ready/world revision
 const KEY_NAME         = 'pnm';   // per-player string: selbst gesetzter Anzeigename
@@ -254,7 +254,7 @@ const KEY_PING           = 'png'; // per-player: number (Roundtrip-Zeit in ms, u
 const KEY_GAME_STATE     = 'gs';  // global: komprimierter Game State (unreliable, single setState)
 const KEY_GAME_STATE_INITIAL = 'gsi'; // global reliable: vollstaendiger Bootstrap-Snapshot der laufenden Runde
 const KEY_ROOM_QUALITY   = 'rql'; // global reliable: aktuelle Lobby-Raumqualitaet fuer Startschutz/Retry-UX
-const KEY_LOBBY_SYNC     = 'lsy'; // global reliable: host-autoritativer Lobby-Snapshot {m:mode, c:mapId, p:playerIds} für den Bereit-Konsistenz-Check
+const KEY_LOBBY_SYNC     = 'lsy'; // global reliable: host-autoritativer Lobby-Snapshot {r:readyRevision, m:mode, c:mapId, t:time, p:playerIds}
 const KEY_PB_CONTRIBUTION = 'pbo'; // per-player reliable: angebotener PersistentPlayerBaseContribution
 const KEY_PB_CONFIRMED   = 'pbk'; // per-player reliable: host-bestaetigter Beitrag nach einem Sieg
 const KEY_PB_REWARD_GRANT = 'pbr'; // per-player reliable: host-bestaetigte kumulative Reward-IDs
@@ -1220,7 +1220,7 @@ export class NetworkBridge {
    * noch nicht aufgeschlossen hat – z. B. einen Mitspieler nicht kennt (Bug A/B) oder mit veraltetem
    * Modus bereit würde (und so ein für den Modus ungültiges Loadout committen könnte).
    */
-  private hostPublishLobbySync(): void {
+  private hostPublishLobbySync(advanceReadyRevision = false): void {
     if (!isHost()) return;
     // Alte/neu erstellte Raeume besitzen den optionalen Key noch nicht. Einmalig mit dem
     // Default anlegen, damit auch Clients den Slider sofort als autoritativen Zustand sehen.
@@ -1228,11 +1228,23 @@ export class NetworkBridge {
       setState(KEY_TIME_OF_DAY, DEFAULT_LOBBY_TIME_OF_DAY_MINUTES, true);
     }
     setState(KEY_LOBBY_SYNC, {
+      r: this.getLobbyReadyRevision() + (advanceReadyRevision ? 1 : 0),
       m: this.getGameMode(),
       c: this.getCoopDefenseMapId(),
       t: this.getLobbyTimeOfDayMinutes(),
       p: [...this.connectedPlayers.keys()].sort(),
     }, true);
+  }
+
+  /** The initial lobby uses revision zero; only an explicit host Ready reset advances it. */
+  private getLobbyReadyRevision(): number {
+    const snapshot = getState(KEY_LOBBY_SYNC);
+    const revision = isRecord(snapshot) ? snapshot.r : undefined;
+    return typeof revision === 'number' && Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
+  }
+
+  private createReadyState(): { r: number } {
+    return { r: this.getLobbyReadyRevision() };
   }
 
   /** Host-only: Veröffentlicht den aktuellen Lobby-Snapshot erneut (z. B. final unmittelbar vor Rundenstart). */
@@ -1443,7 +1455,7 @@ export class NetworkBridge {
     if (!isHost()) return;
     const state = this.playerStateMap.get(playerId);
     if (!state) return;
-    state.setState(KEY_READY, ready, true);
+    state.setState(KEY_READY, ready ? this.createReadyState() : false, true);
   }
 
   hostSetPlayerCommittedLoadout(playerId: string, snapshot: LoadoutCommitSnapshot | null): void {
@@ -1455,6 +1467,8 @@ export class NetworkBridge {
 
   private hostInvalidateLobbyReadyStateForAllPlayers(): void {
     if (!isHost()) return;
+    // A previously sent client Ready must not undo this reset after crossing the new snapshot.
+    this.hostPublishLobbySync(true);
     for (const playerId of this.connectedPlayers.keys()) {
       this.hostSetPlayerReady(playerId, false);
       this.hostSetPlayerCommittedLoadout(playerId, null);
@@ -1799,7 +1813,7 @@ export class NetworkBridge {
       myPlayer().setState(KEY_LOADOUT_COMMITTED, null, true);
       return;
     }
-    myPlayer().setState(KEY_READY, ready, true);
+    myPlayer().setState(KEY_READY, this.createReadyState(), true);
   }
 
   /**
@@ -1808,7 +1822,7 @@ export class NetworkBridge {
    */
   setLocalReadyWithCommittedLoadout(snapshot: LoadoutCommitSnapshot): void {
     myPlayer().setState(KEY_LOADOUT_COMMITTED, snapshot, true);
-    myPlayer().setState(KEY_READY, true, true);
+    myPlayer().setState(KEY_READY, this.createReadyState(), true);
   }
 
   /** Dev scenario only: writes the client-owned state of a scripted bot peer on the offline host. */
@@ -1826,7 +1840,7 @@ export class NetworkBridge {
     if (state.name !== undefined) room.setPlayerState(playerId, KEY_NAME, sanitizePlayerName(state.name) || 'Dachs', true);
     if (state.commit) {
       room.setPlayerState(playerId, KEY_LOADOUT_COMMITTED, state.commit, true);
-      room.setPlayerState(playerId, KEY_READY, true, true);
+      room.setPlayerState(playerId, KEY_READY, this.createReadyState(), true);
     }
     if (state.input) room.setPlayerState(playerId, KEY_INPUT, { ...state.input, worldRevision: this.getWorldDescriptor()?.worldRevision });
   }
@@ -1837,7 +1851,8 @@ export class NetworkBridge {
   }
 
   getPlayerReady(playerId: string): boolean {
-    return (this.playerStateMap.get(playerId)?.getState(KEY_READY) as boolean | undefined) ?? false;
+    const ready = this.playerStateMap.get(playerId)?.getState(KEY_READY);
+    return isRecord(ready) && ready.r === this.getLobbyReadyRevision();
   }
 
   /**
