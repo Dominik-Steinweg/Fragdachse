@@ -12,6 +12,34 @@ import { NetworkBridge } from '../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 
 describe('holds until main mission victory', () => {
+  it.each(['advance', 'repel-assault'] as const)('rejects a mandatory victory-hold cycle in %s', objective => {
+    expect(() => normalizeCoopDefenseMapConfig(makeMap([{
+      id: 'victory-hold', type: 'hold',
+      start: { type: 'after-checkpoint', checkpointId: 'exit' },
+      holdUntilVictory: true, targets: ['friendly-outpost'],
+    }], objective, objective === 'repel-assault' ? [{
+      id: 'required', start: { type: 'after-defense', defenseId: 'defense' },
+      groups: [{ enemyKind: 'zombie-badger', count: 1 }],
+    }] : [], {
+      bases: TEST_BASES.slice(0, 2),
+      ...(objective === 'advance' ? { respawnsPerPlayer: 0 } : {}),
+      missionProgress: { checkpoints: [{ id: 'exit', gridX: 2, gridY: 2 }],
+        mandatoryDefenses: [{ id: 'defense', checkpointId: 'exit', objectiveId: 'victory-hold', failureEndsMission: true }] },
+    }))).toThrow(/cyclic mission dependency/);
+  });
+
+  it.each(['advance', 'repel-assault', 'survive'] as const)('preserves optional victory holds in %s', objective => {
+    expect(() => normalizeCoopDefenseMapConfig(makeMap([{
+      id: 'optional-victory-hold', type: 'hold', start: { type: 'time', atMs: 0 },
+      holdUntilVictory: true, targets: ['friendly-outpost'],
+    }], objective, undefined, {
+      bases: TEST_BASES.slice(0, 2),
+      ...(objective === 'survive' ? { surviveDurationSec: 60, respawnsPerPlayer: 0 } : {}),
+      ...(objective === 'advance' ? { respawnsPerPlayer: 0,
+        missionProgress: { checkpoints: [{ id: 'exit', gridX: 2, gridY: 2 }] } } : {}),
+    }))).not.toThrow();
+  });
+
   it.each([false, true])('grants once only if the target survives (destroyed: %s)', (destroyed) => {
     const map = normalizeCoopDefenseMapConfig(makeSingleTargetMap([{
       id: 'protect-until-victory', type: 'hold', start: { type: 'time', atMs: 0 },

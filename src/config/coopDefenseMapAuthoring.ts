@@ -2773,6 +2773,7 @@ function normalizePositiveMapEventInteger(
 }
 
 type MissionDependencyNode =
+  | 'mission-victory'
   | `encounter:${string}`
   | `event:${string}`
   | `checkpoint:${string}`
@@ -2838,6 +2839,7 @@ function validateMissionDependencyGraph(
     const encounter = encounters[index];
     const dependent = `encounter:${encounter.id}` as const;
     addNode(dependent);
+    if (objective === 'repel-assault') addDependency(dependent, 'mission-victory');
     // Repel assault consumes the authored sequence even when a start uses another trigger.
     if (objective === 'repel-assault' && index > 0) {
       addDependency(`encounter:${encounters[index - 1].id}`, dependent);
@@ -2914,6 +2916,7 @@ function validateMissionDependencyGraph(
   for (const [index, checkpoint] of checkpoints.entries()) {
     const complete = `checkpoint-complete:${checkpoint.id}` as const;
     addDependency(`checkpoint:${checkpoint.id}`, complete);
+    if (objective === 'advance') addDependency(complete, 'mission-victory');
     if (index > 0) addDependency(`checkpoint-complete:${checkpoints[index - 1].id}`, `checkpoint:${checkpoint.id}`);
     if (checkpoint.completeOn?.type === 'after-encounter') {
       addDependency(`encounter:${checkpoint.completeOn.encounterId}`, complete);
@@ -2929,6 +2932,7 @@ function validateMissionDependencyGraph(
   for (const objective of objectives) {
     const objectiveNode = `objective:${objective.id}` as const;
     addNode(objectiveNode);
+    if (objective.holdUntilVictory) addDependency('mission-victory', objectiveNode);
     addMissionTriggerDependency(objectiveNode, `Secondary objective ${objective.id}`, objective.start);
     if (objective.focusUntil) {
       addMissionTriggerDependency(objectiveNode, `Secondary objective ${objective.id}`, objective.focusUntil);
