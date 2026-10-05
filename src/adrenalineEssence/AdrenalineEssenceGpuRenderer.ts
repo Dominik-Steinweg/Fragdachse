@@ -3,6 +3,7 @@ import { DEPTH, PLAYER_VISUAL_SIZE } from '../config';
 import { buildGpuVfxAtlas, GPU_VFX_ATLAS_KEY } from '../effects/gpu/GpuVfxAtlas';
 import { setGpuVfxTint } from '../effects/gpu/GpuVfxMember';
 import { getGraphicsQualityProfile, type GraphicsQuality } from '../graphics/GraphicsQuality';
+import { disposeShaderWarmupNode } from '../graphics/disposeShaderWarmupNode';
 import { getVisibleWorldView } from '../ui/HostileBaseIndicator';
 import { ADRENALINE_ESSENCE_CONFIG } from './AdrenalineEssenceConfig';
 import type { EssenceLightingPresentation, EssenceLightSource } from './AdrenalineEssenceLighting';
@@ -216,8 +217,10 @@ export class AdrenalineEssenceGpuRenderer {
   destroy(): void {
     if (this.destroyed) return;
     this.clear();
-    this.body.destroy();
-    this.glow.destroy();
+    for (const layer of [this.body, this.glow]) {
+      if (layer.submitterNode?.programManager) disposeShaderWarmupNode(layer.submitterNode);
+      layer.destroy();
+    }
     this.lighting?.destroy();
     this.destroyed = true;
   }
