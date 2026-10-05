@@ -35,13 +35,20 @@ let nextId = 0;
 class FormationDataTexture {
   readonly texture: Phaser.Textures.Texture;
   private readonly wrapper: Phaser.Renderer.WebGL.Wrappers.WebGLTextureWrapper;
+  private readonly pixels: Uint8Array;
   constructor(private readonly scene: Phaser.Scene, readonly key: string, readonly width: number, readonly height: number, linear: boolean) {
     const renderer=scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer, gl=renderer.gl;
+    this.pixels=new Uint8Array(width*height*4);
     this.wrapper=renderer.createTexture2D(0,linear?gl.LINEAR:gl.NEAREST,linear?gl.LINEAR:gl.NEAREST,
-      gl.CLAMP_TO_EDGE,gl.CLAMP_TO_EDGE,gl.RGBA,new Uint8Array(width*height*4),width,height,false,false,false);
+      gl.CLAMP_TO_EDGE,gl.CLAMP_TO_EDGE,gl.RGBA,this.pixels,width,height,false,false,false);
     this.texture=scene.textures.addGLTexture(key,this.wrapper)!;
   }
+  /** Phaser restores this same buffer after context loss, including partial uploads. */
+  remember(x:number,y:number,width:number,height:number,data:Uint8Array):void {
+    for(let row=0;row<height;row++)this.pixels.set(data.subarray(row*width*4,(row+1)*width*4),((y+row)*this.width+x)*4);
+  }
   upload(x: number, y: number, width: number, height: number, data: Uint8Array): void {
+    this.remember(x,y,width,height,data);
     const renderer=this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer, gl=renderer.gl;
     renderer.glTextureUnits.bind(this.wrapper,0);
     renderer.glWrapper.updateTexturing({texturing:{flipY:false,premultiplyAlpha:false}});
@@ -380,9 +387,13 @@ export class RockFormationLighting {
     } else this.horizonBlend[r.slot]=1;
     if(r.azimuth!==undefined&&r.azimuth!==result.azimuth){this.directionBuildMs+=result.buildMs;this.directionBuilds++;}
     let x0=0,y0=0,x1=FORMATION_SIDE,y1=FORMATION_SIDE;
-    if(repair&&r.gpuRepaired&&r.gpuAzimuth===result.azimuth) {
+    if(repair&&r.gpuRepaired&&this.gpuRepair?.available&&r.gpuAzimuth===result.azimuth) {
       // The correctly repaired GPU field is already final within channel precision.
-      // Refresh only the canonical CPU mirror; no delayed second texture write.
+      // Refresh both CPU mirrors without another GPU write. Context loss invalidates
+      // the GPU repair, so an outstanding result must instead publish normally below.
+      const x=r.slot%FORMATION.atlasColumns*FORMATION_SIDE,y=Math.floor(r.slot/FORMATION.atlasColumns)*FORMATION_SIDE;
+      this.field.remember(x,y,FORMATION_SIDE,FORMATION_SIDE,result.data);
+      this.occlusion.remember(x,y,FORMATION_SIDE,FORMATION_SIDE,result.occlusion);
       x1=y1=0;
     } else if(repair&&!r.gpuRepaired&&r.ready&&r.data&&r.occlusion) {
       x0=y0=FORMATION_SIDE;x1=y1=0;
@@ -495,7 +506,7 @@ export class RockFormationLighting {
     if(this.disposed||this.error||this.overflow||this.state.material!=='mineral'||!this.receiver)return null;
     // A worker-only repair must not lend the previous silhouette as current geometry.
     // GPU repairs already update the borrowed field synchronously in invalidate().
-    for(const r of this.resident.values()) if(r.repair&&(this.repairPath!=='gpu'||!r.gpuRepaired))return null;
+    for(const r of this.resident.values()) if(r.repair&&(this.repairPath!=='gpu'||!r.gpuRepaired||!this.gpuRepair?.available))return null;
     const shadows=this.receiver.fogShadows!;
     shadows.horizonPrevious=this.previous?.texture;
     shadows.sun=this.state.sun;

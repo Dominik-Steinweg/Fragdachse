@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module';
+const TextureWrapper = createRequire(import.meta.url)('../node_modules/phaser/src/renderer/webgl/wrappers/WebGLTextureWrapper.js');
 import { WOODLAND_TRANSMISSION_KEY } from '../src/assets/WoodlandAssetManifest';
 import { WOODLAND_ROCK_COVERAGE_KEY, WOODLAND_ROCK_HEIGHT_KEY } from '../src/assets/WoodlandAssetManifest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -17,7 +19,7 @@ import { FORMATION_SIDE } from '../src/arena/rocks/RockFormationField';
 import type { RockLightingState } from '../src/arena/rocks/RockLightingState';
 
 
-function fixture(width=512,height=512,gridX=4,gridY=4,heightKey?: string,colourKey?: string){
+function fixture(width=512,height=512,gridX=4,gridY=4,heightKey?: string,colourKey?: string,realTextures=false){
   class Worker {
     static instance:Worker; messages:any[]=[];onmessage:((e:any)=>void)|null=null;onerror:unknown;
     terminate=vi.fn();constructor(){Worker.instance=this;}
@@ -29,8 +31,22 @@ function fixture(width=512,height=512,gridX=4,gridY=4,heightKey?: string,colourK
   vi.stubGlobal('Worker',Worker);
   vi.stubGlobal('document',{createElement:()=>({getContext:()=>({drawImage(){},getImageData:()=>({data:new Uint8ClampedArray(16).fill(255)})})})});
   const upload=vi.fn(),remove=vi.fn();
-  const renderer={gl:{LINEAR:1,NEAREST:2,CLAMP_TO_EDGE:3,RGBA:4,TEXTURE_2D:5,UNSIGNED_BYTE:6,texSubImage2D:upload},
+  let bound:any; const wrappers:any[]=[];
+  const renderer:any={canvas:new EventTarget(),gl:{LINEAR:1,NEAREST:2,CLAMP_TO_EDGE:3,RGBA:4,TEXTURE_2D:5,UNSIGNED_BYTE:6,texSubImage2D:upload},
     createTexture2D:()=>({}),glTextureUnits:{bind(){}},glWrapper:{updateTexturing(){}}};
+  if(realTextures) {
+  Object.assign(renderer.gl, {
+    isContextLost: () => false, createTexture: () => ({}), texParameteri() {},
+    texImage2D(_t:any,_l:any,_f:any,width:number,height:number,_b:any,_f2:any,_type:any,data:Uint8Array) {
+      bound.width=width;bound.height=height;bound.data=data.slice();
+    },
+  });
+  renderer.createTexture2D=(...args:any[])=>{const w=new TextureWrapper(renderer,...args);wrappers.push(w);return w;};
+  renderer.glTextureUnits.bind=(wrapper:any)=>{bound=wrapper.webGLTexture;};
+  upload.mockImplementation((_t:any,_l:any,x:number,y:number,width:number,height:number,_f:any,_type:any,data:Uint8Array)=>{
+    for(let row=0;row<height;row++)bound.data.set(data.subarray(row*width*4,(row+1)*width*4),((y+row)*bound.width+x)*4);
+  });
+  }
   const transmissionTexture={key:WOODLAND_TRANSMISSION_KEY,getSourceImage:()=>({width:512,height:512})};
   const getTexture=vi.fn((key:string)=>key===WOODLAND_TRANSMISSION_KEY?transmissionTexture:
     {getSourceImage:()=>({width:2,height:2})});
@@ -40,7 +56,7 @@ function fixture(width=512,height=512,gridX=4,gridY=4,heightKey?: string,colourK
   const state:RockLightingState={enabled:true,normals:false,strength:1,sun:[-.5,-.5,Math.SQRT1_2],material:'mineral',colourTextureKey:colourKey};
   const lighting=new RockFormationLighting(scene as never,{offsetX:0,offsetY:0,width,height},states,state,heightKey);
   lighting.updateView({x:0,y:0,width:400,height:400});lighting.tick();
-  return{coverage,getCoverage,lighting,worker:Worker.instance,states,state,upload,remove,transmissionTexture,getTexture};
+  return{renderer,wrappers,coverage,getCoverage,lighting,worker:Worker.instance,states,state,upload,remove,transmissionTexture,getTexture};
 }
 afterEach(()=>{vi.unstubAllGlobals();vi.clearAllMocks();fake.quads.length=0;});
 describe('formation lighting ownership and incremental updates',()=>{
@@ -151,7 +167,7 @@ describe('formation lighting ownership and incremental updates',()=>{
     f.lighting.destroy();
   });
   it('uploads the union of changed normal/coverage and occlusion samples, preserving atlas coordinates',()=>{
-    const f=fixture();settle(f);f.upload.mockClear();
+    const f=fixture(512,512,4,4,undefined,undefined,true);settle(f);f.upload.mockClear();
     f.states[0].active=false;f.lighting.invalidate([0]);f.lighting.tick();
     const request=f.worker.messages.at(-1), chunk=request.chunks[0];
     const data=new Uint8Array(FORMATION_SIDE**2*4).fill(255),occlusion=data.slice();
@@ -162,6 +178,7 @@ describe('formation lighting ownership and incremental updates',()=>{
     f.lighting.tick();expect(f.upload).toHaveBeenCalledTimes(2);
     for(const call of f.upload.mock.calls)expect(call.slice(2,6)).toEqual([100,20,6,3]);
     expect(f.lighting.getDiagnostics().lastRepairPublishMs).toBeGreaterThanOrEqual(0);
+    expectRestoredTextures(f);
     f.lighting.destroy();
   });
   it('discards stale worker results on destruction and releases every listener, texture and shader on teardown',()=>{
@@ -181,10 +198,11 @@ describe('formation lighting ownership and incremental updates',()=>{
 it('rebakes only across azimuth bins, blends on the presentation clock and releases horizon history',async()=>{
   const {createSunPath,resolveSunPath}=await import('../src/effects/sunlight/SunPath');
   const {createSunTuning}=await import('../src/effects/sunlight/SunAtmosphere');
-  const f=fixture(),settle=()=>{let guard=100;while(f.lighting.getDiagnostics().pendingChunks&&guard-->0){f.worker.reply();f.lighting.tick();}expect(guard).toBeGreaterThan(0);};settle();
+  const f=fixture(512,512,4,4,undefined,undefined,true),settle=()=>{let guard=100;while(f.lighting.getDiagnostics().pendingChunks&&guard-->0){f.worker.reply();f.lighting.tick();}expect(guard).toBeGreaterThan(0);};settle();
   const path=resolveSunPath(720,90,createSunPath());f.state.clouds={tuning:createSunTuning(),timeSec:0,strength:1,sunPath:path};
   f.lighting.tick();settle();const before=f.worker.messages.filter(m=>m.kind==='build').length,bytes=f.lighting.getDiagnostics().uploadBytes;
   const binding=f.lighting.getReceiverBinding()!;expect(binding.horizonPrevious).toBeDefined();expect(binding.horizonBlend![0]).toBe(0);
+  expectRestoredTextures(f);
   resolveSunPath(720,91,path);for(let i=0;i<20;i++)f.lighting.tick();
   expect(f.worker.messages.filter(m=>m.kind==='build')).toHaveLength(before);expect(f.lighting.getDiagnostics().uploadBytes).toBe(bytes);
   f.state.clouds.timeSec=.3;f.lighting.tick();expect(binding.horizonBlend![0]).toBeCloseTo(.5);
@@ -313,8 +331,19 @@ function gpuFixture(error=0) {
 }
 
 describe('GPU formation transaction',()=>{
+  it('invalidates GPU-only publications on context loss and releases its listener on teardown',()=>{
+    const f=gpuFixture(),chunk={cx:0,cy:0,slot:0};
+    f.repair.validate(chunk,135,true,null,f.reference,f.reference);
+    expect(f.repair.available).toBe(true);
+    const onLost=f.renderer.canvas.addEventListener.mock.calls.find(([event]:[string])=>event==='webglcontextlost')[1];
+    onLost();
+    expect(f.repair.available).toBe(false);
+    expect(f.repair.repair([chunk],135,true,null,{field:{} as WebGLTexture,occlusion:{} as WebGLTexture})).toBe(false);
+    f.repair.destroy();
+    expect(f.renderer.canvas.removeEventListener).toHaveBeenCalledWith('webglcontextlost',onLost);
+  });
   it('publishes before the destruction frame and rejects a superseded worker repair across a chunk edge',()=>{
-    const gpu:any={change:vi.fn(),repair:vi.fn(()=>true),validate:vi.fn(),poll:vi.fn(),destroy:vi.fn(),diagnostics:{available:true}};
+    const gpu:any={available:true,change:vi.fn(),repair:vi.fn(()=>true),validate:vi.fn(),poll:vi.fn(),destroy:vi.fn(),diagnostics:{available:true}};
     const create=vi.spyOn(RockFormationGpuRepair,'create').mockReturnValue(gpu);
     try {
       const f=fixture(1024,512,15,5);let guard=20;
@@ -532,4 +561,46 @@ it('uploads zero-alpha ray/occupancy data unchanged after Phaser colour uploads 
   f.repair.change([{id:0,gridX:15,gridY:15,active:true,frame:3}]);
   expect([...uploads.at(-1)!.data]).toEqual([4,0,0,0]);
   expect(pma&&flip).toBe(true);f.repair.destroy();
+});
+
+/** Exercise Phaser's actual restoration, with only the GL memory store simulated. */
+function expectRestoredTextures(f:ReturnType<typeof fixture>):void {
+ expect(f.wrappers.length).toBeGreaterThan(0);
+ const before=f.wrappers.map(w=>w.webGLTexture.data.slice());
+ for(const wrapper of f.wrappers)wrapper.createResource();
+ for(let i=0;i<before.length;i++)expect(f.wrappers[i].webGLTexture.data.every((value:number,index:number)=>value===before[i][index])).toBe(true);
+}
+it('restores published formation atlas bytes through actual Phaser texture wrappers',()=>{
+ const f=fixture(512,512,4,4,undefined,undefined,true);let guard=100;
+ while(f.lighting.getDiagnostics().pendingChunks&&guard-->0){f.worker.reply();f.lighting.tick();}
+ expect(f.lighting.getPreparationState().ready).toBe(true);
+ const before=f.wrappers.map(w=>w.webGLTexture.data.slice());
+ expect(before.every(bytes=>bytes.some((v:number)=>v>0))).toBe(true);
+ for(const wrapper of f.wrappers)wrapper.createResource();
+ f.lighting.tick();
+ try { for(let i=0;i<before.length;i++)expect(f.wrappers[i].webGLTexture.data.every((value:number,index:number)=>value===before[i][index])).toBe(true); }
+ finally {f.lighting.destroy();}
+});
+
+it.each(['published mirror','pending mirror'])('restores an explosion across context loss with %s',mode=>{
+ const gpu:any={available:true,change(){},validate(){},poll(){},destroy(){},diagnostics:{available:true},repair(chunks:any[],_a:any,_s:any,_r:any,atlas:any){
+   for(const chunk of chunks)for(const [texture,value]of [[atlas.field,100],[atlas.occlusion,200]] as const){
+     const x=chunk.slot%8*FORMATION_SIDE,y=Math.floor(chunk.slot/8)*FORMATION_SIDE;
+     for(let row=0;row<FORMATION_SIDE;row++)texture.data.fill(value,((y+row)*texture.width+x)*4,((y+row)*texture.width+x+FORMATION_SIDE)*4);
+   }return true;
+ }};
+ const create=vi.spyOn(RockFormationGpuRepair,'create').mockReturnValue(gpu);
+ const f=fixture(512,512,4,4,undefined,undefined,true);let guard=100;
+ while(f.lighting.getDiagnostics().pendingChunks&&guard-->0){f.worker.reply();f.lighting.tick();}
+ f.states[0].active=false;f.lighting.invalidate([0]);f.lighting.tick();
+ const expected=f.wrappers.map(w=>w.webGLTexture.data.slice());
+ if(mode==='published mirror'){f.upload.mockClear();f.worker.reply();f.lighting.tick();expect(f.upload).not.toHaveBeenCalled();}
+ gpu.available=false;
+ if(mode==='pending mirror')expect(f.lighting.getCoverageBinding()).toBeNull();
+ f.renderer.canvas.dispatchEvent(new Event('webglcontextlost'));
+ for(const wrapper of f.wrappers)wrapper.createResource();
+ if(mode==='pending mirror')f.worker.reply();f.lighting.tick();
+ expect(f.lighting.getCoverageBinding()).not.toBeNull();
+ try {for(let i=0;i<expected.length;i++)expect(f.wrappers[i].webGLTexture.data.every((value:number,index:number)=>value===expected[i][index])).toBe(true);}
+ finally {f.lighting.destroy();create.mockRestore();}
 });
