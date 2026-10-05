@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { EventEmitter } from 'node:events';
 
 vi.mock('phaser', async () => {
   const { InstalledShader } = await import('./CharacterShadowPhaserHarness');
@@ -7,8 +8,8 @@ vi.mock('phaser', async () => {
   const ShaderQuad = require(process.cwd() + '/node_modules/phaser/src/renderer/webgl/renderNodes/ShaderQuad.js');
   return {
     Textures: { FilterMode: { LINEAR: 1 } },
-    Scenes: { Events: { SHUTDOWN: 'shutdown' } },
-    BlendModes: { NORMAL: 0 }, Math: {
+    Scenes: { Events: { SHUTDOWN: 'shutdown', UPDATE: 'update', DESTROY: 'destroy' } },
+    BlendModes: { NORMAL: 0, ADD: 1 }, Math: {
       Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)),
       Linear: (a: number, b: number, t: number) => a + (b - a) * t,
       Easing: { Quadratic: { Out: (t: number) => t * (2 - t) } },
@@ -20,12 +21,20 @@ vi.mock('phaser', async () => {
         // Keep the installed Shader constructor/components/preDestroy, replacing the
         // harness's draw-only node with the installed allocation/ProgramManager path.
         this.renderNode = new ShaderQuad(scene.sys.renderer.renderNodes, config);
+        scene.onShaderCreated(this);
+      }
+      setRenderToTexture() {
+        // The browser framebuffer is not part of this node-allocation proof.
+        this.drawingContext = { destroy: vi.fn(), clear() {}, setClearColor() {} };
+        this.texture = { destroy: vi.fn() };
+        return this;
       }
       once(_event: string, callback: () => void) { this.callbacks.push(callback); return this; }
       destroy() {
         if (this.destroyed) return;
-        this.callbacks.forEach(callback => callback());
         this.preDestroy();
+        // Installed GameObject.destroy emits DESTROY only after preDestroy.
+        this.callbacks.forEach(callback => callback());
         super.destroy();
       }
     } },
@@ -35,7 +44,6 @@ vi.mock('../src/effects/EffectUtils', () => ({
   registerGraphicsObject() {}, mixColors: (color: number) => color,
   ensureCanvasTexture() {}, fillRadialGradientTexture() {},
 }));
-vi.mock('../src/graphics/GraphicsQuality', () => ({ getGraphicsQualityProfile: () => ({ level: 'high' }) }));
 
 import { CoopDefenseMissionProgressRenderer } from '../src/effects/CoopDefenseMissionProgressRenderer';
 import { TeslaNovaRenderer } from '../src/effects/TeslaNovaRenderer';
@@ -44,6 +52,9 @@ import { WaterSurfaceRenderer } from '../src/arena/WaterSurfaceRenderer';
 import { StinkCloudBody } from '../src/effects/StinkCloudBody';
 import { FlamethrowerUpgradeRenderer } from '../src/effects/FlamethrowerUpgradeRenderer';
 import { PlasmaBurnerRenderer } from '../src/effects/PlasmaBurnerRenderer';
+import { PlayerStatusRing } from '../src/ui/PlayerStatusRing';
+import { LivingFieldTexture } from '../src/effects/living/LivingFieldTexture';
+import { GraphicsQualityController } from '../src/graphics/GraphicsQuality';
 import * as Phaser from 'phaser';
 
 function fixture() {
@@ -65,24 +76,37 @@ function fixture() {
     },
   };
   renderer.renderNodes = { renderer, getNode: () => ({}), finishBatch: vi.fn() };
-  const quads: any[] = [];
+  const quads: any[] = [], containers: any[] = [];
+  const object = () => ({
+    setVisible() { return this; }, setDepth() { return this; }, setBlendMode() { return this; }, destroy() {},
+  });
   const scene = {
+    onShaderCreated: (quad: any) => quads.push(quad),
+    scene: { key: 'ShaderLifetime' },
     sys: { renderer }, textures: {
-      get: () => ({}), remove: vi.fn(),
+      get: () => ({}), remove: vi.fn(), exists: () => true,
       createCanvas: () => ({ context: {
         createImageData: (w: number, h: number) => ({ data: new Uint8ClampedArray(w * h * 4) }),
         putImageData() {},
       }, refresh() {}, setFilter() {} }),
-    }, time: { now: 0 }, events: { once: vi.fn() },
+    }, time: { now: 0 }, events: new EventEmitter(),
     add: {
-      existing: (quad: any) => { quads.push(quad); return quad; },
+      existing: (quad: any) => quad,
+      image: object, graphics: object, particles() {},
+      container: (_x: number, _y: number, children: any[]) => {
+        const container = { ...object(), children, destroyed: false,
+          add(child: any) { children.push(child); },
+          destroy() { if (this.destroyed) return; this.destroyed = true; children.forEach(child => child.destroy()); },
+        };
+        containers.push(container); return container;
+      },
       shader: (...args: any[]) => {
         const quad = new (Phaser.GameObjects.Shader as any)(scene, ...args);
-        quads.push(quad); return quad;
+        return quad;
       },
     },
   };
-  return { scene, buffers, vaos, quads, programs, sharedIndex };
+  return { scene, buffers, vaos, quads, containers, programs, sharedIndex };
 }
 
 function mission(scene: any) {
@@ -96,7 +120,7 @@ function mission(scene: any) {
   return () => renderer.destroy();
 }
 
-describe('World shader effects release private Phaser GPU resources', () => {
+describe('Shader owners release private Phaser GPU resources', () => {
   it.each(['mission', 'nova-expiry', 'nova-teardown', 'tesla-field', 'stink', 'stink-probe', 'flame-expiry', 'flame-teardown'] as const)('releases %s without retiring another owner or shared programs', kind => {
     const f = fixture();
     const create = () => {
@@ -181,6 +205,70 @@ describe('World shader effects release private Phaser GPU resources', () => {
     second.shutdown();
     expect(f.buffers).toEqual([f.sharedIndex]);
     expect(f.vaos).toEqual([]);
+    expect(f.sharedIndex.destroy).not.toHaveBeenCalled();
+  });
+
+  it.each(['owner', 'container', 'quality'] as const)('releases status-ring shader nodes on %s destruction', transition => {
+    const f = fixture(), quality = new GraphicsQualityController('high');
+    quality.attach(f.scene as never);
+    const first = new PlayerStatusRing(f.scene as never, () => undefined);
+    const firstQuads = [...f.quads];
+    const second = new PlayerStatusRing(f.scene as never, () => undefined);
+    const controlQuads = f.quads.slice(firstQuads.length);
+    expect(firstQuads).toHaveLength(2);
+    const nodes = firstQuads.map(quad => quad.renderNode), suites = nodes.map(node => node.programManager.getCurrentProgramSuite());
+    const controlNodes = controlQuads.map(quad => quad.renderNode), controls = controlNodes.map(node => node.programManager.getCurrentProgramSuite());
+    expect(suites[0].program).toBe(controls[0].program);
+    if (transition === 'quality') {
+      quality.setLevel('low');
+      expect(firstQuads[0].destroyed).not.toBe(true);
+      expect(firstQuads[1].destroyed).toBe(true);
+      expect(f.buffers).toEqual([f.sharedIndex, nodes[0].vertexBufferLayout.buffer, controlNodes[0].vertexBufferLayout.buffer]);
+      expect(f.vaos).toEqual([suites[0].vao, controls[0].vao]);
+      quality.setLevel('high');
+      expect(f.quads).toHaveLength(6);
+    } else {
+      if (transition === 'container') f.containers[0].destroy();
+      first.destroy();
+      expect(firstQuads.every(quad => quad.destroyed)).toBe(true);
+      expect(f.buffers).toEqual([f.sharedIndex, ...controlNodes.map(node => node.vertexBufferLayout.buffer)]);
+      expect(f.vaos).toEqual(controls.map(suite => suite.vao));
+      expect(controlQuads.every(quad => !quad.destroyed)).toBe(true);
+    }
+    first.destroy(); second.destroy(); second.destroy();
+    expect(f.buffers).toEqual([f.sharedIndex]);
+    expect(f.vaos).toEqual([]);
+    suites.forEach(suite => expect(suite.vao.destroy).toHaveBeenCalledOnce());
+    expect([...f.programs.values()].every(program => !program.destroy.mock.calls.length)).toBe(true);
+    const count = f.quads.length;
+    quality.setLevel('low'); quality.setLevel('high');
+    expect(f.quads).toHaveLength(count);
+    quality.destroy();
+  });
+
+  it.each(['last-consumer', 'shutdown'] as const)('retains the shared living field until %s', transition => {
+    const f = fixture(), field = LivingFieldTexture.get(f.scene as never);
+    field.retain(); field.retain();
+    expect(f.quads).toHaveLength(1);
+    const quad = f.quads[0], node = quad.renderNode, suite = node.programManager.getCurrentProgramSuite();
+    field.release();
+    expect(quad.destroyed).not.toBe(true);
+    expect(f.buffers).toContain(node.vertexBufferLayout.buffer);
+    expect(f.vaos).toContain(suite.vao);
+    if (transition === 'shutdown') f.scene.events.emit('shutdown');
+    else field.release();
+    expect(quad.destroyed).toBe(true);
+    expect(f.buffers).toEqual([f.sharedIndex]);
+    expect(f.vaos).toEqual([]);
+    field.release();
+    const replacement = LivingFieldTexture.get(f.scene as never);
+    replacement.retain();
+    expect(f.quads).toHaveLength(2);
+    expect(f.quads[1].renderNode.programManager.getCurrentProgramSuite().program).toBe(suite.program);
+    replacement.release();
+    expect(f.buffers).toEqual([f.sharedIndex]);
+    expect(f.vaos).toEqual([]);
+    expect(suite.program.destroy).not.toHaveBeenCalled();
     expect(f.sharedIndex.destroy).not.toHaveBeenCalled();
   });
 

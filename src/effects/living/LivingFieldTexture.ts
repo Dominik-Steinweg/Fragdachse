@@ -5,6 +5,7 @@ import {
   LIVING_FIELD_UNIT_WIDTH,
 } from './livingFieldShader';
 import { getGraphicsQualityController, getGraphicsQualityProfile } from '../../graphics/GraphicsQuality';
+import { disposeShaderWarmupNode } from '../../graphics/disposeShaderWarmupNode';
 
 /**
  * Die geteilte, animierte Feldtextur hinter allen lebendigen Balken einer Szene.
@@ -256,6 +257,7 @@ export class LivingFieldTexture {
 
   private disposeShader(): void {
     if (!this.shader) return;
+    if (this.shader.renderNode) disposeShaderWarmupNode(this.shader.renderNode);
     this.shader.destroy();
     this.shader = null;
     if (this.scene.textures.exists(this.textureKey)) this.scene.textures.remove(this.textureKey);

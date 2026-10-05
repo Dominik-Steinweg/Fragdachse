@@ -7,6 +7,7 @@ import {
   PLAYER_VISUAL_SIZE,
 } from '../config';
 import { getGraphicsQualityController, getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
+import { disposeShaderWarmupNode } from '../graphics/disposeShaderWarmupNode';
 import { fillRadialGradientTexture, registerGraphicsObject } from '../effects/EffectUtils';
 import {
   STATUS_RING_ADRENALINE_TRANSITION_FRACTION,
@@ -481,6 +482,8 @@ export class PlayerStatusRing {
       STATUS_RING_TEXTURE_SIZE,
       STATUS_RING_TEXTURE_SIZE,
     );
+    const node = quad.renderNode;
+    quad.once('destroy', () => disposeShaderWarmupNode(node));
     quad.setOrigin(0.5, 0.5);
     quad.setBlendMode(Phaser.BlendModes.ADD);
     return quad;
@@ -513,6 +516,8 @@ export class PlayerStatusRing {
       STATUS_RING_TEXTURE_SIZE,
       STATUS_RING_TEXTURE_SIZE,
     );
+    const node = quad.renderNode;
+    quad.once('destroy', () => disposeShaderWarmupNode(node));
     quad.setOrigin(0.5, 0.5);
     quad.setBlendMode(Phaser.BlendModes.NORMAL);
     return quad;
