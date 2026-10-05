@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { GuardianSpiritPhase, SyncedGuardianSpirit } from '../types';
-import type { CombatActorStatePort, CombatDamageEffectPort } from '../combat/CombatCapabilities';
+import type { CombatActorStatePort, CombatDamageEffectPort, CombatRelationshipQueryPort } from '../combat/CombatCapabilities';
 
 const STAT_PREFIX = 'player.guardianSpirit';
 const IMPACT_VISUAL_MS = 180;
@@ -53,7 +53,7 @@ export class GuardianSpiritSystem {
   constructor(
     private readonly playerManager: PlayerManager,
     enemyManager: EnemyManager | null,
-    private readonly combatSystem: CombatActorStatePort & CombatDamageEffectPort,
+    private readonly combatSystem: CombatActorStatePort & CombatDamageEffectPort & CombatRelationshipQueryPort,
     private readonly resolveStat: GuardianSpiritStatResolver,
   ) {
     this.enemyManager = enemyManager;
@@ -141,7 +141,8 @@ export class GuardianSpiritSystem {
       }
 
       const target = spirit.targetId ? this.enemyManager?.getEnemy(spirit.targetId) : undefined;
-      if (!target || !this.combatSystem.isAlive(target.id)) {
+      if (!target || !this.combatSystem.isAlive(target.id)
+        || !this.combatSystem.canDamageTarget(ownerId, target.id)) {
         spirit.phase = 'returning';
         spirit.targetId = undefined;
         continue;
@@ -175,7 +176,7 @@ export class GuardianSpiritSystem {
       .sort((left, right) => left.id - right.id)[0];
     if (!readySpirit) return;
 
-    const target = this.findNearestTarget(ownerX, ownerY, cfg.scanRadius);
+    const target = this.findNearestTarget(ownerId, ownerX, ownerY, cfg.scanRadius);
     if (!target) return;
     readySpirit.phase = 'attacking';
     readySpirit.targetId = target.id;
@@ -197,11 +198,11 @@ export class GuardianSpiritSystem {
     });
   }
 
-  private findNearestTarget(ownerX: number, ownerY: number, radius: number) {
+  private findNearestTarget(ownerId: string, ownerX: number, ownerY: number, radius: number) {
     let nearest: ReturnType<EnemyManager['getEnemy']>;
     let nearestDistance = radius;
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
-      if (!this.combatSystem.isAlive(enemy.id)) continue;
+      if (!this.combatSystem.isAlive(enemy.id) || !this.combatSystem.canDamageTarget(ownerId, enemy.id)) continue;
       const distance = Phaser.Math.Distance.Between(ownerX, ownerY, enemy.sprite.x, enemy.sprite.y);
       if (distance > nearestDistance) continue;
       nearest = enemy;
