@@ -65,9 +65,11 @@ export class ProjectileLifecycleProcessor {
   }
 
   triggerEnemyImpactExplosion(projectile: ProjectileRuntimeRecord): boolean {
-    if (!projectile.spec.interaction.enemyHitExplosion || projectile.pendingExplosion) return false;
+    const effect = projectile.spec.interaction.enemyHitExplosion;
+    // Upgrade placeholders with zero radius must not produce explosion FX or audio.
+    if (!effect || effect.radius <= 0 || projectile.pendingExplosion) return false;
     projectile.pendingExplosion = true;
-    this.pendingProjectileExplosions.push(this.createExplosionRequest(projectile, projectile.spec.interaction.enemyHitExplosion));
+    this.pendingProjectileExplosions.push(this.createExplosionRequest(projectile, effect));
     this.deps.queueDestroy(projectile);
     return true;
   }

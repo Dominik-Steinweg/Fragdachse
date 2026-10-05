@@ -201,6 +201,41 @@ describe('ArenaMetaController', () => {
     expect(store.markCoopDefenseMapCompleted).toHaveBeenCalledWith('1');
   });
 
+  it.each(['10', '11'].flatMap(mapId => [true, false].flatMap(host => [true, false].map(newBaseObject => ({
+    mapId, host, newBaseObject,
+  })))))('keeps radius rewards in results but opens base only for a new object (map=$mapId, host=$host, object=$newBaseObject)', ({ mapId, host, newBaseObject }) => {
+    const { controller, store, resultRead, presentation, session } = makeInput();
+    vi.mocked(session.isHost).mockReturnValue(host);
+    const progress = { ...getStoredCoopDefenseProgress(), persistentBaseUnlocked: true };
+    vi.mocked(store.getProgress).mockImplementation(() => structuredClone(progress));
+    vi.mocked(store.unlockPersistentBaseAreaStageAfterVictory).mockImplementation(() => {
+      progress.persistentBaseAreaStage = 2;
+      return true;
+    });
+    controller.refresh();
+    controller.captureRoundRewardBaseline(1);
+    controller.beginMatchResults();
+    if (newBaseObject) progress.persistentBaseRewardUnlocks = ['base_spore_turret'];
+    vi.mocked(resultRead.getRoundResults).mockReturnValue([{
+      id: 'local', name: 'Local', colorHex: 0xffffff, frags: 0, teamId: null,
+      roundEndedAt: 42, gameMode: 'coop_defense', mapName: 'Map', sharedXp: 0,
+    }]);
+    vi.mocked(resultRead.getRoundState).mockReturnValue({ status: 'victory', roundStartTime: 1, endedAt: 42, coopDefenseMapId: mapId });
+    controller.tryFinalizeMatchResults();
+    expect(store.unlockPersistentBaseAreaStageAfterVictory).toHaveBeenCalledWith(mapId);
+    expect(presentation.showMatchResults).toHaveBeenCalledWith(expect.objectContaining({
+      progress: expect.objectContaining({ persistentBaseAreaStageUnlocked: true, persistentBaseAreaStage: progress.persistentBaseAreaStage }),
+    }));
+    controller.startAfterRoundFlow();
+    if (host && newBaseObject) {
+      expect(presentation.showBaseOverlay).toHaveBeenCalledWith(['base_spore_turret']);
+      expect(presentation.finishAfterRoundPresentation).not.toHaveBeenCalled();
+      controller.finishAfterRoundStep('base');
+    } else expect(presentation.showBaseOverlay).not.toHaveBeenCalled();
+    expect(controller.isAfterRoundFlowActive()).toBe(false);
+    expect(presentation.finishAfterRoundPresentation).toHaveBeenCalledOnce();
+  });
+
   it('blocks manual base access for clients even when their personal base is unlocked', () => {
     const { controller, store, session, presentation } = makeInput();
     const progress = getStoredCoopDefenseProgress();

@@ -3,7 +3,7 @@ import type { PerformanceCase } from './contracts';
 import { buildPerformanceLoadout as build, presets, type PresetItem } from './loadouts';
 import { PERFORMANCE_MAP_ID, VOID_FIRE_MAP_ID, DAWN_MAP_ID } from './referenceMap';
 export { PERFORMANCE_MAP_ID, REFERENCE_SEED, registerReferenceMap } from './referenceMap';
-export const SCENARIO_VERSION = 'pages-review-1';
+export const SCENARIO_VERSION = 'pages-review-2';
 
 export function allPerformanceCases(): PerformanceCase[] {
   const glock = build('GLOCK');

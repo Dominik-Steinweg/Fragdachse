@@ -39,7 +39,6 @@ function createHarness(activity: ActivityDescriptor | null = ACTIVITY_A): {
     applyPersistentBaseOutcome: (outcome, identity) => {
       calls.push(`base:${outcome}:${identity.worldRevision}:${identity.activityRevision}`);
     },
-    clearActivityPresentation: () => { calls.push('clear-presentation'); },
     publishCompletion: (completion, endedAt) => {
       calls.push(`publish:${getCoopMissionConclusion(completion)}:${endedAt}`);
     },
@@ -88,12 +87,11 @@ describe('result application', () => {
       'resolve-rewards:activity:coop-mission:7',
       'grant:base_health_pedestal',
       'base:commit:21:7',
-      'clear-presentation',
       'publish:victory:9000',
     ]);
 
     expect(harness.application.apply(completion, 9_001)).toBe(false);
-    expect(harness.calls).toHaveLength(6);
+    expect(harness.calls).toHaveLength(5);
   });
 
   for (const conclusion of ['defeat', 'aborted'] as const) {
@@ -104,7 +102,6 @@ describe('result application', () => {
       expect(harness.application.apply(completion, 9_000)).toBe(true);
       expect(harness.calls).toEqual([
         'base:rollback:21:7',
-        'clear-presentation',
         `publish:${conclusion}:9000`,
       ]);
     });

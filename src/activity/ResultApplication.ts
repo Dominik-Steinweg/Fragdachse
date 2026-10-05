@@ -23,7 +23,6 @@ export interface ResultApplicationPort {
     outcome: PersistentBaseRoundOutcome,
     identity: PersistentBaseTransactionIdentity,
   ) => void;
-  readonly clearActivityPresentation: () => void;
   readonly publishCompletion: (
     completion: CoopMissionActivityCompletion,
     endedAt: number,
@@ -62,7 +61,6 @@ export class ResultApplication {
         activityRevision: completion.activityRevision,
       },
     );
-    this.port.clearActivityPresentation();
     this.port.publishCompletion(completion, endedAt);
     return true;
   }

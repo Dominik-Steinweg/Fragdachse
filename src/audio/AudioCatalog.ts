@@ -109,6 +109,7 @@ const SHOT_ASSETS = {
   shot_p90:               './assets/sounds/p90.ogg',//done
   shot_flame:             './assets/sounds/flame.ogg',//done
   shot_rocketlauncher:    './assets/sounds/rocketlauncher.ogg',//done
+  shot_turret_rocket:     './assets/sounds/rocketlauncher.ogg',
   shot_minirocketlauncher:'./assets/sounds/minirocketlauncher.ogg',//done
   shot_spore:             './assets/sounds/spore.ogg',//done
   shot_negev:             './assets/sounds/negev.ogg',//done
@@ -272,12 +273,12 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_explosion_fireball: 0.5,
   sfx_explosion_kamikaze: 0.5,
   sfx_explosion_rocket_aftershock: 0.5,
-  sfx_explosion_plasma_swarm: 0.6,
+  sfx_explosion_plasma_swarm: 0.45,
   sfx_explosion_grave_titan_plasma: 0.5,
   sfx_explosion_alien_plasma: 0.5,
   sfx_explosion_turret_plasma: 0.5,
   sfx_explosion_inferno_rockets: 0.15,
-  sfx_explosion_turret_rocket: 0.5,
+  sfx_explosion_turret_rocket: 0.10,
   sfx_explosion_gravity: 0.5,
   sfx_explosion_void_nuke: 0.9,
   sfx_explosion_decoy: 0.5,
@@ -304,6 +305,7 @@ export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   shot_p90:                0.3,
   shot_flame:              0.2,
   shot_rocketlauncher:     0.5,
+  shot_turret_rocket:      0.2,
   shot_minirocketlauncher: 0.45,
   shot_spore:              0.5,
   shot_negev:              0.2,

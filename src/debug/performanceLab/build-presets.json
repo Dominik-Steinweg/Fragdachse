@@ -102,7 +102,16 @@
   "TESLA_DOME": {
     "slot": "weapon2",
     "upgrades": {
-      "unlock_tesla_dome": 1
+      "unlock_tesla_dome": 1,
+      "tesla_dome_additional_beams": 3,
+      "tesla_dome_focused_conductivity": 3,
+      "tesla_dome_energy_efficiency": 3,
+      "tesla_dome_field_charge": 1,
+      "tesla_dome_field_stabilization": 1,
+      "tesla_dome_overcharge_pulse": 1,
+      "tesla_dome_thunderstorm": 1,
+      "tesla_dome_fast_charge": 3,
+      "tesla_dome_overcharge": 3
     }
   },
   "FLAMETHROWER": {

@@ -45,6 +45,16 @@ bevor die lebende RoundParticipation gelöscht wird. Die lokale Ergebnisbuchung 
 begrenzt den Revisions-Namensraum für persistente Einmaligkeit; ein Host-Zeitstempel allein
 ist über verschiedene Rooms hinweg keine geordnete Rundenidentität.
 
+Beim regulären Rundenabschluss veröffentlicht der Host Ergebniszustände und danach `LOBBY`,
+bevor er RoundParticipation, eingefrorene Runden-Loadouts und Missionspräsentation löscht.
+Reliable Nachrichten sind geordnet, können aber zwischen Client-Frames einzeln eintreffen.
+Die Phase aktiviert den lokalen Exit-Schutz vor dem normalen Teilnahme-/World-Abgleich;
+bei ergebnisberechtigten Spielern wartet der sichtbare World-Abbau nach Sieg/Niederlage
+auf Fade und Ergebnis-Render.
+Lobby-Ready-Commits dürfen vorher invalidiert werden, da die laufende Arena ihre getrennten
+Runden-Loadouts liest. Owner: `ArenaLifecycleCoordinator.hostCompleteRound`; Vertragstest:
+[ArenaExitLifecycle.test.ts](../../tests/integration/ArenaExitLifecycle.test.ts).
+
 Ein Ready gilt nur für die aktuelle hosteigene Ready-Revision des Lobby-Snapshots. Jede
 autoritative Invalidierung aller Ready-Zustände erhöht diese Revision, auch bei unveränderter
 Konfiguration. Erneute Snapshot-Publikation, Join und Resume erhalten sie. Damit kann ein vor

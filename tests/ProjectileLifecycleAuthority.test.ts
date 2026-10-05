@@ -29,6 +29,30 @@ function fixture() {
 }
 
 describe('world-owned projectile lifecycle authority', () => {
+  it.each([false, true])('only emits enabled enemy-impact explosions and still consumes the bolt (enabled=%s)', enabled => {
+    const { runtime, physics } = fixture();
+    const hit = vi.fn(() => ({ accepted: true }));
+    runtime.setProjectileCombatPort({ resolveDirectImpact: hit, resolveExplosionCombat: () => ({ damagedTargetKeys: [] }) });
+    runtime.setProjectileTargetabilityPort({ canDamage: () => true, canDamageOwner: () => true,
+      isTargetCurrentlyValid: () => true });
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink => {
+      sink('enemy', 'target', 'enemy-owner', 0, 0, 8, -8, -8, 8, 8);
+    } });
+    const effect = { ...explosion, radius: enabled ? explosion.radius : 0, maxDamage: enabled ? explosion.maxDamage : 0 };
+    const id = runtime.spawnProjectile({ ...request(),
+      interaction: { directHit: { damage: 6 }, enemyHitExplosion: effect },
+    })!;
+    runtime.runHostInteractionStage(0);
+    const stage = runtime.runHostProjectileStage(0, 0);
+    expect(hit).toHaveBeenCalledOnce();
+    expect(stage.projectileExplosions).toEqual(enabled
+      ? [expect.objectContaining({ projectileId: id, effect })] : []);
+    expect(runtime.activeCount).toBe(0);
+    expect(physics.released).toEqual([id]);
+    expect(runtime.runHostProjectileStage(0, 0).projectileExplosions).toEqual([]);
+    runtime.destroy();
+  });
+
   it.each([1, 0.5])('expires translocator pucks on their simulated lifetime at time factor %s', factor => {
     const { runtime, physics } = fixture();
     runtime.setProjectileTimeFieldPort({ getMovementFactor: () => factor });

@@ -46,6 +46,9 @@ import { ArenaScene } from '../../src/scenes/ArenaScene';
 import { ArenaLifecycleCoordinator } from '../../src/scenes/arena/ArenaLifecycleCoordinator';
 import { ResultApplication } from '../../src/activity/ResultApplication';
 import { bridge } from '../../src/network/bridge';
+import { NetworkBridge } from '../../src/network/NetworkBridge';
+import { clearActiveSession, setActiveSession } from '../../src/network/peer/session';
+import { FakeNetwork, createHostRoom, addClientRoom, type TestRoom } from '../fakePeerNetwork';
 import * as devScenarioMode from '../../src/utils/devScenarioMode';
 import { DEFAULT_COOP_DEFENSE_MAP_ID } from '../../src/config/coopDefenseMaps';
 import { registerDiagnosticMap, getCoopDefenseMapConfig, WEAPON_BALANCE_LAB_MAP_ID } from '../../src/config/coopDefenseMaps';
@@ -90,6 +93,125 @@ function fixture(host: boolean, outcome = 'victory') {
 }
 afterEach(() => vi.restoreAllMocks());
 describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
+  it.each([
+    ['coop_defense', 'victory'], ['coop_defense', 'defeat'],
+    ['deathmatch', 'victory'], ['deathmatch', 'defeat'],
+  ] as const)('preserves the client arena between every reliable completion message: %s / %s', async (mode, outcome) => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const clientRoom = await addClientRoom(network);
+    const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'EXIT' });
+    const hostId = hostRoom.room.getLocalPlayerId();
+    const clientId = clientRoom.room.getLocalPlayerId();
+    const ids = [hostId, clientId];
+    const host = fixture(true);
+    const client = fixture(false);
+    // Retain only rendering/scene doubles. Phase, roles, eligibility and frozen loadouts
+    // are read through the real Bridge and PeerRoom, including wire encoding/validation.
+    for (const method of ['isHost', 'getGamePhase', 'setGamePhase', 'getRoundState', 'getRoundResults',
+      'getLocalPlayerId', 'isLocalRoundResultEligible', 'hostResetRoundParticipation',
+      'publishCoopDefenseRespawnBudgetState'] as const) vi.mocked(bridge[method]).mockRestore();
+    vi.mocked(bridge.getGameMode).mockReturnValue(mode);
+    use(hostRoom);
+    const hostBridge = new NetworkBridge();
+    hostBridge.activate();
+    vi.mocked(bridge.hostResetAllLobbyReady).mockImplementation(() => hostBridge.hostResetAllLobbyReady());
+    vi.spyOn(bridge, 'getConnectedPlayerIds').mockReturnValue(ids);
+    const activity = {
+      kind: mode === 'coop_defense' ? 'coop-mission' as const : 'deathmatch' as const,
+      definitionId: 'activity:test', worldRevision: 1, activityRevision: 1,
+    };
+    const world = { worldRevision: 1, definitionId: 'world:match', seed: 1, generatorVersion: 3, layoutFingerprint: 'exit' };
+    const loadout = { weapon1: 'GLOCK', weapon2: null, utility: 'GRENADE', ultimate: 'RAGE' };
+    const presentationKeys = ['cep', 'cme', 'cso', 'cmp', 'crb'] as const;
+    try {
+      hostBridge.publishWorldAndActivity(world, activity);
+      for (const id of ids) hostBridge.hostSetPlayerCommittedLoadout(id, loadout);
+      hostBridge.hostStartRoundParticipants(ids, 100, 1);
+      hostBridge.setGamePhase('ARENA');
+      hostBridge.publishRoundState({ status: 'active', roundStartTime: 100, roundRevision: 1 });
+      hostBridge.publishRoundResults([]);
+      // Opaque non-null wire payloads let us check preservation independently of HUD schemas.
+      for (const key of presentationKeys) hostRoom.room.setGlobal(key, { preserved: key }, true);
+      host.flow.worldLifecycle.activity.descriptor = activity;
+      Object.assign(host.flow, {
+        publishRoundConclusion: (ArenaLifecycleCoordinator.prototype as any).publishRoundConclusion,
+        clearCoopMissionPresentationState: (ArenaLifecycleCoordinator.prototype as any).clearCoopMissionPresentationState,
+        hostSaveRoundResults: vi.fn((endedAt: number) => bridge.publishRoundResults(ids.map(id => ({
+          id, name: id, colorHex: 0xffffff, teamId: null, gameMode: mode, mapName: 'Test',
+          roundRevision: 1, roundEndedAt: endedAt,
+          frags: (id === clientId) === (outcome === 'victory') ? 2 : 1,
+        })))),
+      });
+      host.flow.resultApplication = new ResultApplication({
+        getCurrentActivity: () => activity,
+        resolveVictoryRewardIds: () => [], grantPersistentBaseRewards: vi.fn(),
+        applyPersistentBaseOutcome: vi.fn(),
+        publishCompletion: (completion, endedAt) => host.flow.publishCoopMissionCompletion(completion, endedAt),
+      });
+      client.flow.ctx = { playerManager: { getAllPlayers: () => ids.map(id => ({ id })) } };
+      client.flow.hostUpdate.localPlayerState = { alive: true };
+      client.flow.worldLifecycle.descriptor = world;
+      client.flow.builtWorldRevision = 1;
+      const remove = vi.spyOn(client.flow, 'removePlayerFromActiveRound').mockImplementation(() => {});
+      const participationSync = vi.spyOn(client.flow, 'syncRoundParticipation');
+      const teardown = vi.spyOn(client.flow, 'onTransitionToLobby').mockImplementation(() => {});
+      const receive = clientRoom.transport.handlers!.onMessage;
+      const deliveries: Array<() => void> = [];
+      clientRoom.transport.handlers!.onMessage = (...args) => { deliveries.push(() => receive(...args)); };
+
+      host.flow.hostCompleteRound(outcome);
+      host.flow.hostCompleteRound(outcome);
+      expect(host.flow.hostSaveRoundResults).toHaveBeenCalledOnce();
+      expect(host.flow.scene.physics.world.pause).toHaveBeenCalledOnce();
+      // Also deliver an early replacement while the client's fade still owns the old world.
+      hostBridge.publishWorldAndActivity({ ...world, definitionId: 'world:lobby', worldRevision: 2 }, null);
+      use(clientRoom);
+      let arenaFrames = 0, exitFrames = 0;
+      for (const deliver of deliveries) {
+        deliver();
+        if (bridge.getGamePhase() === 'ARENA') {
+          arenaFrames++;
+          expect(client.scene.syncArenaExitFade('ARENA')).toBe(false);
+          // The real normal-frame role reconciliation must not remove anyone between packets.
+          client.flow.syncRoundParticipation();
+          expect(bridge.isLocalSpectator()).toBe(false);
+          expect(bridge.getPlayerCommittedLoadout(clientId)).toMatchObject(loadout);
+          for (const key of presentationKeys) expect(clientRoom.room.getGlobal(key)).toEqual({ preserved: key });
+        } else {
+          exitFrames++;
+          expect(bridge.getRoundState()?.status).toBe(outcome);
+          expect(bridge.getRoundResults()).toHaveLength(2);
+          const previousSyncs = participationSync.mock.calls.length;
+          client.scene.update(0, 16);
+          expect(participationSync).toHaveBeenCalledTimes(previousSyncs);
+          client.flow.detectWorldChange(true);
+          expect(client.flow.worldRuntime.update).not.toHaveBeenCalled();
+        }
+        expect(remove).not.toHaveBeenCalled();
+        expect(teardown).not.toHaveBeenCalled();
+        expect(client.flow.worldLifecycle.endInstance).not.toHaveBeenCalled();
+      }
+      expect(arenaFrames).toBeGreaterThan(0);
+      expect(exitFrames).toBeGreaterThan(1);
+      expect(bridge.getRoundParticipation()).toBeNull();
+      expect(clientRoom.room.getGlobal('rlc')).toBeNull();
+      for (const key of presentationKeys) expect(clientRoom.room.getGlobal(key)).toBeNull();
+      expect(client.scene.arenaExitFadeOverlay.play).toHaveBeenCalledExactlyOnceWith(outcome, expect.any(Function));
+      expect(client.flow.scene.physics.world.pause).toHaveBeenCalledOnce();
+      client.completeFade();
+      client.scene.update(0, 16);
+      expect(teardown).not.toHaveBeenCalled();
+      client.events.emit('postrender');
+      expect(client.scene.syncArenaExitFade('LOBBY')).toBe(false);
+      client.flow.detectPhaseChange(false);
+      expect(teardown).toHaveBeenCalledOnce();
+      expect(client.scene.meta.beginMatchResults).toHaveBeenCalledOnce();
+    } finally {
+      hostRoom.room.destroy(); clientRoom.room.destroy(); clearActiveSession();
+    }
+  });
+
   it('preserves the real Ready round identity through pre-completion balance capture and finalization', () => {
     const { flow, scene } = fixture(true);
     let roundState: any = null;
@@ -226,6 +348,23 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     expect(flow.worldLifecycle.endInstance).not.toHaveBeenCalled();
     expect(teardown).not.toHaveBeenCalled();
   });
+  it.each(['aborted', 'draw', 'spectator'] as const)('keeps the existing no-fade exit for %s', reason => {
+    const { scene, flow } = fixture(false, reason === 'aborted' ? 'aborted' : 'victory');
+    if (reason === 'spectator') vi.mocked(bridge.isLocalRoundResultEligible).mockReturnValue(false);
+    if (reason === 'draw') {
+      vi.mocked(bridge.getGameMode).mockReturnValue('deathmatch');
+      vi.mocked(bridge.getRoundResults).mockReturnValue(['local', 'remote'].map(id => ({
+        id, name: id, colorHex: 0xffffff, frags: 2, teamId: null,
+        gameMode: 'deathmatch', mapName: 'Test', roundEndedAt: 1000,
+      })));
+    }
+    const teardown = vi.spyOn(flow, 'onTransitionToLobby').mockImplementation(() => {});
+    const defer = scene.syncArenaExitFade('LOBBY');
+    expect(defer).toBe(false);
+    flow.detectPhaseChange(defer);
+    expect(scene.arenaExitFadeOverlay.play).not.toHaveBeenCalled();
+    expect(teardown).toHaveBeenCalledOnce();
+  });
   it('verbucht den Host-Abschluss einmal und sperrt Aktionen ohne World-Abbau', () => {
     const { flow, setPhase } = fixture(true);
     setPhase('ARENA');
@@ -249,7 +388,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
       getCurrentActivity: () => activity as any,
       resolveVictoryRewardIds: () => [], grantPersistentBaseRewards: vi.fn(),
       applyPersistentBaseOutcome: applyBase,
-      clearActivityPresentation: vi.fn(), publishCompletion: publish,
+      publishCompletion: publish,
     });
     setPhase('ARENA');
     flow.hostCompleteRound(outcome); flow.hostCompleteRound(outcome);
@@ -317,7 +456,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     flow.resultApplication = new ResultApplication({
       getCurrentActivity: () => activity as any,
       resolveVictoryRewardIds: () => [], grantPersistentBaseRewards: vi.fn(),
-      applyPersistentBaseOutcome: vi.fn(), clearActivityPresentation: vi.fn(),
+      applyPersistentBaseOutcome: vi.fn(),
       publishCompletion: (completion, endedAt) => flow.publishCoopMissionCompletion(completion, endedAt),
     });
     setPhase('ARENA');
@@ -389,7 +528,7 @@ describe('Performance lab campaign lifecycle', () => {
     const applyBase = vi.fn();
     flow.resultApplication = new ResultApplication({ getCurrentActivity: () => activity as any,
       resolveVictoryRewardIds: () => [], grantPersistentBaseRewards: vi.fn(), applyPersistentBaseOutcome: applyBase,
-      clearActivityPresentation: vi.fn(), publishCompletion: vi.fn() });
+      publishCompletion: vi.fn() });
     vi.mocked(bridge.hostResetAllLobbyReady).mockImplementation(() => { expect(applyBase).toHaveBeenCalledOnce(); committed = null; });
     Object.assign(flow, { committedLoadoutSelections: new WeakMap(), resolveConfiguredGameMode: () => 'coop_defense',
       navigationLabPort: { setNextRoundSeed: vi.fn() }, setIsLocalReady: vi.fn(),

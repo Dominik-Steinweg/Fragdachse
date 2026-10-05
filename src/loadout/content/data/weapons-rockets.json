@@ -271,7 +271,7 @@
       "rockDamageMult": 0,
       "trainDamageMult": 1,
       "shotAudio": {
-        "successKey": "shot_rocketlauncher",
+        "successKey": "shot_turret_rocket",
         "failureKey": "shot_dry_trigger"
       }
     },

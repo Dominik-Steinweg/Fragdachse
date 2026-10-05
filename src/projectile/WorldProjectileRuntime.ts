@@ -1003,8 +1003,7 @@ export class WorldProjectileRuntime implements
     if (projectile.spec.interaction.impactCloud) this.projectileImpactEventCallback?.(this.createImpactSource(projectile, impact.x, impact.y));
     const targetKey = target.kind === 'player' ? `players:${target.id}`
       : target.kind === 'enemy' ? `enemies:${target.id}` : undefined;
-    if (projectile.spec.interaction.enemyHitExplosion) {
-      this.lifecycleProcessor.triggerEnemyImpactExplosion(projectile);
+    if (this.lifecycleProcessor.triggerEnemyImpactExplosion(projectile)) {
       return false;
     }
     if (projectile.interaction.explosion) {

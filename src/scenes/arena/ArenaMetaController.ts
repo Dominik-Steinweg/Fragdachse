@@ -784,7 +784,7 @@ export class ArenaMetaController {
       if (presentation.itemReward) steps.push('items');
       if (progress.after.level > progress.before.level || progress.newBossPoints > 0
         || progress.classesUnlocked || progress.newlyUnlockedClassIds.length > 0) steps.push('upgrades');
-      if (this.input.session.isHost() && (progress.persistentBaseUnlocked || progress.persistentBaseAreaStageUnlocked
+      if (this.input.session.isHost() && (progress.persistentBaseUnlocked
         || progress.persistentBaseHealthReward || progress.newlyUnlockedBaseRewardIds.length)) steps.push('base');
       this.afterRound.prepare(firstResult.roundEndedAt, steps, this.afterRoundIdentity);
       this.setLocalReady(false);

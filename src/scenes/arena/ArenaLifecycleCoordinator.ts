@@ -688,7 +688,6 @@ export class ArenaLifecycleCoordinator {
     applyPersistentBaseOutcome: (outcome, identity) => {
       this.persistentBase.applyRoundOutcome(outcome, identity);
     },
-    clearActivityPresentation: () => { this.clearCoopMissionPresentationState(); },
     publishCompletion: (completion, endedAt) => {
       this.publishCoopMissionCompletion(completion, endedAt);
     },
@@ -2120,20 +2119,23 @@ export class ArenaLifecycleCoordinator {
         roundConclusion,
         this.resolvePersistentBaseTransactionIdentity(),
       );
-      this.clearCoopMissionPresentationState();
       this.publishRoundConclusion(roundConclusion, roundEndedAt);
       this.hostSaveRoundResults(roundEndedAt, roundConclusion !== 'aborted');
     }
-    bridge.publishCoopDefenseRespawnBudgetState(null);
     // Die Abrechnung ist verbindlich; den vollstaendigen Abbau besitzt weiterhin
     // onTransitionToLobby, nach Fade und gerenderter Ergebnisansicht.
     this.beginArenaExitPresentation();
-    bridge.hostResetRoundParticipation();
     // Alle Spieler host-autoritativ auf "nicht bereit" setzen, BEVOR die Lobby-Phase greift. So ist der
     // Host-Zustandsspeicher garantiert sauber (auch wenn ein Client seinen Ready-Status nicht selbst
     // zurücksetzt) und es kann keine neue Runde durch stehengebliebene Ready-Flags sofort starten.
     bridge.hostResetAllLobbyReady();
     bridge.setGamePhase('LOBBY');
+    // Reliable Nachrichten koennen auf Clients in getrennten Frames ankommen. Erst die
+    // Lobby-Phase aktiviert dort den Exit-Schutz; bis dahin bleiben Rollen, Loadouts und
+    // Missionsanzeigen erhalten, damit kein normaler Arena-Frame die Abschlussansicht abbaut.
+    bridge.hostResetRoundParticipation();
+    bridge.publishCoopDefenseRespawnBudgetState(null);
+    this.clearCoopMissionPresentationState();
   }
 
   private broadcastMissionAudio(
