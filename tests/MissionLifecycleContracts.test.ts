@@ -95,6 +95,32 @@ async function createRoom(playerCount: number): Promise<TestRoom[]> {
   return rooms;
 }
 
+describe('mission lifecycle – durable scores', () => {
+  it.each(['increment', 'award', 'reset'] as const)('delivers a one-time %s even when fast state is lost', async action => {
+    const [hostRoom, clientRoom] = await createRoom(2);
+    try {
+      const host = bridgeFor(hostRoom);
+      hostStartMission(host, 4711);
+      const playerId = clientRoom.room.getLocalPlayerId();
+      hostRoom.room.setPlayerState(playerId, 'frg', 3, true);
+      for (const link of hostRoom.transport.links) link.fastReady = false;
+
+      if (action === 'increment') host.incrementPlayerFrags(playerId);
+      else if (action === 'award') host.addPlayerFrags(playerId, 3);
+      else host.resetAllFrags();
+      const expected = action === 'increment' ? 4 : action === 'award' ? 6 : 0;
+      expect(host.getPlayerFrags(playerId)).toBe(expected);
+      hostRoom.room.update();
+
+      const client = bridgeFor(clientRoom);
+      expect(client.getPlayerFrags(playerId)).toBe(expected);
+    } finally {
+      clearActiveSession();
+      clientRoom.room.destroy(); hostRoom.room.destroy();
+    }
+  });
+});
+
 describe('mission lifecycle – Start und Freigabe', () => {
   it('friert Teilnahme und Rundenzustand beim Wechsel aus der Lobby host-autoritativ ein', async () => {
     const [hostRoom, clientRoom] = await createRoom(2);

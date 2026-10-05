@@ -4838,7 +4838,7 @@ export class NetworkBridge {
     const ps = this.playerStateMap.get(killerId);
     if (!ps) return;
     const current = (ps.getState(KEY_FRAGS) as number | undefined) ?? 0;
-    ps.setState(KEY_FRAGS, current + 1);
+    ps.setState(KEY_FRAGS, current + 1, true);
   }
 
   /** Host-only: Erhöht den Frag-Zähler eines Spielers um einen beliebigen Betrag. */
@@ -4847,14 +4847,14 @@ export class NetworkBridge {
     const ps = this.playerStateMap.get(playerId);
     if (!ps) return;
     const current = (ps.getState(KEY_FRAGS) as number | undefined) ?? 0;
-    ps.setState(KEY_FRAGS, current + amount);
+    ps.setState(KEY_FRAGS, current + amount, true);
   }
 
   /** Host-only: Setzt die Frags aller verbundenen Spieler auf 0 zurück. */
   resetAllFrags(): void {
     if (!isHost()) return;
     for (const ps of this.playerStateMap.values()) {
-      ps.setState(KEY_FRAGS, 0);
+      ps.setState(KEY_FRAGS, 0, true);
     }
   }
 
