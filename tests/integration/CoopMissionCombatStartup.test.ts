@@ -115,6 +115,8 @@ import { ADRENALINE_ESSENCE_CONFIG } from '../../src/adrenalineEssence/Adrenalin
 import { CoopMissionComposition, type CoopMissionCompositionOptions } from '../../src/activity/CoopMissionComposition';
 import type { CoopMissionActivityConfiguration } from '../../src/activity/CoopMissionActivityConfig';
 import survivalMap from '../../src/config/coopDefenseMaps/09-ueberleben.json';
+import { normalizeCoopDefenseMapConfig, getCoopDefenseMapObjectiveZoneWorldRect } from '../../src/config/coopDefenseMaps';
+import { CoopMissionObjectiveComposition, type CoopMissionObjectiveCompositionOptions } from '../../src/activity/CoopMissionObjectiveComposition';
 
 const activity: ActivityDescriptor = {
   activityRevision: 2,
@@ -124,6 +126,71 @@ const activity: ActivityDescriptor = {
 };
 
 describe('Coop mission without bases', () => {
+  it.each(['ground', 'carried'] as const)('retires %s surplus cargo through objective completion without blocking another objective', surplusState => {
+    const mapConfig = normalizeCoopDefenseMapConfig({
+      mapId: 'carry-surplus', objective: 'survive', surviveDurationSec: 60,
+      respawnsPerPlayer: 0, balanceReferenceDurationSec: 60, bases: [], powerUps: [],
+      secondaryObjectives: [
+        { id: 'first', type: 'carry', start: { type: 'time', atMs: 0 },
+          focusUntil: { type: 'time', atMs: 1000 }, targets: [], targetGoal: 1,
+          carry: { itemCount: 2, spawnZone: { gridX: 2, gridY: 2, widthCells: 1, heightCells: 1 },
+            deliveryZone: { gridX: 10, gridY: 2, widthCells: 1, heightCells: 1 } } },
+        { id: 'second', type: 'carry', start: { type: 'time', atMs: 1000 },
+          targets: [], targetGoal: 1,
+          carry: { itemCount: 1, spawnZone: { gridX: 4, gridY: 4, widthCells: 1, heightCells: 1 },
+            deliveryZone: { gridX: 12, gridY: 4, widthCells: 1, heightCells: 1 } } },
+      ],
+    });
+    const players = ['p1', 'p2'].map((id, index) => {
+      const player = { id, x: 0, y: 0, body: { enable: index === 0 || surplusState === 'carried' },
+        getBounds: () => ({ x: player.x - 6, y: player.y - 6, width: 12, height: 12 }) };
+      return player;
+    });
+    const runtime = new CoopMissionRuntime(activity);
+    const onCompleted = vi.fn(), onDeliveredFx = vi.fn();
+    new CoopMissionObjectiveComposition({
+      activity: { definitionId: 'activity:carry-surplus', mapConfig },
+      authoredRocks: [], humanPlayerCount: 1, worldRevision: 1,
+      worldMetrics: resolveCoopDefenseWorldMetrics(undefined, undefined), isHost: true,
+      scene: {}, baseManager: null, powerUpSystem: null, temporaryUtilityPort: null,
+      playerManager: { getAllPlayers: () => players, getPlayer: (id: string) => players.find(player => player.id === id) },
+      combatSystem: { isAlive: () => true }, getPlayerCapabilities: () => ({ canUseMissionActions: true }),
+      isPlayerBurrowed: () => false, publishMissionProgress: vi.fn(),
+      onObjectiveCompleted: onCompleted, grantPersistentBaseRewards: vi.fn(),
+      broadcastCarryDeliveredFx: onDeliveredFx,
+    } as unknown as CoopMissionObjectiveCompositionOptions).materialize(runtime);
+    const objectives = runtime.coopDefenseSecondaryObjectiveSystem!, carry = runtime.coopDefenseCarrySystem!;
+    objectives.hostUpdate(0, false);
+    const firstItem = carry.getSnapshot()[0];
+    players.forEach(player => { player.x = firstItem.x; player.y = firstItem.y; });
+    carry.hostUpdate(true);
+    expect(carry.getSnapshot().filter(item => item.state === 'carried')).toHaveLength(surplusState === 'carried' ? 2 : 1);
+    // The first objective remains countable after its focus window; the second is already active.
+    objectives.hostUpdate(1000, false);
+    expect(objectives.getObjectiveState('second')).toBe('active');
+    const deliver = (index: number) => {
+      const zone = getCoopDefenseMapObjectiveZoneWorldRect(mapConfig.secondaryObjectives![index].carry!.deliveryZone);
+      players[0].x = zone.x + zone.width / 2; players[0].y = zone.y + zone.height / 2;
+      carry.hostUpdate(true);
+    };
+    deliver(0);
+    expect(objectives.getObjectiveState('first')).toBe('completed');
+    expect(carry.getSnapshot().map(item => item.objectiveId)).toEqual(['second']);
+    carry.activateObjective('first');
+    expect(carry.getSnapshot().map(item => item.objectiveId)).toEqual(['second']);
+    const secondItem = carry.getSnapshot()[0];
+    players[0].x = secondItem.x; players[0].y = secondItem.y;
+    carry.hostUpdate(true);
+    expect(carry.getSnapshot()[0].holderId).toBe('p1');
+    deliver(1);
+    expect(objectives.getObjectiveState('second')).toBe('completed');
+    expect(carry.getSnapshot()).toEqual([]);
+    carry.hostUpdate(true);
+    expect(onCompleted.mock.calls).toEqual([['first'], ['second']]);
+    expect(onDeliveredFx).toHaveBeenCalledTimes(2);
+    runtime.destroy();
+  });
+
   function createMission(participantIds = ['local'], respawnsPerPlayer = 1) {
     let secondsLeft = 10;
     const runtime = new CoopMissionRuntime(activity);

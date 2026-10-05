@@ -111,6 +111,14 @@ export class CoopDefenseCarrySystem {
     }
   }
 
+  /** A completed objective must not leave cargo occupying a player's carry slot. */
+  completeObjective(objectiveId: string): void {
+    for (const [itemId, item] of this.items) {
+      if (item.objectiveId === objectiveId) this.items.delete(itemId);
+    }
+    // Keep the activation tombstone until reset so a repeated callback cannot respawn cargo.
+  }
+
   /** Advances all host-owned item transitions and returns the authoritative snapshot. */
   hostUpdate(interactionsEnabled: boolean): SyncedCoopDefenseCarryState {
     this.releasePickupBlocks();

@@ -137,6 +137,7 @@ export class CoopMissionObjectiveComposition {
           }
         },
         onObjectiveCompleted: (objectiveId) => {
+          runtime.coopDefenseCarrySystem?.completeObjective(objectiveId);
           this.options.onObjectiveCompleted?.(objectiveId);
           const config = objectives.find((entry) => entry.id === objectiveId);
           this.options.grantPersistentBaseRewards(config?.rewards?.persistentBaseRewardsOnComplete);
