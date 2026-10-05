@@ -37,13 +37,16 @@ export class DeathLabApi {
   subscribe(listener: () => void): () => void { this.listeners.add(listener); listener(); return () => this.listeners.delete(listener); }
   private notify(): void { for (const listener of this.listeners) listener(); }
   dispose(): void { this.disposed = true; this.scene.playback.playing = false; this.baseline = null; this.listeners.clear(); }
+  private readonly assertActive = (): void => {
+    if (this.disposed) throw new Error('Death-Lab wurde beendet.');
+  };
 
   run(command: unknown): Promise<unknown> {
     // Clone now: callers cannot mutate a queued command while a capture is pending.
     const input = structuredClone(command);
     const work = this.queue.then(async () => {
       await this.readyPromise;
-      if (this.disposed) throw new Error('Death-Lab wurde beendet.');
+      this.assertActive();
       this.busy = true; this.error = null; this.notify();
       try { return await this.execute(object(input)); }
       catch (error) { this.error = String(error); throw error; }
@@ -97,9 +100,11 @@ export class DeathLabApi {
   private async captureFrames(times: readonly number[]): Promise<CapturedFrame[]> {
     const frames: CapturedFrame[] = [];
     for (const timeMs of times) {
-      if (this.disposed) throw new Error('Aufnahme abgebrochen: Lab beendet.');
+      this.assertActive();
       this.scene.playback.seek(timeMs);
-      frames.push({ timeMs: this.scene.playback.timeMs, png: await this.scene.capture() });
+      const png = await this.scene.capture();
+      this.assertActive();
+      frames.push({ timeMs: this.scene.playback.timeMs, png });
     }
     return frames;
   }
@@ -150,8 +155,9 @@ export class DeathLabApi {
         try {
           const metadata = this.metadata(), frames = await this.captureFrames(times);
           const images = await Promise.all(frames.map(f => decodePng(f.png)));
+          this.assertActive();
           this.baseline = { metadata, frames, images };
-        } finally { this.seek(saved); }
+        } finally { if (!this.disposed) this.seek(saved); }
         break;
       }
       case 'clearBaseline': keys(c, ['action']); this.baseline = null; break;
@@ -174,11 +180,13 @@ export class DeathLabApi {
           const frames = await this.captureFrames(times);
           const result: LabExport = { metadata: { ...this.metadata(), timesMs: times },
             frames, contactSheet: await contactSheet(frames) };
+          this.assertActive();
           if (reference) result.baseline = { metadata: structuredClone(this.baseline!.metadata), frames: reference,
             contactSheet: await contactSheet(reference) };
-          if (download) await downloadExport(result);
+          this.assertActive();
+          if (download) await downloadExport(result, this.assertActive);
           return result;
-        } finally { this.seek(saved); }
+        } finally { if (!this.disposed) this.seek(saved); }
       }
       default: throw new Error('action: status, configure, tuning, seek, step, play, freeze, clearBaseline oder export.');
     }

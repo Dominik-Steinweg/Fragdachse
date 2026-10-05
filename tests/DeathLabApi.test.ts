@@ -1,15 +1,15 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({}));
 vi.mock('../src/dev/deathLab/Export', async original => ({
   ...await original<typeof import('../src/dev/deathLab/Export')>(),
-  decodePng: async (png: string) => ({ src: png }),
-  contactSheet: async () => 'contact-sheet',
+  decodePng: vi.fn(async (png: string) => ({ src: png })),
+  contactSheet: vi.fn(async () => 'contact-sheet'),
 }));
 import { DeathLabApi } from '../src/dev/deathLab/api';
 import { DeathPlayback } from '../src/dev/deathLab/Playback';
 import { INITIAL_SETTINGS, resolveSettings } from '../src/dev/deathLab/State';
 import { DEATH_TUNING_DEFAULTS } from '../src/effects/gpu/DeathTuning';
-import type { LabExport } from '../src/dev/deathLab/Export';
+import { contactSheet, decodePng, type LabExport } from '../src/dev/deathLab/Export';
 
 function setup(capture?: (time: number) => Promise<string>) {
   const events: unknown[] = [];
@@ -26,6 +26,70 @@ function setup(capture?: (time: number) => Promise<string>) {
 }
 
 describe('death lab automation', () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+  it.each(['freeze', 'export'] as const)('cancels %s if the last capture resolves after disposal', async action => {
+    let release!: () => void;
+    const barrier = new Promise<void>(resolve => { release = resolve; });
+    const finalTime = action === 'freeze' ? 1500 : 0;
+    const { api, scene, events } = setup(async time => {
+      if (time === finalTime) await barrier;
+      return `png-${time}`;
+    });
+    await api.whenReady();
+    await api.run({ action: 'seek', timeMs: 500 });
+    const pending = api.run({ action, frames: action === 'freeze' ? 2 : 1, stepMs: 1500 });
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    expect(scene.capture).toHaveBeenCalledTimes(action === 'freeze' ? 2 : 1);
+    api.dispose();
+    events.length = 0;
+    release();
+    await expect(pending).rejects.toThrow(/beendet/);
+    expect(events).toEqual([]);
+    expect(api.status().baseline).toBeNull();
+    expect(api.status().busy).toBe(false);
+  });
+  it.each(['freeze', 'export'] as const)('cancels %s during post-capture image preparation', async action => {
+    let release!: () => void;
+    const barrier = new Promise<void>(resolve => { release = resolve; });
+    let preparing = false;
+    if (action === 'freeze') vi.mocked(decodePng).mockImplementationOnce(async () => {
+      preparing = true;
+      await barrier;
+      return {} as HTMLImageElement;
+    });
+    else vi.mocked(contactSheet).mockImplementationOnce(async () => {
+      preparing = true;
+      await barrier;
+      return 'contact-sheet';
+    });
+    const { api, events } = setup();
+    const pending = api.run({ action, frames: action === 'freeze' ? 2 : 1, stepMs: 1500 });
+    for (let i = 0; i < 15; i++) await Promise.resolve();
+    expect(preparing).toBe(true);
+    api.dispose();
+    events.length = 0;
+    release();
+    await expect(pending).rejects.toThrow(/beendet/);
+    expect(events).toEqual([]);
+    expect(api.status().baseline).toBeNull();
+  });
+  it('does not start a browser download when disposal wins the Blob conversion', async () => {
+    let release!: (blob: Blob) => void;
+    const conversion = new Promise<Blob>(resolve => { release = resolve; });
+    const readBlob = vi.fn(() => conversion);
+    vi.stubGlobal('fetch', vi.fn(async () => ({ blob: readBlob })));
+    const createUrl = vi.spyOn(URL, 'createObjectURL');
+    const { api, events } = setup();
+    const pending = api.run({ action: 'export', frames: 1, download: true });
+    for (let i = 0; i < 15; i++) await Promise.resolve();
+    expect(readBlob).toHaveBeenCalledOnce();
+    api.dispose();
+    events.length = 0;
+    release(new Blob(['image']));
+    await expect(pending).rejects.toThrow(/beendet/);
+    expect(createUrl).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+  });
   it('validates settings and commands atomically, including loop and duration safety', async () => {
     const { api, scene } = setup(); await api.whenReady();
     const before = api.status();

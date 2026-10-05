@@ -35,9 +35,16 @@ function download(data: Blob, name: string): void {
   anchor.href = url; anchor.download = name; anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-export async function downloadExport(result: LabExport): Promise<void> {
-  download(await (await fetch(result.contactSheet)).blob(), 'death-contact-B.png');
-  if (result.baseline) download(await (await fetch(result.baseline.contactSheet)).blob(), 'death-contact-A.png');
+export async function downloadExport(result: LabExport, assertActive: () => void): Promise<void> {
+  const current = await (await fetch(result.contactSheet)).blob();
+  assertActive();
+  download(current, 'death-contact-B.png');
+  if (result.baseline) {
+    const baseline = await (await fetch(result.baseline.contactSheet)).blob();
+    assertActive();
+    download(baseline, 'death-contact-A.png');
+  }
+  assertActive();
   // One JSON download includes every full-resolution PNG as a data URL; automation can write them individually.
   download(new Blob([JSON.stringify(result)], { type: 'application/json' }), 'death-sequence.json');
 }
