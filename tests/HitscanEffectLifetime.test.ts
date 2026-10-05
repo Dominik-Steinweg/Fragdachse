@@ -8,6 +8,7 @@ vi.mock('phaser', () => ({
     RadToDeg: (x: number) => x * 180 / Math.PI,
     Clamp: (x: number, min: number, max: number) => Math.max(min, Math.min(max, x)),
     FloatBetween: (min: number, max: number) => (min + max) / 2,
+    Between: (min: number, max: number) => Math.round((min + max) / 2),
     Linear: (a: number, b: number, t: number) => a + (b - a) * t,
   },
 }));
@@ -25,6 +26,7 @@ vi.mock('../src/effects/EffectUtils', () => ({
 
 import { AsmdPrimaryRenderer } from '../src/effects/AsmdPrimaryRenderer';
 import { BiteRenderer } from '../src/effects/BiteRenderer';
+import { ZeusTaserRenderer } from '../src/effects/ZeusTaserRenderer';
 import { resetRenderersForWorldGameplayTeardown } from '../src/scenes/arena/rendererWorldTeardown';
 
 function fixture() {
@@ -38,6 +40,7 @@ function fixture() {
       setPosition: () => object, lineStyle: () => object, beginPath: () => object,
       moveTo: () => object, lineTo: () => object, strokePath: () => object,
       lineBetween: () => object, setEmitterAngle: () => object,
+      fillStyle: () => object, arc: () => object, closePath: () => object, fillPath: () => object,
       add: (added: typeof children | typeof object) => { children.push(...(Array.isArray(added) ? added : [added])); return object; },
       removeAll: (destroy: boolean) => { if (destroy) children.splice(0).forEach(child => child.destroy()); return object; },
       explode: (count: number) => { object.liveParticles += count; },
@@ -60,6 +63,7 @@ function fixture() {
     } },
   };
   const asmd = new AsmdPrimaryRenderer(scene as never), biteRenderer = new BiteRenderer(scene as never);
+  const zeus = new ZeusTaserRenderer(scene as never);
   const unused = { clear() {}, destroy() {}, destroyAll() {}, clearAll() {}, clearAllUnderground() {},
     clearUpgrades() {}, clearPending() {}, releaseAll() {} };
   const bundle = Object.fromEntries([
@@ -69,18 +73,19 @@ function fixture() {
     'repairDrone', 'attackDrone', 'objectiveRepairDrones', 'slimeTrail', 'corpseMarker',
     'flamethrowerUpgrades', 'entityBurnGpu', 'explosionGpu', 'gpuVfx',
   ].map(key => [key, unused]));
-  Object.assign(bundle, { asmdPrimary: asmd, bite: biteRenderer });
+  Object.assign(bundle, { asmdPrimary: asmd, bite: biteRenderer, zeusTaser: zeus });
   const clear = () => resetRenderersForWorldGameplayTeardown(bundle as never);
   return { scene, objects, tweens, timers, clear, play(kind: string) {
     bite = kind.startsWith('bite');
     if (bite) biteRenderer.playSwing(500, 500, 0, 45, 40, 0xffffff, kind === 'bite-hit', 520, 510);
+    else if (kind.startsWith('zeus')) zeus.playSwing(500, 500, 0, 45, 40, 0xffffff, kind === 'zeus-hit', 520, 510);
     else asmd.playTracer(500, 500, 650, 510, 0xffffff, 3,
       kind === 'asmd-player' ? 'player' : kind === 'asmd-air' ? 'none' : 'environment');
   } };
 }
 
 describe('hitscan effects belong to the ending World', () => {
-  it.each(['asmd-air', 'asmd-environment', 'asmd-player', 'bite-air', 'bite-hit'])(
+  it.each(['asmd-air', 'asmd-environment', 'asmd-player', 'bite-air', 'bite-hit', 'zeus-air', 'zeus-hit'])(
     'releases %s transients while retaining reusable particle pools', kind => {
       const f = fixture();
       f.play(kind);

@@ -15,7 +15,26 @@ const ZEUS_LINGER_MULT = 1.35;
 export class ZeusTaserRenderer {
   private statusLayer: Phaser.GameObjects.Graphics | null = null;
   private upgradesGpu: ZeusUpgradesGpuRenderer | null = null;
+  private readonly transients = new Set<Phaser.GameObjects.GameObject>();
+  private readonly emitterTimers = new Map<Phaser.Time.TimerEvent, readonly Phaser.GameObjects.Particles.ParticleEmitter[]>();
   constructor(private readonly scene: Phaser.Scene) {}
+
+  clear(): void {
+    this.clearUpgrades();
+    for (const object of this.transients) {
+      this.scene.tweens.killTweensOf(object);
+      this.releaseTransient(object);
+    }
+    for (const [timer, emitters] of this.emitterTimers) {
+      timer.remove(false);
+      for (const emitter of emitters) destroyEmitter(emitter);
+    }
+    this.emitterTimers.clear();
+  }
+
+  private releaseTransient(object: Phaser.GameObjects.GameObject): void {
+    if (this.transients.delete(object)) object.destroy();
+  }
 
   registerGpuVfx(gpu: GpuVfxSystem): void {
     this.upgradesGpu ??= new ZeusUpgradesGpuRenderer(gpu);
@@ -107,6 +126,7 @@ export class ZeusTaserRenderer {
     const hotColor = mixColors(playerColor, 0xffffff, 0.72);
 
     const sector = this.scene.add.container(x, y);
+    this.transients.add(sector);
     sector.setDepth(DEPTH_TRACE + 0.04);
     sector.setRotation(angle);
 
@@ -122,10 +142,7 @@ export class ZeusTaserRenderer {
       scaleY: 1.09,
       duration: Math.round(240 * ZEUS_LINGER_MULT),
       ease: 'Cubic.easeOut',
-      onComplete: () => {
-        sector.removeAll(true);
-        sector.destroy();
-      },
+      onComplete: () => this.releaseTransient(sector),
     });
 
     this.playOriginBurst(x, y, angle, playerColor, accentColor, hotColor, resolvedRange);
@@ -298,6 +315,8 @@ export class ZeusTaserRenderer {
       .setAlpha(0.88)
       .setRotation(angle)
       .setDisplaySize(Math.max(range * 0.26, 34), 14);
+    this.transients.add(halo);
+    this.transients.add(streak);
 
     this.scene.tweens.add({
       targets: [halo, streak],
@@ -307,8 +326,8 @@ export class ZeusTaserRenderer {
       duration: Math.round(150 * ZEUS_LINGER_MULT),
       ease: 'Quad.easeOut',
       onComplete: () => {
-        halo.destroy();
-        streak.destroy();
+        this.releaseTransient(halo);
+        this.releaseTransient(streak);
       },
     });
 
@@ -326,7 +345,10 @@ export class ZeusTaserRenderer {
       emitting: false,
     }, DEPTH_TRACE + 0.1, undefined, 'zeusTaser');
     sparks.explode(16);
-    this.scene.time.delayedCall(Math.round(240 * ZEUS_LINGER_MULT), () => destroyEmitter(sparks));
+    const timer = this.scene.time.delayedCall(Math.round(240 * ZEUS_LINGER_MULT), () => {
+      if (this.emitterTimers.delete(timer)) destroyEmitter(sparks);
+    });
+    this.emitterTimers.set(timer, [sparks]);
   }
 
   private playVolumeParticles(
@@ -380,10 +402,12 @@ export class ZeusTaserRenderer {
       rim.explode(2, px, py);
     }
 
-    this.scene.time.delayedCall(Math.round(280 * ZEUS_LINGER_MULT), () => {
+    const timer = this.scene.time.delayedCall(Math.round(280 * ZEUS_LINGER_MULT), () => {
+      if (!this.emitterTimers.delete(timer)) return;
       destroyEmitter(volume);
       destroyEmitter(rim);
     });
+    this.emitterTimers.set(timer, [volume, rim]);
   }
 
   private playImpactBurst(
@@ -398,6 +422,7 @@ export class ZeusTaserRenderer {
     if (!isPointInsideArena(impactX, impactY)) return;
 
     const chain = this.scene.add.graphics();
+    this.transients.add(chain);
     registerGraphicsObject(this.scene, 'zeusTaserEffects', chain);
     chain.setDepth(DEPTH_TRACE + 0.13);
     makeAdditive(chain);
@@ -420,7 +445,7 @@ export class ZeusTaserRenderer {
       alpha: 0,
       duration: Math.round(180 * ZEUS_LINGER_MULT),
       ease: 'Quad.easeOut',
-      onComplete: () => chain.destroy(),
+      onComplete: () => this.releaseTransient(chain),
     });
 
     const halo = this.scene.add.image(impactX, impactY, TEX_ZEUS_HAZE)
@@ -436,6 +461,8 @@ export class ZeusTaserRenderer {
       .setTint(hotColor)
       .setAlpha(0.96)
       .setDisplaySize(24, 24);
+    this.transients.add(halo);
+    this.transients.add(flash);
 
     this.scene.tweens.add({
       targets: [halo, flash],
@@ -445,8 +472,8 @@ export class ZeusTaserRenderer {
       duration: Math.round(220 * ZEUS_LINGER_MULT),
       ease: 'Cubic.easeOut',
       onComplete: () => {
-        halo.destroy();
-        flash.destroy();
+        this.releaseTransient(halo);
+        this.releaseTransient(flash);
       },
     });
 
@@ -465,6 +492,7 @@ export class ZeusTaserRenderer {
     sparks.explode(18);
 
     const branches = this.scene.add.graphics();
+    this.transients.add(branches);
     registerGraphicsObject(this.scene, 'zeusTaserEffects', branches);
     branches.setDepth(DEPTH_TRACE + 0.15);
     makeAdditive(branches);
@@ -496,10 +524,13 @@ export class ZeusTaserRenderer {
       alpha: 0,
       duration: Math.round(220 * ZEUS_LINGER_MULT),
       ease: 'Quad.easeOut',
-      onComplete: () => branches.destroy(),
+      onComplete: () => this.releaseTransient(branches),
     });
 
-    this.scene.time.delayedCall(Math.round(300 * ZEUS_LINGER_MULT), () => destroyEmitter(sparks));
+    const timer = this.scene.time.delayedCall(Math.round(300 * ZEUS_LINGER_MULT), () => {
+      if (this.emitterTimers.delete(timer)) destroyEmitter(sparks);
+    });
+    this.emitterTimers.set(timer, [sparks]);
   }
 
   private playTerminusPulse(
@@ -522,6 +553,8 @@ export class ZeusTaserRenderer {
       .setTint(mixColors(playerColor, 0xffffff, 0.5))
       .setAlpha(0.42)
       .setDisplaySize(10, 10);
+    this.transients.add(pulse);
+    this.transients.add(core);
 
     this.scene.tweens.add({
       targets: [pulse, core],
@@ -531,8 +564,8 @@ export class ZeusTaserRenderer {
       duration: Math.round(140 * ZEUS_LINGER_MULT),
       ease: 'Quad.easeOut',
       onComplete: () => {
-        pulse.destroy();
-        core.destroy();
+        this.releaseTransient(pulse);
+        this.releaseTransient(core);
       },
     });
   }
