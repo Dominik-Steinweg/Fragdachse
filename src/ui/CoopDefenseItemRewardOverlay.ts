@@ -140,6 +140,7 @@ interface SalvageRow {
 export class CoopDefenseItemRewardOverlay {
   private readonly lazy: LazyOverlayGate;
   private container: Phaser.GameObjects.Container | null = null;
+  private builtLocale = getLocale();
   private title: Phaser.GameObjects.Text | null = null;
   private subtitle: Phaser.GameObjects.Text | null = null;
   private cards: RewardCard[] = [];
@@ -178,6 +179,7 @@ export class CoopDefenseItemRewardOverlay {
 
   build(): void {
     this.destroy();
+    this.builtLocale = getLocale();
     const objects: Phaser.GameObjects.GameObject[] = [];
 
     // Der Hintergrund faengt Klicks ab, schliesst aber nicht: die Belohnung soll nie
@@ -276,7 +278,7 @@ export class CoopDefenseItemRewardOverlay {
   }
 
   private showLoaded(presentation: MatchItemRewardPresentation, closeAfterClaim: boolean): void {
-    if (!this.container) this.build();
+    if (!this.container || this.builtLocale !== getLocale()) this.build();
     this.presentation = presentation;
     this.closeAfterClaim = closeAfterClaim;
     this.visible = true;

@@ -4,10 +4,14 @@ import { EventEmitter } from 'node:events';
 vi.mock('phaser', () => ({
   BlendModes: { ADD: 1 },
   GameObjects: { Events: { DESTROY: 'destroy' } },
+  Textures: { CanvasTexture: class {} },
   Scenes: { Events: { UPDATE: 'update', POST_UPDATE: 'postupdate', SHUTDOWN: 'shutdown', DESTROY: 'destroy' } },
-  Math: { Clamp: (v: number, min: number, max: number) => Math.min(max, Math.max(min, v)) },
+  Math: { Clamp: (v: number, min: number, max: number) => Math.min(max, Math.max(min, v)),
+    Average: (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length,
+    Linear: (start: number, end: number, t: number) => start + (end - start) * t },
 }));
 vi.mock('../../src/utils/phaserFx', () => ({ addExternalGlow: () => null, removeExternalFx: () => {} }));
+vi.mock('../../src/ui/OverlayAssets', () => ({ getOverlayAssets: () => ({ ready: () => true }) }));
 
 // Observe the UI -> effect boundary. The real field, sampling and quality lifecycle are
 // exercised in the core tests; these tests execute the consumers' builders and transitions.
@@ -47,6 +51,10 @@ import { HudResourceRow } from '../../src/ui/HudResourceRow';
 import { CoopDefenseUpgradesOverlay } from '../../src/ui/CoopDefenseUpgradesOverlay';
 import { CoopDefenseTutorialPanel } from '../../src/ui/CoopDefenseTutorialPanel';
 import { HELP_CONTROLS } from '../../src/config/helpControls';
+import { CoopDefenseItemsOverlay } from '../../src/ui/CoopDefenseItemsOverlay';
+import { CoopDefenseItemRewardOverlay } from '../../src/ui/CoopDefenseItemRewardOverlay';
+import { MatchResultsOverlay } from '../../src/ui/MatchResultsOverlay';
+import { getCoopDefenseProgressSnapshot } from '../../src/utils/coopDefenseProgression';
 
 class UiObject extends EventEmitter {
   visible = true;
@@ -62,6 +70,7 @@ class UiObject extends EventEmitter {
   list: UiObject[] = [];
   parentContainer: UiObject | null = null;
   texture = { key: '' };
+  frame = { width: 32, height: 32 };
   text = '';
   crop: number[] = [];
   constructor(public kind: string, public x = 0, public y = 0) { super(); this.setMaxListeners(0); }
@@ -70,6 +79,7 @@ class UiObject extends EventEmitter {
     return this;
   }
   addAt(object: UiObject, index: number) { this.list.splice(index, 0, object); object.parentContainer = this; return this; }
+  bringToTop(object: UiObject) { this.list = this.list.filter(child => child !== object); this.list.push(object); return this; }
   removeAll(destroy = false) { if (destroy) for (const child of [...this.list]) child.destroy(); this.list = []; return this; }
   setVisible(v: boolean) { this.visible = v; return this; }
   setAlpha(a: number) { this.alpha = a; return this; }
@@ -90,11 +100,18 @@ class UiObject extends EventEmitter {
   setStroke() { return this; }
   setFillStyle() { return this; }
   setTint() { return this; }
+  clearTint() { return this; }
+  setFontSize() { return this; }
+  setWordWrapWidth() { return this; }
   setBlendMode() { return this; }
   setScale() { return this; }
   setFrame() { return this; }
   setSlices() { return this; }
   setLetterSpacing() { return this; }
+  setAngle() { return this; }
+  stop() { return this; }
+  killAll() { return this; }
+  emitParticleAt() { return this; }
   clear() { return this; }
   fillStyle() { return this; }
   lineStyle() { return this; }
@@ -103,21 +120,29 @@ class UiObject extends EventEmitter {
   fillPoints() { return this; }
   fillRect() { return this; }
   fillTriangle() { return this; }
+  lineBetween() { return this; }
+  beginPath() { return this; }
+  moveTo() { return this; }
+  lineTo() { return this; }
+  strokePath() { return this; }
+  generateTexture() { return this; }
   destroy() { if (!this.active) return; this.active = false; this.emit('destroy'); this.removeAll(true); }
 }
 
 function sceneStub() {
   const tweens: any[] = [];
   const scene: any = {
-    input: new EventEmitter(), events: new EventEmitter(),
+    input: Object.assign(new EventEmitter(), { setDraggable() {}, dragDistanceThreshold: 3, keyboard: new EventEmitter() }),
+    events: new EventEmitter(), load: new EventEmitter(),
     tweens: { killTweensOf() {}, add: (config: any) => {
-      const tween = { ...config, removed: false, remove() { this.removed = true; }, destroy() { this.removed = true; } };
+      const tween = { ...config, removed: false, remove() { this.removed = true; }, destroy() { this.removed = true; }, stop() { this.removed = true; } };
       tweens.push(tween);
       return tween;
     } },
-    time: { now: 0, delayedCall: () => ({ destroy() {} }) },
+    time: { now: 0, delayedCall: () => ({ destroy() {}, remove() {} }) },
     textures: {
       exists: () => true, remove() {},
+      get: () => ({ has: () => true }),
       createCanvas: () => ({ context: {
         createLinearGradient: () => ({ addColorStop() {} }), fillRect() {},
       }, refresh() {} }),
@@ -130,12 +155,96 @@ function sceneStub() {
       circle: (x = 0, y = 0) => new UiObject('circle', x, y),
       nineslice: (x = 0, y = 0) => new UiObject('nineslice', x, y),
       graphics: () => new UiObject('graphics'),
+      particles: () => new UiObject('particles'),
     },
   };
   return { scene, tweens };
 }
 
 beforeEach(() => { effects.length = 0; });
+
+describe('reopened overlay language and ownership', () => {
+  const labels = {
+    items: 'ui.items.equipped', upgrades: 'ui.upgrades.cancel', rewards: 'ui.items.rewardBack',
+    results: 'ui.results.skipHint', syncing: 'ui.results.continueLobby',
+  } as const;
+  const texts = (object: UiObject): string[] => [object.text, ...object.list.flatMap(texts)];
+
+  it.each(['items', 'upgrades', 'rewards', 'results', 'syncing'] as const)(
+    'reopens %s in the current language and releases the previous view', kind => {
+      const locale = getLocale();
+      const { scene, tweens } = sceneStub();
+      let overlay: any;
+      try {
+        setLocale('de');
+        const closed = vi.fn();
+        const presentation = { outcome: 'defeat', mode: 'coop_defense', modeLabel: 'Coop', mapLabel: 'Map',
+          localPlayerId: 'local', leaderboard: [], progress: null, technicalMessage: null, itemReward: null } as const;
+        const item = { uid: 'reward', slot: 'armor', rarity: 'white', itemLevel: 1, baseValue: 25, affixes: [] } as const;
+        const reward = { roundEndedAt: 10, queueIndex: 1, queueSize: 1, epicGuaranteeCount: 0, options: [{
+          item, equipped: { ...item, uid: 'equipped' }, directEquip: false, comparison: [], freeStashSlots: 0, salvageXp: 1,
+          stash: Array.from({ length: 10 }, (_, index) => ({ ...item, uid: `stored-${index}` })),
+        }] } as const;
+        if (kind === 'items') overlay = new CoopDefenseItemsOverlay(scene,
+          () => ({ items: [], equippedItemIds: {}, pendingRewardCount: 0 }),
+          vi.fn(), vi.fn(), vi.fn(), vi.fn(), closed);
+        else if (kind === 'upgrades') overlay = new CoopDefenseUpgradesOverlay(scene,
+          () => getCoopDefenseProgressSnapshot(0), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn(),
+          vi.fn(), vi.fn(), vi.fn(), () => ({ weapon1: null, weapon2: null, utility: null, ultimate: null }),
+          vi.fn(), vi.fn(), vi.fn(), closed);
+        else if (kind === 'rewards') overlay = new CoopDefenseItemRewardOverlay(scene, vi.fn(), () => reward, closed);
+        else {
+          overlay = new MatchResultsOverlay(scene, closed);
+          overlay.setBalanceFeedbackVisible(true); // Meta sets eligibility before showing the view.
+        }
+        const open = () => {
+          if (kind === 'rewards') {
+            overlay.show(reward);
+            overlay.cards[0].takeButton.emit('pointerdown');
+          } else if (kind === 'results') overlay.showReplay(presentation);
+          else if (kind === 'syncing') overlay.showSyncing('Coop', 'Map');
+          else overlay.show();
+        };
+        open();
+        const oldRoot = overlay.container as UiObject;
+        const oldTooltip = (overlay.tooltip ?? overlay.rewardTooltip).container as UiObject;
+        const oldEffects = effects.slice();
+        const oldLabel = t(labels[kind]);
+        expect(texts(oldRoot)).toContain(oldLabel);
+        if (kind === 'upgrades') {
+          overlay.picker.open({ anchorX: 0, anchorY: 0, title: 'Picker', groups: [{ label: null, entries: [{
+            key: 'test', displayName: 'Test', textureKey: null, accentColor: 0xffffff,
+            selected: false, disabled: false, onPick: vi.fn(),
+          }] }] });
+          expect(scene.input.keyboard.listenerCount('keydown-ESC')).toBe(1);
+        }
+        overlay.hide();
+        expect(scene.input.keyboard.listenerCount('keydown-ESC')).toBe(0);
+        const fadeOut = kind === 'upgrades' ? tweens.at(-1) : null;
+        setLocale('en');
+        expect(t(labels[kind])).not.toBe(oldLabel);
+        open();
+        expect(texts(overlay.container)).toContain(t(labels[kind]));
+        expect(oldRoot.active).toBe(false);
+        expect(oldTooltip.active).toBe(false);
+        expect(oldEffects.every(effect => effect.destroyed)).toBe(true);
+        if (fadeOut) expect(fadeOut.removed).toBe(true);
+        if (kind === 'results' || kind === 'syncing') expect(overlay.balanceFeedbackAvailable).toBe(true);
+        if (kind === 'results') expect(overlay.balanceFeedbackButton.visible).toBe(true);
+        expect(scene.load.eventNames().every((event: string) => scene.load.listenerCount(event) === 1)).toBe(true);
+        const currentRoot = overlay.container;
+        overlay.hide(); open();
+        expect(overlay.container).toBe(currentRoot);
+        if (kind === 'results') overlay.continueToLobby();
+        expect(closed).not.toHaveBeenCalled();
+        overlay.destroy();
+        expect(scene.load.eventNames()).toEqual([]);
+        expect(effects.every(effect => effect.destroyed)).toBe(true);
+        expect(scene.input.dragDistanceThreshold).toBe(3);
+      } finally { overlay?.destroy(); setLocale(locale); }
+    },
+  );
+});
 
 describe('living UI consumer ownership', () => {
   it('sounds central buttons once at their configured activation edge and keeps rejected or disabled actions silent', () => {

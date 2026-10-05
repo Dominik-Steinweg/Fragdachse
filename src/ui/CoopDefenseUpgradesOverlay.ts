@@ -303,6 +303,7 @@ const CATEGORY_VISUALS: Record<CoopDefenseUpgradeCategorySnapshot['id'], Categor
 export class CoopDefenseUpgradesOverlay {
   private readonly lazy: LazyOverlayGate;
   private container: Phaser.GameObjects.Container | null = null;
+  private builtLocale = getLocale();
   private dimRect: Phaser.GameObjects.Rectangle | null = null;
   private levelText: Phaser.GameObjects.Text | null = null;
   private pointsText: Phaser.GameObjects.Text | null = null;
@@ -367,10 +368,8 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   build(): void {
-    this.visibilityTween?.remove();
-    this.visibilityTween = null;
-    this.container?.destroy(true);
-    this.container = null;
+    this.destroy();
+    this.builtLocale = getLocale();
     this.dimRect = null;
     this.levelText = null;
     this.pointsText = null;
@@ -641,7 +640,7 @@ export class CoopDefenseUpgradesOverlay {
   }
 
   private showLoaded(): void {
-    if (!this.container) this.build();
+    if (!this.container || this.builtLocale !== getLocale()) this.build();
     if (this.visible || !this.container) return;
     this.visible = true;
     this.xpBarEffect?.start();

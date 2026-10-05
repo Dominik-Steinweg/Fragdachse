@@ -148,6 +148,7 @@ interface ItemCell {
 export class CoopDefenseItemsOverlay {
   private readonly lazy: LazyOverlayGate;
   private container: Phaser.GameObjects.Container | null = null;
+  private builtLocale = getLocale();
   private dollCells = new Map<CoopDefenseItemSlot, ItemCell>();
   private stashCells: ItemCell[] = [];
   private columnTitles = new Map<CoopDefenseItemSlot, Phaser.GameObjects.Text>();
@@ -191,6 +192,7 @@ export class CoopDefenseItemsOverlay {
 
   build(): void {
     this.destroy();
+    this.builtLocale = getLocale();
     const objects: Phaser.GameObjects.GameObject[] = [];
 
     objects.push(
@@ -244,7 +246,7 @@ export class CoopDefenseItemsOverlay {
   }
 
   private showLoaded(): void {
-    if (!this.container) this.build();
+    if (!this.container || this.builtLocale !== getLocale()) this.build();
     this.visible = true;
     this.pendingSalvageUid = null;
     // Ohne Mindestdistanz startet Phaser das Ziehen schon beim Druecken; ein einfacher Klick

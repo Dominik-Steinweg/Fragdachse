@@ -216,6 +216,7 @@ export interface MatchResultsRestartActions {
 
 export class MatchResultsOverlay {
   private container: Phaser.GameObjects.Container | null = null;
+  private builtLocale = getLocale();
   private forestBackground: Phaser.GameObjects.Image | null = null;
   private titleSigns: { image: Phaser.GameObjects.Image; w: number; h: number }[] = [];
   private modalFrame: Phaser.GameObjects.Image | null = null;
@@ -289,7 +290,10 @@ export class MatchResultsOverlay {
   ) {}
 
   build(): void {
+    const balanceFeedbackAvailable = this.balanceFeedbackAvailable;
     this.destroy();
+    this.balanceFeedbackAvailable = balanceFeedbackAvailable;
+    this.builtLocale = getLocale();
     this.ensureEffectTextures();
 
     const objects: Phaser.GameObjects.GameObject[] = [];
@@ -369,7 +373,7 @@ export class MatchResultsOverlay {
   }
 
   showSyncing(modeLabel: string, mapLabel: string): void {
-    if (!this.container) this.build();
+    if (!this.container || this.builtLocale !== getLocale()) this.build();
     this.stopSequence();
     this.stopIdleAnimations();
     this.replayOnly = false;
@@ -429,7 +433,7 @@ export class MatchResultsOverlay {
   }
 
   private present(presentation: MatchResultsPresentation): void {
-    if (!this.container) this.build();
+    if (!this.container || this.builtLocale !== getLocale()) this.build();
     this.stopSequence();
     this.stopIdleAnimations();
     this.visible = true;
