@@ -1,14 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import { allPerformanceCases, resolvePerformanceCases, registerReferenceMap } from '../src/debug/performanceLab/scenarios';
 import { isCoopDefenseReadyLoadoutComplete } from '../src/loadout/LoadoutRules';
-import { getCoopDefenseMapConfig, isDiagnosticMapId } from '../src/config/coopDefenseMaps';
-import { PERFORMANCE_MAP_ID, VOID_FIRE_MAP_ID } from '../src/debug/performanceLab/referenceMap';
+import { getCoopDefenseMapConfig, isDiagnosticMapId, normalizeCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
+import { PERFORMANCE_MAP_ID, VOID_FIRE_MAP_ID, MAP14_FIRE_MAP_ID, referenceMap } from '../src/debug/performanceLab/referenceMap';
 import { PERFORMANCE_FIXTURE } from '../src/debug/performanceLab/fixtures';
 import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
 import { buildPerformanceLoadout, presets } from '../src/debug/performanceLab/loadouts';
 import { COOP_DEFENSE_UPGRADE_DEFINITIONS } from '../src/utils/coopDefenseUpgrades';
 
 describe('Performance reference fixtures', () => {
+  it('derives the Map 14 fire case without modifying campaign terrain or encounters', () => {
+    const campaign = getCoopDefenseMapConfig('14');
+    const before = structuredClone(campaign);
+    const map = normalizeCoopDefenseMapConfig(referenceMap(MAP14_FIRE_MAP_ID));
+    expect(resolvePerformanceCases('hazards.map14-fire')[0].mapId).toBe(map.mapId);
+    for (const key of ['arenaWidthCells', 'arenaHeightCells', 'timeOfDay', 'rockField', 'water', 'waterAreas',
+      'bases', 'persistentBase', 'encounters', 'persistentSpawns'] as const) expect(map[key]).toEqual(campaign[key]);
+    const fire = map.mapEvents?.find(event => event.type === 'ground-hazard');
+    const original = campaign.mapEvents?.find(event => event.type === 'ground-hazard');
+    expect(fire?.area).toEqual(original?.area);
+    expect(fire?.effect).toEqual(original?.effect);
+    expect(fire?.spread?.durationMs).toBeLessThan(original!.spread!.durationMs);
+    expect(campaign).toEqual(before);
+  });
   it('exercises the fully upgraded Tesla dome beyond full charge', () => {
     const [scenario] = resolvePerformanceCases('weapon.tesla');
     const loadout = buildPerformanceLoadout('TESLA_DOME');
@@ -77,5 +91,6 @@ describe('Performance reference fixtures', () => {
     } finally { cleanup(); }
     expect(isDiagnosticMapId(PERFORMANCE_MAP_ID)).toBe(false);
     expect(isDiagnosticMapId(VOID_FIRE_MAP_ID)).toBe(false);
+    expect(isDiagnosticMapId(MAP14_FIRE_MAP_ID)).toBe(false);
   });
 });

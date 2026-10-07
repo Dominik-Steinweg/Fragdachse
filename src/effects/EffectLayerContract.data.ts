@@ -2986,6 +2986,10 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:effects/HolyExplosionRenderer.ts:spawnEmblem/layers/depth/1","owner":"effects/HolyExplosionRenderer.ts","component":"spawnEmblem/layers/depth/1","height":"body","lighting":"material","camera":"world","depths":[25.44],"blends":["NORMAL"],"profiles":["H"],"role":"effect","source":{"selector":"spawnEmblem/layers/depth/1","expression":"DEPTH_FX + 0.44"}},
   {"id":"cpu:effects/HolyExplosionRenderer.ts:spawnEmblem/layers/depth/2","owner":"effects/HolyExplosionRenderer.ts","component":"spawnEmblem/layers/depth/2","height":"body","lighting":"material","camera":"world","depths":[25.46],"blends":["NORMAL"],"profiles":["H"],"role":"effect","source":{"selector":"spawnEmblem/layers/depth/2","expression":"DEPTH_FX + 0.46"}},
   {"id":"cpu:effects/HolyExplosionRenderer.ts:image/image/setDepth/0","owner":"effects/HolyExplosionRenderer.ts","component":"image/image/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[25.2,25.42,25.44,25.46,25.5],"blends":["ADD"],"profiles":["H"],"role":"effect","source":{"selector":"image/image/setDepth/0","expression":"depth"}},
+  {"id":"cpu:effects/ShockComboExplosionRenderer.ts:spawnSphere/depth/depth/0","owner":"effects/ShockComboExplosionRenderer.ts","component":"spawnSphere/depth/depth/0","height":"body","lighting":"material","camera":"world","depths":[25.3],"blends":["NORMAL"],"profiles":["H"],"role":"effect","source":{"selector":"spawnSphere/depth/depth/0","expression":"DEPTH_FX + 0.3"}},
+  {"id":"cpu:effects/ShockComboExplosionRenderer.ts:spawnSphere/depth/depth/1","owner":"effects/ShockComboExplosionRenderer.ts","component":"spawnSphere/depth/depth/1","height":"body","lighting":"material","camera":"world","depths":[25.34],"blends":["NORMAL"],"profiles":["H"],"role":"effect","source":{"selector":"spawnSphere/depth/depth/1","expression":"DEPTH_FX + 0.34"}},
+  {"id":"cpu:effects/ShockComboExplosionRenderer.ts:spawnArcs/arcs/setDepth/0","owner":"effects/ShockComboExplosionRenderer.ts","component":"spawnArcs/arcs/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[25.5],"blends":["ADD"],"profiles":["H"],"role":"effect","source":{"selector":"spawnArcs/arcs/setDepth/0","expression":"DEPTH_FX + 0.5"}},
+  {"id":"cpu:effects/ShockComboExplosionRenderer.ts:image/image/setDepth/0","owner":"effects/ShockComboExplosionRenderer.ts","component":"image/image/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[5.05,24.88,25.3,25.32,25.33,25.34,25.35,25.36,25.39,25.4,25.45,25.6,25.7,25.85,25.9],"blends":["ADD"],"profiles":["G","H"],"role":"effect","source":{"selector":"image/image/setDepth/0","expression":"depth"}},
   {"id":"cpu:effects/HolyGrenadeRenderer.ts:createVisual/glow/setDepth/0","owner":"effects/HolyGrenadeRenderer.ts","component":"createVisual/glow/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[14],"blends":["ADD"],"profiles":["K"],"role":"effect","source":{"selector":"createVisual/glow/setDepth/0","expression":"DEPTH.PROJECTILES - 1"}},
   {"id":"cpu:effects/HolyGrenadeRenderer.ts:createVisual/body/setDepth/0","owner":"effects/HolyGrenadeRenderer.ts","component":"createVisual/body/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[15],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/body/setDepth/0","expression":"DEPTH.PROJECTILES"}},
   {"id":"cpu:effects/HolyGrenadeRenderer.ts:createVisual/trim/setDepth/0","owner":"effects/HolyGrenadeRenderer.ts","component":"createVisual/trim/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[15.2],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/trim/setDepth/0","expression":"DEPTH.PROJECTILES + 0.2"}},
@@ -5094,6 +5098,61 @@ export const CPU_SOURCE_CONTRACTS = {
         25.44,
         25.46,
         25.5
+      ]
+    }
+  },
+  "effects/ShockComboExplosionRenderer.ts": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "spawnSphere/depth/depth/0",
+        "expression": "DEPTH_FX + 0.3",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "spawnSphere/depth/depth/1",
+        "expression": "DEPTH_FX + 0.34",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "spawnArcs/arcs/setDepth/0",
+        "expression": "DEPTH_FX + 0.5",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "image/image/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {
+      "depth": [
+        5.05,
+        24.88,
+        25.3,
+        25.32,
+        25.33,
+        25.34,
+        25.35,
+        25.36,
+        25.39,
+        25.4,
+        25.45,
+        25.6,
+        25.7,
+        25.85,
+        25.9
       ]
     }
   },

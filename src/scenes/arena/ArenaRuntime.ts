@@ -649,6 +649,10 @@ export class ArenaRuntime {
     return this.flow.getWorldRuntime()?.presentation?.layout ?? null;
   }
 
+  canPlaceScenarioGroundFireCell(x: number, y: number): boolean {
+    return this.ctx.fireSystem.canPlaceGroundCell(x, y);
+  }
+
   getPowerUpPedestalSnapshot(): SyncedPowerUpPedestal[] {
     return this.flow.getWorldPowerUpRuntime()?.system?.getPedestalSnapshot() ?? [];
   }

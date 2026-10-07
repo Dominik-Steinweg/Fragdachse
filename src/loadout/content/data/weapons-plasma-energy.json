@@ -304,7 +304,7 @@
         "knockback": 950,
         "selfKnockbackMult": 0.75,
         "allowCrossTeam": true,
-        "explosionVisualStyle": "energy",
+        "explosionVisualStyle": "asmd_combo",
         "dotArea": {
           "durationMs": 0,
           "damagePerTick": 0,

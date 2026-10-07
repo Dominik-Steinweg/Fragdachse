@@ -192,6 +192,7 @@ Sichtbare Gameplay-Last und Spieltakte ändern sich durch die Profilauswahl nich
 | `destruction.nuke`, `destruction.bfg` | Reguläres Pickup, Aktivierung/Aufladen, eigenes dichtes Felsfeld und freigeräumte Route |
 | `enemies.low`, `enemies.medium`, `enemies.high` | Drei feste Gegnerbestände mit gleicher Artenmischung und Spielerbewegung |
 | `hazards.void-fire` | Dauerhafte VoidFire-Front in der Größe des Endzustands von Map 14, danach 30 Sekunden volle Feuerlast |
+| `hazards.map14-fire` | Echtes Map-14-Gelände mit Wasser, Basen und regulären Gegnerwellen; beschleunigte Feuerfront, danach 30 Sekunden Messung |
 | `weapon.glock`, `weapon.p90`, `weapon.plasma`, `weapon.mini-rockets`, `weapon.shotgun` | Baseline beziehungsweise explizit voll ausgebaute Waffen |
 | `weapon.asmd`, `weapon.bite`, `weapon.rocket`, `weapon.tesla`, `weapon.flame` | Basis-Builds einschließlich gehaltener Waffen |
 | `weapon.hydra` | Aufgerüstete Hydra gegen eine Felswand: tatsächliche Teilung und nachführende Split-Projektile mit Treffern |
@@ -238,6 +239,18 @@ startet das Messfenster. Tageszeit ist wie auf Map 14 20:30 Uhr. Bäume, das unt
 Pickups und die beiden inneren Felsfelder entfallen, damit die Feuerlast reproduzierbar
 vollständig entsteht; die äußere Felsreserve bleibt bestehen. Es gibt keine Gegnerwellen.
 Der Fall isoliert damit die hohe VoidFire-Last und bildet keine vollständige Map-14-Runde nach.
+
+`npm run perf:chrome -- --case hazards.map14-fire` misst dagegen eine Diagnosekopie der
+aktuellen Map 14 mit festem Seed. Gelände, Tageszeit, Basen und Gegnerpläne bleiben erhalten.
+Das Tutorial entfällt, das Überlebensziel wird auf eine Stunde verlängert und die Feuerfront
+breitet sich in fünf Sekunden aus. Die Messung beginnt, sobald mindestens 95 % der bei der
+Vorbereitung entzündbaren Feuerzellen aktiv sind. Hindernisse werden über die echten
+Feuer-Platzierungsregeln berücksichtigt. Der Beobachter steht auf der nächsten freien Position
+zur Kartenkoordinate (60, 21), direkt an der Feuerfront. Feuerlast und sichtbares Feuer werden
+während der Messung geprüft. Der Fall ist auch in `standard` enthalten.
+Die Gegnerzeit läuft regulär ab Rundenbeginn; dies ist eine beschleunigte Feuerlast auf der
+echten Karte, kein gespeicherter Spielstand der 90. Rundensekunde. Änderungen an Map 14
+ändern auch diesen Fall und müssen bei Vergleichen berücksichtigt werden.
 `expectedVoidFireCells`, `voidFireCellsMin` und `visibleVoidFireCellsMin` belegen Sollbestand,
 kleinsten beobachteten Bestand und Sichtbarkeit während der Messung. Fehlende, abnehmende
 oder vollständig unsichtbare Feuerlast lässt den Lauf scheitern.

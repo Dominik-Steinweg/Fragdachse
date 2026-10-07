@@ -12,7 +12,7 @@ describe('explosion visual profiles', () => {
       'default', 'meteor', 'holy', 'energy', 'lightning', 'nuke', 'void_nuke', 'rocket',
       'mini_rocket', 'mini_rocket_cascade', 'train', 'brood_hatch', 'regeneration',
       'timebomb', 'timebomb_pop', 'he_cluster_shard', 'he_demolition_shard',
-      'time_bubble_release',
+      'time_bubble_release', 'asmd_combo',
     ];
     expect(Object.keys(EXPLOSION_VISUAL_PROFILES).sort()).toEqual([...styles].sort());
     for (const style of styles) {
@@ -34,12 +34,13 @@ describe('explosion visual profiles', () => {
     expect(getCombatExplosionProfile('lightning')?.family).toBe('lightning');
     expect(getCombatExplosionProfile('train')?.family).toBe('train');
     expect(getCombatExplosionProfile('void_nuke')?.family).toBe('nuke');
+    expect(getCombatExplosionProfile('asmd_combo')?.family).toBe('shock');
   });
   it('limits the P1 routing to ordinary thermal explosions, retaining high and special signatures', () => {
     for (const style of ['default', 'rocket', 'mini_rocket', 'mini_rocket_cascade', 'he_cluster_shard', 'he_demolition_shard'] as const) {
       expect(getCombatExplosionProfile(style)?.layering).toBe('ordinary');
     }
-    for (const style of ['nuke', 'void_nuke', 'train', 'holy', 'lightning', 'energy', 'timebomb', 'timebomb_pop', 'time_bubble_release'] as const) {
+    for (const style of ['nuke', 'void_nuke', 'train', 'holy', 'lightning', 'energy', 'timebomb', 'timebomb_pop', 'time_bubble_release', 'asmd_combo'] as const) {
       expect(getCombatExplosionProfile(style)?.layering).toBe('legacy');
     }
   });

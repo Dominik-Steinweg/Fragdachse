@@ -63,6 +63,24 @@ describe('explosion gpu renderer', () => {
     expect(findFakeLane(scene, 'explosion-regeneration').edited.length).toBe(8);
   });
 
+  it('renders the ASMD combo as a pure energy discharge without fire, debris or smoke', () => {
+    const scene = makeFakeGpuVfxScene();
+    const system = new GpuVfxSystem(scene as never);
+    const renderer = new ExplosionGpuRenderer();
+    renderer.registerGpuVfx(system);
+
+    const palette = {
+      core: 0xf4e8ff, hot: 0xd09cff, body: 0xa04dff,
+      outer: 0x3a1f66, ember: 0x2a1748, smoke: 0x1d1a30,
+    };
+    renderer.spawnCombatExplosion({ x: 100, y: 100, radius: 100, style: 'asmd_combo', palette });
+
+    const edited = scene.layers.filter((layer) => layer.edited.length > 0).map((layer) => layer.name);
+    expect(edited).toEqual(['explosion-spark']);
+    // Nur die beiden verzögerten Ausstoßwellen; kein Rauch- oder Sekundärballen-Stage.
+    expect(renderer.getPendingStageCount()).toBe(2);
+  });
+
   it('keeps gravity variants in their compatible GPU lanes', () => {
     const scene = makeFakeGpuVfxScene();
     const system = new GpuVfxSystem(scene as never);

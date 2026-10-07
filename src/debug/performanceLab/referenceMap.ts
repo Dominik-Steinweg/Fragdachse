@@ -1,13 +1,23 @@
-import { registerDiagnosticMap, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, registerDiagnosticMap, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { PERFORMANCE_FIXTURE as fixture } from './fixtures';
 
 export const PERFORMANCE_MAP_ID = 'performance-reference';
 export const VOID_FIRE_MAP_ID = `${PERFORMANCE_MAP_ID}-void-fire`;
 export const DAWN_MAP_ID = `${PERFORMANCE_MAP_ID}-dawn`;
+export const MAP14_FIRE_MAP_ID = `${PERFORMANCE_MAP_ID}-map14-fire`;
 export const REFERENCE_SEED = 16092026;
 
 /** Fixed authored fixture; its load is never scaled to the measuring device. */
 export function referenceMap(mapId = PERFORMANCE_MAP_ID): CoopDefenseMapConfig {
+  if (mapId === MAP14_FIRE_MAP_ID) {
+    const map = structuredClone(getCoopDefenseMapConfig('14'));
+    return { ...map, mapId, tutorialDurationMs: 0, surviveDurationSec: 3600,
+      // Registration rebuilds the canonical persistent base from its authored binding.
+      bases: map.bases.filter(base => base.id !== map.persistentBase?.baseId),
+      mapEvents: map.mapEvents?.map(event => event.type === 'ground-hazard' && event.spread
+        ? { ...event, spread: { ...event.spread, durationMs: fixture.voidFire.spread.durationMs } } : event),
+    };
+  }
   const voidFire = mapId === VOID_FIRE_MAP_ID;
   const water: { gridX: number; gridY: number }[] = [];
   for (const [cx, cy, rx, ry] of [[60, 20, 12, 6], [110, 25, 15, 8], [100, 72, 16, 9]]) {
@@ -42,7 +52,7 @@ export function referenceMap(mapId = PERFORMANCE_MAP_ID): CoopDefenseMapConfig {
 
 export function registerReferenceMap(): () => void {
   const removers: (() => void)[] = [];
-  try { for (const id of [PERFORMANCE_MAP_ID, `${PERFORMANCE_MAP_ID}-train`, VOID_FIRE_MAP_ID, DAWN_MAP_ID]) removers.push(registerDiagnosticMap(referenceMap(id))); }
+  try { for (const id of [PERFORMANCE_MAP_ID, `${PERFORMANCE_MAP_ID}-train`, VOID_FIRE_MAP_ID, DAWN_MAP_ID, MAP14_FIRE_MAP_ID]) removers.push(registerDiagnosticMap(referenceMap(id))); }
   catch (error) { removers.reverse().forEach(remove => remove()); throw error; }
   return () => removers.reverse().forEach(remove => remove());
 }

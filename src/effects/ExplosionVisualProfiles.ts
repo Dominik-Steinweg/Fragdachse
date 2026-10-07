@@ -1,7 +1,7 @@
 import type { ExplosionVisualStyle } from '../types';
 
 export type CombatExplosionVisualStyle = Exclude<ExplosionVisualStyle, 'brood_hatch' | 'regeneration'>;
-export type ExplosionSpecialFamily = 'standard' | 'cascade' | 'energy' | 'holy' | 'lightning' | 'train' | 'nuke' | 'pop';
+export type ExplosionSpecialFamily = 'standard' | 'cascade' | 'energy' | 'shock' | 'holy' | 'lightning' | 'train' | 'nuke' | 'pop';
 
 export interface ExplosionVisualProfile {
   readonly family: ExplosionSpecialFamily;
@@ -87,6 +87,13 @@ export const EXPLOSION_VISUAL_PROFILES = {
   void_nuke: {
     family: 'nuke', layering: 'legacy', countScale: 1.7, lifeScale: 1.5, bodyScale: 1.5,
     smokeScale: 2, chunkScale: 1.8, upwardEmbers: true,
+  },
+  // ASMD-Combo: reine Energieentladung. Kugel, Bögen und Flare zeichnet der
+  // ShockComboExplosionRenderer; die GPU-Spur liefert nur schwerelose Funken – kein Feuerball,
+  // keine Brocken, kein Rauch.
+  asmd_combo: {
+    family: 'shock', layering: 'legacy', countScale: 1.15, lifeScale: 0.85, bodyScale: 0,
+    smokeScale: 0, chunkScale: 0, upwardEmbers: false,
   },
   brood_hatch: null,
   regeneration: null,

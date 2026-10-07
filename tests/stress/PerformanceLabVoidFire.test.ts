@@ -18,7 +18,7 @@ import { ArenaGenerator, resolveArenaGenerationInput } from '../../src/arena/Are
 import { CELL_SIZE, applyArenaMetricsForMode } from '../../src/config';
 import { normalizeCoopDefenseMapConfig } from '../../src/config/coopDefenseMaps';
 import { PERFORMANCE_FIXTURE as fixture } from '../../src/debug/performanceLab/fixtures';
-import { referenceMap, VOID_FIRE_MAP_ID, REFERENCE_SEED } from '../../src/debug/performanceLab/referenceMap';
+import { referenceMap, VOID_FIRE_MAP_ID, MAP14_FIRE_MAP_ID, REFERENCE_SEED } from '../../src/debug/performanceLab/referenceMap';
 import { resolvePerformanceCases } from '../../src/debug/performanceLab/scenarios';
 import { FireSystem, GROUND_FIRE_CELL_SIZE } from '../../src/effects/FireSystem';
 import { CoopDefenseGroundHazardEventHandler } from '../../src/systems/CoopDefenseGroundHazardEventHandler';
@@ -26,20 +26,28 @@ import { CoopDefenseMapEventDirector } from '../../src/systems/CoopDefenseMapEve
 import { resolveCoopDefenseWorldMetrics } from '../../src/world/WorldMetrics';
 
 describe('Performance lab VoidFire load', () => {
-  it('ignites the full generated footprint, sustains it and releases it through the authored event lifecycle', () => {
-    const map = normalizeCoopDefenseMapConfig(referenceMap(VOID_FIRE_MAP_ID));
-    const test = resolvePerformanceCases('hazards.void-fire')[0];
+  it.each([
+    [VOID_FIRE_MAP_ID, 'hazards.void-fire'], [MAP14_FIRE_MAP_ID, 'hazards.map14-fire'],
+  ])('%s sustains its generated fire footprint and releases it through the authored event lifecycle', (mapId, caseId) => {
+    const map = normalizeCoopDefenseMapConfig(referenceMap(mapId));
+    const test = resolvePerformanceCases(caseId)[0];
     const metrics = resolveCoopDefenseWorldMetrics(map.arenaWidthCells, map.arenaHeightCells);
     const layout = ArenaGenerator.generate(REFERENCE_SEED, resolveArenaGenerationInput('coop_defense', metrics), map);
-    const area = fixture.voidFire.area;
+    const area = map.mapEvents!.find(event => event.type === 'ground-hazard')!.area;
+    if (area.type !== 'rectangle') throw new Error('Expected a firefront rectangle');
     const expected = area.widthCells * area.heightCells * (CELL_SIZE / GROUND_FIRE_CELL_SIZE) ** 2;
     const inArea = (cell: { gridX: number; gridY: number }) => cell.gridX >= area.gridX && cell.gridX < area.gridX + area.widthCells
       && cell.gridY >= area.gridY && cell.gridY < area.gridY + area.heightCells;
     expect(test.mapId).toBe(map.mapId);
     expect(layout.groundHazardZones!.flatMap(zone => zone.cells)).toHaveLength(area.widthCells * area.heightCells);
-    expect([...layout.rocks, ...layout.trees, ...layout.powerUpPedestals].some(inArea)).toBe(false);
-    expect(map.water?.some(inArea)).toBe(false);
-    expect(layout.rocks.length).toBeGreaterThanOrEqual(fixture.minimumGlobalRocks);
+    if (mapId === VOID_FIRE_MAP_ID) {
+      expect([...layout.rocks, ...layout.trees, ...layout.powerUpPedestals].some(inArea)).toBe(false);
+      expect(map.water?.some(inArea)).toBe(false);
+      expect(layout.rocks.length).toBeGreaterThanOrEqual(fixture.minimumGlobalRocks);
+    } else {
+      expect(layout.rocks.some(inArea)).toBe(true);
+      expect(map.water?.some(inArea)).toBe(true);
+    }
 
     applyArenaMetricsForMode('coop_defense', 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
     const fire = new FireSystem({} as Phaser.Scene);

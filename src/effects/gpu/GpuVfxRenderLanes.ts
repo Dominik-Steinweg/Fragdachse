@@ -462,7 +462,8 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     label: 'explosion-spark',
     depth: DEPTH_FX,
     blendMode: Phaser.BlendModes.ADD,
-    eases: [GpuVfxEase.Linear],
+    // QuadOut/CubicIn: die ASMD-Combo bremst ihre Energiepfeile an der Kugelhülle ab.
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut, GpuVfxEase.CubicIn],
     capacity: 4096,
     maxLifetimeMs: 1100,
     order: 'add-over-opaque',

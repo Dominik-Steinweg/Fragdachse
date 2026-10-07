@@ -2983,6 +2983,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.effectSystem.clearZeusUpgrades();
     this.ctx.effectSystem.clearMgAttrition();
     this.ctx.effectSystem.clearHolyExplosions();
+    this.ctx.effectSystem.clearShockComboExplosions();
     // Die Effektdarstellung der vergangenen World raeumt ihr eigener Owner ab.
     resetRenderersForWorldGameplayTeardown(this.renderers);
     // Laufende Kameraquellen und Trefferkopien dürfen nicht in die Lobby überlaufen.

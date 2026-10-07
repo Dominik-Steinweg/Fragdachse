@@ -60,7 +60,7 @@ interface ExplosionSequenceHost {
   hasActiveNukeSequence(): boolean;
 }
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
-import { impactExceptional, impactLight } from './camera/cameraFeedbackPresets';
+import { impactExceptional, impactLight, impactMedium } from './camera/cameraFeedbackPresets';
 import {
   EXPLOSION_LIGHT_MIN_OCCLUDING_RADIUS,
   EXPLOSION_LIGHT_RADIUS_FACTOR,
@@ -68,6 +68,7 @@ import {
 } from './LightingConfig';
 import { ZeusTaserRenderer } from './ZeusTaserRenderer';
 import { HolyExplosionRenderer } from './HolyExplosionRenderer';
+import { ShockComboExplosionRenderer } from './ShockComboExplosionRenderer';
 import type { BloodStainSink, CombatGoreGpuRenderer } from './CombatGoreGpuRenderer';
 import {
   TEX_EXPLOSION_SPARK,
@@ -130,6 +131,10 @@ export class EffectSystem implements EnemyVisualSink {
 
   /** Laufende Signatur-Explosionen der Heiligen Handgranate gehören zur endenden World. */
   clearHolyExplosions(): void { this.holyExplosionRenderer?.clear(); }
+  private shockComboExplosionRenderer: ShockComboExplosionRenderer | null = null;
+
+  /** Laufende ASMD-Combo-Entladungen gehören ebenfalls zur endenden World. */
+  clearShockComboExplosions(): void { this.shockComboExplosionRenderer?.clear(); }
   private pendingPredictedTracerIds = new Map<number, number>();
   private processedSyncedTracerKeys = new Map<string, number>();
   private processedMeleeSwingKeys   = new Map<string, number>();
@@ -292,6 +297,8 @@ export class EffectSystem implements EnemyVisualSink {
     this.xpTextRenderer = null;
     this.clearHolyExplosions();
     this.holyExplosionRenderer = null;
+    this.clearShockComboExplosions();
+    this.shockComboExplosionRenderer = null;
     this.clearZeusUpgrades();
     this.clearAllBurrowStates();
     this.clearMobilityEffects();
@@ -914,6 +921,11 @@ export class EffectSystem implements EnemyVisualSink {
       return;
     }
 
+    if (visualStyle === 'asmd_combo') {
+      this.playShockComboExplosionEffect(x, y, radius, color);
+      return;
+    }
+
     if (visualStyle === 'regeneration') {
       this.playRegenerationEffect(x, y, radius, color ?? PLASMA_BURNER_COLOR);
       return;
@@ -1082,7 +1094,7 @@ export class EffectSystem implements EnemyVisualSink {
       ? 0xcdf1ff
       : visualStyle === 'regeneration'
         ? mixColors(color ?? PLASMA_BURNER_COLOR, 0xffffff, 0.45)
-        : visualStyle === 'energy'
+        : visualStyle === 'energy' || visualStyle === 'asmd_combo'
           ? 0xd4f2fc
           : visualStyle === 'holy'
             ? 0xffefbe
@@ -1101,6 +1113,30 @@ export class EffectSystem implements EnemyVisualSink {
       durationMs: getExplosionLightDurationMs(radius),
       occludes: radius >= EXPLOSION_LIGHT_MIN_OCCLUDING_RADIUS,
     });
+  }
+
+  /**
+   * ASMD-Combo: Energieentladung statt Verbrennung. Die Form (Energiekugel mit Blitzgeflecht, Bögen, Flare,
+   * Kollaps) zeichnet der ShockComboExplosionRenderer; die GPU-Spur liefert schwerelose Funken.
+   */
+  private playShockComboExplosionEffect(x: number, y: number, radius: number, color: number | undefined): void {
+    const bodyColor = color ?? 0xa04dff;
+    this.shockComboExplosionRenderer ??= new ShockComboExplosionRenderer(this.scene);
+    this.shockComboExplosionRenderer.play(x, y, radius, bodyColor);
+    // Kurzer, heller Zusatzstoß über dem regulären Explosionslicht: die Entladung blitzt auf.
+    this.lighting?.pulse('explosion', x, y, {
+      radiusPx: radius * 1.5,
+      color: mixColors(bodyColor, 0xffffff, 0.5),
+      intensity: 1.4,
+      durationMs: 300,
+      occludes: false,
+    });
+    this.spawnCombatExplosionGpu(
+      x, y, radius, 'asmd_combo', bodyColor,
+      this.mixColor(bodyColor, 0xffffff, 0.82),
+      this.mixColor(bodyColor, 0xffffff, 0.42),
+    );
+    this.cameraFeedback?.request(impactMedium({ sourceX: x, sourceY: y }));
   }
 
   private playLightningExplosionEffect(x: number, y: number, radius: number, color: number): void {
@@ -1164,7 +1200,7 @@ export class EffectSystem implements EnemyVisualSink {
   ): void {
     if (!this.explosionGpuRenderer || !isDestructiveExplosionStyle(style)) return;
 
-    const energyLike = style === 'energy' || style === 'timebomb' || style === 'timebomb_pop' || style === 'lightning';
+    const energyLike = style === 'energy' || style === 'asmd_combo' || style === 'timebomb' || style === 'timebomb_pop' || style === 'lightning';
     const voidLike = style === 'void_nuke';
     const holyLike = style === 'holy';
     const thermalLike = isThermalExplosionStyle(style);

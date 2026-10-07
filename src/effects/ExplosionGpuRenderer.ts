@@ -28,7 +28,11 @@ const MAX_PENDING_STAGES = 256;
 const STALE_STAGE_GRACE_MS = 80;
 
 type GpuVfxMotionEase = typeof GpuVfxEase.Linear | typeof GpuVfxEase.Gravity;
-type PendingStageKind = 'secondary' | 'cascade' | 'smoke';
+type PendingStageKind = 'secondary' | 'cascade' | 'smoke' | 'shock';
+
+/** Ausstoßwellen der ASMD-Combo: die erste sofort, die weiteren im festen Takt. */
+const SHOCK_WAVES = 3;
+const SHOCK_WAVE_INTERVAL_MS = 55;
 
 export interface ExplosionCombatPalette {
   readonly core: number;
@@ -52,6 +56,8 @@ interface PendingExplosionStage {
   readonly kind: PendingStageKind;
   readonly dueMs: number;
   readonly request: ExplosionCombatVisualRequest;
+  /** Nur fuer 'shock': Index der Ausstosswelle. */
+  readonly wave?: number;
 }
 
 interface ParticleSetup {
@@ -66,6 +72,7 @@ interface ParticleSetup {
   tint: number;
   frame?: GpuVfxFrameId;
   yMode?: GpuVfxMotionEase;
+  positionEase?: typeof GpuVfxEase.Linear | typeof GpuVfxEase.QuadOut;
   gravityFactor?: number;
   rotation?: number;
   angularVelocity?: number;
@@ -127,6 +134,7 @@ export class ExplosionGpuRenderer {
     if (!this.gpuVfx || !profile || request.radius <= 0) return;
 
     if (request.style === 'time_bubble_release') { this.spawnBubbleRelease(request); return; }
+    if (profile.family === 'shock') { this.spawnShockDischarge(request, profile); return; }
 
     this.spawnImpact(request, profile);
     if (profile.family === 'pop' || profile.family === 'lightning') return;
@@ -249,6 +257,132 @@ export class ExplosionGpuRenderer {
         stretchStart: 2 + strength, stretchEnd: 0.4, rotation: angle + Math.PI * 0.5,
         angularVelocity: index % 2 ? 1.6 : -1.6,
         alphaStart: 0.65 + strength * 0.3, tint: index % 3 ? 0xff5b16 : 0xffc237,
+      });
+    });
+  }
+
+  /**
+   * Energieentladung der ASMD-Combo: Energie strömt sichtbar vom Kern nach außen. Drei Wellen
+   * aus Energiepfeilen und leuchtenden Plasmakugeln schießen aus dem Kern, bremsen an der
+   * Kugelhülle ab und verglühen dort; einzelne Überschussfunken durchschlagen die Hülle.
+   * Körper, Rauch und Brocken entfallen bewusst; die Form trägt der ShockComboExplosionRenderer.
+   */
+  private spawnShockDischarge(request: ExplosionCombatVisualRequest, profile: ExplosionVisualProfile): void {
+    this.spawnShockWave(request, profile, 0);
+    const nowMs = this.gpuVfx?.now() ?? 0;
+    for (let wave = 1; wave < SHOCK_WAVES; wave += 1) {
+      this.scheduleStage({ kind: 'shock', dueMs: nowMs + wave * SHOCK_WAVE_INTERVAL_MS, request, wave });
+    }
+
+    // Überschussfunken: dünn, schnell, schlagen über die Hülle hinaus.
+    const { x, y, radius, palette } = request;
+    this.spawnBurst(this.effectFor(request, 'Spark'), Math.round(this.resolveSparkCount(radius, profile) * 0.45), (spec, index, count) => {
+      const angle = index / count * TWO_PI + Phaser.Math.FloatBetween(-0.25, 0.25);
+      const lifeMs = Phaser.Math.FloatBetween(130, 260) * profile.lifeScale;
+      const speed = Phaser.Math.FloatBetween(radius * 2.6, radius * 4.2);
+      this.configure(spec, {
+        x: x + Math.cos(angle) * radius * 0.2,
+        y: y + Math.sin(angle) * radius * 0.2,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        positionEase: GpuVfxEase.QuadOut,
+        lifeMs,
+        scaleStart: Phaser.Math.FloatBetween(0.35, 0.6),
+        scaleEnd: 0,
+        alphaStart: 0.9,
+        tint: pickGpuVfxTint([palette.core, palette.hot]),
+        tintBlendStart: 0,
+        tintBlendEnd: 1,
+        frame: GpuVfxFrameId.ExplosionStreak,
+        rotation: angle,
+        stretchStart: Phaser.Math.FloatBetween(3.2, 4.6),
+        stretchEnd: 0.5,
+      });
+    });
+
+    // Ionisationsfunken, die von der Hülle abdriften.
+    const moteCount = clamp(Math.round(radius / 5 * profile.countScale), 6, 30);
+    this.spawnBurst(this.effectFor(request, 'Spark'), moteCount, (spec) => {
+      const angle = Phaser.Math.FloatBetween(0, TWO_PI);
+      const shell = radius * Phaser.Math.FloatBetween(0.75, 0.95);
+      const drift = radius * Phaser.Math.FloatBetween(0.1, 0.3);
+      this.configure(spec, {
+        x: x + Math.cos(angle) * shell,
+        y: y + Math.sin(angle) * shell,
+        vx: Math.cos(angle) * drift,
+        vy: Math.sin(angle) * drift,
+        lifeMs: Phaser.Math.FloatBetween(260, 500),
+        scaleStart: Phaser.Math.FloatBetween(0.4, 0.75),
+        scaleEnd: 0,
+        alphaStart: emissiveAlpha(0.85),
+        tint: pickGpuVfxTint([palette.core, palette.hot, palette.body]),
+        tintBlendStart: 0.3,
+        tintBlendEnd: 1,
+        frame: GpuVfxFrameId.ExplosionSpark,
+      });
+    });
+  }
+
+  /**
+   * Eine Ausstoßwelle: Energiepfeile starten im Kern, sind lang gestreckt, solange sie schnell
+   * sind, und ziehen sich beim Abbremsen an der Hülle zu Lichtpunkten zusammen. Dazwischen
+   * fliegen größere Plasmakugeln, die beim Ankommen in Hüllenfarbe verglühen.
+   */
+  private spawnShockWave(request: ExplosionCombatVisualRequest, profile: ExplosionVisualProfile, wave: number): void {
+    const { x, y, radius, palette } = request;
+    const strength = 1 - wave * 0.22;
+    const offset = Phaser.Math.FloatBetween(0, TWO_PI);
+    const dartCount = Math.round(clamp(Math.round(radius / 3.2 * profile.countScale), 12, 56) * strength);
+    this.spawnBurst(this.effectFor(request, 'Spark'), dartCount, (spec, index, count) => {
+      const angle = offset + index / count * TWO_PI + Phaser.Math.FloatBetween(-0.12, 0.12);
+      const start = radius * Phaser.Math.FloatBetween(0.02, 0.14);
+      const travel = radius * Phaser.Math.FloatBetween(0.7, 0.98) - start;
+      const lifeMs = Phaser.Math.FloatBetween(200, 300) * profile.lifeScale;
+      // Die Amplitude ist vx * Lebenszeit; mit QuadOut endet die Bahn so genau an der Hülle.
+      const speed = travel / (lifeMs / 1000);
+      this.configure(spec, {
+        x: x + Math.cos(angle) * start,
+        y: y + Math.sin(angle) * start,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        positionEase: GpuVfxEase.QuadOut,
+        lifeMs,
+        scaleStart: Phaser.Math.FloatBetween(0.7, 1.15) * strength,
+        scaleEnd: 0.18,
+        alphaStart: 1,
+        alphaEase: GpuVfxEase.CubicIn,
+        tint: pickGpuVfxTint([palette.hot, palette.body, palette.body]),
+        tintBlendStart: 0,
+        tintBlendEnd: 1,
+        frame: GpuVfxFrameId.ExplosionStreak,
+        rotation: angle,
+        stretchStart: Phaser.Math.FloatBetween(3.4, 5.2),
+        stretchEnd: 0.9,
+      });
+    });
+
+    const orbCount = Math.round(clamp(Math.round(radius / 7 * profile.countScale), 6, 22) * strength);
+    this.spawnBurst(this.effectFor(request, 'Spark'), orbCount, (spec, index, count) => {
+      const angle = offset + (index + 0.5) / count * TWO_PI + Phaser.Math.FloatBetween(-0.2, 0.2);
+      const start = radius * Phaser.Math.FloatBetween(0.04, 0.16);
+      const travel = radius * Phaser.Math.FloatBetween(0.6, 0.9) - start;
+      const lifeMs = Phaser.Math.FloatBetween(240, 360) * profile.lifeScale;
+      const speed = travel / (lifeMs / 1000);
+      this.configure(spec, {
+        x: x + Math.cos(angle) * start,
+        y: y + Math.sin(angle) * start,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        positionEase: GpuVfxEase.QuadOut,
+        lifeMs,
+        scaleStart: Phaser.Math.FloatBetween(1.3, 2) * strength,
+        scaleEnd: 0.3,
+        alphaStart: emissiveAlpha(0.95),
+        alphaEase: GpuVfxEase.CubicIn,
+        tint: palette.body,
+        tintBlendStart: 0,
+        tintBlendEnd: 1,
+        frame: GpuVfxFrameId.ExplosionSpark,
       });
     });
   }
@@ -684,6 +818,7 @@ export class ExplosionGpuRenderer {
 
       if (stage.kind === 'secondary') this.spawnSecondary(stage.request);
       else if (stage.kind === 'cascade') this.spawnCascade(stage.request);
+      else if (stage.kind === 'shock') this.spawnShockWave(stage.request, getCombatExplosionProfile(stage.request.style)!, stage.wave ?? 1);
       else this.spawnSmoke(stage.request);
     }
   }
@@ -691,6 +826,11 @@ export class ExplosionGpuRenderer {
   private recordDroppedStage(stage: PendingExplosionStage): void {
     const profile = getCombatExplosionProfile(stage.request.style);
     if (!profile || !this.gpuVfx) return;
+    if (stage.kind === 'shock') {
+      this.gpuVfx.recordQualityDrop(this.effectFor(stage.request, 'Spark'),
+        clamp(Math.round(stage.request.radius / 3.2 * profile.countScale), 12, 56));
+      return;
+    }
     const effect = stage.kind === 'smoke'
       ? this.effectFor(stage.request, 'Smoke')
       : stage.kind === 'cascade'
@@ -757,6 +897,7 @@ export class ExplosionGpuRenderer {
     spec.y = setup.y;
     spec.vx = setup.vx;
     spec.vy = setup.vy;
+    spec.positionEase = setup.positionEase ?? GpuVfxEase.Linear;
     spec.yMode = setup.yMode ?? GpuVfxEase.Linear;
     spec.gravityFactor = setup.gravityFactor ?? 1;
     spec.rotation = setup.rotation ?? 0;

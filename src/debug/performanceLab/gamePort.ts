@@ -9,7 +9,7 @@ import type { PerformanceCase, PerformanceLabGamePort, PerformanceWindow } from 
 import type { LoadoutUseResult, WeaponSlot } from '../../types';
 import { NavigationGeometry } from '../../systems/navigation/NavigationGeometry';
 import { quantizeAngle } from '../../utils/angle';
-import { REFERENCE_SEED } from './referenceMap';
+import { MAP14_FIRE_MAP_ID, REFERENCE_SEED } from './referenceMap';
 import { getVisibleWorldView, isWorldPointInsideView } from '../../ui/HostileBaseIndicator';
 import { PERFORMANCE_FIXTURE as fixture } from './fixtures';
 import { CELL_SIZE } from '../../config';
@@ -108,7 +108,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
       peak('fogTracesPeak', environment.fog?.visibleTraces ?? 0);
     }
     peak('burningCellsPeak', state.burningCells);
-    if (preparedId === 'hazards.void-fire') {
+    if (preparedId === 'hazards.void-fire' || preparedId === 'hazards.map14-fire') {
       const view = getVisibleWorldView(scene.cameras.main);
       let total = 0, visible = 0;
       for (const cell of state.burningGround.cells) {
@@ -189,11 +189,27 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     if (test.kind === 'environment' || test.kind === 'hazard' || test.id === 'review.train') flow.navigationLabPort.setScenarioActive(false);
     if (test.kind === 'hazard') counters.expectedVoidFireCells = fixture.voidFire.area.widthCells
       * fixture.voidFire.area.heightCells * (CELL_SIZE / GROUND_FIRE_CELL_SIZE) ** 2;
+    if (test.mapId === MAP14_FIRE_MAP_ID) {
+      // Resolve once against the live World's fire obstacles, not the rectangle's area.
+      counters.expectedVoidFireCells = 0;
+      const metrics = flow.getWorldMetrics()!;
+      for (const zone of flow.getWorldLayout()?.groundHazardZones ?? []) for (const cell of zone.cells) {
+        for (let y = GROUND_FIRE_CELL_SIZE / 2; y < CELL_SIZE; y += GROUND_FIRE_CELL_SIZE) {
+          for (let x = GROUND_FIRE_CELL_SIZE / 2; x < CELL_SIZE; x += GROUND_FIRE_CELL_SIZE) {
+            if (flow.canPlaceScenarioGroundFireCell(metrics.offsetX + cell.gridX * CELL_SIZE + x,
+              metrics.offsetY + cell.gridY * CELL_SIZE + y)) counters.expectedVoidFireCells++;
+          }
+        }
+      }
+      if (!counters.expectedVoidFireCells) throw new Error('Map 14 firefront geometry missing');
+    }
+    if (test.kind === 'hazard') counters.minimumVoidFireCells = test.mapId === MAP14_FIRE_MAP_ID
+      ? Math.ceil(counters.expectedVoidFireCells * 0.95) : counters.expectedVoidFireCells;
     const snapshot = flow.navigationLabPort.getGeometry();
     if (!snapshot) throw new Error('Reference geometry unavailable');
     geometry = new NavigationGeometry(snapshot);
     rocksBefore = rocks();
-    if (rocksBefore < fixture.minimumGlobalRocks) throw new Error(`Reference rock reserve too small: ${rocksBefore}`);
+    if (test.mapId !== MAP14_FIRE_MAP_ID && rocksBefore < fixture.minimumGlobalRocks) throw new Error(`Reference rock reserve too small: ${rocksBefore}`);
     if (test.id.startsWith('destruction')) {
       counters.fieldRocksBefore = fieldRocks(test.itemId);
       if (counters.fieldRocksBefore < fixture.minimumDestructionFieldRocks) throw new Error(`${test.id}: destruction field is already empty`);
@@ -209,6 +225,14 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
       : test.id === 'environment.dawn' ? point(80, 64) : test.kind === 'environment' ? point(33, 48)
       : test.itemId === 'NUKE' || test.id === 'destruction.single' ? point(40, 51)
       : test.itemId === 'BFG' || test.itemId === 'HYDRA' ? point(76, 51) : point(67, 72);
+    if (test.mapId === MAP14_FIRE_MAP_ID) {
+      const front = point(60, 21);
+      const free = flow.navigationLabPort.getFreePositions(18);
+      const nearest = free.reduce<{ x: number; y: number } | null>((best, p) =>
+        !best || Math.hypot(p.x - front.x, p.y - front.y) < Math.hypot(best.x - front.x, best.y - front.y) ? p : best, null);
+      if (!nearest) throw new Error('Map 14 has no free observer position');
+      playerPosition = nearest;
+    }
     if (!geometry.isFree(playerPosition.x, playerPosition.y, 18)) throw new Error(`${test.id}: blocked player fixture`);
     flow.navigationLabPort.placePlayer(playerPosition.x, playerPosition.y);
     aimPosition = { x: playerPosition.x + (test.targetDistance ?? 220), y: playerPosition.y };
@@ -252,9 +276,9 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     if (prepared) return true;
     const now = performance.now();
     observe();
-    if (test.kind === 'hazard' && counters.voidFireCells !== counters.expectedVoidFireCells) {
+    if (test.kind === 'hazard' && !(counters.voidFireCells >= counters.minimumVoidFireCells)) {
       if (now - preparationAt > fixture.voidFire.preparationTimeoutMs) {
-        throw new Error(`${test.id}: full VoidFire load missing (${counters.voidFireCells ?? 0}/${counters.expectedVoidFireCells})`);
+        throw new Error(`${test.id}: required VoidFire load missing (${counters.voidFireCells ?? 0}/${counters.minimumVoidFireCells})`);
       }
       return false;
     }
@@ -473,8 +497,8 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
       if (test.id === 'review.train' && !counters.trainDestroyed) throw new Error('Train destruction was not observed');
       if (test.id === 'review.explosions' && !counters.visualExplosions) throw new Error('No visual explosions');
       if (test.kind === 'hazard' && (!(counters.voidFireMeasurementSamples > 0)
-        || counters.voidFireCellsMin !== counters.expectedVoidFireCells
-        || counters.voidFireCells !== counters.expectedVoidFireCells || !(counters.visibleVoidFireCellsMin > 0))) {
+        || !(counters.voidFireCellsMin >= counters.minimumVoidFireCells)
+        || !(counters.voidFireCells >= counters.minimumVoidFireCells) || !(counters.visibleVoidFireCellsMin > 0))) {
         throw new Error(`${test.id}: sustained visible VoidFire load missing: ${JSON.stringify(counters)}`);
       }
       for (const kind of test.requiredDamageKinds ?? []) {
