@@ -155,6 +155,14 @@ Feuer-/Warnprojektion wie die Darstellung; sie dürfen nicht die gesamte zukünf
 `SyncedBurningGroundSnapshot.warnings` ist ausschließlich eine Hostprojektion, keine clientseitige
 Zündentscheidung. Der bestehende Snapshotpfad liefert sie auch an Late Join.
 
+Radiale `expanded-patches` referenzieren ein permanentes `random-patches`-Ereignis ab
+Rundenstart. Der Layoutgenerator bewahrt dessen Mittelpunkte und Radien und bereitet nur die
+zusätzlichen, gültigen Zellen vor; deren `expansionProgress` ist normierte Geometrie, keine
+Laufzeit. Überlappungen verwenden den frühesten Fortschrittswert. Der Ground-Hazard-Handler
+leitet daraus Zündzeiten und Bodenwarnungen ab; Clients würfeln oder vergrößern keine Flächen
+selbst. Maßgeblich sind `CoopDefenseVoidHunterMap.test.ts`, `GroundHazardSpread.test.ts` und
+`CoopDefenseC3.test.ts` unter `tests/`.
+
 Der zusätzliche Void-Basisbrand gehört zur Activity (`BaseVoidFireSystem`), nicht zum Blueprint
 oder World-Layout. Er prüft tatsächliche Basiszellen statt Bounding-Boxen, verwendet einen
 Schadensstrom je Basis und führt Schaden über `applyBaseStatusDamage` samt Fraktionsprüfung aus.

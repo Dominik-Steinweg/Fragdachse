@@ -168,7 +168,7 @@ export class CoopDefenseGroundHazardEventHandler implements CoopDefenseMapEventH
               centerX: cellLeft + subX + GROUND_FIRE_CELL_SIZE * 0.5,
               centerY: cellTop + subY + GROUND_FIRE_CELL_SIZE * 0.5,
               delayMs: groundHazardIgnitionDelay(event, cell.gridX + subX / CELL_SIZE,
-                cell.gridY + subY / CELL_SIZE, this.deps.worldSeed ?? 0),
+                cell.gridY + subY / CELL_SIZE, this.deps.worldSeed ?? 0, cell.expansionProgress),
             };
             cells.push(pending);
           }

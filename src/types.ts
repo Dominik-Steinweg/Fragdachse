@@ -1760,6 +1760,8 @@ export interface SyncedBurningGroundCell {
 }
 
 export interface ArenaGroundHazardCell {
+  /** Normalized radial distance through an expansion ring; no timing or damage state. */
+  expansionProgress?: number;
   gridX: number;
   gridY: number;
 }
@@ -1772,6 +1774,8 @@ export interface ArenaGroundHazardCell {
  * zweite Wahrheit, die bei jeder Balancing-Aenderung auseinanderlaufen kann.
  */
 export interface ArenaGroundHazardZone {
+  /** Original seeded patch geometry, retained only when another event expands this patch. */
+  patch?: { centerX: number; centerY: number; radiusCells: number };
   /** Authored map-event id; layout consumers must not infer a new event from geometry. */
   eventId: string;
   id: string;

@@ -3,10 +3,19 @@ import type { CoopDefenseMapGroundHazardEventConfig } from '../config/coopDefens
 /** Smooth seeded arrival times, prepared once. No runtime flood fill or random walk. */
 export function groundHazardIgnitionDelay(
   event: CoopDefenseMapGroundHazardEventConfig, gridX: number, gridY: number, worldSeed: number,
+  expansionProgress?: number,
 ): number {
   const spread = event.spread;
   const area = event.area;
-  if (!spread || area.type !== 'rectangle') return 0;
+  if (!spread) return 0;
+  if (spread.direction === 'radial') {
+    if (area.type !== 'expanded-patches' || expansionProgress === undefined || !Number.isFinite(expansionProgress)) {
+      throw new Error(`Missing radial geometry for ground hazard ${event.id}`);
+    }
+    return Math.round(spread.warningLeadMs + Math.max(0, Math.min(1, expansionProgress))
+      * (spread.durationMs - spread.warningLeadMs));
+  }
+  if (area.type !== 'rectangle') return 0;
   let seed = worldSeed | 0;
   for (const char of event.id) seed = Math.imul(seed ^ char.charCodeAt(0), 16777619);
   const noise = (index: number) => {

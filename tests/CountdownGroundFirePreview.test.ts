@@ -27,7 +27,10 @@ describe('countdown ground-fire preview', () => {
     expect(snapshot.cells.every((cell) => cell.expiresAt === Number.MAX_SAFE_INTEGER)).toBe(true);
   });
 
-  it('does not preview hazards whose authored trigger is after the round start', () => {
+  it('previews initial patches but excludes the boss-phase expansion', () => {
+    const map = getCoopDefenseMapConfig('15');
+    const source = map.mapEvents.find(event => event.type === 'ground-hazard' && event.area.type === 'random-patches')!;
+    const expansion = map.mapEvents.find(event => event.type === 'ground-hazard' && event.area.type === 'expanded-patches')!;
     const layout: ArenaLayout = {
       seed: 1,
       rocks: [],
@@ -36,14 +39,20 @@ describe('countdown ground-fire preview', () => {
       dirt: [],
       powerUpPedestals: [],
       groundHazardZones: [{
-        eventId: 'void-random-patches',
-        id: 'void-random-patches',
+        eventId: source.id,
+        id: source.id,
         cells: [{ gridX: 20, gridY: 10 }],
+      }, {
+        eventId: expansion.id,
+        id: expansion.id,
+        cells: [{ gridX: 21, gridY: 10, expansionProgress: .5 }],
       }],
     };
 
-    const snapshot = buildCountdownGroundFirePreview(layout, getCoopDefenseMapConfig('15'));
+    const snapshot = buildCountdownGroundFirePreview(layout, map);
 
-    expect(snapshot.cells).toEqual([]);
+    expect(snapshot.cells).toHaveLength(4);
+    const withoutExpansion = buildCountdownGroundFirePreview({ ...layout, groundHazardZones: layout.groundHazardZones!.slice(0, 1) }, map);
+    expect(snapshot).toEqual(withoutExpansion);
   });
 });

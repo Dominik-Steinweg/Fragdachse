@@ -70,6 +70,18 @@ function createAnnouncementHarness() {
 }
 
 describe('Coop Defense C4 map-event presentation', () => {
+  it('suppresses opted-out ground hazard messages without muting other hazards', () => {
+    const map = COOP_DEFENSE_MAP_CONFIGS.find(map => map.mapId === '15')!;
+    const quiet = map.mapEvents!.filter(event => event.type === 'ground-hazard');
+    const normal = { ...quiet[0], id: 'normal', announcement: undefined };
+    const harness = createAnnouncementHarness();
+    harness.presenter.setMapEvents([...quiet, normal]);
+    for (const lifecycle of ['dormant', 'scheduled', 'active'] as const) {
+      harness.presenter.sync([...quiet, normal].flatMap(event => state(event.id, 'ground-hazard', lifecycle)));
+    }
+    expect(harness.messages.length).toBeGreaterThan(0);
+    expect(harness.messages.every(message => message.topic === 'map-event:normal')).toBe(true);
+  });
   it('hydrates the first snapshot without historical announcements and deduplicates transitions', () => {
     const event = makeTrainEvent();
     const harness = createAnnouncementHarness();

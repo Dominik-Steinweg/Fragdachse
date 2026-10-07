@@ -11,6 +11,7 @@ import { clone, set, type JsonObject } from '../tools/map-editor/shared/json';
 import { pickMapObject } from '../tools/map-editor/client/map/selection';
 import { planTutorialSweep } from '../src/systems/CoopDefenseAirstrikeEventHandler';
 import { applyArenaMetricsForMode, CELL_SIZE } from '../src/config';
+import { COOP_DEFENSE_MODE } from '../src/gameModes';
 import { COOP_DEFENSE_ENEMY_KINDS, getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
 import { activeSpawnFronts } from '../tools/map-editor/shared/spawns';
 
@@ -18,6 +19,16 @@ const raw = () => JSON.parse(readFileSync(new URL('../src/config/coopDefenseMaps
 afterEach(() => { vi.unstubAllGlobals(); applyArenaMetricsForMode('deathmatch', 'LOBBY'); });
 
 describe('map editor geometry and real generator', () => {
+  it('previews seeded patches and their referenced expansion through the normal validator', () => {
+    const document = JSON.parse(readFileSync(new URL('../src/config/coopDefenseMaps/15-leerenjaeger.json', import.meta.url), 'utf8'));
+    const result = generatePreview(document, 71515);
+    const normalized = normalizeCoopDefenseMapConfig(document);
+    const runtime = ArenaGenerator.generate(71515,
+      resolveArenaGenerationInput(COOP_DEFENSE_MODE, result.metrics), normalized);
+    expect(result.layout.groundHazardZones).toEqual(runtime.groundHazardZones);
+    const expansion = normalized.mapEvents.find(event => event.type === 'ground-hazard' && event.area.type === 'expanded-patches')!;
+    expect(result.layout.groundHazardZones!.some(zone => zone.eventId === expansion.id)).toBe(true);
+  });
   const contentMap = (): JsonObject => ({ mapId: 'editor-content-test', balanceReferenceDurationSec: 60, objective: 'survive', surviveDurationSec: 60, respawnsPerPlayer: 0, bases: [], powerUps: [], rockFillRatio: 0, treeCount: 0 });
   const sessionFor = (document: JsonObject) => new MapDocumentSession('map.json', { sourceKey: 'map.json', mapId: String(document.mapId), document, revision: 'r', text: JSON.stringify(document) });
   it('moves and resizes a fire front through its authored area, undo and the real generator', () => {

@@ -551,6 +551,12 @@ export type ResolvedCoopDefenseMapAirstrikeEventConfig = CoopDefenseMapAirstrike
 
 export type CoopDefenseMapGroundHazardArea =
   | {
+    readonly type: 'expanded-patches';
+    readonly sourceEventId: string;
+    readonly radiusScale: number;
+    readonly baseClearanceCells?: number;
+  }
+  | {
     readonly type: 'random-patches';
     readonly randomPatchCount: number;
     readonly minPatchRadiusCells: number;
@@ -580,14 +586,19 @@ export interface CoopDefenseMapGroundHazardEffectConfig {
 
 export interface CoopDefenseMapGroundHazardEventConfig extends CoopDefenseMapEventBase {
   readonly type: 'ground-hazard';
+  readonly announcement?: 'none';
   readonly durationMs?: number;
   readonly area: CoopDefenseMapGroundHazardArea;
   readonly effect: CoopDefenseMapGroundHazardEffectConfig;
-  /** Organic, monotone expansion inside a rectangle; reached cells stay active. */
+  /** Monotone rectangular or radial expansion; reached cells stay active. */
   readonly spread?: {
     readonly direction: 'left-to-right';
     readonly durationMs: number;
     readonly roughnessCells: number;
+    readonly warningLeadMs: number;
+  } | {
+    readonly direction: 'radial';
+    readonly durationMs: number;
     readonly warningLeadMs: number;
   };
 }
@@ -2381,6 +2392,15 @@ function normalizeMapEvents(
       );
     }
     if (event.type === 'ground-hazard') {
+      if (event.area?.type === 'expanded-patches') {
+        const sourceEventId = event.area.sourceEventId;
+        const source = events.find(candidate => candidate?.id === sourceEventId);
+        if (!source || source.type !== 'ground-hazard' || source.area?.type !== 'random-patches'
+          || source.durationMs !== undefined || source.start.type !== 'time' || source.start.atMs !== 0
+          || (source.delayMs ?? 0) !== 0 || event.start.type !== 'boss-phase') {
+          throw new Error(`[coopDefenseMaps] Invalid expanded-patches source or trigger on ${mapId}:${event.id}`);
+        }
+      }
       return normalizeGroundHazardMapEvent(
         mapId,
         event,
@@ -2441,19 +2461,28 @@ function normalizeGroundHazardMapEvent(
     throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${event.id} needs a positive burnDurationMs`);
   }
   const spread = event.spread;
+  if (event.announcement !== undefined && event.announcement !== 'none') {
+    throw new Error(`[coopDefenseMaps] Invalid ground hazard announcement on ${mapId}:${event.id}`);
+  }
+  if (area.type === 'expanded-patches' && spread?.direction !== 'radial') {
+    throw new Error(`[coopDefenseMaps] Expanded patches require radial spread on ${mapId}:${event.id}`);
+  }
   if (spread !== undefined && (
-    !spread || area.type !== 'rectangle' || effect.visualStyle !== 'void'
-    || durationMs !== undefined || spread.direction !== 'left-to-right'
+    !spread || effect.visualStyle !== 'void'
+    || durationMs !== undefined
     || !Number.isFinite(spread.durationMs) || spread.durationMs <= 0
-    || !Number.isFinite(spread.roughnessCells) || spread.roughnessCells < 0
-    || spread.roughnessCells >= area.widthCells / Math.PI
     || !Number.isFinite(spread.warningLeadMs) || spread.warningLeadMs < 0
+    || (spread.direction === 'left-to-right'
+      ? area.type !== 'rectangle' || !Number.isFinite(spread.roughnessCells) || spread.roughnessCells < 0
+        || spread.roughnessCells >= area.widthCells / Math.PI
+      : spread.direction !== 'radial' || area.type !== 'expanded-patches' || spread.warningLeadMs >= spread.durationMs)
   )) {
-    throw new Error(`[coopDefenseMaps] Invalid permanent rectangular void spread on ${mapId}:${event.id}`);
+    throw new Error(`[coopDefenseMaps] Invalid permanent void spread on ${mapId}:${event.id}`);
   }
   return {
     id: event.id,
     type: 'ground-hazard',
+    ...(event.announcement === undefined ? {} : { announcement: event.announcement }),
     start,
     delayMs,
     ...(durationMs === undefined ? {} : { durationMs }),
@@ -2479,6 +2508,14 @@ function normalizeGroundHazardArea(
     throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${eventId} needs a valid area`);
   }
   const baseClearanceCells = normalizeGroundHazardBaseClearance(mapId, eventId, area.baseClearanceCells);
+  if (area.type === 'expanded-patches') {
+    if (typeof area.sourceEventId !== 'string' || !area.sourceEventId.trim()
+      || !Number.isFinite(area.radiusScale) || area.radiusScale <= 1) {
+      throw new Error(`[coopDefenseMaps] Invalid expanded-patches area on ${mapId}:${eventId}`);
+    }
+    return { type: 'expanded-patches', sourceEventId: area.sourceEventId, radiusScale: area.radiusScale,
+      ...(baseClearanceCells === undefined ? {} : { baseClearanceCells }) };
+  }
   if (area.type === 'random-patches') {
     if (
       typeof area.minPatchRadiusCells !== 'number'

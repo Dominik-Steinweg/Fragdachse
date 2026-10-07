@@ -10,6 +10,15 @@ const event: CoopDefenseMapGroundHazardEventConfig = {
 };
 
 describe('organic hazard arrival field', () => {
+  it('warns before radial growth and reaches the outer radius at the end of its window', () => {
+    const radial: CoopDefenseMapGroundHazardEventConfig = { ...event,
+      area: { type: 'expanded-patches', sourceEventId: 'source', radiusScale: 2 },
+      spread: { direction: 'radial', durationMs: 10000, warningLeadMs: 2000 } };
+    expect(groundHazardIgnitionDelay(radial, 0, 0, 1, 0)).toBe(2000);
+    expect(groundHazardIgnitionDelay(radial, 0, 0, 1, .5)).toBe(6000);
+    expect(groundHazardIgnitionDelay(radial, 0, 0, 1, 1)).toBe(10000);
+    expect(() => groundHazardIgnitionDelay(radial, 0, 0, 1)).toThrow(/Missing radial geometry/);
+  });
   it('keeps each row connected and monotone with a fixed start and end', () => {
     for (const seed of [1, 71, 993]) for (let y = 3; y < 27; y += 0.5) {
       let previous = -1;

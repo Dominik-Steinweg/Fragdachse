@@ -92,6 +92,7 @@ export class CoopDefenseMapEventAnnouncementPresenter {
       // die sichtbaren Airstrike-Warnkreise. Die wiederholten Map-Event-Pop-ups wuerden
       // diese taktische Information nur doppelt und bei jedem Zyklus anzeigen.
       if (event.type === 'airstrike' && event.pattern === 'player-hunt') continue;
+      if (event.type === 'ground-hazard' && event.announcement === 'none') continue;
       const message = createAnnouncementMessage(event, entry);
       if (message) this.announcements.enqueue({
         ...message,

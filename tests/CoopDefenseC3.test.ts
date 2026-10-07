@@ -85,6 +85,27 @@ function makeZone(eventId: string) {
 }
 
 describe('Coop Defense C3 configuration', () => {
+  it('validates expansion sources, scales, spread timing and announcement settings', () => {
+    const source = makeEvent({ id: 'source', delayMs: 0, durationMs: undefined,
+      area: { type: 'random-patches', randomPatchCount: 2, minPatchRadiusCells: 2, maxPatchRadiusCells: 3 } });
+    const expansion = makeEvent({ id: 'expansion', delayMs: 0, durationMs: undefined,
+      start: { type: 'boss-phase', phase: 2 }, announcement: 'none',
+      area: { type: 'expanded-patches', sourceEventId: source.id, radiusScale: 2 },
+      spread: { direction: 'radial', durationMs: 10000, warningLeadMs: 1000 } });
+    const normalize = (event = expansion, original = source) => normalizeCoopDefenseMapConfig(makeMap({
+      objective: 'defeat-boss', surviveDurationSec: undefined, respawnsPerPlayer: undefined,
+      boss: { enemyKind: 'void-hunter', spawnAtMs: 1000 }, mapEvents: [event, original],
+    }));
+    expect(normalize().mapEvents[0]).toMatchObject({
+      area: expansion.area, spread: expansion.spread, announcement: expansion.announcement,
+    });
+    expect(() => normalize({ ...expansion, area: { type: 'expanded-patches', sourceEventId: 'missing', radiusScale: 2 } })).toThrow(/source/);
+    expect(() => normalize({ ...expansion, area: { type: 'expanded-patches', sourceEventId: source.id, radiusScale: 1 } })).toThrow(/area/);
+    expect(() => normalize({ ...expansion, spread: { direction: 'radial', durationMs: 1000, warningLeadMs: 1000 } })).toThrow(/spread/);
+    expect(() => normalize({ ...expansion, spread: undefined })).toThrow(/radial/);
+    expect(() => normalize(expansion, { ...source, durationMs: 1000 })).toThrow(/source/);
+    expect(() => normalize({ ...expansion, announcement: 'popup' as 'none' })).toThrow(/announcement/);
+  });
   it('lets void touch the actual base footprint while preserving explicitly positive clearance', () => {
     const map = getCoopDefenseMapConfig('16');
     applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
@@ -231,6 +252,45 @@ describe('Coop Defense C3 configuration', () => {
 
 describe('Coop Defense C3 ground hazard lifecycle', () => {
   afterEach(() => vi.restoreAllMocks());
+
+  it('gates radial growth on the boss phase, warns locally, catches up and cleans up', () => {
+    let now = 0;
+    let phaseTwo = false;
+    let blocked = true;
+    const lit = new Set<string>();
+    let warnings: Array<{ gridX: number; gridY: number; activatesAt: number }> = [];
+    const expansion = makeEvent({ id: 'expansion', durationMs: undefined, delayMs: 0,
+      start: { type: 'boss-phase', phase: 2 },
+      area: { type: 'expanded-patches', sourceEventId: 'source', radiusScale: 2 },
+      spread: { direction: 'radial', durationMs: 10000, warningLeadMs: 2000 } });
+    const cells = [0, .5, 1].map((expansionProgress, i) => ({ gridX: 4 + i, gridY: 4, expansionProgress }));
+    const handler = new CoopDefenseGroundHazardEventHandler({ getNowMs: () => now,
+      prebuiltZones: [{ eventId: expansion.id, id: 'extension', cells }],
+      fireSystem: {
+        hostRefreshGroundCell: (x, y) => { if (blocked) return false; lit.add(`${x}:${y}`); return true; },
+        hostSetGroundWarnings: (_key, next) => { warnings = next; },
+        hostRemoveGroundSourcesBySourceKey: () => { lit.clear(); warnings = []; },
+      },
+    });
+    const director = new CoopDefenseMapEventDirector([expansion], [handler], { isTriggerSatisfied: () => phaseTwo });
+    now = 10000; director.hostUpdate(now, false);
+    expect(lit.size).toBe(0); expect(warnings).toEqual([]);
+    phaseTwo = true; director.hostUpdate(0, false);
+    expect(warnings).toHaveLength(4);
+    expect(warnings.every(cell => cell.activatesAt === now + 2000)).toBe(true);
+    now += 2000; director.hostUpdate(2000, false);
+    expect(lit.size).toBe(0);
+    blocked = false; now += 500; director.hostUpdate(500, false);
+    expect(lit.size).toBe(4);
+    now += 1500; director.hostUpdate(1500, false);
+    expect(warnings).toHaveLength(4);
+    expect(warnings.every(cell => cell.activatesAt === now + 2000)).toBe(true);
+    now = 20000; director.hostUpdate(6000, false);
+    expect(lit.size).toBe(12); expect(warnings).toEqual([]);
+    now += 100000; director.hostUpdate(100000, false);
+    expect(lit.size).toBe(12);
+    director.reset(); expect(lit.size).toBe(0); expect(warnings).toEqual([]);
+  });
 
   it('replicates only the local warning rim, catches up late starts and retries reached blocked cells', () => {
     let now = 0;

@@ -2785,7 +2785,7 @@ export class ArenaScene extends Phaser.Scene {
 
     return {
       skyState: resolveSkyState(minutes),
-      isVoidMap: mapId !== null && getCoopDefenseMapConfig(mapId).trackMode === 'void-fire',
+      isVoidMap: mapId !== null && (mapId === '15' || getCoopDefenseMapConfig(mapId).trackMode === 'void-fire'),
       bossVisualProfile: inArena && mapId === '15' ? 'void-hunter' : undefined,
       bossPhase: inArena ? (this.arenaRuntime?.getMaxBossPhase() ?? 0) : 0,
       localHpFraction: localWounded ? (localPlayer?.getHpFraction() ?? 1) : 1,

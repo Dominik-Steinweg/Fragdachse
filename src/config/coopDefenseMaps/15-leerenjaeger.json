@@ -2,7 +2,7 @@
   "mapId": "15",
   "arenaWidthCells": 100,
   "arenaHeightCells": 44,
-  "timeOfDay": "19:00",
+  "timeOfDay": "20:45",
   "dynamicTimeOfDay": {
     "transitions": [
       {
@@ -17,18 +17,18 @@
       }
     ]
   },
-  "trackMode": "void-fire",
+  "trackMode": "none",
   "mapEvents": [
     {
-      "id": "void-track-corridor",
+      "id": "void-random-patches",
       "type": "ground-hazard",
+      "announcement": "none",
       "start": { "type": "time", "atMs": 0 },
       "area": {
-        "type": "rectangle",
-        "gridX": 49,
-        "gridY": 0,
-        "widthCells": 2,
-        "heightCells": 44,
+        "type": "random-patches",
+        "randomPatchCount": 6,
+        "minPatchRadiusCells": 2,
+        "maxPatchRadiusCells": 5,
         "baseClearanceCells": 2
       },
       "effect": {
@@ -39,16 +39,17 @@
       }
     },
     {
-      "id": "void-random-patches",
+      "id": "void-patch-expansion",
       "type": "ground-hazard",
+      "announcement": "none",
       "start": { "type": "boss-phase", "phase": 2 },
       "area": {
-        "type": "random-patches",
-        "randomPatchCount": 6,
-        "minPatchRadiusCells": 2,
-        "maxPatchRadiusCells": 5,
+        "type": "expanded-patches",
+        "sourceEventId": "void-random-patches",
+        "radiusScale": 2,
         "baseClearanceCells": 2
       },
+      "spread": { "direction": "radial", "durationMs": 30000, "warningLeadMs": 3000 },
       "effect": {
         "visualStyle": "void",
         "burnDurationMs": 2000,

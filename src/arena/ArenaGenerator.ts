@@ -104,7 +104,7 @@ function updateJsonFingerprintHash(value: unknown, hash: number, inArray = false
 }
 
 /** Increment whenever deterministic generation changes in a wire-visible way. */
-export const ARENA_GENERATOR_VERSION = 9;
+export const ARENA_GENERATOR_VERSION = 10;
 
 /** Immutable inputs that previously leaked in through mutable config module variables. */
 export interface ArenaGenerationInput {
@@ -1776,9 +1776,39 @@ export class ArenaGenerator {
     ): ArenaGroundHazardZone => ({ eventId: event.id, id, cells });
 
     const zones: ArenaGroundHazardZone[] = [];
-    for (const event of events) {
+    // Resolve source patches before their extensions, independently of authored event order.
+    const orderedEvents = [...events.filter(event => event.area.type !== 'expanded-patches'),
+      ...events.filter(event => event.area.type === 'expanded-patches')];
+    for (const event of orderedEvents) {
       const area = event.area;
       const baseClearanceCells = area.baseClearanceCells ?? 0;
+      if (area.type === 'expanded-patches') {
+        const sources = zones.filter(zone => zone.eventId === area.sourceEventId);
+        const initialCells = new Set(sources.flatMap(zone => zone.cells.map(cell => this.cellKey(cell.gridX, cell.gridY))));
+        const expanded = new Map<number, ArenaGroundHazardZone['cells'][number]>();
+        for (const source of sources) {
+          const patch = source.patch;
+          if (!patch) continue;
+          const outerRadius = patch.radiusCells * area.radiusScale;
+          for (let gridY = Math.max(0, Math.floor(patch.centerY - outerRadius));
+            gridY <= Math.min(this.metrics.gridRows - 1, Math.ceil(patch.centerY + outerRadius)); gridY++) {
+            for (let gridX = Math.max(0, Math.floor(patch.centerX - outerRadius));
+              gridX <= Math.min(this.metrics.gridCols - 1, Math.ceil(patch.centerX + outerRadius)); gridX++) {
+              const distance = Math.hypot(gridX - patch.centerX, gridY - patch.centerY);
+              const key = this.cellKey(gridX, gridY);
+              if (distance > outerRadius || initialCells.has(key)
+                || !isValidCell(gridX, gridY, baseClearanceCells)) continue;
+              const expansionProgress = Math.max(0, (distance - patch.radiusCells) / (outerRadius - patch.radiusCells));
+              const previous = expanded.get(key);
+              if (!previous || expansionProgress < previous.expansionProgress!) {
+                expanded.set(key, { gridX, gridY, expansionProgress });
+              }
+            }
+          }
+        }
+        if (expanded.size > 0) zones.push(makeZone(event, event.id, [...expanded.values()]));
+        continue;
+      }
       // Authored Geometrie: Ein Rechteck bzw. eine Zellenliste, die vollstaendig auf Felsen,
       // Basiszellen oder Gleisen liegt, liefert schlicht keine Zone. Der Fachhandler laesst das
       // Event dann dormant (fail-closed) -- ein Layout-Retry oder gar ein Abbruch der
@@ -1805,6 +1835,7 @@ export class ArenaGenerator {
       const avoidVoidTrackCorridor = mapConfig.trackMode === 'void-fire';
       for (let patchIndex = 0; patchIndex < area.randomPatchCount; patchIndex += 1) {
         let selected: ArenaGroundHazardZone['cells'] | null = null;
+        let selectedPatch: ArenaGroundHazardZone['patch'];
         for (let attempt = 0; attempt < 120 && selected === null; attempt += 1) {
           const radius = area.minPatchRadiusCells
             + rng() * (area.maxPatchRadiusCells - area.minPatchRadiusCells);
@@ -1834,12 +1865,19 @@ export class ArenaGenerator {
               }
             }
           }
-          if (cells.length >= 4) selected = cells;
+          if (cells.length >= 4) {
+            selected = cells;
+            selectedPatch = { centerX, centerY, radiusCells: radius };
+          }
         }
         if (selected === null) continue;
         selectedPatchCount += 1;
         for (const cell of selected) usedInEvent.add(this.cellKey(cell.gridX, cell.gridY));
-        zones.push(makeZone(event, `${event.id}:patch-${patchIndex + 1}`, selected));
+        const zone = makeZone(event, `${event.id}:patch-${patchIndex + 1}`, selected);
+        if (events.some(candidate => candidate.area.type === 'expanded-patches' && candidate.area.sourceEventId === event.id)) {
+          zone.patch = selectedPatch;
+        }
+        zones.push(zone);
       }
       if (selectedPatchCount === 0) return null;
     }
