@@ -1,9 +1,15 @@
-import type * as Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import type { ShaderWarmupProbe } from '../graphics/ShaderWarmupProbe';
+import { disposeShaderWarmupNode } from '../graphics/disposeShaderWarmupNode';
 import { DistortionFilter } from './distortion/DistortionFilter';
 import { EnemyReadabilityRenderer } from './EnemyReadabilityRenderer';
 import { StinkCloudBody } from './StinkCloudBody';
 import { MeteorGpuLayer } from './gpu/MeteorGpuLayer';
+import {
+  TESLA_BOLT_FRAGMENT_SOURCE, TESLA_BOLT_SHADER_NAME, TESLA_DOME_FRAGMENT_SOURCE, TESLA_DOME_SHADER_NAME,
+  TESLA_NOVA_FRAGMENT_SOURCE, TESLA_NOVA_SHADER_NAME,
+} from './teslaDomeShader';
+import { createTeslaStormShaderProbe } from './teslaStorm/TeslaStormBoltGpuLayer';
 
 /** Lazy probes; their owner releases them on completion, failure and Scene teardown.
  * Phaser's program cache belongs to this renderer/context. No Activity or Round is created.
@@ -51,5 +57,29 @@ export function createCombatShaderWarmupProbes(scene: Phaser.Scene): ShaderWarmu
       },
       destroy: () => { displacement?.destroy(); displacement = null; },
     },
+    // Tesla dome, beams and nova otherwise link on their first activation: a visible hitch.
+    shaderQuadProbe(scene, TESLA_DOME_SHADER_NAME, TESLA_DOME_FRAGMENT_SOURCE),
+    shaderQuadProbe(scene, TESLA_BOLT_SHADER_NAME, TESLA_BOLT_FRAGMENT_SOURCE),
+    shaderQuadProbe(scene, TESLA_NOVA_SHADER_NAME, TESLA_NOVA_FRAGMENT_SOURCE),
+    createTeslaStormShaderProbe(scene),
   ];
+}
+
+/** Links a fragment-only Shader program with a detached quad; its uniforms stay at defaults. */
+function shaderQuadProbe(scene: Phaser.Scene, shaderName: string, fragmentSource: string): ShaderWarmupProbe {
+  let quad: Phaser.GameObjects.Shader | null = null;
+  return {
+    name: shaderName,
+    prepare: context => {
+      quad ??= new Phaser.GameObjects.Shader(scene, { name: shaderName, shaderName, fragmentSource }, 0, 0, 1, 1);
+      // Phaser's runtime accepts no parent; its 4.2.1 declaration incorrectly requires one.
+      quad.renderNode.run(context, quad, undefined as unknown as Phaser.GameObjects.Components.TransformMatrix);
+      return !!quad.renderNode.programManager.getCurrentProgramSuite();
+    },
+    destroy: () => {
+      if (quad?.renderNode) disposeShaderWarmupNode(quad.renderNode);
+      quad?.destroy();
+      quad = null;
+    },
+  };
 }

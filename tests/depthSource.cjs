@@ -69,7 +69,7 @@ function evaluate(node, file, bindings = {}, seen = new Set()) {
   return [];
 }
 const helperArguments = { configureAdditiveImage: 1, createEmitter: 5, createEnemyClawGpuLayer: 3,
-  createEarthbreakFissureGpuLayer: 3, createFlightRibbonLayer: 2, EnemyEyeBatch: 3, HeldItemVisual: 1 };
+  createEarthbreakFissureGpuLayer: 3, createFlightRibbonLayer: 2, createTeslaStormBoltGpuLayer: 2, EnemyEyeBatch: 3, HeldItemVisual: 1 };
 function inventory(file) {
   const { sf } = source(file), rows = [], counts = new Map();
   const visit = n => {

@@ -3088,9 +3088,7 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:effects/StinkPlagueRenderer.ts:update/body.image/setDepth/0","owner":"effects/StinkPlagueRenderer.ts","component":"update/body.image/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[10.17,10.22],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"update/body.image/setDepth/0","expression":"depth"}},
   {"id":"cpu:effects/StinkPlagueRenderer.ts:update/wisp/setDepth/0","owner":"effects/StinkPlagueRenderer.ts","component":"update/wisp/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[10.18,10.23],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"update/wisp/setDepth/0","expression":"depth + .01"}},
   {"id":"cpu:effects/StinkPlagueRenderer.ts:update/image/setDepth/0","owner":"effects/StinkPlagueRenderer.ts","component":"update/image/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[17.89],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"update/image/setDepth/0","expression":"DEPTH.SMOKE - .11"}},
-  {"id":"cpu:effects/TeslaBoltRenderer.ts:createVisual/halos/configureAdditiveImage/0","owner":"effects/TeslaBoltRenderer.ts","component":"createVisual/halos/configureAdditiveImage/0","height":"body","lighting":"emissive","camera":"world","depths":[15.1],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/halos/configureAdditiveImage/0","expression":"DEPTH.PROJECTILES + 0.1"}},
-  {"id":"cpu:effects/TeslaBoltRenderer.ts:createVisual/sparks/configureAdditiveImage/0","owner":"effects/TeslaBoltRenderer.ts","component":"createVisual/sparks/configureAdditiveImage/0","height":"body","lighting":"emissive","camera":"world","depths":[15.22],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/sparks/configureAdditiveImage/0","expression":"DEPTH.PROJECTILES + 0.22"}},
-  {"id":"cpu:effects/TeslaBoltRenderer.ts:createVisual/arcs/setDepth/0","owner":"effects/TeslaBoltRenderer.ts","component":"createVisual/arcs/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[15.2],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/arcs/setDepth/0","expression":"DEPTH.PROJECTILES + 0.2"}},
+  {"id":"cpu:effects/TeslaBoltRenderer.ts:ensureLayer/this.layer/createTeslaStormBoltGpuLayer/0","owner":"effects/TeslaBoltRenderer.ts","component":"ensureLayer/this.layer/createTeslaStormBoltGpuLayer/0","height":"body","lighting":"emissive","camera":"world","depths":[15.2],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"ensureLayer/this.layer/createTeslaStormBoltGpuLayer/0","expression":"DEPTH.PROJECTILES + 0.2"}},
   {"id":"cpu:effects/TeslaBoltRenderer.ts:playImpact/flash/configureAdditiveImage/0","owner":"effects/TeslaBoltRenderer.ts","component":"playImpact/flash/configureAdditiveImage/0","height":"body","lighting":"emissive","camera":"world","depths":[15.3],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"playImpact/flash/configureAdditiveImage/0","expression":"DEPTH.PROJECTILES + 0.3"}},
   {"id":"cpu:effects/TeslaBoltRenderer.ts:ensureImpactEmitter/this.impactEmitter/createEmitter/0","owner":"effects/TeslaBoltRenderer.ts","component":"ensureImpactEmitter/this.impactEmitter/createEmitter/0","height":"body","lighting":"emissive","camera":"world","depths":[15.31],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"ensureImpactEmitter/this.impactEmitter/createEmitter/0","expression":"DEPTH.PROJECTILES + 0.31"}},
   {"id":"cpu:effects/TeslaDomeRenderer.ts:createVisual/depth/depth/0","owner":"effects/TeslaDomeRenderer.ts","component":"createVisual/depth/depth/0","height":"body","lighting":"emissive","camera":"world","depths":[16.05],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/depth/depth/0","expression":"DEPTH.FIRE + 0.05"}},
@@ -3133,6 +3131,7 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:effects/earthbreak/EarthbreakFissureGpuLayer.ts:createEarthbreakFissureLayers/layers/createEarthbreakFissureGpuLayer/0","owner":"effects/earthbreak/EarthbreakFissureGpuLayer.ts","component":"createEarthbreakFissureLayers/layers/createEarthbreakFissureGpuLayer/0","height":"body","lighting":"material","camera":"world","depths":[5.05],"blends":["NORMAL"],"profiles":["G"],"role":"effect","source":{"selector":"createEarthbreakFissureLayers/layers/createEarthbreakFissureGpuLayer/0","expression":"DEPTH.DECALS + 0.05"}},
   {"id":"cpu:effects/earthbreak/EarthbreakFissureGpuLayer.ts:createEarthbreakFissureLayers/layers/createEarthbreakFissureGpuLayer/1","owner":"effects/earthbreak/EarthbreakFissureGpuLayer.ts","component":"createEarthbreakFissureLayers/layers/createEarthbreakFissureGpuLayer/1","height":"body","lighting":"material","camera":"world","depths":[19.57],"blends":["NORMAL"],"profiles":["E"],"role":"effect","source":{"selector":"createEarthbreakFissureLayers/layers/createEarthbreakFissureGpuLayer/1","expression":"DEPTH_LIGHTING + 0.07"}},
   {"id":"cpu:effects/enemyClaw/EnemyClawGpuLayer.ts:createEnemyClawGpuLayer/image/setDepth/0","owner":"effects/enemyClaw/EnemyClawGpuLayer.ts","component":"createEnemyClawGpuLayer/image/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[],"blends":["ADD"],"profiles":[],"role":"delegate","source":{"selector":"createEnemyClawGpuLayer/image/setDepth/0","expression":"depth"}},
+  {"id":"cpu:effects/teslaStorm/TeslaStormBoltGpuLayer.ts:createTeslaStormBoltGpuLayer/layer?.image/setDepth/0","owner":"effects/teslaStorm/TeslaStormBoltGpuLayer.ts","component":"createTeslaStormBoltGpuLayer/layer?.image/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"createTeslaStormBoltGpuLayer/layer?.image/setDepth/0","expression":"depth"}},
   {"id":"cpu:effects/health/WorldHealthBarRenderer.ts:borrowView/view.background/setDepth/0","owner":"effects/health/WorldHealthBarRenderer.ts","component":"borrowView/view.background/setDepth/0","height":"ground","lighting":"material","camera":"world","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"borrowView/view.background/setDepth/0","expression":"s.backgroundDepth"}},
   {"id":"cpu:effects/health/WorldHealthBarRenderer.ts:borrowView/view.trail/setDepth/0","owner":"effects/health/WorldHealthBarRenderer.ts","component":"borrowView/view.trail/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"borrowView/view.trail/setDepth/0","expression":"(s.backgroundDepth + s.fillDepth) / 2"}},
   {"id":"cpu:effects/health/WorldHealthBarRenderer.ts:borrowView/view.fill/setDepth/0","owner":"effects/health/WorldHealthBarRenderer.ts","component":"borrowView/view.fill/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"borrowView/view.fill/setDepth/0","expression":"s.fillDepth"}},
@@ -6082,31 +6081,17 @@ export const CPU_SOURCE_CONTRACTS = {
     "cameras": [],
     "sites": [
       {
-        "key": "createVisual/halos/configureAdditiveImage/0",
-        "expression": "DEPTH.PROJECTILES + 0.1",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "createVisual/sparks/configureAdditiveImage/0",
-        "expression": "DEPTH.PROJECTILES + 0.22",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "createVisual/arcs/setDepth/0",
-        "expression": "DEPTH.PROJECTILES + 0.2",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
         "key": "playImpact/flash/configureAdditiveImage/0",
         "expression": "DEPTH.PROJECTILES + 0.3",
         "blends": [
           "ADD"
+        ]
+      },
+      {
+        "key": "ensureLayer/this.layer/createTeslaStormBoltGpuLayer/0",
+        "expression": "DEPTH.PROJECTILES + 0.2",
+        "blends": [
+          "NORMAL"
         ]
       },
       {
@@ -6529,6 +6514,26 @@ export const CPU_SOURCE_CONTRACTS = {
         10,
         16,
         25
+      ]
+    }
+  },
+  "effects/teslaStorm/TeslaStormBoltGpuLayer.ts": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createTeslaStormBoltGpuLayer/layer?.image/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "depth": [
+        15.2
       ]
     }
   },
