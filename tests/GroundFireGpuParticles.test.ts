@@ -58,6 +58,39 @@ afterEach(() => {
 });
 
 describe('GroundFire GPU particles', () => {
+  it('keeps steady lights alive, updates changed surfaces, fades finite lights and releases expired ones', () => {
+    const renderer = new GroundFireClusterRenderer();
+    const lighting = { setLight: vi.fn(), releaseLight: vi.fn() };
+    renderer.setLightingSystem(lighting as never);
+    const ground = cells(3, 3);
+    renderer.syncGround({ cells: ground }, 0);
+    renderer.update(0);
+    const initial = structuredClone(lighting.setLight.mock.calls);
+    expect(initial.length).toBeGreaterThan(0);
+    lighting.setLight.mockClear();
+    renderer.update(500);
+    expect(lighting.setLight.mock.calls).toEqual(initial);
+    renderer.syncGround({ cells: ground.map(cell => ({ ...cell, gridX: cell.gridX + 10 })) }, 500);
+    lighting.setLight.mockClear();
+    renderer.update(500);
+    expect(lighting.setLight.mock.calls[0][2]).toBeGreaterThan(initial[0][2]);
+    const steadyIntensity = lighting.setLight.mock.calls[0][4].intensity;
+    lighting.setLight.mockClear();
+    renderer.update(99_900);
+    expect(lighting.setLight.mock.calls[0][4].intensity).toBeLessThan(steadyIntensity);
+    lighting.setLight.mockClear();
+    renderer.update(500);
+    expect(lighting.setLight.mock.calls[0][4].intensity).toBe(steadyIntensity);
+    lighting.setLight.mockClear();
+    renderer.update(100_001);
+    expect(lighting.setLight).not.toHaveBeenCalled();
+    expect(lighting.releaseLight).toHaveBeenCalled();
+    renderer.clear();
+    renderer.syncGround({ cells: ground }, 0);
+    renderer.update(0);
+    expect(lighting.setLight).toHaveBeenCalled();
+  });
+
   it('reuses unchanged snapshot cells without rescanning while advancing their expiry clock', () => {
     const { system, renderer } = setup();
     let cellReads = 0;

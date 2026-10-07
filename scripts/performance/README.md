@@ -87,7 +87,10 @@ revision has no LoadingTimeline. No scenario recording runs during this probe.
 boot marker. Navigation timing and resource evidence identify connection delays
 before any game code runs, separately from loading inside the application.
 The runner honors an `output-root/STOP` file between polls and guards C: against
-more than 128 MiB additional free-space loss (including OS paging).
+more than 128 MiB additional free-space loss (including OS paging). For machines
+with ample free space but larger paging growth, `--max-c-growth-mib 2048` explicitly
+raises that allowance. The supported range is 128–8192 MiB; the 1 GiB free-space
+reserve remains in force. The selected allowance is recorded in the suite options.
 
 Keep this workload quiet: no simultaneous tests/builds/other measurement browser.
 Boot is a new HTTP profile, not a cold OS/driver cache. A broker-free startup is

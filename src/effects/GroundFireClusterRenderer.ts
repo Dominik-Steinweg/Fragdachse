@@ -269,6 +269,9 @@ export class GroundFireClusterRenderer {
   private readonly lightRecords = new Map<string, GroundFireLightRecord>();
   private readonly activeLightKeys = new Set<string>();
   private readonly lightRanking: GroundFireLightRecord[] = [];
+  private lightRankingDirty = true;
+  private nextLightFadeAt = 0;
+  private lightRankingAt = 0;
   private snapshotSignature = '';
   private snapshotCells: readonly SyncedBurningGroundCell[] | null = null;
   private readonly knownCells = new Map<string, number>();
@@ -377,6 +380,7 @@ export class GroundFireClusterRenderer {
     const signature = groundFireCellsSignature(snapshot.cells);
     if (signature === this.snapshotSignature) return;
     this.snapshotSignature = signature;
+    this.lightRankingDirty = true;
 
     // Track spatial cells independently of cluster IDs: merges, splits and lifetime
     // refreshes must not restart an already populated fire surface.
@@ -421,7 +425,10 @@ export class GroundFireClusterRenderer {
   update(now: number): void {
     this.synchronizedNow = now;
     for (const [id, cluster] of this.clusters) {
-      if (cluster.expiresAt <= now) this.clusters.delete(id);
+      if (cluster.expiresAt <= now) {
+        this.clusters.delete(id);
+        this.lightRankingDirty = true;
+      }
     }
     this.syncLights(now);
   }
@@ -447,6 +454,7 @@ export class GroundFireClusterRenderer {
   }
 
   setLightingSystem(lighting: LightingSystem | null): void {
+    if (lighting !== this.lighting) this.lightRankingDirty = true;
     if (!lighting && this.lighting) {
       for (const key of this.activeLightKeys) this.lighting.releaseLight(`groundfire:${key}`);
       this.activeLightKeys.clear();
@@ -474,6 +482,9 @@ export class GroundFireClusterRenderer {
     this.activeLightKeys.clear();
     this.lightRecords.clear();
     this.lightRanking.length = 0;
+    this.lightRankingDirty = true;
+    this.nextLightFadeAt = 0;
+    this.lightRankingAt = 0;
   }
 
   destroyAll(): void {
@@ -1167,6 +1178,30 @@ export class GroundFireClusterRenderer {
     const lighting = this.lighting;
     if (!lighting) return;
 
+    if (this.lightRankingDirty || now >= this.nextLightFadeAt || now < this.lightRankingAt) this.rebuildLightRanking(now, lighting);
+    // Keyed lights still need their regular lifetime confirmation, even when their
+    // geometry and ranking are unchanged for a permanent ground-fire surface.
+    const stale = this.activeLightKeys;
+    for (const record of this.lightRanking) {
+      lighting.setLight(
+        `groundfire:${record.key}`,
+        record.visualStyle === 'void' ? 'voidGroundFire' : 'groundFire',
+        record.x,
+        record.y,
+        { radiusPx: record.radiusPx, intensity: record.intensity },
+      );
+      stale.delete(record.key);
+    }
+    for (const staleKey of stale) lighting.releaseLight(`groundfire:${staleKey}`);
+    stale.clear();
+    for (const record of this.lightRanking) stale.add(record.key);
+  }
+
+  private rebuildLightRanking(now: number, lighting: LightingSystem): void {
+    this.lightRankingDirty = false;
+    this.lightRankingAt = now;
+    this.nextLightFadeAt = Number.POSITIVE_INFINITY;
+
     for (const [key, record] of this.lightRecords) {
       if (this.clusters.has(record.clusterId)) continue;
       lighting.releaseLight(`groundfire:${key}`);
@@ -1177,6 +1212,7 @@ export class GroundFireClusterRenderer {
     for (const cluster of this.clusters.values()) {
       const remaining = cluster.expiresAt - now;
       if (remaining <= 0) continue;
+      this.nextLightFadeAt = Math.min(this.nextLightFadeAt, cluster.expiresAt - GROUND_FIRE_FADE_MS);
       const fade = Phaser.Math.Clamp(remaining / GROUND_FIRE_FADE_MS, 0, 1);
       const lightCount = this.getLightCount(cluster);
       const majorAxis = Math.max(cluster.widthPx, cluster.heightPx);
@@ -1213,20 +1249,6 @@ export class GroundFireClusterRenderer {
 
     this.lightRanking.sort((left, right) => right.weight - left.weight);
     if (this.lightRanking.length > MAX_GROUND_FIRE_LIGHTS) this.lightRanking.length = MAX_GROUND_FIRE_LIGHTS;
-    const stale = this.activeLightKeys;
-    for (const record of this.lightRanking) {
-      lighting.setLight(
-        `groundfire:${record.key}`,
-        record.visualStyle === 'void' ? 'voidGroundFire' : 'groundFire',
-        record.x,
-        record.y,
-        { radiusPx: record.radiusPx, intensity: record.intensity },
-      );
-      stale.delete(record.key);
-    }
-    for (const staleKey of stale) lighting.releaseLight(`groundfire:${staleKey}`);
-    stale.clear();
-    for (const record of this.lightRanking) stale.add(record.key);
   }
 
   private resetQualityCarry(): void {

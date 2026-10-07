@@ -7,14 +7,17 @@ import type { SyncedBurningGroundSnapshot } from '../types';
 /** A soft, pulsing preheat band. It only reads the host-selected upcoming cells. */
 export class GroundHazardWarningRenderer {
   private readonly images: Phaser.GameObjects.Image[] = [];
+  private activeCount = 0;
   constructor(private readonly scene: Phaser.Scene) {}
 
   sync(cells: SyncedBurningGroundSnapshot['warnings'], now: number): void {
     let used = 0;
     for (const cell of cells ?? []) {
       if (cell.activatesAt <= now) continue;
-      const image = this.images[used] ?? this.scene.add.image(0, 0, TEX_VOID_FLAME_GLOW)
+      let image = this.images[used];
+      if (!image) image = this.scene.add.image(0, 0, TEX_VOID_FLAME_GLOW)
         .setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.FIRE - 0.1).setTint(0xc992ff);
+      else if (used >= this.activeCount) image.addToDisplayList();
       this.images[used++] = image;
       const urgency = 1 - Math.min(1, (cell.activatesAt - now) / 3000);
       image.setPosition((cell.gridX + 0.5) * GROUND_FIRE_CELL_SIZE, (cell.gridY + 0.5) * GROUND_FIRE_CELL_SIZE)
@@ -22,8 +25,11 @@ export class GroundHazardWarningRenderer {
         .setAlpha((0.12 + urgency * 0.16) * (0.8 + Math.sin(now * 0.007 + cell.gridY * 0.3) * 0.2))
         .setVisible(true);
     }
-    for (let i = used; i < this.images.length; i++) this.images[i].setVisible(false);
+    // An exhausted firefront can leave thousands of pooled images. Detach them so
+    // Scene depth sorting and camera traversal only visit the current warning band.
+    for (let i = used; i < this.activeCount; i++) this.images[i].setVisible(false).removeFromDisplayList();
+    this.activeCount = used;
   }
 
-  clear(): void { for (const image of this.images) image.destroy(); this.images.length = 0; }
+  clear(): void { for (const image of this.images) image.destroy(); this.images.length = 0; this.activeCount = 0; }
 }

@@ -42,7 +42,7 @@ function initialize(request) {
 }
 
 export async function runSuite(args) {
-  const options={runs:3,qualities:['high','low'],caseId:'review',timeoutMs:900_000,warmupMs:2000,cpuThrottle:1};
+  const options={runs:3,qualities:['high','low'],caseId:'review',timeoutMs:900_000,warmupMs:2000,cpuThrottle:1,maxCGrowthMiB:128};
   for(let i=0;i<args.length;i+=2){const key=args[i],v=args[i+1];if(!v)throw Error(`Missing value: ${key}`);
     if(key==='--sites')options.sites=v;
     else if(key==='--output-root')options.output=resolve(v);
@@ -51,11 +51,12 @@ export async function runSuite(args) {
     else if(key==='--case')options.caseId=v;
     else if(key==='--warmup-ms' && /^\d+$/.test(v))options.warmupMs=Number(v);
     else if(key==='--cpu-throttle' && /^(1|4)$/.test(v))options.cpuThrottle=Number(v);
+    else if(key==='--max-c-growth-mib' && /^\d+$/.test(v) && Number(v)>=128 && Number(v)<=8192)options.maxCGrowthMiB=Number(v);
     else if(key==='--profile'&&['on','off'].includes(v))options.profile=v==='on';
     else throw Error(`Unknown suite option: ${key}`);
   }
   if(!options.sites||!options.output||options.runs<1||options.runs>100||options.warmupMs>120_000||options.qualities.some(q=>!['high','low'].includes(q)))
-    throw Error('Usage: perf:chrome --suite --sites sites.json --output-root D:/... [--runs 3] [--qualities high,low] [--case review] [--cpu-throttle 1|4] [--profile on]');
+    throw Error('Usage: perf:chrome --suite --sites sites.json --output-root D:/... [--runs 3] [--qualities high,low] [--case review] [--cpu-throttle 1|4] [--profile on] [--max-c-growth-mib 128..8192]');
   if(options.caseId==='load'&&options.profile)throw Error('Loading probes do not support the gameplay CPU profile option');
   const sites=JSON.parse(await readFile(options.sites,'utf8'));
   for (const site of sites) site.buildId = createHash('sha256').update(await readFile(join(site.site, 'index.html'))).digest('hex');
@@ -66,7 +67,7 @@ export async function runSuite(args) {
     ignoreDefaultArgs:['--mute-audio','--autoplay-policy=no-user-gesture-required']};
   const all=[],environment={version:SUITE_VERSION,options,launch,cpu:cpus()[0]?.model,memoryBytes:totalmem(),sites};
   const storageStart=await statfs('C:/');
-  const minimumFreeC=Math.max(1024**3,storageStart.bavail*storageStart.bsize-128*1024**2);
+  const minimumFreeC=Math.max(1024**3,storageStart.bavail*storageStart.bsize-options.maxCGrowthMiB*1024**2);
   // Alternate A/B order by repetition to reduce temperature/order bias.
   for(let repetition=1;repetition<=options.runs;repetition++)for(const quality of options.qualities)for(const site of repetition%2?sites:[...sites].reverse()){
     if(await stopRequested())throw Error('Stopped by output-root/STOP');
@@ -111,7 +112,7 @@ export async function runSuite(args) {
       const guard=async()=>{
         if(await stopRequested())throw Error('Stopped by output-root/STOP');
         const storage=await statfs('C:/');
-        if(storage.bavail*storage.bsize<minimumFreeC)throw Error('C: free-space guard: more than 128 MiB consumed or less than 1 GiB free');
+        if(storage.bavail*storage.bsize<minimumFreeC)throw Error(`C: free-space guard: more than ${options.maxCGrowthMiB} MiB consumed or less than 1 GiB free`);
         if(Date.now()>deadline)throw Error('Suite timeout');
         if(messages.some(m=>m.type==='pageerror'))throw Error('Page error');
       };
