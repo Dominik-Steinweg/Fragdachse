@@ -33,15 +33,6 @@ const NEIGHBOURS: readonly (readonly [number, number])[] = [
   [-1, 0],
 ];
 
-/** Stable signature used to skip cluster work when the replicated cell state is unchanged. */
-export function groundFireCellsSignature(cells: readonly SyncedBurningGroundCell[]): string {
-  const entries = cells.map(cell => (
-    `${cell.visualStyle}:${cell.gridX}:${cell.gridY}:${cell.expiresAt}:${cell.intensity}:${cell.id}`
-  ));
-  entries.sort();
-  return entries.join('|');
-}
-
 /**
  * Finds 4-connected GroundFire components. Normal and void fire deliberately stay in separate
  * components even when they occupy neighbouring cells because their temperature palettes and
@@ -150,23 +141,80 @@ function createLayout(
   };
 }
 
+/** Edge length of a fixed emission region, in GroundFire raster cells. */
+export const GROUND_FIRE_REGION_CELLS = 8;
+
+const STYLE_INDEX: Readonly<Record<GroundFireVisualStyle, number>> = { normal: 0, void: 1 };
+const KEY_OFFSET = 2 ** 13;
+const KEY_ROW = 2 ** 14;
+const KEY_STYLE = 2 ** 28;
+
+/**
+ * Allocation-free numeric identity of a style/raster position. Frame and diff paths use it
+ * instead of template strings. Keys stay small integers (fast V8 map keys) and exact within
+ * ±8192 cells per axis, far beyond any arena.
+ */
+export function groundFireCellKey(style: GroundFireVisualStyle, gridX: number, gridY: number): number {
+  return STYLE_INDEX[style] * KEY_STYLE + (gridY + KEY_OFFSET) * KEY_ROW + gridX + KEY_OFFSET;
+}
+
+/** Key of the neighbouring raster cell or region; keys stay exact within the coordinate range. */
+export function offsetGroundFireKey(key: number, dx: number, dy: number): number {
+  return key + dy * KEY_ROW + dx;
+}
+
+/** Numeric identity of the fixed emission region containing a raster cell. */
+export function groundFireRegionKey(style: GroundFireVisualStyle, gridX: number, gridY: number): number {
+  return groundFireCellKey(
+    style,
+    Math.floor(gridX / GROUND_FIRE_REGION_CELLS),
+    Math.floor(gridY / GROUND_FIRE_REGION_CELLS),
+  );
+}
+
+/** Stable string identity of an emission region; seeds and light owners derive from it. */
+export function groundFireRegionId(style: GroundFireVisualStyle, gridX: number, gridY: number, regionCells = GROUND_FIRE_REGION_CELLS): string {
+  return `groundfire-region:${style}:${Math.floor(gridX / regionCells)}:${Math.floor(gridY / regionCells)}`;
+}
+
+/** Strongest duplicate wins; keeps resolution deterministic for duplicate peer cells. */
+export function isStrongerGroundFireCell(cell: SyncedBurningGroundCell, previous: SyncedBurningGroundCell | undefined): boolean {
+  return !previous || cell.intensity > previous.intensity || cell.expiresAt > previous.expiresAt;
+}
+
+/**
+ * Layout of exactly one emission region. The caller passes its de-duplicated cells; the
+ * renderer uses this to rebuild only regions whose replicated cells actually changed.
+ */
+export function buildGroundFireRegionLayout(
+  cells: SyncedBurningGroundCell[],
+  cellSize = 16,
+  regionCells = GROUND_FIRE_REGION_CELLS,
+): GroundFireClusterLayout {
+  const first = cells[0];
+  return createLayout(
+    cells.sort(compareCells),
+    cellSize,
+    groundFireRegionId(first.visualStyle, first.gridX, first.gridY, regionCells),
+  );
+}
+
 /** Fixed world-space emission regions: a remote bridge cannot change a trail's
  * density, random seed, flow clocks or lighting owner when it burns out. */
 export function buildGroundFireEmissionLayouts(
   cells: readonly SyncedBurningGroundCell[],
   cellSize = 16,
-  regionCells = 8,
+  regionCells = GROUND_FIRE_REGION_CELLS,
 ): GroundFireClusterLayout[] {
   const regions = new Map<string, Map<string, SyncedBurningGroundCell>>();
   for (const cell of cells) {
-    const id = `groundfire-region:${cell.visualStyle}:${Math.floor(cell.gridX / regionCells)}:${Math.floor(cell.gridY / regionCells)}`;
+    const id = groundFireRegionId(cell.visualStyle, cell.gridX, cell.gridY, regionCells);
     let region = regions.get(id);
     if (!region) { region = new Map(); regions.set(id, region); }
     const key = cellKey(cell.visualStyle, cell.gridX, cell.gridY);
-    const previous = region.get(key);
-    if (!previous || cell.intensity > previous.intensity || cell.expiresAt > previous.expiresAt) region.set(key, cell);
+    if (isStrongerGroundFireCell(cell, region.get(key))) region.set(key, cell);
   }
-  return [...regions].map(([id, region]) => createLayout([...region.values()].sort(compareCells), cellSize, id))
+  return [...regions.values()].map(region => buildGroundFireRegionLayout([...region.values()], cellSize, regionCells))
     .sort((left, right) => left.id.localeCompare(right.id));
 }
 

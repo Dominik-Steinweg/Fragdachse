@@ -82,6 +82,8 @@ export class FlamethrowerUpgradeRenderer {
     ensureFlameTextures(scene);
     ensureVoidFlameTextures(scene);
     this.groundFire = new GroundFireClusterRenderer();
+    // Bodenfeuer ausserhalb des Arena-Bildes braucht keine Partikel; sein Budget geht an das Sichtbare.
+    this.groundFire.setViewCamera(scene.cameras?.main ?? null);
     this.groundWarning = new GroundHazardWarningRenderer(scene);
   }
 

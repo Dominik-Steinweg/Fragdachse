@@ -497,6 +497,25 @@ interface EncodedBurningGroundDelta {
   r?: number[];
 }
 
+/** True when a full snapshot resolves to exactly the cells already held, in the same order. */
+function sameLiveBurningGroundCells(
+  encoded: readonly EncodedBurningGroundCell[],
+  cells: SyncedBurningGroundSnapshot['cells'],
+  now: number,
+): boolean {
+  let index = 0;
+  for (const entry of encoded) {
+    if (entry[3] <= now) continue;
+    const cell = cells[index++];
+    if (!cell || cell.expiresAt <= now) return false;
+    // Same normalization as `decodeBurningGroundCell`, without allocating per cell.
+    if (cell.id !== entry[0] || cell.gridX !== entry[1] || cell.gridY !== entry[2]
+      || cell.expiresAt !== entry[3] || cell.intensity !== Math.max(1, entry[4] ?? 1)
+      || cell.visualStyle !== (entry[5] === 1 ? 'void' : 'normal')) return false;
+  }
+  return index === cells.length;
+}
+
 function sanitizeGroundWarnings(value: unknown, now: number): NonNullable<SyncedBurningGroundSnapshot['warnings']> {
   if (!Array.isArray(value)) return [];
   return value.filter(cell => cell && Number.isSafeInteger(cell.gridX) && Number.isSafeInteger(cell.gridY)
@@ -3021,6 +3040,8 @@ export class NetworkBridge {
   private lastPublishedGroundHadWarnings = false;
   private readonly lastPublishedBurningGround = new Map<number, EncodedBurningGroundCell>();
   private lastPublishedGroundCells: readonly SyncedBurningGroundSnapshot['cells'][number][] | null = null;
+  /** FireSystem keeps unchanged cell objects across snapshots; their encoding is reused. */
+  private encodedGroundCells = new WeakMap<SyncedBurningGroundSnapshot['cells'][number], EncodedBurningGroundCell>();
   // Client-seitiger Statik-Cache der Projektile. Nur die Statik wird gecacht – die Dynamik kommt
   // jeden Tick vollstaendig, weshalb es keinen SyncedProjectile-Cache braucht.
   private readonly projectileStaticCache = new Map<number, SyncedProjectileStatic>();
@@ -3770,7 +3791,7 @@ export class NetworkBridge {
       return hadWarnings || this.lastPublishedGroundHadWarnings ? { w: snapshot.warnings ?? [] } : null;
     }
     const current = new Map<number, EncodedBurningGroundCell>();
-    for (const cell of snapshot.cells) current.set(cell.id, encodeBurningGroundCell(cell));
+    for (const cell of snapshot.cells) current.set(cell.id, this.encodeGroundCell(cell));
     this.lastPublishedGroundCells = snapshot.cells;
 
     if (sendFull) {
@@ -3784,7 +3805,7 @@ export class NetworkBridge {
     const removals: number[] = [];
     for (const [id, encoded] of current) {
       const previous = this.lastPublishedBurningGround.get(id);
-      if (!previous || previous.some((value, index) => value !== encoded[index])) upserts.push(encoded);
+      if (previous !== encoded && (!previous || previous.some((value, index) => value !== encoded[index]))) upserts.push(encoded);
     }
     for (const id of this.lastPublishedBurningGround.keys()) {
       if (!current.has(id)) removals.push(id);
@@ -3808,7 +3829,7 @@ export class NetworkBridge {
     this.burningGroundPublishTicks += 1;
     this.lastPublishedBurningGround.clear();
     const full = snapshot.cells.map((cell) => {
-      const encoded = encodeBurningGroundCell(cell);
+      const encoded = this.encodeGroundCell(cell);
       this.lastPublishedBurningGround.set(cell.id, encoded);
       return encoded;
     });
@@ -3816,14 +3837,30 @@ export class NetworkBridge {
     return { f: full, w: snapshot.warnings ?? [] };
   }
 
+  private encodeGroundCell(cell: SyncedBurningGroundSnapshot['cells'][number]): EncodedBurningGroundCell {
+    let encoded = this.encodedGroundCells.get(cell);
+    if (!encoded) {
+      encoded = encodeBurningGroundCell(cell);
+      this.encodedGroundCells.set(cell, encoded);
+    }
+    return encoded;
+  }
+
   private mergeBurningGroundDelta(
     delta: EncodedBurningGroundDelta | undefined,
     previous: SyncedBurningGroundSnapshot,
   ): SyncedBurningGroundSnapshot {
     const now = this.getSynchronizedNow();
+    // Unchanged geometry keeps its array identity: consumers skip their per-change work, and a
+    // large persistent surface must not be rebuilt on every tick or loss-repair snapshot.
     if (delta?.f) {
-      return { cells: delta.f.map(decodeBurningGroundCell).filter(cell => cell.expiresAt > now),
-        warnings: sanitizeGroundWarnings(delta.w, now) };
+      return { cells: sameLiveBurningGroundCells(delta.f, previous.cells, now)
+        ? previous.cells
+        : delta.f.map(decodeBurningGroundCell).filter(cell => cell.expiresAt > now),
+      warnings: sanitizeGroundWarnings(delta.w, now) };
+    }
+    if (!delta?.r?.length && !delta?.u?.length && previous.cells.every(cell => cell.expiresAt > now)) {
+      return { cells: previous.cells, warnings: sanitizeGroundWarnings(delta?.w ?? previous.warnings, now) };
     }
     const cells = new Map(previous.cells.filter(cell => cell.expiresAt > now).map(cell => [cell.id, cell]));
     for (const id of delta?.r ?? []) cells.delete(id);

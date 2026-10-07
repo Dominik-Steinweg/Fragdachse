@@ -7,6 +7,7 @@ import type {
   FireGrenadeEffect,
   GroundFireDamageTarget,
   GroundFireVisualStyle,
+  SyncedBurningGroundCell,
   SyncedBurningGroundSnapshot,
   SyncedFireZone,
 } from '../types';
@@ -175,6 +176,9 @@ export class FireSystem {
   private getObstacleRevision: GroundFireObstacleRevisionResolver | null = null;
   private groundSnapshotDirty = true;
   private cachedGroundSnapshot: SyncedBurningGroundSnapshot = { cells: [] };
+  /** Published cell objects by visual id; unchanged cells keep their identity across snapshots. */
+  private publishedGroundCells = new Map<number, SyncedBurningGroundCell>();
+  private nextPublishedGroundCells = new Map<number, SyncedBurningGroundCell>();
   private readonly groundWarnings = new Map<string, NonNullable<SyncedBurningGroundSnapshot['warnings']>>();
   private warningCells: NonNullable<SyncedBurningGroundSnapshot['warnings']> = [];
   private groundState: SyncedBurningGroundSnapshot = { cells: [] };
@@ -610,6 +614,7 @@ export class FireSystem {
     this.lastDamageTick = -1;
     this.groundSnapshotDirty = true;
     this.cachedGroundSnapshot = { cells: [] };
+    this.publishedGroundCells.clear();
     this.lastSimulationMs = 0;
     this.lastCreationMs = 0;
   }
@@ -752,18 +757,33 @@ export class FireSystem {
 
   private getGroundSnapshot(): SyncedBurningGroundSnapshot {
     if (!this.groundSnapshotDirty) return this.cachedGroundSnapshot;
-    this.cachedGroundSnapshot = {
-      cells: [...this.cells.values()]
-        .flatMap(cell => [...cell.visuals.values()].map(visual => ({
-          id: visual.id,
-          gridX: cell.gridX,
-          gridY: cell.gridY,
-          expiresAt: visual.expiresAt,
-          intensity: Math.max(1, visual.intensity),
-          visualStyle: visual.visualStyle,
-        })))
-        .sort((left, right) => left.id - right.id),
-    };
+    // The array is replaced on every change, but published cells are immutable values: an
+    // unchanged cell keeps its object so network and renderers can skip it cheaply.
+    const previous = this.publishedGroundCells;
+    const next = this.nextPublishedGroundCells;
+    next.clear();
+    const cells: SyncedBurningGroundCell[] = [];
+    for (const cell of this.cells.values()) {
+      for (const visual of cell.visuals.values()) {
+        const intensity = Math.max(1, visual.intensity);
+        let synced = previous.get(visual.id);
+        if (!synced || synced.expiresAt !== visual.expiresAt || synced.intensity !== intensity) {
+          synced = {
+            id: visual.id,
+            gridX: cell.gridX,
+            gridY: cell.gridY,
+            expiresAt: visual.expiresAt,
+            intensity,
+            visualStyle: visual.visualStyle,
+          };
+        }
+        next.set(visual.id, synced);
+        cells.push(synced);
+      }
+    }
+    this.publishedGroundCells = next;
+    this.nextPublishedGroundCells = previous;
+    this.cachedGroundSnapshot = { cells: cells.sort((left, right) => left.id - right.id) };
     this.groundSnapshotDirty = false;
     return this.cachedGroundSnapshot;
   }
@@ -783,12 +803,17 @@ export class FireSystem {
         aggregates.set(source.visualStyle, { expiresAt: source.expiresAt, intensity: 1 });
       }
     }
+    // Repeated refreshes of an unchanged permanent cell must not republish the whole surface.
+    let changed = false;
     for (const visualStyle of cell.visuals.keys()) {
-      if (!aggregates.has(visualStyle)) cell.visuals.delete(visualStyle);
+      if (aggregates.has(visualStyle)) continue;
+      cell.visuals.delete(visualStyle);
+      changed = true;
     }
     for (const [visualStyle, aggregate] of aggregates) {
       const visual = cell.visuals.get(visualStyle);
       if (visual) {
+        if (visual.expiresAt === aggregate.expiresAt && visual.intensity === aggregate.intensity) continue;
         visual.expiresAt = aggregate.expiresAt;
         visual.intensity = aggregate.intensity;
       } else {
@@ -799,8 +824,9 @@ export class FireSystem {
           intensity: aggregate.intensity,
         });
       }
+      changed = true;
     }
-    this.groundSnapshotDirty = true;
+    if (changed) this.groundSnapshotDirty = true;
   }
 
   private visitTouchingCells(

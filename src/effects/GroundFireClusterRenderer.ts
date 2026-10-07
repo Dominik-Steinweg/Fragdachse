@@ -1,10 +1,19 @@
 import * as Phaser from 'phaser';
 import type { GroundFireVisualStyle, SyncedBurningGroundCell, SyncedBurningGroundSnapshot } from '../types';
 import {
-  buildGroundFireEmissionLayouts,
-  groundFireCellsSignature,
+  buildGroundFireRegionLayout,
+  groundFireCellKey,
+  groundFireRegionKey,
+  isStrongerGroundFireCell,
+  offsetGroundFireKey,
   type GroundFireClusterLayout,
 } from './GroundFireClusters';
+import {
+  createVisibleWorldView,
+  getVisibleWorldView,
+  type CameraWorldViewSource,
+  type VisibleWorldView,
+} from '../graphics/CameraWorldView';
 import { GROUND_FIRE_CELL_SIZE } from './FireSystem';
 import {
   GROUND_FIRE_BED_SIZE,
@@ -159,7 +168,27 @@ const CORE_DEPTH_CELLS = 2.2;
 /** Ab so vielen Zellen gilt ein Cluster als ausgedehnte Flaeche (siehe `GroundFireCluster.spread`). */
 const GROUND_FIRE_SPREAD_CELLS = 5;
 
+/**
+ * Sichtrand in Weltpixeln, ab dem eine Emissionsregion bespielt wird. Groesser als das groesste
+ * Motiv samt Streuung und Drift: Partikel entstehen ausserhalb des Bildes, und eine bei
+ * Kamerafahrt eintretende Region ist beim ersten sichtbaren Frame bereits voll besetzt.
+ */
+const GROUND_FIRE_VIEW_PADDING = 160;
+
+/**
+ * Bodenfeuerlicht sammelt sich in weltfesten Bloecken aus 4 x 4 Emissionsregionen (512 px).
+ * Ein Block leuchtet mit einem breiten Licht: so verteilt sich das knappe Lichtbudget ueber
+ * die ganze sichtbare Brandflaeche, und Lichtpositionen springen bei Kamerafahrt nicht.
+ */
+const GROUND_FIRE_LIGHT_BLOCK_PX = CELL * 8 * 4;
+/** Sichtrand fuer die Lichtwahl: etwa ein Lichtradius, damit Randglut ins Bild strahlt. */
+const GROUND_FIRE_LIGHT_VIEW_PADDING = 256;
+/** Einblendzeit fuer Lichter, die erst durch eine Kamerafahrt ins Budget kommen. */
+const GROUND_FIRE_LIGHT_FADE_IN_MS = 360;
+
 interface GroundFireCellField {
+  /** `groundFireCellKey` der Rasterzelle. */
+  key: number;
   /** Weltmittelpunkt der Rasterzelle. */
   x: number;
   y: number;
@@ -174,6 +203,7 @@ interface GroundFireCellField {
 
 interface GroundFireCluster {
   id: string;
+  regionKey: number;
   seed: number;
   visualStyle: GroundFireVisualStyle;
   cells: readonly SyncedBurningGroundCell[];
@@ -183,10 +213,25 @@ interface GroundFireCluster {
   centerY: number;
   widthPx: number;
   heightPx: number;
+  /** Weltgrenzen der belegten Rasterzellen fuer die Sichtpruefung. */
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
   totalIntensity: number;
   maxIntensity: number;
   expiresAt: number;
   bornAt: number;
+  /** Neu entzuendete Zellen dieser Region, die beim naechsten Emissionsschritt vorgewaermt werden. */
+  pendingIgnitions: Set<number>;
+  /**
+   * GPUFX-Zeit, seit der die Region ausserhalb des Sichtbereichs nicht mehr emittiert; `null`
+   * waehrend sie bespielt wird. Beim Wiedereintritt fuellt sie genau die in dieser Zeit
+   * ausgebliebene, juengste Population nach.
+   */
+  absentSinceMs: number | null;
+  /** Ergebnis der Sichtpruefung dieses Emissionsschritts. */
+  inView: boolean;
   /**
    * 0 bei einer einzelnen Zelle, 1 ab `GROUND_FIRE_SPREAD_CELLS`.
    *
@@ -221,17 +266,26 @@ interface GroundFireCluster {
 
 interface GroundFireLightRecord {
   key: string;
-  clusterId: string;
   x: number;
   y: number;
   weight: number;
   radiusPx: number;
   intensity: number;
   visualStyle: GroundFireVisualStyle;
+  /** Aggregat des laufenden Neuaufbaus. */
+  cells: number;
+  totalIntensity: number;
+  maxIntensity: number;
+  expiresAt: number;
+  inView: boolean;
+  viewDistance: number;
+  /** Lichtzeit, ab der ein durch Kamerafahrt neu gewaehltes Licht einblendet. */
+  shownAt: number;
 }
 
 /** Ergebnis des Konvektionsfeldes; wiederverwendet, damit der Hotpath nichts allokiert. */
 const MOTION: GroundFireMotionSample = { x: 0, y: 0, heat: 0 };
+const NO_CELLS: readonly GroundFireCellField[] = [];
 
 /**
  * Cluster-only visual backend for persistent ground fire.
@@ -272,11 +326,20 @@ export class GroundFireClusterRenderer {
   private lightRankingDirty = true;
   private nextLightFadeAt = 0;
   private lightRankingAt = 0;
-  private snapshotSignature = '';
+  private lightViewKey = '';
+  private readonly lightView = createVisibleWorldView();
   private snapshotCells: readonly SyncedBurningGroundCell[] | null = null;
-  private readonly knownCells = new Map<string, number>();
-  private readonly pendingIgnitions = new Set<string>();
-  private ignitionCells: readonly GroundFireCellField[] = [];
+  /** Aufgeloester Zellstand des letzten Snapshots, nach `groundFireCellKey`. */
+  private knownCells = new Map<number, SyncedBurningGroundCell>();
+  /** Wiederverwendeter Puffer fuer den naechsten Zellstand; wird mit `knownCells` getauscht. */
+  private nextCells = new Map<number, SyncedBurningGroundCell>();
+  private readonly dirtyRegions = new Set<number>();
+  private readonly regionClusters = new Map<number, GroundFireCluster>();
+  private ignitionCells: readonly GroundFireCellField[] = NO_CELLS;
+  /** Anteil der Ziel-Population, die ein Vorwaermschritt anlegt (1 bei neuen Zellen). */
+  private ignitionShareMs = Number.POSITIVE_INFINITY;
+  private viewCamera: CameraWorldViewSource | null = null;
+  private readonly view = createVisibleWorldView();
   private ignitionOrder = new Int32Array(0);
   private ignitionAgeFraction = 0;
   private warming = false;
@@ -374,61 +437,92 @@ export class GroundFireClusterRenderer {
   syncGround(snapshot: SyncedBurningGroundSnapshot, now = Date.now()): void {
     this.synchronizedNow = now;
     // Snapshot producers replace the cells array when values change. Host frames between
-    // changes can reuse the resolved surface without allocating and sorting a full signature.
+    // changes can reuse the resolved surface without rescanning it.
     if (snapshot.cells === this.snapshotCells) return;
     this.snapshotCells = snapshot.cells;
-    const signature = groundFireCellsSignature(snapshot.cells);
-    if (signature === this.snapshotSignature) return;
-    this.snapshotSignature = signature;
+
+    // Diff against the previous resolved state with numeric keys. Small transient fires next
+    // to a large permanent surface must only rebuild the regions they touch, never the map.
+    const next = this.nextCells;
+    next.clear();
+    for (const cell of snapshot.cells) {
+      const key = groundFireCellKey(cell.visualStyle, cell.gridX, cell.gridY);
+      if (isStrongerGroundFireCell(cell, next.get(key))) next.set(key, cell);
+    }
+    const previous = this.knownCells;
+    const dirty = this.dirtyRegions;
+    const ignitions: number[] = [];
+    dirty.clear();
+    for (const [key, cell] of next) {
+      const old = previous.get(key);
+      // Track spatial cells independently of cluster IDs: merges, splits and lifetime
+      // refreshes must not restart an already populated fire surface.
+      if (cell.expiresAt > now && (old?.expiresAt ?? 0) <= now) ignitions.push(key);
+      if (old && old.expiresAt === cell.expiresAt && old.intensity === cell.intensity) continue;
+      dirty.add(groundFireRegionKey(cell.visualStyle, cell.gridX, cell.gridY));
+    }
+    for (const [key, old] of previous) {
+      if (!next.has(key)) dirty.add(groundFireRegionKey(old.visualStyle, old.gridX, old.gridY));
+    }
+    this.knownCells = next;
+    this.nextCells = previous;
+    if (dirty.size === 0) return;
     this.lightRankingDirty = true;
 
-    // Track spatial cells independently of cluster IDs: merges, splits and lifetime
-    // refreshes must not restart an already populated fire surface.
-    const nextCells = new Map<string, number>();
-    for (const cell of snapshot.cells) {
-      const key = `${cell.visualStyle}:${cell.gridX}:${cell.gridY}`;
-      if (cell.expiresAt > now && (this.knownCells.get(key) ?? 0) <= now)
-        this.pendingIgnitions.add(key);
-      nextCells.set(key, cell.expiresAt);
+    const regionCells = new Map<number, SyncedBurningGroundCell[]>();
+    for (const cell of next.values()) {
+      const regionKey = groundFireRegionKey(cell.visualStyle, cell.gridX, cell.gridY);
+      if (!dirty.has(regionKey)) continue;
+      let cells = regionCells.get(regionKey);
+      if (!cells) { cells = []; regionCells.set(regionKey, cells); }
+      cells.push(cell);
     }
-    for (const key of this.pendingIgnitions) if (!nextCells.has(key)) this.pendingIgnitions.delete(key);
-    this.knownCells.clear();
-    for (const [key, expiresAt] of nextCells) this.knownCells.set(key, expiresAt);
-
-    const layouts = buildGroundFireEmissionLayouts(snapshot.cells, CELL);
-    const nextClusters = new Map<string, GroundFireCluster>();
-    for (const layout of layouts) {
-      const existing = this.clusters.get(layout.id);
-      const cluster = existing ?? this.createCluster(layout);
+    for (const regionKey of dirty) {
+      const cells = regionCells.get(regionKey);
+      const existing = this.regionClusters.get(regionKey);
+      if (!cells) {
+        if (existing) this.removeCluster(existing);
+        continue;
+      }
+      const layout = buildGroundFireRegionLayout(cells, CELL);
+      const cluster = existing ?? this.createCluster(layout, regionKey);
       this.applyLayout(cluster, layout);
-      if (!existing) this.primeClusterEmission(cluster);
-      nextClusters.set(cluster.id, cluster);
+      for (const key of cluster.pendingIgnitions) if (!next.has(key)) cluster.pendingIgnitions.delete(key);
+      if (!existing) {
+        this.primeClusterEmission(cluster);
+        this.clusters.set(cluster.id, cluster);
+        this.regionClusters.set(regionKey, cluster);
+      }
     }
+    // Rim distance reaches up to three cells into neighbouring regions.
+    for (const regionKey of dirty) {
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const neighbourKey = offsetGroundFireKey(regionKey, dx, dy);
+          if (dirty.has(neighbourKey)) continue;
+          const neighbour = this.regionClusters.get(neighbourKey);
+          if (neighbour) this.refreshCoreness(neighbour);
+        }
+      }
+    }
+    for (const key of ignitions) {
+      const cell = next.get(key)!;
+      this.regionClusters.get(groundFireRegionKey(cell.visualStyle, cell.gridX, cell.gridY))?.pendingIgnitions.add(key);
+    }
+  }
 
-    this.clusters.clear();
-    for (const [id, cluster] of nextClusters) this.clusters.set(id, cluster);
-    // Capacity protection follows total demand, never connectivity. At ordinary
-    // loads every region keeps its full density, including a newly growing trail.
-    let requestedLive = 0;
-    for (const layout of layouts) {
-      const count = layout.cells.length;
-      requestedLive += Math.max(BED_MIN_LIVE, count * BED_DENSITY_PER_CELL)
-        + Math.max(FIELD_MIN_LIVE, count * FIELD_DENSITY_PER_CELL)
-        + Math.max(CORE_MIN_LIVE, count * CORE_DENSITY_PER_CELL)
-        + Math.max(EMBER_MIN_LIVE, count * EMBER_DENSITY_PER_CELL)
-        + Math.max(SPARK_MIN_LIVE, count * GROUND_FIRE_SPARK_DENSITY_PER_CELL)
-        + Math.max(SPARK_ACCENT_MIN_LIVE, count * GROUND_FIRE_SPARK_ACCENT_DENSITY_PER_CELL);
-    }
-    this.densityScale = Math.min(1, GROUND_FIRE_LIVE_BUDGET / Math.max(1, requestedLive));
+  /**
+   * Bespielt nur Regionen im (gepolsterten) Sichtbereich dieser Kamera. Ohne Kamera emittieren
+   * alle Regionen; das ist auch der Vertrag fuer Werkzeuge ohne Arena-Kamera.
+   */
+  setViewCamera(camera: CameraWorldViewSource | null): void {
+    this.viewCamera = camera;
   }
 
   update(now: number): void {
     this.synchronizedNow = now;
-    for (const [id, cluster] of this.clusters) {
-      if (cluster.expiresAt <= now) {
-        this.clusters.delete(id);
-        this.lightRankingDirty = true;
-      }
+    for (const cluster of this.clusters.values()) {
+      if (cluster.expiresAt <= now) this.removeCluster(cluster);
     }
     this.syncLights(now);
   }
@@ -465,11 +559,13 @@ export class GroundFireClusterRenderer {
 
   clear(): void {
     this.clusters.clear();
-    this.snapshotSignature = '';
+    this.regionClusters.clear();
     this.snapshotCells = null;
     this.knownCells.clear();
-    this.pendingIgnitions.clear();
-    this.ignitionCells = [];
+    this.nextCells.clear();
+    this.dirtyRegions.clear();
+    this.ignitionCells = NO_CELLS;
+    this.ignitionShareMs = Number.POSITIVE_INFINITY;
     this.ignitionOrder = new Int32Array(0);
     this.ignitionAgeFraction = 0;
     this.warming = false;
@@ -485,6 +581,7 @@ export class GroundFireClusterRenderer {
     this.lightRankingDirty = true;
     this.nextLightFadeAt = 0;
     this.lightRankingAt = 0;
+    this.lightViewKey = '';
   }
 
   destroyAll(): void {
@@ -493,9 +590,16 @@ export class GroundFireClusterRenderer {
 
   // ── Cluster-Aufbau ─────────────────────────────────────────────────────────
 
-  private createCluster(layout: GroundFireClusterLayout): GroundFireCluster {
+  private removeCluster(cluster: GroundFireCluster): void {
+    this.clusters.delete(cluster.id);
+    this.regionClusters.delete(cluster.regionKey);
+    this.lightRankingDirty = true;
+  }
+
+  private createCluster(layout: GroundFireClusterLayout, regionKey: number): GroundFireCluster {
     return {
       id: layout.id,
+      regionKey,
       seed: layout.seed,
       visualStyle: layout.visualStyle,
       cells: layout.cells,
@@ -505,10 +609,18 @@ export class GroundFireClusterRenderer {
       centerY: layout.centerY,
       widthPx: layout.widthPx,
       heightPx: layout.heightPx,
+      left: 0,
+      top: 0,
+      right: 0,
+      bottom: 0,
       totalIntensity: layout.totalIntensity,
       maxIntensity: layout.maxIntensity,
       expiresAt: layout.expiresAt,
       bornAt: this.gpuVfx?.now() ?? 0,
+      pendingIgnitions: new Set(),
+      // Noch nie bespielt: der erste sichtbare Schritt legt die volle Population an.
+      absentSinceMs: Number.NEGATIVE_INFINITY,
+      inView: false,
       spread: 0,
       bedOrder: new Int32Array(0),
       fieldOrder: new Int32Array(0),
@@ -542,6 +654,10 @@ export class GroundFireClusterRenderer {
     cluster.centerY = layout.centerY;
     cluster.widthPx = layout.widthPx;
     cluster.heightPx = layout.heightPx;
+    cluster.left = layout.minGridX * CELL;
+    cluster.top = layout.minGridY * CELL;
+    cluster.right = (layout.maxGridX + 1) * CELL;
+    cluster.bottom = (layout.maxGridY + 1) * CELL;
     cluster.totalIntensity = layout.totalIntensity;
     cluster.maxIntensity = layout.maxIntensity;
     cluster.expiresAt = layout.expiresAt;
@@ -588,6 +704,7 @@ export class GroundFireClusterRenderer {
       const x = (cell.gridX + 0.5) * CELL;
       const y = (cell.gridY + 0.5) * CELL;
       field.push({
+        key: groundFireCellKey(cell.visualStyle, cell.gridX, cell.gridY),
         x,
         y,
         coreness: 0,
@@ -627,12 +744,20 @@ export class GroundFireClusterRenderer {
     }
   }
 
+  /** Nur die Randdistanz; fuer Nachbarregionen einer geaenderten Region. */
+  private refreshCoreness(cluster: GroundFireCluster): void {
+    for (let i = 0; i < cluster.field.length && i < cluster.cells.length; i += 1) {
+      cluster.field[i].coreness = this.cellCoreness(cluster.cells[i]);
+    }
+  }
+
   private cellCoreness(cell: SyncedBurningGroundCell): number {
+    const key = groundFireCellKey(cell.visualStyle, cell.gridX, cell.gridY);
     for (let distance = 1; distance <= Math.ceil(CORE_DEPTH_CELLS); distance++) {
       for (let dx = -distance; dx <= distance; dx++) {
         const dy = distance - Math.abs(dx);
-        if (!this.knownCells.has(`${cell.visualStyle}:${cell.gridX + dx}:${cell.gridY + dy}`)
-          || !this.knownCells.has(`${cell.visualStyle}:${cell.gridX + dx}:${cell.gridY - dy}`)) {
+        if (!this.knownCells.has(offsetGroundFireKey(key, dx, dy))
+          || !this.knownCells.has(offsetGroundFireKey(key, dx, -dy))) {
           return (distance - 1) / CORE_DEPTH_CELLS;
         }
       }
@@ -646,13 +771,36 @@ export class GroundFireClusterRenderer {
     const system = this.gpuVfx;
     if (!system) return;
 
+    const view = this.viewCamera
+      ? getVisibleWorldView(this.viewCamera, this.view, GROUND_FIRE_VIEW_PADDING)
+      : null;
+    // Capacity protection follows the demand of the regions actually emitted, never
+    // connectivity or off-screen area. At ordinary loads every region keeps its full density.
+    let requestedLive = 0;
     for (const cluster of this.clusters.values()) {
-      if (cluster.expiresAt <= this.synchronizedNow || cluster.field.length === 0) continue;
+      cluster.inView = cluster.expiresAt > this.synchronizedNow && cluster.field.length > 0
+        && (!view || (cluster.right > view.x && cluster.left < view.right
+          && cluster.bottom > view.y && cluster.top < view.bottom));
+      if (cluster.inView) requestedLive += this.requestedLive(cluster.cells.length);
+      else if (cluster.absentSinceMs === null) cluster.absentSinceMs = nowMs;
+    }
+    this.densityScale = Math.min(1, GROUND_FIRE_LIVE_BUDGET / Math.max(1, requestedLive));
+
+    for (const cluster of this.clusters.values()) {
+      if (!cluster.inView) continue;
       const age = this.clusterAge(cluster, nowMs);
       const intensity = this.clusterIntensity(cluster) * (0.98 - age * 0.12);
-      this.ignitionCells = this.pendingIgnitions.size === 0 ? [] : cluster.field.filter(cell => this.pendingIgnitions.has(
-        `${cluster.visualStyle}:${Math.floor(cell.x / CELL)}:${Math.floor(cell.y / CELL)}`,
-      ));
+      if (cluster.absentSinceMs !== null) {
+        // First sight or re-entry: restore exactly the youngest population that was not born
+        // while the region was skipped. New cells are part of that population.
+        this.ignitionCells = cluster.field;
+        this.ignitionShareMs = nowMs - cluster.absentSinceMs;
+        cluster.absentSinceMs = null;
+        cluster.pendingIgnitions.clear();
+      } else if (cluster.pendingIgnitions.size > 0) {
+        this.ignitionCells = cluster.field.filter(cell => cluster.pendingIgnitions.has(cell.key));
+        cluster.pendingIgnitions.clear();
+      }
 
       this.runFlow(
         cluster, cluster.bedFlow, deltaMs, GROUND_FIRE_BED_LIFESPAN, BED_DENSITY_PER_CELL,
@@ -685,11 +833,18 @@ export class GroundFireClusterRenderer {
           SMOKE_MIN_LIVE, GpuVfxEffectId.GroundFireSmoke, intensity, nowMs, this.spawnSmoke,
         );
       }
-      for (const cell of this.ignitionCells) this.pendingIgnitions.delete(
-        `${cluster.visualStyle}:${Math.floor(cell.x / CELL)}:${Math.floor(cell.y / CELL)}`,
-      );
-      this.ignitionCells = [];
+      this.ignitionCells = NO_CELLS;
+      this.ignitionShareMs = Number.POSITIVE_INFINITY;
     }
+  }
+
+  private requestedLive(cellCount: number): number {
+    return Math.max(BED_MIN_LIVE, cellCount * BED_DENSITY_PER_CELL)
+      + Math.max(FIELD_MIN_LIVE, cellCount * FIELD_DENSITY_PER_CELL)
+      + Math.max(CORE_MIN_LIVE, cellCount * CORE_DENSITY_PER_CELL)
+      + Math.max(EMBER_MIN_LIVE, cellCount * EMBER_DENSITY_PER_CELL)
+      + Math.max(SPARK_MIN_LIVE, cellCount * GROUND_FIRE_SPARK_DENSITY_PER_CELL)
+      + Math.max(SPARK_ACCENT_MIN_LIVE, cellCount * GROUND_FIRE_SPARK_ACCENT_DENSITY_PER_CELL);
   }
 
   /**
@@ -726,16 +881,18 @@ export class GroundFireClusterRenderer {
     if (this.ignitionCells.length > 0) {
       // Seed the steady population, not a flash of newborn particles. Distributed ages
       // give the first frame the usual brightness and stagger subsequent retirement.
-      // Only the new share of the existing quality/density budget is populated.
+      // Only the new share of the existing quality/density budget is populated; a region
+      // returning into view only lacks the particles born during its absence.
+      const share = Math.min(1, this.ignitionShareMs / this.averageLife(lifespan));
       const target = this.averageLife(lifespan) / frequency
-        * this.ignitionCells.length / cluster.field.length
+        * this.ignitionCells.length / cluster.field.length * share
         + (this.ignitionCarry.get(flow) ?? 0);
       const count = Math.floor(target);
       this.ignitionCarry.set(flow, target - count);
       this.ignitionOrder = buildGroundFireTraversal(this.ignitionCells.length, cluster.seed, effect);
       this.warming = true;
       for (let index = 0; index < count; index += 1) {
-        this.ignitionAgeFraction = (index + 0.5) / count;
+        this.ignitionAgeFraction = (index + 0.5) / count * share;
         spawn.call(this, cluster, intensity, nowMs);
       }
       this.warming = false;
@@ -1178,17 +1335,29 @@ export class GroundFireClusterRenderer {
     const lighting = this.lighting;
     if (!lighting) return;
 
-    if (this.lightRankingDirty || now >= this.nextLightFadeAt || now < this.lightRankingAt) this.rebuildLightRanking(now, lighting);
+    const view = this.viewCamera
+      ? getVisibleWorldView(this.viewCamera, this.lightView, GROUND_FIRE_LIGHT_VIEW_PADDING)
+      : null;
+    const viewKey = view
+      ? `${Math.floor(view.x / GROUND_FIRE_LIGHT_BLOCK_PX)}:${Math.floor(view.y / GROUND_FIRE_LIGHT_BLOCK_PX)}:`
+        + `${Math.floor(view.right / GROUND_FIRE_LIGHT_BLOCK_PX)}:${Math.floor(view.bottom / GROUND_FIRE_LIGHT_BLOCK_PX)}`
+      : '';
+    const cameraMoved = viewKey !== this.lightViewKey;
+    if (this.lightRankingDirty || cameraMoved || now >= this.nextLightFadeAt || now < this.lightRankingAt) {
+      this.rebuildLightRanking(now, lighting, view, cameraMoved && !this.lightRankingDirty);
+      this.lightViewKey = viewKey;
+    }
     // Keyed lights still need their regular lifetime confirmation, even when their
     // geometry and ranking are unchanged for a permanent ground-fire surface.
     const stale = this.activeLightKeys;
     for (const record of this.lightRanking) {
+      const fadeIn = Phaser.Math.Clamp((now - record.shownAt) / GROUND_FIRE_LIGHT_FADE_IN_MS, 0, 1);
       lighting.setLight(
         `groundfire:${record.key}`,
         record.visualStyle === 'void' ? 'voidGroundFire' : 'groundFire',
         record.x,
         record.y,
-        { radiusPx: record.radiusPx, intensity: record.intensity },
+        { radiusPx: record.radiusPx, intensity: record.intensity * fadeIn },
       );
       stale.delete(record.key);
     }
@@ -1197,58 +1366,83 @@ export class GroundFireClusterRenderer {
     for (const record of this.lightRanking) stale.add(record.key);
   }
 
-  private rebuildLightRanking(now: number, lighting: LightingSystem): void {
+  private rebuildLightRanking(
+    now: number,
+    lighting: LightingSystem,
+    view: VisibleWorldView | null,
+    cameraMoved: boolean,
+  ): void {
     this.lightRankingDirty = false;
     this.lightRankingAt = now;
     this.nextLightFadeAt = Number.POSITIVE_INFINITY;
 
-    for (const [key, record] of this.lightRecords) {
-      if (this.clusters.has(record.clusterId)) continue;
-      lighting.releaseLight(`groundfire:${key}`);
-      this.lightRecords.delete(key);
+    for (const record of this.lightRecords.values()) {
+      record.x = 0;
+      record.y = 0;
+      record.cells = 0;
+      record.totalIntensity = 0;
+      record.maxIntensity = 0;
+      record.expiresAt = 0;
+      record.inView = false;
+    }
+    for (const cluster of this.clusters.values()) {
+      if (cluster.expiresAt <= now) continue;
+      this.nextLightFadeAt = Math.min(this.nextLightFadeAt, cluster.expiresAt - GROUND_FIRE_FADE_MS);
+      const key = `${cluster.visualStyle}:${Math.floor(cluster.centerX / GROUND_FIRE_LIGHT_BLOCK_PX)}:`
+        + `${Math.floor(cluster.centerY / GROUND_FIRE_LIGHT_BLOCK_PX)}`;
+      let record = this.lightRecords.get(key);
+      if (!record) {
+        record = {
+          key, x: 0, y: 0, weight: 0, radiusPx: 0, intensity: 0, visualStyle: cluster.visualStyle,
+          cells: 0, totalIntensity: 0, maxIntensity: 0, expiresAt: 0, inView: false, viewDistance: 0,
+          shownAt: Number.NEGATIVE_INFINITY,
+        };
+        this.lightRecords.set(key, record);
+      }
+      const count = cluster.cells.length;
+      record.x += cluster.centerX * count;
+      record.y += cluster.centerY * count;
+      record.cells += count;
+      record.totalIntensity += cluster.totalIntensity;
+      record.maxIntensity = Math.max(record.maxIntensity, cluster.maxIntensity);
+      record.expiresAt = Math.max(record.expiresAt, cluster.expiresAt);
+      record.inView ||= !view || (cluster.right > view.x && cluster.left < view.right
+        && cluster.bottom > view.y && cluster.top < view.bottom);
     }
 
     this.lightRanking.length = 0;
-    for (const cluster of this.clusters.values()) {
-      const remaining = cluster.expiresAt - now;
-      if (remaining <= 0) continue;
-      this.nextLightFadeAt = Math.min(this.nextLightFadeAt, cluster.expiresAt - GROUND_FIRE_FADE_MS);
-      const fade = Phaser.Math.Clamp(remaining / GROUND_FIRE_FADE_MS, 0, 1);
-      const lightCount = this.getLightCount(cluster);
-      const majorAxis = Math.max(cluster.widthPx, cluster.heightPx);
-      const offset = Math.max(CELL, majorAxis * 0.22);
-      for (let index = 0; index < lightCount; index += 1) {
-        const key = `${cluster.id}:${index}`;
-        let record = this.lightRecords.get(key);
-        if (!record) {
-          record = {
-            key,
-            clusterId: cluster.id,
-            x: 0,
-            y: 0,
-            weight: 0,
-            radiusPx: 0,
-            intensity: 0,
-            visualStyle: cluster.visualStyle,
-          };
-          this.lightRecords.set(key, record);
-        }
-        const axisIsX = cluster.widthPx >= cluster.heightPx;
-        const localOffset = index === 0 ? 0 : (index === 1 ? -offset : offset);
-        record.x = cluster.centerX + (axisIsX ? localOffset : 0);
-        record.y = cluster.centerY + (axisIsX ? 0 : localOffset);
-        const sizeBoost = Phaser.Math.Clamp(Math.sqrt(cluster.cells.length) * 0.16, 0, 1.45);
-        record.weight = (0.42 + this.clusterIntensity(cluster) * 0.65 + sizeBoost) * fade
-          * (index === 0 ? 1 : 0.82);
-        record.radiusPx = GROUND_FIRE_LIGHT_BUCKET_SIZE * (1.25 + sizeBoost * 0.48);
-        record.intensity = 0.48 + Math.min(record.weight, 1.8) * 0.26;
-        record.visualStyle = cluster.visualStyle;
-        this.lightRanking.push(record);
+    for (const [key, record] of this.lightRecords) {
+      if (record.cells === 0) {
+        lighting.releaseLight(`groundfire:${key}`);
+        this.lightRecords.delete(key);
+        continue;
       }
+      record.x /= record.cells;
+      record.y /= record.cells;
+      record.viewDistance = view ? Math.hypot(record.x - view.centerX, record.y - view.centerY) : 0;
+      const fade = Phaser.Math.Clamp((record.expiresAt - now) / GROUND_FIRE_FADE_MS, 0, 1);
+      const sizeBoost = Phaser.Math.Clamp(Math.sqrt(record.cells) * 0.16, 0, 1.45);
+      record.weight = (0.42 + this.intensityOf(record.totalIntensity, record.maxIntensity) * 0.65 + sizeBoost)
+        * fade;
+      // A large block glows across its area; a small Molotov keeps its compact radius.
+      record.radiusPx = Math.max(
+        GROUND_FIRE_LIGHT_BUCKET_SIZE * (1.25 + sizeBoost * 0.48),
+        Math.sqrt(record.cells) * CELL * 0.62,
+      );
+      record.intensity = 0.48 + Math.min(record.weight, 1.8) * 0.26;
+      // Off-screen fire casts no visible light; its block is released until it returns.
+      if (record.inView) this.lightRanking.push(record);
     }
 
-    this.lightRanking.sort((left, right) => right.weight - left.weight);
+    // Among equally strong visible blocks the nearest win.
+    this.lightRanking.sort((left, right) => right.weight - left.weight
+      || left.viewDistance - right.viewDistance
+      || (left.key < right.key ? -1 : left.key > right.key ? 1 : 0));
     if (this.lightRanking.length > MAX_GROUND_FIRE_LIGHTS) this.lightRanking.length = MAX_GROUND_FIRE_LIGHTS;
+    for (const record of this.lightRanking) {
+      // Lights that enter only because the camera moved fade in instead of popping on screen.
+      if (!this.activeLightKeys.has(record.key)) record.shownAt = cameraMoved ? now : Number.NEGATIVE_INFINITY;
+    }
   }
 
   private resetQualityCarry(): void {
@@ -1260,13 +1454,13 @@ export class GroundFireClusterRenderer {
     this.gpuVfx?.quality.resetCarry(GpuVfxEffectId.GroundFireSmoke);
   }
 
-  private getLightCount(cluster: GroundFireCluster): number {
-    return cluster.cells.length >= 18 ? 2 : 1;
+  private clusterIntensity(cluster: GroundFireCluster): number {
+    return this.intensityOf(cluster.totalIntensity, cluster.maxIntensity);
   }
 
-  private clusterIntensity(cluster: GroundFireCluster): number {
+  private intensityOf(totalIntensity: number, maxIntensity: number): number {
     return Phaser.Math.Clamp(
-      Math.log2(cluster.totalIntensity + 1) / 3 + Math.min(0.25, cluster.maxIntensity * 0.05),
+      Math.log2(totalIntensity + 1) / 3 + Math.min(0.25, maxIntensity * 0.05),
       0.28,
       1.2,
     );

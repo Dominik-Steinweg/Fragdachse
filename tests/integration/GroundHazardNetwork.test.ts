@@ -88,10 +88,11 @@ describe('ground hazard and base burn replication', () => {
       publish();
       expect(cellReads).toBe(0);
 
+      // Published cells are immutable values: a new array of the same objects reuses their encoding.
       state.burningGround = { cells: [...groundCells] };
       publish(true);
-      expect(cellReads).toBeGreaterThan(0);
-      cellReads = 0;
+      expect(cellReads).toBe(0);
+      expect(client.getLatestGameState()!.burningGround.cells).toHaveLength(1);
       state.burningGround = { ...state.burningGround,
         warnings: [{ gridX: 2, gridY: 0, activatesAt: Date.now() + 60_000 }] };
       publish(); publish();
@@ -116,10 +117,17 @@ describe('ground hazard and base burn replication', () => {
       state.burningGround = { cells: [{ ...cell, intensity: 2 }], warnings: [] };
       publish();
       hostRoom.transport.links[0].fastReady = true;
-      for (let tick = 3; tick < NET_TICK_RATE_HZ; tick++) publish();
-      expect(client.getLatestGameState()!.burningGround.cells[0].intensity).toBe(1);
+      publish();
+      // Unchanged replicated geometry keeps its array, so per-change consumers stay idle.
+      const stale = client.getLatestGameState()!.burningGround.cells;
+      for (let tick = 4; tick < NET_TICK_RATE_HZ; tick++) publish();
+      expect(client.getLatestGameState()!.burningGround.cells).toBe(stale);
+      expect(stale[0].intensity).toBe(1);
       publish();
       expect(client.getLatestGameState()!.burningGround).toEqual(state.burningGround);
+      const repaired = client.getLatestGameState()!.burningGround.cells;
+      for (let tick = 0; tick <= NET_TICK_RATE_HZ; tick++) publish();
+      expect(client.getLatestGameState()!.burningGround.cells).toBe(repaired);
     } finally { clearActiveSession(); }
   });
 

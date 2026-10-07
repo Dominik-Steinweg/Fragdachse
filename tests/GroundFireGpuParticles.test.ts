@@ -213,6 +213,98 @@ describe('GroundFire GPU particles', () => {
     expect(disconnected).toEqual(connected);
   });
 
+  it('resolves region-local snapshot changes exactly like a fresh snapshot', () => {
+    const resolve = (renderer: GroundFireClusterRenderer) => {
+      const lighting = { setLight: vi.fn(), releaseLight: vi.fn() };
+      renderer.setLightingSystem(lighting as never);
+      renderer.update(0);
+      const clusters = (renderer as unknown as { clusters: Map<string, { field: { key: number; coreness: number }[] }> }).clusters;
+      return {
+        lights: lighting.setLight.mock.calls.map(call => JSON.stringify(call)).sort(),
+        coreness: [...clusters].sort(([a], [b]) => a.localeCompare(b))
+          .map(([id, cluster]) => [id, cluster.field.map(cell => `${cell.key}:${cell.coreness}`).sort()]),
+      };
+    };
+    const area = cells(24, 16).map(cell => ({ ...cell, intensity: 2 }));
+    const transient = cells(3, 2).map(cell => ({ ...cell, id: cell.id + 1000, gridX: cell.gridX + 40, gridY: cell.gridY + 2 }));
+    const incremental = new GroundFireClusterRenderer();
+    incremental.syncGround({ cells: area }, 0);
+    incremental.syncGround({ cells: [...area, ...transient] }, 0);
+    // Holes cross a region border and change the rim distance on both sides of it.
+    const final = area.filter(cell => !(cell.gridY === 7 && cell.gridX >= 6 && cell.gridX <= 9))
+      .map(cell => (cell.gridX === 20 && cell.gridY === 3 ? { ...cell, intensity: 4 } : cell));
+    incremental.syncGround({ cells: [...final, ...transient.slice(2)] }, 0);
+    incremental.syncGround({ cells: final }, 0);
+    const fresh = new GroundFireClusterRenderer();
+    fresh.syncGround({ cells: final }, 0);
+    expect(resolve(incremental)).toEqual(resolve(fresh));
+  });
+
+  it('emits only regions near the camera and restores returning regions at steady density', () => {
+    const { system, renderer } = setup();
+    const camera = { width: 320, height: 192, originX: 0, originY: 0, zoom: 1, scrollX: 0, scrollY: 0 };
+    renderer.setViewCamera(camera);
+    const spawned: Array<{ x: number; age: number }> = [];
+    const spawn = system.spawn.bind(system);
+    vi.spyOn(system, 'spawn').mockImplementation((spec, source, now, age, out) => {
+      spawned.push({ x: spec.x, age: age ?? 0 });
+      return spawn(spec, source, now, age, out);
+    });
+    renderer.syncGround({ cells: cells(160, 12) }, 0);
+    for (let frame = 0; frame < 240; frame += 1) system.update(16);
+    // Padded view plus region granularity; nothing is emitted for the far part of the surface.
+    expect(spawned.length).toBeGreaterThan(0);
+    expect(spawned.every(member => member.x < 320 + 160 + 8 * 16 + 48)).toBe(true);
+    const steady = system.getLaneStats(GpuVfxLaneId.GroundFire)!.liveCount;
+
+    spawned.length = 0;
+    // The far end of the surface overlaps the same number of regions as the start.
+    camera.scrollX = 160 * 16 - 320;
+    system.update(16);
+    const entered = spawned.filter(member => member.x > camera.scrollX - 160 - 8 * 16 - 48);
+    expect(entered.filter(member => member.age > 0).length).toBeGreaterThan(entered.length * 0.8);
+    expect(new Set(entered.map(member => Math.round(member.age))).size).toBeGreaterThan(10);
+    for (let frame = 0; frame < 240; frame += 1) system.update(16);
+    const moved = system.getLaneStats(GpuVfxLaneId.GroundFire)!.liveCount;
+    expect(moved).toBeGreaterThan(steady * 0.8);
+    expect(moved).toBeLessThan(steady * 1.2);
+
+    // A quick return only refills the particles that were not born while it was skipped.
+    const farEnd = camera.scrollX;
+    camera.scrollX = 0;
+    for (let frame = 0; frame < 20; frame += 1) system.update(16);
+    spawned.length = 0;
+    camera.scrollX = farEnd;
+    system.update(16);
+    const refilled = spawned.filter(member => member.age > 0).length;
+    expect(refilled).toBeGreaterThan(0);
+    expect(refilled).toBeLessThan(entered.length * 0.5);
+  });
+
+  it('spends the ground-fire light budget on visible fire and fades lights in after camera moves', () => {
+    const renderer = new GroundFireClusterRenderer();
+    const lighting = { setLight: vi.fn(), releaseLight: vi.fn() };
+    const camera = { width: 640, height: 384, originX: 0, originY: 0, zoom: 1, scrollX: 0, scrollY: 0 };
+    renderer.setLightingSystem(lighting as never);
+    renderer.setViewCamera(camera);
+    renderer.syncGround({ cells: cells(480, 32) }, 0);
+    renderer.update(0);
+    const visibleX = (call: unknown[]) => call[2] as number;
+    expect(lighting.setLight.mock.calls.length).toBeGreaterThan(0);
+    expect(lighting.setLight.mock.calls.every(call => visibleX(call) < 640 + 256 + 512)).toBe(true);
+
+    lighting.setLight.mockClear();
+    camera.scrollX = 4000;
+    renderer.update(16);
+    const moved = lighting.setLight.mock.calls;
+    expect(moved.every(call => visibleX(call) > 4000 - 256 - 512)).toBe(true);
+    expect(moved.every(call => (call[4] as { intensity: number }).intensity === 0)).toBe(true);
+    expect(lighting.releaseLight).toHaveBeenCalled();
+    lighting.setLight.mockClear();
+    renderer.update(16 + 400);
+    expect(lighting.setLight.mock.calls.every(call => (call[4] as { intensity: number }).intensity > 0.4)).toBe(true);
+  });
+
   it('keeps large surfaces inside the existing shared lane budget', () => {
     const { renderer, system } = setup();
     renderer.syncGround({ cells: cells(48, 40) }, 0);
