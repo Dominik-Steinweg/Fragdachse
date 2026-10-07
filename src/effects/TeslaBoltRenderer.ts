@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import { emissiveAlpha } from './EmissiveScale';
+import { TeslaBoltTriangles } from './TeslaBoltTriangles';
 import {
   configureAdditiveImage,
   createEmitter,
@@ -32,7 +33,7 @@ interface BoltVisual {
   halos: Phaser.GameObjects.Image[];
   sparks: BoltSpark[];
   sparkRandom: () => number;
-  arcs: Phaser.GameObjects.Graphics;
+  arcs: TeslaBoltTriangles;
   color: number;
   hotColor: number;
   size: number;
@@ -78,6 +79,7 @@ export class TeslaBoltRenderer {
   private readonly visuals = new Map<number, BoltVisual>();
   private impactEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private readonly impactFlashes = new Set<Phaser.GameObjects.Image>();
+  private readonly bandOffsets: BoltPoint[] = makePoints(2 + (SHAPE_NODES - 2) * (CORNER_STEPS + 1));
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -118,9 +120,10 @@ export class TeslaBoltRenderer {
       registerGraphicsObject(this.scene, 'teslaBoltEffects', image);
       return { image, outer: index >= SPARK_COUNT - 2, bornAt: 0, lifetimeMs: 1, angle: 0, radius: 0, diameter: 0 };
     });
-    const arcs = this.scene.add.graphics()
+    const arcs = new TeslaBoltTriangles(this.scene)
       .setDepth(DEPTH.PROJECTILES + 0.2)
       .setBlendMode(Phaser.BlendModes.ADD);
+    this.scene.add.existing(arcs);
     registerGraphicsObject(this.scene, 'teslaBoltEffects', arcs);
 
     const visual: BoltVisual = {
@@ -299,7 +302,7 @@ export class TeslaBoltRenderer {
   }
 
   private drawBolt(visual: BoltVisual): void {
-    visual.arcs.clear();
+    visual.arcs.resetTriangles();
     for (let index = 0; index < visual.filaments.length; index++) {
       this.drawArc(visual, visual.filaments[index], index);
     }
@@ -383,13 +386,25 @@ export class TeslaBoltRenderer {
 
   /** Zusammenhängende Bänder vermeiden helle Überlappungen einzelner transparenter Linien. */
   private drawFilament(
-    graphics: Phaser.GameObjects.Graphics,
+    graphics: TeslaBoltTriangles,
     points: BoltPoint[],
     width: number,
     color: number,
     intensity: number,
     branch: boolean,
   ): void {
+    // The centerline normal and taper are shared by all three glow/core passes.
+    for (let index = 0; index < points.length; index++) {
+      const before = points[Math.max(0, index - 1)];
+      const after = points[Math.min(points.length - 1, index + 1)];
+      const dx = after.x - before.x;
+      const dy = after.y - before.y;
+      const distance = Math.max(0.0001, Math.hypot(dx, dy));
+      const t = index / (points.length - 1);
+      const envelope = branch ? (index === 0 ? 0 : Math.sin(Math.PI * t) * (1 - t)) : Math.sin(Math.PI * t);
+      this.bandOffsets[index].x = -dy / distance * envelope * 0.5;
+      this.bandOffsets[index].y = dx / distance * envelope * 0.5;
+    }
     for (let pass = 0; pass < 3; pass++) {
       const bandWidth = width * (pass === 0 ? 2.4 : pass === 1 ? 1.45 : 0.65);
       const alpha = emissiveAlpha(intensity * (pass === 0 ? 0.09 : pass === 1 ? 0.23 : 0.64));
@@ -399,23 +414,15 @@ export class TeslaBoltRenderer {
       let rightY = leftY;
       for (let index = 0; index < points.length; index++) {
         const point = points[index];
-        const before = points[Math.max(0, index - 1)];
-        const after = points[Math.min(points.length - 1, index + 1)];
-        const dx = after.x - before.x;
-        const dy = after.y - before.y;
-        const distance = Math.max(0.0001, Math.hypot(dx, dy));
-        const t = index / (points.length - 1);
-        const envelope = branch ? (index === 0 ? 0 : Math.sin(Math.PI * t) * (1 - t)) : Math.sin(Math.PI * t);
-        const radius = bandWidth * envelope * 0.5;
-        const nextLeftX = point.x - dy / distance * radius;
-        const nextLeftY = point.y + dx / distance * radius;
-        const nextRightX = point.x + dy / distance * radius;
-        const nextRightY = point.y - dx / distance * radius;
+        const offset = this.bandOffsets[index];
+        const nextLeftX = point.x + offset.x * bandWidth;
+        const nextLeftY = point.y + offset.y * bandWidth;
+        const nextRightX = point.x - offset.x * bandWidth;
+        const nextRightY = point.y - offset.y * bandWidth;
         if (index > 0) {
           const midpoint = (index - 0.5) / (points.length - 1);
-          graphics.fillStyle(pass === 2 ? 0xffffff : color, alpha * (0.2 + Math.sin(Math.PI * midpoint) * 0.8));
-          graphics.fillTriangle(leftX, leftY, rightX, rightY, nextLeftX, nextLeftY);
-          graphics.fillTriangle(rightX, rightY, nextRightX, nextRightY, nextLeftX, nextLeftY);
+          graphics.addSection(leftX, leftY, rightX, rightY, nextLeftX, nextLeftY, nextRightX, nextRightY,
+            pass === 2 ? 0xffffff : color, alpha * (0.2 + Math.sin(Math.PI * midpoint) * 0.8));
         }
         leftX = nextLeftX;
         leftY = nextLeftY;
