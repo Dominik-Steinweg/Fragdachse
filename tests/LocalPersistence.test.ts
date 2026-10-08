@@ -31,6 +31,7 @@ import {
   setStoredPendingCoopDefenseItemReward,
   claimStoredPendingCoopDefenseItemReward,
   unlockStoredCoopDefenseItemsAfterVictory,
+  unlockStoredCoopDefenseMapAfterVictory,
   grantStoredPersistentBaseRewards,
   setStoredPersistentBaseUnlocked,
   setStoredPersistentBaseAreaStage,
@@ -41,6 +42,7 @@ import {
   setStoredLocale,
 } from '../src/utils/localPreferences';
 import { resolveBrowserLocale } from '../src/i18n/types';
+import { getUnlockedCoopDefenseMapConfigs } from '../src/config/coopDefenseMapUnlocks';
 import { buildDefaultCoopDefenseUpgradeProfile } from '../src/utils/coopDefenseUpgrades';
 import { getCoopDefenseProgressSnapshot } from '../src/utils/coopDefenseProgression';
 import { rollCoopDefenseItemOffer } from '../src/utils/coopDefenseItems';
@@ -261,6 +263,18 @@ describe('local progress generation', () => {
     expect(getStoredPersistentBaseHealthRewards()).toEqual(rewards);
     expect(importStoredGameProgressJson(JSON.stringify(exported)).ok).toBe(true);
     expect(getStoredPersistentBaseHealthRewards()).toEqual(rewards);
+  });
+
+  it.each(['15', '16', '17'])('keeps imported campaign progress %s without unlocking unfinished maps', highest => {
+    const exported = JSON.parse(exportStoredGameProgressJson());
+    exported.progress.coopDefense.highestUnlockedMapId = highest;
+    expect(importStoredGameProgressJson(JSON.stringify(exported)).ok).toBe(true);
+    expect(unlockStoredCoopDefenseMapAfterVictory('15')).toBe(false);
+    invalidateLocalStorageCache();
+    const stored = getStoredCoopDefenseProgress().highestUnlockedMapId;
+    expect(stored).toBe(highest);
+    expect(getUnlockedCoopDefenseMapConfigs(stored).map(map => map.mapId)).not.toContain('16');
+    expect(getUnlockedCoopDefenseMapConfigs(stored).map(map => map.mapId)).not.toContain('17');
   });
 
   it('does not infer HP rewards from campaign unlocks in the current format and rejects corrupt rewards atomically', () => {

@@ -10,7 +10,7 @@ import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
 import { getMapName } from '../i18n/contentPresentation';
 import { getUnlockedCoopDefenseMapConfigs } from '../config/coopDefenseMapUnlocks';
 import { getStoredHighestUnlockedCoopDefenseMapId } from '../utils/localPreferences';
-import { isCoopDefenseTestMapUnlocked } from '../utils/coopDefenseDebugSession';
+import { areCoopDefenseUnreleasedMapsUnlocked, isCoopDefenseTestMapUnlocked } from '../utils/coopDefenseDebugSession';
 import { formatTimeOfDay, MINUTES_PER_DAY } from '../effects/TimeOfDay';
 import { toDesignSpace } from '../graphics/RenderResolution';
 import { LoadoutSlotPicker } from './LoadoutSlotPicker';
@@ -125,7 +125,7 @@ export class LobbySettingsControls {
   private open(maps: boolean): void {
     if (!this.canEdit()) return;
     const entries = maps
-      ? getUnlockedCoopDefenseMapConfigs(getStoredHighestUnlockedCoopDefenseMapId(), isCoopDefenseTestMapUnlocked()).map(map => ({
+      ? getUnlockedCoopDefenseMapConfigs(getStoredHighestUnlockedCoopDefenseMapId(), isCoopDefenseTestMapUnlocked(), areCoopDefenseUnreleasedMapsUnlocked()).map(map => ({
         key: map.mapId, displayName: map.mapId, textureKey: null, accentColor: FOREST.border,
         selected: map.mapId === this.bridge.getCoopDefenseMapId(), disabled: false,
         onPick: () => {

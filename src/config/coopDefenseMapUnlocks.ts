@@ -4,12 +4,16 @@ import { COOP_DEFENSE_MAP_CONFIGS, type CoopDefenseMapConfig } from './coopDefen
  * Freischaltung der Coop-Defense-Maps: rein lokaler Einzelspieler-Fortschritt.
  *
  * Die Kampagne ist linear – gespeichert wird deshalb nur die hoechste freigeschaltete Map, alles
- * davor gilt automatisch als offen. Die Reihenfolge kommt aus der Map-Registry, nicht aus der
+ * davor gilt als freigeschaltet, bleibt aber an die aktuelle Release-Verfuegbarkeit gebunden.
+ * Die Reihenfolge kommt aus der Map-Registry, nicht aus der
  * numerischen Map-ID: die Registry ist die einzige Stelle, an der die Kampagnenreihenfolge steht.
  */
 
 /** Die Testmap wird nur explizit ueber das Debug-Overlay freigeschaltet. */
 export const COOP_DEFENSE_TEST_MAP_ID = '0';
+
+/** Authored maps withheld from normal play until balancing is complete. */
+export const COOP_DEFENSE_UNRELEASED_MAP_IDS: readonly string[] = ['16', '17'];
 
 /** Freischaltstand eines neuen Spielers: alles bis einschliesslich Map 1. */
 export const INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID = '1';
@@ -34,15 +38,22 @@ export function sanitizeHighestUnlockedCoopDefenseMapId(mapId: unknown): string 
     ? trimmedMapId : INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID;
 }
 
-export function isCoopDefenseMapUnlocked(mapId: string, highestUnlockedMapId: string, testMapUnlocked = false): boolean {
+export function isCoopDefenseMapUnlocked(mapId: string, highestUnlockedMapId: string, testMapUnlocked = false, unreleasedMapsUnlocked = false): boolean {
   if (mapId === COOP_DEFENSE_TEST_MAP_ID) return testMapUnlocked;
+  if (COOP_DEFENSE_UNRELEASED_MAP_IDS.includes(mapId)) return unreleasedMapsUnlocked;
   const mapIndex = indexOfMapId(mapId);
   if (mapIndex < 0) return false;
   return mapIndex <= indexOfMapId(sanitizeHighestUnlockedCoopDefenseMapId(highestUnlockedMapId));
 }
 
-export function getUnlockedCoopDefenseMapConfigs(highestUnlockedMapId: string, testMapUnlocked = false): readonly CoopDefenseMapConfig[] {
-  return COOP_DEFENSE_MAP_CONFIGS.filter((mapConfig) => isCoopDefenseMapUnlocked(mapConfig.mapId, highestUnlockedMapId, testMapUnlocked));
+export function getUnlockedCoopDefenseMapConfigs(highestUnlockedMapId: string, testMapUnlocked = false, unreleasedMapsUnlocked = false): readonly CoopDefenseMapConfig[] {
+  return COOP_DEFENSE_MAP_CONFIGS.filter((mapConfig) => isCoopDefenseMapUnlocked(mapConfig.mapId, highestUnlockedMapId, testMapUnlocked, unreleasedMapsUnlocked));
+}
+
+/** Default selection uses normal availability without rewriting saved progress. */
+export function getHighestAvailableCoopDefenseMapId(highestUnlockedMapId: string): string {
+  const maps = getUnlockedCoopDefenseMapConfigs(highestUnlockedMapId);
+  return maps[maps.length - 1]?.mapId ?? INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID;
 }
 
 /** Alle Maps in Kampagnenreihenfolge – Auswahlreihenfolge des Debug-Dropdowns. */
@@ -50,11 +61,12 @@ export function getCoopDefenseMapIdsInOrder(): readonly string[] {
   return MAP_ORDER;
 }
 
-/** Map, die ein Sieg auf `mapId` freischaltet; `null` am Ende der Kampagne oder bei fremder ID. */
+/** Next map unlocked by victory; unavailable successors end normal progression. */
 export function getCoopDefenseMapUnlockedByVictoryOn(mapId: string): string | null {
   const mapIndex = indexOfMapId(mapId);
   if (mapIndex < 0 || mapIndex + 1 >= MAP_ORDER.length) return null;
-  return MAP_ORDER[mapIndex + 1];
+  const nextMapId = MAP_ORDER[mapIndex + 1];
+  return COOP_DEFENSE_UNRELEASED_MAP_IDS.includes(nextMapId) ? null : nextMapId;
 }
 
 /** Der weiter fortgeschrittene der beiden Staende. */

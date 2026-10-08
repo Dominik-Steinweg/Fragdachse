@@ -2,7 +2,7 @@ import { BUTTON_CURSOR } from './gameCursor';
 import { COLORS, toCssColor } from '../config';
 import { COOP_DEFENSE_MAP_CONFIGS } from '../config/coopDefenseMaps';
 import { COOP_DEFENSE_TEST_MAP_ID } from '../config/coopDefenseMapUnlocks';
-import { isCoopDefenseTestMapUnlocked, unlockCoopDefenseTestMap } from '../utils/coopDefenseDebugSession';
+import { areCoopDefenseUnreleasedMapsUnlocked, isCoopDefenseTestMapUnlocked, unlockCoopDefenseTestMap, unlockCoopDefenseUnreleasedMaps } from '../utils/coopDefenseDebugSession';
 import {
   COOP_DEFENSE_CLASS_IDS,
   getUnlockedCoopDefenseClassIds,
@@ -286,6 +286,19 @@ export class CoopDefenseDebugOverlay {
       this.refresh();
     };
     campaignSection.appendChild(unlockTestMapButton);
+
+    const unlockUnreleasedMapsButton = createButton(
+      t(areCoopDefenseUnreleasedMapsUnlocked() ? 'ui.coopDebug.unreleasedMapsUnlocked' : 'ui.coopDebug.unlockUnreleasedMaps'),
+      'positive',
+    );
+    unlockUnreleasedMapsButton.style.marginTop = '7px';
+    unlockUnreleasedMapsButton.disabled = areCoopDefenseUnreleasedMapsUnlocked();
+    unlockUnreleasedMapsButton.title = t('ui.coopDebug.unreleasedMapsHint');
+    unlockUnreleasedMapsButton.onclick = () => {
+      unlockCoopDefenseUnreleasedMaps();
+      this.refresh();
+    };
+    campaignSection.appendChild(unlockUnreleasedMapsButton);
 
     const itemSection = createSection(t('ui.coopDebug.items'));
     const itemStatus = createStatusLine(

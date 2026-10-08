@@ -4,6 +4,7 @@ import { getLoadoutUtilityId, loadoutToolFromId } from '../../loadout/LoadoutToo
 import { COOP_DEFENSE_CLASS_IDS, DEFAULT_COOP_DEFENSE_CLASS_ID } from '../../config/coopDefenseClasses';
 import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../../config/coopDefenseItems';
 import { getCoopDefenseMapConfig } from '../../config/coopDefenseMaps';
+import { getHighestAvailableCoopDefenseMapId } from '../../config/coopDefenseMapUnlocks';
 import { isCoopDefenseMode } from '../../gameModes';
 import { getSelectableLoadoutItems } from '../../loadout/LoadoutCatalog';
 import type { RoundResult, RoundState } from '../../network/NetworkBridge';
@@ -324,7 +325,7 @@ export class ArenaMetaController {
 
   applyDefaultCoopDefenseMapSelection(): void {
     if (this.destroyed || !this.input.session.isHost()) return;
-    this.input.session.setCoopDefenseMapId(this.getHighestUnlockedMapId());
+    this.input.session.setCoopDefenseMapId(getHighestAvailableCoopDefenseMapId(this.getHighestUnlockedMapId()));
   }
 
   refresh(options: ArenaMetaRefreshOptions = {}): void {
