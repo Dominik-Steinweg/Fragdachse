@@ -18,7 +18,7 @@ import { ArenaGenerator, resolveArenaGenerationInput } from '../../src/arena/Are
 import { CELL_SIZE, applyArenaMetricsForMode } from '../../src/config';
 import { normalizeCoopDefenseMapConfig } from '../../src/config/coopDefenseMaps';
 import { PERFORMANCE_FIXTURE as fixture } from '../../src/debug/performanceLab/fixtures';
-import { referenceMap, VOID_FIRE_MAP_ID, MAP14_FIRE_MAP_ID, REFERENCE_SEED } from '../../src/debug/performanceLab/referenceMap';
+import { referenceMap, VOID_FIRE_MAP_ID, MAP14_FIRE_MAP_ID, MAP15_MAP_ID, REFERENCE_SEED } from '../../src/debug/performanceLab/referenceMap';
 import { resolvePerformanceCases } from '../../src/debug/performanceLab/scenarios';
 import { FireSystem, GROUND_FIRE_CELL_SIZE } from '../../src/effects/FireSystem';
 import { CoopDefenseGroundHazardEventHandler } from '../../src/systems/CoopDefenseGroundHazardEventHandler';
@@ -26,6 +26,39 @@ import { CoopDefenseMapEventDirector } from '../../src/systems/CoopDefenseMapEve
 import { resolveCoopDefenseWorldMetrics } from '../../src/world/WorldMetrics';
 
 describe('Performance lab VoidFire load', () => {
+  it('expands Map 15 patches only after the boss trigger and cleans up all permanent sources', () => {
+    const map = normalizeCoopDefenseMapConfig(referenceMap(MAP15_MAP_ID));
+    const metrics = resolveCoopDefenseWorldMetrics(map.arenaWidthCells, map.arenaHeightCells);
+    const layout = ArenaGenerator.generate(REFERENCE_SEED, resolveArenaGenerationInput('coop_defense', metrics), map);
+    const expansion = map.mapEvents!.find(event => event.type === 'ground-hazard' && event.start.type === 'boss-phase')!;
+    const initial = new Set(layout.groundHazardZones!.filter(zone => zone.eventId !== expansion.id)
+      .flatMap(zone => zone.cells.map(cell => `${cell.gridX}:${cell.gridY}`)));
+    const full = new Set(layout.groundHazardZones!.flatMap(zone => zone.cells.map(cell => `${cell.gridX}:${cell.gridY}`)));
+    const subcells = (CELL_SIZE / GROUND_FIRE_CELL_SIZE) ** 2;
+    applyArenaMetricsForMode('coop_defense', 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
+    const fire = new FireSystem({} as Phaser.Scene);
+    let now = 1_000_000, phaseTwo = false;
+    const handler = new CoopDefenseGroundHazardEventHandler({ fireSystem: fire,
+      prebuiltZones: layout.groundHazardZones!, worldMetrics: metrics, worldSeed: REFERENCE_SEED, getNowMs: () => now });
+    const director = new CoopDefenseMapEventDirector(map.mapEvents!, [handler], {
+      isTriggerSatisfied: start => start.type === 'boss-phase' && phaseTwo,
+    });
+    const step = (delta: number) => { now += delta; director.hostUpdate(delta, false); return fire.hostUpdate(now).ground; };
+    try {
+      expect(step(1000).cells).toHaveLength(initial.size * subcells);
+      expect(step(60_000).cells).toHaveLength(initial.size * subcells);
+      phaseTwo = true;
+      step(0);
+      step(expansion.spread!.durationMs / 2);
+      const grown = step(expansion.spread!.durationMs / 2);
+      expect(full.size).toBeGreaterThan(initial.size);
+      expect(grown.cells).toHaveLength(full.size * subcells);
+      expect(grown.warnings ?? []).toHaveLength(0);
+      expect(step(resolvePerformanceCases('boss.map15')[0].durationMs).cells).toHaveLength(full.size * subcells);
+      director.reset();
+      expect(fire.getGroundState().cells).toHaveLength(0);
+    } finally { director.reset(); fire.destroyAll(); applyArenaMetricsForMode('deathmatch', 'LOBBY'); }
+  });
   it.each([
     [VOID_FIRE_MAP_ID, 'hazards.void-fire'], [MAP14_FIRE_MAP_ID, 'hazards.map14-fire'],
   ])('%s sustains its generated fire footprint and releases it through the authored event lifecycle', (mapId, caseId) => {

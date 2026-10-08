@@ -81,6 +81,7 @@ describe('Performance lab offline evidence', () => {
     expect(parsePerformanceOptions(['--case', 'standard']).captureProfile).toBe('reduced');
     expect(parsePerformanceOptions(['--case', 'enemies.high']).captureProfile).toBe('standard');
     expect(parsePerformanceOptions(['--case', 'hazards.map14-fire']).caseId).toBe('hazards.map14-fire');
+    expect(parsePerformanceOptions(['--case', 'boss.map15']).caseId).toBe('boss.map15');
     expect(parsePerformanceOptions(['--capture-profile', 'standard']).captureProfile).toBe('standard');
     expect(parsePerformanceOptions(['--case', 'enemies.high', '--capture-profile', 'reduced']).captureProfile).toBe('reduced');
   });

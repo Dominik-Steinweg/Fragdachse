@@ -5,10 +5,20 @@ export const PERFORMANCE_MAP_ID = 'performance-reference';
 export const VOID_FIRE_MAP_ID = `${PERFORMANCE_MAP_ID}-void-fire`;
 export const DAWN_MAP_ID = `${PERFORMANCE_MAP_ID}-dawn`;
 export const MAP14_FIRE_MAP_ID = `${PERFORMANCE_MAP_ID}-map14-fire`;
+export const MAP15_MAP_ID = `${PERFORMANCE_MAP_ID}-map15`;
 export const REFERENCE_SEED = 16092026;
 
 /** Fixed authored fixture; its load is never scaled to the measuring device. */
 export function referenceMap(mapId = PERFORMANCE_MAP_ID): CoopDefenseMapConfig {
+  if (mapId === MAP15_MAP_ID) {
+    const map = structuredClone(getCoopDefenseMapConfig('15'));
+    return { ...map, mapId, tutorialDurationMs: 0,
+      bases: map.bases.filter(base => base.id !== map.persistentBase?.baseId),
+      // The passive observer does not clear the opening wave. Keep that wave and
+      // the ordinary intro, but admit the boss without the campaign kill gate.
+      boss: { ...map.boss!, startAfterEncounterId: undefined },
+    };
+  }
   if (mapId === MAP14_FIRE_MAP_ID) {
     const map = structuredClone(getCoopDefenseMapConfig('14'));
     return { ...map, mapId, tutorialDurationMs: 0, surviveDurationSec: 3600,
@@ -52,7 +62,7 @@ export function referenceMap(mapId = PERFORMANCE_MAP_ID): CoopDefenseMapConfig {
 
 export function registerReferenceMap(): () => void {
   const removers: (() => void)[] = [];
-  try { for (const id of [PERFORMANCE_MAP_ID, `${PERFORMANCE_MAP_ID}-train`, VOID_FIRE_MAP_ID, DAWN_MAP_ID, MAP14_FIRE_MAP_ID]) removers.push(registerDiagnosticMap(referenceMap(id))); }
+  try { for (const id of [PERFORMANCE_MAP_ID, `${PERFORMANCE_MAP_ID}-train`, VOID_FIRE_MAP_ID, DAWN_MAP_ID, MAP14_FIRE_MAP_ID, MAP15_MAP_ID]) removers.push(registerDiagnosticMap(referenceMap(id))); }
   catch (error) { removers.reverse().forEach(remove => remove()); throw error; }
   return () => removers.reverse().forEach(remove => remove());
 }

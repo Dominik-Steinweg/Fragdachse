@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { BLOOD_HIT_VFX, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { createSeededRandom, ensureCanvasTexture } from './EffectUtils';
+import { BloodStainBatch } from './BloodStainBatch';
 
 export const TEX_BLOOD_DROPLET = '__blood_droplet';
 export const TEX_BLOOD_STREAK = '__blood_streak';
@@ -13,6 +14,7 @@ export const TEX_BLOOD_EDGE_RIGHT  = '__blood_edge_right';
 export const TEX_BLOOD_SPECKLE     = '__blood_speckle';
 
 const activeBloodStains: Phaser.GameObjects.Image[] = [];
+const bloodStainBatches = new WeakMap<Phaser.Scene, BloodStainBatch>();
 
 function pruneDestroyedBloodStains(): void {
   for (let index = activeBloodStains.length - 1; index >= 0; index -= 1) {
@@ -37,6 +39,8 @@ export function clearBloodStains(scene: Phaser.Scene): void {
     scene.tweens.killTweensOf(stain);
     stain.destroy();
   }
+  bloodStainBatches.get(scene)?.destroy();
+  bloodStainBatches.delete(scene);
 }
 
 function resolveTextures(target: Phaser.Scene | Phaser.Textures.TextureManager): Phaser.Textures.TextureManager {
@@ -323,6 +327,14 @@ export function spawnBloodStain(scene: Phaser.Scene, config: BloodStainSpawnConf
 
   activeBloodStains.push(stain);
   stain.once(Phaser.GameObjects.Events.DESTROY, () => unregisterBloodStain(stain));
+  if (scene.sys.renderer.type === Phaser.WEBGL) {
+    let batch = bloodStainBatches.get(scene);
+    if (!batch) {
+      batch = new BloodStainBatch(scene, TEX_BLOOD_STAIN, () => bloodStainBatches.delete(scene));
+      bloodStainBatches.set(scene, batch);
+    }
+    batch.add(stain);
+  }
 
   scene.tweens.add({
     targets: stain,

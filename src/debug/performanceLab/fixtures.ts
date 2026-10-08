@@ -11,6 +11,7 @@ export const PERFORMANCE_FIXTURE = {
   combatWaveIntervalMs: 7500,
   observationIntervalMs: 100,
   resourceRefillIntervalMs: 250,
+  map15: { phaseTwoAtMs: 10_000, preparationTimeoutMs: 60_000 },
   // Map 14's final firefront footprint; freeze the load independently of campaign tuning.
   voidFire: {
     area: { type: 'rectangle', gridX: 35, gridY: 40, widthCells: 59, heightCells: 42, baseClearanceCells: 0 },

@@ -121,6 +121,7 @@ npm run perf:chrome -- --case weapon.plasma
 npm run perf:chrome -- --case destruction.bfg --duration-seconds 60
 npm run perf:chrome -- --case combat.day-night
 npm run perf:chrome -- --case hazards.void-fire
+npm run perf:chrome -- --case boss.map15
 npm run perf:chrome -- --case weapon.glock --capture-profile reduced
 npm run perf:compare -- <Ergebnisordner-A> <Ergebnisordner-B>
 ```
@@ -193,6 +194,7 @@ Sichtbare Gameplay-Last und Spieltakte ändern sich durch die Profilauswahl nich
 | `enemies.low`, `enemies.medium`, `enemies.high` | Drei feste Gegnerbestände mit gleicher Artenmischung und Spielerbewegung |
 | `hazards.void-fire` | Dauerhafte VoidFire-Front in der Größe des Endzustands von Map 14, danach 30 Sekunden volle Feuerlast |
 | `hazards.map14-fire` | Echtes Map-14-Gelände mit Wasser, Basen und regulären Gegnerwellen; beschleunigte Feuerfront, danach 30 Sekunden Messung |
+| `boss.map15` | Map 15 mit regulären Gegnerwellen, Leerenjäger, Nuke, Armageddon und radialer Feuer-Ausbreitung; 60 Sekunden mit getrennten Phasen |
 | `weapon.glock`, `weapon.p90`, `weapon.plasma`, `weapon.mini-rockets`, `weapon.shotgun` | Baseline beziehungsweise explizit voll ausgebaute Waffen |
 | `weapon.asmd`, `weapon.bite`, `weapon.rocket`, `weapon.tesla`, `weapon.flame` | Basis-Builds einschließlich gehaltener Waffen |
 | `weapon.hydra` | Aufgerüstete Hydra gegen eine Felswand: tatsächliche Teilung und nachführende Split-Projektile mit Treffern |
@@ -254,6 +256,22 @@ echten Karte, kein gespeicherter Spielstand der 90. Rundensekunde. Änderungen a
 `expectedVoidFireCells`, `voidFireCellsMin` und `visibleVoidFireCellsMin` belegen Sollbestand,
 kleinsten beobachteten Bestand und Sichtbarkeit während der Messung. Fehlende, abnehmende
 oder vollständig unsichtbare Feuerlast lässt den Lauf scheitern.
+
+`boss.map15` übernimmt Gelände, Tageszeitwechsel, Feuergeometrie und Gegnerpläne von Map 15.
+Die Diagnosekopie überspringt Tutorial und Boss-Freigabe durch das Räumen der Anfangswelle;
+die Welle selbst und das reguläre Boss-Intro bleiben erhalten. Der geschützte, passive
+Beobachter steht auf der nächsten freien Position zu (50, 22). Die Basis wird im selben
+250-ms-Diagnosetakt wie die Ressourcen aufgefüllt, damit sie die Last überlebt; Angriffe und
+Schaden laufen regulär und `baseHpRepaired` weist die Reparaturmenge aus. Die Messung beginnt erst
+mit lebendem Boss in Phase 1 und aktivem Anfangsfeuer. Nach zehn Sekunden wird seine HP
+auf den authored Phasen-Schwellwert gesetzt. Boss-System, Nuke, Armageddon, Verstärkungen,
+Tageszeitwechsel und die 30 Sekunden lange radiale Ausbreitung laufen regulär.
+Die Fenster `boss.map15.phase1`, `.expansion` und `.phase2` trennen die Lasten innerhalb
+des 60-Sekunden-Gesamtfensters. Fehlende Bossphasen, Nuke, Meteore oder sichtbares und
+ausgeweitetes Feuer lassen den Lauf scheitern. Der Fall ist ein Host-/Rendering-Benchmark
+mit festem Seed und ohne Spielerschüsse; er misst keine vollständige Kampagnenrunde oder
+WebRTC-Verbindung. Änderungen an Map 15 verändern auch diesen Fall.
+Messaufbau, Optimierung und Ergebnisse stehen im [Map-15-Bericht](performance-map15-2026-10-08.md).
 
 Lastmengen, Ziel-HP und Mindestbestände stehen in `fixtures.ts`, die Karte in `referenceMap.ts`,
 Zeiten und Fallverträge in `scenarios.ts`. `build-presets.json` hält die erlaubten Upgrade-IDs

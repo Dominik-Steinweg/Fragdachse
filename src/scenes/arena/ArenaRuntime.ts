@@ -1,5 +1,7 @@
 import type Phaser from 'phaser';
 import { bridge } from '../../network/bridge';
+import { isDiagnosticMapId } from '../../config/coopDefenseMaps';
+import { getCoopDefenseEnemyConfig } from '../../config/coopDefenseEnemies';
 import { getVisibleWorldView } from '../../ui/HostileBaseIndicator';
 import type { ArenaContext } from './ArenaContext';
 import type { RendererBundle } from './RendererBundle';
@@ -653,6 +655,33 @@ export class ArenaRuntime {
     return this.ctx.fireSystem.canPlaceGroundCell(x, y);
   }
 
+  /** Diagnostic input only; the normal boss system owns the resulting phase and all effects. */
+  prepareScenarioBossPhaseTwo(): boolean {
+    if (!bridge.isHost() || !isDiagnosticMapId(bridge.getCoopDefenseMapId())) return false;
+    const manager = this.flow.getCoopMissionRuntime()?.enemyManager;
+    for (const enemy of manager?.getAllEnemies() ?? []) {
+      const config = getCoopDefenseEnemyConfig(enemy.kind).voidHunterBoss;
+      if (!config || enemy.getHp() <= 0) continue;
+      return manager!.hostSetVitalsBaseline(enemy.id,
+        enemy.getMaxHp() * config.phaseTwoHpRatio, enemy.getMaxHp());
+    }
+    return false;
+  }
+
+  /** Keep the passive diagnostic's mission target alive while retaining attacks and damage. */
+  repairScenarioBases(): number {
+    if (!bridge.isHost() || !isDiagnosticMapId(bridge.getCoopDefenseMapId())) return 0;
+    const bases = this.flow.getWorldRuntime()?.materialization?.bases;
+    let repaired = 0;
+    for (const base of bases?.getMainBasesByFaction('friendly') ?? []) {
+      const missing = base.getMaxHp() - base.getHp();
+      if (base.isDestroyed() || missing <= 0) continue;
+      bases!.heal(base.id, missing);
+      repaired += missing;
+    }
+    return repaired;
+  }
+
   getPowerUpPedestalSnapshot(): SyncedPowerUpPedestal[] {
     return this.flow.getWorldPowerUpRuntime()?.system?.getPedestalSnapshot() ?? [];
   }
@@ -671,6 +700,7 @@ export class ArenaRuntime {
       meteors: this.flow.getWorldSupportGameplayRuntime()?.systems.armageddon.getSnapshot().length ?? 0,
       burningCells: burningGround.cells.length,
       burningGround,
+      bossPhase: this.flow.getCoopMissionRuntime()?.enemyManager?.getMaxBossPhase() ?? 0,
       lights: this.renderers.lighting.getDebugStats(),
       constructions: this.flow.getWorldRuntime()?.materialization?.placement?.getAllRuntimeRocks() ?? [],
     };

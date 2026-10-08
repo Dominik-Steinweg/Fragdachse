@@ -2866,6 +2866,7 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:effects/BlackHoleRenderer.ts:play/wispEmitter/createEmitter/0","owner":"effects/BlackHoleRenderer.ts","component":"play/wispEmitter/createEmitter/0","height":"body","lighting":"emissive","camera":"world","depths":[15.948],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"play/wispEmitter/createEmitter/0","expression":"DEPTH.FIRE - 0.052"}},
   {"id":"cpu:effects/BlackHoleRenderer.ts:play/innerOrbitEmitter/createEmitter/0","owner":"effects/BlackHoleRenderer.ts","component":"play/innerOrbitEmitter/createEmitter/0","height":"body","lighting":"emissive","camera":"world","depths":[15.95],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"play/innerOrbitEmitter/createEmitter/0","expression":"DEPTH.FIRE - 0.05"}},
   {"id":"cpu:effects/BloodEffectShared.ts:spawnBloodStain/stain/setDepth/0","owner":"effects/BloodEffectShared.ts","component":"spawnBloodStain/stain/setDepth/0","height":"ground","lighting":"material","camera":"world","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"spawnBloodStain/stain/setDepth/0","expression":"config.depth"}},
+  {"id":"cpu:effects/BloodStainBatch.ts:add/batch/EnemyEyeBatch/0","owner":"effects/BloodStainBatch.ts","component":"add/batch/EnemyEyeBatch/0","height":"ground","lighting":"material","camera":"world","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"add/batch/EnemyEyeBatch/0","expression":"stain.depth"}},
   {"id":"cpu:effects/BulletRenderer.ts:createVisual/bullet/setDepth/0","owner":"effects/BulletRenderer.ts","component":"createVisual/bullet/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[15],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/bullet/setDepth/0","expression":"DEPTH_BULLET"}},
   {"id":"cpu:effects/BulletRenderer.ts:createVisual/accent/configureAdditiveImage/0","owner":"effects/BulletRenderer.ts","component":"createVisual/accent/configureAdditiveImage/0","height":"body","lighting":"emissive","camera":"world","depths":[16],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/accent/configureAdditiveImage/0","expression":"DEPTH_ACCENT"}},
   {"id":"cpu:effects/BulletRenderer.ts:createVisual/trail/setDepth/0","owner":"effects/BulletRenderer.ts","component":"createVisual/trail/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[14],"blends":["ADD"],"profiles":["K"],"role":"effect","source":{"selector":"createVisual/trail/setDepth/0","expression":"DEPTH_TRAIL"}},
@@ -3795,6 +3796,12 @@ export const CPU_SOURCE_CONTRACTS = {
         9.95
       ]
     }
+  },
+  "effects/BloodStainBatch.ts": {
+    "blends": [],
+    "cameras": [],
+    "sites": [{ "key": "add/batch/EnemyEyeBatch/0", "expression": "stain.depth", "blends": ["NORMAL"] }],
+    "bindings": {}
   },
   "effects/BulletRenderer.ts": {
     "blends": [

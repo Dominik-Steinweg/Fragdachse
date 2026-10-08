@@ -3,7 +3,7 @@ export function parsePerformanceOptions(args) {
   for (let i = 0; i < args.length; i += 2) {
     const flag = args[i], arg = args[i + 1];
     if (flag === '--load') { value.load = true; i--; continue; }
-    if (flag === '--help') { console.log('Load: perf:chrome --load [--runs N (default 5)] [--network local|50mbps] [--headless on|off] [--timeout-seconds N] [--build SOURCE-HASH]\nperf:chrome [--case CASE-ID] [--build SOURCE-HASH] [--duration-seconds N] [--timeout-seconds N] [--capture-profile standard|reduced] [--enemy-eyes on|off] [--time-of-day HH:MM]\nCases: environment.route/dawn, destruction.single/nuke/bfg, enemies.low/medium/high, hazards.void-fire/map14-fire, weapon.glock/p90/plasma/mini-rockets/shotgun/asmd/bite/rocket/tesla/flame/hydra, utility.he/molotov/smoke/time-bubble, construction.defense, ultimate.armageddon, combat.day/night/day-night, recovery.idle'); process.exit(0); }
+    if (flag === '--help') { console.log('Load: perf:chrome --load [--runs N (default 5)] [--network local|50mbps] [--headless on|off] [--timeout-seconds N] [--build SOURCE-HASH]\nperf:chrome [--case CASE-ID] [--build SOURCE-HASH] [--duration-seconds N] [--timeout-seconds N] [--capture-profile standard|reduced] [--enemy-eyes on|off] [--time-of-day HH:MM]\nCases: environment.route/dawn, destruction.single/nuke/bfg, enemies.low/medium/high, hazards.void-fire/map14-fire, boss.map15, weapon.glock/p90/plasma/mini-rockets/shotgun/asmd/bite/rocket/tesla/flame/hydra, utility.he/molotov/smoke/time-bubble, construction.defense, ultimate.armageddon, combat.day/night/day-night, recovery.idle'); process.exit(0); }
     if (!arg) throw new Error(`Missing argument for ${flag}`);
     if (flag === '--runs' && /^\d+$/.test(arg) && Number(arg) >= 1 && Number(arg) <= 100) value.runs = Number(arg);
     else if (flag === '--network' && ['local', '50mbps'].includes(arg)) value.network = arg;
@@ -21,7 +21,7 @@ export function parsePerformanceOptions(args) {
     } else if (flag === '--capture-profile' && ['standard', 'reduced'].includes(arg)) value.captureProfile = arg;
     else throw new Error(`Unknown option: ${flag}`);
   }
-  if (!/^(standard|environment\.(route|dawn)|destruction\.(single|nuke|bfg)|enemies\.(low|medium|high)|hazards\.(void-fire|map14-fire)|weapon\.(glock|p90|plasma|mini-rockets|shotgun|asmd|bite|rocket|tesla|flame|hydra)|utility\.(he|molotov|smoke|time-bubble)|construction\.defense|ultimate\.armageddon|combat\.(day|night|day-night)|recovery\.idle)$/.test(value.caseId)) throw new Error(`Unknown case: ${value.caseId}`);
+  if (!/^(standard|environment\.(route|dawn)|destruction\.(single|nuke|bfg)|enemies\.(low|medium|high)|hazards\.(void-fire|map14-fire)|boss\.map15|weapon\.(glock|p90|plasma|mini-rockets|shotgun|asmd|bite|rocket|tesla|flame|hydra)|utility\.(he|molotov|smoke|time-bubble)|construction\.defense|ultimate\.armageddon|combat\.(day|night|day-night)|recovery\.idle)$/.test(value.caseId)) throw new Error(`Unknown case: ${value.caseId}`);
   if (value.durationMs && (['standard', 'combat.day-night'].includes(value.caseId) || value.durationMs + 60_000 > value.timeoutMs)) throw new Error('Duration requires an individual case and at least 60 seconds of timeout headroom');
   // Long combined captures use the stable low-overhead profile; focused traces retain JS sampling.
   if (value.load) {

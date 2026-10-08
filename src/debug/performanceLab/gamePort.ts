@@ -9,7 +9,7 @@ import type { PerformanceCase, PerformanceLabGamePort, PerformanceWindow } from 
 import type { LoadoutUseResult, WeaponSlot } from '../../types';
 import { NavigationGeometry } from '../../systems/navigation/NavigationGeometry';
 import { quantizeAngle } from '../../utils/angle';
-import { MAP14_FIRE_MAP_ID, REFERENCE_SEED } from './referenceMap';
+import { MAP14_FIRE_MAP_ID, MAP15_MAP_ID, REFERENCE_SEED } from './referenceMap';
 import { getVisibleWorldView, isWorldPointInsideView } from '../../ui/HostileBaseIndicator';
 import { PERFORMANCE_FIXTURE as fixture } from './fixtures';
 import { CELL_SIZE } from '../../config';
@@ -45,6 +45,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
   let carriedRecovery = false;
   let clearedRouteAt: number | null = null;
   let subphases: PerformanceWindow[] = [];
+  let bossWindow: { id: string; fromMs: number } | null = null;
   let spawnCandidates: readonly { x: number; y: number }[] | null = null;
   let nextResourceAt = 0, maximumAdrenaline = 0;
   let nextVisualBurst = 0;
@@ -80,6 +81,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     for (const [id, position] of targets) flow.weaponBalanceLabPort.pinTarget(id, position.x, position.y);
     if (performance.now() >= nextResourceAt) {
       flow.weaponBalanceLabPort.setAdrenaline(localId(), maximumAdrenaline);
+      if (preparedId === 'boss.map15') add('baseHpRepaired', flow.repairScenarioBases());
       nextResourceAt = performance.now() + fixture.resourceRefillIntervalMs;
     }
   };
@@ -108,23 +110,33 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
       peak('fogTracesPeak', environment.fog?.visibleTraces ?? 0);
     }
     peak('burningCellsPeak', state.burningCells);
-    if (preparedId === 'hazards.void-fire' || preparedId === 'hazards.map14-fire') {
+    if (preparedId === 'hazards.void-fire' || preparedId === 'hazards.map14-fire' || preparedId === 'boss.map15') {
       const view = getVisibleWorldView(scene.cameras.main);
-      let total = 0, visible = 0;
+      let total = 0, visible = 0, permanent = 0;
       for (const cell of state.burningGround.cells) {
         if (cell.visualStyle !== 'void') continue;
         total++;
+        if (cell.expiresAt === Number.MAX_SAFE_INTEGER) permanent++;
         if (isWorldPointInsideView((cell.gridX + 0.5) * GROUND_FIRE_CELL_SIZE,
           (cell.gridY + 0.5) * GROUND_FIRE_CELL_SIZE, view)) visible++;
       }
       counters.voidFireCells = total;
+      counters.permanentVoidFireCells = permanent;
       peak('voidFireCellsPeak', total); peak('visibleVoidFireCellsPeak', visible);
       if (measureVoidFire) {
         add('voidFireMeasurementSamples');
         counters.voidFireCellsMin = Math.min(counters.voidFireCellsMin ?? total, total);
         counters.visibleVoidFireCellsMin = Math.min(counters.visibleVoidFireCellsMin ?? visible, visible);
+        if (preparedId === 'boss.map15') {
+          add(`bossPhase${state.bossPhase}Samples`);
+          if (bossWindow?.id === 'phase2') {
+            add('expandedFireSamples');
+            counters.expandedFireCellsMin = Math.min(counters.expandedFireCellsMin ?? permanent, permanent);
+          }
+        }
       }
     }
+    counters.bossPhase = state.bossPhase;
     peak('activeLightsPeak', state.lights.activeLights); peak('renderedLightsPeak', state.lights.renderedLights);
     if (preparedId.startsWith('combat.') || preparedId === 'environment.dawn') {
       const waterProbe = point(86, 72);
@@ -175,7 +187,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
   const initializeCase = (test: PerformanceCase) => {
     carriedRecovery = test.kind === 'recovery' && preparedId.startsWith('combat.');
     preparedId = test.id; prepared = false; preparationAt = performance.now(); timeChanged = false;
-    clearedRouteAt = null; subphases = [];
+    clearedRouteAt = null; subphases = []; bossWindow = null;
     nextBuildAt = 0; nextCombatShotAt = 0; nextWaveAt = fixture.combatWaveIntervalMs; seenLakes.clear();
     nextVisualBurst = 0;
     spawnCandidates = null; nextResourceAt = 0;
@@ -186,22 +198,24 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     stopped = false; lastTrainY = null; lastObservationAt = 0; caseStart = performance.now();
     flow.navigationLabPort.setScenarioActive(true);
     // Authored environment/hazard cases keep the ordinary event scheduler.
-    if (test.kind === 'environment' || test.kind === 'hazard' || test.id === 'review.train') flow.navigationLabPort.setScenarioActive(false);
+    if (test.kind === 'environment' || test.kind === 'hazard' || test.kind === 'boss' || test.id === 'review.train') flow.navigationLabPort.setScenarioActive(false);
     if (test.kind === 'hazard') counters.expectedVoidFireCells = fixture.voidFire.area.widthCells
       * fixture.voidFire.area.heightCells * (CELL_SIZE / GROUND_FIRE_CELL_SIZE) ** 2;
-    if (test.mapId === MAP14_FIRE_MAP_ID) {
+    if (test.mapId === MAP14_FIRE_MAP_ID || test.mapId === MAP15_MAP_ID) {
       // Resolve once against the live World's fire obstacles, not the rectangle's area.
       counters.expectedVoidFireCells = 0;
       const metrics = flow.getWorldMetrics()!;
+      const cells = new Set<string>();
       for (const zone of flow.getWorldLayout()?.groundHazardZones ?? []) for (const cell of zone.cells) {
         for (let y = GROUND_FIRE_CELL_SIZE / 2; y < CELL_SIZE; y += GROUND_FIRE_CELL_SIZE) {
           for (let x = GROUND_FIRE_CELL_SIZE / 2; x < CELL_SIZE; x += GROUND_FIRE_CELL_SIZE) {
-            if (flow.canPlaceScenarioGroundFireCell(metrics.offsetX + cell.gridX * CELL_SIZE + x,
-              metrics.offsetY + cell.gridY * CELL_SIZE + y)) counters.expectedVoidFireCells++;
+            const wx = metrics.offsetX + cell.gridX * CELL_SIZE + x, wy = metrics.offsetY + cell.gridY * CELL_SIZE + y;
+            if (flow.canPlaceScenarioGroundFireCell(wx, wy)) cells.add(`${wx}:${wy}`);
           }
         }
       }
-      if (!counters.expectedVoidFireCells) throw new Error('Map 14 firefront geometry missing');
+      counters.expectedVoidFireCells = cells.size;
+      if (!cells.size) throw new Error(`${test.id}: ground hazard geometry missing`);
     }
     if (test.kind === 'hazard') counters.minimumVoidFireCells = test.mapId === MAP14_FIRE_MAP_ID
       ? Math.ceil(counters.expectedVoidFireCells * 0.95) : counters.expectedVoidFireCells;
@@ -209,7 +223,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     if (!snapshot) throw new Error('Reference geometry unavailable');
     geometry = new NavigationGeometry(snapshot);
     rocksBefore = rocks();
-    if (test.mapId !== MAP14_FIRE_MAP_ID && rocksBefore < fixture.minimumGlobalRocks) throw new Error(`Reference rock reserve too small: ${rocksBefore}`);
+    if (test.mapId !== MAP14_FIRE_MAP_ID && test.mapId !== MAP15_MAP_ID && rocksBefore < fixture.minimumGlobalRocks) throw new Error(`Reference rock reserve too small: ${rocksBefore}`);
     if (test.id.startsWith('destruction')) {
       counters.fieldRocksBefore = fieldRocks(test.itemId);
       if (counters.fieldRocksBefore < fixture.minimumDestructionFieldRocks) throw new Error(`${test.id}: destruction field is already empty`);
@@ -225,12 +239,12 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
       : test.id === 'environment.dawn' ? point(80, 64) : test.kind === 'environment' ? point(33, 48)
       : test.itemId === 'NUKE' || test.id === 'destruction.single' ? point(40, 51)
       : test.itemId === 'BFG' || test.itemId === 'HYDRA' ? point(76, 51) : point(67, 72);
-    if (test.mapId === MAP14_FIRE_MAP_ID) {
-      const front = point(60, 21);
+    if (test.mapId === MAP14_FIRE_MAP_ID || test.mapId === MAP15_MAP_ID) {
+      const front = test.mapId === MAP15_MAP_ID ? point(50, 22) : point(60, 21);
       const free = flow.navigationLabPort.getFreePositions(18);
       const nearest = free.reduce<{ x: number; y: number } | null>((best, p) =>
         !best || Math.hypot(p.x - front.x, p.y - front.y) < Math.hypot(best.x - front.x, best.y - front.y) ? p : best, null);
-      if (!nearest) throw new Error('Map 14 has no free observer position');
+      if (!nearest) throw new Error(`${test.id}: no free observer position`);
       playerPosition = nearest;
     }
     if (!geometry.isFree(playerPosition.x, playerPosition.y, 18)) throw new Error(`${test.id}: blocked player fixture`);
@@ -275,7 +289,12 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     if (preparedId !== test.id) initializeCase(test);
     if (prepared) return true;
     const now = performance.now();
+    if (test.kind === 'boss') maintainTargets();
     observe();
+    if (test.kind === 'boss' && (!(counters.bossPhase === 1) || !(counters.voidFireCells > 0))) {
+      if (now - preparationAt > fixture.map15.preparationTimeoutMs) throw new Error(`${test.id}: phase-one boss or initial fire missing`);
+      return false;
+    }
     if (test.kind === 'hazard' && !(counters.voidFireCells >= counters.minimumVoidFireCells)) {
       if (now - preparationAt > fixture.voidFire.preparationTimeoutMs) {
         throw new Error(`${test.id}: required VoidFire load missing (${counters.voidFireCells ?? 0}/${counters.minimumVoidFireCells})`);
@@ -421,9 +440,24 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
         event('performance:recovery-late-spawns', { count });
         flow.navigationLabPort.removeEnemies();
       }
-      maintainTargets(); observe(test.kind === 'hazard' && stage === 'measure');
+      maintainTargets(); observe((test.kind === 'hazard' || test.kind === 'boss') && stage === 'measure');
       if (stage === 'warmup') { input(); return; }
       if (stage === 'tail') { input(); return; }
+      if (test.kind === 'boss') {
+        const now = performance.now();
+        bossWindow ??= { id: 'phase1', fromMs: now };
+        const nextPhase = (id: string) => {
+          subphases.push({ id: `${test.id}.${bossWindow!.id}`, kind: 'measurement', caseVersion: test.version,
+            fromMs: bossWindow!.fromMs, toMs: now, load: { ...counters } });
+          bossWindow = { id, fromMs: now };
+          event(`performance:boss-${id}`, { caseId: test.id });
+        };
+        if (bossWindow.id === 'phase1' && elapsed >= fixture.map15.phaseTwoAtMs) {
+          if (!flow.prepareScenarioBossPhaseTwo()) throw new Error(`${test.id}: boss phase input rejected`);
+          nextPhase('expansion');
+        } else if (bossWindow.id === 'expansion' && counters.bossPhase === 2
+          && counters.permanentVoidFireCells >= counters.expectedVoidFireCells * 0.95) nextPhase('phase2');
+      }
       if (test.id === 'review.explosions' && elapsed >= nextVisualBurst) {
         // Fixed presentation load through the ordinary effect RPC; no fake damage.
         for (let i = 0; i < 12; i++) {
@@ -487,6 +521,8 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
       return ready;
     },
     finishCase(test) {
+      if (bossWindow) subphases.push({ id: `${test.id}.${bossWindow.id}`, kind: 'measurement',
+        caseVersion: test.version, fromMs: bossWindow.fromMs, toMs: performance.now(), load: { ...counters } });
       if (clearedRouteAt !== null) subphases.push({ id: `${test.id}.cleared-route`, kind: 'measurement',
         caseVersion: test.version, fromMs: clearedRouteAt, toMs: performance.now(), load: { ...counters, rocksRemaining: rocks() } });
       stopped = true; input(); flow.rpcPorts.heldAction.clearPlayer(localId());
@@ -494,6 +530,12 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     readSubphases: () => subphases,
     verifyCase(test) {
       observe();
+      if (test.kind === 'boss' && (!counters.bossPhase1Samples || !counters.bossPhase2Samples
+        || counters.bossPhase0Samples || !counters.nukePeak || !counters.meteorPeak
+        || !counters.expandedFireSamples || !(counters.expandedFireCellsMin >= counters.expectedVoidFireCells * 0.95)
+        || !(counters.visibleVoidFireCellsMin > 0))) {
+        throw new Error(`${test.id}: boss phases, Nuke, Armageddon or expanded visible fire missing: ${JSON.stringify(counters)}`);
+      }
       if (test.id === 'review.train' && !counters.trainDestroyed) throw new Error('Train destruction was not observed');
       if (test.id === 'review.explosions' && !counters.visualExplosions) throw new Error('No visual explosions');
       if (test.kind === 'hazard' && (!(counters.voidFireMeasurementSamples > 0)
