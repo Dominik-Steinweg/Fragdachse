@@ -115,6 +115,23 @@ export interface LightPreset {
  */
 export const LIGHT_PRESETS = {
   /** Small ambient ground lights; gameplay lights always win the shared render budget. */
+  /**
+   * Kaltes Mondlicht über dem Grufttitan-Friedhof. Groß und hoch priorisiert, damit das
+   * Boss-Intro in tiefer Nacht lesbar bleibt; die Lebenszeit verwaltet der Intro-Renderer.
+   */
+  graveMoonlight: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 360,
+    color: 0xa9c4ff,
+    intensity: 1.15,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 6,
+    flickerAmount: 0,
+    flickerHz: 0,
+  },
   firefly: {
     enabled: true,
     shape: 'radial',

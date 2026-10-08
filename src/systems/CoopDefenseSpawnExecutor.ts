@@ -89,21 +89,65 @@ export class CoopDefenseSpawnExecutor {
 
   /** Einmaliger Boss-Spawn; der bestehende Boss-Pfad bleibt auf der Westfront. */
   hostSpawnBoss(kind: CoopDefenseEnemyKind): boolean {
+    const point = this.hostResolveBossSpawnPoint(kind);
+    return point ? this.hostSpawnBossAt(kind, point.x, point.y) : false;
+  }
+
+  /**
+   * Waehlt den Boss-Spawnpunkt vorab, damit ein Intro ihn ankuendigen kann. Mit
+   * `edgeMarginCells` werden Zellen mit Abstand zum Kartenrand bevorzugt, damit eine
+   * Inszenierung rund um den Punkt nicht am Rand abgeschnitten wird.
+   */
+  hostResolveBossSpawnPoint(
+    kind: CoopDefenseEnemyKind,
+    edgeMarginCells = 0,
+  ): { readonly x: number; readonly y: number } | null {
+    const candidates = this.collectBossCandidates(kind);
+    if (candidates.length === 0) return null;
+    const { gridCols, gridRows } = this.metrics;
+    const interior = edgeMarginCells > 0
+      ? candidates.filter((cell) => Math.min(
+        cell.gridX,
+        cell.gridY,
+        gridCols - 1 - cell.gridX,
+        gridRows - 1 - cell.gridY,
+      ) >= edgeMarginCells)
+      : candidates;
+    const pick = Phaser.Math.RND.pick(interior.length > 0 ? interior : candidates);
+    return worldCellCenter(this.metrics, pick.gridX, pick.gridY);
+  }
+
+  /**
+   * Spawnt den Boss am angekuendigten Punkt. Ist dieser inzwischen blockiert oder belegt,
+   * wird der naechstgelegene gueltige Kandidat genommen, damit das Intro nicht ins Leere laeuft.
+   */
+  hostSpawnBossAt(kind: CoopDefenseEnemyKind, x: number, y: number, options: EnemySpawnOptions = {}): boolean {
+    const candidates = this.collectBossCandidates(kind);
+    if (candidates.length === 0) return false;
+    let best = candidates[0];
+    let bestDistanceSq = Number.POSITIVE_INFINITY;
+    for (const cell of candidates) {
+      const world = worldCellCenter(this.metrics, cell.gridX, cell.gridY);
+      const distanceSq = (world.x - x) ** 2 + (world.y - y) ** 2;
+      if (distanceSq < bestDistanceSq) {
+        best = cell;
+        bestDistanceSq = distanceSq;
+      }
+    }
+    const world = worldCellCenter(this.metrics, best.gridX, best.gridY);
+    this.enemyManager.hostSpawnAtWorld(world.x, world.y, kind, options);
+    this.pushRecent(this.key(best.gridX, best.gridY));
+    return true;
+  }
+
+  private collectBossCandidates(kind: CoopDefenseEnemyKind): SpawnCell[] {
     const candidates = this.collectCandidates(
       kind,
       DEFAULT_SPAWN_FRONT,
       this.bossFlowFieldService ?? this.flowFieldService,
     );
-    if (candidates.length === 0) {
-      this.warnExhausted();
-      return false;
-    }
-
-    const pick = Phaser.Math.RND.pick(candidates);
-    const world = worldCellCenter(this.metrics, pick.gridX, pick.gridY);
-    this.enemyManager.hostSpawnAtWorld(world.x, world.y, kind);
-    this.pushRecent(this.key(pick.gridX, pick.gridY));
-    return true;
+    if (candidates.length === 0) this.warnExhausted();
+    return candidates;
   }
 
   private spawnArenaGroup(

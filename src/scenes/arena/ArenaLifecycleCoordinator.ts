@@ -881,6 +881,12 @@ export class ArenaLifecycleCoordinator {
         if (!current || current.status !== 'active') return;
         bridge.publishRoundState({ ...current, coopDefenseBossSpawnedAtMs: spawnedAtMs });
       },
+      onBossIntroStarted: (intro) => {
+        this.runtimeDiagnosticEventSink?.('boss:intro', { startedAtMs: intro.startedAtMs, preset: intro.preset });
+        const current = bridge.getRoundState();
+        if (!current || current.status !== 'active') return;
+        bridge.publishRoundState({ ...current, coopDefenseBossIntro: intro });
+      },
       visualSink: this.ctx.effectSystem,
       onWaveStarted: id => this.broadcastMissionAudio('sfx_wave_start', `wave:${id}`),
       onObjectiveCompleted: id => this.broadcastMissionAudio('sfx_objective_complete', `objective:${id}`),

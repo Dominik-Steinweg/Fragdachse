@@ -20,6 +20,7 @@ import {
   NET_SMOOTH_TIME_MS,
 } from '../config';
 import { setCameraBaseScroll } from '../graphics/cameraBaseScroll';
+import { getCameraFocusOverride } from '../graphics/cameraFocusOverride';
 import type { ArenaSpectatorCameraInput } from '../scenes/arena/ArenaInputBindings';
 import { advanceSpectatorCameraScroll } from '../scenes/arena/SpectatorCameraModel';
 import { getVisibleWorldView, type WorldViewRect } from '../ui/HostileBaseIndicator';
@@ -392,8 +393,13 @@ export class WorldPresentationFrameBinding {
     const maxScrollY = Math.max(0, ARENA_MAX_Y - (ARENA_OFFSET_Y + ARENA_VIEWPORT_HEIGHT));
     const focusScreenX = ARENA_OFFSET_X + ARENA_VIEWPORT_WIDTH * 0.5;
     const focusScreenY = ARENA_OFFSET_Y + ARENA_VIEWPORT_HEIGHT * 0.5;
-    const targetScrollX = Phaser.Math.Clamp(localSprite.x - focusScreenX, 0, maxScrollX);
-    const targetScrollY = Phaser.Math.Clamp(localSprite.y - focusScreenY, 0, maxScrollY);
+    // Ein inszenierter Fokus (Boss-Intro) blendet das Spielerziel weich zu seinem Punkt über.
+    const focus = getCameraFocusOverride(this.input.scene);
+    const focusWeight = focus && !this.input.isArenaLoading() ? focus.weight : 0;
+    const followX = focus ? Phaser.Math.Linear(localSprite.x, focus.x, focusWeight) : localSprite.x;
+    const followY = focus ? Phaser.Math.Linear(localSprite.y, focus.y, focusWeight) : localSprite.y;
+    const targetScrollX = Phaser.Math.Clamp(followX - focusScreenX, 0, maxScrollX);
+    const targetScrollY = Phaser.Math.Clamp(followY - focusScreenY, 0, maxScrollY);
     // The first local spawn is already known during loading; snap once so the startup working
     // set is not invalidated by a camera glide while the barrier is being evaluated.
     const followLerp = this.input.isArenaLoading() ? 1 : 1 - Math.exp(-deltaMs / 120);

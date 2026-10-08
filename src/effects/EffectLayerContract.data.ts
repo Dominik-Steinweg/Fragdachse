@@ -2880,6 +2880,14 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:effects/CoopDefenseEncounterTelegraphRenderer.ts:generateTextures/haze/setDepth/0","owner":"effects/CoopDefenseEncounterTelegraphRenderer.ts","component":"generateTextures/haze/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[24.8],"blends":["ADD"],"profiles":["H"],"role":"ui","source":{"selector":"generateTextures/haze/setDepth/0","expression":"DEPTH_FX - 0.2"}},
   {"id":"cpu:effects/CoopDefenseEncounterTelegraphRenderer.ts:generateTextures/drift/setDepth/0","owner":"effects/CoopDefenseEncounterTelegraphRenderer.ts","component":"generateTextures/drift/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[25.1],"blends":["ADD"],"profiles":["H"],"role":"ui","source":{"selector":"generateTextures/drift/setDepth/0","expression":"DEPTH_FX + 0.1"}},
   {"id":"cpu:effects/CoopDefenseEncounterTelegraphRenderer.ts:generateTextures/crest/setDepth/0","owner":"effects/CoopDefenseEncounterTelegraphRenderer.ts","component":"generateTextures/crest/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[25.15],"blends":["ADD"],"profiles":["H"],"role":"ui","source":{"selector":"generateTextures/crest/setDepth/0","expression":"DEPTH_FX + 0.15"}},
+  {"id":"cpu:effects/BossIntroGraveyardRenderer.ts:module/this.crater/setDepth/0","owner":"effects/BossIntroGraveyardRenderer.ts","component":"module/this.crater/setDepth/0","height":"ground","lighting":"material","camera":"world","depths":[5.13],"blends":["NORMAL"],"profiles":["G"],"role":"effect","source":{"selector":"module/this.crater/setDepth/0","expression":"DEPTH_GRAVE_GROUND + 0.01"}},
+  {"id":"cpu:effects/BossIntroGraveyardRenderer.ts:module/this.moonbeam/setDepth/0","owner":"effects/BossIntroGraveyardRenderer.ts","component":"module/this.moonbeam/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[19.56],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"module/this.moonbeam/setDepth/0","expression":"DEPTH_GRAVE_MOONBEAM"}},
+  {"id":"cpu:effects/BossIntroGraveyardRenderer.ts:buildIntro/setDepth/setDepth/0","owner":"effects/BossIntroGraveyardRenderer.ts","component":"buildIntro/setDepth/setDepth/0","height":"ground","lighting":"material","camera":"world","depths":[5.12],"blends":["NORMAL"],"profiles":["G"],"role":"effect","source":{"selector":"buildIntro/setDepth/setDepth/0","expression":"DEPTH_GRAVE_GROUND"}},
+  {"id":"cpu:effects/BossIntroGraveyardRenderer.ts:buildIntro/setDepth/setDepth/1","owner":"effects/BossIntroGraveyardRenderer.ts","component":"buildIntro/setDepth/setDepth/1","height":"ground","lighting":"material","camera":"world","depths":[9.2],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"buildIntro/setDepth/setDepth/1","expression":"DEPTH_GRAVE_SHADOW"}},
+  {"id":"cpu:effects/BossIntroGraveyardRenderer.ts:buildIntro/setDepth/setDepth/2","owner":"effects/BossIntroGraveyardRenderer.ts","component":"buildIntro/setDepth/setDepth/2","height":"body","lighting":"material","camera":"world","depths":[9.3],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"buildIntro/setDepth/setDepth/2","expression":"DEPTH_GRAVE_STONE"}},
+  {"id":"cpu:effects/BossIntroGraveyardRenderer.ts:buildIntro/setDepth/setDepth/3","owner":"effects/BossIntroGraveyardRenderer.ts","component":"buildIntro/setDepth/setDepth/3","height":"body","lighting":"material","camera":"world","depths":[9.35],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"buildIntro/setDepth/setDepth/3","expression":"DEPTH_GRAVE_FRAGMENT"}},
+  {"id":"cpu:effects/BossIntroGraveyardRenderer.ts:buildIntro/setDepth/setDepth/4","owner":"effects/BossIntroGraveyardRenderer.ts","component":"buildIntro/setDepth/setDepth/4","height":"high","lighting":"emissive","camera":"world","depths":[19.62],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"buildIntro/setDepth/setDepth/4","expression":"DEPTH_GRAVE_FIREFLY"}},
+  {"id":"cpu:effects/BossIntroGraveyardRenderer.ts:buildIntro/setDepth/setDepth/5","owner":"effects/BossIntroGraveyardRenderer.ts","component":"buildIntro/setDepth/setDepth/5","height":"high","lighting":"emissive","camera":"world","depths":[19.58],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"buildIntro/setDepth/setDepth/5","expression":"DEPTH_GRAVE_MIST"}},
   {"id":"cpu:effects/CoopDefenseMissionProgressRenderer.ts:createCheckpoints/quad/setDepth/0","owner":"effects/CoopDefenseMissionProgressRenderer.ts","component":"createCheckpoints/quad/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[8.5],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"createCheckpoints/quad/setDepth/0","expression":"DEPTH.ROCKS - 0.5"}},
   {"id":"cpu:effects/CoopDefenseMissionProgressRenderer.ts:syncBarriers/image/setDepth/0","owner":"effects/CoopDefenseMissionProgressRenderer.ts","component":"syncBarriers/image/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"syncBarriers/image/setDepth/0","expression":"DEPTH.ROCKS"}},
   {"id":"cpu:effects/CoopDefenseSecondaryObjectiveMarkerRenderer.ts:build/container/setDepth/0","owner":"effects/CoopDefenseSecondaryObjectiveMarkerRenderer.ts","component":"build/container/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[12],"blends":["NORMAL"],"profiles":["K"],"role":"ui","source":{"selector":"build/container/setDepth/0","expression":"DEPTH.BASES + 8"}},
@@ -4041,6 +4049,71 @@ export const CPU_SOURCE_CONTRACTS = {
         "expression": "DEPTH.GROUND_FOG + 0.1",
         "blends": [
           "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "effects/BossIntroGraveyardRenderer.ts": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.crater/setDepth/0",
+        "expression": "DEPTH_GRAVE_GROUND + 0.01",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.moonbeam/setDepth/0",
+        "expression": "DEPTH_GRAVE_MOONBEAM",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "buildIntro/setDepth/setDepth/0",
+        "expression": "DEPTH_GRAVE_GROUND",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "buildIntro/setDepth/setDepth/1",
+        "expression": "DEPTH_GRAVE_SHADOW",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "buildIntro/setDepth/setDepth/2",
+        "expression": "DEPTH_GRAVE_STONE",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "buildIntro/setDepth/setDepth/3",
+        "expression": "DEPTH_GRAVE_FRAGMENT",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "buildIntro/setDepth/setDepth/4",
+        "expression": "DEPTH_GRAVE_FIREFLY",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "buildIntro/setDepth/setDepth/5",
+        "expression": "DEPTH_GRAVE_MIST",
+        "blends": [
+          "ADD"
         ]
       }
     ],

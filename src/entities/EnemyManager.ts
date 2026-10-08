@@ -169,6 +169,8 @@ export interface EnemySpawnOptions {
   readonly spawnFront?: SpawnFront;
   /** Host-only generic provenance, e.g. the owning encounter id. */
   readonly originId?: string;
+  /** Ein inszeniertes Intro uebernimmt die Ankuendigung; der generische Spawnblitz entfaellt. */
+  readonly skipSpawnEffect?: boolean;
 }
 
 export class EnemyManager {
@@ -330,6 +332,15 @@ export class EnemyManager {
     this.visualSink = sink;
   }
 
+  private spawnEffectSuppressor: ((kind: CoopDefenseEnemyKind, x: number, y: number) => boolean) | null = null;
+  /**
+   * Präsentationsfilter für den generischen Spawnblitz (Host wie Client), z. B. wenn ein
+   * repliziertes Boss-Intro das Erscheinen bereits inszeniert.
+   */
+  setSpawnEffectSuppressor(suppressor: ((kind: CoopDefenseEnemyKind, x: number, y: number) => boolean) | null): void {
+    this.spawnEffectSuppressor = suppressor;
+  }
+
   /**
    * Einziger Weg, den Einbuddel-Zustand eines Gegners zu setzen – hier hängen die Buddel-Visuals
    * dran. Der Host ruft das aus dem Burrow-System, der Client beim Anwenden des Snapshots, so dass
@@ -427,7 +438,8 @@ export class EnemyManager {
    * unsichtbar, und ihr Auftauchen hat mit dem Buddel-Effekt bereits seine eigene Ankündigung.
    */
   private playSpawnEffect(enemy: EnemyEntity, options: EnemySpawnOptions): void {
-    if (options.spawnBurrowed || this.resolvedConfigs[enemy.kind]?.burrow?.spawnBurrowedAtEdge) return;
+    if (options.spawnBurrowed || options.skipSpawnEffect || this.resolvedConfigs[enemy.kind]?.burrow?.spawnBurrowedAtEdge) return;
+    if (this.spawnEffectSuppressor?.(enemy.kind, enemy.sprite.x, enemy.sprite.y)) return;
     this.visualSink?.playEnemySpawnEffect(enemy.sprite.x, enemy.sprite.y, enemy.getSpawnEffectColor());
   }
 

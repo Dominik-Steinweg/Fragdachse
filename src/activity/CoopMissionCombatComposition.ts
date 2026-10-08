@@ -1,3 +1,4 @@
+import type { BossIntroState } from '../config/bossIntros';
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import { WaterGeometry } from '../arena/WaterGeometry';
 import * as Phaser from 'phaser';
@@ -73,6 +74,7 @@ export interface CoopMissionCombatCompositionOptions {
   readonly healthBars?: WorldHealthBarRenderer | null;
   readonly entityBurnGpuController: EntityBurnGpuController | null;
   readonly onBossSpawned?: (spawnedAtMs: number) => void;
+  readonly onBossIntroStarted?: (state: BossIntroState) => void;
   readonly onWaveStarted?: (encounterId: string) => void;
   readonly onDiagnosticEvent?: (type: string, fields: Record<string, unknown>) => void;
 }
@@ -249,6 +251,7 @@ export class CoopMissionCombatComposition {
         enemyManager,
         spawnExecutor,
         this.options.onBossSpawned,
+        this.options.onBossIntroStarted,
       )
       : null;
     const mapDirector = encounterConfigs.length > 0

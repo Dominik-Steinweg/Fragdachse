@@ -1,3 +1,4 @@
+import { readBossIntroState } from '../../config/bossIntros';
 import { isOffensiveConstruction } from '../../systems/offensiveConstruction';
 import { bridge } from '../../network/bridge';
 import { PLAYER_SIZE } from '../../config';
@@ -40,6 +41,10 @@ export function createArenaCoopMissionPresentationPort(
     getLocalRespawnBudgetState: () => bridge.getLocalCoopDefenseRespawnBudgetState(),
     getSynchronizedNow: () => bridge.getSynchronizedNow(),
     getArenaStartTime: () => bridge.getArenaStartTime(),
+    getBossIntroState: () => {
+      const round = bridge.getRoundState();
+      return round?.status === 'active' ? readBossIntroState(round.coopDefenseBossIntro) : null;
+    },
     getEnemyVulnerability: (enemyId, now) => input.getEnemyVulnerability(enemyId, now),
     getCarryPresentationItems: () => resolveCoopDefenseCarryPresentationSnapshot(
       bridge.isHost(),

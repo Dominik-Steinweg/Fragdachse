@@ -9,6 +9,7 @@ import { EnemyReadabilityRenderer } from '../../effects/EnemyReadabilityRenderer
 import { createCombatShaderWarmupProbes } from '../../effects/CombatShaderWarmup';
 import { MovementEffectsRenderer } from '../../effects/MovementEffectsRenderer';
 import { BurrowGpuRenderer } from '../../effects/BurrowGpuRenderer';
+import { BossIntroGraveyardRenderer } from '../../effects/BossIntroGraveyardRenderer';
 import { createEarthbreakFissureLayers } from '../../effects/earthbreak/EarthbreakFissureGpuLayer';
 import * as Phaser from 'phaser';
 import { BulletRenderer }      from '../../effects/BulletRenderer';
@@ -122,6 +123,7 @@ export interface RendererBundle {
   constructionOwnershipMotes: ConstructionOwnershipMoteRenderer;
   movement:            MovementEffectsRenderer;
   burrowGpu:           BurrowGpuRenderer;
+  bossIntro:           BossIntroGraveyardRenderer;
   combatGoreGpu:      CombatGoreGpuRenderer;
   entityBurnGpu:       EntityBurnGpuController;
   mgAttrition:         MgAttritionRenderer;
@@ -417,6 +419,8 @@ export function* createRendererBundleSteps(
   cleanup.push(() => constructionOwnershipMotes.destroy());
   const movement = new MovementEffectsRenderer(gpuVfx, burrowGpu);
   cleanup.push(() => movement.destroy());
+  const bossIntro = new BossIntroGraveyardRenderer(scene, lighting, burrowGpu);
+  cleanup.push(() => bossIntro.destroy());
   return {
     interactions,
     turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, plasmaBurnerCharge, healingAura, guardianSpirit, repairDrone, attackDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
@@ -431,6 +435,7 @@ export function* createRendererBundleSteps(
     constructionOwnershipMotes,
     movement,
     burrowGpu,
+    bossIntro,
     combatGoreGpu,
     entityBurnGpu,
     mgAttrition,
@@ -507,6 +512,7 @@ export function wireRenderersToCameraFeedback(
   bundle.airstrike.setCameraFeedback(controller);
   bundle.meteor.setCameraFeedback(controller);
   bundle.beer.setCameraFeedback(controller);
+  bundle.bossIntro.setCameraFeedback(controller);
 }
 
 /**
@@ -528,4 +534,5 @@ export function wireRenderersToAudioSystem(bundle: RendererBundle, audioSystem: 
   bundle.teslaDome.setAudioSystem(audioSystem);
   bundle.energyShield.setAudioSystem(audioSystem);
   bundle.nuke.setAudioSystem(audioSystem);
+  bundle.bossIntro.setAudioSystem(audioSystem);
 }

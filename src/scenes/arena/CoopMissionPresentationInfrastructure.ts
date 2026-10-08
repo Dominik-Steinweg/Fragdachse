@@ -9,6 +9,8 @@ import type { EnemyManager } from '../../entities/EnemyManager';
 import type { PlayerManager } from '../../entities/PlayerManager';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { RendererBundle } from './RendererBundle';
+import type { BossIntroState } from '../../config/bossIntros';
+import { t } from '../../i18n';
 import type {
   CoopMissionPresentationUiPort,
 } from '../../activity/CoopMissionPresentationBinding';
@@ -37,6 +39,8 @@ export class CoopMissionPresentationInfrastructure {
   private ui: CoopMissionPresentationUiPort | null = null;
   private uiInput: CoopMissionPresentationInfrastructureInput | null = null;
   private worldSpaceDestroyed = false;
+  /** Zuletzt angekündigtes Boss-Intro; verhindert Doppelmeldungen pro Frame. */
+  private announcedBossIntroKey: string | null = null;
   private destroyed = false;
 
   constructor(private readonly scene: Phaser.Scene) {
@@ -173,6 +177,12 @@ export class CoopMissionPresentationInfrastructure {
             );
           }
         },
+        syncBossIntro: (state, now) => {
+          if (this.destroyed) return;
+          input.renderers.bossIntro.sync(state, now, true);
+          this.announceBossIntro(state, now);
+        },
+        bossIntroOwnsSpawn: (state, now) => !this.destroyed && input.renderers.bossIntro.ownsSpawnAt(state, now),
         destroy: () => {
           if (!this.destroyed) this.destroyWorldSpace(input);
         },
@@ -208,6 +218,25 @@ export class CoopMissionPresentationInfrastructure {
     this.uiInput = null;
   }
 
+  /** Das Banner gehört zum live miterlebten Intro-Start; Late-Joiner bekommen es nicht nachgereicht. */
+  private announceBossIntro(state: BossIntroState | null, now: number): void {
+    if (!state) return;
+    const key = `${state.startedAtMs}:${state.seed}`;
+    if (this.announcedBossIntroKey === key) return;
+    this.announcedBossIntroKey = key;
+    if (now - state.startedAtMs > 2_500) return;
+    this.objectiveAnnouncements.enqueue({
+      id: `boss-intro:${key}`,
+      kicker: t('ui.bossIntro.graveyard.kicker'),
+      title: t('ui.bossIntro.graveyard.title'),
+      detail: t('ui.bossIntro.graveyard.detail'),
+      tone: 'main',
+      topic: 'boss-intro',
+      priority: 100,
+      holdMs: 3_200,
+    });
+  }
+
   private destroyWorldSpace(input: CoopMissionPresentationInfrastructureInput): void {
     if (this.worldSpaceDestroyed) return;
     this.worldSpaceDestroyed = true;
@@ -216,6 +245,7 @@ export class CoopMissionPresentationInfrastructure {
     this.hostileBaseIndicator?.destroy();
     this.hostileBaseIndicator = null;
     input.renderers.encounterTelegraph.destroy();
+    input.renderers.bossIntro.clear();
     input.renderers.secondaryObjectiveMarkers.destroy();
     input.renderers.missionProgress.destroy();
     input.renderers.carryZones.clear();
@@ -227,6 +257,8 @@ export class CoopMissionPresentationInfrastructure {
     input.renderers.beer.syncCoopDefenseCarry([]);
     input.clientUpdate.resetEnemyDashVisuals();
     input.renderers.encounterTelegraph.clear();
+    input.renderers.bossIntro.clear();
+    this.announcedBossIntroKey = null;
     input.renderers.secondaryObjectiveMarkers.clear();
     input.renderers.missionProgress.clear();
     input.renderers.carryZones.clear();

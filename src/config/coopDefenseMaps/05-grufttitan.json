@@ -90,7 +90,8 @@
   ],
   "boss": {
     "enemyKind": "grave-titan",
-    "spawnAtMs": 7500
+    "spawnAtMs": 7500,
+    "intro": { "preset": "graveyard-rise" }
   },
   "encounters": [
     {

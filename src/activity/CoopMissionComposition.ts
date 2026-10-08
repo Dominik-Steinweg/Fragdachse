@@ -1,3 +1,4 @@
+import type { BossIntroState } from '../config/bossIntros';
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import * as Phaser from 'phaser';
 import type { ArenaBuilderResult } from '../arena/ArenaBuilder';
@@ -120,6 +121,7 @@ export interface CoopMissionCompositionOptions {
   readonly getNowMs: () => number;
   readonly onDiagnosticEvent: (type: string, fields: Record<string, unknown>) => void;
   readonly onBossSpawned: (spawnedAtMs: number) => void;
+  readonly onBossIntroStarted: (state: BossIntroState) => void;
   readonly onWaveStarted?: (encounterId: string) => void;
   readonly onObjectiveCompleted?: (objectiveId: string) => void;
   readonly onCheckpointActivated?: (checkpointId: string) => void;
@@ -183,6 +185,7 @@ export class CoopMissionComposition {
       healthBars: this.options.getHealthBarRenderer?.(),
       entityBurnGpuController: this.options.entityBurnGpuController,
       onBossSpawned: this.options.onBossSpawned,
+      onBossIntroStarted: this.options.onBossIntroStarted,
       onWaveStarted: this.options.onWaveStarted,
       onDiagnosticEvent: this.options.onDiagnosticEvent,
     }).materialize(runtime);

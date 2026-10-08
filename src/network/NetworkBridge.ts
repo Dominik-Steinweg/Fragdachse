@@ -329,6 +329,8 @@ export interface RoundState {
   timeOfDayMinutes?: number;
   /** Einmaliger reliable Anker des tatsaechlich erfolgreichen Coop-Boss-Spawns. */
   coopDefenseBossSpawnedAtMs?: number;
+  /** Reliable, Late-Join-faehiger Anker eines inszenierten Boss-Intros (vor dem eigentlichen Spawn). */
+  coopDefenseBossIntro?: import('../config/bossIntros').BossIntroState;
   coopDefenseHumanPlayerCount?: number;
   // Historischer Ergebnis-/Round-Snapshot. Der aktive World-Aufbau liest die Map aus dem
   // WorldDescriptor; dieses Feld bleibt nur fuer Ergebnisdarstellung und Unlock-Auswertung.

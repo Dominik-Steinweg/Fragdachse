@@ -1,4 +1,5 @@
 import { resolveEnemyLifecycleTotals } from './coopDefenseEnemyLifecycle';
+import { isBossIntroPresetId, type BossIntroPresetId } from './bossIntros';
 import { normalizeFogStrength } from './groundFog';
 import { normalizeCoopDefenseWater } from './coopDefenseWater';
 import { turretAimConfig, validateTurretAimConfig, type TurretAimConfig } from './turretAim';
@@ -424,6 +425,8 @@ export interface ResolvedCoopDefenseMapMissionProgressConfig {
 export interface CoopDefenseMapBossConfig {
   readonly enemyKind: CoopDefenseEnemyKind;
   readonly spawnAtMs: number;
+  /** Optionales inszeniertes Intro; der eigentliche Spawn folgt erst nach dessen `emergeAtMs`. */
+  readonly intro?: { readonly preset: BossIntroPresetId };
 }
 
 export type CoopDefenseTimeOfDayTransitionStart =
@@ -3561,9 +3564,15 @@ function normalizeBossConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapBos
     );
   }
 
+  const intro = mapConfig.boss.intro;
+  if (intro !== undefined && !isBossIntroPresetId(intro?.preset)) {
+    throw new Error(`[coopDefenseMaps] Boss slot on map ${mapConfig.mapId} references unknown intro preset`);
+  }
+
   return {
     enemyKind: mapConfig.boss.enemyKind,
     spawnAtMs: Math.floor(mapConfig.boss.spawnAtMs),
+    ...(intro ? { intro: { preset: intro.preset } } : {}),
   };
 }
 

@@ -7,6 +7,7 @@ import type {
   SyncedCoopDefenseCarryItem,
 } from '../types';
 import type { EnemyEntity } from '../entities/EnemyEntity';
+import type { BossIntroState } from '../config/bossIntros';
 import type {
   CoopDefenseMapConfig,
   ResolvedCoopDefenseMapEventConfig,
@@ -49,6 +50,8 @@ export interface CoopMissionPresentationReadPort {
   readonly getBossProgress: (enemyKind: string) => MainObjectiveBossProgress | null;
   readonly getEnemyVulnerability: (enemyId: string, now: number) => boolean;
   readonly getCarryPresentationItems: () => readonly SyncedCoopDefenseCarryItem[];
+  /** Replizierter Anker eines inszenierten Boss-Intros der laufenden Runde. */
+  readonly getBossIntroState: () => BossIntroState | null;
 }
 
 export interface CoopMissionPresentationUiPort {
@@ -110,6 +113,9 @@ export interface CoopMissionPresentationUiPort {
       elapsedMs: number,
     ) => void;
     readonly syncHostileBaseIndicator: (mapConfig: CoopDefenseMapConfig) => void;
+    readonly syncBossIntro: (state: BossIntroState | null, now: number) => void;
+    /** Ob das Intro gerade das Erscheinen des Bosses inszeniert (ersetzt den Spawnblitz). */
+    readonly bossIntroOwnsSpawn: (state: BossIntroState | null, now: number) => boolean;
     /** Scene-lifetime visual objects are destroyed only with the Scene, never on Activity detach. */
     readonly destroy: () => void;
     readonly reset: () => void;
@@ -127,6 +133,11 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
   private runtime: CoopMissionRuntime | null = null;
   private presentationActive = false;
   private clientCarryPresentationItems: readonly SyncedCoopDefenseCarryItem[] | null = null;
+  /** Ein inszeniertes Boss-Intro ersetzt den generischen Spawnblitz seines Bosses (Host wie Client). */
+  private readonly spawnEffectSuppressor = this.mapConfig.boss?.intro
+    ? (kind: string): boolean => kind === this.mapConfig.boss?.enemyKind
+      && this.ui.worldSpace.bossIntroOwnsSpawn(this.reads.getBossIntroState(), this.reads.getSynchronizedNow())
+    : null;
 
   constructor(
     private readonly mapConfig: CoopDefenseMapConfig,
@@ -141,10 +152,12 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     this.presentationActive = false;
     this.clientCarryPresentationItems = null;
     this.ui.mapEvents.setMapEvents(this.mapConfig.mapEvents ?? []);
+    runtime.enemyManager?.setSpawnEffectSuppressor(this.spawnEffectSuppressor);
   }
 
   detach(): void {
     if (!this.runtime) return;
+    this.runtime.enemyManager?.setSpawnEffectSuppressor(null);
     this.runtime = null;
     this.clearPresentation();
   }
@@ -162,6 +175,7 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
       return;
     }
     this.presentationActive = true;
+    this.runtime.enemyManager?.setSpawnEffectSuppressor(this.spawnEffectSuppressor);
 
     const elapsedMs = this.runtime.getMissionNow(this.reads.getSynchronizedNow()) - this.reads.getArenaStartTime();
     const missionProgress = this.reads.getMissionProgressPresentationState();
@@ -234,6 +248,7 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
       elapsedMs,
     );
     this.ui.worldSpace.syncHostileBaseIndicator(this.mapConfig);
+    this.ui.worldSpace.syncBossIntro(this.reads.getBossIntroState(), this.reads.getSynchronizedNow());
   }
 
   /**
@@ -246,6 +261,8 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     if (!runtime) return;
 
     if (!frame.stateAvailable) return;
+    // Der Gegner-Manager kann nach dem Attach neu entstehen; der Filter muss vor dem Snapshot sitzen.
+    runtime.enemyManager?.setSpawnEffectSuppressor(this.spawnEffectSuppressor);
     if (frame.newSnapshot) {
       runtime.enemyManager?.applySnapshot(frame.enemySnapshot);
     }
