@@ -2914,6 +2914,13 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:effects/BossIntroGraveyardRenderer.ts:buildIntro/setDepth/setDepth/2","owner":"effects/BossIntroGraveyardRenderer.ts","component":"buildIntro/setDepth/setDepth/2","height":"body","lighting":"material","camera":"world","depths":[9.3],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"buildIntro/setDepth/setDepth/2","expression":"DEPTH_GRAVE_STONE"}},
   {"id":"cpu:effects/BossIntroGraveyardRenderer.ts:buildIntro/setDepth/setDepth/3","owner":"effects/BossIntroGraveyardRenderer.ts","component":"buildIntro/setDepth/setDepth/3","height":"body","lighting":"material","camera":"world","depths":[9.35],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"buildIntro/setDepth/setDepth/3","expression":"DEPTH_GRAVE_FRAGMENT"}},
   {"id":"cpu:effects/BossIntroGraveyardRenderer.ts:buildIntro/setDepth/setDepth/4","owner":"effects/BossIntroGraveyardRenderer.ts","component":"buildIntro/setDepth/setDepth/4","height":"high","lighting":"emissive","camera":"world","depths":[19.58],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"buildIntro/setDepth/setDepth/4","expression":"DEPTH_GRAVE_MIST"}},
+  {"id":"cpu:effects/VoidRiftIntroRenderer.ts:module/this.veins/setDepth/0","owner":"effects/VoidRiftIntroRenderer.ts","component":"module/this.veins/setDepth/0","height":"ground","lighting":"emissive","camera":"world","depths":[5.13],"blends":["ADD"],"profiles":["G"],"role":"effect","source":{"selector":"module/this.veins/setDepth/0","expression":"DEPTH_VEINS"}},
+  {"id":"cpu:effects/VoidRiftIntroRenderer.ts:module/this.scar/setDepth/0","owner":"effects/VoidRiftIntroRenderer.ts","component":"module/this.scar/setDepth/0","height":"ground","lighting":"emissive","camera":"world","depths":[5.135],"blends":["ADD"],"profiles":["G"],"role":"effect","source":{"selector":"module/this.scar/setDepth/0","expression":"DEPTH_VEINS + 0.005"}},
+  {"id":"cpu:effects/VoidRiftIntroRenderer.ts:module/this.riftGlow/setDepth/0","owner":"effects/VoidRiftIntroRenderer.ts","component":"module/this.riftGlow/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[19.55],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"module/this.riftGlow/setDepth/0","expression":"DEPTH_RIFT_GLOW"}},
+  {"id":"cpu:effects/VoidRiftIntroRenderer.ts:module/this.riftBody/setDepth/0","owner":"effects/VoidRiftIntroRenderer.ts","component":"module/this.riftBody/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[19.57],"blends":["NORMAL"],"profiles":["E"],"role":"effect","source":{"selector":"module/this.riftBody/setDepth/0","expression":"DEPTH_RIFT_BODY"}},
+  {"id":"cpu:effects/VoidRiftIntroRenderer.ts:module/this.riftNebula/setDepth/0","owner":"effects/VoidRiftIntroRenderer.ts","component":"module/this.riftNebula/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[19.575],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"module/this.riftNebula/setDepth/0","expression":"DEPTH_RIFT_BODY + 0.005"}},
+  {"id":"cpu:effects/VoidRiftIntroRenderer.ts:module/this.riftRim/setDepth/0","owner":"effects/VoidRiftIntroRenderer.ts","component":"module/this.riftRim/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[19.59],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"module/this.riftRim/setDepth/0","expression":"DEPTH_RIFT_RIM"}},
+  {"id":"cpu:effects/VoidRiftIntroRenderer.ts:module/this.shockRing/setDepth/0","owner":"effects/VoidRiftIntroRenderer.ts","component":"module/this.shockRing/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[19.61],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"module/this.shockRing/setDepth/0","expression":"DEPTH_SHOCK_RING"}},
   {"id":"cpu:effects/CoopDefenseMissionProgressRenderer.ts:createCheckpoints/quad/setDepth/0","owner":"effects/CoopDefenseMissionProgressRenderer.ts","component":"createCheckpoints/quad/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[8.5],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"createCheckpoints/quad/setDepth/0","expression":"DEPTH.ROCKS - 0.5"}},
   {"id":"cpu:effects/CoopDefenseMissionProgressRenderer.ts:syncBarriers/image/setDepth/0","owner":"effects/CoopDefenseMissionProgressRenderer.ts","component":"syncBarriers/image/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"syncBarriers/image/setDepth/0","expression":"DEPTH.ROCKS"}},
   {"id":"cpu:effects/CoopDefenseSecondaryObjectiveMarkerRenderer.ts:build/container/setDepth/0","owner":"effects/CoopDefenseSecondaryObjectiveMarkerRenderer.ts","component":"build/container/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[12],"blends":["NORMAL"],"profiles":["K"],"role":"ui","source":{"selector":"build/container/setDepth/0","expression":"DEPTH.BASES + 8"}},
@@ -4128,6 +4135,64 @@ export const CPU_SOURCE_CONTRACTS = {
       {
         "key": "buildIntro/setDepth/setDepth/4",
         "expression": "DEPTH_GRAVE_MIST",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "effects/VoidRiftIntroRenderer.ts": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.veins/setDepth/0",
+        "expression": "DEPTH_VEINS",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.scar/setDepth/0",
+        "expression": "DEPTH_VEINS + 0.005",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.riftGlow/setDepth/0",
+        "expression": "DEPTH_RIFT_GLOW",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.riftBody/setDepth/0",
+        "expression": "DEPTH_RIFT_BODY",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.riftNebula/setDepth/0",
+        "expression": "DEPTH_RIFT_BODY + 0.005",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.riftRim/setDepth/0",
+        "expression": "DEPTH_RIFT_RIM",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.shockRing/setDepth/0",
+        "expression": "DEPTH_SHOCK_RING",
         "blends": [
           "ADD"
         ]

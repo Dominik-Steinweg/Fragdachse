@@ -94,28 +94,28 @@
       "id": "void-hunter-opening-support",
       "start": {
         "type": "time",
-        "atMs": 7000
+        "atMs": 1500
       },
       "groups": [
         {
           "enemyKind": "zombie-badger",
-          "count": 6,
+          "count": 3,
           "front": "west"
         },
         {
           "enemyKind": "demon-badger",
-          "count": 3,
+          "count": 1,
           "delayMs": 900,
           "front": "west"
         },
         {
           "enemyKind": "zombie-badger",
-          "count": 6,
+          "count": 3,
           "front": "east"
         },
         {
           "enemyKind": "demon-badger",
-          "count": 3,
+          "count": 1,
           "delayMs": 900,
           "front": "east"
         }
@@ -231,7 +231,8 @@
   ],
   "boss": {
     "enemyKind": "void-hunter",
-    "spawnAtMs": 2500,
+    "spawnAtMs": 0,
+    "startAfterEncounterId": "void-hunter-opening-support",
     "intro": { "preset": "void-sparks" }
   },
   "itemDrop": {

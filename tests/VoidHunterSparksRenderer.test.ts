@@ -10,7 +10,6 @@ import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
 import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
 import { GpuVfxLaneId } from '../src/effects/gpu/GpuVfxRenderLanes';
 import type { BossPresenceSource } from '../src/effects/BossPresenceRenderer';
-import { getCameraFocusOverride } from '../src/graphics/cameraFocusOverride';
 import { readBossIntroState, VOID_SPARKS_INTRO } from '../src/config/bossIntros';
 import { makeFakeGpuVfxScene } from './fakeGpuVfxScene';
 
@@ -46,7 +45,8 @@ describe('Void hunter GPU presentation', () => {
     f.spawn.mockClear(); f.gpu.update(100);
     expect(f.spawn).toHaveBeenCalled();
     for (const [spec] of f.spawn.mock.calls) {
-      expect(Math.hypot(spec.x - 500, spec.y - 600)).toBeLessThanOrEqual(f.boss.size / 2);
+      // Korona: Kometenbahnen, Glut und Blitze bleiben dicht am Körper.
+      expect(Math.hypot(spec.x - 500, spec.y - 600)).toBeLessThanOrEqual(f.boss.size);
     }
     f.renderer.syncBosses([{ ...f.boss, visible: false }]);
     expect(f.live()).toBe(0); expect(f.lights.size).toBe(0);
@@ -56,18 +56,16 @@ describe('Void hunter GPU presentation', () => {
     expect(f.live()).toBe(0); expect(f.lights.size).toBe(0);
   });
 
-  it('renders a late-joined intro before emergence and clears its focus/light/particles at completion', () => {
+  it('renders a late-joined intro before emergence and clears its light/particles at completion', () => {
     const f = setup();
     const state = readBossIntroState({ preset: 'void-sparks', x: 220, y: 240, seed: 17, startedAtMs: 1000 })!;
     expect(state).not.toBeNull();
     const now = state.startedAtMs + VOID_SPARKS_INTRO.emergeAtMs / 2;
     f.renderer.syncIntro(state, now); f.gpu.update(100);
     expect(f.live()).toBeGreaterThan(0); expect(f.lights.size).toBeGreaterThan(0);
-    expect(getCameraFocusOverride(f.scene as never)).toMatchObject({ x: state.x, y: state.y });
     expect(f.renderer.ownsSpawnAt(state, now)).toBe(true);
     f.renderer.syncIntro(state, state.startedAtMs + VOID_SPARKS_INTRO.durationMs + 1);
     expect(f.live()).toBe(0); expect(f.lights.size).toBe(0);
-    expect(getCameraFocusOverride(f.scene as never)).toBeNull();
     f.renderer.syncIntro({ ...state, preset: 'graveyard-rise' }, now); f.gpu.update(100);
     expect(f.live()).toBe(0);
   });

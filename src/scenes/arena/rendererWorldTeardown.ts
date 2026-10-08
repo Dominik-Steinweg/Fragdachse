@@ -61,6 +61,7 @@ export function resetRenderersForWorldPresentationTeardown(
   bundle.bossIntro.clear();
   bundle.bossPresence.clear();
   bundle.voidHunterSparks.clear();
+  bundle.voidRift.clear();
   bundle.meteor.clear();
   bundle.rockDestruction.clear();
   bundle.carryZones.clear();

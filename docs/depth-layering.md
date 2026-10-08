@@ -52,7 +52,7 @@ Die Allowlist beschreibt bekannte Abweichungen; der aktuelle Umfang folgt aus
 | D06 | Material-/Projektilfamilie außerhalb Sonnenpass | 103 |
 | D07 | Gleichstand Sonnenpass 14,5 | 1 |
 | D08 | Gleichstand Kronen 20 | 3 |
-| D10 | uneinheitlicher Emissionsvertrag | 240 |
+| D10 | uneinheitlicher Emissionsvertrag | 242 |
 | D11 | Welt-UI unter Licht-/Nebelbehandlung | 13 |
 
 D09 (lokale Kronenöffnung), D12 (Schattenempfänger), D13 (Begründung hoher Effekte) und D14

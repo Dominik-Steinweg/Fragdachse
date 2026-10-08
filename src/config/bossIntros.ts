@@ -7,10 +7,31 @@ export type BossIntroPresetId = 'graveyard-rise' | 'void-sparks';
 
 export const BOSS_INTRO_PRESET_IDS: readonly BossIntroPresetId[] = ['graveyard-rise', 'void-sparks'];
 
+/**
+ * „Riss aus einer anderen Dimension“: Anomalie → Riss öffnet sich → Kollaps → Erscheinen.
+ * Alle Zeiten ab Intro-Start; GPU-Funken und CPU-Riss lesen dieselbe Zeitachse.
+ */
 export const VOID_SPARKS_INTRO = {
-  emergeAtMs: 3_600,
-  durationMs: 4_600,
+  emergeAtMs: 5_200,
+  durationMs: 7_800,
   spawnEdgeMarginCells: 5,
+  /** Funken sickern ein, Bodenrisse kriechen aus. */
+  anomalyEndMs: 1_400,
+  /** Der Riss öffnet sich zuerst in der Länge, dann in der Breite. */
+  riftOpenStartMs: 1_200,
+  riftOpenEndMs: 3_300,
+  /** Der Riss zieht sich zur Linie zusammen; danach ein kurzer Moment Stille. */
+  collapseStartMs: 4_550,
+  collapseEndMs: 4_950,
+  riftLengthPx: 260,
+  riftWidthPx: 92,
+  veinRadiusPx: 230,
+  shockwaveRadiusPx: 440,
+  shockwaveMs: 750,
+  scarFadeMs: 2_200,
+  arcs: { startMs: 2_100, endMs: 4_550, minIntervalMs: 140, maxIntervalMs: 340, reachPx: 230 },
+  rumble: { startMs: 2_000, amplitudePx: 8 },
+  camera: { panInMs: 1_400, holdAfterEmergeMs: 1_300, panOutMs: 1_300, zoom: 1.5 },
 } as const;
 
 export interface GraveyardRiseIntroPreset {

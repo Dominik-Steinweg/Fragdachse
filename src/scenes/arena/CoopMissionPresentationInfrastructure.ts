@@ -181,6 +181,7 @@ export class CoopMissionPresentationInfrastructure {
           if (this.destroyed) return;
           input.renderers.bossIntro.sync(state, now, true);
           input.renderers.voidHunterSparks.syncIntro(state, now);
+          input.renderers.voidRift.sync(state, now);
           this.announceBossIntro(state, now);
         },
         syncBossPresence: (sources, now) => {
@@ -258,6 +259,7 @@ export class CoopMissionPresentationInfrastructure {
     input.renderers.bossIntro.clear();
     input.renderers.bossPresence.clear();
     input.renderers.voidHunterSparks.clear();
+    input.renderers.voidRift.clear();
     input.renderers.secondaryObjectiveMarkers.destroy();
     input.renderers.missionProgress.destroy();
     input.renderers.carryZones.clear();
@@ -272,6 +274,7 @@ export class CoopMissionPresentationInfrastructure {
     input.renderers.bossIntro.clear();
     input.renderers.bossPresence.clear();
     input.renderers.voidHunterSparks.clear();
+    input.renderers.voidRift.clear();
     this.announcedBossIntroKey = null;
     input.renderers.secondaryObjectiveMarkers.clear();
     input.renderers.missionProgress.clear();

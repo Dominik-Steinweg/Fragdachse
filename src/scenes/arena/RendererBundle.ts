@@ -11,6 +11,7 @@ import { MovementEffectsRenderer } from '../../effects/MovementEffectsRenderer';
 import { BurrowGpuRenderer } from '../../effects/BurrowGpuRenderer';
 import { BossIntroGraveyardRenderer } from '../../effects/BossIntroGraveyardRenderer';
 import { BossPresenceRenderer } from '../../effects/BossPresenceRenderer';
+import { VoidRiftIntroRenderer } from '../../effects/VoidRiftIntroRenderer';
 import { VoidHunterSparksRenderer } from '../../effects/VoidHunterSparksRenderer';
 import { createEarthbreakFissureLayers } from '../../effects/earthbreak/EarthbreakFissureGpuLayer';
 import * as Phaser from 'phaser';
@@ -128,6 +129,7 @@ export interface RendererBundle {
   bossIntro:           BossIntroGraveyardRenderer;
   bossPresence:        BossPresenceRenderer;
   voidHunterSparks:    VoidHunterSparksRenderer;
+  voidRift:            VoidRiftIntroRenderer;
   combatGoreGpu:      CombatGoreGpuRenderer;
   entityBurnGpu:       EntityBurnGpuController;
   mgAttrition:         MgAttritionRenderer;
@@ -430,6 +432,8 @@ export function* createRendererBundleSteps(
   cleanup.push(() => bossPresence.destroy());
   const voidHunterSparks = new VoidHunterSparksRenderer(scene, gpuVfx, lighting);
   cleanup.push(() => voidHunterSparks.destroy());
+  const voidRift = new VoidRiftIntroRenderer(scene, lighting);
+  cleanup.push(() => voidRift.destroy());
   return {
     interactions,
     turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, plasmaBurnerCharge, healingAura, guardianSpirit, repairDrone, attackDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
@@ -447,6 +451,7 @@ export function* createRendererBundleSteps(
     bossIntro,
     bossPresence,
     voidHunterSparks,
+    voidRift,
     combatGoreGpu,
     entityBurnGpu,
     mgAttrition,
@@ -524,6 +529,7 @@ export function wireRenderersToCameraFeedback(
   bundle.meteor.setCameraFeedback(controller);
   bundle.beer.setCameraFeedback(controller);
   bundle.bossIntro.setCameraFeedback(controller);
+  bundle.voidRift.setCameraFeedback(controller);
 }
 
 /**
@@ -537,6 +543,7 @@ export function wireRenderersToDistortion(
 ): void {
   bundle.timeBubble.setDistortionComposer(composer);
   bundle.blackHole.setDistortionComposer(composer);
+  bundle.voidRift.setDistortionComposer(composer);
 }
 
 /** Wire GameAudioSystem to renderers that play sounds. */
@@ -546,4 +553,5 @@ export function wireRenderersToAudioSystem(bundle: RendererBundle, audioSystem: 
   bundle.energyShield.setAudioSystem(audioSystem);
   bundle.nuke.setAudioSystem(audioSystem);
   bundle.bossIntro.setAudioSystem(audioSystem);
+  bundle.voidRift.setAudioSystem(audioSystem);
 }
