@@ -104,6 +104,7 @@ export const GpuVfxLaneId = {
   ExplosionLowGlow:      43,
   TrainAftermathSmoke:   44,
   TrainAftermathDebris:  45,
+  MovementGlow:          46,
 } as const;
 
 export type GpuVfxLaneId = (typeof GpuVfxLaneId)[keyof typeof GpuVfxLaneId];
@@ -837,5 +838,14 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     capacity: 96, maxLifetimeMs: 9000, order: 'ordered', reserveCritical: 0,
     rationale: 'Long-lived train fragments stay lit, below their smoke and canopies; movement grit keeps the short TrainBody lane.',
     capacityRationale: 'At most 64 ballistic bodies plus a small overlap reserve; no per-fragment Phaser objects.',
+  },
+  {
+    id: GpuVfxLaneId.MovementGlow, label: 'movement-glow', depth: DEPTH.DECALS + 0.11,
+    blendMode: Phaser.BlendModes.ADD,
+    eases: [GpuVfxEase.Linear, GpuVfxEase.CubicIn],
+    capacity: MOVEMENT_FX.footprintGlowCapacity, maxLifetimeMs: MOVEMENT_FX.footprintLifeMaxMs,
+    order: 'add-over-opaque', reserveCritical: 0,
+    rationale: 'Additive footprint glow (e.g. the Grave Titan) sits directly above its NORMAL print on MovementGround and below actors, so the paw covers it; ground-glow lights keep it visible at night.',
+    capacityRationale: 'Only authored glowing walkers emit here, one copy per printed paw; a few bosses at four-second prints stay far below this cap.',
   },
 ];

@@ -17,6 +17,7 @@ import { GAME_WIDTH, GAME_HEIGHT } from '../../config';
 import { getVisibleWorldView } from '../../graphics/CameraWorldView';
 import type { TrainDevPassOptions } from '../../train/TrainManager';
 import { setCameraBaseScroll } from '../../graphics/cameraBaseScroll';
+import { getCameraFocusOverride, resolveCameraFocusZoom } from '../../graphics/cameraFocusOverride';
 import { ScenarioClock } from './clock';
 import { visualTest, bindVisualTestBootClock } from './visualTest';
 import { BootScreen } from '../../ui/BootScreen';
@@ -728,16 +729,20 @@ export class DevScenarioController {
     try { point = this.trainCameraPoint ?? (this.cameraAtTarget ? this.world(this.aim) : this.runtime.navigationLabPort.getPlayerPosition()); }
     catch (error) { this.cameraAtTarget = false; this.fail(error); return; }
     if (!point) return;
+    // Inszenierte Fokusse (Boss-Intro) laufen auch hier, damit Schwenk und Zoom pruefbar sind.
+    const focus = this.trainCameraPoint ? null : getCameraFocusOverride(this.scene);
+    if (focus) point = { x: point.x + (focus.x - point.x) * focus.weight, y: point.y + (focus.y - point.y) * focus.weight };
+    const zoom = this.zoom * resolveCameraFocusZoom(focus);
     const camera = this.scene.cameras.main;
     camera.removeBounds();
-    camera.setZoom(this.scene.scale.width / GAME_WIDTH * this.zoom, this.scene.scale.height / GAME_HEIGHT * this.zoom);
+    camera.setZoom(this.scene.scale.width / GAME_WIDTH * zoom, this.scene.scale.height / GAME_HEIGHT * zoom);
     if (this.trainCameraPoint) {
       // Arena uses origin (0,0); Phaser centerOn assumes the unzoomed half viewport.
       // Invert the actual origin/zoom instead, also valid after a DPR or viewport resize.
       camera.stopFollow();
       const view = getVisibleWorldView(camera);
       camera.setScroll(camera.scrollX + point.x - view.centerX, camera.scrollY + point.y - view.centerY);
-    } else camera.setScroll(point.x - GAME_WIDTH / this.zoom / 2, point.y - GAME_HEIGHT / this.zoom / 2);
+    } else camera.setScroll(point.x - GAME_WIDTH / zoom / 2, point.y - GAME_HEIGHT / zoom / 2);
     setCameraBaseScroll(this.scene, camera.scrollX, camera.scrollY);
   }
   snapshot(): Record<string, unknown> {

@@ -129,6 +129,8 @@ export const DEPTH_LAYER_EXCEPTIONS: readonly LayerException[] = [
   {"id":"cpu:effects/AttackDroneRenderer.ts:createDrone/this.scene.add/setDepth/0","deviation":"material-outside-sun","finding":"D06"},
   {"id":"cpu:effects/AttackDroneRenderer.ts:createDrone/this.scene.add/setDepth/1","deviation":"material-outside-sun","finding":"D06"},
   {"id":"cpu:effects/AttackDroneRenderer.ts:createDrone/this.scene.add/setDepth/3","deviation":"material-outside-sun","finding":"D06"},
+  {"id":"gpu:MovementFootprintGlow","deviation":"emission-under-lightmap","finding":"D10"},
+  {"id":"lane:MovementGlow","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/BfgRenderer.ts:createVisual/coreEmitter/createEmitter/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/BfgRenderer.ts:createVisual/outerEmitter/createEmitter/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/BfgRenderer.ts:createVisual/sparkEmitter/createEmitter/0","deviation":"emission-under-lightmap","finding":"D10"},

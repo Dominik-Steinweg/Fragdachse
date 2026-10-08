@@ -132,6 +132,20 @@ export const LIGHT_PRESETS = {
     flickerAmount: 0,
     flickerHz: 0,
   },
+  /** Wie `firefly`, aber inszenierte Glühwürmchen (Boss, Intro) gewinnen Budgetplätze vor Ambient-Tieren. */
+  stagedFirefly: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 115,
+    color: 0xc9e94a,
+    intensity: 0.45,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 2,
+    flickerAmount: 0,
+    flickerHz: 0,
+  },
   firefly: {
     enabled: true,
     shape: 'radial',

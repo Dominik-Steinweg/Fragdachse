@@ -8,6 +8,7 @@ import type {
 } from '../types';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { BossIntroState } from '../config/bossIntros';
+import type { BossPresenceSource } from '../effects/BossPresenceRenderer';
 import type {
   CoopDefenseMapConfig,
   ResolvedCoopDefenseMapEventConfig,
@@ -114,6 +115,7 @@ export interface CoopMissionPresentationUiPort {
     ) => void;
     readonly syncHostileBaseIndicator: (mapConfig: CoopDefenseMapConfig) => void;
     readonly syncBossIntro: (state: BossIntroState | null, now: number) => void;
+    readonly syncBossPresence: (sources: readonly BossPresenceSource[], now: number) => void;
     /** Ob das Intro gerade das Erscheinen des Bosses inszeniert (ersetzt den Spawnblitz). */
     readonly bossIntroOwnsSpawn: (state: BossIntroState | null, now: number) => boolean;
     /** Scene-lifetime visual objects are destroyed only with the Scene, never on Activity detach. */
@@ -249,6 +251,27 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     );
     this.ui.worldSpace.syncHostileBaseIndicator(this.mapConfig);
     this.ui.worldSpace.syncBossIntro(this.reads.getBossIntroState(), this.reads.getSynchronizedNow());
+    this.syncBossPresence();
+  }
+
+  private readonly bossPresenceSources: BossPresenceSource[] = [];
+
+  /** Glühwürmchen und Fußspuren um Bosse, die solche Präsenz-Effekte authored haben. */
+  private syncBossPresence(): void {
+    this.bossPresenceSources.length = 0;
+    for (const enemy of this.runtime?.enemyManager?.getAllEnemies() ?? []) {
+      const presence = enemy.getBossPresence();
+      if (!presence || !enemy.sprite.active || enemy.getHp() <= 0) continue;
+      this.bossPresenceSources.push({
+        id: enemy.id,
+        x: enemy.sprite.x,
+        y: enemy.sprite.y,
+        size: enemy.getSize(),
+        visible: enemy.sprite.visible && !enemy.isBurrowed(),
+        presence,
+      });
+    }
+    this.ui.worldSpace.syncBossPresence(this.bossPresenceSources, this.reads.getSynchronizedNow());
   }
 
   /**

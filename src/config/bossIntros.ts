@@ -43,7 +43,6 @@ export interface GraveyardRiseIntroPreset {
     readonly count: number;
     readonly startMs: number;
     readonly orbitRadius: number;
-    readonly color: number;
   };
   readonly churn: {
     readonly startMs: number;
@@ -61,6 +60,8 @@ export interface GraveyardRiseIntroPreset {
     /** Wie lange nach dem Durchbruch die Kamera noch auf dem Boss bleibt. */
     readonly holdAfterEmergeMs: number;
     readonly panOutMs: number;
+    /** Zusaetzlicher Kamerazoom am Fokuspunkt (1 = kein Zoom). */
+    readonly zoom: number;
   };
 }
 
@@ -83,10 +84,10 @@ export const GRAVEYARD_RISE_INTRO: GraveyardRiseIntroPreset = {
     sizeJitter: 0.2,
     plotWidthPx: 26,
   },
-  fireflies: { count: 28, startMs: 1_000, orbitRadius: 175, color: 0xc9e94a },
+  fireflies: { count: 20, startMs: 1_000, orbitRadius: 175 },
   churn: { startMs: 3_000, radius: 64, rumbleAmplitudePx: 6 },
   shatter: { fragmentsPerStone: 4, fragmentLifetimeMs: 1_500, fragmentSpeed: 260, shockwaveRadius: 190 },
-  camera: { panInMs: 1_200, holdAfterEmergeMs: 900, panOutMs: 1_100 },
+  camera: { panInMs: 1_400, holdAfterEmergeMs: 1_100, panOutMs: 1_300, zoom: 1.45 },
 };
 
 export function getBossIntroPreset(id: BossIntroPresetId): GraveyardRiseIntroPreset {

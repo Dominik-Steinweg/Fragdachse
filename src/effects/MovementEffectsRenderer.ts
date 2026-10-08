@@ -3,6 +3,7 @@ import { MOVEMENT_FX } from '../config/movementEffects';
 import { mixColors } from './EffectUtils';
 import { MovementParticleBudget } from './MovementParticleBudget';
 import type { BurrowGpuRenderer } from './BurrowGpuRenderer';
+import type { LightingSystem } from './LightingSystem';
 import {
   createMovementVisualSample, MovementStepSampler,
   type MovementContactSink, type MovementVisualSample, type MovementVisualSource,
@@ -25,6 +26,17 @@ interface Track {
 }
 
 interface MovementView { x: number; y: number; width: number; height: number; }
+
+/** Bodenlicht eines leuchtenden Abdrucks; es verglimmt mit demselben Verlauf wie der Abdruck. */
+interface GlowPrintLight {
+  x: number;
+  y: number;
+  radiusPx: number;
+  intensity: number;
+  color: number;
+  bornAt: number;
+  endsAt: number;
+}
 const PAW_FRAMES = {
   compact: GpuVfxFrameId.MovementPawCompact,
   clawed: GpuVfxFrameId.MovementPawClawed,
@@ -54,9 +66,16 @@ export class MovementEffectsRenderer {
   private readonly prints = new MovementParticleBudget(MOVEMENT_FX.footprintCapacity, MOVEMENT_FX.playerFootprintReserve);
   private readonly dust = new MovementParticleBudget(MOVEMENT_FX.dustCapacity, MOVEMENT_FX.playerDustReserve);
   private readonly footprint: GpuVfxSpawnSpec;
+  private readonly footprintGlow: GpuVfxSpawnSpec;
   private readonly walkDust: GpuVfxSpawnSpec;
   private readonly dashDust: GpuVfxSpawnSpec;
   private readonly footprintSource: number;
+  private readonly footprintGlowSource: number;
+  private readonly glowPrints = new MovementParticleBudget(MOVEMENT_FX.footprintGlowCapacity, 0);
+  /** Aktive Bodenlichter; zugleich der an die Lichtkarte ausgeliehene Frame. */
+  private readonly glowLights: GlowPrintLight[] = [];
+  private readonly glowLightFrame = { lights: this.glowLights, lightCount: 0 };
+  private lighting: Pick<LightingSystem, 'setGroundGlowLights'> | null = null;
   private readonly walkSource: number;
   private readonly dashSource: number;
   private terrain: TerrainColorSnapshot | null = null;
@@ -77,9 +96,11 @@ export class MovementEffectsRenderer {
     private readonly burrow?: Pick<BurrowGpuRenderer, 'playDashTrail'>,
   ) {
     this.footprint = gpu.createSpec(GpuVfxEffectId.MovementFootprint);
+    this.footprintGlow = gpu.createSpec(GpuVfxEffectId.MovementFootprintGlow);
     this.walkDust = gpu.createSpec(GpuVfxEffectId.MovementWalkDust);
     this.dashDust = gpu.createSpec(GpuVfxEffectId.MovementDashDust);
     this.footprintSource = gpu.createSource(GpuVfxEffectId.MovementFootprint);
+    this.footprintGlowSource = gpu.createSource(GpuVfxEffectId.MovementFootprintGlow);
     this.walkSource = gpu.createSource(GpuVfxEffectId.MovementWalkDust);
     this.dashSource = gpu.createSource(GpuVfxEffectId.MovementDashDust);
     this.generation = gpu.emissionGeneration;
@@ -155,7 +176,8 @@ export class MovementEffectsRenderer {
     this.captured = false;
     if (this.generation !== this.gpu.emissionGeneration) { this.clear(); return; }
     this.now = now;
-    this.prints.retire(now); this.dust.retire(now);
+    this.prints.retire(now); this.dust.retire(now); this.glowPrints.retire(now);
+    this.syncGlowLights(now);
     for (const track of this.players) this.advance(track);
     // Changing the first enemy avoids permanently starving the tail of a large wave.
     for (let i = 0; i < this.enemies.length; i++) {
@@ -213,16 +235,64 @@ export class MovementEffectsRenderer {
     const spec = this.footprint;
     const tuning = MOVEMENT_FX.footprint;
     const size = Math.max(0.85, Math.min(1.5, Math.sqrt(s.size / 32)));
+    const glowScale = s.footprintGlow ? MOVEMENT_FX.footprintGlow.scale : 1;
     spec.frame = PAW_FRAMES[s.footprint];
     spec.x = x; spec.y = y;
     spec.rotation = facing + Math.PI / 2 + (Math.random() - 0.5) * 0.13;
-    spec.scaleStart = spec.scaleEnd = tuning.scale * size * (0.94 + Math.random() * 0.12);
+    spec.scaleStart = spec.scaleEnd = tuning.scale * size * glowScale * (0.94 + Math.random() * 0.12);
     spec.alphaStart = tuning.alphaMin + Math.random() * (tuning.alphaMax - tuning.alphaMin); spec.alphaEnd = 0;
     spec.alphaEase = GpuVfxEase.CubicIn;
-    spec.tint = mixColors(this.terrain?.sample(x, y) ?? 0x8c8874, tuning.ink, tuning.inkMix);
+    const ink = mixColors(this.terrain?.sample(x, y) ?? 0x8c8874, tuning.ink, tuning.inkMix);
+    spec.tint = s.footprintGlow ? mixColors(ink, s.footprintGlow, MOVEMENT_FX.footprintGlow.inkMix) : ink;
     spec.lifeMs = MOVEMENT_FX.footprintLifeMinMs + Math.random()
       * (MOVEMENT_FX.footprintLifeMaxMs - MOVEMENT_FX.footprintLifeMinMs);
-    if (this.gpu.spawn(spec, this.footprintSource, this.now, age)) this.prints.record(this.now + spec.lifeMs - age);
+    if (!this.gpu.spawn(spec, this.footprintSource, this.now, age)) return;
+    this.prints.record(this.now + spec.lifeMs - age);
+    if (s.footprintGlow) this.spawnFootprintGlow(spec, s.footprintGlow, age);
+  }
+
+  /**
+   * Deckungsgleiche Leuchtkopie desselben Abdrucks, direkt über dem Abdruck und unter den
+   * Figuren: die Pfote verdeckt sie. Ein kleines Bodenlicht in der Lichtkarte hält sie nachts
+   * sichtbar; beides verglimmt mit dem Abdruck.
+   */
+  private spawnFootprintGlow(print: GpuVfxSpawnSpec, color: number, age: number): void {
+    if (!this.glowPrints.canSpawn(false)) return;
+    const tuning = MOVEMENT_FX.footprintGlow;
+    const spec = this.footprintGlow;
+    spec.frame = print.frame;
+    spec.x = print.x; spec.y = print.y;
+    spec.rotation = print.rotation;
+    spec.scaleStart = spec.scaleEnd = print.scaleStart;
+    spec.alphaStart = tuning.alpha; spec.alphaEnd = 0;
+    spec.alphaEase = GpuVfxEase.CubicIn;
+    spec.tint = color;
+    spec.lifeMs = print.lifeMs;
+    if (!this.gpu.spawn(spec, this.footprintGlowSource, this.now, age)) return;
+    const bornAt = this.now - age;
+    this.glowPrints.record(bornAt + spec.lifeMs);
+    this.glowLights.push({ x: print.x, y: print.y, radiusPx: tuning.lightRadiusPx * print.scaleStart,
+      intensity: tuning.lightIntensity, color, bornAt, endsAt: bornAt + spec.lifeMs });
+  }
+
+  /** Bodenlichter mit demselben CubicIn-Verglimmen wie die Abdrücke an die Lichtkarte melden. */
+  private syncGlowLights(now: number): void {
+    let kept = 0;
+    for (const light of this.glowLights) {
+      if (light.endsAt <= now) continue;
+      const t = Math.max(0, (now - light.bornAt) / (light.endsAt - light.bornAt));
+      light.intensity = MOVEMENT_FX.footprintGlow.lightIntensity * (1 - t * t * t);
+      this.glowLights[kept++] = light;
+    }
+    this.glowLights.length = kept;
+    this.glowLightFrame.lightCount = kept;
+    this.lighting?.setGroundGlowLights(this, kept > 0 ? this.glowLightFrame : null);
+  }
+
+  /** Bodenlichter leuchtender Fußspuren laufen über die gesammelten Bodenleuchten der Lichtkarte. */
+  setLightingSystem(lighting: Pick<LightingSystem, 'setGroundGlowLights'> | null): void {
+    this.lighting?.setGroundGlowLights(this, null);
+    this.lighting = lighting;
   }
 
   private spawnDust(
@@ -274,9 +344,14 @@ export class MovementEffectsRenderer {
   clear(): void {
     this.tracks.clear(); this.players.length = this.enemies.length = 0;
     this.prints.clear(); this.dust.clear(); this.interruptions.clear();
+    this.glowPrints.clear();
+    this.glowLights.length = 0;
+    this.glowLightFrame.lightCount = 0;
+    this.lighting?.setGroundGlowLights(this, null);
     this.captured = false; this.current = null;
     this.dustSequence = 0;
     this.gpu.clearSource(this.footprintSource);
+    this.gpu.clearSource(this.footprintGlowSource);
     this.gpu.clearSource(this.walkSource);
     this.gpu.clearSource(this.dashSource);
     this.generation = this.gpu.emissionGeneration;
@@ -286,6 +361,7 @@ export class MovementEffectsRenderer {
     if (this.destroyed) return;
     this.clear(); this.destroyed = true; this.world = null; this.terrain = null;
     this.gpu.releaseSource(this.footprintSource);
+    this.gpu.releaseSource(this.footprintGlowSource);
     this.gpu.releaseSource(this.walkSource);
     this.gpu.releaseSource(this.dashSource);
   }

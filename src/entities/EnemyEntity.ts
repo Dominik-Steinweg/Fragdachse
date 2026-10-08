@@ -86,8 +86,6 @@ export class EnemyEntity {
   private timebombFuseRenderer: TimebombFuseRenderer | null = null;
   private voidMolotovWindupRing: Phaser.GameObjects.Arc | null = null;
   private bossAura: Phaser.GameObjects.Ellipse | null = null;
-  private bossRing: Phaser.GameObjects.Ellipse | null = null;
-  private bossLabel: Phaser.GameObjects.Text | null = null;
   private maxHp = 1;
   private currentHp = 0;
   private targetX: number;
@@ -357,6 +355,7 @@ export class EnemyEntity {
       : this.walkingRequested ? 'walk' : 'idle';
     out.isBurrowDash = false;
     out.revision = this.movementRevision;
+    out.footprintGlow = this.faction === 'hostile' ? this.config.bossPresence?.footprintGlowColor ?? 0 : 0;
   }
 
   /**
@@ -590,8 +589,6 @@ export class EnemyEntity {
     this.ownerRing?.setVisible(!burrowed);
     this.glowHalo?.setVisible(!burrowed);
     this.bossAura?.setVisible(!burrowed);
-    this.bossRing?.setVisible(!burrowed);
-    this.bossLabel?.setVisible(!burrowed);
     this.healthBars?.suppress(this.healthBar, burrowed);
     this.syncWalkingAnimation();
     this.syncBar();
@@ -600,6 +597,11 @@ export class EnemyEntity {
 
   isBoss(): boolean {
     return this.config.isBoss === true;
+  }
+
+  /** Authored Präsenz-Effekte eines feindlichen Bosses (Glühwürmchen, Fußspuren), sonst `undefined`. */
+  getBossPresence(): ResolvedCoopDefenseEnemyConfig['bossPresence'] {
+    return this.faction === 'hostile' && this.config.isBoss ? this.config.bossPresence : undefined;
   }
 
   getAttackWeapons(): readonly EnemyAttackWeapon[] {
@@ -782,8 +784,6 @@ export class EnemyEntity {
     this.destroyVoidMolotovWindupVisuals();
     this.lighting?.releaseLight(this.glowLightKey());
     this.bossAura?.destroy();
-    this.bossRing?.destroy();
-    this.bossLabel?.destroy();
     this.sprite.destroy();
   }
 
@@ -969,40 +969,23 @@ export class EnemyEntity {
     this.voidMolotovWindupRing = null;
   }
 
+  /**
+   * Bosse werden über Glow, Präsenz-Effekte (Glühwürmchen, Fußspuren) und ihren HP-Balken
+   * lesbar, nicht über HUD-artige Rahmen oder Beschriftung. Nur der Leerenjäger behält seinen
+   * Phasen-Sockel, weil er den Phasenwechsel anzeigt.
+   */
   private createBossDecorations(scene: Phaser.Scene): void {
-    if (!this.config.isBoss) return;
+    if (!this.config.isBoss || !this.config.voidHunterBoss) return;
 
     this.bossAura = scene.add.ellipse(
       this.sprite.x,
       this.sprite.y + this.config.size * 0.2,
       this.config.size * 1.45,
       this.config.size * 0.72,
-      this.config.voidHunterBoss ? 0x6f16a8 : 0x6d1026,
+      0x6f16a8,
       0.38,
     ).setDepth(DEPTH.PLAYERS - 0.075);
-    this.bossRing = scene.add.ellipse(
-      this.sprite.x,
-      this.sprite.y + this.config.size * 0.2,
-      this.config.size * 1.7,
-      this.config.size * 0.88,
-      0x000000,
-      0,
-    ).setStrokeStyle(3, COLORS.GOLD_1, 0.9).setDepth(DEPTH.PLAYERS - 0.07);
     registerGraphicsObject(scene, 'bossDecoration', this.bossAura);
-    registerGraphicsObject(scene, 'bossDecoration', this.bossRing);
-    this.bossLabel = scene.add.text(
-      this.sprite.x,
-      this.sprite.y - this.config.size * 0.5 - 11,
-      `BOSS · ${getEnemyName(this.kind, getLocale()).toUpperCase()}`,
-      {
-        fontSize: '13px',
-        fontFamily: 'monospace',
-        fontStyle: 'bold',
-        color: '#ffd166',
-        stroke: '#33000d',
-        strokeThickness: 4,
-      },
-    ).setOrigin(0.5, 1).setDepth(DEPTH.PLAYERS + 2);
   }
 
   /**
@@ -1030,8 +1013,6 @@ export class EnemyEntity {
       );
       this.bossAura?.setFillStyle(phaseTwo ? 0xb82fff : 0x6f16a8, phaseTwo ? 0.56 : 0.38);
     }
-    this.bossRing?.setPosition(this.sprite.x, auraY);
-    this.bossLabel?.setPosition(this.sprite.x, this.sprite.y - this.config.size * 0.5 - 11);
   }
 
   private createWeapons(): readonly EnemyAttackWeapon[] {

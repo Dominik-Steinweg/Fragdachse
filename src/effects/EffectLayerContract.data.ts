@@ -798,7 +798,8 @@ export const GPU_LAYER_CONTRACTS = {
 ,
   "TrainAftermathSmoke": {"id": "lane:TrainAftermathSmoke", "owner": "effects/gpu/GpuVfxRenderLanes.ts", "component": "TrainAftermathSmoke", "height": "body", "lighting": "material", "camera": "world", "depths": [13.2], "blends": ["NORMAL"], "profiles": ["K"], "role": "effect"},
   // train8: rising fragments only; they break before landing. Small landed chips use TrainResidue/TrainGround (5.35).
-  "TrainAftermathDebris": {"id": "lane:TrainAftermathDebris", "owner": "effects/gpu/GpuVfxRenderLanes.ts", "component": "TrainAftermathDebris", "height": "body", "lighting": "material", "camera": "world", "depths": [11.2], "blends": ["NORMAL"], "profiles": ["K"], "role": "effect"}
+  "TrainAftermathDebris": {"id": "lane:TrainAftermathDebris", "owner": "effects/gpu/GpuVfxRenderLanes.ts", "component": "TrainAftermathDebris", "height": "body", "lighting": "material", "camera": "world", "depths": [11.2], "blends": ["NORMAL"], "profiles": ["K"], "role": "effect"},
+  "MovementGlow": {"id": "lane:MovementGlow", "owner": "effects/gpu/GpuVfxRenderLanes.ts", "component": "MovementGlow", "height": "ground", "lighting": "emissive", "camera": "world", "depths": [5.11], "blends": ["ADD"], "profiles": ["G"], "role": "effect"}
 } as const satisfies Record<keyof typeof GpuVfxLaneId, LayerContract>;
 export const GPU_EFFECT_CONTRACTS = {
   "AirstrikeBomb": {
@@ -2780,6 +2781,27 @@ export const GPU_EFFECT_CONTRACTS = {
     "lanes": [
       "ExplosionLowBody"
     ]
+  },
+  "MovementFootprintGlow": {
+    "id": "gpu:MovementFootprintGlow",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "MovementFootprintGlow",
+    "height": "ground",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      5.11
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "G"
+    ],
+    "role": "effect",
+    "lanes": [
+      "MovementGlow"
+    ]
   }
 } as const satisfies Record<keyof typeof GpuVfxEffectId, LayerContract & {readonly lanes: readonly (keyof typeof GpuVfxLaneId)[]}>;
 export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
@@ -2886,8 +2908,7 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:effects/BossIntroGraveyardRenderer.ts:buildIntro/setDepth/setDepth/1","owner":"effects/BossIntroGraveyardRenderer.ts","component":"buildIntro/setDepth/setDepth/1","height":"ground","lighting":"material","camera":"world","depths":[9.2],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"buildIntro/setDepth/setDepth/1","expression":"DEPTH_GRAVE_SHADOW"}},
   {"id":"cpu:effects/BossIntroGraveyardRenderer.ts:buildIntro/setDepth/setDepth/2","owner":"effects/BossIntroGraveyardRenderer.ts","component":"buildIntro/setDepth/setDepth/2","height":"body","lighting":"material","camera":"world","depths":[9.3],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"buildIntro/setDepth/setDepth/2","expression":"DEPTH_GRAVE_STONE"}},
   {"id":"cpu:effects/BossIntroGraveyardRenderer.ts:buildIntro/setDepth/setDepth/3","owner":"effects/BossIntroGraveyardRenderer.ts","component":"buildIntro/setDepth/setDepth/3","height":"body","lighting":"material","camera":"world","depths":[9.35],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"buildIntro/setDepth/setDepth/3","expression":"DEPTH_GRAVE_FRAGMENT"}},
-  {"id":"cpu:effects/BossIntroGraveyardRenderer.ts:buildIntro/setDepth/setDepth/4","owner":"effects/BossIntroGraveyardRenderer.ts","component":"buildIntro/setDepth/setDepth/4","height":"high","lighting":"emissive","camera":"world","depths":[19.62],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"buildIntro/setDepth/setDepth/4","expression":"DEPTH_GRAVE_FIREFLY"}},
-  {"id":"cpu:effects/BossIntroGraveyardRenderer.ts:buildIntro/setDepth/setDepth/5","owner":"effects/BossIntroGraveyardRenderer.ts","component":"buildIntro/setDepth/setDepth/5","height":"high","lighting":"emissive","camera":"world","depths":[19.58],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"buildIntro/setDepth/setDepth/5","expression":"DEPTH_GRAVE_MIST"}},
+  {"id":"cpu:effects/BossIntroGraveyardRenderer.ts:buildIntro/setDepth/setDepth/4","owner":"effects/BossIntroGraveyardRenderer.ts","component":"buildIntro/setDepth/setDepth/4","height":"high","lighting":"emissive","camera":"world","depths":[19.58],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"buildIntro/setDepth/setDepth/4","expression":"DEPTH_GRAVE_MIST"}},
   {"id":"cpu:effects/CoopDefenseMissionProgressRenderer.ts:createCheckpoints/quad/setDepth/0","owner":"effects/CoopDefenseMissionProgressRenderer.ts","component":"createCheckpoints/quad/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[8.5],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"createCheckpoints/quad/setDepth/0","expression":"DEPTH.ROCKS - 0.5"}},
   {"id":"cpu:effects/CoopDefenseMissionProgressRenderer.ts:syncBarriers/image/setDepth/0","owner":"effects/CoopDefenseMissionProgressRenderer.ts","component":"syncBarriers/image/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"syncBarriers/image/setDepth/0","expression":"DEPTH.ROCKS"}},
   {"id":"cpu:effects/CoopDefenseSecondaryObjectiveMarkerRenderer.ts:build/container/setDepth/0","owner":"effects/CoopDefenseSecondaryObjectiveMarkerRenderer.ts","component":"build/container/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[12],"blends":["NORMAL"],"profiles":["K"],"role":"ui","source":{"selector":"build/container/setDepth/0","expression":"DEPTH.BASES + 8"}},
@@ -3171,8 +3192,6 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:entities/EnemyEntity.ts:createGlowHalo/this.glowHalo/setDepth/0","owner":"entities/EnemyEntity.ts","component":"createGlowHalo/this.glowHalo/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[9.91],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"createGlowHalo/this.glowHalo/setDepth/0","expression":"DEPTH.PLAYERS - 0.09"}},
   {"id":"cpu:entities/EnemyEntity.ts:syncVoidMolotovWindupVisuals/this.voidMolotovWindupRing/setDepth/0","owner":"entities/EnemyEntity.ts","component":"syncVoidMolotovWindupVisuals/this.voidMolotovWindupRing/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9.96],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"syncVoidMolotovWindupVisuals/this.voidMolotovWindupRing/setDepth/0","expression":"this.sprite.depth + 0.01"}},
   {"id":"cpu:entities/EnemyEntity.ts:createBossDecorations/this.bossAura/setDepth/0","owner":"entities/EnemyEntity.ts","component":"createBossDecorations/this.bossAura/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9.925],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"createBossDecorations/this.bossAura/setDepth/0","expression":"DEPTH.PLAYERS - 0.075"}},
-  {"id":"cpu:entities/EnemyEntity.ts:createBossDecorations/this.bossRing/setDepth/0","owner":"entities/EnemyEntity.ts","component":"createBossDecorations/this.bossRing/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9.93],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"createBossDecorations/this.bossRing/setDepth/0","expression":"DEPTH.PLAYERS - 0.07"}},
-  {"id":"cpu:entities/EnemyEntity.ts:createBossDecorations/this.bossLabel/setDepth/0","owner":"entities/EnemyEntity.ts","component":"createBossDecorations/this.bossLabel/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[12],"blends":["NORMAL"],"profiles":["K"],"role":"effect","source":{"selector":"createBossDecorations/this.bossLabel/setDepth/0","expression":"DEPTH.PLAYERS + 2"}},
   {"id":"cpu:entities/HeldItemVisual.ts:setDepth/this.image/setDepth/0","owner":"entities/HeldItemVisual.ts","component":"setDepth/this.image/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"setDepth/this.image/setDepth/0","expression":"depth"}},
   {"id":"cpu:entities/HeldItemVisual.ts:setItem/this.image/setDepth/0","owner":"entities/HeldItemVisual.ts","component":"setItem/this.image/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"setItem/this.image/setDepth/0","expression":"this.depth"}},
   {"id":"cpu:entities/PlayerEntity.ts:module/this.sprite/setDepth/0","owner":"entities/PlayerEntity.ts","component":"module/this.sprite/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[10],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.sprite/setDepth/0","expression":"DEPTH.PLAYERS"}},
@@ -4104,13 +4123,6 @@ export const CPU_SOURCE_CONTRACTS = {
       },
       {
         "key": "buildIntro/setDepth/setDepth/4",
-        "expression": "DEPTH_GRAVE_FIREFLY",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "buildIntro/setDepth/setDepth/5",
         "expression": "DEPTH_GRAVE_MIST",
         "blends": [
           "ADD"
@@ -6923,20 +6935,6 @@ export const CPU_SOURCE_CONTRACTS = {
       {
         "key": "createBossDecorations/this.bossAura/setDepth/0",
         "expression": "DEPTH.PLAYERS - 0.075",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "createBossDecorations/this.bossRing/setDepth/0",
-        "expression": "DEPTH.PLAYERS - 0.07",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "createBossDecorations/this.bossLabel/setDepth/0",
-        "expression": "DEPTH.PLAYERS + 2",
         "blends": [
           "NORMAL"
         ]

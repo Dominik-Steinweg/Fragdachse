@@ -105,3 +105,35 @@ describe('CoopDefenseBossSystem intro', () => {
     expect(onBossIntroStarted).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('CoopDefenseBossSystem start condition', () => {
+  it('waits for the authored start condition and reports time since the actual spawn', () => {
+    let waveCleared = false;
+    let bossActive = false;
+    const spawnBoss = vi.fn(() => {
+      bossActive = true;
+      return true;
+    });
+    const system = new CoopDefenseBossSystem(
+      { enemyKind: 'grave-titan', spawnAtMs: 0, startAfterEncounterId: 'wave-1' },
+      { hasEnemyKind: () => bossActive } as never,
+      { hostSpawnBoss: spawnBoss },
+      undefined,
+      undefined,
+      () => 0.5,
+      () => waveCleared,
+    );
+
+    system.hostUpdate(30_000, false);
+    expect(spawnBoss).not.toHaveBeenCalled();
+    expect(system.getMsSinceSpawn()).toBeNull();
+
+    waveCleared = true;
+    system.hostUpdate(16, false);
+    expect(spawnBoss).toHaveBeenCalledTimes(1);
+    expect(system.getMsSinceSpawn()).toBe(0);
+
+    system.hostUpdate(7_500, false);
+    expect(system.getMsSinceSpawn()).toBe(7_500);
+  });
+});

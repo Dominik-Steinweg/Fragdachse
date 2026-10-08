@@ -1,6 +1,5 @@
 import * as Phaser from 'phaser';
 import { DEPTH, DEPTH_LIGHTING } from '../config';
-import { AMBIENT_WILDLIFE } from '../arena/AmbientWildlifeConfig';
 import { getBossIntroPreset, type BossIntroState, type GraveyardRiseIntroPreset } from '../config/bossIntros';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { clearCameraFocusOverride, setCameraFocusOverride } from '../graphics/cameraFocusOverride';
@@ -8,6 +7,7 @@ import type { BurrowGpuRenderer } from './BurrowGpuRenderer';
 import type { CameraFeedbackController } from './camera/CameraFeedbackController';
 import { CAMERA_FEEDBACK_PRIORITY, impactExceptional, impactLight, sustainedRumble } from './camera/cameraFeedbackPresets';
 import { ensureCanvasTexture, registerGraphicsObject } from './EffectUtils';
+import { GraveFireflySwarm, type GraveFireflyPose } from './GraveFireflySwarm';
 import type { LightingSystem } from './LightingSystem';
 
 /**
@@ -32,9 +32,6 @@ const TOMB_TEXTURE_PX = 128;
 /** Gezeichnete Fläche des Grabfelds in seiner 64×96-Textur. */
 const PLOT_DRAWN_WIDTH_PX = 44;
 const PLOT_DRAWN_LENGTH_PX = 80;
-const TEX_FIREFLY = '__grave_firefly';
-/** Glühwürmchen in derselben Größe wie die Ambient-Glühwürmchen der Welt. */
-const FIREFLY_HALO_RADIUS_PX = AMBIENT_WILDLIFE.fireflyGlowRadius * AMBIENT_WILDLIFE.visualScale;
 const FRAGMENT_TEXTURE_PX = 64;
 
 /** Bodennahe Grabfelder und der Krater liegen bei den Decals. */
@@ -46,12 +43,10 @@ const DEPTH_GRAVE_FRAGMENT = DEPTH.ROCKS + 0.35;
 /** Selbstleuchtendes (Mondschein-Kegel, Nebel, Glühwürmchen) liegt über der Lichtkarte. */
 const DEPTH_GRAVE_MOONBEAM = DEPTH_LIGHTING + 0.06;
 const DEPTH_GRAVE_MIST = DEPTH_LIGHTING + 0.08;
-const DEPTH_GRAVE_FIREFLY = DEPTH_LIGHTING + 0.12;
 
 const MOON_LIGHT_KEY = 'bossIntro:moon';
 const RIM_LIGHT_KEY = 'bossIntro:rim';
 const RUMBLE_ID = 'bossIntro:rumble';
-const FIREFLY_LIGHT_COUNT = 6;
 const MIST_COUNT = 7;
 /** Einmal-Effekte zünden nur, wenn ihr Zeitpunkt höchstens so lange zurückliegt. */
 const ONE_SHOT_STALE_MS = 450;
@@ -77,12 +72,16 @@ interface FragmentLayout {
   readonly scale: number;
 }
 
+/** Ruhiges Umherschweben um einen Ankerpunkt, wie bei den Ambient-Glühwürmchen. */
 interface FireflyLayout {
-  readonly radius: number;
-  readonly angularSpeed: number;
-  readonly phase: number;
-  readonly wobble: number;
-  readonly pulseHz: number;
+  readonly anchorX: number;
+  readonly anchorY: number;
+  readonly amplitudeX: number;
+  readonly amplitudeY: number;
+  readonly frequencyX: number;
+  readonly frequencyY: number;
+  readonly phaseX: number;
+  readonly phaseY: number;
   readonly delayMs: number;
 }
 
@@ -125,7 +124,8 @@ export class BossIntroGraveyardRenderer {
   private readonly shadows: Phaser.GameObjects.Image[] = [];
   private readonly stones: Phaser.GameObjects.Image[] = [];
   private readonly fragments: Phaser.GameObjects.Image[] = [];
-  private readonly fireflies: Phaser.GameObjects.Image[] = [];
+  private fireflySwarm: GraveFireflySwarm | null = null;
+  private readonly fireflyPoses: GraveFireflyPose[] = [];
   private readonly mist: Phaser.GameObjects.Image[] = [];
   private readonly crater: Phaser.GameObjects.Image;
   private readonly moonbeam: Phaser.GameObjects.Image;
@@ -191,9 +191,11 @@ export class BossIntroGraveyardRenderer {
   clear(): void {
     if (this.current === null && !this.lightsActive) return;
     this.current = null;
-    for (const list of [this.plots, this.shadows, this.stones, this.fragments, this.fireflies, this.mist]) {
+    for (const list of [this.plots, this.shadows, this.stones, this.fragments, this.mist]) {
       for (const image of list) image.setVisible(false);
     }
+    this.fireflySwarm?.destroy();
+    this.fireflySwarm = null;
     this.crater.setVisible(false);
     this.moonbeam.setVisible(false);
     this.releaseLights();
@@ -205,10 +207,11 @@ export class BossIntroGraveyardRenderer {
     if (this.destroyed) return;
     this.clear();
     this.destroyed = true;
-    for (const list of [this.plots, this.shadows, this.stones, this.fragments, this.fireflies, this.mist]) {
+    for (const list of [this.plots, this.shadows, this.stones, this.fragments, this.mist]) {
       for (const image of list) image.destroy();
       list.length = 0;
     }
+
     this.crater.destroy();
     this.moonbeam.destroy();
   }
@@ -285,13 +288,18 @@ export class BossIntroGraveyardRenderer {
 
     const fireflies: FireflyLayout[] = [];
     for (let index = 0; index < preset.fireflies.count; index += 1) {
+      const angle = random() * Math.PI * 2;
+      const distance = preset.fireflies.orbitRadius * Math.sqrt(0.15 + random() * 0.85);
       fireflies.push({
-        radius: preset.fireflies.orbitRadius * (0.4 + random() * 0.65),
-        angularSpeed: (random() < 0.5 ? -1 : 1) * (0.35 + random() * 0.55),
-        phase: random() * Math.PI * 2,
-        wobble: 8 + random() * 18,
-        pulseHz: 0.6 + random() * 1.1,
-        delayMs: random() * 900,
+        anchorX: Math.cos(angle) * distance,
+        anchorY: Math.sin(angle) * distance * 0.8,
+        amplitudeX: 18 + random() * 26,
+        amplitudeY: 14 + random() * 22,
+        frequencyX: 0.06 + random() * 0.08,
+        frequencyY: 0.05 + random() * 0.08,
+        phaseX: random() * Math.PI * 2,
+        phaseY: random() * Math.PI * 2,
+        delayMs: random() * 1_400,
       });
     }
 
@@ -315,8 +323,6 @@ export class BossIntroGraveyardRenderer {
     this.ensurePool(this.shadows, stones.length, () => this.createImage(TEX_SHADOW).setDepth(DEPTH_GRAVE_SHADOW));
     this.ensurePool(this.stones, stones.length, () => this.createImage(this.tombTexture(0)).setDepth(DEPTH_GRAVE_STONE));
     this.ensurePool(this.fragments, fragments.length, () => this.createImage(this.fragmentTexture(0)).setDepth(DEPTH_GRAVE_FRAGMENT));
-    this.ensurePool(this.fireflies, fireflies.length, () => this.createImage(TEX_FIREFLY)
-      .setDepth(DEPTH_GRAVE_FIREFLY).setBlendMode(Phaser.BlendModes.ADD));
     this.ensurePool(this.mist, MIST_COUNT, () => this.createImage(TEX_MIST)
       .setDepth(DEPTH_GRAVE_MIST).setBlendMode(Phaser.BlendModes.ADD));
     stones.forEach((stone, index) => {
@@ -325,6 +331,8 @@ export class BossIntroGraveyardRenderer {
         .setTint(0x000000).setTintMode(Phaser.TintModes.FILL);
     });
     fragments.forEach((fragment, index) => this.fragments[index].setTexture(this.fragmentTexture(fragment.variant)));
+
+    this.fireflySwarm = new GraveFireflySwarm(this.scene, this.lighting, 'bossIntro:firefly', fireflies.length, state.seed);
 
     // Late-Joiner sehen den aktuellen Zustand, aber keine nachgeholten Einmal-Effekte.
     return { key, state, preset, stones, fragments, fireflies, churnEvents, lastElapsedMs: elapsed - 60 };
@@ -344,8 +352,8 @@ export class BossIntroGraveyardRenderer {
       const shattered = elapsed >= emerge;
       // Grabfeld: erscheint mit dem Stein und bleibt nach dem Zerbersten noch kurz als Spur.
       const plotAlpha = shattered
-        ? 0.75 * (1 - smoothstep((elapsed - emerge) / 1_800))
-        : 0.75 * smoothstep(rise * 1.6);
+        ? 0.6 * (1 - smoothstep((elapsed - emerge) / 1_800))
+        : 0.6 * smoothstep(rise * 1.6);
       // Das Grabfeld liegt südlich vor dem Stein, in dessen Ausrichtung.
       const plotScale = preset.tombstones.plotWidthPx / PLOT_DRAWN_WIDTH_PX;
       const plotOffset = (PLOT_DRAWN_LENGTH_PX * plotScale) / 2 + 3;
@@ -462,38 +470,28 @@ export class BossIntroGraveyardRenderer {
         .setScale((2.4 + (index % 3) * 0.5) * swell);
     }
 
-    // Glühwürmchen umkreisen den Friedhof und stieben beim Durchbruch davon.
-    const fly = preset.fireflies;
-    let lightIndex = 0;
-    intro.fireflies.forEach((firefly, index) => {
-      const image = this.fireflies[index];
-      const appear = smoothstep((elapsed - fly.startMs - firefly.delayMs) / 700);
-      const scatter = Math.max(0, elapsed - emerge) / 1000;
-      const scatterFade = 1 - smoothstep(scatter / 1.2);
-      const strength = appear * scatterFade;
-      if (strength <= 0.01) {
-        image.setVisible(false);
-        this.lighting.releaseLight(`bossIntro:firefly:${index}`, { immediate: true });
-        return;
-      }
-      const seconds = elapsed / 1000;
-      const angle = firefly.phase + seconds * firefly.angularSpeed * (1 + scatter * 3);
-      const radius = firefly.radius * (1 + scatter * 1.8) + Math.sin(seconds * 2.1 + firefly.phase) * firefly.wobble;
-      const x = state.x + Math.cos(angle) * radius;
-      const y = state.y + Math.sin(angle) * radius * 0.8;
-      const pulse = 0.55 + 0.45 * Math.sin(seconds * Math.PI * 2 * firefly.pulseHz + firefly.phase);
-      image.setVisible(true).setPosition(x, y).setTint(fly.color)
-        .setAlpha(strength * (0.35 + pulse * 0.65))
-        .setScale((FIREFLY_HALO_RADIUS_PX * 2) / 64);
-      if (lightIndex < FIREFLY_LIGHT_COUNT && index % 2 === 0) {
-        this.lighting.setLight(`bossIntro:firefly:${index}`, 'firefly', x, y, {
-          radiusPx: 70,
-          intensity: 0.5 * strength * pulse,
-        });
-        lightIndex += 1;
-      }
-    });
-    void now;
+    // Glühwürmchen schweben ruhig über dem Friedhof und stieben beim Durchbruch davon.
+    const seconds = elapsed / 1000;
+    const scatter = Math.max(0, elapsed - emerge) / 1000;
+    const scatterFade = 1 - smoothstep(scatter / 1.4);
+    this.fireflyPoses.length = 0;
+    for (const firefly of intro.fireflies) {
+      const appear = smoothstep((elapsed - preset.fireflies.startMs - firefly.delayMs) / 900);
+      const spread = 1 + scatter * scatter * 2.2;
+      const omegaX = firefly.frequencyX * Math.PI * 2;
+      const omegaY = firefly.frequencyY * Math.PI * 2;
+      const x = state.x + firefly.anchorX * spread + Math.sin(seconds * omegaX + firefly.phaseX) * firefly.amplitudeX;
+      const y = state.y + firefly.anchorY * spread + Math.cos(seconds * omegaY + firefly.phaseY) * firefly.amplitudeY;
+      const vx = firefly.anchorX * scatter * 4.4 + Math.cos(seconds * omegaX + firefly.phaseX) * firefly.amplitudeX * omegaX;
+      const vy = firefly.anchorY * scatter * 4.4 - Math.sin(seconds * omegaY + firefly.phaseY) * firefly.amplitudeY * omegaY;
+      this.fireflyPoses.push({
+        x,
+        y,
+        heading: Math.atan2(vy, vx),
+        alpha: appear * scatterFade,
+      });
+    }
+    this.fireflySwarm?.sync(this.fireflyPoses, now);
   }
 
   private renderCamera(intro: IntroScene, elapsed: number): void {
@@ -502,7 +500,7 @@ export class BossIntroGraveyardRenderer {
     const weight = elapsed <= holdUntil
       ? smoothstep(elapsed / camera.panInMs)
       : 1 - smoothstep((elapsed - holdUntil) / camera.panOutMs);
-    setCameraFocusOverride(this.scene, intro.state.x, intro.state.y, weight);
+    setCameraFocusOverride(this.scene, intro.state.x, intro.state.y, weight, camera.zoom);
 
     const churnProgress = clamp01((elapsed - intro.preset.churn.startMs) / (intro.preset.emergeAtMs - intro.preset.churn.startMs));
     if (churnProgress > 0 && elapsed < intro.preset.emergeAtMs) {
@@ -546,9 +544,6 @@ export class BossIntroGraveyardRenderer {
     if (!this.lightsActive) return;
     this.lighting.releaseLight(MOON_LIGHT_KEY);
     this.lighting.releaseLight(RIM_LIGHT_KEY);
-    for (let index = 0; index < this.fireflies.length; index += 1) {
-      this.lighting.releaseLight(`bossIntro:firefly:${index}`, { immediate: true });
-    }
     this.lightsActive = false;
   }
 
@@ -591,17 +586,6 @@ export class BossIntroGraveyardRenderer {
       gradient.addColorStop(1, 'rgba(255,255,255,0)');
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, 128, 128);
-    });
-    // Kleiner heller Leib (≈ Ambient-Insekt) mit schwachem Halo.
-    ensureCanvasTexture(textures, TEX_FIREFLY, 64, 64, (ctx) => {
-      const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-      gradient.addColorStop(0, 'rgba(255,255,255,1)');
-      gradient.addColorStop(0.06, 'rgba(255,255,255,0.95)');
-      gradient.addColorStop(0.12, 'rgba(255,255,255,0.32)');
-      gradient.addColorStop(0.4, 'rgba(255,255,255,0.08)');
-      gradient.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, 64, 64);
     });
     ensureCanvasTexture(textures, TEX_MIST, 64, 64, (ctx) => {
       const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
@@ -734,26 +718,29 @@ function drawTombstone(ctx: Ctx, variant: number): void {
       break;
     }
     default: {
-      // Kleiner Obelisk von oben: Pyramidenspitze mit vier unterschiedlich hellen Flächen.
-      const s = 30;
-      ctx.fillStyle = '#474a45';
-      ctx.fillRect(c - s - 6, c - s - 6, (s + 6) * 2, (s + 6) * 2);
-      ctx.beginPath(); ctx.rect(c - s - 6, c - s - 6, (s + 6) * 2, (s + 6) * 2); outline(ctx);
-      const faces: [number, number, number, number, string][] = [
-        [c - s, c - s, c + s, c - s, '#c4c7bf'],
-        [c + s, c - s, c + s, c + s, '#8a8e87'],
-        [c + s, c + s, c - s, c + s, '#5d615c'],
-        [c - s, c + s, c - s, c - s, '#a5a9a1'],
-      ];
-      for (const [x0, y0, x1, y1, color] of faces) {
-        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.lineTo(c, c); ctx.closePath();
-        ctx.fillStyle = color; ctx.fill();
+      // Gotischer Spitzbogenstein mit eingemeißeltem Kreuz, gekippt wie Variante 2.
+      ctx.beginPath();
+      ctx.moveTo(c - 26, c + 30);
+      ctx.lineTo(c - 26, c - 8);
+      ctx.quadraticCurveTo(c - 24, c - 34, c, c - 44);
+      ctx.quadraticCurveTo(c + 24, c - 34, c + 26, c - 8);
+      ctx.lineTo(c + 26, c + 30);
+      ctx.closePath();
+      ctx.fillStyle = stoneFill(ctx, c - 26, c - 44, c + 26, c + 30);
+      ctx.fill();
+      outline(ctx);
+      ctx.strokeStyle = 'rgba(35,38,35,0.65)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(c, c - 30); ctx.lineTo(c, c + 6);
+      ctx.moveTo(c - 10, c - 18); ctx.lineTo(c + 10, c - 18);
+      ctx.stroke();
+      ctx.lineWidth = 2;
+      for (const y of [c + 14, c + 21]) {
+        ctx.beginPath(); ctx.moveTo(c - 14, y); ctx.lineTo(c + 14, y); ctx.stroke();
       }
-      ctx.beginPath(); ctx.rect(c - s, c - s, s * 2, s * 2); outline(ctx);
-      ctx.strokeStyle = 'rgba(30,32,30,0.5)';
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(c - s, c - s); ctx.lineTo(c + s, c + s); ctx.moveTo(c + s, c - s); ctx.lineTo(c - s, c + s); ctx.stroke();
-      speckle(ctx, 53, 24, { x: c - s - 6, y: c - s - 6, w: (s + 6) * 2, h: (s + 6) * 2 });
+      speckle(ctx, 53, 30, { x: c - 26, y: c - 44, w: 52, h: 74 });
+      crack(ctx, [[c + 26, c - 4], [c + 16, c + 2], [c + 19, c + 12]]);
       break;
     }
   }
@@ -782,15 +769,17 @@ function drawFragment(ctx: Ctx, variant: number): void {
 function drawGravePlot(ctx: Ctx): void {
   const random = createRandom(7);
   roundedRectPath(ctx, 10, 8, 44, 80, 14);
-  const gradient = ctx.createLinearGradient(10, 8, 54, 88);
-  gradient.addColorStop(0, '#4a3a2b');
-  gradient.addColorStop(1, '#2b2119');
+  // Weich gewölbter Erdhügel: dunkle Ränder, etwas hellerer Rücken.
+  const gradient = ctx.createLinearGradient(10, 0, 54, 0);
+  gradient.addColorStop(0, '#1d1611');
+  gradient.addColorStop(0.45, '#3a2d21');
+  gradient.addColorStop(1, '#16110c');
   ctx.fillStyle = gradient;
   ctx.fill();
   ctx.save();
   ctx.clip();
   for (let index = 0; index < 60; index += 1) {
-    ctx.fillStyle = random() < 0.5 ? 'rgba(110,88,64,0.55)' : 'rgba(18,13,9,0.5)';
+    ctx.fillStyle = random() < 0.4 ? 'rgba(92,72,50,0.45)' : 'rgba(14,10,7,0.55)';
     ctx.beginPath();
     ctx.arc(10 + random() * 44, 8 + random() * 80, 1 + random() * 3, 0, Math.PI * 2);
     ctx.fill();

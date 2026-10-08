@@ -16,11 +16,11 @@ import { ArenaBuilder, type ArenaBuilderResult } from '../arena/ArenaBuilder';
 import {
   ACTIVE_ARENA_METRICS_PROFILE,
   ARENA_MAX_X, ARENA_MAX_Y, ARENA_OFFSET_X, ARENA_OFFSET_Y,
-  ARENA_VIEWPORT_HEIGHT, ARENA_VIEWPORT_WIDTH,
+  ARENA_VIEWPORT_HEIGHT, ARENA_VIEWPORT_WIDTH, GAME_HEIGHT, GAME_WIDTH,
   NET_SMOOTH_TIME_MS,
 } from '../config';
 import { setCameraBaseScroll } from '../graphics/cameraBaseScroll';
-import { getCameraFocusOverride } from '../graphics/cameraFocusOverride';
+import { getCameraFocusOverride, resolveCameraFocusZoom } from '../graphics/cameraFocusOverride';
 import type { ArenaSpectatorCameraInput } from '../scenes/arena/ArenaInputBindings';
 import { advanceSpectatorCameraScroll } from '../scenes/arena/SpectatorCameraModel';
 import { getVisibleWorldView, type WorldViewRect } from '../ui/HostileBaseIndicator';
@@ -260,6 +260,8 @@ export class WorldPresentationFrameBinding {
   private destroyed = false;
   private readonly wildlifePlayers: WildlifePlayer[] = [];
   private lastCameraScrollX = 0;
+  private focusZoomApplied = false;
+  private focusZoomBoundsWereUsed = true;
   private lastCameraScrollY = 0;
   private spectatorCameraScrollX = 0;
   private spectatorCameraScrollY = 0;
@@ -350,11 +352,14 @@ export class WorldPresentationFrameBinding {
       this.lastCameraScrollY = 0;
       this.spectatorCameraScrollX = 0;
       this.spectatorCameraScrollY = 0;
+      // Ein inszenierter Zoom gilt nur in der normalen Spielerverfolgung.
+      this.syncFocusZoom(1);
       resetWorldCameraBase(this.input.scene);
       return;
     }
 
     if (spectator) {
+      this.syncFocusZoom(1);
       const spectatorInput = this.input.getSpectatorCameraInput();
       this.spectatorCameraScrollX = advanceSpectatorCameraScroll({
         currentScrollX: this.spectatorCameraScrollX,
@@ -383,6 +388,7 @@ export class WorldPresentationFrameBinding {
     const localSprite = this.input.getLocalPlayerSprite();
     const preparedStartFocus = this.input.isArenaLoading() || this.input.isArenaCountdownActive();
     if (!localSprite?.active || (!this.input.isLocalPlayerAlive() && !preparedStartFocus)) {
+      this.syncFocusZoom(1);
       camera.scrollX = this.lastCameraScrollX;
       camera.scrollY = this.lastCameraScrollY;
       setCameraBaseScroll(this.input.scene, this.lastCameraScrollX, this.lastCameraScrollY);
@@ -394,12 +400,19 @@ export class WorldPresentationFrameBinding {
     const focusScreenX = ARENA_OFFSET_X + ARENA_VIEWPORT_WIDTH * 0.5;
     const focusScreenY = ARENA_OFFSET_Y + ARENA_VIEWPORT_HEIGHT * 0.5;
     // Ein inszenierter Fokus (Boss-Intro) blendet das Spielerziel weich zu seinem Punkt über.
-    const focus = getCameraFocusOverride(this.input.scene);
-    const focusWeight = focus && !this.input.isArenaLoading() ? focus.weight : 0;
+    const focus = this.input.isArenaLoading() ? null : getCameraFocusOverride(this.input.scene);
+    const focusWeight = focus?.weight ?? 0;
     const followX = focus ? Phaser.Math.Linear(localSprite.x, focus.x, focusWeight) : localSprite.x;
     const followY = focus ? Phaser.Math.Linear(localSprite.y, focus.y, focusWeight) : localSprite.y;
-    const targetScrollX = Phaser.Math.Clamp(followX - focusScreenX, 0, maxScrollX);
-    const targetScrollY = Phaser.Math.Clamp(followY - focusScreenY, 0, maxScrollY);
+    // Die Kamera hat ihren Ursprung oben links; unter Zoom zeigt Bildschirmpunkt s die Welt bei
+    // scroll + s / zoom. Ziel und Klemmung rechnen deshalb im gezoomten Sichtfeld.
+    const zoom = this.syncFocusZoom(resolveCameraFocusZoom(focus));
+    const minScrollX = ARENA_OFFSET_X * (1 - 1 / zoom);
+    const minScrollY = ARENA_OFFSET_Y * (1 - 1 / zoom);
+    const zoomedMaxScrollX = zoom > 1 ? Math.max(minScrollX, ARENA_MAX_X - (ARENA_OFFSET_X + ARENA_VIEWPORT_WIDTH) / zoom) : maxScrollX;
+    const zoomedMaxScrollY = zoom > 1 ? Math.max(minScrollY, ARENA_MAX_Y - (ARENA_OFFSET_Y + ARENA_VIEWPORT_HEIGHT) / zoom) : maxScrollY;
+    const targetScrollX = Phaser.Math.Clamp(followX - focusScreenX / zoom, minScrollX, zoomedMaxScrollX);
+    const targetScrollY = Phaser.Math.Clamp(followY - focusScreenY / zoom, minScrollY, zoomedMaxScrollY);
     // The first local spawn is already known during loading; snap once so the startup working
     // set is not invalidated by a camera glide while the barrier is being evaluated.
     const followLerp = this.input.isArenaLoading() ? 1 : 1 - Math.exp(-deltaMs / 120);
@@ -408,6 +421,28 @@ export class WorldPresentationFrameBinding {
     camera.scrollX = this.lastCameraScrollX;
     camera.scrollY = this.lastCameraScrollY;
     setCameraBaseScroll(this.input.scene, this.lastCameraScrollX, this.lastCameraScrollY);
+  }
+
+  /**
+   * Multipliziert den Designzoom der Hauptkamera mit `factor` und gibt den angewandten Faktor
+   * zurueck. Lichtkarte und andere bildschirmfeste Ebenen skalieren um denselben Ursprung (0,0)
+   * mit und bleiben deshalb deckungsgleich. Waehrend des Zooms klemmt die Verfolgung selbst;
+   * Phasers Bounds sind auf den Designzoom zugeschnitten und werden so lange ausgesetzt.
+   */
+  private syncFocusZoom(factor: number): number {
+    const zoom = factor > 1.0005 ? factor : 1;
+    if (zoom === 1 && !this.focusZoomApplied) return 1;
+    const scene = this.input.scene;
+    const camera = scene.cameras.main;
+    camera.setZoom(scene.scale.width / GAME_WIDTH * zoom, scene.scale.height / GAME_HEIGHT * zoom);
+    if (zoom > 1 && !this.focusZoomApplied) {
+      this.focusZoomBoundsWereUsed = camera.useBounds;
+      camera.useBounds = false;
+    } else if (zoom === 1 && this.focusZoomApplied) {
+      camera.useBounds = this.focusZoomBoundsWereUsed;
+    }
+    this.focusZoomApplied = zoom > 1;
+    return zoom;
   }
 
   /**

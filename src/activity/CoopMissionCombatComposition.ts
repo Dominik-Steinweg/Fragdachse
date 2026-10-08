@@ -252,6 +252,11 @@ export class CoopMissionCombatComposition {
         spawnExecutor,
         this.options.onBossSpawned,
         this.options.onBossIntroStarted,
+        Math.random,
+        () => {
+          const encounterId = this.options.activity.mapConfig.boss?.startAfterEncounterId;
+          return !encounterId || (runtime.coopDefenseMapDirector?.isEncounterCleared(encounterId) ?? false);
+        },
       )
       : null;
     const mapDirector = encounterConfigs.length > 0
@@ -277,6 +282,10 @@ export class CoopMissionCombatComposition {
                 return runtime.coopDefenseMissionProgressSystem?.isDefenseResolved(start.defenseId) ?? false;
               case 'base-destroyed':
                 return this.options.getBase(start.baseId)?.isDestroyed() ?? false;
+              case 'after-boss-spawn': {
+                const sinceSpawn = runtime.coopDefenseBossSystem?.getMsSinceSpawn() ?? null;
+                return sinceSpawn !== null && sinceSpawn >= start.delayMs;
+              }
               case 'time':
               case 'after-previous':
                 return false;

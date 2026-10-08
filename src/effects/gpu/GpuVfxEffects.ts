@@ -105,6 +105,7 @@ export const GpuVfxEffectId = {
   ExplosionLowShockwave: 91,
   ExplosionLowCascade: 92,
   ExplosionLowEmberDown: 93,
+  MovementFootprintGlow: 94,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -711,6 +712,9 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     importance: 'standard',
     release: 'linger',
   },
+  // Selbstleuchtende Kopie authored leuchtender Fußspuren; Frame wird pro Abdruck gesetzt.
+  { id: GpuVfxEffectId.MovementFootprintGlow, label: 'movement.footprint-glow', lane: GpuVfxLaneId.MovementGlow,
+    frame: GpuVfxFrameId.MovementPawBroad, importance: 'decorative', release: 'linger' },
 ];
 
 /** Definition-level routing. No particle chooses height by radius, random state or position. */

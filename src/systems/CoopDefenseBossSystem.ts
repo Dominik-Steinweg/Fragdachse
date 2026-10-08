@@ -12,7 +12,7 @@ interface BossSpawnExecutor {
 type BossPhase =
   | { readonly type: 'waiting' }
   | { readonly type: 'intro'; readonly state: BossIntroState; readonly emergeAtElapsedMs: number }
-  | { readonly type: 'spawned' };
+  | { readonly type: 'spawned'; readonly spawnedAtElapsedMs: number };
 
 /**
  * Owns boss timing and defeat state; placement remains with the shared spawn executor.
@@ -30,14 +30,18 @@ export class CoopDefenseBossSystem {
     private readonly onBossSpawned?: (spawnedAtMs: number) => void,
     private readonly onBossIntroStarted?: (state: BossIntroState) => void,
     private readonly random: () => number = Math.random,
+    /** Zusaetzliche authored Startbedingung, z. B. "Welle 1 geraeumt". */
+    private readonly isStartSatisfied: () => boolean = () => true,
   ) {}
 
   hostUpdate(deltaMs: number, countdownActive: boolean, synchronizedNowMs = Date.now()): void {
-    if (countdownActive || this.phase.type === 'spawned') return;
+    if (countdownActive) return;
     this.elapsedMs += Number.isFinite(deltaMs) ? Math.max(0, deltaMs) : 0;
+    if (this.phase.type === 'spawned') return;
     if (this.elapsedMs < this.bossConfig.spawnAtMs) return;
 
     if (this.phase.type === 'waiting') {
+      if (!this.isStartSatisfied()) return;
       const intro = this.tryStartIntro(synchronizedNowMs);
       if (intro) {
         this.phase = intro;
@@ -61,6 +65,11 @@ export class CoopDefenseBossSystem {
   reset(): void {
     this.elapsedMs = 0;
     this.phase = { type: 'waiting' };
+  }
+
+  /** Missionszeit seit dem tatsaechlichen Boss-Spawn; `null`, solange der Boss nicht steht. */
+  getMsSinceSpawn(): number | null {
+    return this.phase.type === 'spawned' ? this.elapsedMs - this.phase.spawnedAtElapsedMs : null;
   }
 
   isBossDefeated(): boolean {
@@ -91,7 +100,7 @@ export class CoopDefenseBossSystem {
 
   private completeSpawn(spawned: boolean, synchronizedNowMs: number): void {
     if (!spawned) return;
-    this.phase = { type: 'spawned' };
+    this.phase = { type: 'spawned', spawnedAtElapsedMs: this.elapsedMs };
     this.onBossSpawned?.(synchronizedNowMs);
   }
 }

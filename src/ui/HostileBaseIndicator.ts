@@ -115,6 +115,8 @@ export class HostileBaseIndicator {
     let targetX: number | null = null;
     let targetY: number | null = null;
     let worldArrowY: number | null = null;
+    // Ein sichtbarer Boss ist über seine Präsenz-Effekte lesbar; der Pfeil bleibt nur am Bildrand.
+    let worldArrowWhenVisible = true;
 
     if (active && mapConfig?.objective === 'destroy-hostile-bases') {
       const target = baseManager?.getActiveMainBase('hostile');
@@ -135,6 +137,7 @@ export class HostileBaseIndicator {
         targetX = boss.sprite.x;
         targetY = boss.sprite.y;
         worldArrowY = boss.sprite.y - boss.sprite.displayHeight * 0.6 - 22;
+        worldArrowWhenVisible = false;
       }
     }
 
@@ -152,6 +155,12 @@ export class HostileBaseIndicator {
     // dieser Punkt im Bild liegt – bei bloßer Überschneidung der Bounding-Box stünde er noch
     // außerhalb des Sichtfelds und es wäre für einen Moment gar kein Marker sichtbar.
     const targetVisible = isWorldPointInsideView(targetX, targetY, view);
+
+    if (targetVisible && !worldArrowWhenVisible) {
+      this.worldArrow.setVisible(false);
+      this.edgeArrow.setVisible(false);
+      return;
+    }
 
     if (targetVisible) {
       const arrowX = targetX;

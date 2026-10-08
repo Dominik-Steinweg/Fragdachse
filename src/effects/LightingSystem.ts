@@ -116,6 +116,12 @@ interface ActiveLight {
   occlusionCache: OcclusionCache | null;
 }
 
+/** Ausgeliehener Frame kleiner farbiger Bodenleuchten (siehe {@link LightingSystem.setGroundGlowLights}). */
+export interface GroundGlowLightFrame {
+  readonly lights: readonly { x: number; y: number; radiusPx: number; intensity: number; color: number }[];
+  readonly lightCount: number;
+}
+
 export interface LightOverrides {
   radiusPx?: number;
   color?: number;
@@ -238,6 +244,10 @@ export class LightingSystem {
   private renderedEyeLights = 0;
   private readonly essenceFrames = new Map<object, EssenceLightFrame>();
   private essenceBatch: EnemyEyeBatch | null = null;
+  /** Kleine farbige Bodenleuchten (z. B. leuchtende Fußspuren), gesammelt in einem Draw. */
+  private readonly groundGlowFrames = new Map<object, GroundGlowLightFrame>();
+  private groundGlowBatch: EnemyEyeBatch | null = null;
+  private renderedGroundGlowLights = 0;
   private renderedEssenceLights = 0;
 
   private occluders: LightOccluderIndex | null = null;
@@ -504,6 +514,9 @@ export class LightingSystem {
     this.essenceFrames.clear();
     this.essenceBatch?.begin(0);
     this.renderedEssenceLights = 0;
+    this.groundGlowFrames.clear();
+    this.groundGlowBatch?.begin(0);
+    this.renderedGroundGlowLights = 0;
     for (const light of this.lights) {
       this.releaseExplosionCache(light);
       this.pool.push(light);
@@ -520,6 +533,8 @@ export class LightingSystem {
     this.enemyEyeBatch = null;
     this.essenceBatch?.destroy();
     this.essenceBatch = null;
+    this.groundGlowBatch?.destroy();
+    this.groundGlowBatch = null;
     this.vectorSuppressed = false;
     this.destroyRenderTargets();
     this.unsubscribeQuality?.();
@@ -563,6 +578,53 @@ export class LightingSystem {
       this.essenceBatch?.begin(0);
       this.renderedEssenceLights = 0;
     }
+  }
+
+  /**
+   * Viele kleine farbige Bodenleuchten außerhalb des Lichtbudgets, z. B. leuchtende
+   * Fußspuren. Ausgeliehene Frames; die Besitzeridentität trennt mehrere Quellen.
+   */
+  setGroundGlowLights(owner: object, frame: GroundGlowLightFrame | null): void {
+    if (frame && frame.lightCount > 0) this.groundGlowFrames.set(owner, frame);
+    else this.groundGlowFrames.delete(owner);
+    if (this.groundGlowFrames.size === 0) {
+      this.groundGlowBatch?.begin(0);
+      this.renderedGroundGlowLights = 0;
+    }
+  }
+
+  private countGroundGlowLights(): number {
+    let count = 0;
+    for (const frame of this.groundGlowFrames.values()) count += frame.lightCount;
+    return count;
+  }
+
+  private collectGroundGlowLights(scrollX: number, scrollY: number, overscanX: number, overscanY: number): number {
+    this.renderedGroundGlowLights = 0;
+    const count = this.countGroundGlowLights();
+    const factor = this.sky.lightFactor * GLOBAL_LIGHT_INTENSITY_MULT;
+    if (count === 0 || factor <= 0 || this.compositeSuppressed) {
+      this.groundGlowBatch?.begin(0);
+      return 0;
+    }
+    if (!this.groundGlowBatch) {
+      this.groundGlowBatch = new EnemyEyeBatch(this.scene, TEX_LIGHT_RADIAL, 256);
+      this.groundGlowBatch.layer.setBlendMode(Phaser.BlendModes.ADD).setName('ground-glow-lights');
+    }
+    this.groundGlowBatch.begin(Math.min(count, 256));
+    const scale = this.quality.lightMapScale;
+    for (const frame of this.groundGlowFrames.values()) {
+      for (let index = 0; index < frame.lightCount && this.renderedGroundGlowLights < 256; index++) {
+        const light = frame.lights[index], x = light.x - scrollX, y = light.y - scrollY, r = light.radiusPx;
+        if (x + r < -overscanX || y + r < -overscanY
+          || x - r > this.viewport.width + overscanX || y - r > this.viewport.height + overscanY) continue;
+        this.groundGlowBatch.write((x + overscanX) * scale, (y + overscanY) * scale,
+          r * 2 * scale, r * 2 * scale, 0, light.color, Math.min(1, light.intensity * factor));
+        this.renderedGroundGlowLights++;
+      }
+    }
+    this.groundGlowBatch.layer.setVisible(this.renderedGroundGlowLights > 0);
+    return this.renderedGroundGlowLights;
   }
 
   private countEssenceLights(): number {
@@ -747,6 +809,7 @@ export class LightingSystem {
     this.collectRenderQueue(now, scrollX, scrollY);
     const eyeLights = this.collectEnemyEyeLights(scrollX, scrollY, overscanX, overscanY);
     const essenceLights = this.collectEssenceLights(scrollX, scrollY, overscanX, overscanY);
+    const groundGlowLights = this.collectGroundGlowLights(scrollX, scrollY, overscanX, overscanY);
     const queueMs = metricsEnabled ? performance.now() - queueStartedAt : 0;
 
     this.frameOcclusionRefreshes = 0;
@@ -765,7 +828,7 @@ export class LightingSystem {
 
     const ambientColor = this.getAmbientColor();
     const ambientIsNeutral = ambientColor === NEUTRAL_AMBIENT_COLOR;
-    const queueEmpty = this.renderQueue.length === 0 && eyeLights === 0 && essenceLights === 0;
+    const queueEmpty = this.renderQueue.length === 0 && eyeLights === 0 && essenceLights === 0 && groundGlowLights === 0;
     this.syncLightBleed(overlay, !queueEmpty);
 
     // Reihenfolge ist tragend: erst Sichtbarkeit entscheiden, dann erst Befehle erzeugen.
@@ -828,6 +891,7 @@ export class LightingSystem {
     // One instanced draw for every visible eye light, independent of the ranked light budget.
     if (eyeLights > 0) overlay.draw(this.enemyEyeBatch!.layer);
     if (essenceLights > 0) overlay.draw(this.essenceBatch!.layer);
+    if (groundGlowLights > 0) overlay.draw(this.groundGlowBatch!.layer);
 
     const staticOccluderRevision = this.vectorSuppressed
       ? 0
@@ -840,7 +904,7 @@ export class LightingSystem {
     );
 
     let occludingUsed = 0;
-    let directLights = eyeLights + essenceLights;
+    let directLights = eyeLights + essenceLights + groundGlowLights;
     let fallbackOccludingLights = 0;
     let directMs = 0;
     let occlusionMs = 0;
@@ -849,12 +913,13 @@ export class LightingSystem {
     let falloffQuads = 0;
     let dynamicOccluderTests = 0;
     let dynamicOccluderHits = 0;
-    let commandCount = 1 + (eyeLights > 0 ? 1 : 0) + (essenceLights > 0 ? 1 : 0);
-    let radialLights = eyeLights + essenceLights;
+    let commandCount = 1 + (eyeLights > 0 ? 1 : 0) + (essenceLights > 0 ? 1 : 0) + (groundGlowLights > 0 ? 1 : 0);
+    let radialLights = eyeLights + essenceLights + groundGlowLights;
     let coneLights = 0;
     const presetCounts = countMetrics ? {} as Record<string, number> : null;
     if (presetCounts && eyeLights > 0) presetCounts.enemyEyes = eyeLights;
     if (presetCounts && essenceLights > 0) presetCounts.adrenalineEssence = essenceLights;
+    if (presetCounts && groundGlowLights > 0) presetCounts.groundGlow = groundGlowLights;
     for (const light of this.renderQueue) {
       if (countMetrics) {
         presetCounts![light.presetKey] = (presetCounts![light.presetKey] ?? 0) + 1;
@@ -926,8 +991,8 @@ export class LightingSystem {
 
     if (semanticMetricsEnabled) {
       this.recordAttributionMetrics(
-        this.lights.length + (this.enemyEyeFrame?.lightCount ?? 0) + this.countEssenceLights(),
-        this.renderQueue.length + eyeLights + essenceLights,
+        this.lights.length + (this.enemyEyeFrame?.lightCount ?? 0) + this.countEssenceLights() + this.countGroundGlowLights(),
+        this.renderQueue.length + eyeLights + essenceLights + groundGlowLights,
         occludingUsed,
         commandCount,
         shadowQuads,
@@ -949,8 +1014,8 @@ export class LightingSystem {
       directMs,
       occlusionMs,
       shadowGeometryMs,
-      activeLights: this.lights.length + (this.enemyEyeFrame?.lightCount ?? 0) + this.countEssenceLights(),
-      renderedLights: this.renderQueue.length + eyeLights + essenceLights,
+      activeLights: this.lights.length + (this.enemyEyeFrame?.lightCount ?? 0) + this.countEssenceLights() + this.countGroundGlowLights(),
+      renderedLights: this.renderQueue.length + eyeLights + essenceLights + groundGlowLights,
       directLights,
       occludingLights: occludingUsed,
       fallbackOccludingLights,

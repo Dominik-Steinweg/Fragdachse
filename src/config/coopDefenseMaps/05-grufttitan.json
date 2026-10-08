@@ -90,7 +90,8 @@
   ],
   "boss": {
     "enemyKind": "grave-titan",
-    "spawnAtMs": 7500,
+    "spawnAtMs": 0,
+    "startAfterEncounterId": "grave-titan-opening-support",
     "intro": { "preset": "graveyard-rise" }
   },
   "encounters": [
@@ -104,7 +105,7 @@
     },
     {
       "id": "grave-titan-phase-support",
-      "start": { "type": "time", "atMs": 15000 },
+      "start": { "type": "after-boss-spawn", "delayMs": 7500 },
       "groups": [
         { "enemyKind": "demon-badger", "count": 4, "front": "west" },
         { "enemyKind": "rabid-badger", "count": 2, "delayMs": 1200, "front": "west" }
@@ -112,7 +113,7 @@
     },    
     {
       "id": "grave-titan-phase-support2",
-      "start": { "type": "time", "atMs": 25000 },
+      "start": { "type": "after-boss-spawn", "delayMs": 17500 },
       "groups": [
         { "enemyKind": "demon-badger", "count": 4, "front": "west" },
         { "enemyKind": "rabid-badger", "count": 1, "delayMs": 1200, "front": "west" }
@@ -120,7 +121,7 @@
     },
     {
       "id": "grave-titan-phase-support3",
-      "start": { "type": "time", "atMs": 35000 },
+      "start": { "type": "after-boss-spawn", "delayMs": 27500 },
       "groups": [
         { "enemyKind": "demon-badger", "count": 4, "front": "west" },
         { "enemyKind": "rabid-badger", "count": 2, "delayMs": 1200, "front": "west" }
@@ -128,7 +129,7 @@
     },
     {
       "id": "grave-titan-phase-support4",
-      "start": { "type": "time", "atMs": 45000 },
+      "start": { "type": "after-boss-spawn", "delayMs": 37500 },
       "groups": [
         { "enemyKind": "demon-badger", "count": 4, "front": "south" },
         { "enemyKind": "rabid-badger", "count": 1, "delayMs": 1200, "front": "south" }

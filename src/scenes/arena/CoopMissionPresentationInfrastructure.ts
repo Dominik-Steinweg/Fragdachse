@@ -182,6 +182,9 @@ export class CoopMissionPresentationInfrastructure {
           input.renderers.bossIntro.sync(state, now, true);
           this.announceBossIntro(state, now);
         },
+        syncBossPresence: (sources, now) => {
+          if (!this.destroyed) input.renderers.bossPresence.sync(sources, now);
+        },
         bossIntroOwnsSpawn: (state, now) => !this.destroyed && input.renderers.bossIntro.ownsSpawnAt(state, now),
         destroy: () => {
           if (!this.destroyed) this.destroyWorldSpace(input);
@@ -246,6 +249,7 @@ export class CoopMissionPresentationInfrastructure {
     this.hostileBaseIndicator = null;
     input.renderers.encounterTelegraph.destroy();
     input.renderers.bossIntro.clear();
+    input.renderers.bossPresence.clear();
     input.renderers.secondaryObjectiveMarkers.destroy();
     input.renderers.missionProgress.destroy();
     input.renderers.carryZones.clear();
@@ -258,6 +262,7 @@ export class CoopMissionPresentationInfrastructure {
     input.clientUpdate.resetEnemyDashVisuals();
     input.renderers.encounterTelegraph.clear();
     input.renderers.bossIntro.clear();
+    input.renderers.bossPresence.clear();
     this.announcedBossIntroKey = null;
     input.renderers.secondaryObjectiveMarkers.clear();
     input.renderers.missionProgress.clear();

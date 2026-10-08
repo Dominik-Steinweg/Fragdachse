@@ -10,6 +10,7 @@ import { createCombatShaderWarmupProbes } from '../../effects/CombatShaderWarmup
 import { MovementEffectsRenderer } from '../../effects/MovementEffectsRenderer';
 import { BurrowGpuRenderer } from '../../effects/BurrowGpuRenderer';
 import { BossIntroGraveyardRenderer } from '../../effects/BossIntroGraveyardRenderer';
+import { BossPresenceRenderer } from '../../effects/BossPresenceRenderer';
 import { createEarthbreakFissureLayers } from '../../effects/earthbreak/EarthbreakFissureGpuLayer';
 import * as Phaser from 'phaser';
 import { BulletRenderer }      from '../../effects/BulletRenderer';
@@ -124,6 +125,7 @@ export interface RendererBundle {
   movement:            MovementEffectsRenderer;
   burrowGpu:           BurrowGpuRenderer;
   bossIntro:           BossIntroGraveyardRenderer;
+  bossPresence:        BossPresenceRenderer;
   combatGoreGpu:      CombatGoreGpuRenderer;
   entityBurnGpu:       EntityBurnGpuController;
   mgAttrition:         MgAttritionRenderer;
@@ -418,9 +420,12 @@ export function* createRendererBundleSteps(
   const constructionOwnershipMotes = new ConstructionOwnershipMoteRenderer(gpuVfx);
   cleanup.push(() => constructionOwnershipMotes.destroy());
   const movement = new MovementEffectsRenderer(gpuVfx, burrowGpu);
+  movement.setLightingSystem(lighting);
   cleanup.push(() => movement.destroy());
   const bossIntro = new BossIntroGraveyardRenderer(scene, lighting, burrowGpu);
   cleanup.push(() => bossIntro.destroy());
+  const bossPresence = new BossPresenceRenderer(scene, lighting);
+  cleanup.push(() => bossPresence.destroy());
   return {
     interactions,
     turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, plasmaBurnerCharge, healingAura, guardianSpirit, repairDrone, attackDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
@@ -436,6 +441,7 @@ export function* createRendererBundleSteps(
     movement,
     burrowGpu,
     bossIntro,
+    bossPresence,
     combatGoreGpu,
     entityBurnGpu,
     mgAttrition,

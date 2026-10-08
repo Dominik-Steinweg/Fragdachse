@@ -59,6 +59,7 @@ export function resetRenderersForWorldPresentationTeardown(
   bundle.airstrike.clear();
   bundle.encounterTelegraph.clear();
   bundle.bossIntro.clear();
+  bundle.bossPresence.clear();
   bundle.meteor.clear();
   bundle.rockDestruction.clear();
   bundle.carryZones.clear();

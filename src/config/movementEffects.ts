@@ -22,11 +22,17 @@ export const MOVEMENT_FX = {
   footprintCapacity: 3072,
   dustCapacity: 1024,
   playerFootprintReserve: 256,
+  /** Selbstleuchtende Kopien authored leuchtender Fußspuren (z. B. Grave-Titan). */
+  footprintGlowCapacity: 256,
   playerDustReserve: 128,
   footprintLifeMinMs: 3000,
   footprintLifeMaxMs: 4000,
   // Read at normal camera distance: a paw occupies roughly 10 x 14 world pixels.
   footprint: { scale: 1.2, alphaMin: 0.58, alphaMax: 0.7, ink: 0x211c16, inkMix: 0.8 },
+  /** Leuchtende Fußspur: Abdruck in der Leuchtfarbe eingefärbt plus additive Kopie über der Lichtkarte. */
+  // scale: leuchtende Abdrücke sind kleiner als die normalen Abdrücke desselben Läufers.
+  // lightRadiusPx gilt pro Einheit Abdruck-Skalierung.
+  footprintGlow: { inkMix: 0.55, alpha: 0.9, scale: 0.6, lightRadiusPx: 16, lightIntensity: 0.85 },
   walkDust: { scale: 0.52, alpha: 0.84, count: 3, speedMin: 18, speedMax: 34, lifeFactor: 1 },
   dashDust: {
     // Halve both puff diameter and spread; the shorter tail keeps the dash compact in motion.

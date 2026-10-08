@@ -133,12 +133,17 @@
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_grave_titan",
       "isBoss": true,
+      "color": 12900548,
       "glow": {
         "color": 8191882,
-        "sizeFactor": 1.55,
-        "alpha": 0.9,
-        "lightRadiusPx": 240,
-        "lightIntensity": 0.95
+        "sizeFactor": 1.25,
+        "alpha": 0.45,
+        "lightRadiusPx": 150,
+        "lightIntensity": 0.45
+      },
+      "bossPresence": {
+        "fireflyCount": 22,
+        "footprintGlowColor": 9305946
       },
       "trainAwareness": {
         "safetyDistancePx": 48,

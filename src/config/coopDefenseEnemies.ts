@@ -96,6 +96,15 @@ export interface CoopDefenseEnemyGlowConfig {
   readonly lightIntensity: number;
 }
 
+/**
+ * Lesbarkeit eines Bosses ohne HUD-Rahmen: umschwärmende Ambient-Glühwürmchen und seine
+ * normalen Fußspuren, in der Bossfarbe leuchtend. Rein präsentational; Gameplay liest das nie.
+ */
+export interface CoopDefenseEnemyBossPresenceConfig {
+  readonly fireflyCount: number;
+  readonly footprintGlowColor: number;
+}
+
 export interface CoopDefenseEnemyTranslocatorConfig {
   readonly utilityId: 'TRANSLOCATOR';
   readonly flightTimeMs: number;
@@ -292,6 +301,7 @@ export interface CoopDefenseEnemyConfig {
   readonly color?: number;
   readonly glow?: CoopDefenseEnemyGlowConfig;
   readonly eyeGlow?: { readonly color: number };
+  readonly bossPresence?: CoopDefenseEnemyBossPresenceConfig;
   readonly phaseTwoGlow?: CoopDefenseEnemyGlowConfig;
   readonly translocator?: CoopDefenseEnemyTranslocatorConfig;
   readonly burrow?: CoopDefenseEnemyBurrowConfig;
@@ -390,6 +400,7 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         color: config.color,
         glow: config.glow,
         eyeGlow: config.eyeGlow,
+        bossPresence: config.bossPresence,
         phaseTwoGlow: config.phaseTwoGlow,
         translocator: config.translocator,
         burrow: config.burrow,
@@ -492,6 +503,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
       : undefined,
     glow: normalizeGlowConfig(enemy.glow),
     eyeGlow: normalizeEyeGlowConfig(enemy.eyeGlow),
+    bossPresence: normalizeBossPresenceConfig(enemy.bossPresence),
     phaseTwoGlow: normalizeGlowConfig(enemy.phaseTwoGlow),
     translocator: normalizeTranslocatorConfig(enemy.translocator, enemy.id),
     burrow: normalizeBurrowConfig(enemy.burrow),
@@ -530,6 +542,16 @@ function normalizeTrainCollision(
     damageToEnemy: Math.max(0, config.damageToEnemy),
     destroysTrain: config.destroysTrain === true,
   };
+}
+
+function normalizeBossPresenceConfig(
+  value: CoopDefenseEnemyBossPresenceConfig | undefined,
+): CoopDefenseEnemyBossPresenceConfig | undefined {
+  if (value === undefined) return undefined;
+  const valid = Number.isInteger(value.fireflyCount) && value.fireflyCount >= 0 && value.fireflyCount <= 32
+    && Number.isInteger(value.footprintGlowColor) && value.footprintGlowColor > 0 && value.footprintGlowColor <= 0xffffff;
+  if (!valid) throw new Error('[coopDefenseEnemies] Invalid boss presence config');
+  return { fireflyCount: value.fireflyCount, footprintGlowColor: value.footprintGlowColor };
 }
 
 function normalizeEyeGlowConfig(value: { readonly color: number } | undefined): { readonly color: number } | undefined {

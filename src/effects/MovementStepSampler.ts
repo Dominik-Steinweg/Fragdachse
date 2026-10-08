@@ -17,6 +17,8 @@ export interface MovementVisualSample {
   mode: MovementVisualMode;
   isBurrowDash: boolean;
   revision: number;
+  /** Authored Leuchtfarbe der Fußspuren; 0 = normale, unbeleuchtete Abdrücke. */
+  footprintGlow: number;
 }
 
 export interface MovementVisualSource {
@@ -30,7 +32,7 @@ export type MovementContactSink = (
 
 export function createMovementVisualSample(): MovementVisualSample {
   return { id: '', x: 0, y: 0, facing: 0, size: 32, pawCount: 2, footprint: 'compact', player: false,
-    visible: false, mode: 'idle', isBurrowDash: false, revision: 0 };
+    visible: false, mode: 'idle', isBurrowDash: false, revision: 0, footprintGlow: 0 };
 }
 
 /** Distance, not render frames or input, advances the gait. Dropped contacts still advance it. */

@@ -195,6 +195,8 @@ export type CoopDefenseMapEncounterStart =
   | { readonly type: 'after-defense'; readonly defenseId: string }
   | { readonly type: 'after-event'; readonly eventId: string }
   | { readonly type: 'boss-phase'; readonly phase: number }
+  /** Startet `delayMs` nach dem tatsaechlichen Boss-Spawn (also nach einem Boss-Intro). */
+  | { readonly type: 'after-boss-spawn'; readonly delayMs: number }
   | { readonly type: 'base-destroyed'; readonly baseId: string };
 
 /** Endlicher Encounter; `repel-assault` verwendet die Reihenfolge als Clear-/Rest-Kette. */
@@ -427,6 +429,8 @@ export interface CoopDefenseMapBossConfig {
   readonly spawnAtMs: number;
   /** Optionales inszeniertes Intro; der eigentliche Spawn folgt erst nach dessen `emergeAtMs`. */
   readonly intro?: { readonly preset: BossIntroPresetId };
+  /** Boss (bzw. sein Intro) startet erst, wenn dieser Encounter geraeumt ist – zusaetzlich zu `spawnAtMs`. */
+  readonly startAfterEncounterId?: string;
 }
 
 export type CoopDefenseTimeOfDayTransitionStart =
@@ -2212,6 +2216,14 @@ function normalizeEncounterStart(
         );
       }
       return { type: 'boss-phase', phase: 2 };
+    case 'after-boss-spawn':
+      if (!context.boss) {
+        throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} waits for a boss but the map has none`);
+      }
+      return {
+        type: 'after-boss-spawn',
+        delayMs: normalizeRequiredMilliseconds(mapId, encounterId, start.delayMs, 'boss spawn delay'),
+      };
     case 'base-destroyed': {
       if (typeof start.baseId !== 'string' || start.baseId.trim().length === 0) {
         throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} needs a base id`);
@@ -3564,6 +3576,11 @@ function normalizeBossConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapBos
     );
   }
 
+  const startAfterEncounterId = mapConfig.boss.startAfterEncounterId?.trim();
+  if (mapConfig.boss.startAfterEncounterId !== undefined
+    && (!startAfterEncounterId || !(mapConfig.encounters ?? []).some((encounter) => encounter.id === startAfterEncounterId))) {
+    throw new Error(`[coopDefenseMaps] Boss slot on map ${mapConfig.mapId} waits for an unknown encounter`);
+  }
   const intro = mapConfig.boss.intro;
   if (intro !== undefined && !isBossIntroPresetId(intro?.preset)) {
     throw new Error(`[coopDefenseMaps] Boss slot on map ${mapConfig.mapId} references unknown intro preset`);
@@ -3573,6 +3590,7 @@ function normalizeBossConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapBos
     enemyKind: mapConfig.boss.enemyKind,
     spawnAtMs: Math.floor(mapConfig.boss.spawnAtMs),
     ...(intro ? { intro: { preset: intro.preset } } : {}),
+    ...(startAfterEncounterId ? { startAfterEncounterId } : {}),
   };
 }
 
