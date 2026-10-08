@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import { DEPTH, DEPTH_FX } from '../config';
 import { scaleParticleCount } from '../graphics/GraphicsQuality';
 import { emissiveAlpha } from './EmissiveScale';
-import { ensureCanvasTexture, mixColors } from './EffectUtils';
+import { ensureCanvasTexture, mixColors, registerGraphicsObject } from './EffectUtils';
 
 const TEX_SPHERE = '__shock_combo_sphere';
 const TEX_CRACKLE_A = '__shock_combo_crackle_a';
@@ -217,6 +217,7 @@ export class ShockComboExplosionRenderer {
    */
   private spawnArcs(x: number, y: number, radius: number, palette: ShockComboPalette): void {
     const arcs = this.scene.add.graphics().setDepth(DEPTH_FX + 0.5).setBlendMode(Phaser.BlendModes.ADD);
+    registerGraphicsObject(this.scene, 'asmdEffects', arcs);
     this.track(arcs);
     const radialCount = scaleParticleCount(this.scene, Phaser.Math.Clamp(Math.round(radius / 13), 6, 14));
     const coronaCount = scaleParticleCount(this.scene, Phaser.Math.Clamp(Math.round(radius / 16), 4, 10), 'decorative');

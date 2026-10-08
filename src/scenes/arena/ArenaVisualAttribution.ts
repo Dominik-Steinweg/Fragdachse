@@ -62,7 +62,7 @@ export const GRAPHICS_FAMILIES = {
   enemyStatus: ['EnemyEntity', 'WorldHealthBarRenderer', 'EnemyVulnerabilityRenderer', 'EnemyReadabilityRenderer', 'SmokeBodyEffect'],
   bossDecoration: ['EnemyEntity'],
   smokeClouds: ['SmokeSystem'],
-  asmdEffects: ['AsmdPrimaryRenderer'],
+  asmdEffects: ['AsmdPrimaryRenderer', 'ShockComboExplosionRenderer'],
   bfgEffects: ['BfgRenderer'],
   teslaBoltEffects: ['TeslaBoltRenderer'],
   teslaDomeEffects: ['TeslaDomeRenderer'],
