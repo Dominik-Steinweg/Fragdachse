@@ -106,6 +106,7 @@ export const GpuVfxEffectId = {
   ExplosionLowCascade: 92,
   ExplosionLowEmberDown: 93,
   MovementFootprintGlow: 94,
+  VoidHunterSpark: 95,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -715,6 +716,8 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
   // Selbstleuchtende Kopie authored leuchtender Fußspuren; Frame wird pro Abdruck gesetzt.
   { id: GpuVfxEffectId.MovementFootprintGlow, label: 'movement.footprint-glow', lane: GpuVfxLaneId.MovementGlow,
     frame: GpuVfxFrameId.MovementPawBroad, importance: 'decorative', release: 'linger' },
+  { id: GpuVfxEffectId.VoidHunterSpark, label: 'boss.void-sparks', lane: GpuVfxLaneId.ExplosionLowGlow,
+    frame: GpuVfxFrameId.ExplosionSpark, importance: 'standard', release: 'kill-with-source' },
 ];
 
 /** Definition-level routing. No particle chooses height by radius, random state or position. */

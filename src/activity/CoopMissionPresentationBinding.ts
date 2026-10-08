@@ -256,12 +256,13 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
 
   private readonly bossPresenceSources: BossPresenceSource[] = [];
 
-  /** Glühwürmchen und Fußspuren um Bosse, die solche Präsenz-Effekte authored haben. */
+  /** Präsenz-Effekte folgen den sichtbaren, replizierten Bosspositionen. */
   private syncBossPresence(): void {
     this.bossPresenceSources.length = 0;
     for (const enemy of this.runtime?.enemyManager?.getAllEnemies() ?? []) {
       const presence = enemy.getBossPresence();
-      if (!presence || !enemy.sprite.active || enemy.getHp() <= 0) continue;
+      const voidPhase = enemy.kind === 'void-hunter' ? enemy.getBossPhase() : undefined;
+      if ((!presence && !voidPhase) || !enemy.sprite.active || enemy.getHp() <= 0) continue;
       this.bossPresenceSources.push({
         id: enemy.id,
         x: enemy.sprite.x,
@@ -269,6 +270,7 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
         size: enemy.getSize(),
         visible: enemy.sprite.visible && !enemy.isBurrowed(),
         presence,
+        voidPhase,
       });
     }
     this.ui.worldSpace.syncBossPresence(this.bossPresenceSources, this.reads.getSynchronizedNow());

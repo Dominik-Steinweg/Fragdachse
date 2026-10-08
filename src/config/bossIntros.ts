@@ -1,11 +1,17 @@
 /**
  * Authored Boss-Intro-Presets. Der Host verzögert den Boss-Spawn um `emergeAtMs` und
- * repliziert Ort/Startzeit/Seed; Renderer leiten die gesamte Inszenierung deterministisch
- * aus diesen Werten und der synchronisierten Zeit ab.
+ * repliziert Ort/Startzeit/Seed; Renderer leiten die Inszenierung aus diesem Anker
+ * und der synchronisierten Zeit ab.
  */
-export type BossIntroPresetId = 'graveyard-rise';
+export type BossIntroPresetId = 'graveyard-rise' | 'void-sparks';
 
-export const BOSS_INTRO_PRESET_IDS: readonly BossIntroPresetId[] = ['graveyard-rise'];
+export const BOSS_INTRO_PRESET_IDS: readonly BossIntroPresetId[] = ['graveyard-rise', 'void-sparks'];
+
+export const VOID_SPARKS_INTRO = {
+  emergeAtMs: 3_600,
+  durationMs: 4_600,
+  spawnEdgeMarginCells: 5,
+} as const;
 
 export interface GraveyardRiseIntroPreset {
   /** Zeitpunkt (ab Intro-Start), an dem der Host den Boss spawnt. */
@@ -90,10 +96,15 @@ export const GRAVEYARD_RISE_INTRO: GraveyardRiseIntroPreset = {
   camera: { panInMs: 1_400, holdAfterEmergeMs: 1_100, panOutMs: 1_300, zoom: 1.45 },
 };
 
-export function getBossIntroPreset(id: BossIntroPresetId): GraveyardRiseIntroPreset {
+export function getBossIntroPreset(id: 'graveyard-rise'): GraveyardRiseIntroPreset;
+export function getBossIntroPreset(id: 'void-sparks'): typeof VOID_SPARKS_INTRO;
+export function getBossIntroPreset(id: BossIntroPresetId): GraveyardRiseIntroPreset | typeof VOID_SPARKS_INTRO;
+export function getBossIntroPreset(id: BossIntroPresetId): GraveyardRiseIntroPreset | typeof VOID_SPARKS_INTRO {
   switch (id) {
     case 'graveyard-rise':
       return GRAVEYARD_RISE_INTRO;
+    case 'void-sparks':
+      return VOID_SPARKS_INTRO;
   }
 }
 

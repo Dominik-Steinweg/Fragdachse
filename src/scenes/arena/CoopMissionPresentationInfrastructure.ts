@@ -180,12 +180,18 @@ export class CoopMissionPresentationInfrastructure {
         syncBossIntro: (state, now) => {
           if (this.destroyed) return;
           input.renderers.bossIntro.sync(state, now, true);
+          input.renderers.voidHunterSparks.syncIntro(state, now);
           this.announceBossIntro(state, now);
         },
         syncBossPresence: (sources, now) => {
-          if (!this.destroyed) input.renderers.bossPresence.sync(sources, now);
+          if (this.destroyed) return;
+          input.renderers.bossPresence.sync(sources, now);
+          input.renderers.voidHunterSparks.syncBosses(sources);
         },
-        bossIntroOwnsSpawn: (state, now) => !this.destroyed && input.renderers.bossIntro.ownsSpawnAt(state, now),
+        bossIntroOwnsSpawn: (state, now) => !this.destroyed && (
+          input.renderers.bossIntro.ownsSpawnAt(state, now)
+          || input.renderers.voidHunterSparks.ownsSpawnAt(state, now)
+        ),
         destroy: () => {
           if (!this.destroyed) this.destroyWorldSpace(input);
         },
@@ -228,11 +234,12 @@ export class CoopMissionPresentationInfrastructure {
     if (this.announcedBossIntroKey === key) return;
     this.announcedBossIntroKey = key;
     if (now - state.startedAtMs > 2_500) return;
+    const voidIntro = state.preset === 'void-sparks';
     this.objectiveAnnouncements.enqueue({
       id: `boss-intro:${key}`,
-      kicker: t('ui.bossIntro.graveyard.kicker'),
-      title: t('ui.bossIntro.graveyard.title'),
-      detail: t('ui.bossIntro.graveyard.detail'),
+      kicker: t(voidIntro ? 'ui.bossIntro.void.kicker' : 'ui.bossIntro.graveyard.kicker'),
+      title: t(voidIntro ? 'ui.bossIntro.void.title' : 'ui.bossIntro.graveyard.title'),
+      detail: t(voidIntro ? 'ui.bossIntro.void.detail' : 'ui.bossIntro.graveyard.detail'),
       tone: 'main',
       topic: 'boss-intro',
       priority: 100,
@@ -250,6 +257,7 @@ export class CoopMissionPresentationInfrastructure {
     input.renderers.encounterTelegraph.destroy();
     input.renderers.bossIntro.clear();
     input.renderers.bossPresence.clear();
+    input.renderers.voidHunterSparks.clear();
     input.renderers.secondaryObjectiveMarkers.destroy();
     input.renderers.missionProgress.destroy();
     input.renderers.carryZones.clear();
@@ -263,6 +271,7 @@ export class CoopMissionPresentationInfrastructure {
     input.renderers.encounterTelegraph.clear();
     input.renderers.bossIntro.clear();
     input.renderers.bossPresence.clear();
+    input.renderers.voidHunterSparks.clear();
     this.announcedBossIntroKey = null;
     input.renderers.secondaryObjectiveMarkers.clear();
     input.renderers.missionProgress.clear();

@@ -643,8 +643,8 @@
       "pawCount": 4,
       "maxHp": 4000,
       "xp": 750,
-      "size": 52,
-      "moveSpeed": 120,
+      "size": 78,
+      "moveSpeed": 156,
       "knockbackFactor": 0.25,
       "movementTarget": "players",
       "weapons": [

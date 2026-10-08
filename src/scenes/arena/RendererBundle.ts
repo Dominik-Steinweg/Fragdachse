@@ -11,6 +11,7 @@ import { MovementEffectsRenderer } from '../../effects/MovementEffectsRenderer';
 import { BurrowGpuRenderer } from '../../effects/BurrowGpuRenderer';
 import { BossIntroGraveyardRenderer } from '../../effects/BossIntroGraveyardRenderer';
 import { BossPresenceRenderer } from '../../effects/BossPresenceRenderer';
+import { VoidHunterSparksRenderer } from '../../effects/VoidHunterSparksRenderer';
 import { createEarthbreakFissureLayers } from '../../effects/earthbreak/EarthbreakFissureGpuLayer';
 import * as Phaser from 'phaser';
 import { BulletRenderer }      from '../../effects/BulletRenderer';
@@ -126,6 +127,7 @@ export interface RendererBundle {
   burrowGpu:           BurrowGpuRenderer;
   bossIntro:           BossIntroGraveyardRenderer;
   bossPresence:        BossPresenceRenderer;
+  voidHunterSparks:    VoidHunterSparksRenderer;
   combatGoreGpu:      CombatGoreGpuRenderer;
   entityBurnGpu:       EntityBurnGpuController;
   mgAttrition:         MgAttritionRenderer;
@@ -426,6 +428,8 @@ export function* createRendererBundleSteps(
   cleanup.push(() => bossIntro.destroy());
   const bossPresence = new BossPresenceRenderer(scene, lighting);
   cleanup.push(() => bossPresence.destroy());
+  const voidHunterSparks = new VoidHunterSparksRenderer(scene, gpuVfx, lighting);
+  cleanup.push(() => voidHunterSparks.destroy());
   return {
     interactions,
     turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, plasmaBurnerCharge, healingAura, guardianSpirit, repairDrone, attackDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
@@ -442,6 +446,7 @@ export function* createRendererBundleSteps(
     burrowGpu,
     bossIntro,
     bossPresence,
+    voidHunterSparks,
     combatGoreGpu,
     entityBurnGpu,
     mgAttrition,

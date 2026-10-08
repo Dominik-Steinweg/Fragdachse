@@ -23,11 +23,13 @@ function createHarness(): {
   readonly calls: string[];
   readonly carrySnapshots: readonly SyncedCoopDefenseCarryItem[][];
   readonly progressTimes: readonly number[];
+  readonly bossSnapshots: readonly import('../../src/effects/BossPresenceRenderer').BossPresenceSource[][];
   readonly clock: { now: number; arenaStart: number };
 } {
   const calls: string[] = [];
   const carrySnapshots: SyncedCoopDefenseCarryItem[][] = [];
   const progressTimes: number[] = [];
+  const bossSnapshots: import('../../src/effects/BossPresenceRenderer').BossPresenceSource[][] = [];
   const clock = { now: 1_000, arenaStart: 0 };
   const ui: CoopMissionPresentationUiPort = {
     centerHud: {
@@ -65,6 +67,9 @@ function createHarness(): {
       syncCarryZones: () => calls.push('world:carry'),
       syncObjectiveRepairDrones: () => calls.push('world:repair'),
       syncHostileBaseIndicator: () => calls.push('world:hostile-base'),
+      syncBossIntro: () => {},
+      syncBossPresence: sources => bossSnapshots.push([...sources]),
+      bossIntroOwnsSpawn: () => false,
       destroy: () => calls.push('world:destroy'),
       reset: () => calls.push('world:reset'),
     },
@@ -79,6 +84,7 @@ function createHarness(): {
     getArenaStartTime: () => clock.arenaStart,
     getHostileBaseProgress: () => null,
     getBossProgress: () => null,
+    getBossIntroState: () => null,
     getEnemyVulnerability: () => false,
     getCarryPresentationItems: () => [],
   };
@@ -88,7 +94,7 @@ function createHarness(): {
     ui,
   );
   const runtime = new CoopMissionRuntime(activity(1));
-  return { binding, runtime, calls, carrySnapshots, progressTimes, clock };
+  return { binding, runtime, calls, carrySnapshots, progressTimes, bossSnapshots, clock };
 }
 
 describe('CoopMissionPresentationBinding', () => {
@@ -151,10 +157,18 @@ describe('CoopMissionPresentationBinding', () => {
   });
 
   it('zieht Enemy-Projection und replizierte Carry-Daten ueber den kanonischen Activity-Step', () => {
-    const { binding, runtime, calls, carrySnapshots } = createHarness();
+    const { binding, runtime, calls, carrySnapshots, bossSnapshots } = createHarness();
     runtime.bind(binding);
+    let enemyHp = 100;
     const enemy = {
       id: 'enemy-a',
+      kind: 'void-hunter',
+      sprite: { x: 80, y: 120, active: true, visible: true },
+      getBossPresence: () => undefined,
+      getBossPhase: () => 2,
+      getHp: () => enemyHp,
+      getSize: () => 78,
+      isBurrowed: () => false,
       setVulnerable: (active: boolean) => calls.push(`enemy:vulnerable:${active}`),
     } as unknown as EnemyEntity;
     const enemyManager = {
@@ -165,6 +179,7 @@ describe('CoopMissionPresentationBinding', () => {
       setEnemySpawnedCallback: () => undefined,
       destroy: () => undefined,
       setVisualSink: () => undefined,
+      setSpawnEffectSuppressor: () => undefined,
     } as never;
     runtime.setEnemyManager(enemyManager);
 
@@ -183,6 +198,13 @@ describe('CoopMissionPresentationBinding', () => {
     expect(calls).toContain('enemy:lerp:0.25');
     expect(calls).toContain('world:enemy-dash');
     expect(calls).toContain('enemy:vulnerable:false');
+    expect(bossSnapshots.at(-1)).toEqual([{
+      id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y, size: enemy.getSize(),
+      visible: true, voidPhase: enemy.getBossPhase(), presence: undefined,
+    }]);
+    enemyHp = 0;
+    binding.sync(16, true);
+    expect(bossSnapshots.at(-1)).toEqual([]);
     expect(carrySnapshots.at(-1)).toEqual([
       { id: 'carry-a', objectiveId: 'objective-a', x: 10, y: 20, holderId: null, state: 'spawned' },
     ]);

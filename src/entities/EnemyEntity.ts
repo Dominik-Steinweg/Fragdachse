@@ -85,7 +85,6 @@ export class EnemyEntity {
   private glowHalo: Phaser.GameObjects.Image | null = null;
   private timebombFuseRenderer: TimebombFuseRenderer | null = null;
   private voidMolotovWindupRing: Phaser.GameObjects.Arc | null = null;
-  private bossAura: Phaser.GameObjects.Ellipse | null = null;
   private maxHp = 1;
   private currentHp = 0;
   private targetX: number;
@@ -194,7 +193,6 @@ export class EnemyEntity {
     }
     if (faction === 'hostile') {
       this.createGlowHalo(scene);
-      this.createBossDecorations(scene);
     }
 
     if (authoritative) {
@@ -588,7 +586,6 @@ export class EnemyEntity {
     this.sprite.setVisible(!burrowed);
     this.ownerRing?.setVisible(!burrowed);
     this.glowHalo?.setVisible(!burrowed);
-    this.bossAura?.setVisible(!burrowed);
     this.healthBars?.suppress(this.healthBar, burrowed);
     this.syncWalkingAnimation();
     this.syncBar();
@@ -729,7 +726,7 @@ export class EnemyEntity {
   }
 
   syncBar(): void {
-    this.syncBossDecorations();
+    this.ownerRing?.setPosition(this.sprite.x, this.sprite.y + this.config.size * 0.22);
     this.syncGlow();
     this.syncTimebombFuseVisuals();
     this.syncVoidMolotovWindupVisuals();
@@ -783,7 +780,6 @@ export class EnemyEntity {
     this.destroyTimebombFuseVisuals();
     this.destroyVoidMolotovWindupVisuals();
     this.lighting?.releaseLight(this.glowLightKey());
-    this.bossAura?.destroy();
     this.sprite.destroy();
   }
 
@@ -819,7 +815,7 @@ export class EnemyEntity {
   /**
    * Additiver Halo aus der `glow`-Konfiguration. Bewusst rund und ohne Perspektive: die Arena
    * wird orthografisch von oben gesehen, ein gestauchter Kreis würde eine Schrägsicht andeuten,
-   * die es nicht gibt. Der Bosssockel (`bossAura`) ist die Ausnahme – er liegt am Boden.
+   * die es nicht gibt.
    */
   private createGlowHalo(scene: Phaser.Scene): void {
     const glow = this.config.glow;
@@ -970,27 +966,8 @@ export class EnemyEntity {
   }
 
   /**
-   * Bosse werden über Glow, Präsenz-Effekte (Glühwürmchen, Fußspuren) und ihren HP-Balken
-   * lesbar, nicht über HUD-artige Rahmen oder Beschriftung. Nur der Leerenjäger behält seinen
-   * Phasen-Sockel, weil er den Phasenwechsel anzeigt.
-   */
-  private createBossDecorations(scene: Phaser.Scene): void {
-    if (!this.config.isBoss || !this.config.voidHunterBoss) return;
-
-    this.bossAura = scene.add.ellipse(
-      this.sprite.x,
-      this.sprite.y + this.config.size * 0.2,
-      this.config.size * 1.45,
-      this.config.size * 0.72,
-      0x6f16a8,
-      0.38,
-    ).setDepth(DEPTH.PLAYERS - 0.075);
-    registerGraphicsObject(scene, 'bossDecoration', this.bossAura);
-  }
-
-  /**
    * Bossphase für die Bildkomposition: 0 = kein Boss, 1 = Boss aktiv, 2 = zweite Phase.
-   * Dieselbe Schwelle wie die Bossdekorationen, damit Farbstimmung und Gegnerdarstellung
+   * Dieselbe Schwelle wie die Bossregeln, damit Farbstimmung und Gegnerdarstellung
    * gleichzeitig umschlagen.
    */
   getBossPhase(): number {
@@ -998,21 +975,6 @@ export class EnemyEntity {
     const ratio = this.config.voidHunterBoss?.phaseTwoHpRatio;
     if (ratio === undefined) return 1;
     return this.currentHp / this.maxHp <= ratio ? 2 : 1;
-  }
-
-  private syncBossDecorations(): void {
-    this.ownerRing?.setPosition(this.sprite.x, this.sprite.y + this.config.size * 0.22);
-    if (!this.config.isBoss) return;
-    const auraY = this.sprite.y + this.config.size * 0.2;
-    this.bossAura?.setPosition(this.sprite.x, auraY);
-    if (this.config.voidHunterBoss) {
-      const phaseTwo = this.currentHp / this.maxHp <= this.config.voidHunterBoss.phaseTwoHpRatio;
-      this.bossAura?.setDisplaySize(
-        this.config.size * (phaseTwo ? 2.25 : 1.45),
-        this.config.size * (phaseTwo ? 1.12 : 0.72),
-      );
-      this.bossAura?.setFillStyle(phaseTwo ? 0xb82fff : 0x6f16a8, phaseTwo ? 0.56 : 0.38);
-    }
   }
 
   private createWeapons(): readonly EnemyAttackWeapon[] {

@@ -32,7 +32,10 @@ describe('CoopDefenseBossSystem', () => {
   });
 });
 
-describe('CoopDefenseBossSystem intro', () => {
+describe.each([
+  { preset: 'graveyard-rise' as const, enemyKind: 'grave-titan' as const },
+  { preset: 'void-sparks' as const, enemyKind: 'void-hunter' as const },
+])('CoopDefenseBossSystem intro $preset', ({ preset, enemyKind }) => {
   function createIntroSystem() {
     let bossActive = false;
     const spawnBossAt = vi.fn(() => {
@@ -43,8 +46,8 @@ describe('CoopDefenseBossSystem intro', () => {
     const onBossSpawned = vi.fn();
     const onBossIntroStarted = vi.fn();
     const system = new CoopDefenseBossSystem(
-      { enemyKind: 'grave-titan', spawnAtMs: 1_000, intro: { preset: 'graveyard-rise' } },
-      { hasEnemyKind: (kind: string) => kind === 'grave-titan' && bossActive } as never,
+      { enemyKind, spawnAtMs: 1_000, intro: { preset } },
+      { hasEnemyKind: (kind: string) => kind === enemyKind && bossActive } as never,
       {
         hostSpawnBoss: spawnBoss,
         hostResolveBossSpawnPoint: () => ({ x: 120, y: 340 }),
@@ -59,11 +62,11 @@ describe('CoopDefenseBossSystem intro', () => {
 
   it('announces the reserved point first and spawns there only after the authored emerge delay', () => {
     const { system, spawnBoss, spawnBossAt, onBossSpawned, onBossIntroStarted } = createIntroSystem();
-    const emergeAtMs = getBossIntroPreset('graveyard-rise').emergeAtMs;
+    const emergeAtMs = getBossIntroPreset(preset).emergeAtMs;
 
     system.hostUpdate(1_000, false, 50_000);
     expect(onBossIntroStarted).toHaveBeenCalledWith(expect.objectContaining({
-      preset: 'graveyard-rise', x: 120, y: 340, startedAtMs: 50_000,
+      preset, x: 120, y: 340, startedAtMs: 50_000,
     }));
     expect(spawnBossAt).not.toHaveBeenCalled();
     expect(system.isBossDefeated()).toBe(false);
@@ -73,7 +76,7 @@ describe('CoopDefenseBossSystem intro', () => {
     expect(system.isBossDefeated()).toBe(false);
 
     system.hostUpdate(1, false, 50_000 + emergeAtMs);
-    expect(spawnBossAt).toHaveBeenCalledWith('grave-titan', 120, 340, { skipSpawnEffect: true });
+    expect(spawnBossAt).toHaveBeenCalledWith(enemyKind, 120, 340, { skipSpawnEffect: true });
     expect(spawnBoss).not.toHaveBeenCalled();
     expect(onBossSpawned).toHaveBeenCalledWith(50_000 + emergeAtMs);
     expect(onBossIntroStarted).toHaveBeenCalledTimes(1);
@@ -81,7 +84,7 @@ describe('CoopDefenseBossSystem intro', () => {
 
   it('keeps the intro running until a delayed spawn succeeds and only then allows defeat', () => {
     const { system, spawnBossAt, setBossActive } = createIntroSystem();
-    const emergeAtMs = getBossIntroPreset('graveyard-rise').emergeAtMs;
+    const emergeAtMs = getBossIntroPreset(preset).emergeAtMs;
     spawnBossAt.mockImplementationOnce(() => false);
 
     system.hostUpdate(1_000 + emergeAtMs, false);

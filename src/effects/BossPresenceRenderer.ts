@@ -15,7 +15,8 @@ export interface BossPresenceSource {
   readonly y: number;
   readonly size: number;
   readonly visible: boolean;
-  readonly presence: CoopDefenseEnemyBossPresenceConfig;
+  readonly presence?: CoopDefenseEnemyBossPresenceConfig;
+  readonly voidPhase?: number;
 }
 
 interface FireflyOrbit {
@@ -69,6 +70,7 @@ export class BossPresenceRenderer {
   }
 
   private syncSource(source: BossPresenceSource, nowMs: number): void {
+    if (!source.presence) return;
     let track = this.tracks.get(source.id);
     if (!track) {
       const seed = hashId(source.id);

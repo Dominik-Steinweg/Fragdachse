@@ -2802,6 +2802,11 @@ export const GPU_EFFECT_CONTRACTS = {
     "lanes": [
       "MovementGlow"
     ]
+  },
+  "VoidHunterSpark": {
+    "id": "gpu:VoidHunterSpark", "owner": "effects/gpu/GpuVfxEffects.ts", "component": "VoidHunterSpark",
+    "height": "body", "lighting": "emissive", "camera": "world", "depths": [19.6],
+    "blends": ["ADD"], "profiles": ["E"], "role": "effect", "lanes": ["ExplosionLowGlow"]
   }
 } as const satisfies Record<keyof typeof GpuVfxEffectId, LayerContract & {readonly lanes: readonly (keyof typeof GpuVfxLaneId)[]}>;
 export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
@@ -3191,7 +3196,6 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:entities/EnemyEntity.ts:module/this.ownerRing/setDepth/0","owner":"entities/EnemyEntity.ts","component":"module/this.ownerRing/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9.925],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.ownerRing/setDepth/0","expression":"DEPTH.PLAYERS - 0.075"}},
   {"id":"cpu:entities/EnemyEntity.ts:createGlowHalo/this.glowHalo/setDepth/0","owner":"entities/EnemyEntity.ts","component":"createGlowHalo/this.glowHalo/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[9.91],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"createGlowHalo/this.glowHalo/setDepth/0","expression":"DEPTH.PLAYERS - 0.09"}},
   {"id":"cpu:entities/EnemyEntity.ts:syncVoidMolotovWindupVisuals/this.voidMolotovWindupRing/setDepth/0","owner":"entities/EnemyEntity.ts","component":"syncVoidMolotovWindupVisuals/this.voidMolotovWindupRing/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9.96],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"syncVoidMolotovWindupVisuals/this.voidMolotovWindupRing/setDepth/0","expression":"this.sprite.depth + 0.01"}},
-  {"id":"cpu:entities/EnemyEntity.ts:createBossDecorations/this.bossAura/setDepth/0","owner":"entities/EnemyEntity.ts","component":"createBossDecorations/this.bossAura/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9.925],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"createBossDecorations/this.bossAura/setDepth/0","expression":"DEPTH.PLAYERS - 0.075"}},
   {"id":"cpu:entities/HeldItemVisual.ts:setDepth/this.image/setDepth/0","owner":"entities/HeldItemVisual.ts","component":"setDepth/this.image/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"setDepth/this.image/setDepth/0","expression":"depth"}},
   {"id":"cpu:entities/HeldItemVisual.ts:setItem/this.image/setDepth/0","owner":"entities/HeldItemVisual.ts","component":"setItem/this.image/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"setItem/this.image/setDepth/0","expression":"this.depth"}},
   {"id":"cpu:entities/PlayerEntity.ts:module/this.sprite/setDepth/0","owner":"entities/PlayerEntity.ts","component":"module/this.sprite/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[10],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.sprite/setDepth/0","expression":"DEPTH.PLAYERS"}},
@@ -6928,13 +6932,6 @@ export const CPU_SOURCE_CONTRACTS = {
       {
         "key": "syncVoidMolotovWindupVisuals/this.voidMolotovWindupRing/setDepth/0",
         "expression": "this.sprite.depth + 0.01",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "createBossDecorations/this.bossAura/setDepth/0",
-        "expression": "DEPTH.PLAYERS - 0.075",
         "blends": [
           "NORMAL"
         ]

@@ -150,7 +150,7 @@ export class BossIntroGraveyardRenderer {
 
   /** Ob ein Intro gerade das Erscheinen dieses Bosses inszeniert (unterdrückt den Spawnblitz). */
   ownsSpawnAt(state: BossIntroState | null, now: number): boolean {
-    if (!state) return false;
+    if (!state || state.preset !== 'graveyard-rise') return false;
     const elapsed = now - state.startedAtMs;
     return elapsed >= -1_000 && elapsed <= getBossIntroPreset(state.preset).durationMs + 4_000;
   }
@@ -161,7 +161,7 @@ export class BossIntroGraveyardRenderer {
    */
   sync(state: BossIntroState | null, now: number, active: boolean): void {
     if (this.destroyed) return;
-    if (!state || !active) {
+    if (!state || state.preset !== 'graveyard-rise' || !active) {
       this.clear();
       return;
     }
