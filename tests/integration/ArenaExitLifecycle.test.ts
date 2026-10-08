@@ -430,6 +430,34 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     if (speaker) expect(victory).toHaveBeenCalledExactlyOnceWith([speaker]);
     else expect(victory).not.toHaveBeenCalled();
   });
+  it('publishes both CTB scores after the last opponent leaves and does not credit a false win', () => {
+    fixture(true);
+    const victory = vi.fn();
+    vi.spyOn(bridge, 'getRoundResultEligiblePlayerIds').mockReturnValue(['remaining']);
+    vi.spyOn(bridge, 'getConnectedPlayers').mockReturnValue([
+      { id: 'remaining', name: 'Blue', colorHex: 0xffffff },
+    ]);
+    vi.spyOn(bridge, 'getPlayerTeam').mockReturnValue('blue');
+    vi.spyOn(bridge, 'getPlayerFrags').mockReturnValue(10);
+    const published = vi.spyOn(bridge, 'publishRoundResults').mockImplementation(() => {});
+    const recorded = vi.spyOn(bridge, 'recordCompletedPvpMatch').mockImplementation(() => {});
+    vi.spyOn(bridge, 'hostPublishRoomStatistics').mockImplementation(() => {});
+    const scores = { blue: 1, red: 3 };
+    const resultContext = {
+      ctx: { voice: { victory } }, resolveConfiguredGameMode: () => 'capture_the_beer',
+      captureTheBeerActivityRuntime: { system: { getTeamScore: (team: 'blue' | 'red') => scores[team] } },
+    };
+    ArenaLifecycleCoordinator.prototype.hostSaveRoundResults.call(resultContext as any, 1000, true);
+    // Teardown may reset the runtime, but the reliable result must retain both final scores.
+    scores.blue = scores.red = 0;
+    const wireResults = JSON.parse(JSON.stringify(published.mock.calls[0][0]));
+    expect(wireResults).toEqual([expect.objectContaining({
+      id: 'remaining', teamId: 'blue', teamScore: 1, teamScores: { blue: 1, red: 3 },
+    })]);
+    expect(recorded).toHaveBeenCalledWith(['remaining'], new Set());
+    expect(victory).not.toHaveBeenCalled();
+  });
+
   it('preserves the completed round revision in state and results after live participation is cleared', () => {
     const { flow, setPhase } = fixture(true);
     const activity = { kind: 'coop-mission', definitionId: 'mission:test', worldRevision: 40, activityRevision: 41 };

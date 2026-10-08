@@ -148,6 +148,7 @@ export interface RoomPvpResult {
   teamId: TeamId | null;
   frags: number;
   teamScore?: number;
+  teamScores?: Readonly<Record<TeamId, number>>;
 }
 
 /** Liefert die echten Sieger einer abgeschlossenen PvP-Runde; bei Draw bleibt die Menge leer. */
@@ -155,8 +156,8 @@ export function resolvePvpWinnerIds(mode: GameMode, results: readonly RoomPvpRes
   if (results.length === 0) return new Set();
 
   if (mode === 'team_deathmatch' || mode === 'capture_the_beer') {
-    const blueScore = resolveTeamScore(results, 'blue');
-    const redScore = resolveTeamScore(results, 'red');
+    const blueScore = resolvePvpTeamScore(results, 'blue');
+    const redScore = resolvePvpTeamScore(results, 'red');
     if (blueScore === redScore) return new Set();
     const winningTeam: TeamId = blueScore > redScore ? 'blue' : 'red';
     return new Set(results.filter((entry) => entry.teamId === winningTeam).map((entry) => entry.id));
@@ -167,7 +168,9 @@ export function resolvePvpWinnerIds(mode: GameMode, results: readonly RoomPvpRes
   return winners.length === 1 ? new Set([winners[0].id]) : new Set();
 }
 
-function resolveTeamScore(results: readonly RoomPvpResult[], teamId: TeamId): number {
+export function resolvePvpTeamScore(results: readonly RoomPvpResult[], teamId: TeamId): number {
+  const finalScore = results.find((entry) => entry.teamScores !== undefined)?.teamScores?.[teamId];
+  if (typeof finalScore === 'number' && Number.isFinite(finalScore)) return finalScore;
   const entries = results.filter((entry) => entry.teamId === teamId);
   const authoritativeScore = entries.find((entry) => typeof entry.teamScore === 'number')?.teamScore;
   if (typeof authoritativeScore === 'number' && Number.isFinite(authoritativeScore)) return authoritativeScore;

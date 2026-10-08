@@ -315,6 +315,8 @@ export interface RoundResult {
   gameMode: GameMode;
   mapName: string;
   teamScore?: number;
+  /** Beide CTB-Endstände, auch wenn ein Team keine berechtigte Spielerzeile mehr hat. */
+  teamScores?: Readonly<Record<TeamId, number>>;
   sharedXp?: number;
   /** Gemeinsame, autoritative B8-Epic-Garantie; pro berechtigter Zeile wiederholt. */
   epicGuaranteeCount?: number;

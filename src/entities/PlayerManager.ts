@@ -349,7 +349,7 @@ export class PlayerManager implements OwnerVisualSource {
     if (worldGeometry.captureTheBeerBasesActive && requestingPlayerId) {
       const teamId = this.teamResolver?.(requestingPlayerId) ?? null;
       const blockedForBaseSpawn = this.buildBlockedCells(requestingPlayerId);
-      const baseSpawn = this.tryGetCaptureTheBeerSpawn(teamId, blockedForBaseSpawn);
+      const baseSpawn = this.tryGetCaptureTheBeerSpawn(teamId, blockedForBaseSpawn, requestingPlayerId, spawnContext);
       if (baseSpawn) return baseSpawn;
     }
 
@@ -627,6 +627,8 @@ export class PlayerManager implements OwnerVisualSource {
   private tryGetCaptureTheBeerSpawn(
     teamId: TeamId | null,
     blocked: ReadonlySet<string>,
+    requestingPlayerId: string,
+    spawnContext: SpawnContextSnapshot,
   ): { x: number; y: number } | null {
     if (!teamId) return null;
 
@@ -635,26 +637,18 @@ export class PlayerManager implements OwnerVisualSource {
       this.metrics.gridCols,
       this.metrics.gridRows,
     ));
-    if (baseCandidates.length > 0) {
-      return this.pickRandomSpawn(baseCandidates);
-    }
+    const evaluate = (candidate: SpawnCandidate) => this.evaluateSpawnCandidate(
+      candidate, requestingPlayerId, spawnContext, null, null,
+    );
+    const baseSpawn = this.pickSpawnWithFallbacks(baseCandidates.map(evaluate));
+    if (baseSpawn) return baseSpawn;
 
     const teamZoneCandidates = this.collectFreeCells(blocked, getCaptureTheBeerTeamSpawnRegion(
       teamId,
       this.metrics.gridCols,
       this.metrics.gridRows,
     ));
-    if (teamZoneCandidates.length > 0) {
-      return this.pickRandomSpawn(teamZoneCandidates);
-    }
-
-    return null;
-  }
-
-  private pickRandomSpawn(candidates: readonly SpawnCandidate[]): { x: number; y: number } | null {
-    if (candidates.length === 0) return null;
-    const chosen = candidates[Math.floor(Math.random() * candidates.length)];
-    return { x: chosen.x, y: chosen.y };
+    return this.pickSpawnWithFallbacks(teamZoneCandidates.map(evaluate));
   }
 
   private buildRelaxedOpponentThresholds(): number[] {

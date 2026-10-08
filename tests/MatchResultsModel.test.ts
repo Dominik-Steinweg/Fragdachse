@@ -93,6 +93,15 @@ describe('MatchResultsModel', () => {
     expect(resolvePersonalMatchOutcome('coop_defense', player.id, [player], aborted)).toBe('aborted');
   });
 
+  it.each([
+    { blue: 1, red: 3, outcome: 'defeat' },
+    { blue: 2, red: 2, outcome: 'draw' },
+    { blue: 3, red: 1, outcome: 'victory' },
+  ])('uses both CTB final scores without an opposing result row: $outcome', ({ blue, red, outcome }) => {
+    const player = { ...result('remaining', 99, 'blue', blue), teamScores: { blue, red } };
+    expect(resolvePersonalMatchOutcome('capture_the_beer', player.id, [player], null)).toBe(outcome);
+  });
+
   it('sorts deterministically and computes multiple level-up rewards', () => {
     expect(sortMatchLeaderboard([
       result('p2', 5),

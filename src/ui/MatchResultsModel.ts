@@ -1,4 +1,5 @@
 import type { RoundResult, RoundState } from '../network/NetworkBridge';
+import { resolvePvpTeamScore } from '../network/RoomStatistics';
 import type { PersistentBaseAreaStage } from '../persistentBase/PersistentBaseCore';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import type { CoopDefenseClassId, CoopDefenseItem, CoopDefenseItemSlot, CoopDefenseRoundIdentity, GameMode, TeamId } from '../types';
@@ -129,8 +130,8 @@ export function resolvePersonalMatchOutcome(
 
   if (mode === 'team_deathmatch' || mode === 'capture_the_beer') {
     if (!local.teamId) return 'syncing';
-    const blueScore = resolveTeamScore(results, 'blue');
-    const redScore = resolveTeamScore(results, 'red');
+    const blueScore = resolvePvpTeamScore(results, 'blue');
+    const redScore = resolvePvpTeamScore(results, 'red');
     if (blueScore === redScore) return 'draw';
     const winningTeam: TeamId = blueScore > redScore ? 'blue' : 'red';
     return local.teamId === winningTeam ? 'victory' : 'defeat';
@@ -224,11 +225,4 @@ export function createMatchItemRewardPresentation(
       };
     }),
   };
-}
-
-function resolveTeamScore(results: readonly RoundResult[], teamId: TeamId): number {
-  const entries = results.filter((entry) => entry.teamId === teamId);
-  const authoritativeScore = entries.find((entry) => typeof entry.teamScore === 'number')?.teamScore;
-  if (typeof authoritativeScore === 'number') return authoritativeScore;
-  return entries.reduce((sum, entry) => sum + Math.max(0, Math.floor(entry.frags)), 0);
 }

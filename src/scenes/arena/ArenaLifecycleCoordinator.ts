@@ -2031,6 +2031,10 @@ export class ArenaLifecycleCoordinator {
       ? this.coopMissionRuntime?.coopDefenseSecondaryObjectiveSystem?.getEpicGuaranteeCount() ?? 0
       : 0;
     const eligibleIds = new Set(bridge.getRoundResultEligiblePlayerIds());
+    const teamScores = gameMode === CAPTURE_THE_BEER_MODE ? {
+      blue: this.captureTheBeerActivityRuntime?.system.getTeamScore('blue') ?? 0,
+      red: this.captureTheBeerActivityRuntime?.system.getTeamScore('red') ?? 0,
+    } : undefined;
     const results: RoundResult[] = bridge.getConnectedPlayers()
       .filter((p) => eligibleIds.has(p.id))
       .map((p) => {
@@ -2045,9 +2049,8 @@ export class ArenaLifecycleCoordinator {
           roundRevision: roundState?.roundRevision,
           gameMode,
           mapName,
-          teamScore: gameMode === CAPTURE_THE_BEER_MODE && teamId
-            ? this.captureTheBeerActivityRuntime?.system.getTeamScore(teamId) ?? 0
-            : undefined,
+          teamScore: teamId ? teamScores?.[teamId] : undefined,
+          teamScores,
           sharedXp: isCoopDefenseMode(gameMode) ? bridge.getCoopDefenseRoundXp() : undefined,
           epicGuaranteeCount: isCoopDefenseMode(gameMode) ? epicGuaranteeCount : undefined,
         };

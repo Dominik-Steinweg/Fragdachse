@@ -17,11 +17,11 @@ vi.mock('../src/network/bridge', () => ({
   bridge: { getCoopDefenseMapId: () => '15' },
 }));
 
-import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, GRID_COLS, GRID_ROWS } from '../src/config';
+import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, GRID_COLS, GRID_ROWS, getArenaMetricsProfile, getCaptureTheBeerBaseRegion, getCaptureTheBeerTeamSpawnRegion } from '../src/config';
 import { PlayerManager } from '../src/entities/PlayerManager';
 import type { BaseSpec } from '../src/arena/BaseRegistry';
 import type { ArenaLayout } from '../src/types';
-import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
+import { resolveActiveArenaWorldMetrics, resolveWorldMetrics } from '../src/world/WorldMetrics';
 
 const TEST_WORLD_GEOMETRY = {
   metrics: resolveActiveArenaWorldMetrics(),
@@ -61,6 +61,43 @@ function center(gridX: number, gridY: number): { x: number; y: number } {
 }
 
 describe('PlayerManager ground hazard spawns', () => {
+  it.each(['blue', 'red'] as const)('prefers safe CTB %s base cells, then team territory, then the arena', teamId => {
+    const metrics = resolveWorldMetrics(getArenaMetricsProfile('capture_the_beer', 'ARENA'));
+    const base = getCaptureTheBeerBaseRegion(teamId, metrics.gridCols, metrics.gridRows);
+    const territory = getCaptureTheBeerTeamSpawnRegion(teamId, metrics.gridCols, metrics.gridRows);
+    const homeX = Math.floor((base.minGridX + base.maxGridX) / 2);
+    const cells = [
+      { gridX: homeX, gridY: 2 },
+      { gridX: homeX, gridY: metrics.gridRows - 3 },
+      { gridX: teamId === 'blue' ? territory.maxGridX : territory.minGridX, gridY: 2 },
+      { gridX: Math.floor(metrics.gridCols / 2), gridY: 2 },
+    ];
+    const free = new Set(cells.map(cell => `${cell.gridX}_${cell.gridY}`));
+    const rocks: ArenaLayout['rocks'] = [];
+    for (let y = 0; y < metrics.gridRows; y++) for (let x = 0; x < metrics.gridCols; x++) {
+      if (!free.has(`${x}_${y}`)) rocks.push({ gridX: x, gridY: y });
+    }
+    const manager = new PlayerManager({} as never);
+    manager.setWorldGeometry({ metrics, bases: [], captureTheBeerBasesActive: true });
+    manager.setTeamResolver(() => teamId);
+    manager.setLayout({ seed: 1, rocks, trees: [], tracks: [], dirt: [], powerUpPedestals: [] });
+    let dangerousCells = 1;
+    manager.setSpawnContextProvider(() => ({
+      fires: [], stinkClouds: [], teslaDomes: [], nukes: [], meteors: [], turrets: [], projectiles: [],
+      burningGroundCells: cells.slice(0, dangerousCells).map(cell => ({
+        x: metrics.offsetX + (cell.gridX + 0.5) * CELL_SIZE,
+        y: metrics.offsetY + (cell.gridY + 0.5) * CELL_SIZE,
+        radius: CELL_SIZE / 2,
+      })),
+    }));
+    for (dangerousCells = 1; dangerousCells <= 3; dangerousCells++) {
+      const safe = cells[dangerousCells];
+      expect(manager.getSpawnPoint('player')).toEqual({
+        x: (safe.gridX + 0.5) * CELL_SIZE, y: (safe.gridY + 0.5) * CELL_SIZE,
+      });
+    }
+  });
+
   it('keeps respawns near a threatened base while preferring open ground, then ordinary enemies over the boss', () => {
     const bossCell = { gridX: 14, gridY: 10 };
     const ordinaryCell = { gridX: 20, gridY: 10 };

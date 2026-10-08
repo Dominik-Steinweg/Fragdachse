@@ -97,4 +97,12 @@ describe('host room statistics ledger', () => {
     const newRoom = new RoomStatisticsLedger();
     expect(newRoom.snapshot()).toEqual([]);
   });
+
+  it('does not credit a CTB win when the leading opponent team has left', () => {
+    const remaining = { id: 'blue', teamId: 'blue' as const, frags: 99, teamScore: 1,
+      teamScores: { blue: 1, red: 3 } };
+    expect(resolvePvpWinnerIds('capture_the_beer', [remaining])).toEqual(new Set());
+    expect(resolvePvpWinnerIds('capture_the_beer', [{ ...remaining, teamScores: { blue: 3, red: 1 } }]))
+      .toEqual(new Set(['blue']));
+  });
 });
