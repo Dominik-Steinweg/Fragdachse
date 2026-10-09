@@ -76,13 +76,15 @@ function harness() {
   return { ...fake, renderer, clock(t: number) { time = t; }, tick() { renderer.update(true); } };
 }
 const kind = COOP_DEFENSE_ENEMY_KINDS[0];
-function enemies(h: ReturnType<typeof harness>, boss = false, deathSpawns: readonly CoopDefenseEnemyDeathSpawnConfig[] = []) {
+function enemies(h: ReturnType<typeof harness>, boss = false, deathSpawns: readonly CoopDefenseEnemyDeathSpawnConfig[] = [], decoration = false) {
   const configs = resolveCoopDefenseEnemyConfigs(1);
-  // Preserve the real codec kind, but exclude unrelated authored attacks and glow from the fixture.
+  // Preserve the real codec kind, but exclude unrelated authored attacks and glow.
+  // The decoration contract opts into a synthetic halo independent of authored tuning.
+  if (decoration) h.scene.textures.exists = () => true;
   configs[kind] = {
     ...configs[kind],
     isBoss: boss,
-    glow: undefined,
+    glow: decoration ? { color: 0xffffff, alpha: 0.5, sizeFactor: 1.5 } : undefined,
     weapons: [],
     imageKey: 'health-test',
     deathSpawns,
@@ -1505,7 +1507,7 @@ describe('World HP consumer boundaries', () => {
   });
 
   it('keeps bosses visible and retains non-HP decorations, including lethal guard rescue', () => {
-    const h = harness(), manager = enemies(h, true);
+    const h = harness(), manager = enemies(h, true, [], true);
     upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 100, maxHp: 100 });
     h.tick();
     expect(h.renderer.getStats().active).toBe(1);

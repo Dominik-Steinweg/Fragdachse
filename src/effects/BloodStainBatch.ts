@@ -1,9 +1,15 @@
 import * as Phaser from 'phaser';
 import { EnemyEyeBatch } from './EnemyEyeBatch';
 
+interface StainGroup {
+  batch: EnemyEyeBatch;
+  stains: Set<Phaser.GameObjects.Image>;
+}
+
 /** Keep Image/tween semantics, but submit contiguous runs of stains as textured quads. */
 export class BloodStainBatch {
-  private readonly groups: { batch: EnemyEyeBatch; stains: Set<Phaser.GameObjects.Image> }[] = [];
+  private readonly groups = new Map<Phaser.GameObjects.GameObject, StainGroup>();
+  private readonly pending = new Map<Phaser.GameObjects.Image, { group?: StainGroup }>();
   private destroyed = false;
 
   constructor(private readonly scene: Phaser.Scene, private readonly texture: string, private readonly onDestroy: () => void) {
@@ -12,33 +18,65 @@ export class BloodStainBatch {
   }
 
   add(stain: Phaser.GameObjects.Image): void {
-    // Enemies share this depth. Start a new run when another object was inserted
-    // between stains, preserving Phaser's stable ordering at equal depth.
-    let previous: Phaser.GameObjects.GameObject | undefined;
-    const display = this.scene.children.list;
-    for (let i = display.length - 1; i >= 0; i--) {
-      const object = display[i];
-      if (object !== stain && 'depth' in object && object.depth === stain.depth) { previous = object; break; }
+    const entry: { group?: StainGroup } = {};
+    this.pending.set(stain, entry);
+    stain.once(Phaser.GameObjects.Events.DESTROY, () => {
+      this.pending.delete(stain);
+      entry.group?.stains.delete(stain);
+    });
+  }
+
+  private flushPending(): void {
+    if (!this.pending.size) return;
+    // Resolve whole arrival runs backwards, stopping when their predecessors are
+    // known. Different depths cannot interleave; equal-depth enemies split runs.
+    const runs = new Map<number, Phaser.GameObjects.Image[]>();
+    const objects = [...this.scene.children.list];
+    for (let i = objects.length - 1; i >= 0; i--) {
+      const object = objects[i];
+      if (!('depth' in object)) continue;
+      const depth = object.depth as number;
+      const stain = object as Phaser.GameObjects.Image;
+      if (this.pending.has(stain)) {
+        let run = runs.get(depth);
+        if (!run) runs.set(depth, run = []);
+        run.push(stain);
+        continue;
+      }
+      const run = runs.get(depth);
+      if (!run) continue;
+      this.flushPendingRun(depth, run, this.groups.get(object));
+      runs.delete(depth);
+      if (!this.pending.size) return;
     }
-    let group = this.groups.find(candidate => candidate.batch.layer === previous);
+    for (const [depth, run] of runs) this.flushPendingRun(depth, run);
+  }
+
+  private flushPendingRun(depth: number, run: Phaser.GameObjects.Image[], group?: StainGroup): void {
     if (!group) {
-      // This existing persistent quad writer is shared with lights as well as eyes.
-      const batch = new EnemyEyeBatch(this.scene, this.texture, 32, stain.depth);
+      const batch = new EnemyEyeBatch(this.scene, this.texture, 32, depth);
       batch.layer.setName('blood-stains');
+      // Replace the first arrival at its original position, before the stable
+      // depth sort, so later equal-depth enemies remain above this run.
+      this.scene.children.moveBelow(batch.layer, run[run.length - 1]);
       group = { batch, stains: new Set() };
-      this.groups.push(group);
+      this.groups.set(batch.layer, group);
     }
-    const stains = group.stains;
-    stains.add(stain);
-    stain.removeFromDisplayList();
-    stain.once(Phaser.GameObjects.Events.DESTROY, () => stains.delete(stain));
+    // The scan collected newest first; append in original compositing order.
+    for (let i = run.length - 1; i >= 0; i--) {
+      const stain = run[i];
+      const entry = this.pending.get(stain)!;
+      entry.group = group;
+      group.stains.add(stain);
+      this.pending.delete(stain);
+      stain.removeFromDisplayList();
+    }
   }
 
   private sync(): void {
-    for (let index = 0; index < this.groups.length;) {
-      const { batch, stains } = this.groups[index];
-      if (!stains.size) { batch.destroy(); this.groups.splice(index, 1); continue; }
-      index++;
+    this.flushPending();
+    for (const [layer, { batch, stains }] of this.groups) {
+      if (!stains.size) { batch.destroy(); this.groups.delete(layer); continue; }
       batch.begin(stains.size);
       // Insertion order preserves alpha compositing of overlapping stains.
       for (const stain of stains) {
@@ -57,11 +95,13 @@ export class BloodStainBatch {
     this.destroyed = true;
     this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.sync, this);
     this.scene.events.off(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this);
-    for (const { batch, stains } of this.groups) {
+    for (const stain of this.pending.keys()) { this.scene.tweens.killTweensOf(stain); stain.destroy(); }
+    this.pending.clear();
+    for (const { batch, stains } of this.groups.values()) {
       for (const stain of stains) { this.scene.tweens.killTweensOf(stain); stain.destroy(); }
       batch.destroy(); stains.clear();
     }
-    this.groups.length = 0;
+    this.groups.clear();
     this.onDestroy();
   }
 }

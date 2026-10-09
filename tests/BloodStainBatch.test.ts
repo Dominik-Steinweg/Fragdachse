@@ -8,15 +8,23 @@ vi.mock('phaser', () => ({
 }));
 vi.mock('../src/effects/EnemyEyeBatch', () => ({ EnemyEyeBatch: class {
   layer: any;
-  begin = vi.fn(); write = vi.fn(); destroy = vi.fn();
+  begin = vi.fn(); write = vi.fn();
+  destroy: ReturnType<typeof vi.fn>;
   constructor(scene: any, _texture: string, _capacity: number, depth: number) {
     this.layer = { depth, setName() {}, batch: this };
     scene.children.list.push(this.layer);
+    this.destroy = vi.fn(() => scene.children.list.splice(scene.children.list.indexOf(this.layer), 1));
   }
 } }));
 
 function fixture() {
-  const scene = { events: new EventEmitter(), children: { list: [] as any[] }, tweens: { killTweensOf: vi.fn() } };
+  const scene = { events: new EventEmitter(), children: {
+    list: [] as any[],
+    moveBelow(child: any, reference: any) {
+      this.list.splice(this.list.indexOf(child), 1);
+      this.list.splice(this.list.indexOf(reference), 0, child);
+    },
+  }, tweens: { killTweensOf: vi.fn() } };
   const onDestroy = vi.fn();
   const batch = new BloodStainBatch(scene as never, 'blood', onDestroy);
   const stain = (x: number, depth = 9.95) => {
@@ -24,7 +32,12 @@ function fixture() {
       x, y: 32, displayWidth: 20, displayHeight: 21, rotation: .4, tintTopLeft: 0x922211,
       alpha: .5, active: true, visible: true, depth,
       removeFromDisplayList() { scene.children.list.splice(scene.children.list.indexOf(this), 1); },
-      destroy() { this.emit('destroy'); this.active = false; },
+      destroy() {
+        if (!this.active) return;
+        this.emit('destroy'); this.active = false;
+        const index = scene.children.list.indexOf(this);
+        if (index >= 0) scene.children.list.splice(index, 1);
+      },
     });
     scene.children.list.push(image);
     batch.add(image as never);
@@ -41,13 +54,13 @@ describe('blood stain render batching', () => {
     scene.children.list.push(enemy);
     stain(30);
     stain(40, 8);
+    // Tween values are sampled after update; the Image remains the tween target.
+    first.alpha = .25; second.displayWidth = 28;
+    scene.events.emit('postupdate');
     const [before, interleaved, after, lower] = scene.children.list;
     expect(interleaved).toBe(enemy);
     expect(scene.children.list).toHaveLength(4);
     expect(lower.depth).toBe(8);
-    // Tween values are sampled after update; the Image remains the tween target.
-    first.alpha = .25; second.displayWidth = 28;
-    scene.events.emit('postupdate');
     expect(before.batch.write.mock.calls).toEqual([
       [10, 32, 20, 21, .4, 0x922211, 63 / 255], [20, 32, 28, 21, .4, 0x922211, 127 / 255],
     ]);
@@ -58,7 +71,9 @@ describe('blood stain render batching', () => {
   it('removes expired stains and releases empty batches', () => {
     const { scene, stain } = fixture();
     const first = stain(10), second = stain(20);
+    scene.events.emit('postupdate');
     const writer = scene.children.list[0].batch;
+    writer.write.mockClear();
     first.destroy();
     scene.events.emit('postupdate');
     expect(writer.write.mock.calls).toHaveLength(1);
@@ -70,18 +85,87 @@ describe('blood stain render batching', () => {
 
   it.each(['shutdown', 'world-clear'])('cleans detached Images and tweens on %s exactly once', (reason) => {
     const { scene, batch, stain, onDestroy } = fixture();
-    const first = stain(10), second = stain(20);
+    const first = stain(10);
+    scene.events.emit('postupdate');
     const writer = scene.children.list[0].batch;
+    writer.write.mockClear();
+    const second = stain(20); // Teardown also owns arrivals not yet batched.
     if (reason === 'shutdown') scene.events.emit('shutdown');
     else batch.destroy();
     batch.destroy();
     scene.events.emit('postupdate');
     expect(first.active).toBe(false); expect(second.active).toBe(false);
-    expect(scene.tweens.killTweensOf.mock.calls.map(([image]) => image)).toEqual([first, second]);
+    expect(new Set(scene.tweens.killTweensOf.mock.calls.map(([image]) => image))).toEqual(new Set([first, second]));
     expect(writer.destroy).toHaveBeenCalledOnce();
     expect(writer.write).not.toHaveBeenCalled();
     expect(onDestroy).toHaveBeenCalledOnce();
     expect(scene.events.listenerCount('postupdate')).toBe(0);
     expect(scene.events.listenerCount('shutdown')).toBe(0);
+  });
+
+  it('reuses a preceding run across frames, but keeps later equal-depth objects above it', () => {
+    const { scene, stain } = fixture();
+    stain(10);
+    scene.events.emit('postupdate');
+    const first = scene.children.list[0];
+    first.batch.write.mockClear();
+    scene.children.list.push({ depth: 20 });
+    stain(20);
+    const enemy = { depth: 9.95 };
+    scene.children.list.push(enemy);
+    stain(30);
+    const laterEnemy = { depth: 9.95 };
+    scene.children.list.push(laterEnemy);
+    scene.events.emit('postupdate');
+    const atDepth = scene.children.list.filter(object => object.depth === 9.95);
+    expect(atDepth).toHaveLength(4);
+    expect(atDepth[0]).toBe(first);
+    expect(first.batch.write.mock.calls.map(([x]: number[]) => x)).toEqual([10, 20]);
+    expect(atDepth[1]).toBe(enemy);
+    expect(atDepth[2].batch.write.mock.calls[0][0]).toBe(30);
+    expect(atDepth[3]).toBe(laterEnemy);
+  });
+
+  it('does not resurrect an arrival that expires before the next render', () => {
+    const { scene, stain } = fixture();
+    const expired = stain(10);
+    expired.destroy();
+    scene.events.emit('postupdate');
+    expect(scene.children.list).toHaveLength(0);
+    stain(20);
+    scene.events.emit('postupdate');
+    expect(scene.children.list[0].batch.write.mock.calls[0][0]).toBe(20);
+  });
+
+  it('matches ordinary Image compositing through mixed-depth arrival and expiry bursts', () => {
+    const { scene, stain } = fixture();
+    const reference: any[] = [];
+    const images: ReturnType<typeof stain>[] = [];
+    for (let frame = 0; frame < 24; frame++) {
+      for (const object of scene.children.list) object.batch?.write.mockClear();
+      for (let arrival = 0; arrival < 18; arrival++) {
+        const id = frame * 18 + arrival;
+        const depth = [8, 9.95, 12][(id * 7 + frame) % 3];
+        if (id % 7 === 0) {
+          const enemy = { x: id, depth, active: true };
+          scene.children.list.push(enemy);
+          reference.push(enemy);
+        } else {
+          const image = stain(id, depth);
+          images.push(image);
+          reference.push(image);
+        }
+      }
+      // Both new arrivals and already detached Images can expire before render.
+      images[images.length - 1].destroy();
+      images[frame].destroy();
+      scene.events.emit('postupdate');
+      scene.children.list.sort((a, b) => a.depth - b.depth);
+      reference.sort((a, b) => a.depth - b.depth);
+      const drawn = scene.children.list.flatMap(object => object.batch
+        ? object.batch.write.mock.calls.map(([x]: number[]) => x)
+        : [object.x]);
+      expect(drawn).toEqual(reference.filter(object => object.active).map(object => object.x));
+    }
   });
 });

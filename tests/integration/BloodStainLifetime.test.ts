@@ -1,9 +1,10 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
+import * as Phaser from 'phaser';
 
 vi.mock('phaser', async () => {
   const phaser = (await import('../fakeArenaRenderScene')).createFakePhaserModule();
-  return { ...phaser, Math: { ...phaser.Math, DegToRad: (value: number) => value * Math.PI / 180 }, Scene: class {}, GameObjects: { ...phaser.GameObjects, Events: { DESTROY: 'destroy' } },
+  return { ...phaser, CANVAS: 1, WEBGL: 2, Math: { ...phaser.Math, DegToRad: (value: number) => value * Math.PI / 180 }, Scene: class {}, GameObjects: { ...phaser.GameObjects, Events: { DESTROY: 'destroy' } },
     Filters: { Displacement: class {}, ParallelFilters: class {} } };
 });
 const bridgeMock = vi.hoisted(() => ({
@@ -27,6 +28,7 @@ import { healthBarTestScene } from '../healthBarTestScene';
 
 function fixture() {
   const f = healthBarTestScene();
+  f.scene.sys = { renderer: { type: Phaser.CANVAS } };
   f.scene.events = new EventEmitter();
   const timers: Array<{ callback(): void; remove: ReturnType<typeof vi.fn> }> = [];
   const tweens: Array<{ targets: unknown; onComplete?: () => void }> = [];
