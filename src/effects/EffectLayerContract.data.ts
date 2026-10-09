@@ -2977,13 +2977,8 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:effects/EnemyEyeGlowRenderer.ts:module/this.core/EnemyEyeBatch/0","owner":"effects/EnemyEyeGlowRenderer.ts","component":"module/this.core/EnemyEyeBatch/0","height":"body","lighting":"emissive","camera":"world","depths":[19.62],"blends":["NORMAL"],"profiles":["E"],"role":"effect","source":{"selector":"module/this.core/EnemyEyeBatch/0","expression":"DEPTH_LIGHTING + .12"}},
   {"id":"cpu:effects/EnemyReadabilityRenderer.ts:createLayer/layer/setDepth/0","owner":"effects/EnemyReadabilityRenderer.ts","component":"createLayer/layer/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9.949],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"createLayer/layer/setDepth/0","expression":"s.depth - 0.001"}},
   {"id":"cpu:effects/EnemyVulnerabilityRenderer.ts:createLayer/layer/setDepth/0","owner":"effects/EnemyVulnerabilityRenderer.ts","component":"createLayer/layer/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9.88,9.89,9.955,19.585],"blends":["NORMAL"],"profiles":["E","M"],"role":"effect","source":{"selector":"createLayer/layer/setDepth/0","expression":"depth"}},
-  {"id":"cpu:effects/EnergyBallRenderer.ts:createVisual/coreEmitter/createEmitter/0","owner":"effects/EnergyBallRenderer.ts","component":"createVisual/coreEmitter/createEmitter/0","height":"body","lighting":"emissive","camera":"world","depths":[16],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/coreEmitter/createEmitter/0","expression":"DEPTH.PROJECTILES + 1"}},
-  {"id":"cpu:effects/EnergyBallRenderer.ts:createVisual/shellEmitter/createEmitter/0","owner":"effects/EnergyBallRenderer.ts","component":"createVisual/shellEmitter/createEmitter/0","height":"body","lighting":"emissive","camera":"world","depths":[15.5],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/shellEmitter/createEmitter/0","expression":"DEPTH.PROJECTILES + 0.5"}},
-  {"id":"cpu:effects/EnergyBallRenderer.ts:createVisual/glowImage/configureAdditiveImage/0","owner":"effects/EnergyBallRenderer.ts","component":"createVisual/glowImage/configureAdditiveImage/0","height":"body","lighting":"emissive","camera":"world","depths":[14.8],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/glowImage/configureAdditiveImage/0","expression":"DEPTH.PROJECTILES - 0.2"}},
-  {"id":"cpu:effects/EnergyBallRenderer.ts:createVisual/shellImage/configureAdditiveImage/0","owner":"effects/EnergyBallRenderer.ts","component":"createVisual/shellImage/configureAdditiveImage/0","height":"body","lighting":"emissive","camera":"world","depths":[15.8],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/shellImage/configureAdditiveImage/0","expression":"DEPTH.PROJECTILES + 0.8"}},
-  {"id":"cpu:effects/EnergyBallRenderer.ts:playImpact/glow/configureAdditiveImage/0","owner":"effects/EnergyBallRenderer.ts","component":"playImpact/glow/configureAdditiveImage/0","height":"body","lighting":"emissive","camera":"world","depths":[16.4],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"playImpact/glow/configureAdditiveImage/0","expression":"DEPTH.PROJECTILES + 1.4"}},
-  {"id":"cpu:effects/EnergyBallRenderer.ts:playImpact/shell/configureAdditiveImage/0","owner":"effects/EnergyBallRenderer.ts","component":"playImpact/shell/configureAdditiveImage/0","height":"body","lighting":"emissive","camera":"world","depths":[16.5],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"playImpact/shell/configureAdditiveImage/0","expression":"DEPTH.PROJECTILES + 1.5"}},
-  {"id":"cpu:effects/EnergyBallRenderer.ts:playImpact/sparkEmitter/createEmitter/0","owner":"effects/EnergyBallRenderer.ts","component":"playImpact/sparkEmitter/createEmitter/0","height":"body","lighting":"emissive","camera":"world","depths":[16.45],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"playImpact/sparkEmitter/createEmitter/0","expression":"DEPTH.PROJECTILES + 1.45"}},
+  {"id":"cpu:effects/EnergyBallRenderer.ts:ensureLayer/this.layer/createEnergyBallGpuLayer/0","owner":"effects/EnergyBallRenderer.ts","component":"ensureLayer/this.layer/createEnergyBallGpuLayer/0","height":"body","lighting":"emissive","camera":"world","depths":[15.5],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"ensureLayer/this.layer/createEnergyBallGpuLayer/0","expression":"DEPTH.PROJECTILES + 0.5"}},
+  {"id":"cpu:effects/energyBall/EnergyBallGpuLayer.ts:createEnergyBallGpuLayer/layer?.image/setDepth/0","owner":"effects/energyBall/EnergyBallGpuLayer.ts","component":"createEnergyBallGpuLayer/layer?.image/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"createEnergyBallGpuLayer/layer?.image/setDepth/0","expression":"depth"}},
   {"id":"cpu:effects/EnergyInjectorRenderer.ts:createVisual/halo/setDepth/0","owner":"effects/EnergyInjectorRenderer.ts","component":"createVisual/halo/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[14.8],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/halo/setDepth/0","expression":"DEPTH.PROJECTILES - 0.2"}},
   {"id":"cpu:effects/EnergyInjectorRenderer.ts:createVisual/ring/setDepth/0","owner":"effects/EnergyInjectorRenderer.ts","component":"createVisual/ring/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[14.9],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/ring/setDepth/0","expression":"DEPTH.PROJECTILES - 0.1"}},
   {"id":"cpu:effects/EnergyInjectorRenderer.ts:createVisual/sparks/setDepth/0","owner":"effects/EnergyInjectorRenderer.ts","component":"createVisual/sparks/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[14.85],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/sparks/setDepth/0","expression":"DEPTH.PROJECTILES - 0.15"}},
@@ -4766,62 +4761,38 @@ export const CPU_SOURCE_CONTRACTS = {
     }
   },
   "effects/EnergyBallRenderer.ts": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "ensureLayer/this.layer/createEnergyBallGpuLayer/0",
+        "expression": "DEPTH.PROJECTILES + 0.5",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "effects/energyBall/EnergyBallGpuLayer.ts": {
     "blends": [
       "Phaser.BlendModes.ADD"
     ],
     "cameras": [],
     "sites": [
       {
-        "key": "createVisual/coreEmitter/createEmitter/0",
-        "expression": "DEPTH.PROJECTILES + 1",
+        "key": "createEnergyBallGpuLayer/layer?.image/setDepth/0",
+        "expression": "depth",
         "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "createVisual/shellEmitter/createEmitter/0",
-        "expression": "DEPTH.PROJECTILES + 0.5",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "createVisual/glowImage/configureAdditiveImage/0",
-        "expression": "DEPTH.PROJECTILES - 0.2",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "createVisual/shellImage/configureAdditiveImage/0",
-        "expression": "DEPTH.PROJECTILES + 0.8",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "playImpact/glow/configureAdditiveImage/0",
-        "expression": "DEPTH.PROJECTILES + 1.4",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "playImpact/shell/configureAdditiveImage/0",
-        "expression": "DEPTH.PROJECTILES + 1.5",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "playImpact/sparkEmitter/createEmitter/0",
-        "expression": "DEPTH.PROJECTILES + 1.45",
-        "blends": [
-          "ADD"
+          "NORMAL"
         ]
       }
     ],
-    "bindings": {}
+    "bindings": {
+      "depth": [
+        15.5
+      ]
+    }
   },
   "effects/EnergyInjectorRenderer.ts": {
     "blends": [

@@ -10,6 +10,7 @@ import {
   TESLA_NOVA_FRAGMENT_SOURCE, TESLA_NOVA_SHADER_NAME,
 } from './teslaDomeShader';
 import { createTeslaStormShaderProbe } from './teslaStorm/TeslaStormBoltGpuLayer';
+import { createEnergyBallShaderProbe } from './energyBall/EnergyBallGpuLayer';
 
 /** Lazy probes; their owner releases them on completion, failure and Scene teardown.
  * Phaser's program cache belongs to this renderer/context. No Activity or Round is created.
@@ -62,6 +63,7 @@ export function createCombatShaderWarmupProbes(scene: Phaser.Scene): ShaderWarmu
     shaderQuadProbe(scene, TESLA_BOLT_SHADER_NAME, TESLA_BOLT_FRAGMENT_SOURCE),
     shaderQuadProbe(scene, TESLA_NOVA_SHADER_NAME, TESLA_NOVA_FRAGMENT_SOURCE),
     createTeslaStormShaderProbe(scene),
+    createEnergyBallShaderProbe(scene),
   ];
 }
 
