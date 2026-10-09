@@ -27,6 +27,7 @@ import {
 import {
   DEFAULT_LOADOUT,
   getAvailableUltimateConfigs,
+  resolveUtilityIdForMode,
   LOADOUT_CATALOG_ENTRIES,
   isWeaponAllowedInMode,
   ULTIMATE_CONFIGS,
@@ -101,7 +102,7 @@ export function getLoadoutSlotItems(slot: LoadoutSlot, mode: GameMode): readonly
     }));
   }
   return STATIC_SLOT_ITEMS[slot].filter((item) => {
-    if (slot === 'utility') return true;
+    if (slot === 'utility') return resolveUtilityIdForMode(item.id, mode) !== undefined;
     const config = WEAPON_CONFIGS[item.id as keyof typeof WEAPON_CONFIGS];
     return config !== undefined && isWeaponAllowedInMode(config, mode);
   });

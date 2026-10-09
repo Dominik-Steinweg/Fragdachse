@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { getLoadoutSlotItems } from '../src/loadout/LoadoutCatalog';
 import { areLoadoutConfigsEquivalent } from '../src/loadout/LoadoutRules';
 import { resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../src/loadout/LoadoutRules';
 import { DEFAULT_LOADOUT, resolveUtilityIdForMode, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
@@ -36,6 +37,17 @@ describe('mode-specific weapon availability', () => {
 
     expect(snapshot.weapon2).toBe('P90');
   });
+
+  it.each(['deathmatch', 'team_deathmatch', 'capture_the_beer'] as const)(
+    'excludes the Coop-only spore turret from selection and committed loadouts in %s',
+    (mode) => {
+      expect(getLoadoutSlotItems('utility', mode).map(item => item.id)).not.toContain('SPORE_TURRET');
+      expect(resolveUtilityIdForMode('SPORE_TURRET', mode)).toBeUndefined();
+      expect(resolveUtilityIdForMode('SPORE_TURRET_COOP', mode)).toBeUndefined();
+      const coop = resolveLoadoutSelectionIds({ utility: UTILITY_CONFIGS.SPORE_TURRET }, 'coop_defense');
+      expect(sanitizeCommittedLoadoutForMode(coop, mode)?.utility).toBe(DEFAULT_LOADOUT.utility.id);
+    },
+  );
 
   it('commits concrete inherited utility IDs per mode', () => {
     const coop = resolveLoadoutSelectionIds({ utility: UTILITY_CONFIGS.ROCK_BARRIER }, 'coop_defense');

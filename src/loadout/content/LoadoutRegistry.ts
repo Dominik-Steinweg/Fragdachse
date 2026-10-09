@@ -1,4 +1,5 @@
 import type { GameMode } from '../../types';
+import { isCoopDefenseMode } from '../../gameModes';
 import {
   buildLoadoutRegistries,
   isUltimateAllowedInMode,
@@ -60,7 +61,8 @@ export function getUtilityBaseId(id: string): string | undefined {
 export function resolveUtilityIdForMode(id: string, mode: GameMode): string | undefined {
   const baseId = getUtilityBaseId(id) ?? id;
   if (!UTILITY_CONFIGS[baseId]) return undefined;
-  // The normal placeables are permanent constructions in every mode. There is no Coop-only
+  if (baseId === 'SPORE_TURRET' && !isCoopDefenseMode(mode)) return undefined;
+  // Available placeables are permanent constructions. There is no Coop-only
   // lifetime/config variant; legacy IDs have already been normalized above.
   return baseId;
 }

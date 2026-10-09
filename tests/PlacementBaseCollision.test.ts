@@ -225,7 +225,7 @@ describe('turret aim configuration in placement snapshots', () => {
 
   it('freezes a utility profile when restored and leaves legacy utility fields absent', () => {
     const host = createPlacement();
-    const utility = getUtilityConfigForMode('SPORE_TURRET', 'coop-defense');
+    const utility = getUtilityConfigForMode('SPORE_TURRET', 'coop_defense');
     if (utility.type !== 'placeable_turret') throw new Error('expected turret');
     const configured = { ...utility, placeable: { ...utility.placeable, rotationSpeedDegPerSec: 70, aimToleranceDeg: 2,
       targetRange: utility.placeable.targetRange * 1.5 } };
