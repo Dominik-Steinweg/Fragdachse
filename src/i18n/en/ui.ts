@@ -240,6 +240,7 @@ export const enUi = {
   "ui.lobby.pingPreparing": "Measuring ping …",
   "ui.lobby.newRoom": "NEW ROOM",
   "ui.lobby.players": "PLAYERS",
+  "ui.lobby.team": "Team",
   "ui.lobby.teamBlue": "BLUE",
   "ui.lobby.teamRed": "RED",
   "ui.lobby.inviteFriend": "INVITE FRIEND",

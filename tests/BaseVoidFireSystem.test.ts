@@ -11,24 +11,25 @@ vi.mock('phaser', () => ({
 }));
 import { BaseVoidFireSystem, collectBaseFireContacts, type VoidFireBase } from '../src/systems/BaseVoidFireSystem';
 import { FireSystem } from '../src/effects/FireSystem';
-import { CELL_SIZE, ARENA_OFFSET_X, ARENA_OFFSET_Y } from '../src/config';
+import { BURN_TICK_INTERVAL_MS, CELL_SIZE, ARENA_OFFSET_X, ARENA_OFFSET_Y } from '../src/config';
 import type { GroundFireContact } from '../src/effects/FireSystem';
 import type { CombatSource } from '../src/combat/CombatScope';
 
 const source: CombatSource = { gameplaySource: { kind: 'environment', id: 'hazard' },
   attribution: { kind: 'world', id: 'hazard' }, allegiance: { ownerId: 'hazard', kind: 'world' }, origin: 'burn' };
-function harness(hp = 2000) {
+const testConfig = { damagePerSecond: { friendly: 100, hostile: 133 }, afterburnMs: 1000 };
+function harness(hp = 2000, faction: VoidFireBase['faction'] = 'friendly', config = testConfig) {
   let contacts: GroundFireContact[] = [];
   let burning = false;
   let eligible = true;
   let permitted = true;
   const damage: number[] = [];
-  const base: VoidFireBase = { id: 'base', faction: 'friendly',
+  const base: VoidFireBase = { id: 'base', faction,
     isDamageable: () => eligible && hp > 0, setVoidBurning: value => { burning = value; } };
   const system = new BaseVoidFireSystem({ getBases: () => [base], getContacts: () => contacts,
     captureSource: () => source, canDamage: () => permitted,
     damage: (_id, amount) => { hp = Math.max(0, hp - amount); damage.push(amount); },
-  }, { damagePerSecond: 100, afterburnMs: 1000 });
+  }, config);
   return { system, damage, hp: () => hp, burning: () => burning,
     eligible: (value: boolean) => { eligible = value; }, permitted: (value: boolean) => { permitted = value; },
     contact: (count = 1, style: 'normal' | 'void' = 'void') => {
@@ -40,6 +41,32 @@ function harness(hp = 2000) {
 }
 
 describe('finite base void burn', () => {
+  it.each(['friendly', 'hostile'] as const)('uses the %s damage rate without rounding fractional ticks', faction => {
+    const config = { damagePerSecond: { friendly: 13, hostile: 37 }, afterburnMs: 1000 };
+    const h = harness(2000, faction, config);
+    h.contact(); h.system.hostUpdate(0); h.contact(0);
+    h.system.hostUpdate(BURN_TICK_INTERVAL_MS);
+    const tickDamage = config.damagePerSecond[faction] * BURN_TICK_INTERVAL_MS / 1000;
+    expect(h.damage).toEqual([tickDamage]);
+    expect(h.hp()).toBeCloseTo(2000 - tickDamage);
+    h.system.hostUpdate(config.afterburnMs);
+    expect(h.hp()).toBeCloseTo(2000 - config.damagePerSecond[faction] * config.afterburnMs / 1000);
+    expect(h.burning()).toBe(false);
+  });
+  it.each(['friendly', 'hostile'] as const)('keeps one %s damage stream during sustained overlapping contact', faction => {
+    const h = harness(2000, faction);
+    const contactDurationMs = testConfig.afterburnMs * 3;
+    h.contact(20); h.system.hostUpdate(0);
+    for (let now = BURN_TICK_INTERVAL_MS; now <= contactDurationMs; now += BURN_TICK_INTERVAL_MS) {
+      h.system.hostUpdate(now);
+      expect(h.burning()).toBe(true);
+    }
+    h.contact(0);
+    h.system.hostUpdate(contactDurationMs + testConfig.afterburnMs);
+    expect(h.hp()).toBeCloseTo(2000 - testConfig.damagePerSecond[faction]
+      * (contactDurationMs + testConfig.afterburnMs) / 1000);
+    expect(h.burning()).toBe(false);
+  });
   it('samples occupied cells of a concave footprint without igniting through its courtyard', () => {
     const fire = new FireSystem({} as never);
     const metrics = { offsetX: ARENA_OFFSET_X, offsetY: ARENA_OFFSET_Y };

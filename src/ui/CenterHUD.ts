@@ -812,13 +812,14 @@ export class CenterHUD {
     const capacityMax = data.constructionCapacityMax ?? 0;
     if (capacityMax > 0) {
       const used = Phaser.Math.Clamp(data.constructionCapacityUsed ?? 0, 0, capacityMax);
+      const available = capacityMax - used;
       entries.push({
         id: CONSTRUCTION_CAPACITY_ID,
         side: 'right',
         tone: 'bronze',
         title: t('ui.hud.constructionCapacity'),
-        value: `${Math.round(used)} / ${Math.round(capacityMax)}`,
-        frac: used / capacityMax,
+        value: `${Math.round(available)} / ${Math.round(capacityMax)}`,
+        frac: available / capacityMax,
       });
     }
     if (data.shieldBuff?.visible) {

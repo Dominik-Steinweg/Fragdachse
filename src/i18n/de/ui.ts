@@ -240,6 +240,7 @@ export const deUi = {
   "ui.lobby.pingPreparing": "Ping wird geprüft …",
   "ui.lobby.newRoom": "NEUER RAUM",
   "ui.lobby.players": "SPIELER",
+  "ui.lobby.team": "Team",
   "ui.lobby.teamBlue": "BLAU",
   "ui.lobby.teamRed": "ROT",
   "ui.lobby.inviteFriend": "FREUND EINLADEN",

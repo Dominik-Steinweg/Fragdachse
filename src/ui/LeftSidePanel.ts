@@ -108,7 +108,7 @@ const NAME_COLOR_ROW_Y = 496;
 const CONTROL_LABEL_OFFSET_Y = 1.5;
 const ARROW_BUTTON_W = 24;
 const ARROW_BUTTON_H = 24;
-const TEAM_SELECT_ARROW_OFFSET_X = NAME_COLOR_BUTTON_W / 2 - ARROW_BUTTON_W / 2;
+const TEAM_SELECT_ARROW_OFFSET_X = 60;
 
 // Color-Picker-Popup (world-Koordinaten, separater Container)
 const PICKER_PADDING  = 10;
@@ -148,12 +148,6 @@ const LOADOUT_POPUP_LAYOUT = {
 } as const;
 
 const TEAM_OPTIONS: readonly TeamId[] = ['blue', 'red'];
-
-function getTeamLabel(teamId: TeamId | null): string {
-  if (teamId === 'blue') return t('ui.lobby.teamBlue');
-  if (teamId === 'red') return t('ui.lobby.teamRed');
-  return t('ui.lobby.chooseTeam');
-}
 
 type LoadoutCarouselItem = LoadoutItemRef;
 
@@ -607,14 +601,13 @@ export class LeftSidePanel {
   refreshColorIndicator(): void {
     const color = this.bridge.getPlayerColor(this.bridge.getLocalPlayerId());
     const mode = this.bridge.getGameMode();
-    const teamId = this.bridge.getPlayerTeam(this.bridge.getLocalPlayerId());
     if (color !== undefined) {
       this.badgerPreview?.setColor(color);
       this.localNameText?.setColor(toCssColor(color));
     }
     this.syncAllLoadoutSelections();
     this.refreshBadgerHeldItem();
-    this.updateTeamSelectorState(mode, teamId);
+    this.updateTeamSelectorState(mode);
   }
 
   /** Per-frame lobby update: rotate badger towards mouse. */
@@ -670,7 +663,7 @@ export class LeftSidePanel {
     this.updateNameEditButtonVisibility();
     this.updateColorEditState();
     this.updateLoadoutArrowVisibility();
-    this.updateTeamSelectorState(this.bridge.getGameMode(), this.bridge.getPlayerTeam(this.bridge.getLocalPlayerId()));
+    this.updateTeamSelectorState(this.bridge.getGameMode());
   }
 
   destroy(): void {
@@ -1360,7 +1353,7 @@ export class LeftSidePanel {
     });
   }
 
-  private updateTeamSelectorState(mode: GameMode, teamId: TeamId | null): void {
+  private updateTeamSelectorState(mode: GameMode): void {
     const showTeamSelect = hasTeamSelection(mode);
     const canChangeTeam = showTeamSelect && !this.lobbyFieldsLocked && this.bridge.canPlayerChangeTeam(this.bridge.getLocalPlayerId());
     const alpha = canChangeTeam ? 1 : 0.35;
@@ -1379,8 +1372,9 @@ export class LeftSidePanel {
       this.colorEditBtn?.setVisible(false).disableInteractive();
       this.colorEditText
         .setPosition(COLOR_BUTTON_X, NAME_COLOR_ROW_Y + CONTROL_LABEL_OFFSET_Y)
-        .setVisible(true);
-      this.colorEditText.setText(getTeamLabel(teamId));
+        .setVisible(true)
+        .setAlpha(alpha)
+        .setText(t('ui.lobby.team'));
     } else {
       this.updateColorEditState();
     }

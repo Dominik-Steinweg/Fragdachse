@@ -43,7 +43,10 @@ export class BaseVoidFireSystem {
   private destroyed = false;
 
   constructor(private readonly deps: BaseVoidFireDeps,
-    private readonly config: Readonly<{ damagePerSecond: number; afterburnMs: number }> = BASE_VOID_FIRE) {}
+    private readonly config: Readonly<{
+      damagePerSecond: Readonly<Record<VoidFireBase['faction'], number>>;
+      afterburnMs: number;
+    }> = BASE_VOID_FIRE) {}
 
   hostUpdate(now: number): void {
     if (this.destroyed || !Number.isFinite(now)) return;
@@ -58,7 +61,7 @@ export class BaseVoidFireSystem {
         // Integrate only the lifetime already earned by prior contacts. Late frames do not
         // invent damage in a gap between an expired burn and the next observed contact.
         while (burn.nextTickAt <= Math.min(now, burn.expiresAt) && base.isDamageable()) {
-          this.deps.damage(base.id, this.config.damagePerSecond * BURN_TICK_INTERVAL_MS / 1000,
+          this.deps.damage(base.id, this.config.damagePerSecond[base.faction] * BURN_TICK_INTERVAL_MS / 1000,
             burn.source, burn.nextTickAt);
           burn.nextTickAt += BURN_TICK_INTERVAL_MS;
           if (this.destroyed) return;
