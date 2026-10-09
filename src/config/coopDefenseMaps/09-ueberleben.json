@@ -2,7 +2,7 @@
   "mapId": "9",
   "arenaWidthCells": 84,
   "arenaHeightCells": 38,
-  "timeOfDay": "20:30",
+  "timeOfDay": "19:00",
   "rockFillRatio": 0.4,
   "trackPosition": "center",
   "mapEvents": [{
@@ -32,7 +32,7 @@
       "groups": [
         {
           "enemyKind": "zombie-badger",
-          "count": 48,
+          "count": 72,
           "front": "west",
           "spawnStaggerMs": 18000
         },
@@ -75,7 +75,7 @@
         },
         {
           "enemyKind": "zombie-badger",
-          "count": 24,
+          "count": 36,
           "spawnStaggerMs": 12000,
           "delayMs": 6000
         }
@@ -111,7 +111,7 @@
         },
         {
           "enemyKind": "zombie-badger",
-          "count": 40,
+          "count": 60,
           "spawnStaggerMs": 18000
         }
       ]
