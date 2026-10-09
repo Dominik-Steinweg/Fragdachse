@@ -6,11 +6,13 @@ vi.mock('../src/network/bridge', () => ({
 }));
 
 import { resolveCoopDefenseBases } from '../src/arena/BaseRegistry';
+import { ArenaGenerator, resolveArenaGenerationInput } from '../src/arena/ArenaGenerator';
 import { applyArenaMetricsForMode } from '../src/config';
 import {
   getCoopDefenseMapConfig,
 } from '../src/config/coopDefenseMaps';
 import { COOP_DEFENSE_MODE } from '../src/gameModes';
+import { resolveCoopDefenseWorldMetrics } from '../src/world/WorldMetrics';
 
 describe('Map 15 - Leerenjäger', () => {
   beforeAll(() => {
@@ -91,6 +93,34 @@ describe('Map 15 - Leerenjäger', () => {
           }
         }
       }
+    }
+  });
+
+  it('keeps the full layout fingerprint identical across hypot rounding implementations', () => {
+    const map = getCoopDefenseMapConfig('15');
+    const input = resolveArenaGenerationInput(
+      COOP_DEFENSE_MODE,
+      resolveCoopDefenseWorldMetrics(map.arenaWidthCells, map.arenaHeightCells),
+    );
+    const hypot = vi.spyOn(Math, 'hypot');
+    try {
+      // Both formulas compute the same distance, but scaling changes the last bits.
+      // Model that engine difference explicitly instead of comparing one engine to itself.
+      hypot.mockImplementation((...values) => Math.sqrt(values.reduce((sum, value) => sum + value * value, 0)));
+      const hostLayout = ArenaGenerator.generate(42, input, map);
+      hypot.mockImplementation((...values) => {
+        const scale = Math.max(...values.map(Math.abs));
+        if (scale === 0) return 0;
+        return scale * Math.sqrt(values.reduce((sum, value) => sum + (value / scale) * (value / scale), 0));
+      });
+      const clientLayout = ArenaGenerator.generate(42, input, map);
+
+      expect(hostLayout.groundHazardZones?.some(zone =>
+        zone.cells.some(cell => cell.expansionProgress !== undefined))).toBe(true);
+      expect(ArenaGenerator.fingerprint(clientLayout)).toBe(ArenaGenerator.fingerprint(hostLayout));
+      expect(clientLayout).toEqual(hostLayout);
+    } finally {
+      hypot.mockRestore();
     }
   });
 

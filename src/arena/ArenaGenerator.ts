@@ -104,7 +104,7 @@ function updateJsonFingerprintHash(value: unknown, hash: number, inArray = false
 }
 
 /** Increment whenever deterministic generation changes in a wire-visible way. */
-export const ARENA_GENERATOR_VERSION = 10;
+export const ARENA_GENERATOR_VERSION = 11;
 
 /** Immutable inputs that previously leaked in through mutable config module variables. */
 export interface ArenaGenerationInput {
@@ -1790,14 +1790,20 @@ export class ArenaGenerator {
           const patch = source.patch;
           if (!patch) continue;
           const outerRadius = patch.radiusCells * area.radiusScale;
+          const outerRadiusSq = outerRadius * outerRadius;
           for (let gridY = Math.max(0, Math.floor(patch.centerY - outerRadius));
             gridY <= Math.min(this.metrics.gridRows - 1, Math.ceil(patch.centerY + outerRadius)); gridY++) {
             for (let gridX = Math.max(0, Math.floor(patch.centerX - outerRadius));
               gridX <= Math.min(this.metrics.gridCols - 1, Math.ceil(patch.centerX + outerRadius)); gridX++) {
-              const distance = Math.hypot(gridX - patch.centerX, gridY - patch.centerY);
+              const dx = gridX - patch.centerX;
+              const dy = gridY - patch.centerY;
+              const distanceSq = dx * dx + dy * dy;
               const key = this.cellKey(gridX, gridY);
-              if (distance > outerRadius || initialCells.has(key)
+              if (distanceSq > outerRadiusSq || initialCells.has(key)
                 || !isValidCell(gridX, gridY, baseClearanceCells)) continue;
+              // Grid-sized integer deltas need no hypot scaling. Its engine-specific rounding
+              // would leak into expansionProgress and make host/client fingerprints disagree.
+              const distance = Math.sqrt(distanceSq);
               const expansionProgress = Math.max(0, (distance - patch.radiusCells) / (outerRadius - patch.radiusCells));
               const previous = expanded.get(key);
               if (!previous || expansionProgress < previous.expansionProgress!) {
