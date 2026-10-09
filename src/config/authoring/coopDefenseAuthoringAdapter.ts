@@ -158,6 +158,7 @@ export function toWorldGenerationConfig(world: WorldDefinition): ArenaGeneration
     water: world.terrain.water,
     trackMode: world.tracks?.mode,
     trackPosition: world.tracks?.position,
+    timeOfDay: world.initialTimeOfDay,
     persistentBase: world.persistentBaseSite,
     bases: world.bases.map((base) => toCoopBaseConfig(base, undefined)),
     fogStrength: world.fogStrength,

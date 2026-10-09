@@ -83,6 +83,11 @@ export class WorldLifecycle {
     return this.instanceDescriptor;
   }
 
+  /** A delayed observation must not recreate a World that has already ended locally. */
+  hasEndedRevision(worldRevision: number): boolean {
+    return worldRevision <= this.lastEndedWorldRevision;
+  }
+
   /** Liefert den Identity-Scope der laufenden World-Instanz für ihre lokale Materialisierung. */
   getProjectileIdentityScope(): ProjectileIdentityScope {
     if (this.projectileIdentityScope) return this.projectileIdentityScope;
@@ -109,7 +114,7 @@ export class WorldLifecycle {
    */
   beginCreate(world: WorldDescriptor, activity: ActivityDescriptor | null): void {
     assertActivityBelongsToWorld(world, activity);
-    if (world.worldRevision <= this.lastEndedWorldRevision) {
+    if (this.hasEndedRevision(world.worldRevision)) {
       throw new Error(
         `[WorldLifecycle] Cannot recreate ended world revision ${world.worldRevision}; `
         + `latest ended revision is ${this.lastEndedWorldRevision}`,
@@ -153,7 +158,7 @@ export class WorldLifecycle {
         + ` does not match the created instance ${this.instanceDescriptor.definitionId}`,
       );
     }
-    if (!this.instanceDescriptor && context.descriptor.worldRevision <= this.lastEndedWorldRevision) {
+    if (!this.instanceDescriptor && this.hasEndedRevision(context.descriptor.worldRevision)) {
       throw new Error(
         `[WorldLifecycle] Ignoring stale runtime for ended world revision ${context.descriptor.worldRevision}`,
       );

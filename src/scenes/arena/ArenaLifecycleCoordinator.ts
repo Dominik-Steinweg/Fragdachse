@@ -1520,6 +1520,7 @@ export class ArenaLifecycleCoordinator {
       }
       return;
     }
+    if (this.worldLifecycle.hasEndedRevision(world.worldRevision)) return;
     // Eine neue Instanz derselben oder einer anderen World ersetzt die gebaute. Ohne diese
     // Pruefung bliebe nach einem LobbyWorld-Reset die alte Runtime stehen: es gibt eine World,
     // aber die lokal gebaute meint eine andere.
@@ -2518,7 +2519,11 @@ export class ArenaLifecycleCoordinator {
    * Activity laeuft, nicht weil hier eine zweite Regel sie ausblendet.
    */
   syncLobbySurface(showLobby: boolean, onExitComplete?: () => void): void {
-    if (this.lobbySurfaceShown === showLobby) return;
+    if (this.lobbySurfaceShown === showLobby) {
+      // Loading can hide the overlay independently of the surrounding Lobby panels.
+      if (showLobby && !this.lobbyOverlay.isVisible()) this.lobbyOverlay.show();
+      return;
+    }
     this.lobbySurfaceShown = showLobby;
     if (showLobby) {
       this.lobbyOverlay.show();
@@ -3238,7 +3243,15 @@ export class ArenaLifecycleCoordinator {
   }
 
   private onTransitionToArena(): void {
-    if (this.matchTerminated || !this.ensureArenaEntry()) return;
+    if (this.matchTerminated) return;
+    const incomingWorld = bridge.getWorldDescriptor();
+    // Phase and World updates can arrive separately after round end. Check before any
+    // loading/UI work, including retries, rather than failing later during runtime attach.
+    if (incomingWorld && this.worldLifecycle.hasEndedRevision(incomingWorld.worldRevision)) {
+      this.cancelArenaEntry();
+      return;
+    }
+    if (!this.ensureArenaEntry()) return;
     // Der Retry-Timer (delayedCall unten) und `detectWorldChange()` im Update-Loop koennen am
     // selben Frame feuern. Ohne Guard wuerde ein doppelter Eintritt den laufenden Snapshot
     // invalidieren und einen zweiten Build starten, der den ersten zerstoerten Scratch erbt.

@@ -965,6 +965,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
     Object.assign(coordinator, {
       scene, layoutRetryCount: 0, arenaTransitionGeneration: 0,
+      worldLifecycle: { hasEndedRevision: () => false },
       // This test begins after the opaque loading frame; entry rendering has its own suite.
       arenaEntry: { stage: 'released', revision: 77 },
       ctx: { gameAudioSystem: { stopMusic: vi.fn() }, arenaCountdown: { showLoading: vi.fn() } },

@@ -29,6 +29,7 @@ import {
   toCoopDefenseMapConfig,
   toCoopMissionDefinition,
   toWorldDefinition,
+  toWorldGenerationConfig,
 } from '../src/config/authoring/coopDefenseAuthoringAdapter';
 import {
   getActivityDefinition,
@@ -38,6 +39,9 @@ import {
 } from '../src/config/authoring/authoredScenarios';
 import { resolveWorldPersistentBaseAnchorBase } from '../src/config/authoring/WorldDefinition';
 import { resolveCoopDefenseBases } from '../src/arena/BaseRegistry';
+import { ArenaGenerator, resolveArenaGenerationInput } from '../src/arena/ArenaGenerator';
+import { getAuthoredWorldMetricsProfile } from '../src/config';
+import { resolveWorldMetrics } from '../src/world/WorldMetrics';
 
 it('refreshes cached authoring for late diagnostic maps without changing the campaign', () => {
   const map = { ...getCoopDefenseMapConfig(WEAPON_BALANCE_LAB_MAP_ID), mapId: 'late-diagnostic' };
@@ -295,6 +299,29 @@ describe('World-/Activity-Authoring – Compatibility-Adapter', () => {
 });
 
 describe('World-/Activity-Authoring – World ohne Activity', () => {
+  it('erhaelt World-Felder im Generator-Vertrag ohne Missionsdaten einzuschleusen', () => {
+    for (const map of ALL_MAP_CONFIGS) {
+      const world = toWorldDefinition(map);
+      const generation = toWorldGenerationConfig(world);
+      expect(toWorldDefinition(generation)).toEqual(world);
+      for (const field of COOP_MISSION_SOURCE_FIELDS) {
+        if (field === 'powerUps') expect(generation.powerUps).toEqual([]);
+        else expect(generation[field]).toBeUndefined();
+      }
+    }
+  });
+
+  it('generiert Map 6 ohne Activity aus ihren World-Feldern', () => {
+    const world = getWorldDefinitionForMap('6')!;
+    const generation = toWorldGenerationConfig(world);
+    const metrics = getAuthoredWorldMetricsProfile(world.metrics.widthCells, world.metrics.heightCells);
+    const input = resolveArenaGenerationInput('coop_defense', resolveWorldMetrics(metrics));
+    const layout = ArenaGenerator.generate(42, input, generation);
+    expect(layout.seed).toBe(42);
+    expect(ArenaGenerator.fingerprint(ArenaGenerator.generate(42, input, generation)))
+      .toBe(ArenaGenerator.fingerprint(layout));
+  });
+
   it('beschreibt eine persistente Basis vollstaendig ohne Missionsfelder', () => {
     // Eine produktive Persistent-Base-Map bleibt auch ohne laufende Activity eine vollstaendige
     // World; die Missionsfelder verbleiben ausschliesslich in der Activity.

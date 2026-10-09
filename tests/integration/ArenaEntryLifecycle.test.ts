@@ -27,6 +27,8 @@ import { MatchResultsOverlay } from '../../src/ui/MatchResultsOverlay';
 import { PersistentBaseEditorScene } from '../../src/scenes/PersistentBaseEditorScene';
 import { bridge } from '../../src/network/bridge';
 import * as config from '../../src/config';
+import { WorldLifecycle } from '../../src/world/WorldLifecycle';
+import type { WorldRuntimeContext } from '../../src/world/WorldRuntimeContext';
 
 describe('ArenaScene after-round handoff', () => {
   it('hands input to the base Scene only after both cameras have faded in, then returns to the lobby', () => {
@@ -83,6 +85,7 @@ describe('ArenaScene after-round handoff', () => {
 });
 
 function fixture(host = false, visibleLobby = true) {
+  let overlayVisible = visibleLobby;
   const lobby = { definitionId: 'world:lobby', worldRevision: 10, seed: 1, generatorVersion: 1, layoutFingerprint: 'lobby' };
   const target = { ...lobby, definitionId: 'world:arena', worldRevision: 20, layoutFingerprint: 'arena' };
   const net = { phase: 'ARENA', revision: 20, world: lobby, activity: null as any };
@@ -114,7 +117,7 @@ function fixture(host = false, visibleLobby = true) {
     layoutRetryCount: 0, lobbySurfaceShown: visibleLobby, roundStartPending: false, lastRoundRevision: 10,
     pendingLobbyWorldReinstance: false, pendingLobbyWorldPresentationRebuild: false,
     worldLifecycle: { descriptor: lobby, activity: { kind: null, descriptor: null },
-      endInstance: vi.fn(), syncObservedActivity: vi.fn(), isActive: () => true },
+      endInstance: vi.fn(), syncObservedActivity: vi.fn(), isActive: () => true, hasEndedRevision: () => false },
     worldRuntime: { update: vi.fn(), context: {} },
     ctx: { arenaCountdown: countdown,
       leftPanel: { transitionToGame: vi.fn((done?: () => void) => { if (done) completions.panel = done; }),
@@ -122,9 +125,10 @@ function fixture(host = false, visibleLobby = true) {
       rightPanel: { transitionToGame: vi.fn(), transitionToLobby: vi.fn() },
       centerHUD: { transitionToGame: vi.fn(), transitionToLobby: vi.fn() },
       gameAudioSystem: { stopMusic: vi.fn(), playMusic: vi.fn() } },
-    lobbyOverlay: { isPresented: () => visibleLobby, lockButton: vi.fn(), show: vi.fn(),
-      hide: vi.fn((done?: () => void) => { if (done) completions.card = done; }),
-      setReadyButtonState: vi.fn(), showHostDisconnectedMessage: vi.fn() },
+    lobbyOverlay: { isPresented: () => overlayVisible, isVisible: () => overlayVisible,
+      lockButton: vi.fn(), show: vi.fn(() => { overlayVisible = true; }),
+      hide: vi.fn((done?: () => void) => { overlayVisible = false; if (done) completions.card = done; }),
+      setReadyButtonState: vi.fn(), showHostDisconnectedMessage: vi.fn(), showArenaFailureMessage: vi.fn() },
     hostUpdate: { setActive: vi.fn(), localPlayerState: {} },
     hostSyncWorldParticipation: vi.fn(), syncHostLoadoutsFromCommittedSelections: vi.fn(),
     detachAllWorldPlayers: vi.fn(), clearWorldAdmission: vi.fn(),
@@ -163,6 +167,69 @@ function fixture(host = false, visibleLobby = true) {
 
 beforeEach(() => { assets.getState.mockReturnValue({ ready: true, status: 'ready' }); assets.start.mockClear(); });
 afterEach(() => vi.restoreAllMocks());
+
+describe('completed World and Lobby recovery', () => {
+  it.each([
+    ['frame', 'world:lobby'], ['entry', 'world:lobby'], ['retry', 'world:lobby'],
+    ['frame', 'world:coop-defense:6'],
+  ])('ignores ended Match Worlds through %s and accepts a new %s without Activity', (route, definitionId) => {
+    const f = fixture();
+    const lifecycle = new WorldLifecycle({ publish: vi.fn(), clear: vi.fn(), attach: vi.fn(), detach: vi.fn() });
+    const ended = { ...f.net.world, definitionId: 'world:coop-defense:6', worldRevision: 20 };
+    lifecycle.attachRuntime({ descriptor: ended } as WorldRuntimeContext);
+    f.flow.worldLifecycle = lifecycle;
+    f.flow.syncLobbyTimeOfDay = vi.fn();
+    f.net.world = ended;
+    f.net.activity = null;
+    f.net.phase = 'LOBBY';
+    f.flow.lastPhase = 'ARENA';
+    f.flow.detectPhaseChange();
+    expect(lifecycle.descriptor).toBeNull();
+    const abort = vi.spyOn(f.flow, 'terminateMatch');
+    const enter = vi.spyOn(f.flow, 'ensureArenaEntry');
+    if (route === 'frame') f.flow.detectWorldChange();
+    if (route === 'entry') f.flow.onTransitionToArena();
+    if (route === 'retry') {
+      f.flow.retryArenaTransition(16);
+      f.timers.at(-1)!.callback();
+    }
+    expect(f.flow.buildWorld).not.toHaveBeenCalled();
+    expect(enter).not.toHaveBeenCalled();
+    expect(abort).not.toHaveBeenCalled();
+    expect(f.flow.lobbyOverlay.isVisible()).toBe(true);
+
+    f.flow.buildWorld.mockImplementation((descriptor: WorldRuntimeContext['descriptor']) => {
+      lifecycle.attachRuntime({ descriptor } as WorldRuntimeContext);
+    });
+    f.net.world = { ...ended, definitionId, worldRevision: 21 };
+    f.flow.detectWorldChange();
+    expect(f.flow.buildWorld).toHaveBeenCalledExactlyOnceWith(f.net.world, null, false);
+    expect(f.flow.arenaBuilt).toBe(true);
+    expect(lifecycle.isActive()).toBe(true);
+    expect(lifecycle.activity.descriptor).toBeNull();
+    f.net.world = ended;
+    f.flow.detectWorldChange();
+    expect(lifecycle.descriptor?.worldRevision).toBe(21);
+    expect(f.flow.buildWorld).toHaveBeenCalledOnce();
+    expect(abort).not.toHaveBeenCalled();
+  });
+
+  it('restores a hidden Lobby on build failure despite the cached visible surface state', () => {
+    const f = fixture();
+    f.net.phase = 'LOBBY';
+    f.flow.lobbyOverlay.hide();
+    expect(f.flow.lobbySurfaceShown).toBe(true);
+    f.flow.terminateMatch('arena build failed');
+    f.flow.terminateMatch('arena build failed');
+    f.flow.syncLobbySurface(true);
+    expect(f.flow.lobbyOverlay.isVisible()).toBe(true);
+    expect(f.flow.lobbyOverlay.show).toHaveBeenCalledOnce();
+    expect(f.flow.lobbyOverlay.showArenaFailureMessage).toHaveBeenCalledExactlyOnceWith('arena build failed');
+    expect(f.flow.ctx.leftPanel.transitionToLobby).not.toHaveBeenCalled();
+    expect(f.flow.ctx.rightPanel.transitionToLobby).not.toHaveBeenCalled();
+    expect(f.flow.ctx.centerHUD.transitionToLobby).not.toHaveBeenCalled();
+  });
+});
 
 describe('solo defeat restart from results', () => {
   function restartFixture() {

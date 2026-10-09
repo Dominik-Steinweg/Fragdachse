@@ -106,6 +106,25 @@ describe('WorldLifecycle – expliziter Zustand', () => {
   });
 });
 describe('WorldLifecycle – Teardown und Instanzende sind verschieden', () => {
+  it('kennzeichnet beendete Revisionen, aber weder Runtime-Detach noch neue Worlds als beendet', () => {
+    const lifecycle = new WorldLifecycle(createSink());
+    const world = descriptor();
+    expect(lifecycle.hasEndedRevision(world.worldRevision)).toBe(false);
+    lifecycle.attachRuntime(runtime(world));
+    lifecycle.detachRuntime();
+    expect(lifecycle.hasEndedRevision(world.worldRevision)).toBe(false);
+    lifecycle.endInstance();
+    expect(lifecycle.hasEndedRevision(world.worldRevision)).toBe(true);
+    expect(lifecycle.hasEndedRevision(world.worldRevision - 1)).toBe(true);
+    expect(() => lifecycle.beginCreate(world, null)).toThrow(/ended world revision/);
+    expect(() => lifecycle.attachRuntime(runtime(world))).toThrow(/ended world revision/);
+    const next = descriptor({ worldRevision: world.worldRevision + 1 });
+    expect(lifecycle.hasEndedRevision(next.worldRevision)).toBe(false);
+    lifecycle.attachRuntime(runtime(next));
+    expect(lifecycle.isActive()).toBe(true);
+    expect(lifecycle.activity.descriptor).toBeNull();
+  });
+
   it('behaelt die replizierte Instanz, wenn nur die lokale Runtime faellt', () => {
     const sink = createSink();
     const lifecycle = new WorldLifecycle(sink);
