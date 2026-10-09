@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { DEPTH, VOID_FIRE_COLOR } from '../config';
+import { DEPTH } from '../config';
 import type { EntityBurnGpuController } from './EntityBurnGpuController';
 import type { LightingSystem } from './LightingSystem';
 import type { GroundFireVisualStyle } from '../types';
@@ -8,6 +8,7 @@ import {
   ensureVoidFlameTextures,
   TEX_FLAME_GLOW,
   TEX_VOID_FLAME_GLOW,
+  tintedFirePalette,
 } from './FlameShared';
 
 const DEPTH_BURN_GLOW = DEPTH.PLAYERS + 0.18;
@@ -101,7 +102,7 @@ export class EntityBurnRenderer {
       this.lighting?.setLight(this.lightKey, 'entityBurn', x, y + bodySize * 0.05, {
         radiusPx: 70 + bodySize * 1.1 + intensity * 40,
         intensity: 0.55 + intensity * 0.45,
-        color: this.visualStyle === 'void' ? VOID_ENTITY_BURN_LIGHT_COLOR : undefined,
+        color: this.visualStyle === 'void' ? VOID_ENTITY_BURN_LIGHT_COLOR : tintedFirePalette(this.visualStyle)?.light,
       });
     }
   }
@@ -114,10 +115,10 @@ export class EntityBurnRenderer {
     if (this.visualStyle === visualStyle) return;
     this.visualStyle = visualStyle;
 
-    const isVoid = visualStyle === 'void';
+    const palette = tintedFirePalette(visualStyle);
     this.glowImage
-      .setTexture(isVoid ? TEX_VOID_FLAME_GLOW : TEX_FLAME_GLOW)
-      .setTint(isVoid ? VOID_FIRE_COLOR : 0xff8a24);
+      .setTexture(palette ? TEX_VOID_FLAME_GLOW : TEX_FLAME_GLOW)
+      .setTint(palette?.accent ?? 0xff8a24);
   }
 
   private releaseLight(): void {

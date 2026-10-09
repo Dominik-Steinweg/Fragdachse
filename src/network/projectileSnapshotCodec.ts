@@ -89,6 +89,7 @@ export const PROJECTILE_GRENADE_VISUAL_PRESETS = [
   'he', 'smoke', 'molotov', 'time_bubble', 'fur_ball',
   'he_cluster_shard', 'he_demolition_shard',
   'molotov_void',
+  'molotov_allied',
 ] as const satisfies readonly GrenadeVisualPreset[];
 
 export const PROJECTILE_ENERGY_BALL_VARIANTS = [
@@ -248,7 +249,9 @@ function encodeBurn(entry: SyncedProjectileDynamic): number {
     ? 1
     : entry.projectileBurnVisualStyle === 'void'
       ? 2
-      : 0;
+      : entry.projectileBurnVisualStyle === 'allied'
+        ? 3
+        : 0;
   return (entry.burning ? 1 : 0) | (styleCode << 1);
 }
 
@@ -323,6 +326,7 @@ export function decodeProjectileDynamics(
       const styleCode = burnPacked >> 1;
       if (styleCode === 1) entry.projectileBurnVisualStyle = 'normal' as GroundFireVisualStyle;
       else if (styleCode === 2) entry.projectileBurnVisualStyle = 'void' as GroundFireVisualStyle;
+      else if (styleCode === 3) entry.projectileBurnVisualStyle = 'allied' as GroundFireVisualStyle;
     }
     if (mask & D_MINI_ROCKET) {
       entry.miniRocketPhase = decodeMiniRocketPhase(stream[i++] as number);

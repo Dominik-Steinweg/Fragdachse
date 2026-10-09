@@ -294,6 +294,11 @@ describe('Enemy snapshot codec', () => {
       burnStacks: 3,
       burnVisualStyle: 'void',
     });
+    for (const burnVisualStyle of ['normal', 'allied'] as const) {
+      const stream: Array<number | string> = [];
+      encodeEnemyUpsert(stream, { id: 'e2a', burnStacks: 3, burnVisualStyle });
+      expect(decodeEnemyUpserts(stream)[0]).toMatchObject({ burnStacks: 3, burnVisualStyle });
+    }
   });
 
   it('keeps every enemy kind addressable by its wire index', () => {

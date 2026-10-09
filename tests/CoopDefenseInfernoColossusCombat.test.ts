@@ -21,7 +21,7 @@ import { CoopDefenseEnemyAbilitySystem } from '../src/systems/CoopDefenseEnemyAb
 import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS, type MolotovUtilityConfig } from '../src/loadout/LoadoutConfig';
 import { GenericWeapon } from '../src/loadout/GenericWeapon';
-import { VOID_FIRE_COLOR } from '../src/config';
+import { ALLIED_COLOR, VOID_FIRE_COLOR } from '../src/config';
 import type { BaseManager } from '../src/entities/BaseManager';
 import type { EnemyAttackWeapon, EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager } from '../src/entities/EnemyManager';
@@ -538,7 +538,7 @@ describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
 });
 
 describe('Flammenkoloss – Void-Brandsatz', () => {
-  function createAbilitySystem(enemy: TestColossus, players: readonly TestPlayer[]) {
+  function createAbilitySystem(enemy: TestColossus, players: readonly TestPlayer[], hostiles: readonly unknown[] = []) {
     const spawnProjectile = vi.fn().mockReturnValue(1);
     const canSeeThroughSmoke = vi.fn(() => true);
     const system = new CoopDefenseEnemyAbilitySystem(
@@ -546,7 +546,7 @@ describe('Flammenkoloss – Void-Brandsatz', () => {
         canSeeThroughSmoke,
         getAllEnemies: () => [enemy],
         getEnemy: () => enemy,
-        getHostileEnemies: () => [],
+        getHostileEnemies: () => hostiles,
       } as unknown as EnemyManager,
       { getAllPlayers: () => players } as unknown as PlayerManager,
       { spawnProjectile } as unknown as ProjectileSpawnPort,
@@ -629,6 +629,23 @@ describe('Flammenkoloss – Void-Brandsatz', () => {
         color: VOID_FIRE_COLOR,
         grenadePreset: 'molotov_void',
       },
+    });
+  });
+
+  it('wirft als Verbuendeter einen gruenen Brandsatz, der nur Gegner trifft', () => {
+    const enemy = Object.assign(createColossus(), { faction: 'allied', ownerId: 'p1' });
+    const hostile = { id: 'e9', sprite: { x: 600, y: 100, active: true } };
+    const { system, spawnProjectile } = createAbilitySystem(enemy, [], [hostile]);
+
+    system.hostUpdate(1_000);
+    const readyAt = 1_000 + VOID_MOLOTOV.cooldownMs;
+    system.hostUpdate(readyAt);
+    system.hostUpdate(readyAt + VOID_MOLOTOV.windupMs);
+
+    expect(spawnProjectile).toHaveBeenCalledTimes(1);
+    expect(spawnProjectile.mock.calls[0][0]).toMatchObject({
+      interaction: { grenadeEffect: { type: 'fire', visualStyle: 'allied', damageTarget: 'enemies' } },
+      presentation: { color: ALLIED_COLOR, ownerColor: ALLIED_COLOR, grenadePreset: 'molotov_allied' },
     });
   });
 

@@ -5,9 +5,7 @@ import {
   FLAME_COLORS_CORE,
   FLAME_COLORS_OUTER,
   FLAME_COLORS_SPARK,
-  VOID_FLAME_COLORS_CORE,
-  VOID_FLAME_COLORS_OUTER,
-  VOID_FLAME_COLORS_SPARK,
+  tintedFirePalette,
 } from './FlameShared';
 import { GpuVfxFrameId } from './gpu/GpuVfxAtlas';
 import { GpuVfxEase } from './gpu/GpuVfxEase';
@@ -289,8 +287,8 @@ export class EntityBurnGpuController {
 
   private spawnCore(entry: EntityBurnEntry, nowMs: number): void {
     const spec = this.coreSpec;
-    const isVoid = entry.visualStyle === 'void';
-    spec.frame = isVoid ? GpuVfxFrameId.FlameCoreVoid : GpuVfxFrameId.FlameCore;
+    const palette = tintedFirePalette(entry.visualStyle);
+    spec.frame = palette ? GpuVfxFrameId.FlameCoreVoid : GpuVfxFrameId.FlameCore;
     spec.lifeMs = Phaser.Math.FloatBetween(190, 360);
     this.setSpawnPoint(spec, entry.x, entry.y + entry.bodySize * 0.08, entry.coreRadius);
     spec.vx = Phaser.Math.FloatBetween(-15, 15);
@@ -298,14 +296,14 @@ export class EntityBurnGpuController {
     spec.rotation = Phaser.Math.DegToRad(Phaser.Math.FloatBetween(-25, 25));
     spec.scaleStart = entry.coreScaleStart;
     spec.alphaStart = entry.coreAlphaStart;
-    spec.tint = pickGpuVfxTint(isVoid ? VOID_FLAME_COLORS_CORE : FLAME_COLORS_CORE);
+    spec.tint = pickGpuVfxTint(palette?.core ?? FLAME_COLORS_CORE);
     this.system.spawn(spec, entry.source, nowMs);
   }
 
   private spawnOuter(entry: EntityBurnEntry, nowMs: number): void {
     const spec = this.outerSpec;
-    const isVoid = entry.visualStyle === 'void';
-    spec.frame = isVoid ? GpuVfxFrameId.FlameOuterVoid : GpuVfxFrameId.FlameOuter;
+    const palette = tintedFirePalette(entry.visualStyle);
+    spec.frame = palette ? GpuVfxFrameId.FlameOuterVoid : GpuVfxFrameId.FlameOuter;
     spec.lifeMs = Phaser.Math.FloatBetween(300, 560);
     this.setSpawnPoint(spec, entry.x, entry.y + entry.bodySize * 0.1, entry.outerRadius);
     spec.vx = Phaser.Math.FloatBetween(-24, 24);
@@ -313,21 +311,21 @@ export class EntityBurnGpuController {
     spec.rotation = Phaser.Math.FloatBetween(0, Math.PI * 2);
     spec.scaleStart = entry.outerScaleStart;
     spec.alphaStart = entry.outerAlphaStart;
-    spec.tint = pickGpuVfxTint(isVoid ? VOID_FLAME_COLORS_OUTER : FLAME_COLORS_OUTER);
+    spec.tint = pickGpuVfxTint(palette?.outer ?? FLAME_COLORS_OUTER);
     this.system.spawn(spec, entry.source, nowMs);
   }
 
   private spawnSpark(entry: EntityBurnEntry, nowMs: number): void {
     const spec = this.sparkSpec;
-    const isVoid = entry.visualStyle === 'void';
-    spec.frame = isVoid ? GpuVfxFrameId.FlameSparkVoid : GpuVfxFrameId.FlameSpark;
+    const palette = tintedFirePalette(entry.visualStyle);
+    spec.frame = palette ? GpuVfxFrameId.FlameSparkVoid : GpuVfxFrameId.FlameSpark;
     spec.lifeMs = Phaser.Math.FloatBetween(220, 520);
     this.setSpawnPoint(spec, entry.x, entry.y - entry.bodySize * 0.02, entry.sparkRadius);
     spec.vx = Phaser.Math.FloatBetween(-34, 34);
     spec.vy = Phaser.Math.FloatBetween(-92, -34);
     spec.scaleStart = entry.sparkScaleStart;
     spec.alphaStart = entry.sparkAlphaStart;
-    spec.tint = pickGpuVfxTint(isVoid ? VOID_FLAME_COLORS_SPARK : FLAME_COLORS_SPARK);
+    spec.tint = pickGpuVfxTint(palette?.spark ?? FLAME_COLORS_SPARK);
     this.system.spawn(spec, entry.source, nowMs);
   }
 }

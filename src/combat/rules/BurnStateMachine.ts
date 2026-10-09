@@ -262,7 +262,10 @@ export class BurnStateMachine {
       for (const bucket of state.stacks) {
         if (bucket.expiresAt <= now) continue;
         totalStacks += bucket.stackCount;
-        if (state.visualStyle === 'void') visualStyle = 'void';
+        // Vorrang void > allied > normal: feindliches Void-Feuer bleibt immer erkennbar.
+        if (state.visualStyle === 'void' || (state.visualStyle === 'allied' && visualStyle === 'normal')) {
+          visualStyle = state.visualStyle;
+        }
       }
     }
 

@@ -32,6 +32,14 @@ export function enemyHealthBarStyle(boss: boolean, width: number): HealthBarStyl
   return { family: 'enemyStatus', visibility: boss ? 'alive' : 'after-damage', width,
     height: HP_BAR_HEIGHT, backgroundDepth: DEPTH.SMOKE + 0.5, fillDepth: DEPTH.SMOKE + 0.6, ...hostile };
 }
+/**
+ * Verbündete Gegner (Nekromantie): freundliche Farben und immer sichtbar. Der Balken ist neben
+ * Umriss und Ring das stärkste Freund-Signal; mit HP-Regeneration würde ein Balken, der erst
+ * nach Schaden erscheint, außerdem ständig auf- und abtauchen.
+ */
+export function alliedEnemyHealthBarStyle(width: number): HealthBarStyle {
+  return { ...enemyHealthBarStyle(false, width), visibility: 'alive', ...friendly };
+}
 export function playerHealthBarStyle(enemy: boolean): HealthBarStyle {
   return { family: 'playerStatus', visibility: 'alive', width: HP_BAR_WIDTH,
     height: HP_BAR_HEIGHT, backgroundDepth: DEPTH.PLAYERS + 1, fillDepth: DEPTH.PLAYERS + 2,

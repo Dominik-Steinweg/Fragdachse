@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { COLORS } from '../config';
+import { ALLIED_COLOR } from '../config';
 import { getCoopDefenseEnemyXp, type CoopDefenseEnemyKind } from '../config/coopDefenseEnemies';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type {
@@ -133,11 +133,21 @@ export class NecromancySystem {
    * Übernahme darüber hinausgehen darf; die übernommenen Einheiten zählen danach aber ganz normal
    * ins Limit für reguläre Wiederbelebungen. Nekromantie-Boni (HP-Multiplikator beim Spawn, Tempo
    * und Regeneration im Frame-Update) gelten wie für wiederbelebte Dachse.
+   *
+   * Mit `respectAllyLimit` (Brut eines verbündeten Werfers) gibt es am Limit keine Übernahme;
+   * sonst würde ein einzelner Verbündeter das Gefolge unbegrenzt vermehren.
    */
-  captureAlly(ownerId: string, x: number, y: number, kind: CoopDefenseEnemyKind): EnemyEntity | null {
+  captureAlly(
+    ownerId: string,
+    x: number,
+    y: number,
+    kind: CoopDefenseEnemyKind,
+    options: { readonly respectAllyLimit?: boolean } = {},
+  ): EnemyEntity | null {
     const owner = this.playerManager.getPlayer(ownerId);
     if (!owner?.active || !this.combatSystem.isAlive(ownerId)) return null;
     const cfg = this.resolveConfig(ownerId);
+    if (options.respectAllyLimit && this.enemyManager.getAlliedEnemies(ownerId).length >= cfg.maxAllies) return null;
     const ally = this.enemyManager.hostSpawnAllyAtWorld(x, y, kind, ownerId, owner.color, cfg.hpMultiplier);
     if (!this.owners.has(ownerId)) this.owners.set(ownerId, { nextRaiseAt: 0 });
     return ally;
@@ -198,7 +208,7 @@ export class NecromancySystem {
         FOLLOW_RADIUS_BASE_PX + FOLLOW_RADIUS_PER_ALLY_PX * Math.max(0, allies.length - 1),
       );
       for (const ally of allies) {
-        this.updateAlly(ally, player.id, player.color, destination, followRadius, now, deltaMs);
+        this.updateAlly(ally, player.id, destination, followRadius, now, deltaMs);
       }
     }
 
@@ -323,7 +333,6 @@ export class NecromancySystem {
   private updateAlly(
     ally: EnemyEntity,
     ownerId: string,
-    ownerColor: number,
     destination: { x: number; y: number; target?: EnemyEntity },
     followRadius: number,
     now: number,
@@ -374,7 +383,7 @@ export class NecromancySystem {
           || !ally.isWeaponReady(weapon, now) || Math.hypot(breach.x - ally.sprite.x, breach.y - ally.sprite.y) > config.range) continue;
         const angle = Math.atan2(breach.y - ally.sprite.y, breach.x - ally.sprite.x);
         if (this.weaponExecution.fire(config, { x: ally.sprite.x, y: ally.sprite.y, angle, targetX: breach.x, targetY: breach.y,
-          ownerId: ally.id, ownerColor: ownerColor || COLORS.GREEN_2 })) {
+          ownerId: ally.id, ownerColor: ALLIED_COLOR })) {
           ally.faceAngle(angle); ally.pauseAttackMovement(now); ally.recordWeaponUse(weapon, now);
         }
         return;
@@ -397,7 +406,8 @@ export class NecromancySystem {
         targetX: destination.target.sprite.x,
         targetY: destination.target.sprite.y,
         ownerId: ally.id,
-        ownerColor: ownerColor || COLORS.GREEN_2,
+        // Verbündete feuern in der gemeinsamen Verbündeten-Palette, nicht in der Spielerfarbe.
+        ownerColor: ALLIED_COLOR,
       })) return;
       ally.faceAngle(angle);
       ally.pauseAttackMovement(now);

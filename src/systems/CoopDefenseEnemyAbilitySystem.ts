@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import type { DecoyTargetPort } from './CoopDefenseDecoyTargetSystem';
-import { PLAYER_SIZE, VOID_FIRE_COLOR } from '../config';
+import { ALLIED_COLOR, PLAYER_SIZE, VOID_FIRE_COLOR } from '../config';
+import { alliedDamageZoneVariant, resolveEnemyFireEffect } from './AlliedEnemyEffects';
 import {
   getCoopDefenseEnemyConfig,
   type CoopDefenseEnemySpawnThrowConfig,
@@ -250,7 +251,7 @@ export class CoopDefenseEnemyAbilitySystem {
       utility.afterCloudDurationMs ?? 0,
       utility.afterCloudRadiusFactor ?? 0,
       utility.afterCloudDamageFactor ?? 0,
-      utility.visualVariant ?? 'stink',
+      enemy.faction === 'allied' ? alliedDamageZoneVariant(utility.visualVariant ?? 'stink') : utility.visualVariant ?? 'stink',
       now,
     );
     this.activeStinkAuraEnemyIds.add(enemy.id);
@@ -352,7 +353,7 @@ export class CoopDefenseEnemyAbilitySystem {
     const spawnDistance = enemy.getCollisionRadius() + (utility.projectileSize ?? 16) * 0.5;
     const spawnX = enemy.sprite.x + Math.cos(angle) * spawnDistance;
     const spawnY = enemy.sprite.y + Math.sin(angle) * spawnDistance;
-    const color = getCoopDefenseEnemyConfig(enemy.kind).color ?? 0x9b32ff;
+    const color = this.translocatorColor(enemy);
     const plannedFlightSeconds = Math.max(0.1, ability.flightTimeMs / 1000);
     // Die Puck-Physik verliert während des Fluges viel Geschwindigkeit durch Luftreibung.
     // Gegner dürfen deshalb stärker werfen, damit der Puck den anvisierten Spieler erreicht.
@@ -452,11 +453,13 @@ export class CoopDefenseEnemyAbilitySystem {
           count: ability.count,
           offsetPx: ability.spawnOffsetPx,
           color: ability.color,
+          ...(enemy.faction === 'allied' && enemy.ownerId ? { allyOwnerId: enemy.ownerId } : {}),
         },
       },
       presentation: {
         color: ability.color,
-        ownerColor: ability.color,
+        // Der Fellball bleibt braun; nur sein Glow zeigt, dass ein Verbündeter wirft.
+        ownerColor: enemy.faction === 'allied' ? ALLIED_COLOR : ability.color,
         style: 'grenade',
         grenadePreset: 'fur_ball',
       },
@@ -480,7 +483,7 @@ export class CoopDefenseEnemyAbilitySystem {
       enemy.id,
       enemy.sprite.x,
       enemy.sprite.y,
-      ability,
+      resolveEnemyFireEffect(enemy.faction, ability),
       `void-fire-chunks:${enemy.id}:${now}`,
       now,
     );
@@ -511,8 +514,10 @@ export class CoopDefenseEnemyAbilitySystem {
           damagePerTick: ability.burnDamagePerTick,
         },
         sourceId: ability.sourceId,
-        visualStyle: ability.visualStyle,
-        damageTarget: ability.damageTarget,
+        ...resolveEnemyFireEffect(enemy.faction, {
+          visualStyle: ability.visualStyle,
+          damageTarget: ability.damageTarget,
+        }),
       },
       now,
     );
@@ -635,6 +640,7 @@ export class CoopDefenseEnemyAbilitySystem {
 
     if (state.targetRef?.kind === 'decoy') this.decoyTargets?.usedTarget(enemy.id, { kind: 'decoy', id: state.targetRef.id });
     const sourceId = `enemy.${enemy.kind}.void_molotov`;
+    const allied = enemy.faction === 'allied';
     this.projectileSpawn.spawnProjectile({
       origin: { x: spawnX, y: spawnY, angle },
       provenance: createSingleOwnerProvenance(enemy.id, { weaponSourceId: sourceId, sourceSlot: 'utility' }),
@@ -664,15 +670,14 @@ export class CoopDefenseEnemyAbilitySystem {
           rockDamageMult: 0,
           trainDamageMult: 0,
           sourceId,
-          visualStyle: 'void',
-          damageTarget: 'players',
+          ...resolveEnemyFireEffect(enemy.faction, { visualStyle: 'void', damageTarget: 'players' }),
         },
       },
       presentation: {
-        color: VOID_FIRE_COLOR,
-        ownerColor: VOID_FIRE_COLOR,
+        color: allied ? ALLIED_COLOR : VOID_FIRE_COLOR,
+        ownerColor: allied ? ALLIED_COLOR : VOID_FIRE_COLOR,
         style: utility.projectileStyle,
-        grenadePreset: 'molotov_void',
+        grenadePreset: allied ? 'molotov_allied' : 'molotov_void',
       },
     });
   }
@@ -810,6 +815,12 @@ export class CoopDefenseEnemyAbilitySystem {
     return best;
   }
 
+  /** Puck und Blitz tragen die Gattungsfarbe, bei Verbündeten die Verbündeten-Palette. */
+  private translocatorColor(enemy: EnemyEntity): number {
+    if (enemy.faction === 'allied') return ALLIED_COLOR;
+    return getCoopDefenseEnemyConfig(enemy.kind).color ?? 0x9b32ff;
+  }
+
   private teleportEnemyToPuck(
     enemy: EnemyEntity,
     puckId: number,
@@ -819,7 +830,7 @@ export class CoopDefenseEnemyAbilitySystem {
     ability: CoopDefenseEnemyTranslocatorConfig,
     state: EnemyTeleportState,
   ): void {
-    const color = getCoopDefenseEnemyConfig(enemy.kind).color ?? 0x9b32ff;
+    const color = this.translocatorColor(enemy);
     if (!this.translocatorProjectilePort?.consumePuck(puckId)) return;
     this.network.broadcastTranslocatorFlash(enemy.sprite.x, enemy.sprite.y, color, 'start', enemy.id);
     enemy.setPosition(targetX, targetY);

@@ -59,6 +59,7 @@ describe('player burn visual style codec', () => {
   it('round-trips void entity fire and defaults older payloads to normal fire', () => {
     const encodedVoid = encodePlayerStates({ p0: makePlayerState('void') });
     expect(decodePlayerStates(encodedVoid).p0.burnVisualStyle).toBe('void');
+    expect(decodePlayerStates(encodePlayerStates({ p0: makePlayerState('allied') })).p0.burnVisualStyle).toBe('allied');
     expect(decodePlayerStates(encodedVoid).p0.adrenalineRevision).toBe(7);
     expect(decodePlayerStates(encodedVoid).p0.weapon2PredictionAck).toBe(3);
 

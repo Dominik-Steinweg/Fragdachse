@@ -15,6 +15,7 @@ import {
   type VisibleWorldView,
 } from '../graphics/CameraWorldView';
 import { GROUND_FIRE_CELL_SIZE } from './FireSystem';
+import { tintedFirePalette } from './FlameShared';
 import {
   GROUND_FIRE_BED_SIZE,
   GROUND_FIRE_SURFACE_SIZE,
@@ -59,10 +60,6 @@ const GROUND_FIRE_TINTS_COOL = [0xbc1707, 0x971006, 0x760806, 0x560306] as const
  * stehen, ohne dass die Flaeche als Ganzes ausbleicht.
  */
 const GROUND_FIRE_TINTS_EMBER = [0xffe6a4, 0xffd07a, 0xffb653, 0xff9a34] as const;
-const GROUND_FIRE_VOID_TINTS_HOT  = [0xf2d3ff, 0xe6b6ff, 0xd79bff, 0xc98cff] as const;
-const GROUND_FIRE_VOID_TINTS_MID  = [0xc76cff, 0xb14ef2, 0x9c37e4, 0xd486ff] as const;
-const GROUND_FIRE_VOID_TINTS_COOL = [0x7620b8, 0x571590, 0x3c0f68, 0x6a1aa4] as const;
-const GROUND_FIRE_VOID_TINTS_EMBER = [0xf7e2ff, 0xeac2ff, 0xdda4ff, 0xc887ff] as const;
 
 /**
  * Lebensdauern. Bewusst lang: bei gleicher Ziel-Lebendzahl ist die Spawnrate `lebend /
@@ -1205,8 +1202,8 @@ export class GroundFireClusterRenderer {
     spec.stretchStart = 0.86 + this.seededUnit(seed, 53) * 0.36;
     spec.stretchEnd = 1;
     spec.alphaStart = EMBER_ALPHA * fade * (0.72 + heat * 0.34);
-    // Void bleibt naeher an seiner Farbe: der Stil lebt vom Violett, nicht von der Hitze.
-    spec.tintBlendStart = style === 'void' ? 0.82 : 0.62;
+    // Getoente Stile bleiben naeher an ihrer Farbe: sie leben vom Farbton, nicht von der Hitze.
+    spec.tintBlendStart = style !== 'normal' ? 0.82 : 0.62;
     spec.tintBlendEnd = 1;
     spec.tint = this.pickEmberTint(style, seed, 59);
     system.spawn(spec, this.source, nowMs, spec.lifeMs * this.ignitionAgeFraction);
@@ -1354,10 +1351,14 @@ export class GroundFireClusterRenderer {
       const fadeIn = Phaser.Math.Clamp((now - record.shownAt) / GROUND_FIRE_LIGHT_FADE_IN_MS, 0, 1);
       lighting.setLight(
         `groundfire:${record.key}`,
-        record.visualStyle === 'void' ? 'voidGroundFire' : 'groundFire',
+        record.visualStyle !== 'normal' ? 'voidGroundFire' : 'groundFire',
         record.x,
         record.y,
-        { radiusPx: record.radiusPx, intensity: record.intensity * fadeIn },
+        {
+          radiusPx: record.radiusPx,
+          intensity: record.intensity * fadeIn,
+          color: tintedFirePalette(record.visualStyle)?.light,
+        },
       );
       stale.delete(record.key);
     }
@@ -1471,14 +1472,15 @@ export class GroundFireClusterRenderer {
   }
 
   private pickHeatTint(style: GroundFireVisualStyle, heat: number, seed: number, salt: number): number {
-    const palette = style === 'void'
-      ? (heat > 0.62 ? GROUND_FIRE_VOID_TINTS_HOT : heat > 0.28 ? GROUND_FIRE_VOID_TINTS_MID : GROUND_FIRE_VOID_TINTS_COOL)
+    const tinted = tintedFirePalette(style);
+    const palette = tinted
+      ? (heat > 0.62 ? tinted.groundHot : heat > 0.28 ? tinted.groundMid : tinted.groundCool)
       : (heat > 0.62 ? GROUND_FIRE_TINTS_HOT : heat > 0.28 ? GROUND_FIRE_TINTS_MID : GROUND_FIRE_TINTS_COOL);
     return palette[Math.floor(this.seededUnit(seed, salt) * palette.length)];
   }
 
   private pickEmberTint(style: GroundFireVisualStyle, seed: number, salt: number): number {
-    const palette = style === 'void' ? GROUND_FIRE_VOID_TINTS_EMBER : GROUND_FIRE_TINTS_EMBER;
+    const palette = tintedFirePalette(style)?.groundEmber ?? GROUND_FIRE_TINTS_EMBER;
     return palette[Math.floor(this.seededUnit(seed, salt) * palette.length)];
   }
 

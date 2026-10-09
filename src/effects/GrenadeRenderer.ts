@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { DEPTH, VOID_FIRE_COLOR, VOID_PALETTE } from '../config';
+import { ALLIED_COLOR, ALLIED_PALETTE, DEPTH, VOID_FIRE_COLOR, VOID_PALETTE } from '../config';
 import type { GrenadeVisualPreset } from '../types';
 import { ensureExplosionChunkTexture, TEX_EXPLOSION_CHUNK } from './gpu/GpuVfxSourceTextures';
 import { configureAdditiveImage, createEmitter, destroyEmitter, ensureCanvasTexture } from './EffectUtils';
@@ -14,6 +14,7 @@ const BODY_KEYS: Record<GrenadeVisualPreset, string> = {
   smoke:   '__grenade_body_smoke',
   molotov: '__grenade_body_molotov',
   molotov_void: '__grenade_body_molotov_void',
+  molotov_allied: '__grenade_body_molotov_allied',
   time_bubble: '__grenade_body_time_bubble',
   fur_ball: '__grenade_body_fur_ball',
 };
@@ -23,6 +24,7 @@ const DETAIL_KEYS: Partial<Record<GrenadeVisualPreset, string>> = {
   smoke:   '__grenade_detail_smoke',
   molotov: '__grenade_detail_molotov',
   molotov_void: '__grenade_detail_molotov_void',
+  molotov_allied: '__grenade_detail_molotov_allied',
   time_bubble: '__grenade_detail_time_bubble',
   fur_ball: '__grenade_detail_fur_ball',
 };
@@ -34,6 +36,8 @@ const SPARK_KEYS: Record<GrenadeVisualPreset, string> = {
   smoke:   '__grenade_spark_smoke',
   molotov: '__grenade_spark_molotov',
   molotov_void: '__grenade_spark_molotov_void',
+  // Die Flammenfetzen sind neutral weiss und werden zur Laufzeit getoent.
+  molotov_allied: '__grenade_spark_molotov_void',
   time_bubble: '__grenade_spark_time_bubble',
   fur_ball: '__grenade_spark_fur_ball',
 };
@@ -132,6 +136,21 @@ const PRESETS: Record<GrenadeVisualPreset, GrenadePresetConfig> = {
     trailSpeed:      18,
     trailTints:      [VOID_PALETTE.bright, VOID_FIRE_COLOR, VOID_PALETTE.deep],
   },
+  // Void-Molotov verbündeter Gegner: gleiche Form, Verbündeten-Jade.
+  molotov_allied: {
+    bodyScale:       0.8,
+    glowTint:        ALLIED_COLOR,
+    glowAlpha:       0.8,
+    glowScale:       1.9,
+    detailAlpha:     1,
+    trailAlpha:      0.85,
+    trailFrequency:  16,
+    trailLifespan:   { min: 180, max: 300 },
+    trailScaleStart: 0.55,
+    trailScaleEnd:   0.06,
+    trailSpeed:      18,
+    trailTints:      [ALLIED_PALETTE.bright, ALLIED_COLOR, ALLIED_PALETTE.deep],
+  },
   time_bubble: {
     bodyScale:       0.72,
     glowAlpha:       0.84,
@@ -162,6 +181,50 @@ const PRESETS: Record<GrenadeVisualPreset, GrenadePresetConfig> = {
     trailAdditive:   false,
   },
 };
+
+/** Getoente Orb-Molotovs: Tint ihrer neutralen Flammenfetzen. */
+const ORB_FLAME_TINTS: Partial<Record<GrenadeVisualPreset, number>> = {
+  molotov_void: VOID_FIRE_COLOR,
+  molotov_allied: ALLIED_COLOR,
+};
+
+interface OrbPalette {
+  shellLight: number;
+  shellMid: number;
+  shadow: number;
+  deep: number;
+  primary: number;
+  bright: number;
+  coreHot: number;
+}
+
+const VOID_ORB_PALETTE: OrbPalette = {
+  shellLight: 0xa44bdf,
+  shellMid: 0x541b83,
+  shadow: VOID_PALETTE.shadow,
+  deep: VOID_PALETTE.deep,
+  primary: VOID_FIRE_COLOR,
+  bright: VOID_PALETTE.bright,
+  coreHot: 0xe6adff,
+};
+
+const ALLIED_ORB_PALETTE: OrbPalette = {
+  shellLight: 0x2fc489,
+  shellMid: 0x136b48,
+  shadow: ALLIED_PALETTE.shadow,
+  deep: ALLIED_PALETTE.deep,
+  primary: ALLIED_COLOR,
+  bright: ALLIED_PALETTE.bright,
+  coreHot: 0xc2ffe6,
+};
+
+function cssHex(color: number): string {
+  return `#${color.toString(16).padStart(6, '0')}`;
+}
+
+function cssRgba(color: number, alpha: number): string {
+  return `rgba(${(color >> 16) & 0xff},${(color >> 8) & 0xff},${color & 0xff},${alpha})`;
+}
 
 export class GrenadeRenderer {
   private visuals   = new Map<number, GrenadeVisual>();
@@ -260,7 +323,8 @@ export class GrenadeRenderer {
 
     visual.glow.setPosition(x, y).setScale(baseScale * cfg.glowScale).setRotation(-spin * 0.18);
 
-    const isVoidOrb = visual.preset === 'molotov_void';
+    const orbTint = ORB_FLAME_TINTS[visual.preset];
+    const isVoidOrb = orbTint !== undefined;
     const pulse = isVoidOrb ? 1 + Math.sin(this.scene.time.now * 0.014 + id) * 0.06 : 1;
     // The containment shell turns slowly while its burning corona swirls independently.
     visual.body.setPosition(x, y).setScale(baseScale).setRotation(isVoidOrb ? spin * 0.25 : spin);
@@ -268,12 +332,12 @@ export class GrenadeRenderer {
 
     visual.trail.setPosition(tailX, tailY);
 
-    if (visual.preset === 'molotov' || visual.preset === 'molotov_void') {
+    if (visual.preset === 'molotov' || isVoidOrb) {
       const now  = this.scene.time.now;
       const dist = Phaser.Math.Distance.Between(visual.lastFireX, visual.lastFireY, tailX, tailY);
       // Spawn small ember puffs at moderate intervals – not as dense as rocket smoke.
       if (dist >= Math.max(size * 0.55, 6) || now - visual.lastFireAt >= 38) {
-        this.spawnFirePuff(tailX, tailY, size, isVoidOrb, angle);
+        this.spawnFirePuff(tailX, tailY, size, orbTint, angle);
         visual.lastFireX  = tailX;
         visual.lastFireY  = tailY;
         visual.lastFireAt = now;
@@ -281,12 +345,14 @@ export class GrenadeRenderer {
     }
   }
 
-  private spawnFirePuff(x: number, y: number, size: number, isVoid: boolean, angle: number): void {
+  /** `orbTint` gesetzt = getoente Orb-Variante (Void/Verbuendete) mit neutralen Flammenfetzen. */
+  private spawnFirePuff(x: number, y: number, size: number, orbTint: number | undefined, angle: number): void {
+    const isVoid = orbTint !== undefined;
     // Small ember/glow puff – noticeable but much subtler than rocket smoke.
     const puff = this.scene.add.image(x, y, isVoid ? SPARK_KEYS.molotov_void : TEX_MOLOTOV_FIRE_PUFF)
       .setDepth(isVoid ? DEPTH.PROJECTILES - 0.3 : DEPTH.FIRE)
       .setBlendMode(Phaser.BlendModes.ADD)
-      .setTint(isVoid ? VOID_FIRE_COLOR : 0xffffff)
+      .setTint(orbTint ?? 0xffffff)
       .setAlpha(0.68)
       .setRotation(isVoid ? angle + Math.PI : 0)
       .setScale(isVoid ? Math.max(size / 24, 0.3) : Math.max(size / 46, 0.14));
@@ -531,13 +597,24 @@ export class GrenadeRenderer {
   }
 
   private generateVoidOrbTextures(textures: Phaser.Textures.TextureManager): void {
+    this.generateOrbTextures(textures, BODY_KEYS.molotov_void, DETAIL_KEYS.molotov_void!, VOID_ORB_PALETTE);
+    this.generateOrbTextures(textures, BODY_KEYS.molotov_allied, DETAIL_KEYS.molotov_allied!, ALLIED_ORB_PALETTE);
+    this.generateOrbFlameWispTexture(textures);
+  }
+
+  private generateOrbTextures(
+    textures: Phaser.Textures.TextureManager,
+    bodyKey: string,
+    detailKey: string,
+    palette: OrbPalette,
+  ): void {
     // A round containment shell and exposed plasma core, viewed directly from above.
-    ensureCanvasTexture(textures, BODY_KEYS.molotov_void, 64, 64, (ctx) => {
+    ensureCanvasTexture(textures, bodyKey, 64, 64, (ctx) => {
       const shell = ctx.createRadialGradient(28, 27, 2, 32, 32, 22);
-      shell.addColorStop(0, '#a44bdf');
-      shell.addColorStop(0.55, '#541b83');
-      shell.addColorStop(0.85, '#240a38');
-      shell.addColorStop(1, '#6f16a8');
+      shell.addColorStop(0, cssHex(palette.shellLight));
+      shell.addColorStop(0.55, cssHex(palette.shellMid));
+      shell.addColorStop(0.85, cssHex(palette.shadow));
+      shell.addColorStop(1, cssHex(palette.deep));
       ctx.fillStyle = shell;
       ctx.beginPath();
       ctx.arc(32, 32, 22, 0, Math.PI * 2);
@@ -547,37 +624,37 @@ export class GrenadeRenderer {
       ctx.lineCap = 'round';
       for (let i = 0; i < 3; i++) {
         const start = i * Math.PI * 2 / 3;
-        ctx.strokeStyle = '#b347ff';
+        ctx.strokeStyle = cssHex(palette.primary);
         ctx.lineWidth = 2.5;
         ctx.beginPath();
         ctx.arc(32, 32, 19, start, start + 1.5);
         ctx.stroke();
-        ctx.strokeStyle = '#d98cff';
+        ctx.strokeStyle = cssHex(palette.bright);
         ctx.lineWidth = 1.2;
         ctx.beginPath();
         ctx.arc(32, 32, 14, start + 0.3, start + 1.2);
         ctx.stroke();
       }
       const core = ctx.createRadialGradient(31, 31, 1, 32, 32, 12);
-      core.addColorStop(0, '#e6adff');
-      core.addColorStop(0.3, '#d98cff');
-      core.addColorStop(0.7, '#b347ff');
-      core.addColorStop(1, 'rgba(111,22,168,0)');
+      core.addColorStop(0, cssHex(palette.coreHot));
+      core.addColorStop(0.3, cssHex(palette.bright));
+      core.addColorStop(0.7, cssHex(palette.primary));
+      core.addColorStop(1, cssRgba(palette.deep, 0));
       ctx.fillStyle = core;
       ctx.fillRect(20, 20, 24, 24);
     });
 
     // Curled flame tongues surround the shell, with a transparent center for the core.
-    ensureCanvasTexture(textures, DETAIL_KEYS.molotov_void!, 64, 64, (ctx) => {
+    ensureCanvasTexture(textures, detailKey, 64, 64, (ctx) => {
       ctx.translate(32, 32);
       for (let i = 0; i < 7; i++) {
         ctx.save();
         ctx.rotate(i * Math.PI * 2 / 7);
         const tip = 27 + (i % 3) * 1.5;
         const flame = ctx.createLinearGradient(14, 0, tip, 0);
-        flame.addColorStop(0, 'rgba(217,140,255,0.85)');
-        flame.addColorStop(0.45, 'rgba(179,71,255,0.75)');
-        flame.addColorStop(1, 'rgba(111,22,168,0)');
+        flame.addColorStop(0, cssRgba(palette.bright, 0.85));
+        flame.addColorStop(0.45, cssRgba(palette.primary, 0.75));
+        flame.addColorStop(1, cssRgba(palette.deep, 0));
         ctx.fillStyle = flame;
         ctx.beginPath();
         ctx.moveTo(16, -5);
@@ -588,8 +665,10 @@ export class GrenadeRenderer {
         ctx.restore();
       }
     });
+  }
 
-    // Neutral flame wisps receive the shared Void palette at runtime.
+  private generateOrbFlameWispTexture(textures: Phaser.Textures.TextureManager): void {
+    // Neutral flame wisps receive the orb's palette (Void or allied) at runtime.
     ensureCanvasTexture(textures, SPARK_KEYS.molotov_void, 28, 28, (ctx) => {
       const flame = ctx.createRadialGradient(9, 14, 1, 13, 14, 14);
       flame.addColorStop(0, 'rgba(255,255,255,0.95)');

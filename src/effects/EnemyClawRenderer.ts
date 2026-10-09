@@ -1,5 +1,5 @@
 import type * as Phaser from 'phaser';
-import { DEPTH, DEPTH_LIGHTING, DEPTH_TRACE } from '../config';
+import { ALLIED_COLOR, DEPTH, DEPTH_LIGHTING, DEPTH_TRACE } from '../config';
 import { emissiveAlpha } from './EmissiveScale';
 import type { SyncedMeleeSwing } from '../types';
 import type { EnemyClawState } from '../systems/EnemyClawAttack';
@@ -86,18 +86,20 @@ export class EnemyClawRenderer {
     this.retire(clock);
     if (this.confirmed.has(id)) return;
     this.remember(this.confirmed, id, clock);
+    // Verbündete Gegner (Nekromantie) schlagen in ihrer Palette zu, alle anderen in der Gefahrenfarbe.
+    const color = swing.color === ALLIED_COLOR ? ALLIED_COLOR : ENEMY_CLAW_HOSTILE_COLOR;
     if (!this.store.has(id) && !this.struck.has(id)) {
       // The windup never reached this client: play the rake from the authoritative result.
       this.remember(this.struck, id, clock);
       this.store.addAttack(id, {
         x: swing.x, y: swing.y, angle: swing.angle, range: swing.range, halfArc: swing.arcDegrees * Math.PI / 360,
-        startedAt: clock - 2, strikeAt: clock - 1, hitAt: clock, color: ENEMY_CLAW_HOSTILE_COLOR,
+        startedAt: clock - 2, strikeAt: clock - 1, hitAt: clock, color,
       }, clock);
     }
     if (!swing.hitPlayer || swing.impactX === undefined || swing.impactY === undefined) return;
     const size = Math.max(15, Math.min(34, swing.range * 0.36));
     this.store.addContact(`${id}:contact`, swing.impactX, swing.impactY, swing.angle, size,
-      this.store.colorOf(id) ?? ENEMY_CLAW_HOSTILE_COLOR, clock);
+      this.store.colorOf(id) ?? color, clock);
   }
 
   /** Before the hit a cancelled windup vanishes; after it the running rake finishes on its own. */

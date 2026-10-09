@@ -1,6 +1,6 @@
 import { ProjectileTrailSampler, type ProjectileTrailSegment } from '../projectile/ProjectileFlightPath';
 import * as Phaser from 'phaser';
-import { DEPTH, VOID_FIRE_COLOR } from '../config';
+import { DEPTH } from '../config';
 import type { GroundFireVisualStyle } from '../types';
 import type { LightingSystem } from './LightingSystem';
 import {
@@ -8,9 +8,8 @@ import {
   ensureVoidFlameTextures,
   TEX_FLAME_GLOW,
   TEX_VOID_FLAME_GLOW,
-  VOID_FLAME_COLORS_CORE,
-  VOID_FLAME_COLORS_OUTER,
-  VOID_FLAME_COLORS_SPARK,
+  tintedFirePalette,
+  type TintedFirePalette,
 } from './FlameShared';
 import { GpuVfxFrameId } from './gpu/GpuVfxAtlas';
 import { GpuVfxEase } from './gpu/GpuVfxEase';
@@ -111,11 +110,11 @@ export class ProjectileBurnRenderer {
 
     let visual = this.visuals.get(id);
     if (!visual) {
-      const isVoid = visualStyle === 'void';
-      const glow = this.scene.add.image(x, y, isVoid ? TEX_VOID_FLAME_GLOW : TEX_FLAME_GLOW)
+      const palette = tintedFirePalette(visualStyle);
+      const glow = this.scene.add.image(x, y, palette ? TEX_VOID_FLAME_GLOW : TEX_FLAME_GLOW)
         .setDepth(DEPTH.PROJECTILES + 0.28)
         .setBlendMode(Phaser.BlendModes.ADD)
-        .setTint(isVoid ? VOID_FIRE_COLOR : 0xff4d18)
+        .setTint(palette?.accent ?? 0xff4d18)
         .setAlpha(0.78);
       visual = {
         glow,
@@ -130,10 +129,10 @@ export class ProjectileBurnRenderer {
 
     if (visual.visualStyle !== visualStyle) {
       visual.visualStyle = visualStyle;
-      const isVoid = visualStyle === 'void';
+      const palette = tintedFirePalette(visualStyle);
       visual.glow
-        .setTexture(isVoid ? TEX_VOID_FLAME_GLOW : TEX_FLAME_GLOW)
-        .setTint(isVoid ? VOID_FIRE_COLOR : 0xff4d18);
+        .setTexture(palette ? TEX_VOID_FLAME_GLOW : TEX_FLAME_GLOW)
+        .setTint(palette?.accent ?? 0xff4d18);
     }
 
     const now = this.scene.time.now;
@@ -149,7 +148,9 @@ export class ProjectileBurnRenderer {
     // Dauerlicht am selben Lebenszyklus wie das Glow-Visual: erzeugt in `sync()`,
     // freigegeben in `destroyVisual()`. Der Radius bleibt eng – die Helligkeit kommt
     // aus Intensität und Kernfarbe des Presets, nicht aus der Reichweite.
-    this.lighting?.setLight(`projburn:${id}`, visual.visualStyle === 'void' ? 'voidFlameProjectile' : 'projectileBurn', x, y, {
+    const palette = tintedFirePalette(visual.visualStyle);
+    this.lighting?.setLight(`projburn:${id}`, palette ? 'voidFlameProjectile' : 'projectileBurn', x, y, {
+      color: palette?.light,
       radiusPx: 45 + size * 2.4,
     });
   }
@@ -205,13 +206,13 @@ export class ProjectileBurnRenderer {
     const jitter = Math.max(1.5, size * 0.35);
     const px = x + Phaser.Math.FloatBetween(-jitter, jitter);
     const py = y + Phaser.Math.FloatBetween(-jitter, jitter);
-    const isVoid = visualStyle === 'void';
+    const palette = tintedFirePalette(visualStyle);
     const nowMs = system.now();
 
-    this.spawnTrailOuter(px, py, Math.max(1, strength), isVoid, nowMs, ageMs);
-    this.spawnTrailCore(px, py + 1, isVoid, nowMs, ageMs);
+    this.spawnTrailOuter(px, py, Math.max(1, strength), palette, nowMs, ageMs);
+    this.spawnTrailCore(px, py + 1, palette, nowMs, ageMs);
     if ((Math.floor(this.scene.time.now) + Math.round(x + y)) % 3 === 0) {
-      this.spawnTrailSpark(px, py, isVoid, nowMs, ageMs);
+      this.spawnTrailSpark(px, py, palette, nowMs, ageMs);
     }
   }
 
@@ -227,15 +228,15 @@ export class ProjectileBurnRenderer {
     return amount;
   }
 
-  private spawnTrailOuter(x: number, y: number, count: number, isVoid: boolean, nowMs: number, ageMs = 0): void {
+  private spawnTrailOuter(x: number, y: number, count: number, palette: TintedFirePalette | null, nowMs: number, ageMs = 0): void {
     const system = this.gpuVfx;
     const spec = this.outerSpec;
     if (!system || !spec) return;
     const amount = this.admitTrailBurst(GpuVfxEffectId.ProjectileBurnOuter, count);
     if (amount <= 0) return;
 
-    spec.frame = isVoid ? GpuVfxFrameId.FlameOuterVoid : GpuVfxFrameId.FlameOuter;
-    const tints = isVoid ? VOID_FLAME_COLORS_OUTER : TRAIL_COLORS_OUTER;
+    spec.frame = palette ? GpuVfxFrameId.FlameOuterVoid : GpuVfxFrameId.FlameOuter;
+    const tints = palette?.outer ?? TRAIL_COLORS_OUTER;
     spec.x = x;
     spec.y = y;
     for (let index = 0; index < amount; index += 1) {
@@ -247,35 +248,35 @@ export class ProjectileBurnRenderer {
     }
   }
 
-  private spawnTrailCore(x: number, y: number, isVoid: boolean, nowMs: number, ageMs = 0): void {
+  private spawnTrailCore(x: number, y: number, palette: TintedFirePalette | null, nowMs: number, ageMs = 0): void {
     const system = this.gpuVfx;
     const spec = this.coreSpec;
     if (!system || !spec) return;
     if (this.admitTrailBurst(GpuVfxEffectId.ProjectileBurnCore, 1) <= 0) return;
 
-    spec.frame = isVoid ? GpuVfxFrameId.FlameCoreVoid : GpuVfxFrameId.FlameCore;
+    spec.frame = palette ? GpuVfxFrameId.FlameCoreVoid : GpuVfxFrameId.FlameCore;
     spec.lifeMs = Phaser.Math.FloatBetween(120, 250);
     spec.x = x;
     spec.y = y;
     spec.vx = Phaser.Math.FloatBetween(-15, 15);
     spec.vy = Phaser.Math.FloatBetween(-42, -9);
-    spec.tint = pickGpuVfxTint(isVoid ? VOID_FLAME_COLORS_CORE : TRAIL_COLORS_CORE);
+    spec.tint = pickGpuVfxTint(palette?.core ?? TRAIL_COLORS_CORE);
     system.spawn(spec, this.source, nowMs, ageMs);
   }
 
-  private spawnTrailSpark(x: number, y: number, isVoid: boolean, nowMs: number, ageMs = 0): void {
+  private spawnTrailSpark(x: number, y: number, palette: TintedFirePalette | null, nowMs: number, ageMs = 0): void {
     const system = this.gpuVfx;
     const spec = this.sparkSpec;
     if (!system || !spec) return;
     if (this.admitTrailBurst(GpuVfxEffectId.ProjectileBurnSpark, 1) <= 0) return;
 
-    spec.frame = isVoid ? GpuVfxFrameId.FlameSparkVoid : GpuVfxFrameId.FlameSpark;
+    spec.frame = palette ? GpuVfxFrameId.FlameSparkVoid : GpuVfxFrameId.FlameSpark;
     spec.lifeMs = Phaser.Math.FloatBetween(170, 380);
     spec.x = x;
     spec.y = y;
     spec.vx = Phaser.Math.FloatBetween(-52, 52);
     spec.vy = Phaser.Math.FloatBetween(-105, -36);
-    spec.tint = pickGpuVfxTint(isVoid ? VOID_FLAME_COLORS_SPARK : TRAIL_COLORS_SPARK);
+    spec.tint = pickGpuVfxTint(palette?.spark ?? TRAIL_COLORS_SPARK);
     system.spawn(spec, this.source, nowMs, ageMs);
   }
 }

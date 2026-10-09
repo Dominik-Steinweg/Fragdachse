@@ -92,6 +92,13 @@ Die Nachbarschaft liest einen gemeinsamen Positionsstand und die zuletzt physika
 Geschwindigkeiten, einschließlich Statusfaktoren und Impulsen. Eingebuddelte, inaktive und physikalisch
 deaktivierte Einheiten sind keine gewöhnlichen Bewegungsnachbarn.
 
+Verbündete Gegner (`faction: 'allied'`) zeigen ihre Waffen- und Fähigkeitseffekte in der gemeinsamen
+Verbündeten-Palette (`ALLIED_PALETTE`), nie in Gegnerfarben. Der Host übersetzt Waffen-Configs, Brandflächen
+und Wolkenvarianten zentral in [AlliedEnemyEffects.ts](../../src/systems/AlliedEnemyEffects.ts); getönte
+Feuerfamilien laufen über den Feuerstil `allied`. Brandflächen eines Verbündeten zielen auf `enemies`, damit sie
+Spieler auch nach dem Tod ihres Erzeugers nicht treffen. Eine neue Gegnerfähigkeit, die Verbündete auslösen
+können, muss beides über dieses Modul beziehen.
+
 ## RoundParticipation bleibt separat
 
 [RoundParticipationPolicy.ts](../../src/scenes/arena/RoundParticipationPolicy.ts) bildet den Teilnehmer-Snapshot einer laufenden Runde ab und ist nicht mit WorldParticipation zu vermischen:

@@ -3,17 +3,23 @@ import { EMPTY_ENEMY_CLAW_STATE, isEnemyClawState, type EnemyClawState } from '.
 import { syncEnemyClawAnimation } from '../animations/EnemyClawAnimation';
 import { getEnemyFootprintVariant } from '../config/movementEffects';
 import type { MovementVisualSample } from '../effects/MovementStepSampler';
-import { enemyHealthBarStyle } from '../effects/health/healthBarStyles';
+import { alliedEnemyHealthBarStyle, enemyHealthBarStyle } from '../effects/health/healthBarStyles';
+import { addPlayerGlow } from '../effects/PlayerGlow';
+import { removeInternalFx, type GlowHandle } from '../utils/phaserFx';
+import { resolveAlliedEnemyWeaponConfig } from '../systems/AlliedEnemyEffects';
 import * as Phaser from 'phaser';
 import { GenericWeapon } from '../loadout/GenericWeapon';
 import { WEAPON_CONFIGS, type WeaponConfig } from '../loadout/LoadoutConfig';
 import { isVelocityMoving } from '../loadout/SpreadMath';
 import type { BaseWeapon } from '../loadout/BaseWeapon';
 import {
+  ALLIED_COLOR,
+  ALLIED_PALETTE,
   COLORS,
   DEPTH,
   HP_BAR_OFFSET_Y,
   HP_BAR_WIDTH,
+  PLAYER_SIZE,
   VOID_FIRE_COLOR,
 } from '../config';
 import {
@@ -105,7 +111,9 @@ export class EnemyEntity {
   private burnGpu: EntityBurnGpuController | null = null;
   private plasmaChargeRenderer: PlasmaChargeRenderer | null = null;
   private vulnerable = false;
-  private ownerRing: Phaser.GameObjects.Ellipse | null = null;
+  private ownerRing: Phaser.GameObjects.Arc | null = null;
+  /** Leuchtumriss verbündeter Gegner – dieselbe Silhouetten-Glow-Sprache wie Spieler und eigene Türme. */
+  private allyGlow: GlowHandle | null = null;
   private burnStacks = 0;
   private plasmaChargeStacks = 0;
   private burnVisualStyle: GroundFireVisualStyle = 'normal';
@@ -183,9 +191,14 @@ export class EnemyEntity {
     this.sprite.setDisplaySize(this.getVisualSize(), this.getVisualSize());
     this.sprite.setDepth(DEPTH.PLAYERS - 0.05);
     if (faction === 'allied') {
-      this.sprite.setTint(0x89d66d);
-      this.ownerRing = scene.add.ellipse(x, y + this.config.size * 0.22, this.config.size * 1.15, this.config.size * 0.52, 0x000000, 0)
-        .setStrokeStyle(2, ownerColor ?? 0x80ff80, 0.95)
+      // Verbündete lesen sich über drei Signale: Jade-Tönung, Jade-Leuchtumriss und einen
+      // Ring in der Farbe des Besitzers. Gegner-Grüns sind pastellig – erst der Umriss trennt.
+      this.sprite.setTint(ALLIED_PALETTE.tint);
+      this.allyGlow = addPlayerGlow(this.sprite, ALLIED_COLOR, Phaser.Math.Clamp(this.config.size / PLAYER_SIZE, 0.75, 1.4));
+      // Draufsicht: zentrierter Kreis statt perspektivischer Ellipse. Der Snapshot dekodiert eine
+      // fehlende Besitzerfarbe als 0, deshalb `||` statt `??`.
+      this.ownerRing = scene.add.circle(x, y, this.config.size * 0.62, 0x000000, 0)
+        .setStrokeStyle(3, ownerColor || ALLIED_PALETTE.bright, 1)
         .setDepth(DEPTH.PLAYERS - 0.075); // Above figure shadows (9.92), below the contour/body.
       registerGraphicsObject(scene, 'enemyStatus', this.ownerRing);
     } else if (this.config.color !== undefined) {
@@ -402,7 +415,9 @@ export class EnemyEntity {
   private bindHealthBar(): void {
     if (!this.sprite.active || !this.healthBars || this.healthBars.isValid(this.healthBar)) return;
     this.healthBar = this.healthBars.bind(
-      enemyHealthBarStyle(this.faction === 'hostile' && this.config.isBoss === true, this.getHpBarWidth()),
+      this.faction === 'allied'
+        ? alliedEnemyHealthBarStyle(this.getHpBarWidth())
+        : enemyHealthBarStyle(this.config.isBoss === true, this.getHpBarWidth()),
       this.currentHp, this.maxHp, this.sprite.x, this.sprite.y + this.getHpBarOffsetY(),
       this.burrowed || !this.sprite.visible,
     );
@@ -547,7 +562,7 @@ export class EnemyEntity {
    * nicht mit einem Spielerspawn verwechselt wird.
    */
   getSpawnEffectColor(): number {
-    if (this.faction === 'allied') return this.ownerColor ?? 0x89d66d;
+    if (this.faction === 'allied') return ALLIED_COLOR;
     return this.config.glow?.color ?? this.config.color ?? 0xd8483c;
   }
 
@@ -726,7 +741,7 @@ export class EnemyEntity {
   }
 
   syncBar(): void {
-    this.ownerRing?.setPosition(this.sprite.x, this.sprite.y + this.config.size * 0.22);
+    this.ownerRing?.setPosition(this.sprite.x, this.sprite.y);
     this.syncGlow();
     this.syncTimebombFuseVisuals();
     this.syncVoidMolotovWindupVisuals();
@@ -772,6 +787,8 @@ export class EnemyEntity {
     this.plasmaChargeRenderer = null;
     this.ownerRing?.destroy();
     this.ownerRing = null;
+    removeInternalFx(this.sprite, this.allyGlow);
+    this.allyGlow = null;
     if (this.glowHalo) {
       this.sprite.scene.tweens.killTweensOf(this.glowHalo);
       this.glowHalo.destroy();
@@ -950,7 +967,7 @@ export class EnemyEntity {
 
     if (!this.voidMolotovWindupRing) {
       this.voidMolotovWindupRing = this.sprite.scene.add.circle(this.sprite.x, this.sprite.y, this.config.size * 0.5);
-      this.voidMolotovWindupRing.setStrokeStyle(3, VOID_FIRE_COLOR, 1);
+      this.voidMolotovWindupRing.setStrokeStyle(3, this.faction === 'allied' ? ALLIED_COLOR : VOID_FIRE_COLOR, 1);
       registerGraphicsObject(this.sprite.scene, 'enemyStatus', this.voidMolotovWindupRing);
     }
     const progress = this.gaussChargeProgress;
@@ -997,6 +1014,15 @@ export class EnemyEntity {
   }
 
   private resolveEnemyWeaponConfig(
+    config: WeaponConfig,
+    targetMode: CoopDefenseEnemyWeaponTargetMode,
+  ): WeaponConfig {
+    const gameplayConfig = this.resolveEnemyWeaponGameplay(config, targetMode);
+    // Verbündete tragen die Effekte ihrer Gattung in der Verbündeten-Palette.
+    return this.faction === 'allied' ? resolveAlliedEnemyWeaponConfig(gameplayConfig) : gameplayConfig;
+  }
+
+  private resolveEnemyWeaponGameplay(
     config: WeaponConfig,
     targetMode: CoopDefenseEnemyWeaponTargetMode,
   ): WeaponConfig {

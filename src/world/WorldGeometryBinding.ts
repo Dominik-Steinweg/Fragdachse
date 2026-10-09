@@ -195,7 +195,8 @@ export class WorldGeometryBinding implements WorldScopedBinding {
         Math.floor(bounds.centerX / GROUND_FIRE_CELL_SIZE),
         Math.floor(bounds.centerY / GROUND_FIRE_CELL_SIZE),
       ),
-      (startX, startY, endX, endY, style) => this.hasFireLineOfSight(startX, startY, endX, endY, style === 'void'),
+      // Void-Feuer und seine Verbündeten-Variante teilen die Mechanik; nur die Farbe unterscheidet sie.
+      (startX, startY, endX, endY, style) => this.hasFireLineOfSight(startX, startY, endX, endY, style !== 'normal'),
       () => this.fireObstacles.revision,
     );
   }

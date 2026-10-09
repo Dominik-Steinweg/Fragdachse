@@ -390,7 +390,7 @@ export type ProjectilePathEffectKind = 'awp' | 'fireball';
 export type BulletVisualPreset = 'default' | 'glock' | 'xbow' | 'p90' | 'ak47' | 'shotgun' | 'awp' | 'awp_charged' | 'awp_corridor' | 'gauss' | 'negev' | 'time_prism';
 
 /** Data-driven Preset fuer klassische geworfene Granaten. */
-export type GrenadeVisualPreset = 'he' | 'he_cluster_shard' | 'he_demolition_shard' | 'smoke' | 'molotov' | 'molotov_void' | 'time_bubble' | 'fur_ball';
+export type GrenadeVisualPreset = 'he' | 'he_cluster_shard' | 'he_demolition_shard' | 'smoke' | 'molotov' | 'molotov_void' | 'time_bubble' | 'fur_ball' | 'molotov_allied';
 
 /** Visuelles Preset fuer Hitscan-Strahlen. */
 export type HitscanVisualPreset = 'default' | 'asmd_primary' | 'plasma_burner';
@@ -439,8 +439,11 @@ export interface BurnOnHitConfig {
 /** Herkunft eines Brand-Stacks. Direkte Flammenwerfer-Quellen duerfen Todeseffekte ausloesen. */
 export type BurnOrigin = 'generic' | 'flamethrower_direct' | 'ground_fire' | 'fire_ring';
 
-/** Optische Familie einer Brandquelle; Varianten koennen dieselbe Rasterzelle belegen. */
-export type GroundFireVisualStyle = 'normal' | 'void';
+/**
+ * Optische Familie einer Brandquelle; Varianten koennen dieselbe Rasterzelle belegen.
+ * `allied` ist die Void-Familie im Verbuendeten-Jade (Feuer wiederbelebter Gegner).
+ */
+export type GroundFireVisualStyle = 'normal' | 'void' | 'allied';
 
 /** Entitaetsgruppe, die eine Brandquelle beschaedigen und entzuenden darf. */
 export type GroundFireDamageTarget = 'all' | 'players' | 'enemies';
@@ -1490,6 +1493,11 @@ export interface SpawnEnemyGrenadeEffect {
   count: number;
   offsetPx: number;
   color?: number;
+  /**
+   * Host-intern: Spieler, dem der verbündete Werfer gehört. Die Brut schlüpft dann als dessen
+   * Verbündete – auch wenn der Werfer bis zum Einschlag gestorben ist.
+   */
+  allyOwnerId?: string;
 }
 
 export type GrenadeEffectConfig =

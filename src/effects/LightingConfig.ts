@@ -875,6 +875,10 @@ export function getProjectileLightSpec(
       if (grenadeVisualPreset === 'molotov_void') {
         return { preset: 'voidFlameProjectile', baseRadiusPx: 52, radiusPerSizePx: 2.2 };
       }
+      if (grenadeVisualPreset === 'molotov_allied') {
+        // Gleiches Licht wie der Void-Orb, aber aus der Projektilfarbe (Verbündeten-Jade).
+        return { preset: 'voidFlameProjectile', baseRadiusPx: 52, radiusPerSizePx: 2.2, whitenFromColor: 0.6 };
+      }
       if (grenadeVisualPreset === 'molotov') {
         // Brennt im Flug bereits sichtbar. `ProjectileBurnRenderer` überspringt Granaten,
         // das Licht muss also von hier kommen.

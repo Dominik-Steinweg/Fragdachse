@@ -70,6 +70,11 @@ vi.mock('../src/effects/FlameShared', () => ({
   VOID_FLAME_COLORS_CORE: [0xffffff],
   VOID_FLAME_COLORS_OUTER: [0xffffff],
   VOID_FLAME_COLORS_SPARK: [0xffffff],
+  tintedFirePalette: (style?: string) => (!style || style === 'normal' ? null : {
+    accent: 0xffffff, core: [0xffffff], outer: [0xffffff], spark: [0xffffff],
+    jetHot: [0xffffff], jetMid: [0xffffff], jetCool: [0xffffff],
+    groundHot: [0xffffff], groundMid: [0xffffff], groundCool: [0xffffff], groundEmber: [0xffffff],
+  }),
 }));
 
 vi.mock('../src/effects/FireSystem', () => ({

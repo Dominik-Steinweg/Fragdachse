@@ -40,6 +40,8 @@ export interface TeslaPaletteRecipe {
 export const TESLA_ELECTRIC_RECIPE: TeslaPaletteRecipe = { deep: 0x1c4ee8, body: 0x2c86ff, hot: 0x8cc8ff };
 /** Sattes Violett der gegnerischen Mini-Kuppel. */
 export const TESLA_VOID_RECIPE: TeslaPaletteRecipe = { deep: 0x4a12b8, body: 0xa246ff, hot: 0xe6b8ff };
+/** Verbündeten-Jade der Mini-Kuppel wiederbelebter Gegner. */
+export const TESLA_ALLIED_RECIPE: TeslaPaletteRecipe = { deep: 0x0a7a50, body: 0x1fe39a, hot: 0xa8ffd8 };
 
 export function createTeslaPalette(): TeslaPalette {
   return { deep: [0, 0, 0], body: [0, 0, 0], hot: [0, 0, 0], core: [0, 0, 0] };

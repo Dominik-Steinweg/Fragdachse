@@ -73,7 +73,8 @@ export class BaseVoidFireSystem {
       }
       if (base.isDamageable()) {
         for (const contact of this.deps.getContacts(base.id, now)) {
-          if (contact.visualStyle !== 'void') continue;
+          // Verbündetes Feuer ist umgefärbtes Void-Feuer und brennt Basen genauso an.
+          if (contact.visualStyle === 'normal') continue;
           const source = contact.combatSource ?? this.deps.captureSource(contact);
           if (!this.deps.canDamage(source, base.faction)) continue;
           if (burn) burn.expiresAt = now + this.config.afterburnMs;

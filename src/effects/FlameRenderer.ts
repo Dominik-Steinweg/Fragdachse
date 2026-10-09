@@ -1,10 +1,11 @@
 import * as Phaser from 'phaser';
-import { DEPTH, VOID_FIRE_COLOR } from '../config';
+import { DEPTH } from '../config';
 import { emissiveAlpha } from './EmissiveScale';
 import {
   ensureFlameJetTextures,
   ensureFlameTextures,
   ensureVoidFlameTextures,
+  fireStyleForColor,
   pickHeatTint,
   FLAME_COLORS_SPARK,
   FLAME_JET_TINTS_COOL,
@@ -12,10 +13,8 @@ import {
   FLAME_JET_TINTS_MID,
   TEX_FLAME_GLOW,
   TEX_VOID_FLAME_GLOW,
-  VOID_FLAME_COLORS_SPARK,
-  VOID_JET_TINTS_COOL,
-  VOID_JET_TINTS_HOT,
-  VOID_JET_TINTS_MID,
+  tintedFirePalette,
+  type TintedFirePalette,
 } from './FlameShared';
 import { FLAME_LIGHT_ID_STRIDE } from './LightingConfig';
 import type { LightingSystem } from './LightingSystem';
@@ -135,6 +134,8 @@ interface FlameVisual {
   glowImage: Phaser.GameObjects.Image;
   glowBaseAlpha: number;
   isVoid: boolean;
+  /** Lichtfarbe der getoenten Feuerfamilie; `undefined` behaelt die Presetfarbe. */
+  lightColor: number | undefined;
 }
 
 /**
@@ -238,7 +239,8 @@ export class FlameRenderer {
   createVisual(id: number, x: number, y: number, size: number, color: number, chainKey = ''): void {
     if (this.flames.has(id)) return;
 
-    const isVoid = color === VOID_FIRE_COLOR;
+    const palette: TintedFirePalette | null = tintedFirePalette(fireStyleForColor(color));
+    const isVoid = palette !== null;
     // Der Halo ist eine breite additive Flaeche unter dem ganzen Strahl; er hebt den Untergrund
     // gleichmaessig an und ist damit der zweite Weg, auf dem die Flamme ins Weisse kippt.
     const glowBaseAlpha = isVoid ? 0.64 : 0.4;
@@ -253,7 +255,7 @@ export class FlameRenderer {
     glowImage.setDepth(DEPTH_FLAME - 0.1);
     glowImage.setAlpha(emissiveAlpha(glowBaseAlpha));
     glowImage.setScale(glowScale(size));
-    glowImage.setTint(isVoid ? VOID_FIRE_COLOR : 0xffaa44);
+    glowImage.setTint(palette?.accent ?? 0xffaa44);
 
     const visual: FlameVisual = {
       id,
@@ -281,13 +283,14 @@ export class FlameRenderer {
       outerFlow: new ParticleFlowScheduler(OUTER_FREQUENCY_MS),
       sparkFlow: new ParticleFlowScheduler(SPARK_FREQUENCY_MS),
       source: this.gpuVfx?.createSource(GpuVfxEffectId.FlameCore) ?? GPU_VFX_NO_SOURCE_HANDLE,
-      hotTints: isVoid ? VOID_JET_TINTS_HOT : FLAME_JET_TINTS_HOT,
-      midTints: isVoid ? VOID_JET_TINTS_MID : FLAME_JET_TINTS_MID,
-      coolTints: isVoid ? VOID_JET_TINTS_COOL : FLAME_JET_TINTS_COOL,
-      sparkTints: isVoid ? VOID_FLAME_COLORS_SPARK : FLAME_COLORS_SPARK,
+      hotTints: palette?.jetHot ?? FLAME_JET_TINTS_HOT,
+      midTints: palette?.jetMid ?? FLAME_JET_TINTS_MID,
+      coolTints: palette?.jetCool ?? FLAME_JET_TINTS_COOL,
+      sparkTints: palette?.spark ?? FLAME_COLORS_SPARK,
       glowImage,
       glowBaseAlpha,
       isVoid,
+      lightColor: palette?.light,
     };
 
     this.flames.set(id, visual);
@@ -334,6 +337,7 @@ export class FlameRenderer {
     if (id % FLAME_LIGHT_ID_STRIDE === 0) {
       this.lighting?.setLight(`flame:${id}`, preset, x, y, {
         radiusPx: visual.isVoid ? 96 + size * 2.55 : 80 + size * 2.2,
+        color: visual.lightColor,
       });
     }
 
@@ -343,6 +347,7 @@ export class FlameRenderer {
     if (visual.chainKey !== '' && this.recentByChain.get(visual.chainKey)?.[0] === id) {
       this.lighting?.setLight(`flameMuzzle:${visual.chainKey}`, preset, x, y, {
         radiusPx: visual.isVoid ? 172 : 150,
+        color: visual.lightColor,
       });
     }
   }

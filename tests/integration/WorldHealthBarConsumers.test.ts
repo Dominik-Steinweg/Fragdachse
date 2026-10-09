@@ -46,7 +46,7 @@ import { BaseManager } from '../../src/entities/BaseManager';
 import { RockVisualHelper } from '../../src/scenes/arena/RockVisualHelper';
 import { encodeEnemyUpsert } from '../../src/network/enemySnapshotCodec';
 import { COOP_DEFENSE_ENEMY_KINDS, resolveCoopDefenseEnemyConfigs, type CoopDefenseEnemyDeathSpawnConfig } from '../../src/config/coopDefenseEnemies';
-import { HEALTH_BAR_TUNING, TURRET_HEALTH_BAR_STYLE } from '../../src/effects/health/healthBarStyles';
+import { HEALTH_BAR_TUNING, TURRET_HEALTH_BAR_STYLE, enemyHealthBarStyle, playerHealthBarStyle } from '../../src/effects/health/healthBarStyles';
 import { WorldHealthBarRenderer } from '../../src/effects/health/WorldHealthBarRenderer';
 import { resolveCoopDefenseWorldMetrics } from '../../src/world/WorldMetrics';
 import { COOP_DEFENSE_CONSTRUCTION_IDS, getCoopDefenseConstructionDefinition } from '../../src/config/coopDefenseConstructions';
@@ -1489,6 +1489,22 @@ describe('World HP consumer boundaries', () => {
     expect(h.renderer.getStats().active).toBe(1);
     manager.destroy();
     expect(h.renderer.getStats().bindings).toBe(0);
+  });
+
+  it('keeps allied enemy bars visible at full health in the friendly palette', () => {
+    const h = harness(), manager = enemies(h);
+    upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 100, maxHp: 100 });
+    upsert(manager, { id: 'e2', kind, x: 30, y: 40, hp: 100, maxHp: 100, faction: 'allied', ownerId: 'p1', ownerColor: 0x4f8fba });
+    for (let t = 0; t <= HEALTH_BAR_TUNING.visibleAfterDamageMs + 200; t += 100) {
+      h.clock(t);
+      h.tick();
+    }
+    // Nur der Verbündete zeigt seinen Balken ungefragt, und zwar nicht in der Gegnerfarbe.
+    expect(h.renderer.getStats()).toMatchObject({ bindings: 2, active: 1 });
+    const fills = h.rectangles.filter(object => object.visible).map(object => object.fillColor);
+    expect(fills).toContain(playerHealthBarStyle(false).healthy);
+    expect(fills).not.toContain(enemyHealthBarStyle(false, 1).healthy);
+    manager.destroy();
   });
 
   it('silently absorbs burrow recovery snapshots and resets removed/reused entity IDs', () => {

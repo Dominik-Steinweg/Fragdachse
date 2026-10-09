@@ -144,7 +144,7 @@ function createLayout(
 /** Edge length of a fixed emission region, in GroundFire raster cells. */
 export const GROUND_FIRE_REGION_CELLS = 8;
 
-const STYLE_INDEX: Readonly<Record<GroundFireVisualStyle, number>> = { normal: 0, void: 1 };
+const STYLE_INDEX: Readonly<Record<GroundFireVisualStyle, number>> = { normal: 0, void: 1, allied: 2 };
 const KEY_OFFSET = 2 ** 13;
 const KEY_ROW = 2 ** 14;
 const KEY_STYLE = 2 ** 28;

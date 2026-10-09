@@ -9,6 +9,7 @@ import { sanitizePersistentBaseLayoutEdit, type PersistentBaseLayoutEdit, type P
 import { isPersistentBaseAreaStage, type PersistentBaseAreaStage } from '../persistentBase/PersistentBaseCore';
 import { getLoadoutUtilityId } from '../loadout/LoadoutTools';
 import { GameplayAudioCursor, isGameplayAudioEvent, type GameplayAudioCue, type GameplayAudioEvent } from '../audio/GameplayAudioFeedback';
+import { decodeGroundFireVisualStyle, encodeGroundFireVisualStyle } from './groundFireVisualStyleCodec';
 import { encodeMgAttrition, decodeMgAttrition } from './mgAttritionCodec';
 import { emptyMgAttritionSnapshot, type MgAttritionSnapshot } from '../systems/MgAttritionRuntime';
 import { EMPTY_ZEUS_SNAPSHOT, type ZeusSnapshot } from '../systems/ZeusRuntime';
@@ -515,7 +516,7 @@ function sameLiveBurningGroundCells(
     // Same normalization as `decodeBurningGroundCell`, without allocating per cell.
     if (cell.id !== entry[0] || cell.gridX !== entry[1] || cell.gridY !== entry[2]
       || cell.expiresAt !== entry[3] || cell.intensity !== Math.max(1, entry[4] ?? 1)
-      || cell.visualStyle !== (entry[5] === 1 ? 'void' : 'normal')) return false;
+      || cell.visualStyle !== decodeGroundFireVisualStyle(entry[5])) return false;
   }
   return index === cells.length;
 }
@@ -527,7 +528,7 @@ function sanitizeGroundWarnings(value: unknown, now: number): NonNullable<Synced
 }
 
 function encodeBurningGroundCell(cell: SyncedBurningGroundSnapshot['cells'][number]): EncodedBurningGroundCell {
-  return [cell.id, cell.gridX, cell.gridY, cell.expiresAt, cell.intensity, cell.visualStyle === 'void' ? 1 : 0];
+  return [cell.id, cell.gridX, cell.gridY, cell.expiresAt, cell.intensity, encodeGroundFireVisualStyle(cell.visualStyle)];
 }
 
 function decodeBurningGroundCell([id, gridX, gridY, expiresAt, intensity, visualStyle]: EncodedBurningGroundCell) {
@@ -537,7 +538,7 @@ function decodeBurningGroundCell([id, gridX, gridY, expiresAt, intensity, visual
     gridY,
     expiresAt,
     intensity: Math.max(1, intensity ?? 1),
-    visualStyle: visualStyle === 1 ? 'void' as const : 'normal' as const,
+    visualStyle: decodeGroundFireVisualStyle(visualStyle),
   };
 }
 
@@ -3932,7 +3933,7 @@ export class NetworkBridge {
       y,
       t: startedAt,
       p: targets.flatMap(target => [target.x, target.y, target.landsAt]),
-      ...(visualStyle === 'void' ? { v: 1 } : {}),
+      ...(visualStyle !== 'normal' ? { v: encodeGroundFireVisualStyle(visualStyle) } : {}),
     });
   }
 
@@ -3948,7 +3949,7 @@ export class NetworkBridge {
         if (p[index + 2] < t) return;
         targets.push({ x: p[index], y: p[index + 1], landsAt: p[index + 2] });
       }
-      fireChunkEffectHandler(x, y, targets, t, v === 1 ? 'void' : 'normal');
+      fireChunkEffectHandler(x, y, targets, t, decodeGroundFireVisualStyle(v));
       return undefined;
     });
   }

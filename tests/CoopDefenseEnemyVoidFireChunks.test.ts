@@ -112,6 +112,39 @@ describe('Inferno Colossus void fire chunks', () => {
     expect(hostCreateFireChunkBurst).toHaveBeenCalledTimes(2);
   });
 
+  it('turns an allied colossus fire trail and chunks into allied fire that never targets players', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const ability = getCoopDefenseEnemyConfig('inferno-colossus').voidFireChunks!;
+    const firstBurstAt = 1_000 + ability.intervalMinMs
+      + Math.floor(0.5 * (ability.intervalMaxMs - ability.intervalMinMs + 1));
+    const enemy = fakeEntity({ id: 'ally-1',
+      kind: 'inferno-colossus',
+      faction: 'allied', ownerId: 'p1', active: true, x: 520, y: 360, getHp: () => 1_200,
+      getCollisionRadius: () => 34,
+      isBurrowed: () => false }) as unknown as EnemyEntity;
+    const hostCreateFireChunkBurst = vi.fn();
+    const hostRefreshGroundCellsAlongSweptCircle = vi.fn();
+    const system = new CoopDefenseEnemyAbilitySystem(
+      { getAllEnemies: () => [enemy], getHostileEnemies: () => [] } as unknown as EnemyManager,
+      { getAllPlayers: () => [] } as unknown as PlayerManager,
+      {} as ProjectileSpawnPort,
+      {} as CombatSystem,
+      null as EnergyShieldSystem | null,
+      {} as StinkCloudSystem,
+      { hostCreateFireChunkBurst } as unknown as FlamethrowerUpgradeSystem,
+      { hostRefreshGroundCellsAlongSweptCircle } as unknown as FireSystem,
+      { broadcastTranslocatorFlash: () => undefined },
+    );
+
+    system.hostUpdate(1_000);
+    system.hostUpdate(firstBurstAt);
+    const allied = expect.objectContaining({ visualStyle: 'allied', damageTarget: 'enemies' });
+    expect(hostRefreshGroundCellsAlongSweptCircle).toHaveBeenLastCalledWith(
+      520, 360, 520, 360, 34, allied, firstBurstAt);
+    expect(hostCreateFireChunkBurst).toHaveBeenCalledWith(
+      'ally-1', 520, 360, allied, `void-fire-chunks:ally-1:${firstBurstAt}`, firstBurstAt);
+  });
+
   it('uses a boss-only purple flamethrower with a slightly larger range', () => {
     const bossConfig = getCoopDefenseEnemyConfig('inferno-colossus');
     expect(bossConfig.weapons[0]?.weaponId).toBe('INFERNO_COLOSSUS_FLAMETHROWER');

@@ -224,6 +224,22 @@ export const VOID_PALETTE = {
   shadow: 0x240a38,
 } as const;
 
+/**
+ * Gemeinsame Palette wiederbelebter bzw. übernommener Gegner (Nekromantie) und ihrer Effekte.
+ * Gesättigtes Jade (~155°): Gegner-Grüns liegen pastellig bei 100–142°, Spielerfarben nutzen
+ * den Bereich 100–180° gar nicht. `tint` ist die multiplikative Körpertönung.
+ */
+export const ALLIED_PALETTE = {
+  core: 0xe8fff5,
+  bright: 0x8affcf,
+  primary: 0x1fe39a,
+  deep: 0x0c8f5f,
+  shadow: 0x05301f,
+  tint: 0xa6f5d4,
+} as const;
+/** Kanonischer VFX-Akzent verbündeter Gegner. */
+export const ALLIED_COLOR = ALLIED_PALETTE.primary;
+
 export interface BeamPalette {
   shadow: number;
   glow: number;

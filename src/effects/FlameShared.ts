@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
-import { VOID_FIRE_COLOR } from '../config';
+import type { GroundFireVisualStyle } from '../types';
+import { ALLIED_COLOR, VOID_FIRE_COLOR } from '../config';
 import { ensureCanvasTexture, fillRadialGradientTexture } from './EffectUtils';
 
 export const TEX_FLAME_EMBER = '__flame_ember';
@@ -103,6 +104,74 @@ export const FLAME_JET_TINTS_COOL = [0xe0450c, 0xb63108, 0xc93a0a, 0x8e2c0c] as 
 export const VOID_JET_TINTS_HOT   = [0xf2d3ff, 0xe6b6ff, 0xd79bff, 0xc98cff] as const;
 export const VOID_JET_TINTS_MID   = [0xc76cff, 0xb14ef2, 0x9c37e4, 0xd486ff] as const;
 export const VOID_JET_TINTS_COOL  = [0x7620b8, 0x571590, 0x3c0f68, 0x6a1aa4] as const;
+
+/**
+ * Getoente Feuerfamilie (Void, Verbuendete). Die Texturen und GPU-Frames dieser Familie sind
+ * weiss; erst die Palette gibt ihnen die Farbe. Ein weiterer Stil braucht deshalb nur eine
+ * weitere Palette, keine neuen Texturen.
+ */
+export interface TintedFirePalette {
+  /** Tint der weichen Glow-Bilder. */
+  readonly accent: number;
+  readonly core: readonly number[];
+  readonly outer: readonly number[];
+  readonly spark: readonly number[];
+  readonly jetHot: readonly number[];
+  readonly jetMid: readonly number[];
+  readonly jetCool: readonly number[];
+  readonly groundHot: readonly number[];
+  readonly groundMid: readonly number[];
+  readonly groundCool: readonly number[];
+  readonly groundEmber: readonly number[];
+  /** Lichtfarbe zu den Void-Lichtpresets; `undefined` behaelt die Presetfarbe. */
+  readonly light?: number;
+}
+
+export const VOID_FIRE_PALETTE: TintedFirePalette = {
+  accent: VOID_FIRE_COLOR,
+  core: VOID_FLAME_COLORS_CORE,
+  outer: VOID_FLAME_COLORS_OUTER,
+  spark: VOID_FLAME_COLORS_SPARK,
+  jetHot: VOID_JET_TINTS_HOT,
+  jetMid: VOID_JET_TINTS_MID,
+  jetCool: VOID_JET_TINTS_COOL,
+  groundHot: [0xf2d3ff, 0xe6b6ff, 0xd79bff, 0xc98cff],
+  groundMid: [0xc76cff, 0xb14ef2, 0x9c37e4, 0xd486ff],
+  groundCool: [0x7620b8, 0x571590, 0x3c0f68, 0x6a1aa4],
+  groundEmber: [0xf7e2ff, 0xeac2ff, 0xdda4ff, 0xc887ff],
+};
+
+/** Feuer verbuendeter Gegner: dieselben Helligkeitsstufen wie Void, im Verbuendeten-Jade. */
+export const ALLIED_FIRE_PALETTE: TintedFirePalette = {
+  accent: ALLIED_COLOR,
+  core: [0xffffff, 0xc8ffe6, 0x7ff5c2, ALLIED_COLOR],
+  outer: [0xb4ffdd, 0x6cf0b6, 0x2fd08f, 0x13915f],
+  spark: [0xffffff, 0xd4ffec, 0x77f5c0, 0x2ee8a2],
+  jetHot: [0xd3ffec, 0xb6ffdf, 0x9bf7d0, 0x8cf0c5],
+  jetMid: [0x6cf0b6, 0x4ee0a0, 0x37cf8c, 0x86f5c6],
+  jetCool: [0x20b87a, 0x15905c, 0x0f6842, 0x1aa46c],
+  groundHot: [0xd3ffec, 0xb6ffdf, 0x9bf7d0, 0x8cf0c5],
+  groundMid: [0x6cf0b6, 0x4ee0a0, 0x37cf8c, 0x86f5c6],
+  groundCool: [0x20b87a, 0x15905c, 0x0f6842, 0x1aa46c],
+  groundEmber: [0xe2fff1, 0xc2ffe4, 0xa4f8d5, 0x87f0c4],
+  light: 0xc6ffe4,
+};
+
+/** Palette eines getoenten Feuerstils; `null` fuer normales, eingebacken farbiges Feuer. */
+export function tintedFirePalette(style: GroundFireVisualStyle | undefined): TintedFirePalette | null {
+  switch (style) {
+    case 'void': return VOID_FIRE_PALETTE;
+    case 'allied': return ALLIED_FIRE_PALETTE;
+    default: return null;
+  }
+}
+
+/** Projektile tragen keinen Feuerstil, nur ihre Farbe; die kanonischen Akzente benennen ihn. */
+export function fireStyleForColor(color: number): GroundFireVisualStyle {
+  if (color === VOID_FIRE_COLOR) return 'void';
+  if (color === ALLIED_COLOR) return 'allied';
+  return 'normal';
+}
 
 /**
  * Waehlt den Tint nach Resthitze (1 = Duese, 0 = ausgebranntes Ende). Die Bandgrenzen werden

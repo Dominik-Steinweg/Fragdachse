@@ -138,7 +138,7 @@ describe('Projektil-Dynamik-Codec', () => {
 
   it('round-trips every burning / burn-style combination', () => {
     for (const burning of [undefined, true] as const) {
-      for (const style of [undefined, 'normal', 'void'] as const) {
+      for (const style of [undefined, 'normal', 'void', 'allied'] as const) {
         const decoded = roundTripDynamic({ ...base, burning, projectileBurnVisualStyle: style });
         expect(decoded.burning).toBe(burning);
         expect(decoded.projectileBurnVisualStyle).toBe(style);
@@ -361,7 +361,7 @@ describe('Projektil-Snapshot-Zusammenfuehrung', () => {
   });
 });
 
-it.each(['he_cluster_shard', 'he_demolition_shard', 'molotov_void'] as const)('round-trips %s without an HE body fallback', grenadeVisualPreset => {
+it.each(['he_cluster_shard', 'he_demolition_shard', 'molotov_void', 'molotov_allied'] as const)('round-trips %s without an HE body fallback', grenadeVisualPreset => {
   expect(roundTripStatic({ id: 1, ownerId: 'p1', style: 'grenade', grenadeVisualPreset }))
     .toEqual({ id: 1, ownerId: 'p1', style: 'grenade', grenadeVisualPreset });
 });

@@ -13,7 +13,7 @@ import {
   FLAME_COLORS_OUTER,
   TEX_FLAME_EMBER,
   TEX_VOID_FLAME_EMBER,
-  VOID_FLAME_COLORS_OUTER,
+  tintedFirePalette,
 } from './FlameShared';
 import { FLAME_RING_FRAGMENT_SOURCE, FLAME_RING_OUTER_REACH, FLAME_RING_SHADER_NAME } from './flameRingShader';
 import { GroundFireClusterRenderer } from './GroundFireClusterRenderer';
@@ -115,8 +115,10 @@ export class FlamethrowerUpgradeRenderer {
       // Ein Follow-Light je fliegendem Brocken; freigegeben beim Aufschlag.
       const lightKey = `firechunk:${this.nextChunkLightId++}`;
       this.activeChunkLightKeys.add(lightKey);
-      const isVoid = visualStyle === 'void';
-      const colors = isVoid ? VOID_FLAME_COLORS_OUTER : FLAME_COLORS_OUTER;
+      const palette = tintedFirePalette(visualStyle);
+      const isVoid = palette !== null;
+      const lightOverrides = palette?.light !== undefined ? { color: palette.light } : undefined;
+      const colors = palette?.outer ?? FLAME_COLORS_OUTER;
       const chunk = this.scene.add.image(x, y, isVoid ? TEX_VOID_FLAME_EMBER : TEX_FLAME_EMBER)
         .setDepth(DEPTH.PROJECTILES + 0.4)
         .setBlendMode(Phaser.BlendModes.ADD)
@@ -142,7 +144,7 @@ export class FlamethrowerUpgradeRenderer {
           );
           chunk.setRotation(t * Math.PI * 4);
           chunk.setScale(0.72 + Math.sin(t * Math.PI) * 0.28);
-          this.lighting?.setLight(lightKey, isVoid ? 'voidFireChunk' : 'fireChunk', chunk.x, chunk.y);
+          this.lighting?.setLight(lightKey, isVoid ? 'voidFireChunk' : 'fireChunk', chunk.x, chunk.y, lightOverrides);
         },
         onComplete: () => {
           const shouldLand = chunk.active;
@@ -152,7 +154,7 @@ export class FlamethrowerUpgradeRenderer {
           this.lighting?.releaseLight(lightKey);
           chunk.destroy();
           if (!shouldLand) return;
-          this.lighting?.pulse(isVoid ? 'voidFireChunkImpact' : 'fireChunkImpact', target.x, target.y);
+          this.lighting?.pulse(isVoid ? 'voidFireChunkImpact' : 'fireChunkImpact', target.x, target.y, lightOverrides);
           // Der Einschlag benutzt dieselben Bodenfeuer-Effekte, entsteht aber ausserhalb des
           // Emissions-Ticks: die Partikeluhr steht noch auf dem Stand des Vorframes.
           this.groundFire.spawnImpact(target.x, target.y, visualStyle);

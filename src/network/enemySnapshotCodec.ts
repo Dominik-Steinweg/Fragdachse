@@ -69,7 +69,8 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
   if (mask & FIELD_HP) out.push(entry.hp as number, entry.maxHp as number);
   if (mask & FIELD_KIND) out.push(getCoopDefenseEnemyKindIndex(entry.kind as string));
   if (mask & FIELD_BURN) {
-    out.push((entry.burnStacks as number) + (entry.burnVisualStyle === 'void' ? 0.5 : 0));
+    // Brandstil im Nachkommaanteil: normal 0, allied 0.25, void 0.5 (alle binär exakt).
+    out.push((entry.burnStacks as number) + (entry.burnVisualStyle === 'void' ? 0.5 : entry.burnVisualStyle === 'allied' ? 0.25 : 0));
   }
   if (mask & FIELD_FACTION) {
     out.push(entry.faction === 'allied' ? 1 : 0, entry.ownerId ?? '', entry.ownerColor ?? 0);
@@ -123,7 +124,8 @@ export function decodeEnemyUpserts(stream: readonly (number | string)[]): Synced
     if (mask & FIELD_BURN) {
       const packedBurn = stream[i++] as number;
       entry.burnStacks = Math.floor(packedBurn);
-      entry.burnVisualStyle = packedBurn - entry.burnStacks >= 0.5 ? 'void' : 'normal';
+      const styleFraction = packedBurn - entry.burnStacks;
+      entry.burnVisualStyle = styleFraction >= 0.5 ? 'void' : styleFraction >= 0.25 ? 'allied' : 'normal';
     }
     if (mask & FIELD_FACTION) {
       entry.faction = (stream[i++] as number) === 1 ? 'allied' : 'hostile';

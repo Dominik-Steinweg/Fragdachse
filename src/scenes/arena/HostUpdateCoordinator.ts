@@ -1419,7 +1419,8 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
    *
    * Hat ein Spieler die Bombe an seiner Reflexkuppel abgefangen, gehört sie ihm – die Brut
    * schlüpft dann als sein Verbündeter und verhält sich wie ein per Nekromantie wiederbelebter
-   * Dachs (siehe NecromancySystem.captureAlly).
+   * Dachs (siehe NecromancySystem.captureAlly). Die Bombe eines verbündeten Werfers gehört dessen
+   * Besitzer; sie zählt aber ins Ally-Limit.
    */
   private spawnEnemiesFromGrenade(
     x: number, y: number,
@@ -1429,18 +1430,29 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     const enemyManager = this.enemyManager;
     if (!enemyManager || !hasCoopDefenseEnemyKind(effect.enemyKind)) return;
     const capturedByPlayer = this.ctx.playerManager.getPlayer(ownerId) !== undefined;
-    const originId = capturedByPlayer ? undefined : enemyManager.getEnemy(ownerId)?.originId;
+    // Wirft ein verbündeter Dachs, gehört die Brut dem Spieler, dem der Werfer gehört.
+    const alliedThrowOwnerId = capturedByPlayer ? undefined : effect.allyOwnerId;
+    const capturingPlayerId = capturedByPlayer ? ownerId : alliedThrowOwnerId;
+    const originId = capturingPlayerId ? undefined : enemyManager.getEnemy(ownerId)?.originId;
+    const necromancy = capturingPlayerId
+      ? this.worldFramePort?.getShootingRange?.()?.necromancy ?? this.coopMissionRuntime?.necromancySystem
+      : undefined;
 
     const baseAngle = Phaser.Math.RND.realInRange(0, Math.PI * 2);
     for (let index = 0; index < effect.count; index += 1) {
       const angle = baseAngle + index * (Math.PI * 2 / Math.max(1, effect.count));
       const spawnX = x + Math.cos(angle) * effect.offsetPx;
       const spawnY = y + Math.sin(angle) * effect.offsetPx;
-      // Scheitert die Übernahme (Abfänger inzwischen tot), schlüpft die Brut regulär feindlich –
-      // die Bombe soll nicht stillschweigend verpuffen.
-      const captured = capturedByPlayer
-        ? (this.worldFramePort?.getShootingRange?.()?.necromancy ?? this.coopMissionRuntime?.necromancySystem)?.captureAlly(ownerId, spawnX, spawnY, effect.enemyKind) ?? null
+      const captured = capturingPlayerId
+        ? necromancy?.captureAlly(capturingPlayerId, spawnX, spawnY, effect.enemyKind, {
+          respectAllyLimit: alliedThrowOwnerId !== undefined,
+        }) ?? null
         : null;
+      // Die Brut eines verbündeten Werfers schlüpft nie feindlich: am Ally-Limit oder ohne
+      // lebenden Besitzer verpufft sie.
+      if (!captured && alliedThrowOwnerId !== undefined) continue;
+      // Scheitert die Übernahme an der Reflexkuppel (Abfänger inzwischen tot), schlüpft die Brut
+      // regulär feindlich – die Bombe soll nicht stillschweigend verpuffen.
       if (!captured) {
         enemyManager.hostSpawnAtWorld(
           spawnX,

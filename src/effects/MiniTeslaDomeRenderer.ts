@@ -1,17 +1,19 @@
 import * as Phaser from 'phaser';
-import { DEPTH } from '../config';
+import { ALLIED_COLOR, DEPTH } from '../config';
 import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
 import type { EnemyVisualSource } from '../entities/EnemyVisualSource';
 import { WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import type { TeslaDomeWeaponFireConfig } from '../loadout/LoadoutConfig';
 import { registerGraphicsObject } from './EffectUtils';
 import type { LightingSystem } from './LightingSystem';
-import { TESLA_VOID_RECIPE, TeslaFieldVisual, writeTeslaPalette, type TeslaFieldState } from './TeslaFieldVisual';
+import { TESLA_ALLIED_RECIPE, TESLA_VOID_RECIPE, TeslaFieldVisual, writeTeslaPalette, type TeslaFieldState } from './TeslaFieldVisual';
 
 /** Aufgehelltes Violett der Kuppel – die satte Feldfarbe trägt als Licht zu wenig Grün. */
 const MINI_DOME_LIGHT_COLOR = 0xdfb4ff;
 /** Satte Grundfarbe, falls die Waffe keine eigene Projektilfarbe trägt. */
 const MINI_DOME_FALLBACK_COLOR = 0x9b32ff;
+/** Licht der Kuppel verbündeter Gegner: aufgehelltes Verbündeten-Jade. */
+const MINI_DOME_ALLIED_LIGHT_COLOR = 0xb4ffdf;
 /** Freie Entladungen vom Kern zur Hülle; der Gegner hat keine replizierten Strahlziele. */
 const IDLE_ARC_COUNT = 3;
 
@@ -19,10 +21,12 @@ interface MiniDomeVisual {
   field: TeslaFieldVisual;
   state: TeslaFieldState;
   phase: number;
+  /** Träger ist ein verbündeter Gegner: Kuppel im Verbündeten-Jade statt Violett. */
+  allied: boolean;
 }
 
 /**
- * Kleine, satt violette Tesla-Variante für Teleporter-Gegner.
+ * Kleine, satt violette Tesla-Variante für Teleporter-Gegner; bei verbündeten Trägern in Jade.
  *
  * Nutzt dieselbe prozedurale Energiehülle wie die Spieler- und Turmkuppel, liegt aber unter der
  * Gegnerfigur und zeigt statt Zielstrahlen kurze, pulsierende Entladungen vom Kern zur Hülle.
@@ -61,12 +65,13 @@ export class MiniTeslaDomeRenderer {
     const weapon = WEAPON_CONFIGS.MINI_TESLA_DOME;
     if (weapon.fire.type !== 'tesla_dome') return;
     const fire: TeslaDomeWeaponFireConfig = weapon.fire;
-    const color = weapon.projectileColor ?? MINI_DOME_FALLBACK_COLOR;
+    const hostileColor = weapon.projectileColor ?? MINI_DOME_FALLBACK_COLOR;
     const now = this.scene.time.now;
 
     for (const [enemyId, visual] of this.visuals) {
       const { field, state } = visual;
-      writeTeslaPalette(field.palette, color, TESLA_VOID_RECIPE, fire.visualWhiteness);
+      if (visual.allied) writeTeslaPalette(field.palette, ALLIED_COLOR, TESLA_ALLIED_RECIPE, fire.visualWhiteness);
+      else writeTeslaPalette(field.palette, hostileColor, TESLA_VOID_RECIPE, fire.visualWhiteness);
 
       // Jede Entladung zündet phasenversetzt, hält kurz und erlischt – nie alle gleichzeitig.
       for (let index = 0; index < IDLE_ARC_COUNT; index++) {
@@ -93,7 +98,7 @@ export class MiniTeslaDomeRenderer {
 
       this.lighting?.setLight(lightKey(enemyId), 'electricField', state.x, state.y, {
         radiusPx: Math.max(state.radius * 1.5, 70),
-        color: MINI_DOME_LIGHT_COLOR,
+        color: visual.allied ? MINI_DOME_ALLIED_LIGHT_COLOR : MINI_DOME_LIGHT_COLOR,
         intensity: 0.5,
       });
     }
@@ -135,6 +140,7 @@ export class MiniTeslaDomeRenderer {
         }, state),
         state,
         phase,
+        allied: enemy.faction === 'allied',
       };
       this.visuals.set(enemy.id, visual);
     }

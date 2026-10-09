@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { MUZZLE_FLASH_VFX, VOID_FIRE_COLOR } from '../config';
+import { ALLIED_COLOR, MUZZLE_FLASH_VFX, VOID_FIRE_COLOR } from '../config';
 import type { BulletVisualPreset, EnergyBallVariant, HitscanVisualPreset, ProjectileStyle } from '../types';
 import { mixColors } from './EffectUtils';
 import { getEmissiveScale } from './EmissiveScale';
@@ -139,7 +139,8 @@ export class MuzzleFlashRenderer {
     if (!this.acceptRepeat(sourceId, preset, now, cfg.outerDuration)) return;
     const angle = Math.atan2(vy, vx);
     const dx = Math.cos(angle), dy = Math.sin(angle);
-    const voidFlame = preset === 'flame' && color === VOID_FIRE_COLOR;
+    // Getoente Feuerfamilie (Void, Verbuendete): Funken und Licht folgen ihrer Akzentfarbe.
+    const voidFlame = preset === 'flame' && (color === VOID_FIRE_COLOR || color === ALLIED_COLOR);
     const lightColor = voidFlame ? mixColors(color!, 0xffffff, 0.58) : color ?? cfg.tint;
     this.lightOverrides.color = lightColor;
     this.lightOverrides.radiusPx = cfg.lightRadius;
