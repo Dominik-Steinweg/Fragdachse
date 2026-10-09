@@ -3065,6 +3065,7 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:effects/PlasmaChargeRenderer.ts:module/this.coreEmitter/setDepth/0","owner":"effects/PlasmaChargeRenderer.ts","component":"module/this.coreEmitter/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[10.24],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.coreEmitter/setDepth/0","expression":"CHARGE_CORE_DEPTH"}},
   {"id":"cpu:effects/PlasmaChargeRenderer.ts:module/this.sparkEmitter/setDepth/0","owner":"effects/PlasmaChargeRenderer.ts","component":"module/this.sparkEmitter/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[10.3],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.sparkEmitter/setDepth/0","expression":"CHARGE_SPARK_DEPTH"}},
   {"id":"cpu:effects/PlasmaChargeRenderer.ts:module/this.glowImage/setDepth/0","owner":"effects/PlasmaChargeRenderer.ts","component":"module/this.glowImage/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[10.16],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.glowImage/setDepth/0","expression":"CHARGE_GLOW_DEPTH"}},
+  {"id":"cpu:effects/PlayerGlowPresence.ts:module/this.lift/setDepth/0","owner":"effects/PlayerGlowPresence.ts","component":"module/this.lift/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[10.55],"blends":["NORMAL"],"profiles":["K"],"role":"effect","source":{"selector":"module/this.lift/setDepth/0","expression":"DEPTH.GROUND_FOG_COMPOSITE + 0.05"}},
   {"id":"cpu:effects/PressureShieldRenderer.ts:module/this.shell/configureAdditiveImage/0","owner":"effects/PressureShieldRenderer.ts","component":"module/this.shell/configureAdditiveImage/0","height":"body","lighting":"emissive","camera":"world","depths":[10.18],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.shell/configureAdditiveImage/0","expression":"DEPTH.PLAYERS + 0.18"}},
   {"id":"cpu:effects/PressureShieldRenderer.ts:module/this.echo/configureAdditiveImage/0","owner":"effects/PressureShieldRenderer.ts","component":"module/this.echo/configureAdditiveImage/0","height":"body","lighting":"emissive","camera":"world","depths":[10.19],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.echo/configureAdditiveImage/0","expression":"DEPTH.PLAYERS + 0.19"}},
   {"id":"cpu:effects/ProjectileBurnRenderer.ts:sync/glow/setDepth/0","owner":"effects/ProjectileBurnRenderer.ts","component":"sync/glow/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[15.28],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"sync/glow/setDepth/0","expression":"DEPTH.PROJECTILES + 0.28"}},
@@ -5646,6 +5647,20 @@ export const CPU_SOURCE_CONTRACTS = {
         "expression": "CHARGE_GLOW_DEPTH",
         "blends": [
           "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "effects/PlayerGlowPresence.ts": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.lift/setDepth/0",
+        "expression": "DEPTH.GROUND_FOG_COMPOSITE + 0.05",
+        "blends": [
+          "NORMAL"
         ]
       }
     ],

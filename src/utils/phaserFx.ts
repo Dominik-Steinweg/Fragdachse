@@ -37,6 +37,8 @@ export interface GlowHandle {
   outerStrength: number;
   innerStrength: number;
   color: number;
+  /** Filter-only: multiplies the glow distance (Phaser `Filters.Glow.scale`). */
+  scale?: number;
   renderNode?: string;
   fallbackHandle?: GlowHandle | null;
   setFallbackHandle?: (handle: GlowHandle | null) => void;

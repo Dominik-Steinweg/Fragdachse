@@ -326,6 +326,7 @@ export const DEPTH_LAYER_EXCEPTIONS: readonly LayerException[] = [
   {"id":"cpu:effects/PlasmaChargeRenderer.ts:module/this.coreEmitter/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/PlasmaChargeRenderer.ts:module/this.sparkEmitter/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/PlasmaChargeRenderer.ts:module/this.glowImage/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
+  {"id":"cpu:effects/PlayerGlowPresence.ts:module/this.lift/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/PressureShieldRenderer.ts:module/this.shell/configureAdditiveImage/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/PressureShieldRenderer.ts:module/this.echo/configureAdditiveImage/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/ProjectileBurnRenderer.ts:sync/glow/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},

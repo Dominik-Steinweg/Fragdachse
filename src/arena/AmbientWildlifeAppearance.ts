@@ -3,7 +3,7 @@ import type { SunCloudState } from '../effects/sunlight/cloudShadow';
 import { fogPatchMaskAt } from '../effects/sunlight/FogPatchField';
 import { fogDayWeight } from '../effects/groundFog/FogBankField';
 
-/** Emissive halo approximation only. Ordinary animals receive the actual fog pass.
+/** Emissive halo approximation only (fireflies, player-colour fog lift). Ordinary animals receive the actual fog pass.
  * Reuses the world-space bank/time; deliberately avoids synchronous GPU readbacks.
  * Night uses a faint mean haze, since the daylight bank field is disabled then.
  * Local obstacle pile-ups are not available here; neither emission nor light power grows. */

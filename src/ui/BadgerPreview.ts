@@ -10,7 +10,7 @@ import { PLAYER_SIZE, PLAYER_VISUAL_SCALE } from '../config';
 import { BADGER_IDLE_FRAME, BADGER_WALKING_TEXTURE_KEY, syncBadgerWalkingAnimation } from '../animations/BadgerAnimations';
 import { HeldItemVisual } from '../entities/HeldItemVisual';
 import { removeInternalFx, type GlowHandle } from '../utils/phaserFx';
-import { addPlayerGlow } from '../effects/PlayerGlow';
+import { addPlayerGlow, PLAYER_GLOW_STRENGTH } from '../effects/PlayerGlow';
 
 const ROTATION_OFFSET = Math.PI / 2;
 
@@ -45,7 +45,7 @@ export class BadgerPreview {
     if (this.glowFx) {
       this.glowTween = scene.tweens.add({
         targets:       this.glowFx,
-        outerStrength: { from: 3, to: 7 },
+        outerStrength: { from: PLAYER_GLOW_STRENGTH.min, to: PLAYER_GLOW_STRENGTH.max },
         duration:      1000,
         yoyo:          true,
         repeat:        -1,

@@ -31,7 +31,7 @@ export class TurretAnimationController {
       if (color === binding.controlColor) continue;
       if (binding.controlGlow) removeInternalFx(binding.sprite, binding.controlGlow);
       binding.controlColor = color;
-      binding.controlGlow = color === undefined ? null : addPlayerGlow(binding.sprite, color, 1.4, 10);
+      binding.controlGlow = color === undefined ? null : addPlayerGlow(binding.sprite, color, 1.4, 10, { rim: 0 });
     }
 
   }

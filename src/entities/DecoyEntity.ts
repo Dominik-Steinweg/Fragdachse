@@ -1,7 +1,9 @@
 import * as Phaser from 'phaser';
 import { HeldItemVisual } from './HeldItemVisual';
 import { removeInternalFx, type GlowHandle } from '../utils/phaserFx';
-import { addPlayerGlow } from '../effects/PlayerGlow';
+import { addPlayerGlow, PLAYER_GLOW_STRENGTH } from '../effects/PlayerGlow';
+import { PlayerGlowPresence } from '../effects/PlayerGlowPresence';
+import type { LightingSystem } from '../effects/LightingSystem';
 import { registerGraphicsObject } from '../effects/EffectUtils';
 import {
   PLAYER_VISUAL_SIZE, DEPTH, COLORS,
@@ -29,8 +31,9 @@ export class DecoyEntity {
   private currentArmor = 0;
   private currentMaxArmor = 1;
   private glowFx: GlowHandle | null = null;
+  private readonly glowPresence: PlayerGlowPresence;
   private anomalyTween: Phaser.Tweens.Tween | null = null;
-  private anomalyState = { alpha: 0.92, outerStrength: 4.2 };
+  private anomalyState = { alpha: 0.92, outerStrength: PLAYER_GLOW_STRENGTH.min };
   /**
    * Der Koeder soll wie sein Besitzer aussehen. Ohne getragenes Item waere er allein daran
    * zweifelsfrei zu erkennen und damit als Taeuschung wertlos.
@@ -47,6 +50,7 @@ export class DecoyEntity {
     y: number,
     colorHex: number,
     isEnemy: boolean,
+    lighting: LightingSystem | null = null,
   ) {
     this.id = id;
     this.ownerId = ownerId;
@@ -59,6 +63,7 @@ export class DecoyEntity {
     this.sprite.setDisplaySize(PLAYER_VISUAL_SIZE, PLAYER_VISUAL_SIZE);
     this.sprite.setDepth(DEPTH.PLAYERS - 0.02);
     this.glowFx = addPlayerGlow(this.sprite, colorHex);
+    this.glowPresence = new PlayerGlowPresence(scene, this.sprite, colorHex, lighting);
 
     this.heldItem = new HeldItemVisual(scene, DEPTH.PLAYERS - 0.015);
 
@@ -100,6 +105,10 @@ export class DecoyEntity {
     this.syncHeldItem();
   }
 
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.glowPresence.setLighting(lighting);
+  }
+
   /** Getragenes Loadout-Item des Besitzers. `null` blendet es aus. */
   setHeldItemId(itemId: string | null): void {
     this.heldItem.setItem(itemId);
@@ -126,6 +135,7 @@ export class DecoyEntity {
     this.armorBarBg.setPosition(x, armorY);
     this.armorBarFg.setPosition(x - ARMOR_BAR_WIDTH / 2, armorY);
     this.syncHeldItem();
+    this.glowPresence.sync(this.glowFx, true);
   }
 
   private syncHeldItem(): void {
@@ -170,7 +180,7 @@ export class DecoyEntity {
     this.anomalyTween = this.scene.tweens.add({
       targets: this.anomalyState,
       alpha: { from: 0.86, to: 0.98 },
-      outerStrength: { from: 3.6, to: 5.4 },
+      outerStrength: { from: PLAYER_GLOW_STRENGTH.decoyMin, to: PLAYER_GLOW_STRENGTH.decoyMax },
       duration: 1350,
       ease: 'Sine.easeInOut',
       yoyo: true,
@@ -194,6 +204,7 @@ export class DecoyEntity {
 
   destroy(): void {
     this.anomalyTween?.stop();
+    this.glowPresence.destroy();
     this.heldItem.destroy();
     this.hpBarBg.destroy();
     this.hpBarFg.destroy();

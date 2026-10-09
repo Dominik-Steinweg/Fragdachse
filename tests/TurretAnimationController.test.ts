@@ -58,7 +58,7 @@ describe('turret animation lifecycle', () => {
     expect(marker.visible).toBe(true); expect(label.setText).toHaveBeenCalledWith('Shift: Bemannen');
     controller.syncControl([{ id: '7', color: 0x22ddff }]); selection.sync(null);
     expect(marker.visible).toBe(false); expect(label.visible).toBe(false);
-    expect(glowFx.add).toHaveBeenCalledWith(turret.phaser, 0x22ddff, expect.any(Number), expect.any(Number));
+    expect(glowFx.add).toHaveBeenCalledWith(turret.phaser, 0x22ddff, expect.any(Number), expect.any(Number), { rim: 0 });
     const [, , scale, strength] = glowFx.add.mock.calls[0]; expect(scale).toBeGreaterThan(1); expect(strength).toBeGreaterThan(4);
     controller.syncControl([{ id: '7', color: 0x22ddff }]); expect(glowFx.add).toHaveBeenCalledOnce();
     controller.syncControl([]); expect(glowFx.remove).toHaveBeenCalledOnce();

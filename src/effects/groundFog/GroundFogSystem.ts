@@ -75,6 +75,8 @@ export class GroundFogSystem {
     scene.sys.renderer?.on('restorewebgl', this.onContextRestore);
   }
   private get active(): boolean { return !this.destroyed && this.enabled && this.strength > 0 && !this.failed; }
+  /** Strength of the fog actually composited this World (0 while off, failed or hidden for debugging). */
+  get displayedStrength(): number { return this.active && !this.debugDisplaySuppressed ? this.strength : 0; }
   addExplosion(x: number, y: number, radius: number, style: ExplosionVisualStyle = 'default'): void {
     if (!this.active || !this.reactions) return;
     const scale = ['mini_rocket', 'mini_rocket_cascade', 'he_cluster_shard', 'he_demolition_shard', 'timebomb_pop'].includes(style) ? .6

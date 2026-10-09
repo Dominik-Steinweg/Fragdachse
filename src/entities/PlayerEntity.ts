@@ -26,7 +26,8 @@ import { SpawnEffectRenderer } from '../effects/SpawnEffectRenderer';
 import { killAllAndResetParticlePositions, registerGraphicsObject, registerParticleEmitter } from '../effects/EffectUtils';
 import type { LightingSystem } from '../effects/LightingSystem';
 import { removeInternalFx, type GlowHandle } from '../utils/phaserFx';
-import { addPlayerGlow } from '../effects/PlayerGlow';
+import { addPlayerGlow, PLAYER_GLOW_STRENGTH } from '../effects/PlayerGlow';
+import { PlayerGlowPresence } from '../effects/PlayerGlowPresence';
 import {
   PLAYER_SIZE, PLAYER_VISUAL_SIZE, DEPTH, COLORS, BURROW_WINDUP_DURATION_MS,
   toCssColor,
@@ -123,6 +124,8 @@ export class PlayerEntity {
   // Glow-Aura für Spielerfarbe
   private glowFx: GlowHandle | null = null;
   private glowTween: Phaser.Tweens.Tween | null = null;
+  /** Spielerfarbe gegen Nebel und Nacht: Halo über dem Nebel und Bodenlicht. */
+  private glowPresence: PlayerGlowPresence | null = null;
   private spawnShine: Phaser.GameObjects.Image | null = null;
   private spawnShineTween: Phaser.Tweens.Tween | null = null;
   private spawnShineProgress = 0;
@@ -222,6 +225,7 @@ export class PlayerEntity {
 
       // Weicher Außen-Glow derselben animierten Silhouette wie in Vorschau und Köder.
       this.glowFx = addPlayerGlow(this.sprite, profile.colorHex);
+      this.glowPresence = new PlayerGlowPresence(scene, this.sprite, profile.colorHex, lighting);
       this.startDefaultGlowTween();
 
       this.heldItem = new HeldItemVisual(scene, DEPTH.PLAYERS + 0.02);
@@ -694,6 +698,7 @@ export class PlayerEntity {
    */
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
+    this.glowPresence?.setLighting(lighting);
     this.spawnEffectRenderer?.setLightingSystem(lighting);
     this.burnRenderer?.setLightingSystem(lighting, `entityburn:player:${this.id}`);
   }
@@ -776,7 +781,7 @@ export class PlayerEntity {
       this.glowFx.outerStrength = 22;
       this.glowTween = scene.tweens.add({
         targets:       this.glowFx,
-        outerStrength: 5,
+        outerStrength: PLAYER_GLOW_STRENGTH.min,
         duration:      480,
         ease:          'Quad.easeOut',
         onComplete:    () => {
@@ -991,6 +996,8 @@ export class PlayerEntity {
     this.syncSpawnShine();
     this.syncStealthOverlay();
     this.syncHeldItem();
+    this.glowPresence?.sync(this.glowFx, this.isAliveVisual && !this.isDecoyStealthed
+      && !this.turretMounted && this.burrowPhase !== 'underground' && this.burrowPhase !== 'trapped');
   }
 
   private syncHeldItem(): void {
@@ -1223,7 +1230,7 @@ export class PlayerEntity {
     this.glowTween?.stop();
     this.glowTween = this.sprite.scene.tweens.add({
       targets:       this.glowFx,
-      outerStrength: { from: 3, to: 7 },
+      outerStrength: { from: PLAYER_GLOW_STRENGTH.min, to: PLAYER_GLOW_STRENGTH.max },
       duration:      1000,
       yoyo:          true,
       repeat:        -1,
@@ -1267,6 +1274,8 @@ export class PlayerEntity {
     this.healthBar = null;
     this.armorBarBg?.destroy();
     this.armorBarFg?.destroy();
+    this.glowPresence?.destroy();
+    this.glowPresence = null;
     if (this.sprite) removeInternalFx(this.sprite, this.glowFx);
     this.glowFx = null;
     this.sprite?.destroy();

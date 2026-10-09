@@ -7,6 +7,7 @@ import { PlayerBody } from '../entities/PlayerBody';
 import { DecoyRuntime, type DecoyState, type DecoyEnd, type DecoyEndReason } from './DecoyRuntime';
 import type { PlayerManager } from '../entities/PlayerManager';
 import { DecoyEntity } from '../entities/DecoyEntity';
+import type { LightingSystem } from '../effects/LightingSystem';
 import type { WorldMetrics } from '../world/WorldMetrics';
 import type { CombatDamageMutationOutcome, TargetDamageMutationRequest } from '../combat/CombatMutation';
 import { freezeTargetMutationOutcome } from '../combat/CombatMutation';
@@ -60,6 +61,7 @@ export class DecoySystem {
   private trunkGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
   private baseGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
   private worldMetrics: WorldMetrics | null = null;
+  private lighting: LightingSystem | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -84,6 +86,11 @@ export class DecoySystem {
   setLifecyclePort(port: DecoyLifecyclePort | null): void { this.lifecycle = port; }
   setStealthBrokenHandler(handler: typeof this.stealthBroken): void { this.stealthBroken = handler; }
   setWorldMetrics(metrics: WorldMetrics | null): void { this.worldMetrics = metrics; }
+  /** Der Köder trägt dasselbe Bodenlicht in Spielerfarbe wie sein Besitzer. */
+  setLightingSystem(lighting: LightingSystem | null): void {
+    this.lighting = lighting;
+    for (const entity of this.entities.values()) entity.setLightingSystem(lighting);
+  }
 
   setObstacleGroups(
     rockGroup: Phaser.Physics.Arcade.StaticGroup | null,
@@ -120,7 +127,7 @@ export class DecoySystem {
     body.body.setVelocity(Math.cos(angle) * decoy.speed, Math.sin(angle) * decoy.speed);
     if (this.presentationEnabled) {
       const entity = new DecoyEntity(this.scene, decoy.id, playerId, body.x, body.y, playerColor,
-        this.bridge.isEnemyPair(this.bridge.getLocalPlayerId(), playerId));
+        this.bridge.isEnemyPair(this.bridge.getLocalPlayerId(), playerId), this.lighting);
       entity.setRotation(angle);
       entity.updateVitals(decoy.hp, decoy.maxHp, decoy.armor, decoy.maxArmor);
       this.entities.set(decoy.id, entity);
@@ -192,6 +199,7 @@ export class DecoySystem {
           snapshot.y,
           snapshot.color,
           this.bridge.isEnemyPair(localPlayerId, snapshot.ownerId),
+          this.lighting,
         );
         this.entities.set(snapshot.id, entity);
       }
