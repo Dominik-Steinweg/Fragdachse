@@ -1128,6 +1128,7 @@ export class NetworkBridge {
         this.clearWeapon2PredictionState(state.id);
         if (hadColor) this.reconcileColorPool();
         this.quitCbs.forEach(cb => cb(state.id));
+        this.hostPublishRoomStatistics();
         this.hostPublishLobbySync();
       });
 
@@ -5057,7 +5058,7 @@ export class NetworkBridge {
     this.roomStatistics.recordCompletedPvpMatch(eligiblePlayerIds, winnerIds);
   }
 
-  /** Liefert die Raumstatistik für alle aktuell verbundenen Spieler. */
+  /** Raumhistorie nach Spieler-ID, mit aktuellen Profilen der noch verbundenen Spieler. */
   getRoomPlayerStatistics(): RoomPlayerStatistics[] {
     if (isHost()) {
       for (const profile of this.getConnectedPlayers()) this.roomStatistics.ensurePlayer(profile);
@@ -5066,12 +5067,17 @@ export class NetworkBridge {
     const raw = getState(KEY_ROOM_STATS);
     if (!Array.isArray(raw)) return [];
     return raw.filter((entry): entry is RoomPlayerStatistics => this.isValidRoomStatisticsEntry(entry))
-      .map((entry) => ({ ...entry }));
+      .map((entry) => {
+        const profile = this.getPlayerProfile(entry.id);
+        return profile
+          ? { ...entry, name: profile.name, colorHex: profile.colorHex, teamId: profile.teamId ?? null }
+          : { ...entry };
+      });
   }
 
   hostPublishRoomStatistics(): void {
     if (!isHost()) return;
-    setState(KEY_ROOM_STATS, this.roomStatistics.snapshot(), true);
+    setState(KEY_ROOM_STATS, this.getRoomPlayerStatistics(), true);
   }
 
   /** Neue Spieler erhalten Defaults; Resume und Rundenwechsel behalten ihre Werte. */
@@ -5417,6 +5423,8 @@ export class NetworkBridge {
       }
       const nextProfile: PlayerProfile = { id: state.id, name: nextName, colorHex: nextColor, teamId, voiceChecksum };
       this.connectedPlayers.set(state.id, nextProfile);
+      // Preserve the latest known display data even if this player leaves before the next snapshot.
+      if (isHost()) this.roomStatistics.ensurePlayer(nextProfile);
       this.connectedPlayersCacheDirty = true;
       return nextProfile;
     }

@@ -4,6 +4,7 @@ import { burnerRules, target } from './PlasmaBurnerTestFixture';
 import type { PlasmaBurnerPulseRequest } from '../src/combat/plasmaBurner/PlasmaBurnerContracts';
 import type { PlasmaBurnerTarget } from '../src/combat/plasmaBurner/PlasmaBurnerTargetPolicy';
 import { fakeEntity } from './fakeEntity';
+import { resolveCoopDefenseWorldMetrics } from '../src/world/WorldMetrics';
 import { describe, expect, it, vi } from 'vitest';
 import { TargetStatusSystem, VULNERABILITY_INCOMING_DAMAGE_BONUS } from '../src/systems/TargetStatusSystem';
 
@@ -968,6 +969,86 @@ describe('CombatSystem melee query target set', () => {
   });
 });
 
+describe('offensive hitscan ally passthrough', () => {
+  function fixture() {
+    const f = makeSupportCombatHarness();
+    f.combat.setWorldMetrics({ ...resolveCoopDefenseWorldMetrics(64, 32), offsetX: 0, offsetY: 0 });
+    // Keep the real geometry clear of the arena boundary, with two allies before the victim.
+    f.players[0].x = 100; f.players[0].y = 100;
+    f.players[1].x = 200; f.players[1].y = 100;
+    f.players[2].x = 400; f.players[2].y = 100;
+    f.players.push(fakeEntity({ id: 'ally-2', x: 280, y: 100, body: { enable: true } }));
+    f.combat.initPlayer('ally-2');
+    vi.mocked(f.bridge.areTeammates).mockImplementation((a, b) =>
+      a === 'shooter' && (b === 'ally' || b === 'ally-2'));
+    const options = { shooterId: 'shooter', startX: 130, startY: 100,
+      angle: 0, range: 500, traceThickness: 4, applyFavorTheShooter: false };
+    return { ...f, options };
+  }
+
+  it.each([true, false])('skips allies for both default and explicit offensive traces (host=%s)', host => {
+    const { combat, bridge, options } = fixture();
+    vi.mocked(bridge.isHost).mockReturnValue(host);
+    for (const purpose of [undefined, 'directFire'] as const) {
+      expect(combat.traceHitscan({ ...options, purpose, applyFavorTheShooter: host }))
+        .toMatchObject({ hitPlayerId: 'victim', hitObstacle: false, endX: 382, endY: 100 });
+    }
+    expect(combat.traceHitscan({ ...options, purpose: 'support' }))
+      .toMatchObject({ hitPlayerId: 'ally', endX: 182 });
+  });
+
+  it('reaches maximum range or the next real blocker when only allies are in the way', () => {
+    const { combat, players, options } = fixture();
+    players[2].y = 300;
+    expect(combat.traceHitscan(options))
+      .toMatchObject({ hitPlayerId: null, hitObstacle: false, endX: 630 });
+    combat.setArenaObstacles([{ active: true,
+      getBounds: () => new Phaser.Geom.Rectangle(350, 80, 20, 40) }] as never, []);
+    expect(combat.traceHitscan(options))
+      .toMatchObject({ hitPlayerId: null, hitObstacle: true, endX: 350 });
+  });
+
+  it('damages the enemy and extends the ASMD detonation search beyond allies without ally reactions', () => {
+    const { combat, bridge, options } = fixture();
+    const damageTaken = vi.fn();
+    combat.setPlayerDamageTakenHandler(damageTaken);
+    const detonation = vi.fn();
+    combat.setDetonationSystem({ checkHitscanDetonations: detonation } as never);
+    const weapon = WEAPON_CONFIGS.ASMD_PRIM;
+    resolveHitscan(combat, 'shooter', options.startX, options.startY, 0, options.range,
+      10, options.traceThickness, 0xffffff, 0, weapon.id, 'asmd_primary',
+      undefined, 'weapon1', undefined, weapon.detonator);
+    expect(combat.getHP('victim')).toBe(90);
+    for (const id of ['shooter', 'ally', 'ally-2']) expect(combat.getHP(id)).toBe(100);
+    expect(damageTaken).toHaveBeenCalledOnce();
+    expect(damageTaken.mock.calls[0][0]).toBe('victim');
+    expect(vi.mocked(bridge.broadcastHitscanTracer).mock.calls[0].slice(0, 7))
+      .toEqual([130, 100, 382, 100, 0xffffff, 4, 'player']);
+    // An ASMD Secondary at x=320 is inside the detonation segment, beyond both allies.
+    expect(detonation).toHaveBeenCalledExactlyOnceWith(130, 100, 382, 100,
+      'shooter', weapon.detonator, 'weapon1');
+  });
+
+  it('passes allies before and after a portal while preserving the gap between trace segments', () => {
+    const { combat, players, options } = fixture();
+    players[3].x = 560; players[2].x = 650;
+    combat.setPortalQueryPort({ getPortalPairs: () => [{ id: 'pair', ownerId: 'shooter',
+      a: { x: 300, y: 100 }, b: { x: 500, y: 100 }, radius: 16, reentryDistance: 48,
+      damageBonus: 0.6, createdAt: 0, expiresAt: 1000 }], isPortalFriendly: () => true });
+    const path = combat.traceHitscanPath(options);
+    expect(path.map(s => [s.startX, s.trace.endX, s.trace.hitPlayerId]))
+      .toEqual([[130, 284, null], [484, 632, 'victim']]);
+  });
+
+  it('still heals the first allied player with the actual support trace', () => {
+    const { combat } = fixture();
+    bindBurner(combat);
+    combat.applyDamage('ally', 40, false, 'victim', 'test');
+    pulse(combat, 'shooter', { x: 130, y: 100, targetX: 630, targetY: 100 });
+    expect(combat.getHP('ally')).toBe(85);
+    expect(combat.getHP('victim')).toBe(100);
+  });
+});
 describe('Plasmabrenner hitscan support impact', () => {
   it('preserves the explicit character team-damage rule when an explosion retains its source', () => {
     const { combat } = makeSupportCombatHarness();

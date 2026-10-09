@@ -3645,6 +3645,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     let hitDecoyId: number | null = null;
     for (const player of this.playerManager.getAllPlayers()) {
       if (!this.isHitscanTargetCandidate(player.id, shooterId, includeShooter)) continue;
+      // Offensive traces pass allies; support traces must retain their healing contacts.
+      if (options.purpose !== 'support' && !this.canDamageTarget(shooterId, player.id)) continue;
 
       if (player.id === shooterId) {
         // A muzzle overlapping its moving owner must be allowed to leave the owner's

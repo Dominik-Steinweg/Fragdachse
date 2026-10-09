@@ -78,6 +78,37 @@ function spawn(runtime: ReturnType<typeof createProjectileRuntimeTestWorld>['run
 }
 
 describe('provider-independent collision order', () => {
+  it.each(['sweep', 'overlap'] as const)('passes allies without consuming penetration or damage retention (%s)', collisionMode => {
+    const { runtime, physics } = createProjectileRuntimeTestWorld();
+    const hits: Array<{ id: string; damage: number }> = [];
+    runtime.setProjectileTargetabilityPort({
+      canDamage: (_source, target) => target.id !== 'ally',
+      canDamageOwner: () => true, isTargetCurrentlyValid: () => true,
+    });
+    runtime.setProjectileCombatPort({
+      resolveDirectImpact: ({ target, directHit }) => {
+        hits.push({ id: target.id, damage: directHit.damage }); return { accepted: true };
+      },
+      resolveExplosionCombat: () => ({ damagedTargetKeys: [] }),
+    });
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink => {
+      sink('player', 'ally', 'ally', 30, 0, 8, 22, -8, 38, 8);
+      sink('enemy', 'first', 'enemy', 60, 0, 8, 52, -8, 68, 8);
+      sink('enemy', 'second', 'enemy', 90, 0, 8, 82, -8, 98, 8);
+    } });
+    const id = spawn(runtime, request({ flight: { collisionMode,
+      penetration: { count: 1, damageRetention: 0.5 } } }));
+    runtime.runHostInteractionStage(0);
+    for (const [index, x] of [30, 60, 90].entries()) {
+      physics.handles.get(id)!.sprite.x = x;
+      runtime.runHostInteractionStage((index + 1) * 16);
+      if (index < 2) expect(runtime.activeCount).toBe(1);
+    }
+    expect(hits).toEqual([{ id: 'first', damage: 6 }, { id: 'second', damage: 3 }]);
+    expect(runtime.activeCount).toBe(0);
+    runtime.destroy();
+  });
+
   it.each([true, false])('excludes only the original target incarnation and carries stun on a confirmed bolt (original=%s)', original => {
     const { runtime, physics } = createProjectileRuntimeTestWorld();
     const hit = vi.fn(() => ({ accepted: true }));

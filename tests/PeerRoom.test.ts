@@ -420,6 +420,75 @@ describe('PeerRoom replicated state', () => {
     },
   );
 
+  it('publishes current room statistics names without the host opening the statistics first', async () => {
+    const network = new FakeNetwork();
+    const host = await createHostRoom(network);
+    const client = await addClientRoom(network);
+    const use = (room: typeof host) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    try {
+      use(host);
+      const bridge = new NetworkBridge();
+      bridge.activate();
+      bridge.recordCompletedPvpMatch(['p1'], new Set(['p1']));
+      client.room.setPlayerState('p1', 'pnm', 'Neuer Dachs', true);
+      bridge.hostPublishRoomStatistics();
+
+      use(client);
+      const receiver = new NetworkBridge();
+      // Without an activated roster, this reads only the published statistics snapshot.
+      expect(receiver.getRoomPlayerStatistics().find(entry => entry.id === 'p1')).toMatchObject({
+        name: 'Neuer Dachs', pvpMatchesPlayed: 1, pvpWins: 1,
+      });
+    } finally {
+      clearActiveSession(); client.room.destroy(); host.room.destroy();
+    }
+  });
+
+  it('keeps statistics tied to player IDs through live renames and preserves departed profiles', async () => {
+    const network = new FakeNetwork();
+    const host = await createHostRoom(network);
+    const client = await addClientRoom(network);
+    const observer = await addClientRoom(network);
+    const use = (room: typeof host) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    try {
+      use(host);
+      const bridge = new NetworkBridge();
+      bridge.activate();
+      bridge.recordCompletedPvpMatch(['p1', 'p2'], new Set(['p1']));
+      bridge.hostPublishRoomStatistics();
+      use(observer);
+      const receiver = new NetworkBridge();
+      receiver.activate();
+
+      // Names arrive independently of the statistics snapshot, including identical names.
+      client.room.setPlayerState('p1', 'pnm', 'Doppelname', true);
+      observer.room.setPlayerState('p2', 'pnm', 'Doppelname', true);
+      const entries = receiver.getRoomPlayerStatistics();
+      expect(entries).toHaveLength(3);
+      expect(entries.find(entry => entry.id === 'p1')).toMatchObject({ name: 'Doppelname', pvpWins: 1 });
+      expect(entries.find(entry => entry.id === 'p2')).toMatchObject({ name: 'Doppelname', pvpWins: 0 });
+
+      client.room.setPlayerState('p1', 'pnm', 'Letzter Name', true);
+      use(host);
+      // Normal roster reads must retain the profile even without a statistics read.
+      expect(bridge.getPlayerProfile('p1')?.name).toBe('Letzter Name');
+      // Synchronous fake delivery must run the observer's quit callback in its own session.
+      const receive = observer.transport.handlers!.onMessage;
+      observer.transport.handlers!.onMessage = (...args) => {
+        use(observer);
+        try { receive(...args); } finally { use(host); }
+      };
+      host.room.kickPlayer('p1');
+      use(observer);
+      expect(receiver.getRoomPlayerStatistics().find(entry => entry.id === 'p1')).toMatchObject({
+        name: 'Letzter Name', pvpMatchesPlayed: 1, pvpWins: 1,
+      });
+      expect(receiver.getRoomPlayerStatistics()).toHaveLength(3);
+    } finally {
+      clearActiveSession(); observer.room.destroy(); client.room.destroy(); host.room.destroy();
+    }
+  });
+
   it('orders a new player name after the reliable join even when fast traffic overtakes the roster', async () => {
     const network = new FakeNetwork();
     const host = await createHostRoom(network);
