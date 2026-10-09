@@ -47,6 +47,8 @@ import {
   resolveCoopDefenseItemIconTexture,
 } from './coopDefenseItemIcons';
 import { formatNumber, getLocale, t } from '../i18n';
+import { fitHudText } from './HudCard';
+import { formatRoomStatValue } from './RoomStatisticsModel';
 
 // ── Layout ───────────────────────────────────────────────────────────────────
 // The framed woodland illustration covers the interior; the world is visible outside.
@@ -89,8 +91,11 @@ const MAX_ROWS = 12;
 const MEDAL_SIZE = 32;
 const MEDAL_X = LEFT_X + 52;
 const NAME_X = LEFT_X + 96;
-const TEAM_X = LEFT_X + 652;
-const SCORE_X = LEFT_X + LEFT_W - ROW_INSET - 20;
+const TEAM_X = LEFT_X + 510;
+const SCORE_X = LEFT_X + 730;
+const DAMAGE_X = LEFT_X + LEFT_W - ROW_INSET - 20;
+const SCORE_W = 100;
+const DAMAGE_W = DAMAGE_X - SCORE_X - 28;
 const HEADER_ROW_Y = 356;
 const HEADER_DIVIDER_Y = 376;
 
@@ -167,6 +172,8 @@ interface ResultRow {
   name: Phaser.GameObjects.Text;
   team: Phaser.GameObjects.Text;
   score: Phaser.GameObjects.Text;
+  damage: Phaser.GameObjects.Text;
+  scoreScale: number;
   frags: number;
 }
 
@@ -680,6 +687,7 @@ export class MatchResultsOverlay {
       this.columnLabel(NAME_X, HEADER_ROW_Y, t('ui.results.player'), 0),
       this.columnLabel(TEAM_X, HEADER_ROW_Y, t('ui.results.team'), 0),
       this.columnLabel(SCORE_X, HEADER_ROW_Y, t('ui.score.frags'), 1),
+      this.columnLabel(DAMAGE_X, HEADER_ROW_Y, t('ui.results.damage'), 1),
       this.scene.add.rectangle(LEFT_CX, HEADER_DIVIDER_Y, ROW_W, 1, COLORS.GREY_5, 0.55)
         .setScrollFactor(0),
     );
@@ -702,9 +710,12 @@ export class MatchResultsOverlay {
       const score = this.scene.add.text(SCORE_X, y, '', {
         fontFamily: FONT_MONO, fontSize: '22px', fontStyle: 'bold', color: toCssColor(COLORS.GOLD_1),
       }).setOrigin(1, 0.5).setScrollFactor(0);
-      const container = this.scene.add.container(0, 0, [frame, medal, rank, name, team, score])
+      const damage = this.scene.add.text(DAMAGE_X, y, '', {
+        fontFamily: FONT_MONO, fontSize: '20px', fontStyle: 'bold', color: toCssColor(COLORS.GREY_1),
+      }).setOrigin(1, 0.5).setScrollFactor(0);
+      const container = this.scene.add.container(0, 0, [frame, medal, rank, name, team, score, damage])
         .setScrollFactor(0);
-      this.rows.push({ container, frame, medal, rank, name, team, score, frags: 0 });
+      this.rows.push({ container, frame, medal, rank, name, team, score, damage, scoreScale: 1, frags: 0 });
       objects.push(container);
     }
 
@@ -968,10 +979,16 @@ export class MatchResultsOverlay {
       row.frame.setTexture(this.ensureRowTexture(isLocal ? 'local' : (index % 2 ? 'odd' : 'even')));
       row.medal.setTexture(this.ensureMedalTexture(medalColor));
       row.rank.setText(String(index + 1));
-      row.name.setText(isLocal ? `${entry.name}  (${t('ui.results.you')})` : entry.name).setColor(toCssColor(entry.colorHex));
-      row.team.setText(entry.teamId && isTeamMode
+      fitHudText(row.name, isLocal ? `${entry.name}  (${t('ui.results.you')})` : entry.name, TEAM_X - NAME_X - 24);
+      row.name.setColor(toCssColor(entry.colorHex));
+      fitHudText(row.team, entry.teamId && isTeamMode
         ? getLocalizedTeamLabel(entry.teamId, presentation.mode).toUpperCase()
-        : t('ui.common.dash'));
+        : t('ui.common.dash'), SCORE_X - SCORE_W - TEAM_X - 24);
+      row.damage.setText(formatRoomStatValue(entry.damageDealt ?? 0, getLocale()));
+      row.damage.setScale(Math.min(1, DAMAGE_W / Math.max(1, row.damage.width)));
+      row.score.setText(String(row.frags));
+      row.scoreScale = Math.min(1, SCORE_W / Math.max(1, row.score.width * 1.18));
+      row.score.setScale(row.scoreScale);
       // Zaehlt in der Sequenz hoch; der Endwert steht in `row.frags`.
       row.score.setText('0').setColor(toCssColor(index === 0 ? COLORS.GOLD_1 : COLORS.GREY_1));
       row.container.setVisible(true).setAlpha(0).setX(-52);
@@ -1209,7 +1226,7 @@ export class MatchResultsOverlay {
           row.score.setText(String(row.frags));
           this.addTween({
             targets: row.score,
-            scale: 1.18,
+            scale: row.scoreScale * 1.18,
             duration: 110,
             yoyo: true,
             ease: 'Sine.easeOut',
@@ -1361,7 +1378,7 @@ export class MatchResultsOverlay {
     this.rows.forEach((row) => {
       if (!row.container.visible) return;
       row.container.setAlpha(1).setX(0);
-      row.score.setText(String(row.frags)).setScale(1);
+      row.score.setText(String(row.frags)).setScale(row.scoreScale);
     });
 
     if (this.presentation?.progress) {

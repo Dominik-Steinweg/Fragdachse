@@ -72,7 +72,7 @@ function activity(activityRevision: number): ActivityDescriptor {
   };
 }
 
-type DamageHandler = (targetType: string, targetId: string, attackerId: string, damage: number) => void;
+type DamageHandler = (targetType: string, targetId: string, attackerId: string, damage: number, kind?: string, faction?: string) => void;
 
 function combatBindingHarness(
   isCoopMission: () => boolean,
@@ -106,6 +106,7 @@ function combatBindingHarness(
     baseManager: null,
     worldMetrics: resolveActiveArenaWorldMetrics(),
     isCoopMission,
+    isTrainingTarget: id => id === 'training',
     isActivityActive: () => true,
     getSpawnContext: () => null,
     getWorldParticipation: () => null as never,
@@ -179,6 +180,7 @@ function combatBindingHarness(
     barriers,
     combat: combat as CombatSystem,
     damage: () => damageHandler?.('player', 'victim', 'attacker', 10),
+    reportDamage: (...args: Parameters<DamageHandler>) => damageHandler?.(...args),
     stats,
   };
 }
@@ -209,6 +211,24 @@ function beer(teamId: 'blue' | 'red', state: SyncedCaptureTheBeerBeer['state'], 
 }
 
 describe('Activity rebinding', () => {
+  it('credits only hostile combat damage, excluding training, friendly targets and self damage', () => {
+    const harness = combatBindingHarness(() => false);
+    try {
+      harness.reportDamage('enemy', 'hostile', 'attacker', 7.25, 'direct', 'hostile');
+      harness.reportDamage('player', 'victim', 'attacker', 12.5, 'burn');
+      harness.reportDamage('enemy', 'training', 'attacker', 100, 'direct', 'hostile');
+      harness.reportDamage('enemy', 'friendly', 'attacker', 100, 'direct', 'friendly');
+      harness.reportDamage('player', 'attacker', 'attacker', 100);
+      harness.reportDamage('player', 'victim', 'unknown', 100);
+      harness.reportDamage('player', 'victim', 'attacker', 0);
+      expect(harness.stats.addPlayerRoomDamage.mock.calls).toEqual([
+        ['attacker', 7.25], ['attacker', 12.5],
+      ]);
+    } finally {
+      harness.binding.destroy();
+    }
+  });
+
   it('liest Coop dynamisch durch none → A → none → B → none ohne neue Combat-Bindung', () => {
     const world = new WorldRuntime(worldContext());
     let lifecycle: WorldLifecycle | null = null;

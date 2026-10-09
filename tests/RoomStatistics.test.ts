@@ -3,7 +3,7 @@ import {
   RoomStatisticsLedger,
   resolvePvpWinnerIds,
 } from '../src/network/RoomStatistics';
-import { formatRoomWinRate, getRoomWinRate, sortRoomStatistics } from '../src/ui/RoomStatisticsModel';
+import { formatRoomStatValue, formatRoomWinRate, getRoomWinRate, sortRoomStatistics } from '../src/ui/RoomStatisticsModel';
 
 const profile = (id: string, name = id, teamId: 'blue' | 'red' | null = null) => ({
   id,
@@ -13,6 +13,12 @@ const profile = (id: string, name = id, teamId: 'blue' | 'red' | null = null) =>
 });
 
 describe('host room statistics ledger', () => {
+  it('formats damage with localized grouping and at most one decimal place', () => {
+    expect(formatRoomStatValue(1234567.25, 'de')).toBe('1.234.567,3');
+    expect(formatRoomStatValue(1234567.25, 'en')).toBe('1,234,567.3');
+    expect(formatRoomStatValue(0, 'de')).toBe('0');
+  });
+
   it('aggregates multiple rounds and modes without resetting or duplicating reconnects', () => {
     const ledger = new RoomStatisticsLedger();
     ledger.ensurePlayer(profile('p1', 'Alpha'));

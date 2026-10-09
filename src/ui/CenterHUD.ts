@@ -779,7 +779,7 @@ export class CenterHUD {
         side: 'left',
         tone: 'orange',
         title: getUtilityHudDisplayName(data.utilityId, data.utilityAction, data.persistentBaseRewardId),
-        value: data.utilityStatusLabel ?? charges,
+        value: data.utilityStatusLabel || charges,
         frac: Phaser.Math.Clamp(1 - data.utilityCooldownFrac, 0, 1),
         energy: data.isTemporaryUtilitySelected ? 1 : 0,
         dim: data.utilityBlocked === true,

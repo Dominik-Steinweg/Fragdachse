@@ -32,6 +32,15 @@ function result(
 }
 
 describe('MatchResultsModel', () => {
+  it('does not use damage to rank players or break a frag tie', () => {
+    const a = { ...result('a', 5), damageDealt: 1 };
+    const b = { ...result('b', 5), damageDealt: 1000 };
+    const c = { ...result('c', 4), damageDealt: 2000 };
+    expect(sortMatchLeaderboard([c, b, a]).map(entry => entry.id)).toEqual(['a', 'b', 'c']);
+    expect(resolvePersonalMatchOutcome('deathmatch', 'a', [a, b, c], null)).toBe('draw');
+    expect(resolvePersonalMatchOutcome('deathmatch', 'c', [a, b, c], null)).toBe('defeat');
+  });
+
   it('requires restart confirmation for new rewards, but not XP alone or old unspent points', () => {
     const before = getCoopDefenseProgressSnapshot(getCoopDefenseXpThresholdForLevel(3));
     const after = getCoopDefenseProgressSnapshot(before.totalXp + 1);

@@ -308,6 +308,8 @@ export interface RoundResult {
   name:     string;
   colorHex: number;
   frags:    number;
+  /** Tatsächlich verursachter Schaden dieser Runde; ältere Snapshots enthalten das Feld nicht. */
+  damageDealt?: number;
   teamId:   TeamId | null;
   /** Gemeinsame Match-Metadaten; pro Zeile wiederholt, damit Ergebnis und Kontext atomar replizieren. */
   roundEndedAt: number;
@@ -811,6 +813,8 @@ export class NetworkBridge {
   private playerStateMap   = new Map<string, PlayerState>();
   /** Host-only: lebt laenger als eine Runde und wird nur mit KEY_ROOM_STATS veroeffentlicht. */
   private readonly roomStatistics = new RoomStatisticsLedger();
+  /** Host-only; von Rundenteilnahme-Start bis zum Abbau nach dem Ergebnissnapshot. */
+  private roundDamageDealt: Map<string, number> | null = null;
   /**
    * Cache fuer {@link getPlayerCommittedLoadout}, geschluesselt auf die Referenz des rohen
    * Netzwerk-Zustands. Ein neuer Snapshot bringt ein neues Rohobjekt und invalidiert den
@@ -2000,6 +2004,7 @@ export class NetworkBridge {
   ): void {
     if (!isHost()) return;
     const participation = createRoundParticipationState(roundStartTime, participantIds, roundRevision);
+    this.roundDamageDealt = new Map();
     // Capture independent sanitized values before participation/phase can expose this round.
     // The client-owned lobby commit may subsequently change or disappear, including on resume.
     const loadouts = Object.fromEntries(participation.participantIds.flatMap(playerId => {
@@ -2159,6 +2164,7 @@ export class NetworkBridge {
   /** Host-only: Rollen-Snapshot nach Rundenende loeschen; in der naechsten Lobby gilt normaler Join. */
   hostResetRoundParticipation(): void {
     if (!isHost()) return;
+    this.roundDamageDealt = null;
     setState(KEY_ROUND_PARTICIPATION, null, true);
     setState(KEY_ROUND_LOADOUTS, null, true);
   }
@@ -5011,7 +5017,16 @@ export class NetworkBridge {
   /** Host-only: addiert tatsächlich verursachten Schaden ohne Rundungs-/Overkill-Verlust. */
   addRoomStatistic(playerId: string, counter: RoomStatisticsCounter, amount = 1): void {
     if (!isHost() || !this.canPlayerReceiveRoundRewards(playerId)) return;
+    if (!Number.isFinite(amount) || amount <= 0) return;
     this.roomStatistics.add(playerId, counter, amount);
+    if (counter === 'damageDealt' && this.roundDamageDealt) {
+      this.roundDamageDealt.set(playerId, this.getPlayerRoundDamage(playerId) + amount);
+    }
+  }
+
+  /** Hostseitiger Rundenzähler; Clients lesen den abgeschlossenen Wert aus RoundResult. */
+  getPlayerRoundDamage(playerId: string): number {
+    return this.roundDamageDealt?.get(playerId) ?? 0;
   }
 
   addPlayerRoomDamage(playerId: string, amount: number): void {

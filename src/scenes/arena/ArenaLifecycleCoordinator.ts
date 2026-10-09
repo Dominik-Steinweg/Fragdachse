@@ -2045,6 +2045,7 @@ export class ArenaLifecycleCoordinator {
           name:     p.name,
           colorHex: p.colorHex,
           frags:    bridge.getPlayerFrags(p.id),
+          damageDealt: bridge.getPlayerRoundDamage(p.id),
           teamId,
           roundEndedAt,
           roundRevision: roundState?.roundRevision,

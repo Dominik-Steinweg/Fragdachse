@@ -421,6 +421,7 @@ export const enUi = {
   "ui.results.leaderboard": "MATCH LEADERBOARD",
   "ui.results.rank": "RANK",
   "ui.results.player": "PLAYER",
+  "ui.results.damage": "DAMAGE",
   "ui.results.team": "TEAM",
   "ui.results.progress": "PROGRESS",
   "ui.results.level": "LEVEL {level}",

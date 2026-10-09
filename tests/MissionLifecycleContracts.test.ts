@@ -168,6 +168,51 @@ describe('mission lifecycle – spectator requests', () => {
 });
 
 describe('mission lifecycle – durable scores', () => {
+  it('keeps fractional round damage separate from room totals and replicates the frozen result reliably', async () => {
+    const [hostRoom, clientRoom] = await createRoom(2);
+    try {
+      const host = bridgeFor(hostRoom);
+      const playerId = hostRoom.room.getLocalPlayerId();
+      const idleId = clientRoom.room.getLocalPlayerId();
+      hostStartMission(host, 4711);
+      host.addPlayerRoomDamage(playerId, 7.25);
+      host.addPlayerRoomDamage(playerId, 12.5);
+      for (const amount of [0, -1, NaN, Infinity]) host.addPlayerRoomDamage(playerId, amount);
+      host.addPlayerRoomDamage('nonparticipant', 100);
+      expect(host.getPlayerRoundDamage(playerId)).toBe(19.75);
+      expect(host.getPlayerRoundDamage(idleId)).toBe(0);
+      expect(host.getPlayerRoundDamage('nonparticipant')).toBe(0);
+      const roomDamage = () => host.getRoomPlayerStatistics().find(entry => entry.id === playerId)?.damageDealt;
+      expect(roomDamage()).toBe(19.75);
+
+      for (const link of hostRoom.transport.links) link.fastReady = false;
+      host.publishRoundResults([{
+        id: playerId, name: 'Player', colorHex: 0xffffff, frags: 1, teamId: null,
+        damageDealt: host.getPlayerRoundDamage(playerId), roundEndedAt: 100,
+        roundRevision: 4711, gameMode: 'deathmatch', mapName: 'Arena',
+      }]);
+      hostCompleteMission(host, 'victory', 100);
+      host.addPlayerRoomDamage(playerId, 200);
+      expect(host.getPlayerRoundDamage(playerId)).toBe(0);
+      expect(roomDamage()).toBe(19.75);
+      hostRoom.room.update();
+      const client = bridgeFor(clientRoom);
+      client.addPlayerRoomDamage(playerId, 999);
+      expect(client.getPlayerRoundDamage(playerId)).toBe(0);
+      expect(client.getRoundResults()).toMatchObject([{ damageDealt: 19.75 }]);
+
+      setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'ABC123' });
+      hostStartMission(host, 4712);
+      expect(host.getPlayerRoundDamage(playerId)).toBe(0);
+      host.addPlayerRoomDamage(playerId, 2.5);
+      expect(host.getPlayerRoundDamage(playerId)).toBe(2.5);
+      expect(roomDamage()).toBe(22.25);
+    } finally {
+      clearActiveSession();
+      clientRoom.room.destroy(); hostRoom.room.destroy();
+    }
+  });
+
   it.each(['increment', 'award', 'reset'] as const)('delivers a one-time %s even when fast state is lost', async action => {
     const [hostRoom, clientRoom] = await createRoom(2);
     try {

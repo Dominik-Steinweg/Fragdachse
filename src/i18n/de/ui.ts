@@ -421,6 +421,7 @@ export const deUi = {
   "ui.results.leaderboard": "MATCH-LEADERBOARD",
   "ui.results.rank": "RANG",
   "ui.results.player": "SPIELER",
+  "ui.results.damage": "SCHADEN",
   "ui.results.team": "TEAM",
   "ui.results.progress": "FORTSCHRITT",
   "ui.results.level": "LEVEL {level}",

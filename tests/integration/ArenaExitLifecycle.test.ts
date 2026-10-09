@@ -439,6 +439,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     ]);
     vi.spyOn(bridge, 'getPlayerTeam').mockReturnValue('blue');
     vi.spyOn(bridge, 'getPlayerFrags').mockReturnValue(10);
+    vi.spyOn(bridge, 'getPlayerRoundDamage').mockReturnValue(1234.5);
     const published = vi.spyOn(bridge, 'publishRoundResults').mockImplementation(() => {});
     const recorded = vi.spyOn(bridge, 'recordCompletedPvpMatch').mockImplementation(() => {});
     vi.spyOn(bridge, 'hostPublishRoomStatistics').mockImplementation(() => {});
@@ -452,7 +453,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     scores.blue = scores.red = 0;
     const wireResults = JSON.parse(JSON.stringify(published.mock.calls[0][0]));
     expect(wireResults).toEqual([expect.objectContaining({
-      id: 'remaining', teamId: 'blue', teamScore: 1, teamScores: { blue: 1, red: 3 },
+      id: 'remaining', teamId: 'blue', teamScore: 1, teamScores: { blue: 1, red: 3 }, damageDealt: 1234.5,
     })]);
     expect(recorded).toHaveBeenCalledWith(['remaining'], new Set());
     expect(victory).not.toHaveBeenCalled();
