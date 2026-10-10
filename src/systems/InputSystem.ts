@@ -304,6 +304,8 @@ export class InputSystem {
   private selectedRadialAction: RadialActionRef | null = null;
   private readonly knownTemporaryUtilityIds = new Set<string>();
   private readonly radialSelectionHistory: RadialActionRef[] = [];
+  /** Activity, zu der die Rad-Auswahl gehoert; `undefined` = noch keine beobachtet. */
+  private radialSelectionActivityRevision: number | null | undefined = undefined;
   private radialCancelAwaitingRelease = false;
   private constructionPlacementActive = false;
   private dismantlePlacementActive = false;
@@ -629,6 +631,7 @@ export class InputSystem {
   }
 
   private getRadialActionStates(now = this.getCooldownNow()): RadialActionState[] {
+    this.resetRadialSelectionOnActivityChange();
     const capacity = this.radialGetCapacity?.();
     const capabilities = this.radialGetCapabilities?.() ?? {
       canUseUtility: this.inputEnabled,
@@ -718,15 +721,25 @@ export class InputSystem {
         return;
       }
     }
-    const ordinaryUtility = actions.find((entry) => entry.ref.kind === 'utility');
-    this.selectedRadialAction = ordinaryUtility?.ref
-      ? cloneRadialActionRef(ordinaryUtility.ref)
-      : actions[0]?.ref
-        ? cloneRadialActionRef(actions[0].ref)
-        : null;
+    // Default ist der erste Rad-Eintrag (Utilities in Slot-Reihenfolge vorn). Management-Aktionen
+    // werden nie automatisch gewaehlt: Kaemen die Tools erst nach ihnen an (z. B. Loadout-Snapshot
+    // beim Rundenstart noch nicht repliziert), bliebe sonst `Verschieben` dauerhaft ausgewaehlt.
+    const fallback = actions.find((entry) => entry.category !== 'managementAction');
+    this.selectedRadialAction = fallback ? cloneRadialActionRef(fallback.ref) : null;
     if (!this.selectedRadialAction || this.selectedRadialAction.kind !== 'persistent-reward') {
       this.persistentRewardPlacementActive = false;
     }
+  }
+
+  /** Jede Activity (Runde) startet mit der Default-Auswahl statt der Wahl aus der vorigen Runde. */
+  private resetRadialSelectionOnActivityChange(): void {
+    const activityRevision = this.bridge.getActivityDescriptor?.()?.activityRevision ?? null;
+    const previous = this.radialSelectionActivityRevision;
+    if (activityRevision === previous) return;
+    this.radialSelectionActivityRevision = activityRevision;
+    if (previous === undefined) return;
+    this.selectedRadialAction = null;
+    this.radialSelectionHistory.length = 0;
   }
 
   private applyRadialSelection(selection: RadialActionRef): void {

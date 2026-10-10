@@ -501,6 +501,39 @@ describe('Radial Menu V2 input', () => {
     expect(uses.mock.calls[0]?.[0]).toBe('utility');
   });
 
+  it('never auto-selects a management action and defaults to the first tool once tools arrive', () => {
+    const { system } = createSystem();
+    let tools: Array<{ kind: 'utility' | 'construction'; id: string }> = [];
+    system.setupRadialActionProviders({
+      getTools: () => tools,
+      getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+      getManagementActions: () => ['reposition', 'dismantle', 'dismantle-own-all'],
+    });
+
+    expect(system.getSelectedRadialActionForHud()).toBeNull();
+
+    tools = [{ kind: 'construction', id: 'rock_barrier' }, { kind: 'utility', id: 'STINK_CLOUD' }];
+    expect(system.getSelectedRadialActionForHud()).toEqual({ kind: 'utility', utilityId: 'STINK_CLOUD' });
+  });
+
+  it('resets an explicit selection to slot 1 when a new activity starts', () => {
+    const { system, bridge } = createSystem();
+    let activityRevision = 1;
+    Object.assign(bridge, { getActivityDescriptor: () => ({ activityRevision }) });
+    system.setupRadialActionProviders({
+      getTools: () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
+      getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+      getManagementActions: () => ['reposition', 'dismantle', 'dismantle-own-all'],
+    });
+    system.getSelectedRadialActionForHud();
+    Object.assign(system, { selectedRadialAction: { kind: 'management', action: 'reposition' } });
+
+    expect(system.getSelectedRadialActionForHud()).toEqual({ kind: 'management', action: 'reposition' });
+
+    activityRevision = 2;
+    expect(system.getSelectedRadialActionForHud()).toEqual({ kind: 'utility', utilityId: 'STINK_CLOUD' });
+  });
+
   it('delegates tool-loadout utility identity without a parallel selection state', () => {
     const { system, keys } = createSystem();
     system.setupRadialActionProviders({
