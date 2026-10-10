@@ -130,7 +130,13 @@ const LOADOUT_SLOT_SIZE = 56;
 const LOADOUT_SLOT_GAP = 8;
 const LOADOUT_ROW_Y = LOADOUT_CARD_TOP + 12 + LOADOUT_SLOT_SIZE / 2;
 const LOADOUT_CARD_BOTTOM = LOADOUT_ROW_Y + LOADOUT_SLOT_SIZE / 2 + 10;
+// Gekaufte Basis-Upgrades auf der Allgemein-Karte; bei Platzmangel faechern sie ueberlappend auf.
 const LOADOUT_EMBLEM_SIZE = 40;
+const LOADOUT_EMBLEM_GAP = 6;
+const LOADOUT_EMBLEM_PAD_X = 18;
+// Ab starker Ueberdeckung wechseln die Symbole in eine versetzte Zickzack-Reihe.
+const LOADOUT_EMBLEM_STAGGER_SIZE = 32;
+const LOADOUT_EMBLEM_STAGGER_Y = 10;
 // Register: Die Tabs sitzen direkt auf der Oberkante des Baum-Blatts. Der aktive Tab ist Teil
 // des Blatts, geschlossene Tabs sind etwas niedriger und liegen hinter dessen Kante.
 const TAB_TOP = LOADOUT_CARD_BOTTOM + 10;
@@ -239,8 +245,8 @@ type LoadoutColumn = {
   active: boolean;
   /** Kategorien, die diese Spalte oeffnet; die ganze Karte wirkt als Teil ihres Tabs. */
   categoryIndices: number[];
-  /** Spalten ohne Loadout-Slot ("Allgemein") zeigen stattdessen ein Kategorie-Emblem. */
-  emblemKey: string | null;
+  /** Spalten ohne Loadout-Slot ("Allgemein") zeigen stattdessen ihre gekauften Basis-Upgrades. */
+  emblemNodes: CoopDefenseUpgradeNodeSnapshot[];
   slots: LoadoutSlotParams[];
 };
 
@@ -1148,16 +1154,15 @@ export class CoopDefenseUpgradesOverlay {
       const accentColor = this.getCategoryVisuals(category.id, progress.classId).connector;
       const centerX = this.getTabCenterX(layout, index);
       if (category.id === 'general') {
-        // Kein Loadout-Slot, aber dieselbe Spaltenform wie alle anderen Kategorien, damit die
-        // Reihe als Satz gleichwertiger Kategorien gelesen wird.
-        const root = category.upgrades.find((node) => node.requires.length === 0) ?? category.upgrades[0];
+        // Kein Loadout-Slot, aber dieselbe Spaltenform wie alle anderen Kategorien. Statt eines
+        // Slots zeigt die Karte die gekauften Upgrades ohne Voraussetzung (obere Baumreihe).
         columns.push({
           centerX,
           width: layout.tabW,
           accentColor,
           active: index === this.activeCategoryIndex,
           categoryIndices: [index],
-          emblemKey: root ? this.getNodeTextureKey(root) : null,
+          emblemNodes: category.upgrades.filter((node) => node.requires.length === 0 && node.level > 0),
           slots: [],
         });
         return;
@@ -1171,7 +1176,7 @@ export class CoopDefenseUpgradesOverlay {
         accentColor,
         active: index === this.activeCategoryIndex,
         categoryIndices: [index],
-        emblemKey: null,
+        emblemNodes: [],
         slots: [{
           centerX,
           accentColor,
@@ -1223,7 +1228,7 @@ export class CoopDefenseUpgradesOverlay {
       accentColor,
       active: categoryIndices.includes(this.activeCategoryIndex),
       categoryIndices: [...categoryIndices],
-      emblemKey: null,
+      emblemNodes: [],
       slots,
     };
   }
@@ -1256,12 +1261,40 @@ export class CoopDefenseUpgradesOverlay {
       activateUi(this.scene, () => this.setActiveCategory(column.categoryIndices[0]));
     });
 
-    if (column.emblemKey && runtimeTextureExists(this.scene.textures, column.emblemKey)) {
-      const emblemKey = ensureUpgradeIcon(this.scene, getLoadoutIconTextureKey(this.scene, column.emblemKey),
-        column.active, false);
-      this.loadoutContainer.add(fitLoadoutIcon(runtimeImage(this.scene, column.centerX, LOADOUT_ROW_Y, emblemKey),
-        LOADOUT_EMBLEM_SIZE, LOADOUT_EMBLEM_SIZE).setScrollFactor(0).setAlpha(column.active ? 1 : 0.8));
-    }
+    this.renderCategoryEmblems(column);
+  }
+
+  /**
+   * Gekaufte Basis-Upgrades als Reihe ihrer Symbole – bewusst ohne Slot- oder Knotenrahmen, da
+   * sie nicht zum Loadout gehoeren. Reicht die Kartenbreite nicht, ruecken sie zusammen und
+   * ueberdecken sich leicht; bei vielen Upgrades wechseln sie in eine versetzte Zickzack-Reihe,
+   * damit jedes Symbol erkennbar bleibt. Spaetere liegen oben.
+   */
+  private renderCategoryEmblems(column: LoadoutColumn): void {
+    if (!this.loadoutContainer) return;
+    const iconKeys = column.emblemNodes
+      .map((node) => this.getNodeTextureKey(node))
+      .filter((key): key is string => key !== null && runtimeTextureExists(this.scene.textures, key));
+    const count = iconKeys.length;
+    if (count === 0) return;
+
+    const innerW = column.width - LOADOUT_EMBLEM_PAD_X * 2;
+    const stepFor = (size: number) => count > 1 ? Math.min(size + LOADOUT_EMBLEM_GAP, (innerW - size) / (count - 1)) : 0;
+    const staggered = stepFor(LOADOUT_EMBLEM_SIZE) < LOADOUT_EMBLEM_SIZE * 0.6;
+    const size = staggered ? LOADOUT_EMBLEM_STAGGER_SIZE : LOADOUT_EMBLEM_SIZE;
+    const step = stepFor(size);
+    const startX = column.centerX - (step * (count - 1)) / 2;
+    const alpha = column.active ? 1 : 0.86;
+
+    iconKeys.forEach((iconKey, index) => {
+      const x = startX + index * step;
+      const y = LOADOUT_ROW_Y + (staggered ? (index % 2 === 0 ? -1 : 1) * LOADOUT_EMBLEM_STAGGER_Y : 0);
+      this.loadoutContainer!.add(
+        fitLoadoutIcon(runtimeImage(this.scene, x, y, getLoadoutIconTextureKey(this.scene, iconKey)), size, size)
+          .setScrollFactor(0)
+          .setAlpha(alpha),
+      );
+    });
   }
 
   private renderLoadoutSlot(params: LoadoutSlotParams): void {
