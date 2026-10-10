@@ -97,6 +97,22 @@ describe('Body graph and current geometry', () => {
     world.flush(); expect(world.field.queryNavigation(32, 128).status).toBe('invalid-goal'); world.destroy();
   });
 
+  it('accepts landing points awaiting moved or missing goals, but never a confirmed dead end', () => {
+    const open = navigationTestWorld(); open.goal(224, 128); open.flush();
+    open.goal(224, 192);
+    expect(open.field.queryNavigation(32, 128).status).toBe('pending');
+    expect(open.field.isCirclePositionFreeAt(32, 128, 15)).toBe(true);
+    open.destroy();
+
+    const walled = navigationTestWorld([wall('middle', 112, 0, 144, 256)]);
+    walled.goal(224, 128); walled.flush();
+    expect(walled.field.isCirclePositionFreeAt(32, 128, 15)).toBe(false);
+    walled.goal(128, 128); walled.flush();
+    expect(walled.field.queryNavigation(32, 128).status).toBe('invalid-goal');
+    expect(walled.field.isCirclePositionFreeAt(32, 128, 15)).toBe(true);
+    walled.destroy();
+  });
+
   it('keeps an overlapping blocker closed until the final physical object is removed', () => {
     const world = navigationTestWorld([wall('first', 112, 0, 144, 256), wall('second', 112, 0, 144, 256)]);
     world.goal(224, 128); world.flush();

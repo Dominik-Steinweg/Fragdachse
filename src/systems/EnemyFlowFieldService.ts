@@ -517,9 +517,20 @@ export class EnemyFlowFieldService {
     return this.isCircleClearAt(worldX, worldY, radius, true);
   }
 
-  /** Semantischer Alias fuer Sonderfaelle wie Auftauchen: frei und vom Flowfield erreichbar. */
+  /**
+   * Landepunkt fuer Sonderfaelle wie Auftauchen: koerperlich frei und auf dem aktuellen
+   * Topologie-Graphen nicht nachweislich abgeschnitten. Anders als die Steuerung braucht ein
+   * Landepunkt kein fertiges Kostenfeld: Bewegte Ziele (`pending` bei aktueller Topologie, Anschluss
+   * bereits geprueft) oder voruebergehend fehlende Ziele (alle Spieler tot/verborgen) duerfen ein
+   * Auftauchen nicht beliebig lange verzoegern.
+   */
   isCirclePositionFreeAt(worldX: number, worldY: number, radius: number): boolean {
-    return this.isCircleFlowReachableAt(worldX, worldY, radius);
+    const geometry = this.view.geometry();
+    if (!geometry) return this.isCircleClearAt(worldX, worldY, radius, true);
+    if (!geometry.isFree(worldX, worldY, radius)) return false;
+    const status = this.queryNavigation(worldX, worldY).status;
+    if (status === 'ready' || status === 'invalid-goal') return true;
+    return status === 'pending' && this.view.snapshot()?.topologyVersion === this.view.version().topology;
   }
 
   /**
