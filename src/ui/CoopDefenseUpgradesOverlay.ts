@@ -3,7 +3,10 @@ import { UPGRADE_HEADER, UPGRADE_CONTROLS } from './UpgradeForestAssets';
 import { MATCH_RESULTS_BACKGROUND } from './MatchResultsAssets';
 import { UPGRADE_MENU } from './UpgradeMenuLayout';
 import { ensureResultsTitle } from './matchResultsTextures';
-import { ensureUpgradeSurface, ensureUpgradeIcon, ensureUpgradeFrame, ensureUpgradeXpFrame, ensureUpgradeApply } from './upgradeForestTextures';
+import {
+  ensureUpgradeSurface, ensureUpgradeIcon, ensureUpgradeXpFrame, ensureUpgradeApply,
+  ensureUpgradeRegisterTab, ensureUpgradeRegisterSheet,
+} from './upgradeForestTextures';
 import { BUTTON_CURSOR } from './gameCursor';
 import { toCssColor, BORDER, SURFACE, TEXT, textStyle, ensureModalFrame, ensureModalPanelTexture, ensureGlossyButtonTexture } from './ForestModal';
 import * as Phaser from 'phaser';
@@ -40,7 +43,7 @@ import {
 import { attachHoverEffect } from './uiHover';
 import { UiTooltip, type UiTooltipLine } from './UiTooltip';
 import { UiContextMenu, type UiContextMenuEntry } from './UiContextMenu';
-import { INTENT, FONT_MONO } from './uiTheme';
+import { INTENT, FONT_MONO, MOTION } from './uiTheme';
 import {
   COOP_DEFENSE_CLASS_DEFINITIONS,
   COOP_DEFENSE_CLASS_IDS,
@@ -120,24 +123,42 @@ const CLASS_ROW_Y = POINTS_Y + 62;
 const CLASS_BUTTON_W = 280;
 const CLASS_BUTTON_H = 52;
 const CLASS_BUTTON_GAP = 20;
-// Loadout-Block: Jede Kategorie bekommt eine Spaltenkarte, die Slot und Tab zusammenfasst.
-// Deshalb liegt die Kartenoberkante ueber der Slot-Zeile und die Unterkante unter den Tabs.
+// Loadout-Block: Jede Kategorie bekommt ueber ihrem Register-Tab eine Spaltenkarte mit ihren Slots.
 const LOADOUT_LABEL_Y = CLASS_ROW_Y + 36;
 const LOADOUT_CARD_TOP = CLASS_ROW_Y + 36;
 const LOADOUT_SLOT_SIZE = 56;
 const LOADOUT_SLOT_GAP = 8;
 const LOADOUT_ROW_Y = LOADOUT_CARD_TOP + 12 + LOADOUT_SLOT_SIZE / 2;
-const TAB_TOP = LOADOUT_ROW_Y + LOADOUT_SLOT_SIZE / 2 + 14;
-const TAB_H = 44;
+const LOADOUT_CARD_BOTTOM = LOADOUT_ROW_Y + LOADOUT_SLOT_SIZE / 2 + 10;
+const LOADOUT_EMBLEM_SIZE = 40;
+// Register: Die Tabs sitzen direkt auf der Oberkante des Baum-Blatts. Der aktive Tab ist Teil
+// des Blatts, geschlossene Tabs sind etwas niedriger und liegen hinter dessen Kante.
+const TAB_TOP = LOADOUT_CARD_BOTTOM + 10;
+const TAB_H = 46;
+const TAB_INACTIVE_INSET = 6;
 const TAB_GAP = 12;
 const TAB_MAX_W = 278;
+// Seitlicher Versatz, mit dem ein neu geoeffneter Kategorie-Baum hereingleitet.
+const CATEGORY_SLIDE_PX = 28;
 
-const CONTENT_TOP = TAB_TOP + TAB_H + 14;
+const CONTENT_TOP = TAB_TOP + TAB_H;
 const CONTENT_BOTTOM = ACTION_BTN_Y - ACTION_BTN_H / 2 - 16;
 const CONTENT_W = PANEL_W - 112;
 const CONTENT_X = CX - CONTENT_W / 2;
 const CONTENT_H = CONTENT_BOTTOM - CONTENT_TOP;
-const CONTENT_Y = CONTENT_TOP + CONTENT_H / 2;
+
+// Blatt des Registers rund um den Baum; der Rand nimmt Schatten und Kantenleuchten auf.
+const SHEET_PAD_X = 10;
+const SHEET_BOTTOM = CONTENT_BOTTOM + 6;
+const SHEET_MARGIN = 20;
+const SHEET_TEX_X = CONTENT_X - SHEET_PAD_X - SHEET_MARGIN;
+const SHEET_TEX_Y = TAB_TOP - SHEET_MARGIN;
+const SHEET_TEX_W = Math.round(CONTENT_W + (SHEET_PAD_X + SHEET_MARGIN) * 2);
+const SHEET_TEX_H = Math.round(SHEET_BOTTOM - TAB_TOP + SHEET_MARGIN * 2);
+const SHEET_TEX_KEY = '_ccd_register_sheet';
+// Weiche Ein- und Ausblendung der Baumspalten an Ober- und Unterkante des Blatts.
+const LANE_FADE_TOP = 40;
+const LANE_FADE_BOTTOM = 90;
 
 /** The tree owns only this area; the action strip below it is always reserved. */
 export const COOP_UPGRADE_TREE_BOUNDS = Object.freeze({ left: CONTENT_X, top: CONTENT_TOP,
@@ -216,7 +237,20 @@ type LoadoutColumn = {
   width: number;
   accentColor: number;
   active: boolean;
+  /** Kategorien, die diese Spalte oeffnet; die ganze Karte wirkt als Teil ihres Tabs. */
+  categoryIndices: number[];
+  /** Spalten ohne Loadout-Slot ("Allgemein") zeigen stattdessen ein Kategorie-Emblem. */
+  emblemKey: string | null;
   slots: LoadoutSlotParams[];
+};
+
+/**
+ * Teile eines Kategorie-Tabs fuer Hover-Weitergabe und Aufmerksamkeits-Welle. Der aktive Tab ist
+ * Teil des Register-Blatts und besitzt deshalb keinen eigenen Hintergrund.
+ */
+type TabView = {
+  background: Phaser.GameObjects.Image | null;
+  decoration: Phaser.GameObjects.Container;
 };
 
 /** Was ein Node im Baum ins Loadout uebernehmen kann. */
@@ -320,8 +354,14 @@ export class CoopDefenseUpgradesOverlay {
   private progressFill: Phaser.GameObjects.Image | null = null;
   private xpBarEffect: LivingBarEffect | null = null;
   private xpLabel: Phaser.GameObjects.Text | null = null;
-  private contentBg: Phaser.GameObjects.Image | null = null;
+  private registerSheet: Phaser.GameObjects.Image | null = null;
+  private registerSheetKey: string | null = null;
   private tabsContainer: Phaser.GameObjects.Container | null = null;
+  private tabLabelsContainer: Phaser.GameObjects.Container | null = null;
+  private tabViews: TabView[] = [];
+  /** Sobald eine andere Kategorie geoeffnet wurde, entfaellt die Hinweis-Welle ueber die Tabs. */
+  private categoriesExplored = false;
+  private categoryTween: Phaser.Tweens.Tween | null = null;
   private classContainer: Phaser.GameObjects.Container | null = null;
   private loadoutContainer: Phaser.GameObjects.Container | null = null;
   private loadoutHintText: Phaser.GameObjects.Text | null = null;
@@ -341,7 +381,6 @@ export class CoopDefenseUpgradesOverlay {
   private refreshPending = false;
   private nodeGlows: Array<{ target: Phaser.GameObjects.GameObject; glow: GlowHandle }> = [];
   private decorationTweens: Phaser.Tweens.Tween[] = [];
-  private tabGlows: Array<{ target: Phaser.GameObjects.GameObject; glow: GlowHandle }> = [];
   private tabTweens: Phaser.Tweens.Tween[] = [];
   private classGlows: Array<{ target: Phaser.GameObjects.GameObject; glow: GlowHandle }> = [];
   private classTweens: Phaser.Tweens.Tween[] = [];
@@ -380,8 +419,11 @@ export class CoopDefenseUpgradesOverlay {
     this.respecMenu = null;
     this.pendingRespecAction = null;
     this.progressFill = null;
-    this.contentBg = null;
+    this.registerSheet = null;
+    this.registerSheetKey = null;
     this.tabsContainer = null;
+    this.tabLabelsContainer = null;
+    this.tabViews = [];
     this.classContainer = null;
     this.loadoutContainer = null;
     this.loadoutHintText = null;
@@ -531,10 +573,16 @@ export class CoopDefenseUpgradesOverlay {
     this.tabsContainer = this.scene.add.container(0, 0).setScrollFactor(0);
     objects.push(this.tabsContainer);
 
-    this.contentBg = this.scene.add.image(CX, CONTENT_Y, this.ensureContentBgTexture(COLORS.GREY_5))
-      .setScrollFactor(0);
-    objects.push(this.contentBg);
-    objects.push(this.scene.add.image(CX, CONTENT_Y, ensureUpgradeFrame(this.scene, CONTENT_W + 36, CONTENT_H + 32)).setScrollFactor(0));
+    // Register-Blatt: aktiver Tab und Baumflaeche als eine Kontur ueber den geschlossenen Tabs.
+    this.registerSheet = this.scene.add.image(SHEET_TEX_X, SHEET_TEX_Y, '__WHITE')
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setVisible(false);
+    objects.push(this.registerSheet);
+
+    // Beschriftungen aller Tabs liegen ueber dem Blatt, damit auch der aktive Tab lesbar bleibt.
+    this.tabLabelsContainer = this.scene.add.container(0, 0).setScrollFactor(0);
+    objects.push(this.tabLabelsContainer);
 
     // Statische Lanes und Connectoren liegen getrennt von den dynamischen Nodes. Der
     // Hintergrund kann dadurch als ein einziges gebackenes Bild bestehen bleiben, wenn
@@ -649,6 +697,7 @@ export class CoopDefenseUpgradesOverlay {
     this.closing = false;
     this.xpBarEffect?.start();
     this.refresh();
+    if (!this.categoriesExplored) this.playTabAttentionWave();
 
     this.container.setVisible(true);
     this.visibilityTween?.remove();
@@ -717,6 +766,7 @@ export class CoopDefenseUpgradesOverlay {
     this.clearNodeDecorations();
     this.clearTabDecorations();
     this.clearClassDecorations();
+    this.stopCategoryTransition();
     this.xpBarEffect?.stop();
 
     this.visibilityTween?.remove();
@@ -753,12 +803,15 @@ export class CoopDefenseUpgradesOverlay {
     this.clearNodeDecorations();
     this.clearTabDecorations();
     this.clearClassDecorations();
+    this.stopCategoryTransition();
     this.xpBarEffect?.destroy();
     this.xpBarEffect = null;
     this.tooltip?.destroy();
     this.tooltip = null;
     this.container?.destroy(true);
     this.container = null;
+    this.registerSheet = null;
+    this.releaseRegisterSheet();
     this.dimRect = null;
     this.progressFill = null;
     this.treeBackgroundContainer = null;
@@ -882,7 +935,9 @@ export class CoopDefenseUpgradesOverlay {
 
   private setActiveCategory(index: number): void {
     if (index === this.activeCategoryIndex) return;
+    const direction = index > this.activeCategoryIndex ? 1 : -1;
     this.activeCategoryIndex = index;
+    this.categoriesExplored = true;
     this.hideTooltip();
     this.picker?.close();
     this.closeRespecMenu();
@@ -892,6 +947,57 @@ export class CoopDefenseUpgradesOverlay {
     this.renderLoadoutRow(progress);
     this.renderTabs(progress);
     this.renderActiveCategory(progress);
+    this.playCategoryTransition(direction);
+  }
+
+  /** Der neue Baum gleitet aus Richtung des gewaehlten Tabs herein, wie beim Umblaettern. */
+  private playCategoryTransition(direction: number): void {
+    this.stopCategoryTransition();
+    const targets = [this.treeBackgroundContainer, this.upgradesContainer]
+      .filter((target): target is Phaser.GameObjects.Container => target !== null);
+    if (targets.length === 0) return;
+    for (const target of targets) target.setPosition(direction * CATEGORY_SLIDE_PX, 0).setAlpha(0);
+    this.categoryTween = this.scene.tweens.add({
+      targets,
+      x: 0,
+      alpha: 1,
+      duration: MOTION.base,
+      ease: MOTION.ease.out,
+      onComplete: () => { this.categoryTween = null; },
+    });
+  }
+
+  private stopCategoryTransition(): void {
+    this.categoryTween?.remove();
+    this.categoryTween = null;
+    this.treeBackgroundContainer?.setPosition(0, 0).setAlpha(1);
+    this.upgradesContainer?.setPosition(0, 0).setAlpha(1);
+  }
+
+  /**
+   * Beim Oeffnen laeuft eine kurze Welle ueber die geschlossenen Kategorie-Tabs. Sie zeigt ohne
+   * Text, dass es mehr als die offene Seite gibt, und entfaellt nach dem ersten Kategoriewechsel.
+   */
+  private playTabAttentionWave(): void {
+    let order = 0;
+    for (const view of this.tabViews) {
+      if (!view.background) continue;
+      // Tabs sind an ihrer Unterkante verankert und richten sich deshalb kurz nach oben auf.
+      const targets = [view.background, view.decoration];
+      this.tabTweens.push(this.scene.tweens.add({
+        targets,
+        scaleX: 1.05,
+        scaleY: 1.12,
+        delay: 320 + order * 110,
+        duration: 170,
+        yoyo: true,
+        ease: 'Sine.easeInOut',
+        onComplete: () => {
+          for (const target of targets) target.setScale(1);
+        },
+      }));
+      order += 1;
+    }
   }
 
   private clearClassDecorations(): void {
@@ -1039,17 +1145,33 @@ export class CoopDefenseUpgradesOverlay {
         utilityIndices.push(index);
         return;
       }
-      if (category.id === 'general') return;
+      const accentColor = this.getCategoryVisuals(category.id, progress.classId).connector;
+      const centerX = this.getTabCenterX(layout, index);
+      if (category.id === 'general') {
+        // Kein Loadout-Slot, aber dieselbe Spaltenform wie alle anderen Kategorien, damit die
+        // Reihe als Satz gleichwertiger Kategorien gelesen wird.
+        const root = category.upgrades.find((node) => node.requires.length === 0) ?? category.upgrades[0];
+        columns.push({
+          centerX,
+          width: layout.tabW,
+          accentColor,
+          active: index === this.activeCategoryIndex,
+          categoryIndices: [index],
+          emblemKey: root ? this.getNodeTextureKey(root) : null,
+          slots: [],
+        });
+        return;
+      }
 
       const slot = category.id as LoadoutSlot;
       const itemId = selection[slot];
-      const accentColor = this.getCategoryVisuals(category.id, progress.classId).connector;
-      const centerX = this.getTabCenterX(layout, index);
       columns.push({
         centerX,
         width: layout.tabW,
         accentColor,
         active: index === this.activeCategoryIndex,
+        categoryIndices: [index],
+        emblemKey: null,
         slots: [{
           centerX,
           accentColor,
@@ -1100,21 +1222,46 @@ export class CoopDefenseUpgradesOverlay {
       width: spanRight - spanLeft,
       accentColor,
       active: categoryIndices.includes(this.activeCategoryIndex),
+      categoryIndices: [...categoryIndices],
+      emblemKey: null,
       slots,
     };
   }
 
   /**
-   * Spaltenkarte hinter Slots und Tab. Sie reicht von der Loadout-Zeile bis unter die Tabs,
-   * damit beide als eine Einheit in Kategoriefarbe gelesen werden; die Spalte der offenen
-   * Kategorie tritt zusaetzlich hervor.
+   * Spaltenkarte hinter den Slots, exakt ueber dem Register-Tab ihrer Kategorie und in deren
+   * Farbe; die Spalte der offenen Kategorie tritt zusaetzlich hervor.
    */
   private renderCategoryCard(column: LoadoutColumn): void {
     if (!this.loadoutContainer) return;
-    const height = TAB_TOP + TAB_H - LOADOUT_CARD_TOP;
+    const height = LOADOUT_CARD_BOTTOM - LOADOUT_CARD_TOP;
     const key = this.ensureLoadoutCardTexture(column.width, height, column.accentColor, column.active);
-    this.loadoutContainer.add(this.scene.add.image(column.centerX, LOADOUT_CARD_TOP + height / 2, key)
-      .setScrollFactor(0));
+    const card = this.scene.add.image(column.centerX, LOADOUT_CARD_TOP + height / 2, key)
+      .setScrollFactor(0)
+      .setInteractive({ cursor: BUTTON_CURSOR });
+    this.loadoutContainer.add(card);
+
+    // Die ganze Karte gehoert zum Tab: Hover hebt die zugehoerigen Tabs an, Klick oeffnet die Kategorie.
+    const tabsOf = () => column.categoryIndices
+      .map((index) => this.tabViews[index]?.background)
+      .filter((tab): tab is Phaser.GameObjects.Image => tab?.active === true);
+    card.on('pointerover', (pointer: Phaser.Input.Pointer) => {
+      for (const tab of tabsOf()) tab.emit('pointerover', pointer);
+    });
+    card.on('pointerout', (pointer: Phaser.Input.Pointer) => {
+      for (const tab of tabsOf()) tab.emit('pointerout', pointer);
+    });
+    card.on('pointerdown', () => {
+      if (column.categoryIndices.includes(this.activeCategoryIndex)) return;
+      activateUi(this.scene, () => this.setActiveCategory(column.categoryIndices[0]));
+    });
+
+    if (column.emblemKey && runtimeTextureExists(this.scene.textures, column.emblemKey)) {
+      const emblemKey = ensureUpgradeIcon(this.scene, getLoadoutIconTextureKey(this.scene, column.emblemKey),
+        column.active, false);
+      this.loadoutContainer.add(fitLoadoutIcon(runtimeImage(this.scene, column.centerX, LOADOUT_ROW_Y, emblemKey),
+        LOADOUT_EMBLEM_SIZE, LOADOUT_EMBLEM_SIZE).setScrollFactor(0).setAlpha(column.active ? 1 : 0.8));
+    }
   }
 
   private renderLoadoutSlot(params: LoadoutSlotParams): void {
@@ -1289,16 +1436,12 @@ export class CoopDefenseUpgradesOverlay {
     accentColor: number,
     isActive: boolean,
   ): string {
-    return ensureUpgradeSurface(this.scene, Math.round(width), Math.round(height), accentColor, isActive, true);
+    return ensureUpgradeSurface(this.scene, Math.round(width), Math.round(height), accentColor, isActive, true, true);
   }
 
   private clearTabDecorations(): void {
     for (const tween of this.tabTweens) tween.destroy();
     this.tabTweens = [];
-    for (const { target, glow } of this.tabGlows) {
-      if (target.active) removeExternalFx(target, glow);
-    }
-    this.tabGlows = [];
   }
 
   /** Spaltenraster der Kategorie-Tabs; die Loadout-Slots richten sich daran aus. */
@@ -1329,59 +1472,91 @@ export class CoopDefenseUpgradesOverlay {
     if (!this.tabsContainer) return;
     this.clearTabDecorations();
     this.tabsContainer.removeAll(true);
+    this.tabLabelsContainer?.removeAll(true);
+    this.tabViews = [];
 
     const categories = progress.upgradeCategories;
-    if (categories.length === 0) return;
+    const activeCategory = categories[this.activeCategoryIndex];
+    if (!activeCategory) {
+      this.registerSheet?.setVisible(false);
+      return;
+    }
 
     const layout = this.getTabLayout(categories.length);
-    const tabW = layout.tabW;
+    const tabW = Math.round(layout.tabW);
+    const activeVisuals = this.getCategoryVisuals(activeCategory.id, progress.classId);
+    this.renderRegisterSheet(this.getTabCenterX(layout, this.activeCategoryIndex), tabW, activeVisuals.connector);
 
     categories.forEach((category, index) => {
       const visuals = this.getCategoryVisuals(category.id, progress.classId);
       const isActive = index === this.activeCategoryIndex;
       const centerX = this.getTabCenterX(layout, index);
+      const tabH = isActive ? TAB_H : TAB_H - TAB_INACTIVE_INSET;
 
-      const tabTexKey = this.ensureTabTexture(tabW, visuals, isActive);
-      const restAlpha = isActive ? 1 : 0.9;
-      const bg = this.scene.add.image(centerX, TAB_TOP + TAB_H / 2, tabTexKey)
-        .setScrollFactor(0)
-        .setAlpha(restAlpha)
-        .setInteractive({ cursor: BUTTON_CURSOR });
-      this.tabsContainer!.add(bg);
-
-      if (isActive) {
-        // Leichter, atmender Glow am aktiven Tab in Kategorie-Farbe.
-        const glow = addExternalGlow(bg, visuals.connector, 0.7, 0, false, 0.1, 6);
-        if (glow) {
-          this.tabGlows.push({ target: bg, glow });
-          this.tabTweens.push(this.scene.tweens.add({
-            targets: glow,
-            outerStrength: 1.7,
-            duration: 1800,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.easeInOut',
-          }));
-        }
+      // Geschlossene Tabs sind an der Blattkante verankert (Origin unten) und wachsen beim
+      // Hover nach oben; ihre Unterkante verschwindet hinter dem Blatt.
+      let background: Phaser.GameObjects.Image | null = null;
+      if (!isActive) {
+        background = this.scene.add.image(centerX, CONTENT_TOP + 2,
+          ensureUpgradeRegisterTab(this.scene, tabW, tabH + 2, visuals.connector))
+          .setOrigin(0.5, 1)
+          .setScrollFactor(0)
+          .setInteractive({ cursor: BUTTON_CURSOR });
+        this.tabsContainer!.add(background);
       }
 
-      const label = this.scene.add.text(centerX, TAB_TOP + TAB_H / 2, category.label, {
-        fontSize: '15px',
+      // Die Beschriftung teilt den Ankerpunkt des Tabs, damit Hover und
+      // Hinweis-Welle sie gemeinsam mit dem Hintergrund skalieren.
+      const decoration = this.scene.add.container(centerX, CONTENT_TOP).setScrollFactor(0);
+      const label = this.scene.add.text(0, -tabH / 2 - 1, category.label, {
+        fontSize: isActive ? '16px' : '15px',
         fontFamily: FONT_MONO,
         fontStyle: 'bold',
-        // Aktiv: dunkler Text auf lebendiger Farbe (hoher Kontrast); passiv: hell.
-        color: toCssColor(isActive ? COLORS.GREY_10 : COLORS.GREY_2),
-      }).setOrigin(0.5).setScrollFactor(0);
-      this.tabsContainer!.add(label);
+        color: isActive ? '#f6f9e8' : toCssColor(visuals.title),
+        stroke: '#0b120d',
+        strokeThickness: isActive ? 4 : 0,
+      }).setOrigin(0.5).setScrollFactor(0).setAlpha(isActive ? 1 : 0.86);
+      decoration.add(label);
+      this.tabLabelsContainer!.add(decoration);
+      this.tabViews.push({ background, decoration });
 
-      // Einheitlicher Hover-Effekt fuer alle Tabs (auch der aktive).
-      attachHoverEffect(this.scene, bg, label);
-      bg.on('pointerdown', () => activateUi(this.scene, () => this.setActiveCategory(index)));
+      if (background) {
+        attachHoverEffect(this.scene, background, decoration);
+        background.on('pointerover', () => label.setAlpha(1));
+        background.on('pointerout', () => label.setAlpha(0.86));
+        background.on('pointerdown', () => activateUi(this.scene, () => this.setActiveCategory(index)));
+      }
     });
   }
 
-  private ensureTabTexture(tabW: number, visuals: CategoryVisuals, isActive: boolean): string {
-    return ensureUpgradeSurface(this.scene, Math.round(tabW), TAB_H, visuals.connector, isActive);
+  /**
+   * Das Blatt haengt von offenem Tab und Kategoriefarbe ab. Es ist gross, deshalb lebt immer nur
+   * die Textur des aktuellen Zustands; die vorherige wird beim Wechsel freigegeben.
+   */
+  private renderRegisterSheet(tabCenterX: number, tabW: number, accentColor: number): void {
+    if (!this.registerSheet) return;
+    const tabLeft = Math.round(tabCenterX - tabW / 2) - SHEET_TEX_X;
+    const key = `${SHEET_TEX_KEY}_${tabLeft}_${tabW}_${accentColor}`;
+    ensureUpgradeRegisterSheet(this.scene, key, {
+      width: SHEET_TEX_W,
+      height: SHEET_TEX_H,
+      sheetLeft: SHEET_MARGIN,
+      sheetTop: CONTENT_TOP - SHEET_TEX_Y,
+      sheetRight: SHEET_MARGIN + CONTENT_W + SHEET_PAD_X * 2,
+      sheetBottom: SHEET_BOTTOM - SHEET_TEX_Y,
+      tabLeft,
+      tabRight: tabLeft + tabW,
+      tabTop: TAB_TOP - SHEET_TEX_Y,
+      accent: accentColor,
+    });
+    this.registerSheet.setTexture(key).setVisible(true);
+    this.releaseRegisterSheet(key);
+  }
+
+  private releaseRegisterSheet(keep: string | null = null): void {
+    const previous = this.registerSheetKey;
+    this.registerSheetKey = keep;
+    if (previous && previous !== keep) this.scene.textures.remove(previous);
   }
 
   private clearNodeDecorations(): void {
@@ -1409,7 +1584,6 @@ export class CoopDefenseUpgradesOverlay {
     }
 
     const visuals = this.getCategoryVisuals(category.id, progress.classId);
-    this.contentBg?.setTexture(this.ensureContentBgTexture(visuals.connector));
     const tree = this.buildCategoryTree(category.upgrades);
     const columnCache = new Map<string, number>();
     const depthCache = new Map<string, number>();
@@ -1519,11 +1693,36 @@ export class CoopDefenseUpgradesOverlay {
     }
     graphics.generateTexture(TREE_BACKGROUND_TEX_KEY, GAME_WIDTH, GAME_HEIGHT);
     graphics.destroy();
+    this.fadeTreeBackgroundEdges();
 
     this.treeBackground = this.scene.add.image(CX, CY, TREE_BACKGROUND_TEX_KEY)
       .setScrollFactor(0);
     this.treeBackgroundContainer.add(this.treeBackground);
     this.treeBackgroundSignature = signature;
+  }
+
+  /**
+   * Die Spalten beginnen und enden nicht mit harten Kanten: Oben laufen sie weich aus der
+   * Blattkante heraus, unten blenden sie gemeinsam mit dem Register-Blatt aus.
+   */
+  private fadeTreeBackgroundEdges(): void {
+    const texture = this.scene.textures.get(TREE_BACKGROUND_TEX_KEY);
+    if (!(texture instanceof Phaser.Textures.CanvasTexture)) return;
+    const ctx = texture.context;
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    const topFade = ctx.createLinearGradient(0, CONTENT_TOP + 10, 0, CONTENT_TOP + LANE_FADE_TOP);
+    topFade.addColorStop(0, 'rgba(0,0,0,.75)');
+    topFade.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = topFade;
+    ctx.fillRect(0, CONTENT_TOP, GAME_WIDTH, LANE_FADE_TOP);
+    const bottomFade = ctx.createLinearGradient(0, CONTENT_BOTTOM - LANE_FADE_BOTTOM, 0, CONTENT_BOTTOM - 10);
+    bottomFade.addColorStop(0, 'rgba(0,0,0,0)');
+    bottomFade.addColorStop(1, 'rgba(0,0,0,1)');
+    ctx.fillStyle = bottomFade;
+    ctx.fillRect(0, CONTENT_BOTTOM - LANE_FADE_BOTTOM, GAME_WIDTH, LANE_FADE_BOTTOM + 10);
+    ctx.restore();
+    texture.refresh();
   }
 
   private drawItemLanes(
@@ -2246,36 +2445,6 @@ export class CoopDefenseUpgradesOverlay {
 
   private ensureRespecButtonTexture(): string {
     return ensureGlossyButtonTexture(this.scene, 'respec', RESPEC_W, RESPEC_H, INTENT.danger.fill);
-  }
-
-  private ensureContentBgTexture(color: number): string {
-    const key = `_ccd_contentbg_uniform_60_${color.toString(16)}`;
-    if (this.scene.textures.exists(key)) return key;
-
-    const w = Math.max(1, Math.round(CONTENT_W));
-    const h = Math.max(1, Math.round(CONTENT_H));
-    const ct = this.scene.textures.createCanvas(key, w, h);
-    if (!ct) return key;
-    const ctx = ct.context;
-    ctx.clearRect(0, 0, w, h);
-
-    const radius = 16;
-    const inset = 1.5;
-    const rectW = w - inset * 2;
-    const rectH = h - inset * 2;
-
-    // Einheitliche leichte Tönung; die einzelnen Upgrade-Spalten besitzen ihre eigene Deckkraft.
-    roundRectPath(ctx, inset, inset, rectW, rectH, radius);
-    ctx.fillStyle = rgbStr(lerpColor(SURFACE.sunken, color, 0.03), 0.60);
-    ctx.fill();
-
-    roundRectPath(ctx, inset, inset, rectW, rectH, radius);
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = rgbStr(color, 0.4);
-    ctx.stroke();
-
-    ct.refresh();
-    return key;
   }
 
   private handleUpgradePointerDown(node: CoopDefenseUpgradeNodeSnapshot, pointer: Phaser.Input.Pointer): void {
