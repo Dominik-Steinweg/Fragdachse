@@ -53,7 +53,7 @@ export class ArmageddonReview {
       this.lastBurst=age;
       for(const m of meteors)this.renderer.playImpact(m.x,m.y,m.radius,variant);
     }
-    this.renderer.sync(this.options.singleImpact?[]:meteors);
+    this.renderer.sync(this.options.singleImpact?[]:meteors,Date.now());
     if(this.cpu.length<900)this.cpu.push(performance.now()-start);
   }
   status(){

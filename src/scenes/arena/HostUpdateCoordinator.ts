@@ -834,8 +834,8 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     this.visuals?.powerUp.sync(powerups);
     this.visuals?.powerUp.updatePedestals(syncedNow);
     this.visuals?.nuke.sync(nukes);
-    this.visuals?.airstrike.sync(airstrikes);
-    this.visuals?.meteor.sync(meteors);
+    this.visuals?.airstrike.sync(airstrikes, syncedNow);
+    this.visuals?.meteor.sync(meteors, syncedNow);
     if (!countdownActive) this.checkLocalPickup(powerups);
 
     const localId = bridge.getLocalPlayerId();

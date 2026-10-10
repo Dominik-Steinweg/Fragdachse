@@ -136,8 +136,8 @@ export interface WorldClientPresentationRenderers {
     updatePresentation(presentationTimeMs: number): void;
   };
   readonly nuke: { sync(nukes: SyncedNukeStrike[]): void };
-  readonly airstrike: { sync(strikes: SyncedAirstrikeStrike[]): void };
-  readonly meteor: { sync(meteors: SyncedMeteorStrike[]): void };
+  readonly airstrike: { sync(strikes: SyncedAirstrikeStrike[], hostNowMs: number): void };
+  readonly meteor: { sync(meteors: SyncedMeteorStrike[], hostNowMs: number): void };
 }
 
 /**
@@ -568,8 +568,8 @@ export class WorldPresentationFrameBinding {
       );
       renderers.powerUp.sync(state.powerups);
       renderers.nuke.sync(state.nukes);
-      renderers.airstrike.sync(state.airstrikes);
-      renderers.meteor.sync(state.meteors);
+      renderers.airstrike.sync(state.airstrikes, now);
+      renderers.meteor.sync(state.meteors, now);
     } else if (countdownActive) {
       renderers.flamethrowerUpgrades.syncGround(countdownGround, now);
       renderers.powerUp.syncPedestals(countdownPedestals);

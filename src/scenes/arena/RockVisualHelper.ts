@@ -524,7 +524,11 @@ export class RockVisualHelper {
 
   private ensureRuntimeRockSlot(rock: SyncedPlaceableRock): void {
     if (!this.currentLayout || !this.arenaResult) return;
-    this.currentLayout.rocks[rock.id] = { gridX: rock.gridX, gridY: rock.gridY };
+    // Runtime IDs can skip slots a late joiner never saw (placeables destroyed before the join).
+    // Keep layout.rocks dense: iterating consumers treat it as RockCell[] without holes.
+    const rocks = this.currentLayout.rocks;
+    while (rocks.length < rock.id) rocks.push({ gridX: rock.gridX, gridY: rock.gridY });
+    rocks[rock.id] = { gridX: rock.gridX, gridY: rock.gridY };
     while (this.arenaResult.rockPhysicsProxies.length <= rock.id) {
       this.arenaResult.rockPhysicsProxies.push(null);
     }

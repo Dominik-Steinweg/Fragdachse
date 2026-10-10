@@ -194,6 +194,14 @@ function expectedState(
 }
 
 describe('RockVisualHelper client snapshot materialization', () => {
+  it('keeps the layout rock list dense when a late snapshot skips runtime ids', () => {
+    const f = createFixture([2]);
+    const rocks = f.ctx.currentLayout.rocks;
+    expect(rocks).toHaveLength(3);
+    for (let id = 0; id < rocks.length; id++) expect(rocks[id]).toBeDefined();
+    expect(rocks[2]).toEqual(ROCK_COORDINATES[2]);
+  });
+
   it('preserves replacement occupants while presenting a batch of relocated rocks', () => {
     const f = createFixture([0, 1]);
     const previous = f.changes.added.map(rock => ({ ...rock }));

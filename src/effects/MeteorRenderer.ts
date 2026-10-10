@@ -42,8 +42,9 @@ export class MeteorRenderer {
       durationMs:310,priority:CAMERA_FEEDBACK_PRIORITY.mediumImpact,decay:'impulse',sourceX:x,sourceY:y});
   }
 
-  sync(meteors: SyncedMeteorStrike[]): void {
-    const now=Date.now(), camera=this.scene.cameras.main;
+  /** `now` must be host-synchronized time: spawnedAt/impactAt are host timestamps. */
+  sync(meteors: SyncedMeteorStrike[], now: number): void {
+    const camera=this.scene.cameras.main;
     const visible=(m:{x:number;y:number;radius:number})=>camera.worldView.contains(m.x,m.y)
       || (m.x+m.radius*4>=camera.worldView.x && m.x-m.radius*4<=camera.worldView.right
         && m.y+m.radius*4>=camera.worldView.y && m.y-m.radius*4<=camera.worldView.bottom);

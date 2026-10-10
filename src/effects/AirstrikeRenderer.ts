@@ -186,9 +186,9 @@ export class AirstrikeRenderer {
     system.registerEmission((deltaMs, nowMs) => this.emitParticles(deltaMs, nowMs));
   }
 
-  sync(strikes: SyncedAirstrikeStrike[]): void {
+  /** `now` must be host-synchronized time: armedAt/explodeAt are host timestamps. */
+  sync(strikes: SyncedAirstrikeStrike[], now: number): void {
     const activeIds = new Set<number>();
-    const now       = Date.now();
 
     for (const strike of strikes) {
       activeIds.add(strike.id);

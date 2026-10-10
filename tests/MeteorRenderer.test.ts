@@ -12,29 +12,29 @@ function fixture(){
 describe('meteor snapshot presentation',()=>{
   beforeEach(()=>{vi.clearAllMocks();vi.spyOn(Date,'now').mockReturnValue(1500);});
   it('preserves authoritative radius and position at partial progress, clamps the clock',()=>{
-    const {renderer}=fixture();renderer.sync([strike]);
+    const {renderer}=fixture();renderer.sync([strike], Date.now());
     expect(batch.add).toHaveBeenLastCalledWith(expect.objectContaining({x:100,y:100,radius:60,progress:.5,age:-1}));
-    vi.mocked(Date.now).mockReturnValue(5000);renderer.sync([strike]);
+    vi.mocked(Date.now).mockReturnValue(5000);renderer.sync([strike], Date.now());
     expect(batch.add).toHaveBeenLastCalledWith(expect.objectContaining({progress:1,age:-1}));
   });
   it('leaves no impact or residue on early cancellation',()=>{
     const {renderer}=fixture();const feedback={request:vi.fn()};renderer.setCameraFeedback(feedback as never);
-    renderer.sync([strike]);batch.add.mockClear();renderer.sync([]);
+    renderer.sync([strike], Date.now());batch.add.mockClear();renderer.sync([], Date.now());
     expect(batch.add).not.toHaveBeenCalled();expect(feedback.request).not.toHaveBeenCalled();
   });
   it('creates residue only from the impact event, expires it and clears round resources',()=>{
-    const {renderer,scene}=fixture();renderer.sync([strike]);vi.mocked(Date.now).mockReturnValue(2000);
-    renderer.sync([]);expect(batch.add).not.toHaveBeenCalledWith(expect.objectContaining({age:0}));
-    renderer.playImpact(100,100,60,'normal');batch.add.mockClear();renderer.sync([]);
+    const {renderer,scene}=fixture();renderer.sync([strike], Date.now());vi.mocked(Date.now).mockReturnValue(2000);
+    renderer.sync([], Date.now());expect(batch.add).not.toHaveBeenCalledWith(expect.objectContaining({age:0}));
+    renderer.playImpact(100,100,60,'normal');batch.add.mockClear();renderer.sync([], Date.now());
     expect(batch.add).toHaveBeenLastCalledWith(expect.objectContaining({x:100,y:100,radius:60,age:0}));
-    batch.add.mockClear();scene.time.now=8000;renderer.sync([]);expect(batch.add).not.toHaveBeenCalled();
-    renderer.sync([strike]);renderer.clear();batch.add.mockClear();renderer.sync([]);
+    batch.add.mockClear();scene.time.now=8000;renderer.sync([], Date.now());expect(batch.add).not.toHaveBeenCalled();
+    renderer.sync([strike], Date.now());renderer.clear();batch.add.mockClear();renderer.sync([], Date.now());
     expect(batch.add).not.toHaveBeenCalled();expect(batch.clear).toHaveBeenCalled();
     renderer.destroy();expect(batch.destroy).toHaveBeenCalledOnce();
   });
   it('retains warning state through suppression without drawing',()=>{
     const {renderer}=fixture();const system={isSuppressed:()=>true};renderer.registerGpuVfx(system as never);
-    renderer.sync([strike]);expect(batch.add).not.toHaveBeenCalled();
-    system.isSuppressed=()=>false;renderer.sync([strike]);expect(batch.add).toHaveBeenCalledOnce();
+    renderer.sync([strike], Date.now());expect(batch.add).not.toHaveBeenCalled();
+    system.isSuppressed=()=>false;renderer.sync([strike], Date.now());expect(batch.add).toHaveBeenCalledOnce();
   });
 });

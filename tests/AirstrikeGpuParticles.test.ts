@@ -99,7 +99,7 @@ describe('airstrike gpu particles', () => {
     // Die Lanes entstehen aus dem Manifest, nicht aus dem Effekt.
     expect(scene.layers.length).toBe(GPU_VFX_LANES.length);
 
-    renderer.sync([strike(1), strike(2), strike(3)]);
+    renderer.sync([strike(1), strike(2), strike(3)], Date.now());
     system.update(200);
     expect(scene.layers.length).toBe(GPU_VFX_LANES.length);
 
@@ -139,7 +139,7 @@ describe('airstrike gpu particles', () => {
 
   it('draws both motifs from the shared atlas', () => {
     const { system, renderer, bomb, spark } = setup();
-    renderer.sync([strike(1)]);
+    renderer.sync([strike(1)], Date.now());
     system.update(200);
 
     expect(bomb.key).toBe('__gpu_vfx_atlas');
@@ -150,7 +150,7 @@ describe('airstrike gpu particles', () => {
 
   it('keeps the gravity encoding of the falling bombs', () => {
     const { system, renderer, bomb } = setup();
-    renderer.sync([strike(1)]);
+    renderer.sync([strike(1)], Date.now());
     system.update(200);
 
     const member = bomb.members[0];
@@ -162,7 +162,7 @@ describe('airstrike gpu particles', () => {
 
   it('emits on the flow counters the old emitters started with', () => {
     const { system, renderer, bomb, spark } = setup();
-    renderer.sync([strike(1)]);
+    renderer.sync([strike(1)], Date.now());
 
     system.update(69);
     expect(bomb.edited.length).toBe(0);
@@ -179,7 +179,7 @@ describe('airstrike gpu particles', () => {
   it('ticks particles without a fresh sync, as the autonomous emitter did', () => {
     // Auf Clients laeuft sync() nur mit neuem Netzzustand; die Emission darf davon nicht abhaengen.
     const { system, renderer, bomb } = setup();
-    renderer.sync([strike(1)]);
+    renderer.sync([strike(1)], Date.now());
 
     for (let frame = 0; frame < 20; frame += 1) system.update(16);
     expect(bomb.edited.length).toBeGreaterThan(2);
@@ -187,12 +187,12 @@ describe('airstrike gpu particles', () => {
 
   it('hides a vanished strike immediately, like the old emitter destroy', () => {
     const { system, renderer, bomb } = setup();
-    renderer.sync([strike(1), strike(2)]);
+    renderer.sync([strike(1), strike(2)], Date.now());
     system.update(200);
     const spawned = bomb.edited.length;
     expect(spawned).toBeGreaterThan(0);
 
-    renderer.sync([strike(2)]);
+    renderer.sync([strike(2)], Date.now());
     // Genau die Member von Strike 1 sind stillgelegt, die von Strike 2 laufen weiter.
     expect(bomb.patched.length).toBeGreaterThan(0);
     expect(bomb.patched.length).toBeLessThan(spawned);
@@ -200,7 +200,7 @@ describe('airstrike gpu particles', () => {
 
   it('clears every member and shape on teardown, keeping the shared lanes alive', () => {
     const { scene, system, renderer, bomb, spark } = setup();
-    renderer.sync([strike(1), strike(2)]);
+    renderer.sync([strike(1), strike(2)], Date.now());
     system.update(200);
     const spawnedBombs = bomb.edited.length;
     const spawnedSparks = spark.edited.length;
@@ -212,7 +212,7 @@ describe('airstrike gpu particles', () => {
     expect(scene.layers.length).toBe(GPU_VFX_LANES.length);
 
     // Nach dem Teardown darf ein neuer Strike sofort wieder emittieren.
-    renderer.sync([strike(3)]);
+    renderer.sync([strike(3)], Date.now());
     system.update(200);
     expect(bomb.edited.length).toBeGreaterThan(spawnedBombs);
   });
@@ -223,14 +223,14 @@ describe('airstrike gpu particles', () => {
     // selben Frame, und ein `maxAliveParticles`-Deckel kam wegen `lifespan: {min,max}` nie
     // zustande. Auf `high` (Faktor 1) bleibt die Emission bitgleich.
     const high = setup();
-    high.renderer.sync([strike(1)]);
+    high.renderer.sync([strike(1)], Date.now());
     for (let frame = 0; frame < 30; frame += 1) high.system.update(16);
     const highSpawns = high.bomb.edited.length;
 
     qualityFactors.standard = 0.35;
     resetGpuVfxAtlasForTests();
     const low = setup();
-    low.renderer.sync([strike(1)]);
+    low.renderer.sync([strike(1)], Date.now());
     for (let frame = 0; frame < 30; frame += 1) low.system.update(16);
 
     expect(highSpawns).toBeGreaterThan(0);
@@ -240,7 +240,7 @@ describe('airstrike gpu particles', () => {
   it('stops emitting entirely at quality factor zero', () => {
     qualityFactors.standard = 0;
     const { scene, system, renderer, bomb, spark } = setup();
-    renderer.sync([strike(1)]);
+    renderer.sync([strike(1)], Date.now());
     for (let frame = 0; frame < 30; frame += 1) system.update(16);
 
     expect(bomb.edited.length).toBe(0);
