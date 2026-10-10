@@ -4,7 +4,13 @@ import * as Phaser from 'phaser';
 import { RocketMagazineIndicator } from './RocketMagazineIndicator';
 import type { WeaponConfig } from '../loadout/LoadoutConfig';
 import { AimSpreadModel } from './AimSpreadModel';
-import { AimVisuals, type SlotPalette } from './AimVisuals';
+import {
+  AIM_BOLD_BEAM_RING_GAP,
+  AIM_CHARGE_RING_OFFSET,
+  AIM_CHARGE_RING_OFFSET_BOLD,
+  AimVisuals,
+  type SlotPalette,
+} from './AimVisuals';
 import type { PlayerAimNetState, UltimateChargePreviewState, UtilityChargePreviewState, UtilityTargetingPreviewState, WeaponSlot } from '../types';
 import {
   COLORS,
@@ -47,6 +53,10 @@ const RING_BASE_ALPHA    = 0.08; // Ringalpha ohne Spread
 const RING_SPREAD_ALPHA  = 0.14; // Zusatzalpha bei vollem Spread
 const PULSE_SPEED        = 0.005;
 const PULSE_AMP          = 0.025;
+// Deutliche Zielhilfe: ruhig statt pulsierend, der Mittelpunkt leicht aufgehellt fuer Kontrast
+// zur dunklen Kontur.
+const BOLD_RING_ALPHA    = 0.9;
+const BOLD_DOT_LIGHTEN   = 0.25;
 
 const MOVE_THRESHOLD = 0.3;
 
@@ -94,6 +104,7 @@ export class AimSystem {
     private readonly getLocalSprite:  () => Phaser.GameObjects.Image | undefined,
     private readonly getWeaponConfig: (slot: WeaponSlot) => WeaponConfig,
     private readonly getPlayerColor:  () => number,
+    private readonly isHighVisibilityAim: () => boolean = () => false,
   ) {
     this.visuals = new AimVisuals(scene);
     this.spreadModel = new AimSpreadModel(getWeaponConfig);
@@ -159,6 +170,8 @@ export class AimSystem {
     this.rocketIndicator?.hide();
     this.plasmaIndicator?.hide();
     if (!showAim) return;
+    const bold = this.isHighVisibilityAim();
+    this.visuals.setHighVisibility(bold);
 
     const sprite = this.getLocalSprite();
     if (!sprite) return;
@@ -232,7 +245,11 @@ export class AimSystem {
     const cursorForwardDistance = gameplayAimMuzzle
       ? Math.max(0, (px - beamOrigin.x) * nx + (py - beamOrigin.y) * ny)
       : dist;
-    const beamLength = Math.min(cursorForwardDistance, cfg.range);
+    // Die deutliche Linie endet vor dem Spread-Ring, statt durch das Fadenkreuz zu laufen.
+    const beamRingClearance = bold && cursorForwardDistance <= cfg.range
+      ? this.getRingRadius(frac) + AIM_BOLD_BEAM_RING_GAP
+      : 0;
+    const beamLength = Math.max(0, Math.min(cursorForwardDistance, cfg.range) - beamRingClearance);
     const ex = beamOrigin.x + nx * beamLength;
     const ey = beamOrigin.y + ny * beamLength;
 
@@ -286,11 +303,20 @@ export class AimSystem {
     palette: SlotPalette,
     accentColor: number,
   ): void {
-    const gap   = RING_GAP_MIN + frac * (RING_GAP_MAX - RING_GAP_MIN);
-    const pulse = 1 + PULSE_AMP * Math.sin(this.scene.time.now * PULSE_SPEED);
     const isHit = this.scene.time.now <= this.confirmedHitUntil;
+    const ringR = this.getRingRadius(frac);
 
-    const ringR     = gap * 1.1;
+    if (this.visuals.isHighVisibility()) {
+      this.visuals.showCrosshair(
+        cx, cy, ringR,
+        isHit ? accentColor : palette.crossMain,
+        isHit ? 1 : BOLD_RING_ALPHA,
+        this.mixWithWhite(accentColor, BOLD_DOT_LIGHTEN),
+      );
+      return;
+    }
+
+    const pulse = 1 + PULSE_AMP * Math.sin(this.scene.time.now * PULSE_SPEED);
     const ringColor = isHit ? accentColor : palette.crossGlow;
     const ringAlpha = isHit
       ? Math.min(0.85, (RING_BASE_ALPHA + frac * RING_SPREAD_ALPHA) * 5.5)
@@ -306,13 +332,17 @@ export class AimSystem {
     chargeFrac: number,
     palette: SlotPalette,
   ): void {
-    const spreadRadius = (RING_GAP_MIN + spreadFrac * (RING_GAP_MAX - RING_GAP_MIN)) * 1.1;
-    const radius = spreadRadius + 8;
+    const radius = this.getRingRadius(spreadFrac)
+      + (this.visuals.isHighVisibility() ? AIM_CHARGE_RING_OFFSET_BOLD : AIM_CHARGE_RING_OFFSET);
     const full = chargeFrac >= 0.999;
     const pulse = full ? 0.78 + Math.sin(this.scene.time.now * 0.012) * 0.16 : 0.68;
     const color = full ? 0xff6a2b : palette.crossMain;
 
     this.visuals.showChargeRing(cx, cy, radius, chargeFrac, palette, color, pulse, full);
+  }
+
+  private getRingRadius(spreadFrac: number): number {
+    return (RING_GAP_MIN + spreadFrac * (RING_GAP_MAX - RING_GAP_MIN)) * 1.1;
   }
 
   private showGaussAimReticle(sx: number, sy: number, preview: UltimateChargePreviewState): void {

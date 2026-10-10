@@ -300,6 +300,7 @@ export const deUi = {
   "ui.options.title": "OPTIONEN",
   "ui.options.graphics": "Grafikqualität",
   "ui.options.groundFog": "Bodennebel",
+  "ui.options.highVisibilityAim": "Deutliche Zielhilfe",
   "ui.options.audio": "Audio",
   "ui.options.language": "Sprache",
   "ui.options.german": "Deutsch",

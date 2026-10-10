@@ -22,6 +22,8 @@ import {
   setStoredEffectsVolume,
   setStoredGraphicsQuality,
   setStoredGroundFogEnabled,
+  getStoredHighVisibilityAim,
+  setStoredHighVisibilityAim,
   setStoredMasterVolume,
   setStoredMusicVolume,
 } from '../utils/localPreferences';
@@ -46,6 +48,10 @@ const QUALITY_BUTTON_Y = CY - 184;
 const QUALITY_BUTTON_W = 150;
 const QUALITY_BUTTON_H = 44;
 const QUALITY_BUTTON_GAP = 12;
+const TOGGLE_Y = QUALITY_BUTTON_Y + 44;
+const TOGGLE_W = 230;
+const TOGGLE_H = 28;
+const TOGGLE_GAP = 14;
 
 const DIM_COLOR = COLORS.GREY_10;
 const DIM_ALPHA = 0.58;
@@ -223,6 +229,7 @@ export class OptionsOverlay {
   private readonly sliders = new Map<VolumeSliderKey, SliderState>();
   private readonly qualityButtons = new Map<GraphicsQuality, QualityButtonState>();
   private fogButton: QualityButtonState | null = null;
+  private aimButton: QualityButtonState | null = null;
   private readonly localeButtons = new Map<Locale, LocaleButtonState>();
   private visible = false;
   private visibilityTween: Phaser.Tweens.Tween | null = null;
@@ -294,7 +301,7 @@ export class OptionsOverlay {
       slider.fillEffect.destroy();
     }
     this.sliders.clear();
-    this.qualityButtons.clear(); this.fogButton = null;
+    this.qualityButtons.clear(); this.fogButton = null; this.aimButton = null;
     this.localeButtons.clear();
     this.container?.destroy(true);
     this.container = null;
@@ -473,7 +480,7 @@ export class OptionsOverlay {
       slider.fillEffect.destroy();
     }
     this.sliders.clear();
-    this.qualityButtons.clear(); this.fogButton = null;
+    this.qualityButtons.clear(); this.fogButton = null; this.aimButton = null;
     this.localeButtons.clear();
     this.container?.destroy(true);
     this.container = null;
@@ -518,15 +525,15 @@ export class OptionsOverlay {
   }
 
   private buildQualitySelector(objects: Phaser.GameObjects.GameObject[]): void {
-    const y = QUALITY_BUTTON_Y + 44;
-    const background = this.scene.add.image(CX, y, this.selectionTexture(230, 28, false)).setScrollFactor(0)
-      .setInteractive({ cursor: BUTTON_CURSOR }).on('pointerdown', () => {
-        const enabled = !this.graphicsQuality.getGroundFogEnabled();
-        this.graphicsQuality.setGroundFogEnabled(enabled); setStoredGroundFogEnabled(enabled);
-        this.syncQualityButtons(); playUiActivation(this.scene);
-      });
-    const label = this.scene.add.text(CX, y, '', textStyle('labelSm', { color: TEXT.secondary })).setOrigin(.5).setScrollFactor(0);
-    this.fogButton = { background, label }; objects.push(background, label);
+    const toggleOffset = (TOGGLE_W + TOGGLE_GAP) / 2;
+    this.fogButton = this.buildToggle(CX - toggleOffset, objects, () => {
+      const enabled = !this.graphicsQuality.getGroundFogEnabled();
+      this.graphicsQuality.setGroundFogEnabled(enabled); setStoredGroundFogEnabled(enabled);
+    });
+    // Die Zielhilfe liest die Einstellung selbst; das Umschalten wirkt ab dem naechsten Frame.
+    this.aimButton = this.buildToggle(CX + toggleOffset, objects, () => {
+      setStoredHighVisibilityAim(!getStoredHighVisibilityAim());
+    });
     const totalWidth = QUALITY_OPTIONS.length * QUALITY_BUTTON_W
       + (QUALITY_OPTIONS.length - 1) * QUALITY_BUTTON_GAP;
     const startX = CX - totalWidth / 2 + QUALITY_BUTTON_W / 2;
@@ -552,12 +559,28 @@ export class OptionsOverlay {
 
   }
 
+  private buildToggle(x: number, objects: Phaser.GameObjects.GameObject[], toggle: () => void): QualityButtonState {
+    const background = this.scene.add.image(x, TOGGLE_Y, this.selectionTexture(TOGGLE_W, TOGGLE_H, false)).setScrollFactor(0)
+      .setInteractive({ cursor: BUTTON_CURSOR }).on('pointerdown', () => {
+        toggle();
+        this.syncQualityButtons(); playUiActivation(this.scene);
+      });
+    background.on('pointerover', () => playUiHover(this.scene));
+    const label = this.scene.add.text(x, TOGGLE_Y, '', textStyle('labelSm', { color: TEXT.secondary })).setOrigin(.5).setScrollFactor(0);
+    objects.push(background, label);
+    return { background, label };
+  }
+
+  private syncToggle(state: QualityButtonState | null, enabled: boolean, labelKey: string): void {
+    if (!state) return;
+    state.background.setTexture(this.selectionTexture(TOGGLE_W, TOGGLE_H, enabled));
+    state.label.setText(`${enabled ? '☑' : '☐'} ${t(labelKey)}`)
+      .setColor(toCssColor(enabled ? TEXT.primary : TEXT.secondary));
+  }
+
   private syncQualityButtons(): void {
-    if (this.fogButton) {
-      const enabled = this.graphicsQuality.getGroundFogEnabled();
-      this.fogButton.background.setTexture(this.selectionTexture(230, 28, enabled));
-      this.fogButton.label.setText(`${enabled ? '☑' : '☐'} ${t('ui.options.groundFog')}`);
-    }
+    this.syncToggle(this.fogButton, this.graphicsQuality.getGroundFogEnabled(), 'ui.options.groundFog');
+    this.syncToggle(this.aimButton, getStoredHighVisibilityAim(), 'ui.options.highVisibilityAim');
     const selected = this.graphicsQuality.getLevel();
     for (const [level, state] of this.qualityButtons) {
       const active = level === selected;

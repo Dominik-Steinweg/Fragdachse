@@ -38,6 +38,8 @@ import {
   setStoredPersistentBaseState,
   setStoredCoopDefenseUpgradeProfile,
   setStoredGraphicsQuality,
+  setStoredHighVisibilityAim,
+  getStoredHighVisibilityAim,
   setStoredMasterVolume,
   setStoredLocale,
 } from '../src/utils/localPreferences';
@@ -313,11 +315,20 @@ describe('local progress generation', () => {
     }));
     expect(getStoredGraphicsQuality()).toBe('low');
     expect(getStoredMasterVolume()).toBe(0.2);
-    expect(JSON.parse(storage.getItem(LOCAL_SETTINGS_STORAGE_KEY)!).graphics).toEqual({ quality: 'low', groundFogEnabled: true });
+    expect(JSON.parse(storage.getItem(LOCAL_SETTINGS_STORAGE_KEY)!).graphics)
+      .toEqual({ quality: 'low', groundFogEnabled: true, highVisibilityAim: false });
     setStoredGraphicsQuality('high');
     invalidateLocalStorageCache();
     expect(getStoredGraphicsQuality()).toBe('high');
     expect(getStoredMasterVolume()).toBe(0.2);
+  });
+
+  it('keeps the high-visibility aim choice as an opt-in device setting', () => {
+    expect(getStoredHighVisibilityAim()).toBe(false);
+    setStoredHighVisibilityAim(true);
+    invalidateLocalStorageCache();
+    expect(getStoredHighVisibilityAim()).toBe(true);
+    expect(getStoredGraphicsQuality()).toBe('high');
   });
 
   it('enables unconfigured music while preserving saved volume including mute', () => {

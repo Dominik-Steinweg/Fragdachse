@@ -123,6 +123,7 @@ import {
   getStoredEffectsVolume,
   getStoredGraphicsQuality,
   getStoredGroundFogEnabled,
+  getStoredHighVisibilityAim,
   getStoredMasterVolume,
   getStoredMusicVolume,
 } from '../utils/localPreferences';
@@ -756,6 +757,7 @@ export class ArenaScene extends Phaser.Scene {
       () => playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject ?? undefined,
       (slot) => this.clientUpdate.getLocalWeaponConfig(slot),
       () => bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0],
+      getStoredHighVisibilityAim,
     );
     const scopeOverlay = new ScopeOverlay(this);
     const utilityChargeIndicator = new UtilityChargeIndicator(

@@ -300,6 +300,7 @@ export const enUi = {
   "ui.options.title": "OPTIONS",
   "ui.options.graphics": "Graphics quality",
   "ui.options.groundFog": "Ground fog",
+  "ui.options.highVisibilityAim": "Bold aim guide",
   "ui.options.audio": "Audio",
   "ui.options.language": "Language",
   "ui.options.german": "Deutsch",

@@ -3258,6 +3258,8 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:scenes/arena/TunnelEndpointVisual.ts:module/this.emberEmitter/createEmitter/0","owner":"scenes/arena/TunnelEndpointVisual.ts","component":"module/this.emberEmitter/createEmitter/0","height":"ground","lighting":"emissive","camera":"world","depths":[9.73],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.emberEmitter/createEmitter/0","expression":"depth + 0.07"}},
   {"id":"cpu:ui/AimSystem.ts:module/this.container/setDepth/0","owner":"ui/AimSystem.ts","component":"module/this.container/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[19.6],"blends":["NORMAL"],"profiles":["E"],"role":"ui","source":{"selector":"module/this.container/setDepth/0","expression":"DEPTH_AIM"}},
   {"id":"cpu:ui/AimVisuals.ts:module/this.chargeGfx/setDepth/0","owner":"ui/AimVisuals.ts","component":"module/this.chargeGfx/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[19.6],"blends":["NORMAL"],"profiles":["E"],"role":"ui","source":{"selector":"module/this.chargeGfx/setDepth/0","expression":"DEPTH_AIM"}},
+  {"id":"cpu:ui/AimVisuals.ts:setHighVisibility/image/setDepth/0","owner":"ui/AimVisuals.ts","component":"setHighVisibility/image/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[19.6,99],"blends":["NORMAL"],"profiles":["E","H"],"role":"ui","source":{"selector":"setHighVisibility/image/setDepth/0","expression":"enabled ? DEPTH_AIM_HIGH_VISIBILITY : DEPTH_AIM"}},
+  {"id":"cpu:ui/AimVisuals.ts:setHighVisibility/this.chargeGfx/setDepth/0","owner":"ui/AimVisuals.ts","component":"setHighVisibility/this.chargeGfx/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[19.6,99],"blends":["NORMAL"],"profiles":["E","H"],"role":"ui","source":{"selector":"setHighVisibility/this.chargeGfx/setDepth/0","expression":"enabled ? DEPTH_AIM_HIGH_VISIBILITY : DEPTH_AIM"}},
   {"id":"cpu:ui/AimVisuals.ts:addImage/image/setDepth/0","owner":"ui/AimVisuals.ts","component":"addImage/image/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[19.6],"blends":["NORMAL"],"profiles":["E"],"role":"ui","source":{"selector":"addImage/image/setDepth/0","expression":"DEPTH_AIM"}},
   {"id":"cpu:ui/ArenaCountdownOverlay.ts:module/this.focusFallback/setDepth/0","owner":"ui/ArenaCountdownOverlay.ts","component":"module/this.focusFallback/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[98],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"module/this.focusFallback/setDepth/0","expression":"DEPTH.OVERLAY - 2"}},
   {"id":"cpu:ui/ArenaCountdownOverlay.ts:module/this.loadingBackdrop/setDepth/0","owner":"ui/ArenaCountdownOverlay.ts","component":"module/this.loadingBackdrop/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[96],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"module/this.loadingBackdrop/setDepth/0","expression":"DEPTH.OVERLAY - 4"}},
@@ -7547,6 +7549,20 @@ export const CPU_SOURCE_CONTRACTS = {
       {
         "key": "module/this.chargeGfx/setDepth/0",
         "expression": "DEPTH_AIM",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "setHighVisibility/image/setDepth/0",
+        "expression": "enabled ? DEPTH_AIM_HIGH_VISIBILITY : DEPTH_AIM",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "setHighVisibility/this.chargeGfx/setDepth/0",
+        "expression": "enabled ? DEPTH_AIM_HIGH_VISIBILITY : DEPTH_AIM",
         "blends": [
           "NORMAL"
         ]

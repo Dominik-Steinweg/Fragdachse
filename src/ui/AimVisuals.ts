@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { COLORS, DEPTH_AIM } from '../config';
+import { COLORS, DEPTH_AIM, DEPTH_AIM_HIGH_VISIBILITY } from '../config';
 import { ensureCanvasTexture, fillRadialGradientTexture } from '../effects/EffectUtils';
 
 export type SlotPalette = {
@@ -36,12 +36,12 @@ const RANGE_TICK_H       = 10;
 const RING_SHADOW_W = 5;
 const RING_GLOW_W   = 3;
 const RING_R_MIN    = 5;    // Fadenkreuz-Minimum: 5 * 1.1 = 5.5
-const RING_R_MAX    = 30;   // AWP-Ladering-Maximum: 22 + 8
+const RING_R_MAX    = 36;   // AWP-Ladering-Maximum: 22 + AIM_CHARGE_RING_OFFSET_BOLD
 const RING_R_STEP   = 0.5;
 const RING_FRAMES   = Math.round((RING_R_MAX - RING_R_MIN) / RING_R_STEP) + 1;
-// Groesste gezeichnete Ausdehnung ist r + 1 + (RING_GLOW_W + 4) / 2 = 34.5. Die Zelle muss gerade
+// Groesste gezeichnete Ausdehnung ist r + 1 + (RING_GLOW_W + 4) / 2 = 40.5. Die Zelle muss gerade
 // sein, damit ein ganzzahliges Zentrum mit Origin 0.5 auf ganzen Pixeln landet.
-const RING_CELL     = 78;
+const RING_CELL     = 82;
 const RING_COLS     = 8;
 const RING_ROWS     = Math.ceil(RING_FRAMES / RING_COLS);
 
@@ -52,6 +52,31 @@ const RING_FRAME_NAMES: readonly string[] = Array.from(
 
 function ringFrameIndex(radius: number): number {
   return Phaser.Math.Clamp(Math.round((radius - RING_R_MIN) / RING_R_STEP), 0, RING_FRAMES - 1);
+}
+
+// ── Deutliche Zielhilfe ────────────────────────────────────────────────────
+// Opt-in-Variante fuer Spieler, die das Fadenkreuz im Gefecht verlieren. Jede Form traegt eine
+// dunkle Kontur in derselben Textur: Der multiplikative Tint faerbt nur den weissen Kern, die
+// Kontur bleibt dunkel und haelt den Kontrast auf hellem wie dunklem Boden.
+/** Abstand des AWP-Laderings zum Spread-Ring, damit er ausserhalb der Ticks liegt. */
+export const AIM_CHARGE_RING_OFFSET      = 8;
+export const AIM_CHARGE_RING_OFFSET_BOLD = 14;
+
+const BOLD_RING_R_MAX     = 22.5; // Spread-Maximum: 20 * 1.1 = 22
+const BOLD_RING_FRAMES    = Math.round((BOLD_RING_R_MAX - RING_R_MIN) / RING_R_STEP) + 1;
+const BOLD_RING_CORE_W    = 2;
+const BOLD_OUTLINE_W      = 4.5;
+const BOLD_TICK_INNER     = 3;    // Abstand der Ticks zum Ring
+const BOLD_TICK_LEN       = 6;
+// Groesste Ausdehnung: r + BOLD_TICK_INNER + BOLD_TICK_LEN + BOLD_OUTLINE_W / 2 = 33.75.
+const BOLD_RING_CELL      = 72;
+const BOLD_RING_ROWS      = Math.ceil(BOLD_RING_FRAMES / RING_COLS);
+const BOLD_BEAM_STRIP_H   = 12;
+/** Luecke zwischen Beam-Ende und Spread-Ring, damit die Linie nicht in das Fadenkreuz laeuft. */
+export const AIM_BOLD_BEAM_RING_GAP = 5;
+
+function boldRingFrameIndex(radius: number): number {
+  return Phaser.Math.Clamp(Math.round((radius - RING_R_MIN) / RING_R_STEP), 0, BOLD_RING_FRAMES - 1);
 }
 
 // ── Mittelpunkt ────────────────────────────────────────────────────────────
@@ -86,6 +111,9 @@ const TEX = {
   gaussWide:  `__aim/gauss-wide/${STRIP_W}x${GAUSS_WIDE_TEX_H}`,
   gaussCore:  `__aim/gauss-core/${STRIP_W}x${GAUSS_CORE_TEX_H}`,
   gaussEmit:  `__aim/gauss-emitter/${GAUSS_EMIT_TEX_SIZE}`,
+  boldBeam:   `__aim/bold-beam/${STRIP_W}x${BOLD_BEAM_STRIP_H}/f${BEAM_START_FADE_AT}-${BEAM_END_FADE_AT}`,
+  boldRing:   `__aim/bold-ring/${BOLD_RING_CELL}/${RING_R_MIN}-${BOLD_RING_R_MAX}-${RING_R_STEP}/w${BOLD_RING_CORE_W}-${BOLD_OUTLINE_W}/t${BOLD_TICK_INNER}-${BOLD_TICK_LEN}`,
+  boldDot:    `__aim/bold-dot/${DOT_TEX_SIZE}`,
 } as const;
 
 /**
@@ -183,16 +211,19 @@ function bakeRingAtlas(
   textures: Phaser.Textures.TextureManager,
   key: string,
   drawRing: (ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number) => void,
+  cell = RING_CELL,
+  frames = RING_FRAMES,
+  rows = RING_ROWS,
 ): void {
-  ensureCanvasTexture(textures, key, RING_COLS * RING_CELL, RING_ROWS * RING_CELL, (ctx, canvas) => {
+  ensureCanvasTexture(textures, key, RING_COLS * cell, rows * cell, (ctx, canvas) => {
     ctx.strokeStyle = '#ffffff';
-    for (let index = 0; index < RING_FRAMES; index += 1) {
-      const x = (index % RING_COLS) * RING_CELL;
-      const y = ((index / RING_COLS) | 0) * RING_CELL;
-      drawRing(ctx, x + RING_CELL / 2, y + RING_CELL / 2, RING_R_MIN + index * RING_R_STEP);
+    for (let index = 0; index < frames; index += 1) {
+      const x = (index % RING_COLS) * cell;
+      const y = ((index / RING_COLS) | 0) * cell;
+      drawRing(ctx, x + cell / 2, y + cell / 2, RING_R_MIN + index * RING_R_STEP);
       // `Texture.add()` zieht den ersten benannten Frame zum `firstFrame` hoch und verdraengt
       // `__BASE`. Bilder aus diesem Atlas muessen deshalb immer mit explizitem Frame entstehen.
-      canvas.add(RING_FRAME_NAMES[index], 0, x, y, RING_CELL, RING_CELL);
+      canvas.add(RING_FRAME_NAMES[index], 0, x, y, cell, cell);
     }
     ctx.globalAlpha = 1;
   });
@@ -221,12 +252,17 @@ export class AimVisuals {
   private readonly gaussCore:    Phaser.GameObjects.Image;
   private readonly gaussEmit:    Phaser.GameObjects.Image;
   private readonly reticle:      Phaser.GameObjects.Image;
+  private readonly boldBeam:     Phaser.GameObjects.Image;
+  private readonly boldRing:     Phaser.GameObjects.Image;
+  private readonly boldDot:      Phaser.GameObjects.Image;
 
   private readonly images: readonly Phaser.GameObjects.Image[];
 
   private ringShadowFrame = -1;
   private ringGlowFrame   = -1;
   private chargeRingFrame = -1;
+  private boldRingFrame   = -1;
+  private highVisibility  = false;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.generateTextures();
@@ -235,12 +271,16 @@ export class AimVisuals {
     // Einfuegereihenfolge. Die Reihenfolge hier IST also die Z-Reihenfolge.
     this.beamShadow   = this.addStrip(TEX.beamShadow, BEAM_STRIP_H);
     this.beamEnergy   = this.addStrip(TEX.beamEnergy, BEAM_STRIP_H);
+    this.boldBeam     = this.addStrip(TEX.boldBeam, BOLD_BEAM_STRIP_H);
     this.tickShadow   = this.addStrip(TEX.beamShadow, RANGE_TICK_H, RANGE_BAR_HALF_LEN * 2);
     this.tickCore     = this.addStrip(TEX.beamEnergy, RANGE_TICK_H, RANGE_BAR_HALF_LEN * 2);
     this.ringShadow   = this.addImage(TEX.ringPlain, RING_FRAME_NAMES[0]);
     this.ringGlow     = this.addImage(TEX.ringGlow,  RING_FRAME_NAMES[0]);
+    this.boldRing     = this.addImage(TEX.boldRing,  RING_FRAME_NAMES[0]);
     this.centerDot    = this.addImage(AIM_GLOW_DOT_TEXTURE);
     this.centerDot.setDisplaySize(DOT_WORLD_RADIUS * 2, DOT_WORLD_RADIUS * 2);
+    this.boldDot      = this.addImage(TEX.boldDot);
+    this.boldDot.setDisplaySize(DOT_WORLD_RADIUS * 2, DOT_WORLD_RADIUS * 2);
     this.chargeShadow = this.addImage(TEX.ringPlain, RING_FRAME_NAMES[0]);
     this.chargeGlow   = this.addImage(TEX.ringPlain, RING_FRAME_NAMES[0]);
 
@@ -254,9 +294,9 @@ export class AimVisuals {
     this.reticle   = this.addImage(TEX.reticle);
 
     this.images = [
-      this.beamShadow, this.beamEnergy,
+      this.beamShadow, this.beamEnergy, this.boldBeam,
       this.tickShadow, this.tickCore,
-      this.ringShadow, this.ringGlow, this.centerDot,
+      this.ringShadow, this.ringGlow, this.boldRing, this.centerDot, this.boldDot,
       this.chargeShadow, this.chargeGlow,
       this.gaussWide, this.gaussCore, this.gaussEmit,
       this.reticle,
@@ -273,6 +313,20 @@ export class AimVisuals {
     this.chargeGfx.setVisible(false);
   }
 
+  /** Waehlt zwischen dezenter und kontrastreicher Zielhilfe; wirkt ab dem naechsten `show*`. */
+  setHighVisibility(enabled: boolean): void {
+    if (enabled === this.highVisibility) return;
+    this.highVisibility = enabled;
+    // Die gesamte Zielhilfe wechselt die Ebene gemeinsam, damit ihre Einfuegereihenfolge als
+    // Z-Reihenfolge erhalten bleibt. Nur bei Umschaltung: setDepth loest eine Neusortierung aus.
+    for (const image of this.images) image.setDepth(enabled ? DEPTH_AIM_HIGH_VISIBILITY : DEPTH_AIM);
+    this.chargeGfx.setDepth(enabled ? DEPTH_AIM_HIGH_VISIBILITY : DEPTH_AIM);
+  }
+
+  isHighVisibility(): boolean {
+    return this.highVisibility;
+  }
+
   showBeam(
     sx: number,
     sy: number,
@@ -286,6 +340,13 @@ export class AimVisuals {
     const length = Math.sqrt(dx * dx + dy * dy);
     if (length < 0.5) return;
     const rotation = Math.atan2(dy, dx);
+
+    if (this.highVisibility) {
+      this.boldBeam.setVisible(true).setPosition(sx, sy).setRotation(rotation)
+        .setTint(palette.beamCore).setAlpha(0.62 - frac * 0.12);
+      this.boldBeam.displayWidth = length;
+      return;
+    }
 
     this.beamShadow.setVisible(true).setPosition(sx, sy).setRotation(rotation)
       .setTint(palette.beamShadow).setAlpha(BEAM_SHADOW_ALPHA + frac * 0.04);
@@ -304,10 +365,11 @@ export class AimVisuals {
     const startX = rx - perpX * RANGE_BAR_HALF_LEN;
     const startY = ry - perpY * RANGE_BAR_HALF_LEN;
 
+    const bold = this.highVisibility;
     this.tickShadow.setVisible(true).setPosition(startX, startY).setRotation(rotation)
-      .setTint(CROSS_SHADOW_COLOR).setAlpha(0.28);
+      .setTint(CROSS_SHADOW_COLOR).setAlpha(bold ? 0.5 : 0.28);
     this.tickCore.setVisible(true).setPosition(startX, startY).setRotation(rotation)
-      .setTint(accentColor).setAlpha(0.55);
+      .setTint(accentColor).setAlpha(bold ? 0.9 : 0.55);
   }
 
   showCrosshair(
@@ -318,6 +380,17 @@ export class AimVisuals {
     ringAlpha: number,
     accentColor: number,
   ): void {
+    if (this.highVisibility) {
+      const boldFrame = boldRingFrameIndex(ringRadius);
+      if (boldFrame !== this.boldRingFrame) {
+        this.boldRing.setFrame(RING_FRAME_NAMES[boldFrame]);
+        this.boldRingFrame = boldFrame;
+      }
+      this.boldRing.setVisible(true).setPosition(cx, cy).setTint(ringColor).setAlpha(ringAlpha);
+      this.boldDot.setVisible(true).setPosition(cx, cy).setTint(accentColor);
+      return;
+    }
+
     const shadowFrame = ringFrameIndex(ringRadius + 1.5);
     if (shadowFrame !== this.ringShadowFrame) {
       this.ringShadow.setFrame(RING_FRAME_NAMES[shadowFrame]);
@@ -478,6 +551,8 @@ export class AimVisuals {
 
     ensureAimGlowDotTexture(this.scene);
 
+    this.bakeHighVisibilityTextures(textures);
+
     this.bakeTargetingReticle(textures);
 
     // Gauss-Strahl: der frueher aus fuenf Strichen gestapelte Querschnitt als Verlauf. Ohne
@@ -511,6 +586,53 @@ export class AimVisuals {
       [0.62, 'rgba(255,255,255,0.25)'],
       [0.78, 'rgba(230,230,230,0.12)'],
       [1.00, 'rgba(230,230,230,0.00)'],
+    ]);
+  }
+
+  private bakeHighVisibilityTextures(textures: Phaser.Textures.TextureManager): void {
+    const outline = 'rgb(20,20,26)';
+
+    // Beam: weisser Kern (~2.4 px) mit dunkler Kontur je ~2 px, weich ausgefedert.
+    bakeStrip(textures, TEX.boldBeam, BOLD_BEAM_STRIP_H, [
+      [0.00, 'rgba( 20, 20, 26,0.00)'],
+      [0.17, 'rgba( 20, 20, 26,0.42)'],
+      [0.33, 'rgba( 20, 20, 26,0.42)'],
+      [0.40, 'rgba(255,255,255,0.92)'],
+      [0.60, 'rgba(255,255,255,0.92)'],
+      [0.67, 'rgba( 20, 20, 26,0.42)'],
+      [0.83, 'rgba( 20, 20, 26,0.42)'],
+      [1.00, 'rgba( 20, 20, 26,0.00)'],
+    ], true);
+
+    // Spread-Ring plus vier Achsen-Ticks. Erst alle Konturen, dann alle Kerne, damit keine Kontur
+    // einen bereits gezeichneten Kern ueberdeckt.
+    bakeRingAtlas(textures, TEX.boldRing, (ctx, cx, cy, radius) => {
+      const axes: readonly (readonly [number, number])[] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+      const inner = radius + BOLD_TICK_INNER;
+      const outer = inner + BOLD_TICK_LEN;
+      const pass = (color: string, alpha: number, width: number): void => {
+        ctx.strokeStyle = color;
+        strokeRing(ctx, cx, cy, radius, width, alpha);
+        ctx.lineCap = 'round';
+        for (const [dx, dy] of axes) {
+          ctx.beginPath();
+          ctx.moveTo(cx + dx * inner, cy + dy * inner);
+          ctx.lineTo(cx + dx * outer, cy + dy * outer);
+          ctx.stroke();
+        }
+      };
+      pass(outline, 0.62, BOLD_OUTLINE_W);
+      pass('#ffffff', 1, BOLD_RING_CORE_W);
+    }, BOLD_RING_CELL, BOLD_RING_FRAMES, BOLD_RING_ROWS);
+
+    // Mittelpunkt: deckender Kern (r = 2.4) mit dunklem Saum bis r = 4, auf 8 px Weltradius.
+    fillRadialGradientTexture(textures, TEX.boldDot, DOT_TEX_SIZE, [
+      [0.00, 'rgba(255,255,255,1.00)'],
+      [0.30, 'rgba(255,255,255,1.00)'],
+      [0.36, 'rgba( 20, 20, 26,0.72)'],
+      [0.50, 'rgba( 20, 20, 26,0.72)'],
+      [0.64, 'rgba( 20, 20, 26,0.00)'],
+      [1.00, 'rgba( 20, 20, 26,0.00)'],
     ]);
   }
 

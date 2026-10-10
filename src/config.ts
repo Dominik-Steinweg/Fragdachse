@@ -618,6 +618,13 @@ export const DEPTH_FX = 25;
 export const DEPTH_AIM = DEPTH.CANOPY - 0.4;
 
 /**
+ * Deutliche Zielhilfe (Option): oberste Ebene der Weltkamera, damit Explosionen, Kronen,
+ * Rauch und Himmelsblitze das Fadenkreuz nie verdecken. Die Clarity-Kamera mit HUD und
+ * Overlays zeichnet unabhaengig von der Tiefe weiterhin darueber.
+ */
+export const DEPTH_AIM_HIGH_VISIBILITY = DEPTH.OVERLAY - 1;
+
+/**
  * Lightmap-Overlay der dynamischen Beleuchtung: über Boden, Felsen, Baumstämmen und
  * Spielern, aber **unter** den Baumkronen (`DEPTH.CANOPY` = 20) und unter `DEPTH_FX` –
  * Explosions- und Feuer-Visuals sind emissiv und sollen auch nachts ungedimmt bleiben.
