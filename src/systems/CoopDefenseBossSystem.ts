@@ -2,8 +2,13 @@ import type { CoopDefenseMapBossConfig } from '../config/coopDefenseMaps';
 import type { CoopDefenseEnemyKind } from '../config/coopDefenseEnemies';
 import type { EnemyManager, EnemySpawnOptions } from '../entities/EnemyManager';
 import { getBossIntroPreset, type BossIntroState } from '../config/bossIntros';
+import type { KrakenBossSpawnPort, KrakenHabitatReservation, KrakenHabitatResult } from './KrakenState';
+import type { BossTargetRef } from '../combat/CombatPartContact';
 
 interface BossSpawnExecutor {
+  hostReserveBossHabitat?(kind: CoopDefenseEnemyKind, habitatId: string): KrakenHabitatResult<KrakenHabitatReservation>;
+  spawnAtHabitat?: KrakenBossSpawnPort['spawnAtHabitat'];
+  releaseBossHabitat?(reservationId: string): void;
   hostSpawnBoss(kind: CoopDefenseEnemyKind): boolean;
   hostResolveBossSpawnPoint?(kind: CoopDefenseEnemyKind, edgeMarginCells?: number): { readonly x: number; readonly y: number } | null;
   hostSpawnBossAt?(kind: CoopDefenseEnemyKind, x: number, y: number, options?: EnemySpawnOptions): boolean;
@@ -11,7 +16,7 @@ interface BossSpawnExecutor {
 
 type BossPhase =
   | { readonly type: 'waiting' }
-  | { readonly type: 'intro'; readonly state: BossIntroState; readonly emergeAtElapsedMs: number }
+  | { readonly type: 'intro'; readonly state: BossIntroState; readonly emergeAtElapsedMs: number; readonly reservation?: KrakenHabitatReservation }
   | { readonly type: 'spawned'; readonly spawnedAtElapsedMs: number };
 
 /**
@@ -22,12 +27,14 @@ type BossPhase =
 export class CoopDefenseBossSystem {
   private elapsedMs = 0;
   private phase: BossPhase = { type: 'waiting' };
+  private defeatCompletion: (() => boolean) | null = null;
+  setDefeatCompletionSource(source: (() => boolean) | null): void { this.defeatCompletion = source; }
 
   constructor(
     private readonly bossConfig: CoopDefenseMapBossConfig,
     private readonly enemyManager: EnemyManager,
     private readonly spawnExecutor: BossSpawnExecutor,
-    private readonly onBossSpawned?: (spawnedAtMs: number) => void,
+    private readonly onBossSpawned?: (spawnedAtMs: number, boss?: BossTargetRef, intro?: BossIntroState) => void,
     private readonly onBossIntroStarted?: (state: BossIntroState) => void,
     private readonly random: () => number = Math.random,
     /** Zusaetzliche authored Startbedingung, z. B. "Welle 1 geraeumt". */
@@ -47,12 +54,21 @@ export class CoopDefenseBossSystem {
         this.phase = intro;
         return;
       }
+      if (this.bossConfig.habitatId || this.bossConfig.intro?.preset === 'kraken-rise') return;
       this.completeSpawn(this.spawnExecutor.hostSpawnBoss(this.bossConfig.enemyKind), synchronizedNowMs);
       return;
     }
 
     if (this.elapsedMs < this.phase.emergeAtElapsedMs) return;
-    const { state } = this.phase;
+    const { state, reservation } = this.phase;
+    if (reservation) {
+      const boss = this.spawnExecutor.spawnAtHabitat?.(this.bossConfig.enemyKind, reservation);
+      this.spawnExecutor.releaseBossHabitat?.(reservation.reservationId);
+      if (!boss) { this.phase = { type: 'waiting' }; return; }
+      this.phase = { type: 'spawned', spawnedAtElapsedMs: this.elapsedMs };
+      this.onBossSpawned?.(synchronizedNowMs, boss, state);
+      return;
+    }
     const spawned = this.spawnExecutor.hostSpawnBossAt?.(
       this.bossConfig.enemyKind,
       state.x,
@@ -63,6 +79,7 @@ export class CoopDefenseBossSystem {
   }
 
   reset(): void {
+    if (this.phase.type === 'intro' && this.phase.reservation) this.spawnExecutor.releaseBossHabitat?.(this.phase.reservation.reservationId);
     this.elapsedMs = 0;
     this.phase = { type: 'waiting' };
   }
@@ -73,11 +90,23 @@ export class CoopDefenseBossSystem {
   }
 
   isBossDefeated(): boolean {
-    return this.phase.type === 'spawned' && !this.enemyManager.hasEnemyKind(this.bossConfig.enemyKind);
+    return this.phase.type === 'spawned' && !this.enemyManager.hasEnemyKind(this.bossConfig.enemyKind)
+      && (!(this.bossConfig.habitatId || this.bossConfig.intro?.preset === 'kraken-rise') || this.defeatCompletion?.() === true);
   }
 
   private tryStartIntro(synchronizedNowMs: number): BossPhase | null {
     const introConfig = this.bossConfig.intro;
+    if (introConfig?.preset === 'kraken-rise') {
+      if (!this.bossConfig.habitatId || !this.spawnExecutor.spawnAtHabitat) return null;
+      const result = this.spawnExecutor.hostReserveBossHabitat?.(this.bossConfig.enemyKind, this.bossConfig.habitatId);
+      if (result?.status !== 'valid') return null;
+      const r = result.value;
+      const state: BossIntroState = { preset: 'kraken-rise', habitatId: r.habitatId, waterAnchorId: r.waterAnchorId,
+        x: r.x, y: r.y, startedAtMs: synchronizedNowMs, seed: Math.floor(this.random() * 0xffffffff) >>> 0 };
+      this.onBossIntroStarted?.(state);
+      return { type: 'intro', state, reservation: r, emergeAtElapsedMs: this.elapsedMs + getBossIntroPreset('kraken-rise').emergeAtMs };
+    }
+    if (this.bossConfig.habitatId) return null;
     if (!introConfig || !this.spawnExecutor.hostResolveBossSpawnPoint || !this.spawnExecutor.hostSpawnBossAt) return null;
     const preset = getBossIntroPreset(introConfig.preset);
     const point = this.spawnExecutor.hostResolveBossSpawnPoint(this.bossConfig.enemyKind, preset.spawnEdgeMarginCells);

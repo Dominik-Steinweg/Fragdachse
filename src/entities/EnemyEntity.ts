@@ -70,6 +70,39 @@ export interface EnemyAttackWeapon {
 }
 
 export class EnemyEntity {
+  private krakenMovement: import('../systems/KrakenState').KrakenState['movement'] | null = null;
+  private krakenDestination: { readonly x: number; readonly y: number } | null = null;
+  private krakenTargetability: import('../systems/KrakenState').KrakenState['bodyTargetability'] | null = null;
+  private areaClaw: import('../systems/EnemyClawAttack').EnemyAreaClawState = { revision: 0, attack: null };
+
+  isBodyTargetable(): boolean { return !this.krakenTargetability || this.krakenTargetability.mode === 'exposed'; }
+  suppressBodyDotTicks(): boolean { return !!this.config.krakenBoss && !this.isBodyTargetable(); }
+  countsForEncounter(): boolean { return !this.config.krakenEgg; }
+  isKrakenEgg(): boolean { return !!this.config.krakenEgg; }
+  retireKrakenEgg(now: number): void {
+    if (this.config.krakenEgg) this.setKrakenBodyTargetability({ revision: (this.krakenTargetability?.revision ?? 0) + 1,
+      effectiveAt: now, mode: 'protected' });
+  }
+  isOrdinaryMovementEnabled(): boolean { return !this.stationary && (!this.krakenMovement || this.krakenMovement === 'land'); }
+  setKrakenBodyTargetability(state: import('../systems/KrakenState').KrakenState['bodyTargetability']): void {
+    if (this.krakenTargetability && state.revision <= this.krakenTargetability.revision) return;
+    this.krakenTargetability = { ...state };
+  }
+  setKrakenMovement(mode: import('../systems/KrakenState').KrakenState['movement'], destination: { readonly x: number; readonly y: number } | null): void {
+    this.krakenMovement = mode; this.krakenDestination = destination;
+    this.setStationary(mode !== 'land');
+  }
+  /** Destination is the prevalidated next host position, never an unchecked teleport target. */
+  applyKrakenMovement(): void {
+    const point = this.krakenDestination; this.krakenDestination = null;
+    if (point && (this.krakenMovement === 'water-approach' || this.krakenMovement === 'ashore')) {
+      this.setStationary(false); this.setPosition(point.x, point.y); this.setStationary(true);
+    }
+  }
+  getAreaClawState(): import('../systems/EnemyClawAttack').EnemyAreaClawState { return this.areaClaw; }
+  applyAreaClawState(state: import('../systems/EnemyClawAttack').EnemyAreaClawState): void {
+    if (state.revision > this.areaClaw.revision) this.areaClaw = structuredClone(state);
+  }
   // Bild zeigt nach Norden – Offset um Aim-Angle (0 = rechts) korrekt darzustellen.
   private static readonly ROTATION_OFFSET = Math.PI / 2;
 
@@ -218,6 +251,7 @@ export class EnemyEntity {
     }
 
     this.faceAngle(0);
+    if (authoritative && (config.krakenEgg || config.krakenBoss)) this.setStationary(true);
     this.syncBar();
   }
 
@@ -509,7 +543,7 @@ export class EnemyEntity {
   }
 
   getMoveSpeed(): number {
-    return this.config.moveSpeed * this.moveSpeedMultiplier;
+    return (this.config.krakenBoss?.landMoveSpeedPxPerSec ?? this.config.moveSpeed) * this.moveSpeedMultiplier;
   }
 
   setMoveSpeedMultiplier(multiplier: number): void {
@@ -518,10 +552,12 @@ export class EnemyEntity {
 
   /** Faktor, mit dem Wegstoss-Impulse auf diesen Gegner skaliert werden (1 = normal). */
   getKnockbackFactor(): number {
+    if (this.stationary) return 0;
     return this.config.knockbackFactor ?? DEFAULT_ENEMY_KNOCKBACK_FACTOR;
   }
 
   getCollisionRadius(): number {
+    if (this.config.krakenBoss) return this.config.krakenBoss.bodyRadiusPx;
     // Der Arcade-Body ist waehrend eines Dashes temporaer kleiner. Sonderbewegungen muessen
     // deshalb den tatsaechlichen Radius verwenden; auf Clients ohne autoritativen Body gilt die
     // registrierte Koerpergroesse ohne den transparenten Bewegungsrand.
@@ -533,7 +569,7 @@ export class EnemyEntity {
 
   /** Physischer Grunddurchmesser des Gegners vor der Ausweich-Skalierung. */
   getSize(): number {
-    return this.config.size;
+    return this.config.krakenBoss ? this.config.krakenBoss.bodyRadiusPx * 2 : this.config.size;
   }
 
   /** Canvas includes the pounce's transparent margin; the physical size stays authored. */
@@ -542,7 +578,7 @@ export class EnemyEntity {
   }
 
   private syncCollisionCircle(): void {
-    const diameter = this.sprite.frame.realWidth / (this.walkingSheet?.displayScale ?? 1);
+    const diameter = this.sprite.frame.realWidth * this.getSize() / this.getVisualSize();
     const offset = (this.sprite.frame.realWidth - diameter) * 0.5;
     this.body.setCircle(diameter * 0.5, offset, offset);
   }
@@ -764,6 +800,7 @@ export class EnemyEntity {
       hp: this.currentHp,
       maxHp: this.getMaxHp(),
       burnStacks: Math.min(this.burnStacks, MAX_VISUAL_BURN_STACKS),
+      ...(this.areaClaw.revision > 0 ? { areaClaw: this.areaClaw } : {}),
       burnVisualStyle: this.burnVisualStyle,
       plasmaChargeStacks: this.plasmaChargeStacks > 0 ? this.plasmaChargeStacks : undefined,
       faction: this.faction,
@@ -995,6 +1032,7 @@ export class EnemyEntity {
   }
 
   private createWeapons(): readonly EnemyAttackWeapon[] {
+    if (this.config.krakenBoss || this.config.krakenEgg) return [];
     return this.config.weapons.map((configuredWeapon) => {
       const baseConfig = WEAPON_CONFIGS[configuredWeapon.weaponId as keyof typeof WEAPON_CONFIGS];
       if (!baseConfig) {

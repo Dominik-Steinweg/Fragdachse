@@ -22,6 +22,17 @@ import * as enemyConfigs from '../src/config/coopDefenseEnemies';
 import { resolveActiveArenaWorldMetrics, resolveCoopDefenseWorldMetrics, worldCellCenter } from '../src/world/WorldMetrics';
 
 describe('Spawn coordinates across World and navigation grids', () => {
+  it('forwards a water reservation only through the dedicated habitat spawn port', () => {
+    const reservation = { worldRevision: 1, activityRevision: 1, topologyRevision: 1, reservationId: 'water', habitatId: 'pond', waterAnchorId: 'center', bodyRadiusPx: 64, x: 100, y: 200 };
+    const boss = { kind: 'enemy' as const, id: 'kraken', scope: { worldRevision: 1, runtimeGeneration: 1 }, instance: { entityGeneration: 1, activityRevision: 1 } };
+    const hostSpawnAtHabitat = vi.fn(() => boss), hostSpawnAtWorld = vi.fn();
+    const habitat = { revalidate: () => true, release: vi.fn() } as never;
+    const executor = new CoopDefenseSpawnExecutor({ hostSpawnAtHabitat, hostSpawnAtWorld } as never, {} as never,
+      resolveCoopDefenseWorldMetrics(30, 30), null, null, null, habitat);
+    expect(executor.spawnAtHabitat('kraken', reservation)).toBe(boss);
+    expect(hostSpawnAtHabitat).toHaveBeenCalledWith('kraken', reservation, habitat);
+    expect(hostSpawnAtWorld).not.toHaveBeenCalled();
+  });
   function setup() {
     const world = navigationTestWorld();
     const metrics = { ...resolveCoopDefenseWorldMetrics(8, 8), gridCols: 8, gridRows: 8,
