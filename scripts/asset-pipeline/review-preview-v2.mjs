@@ -74,7 +74,7 @@ export async function reviewPreview(folder, { root = defaultRoot, compare } = {}
   const m = await json(manifestFile);
   if (m.status !== 'authoring-preview' || !m.indices?.length || m.indices.some(i => !Number.isInteger(i) || i < 0)) throw new Error('Ungültiges Vorschau-Manifest.');
   const displayScale = m.spec.displayScale ?? 1;
-  if (!Number.isInteger(m.spec.targetSize) || m.spec.targetSize < 1 || m.spec.targetSize > 128
+  if (!Number.isInteger(m.spec.targetSize) || m.spec.targetSize < 1 || m.spec.targetSize > 1024
       || !Number.isFinite(displayScale) || displayScale < 1 || displayScale > 3) throw new Error('Ungültige Nominalgröße.');
   const size = Math.round(m.spec.targetSize * displayScale);
   const source = await comparisonSource(root, m.spec, compare);
@@ -95,14 +95,19 @@ export async function reviewPreview(folder, { root = defaultRoot, compare } = {}
   };
   let rock;
   if (m.spec.category === 'turret') rock = await sharp(path.join(root, 'public/assets/sprites/rocks47blob.png')).extract({ left: 96, top: 96, width: 32, height: 32 }).png().toBuffer();
-  const motions = m.indices.filter(i => i !== 0), columns = 4, width = 800;
-  const height = 382 + Math.ceil(motions.length / columns) * 225;
+  const motions = m.indices.filter(i => i !== 0), columns = 4;
+  const cellWidth = Math.max(200, size + 32), width = columns * cellWidth;
+  const detailSize = Math.max(220, size), detailY = 94 + detailSize / 2;
+  const nominalOffset = detailSize / 2 + 20 + size / 2;
+  const headerHeight = 94 + detailSize + 20 + size + 28;
+  const motionHeight = 30 + 148 + 12 + size + 24;
+  const height = headerHeight + Math.ceil(motions.length / columns) * motionHeight;
   let svg = text(20, 28, `${m.spec.label} · ${m.variant} · Authoring-Vorschau`, 19)
     + text(20, 51, `Vergrößert und ${m.spec.targetSize} px Körpergröße · statische Posen, keine Bewegungsabnahme`)
-    + text(30, 80, 'Bisher: ' + source.label, 12) + text(430, 80, 'Neu: idle', 12);
+    + text(30, 80, 'Bisher: ' + source.label, 12) + text(width / 2 + 30, 80, 'Neu: idle', 12);
   const layers = [];
   async function add(file, x, y, transform, scale = m.spec.displayScale ?? 1) {
-    for (const [display, cy] of [[Math.round(220 * scale / (m.spec.displayScale ?? 1)), y], [Math.round(m.spec.targetSize * scale), y + 146]]) {
+    for (const [display, cy] of [[Math.round(detailSize * scale / (m.spec.displayScale ?? 1)), y], [Math.round(m.spec.targetSize * scale), y + nominalOffset]]) {
       const angle = (transform?.rotationOffset ?? 0) * 180 / Math.PI;
       const ratio = display / size;
       if (rock) await centered(layers, display === size ? rock : await sharp(rock).resize(Math.round(32 * ratio)).png().toBuffer(), x, cy);
@@ -116,16 +121,16 @@ export async function reviewPreview(folder, { root = defaultRoot, compare } = {}
       previous = await sharp({ create: { width: h.referenceSize, height: h.referenceSize, channels: 4, background: '#00000000' } })
         .composite([{ input: await readFile(previous), left: Math.round(h.grip[0] - h.referenceGrip[0]), top: Math.round(h.grip[1] - h.referenceGrip[1]) }]).png().toBuffer();
     }
-    await add(previous, 200, 204, source.transform, source.displayScale ?? 1);
+    await add(previous, width / 4, detailY, source.transform, source.displayScale ?? 1);
   }
-  if (hasIdle) await add(idle, 600, 204);
-  else svg += text(430, 204, 'Idle fehlt in dieser alten Vorschau.');
+  if (hasIdle) await add(idle, width * .75, detailY);
+  else svg += text(width / 2 + 30, detailY, 'Idle fehlt in dieser alten Vorschau.');
   for (let i = 0; i < motions.length; i++) {
-    const x = 100 + i % columns * 200, y = 400 + Math.floor(i / columns) * 225;
+    const x = cellWidth / 2 + i % columns * cellWidth, y = headerHeight + 20 + Math.floor(i / columns) * motionHeight;
     svg += text(x - 85, y, poseLabel(motions[i]), 12);
     await centered(layers, await sprite(await frame(motions[i]), 148), x, y + 83);
-    if (rock) await centered(layers, rock, x, y + 186);
-    await centered(layers, await sprite(await frame(motions[i]), size), x, y + 186);
+    if (rock) await centered(layers, rock, x, y + 170 + size / 2);
+    await centered(layers, await sprite(await frame(motions[i]), size), x, y + 170 + size / 2);
   }
   const comparisonFile = await safePath(folder, 'comparison.png');
   await sharp(canvas(width, height, svg)).composite(layers).png().toFile(comparisonFile);
@@ -136,11 +141,12 @@ export async function reviewPreview(folder, { root = defaultRoot, compare } = {}
     + text(20, 51, `0° / 45° / 90° · Originalpixel ohne Hochskalierung${rock ? ' · Fels 32 px' : ''}`);
   const scaleLayers = [];
   const rowHeight = Math.max(100, Math.ceil(size * Math.SQRT2) + 20);
+  const tileWidth = Math.max(196, Math.ceil(size * Math.SQRT2) + 16);
   for (let i = 0; i < backgrounds.length; i++) {
     const [name, bg] = backgrounds[i], y = 82 + i * rowHeight;
     scaleSvg += text(20, y + rowHeight / 2, name);
     for (let j = 0; j < 3; j++) {
-      const left = 130 + j * 210, top = y, w = 196, h = rowHeight - 8;
+      const left = 130 + j * (tileWidth + 14), top = y, w = tileWidth, h = rowHeight - 8;
       let background;
       if (bg.startsWith('#')) background = await sharp({ create: { width: w, height: h, channels: 4, background: bg } }).png().toBuffer();
       else {
@@ -156,7 +162,7 @@ export async function reviewPreview(folder, { root = defaultRoot, compare } = {}
   }
   if (!hasIdle) scaleSvg += text(20, 72, 'Idle fehlt: leere Vergleichsfelder.');
   const scaleFile = await safePath(folder, 'scale.png');
-  await sharp(canvas(800, 90 + 4 * rowHeight, scaleSvg)).composite(scaleLayers).png().toFile(scaleFile);
+  await sharp(canvas(140 + 3 * (tileWidth + 14), 90 + 4 * rowHeight, scaleSvg)).composite(scaleLayers).png().toFile(scaleFile);
   m.poses = poses;
   m.comparison = source;
   await writeFile(manifestFile, JSON.stringify(m, null, 2) + '\n');

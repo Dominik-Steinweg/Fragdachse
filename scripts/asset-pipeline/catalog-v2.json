@@ -4619,6 +4619,88 @@
           "parameters": {}
         }
       ]
+    },
+    {
+      "id": "abyssal-kraken",
+      "label": "Abgrundkrake — Wasserboss",
+      "category": "enemy",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/abyssal-kraken-v2.png",
+      "targetSize": 320,
+      "sourceSizes": [
+        512,
+        1024
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Sehr großer Wasserboss mit speerförmigem Mantel, ausgeprägtem Rückenkiel und seitlichen Flossen, vier Augen und acht massigen, einzeln eingerollten muskulösen Tentakeln.",
+        "colors": "Kräftig violette organische Haut mit unregelmäßigen Pigmentflecken, erhabenen Hautfalten und Papillen, tiefen Furchen und gebrochenem feuchtem Glanz. Pfirsichrosa Schlitzaugen unter schweren fleischigen Lidern, rosige ventrale Saugnäpfe, ein dunkler Schnabel und sechs eingerollte Mundtentakel.",
+        "anatomy": "Acht weich gewichtete Tentakelketten mit ventralen Saugnäpfen. Wenige eingedrehte Tentakelspitzen zeigen in Ruhe kleine Saugnapfränder; beim Angriff rollt das vordere Armpaar seine Unterseite deutlich auf. Organisch in den Mantel eingebettete Augenhöhlen, ein schmaler Maulspalt unter fleischigen Falten und sechs kurze Mundtentakel. Wasserlinie und Spritzer gehören später zum World-Renderer."
+      },
+      "requiredClips": [
+        "idle",
+        "move",
+        "slam",
+        "emerge"
+      ],
+      "production": "reference",
+      "recipe": "abyssal-kraken",
+      "model": {},
+      "orthoScale": 8,
+      "textures": {
+        "organic": "art/poc/pipeline-v2/textures/kraken-dermis-v1.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Organische Tiefseehaut mit Pigmentierung und Faltentiefe",
+          "textureStrength": 0.93,
+          "formShadowStrength": 0.91
+        }
+      },
+      "clips": [
+        {
+          "name": "idle",
+          "motion": "kraken_idle",
+          "frameCount": 24,
+          "frameRate": 12,
+          "loop": true,
+          "parameters": {
+            "wave": 0.025
+          }
+        },
+        {
+          "name": "move",
+          "motion": "kraken_swim",
+          "frameCount": 24,
+          "frameRate": 16,
+          "loop": true,
+          "parameters": {
+            "wave": 0.048
+          }
+        },
+        {
+          "name": "slam",
+          "motion": "kraken_slam",
+          "frameCount": 32,
+          "frameRate": 24,
+          "loop": false,
+          "markers": {
+            "strike": 11,
+            "impact": 16
+          }
+        },
+        {
+          "name": "emerge",
+          "motion": "kraken_emerge",
+          "frameCount": 24,
+          "frameRate": 16,
+          "loop": false
+        }
+      ]
     }
   ]
 }

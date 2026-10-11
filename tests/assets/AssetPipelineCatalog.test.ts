@@ -104,7 +104,7 @@ describe('asset pipeline catalog contracts', () => {
   });
 
   it('distinguishes executable reference recipes from planned briefs and defines complete motion contracts', () => {
-    const motions = new Set(['mechanical_fire', 'energy_fire', 'organic_pulse', 'sustained', 'quadruped', 'biped', 'player_walk', 'player_idle', 'quad_rotors', 'twin_rotors', 'claw_quadruped', 'claw_biped']);
+    const motions = new Set(['mechanical_fire', 'energy_fire', 'organic_pulse', 'sustained', 'quadruped', 'biped', 'player_walk', 'player_idle', 'quad_rotors', 'twin_rotors', 'claw_quadruped', 'claw_biped', 'kraken_idle', 'kraken_swim', 'kraken_slam', 'kraken_emerge']);
     for (const asset of assets) {
       if (asset.production === 'planned') {
         expect(asset.recipe).toBeUndefined();

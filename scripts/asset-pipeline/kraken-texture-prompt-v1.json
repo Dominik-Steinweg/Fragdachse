@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "asset": "abyssal-kraken",
+  "tool": "built-in image_gen",
+  "output": "art/poc/pipeline-v2/textures/kraken-dermis-v1.png",
+  "prompt": "Use case: stylized-concept. Asset type: a square diffuse/albedo texture source for the actual 3D Blender skin of a colossal evil purple deep-sea kraken. Flat orthographic macro surface sample filling every pixel edge to edge, no animal or silhouette. Dense richly authored cephalopod dermis: irregular tiny leathery papillae, delicate interconnected wrinkles, clusters of dark chromatophore freckles, subtle branching plum capillaries, and restrained larger irregular aubergine pigment patches. Fine structure must look grown, not geometric hexagonal scales. Color palette dark muted eggplant purple, bruised plum, smoky lavender, small desaturated dusty mauve raised areas. Surface is organic, old, tough and matte, not plastic, rubber, stone, metal or polished. Keep diffuse values readable with soft midtones and clearly resolved microstructure, no gloss. Even neutral ambient illumination, no directional lighting, no baked shadows, no bright center, no vignette. Seamless-looking uniform spatial frequency. No eyes, mouths, suckers, limbs, anatomy, lettering, frame, border or watermark. One continuous skin material swatch, high detail."
+}

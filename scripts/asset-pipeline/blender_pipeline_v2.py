@@ -171,7 +171,7 @@ def validate_base(scene, asset, spec):
 def prepare(root, spec, revision, fingerprint, sources, textures):
     # MCP keeps Python alive. Hashing current files must never label cached old code.
     importlib.invalidate_caches()
-    for name in ('blender_pipeline', 'rigs_v2', 'claw_motion_v2', 'motions_v2', 'eye_anchors',
+    for name in ('blender_pipeline', 'rigs_v2', 'claw_motion_v2', 'kraken_motion_v2', 'motions_v2', 'eye_anchors',
                  'recipes.badger', 'recipes_v2.badger',
                  *([f'recipes.{spec["recipe"]}'] if spec['recipe'] in ('badger', 'rocket') else [])):
         if name in sys.modules:

@@ -104,8 +104,9 @@ describe('selected runtime asset package', () => {
       expect(metadata.height).toBeGreaterThan(0);
     }
   });
-  it('covers the authored production catalog with unique runtime textures', () => {
-    expect(manifest.assets.map(a => a.id).sort()).toEqual(catalog.assets.map(a => a.id).sort());
+  it('covers catalog assets bound to game IDs with unique runtime textures', () => {
+    // Unbound designs can be produced and reviewed before gameplay integration.
+    expect(manifest.assets.map(a => a.id).sort()).toEqual(catalog.assets.filter(a => a.gameIds.length > 0).map(a => a.id).sort());
     expect(new Set(manifest.assets.flatMap(a => [a.textureKey, a.sheetTextureKey])).size).toBe(manifest.assets.length * 2);
     for (const asset of manifest.assets) {
       expect(asset.gameIds).toEqual(catalog.assets.find(a => a.id === asset.id)!.gameIds);

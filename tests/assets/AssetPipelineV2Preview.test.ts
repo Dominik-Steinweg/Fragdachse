@@ -102,6 +102,22 @@ describe('Disposable V2 authoring previews', () => {
     expect(JSON.parse(await readFile(path.join(root, folder, 'preview.json'), 'utf8')).comparison.kind).toBe('catalog');
   });
 
+  it('keeps a large boss at nominal size in separate unclipped rotation cells', async () => {
+    const { root, image } = await fixture();
+    const folder = 'art/poc/pipeline-v2/previews/boss/kraken';
+    await save(path.join(root, folder, 'preview.json'), { status: 'authoring-preview', id: 'kraken', variant: 'standard', indices: [0, 1],
+      spec: { id: 'kraken', label: 'Kraken', category: 'enemy', targetSize: 320, clips: [{ name: 'move', frameCount: 2, loop: true }] } });
+    await image(`${folder}/frame-0000.png`);
+    await image(`${folder}/frame-0001.png`);
+    await image('public/assets/sprites/gras_bg_tile.png');
+    await image('public/assets/sprites/train/train_material_dark_top.png');
+    await preview(['--review', folder], root);
+    const scale = await sharp(path.join(root, folder, 'scale.png')).metadata();
+    expect(scale.width).toBeGreaterThan(3 * 320 * Math.SQRT2);
+    const comparison = await sharp(path.join(root, folder, 'comparison.png')).metadata();
+    expect(comparison.width).toBeGreaterThan(4 * 320);
+  });
+
   it('rejects traversal, production outputs and redirected preview directories', async () => {
     const { root } = await fixture();
     await expect(safePath(root, '../outside')).rejects.toThrow(/Unsafe/);
