@@ -1,3 +1,4 @@
+import { VOID_PALETTE } from '../config';
 import { GpuVfxEffectId } from './gpu/GpuVfxEffects';
 import { getGpuVfxFrame, GpuVfxFrameId } from './gpu/GpuVfxAtlas';
 import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
@@ -8,6 +9,8 @@ const EFFECTS = [GpuVfxEffectId.VoidMeteorPlasma, GpuVfxEffectId.VoidMeteorSpark
   GpuVfxEffectId.VoidMeteorSmoke, GpuVfxEffectId.VoidMeteorFragment, GpuVfxEffectId.VoidMeteorSpark] as const;
 const BASE_RATES = [260, 190, 72, 12, 420];
 const EDGE_MEMBERS_PER_TICK = 3;
+/** Edge fibres burn out in the void family instead of reading as white rain. */
+const EDGE_TINTS = [VOID_PALETTE.primary, VOID_PALETTE.primary, VOID_PALETTE.bright, 0xe86bff] as const;
 
 /** One bounded source per material, scheduled by the shared GPU tick after retirement.
  * Impact only stops emission; clear/teardown kills all surviving members with their sources. */
@@ -198,7 +201,8 @@ export class VoidMeteorParticleTrail {
     spec.scaleEnd = spec.scaleStart * 0.35;
     spec.stretchStart = 3 + this.edgeRandom() * 4; spec.stretchEnd = 5;
     spec.alphaStart = 1;
-    spec.tint = 0xe9caff; spec.tintBlendStart = 0.03; spec.tintBlendEnd = 1;
+    spec.tint = EDGE_TINTS[Math.floor(this.edgeRandom() * EDGE_TINTS.length)];
+    spec.tintBlendStart = 0.6; spec.tintBlendEnd = 1;
     this.gpu.spawn(spec, this.sources[4], now);
   }
 }
