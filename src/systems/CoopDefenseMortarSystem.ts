@@ -1,6 +1,6 @@
 import { getCoopDefenseEnemyConfig, type CoopDefenseEnemyMortarConfig } from '../config/coopDefenseEnemies';
 import { getCoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
-import type { CombatActorStatePort, CombatGeometryPort } from '../combat/CombatCapabilities';
+import type { CombatActorStatePort, CombatGeometryPort, CombatRelationshipQueryPort } from '../combat/CombatCapabilities';
 import { COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, PLAYER_SIZE } from '../config';
 import { ATTACK_DRONE_RULES } from '../config/attackDrone';
 import { UTILITY_CONFIGS, type PlaceableTurretUtilityConfig } from '../loadout/LoadoutConfig';
@@ -12,6 +12,7 @@ import type { PlacementSystem } from './PlacementSystem';
 import type { EnemyAiTargetCatalog } from './EnemyAiTargetCatalog';
 import type { SyncedMortarStrike, SyncedPlaceableRock } from '../types';
 import { CoopDefenseMortarStrikeSystem, type MortarStrike } from './CoopDefenseMortarStrikeSystem';
+import { selectAlliedMortarTarget } from './mortarAlliedTargeting';
 import { distance, findMortarLocalPositions, type MortarLocalPosition, type MortarNavigation, type MortarPoint } from './MortarLocalPositions';
 
 interface MortarTarget {
@@ -54,7 +55,8 @@ export class CoopDefenseMortarSystem implements EnemySpecialMovementSource {
   constructor(
     private readonly enemies: Pick<EnemyManager, 'getAllEnemies'>,
     private readonly players: Pick<PlayerManager, 'getAllPlayers'>,
-    private readonly combat: Pick<CombatActorStatePort, 'isAlive'> & Pick<CombatGeometryPort, 'hasLineOfSight'>,
+    private readonly combat: Pick<CombatActorStatePort, 'isAlive'> & Pick<CombatGeometryPort, 'hasLineOfSight'>
+      & CombatRelationshipQueryPort,
     private readonly catalog: EnemyAiTargetCatalog,
     private readonly bases: Pick<BaseManager, 'getBasesByFaction' | 'getObstacleGeneration' | 'getBase'> | null,
     private readonly placement: Pick<PlacementSystem, 'forEachRuntimeRockInRadius' | 'getRuntimeRock' | 'getWorldPointForCell' | 'getCarrierBaseId'>,
@@ -93,7 +95,8 @@ export class CoopDefenseMortarSystem implements EnemySpecialMovementSource {
         snapshot, damage: { ...config, targetWeights: { ...config.targetWeights } },
         source: {
           gameplaySource: { kind: 'enemy', id: enemy.id }, actor: { kind: 'enemy', id: enemy.id },
-          attribution: { kind: 'enemy', id: enemy.id },
+          attribution: enemy.faction === 'allied' && enemy.ownerId
+            ? { kind: 'player', id: enemy.ownerId } : { kind: 'enemy', id: enemy.id },
           allegiance: { ownerId: enemy.id, factionId: enemy.faction },
           authoredSourceId: 'enemy.mortar', origin: 'explosion',
         },
@@ -155,8 +158,17 @@ export class CoopDefenseMortarSystem implements EnemySpecialMovementSource {
   private chooseFactionFiringTarget(enemy: EnemyEntity, state: MortarBehavior, config: CoopDefenseEnemyMortarConfig, nowMs: number): MortarPoint | null {
     switch (enemy.faction) {
       case 'hostile': return this.updateHostileSiege(enemy, state, config, nowMs);
+      case 'allied': return this.chooseAlliedTarget(enemy, state, config, nowMs);
       default: return null;
     }
+  }
+
+  /** Necromancy allies shell hostile clusters; no siege positioning, evaluated on an interval. */
+  private chooseAlliedTarget(enemy: EnemyEntity, state: MortarBehavior, config: CoopDefenseEnemyMortarConfig, nowMs: number): MortarPoint | null {
+    if (nowMs < state.readyAt || nowMs < state.evaluateAt) return null;
+    state.evaluateAt = nowMs + config.reevaluateIntervalMs;
+    return selectAlliedMortarTarget(enemy, this.enemies.getAllEnemies(), config,
+      [...this.getSnapshot(), ...this.strikes.getSnapshot()], nowMs, id => this.combat.canDamageTarget(enemy.id, id));
   }
 
   private updateHostileSiege(enemy: EnemyEntity, state: MortarBehavior, config: CoopDefenseEnemyMortarConfig, nowMs: number): MortarPoint | null {

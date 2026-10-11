@@ -1718,6 +1718,14 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   applyMortarStrikeDamage(strike: MortarStrike, nowMs: number): void {
     const { snapshot: shot, damage: cfg, source } = strike;
     const ownerId = source.allegiance.ownerId;
+    // Allied artillery only hits hostile actors. The captured source retains faction and
+    // necromancy credit after despawn; structures, terrain, train and decoys are excluded.
+    if (shot.faction === 'allied') {
+      this.ctx.getWorldCombatCore()!.applyAoeDamage(shot.targetX, shot.targetY, shot.radius,
+        cfg.maxDamage, ownerId, false, { source, sourceId: 'enemy.mortar', category: 'explosion',
+          baseDamageMult: 0, damageFalloff: { minDamage: cfg.minDamage } });
+      return;
+    }
     applyHostileAreaStrikeDamage({
       x: shot.targetX, y: shot.targetY, radius: shot.radius, maxDamage: cfg.maxDamage, minDamage: cfg.minDamage,
       attackerId: ownerId, sourceId: 'enemy.mortar', source, includeSelf: false,
