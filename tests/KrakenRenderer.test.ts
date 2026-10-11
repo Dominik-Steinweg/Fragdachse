@@ -19,7 +19,7 @@ import { KRAKEN_WORLD_EXPOSURE, krakenWaterMask } from '../src/effects/kraken/su
 import { KRAKEN_RISE_INTRO } from '../src/config/bossIntros';
 import { getCameraFocusOverride } from '../src/graphics/cameraFocusOverride';
 import { normalizePipelineAsset, type PipelineBossAsset } from '../src/config/pipelineAssetContracts';
-import { KRAKEN_ASSET_REQUIREMENTS } from '../src/config/krakenBoss';
+import { KRAKEN_ASSET_REQUIREMENTS, KRAKEN_BOSS_DEFAULTS } from '../src/config/krakenBoss';
 import type { KrakenState, KrakenTentacleState, KrakenEggState } from '../src/systems/KrakenState';
 import type { CombatPartHitReceipt } from '../src/combat/CombatPartContact';
 
@@ -110,6 +110,27 @@ function sceneFixture() {
 }
 
 describe('host timelines and D asset projection', () => {
+  it('joins the exit on the water side until grip, then starts exactly at the land grip marker', () => {
+    const s = state(), a = assets(), pose = { x: 100, y: 120, angle: 1 };
+    s.phase = { kind: 'ashore', corridorId: 'shore', startedAt: 0, moveAt: 1200, gripAt: 1900,
+      heaveAt: 3150, endsAt: 3600, recoveryEndsAt: 4200, blocked: false };
+    s.bodyTargetability.mode = 'protected';
+    expect(sampleKrakenBody(s, pose, a, 300).sample.clip).toBe('idle');
+    expect(sampleKrakenBody(s, pose, a, 800).sample.frame).not.toBe(sampleKrakenBody(s, pose, a, 300).sample.frame);
+    const swim = sampleKrakenBody(s, pose, a, 1800); expect(swim.asset).toBe(a.water); expect(swim.sample.clip).toBe('move');
+    const grip = sampleKrakenBody(s, pose, a, s.phase.gripAt);
+    expect(grip.asset).toBe(a.land); expect(grip.sample.frame).toBe(a.land.metadata.clips.find(c => c.name === 'ashore')!.markers!.grip);
+    expect(sampleKrakenBody(s, pose, a, s.phase.heaveAt).sample.frame).toBe(a.land.metadata.clips.find(c => c.name === 'ashore')!.markers!.heave);
+  });
+  it('joins a lunge using the frozen attack clock and maps strike/impact to exported markers', () => {
+    const s = state(), a = assets(), attack = { ...part('body').claw.attack!, presentation: 'slam' as const };
+    s.phase = { kind: 'land', startedAt: 0 }; s.bodyAction = { kind: 'slam', attackId: attack.attackId };
+    const pose = { x: 240, y: 120, angle: attack.pose.angle, claw: { revision: 1, attack } };
+    const clip = a.land.metadata.clips.find(c => c.name === 'slam')!;
+    expect(sampleKrakenBody(s, pose, a, attack.strikeAt).sample.frame).toBe(clip.markers!.strike);
+    expect(sampleKrakenBody(s, pose, a, attack.hitAt).sample.frame).toBe(clip.markers!.impact);
+    expect(sampleKrakenBody(s, pose, a, (attack.strikeAt + attack.hitAt) / 2).pose).toEqual(pose);
+  });
   it('hides an unavailable atlas pair without creating filters or repeating diagnostics', () => {
     const f = sceneFixture(), diagnostic = vi.fn(); f.scene.textures.exists.mockReturnValue(false);
     const view = new KrakenSpriteView(f.scene, asset('water'), () => 0, diagnostic);
@@ -172,6 +193,36 @@ describe('host timelines and D asset projection', () => {
 });
 
 describe('Kraken renderer ownership', () => {
+  it('announces once and only shakes on live marker crossings, including without resident assets', () => {
+    const f = sceneFixture(), s = state(), announceExit = vi.fn(), feedback = { request: vi.fn(), cancel: vi.fn() };
+    const c = KRAKEN_BOSS_DEFAULTS.exit;
+    s.phase = { kind: 'ashore', corridorId: 'shore', startedAt: 0, moveAt: c.warningMs, gripAt: c.warningMs + c.gripAfterMs,
+      heaveAt: c.warningMs + c.heaveAfterMs, endsAt: c.warningMs + c.durationMs,
+      recoveryEndsAt: c.warningMs + c.durationMs + c.recoveryMs, blocked: false }; s.tentacles = [];
+    const pose = { x: 0, y: 0, angle: 0 };
+    const options = { assets: null, waterAt: () => 0, readEggPose: () => null, diagnostic: vi.fn(), announceExit, feedback: feedback as never };
+    const renderer = new KrakenRenderer(f.scene, options);
+    renderer.sync(s, pose, c.roarAfterMs - 50); renderer.sync(s, pose, c.roarAfterMs);
+    renderer.sync(s, pose, c.roarAfterMs); expect(announceExit).toHaveBeenCalledOnce(); expect(feedback.request).toHaveBeenCalledOnce();
+    renderer.destroy(); feedback.request.mockClear(); announceExit.mockClear();
+    const joined = new KrakenRenderer(f.scene, options); joined.sync(s, pose, s.phase.gripAt + 200);
+    expect(announceExit).not.toHaveBeenCalled(); expect(feedback.request).not.toHaveBeenCalled(); joined.destroy();
+  });
+  it('advances land movement frames by distance and idles when the body stops', () => {
+    const f = sceneFixture(), a = assets(), s = state();
+    s.phase = { kind: 'land', startedAt: 0 }; s.bodyTargetability.mode = 'exposed'; s.tentacles = [];
+    const renderer = new KrakenRenderer(f.scene, { assets: a, waterAt: () => 0, readEggPose: () => null, diagnostic: vi.fn() });
+    renderer.sync(s, { x: 0, y: 0, angle: 0 }, 0);
+    const step = KRAKEN_BOSS_DEFAULTS.landMoveSpeedPxPerSec / 10;
+    renderer.sync(s, { x: step, y: 0, angle: 0 }, 100);
+    expect(vi.mocked(a.land.frame).mock.calls.at(-1)?.[0]).toBe('move');
+    const firstFrame = vi.mocked(a.land.frame).mock.calls.at(-1)![1];
+    renderer.sync(s, { x: step * 2, y: 0, angle: 0 }, 300);
+    const secondFrame = vi.mocked(a.land.frame).mock.calls.at(-1)![1];
+    expect(secondFrame).toBeGreaterThan(firstFrame);
+    renderer.sync(s, { x: step * 2, y: 0, angle: 0 }, 400);
+    expect(vi.mocked(a.land.frame).mock.calls.at(-1)?.[0]).toBe('idle'); renderer.destroy();
+  });
   it('binds matching passes, uses exposure on land and releases the filter before its owned mask', () => {
     const f = sceneFixture(), a = asset('land'), diagnostic = vi.fn();
     const v = new KrakenSpriteView(f.scene, a, () => 0, diagnostic);

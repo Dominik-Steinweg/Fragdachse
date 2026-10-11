@@ -17,7 +17,7 @@ export const KrakenBossConfigSchema = v.pipe(v.strictObject({
   assets: v.strictObject({ water: id, land: id, tentacle: id, egg: id }),
   bodyRadiusPx: positive, phaseTwoHpRatio: v.pipe(positive, v.maxValue(1)), hpGate: v.literal(false),
   firstAttackDelayMs: nonnegative, actionPauseMs: nonnegative, turnRateDegPerSec: positive,
-  waterApproachSpeedPxPerSec: positive, waterShoreDistancePx: nonnegative, landMoveSpeedPxPerSec: positive,
+  waterApproachSpeedPxPerSec: positive, waterShoreDistancePx: nonnegative, landMoveSpeedPxPerSec: positive, landTurnRateDegPerSec: positive,
   dive: v.strictObject({ intervalMs: positive, durationMs: positive, submergedAtMs: positive,
     submergedDurationMs: positive, surfaceDurationMs: positive, vulnerableAtMs: positive, recoveryMs: nonnegative }),
   ink: v.strictObject({ range: positive, arcDegrees: v.pipe(positive, v.maxValue(360)), damage: positive,
@@ -28,9 +28,11 @@ export const KrakenBossConfigSchema = v.pipe(v.strictObject({
   hitboxProfiles: v.pipe(v.array(v.strictObject({ id,
     rise: shapes, hover: shapes, slam: shapes, retract: shapes })), v.minLength(1)),
   transfer: CombatPartTransferPolicySchema,
-  slam: v.strictObject(lane),
+  slam: v.strictObject({ ...lane, lungeDistancePx: positive, frontArcDegrees: v.pipe(positive, v.maxValue(180)) }),
   landCooldowns: v.strictObject({ slamMs: positive, inkMs: positive, eggsMs: positive }),
   exit: v.strictObject({ warningMs: positive, durationMs: positive, recoveryMs: nonnegative,
+    roarAfterMs: nonnegative, gripAfterMs: positive, gripHoldMs: nonnegative, heaveAfterMs: positive,
+    gripDistanceRatio: positive, heaveDistanceRatio: v.pipe(positive, v.maxValue(1)),
     protected: v.literal(true), contactDamage: v.literal(0), blockedPolicy: v.literal('wait-or-alternate'),
     retryMs: positive, diagnosticAfterMs: positive }),
   eggs: v.strictObject({ enemyKind: id, maxHp: positive, radiusPx: positive, volleyCount: count,
@@ -49,6 +51,9 @@ export const KrakenBossConfigSchema = v.pipe(v.strictObject({
   residency: v.strictObject({ waterBudgetMiB: positive, landBudgetMiB: positive, pixelsPerDisplayPixel: v.literal(1) }),
 }), v.check(c => c.dive.submergedAtMs <= c.dive.durationMs && c.dive.vulnerableAtMs <= c.dive.surfaceDurationMs,
 'Submersion markers must fit their host clips'),
+v.check(c => c.exit.roarAfterMs < c.exit.warningMs && c.exit.gripAfterMs + c.exit.gripHoldMs < c.exit.heaveAfterMs
+  && c.exit.heaveAfterMs < c.exit.durationMs && c.exit.gripDistanceRatio < c.exit.heaveDistanceRatio
+  && c.slam.lungeDistancePx < c.slam.length, 'Invalid exit/lunge anchors'),
 v.check(c => c.eggs.hatchSpawnAfterMs < c.eggs.hatchDurationMs
   && c.eggs.volleyCount <= c.eggs.maxPendingAndLive && c.eggs.releaseOffsets.length >= c.eggs.volleyCount,
 'Invalid egg capacity/anchors'),

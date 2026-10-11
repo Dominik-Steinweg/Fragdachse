@@ -9,12 +9,14 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const args = process.argv.slice(2);
 const value = name => args.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3);
-for (const arg of args) if (!/^--(origin|run|asset|size|frames|options|effects|r4|r5)=/.test(arg)) throw Error(`Unknown option: ${arg}`);
+for (const arg of args) if (!/^--(origin|run|asset|size|frames|options|effects|r4|r5|r7)=/.test(arg)) throw Error(`Unknown option: ${arg}`);
+const r7 = value('r7') === 'only';
+if (value('r7') && !r7) throw Error('r7: only');
 const r5 = value('r5') === 'only';
 if (value('r5') && !r5) throw Error('r5: only');
 const r4 = value('r4') === 'only';
 if (value('r4') && !r4) throw Error('r4: only');
-const effectsOnly = value('effects') === 'only' || r4 || r5;
+const effectsOnly = value('effects') === 'only' || r4 || r5 || r7;
 if (value('effects') && !['only', 'all'].includes(value('effects'))) throw Error('effects: only/all');
 const origin = value('origin') ?? 'http://127.0.0.1:8090';
 const count = Number(value('frames') ?? 6);
@@ -162,6 +164,30 @@ try {
   const status = await command({ action: 'krakenReview', ...options, playing: false });
   await settle(); await command({ action: 'step', frames: 120 }); await settle();
   await command({ action: 'step', frames: 60 }); await settle();
+  if (r7) {
+    for (const effect of ['ashore', 'land-move', 'land-claw']) {
+      const start = await command({ action: 'krakenReview', effect, effectTime: 0, phase: 'water', direction: 0,
+        camera: 'overview', playback: 'manual', submersion: true, waterLevel: null, grid: false, clip: 'idle' });
+      const timeline = start.krakenReview.landTimeline, p = timeline.phase, a = timeline.attack;
+      const times = effect === 'ashore' ? [0, timeline.roarAt, p.moveAt, p.gripAt - 30, p.gripAt + 80,
+        p.gripAt + 300, p.heaveAt, p.endsAt, p.endsAt + 2200]
+        : effect === 'land-claw' ? [0, a.strikeAt * .65, a.strikeAt, (a.strikeAt + a.hitAt) / 2,
+          a.hitAt, a.hitAt + 100, a.endsAt, a.endsAt + 500, a.endsAt + 2200]
+          : [0, 250, 500, 750, 1000, 1500, 2000, 2200, 2700];
+      for (const camera of ['overview', 'effect']) {
+        const frames = [], labels = [];
+        for (const time of times) {
+          const effectTime = Math.round(time / 1000 * 60) / 60, label = `${effect} | ${camera} | t=${effectTime.toFixed(3)}`;
+          frames.push(await capture(label, { effect, effectTime, camera })); labels.push(label);
+        }
+        await sheet(`r7-${effect}-${camera}`, frames, labels, 3);
+        const rewind = await capture(`${effect} rewind`, { effect, effectTime: 0, camera });
+        const { diff: _diff, ...comparison } = await compareImages(frames[0], rewind, { delta: 3, maxRatio: 0 });
+        seekComparisons.push({ effect, camera, ...comparison });
+        if (!comparison.passed) seekMismatches.push(`${effect}-${camera}`);
+      }
+    }
+  }
   if (r5) {
     for (const effect of ['intro', 'dive', 'surface', 'egg-throw']) {
       const start = await command({ action: 'krakenReview', effect, effectTime: 0, phase: 'water', direction: 90,

@@ -3,6 +3,7 @@ import { KRAKEN_BOSS_DEFAULTS } from '../src/config/krakenBoss';
 import { CoopDefenseKrakenSystem, type KrakenHostDependencies } from '../src/systems/CoopDefenseKrakenSystem';
 import { readKrakenState, type KrakenState, type KrakenLaneReservation } from '../src/systems/KrakenState';
 import type { BossTargetRef } from '../src/combat/CombatPartContact';
+import { krakenExitDistance } from '../src/systems/CoopDefenseKrakenMotion';
 
 const boss: BossTargetRef = { kind: 'enemy', id: 'kraken', scope: { worldRevision: 1, runtimeGeneration: 1 }, instance: { entityGeneration: 1, activityRevision: 1 } };
 function setup() {
@@ -36,6 +37,49 @@ function setup() {
 }
 
 describe('Kraken host owner', () => {
+  it('finishes an egg volley across half HP without retiring landed eggs or flights', () => {
+    const f = setup(); f.tick(f.config.firstAttackDelayMs);
+    const ink = f.system.getBodyClaw().attack!; f.tick(ink.endsAt); f.tick(ink.endsAt + f.config.actionPauseMs);
+    const cast = f.system.getState()!.bodyAction!; if (cast.kind !== 'eggs') throw Error();
+    f.tick(cast.releaseAt); f.entity.hp = 40;
+    for (let i = 1; i < f.config.eggs.volleyCount; i++) f.tick(cast.releaseAt + i * f.config.eggs.releaseSpacingMs);
+    expect(f.deps.projectiles.spawnProjectile).toHaveBeenCalledTimes(f.config.eggs.volleyCount);
+    expect(f.deps.brood.retireBossEggs).not.toHaveBeenCalled(); expect(f.deps.brood.cancelEgg).not.toHaveBeenCalled();
+    expect(f.deps.brood.clearBoss).not.toHaveBeenCalled();
+    f.tick(cast.endsAt); f.tick(cast.endsAt + 1); expect(f.system.getState()!.phase.kind).toBe('ashore');
+    f.entity.alive = false; f.tick(cast.endsAt + 2); expect(f.deps.brood.clearBoss).toHaveBeenCalledOnce();
+  });
+
+  it('samples the same marker curve with coarse and fine host steps, holding at grip', () => {
+    const coarse = setup(), fine = setup();
+    for (const f of [coarse, fine]) { f.entity.hp = 40; f.tick(1); }
+    const p = coarse.system.getState()!.phase; if (p.kind !== 'ashore') throw Error();
+    const at = p.heaveAt + (p.endsAt - p.heaveAt) / 2;
+    for (let t = 17; t < at; t += 17) fine.tick(t);
+    fine.tick(at); coarse.tick(at);
+    expect(coarse.entity.x).toBeCloseTo(fine.entity.x, 8);
+    expect(coarse.entity.x / 300).toBeCloseTo(krakenExitDistance(p, at, coarse.config.exit), 8);
+    expect(krakenExitDistance(p, p.gripAt, coarse.config.exit)).toBe(krakenExitDistance(p, p.gripAt + coarse.config.exit.gripHoldMs, coarse.config.exit));
+    expect(krakenExitDistance(p, p.endsAt, coarse.config.exit)).toBe(1);
+  });
+
+  it('sweeps a land lunge, freezes the lane and commits only once at impact', () => {
+    const f = setup(); f.entity.hp = 40; f.tick(1);
+    const p = f.system.getState()!.phase; if (p.kind !== 'ashore') throw Error();
+    f.tick(p.recoveryEndsAt); f.tick(p.recoveryEndsAt + f.config.actionPauseMs);
+    const attack = f.system.getBodyClaw().attack!; expect(attack.presentation).toBe('slam');
+    const start = f.entity.x, wall = start + f.config.slam.lungeDistancePx / 2;
+    f.deps.canMove = (_from, to, mode) => mode !== 'land' || to.x <= wall;
+    f.deps.intent.readTarget = () => ({ target: boss, x: -500, y: 700 });
+    f.tick(attack.strikeAt); expect(f.entity.x).toBe(start);
+    f.tick(attack.hitAt - 1); expect(f.entity.x).toBeGreaterThan(start); expect(f.entity.x).toBeLessThanOrEqual(wall);
+    expect(f.deps.combat.resolveAreaAttack).not.toHaveBeenCalled();
+    f.tick(attack.hitAt); f.tick(attack.hitAt);
+    expect(f.entity.x).toBeLessThanOrEqual(wall); expect(f.system.getBodyClaw().attack!.pose).toEqual(attack.pose);
+    expect(f.deps.combat.resolveAreaAttack).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(f.deps.combat.resolveAreaAttack).mock.calls[0][0].claw.attack.pose).toEqual(attack.pose);
+  });
+
   it('waits for camera return, freezes ink geometry and commits each impact once under reentrancy', () => {
     const f = setup(); f.system.clear(); f.system.start(boss, 'pond', 1, 100, 0);
     f.tick(99); expect(f.system.getState()?.bodyAction).toBeNull();

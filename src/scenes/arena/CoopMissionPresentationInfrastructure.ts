@@ -1,3 +1,4 @@
+import type { CameraFeedbackController } from '../../effects/camera/CameraFeedbackController';
 import { KrakenRenderer, type KrakenPresentationAssets } from '../../effects/kraken/KrakenRenderer';
 import { KrakenIntroRenderer } from '../../effects/kraken/KrakenIntroRenderer';
 import { KRAKEN_RISE_INTRO } from '../../config/bossIntros';
@@ -19,6 +20,7 @@ import type {
 } from '../../activity/CoopMissionPresentationBinding';
 
 export interface CoopMissionPresentationInfrastructureInput {
+  readonly cameraFeedback?: CameraFeedbackController;
   readonly krakenAssets?: KrakenPresentationAssets | null;
   readonly krakenWaterAt?: (x: number, y: number) => number;
   readonly centerHUD: CenterHUD;
@@ -70,6 +72,12 @@ export class CoopMissionPresentationInfrastructure {
     const waterAt = input.krakenWaterAt ?? (() => 0);
     const diagnostic = (message: string) => console.warn('[Kraken presentation]', message);
     this.kraken = new KrakenRenderer(this.scene, { assets: input.krakenAssets ?? null, waterAt, diagnostic,
+      feedback: input.cameraFeedback,
+      announceExit: () => this.objectiveAnnouncements.enqueue({
+        id: 'kraken-ashore:' + this.scene.time.now, topic: 'boss-intro', priority: 100, tone: 'main', holdMs: 2200,
+        kicker: t('ui.bossIntro.kraken.kicker'),
+        title: t('ui.bossIntro.kraken.ashore'),
+      }),
       readEggPose: egg => {
         const manager = input.getEnemyManager(), target = manager?.getCombatTargetRef(egg.eggId);
         const e = target?.instance.entityGeneration === egg.entityGeneration ? manager?.getEnemy(egg.eggId) : null;
@@ -77,6 +85,7 @@ export class CoopMissionPresentationInfrastructure {
       },
     });
     this.krakenIntro = new KrakenIntroRenderer(this.scene, input.krakenAssets?.water ?? null, waterAt, diagnostic);
+    this.krakenIntro.setCameraFeedback(input.cameraFeedback ?? null);
 
     this.secondaryObjectiveHud = new CoopDefenseSecondaryObjectiveHud(
       this.scene,

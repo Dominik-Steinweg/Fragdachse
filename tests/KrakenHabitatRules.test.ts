@@ -22,6 +22,17 @@ function setup() {
   return { rules, queries, boss, habitat, water, metrics, topology: () => { topology++; }, activity: () => { activity++; } };
 }
 describe('Kraken habitat reservations', () => {
+  it('ranks free land endpoints by target proximity with authored order breaking ties', () => {
+    const f = setup(), first = f.habitat.exits[0];
+    const near = { ...structuredClone(first), id: 'near', path: [...first.path.slice(0, -1), { gridX: 35, gridY: 22 }] };
+    f.habitat.exits.push(near, { ...structuredClone(near), id: 'tied' });
+    const target = worldCellCenter(f.metrics, 35, 22);
+    const chosen = f.rules.reserveExit(f.boss, 'pond', target);
+    expect(chosen.status === 'valid' && chosen.value.corridorId).toBe('near');
+    f.queries.circleFree = (x, y) => x !== target.x || y !== target.y;
+    const fallback = f.rules.reserveExit(f.boss, 'pond', target);
+    expect(fallback.status === 'valid' && fallback.value.corridorId).toBe(first.id);
+  });
   it('requires a full wet body and current land navigation, preserving pending', () => {
     const f = setup(); f.queries.landConnection = () => 'pending';
     expect(f.rules.reserveWaterSpawn('pond', KRAKEN_BOSS_DEFAULTS.bodyRadiusPx).status).toBe('pending');

@@ -735,6 +735,7 @@ export class ArenaLifecycleCoordinator {
     private readonly getSpectatorCameraInput: () => ArenaSpectatorCameraInput | undefined,
   ) {
     this.coopMissionPresentationUi = coopMissionPresentation?.createUiPort({
+      cameraFeedback: ctx.visualFeedback.camera,
       centerHUD: ctx.centerHUD,
       playerManager: ctx.playerManager,
       clientUpdate,

@@ -162,7 +162,7 @@ export class KrakenAssetResidency {
     if (this.detached) return { ready: Promise.resolve(false), settled: Promise.resolve() };
     this.phase = phase;
     const current: KrakenAssetRole[] = phase === 'intro' || phase === 'water' ? ['water', 'tentacle', 'egg']
-      : phase === 'dead' ? [] : ['land', ...(options.activeEggs === false ? [] : ['egg' as const])];
+      : phase === 'dead' ? [] : [...(phase === 'ashore' ? ['water' as const] : []), 'land', ...(options.activeEggs === false ? [] : ['egg' as const])];
     const required: [KrakenAssetRole, string][] = current.map(role => [role, '__rest']);
     const clips: [KrakenAssetRole, string][] = [];
     const add = (role: KrakenAssetRole, names: readonly string[]) => names.forEach(name => clips.push([role, name]));
@@ -172,7 +172,7 @@ export class KrakenAssetResidency {
       if (options.waterMove) add('water', ['move']);
       add('tentacle', ['rise', 'hover', 'slam', 'retract']);
     }
-    if (phase === 'ashore') add('land', ['ashore']);
+    if (phase === 'ashore') { add('water', ['idle', 'move']); add('land', ['ashore']); }
     if (phase === 'ashore' || phase === 'land') add('land', ['idle', 'move', 'ink-spit', 'slam', 'egg-throw', 'death']);
     if (current.includes('egg')) add('egg', ['idle', 'hatch']);
     if (phase === 'water' && options.prefetchLand) add('land', ['__rest', 'ashore', 'idle', 'move', 'ink-spit', 'slam', 'egg-throw', 'death']);

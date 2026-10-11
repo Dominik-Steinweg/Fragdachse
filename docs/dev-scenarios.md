@@ -101,6 +101,30 @@ Shader-Rundung von höchstens 3/255 je Kanal, ohne Pixelausnahmen; Messwerte ste
 Der Aufnahme-Tab hält Vites Hot-Reload-Verbindung an, damit parallele Dateiedits keinen
 laufenden Bogen neu laden. Ein neuer Runner-Aufruf lädt den aktuellen Code.
 
+### Kraken-Ausstieg und Landkampf (R7)
+
+`effect: 'ashore' | 'land-move' | 'land-claw'` verwendet die Hostwerte aus `krakenBoss.json`.
+`effectTime` ist die exakte Zeit in Sekunden; `playback: 'play'` spielt ab der gewählten Zeit.
+`krakenReview.landTimeline` zeigt Pose, Asset, Clipframe, Ausstiegsanker und eingefrorene Angriffslane.
+Der Ausstieg verwendet dieselbe Distanzkurve wie der Host und wechselt erst bei `gripAt` zum Landasset.
+Die Landbewegung läuft bis zum Stillstand; der Klauenangriff zeigt Windup, Ausfall, Impact und Erholung.
+
+```js
+await devScenario.run({action:'krakenReview', run:'kraken-v10', asset:'abyssal-kraken', size:320,
+  land:{run:'kraken-v10', asset:'abyssal-kraken-land', size:360}, effect:'ashore', effectTime:0});
+await devScenario.run({action:'krakenReview', effect:'land-claw', effectTime:0.53});
+await devScenario.run({action:'krakenReview', effect:'land-move', effectTime:0, playback:'play'});
+```
+
+```powershell
+node scripts/visual/kraken-review.mjs --run=kraken-v10 --r7=only
+```
+
+Neun Zeitpunkte je Effekt und Kamerasicht landen unter
+`build/kraken-review/<timestamp>/r7-<effect>-<overview|effect>.png`.
+`report.json` enthält Zeitanker, Kameraversatz, Fehler und Rückwärts-Seek-Vergleiche.
+Die Aufnahme verwendet vorhandene Atlanten; sie baut oder verändert keine Assets.
+
 ### Kraken-Effekte (R3)
 
 `effect: 'ink' | 'erupt' | 'slam' | 'none'` wählt den Prototyp. `effectTime` ist die absolute

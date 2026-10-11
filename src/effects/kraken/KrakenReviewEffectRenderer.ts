@@ -63,11 +63,11 @@ export class KrakenReviewEffectRenderer {
       .setRotation(angle).setDisplaySize(width, height).setVisible(true);
     q.shape[0] = width; q.shape[1] = height;
   }
-  render(f: KrakenReviewEffectFrame): void {
-    this.time = f.time;
+  render(f: KrakenReviewEffectFrame | { effect: 'none' }): void {
     this.telegraph.clear();
     for (const q of this.quads()) q.object.setVisible(false);
     if (f.effect === 'none') return;
+    this.time = f.time;
     if (f.effect === 'egg-throw') {
       f.eggs?.forEach((egg, i) => {
         if (!egg.visible) return;

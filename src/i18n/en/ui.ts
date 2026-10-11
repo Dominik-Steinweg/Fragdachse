@@ -513,6 +513,7 @@ export const enUi = {
   "ui.bossIntro.kraken.kicker": "FROM THE DEPTHS",
   "ui.bossIntro.kraken.title": "THE ABYSSAL KRAKEN AWAKENS",
   "ui.bossIntro.kraken.detail": "Dodge the ink and strike the shore tentacles.",
+  "ui.bossIntro.kraken.ashore": "The Abyssal Kraken is leaving the water!",
   "ui.bossIntro.void.title": "THE VOID HUNTER APPROACHES",
   "ui.bossIntro.void.detail": "Void sparks herald its arrival…",
   "ui.mainObjective.enemyBase": "DESTROY THE ENEMY BASE",

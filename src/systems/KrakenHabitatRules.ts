@@ -71,9 +71,9 @@ export class KrakenHabitatRules implements KrakenHabitatPort {
   }
 
   revalidateLane(r: KrakenLaneReservation): boolean { return this.current(r) && this.laneFree(r); }
-  reserveExit(boss: BossTargetRef, habitatId: string): KrakenHabitatResult<KrakenExitReservation> {
+  reserveExit(boss: BossTargetRef, habitatId: string, target?: Point): KrakenHabitatResult<KrakenExitReservation> {
     if (!this.matches(boss, habitatId)) return this.invalid('Stale boss/habitat');
-    const result = this.findExit();
+    const result = this.findExit(target);
     return result.status === 'valid' ? { status: 'valid', value: this.remember({ ...result.value, reservationId: this.id() }) } : result;
   }
   revalidateExit(r: KrakenExitReservation): KrakenHabitatResult<KrakenExitReservation> {
@@ -124,20 +124,26 @@ export class KrakenHabitatRules implements KrakenHabitatPort {
   }
 
   /** Validate the actual next host segment, including any water approach to an exit anchor. */
-  canMove(from: Point, to: Point, mode: 'water-approach' | 'ashore'): boolean {
+  canMove(from: Point, to: Point, mode: 'water-approach' | 'ashore' | 'land'): boolean {
     const radius = this.config.bodyRadiusPx;
     if (!this.inside(from, radius) || !this.inside(to, radius)
       || !this.queries.segmentFree(from, to, radius) || !this.queries.circleFree(to.x, to.y, radius)) return false;
     if (mode === 'ashore') return [...this.reservations.values()].some(r => 'corridorId' in r.value && this.current(r.value));
     const steps = Math.max(1, Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / (CELL_SIZE / 4)));
-    for (let i = 0; i <= steps; i++) if (!this.wet({ x: from.x + (to.x - from.x) * i / steps,
-      y: from.y + (to.y - from.y) * i / steps }, radius)) return false;
+    for (let i = 0; i <= steps; i++) {
+      const point = { x: from.x + (to.x - from.x) * i / steps, y: from.y + (to.y - from.y) * i / steps };
+      if (!(mode === 'land' ? this.dry(point, radius) : this.wet(point, radius))) return false;
+    }
     return true;
   }
 
-  private findExit(): KrakenHabitatResult<KrakenExitReservation> {
+  private findExit(target?: Point): KrakenHabitatResult<KrakenExitReservation> {
     let pending = false;
-    for (const e of this.habitat.exits) {
+    const ranked = this.habitat.exits.map((exit, index) => {
+      const end = this.cell(exit.path[exit.path.length - 1]);
+      return { exit, index, score: target ? Math.hypot(end.x - target.x, end.y - target.y) : 0 };
+    }).sort((a, b) => a.score - b.score || a.index - b.index);
+    for (const { exit: e } of ranked) {
       const r: KrakenExitReservation = { reservationId: '', topologyRevision: this.queries.revisions().topologyRevision,
         corridorId: e.id, widthPx: e.widthCells * CELL_SIZE, path: e.path.map(p => this.cell(p)) };
       const result = this.exitFree(r);

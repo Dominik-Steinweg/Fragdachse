@@ -1,6 +1,7 @@
 import type { CombatAreaAttackPort } from '../combat/CombatAreaAttack';
 import type { BossTargetRef, CombatPartIdentity } from '../combat/CombatPartContact';
 import type { KrakenBossConfig } from '../config/krakenBoss';
+import { krakenExitDistance } from './CoopDefenseKrakenMotion';
 import { KrakenTentacleTargets } from '../entities/KrakenTentacleTargets';
 import type { EnemyAreaClawAttack, EnemyAreaClawEvent, EnemyAreaClawState, EnemyClawSlot } from './EnemyClawAttack';
 import type { CoopDefenseKrakenBroodSystem } from './CoopDefenseKrakenBroodSystem';
@@ -12,7 +13,7 @@ type Point = { readonly x: number; readonly y: number };
 export interface KrakenHostDependencies {
   entity: KrakenEntityPort;
   intent: KrakenIntentReadPort;
-  habitat: KrakenHabitatPort;
+  habitat: KrakenHabitatPort & { reserveExit(boss: BossTargetRef, habitatId: string, target?: Point): ReturnType<KrakenHabitatPort['reserveExit']> };
   combat: CombatAreaAttackPort;
   projectiles: KrakenProjectileSpawnPort;
   brood: CoopDefenseKrakenBroodSystem;
@@ -20,7 +21,7 @@ export interface KrakenHostDependencies {
   /** Bind body snapshots and reliable body/part starts/clears in AP2. */
   claw(event: EnemyAreaClawEvent): void;
   waterApproach(from: Point, target: Point): Point | null;
-  canMove(from: Point, to: Point, mode: 'water-approach' | 'ashore'): boolean;
+  canMove(from: Point, to: Point, mode: 'water-approach' | 'ashore' | 'land'): boolean;
   eggLandings(from: Point, rotation: number, count: number, minimumShoreDistancePx: number): readonly (Point | null)[];
   flightFree(from: Point, to: Point, radius: number): boolean;
   random(): number;
@@ -46,7 +47,9 @@ export class CoopDefenseKrakenSystem {
   private cooldowns = { ink: 0, eggs: 0, slam: 0 };
   private exit: KrakenExitReservation | null = null;
   private exitIndex = 0;
-  private exitSpeed = 0;
+  private exitLength = 0;
+  private exitTravelled = 0;
+  private lunge: { from: Point; distance: number; stopped: boolean } | null = null;
   private nextExitRetry = 0;
   private blockedSince: number | null = null;
   private diagnosticSent = false;
@@ -93,8 +96,6 @@ export class CoopDefenseKrakenSystem {
     if (s.phase.kind === 'dying' || s.phase.kind === 'removed') { this.advanceDeath(now); return; }
     if (!s.phaseTwoPending && entity.hp <= entity.maxHp * this.config.phaseTwoHpRatio) {
       s.phaseTwoPending = true;
-      this.deps.brood.retireBossEggs(s.boss);
-      this.throws = [];
     }
     if (entity.stunned && s.bodyAction) this.cancelBody();
     const p = s.phase, d = this.config.dive;
@@ -134,6 +135,7 @@ export class CoopDefenseKrakenSystem {
       case 'ashore': this.advanceExit(now, dt, entity); break;
       case 'land':
         this.move(s.bodyAction || entity.stunned ? 'locked' : 'land', null);
+        if (s.bodyAction?.kind === 'slam') this.advanceLunge(now, entity);
         if (!s.bodyAction && !entity.stunned) this.faceTarget(entity, dt);
         break;
     }
@@ -167,7 +169,7 @@ export class CoopDefenseKrakenSystem {
       this.deps.brood.clearBoss(old.boss);
     }
     for (const p of this.parts.values()) this.deps.habitat.release(p.lane.reservationId);
-    this.parts.clear(); this.contacts.clear(); this.throws = []; this.bodyProgress = null;
+    this.parts.clear(); this.contacts.clear(); this.throws = []; this.bodyProgress = null; this.lunge = null;
     if (this.exit) this.deps.habitat.release(this.exit.reservationId);
     this.exit = null; this.blockedSince = null; this.diagnosticSent = false;
     if (old) this.deps.publish.publish(null);
@@ -186,9 +188,13 @@ export class CoopDefenseKrakenSystem {
   private faceTarget(entity: Point & { angle: number }, dt: number): void {
     const target = this.deps.intent.readTarget(this.state!.boss);
     if (!target) return;
+    this.facePoint(entity, target, dt);
+  }
+  private facePoint(entity: Point & { angle: number }, target: Point, dt: number): void {
     const desired = Math.atan2(target.y - entity.y, target.x - entity.x);
     const diff = Math.atan2(Math.sin(desired - entity.angle), Math.cos(desired - entity.angle));
-    const limit = this.config.turnRateDegPerSec * Math.PI / 180 * dt / 1000;
+    const rate = this.state!.phase.kind === 'land' ? this.config.landTurnRateDegPerSec : this.config.turnRateDegPerSec;
+    const limit = rate * Math.PI / 180 * dt / 1000;
     this.deps.entity.setFacing(this.state!.boss, entity.angle + Math.max(-limit, Math.min(limit, diff)));
   }
 
@@ -196,7 +202,8 @@ export class CoopDefenseKrakenSystem {
     const s = this.state!, entity = this.deps.entity.readBoss(s.boss), target = this.deps.intent.readTarget(s.boss);
     if (!entity || !target) return;
     const desired = Math.atan2(target.y - entity.y, target.x - entity.x);
-    if (Math.abs(Math.atan2(Math.sin(desired - entity.angle), Math.cos(desired - entity.angle))) > Math.PI / 36) return;
+    const error = Math.abs(Math.atan2(Math.sin(desired - entity.angle), Math.cos(desired - entity.angle)));
+    if (error > (s.phase.kind === 'land' ? this.config.slam.frontArcDegrees * Math.PI / 360 : Math.PI / 36)) return;
     if (s.phase.kind === 'surfaced') {
       const approach = this.deps.waterApproach(entity, target);
       if (approach && Math.hypot(approach.x - entity.x, approach.y - entity.y) > 1) return;
@@ -206,6 +213,7 @@ export class CoopDefenseKrakenSystem {
     } else {
       // An overdue ability gets priority over repeating slam, avoiding starvation at close range.
       const ready = (['slam', 'ink', 'eggs'] as const).filter(k => now >= this.cooldowns[k]
+        && (k === 'slam' || error <= Math.PI / 36)
         && (k !== 'slam' || Math.hypot(target.x - entity.x, target.y - entity.y) <= this.config.bodyRadiusPx + this.config.slam.length))
         .sort((a, b) => this.cooldowns[a] - this.cooldowns[b]);
       const kind = ready[0];
@@ -227,6 +235,7 @@ export class CoopDefenseKrakenSystem {
           : { kind: 'lane', length: this.config.slam.length, width: this.config.slam.width } } };
     this.state!.bodyAction = kind === 'ink' ? { kind, attackId, startedAt: now, chargeAt: attack.strikeAt, spitAt: attack.hitAt, endsAt: attack.endsAt } : { kind, attackId };
     this.bodyProgress = { actionId: attackId, released: false, impacted: false };
+    if (kind === 'slam') this.lunge = { from: { x: entity.x, y: entity.y }, distance: 0, stopped: false };
     this.bodyClaw = { revision: this.bodyClaw.revision + 1, attack };
     this.move(this.state!.phase.kind === 'land' ? 'locked' : 'water-anchored', null);
     this.emitClaw({ kind: 'body' }, this.bodyClaw);
@@ -301,10 +310,29 @@ export class CoopDefenseKrakenSystem {
     }
     if (this.state === s && s.bodyAction === action && now >= attack.endsAt) this.finishBody(now);
   }
-  private finishBody(now: number): void { this.cancelBody(); this.nextActionAt = now + this.config.actionPauseMs; }
+  private advanceLunge(now: number, entity: Point): void {
+    const attack = this.bodyClaw.attack, lunge = this.lunge;
+    if (!attack || !lunge || lunge.stopped || now < attack.strikeAt) return;
+    const desired = this.config.slam.lungeDistancePx * Math.min(1, (now - attack.strikeAt) / (attack.hitAt - attack.strikeAt));
+    const point = (d: number): Point => ({ x: lunge.from.x + Math.cos(attack.pose.angle) * d,
+      y: lunge.from.y + Math.sin(attack.pose.angle) * d });
+    let distance = desired;
+    if (!this.deps.canMove(entity, point(distance), 'land')) {
+      let low = lunge.distance, high = distance;
+      // Every query sweeps the complete body circle, including obstacles between both endpoints.
+      for (let i = 0; i < 16; i++) { const mid = (low + high) / 2;
+        if (this.deps.canMove(entity, point(mid), 'land')) low = mid; else high = mid;
+      }
+      distance = low; lunge.stopped = true;
+    }
+    lunge.distance = distance;
+    // Existing explicit-position movement mode; land phase and targetability remain authoritative.
+    this.move('ashore', point(distance));
+  }
+  private finishBody(now: number): void { this.cancelBody(); this.nextActionAt = now + (this.state?.phase.kind === 'land' ? 0 : this.config.actionPauseMs); }
   private cancelBody(): void {
     const s = this.state; if (!s) return;
-    s.bodyAction = null; this.bodyProgress = null;
+    s.bodyAction = null; this.bodyProgress = null; this.lunge = null;
     const eggs = this.throws; this.throws = [];
     for (const egg of eggs) if (!egg.released) this.deps.brood.cancelEgg(egg.effect);
     if (this.bodyClaw.attack) this.clearClaw({ kind: 'body' }, s.boss);
@@ -395,25 +423,28 @@ export class CoopDefenseKrakenSystem {
   private beginExit(now: number): void {
     if (now < this.nextExitRetry) return;
     this.nextExitRetry = now + this.config.exit.retryMs;
-    const s = this.state!, result = this.deps.habitat.reserveExit(s.boss, s.habitatId);
+    const s = this.state!, intent = this.deps.intent.readTarget(s.boss), players = this.deps.intent.readSecondaryTargets(s.boss);
+    const target = intent ?? (players.length ? { x: players.reduce((sum, p) => sum + p.x, 0) / players.length,
+      y: players.reduce((sum, p) => sum + p.y, 0) / players.length } : undefined);
+    const result = this.deps.habitat.reserveExit(s.boss, s.habitatId, target);
     if (result.status !== 'valid') { this.blocked(now, result.reason); return; }
     this.exit = result.value; this.exitIndex = 0;
     const c = this.config.exit, moveAt = now + c.warningMs;
     let previous: Point = this.lastPose, length = 0;
     for (const p of this.exit.path) { length += Math.hypot(p.x - previous.x, p.y - previous.y); previous = p; }
-    this.exitSpeed = length / (c.durationMs / 1000);
+    this.exitLength = length; this.exitTravelled = 0;
     s.phase = { kind: 'ashore', corridorId: this.exit.corridorId, startedAt: now, moveAt,
-      gripAt: moveAt + c.durationMs / 3, heaveAt: moveAt + c.durationMs * 2 / 3,
+      gripAt: moveAt + c.gripAfterMs, heaveAt: moveAt + c.heaveAfterMs,
       endsAt: moveAt + c.durationMs, recoveryEndsAt: moveAt + c.durationMs + c.recoveryMs, blocked: false };
     this.targetability('protected', now); this.move('locked', null);
     this.blockedSince = null;
   }
-  private advanceExit(now: number, dt: number, entity: Point): void {
+  private advanceExit(now: number, dt: number, entity: Point & { angle: number }): void {
     const s = this.state!, p = s.phase;
     if (p.kind !== 'ashore' || !this.exit) return;
     const valid = this.deps.habitat.revalidateExit(this.exit);
     if (valid.status !== 'valid') {
-      p.blocked = true; p.endsAt += dt; p.recoveryEndsAt += dt; this.move('locked', null); this.blocked(now, valid.reason);
+      this.pauseExit(now, dt); this.blocked(now, valid.reason);
       // Topology revoked the permit: restart a warned authored corridor from the current safe pose.
       if (valid.status === 'invalid' && now >= this.nextExitRetry) {
         this.deps.habitat.release(this.exit.reservationId); this.exit = null;
@@ -423,16 +454,20 @@ export class CoopDefenseKrakenSystem {
       return;
     }
     p.blocked = false; this.blockedSince = null;
+    const facing = this.exit.path.slice(this.exitIndex).find(q => Math.hypot(q.x - entity.x, q.y - entity.y) > 1);
+    if (facing) this.facePoint(entity, facing, dt);
     if (now < p.moveAt) { this.move('locked', null); return; }
-    let position = entity, remaining = this.exitSpeed * Math.min(dt, now - p.moveAt) / 1000;
-    while (this.exitIndex < this.exit.path.length) {
-      const waypoint = this.exit.path[this.exitIndex], distance = Math.hypot(waypoint.x - position.x, waypoint.y - position.y);
+    const desired = this.exitLength * krakenExitDistance(p, now, this.config.exit);
+    let position: Point = entity, remaining = Math.max(0, desired - this.exitTravelled), index = this.exitIndex;
+    while (index < this.exit.path.length) {
+      const waypoint = this.exit.path[index], distance = Math.hypot(waypoint.x - position.x, waypoint.y - position.y);
       const next = this.step(position, waypoint, remaining);
-      if (!this.deps.canMove(position, next, 'ashore')) { p.blocked = true; p.endsAt += dt; p.recoveryEndsAt += dt; this.move('locked', null); this.blocked(now, 'Exit movement obstructed'); return; }
+      if (!this.deps.canMove(position, next, 'ashore')) { this.pauseExit(now, dt); this.blocked(now, 'Exit movement obstructed'); return; }
       position = next; remaining -= distance;
       if (remaining < 0) break;
-      this.exitIndex++;
+      index++;
     }
+    this.exitIndex = index; this.exitTravelled = desired;
     this.move('ashore', position);
     if (this.exitIndex >= this.exit.path.length && now >= p.recoveryEndsAt) {
       this.deps.habitat.release(this.exit.reservationId); this.exit = null;
@@ -440,6 +475,12 @@ export class CoopDefenseKrakenSystem {
       // Apply final waypoint before ordinary land navigation becomes available next step.
       this.nextActionAt = now + this.config.actionPauseMs;
     }
+  }
+  private pauseExit(now: number, dt: number): void {
+    const p = this.state!.phase; if (p.kind !== 'ashore') return;
+    const delay = Math.min(dt, Math.max(0, now - p.moveAt));
+    p.blocked = true; p.moveAt += delay; p.gripAt += delay; p.heaveAt += delay;
+    p.endsAt += delay; p.recoveryEndsAt += delay; this.move('locked', null);
   }
   private blocked(now: number, reason: string): void {
     this.blockedSince ??= now;
@@ -450,7 +491,7 @@ export class CoopDefenseKrakenSystem {
 
   private die(now: number): void {
     const s = this.state; if (!s || s.phase.kind === 'dying' || s.phase.kind === 'removed') return;
-    const land = s.phase.kind === 'land' || s.phase.kind === 'ashore';
+    const land = s.phase.kind === 'land' || s.phase.kind === 'ashore' && now >= s.phase.gripAt;
     const submerged = s.bodyTargetability.mode === 'hidden';
     this.cancelBody();
     s.phase = { kind: 'dying', startedAt: now, endsAt: now + (land ? this.config.death.landMs : this.config.death.waterMs),

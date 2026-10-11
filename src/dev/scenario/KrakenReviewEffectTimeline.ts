@@ -16,7 +16,7 @@ export const KRAKEN_EFFECT_DEFAULTS = {
   eggFlight: { release: .65, count: 6, flight: .95, arcScale: .65, launchRadius: 108,
     landInset: 48, incubation: 3.5, pulse: .16, slimeRadius: 24, residue: 1.6 },
 };
-export type KrakenEffect = 'none' | 'approach' | 'ink' | 'erupt' | 'slam' | 'intro' | 'dive' | 'surface' | 'egg-throw';
+export type KrakenEffect = 'none' | 'approach' | 'ink' | 'erupt' | 'slam' | 'intro' | 'dive' | 'surface' | 'egg-throw' | 'ashore' | 'land-move' | 'land-claw';
 export type KrakenEffectLook = typeof KRAKEN_EFFECT_DEFAULTS;
 export interface KrakenEffectOptions extends KrakenEffectLook {
   effect: KrakenEffect;
@@ -56,7 +56,7 @@ export function effectOptions(raw: Record<string, unknown>, previous: KrakenEffe
       || p.x > (key === 'eggLaunches' ? 1 : 2000) || p.y > (key === 'eggLaunches' ? 1 : 2000))) throw Error(`Invalid ${key}`);
     next[key] = points.map(p => ({ x: p.x, y: p.y }));
   }
-  if (!['none', 'approach', 'ink', 'erupt', 'slam', 'intro', 'dive', 'surface', 'egg-throw'].includes(next.effect)) throw Error('Invalid effect');
+  if (!['none', 'approach', 'ink', 'erupt', 'slam', 'intro', 'dive', 'surface', 'egg-throw', 'ashore', 'land-move', 'land-claw'].includes(next.effect)) throw Error('Invalid effect');
   if (!['manual', 'play'].includes(next.playback)) throw Error('playback: manual/play');
   if (!Number.isFinite(next.effectTime) || next.effectTime < 0 || next.effectTime > 120) throw Error('effectTime: seconds 0..120');
   if (next.approach.speed <= 0 || next.approach.turnRate <= 0 || next.approach.turnRate > 360 || next.approach.bodyRadius <= 0) throw Error('Invalid approach movement');

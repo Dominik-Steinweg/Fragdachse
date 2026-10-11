@@ -513,6 +513,7 @@ export const deUi = {
   "ui.bossIntro.kraken.kicker": "AUS DER TIEFE",
   "ui.bossIntro.kraken.title": "DER ABGRUNDKRAKE ERWACHT",
   "ui.bossIntro.kraken.detail": "Weicht der Tinte aus und trefft die Ufertentakel.",
+  "ui.bossIntro.kraken.ashore": "Der Abgrundkrake verlässt das Wasser!",
   "ui.bossIntro.void.title": "DER LEERENJÄGER KOMMT",
   "ui.bossIntro.void.detail": "Schwach wie eine Flasche leer",
   "ui.mainObjective.enemyBase": "GEGNER-BASIS ZERSTÖREN",

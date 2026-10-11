@@ -7,13 +7,15 @@ import { CELL_SIZE, DEPTH } from '../../config';
 import { EnemyClawRenderer, ENEMY_CLAW_HOSTILE_COLOR } from '../../effects/EnemyClawRenderer';
 import { KrakenReviewAssets, type LoadedReviewAsset, type ReviewAssetSource } from './KrakenReviewAssets';
 import { effectDefaults, effectOptions, effectPose, effectTiming, type KrakenEffectOptions } from './KrakenReviewEffectTimeline';
-import { KrakenReviewEffectRenderer } from '../../effects/kraken/KrakenReviewEffectRenderer';
+import { KrakenReviewEffectRenderer, type KrakenReviewEffectFrame } from '../../effects/kraken/KrakenReviewEffectRenderer';
 import { CameraFeedbackModel } from '../../effects/camera/CameraFeedbackModel';
 import { planKrakenApproach } from './KrakenReviewApproach';
 import { KrakenTentacleShadow } from '../../effects/kraken/KrakenTentacleShadow';
 import { impactLight } from '../../effects/camera/cameraFeedbackPresets';
 import { bodyEffectClip, bodyEffectTiming, isBodyEffect, reviewEggTargets, sampleReviewEgg } from './KrakenReviewChoreography';
 import type { KrakenReviewDrainFilter } from '../../effects/kraken/KrakenReviewDrainFilter';
+import type { KrakenEffects } from '../../effects/kraken/KrakenRenderer';
+import { isLandEffect, sampleReviewLand } from './KrakenReviewLand';
 
 export interface KrakenReviewOptions extends ReviewAssetSource, KrakenEffectOptions {
   land: ReviewAssetSource | null;
@@ -108,6 +110,8 @@ export class KrakenBossReview {
   private readonly grid: Phaser.GameObjects.Graphics;
   private readonly model: WaterSurfaceModel;
   private readonly effects: KrakenReviewEffectRenderer;
+  private landEffects!: KrakenEffects;
+  private landDrain?: KrakenReviewDrainFilter;
   private readonly feedback = new CameraFeedbackModel(undefined, () => .37);
   private readonly extraTentacles: ReviewVisual[] = [];
   private water: ReviewVisual | null = null;
@@ -150,6 +154,10 @@ export class KrakenBossReview {
 
   async initialize(): Promise<void> {
     this.submersionType = (await import('./KrakenReviewSubmersion')).KrakenReviewSubmersion;
+    const { KrakenEffects } = await import('../../effects/kraken/KrakenRenderer');
+    const { addReviewDrain } = await import('../../effects/kraken/KrakenReviewDrainFilter');
+    if (this.disposed) throw Error('Kraken review ended during effect loading.');
+    this.landEffects = new KrakenEffects(this.scene, (x, y) => this.model.sample(x - this.gridOrigin.x, y - this.gridOrigin.y));
     const load = async (request: ReviewAssetSource) => {
       const asset = await this.assets.load(request);
       if (this.disposed) throw Error('Kraken review ended during loading.');
@@ -162,6 +170,8 @@ export class KrakenBossReview {
       this.drain = addReviewDrain(this.water.sprite, this.water.submersion.filter.elevationFrame, this.water.asset.elevation);
     }
     if (this.options.land) this.land = this.visual(await load(this.options.land));
+    if (this.land?.submersion && this.land.asset.elevation) this.landDrain = addReviewDrain(this.land.sprite,
+      this.land.submersion.filter.elevationFrame, this.land.asset.elevation);
     if (this.options.tentacle) {
       const asset = await load(this.options.tentacle);
       this.tentacle = this.visual(asset);
@@ -178,6 +188,7 @@ export class KrakenBossReview {
   }
 
   configure(options: KrakenReviewOptions): void {
+    if (isLandEffect(options.effect) && !this.land) throw Error('Land effects require the land atlas');
     const body = options.phase === 'land' ? this.land ?? this.water : this.water;
     if (isBodyEffect(options.effect)) {
       if (options.phase !== 'water' || !options.submersion) throw Error('Body effects require water phase and submersion');
@@ -248,6 +259,9 @@ export class KrakenBossReview {
   }
 
   private render(): void {
+    this.landEffects.begin();
+    if (this.landDrain) this.landDrain.active = false;
+    if (isLandEffect(this.options.effect)) { this.renderLand(); return; }
     const o = this.options, body = this.body!;
     const choreography = bodyEffectTiming(o, body.asset.clips), bodyEffect = isBodyEffect(o.effect);
     const approach = this.approachPlan?.sample(o.effectTime);
@@ -287,7 +301,7 @@ export class KrakenBossReview {
       this.pose(this.tentacle, this.shore, this.tentacle.asset.sockets.waterEntry ?? o.tentaclePivot, o.direction + 90);
       this.tentacle.sprite.setVisible(!bodyEffect && o.effect !== 'ink' && o.effect !== 'approach' && (!preview || referenceVisible));
     }
-    const eggFrames: NonNullable<Parameters<KrakenReviewEffectRenderer['render']>[0]['eggs']> = [];
+    const eggFrames: NonNullable<KrakenReviewEffectFrame['eggs']> = [];
     this.eggs.forEach((egg, i) => {
       egg.sprite.setScale(egg.asset.scale).setAlpha(1).setVisible(o.effect === 'none' && i < 3);
       if (o.effect === 'egg-throw' && i < this.eggPaths.length) {
@@ -325,7 +339,7 @@ export class KrakenBossReview {
       ...this.shore, angle: o.direction * Math.PI / 180,
       startedAt: 1000 - o.telegraphProgress * 1000, strikeAt: 1800 - o.telegraphProgress * 1000,
       hitAt: 2000 - o.telegraphProgress * 1000, color: ENEMY_CLAW_HOSTILE_COLOR });
-    this.effects.render({ effect: approach ? (approach.attacking ? 'ink' : 'none') : o.effect as Exclude<typeof o.effect, 'approach'>,
+    this.effects.render({ effect: approach ? (approach.attacking ? 'ink' : 'none') : o.effect as Exclude<typeof o.effect, 'approach' | 'ashore' | 'land-move' | 'land-claw'>,
       time: approach ? approach.attackTime : o.effectTime, angle: approach?.angle ?? o.direction * Math.PI / 180,
       mouth: this.mouth(), shores, charge: timing.charge.seconds, spit: timing.spit.seconds,
       impact: timing.impact.seconds, retract: timing.retract.seconds, length: o.telegraphLength, width: o.telegraphWidth,
@@ -336,6 +350,37 @@ export class KrakenBossReview {
         lead: choreography.lead, arms: choreography.armsBreak.seconds, keel: choreography.keelBreak.seconds,
         roar: choreography.roar.seconds, submerged: choreography.submerged.seconds,
       } : undefined });
+  }
+  private landSample(time = this.options.effectTime * 1000) {
+    return sampleReviewLand(this.options.effect, time, this.center, this.shore, this.options.direction * Math.PI / 180,
+      this.water!.asset.clips, this.land!.asset.clips);
+  }
+  private renderLand(): void {
+    const now = this.options.effectTime * 1000, s = this.landSample(), visual = s.asset === 'water' ? this.water! : this.land!;
+    this.effects.render({ effect: 'none' });
+    for (const v of [this.water, this.land, this.tentacle, ...this.extraTentacles, ...this.eggs]) v?.sprite.setVisible(v === visual);
+    visual.playback = { clip: s.sample.clip, position: s.sample.frame, playing: false, markers: [] };
+    this.pose(visual, s.pose, visual.asset.pivot, s.pose.angle * 180 / Math.PI + 90);
+    visual.sprite.setAlpha(1);
+    if (this.drain) this.drain.active = false;
+    this.renderer.clear();
+    if (this.options.effect === 'ashore') {
+      this.landEffects.ashore(s.pose, s.phase, now, this.landSample(s.phase.gripAt).pose);
+      if (this.landDrain && visual.submersion && now >= s.phase.gripAt) {
+        this.landDrain.active = true; this.landDrain.time = now / 1000;
+        this.landDrain.elevation = visual.submersion.filter.elevationFrame;
+        this.landDrain.level = visual.submersion.filter.params.waterLevel;
+        this.landDrain.amount = 1 - Math.max(0, Math.min(1, (now - s.phase.heaveAt) / 1100));
+      }
+      for (let at = s.phase.gripAt; at <= Math.min(now, s.phase.endsAt); at += 160) {
+        this.landEffects.wetTrail(this.landSample(at).pose, at, now);
+      }
+    }
+    if (s.attack) {
+      this.renderer.syncArea({ worldRevision: 1, activityRevision: 1, enemyId: 'review', entityGeneration: 1,
+        slot: { kind: 'body' }, state: { revision: 1, attack: s.attack } }, now);
+      this.landEffects.slam(s.attack.pose, s.attack.hitAt, now);
+    }
   }
 
   private effectTimings() {
@@ -361,6 +406,7 @@ export class KrakenBossReview {
     });
   }
   effectFocus(): Point {
+    if (isLandEffect(this.options.effect)) return this.landSample().pose;
     const o = this.options, angle = this.body!.sprite.rotation - Math.PI / 2;
     if (o.effect === 'egg-throw' && this.eggs[0]) return { x: this.eggs[0].sprite.x, y: this.eggs[0].sprite.y };
     if (isBodyEffect(o.effect)) return this.center;
@@ -371,6 +417,17 @@ export class KrakenBossReview {
   }
   /** Reuse the camera model/preset at an absolute time, so reverse seeks remain pixel-identical. */
   cameraOffset(): Point {
+    if (isLandEffect(this.options.effect)) {
+      const s = this.landSample(), now = this.options.effectTime * 1000;
+      this.feedback.clear();
+      const times = this.options.effect === 'ashore' ? [s.roarAt, s.phase.gripAt] : s.attack ? [s.attack.hitAt] : [];
+      for (const at of times) if (now >= at) {
+        const request = impactLight({ dirX: Math.cos(s.pose.angle), dirY: Math.sin(s.pose.angle) });
+        this.feedback.request({ ...request, id: `land-${at}`, amplitudePx: request.amplitudePx * .45 }, at);
+      }
+      const sample = this.feedback.step(0, now, 0, 0, 1);
+      return { x: sample.offsetX, y: sample.offsetY };
+    }
     const o = this.options, intro = o.effect === 'intro';
     const age = o.effectTime - (intro ? bodyEffectTiming(o, this.body!.asset.clips).roar.seconds : this.effectTimings().impact.seconds);
     this.feedback.clear();
@@ -404,7 +461,7 @@ export class KrakenBossReview {
       source: { url: v.asset.sourceUrl(v.sprite.texture.key),
         x: v.sprite.frame.cutX, y: v.sprite.frame.cutY, width: v.sprite.frame.cutWidth, height: v.sprite.frame.cutHeight,
         trimX: v.sprite.frame.x, trimY: v.sprite.frame.y, logicalWidth: v.sprite.frame.realWidth, logicalHeight: v.sprite.frame.realHeight } } : null;
-    return { loaded: this.loaded, options: this.options, clips: this.body?.asset.clips ?? [],
+    return { loaded: this.loaded, options: this.options, landTimeline: isLandEffect(this.options.effect) ? this.landSample() : null, clips: this.body?.asset.clips ?? [],
       body: describe(this.body), tentacle: describe(this.tentacle), eggs: this.eggs.map(describe),
       choreography: { timing: bodyEffectTiming(this.options, this.body?.asset.clips ?? []), eggPaths: this.eggPaths,
         launchSource: this.options.eggLaunches.length ? 'eggLaunches' : this.body?.asset.sockets.egg1 ? 'egg sockets' : 'eggFlight.launchRadius fallback' },
@@ -420,7 +477,7 @@ export class KrakenBossReview {
     if (this.disposed) return;
     this.disposed = true; this.scene.events.off('postupdate', this.update, this);
     for (const v of [this.water, this.land, this.tentacle, ...this.extraTentacles, ...this.eggs]) if (v) { v.shadow?.destroy(); v.sprite.destroy(); v.submersion?.destroy(); }
-    this.effects.destroy(); this.feedback.clear();
+    this.effects.destroy(); this.landEffects?.destroy(); this.feedback.clear();
     this.grid.destroy(); this.renderer.destroy(); this.assets.destroy();
   }
 }

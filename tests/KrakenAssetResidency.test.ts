@@ -101,6 +101,7 @@ describe('Kraken phase residency', () => {
     expect(h.events.indexOf('intro-animation-removed')).toBeLessThan(h.events.findIndex(e => e.startsWith('remove:') && e.includes('intro-rise')));
     expect([...h.textures].some(k => k.includes(':move:'))).toBe(false);
     await h.residency.setPhase('ashore').settled;
+    for (const clip of ['__rest', 'idle', 'move']) expect([...h.textures].some(k => k.startsWith('kraken_water') && k.includes(`:${clip}:`))).toBe(true);
     a.release(); expect(h.textures.has(a.pose.key)).toBe(true);
     b.release(); expect(h.textures.has(a.pose.key)).toBe(false);
     expect(h.events.lastIndexOf('filter-removed')).toBeLessThan(h.events.indexOf(`remove:${a.pose.key}`));

@@ -1,3 +1,5 @@
+import { sampleKrakenClip, type KrakenClipSample } from './KrakenClipTimeline';
+export { sampleKrakenClip, type KrakenClipSample } from './KrakenClipTimeline';
 import * as Phaser from 'phaser';
 import { DEPTH } from '../../config';
 import type { PipelineBossAsset, PipelineClip } from '../../config/pipelineAssetContracts';
@@ -14,6 +16,10 @@ import { addReviewDrain, type KrakenReviewDrainFilter } from './KrakenReviewDrai
 import { KrakenTentacleShadow } from './KrakenTentacleShadow';
 import { KRAKEN_REVIEW_FX_SHADER } from './reviewEffectShader';
 import type { GrenadeEggVisual } from '../GrenadeRenderer';
+import { KRAKEN_BOSS_DEFAULTS, type KrakenBossConfig } from '../../config/krakenBoss';
+import { krakenExitRoarAt, type KrakenExitPhase } from '../../systems/CoopDefenseKrakenMotion';
+import type { CameraFeedbackController } from '../camera/CameraFeedbackController';
+import { impactLight } from '../camera/cameraFeedbackPresets';
 
 export type KrakenPoint = { readonly x: number; readonly y: number };
 export type KrakenPose = KrakenPoint & { readonly angle: number };
@@ -33,6 +39,7 @@ export interface KrakenPresentationAssets {
 }
 export interface KrakenBodyPose extends KrakenPose {
   readonly moving?: boolean;
+  readonly locomotionTimeMs?: number;
   readonly claw?: EnemyAreaClawState;
 }
 export interface KrakenRendererOptions {
@@ -41,13 +48,16 @@ export interface KrakenRendererOptions {
   /** Read the matching egg Entity generation; the brood slice deliberately carries no pose. */
   readonly readEggPose: (egg: KrakenEggState) => KrakenPose | null;
   readonly diagnostic: (message: string) => void;
+  readonly config?: KrakenBossConfig;
+  readonly feedback?: CameraFeedbackController;
+  readonly announceExit?: () => void;
   /** Optional existing combat contact-FX adapter. Called once with the physical hit position. */
   readonly partContact?: (receipt: CombatPartHitReceipt) => void;
 }
 
 export const krakenClamp = (n: number): number => Math.max(0, Math.min(1, n));
-export interface KrakenClipSample { readonly clip: string; readonly frame: number }
-type Anchor = readonly [time: number, frame: number];
+
+
 export function krakenClip(asset: PipelineBossAsset, name: string): PipelineClip {
   const clip = asset.clips.find(c => c.name === name);
   if (!clip) throw Error(`Kraken asset ${asset.id} lacks ${name}`);
@@ -57,17 +67,6 @@ function marker(clip: PipelineClip, name: string): number {
   const value = clip.markers?.[name];
   if (value === undefined) throw Error(`Kraken clip ${clip.name} lacks marker ${name}`);
   return value;
-}
-/** Retiming consumes semantic export markers and absolute host anchors, never clip.next. */
-export function sampleKrakenClip(clip: PipelineClip, now: number, anchors: readonly Anchor[]): KrakenClipSample {
-  let frame = anchors[0][1];
-  for (let i = 1; i < anchors.length; i++) {
-    const [end, last] = anchors[i], [start, first] = anchors[i - 1];
-    if (now >= end) { frame = last; continue; }
-    frame = first + (last - first) * krakenClamp((now - start) / Math.max(1, end - start));
-    break;
-  }
-  return { clip: clip.name, frame: Math.max(0, Math.min(clip.frames.length - 1, Math.floor(frame))) };
 }
 function loop(asset: PipelineBossAsset, name: string, age: number): KrakenClipSample {
   const clip = krakenClip(asset, name);
@@ -99,15 +98,20 @@ export function krakenBodyVisible(state: KrakenState, now: number): boolean {
   // A surface projection supersedes the preceding hidden-body epoch. Protection is not invisibility.
   return p.kind === 'surfacing' || state.bodyTargetability.mode !== 'hidden' || now < state.bodyTargetability.effectiveAt;
 }
-export function sampleKrakenBody(state: KrakenState, pose: KrakenBodyPose, assets: KrakenPresentationAssets, now: number):
+export function sampleKrakenBody(state: KrakenState, pose: KrakenBodyPose, assets: KrakenPresentationAssets, now: number, config = KRAKEN_BOSS_DEFAULTS):
   { asset: KrakenPresentationAsset; sample: KrakenClipSample; pose: KrakenPose; visible: boolean } {
   const p = state.phase;
-  const land = p.kind === 'land' || p.kind === 'ashore' || (p.kind === 'dying' && p.asset === 'land');
+  const land = p.kind === 'land' || (p.kind === 'ashore' && now >= p.gripAt) || (p.kind === 'dying' && p.asset === 'land');
   const asset = land ? assets.land : assets.water, a = asset.metadata;
   let sample: KrakenClipSample;
   if (p.kind === 'diving') sample = timed(a, 'dive', now, p.startedAt, p.endsAt, [[p.submergedAt, 'submerged']]);
   else if (p.kind === 'surfacing') sample = timed(a, 'surface', now, p.startedAt, p.endsAt, [[p.vulnerableAt, 'eyes-open']]);
-  else if (p.kind === 'ashore') sample = timed(a, 'ashore', now, p.moveAt, p.endsAt, [[p.gripAt, 'grip'], [p.heaveAt, 'heave']]);
+  else if (p.kind === 'ashore') {
+    if (!land) sample = loop(a, now < p.moveAt || p.blocked ? 'idle' : 'move', now - p.startedAt);
+    else { const clip = krakenClip(a, 'ashore'); sample = sampleKrakenClip(clip, now,
+      [[p.gripAt, marker(clip, 'grip')], [p.gripAt + config.exit.gripHoldMs, marker(clip, 'grip')],
+        [p.heaveAt, marker(clip, 'heave')], [p.endsAt, clip.frames.length - 1]]); }
+  }
   else if (p.kind === 'dying') sample = timed(a, land ? 'death' : 'dive', now, p.startedAt, p.endsAt);
   else if (state.bodyAction?.kind === 'ink') {
     const action = state.bodyAction;
@@ -118,7 +122,7 @@ export function sampleKrakenBody(state: KrakenState, pose: KrakenBodyPose, asset
   } else if (state.bodyAction?.kind === 'slam' && pose.claw?.attack?.attackId === state.bodyAction.attackId) {
     const action = pose.claw.attack;
     sample = timed(a, 'slam', now, action.startedAt, action.endsAt, [[action.strikeAt, 'strike'], [action.hitAt, 'impact']]);
-  } else sample = loop(a, pose.moving && land ? 'move' : 'idle', now);
+  } else sample = loop(a, pose.moving && land ? 'move' : 'idle', pose.moving && land ? pose.locomotionTimeMs ?? now : now);
   return { asset, sample, pose: p.kind === 'dying' ? p.terminalPose : pose, visible: krakenBodyVisible(state, now) };
 }
 export function sampleKrakenTentacle(t: KrakenTentacleState, asset: PipelineBossAsset, now: number): KrakenClipSample {
@@ -306,6 +310,29 @@ export class KrakenEffects {
     if (!q) return;
     q.shape[2] = d.radius; q.shape[3] = 1; q.timing = [d.lifetime, d.shadow, d.foam, 0];
   }
+  ashore(pose: KrakenPose, phase: KrakenExitPhase, now: number, gripPose = pose): void {
+    const age = (now - phase.startedAt) / 1000;
+    if (now < phase.gripAt) {
+      const q = this.take(7, DEPTH.PLAYERS - .25, pose, pose.angle, 560, 320, age, 80);
+      if (q) { q.shape[2] = 200; q.shape[3] = 100; q.timing = [(phase.moveAt - phase.startedAt) / 1000, 0, 0, 0]; }
+    }
+    const timing = { startedAt: phase.startedAt, clipStartedAt: phase.moveAt, armsAt: phase.gripAt,
+      keelAt: phase.gripAt + 160, eyesAt: phase.heaveAt, roarAt: phase.gripAt, endsAt: phase.endsAt };
+    this.rise(now < phase.gripAt ? pose : gripPose, timing, now, false);
+    if (now >= phase.gripAt) {
+      const contact = { x: gripPose.x + Math.cos(gripPose.angle) * 96, y: gripPose.y + Math.sin(gripPose.angle) * 96 };
+      if (this.waterAt(contact.x, contact.y) <= 0) this.slam({ originX: contact.x, originY: contact.y,
+        angle: gripPose.angle, geometry: { kind: 'lane', length: 90, width: 100 } }, phase.gripAt, now);
+      this.dive({ ...gripPose, x: gripPose.x - Math.cos(gripPose.angle) * 100,
+        y: gripPose.y - Math.sin(gripPose.angle) * 100 }, phase.gripAt, now);
+    }
+  }
+  wetTrail(pose: KrakenPose, at: number, now: number): void {
+    const age = (now - at) / 1000;
+    if (age < 0 || age > 4) return;
+    const q = this.take(8, DEPTH.DECALS + .1, pose, pose.angle, 220, 160, age);
+    if (q) { q.shape[2] = 72; q.shape[3] = 36; q.timing = [4, 0, 0, 0]; }
+  }
   rise(pose: KrakenPose, timing: KrakenRiseTiming, now: number, intro: boolean): void {
     const b = intro ? LOOK.intro : LOOK.surface;
     const age = (now - timing.startedAt) / 1000, arms = (timing.armsAt - timing.startedAt) / 1000;
@@ -389,6 +416,13 @@ export class KrakenRenderer {
   private destroyed = false;
   private missingAssetsReported = false;
   private waterMotion: { pose: KrakenPose; diveAt?: number; rise?: KrakenRiseTiming } | null = null;
+  private lastBody: { pose: KrakenPose; now: number } | null = null;
+  private locomotionTime = 0;
+  private exitKey = '';
+  private announcedExit = '';
+  private trails: { pose: KrakenPose; at: number }[] = [];
+  private wetUntil = 0;
+  private exitVisual: { phase: KrakenExitPhase; grip: KrakenPose | null } | null = null;
   constructor(private readonly scene: Phaser.Scene, private readonly options: KrakenRendererOptions) {
     this.claw = new EnemyClawRenderer(scene, () => this.now);
     this.effects = new KrakenEffects(scene, options.waterAt);
@@ -401,6 +435,17 @@ export class KrakenRenderer {
     if (state.revision < this.revision) return;
     this.revision = state.revision; this.now = now;
     this.effects.begin();
+    const cuePhase = state.phase, cueConfig = this.options.config ?? KRAKEN_BOSS_DEFAULTS;
+    if (body) {
+      if (cuePhase.kind === 'ashore') {
+        const cueKey = `${key}/${cuePhase.startedAt}`;
+        if (cueKey !== this.announcedExit) { this.announcedExit = cueKey;
+          if (now >= cuePhase.startedAt && now < cuePhase.moveAt) this.options.announceExit?.(); }
+        this.impulse('roar', krakenExitRoarAt(cuePhase, cueConfig.exit), body, now);
+        this.impulse('grip', cuePhase.gripAt, body, now);
+      }
+      if (body.claw?.attack?.presentation === 'slam') this.impulse('claw', body.claw.attack.hitAt, body, now);
+    }
     if (!this.options.assets) {
       if (!this.missingAssetsReported) { this.missingAssetsReported = true; this.options.diagnostic('Kraken atlases are not imported/resident; showing authoritative attack geometry only.'); }
       const bodyEvent = this.event(state, { kind: 'body' }, body?.claw ?? { revision: 0, attack: null });
@@ -415,27 +460,53 @@ export class KrakenRenderer {
       for (const [key, event] of this.fallbackSlots) if (!current.has(key)) {
         this.claw.releaseArea(event); this.fallbackSlots.delete(key);
       }
+      if (body) this.lastBody = { pose: { ...body }, now };
       return;
     }
     const terminal = state.phase.kind === 'dying' ? state.phase.terminalPose : null;
     const pose = terminal ?? body;
     if (pose) {
-      const render = sampleKrakenBody(state, body ?? pose, this.options.assets, now);
+      const config = this.options.config ?? KRAKEN_BOSS_DEFAULTS;
+      const elapsed = this.lastBody ? now - this.lastBody.now : 0;
+      const distance = this.lastBody ? Math.hypot(pose.x - this.lastBody.pose.x, pose.y - this.lastBody.pose.y) : 0;
+      const moving = state.phase.kind === 'land' && !state.bodyAction && elapsed > 0 && elapsed < 500 && distance > .01;
+      if (moving) this.locomotionTime += distance / config.landMoveSpeedPxPerSec * 1000;
+      const render = sampleKrakenBody(state, { ...(body ?? pose), moving, locomotionTimeMs: this.locomotionTime }, this.options.assets, now, config);
       if (this.body?.asset !== render.asset) {
         this.body?.destroy(); this.body = this.view(render.asset);
       }
       const phase = state.phase;
+      if (phase.kind === 'ashore') {
+        const key = `${this.bossKey}/${phase.startedAt}`;
+        if (key !== this.exitKey) { this.exitKey = key; this.exitVisual = { phase, grip: null }; }
+        this.exitVisual!.phase = phase;
+        if (now >= phase.gripAt && !this.exitVisual!.grip) this.exitVisual!.grip = { ...render.pose };
+        this.wetUntil = phase.endsAt + 3200;
+      }
+      if (this.exitVisual && (phase.kind === 'ashore' || phase.kind === 'land')) {
+        this.effects.ashore(render.pose, this.exitVisual.phase, now, this.exitVisual.grip ?? render.pose);
+      }
+      if (now < this.wetUntil && (phase.kind === 'land' || phase.kind === 'ashore' && now >= phase.gripAt)
+        && (!this.trails.length || Math.hypot(pose.x - this.trails[this.trails.length - 1].pose.x, pose.y - this.trails[this.trails.length - 1].pose.y) > 28)) {
+        this.trails.push({ pose: { ...pose }, at: now });
+        if (this.trails.length > 24) this.trails.shift();
+      }
+      this.lastBody = { pose: { ...pose }, now };
       if (phase.kind === 'surfacing') this.waterMotion = { pose: render.pose,
         rise: krakenRiseTiming(render.asset.metadata, 'surface', phase.startedAt, phase.startedAt, phase.endsAt, phase.vulnerableAt) };
       if (phase.kind === 'diving') this.waterMotion = { pose: render.pose, diveAt: phase.submergedAt };
       if (phase.kind === 'dying' && phase.asset === 'water') this.waterMotion = { pose: render.pose, diveAt: phase.startedAt };
       if (render.visible) this.body.show(render.sample, render.pose, now, {
-        drain: this.waterMotion?.rise ? krakenDrain(this.waterMotion.rise, now, false) : 0,
+        drain: phase.kind === 'ashore' && now >= phase.gripAt
+          ? 1 - krakenClamp((now - phase.heaveAt) / 1100)
+          : this.waterMotion?.rise ? krakenDrain(this.waterMotion.rise, now, false) : 0,
         alpha: phase.kind === 'dying' && phase.asset === 'water'
           ? 1 - krakenClamp((now - phase.startedAt) / (phase.endsAt - phase.startedAt)) : 1,
       });
       else this.body.hide();
     } else this.body?.hide();
+    this.trails = this.trails.filter(t => now - t.at < 4000);
+    for (const trail of this.trails) this.effects.wetTrail(trail.pose, trail.at, now);
     if (this.waterMotion) {
       if (this.waterMotion.rise) this.effects.rise(this.waterMotion.pose, this.waterMotion.rise, now, false);
       if (this.waterMotion.diveAt !== undefined) this.effects.dive(this.waterMotion.pose, this.waterMotion.diveAt, now);
@@ -522,11 +593,18 @@ export class KrakenRenderer {
     return krakenSocket(a, { x: s.x, y: s.y, angle: s.rotation - krakenRotation(a, 0) }, name);
   }
   clear(): void {
+    for (const id of ['roar', 'grip', 'claw']) this.options.feedback?.cancel(`kraken-${id}`);
+    this.lastBody = null; this.locomotionTime = 0; this.exitKey = ''; this.announcedExit = ''; this.exitVisual = null; this.trails = []; this.wetUntil = 0;
     this.body?.destroy(); this.body = null;
     for (const part of this.parts.values()) part.view.destroy();
     for (const egg of this.eggs.values()) egg.destroy();
     this.parts.clear(); this.fallbackSlots.clear(); this.eggs.clear(); this.contacts.clear(); this.contactSeen.clear(); this.impacts.clear();
     this.claw.clear(); this.effects.clear(); this.waterMotion = null; this.bossKey = ''; this.revision = -1;
+  }
+  private impulse(id: string, at: number, pose: KrakenPose, now: number): void {
+    if (!this.lastBody || now - this.lastBody.now >= 150 || this.lastBody.now >= at || now < at || now - at >= 150) return;
+    const impulse = impactLight({ sourceX: pose.x, sourceY: pose.y });
+    this.options.feedback?.request({ ...impulse, id: `kraken-${id}`, amplitudePx: impulse.amplitudePx * .45 });
   }
   destroy(): void {
     if (this.destroyed) return;

@@ -164,6 +164,25 @@ void main() {
       alpha=max(pool*.62+rim*.25,drops*.8);
       color=mix(vec3(.07,.095,.025),vec3(.3,.36,.1),clamp(rim+n*.3+drops,0.0,1.0));
     }
+  } else if(uMode>7.5) {
+    float n=field(p*.075), r=length(p/vec2(uShape.z,uShape.w));
+    float drag=exp(-r*r*2.0)*(.6+.4*n);
+    float drops=0.0;
+    for(int i=0;i<12;i++) {
+      float k=float(i), a=k*2.39996;
+      vec2 pos=vec2(cos(a)*uShape.z,sin(a)*uShape.w)*(1.0+hash(vec2(k,8))*.5);
+      drops=max(drops,1.0-smoothstep(1.0,3.0,length(p-pos)));
+    }
+    alpha=(drag*.28+drops*.35)*(1.0-smoothstep(1.0,uTiming.x,t));
+    color=mix(vec3(.04,.1,.095),vec3(.28,.41,.38),n);
+  } else if(uMode>6.5) {
+    float n=field(p*.055+vec2(-t*.6,0));
+    float lane=exp(-pow(p.y/uShape.w,4.0))*smoothstep(-100.0,-55.0,p.x)*(1.0-smoothstep(120.0,uShape.z,p.x));
+    float bow=exp(-pow((length((p-vec2(40,0))/vec2(1.0,1.4))-85.0)/5.0,2.0));
+    float wake=exp(-pow((abs(p.y)-28.0-max(0.0,-p.x)*.3)/5.0,2.0))*(1.0-smoothstep(-20.0,25.0,p.x));
+    float strands=pow(.5+.5*sin(p.x*.08-t*7.0+n*9.0),8.0)*lane;
+    alpha=lane*.09+(bow+wake)*(.18+n*.25)+strands*.18;
+    color=mix(vec3(.15,.38,.4),vec3(.69,.88,.85),clamp(bow+wake+strands,0.0,1.0));
   } else if(uMode>5.5) {
     float r=length(p), radius=uShape.z;
     float flash=exp(-pow(r/(radius*(.4+t*2.0)),2.0))*exp(-t*17.0);

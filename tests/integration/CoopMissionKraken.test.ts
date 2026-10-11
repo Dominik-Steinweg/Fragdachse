@@ -13,6 +13,7 @@ import { WaterGeometry } from '../../src/arena/WaterGeometry';
 import { healthBarTestScene } from '../healthBarTestScene';
 import { routeKrakenEggLanding } from '../../src/projectile/KrakenEggLandingReaction';
 import { encodeKrakenSnapshot, decodeKrakenSnapshot } from '../../src/network/krakenSnapshotCodec';
+import { decodeEnemyUpserts } from '../../src/network/enemySnapshotCodec';
 import type { ProjectileSpawnRequest } from '../../src/projectile/ProjectileSpawnRequest';
 import { NetworkBridge } from '../../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../../src/network/peer/session';
@@ -81,10 +82,27 @@ function setup() {
       provenance: { gameplaySourceId: boss.id, attributionId: boss.id, allegiance: { ownerId: boss.id } } } as never, now, brood);
     return brood.getEggs(boss).find(e => e.castId === effect.castId && manager.getEnemy(e.eggId)?.sprite.x === worldCellCenter(metrics, x, y).x)!;
   };
-  return { runtime, manager, boss, system, habitat, brood, tick, dive, land, flights, metrics, ports, publish, impact, release, broodBinding, block, contacts: () => contacts };
+  return { runtime, manager, boss, system, habitat, brood, tick, dive, land, flights, metrics, player, ports, publish, impact, release, broodBinding, block, contacts: () => contacts };
 }
 
 describe('Coop mission Kraken composition', () => {
+  it('stops the lunging body circle before a real World obstacle', () => {
+    const f = setup(); f.manager.hostSetVitalsBaseline(f.boss.id, 400, 1000); f.tick(1);
+    const exit = f.system.getState()!.phase; if (exit.kind !== 'ashore') throw Error();
+    f.tick(exit.recoveryEndsAt);
+    const entity = f.manager.getEnemy(f.boss.id)!, start = { x: entity.sprite.x, y: entity.sprite.y };
+    f.player.x = start.x + config.slam.length; f.player.y = start.y; entity.faceAngle(0);
+    const obstacleX = Math.floor((start.x + config.slam.lungeDistancePx - f.metrics.offsetX) / 32);
+    const obstacleY = Math.floor((start.y - f.metrics.offsetY) / 32);
+    const obstacle = worldCellCenter(f.metrics, obstacleX, obstacleY); f.block(obstacleX, obstacleY);
+    f.tick(exit.recoveryEndsAt + config.actionPauseMs);
+    const attack = f.system.getBodyClaw().attack!; expect(attack.presentation).toBe('slam');
+    f.tick(attack.hitAt);
+    expect(entity.sprite.x).toBeGreaterThan(start.x);
+    expect(entity.sprite.x - start.x).toBeLessThan(config.slam.lungeDistancePx);
+    expect(Math.hypot(entity.sprite.x - obstacle.x, entity.sprite.y - obstacle.y)).toBeGreaterThanOrEqual(config.bodyRadiusPx + 32);
+    expect(f.impact).toHaveBeenCalledOnce();
+  });
   it('revalidates the full exit against current World geometry and selects the other authored corridor', () => {
     const f = setup(), habitatId = krakenAbyssMap().krakenHabitat!.id;
     const first = f.habitat.reserveExit(f.boss, habitatId);
@@ -97,7 +115,7 @@ describe('Coop mission Kraken composition', () => {
     f.block(43, 39);
     expect(f.habitat.reserveExit(f.boss, habitatId).status).toBe('blocked');
   });
-  it('joins the real host projection mid-dive with all parts and follows the terminal clear', async () => {
+  it.each(['dive', 'ashore', 'lunge'] as const)('joins the real host projection during %s and follows the terminal clear', async phase => {
     const network = new FakeNetwork(), hostRoom = await createHostRoom(network);
     const rooms = [hostRoom];
     const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'KRAKEN' });
@@ -106,16 +124,35 @@ describe('Coop mission Kraken composition', () => {
       host.publishWorldAndActivity({ worldRevision: 2, definitionId: 'world:lobby', seed: 1, generatorVersion: 3, layoutFingerprint: 'kraken' },
         { worldRevision: 2, activityRevision: 5, kind: 'coop-mission', definitionId: 'activity:coop-mission:kraken-abyss-lab' });
       const f = setup(); Object.assign(f.ports, { publish: (s: ReturnType<typeof f.system.getState>) => host.publishKrakenState(s) });
-      f.dive(); const state = f.system.getState()!;
+      if (phase === 'dive') f.dive();
+      else {
+        f.manager.hostSetVitalsBaseline(f.boss.id, 400, 1000); f.tick(1);
+        const exit = f.system.getState()!.phase; if (exit.kind !== 'ashore') throw Error();
+        if (phase === 'ashore') f.tick((exit.gripAt + exit.heaveAt) / 2);
+        else {
+          f.tick(exit.recoveryEndsAt);
+          const entity = f.manager.getEnemy(f.boss.id)!;
+          f.player.x = entity.sprite.x + 200; f.player.y = entity.sprite.y; entity.faceAngle(0);
+          f.tick(exit.recoveryEndsAt + config.actionPauseMs);
+          const attack = f.system.getBodyClaw().attack!; expect(attack.presentation).toBe('slam');
+          f.tick((attack.strikeAt + attack.hitAt) / 2);
+          expect(entity.sprite.x).toBeGreaterThan(f.player.x - 200);
+        }
+      }
+      const state = f.system.getState()!;
       const snapshot = gameState(state); snapshot.enemies = f.manager.getNetSnapshot();
       host.publishGameState(snapshot, true); hostRoom.room.update();
       const clientRoom = await addClientRoom(network); rooms.push(clientRoom); use(clientRoom);
       const client = new NetworkBridge(); client.activate();
       expect(client.getLatestGameState()?.kraken).toEqual(state);
-      expect(client.getKrakenState()?.tentacles.length).toBeGreaterThan(1);
+      if (phase === 'dive') expect(client.getKrakenState()?.tentacles.length).toBeGreaterThan(1);
+      if (phase === 'lunge') expect(decodeEnemyUpserts(client.getLatestGameState()!.enemies!.u).find(e => e.id === f.boss.id)?.areaClaw).toEqual(f.system.getBodyClaw());
       use(hostRoom); f.runtime.destroy(); hostRoom.room.update();
       use(clientRoom); expect(client.getKrakenState()).toBeNull();
-    } finally { for (const room of rooms) room.room.destroy(); clearActiveSession(); }
+    } finally {
+      use(hostRoom); for (const cleanup of cleanups.splice(0).reverse()) cleanup();
+      for (const room of rooms) room.room.destroy(); clearActiveSession();
+    }
   });
   it('updates body protection and movement before ordinary movement/queries, then executes actions', () => {
     const f = setup(), order: string[] = [];
@@ -160,11 +197,27 @@ describe('Coop mission Kraken composition', () => {
     expect(f.land(1)).toBeUndefined(); expect(f.brood.getEggs(f.boss)).toEqual([]);
   });
 
-  it('honours an already promised tentacle hit at half HP, retires eggs, then surfaces before protected exit', () => {
+  it('keeps airborne and landed eggs live through the transition and hatches both normally', () => {
+    const f = setup(), landed = f.land(1);
+    const effect = { type: 'kraken_egg_land' as const, boss: f.boss, castId: 'airborne', eggId: 'flying',
+      broodTableId: config.eggs.broodTable.id, originId: 'kraken-encounter' };
+    expect(f.brood.reserveEgg(effect)).toBe(true); f.brood.released(effect, 2);
+    f.manager.hostSetVitalsBaseline(f.boss.id, 400, 1000); f.tick(1);
+    routeKrakenEggLanding({ effect, projectileId: 2, ...worldCellCenter(f.metrics, 42, 40),
+      provenance: { gameplaySourceId: f.boss.id, attributionId: f.boss.id, allegiance: { ownerId: f.boss.id } } } as never, 10, f.brood);
+    const eggs = f.brood.getEggs(f.boss); expect(eggs).toHaveLength(2);
+    expect(f.manager.getEnemy(landed.eggId)).toBeDefined();
+    f.brood.hostUpdate(Math.max(...eggs.map(e => e.spawnAt)));
+    expect(f.manager.getAllEnemies().filter(e => e.kind === landed.enemyKind)).toHaveLength(2);
+    f.manager.applyDamage(f.boss.id, 1000000); f.tick(20);
+    expect(f.brood.getEggs(f.boss)).toEqual([]);
+  });
+
+  it('honours a promised tentacle hit and preserves incubating eggs at half HP before protected exit', () => {
     const f = setup(); f.dive(); const part = f.system.getState()!.tentacles[0], egg = f.land(1);
     f.manager.hostSetVitalsBaseline(f.boss.id, 500, 1000);
     f.tick(part.claw.attack!.strikeAt);
-    expect(f.system.getState()!.phaseTwoPending).toBe(true); expect(f.manager.getEnemy(egg.eggId)).toBeUndefined();
+    expect(f.system.getState()!.phaseTwoPending).toBe(true); expect(f.manager.getEnemy(egg.eggId)).toBeDefined();
     f.tick(part.claw.attack!.hitAt); expect(f.impact).toHaveBeenCalled();
     f.tick(part.endsAt + 1);
     const surface = f.system.getState()!.phase; expect(surface.kind).toBe('surfacing');
