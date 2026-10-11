@@ -1,8 +1,8 @@
 import type * as Phaser from 'phaser';
 import { normalizePipelineAssets, type PipelineAtlasPage, type PipelineBossAsset, type PipelineSocketPoint } from '../../config/pipelineAssetContracts';
 
-export type KrakenAssetRole = 'water' | 'land' | 'tentacle' | 'egg';
-export type KrakenResidencyPhase = 'intro' | 'water' | 'ashore' | 'land' | 'dead';
+import { krakenResidencyPlan, type KrakenAssetRole, type KrakenResidencyPhase, type KrakenPhaseOptions } from './KrakenResidencyPlan';
+export type { KrakenAssetRole, KrakenResidencyPhase } from './KrakenResidencyPlan';
 export interface KrakenResidencyDiagnostic { phase: KrakenResidencyPhase; assetId: string; clip: string; message: string }
 export interface KrakenPreparedPage {
   /** Synchronous: only the residency owner may publish after checking generation and references. */
@@ -39,7 +39,6 @@ interface PageState {
   refs: number; pinned: boolean; registered: boolean; prepared?: KrakenPreparedPage; loading?: Promise<boolean>;
 }
 const roles: readonly KrakenAssetRole[] = ['water', 'land', 'tentacle', 'egg'];
-const waterClips = ['idle', 'ink-spit', 'egg-throw', 'dive', 'surface'];
 let scopeSerial = 0;
 
 /** Local Activity presentation lifetime. No host/readiness/network dependency. */
@@ -157,25 +156,11 @@ export class KrakenAssetResidency {
    * Call again to retry failures. Consumers keep drawing rest poses with current host pose/time.
    * Water move is opt-in; land prefetch is opt-in and charged to the current/peak budget.
    */
-  setPhase(phase: KrakenResidencyPhase, options: { waterMove?: boolean; prefetchLand?: boolean; activeEggs?: boolean } = {}):
+  setPhase(phase: KrakenResidencyPhase, options: KrakenPhaseOptions = {}):
     { ready: Promise<boolean>; settled: Promise<void> } {
     if (this.detached) return { ready: Promise.resolve(false), settled: Promise.resolve() };
     this.phase = phase;
-    const current: KrakenAssetRole[] = phase === 'intro' || phase === 'water' ? ['water', 'tentacle', 'egg']
-      : phase === 'dead' ? [] : [...(phase === 'ashore' ? ['water' as const] : []), 'land', ...(options.activeEggs === false ? [] : ['egg' as const])];
-    const required: [KrakenAssetRole, string][] = current.map(role => [role, '__rest']);
-    const clips: [KrakenAssetRole, string][] = [];
-    const add = (role: KrakenAssetRole, names: readonly string[]) => names.forEach(name => clips.push([role, name]));
-    if (phase === 'intro') add('water', ['intro-rise']);
-    if (phase === 'intro' || phase === 'water') {
-      add('water', waterClips);
-      if (options.waterMove) add('water', ['move']);
-      add('tentacle', ['rise', 'hover', 'slam', 'retract']);
-    }
-    if (phase === 'ashore') { add('water', ['idle', 'move']); add('land', ['ashore']); }
-    if (phase === 'ashore' || phase === 'land') add('land', ['idle', 'move', 'ink-spit', 'slam', 'egg-throw', 'death']);
-    if (current.includes('egg')) add('egg', ['idle', 'hatch']);
-    if (phase === 'water' && options.prefetchLand) add('land', ['__rest', 'ashore', 'idle', 'move', 'ink-spit', 'slam', 'egg-throw', 'death']);
+    const { required, clips } = krakenResidencyPlan(phase, options);
     this.desired = new Set([...required, ...clips].flatMap(([role, clip]) => this.descriptors(role, clip).map(p => p.key)));
     // Unleased global animations may reference any page. Remove them before a phase evicts pages.
     if ([...this.pages.values()].some(p => p.pinned && !this.desired.has(p.key))) {

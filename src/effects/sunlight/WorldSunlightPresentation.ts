@@ -51,6 +51,14 @@ export class WorldSunlightPresentation {
  private readonly atmosphereClock=new SunAtmosphereClock();
  readonly clouds: SunCloudState={tuning:this.sunTuning,timeSec:0,strength:0};
  private readonly sunPath=createSunPath();
+ private reviewSun: { azimuth: number; elevation: number; strength: number } | null = null;
+ /** Explicit diagnostic override through the sole sun owner; all figure casters see the same vector. */
+ setFigureReviewSun(value: { azimuth: number; elevation: number; strength: number } | null): void {
+  if(this.disposed)return;
+  if (value && (![value.azimuth,value.elevation,value.strength].every(Number.isFinite)
+    || value.elevation<=0 || value.elevation>90 || value.strength<0 || value.strength>1)) throw Error('Invalid figure review sun');
+  this.reviewSun=value;this.sunMinute=NaN;this.sync();
+ }
  private readonly sunState: RockLightingState={enabled:true,normals:false,strength:0,sun:[0,0,1]};
  private readonly sunFog: FogWoodlandLight={sun:this.sunState.sun,sunCompositeTuning:this.sunTuning,clouds:this.clouds};
  private readonly ecologyQuality={rockEdgeFlora:1,rockCreviceFlora:1,rockFootFlora:1,rockFloraContact:.24,rockFloraBlend:.5};
@@ -118,6 +126,13 @@ export class WorldSunlightPresentation {
   if(minute!==this.ambientMinute){targets.lighting.setSunAmbient(resolveSunAmbient(minute));this.ambientMinute=minute;}
   if(minute!==this.sunMinute||this.azimuthOverride!==this.sunTuning.sunAzimuthOverride){
     this.clouds.sunPath=resolveSunPath(minute,this.sunTuning.sunAzimuthOverride,this.sunPath);
+    if(this.reviewSun){
+      const r=this.reviewSun,a=r.azimuth*Math.PI/180,e=r.elevation*Math.PI/180;
+      this.sunPath.azimuth=r.azimuth;this.sunPath.elevation=e;this.sunPath.strength=r.strength;
+      this.sunPath.direction[0]=Math.cos(a);this.sunPath.direction[1]=-Math.sin(a);
+      this.sunPath.sun[0]=Math.cos(a)*Math.cos(e);this.sunPath.sun[1]=-Math.sin(a)*Math.cos(e);this.sunPath.sun[2]=Math.sin(e);
+      this.sunPath.horizonAzimuth=r.azimuth;
+    }
     this.sunState.strength=this.sunPath.strength;
     for(let i=0;i<3;i++)this.sunState.sun[i]=this.sunPath.sun[i];
     targets.rocks?.setSunTime(minute);this.sunMinute=minute;this.azimuthOverride=this.sunTuning.sunAzimuthOverride;

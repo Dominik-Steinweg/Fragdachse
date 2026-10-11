@@ -367,7 +367,8 @@ it('cancels a queued train explosion on stop and refuses unsafe observer positio
 });
 
 // Exercise the real start/tick chain; only Phaser bodies and lifecycle services are stubbed.
-vi.mock('phaser', () => ({ BlendModes: { NORMAL: 0, ADD: 1 } }));
+vi.mock('phaser', () => ({ BlendModes: { NORMAL: 0, ADD: 1 }, Filters: { Controller: class {} },
+  Renderer: { WebGL: { RenderNodes: { BaseFilterShader: class {} } } } }));
 import { TrainManager } from '../src/train/TrainManager';
 import { CoopDefenseTrainEventHandler } from '../src/train/CoopDefenseTrainEventHandler';
 import { createDevScenarioWorldPort } from '../src/scenes/arena/ArenaRuntimeAdapters';

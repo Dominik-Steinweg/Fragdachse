@@ -7,6 +7,8 @@ import { sunShaderName } from './sunlight/SunRenderTarget';
 /** One cell-sized receiver texel. Obstacles/bases are exclusions, never casters.
  * Updated on the existing shadow invalidation path, not by scanning per player. */
 export class CharacterShadowReceiver {
+  /** Casters that clip submerged geometry invalidate their projected mask with the receiver. */
+  revision = 0;
   readonly world: number[];
   readonly texture: Phaser.Textures.Texture;
   private readonly data: Uint8Array;
@@ -44,6 +46,7 @@ export class CharacterShadowReceiver {
     // inherit neither their orientation nor colour conversion from the previous upload.
     renderer.glWrapper.updateTexturing({ texturing: { flipY: false, premultiplyAlpha: false } });
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, this.width, this.height, gl.RGBA, gl.UNSIGNED_BYTE, this.data);
+    this.revision++;
   }
   private set(x: number, y: number, value: number): void {
     const col = Math.floor((x - this.world[0]) / CELL_SIZE), row = Math.floor((y - this.world[1]) / CELL_SIZE);

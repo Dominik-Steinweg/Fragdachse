@@ -1,4 +1,8 @@
 import * as Phaser from 'phaser';
+import { characterLocalVector } from '../CharacterMaterialModel';
+import { setCloudUniforms, type SunCloudState } from '../sunlight/cloudShadow';
+import { getGraphicsQualityProfile } from '../../graphics/GraphicsQuality';
+import { KRAKEN_MATERIAL_HEADER } from './krakenMaterialShader';
 
 /** Heights are Blender units; colours are linear shader RGB in [0, 1]. */
 export const SUBMERSION_DEFAULTS = {
@@ -10,6 +14,9 @@ export const SUBMERSION_DEFAULTS = {
   foamBand: 0.022, foamOpacity: 0.42,
   depthFalloff: 0.35, desaturation: 0.45, shallowTint: 0.22,
   fadeStart: 0.15, fadeEnd: 1.2, refractionPx: 2,
+  // On land nothing can lie below the ground: parts deeper than this under the waterline (a tentacle's
+  // coil before it erupts, the bank side of the body during ashore) fade out instead of being drawn on grass.
+  buriedStart: 0.5, buriedEnd: 1.0,
   exposure: 1,
 };
 
@@ -28,8 +35,10 @@ uniform float waterLevel, elevationMin, elevationMax, time;
 uniform vec3 deepColor, shallowColor, foamColor;
 uniform float wetBand, wetDarkening, wetSaturation, foamBand, foamOpacity;
 uniform float depthFalloff, desaturation, shallowTint, fadeStart, fadeEnd, refractionPx, exposure;
+uniform float buriedStart, buriedEnd;
 varying vec2 outTexCoord;
 #pragma phaserTemplate(fragmentHeader)
+${KRAKEN_MATERIAL_HEADER}
 float hash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
 float noise(vec2 p) {
   vec2 i=floor(p),f=fract(p); f=f*f*(3.0-2.0*f);
@@ -38,18 +47,21 @@ float noise(vec2 p) {
 void main() {
   vec2 uv=outTexCoord;
   vec4 source=boundedSampler(uMainSampler,uv);
-  source.rgb*=exposure;  // per-object exposure, also on land
   vec2 logical=vec2(uv.x,1.0-uv.y);
   vec2 local=(logical*elevationSize-elevationTrim.xy)/elevationTrim.zw;
+  vec4 height=texture2D(uElevation,mix(elevationUV.xy,elevationUV.zw,clamp(local,0.0,1.0)));
+  source=krakenLight(source,logical,height);
+  source.rgb*=exposure;
   float mask=texture2D(uWaterMask,logical).r;
-  if(source.a<=0.0 || mask<=0.0 || any(lessThan(local,vec2(0))) || any(greaterThan(local,vec2(1)))) {
+  if(source.a<=0.0 || any(lessThan(local,vec2(0))) || any(greaterThan(local,vec2(1)))) {
     gl_FragColor=source; return;
   }
-  vec4 height=texture2D(uElevation,mix(elevationUV.xy,elevationUV.zw,local));
   if(height.a<=0.001) { gl_FragColor=source; return; }
   // Phaser uploads PNGs with premultiplied alpha. Undo it for this data pass.
   float elevation=mix(elevationMin,elevationMax,clamp(height.r/height.a,0.0,1.0));
   float d=waterLevel-elevation;
+  vec4 ground=source*(1.0-smoothstep(buriedStart,buriedEnd,d));
+  if(mask<=0.0) { gl_FragColor=ground; return; }
   vec3 rgb=source.rgb/source.a;
   float alpha=source.a;
   if(d>0.0) {
@@ -57,6 +69,10 @@ void main() {
     vec2 shift=vec2(sin(logical.y*37.0+time*1.3),cos(logical.x*31.0+time*1.1));
     shift*=min(refractionPx,2.0)*0.70710678*f/max(displaySize,vec2(1));
     vec4 refracted=boundedSampler(uMainSampler,uv+shift);
+    vec2 refractedLogical=vec2(uv.x+shift.x,1.0-uv.y-shift.y);
+    vec2 refractedLocal=(refractedLogical*elevationSize-elevationTrim.xy)/elevationTrim.zw;
+    vec4 refractedData=texture2D(uElevation,mix(elevationUV.xy,elevationUV.zw,clamp(refractedLocal,0.0,1.0)));
+    refracted=krakenLight(refracted,refractedLogical,refractedData);
     refracted.rgb*=exposure;
     rgb=refracted.a>0.001 ? refracted.rgb/refracted.a : rgb;
     rgb=mix(rgb,vec3(dot(rgb,vec3(.2126,.7152,.0722))),desaturation*f);
@@ -72,7 +88,7 @@ void main() {
   foam*=smoothstep(.25,.65,noise(logical*displaySize*.16+vec2(time*.5,-time*.3)));
   rgb=mix(rgb,foamColor,foam);
   // No halo beyond beauty coverage; premultiplied output remains valid as it fades.
-  gl_FragColor=mix(source,vec4(clamp(rgb,0.0,1.0)*alpha,alpha),clamp(mask,0.0,1.0));
+  gl_FragColor=mix(ground,vec4(clamp(rgb,0.0,1.0)*alpha,alpha),clamp(mask,0.0,1.0));
 }
 `;
 
@@ -85,6 +101,8 @@ type Sprite = Phaser.GameObjects.Sprite | Phaser.GameObjects.Image;
  * __WHITE supplies constant 1. Owners update the matching elevation frame each pose.
  */
 export class SubmersionFilter extends Phaser.Filters.Controller {
+  /** Pilot/new-revision opt-in only; scalar elevation never implies a material. */
+  material: { clouds: SunCloudState; emission: Phaser.Textures.Frame; emissionRange: number } | null = null;
   params = { ...SUBMERSION_DEFAULTS };
   elevationMin: number;
   elevationMax: number;
@@ -104,10 +122,21 @@ class SubmersionNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader 
   override setupTextures(c: SubmersionFilter, textures: Phaser.Renderer.WebGL.Wrappers.WebGLTextureWrapper[]): void {
     textures[1] = c.elevationFrame.glTexture;
     textures[2] = c.waterMask.glTexture;
+    textures[3] = (c.material?.emission ?? c.elevationFrame).glTexture;
   }
   override setupUniforms(c: SubmersionFilter): void {
     const f = c.elevationFrame;
+    const m = c.material, e = m?.emission ?? f, sun = [0, 0, 1], s = c.target;
+    const light = m?.clouds.sunPath?.sun ?? [0, 0, 1];
+    characterLocalVector(light[0], light[1], light[2], s.rotation, s.flipX, s.flipY, sun);
     const uniforms = {
+      uEmission: 3, materialEnabled: Number(!!m), materialLow: Number(getGraphicsQualityProfile(c.target.scene).level === 'low'),
+      materialSun: sun, materialStrength: m?.clouds.sunPath?.strength ?? 0,
+      materialNormalScale: [1 / Math.max(.001, Math.abs(s.scaleX)), 1 / Math.max(.001, Math.abs(s.scaleY)),
+        1 / Math.max(.001, Math.sqrt(Math.abs(s.scaleX * s.scaleY)))],
+      materialWorld: [s.x, s.y, Math.cos(s.rotation), Math.sin(s.rotation)], materialOrigin: [s.originX, s.originY],
+      emissionRange: m?.emissionRange ?? 1, emissionUV: [e.u0, e.v0, e.u1, e.v1],
+      emissionSize: [e.realWidth, e.realHeight], emissionTrim: [e.x, e.y, e.width, e.height],
       ...c.params, uElevation: 1, uWaterMask: 2,
       elevationMin: c.elevationMin, elevationMax: c.elevationMax,
       elevationUV: [f.u0, f.v0, f.u1, f.v1],
@@ -116,6 +145,7 @@ class SubmersionNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader 
       displaySize: [Math.abs(c.target.displayWidth), Math.abs(c.target.displayHeight)],
     };
     for (const [key, value] of Object.entries(uniforms)) this.programManager.setUniform(key, value);
+    setCloudUniforms((key, value) => this.programManager.setUniform(key, value), m?.clouds);
   }
 }
 

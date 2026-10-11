@@ -3,6 +3,8 @@ import { EnemyMeshReview } from './EnemyMeshReview';
 import { ArmageddonReview } from './ArmageddonReview';
 import { TurretMaterialReview } from './TurretMaterialReview';
 import { KrakenBossReview, krakenAssetIdentity, krakenReviewOptions } from './KrakenBossReview';
+import { KrakenLightShadowReview, krakenLightShadowOptions } from './KrakenLightShadowReview';
+import { WaterSurfaceModel } from '../../arena/WaterSurfaceModel';
 import { KRAKEN_CENTER, KRAKEN_MAP_ID, KRAKEN_PLAYER, KRAKEN_SHORE, registerKrakenAbyssMap } from './krakenAbyssMap';
 import { setCharacterMaterialSuppressed, setCharacterMaterialView, characterMaterialStatus } from '../../effects/CharacterMaterialLighting';
 import { WorldLightingMeasurement } from './WorldLightingMeasurement';
@@ -48,6 +50,7 @@ export class DevScenarioController {
   private armageddonReview: ArmageddonReview | null = null;
   private turretMaterialReview: TurretMaterialReview | null = null;
   private krakenReview: KrakenBossReview | null = null;
+  private krakenLightShadowReview: KrakenLightShadowReview | null = null;
   private readonly unregisterKrakenMap: () => void;
   private krakenLoading = false;
   private pendingKrakenMission: { skipIntro: boolean; hp: number | null } | null = null;
@@ -60,6 +63,31 @@ export class DevScenarioController {
     this.requireReady();
     if (this.config.mapId !== KRAKEN_MAP_ID) throw Error(`krakenReview requires ${KRAKEN_MAP_ID}`);
     if (this.krakenLoading) throw Error('Wait for the pending krakenReview command.');
+    if (command.pilot !== undefined || this.krakenLightShadowReview && command.run === undefined) {
+      const options = krakenLightShadowOptions(command, this.krakenLightShadowReview?.options);
+      this.krakenReview?.destroy(); this.krakenReview = null;
+      const prior = this.krakenLightShadowReview;
+      this.krakenLoading = true;
+      try {
+        if (!prior || prior.options.pilot !== options.pilot || prior.options.pose !== options.pose) {
+          prior?.destroy(); this.krakenLightShadowReview = null;
+          const targets = this.runtime.getScenarioLightingTargets(), metrics = this.runtime.getWorldMetrics()!;
+          if (!targets.sunlight) throw Error('Lighting pilot requires the World sunlight owner');
+          const water = new WaterSurfaceModel(this.runtime.getWorldLayout()?.water ?? [], { width: metrics.widthPx, height: metrics.heightPx });
+          const review = new KrakenLightShadowReview(this.scene, options, targets.shadow, targets.sunlight,
+            this.world({ gridX: KRAKEN_SHORE.gridX, gridY: KRAKEN_SHORE.gridY + 7 }), this.world(KRAKEN_SHORE),
+            (x,y) => water.sample(x-metrics.offsetX,y-metrics.offsetY));
+          this.krakenLightShadowReview = review;
+          try { await review.initialize(); } catch (error) { review.destroy(); this.krakenLightShadowReview = null; throw error; }
+        } else prior.configure(options);
+        this.config = { ...this.config, timeOfDay: options.night ? 0 : 720 };
+        this.worldLighting?.update(this.config.timeOfDay, this.clock.now);
+        this.runtime.setTimeOfDayDebugOverride(this.config.timeOfDay);
+        this.cameraAtTarget = true; this.zoom = 1; this.syncCamera(); this.syncPanel();
+      } finally { this.krakenLoading = false; }
+      return;
+    }
+    this.krakenLightShadowReview?.destroy(); this.krakenLightShadowReview = null;
     const options = krakenReviewOptions(command, this.krakenReview?.options);
     let fixture = this.krakenReview;
     if (!fixture || krakenAssetIdentity(options) !== krakenAssetIdentity(fixture.options)) {
@@ -171,6 +199,7 @@ export class DevScenarioController {
   start(value: unknown): void {
     this.pendingKrakenMission = null; this.pendingKrakenHp = null;
     this.krakenReview?.destroy(); this.krakenReview = null;
+    this.krakenLightShadowReview?.destroy(); this.krakenLightShadowReview = null;
     this.turretMaterialReview?.destroy(); this.turretMaterialReview = null;
     this.armageddonReview?.destroy(); this.armageddonReview = null;
     const config = parseScenario(value);
@@ -783,6 +812,7 @@ export class DevScenarioController {
     try { point = this.trainCameraPoint ?? (this.cameraAtTarget ? this.world(this.aim) : this.runtime.navigationLabPort.getPlayerPosition()); }
     catch (error) { this.cameraAtTarget = false; this.fail(error); return; }
     if (!point) return;
+    if (this.krakenLightShadowReview) point = this.krakenLightShadowReview.focus;
     if (this.krakenReview?.options.camera === 'effect') point = this.krakenReview.effectFocus();
     if (this.krakenReview) {
       const offset = this.krakenReview.cameraOffset();
@@ -794,7 +824,8 @@ export class DevScenarioController {
     const zoom = this.zoom * resolveCameraFocusZoom(focus);
     const camera = this.scene.cameras.main;
     camera.removeBounds();
-    camera.setZoom(this.scene.scale.width / GAME_WIDTH * zoom, this.scene.scale.height / GAME_HEIGHT * zoom);
+    if (this.krakenLightShadowReview) camera.setZoom(1); // A source/world pixel is one camera pixel in the pilot.
+    else camera.setZoom(this.scene.scale.width / GAME_WIDTH * zoom, this.scene.scale.height / GAME_HEIGHT * zoom);
     if (this.trainCameraPoint) {
       // Arena uses origin (0,0); Phaser centerOn assumes the unzoomed half viewport.
       // Invert the actual origin/zoom instead, also valid after a DPR or viewport resize.
@@ -822,7 +853,7 @@ export class DevScenarioController {
       enemyMeshShadows: this.state === 'ready' ? this.runtime.getScenarioLightingTargets().shadow?.getEnemyShadowsStatus() ?? null : null,
       enemyMeshMeasurement: this.enemyMeshReview?.measurement ?? null,
       armageddonReview: this.armageddonReview?.status() ?? null,
-      krakenReview: this.krakenReview?.status() ?? null,
+      krakenReview: this.krakenLightShadowReview?.status() ?? this.krakenReview?.status() ?? null,
       enemyMeshFixture: this.enemyMeshReview?.inspect() ?? null,
       enemyContour: this.state === 'ready' ? this.runtime.getScenarioLightingTargets().enemyReadability.getDiagnostics() : null,
       characterMaterial: characterMaterialStatus(this.scene),
@@ -887,6 +918,7 @@ export class DevScenarioController {
   }
   destroy(): void {
     this.krakenReview?.destroy(); this.krakenReview = null;
+    this.krakenLightShadowReview?.destroy(); this.krakenLightShadowReview = null;
     this.turretMaterialReview?.destroy(); this.turretMaterialReview = null;
     this.armageddonReview?.destroy(); this.armageddonReview = null;
     if (this.disposed) return;

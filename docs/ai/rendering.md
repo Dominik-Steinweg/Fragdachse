@@ -169,6 +169,9 @@ und [WorldPresentationFrameLifetime.test.ts](../../tests/integration/WorldPresen
 ## Figuren- und Turmassets
 
 `ShadowSystem` besitzt die worldgebundenen `CharacterMeshShadowRenderer`-Ressourcen.
+Auch die gemeinsame `CharacterShadowReceiver`-Maske gehoert `ShadowSystem`, unabhaengig von
+Spielern und Qualitaetsstufe. Weitere Figuren-Caster leihen sie ueber `borrowFigureEnvironment`;
+bei World-/Qualitaetswechsel werden ihre Borrower vor der Maske entkoppelt.
 Sonnenzustand und pausierbare Praesentationszeit kommen von `WorldSunlightPresentation`;
 World-Unbind und Qualitaetswechsel geben Masken-Slots, Geometriebuffer und Empfaengermaske frei.
 Die binaeren, hashgebundenen Meshdaten bleiben im game-owned Loader-Cache. Schatten lesen den
