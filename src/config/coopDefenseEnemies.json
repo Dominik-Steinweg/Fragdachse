@@ -830,8 +830,8 @@
         "preferredRangeMaxPx": 1000,
         "coverSearchActivationMarginPx": 250,
         "localSearchRadiusPx": 420,
-        "positionCandidateRings": 2,
-        "positionCandidateDirections": 8,
+        "positionCandidateRings": 3,
+        "positionCandidateDirections": 12,
         "maxLocalSearchCells": 4096,
         "topTargetCandidates": 4,
         "threatScanRadiusPx": 1400,
@@ -846,7 +846,7 @@
         "threatChangeDistancePx": 96,
         "spacingSpeedFactor": 0.45,
         "spacingProbeDistancePx": 40,
-        "positionArrivalTolerancePx": 10
+        "positionArrivalTolerancePx": 6
       }
     }
   ]
