@@ -50,6 +50,10 @@ def throw_windows(p):
     return out
 
 
+def smoothstep_tip(t):
+    return smooth(.55, 1, t)
+
+
 def brood_throw(asset, phase, frame, p, pose, key, key_arms, key_lids, land=False):
     """Six staggered throws: lift the egg, cock the arm back and up, whip it outward, follow through."""
     windows = throw_windows(p)
@@ -80,8 +84,11 @@ def brood_throw(asset, phase, frame, p, pose, key, key_arms, key_lids, land=Fals
         lift, cock, snap = beats(local[i])
         lag = smooth(.0, 1, t) * .06       # the whip travels from the root to the hook
         _, _, snap_late = beats(local[i] - lag)
-        pitch = .03 * lift * (.5 + .5 * t) + .085 * cock * (.6 + .4 * t) - .055 * snap_late * (.3 + .7 * t)
-        yaw = -side * .07 * cock * (.3 + .7 * t) + side * .065 * snap_late * t
+        # From above the wind-up must read in the plane: a big swing back towards the tail with the
+        # hook curling up, then a whip outward past the rest line.
+        curl = .09 * cock * smoothstep_tip(t)
+        pitch = .03 * lift * (.5 + .5 * t) + .07 * cock * (.6 + .4 * t) + curl - .06 * snap_late * (.3 + .7 * t)
+        yaw = -side * .15 * cock * (.25 + .75 * t) + side * .10 * snap_late * (.2 + .8 * t)
         twist = side * .05 * cock * t
         return (pitch, twist, yaw)
 
