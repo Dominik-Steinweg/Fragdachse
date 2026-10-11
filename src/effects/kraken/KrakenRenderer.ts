@@ -134,6 +134,11 @@ export function sampleKrakenTentacle(t: KrakenTentacleState, asset: PipelineBoss
     const start = Math.max(t.hoverAt, attack.strikeAt - marker(slam, 'strike') / slam.frameRate * 1000);
     if (now >= start) return timed(asset, 'slam', now, start, attack.endsAt,
       [[attack.strikeAt, 'strike'], [attack.hitAt, 'impact']]);
+    // Rise ends and slam starts on hover frame 0: play a whole number of retimed hover loops in between,
+    // or hold the raised pose when the window is shorter than half a loop.
+    const hover = krakenClip(asset, 'hover'), period = hover.frames.length / hover.frameRate * 1000;
+    const span = start - t.hoverAt, cycles = Math.round(span / period);
+    return loop(asset, 'hover', cycles ? (now - t.hoverAt) * cycles * period / span : 0);
   }
   return loop(asset, 'hover', now - t.hoverAt);
 }

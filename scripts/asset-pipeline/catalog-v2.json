@@ -4937,8 +4937,8 @@
         "organic": "art/poc/kraken-v8/textures/kraken-scales-v8.png"
       },
       "elevation": {
-        "min": -3.5,
-        "max": 4.5,
+        "min": -5.2,
+        "max": 7,
         "scale": 0.5,
         "previewWaterLevel": 0
       },

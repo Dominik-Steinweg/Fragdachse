@@ -27,8 +27,10 @@ def apply_kraken_egg(asset, motion, phase, frame, idle, p, pose, key):
         crack = smooth(0, .30, phase)
         opening = smooth(.22, .62, phase)
         beat = 1.4 * math.sin(math.pi * smooth(0, .3, phase))
-        burst = 1 + .35 * smooth(.25, .45, phase) - 1.35 * smooth(.45, .75, phase)
-        glow += 2.2 * smooth(.15, .35, phase) * (1 - smooth(.4, .8, phase)) - (glow) * smooth(.6, 1, phase)
+        # The ember flares as the shell cracks and is spent before the brood spawns
+        # (marker spawn ~.53), leaving an open, faintly glowing husk.
+        burst = 1 + .25 * smooth(.18, .32, phase) - 1.25 * smooth(.32, .55, phase)
+        glow += .5 * smooth(.12, .28, phase) - (glow + .5) * .85 * smooth(.30, .55, phase)
         opening += .04 * crack * math.sin(phase * 60) * (1 - opening)
     scale = max(.001, burst) * (1 + .06 * beat)
     pose('core', scale=(scale, scale, scale))

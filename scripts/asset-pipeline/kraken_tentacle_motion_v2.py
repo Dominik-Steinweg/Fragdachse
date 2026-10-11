@@ -83,9 +83,10 @@ def apply_kraken_tentacle(asset, motion, phase, frame, idle, p, pose, key):
                 t = j / (n - 1)
                 up = smooth(.25, .6, t)
                 # Towering menace: the column sways, the hook weaves and tastes the air.
-                shape[0][j] += 4 * math.sin(cycle - t * 2.4) * up
-                shape[1][j] += 7 * math.sin(cycle + 1.1 - t * 3.6) * up
-                shape[2][j] += 10 * math.sin(cycle + .4) * smooth(.6, 1, t)
+                # Each term is zero at phase 0, so the loop starts on the exact raised pose.
+                shape[0][j] += 4 * (math.sin(cycle - t * 2.4) - math.sin(-t * 2.4)) * up
+                shape[1][j] += 7 * (math.sin(cycle + 1.1 - t * 3.6) - math.sin(1.1 - t * 3.6)) * up
+                shape[2][j] += 10 * (math.sin(cycle + .4) - math.sin(.4)) * smooth(.6, 1, t)
     elif motion == 'kraken_tentacle_rise':
         # Bursts straight up out of the deep, overshoots high, settles into the tower.
         surge = smooth(0, .45, phase)
