@@ -29,8 +29,8 @@ describe('CombatSystem Chain Lightning – Runtime/Shared Resolver Parity', () =
   it('keeps primary exclusion, nearest-first tie order, 1-based falloff, chain damage kind and resources', () => {
     const enemyManager = {
       getAllEnemies: () => [
-        fakeEntity({ id: 'primary', x: 10, y: 0 }),
-        fakeEntity({ id: 'enemy_next', x: 35, y: 0 }),
+        fakeEntity({ id: 'primary', x: 10, y: 0, isBurrowed: () => false }),
+        fakeEntity({ id: 'enemy_next', x: 35, y: 0, isBurrowed: () => false }),
       ],
       getEnemy: () => undefined,
       hasEnemy: () => false,

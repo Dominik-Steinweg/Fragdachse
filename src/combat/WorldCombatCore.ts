@@ -1,4 +1,9 @@
 import { getHitscanRangeToCursor } from '../loadout/WeaponFireExecutor';
+import type { CombatAreaAttackPort, CombatAreaAttackRequest } from './CombatAreaAttack';
+import { readEnemyAreaClawEvent } from '../systems/EnemyClawAttack';
+import { combatDamageEventTargetKey, type CombatDamageEventIdentity, type CombatPartContactSnapshot,
+  type CombatPartContactReadPort, type CombatPartStatusPort, type CombatPartTransferPolicy,
+  type CombatPartHitReceipt } from './CombatPartContact';
 import { plasmaBurnerTargetEffect, type PlasmaBurnerTarget, type PlasmaBurnerTargetCatalogPort } from './plasmaBurner/PlasmaBurnerTargetPolicy';
 import { resolvePlasmaBurnerChain } from './plasmaBurner/PlasmaBurnerChainResolver';
 import { canHoldPlasmaBurnerLock } from './plasmaBurner/PlasmaBurnerTargetLock';
@@ -185,6 +190,8 @@ export type { ProjectileAk47DirectImpact as Ak47DirectEnemyHitImpact } from '../
  * – Gegnerfaehigkeiten, Dash-Aufprall, Umgebungsschaden – auf dem Default stehen bleiben.
  */
 interface DamageApplicationOptions {
+  /** Private, host-revalidated physical contact. Never a client-settable bypass. */
+  partContact?: CombatPartContactSnapshot;
   allowTeamDamage?: boolean;
   allowCritical?: boolean;
   sourceSlot?: LoadoutSlot;
@@ -360,7 +367,143 @@ type MeleeSwingTargetCandidate =
   | Omit<Extract<MeleeSwingTarget, { readonly kind: 'enemy' }>, 'distance'>
   | Omit<Extract<MeleeSwingTarget, { readonly kind: 'decoy' }>, 'distance'>;
 
-export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAttackPort {
+export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAttackPort, CombatAreaAttackPort {
+  private partBinding: { contacts: CombatPartContactReadPort; status: CombatPartStatusPort;
+    policy: CombatPartTransferPolicy; isBodyTargetable: (target: CombatTargetRef) => boolean;
+    onHit?: (receipt: CombatPartHitReceipt) => void } | null = null;
+  // Opaque query handles are physical contacts, never registered Enemy entities or HP owners.
+  private readonly partHandles = new Map<string, CombatPartContactSnapshot>();
+  private readonly damageEvents = new Set<string>();
+  private readonly pendingDirectEvents = new Set<string>();
+  private readonly areaAttacks = new Set<string>();
+  private damageEventId: string | null = null;
+  private damageEventSequence = 0;
+
+  /** AP2 attaches the Activity-owned A ports and detaches before removing that Activity. */
+  bindPartContacts(binding: NonNullable<WorldCombatCore['partBinding']>): () => void {
+    this.partBinding = binding;
+    this.partHandles.clear(); this.damageEvents.clear(); this.areaAttacks.clear();
+    return () => {
+      if (this.partBinding !== binding) return;
+      this.partBinding = null;
+      this.partHandles.clear(); this.damageEvents.clear(); this.areaAttacks.clear();
+    };
+  }
+
+  private isBodyTargetable(id: string): boolean {
+    const target = this.enemyManager?.getCombatTargetRef?.(id);
+    return !target || (this.partBinding?.isBodyTargetable(target) ?? true);
+  }
+
+  private currentPart(snapshot: CombatPartContactSnapshot): CombatPartContactSnapshot | null {
+    if (!this.partBinding) return null;
+    if (!this.currentHostExecution) return this.runHostExecution(() => this.currentPart(snapshot));
+    const { identity, contactId } = snapshot.contact, boss = identity.boss;
+    const current = this.enemyManager?.getCombatTargetRef?.(boss.id);
+    if (!current || !isSameCombatTargetInstance(current, boss) || !isSameCombatScope(boss.scope, this.getCombatScope())) return null;
+    const state = this.enemyManager?.readCombatVitals(boss);
+    if (!state?.alive) return null;
+    const resolved = this.partBinding?.contacts.resolveContact(identity, contactId, this.hostFrameNowMs);
+    if (!resolved || !isSameCombatTargetInstance(resolved.contact.identity.boss, boss)
+      || resolved.contact.identity.partId !== identity.partId
+      || resolved.contact.identity.partGeneration !== identity.partGeneration
+      || resolved.contact.identity.cycleId !== identity.cycleId
+      || resolved.contact.contactId !== contactId || this.hostFrameNowMs < resolved.contact.targetableFrom
+      || this.hostFrameNowMs >= resolved.contact.targetableUntil) return null;
+    return resolved;
+  }
+
+  /** Shared query adapter for Projectile, automatic targeting and immediate weapons. */
+  readPartTargets(): readonly { id: string; snapshot: CombatPartContactSnapshot; x: number; y: number; radius: number }[] {
+    if (!this.partBinding) return [];
+    if (!this.currentHostExecution) return this.runHostExecution(() => this.readPartTargets());
+    const result = [];
+    for (const candidate of this.partBinding?.contacts.getContacts(this.hostFrameNowMs) ?? []) {
+      const snapshot = this.currentPart(candidate);
+      if (!snapshot) continue;
+      const id = `combat-part:${JSON.stringify([snapshot.contact.identity, snapshot.contact.contactId])}`;
+      this.partHandles.set(id, snapshot);
+      const shapes = CombatGeometry.partShapes(snapshot);
+      if (!shapes.length) continue;
+      const left = Math.min(...shapes.map(p => Math.min(p.ax, p.bx) - p.radius));
+      const right = Math.max(...shapes.map(p => Math.max(p.ax, p.bx) + p.radius));
+      const top = Math.min(...shapes.map(p => Math.min(p.ay, p.by) - p.radius));
+      const bottom = Math.max(...shapes.map(p => Math.max(p.ay, p.by) + p.radius));
+      result.push({ id, snapshot, x: (left + right) / 2, y: (top + bottom) / 2, radius: Math.hypot(right - left, bottom - top) / 2 });
+    }
+    return result;
+  }
+
+  /** Bind alongside readCollisionTargets; null is an exact miss, undefined an ordinary body. */
+  getPartProjectileHit(id: string, sx: number, sy: number, ex: number, ey: number, radius: number) {
+    const candidate = this.partHandles.get(id);
+    if (!candidate) return id.startsWith('combat-part:') ? null : undefined;
+    const snapshot = this.currentPart(candidate);
+    return snapshot ? CombatGeometry.tracePart(snapshot, sx, sy, ex, ey, radius) : null;
+  }
+
+  private withDamageEvent<T>(id: string, work: () => T): T {
+    const previous = this.damageEventId;
+    this.damageEventId = id;
+    try { return work(); } finally { this.damageEventId = previous; }
+  }
+
+  private partStatus(id: string, status: 'burn' | 'slow' | 'stun', durationMs: number): boolean {
+    const candidate = this.partHandles.get(id);
+    if (!candidate) return false;
+    const current = this.currentPart(candidate);
+    if (current && durationMs > 0) this.partBinding?.status.applyPartStatus(current.contact.identity, status, this.hostFrameNowMs + durationMs);
+    return true;
+  }
+
+  /** Automatic locks use physical aim points but canonical identity for relationship/dedupe. */
+  readEnemyAimTargets(): readonly { id: string; bossId: string; x: number; y: number; radius: number; part?: CombatPartContactSnapshot }[] {
+    return [
+      ...(this.enemyManager?.getAllEnemies() ?? []).filter(e => this.isBodyTargetable(e.id) && !e.isBurrowed()).map(e => ({
+        id: e.id, bossId: e.id, x: e.sprite.x, y: e.sprite.y, radius: e.getCollisionRadius(),
+      })),
+      ...this.readPartTargets().map(p => ({ id: p.id, bossId: p.snapshot.contact.identity.boss.id,
+        x: p.x, y: p.y, radius: p.radius, part: p.snapshot })),
+    ];
+  }
+
+  private radialEnemyContacts(x: number, y: number, surface: boolean) {
+    const best = new Map<string, { id: string; bossId: string; distance: number }>();
+    for (const target of this.readEnemyAimTargets()) {
+      const contact = target.part ? CombatGeometry.nearestPartPoint(target.part, x, y) : null;
+      if (target.part && (!contact || !this.hasLineOfSight(x, y, contact.x, contact.y))) continue;
+      const distance = contact?.distance ?? Math.max(0, Math.hypot(x - target.x, y - target.y) - (surface ? target.radius : 0));
+      if (!best.has(target.bossId) || distance < best.get(target.bossId)!.distance) best.set(target.bossId, { id: target.id, bossId: target.bossId, distance });
+    }
+    return [...best.values()];
+  }
+
+  private applyPartDamage(id: string, amount: number, attackerId?: string, sourceId?: string,
+    visual?: DamageVisualContext, options?: DamageApplicationOptions): CombatDamageMutationOutcome | null {
+    const candidate = this.partHandles.get(id), snapshot = candidate && this.currentPart(candidate);
+    if (!snapshot || !this.partBinding) return null;
+    const boss = snapshot.contact.identity.boss;
+    const source = options?.source ?? this.createLegacyMutationSource(attackerId, sourceId, options?.damageKind ?? 'direct');
+    if (!this.relationshipForSource(source, boss.id).canDamage) return null;
+    const point = CombatGeometry.nearestPartPoint(snapshot, visual?.sourceX ?? snapshot.contact.x, visual?.sourceY ?? snapshot.contact.y);
+    if (!point) return null;
+    if (visual?.sourceX !== undefined && visual.sourceY !== undefined
+      && !this.hasLineOfSight(visual.sourceX, visual.sourceY, point.x, point.y)) return null;
+    const event: CombatDamageEventIdentity = { scope: boss.scope, activityRevision: boss.instance.activityRevision,
+      eventId: this.damageEventId ?? `contact:${++this.damageEventSequence}` };
+    const key = combatDamageEventTargetKey(event, boss);
+    if (this.damageEvents.has(key)) return null;
+    // Reserve before modifiers, mutation or feedback can reenter Combat.
+    this.damageEvents.add(key);
+    const multiplier = this.partBinding.policy.damageMultiplier;
+    const onHit = this.partBinding.onHit;
+    const outcome = this.applyEnemyDamage(boss.id, amount * multiplier, attackerId, sourceId,
+      visual, { ...options, source, target: boss, partContact: snapshot,
+        ...(options?.basis ? { basis: { ...options.basis, amount: options.basis.amount * multiplier } } : {}) });
+    if (outcome && outcome.kind !== 'rejected') onHit?.({ event, part: snapshot.contact.identity,
+      contactId: snapshot.contact.contactId, x: point.x, y: point.y, outcomeId: outcome.outcomeId });
+    return outcome;
+  }
   private readonly pressureShields = new PressureShieldSystem();
   private readonly rocketHealSequences = new Map<string, number>();
   getRocketSupportState(playerId: string, now: number): { pressureShieldUntil: number; rocketHealSequence: number } {
@@ -630,11 +773,11 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   }
 
   applyAoeDamage(...args: Parameters<WorldCombatCore['applyAoeDamageAtHostTime']>): ReturnType<WorldCombatCore['applyAoeDamageAtHostTime']> {
-    return this.runHostExecution(() => this.applyAoeDamageAtHostTime(...args));
+    return this.runHostExecution(() => this.withDamageEvent(`aoe:${++this.damageEventSequence}`, () => this.applyAoeDamageAtHostTime(...args)));
   }
 
   applyExplosionDamage(...args: Parameters<WorldCombatCore['applyExplosionDamageAtHostTime']>): ReturnType<WorldCombatCore['applyExplosionDamageAtHostTime']> {
-    return this.runHostExecution(() => this.applyExplosionDamageAtHostTime(...args));
+    return this.runHostExecution(() => this.withDamageEvent(`explosion:${++this.damageEventSequence}`, () => this.applyExplosionDamageAtHostTime(...args)));
   }
 
   getPlayerRuntimeDamageMultiplier(...args: Parameters<WorldCombatCore['getPlayerRuntimeDamageMultiplierAtHostTime']>): ReturnType<WorldCombatCore['getPlayerRuntimeDamageMultiplierAtHostTime']> {
@@ -642,7 +785,18 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   }
 
   resolveDirectImpact(...args: Parameters<WorldCombatCore['resolveDirectImpactAtHostTime']>): ReturnType<WorldCombatCore['resolveDirectImpactAtHostTime']> {
-    return this.runHostExecution(() => this.resolveDirectImpactAtHostTime(...args));
+    return this.runHostExecution(() => this.withDamageEvent(`projectile:${args[0].projectileId}`, () => {
+      const request = args[0];
+      const target = request.target.kind === 'enemy'
+        ? this.partHandles.get(request.target.id)?.contact.identity.boss ?? this.enemyManager?.getCombatTargetRef(request.target.id) : null;
+      const key = this.partBinding && target && target.instance.activityRevision !== undefined
+        ? combatDamageEventTargetKey({ scope: target.scope, activityRevision: target.instance.activityRevision,
+          eventId: this.damageEventId! }, target) : null;
+      if (key && (this.pendingDirectEvents.has(key) || this.damageEvents.has(key))) return { accepted: false };
+      if (key) this.pendingDirectEvents.add(key);
+      try { return this.resolveDirectImpactAtHostTime(...args); }
+      finally { if (key) this.pendingDirectEvents.delete(key); }
+    }));
   }
 
   resolveExplosionCombat(...args: Parameters<WorldCombatCore['resolveExplosionCombatAtHostTime']>): ReturnType<WorldCombatCore['resolveExplosionCombatAtHostTime']> {
@@ -658,7 +812,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
    * retaining the established per-weapon semantics in the concrete resolvers below.
    */
   resolveImmediateAttack(request: Parameters<CombatImmediateAttackPort['resolveImmediateAttack']>[0]): CombatImmediateAttackOutcome {
-    return this.runHostExecution(() => {
+    return this.runHostExecution(() => this.withDamageEvent(`immediate:${++this.damageEventSequence}`, () => {
       const previousCollector = this.immediateMutationOutcomes;
       const interactions: CombatDamageMutationOutcome[] = [];
       this.immediateMutationOutcomes = interactions;
@@ -729,7 +883,68 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       } finally {
         this.immediateMutationOutcomes = previousCollector;
       }
-    });
+    }));
+  }
+
+  resolveAreaAttack(request: CombatAreaAttackRequest): CombatImmediateAttackOutcome {
+    return this.runHostExecution(() => {
+      const { claw, source, damage } = request, { attack } = claw, pose = attack.pose;
+      const actor = source.actor ?? source.gameplaySource;
+      const owner = this.enemyManager?.getCombatTargetRef(claw.enemyId);
+      const { revision, attack: _attack, ...address } = claw;
+      if (!this.bridge.isHost() || !owner || !Number.isFinite(damage) || damage < 0
+        || !isSameCombatScope(owner.scope, this.getCombatScope()) || !this.enemyManager?.readCombatVitals(owner)?.alive
+        || owner.scope.worldRevision !== claw.worldRevision || owner.instance.entityGeneration !== claw.entityGeneration
+        || owner.instance.activityRevision !== claw.activityRevision || !this.isAlive(claw.enemyId)
+        || this.hostFrameNowMs < attack.hitAt || actor.kind !== 'enemy' || actor.id !== claw.enemyId
+        || !readEnemyAreaClawEvent({ ...address, state: { revision, attack } })) return { accepted: false, interactions: [] };
+      const key = JSON.stringify([owner, claw.slot, attack.attackId]);
+      if (this.areaAttacks.has(key)) return { accepted: false, interactions: [] };
+      this.areaAttacks.add(key);
+      const targets: { kind: 'player' | 'enemy' | 'decoy'; id: string | number; x: number; y: number; radius: number; target?: CombatTargetRef }[] = [];
+      const select = (candidate: typeof targets[number]) => {
+        if (!CombatGeometry.areaContainsCircle(pose, candidate.x, candidate.y, candidate.radius)) return;
+        this.meleeLine.setTo(pose.originX, pose.originY, candidate.x, candidate.y);
+        if (this.isMeleePathBlocked(Math.hypot(candidate.x - pose.originX, candidate.y - pose.originY) - candidate.radius)) return;
+        targets.push(candidate);
+      };
+      for (const p of this.playerManager.getAllPlayers()) {
+        if (!this.isPlayerTargetable(p.id) || !this.isAlive(p.id) || this.isBurrowed(p.id)
+          || !this.relationshipForSource(source, p.id).canDamage) continue;
+        select({ kind: 'player', id: p.id, x: p.x, y: p.y, radius: PLAYER_SIZE / 2, target: this.playerVitals.getTargetRef(p.id) ?? undefined });
+      }
+      for (const e of this.enemyManager?.getAllEnemies() ?? []) {
+        if (e.faction !== 'allied' || !this.isBodyTargetable(e.id) || e.isBurrowed()
+          || !this.relationshipForSource(source, e.id).canDamage) continue;
+        select({ kind: 'enemy', id: e.id, x: e.sprite.x, y: e.sprite.y, radius: e.getCollisionRadius(), target: this.enemyManager?.getCombatTargetRef(e.id) ?? undefined });
+      }
+      for (const d of this.decoySystem?.getHostTargets() ?? []) {
+        if (!this.relationshipForSource(source, d.ownerId).canDamage) continue;
+        select({ kind: 'decoy', id: d.id, x: d.x, y: d.y, radius: PLAYER_SIZE / 2 });
+      }
+      const interactions: CombatDamageMutationOutcome[] = [], visited = new Set<string>();
+      const visual = { sourceX: pose.originX, sourceY: pose.originY, dirX: Math.cos(pose.angle), dirY: Math.sin(pose.angle) };
+      let impact: typeof targets[number] | undefined;
+      for (const t of targets) {
+        const targetKey = `${t.kind}:${t.id}`;
+        if (visited.has(targetKey)) continue;
+        visited.add(targetKey);
+        if (t.target && !this.isCurrentCombatantTarget(t.target)) continue;
+        if (this.shouldBlockWithShield(String(t.id), 'melee', damage, pose.originX, pose.originY)) continue;
+        const outcome = t.kind === 'decoy'
+          ? this.decoySystem?.applyDamage(Number(t.id), damage, source.attribution.id, attack.weaponId, visual)
+          : this.applyDamage(String(t.id), damage, false, source.attribution.id, attack.weaponId, visual,
+            { source, target: t.target, sourceSlot: source.sourceSlot, damageKind: 'direct' });
+        if (outcome) interactions.push(outcome);
+        if (outcome?.kind === 'damage-applied' && outcome.actualDamage > 0) impact ??= t;
+      }
+      const g = pose.geometry;
+      this.queueMeleeSwing({ areaClaw: claw, clawAttackId: attack.attackId, weaponSourceId: attack.weaponId,
+        x: pose.originX, y: pose.originY, angle: pose.angle,
+        range: g.kind === 'sector' ? g.range : g.length, arcDegrees: g.kind === 'sector' ? g.arcDegrees : 0,
+        color: COLORS.RED_2, shooterId: claw.enemyId, hitPlayer: !!impact, impactX: impact?.x, impactY: impact?.y });
+      return { accepted: true, interactions: Object.freeze(interactions) };
+    }, request.nowMs);
   }
 
   applyBaseDamage(...args: Parameters<WorldCombatCore['applyBaseDamageAtHostTime']>): ReturnType<WorldCombatCore['applyBaseDamageAtHostTime']> {
@@ -1133,7 +1348,9 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     const binding = Object.freeze({ ...sources });
     this.hostExecutionSources = binding;
     return { destroy: () => {
-      if (this.hostExecutionSources === binding) this.hostExecutionSources = null;
+      if (this.hostExecutionSources !== binding) return;
+      this.hostExecutionSources = null;
+      this.partBinding = null; this.partHandles.clear(); this.damageEvents.clear(); this.areaAttacks.clear();
     } };
   }
 
@@ -1237,7 +1454,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     });
   }
 
-  isAlive(id: string): boolean { return (this.playerVitals.readCurrent(id)?.alive ?? false) || this.enemyManager?.hasEnemy(id) === true; }
+  isAlive(id: string): boolean { if (this.partHandles.has(id)) return !!this.currentPart(this.partHandles.get(id)!); return (this.playerVitals.readCurrent(id)?.alive ?? false) || this.enemyManager?.hasEnemy(id) === true; }
   isBurrowed(id: string): boolean {
     const enemy = this.enemyManager?.getEnemy(id);
     if (enemy) return enemy.isBurrowed();
@@ -1278,7 +1495,9 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     visualContext?:  DamageVisualContext,
     options?:        DamageApplicationOptions,
   ): CombatDamageMutationOutcome | null {
+    if (this.partHandles.has(targetId)) return this.applyPartDamage(targetId, amount, attackerId, sourceId, visualContext, options);
     if (this.enemyManager?.hasEnemy(targetId)) {
+      if (!this.isBodyTargetable(targetId)) return null;
       return this.applyEnemyDamage(targetId, amount, attackerId, sourceId, visualContext, options);
     }
     const target = options?.target?.kind === 'player' && String(options.target.id) === targetId
@@ -1425,12 +1644,17 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     visualStyle: GroundFireVisualStyle,
     source?: CombatSource,
   ): void {
-    if (!this.isAlive(targetId)) return;
+    if (durationMs <= 0 || damagePerTick <= 0 || !sourceId) return;
+    const part = this.partHandles.get(targetId);
+    if (part) {
+      if (source ? this.relationshipForSource(source, part.contact.identity.boss.id).canDamage
+        : this.canDamageTarget(attackerId, targetId)) this.partStatus(targetId, 'burn', durationMs);
+      return;
+    }
+    if (!this.isBodyTargetable(targetId) || !this.isAlive(targetId)) return;
     if (source
       ? this.isBurrowed(targetId) || !this.relationshipForSource(source, targetId).canDamage
       : !this.canDamageTarget(attackerId, targetId)) return;
-    if (durationMs <= 0 || damagePerTick <= 0 || !sourceId) return;
-
     const target = this.resolveCurrentCombatantTarget(targetId);
     if (!target) return;
     this.burnStatus.applyBurn({
@@ -1487,7 +1711,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     for (const contribution of contributions) {
       const targetId = String(contribution.target.id);
       if (!contribution.isSourceValid()
-        || !this.isCurrentCombatantTarget(contribution.target) || !this.isAlive(targetId)) continue;
+        || !this.isCurrentCombatantTarget(contribution.target) || !this.isAlive(targetId) || !this.isBodyTargetable(targetId)) continue;
       this.applyDamage(
         targetId,
         contribution.damage,
@@ -1516,6 +1740,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     includeSelf = false,
     options?: AoeDamageOptions,
   ): void {
+    const enemyContacts = this.radialEnemyContacts(x, y, false);
     const derivedFrom = options?.derivedFrom;
     const damageKind = options?.damageKind ?? 'explosion';
     const sourceSlot = options?.sourceSlot ?? options?.source?.sourceSlot;
@@ -1574,11 +1799,11 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
     if (options?.skipEnemies) return;
 
-    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
-      if (options?.excludeTargetId === enemy.id) continue;
+    for (const enemy of enemyContacts) {
+      if (options?.excludeTargetId === enemy.bossId) continue;
       if (!includeSelf && enemy.id === ownerId) continue;
       if (!this.canDamageTarget(ownerId, enemy.id, options?.allowTeamDamage)) continue;
-      const dist = Phaser.Math.Distance.Between(x, y, enemy.sprite.x, enemy.sprite.y);
+      const dist = enemy.distance;
       if (dist > radius) continue;
 
       const roundedDamage = Math.round(computeRadialDamage(dist, radius, runtimeDamage, runtimeFalloff));
@@ -1631,7 +1856,9 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   }
 
   private applyEnemySlowAtHostTime(enemyId: string, slowFraction: number, durationMs: number): void {
-    if (slowFraction <= 0 || durationMs <= 0 || !this.enemyManager?.hasEnemy(enemyId)) return;
+    if (slowFraction <= 0 || durationMs <= 0) return;
+    if (this.partStatus(enemyId, 'slow', durationMs)) return;
+    if (!this.enemyManager?.hasEnemy(enemyId)) return;
     const target = this.enemyManager.getCombatTargetRef(enemyId);
     if (!target) return;
     this.movementStatus?.applySlow({
@@ -1652,6 +1879,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     sourceId = 'environment.explosion',
     source?: CombatSource,
   ): string[] {
+    const enemyContacts = this.radialEnemyContacts(x, y, effect.useTargetSurfaceDistance === true);
     if (effect.rocketSupport) effect = this.captureRocketExplosionDamage(effect, ownerId, sourceSlot);
     this.bubbleChargePort?.observeExplosion(x, y, effect.radius, effect.maxDamage,
       this.hostFrameNowMs, resolveProjectileExplosionFalloff(effect));
@@ -1708,13 +1936,15 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       }
     }
 
-    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+    for (const contact of enemyContacts) {
+      const entity = this.enemyManager?.getEnemy(contact.bossId);
+      if (!entity) continue;
+      const enemy = { id: contact.id, faction: entity.faction, isBurrowed: () => entity.isBurrowed() };
       if (enemy.faction === 'hostile' ? !damageHostileEnemies : !damageAlliedEnemies) continue;
       if (enemy.isBurrowed() || (source
-        ? !this.relationshipForSource({ ...source, allegiance: { ...source.allegiance, allowTeamDamage: effect.allowTeamDamage } }, enemy.id).canDamage
+        ? !this.relationshipForSource({ ...source, allegiance: { ...source.allegiance, allowTeamDamage: effect.allowTeamDamage } }, contact.bossId).canDamage
         : !this.canDamageTarget(ownerId, enemy.id, effect.allowTeamDamage))) continue;
-      const centerDistance = Phaser.Math.Distance.Between(x, y, enemy.sprite.x, enemy.sprite.y);
-      const dist = effect.useTargetSurfaceDistance ? Math.max(0, centerDistance - enemy.getCollisionRadius()) : centerDistance;
+      const dist = contact.distance;
       if (dist > effect.radius) continue;
 
       const basis = this.resolveExplosionDamageBasis(dist, effect, ownerId, sourceSlot);
@@ -1732,7 +1962,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         source: source ? { ...source, allegiance: { ...source.allegiance, allowTeamDamage: effect.allowTeamDamage } } : undefined,
       });
       if (outcome?.kind === 'damage-applied' && outcome.actualDamage > 0) {
-        damagedTargetKeys.push(`enemies:${enemy.id}`);
+        damagedTargetKeys.push(`enemies:${contact.bossId}`);
       }
     }
 
@@ -1754,6 +1984,14 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   }
 
   canDamageTarget(attackerId: string | undefined, targetId: string, allowTeamDamage = false): boolean {
+    const part = this.partHandles.get(targetId);
+    if (part) {
+      const current = this.currentPart(part);
+      if (!current) return false;
+      const source = this.createLegacyMutationSource(attackerId, undefined, 'direct');
+      return this.relationshipForSource({ ...source, allegiance: { ...source.allegiance, allowTeamDamage } }, current.contact.identity.boss.id).canDamage;
+    }
+    if (!this.isBodyTargetable(targetId)) return false;
     if (!this.isPlayerTargetable(targetId)) return false;
     if (!attackerId) return true;
     if (this.playerActionAllowedResolver
@@ -1815,7 +2053,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       );
     }
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
-      if (!enemy.sprite.active || !this.isAlive(enemy.id)) continue;
+      if (!enemy.sprite.active || !this.isAlive(enemy.id) || !this.isBodyTargetable(enemy.id) || enemy.isBurrowed()) continue;
       const radius = enemy.getCollisionRadius();
       sink(
         'enemy', enemy.id, enemy.id,
@@ -1823,6 +2061,10 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         radius,
         enemy.sprite.x - radius, enemy.sprite.y - radius, enemy.sprite.x + radius, enemy.sprite.y + radius,
       );
+    }
+    for (const part of this.readPartTargets()) {
+      sink('enemy', part.id, part.snapshot.contact.identity.boss.id, part.x, part.y, part.radius,
+        part.x - part.radius, part.y - part.radius, part.x + part.radius, part.y + part.radius);
     }
     for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
       const { x, y } = decoy;
@@ -2024,6 +2266,35 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
    */
   private resolveDirectImpactAtHostTime(request: ProjectileDirectImpactRequest): ProjectileDirectImpactOutcome {
     request = { ...request, provenance: this.captureProjectileProvenance(request.provenance) };
+    if (request.target.kind === 'enemy' && this.partHandles.has(request.target.id)) {
+      const handle = request.target.id, snapshot = this.currentPart(this.partHandles.get(handle)!);
+      if (!snapshot || !this.canProjectileDamageTarget(request.provenance, handle, request.provenance.allegiance.allowTeamDamage)) return { accepted: false };
+      const boss = snapshot.contact.identity.boss;
+      const event = { scope: boss.scope, activityRevision: boss.instance.activityRevision, eventId: this.damageEventId! };
+      if (this.damageEvents.has(combatDamageEventTargetKey(event, boss))) return { accepted: false };
+      const canonicalRequest = { ...request, target: { kind: 'enemy' as const, id: boss.id } };
+      const ak47 = this.resolveAk47DirectEnemyHit(canonicalRequest, boss.id);
+      if (!this.currentPart(snapshot)) return { accepted: false };
+      const plasmaSwarm = this.resolvePlasmaSwarmReaction(canonicalRequest, boss.id, request.impact.x, request.impact.y);
+      if (plasmaSwarm) this.onPlasmaSwarmReaction?.(plasmaSwarm);
+      const adapted = this.adaptProjectileDirectRequest(canonicalRequest, boss,
+        this.nextMutationOutcomeId('part-projectile', boss.id), ak47.damageMultiplier);
+      const mutation = this.applyDamage(handle, adapted.basis.amount, false, adapted.source.attribution.id,
+        adapted.source.authoredSourceId, { sourceX: request.impact.x, sourceY: request.impact.y,
+          dirX: request.velocity.x, dirY: request.velocity.y },
+        { source: adapted.source, basis: adapted.basis, sourceSlot: adapted.source.sourceSlot, damageKind: 'direct', entry: 'projectile-direct' });
+      if (mutation && mutation.kind !== 'rejected') {
+        this.applyProjectileBurnAugments(handle, request);
+        this.applyEnemySlowFromDirectHit(handle, request);
+        this.partStatus(handle, 'stun', request.directHit.stunDurationMs ?? 0);
+        this.publishPrimaryHitReward(mutation, request.provenance.primaryHitReward, request.impact);
+        const direct = mutation.kind === 'damage-applied' ? mutation : null;
+        this.applyAk47TargetExplosion(request.impact.x, request.impact.y, request.provenance.allegiance.ownerId, boss.id, direct, ak47);
+        this.resolveGaussDischarge(canonicalRequest, undefined, boss.id, direct);
+      }
+      return { ...projectileMutationOutcome(mutation), reaction: createReactionMetadata(request, ak47, plasmaSwarm) };
+    }
+    if (request.target.kind === 'enemy' && !this.isBodyTargetable(request.target.id)) return { accepted: false };
     if (request.target.kind === 'player') return this.applyDirectPlayerImpact(request, request.target.id);
     if (request.target.kind === 'enemy') return this.applyDirectEnemyImpact(request, request.target.id);
     return this.applyDirectDecoyImpact(request, request.target.id);
@@ -2131,6 +2402,12 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
   /** Committed effects use saved relationship facts, independently of new-action permission. */
   canProjectileDamageTarget(provenance: ProjectileProvenance, targetId: string, allowTeamDamage = false): boolean {
+    const candidate = this.partHandles.get(targetId);
+    if (candidate) {
+      const part = this.currentPart(candidate);
+      if (!part) return false;
+      targetId = part.contact.identity.boss.id;
+    } else if (targetId.startsWith('combat-part:') || !this.isBodyTargetable(targetId)) return false;
     if (!this.isPlayerTargetable(targetId)) return false;
     const saved = this.captureProjectileProvenance(provenance);
     const source = adaptProjectileCombatSource(saved, 0, this.classifyProjectileSource({ provenance: saved }));
@@ -2790,7 +3067,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       const visitedEnemies = new Set<string>();
       const visitedDecoys  = new Set<number>();
       if (trace.hitPlayerId)         visitedPlayers.add(trace.hitPlayerId);
-      if (trace.hitEnemyId)          visitedEnemies.add(trace.hitEnemyId);
+      if (trace.hitEnemyId)          visitedEnemies.add(this.partHandles.get(trace.hitEnemyId)?.contact.identity.boss.id ?? trace.hitEnemyId);
       if (trace.hitDecoyId !== null) visitedDecoys.add(trace.hitDecoyId);
 
       this.resolveChainLightning({
@@ -2820,13 +3097,45 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
    */
 
   setPlasmaBurnerTargetCatalog(catalog: PlasmaBurnerTargetCatalogPort | null): void { this.plasmaBurnerCatalog = catalog; }
+  private readPlasmaTarget(key: string, owner: string, x: number, y: number): PlasmaBurnerTarget | null {
+    if (key.startsWith('enemy:')) {
+      const id = key.slice(6);
+      const candidates = this.readPartTargets().filter(p => p.id === id || p.snapshot.contact.identity.boss.id === id);
+      let best: PlasmaBurnerTarget | null = null, distance = Infinity;
+      for (const part of candidates) {
+        const point = CombatGeometry.nearestPartPoint(part.snapshot, x, y);
+        if (!point || point.distance >= distance || !this.canDamageTarget(owner, part.id)
+          || !this.hasChainLineOfSight(x, y, point.x, point.y, { purpose: 'support' })) continue;
+        const boss = part.snapshot.contact.identity.boss, state = this.enemyManager?.readCombatVitals(boss);
+        if (!state?.alive) continue;
+        distance = point.distance;
+        best = { key: `enemy:${boss.id}`, id: part.id, kind: 'enemy', category: 'combatant',
+          x: point.x, y: point.y, hp: state.hp, maxHp: state.maxHp, alive: true,
+          damageable: true, supportable: false, self: false, automatic: true };
+      }
+      if (best) return best;
+      if (id.startsWith('combat-part:') || !this.isBodyTargetable(id)) return null;
+    }
+    return this.plasmaBurnerCatalog?.read(key, owner, x, y) ?? null;
+  }
+
+  private queryPlasmaTargets(owner: string, x: number, y: number, radius: number): readonly PlasmaBurnerTarget[] {
+    const keys = new Set((this.plasmaBurnerCatalog?.query(owner, x, y, radius) ?? []).map(t => t.key));
+    for (const part of this.readPartTargets()) keys.add(`enemy:${part.snapshot.contact.identity.boss.id}`);
+    const result: PlasmaBurnerTarget[] = [];
+    for (const key of keys) {
+      const target = this.readPlasmaTarget(key, owner, x, y);
+      if (target && Math.hypot(target.x - x, target.y - y) <= radius) result.push(target);
+    }
+    return result;
+  }
   setPlasmaBurnerStructurePort(port: PlasmaBurnerStructurePort | null): void { this.plasmaBurnerStructures = port; }
   canSupportPlasmaBurnerTarget(ownerId: string, targetId: string): boolean {
     return this.relationshipForSource(this.createLegacyMutationSource(ownerId, 'PLASMA_BURNER', 'support'), targetId).canSupport;
   }
 
   resolvePlasmaBurnerPulse(req: PlasmaBurnerPulseRequest): PlasmaBurnerPulseOutcome {
-    return this.runHostExecution(() => {
+    return this.runHostExecution(() => this.withDamageEvent(`burner:${req.playerId}:${req.shotId}`, () => {
       const empty = { accepted: false, contacts: [], chainMemberKeys: [], lock: null };
       if (!this.bridge.isHost() || !this.plasmaBurnerCatalog || req.config.fire.type !== 'hitscan'
         || !req.config.fire.supportEffect) return empty;
@@ -2845,7 +3154,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
           : trace.hitObstacleKind === 'base' ? 'base:' + this.resolveHitscanBaseId(trace.endX, trace.endY, Math.cos(req.angle), Math.sin(req.angle))
           : trace.hitObstacleKind === 'rock' ? 'rock:' + trace.hitObstacleIndex : null;
         if (!key) return null;
-        const target = this.plasmaBurnerCatalog!.read(key, req.playerId, fromX, fromY);
+        const target = this.readPlasmaTarget(key, req.playerId, fromX, fromY);
         if (target) return target;
         if (trace.hitObstacleKind !== 'rock' || trace.hitObstacleIndex === undefined) return null;
         return { key, kind: 'rock', id: String(trace.hitObstacleIndex), category: 'environment',
@@ -2857,7 +3166,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       const directlyTargeted = primary && primary.category !== 'environment' && plasmaBurnerTargetEffect(primary, 'direct') !== null;
       let locked = false;
       if (!directlyTargeted && req.lock) {
-        const target = this.plasmaBurnerCatalog.read(req.lock, req.playerId, start.x, start.y);
+        const target = this.readPlasmaTarget(req.lock, req.playerId, start.x, start.y);
         if (canHoldPlasmaBurnerLock(target, { ...start, angle: req.angle, range: req.config.range,
           toleranceDegrees: req.stats.lockToleranceDegrees,
           firstTargetAt: angle => readTrace(this.traceHitscan({ ...options, angle, range: req.config.range }))?.key ?? null })) {
@@ -2868,8 +3177,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       }
       const chain = primary && plasmaBurnerTargetEffect(primary, 'direct') ? resolvePlasmaBurnerChain({
         primary, previous: req.chainMemberKeys, maxJumps: req.stats.maxJumps, radius: req.stats.couplingRadius,
-        read: (key, from) => this.plasmaBurnerCatalog!.read(key, req.playerId, from.x, from.y),
-        candidates: from => this.plasmaBurnerCatalog!.query(req.playerId, from.x, from.y, req.stats.couplingRadius),
+        read: (key, from) => this.readPlasmaTarget(key, req.playerId, from.x, from.y),
+        candidates: from => this.queryPlasmaTargets(req.playerId, from.x, from.y, req.stats.couplingRadius),
         visible: (from, to) => this.hasChainLineOfSight(from.x, from.y, to.x, to.y, { purpose: 'support' }),
       }) : [];
       const contacts: PlasmaBurnerContact[] = [];
@@ -2894,7 +3203,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       }
       let lock: string | null = null;
       if (primary && req.stats.lockToleranceDegrees > 0 && contacts[0]?.effectiveAmount > 0 && path.length === 1) {
-        const current = this.plasmaBurnerCatalog.read(primary.key, req.playerId, start.x, start.y);
+        const current = this.readPlasmaTarget(primary.key, req.playerId, start.x, start.y);
         if (canHoldPlasmaBurnerLock(current, { ...start, angle: req.angle, range: req.config.range,
           toleranceDegrees: req.stats.lockToleranceDegrees,
           firstTargetAt: angle => readTrace(this.traceHitscan({ ...options, angle, range: req.config.range }))?.key ?? null })) lock = primary.key;
@@ -2907,14 +3216,14 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       this.bridge.broadcastPlasmaBurnerPulse({ id: req.playerId, sid: req.shotId, lk: locked || lock !== null,
         m: req.multiplier, p: path.length, s: segments });
       return { accepted: true, contacts, chainMemberKeys: chain.map(t => t.key), lock };
-    }, req.nowMs);
+    }), req.nowMs);
   }
 
   resolvePlasmaBurnerChargeImpact(req: PlasmaBurnerChargeImpactRequest): { accepted: boolean; effectiveAmount: number } {
     return this.runHostExecution(() => {
       if (!this.bridge.isHost()) return { accepted: false, effectiveAmount: 0 };
       const owner = req.provenance.allegiance.ownerId;
-      const target = this.plasmaBurnerCatalog?.read(req.targetKey, owner, req.x, req.y);
+      const target = this.readPlasmaTarget(req.targetKey, owner, req.x, req.y);
       if (!target || !plasmaBurnerTargetEffect(target, 'automatic')) return { accepted: false, effectiveAmount: 0 };
       const contact = this.applyBurnerContact(target, req.damage, req.heal, owner, req.provenance.sourceSlot as WeaponSlot,
         req.x, req.y, 1, 1, 'automatic', 'projectile');
@@ -2996,26 +3305,33 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       ...[...opts.visitedDecoys].map((id) => `decoy:${id}`),
     ]);
 
+    const physicalHandles = new Map<string, string>();
     resolveChainLightningTraversal({
       originX: opts.originX,
       originY: opts.originY,
       baseDamage: opts.baseDamage,
       config: chainCfg,
       visitedTargetIds,
-      getCandidates: () => {
+      getCandidates: (originX, originY) => {
         const candidates: ChainLightningTarget[] = [];
         if (chainCfg.targetEnemies) {
-          for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
-            if (enemy.id === opts.shooterId) continue;
-            if (!this.canDamageTarget(opts.shooterId, enemy.id)) continue;
-            candidates.push({
-              id: `enemy:${enemy.id}`,
-              kind: 'enemy',
-              x: enemy.sprite.x,
-              y: enemy.sprite.y,
-            });
+          const best = new Map<string, { id: string; x: number; y: number; distance: number }>();
+          for (const enemy of this.readEnemyAimTargets()) {
+            if (enemy.bossId === opts.shooterId || opts.visitedEnemies.has(enemy.bossId)
+              || !this.canDamageTarget(opts.shooterId, enemy.id)) continue;
+            const point = enemy.part ? CombatGeometry.nearestPartPoint(enemy.part, originX, originY) : enemy;
+            if (!point || !this.hasChainLineOfSight(originX, originY, point.x, point.y)) continue;
+            const distance = Math.hypot(point.x - originX, point.y - originY);
+            if (!best.has(enemy.bossId) || distance < best.get(enemy.bossId)!.distance)
+              best.set(enemy.bossId, { id: enemy.id, x: point.x, y: point.y, distance });
+          }
+          for (const [bossId, physical] of best) {
+            const id = `enemy:${bossId}`;
+            physicalHandles.set(id, physical.id);
+            candidates.push({ id, kind: 'enemy', x: physical.x, y: physical.y });
           }
         }
+
         if (chainCfg.targetPlayers) {
           for (const player of this.playerManager.getAllPlayers()) {
             if (player.id === opts.shooterId) continue;
@@ -3081,7 +3397,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         } : { damageKind: 'chain' as const };
         if (jump.target.kind === 'enemy') {
           opts.visitedEnemies.add(runtimeId);
-          const outcome = this.applyDamage(runtimeId, jump.damage, false, opts.shooterId, opts.sourceId, visualContext, damageOptions);
+          const outcome = this.applyDamage(physicalHandles.get(jump.target.id) ?? runtimeId, jump.damage, false, opts.shooterId, opts.sourceId, visualContext, damageOptions);
           this.publishPrimaryHitReward(outcome, opts.primaryHitReward, { x: jump.target.x, y: jump.target.y });
         } else if (jump.target.kind === 'player') {
           opts.visitedPlayers.add(runtimeId);
@@ -3255,13 +3571,14 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       }
     }
     if (canDamageKind('enemies')) {
-      for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
-        if (enemy.id === shooterId) continue;
-        selectSwingTarget({
-          kind: 'enemy', id: enemy.id, key: `enemy:${enemy.id}`,
-          x: enemy.sprite.x, y: enemy.sprite.y,
-          radius: enemy.getCollisionRadius(),
-        });
+      for (const enemy of this.readEnemyAimTargets()) {
+        if (enemy.bossId === shooterId) continue;
+        if (enemy.part) {
+          const contact = CombatGeometry.partMeleeContact(enemy.part,
+            { originX: x, originY: y, angle, geometry: { kind: 'sector', range, arcDegrees } });
+          if (contact) selectSwingTarget({ kind: 'enemy', id: enemy.id, key: `enemy:${enemy.bossId}`, ...contact });
+        } else selectSwingTarget({ kind: 'enemy', id: enemy.id, key: `enemy:${enemy.bossId}`,
+          x: enemy.x, y: enemy.y, radius: enemy.radius });
       }
     }
     if (canDamageKind('decoys')) {
@@ -3283,6 +3600,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
     // Resolution + mutation phase: each selected physical entity is processed at most once.
     for (const target of swingTargets) {
+      if (meleeHitIds.has(target.key)) continue;
       const dist = target.distance;
       let bloodContact = false;
 
@@ -3343,7 +3661,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
             ? this.playerManager.getAllPlayers().map(player => ({ id: player.id, key: `player:${player.id}`, x: player.x, y: player.y }))
             : []),
           ...(canDamageKind('enemies')
-            ? (this.enemyManager?.getAllEnemies() ?? []).map(enemy => ({ id: enemy.id, key: `enemy:${enemy.id}`, x: enemy.sprite.x, y: enemy.sprite.y }))
+            ? this.readEnemyAimTargets().map(enemy => ({ id: enemy.id, key: `enemy:${enemy.bossId}`, x: enemy.x, y: enemy.y }))
             : []),
         ];
         for (const candidate of candidates) {
@@ -3690,6 +4008,13 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       hitPlayerId = null;
       hitEnemyId = enemy.id;
       hitDecoyId = null;
+    }
+
+    for (const part of this.readPartTargets()) {
+      if (!this.canDamageTarget(shooterId, part.id)) continue;
+      const hit = CombatGeometry.tracePart(part.snapshot, startX, startY, maxEndX, maxEndY, traceThickness * 0.5);
+      if (!hit || hit.distance > closestDistance) continue;
+      closestDistance = hit.distance; hitPlayerId = null; hitEnemyId = part.id; hitDecoyId = null;
     }
 
     for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
@@ -4091,6 +4416,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     target: TargetStatusTarget,
     durationOrProjectile: number | undefined,
   ): void {
+    if (this.partHandles.has(target.targetId)) return;
     const durationMs = durationOrProjectile ?? 0;
     if (durationMs > 0) this.onApplyVulnerability?.(target, durationMs, this.hostFrameNowMs);
   }
@@ -4108,9 +4434,17 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       ? options.target
       : this.enemyManager?.getCombatTargetRef(targetId);
     if (!enemy || !target || !this.enemyManager) return null;
+    if (!options?.partContact && this.partBinding && this.damageEventId && target.instance.activityRevision !== undefined) {
+      const key = combatDamageEventTargetKey({ scope: target.scope,
+        activityRevision: target.instance.activityRevision, eventId: this.damageEventId }, target);
+      if (this.damageEvents.has(key)) return null;
+      this.damageEvents.add(key);
+    }
     this.prepareAttributionTarget(target);
-    const x = enemy.sprite.x;
-    const y = enemy.sprite.y;
+    const contactPoint = options?.partContact && CombatGeometry.nearestPartPoint(options.partContact,
+      visualContext?.sourceX ?? options.partContact.contact.x, visualContext?.sourceY ?? options.partContact.contact.y);
+    const x = enemy.sprite.x, y = enemy.sprite.y;
+    const hitX = contactPoint?.x ?? x, hitY = contactPoint?.y ?? y;
     const maxHp = enemy.getMaxHp();
     const isBoss = options?.damageKind === 'direct' && options.sourceSlot === 'weapon1' ? enemy.isBoss() : false;
     const targetFaction = enemy.faction;
@@ -4146,7 +4480,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     }
 
     const hpLost = outcome.hpLost;
-    if (this.movementStatus && hpLost > 0 && !result.died && targetFaction === 'hostile'
+    if (!options?.partContact && this.movementStatus && hpLost > 0 && !result.died && targetFaction === 'hostile'
       && this.isCurrentCombatantTarget(target)) {
       const durationMs = resolveEnemyHitStaggerDuration(request.damageKind, enemy.getKnockbackFactor(), ENEMY_HIT_STAGGER_BASE_MS);
       if (durationMs > 0) this.movementStatus.applyHitStagger({ target, durationMs, nowMs: this.hostFrameNowMs });
@@ -4156,7 +4490,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     const killerId = creditedSource?.attribution.id;
     const killSourceId = creditedSource?.authoredSourceId ?? sourceId ?? 'source.unknown';
     for (const observer of this.enemyDamageCommittedObservers) {
-      observer(outcome, x, y, this.hostFrameNowMs);
+      observer(outcome, hitX, hitY, this.hostFrameNowMs);
       if (!current()) return outcome;
     }
     // Facts are secured; end target status before any hook can create a successor.
@@ -4179,6 +4513,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       attackerId
       && !options?.skipLifeLeech
       && !result.died
+      && !options?.partContact
       && options?.damageKind === 'direct'
       && options.sourceSlot === 'weapon1'
       && this.isCurrentCombatantTarget(target)
@@ -4189,8 +4524,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
     if (!options?.suppressHitEffect) this.bridge.broadcastEffect({
       type: 'hit',
-      x,
-      y,
+      x: hitX,
+      y: hitY,
       targetId,
       shooterId: attackerId,
       targetColor: COLORS.RED_2,

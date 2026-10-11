@@ -408,7 +408,7 @@ export class WorldProjectileRuntime implements
         if (target.kind === 'base') return this.physicsBinding.getObstacleGeometry?.()?.baseHit(
           target.id, sx, sy, ex, ey, record.physics.body.width / 2, record.physics.body.height / 2,
           record.sourceCarrierBaseId);
-        if (target.kind !== 'train') return undefined;
+        if (target.kind !== 'train' && target.kind !== 'enemy') return undefined;
         const query = this.collisionTargetQueryPort;
         if (sx === ex && sy === ey) {
           const bounds = record.physics.sprite.getBounds();

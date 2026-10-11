@@ -1,3 +1,4 @@
+import { routeKrakenEggLanding } from '../../projectile/KrakenEggLandingReaction';
 import { mgTargetVisual } from '../../effects/MgAttritionVisualTarget';
 import { emptyMgAttritionSnapshot } from '../../systems/MgAttritionRuntime';
 import { getUtilityRechargeFraction } from '../../loadout/UtilityChargeState';
@@ -187,6 +188,12 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   /** Standalone domain effects are queued here and resolved after post-projectile gameplay. */
   private readonly pendingStandaloneExplosions: ProjectileExplosionRequest[] = [];
   private hostFrameNowMs = 0;
+  private krakenBroodPort: import('../../systems/KrakenState').KrakenBroodPort | null = null;
+
+  /** Activity composition owns the binding and clears it on detach. */
+  setKrakenBroodPort(port: import('../../systems/KrakenState').KrakenBroodPort | null): void {
+    this.krakenBroodPort = port;
+  }
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -1560,6 +1567,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   private resolveGrenadePayload(request: ProjectileGrenadePayloadRequest): void {
     const ownerId = request.provenance.allegiance.ownerId;
     const effect = request.effect;
+    if (routeKrakenEggLanding(request, this.hostFrameNowMs, this.krakenBroodPort)) return;
     if (effect.type === 'damage') {
       const combat = this.ctx.getWorldCombatCore();
       const world = this.worldRuntime;

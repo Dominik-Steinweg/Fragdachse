@@ -4,6 +4,7 @@ import type {
   CombatSafeMuzzlePort,
 } from '../combat/CombatCapabilities';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
+import type { CombatAreaAttackPort, CombatAreaAttackRequest } from '../combat/CombatAreaAttack';
 import type { WeaponConfig } from '../loadout/LoadoutConfig';
 import {
   WeaponFireExecutor,
@@ -19,6 +20,7 @@ type WeaponFireCombatResolver =
 export interface WorldWeaponExecutionRuntimeOptions {
   readonly projectileSpawn: ProjectileSpawnPort;
   readonly combatSystem: WeaponFireCombatResolver;
+  readonly areaAttacks?: CombatAreaAttackPort;
 }
 
 /**
@@ -31,10 +33,10 @@ export interface WorldWeaponExecutionRuntimeOptions {
  * Türme und Allies rufen `fire()` mit derselben `WeaponConfig`. Der `LoadoutManager` delegiert
  * seinen Player-Fire hierher.
  */
-export class WorldWeaponExecutionRuntime implements WorldScopedBinding, WeaponExecutionCapability {
+export class WorldWeaponExecutionRuntime implements WorldScopedBinding, WeaponExecutionCapability, CombatAreaAttackPort {
   private readonly executor: WeaponFireExecutor;
 
-  constructor(options: WorldWeaponExecutionRuntimeOptions) {
+  constructor(private readonly options: WorldWeaponExecutionRuntimeOptions) {
     const { projectileSpawn, combatSystem } = options;
     this.executor = new WeaponFireExecutor({
       spawnProjectile: (request) => projectileSpawn.spawnProjectile(request),
@@ -69,6 +71,10 @@ export class WorldWeaponExecutionRuntime implements WorldScopedBinding, WeaponEx
 
   fire(config: WeaponConfig, params: WeaponFireParams): boolean {
     return this.executor.fire(config, params);
+  }
+
+  resolveAreaAttack(request: CombatAreaAttackRequest) {
+    return this.options.areaAttacks?.resolveAreaAttack(request) ?? { accepted: false, interactions: [] };
   }
 
   destroy(): void {
