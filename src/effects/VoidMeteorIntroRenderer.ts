@@ -174,11 +174,11 @@ export class VoidMeteorIntroRenderer {
     const age = elapsed - I.impactAtMs;
     const warning = age < 0 ? smooth(elapsed / 700) * (0.16 + 0.55 * approach) : 0;
     this.warningGlow.setVisible(warning > 0).setPosition(state.x, state.y)
-      .setDisplaySize(I.meteorRadiusPx * 3, I.meteorRadiusPx * 3)
+      .setDisplaySize(I.meteorRadiusPx * 3.75, I.meteorRadiusPx * 3.75)
       .setTint(VOID_PALETTE.primary).setAlpha(warning * (0.9 + 0.1 * Math.sin(elapsed * 0.014)));
     const light = this.groundGlow.lights[0];
     light.x = state.x; light.y = state.y;
-    light.radiusPx = I.meteorRadiusPx * (1.25 + 0.35 * approach);
+    light.radiusPx = I.meteorRadiusPx * (1.25 + 0.35 * approach) * (age < 0 ? 1.25 : 1);
     light.intensity = age < 0 ? warning : 0.35 * (1 - smooth(age / 1_800));
     light.color = age < 0 ? VOID_PALETTE.primary : VOID_PALETTE.bright;
     this.groundGlow.lightCount = light.intensity > 0.01 ? 1 : 0;
@@ -202,14 +202,14 @@ export class VoidMeteorIntroRenderer {
     const visible = age >= 0 && age < duration;
     const reveal = smooth(age / 160);
     const compression = smooth((age - duration + 550) / 550);
-    const radius = 100 * (0.94 + 0.06 * progress);
+    const radius = 145 * (0.94 + 0.06 * progress);
     const entryT = clamp01(age / 300);
     const speed = 410 * 1.35 * progress ** 0.35 / (duration / 1000)
       + (age < 300 ? 690 * 6 * entryT * (1 - entryT) / 0.3 : 0);
     if (visible) this.plasma.sync(x, y, radius, angle, age / 1_000, state.seed, compression, reveal);
     else this.plasma.clear();
     this.trail?.sync(x, y, angle, speed, visible);
-    const shadowSize = 110 + 130 * progress;
+    const shadowSize = 155 + 185 * progress;
     this.flightShadow.setVisible(visible).setPosition(x + dx * 70 * (1 - progress), y + dy * 70 * (1 - progress))
       .setDisplaySize(shadowSize, shadowSize).setAlpha(reveal * (0.2 + 0.68 * progress));
     if (visible) {
@@ -227,7 +227,7 @@ export class VoidMeteorIntroRenderer {
       return;
     }
     const t = smooth(elapsed / I.impactAtMs);
-    const radius = I.meteorRadiusPx * (0.4 + 0.6 * t);
+    const radius = I.meteorRadiusPx * 1.25 * (0.4 + 0.6 * t);
     this.warningRing.setVisible(true).setPosition(state.x, state.y)
       .setScale(radius / 116).setTint(VOID_PALETTE.bright).setAlpha(smooth(elapsed / 700) * (0.25 + 0.4 * t));
     const warning = this.warningDistortion;

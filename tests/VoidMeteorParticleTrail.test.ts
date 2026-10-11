@@ -8,7 +8,7 @@ vi.mock('../src/graphics/GraphicsQuality', () => ({ getGraphicsQualityController
 import { VoidMeteorParticleTrail } from '../src/effects/VoidMeteorParticleTrail';
 import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
 import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
-import { GpuVfxLaneId } from '../src/effects/gpu/GpuVfxRenderLanes';
+import { GPU_VFX_LANES, GpuVfxLaneId } from '../src/effects/gpu/GpuVfxRenderLanes';
 import { makeFakeGpuVfxScene } from './fakeGpuVfxScene';
 
 beforeEach(() => resetGpuVfxAtlasForTests());
@@ -24,19 +24,26 @@ function fixture() {
 }
 
 describe('Void meteor GPU particle lifecycle', () => {
-  it('emits bounded layers, stops on impact and lets existing particles finish', () => {
+  it.each([16, 100])('emits bounded layers at %i ms steps, stops on impact and lets existing particles finish', (delta) => {
     const f = fixture();
-    for (let i = 0; i < 600; i++) f.gpu.update(16);
+    const lifetimes = new Map<GpuVfxLaneId, number>();
+    f.spawn.mockImplementation((spec, source, now) => {
+      lifetimes.set(spec.lane, Math.max(lifetimes.get(spec.lane) ?? 0, spec.lifeMs));
+      return GpuVfxSystem.prototype.spawn.call(f.gpu, spec, source, now);
+    });
+    for (let elapsed = 0; elapsed < 10_000; elapsed += delta) f.gpu.update(delta);
     for (const lane of f.lanes) {
       const stats = f.gpu.getLaneStats(lane)!;
       expect(stats.liveCount).toBeGreaterThan(0);
       expect(stats.capacityDrops).toBe(0);
+      expect(lifetimes.get(lane)).toBeLessThanOrEqual(GPU_VFX_LANES[lane].maxLifetimeMs);
     }
     const alive = f.live();
     f.trail.sync(500, 600, 2.5, 0, false);
     expect(f.live()).toBe(alive);
     f.spawn.mockClear();
-    for (let i = 0; i < 130; i++) f.gpu.update(16);
+    const retireMs = Math.max(...f.lanes.map(lane => GPU_VFX_LANES[lane].maxLifetimeMs));
+    for (let elapsed = 0; elapsed <= retireMs; elapsed += 16) f.gpu.update(16);
     expect(f.spawn).not.toHaveBeenCalled();
     expect(f.live()).toBe(0);
     f.trail.destroy(); f.gpu.destroy();

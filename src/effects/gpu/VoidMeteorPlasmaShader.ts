@@ -45,59 +45,60 @@ float fbm(vec2 p) {
   return value;
 }
 vec3 heatColor(float heat) {
-  vec3 color = mix(vec3(0.10, 0.006, 0.28), vec3(0.46, 0.075, 0.96), smoothstep(0.0, 0.42, heat));
-  color = mix(color, vec3(0.83, 0.36, 1.0), smoothstep(0.35, 0.78, heat));
-  return mix(color, vec3(1.0, 0.93, 1.0), smoothstep(0.76, 1.18, heat));
+  vec3 color = mix(vec3(0.07, 0.008, 0.17), vec3(0.35, 0.035, 0.73), smoothstep(0.0, 0.48, heat));
+  color = mix(color, vec3(0.88, 0.20, 0.83), smoothstep(0.38, 0.85, heat));
+  return mix(color, vec3(1.0, 0.90, 1.0), smoothstep(0.79, 1.20, heat));
 }
 
 void main() {
   vec2 p = vLocal;
   float age = uPlasma.x, seed = uPlasma.y, compression = uPlasma.z;
-  vec2 drift = vec2(age * 2.1, seed * 0.173);
-  // Unequal, counter-rolling turbulence breaks both the contour and its interior.
-  float coarse = fbm(p * 2.6 + drift);
-  float crossFlow = fbm(p.yx * 3.4 + vec2(-age * 1.4, seed * 0.319));
-  vec2 warped = p + vec2(coarse - 0.48, crossFlow - 0.48) * 0.38;
-  float folding = fbm(warped * 6.5 + vec2(age * 3.3, seed * 0.071));
-  float radius = length(vec2(warped.x * 1.04, warped.y * 1.22));
-  float unevenEdge = 0.80 + (coarse - 0.45) * 0.32 + (folding - 0.45) * 0.13;
-  float body = 1.0 - smoothstep(unevenEdge - 0.25, unevenEdge + 0.13, radius);
-  // Bright folds alternate with cooler, deep violet cavities; there is no flat filled disc.
-  float ridge = pow(max(0.0, 1.0 - abs(folding - 0.52) * 3.2), 3.2);
-  float heat = body * (0.25 + 0.55 * coarse + 0.52 * ridge);
-  float center = exp(-dot(warped * vec2(1.2, 1.65), warped * vec2(1.2, 1.65)) * 4.4);
-  heat += center * (0.28 + 0.24 * compression);
-  vec3 emission = heatColor(heat) * body * (0.45 + heat * 0.55);
+  vec2 drift = vec2(age * 0.48, seed * 0.173);
+  // Slow domain-warped billows carry broad pools of molten heat, not threshold ridges.
+  float coarse = fbm(p * 1.9 + drift);
+  float crossFlow = fbm(p.yx * 2.1 + vec2(-age * 0.35, seed * 0.319));
+  vec2 warped = p + vec2(coarse - 0.48, crossFlow - 0.48) * 0.48;
+  float folding = fbm(warped * 3.1 + vec2(age * 0.65, seed * 0.071));
+  float billow = smoothstep(0.22, 0.77, folding);
+  float radius = length(vec2(warped.x, warped.y * 1.04));
+  float unevenEdge = 0.88 + (coarse - 0.45) * 0.26;
+  float body = 1.0 - smoothstep(unevenEdge - 0.23, unevenEdge + 0.15, radius);
+  vec2 corePoint = (warped - vec2(0.10, 0.0)) * vec2(1.0, 1.08);
+  float center = exp(-dot(corePoint, corePoint) * 4.2);
+  float heat = 0.20 + 0.44 * billow + center * (0.89 + 0.18 * compression);
+  // Broad, cooler crust pools remain buried in the outer molten mantle.
+  float crust = smoothstep(0.35, 0.75, coarse) * (1.0 - center) * 0.15;
+  heat -= crust;
+  vec3 emission = heatColor(heat) * body * (0.43 + heat * 0.32) * (0.80 + billow * 0.30);
 
-  // Leading pressure front occupies only the forward sector, never a complete glowing ring.
-  float frontX = 0.78 - p.y * p.y * 0.66;
-  float frontDist = p.x - frontX + (folding - 0.48) * 0.09;
-  float bowWidth = 0.045 + compression * 0.035;
+  // A volume of compressed gas on the front, with a soft inside and outside edge.
+  float frontX = 0.59 - p.y * p.y * 0.38;
+  float frontDist = p.x - frontX + (folding - 0.48) * 0.15;
+  float bowWidth = 0.25 + compression * 0.06;
   float bow = exp(-frontDist * frontDist / (bowWidth * bowWidth));
-  bow *= smoothstep(0.03, 0.35, p.x) * (1.0 - smoothstep(0.44, 0.82, abs(p.y)));
-  bow *= 0.45 + 0.55 * coarse;
-  emission += mix(vec3(0.66, 0.18, 1.0), vec3(1.0, 0.90, 1.0), 0.55 + compression * 0.4)
-    * bow * (0.70 + compression * 0.85);
+  bow *= smoothstep(-0.08, 0.42, p.x) * exp(-p.y * p.y * 3.0);
+  bow *= 0.50 + 0.50 * billow;
+  emission += vec3(0.84, 0.55, 1.0) * bow * (0.25 + compression * 0.25);
 
   // Analytic rear ablation exists independently of a particle history. Broken channels and
   // asymmetric wandering widths prevent the wake from becoming a solid cone or ribbon.
   float back = max(0.0, -p.x);
-  float tailT = clamp(back / 4.5, 0.0, 1.0);
-  float wander = sin(back * 3.0 - age * 3.5 + seed) * (0.055 + tailT * 0.18);
-  float tailWidth = mix(0.42, 0.19, tailT) + (coarse - 0.42) * 0.25;
+  float tailT = clamp(back / 3.5, 0.0, 1.0);
+  float wander = sin(back * 2.3 - age * 1.0 + seed) * (0.055 + tailT * 0.18);
+  float tailWidth = mix(0.62, 0.23, tailT) + (coarse - 0.42) * 0.25;
   float side = (p.y - wander) / max(0.07, tailWidth);
   float crossSection = exp(-side * side * 1.45);
-  float channels = fbm(vec2(p.x * 1.35 + age * 3.4, p.y * 8.4 + seed * 0.231));
+  float channels = fbm(vec2(p.x * 1.35 + age * 1.2, p.y * 5.4 + seed * 0.231));
   float shreds = smoothstep(0.23 + tailT * 0.11, 0.72, channels + folding * 0.23);
   float tail = crossSection * shreds * smoothstep(0.20, 0.92, back)
-    * (1.0 - smoothstep(3.15, 4.50, back));
+    * (1.0 - smoothstep(2.35, 3.50, back));
   // Avoid fully populated old trails at the first flight instant.
   tail *= smoothstep(back * 0.16, back * 0.16 + 0.16, max(0.0, age));
-  float tailHeat = (0.87 - tailT * 0.58) * (0.72 + channels * 0.56);
-  emission += heatColor(tailHeat) * tail * (0.88 - tailT * 0.36);
+  float tailHeat = (0.80 - tailT * 0.66) * (0.72 + channels * 0.56);
+  emission += heatColor(tailHeat) * tail * (0.70 - tailT * 0.48);
 
   // Low, irregular corona stays coloured instead of whitening the full silhouette.
-  float fringe = exp(-radius * radius * 1.9) * (0.20 + coarse * 0.14);
+  float fringe = exp(-radius * radius * 1.65) * (0.28 + coarse * 0.18);
   emission += vec3(0.31, 0.025, 0.68) * fringe;
   float edgeFade = smoothstep(-4.8, -4.45, p.x) * (1.0 - smoothstep(1.25, 1.55, p.x))
     * (1.0 - smoothstep(1.30, 1.65, abs(p.y)));

@@ -853,15 +853,15 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
   {
     id: GpuVfxLaneId.VoidMeteorMaterial, label: 'void-meteor-material', depth: 20.55,
     blendMode: Phaser.BlendModes.NORMAL, eases: [GpuVfxEase.Linear],
-    capacity: 256, maxLifetimeMs: 1800, order: 'ordered', reserveCritical: 0,
-    rationale: 'Airborne intro smoke and tiny fragments behind the plasma, above canopy; separate from lit ground aftermath.',
-    capacityRationale: 'One intro, at most 80 smoke/s for 1.8s and 36 fragments/s for 1.2s: below 200 live members.',
+    capacity: 512, maxLifetimeMs: 3000, order: 'ordered', reserveCritical: 0,
+    rationale: 'Airborne intro smoke and glowing crust fragments behind the plasma, above canopy; separate from lit ground aftermath.',
+    capacityRationale: 'One intro, rounded peak <=112 smoke/s plus <=19 fragments/s with two material members each; 150/s * 3s <=450 slots, within 512.',
   },
   {
     id: GpuVfxLaneId.VoidMeteorEmission, label: 'void-meteor-emission', depth: 20.64,
     blendMode: Phaser.BlendModes.ADD, eases: [GpuVfxEase.Linear],
-    capacity: 1024, maxLifetimeMs: 1400, order: 'add-over-opaque', reserveCritical: 0,
+    capacity: 2048, maxLifetimeMs: 2100, order: 'add-over-opaque', reserveCritical: 0,
     rationale: 'Airborne plasma, sparks and fragment edge glow directly below the procedural core; no compatible existing lane at this height.',
-    capacityRationale: 'One intro: <=500 plasma/s * .65s, <=333 sparks/s * 1.2s, sparse smoke/fragment glow copies; below 1024.',
+    capacityRationale: 'One intro, rounded peaks: 500 plasma/s * .55s + 334 sparks/s * 1.2s + 112 smoke glows/s * 1.8s + 19 fragment glows/s * 2.1s + 500 edge fibres/s * .62s <1230 live; 2048 covers tick overlap.',
   },
 ];
