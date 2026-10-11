@@ -9,6 +9,19 @@ import { getCombatExplosionProfile } from '../src/effects/ExplosionVisualProfile
 import { makeFakeGpuVfxScene, makeFakeDisplayObject } from './fakeGpuVfxScene';
 
 describe('exploding shard presentation', () => {
+  it('delegates egg flight to an asset view and owns its replacement/destruction without terminal reactions', () => {
+    const scene = makeFakeGpuVfxScene(), renderer = new GrenadeRenderer(scene as never);
+    const egg = { update: vi.fn(), destroy: vi.fn() }, replacement = { update: vi.fn(), destroy: vi.fn() };
+    renderer.attachEggVisual(7, egg); renderer.attachEggVisual(7, egg);
+    renderer.updateVisual(7, 11, 12, 14, 20, 30);
+    expect(egg.update).toHaveBeenCalledWith(11, 12, 14, 20, 30);
+    expect(renderer.has(7)).toBe(true);
+    renderer.attachEggVisual(7, replacement);
+    expect(egg.destroy).toHaveBeenCalledTimes(1);
+    renderer.destroyAll(); renderer.destroyAll();
+    expect(replacement.destroy).toHaveBeenCalledTimes(1);
+    expect(renderer.getActiveIds()).toEqual([]);
+  });
   it.each(['he_cluster_shard', 'he_demolition_shard'] as const)('uses a visible rotating fragment for %s, independently of physics size', preset => {
     const scene = makeFakeGpuVfxScene();
     const images: Array<{ key: string; object: ReturnType<typeof makeFakeDisplayObject> }> = [];

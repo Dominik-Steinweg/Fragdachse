@@ -129,3 +129,64 @@ export function addSubmersionFilter(target: Sprite, elevationFrame: Phaser.Textu
   target.filters!.internal.add(filter);
   return filter;
 }
+
+export interface KrakenMaskTransform {
+  readonly x: number; readonly y: number; readonly rotation: number;
+  readonly originX: number; readonly originY: number;
+  readonly displayWidth: number; readonly displayHeight: number;
+}
+
+/** Full logical canvas -> world, independent of color/elevation atlas trimming or resolution.
+ * waterAt accepts world presentation coordinates (the composition owns any world offset). */
+export function krakenWaterMask(width: number, height: number, transform: KrakenMaskTransform,
+  waterAt: (x: number, y: number) => number): Uint8ClampedArray {
+  const result = new Uint8ClampedArray(width * height * 4);
+  const c = Math.cos(transform.rotation), s = Math.sin(transform.rotation);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const dx = ((x + .5) / width - transform.originX) * transform.displayWidth;
+    const dy = ((y + .5) / height - transform.originY) * transform.displayHeight;
+    const offset = (y * width + x) * 4;
+    result[offset] = Math.round(Math.max(0, Math.min(1,
+      waterAt(transform.x + dx * c - dy * s, transform.y + dx * s + dy * c))) * 255);
+    result[offset + 3] = 255;
+  }
+  return result;
+}
+
+let maskSerial = 0;
+/** Owns only its small world mask and filter. Residency owns the borrowed atlas frames. */
+export class KrakenSubmersion {
+  readonly filter: SubmersionFilter;
+  private readonly mask: Phaser.Textures.CanvasTexture;
+  private signature = '';
+  private destroyed = false;
+
+  constructor(private readonly sprite: Sprite, elevation: Phaser.Textures.Frame, encoding: { min: number; max: number },
+    private readonly waterAt: (x: number, y: number) => number) {
+    this.mask = sprite.scene.textures.createCanvas(`kraken-runtime-mask-${++maskSerial}`, 128, 128)!;
+    this.filter = addSubmersionFilter(sprite, elevation, encoding, this.mask.key);
+    this.filter.params.exposure = KRAKEN_WORLD_EXPOSURE;
+  }
+
+  update(elevation: Phaser.Textures.Frame, level: number, timeSeconds: number, waterRevision = 0): void {
+    if (this.destroyed) return;
+    this.filter.elevationFrame = elevation;
+    this.filter.params.waterLevel = level;
+    this.filter.params.time = timeSeconds;
+    const s = this.sprite;
+    const signature = [s.x, s.y, s.originX, s.originY, s.displayWidth, s.displayHeight, s.rotation, waterRevision].join(',');
+    if (signature === this.signature) return;
+    this.signature = signature;
+    const pixels = this.mask.context.createImageData(128, 128);
+    pixels.data.set(krakenWaterMask(128, 128, s, this.waterAt));
+    this.mask.context.putImageData(pixels, 0, 0);
+    this.mask.refresh();
+  }
+
+  destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.sprite.filters?.internal.remove(this.filter);
+    this.mask.destroy();
+  }
+}
