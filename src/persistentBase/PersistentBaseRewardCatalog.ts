@@ -1,5 +1,5 @@
+import { WATCHTOWER_REWARD_ICON_KEY } from '../config/watchtower';
 import type { TurretWeaponId } from '../types';
-import { WATCHTOWER_TEXTURE_KEY } from '../config/watchtower';
 import {
   isPersistentBaseRewardId,
   PERSISTENT_BASE_REWARD_IDS,
@@ -110,7 +110,7 @@ export const PERSISTENT_BASE_REWARD_DEFINITIONS: readonly PersistentBaseRewardDe
     gameplaySource: { kind: 'construction-definition', constructionId: 'watchtower' },
     initialState: { respawnMs: null, spawnOnArenaStart: true },
     placementRule: 'persistent-build-area',
-    presentation: { labelKey: 'construction.watchtower.name', iconKey: WATCHTOWER_TEXTURE_KEY },
+    presentation: { labelKey: 'construction.watchtower.name', iconKey: WATCHTOWER_REWARD_ICON_KEY },
   },
 ]);
 

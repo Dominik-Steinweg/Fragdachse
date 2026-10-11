@@ -148,9 +148,11 @@ function createSystem(
 }
 
 describe('Enemy stuck in a rock', () => {
-  it('lets player hunters fire at an occupied non-offensive tower surface, but not an empty tower', () => {
+  it.each([{ kind: 'timebomb-badger', intent: false }, { kind: 'rabid-badger', intent: false }, { kind: 'rabid-badger', intent: true }] as const)('lets $kind fire at an occupied tower surface (intent: $intent), but not an empty tower', ({ kind, intent }) => {
     const enemy = createStuckEnemy({ wantsToMove: true, pathBlocked: false }, 'all');
-    Object.assign(enemy, { kind: 'timebomb-badger' });
+    Object.assign(enemy, { kind });
+    const rangedWeapon = enemy.getAttackWeapons()[1];
+    enemy.getAttackWeapons = () => [rangedWeapon];
     const rock = { x: 180, y: 100, active: true };
     const construction = { id: 0, hp: 600, kind: 'watchtower' };
     const tower = { occupied: true, placement: {
@@ -158,6 +160,10 @@ describe('Enemy stuck in a rock', () => {
       getRuntimeRockSurfacePoint: () => ({ x: 148, y: 100 }),
     } as unknown as PlacementSystem };
     const { system, firedTargetPositions } = createSystem(enemy, rock, undefined, [rock], null, tower);
+    if (intent) system.setIntents({
+      get: () => ({ target: { kind: 'armed-construct', id: '0' }, attackContext: 'primary', reason: 'player' }),
+      allowsAttack: () => tower.occupied,
+    } as unknown as EnemyIntentSystem);
     system.hostUpdate(16, 1000);
     expect(firedTargetPositions).toEqual([{ x: 148, y: 100 }]);
     tower.occupied = false;

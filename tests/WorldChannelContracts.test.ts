@@ -73,6 +73,27 @@ async function createRoom(playerCount: number): Promise<TestRoom[]> {
   return rooms;
 }
 
+it('delivers collapse once to host and client, rejecting stale-world and client-authored effects', async () => {
+  const [hostRoom, clientRoom] = await createRoom(2);
+  const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+  try {
+    const host = bridgeFor(hostRoom);
+    host.publishLobbySync(); host.publishWorldAndActivity(world(), activity());
+    const hostEffect = vi.fn(); host.registerWatchtowerCollapseHandler(hostEffect);
+    const client = bridgeFor(clientRoom), clientEffect = vi.fn();
+    client.registerWatchtowerCollapseHandler(clientEffect);
+    use(hostRoom); host.broadcastWatchtowerCollapse(160, 240, 64, 64);
+    expect(hostEffect.mock.calls).toEqual([[160, 240, 64, 64]]);
+    expect(clientEffect.mock.calls).toEqual(hostEffect.mock.calls);
+    hostRoom.room.broadcast('watchtower-collapse', { x: 160, y: 240, width: 64, height: 64, wr: 11 });
+    hostRoom.room.broadcast('watchtower-collapse', { x: 160, y: 240, width: -1, height: 64, wr: 12 });
+    use(clientRoom); clientRoom.room.broadcast('watchtower-collapse', { x: 160, y: 240, width: 64, height: 64, wr: 12 });
+    expect(hostEffect).toHaveBeenCalledTimes(1); expect(clientEffect).toHaveBeenCalledTimes(1);
+    expect(hostRoom.transport.links.flatMap(link => link.sent).filter(item =>
+      JSON.stringify(item.message).includes('watchtower-collapse')).every(item => item.channel === 'rel')).toBe(true);
+  } finally { clearActiveSession(); }
+});
+
 describe('World-Kanal – Replikation', () => {
   it('can consume the fast full copy before its reliable copy and keeps ordinary delta loss recoverable', async () => {
     const [hostRoom, clientRoom] = await createRoom(2);

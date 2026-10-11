@@ -1,3 +1,4 @@
+import { runWatchtowerReview, releaseWatchtowerReview } from './WatchtowerReview';
 import type { DevScenarioController } from './controller';
 import { parseScenario, type GridPoint } from './config';
 import { COOP_DEFENSE_ENEMY_KINDS, type CoopDefenseEnemyKind } from '../../config/coopDefenseEnemies';
@@ -45,6 +46,7 @@ function slot(value: unknown): WeaponSlot {
 export function runScenarioCommand(controller: DevScenarioController, value: unknown): void | Promise<void> {
   const c = object(value);
   switch (c.action) {
+    case 'watchtowerReview': return runWatchtowerReview(controller, c);
     case 'krakenReview': return controller.arrangeKrakenReview(c);
     case 'armageddonReview': {
       const count=number(c.count??1,1,256);
@@ -264,6 +266,7 @@ export function installScenarioApi(controller: DevScenarioController) {
   window.devScenario = api;
   return { destroy() {
     active = false;
+    releaseWatchtowerReview(controller);
     for (const check of waiters) check();
     if (window.devScenario === api) delete window.devScenario;
   } };

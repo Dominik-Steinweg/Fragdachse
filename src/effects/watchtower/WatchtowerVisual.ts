@@ -1,9 +1,16 @@
 import * as Phaser from 'phaser';
+import { getPipelineAsset } from '../../config/pipelineAssets';
 import { DEPTH, ROCK_TINT_STEPS } from '../../config';
-import { WATCHTOWER_TEXTURE_KEY } from '../../config/watchtower';
+import { WATCHTOWER_TEXTURE_KEY, WATCHTOWER_REWARD_ICON_KEY } from '../../config/watchtower';
 import { getConstructionBounds } from '../../systems/ConstructionGeometry';
 import type { SyncedPlaceableRock } from '../../types';
 import type { WorldMetrics } from '../../world/WorldMetrics';
+
+export function preloadWatchtowerAssets(loader: Phaser.Loader.LoaderPlugin): void {
+  const asset = getPipelineAsset('watchtower');
+  loader.image(asset.textureKey, asset.idlePath);
+  loader.image(WATCHTOWER_REWARD_ICON_KEY, './assets/sprites/rewards/watchtower.png');
+}
 
 /** One cached fallback; the authored texture takes precedence when loaded. */
 export function ensureWatchtowerTexture(scene: Phaser.Scene): string {

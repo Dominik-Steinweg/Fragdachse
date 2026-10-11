@@ -4473,6 +4473,38 @@
       "clips": []
     },
     {
+      "id": "watchtower",
+      "label": "Wachturm",
+      "category": "construction",
+      "gameIds": ["watchtower"],
+      "reference": "scripts/asset-pipeline/references/watchtower-concept-b.png",
+      "targetSize": 64,
+      "sourceSizes": [128, 256],
+      "forward": "north",
+      "pivot": [0.5, 0.5],
+      "description": {
+        "silhouette": "Open square elevated timber platform without a roof, four stone feet and a south-facing leaning ladder, entirely inside a two-cell square canvas with at least two percent safety border",
+        "colors": "Quiet warm ash floor with restrained board variation, lighter handrail crowns and ladder treads over dark timber fascia, matte charcoal iron brackets, cool gray stone foundations",
+        "anatomy": "Concept B with broad east-west floorboards and soft seams, raised handrails and lower guard rails interrupted at the southern entry, four five-pixel wooden post crowns with iron corner wraps, real splayed piers, underfloor cross braces and protruding knee braces. Strict orthographic plan view; no ground or baked ground shadow. One BU is 32 display pixels; deck and rails occupy about 52 pixels, structural tips about 61 pixels."
+      },
+      "requiredClips": [],
+      "production": "reference",
+      "recipe": "watchtower",
+      "model": {},
+      "orthoScale": 2,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Quiet ash, forged iron and cool stone",
+          "textureStrength": 0.12,
+          "formShadowStrength": 0.38
+        }
+      },
+      "clips": []
+    },
+    {
       "id": "attack-drone-body",
       "label": "Schwerer Quadrocopter",
       "category": "companion",

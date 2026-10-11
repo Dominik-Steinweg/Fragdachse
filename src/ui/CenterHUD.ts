@@ -874,6 +874,10 @@ export class CenterHUD {
   }
 
   showFraggedBy(killerName: string, sourceId: string, _color: number): void {
+    if (!killerName) {
+      this.showAnnouncement(getSourceName(sourceId, getLocale()), COLORS.RED_2);
+      return;
+    }
     this.showAnnouncement(t('ui.announcement.fraggedBy', {
       player: killerName,
       source: getSourceName(sourceId, getLocale()),

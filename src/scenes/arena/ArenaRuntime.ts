@@ -222,7 +222,7 @@ export class ArenaRuntime {
     this.persistentBase = createArenaPersistentBasePort(this.persistentBaseOwner);
     this.weaponBalanceLabPort = createWeaponBalanceLabWorldPort(this.flow, this.ctx.playerManager);
     this.navigationLabPort = createNavigationLabWorldPort(this.flow, this.ctx.playerManager);
-    this.devScenarioPort = createDevScenarioWorldPort(this.flow, this.ctx.playerManager);
+    this.devScenarioPort = createDevScenarioWorldPort(this.flow, this.ctx.playerManager, input.rockVisualHelper);
     this.strategicTargetsPort = createArenaStrategicTargetsPort(this.flow);
     this.presentation = createArenaRuntimePresentationPort(
       this.syncWorldCamera.bind(this),

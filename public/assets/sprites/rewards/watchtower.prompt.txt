@@ -1,0 +1,7 @@
+Built-in image_gen, transparent RGBA, derived from public/assets/sprites/pipeline-v2/watchtower/idle.png.
+Style reference: rewards/plasma_turret.png. Same borderless square inventory-icon convention;
+the UI supplies its own frame. The watchtower retains the mandatory overhead perspective.
+Suggested loader key for W4: reward_watchtower. No loader/catalog wiring in this lane.
+
+Prompt:
+Create a polished square transparent inventory reward icon for Fragdachse: a wooden watchtower platform, derived faithfully from reference 1 (the imported overhead idle sprite). Reference 1 defines geometry, colors and orientation: square tan brown plank platform, four corner posts with dull charcoal iron caps/bands, perimeter wooden rails, modest stone feet and south-side ladder. Preserve strict orthographic 90-degree overhead view, square parallel sides, no visible vertical walls, no perspective or isometric tilt. Reference 2 only defines modern clean illustrated game-icon polish, soft edges and readable material treatment; do NOT use its blue/cyan palette or its perspective. Enlarge and refine reference 1 to a crisp high-resolution icon, quiet broad golden-brown wood grain, distinct matte iron fittings, readable at 24-32px. Center complete object occupying 85% of square with transparent padding. Real transparent RGBA, no background, ground, shadow outside object, frame, border, text, roof, figures or weapons.

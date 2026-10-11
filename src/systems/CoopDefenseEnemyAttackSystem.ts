@@ -694,7 +694,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
   }
 
   private findNearestArmedConstructTarget(enemy: EnemyEntity, range: number, knownId?: number): EnemyAttackCandidate | null {
-    if (getCoopDefenseEnemyConfig(enemy.kind).movementTarget !== 'players-and-armed-constructs') return null;
+    const huntsArmedConstructions = getCoopDefenseEnemyConfig(enemy.kind).movementTarget === 'players-and-armed-constructs';
     const rockObjects = this.getRockObjects() ?? [];
     let best: EnemyAttackCandidate | null = null;
     const knownConstruction = knownId === undefined ? undefined : this.placementSystem?.getRuntimeRock(knownId);
@@ -704,7 +704,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
       if (this.intents && !this.intents.allowsAttack(enemy.id, 'obstacle', String(construction.id), 'all')) continue;
       const occupiedTower = construction.kind === 'watchtower' && this.playerManager.getAllPlayers().some(
         p => this.combatSystem.isAlive(p.id) && this.combatSystem.getStructureOccupancyId?.(p.id) === construction.id);
-      if (construction.hp <= 0 || (!isOffensiveConstruction(construction) && !occupiedTower)) continue;
+      if (construction.hp <= 0 || (!occupiedTower && (!huntsArmedConstructions || !isOffensiveConstruction(construction)))) continue;
       const obstacle = rockObjects[construction.id];
       if (!obstacle?.active) continue;
       const point = occupiedTower ? this.placementSystem!.getRuntimeRockSurfacePoint(construction, enemy.sprite.x, enemy.sprite.y) : obstacle;

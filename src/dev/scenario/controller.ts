@@ -149,6 +149,7 @@ export class DevScenarioController {
     this.restoreBootClock = bindVisualTestBootClock(BootScreen, scene.time);
     this.clock.holdLoadingTime = () => this.runtime.getScenarioLoadingState().work?.renderReady === false;
     this.bots = new ScenarioBots(runtime, () => this.clock.now);
+    bindWatchtowerReview(this, this.runtime);
     let imported: DevScenario | null = null;
     try { imported = decodeScenario(location.hash); } catch (error) { this.fail(error); }
     this.panel = createScenarioPanel(this);
@@ -900,3 +901,5 @@ export class DevScenarioController {
     this.panel.destroy(); this.restoreBootClock(); this.restoreTextureKeys(); this.clock.destroy();
   }
 }
+
+import { bindWatchtowerReview } from './WatchtowerReview';

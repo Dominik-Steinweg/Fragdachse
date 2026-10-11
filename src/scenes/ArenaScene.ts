@@ -1,3 +1,4 @@
+import { preloadWatchtowerAssets } from '../effects/watchtower/WatchtowerVisual';
 import { installRuntimeAssetUrls } from '../assets/RuntimeAssetUrls';
 import { preloadPowerUpAssets, assertPowerUpAssetsReady } from '../assets/PowerUpAssets';
 import { preloadWoodlandAssets, assertWoodlandAssetsReady } from '../assets/WoodlandAssets';
@@ -415,6 +416,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadBadgerAnimationAssets(this.load);
     preloadHeldItemAssets(this.load);
     preloadAttackDroneAssets(this.load);
+    preloadWatchtowerAssets(this.load);
     preloadRepairDroneAssets(this.load);
     // Mehrere Gegner-Arten duerfen sich dasselbe Sprite teilen (Varianten unterscheiden sich nur
     // ueber die Einfaerbung), deshalb wird jeder Key nur einmal in die Ladeschlange gestellt.

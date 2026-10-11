@@ -1,3 +1,4 @@
+import { getConstructionBounds } from '../../systems/ConstructionGeometry';
 import { isOffensiveConstruction } from '../../systems/offensiveConstruction';
 import { bridge } from '../../network/bridge';
 import { PICKUP_AUDIO } from '../../audio/GameplayAudioFeedback';
@@ -155,6 +156,10 @@ export function composeWorldConstruction(
     recordConstructionBuilt: (playerId) => bridge.recordConstructionBuilt(playerId),
     onConstructionDestroyed: (runtime, cause, attackerId) => {
       gameplay.player?.onOccupiedConstructionDestroyed(runtime.id, cause, attackerId);
+      if (runtime.kind === 'watchtower' && (cause === 'damage' || cause === 'decay')) {
+        const bounds = getConstructionBounds(runtime, world.metrics);
+        bridge.broadcastWatchtowerCollapse(bounds.x, bounds.y, bounds.width, bounds.height);
+      }
       if (runtime.persistentRewardId && (cause === 'damage' || cause === 'decay')) {
         persistentBaseBinding.markRewardDestroyed(runtime.persistentRewardId);
       }

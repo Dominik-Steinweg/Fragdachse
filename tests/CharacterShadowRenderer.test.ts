@@ -41,6 +41,8 @@ vi.mock('../src/effects/sunlight/SunRenderTarget',async()=>{
 vi.mock('../src/effects/EffectUtils',()=>({registerGraphicsObject:vi.fn()}));
 import {CharacterShadowRenderer} from '../src/effects/CharacterShadowRenderer';
 import {CharacterShadowReceiver} from '../src/effects/CharacterShadowReceiver';
+import {COOP_DEFENSE_CONSTRUCTIONS} from '../src/config/coopDefenseConstructions';
+import {CELL_SIZE} from '../src/config';
 import {CHARACTER_SHADOW_CONFIG as config} from '../src/effects/ShadowConfig';
 import {CHARACTER_SHADOW_MANIFEST as manifest} from '../src/assets/CharacterShadowAssetManifest';
 import {createSunTuning} from '../src/effects/sunlight/SunAtmosphere';
@@ -109,6 +111,26 @@ it('receiver excludes actual obstacles and bases, weakens water and releases des
  f.receiver.update(layout,0,0,()=>true,[],[{x:80,y:16}]);
  expect(f.pixels()[0]).toBe(0);expect(f.pixels()[4]).toBe(Math.round(config.waterResponse*255));expect(f.pixels()[8]).toBe(0);
  f.receiver.update(layout,0,0,()=>false,[],[]);expect(f.pixels()[0]).toBe(255);expect(f.pixels()[8]).toBe(255);f.renderer.destroy();
+});
+
+it('receives figure shadows across the whole live tower deck and restores ground rules after removal', () => {
+ const f=fixture();
+ const tower={id:0,kind:'watchtower',gridX:1,gridY:1,hp:1};
+ const cells=COOP_DEFENSE_CONSTRUCTIONS.watchtower.footprint.map(cell=>({gridX:tower.gridX+cell.dx,gridY:tower.gridY+cell.dy}));
+ const layout={rocks:[{gridX:1,gridY:1},{gridX:4,gridY:1}],water:cells} as never;
+ const sample=(cell:{gridX:number;gridY:number})=>f.receiver.sample((cell.gridX+.5)*CELL_SIZE,(cell.gridY+.5)*CELL_SIZE);
+ f.receiver.update(layout,0,0,()=>true,[tower] as never,[]);
+ expect(cells.every(cell=>sample(cell)===1)).toBe(true);
+ expect(sample({gridX:4,gridY:1})).toBe(0);
+ const base=cells[cells.length-1];
+ f.receiver.update(layout,0,0,()=>true,[tower] as never,[{x:(base.gridX+.5)*CELL_SIZE,y:(base.gridY+.5)*CELL_SIZE}]);
+ expect(sample(base)).toBe(0);
+ // A destroyed/hidden tower must not restore water attenuation to a solid receiver.
+ for(const runtime of [[],[{...tower,hp:0}],[tower]]) {
+  f.receiver.update(layout,0,0,index=>index!==0,runtime as never,[]);
+  expect(cells.every(cell=>sample(cell)===Math.round(config.waterResponse*255)/255)).toBe(true);
+ }
+ f.renderer.destroy();
 });
 
 it('manifest pages reach a daytime draw whose real Phaser vertices match sampled world coordinates',async()=>{

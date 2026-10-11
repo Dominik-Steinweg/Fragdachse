@@ -1,3 +1,4 @@
+import { WatchtowerDestructionFx } from '../../effects/watchtower/WatchtowerDestructionFx';
 import { PlasmaBurnerChargeRenderer } from '../../effects/PlasmaBurnerChargeRenderer';
 import { onBootSceneTeardown } from '../../ui/BootPreparation';
 import { MgAttritionRenderer } from '../../effects/MgAttritionRenderer';
@@ -151,6 +152,7 @@ export interface RendererBundle {
   objectiveRepairDrones: CoopDefenseObjectiveRepairDroneRenderer;
   meteor:              MeteorRenderer;
   rockDestruction:     RockDestructionRenderer;
+  watchtowerDestruction: WatchtowerDestructionFx;
   powerUp:             PowerUpRenderer;
   shadow:              ShadowSystem;
   lighting:            LightingSystem;
@@ -375,6 +377,8 @@ export function* createRendererBundleSteps(
   cleanup.push(() => meteor.destroy());
   yield 'renderers/meteor';
 
+  const watchtowerDestruction = new WatchtowerDestructionFx(scene);
+  cleanup.push(() => watchtowerDestruction.destroy());
   const rockDestruction = new RockDestructionRenderer(scene);
   rockDestruction.generateTextures();
   yield 'renderers/rockDestruction';
@@ -438,7 +442,7 @@ export function* createRendererBundleSteps(
     interactions,
     turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, plasmaBurnerCharge, healingAura, guardianSpirit, repairDrone, attackDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
     rocket, fireball, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
-    nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, missionProgress, carryZones, ak47StrategicTargets, objectiveRepairDrones, meteor, rockDestruction, powerUp, shadow, lighting,
+    nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, missionProgress, carryZones, ak47StrategicTargets, objectiveRepairDrones, meteor, rockDestruction, watchtowerDestruction, powerUp, shadow, lighting,
     remoteControl,
     healthBars,
     enemyEyes,

@@ -1795,6 +1795,21 @@ export class NetworkBridge {
     return input && receivedAt !== undefined ? { input, receivedAt } : null;
   }
 
+  broadcastWatchtowerCollapse(x: number, y: number, width: number, height: number): void {
+    const wr = this.getWorldDescriptor()?.worldRevision ?? null;
+    if (isHost() && wr !== null) this.broadcastGameplayEvent('watchtower-collapse', { x, y, width, height, wr });
+  }
+
+  registerWatchtowerCollapseHandler(handler: (x: number, y: number, width: number, height: number) => void): void {
+    this.registerAllRpcHandler('watchtower-collapse', (data: unknown) => {
+      if (!this.acceptsWorldRpc(data)) return;
+      const { x, y, width, height } = data;
+      if ([x, y, width, height].some(v => typeof v !== 'number' || !Number.isFinite(v))) return;
+      if ((width as number) <= 0 || (height as number) <= 0) return;
+      handler(x as number, y as number, width as number, height as number);
+    });
+  }
+
   sendStructureOccupancyRequest(request: import('../systems/StructureOccupancySystem').StructureOccupancyRequest): void {
     if (this.getWorldActionRevision() === null) return;
     if (isHost()) { this.structureOccupancyHandler?.(myPlayer().id, request); return; }

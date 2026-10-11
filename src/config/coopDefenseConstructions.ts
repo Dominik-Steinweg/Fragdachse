@@ -1,7 +1,7 @@
 import { validateTurretAimConfig, type TurretAimConfig } from './turretAim';
 import rawCoopDefenseConstructionCooldowns from './coopDefenseConstructions.json';
 import { ATTACK_DRONE_RULES } from './attackDrone';
-import { WATCHTOWER_TEXTURE_KEY } from './watchtower';
+import { WATCHTOWER_REWARD_ICON_KEY } from './watchtower';
 import type { ConstructionId, ConstructionOwnership, CoopDefenseClassId, EnergyInjectorConstructionEffect, GameMode, PlaceableKind, TurretWeaponId } from '../types';
 
 interface RawCoopDefenseConstructionCooldownDefinition {
@@ -194,7 +194,7 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
     watchtower: {
       kind: 'watchtower', id: 'watchtower',
       buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.watchtower,
-      iconKey: WATCHTOWER_TEXTURE_KEY,
+      iconKey: WATCHTOWER_REWARD_ICON_KEY,
       // Base reward only: never offered as a personal loadout construction.
       unlockUpgradeId: '', allowedModes: [],
       maxHp: 600, placementRange: COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,

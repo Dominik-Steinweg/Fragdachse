@@ -21,6 +21,7 @@ import {
   CHARACTER_SHADOW_MODE, CHARACTER_MESH_TARGET_SIZE,
   getProjectileShadowConfig,
   SHADOW_CASTERS,
+  WATCHTOWER_SHADOW_FOOTPRINT,
   SHADOW_PROFILES,
   type ShadowCasterConfig,
   type ShadowProfile,
@@ -92,6 +93,7 @@ const STATIC_SHADOW_CASTERS: ReadonlyArray<{
 }> = [
   { config: SHADOW_CASTERS.base, group: 'bases' },
   { config: SHADOW_CASTERS.rock, group: 'rocks' },
+  { config: SHADOW_CASTERS.watchtower, group: 'rocks' },
   { config: SHADOW_CASTERS.turret, group: 'rocks' },
   { config: SHADOW_CASTERS.trunk, group: 'trees' },
   { config: SHADOW_CASTERS.canopy, group: 'trees' },
@@ -141,7 +143,9 @@ function getStaticShadowReachPx(preset: ShadowCasterConfig, profile: ShadowProfi
 function getMaxStaticShadowReachPx(profile: ShadowProfile, direction = WORLD_SHADOW_CONFIG.lightDirection): number {
   let reach = 0;
   for (const { config } of STATIC_SHADOW_CASTERS) {
-    reach = Math.max(reach, getStaticShadowReachPx(config, profile, direction));
+    const anchorOffset = config === SHADOW_CASTERS.watchtower
+      ? Math.max(Math.abs(WATCHTOWER_SHADOW_FOOTPRINT.centerOffsetX), Math.abs(WATCHTOWER_SHADOW_FOOTPRINT.centerOffsetY)) : 0;
+    reach = Math.max(reach, getStaticShadowReachPx(config, profile, direction) + anchorOffset);
   }
   return reach;
 }
@@ -327,6 +331,15 @@ export class ShadowSystem {
   /** Wiederverwendete Puffer – eine Allokation je Region weniger. */
   private readonly staticRockCandidates: number[] = [];
   private readonly staticRuntimeById = new Map<number, SyncedPlaceableRock>();
+  // Copies survive mutable layout/snapshot relocation and removal until invalidation.
+  private readonly watchtowerShadowAnchors = new Map<number, { gridX: number; gridY: number }>();
+
+  private rememberWatchtowerShadowAnchors(runtime: readonly SyncedPlaceableRock[]): void {
+    this.watchtowerShadowAnchors.clear();
+    for (const tower of runtime) if (tower.kind === 'watchtower' && tower.hp > 0) {
+      this.watchtowerShadowAnchors.set(tower.id, { gridX: tower.gridX, gridY: tower.gridY });
+    }
+  }
   private attributionCollector: ArenaVisualAttributionCollector | null = null;
 
   // Reusable point buffers — mutated in-place each draw call to avoid
@@ -563,6 +576,7 @@ export class ShadowSystem {
     }
     this.lastStaticLayout = layout;
     this.lastStaticOptions = options;
+    this.rememberWatchtowerShadowAnchors(options.runtimeRocks ?? EMPTY_RUNTIME_ROCKS);
     this.staticBakeProfile = profile;
     this.bakedAzimuth=this.sunAzimuth;
     if(this.bakedAzimuth===null)this.staticSunDirection=null;
@@ -650,6 +664,7 @@ export class ShadowSystem {
         SHADOW_DIRTY_CHUNK_SIZE,
       );
     }
+    this.rememberWatchtowerShadowAnchors(runtimeRocks);
   }
 
   // ── Chunk-Streaming der statischen Bakes ───────────────────────────────────
@@ -784,6 +799,16 @@ export class ShadowSystem {
             if (!cell || !rockVisible(id)) continue;
             const worldX = offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
             const worldY = offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
+            const runtime = runtimeById.get(id);
+            if (runtime?.kind === 'watchtower') {
+              if (drawsRock && runtime.hp > 0) {
+                this.drawStaticFootprintInRegion(bucket,
+                  worldX + WATCHTOWER_SHADOW_FOOTPRINT.centerOffsetX,
+                  worldY + WATCHTOWER_SHADOW_FOOTPRINT.centerOffsetY,
+                  SHADOW_CASTERS.watchtower, regionBounds, profile);
+              }
+              continue;
+            }
             if (drawsRock && !this.formationShadows?.(id)) {
               this.drawStaticFootprintInRegion(bucket, worldX, worldY, SHADOW_CASTERS.rock, regionBounds, profile);
             }
@@ -886,21 +911,29 @@ export class ShadowSystem {
     const bounds = this.worldBoundsOverride ?? WORLD_SHADOW_CONFIG.arenaBounds;
     const chunks = new Map<string, ShadowDirtyChunk>();
     for (const id of dirtyRockIds) {
-      const cell = layout.rocks[id];
-      if (!cell) continue;
-      const x = ARENA_OFFSET_X + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
-      const y = ARENA_OFFSET_Y + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
-      for (const preset of [SHADOW_CASTERS.rock, SHADOW_CASTERS.turret]) {
-        const casterBounds = this.getShadowBounds(x, y, preset, profile);
-        const minChunkX = Math.floor((Math.max(bounds.minX, casterBounds.minX) - bounds.minX) / SHADOW_DIRTY_CHUNK_SIZE);
-        const minChunkY = Math.floor((Math.max(bounds.minY, casterBounds.minY) - bounds.minY) / SHADOW_DIRTY_CHUNK_SIZE);
-        const maxChunkX = Math.floor((Math.min(bounds.maxX - 1, casterBounds.maxX) - bounds.minX) / SHADOW_DIRTY_CHUNK_SIZE);
-        const maxChunkY = Math.floor((Math.min(bounds.maxY - 1, casterBounds.maxY) - bounds.minY) / SHADOW_DIRTY_CHUNK_SIZE);
-        for (let cy = minChunkY; cy <= maxChunkY; cy += 1) {
-          for (let cx = minChunkX; cx <= maxChunkX; cx += 1) {
-            const chunkX = bounds.minX + cx * SHADOW_DIRTY_CHUNK_SIZE;
-            const chunkY = bounds.minY + cy * SHADOW_DIRTY_CHUNK_SIZE;
-            chunks.set(`${chunkX}:${chunkY}`, { x: chunkX, y: chunkY });
+      const current = layout.rocks[id];
+      const previousTower = this.watchtowerShadowAnchors.get(id);
+      const isTower = previousTower || this.lastStaticOptions.runtimeRocks?.some(rock => rock.id === id && rock.kind === 'watchtower');
+      for (const cell of [current, previousTower]) {
+        if (!cell) continue;
+        const x = ARENA_OFFSET_X + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
+        const y = ARENA_OFFSET_Y + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
+        const presets = isTower ? [SHADOW_CASTERS.rock, SHADOW_CASTERS.watchtower] : [SHADOW_CASTERS.rock, SHADOW_CASTERS.turret];
+        for (const preset of presets) {
+          const tower = preset === SHADOW_CASTERS.watchtower;
+          const casterBounds = this.getShadowBounds(
+            x + (tower ? WATCHTOWER_SHADOW_FOOTPRINT.centerOffsetX : 0),
+            y + (tower ? WATCHTOWER_SHADOW_FOOTPRINT.centerOffsetY : 0), preset, profile);
+          const minChunkX = Math.floor((Math.max(bounds.minX, casterBounds.minX) - bounds.minX) / SHADOW_DIRTY_CHUNK_SIZE);
+          const minChunkY = Math.floor((Math.max(bounds.minY, casterBounds.minY) - bounds.minY) / SHADOW_DIRTY_CHUNK_SIZE);
+          const maxChunkX = Math.floor((Math.min(bounds.maxX - 1, casterBounds.maxX) - bounds.minX) / SHADOW_DIRTY_CHUNK_SIZE);
+          const maxChunkY = Math.floor((Math.min(bounds.maxY - 1, casterBounds.maxY) - bounds.minY) / SHADOW_DIRTY_CHUNK_SIZE);
+          for (let cy = minChunkY; cy <= maxChunkY; cy += 1) {
+            for (let cx = minChunkX; cx <= maxChunkX; cx += 1) {
+              const chunkX = bounds.minX + cx * SHADOW_DIRTY_CHUNK_SIZE;
+              const chunkY = bounds.minY + cy * SHADOW_DIRTY_CHUNK_SIZE;
+              chunks.set(`${chunkX}:${chunkY}`, { x: chunkX, y: chunkY });
+            }
           }
         }
       }
@@ -1069,6 +1102,7 @@ export class ShadowSystem {
    * Arena-Teardown und blieben als Raster in der Lobby sichtbar.
    */
   private clearStatic(): void {
+    this.watchtowerShadowAnchors.clear();
     this.baseCells.clear();
     this.seenBaseCells.clear();
     for (const bucket of this.layers.values()) bucket.staticGraphics.clear();
