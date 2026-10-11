@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import sharp from 'sharp';
 import { indexLibrary } from './index-library.mjs';
 import { validateEyeAnchors } from './eye-anchors.mjs';
+import { validateSocketManifest } from './socket-anchors.mjs';
 import { exportProvenance } from './export-provenance.mjs';
 import { validateClipContracts, validateExtensions } from './contracts-v2.mjs';
 import { packAtlas } from './atlas-v2.mjs';
@@ -42,6 +43,7 @@ export function validateManifestV2(m) {
   if (!Array.isArray(m.frames) || !m.frames.length || m.idleFrame !== 0) throw new Error('V2 requires frames and idleFrame 0');
   // Historical immutable V2 bundles remain readable; new enemy builds require sockets.
   if (m.eyeAnchors !== undefined) validateEyeAnchors(m.eyeAnchors, m.frames.length);
+  validateSocketManifest(m);
   for (const [index, frame] of m.frames.entries()) {
     if (frame.index !== index || frame.file !== `masters/frame-${String(index).padStart(4, '0')}.png` || !Number.isFinite(frame.blenderFrame) || !digestPattern.test(frame.sha256)) throw new Error(`Invalid frame ${index}`);
     if (!Array.isArray(frame.bounds) || frame.bounds.length !== 4 || frame.bounds.some(n => !Number.isFinite(n)) || frame.bounds[0] > frame.bounds[2] || frame.bounds[1] > frame.bounds[3]) throw new Error(`Invalid frame bounds ${index}`);
@@ -139,7 +141,9 @@ export async function exportVariantV2(folder, workspace = repoRoot) {
   const blendHash = sha256(await readFile(path.join(folder, 'asset.blend')));
   const exportFile = path.join(folder, 'export.json');
   const prior = await exists(exportFile) ? await readJson(exportFile) : null;
-  if (prior && (JSON.stringify(prior.manifest) !== JSON.stringify(m) || prior.inputHash !== build.inputHash || prior.blendSha256 !== blendHash)) throw new Error('Rendered revision changed; create a new revision instead');
+  if (prior && (JSON.stringify(prior.manifest) !== JSON.stringify(m) || prior.inputHash !== build.inputHash || prior.blendSha256 !== blendHash
+    || JSON.stringify(prior.sockets) !== JSON.stringify(m.sockets)
+    || JSON.stringify(prior.socketFrames) !== JSON.stringify(m.socketFrames))) throw new Error('Rendered revision changed; create a new revision instead');
   const provenance = await exportProvenance(m);
   // Reuse only after inputs AND every output byte have been revalidated. A tool/library
   // change invalidates this optimization and still has to satisfy pixel parity below.
@@ -176,12 +180,14 @@ export async function exportVariantV2(folder, workspace = repoRoot) {
         for (const pass of m.elevation ? ['color', 'elevation'] : ['color']) {
           const passSize = pass === 'color' ? size : elevationSize;
           const pages = await packAtlas(clip.frames.map(i => (pass === 'color' ? frames : elevations)[i]),
-            { frameNames, sourceFrames: clip.frames, size: passSize, pivot: m.pivot, prefix: `atlas/${size}/${pass}-${clip.name}` });
+            { frameNames, sourceFrames: clip.frames, socketFrames: m.socketFrames && clip.frames.map(i => m.socketFrames[i]),
+              size: passSize, pivot: m.pivot, prefix: `atlas/${size}/${pass}-${clip.name}` });
           const records = [];
           for (const page of pages) {
             const bytes = jsonBytes(page.metadata);
             buffers.set(page.image, page.png); buffers.set(page.json, bytes);
             records.push({ image: page.image, json: page.json, width: page.width, height: page.height,
+              ...(m.socketFrames ? { frameNames: Object.keys(page.metadata.frames) } : {}),
               gpuBytesRGBA8: page.gpuBytesRGBA8, sha256: sha256(page.png), jsonSha256: sha256(bytes) });
             clipBudget[pass] += page.gpuBytesRGBA8;
           }
@@ -201,6 +207,7 @@ export async function exportVariantV2(folder, workspace = repoRoot) {
     if (prior && prior.outputs[name] !== outputs[name]) throw new Error('Export algorithm changed; create a new revision instead');
   }
   const result = { pipelineVersion: 2, provenance, manifest: m, inputHash: build.inputHash, blendSha256: blendHash, outputs, sheets,
+    ...(m.socketFrames ? { sockets: m.sockets, socketFrames: m.socketFrames } : {}),
     ...(m.runtimeAtlas ? { atlases, budget } : {}),
     ...(m.elevation ? { elevation: m.elevationPass } : {}), report: { frames: reports, native: reports[m.idleFrame].native } };
   for (const [name, buffer] of buffers) {
@@ -224,6 +231,7 @@ function presentationContract(m) {
   return JSON.stringify({ id: m.id, revision: m.revision, category: m.category, targetSize: m.targetSize, displayScale: m.displayScale, sourceSizes: m.sourceSizes, pivot: m.pivot, forward: m.forward,
     masterSize: m.masterSize, idleFrame: m.idleFrame, frames: m.frames.map(({ index, file, blenderFrame }) => ({ index, file, blenderFrame })), clips: m.clips,
     elevation: m.elevation, runtimeAtlas: m.runtimeAtlas, runtimeContract: m.runtimeContract, runtimeBudgetMB: m.runtimeBudgetMB,
+    sockets: m.sockets, socketFrames: m.socketFrames,
     camera: { ...m.camera, bounds: undefined }, textures: m.textures, sources: m.sources, reference: m.reference, referenceTransform: m.referenceTransform, heldItem: m.heldItem });
 }
 
@@ -243,7 +251,9 @@ async function bundleFiles(assetFolder, variant, size) {
   const folder = path.join(assetFolder, variant), exported = await readJson(path.join(folder, 'export.json'));
   const m = await readJson(path.join(folder, 'render.json'));
   validateManifestV2(m);
-  if (exported.inputHash !== build.inputHash || JSON.stringify(exported.manifest) !== JSON.stringify(m)) throw new Error('Export no longer matches completed build');
+  if (exported.inputHash !== build.inputHash || JSON.stringify(exported.manifest) !== JSON.stringify(m)
+    || JSON.stringify(exported.sockets) !== JSON.stringify(m.sockets)
+    || JSON.stringify(exported.socketFrames) !== JSON.stringify(m.socketFrames)) throw new Error('Export no longer matches completed build');
   if (!m.sourceSizes.includes(size)) throw new Error('Choose a production source size');
   const checked = await verifyArchivedSources(assetFolder, m);
   // Preserve auxiliary snapshot inputs (for example the resolved catalog) as well.
@@ -271,6 +281,7 @@ export async function selectVariantV2(assetFolder, variant, size, reason) {
   if (await exists(selectionFile)) throw new Error('Selection already exists; retain approved revision');
   const { files, manifest: m, exported } = await bundleFiles(assetFolder, variant, size);
   const selection = { version: 2, id: m.id, revision: m.revision, inputHash: exported.inputHash, variant, size, reason: reason.trim(),
+    ...(m.socketFrames ? { sockets: m.sockets, socketFrames: m.socketFrames } : {}),
     ...(m.displayScale !== undefined ? { displayScale: m.displayScale } : {}),
     ...(m.runtimeAtlas ? { atlases: exported.atlases[size], budget: exported.budget.sizes[size] } : {}),
     idle: `${variant}/sprite-${size}.png`, sheet: `${variant}/sheet-${size}.png`, layout: exported.sheets[size], idleFrame: m.idleFrame, clips: m.clips,
@@ -285,6 +296,8 @@ export async function verifySelectionV2(assetFolder) {
   const { files, manifest: m, exported } = await bundleFiles(assetFolder, selection.variant, selection.size);
   if (JSON.stringify(selection.files) !== JSON.stringify(files) || selection.bundleSha256 !== sha256(jsonBytes(files)) || selection.inputHash !== exported.inputHash || selection.id !== m.id || selection.revision !== m.revision
     || selection.displayScale !== m.displayScale
+    || JSON.stringify(selection.sockets) !== JSON.stringify(m.sockets)
+    || JSON.stringify(selection.socketFrames) !== JSON.stringify(m.socketFrames)
     || JSON.stringify(selection.atlases) !== JSON.stringify(exported.atlases?.[selection.size])
     || JSON.stringify(selection.budget) !== JSON.stringify(exported.budget?.sizes[selection.size])
     || selection.idle !== `${selection.variant}/sprite-${selection.size}.png` || selection.sheet !== `${selection.variant}/sheet-${selection.size}.png`

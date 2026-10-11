@@ -324,6 +324,39 @@ Vor der Auswahl die tatsächlichen Prüfergebnisse als JSON-Objekt innerhalb des
 
 `art/poc/pipeline-v2/` bleibt lokal und Git-ignoriert. Skripte, Rezepte, Katalog und Prompts werden versioniert. Für die Abnahme `npm run test:assets`, `node scripts/asset-pipeline/check-viewer.mjs`, `npm run check` und `git diff --check` ausführen. Bei Skilländerungen zusätzlich `npm run ai:sync`. Der Viewer-Build ersetzt keinen sichtbaren Browserreview.
 
+## Generische Sockets pro Frame
+
+Rezepte liefern direkte Objektreferenzen in `asset['sockets']`. Die Pipeline projiziert deren
+ausgewerteten Weltursprung mit der unveränderten orthografischen Kamera; `eyeLeft`/`eyeRight`
+bleiben beim separaten Augenvertrag. `socketFrames[index][name] = {x, y, z}` steht in
+`render.json`, `export.json` und der hashgebundenen Selection: `x/y` sind normierte
+Full-Canvas-Koordinaten (links/oben = 0, rechts/unten = 1), `z` ist Welt-z in Blender-Einheiten.
+Die Framezahl entspricht exakt den ausgegebenen Masters einschließlich separater Ruhepose.
+Jeder Atlas-Frame trägt dieselben Werte unter `sockets`; `sourceFrame` ordnet ihn zu.
+Trimming, Auflösung und Elevation-Downsampling verändern diese Werte nicht. Abgebrochene
+`--max-frames`-Builds halten bereits ausgegebene Samples in `build.json` unter `frames[].sockets`.
+
+`sockets[name] = [x, y]` ist zusätzlich die AP0-kompatible Sicht der Ruhepose (`idleFrame`).
+**Offener AP0-Vertragsschritt:** `PipelineBossAsset` erlaubt derzeit nur diese statische Sicht.
+Vor Teil 2 muss eine Framefolge mit Welt-z (Vorschlag: obiges `socketFrames`) ausdrücklich
+zugelassen und validiert werden; Ruhekoordinaten ersetzen keine animierten Release-Sockets.
+Ebenso verlangt AP0 derzeit `egg-throw.release`, während der aktuelle Katalog diesen Marker
+durch `release-1` bis `release-6` ersetzt. AP0 muss dieselben sechs Marker verlangen; die
+Pipeline prüft sie bereits und ordnet sie jeweils `egg1` bis `egg6` zu. `hatch.spawn` bleibt ein
+Marker, kein Socket. AP0-Dateien werden durch diese Pipeline-Erweiterung nicht geändert.
+
+Isolierter Rauchtest ohne Änderung vorhandener Produktionsruns:
+
+```powershell
+blender --background --python-exit-code 1 --python scripts/asset-pipeline/blender_pipeline_v2.py -- --repo C:/Fragdachse --asset abyssal-kraken --revision socket-smoke-1 --device OPTIX --max-frames 2 --output-root art/poc/kraken-v11/socket-smoke
+```
+
+Den Aufruf für `abyssal-kraken-tentacle` wiederholen. Der optionale `--output-root` muss
+innerhalb des Repositories liegen; darunter gelten dieselben unveränderlichen `runs/` und
+fortsetzbaren `incomplete/`-Revisionen. Ein begrenzter Lauf ist kein auswählbarer Produktionsbuild.
+Ein unveränderndes, hashgeprüftes Socket-Overlay aus einem bereits gerenderten Sample erzeugt
+`node scripts/asset-pipeline/socket-overlay.mjs <build.json> standard 0 <neues-overlay.png>`.
+
 ## Gespeicherte V2-Animation in echtem Blender verifizieren
 
 `player_idle` authoriert Atmung über Brustskalierung und eine kleine Kopfreaktion. Die

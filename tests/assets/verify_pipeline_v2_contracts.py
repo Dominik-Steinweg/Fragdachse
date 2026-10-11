@@ -14,6 +14,7 @@ from contracts_v2 import validate_clips, validate_extensions
 from pose_validation_v2 import assert_clip_boundary
 from pose_validation_v2 import validate_animation
 import motions_v2
+from socket_anchors import sample_sockets, validate_socket_frames
 
 
 def state(value):
@@ -21,6 +22,49 @@ def state(value):
 
 
 class PipelineContracts(unittest.TestCase):
+    def test_socket_projection_follows_evaluated_parent_and_preserves_world_height(self):
+        import bpy
+        import blender_pipeline as shared
+        previous = bpy.context.window.scene
+        scene = shared.make_scene('Socket projection fixture', 2)
+        try:
+            parent = bpy.data.objects.new('Animated socket parent', None)
+            socket = bpy.data.objects.new('Socket fixture', None)
+            scene.collection.objects.link(parent)
+            scene.collection.objects.link(socket)
+            socket.parent = parent
+            socket.location = (.1, 0, .2)
+            socket.scale = (.001,) * 3
+            for frame, position in ((0, (0, 0, 0)), (1, (.2, .4, -.7))):
+                motions_v2.key(parent, 'location', position, frame)
+            samples = []
+            for frame in (0, 1):
+                scene.frame_set(frame)
+                bpy.context.view_layer.update()
+                samples.append(sample_sockets(scene, {'mouth': socket, 'eyeLeft': None, 'eyeRight': None}))
+            validate_socket_frames(samples, 2, ['mouth'])
+            self.assertEqual(set(samples[0]), {'mouth'})
+            for key, expected in dict(x=.65, y=.3, z=-.5).items():
+                self.assertAlmostEqual(samples[1]['mouth'][key], expected, places=6)
+            self.assertNotEqual(samples[0], samples[1])
+            for frames, count, required in ((samples[:1], 2, []), (samples, 2, ['waterEntry']),
+                                             ([samples[0], {}], 2, []),
+                                             ([{'mouth': dict(x=1.1, y=.5, z=0)}], 1, []),
+                                             ([{'mouth': dict(x=.5, y=.5, z=float('nan'))}], 1, [])):
+                with self.assertRaises(ValueError):
+                    validate_socket_frames(frames, count, required)
+            scene.camera.rotation_euler.x = .1
+            with self.assertRaisesRegex(ValueError, 'top-down'):
+                sample_sockets(scene, {'mouth': socket})
+            scene.camera.rotation_euler.x = 0
+            socket.location.x = 10
+            bpy.context.view_layer.update()
+            with self.assertRaisesRegex(ValueError, 'outside export canvas'):
+                sample_sockets(scene, {'mouth': socket})
+        finally:
+            bpy.context.window.scene = previous
+            bpy.data.scenes.remove(scene)
+
     def test_markers_and_author_phases(self):
         clip = dict(name='rise', motion='fixture', frameCount=4, frameRate=12, loop=False,
                     start='free', end='free', next='hover', markers={'release': 3, 'lift': 0})

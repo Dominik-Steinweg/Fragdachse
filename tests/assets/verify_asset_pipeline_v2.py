@@ -22,6 +22,7 @@ from pose_validation_v2 import (EPSILON, require, near, matrix_values, set_frame
     animation_owners, snapshot, different_meshes, assert_same_pose, hierarchy_root,
     fixed_presentation, assert_fixed_presentation, assert_geometry_bounds, assert_clip_boundary)
 from contracts_v2 import validate_clips, validate_extensions
+from socket_anchors import sample_sockets, validate_socket_frames
 
 
 def digest(data):
@@ -75,6 +76,24 @@ def verify(scene, manifest, report, source_folder):
                    'textures': len(images), 'sources': len(manifest['sources'])})
 
     frames = manifest['frames']
+    if 'socketFrames' in manifest or manifest['id'].startswith('abyssal-kraken'):
+        required = (['mouth'] + [f'egg{i}' for i in range(1, 7)] if manifest['id'] in
+                    ('abyssal-kraken', 'abyssal-kraken-land') else
+                    ['waterEntry'] if manifest['id'] == 'abyssal-kraken-tentacle' else [])
+        validate_socket_frames(manifest.get('socketFrames'), len(frames), required)
+        references = json.loads(scene['asset_socket_objects'])
+        sockets = {name: scene.objects[obj] for name, obj in references.items()}
+        for index, frame in enumerate(frames):
+            set_frame(scene, frame['blenderFrame'])
+            actual = sample_sockets(scene, sockets)
+            expected = manifest['socketFrames'][index]
+            require(set(actual) == set(expected), 'Saved socket references differ')
+            require(all(near([actual[name][k] for k in ('x', 'y', 'z')],
+                             [expected[name][k] for k in ('x', 'y', 'z')]) for name in actual),
+                    f'Evaluated sockets differ in frame {index}')
+        require(manifest['sockets'] == {name: [p['x'], p['y']] for name, p in
+                manifest['socketFrames'][manifest['idleFrame']].items()}, 'Rest sockets differ')
+        checks.append({'name': 'evaluated_full_canvas_sockets', 'passed': True, 'frames': len(frames), 'names': list(sockets)})
     require([frame['index'] for frame in frames] == list(range(len(frames))), 'Frame indices are not contiguous')
     require(manifest['idleFrame'] == 0 and frames[0]['blenderFrame'] == 0, 'Expected separate idle pose at frame zero')
     referenced = [manifest['idleFrame']]

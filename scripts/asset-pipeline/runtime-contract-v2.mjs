@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 import { validateClipContracts, validateExtensions } from './contracts-v2.mjs';
 import { elevationEncoding } from './elevation-v2.mjs';
+import { requiredSockets, validateSocketFrames } from './socket-anchors.mjs';
 
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -29,6 +30,9 @@ export async function verifyBossRuntime(entry, asset, read) {
       || clip.start !== authored.start || clip.next !== authored.next) throw new Error('Boss markers or clip contract differ from catalog');
   }
   const groups = [{ name: '__rest', frames: [asset.idleFrame] }, ...asset.clips];
+  const required = requiredSockets(entry.id), socketSamples = new Map();
+  if (asset.socketFrames !== undefined) validateSocketFrames(asset.socketFrames,
+    Math.max(...groups.flatMap(c => c.frames)) + 1, required);
   const totals = { color: 0, elevation: 0, total: 0 }, clips = {}, files = new Set();
   for (const pass of ['color', 'elevation']) {
     const atlases = asset.atlases?.[pass];
@@ -46,12 +50,24 @@ export async function verifyBossRuntime(entry, asset, read) {
         const [image, json] = await Promise.all([read(page.image), read(page.json)]);
         if (digest(image) !== page.sha256 || digest(json) !== page.jsonSha256) throw new Error('Boss atlas hash mismatch');
         const info = await sharp(image).metadata(), metadata = JSON.parse(json.toString('utf8'));
+        if (page.frameNames && !same(page.frameNames, Object.keys(metadata.frames))) throw new Error('Boss page frame ownership differs');
         if (!info.hasAlpha || info.width !== page.width || info.height !== page.height || info.width > 4096 || info.height > 4096
           || page.gpuBytesRGBA8 !== info.width * info.height * 4 || metadata.meta?.size?.w !== info.width || metadata.meta?.size?.h !== info.height
           || metadata.meta?.image !== page.image.split('/').at(-1)) throw new Error('Boss atlas dimensions or GPU bytes invalid');
         for (const [name, frame] of Object.entries(metadata.frames)) {
           if (!names.includes(name) || found.has(name)) throw new Error('Boss atlas frame names inconsistent');
           found.add(name);
+          if (frame.sockets !== undefined || required.length || asset.socketFrames !== undefined) {
+            validateSocketFrames([frame.sockets], 1, required);
+            const source = frame.sourceFrame;
+            if ((socketSamples.has(source) && !same(socketSamples.get(source), frame.sockets))
+              || (asset.socketFrames && !same(asset.socketFrames[source], frame.sockets))) throw new Error('Boss socket frame/pass mapping differs');
+            socketSamples.set(source, frame.sockets);
+            if (clip.name === '__rest' && asset.sockets !== undefined) {
+              const rest = Object.fromEntries(Object.entries(frame.sockets).map(([key, p]) => [key, [p.x, p.y]]));
+              if (!same(rest, asset.sockets)) throw new Error('Boss rest sockets differ');
+            }
+          }
           const r = frame.frame, s = frame.spriteSourceSize;
           if (![r?.x, r?.y, r?.w, r?.h, s?.x, s?.y, s?.w, s?.h].every(Number.isInteger)
             || r.x < 0 || r.y < 0 || r.w < 1 || r.h < 1 || r.x + r.w > info.width || r.y + r.h > info.height
