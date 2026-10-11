@@ -6,7 +6,7 @@ import {
 
 describe('latejoin game-state bootstrap', () => {
   it('requires the current support-weapon slices for latejoiners', () => {
-    expect(FULL_GAME_STATE_SLICE_KEYS).toEqual(expect.arrayContaining(['ei', 'fi', 'vu', 'cc']));
+    expect(FULL_GAME_STATE_SLICE_KEYS).toEqual(expect.arrayContaining(['ei', 'fi', 'vu', 'cc', 'kr']));
     expect(FULL_GAME_STATE_SLICE_KEYS).not.toContain('tc');
   });
 
@@ -18,6 +18,10 @@ describe('latejoin game-state bootstrap', () => {
     full._full = true;
 
     expect(isCompleteGameStatePayload(full)).toBe(true);
+
+    const withoutKraken = { ...full };
+    delete withoutKraken.kr;
+    expect(isCompleteGameStatePayload(withoutKraken)).toBe(false);
 
     const withoutEssence = { ...full };
     delete withoutEssence.ae;
