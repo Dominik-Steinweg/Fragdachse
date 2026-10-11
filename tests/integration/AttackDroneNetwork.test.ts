@@ -13,7 +13,7 @@ describe('attack drone World replication', () => {
     host.publishLobbySync();host.publishWorldAndActivity(world,null);const client=connect(clientRoom);
     const base: Parameters<NetworkBridge['publishGameState']>[0]={roundStartTime:0,players:{},projectiles:null,enemies:null,rocks:null,
       placeableRocks:[],reinforcementMatrices:[],energyInjectorEffects:[],energyInjectorFocus:[],remoteControlTurrets:[],decoys:[],smokes:[],fires:[],powerups:null,pedestals:null,
-      nukes:[],airstrikes:[],meteors:[],tunnels:[],train:null,bases:[],captureTheBeer:null,coopDefenseCarry:[],stinkClouds:[],timeBubbles:[],teslaDomes:[],energyShields:[],
+      nukes:[],mortarStrikes: [], airstrikes:[],meteors:[],tunnels:[],train:null,bases:[],captureTheBeer:null,coopDefenseCarry:[],stinkClouds:[],timeBubbles:[],teslaDomes:[],energyShields:[],
       guardianSpirits:[],repairDrones:[],slimeTrail:{cells:[],affectedEnemies:[]},targetVulnerabilities:[],ak47StrategicTargets:[],burningGround:{cells:[]}};
     const h=droneHarness({bombBay:1});h.targets.splice(0,1,...droneGroup());h.tick(0);
     const publish=()=>{use(hostRoom);host.publishGameState({...base,attackDrones:h.system.getSnapshot(),attackDroneBombs:h.bombs.slice(-1).map(b=>({

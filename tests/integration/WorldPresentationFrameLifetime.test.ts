@@ -393,7 +393,7 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
       powerups: [],
       pedestals: [],
       nukes: [],
-      airstrikes: [],
+      mortarStrikes: [], airstrikes: [],
       meteors: [],
     } satisfies WorldClientPresentationState;
     const binding = new WorldPresentationFrameBinding(fakeBindingInput(fakeScene(), {

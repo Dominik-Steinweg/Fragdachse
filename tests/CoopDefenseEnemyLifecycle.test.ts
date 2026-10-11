@@ -3,6 +3,13 @@ import { resolveCoopDefenseEnemyConfigs } from '../src/config/coopDefenseEnemies
 import { resolveEnemyLifecycleTotals } from '../src/config/coopDefenseEnemyLifecycle';
 
 describe('shared enemy lifecycle potential', () => {
+  it('classifies the authored mortar ability without predicting extra enemies or rewards', () => {
+    const config = resolveCoopDefenseEnemyConfigs(1)['mortar-badger'];
+    const totals = resolveEnemyLifecycleTotals('mortar-badger');
+    expect(totals.mechanicTags.has('mortar')).toBe(true);
+    expect(totals.hp).toBe(config.maxHp); expect(totals.xp).toBe(config.xp);
+    expect(totals.dynamic).toBe(false);
+  });
   it('keeps direct and fixed follow-up XP separate', () => {
     const enemies = resolveCoopDefenseEnemyConfigs(1), kind = Object.keys(enemies).find(k => enemies[k].deathSpawns?.length)!;
     const totals = resolveEnemyLifecycleTotals(kind, enemies);

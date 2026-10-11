@@ -2810,6 +2810,8 @@ export const GPU_EFFECT_CONTRACTS = {
   }
 } as const satisfies Record<keyof typeof GpuVfxEffectId, LayerContract & {readonly lanes: readonly (keyof typeof GpuVfxLaneId)[]}>;
 export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
+  { id: 'mortar:marker', owner: 'effects/MortarStrikeRenderer.ts', component: 'markers', height: 'ground', lighting: 'emissive', camera: 'world', depths: [19.8], blends: ['NORMAL'], profiles: ['E'], role: 'ui', source: { selector: 'sync/marker/setDepth/0', expression: '19.8' } },
+  { id: 'mortar:shadow', owner: 'effects/MortarStrikeRenderer.ts', component: 'shadows', height: 'ground', lighting: 'material', camera: 'world', depths: [5.1], blends: ['NORMAL'], profiles: ['G'], role: 'effect', source: { selector: 'sync/shadow/setDepth/0', expression: '5.1' } },
   {"id":"cpu:ui/AfterRoundTransition.ts:overlayTransitionView/root/setDepth/0","owner":"ui/AfterRoundTransition.ts","component":"overlayTransitionView/root/setDepth/0","height":"body","lighting":"material","camera":"clarity","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"overlayTransitionView/root/setDepth/0","expression":"value"}},
   {"id":"cpu:ui/AfterRoundTransition.ts:overlayTransitionView/root/setDepth/1","owner":"ui/AfterRoundTransition.ts","component":"overlayTransitionView/root/setDepth/1","height":"body","lighting":"material","camera":"clarity","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"overlayTransitionView/root/setDepth/1","expression":"depth"}},
   {"id":"cpu:ui/AfterRoundTransition.ts:opening/view/setDepth/0","owner":"ui/AfterRoundTransition.ts","component":"opening/view/setDepth/0","height":"body","lighting":"material","camera":"clarity","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"opening/view/setDepth/0","expression":"Math.max(view.depth, (this.source?.depth ?? view.depth) + 1)"}},
@@ -3302,6 +3304,10 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:ui/UiContextMenu.ts:open/this.container/setDepth/0","owner":"ui/UiContextMenu.ts","component":"open/this.container/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[103],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"open/this.container/setDepth/0","expression":"this.standaloneDepth"}},
 ];
 export const CPU_SOURCE_CONTRACTS = {
+  'effects/MortarStrikeRenderer.ts': { bindings: {}, blends: [], cameras: [], sites: [
+    { key: 'sync/marker/setDepth/0', expression: '19.8', blends: ['NORMAL'] },
+    { key: 'sync/shadow/setDepth/0', expression: '5.1', blends: ['NORMAL'] },
+  ] },
   "ui/AfterRoundTransition.ts": {
   "blends": [],
   "cameras": [],

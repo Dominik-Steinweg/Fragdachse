@@ -1,3 +1,4 @@
+import { MortarStrikeRenderer } from '../../effects/MortarStrikeRenderer';
 import { PlasmaBurnerChargeRenderer } from '../../effects/PlasmaBurnerChargeRenderer';
 import { onBootSceneTeardown } from '../../ui/BootPreparation';
 import { MgAttritionRenderer } from '../../effects/MgAttritionRenderer';
@@ -157,6 +158,7 @@ export interface RendererBundle {
   // World-scoped presentation renderers: created when a World is built and cleared on World teardown.
   train:               TrainRenderer | null;
   translocatorTeleport: TranslocatorTeleportRenderer | null;
+  mortarStrike: MortarStrikeRenderer;
 }
 
 /** Synchronous entry point for callers that already own their scheduling. */
@@ -434,6 +436,9 @@ export function* createRendererBundleSteps(
   cleanup.push(() => voidHunterSparks.destroy());
   const voidRift = new VoidRiftIntroRenderer(scene, lighting);
   cleanup.push(() => voidRift.destroy());
+  const mortarStrike = new MortarStrikeRenderer(scene);
+  cleanup.push(() => mortarStrike.destroy());
+  yield 'renderers/mortarStrike';
   return {
     interactions,
     turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, plasmaBurnerCharge, healingAura, guardianSpirit, repairDrone, attackDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
@@ -458,6 +463,7 @@ export function* createRendererBundleSteps(
     explosionGpu,
     train: null,
     translocatorTeleport: null,
+    mortarStrike,
   };
 }
 

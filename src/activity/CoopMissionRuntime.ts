@@ -1,3 +1,7 @@
+import type { SyncedMortarStrike } from '../types';
+import type { CoopDefenseMortarSystem } from '../systems/CoopDefenseMortarSystem';
+import type { CoopDefenseMortarStrikeSystem } from '../systems/CoopDefenseMortarStrikeSystem';
+import { CompositeEnemySpecialMovementSource } from '../systems/CompositeEnemySpecialMovementSource';
 import type { CoopDefenseDecoyTargetSystem } from '../systems/CoopDefenseDecoyTargetSystem';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { CoopDefenseBossSystem } from '../systems/CoopDefenseBossSystem';
@@ -115,6 +119,7 @@ export interface CoopMissionClientPresentationFrame {
   readonly stateAvailable: boolean;
   readonly newSnapshot: boolean;
   readonly enemySnapshot: SyncedEnemySnapshot | null;
+  readonly mortarStrikes: readonly SyncedMortarStrike[];
   readonly carryItems: readonly SyncedCoopDefenseCarryItem[];
   readonly interpolationFactor: number;
 }
@@ -204,6 +209,20 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   private encounterOwner: CoopMissionEncounterRuntime | null = null;
   private enemyBehaviourOwner: CoopMissionEnemyBehaviourRuntime | null = null;
   private enemySpecialOwner: CoopMissionEnemySpecialRuntime | null = null;
+  private mortarOwner: { behavior: CoopDefenseMortarSystem; strikes: CoopDefenseMortarStrikeSystem } | null = null;
+  private specialMovementOwner: CompositeEnemySpecialMovementSource | null = null;
+  get coopDefenseMortarSystem() { return this.mortarOwner?.behavior ?? null; }
+  get coopDefenseMortarStrikeSystem() { return this.mortarOwner?.strikes ?? null; }
+  get enemySpecialMovementSource() { return this.specialMovementOwner; }
+  getMortarSnapshot(): SyncedMortarStrike[] {
+    return [...(this.mortarOwner?.behavior.getSnapshot() ?? []), ...(this.mortarOwner?.strikes.getSnapshot() ?? [])];
+  }
+  setMortar(behavior: CoopDefenseMortarSystem, strikes: CoopDefenseMortarStrikeSystem): void {
+    this.claimEmptySlot('mortar runtime', this.mortarOwner);
+    this.mortarOwner = { behavior, strikes };
+    this.specialMovementOwner = new CompositeEnemySpecialMovementSource([this.coopDefenseTimebombSystem, behavior]);
+    this.publishBindings();
+  }
   private necromancyOwner: NecromancySystem | null = null;
   private mapEventOwner: CoopDefenseMapEventDirector | null = null;
   private objectiveOwner: CoopMissionObjectiveRuntime | null = null;
@@ -343,6 +362,7 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   setEnemySpecials(runtime: CoopMissionEnemySpecialRuntime): void {
     this.claimEmptySlot('enemy special runtime', this.enemySpecialOwner);
     this.enemySpecialOwner = runtime;
+    this.specialMovementOwner = new CompositeEnemySpecialMovementSource([runtime.timebomb, this.coopDefenseMortarSystem]);
     this.publishBindings();
   }
 
@@ -473,6 +493,7 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
       stateAvailable: false,
       newSnapshot: false,
       enemySnapshot: null,
+      mortarStrikes: [],
       carryItems: [],
       interpolationFactor: 0,
     } satisfies CoopMissionClientPresentationFrame;
@@ -518,6 +539,10 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     this.encounterOwner?.persistentPressure?.reset();
     this.encounterOwner?.boss?.reset();
 
+    this.mortarOwner?.behavior.clear();
+    this.mortarOwner?.strikes.clear();
+    this.mortarOwner = null;
+    this.specialMovementOwner = null;
     this.enemySpecialOwner?.voidHunter?.clear();
     this.enemySpecialOwner?.timebomb?.clear();
     this.enemyBehaviourOwner?.decoyTargets?.destroy();

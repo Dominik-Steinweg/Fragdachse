@@ -332,7 +332,7 @@ describe('Water terrain contracts', () => {
     const map = getCoopDefenseMapConfig('0');
     for (const water of [[{ gridX: -1, gridY: 3 }], [{ gridX: 3.5, gridY: 4 }], [cell, cell],
       [{ gridX: 1, gridY: 39 }]]) {
-      expect(() => normalizeCoopDefenseMapConfig({ ...map, water })).toThrow(/water/i);
+      expect(() => normalizeCoopDefenseMapConfig({ ...map, encounters: [], water })).toThrow(/water/i);
     }
   });
 

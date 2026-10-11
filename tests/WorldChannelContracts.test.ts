@@ -57,7 +57,7 @@ function snapshot(x: number, rocks: Parameters<NetworkBridge['publishGameState']
       aim: { revision: 0, isMoving: false, weapon1DynamicSpread: 0, weapon2DynamicSpread: 0 } } },
     rocks, projectiles: null, enemies: null, placeableRocks: [], reinforcementMatrices: [],
     energyInjectorEffects: [], energyInjectorFocus: [], remoteControlTurrets: [], decoys: [],
-    smokes: [], fires: [], powerups: null, pedestals: null, nukes: [], airstrikes: [], meteors: [],
+    smokes: [], fires: [], powerups: null, pedestals: null, nukes: [], mortarStrikes: [], airstrikes: [], meteors: [],
     tunnels: [], train: null, bases: [], captureTheBeer: null, coopDefenseCarry: [], stinkClouds: [],
     timeBubbles: [], teslaDomes: [], energyShields: [], guardianSpirits: [], repairDrones: [],
     slimeTrail: { cells: [], affectedEnemies: [] }, targetVulnerabilities: [], ak47StrategicTargets: [],
@@ -73,6 +73,36 @@ async function createRoom(playerCount: number): Promise<TestRoom[]> {
 }
 
 describe('World-Kanal – Replikation', () => {
+  it('bootstraps mortar markers, retains missing delta slices and explicitly transmits their removal', async () => {
+    const [hostRoom, clientRoom] = await createRoom(2);
+    const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    const shot = { id: 1, sourceEnemyId: 'mortar', sourceX: 0, sourceY: 0, targetX: 800, targetY: 0,
+      radius: 90, armedAt: 100, launchAt: 2100, impactAt: 3100, faction: 'hostile' as const };
+    try {
+      const host = bridgeFor(hostRoom);
+      host.publishWorldAndActivity(world(), null);
+      host.publishGameState({ ...snapshot(0), mortarStrikes: [shot] }, true);
+      hostRoom.room.update();
+      const client = bridgeFor(clientRoom);
+      expect(client.getLatestGameState()?.mortarStrikes).toEqual([shot]);
+      client.flushNetwork();
+      use(hostRoom);
+      host.publishGameState({ ...snapshot(1), mortarStrikes: [shot] });
+      const delta = { ...hostRoom.room.getGlobal('gs') as Record<string, unknown> };
+      expect(delta._full).not.toBe(true);
+      delete delta.mo;
+      hostRoom.room.setGlobal('gs', delta, true); hostRoom.room.update();
+      use(clientRoom);
+      expect(client.getLatestGameState()?.mortarStrikes).toEqual([shot]);
+      client.flushNetwork();
+      use(hostRoom);
+      host.publishGameState(snapshot(2)); hostRoom.room.update();
+      expect((hostRoom.room.getGlobal('gs') as Record<string, unknown>).mo).toEqual([]);
+      use(clientRoom);
+      expect(client.getLatestGameState()?.mortarStrikes).toEqual([]);
+    } finally { clearActiveSession(); }
+  });
+
   it('can consume the fast full copy before its reliable copy and keeps ordinary delta loss recoverable', async () => {
     const [hostRoom, clientRoom] = await createRoom(2);
     const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
@@ -289,7 +319,7 @@ describe('World-Kanal – Replikation', () => {
       roundStartTime: 0, players: {}, projectiles: null, enemies: null, rocks: null,
       placeableRocks: [], reinforcementMatrices: [], energyInjectorEffects: [], energyInjectorFocus: [],
       remoteControlTurrets: [], decoys: [], smokes: [], fires: [], powerups: null, pedestals: null,
-      nukes: [], airstrikes: [], meteors: [], tunnels: [], train: null, bases: [], captureTheBeer: null,
+      nukes: [], mortarStrikes: [], airstrikes: [], meteors: [], tunnels: [], train: null, bases: [], captureTheBeer: null,
       coopDefenseCarry: [], stinkClouds: [], timeBubbles: [], teslaDomes: [], energyShields: [],
       guardianSpirits: [], repairDrones: [], slimeTrail: { cells: [], affectedEnemies: [] },
       targetVulnerabilities: [], ak47StrategicTargets: [], burningGround: { cells: [] },
@@ -525,7 +555,7 @@ describe('World-Kanal – Replikation', () => {
         roundStartTime: 0, players: {}, projectiles: null, enemies: null, rocks: null,
         placeableRocks: [], reinforcementMatrices: [], energyInjectorEffects: [], energyInjectorFocus: [],
         remoteControlTurrets: [], decoys: [], smokes: [], fires: [], powerups: null, pedestals: null,
-        nukes: [], airstrikes: [], meteors: [], tunnels: [], train: null, bases: [], captureTheBeer: null,
+        nukes: [], mortarStrikes: [], airstrikes: [], meteors: [], tunnels: [], train: null, bases: [], captureTheBeer: null,
         coopDefenseCarry: [], stinkClouds: [], timeBubbles: [], teslaDomes: [], energyShields: [],
         guardianSpirits: [], repairDrones: [], slimeTrail: { cells: [], affectedEnemies: [] },
         targetVulnerabilities: [], ak47StrategicTargets: [], burningGround: { cells: [] },
@@ -794,7 +824,7 @@ describe('World-Kanal – Essenz im Lobby-Testgelaende', () => {
       roundStartTime: 0, players: {}, projectiles: null, enemies: null, rocks: null,
       placeableRocks: [], reinforcementMatrices: [], energyInjectorEffects: [], energyInjectorFocus: [],
       remoteControlTurrets: [], decoys: [], smokes: [], fires: [], powerups: null, pedestals: null,
-      nukes: [], airstrikes: [], meteors: [], tunnels: [], train: null, bases: [], captureTheBeer: null,
+      nukes: [], mortarStrikes: [], airstrikes: [], meteors: [], tunnels: [], train: null, bases: [], captureTheBeer: null,
       coopDefenseCarry: [], stinkClouds: [], timeBubbles: [], teslaDomes: [], energyShields: [],
       guardianSpirits: [], repairDrones: [], slimeTrail: { cells: [], affectedEnemies: [] },
       targetVulnerabilities: [], ak47StrategicTargets: [], burningGround: { cells: [] },

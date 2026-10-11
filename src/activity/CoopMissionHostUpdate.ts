@@ -222,7 +222,7 @@ export class CoopMissionHostUpdate {
       this.runtime.coopDefenseEnemyTrainAwarenessSystem,
       this.runtime.coopDefenseEnemyBurrowSystem,
       this.runtime.coopDefenseEnemyCombatPositioningSystem,
-      this.runtime.coopDefenseTimebombSystem,
+      this.runtime.enemySpecialMovementSource,
       this.port.getSmokeSystem(),
       this.runtime.coopDefenseDecoyTargetSystem,
       this.runtime.coopDefenseEnemyAttackSystem,
@@ -233,6 +233,8 @@ export class CoopMissionHostUpdate {
     if (!countdownActive && !weaponBalanceLabActive) {
       this.runtime.coopDefenseVoidHunterSystem?.hostUpdate(nowMs);
       this.runtime.coopDefenseEnemyAbilitySystem?.hostUpdate(nowMs);
+      this.runtime.coopDefenseMortarSystem?.hostUpdate(nowMs);
+      this.runtime.coopDefenseMortarStrikeSystem?.hostUpdate(nowMs);
       if (metrics) { metrics.enemyAbilitiesMs = performance.now() - measuredAt; measuredAt = performance.now(); }
       this.runtime.coopDefenseEnemyAttackSystem?.hostUpdate(deltaMs, nowMs);
       if (metrics) metrics.enemyAttacksMs = performance.now() - measuredAt;

@@ -1528,11 +1528,14 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     const runtimeFalloff = options?.damageFalloff
       ? { ...options.damageFalloff, minDamage: options.damageFalloff.minDamage * runtimeMultiplier }
       : undefined;
+    // Only enemy-actor sources may stand in for a removed enemy; turret/world sources keep their path.
+    const sourceFaction = options?.source?.actor?.kind === 'enemy' ? options.source.allegiance.factionId : undefined;
+    const attackerFactionFallback = sourceFaction === 'hostile' || sourceFaction === 'allied' ? sourceFaction : undefined;
     for (const player of this.playerManager.getAllPlayers()) {
       if (options?.excludeTargetId === player.id) continue;
       if (!includeSelf && player.id === ownerId) continue;
       if (!this.isAlive(player.id)) continue;
-      if (!this.canDamageTarget(ownerId, player.id, options?.allowTeamDamage)) continue;
+      if (!this.canDamageTarget(ownerId, player.id, options?.allowTeamDamage, attackerFactionFallback)) continue;
       const dist = Phaser.Math.Distance.Between(x, y, player.x, player.y);
       if (dist > radius) continue;
 
@@ -1577,7 +1580,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
       if (options?.excludeTargetId === enemy.id) continue;
       if (!includeSelf && enemy.id === ownerId) continue;
-      if (!this.canDamageTarget(ownerId, enemy.id, options?.allowTeamDamage)) continue;
+      if (!this.canDamageTarget(ownerId, enemy.id, options?.allowTeamDamage, attackerFactionFallback)) continue;
       const dist = Phaser.Math.Distance.Between(x, y, enemy.sprite.x, enemy.sprite.y);
       if (dist > radius) continue;
 
@@ -1753,7 +1756,12 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     return damagedTargetKeys;
   }
 
-  canDamageTarget(attackerId: string | undefined, targetId: string, allowTeamDamage = false): boolean {
+  canDamageTarget(
+    attackerId: string | undefined,
+    targetId: string,
+    allowTeamDamage = false,
+    attackerFactionFallback?: 'hostile' | 'allied',
+  ): boolean {
     if (!this.isPlayerTargetable(targetId)) return false;
     if (!attackerId) return true;
     if (this.playerActionAllowedResolver
@@ -1762,9 +1770,11 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     if (attackerId === targetId) return true;
     const attackerEnemy = this.enemyManager?.getEnemy(attackerId);
     const targetEnemy = this.enemyManager?.getEnemy(targetId);
+    // Deferred effects retain allegiance after the attacker leaves the world.
+    const attackerFaction = attackerEnemy ? attackerEnemy.faction : attackerFactionFallback;
     const source = {
-      allegiance: { ownerId: attackerId, factionId: attackerEnemy?.faction },
-      actor: attackerEnemy ? { kind: 'enemy' as const, id: attackerId } : undefined,
+      allegiance: { ownerId: attackerId, factionId: attackerFaction },
+      actor: attackerEnemy || attackerFactionFallback ? { kind: 'enemy' as const, id: attackerId } : undefined,
     };
     if (attackerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID) {
       return this.relationshipForSource(source, targetId).canDamage;

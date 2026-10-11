@@ -13,6 +13,38 @@ import {
 } from '../src/systems/CoopDefenseAirstrikeEventHandler';
 import { CoopDefenseMapEventDirector } from '../src/systems/CoopDefenseMapEventDirector';
 import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
+import { applyHostileAreaStrikeDamage } from '../src/systems/hostileAreaStrikeDamage';
+import { ULTIMATE_CONFIGS, type AirstrikeUltimateConfig } from '../src/loadout/LoadoutConfig';
+import { computeRadialDamage } from '../src/utils/radialDamage';
+
+describe('shared hostile area-strike damage', () => {
+  it('preserves airstrike falloff, friendly base surfaces, common environment scaling and nearest train segment', () => {
+    const cfg = ULTIMATE_CONFIGS.AIRSTRIKE as AirstrikeUltimateConfig;
+    const radius = cfg.radius;
+    const distance = radius / 2;
+    const radial = computeRadialDamage(distance, radius, cfg.maxDamage, { minDamage: cfg.minDamage });
+    const aoe = vi.fn(), base = vi.fn(), train = vi.fn(), rock = vi.fn(() => ({ actualDamage: 1, remainingIntegrity: 1, becameDestroyed: false }));
+    applyHostileAreaStrikeDamage({ x: 0, y: 0, radius, maxDamage: cfg.maxDamage, minDamage: cfg.minDamage,
+      attackerId: 'airstrike', sourceId: 'environment.airstrike', includeSelf: cfg.selfDamageMult > 0,
+      aoe: { baseDamageMult: 0, skipEnemies: true, sourceSlot: 'ultimate', selfDamageMult: cfg.selfDamageMult, allowTeamDamage: cfg.allowTeamDamage },
+      friendlyBaseDamageMult: 1, rockDamageMult: cfg.rockDamageMult, trainDamageMult: cfg.trainDamageMult,
+    }, { combat: { applyAoeDamage: aoe },
+      bases: { getBasesByFaction: () => [{ id: 'friendly', isInert: () => false,
+        getCellBodies: () => [{ getBounds: () => ({ left: distance, right: distance + 10, top: 0, bottom: 10 }) }] }] } as never,
+      damageBase: base, isConstruction: () => false,
+      environment: { forEachActiveRock: visit => visit(1, distance, 0), resolveRockDamage: (_id, value) => value,
+        applyRockDamage: rock, onRockDestroyed: vi.fn() },
+      trainSegments: [{ x: radius * 2, y: 0 }, { x: distance, y: 0 }], damageTrain: train,
+    });
+    expect(aoe).toHaveBeenCalledWith(0, 0, radius, cfg.maxDamage, 'airstrike', cfg.selfDamageMult > 0,
+      expect.objectContaining({ sourceId: 'environment.airstrike', sourceSlot: 'ultimate', skipEnemies: true,
+        baseDamageMult: 0, damageFalloff: { minDamage: cfg.minDamage } }));
+    expect(base).toHaveBeenCalledExactlyOnceWith('friendly', radial, 1);
+    expect(rock).toHaveBeenCalledExactlyOnceWith(1, Math.round(radial * cfg.rockDamageMult), 'airstrike');
+    if (cfg.trainDamageMult !== 0) expect(train).toHaveBeenCalledExactlyOnceWith(Math.round(radial * cfg.trainDamageMult));
+    else expect(train).not.toHaveBeenCalled();
+  });
+});
 
 function makeMap(overrides: Partial<CoopDefenseMapConfig>): CoopDefenseMapConfig {
   return {

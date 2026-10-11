@@ -271,6 +271,7 @@ export interface WorldCombatGameplayBindingOptions {
   }[];
   readonly getWorldTrain: () => { getActiveSegmentPositions: () => { x: number; y: number }[]; applyDamage: (damage: number, ownerId: string) => void } | null;
   readonly getWorldMutation: () => WorldObjectMutationRuntime | null;
+  readonly getMortarSystem: () => import('../systems/CoopDefenseMortarSystem').CoopDefenseMortarSystem | null;
   readonly getTimebombSystem: () => CoopDefenseTimebombSystem | null;
   readonly getNecromancySystem: () => NecromancySystem | null;
   readonly hostUpdate: WorldCombatImpactPort;
@@ -698,6 +699,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combat.setArmorReceivedHandler((playerId, amount) => o.network.stats.recordArmorReceived(playerId, amount));
     o.projectileEvents.setNaturalFlameExpiryCallback((projectile: ProjectileFlameExpiryEvent) => o.getPlayerCombatIntegration()?.reactions.handleNaturalFlameExpiry(projectile, Date.now()));
     hostPhysics.setEnemyMovementFactorResolver((enemyId, now) => Math.min(
+      o.getMortarSystem()?.blocksRegularAttacks(enemyId) ? 0 : 1,
       o.getPlayerCombatIntegration()?.slimeTrail?.getEnemyMovementFactor(enemyId, now) ?? 1,
       combat.getEnemyMovementFactor(enemyId, now),
     ));
@@ -710,6 +712,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
           enemyId, x, y, burnSources, combat.getHostTime(), wildfire);
         if (!current()) return true;
       }
+      if (death) o.getMortarSystem()?.handleKilled(death, combat.getHostTime());
       const wasTimebomb = death ? (o.getTimebombSystem()?.handleKilled(death, combat.getHostTime()) ?? false) : false;
       if (!current()) return true;
       if (wasTimebomb) {

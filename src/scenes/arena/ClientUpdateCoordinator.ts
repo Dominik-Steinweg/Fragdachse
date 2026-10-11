@@ -374,6 +374,7 @@ export class ClientUpdateCoordinator {
         stateAvailable: false,
         newSnapshot: false,
         enemySnapshot: null,
+        mortarStrikes: [],
         carryItems: [],
         interpolationFactor: 0,
       });
@@ -634,6 +635,7 @@ export class ClientUpdateCoordinator {
       stateAvailable: true,
       newSnapshot: isNewData,
       enemySnapshot: state.enemies,
+      mortarStrikes: state.mortarStrikes,
       carryItems: state.coopDefenseCarry ?? [],
       interpolationFactor: lerpFactor,
     });

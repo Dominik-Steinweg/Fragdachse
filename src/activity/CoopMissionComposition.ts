@@ -115,7 +115,8 @@ export interface CoopMissionCompositionOptions {
   readonly markLightDirty: () => void;
   readonly grantPersistentBaseRewards: (rewardIds: readonly PersistentBaseRewardId[] | undefined) => void;
   readonly removeEnemyFromPlayerItems: (enemyId: string) => void;
-  readonly broadcastExplosion: (x: number, y: number, radius: number, style: 'timebomb' | 'timebomb_pop') => void;
+  readonly mortarImpact: import('../systems/CoopDefenseMortarStrikeSystem').CoopDefenseMortarImpactPort;
+  readonly broadcastExplosion: (x: number, y: number, radius: number, style: 'timebomb' | 'timebomb_pop' | 'mortar') => void;
   readonly broadcastCorpseMarker: (corpseId: number, x: number, y: number, enemySize: number, lifetimeMs: number) => void;
   readonly removeCorpseMarker: (corpseId: number) => void;
   readonly getNowMs: () => number;
@@ -307,6 +308,7 @@ export class CoopMissionComposition {
       playerModifierReadPort: this.options.getPlayerModifierReadPort(),
       removeEnemyFromPlayerItems: this.options.removeEnemyFromPlayerItems,
       damageConstruction: this.options.damageConstruction,
+      mortarImpact: this.options.mortarImpact,
       broadcastExplosion: this.options.broadcastExplosion,
       broadcastCorpseMarker: this.options.broadcastCorpseMarker,
       removeCorpseMarker: this.options.removeCorpseMarker,

@@ -432,7 +432,7 @@ describe('Coop defense map progression', () => {
   });
 
   it('rejects invalid dynamic time authoring', () => {
-    const base = getCoopDefenseMapConfig('0');
+    const base = { ...getCoopDefenseMapConfig('0'), encounters: [] };
     expect(() => normalizeCoopDefenseMapConfig({
       ...base,
       dynamicTimeOfDay: { minutesPerSecond: -1 },

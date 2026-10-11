@@ -8,6 +8,26 @@ Der Einstieg und die Bedienoberfläche werden vom normalen Produktionsbuild nich
 
 ## Bedienung
 
+### Mörser-Dachs: Gate 1
+
+Map `0` (`00-test`) enthält einen Mörser-Encounter. Für isolierte Versuche im bestehenden
+Dev-Szenario Map `0`, `suppressWaves: true` und einen festen Seed wählen. Einen freien Bereich
+mit etwa 700–1000 px Abstand zwischen Spieler/Konstrukt und Mörser suchen; eine Zelle hat 32 px.
+Über `target` zuerst die gewünschte freie Zelle auswählen, dann:
+
+```js
+devScenario.run({ action: 'spawn', kind: 'mortar-badger', pinned: false });
+```
+
+Mit dem Inspector einen ausgerüsteten Turm oder eine `rock_barrier` als Ziel platzieren
+(`build`, `id` und freie Grid-Koordinaten). Im offenen Bereich und anschließend mit mehreren
+natürlichen Felsen zwischen Ziel und Mörser wiederholen. Deckung beeinflusst Gate 1 noch nicht;
+Felsen dürfen nur beim Einschlag Kollateralschaden erhalten. Der Mörser nähert sich über das
+Flow-Field und hält während des offenen lila Zielkreises an. Das Ziel dann bewegen oder abbauen:
+Der markierte Punkt bleibt fest. Vor dem geschlossenen Ring töten → Abbruch; danach töten →
+Einschlag bleibt. Zusätzlich während des Windups in den Nahbereich laufen: kein Abbruch, aber
+kein nächster Windup, solange ein lebender Spieler innerhalb der Mindestreichweite bleibt.
+
 ### Kraken: Abgrundteich (Dev-Review)
 
 `kraken-abyss-lab` ist nur während des Dev-Szenario-Modus registriert und wird beim

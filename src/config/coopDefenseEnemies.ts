@@ -253,6 +253,26 @@ export interface CoopDefenseEnemyVoidFireChunkConfig extends FireChunkBurstConfi
 export interface CoopDefenseEnemyVoidFireTrailConfig extends GroundFireCellEffect {}
 
 /** Dreiphasige, zielgebundene Selbstzuendung des Zeitbombendachses. */
+export interface CoopDefenseEnemyMortarConfig {
+  readonly minRangePx: number;
+  readonly preferredRangeMinPx: number;
+  readonly maxRangePx: number;
+  readonly windupMs: number;
+  readonly flightMs: number;
+  readonly postImpactDelayMs: number;
+  readonly impactRadiusPx: number;
+  readonly maxDamage: number;
+  readonly minDamage: number;
+  readonly baseDamageMult: number;
+  readonly constructionDamageMult: number;
+  readonly rockDamageMult: number;
+  readonly trainDamageMult: number;
+  readonly targetWeights: Readonly<Record<'base' | 'armedConstruct' | 'construct' | 'barrier' | 'player', number>>;
+  readonly overlapPenalty: number;
+  readonly overlapMarginPx: number;
+  readonly reevaluateIntervalMs: number;
+}
+
 export interface CoopDefenseEnemyTimebombConfig {
   readonly chaseSpeedMultiplier: number;
   readonly activationRadiusPx: number;
@@ -313,6 +333,7 @@ export interface CoopDefenseEnemyConfig {
   readonly voidFireTrail?: CoopDefenseEnemyVoidFireTrailConfig;
   readonly voidMolotov?: CoopDefenseEnemyVoidMolotovConfig;
   readonly timebomb?: CoopDefenseEnemyTimebombConfig;
+  readonly mortar?: CoopDefenseEnemyMortarConfig;
   readonly stinkAura?: CoopDefenseEnemyStinkAuraConfig;
   readonly deathSpawns?: readonly CoopDefenseEnemyDeathSpawnConfig[];
   readonly trainAwareness?: CoopDefenseEnemyTrainAwarenessConfig;
@@ -412,6 +433,7 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         voidFireTrail: config.voidFireTrail,
         voidMolotov: config.voidMolotov,
         timebomb: config.timebomb,
+        mortar: config.mortar ? { ...config.mortar, targetWeights: { ...config.mortar.targetWeights } } : undefined,
         stinkAura: config.stinkAura,
         deathSpawns: config.deathSpawns,
         trainAwareness: config.trainAwareness,
@@ -515,6 +537,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     voidFireTrail: normalizeVoidFireTrailConfig(enemy.voidFireTrail),
     voidMolotov: normalizeVoidMolotovConfig(enemy.voidMolotov, enemy.id),
     timebomb: normalizeTimebombConfig(enemy.timebomb),
+    mortar: normalizeMortarConfig(enemy.mortar),
     stinkAura: normalizeStinkAuraConfig(enemy.stinkAura, enemy.id),
     deathSpawns: normalizeDeathSpawns(enemy.deathSpawns, enemy.id),
     trainAwareness: normalizeTrainAwareness(enemy.trainAwareness),
@@ -878,6 +901,24 @@ function normalizeMovementTarget(target: CoopDefenseEnemyMovementTarget): CoopDe
     return target;
   }
   throw new Error(`[coopDefenseEnemies] Unsupported movementTarget: ${String(target)}`);
+}
+
+export function normalizeMortarConfig(config: CoopDefenseEnemyMortarConfig | undefined): CoopDefenseEnemyMortarConfig | undefined {
+  if (!config) return undefined;
+  const normalized = { ...config, trainDamageMult: config.trainDamageMult ?? 0, targetWeights: { ...config.targetWeights } };
+  for (const key of ['minRangePx', 'preferredRangeMinPx', 'maxRangePx', 'windupMs', 'flightMs',
+    'postImpactDelayMs', 'impactRadiusPx', 'maxDamage', 'minDamage', 'baseDamageMult',
+    'constructionDamageMult', 'rockDamageMult', 'trainDamageMult', 'overlapPenalty', 'overlapMarginPx', 'reevaluateIntervalMs'] as const) {
+    const value = normalized[key];
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) throw new Error(`Invalid mortar.${key}`);
+  }
+  for (const key of ['base', 'armedConstruct', 'construct', 'barrier', 'player'] as const) {
+    if (!Number.isFinite(normalized.targetWeights[key]) || normalized.targetWeights[key] <= 0) throw new Error(`Invalid mortar.targetWeights.${key}`);
+  }
+  if (!(config.minRangePx < config.preferredRangeMinPx && config.preferredRangeMinPx <= config.maxRangePx)
+    || config.windupMs <= 0 || config.flightMs <= 0 || config.impactRadiusPx <= 0
+    || config.reevaluateIntervalMs <= 0 || config.minDamage > config.maxDamage) throw new Error('Invalid mortar ranges, timing or damage');
+  return normalized;
 }
 
 function normalizeTimebombConfig(

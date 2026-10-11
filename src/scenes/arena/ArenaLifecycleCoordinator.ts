@@ -1,3 +1,4 @@
+import { VOID_PALETTE } from '../../config';
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { type PersistentBaseHealthReward } from '../../persistentBase/PersistentBaseHealth';
 import { getDeferredAssets } from '../../assets/DeferredAssets';
@@ -867,7 +868,8 @@ export class ArenaLifecycleCoordinator {
       markLightDirty: () => this.worldRuntime?.materialization?.lightOccluders?.markDirty(),
       grantPersistentBaseRewards: (rewardIds) => this.persistentBase.grantAuthoredPersistentBaseRewards(rewardIds),
       removeEnemyFromPlayerItems: (enemyId) => this.worldPlayerGameplayRuntime?.getPlayerCombatIntegrationPort().reactions.removeEnemy(enemyId),
-      broadcastExplosion: (x, y, radius, style) => bridge.broadcastExplosionEffect(x, y, radius, 0xb82fff, style, undefined, style === 'timebomb_pop' ? 'silent' : 'enemy.timebomb'),
+      mortarImpact: { impact: (strike, nowMs) => this.hostUpdate.applyMortarStrikeDamage(strike, nowMs) },
+      broadcastExplosion: (x, y, radius, style) => bridge.broadcastExplosionEffect(x, y, radius, style === 'mortar' ? VOID_PALETTE.primary : 0xb82fff, style, undefined, style === 'timebomb_pop' ? 'silent' : style === 'mortar' ? 'generic' : 'enemy.timebomb'),
       broadcastCorpseMarker: (corpseId, x, y, enemySize, lifetimeMs) => (
         bridge.broadcastCorpseMarker(corpseId, x, y, enemySize, lifetimeMs)
       ),

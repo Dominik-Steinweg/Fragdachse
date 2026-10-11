@@ -423,7 +423,14 @@
       "respawnMs": 4000
     }
   ],
-  "encounters": [],
+  "encounters": [
+    {
+      "id": "mortar-gate-1",
+      "start": { "type": "time", "atMs": 3000 },
+      "groups": [{ "enemyKind": "mortar-badger", "count": 2, "spawnStaggerMs": 1500,
+        "spawnArea": { "gridX": 34, "gridY": 30, "widthCells": 4, "heightCells": 6 } }]
+    }
+  ],
   "persistentSpawns": [],
   "mapEvents": [],
   "secondaryObjectives": []

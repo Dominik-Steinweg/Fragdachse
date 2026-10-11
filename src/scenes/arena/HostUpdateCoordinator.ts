@@ -1,3 +1,5 @@
+import { applyHostileAreaStrikeDamage } from '../../systems/hostileAreaStrikeDamage';
+import type { MortarStrike } from '../../systems/CoopDefenseMortarStrikeSystem';
 import { mgTargetVisual } from '../../effects/MgAttritionVisualTarget';
 import { emptyMgAttritionSnapshot } from '../../systems/MgAttritionRuntime';
 import { getUtilityRechargeFraction } from '../../loadout/UtilityChargeState';
@@ -821,6 +823,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         const visual = manager?.getEnemy(id)?.getStatusVisualTarget();
         return visual ? { ...visual, entityGeneration: manager?.getCombatTargetRef(id)?.instance.entityGeneration } : null;
       }, id => this.baseManager?.getBase(id)));
+    const mortarStrikes = this.coopMissionRuntime?.getMortarSnapshot() ?? [];
     const airstrikes  = this.supportSystems?.airstrike?.getSnapshot()        ?? [];
     const meteors     = this.supportSystems?.armageddon?.getSnapshot()       ?? [];
     const train     = this.trainManager?.getNetSnapshot()        ?? null;
@@ -835,6 +838,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     this.visuals?.powerUp.updatePedestals(syncedNow);
     this.visuals?.nuke.sync(nukes);
     this.visuals?.airstrike.sync(airstrikes, syncedNow);
+    this.visuals?.mortarStrike.sync(mortarStrikes, syncedNow);
     this.visuals?.meteor.sync(meteors, syncedNow);
     if (!countdownActive) this.checkLocalPickup(powerups);
 
@@ -1199,6 +1203,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       powerups: this.powerUpSystem?.getNetSnapshot() ?? null,
       pedestals: this.powerUpSystem?.getPedestalNetSnapshot() ?? null,
       nukes,
+      mortarStrikes,
       airstrikes,
       meteors,
       tunnels: [...playerSnapshot.tunnels],
@@ -1691,70 +1696,47 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     cfg:         AirstrikeUltimateConfig,
     triggeredBy: string,
   ): void {
-    const arenaResult = this.arenaResult;
-    const falloff = { minDamage: cfg.minDamage };
     const isEnemyAirstrike = triggeredBy === COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID;
-
-    // Spieler-Schaden
-    this.ctx.getWorldCombatCore()!.applyAoeDamage(x, y, radius, cfg.maxDamage, triggeredBy, cfg.selfDamageMult > 0, {
-      category:       'explosion',
-      sourceId:     'environment.airstrike',
-      sourceSlot:     'ultimate',
-      allowTeamDamage: cfg.allowTeamDamage,
-      selfDamageMult:  cfg.selfDamageMult,
-      damageFalloff:   falloff,
-      skipEnemies:     cfg.skipEnemyDamage,
-      baseDamageMult:  isEnemyAirstrike ? 0 : (cfg.baseDamageMult ?? 1),
+    applyHostileAreaStrikeDamage({
+      x, y, radius, maxDamage: cfg.maxDamage, minDamage: cfg.minDamage,
+      attackerId: triggeredBy, sourceId: 'environment.airstrike', includeSelf: cfg.selfDamageMult > 0,
+      aoe: { sourceSlot: 'ultimate', allowTeamDamage: cfg.allowTeamDamage, selfDamageMult: cfg.selfDamageMult,
+        skipEnemies: cfg.skipEnemyDamage, baseDamageMult: isEnemyAirstrike ? 0 : (cfg.baseDamageMult ?? 1) },
+      friendlyBaseDamageMult: cfg.friendlyBaseDamageMult ?? 0,
+      rockDamageMult: cfg.rockDamageMult, trainDamageMult: cfg.trainDamageMult,
+    }, {
+      combat: this.ctx.getWorldCombatCore()!, bases: this.baseManager,
+      damageBase: (id, damage, multiplier) => this.ctx.getWorldCombatCore()!.applyBaseDamage(id, damage, triggeredBy, undefined, multiplier),
+      environment: this.arenaResult ? this.environmentRockSink : null,
+      isConstruction: id => !!this.placementSystem?.getRuntimeRock(id),
+      trainSegments: this.trainManager?.getNetSnapshot()?.alive ? this.trainManager.getSegmentPositions() : [],
+      damageTrain: damage => { this.worldMutation?.applyResolvedDamage('train', 'main', damage, triggeredBy, 'environment.airstrike', 'explosion'); },
     });
+  }
 
-    // Legacy-Semantik: Zombie-/Map-Luftangriffe treffen nur die eigenen Basen.
-    if ((cfg.friendlyBaseDamageMult ?? 0) > 0 && this.baseManager) {
-      // Zombie-Luftangriffe treffen nur eigene Basen.
-      for (const base of this.baseManager.getBasesByFaction('friendly')) {
-        if (base.isInert?.() === true) continue;
-        let minDist = Infinity;
-        for (const cell of base.getCellBodies()) {
-          const b  = cell.getBounds();
-          const dx = Math.max(b.left - x, 0, x - b.right);
-          const dy = Math.max(b.top  - y, 0, y - b.bottom);
-          const d  = Math.sqrt(dx * dx + dy * dy);
-          if (d < minDist) minDist = d;
+  applyMortarStrikeDamage(strike: MortarStrike, nowMs: number): void {
+    const { snapshot: shot, damage: cfg, source } = strike;
+    const ownerId = source.allegiance.ownerId;
+    applyHostileAreaStrikeDamage({
+      x: shot.targetX, y: shot.targetY, radius: shot.radius, maxDamage: cfg.maxDamage, minDamage: cfg.minDamage,
+      attackerId: ownerId, sourceId: 'enemy.mortar', source, includeSelf: false,
+      aoe: { source, baseDamageMult: 0 }, friendlyBaseDamageMult: cfg.baseDamageMult,
+      rockDamageMult: cfg.rockDamageMult, constructionDamageMult: cfg.constructionDamageMult, trainDamageMult: cfg.trainDamageMult,
+    }, {
+      combat: this.ctx.getWorldCombatCore()!, bases: this.baseManager,
+      damageBase: (id, damage, multiplier) => this.ctx.getWorldCombatCore()!.applyBaseStatusDamage(id, damage * multiplier, source, nowMs),
+      environment: this.arenaResult ? this.environmentRockSinkFor(source) : null,
+      isConstruction: id => !!this.placementSystem?.getRuntimeRock(id),
+      trainSegments: this.trainManager?.getNetSnapshot()?.alive ? this.trainManager.getSegmentPositions() : [],
+      damageTrain: damage => { this.worldMutation?.applyResolvedDamage('train', 'main', damage, ownerId, 'enemy.mortar', 'explosion', undefined, source); },
+      damageDecoys: (x, y, radius, damageAt) => {
+        for (const decoy of this.ctx.decoySystem.getHostTargets()) {
+          const distance = Math.hypot(decoy.x - x, decoy.y - y);
+          if (distance <= radius) this.ctx.decoySystem.applyDamage(decoy.id, Math.round(damageAt(distance)), ownerId,
+            'enemy.mortar', { sourceX: x, sourceY: y }, source);
         }
-        if (minDist > radius) continue;
-        const baseDmg = computeRadialDamage(minDist, radius, cfg.maxDamage, falloff);
-        if (baseDmg > 0) {
-          this.ctx.getWorldCombatCore()!.applyBaseDamage(
-            base.id, baseDmg, triggeredBy, undefined, cfg.friendlyBaseDamageMult,
-          );
-        }
-      }
-    }
-
-    // Felsen-Schaden
-    if (cfg.rockDamageMult !== 0 && arenaResult) {
-      applyRadialEnvironmentDamage(
-        this.environmentRockSink,
-        { x, y, radius, damage: cfg.maxDamage, rockDamageMult: cfg.rockDamageMult, falloff },
-        triggeredBy,
-        false,
-      );
-    }
-
-    // Zug-Schaden
-    if (cfg.trainDamageMult !== 0 && this.trainManager) {
-      const trainState = this.trainManager.getNetSnapshot();
-      if (trainState?.alive) {
-        let minDist = Infinity;
-        for (const seg of this.trainManager.getSegmentPositions()) {
-          const d = Phaser.Math.Distance.Between(x, y, seg.x, seg.y);
-          if (d < minDist) minDist = d;
-        }
-        if (minDist <= radius) {
-          const baseDmg = computeRadialDamage(minDist, radius, cfg.maxDamage, falloff);
-          this.worldMutation?.applyResolvedDamage('train', 'main', Math.round(baseDmg * cfg.trainDamageMult), triggeredBy, 'environment.airstrike', 'explosion');
-        }
-      }
-    }
+      },
+    });
   }
 
   /**

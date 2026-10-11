@@ -6,7 +6,7 @@ import * as Phaser from 'phaser';
 import { t } from '../i18n';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, SyncedCombatEffect, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
-import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, PLASMA_BURNER_COLOR, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
+import { BLOOD_HIT_VFX, COLORS, VOID_PALETTE, DAMAGE_VIGNETTE_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, PLASMA_BURNER_COLOR, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
 import {
   TEX_BLOOD_EDGE_BOTTOM,
   TEX_BLOOD_EDGE_LEFT,
@@ -1205,9 +1205,9 @@ export class EffectSystem implements EnemyVisualSink {
     const holyLike = style === 'holy';
     const thermalLike = isThermalExplosionStyle(style);
     const palette: ExplosionCombatPalette = {
-      core: thermalLike ? 0xfff2d0 : coreColor,
-      hot: thermalLike ? FLAME_JET_TINTS_HOT[2] : hotColor,
-      body: thermalLike ? FLAME_JET_TINTS_MID[1] : bodyColor,
+      core: style === 'mortar' ? VOID_PALETTE.core : thermalLike ? 0xfff2d0 : coreColor,
+      hot: style === 'mortar' ? VOID_PALETTE.bright : thermalLike ? FLAME_JET_TINTS_HOT[2] : hotColor,
+      body: style === 'mortar' ? VOID_PALETTE.primary : thermalLike ? FLAME_JET_TINTS_MID[1] : bodyColor,
       outer: thermalLike
         ? FLAME_JET_TINTS_COOL[0]
         : this.mixColor(bodyColor, holyLike ? 0xa86912 : (voidLike ? 0x25162e : (energyLike ? 0x15243b : 0x3a1710)), 0.54),

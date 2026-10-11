@@ -116,6 +116,11 @@
       "baseId": "ZOMBIE_BADGER_BITE",
       "_notes": "Bewusst gekoppelte Variante der bereits zuvor gemeinsam erzeugten Gegnerbiss-Familie."
     },
+    "MORTAR_BADGER_BITE": {
+      "id": "MORTAR_BADGER_BITE",
+      "_notes": "Mörser-Nahkampf nutzt die bestehende einfache Gegnerbiss-Familie.",
+      "baseId": "ZOMBIE_BADGER_BITE"
+    },
     "THROWER_BADGER_BITE": {
       "id": "THROWER_BADGER_BITE",
       "damage": 40,

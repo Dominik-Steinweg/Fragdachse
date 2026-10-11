@@ -26,6 +26,10 @@ const STANDARD: ExplosionVisualProfile = {
  */
 export const EXPLOSION_VISUAL_PROFILES = {
   default: STANDARD,
+  mortar: {
+    family: 'standard', layering: 'ordinary', countScale: 1, lifeScale: 1.1, bodyScale: 0.85,
+    smokeScale: 1.8, chunkScale: 0.8, upwardEmbers: false,
+  },
   he_cluster_shard: {
     family: 'standard', layering: 'ordinary', countScale: 0.4, lifeScale: 0.55, bodyScale: 0.75,
     smokeScale: 0.15, chunkScale: 0.25, upwardEmbers: false,

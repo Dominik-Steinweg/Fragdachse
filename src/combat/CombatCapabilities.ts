@@ -82,7 +82,8 @@ export interface CombatActorStatePort {
 }
 
 export interface CombatRelationshipQueryPort {
-  canDamageTarget(attackerId: string | undefined, targetId: string, allowTeamDamage?: boolean): boolean;
+  canDamageTarget(attackerId: string | undefined, targetId: string, allowTeamDamage?: boolean,
+    attackerFactionFallback?: 'hostile' | 'allied'): boolean;
 }
 
 export interface CombatGeometryPort {
@@ -123,6 +124,9 @@ export interface CombatDamageApplicationOptions {
 
 /** Explicit radial-effect modifiers used by migrated world/activity consumers. */
 export interface CombatAoeDamageOptions {
+  readonly damageFalloff?: RadialDamageFalloffConfig;
+  readonly selfDamageMult?: number;
+  readonly skipEnemies?: boolean;
   readonly vulnerabilityDurationMs?: number;
   readonly damageKind?: Extract<CombatDamageKind, 'explosion' | 'ground'>;
   readonly source?: CombatSource;

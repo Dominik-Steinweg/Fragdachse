@@ -21,7 +21,7 @@ describe('Earthbreak authoritative replication', () => {
       roundStartTime: 0, players: {}, projectiles: null, enemies: null, rocks: null,
       placeableRocks: [], reinforcementMatrices: [], energyInjectorEffects: [], energyInjectorFocus: [],
       remoteControlTurrets: [], decoys: [], smokes: [], fires: [], powerups: null, pedestals: null,
-      nukes: [], airstrikes: [], meteors: [], tunnels: [], train: null, bases: [], captureTheBeer: null,
+      nukes: [], mortarStrikes: [], airstrikes: [], meteors: [], tunnels: [], train: null, bases: [], captureTheBeer: null,
       coopDefenseCarry: [], stinkClouds: [], timeBubbles: [], teslaDomes: [], energyShields: [],
       guardianSpirits: [], repairDrones: [], slimeTrail: { cells: [], affectedEnemies: [] },
       targetVulnerabilities: [], ak47StrategicTargets: [], burningGround: { cells: [] },

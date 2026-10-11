@@ -69,7 +69,7 @@ import {
   type PeerPayloadDiagnostics,
 } from './peer';
 import { getOrCreateRoomResumeToken, readRoomCodeFromUrl } from '../utils/roomQuality';
-import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState, ExplosionVisualStyle, FireChunkFlight, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlacementPreviewNetState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedProjectileSnapshot, SyncedProjectileStatic, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
+import type { BurrowPhase, CaptureTheBeerFxEvent, CoopDefenseEncounterPresentationState, CoopDefenseMapEventPresentationState, CoopDefenseMapEventLifecycleState, CoopDefenseMapEventType, CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationState, CoopDefenseRespawnBudgetPlayerState, CoopDefenseRespawnBudgetState, ExplosionVisualStyle, FireChunkFlight, GameMode, GroundFireVisualStyle, HostHeldActionKind, HitscanImpactKind, HitscanVisualPreset, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, LobbyLoadoutPreviewState, PlacementPreviewNetState, PlayerInput, PlayerProfile, PlayerNetState, RoomQualitySnapshot, RoundParticipationState, ShieldBuffHudState, ShotAudioKey, SlimeBloomTarget, SpawnFront, SyncedActiveHudBuff, SyncedAirstrikeStrike, SyncedMortarStrike, SyncedBaseState, SyncedBurningGroundSnapshot, SyncedCaptureTheBeerState, SyncedCoopDefenseCarryState, SyncedCombatEffect, SyncedDecoy, SyncedEnergyInjectorEffect, SyncedEnergyInjectorFocus, SyncedEnergyShield, SyncedEnemySnapshot, SyncedFireZone, SyncedGuardianSpirit, SyncedHitscanTrace, SyncedMeleeSwing, SyncedMeteorStrike, SyncedNukeStrike, SyncedPlaceableRock, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot, SyncedProjectile, SyncedProjectileSnapshot, SyncedProjectileStatic, SyncedRemoteControlTurret, SyncedRepairDrone, SyncedReinforcementMatrix, SyncedRockSnapshot, SyncedSlimeTrailSnapshot, SyncedSmokeCloud, SyncedStinkCloud, SyncedTeslaDome, SyncedTimeBubble, SyncedTargetVulnerability, SyncedTrainState, SyncedTunnel, TeamId, TrainEventConfig, GamePhase, RockNetState } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import {
   clonePersistentPlayerBaseContribution,
@@ -373,6 +373,7 @@ export interface GameState {
   powerups:     SyncedPowerUp[];  // Power-Ups auf dem Boden
   pedestals:    SyncedPowerUpPedestal[]; // feste Power-Up-Podeste
   nukes:        SyncedNukeStrike[];
+  mortarStrikes: SyncedMortarStrike[];
   airstrikes:   SyncedAirstrikeStrike[];  // Luftangriff-Strikes (Warn- + Einschlagsphase)
   meteors:      SyncedMeteorStrike[];     // Armageddon-Meteore (Warn- + Einschlagsphase)
   tunnels:      SyncedTunnel[];
@@ -421,6 +422,7 @@ interface OutboundGameState {
   powerups:     SyncedPowerUpSnapshot | null;
   pedestals:    SyncedPowerUpPedestalSnapshot | null;
   nukes:        SyncedNukeStrike[];
+  mortarStrikes: SyncedMortarStrike[];
   airstrikes:   SyncedAirstrikeStrike[];
   meteors:      SyncedMeteorStrike[];
   tunnels:      SyncedTunnel[];
@@ -3151,6 +3153,7 @@ export class NetworkBridge {
     if (state.powerups)                payload.u = state.powerups;
     if (state.pedestals)               payload.pd = state.pedestals;
     if (state.nukes.length > 0)        payload.n  = state.nukes;
+    payload.mo = state.mortarStrikes; // Empty is meaningful; missing delta slices retain their previous value.
     if (state.airstrikes.length > 0)   payload.ak = state.airstrikes;
     if (state.meteors.length > 0)      payload.mt = state.meteors;
     if (state.tunnels.length > 0)      payload.tn = state.tunnels;
@@ -3258,6 +3261,7 @@ export class NetworkBridge {
       u: state.powerups ?? { full: true, count: 0, upserts: [], removals: [] } satisfies SyncedPowerUpSnapshot,
       pd: state.pedestals ?? { full: true, upserts: [], removals: [] } satisfies SyncedPowerUpPedestalSnapshot,
       n: state.nukes,
+      mo: state.mortarStrikes,
       ak: state.airstrikes,
       mt: state.meteors,
       tn: state.tunnels,
@@ -3388,6 +3392,7 @@ export class NetworkBridge {
       powerups:      nextPowerUps,
       pedestals:     nextPedestals,
       nukes:         (raw.n  as SyncedNukeStrike[]       | undefined) ?? [],
+      mortarStrikes: (raw.mo as SyncedMortarStrike[] | undefined) ?? this.cachedGameState?.mortarStrikes ?? [],
       airstrikes:    (raw.ak as SyncedAirstrikeStrike[] | undefined) ?? [],
       meteors:       (raw.mt as SyncedMeteorStrike[]    | undefined) ?? [],
       tunnels:       (raw.tn as SyncedTunnel[]          | undefined) ?? [],

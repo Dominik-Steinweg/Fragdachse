@@ -141,6 +141,9 @@ export class CoopMissionPresentationInfrastructure {
             );
           }
         },
+        syncMortarStrikes: (strikes, nowMs) => {
+          if (!this.destroyed) input.renderers.mortarStrike.sync(strikes, nowMs);
+        },
         syncCoopDefenseCarry: (items) => {
           if (!this.destroyed) input.renderers.beer.syncCoopDefenseCarry(items);
         },

@@ -1,3 +1,5 @@
+import { CoopDefenseMortarSystem } from '../systems/CoopDefenseMortarSystem';
+import { CoopDefenseMortarStrikeSystem, type CoopDefenseMortarImpactPort } from '../systems/CoopDefenseMortarStrikeSystem';
 import type { BaseManager } from '../entities/BaseManager';
 import type { CombatActivityPort } from '../combat/CombatCapabilities';
 import type { CoopMissionEnemySpecialRuntime, CoopMissionRuntime } from './CoopMissionRuntime';
@@ -16,6 +18,7 @@ import type { WorldMetrics } from '../world/WorldMetrics';
 import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecutionAdapter';
 
 export interface CoopMissionEnemySupportCompositionOptions {
+  readonly mortarImpact: CoopDefenseMortarImpactPort;
   readonly playerManager: PlayerManager;
   readonly combatSystem: CombatActivityPort;
   readonly baseManager: BaseManager | null;
@@ -33,7 +36,7 @@ export interface CoopMissionEnemySupportCompositionOptions {
     x: number,
     y: number,
     radius: number,
-    style: 'timebomb' | 'timebomb_pop',
+    style: 'timebomb' | 'timebomb_pop' | 'mortar',
   ) => void;
   readonly broadcastCorpseMarker: (
     corpseId: number,
@@ -111,6 +114,17 @@ export class CoopMissionEnemySupportComposition {
       runtime.setEnemySpecials(specials);
     }
 
+    if (runtime.enemyAiTargetCatalog) {
+      const strikes = new CoopDefenseMortarStrikeSystem({ impact: (strike, nowMs) => {
+        this.options.mortarImpact.impact(strike, nowMs);
+        const shot = strike.snapshot;
+        this.options.broadcastExplosion(shot.targetX, shot.targetY, shot.radius, 'mortar');
+      } });
+      runtime.setMortar(new CoopDefenseMortarSystem(enemyManager, this.options.playerManager,
+        this.options.combatSystem, runtime.enemyAiTargetCatalog, this.options.baseManager,
+        this.options.placementSystem, strikes), strikes);
+    }
+
     const necromancy = this.options.playerModifierReadPort && this.options.weaponExecution
       ? new NecromancySystem(
         this.options.playerManager,
@@ -129,6 +143,7 @@ export class CoopMissionEnemySupportComposition {
         runtime.coopDefenseEnemyAttackSystem?.setActionBlockedChecker((enemyId) => (
           (runtime.coopDefenseVoidHunterSystem?.blocksRegularAttacks(enemyId) ?? false)
           || (runtime.coopDefenseTimebombSystem?.blocksRegularBehavior(enemyId) ?? false)
+          || (runtime.coopDefenseMortarSystem?.blocksRegularAttacks(enemyId) ?? false)
           || (runtime.coopDefenseEnemyAbilitySystem?.blocksRegularAttacks(enemyId) ?? false)
         ));
         if (necromancy) {

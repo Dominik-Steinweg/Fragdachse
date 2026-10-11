@@ -324,6 +324,83 @@ function makeSupportCombatHarness() {
 }
 
 describe('CombatSystem base damage routing', () => {
+  it('retains hostile mortar allegiance after source removal and cannot damage its own faction', () => {
+    const { combat, players } = makeSupportCombatHarness();
+    const enemy = fakeEntity({ id: 'friendly-to-mortar', faction: 'hostile', x: 0, y: 0,
+      getHp: () => 100, getMaxHp: () => 100, isBurrowed: () => false });
+    const damage = vi.fn(() => ({ died: false, remainingHp: 100 }));
+    combat.setEnemyManager({ getAllEnemies: () => [enemy],
+      getEnemy: (id: string) => id === enemy.id ? enemy : undefined,
+      hasEnemy: (id: string) => id === enemy.id,
+      ...enemyMutationPort(enemy, damage),
+    } as never);
+    for (const player of players) { player.x = 0; player.y = 0; }
+    const source = { gameplaySource: { kind: 'enemy' as const, id: 'removed-mortar' },
+      actor: { kind: 'enemy' as const, id: 'removed-mortar' }, attribution: { kind: 'enemy' as const, id: 'removed-mortar' },
+      allegiance: { ownerId: 'removed-mortar', factionId: 'hostile' }, authoredSourceId: 'enemy.mortar', origin: 'explosion' as const };
+    combat.applyAoeDamage(0, 0, 50, 10, 'removed-mortar', false, { source, baseDamageMult: 0 });
+    expect(damage).not.toHaveBeenCalled();
+    for (const player of players) expect(combat.getHP(player.id)).toBe(90);
+  });
+  it('filters an untargetable player before applying a sourced AoE hit', () => {
+    const { combat } = makeSupportCombatHarness();
+    const source = combat.captureWorldDamageSource('shooter', 'grenade', 'explosion');
+    combat.setPlayerMountedResolver(id => id === 'victim');
+    const applyDamage = vi.spyOn(combat, 'applyDamage');
+
+    combat.applyAoeDamage(100, 20, 10, 10, 'shooter', false, { source, baseDamageMult: 0 });
+
+    expect(combat.getHP('victim')).toBe(100);
+    expect(applyDamage).not.toHaveBeenCalled();
+  });
+
+  it.each(['target', 'attacker'] as const)('respects a burrowed %s when an AoE retains its source', burrowed => {
+    const { combat } = makeSupportCombatHarness();
+    const enemy = fakeEntity({ id: 'enemy', faction: 'hostile', x: 100, y: 20,
+      getHp: () => 100, getMaxHp: () => 100, isBurrowed: () => true });
+    combat.setEnemyManager({
+      getAllEnemies: () => [enemy],
+      getEnemy: (id: string) => id === enemy.id ? enemy : undefined,
+      hasEnemy: (id: string) => id === enemy.id,
+    } as never);
+    const ownerId = burrowed === 'target' ? 'shooter' : enemy.id;
+    const source = combat.captureWorldDamageSource(ownerId, 'grenade', 'explosion');
+    const applyDamage = vi.spyOn(combat, 'applyDamage');
+    const applySlow = vi.spyOn(combat, 'applyEnemySlow');
+
+    combat.applyAoeDamage(100, 20, 10, 10, ownerId, false, {
+      source, baseDamageMult: 0, enemySlowFraction: 0.5, enemySlowDurationMs: 1000,
+      excludeTargetId: burrowed === 'target' ? 'victim' : undefined,
+    });
+
+    expect(combat.getHP('victim')).toBe(100);
+    expect(applyDamage).not.toHaveBeenCalled();
+    expect(applySlow).not.toHaveBeenCalled();
+  });
+
+  it('respects player action restrictions when an AoE retains its source', () => {
+    const { combat, bridge } = makeSupportCombatHarness();
+    const source = combat.captureWorldDamageSource('shooter', 'grenade', 'explosion');
+    vi.mocked(bridge.getPlayerProfile).mockReturnValue({ id: 'shooter' } as never);
+    combat.setPlayerActionAllowedResolver(() => false);
+    const applyDamage = vi.spyOn(combat, 'applyDamage');
+
+    combat.applyAoeDamage(100, 20, 10, 10, 'shooter', false, { source, baseDamageMult: 0 });
+
+    expect(combat.getHP('victim')).toBe(100);
+    expect(applyDamage).not.toHaveBeenCalled();
+  });
+
+  it('uses the registered attacker faction before the deferred faction fallback', () => {
+    const { combat } = makeSupportCombatHarness();
+    const enemy = fakeEntity({ id: 'enemy', faction: 'allied', isBurrowed: () => false });
+    combat.setEnemyManager({ getEnemy: (id: string) => id === enemy.id ? enemy : undefined } as never);
+
+    expect(combat.canDamageTarget(enemy.id, 'victim', false, 'hostile')).toBe(false);
+    expect(combat.canDamageTarget('removed-enemy', 'victim', false, 'hostile')).toBe(true);
+    expect(combat.canDamageTarget('removed-enemy', 'victim', false, 'allied')).toBe(false);
+  });
+
   it('damages only hostile combatants at an earth explosion centre and applies vulnerability after the hit', () => {
     const { combat, players } = makeSupportCombatHarness();
     let now = 1000, hp = 1000;

@@ -413,7 +413,7 @@ export type MeleeDamageTarget = 'players' | 'enemies' | 'decoys' | 'bases' | 'ro
 export type EnergyBallVariant = 'default' | 'plasma';
 
 /** Visueller Stil einer Explosion / Detonation. */
-export type ExplosionVisualStyle = 'default' | 'meteor' | 'he_cluster_shard' | 'he_demolition_shard' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'void_nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train' | 'brood_hatch' | 'regeneration' | 'timebomb' | 'timebomb_pop' | 'time_bubble_release' | 'asmd_combo';
+export type ExplosionVisualStyle = 'mortar' | 'default' | 'meteor' | 'he_cluster_shard' | 'he_demolition_shard' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'void_nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train' | 'brood_hatch' | 'regeneration' | 'timebomb' | 'timebomb_pop' | 'time_bubble_release' | 'asmd_combo';
 
 /** Linearer radialer Schadensabfall: innen maxDamage, am Rand minDamage. */
 export interface RadialDamageFalloffConfig {
@@ -2184,6 +2184,21 @@ export interface SyncedNukeStrike {
 }
 
 /** Aktiver Luftangriff-Strike (Host → Clients via GameState) */
+/** Presentation-only projection, with stable identity across windup and committed flight. */
+export interface SyncedMortarStrike {
+  id: number;
+  sourceEnemyId: string;
+  sourceX: number;
+  sourceY: number;
+  targetX: number;
+  targetY: number;
+  radius: number;
+  armedAt: number;
+  launchAt: number;
+  impactAt: number;
+  faction: 'hostile' | 'allied';
+}
+
 export interface SyncedAirstrikeStrike {
   id:          number;
   x:           number;

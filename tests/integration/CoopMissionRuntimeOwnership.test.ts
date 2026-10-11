@@ -38,6 +38,20 @@ function flowField(name: string, calls: string[]): CoopMissionNavigationRuntime[
 }
 
 describe('CoopMissionRuntime – konkrete Activity-Ownership', () => {
+  it('owns mortar windup and deferred flight together and releases both on Activity teardown', () => {
+    const runtime = new CoopMissionRuntime(descriptor());
+    const behavior = { clear: vi.fn(), getSnapshot: () => [{ id: 1 }], getMovementOverride: () => ({ vx: 0, vy: 0 }) };
+    const strikes = { clear: vi.fn(), getSnapshot: () => [{ id: 2 }] };
+    runtime.setMortar(behavior as never, strikes as never);
+    expect(runtime.getMortarSnapshot()).toEqual([{ id: 1 }, { id: 2 }]);
+    expect(() => runtime.setMortar(behavior as never, strikes as never)).toThrow(/already attached/);
+    runtime.destroy(); runtime.destroy();
+    expect(behavior.clear).toHaveBeenCalledOnce(); expect(strikes.clear).toHaveBeenCalledOnce();
+    expect(runtime.coopDefenseMortarSystem).toBeNull(); expect(runtime.coopDefenseMortarStrikeSystem).toBeNull();
+    expect(runtime.enemySpecialMovementSource).toBeNull(); expect(runtime.getMortarSnapshot()).toEqual([]);
+    expect(() => runtime.setMortar(behavior as never, strikes as never)).toThrow(/after destroy/);
+  });
+
   it('ticks the base burn only during active simulation and discards it on Activity end', () => {
     const runtime = new CoopMissionRuntime(descriptor());
     const burn = { hostUpdate: vi.fn(), destroy: vi.fn() };

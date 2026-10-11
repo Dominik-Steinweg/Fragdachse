@@ -22,12 +22,14 @@ function createHarness(): {
   readonly runtime: CoopMissionRuntime;
   readonly calls: string[];
   readonly carrySnapshots: readonly SyncedCoopDefenseCarryItem[][];
+  readonly mortarSnapshots: readonly import('../../src/types').SyncedMortarStrike[][];
   readonly progressTimes: readonly number[];
   readonly bossSnapshots: readonly import('../../src/effects/BossPresenceRenderer').BossPresenceSource[][];
   readonly clock: { now: number; arenaStart: number };
 } {
   const calls: string[] = [];
   const carrySnapshots: SyncedCoopDefenseCarryItem[][] = [];
+  const mortarSnapshots: import('../../src/types').SyncedMortarStrike[][] = [];
   const progressTimes: number[] = [];
   const bossSnapshots: import('../../src/effects/BossPresenceRenderer').BossPresenceSource[][] = [];
   const clock = { now: 1_000, arenaStart: 0 };
@@ -54,6 +56,7 @@ function createHarness(): {
     worldSpace: {
       syncEncounterTelegraph: () => calls.push('world:encounter'),
       syncSecondaryObjectiveMarkers: () => calls.push('world:secondary'),
+      syncMortarStrikes: strikes => { mortarSnapshots.push([...strikes]); },
       syncCoopDefenseCarry: (items) => {
         carrySnapshots.push([...items]);
         calls.push('world:carry-items');
@@ -94,10 +97,21 @@ function createHarness(): {
     ui,
   );
   const runtime = new CoopMissionRuntime(activity(1));
-  return { binding, runtime, calls, carrySnapshots, progressTimes, bossSnapshots, clock };
+  return { binding, runtime, calls, carrySnapshots, mortarSnapshots, progressTimes, bossSnapshots, clock };
 }
 
 describe('CoopMissionPresentationBinding', () => {
+  it('presents the mortar slice and clears scene-owned markers on Activity detach', () => {
+    const harness = createHarness();
+    harness.runtime.bind(harness.binding);
+    const shot = { id: 1, sourceEnemyId: 'mortar', sourceX: 0, sourceY: 0, targetX: 800, targetY: 0,
+      radius: 90, armedAt: 0, launchAt: 2000, impactAt: 3000, faction: 'hostile' as const };
+    harness.runtime.clientPresentationStep({ stateAvailable: true, newSnapshot: true, enemySnapshot: null,
+      carryItems: [], mortarStrikes: [shot], interpolationFactor: 0 });
+    expect(harness.mortarSnapshots.at(-1)).toEqual([shot]);
+    harness.runtime.destroy();
+    expect(harness.mortarSnapshots.at(-1)).toEqual([]);
+  });
   it('freezes displayed mission time and resumes without counting paused combat time', () => {
     const { binding, runtime, clock, progressTimes } = createHarness();
     runtime.bind(binding);
@@ -187,6 +201,7 @@ describe('CoopMissionPresentationBinding', () => {
       stateAvailable: true,
       newSnapshot: true,
       enemySnapshot: null,
+      mortarStrikes: [],
       carryItems: [{
         id: 'carry-a', objectiveId: 'objective-a', x: 10, y: 20, holderId: null, state: 'spawned',
       }],
@@ -215,6 +230,7 @@ describe('CoopMissionPresentationBinding', () => {
       stateAvailable: true,
       newSnapshot: true,
       enemySnapshot: null,
+      mortarStrikes: [],
       carryItems: [],
       interpolationFactor: 0.25,
     });

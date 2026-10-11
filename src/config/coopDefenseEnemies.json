@@ -769,6 +769,63 @@
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.8
       }
+    },
+    {
+      "id": "mortar-badger",
+      "eyeGlow": {
+        "color": 12070911
+      },
+      "pawCount": 4,
+      "maxHp": 45,
+      "xp": 35,
+      "size": 30,
+      "moveSpeed": 60,
+      "knockbackFactor": 0.5,
+      "movementTarget": "bases",
+      "weapons": [
+        {
+          "weaponId": "MORTAR_BADGER_BITE",
+          "targetMode": "all",
+          "meleeTiming": {
+            "hitDelayMs": 350,
+            "strikeMs": 80,
+            "recoveryMs": 220
+          }
+        }
+      ],
+      "attackScanIntervalMs": 180,
+      "attackStopDurationMs": 220,
+      "obstacleAttackDelayMs": 500,
+      "imageKey": "enemy_thrower_badger",
+      "color": 12070911,
+      "playerScaling": {
+        "maxHpFactorPerAdditionalPlayer": 0.8
+      },
+      "mortar": {
+        "minRangePx": 300,
+        "preferredRangeMinPx": 700,
+        "maxRangePx": 1000,
+        "windupMs": 2000,
+        "flightMs": 1000,
+        "postImpactDelayMs": 1000,
+        "impactRadiusPx": 90,
+        "maxDamage": 45,
+        "minDamage": 10,
+        "baseDamageMult": 1,
+        "constructionDamageMult": 1.5,
+        "rockDamageMult": 1,
+        "trainDamageMult": 0,
+        "targetWeights": {
+          "base": 5,
+          "armedConstruct": 5,
+          "construct": 3,
+          "barrier": 3,
+          "player": 1
+        },
+        "overlapPenalty": 4,
+        "overlapMarginPx": 30,
+        "reevaluateIntervalMs": 200
+      }
     }
   ]
 }

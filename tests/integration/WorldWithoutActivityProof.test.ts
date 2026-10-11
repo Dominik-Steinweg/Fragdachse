@@ -196,7 +196,7 @@ function worldSnapshot(
     powerups: null,
     pedestals: null,
     nukes: [],
-    airstrikes: [],
+    mortarStrikes: [], airstrikes: [],
     meteors: [],
     tunnels: [],
     train: null,
