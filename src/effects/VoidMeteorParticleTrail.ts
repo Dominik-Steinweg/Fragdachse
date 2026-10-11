@@ -7,6 +7,7 @@ import { ParticleFlowScheduler } from './gpu/ParticleFlowScheduler';
 const EFFECTS = [GpuVfxEffectId.VoidMeteorPlasma, GpuVfxEffectId.VoidMeteorSpark,
   GpuVfxEffectId.VoidMeteorSmoke, GpuVfxEffectId.VoidMeteorFragment, GpuVfxEffectId.VoidMeteorSpark] as const;
 const BASE_RATES = [260, 190, 72, 12, 420];
+const EDGE_MEMBERS_PER_TICK = 3;
 
 /** One bounded source per material, scheduled by the shared GPU tick after retirement.
  * Impact only stops emission; clear/teardown kills all surviving members with their sources. */
@@ -29,6 +30,7 @@ export class VoidMeteorParticleTrail {
 
   constructor(private readonly gpu: GpuVfxSystem) {
     this.specs = EFFECTS.map(effect => gpu.createSpec(effect));
+    this.specs[3].frame = GpuVfxFrameId.DeathMorphFrayed;
     this.glow = gpu.createSpec(GpuVfxEffectId.VoidMeteorPlasma);
     this.glow.frame = GpuVfxFrameId.DeathGlow;
     this.glowWidth = getGpuVfxFrame(this.glow.frame).width;
@@ -89,7 +91,9 @@ export class VoidMeteorParticleTrail {
       if (this.sources[layer] < 0) continue;
       const flow = this.flows[layer];
       flow.setFrequency(frequency);
-      const count = Math.min(50, flow.tick(dt));
+      // Keep quality-scaled scheduling below 1 kHz; three interleaved fibres per edge tick
+      // avoid the scheduler's 1 ms floor and retain the same scaling on every quality tier.
+      const count = Math.min(50, flow.tick(dt)) * (layer === 4 ? EDGE_MEMBERS_PER_TICK : 1);
       for (let i = 0; i < count; i++) this.spawn(layer, now, (i + 0.5) / count);
     }
     this.previousX = this.x; this.previousY = this.y;
@@ -132,25 +136,34 @@ export class VoidMeteorParticleTrail {
       spec.alphaStart = 0.62; spec.tint = 0x674773;
     } else {
       spec.lifeMs = 1400 + this.random() * 700;
-      spec.scaleStart = (18 + this.random() * 14) / this.widths[layer];
+      // The chipped motif occupies ~42% of its padded frame. One dark member, no bright
+      // polygon copy: the old translucent six-sided rim read as a large bokeh disc.
+      spec.scaleStart = (10 + this.random() * 8) / (this.widths[layer] * 0.42);
       spec.scaleEnd = spec.scaleStart * 0.6;
       spec.stretchStart = 0.7 + this.random() * 0.85; spec.stretchEnd = spec.stretchStart;
-      spec.alphaStart = 0.90; spec.tint = 0x9864ad;
-      // Two matching ordered material members: a hot outer crust and smaller dark centre.
-      // Their shared motion/rotation preserves a readable rim without new atlas artwork.
-      this.gpu.spawn(spec, this.sources[layer], now);
-      spec.scaleStart *= 0.83; spec.scaleEnd *= 0.83; spec.tint = 0x49324f;
+      spec.alphaStart = 1; spec.tint = 0x160a22;
     }
     this.gpu.spawn(spec, this.sources[layer], now);
     if (layer >= 2 && this.sources[0] >= 0) {
-      // Same trajectory: diffuse underlighting in the smoke, a restrained halo around each crust.
+      // Smoke underlighting is unchanged. Fragments carry only a small core-facing ember,
+      // never a luminous copy of their full silhouette.
       const glow = this.glow;
       glow.x = spec.x; glow.y = spec.y; glow.vx = spec.vx; glow.vy = spec.vy;
       glow.lifeMs = layer === 2 ? 1800 : spec.lifeMs;
-      glow.scaleStart = spec.scaleStart * this.widths[layer] * (layer === 2 ? 1.5 : 1.8) / this.glowWidth;
+      const width = spec.scaleStart * this.widths[layer] * (layer === 3 ? 0.42 : 1);
+      if (layer === 3) {
+        const towardCore = width * 0.28 / Math.hypot(along, side);
+        const offsetX = (-dx * along + dy * side) * towardCore;
+        const offsetY = (-dy * along - dx * side) * towardCore;
+        glow.x += offsetX; glow.y += offsetY;
+        // Follow the body's shrinking edge over its lifetime.
+        glow.vx -= offsetX * 0.4 / (spec.lifeMs / 1000);
+        glow.vy -= offsetY * 0.4 / (spec.lifeMs / 1000);
+      }
+      glow.scaleStart = width * (layer === 2 ? 1.5 : 0.45) / this.glowWidth;
       glow.scaleEnd = glow.scaleStart * (layer === 2 ? 2.0 : 0.6);
-      glow.alphaStart = layer === 2 ? 0.012 : 0.12;
-      glow.tint = layer === 2 ? 0x642b95 : 0xb672f4;
+      glow.alphaStart = layer === 2 ? 0.012 : 0.65;
+      glow.tint = layer === 2 ? 0x642b95 : 0xbe68f7;
       this.gpu.spawn(glow, this.sources[0], now);
     }
   }
@@ -159,8 +172,10 @@ export class VoidMeteorParticleTrail {
     const spec = this.specs[4];
     const dx = this.dx, dy = this.dy;
     let along: number, side: number;
-    if (this.edgeRandom() < 0.64) {
-      const angle = this.edgeRandom() * Math.PI * 2;
+    const region = this.edgeRandom();
+    const front = region < 0.60;
+    if (region < 0.72) {
+      const angle = front ? (this.edgeRandom() - 0.5) * 2.9 : this.edgeRandom() * Math.PI * 2;
       const radius = 112 + this.edgeRandom() * 24;
       along = Math.cos(angle) * radius;
       side = Math.sin(angle) * radius;
@@ -171,19 +186,19 @@ export class VoidMeteorParticleTrail {
     }
     // Small, asynchronous eddies peel fibres off both flanks; motion and rotation run on GPU.
     const eddy = Math.sin(now * 0.009 + along * 0.035 + side * 0.021);
-    const spread = Math.sign(side) * (16 + this.edgeRandom() * 32) + eddy * 28;
-    const retreat = 130 + this.edgeRandom() * 160;
+    const spread = Math.sign(side) * ((front ? 85 : 20) + this.edgeRandom() * 40) + eddy * 28;
+    const retreat = 160 + this.edgeRandom() * 160;
     spec.x = this.previousX + (this.x - this.previousX) * fraction + dx * along - dy * side;
     spec.y = this.previousY + (this.y - this.previousY) * fraction + dy * along + dx * side;
     spec.vx = -dx * retreat - dy * spread; spec.vy = -dy * retreat + dx * spread;
     spec.rotation = Math.atan2(spec.vy, spec.vx) + eddy * 0.2;
     spec.angularVelocity = eddy * 1.4;
-    spec.lifeMs = 280 + this.edgeRandom() * 340;
-    spec.scaleStart = (2 + this.edgeRandom()) / this.widths[4];
-    spec.scaleEnd = spec.scaleStart * 0.18;
-    spec.stretchStart = 1 + this.edgeRandom(); spec.stretchEnd = 2.5;
-    spec.alphaStart = 0.65 + this.edgeRandom() * 0.3;
-    spec.tint = 0xd7a0ff; spec.tintBlendStart = 0.15; spec.tintBlendEnd = 1;
+    spec.lifeMs = 400 + this.edgeRandom() * 500;
+    spec.scaleStart = (2.8 + this.edgeRandom() * 1.4) / this.widths[4];
+    spec.scaleEnd = spec.scaleStart * 0.35;
+    spec.stretchStart = 3 + this.edgeRandom() * 4; spec.stretchEnd = 5;
+    spec.alphaStart = 1;
+    spec.tint = 0xe9caff; spec.tintBlendStart = 0.03; spec.tintBlendEnd = 1;
     this.gpu.spawn(spec, this.sources[4], now);
   }
 }
