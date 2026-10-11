@@ -797,7 +797,6 @@
       "attackStopDurationMs": 220,
       "obstacleAttackDelayMs": 500,
       "imageKey": "enemy_mortar_badger",
-      "color": 12070911,
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.8
       },
