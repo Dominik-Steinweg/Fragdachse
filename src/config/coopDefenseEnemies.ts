@@ -270,6 +270,9 @@ export interface CoopDefenseEnemyMortarConfig {
   readonly rockDamageMult: number;
   readonly trainDamageMult: number;
   readonly targetWeights: Readonly<Record<'base' | 'armedConstruct' | 'construct' | 'barrier' | 'player', number>>;
+  readonly alliedTargetCandidateLimit: number;
+  /** Relative density contribution of bosses; [0, 1] never gives them a bonus. */
+  readonly alliedBossWeight: number;
   readonly overlapPenalty: number;
   readonly overlapMarginPx: number;
   readonly reevaluateIntervalMs: number;
@@ -917,6 +920,10 @@ export function normalizeMortarConfig(config: CoopDefenseEnemyMortarConfig | und
   for (const key of ['base', 'armedConstruct', 'construct', 'barrier', 'player'] as const) {
     if (!Number.isFinite(normalized.targetWeights[key]) || normalized.targetWeights[key] <= 0) throw new Error(`Invalid mortar.targetWeights.${key}`);
   }
+  if (!Number.isSafeInteger(config.alliedTargetCandidateLimit) || config.alliedTargetCandidateLimit < 1)
+    throw new Error('Invalid mortar.alliedTargetCandidateLimit');
+  if (!Number.isFinite(config.alliedBossWeight) || config.alliedBossWeight < 0 || config.alliedBossWeight > 1)
+    throw new Error('Invalid mortar.alliedBossWeight');
   if (!(config.minRangePx < config.preferredRangeMinPx && config.preferredRangeMinPx <= config.maxRangePx)
     || config.windupMs <= 0 || config.flightMs <= 0 || config.impactRadiusPx <= 0
     || config.reevaluateIntervalMs <= 0 || config.minDamage > config.maxDamage) throw new Error('Invalid mortar ranges, timing or damage');

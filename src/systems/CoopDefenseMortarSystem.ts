@@ -1,6 +1,6 @@
 import { getCoopDefenseEnemyConfig, type CoopDefenseEnemyMortarConfig } from '../config/coopDefenseEnemies';
 import { getCoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
-import type { CombatActorStatePort } from '../combat/CombatCapabilities';
+import type { CombatActorStatePort, CombatRelationshipQueryPort } from '../combat/CombatCapabilities';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyDeathInfo, EnemyManager, EnemySpecialMovementSource } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
@@ -9,6 +9,7 @@ import type { PlacementSystem } from './PlacementSystem';
 import type { EnemyAiTargetCatalog } from './EnemyAiTargetCatalog';
 import type { SyncedMortarStrike } from '../types';
 import { CoopDefenseMortarStrikeSystem, type MortarStrike } from './CoopDefenseMortarStrikeSystem';
+import { selectAlliedMortarTarget } from './mortarAlliedTargeting';
 
 interface MortarBehavior {
   windup: MortarStrike | null;
@@ -24,7 +25,7 @@ export class CoopDefenseMortarSystem implements EnemySpecialMovementSource {
   constructor(
     private readonly enemies: Pick<EnemyManager, 'getAllEnemies'>,
     private readonly players: Pick<PlayerManager, 'getAllPlayers'>,
-    private readonly combat: Pick<CombatActorStatePort, 'isAlive'>,
+    private readonly combat: Pick<CombatActorStatePort, 'isAlive'> & CombatRelationshipQueryPort,
     private readonly catalog: EnemyAiTargetCatalog,
     private readonly bases: Pick<BaseManager, 'getBasesByFaction'> | null,
     private readonly placement: Pick<PlacementSystem, 'getAllRuntimeRocks' | 'getWorldPointForCell'>,
@@ -45,12 +46,15 @@ export class CoopDefenseMortarSystem implements EnemySpecialMovementSource {
         else enemy.stopMovement();
         continue;
       }
-      // Gate 1: resurrected allies retain their regular attack behavior only.
-      if (enemy.faction !== 'hostile' || nowMs < state.readyAt || nowMs < state.evaluateAt) continue;
+      // Gate 3 allied dispatch: hostile selection/positioning stays on its existing path.
+      if (nowMs < state.readyAt || nowMs < state.evaluateAt) continue;
       state.evaluateAt = nowMs + config.reevaluateIntervalMs;
-      if (this.players.getAllPlayers().some(player => player.active && this.combat.isAlive(player.id)
+      if (enemy.faction === 'hostile' && this.players.getAllPlayers().some(player => player.active && this.combat.isAlive(player.id)
         && Math.hypot(player.x - enemy.sprite.x, player.y - enemy.sprite.y) < config.minRangePx)) continue;
-      const target = this.chooseTarget(enemy, config, nowMs);
+      const target = enemy.faction === 'allied'
+        ? selectAlliedMortarTarget(enemy, this.enemies.getAllEnemies(), config,
+          [...this.getSnapshot(), ...this.strikes.getSnapshot()], nowMs, id => this.combat.canDamageTarget(enemy.id, id))
+        : this.chooseTarget(enemy, config, nowMs);
       if (!target) continue;
       const angle = Math.atan2(target.y - enemy.sprite.y, target.x - enemy.sprite.x);
       state.windupAngle = angle;
@@ -68,7 +72,8 @@ export class CoopDefenseMortarSystem implements EnemySpecialMovementSource {
         snapshot, damage: { ...config, targetWeights: { ...config.targetWeights } },
         source: {
           gameplaySource: { kind: 'enemy', id: enemy.id }, actor: { kind: 'enemy', id: enemy.id },
-          attribution: { kind: 'enemy', id: enemy.id },
+          attribution: enemy.faction === 'allied' && enemy.ownerId
+            ? { kind: 'player', id: enemy.ownerId } : { kind: 'enemy', id: enemy.id },
           allegiance: { ownerId: enemy.id, factionId: enemy.faction },
           authoredSourceId: 'enemy.mortar', origin: 'explosion',
         },

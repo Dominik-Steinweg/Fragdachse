@@ -23,7 +23,7 @@ function fixture() {
   const impact = vi.fn();
   const strikes = new CoopDefenseMortarStrikeSystem({ impact });
   const mortar = new CoopDefenseMortarSystem({ getAllEnemies: () => enemies },
-    { getAllPlayers: () => players } as never, { isAlive: () => true }, catalog, null,
+    { getAllPlayers: () => players } as never, { isAlive: () => true, canDamageTarget: () => true }, catalog, null,
     { getAllRuntimeRocks: () => rocks, getWorldPointForCell: (x, y) => ({ x, y }) }, strikes);
   const snapshot = () => [...mortar.getSnapshot(), ...strikes.getSnapshot()];
   const update = (now: number) => { mortar.hostUpdate(now); strikes.hostUpdate(now); };
@@ -154,9 +154,28 @@ describe('mortar behavior and deferred execution', () => {
     expect(second.launchAt - first.launchAt).toBeGreaterThanOrEqual(config.windupMs + config.flightMs + config.postImpactDelayMs);
   });
 
-  it('allied mortars never start a windup or block normal behavior', () => {
+  it('allied mortars without hostile targets never wind up against players or constructs', () => {
     const f = fixture(); f.enemy.faction = 'allied'; f.update(0); f.update(config.windupMs);
     expect(f.snapshot()).toEqual([]); expect(f.mortar.getMovementOverride(f.enemy, 0)).toBeNull();
+  });
+
+  it('allied windups ignore nearby players, freeze the target and capture owner credit before launch', () => {
+    const f = fixture(); f.enemy.faction = 'allied'; f.enemy.ownerId = 'necromancer';
+    f.players[0].x = 0;
+    const target = { ...f.enemy, id: 'hostile', kind: 'zombie-badger', faction: 'hostile',
+      sprite: { active: true, x: config.preferredRangeMinPx, y: 0 },
+      isBurrowed: () => false, isBoss: () => false } as EnemyEntity;
+    f.enemies.push(target); f.update(0);
+    const shot = f.snapshot()[0];
+    expect(shot).toMatchObject({ faction: 'allied', targetX: config.preferredRangeMinPx });
+    expect(f.mortar.blocksRegularAttacks(f.enemy.id)).toBe(true);
+    target.sprite.x = 1; f.enemy.ownerId = 'changed-owner';
+    f.update(shot.launchAt - 1); expect(f.snapshot()).toEqual([shot]);
+    f.update(shot.launchAt); f.enemies.length = 0; f.update(shot.impactAt);
+    expect(f.impact.mock.calls[0][0].source).toMatchObject({
+      attribution: { kind: 'player', id: 'necromancer' },
+      allegiance: { ownerId: f.enemy.id, factionId: 'allied' },
+    });
   });
 
   it('composes movement overrides in order, preserving the first non-null override', () => {
@@ -174,6 +193,10 @@ describe('mortar behavior and deferred execution', () => {
     expect(normalizeMortarConfig({ ...config, muzzleForwardPx: undefined })!.muzzleForwardPx).toBe(0);
     for (const value of [-1, NaN, Infinity])
       expect(() => normalizeMortarConfig({ ...config, muzzleForwardPx: value })).toThrow('muzzleForwardPx');
+    for (const value of [0, -1, 1.5, NaN, Infinity, undefined])
+      expect(() => normalizeMortarConfig({ ...config, alliedTargetCandidateLimit: value } as never)).toThrow('alliedTargetCandidateLimit');
+    for (const value of [-1, 1.1, NaN, Infinity, undefined])
+      expect(() => normalizeMortarConfig({ ...config, alliedBossWeight: value } as never)).toThrow('alliedBossWeight');
     const resolved = resolveCoopDefenseEnemyConfigs(1)['mortar-badger'].mortar!;
     expect(resolved).toEqual(config); expect(resolved).not.toBe(config);
     expect(resolved.targetWeights).not.toBe(config.targetWeights);

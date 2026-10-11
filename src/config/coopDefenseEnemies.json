@@ -824,6 +824,8 @@
           "player": 1
         },
         "overlapPenalty": 4,
+        "alliedTargetCandidateLimit": 12,
+        "alliedBossWeight": 1,
         "overlapMarginPx": 30,
         "reevaluateIntervalMs": 200
       }
