@@ -4820,7 +4820,7 @@
           "name": "move",
           "motion": "kraken_land_move",
           "frameCount": 12,
-          "frameRate": 12,
+          "frameRate": 24,
           "loop": true
         },
         {
@@ -4842,7 +4842,7 @@
           "frameRate": 24,
           "loop": false,
           "markers": {
-            "strike": 7,
+            "strike": 8,
             "impact": 11
           }
         },
