@@ -116,7 +116,7 @@ export interface CoopMissionCompositionOptions {
   readonly grantPersistentBaseRewards: (rewardIds: readonly PersistentBaseRewardId[] | undefined) => void;
   readonly removeEnemyFromPlayerItems: (enemyId: string) => void;
   readonly mortarImpact: import('../systems/CoopDefenseMortarStrikeSystem').CoopDefenseMortarImpactPort;
-  readonly broadcastExplosion: (x: number, y: number, radius: number, style: 'timebomb' | 'timebomb_pop' | 'mortar') => void;
+  readonly broadcastExplosion: (x: number, y: number, radius: number, style: 'timebomb' | 'timebomb_pop' | 'mortar', color?: number) => void;
   readonly broadcastCorpseMarker: (corpseId: number, x: number, y: number, enemySize: number, lifetimeMs: number) => void;
   readonly removeCorpseMarker: (corpseId: number) => void;
   readonly getNowMs: () => number;

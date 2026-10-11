@@ -254,6 +254,8 @@ export interface CoopDefenseEnemyVoidFireTrailConfig extends GroundFireCellEffec
 
 /** Dreiphasige, zielgebundene Selbstzuendung des Zeitbombendachses. */
 export interface CoopDefenseEnemyMortarConfig {
+  /** Forward distance from body center to muzzle, in world pixels; omitted means centered. */
+  readonly muzzleForwardPx?: number;
   readonly minRangePx: number;
   readonly preferredRangeMinPx: number;
   readonly maxRangePx: number;
@@ -905,8 +907,8 @@ function normalizeMovementTarget(target: CoopDefenseEnemyMovementTarget): CoopDe
 
 export function normalizeMortarConfig(config: CoopDefenseEnemyMortarConfig | undefined): CoopDefenseEnemyMortarConfig | undefined {
   if (!config) return undefined;
-  const normalized = { ...config, trainDamageMult: config.trainDamageMult ?? 0, targetWeights: { ...config.targetWeights } };
-  for (const key of ['minRangePx', 'preferredRangeMinPx', 'maxRangePx', 'windupMs', 'flightMs',
+  const normalized = { ...config, muzzleForwardPx: config.muzzleForwardPx ?? 0, trainDamageMult: config.trainDamageMult ?? 0, targetWeights: { ...config.targetWeights } };
+  for (const key of ['muzzleForwardPx', 'minRangePx', 'preferredRangeMinPx', 'maxRangePx', 'windupMs', 'flightMs',
     'postImpactDelayMs', 'impactRadiusPx', 'maxDamage', 'minDamage', 'baseDamageMult',
     'constructionDamageMult', 'rockDamageMult', 'trainDamageMult', 'overlapPenalty', 'overlapMarginPx', 'reevaluateIntervalMs'] as const) {
     const value = normalized[key];

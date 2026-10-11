@@ -794,8 +794,7 @@ export const GPU_LAYER_CONTRACTS = {
       "E"
     ],
     "role": "effect"
-  }
-,
+  },
   "TrainAftermathSmoke": {"id": "lane:TrainAftermathSmoke", "owner": "effects/gpu/GpuVfxRenderLanes.ts", "component": "TrainAftermathSmoke", "height": "body", "lighting": "material", "camera": "world", "depths": [13.2], "blends": ["NORMAL"], "profiles": ["K"], "role": "effect"},
   // train8: rising fragments only; they break before landing. Small landed chips use TrainResidue/TrainGround (5.35).
   "TrainAftermathDebris": {"id": "lane:TrainAftermathDebris", "owner": "effects/gpu/GpuVfxRenderLanes.ts", "component": "TrainAftermathDebris", "height": "body", "lighting": "material", "camera": "world", "depths": [11.2], "blends": ["NORMAL"], "profiles": ["K"], "role": "effect"},
@@ -2808,10 +2807,22 @@ export const GPU_EFFECT_CONTRACTS = {
     "height": "body", "lighting": "emissive", "camera": "world", "depths": [19.6],
     "blends": ["ADD"], "profiles": ["E"], "role": "effect", "lanes": ["ExplosionLowGlow"]
   }
+,
+  "MortarCharge": {"id":"gpu:MortarCharge","owner":"effects/gpu/GpuVfxEffects.ts","component":"MortarCharge","height":"body","lighting":"emissive","camera":"world","depths":[19.6],"blends":["ADD"],"profiles":["E"],"role":"effect","lanes":["ExplosionLowGlow"]},
+  "MortarBurst": {"id":"gpu:MortarBurst","owner":"effects/gpu/GpuVfxEffects.ts","component":"MortarBurst","height":"body","lighting":"emissive","camera":"world","depths":[19.6],"blends":["ADD"],"profiles":["E"],"role":"effect","lanes":["ExplosionLowGlow"]},
+  "MortarSmoke": {"id":"gpu:MortarSmoke","owner":"effects/gpu/GpuVfxEffects.ts","component":"MortarSmoke","height":"body","lighting":"material","camera":"world","depths":[13.36],"blends":["NORMAL"],"profiles":["K"],"role":"effect","lanes":["ExplosionLowSmoke"]},
 } as const satisfies Record<keyof typeof GpuVfxEffectId, LayerContract & {readonly lanes: readonly (keyof typeof GpuVfxLaneId)[]}>;
 export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
-  { id: 'mortar:marker', owner: 'effects/MortarStrikeRenderer.ts', component: 'markers', height: 'ground', lighting: 'emissive', camera: 'world', depths: [19.8], blends: ['NORMAL'], profiles: ['E'], role: 'ui', source: { selector: 'sync/marker/setDepth/0', expression: '19.8' } },
-  { id: 'mortar:shadow', owner: 'effects/MortarStrikeRenderer.ts', component: 'shadows', height: 'ground', lighting: 'material', camera: 'world', depths: [5.1], blends: ['NORMAL'], profiles: ['G'], role: 'effect', source: { selector: 'sync/shadow/setDepth/0', expression: '5.1' } },
+  {"id":"mortar:contraction","owner":"effects/MortarStrikeRenderer.ts","component":"contraction","height":"ground","lighting":"emissive","camera":"world","depths":[19.8],"blends":["NORMAL"],"profiles":["E"],"role":"ui","source":{"selector":"createVisual/contraction/setDepth/0","expression":"19.8"}},
+  {"id":"mortar:shadowRim","owner":"effects/MortarStrikeRenderer.ts","component":"shadowRim","height":"ground","lighting":"emissive","camera":"world","depths":[19.8],"blends":["NORMAL"],"profiles":["E"],"role":"ui","source":{"selector":"createVisual/shadowRim/setDepth/0","expression":"19.8"}},
+  {"id":"mortar:arrow","owner":"effects/MortarStrikeRenderer.ts","component":"arrow","height":"body","lighting":"emissive","camera":"clarity","depths":[100],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"module/arrow/setDepth/0","expression":"DEPTH.OVERLAY"}},
+  {"id":"mortar:marker","owner":"effects/MortarStrikeRenderer.ts","component":"marker","height":"ground","lighting":"emissive","camera":"world","depths":[19.8],"blends":["NORMAL"],"profiles":["E"],"role":"ui","source":{"selector":"createVisual/marker/setDepth/0","expression":"19.8"}},
+  {"id":"mortar:shade","owner":"effects/MortarStrikeRenderer.ts","component":"shade","height":"ground","lighting":"material","camera":"world","depths":[5.1],"blends":["NORMAL"],"profiles":["G"],"role":"effect","source":{"selector":"createVisual/shade/setDepth/0","expression":"5.1"}},
+  {"id":"mortar:shadow","owner":"effects/MortarStrikeRenderer.ts","component":"shadow","height":"ground","lighting":"material","camera":"world","depths":[5.1],"blends":["NORMAL"],"profiles":["G"],"role":"effect","source":{"selector":"createVisual/shadow/setDepth/0","expression":"5.1"}},
+  {"id":"mortar:glow","owner":"effects/MortarStrikeRenderer.ts","component":"glow","height":"body","lighting":"emissive","camera":"world","depths":[19.7],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"createVisual/glow/setDepth/0","expression":"19.7"}},
+  {"id":"mortar:core","owner":"effects/MortarStrikeRenderer.ts","component":"core","height":"body","lighting":"emissive","camera":"world","depths":[19.7],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"createVisual/core/setDepth/0","expression":"19.7"}},
+  {"id":"mortar:wave","owner":"effects/MortarStrikeRenderer.ts","component":"wave","height":"body","lighting":"emissive","camera":"world","depths":[19.7],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"createVisual/wave/setDepth/0","expression":"19.7"}},
+  {"id":"mortar:shell","owner":"effects/MortarStrikeRenderer.ts","component":"shell","height":"body","lighting":"material","camera":"world","depths":[13.39],"blends":["NORMAL"],"profiles":["K"],"role":"effect","source":{"selector":"createVisual/shell/setDepth/0","expression":"13.39"}},
   {"id":"cpu:ui/AfterRoundTransition.ts:overlayTransitionView/root/setDepth/0","owner":"ui/AfterRoundTransition.ts","component":"overlayTransitionView/root/setDepth/0","height":"body","lighting":"material","camera":"clarity","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"overlayTransitionView/root/setDepth/0","expression":"value"}},
   {"id":"cpu:ui/AfterRoundTransition.ts:overlayTransitionView/root/setDepth/1","owner":"ui/AfterRoundTransition.ts","component":"overlayTransitionView/root/setDepth/1","height":"body","lighting":"material","camera":"clarity","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"overlayTransitionView/root/setDepth/1","expression":"depth"}},
   {"id":"cpu:ui/AfterRoundTransition.ts:opening/view/setDepth/0","owner":"ui/AfterRoundTransition.ts","component":"opening/view/setDepth/0","height":"body","lighting":"material","camera":"clarity","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"opening/view/setDepth/0","expression":"Math.max(view.depth, (this.source?.depth ?? view.depth) + 1)"}},
@@ -3304,10 +3315,7 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:ui/UiContextMenu.ts:open/this.container/setDepth/0","owner":"ui/UiContextMenu.ts","component":"open/this.container/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[103],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"open/this.container/setDepth/0","expression":"this.standaloneDepth"}},
 ];
 export const CPU_SOURCE_CONTRACTS = {
-  'effects/MortarStrikeRenderer.ts': { bindings: {}, blends: [], cameras: [], sites: [
-    { key: 'sync/marker/setDepth/0', expression: '19.8', blends: ['NORMAL'] },
-    { key: 'sync/shadow/setDepth/0', expression: '5.1', blends: ['NORMAL'] },
-  ] },
+  'effects/MortarStrikeRenderer.ts': {"bindings":{},"blends":["Phaser.BlendModes.ADD"],"cameras":["promoteToClarityCamera(scene, arrow)"],"sites":[{"key":"module/arrow/setDepth/0","expression":"DEPTH.OVERLAY","blends":["NORMAL"]},{"key":"createVisual/marker/setDepth/0","expression":"19.8","blends":["NORMAL"]},{"key":"createVisual/shade/setDepth/0","expression":"5.1","blends":["NORMAL"]},{"key":"createVisual/shadow/setDepth/0","expression":"5.1","blends":["NORMAL"]},{"key":"createVisual/glow/setDepth/0","expression":"19.7","blends":["ADD"]},{"key":"createVisual/core/setDepth/0","expression":"19.7","blends":["ADD"]},{"key":"createVisual/wave/setDepth/0","expression":"19.7","blends":["ADD"]},{"key":"createVisual/contraction/setDepth/0","expression":"19.8","blends":["NORMAL"]},{"key":"createVisual/shadowRim/setDepth/0","expression":"19.8","blends":["NORMAL"]},{"key":"createVisual/shell/setDepth/0","expression":"13.39","blends":["NORMAL"]}]},
   "ui/AfterRoundTransition.ts": {
   "blends": [],
   "cameras": [],

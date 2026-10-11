@@ -437,6 +437,7 @@ export function* createRendererBundleSteps(
   const voidRift = new VoidRiftIntroRenderer(scene, lighting);
   cleanup.push(() => voidRift.destroy());
   const mortarStrike = new MortarStrikeRenderer(scene);
+  mortarStrike.registerGpuVfx(gpuVfx);
   cleanup.push(() => mortarStrike.destroy());
   yield 'renderers/mortarStrike';
   return {
@@ -536,6 +537,7 @@ export function wireRenderersToCameraFeedback(
   bundle.beer.setCameraFeedback(controller);
   bundle.bossIntro.setCameraFeedback(controller);
   bundle.voidRift.setCameraFeedback(controller);
+  bundle.mortarStrike.setCameraFeedback(controller);
 }
 
 /**

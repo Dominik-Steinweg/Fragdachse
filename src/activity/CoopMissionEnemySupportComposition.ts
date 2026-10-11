@@ -1,3 +1,4 @@
+import { ALLIED_COLOR, VOID_PALETTE } from '../config';
 import { CoopDefenseMortarSystem } from '../systems/CoopDefenseMortarSystem';
 import { CoopDefenseMortarStrikeSystem, type CoopDefenseMortarImpactPort } from '../systems/CoopDefenseMortarStrikeSystem';
 import type { BaseManager } from '../entities/BaseManager';
@@ -37,6 +38,7 @@ export interface CoopMissionEnemySupportCompositionOptions {
     y: number,
     radius: number,
     style: 'timebomb' | 'timebomb_pop' | 'mortar',
+    color?: number,
   ) => void;
   readonly broadcastCorpseMarker: (
     corpseId: number,
@@ -118,7 +120,7 @@ export class CoopMissionEnemySupportComposition {
       const strikes = new CoopDefenseMortarStrikeSystem({ impact: (strike, nowMs) => {
         this.options.mortarImpact.impact(strike, nowMs);
         const shot = strike.snapshot;
-        this.options.broadcastExplosion(shot.targetX, shot.targetY, shot.radius, 'mortar');
+        this.options.broadcastExplosion(shot.targetX, shot.targetY, shot.radius, 'mortar', shot.faction === 'allied' ? ALLIED_COLOR : VOID_PALETTE.primary);
       } });
       runtime.setMortar(new CoopDefenseMortarSystem(enemyManager, this.options.playerManager,
         this.options.combatSystem, runtime.enemyAiTargetCatalog, this.options.baseManager,

@@ -802,6 +802,7 @@
         "maxHpFactorPerAdditionalPlayer": 0.8
       },
       "mortar": {
+        "muzzleForwardPx": 5.2,
         "minRangePx": 300,
         "preferredRangeMinPx": 700,
         "maxRangePx": 1000,

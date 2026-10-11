@@ -6,7 +6,7 @@ import * as Phaser from 'phaser';
 import { t } from '../i18n';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, SyncedCombatEffect, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
-import { BLOOD_HIT_VFX, COLORS, VOID_PALETTE, DAMAGE_VIGNETTE_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, PLASMA_BURNER_COLOR, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
+import { BLOOD_HIT_VFX, COLORS, VOID_PALETTE, ALLIED_PALETTE, ALLIED_COLOR, DAMAGE_VIGNETTE_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, PLASMA_BURNER_COLOR, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
 import {
   TEX_BLOOD_EDGE_BOTTOM,
   TEX_BLOOD_EDGE_LEFT,
@@ -967,6 +967,7 @@ export class EffectSystem implements EnemyVisualSink {
       ? this.mixColor(fillColor, 0xffffff, 0.45)
       : (isHoly ? 0xffef9a : (isNuke ? this.mixColor(fillColor, 0xffffff, 0.35) : this.mixColor(fillColor, 0xffffff, 0.2)));
     this.spawnCombatExplosionGpu(x, y, radius, visualStyle, fillColor, flashColor, haloColor);
+    if (visualStyle === 'mortar') return; // The physical GPU profile owns the whole contact cue.
     const startRadius = 8;
     if (isNuke) {
       const skyFlash = this.scene.add.rectangle(
@@ -1204,10 +1205,11 @@ export class EffectSystem implements EnemyVisualSink {
     const voidLike = style === 'void_nuke';
     const holyLike = style === 'holy';
     const thermalLike = isThermalExplosionStyle(style);
+    const mortarPalette = bodyColor === ALLIED_COLOR ? ALLIED_PALETTE : VOID_PALETTE;
     const palette: ExplosionCombatPalette = {
-      core: style === 'mortar' ? VOID_PALETTE.core : thermalLike ? 0xfff2d0 : coreColor,
-      hot: style === 'mortar' ? VOID_PALETTE.bright : thermalLike ? FLAME_JET_TINTS_HOT[2] : hotColor,
-      body: style === 'mortar' ? VOID_PALETTE.primary : thermalLike ? FLAME_JET_TINTS_MID[1] : bodyColor,
+      core: style === 'mortar' ? mortarPalette.core : thermalLike ? 0xfff2d0 : coreColor,
+      hot: style === 'mortar' ? mortarPalette.bright : thermalLike ? FLAME_JET_TINTS_HOT[2] : hotColor,
+      body: style === 'mortar' ? mortarPalette.primary : thermalLike ? FLAME_JET_TINTS_MID[1] : bodyColor,
       outer: thermalLike
         ? FLAME_JET_TINTS_COOL[0]
         : this.mixColor(bodyColor, holyLike ? 0xa86912 : (voidLike ? 0x25162e : (energyLike ? 0x15243b : 0x3a1710)), 0.54),

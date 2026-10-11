@@ -12,6 +12,7 @@ import { CoopDefenseMortarStrikeSystem, type MortarStrike } from './CoopDefenseM
 
 interface MortarBehavior {
   windup: MortarStrike | null;
+  windupAngle: number;
   readyAt: number;
   evaluateAt: number;
 }
@@ -36,9 +37,10 @@ export class CoopDefenseMortarSystem implements EnemySpecialMovementSource {
       const config = getCoopDefenseEnemyConfig(enemy.kind).mortar;
       if (!config || !enemy.sprite.active || enemy.getHp() <= 0) continue;
       live.add(enemy.id);
-      const state = this.states.get(enemy.id) ?? { windup: null, readyAt: 0, evaluateAt: 0 };
+      const state = this.states.get(enemy.id) ?? { windup: null, windupAngle: 0, readyAt: 0, evaluateAt: 0 };
       this.states.set(enemy.id, state);
       if (state.windup) {
+        enemy.faceAngle(state.windupAngle);
         if (nowMs >= state.windup.snapshot.launchAt) this.commit(state);
         else enemy.stopMovement();
         continue;
@@ -50,10 +52,15 @@ export class CoopDefenseMortarSystem implements EnemySpecialMovementSource {
         && Math.hypot(player.x - enemy.sprite.x, player.y - enemy.sprite.y) < config.minRangePx)) continue;
       const target = this.chooseTarget(enemy, config, nowMs);
       if (!target) continue;
+      const angle = Math.atan2(target.y - enemy.sprite.y, target.x - enemy.sprite.x);
+      state.windupAngle = angle;
+      enemy.faceAngle(angle);
+      const muzzleForwardPx = config.muzzleForwardPx ?? 0;
       const launchAt = nowMs + config.windupMs;
       const snapshot: SyncedMortarStrike = {
         id: this.strikes.allocateId(), sourceEnemyId: enemy.id,
-        sourceX: enemy.sprite.x, sourceY: enemy.sprite.y,
+        sourceX: enemy.sprite.x + Math.cos(angle) * muzzleForwardPx,
+        sourceY: enemy.sprite.y + Math.sin(angle) * muzzleForwardPx,
         targetX: target.x, targetY: target.y, radius: config.impactRadiusPx,
         armedAt: nowMs, launchAt, impactAt: launchAt + config.flightMs, faction: enemy.faction,
       };

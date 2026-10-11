@@ -12,7 +12,7 @@ import { computeRadialDamage } from '../src/utils/radialDamage';
 const config = getCoopDefenseEnemyConfig('mortar-badger').mortar!;
 function fixture() {
   const enemy = { id: 'mortar', kind: 'mortar-badger', faction: 'hostile', sprite: { active: true, x: 0, y: 0 },
-    getHp: () => 45, pauseAttackMovement: vi.fn(), stopMovement: vi.fn() } as unknown as EnemyEntity;
+    getHp: () => 45, faceAngle: vi.fn(), pauseAttackMovement: vi.fn(), stopMovement: vi.fn() } as unknown as EnemyEntity;
   const enemies = [enemy];
   const players = [{ id: 'player', active: true, x: config.preferredRangeMinPx, y: 0 }];
   const rocks: SyncedPlaceableRock[] = [];
@@ -32,6 +32,24 @@ function fixture() {
 }
 
 describe('mortar behavior and deferred execution', () => {
+  it.each([0, Math.PI / 2, -Math.PI / 2, Math.PI * 0.7])('captures the muzzle socket and holds fixed aim at angle %s', angle => {
+    const f = fixture();
+    f.enemy.sprite.x = 137; f.enemy.sprite.y = -41;
+    f.players[0].x = f.enemy.sprite.x + Math.cos(angle) * config.preferredRangeMinPx;
+    f.players[0].y = f.enemy.sprite.y + Math.sin(angle) * config.preferredRangeMinPx;
+    f.update(0);
+    const shot = f.snapshot()[0];
+    expect(vi.mocked(f.enemy.faceAngle).mock.lastCall![0]).toBeCloseTo(angle);
+    expect(shot.sourceX).toBeCloseTo(f.enemy.sprite.x + Math.cos(angle) * config.muzzleForwardPx!);
+    expect(shot.sourceY).toBeCloseTo(f.enemy.sprite.y + Math.sin(angle) * config.muzzleForwardPx!);
+    f.players[0].x += 300; f.players[0].y -= 200;
+    f.update(shot.launchAt - 1);
+    expect(vi.mocked(f.enemy.faceAngle).mock.lastCall![0]).toBeCloseTo(angle);
+    expect(f.snapshot()).toEqual([shot]);
+    f.update(shot.launchAt);
+    expect(f.strikes.getSnapshot()).toEqual([shot]);
+  });
+
   it('publishes a fixed point immediately and preserves identity through launch and one impact', () => {
     const f = fixture();
     f.update(0);
@@ -153,6 +171,9 @@ describe('mortar behavior and deferred execution', () => {
     expect(() => normalizeMortarConfig({ ...config, preferredRangeMinPx: config.minRangePx })).toThrow();
     expect(() => normalizeMortarConfig({ ...config, maxDamage: NaN })).toThrow();
     expect(() => normalizeMortarConfig({ ...config, flightMs: undefined } as never)).toThrow();
+    expect(normalizeMortarConfig({ ...config, muzzleForwardPx: undefined })!.muzzleForwardPx).toBe(0);
+    for (const value of [-1, NaN, Infinity])
+      expect(() => normalizeMortarConfig({ ...config, muzzleForwardPx: value })).toThrow('muzzleForwardPx');
     const resolved = resolveCoopDefenseEnemyConfigs(1)['mortar-badger'].mortar!;
     expect(resolved).toEqual(config); expect(resolved).not.toBe(config);
     expect(resolved.targetWeights).not.toBe(config.targetWeights);

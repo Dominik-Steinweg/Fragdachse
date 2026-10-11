@@ -28,6 +28,35 @@ Der markierte Punkt bleibt fest. Vor dem geschlossenen Ring töten → Abbruch; 
 Einschlag bleibt. Zusätzlich während des Windups in den Nahbereich laufen: kein Abbruch, aber
 kein nächster Windup, solange ein lebender Spieler innerhalb der Mindestreichweite bleibt.
 
+#### Mörser Gate 2: reproduzierbare Bildfolge
+
+Bei belegtem Port 8090 einen eigenen Worktree-Server verwenden:
+`npx vite --host 127.0.0.1 --port 8091 --strictPort`. Nach HTTP 200
+`/dev-scenario.html?visual-test=1#scenario=…` mit diesem URL-kodierten Rezept öffnen:
+
+```js
+{ version: 1, mapId: '0', seed: 12345, classId: 'inspector_gadachs',
+  player: { gridX: 12, gridY: 50 }, timeOfDay: 720,
+  suppressWaves: true, freezeMission: true, hideTutorial: true, hideAim: true }
+```
+
+Nach `devScenario.whenReady()` Kamera auf Grid `(24,45)`, Zoom `1.2`,
+`focusTarget: true`; zunächst 180 Frames `step`, dann 30 Frames `settle`.
+Einen ungepinnten Mörser auf `(24,51)` spawnen. Die freundliche Basis liegt etwa
+766 px entfernt. `step` 12 Frames und `capture()` ergeben mit den Gate-1-Zeiten
+10 % Windup. Danach jeweils `step` und `capture()`: 47 Frames → 50 %, 47 → 90 %,
+11 → THUMP, 6 → THUMP +117 ms, 22 → Flug +500 ms, 20 → Flug +850 ms,
+8 → Impact, 14 → Impact +250 ms, 26 → Impact +700 ms.
+`capture()` führt im pausierten Modus selbst einen Frame aus; Zeitpunkte daher
+immer gegen die absoluten Zeiten in `mortarStrikes` prüfen.
+
+Für den Abbruch einen Mörser mit `hp: 1` verwenden und während des Windups mit
+der GLOCK töten. Für den Randpfeil während des Windups auf die Basis `(2,40)`
+mit Zoom `1.8` fokussieren; der Source liegt rechts außerhalb des Bildes. Für die Nacht die
+Live-Option `timeOfDay: 0` setzen und vor dem Spawn die Beleuchtung einpendeln lassen.
+Vollbilder unverändert speichern; beschriftete Detailausschnitte dürfen für den
+Übersichtsbogen ohne Skalierung oder Farbkorrektur kombiniert werden.
+
 ### Kraken: Abgrundteich (Dev-Review)
 
 `kraken-abyss-lab` ist nur während des Dev-Szenario-Modus registriert und wird beim

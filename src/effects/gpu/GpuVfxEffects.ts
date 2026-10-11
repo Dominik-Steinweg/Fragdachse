@@ -107,6 +107,9 @@ export const GpuVfxEffectId = {
   ExplosionLowEmberDown: 93,
   MovementFootprintGlow: 94,
   VoidHunterSpark: 95,
+  MortarCharge: 96,
+  MortarBurst: 97,
+  MortarSmoke: 98,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -718,6 +721,12 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     frame: GpuVfxFrameId.MovementPawBroad, importance: 'decorative', release: 'linger' },
   { id: GpuVfxEffectId.VoidHunterSpark, label: 'boss.void-sparks', lane: GpuVfxLaneId.ExplosionLowGlow,
     frame: GpuVfxFrameId.ExplosionSpark, importance: 'standard', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.MortarCharge, label: 'mortar.charge', lane: GpuVfxLaneId.ExplosionLowGlow,
+    frame: GpuVfxFrameId.ExplosionSpark, importance: 'standard', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.MortarBurst, label: 'mortar.thump', lane: GpuVfxLaneId.ExplosionLowGlow,
+    frame: GpuVfxFrameId.ExplosionStreak, importance: 'standard', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.MortarSmoke, label: 'mortar.smoke', lane: GpuVfxLaneId.ExplosionLowSmoke,
+    frame: GpuVfxFrameId.ExplosionSmoke, importance: 'standard', release: 'kill-with-source' },
 ];
 
 /** Definition-level routing. No particle chooses height by radius, random state or position. */

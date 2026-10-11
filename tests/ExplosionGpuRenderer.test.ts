@@ -19,7 +19,8 @@ vi.mock('../src/graphics/GraphicsQuality', () => ({
 import { ExplosionGpuRenderer } from '../src/effects/ExplosionGpuRenderer';
 import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
 import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
-import { findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
+import { findFakeLane, makeFakeGpuVfxScene, evaluateFakeAnimation } from './fakeGpuVfxScene';
+import { MortarMuzzleVfx } from '../src/effects/MortarMuzzleVfx';
 
 beforeEach(() => {
   resetGpuVfxAtlasForTests();
@@ -34,6 +35,47 @@ afterEach(() => {
 });
 
 describe('explosion gpu renderer', () => {
+  it('keeps a physical mortar blast at the requested radius with material smoke and chunks', () => {
+    const scene = makeFakeGpuVfxScene();
+    const system = new GpuVfxSystem(scene as never);
+    const renderer = new ExplosionGpuRenderer();
+    renderer.registerGpuVfx(system);
+    const radius = 117;
+    renderer.spawnCombatExplosion({ x: 20, y: 30, radius, style: 'mortar',
+      palette: { core: 0xffffff, hot: 0xbb66ff, body: 0x9922ee, outer: 0x552277, ember: 0x443322, smoke: 0x302830 } });
+    const particles = scene.layers.flatMap(lane => lane.members);
+    const ring = particles.find(p => p.frame === 'explosion-ring')!;
+    expect(evaluateFakeAnimation(ring.scaleY, 0.999999) * 32).toBeCloseTo(radius, 3);
+    expect(particles.some(p => p.frame === 'explosion-smoke')).toBe(true);
+    expect(particles.some(p => p.frame === 'leaf-blower-clod')).toBe(true);
+    expect(renderer.getPendingStageCount()).toBe(0);
+    expect(scene.emitters).toHaveLength(0);
+  });
+
+  it('cleans muzzle particles independently of the dead source and honours the quality budget', () => {
+    const scene = makeFakeGpuVfxScene();
+    const system = new GpuVfxSystem(scene as never);
+    const muzzle = new MortarMuzzleVfx(system);
+    const release = vi.spyOn(system, 'releaseSource');
+    const charge = muzzle.createCharge();
+    muzzle.chargeAt(charge, 0, 0, 1, 0xbb66ff);
+    muzzle.thump(0, 0, 0xbb66ff, 0x443355, 0);
+    muzzle.release(charge);
+    expect(release).toHaveBeenCalledTimes(1);
+    system.update(1600); muzzle.update();
+    expect(release).toHaveBeenCalledTimes(2);
+    muzzle.clear();
+    expect(release).toHaveBeenCalledTimes(2);
+    system.destroy();
+    qualityFactors.standard = 0;
+    const quietScene = makeFakeGpuVfxScene();
+    const quietSystem = new GpuVfxSystem(quietScene as never);
+    const quiet = new MortarMuzzleVfx(quietSystem);
+    quiet.thump(0, 0, 0xbb66ff, 0x443355, 0);
+    expect(quietScene.layers.flatMap(lane => lane.edited)).toHaveLength(0);
+    quiet.clear(); quietSystem.destroy();
+  });
+
   it('uses GPU burst lanes for every migrated explosion family', () => {
     const scene = makeFakeGpuVfxScene();
     const system = new GpuVfxSystem(scene as never);

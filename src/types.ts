@@ -2188,6 +2188,7 @@ export interface SyncedNukeStrike {
 export interface SyncedMortarStrike {
   id: number;
   sourceEnemyId: string;
+  /** Captured world-space muzzle position, including the authored forward socket offset. */
   sourceX: number;
   sourceY: number;
   targetX: number;

@@ -27,6 +27,7 @@ describe('explosion visual profiles', () => {
   });
 
   it('maps specialized styles to their authored families', () => {
+    expect(getCombatExplosionProfile('mortar')?.family).toBe('physical');
     expect(getCombatExplosionProfile('mini_rocket_cascade')?.family).toBe('cascade');
     expect(getCombatExplosionProfile('timebomb')?.family).toBe('energy');
     expect(getCombatExplosionProfile('timebomb_pop')?.family).toBe('pop');
