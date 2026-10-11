@@ -123,7 +123,7 @@ def apply_kraken_land(asset, motion, phase, frame, idle, p, pose, key):
                 k = 1 if j == 0 else .7
                 spread = -side * .030 * k * coil * (1 - .3 * t)
                 # Swing the whole arm in from the root so both claws meet ahead.
-                close = side * k * lunge * (.13 * (1 - t) ** 2 + .03 * t)
+                close = side * k * lunge * (.16 * (1 - t) ** 2 + .035 * t)
                 pitch = (.10 * coil * (1 - t) ** 1.2 - .04 * coil * t * t
                          - .035 * lunge * (1 - t) + .025 * snap * t)
                 return (pitch, 0, spread + close)

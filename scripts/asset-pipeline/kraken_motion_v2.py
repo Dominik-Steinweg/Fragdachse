@@ -114,7 +114,7 @@ def apply_kraken(asset, motion, phase, frame, idle, p, pose, key):
         pitch = -.11 * fold * (1 - t) - .09 * fold * t
         yaw = -side * .035 * fold * (.5 + t) + side * .016 * (1 - spread) * rise * t
         # Tips break the surface first: they lift before the body arrives.
-        pitch += .12 * bell(arms_break, .11, phase) * t * t
+        pitch += .18 * bell(arms_break, .11, phase) * t * t
         pitch += (.06 * lift - .08 * slap) * (.4 + t) * settle
         yaw += side * .011 * math.sin(math.tau * phase * 1.5 - t * 4 + i) * (1 - smooth(eyes_open, 1, phase)) * rise
         return (pitch, 0, yaw)
