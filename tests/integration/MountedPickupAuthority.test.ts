@@ -25,7 +25,7 @@ it.each(['HEALTH_PACK', 'ARMOR'])('keeps local and remote %s pickups behind the 
     canOccupy: () => true, canEnter: () => true, isFriendly: () => true, getInput: () => null,
     enter() {}, exit() {}, pin() {} });
   expect(occupancy.request('pilot', { action: 'enter', turretId: 1 })).toBe(true);
-  const gameplay = { isBurrowed: () => false, isControllingTurret: (id: string) => occupancy.isOccupied(id) };
+  const gameplay = { getStructureOccupancyState: () => undefined, isBurrowed: () => false, isControllingTurret: (id: string) => occupancy.isOccupied(id) };
   const flow = Object.assign(Object.create(ArenaLifecycleCoordinator.prototype), {
     isArenaEntryProtected: () => false, getWorldParticipation: () => 'interactive',
     worldLifecycle: { activity: { kind: 'coop-mission' } },

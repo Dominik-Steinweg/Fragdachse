@@ -124,6 +124,12 @@ export class EnergyShieldSystem {
     });
   }
 
+  /** Refresh a live dome without toggling it or resetting its drain/heal clocks. */
+  hostUpdateEquippedConfig(playerId: string, config: WeaponConfig & { fire: EnergyShieldWeaponFireConfig }): void {
+    const shield = this.activeShields.get(playerId);
+    if (shield) shield.config = config;
+  }
+
   hostDeactivateForPlayer(playerId: string): void {
     this.activeShields.delete(playerId);
     this.domeToggleOn.delete(playerId);

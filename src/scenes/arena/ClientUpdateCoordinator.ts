@@ -1,3 +1,5 @@
+import { scaleWeaponRange } from '../../loadout/scaleWeaponRange';
+import { WATCHTOWER_OCCUPANCY_RULES } from '../../config/watchtower';
 import { mgTargetVisual } from '../../effects/MgAttritionVisualTarget';
 import { emptyMgAttritionSnapshot } from '../../systems/MgAttritionRuntime';
 import { getUtilityRechargeFraction } from '../../loadout/UtilityChargeState';
@@ -950,7 +952,10 @@ export class ClientUpdateCoordinator {
   getLocalWeaponConfig(slot: WeaponSlot): WeaponConfig {
     const localId = bridge.getLocalPlayerId();
     const selection = this.resolveCommittedLoadoutSelection(localId);
-    return selection[slot] ?? (slot === 'weapon1' ? WEAPON_CONFIGS.GLOCK : WEAPON_CONFIGS.P90);
+    const config = selection[slot] ?? (slot === 'weapon1' ? WEAPON_CONFIGS.GLOCK : WEAPON_CONFIGS.P90);
+    const occupied = bridge.isHost() ? this.playerGameplayReadViews?.getStructureOccupancyState(localId)
+      : bridge.getLatestGameState()?.players[localId]?.structureOccupancy;
+    return scaleWeaponRange(config, occupied ? WATCHTOWER_OCCUPANCY_RULES.rangeMultiplier : 1);
   }
 
   getLocalUtilityConfig(): UtilityConfig {

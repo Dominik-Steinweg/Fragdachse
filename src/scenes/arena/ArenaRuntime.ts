@@ -1,3 +1,4 @@
+import { getConstructionBounds } from '../../systems/ConstructionGeometry';
 import type Phaser from 'phaser';
 import { bridge } from '../../network/bridge';
 import { isDiagnosticMapId } from '../../config/coopDefenseMaps';
@@ -644,6 +645,15 @@ export class ArenaRuntime {
     return this.flow.getWorldCombatCore();
   }
 
+  getStructureOccupancyState(id: string) { return this.flow.getWorldPlayerGameplayRuntime()?.getStructureOccupancyState(id); }
+  getStructurePlatforms() {
+    const world = this.flow.getWorldRuntime();
+    if (!world) return [];
+    return (world.materialization?.placement?.getAllRuntimeRocks() ?? []).filter(r => r.kind === 'watchtower' && r.hp > 0).map(r => {
+      const bounds = getConstructionBounds(r, world.context.metrics);
+      return { id: r.id, x: bounds.x, y: bounds.y, footprint: bounds };
+    });
+  }
   getTurretDefinitions() { return this.flow.getWorldCombatGameplayBinding()?.getTurretDefinitions() ?? []; }
   getTurretControlState(playerId: string) { return this.flow.getWorldPlayerGameplayRuntime()?.getTurretControlState(playerId); }
 

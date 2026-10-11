@@ -203,6 +203,8 @@ export const enUi = {
   "ui.shootingRange.control.supply": "Adrenaline",
   "ui.lobby.deferredLoading": "Loading game content …",
   "ui.lobby.deferredFailed": "Required game content could not be loaded.",
+  "ui.watchtower.enter": "Shift: Climb watchtower",
+  "ui.watchtower.exit": "Shift: Leave watchtower",
   "ui.turretControl.enter": "Shift: Man turret",
   "ui.stinkCloud.active": "Active",
   "ui.stinkCloud.cooldown": "Cooldown",

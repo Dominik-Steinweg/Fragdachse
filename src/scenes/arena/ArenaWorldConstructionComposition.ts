@@ -154,6 +154,7 @@ export function composeWorldConstruction(
     onPlacementExecuted: playerId => ctx.decoySystem.breakStealth(playerId, Date.now()),
     recordConstructionBuilt: (playerId) => bridge.recordConstructionBuilt(playerId),
     onConstructionDestroyed: (runtime, cause, attackerId) => {
+      gameplay.player?.onOccupiedConstructionDestroyed(runtime.id, cause, attackerId);
       if (runtime.persistentRewardId && (cause === 'damage' || cause === 'decay')) {
         persistentBaseBinding.markRewardDestroyed(runtime.persistentRewardId);
       }
@@ -312,6 +313,12 @@ export function composeWorldObjectMutation(
     train: gameplay.train,
     onDestroy: (destroyed) => { if (gameplay.worldMutation === destroyed) gameplay.worldMutation = null; },
   });
+  combatSystem.setStructureDamagePort({
+    getPlatform: id => gameplay.player?.getStructurePlatform(id) ?? null,
+    apply: (id, amount, source, kind) => runtime.applyResolvedDamage('construction', id, amount,
+      source.attribution.id ?? source.allegiance.ownerId, source.authoredSourceId ?? 'environment.damage', kind, source.sourceSlot, source),
+  });
+  worldRuntime.bind({ destroy: () => combatSystem.setStructureDamagePort(null) });
   gameplay.worldMutation = runtime;
   worldRuntime.bind(runtime);
 }

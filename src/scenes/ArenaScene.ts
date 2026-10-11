@@ -1340,6 +1340,10 @@ export class ArenaScene extends Phaser.Scene {
     });
     this.arenaRuntime.initialize();
     inputSystem.setupShootingRangeProvider(() => this.arenaRuntime.getShootingRange());
+    inputSystem.setupStructureOccupancyProviders({
+      getStructures: () => this.arenaRuntime.getStructurePlatforms(),
+      getState: id => bridge.isHost() ? this.arenaRuntime.getStructureOccupancyState(id) : bridge.getLatestGameState()?.players[id]?.structureOccupancy,
+    });
     inputSystem.setupTurretControlProviders({
       getTurrets: () => this.arenaRuntime.getTurretDefinitions(),
       getState: id => bridge.isHost() ? this.arenaRuntime.getTurretControlState(id) : bridge.getLatestGameState()?.players[id]?.turretControl,

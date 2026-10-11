@@ -101,6 +101,13 @@ export class WorldCombatReactions {
       }
     }
     const allowDrop = o.isActivityActive() && !o.isCoopMission();
+    if (sourceId === 'environment.watchtower_collapse') {
+      if (victimProfile) o.network.effects.broadcastKillEvent({
+        killerId, killerName: '', killerColor: 0x9b7653, sourceId,
+        victimId, victimName: victimProfile.name, victimColor: victimProfile.colorHex,
+      });
+      return;
+    }
     if (killerId === '__train__' || killerId === COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID) {
       if (killerId === '__train__' && allowDrop) o.getPowerUpSystem()?.onPlayerKilled(x, y);
       if (!current()) return;

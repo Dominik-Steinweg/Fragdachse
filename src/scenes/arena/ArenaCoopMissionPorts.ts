@@ -1,3 +1,4 @@
+import { getConstructionBounds, getConstructionCells, nearestConstructionPoint } from '../../systems/ConstructionGeometry';
 import { readBossIntroState } from '../../config/bossIntros';
 import { isOffensiveConstruction } from '../../systems/offensiveConstruction';
 import { bridge } from '../../network/bridge';
@@ -17,6 +18,7 @@ import type { WorldRuntime } from '../../world/WorldRuntime';
 import type { ArenaContext } from './ArenaContext';
 
 export interface ArenaCoopMissionPortsInput {
+  readonly getStructureOccupancyState?: (id: string) => import('../../types').StructureOccupancyState | undefined;
   readonly getTurretControlState?: (playerId: string) => import('../../types').TurretControlState | undefined;
   readonly getSmokePerception: () => import('../../systems/SmokeRules').SmokePerceptionPort | null;
   readonly ctx: ArenaContext;
@@ -100,7 +102,7 @@ export function createArenaCoopMissionPorts(input: ArenaCoopMissionPortsInput): 
         return player ? { x: player.x, y: player.y } : null;
       },
       isPlayerAlive: (playerId) => ctx.getWorldCombatCore()!.isAlive(playerId),
-      isPlayerTargetable: id => !input.getTurretControlState?.(id),
+      isPlayerTargetable: id => !input.getTurretControlState?.(id) && !input.getStructureOccupancyState?.(id),
       isPlayerBurrowed,
       isPlayerStealthed: (playerId) => ctx.decoySystem.isStealthed(playerId),
       canUseMissionActions: (playerId) => getPlayerCapabilities(playerId).canUseMissionActions,
@@ -119,10 +121,16 @@ export function createArenaCoopMissionPorts(input: ArenaCoopMissionPortsInput): 
       getArmedConstructions: () => {
         const constructions: CoopMissionArmedConstructionView[] = [];
         for (const construction of getWorldRuntime()?.materialization?.placement?.getAllRuntimeRocks() ?? []) {
-          if (construction.hp <= 0 || !isOffensiveConstruction(construction)) continue;
+          const occupants = ctx.playerManager.getAllPlayers().filter(p => input.getStructureOccupancyState?.(p.id)?.structureId === construction.id).map(p => p.id);
+          if (construction.hp <= 0 || (!isOffensiveConstruction(construction) && !(construction.kind === 'watchtower' && occupants.length))) continue;
           if (getWorldRuntime()?.materialization?.placement?.getCarrierBaseId(construction.id)) continue;
           constructions.push({
-            representedPlayerIds: representedPlayers(id => id === construction.id),
+            representedPlayerIds: construction.kind === 'watchtower' ? occupants : representedPlayers(id => id === construction.id),
+            cells: getConstructionCells(construction),
+            resolveSurfacePoint: (x, y) => {
+              const metrics = getWorldRuntime()?.context.metrics;
+              return metrics ? nearestConstructionPoint(getConstructionBounds(construction, metrics), x, y) : null;
+            },
             id: String(construction.id),
             gridX: construction.gridX,
             gridY: construction.gridY,

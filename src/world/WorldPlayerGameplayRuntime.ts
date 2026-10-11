@@ -1,5 +1,8 @@
 import { PlasmaBurnerRuntime } from './PlasmaBurnerRuntime';
 import { MolotovUpgradeSystem } from '../systems/MolotovUpgradeSystem';
+import { StructureOccupancySystem, clampStructurePosition, type StructurePlatform } from '../systems/StructureOccupancySystem';
+import { getConstructionBounds } from '../systems/ConstructionGeometry';
+import { WATCHTOWER_OCCUPANCY_RULES, WATCHTOWER_COLLAPSE_SOURCE_ID } from '../config/watchtower';
 import { TurretControlSystem, resolveTurretExit } from '../systems/TurretControlSystem';
 import { dequantizeAngle } from '../utils/angle';
 import type { AutomatedTurret } from '../systems/TurretSystem';
@@ -284,6 +287,7 @@ export interface PlayerGameplayResourceCommandPort {
  * über benannte Runtime-Grenzen.
  */
 export interface PlayerGameplayStateReadView {
+  getStructureOccupancyState(playerId: string): import('../types').StructureOccupancyState | undefined;
   isControllingTurret(playerId: string): boolean;
   getTurretControlState(playerId: string): import('../types').TurretControlState | undefined;
   isBurrowed(playerId: string): boolean;
@@ -322,6 +326,7 @@ export type PlayerGameplayReadViews =
   & PlayerGameplaySnapshotReadView;
 
 export interface PlayerGameplayHostFrameReadModel {
+  readonly structureOccupancy?: import('../types').StructureOccupancyState;
   readonly turretControl?: import('../types').TurretControlState;
   readonly plasmaBurnerOverload?: import('../combat/plasmaBurner/PlasmaBurnerContracts').PlasmaBurnerOverloadNetState;
   readonly rocketMagazine?: import('../types').RocketMagazineState;
@@ -395,6 +400,8 @@ export interface PlayerGameplayTunnelPlacementPort {
 }
 
 export interface WorldPlayerGameplayRuntimeOptions {
+  readonly killOccupant?: (id: string, sourceId: string, attackerId?: string) => void;
+  readonly getStructureAdrenalineRegenMultiplier?: (id: string) => number;
   readonly getTurrets?: () => readonly AutomatedTurret[];
   readonly isFriendlyTurret?: (playerId: string, turret: AutomatedTurret) => boolean;
   readonly getTurretControlInput?: (id: string) => { input: import('../types').TurretControlInput; receivedAt: number } | null;
@@ -454,6 +461,7 @@ export class WorldPlayerGameplayRuntime implements
   private readonly earthbreak: BurrowEarthbreakRuntime;
   private readonly detachEarthbreakMovement: () => void;
   private readonly turretControl: TurretControlSystem;
+  private readonly structureOccupancy: StructureOccupancySystem;
   private geometryQueries: WorldGeometryQueries | null = null;
   private destroyed = false;
   private shieldBuffPort: ShieldBuffPort | null = null;
@@ -477,7 +485,7 @@ export class WorldPlayerGameplayRuntime implements
       canOccupy: id => !this.destroyed && options.combatSystem.isAlive(id)
         && options.getPlayerCapabilities(id).canUseCombat
         && (this.systems?.playerModifier.getNumericStat(id, 'player.turretControlEnabled') ?? 0) > 0,
-      canEnter: id => options.getPlayerCapabilities(id).canInteract && options.getPlayerCapabilities(id).canMove
+      canEnter: id => !this.getStructureOccupancyState(id) && options.getPlayerCapabilities(id).canInteract && options.getPlayerCapabilities(id).canMove
         && this.systems.burrow.getPhase(id) === 'idle' && !this.systems.burrow.isTunnelTransit(id)
         && !this.systems.burrow.isStunned(id) && !(options.combatSystem.isStunned?.(id, Date.now()) ?? false)
         && options.hostPhysics.getDashPhase(id) === 0 && !options.hostPhysics.hasForcedMovement(id),
@@ -507,6 +515,50 @@ export class WorldPlayerGameplayRuntime implements
         options.resetPlayerPosition(id, exit.x, exit.y);
       },
     });
+    this.structureOccupancy = new StructureOccupancySystem({
+      getStructures: () => this.getStructurePlatforms(),
+      getActor: id => {
+        const p = options.playerManager.getPlayer(id);
+        return p ? { x: p.x, y: p.y, angle: p.rotation } : null;
+      },
+      canOccupy: id => !this.destroyed && options.combatSystem.isAlive(id) && options.getPlayerCapabilities(id).canUseCombat,
+      canEnter: id => !this.isControllingTurret(id) && options.getPlayerCapabilities(id).canInteract
+        && options.getPlayerCapabilities(id).canMove && this.systems.burrow.getPhase(id) === 'idle'
+        && !this.systems.burrow.isTunnelTransit(id) && !this.systems.burrow.isStunned(id)
+        && !(options.combatSystem.isStunned?.(id, Date.now()) ?? false)
+        && options.hostPhysics.getDashPhase(id) === 0 && !options.hostPhysics.hasForcedMovement(id),
+      enter: (id, platform) => {
+        this.clearHeldActionsForPlayer(id);
+        this.systems.rocketMagazine?.cancel(id);
+        this.systems.plasmaBurner.endGesture(id, Date.now());
+        this.systems.sustainedWeaponBehavior.interruptCombat(id);
+        this.systems.sustainedWeaponBehavior.refreshEquippedConfig(id);
+        this.systems.ultimateBehavior.interruptCombat(id, Date.now());
+        options.decoySystem.breakStealth(id, Date.now());
+        const player = options.playerManager.getPlayer(id)!;
+        const point = clampStructurePosition(platform, player.x, player.y);
+        options.hostPhysics.clearStructureEntryMovement(id);
+        player.setPosition(point.x, point.y);
+        options.hostPhysics.resetMovementOrigin(id, point.x, point.y);
+        options.resetPlayerPosition(id, point.x, point.y);
+      },
+      detach: id => {
+        this.clearHeldActionsForPlayer(id);
+        this.systems.sustainedWeaponBehavior.interruptCombat(id);
+        this.systems.sustainedWeaponBehavior.refreshEquippedConfig(id);
+      },
+      exit: (id, platform, origin, angle) => {
+        const player = options.playerManager.getPlayer(id);
+        if (!player || !options.combatSystem.isAlive(id)) return;
+        const point = resolveTurretExit(platform, origin, angle, PLAYER_SIZE / 2, this.geometryQueries,
+          () => options.playerManager.getWorldSpawnPoint(id), true);
+        player.setPosition(point.x, point.y);
+        options.hostPhysics.resetMovementOrigin(id, point.x, point.y);
+        options.resetPlayerPosition(id, point.x, point.y);
+      },
+      kill: (id, attackerId) => options.killOccupant?.(id, WATCHTOWER_COLLAPSE_SOURCE_ID, attackerId),
+    });
+    options.hostPhysics.setStructurePlatformResolver(id => this.structureOccupancy.getPlatform(id) ?? null);
     const heldAction = new HostHeldActionSystem();
     const playerModifier = new CoopDefensePlayerModifierSystem();
     const itemRuntime = new CoopDefenseItemRuntimeSystem({
@@ -531,6 +583,7 @@ export class WorldPlayerGameplayRuntime implements
     this.configureBurrow(burrow, playerModifier);
 
     const loadout = options.createLoadoutManager(resource);
+    loadout.setWeaponRangeMultiplierResolver(id => this.getStructureOccupancyState(id) ? WATCHTOWER_OCCUPANCY_RULES.rangeMultiplier : 1);
     const sustainedWeaponBehavior = new SustainedWeaponBehaviorRuntime(loadout, resource);
     const ak47Behavior = new Ak47BehaviorRuntime(loadout);
     const weaponReaction = new WeaponReactionRuntime({
@@ -572,7 +625,8 @@ export class WorldPlayerGameplayRuntime implements
       getActors: () => {
         const actors: TranslocatorActor[] = options.playerManager.getAllPlayers().map(player => ({
           id: player.id, kind: 'player', x: player.x, y: player.y, radius: player.getCollisionRadius(),
-          alive: options.combatSystem.isAlive(player.id) && options.getPlayerCapabilities(player.id).canInteract,
+          alive: options.combatSystem.isAlive(player.id) && options.getPlayerCapabilities(player.id).canInteract
+            && !this.getStructureOccupancyState(player.id),
           surface: !burrow.isBurrowed(player.id) && !burrow.isTunnelTransit(player.id), revision: player.positionRevision,
         }));
         for (const enemy of options.getEnemyManager()?.getAllEnemies() ?? []) actors.push({
@@ -608,6 +662,8 @@ export class WorldPlayerGameplayRuntime implements
       },
     });
     const utilityAction = new PlayerUtilityActionRuntime({
+      canUseType: (id, type) => !this.getStructureOccupancyState(id)
+        || (type !== 'translocator' && type !== 'placeable_rock' && type !== 'placeable_turret' && type !== 'placeable_pedestal'),
       captureSmokeDamage: (id, now) => {
         const build = playerModifier.getModifiers(id);
         return {
@@ -1044,6 +1100,7 @@ export class WorldPlayerGameplayRuntime implements
 
   runHostPrePhysicsStage(deltaMs: number, nowMs: number, countdownActive: boolean): void {
     if (this.destroyed) return;
+    this.structureOccupancy.reconcile();
     this.turretControl.reconcile();
     this.interruptStunnedActions(nowMs);
     const { systems } = this;
@@ -1196,6 +1253,7 @@ export class WorldPlayerGameplayRuntime implements
     ];
     return {
       adrenaline: systems.resource.getAdrenaline(playerId),
+      structureOccupancy: this.getStructureOccupancyState(playerId),
       turretControl: this.getTurretControlState(playerId),
       rocketMagazine: systems.rocketMagazine?.getState(playerId),
       plasmaBurnerOverload: systems.plasmaBurner.getState(playerId),
@@ -1342,6 +1400,7 @@ export class WorldPlayerGameplayRuntime implements
   detachPlayerLoadout(playerId: string): void {
     this.systems.playerAction.removePlayer(playerId);
     this.systems.plasmaBurner.resetPlayer(playerId);
+    this.structureOccupancy.release(playerId, false);
     this.turretControl.release(playerId);
     this.systems.ultimateBehavior.removePlayer(playerId);
     this.systems.ak47Behavior?.removePlayer(playerId);
@@ -1418,6 +1477,7 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.ultimateBehavior.cancelTunnelSelections();
     this.earthbreak.clear();
     this.systems.plasmaBurner.clearAll();
+    this.structureOccupancy.clear();
     this.turretControl.clear();
     this.systems.rocketMagazine?.cancelAll();
     this.systems.heldAction.reset();
@@ -1431,6 +1491,11 @@ export class WorldPlayerGameplayRuntime implements
       return this.systems.playerAction.execute(request);
     }
     if (this.isControllingTurret(request.playerId)) return { ok: false, reason: 'blocked' };
+    if (this.getStructureOccupancyState(request.playerId)) {
+      if (request.category === 'ultimate' && this.systems.loadout.getEquippedUltimateConfig(request.playerId)?.type === 'tunnel')
+        return { ok: false, reason: 'blocked' };
+
+    }
     if (request.category === 'utility') {
       this.systems.playerAction.cancelScope(request.playerId);
       this.systems.rocketMagazine?.releaseForAction(request.playerId, request.hostNowMs);
@@ -1504,14 +1569,14 @@ export class WorldPlayerGameplayRuntime implements
   }
 
   handleDashRequest(playerId: string, dx: number, dy: number, hostNowMs: number): void {
-    if (this.destroyed || this.isControllingTurret(playerId)) return;
+    if (this.destroyed || this.isControllingTurret(playerId) || !!this.getStructureOccupancyState(playerId)) return;
     this.systems.playerAction.cancelScope(playerId);
     this.systems.rocketMagazine?.releaseForAction(playerId, hostNowMs);
     this.options.hostPhysics.handleDashRPC(playerId, dx, dy);
   }
 
   handleBurrowRequest(playerId: string, wantsBurrowed: boolean): void {
-    if (this.destroyed || this.isControllingTurret(playerId)) return;
+    if (this.destroyed || this.isControllingTurret(playerId) || !!this.getStructureOccupancyState(playerId)) return;
     if (wantsBurrowed) this.systems.playerAction.cancelScope(playerId);
     if (wantsBurrowed) this.systems.rocketMagazine?.releaseForAction(playerId, Date.now());
     this.systems.burrow.handleBurrowRequest(playerId, wantsBurrowed);
@@ -1525,7 +1590,7 @@ export class WorldPlayerGameplayRuntime implements
     hostNowMs: number,
     identity?: PlayerGameplayHeldActionIdentity,
   ): boolean {
-    if (this.destroyed || this.isControllingTurret(playerId)) return false;
+    if (this.destroyed || this.isControllingTurret(playerId) || !!this.getStructureOccupancyState(playerId)) return false;
     this.systems.playerAction.cancelScope(playerId);
     return this.systems.heldAction.start(
       playerId,
@@ -1579,6 +1644,20 @@ export class WorldPlayerGameplayRuntime implements
     return this.systems.burrow.isBurrowed(playerId);
   }
 
+  getStructureOccupancyState(id: string) { return this.structureOccupancy.getState(id); }
+  getStructurePlatforms(): StructurePlatform[] {
+    return this.options.placementSystem.getAllRuntimeRocks().filter(r => r.kind === 'watchtower' && r.hp > 0).map(r => {
+      const bounds = getConstructionBounds(r, this.options.worldMetrics);
+      return { id: r.id, x: bounds.x, y: bounds.y, footprint: bounds };
+    });
+  }
+  getStructurePlatform(id: string) { return this.structureOccupancy.getPlatform(id); }
+  requestStructureOccupancy(id: string, request: import('../systems/StructureOccupancySystem').StructureOccupancyRequest) {
+    return this.structureOccupancy.request(id, request);
+  }
+  onOccupiedConstructionDestroyed(id: number, cause: 'damage' | 'decay' | 'removal' | 'teardown', attackerId?: string) {
+    this.structureOccupancy.constructionDestroyed(id, cause, attackerId);
+  }
   isControllingTurret(playerId: string): boolean { return this.turretControl.isOccupied(playerId); }
   getTurretControlState(playerId: string): import('../types').TurretControlState | undefined { return this.turretControl.getState(playerId); }
   getManualTurretControl(id: number | string, now: number) {
@@ -1597,7 +1676,7 @@ export class WorldPlayerGameplayRuntime implements
     return { destroy: () => this.systems.resource.setArtificialAdrenalineSupply(null) };
   }
   refreshArtificialAdrenalineSupply(): void { this.systems.resource.refreshArtificialAdrenalineSupply(); }
-  reconcileTurretControl(): void { this.turretControl.reconcile(); }
+  reconcileTurretControl(): void { this.structureOccupancy.reconcile(); this.turretControl.reconcile(); }
 
   isStunned(playerId: string): boolean {
     return this.systems.burrow.isStunned(playerId);
@@ -1694,6 +1773,8 @@ export class WorldPlayerGameplayRuntime implements
     if (this.destroyed) return;
     this.earthbreak.clear();
     this.detachEarthbreakMovement();
+    this.options.hostPhysics?.setStructurePlatformResolver(null);
+    this.structureOccupancy.clear();
     this.turretControl.clear();
     this.destroyed = true;
     const { systems } = this;
@@ -1766,6 +1847,7 @@ export class WorldPlayerGameplayRuntime implements
       return base
         * this.options.decoySystem.getStealthAdrenalineMultiplier(playerId)
         * itemRuntime.getAdrenalineRegenMultiplier(playerId, nowMs)
+        * (this.options.getStructureAdrenalineRegenMultiplier?.(playerId) ?? 1)
         * (this.options.getTeamAdrenalineRegenMultiplier?.(playerId) ?? 1)
         * (this.options.getTimeBubbleAdrenalineRegenMultiplier?.(playerId, nowMs) ?? 1);
     });

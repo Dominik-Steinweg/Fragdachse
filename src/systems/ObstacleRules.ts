@@ -24,6 +24,8 @@ export function obstacleBlocks(value: ObstacleClass, purpose: ObstacleQueryPurpo
 }
 
 export interface ObstacleShotOptions {
+  /** A hostile occupied carrier is a direct-fire target even though its platform is low. */
+  readonly targetableLowRock?: (rockId: number) => boolean;
   readonly halfWidth?: number;
   readonly halfHeight?: number;
   readonly purpose?: ObstacleQueryPurpose;

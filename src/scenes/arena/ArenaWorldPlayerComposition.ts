@@ -1,4 +1,5 @@
 import { isCoopDefenseLoadoutItemUnlocked } from '../../utils/coopDefenseUpgrades';
+import { WATCHTOWER_OCCUPANCY_RULES } from '../../config/watchtower';
 import { isFriendlyTurret } from '../../systems/TurretControlSystem';
 import { bridge } from '../../network/bridge';
 import { BurrowSystem } from '../../systems/BurrowSystem';
@@ -54,6 +55,8 @@ export function composeWorldPlayerGameplay(
   // LobbyWorld wirken. Die darunterliegenden Missionssysteme bleiben weiterhin an
   // `isCoopMission`/`missionMapConfig` gebunden.
   const playerGameplayRuntime = new WorldPlayerGameplayRuntime({
+    killOccupant: (id, sourceId, attackerId) => combatSystem.killPlayer(id, sourceId, attackerId),
+    getStructureAdrenalineRegenMultiplier: id => gameplay.player?.getStructureOccupancyState(id) ? WATCHTOWER_OCCUPANCY_RULES.adrenalineRegenMultiplier : 1,
     getTurrets: () => gameplay.combat?.getTurretDefinitions() ?? [],
     isFriendlyTurret: (id, turret) => isFriendlyTurret(id, turret, (a, b) => bridge.isEnemyPair(a, b)),
     getTurretControlInput: id => bridge.getPlayerTurretControlInput(id),
@@ -148,6 +151,12 @@ export function composeWorldPlayerGameplay(
     },
   });
   gameplay.player = playerGameplayRuntime;
+  projectileSpawn.setOccupiedStructureTarget((id, owner) => combatSystem.isOccupiedStructureTarget(id, owner));
+  projectileSpawn.setSourceStructureResolver(id => playerGameplayRuntime.getStructureOccupancyState(id)?.structureId);
+  bridge.registerStructureOccupancyHandler((id, request) => {
+    if (request.action === 'enter' && (bridge.isArenaCountdownActive() || bridge.getWorldParticipation(id) !== 'interactive')) return false;
+    return playerGameplayRuntime.requestStructureOccupancy(id, request);
+  });
   bridge.registerTurretControlHandler((id, request) => {
     if (request.action === 'enter' && (bridge.isArenaCountdownActive() || bridge.getWorldParticipation(id) !== 'interactive')) return false;
     return playerGameplayRuntime.requestTurretControl(id, request);
@@ -155,6 +164,10 @@ export function composeWorldPlayerGameplay(
   projectileSpawn.setPortalQueryPort(playerGameplayRuntime.getPortalQueryPort());
   combatSystem.setPortalQueryPort(playerGameplayRuntime.getPortalQueryPort());
   worldRuntime.bind({ destroy: () => {
+    bridge.registerStructureOccupancyHandler(null);
+    projectileSpawn.setSourceStructureResolver(null);
+    projectileSpawn.setOccupiedStructureTarget(null);
+    ctx.hostPhysics.setStructurePlatformResolver(null);
     bridge.registerTurretControlHandler(null);
     projectileSpawn.setPortalQueryPort(null);
     combatSystem.setPortalQueryPort(null);

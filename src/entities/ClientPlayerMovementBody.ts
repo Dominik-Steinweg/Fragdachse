@@ -45,10 +45,10 @@ export class ClientPlayerMovementBody implements LocalPredictionBody {
     for (let remaining = deltaMs; remaining > 1e-7;) {
       const stepMs = Math.min(remaining, maxStepMs);
       resolveWalkingVelocity(this.x, this.y, dx, dy, speed,
-        this.geometry.metrics, this.geometry.isBlockedCell, this.velocity);
+        this.geometry.metrics, this.geometry.getStructurePlatform?.(this.player.id) ? null : this.geometry.isBlockedCell, this.velocity);
       this.body.setVelocity(this.velocity.dx, this.velocity.dy);
       this.body.preUpdate(true, stepMs / 1000);
-      this.geometry.collide(this.player.physicsProxy);
+      this.geometry.collide(this.player.physicsProxy, this.player.id);
       this.body.postUpdate();
       remaining -= stepMs;
     }
@@ -60,7 +60,7 @@ export class ClientPlayerMovementBody implements LocalPredictionBody {
     const steps = Math.max(1, Math.ceil(distance / (radius * 0.5)));
     for (let i = 0; i <= steps; i++) {
       if (!this.geometry.canOccupyCircle(this.x + (x - this.x) * i / steps,
-        this.y + (y - this.y) * i / steps, radius)) return false;
+        this.y + (y - this.y) * i / steps, radius, this.player.id)) return false;
     }
     return true;
   }

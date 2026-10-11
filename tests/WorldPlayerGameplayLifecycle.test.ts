@@ -142,6 +142,7 @@ function makeRuntime() {
 
   const runtime = createRuntimeShell();
   runtime.systems = systems;
+  runtime.structureOccupancy = { getState: () => undefined, release() {}, reconcile() {}, clear() {} };
   runtime.turretControl = emptyTurretControl();
   runtime.options = {
     playerManager: {
@@ -221,6 +222,7 @@ function makeConcreteRemoveRuntime() {
     ak47Behavior: { removePlayer: vi.fn(), destroy: vi.fn() },
   };
   runtime.options = { decoySystem: { clearPlayer: vi.fn() } };
+  runtime.structureOccupancy = { getState: () => undefined, release() {}, reconcile() {}, clear() {} };
   runtime.turretControl = emptyTurretControl();
   return {
     runtime,
@@ -312,6 +314,7 @@ function makeDestroyRuntime() {
     },
     decoySystem: { clearPlayer: vi.fn() },
   };
+  runtime.structureOccupancy = { getState: () => undefined, release() {}, reconcile() {}, clear() {} };
   runtime.turretControl = emptyTurretControl();
   return { runtime, systems };
 }
@@ -584,7 +587,8 @@ describe('WorldPlayerGameplayRuntime – Idempotenz-Gate (2A)', () => {
   it('macht spielerbezogenes Held-Action-Remove und Activity-Reset wiederholbar', () => {
     const heldAction = new HostHeldActionSystem();
     const runtime = createRuntimeShell();
-    runtime.turretControl = emptyTurretControl();
+    runtime.structureOccupancy = { getState: () => undefined, release() {}, reconcile() {}, clear() {} };
+  runtime.turretControl = emptyTurretControl();
     runtime.systems = { playerAction: scopeStub(), ultimateBehavior: { cancelTunnelSelections: vi.fn() },
       plasmaBurner: plasmaStub(), heldAction, translocator: { clear: vi.fn() } };
 
@@ -717,6 +721,7 @@ describe('World player actions release a Rocket magazine before changing player 
       return { ok: true };
     });
     const world = Object.create(WorldPlayerGameplayRuntime.prototype) as AnyRuntime;
+    world.structureOccupancy = { getState: () => undefined, release() {}, reconcile() {}, clear() {} };
     world.turretControl = emptyTurretControl();
     world.systems = {
       playerAction: scopeStub(),
@@ -769,7 +774,7 @@ describe('scope gestures at World and player lifetime boundaries', () => {
       Object.assign(systems.sustainedWeaponBehavior, { interruptCombat: vi.fn() });
       systems.burrow.handleBurrowRequest = vi.fn();
       systems.heldAction.start = vi.fn();
-      runtime.options.hostPhysics = { handleDashRPC: vi.fn() };
+      runtime.options.hostPhysics = { setStructurePlatformResolver: vi.fn(), handleDashRPC: vi.fn() };
       if (boundary === 'attach') runtime.attachPlayerLoadout('p1');
       if (boundary === 'detach') runtime.detachPlayerLoadout('p1');
       if (boundary === 'build detach') runtime.detachPlayerBuild('p1');

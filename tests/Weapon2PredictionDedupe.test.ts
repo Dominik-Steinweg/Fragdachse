@@ -93,7 +93,7 @@ describe('host-owned scope gestures over the weapon-2 RPC', () => {
   it('preserves an uncharged AWP tap through the host tooling adapter without exposing a client shortcut', async () => {
     const f = await scopeFixture();
     const worldRuntime = Object.assign(Object.create(WorldPlayerGameplayRuntime.prototype), {
-      systems: { playerAction: f.actions }, turretControl: { isOccupied: () => false },
+      systems: { playerAction: f.actions }, structureOccupancy: { getState: () => undefined }, turretControl: { isOccupied: () => false },
     }) as WorldPlayerGameplayRuntime;
     const port = createWeaponBalanceLabWorldPort({ getWorldPlayerGameplayRuntime: () => worldRuntime } as never,
       { getPlayer: () => ({ x: 100, y: 100 }) } as never);

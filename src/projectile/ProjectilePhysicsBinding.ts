@@ -337,7 +337,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
         startX, startY, endX, endY,
         (kind, rockIndex, left, top, right, bottom, source) => {
           if (kind === OBSTACLE_ROCK && rockIndex !== options.skipRockIndex && !options.ignoreRocks
-            && obstacleBlocks(this.obstacleIndex!.getRockClass(rockIndex), options.purpose ?? 'physical')
+            && (obstacleBlocks(this.obstacleIndex!.getRockClass(rockIndex), options.purpose ?? 'physical') || options.targetableLowRock?.(rockIndex))
             && !(this.obstacleIndex!.getRockClass(rockIndex) === 'low' && options.purpose === 'support'
               && options.acceptsLowTarget && !options.acceptsLowTarget(rockIndex))) consider(rockIndex, left, top, right, bottom);
           else if (kind === OBSTACLE_BARRIER && obstacleBlocks(source.obstacleClass ?? 'veryHigh', options.purpose ?? 'physical')) {
@@ -356,7 +356,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       for (let index = 0; index < (this.rockObjects?.length ?? 0); index += 1) {
         const rock = this.rockObjects![index];
         if (!rock?.active) continue;
-        if (index === options.skipRockIndex || options.ignoreRocks || !obstacleBlocks(rock.obstacleClass ?? 'veryHigh', options.purpose ?? 'physical')) continue;
+        if (index === options.skipRockIndex || options.ignoreRocks || (!obstacleBlocks(rock.obstacleClass ?? 'veryHigh', options.purpose ?? 'physical') && !options.targetableLowRock?.(index))) continue;
         if (rock.obstacleClass === 'low' && options.purpose === 'support'
           && options.acceptsLowTarget && !options.acceptsLowTarget(index)) continue;
         const bounds = rock.getBounds();

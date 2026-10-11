@@ -104,6 +104,7 @@ export interface PlayerUtilityActionNetworkPort {
 }
 
 export interface PlayerUtilityActionRuntimeOptions {
+  readonly canUseType?: (id: string, type: UtilityConfig['type']) => boolean;
   readonly captureSmokeDamage: (playerId: string, now: number) => Pick<import('../types').SmokeGrenadeEffect, 'sourceDamageMultiplier' | 'sourceOutgoingDamage'>;
   readonly projectileSpawn: ProjectileSpawnPort;
   /** Immediate attacks use the same normalized capability as regular weapon execution. */
@@ -444,6 +445,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     this.hostFrameNowMs = hostNowMs;
     const source = this.resolveSource(playerId, toolRef, temporaryUtilityInstanceId);
     if (!source || source.utility.config.activation.type !== kind) return false;
+    if (this.options.canUseType?.(playerId, source.utility.config.type) === false) return false;
     if (source.utility.config.type === 'time_bubble' && this.timeBubbleBlocked(playerId, hostNowMs)) return false;
     if (!source.temporary && source.utility.config.charges) {
       const state = this.getChargeStock(playerId, source.utility.config, hostNowMs);
@@ -535,6 +537,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
 
     const utility = source.utility;
     const cfg = utility.config;
+    if (this.options.canUseType?.(request.playerId, cfg.type) === false) return { ok: false, reason: 'blocked' };
     if (cfg.type === 'translocator') {
       const state = this.options.translocator?.getUseState(request.playerId);
       if (state?.phase === 'cooldown' && state.cooldownUntil > request.hostNowMs) return { ok: false, reason: 'cooldown' };
@@ -672,6 +675,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   getTranslocatorHpRegen(playerId: string, nowMs: number): number { return this.options.translocator?.getHpRegen(playerId, nowMs) ?? 0; }
 
   private followupTranslocator(request: PlayerUtilityActionRequest): LoadoutUseResult {
+    if (this.options.canUseType?.(request.playerId, 'translocator') === false) return { ok: false, reason: 'blocked' };
     const useId = request.params?.translocatorUseId;
     if (typeof useId !== 'string' || !useId.length || useId.length > 160) return { ok: false, reason: 'invalid' };
     if (!this.options.actor.canInteract(request.playerId) || !this.options.actor.isAlive(request.playerId)

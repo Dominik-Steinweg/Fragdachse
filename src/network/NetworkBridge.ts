@@ -905,6 +905,7 @@ export class NetworkBridge {
   private hitscanTracerHandler: HitscanTracerHandler | null = null;
   private dashHandler: DashHandler | null = null;
   private burrowHandler: BurrowHandler | null = null;
+  private structureOccupancyHandler: ((id: string, request: import('../systems/StructureOccupancySystem').StructureOccupancyRequest) => boolean) | null = null;
   private turretControlHandler: ((id: string, request: import('../types').TurretControlRequest) => boolean) | null = null;
   private shootingRangeHandler: ((id: string, request: import('../shootingRange/ShootingRangeContracts').ShootingRangeRequest) => boolean) | null = null;
   private shockwaveEffectHandler: ShockwaveEffectHandler | null = null;
@@ -1792,6 +1793,24 @@ export class NetworkBridge {
     const input = this.getPlayerInput(playerId)?.turretControl;
     const receivedAt = requireRoom().getPlayerStateUpdatedAt(playerId, KEY_INPUT);
     return input && receivedAt !== undefined ? { input, receivedAt } : null;
+  }
+
+  sendStructureOccupancyRequest(request: import('../systems/StructureOccupancySystem').StructureOccupancyRequest): void {
+    if (this.getWorldActionRevision() === null) return;
+    if (isHost()) { this.structureOccupancyHandler?.(myPlayer().id, request); return; }
+    this.sendWorldRpc('structure-occupancy', { ...request });
+  }
+
+  registerStructureOccupancyHandler(handler: typeof this.structureOccupancyHandler): void {
+    this.structureOccupancyHandler = handler;
+    this.registerHostRpcHandler('structure-occupancy', (data: unknown, caller: PlayerState): boolean => {
+      if (!isHost() || !this.acceptsWorldRpc(data) || !data || typeof data !== 'object') return false;
+      const request = data as import('../systems/StructureOccupancySystem').StructureOccupancyRequest;
+      if (!Number.isSafeInteger(request.structureId) || request.structureId < 0) return false;
+      if (request.action !== 'enter' && request.action !== 'exit') return false;
+      if (request.action === 'exit' && (!Number.isSafeInteger(request.revision) || request.revision <= 0)) return false;
+      return this.structureOccupancyHandler?.(caller.id, request) ?? false;
+    });
   }
 
   sendTurretControlRequest(request: import('../types').TurretControlRequest): void {

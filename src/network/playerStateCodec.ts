@@ -26,6 +26,7 @@ const FLAG_MOLOTOV_FIREWALKER = 256;
 /** Kompakte Wire-Form eines Spielers. Schlüssel bewusst kurz; optionale Felder fehlen bei Default. */
 interface CompactPlayerState {
   po?: import('../combat/plasmaBurner/PlasmaBurnerContracts').PlasmaBurnerOverloadNetState;
+  so?: import('../types').StructureOccupancyState;
   tc?: import('../types').TurretControlState;
   rm?: import('../types').RocketMagazineState;
   ps?: number;
@@ -71,6 +72,7 @@ function encodePlayerState(state: PlayerNetState): CompactPlayerState {
   if (state.isMolotovFirewalkerActive === true) flags |= FLAG_MOLOTOV_FIREWALKER;
 
   const compact: CompactPlayerState = {
+    so: state.structureOccupancy,
     tc: state.turretControl,
     pr: state.positionRevision,
     mp: state.movementPrediction ? [state.movementPrediction.sequence, state.movementPrediction.appliedMs,
@@ -118,6 +120,7 @@ function decodePlayerState(compact: CompactPlayerState): PlayerNetState {
   };
 
   return {
+    ...(compact.so ? { structureOccupancy: compact.so } : {}),
     ...(compact.tc ? { turretControl: compact.tc } : {}),
     x: compact.x,
     ...(compact.po ? { plasmaBurnerOverload: compact.po } : {}),

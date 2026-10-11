@@ -203,6 +203,8 @@ export const deUi = {
   "ui.shootingRange.control.supply": "Adrenalin",
   "ui.lobby.deferredLoading": "Spielinhalte werden nachgeladen …",
   "ui.lobby.deferredFailed": "Erforderliche Spielinhalte konnten nicht geladen werden.",
+  "ui.watchtower.enter": "Shift: Wachturm besteigen",
+  "ui.watchtower.exit": "Shift: Wachturm verlassen",
   "ui.turretControl.enter": "Shift: Bemannen",
   "ui.stinkCloud.active": "Aktiv",
   "ui.stinkCloud.cooldown": "Abklingzeit",

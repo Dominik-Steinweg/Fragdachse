@@ -1,3 +1,5 @@
+import type { StructurePlatform } from '../systems/StructureOccupancySystem';
+import { nearestConstructionPoint } from '../systems/ConstructionGeometry';
 import { getHitscanRangeToCursor } from '../loadout/WeaponFireExecutor';
 import type { CombatAreaAttackPort, CombatAreaAttackRequest } from './CombatAreaAttack';
 import { readEnemyAreaClawEvent } from '../systems/EnemyClawAttack';
@@ -444,8 +446,10 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
   private withDamageEvent<T>(id: string, work: () => T): T {
     const previous = this.damageEventId;
+    const previousStructures = this.structureDamageTargets;
     this.damageEventId = id;
-    try { return work(); } finally { this.damageEventId = previous; }
+    this.structureDamageTargets = new Set();
+    try { return work(); } finally { this.damageEventId = previous; this.structureDamageTargets = previousStructures; }
   }
 
   private partStatus(id: string, status: 'burn' | 'slow' | 'stun', durationMs: number): boolean {
@@ -772,8 +776,11 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     return outcome;
   }
 
-  applyAoeDamage(...args: Parameters<WorldCombatCore['applyAoeDamageAtHostTime']>): ReturnType<WorldCombatCore['applyAoeDamageAtHostTime']> {
-    return this.runHostExecution(() => this.withDamageEvent(`aoe:${++this.damageEventSequence}`, () => this.applyAoeDamageAtHostTime(...args)));
+  applyAoeDamage(...args: Parameters<WorldCombatCore['applyAoeDamageAtHostTime']>): readonly number[] {
+    return this.runHostExecution(() => this.withDamageEvent(`aoe:${++this.damageEventSequence}`, () => {
+      this.applyAoeDamageAtHostTime(...args);
+      return [...(this.structureDamageTargets ?? [])];
+    }));
   }
 
   applyExplosionDamage(...args: Parameters<WorldCombatCore['applyExplosionDamageAtHostTime']>): ReturnType<WorldCombatCore['applyExplosionDamageAtHostTime']> {
@@ -887,7 +894,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   }
 
   resolveAreaAttack(request: CombatAreaAttackRequest): CombatImmediateAttackOutcome {
-    return this.runHostExecution(() => {
+    return this.runHostExecution(() => this.withDamageEvent(`area:${request.claw.attack.attackId}`, () => {
       const { claw, source, damage } = request, { attack } = claw, pose = attack.pose;
       const actor = source.actor ?? source.gameplaySource;
       const owner = this.enemyManager?.getCombatTargetRef(claw.enemyId);
@@ -905,11 +912,11 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       const select = (candidate: typeof targets[number]) => {
         if (!CombatGeometry.areaContainsCircle(pose, candidate.x, candidate.y, candidate.radius)) return;
         this.meleeLine.setTo(pose.originX, pose.originY, candidate.x, candidate.y);
-        if (this.isMeleePathBlocked(Math.hypot(candidate.x - pose.originX, candidate.y - pose.originY) - candidate.radius)) return;
+        if (this.isMeleePathBlocked(Math.hypot(candidate.x - pose.originX, candidate.y - pose.originY) - candidate.radius, this.getStructureOccupancyId(String(candidate.id)))) return;
         targets.push(candidate);
       };
       for (const p of this.playerManager.getAllPlayers()) {
-        if (!this.isPlayerTargetable(p.id) || !this.isAlive(p.id) || this.isBurrowed(p.id)
+        if (!this.canReceivePlayerContact(p.id) || !this.isAlive(p.id) || this.isBurrowed(p.id)
           || !this.relationshipForSource(source, p.id).canDamage) continue;
         select({ kind: 'player', id: p.id, x: p.x, y: p.y, radius: PLAYER_SIZE / 2, target: this.playerVitals.getTargetRef(p.id) ?? undefined });
       }
@@ -944,7 +951,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         range: g.kind === 'sector' ? g.range : g.length, arcDegrees: g.kind === 'sector' ? g.arcDegrees : 0,
         color: COLORS.RED_2, shooterId: claw.enemyId, hitPlayer: !!impact, impactX: impact?.x, impactY: impact?.y });
       return { accepted: true, interactions: Object.freeze(interactions) };
-    }, request.nowMs);
+    }), request.nowMs);
   }
 
   applyBaseDamage(...args: Parameters<WorldCombatCore['applyBaseDamageAtHostTime']>): ReturnType<WorldCombatCore['applyBaseDamageAtHostTime']> {
@@ -1154,9 +1161,46 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     this.onAuthoritativePositionReset = cb;
   }
   setPlayerActionAllowedResolver(resolver: ((playerId: string) => boolean) | null): void { this.playerActionAllowedResolver = resolver; }
+  private structureDamagePort: {
+    getPlatform(id: string): StructurePlatform | null;
+    apply(id: number, amount: number, source: CombatSource, kind: CombatDamageKind): CombatDamageMutationOutcome | null;
+  } | null = null;
+  private structureDamageTargets: Set<number> | null = null;
+  setStructureDamagePort(port: WorldCombatCore['structureDamagePort']): void { this.structureDamagePort = port; }
+  isOccupiedStructureTarget(rockId: number, attackerId: string): boolean {
+    return this.playerManager.getAllPlayers().some(p => this.getStructureOccupancyId(p.id) === rockId
+      && p.id !== attackerId && this.isAlive(p.id) && this.canDamageTarget(attackerId, p.id));
+  }
+  getStructureOccupancyId(id: string): number | undefined { return this.structureDamagePort?.getPlatform(id)?.id; }
+  private canReceivePlayerContact(id: string): boolean { return !this.playerMountedResolver?.(id); }
+  private routeStructureDamage(id: string, amount: number, attackerId?: string, sourceId?: string, options?: DamageApplicationOptions): CombatDamageMutationOutcome | null {
+    const platform = this.structureDamagePort?.getPlatform(id);
+    if (!platform || !this.isAlive(id)) return null;
+    const source = options?.source ?? this.createLegacyMutationSource(attackerId, sourceId, options?.damageKind ?? 'direct');
+    if (!this.relationshipForSource(source, id).canDamage || source.allegiance.ownerId === id) return null;
+    if (this.structureDamageTargets?.has(platform.id)) return null;
+    this.structureDamageTargets?.add(platform.id);
+    const value = this.resolveLegacyWorldModifiers({ targetType: 'construction', targetId: String(platform.id) },
+      options?.basis?.amount ?? amount, source.allegiance.ownerId, source.sourceSlot ?? options?.sourceSlot, false,
+      options?.basis?.kind === 'source-resolved' ? options.basis.sourceFactors : []);
+    return this.structureDamagePort!.apply(platform.id, value, source, options?.damageKind ?? 'direct');
+  }
+  /** Explicit lethal transition, bypassing shields, armour and damage reduction. */
+  killPlayer(playerId: string, sourceId: string, killerId = '__watchtower__'): void {
+    if (!this.bridge.isHost()) return;
+    this.runHostExecution(() => {
+      const target = this.playerVitals.getTargetRef(playerId), player = this.playerManager.getPlayer(playerId);
+      if (!target || !player || !this.isAlive(playerId)) return;
+      this.lastSource.delete(playerId); this.lastKillSource.delete(playerId);
+      const seed = this.nextEffectSeed();
+      this.handleDeath(playerId, player.x, player.y, seed, undefined, false, {
+        target, killerId, weapon: sourceId, source: {}, effect: this.buildDeathEffect(playerId, player.x, player.y, seed),
+      });
+    });
+  }
   private playerMountedResolver: ((playerId: string) => boolean) | null = null;
   setPlayerMountedResolver(resolver: ((playerId: string) => boolean) | null): void { this.playerMountedResolver = resolver; }
-  isPlayerTargetable(playerId: string): boolean { return !this.playerMountedResolver?.(playerId); }
+  isPlayerTargetable(playerId: string): boolean { return this.canReceivePlayerContact(playerId) && this.getStructureOccupancyId(playerId) === undefined; }
   /**
    * Meldung ueber einen direkten Primaerwaffentreffer, der den Gegner nicht getoetet hat.
    * Ausschliesslich `damageKind === 'direct'` und `sourceSlot === 'weapon1'`.
@@ -1495,6 +1539,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     visualContext?:  DamageVisualContext,
     options?:        DamageApplicationOptions,
   ): CombatDamageMutationOutcome | null {
+    if (this.getStructureOccupancyId(targetId) !== undefined) return this.routeStructureDamage(targetId, amount, attackerId, sourceId, options);
     if (this.partHandles.has(targetId)) return this.applyPartDamage(targetId, amount, attackerId, sourceId, visualContext, options);
     if (this.enemyManager?.hasEnemy(targetId)) {
       if (!this.isBodyTargetable(targetId)) return null;
@@ -1758,7 +1803,9 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       if (!includeSelf && player.id === ownerId) continue;
       if (!this.isAlive(player.id)) continue;
       if (!this.canDamageTarget(ownerId, player.id, options?.allowTeamDamage)) continue;
-      const dist = Phaser.Math.Distance.Between(x, y, player.x, player.y);
+      const platform = this.structureDamagePort?.getPlatform(player.id);
+      const dist = platform ? nearestConstructionPoint(platform.footprint, x, y).distance
+        : Phaser.Math.Distance.Between(x, y, player.x, player.y);
       if (dist > radius) continue;
 
       let appliedDamage = computeRadialDamage(dist, radius, runtimeDamage, runtimeFalloff);
@@ -1896,7 +1943,9 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     for (const player of damagePlayers ? this.playerManager.getAllPlayers() : []) {
       if (!this.isAlive(player.id)) continue;
 
-      const dist = Phaser.Math.Distance.Between(x, y, player.x, player.y);
+      const platform = this.structureDamagePort?.getPlatform(player.id);
+      const dist = platform ? nearestConstructionPoint(platform.footprint, x, y).distance
+        : Phaser.Math.Distance.Between(x, y, player.x, player.y);
       if (dist > effect.radius) continue;
 
       const friendly = player.id === ownerId || this.relationshipForSource(
@@ -1932,7 +1981,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         source: source ? { ...source, allegiance: { ...source.allegiance, allowTeamDamage: effect.allowTeamDamage } } : undefined,
       });
       if (outcome?.kind === 'damage-applied' && outcome.actualDamage > 0) {
-        damagedTargetKeys.push(`players:${player.id}`);
+        damagedTargetKeys.push(platform ? `constructions:${platform.id}` : `players:${player.id}`);
       }
     }
 
@@ -1992,7 +2041,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       return this.relationshipForSource({ ...source, allegiance: { ...source.allegiance, allowTeamDamage } }, current.contact.identity.boss.id).canDamage;
     }
     if (!this.isBodyTargetable(targetId)) return false;
-    if (!this.isPlayerTargetable(targetId)) return false;
+    if (!this.canReceivePlayerContact(targetId)) return false;
     if (!attackerId) return true;
     if (this.playerActionAllowedResolver
       && this.bridge.getPlayerProfile(attackerId)
@@ -2021,6 +2070,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     sourceY: number,
     now = this.hostFrameNowMs,
   ): boolean {
+    if (this.getStructureOccupancyId(targetId) !== undefined) return false;
     if (!this.energyShieldSystem) return false;
     return this.energyShieldSystem.tryBlockDamage({
       targetId,
@@ -2042,7 +2092,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
    */
   readCollisionTargets(sink: ProjectileCollisionTargetSink): void {
     for (const player of this.playerManager.getAllPlayers()) {
-      if (!this.isPlayerTargetable(player.id)) continue;
+      if (!this.canReceivePlayerContact(player.id)) continue;
       if (!this.isAlive(player.id)) continue;
       if (this.burrowSystem?.isBurrowed(player.id)) continue;
       const bounds = player.getBounds(this.projectileTargetBounds);
@@ -2408,7 +2458,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       if (!part) return false;
       targetId = part.contact.identity.boss.id;
     } else if (targetId.startsWith('combat-part:') || !this.isBodyTargetable(targetId)) return false;
-    if (!this.isPlayerTargetable(targetId)) return false;
+    if (!this.canReceivePlayerContact(targetId)) return false;
     const saved = this.captureProjectileProvenance(provenance);
     const source = adaptProjectileCombatSource(saved, 0, this.classifyProjectileSource({ provenance: saved }));
     if (this.isBurrowed(targetId)) return false;
@@ -2539,6 +2589,11 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     }
 
     const actualDamage = this.computeDirectDamage(request);
+    if (this.getStructureOccupancyId(playerId) !== undefined) {
+      const adapted = this.adaptProjectileDirectRequest(request, target, this.nextMutationOutcomeId('projectile-direct', playerId));
+      return projectileMutationOutcome(this.routeStructureDamage(playerId, actualDamage, adapted.source.attribution.id,
+        adapted.source.authoredSourceId, { source: adapted.source, basis: adapted.basis, damageKind: 'direct' }));
+    }
     if (this.shouldBlockWithShield(playerId, 'projectile', actualDamage, request.impact.x, request.impact.y, this.hostFrameNowMs)) {
       const reflectionFactor = request.provenance.lineage?.reflected
         ? 0
@@ -3141,7 +3196,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         || !req.config.fire.supportEffect) return empty;
       const effect = req.config.fire.supportEffect;
       const desired = req.gameplayMuzzleOrigin ?? { x: req.x, y: req.y };
-      const start = this.resolveSafeHitscanStart(req.x, req.y, desired.x, desired.y, { purpose: 'support' });
+      const start = this.resolveSafeHitscanStart(req.x, req.y, desired.x, desired.y, { purpose: 'support', skipRockIndex: this.getStructureOccupancyId(req.playerId) });
       const options = { shooterId: req.playerId, startX: start.x, startY: start.y, angle: req.angle,
         range: getHitscanRangeToCursor(req.config, start.x, start.y, req.angle, req.targetX, req.targetY),
         traceThickness: req.config.fire.traceThickness, applyFavorTheShooter: true,
@@ -3560,7 +3615,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       // The complete geometric membership decision belongs to the query phase. The scratch line
       // is safe to reuse here; no target has been mutated yet.
       this.meleeLine.setTo(x, y, candidate.x, candidate.y);
-      if (this.isMeleePathBlocked(distance - candidate.radius)) return;
+      if (this.isMeleePathBlocked(distance - candidate.radius, this.getStructureOccupancyId(shooterId) ?? this.getStructureOccupancyId(String(candidate.id)))) return;
       swingTargets.push({ ...candidate, distance });
     };
     if (canDamageKind('players')) {
@@ -3735,9 +3790,10 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     if (rockMult !== 0 && this.rockObjects && this.onRockDamage) {
       for (let i = 0; i < this.rockObjects.length; i++) {
         const rock = this.rockObjects[i];
-        if (!rock?.active) continue;
-        const dx   = rock.x - x;
-        const dy   = rock.y - y;
+        if (!rock?.active || this.structureDamageTargets?.has(i) || this.getStructureOccupancyId(shooterId) === i) continue;
+        const bounds = this.isOccupiedStructureTarget(i, shooterId) ? rock.getBounds() : null;
+        const dx = (bounds ? Math.max(bounds.left, Math.min(bounds.right, x)) : rock.x) - x;
+        const dy = (bounds ? Math.max(bounds.top, Math.min(bounds.bottom, y)) : rock.y) - y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist > range) continue;
         let ad = Math.atan2(dy, dx) - angle;
@@ -3955,7 +4011,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     this.hitscanLine.setTo(startX, startY, maxEndX, maxEndY);
 
     let closestDistance = Phaser.Geom.Line.Length(this.hitscanLine);
-    const obstacleHit = this.findNearestObstacleHit(this.hitscanLine, { purpose: 'directFire', ...options });
+    const obstacleHit = this.findNearestObstacleHit(this.hitscanLine, { purpose: 'directFire', ...options, skipRockIndex: this.getStructureOccupancyId(shooterId) ?? options.skipRockIndex, targetableLowRock: id => this.isOccupiedStructureTarget(id, shooterId) });
     if (obstacleHit) closestDistance = obstacleHit.distance;
 
     let hitPlayerId: string | null = null;
@@ -4156,12 +4212,12 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
    * vor der angegebenen Distanz blockiert (Arena-Außenwände werden ignoriert,
    * da Ziele immer innerhalb der Arena stehen).
    */
-  private isMeleePathBlocked(maxDist: number): boolean {
-    return this.geometry.isPathBlocked(this.meleeLine, maxDist);
+  private isMeleePathBlocked(maxDist: number, skipRockIndex?: number): boolean {
+    return this.geometry.isPathBlocked(this.meleeLine, maxDist, { skipRockIndex });
   }
 
   private isMeleeTargetCandidate(playerId: string, shooterId: string): boolean {
-    if (!this.isPlayerTargetable(playerId)) return false;
+    if (!this.canReceivePlayerContact(playerId)) return false;
     if (playerId === shooterId) return false;
     if (!this.isAlive(playerId)) return false;
     if (this.burrowSystem?.isBurrowed(playerId)) return false;
@@ -4169,7 +4225,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   }
 
   private isHitscanTargetCandidate(playerId: string, shooterId: string, includeShooter = false): boolean {
-    if (!this.isPlayerTargetable(playerId)) return false;
+    if (!this.canReceivePlayerContact(playerId)) return false;
     if (playerId === shooterId && !includeShooter) return false;
     if (!this.isHitscanTargetAlive(playerId)) return false;
     if (this.isHitscanTargetBurrowed(playerId)) return false;
@@ -4854,7 +4910,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
           && isSameCombatScope(target.scope, this.enemyManager.getCombatTargetRef(target.id)!.scope)
         : isSameCombatScope(target.scope, this.playerVitals.scope),
       resolveTarget: (target, source) => {
-        if (target.kind === 'player' && !this.isPlayerTargetable(target.id)) return null;
+        if (target.kind === 'player' && !this.canReceivePlayerContact(target.id)) return null;
         const state = target.kind === 'player' ? this.playerVitals.readVitals(target)
           : target.kind === 'enemy' ? this.enemyManager?.readCombatVitals(target) : null;
         if (!state) return null;

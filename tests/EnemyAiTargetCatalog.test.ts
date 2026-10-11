@@ -51,6 +51,18 @@ describe('EnemyAiTargetCatalog', () => {
     expect(catalog.getPlayerReplacement('q')).toBe(carrier);
     catalog.clear(); expect(catalog.getPlayerReplacement('p')).toBeNull();
   });
+  it('represents all watchtower occupants by one construction and drops the empty carrier', () => {
+    const catalog = new EnemyAiTargetCatalog();
+    const tower = { ...candidate('armed-construct', '8', () => true), representedPlayerIds: ['p', 'q'] };
+    const players = ['p', 'q'].map(id => candidate('player', id, () => false));
+    catalog.updateTargets([...players, tower]);
+    expect(catalog.getCandidates('player-threats')).toEqual([tower]);
+    expect(catalog.getPlayerReplacement('p')).toBe(tower);
+    expect(catalog.getPlayerReplacement('q')).toBe(tower);
+    catalog.updateTargets(['p', 'q'].map(id => candidate('player', id, () => true)));
+    expect(catalog.getPlayerReplacement('p')).toBeNull();
+    expect(catalog.getCandidates('player-threats').map(p => p.id)).toEqual(['p', 'q']);
+  });
   it('excludes a stealthed player but keeps the technical decoy target', () => {
     let stealthed = true;
     let decoyAlive = true;

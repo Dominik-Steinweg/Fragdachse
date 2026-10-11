@@ -1,3 +1,4 @@
+import { restrictStructureOccupant } from '../../world/PlayerCapabilities';
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { type PersistentBaseHealthReward } from '../../persistentBase/PersistentBaseHealth';
 import { getDeferredAssets } from '../../assets/DeferredAssets';
@@ -744,6 +745,7 @@ export class ArenaLifecycleCoordinator {
       getEnemyManager: () => this.coopMissionRuntime?.enemyManager ?? null,
     }) ?? null;
     this.coopMissionPorts = createArenaCoopMissionPorts({
+      getStructureOccupancyState: id => this.worldPlayerGameplayRuntime?.getStructureOccupancyState(id),
       getTurretControlState: id => this.worldPlayerGameplayRuntime?.getTurretControlState(id),
       getSmokePerception: () => this.worldGameplay?.support?.smoke.runtime ?? null,
       ctx,
@@ -2574,6 +2576,9 @@ export class ArenaLifecycleCoordinator {
       worldCombatAllowed: this.worldLifecycle.activity.kind !== null
         || this.worldRuntime?.context.definition?.actionPolicy?.combat === true,
     });
+    const structure = bridge.isHost() ? this.worldPlayerGameplayRuntime?.getStructureOccupancyState(playerId)
+      : bridge.getLatestGameState()?.players[playerId]?.structureOccupancy;
+    if (structure) return restrictStructureOccupant(capabilities);
     const occupied = bridge.isHost() ? this.worldPlayerGameplayRuntime?.isControllingTurret(playerId)
       : !!bridge.getLatestGameState()?.players[playerId]?.turretControl;
     return occupied ? { ...capabilities, canMove: false, canInteract: false, canPlace: false,

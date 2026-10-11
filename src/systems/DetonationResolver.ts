@@ -22,7 +22,7 @@ export interface DetonationEffectSink {
     falloff: RadialDamageFalloffConfig | undefined,
     baseDamageMult: number,
     sourceSlot: LoadoutSlot | undefined,
-  ): void;
+  ): readonly number[] | void;
   /** Radialer Rückstoß auf bewegliche Körper. */
   applyRadialImpulse(
     x: number, y: number, radius: number, force: number,
@@ -34,6 +34,7 @@ export interface DetonationEffectSink {
     rockDamageMult: number, trainDamageMult: number,
     attackerId: string,
     falloff: RadialDamageFalloffConfig | undefined,
+    excludedRockIndices?: readonly number[],
   ): void;
   /**
    * Explosionsdarstellung. Im Gameplay repliziert, in der Lobby rein lokal.
@@ -71,7 +72,7 @@ export function resolveDetonation(sink: DetonationEffectSink, event: DetonationE
     sink.spawnComboEssence(event, comboAdrenalineGain);
   }
 
-  sink.applyAoeDamage(
+  const hitStructures = sink.applyAoeDamage(
     event.x, event.y, effect.aoeRadius, effect.aoeDamage,
     event.detonatorOwnerId,
     effect.damageFalloff,
@@ -92,6 +93,7 @@ export function resolveDetonation(sink: DetonationEffectSink, event: DetonationE
     effect.rockDamageMult ?? 1, effect.trainDamageMult ?? 1,
     event.detonatorOwnerId,
     effect.damageFalloff,
+    ...(hitStructures?.length ? [hitStructures] : []),
   );
 
   const pulse = resolveComboLightning(event);

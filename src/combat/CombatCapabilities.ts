@@ -77,6 +77,7 @@ export interface CombatLineQueryPort {
  * consumers must not depend on the concrete WorldCombatCore implementation.
  */
 export interface CombatActorStatePort {
+  getStructureOccupancyId?(id: string): number | undefined;
   isPlayerTargetable?(id: string): boolean;
   isStunned?(id: string, now: number): boolean;
   isAlive(id: string): boolean;

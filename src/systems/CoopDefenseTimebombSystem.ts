@@ -390,9 +390,9 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
     const x = enemy.sprite.x;
     const y = enemy.sprite.y;
     this.states.delete(enemy.id);
-    this.damagePlayers(enemy.id, x, y, config.explosionRadiusPx, config.explosionDamage, 'Zeitbombendachs');
+    const hitStructures = this.damagePlayers(enemy.id, x, y, config.explosionRadiusPx, config.explosionDamage, 'Zeitbombendachs');
     this.damageDecoys(enemy.id, x, y, config.explosionRadiusPx, config.explosionDamage, 'Zeitbombendachs');
-    this.damageConstructions(enemy.id, x, y, config.explosionRadiusPx, config.explosionDamage);
+    this.damageConstructions(enemy.id, x, y, config.explosionRadiusPx, config.explosionDamage, hitStructures);
     this.damageArmedOutposts(enemy.id, x, y, config.explosionRadiusPx, config.explosionDamage);
     this.hooks.applyRadialImpulse(x, y, config.explosionRadiusPx, config.explosionKnockback, enemy.id);
     this.hooks.playExplosion(x, y, config.explosionRadiusPx, 'timebomb');
@@ -418,17 +418,24 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
     radius: number,
     maxDamage: number,
     sourceId: string,
-  ): void {
-    if (maxDamage <= 0) return;
+  ): Set<number> {
+    const hitStructures = new Set<number>();
+    if (maxDamage <= 0) return hitStructures;
     for (const player of this.playerManager.getAllPlayers()) {
       if (!player.active || !this.combatSystem.isAlive(player.id) || this.combatSystem.isBurrowed(player.id)) continue;
-      const distance = Math.hypot(player.x - x, player.y - y);
+      const structureId = this.combatSystem.getStructureOccupancyId?.(player.id);
+      if (structureId !== undefined && hitStructures.has(structureId)) continue;
+      const structure = structureId === undefined ? null : this.placementSystem.getRuntimeRock(structureId);
+      const point = structure ? this.placementSystem.getRuntimeRockSurfacePoint(structure, x, y) : player;
+      const distance = Math.hypot(point.x - x, point.y - y);
       if (distance > radius) continue;
       const damage = Math.round(maxDamage * (0.2 + 0.8 * (1 - distance / radius)));
+      if (structureId !== undefined) hitStructures.add(structureId);
       this.combatSystem.applyDamage(player.id, damage, false, attackerId, sourceId, { sourceX: x, sourceY: y }, {
         damageKind: 'explosion', source: this.explosionSource(attackerId, sourceId),
       });
     }
+    return hitStructures;
   }
 
   private damageDecoys(
@@ -457,8 +464,9 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
     };
   }
 
-  private damageConstructions(attackerId: string, x: number, y: number, radius: number, maxDamage: number): void {
+  private damageConstructions(attackerId: string, x: number, y: number, radius: number, maxDamage: number, excluded = new Set<number>()): void {
     for (const construction of this.placementSystem.getAllRuntimeRocks()) {
+      if (excluded.has(construction.id)) continue;
       if (construction.hp <= 0 || (!isOffensiveConstruction(construction) && construction.kind !== 'watchtower')) continue;
       const world = construction.kind === 'watchtower'
         ? this.placementSystem.getRuntimeRockSurfacePoint(construction, x, y)

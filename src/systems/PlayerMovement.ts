@@ -1,3 +1,4 @@
+import { clampStructurePosition, type StructurePlatform } from './StructureOccupancySystem';
 import type * as Phaser from 'phaser';
 import type { WaterGeometry } from '../arena/WaterGeometry';
 import type { WorldMetrics } from '../world/WorldMetrics';
@@ -7,8 +8,9 @@ import { applyGridCornerAssist, type GridCornerAssistOutput, type MovementBlocke
 export interface PlayerMovementGeometry {
   readonly metrics: WorldMetrics;
   readonly isBlockedCell: MovementBlockedCell;
-  collide(proxy: Phaser.GameObjects.Zone): void;
-  canOccupyCircle(x: number, y: number, radius: number): boolean;
+  getStructurePlatform?(id: string): StructurePlatform | null;
+  collide(proxy: Phaser.GameObjects.Zone, playerId?: string): void;
+  canOccupyCircle(x: number, y: number, radius: number, playerId?: string): boolean;
 }
 
 /** Shared normal-locomotion rule. Gameplay modifiers are resolved by the host. */
@@ -37,4 +39,16 @@ export function collidePlayerWater(
   body.position.set(out.x - body.halfWidth, out.y - body.halfHeight);
   body.updateCenter();
   body.setVelocity(out.vx, out.vy);
+}
+
+/** Shared Arcade post-step correction, used by authoritative movement and isolated prediction/replay. */
+export function clampStructureBody(body: Phaser.Physics.Arcade.Body | null, platform: StructurePlatform | null): void {
+  if (!body?.enable || !platform) return;
+  const point = clampStructurePosition(platform, body.center.x, body.center.y);
+  if (point.x === body.center.x && point.y === body.center.y) return;
+  const vx = point.x === body.center.x ? body.velocity.x : 0;
+  const vy = point.y === body.center.y ? body.velocity.y : 0;
+  body.position.set(point.x - body.halfWidth, point.y - body.halfHeight);
+  body.updateCenter();
+  body.setVelocity(vx, vy);
 }

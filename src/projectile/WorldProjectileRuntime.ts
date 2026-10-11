@@ -326,6 +326,7 @@ export class WorldProjectileRuntime implements
   private shotOptions(record: ProjectileRuntimeRecord): import('../systems/ObstacleRules').ObstacleShotOptions {
     return { purpose: record.spec.flight.isGrenade || record.spec.flight.isTranslocatorPuck ? 'physical'
       : (record.spec.interaction.energyInjectorPayload || record.spec.interaction.plasmaBurnerCharge) ? 'support' : 'directFire',
+      targetableLowRock: id => this.occupiedStructureTarget?.(id, record.provenance.allegiance.ownerId) ?? false,
       sourceCarrierBaseId: record.sourceCarrierBaseId,
       skipRockIndex: !record.contacts.originExited && (record.provenance.lineage?.originTarget?.kind === 'construction' || record.provenance.lineage?.originTarget?.kind === 'rock')
         ? Number(record.provenance.lineage.originTarget.id) : undefined,
@@ -340,6 +341,8 @@ export class WorldProjectileRuntime implements
       record.contacts.originExited === true)) return false;
     if (target.kind !== 'rock' && target.kind !== 'base') return true;
     if (target.kind === 'rock') {
+      if (target.id === record.spec.flight.collisionFilter.ignoreRockIndex) return false;
+      if (this.occupiedStructureTarget?.(target.id, record.provenance.allegiance.ownerId)) return true;
       const kind = this.obstacleKindResolver?.(target.id);
       const low = kind === 'rock' || kind === 'turret'
         || this.physicsBinding.getObstacleGeometry?.()?.getRockClass(target.id) === 'low';
@@ -1425,7 +1428,14 @@ export class WorldProjectileRuntime implements
 
   private readonly flameSteps = new Map<number, { fromAge: number; toAge: number; fromX: number; fromY: number; toX: number; toY: number }>();
 
+  private occupiedStructureTarget: ((rockId: number, ownerId: string) => boolean) | null = null;
+  setOccupiedStructureTarget(resolver: typeof this.occupiedStructureTarget): void { this.occupiedStructureTarget = resolver; }
+  private sourceStructureResolver: ((id: string) => number | undefined) | null = null;
+  setSourceStructureResolver(resolver: typeof this.sourceStructureResolver): void { this.sourceStructureResolver = resolver; }
   spawnProjectile(request: ProjectileSpawnRequest): ProjectileSpawnResult {
+    const ownStructure = this.sourceStructureResolver?.(request.provenance.gameplaySourceId);
+    if (ownStructure !== undefined) request = { ...request, flight: { ...request.flight,
+      collisionFilter: { ...request.flight.collisionFilter, ignoreRockIndex: ownStructure } } };
     if (this.destroyed) return null;
     const { origin } = request;
     const id = this.spawnResolved(

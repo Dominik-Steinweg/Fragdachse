@@ -1,3 +1,5 @@
+import { clampStructureBody } from './PlayerMovement';
+import type { StructurePlatform } from './StructureOccupancySystem';
 import type { ZeusMovement } from './ZeusRuntime';
 import * as Phaser from 'phaser';
 import { isMissionBarrierBody } from './CoopDefenseMissionBarrierManager';
@@ -120,6 +122,7 @@ export class HostPhysicsSystem {
     for (const player of this.playerManager.getAllPlayers()) {
       const body = player.physicsProxy.body as Phaser.Physics.Arcade.Body | null;
       if (!player.active || !body?.enable) continue;
+      clampStructureBody(body, this.getStructurePlatform(player.id));
       for (const observer of this.movementStepObservers) observer(player.id, body.center.x, body.center.y, player.positionRevision);
       this.movementAcknowledgements.consume(player.id, player.positionRevision, deltaSeconds * 1000);
       // Client prediction resolves the walking rule from the pose before each fixed step. The
@@ -153,7 +156,7 @@ export class HostPhysicsSystem {
       || this.burrowSystem?.isStunned(id) || this.burrowSystem?.isBurrowed(id)
       || (this.burrowSystem?.getPhase?.(id) ?? 'idle') !== 'idle'
       || this.dashStates.has(id) || this.mountedPlayers.has(id) || this.forcedMovement.has(id)
-      || this.pendingRecoils.has(id) || this.loadoutManager?.getHeldSelfPushVelocity(id, now))) {
+      || this.pendingRecoils.has(id) || (!this.getStructurePlatform(id) && this.loadoutManager?.getHeldSelfPushVelocity(id, now)))) {
       this.interruptMovement(id);
       return this.movementAcknowledgements.snapshot(id, player);
     }
@@ -240,6 +243,14 @@ export class HostPhysicsSystem {
   private forcedMovement = new Map<string, ForcedMovement>();
   private readonly mountedPlayers = new Map<string, { x: number; y: number }>();
 
+  private structurePlatformResolver: ((id: string) => StructurePlatform | null) | null = null;
+  private structureObstacleResolver: ((id: string, obstacle: unknown) => boolean) | null = null;
+  setStructurePlatformResolver(resolver: typeof this.structurePlatformResolver): void { this.structurePlatformResolver = resolver; }
+  clearStructureEntryMovement(id: string): void {
+    this.pendingRecoils.delete(id); this.forcedMovement.delete(id); this.interruptMovement(id);
+  }
+  getStructurePlatform(id: string): StructurePlatform | null { return this.structurePlatformResolver?.(id) ?? null; }
+  setStructureObstacleResolver(resolver: typeof this.structureObstacleResolver): void { this.structureObstacleResolver = resolver; }
   hasForcedMovement(id: string): boolean { return this.forcedMovement.has(id); }
 
   setPlayerMounted(id: string, position: { x: number; y: number } | null): void {
@@ -401,7 +412,7 @@ export class HostPhysicsSystem {
    * einzige Ort, an dem Gegner-Impulse entstehen, damit gilt der Faktor für jeden Wegstoß-Effekt.
    */
   addRecoil(playerId: string, vx: number, vy: number, durationMs = 180, sourcePlayerId?: string): void {
-    if (this.mountedPlayers.has(playerId)) return;
+    if (this.mountedPlayers.has(playerId) || this.getStructurePlatform(playerId)) return;
     const knockbackFactor = this.enemyManager?.getEnemy(playerId)?.getKnockbackFactor() ?? 1;
     if (knockbackFactor <= 0) return;
     this.interruptMovement(playerId);
@@ -430,7 +441,7 @@ export class HostPhysicsSystem {
   }
 
   setForcedMovement(playerId: string, vx: number, vy: number): void {
-    if (this.mountedPlayers.has(playerId)) return;
+    if (this.mountedPlayers.has(playerId) || this.getStructurePlatform(playerId)) return;
     if (!this.forcedMovement.has(playerId)) this.interruptMovement(playerId);
     this.forcedMovement.set(playerId, { vx, vy });
   }
@@ -558,6 +569,7 @@ export class HostPhysicsSystem {
    * Kein Dash wenn: tot, gestunnt, bereits dashend, oder im Stand.
    */
   handleDashRPC(playerId: string, dx: number, dy: number): void {
+    if (this.getStructurePlatform(playerId)) return;
     const now = Date.now();
     if (!this.bridge.isHost()) return;
     if (!(this.canMoveResolver?.(playerId)
@@ -789,7 +801,8 @@ export class HostPhysicsSystem {
         if (this.rockGroup && !this.rockCollidersSetup.has(player.id)) {
           const existing = this.playerColliders.get(player.id) ?? [];
           const c = this.scene.physics.add.collider(player.physicsProxy, this.rockGroup, undefined,
-            (_player, obstacle) => !this.burrowedPlayers.has(player.id) || isMissionBarrierBody(obstacle));
+            (_player, obstacle) => !this.structureObstacleResolver?.(player.id, obstacle)
+              && (!this.burrowedPlayers.has(player.id) || isMissionBarrierBody(obstacle)));
           existing.push(c);
           this.playerColliders.set(player.id, existing);
           this.rockCollidersSetup.add(player.id);
@@ -799,7 +812,8 @@ export class HostPhysicsSystem {
         if (this.trunkGroup && !this.trunkCollidersSetup.has(player.id)) {
           const existing = this.playerColliders.get(player.id) ?? [];
           const c = this.scene.physics.add.collider(player.physicsProxy, this.trunkGroup, undefined,
-            (_player, obstacle) => !this.burrowedPlayers.has(player.id) || isMissionBarrierBody(obstacle));
+            (_player, obstacle) => !this.structureObstacleResolver?.(player.id, obstacle)
+              && (!this.burrowedPlayers.has(player.id) || isMissionBarrierBody(obstacle)));
           existing.push(c);
           this.playerColliders.set(player.id, existing);
           this.trunkCollidersSetup.add(player.id);
@@ -809,7 +823,8 @@ export class HostPhysicsSystem {
         if (this.baseGroup && !this.baseCollidersSetup.has(player.id)) {
           const existing = this.playerColliders.get(player.id) ?? [];
           const c = this.scene.physics.add.collider(player.physicsProxy, this.baseGroup, undefined,
-            (_player, obstacle) => !this.burrowedPlayers.has(player.id) || isMissionBarrierBody(obstacle));
+            (_player, obstacle) => !this.structureObstacleResolver?.(player.id, obstacle)
+              && (!this.burrowedPlayers.has(player.id) || isMissionBarrierBody(obstacle)));
           existing.push(c);
           this.playerColliders.set(player.id, existing);
           this.baseCollidersSetup.add(player.id);
@@ -968,7 +983,7 @@ export class HostPhysicsSystem {
         const speedMult  = this.loadoutManager?.getSpeedMultiplier(player.id, now) ?? 1;
         const speed      = (this.runSpeedResolver?.(player.id) ?? PLAYER_SPEED) * burrowSpeedFactor * speedMult * ((this.walkingSpeedMultiplierResolver?.(player.id, now) ?? 1) * (1 + (this.zeusMoveBonus?.(player.id, now) ?? 0)));
 
-        walkingAssisted = !this.burrowSystem?.isBurrowed(player.id)
+        walkingAssisted = !this.getStructurePlatform(player.id) && !this.burrowSystem?.isBurrowed(player.id)
           && !!(this.movementBlockedCellResolver || this.waterGeometry);
         // The body already holds this frame's completed steps; the proxy only follows at POST_UPDATE.
         resolveWalkingVelocity(playerBody.center.x, playerBody.center.y, movementInput?.dx ?? 0,
@@ -977,7 +992,7 @@ export class HostPhysicsSystem {
         baseVx = this.gridCornerAssistOutput.dx;
         baseVy = this.gridCornerAssistOutput.dy;
 
-        const selfPush = this.loadoutManager?.getHeldSelfPushVelocity(player.id, now);
+        const selfPush = this.getStructurePlatform(player.id) ? null : this.loadoutManager?.getHeldSelfPushVelocity(player.id, now);
         if (selfPush) {
           baseVx += selfPush.vx;
           baseVy += selfPush.vy;

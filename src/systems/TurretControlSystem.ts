@@ -16,13 +16,16 @@ export interface TurretControlActor { readonly x: number; readonly y: number; re
 
 /** Searches beyond the full carrier contour before falling back to the original entry point. */
 export function resolveTurretExit(
-  turret: AutomatedTurret, origin: { x: number; y: number }, angle: number, radius: number,
+  turret: Pick<AutomatedTurret, 'x' | 'y' | 'footprint'>, origin: { x: number; y: number }, angle: number, radius: number,
   geometry: Pick<import('../world/WorldGeometryQueries').WorldGeometryQueries, 'resolveSafeGroundPoint'> | null,
   spawn: () => { x: number; y: number },
+  requireFootprintClearance = false,
 ): { x: number; y: number } {
   const bounds = turret.footprint ?? { left: turret.x - CELL_SIZE / 2, right: turret.x + CELL_SIZE / 2,
     top: turret.y - CELL_SIZE / 2, bottom: turret.y + CELL_SIZE / 2 };
   const valid = (x: number, y: number): boolean => {
+    if (requireFootprintClearance && Math.hypot(x - Math.max(bounds.left, Math.min(bounds.right, x)),
+      y - Math.max(bounds.top, Math.min(bounds.bottom, y))) < radius) return false;
     const point = geometry?.resolveSafeGroundPoint(x, y, radius);
     return !!point && Math.hypot(point.x - x, point.y - y) < 0.001;
   };
