@@ -143,6 +143,28 @@ function createSystem(
 }
 
 describe('Enemy stuck in a rock', () => {
+  it('uses the authored mortar bite against a nearby player while retaining siege intent', () => {
+    const enemy = createStuckEnemy({ wantsToMove: true, pathBlocked: false });
+    const authored = getCoopDefenseEnemyConfig('mortar-badger').weapons[0];
+    const weapon = new GenericWeapon(WEAPON_CONFIGS[authored.weaponId]);
+    Object.assign(enemy, { kind: 'mortar-badger', getAttackWeapons: () => [{ ...authored, weapon,
+      minimumFireDurationMs: 0, attackMovementSpeedFactor: 0, minTargetDistancePx: 0 }] });
+    const player = fakeEntity({ id: 'p1', x: enemy.sprite.x + weapon.config.range / 2, y: enemy.sprite.y, active: true });
+    const { system, firedWeaponIds, firedTargetPositions } = createSystem(enemy,
+      { x: 10000, y: 10000, active: false }, [player], [], null);
+    system.setIntents({ get: () => ({ target: { kind: 'base', id: 'distant-base' },
+      attackContext: 'primary', reason: 'siege' }),
+      allowsAttack: (_enemy: string, kind: string, id: string, mode: string) => mode === 'players' && kind === 'player' && id === player.id,
+    } as unknown as EnemyIntentSystem);
+    const claw = vi.fn(); system.setClawStateSink(claw);
+    system.hostUpdate(16, 1000);
+    expect(claw).toHaveBeenCalledWith(enemy, expect.objectContaining({ attack: expect.objectContaining({ weaponId: authored.weaponId }) }));
+    expect(firedWeaponIds).toEqual([]);
+    system.hostUpdate(16, 1000 + authored.meleeTiming!.hitDelayMs);
+    expect(firedWeaponIds).toEqual([authored.weaponId]);
+    expect(firedTargetPositions).toEqual([{ x: player.x, y: player.y }]);
+  });
+
   it('fires at players without a base manager, including weapons that scan all target kinds', () => {
     const enemy = createStuckEnemy({ wantsToMove: true, pathBlocked: false }, 'all');
     const player = fakeEntity({ id: 'p1', x: 400, y: 100, active: true });

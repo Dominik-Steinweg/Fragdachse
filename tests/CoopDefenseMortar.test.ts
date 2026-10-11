@@ -264,6 +264,28 @@ describe('local mortar siege policy', () => {
     field.destroy();
   });
 
+  it('I: only counts cover that still holds where movement actually stops (arrival tolerance)', () => {
+    const field = openField();
+    // Cover begins between the first northern candidate (snapped to its cell centre) and the
+    // point where movement already counts as arrived, i.e. inside the arrival tolerance.
+    const snap = (v: number) => -1552 + (Math.floor((v + 1552) / 32) + 0.5) * 32;
+    const edge = snap(-config.localSearchRadiusPx / config.positionCandidateRings) + config.positionArrivalTolerancePx / 2;
+    const hasLine = (_sx: number, _sy: number, _x: number, y: number) => y > edge;
+    const f = fixture({ navigation: field, hasLineOfSight: hasLine });
+    const start = { x: f.enemy.sprite.x, y: f.enemy.sprite.y };
+    f.update(0);
+    for (let now = 50; now <= 15000 && !f.mortar.getSnapshot().length; now += 50) {
+      const velocity = f.mortar.getMovementOverride(f.enemy, now) ?? { vx: 0, vy: 0 };
+      f.enemy.sprite.x += velocity.vx * 0.05; f.enemy.sprite.y += velocity.vy * 0.05;
+      f.update(now);
+    }
+    expect(f.mortar.getSnapshot()).toHaveLength(1);
+    const moved = Math.hypot(f.enemy.sprite.x - start.x, f.enemy.sprite.y - start.y) > 1;
+    // Either it fires from where it stood, or the station it walked to really blocks the line.
+    if (moved) expect(hasLine(0, 0, f.enemy.sprite.x, f.enemy.sprite.y)).toBe(false);
+    field.destroy();
+  });
+
   it('J: rejects a small cover gain that requires a long walk and worsens range', () => {
     const field = openField();
     const f = fixture({ navigation: field, hasLineOfSight: (_sx, _sy, x) => x < config.localSearchRadiusPx * 0.9 });
@@ -383,6 +405,25 @@ describe('local mortar siege policy', () => {
     f.players[0].x = 1; f.update(shot.launchAt - 1);
     expect(f.mortar.getSnapshot()).toEqual([shot]);
     expect(f.mortar.getMovementOverride(f.enemy, shot.launchAt - 1)).toEqual({ vx: 0, vy: 0 });
+    field.destroy();
+  });
+
+  it('uses player coordinates inherited through accessors for retreat and bite handoff', () => {
+    const field = openField(); const f = fixture({ navigation: field });
+    let playerX = config.minRangePx * 2 / 3;
+    f.players[0] = new class {
+      id = 'player'; active = true;
+      get x() { return playerX; }
+      get y() { return 0; }
+    }();
+    f.update(0);
+    expect(f.snapshot()).toEqual([]);
+    expect(f.mortar.getMovementOverride(f.enemy, 0)).toEqual({ vx: -f.enemy.getMoveSpeed() * config.spacingSpeedFactor, vy: 0 });
+    playerX = WEAPON_CONFIGS.MORTAR_BADGER_BITE.range;
+    f.update(1);
+    expect(f.snapshot()).toEqual([]);
+    expect(f.mortar.getMovementOverride(f.enemy, 1)).toBeNull();
+    expect(f.mortar.blocksRegularAttacks(f.enemy.id)).toBe(false);
     field.destroy();
   });
 

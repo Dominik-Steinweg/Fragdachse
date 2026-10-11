@@ -224,6 +224,16 @@ export class CoopDefenseMortarSystem implements EnemySpecialMovementSource {
     return found;
   }
 
+  /** Earliest point on the final approach at which the mortar counts as arrived; null if it stays put. */
+  private arrivalEdge(from: MortarPoint, position: MortarLocalPosition, tolerance: number): MortarPoint | null {
+    if (!position.travelDistance || !position.path.length) return null;
+    const previous = position.path.length > 1 ? position.path[position.path.length - 2] : from;
+    const length = distance(previous, position);
+    if (length <= 1e-6) return null;
+    const back = Math.min(tolerance, length) / length;
+    return { x: position.x + (previous.x - position.x) * back, y: position.y + (previous.y - position.y) * back };
+  }
+
   private chooseHostileTargetAndPosition(enemy: EnemyEntity, state: MortarBehavior, config: CoopDefenseEnemyMortarConfig, nowMs: number): void {
     const targets = this.hostileTargetShortlist(enemy, config, nowMs);
     if (!targets.length) { state.target = null; state.position = null; return; }
@@ -241,10 +251,13 @@ export class CoopDefenseMortarSystem implements EnemySpecialMovementSource {
     type Choice = { target: MortarTarget; position: MortarLocalPosition; score: number };
     let current: Choice | null = null, best: Choice | null = null;
     for (const position of positions) {
+      // Movement stops anywhere within the arrival tolerance, so cover must hold at that edge too.
+      const arrival = this.arrivalEdge(enemy.sprite, position, config.positionArrivalTolerancePx);
       let cover = 0;
       for (const threat of state.threats) {
         if (distance(position, threat) > threat.range) continue; // irrelevant is neither exposure nor cover.
-        cover += this.threatHasLine(threat, position) ? -config.exposurePenaltyWeight : config.coverQualityWeight;
+        const exposed = this.threatHasLine(threat, position) || (arrival !== null && this.threatHasLine(threat, arrival));
+        cover += exposed ? -config.exposurePenaltyWeight : config.coverQualityWeight;
       }
       for (const target of targets) {
         const point = target.resolve(position);
@@ -371,7 +384,7 @@ export class CoopDefenseMortarSystem implements EnemySpecialMovementSource {
     const consider = (id: string, point: MortarPoint | null, range: number) => {
       if (!point) return;
       const delta = distance(enemy.sprite, point);
-      if (delta < nearest && delta <= range) { nearest = delta; closest = { ...point, id }; }
+      if (delta < nearest && delta <= range) { nearest = delta; closest = { x: point.x, y: point.y, id }; }
     };
     // The bounded player roster is cheap enough for exact min-range entry between threat probes.
     for (const player of this.players.getAllPlayers()) {

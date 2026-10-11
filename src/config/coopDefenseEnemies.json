@@ -785,7 +785,7 @@
       "weapons": [
         {
           "weaponId": "MORTAR_BADGER_BITE",
-          "targetMode": "all",
+          "targetMode": "players",
           "meleeTiming": {
             "hitDelayMs": 350,
             "strikeMs": 80,
