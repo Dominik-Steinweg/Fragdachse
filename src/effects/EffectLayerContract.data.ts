@@ -799,7 +799,9 @@ export const GPU_LAYER_CONTRACTS = {
   "TrainAftermathSmoke": {"id": "lane:TrainAftermathSmoke", "owner": "effects/gpu/GpuVfxRenderLanes.ts", "component": "TrainAftermathSmoke", "height": "body", "lighting": "material", "camera": "world", "depths": [13.2], "blends": ["NORMAL"], "profiles": ["K"], "role": "effect"},
   // train8: rising fragments only; they break before landing. Small landed chips use TrainResidue/TrainGround (5.35).
   "TrainAftermathDebris": {"id": "lane:TrainAftermathDebris", "owner": "effects/gpu/GpuVfxRenderLanes.ts", "component": "TrainAftermathDebris", "height": "body", "lighting": "material", "camera": "world", "depths": [11.2], "blends": ["NORMAL"], "profiles": ["K"], "role": "effect"},
-  "MovementGlow": {"id": "lane:MovementGlow", "owner": "effects/gpu/GpuVfxRenderLanes.ts", "component": "MovementGlow", "height": "ground", "lighting": "emissive", "camera": "world", "depths": [5.11], "blends": ["ADD"], "profiles": ["G"], "role": "effect"}
+  "MovementGlow": {"id": "lane:MovementGlow", "owner": "effects/gpu/GpuVfxRenderLanes.ts", "component": "MovementGlow", "height": "ground", "lighting": "emissive", "camera": "world", "depths": [5.11], "blends": ["ADD"], "profiles": ["G"], "role": "effect"},
+  "VoidMeteorMaterial": {"id":"lane:VoidMeteorMaterial","owner":"effects/gpu/GpuVfxRenderLanes.ts","component":"VoidMeteorMaterial","height":"high","lighting":"material","camera":"world","depths":[20.55],"blends":["NORMAL"],"profiles":["H"],"role":"effect"},
+  "VoidMeteorEmission": {"id":"lane:VoidMeteorEmission","owner":"effects/gpu/GpuVfxRenderLanes.ts","component":"VoidMeteorEmission","height":"high","lighting":"emissive","camera":"world","depths":[20.64],"blends":["ADD"],"profiles":["H"],"role":"effect"},
 } as const satisfies Record<keyof typeof GpuVfxLaneId, LayerContract>;
 export const GPU_EFFECT_CONTRACTS = {
   "AirstrikeBomb": {
@@ -2807,20 +2809,16 @@ export const GPU_EFFECT_CONTRACTS = {
     "id": "gpu:VoidHunterSpark", "owner": "effects/gpu/GpuVfxEffects.ts", "component": "VoidHunterSpark",
     "height": "body", "lighting": "emissive", "camera": "world", "depths": [19.6],
     "blends": ["ADD"], "profiles": ["E"], "role": "effect", "lanes": ["ExplosionLowGlow"]
-  }
+  },
+  "VoidMeteorPlasma": {"id":"gpu:VoidMeteorPlasma","owner":"effects/gpu/GpuVfxEffects.ts","component":"VoidMeteorPlasma","height":"high","lighting":"emissive","camera":"world","depths":[20.64],"blends":["ADD"],"profiles":["H"],"role":"effect","lanes":["VoidMeteorEmission"]},
+  "VoidMeteorSpark": {"id":"gpu:VoidMeteorSpark","owner":"effects/gpu/GpuVfxEffects.ts","component":"VoidMeteorSpark","height":"high","lighting":"emissive","camera":"world","depths":[20.64],"blends":["ADD"],"profiles":["H"],"role":"effect","lanes":["VoidMeteorEmission"]},
+  "VoidMeteorSmoke": {"id":"gpu:VoidMeteorSmoke","owner":"effects/gpu/GpuVfxEffects.ts","component":"VoidMeteorSmoke","height":"high","lighting":"material","camera":"world","depths":[20.55],"blends":["NORMAL"],"profiles":["H"],"role":"effect","lanes":["VoidMeteorMaterial"]},
+  "VoidMeteorFragment": {"id":"gpu:VoidMeteorFragment","owner":"effects/gpu/GpuVfxEffects.ts","component":"VoidMeteorFragment","height":"high","lighting":"material","camera":"world","depths":[20.55],"blends":["NORMAL"],"profiles":["H"],"role":"effect","lanes":["VoidMeteorMaterial"]},
 } as const satisfies Record<keyof typeof GpuVfxEffectId, LayerContract & {readonly lanes: readonly (keyof typeof GpuVfxLaneId)[]}>;
 export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:effects/VoidMeteorIntroRenderer.ts:module/this.warningGlow/setDepth/0","owner":"effects/VoidMeteorIntroRenderer.ts","component":"module/this.warningGlow/setDepth/0","height":"ground","lighting":"emissive","camera":"world","depths":[5.14],"blends":["ADD"],"profiles":["G"],"role":"effect","source":{"selector":"module/this.warningGlow/setDepth/0","expression":"DEPTH.DECALS + 0.14"}},
   {"id":"cpu:effects/VoidMeteorIntroRenderer.ts:module/this.warningRing/setDepth/0","owner":"effects/VoidMeteorIntroRenderer.ts","component":"module/this.warningRing/setDepth/0","height":"ground","lighting":"emissive","camera":"world","depths":[5.15],"blends":["ADD"],"profiles":["G"],"role":"effect","source":{"selector":"module/this.warningRing/setDepth/0","expression":"DEPTH.DECALS + 0.15"}},
   {"id":"cpu:effects/VoidMeteorIntroRenderer.ts:module/this.flightShadow/setDepth/0","owner":"effects/VoidMeteorIntroRenderer.ts","component":"module/this.flightShadow/setDepth/0","height":"ground","lighting":"material","camera":"world","depths":[5.16],"blends":["NORMAL"],"profiles":["G"],"role":"effect","source":{"selector":"module/this.flightShadow/setDepth/0","expression":"DEPTH.DECALS + 0.16"}},
-  {"id":"cpu:effects/VoidMeteorIntroRenderer.ts:module/this.flightBody/setDepth/0","owner":"effects/VoidMeteorIntroRenderer.ts","component":"module/this.flightBody/setDepth/0","height":"high","lighting":"material","camera":"world","depths":[20.66],"blends":["NORMAL"],"profiles":["H"],"role":"effect","source":{"selector":"module/this.flightBody/setDepth/0","expression":"20.66"}},
-  {"id":"cpu:effects/VoidMeteorIntroRenderer.ts:module/this.flightCracks/setDepth/0","owner":"effects/VoidMeteorIntroRenderer.ts","component":"module/this.flightCracks/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[20.661],"blends":["ADD"],"profiles":["H"],"role":"effect","source":{"selector":"module/this.flightCracks/setDepth/0","expression":"20.661"}},
-  {"id":"cpu:effects/VoidMeteorIntroRenderer.ts:module/this.flightHeatLip/setDepth/0","owner":"effects/VoidMeteorIntroRenderer.ts","component":"module/this.flightHeatLip/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[20.662],"blends":["ADD"],"profiles":["H"],"role":"effect","source":{"selector":"module/this.flightHeatLip/setDepth/0","expression":"20.662"}},
-  {"id":"cpu:effects/VoidMeteorIntroRenderer.ts:module/this.flightCorona/setDepth/0","owner":"effects/VoidMeteorIntroRenderer.ts","component":"module/this.flightCorona/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[20.65],"blends":["ADD"],"profiles":["H"],"role":"effect","source":{"selector":"module/this.flightCorona/setDepth/0","expression":"20.65"}},
-  {"id":"cpu:effects/VoidMeteorIntroRenderer.ts:module/this.flightGlow/setDepth/0","owner":"effects/VoidMeteorIntroRenderer.ts","component":"module/this.flightGlow/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[20.54],"blends":["ADD"],"profiles":["H"],"role":"effect","source":{"selector":"module/this.flightGlow/setDepth/0","expression":"20.54"}},
-  {"id":"cpu:effects/VoidMeteorIntroRenderer.ts:createFlightSmoke/setDepth/setDepth/0","owner":"effects/VoidMeteorIntroRenderer.ts","component":"createFlightSmoke/setDepth/setDepth/0","height":"high","lighting":"material","camera":"world","depths":[20.55],"blends":["NORMAL"],"profiles":["H"],"role":"effect","source":{"selector":"createFlightSmoke/setDepth/setDepth/0","expression":"20.55"}},
-  {"id":"cpu:effects/VoidMeteorIntroRenderer.ts:createFlightFlame/setDepth/setDepth/0","owner":"effects/VoidMeteorIntroRenderer.ts","component":"createFlightFlame/setDepth/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[20.6],"blends":["ADD"],"profiles":["H"],"role":"effect","source":{"selector":"createFlightFlame/setDepth/setDepth/0","expression":"20.6"}},
-  {"id":"cpu:effects/VoidMeteorIntroRenderer.ts:createFlightSpark/setDepth/setDepth/0","owner":"effects/VoidMeteorIntroRenderer.ts","component":"createFlightSpark/setDepth/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[20.67],"blends":["ADD"],"profiles":["H"],"role":"effect","source":{"selector":"createFlightSpark/setDepth/setDepth/0","expression":"20.67"}},
   {"id":"cpu:effects/VoidMeteorIntroRenderer.ts:createFlame/setDepth/setDepth/0","owner":"effects/VoidMeteorIntroRenderer.ts","component":"createFlame/setDepth/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[19.65],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"createFlame/setDepth/setDepth/0","expression":"DEPTH_LIGHTING + 0.15"}},
   {"id":"cpu:ui/AfterRoundTransition.ts:overlayTransitionView/root/setDepth/0","owner":"ui/AfterRoundTransition.ts","component":"overlayTransitionView/root/setDepth/0","height":"body","lighting":"material","camera":"clarity","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"overlayTransitionView/root/setDepth/0","expression":"value"}},
   {"id":"cpu:ui/AfterRoundTransition.ts:overlayTransitionView/root/setDepth/1","owner":"ui/AfterRoundTransition.ts","component":"overlayTransitionView/root/setDepth/1","height":"body","lighting":"material","camera":"clarity","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"overlayTransitionView/root/setDepth/1","expression":"depth"}},
@@ -3339,50 +3337,6 @@ export const CPU_SOURCE_CONTRACTS = {
         "expression": "DEPTH.DECALS + 0.16",
         "blends": [
           "NORMAL"
-        ]
-      },
-      {
-        "key": "module/this.flightBody/setDepth/0",
-        "expression": "20.66",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {"key":"module/this.flightCracks/setDepth/0","expression":"20.661","blends":["ADD"]},
-      {"key":"module/this.flightHeatLip/setDepth/0","expression":"20.662","blends":["ADD"]},
-      {
-        "key": "module/this.flightCorona/setDepth/0",
-        "expression": "20.65",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "module/this.flightGlow/setDepth/0",
-        "expression": "20.54",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "createFlightSmoke/setDepth/setDepth/0",
-        "expression": "20.55",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "createFlightFlame/setDepth/setDepth/0",
-        "expression": "20.6",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "createFlightSpark/setDepth/setDepth/0",
-        "expression": "20.67",
-        "blends": [
-          "ADD"
         ]
       },
       {
@@ -8205,6 +8159,7 @@ export const CPU_SOURCE_CONTRACTS = {
   }
 };
 export const METEOR_LAYER_CONTRACTS: readonly LayerContract[] = [
+  {id:'meteor:plasma',owner:'effects/gpu/VoidMeteorPlasmaLayer.ts',component:'plasma',height:'high',lighting:'emissive',camera:'world',depths:[20.66],blends:['NORMAL'],profiles:['H'],role:'effect'},
   {id:'meteor:ground',owner:'effects/gpu/MeteorGpuLayer.ts',component:'ground',height:'ground',lighting:'material',camera:'world',depths:[5.12],blends:['NORMAL'],profiles:['G'],role:'effect'},
   {id:'meteor:heat',owner:'effects/gpu/MeteorGpuLayer.ts',component:'heat',height:'body',lighting:'emissive',camera:'world',depths:[19.7],blends:['NORMAL'],profiles:['E'],role:'effect'},
   {id:'meteor:flight',owner:'effects/gpu/MeteorGpuLayer.ts',component:'flight',height:'high',lighting:'emissive',camera:'world',depths:[20.6],blends:['NORMAL'],profiles:['H'],role:'effect'},

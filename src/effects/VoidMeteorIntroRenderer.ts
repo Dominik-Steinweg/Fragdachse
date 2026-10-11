@@ -4,18 +4,17 @@ import { VOID_METEOR_INTRO, type BossIntroState } from '../config/bossIntros';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { clearCameraFocusOverride, setCameraFocusOverride } from '../graphics/cameraFocusOverride';
 import type { CameraFeedbackController } from './camera/CameraFeedbackController';
-import { CAMERA_FEEDBACK_PRIORITY, sustainedRumble } from './camera/cameraFeedbackPresets';
+import { CAMERA_FEEDBACK_PRIORITY } from './camera/cameraFeedbackPresets';
 import { DISTORTION_PRIORITY } from './distortion/distortionFramePlanner';
 import type { LocalDistortionComposer } from './distortion/LocalDistortionComposer';
 import { registerGraphicsObject } from './EffectUtils';
 import { ensureFlameTextures, TEX_FLAME_EMBER } from './FlameShared';
-import { MeteorGpuLayer } from './gpu/MeteorGpuLayer';
+import { MeteorGpuLayer, type MeteorGpuItem } from './gpu/MeteorGpuLayer';
 import type { LightingSystem } from './LightingSystem';
 import { ensureVoidIntroTextures, VOID_INTRO_GLOW_TEXTURE, VOID_INTRO_RING_TEXTURE } from './VoidIntroTextures';
-import {
-  ensureVoidMeteorTextures, VOID_METEOR_ROCK, VOID_METEOR_CORONA, VOID_METEOR_FLAME, VOID_METEOR_SMOKE,
-  VOID_METEOR_CRACKS, VOID_METEOR_HEAT_LIP,
-} from './VoidMeteorTextures';
+import { VoidMeteorPlasmaLayer } from './gpu/VoidMeteorPlasmaLayer';
+import { VoidMeteorParticleTrail } from './VoidMeteorParticleTrail';
+import type { GpuVfxSystem } from './gpu/GpuVfxSystem';
 
 const I = VOID_METEOR_INTRO;
 const RUMBLE_ID = 'voidMeteorIntro:rumble';
@@ -28,8 +27,11 @@ const smooth = (value: number): number => {
   return t * t * (3 - 2 * t);
 };
 
+const clampFocus = (value: number, min: number, max: number, half: number): number =>
+  max - min <= half * 2 ? (min + max) / 2 : Math.max(min + half, Math.min(max - half, value));
+const IMMEDIATE_LIGHT_RELEASE = { immediate: true };
+
 interface MeteorIntro {
-  readonly key: string;
   readonly state: BossIntroState;
   lastElapsed: number;
 }
@@ -40,20 +42,22 @@ export class VoidMeteorIntroRenderer {
   private readonly meteor: MeteorGpuLayer;
   private readonly warningGlow: Phaser.GameObjects.Image;
   private readonly warningRing: Phaser.GameObjects.Image;
-  private readonly flightBody: Phaser.GameObjects.Image;
-  private readonly flightCracks: Phaser.GameObjects.Image;
-  private readonly flightHeatLip: Phaser.GameObjects.Image;
-  private readonly flightCorona: Phaser.GameObjects.Image;
-  private readonly flightGlow: Phaser.GameObjects.Image;
+  private readonly plasma: VoidMeteorPlasmaLayer;
+  private trail: VoidMeteorParticleTrail | null = null;
   private readonly flightShadow: Phaser.GameObjects.Image;
-  private readonly flightSmoke: Phaser.GameObjects.Image[];
-  private readonly flightFlames: Phaser.GameObjects.Image[];
-  private readonly flightSparks: Phaser.GameObjects.Image[];
   private readonly flameCrown: Phaser.GameObjects.Image[];
   private readonly groundGlow = {
     lights: [{ x: 0, y: 0, radiusPx: 0, intensity: 0, color: VOID_PALETTE.primary as number }],
     lightCount: 0,
   };
+  private readonly crater: MeteorGpuItem = { x: 0, y: 0, radius: I.meteorRadiusPx, progress: 1, seed: 0, void: true, age: 0 };
+  private readonly warningDistortion = { id: DISTORTION_ID, profile: 'pullSwirl' as const,
+    worldX: 0, worldY: 0, radiusPx: 0, strength: 0, rotation: 0, priority: DISTORTION_PRIORITY.blackHole };
+  private readonly heatDistortion = { id: HEAT_DISTORTION_ID, profile: 'lens' as const,
+    worldX: 0, worldY: 0, radiusPx: 0, strength: 0, rotation: 0, priority: DISTORTION_PRIORITY.shockwave };
+  private readonly rumble = { id: RUMBLE_ID, channel: 'rumble' as const, amplitudePx: 0,
+    frequencyHz: 0, sourceX: 0, sourceY: 0, durationMs: 250, priority: CAMERA_FEEDBACK_PRIORITY.telegraph, decay: 'linear' as const };
+  private readonly crownLight = { radiusPx: 220, intensity: 0, color: 0xff8b32, occludes: false };
   private cameraFeedback: CameraFeedbackController | null = null;
   private distortion: LocalDistortionComposer | null = null;
   private audio: GameAudioSystem | null = null;
@@ -63,24 +67,20 @@ export class VoidMeteorIntroRenderer {
 
   constructor(private readonly scene: Phaser.Scene, private readonly lighting: LightingSystem) {
     ensureVoidIntroTextures(scene.textures);
-    ensureVoidMeteorTextures(scene.textures);
     ensureFlameTextures(scene);
     this.meteor = new MeteorGpuLayer(scene, 'bossIntro');
+    this.plasma = new VoidMeteorPlasmaLayer(scene);
     this.warningGlow = this.createImage(VOID_INTRO_GLOW_TEXTURE)
       .setDepth(DEPTH.DECALS + 0.14).setBlendMode(Phaser.BlendModes.ADD);
     this.warningRing = this.createImage(VOID_INTRO_RING_TEXTURE)
       .setDepth(DEPTH.DECALS + 0.15).setBlendMode(Phaser.BlendModes.ADD);
     this.flightShadow = this.createImage(VOID_INTRO_GLOW_TEXTURE).setDepth(DEPTH.DECALS + 0.16).setTint(0x030008);
-    // A single airborne mass is deliberately above the canopy. Its ground shadow remains below actors.
-    this.flightBody = this.createImage(VOID_METEOR_ROCK).setDepth(20.66);
-    this.flightCracks = this.createImage(VOID_METEOR_CRACKS).setDepth(20.661).setBlendMode(Phaser.BlendModes.ADD);
-    this.flightHeatLip = this.createImage(VOID_METEOR_HEAT_LIP).setDepth(20.662).setBlendMode(Phaser.BlendModes.ADD);
-    this.flightCorona = this.createImage(VOID_METEOR_CORONA).setDepth(20.65).setBlendMode(Phaser.BlendModes.ADD);
-    this.flightGlow = this.createImage(VOID_INTRO_GLOW_TEXTURE).setDepth(20.54).setBlendMode(Phaser.BlendModes.ADD);
-    this.flightSmoke = Array.from({ length: 18 }, () => this.createFlightSmoke());
-    this.flightFlames = Array.from({ length: 24 }, () => this.createFlightFlame());
-    this.flightSparks = Array.from({ length: 22 }, () => this.createFlightSpark());
     this.flameCrown = Array.from({ length: 14 }, () => this.createFlame());
+  }
+
+  registerGpuVfx(gpu: GpuVfxSystem): void {
+    this.trail?.destroy();
+    this.trail = new VoidMeteorParticleTrail(gpu);
   }
 
   setCameraFeedback(controller: CameraFeedbackController | null): void { this.cameraFeedback = controller; }
@@ -103,20 +103,22 @@ export class VoidMeteorIntroRenderer {
       this.clear();
       return;
     }
-    const key = `${state.startedAtMs}:${state.seed}:${state.x}:${state.y}`;
-    if (this.current?.key !== key) {
+    const previous = this.current?.state;
+    if (!previous || previous.startedAtMs !== state.startedAtMs || previous.seed !== state.seed
+      || previous.x !== state.x || previous.y !== state.y) {
       this.clear();
-      // The first observation is a silent baseline, including a join on the impact frame.
-      this.current = { key, state, lastElapsed: elapsed };
+      // First observation is a silent baseline, including a join on the impact frame.
+      this.current = { state, lastElapsed: elapsed };
+      this.trail?.start(state.seed);
     }
     const intro = this.current!;
     const impactAge = elapsed - I.impactAtMs;
     this.meteor.begin();
     if (impactAge >= 0) {
-      this.meteor.add({
-        x: state.x, y: state.y, radius: I.meteorRadiusPx,
-        progress: 1, seed: state.seed % 997, void: true, age: impactAge / 1_000,
-      });
+      const crater = this.crater;
+      crater.x = state.x; crater.y = state.y; crater.seed = state.seed % 997;
+      crater.age = impactAge / 1_000;
+      this.meteor.add(crater);
     }
     this.meteor.flush();
     // Intro residue recedes beneath the authoritative fire chunks instead of masking their landings.
@@ -127,8 +129,7 @@ export class VoidMeteorIntroRenderer {
     this.renderWarning(state, elapsed);
     this.renderFlameCrown(state, elapsed - I.emergeAtMs);
     this.renderCamera(state, elapsed);
-    const crossed = (at: number): boolean => intro.lastElapsed < at && elapsed >= at && elapsed - at <= 450;
-    if (crossed(I.impactAtMs)) {
+    if (intro.lastElapsed < I.impactAtMs && elapsed >= I.impactAtMs && impactAge <= 450) {
       this.impactCallback?.(state.x, state.y, I.explosionRadiusPx);
       this.audio?.playSound('sfx_explosion_void_armageddon', state.x, state.y, undefined, 0.35);
       this.audio?.playSound('sfx_explosion_void_nuke', state.x, state.y, undefined, 0.8);
@@ -142,10 +143,12 @@ export class VoidMeteorIntroRenderer {
     this.meteor.clear();
     this.warningGlow.setVisible(false);
     this.warningRing.setVisible(false);
-    for (const image of this.flightImages()) image.setVisible(false);
+    this.flightShadow.setVisible(false);
+    this.plasma.clear();
+    this.trail?.clear();
     for (const flame of this.flameCrown) flame.setVisible(false);
     this.lighting.setGroundGlowLights(this, null);
-    this.lighting.releaseLight(LIGHT_KEY, { immediate: true });
+    this.lighting.releaseLight(LIGHT_KEY, IMMEDIATE_LIGHT_RELEASE);
     this.distortion?.release(DISTORTION_ID);
     this.distortion?.release(HEAT_DISTORTION_ID);
     this.cameraFeedback?.release(RUMBLE_ID, 120);
@@ -159,7 +162,9 @@ export class VoidMeteorIntroRenderer {
     this.meteor.destroy();
     this.warningGlow.destroy();
     this.warningRing.destroy();
-    for (const image of this.flightImages()) image.destroy();
+    this.flightShadow.destroy();
+    this.plasma.destroy();
+    this.trail?.destroy();
     for (const flame of this.flameCrown) flame.destroy();
     this.impactCallback = null;
   }
@@ -180,104 +185,39 @@ export class VoidMeteorIntroRenderer {
     this.lighting.setGroundGlowLights(this, this.groundGlow.lightCount ? this.groundGlow : null);
     const crownAge = elapsed - I.emergeAtMs;
     if (crownAge >= 0 && crownAge < I.flameCrownMs) {
-      this.lighting.setLight(LIGHT_KEY, 'explosion', state.x, state.y, {
-        radiusPx: 220, intensity: 0.8 * (1 - crownAge / I.flameCrownMs), color: 0xff8b32, occludes: false,
-      });
+      this.crownLight.intensity = 0.8 * (1 - crownAge / I.flameCrownMs);
+      this.lighting.setLight(LIGHT_KEY, 'explosion', state.x, state.y, this.crownLight);
     } else this.lighting.releaseLight(LIGHT_KEY);
   }
 
-  /** Fixed pools sampled analytically: a join sees the same airborne silhouette and wake.
-   * Rotation is wholly in the map plane; no simulated perspective or visible rock side face. */
+  /** Analytic GPU core/wake are seekable; stochastic GPU detail starts with observation. */
   private renderFlight(state: BossIntroState, elapsed: number): void {
     const age = elapsed - I.meteorStartMs;
     const duration = I.impactAtMs - I.meteorStartMs;
     const progress = clamp01(age / duration);
-    // West-front impact: approach from the map interior above/right of the target.
     const angle = Math.PI - (0.45 + (state.seed % 1_000) / 1_000 * 0.22);
     const dx = Math.cos(angle), dy = Math.sin(angle);
     const distance = 410 * (1 - progress ** 1.35) + 690 * (1 - smooth(age / 300));
     const x = state.x - dx * distance, y = state.y - dy * distance;
     const visible = age >= 0 && age < duration;
     const reveal = smooth(age / 160);
-    const size = 226 * (0.94 + 0.06 * progress);
-    const rotation = angle + Math.sin(state.seed) * 0.25 + age * 0.00018;
-    this.flightBody.setVisible(visible).setPosition(x, y).setDisplaySize(size, size)
-      .setRotation(rotation).setAlpha(reveal);
-    const pulse = 0.82 + 0.18 * Math.sin(age * 0.009);
-    const localFront = angle - rotation;
-    const heatTint = (cx: number, cy: number): number => {
-      const intensity = Math.round(255 * (0.16 + 0.84 * clamp01(0.5 + (cx * Math.cos(localFront) + cy * Math.sin(localFront)) * 0.5)));
-      return intensity * 0x010101;
-    };
-    this.flightCracks.setVisible(visible).setPosition(x, y).setDisplaySize(size, size)
-      .setRotation(rotation).setTint(heatTint(-1, -1), heatTint(1, -1), heatTint(-1, 1), heatTint(1, 1))
-      .setAlpha(reveal * pulse);
-    this.flightHeatLip.setVisible(visible).setPosition(x, y).setDisplaySize(size, size)
-      .setRotation(angle).setAlpha(reveal * (0.9 + 0.1 * pulse));
-    this.flightCorona.setVisible(visible).setPosition(x, y).setDisplaySize(size * 1.14, size * 1.14)
-      .setRotation(angle).setAlpha(reveal * (0.8 + 0.12 * Math.sin(age * 0.021)));
-    this.flightGlow.setVisible(visible).setPosition(x, y).setDisplaySize(size * 2.1, size * 2.1)
-      .setTint(VOID_PALETTE.primary).setAlpha(reveal * 0.26);
+    const compression = smooth((age - duration + 550) / 550);
+    const radius = 100 * (0.94 + 0.06 * progress);
+    const entryT = clamp01(age / 300);
+    const speed = 410 * 1.35 * progress ** 0.35 / (duration / 1000)
+      + (age < 300 ? 690 * 6 * entryT * (1 - entryT) / 0.3 : 0);
+    if (visible) this.plasma.sync(x, y, radius, angle, age / 1_000, state.seed, compression, reveal);
+    else this.plasma.clear();
+    this.trail?.sync(x, y, angle, speed, visible);
     const shadowSize = 110 + 130 * progress;
     this.flightShadow.setVisible(visible).setPosition(x + dx * 70 * (1 - progress), y + dy * 70 * (1 - progress))
       .setDisplaySize(shadowSize, shadowSize).setAlpha(reveal * (0.2 + 0.68 * progress));
-    if (visible) this.distortion?.submit({
-      id: HEAT_DISTORTION_ID, profile: 'lens', worldX: x, worldY: y,
-      radiusPx: size * 0.7, strength: 0.035 * reveal * pulse, rotation: angle,
-      priority: DISTORTION_PRIORITY.shockwave,
-    });
-    else this.distortion?.release(HEAT_DISTORTION_ID);
-
-    // Trails extend ~three rock diameters behind the head. A particle's emission time, rather
-    // than a local emitter clock, controls both initial build-up and the brief postimpact remnant.
-    const drawWake = (images: readonly Phaser.GameObjects.Image[], life: number, kind: 'smoke' | 'flame' | 'spark'): void => {
-      for (let i = 0; i < images.length; i++) {
-        const phase = ((i * 0.618034 + (state.seed % 997) / 997) % 1) * life;
-        const particleAge = ((age + phase) % life + life) % life;
-        const born = age - particleAge;
-        const t = particleAge / life;
-        const present = age >= 0 && born >= 0 && born < duration;
-        const lateral = Math.sin(i * 4.79 + state.seed) * (kind === 'spark' ? 65 : 32)
-          + Math.sin(particleAge * 0.006 + i) * 18 * t;
-        const length = kind === 'spark' ? 690 : 570;
-        // Small hot fragments peel off the leading edge and sweep into the wake.
-        const behind = kind === 'spark' ? -78 + t * length : 65 + t * length;
-        const px = x - dx * behind - dy * lateral, py = y - dy * behind + dx * lateral;
-        const fade = smooth(t * 9) * (1 - smooth(t)) * (1 - smooth((age - duration) / 650));
-        const image = images[i];
-        image.setVisible(present).setPosition(px, py);
-        if (kind === 'smoke') {
-          const width = 65 + t * 145;
-          image.setDisplaySize(width * 1.2, width).setRotation(i * 2.4 + t * 0.7).setAlpha(fade * 0.68);
-        } else if (kind === 'flame') {
-          image.setDisplaySize(190 + 140 * t, 112 - 46 * t).setRotation(angle + Math.sin(i) * 0.1)
-            .setAlpha(fade * 0.48);
-        } else {
-          image.setDisplaySize(15 + 23 * (1 - t), 2.5 + (i % 3)).setRotation(angle)
-            .setTint(i % 3 === 0 ? 0xffefff : VOID_PALETTE.bright).setAlpha(fade * 0.85);
-        }
-      }
-    };
-    drawWake(this.flightSmoke, 1_250, 'smoke');
-    drawWake(this.flightFlames, 1_100, 'flame');
-    drawWake(this.flightSparks, 920, 'spark');
-  }
-
-  private flightImages(): readonly Phaser.GameObjects.Image[] {
-    return [this.flightBody, this.flightCracks, this.flightHeatLip, this.flightCorona, this.flightGlow, this.flightShadow,
-      ...this.flightSmoke, ...this.flightFlames, ...this.flightSparks];
-  }
-
-  private createFlightSmoke(): Phaser.GameObjects.Image {
-    return this.createImage(VOID_METEOR_SMOKE).setDepth(20.55);
-  }
-
-  private createFlightFlame(): Phaser.GameObjects.Image {
-    return this.createImage(VOID_METEOR_FLAME).setDepth(20.6).setBlendMode(Phaser.BlendModes.ADD);
-  }
-
-  private createFlightSpark(): Phaser.GameObjects.Image {
-    return this.createImage(VOID_INTRO_GLOW_TEXTURE).setDepth(20.67).setBlendMode(Phaser.BlendModes.ADD);
+    if (visible) {
+      const heat = this.heatDistortion;
+      heat.worldX = x; heat.worldY = y; heat.radiusPx = radius * 1.5;
+      heat.strength = 0.035 * reveal * (0.82 + 0.18 * Math.sin(age * 0.009)); heat.rotation = angle;
+      this.distortion?.submit(heat);
+    } else this.distortion?.release(HEAT_DISTORTION_ID);
   }
 
   private renderWarning(state: BossIntroState, elapsed: number): void {
@@ -290,11 +230,10 @@ export class VoidMeteorIntroRenderer {
     const radius = I.meteorRadiusPx * (0.4 + 0.6 * t);
     this.warningRing.setVisible(true).setPosition(state.x, state.y)
       .setScale(radius / 116).setTint(VOID_PALETTE.bright).setAlpha(smooth(elapsed / 700) * (0.25 + 0.4 * t));
-    this.distortion?.submit({
-      id: DISTORTION_ID, profile: 'pullSwirl', worldX: state.x, worldY: state.y,
-      radiusPx: radius * 1.2, strength: 0.18 * t, rotation: elapsed * 0.0004,
-      priority: DISTORTION_PRIORITY.blackHole,
-    });
+    const warning = this.warningDistortion;
+    warning.worldX = state.x; warning.worldY = state.y; warning.radiusPx = radius * 1.2;
+    warning.strength = 0.18 * t; warning.rotation = elapsed * 0.0004;
+    this.distortion?.submit(warning);
   }
 
   private renderFlameCrown(state: BossIntroState, age: number): void {
@@ -321,17 +260,15 @@ export class VoidMeteorIntroRenderer {
     // Account for the design-to-viewport scale used by both production and scenario cameras.
     const halfWidth = camera.width / this.scene.scale.width * GAME_WIDTH / I.camera.zoom / 2 + 32;
     const halfHeight = camera.height / this.scene.scale.height * GAME_HEIGHT / I.camera.zoom / 2 + 32;
-    const clampFocus = (value: number, min: number, max: number, half: number): number =>
-      max - min <= half * 2 ? (min + max) / 2 : Math.max(min + half, Math.min(max - half, value));
     setCameraFocusOverride(this.scene,
       clampFocus(state.x, ARENA_OFFSET_X, ARENA_MAX_X, halfWidth),
       clampFocus(state.y, ARENA_OFFSET_Y, ARENA_MAX_Y, halfHeight), weight, I.camera.zoom);
     if (elapsed >= I.meteorStartMs && elapsed < I.impactAtMs) {
       const t = clamp01((elapsed - I.meteorStartMs) / (I.impactAtMs - I.meteorStartMs));
-      this.cameraFeedback?.request(sustainedRumble(RUMBLE_ID, 1 + 7 * t * t,
-        CAMERA_FEEDBACK_PRIORITY.telegraph, {
-          sourceX: state.x, sourceY: state.y, frequencyHz: 8 + t * 8, durationMs: 250,
-        }));
+      const rumble = this.rumble;
+      rumble.amplitudePx = 1 + 7 * t * t; rumble.frequencyHz = 8 + t * 8;
+      rumble.sourceX = state.x; rumble.sourceY = state.y;
+      this.cameraFeedback?.request(rumble);
     } else this.cameraFeedback?.release(RUMBLE_ID, 60);
   }
 

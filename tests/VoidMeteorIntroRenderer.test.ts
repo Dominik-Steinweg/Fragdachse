@@ -1,17 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const batch = vi.hoisted(() => ({ begin: vi.fn(), add: vi.fn(), flush: vi.fn(), clear: vi.fn(), destroy: vi.fn(), setAlpha: vi.fn() }));
+const plasmaInstances = vi.hoisted(() => [] as { sync: ReturnType<typeof vi.fn>; clear: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn> }[]);
+const trail = vi.hoisted(() => ({ start: vi.fn(), sync: vi.fn(), clear: vi.fn(), destroy: vi.fn() }));
 vi.mock('phaser', () => ({ BlendModes: { ADD: 1 } }));
 vi.mock('../src/config', () => ({ GAME_WIDTH: 1920, GAME_HEIGHT: 1080, ARENA_OFFSET_X: 0, ARENA_OFFSET_Y: 0, ARENA_MAX_X: 3072, ARENA_MAX_Y: 1504, DEPTH: { DECALS: 5 }, DEPTH_LIGHTING: 19.5, VOID_PALETTE: { primary: 1, bright: 2 } }));
 vi.mock('../src/effects/gpu/MeteorGpuLayer', () => ({ MeteorGpuLayer: class { constructor() { return batch; } } }));
 vi.mock('../src/effects/EffectUtils', () => ({ registerGraphicsObject: vi.fn() }));
 vi.mock('../src/effects/FlameShared', () => ({ ensureFlameTextures: vi.fn(), TEX_FLAME_EMBER: 'flame' }));
 vi.mock('../src/effects/VoidIntroTextures', () => ({ ensureVoidIntroTextures: vi.fn(), VOID_INTRO_GLOW_TEXTURE: 'glow', VOID_INTRO_RING_TEXTURE: 'ring' }));
-vi.mock('../src/effects/VoidMeteorTextures', () => ({
-  ensureVoidMeteorTextures: vi.fn(), VOID_METEOR_ROCK: 'rock', VOID_METEOR_CORONA: 'corona',
-  VOID_METEOR_FLAME: 'wake', VOID_METEOR_SMOKE: 'smoke',
-  VOID_METEOR_CRACKS: 'cracks', VOID_METEOR_HEAT_LIP: 'heatLip',
-}));
+vi.mock('../src/effects/gpu/VoidMeteorPlasmaLayer', () => ({ VoidMeteorPlasmaLayer: class {
+  constructor() { const instance = { sync: vi.fn(), clear: vi.fn(), destroy: vi.fn() }; plasmaInstances.push(instance); return instance; }
+} }));
+vi.mock('../src/effects/VoidMeteorParticleTrail', () => ({ VoidMeteorParticleTrail: class { constructor() { return trail; } } }));
 
 import { VOID_METEOR_INTRO as preset, type BossIntroState } from '../src/config/bossIntros';
 import { getCameraFocusOverride } from '../src/graphics/cameraFocusOverride';
@@ -38,11 +39,12 @@ function fixture() {
   const audio = { playSound: vi.fn() };
   const impact = vi.fn();
   const renderer = new VoidMeteorIntroRenderer(scene as never, lighting as never);
+  renderer.registerGpuVfx({} as never);
   renderer.setCameraFeedback(feedback as never);
   renderer.setDistortionComposer(distortion as never);
   renderer.setAudioSystem(audio as never);
   renderer.setImpactCallback(impact);
-  return { renderer, scene, images, imagesByTexture, lighting, feedback, distortion, audio, impact };
+  return { renderer, scene, images, imagesByTexture, lighting, feedback, distortion, audio, impact, plasma: plasmaInstances.at(-1)! };
 }
 
 describe('void meteor intro presentation ownership', () => {
@@ -60,27 +62,17 @@ describe('void meteor intro presentation ownership', () => {
     expect(batch.add).toHaveBeenLastCalledWith(expect.objectContaining({ progress: 1, age: 0.25 }));
   });
 
-  it('reconstructs the same planar rock and wake on a flight join, then removes the body at impact', () => {
+  it('reconstructs the same GPU core and analytic wake on a flight join, then stops both emissions at impact', () => {
     const live = fixture(), joined = fixture();
     const flightTime = state.startedAtMs + (preset.meteorStartMs + preset.impactAtMs) / 2;
     live.renderer.sync(state, state.startedAtMs + preset.meteorStartMs);
     live.renderer.sync(state, flightTime);
     joined.renderer.sync(state, flightTime);
-    for (const texture of ['rock', 'cracks', 'heatLip', 'corona', 'wake', 'smoke']) {
-      const a = live.imagesByTexture.get(texture)!;
-      const b = joined.imagesByTexture.get(texture)!;
-      for (let i = 0; i < a.length; i++) {
-        for (const method of ['setVisible', 'setPosition', 'setDisplaySize', 'setRotation', 'setAlpha']) {
-          expect(a[i][method].mock.lastCall).toEqual(b[i][method].mock.lastCall);
-        }
-      }
-    }
-    const rock = joined.imagesByTexture.get('rock')![0];
-    const [width, height] = rock.setDisplaySize.mock.lastCall!;
-    expect(width).toBe(height);
-    expect(rock.setVisible).toHaveBeenLastCalledWith(true);
+    expect(live.plasma.sync.mock.lastCall).toEqual(joined.plasma.sync.mock.lastCall);
+    expect(trail.sync.mock.lastCall![4]).toBe(true);
     joined.renderer.sync(state, state.startedAtMs + preset.impactAtMs);
-    expect(rock.setVisible).toHaveBeenLastCalledWith(false);
+    expect(joined.plasma.clear).toHaveBeenCalled();
+    expect(trail.sync.mock.lastCall![4]).toBe(false);
   });
 
   it.each([0, 50, 1_000])('reconstructs a join %sms after impact without replaying sounds or explosion', (offset) => {
@@ -93,14 +85,14 @@ describe('void meteor intro presentation ownership', () => {
   });
 
   it('frames the map interior without changing a west-front impact anchor', () => {
-    const { renderer, scene, imagesByTexture, impact, distortion } = fixture();
+    const { renderer, scene, plasma, impact, distortion } = fixture();
     renderer.sync(state, state.startedAtMs + 1_500);
     const focus = getCameraFocusOverride(scene as never)!;
     expect(focus.x - 1920 / preset.camera.zoom / 2).toBeGreaterThanOrEqual(0);
     expect(focus.y - 1080 / preset.camera.zoom / 2).toBeGreaterThanOrEqual(0);
     expect(focus.x + 1920 / preset.camera.zoom / 2).toBeLessThanOrEqual(3072);
     expect(focus.y + 1080 / preset.camera.zoom / 2).toBeLessThanOrEqual(1504);
-    const [x, y] = imagesByTexture.get('rock')![0].setPosition.mock.lastCall!;
+    const [x, y] = plasma.sync.mock.lastCall!;
     expect(x).toBeGreaterThan(state.x);
     expect(y).toBeLessThan(state.y);
     expect(distortion.submit).toHaveBeenCalledWith(expect.objectContaining({ id: 'voidMeteorIntro:flightHeat' }));
@@ -110,7 +102,7 @@ describe('void meteor intro presentation ownership', () => {
   });
 
   it('releases camera, lights, distortion and GPU state on cancellation, then destroys its images once', () => {
-    const { renderer, scene, images, lighting, feedback, distortion } = fixture();
+    const { renderer, scene, images, lighting, feedback, distortion, plasma } = fixture();
     renderer.sync(state, state.startedAtMs + preset.meteorStartMs);
     expect(getCameraFocusOverride(scene as never)).not.toBeNull();
     expect(renderer.ownsSpawnAt(state, state.startedAtMs + preset.emergeAtMs)).toBe(true);
@@ -124,6 +116,9 @@ describe('void meteor intro presentation ownership', () => {
     renderer.destroy();
     for (const image of images) expect(image.destroy).toHaveBeenCalledOnce();
     expect(batch.destroy).toHaveBeenCalledOnce();
+    expect(plasma.destroy).toHaveBeenCalledOnce();
+    expect(trail.clear).toHaveBeenCalled();
+    expect(trail.destroy).toHaveBeenCalledOnce();
     expect(renderer.ownsSpawnAt(state, state.startedAtMs + preset.emergeAtMs)).toBe(false);
   });
 });

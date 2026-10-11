@@ -105,6 +105,8 @@ export const GpuVfxLaneId = {
   TrainAftermathSmoke:   44,
   TrainAftermathDebris:  45,
   MovementGlow:          46,
+  VoidMeteorMaterial:    47,
+  VoidMeteorEmission:    48,
 } as const;
 
 export type GpuVfxLaneId = (typeof GpuVfxLaneId)[keyof typeof GpuVfxLaneId];
@@ -847,5 +849,19 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     order: 'add-over-opaque', reserveCritical: 0,
     rationale: 'Additive footprint glow (e.g. the Grave Titan) sits directly above its NORMAL print on MovementGround and below actors, so the paw covers it; ground-glow lights keep it visible at night.',
     capacityRationale: 'Only authored glowing walkers emit here, one copy per printed paw; a few bosses at four-second prints stay far below this cap.',
+  },
+  {
+    id: GpuVfxLaneId.VoidMeteorMaterial, label: 'void-meteor-material', depth: 20.55,
+    blendMode: Phaser.BlendModes.NORMAL, eases: [GpuVfxEase.Linear],
+    capacity: 256, maxLifetimeMs: 1800, order: 'ordered', reserveCritical: 0,
+    rationale: 'Airborne intro smoke and tiny fragments behind the plasma, above canopy; separate from lit ground aftermath.',
+    capacityRationale: 'One intro, at most 80 smoke/s for 1.8s and 36 fragments/s for 1.2s: below 200 live members.',
+  },
+  {
+    id: GpuVfxLaneId.VoidMeteorEmission, label: 'void-meteor-emission', depth: 20.64,
+    blendMode: Phaser.BlendModes.ADD, eases: [GpuVfxEase.Linear],
+    capacity: 1024, maxLifetimeMs: 1400, order: 'add-over-opaque', reserveCritical: 0,
+    rationale: 'Airborne plasma, sparks and fragment edge glow directly below the procedural core; no compatible existing lane at this height.',
+    capacityRationale: 'One intro: <=500 plasma/s * .65s, <=333 sparks/s * 1.2s, sparse smoke/fragment glow copies; below 1024.',
   },
 ];

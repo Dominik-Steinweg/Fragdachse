@@ -107,6 +107,10 @@ export const GpuVfxEffectId = {
   ExplosionLowEmberDown: 93,
   MovementFootprintGlow: 94,
   VoidHunterSpark: 95,
+  VoidMeteorPlasma: 96,
+  VoidMeteorSpark: 97,
+  VoidMeteorSmoke: 98,
+  VoidMeteorFragment: 99,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -718,6 +722,14 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     frame: GpuVfxFrameId.MovementPawBroad, importance: 'decorative', release: 'linger' },
   { id: GpuVfxEffectId.VoidHunterSpark, label: 'boss.void-sparks', lane: GpuVfxLaneId.ExplosionLowGlow,
     frame: GpuVfxFrameId.ExplosionSpark, importance: 'standard', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.VoidMeteorPlasma, label: 'boss.void-meteor-plasma', lane: GpuVfxLaneId.VoidMeteorEmission,
+    frame: GpuVfxFrameId.ExplosionFireballA, importance: 'standard', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.VoidMeteorSpark, label: 'boss.void-meteor-spark', lane: GpuVfxLaneId.VoidMeteorEmission,
+    frame: GpuVfxFrameId.ExplosionSpark, importance: 'decorative', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.VoidMeteorSmoke, label: 'boss.void-meteor-smoke', lane: GpuVfxLaneId.VoidMeteorMaterial,
+    frame: GpuVfxFrameId.ExplosionSmoke, importance: 'standard', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.VoidMeteorFragment, label: 'boss.void-meteor-fragment', lane: GpuVfxLaneId.VoidMeteorMaterial,
+    frame: GpuVfxFrameId.ExplosionChunk, importance: 'decorative', release: 'kill-with-source' },
 ];
 
 /** Definition-level routing. No particle chooses height by radius, random state or position. */

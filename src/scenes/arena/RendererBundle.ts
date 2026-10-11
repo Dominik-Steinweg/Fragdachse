@@ -437,6 +437,7 @@ export function* createRendererBundleSteps(
   const voidRift = new VoidRiftIntroRenderer(scene, lighting);
   cleanup.push(() => voidRift.destroy());
   const voidMeteorIntro = new VoidMeteorIntroRenderer(scene, lighting);
+  voidMeteorIntro.registerGpuVfx(gpuVfx);
   cleanup.push(() => voidMeteorIntro.destroy());
   return {
     interactions,
