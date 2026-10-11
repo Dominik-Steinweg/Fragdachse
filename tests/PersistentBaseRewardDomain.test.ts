@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { getCoopDefenseConstructionDefinition } from '../src/config/coopDefenseConstructions';
+import { isOffensiveConstruction } from '../src/systems/offensiveConstruction';
 import {
   getPersistentBaseRewardDefinition,
   PERSISTENT_BASE_REWARD_DEFINITIONS,
@@ -17,6 +19,27 @@ import {
 } from '../src/persistentBase/PersistentBaseRewardTypes';
 
 describe('Persistent Base Reward-Katalog', () => {
+  it('references a destructible non-weapon structure with a shared multi-cell footprint', () => {
+    const reward = getPersistentBaseRewardDefinition('base_watchtower');
+    expect(reward.category).toBe('baseStructure');
+    expect(reward.placementRule).toBe('persistent-build-area');
+    expect(reward.gameplaySource.kind).toBe('construction-definition');
+    if (reward.gameplaySource.kind !== 'construction-definition') throw new Error('Expected construction reward');
+    const construction = getCoopDefenseConstructionDefinition(reward.gameplaySource.constructionId);
+    expect(construction.kind).toBe('watchtower');
+    expect(construction.indestructible).toBe(false);
+    expect(isOffensiveConstruction(construction)).toBe(false);
+    expect(construction).not.toHaveProperty('weaponId');
+    expect(construction.footprint.length).toBeGreaterThan(1);
+    expect(construction.footprint).toContainEqual({ dx: 0, dy: 0 });
+    expect(new Set(construction.footprint.map(cell => `${cell.dx},${cell.dy}`)).size)
+      .toBe(construction.footprint.length);
+    expect(reward.presentation.iconKey).toBe(construction.iconKey);
+    const placement = { rewardId: reward.id, relativeGridX: 2, relativeGridY: 3, angle: 0 };
+    expect(sanitizePersistentBaseRewardState({ ...DEFAULT_PERSISTENT_BASE_REWARD_STATE, placements: [placement] })?.placements)
+      .toEqual([placement]);
+  });
+
   it('contains the stable IDs and existing runtime references', () => {
     expect(PERSISTENT_BASE_REWARD_DEFINITIONS.map((definition) => definition.id)).toEqual([
       'base_rage_pedestal',
@@ -27,6 +50,7 @@ describe('Persistent Base Reward-Katalog', () => {
       'base_health_pedestal',
       'base_rocket_turret',
       'base_holy_hand_grenade_pedestal',
+      'base_watchtower',
     ]);
     expect(getPersistentBaseRewardDefinition('base_adrenaline_pedestal').gameplaySource).toEqual({
       kind: 'power-up-definition', powerUpDefId: 'ADRENALINE',

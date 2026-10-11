@@ -13,11 +13,12 @@ export const PERSISTENT_BASE_REWARD_IDS = [
   'base_health_pedestal',
   'base_rocket_turret',
   'base_holy_hand_grenade_pedestal',
+  'base_watchtower',
 ] as const;
 
 export type PersistentBaseRewardId = typeof PERSISTENT_BASE_REWARD_IDS[number];
 
-export type PersistentBaseRewardCategory = 'basePedestal' | 'baseTurret';
+export type PersistentBaseRewardCategory = 'basePedestal' | 'baseTurret' | 'baseStructure';
 export type PersistentBaseRewardPlacementRule = 'base-surface' | 'persistent-build-area';
 
 export interface PersistentBaseRewardPlacement {
