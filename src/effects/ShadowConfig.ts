@@ -11,6 +11,7 @@ import {
   TRUNK_RADIUS,
 } from '../config';
 import { TRAIN } from '../train/TrainConfig';
+import { COOP_DEFENSE_CONSTRUCTIONS } from '../config/coopDefenseConstructions';
 import type { ProjectileStyle } from '../types';
 
 export type ShadowShape = 'cell' | 'circle' | 'ellipse' | 'capsule';
@@ -98,7 +99,32 @@ export const SHADOW_PROFILES: Readonly<Record<'day' | 'night', ShadowProfile>> =
   night: { opacityMult: 0.35, lengthMult: 0.5, softnessMult: 1.8 },
 };
 
+// The construction catalog owns the footprint; the shadow only chooses visual height.
+export const WATCHTOWER_SHADOW_FOOTPRINT = (() => {
+  const cells = COOP_DEFENSE_CONSTRUCTIONS.watchtower.footprint;
+  const minX = Math.min(...cells.map(cell => cell.dx));
+  const minY = Math.min(...cells.map(cell => cell.dy));
+  const width = Math.max(...cells.map(cell => cell.dx)) - minX + 1;
+  const height = Math.max(...cells.map(cell => cell.dy)) - minY + 1;
+  return { widthPx: width * CELL_SIZE, heightPx: height * CELL_SIZE,
+    centerOffsetX: (minX + width / 2 - .5) * CELL_SIZE,
+    centerOffsetY: (minY + height / 2 - .5) * CELL_SIZE };
+})();
+
 export const SHADOW_CASTERS = {
+  watchtower: {
+    enabled: true,
+    layerDepth: DEPTH.ROCKS - 0.35,
+    castHeightPx: 72,
+    opacity: 0.54,
+    softnessPx: 4,
+    blurLayers: 8,
+    stretch: 1,
+    inflatePx: 0,
+    shape: 'cell',
+    footprintWidthPx: WATCHTOWER_SHADOW_FOOTPRINT.widthPx,
+    footprintHeightPx: WATCHTOWER_SHADOW_FOOTPRINT.heightPx,
+  },
   base: {
     enabled: true,
     layerDepth: DEPTH.BASES - 0.35,
