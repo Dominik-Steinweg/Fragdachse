@@ -14,6 +14,7 @@ from kraken_eye_parts import eye, eye_sculpt, eye_materials
 from kraken_dorsal_parts import MAIN_EYE, SECOND_EYE, mantle, dorsal, face_ridges, fuse, paint_mantle, fins, oral_crown, colour_beard
 from kraken_arm_parts import CHAIN, arm, arm_curve, web, bind, chain_weights, creases
 from kraken_part_assets import strike_tentacle, egg
+from kraken_beard_rig import add_beard_chains, bind_beard
 
 # Right-side arm specs (mirrored left): broad muscular sweeps with relaxed distal hooks.
 # Front arms ride higher so they overlap the ones behind them.
@@ -71,11 +72,13 @@ def build(c, spec):
             crests.append(brow)
     tissue, spines, dorsal_crests = dorsal(c, surface, section, hide, bone, [(p[0][0], p[0][3]) for p in paths])
     ridges, ridge_crests = face_ridges(c, surface, hide)
-    beard, beard_lines = oral_crown(c, surface, hide)
+    beard, beard_lines = oral_crown(c, surface, hide, grouped=True)
     head = [fuse(c, [shell, *tissue, *sculpt, *ridges, *beard], hide, voxel=.012)]
     sockets = [(side * ex, ey, er) for side in (-1, 1) for ex, ey, er in (MAIN_EYE, SECOND_EYE)]
     paint_mantle(head[0], section, dorsal_crests, sockets)
-    colour_beard(head[0], beard_lines, oral)
+    # Preserve the original nearest-point tie order used by the material pass.
+    colour_lines = list(reversed(beard_lines[:5])) + beard_lines[5:]
+    colour_beard(head[0], [sample for line in colour_lines for sample in line], oral)
     write_rest(head[0])
     c.paint_form_mask(head[0], lambda p: .60 + .40 * max(0, min(1, p.z)))
     creases(head[0], .30, .018)
@@ -123,7 +126,9 @@ def build(c, spec):
             b.align_roll(Vector((0, 0, 1)))
             previous = b; chain.append(b.name)
         chains.append(chain)
+    beard_chains = add_beard_chains(data, base, beard_lines)
     bpy.ops.object.mode_set(mode='OBJECT')
+    bind_beard(head[0], rig, beard_lines, beard_chains)
     for i, (ob, _, _, weights) in enumerate(arm_data):
         ob.parent = emergence
         bind(ob, rig, [chain_weights(chains[i], t) for t in weights])
@@ -159,5 +164,6 @@ def build(c, spec):
     throw_order = (0, 4, 2, 6, 3, 7)
     carriers = {arm: carried[f'egg_carry_{n + 1}'] for n, arm in enumerate((0, 2, 3, 4, 6, 7))}
     sockets = {'mouth': mouth, **{f'egg{k + 1}': carriers[arm] for k, arm in enumerate(throw_order)}}
-    return {'root': root, 'parts': {'body': body, 'surfacing': emergence, 'tentacle_chains': chains, **lids, **carried},
+    return {'root': root, 'parts': {'body': body, 'surfacing': emergence, 'tentacle_chains': chains,
+                                  'beard_chains': beard_chains, **lids, **carried},
             'rig': rig, 'sockets': sockets}

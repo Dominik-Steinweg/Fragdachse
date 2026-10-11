@@ -14,6 +14,7 @@ import bmesh
 from mathutils import Vector
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from verify_asset_pipeline_v2 import animation_owners, snapshot, assert_same_pose, set_frame, assert_clip_boundary
+from verify_kraken_beard import verify_beard
 
 
 def visible_cups(scene):
@@ -55,6 +56,7 @@ def main():
     try:
         scene=next(s for s in bpy.data.scenes if s.get('asset_manifest') and json.loads(s['asset_manifest'])['id']=='abyssal-kraken')
         bpy.context.window.scene=scene
+        report['beard']=verify_beard(scene)
         assert scene.camera.data.type=='ORTHO' and all(abs(v)<1e-7 for v in scene.camera.rotation_euler)
         arms=[o for o in scene.objects if o.get('motionRole')=='tentacle']
         assert len(arms)==8, 'Expected eight continuously weighted tentacles'

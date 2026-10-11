@@ -3,7 +3,9 @@
 Angles are local increments along sixteen bones, not whole-arm rotations.
 Every sampled pose owns all controls, including the normally hidden brood.
 """
-from kraken_motion_v2 import smooth
+import math
+
+from kraken_motion_v2 import beard_motion, one_shot, smooth
 
 
 EGG_ARMS = (0, 2, 3, 4, 6, 7)
@@ -36,7 +38,8 @@ def key_rest(asset, frame, pose, key, key_arms, key_lids):
 
 # Throw order: alternating left/right from the front arms backwards.
 THROW_ORDER = (0, 4, 2, 6, 3, 7)
-THROW_START, THROW_STEP, THROW_WINDOW, THROW_RELEASE = .06, .11, .36, .60
+# Long, strongly overlapping windows: the throws roll through the crown as one wave.
+THROW_START, THROW_STEP, THROW_WINDOW, THROW_RELEASE = .0, .11, .46, .64
 
 
 def throw_windows(p):
@@ -55,14 +58,15 @@ def smoothstep_tip(t):
 
 
 def brood_throw(asset, phase, frame, p, pose, key, key_arms, key_lids, land=False):
-    """Six staggered throws: lift the egg, cock the arm back and up, whip it outward, follow through."""
+    """One flowing heave of the whole animal: the crown gathers, the body swells and turns into each
+    throw, and the six releases roll through the arms as an overlapping wave."""
     windows = throw_windows(p)
     local = {arm: (phase - start) / THROW_WINDOW for arm, (start, _) in windows.items()}
 
     def beats(u):
-        lift = envelope(u, (0, 0), (.30, 1), (.62, 1), (1, 0)) if 0 < u < 1 else 0
-        cock = envelope(u, (0, 0), (.15, 0), (.50, 1), (.60, .2), (.75, 0), (1, 0)) if 0 < u < 1 else 0
-        snap = envelope(u, (0, 0), (.48, 0), (.60, 1), (.74, -.25), (1, 0)) if 0 < u < 1 else 0
+        lift = envelope(u, (0, 0), (.30, 1), (.64, 1), (.85, 0), (1, 0)) if 0 < u < 1 else 0
+        cock = envelope(u, (0, 0), (.10, 0), (.52, 1), (.64, .35), (.80, 0), (1, 0)) if 0 < u < 1 else 0
+        snap = envelope(u, (0, 0), (.50, 0), (.66, 1), (.82, -.15), (1, 0)) if 0 < u < 1 else 0
         return lift, cock, snap
 
     eggs = {}
@@ -70,31 +74,39 @@ def brood_throw(asset, phase, frame, p, pose, key, key_arms, key_lids, land=Fals
         u = local[arm]
         eggs[n] = smooth(.05, .30, u) if u < THROW_RELEASE else 0  # gone exactly at its release
     key_eggs(pose, eggs)
-    # The mantle pumps once per throw; the head leans a little towards the throwing side.
-    pump = sum(beats(u)[2] for u in local.values()) / 2
-    lean = sum((-1 if arm < 4 else 1) * beats(u)[1] for arm, u in local.items()) / 3
+    # Whole body: gather and sink, then heave up and swell while turning into each throw.
+    gather = envelope(phase, (0, 0), (.18, 1), (.40, .35), (.80, 0), (1, 0))
+    heave = envelope(phase, (0, 0), (.22, 0), (.55, 1), (.86, .45), (1, 0))
+    sway = sum((-1 if arm < 4 else 1) * (beats(u)[2] - .6 * beats(u)[1]) for arm, u in local.items()) / 3
     recover = 1 - smooth(.92, 1, phase)
-    pose('body', scale=(1 + .02 * pump, 1 - .015 * pump, 1 - .04 * pump))
-    pose('surfacing', location=(0, 0, (.02 if land else .05) * min(1, pump) * recover),
-         rotation=(0, .03 * lean * recover, 0))
+    pose('body', scale=(1 - .04 * gather + .04 * heave, 1 - .03 * gather + .03 * heave, 1 - .06 * gather + .09 * heave))
+    pose('surfacing', location=(0, -.04 * gather + .05 * heave, ((.02 if land else .05) * heave - .03 * gather) * recover),
+         rotation=(0, .03 * sway * recover, .09 * sway * recover))
+
+    def flow(i, side, t):
+        # Every arm, carrying or not, rides the travelling wave of the heave.
+        j = i % 4
+        return side * .026 * math.sin(math.tau * phase - 3 * t - .9 * j) * (gather + heave) * t
 
     def bend(i, side, t):
         if i not in local:
-            return (-.008 * pump * (1 - t), 0, 0)
+            return (-.02 * gather * (1 - t) + .01 * heave * t, 0, flow(i, side, t) - side * .02 * gather * (1 - t))
         lift, cock, snap = beats(local[i])
         lag = smooth(.0, 1, t) * .06       # the whip travels from the root to the hook
         _, _, snap_late = beats(local[i] - lag)
         # From above the wind-up must read in the plane: a big swing back towards the tail with the
         # hook curling up, then a whip outward past the rest line.
-        curl = .09 * cock * smoothstep_tip(t)
-        pitch = .03 * lift * (.5 + .5 * t) + .07 * cock * (.6 + .4 * t) + curl - .06 * snap_late * (.3 + .7 * t)
-        yaw = -side * .15 * cock * (.25 + .75 * t) + side * .10 * snap_late * (.2 + .8 * t)
-        twist = side * .05 * cock * t
+        curl = .06 * cock * smoothstep_tip(t)
+        pitch = (.02 * lift * (.5 + .5 * t) + .035 * cock * (.6 + .4 * t) + curl - .03 * snap_late * (.3 + .7 * t)
+                 - .02 * gather * (1 - t))
+        yaw = (-side * .065 * cock * (.25 + .75 * t) + side * .05 * snap_late * (.2 + .8 * t)
+               + flow(i, side, t) - side * .02 * gather * (1 - t))
+        twist = side * .03 * cock * t
         return (pitch, twist, yaw)
 
-    key_arms(asset, frame, key, bend)
-    squint = max(beats(u)[2] for u in local.values())
-    key_lids(pose, lambda name: .35 * squint * (.8 if 'second' in name else 1))
+    key_arms(asset, frame, key, bend, beard_motion(math.tau * phase * 2, 1.3 * one_shot(phase),
+                                                   splay=.7 * heave - .5 * gather, curl=.3 * gather))
+    key_lids(pose, lambda name: .3 * gather * (.8 if 'second' in name else 1))
 
 
 def apply_action(asset, motion, phase, frame, p, pose, key, key_arms, key_lids):

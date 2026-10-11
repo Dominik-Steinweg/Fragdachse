@@ -49,14 +49,16 @@ POSES = {
     'windup': ([(0, 0), (.16, 0), (.30, 88), (.46, 86), (.62, 66), (.80, 30), (.92, -40), (1, -150)],
                [(0, 0), (.30, 4), (.55, -6), (.80, 5), (1, 12)],
                [(0, 0), (.78, 0), (1, 95)]),
-    # Deep under water: a compact serpentine coil (also the end of `retract`).
+    # Deep under water: a compact serpentine coil, the start of `rise` (buried parts over land are
+    # hidden by the submersion shader).
     'coiled': ([(0, 0), (.16, -14), (.40, 0), (.70, 10), (1, -12)],
                [(0, 0), (.25, 55), (.45, -55), (.65, 50), (.85, -40), (1, 35)],
                [(0, 0), (1, 40)]),
-    # Peeling off the lane: the tip rolls up and back towards the entry.
-    'peeled': ([(0, 0), (.16, 0), (.30, 40), (.50, 55), (.70, 95), (.85, 160), (1, 250)],
-               [(0, 0), (.50, 8), (1, 20)],
-               [(0, 0), (.70, 50), (1, 70)]),
+    # End of `retract`: the arm tips steeply down into the water at the entry. From above its
+    # projection shrinks back towards the entry while buried parts fade, so it withdraws backwards.
+    'plunged': ([(0, 0), (.16, -55), (.40, -62), (.70, -58), (.90, -40), (1, -20)],
+                [(0, 0), (.40, 12), (.70, -15), (1, 10)],
+                [(0, 0), (.30, 0), (1, 32)]),
 }
 
 
@@ -111,9 +113,11 @@ def apply_kraken_tentacle(asset, motion, phase, frame, idle, p, pose, key):
                             * (phase > impact) * (1 - smooth(.85, 1, phase)))
         shape = mix(shape, shapes['flat'], smooth(impact + .12, 1, phase))
     else:  # kraken_tentacle_retract: peel up from the tip, gather over the entry, plunge home.
-        shape = mix(shapes['flat'], shapes['peeled'], smooth(0, .45, phase))
-        shape = mix(shape, shapes['coiled'], smooth(.40, 1, phase))
-        depth = DEEP * smooth(.42, 1, phase)
+        # The hook lets go of the ground, then the arm is hauled down into the water at the entry.
+        shape = mix(shapes['flat'], shapes['plunged'], smooth(.08, .90, phase))
+        release = bell(.16, .10, phase) * smooth(0, .08, phase)  # exactly flat on the slam handover
+        shape[0] = [a + 45 * release * smooth(.70, 1, j / (n - 1)) for j, a in enumerate(shape[0])]
+        depth = DEEP * smooth(.35, 1, phase)
     rig = asset['rig']
     previous = [0, 0, 0]
     for j, name in enumerate(chain):

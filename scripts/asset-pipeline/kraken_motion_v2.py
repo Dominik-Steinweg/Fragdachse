@@ -23,8 +23,12 @@ def bell(center, width, x):
     return math.exp(-((x - center) / width) ** 2)
 
 
-def key_arms(asset, frame, key, bend):
-    """bend(i, side, t) -> (pitch, twist, yaw) radians for chain i at bone fraction t."""
+def key_arms(asset, frame, key, bend, beard=None):
+    """bend/beard(i, side, t) -> (pitch, twist, yaw), in radians.
+
+    Beard indices run left to right; omitted beard explicitly keys the rest pose.
+    Every call resets translation and scale too, so clips cannot inherit a pose.
+    """
     rig = asset['rig']
     for i, chain in enumerate(asset['parts']['tentacle_chains']):
         side = -1 if i < 4 else 1
@@ -32,6 +36,15 @@ def key_arms(asset, frame, key, bend):
             bone = rig.pose.bones[name]
             key(bone, 'rotation_euler', bend(i, side, j / (len(chain) - 1)), frame)
             key(bone, 'location', (0, 0, 0), frame)
+    chains = asset['parts'].get('beard_chains', [])
+    for i, chain in enumerate(chains):
+        side = -1 if i < len(chains) // 2 else 1
+        for j, name in enumerate(chain):
+            bone = rig.pose.bones[name]
+            rotation = beard(i, side, j / (len(chain) - 1)) if beard else (0, 0, 0)
+            key(bone, 'rotation_euler', rotation, frame)
+            key(bone, 'location', (0, 0, 0), frame)
+            key(bone, 'scale', (1, 1, 1), frame)
 
 
 def key_lids(pose, closure):
@@ -56,26 +69,27 @@ def apply_kraken(asset, motion, phase, frame, idle, p, pose, key):
     if idle or motion not in ('kraken_intro_rise',):
         live = not idle
         swim = motion == 'kraken_swim' and live
+        if swim:
+            return swim_stroke(asset, phase, frame, pose, key)
         breath = (.5 - .5 * math.cos(cycle)) if live else 0
         swell = math.sin(cycle + .6) if live else 0
-        pose('body', scale=(1 + .03 * breath, 1 + .02 * breath, 1 + .06 * breath), location=(0, (-.02 * math.sin(cycle) if swim else 0), .03 * breath))
-        pose('surfacing', location=(0, 0, .035 * swell), rotation=(.012 * math.sin(cycle + 1.1) if live else 0, .015 * swell, 0))
-        amplitude = p.get('wave', .025) if live else 0
+        pose('body', scale=(1 + .03 * breath, 1 + .02 * breath, 1 + .06 * breath), location=(0, 0, .03 * breath))
+        pose('surfacing', location=(0, 0, .035 * swell), rotation=(.008 * math.sin(cycle + 1.1) if live else 0, .01 * swell, 0))
 
         def bend(i, side, t):
             if not live:
                 return (0, 0, 0)
-            offset = i * .72
-            yaw = amplitude * side * math.sin(cycle - t * math.tau * (1.25 if swim else 1.05) + offset) * (.4 + t)
-            pitch = amplitude * .8 * math.cos(cycle - t * 4.2 + offset) * (.3 + t)
-            if swim:
-                # Trailing arms: a rhythmic gather-and-push from the roots.
-                pitch += .03 * math.sin(cycle) * (1 - t)
+            # Every arm keeps its own integer harmonic, phase and reach, so the crown
+            # stirs independently instead of wobbling as one; hooks roll in and out.
+            k, ph, a = IDLE_HARMONIC[i], IDLE_PHASE[i], IDLE_REACH[i]
+            yaw = side * .024 * a * math.sin(k * cycle + ph - 2.6 * t) * (.25 + t)
+            pitch = (.016 * a * math.cos(k * cycle + ph - 2.2 * t) * (.2 + t)
+                     + .022 * a * math.sin(k * cycle + ph + 1.2) * t ** 3)
             return (pitch, 0, yaw)
-        key_arms(asset, frame, key, bend)
+        key_arms(asset, frame, key, bend, beard_motion(cycle) if live else None)
         # One slow, deliberate blink per idle loop; the small rear eyes lag behind.
-        blink = 0 if not live or swim else bell(.62, .045, phase)
-        lag = 0 if not live or swim else bell(.67, .045, phase)
+        blink = 0 if not live else bell(.62, .045, phase)
+        lag = 0 if not live else bell(.67, .045, phase)
         key_lids(pose, lambda name: lag if 'second' in name else blink)
         return
     # Cinematic surfacing (one shot, ends exactly in the idle rest pose).
@@ -104,7 +118,10 @@ def apply_kraken(asset, motion, phase, frame, idle, p, pose, key):
         pitch += (.06 * lift - .08 * slap) * (.4 + t) * settle
         yaw += side * .011 * math.sin(math.tau * phase * 1.5 - t * 4 + i) * (1 - smooth(eyes_open, 1, phase)) * rise
         return (pitch, 0, yaw)
-    key_arms(asset, frame, key, bend)
+    # The mouth tentacles twitch awake with the eyes and fan out on the roar.
+    awake = smooth(arms_break, eyes_open, phase) * (1 - smooth(.90, 1, phase))
+    key_arms(asset, frame, key, bend, beard_motion(math.tau * phase * 3, 1.2 * awake,
+                                                   splay=1.2 * bell(roar, .05, phase) * (1 - smooth(.92, 1, phase))))
     closure = 1 - smooth(eyes_open - .03, eyes_open + .06, phase)
     late = 1 - smooth(eyes_open + .02, eyes_open + .10, phase)
     key_lids(pose, lambda name: late if 'second' in name else closure)
@@ -128,7 +145,9 @@ def dive_or_surface(asset, motion, phase, frame, p, pose, key):
             fp, fy = folded(side, t)
             lift = .05 * heave * (.4 + t)
             return (fp * fold + lift, 0, fy * fold)
-        key_arms(asset, frame, key, bend)
+        tuck = smooth(.30, .95, phase)  # dive ends tucked; surface starts from exactly this pose
+        key_arms(asset, frame, key, bend, beard_motion(math.tau * phase * 2, .5 * one_shot(phase),
+                                                       splay=-.6 * tuck, curl=tuck))
         shut = smooth(.25, .42, phase)
         key_lids(pose, lambda name: max(shut, .3 * heave))
         return
@@ -144,9 +163,65 @@ def dive_or_surface(asset, motion, phase, frame, p, pose, key):
         fp, fy = folded(side, t)
         flick = .04 * bell(.80, .06, phase) * (.4 + t) * (1 - smooth(.90, 1, phase))
         return (fp * fold + flick, 0, fy * fold)
-    key_arms(asset, frame, key, bend)
+    tuck = 1 - smooth(.05, .70, phase)
+    key_arms(asset, frame, key, bend, beard_motion(math.tau * phase * 2, .5 * one_shot(phase),
+                                                   splay=-.6 * tuck, curl=tuck))
     closure = 1 - smooth(eyes - .04, eyes + .06, phase)
     key_lids(pose, lambda name: closure)
+
+
+IDLE_HARMONIC = (1, 2, 1, 1, 2, 1, 2, 1)  # integers keep the loop seamless
+IDLE_PHASE = (0, 2.1, 4.0, 1.3, 3.1, .7, 5.2, 2.6)
+IDLE_REACH = (1, .7, .85, .6, .9, .65, .8, .7)
+STROKE = .34  # share of the swim cycle spent in the power stroke
+BEARD_RATE = (1, 2, 1, 2, 1, 1, 2, 1, 2, 1)  # integers keep looping clips seamless
+BEARD_PHASE = (0, 2.4, 4.7, 1.1, 3.6, 5.5, .6, 2.9, 4.2, 1.8)
+
+
+def beard_motion(cycle, writhe=1.0, splay=0.0, curl=0.0, rate=1):
+    """beard(i, side, t) for key_arms: every mouth tentacle writhes on its own harmonic, plus action
+    terms: splay fans the crown out (negative gathers it), curl rolls the tips under the head.
+    One-shot clips scale all terms to zero at their rest ends."""
+    def beard(i, side, t):
+        k, ph = BEARD_RATE[i] * rate, BEARD_PHASE[i]
+        yaw = side * (.11 * writhe * math.sin(k * cycle + ph - 2.2 * t) * (.3 + t) - .16 * splay * (1 - .4 * t))
+        pitch = (.09 * writhe * math.cos(k * cycle + ph - 1.8 * t) * (.3 + t) - .15 * curl * t
+                 + .04 * splay * (1 - t))
+        return (pitch, 0, yaw)
+    return beard
+
+
+def one_shot(phase, edge=.15):
+    """Envelope that keeps a one-shot clip's secondary motion at rest on both ends."""
+    return smooth(0, edge, phase) * (1 - smooth(1 - edge, 1, phase))
+
+
+def swim_stroke(asset, phase, frame, pose, key):
+    """Rowing jet: a fast power stroke closes the crown backwards like an umbrella while the
+    mantle contracts and the body surges; a slow recovery reopens it with trailing tips."""
+    def power(u):
+        u %= 1
+        return smooth(0, STROKE, u) if u < STROKE else 1 - smooth(STROKE, 1, u)
+
+    p0 = power(phase)
+    surge = math.sin(math.pi * min(1, (phase % 1) / STROKE)) if phase % 1 < STROKE else 0
+    pose('body', scale=(1 - .05 * p0, 1 + .05 * p0, 1 - .03 * p0), location=(0, 0, .02 * p0))
+    pose('surfacing', location=(0, .11 * surge, .02 * surge), rotation=(-.02 * surge, 0, 0))
+
+    def bend(i, side, t):
+        j = i % 4
+        # Tips lag the roots: they still trail while the roots already reopen.
+        u = phase - .09 * t - .02 * j
+        sweep = power(u)
+        reach = (.048, .050, .045, .036)[j]
+        yaw = -side * reach * sweep * (1 - .45 * t)
+        # Drag curls the tips forward on the stroke and lets them stream back on recovery.
+        yaw += side * .017 * (power(u - .12) - sweep) * t * t
+        pitch = .012 * sweep * (1 - t) - .01 * sweep * t
+        return (pitch, 0, yaw)
+    # The mouth tentacles stream back and gather on each stroke, then drift open again.
+    key_arms(asset, frame, key, bend, beard_motion(math.tau * phase, .7, splay=-.6 * p0, curl=.8 * p0))
+    key_lids(pose, lambda name: .1)
 
 
 def ink_spit(asset, phase, frame, p, pose, key, land=False):
@@ -154,16 +229,24 @@ def ink_spit(asset, phase, frame, p, pose, key, land=False):
     m = p.get('markerPhases', {})
     charge_at, spit_at = m.get('charge', .43), m.get('spit', .57)
     recover = 1 - smooth(.85, 1, phase)
-    c = smooth(0, charge_at, phase) * (1 - smooth(spit_at, spit_at + .08, phase))
-    s = bell(spit_at + .02, .05, phase) * recover
-    # Small translations only: larger shifts would expose web roots buried in the mantle.
-    pose('body', scale=(1 + .03 * c - .04 * s, 1 + .02 * c - .03 * s, 1 + .09 * c - .11 * s),
-         location=(0, -.015 * c + .05 * s, .04 * c))
-    pose('surfacing', rotation=(.05 * c - .04 * s, 0, 0))
+    c = smooth(0, charge_at, phase) * (1 - smooth(spit_at, spit_at + .06, phase))
+    s = bell(spit_at + .02, .045, phase) * recover
+    r = smooth(spit_at + .04, spit_at + .16, phase) * (1 - smooth(.70, 1, phase))
+    # Body-only shifts stay small (larger ones expose web roots buried in the mantle);
+    # the whole animal (surfacing) draws back while loading and lunges with the jet.
+    pose('body', scale=(1 + .045 * c - .06 * s, 1 + .03 * c - .04 * s, 1 + .14 * c - .16 * s),
+         location=(0, -.015 * c + .05 * s, .05 * c))
+    pose('surfacing', location=(0, -.06 * c + .12 * s - .06 * r, .03 * c), rotation=(.06 * c - .05 * s, 0, 0))
 
     def bend(i, side, t):
-        if i in (0, 4):  # front arms part to clear the mouth, then snap forward with the jet
-            return (.04 * c * (.3 + t), 0, side * .028 * c * (.3 + t) - side * .03 * s * t)
-        return (-.02 * c * (1 - t), 0, 0)
-    key_arms(asset, frame, key, bend)
-    key_lids(pose, lambda name: .35 * c + .5 * s)
+        j = i % 4
+        if j == 0:  # front arms flare wide and rear up, then whip in ahead of the jet
+            return (.06 * c * (1 - t) - .02 * c * t * t + .02 * s * t, 0,
+                    -side * .042 * c * (.3 + t) + side * .065 * s * (.2 + t))
+        k = (1, .8, .6)[j - 1]  # the crown loads backwards, fans forward with the jet, then trails
+        return (-.02 * c * (1 - t) + .015 * s * t, 0,
+                side * k * (-.022 * c * (1 - .4 * t) + .03 * s * (1 - .3 * t) - .012 * r * t))
+    # The beard fans wide around the mouth while loading and snaps shut as the jet leaves.
+    key_arms(asset, frame, key, bend, beard_motion(math.tau * phase * 2, .8 * one_shot(phase),
+                                                   splay=1.3 * c - .7 * s, curl=.5 * s + .3 * r))
+    key_lids(pose, lambda name: .45 * c * (1 - s))

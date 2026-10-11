@@ -3,7 +3,7 @@ import math
 
 SWING = .40  # share of the scuttle cycle an arm spends in the air
 
-from kraken_motion_v2 import ink_spit, key_arms, key_lids, smooth
+from kraken_motion_v2 import beard_motion, ink_spit, key_arms, key_lids, one_shot, smooth
 from kraken_motion_actions_v2 import brood_throw, envelope, key_eggs, key_rest
 
 
@@ -26,6 +26,7 @@ def apply_kraken_land(asset, motion, phase, frame, idle, p, pose, key):
     cycle = math.tau * phase
     markers = p.get('markerPhases', {})
     closure = 0
+    beard = None
 
     if motion == 'kraken_land_idle':
         breath = .5 - .5 * math.cos(cycle)
@@ -37,6 +38,7 @@ def apply_kraken_land(asset, motion, phase, frame, idle, p, pose, key):
             wave = math.sin(cycle - 3.4 * t + i * .8)
             return (.018 * wave * t * t, 0, side * .021 * wave * t * t)
 
+        beard = beard_motion(cycle)
         # Compact periodic blink: identical first/closure poses, no Gaussian tail.
         closure = envelope(phase, (0, 0), (.42, 0), (.54, .94), (.69, 0), (1, 0))
 
@@ -72,6 +74,7 @@ def apply_kraken_land(asset, motion, phase, frame, idle, p, pose, key):
             return (step, 0, side * (.028 * sweep * (1 - .45 * t) + .009 * wave * t))
 
         closure = .12
+        beard = beard_motion(cycle, .8, rate=2)  # quick flicks with every push
 
     elif motion == 'kraken_land_ashore':
         # The runtime shows the water body until `grip`; from there the front
@@ -100,6 +103,7 @@ def apply_kraken_land(asset, motion, phase, frame, idle, p, pose, key):
                     side * (-.018 * trail * (1 - .3 * t) + .012 * heaved * (1 - t)))
 
         closure = .3 * (1 - smooth(grip, heave, phase))
+        beard = beard_motion(cycle * 2, one_shot(phase), splay=.9 * pull)
 
     elif motion == 'kraken_land_slam':
         # Pounce: a short crouch with the claw arms reared and spread, then a
@@ -126,6 +130,7 @@ def apply_kraken_land(asset, motion, phase, frame, idle, p, pose, key):
             return (-.02 * coil * (1 - t), 0, -side * .016 * (.6 * coil + lunge) * (1 - .4 * t))
 
         closure = .25 * coil
+        beard = beard_motion(cycle * 2, .6 * one_shot(phase), splay=1.3 * coil - .8 * lunge, curl=.4 * snap)
 
     else:  # terminal: the final collapsed pose is intentionally held
         collapse = smooth(.25, .9, phase)
@@ -145,6 +150,7 @@ def apply_kraken_land(asset, motion, phase, frame, idle, p, pose, key):
                     side * (.026 * twitch - .21 * curl * t ** 1.25))
 
         closure = smooth(.18, .94, phase)
+        beard = beard_motion(cycle * 3, spasm, curl=1.2 * collapse)
 
-    key_arms(asset, frame, key, bend)
+    key_arms(asset, frame, key, bend, beard)
     key_lids(pose, lambda name: closure)

@@ -336,13 +336,14 @@ def fins(c, section, surface, material, spike_material=None):
     return objects
 
 
-def oral_crown(c, surface, material):
+def oral_crown(c, surface, material, *, grouped=False):
     """Ten tapered feeding tendrils grow forward from a continuous facial hood.
 
-    Returns (tentacle meshes to fuse into the skull, centre lines [(point, radius, t)]).
+    Returns (meshes to fuse, samples [(point, radius, t)]). With grouped=True,
+    samples are grouped into centre lines, sorted by root X from left to right.
     Roots start deep in the jowls and swell, so the voxel union grows them out of the face.
     """
-    objects, lines = [], []
+    objects, lines, chains = [], [], []
     for side in (-1, 1):
         for j, (bx, by) in enumerate([(.06, 2.00), (.16, 1.98), (.27, 1.93), (.38, 1.84), (.48, 1.72)]):
             spread = .20 + .055 * j
@@ -357,9 +358,12 @@ def oral_crown(c, surface, material):
             radii = [.15 - .01 * j, .125 - .010 * j, .085 - .006 * j, .051 - .003 * j, .022, .003]
             objects.append(horn(c, 'Bearded oral tentacle', pts, radii, material, sides=20))
             centres, widths = smooth_path(pts, radii, steps=6)
-            for k, (p, r) in enumerate(zip(centres, widths)):
-                lines.append((Vector(p), r, k / (len(centres) - 1)))
-    return objects, lines
+            line = [(Vector(p), r, k / (len(centres) - 1))
+                    for k, (p, r) in enumerate(zip(centres, widths))]
+            chains.append(line)
+            lines.extend(line)
+    # Keep construction/material traversal unchanged; rig order is left to right.
+    return objects, sorted(chains, key=lambda line: line[0][0].x) if grouped else lines
 
 
 def colour_beard(ob, lines, oral_material):

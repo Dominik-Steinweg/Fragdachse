@@ -4978,8 +4978,7 @@
           "frameCount": 16,
           "frameRate": 24,
           "loop": false,
-          "end": "free",
-          "next": "rise"
+          "end": "free"
         }
       ]
     },
