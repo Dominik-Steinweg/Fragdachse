@@ -2,6 +2,7 @@ import type { CoopDefenseMapBossConfig } from '../config/coopDefenseMaps';
 import type { CoopDefenseEnemyKind } from '../config/coopDefenseEnemies';
 import type { EnemyManager, EnemySpawnOptions } from '../entities/EnemyManager';
 import { getBossIntroPreset, type BossIntroState } from '../config/bossIntros';
+import type { FireChunkBurstPort } from './FlamethrowerUpgradeSystem';
 
 interface BossSpawnExecutor {
   hostSpawnBoss(kind: CoopDefenseEnemyKind): boolean;
@@ -32,6 +33,7 @@ export class CoopDefenseBossSystem {
     private readonly random: () => number = Math.random,
     /** Zusaetzliche authored Startbedingung, z. B. "Welle 1 geraeumt". */
     private readonly isStartSatisfied: () => boolean = () => true,
+    private readonly fireChunkBurstPort?: FireChunkBurstPort | null,
   ) {}
 
   hostUpdate(deltaMs: number, countdownActive: boolean, synchronizedNowMs = Date.now()): void {
@@ -60,6 +62,15 @@ export class CoopDefenseBossSystem {
       { skipSpawnEffect: true },
     ) ?? false;
     this.completeSpawn(spawned, synchronizedNowMs);
+    if (spawned && this.fireChunkBurstPort) {
+      const preset = getBossIntroPreset(state.preset);
+      if ('fireChunkBurst' in preset) {
+        const boss = this.enemyManager.getAllEnemies().find(enemy => enemy.kind === this.bossConfig.enemyKind);
+        if (boss) this.fireChunkBurstPort.hostCreateFireChunkBurst(
+          boss.id, state.x, state.y, preset.fireChunkBurst, `boss-intro:${state.seed}`, synchronizedNowMs,
+        );
+      }
+    }
   }
 
   reset(): void {

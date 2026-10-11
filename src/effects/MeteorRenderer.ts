@@ -33,10 +33,13 @@ export class MeteorRenderer {
 
   /** Called once by the existing reliable explosion presentation event, including late observers.
    * The shared combat burst and its light are spawned by EffectSystem; this adds the meteor signature. */
-  playImpact(x:number, y:number, radius:number, variant:'normal'|'void'='normal'):void {
+  playImpact(x:number, y:number, radius:number, variant:'normal'|'void'='normal', includeCrater = true):void {
     if (this.gpuVfx?.isSuppressed() || radius<=0) return;
-    if (this.impacts.length===64) this.impacts.shift();
-    this.impacts.push({x,y,radius,variant,born:this.scene.time.now,seed:(++this.impactSequence*37)%997});
+    // Cinematic owners can provide their own synchronized crater while retaining ejecta.
+    if (includeCrater) {
+      if (this.impacts.length===64) this.impacts.shift();
+      this.impacts.push({x,y,radius,variant,born:this.scene.time.now,seed:(++this.impactSequence*37)%997});
+    }
     this.explosion?.spawnMeteorDebris(x,y,radius,variant);
     this.cameraFeedback?.request({channel:'impact',amplitudePx:legacyShakeAmplitudePx(Math.min(.007,.003*Math.sqrt(radius/60))),
       durationMs:310,priority:CAMERA_FEEDBACK_PRIORITY.mediumImpact,decay:'impulse',sourceX:x,sourceY:y});

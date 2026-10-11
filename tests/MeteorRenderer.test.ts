@@ -37,4 +37,13 @@ describe('meteor snapshot presentation',()=>{
     renderer.sync([strike], Date.now());expect(batch.add).not.toHaveBeenCalled();
     system.isSuppressed=()=>false;renderer.sync([strike], Date.now());expect(batch.add).toHaveBeenCalledOnce();
   });
+  it('can leave crater ownership to a cinematic while retaining meteor debris',()=>{
+    const {renderer}=fixture();
+    const explosion={spawnMeteorDebris:vi.fn()};
+    renderer.setImpactSystems(explosion as never, {} as never);
+    renderer.playImpact(100,100,60,'void',false);
+    renderer.sync([], Date.now());
+    expect(explosion.spawnMeteorDebris).toHaveBeenCalledExactlyOnceWith(100,100,60,'void');
+    expect(batch.add).not.toHaveBeenCalled();
+  });
 });

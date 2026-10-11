@@ -15,7 +15,7 @@ export class MeteorGpuLayer {
   private version = 0;
   private readonly passes: { image: Phaser.GameObjects.Image; batch: MeteorBatchPort }[] = [];
 
-  constructor(private readonly scene: Phaser.Scene) {
+  constructor(private readonly scene: Phaser.Scene, graphicsFamily: 'meteorEffects' | 'bossIntro' = 'meteorEffects') {
     const renderer = scene.sys?.renderer as Phaser.Renderer.WebGL.WebGLRenderer | undefined;
     if (!renderer?.gl) return;
     // Ground before water; glow below canopy. Only the airborne body / brief flash is high.
@@ -23,7 +23,7 @@ export class MeteorGpuLayer {
     for (const [pass, depth] of [5.12, 19.7, 20.6, 13.38].entries()) {
       const image = scene.add.image(0, 0, '__WHITE').setDepth(depth).setVisible(false);
       image.name = `armageddon-${['ground','heat','flight','material'][pass]}`;
-      registerGraphicsObject(scene, 'meteorEffects', image);
+      registerGraphicsObject(scene, graphicsFamily === 'bossIntro' ? 'bossIntro' : 'meteorEffects', image);
       const batch = createMeteorBatch(renderer, image, pass, this);
       const manager = renderer.renderNodes;
       class Submitter extends Phaser.Renderer.WebGL.RenderNodes.RenderNode {
@@ -55,6 +55,7 @@ export class MeteorGpuLayer {
     for (const {image} of this.passes) image.setVisible(this.count > 0);
   }
   clear(): void { this.begin(); this.flush(); }
+  setAlpha(alpha: number): void { for (const { image } of this.passes) image.setAlpha(alpha); }
   prepare(context: Phaser.Renderer.WebGL.DrawingContext): boolean {
     context.renderer.renderNodes.startStandAloneRender();
     return this.passes.map(({batch})=>batch.run(context,true)).every(Boolean);

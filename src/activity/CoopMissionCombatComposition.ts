@@ -1,4 +1,5 @@
 import type { BossIntroState } from '../config/bossIntros';
+import type { FireChunkBurstPort } from '../systems/FlamethrowerUpgradeSystem';
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import { WaterGeometry } from '../arena/WaterGeometry';
 import * as Phaser from 'phaser';
@@ -75,6 +76,7 @@ export interface CoopMissionCombatCompositionOptions {
   readonly entityBurnGpuController: EntityBurnGpuController | null;
   readonly onBossSpawned?: (spawnedAtMs: number) => void;
   readonly onBossIntroStarted?: (state: BossIntroState) => void;
+  readonly playerFireChunkPort?: FireChunkBurstPort | null;
   readonly onWaveStarted?: (encounterId: string) => void;
   readonly onDiagnosticEvent?: (type: string, fields: Record<string, unknown>) => void;
 }
@@ -257,6 +259,7 @@ export class CoopMissionCombatComposition {
           const encounterId = this.options.activity.mapConfig.boss?.startAfterEncounterId;
           return !encounterId || (runtime.coopDefenseMapDirector?.isEncounterCleared(encounterId) ?? false);
         },
+        this.options.playerFireChunkPort,
       )
       : null;
     const mapDirector = encounterConfigs.length > 0

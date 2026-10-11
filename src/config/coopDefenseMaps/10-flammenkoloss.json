@@ -126,7 +126,9 @@
   ],
   "boss": {
     "enemyKind": "inferno-colossus",
-    "spawnAtMs": 6000
+    "spawnAtMs": 0,
+    "startAfterEncounterId": "inferno-opening-support",
+    "intro": { "preset": "void-meteor" }
   },
   "encounters": [
     {

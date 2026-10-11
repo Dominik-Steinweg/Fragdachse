@@ -3,9 +3,36 @@
  * repliziert Ort/Startzeit/Seed; Renderer leiten die Inszenierung aus diesem Anker
  * und der synchronisierten Zeit ab.
  */
-export type BossIntroPresetId = 'graveyard-rise' | 'void-sparks';
+import type { FireChunkBurstConfig } from '../types';
 
-export const BOSS_INTRO_PRESET_IDS: readonly BossIntroPresetId[] = ['graveyard-rise', 'void-sparks'];
+export type BossIntroPresetId = 'graveyard-rise' | 'void-sparks' | 'void-meteor';
+
+export const BOSS_INTRO_PRESET_IDS: readonly BossIntroPresetId[] = ['graveyard-rise', 'void-sparks', 'void-meteor'];
+
+/** The strike is presentation; only these fire chunks create host-owned ground fire. */
+export const VOID_METEOR_INTRO = {
+  emergeAtMs: 4_350,
+  durationMs: 9_000,
+  spawnEdgeMarginCells: 10,
+  meteorStartMs: 900,
+  impactAtMs: 4_200,
+  meteorRadiusPx: 220,
+  explosionRadiusPx: 520,
+  flameCrownMs: 950,
+  camera: { panInMs: 1_400, holdAfterEmergeMs: 3_150, panOutMs: 1_500, zoom: 1.25 },
+  fireChunkBurst: {
+    count: 150,
+    searchRadius: 600,
+    flightMs: 1_600,
+    igniteCenter: false,
+    durationMs: 6_000,
+    burnDurationMs: 2_000,
+    burnDamagePerTick: 0.5,
+    sourceId: 'enemy.inferno_colossus.meteor_intro',
+    visualStyle: 'void',
+    damageTarget: 'players',
+  } satisfies FireChunkBurstConfig,
+} as const;
 
 /**
  * „Riss aus einer anderen Dimension“: Anomalie → Riss öffnet sich → Kollaps → Erscheinen.
@@ -119,13 +146,16 @@ export const GRAVEYARD_RISE_INTRO: GraveyardRiseIntroPreset = {
 
 export function getBossIntroPreset(id: 'graveyard-rise'): GraveyardRiseIntroPreset;
 export function getBossIntroPreset(id: 'void-sparks'): typeof VOID_SPARKS_INTRO;
-export function getBossIntroPreset(id: BossIntroPresetId): GraveyardRiseIntroPreset | typeof VOID_SPARKS_INTRO;
-export function getBossIntroPreset(id: BossIntroPresetId): GraveyardRiseIntroPreset | typeof VOID_SPARKS_INTRO {
+export function getBossIntroPreset(id: 'void-meteor'): typeof VOID_METEOR_INTRO;
+export function getBossIntroPreset(id: BossIntroPresetId): GraveyardRiseIntroPreset | typeof VOID_SPARKS_INTRO | typeof VOID_METEOR_INTRO;
+export function getBossIntroPreset(id: BossIntroPresetId): GraveyardRiseIntroPreset | typeof VOID_SPARKS_INTRO | typeof VOID_METEOR_INTRO {
   switch (id) {
     case 'graveyard-rise':
       return GRAVEYARD_RISE_INTRO;
     case 'void-sparks':
       return VOID_SPARKS_INTRO;
+    case 'void-meteor':
+      return VOID_METEOR_INTRO;
   }
 }
 

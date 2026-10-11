@@ -83,7 +83,7 @@ export const GRAPHICS_FAMILIES = {
     'AttackDroneRenderer',
   ],
   encounterTelegraphs: ['CoopDefenseEncounterTelegraphRenderer'],
-  bossIntro: ['BossIntroGraveyardRenderer', 'GraveFireflySwarm', 'VoidRiftIntroRenderer'],
+  bossIntro: ['BossIntroGraveyardRenderer', 'GraveFireflySwarm', 'VoidRiftIntroRenderer', 'VoidMeteorIntroRenderer'],
   powerUpEffects: ['PowerUpRenderer'],
   projectileShapes: ['ProjectilePresentationRuntime', 'TracerBounceDebugOverlay'],
   captureObjectiveEffects: ['CaptureTheBeerRenderer'],
