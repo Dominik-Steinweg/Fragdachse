@@ -15,6 +15,7 @@ import {
   VOID_PALETTE,
 } from '../config';
 import type { CoopBaseFaction, CoopBaseTurretWeaponId } from '../config/coopDefenseMaps';
+import { UTILITY_CONFIGS, type PlaceableTurretUtilityConfig } from '../loadout/LoadoutConfig';
 import { getTurretVisualSpec, getTurretVisualTransform } from '../config/turretVisuals';
 import {
   getBaseWorldBounds,
@@ -33,6 +34,8 @@ import {
 
 const EMPTY_LIGHT_SPOTS: readonly { x: number; y: number; radius: number }[] = [];
 const VULNERABLE_MARKER_COLOR = 0xc86bff;
+// Base turrets use the shared automated-turret acquisition range, independently of projectile range.
+const BASE_TURRET_TARGET_RANGE = (UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig).placeable.targetRange;
 
 export interface BaseTurretRuntimeState extends TurretAimConfig {
   readonly id: string;
@@ -41,6 +44,7 @@ export interface BaseTurretRuntimeState extends TurretAimConfig {
   readonly y: number;
   readonly angle: number;
   readonly weaponId: CoopBaseTurretWeaponId;
+  readonly targetRange: number;
   readonly faction: CoopBaseFaction;
 }
 
@@ -374,6 +378,7 @@ export class BaseEntity {
       y: turret.y,
       angle: this.turretAngles.get(turret.id) ?? turret.initialAngle,
       weaponId: turret.weaponId,
+      targetRange: BASE_TURRET_TARGET_RANGE,
       ...turretAimConfig(turret),
       faction: this.faction,
     }));

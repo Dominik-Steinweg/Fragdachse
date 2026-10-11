@@ -10,8 +10,9 @@ import { applyHostileAreaStrikeDamage } from '../src/systems/hostileAreaStrikeDa
 import { computeRadialDamage } from '../src/utils/radialDamage';
 import { EnemyFlowFieldService } from '../src/systems/EnemyFlowFieldService';
 import { findMortarLocalPositions, type MortarNavigation } from '../src/systems/MortarLocalPositions';
+import * as mortarPositions from '../src/systems/MortarLocalPositions';
 import type { CombatGeometryPort } from '../src/combat/CombatCapabilities';
-import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { UTILITY_CONFIGS, WEAPON_CONFIGS, type PlaceableTurretUtilityConfig } from '../src/loadout/LoadoutConfig';
 import { getCoopDefenseConstructionDefinition } from '../src/config/coopDefenseConstructions';
 
 const config = getCoopDefenseEnemyConfig('mortar-badger').mortar!;
@@ -292,6 +293,31 @@ describe('local mortar siege policy', () => {
     field.destroy();
   });
 
+  it.each([1, 3])('J/K: weighs a 350 px walk against cover from %s threats with authored defaults', threatCount => {
+    // Isolate the decision from candidate sampling; navigation is covered separately below.
+    const walk = 350;
+    const candidates = vi.spyOn(mortarPositions, 'findMortarLocalPositions').mockReturnValue([
+      { x: 0, y: 0, travelDistance: 0, path: [] },
+      { x: 0, y: -walk, travelDistance: walk, path: [{ x: 0, y: -walk }] },
+    ]);
+    try {
+      const f = fixture({ hasLineOfSight: (_sx, _sy, _x, y) => y === 0 });
+      for (let i = 1; i < threatCount; i++) f.players.push({ ...f.players[0], id: `threat-${i}` });
+      const gain = threatCount * (config.coverQualityWeight + config.exposurePenaltyWeight);
+      const requiredGain = walk * config.movementCostPerPx + config.minRepositionImprovement;
+      if (threatCount === 1) expect(gain).toBeLessThan(requiredGain);
+      else expect(gain).toBeGreaterThan(requiredGain);
+      f.update(0);
+      if (threatCount === 1) {
+        expect(f.mortar.getSnapshot()).toHaveLength(1);
+        expect(f.mortar.getMovementOverride(f.enemy, 0)).toEqual({ vx: 0, vy: 0 });
+      } else {
+        expect(f.mortar.getSnapshot()).toEqual([]);
+        expect(f.mortar.getMovementOverride(f.enemy, 0)!.vy).toBeLessThan(0);
+      }
+    } finally { candidates.mockRestore(); }
+  });
+
   it('L/N: keeps a good station after THUMP and also fires when every station is open', () => {
     for (const visible of [false, true]) {
       const field = openField();
@@ -422,7 +448,8 @@ describe('local mortar siege policy', () => {
     let alive = true;
     const base = { id: 'outpost', getHp: () => alive ? 100 : 0, isInert: () => false,
       getNearestSurfacePoint: () => ({ x: config.minRangePx + 10, y: 0 }),
-      getTurrets: () => [{ id: 'roof', x: config.minRangePx + 100, y: 0 }] };
+      getTurrets: () => [{ id: 'roof', x: config.minRangePx + 100, y: 0,
+        targetRange: (UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig).placeable.targetRange }] };
     const f = fixture({ navigation: field, bases: { getBasesByFaction: () => [base] as never, getBase: () => base as never, getObstacleGeneration: () => 0 } });
     f.update(0);
     const calls = f.hasLineOfSight.mock.calls.filter(call => call[5] === base.id);
@@ -432,6 +459,28 @@ describe('local mortar siege policy', () => {
     f.hasLineOfSight.mockClear(); f.update(shot.impactAt + config.postImpactDelayMs);
     expect(f.hasLineOfSight.mock.calls.some(call => call[5] === base.id)).toBe(false);
     field.destroy();
+  });
+
+  it.each([0.5, 1, 2])('P: uses the base turret runtime range at its boundary (range factor %s)', factor => {
+    const targetRange = (UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig).placeable.targetRange * factor;
+    for (const offset of [-1, 1]) {
+      const base = { id: 'outpost', getHp: () => 100, isInert: () => false,
+        getNearestSurfacePoint: () => ({ x: config.preferredRangeMinPx, y: 0 }),
+        getTurrets: () => [{ id: 'roof', x: targetRange + offset, y: 0, targetRange }] };
+      const f = fixture({ bases: { getBasesByFaction: () => [base] as never,
+        getBase: () => base as never, getObstacleGeneration: () => 0 } });
+      f.players.length = 0; f.catalog.clear(); f.update(0);
+      if (offset > 0) {
+        expect(f.hasLineOfSight).not.toHaveBeenCalled();
+        expect(f.mortar.getSnapshot()).toHaveLength(1);
+        expect(f.mortar.getMovementOverride(f.enemy, 0)).toEqual({ vx: 0, vy: 0 });
+      } else if (targetRange + offset < config.minRangePx) {
+        expect(f.mortar.getSnapshot()).toEqual([]);
+        expect(f.mortar.getMovementOverride(f.enemy, 0)!.vx).toBeLessThan(0);
+      } else {
+        expect(f.hasLineOfSight).toHaveBeenCalled();
+      }
+    }
   });
 
   it('rejects invalid search budgets and non-finite tactical tuning at the config boundary', () => {

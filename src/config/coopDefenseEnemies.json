@@ -773,7 +773,7 @@
     {
       "id": "mortar-badger",
       "eyeGlow": {
-        "color": 12070911
+        "color": 7025305
       },
       "pawCount": 4,
       "maxHp": 45,
@@ -840,7 +840,7 @@
         "rangeQualityWeight": 1,
         "coverQualityWeight": 1,
         "exposurePenaltyWeight": 2,
-        "movementCostPerPx": 0.006,
+        "movementCostPerPx": 0.008,
         "minRepositionImprovement": 0.5,
         "threatCheckIntervalMs": 250,
         "threatChangeDistancePx": 96,

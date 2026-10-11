@@ -343,11 +343,10 @@ export class CoopDefenseMortarSystem implements EnemySpecialMovementSource {
       const point = resolve();
       if (point) consider({ ...point, id: `construction:${rock.id}`, range, skipRockIndex: rock.id, carrierBaseId, resolve });
     });
-    const baseRange = (UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig).placeable.targetRange;
     for (const base of this.bases?.getBasesByFaction('friendly') ?? []) {
       if (base.getHp() <= 0 || base.isInert()) continue;
       for (const turret of base.getTurrets()) consider({ id: `turret:${turret.id}`, x: turret.x, y: turret.y,
-        range: baseRange, carrierBaseId: base.id, resolve: () => base.getHp() > 0 && !base.isInert() ? turret : null });
+        range: turret.targetRange, carrierBaseId: base.id, resolve: () => base.getHp() > 0 && !base.isInert() ? turret : null });
     }
     return threats;
   }

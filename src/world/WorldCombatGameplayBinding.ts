@@ -1526,6 +1526,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       ownerId: turret.faction === 'hostile' ? COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID : COOP_DEFENSE_BASE_TURRET_OWNER_ID,
       ownerColor: turret.faction === 'hostile' ? TEAM_RED_COLOR : TEAM_BLUE_COLOR,
       weaponId: turret.weaponId,
+      targetRange: turret.targetRange,
       sourceCarrierBaseId: turret.baseId,
       footprint: footprint(turret.baseId),
       targetMode: turret.faction === 'hostile' ? 'players' as const : 'enemies' as const,

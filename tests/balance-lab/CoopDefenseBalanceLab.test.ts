@@ -155,6 +155,27 @@ describe('Coop Defense Balance Lab', () => {
     expect(getCoopDefenseMapBalanceSignature(balanceChanged)).not.toBe(getCoopDefenseMapBalanceSignature(map));
   });
 
+  it('erfasst Mortar-Mechanik und Ability-Schaden, ohne Augenfarbe als Balanceänderung zu werten', () => {
+    const map = { ...COOP_DEFENSE_MAP_CONFIGS[0], encounters: [{
+      id: 'mortar-balance', start: { type: 'time' as const, atMs: 0 },
+      groups: [{ enemyKind: 'mortar-badger', count: 1 }],
+    }] };
+    const snapshot = buildCoopDefenseBalanceMapSnapshot(map);
+    expect(snapshot.usedEnemyKinds).toContain('mortar-badger');
+    expect(snapshot.mechanicTags).toContain('mortar');
+    const enemy = COOP_DEFENSE_ENEMY_CONFIGS['mortar-badger'];
+    const mortar = enemy.mortar! as { maxDamage: number };
+    const eyes = enemy.eyeGlow! as { color: number };
+    const originalDamage = mortar.maxDamage, originalColor = eyes.color;
+    try {
+      mortar.maxDamage += 1;
+      expect(getCoopDefenseMapBalanceSignature(map)).not.toBe(snapshot.balanceSignature);
+      mortar.maxDamage = originalDamage;
+      eyes.color = 0;
+      expect(getCoopDefenseMapBalanceSignature(map)).toBe(snapshot.balanceSignature);
+    } finally { mortar.maxDamage = originalDamage; eyes.color = originalColor; }
+  });
+
   it('kanonisiert historische Übersetzungsnamen und akzeptiert die alte Signaturmigration', () => {
     const map = COOP_DEFENSE_MAP_CONFIGS.find((entry) => entry.mapId === '3')!;
     const renamed = {

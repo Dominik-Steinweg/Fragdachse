@@ -26,6 +26,7 @@ import {
   type BaseSpec,
 } from '../src/arena/BaseRegistry';
 import { BaseManager } from '../src/entities/BaseManager';
+import { UTILITY_CONFIGS, type PlaceableTurretUtilityConfig } from '../src/loadout/LoadoutConfig';
 import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
 import type { LightingSystem } from '../src/effects/LightingSystem';
 import type { CoopDefenseSecondaryObjectiveState } from '../src/types';
@@ -550,6 +551,8 @@ describe('Coop-Defense dormant mission structures', () => {
     expect(manager.getActiveBaseIds()).toEqual(new Set([dormant.id]));
     expect(manager.getBase(dormant.id)!.getTurrets()).toHaveLength(1);
     expect(manager.getTurrets()[0]?.id).toBe('dormant-outpost-turret');
+    expect(manager.getTurrets()[0]?.targetRange)
+      .toBe((UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig).placeable.targetRange);
     expect(groupObjects).toHaveLength(1);
 
     manager.setTurretAngle('dormant-outpost-turret', 1.25);
