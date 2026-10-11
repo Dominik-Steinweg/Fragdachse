@@ -2254,3 +2254,26 @@ Der zentrale emotionale Effekt soll sein:
 Und nach dem THUMP:
 
 > **„Zu spät für den Interrupt. Raus aus dem Kreis.“**
+
+---
+
+# 33. V1.1 – Entscheidungen 2026-10-11 und Ist-Code-Abgleich
+
+Dieser Nachtrag ergänzt V1. Wo er von den Abschnitten oben abweicht, gilt der Nachtrag.
+
+## 33.1 Fachliche Entscheidungen
+
+| Thema | Entscheidung | Abweichung von V1 |
+|---|---|---|
+| Nekromantie | Ein wiederbelebter (verbündeter) Mörser-Dachs behält den Mörser und beschießt feindliche Gegnergruppen. Telegraph und Akzente in Verbündeten-Farbe; keine Ziele oder Schaden an Spielern, Basen, Konstrukten. | Neu (V1 kannte keine verbündeten Gegner). |
+| Interrupt | Unverändert 2 s Windup, nur Tod vor THUMP bricht ab. Der Mörser ist bewusst sehr fragil, damit ein kurzer Fernwaffen-Treffer genügt; der Hauptgegenzug ist die Jagd zwischen den Schüssen. | Keine. |
+| Asset | Eigenes Blender-Asset (Konzept A3a): kompakter Dachs, fest montiertes, 45° nach vorn geneigtes massives Mörserrohr auf Bodenplatte mit Zweibein, rußschwarzes Holzgestell mit Kupferbändern, zwei lila leuchtende Granatkanister. | §18.3: Die Waffe ist sichtbar Teil des Sprites; THUMP sitzt an der Rohrmündung (5,2 px vor der Körpermitte, Blickrichtung zum Ziel). |
+| Offscreen | Während eines feindlichen Windups zeigt ein lila Randpfeil zum Mörser, wenn er außerhalb des Bildes steht. | §19.3: Hinweis ist Pflicht statt optional. |
+| Einsatz | Zunächst nur Testkarte `00-test` und Dev-Szenario; Kampagne 1–17 unverändert. | Erste Kampagnenkarte offen. |
+
+## 33.2 Technische Korrekturen gegenüber V1
+
+- `CombatSystem` existiert nicht mehr. Schaden läuft über `WorldCombatCore`/`CombatDamageEffectPort`; Freund/Feind über `canDamageTarget`. Für Strikes, deren Gegner bereits entfernt ist, führt der Strike seine Fraktion als Fallback mit.
+- Owner-Modell nach dem Gameplay-Runtime-Leitbild: Der Windup (Delay vor Commit) gehört dem Behavior `CoopDefenseMortarSystem`; erst beim THUMP entsteht der Deferred Strike in `CoopDefenseMortarStrikeSystem` (§15.2 entsprechend angepasst). Beide sind Activity-Owner der Coop-Mission, nicht World-Owner wie `AirstrikeSystem`. Die Strike-ID wird bereits beim Windup vergeben; das Wire-Array `mortarStrikes` (Key `mo`) enthält Windups und Flüge.
+- Spieler-, Basis-, Konstrukt-, Fels- und Zugschaden laufen über den gemeinsamen Helfer `applyHostileAreaStrikeDamage`, den auch der Gegner-Luftangriff nutzt.
+- Bewegung: `EnemyManager` hat nur einen Special-Movement-Slot; Timebomb und Mörser teilen ihn über einen Composite-Source.
