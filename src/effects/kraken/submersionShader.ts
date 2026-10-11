@@ -15,6 +15,8 @@ export const SUBMERSION_DEFAULTS = {
 
 /** World lighting lifts sprites roughly 3x in linear light; the boss keeps its dark plum menace. */
 export const KRAKEN_WORLD_EXPOSURE = 0.55;
+/** On land the body sits in ordinary (often shaded) world light; dimming it like the sunlit pond made it unreadable. */
+export const KRAKEN_LAND_EXPOSURE = 1;
 
 export const SUBMERSION_FRAGMENT = `
 #pragma phaserTemplate(shaderName)
@@ -162,10 +164,10 @@ export class KrakenSubmersion {
   private destroyed = false;
 
   constructor(private readonly sprite: Sprite, elevation: Phaser.Textures.Frame, encoding: { min: number; max: number },
-    private readonly waterAt: (x: number, y: number) => number) {
+    private readonly waterAt: (x: number, y: number) => number, exposure = KRAKEN_WORLD_EXPOSURE) {
     this.mask = sprite.scene.textures.createCanvas(`kraken-runtime-mask-${++maskSerial}`, 128, 128)!;
     this.filter = addSubmersionFilter(sprite, elevation, encoding, this.mask.key);
-    this.filter.params.exposure = KRAKEN_WORLD_EXPOSURE;
+    this.filter.params.exposure = exposure;
   }
 
   update(elevation: Phaser.Textures.Frame, level: number, timeSeconds: number, waterRevision = 0): void {

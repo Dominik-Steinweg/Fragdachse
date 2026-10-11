@@ -110,6 +110,22 @@ function sceneFixture() {
 }
 
 describe('host timelines and D asset projection', () => {
+  it('keeps warning and blocked wakes still and stamps wet traces at sampled world poses', () => {
+    const { scene, shaders } = sceneFixture(), fx = new KrakenEffects(scene, () => 0);
+    const phase = { kind: 'ashore' as const, corridorId: 'shore', startedAt: 0, moveAt: 1200, gripAt: 1900,
+      heaveAt: 3150, endsAt: 3600, recoveryEndsAt: 4200, blocked: false };
+    const pose = { x: 123, y: 456, angle: .73 };
+    for (const [now, blocked, swimming] of [[800, false, 0], [1500, false, 1], [1500, true, 0]] as const) {
+      fx.begin(); fx.ashore(pose, { ...phase, blocked }, now);
+      expect(shaders.find(s => s.visible && s.uniforms().uMode === 7).uniforms().uDetail[0]).toBe(swimming);
+    }
+    fx.begin(); fx.wetTrail(pose, 2000, 2200);
+    const trace = shaders.find(s => s.visible && s.uniforms().uMode === 8);
+    expect([trace.x, trace.y, trace.rotation]).toEqual([pose.x, pose.y, pose.angle]);
+    fx.begin(); fx.wetTrail(pose, 2000, 7000);
+    expect(shaders.some(s => s.visible)).toBe(false);
+    fx.destroy();
+  });
   it('joins the exit on the water side until grip, then starts exactly at the land grip marker', () => {
     const s = state(), a = assets(), pose = { x: 100, y: 120, angle: 1 };
     s.phase = { kind: 'ashore', corridorId: 'shore', startedAt: 0, moveAt: 1200, gripAt: 1900,

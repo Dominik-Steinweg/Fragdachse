@@ -10,8 +10,8 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const args = process.argv.slice(2);
 const value = name => args.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3);
 for (const arg of args) if (!/^--(origin|run|asset|size|frames|options|effects|r4|r5|r7)=/.test(arg)) throw Error(`Unknown option: ${arg}`);
-const r7 = value('r7') === 'only';
-if (value('r7') && !r7) throw Error('r7: only');
+const r7 = ['only', 'ashore'].includes(value('r7'));
+if (value('r7') && !r7) throw Error('r7: only/ashore');
 const r5 = value('r5') === 'only';
 if (value('r5') && !r5) throw Error('r5: only');
 const r4 = value('r4') === 'only';
@@ -165,7 +165,7 @@ try {
   await settle(); await command({ action: 'step', frames: 120 }); await settle();
   await command({ action: 'step', frames: 60 }); await settle();
   if (r7) {
-    for (const effect of ['ashore', 'land-move', 'land-claw']) {
+    for (const effect of value('r7') === 'ashore' ? ['ashore'] : ['ashore', 'land-move', 'land-claw']) {
       const start = await command({ action: 'krakenReview', effect, effectTime: 0, phase: 'water', direction: 0,
         camera: 'overview', playback: 'manual', submersion: true, waterLevel: null, grid: false, clip: 'idle' });
       const timeline = start.krakenReview.landTimeline, p = timeline.phase, a = timeline.attack;

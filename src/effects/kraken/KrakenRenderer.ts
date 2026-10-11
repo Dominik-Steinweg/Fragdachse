@@ -11,7 +11,7 @@ import type { KrakenState, KrakenTentacleState, KrakenEggState, KrakenInkCloud }
 import { EnemyClawRenderer } from '../EnemyClawRenderer';
 import { registerGraphicsObject } from '../EffectUtils';
 import { disposeShaderWarmupNode } from '../../graphics/disposeShaderWarmupNode';
-import { KrakenSubmersion, krakenWaterMask } from './submersionShader';
+import { KRAKEN_LAND_EXPOSURE, KRAKEN_WORLD_EXPOSURE, KrakenSubmersion, krakenWaterMask } from './submersionShader';
 import { addReviewDrain, type KrakenReviewDrainFilter } from './KrakenReviewDrainFilter';
 import { KrakenTentacleShadow } from './KrakenTentacleShadow';
 import { KRAKEN_REVIEW_FX_SHADER } from './reviewEffectShader';
@@ -167,7 +167,8 @@ export class KrakenSpriteView {
   private destroyed = false;
   constructor(private readonly scene: Phaser.Scene, readonly asset: KrakenPresentationAsset,
     private readonly waterAt: (x: number, y: number) => number,
-    private readonly diagnostic: (message: string) => void, tentacle = false, depth: number = DEPTH.PLAYERS) {
+    private readonly diagnostic: (message: string) => void, tentacle = false, depth: number = DEPTH.PLAYERS,
+    private readonly exposure = KRAKEN_WORLD_EXPOSURE) {
     this.sprite = scene.add.sprite(0, 0, '__WHITE').setVisible(false).setDepth(depth);
     registerGraphicsObject(scene, 'bossIntro', this.sprite);
     if (tentacle) {
@@ -201,7 +202,7 @@ export class KrakenSpriteView {
     s.setTexture(frame.key, frame.frame).setOrigin(origin[0], origin[1]).setPosition(pose.x, pose.y)
       .setRotation(krakenRotation(a, pose.angle)).setDisplaySize(size, size).setAlpha(options.alpha ?? 1).setVisible(true);
     const elevation = this.scene.textures.getFrame(frame.elevationKey, frame.elevationFrame);
-    if (!this.submersion) this.submersion = new KrakenSubmersion(s, elevation, a.elevation, this.waterAt);
+    if (!this.submersion) this.submersion = new KrakenSubmersion(s, elevation, a.elevation, this.waterAt, this.exposure);
     const level = options.waterLevel ?? a.elevation.previewWaterLevel ?? 0;
     this.submersion.update(elevation, level, now / 1000);
     if (options.drain && !this.drain) this.drain = addReviewDrain(s, elevation, a.elevation);
@@ -291,7 +292,7 @@ export class KrakenEffects {
     q.timing = [e.lifetime, e.bulge, retracting ? 1 : 0, e.foam];
     q.detail = [e.sprayCount, e.spraySpeed * (retracting ? e.retractScale : 1), 0, 0];
   }
-  slam(pose: CombatAreaPose, hitAt: number, now: number): void {
+  slam(pose: CombatAreaPose, hitAt: number, now: number, bend: number = LOOK.slam.bend): void {
     if (pose.geometry.kind !== 'lane') return;
     const age = (now - hitAt) / 1000, g = pose.geometry, look = LOOK.slam;
     for (const [mode, lifetime, depth] of [[2, look.dust, DEPTH.PLAYERS + .1], [3, look.decal, DEPTH.DECALS + .15]]) {
@@ -300,7 +301,7 @@ export class KrakenEffects {
       const q = this.take(mode, depth, { x: pose.originX, y: pose.originY }, pose.angle, width,
         Math.max(g.width * 3, look.width * 3 + look.bend * 2), age, width * .3);
       if (!q) continue;
-      q.shape[2] = g.length; q.shape[3] = g.width; q.timing = [lifetime, look.whip, look.bend, look.width];
+      q.shape[2] = g.length; q.shape[3] = g.width; q.timing = [lifetime, look.whip, bend, look.width];
     }
   }
   dive(pose: KrakenPose, submergedAt: number, now: number): void {
@@ -313,16 +314,21 @@ export class KrakenEffects {
   ashore(pose: KrakenPose, phase: KrakenExitPhase, now: number, gripPose = pose): void {
     const age = (now - phase.startedAt) / 1000;
     if (now < phase.gripAt) {
-      const q = this.take(7, DEPTH.PLAYERS - .25, pose, pose.angle, 560, 320, age, 80);
-      if (q) { q.shape[2] = 200; q.shape[3] = 100; q.timing = [(phase.moveAt - phase.startedAt) / 1000, 0, 0, 0]; }
+      const q = this.take(7, DEPTH.PLAYERS - .25, pose, pose.angle, 560, 360, age);
+      if (q) q.detail[0] = now > phase.moveAt && !phase.blocked ? 1 : 0;
+      // A diffuse directional footprint, not an attack ring. Anchor it at the shore contact.
+      const shore = this.take(10, DEPTH.PLAYERS - .24, gripPose, gripPose.angle, 300, 240, age, 115);
+      if (shore) shore.opacity = .55;
     }
-    const timing = { startedAt: phase.startedAt, clipStartedAt: phase.moveAt, armsAt: phase.gripAt,
-      keelAt: phase.gripAt + 160, eyesAt: phase.heaveAt, roarAt: phase.gripAt, endsAt: phase.endsAt };
-    this.rise(now < phase.gripAt ? pose : gripPose, timing, now, false);
+    const sprayAge = (now - phase.gripAt) / 1000;
+    if (sprayAge >= 0 && sprayAge < 1.3) {
+      const splash = this.take(9, DEPTH.PLAYERS + .1, gripPose, gripPose.angle, 420, 420, sprayAge, 55);
+      if (splash) splash.opacity = .8;
+    }
     if (now >= phase.gripAt) {
       const contact = { x: gripPose.x + Math.cos(gripPose.angle) * 96, y: gripPose.y + Math.sin(gripPose.angle) * 96 };
       if (this.waterAt(contact.x, contact.y) <= 0) this.slam({ originX: contact.x, originY: contact.y,
-        angle: gripPose.angle, geometry: { kind: 'lane', length: 90, width: 100 } }, phase.gripAt, now);
+        angle: gripPose.angle, geometry: { kind: 'lane', length: 90, width: 100 } }, phase.gripAt, now, 0);
       this.dive({ ...gripPose, x: gripPose.x - Math.cos(gripPose.angle) * 100,
         y: gripPose.y - Math.sin(gripPose.angle) * 100 }, phase.gripAt, now);
     }
@@ -611,7 +617,8 @@ export class KrakenRenderer {
     this.clear(); this.destroyed = true; this.claw.destroy(); this.effects.destroy();
   }
   private view(asset: KrakenPresentationAsset, tentacle = false): KrakenSpriteView {
-    return new KrakenSpriteView(this.scene, asset, this.options.waterAt, this.options.diagnostic, tentacle);
+    const exposure = asset === this.options.assets?.land ? KRAKEN_LAND_EXPOSURE : KRAKEN_WORLD_EXPOSURE;
+    return new KrakenSpriteView(this.scene, asset, this.options.waterAt, this.options.diagnostic, tentacle, DEPTH.PLAYERS, exposure);
   }
   private event(state: KrakenState, slot: EnemyAreaClawEvent['slot'], claw: EnemyAreaClawState): EnemyAreaClawEvent {
     return { worldRevision: state.boss.scope.worldRevision, activityRevision: state.boss.instance.activityRevision,

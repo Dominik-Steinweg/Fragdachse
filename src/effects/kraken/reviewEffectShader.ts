@@ -164,6 +164,37 @@ void main() {
       alpha=max(pool*.62+rim*.25,drops*.8);
       color=mix(vec3(.07,.095,.025),vec3(.3,.36,.1),clamp(rim+n*.3+drops,0.0,1.0));
     }
+  } else if(uMode>9.5) {
+    // Soft elongated shore area: filled gradient with no contour or damage colour.
+    float n=field(p*.035);
+    float footprint=exp(-pow(p.x/92.0,4.0)-pow(p.y/68.0,4.0));
+    alpha=footprint*(.07+.07*n);
+    color=vec3(.40,.58,.53);
+  } else if(uMode>8.5) {
+    // Shore-facing wall and two uneven arm contacts; no radial spray distribution.
+    float mist=0.0, drops=0.0;
+    for(int i=0;i<19;i++) {
+      float k=float(i), seed=hash(vec2(k,12)), birth=hash(vec2(k,3))*.12;
+      float age=max(0.0,t-birth);
+      vec2 center=vec2(-18.0+seed*54.0, (hash(vec2(k,7))-.5)*166.0);
+      center+=vec2(-20.0-seed*28.0, (seed-.5)*55.0)*age;
+      vec2 radius=vec2(12.0+seed*20.0,9.0+hash(vec2(k,9))*18.0)*(1.0+age*1.2);
+      float n=field(p*.065+vec2(k,age*.4));
+      float cloud=1.0-smoothstep(.15,1.3,length((p-center)/radius)+(n-.5)*1.1);
+      mist=max(mist,cloud*smoothstep(0.0,.06,t-birth)*(1.0-smoothstep(.18,1.1,age)));
+    }
+    for(int i=0;i<55;i++) {
+      float k=float(i), seed=hash(vec2(k,31)), birth=hash(vec2(k,6))*.16;
+      float age=max(0.0,t-birth), life=.28+seed*.46;
+      vec2 origin=vec2(hash(vec2(k,8))*45.0-8.0,(hash(vec2(k,9))-.5)*150.0);
+      vec2 velocity=vec2(-35.0+hash(vec2(k,4))*105.0,(seed-.5)*145.0);
+      vec2 pos=origin+velocity*age;
+      float size=1.0+hash(vec2(k,5))*2.3;
+      float drop=exp(-pow(length((p-pos)/vec2(1.3,1.0))/size,2.0));
+      drops=max(drops,drop*step(birth,t)*(1.0-smoothstep(life*.45,life,age)));
+    }
+    alpha=mist*.62+drops*.65;
+    color=mix(vec3(.42,.66,.67),vec3(.76,.88,.86),clamp(mist*.7+drops,0.0,1.0));
   } else if(uMode>7.5) {
     float n=field(p*.075), r=length(p/vec2(uShape.z,uShape.w));
     float drag=exp(-r*r*2.0)*(.6+.4*n);
@@ -176,13 +207,16 @@ void main() {
     alpha=(drag*.28+drops*.35)*(1.0-smoothstep(1.0,uTiming.x,t));
     color=mix(vec3(.04,.1,.095),vec3(.28,.41,.38),n);
   } else if(uMode>6.5) {
-    float n=field(p*.055+vec2(-t*.6,0));
-    float lane=exp(-pow(p.y/uShape.w,4.0))*smoothstep(-100.0,-55.0,p.x)*(1.0-smoothstep(120.0,uShape.z,p.x));
-    float bow=exp(-pow((length((p-vec2(40,0))/vec2(1.0,1.4))-85.0)/5.0,2.0));
-    float wake=exp(-pow((abs(p.y)-28.0-max(0.0,-p.x)*.3)/5.0,2.0))*(1.0-smoothstep(-20.0,25.0,p.x));
-    float strands=pow(.5+.5*sin(p.x*.08-t*7.0+n*9.0),8.0)*lane;
-    alpha=lane*.09+(bow+wake)*(.18+n*.25)+strands*.18;
-    color=mix(vec3(.15,.38,.4),vec3(.69,.88,.85),clamp(bow+wake+strands,0.0,1.0));
+    float n=field(p*.06+vec2(t*.65,0)), swimming=uDetail.x;
+    float front=exp(-pow((p.x-95.0)/62.0,2.0)-pow(p.y/74.0,4.0));
+    float mound=front*(.45+.55*n);
+    float strips=pow(.5+.5*sin(p.x*.12+n*9.0-t*2.0),6.0)*front*smoothstep(.4,.64,n);
+    float behind=max(0.0,-p.x), spread=37.0+behind*.24+behind*behind*.0008;
+    float fringe=abs(p.y)-spread-(n-.5)*30.0;
+    float wake=exp(-pow(fringe/(9.0+behind*.028),2.0))*smoothstep(12.0,65.0,behind)
+      *(1.0-smoothstep(140.0,265.0,behind))*smoothstep(.34,.66,n)*swimming;
+    alpha=mound*.10+strips*.17+wake*.34;
+    color=mix(vec3(.13,.32,.33),vec3(.62,.78,.76),clamp(strips+wake*2.0,0.0,1.0));
   } else if(uMode>5.5) {
     float r=length(p), radius=uShape.z;
     float flash=exp(-pow(r/(radius*(.4+t*2.0)),2.0))*exp(-t*17.0);

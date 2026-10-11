@@ -120,6 +120,8 @@ await devScenario.run({action:'krakenReview', effect:'land-move', effectTime:0, 
 node scripts/visual/kraken-review.mjs --run=kraken-v10 --r7=only
 ```
 
+Mit `--r7=ashore` werden nur die beiden Ausstiegsbögen mit denselben neun Zeitpunkten aufgenommen.
+
 Neun Zeitpunkte je Effekt und Kamerasicht landen unter
 `build/kraken-review/<timestamp>/r7-<effect>-<overview|effect>.png`.
 `report.json` enthält Zeitanker, Kameraversatz, Fehler und Rückwärts-Seek-Vergleiche.

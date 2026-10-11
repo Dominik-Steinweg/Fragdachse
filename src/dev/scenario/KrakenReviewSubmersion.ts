@@ -1,6 +1,6 @@
 import type * as Phaser from 'phaser';
 import type { WaterSurfaceModel } from '../../arena/WaterSurfaceModel';
-import { addSubmersionFilter, KRAKEN_WORLD_EXPOSURE, type SubmersionFilter } from '../../effects/kraken/submersionShader';
+import { addSubmersionFilter, KRAKEN_LAND_EXPOSURE, KRAKEN_WORLD_EXPOSURE, type SubmersionFilter } from '../../effects/kraken/submersionShader';
 import type { LoadedReviewAsset, ReviewPose } from './KrakenReviewAssets';
 
 let serial = 0;
@@ -31,7 +31,7 @@ export class KrakenReviewSubmersion {
     private readonly model: WaterSurfaceModel, private readonly offset: { x: number; y: number }) {
     this.mask = sprite.scene.textures.createCanvas(`kraken-water-mask-${++serial}`, sprite.width, sprite.height)!;
     this.filter = addSubmersionFilter(sprite, sprite.scene.textures.getFrame(pose.elevationKey!, pose.elevationFrame), asset.elevation!, this.mask.key);
-    this.filter.params.exposure = KRAKEN_WORLD_EXPOSURE;
+    this.filter.params.exposure = asset.clips.some(c => c.name === 'ashore') ? KRAKEN_LAND_EXPOSURE : KRAKEN_WORLD_EXPOSURE;
   }
   update(pose: ReviewPose, level: number, time: number): void {
     const s = this.sprite;
