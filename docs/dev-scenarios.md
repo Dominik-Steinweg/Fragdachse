@@ -8,6 +8,76 @@ Der Einstieg und die Bedienoberfläche werden vom normalen Produktionsbuild nich
 
 ## Bedienung
 
+### Kraken: Abgrundteich (Dev-Review)
+
+`kraken-abyss-lab` ist nur während des Dev-Szenario-Modus registriert und wird beim
+Controller-Teardown wieder entfernt. Die Karte hat 70×48 Zellen, einen natürlichen
+elliptischen Teich, freie Prüfflächen und einen Spielerstart am Südufer. Es gibt keine
+neue Gegnerart und keine Boss-/Trefferlogik. Wellen bleiben über `suppressWaves` steuerbar.
+
+URL-Rezept (JSON wie bei allen Szenarien URL-kodieren):
+
+```js
+location.hash = 'scenario=' + encodeURIComponent(JSON.stringify({
+  version: 1, classId: 'dachs_nukem', mapId: 'kraken-abyss-lab', seed: 12345, timeOfDay: 720,
+  player: { gridX: 39, gridY: 33 }, suppressWaves: true,
+  freezeMission: true, hideTutorial: true, hideAim: true
+}));
+await devScenario.whenReady();
+await devScenario.run({ action: 'krakenReview', run: 'kraken-v7', asset: 'abyssal-kraken',
+  size: 320, clip: 'slam', frame: 16, camera: 'overview', grid: true });
+```
+
+`krakenReview`-Aufrufe sind Patches auf die aktive Fixture. Den ersten Aufruf und jeden
+Assetwechsel `await`en; `start()` und `destroy()` entfernen Sprites, Texturen, Hooks und GPU-Layer.
+Der URL-Hash speichert das Kartenrezept; die Review-Parameter werden anschließend per Befehl gesetzt.
+`devScenario.status().krakenReview` zeigt Optionen, Clips einschließlich Marker, Texturformat und Frame.
+
+| Parameter | Bedeutung / Standard |
+| --- | --- |
+| `run`, `asset`, `size` | `kraken-v7`, `abyssal-kraken`, `320`; Pfad `/art/poc/pipeline-v2/runs/<run>/<asset>/standard/` |
+| `clip`, `frame` | `idle`, `0`; **nullbasierter Index innerhalb des Clips**, keine Blender-Frame-Nummer. Einzelframe pausiert den Clip, Clipwechsel setzt Frame auf 0. |
+| `playing`, `speed` | `false`, `1`; Clip läuft mit exportierter Bildrate × Geschwindigkeit. Nicht geloopte Clips halten am Ende. Globale Szenariopause hält auch den Clip an. |
+| `phase`, `waterLevel` | `water` / `land`, `0.5` (0–1). Land verschiebt den Körper ans Südufer. `applySubmersion(sprite, level)` ist vorerst ein No-op. |
+| `land` | Optional `{run, asset, size, atlas?, elevationAtlas?}` für den Landkörper; ohne eigenen Landkörper wird dasselbe Asset verwendet. `null` entfernt ihn. |
+| `tentacle` | Optional dieselbe Asset-Schnittstelle für ein zweites Asset am Wassereintritt (auch Ei-Review möglich). `run`/`size` dürfen vom Hauptasset geerbt werden; `null` entfernt es. |
+| `tentaclePivot` | `[0.5, 1]`, normalisierter Pivot im ungetrimmten Quellframe; bleibt bei Rotation am Wassereintritt. Assets zeigen authored nach Norden. |
+| `direction` | `90` Grad, gemeinsame Richtung für Tentakel und Bahn; 0 = rechts, 90 = unten. |
+| `telegraphLength`, `telegraphWidth`, `telegraphProgress` | `320`, `112` Weltpixel, `0.5` (0–1); reine Darstellung ohne Treffer. |
+| `grid`, `camera` | `false`, `overview` / `body`; Raster 32 Weltpixel, an World-Offset/Zellkanten ausgerichtet. |
+| `atlas`, `elevationAtlas` | Automatisch `atlas.json` prüfen; `atlas:false` erzwingt Sheet. Dateinamen relativ zu `standard/`. Elevation optional explizit angeben. |
+
+```js
+await devScenario.run({ action: 'krakenReview', clip: 'idle', playing: true, speed: .5 });
+await devScenario.run({ action: 'krakenReview', clip: 'slam', frame: 11, camera: 'body' });
+await devScenario.run({ action: 'krakenReview', phase: 'land', direction: 135,
+  telegraphLength: 320, telegraphWidth: 112, telegraphProgress: 1 });
+```
+
+Sheet-Zuschnitt (inklusive Margin/Spacing), Clips, Bildrate, Loop und Marker kommen aus
+`export.json`. Trimmed Atlanten verwenden Phaser-Atlas-JSON (`frames`, `sourceSize`,
+`spriteSourceSize`, `meta.image`); numerische Clipframes werden als gleichnamige Atlas-Keys
+aufgelöst, alternativ darf `manifest.clips[].frames` String-Keys enthalten. Elevation-Atlanten
+benötigen dieselben Frame-Keys. Der Loader lädt sie bereits; ihre Shader-Verwendung ist TODO.
+Körper und Tentakel liegen über Wasser (`DEPTH.WATER`) und knapp unter Telegraph/Spielern,
+damit Dachs und Gefahr am Ufer lesbar bleiben. Das ersetzt noch keine Boss-Depth-/Untertauchlogik.
+
+Aufnahmen gegen den **laufenden** Server auf Port 8090:
+
+```sh
+npm run dev:browser
+node scripts/visual/kraken-review.mjs --frames=6 --run=kraken-v7 --asset=abyssal-kraken --size=320
+```
+
+Optional `--origin=http://127.0.0.1:8090` und `--options=<JSON>` für weitere Review-Parameter.
+`CHROME_PATH` überschreibt den lokalen Chrome-Pfad. Der Runner schreibt je Clip einen
+Übersichts- und Körper-Kontaktbogen sowie neun Telegraph-Ansichten (0/0.5/1 × 45/90/135°)
+und `report.json` nach `build/kraken-review/<timestamp>/`. Er prüft, dass zwei Aufnahmen
+bei Pause identisch sind. Den Dev-Server lässt er laufen. Die visuelle Szenengruppe `kraken`
+enthält zusätzlich drei feste Shots; Referenzen werden nur mit explizitem `--update` geschrieben.
+
+### Allgemeine Steuerung
+
 Power-Ups gezielt auf einer freien Zelle erzeugen: `devScenario.run({action:'spawnPowerUp', id:'HEALTH_PACK', gridX:24, gridY:24})`.
 Erlaubt sind `HEALTH_PACK`, `ARMOR`, `RAGE`, `ADRENALINE`, `DOUBLE_DAMAGE`, `NUKE`, `HOLY_HAND_GRENADE`, `BFG`.
 Ohne Koordinaten gilt das aktuelle Ziel; die Aktion nutzt den normalen Host-Pickup-Pfad und wird nicht im Rezept gespeichert.

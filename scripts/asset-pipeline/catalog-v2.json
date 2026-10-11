@@ -4622,7 +4622,7 @@
     },
     {
       "id": "abyssal-kraken",
-      "label": "Abgrundkrake — Wasserboss",
+      "label": "Abgrundkrake — Wasserkörper",
       "category": "enemy",
       "gameIds": [],
       "reference": "scripts/asset-pipeline/references/abyssal-kraken-v2.png",
@@ -4637,22 +4637,24 @@
         0.5
       ],
       "description": {
-        "silhouette": "Sehr großer Wasserboss mit speerförmigem Mantel, ausgeprägtem Rückenkiel und seitlichen Flossen, vier Augen und acht massigen, einzeln eingerollten muskulösen Tentakeln.",
-        "colors": "Kräftig violette organische Haut mit unregelmäßigen Pigmentflecken, erhabenen Hautfalten und Papillen, tiefen Furchen und gebrochenem feuchtem Glanz. Pfirsichrosa Schlitzaugen unter schweren fleischigen Lidern, rosige ventrale Saugnäpfe, ein dunkler Schnabel und sechs eingerollte Mundtentakel.",
-        "anatomy": "Acht weich gewichtete Tentakelketten mit ventralen Saugnäpfen. Wenige eingedrehte Tentakelspitzen zeigen in Ruhe kleine Saugnapfränder; beim Angriff rollt das vordere Armpaar seine Unterseite deutlich auf. Organisch in den Mantel eingebettete Augenhöhlen, ein schmaler Maulspalt unter fleischigen Falten und sechs kurze Mundtentakel. Wasserlinie und Spritzer gehören später zum World-Renderer."
+        "silhouette": "Riesiger Endboss im Teich: gestreckter Speermantel mit segmentiertem Kiel, Hakenstacheln und gezackten Flossenmembranen, acht lange über Schwimmhäute verbundene Arme und eine Krone aus Mundtentakeln.",
+        "colors": "Bedrohliches dunkles Indigo-Violett mit violetten Flanken, Pigmentmarmorierung und Lavendel-Säumen; karminrote Saugnäpfe und Mundtentakel; nach vorn blickende Glutaugen mit Schlitzpupille als hellster Akzent.",
+        "anatomy": "Wasserlinie z=0 für den Elevation-Pass. Augen unter schweren Lidern auf eigenen Pivots (Blinzeln, Öffnen im Intro). Sechs getragene Eier an Armspitzen, in Ruhe verborgen. Schlagtentakel und Eier sind eigene Boss-Teile."
       },
       "requiredClips": [
         "idle",
         "move",
-        "slam",
-        "emerge"
+        "intro-rise",
+        "tentacle-call",
+        "egg-throw"
       ],
       "production": "reference",
       "recipe": "abyssal-kraken",
       "model": {},
-      "orthoScale": 8,
+      "orthoScale": 9.6,
+      "displayScale": 1.2,
       "textures": {
-        "organic": "art/poc/pipeline-v2/textures/kraken-dermis-v1.png"
+        "organic": "art/poc/kraken-v8/textures/kraken-scales-v8.png"
       },
       "materialVariants": {
         "standard": {
@@ -4665,40 +4667,346 @@
         {
           "name": "idle",
           "motion": "kraken_idle",
-          "frameCount": 24,
-          "frameRate": 12,
+          "frameCount": 16,
+          "frameRate": 10,
           "loop": true,
           "parameters": {
-            "wave": 0.025
+            "wave": 0.016
           }
         },
         {
           "name": "move",
           "motion": "kraken_swim",
-          "frameCount": 24,
-          "frameRate": 16,
+          "frameCount": 16,
+          "frameRate": 12,
           "loop": true,
           "parameters": {
-            "wave": 0.048
+            "wave": 0.028
+          }
+        },
+        {
+          "name": "intro-rise",
+          "motion": "kraken_intro_rise",
+          "frameCount": 48,
+          "frameRate": 16,
+          "loop": false,
+          "start": "free",
+          "markers": {
+            "arms-break": 14,
+            "eyes-open": 33,
+            "roar": 40
+          }
+        },
+        {
+          "name": "tentacle-call",
+          "motion": "kraken_call_tentacle",
+          "frameCount": 20,
+          "frameRate": 20,
+          "loop": false,
+          "markers": {
+            "dive": 8,
+            "resurface": 16
+          },
+          "parameters": {
+            "arm": 4
+          }
+        },
+        {
+          "name": "egg-throw",
+          "motion": "kraken_throw_egg",
+          "frameCount": 24,
+          "frameRate": 20,
+          "loop": false,
+          "markers": {
+            "release": 13
+          }
+        }
+      ],
+      "elevation": {
+        "min": -2.5,
+        "max": 2.5,
+        "scale": 0.5,
+        "previewWaterLevel": 0.38
+      },
+      "runtimeAtlas": true,
+      "runtimeContract": "boss",
+      "runtimeBudgetMB": 64
+    },
+    {
+      "id": "abyssal-kraken-land",
+      "label": "Abgrundkrake — an Land (Phase 2)",
+      "category": "enemy",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/abyssal-kraken-v2.png",
+      "targetSize": 360,
+      "sourceSizes": [
+        512,
+        1024
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Riesiger Endboss im Teich: gestreckter Speermantel mit segmentiertem Kiel, Hakenstacheln und gezackten Flossenmembranen, acht lange über Schwimmhäute verbundene Arme und eine Krone aus Mundtentakeln.",
+        "colors": "Bedrohliches dunkles Indigo-Violett mit violetten Flanken, Pigmentmarmorierung und Lavendel-Säumen; karminrote Saugnäpfe und Mundtentakel; nach vorn blickende Glutaugen mit Schlitzpupille als hellster Akzent.",
+        "anatomy": "Ruhepose an Land: Arme breit auf dem Boden abgestützt. Ashore beginnt im Wasser (Elevation-Pass zeigt den Uferübertritt), endet in dieser Ruhepose. Gleiche Anatomie wie der Wasserkörper."
+      },
+      "requiredClips": [
+        "idle",
+        "move",
+        "ashore",
+        "slam",
+        "egg-throw",
+        "death"
+      ],
+      "production": "reference",
+      "recipe": "abyssal-kraken",
+      "model": {
+        "part": "land"
+      },
+      "orthoScale": 10.8,
+      "displayScale": 1.2,
+      "textures": {
+        "organic": "art/poc/kraken-v8/textures/kraken-scales-v8.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Organische Tiefseehaut mit Pigmentierung und Faltentiefe",
+          "textureStrength": 0.93,
+          "formShadowStrength": 0.91
+        }
+      },
+      "clips": [
+        {
+          "name": "idle",
+          "motion": "kraken_land_idle",
+          "frameCount": 12,
+          "frameRate": 10,
+          "loop": true
+        },
+        {
+          "name": "move",
+          "motion": "kraken_land_move",
+          "frameCount": 12,
+          "frameRate": 12,
+          "loop": true
+        },
+        {
+          "name": "ashore",
+          "motion": "kraken_land_ashore",
+          "frameCount": 28,
+          "frameRate": 16,
+          "loop": false,
+          "start": "free",
+          "markers": {
+            "grip": 9,
+            "heave": 18
           }
         },
         {
           "name": "slam",
-          "motion": "kraken_slam",
-          "frameCount": 32,
+          "motion": "kraken_land_slam",
+          "frameCount": 20,
           "frameRate": 24,
           "loop": false,
           "markers": {
-            "strike": 11,
-            "impact": 16
+            "strike": 7,
+            "impact": 11
           }
         },
         {
-          "name": "emerge",
-          "motion": "kraken_emerge",
+          "name": "egg-throw",
+          "motion": "kraken_land_egg_throw",
+          "frameCount": 20,
+          "frameRate": 20,
+          "loop": false,
+          "markers": {
+            "release": 11
+          }
+        },
+        {
+          "name": "death",
+          "motion": "kraken_land_death",
           "frameCount": 24,
           "frameRate": 16,
-          "loop": false
+          "loop": false,
+          "end": "terminal"
+        }
+      ],
+      "elevation": {
+        "min": -2.5,
+        "max": 2.5,
+        "scale": 0.5
+      },
+      "runtimeAtlas": true,
+      "runtimeContract": "boss",
+      "runtimeBudgetMB": 72
+    },
+    {
+      "id": "abyssal-kraken-tentacle",
+      "label": "Abgrundkrake — Schlagtentakel",
+      "category": "boss-part",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/abyssal-kraken-v2.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "production": "reference",
+      "recipe": "abyssal-kraken",
+      "materialVariants": {
+        "standard": {
+          "label": "Organische Tiefseehaut mit Pigmentierung und Faltentiefe",
+          "textureStrength": 0.93,
+          "formShadowStrength": 0.91
+        }
+      },
+      "runtimeAtlas": true,
+      "runtimeContract": "boss",
+      "targetSize": 448,
+      "sourceSizes": [
+        512,
+        1024
+      ],
+      "description": {
+        "silhouette": "Riesiger einzelner Schlagtentakel, dessen Ansatz tief unter Wasser liegt; bäumt sich am Ufer auf und schlägt entlang einer 320 px langen Bahn nieder.",
+        "colors": "Dunkles Indigo-Violett mit violetten Flanken, Pigmentmarmorierung und karminroten ventralen Saugnäpfen.",
+        "anatomy": "Eine 24-gliedrige Kette; Ruhepose ist das lauernde Aufbäumen. Wasserlinie z=0; Runtime verankert am Socket waterEntry und dreht in Bahnrichtung."
+      },
+      "requiredClips": [
+        "hover",
+        "rise",
+        "slam",
+        "retract"
+      ],
+      "model": {
+        "part": "tentacle"
+      },
+      "orthoScale": 11.2,
+      "textures": {
+        "organic": "art/poc/kraken-v8/textures/kraken-scales-v8.png"
+      },
+      "elevation": {
+        "min": -3.5,
+        "max": 4.5,
+        "scale": 0.5,
+        "previewWaterLevel": 0
+      },
+      "runtimeBudgetMB": 48,
+      "clips": [
+        {
+          "name": "hover",
+          "motion": "kraken_tentacle_hover",
+          "frameCount": 16,
+          "frameRate": 12,
+          "loop": true
+        },
+        {
+          "name": "rise",
+          "motion": "kraken_tentacle_rise",
+          "frameCount": 16,
+          "frameRate": 24,
+          "loop": false,
+          "start": "free"
+        },
+        {
+          "name": "slam",
+          "motion": "kraken_tentacle_slam",
+          "frameCount": 20,
+          "frameRate": 24,
+          "loop": false,
+          "markers": {
+            "strike": 7,
+            "impact": 11
+          },
+          "end": "free",
+          "next": "retract"
+        },
+        {
+          "name": "retract",
+          "motion": "kraken_tentacle_retract",
+          "frameCount": 16,
+          "frameRate": 24,
+          "loop": false,
+          "end": "free",
+          "next": "rise"
+        }
+      ]
+    },
+    {
+      "id": "abyssal-kraken-egg",
+      "label": "Abgrundkrake — Brut-Ei",
+      "category": "boss-part",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/abyssal-kraken-v2.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "production": "reference",
+      "recipe": "abyssal-kraken",
+      "materialVariants": {
+        "standard": {
+          "label": "Organische Tiefseehaut mit Pigmentierung und Faltentiefe",
+          "textureStrength": 0.93,
+          "formShadowStrength": 0.91
+        }
+      },
+      "runtimeAtlas": true,
+      "runtimeContract": "boss",
+      "targetSize": 64,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "description": {
+        "silhouette": "Kleines lederiges Ei aus vier Schalenblättern mit glühendem Kern und gekrümmtem Embryo-Schatten.",
+        "colors": "Violette Membran mit rosigen Säumen und Adern, glutroter Kern passend zu den Krakenaugen.",
+        "anatomy": "Vier Schalenblätter auf eigenen Knochen öffnen sich beim Schlüpfen; der Kern pulsiert mit doppeltem Herzschlag."
+      },
+      "requiredClips": [
+        "idle",
+        "hatch"
+      ],
+      "model": {
+        "part": "egg"
+      },
+      "orthoScale": 1.6,
+      "textures": {
+        "organic": "art/poc/kraken-v8/textures/kraken-egg-v8.png"
+      },
+      "elevation": {
+        "min": -0.5,
+        "max": 1.5,
+        "scale": 0.5
+      },
+      "runtimeBudgetMB": 4,
+      "clips": [
+        {
+          "name": "idle",
+          "motion": "kraken_egg_idle",
+          "frameCount": 12,
+          "frameRate": 12,
+          "loop": true,
+          "parameters": {
+            "idleEmission": 2.5,
+            "pulseEmission": 3
+          }
+        },
+        {
+          "name": "hatch",
+          "motion": "kraken_egg_hatch",
+          "frameCount": 16,
+          "frameRate": 24,
+          "loop": false,
+          "end": "terminal",
+          "parameters": {
+            "idleEmission": 2.5
+          }
         }
       ]
     }

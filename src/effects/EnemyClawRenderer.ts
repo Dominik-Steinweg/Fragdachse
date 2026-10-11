@@ -3,7 +3,7 @@ import { ALLIED_COLOR, DEPTH, DEPTH_LIGHTING, DEPTH_TRACE } from '../config';
 import { emissiveAlpha } from './EmissiveScale';
 import type { SyncedMeleeSwing } from '../types';
 import type { EnemyClawState } from '../systems/EnemyClawAttack';
-import { EnemyClawVfxStore } from './enemyClaw/EnemyClawVfxStore';
+import { EnemyClawVfxStore, type ClawVfxAttackSpec } from './enemyClaw/EnemyClawVfxStore';
 import { ClawVfxPass, createEnemyClawGpuLayer, type EnemyClawGpuLayer } from './enemyClaw/EnemyClawGpuLayer';
 
 /** One danger family for every hostile claw: the sector must read as "leave" regardless of species. */
@@ -38,7 +38,7 @@ export class EnemyClawRenderer {
   private lastRetire = Number.NaN;
   private prepareCalls = 0;
 
-  constructor(private readonly scene: Phaser.Scene) {
+  constructor(private readonly scene: Phaser.Scene, private readonly presentationClock?: () => number) {
     const time = (): number => this.store.time(this.clock());
     const ground = createEnemyClawGpuLayer(scene, this.store, ClawVfxPass.Ground, DEPTH.PLAYERS - 0.1, time);
     const top = createEnemyClawGpuLayer(scene, this.store, ClawVfxPass.Top, DEPTH_TRACE, time);
@@ -52,6 +52,12 @@ export class EnemyClawRenderer {
   prepare(): boolean {
     this.prepareCalls++;
     return this.prepareCalls >= MAX_PREPARE_CALLS || this.layers.every(layer => layer.isReady());
+  }
+
+  /** Pure presentation entry point, also usable by dev fixtures; never registers a hit. */
+  showAttack(key: string, spec: ClawVfxAttackSpec): void {
+    this.retire(this.clock());
+    this.store.addAttack(key, spec, this.clock());
   }
 
   /**
@@ -125,7 +131,7 @@ export class EnemyClawRenderer {
     this.layers.length = 0;
   }
 
-  private clock(): number { return this.scene.time.now; }
+  private clock(): number { return this.presentationClock?.() ?? this.scene.time.now; }
 
   private retire(clock: number): void {
     if (clock === this.lastRetire) return;

@@ -69,15 +69,22 @@ def main():
     indices = list(range(len(session['samples']))) if args.indices == 'all' else [int(value) for value in args.indices.split(',')]
     if not indices or any(index < 0 or index >= len(session['samples']) for index in indices): raise ValueError('Invalid preview frame')
     output.mkdir(parents=True)
+    elevations = {}
     for index in indices:
         pipeline.set_frame(scene, session['samples'][index]['blenderFrame'])
-        scene.render.filepath = str(output / f'frame-{index:04d}.png')
+        beauty_file = f'frame-{index:04d}.png'
+        scene.render.filepath = str(output / beauty_file)
         bpy.ops.render.render(write_still=True)
+        if 'elevation' in spec:
+            from elevation_v2 import render_elevation
+            elevations[index] = render_elevation(scene, output, index, spec['elevation'], beauty_file)
     scene.frame_set(0)
     bpy.data.libraries.write(str(output / 'preview.blend'), {scene, *session['texts']}, fake_user=True)
     poses = []
     for index in indices:
         pose = dict(session['samples'][index], clip='idle', phase=0)
+        if index in elevations:
+            pose['elevation'] = elevations[index]
         for clip in session['clips']:
             if index in clip['frames']:
                 position = clip['frames'].index(index)

@@ -15,6 +15,12 @@ const base = { version: 1, classId: 'dachs_nukem', mapId: '1', seed: 12345, time
 
 // Each group boots a fresh isolated tab. Every selected group replays all preceding cues.
 export const groups = [
+  { id: 'kraken', scenario: { ...base, mapId: 'kraken-abyss-lab', player: { gridX: 39, gridY: 33 } },
+    setup: [{ action: 'krakenReview', run: 'kraken-v7', asset: 'abyssal-kraken', atlas: false, clip: 'idle', frame: 0 }], shots: [
+      shot('kraken-overview'),
+      shot('kraken-slam-body', [{ action: 'krakenReview', clip: 'slam', frame: 16, camera: 'body' }]),
+      shot('kraken-lane', [{ action: 'krakenReview', camera: 'overview', grid: true, direction: 135, telegraphProgress: 1 }]),
+    ] },
   { id: 'lobby', scenario: null, setup: [debug({ lobbyTimeOfDay: 720 })], shots: [shot('lobby-day')] },
   { id: 'day', scenario: base, setup: [target(28, 23), camera(1.4)], shots: [
     shot('map1-day'), shot('fog-rocks', [target(27, 18), camera(2)]),

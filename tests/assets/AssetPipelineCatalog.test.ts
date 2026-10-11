@@ -6,6 +6,7 @@ import { PLAYER_SIZE } from '../../src/config';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../../src/config/coopDefenseEnemies';
 import { TURRET_VISUALS } from '../../src/config/turretVisuals';
 import { LOADOUT_CATALOG_ENTRIES, findWeaponConfig } from '../../src/loadout/LoadoutConfig';
+import { validateClipContracts, validateExtensions } from '../../scripts/asset-pipeline/contracts-v2.mjs';
 
 const root = process.cwd();
 const assets = catalog.assets;
@@ -75,7 +76,7 @@ describe('asset pipeline catalog contracts', () => {
       const asset = enemies.find((entry) => entry.gameIds.includes(enemyId))!;
       expect(asset.targetSize).toBe(config.size);
       expect(asset.forward).toBe('north');
-      expect(asset.requiredClips).toEqual(expect.arrayContaining(['move', 'claw']));
+      expect(asset.requiredClips).toEqual(expect.arrayContaining((asset as { runtimeContract?: string }).runtimeContract === 'boss' ? ['move'] : ['move', 'claw']));
       expect(asset.reference).toBe(`public/assets/sprites/enemies/${config.imageKey}.png`);
       expect(config.spriteRotationOffsetDegrees ?? 0).toBe(0);
     }
@@ -105,6 +106,9 @@ describe('asset pipeline catalog contracts', () => {
 
   it('distinguishes executable reference recipes from planned briefs and defines complete motion contracts', () => {
     const motions = new Set(['mechanical_fire', 'energy_fire', 'organic_pulse', 'sustained', 'quadruped', 'biped', 'player_walk', 'player_idle', 'quad_rotors', 'twin_rotors', 'claw_quadruped', 'claw_biped', 'kraken_idle', 'kraken_swim', 'kraken_slam', 'kraken_emerge']);
+    for (const motion of ['kraken_intro_rise', 'kraken_call_tentacle', 'kraken_throw_egg',
+      'kraken_land_idle', 'kraken_land_move', 'kraken_land_ashore', 'kraken_land_slam', 'kraken_land_egg_throw', 'kraken_land_death',
+      'kraken_tentacle_rise', 'kraken_tentacle_hover', 'kraken_tentacle_slam', 'kraken_tentacle_retract', 'kraken_egg_idle', 'kraken_egg_hatch']) motions.add(motion);
     for (const asset of assets) {
       if (asset.production === 'planned') {
         expect(asset.recipe).toBeUndefined();
@@ -115,6 +119,8 @@ describe('asset pipeline catalog contracts', () => {
       expect(asset.recipe).toBeTruthy();
       expect(existsSync(path.join(root, 'scripts/asset-pipeline/recipes_v2', `${asset.recipe}.py`))).toBe(true);
       expect(asset.model).toBeDefined();
+      expect(() => validateClipContracts(asset.clips!, false), asset.id).not.toThrow();
+      expect(() => validateExtensions(asset), asset.id).not.toThrow();
       expect(asset.orthoScale).toBeGreaterThan(0);
       expect(asset.textures).toBeDefined();
       // Original texture pixels and completed renders are local artifacts, not required in a clean checkout.
@@ -135,5 +141,15 @@ describe('asset pipeline catalog contracts', () => {
         if (clip.name === 'move') expect(clip.loop).toBe(true);
       }
     }
+  });
+  it('accepts organic boss parts without locomotion and requires a complete boss export contract', () => {
+    const part = { category: 'boss-part', targetSize: 64, sourceSizes: [128], textures: { organic: 'fixture.png' },
+      runtimeContract: 'boss', runtimeAtlas: true, runtimeBudgetMB: 16, elevation: { min: -2, max: 3 },
+      clips: [{ name: 'hatch', frameCount: 4, frameRate: 12, loop: false, end: 'terminal', markers: { release: 2 } }] };
+    expect(() => validateClipContracts(part.clips, false)).not.toThrow();
+    expect(() => validateExtensions(part)).not.toThrow();
+    for (const patch of [{ runtimeAtlas: false }, { elevation: undefined }, { runtimeBudgetMB: undefined },
+      { runtimeBudgetMB: 0 }, { runtimeContract: 'other' }, { category: 'turret' }, { elevation: { min: 2, max: 2 } },
+      { elevation: { min: -2, max: 3, scale: 0 } }]) expect(() => validateExtensions({ ...part, ...patch })).toThrow();
   });
 });

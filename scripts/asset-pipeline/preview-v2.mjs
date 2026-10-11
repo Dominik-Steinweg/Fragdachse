@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { reviewPreview, safePath } from './review-preview-v2.mjs';
+import { waterOptions } from './water-preview-v2.mjs';
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const identifier = value => {
@@ -49,15 +50,22 @@ export async function renderProcess(executable, args, log, cwd) {
 }
 
 export async function preview(argv, root = repoRoot) {
+  // Node parseArgs treats a separate negative number as an ambiguous option.
+  argv = [...argv];
+  for (let i = 0; i < argv.length - 1; i++) {
+    if (argv[i] === '--water-level' && /^-(?:\d|\.)/.test(argv[i + 1])) argv.splice(i, 2, `--water-level=${argv[i + 1]}`);
+  }
   const { values: args, positionals } = parseArgs({ args: argv, allowPositionals: true, options: Object.fromEntries(
-    ['blender', 'label', 'variant', 'indices', 'device', 'patch', 'compare', 'review'].map(k => [k, { type: 'string' }]).concat([['help', { type: 'boolean' }]])) });
+    ['blender', 'label', 'variant', 'indices', 'device', 'patch', 'compare', 'review', 'water-level', 'water-mask'].map(k => [k, { type: 'string' }]).concat([['help', { type: 'boolean' }]])) });
   if (args.help) {
-    console.log('npm run assets:preview -- <id> [--variant <Katalogvariante>] [--indices 0,4,10|all] [--label name] [--device AUTO|OPTIX|CUDA|CPU] [--blender path] [--patch path] [--compare image]\nOhne Blender erneut auswerten: npm run assets:preview -- --review <Vorschauordner> [--compare image]');
+    console.log('npm run assets:preview -- <id> [--variant <Katalogvariante>] [--indices 0,4,10|all] [--label name] [--device AUTO|OPTIX|CUDA|CPU] [--blender path] [--patch path] [--compare image] [--water-level <BU>] [--water-mask all|half]\nOhne Blender erneut auswerten: npm run assets:preview -- --review <Vorschauordner> [--compare image] [--water-level <BU>] [--water-mask all|half]');
     return;
   }
+  const water = { waterLevel: args['water-level'], waterMask: args['water-mask'] };
+  waterOptions({}, water); // Reject invalid CLI values before starting Blender.
   if (args.review) {
-    if (positionals.length || Object.keys(args).some(k => !['review', 'compare'].includes(k))) throw new Error('--review nur mit --compare kombinieren.');
-    return reviewPreview(path.resolve(root, args.review), { root, compare: args.compare });
+    if (positionals.length || Object.keys(args).some(k => !['review', 'compare', 'water-level', 'water-mask'].includes(k))) throw new Error('--review nur mit --compare, --water-level oder --water-mask kombinieren.');
+    return reviewPreview(path.resolve(root, args.review), { root, compare: args.compare, ...water });
   }
   if (positionals.length !== 1) throw new Error('Eine Asset-ID angeben; siehe --help.');
   const id = identifier(positionals[0]);
@@ -75,6 +83,7 @@ export async function preview(argv, root = repoRoot) {
     spec = { ...spec, ...update };
   }
   const indices = previewIndices(spec, args.indices);
+  waterOptions(spec, water);
   const variant = args.variant ?? Object.keys(spec.materialVariants ?? {})[0], device = args.device ?? 'AUTO';
   if (!/^[a-z0-9][a-z0-9-]*$/.test(variant ?? '') || !Object.hasOwn(spec.materialVariants ?? {}, variant)
     || !['AUTO', 'CPU', 'CUDA', 'OPTIX'].includes(device)) throw new Error('Ungültige Variante oder Gerät; siehe --help.');
@@ -94,7 +103,7 @@ export async function preview(argv, root = repoRoot) {
   manifest.durationSeconds = Math.round((Date.now() - started) / 100) / 10;
   manifest.log = path.relative(root, log).replaceAll('\\', '/');
   await writeFile(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
-  return reviewPreview(folder, { root, compare: args.compare });
+  return reviewPreview(folder, { root, compare: args.compare, ...water });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -13,7 +13,7 @@ import bpy
 import bmesh
 from mathutils import Vector
 sys.path.insert(0,str(Path(__file__).resolve().parent))
-from verify_asset_pipeline_v2 import animation_owners, snapshot, assert_same_pose, set_frame
+from verify_asset_pipeline_v2 import animation_owners, snapshot, assert_same_pose, set_frame, assert_clip_boundary
 
 
 def visible_cups(scene):
@@ -99,15 +99,13 @@ def main():
         set_frame(scene,0)
         resting=snapshot(scene,meshes,rigs,owners)
         closures=[]
+        def sample(frame):
+            set_frame(scene,frame)
+            return snapshot(scene,meshes,rigs,owners)
         for clip in clips:
-            if clip['loop']:
-                set_frame(scene,clip['timelineStart'])
-                initial=snapshot(scene,meshes,rigs,owners)
-                set_frame(scene,clip['timelineStart']+len(clip['frames'])*24/clip['frameRate'])
-                assert_same_pose(initial,snapshot(scene,meshes,rigs,owners),clip['name']+' loop closure')
-            else:
-                set_frame(scene,clip['timelineStart']+(len(clip['frames'])-1)*24/clip['frameRate'])
-                assert_same_pose(resting,snapshot(scene,meshes,rigs,owners),clip['name']+' return to rest')
+            first=sample(clip['timelineStart'])
+            last=sample(clip['timelineStart']+(len(clip['frames'])-1)*24/clip['frameRate'])
+            assert_clip_boundary(clip,clips,resting,first,last,sample)
             closures.append(clip['name'])
         report['verifiedClipClosures']=closures
         report['status']='passed'

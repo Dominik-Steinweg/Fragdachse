@@ -3,9 +3,12 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { runInNewContext } from 'node:vm';
 import EventEmitter from 'eventemitter3';
+import { krakenReviewOptions } from '../src/dev/scenario/KrakenBossReview';
+import { KRAKEN_MAP_ID, krakenAbyssMap } from '../src/dev/scenario/krakenAbyssMap';
+import { isDiagnosticMapId, COOP_DEFENSE_MAP_CONFIGS } from '../src/config/coopDefenseMaps';
 import type * as Phaser from 'phaser';
 import type { ArenaRuntime } from '../src/scenes/arena/ArenaRuntime';
-import { defaultScenario, encodeScenario } from '../src/dev/scenario/config';
+import { defaultScenario, encodeScenario, parseScenario } from '../src/dev/scenario/config';
 import { resolveRockAerialPerspective } from '../src/effects/groundFog/FogRockLighting';
 import { DevScenarioController } from '../src/dev/scenario/controller';
 import { WorldLightingMeasurement } from '../src/dev/scenario/WorldLightingMeasurement';
@@ -57,6 +60,33 @@ beforeEach(() => {
   controller = new DevScenarioController(scene, runtime, () => {}, () => true);
 });
 afterEach(() => { controller.destroy(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+it('owns the Kraken diagnostic map only for the dev controller lifetime', () => {
+  expect(isDiagnosticMapId(KRAKEN_MAP_ID)).toBe(true);
+  expect(COOP_DEFENSE_MAP_CONFIGS.some(map => map.mapId === KRAKEN_MAP_ID)).toBe(false);
+  const map = krakenAbyssMap();
+  expect(map.water?.length).toBeGreaterThan(0);
+  controller.start({ ...defaultScenario(), mapId: KRAKEN_MAP_ID, player: null });
+  const player = controller.config.player!;
+  expect(map.water?.some(cell => cell.gridX === player.gridX && cell.gridY === player.gridY)).toBe(false);
+  controller.destroy();
+  expect(isDiagnosticMapId(KRAKEN_MAP_ID)).toBe(false);
+  expect(() => parseScenario({ ...defaultScenario(), mapId: KRAKEN_MAP_ID })).toThrow();
+});
+
+it('validates Kraken patches and treats frame selection as a paused clip-local pose', () => {
+  const initial = krakenReviewOptions({ run: 'other-run', playing: true, frame: 3, grid: true });
+  const next = krakenReviewOptions({ frame: 5 }, initial);
+  expect(next).toMatchObject({ run: 'other-run', playing: false, frame: 5, grid: true });
+  expect(initial.playing).toBe(true);
+  expect(krakenReviewOptions({ clip: 'slam' }, next).frame).toBe(0);
+  expect(krakenReviewOptions({ tentacle: { asset: 'tentacle' } }, initial).tentacle)
+    .toMatchObject({ run: initial.run, asset: 'tentacle', size: initial.size });
+  for (const invalid of [{ run: '../escape' }, { telegraphWidth: 0 }, { frame: 1.2 }, { waterLevel: NaN },
+    { phase: 'other' }, { speed: Infinity }, { playing: 'yes' }, { tentaclePivot: [0, 2] }, { atlas: '../atlas.json' }]) {
+    expect(() => krakenReviewOptions(invalid)).toThrow();
+  }
+});
 
 function enter() {
   controller.start({ ...defaultScenario(), player: { gridX: 14, gridY: 23 } });

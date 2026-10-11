@@ -1,0 +1,297 @@
+{
+  "version": 8,
+  "asset": "abyssal-kraken",
+  "tool": "built-in image_gen; deterministic sharp postprocessing",
+  "output": "art/poc/kraken-v8/textures/",
+  "review": "art/poc/kraken-v8/textures/review.png",
+  "generation": {
+    "requested_resolution": "Highest available square resolution, ideally at least 2048 x 2048",
+    "returned_resolution": [
+      1254,
+      1254
+    ],
+    "note": "The built-in tool exposes no explicit size control. Three source textures were generated; the matching height map is derived deterministically from the finished dermis to preserve exact fold registration."
+  },
+  "postprocessing": {
+    "implementation": "Node.js + repository sharp",
+    "source_preservation": "Unmodified generated PNGs are retained under textures/sources/.",
+    "operations": [
+      "Convert source to grayscale. Gaussian blur at source resolution; dermis restores 0.08 * (original - blurred) for restrained pores.",
+      "Crossfade an overlap of 188 source pixels in each axis with smoothstep t*t*(3-2*t), reducing the tile from 1254 to 1066 pixels. For coordinates within the overlap, blend source[x+1066] toward source[x], and similarly in Y; use their separable product for corners. No mirroring.",
+      "Normalize using target + limit * tanh((value - mean) * requested_stddev / (actual_stddev * limit)). Round to 8-bit for resampling.",
+      "Membrane only: add -1.4*sin(2*pi*x/(1066-1)) to provide a subtle periodic right-side lift with matching boundary values.",
+      "Resize the seamless 1066 x 1066 result to 2048 x 2048 with Lanczos3, without sharpening.",
+      "Match opposing endpoint values to their average using a 32-pixel smoothstep correction band, horizontal then vertical. At distance j from each edge, add (average - edgeValue) * (1 - 3*t*t + 2*t*t*t), t=j/31. Do not extrapolate pixel slopes.",
+      "Height only: repeat finished dermis 3 x 3, Gaussian blur sigma 8 at final resolution, crop the central 2048 square, then apply the same 32-pixel endpoint correction. Light means raised. This is a luminance-derived artistic height map, not a measured physical displacement scan.",
+      "Encode final grayscale-valued PNGs without alpha. No material color, emission or anatomy is baked in."
+    ],
+    "review_layout": "Each row: 2 x 2 tiles at 256 px each, a 512 px preview offset 50 percent on both axes, and a single 128 px Lanczos3 reduction. Opposing edges measured on full 2048 px files.",
+    "rejected_processing": "The initial derivative-extrapolating boundary correction introduced stripes and was rejected after visual offset review. The delivered files use overlap crossfades.",
+    "verification": "Reviewed final review.png after correction. No visible straight seams or granular noise at thumbnail scale; repeated motifs remain discernible, as expected for a single tile."
+  },
+  "textures": [
+    {
+      "output": "art/poc/kraken-v8/textures/kraken-dermis-v8.png",
+      "tool": "built-in image_gen",
+      "prompt": "Use case: stylized-concept. Asset type: seamless square grayscale material structure texture for Blender cephalopod skin, NOT a creature illustration. Generate at the highest available square resolution, ideally at least 2048x2048. One continuous edge-to-edge flat orthographic top-down swatch, no anatomy. Interlocking soft muscle folds and flowing longitudinal furrows, predominantly vertical, with only 6 to 10 broad folds across the full width. Moderate mesoscopic frequency, softly rounded organic ridges, gentle branching and interlocking, uneven natural spacing. Extremely fine quiet pores between folds, almost imperceptible, absolutely no dots or speckles. Compact middle gray value range around 128/255, approximately 108 to 150, neutral grayscale. Treat values as structure: raised folds softly lighter, furrows softly darker, no directional shaded side. Flat neutral uniform illumination, no shadows, no highlights, no vignette, no broad illumination gradient. Opposing edges should seamlessly continue. Must remain calm coherent midtones at 128px game-size downsampling. No black or white, dark points, freckles, chromatophores, scales, hexagons, warts, gritty noise, cracks, stones, fabric, metal, wet gloss, object silhouette, eyes, tentacles, borders, text, labels or watermark. Fill the entire image with the material.",
+      "generation_attempts": 1,
+      "source": "art/poc/kraken-v8/textures/sources/kraken-dermis-v8-original.png",
+      "source_sha256": "75ae31d5aba2465089addad414a9ed1030a2b72c7a167b33420b45f91620f505",
+      "postprocessing": {
+        "gaussian_sigma_source_px": 5,
+        "micro_residual": 0.08,
+        "target": 128,
+        "requested_stddev": 9,
+        "limit": 22,
+        "overlap_source_px": 188,
+        "final_size": [
+          2048,
+          2048
+        ]
+      },
+      "validation": {
+        "range_8bit": [
+          110,
+          144
+        ],
+        "mean_8bit": 128.115,
+        "opposing_edge_max_difference_8bit": {
+          "x": 0,
+          "y": 0
+        },
+        "self_assessment": "Soft interlocking longitudinal folds remain legible at 128 px; fine pores are subdued and there are no dark freckles."
+      }
+    },
+    {
+      "output": "art/poc/kraken-v8/textures/kraken-dermis-relief-v8.png",
+      "tool": "deterministic sharp derivation; no separate image-generation call",
+      "prompt": "Create a matching soft grayscale height map from kraken-dermis-v8.png. Preserve every fold position and the tile phase exactly. Light means raised and dark means recessed. Suppress pores and high-frequency noise, retain the middle-gray value range and seamless repeat. No directional lighting or new structure.",
+      "generation_attempts": 0,
+      "source": "art/poc/kraken-v8/textures/kraken-dermis-v8.png",
+      "postprocessing": {
+        "wrap_aware_gaussian_sigma_final_px": 8,
+        "endpoint_correction_band_px": 32,
+        "final_size": [
+          2048,
+          2048
+        ],
+        "height_convention": "lighter = raised; consume as Non-Color data"
+      },
+      "validation": {
+        "range_8bit": [
+          111,
+          144
+        ],
+        "mean_8bit": 128.345,
+        "opposing_edge_max_difference_8bit": {
+          "x": 0,
+          "y": 0
+        },
+        "self_assessment": "Fold layout stays registered to the dermis; softened pore-free relief remains calm at 128 px."
+      }
+    },
+    {
+      "output": "art/poc/kraken-v8/textures/kraken-membrane-v8.png",
+      "tool": "built-in image_gen",
+      "prompt": "Use case: stylized-concept. Asset type: seamless square grayscale Blender thin cephalopod fin membrane material texture, only surface structure. Highest available square resolution, ideally at least 2048x2048. Flat orthographic straight top-down material swatch filling every pixel. Quiet light-gray substrate with fine gently branching organic veins and fin rays flowing horizontally from LEFT toward RIGHT across the swatch. Roughly 9-12 principal slender rays over full height, gently wavering, occasional sparse finer branches. Soft low contrast: veins medium-light gray, ground light gray approximately 178/255. No black. The right-hand region has a subtle slightly brighter more translucent-looking quality, not a visible rim or silhouette. Opposing edges should continue as a seamless repeat, no obvious gradient discontinuity. Uniform neutral ambient light, absolutely no baked shadows, directional lighting, specular highlights, vignette or transparent holes. Just a flat grayscale texture, no literal fin, no anatomy, no objects. Veins are delicate but visible, organic smooth flowing tissue, not leaf pattern, not cracked mud, not fabric, not regular polygons. Fine structure stays calm at 128px. No grain, pores, spots, scales, noise, text, labels, frames, border, watermark.",
+      "generation_attempts": 1,
+      "source": "art/poc/kraken-v8/textures/sources/kraken-membrane-v8-original.png",
+      "source_sha256": "ceeb5bb6ba38549d300649dc014b0f1436fba8acc75ba957388385342ef3f6b6",
+      "postprocessing": {
+        "gaussian_sigma_source_px": 1.6,
+        "micro_residual": 0,
+        "target": 181,
+        "requested_stddev": 6,
+        "limit": 22,
+        "overlap_source_px": 188,
+        "periodic_right_lift_amplitude_8bit": 1.4,
+        "final_size": [
+          2048,
+          2048
+        ]
+      },
+      "validation": {
+        "range_8bit": [
+          161,
+          193
+        ],
+        "mean_8bit": 181.065,
+        "opposing_edge_max_difference_8bit": {
+          "x": 0,
+          "y": 0
+        },
+        "self_assessment": "Delicate branching horizontal rays sit on a quiet light-gray ground; right-side lightening is subtle and returns smoothly at the repeat boundary."
+      }
+    },
+    {
+      "output": "art/poc/kraken-v8/textures/kraken-egg-v8.png",
+      "tool": "built-in image_gen",
+      "prompt": "Use case: stylized-concept. Asset type: seamless square grayscale structure texture source for gelatinous marine egg membrane in Blender. Highest available square resolution, ideally at least 2048x2048. A single continuous flat orthographic straight top-down material swatch filling all pixels. Soft uneven organic cellular structure with very thin gently branching veins, calm medium gray. Loose broad irregular rounded cells, varied size and shape, about 7-10 cells across width, soft diffuse boundaries; thin wispy low-contrast veins weave between softly swollen gelatinous cells. Gel-like softness conveyed ONLY through softly varying structure values, no shine or lighting. Neutral gray, narrow range centered on 128/255 around 112-146, no black or white. No baked shadows, highlights, specular reflections, directional lighting, vignette or broad illumination gradient. Opposing edges continue seamlessly. Absolutely no egg silhouette, spheres, bubbles, pores, dots, granular noise, embryonic anatomy, actual organisms, eyes, objects, hexagonal grid, scales, thick black cellular outlines, cracks, cobblestones, text, watermark or frame. Quiet middle tones and coherent soft cells when reduced to 128 pixels. No perspective, one flat material map.",
+      "generation_attempts": 1,
+      "source": "art/poc/kraken-v8/textures/sources/kraken-egg-v8-original.png",
+      "source_sha256": "7d3a802fc05b830eaa55efdf4547f624879c8279f8107656f1894a619466e45c",
+      "postprocessing": {
+        "gaussian_sigma_source_px": 2.5,
+        "micro_residual": 0,
+        "target": 128,
+        "requested_stddev": 6,
+        "limit": 18,
+        "overlap_source_px": 188,
+        "final_size": [
+          2048,
+          2048
+        ]
+      },
+      "validation": {
+        "range_8bit": [
+          118,
+          144
+        ],
+        "mean_8bit": 127.916,
+        "opposing_edge_max_difference_8bit": {
+          "x": 0,
+          "y": 0
+        },
+        "self_assessment": "Soft irregular gelatinous cells and thin veins read as coherent midtones at 128 px, without hard cellular borders or speckled noise."
+      }
+    },
+    {
+      "output": "art/poc/kraken-v8/textures/kraken-scales-v8.png",
+      "tool": "built-in image_gen",
+      "prompt": "Use case: stylized-concept. Asset type: production Blender skin structure texture, a single square 2048 x 2048 seamless grayscale material map. Generate one continuous flat orthographic 90-degree top-down swatch filling every pixel. Organic sinister deep-sea cephalopod / Cthulhu scarred reptilian skin, dense small gently overlapping rounded diamond scales and fleshy tubercles. Approximately 25 scales across the image width, around 600 scales total; modest natural size variation, irregular staggered packing without a rigid grid, no perfect hexagons. Each scale is softly domed with its center slightly lighter and a very narrow darker recessed interscale groove all around; their tiny edges are fleshy and scarred, minute organic creases, restrained microscopic pores. Value encodes surface structure, NOT a lit object: softly lighter elevations, darker grooves, symmetric diffuse value over each dome, NO directional highlights or shadows. Neutral mid gray, moderate narrow contrast approximately 85 to 170 out of 255, no color, no pure white or black. Completely uniform neutral lighting, no broad shading gradient, no vignette, no specular shine, no cast shadows. Seamless opposing boundaries: scales and grooves continue naturally over all four edges. Flat material scan only. No creature, anatomy, eyes, tentacles, suckers, silhouette, isolated object, perspective, borders, text, labels, watermarks, rocks, cobblestones, regular hexagonal grid, cartoon outlines or extreme gritty noise. Organic scale surface inspired by the described Kraken dorsal skin, with no recognizable anatomy. Output only this one material texture. Critical density requirement: Zoom out to show TWICE as many scales across each dimension as a close-up texture. Each scale only about 1/28th of the full image width. 28 to 30 small scales across the width, around 800 to 1000 distinct small scales filling the image. Small papillae densely packed, rather than large armor plates. Fine narrow grooves; softly domed centers, equally dark grooves on all sides, not dark cast shadows below individual scales.",
+      "generation_attempts": 2,
+      "previous_attempt_prompt": "Use case: stylized-concept. Asset type: production Blender skin structure texture, a single square 2048 x 2048 seamless grayscale material map. Generate one continuous flat orthographic 90-degree top-down swatch filling every pixel. Organic sinister deep-sea cephalopod / Cthulhu scarred reptilian skin, dense small gently overlapping rounded diamond scales and fleshy tubercles. Approximately 25 scales across the image width, around 600 scales total; modest natural size variation, irregular staggered packing without a rigid grid, no perfect hexagons. Each scale is softly domed with its center slightly lighter and a very narrow darker recessed interscale groove all around; their tiny edges are fleshy and scarred, minute organic creases, restrained microscopic pores. Value encodes surface structure, NOT a lit object: softly lighter elevations, darker grooves, symmetric diffuse value over each dome, NO directional highlights or shadows. Neutral mid gray, moderate narrow contrast approximately 85 to 170 out of 255, no color, no pure white or black. Completely uniform neutral lighting, no broad shading gradient, no vignette, no specular shine, no cast shadows. Seamless opposing boundaries: scales and grooves continue naturally over all four edges. Flat material scan only. No creature, anatomy, eyes, tentacles, suckers, silhouette, isolated object, perspective, borders, text, labels, watermarks, rocks, cobblestones, regular hexagonal grid, cartoon outlines or extreme gritty noise. Organic scale surface inspired by the described Kraken dorsal skin, with no recognizable anatomy. Output only this one material texture.",
+      "previous_attempt_rejection": "Scale density was too low; regenerated with explicit smaller-scale density.",
+      "source": "art/poc/kraken-v8/textures/sources/kraken-scales-v8-original.png",
+      "source_sha256": "bc2624ecef2a517974636321e61e0a312df4bc03343fe4bbc26c459a7934852b",
+      "postprocessing": {
+        "workflow": "lane_i.operations",
+        "final_size": [
+          2048,
+          2048
+        ],
+        "gaussian_sigma_source_px": 0.7,
+        "requested_stddev": 16,
+        "limit": 48,
+        "overlap_source_px": 100
+      },
+      "validation": {
+        "range_8bit": [
+          87,
+          172
+        ],
+        "mean_8bit": 128.173,
+        "opposing_edge_max_difference_8bit": {
+          "x": 0,
+          "y": 0
+        },
+        "adjacent_edge_mean_gradient_8bit": {
+          "x": 1.242,
+          "y": 1.266
+        },
+        "self_assessment": "Dense small rounded diamond scales with scarred papilla surfaces and narrow grooves remain readable at 128 px; slightly staggered rows remain perceptible despite natural size variation."
+      }
+    },
+    {
+      "output": "art/poc/kraken-v8/textures/kraken-scales-height-v8.png",
+      "tool": "deterministic sharp derivation; no separate image-generation call",
+      "prompt": "Derive a matching seamless grayscale height map from the completed kraken-scales-v8.png. Preserve every scale, scar and groove location and the exact tile phase. Light means raised, grooves dark. Apply only gentle wrap-aware smoothing and contrast remapping; introduce no new features or directional lighting.",
+      "generation_attempts": 0,
+      "source": "art/poc/kraken-v8/textures/kraken-scales-v8.png",
+      "postprocessing": {
+        "workflow": "lane_i.operations",
+        "final_size": [
+          2048,
+          2048
+        ],
+        "height_convention": "lighter = raised; Non-Color",
+        "wrap_aware_gaussian_sigma_final_px": 2
+      },
+      "validation": {
+        "range_8bit": [
+          69,
+          187
+        ],
+        "mean_8bit": 128.289,
+        "opposing_edge_max_difference_8bit": {
+          "x": 0,
+          "y": 0
+        },
+        "adjacent_edge_mean_gradient_8bit": {
+          "x": 1.325,
+          "y": 1.377
+        },
+        "scale_height_correlation": 0.989239,
+        "self_assessment": "Every scale and groove remains in the exact source UV phase; gentle wrap-aware smoothing suppresses micro-noise, with light elevations and dark grooves. This is an artistic luminance-derived height map, not measured displacement."
+      }
+    },
+    {
+      "output": "art/poc/kraken-v8/textures/kraken-underside-v8.png",
+      "tool": "built-in image_gen",
+      "prompt": "Use case: stylized-concept. Asset type: production Blender material structure map, seamless square 2048 x 2048 texture. A single continuous completely flat orthographic 90-degree top-down material swatch filling every pixel. Smooth fleshy underside skin of a sinister deep-sea cephalopod, also suitable for thin swimming membranes. Soft shallow irregular transverse skin folds flowing broadly horizontally, approximately 12-18 main folds over image height, natural gentle wavering and tapering, interrupted occasionally by quiet smooth areas. Very fine subtle branching subdermal veins thread through the soft tissue, subordinate to the folds, no thick branches. Soft skin has tiny restrained creases and scarred tissue, no scales or tubercles. Quiet neutral grayscale midtones approximately 110-148 out of 255, low contrast, no color. Value describes fine surface structure only, never object shading. Completely uniform neutral ambient illumination, NO directional shadows, NO specular highlights, no wet shine, no cast shadows, no vignette, no illumination gradient. Seamless repeat on all four boundaries, folds and veins continue across each edge. Flat texture only, no anatomy, no creature, eyes, arms, suckers, silhouettes, objects, horizon, perspective, grids, geometric cells, cloth, noisy grain, spots, text, labels, borders, or watermarks. Output only this one material texture.",
+      "generation_attempts": 1,
+      "source": "art/poc/kraken-v8/textures/sources/kraken-underside-v8-original.png",
+      "source_sha256": "171704660d6adfc7ef0b0d3ca62d22eef39ee3bbebd987190a889305a6e7a56d",
+      "postprocessing": {
+        "workflow": "lane_i.operations",
+        "final_size": [
+          2048,
+          2048
+        ],
+        "gaussian_sigma_source_px": 1.2,
+        "requested_stddev": 8,
+        "limit": 25,
+        "overlap_source_px": 188
+      },
+      "validation": {
+        "range_8bit": [
+          106,
+          146
+        ],
+        "mean_8bit": 128.085,
+        "opposing_edge_max_difference_8bit": {
+          "x": 0,
+          "y": 0
+        },
+        "adjacent_edge_mean_gradient_8bit": {
+          "x": 0.335,
+          "y": 0.627
+        },
+        "self_assessment": "Soft transverse fleshy folds and delicate veins sit in calm midtones; veins become subordinate at 128 px and the corrected overlap has no visible straight seam."
+      }
+    }
+  ],
+  "lane_i": {
+    "scope": "Additional scale / scar-skin textures. Existing generation and postprocessing fields above describe the earlier dermis / membrane / egg batch only.",
+    "tool": "built-in image_gen; deterministic Node.js + sharp finishing",
+    "requested_resolution": [
+      2048,
+      2048
+    ],
+    "generated_source_resolution": [
+      1254,
+      1254
+    ],
+    "final_resolution": [
+      2048,
+      2048
+    ],
+    "review": "art/poc/kraken-v8/textures/review-scales.png",
+    "reproducible_processing": "art/poc/kraken-v8/textures/sources/process-lane-i.cjs",
+    "operations": [
+      "Convert generated sources to neutral grayscale; source Gaussian sigma 0.7 px for scales, 1.2 px for underside.",
+      "Scales: 100 px overlap in each source axis, minimum squared-error seam (successive positions differ by at most 1 px), 4 px smoothstep feather. Tile before resize: 1154 x 1154.",
+      "Underside: 188 px smoothstep overlap in each source axis. Tile before resize: 1066 x 1066. This replaces the rejected narrow seam, which interrupted folds visibly in the 50-percent-offset review.",
+      "Normalize with 128 + limit*tanh((value-mean)*requested_stddev/(actual_stddev*limit)); scales stddev 16 / limit 48; underside stddev 8 / limit 25.",
+      "Lanczos3 resize to 2048 x 2048. Average opposing endpoint values using an 8 px smoothstep correction band in X then Y.",
+      "Height: derive from final scales in the identical pixel phase; wrap-aware Gaussian sigma 2 px, remap 128+(value-128)*1.6, then same endpoint correction. No independent image synthesis or shifted structures.",
+      "Save opaque grayscale-valued PNGs. Blender structure and height maps should be interpreted as Non-Color data."
+    ],
+    "verification": {
+      "review_layout": "Each row: 2x2 repeat with 256 px tiles, a 512 px preview offset exactly 50 percent in both source axes, one 128 px view.",
+      "visual_review": "Final review-scales.png inspected after underside seam correction. No visible straight tiling seam at review scale; periodic motifs and gently staggered scale rows remain discernible.",
+      "opposing_edges": "All three final maps have maximum endpoint difference 0/255 in X and Y.",
+      "size_note": "Image generation returned 1254 px sources; delivered maps are resized to 2048 px, not natively generated 2K."
+    }
+  }
+}

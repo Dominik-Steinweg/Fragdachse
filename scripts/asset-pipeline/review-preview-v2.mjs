@@ -3,6 +3,7 @@ import sharp from 'sharp';
 import { readFile, writeFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { submersionDefaults, waterOptions, waterTile } from './water-preview-v2.mjs';
 
 const defaultRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const exists = async file => { try { return (await stat(file)).isFile(); } catch (e) { if (e.code === 'ENOENT') return false; throw e; } };
@@ -67,7 +68,7 @@ async function centered(layers, input, x, y) {
   layers.push({ input, left: Math.round(x - width / 2), top: Math.round(y - height / 2) });
 }
 
-export async function reviewPreview(folder, { root = defaultRoot, compare } = {}) {
+export async function reviewPreview(folder, { root = defaultRoot, compare, waterLevel, waterMask } = {}) {
   const previews = await safePath(root, 'art/poc/pipeline-v2/previews');
   folder = await safePath(previews, path.relative(previews, folder));
   const manifestFile = await safePath(folder, 'preview.json');
@@ -77,6 +78,10 @@ export async function reviewPreview(folder, { root = defaultRoot, compare } = {}
   if (!Number.isInteger(m.spec.targetSize) || m.spec.targetSize < 1 || m.spec.targetSize > 1024
       || !Number.isFinite(displayScale) || displayScale < 1 || displayScale > 3) throw new Error('Ungültige Nominalgröße.');
   const size = Math.round(m.spec.targetSize * displayScale);
+  const water = waterOptions(m.spec, { waterLevel, waterMask }, m.water);
+  const elevations = m.spec.elevation ? await Promise.all(m.indices.map(index => safePath(folder, `elevation/masters/frame-${String(index).padStart(4, '0')}.png`))) : [];
+  const elevationExists = await Promise.all(elevations.map(exists));
+  if (elevationExists.some(Boolean) && !elevationExists.every(Boolean)) throw new Error('Elevation-Frames unvollständig; Wasserbogen benötigt alle Vorschau-Frames.');
   const source = await comparisonSource(root, m.spec, compare);
   const frame = async index => safePath(folder, `frame-${String(index).padStart(4, '0')}.png`);
   const idle = await frame(0);
@@ -163,11 +168,34 @@ export async function reviewPreview(folder, { root = defaultRoot, compare } = {}
   if (!hasIdle) scaleSvg += text(20, 72, 'Idle fehlt: leere Vergleichsfelder.');
   const scaleFile = await safePath(folder, 'scale.png');
   await sharp(canvas(140 + 3 * (tileWidth + 14), 90 + 4 * rowHeight, scaleSvg)).composite(scaleLayers).png().toFile(scaleFile);
+  let waterFile;
+  if (elevations.length && elevationExists.every(Boolean)) {
+    const defaults = await submersionDefaults();
+    const enlarged = Math.max(220, size * 2), cols = Math.min(4, m.indices.length);
+    const cell = enlarged + 32, row = enlarged + size + 100;
+    let waterSvg = text(20, 28, `${m.spec.label} · Wasser-Ansicht · ${m.variant}`, 19)
+      + text(20, 51, `Wasserspiegel ${water.waterLevel} BU · ${water.waterMask === 'half' ? 'links Wasser / rechts Land' : 'Teich'} · Zeit 0`)
+      + text(20, 72, 'CPU-Shader-Nachbildung · statische Posen, keine Bewegungsabnahme');
+    const waterLayers = [];
+    for (let i = 0; i < m.indices.length; i++) {
+      const x = (i % cols) * cell + cell / 2, top = 94 + Math.floor(i / cols) * row;
+      waterSvg += text(x - enlarged / 2, top + 13, poseLabel(m.indices[i]), 12)
+        + text(x - enlarged / 2, top + 32, `Vergrößert (${enlarged} px)`, 12)
+        + text(x - enlarged / 2, top + enlarged + 62, `Nominal (${size} px)`, 12);
+      const beauty = await frame(m.indices[i]);
+      await centered(waterLayers, await waterTile(beauty, elevations[i], m.spec.elevation, enlarged, size, water, defaults), x, top + 40 + enlarged / 2);
+      await centered(waterLayers, await waterTile(beauty, elevations[i], m.spec.elevation, size, size, water, defaults), x, top + enlarged + 70 + size / 2);
+    }
+    waterFile = await safePath(folder, 'water.png');
+    await sharp(canvas(cols * cell, 94 + Math.ceil(m.indices.length / cols) * row, waterSvg)).composite(waterLayers).png().toFile(waterFile);
+    m.water = { ...water, time: 0, defaults };
+  }
   m.poses = poses;
   m.comparison = source;
   await writeFile(manifestFile, JSON.stringify(m, null, 2) + '\n');
   console.log(`Vorschau OK: ${m.id} / ${m.variant} · ${m.indices.length} Posen · ${m.durationSeconds ?? '?'} s · ${m.device ?? 'Gerät unbekannt'}\nTechnik: Render vorhanden; Ästhetik und Bewegung separat prüfen.\n${comparisonFile}\n${scaleFile}`);
-  return { comparisonFile, scaleFile, source };
+  if (waterFile) console.log(waterFile);
+  return { comparisonFile, scaleFile, source, ...(waterFile ? { waterFile } : {}) };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

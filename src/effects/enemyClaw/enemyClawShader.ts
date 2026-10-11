@@ -7,7 +7,7 @@ import { CLAW_VFX_SLASH_MS, CLAW_VFX_TELEGRAPH_FADE_MS } from './EnemyClawVfxSto
  * warning stays readable at night; its alpha follows `emissiveAlpha` and fades by day.
  *
  * Attributes per vertex: world position, quad-local px (x = attack direction), timing
- * (start, strike, hit, end), shape (range or mark size, half arc, kind, seed), color.
+ * (start, strike, hit, end), shape (range/length or mark size, half arc/width, kind, seed), color.
  */
 export const ENEMY_CLAW_VERTEX_SHADER = `
 #pragma phaserTemplate(shaderName)
@@ -26,7 +26,7 @@ varying vec4 vTiming;
 varying vec4 vShape;
 varying vec4 vColor;
 void main() {
-  bool contact = inShape.z > 0.5;
+  bool contact = inShape.z > 0.5 && inShape.z < 1.5;
   // Cull whole quads outside their pass/phase before any fragment work.
   bool live = uPass > 1.5 ? true : uPass < 0.5
     ? (!contact && uTime < inTiming.z + ${CLAW_VFX_TELEGRAPH_FADE_MS.toFixed(1)})
@@ -89,6 +89,21 @@ vec4 telegraph(float gain) {
   float a = mask * (0.1 + 0.2 * swell * charge + 0.1 * strike) * gain * vis;
   vec3 color = mix(vColor.rgb, HOT, 0.35 * strike);
   return vec4(color * a, a);
+}
+
+// Rectangle local x runs from the entry toward the tip. Same danger palette and charge
+// clock as sectors; a firm boundary keeps the long, narrow footprint legible.
+vec4 lane(float gain) {
+  if (uTime < vTiming.x) return vec4(0.0);
+  float d = max(max(-vLocal.x, vLocal.x - vShape.x), abs(vLocal.y) - vShape.y);
+  float mask = 1.0 - smoothstep(-uPixel, uPixel, d);
+  float edge = line(d, 1.8) * mask;
+  float charge = clamp((uTime - vTiming.x) / max(1.0, vTiming.z - vTiming.x), 0.0, 1.0);
+  float swell = (1.0 - smoothstep(charge * vShape.x - 5.0, charge * vShape.x + 5.0, vLocal.x)) * step(0.001, charge);
+  float front = line(vLocal.x - charge * vShape.x, 1.2) * step(0.001, charge);
+  float fade = 1.0 - smoothstep(vTiming.z, vTiming.z + FADE_MS, uTime);
+  float a = mask * (0.12 + 0.24 * swell + 0.55 * edge + 0.18 * front) * gain * fade;
+  return vec4(mix(vColor.rgb, HOT, 0.15 * front) * a, a);
 }
 
 // Two mirrored paws closing like a pincer: each drags three stacked claw arcs from the
@@ -179,7 +194,8 @@ vec4 contact() {
 
 void main() {
   vec4 color;
-  if (uPass < 0.5) color = telegraph(1.0);
+  if (vShape.z > 1.5) color = uPass < 0.5 ? lane(1.0) : uPass > 1.5 ? lane(0.55) : vec4(0.0);
+  else if (uPass < 0.5) color = telegraph(1.0);
   else if (uPass < 1.5) color = vShape.z < 0.5 ? rake() : contact();
   // Emissive trace: a fainter copy of the tint keeps the zone readable under the night lightmap.
   else color = vShape.z < 0.5 ? telegraph(0.55) + rake() : contact();

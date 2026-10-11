@@ -6,6 +6,9 @@ import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 import { archiveManifestV2, exportRunV2, exportVariantV2, selectVariantV2, sheetLayout, validateManifestV2, verifySelectionV2 } from '../../scripts/asset-pipeline/export-v2.mjs';
 import { prepareReviewV2 } from '../../scripts/asset-pipeline/prepare-review-v2.mjs';
+import { packAtlas } from '../../scripts/asset-pipeline/atlas-v2.mjs';
+import { elevationEncoding, resizeElevation, verifyElevationPixels } from '../../scripts/asset-pipeline/elevation-v2.mjs';
+import { verifyBossRuntime } from '../../scripts/asset-pipeline/runtime-contract-v2.mjs';
 
 const roots: string[] = [];
 const hash = (data: Buffer | string) => createHash('sha256').update(data).digest('hex');
@@ -59,6 +62,85 @@ async function fixture() {
 }
 
 describe('V2 animated asset export contracts', () => {
+  it('accepts arbitrary sortable markers and explicit clip transitions without relaxing claw', async () => {
+    const { manifest: m } = await fixture();
+    const rise = { name: 'rise', motion: 'fixture', frameRate: 12, loop: false, frames: [0, 1, 2, 3],
+      start: 'free', end: 'free', next: 'hover', markers: { release: 3, lift: 0 } };
+    const hover = { ...m.clips[0], name: 'hover' };
+    const base = { ...m, category: 'boss-part', clips: [rise, hover] };
+    expect(() => validateManifestV2(base)).not.toThrow();
+    for (const patch of [{ markers: { Bad: 1 } }, { markers: { lift: -1 } }, { markers: { lift: 4 } },
+      { markers: { lift: 1.5 } }, { markers: { lift: 1, release: 1 } }, { markers: null },
+      { end: 'unknown' }, { start: 'unknown' }, { next: 'missing' }, { end: 'terminal' }, { loop: true }]) {
+      expect(() => validateManifestV2({ ...base, clips: [{ ...rise, ...patch }, hover] })).toThrow();
+    }
+    for (const end of ['free', 'terminal', 'rest']) expect(() => validateManifestV2({ ...base, clips: [{ ...rise, next: undefined, end }, hover] })).not.toThrow();
+    expect(() => validateManifestV2({ ...base, clips: [{ ...rise, name: 'claw', end: 'rest', next: undefined, markers: { strike: 1, impact: 2, extra: 0 } }] })).toThrow(/Claw/);
+  });
+
+  it('packs multiple trimmed atlas pages with lossless pixels, stable names, canvas and pivot', async () => {
+    const inputs = await Promise.all(['#ab523380', '#16aa22ff', '#1122cc40'].map(frame));
+    const pages = await packAtlas(inputs, { frameNames: ['clip/0', 'clip/1', 'clip/2'], sourceFrames: [3, 7, 9], size: 64,
+      pivot: [.5, .5], prefix: 'atlas/clip', maxSize: 40 });
+    expect(pages).toHaveLength(3);
+    for (const [i, page] of pages.entries()) {
+      expect(page.width).toBeLessThanOrEqual(40); expect(page.height).toBeLessThanOrEqual(40);
+      const record = page.metadata.frames[`clip/${i}`];
+      expect(record).toMatchObject({ sourceSize: { w: 64, h: 64 }, pivot: { x: .5, y: .5 },
+        spriteSourceSize: { x: 16, y: 16, w: 32, h: 32 }, trimmed: true, sourceFrame: [3, 7, 9][i] });
+      const { x, y, w, h } = record.frame;
+      const actual = await sharp(page.png).extract({ left: x, top: y, width: w, height: h }).raw().toBuffer();
+      const expected = await sharp(inputs[i]).extract({ left: 16, top: 16, width: 32, height: 32 }).raw().toBuffer();
+      expect(actual).toEqual(expected);
+      const raw = await sharp(page.png).raw().toBuffer();
+      expect(raw.subarray(0, page.width * 2 * 4).every(v => v === 0)).toBe(true);
+    }
+  });
+
+  it('exports hash-bound height atlases and a byte-accurate resident budget without changing sheets', async () => {
+    const f = await fixture();
+    const elevation = { min: -2, max: 3, scale: .5 };
+    const m = { ...f.manifest, category: 'boss-part', runtimeAtlas: true, runtimeContract: 'boss', runtimeBudgetMB: 2, elevation,
+      elevationPass: { ...elevation, encoding: elevationEncoding, waterline: 0, alpha: 'beauty-coverage', masterSize: 64, colorSpace: 'non-color', premultiplied: false },
+      clips: [{ name: 'hatch', motion: 'fixture', frameRate: 12, loop: false, frames: [1, 2, 3], end: 'terminal', markers: { release: 1 } }] };
+    for (const record of m.frames) {
+      const data = await frame('#808080'), base = `elevation/masters/frame-${String(record.index).padStart(4, '0')}`;
+      const exr = Buffer.from('Float EXR fixture; Blender verification is separate');
+      record.elevation = { file: base + '.png', exrFile: base + '.exr', sha256: hash(data), exrSha256: hash(exr), width: 64, height: 64, encoding: elevationEncoding };
+      await mkdir(path.join(f.folder, 'elevation/masters'), { recursive: true });
+      await writeFile(path.join(f.folder, record.elevation.file), data);
+      await writeFile(path.join(f.folder, record.elevation.exrFile), exr);
+    }
+    await save(path.join(f.folder, 'render.json'), m);
+    const result = await exportVariantV2(f.folder, f.root);
+    const sheet = await readFile(path.join(f.folder, 'sheet-32.png'));
+    expect(result.sheets[32]).toMatchObject({ frameCount: 4, width: 144, height: 36 });
+    expect(result.atlases[32].color.hatch.frameNames).toEqual(result.atlases[32].elevation.hatch.frameNames);
+    expect(result.atlases[32].elevation.hatch).toMatchObject({ sourceSize: 16, logicalSourceSize: 32, pivot: [.5, .5] });
+    expect(JSON.parse(await readFile(path.join(f.asset, 'budget.json'), 'utf8')).variants.calm).toEqual(result.budget);
+    const entry = { ...m, clips: m.clips.map(c => ({ ...c, frameCount: c.frames.length })) };
+    const runtime = { ...m, sourceSize: 32, atlases: result.atlases[32], budget: result.budget.sizes[32] };
+    await expect(verifyBossRuntime(entry, runtime, name => readFile(path.join(f.folder, name)))).resolves.toEqual(runtime.budget);
+    await exportVariantV2(f.folder, f.root);
+    expect(await readFile(path.join(f.folder, 'sheet-32.png'))).toEqual(sheet);
+    const selected = await selectVariantV2(f.asset, 'calm', 32, 'Boss contract fixture.');
+    expect(selected.clips[0]).toMatchObject({ end: 'terminal', markers: { release: 1 } });
+    expect(selected.atlases).toEqual(runtime.atlases);
+    await verifySelectionV2(f.asset);
+    const page = runtime.atlases.elevation.hatch.pages[0];
+    await writeFile(path.join(f.folder, page.image), f.frames[0]);
+    await expect(verifySelectionV2(f.asset)).rejects.toThrow(/Selected export changed/);
+  });
+
+  it('preserves numeric height and Beauty coverage during reduction and rejects mismatched alpha', async () => {
+    const beauty = await frame('#dd2255'), data = await frame('#808080');
+    const resized = await resizeElevation(data, beauty, 16);
+    const raw = await sharp(resized).raw().toBuffer();
+    expect(raw[(8 * 16 + 8) * 4]).toBe(128);
+    await expect(verifyElevationPixels(data, beauty, 64)).resolves.toBeUndefined();
+    await expect(verifyElevationPixels(await frame('#80808080'), beauty, 64)).rejects.toThrow(/alpha/);
+    await expect(verifyElevationPixels(await frame('#ff0080'), beauty, 64)).rejects.toThrow(/scalar/);
+  });
   it('preserves claw markers through export and selection and rejects ambiguous timing', async () => {
     const f = await fixture();
     const claw = { name: 'claw', motion: 'claw_quadruped', frameRate: 24, loop: false,

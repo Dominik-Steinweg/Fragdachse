@@ -8,6 +8,7 @@ vi.mock('../src/effects/enemyClaw/EnemyClawGpuLayer', () => ({
 import { EnemyClawRenderer } from '../src/effects/EnemyClawRenderer';
 import {
   CLAW_VFX_CAPACITY, CLAW_VFX_INSTANCE_FLOATS, CLAW_VFX_SLASH_MS, EnemyClawVfxStore,
+  CLAW_VFX_FLOATS_PER_VERTEX, CLAW_VFX_TELEGRAPH_FADE_MS, ClawVfxKind,
 } from '../src/effects/enemyClaw/EnemyClawVfxStore';
 
 describe('enemy claw presentation lifetime', () => {
@@ -63,6 +64,40 @@ describe('enemy claw presentation lifetime', () => {
 describe('enemy claw instance store', () => {
   const spec = (x: number) => ({ x, y: 0, angle: 0.5, range: 50, halfArc: 0.7,
     startedAt: 0, strikeAt: 270, hitAt: 350, color: 0xff0000 });
+
+  it('rotates a lane about its entry, preserves its full width, and retires after the telegraph fade', () => {
+    const store = new EnemyClawVfxStore();
+    const lane = { shape: 'lane' as const, x: 70, y: 80, angle: Math.PI / 2, length: 240, width: 96,
+      startedAt: 0, strikeAt: 270, hitAt: 350, color: 0xff0000 };
+    store.addAttack('lane', lane, 0);
+    const localX: number[] = [], localY: number[] = [];
+    for (let v = 0; v < 6; v++) {
+      const o = v * CLAW_VFX_FLOATS_PER_VERTEX;
+      localX.push(store.data[o + 2]); localY.push(store.data[o + 3]);
+      expect(store.data[o]).toBeCloseTo(lane.x - store.data[o + 3]);
+      expect(store.data[o + 1]).toBeCloseTo(lane.y + store.data[o + 2]);
+      expect(store.data[o + 8]).toBe(lane.length);
+      expect(store.data[o + 9] * 2).toBe(lane.width);
+      expect(store.data[o + 10]).toBe(ClawVfxKind.Lane);
+    }
+    expect(Math.min(...localX)).toBeLessThanOrEqual(0);
+    expect(Math.max(...localX)).toBeGreaterThanOrEqual(lane.length);
+    expect(Math.min(...localY)).toBeLessThanOrEqual(-lane.width / 2);
+    expect(Math.max(...localY)).toBeGreaterThanOrEqual(lane.width / 2);
+    store.move('lane', 90, 100);
+    expect(store.data[0]).toBeCloseTo(90 - store.data[3]);
+    store.retire(lane.hitAt);
+    expect(store.has('lane')).toBe(true);
+    store.retire(lane.hitAt + CLAW_VFX_TELEGRAPH_FADE_MS);
+    expect(store.count).toBe(0);
+  });
+
+  it('keeps the existing implicit sector equivalent to an explicit sector beside a lane', () => {
+    const implicit = new EnemyClawVfxStore(), explicit = new EnemyClawVfxStore();
+    implicit.addAttack('sector', spec(10), 0);
+    explicit.addAttack('sector', { ...spec(10), shape: 'sector' }, 0);
+    expect(explicit.data).toEqual(implicit.data);
+  });
 
   it('keeps keys addressable across swap-removal and re-anchors vertices', () => {
     const store = new EnemyClawVfxStore();

@@ -9,10 +9,44 @@ import { COOP_DEFENSE_ENEMY_CONFIGS } from '../../src/config/coopDefenseEnemies'
 import { getCoopDefenseUpgradeTextureKey } from '../../src/utils/coopDefenseUpgrades';
 import { AutoTiler, MISSION_BARRIER_AUTOTILE } from '../../src/arena/AutoTiler';
 import { getPipelineSpriteScale } from '../../src/config/pipelineAssets';
+import { isBossRuntime, verifyBossRuntime } from '../../scripts/asset-pipeline/runtime-contract-v2.mjs';
+import { packAtlas } from '../../scripts/asset-pipeline/atlas-v2.mjs';
+
+async function bossFixture() {
+  const entry = { category: 'boss-part', runtimeContract: 'boss', runtimeAtlas: true, runtimeBudgetMB: 1,
+    targetSize: 16, sourceSizes: [16], pivot: [.5, .5], elevation: { min: -1, max: 2, scale: .5 },
+    clips: [{ name: 'hatch', frameCount: 3, frameRate: 12, loop: false, end: 'terminal', markers: { release: 1 } }] };
+  const clips = [{ ...entry.clips[0], frames: [1, 2, 3] }], files = new Map<string, Buffer>();
+  const atlases: Record<string, Record<string, any>> = { color: {}, elevation: {} };
+  const budget = { clips: {} as Record<string, { color: number; elevation: number; total: number }>, totals: { color: 0, elevation: 0, total: 0 } };
+  const hash = (data: Buffer) => createHash('sha256').update(data).digest('hex');
+  for (const group of [{ name: '__rest', frames: [0] }, ...clips]) {
+    const amounts = budget.clips[group.name] = { color: 0, elevation: 0, total: 0 };
+    for (const pass of ['color', 'elevation'] as const) {
+      const size = pass === 'color' ? 16 : 8;
+      const image = await sharp({ create: { width: size, height: size, channels: 4, background: '#808080ff' } }).png().toBuffer();
+      const frameNames = group.frames.map((_, i) => `${group.name}/${String(i).padStart(4, '0')}`);
+      const pages = await packAtlas(group.frames.map(() => image), { size, frameNames, sourceFrames: group.frames, pivot: entry.pivot, prefix: `atlas/${pass}-${group.name}` });
+      const records = pages.map(page => {
+        const json = Buffer.from(JSON.stringify(page.metadata));
+        files.set(page.image, page.png); files.set(page.json, json);
+        amounts[pass] += page.gpuBytesRGBA8;
+        return { image: page.image, json: page.json, width: page.width, height: page.height,
+          gpuBytesRGBA8: page.gpuBytesRGBA8, sha256: hash(page.png), jsonSha256: hash(json) };
+      });
+      atlases[pass][group.name] = { pages: records, sourceSize: size, logicalSourceSize: 16, pivot: entry.pivot, frameNames, sourceFrames: group.frames };
+    }
+    amounts.total = amounts.color + amounts.elevation;
+    for (const key of ['color', 'elevation', 'total'] as const) budget.totals[key] += amounts[key];
+  }
+  const asset = { ...entry, clips, idleFrame: 0, sourceSize: 16, atlases, budget,
+    elevationPass: { ...entry.elevation, encoding: 'linear-unorm8-world-z', waterline: 0, alpha: 'beauty-coverage', colorSpace: 'non-color', premultiplied: false } };
+  return { entry, asset, files, read: async (name: string) => files.get(name)! };
+}
 
 describe('selected runtime asset package', () => {
   it('ships a marked one-shot pounce beyond the body circle, with anchors for all poses', async () => {
-    for (const asset of manifest.assets.filter(a => a.category === 'enemy')) {
+    for (const asset of manifest.assets.filter(a => a.category === 'enemy' && !isBossRuntime(catalog.assets.find(c => c.id === a.id)!))) {
       const clip = asset.clips.find(c => c.name === 'claw')!;
       expect(clip, asset.id).toBeDefined();
       expect(clip.loop).toBe(false);
@@ -48,7 +82,7 @@ describe('selected runtime asset package', () => {
   it('binds complete eye poses to every enemy image revision', () => {
     for (const asset of manifest.assets.filter(a => a.category === 'enemy')) {
       expect(() => validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount, asset)).not.toThrow();
-      expect(COOP_DEFENSE_ENEMY_CONFIGS[asset.id].eyeGlow).toBeDefined();
+      if (!isBossRuntime(catalog.assets.find(c => c.id === asset.id)!)) expect(COOP_DEFENSE_ENEMY_CONFIGS[asset.id].eyeGlow).toBeDefined();
       expect(() => validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount + 1, asset)).toThrow();
       expect(() => validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount, { ...asset, revision: 'foreign' })).toThrow();
       expect(() => validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount,
@@ -60,6 +94,28 @@ describe('selected runtime asset package', () => {
         asset.eyeAnchors!.source.blendSha256)).not.toThrow();
       expect(() => validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount, asset, '0'.repeat(64))).toThrow();
     }
+  });
+  it('checks published boss atlases, markers and resident memory instead of claw centroids', async () => {
+    for (const asset of manifest.assets.filter(isBossRuntime)) {
+      const entry = catalog.assets.find(c => c.id === asset.id)!;
+      await verifyBossRuntime(entry, asset, name => readFile(`public/${name.replace(/^\.\//, '')}`));
+    }
+    const f = await bossFixture();
+    expect(f.asset.clips.some(c => c.name === 'claw')).toBe(false);
+    await expect(verifyBossRuntime(f.entry, f.asset, f.read)).resolves.toEqual(f.asset.budget);
+    await expect(verifyBossRuntime({ ...f.entry, runtimeBudgetMB: .00001 }, { ...f.asset, runtimeBudgetMB: .00001 }, f.read)).rejects.toThrow(/exceeded/);
+    await expect(verifyBossRuntime(f.entry, { ...f.asset, clips: [{ ...f.asset.clips[0], markers: { release: 2 } }] }, f.read)).rejects.toThrow(/markers/);
+    await expect(verifyBossRuntime(f.entry, { ...f.asset, atlases: { color: f.asset.atlases.color } }, f.read)).rejects.toThrow(/atlases/);
+    await expect(verifyBossRuntime(f.entry, { ...f.asset, budget: { ...f.asset.budget, totals: { color: 0, elevation: 0, total: 0 } } }, f.read)).rejects.toThrow(/budget/);
+    const broken = structuredClone(f.asset);
+    broken.atlases.elevation.hatch.frameNames[0] = 'foreign';
+    await expect(verifyBossRuntime(f.entry, broken, f.read)).rejects.toThrow(/mapping/);
+    const page = f.asset.atlases.color.hatch.pages[0];
+    const json = JSON.parse(f.files.get(page.json)!.toString());
+    json.frames['hatch/0000'].sourceSize.w = 8;
+    const bytes = Buffer.from(JSON.stringify(json));
+    f.files.set(page.json, bytes); page.jsonSha256 = createHash('sha256').update(bytes).digest('hex');
+    await expect(verifyBossRuntime(f.entry, f.asset, f.read)).rejects.toThrow(/canvas/);
   });
   it('ships the mission barrier blob frames with transparent spare slots and seamless straight runs', async () => {
     const { data, info } = await sharp('public/assets/sprites/missionbarrier47blob.png')

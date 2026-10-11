@@ -2,6 +2,8 @@ import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { EnemyMeshReview } from './EnemyMeshReview';
 import { ArmageddonReview } from './ArmageddonReview';
 import { TurretMaterialReview } from './TurretMaterialReview';
+import { KrakenBossReview, krakenAssetIdentity, krakenReviewOptions } from './KrakenBossReview';
+import { KRAKEN_CENTER, KRAKEN_MAP_ID, KRAKEN_PLAYER, KRAKEN_SHORE, registerKrakenAbyssMap } from './krakenAbyssMap';
 import { setCharacterMaterialSuppressed, setCharacterMaterialView, characterMaterialStatus } from '../../effects/CharacterMaterialLighting';
 import { WorldLightingMeasurement } from './WorldLightingMeasurement';
 import type * as Phaser from 'phaser';
@@ -19,7 +21,7 @@ import type { TrainDevPassOptions } from '../../train/TrainManager';
 import { setCameraBaseScroll } from '../../graphics/cameraBaseScroll';
 import { getCameraFocusOverride, resolveCameraFocusZoom } from '../../graphics/cameraFocusOverride';
 import { ScenarioClock } from './clock';
-import { visualTest, bindVisualTestBootClock } from './visualTest';
+import { visualTest, bindVisualTestBootClock, bindVisualTestTextureKeys } from './visualTest';
 import { BootScreen } from '../../ui/BootScreen';
 import { getGraphicsQualityController, type GraphicsQuality } from '../../graphics/GraphicsQuality';
 import { decodeScenario, defaultScenario, encodeScenario, parseScenario, scenarioLoadout, type DevScenario, type GridPoint } from './config';
@@ -45,6 +47,36 @@ export class DevScenarioController {
   private enemyMeshReview: EnemyMeshReview | null = null;
   private armageddonReview: ArmageddonReview | null = null;
   private turretMaterialReview: TurretMaterialReview | null = null;
+  private krakenReview: KrakenBossReview | null = null;
+  private readonly unregisterKrakenMap: () => void;
+  private krakenLoading = false;
+  async arrangeKrakenReview(command: Record<string, unknown>): Promise<void> {
+    this.requireReady();
+    if (this.config.mapId !== KRAKEN_MAP_ID) throw Error(`krakenReview requires ${KRAKEN_MAP_ID}`);
+    if (this.krakenLoading) throw Error('Wait for the pending krakenReview command.');
+    const options = krakenReviewOptions(command, this.krakenReview?.options);
+    let fixture = this.krakenReview;
+    if (!fixture || krakenAssetIdentity(options) !== krakenAssetIdentity(fixture.options)) {
+      fixture?.destroy();
+      const metrics = this.runtime.getWorldMetrics()!;
+      fixture = new KrakenBossReview(this.scene, options, this.world(KRAKEN_CENTER), this.world(KRAKEN_SHORE),
+        { x: metrics.offsetX, y: metrics.offsetY });
+      this.krakenReview = fixture; this.krakenLoading = true;
+      try { await fixture.initialize(); }
+      catch (error) {
+        fixture.destroy();
+        if (this.krakenReview === fixture) this.krakenReview = null;
+        throw error;
+      } finally { this.krakenLoading = false; }
+      if (this.krakenReview !== fixture || this.disposed) return;
+    } else fixture.configure(options);
+    this.cameraAtTarget = true;
+    this.aim = options.camera === 'body'
+      ? options.phase === 'water' ? KRAKEN_CENTER : { gridX: KRAKEN_SHORE.gridX, gridY: KRAKEN_SHORE.gridY + 7 }
+      : { gridX: KRAKEN_CENTER.gridX, gridY: 26 };
+    this.zoom = options.camera === 'body' ? 2.5 : .9;
+    this.syncCamera(); this.syncPanel();
+  }
   arrangeTurretMaterialReview(): void {
     this.requireReady();
     this.turretMaterialReview?.destroy();
@@ -97,11 +129,14 @@ export class DevScenarioController {
   private readonly refreshTimer: ReturnType<typeof setInterval>;
   private disposed = false;
   private readonly restoreBootClock: () => void;
+  private readonly restoreTextureKeys: () => void;
 
   constructor(private scene: Phaser.Scene, private runtime: ArenaRuntime,
     private setInput: (angle: number, trigger: WeaponSlot | null) => void,
     private lobbyReady: () => boolean) {
     if (!isDevScenarioMode()) throw new Error('Dev entry required.');
+    this.unregisterKrakenMap = registerKrakenAbyssMap();
+    this.restoreTextureKeys = bindVisualTestTextureKeys(scene.textures);
     this.clock = new ScenarioClock(scene.game.loop);
     this.restoreBootClock = bindVisualTestBootClock(BootScreen, scene.time);
     this.clock.holdLoadingTime = () => this.runtime.getScenarioLoadingState().work?.renderReady === false;
@@ -126,9 +161,11 @@ export class DevScenarioController {
     this.lastAction = { ok: false, error: this.message };
   }
   start(value: unknown): void {
+    this.krakenReview?.destroy(); this.krakenReview = null;
     this.turretMaterialReview?.destroy(); this.turretMaterialReview = null;
     this.armageddonReview?.destroy(); this.armageddonReview = null;
     const config = parseScenario(value);
+    if (config.mapId === KRAKEN_MAP_ID && !config.player) config.player = { ...KRAKEN_PLAYER };
     this.enemyMeshReview?.destroy(); this.enemyMeshReview = null;
     this.clearRenderDebug();
     const run = loadingTimeline.begin('scenario', String(performance.now()));
@@ -746,7 +783,7 @@ export class DevScenarioController {
     setCameraBaseScroll(this.scene, camera.scrollX, camera.scrollY);
   }
   snapshot(): Record<string, unknown> {
-    return { state: this.state, ready: this.state === 'ready' && !this.setupPending && !this.pendingTrainShowcase, message: this.message, isolated: true, network: 'local-only',
+    return { state: this.state, ready: this.state === 'ready' && !this.setupPending && !this.pendingTrainShowcase && !this.krakenLoading, message: this.message, isolated: true, network: 'local-only',
       initialPosition: this.initialPosition, mission: this.runtime.devScenarioPort.readMission(),
       train: this.trainStatus(),
       bots: this.bots.ids().map((id, index) => ({ index, id, ...(this.state === 'ready' ? this.bots.position(index) : null) })),
@@ -763,6 +800,7 @@ export class DevScenarioController {
       enemyMeshShadows: this.state === 'ready' ? this.runtime.getScenarioLightingTargets().shadow?.getEnemyShadowsStatus() ?? null : null,
       enemyMeshMeasurement: this.enemyMeshReview?.measurement ?? null,
       armageddonReview: this.armageddonReview?.status() ?? null,
+      krakenReview: this.krakenReview?.status() ?? null,
       enemyMeshFixture: this.enemyMeshReview?.inspect() ?? null,
       enemyContour: this.state === 'ready' ? this.runtime.getScenarioLightingTargets().enemyReadability.getDiagnostics() : null,
       characterMaterial: characterMaterialStatus(this.scene),
@@ -826,15 +864,17 @@ export class DevScenarioController {
     return { path: result.path, url: result.url, status };
   }
   destroy(): void {
+    this.krakenReview?.destroy(); this.krakenReview = null;
     this.turretMaterialReview?.destroy(); this.turretMaterialReview = null;
     this.armageddonReview?.destroy(); this.armageddonReview = null;
     if (this.disposed) return;
+    this.unregisterKrakenMap();
     this.enemyMeshReview?.destroy(); this.enemyMeshReview = null;
     this.clearRenderDebug();
     loadingTimeline.get('scenario')?.finish('cancelled');
     this.disposed = true; this.stop(); bridge.setDevScenarioPlayerFreeForAll(false); clearInterval(this.refreshTimer);
     this.worldLighting?.destroy(); this.worldLighting = null;
     window.removeEventListener('hashchange', this.onHashChange); this.api.destroy(); this.captureCancel?.();
-    this.panel.destroy(); this.restoreBootClock(); this.clock.destroy();
+    this.panel.destroy(); this.restoreBootClock(); this.restoreTextureKeys(); this.clock.destroy();
   }
 }

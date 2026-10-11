@@ -45,6 +45,7 @@ function slot(value: unknown): WeaponSlot {
 export function runScenarioCommand(controller: DevScenarioController, value: unknown): void | Promise<void> {
   const c = object(value);
   switch (c.action) {
+    case 'krakenReview': return controller.arrangeKrakenReview(c);
     case 'armageddonReview': {
       const count=number(c.count??1,1,256);
       if(!Number.isInteger(count))throw new Error('Integer count required');

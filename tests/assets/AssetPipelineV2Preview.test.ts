@@ -5,6 +5,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { preview, previewIndices, renderProcess, resolveBlender } from '../../scripts/asset-pipeline/preview-v2.mjs';
 import { comparisonSource, safePath } from '../../scripts/asset-pipeline/review-preview-v2.mjs';
+import { submersionDefaults, waterOptions, waterTile } from '../../scripts/asset-pipeline/water-preview-v2.mjs';
 
 const roots: string[] = [];
 const save = async (file: string, data: unknown) => {
@@ -15,10 +16,10 @@ async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'fd-preview-'));
   roots.push(root);
   const png = await sharp({ create: { width: 32, height: 32, channels: 4, background: '#aaaaff80' } }).png().toBuffer();
-  const image = async (relative: string) => {
+  const image = async (relative: string, data = png) => {
     const file = path.join(root, relative);
     await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, png);
+    await writeFile(file, data);
     return file;
   };
   return { root, image };
@@ -78,13 +79,60 @@ describe('Disposable V2 authoring previews', () => {
     await save(sentinel, { revision: 'keep', assets: [] });
     const before = await readFile(sentinel);
     // No catalog or Blender exists in this fixture: --review must bypass both.
-    await preview(['--review', folder], root);
+    expect(await preview(['--review', folder], root)).not.toHaveProperty('waterFile');
     const first = await readFile(path.join(root, folder, 'comparison.png'));
     await preview(['--review', folder], root);
     expect(await readFile(path.join(root, folder, 'comparison.png'))).toEqual(first);
     expect((await sharp(path.join(root, folder, 'scale.png')).metadata()).width).toBeGreaterThan(0);
     expect(await readFile(sentinel)).toEqual(before);
     expect(JSON.parse(await readFile(path.join(root, folder, 'preview.json'), 'utf8'))).toMatchObject({ comparison: { kind: 'missing' }, poses: [{ index: 0, clip: 'idle' }, { index: 2, clip: 'move', phase: .25 }] });
+  });
+
+  it('adds water sheets to existing elevation previews and preserves or overrides review settings', async () => {
+    const { root, image } = await fixture();
+    const folder = 'art/poc/pipeline-v2/previews/water/example';
+    const file = path.join(root, folder, 'preview.json');
+    const manifest = { status: 'authoring-preview', id: 'example', variant: 'standard', indices: [0, 2],
+      spec: { id: 'example', label: 'Water fixture', targetSize: 32, elevation: { min: -2, max: 3, previewWaterLevel: .3 } } };
+    await save(file, manifest);
+    for (const index of manifest.indices) await image(`${folder}/frame-${String(index).padStart(4, '0')}.png`);
+    await image('public/assets/sprites/gras_bg_tile.png');
+    await image('public/assets/sprites/train/train_material_dark_top.png');
+    // Pre-elevation previews still work even if their spec requests elevation.
+    expect(await preview(['--review', folder], root)).not.toHaveProperty('waterFile');
+    const elevation = await sharp({ create: { width: 32, height: 32, channels: 4, background: '#80808080' } }).png().toBuffer();
+    await image(`${folder}/elevation/masters/frame-0000.png`, elevation);
+    await expect(preview(['--review', folder], root)).rejects.toThrow(/Elevation-Frames unvollständig/);
+    await image(`${folder}/elevation/masters/frame-0002.png`, elevation);
+    const result = await preview(['--review', folder], root);
+    expect(result.waterFile).toBe(path.join(root, folder, 'water.png'));
+    expect(await sharp(result.waterFile).metadata()).toMatchObject({ format: 'png', channels: 4 });
+    expect(JSON.parse(await readFile(file, 'utf8')).water).toMatchObject({ waterLevel: .3, waterMask: 'all' });
+    await preview(['--review', folder, '--water-level', '-0.2', '--water-mask', 'half'], root);
+    expect(JSON.parse(await readFile(file, 'utf8')).water).toMatchObject({ waterLevel: -.2, waterMask: 'half' });
+    await preview(['--review', folder], root);
+    expect(JSON.parse(await readFile(file, 'utf8')).water).toMatchObject({ waterLevel: -.2, waterMask: 'half' });
+    await preview(['--review', folder, '--water-level', '0', '--water-mask', 'all'], root);
+    expect(JSON.parse(await readFile(file, 'utf8')).water).toMatchObject({ waterLevel: 0, waterMask: 'all' });
+  });
+
+  it('validates water inputs before rendering and reads current shader parameters without Phaser', async () => {
+    expect(waterOptions({})).toEqual({ waterLevel: 0, waterMask: 'all' });
+    expect(waterOptions({ elevation: { previewWaterLevel: 2 } }, { waterLevel: '0' }).waterLevel).toBe(0);
+    for (const value of ['NaN', 'Infinity', 'water', '']) {
+      await expect(preview(['example', '--water-level', value])).rejects.toThrow(/endlich/);
+    }
+    await expect(preview(['example', '--water-mask', 'right'])).rejects.toThrow(/all oder half/);
+    expect(() => waterOptions({ elevation: { previewWaterLevel: null } })).not.toThrow();
+    expect(() => waterOptions({ elevation: { previewWaterLevel: Infinity } })).toThrow(/endlich/);
+    const defaults = await submersionDefaults();
+    expect(Object.values(defaults).every(value => (Array.isArray(value) ? value : [value]).every(Number.isFinite))).toBe(true);
+    for (const key of ['deepColor', 'shallowColor', 'foamColor']) expect(defaults[key]).toHaveLength(3);
+    const { image } = await fixture();
+    const beauty = await image('beauty.png'), elevation = await image('elevation.png');
+    await expect(waterTile(beauty, elevation, { min: 1, max: 1 }, 32, 32, waterOptions({}), defaults)).rejects.toThrow(/range/);
+    await sharp({ create: { width: 16, height: 16, channels: 4, background: '#888888' } }).png().toFile(elevation);
+    await expect(waterTile(beauty, elevation, { min: -1, max: 1 }, 32, 32, waterOptions({}), defaults)).rejects.toThrow(/canvas differ/);
   });
 
   it('reviews a new held utility from a loadout icon without assuming legacy grip coordinates', async () => {

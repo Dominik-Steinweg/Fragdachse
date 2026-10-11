@@ -4,6 +4,8 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { verifySelectionV2 } from './export-v2.mjs';
 import { validateEyeAnchors } from './eye-anchors.mjs';
+import { isBossRuntime, verifyBossRuntime } from './runtime-contract-v2.mjs';
+import { validateClipContracts } from './contracts-v2.mjs';
 
 const revision = process.argv[2] ?? 'v2-g';
 // Use the same revision identifiers as the V2 builder/exporter; the manifest
@@ -36,6 +38,9 @@ for (const entry of catalog.assets.filter(entry => !requestedIds.length || reque
     throw new Error(`Selected model no longer matches the runtime catalog: ${entry.id}`);
   }
   if ((entry.displayScale ?? 1) !== (rendered.displayScale ?? 1)) throw new Error(`Selected canvas scale differs from catalog: ${entry.id}`);
+  if (entry.runtimeContract !== rendered.runtimeContract) throw new Error(`Selected runtime contract differs from catalog: ${entry.id}`);
+  validateClipContracts(selected.clips);
+  if (entry.category === 'enemy' && !isBossRuntime(entry) && !selected.clips.some(c => c.name === 'claw')) throw new Error(`Enemy claw clip missing: ${entry.id}`);
   const folder = `assets/sprites/pipeline-v2/${entry.id}`;
   const hashes = {};
   for (const [field, name] of [['idle', 'idle.png'], ['sheet', 'sheet.png']]) {
@@ -47,7 +52,8 @@ for (const entry of catalog.assets.filter(entry => !requestedIds.length || reque
     copies.push({ file, destination: `public/${folder}/${name}` });
     hashes[field] = hash;
   }
-  const textureKey = entry.category === 'construction' ? `construction_${entry.gameIds[0]}`
+  const textureKey = entry.category === 'boss-part' ? entry.id.replaceAll('-', '_')
+    : entry.category === 'construction' ? `construction_${entry.gameIds[0]}`
     : entry.category === 'companion' ? entry.id.replaceAll('-', '_')
     : entry.category === 'turret'
     ? `turret_weapon_${entry.id.replaceAll('-', '_')}`
@@ -63,9 +69,28 @@ for (const entry of catalog.assets.filter(entry => !requestedIds.length || reque
     ...(rendered.displayScale !== undefined ? { displayScale: rendered.displayScale } : {}),
     ...(['weapon', 'utility'].includes(entry.category) ? { heldItem: rendered.heldItem } : {}),
     idleFrame: selected.idleFrame,
-    clips: selected.clips.map(({ name, frames, frameRate, loop, markers }) => ({ name, frames, frameRate, loop, ...(markers ? { markers } : {}) })),
+    clips: selected.clips.map(({ name, frames, frameRate, loop, markers, start, end, next }) => ({ name, frames, frameRate, loop,
+      ...(markers ? { markers } : {}), ...(start !== undefined ? { start } : {}), ...(end !== undefined ? { end } : {}), ...(next !== undefined ? { next } : {}) })),
     hashes,
   };
+  if (isBossRuntime(entry)) {
+    Object.assign(asset, { runtimeContract: 'boss', runtimeBudgetMB: entry.runtimeBudgetMB,
+      elevation: rendered.elevation, elevationPass: rendered.elevationPass, atlases: selected.atlases, budget: selected.budget });
+    await verifyBossRuntime(entry, asset, async relative => {
+      if (path.isAbsolute(relative) || /[\\:]/.test(relative) || relative.split('/').includes('..')) throw new Error('Invalid boss atlas path');
+      const file = `${source}/${selected.variant}/${relative}`, bytes = await readFile(file);
+      if (selected.files[`${selected.variant}/${relative}`] !== createHash('sha256').update(bytes).digest('hex')) throw new Error('Boss atlas is not selection-bound');
+      return bytes;
+    });
+    asset.atlases = structuredClone(asset.atlases);
+    for (const pass of Object.values(asset.atlases)) for (const clip of Object.values(pass)) for (const page of clip.pages) {
+      for (const key of ['image', 'json']) {
+        const relative = page[key];
+        copies.push({ file: `${source}/${selected.variant}/${relative}`, destination: `public/${folder}/${relative}` });
+        page[key] = `./${folder}/${relative}`;
+      }
+    }
+  }
   if (entry.category === 'enemy') {
     // A reimport may retain a reviewed migration only for byte-identical selected images.
     const previousAsset = existingRuntime.assets.find(asset => asset.id === entry.id);

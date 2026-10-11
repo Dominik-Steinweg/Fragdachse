@@ -1,4 +1,4 @@
-import { readFile, writeFile, readdir, access, rename } from 'node:fs/promises';
+import { readFile, writeFile, readdir, access, rename, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
@@ -7,6 +7,9 @@ import sharp from 'sharp';
 import { indexLibrary } from './index-library.mjs';
 import { validateEyeAnchors } from './eye-anchors.mjs';
 import { exportProvenance } from './export-provenance.mjs';
+import { validateClipContracts, validateExtensions } from './contracts-v2.mjs';
+import { packAtlas } from './atlas-v2.mjs';
+import { validateElevationManifest, verifyElevationPixels, resizeElevation } from './elevation-v2.mjs';
 import { inside, inspectMaster, nativeMetrics, repoRoot, resizeMaster, validateManifest, variantLabel } from './export.mjs';
 
 const sha256 = data => createHash('sha256').update(data).digest('hex');
@@ -46,17 +49,15 @@ export function validateManifestV2(m) {
   }
   if (m.mount && (m.category !== 'turret' || m.mount.rockSize !== 32 || !Number.isFinite(m.mount.maxBaseDiameter) || m.mount.maxBaseDiameter <= 0 || m.mount.maxBaseDiameter >= m.mount.rockSize)) throw new Error('Turret base must fit its 32-pixel rock');
   if (!Array.isArray(m.clips) || (!m.clips.length && !['weapon', 'utility', 'construction', 'companion', 'powerup'].includes(m.category))) throw new Error('Animation clips missing');
+  validateExtensions(m);
+  validateElevationManifest(m);
   const names = new Set();
   for (const clip of m.clips) {
     if (!/^[a-z][a-z0-9-]*$/.test(clip.name) || names.has(clip.name) || typeof clip.motion !== 'string' || !clip.motion || !Number.isFinite(clip.frameRate) || clip.frameRate <= 0 || typeof clip.loop !== 'boolean' || !Array.isArray(clip.frames) || !clip.frames.length || clip.frames.some(n => !Number.isInteger(n) || n < 0 || n >= m.frames.length)) throw new Error('Invalid animation clip');
     names.add(clip.name);
-    if (clip.name === 'claw' && (clip.loop || !clip.markers
-      || !Number.isInteger(clip.markers.strike) || !Number.isInteger(clip.markers.impact)
-      || !(0 < clip.markers.strike && clip.markers.strike < clip.markers.impact && clip.markers.impact < clip.frames.length - 1))) {
-      throw new Error('Claw requires ordered strike and impact markers within a one-shot clip');
-    }
   }
-  const required = ['weapon', 'utility', 'construction', 'companion', 'powerup'].includes(m.category) ? null : m.category === 'turret' ? 'fire' : 'move';
+  validateClipContracts(m.clips);
+  const required = ['weapon', 'utility', 'construction', 'companion', 'powerup', 'boss-part'].includes(m.category) ? null : m.category === 'turret' ? 'fire' : 'move';
   if (required && !names.has(required)) throw new Error(`Required ${required} clip missing`);
   if (['weapon', 'utility'].includes(m.category)) {
     const h = m.heldItem;
@@ -121,13 +122,19 @@ export async function exportVariantV2(folder, workspace = repoRoot) {
   if (acceptedFrames && (acceptedFrames.length !== m.frames.length || m.frames.some((frame, index) => acceptedFrames[index].index !== frame.index || acceptedFrames[index].sha256 !== frame.sha256))) throw new Error('Manifest disagrees with completed frames');
   if (path.basename(folder) !== m.variant || path.basename(assetFolder) !== m.id || path.basename(path.dirname(assetFolder)) !== m.revision) throw new Error('Manifest disagrees with revision folder');
   await verifyArchivedSources(assetFolder, m);
-  const masters = [], reports = [];
+  const masters = [], reports = [], elevationMasters = [];
   for (const frame of m.frames) {
     const input = await readFile(inside(folder, frame.file));
     if (sha256(input) !== frame.sha256) throw new Error(`Master frame changed: ${frame.file}`);
     const report = await inspectMaster(input, m.masterSize);
     report.native = await nativeMetrics(input, Math.round(m.targetSize * (m.displayScale ?? 1)));
     masters.push(input); reports.push(report);
+    if (m.elevation) {
+      const e = frame.elevation, bytes = await readFile(inside(folder, e.file));
+      if (sha256(bytes) !== e.sha256 || sha256(await readFile(inside(folder, e.exrFile))) !== e.exrSha256) throw new Error('Elevation master changed');
+      await verifyElevationPixels(bytes, input, m.masterSize);
+      elevationMasters.push(bytes);
+    }
   }
   const blendHash = sha256(await readFile(path.join(folder, 'asset.blend')));
   const exportFile = path.join(folder, 'export.json');
@@ -136,7 +143,7 @@ export async function exportVariantV2(folder, workspace = repoRoot) {
   const provenance = await exportProvenance(m);
   // Reuse only after inputs AND every output byte have been revalidated. A tool/library
   // change invalidates this optimization and still has to satisfy pixel parity below.
-  if (prior && JSON.stringify(prior.provenance) === JSON.stringify(provenance)) {
+  if (prior && !m.runtimeAtlas && !m.elevation && JSON.stringify(prior.provenance) === JSON.stringify(provenance)) {
     let valid = Object.keys(prior.outputs).length === new Set([m.targetSize,...m.sourceSizes]).size * 2;
     for (const [name, expected] of Object.entries(prior.outputs)) {
       const bytes = await readFile(inside(folder, relativeFile(name))).catch(() => null);
@@ -144,7 +151,8 @@ export async function exportVariantV2(folder, workspace = repoRoot) {
     }
     if (valid) return prior;
   }
-  const outputs = {}, sheets = {};
+  const outputs = {}, sheets = {}, atlases = {};
+  const budget = { version: 1, format: 'RGBA8', mipmaps: false, unit: 'bytes', sizes: {} };
   const buffers = new Map();
   for (const size of [...new Set([m.targetSize, ...m.sourceSizes])]) {
     const frames = await Promise.all(masters.map(input => resizeMaster(input, size)));
@@ -152,20 +160,70 @@ export async function exportVariantV2(folder, workspace = repoRoot) {
     buffers.set(`sprite-${size}.png`, frames[m.idleFrame]);
     buffers.set(`sheet-${size}.png`, buffer);
     sheets[size] = layout;
+    let elevations = [];
+    const elevationSize = m.elevation ? Math.round(size * (m.elevation.scale ?? .5)) : null;
+    if (m.elevation) {
+      elevations = await Promise.all(elevationMasters.map((input, i) => resizeElevation(input, masters[i], elevationSize)));
+      elevations.forEach((bytes, i) => buffers.set(`elevation/frames-${size}/frame-${String(i).padStart(4, '0')}.png`, bytes));
+    }
+    if (m.runtimeAtlas) {
+      atlases[size] = { color: {}, elevation: {} };
+      const clips = [{ name: '__rest', frames: [m.idleFrame] }, ...m.clips];
+      const totals = { color: 0, elevation: 0, total: 0 }, clipBudgets = {};
+      for (const clip of clips) {
+        const frameNames = clip.frames.map((_, i) => `${clip.name}/${String(i).padStart(4, '0')}`);
+        const clipBudget = { color: 0, elevation: 0, total: 0 };
+        for (const pass of m.elevation ? ['color', 'elevation'] : ['color']) {
+          const passSize = pass === 'color' ? size : elevationSize;
+          const pages = await packAtlas(clip.frames.map(i => (pass === 'color' ? frames : elevations)[i]),
+            { frameNames, sourceFrames: clip.frames, size: passSize, pivot: m.pivot, prefix: `atlas/${size}/${pass}-${clip.name}` });
+          const records = [];
+          for (const page of pages) {
+            const bytes = jsonBytes(page.metadata);
+            buffers.set(page.image, page.png); buffers.set(page.json, bytes);
+            records.push({ image: page.image, json: page.json, width: page.width, height: page.height,
+              gpuBytesRGBA8: page.gpuBytesRGBA8, sha256: sha256(page.png), jsonSha256: sha256(bytes) });
+            clipBudget[pass] += page.gpuBytesRGBA8;
+          }
+          atlases[size][pass][clip.name] = { pages: records, frameNames, sourceFrames: clip.frames,
+            sourceSize: passSize, logicalSourceSize: size, pivot: m.pivot };
+        }
+        clipBudget.total = clipBudget.color + clipBudget.elevation;
+        clipBudgets[clip.name] = clipBudget;
+        for (const pass of ['color', 'elevation', 'total']) totals[pass] += clipBudget[pass];
+      }
+      budget.sizes[size] = { clips: clipBudgets, totals };
+    }
   }
+  if (m.runtimeAtlas) buffers.set('budget.json', jsonBytes(budget));
   for (const [name, buffer] of buffers) {
     outputs[name] = sha256(buffer);
     if (prior && prior.outputs[name] !== outputs[name]) throw new Error('Export algorithm changed; create a new revision instead');
   }
-  const result = { pipelineVersion: 2, provenance, manifest: m, inputHash: build.inputHash, blendSha256: blendHash, outputs, sheets, report: { frames: reports, native: reports[m.idleFrame].native } };
-  for (const [name, buffer] of buffers) await writeFile(path.join(folder, name), buffer);
+  const result = { pipelineVersion: 2, provenance, manifest: m, inputHash: build.inputHash, blendSha256: blendHash, outputs, sheets,
+    ...(m.runtimeAtlas ? { atlases, budget } : {}),
+    ...(m.elevation ? { elevation: m.elevationPass } : {}), report: { frames: reports, native: reports[m.idleFrame].native } };
+  for (const [name, buffer] of buffers) {
+    await mkdir(path.dirname(path.join(folder, name)), { recursive: true });
+    await writeFile(path.join(folder, name), buffer);
+  }
   await writeFile(exportFile, jsonBytes(result));
+  if (m.runtimeAtlas) {
+    const variants = {};
+    for (const variant of await readdir(assetFolder, { withFileTypes: true })) if (variant.isDirectory()) {
+      const report = await readJson(path.join(assetFolder, variant.name, 'budget.json')).catch(error => { if (error.code === 'ENOENT') return null; throw error; });
+      if (report) variants[variant.name] = report;
+    }
+    await writeFile(path.join(assetFolder, 'budget.json'), jsonBytes({ version: 1, id: m.id, revision: m.revision,
+      policy: 'Each size/variant is an alternative resident set; totals include the separate rest pose, exclude legacy sheets and mipmaps.', variants }));
+  }
   return result;
 }
 
 function presentationContract(m) {
   return JSON.stringify({ id: m.id, revision: m.revision, category: m.category, targetSize: m.targetSize, displayScale: m.displayScale, sourceSizes: m.sourceSizes, pivot: m.pivot, forward: m.forward,
     masterSize: m.masterSize, idleFrame: m.idleFrame, frames: m.frames.map(({ index, file, blenderFrame }) => ({ index, file, blenderFrame })), clips: m.clips,
+    elevation: m.elevation, runtimeAtlas: m.runtimeAtlas, runtimeContract: m.runtimeContract, runtimeBudgetMB: m.runtimeBudgetMB,
     camera: { ...m.camera, bounds: undefined }, textures: m.textures, sources: m.sources, reference: m.reference, referenceTransform: m.referenceTransform, heldItem: m.heldItem });
 }
 
@@ -192,10 +250,18 @@ async function bundleFiles(assetFolder, variant, size) {
   for (const file of await listFiles(path.join(assetFolder, 'archive-source'))) checked[`archive-source/${file}`] = sha256(await readFile(inside(assetFolder, `archive-source/${file}`)));
   const wanted = ['build.json', `${variant}/render.json`, `${variant}/export.json`, `${variant}/asset.blend`,
     `${variant}/sprite-${size}.png`, `${variant}/sheet-${size}.png`, ...m.frames.map(f => `${variant}/${f.file}`)];
+  const extraOutputs = m.runtimeAtlas || m.elevation ? Object.keys(exported.outputs).filter(name => name === 'budget.json'
+    || name.startsWith(`atlas/${size}/`) || name.startsWith(`elevation/frames-${size}/`)) : [];
+  wanted.push(...extraOutputs.map(name => `${variant}/${name}`));
+  if (m.elevation) wanted.push(...m.frames.flatMap(f => [`${variant}/${f.elevation.file}`, `${variant}/${f.elevation.exrFile}`]));
   for (const file of wanted) checked[file] = sha256(await readFile(inside(assetFolder, file)));
   if (checked[`${variant}/asset.blend`] !== exported.blendSha256) throw new Error('Packed Blender source changed');
   for (const name of [`sprite-${size}.png`, `sheet-${size}.png`]) if (checked[`${variant}/${name}`] !== exported.outputs[name]) throw new Error(`Selected export changed: ${name}`);
+  for (const name of extraOutputs) if (checked[`${variant}/${name}`] !== exported.outputs[name]) throw new Error(`Selected export changed: ${name}`);
   for (const frame of m.frames) if (checked[`${variant}/${frame.file}`] !== frame.sha256) throw new Error(`Selected master changed: ${frame.file}`);
+  if (m.elevation) for (const frame of m.frames) for (const [key, hash] of [['file', 'sha256'], ['exrFile', 'exrSha256']]) {
+    if (checked[`${variant}/${frame.elevation[key]}`] !== frame.elevation[hash]) throw new Error('Selected elevation master changed');
+  }
   return { files: Object.fromEntries(Object.entries(checked).sort(([a], [b]) => a.localeCompare(b))), manifest: m, exported };
 }
 
@@ -206,6 +272,7 @@ export async function selectVariantV2(assetFolder, variant, size, reason) {
   const { files, manifest: m, exported } = await bundleFiles(assetFolder, variant, size);
   const selection = { version: 2, id: m.id, revision: m.revision, inputHash: exported.inputHash, variant, size, reason: reason.trim(),
     ...(m.displayScale !== undefined ? { displayScale: m.displayScale } : {}),
+    ...(m.runtimeAtlas ? { atlases: exported.atlases[size], budget: exported.budget.sizes[size] } : {}),
     idle: `${variant}/sprite-${size}.png`, sheet: `${variant}/sheet-${size}.png`, layout: exported.sheets[size], idleFrame: m.idleFrame, clips: m.clips,
     files, bundleSha256: sha256(jsonBytes(files)) };
   await writeFile(selectionFile, jsonBytes(selection), { flag: 'wx' });
@@ -218,6 +285,8 @@ export async function verifySelectionV2(assetFolder) {
   const { files, manifest: m, exported } = await bundleFiles(assetFolder, selection.variant, selection.size);
   if (JSON.stringify(selection.files) !== JSON.stringify(files) || selection.bundleSha256 !== sha256(jsonBytes(files)) || selection.inputHash !== exported.inputHash || selection.id !== m.id || selection.revision !== m.revision
     || selection.displayScale !== m.displayScale
+    || JSON.stringify(selection.atlases) !== JSON.stringify(exported.atlases?.[selection.size])
+    || JSON.stringify(selection.budget) !== JSON.stringify(exported.budget?.sizes[selection.size])
     || selection.idle !== `${selection.variant}/sprite-${selection.size}.png` || selection.sheet !== `${selection.variant}/sheet-${selection.size}.png`
     || JSON.stringify(selection.layout) !== JSON.stringify(exported.sheets[selection.size]) || selection.idleFrame !== m.idleFrame || JSON.stringify(selection.clips) !== JSON.stringify(m.clips)) throw new Error('Selected bundle changed; retain approved revision');
   return selection;

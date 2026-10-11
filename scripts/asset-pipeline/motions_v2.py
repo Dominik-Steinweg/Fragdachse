@@ -1,7 +1,18 @@
 """Authored Actions sampled at fixed phases. Motion never translates the asset root."""
 import math
+import importlib
 from claw_motion_v2 import apply_claw
-from kraken_motion_v2 import apply_kraken
+
+
+def clip_parameters(clip):
+    parameters = dict(clip.get('parameters', {}))
+    divisor = clip['frameCount'] if clip['loop'] else clip['frameCount'] - 1
+    phases = {name: index / divisor for name, index in sorted(clip.get('markers', {}).items(), key=lambda item: item[1])}
+    parameters['markerPhases'] = phases
+    for name in ('strike', 'impact'):
+        if name in phases:
+            parameters[name + 'Phase'] = phases[name]
+    return parameters
 
 
 def key(ob, path, value, frame):
@@ -20,10 +31,7 @@ def author(asset, clips):
         count, name, motion = clip['frameCount'], clip['name'], clip['motion']
         step = 24 / clip['frameRate']
         frames = []
-        parameters = dict(clip.get('parameters', {}))
-        if clip.get('markers'):
-            parameters.update(strikePhase=clip['markers']['strike'] / (count - 1),
-                              impactPhase=clip['markers']['impact'] / (count - 1))
+        parameters = clip_parameters(clip)
         # Evaluate the closure pose at N for loops, but export only [0, N).
         for i in range(count + (1 if clip['loop'] else 0)):
             phase = i / (count if clip['loop'] else count - 1)
@@ -36,10 +44,12 @@ def author(asset, clips):
                          'timelineStart': frame, 'timelineEnd': max(frame + count * step - 1, samples[-1]['blenderFrame']),
                          **({'parameters': clip['parameters']} if 'parameters' in clip else {}),
                          **({'markers': clip['markers']} if 'markers' in clip else {})})
+        exported[-1].update({key: clip[key] for key in ('start', 'end', 'next') if key in clip})
+        exported[-1]['end'] = clip.get('end', 'rest')
         frame += count * step + 2
     # Idle keys are independent of the first phase in an active loop.
     for clip in clips:
-        apply(asset, clip['motion'], 0, 0, idle=True, parameters=clip.get('parameters', {}), rests=rests)
+        apply(asset, clip['motion'], 0, 0, idle=True, parameters=clip_parameters(clip), rests=rests)
     # Blender 4.4+ stores curves in slotted Actions. Set sampled interpolation linear.
     animated = [asset['rig']] if asset['rig'] else []
     animated += [ob for ob in asset['parts'].values() if hasattr(ob, 'animation_data')]
@@ -77,7 +87,24 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
     pose('claw_weapon')
     pose('attack_motion')
     if motion.startswith('kraken_'):
-        apply_kraken(asset, motion, phase, frame, idle, p, pose, key)
+        for prefix, module, function in (
+            ('kraken_land_', 'kraken_motion_land_v2', 'apply_kraken_land'),
+            ('kraken_tentacle_', 'kraken_tentacle_motion_v2', 'apply_kraken_tentacle'),
+            ('kraken_egg_', 'kraken_egg_motion_v2', 'apply_kraken_egg'),
+            ('kraken_', 'kraken_motion_v2', 'apply_kraken'),
+        ):
+            if not motion.startswith(prefix):
+                continue
+            try:
+                implementation = importlib.import_module(module)
+            except ModuleNotFoundError as error:
+                if error.name == module:
+                    raise ValueError(f'Motion module missing for {motion}: {module}') from error
+                raise
+            if prefix == 'kraken_' and motion not in getattr(implementation, 'SUPPORTED_MOTIONS', ('kraken_idle', 'kraken_swim', 'kraken_slam', 'kraken_emerge')):
+                raise ValueError(f'Unknown Kraken motion: {motion}')
+            getattr(implementation, function)(asset, motion, phase, frame, idle, p, pose, key)
+            break
     elif motion in ('claw_quadruped', 'claw_biped'):
         apply_claw(asset, phase, frame, idle, p, pose, key)
     elif motion in ('quad_rotors', 'twin_rotors'):

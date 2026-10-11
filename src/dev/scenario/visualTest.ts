@@ -19,6 +19,23 @@ export function installVisualTest(): void {
   Date.now = () => 1700000000000;
 }
 
+/** RenderTexture uses Math.random-based UUIDs internally. Zero-delta worker publication
+ * replays a frame's random stream, but resource identities must never be replayed.
+ * Only repair a colliding auto UUID; authored texture-key errors remain visible. */
+export function bindVisualTestTextureKeys(textures: import('phaser').Textures.TextureManager): () => void {
+  if (!visualTest.enabled) return () => {};
+  const original = textures.addDynamicTexture;
+  let serial = 0;
+  const wrapped: typeof original = function (key, width, height, forceEven) {
+    if (typeof key === 'string' && /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i.test(key) && textures.exists(key)) {
+      do { key = `__visual_test_dynamic_${++serial}`; } while (textures.exists(key));
+    }
+    return original.call(textures, key, width, height, forceEven);
+  };
+  textures.addDynamicTexture = wrapped;
+  return () => { if (textures.addDynamicTexture === wrapped) textures.addDynamicTexture = original; };
+}
+
 /** The DOM boot fade normally resolves on CSS transitionend / a wall-time fallback.
  * Its completion admits the lobby and therefore chooses the round's clock and seeds.
  * In visual tests use a fixed presentation warmup instead. 800 ms retains the

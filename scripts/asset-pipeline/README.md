@@ -82,6 +82,113 @@ mit. Der Klauenclip bewegt einen eigenen untergeordneten Körper-Control nach vo
 Kamera und Pivot bleiben fest. `leapDistance` beschreibt den Vorstoß in Blender-Einheiten,
 `strike` und `impact` markieren die zeitliche Zuordnung durch die Runtime.
 
+## Marker, Clip-Anfänge und Clip-Enden
+
+`clips[].markers` ist ein optionales Objekt `{name: frameIndex}`. Namen entsprechen
+`^[a-z][a-z0-9-]*$`, Indizes sind ganze Zahlen in `[0, frameCount)`. Die Reihenfolge
+im JSON ist frei; Verbraucher sortieren nach Frameindex. Zwei Marker dürfen nicht
+denselben Index belegen. `claw` behält genau `strike` und `impact`, mit
+`0 < strike < impact < frameCount - 1`, und bleibt ein One-Shot.
+Motion-Funktionen erhalten `parameters.markerPhases`; für Loops ist die Phase
+`index / frameCount`, sonst `index / (frameCount - 1)`. `strikePhase` und
+`impactPhase` bleiben, soweit vorhanden, als Alias erhalten, auch beim Ruhe-Key.
+
+`clips[].end` gilt für One-Shots: `rest` (Standard) vergleicht den letzten Frame mit
+der separaten Ruhepose, `free` erlaubt ein freies Ende, `terminal` markiert einen
+Endzustand ohne Rückkehrzwang. Nur `free` darf `next: "<clipName>"` angeben; dann
+muss das Ende mit dem ersten Frame dieses existierenden Clips übereinstimmen.
+Loops schließen weiterhin auf ihre eigene erste Pose und erlauben keine
+End-/Next-Transition. Die Prüfung in `prepare()` und beiden Blender-Verifiern
+vergleicht ausgewertete Meshes, Bones und animierte Properties mit `2e-6` Toleranz;
+volle Euler-Umdrehungen sind äquivalent. Jeder Clip muss Geometrie bewegen,
+Root, Kamera und Licht bleiben fest.
+
+`clips[].start: "free"` dokumentiert einen freien Einstieg, etwa unter Wasser.
+`start: "rest"` verlangt ausdrücklich die Ruhepose. Ohne `start` bleibt der
+bisherige, nicht eingeschränkte Einstieg erhalten: Bestehende Schussclips starten
+bereits im Rückstoß, manche Loops in einer aktiven Pose. `render.json` und
+`export.json` erhalten `start`, `end`, `next` und Marker; neue Builds schreiben auch
+den Standard `end: "rest"` ausdrücklich. Alte Manifeste bleiben lesbar.
+
+## Boss-Teile und Motion-Dispatch
+
+`category: "boss-part"` bezeichnet animierte Boss-Teile. Sie benötigen weder
+Augen-Sockets noch einen `move`-Clip; `organic` ist die passende erlaubte
+Texturfamilie. Ein gespeichertes Rig, gewichtete und bewegte Meshes bleiben Pflicht.
+`enemy` verlangt weiterhin seine Augen-Sockets und einen loopenden `move`.
+
+Der Dispatch prüft zuerst `kraken_land_` → `kraken_motion_land_v2.apply_kraken_land`,
+`kraken_tentacle_` → `kraken_tentacle_motion_v2.apply_kraken_tentacle` und
+`kraken_egg_` → `kraken_egg_motion_v2.apply_kraken_egg`, danach `kraken_`.
+Alle Module werden erst beim jeweiligen Aufruf importiert. Land und Ei enthalten
+zunächst ausdrücklich fehlschlagende Platzhalter; das Tentakelmodul liefert die
+Modellierungs-Lane. Der Wasser-Dispatcher akzeptiert die vier bestehenden Motions;
+neue Wasser-Motions müssen im Modul durch `SUPPORTED_MOTIONS` bekannt gemacht
+werden. Unbekannte Namen sind Fehler. Die spezifischen Präfixe sind reserviert,
+auch wenn beispielsweise der Wasserboss selbst Eier wirft.
+
+## Elevation-Pass
+
+Optional aktiviert `elevation: {"min": -2, "max": 3, "scale": 0.5}` einen
+zusätzlichen Pass je Master und Materialvariante. `min < max` sind endliche
+Welt-Z-Höhen in Blender-Einheiten, Wasserlinie ist `z=0`; `scale` liegt in `(0,1]`
+und ist ohne Angabe `0.5`. Die Exportkante ist `round(Exportgröße * scale)`.
+Ein Emission-Override schreibt mit derselben Kamera/Pivot einen linearen
+32-bit-Float-EXR ohne Denoise, Compositor oder Rekonstruktionsfilter (Box, Breite
+0.01), neutralem Farbmanagement und anschließend einen RGBA8-Datenmaster.
+
+RGB enthält identisch `round(255 * clamp((worldZ-min)/(max-min), 0, 1))`,
+Encoding `linear-unorm8-world-z`, ohne Gamma oder Premultiplikation. Alpha kommt
+direkt vom Beauty-Master, auch beim Export aus dessen ursprünglicher Auflösung.
+Höhen werden beim Verkleinern mit Nearest abgetastet; Daten am Silhouettenrand
+werden für Beauty-Antialiasing um höchstens vier Masterpixel erweitert.
+Die Dateien liegen je Variante unter `elevation/masters/` (PNG und EXR) sowie
+`elevation/frames-<Exportgröße>/`. `render.json` führt Bereich, Kodierung,
+Abmessungen und beide Hashes; `export.json` bindet auch die abgeleiteten Dateien.
+
+Der Blender-Verifier prüft Hashes, Größe, skalare RGB-Werte und Beauty-Alpha mit
+maximal `1/255` Abweichung. Innere Pixel werden unabhängig gegen Welt-Z-Raycasts
+geprüft: mindestens acht Treffer, Medianfehler höchstens `2/255`, mindestens 95 %
+innerhalb `4/255`. Das erkennt unter anderem invertierte, gammakodierte oder
+unplausibel konstante Höhen; eine tatsächlich ebene Oberfläche bleibt gültig.
+
+## Runtime-Atlanten und Budget
+
+`runtimeAtlas: true` ergänzt die unveränderten `sheet-<size>.png` um getrimmte
+Phaser-JSON-Hash-Atlanten je Clip und Exportgröße unter `atlas/<size>/`.
+Seiten bleiben höchstens 4096×4096, mit zwei transparenten Randpixeln, ohne
+Rotation und nötigenfalls mehreren Seiten. `frame`, `trimmed`, `spriteSourceSize`,
+`sourceSize` und `pivot` erhalten die ursprüngliche logische Canvas-Position.
+Frame-Namen sind `<clip>/<vierstelliger Clipindex>`, für Farbe und Elevation
+identisch. Der zusätzliche Atlas `__rest` enthält den unabhängigen Ruheframe.
+Elevation verwendet seine eigene Auflösung; `logicalSourceSize` hält die
+zugehörige Farb-Canvasgröße fest. Alle Seiten und JSON-Dateien sind hashgebunden,
+auch in Auswahl und Quellenarchiv.
+
+`budget.json` je Asset enthält die Variantenberichte; je Variante liegt ebenfalls
+ein hashgebundener Bericht. Pro Größe werden RGBA8-GPU-Bytes je Clip und insgesamt
+für Farbe und Elevation gezählt (`Breite * Höhe * 4` je Seite, einschließlich
+Padding und Ruhepose). Größen/Varianten sind alternative residente Sätze;
+Legacy-Sheets, Downloads und Mipmaps zählen nicht zu diesem Atlasbudget.
+
+## Boss-Runtime-Vertrag
+
+`runtimeContract: "boss"` ist für `enemy` und `boss-part` erlaubt und setzt
+`runtimeAtlas: true`, `elevation` und ein positives `runtimeBudgetMB` voraus.
+Beim Import und in Assettests entfallen für diesen Vertrag Klauenpflicht und
+Klauen-Pose-Zentroidprüfungen. Stattdessen werden tatsächliche Atlasdateien,
+Hashes, Frame-Namen, Canvas/Pivot, kataloggleiche Marker und Clipübergänge geprüft.
+Die ausgewählte Auflösung muss mit Farbe plus Elevation höchstens
+`runtimeBudgetMB * 1024 * 1024` GPU-Bytes belegen. Augenanker werden nur für
+`enemy` verlangt; der Bossvertrag setzt kein gewöhnliches `eyeGlow`-Configfeld
+voraus. Der Import bleibt ein eigener, ausdrücklich ausgelöster Schritt.
+
+Für isolierte Rauchtests akzeptiert der Builder `--catalog <temporäre-Kopie>`
+(Python: `catalog_path=...`). Der aufgelöste Eintrag wird im Input-Fingerprint
+und als `archive-source/resolved-spec.json` erhalten. Echte Katalogeinträge und
+abgeschlossene Runs werden dabei nicht geändert; neue Revision wählen und
+`--max-frames` für kleine, identisch fortsetzbare Renderportionen nutzen.
+
 ## V2 bauen und erweitern
 
 1. Originalbild und aktuelle Spielkonfiguration prüfen. Für Serienassets den vorhandenen Katalogeintrag ausarbeiten; keine abweichenden Kopien von Spiel-IDs oder Anzeigegrößen anlegen.
@@ -151,9 +258,20 @@ npm run assets:preview -- badger --blender "D:/Blender Foundation/Blender 5.2/bl
 | `--device AUTO` | Standard: verfügbares OPTIX-, dann CUDA-Gerät, sonst CPU. Explizites `CPU`, `CUDA` oder `OPTIX` möglich; ein nicht verfügbares explizites GPU-Gerät führt zum Fehler. |
 | `--patch datei.json` | Bestehendes lokales Override-Format: Asset-ID auf flache Spec-Änderungen abbilden, optional unter `assets`; alternativ Asset-Liste. Der Katalog wird nicht geändert. |
 | `--compare bild.png` | Eigenes Vergleichsbild statt automatischer Vorgängerauswahl. |
-| `--review <Vorschauordner>` | Nur Bildübersichten neu erstellen, ohne Blender; kombinierbar mit `--compare`. |
+| `--water-level <BU>` | Wasserspiegel für `water.png` in Blender-Einheiten; sonst `elevation.previewWaterLevel`, sonst `0`. |
+| `--water-mask all\|half` | Standard `all`: überall Wasser. `half`: linke Hälfte Wasser, rechte Hälfte Land für Uferübertritte. |
+| `--review <Vorschauordner>` | Nur Bildübersichten neu erstellen, ohne Blender; kombinierbar mit `--compare`, `--water-level` und `--water-mask`. |
 
 `comparison.png` zeigt bisherigen und neuen idle vergrößert und in echter Nominalgröße, darunter die ausgewählten neuen Bewegungsposen. `scale.png` zeigt den neuen idle bei 0°/45°/90° auf hellem, dunklem, Gras- und Stahluntergrund aus dem vorhandenen Viewer. Türme stehen zum Größenvergleich auf dem echten 32×32-Fels; der Fels dreht sich nicht mit dem Turm.
+
+Bei einer Spec mit `elevation` rendert die Vorschau für jeden gewählten Frame zusätzlich den gemeinsamen [Elevation-Pass](#elevation-pass) aus `elevation_v2.py`: `elevation/masters/frame-XXXX.png` und `.exr`. Die Pass-Metadaten stehen am jeweiligen Pose-Eintrag in `preview.json`. `water.png` zeigt alle Vorschau-Frames vergrößert und in Nominalgröße (`targetSize * displayScale`) über einer ruhigen Teichfarbe. Die CPU-Nachbildung liest die aktuellen `SUBMERSION_DEFAULTS` aus [submersionShader.ts](../../src/effects/kraken/submersionShader.ts) und bildet Tiefenfärbung, Ausblenden, Nassrand, Schaum und Refraktion bei fester Zeit `0` nach. Sie ist eine statische Authoring-Hilfe, keine GPU- oder Bewegungsabnahme.
+
+```powershell
+npm run assets:preview -- abyssal-kraken-tentacle --indices 0,17,24,30,39,46,60,68 --water-level 0 --label kraken-v8-p4-smoke
+npm run assets:preview -- abyssal-kraken-land --water-level 0 --water-mask half
+```
+
+`--review` erzeugt den Wasserbogen auch nachträglich, sobald PNG-Elevation-Frames für alle Vorschau-Indizes vorhanden sind; ohne Pass-Dateien bleiben ältere Vorschauen weiterhin nutzbar. Ein unvollständiger Pass-Satz wird als Fehler gemeldet. Wasserstand und Maske werden in `preview.json` gespeichert und bei erneutem Review beibehalten; explizite Optionen überschreiben sie (`--water-mask all` setzt die Halbmaske zurück).
 
 Der bisherige Stand ist das aktuell importierte Asset mit seiner eigenen Revision und Variante: Wenn lokal vorhanden, wird der entsprechende Master verwendet, andernfalls das importierte Runtime-Bild mit Kennzeichnung der geringeren Quellauflösung. Ohne Import gilt die Katalogreferenz einschließlich ihrer bisherigen Positions-/Drehkorrektur. Fehlende Vergleiche werden im Bild ausdrücklich markiert. `preview.json` speichert tatsächlich gewählte Posen, Gerät, Renderdauer und Vergleichsquelle. Alte Vorschau-Manifeste bleiben lesbar; wenn ihnen idle fehlt, wird dies markiert.
 
@@ -338,6 +456,56 @@ Moderner, farbenfroher, texturierter, leicht stilisierter 2D-Look. Geometrie lie
 - Gesichtsbänder, Augen, Ohren, Brauen, Schwanz, Warnmarkierungen und Anzeigen werden gezielt gestaltet. KI-Texturen bestimmen keine Anatomie. Mikrodetails dürfen diese Merkmale bei Nominalgröße nicht auflösen.
 
 ## Export und Viewer
+
+### Kraken-/Boss-Review: Wasser, Atlanten und Maßstab
+
+Der Viewer liest optionale Atlas-/Elevation-Angaben aus der `export.json` neben der
+gewählten Quelle; vorhandene Kataloge und abgeschlossene Runs bleiben unverändert.
+Farb- und Elevation-Atlanten dürfen unabhängig gepackt und getrimmt sein. Die Auswahl
+bleibt ein logischer Frame; `sourceFrames`, `frameNames`, Trim-Offsets und ursprüngliche
+Framegröße ordnen beide Pässe zu. Ohne Atlas verwendet der Viewer Sheets bzw. die
+exportierten Elevation-Einzelframes. One-Shots beachten `end/next`: `rest` kehrt zur
+Ruhepose zurück, `free` ohne Nachfolger und `terminal` halten die Endpose.
+
+Ein isolierter Export ohne Viewer-Katalog lässt sich mit
+`?export=/art/poc/<pfad>/<variante>/export.json&compare=false` direkt öffnen.
+Der verifizierte Smoke-Export liegt unter
+`art/poc/kraken-v8/pipeline-smoke/pipeline-v8-smoke-2/art/poc/pipeline-v2/runs/pipeline-v8-smoke-2/abyssal-kraken/standard/export.json`.
+
+`Teich`, Untertauchen und Wasserspiegel sind unabhängig schaltbar. Der BU-Regler
+verwendet den Elevation-Bereich der sichtbaren Auswahl. Das 32-px-Raster und der
+Dachs (`PLAYER_VISUAL_SIZE`, einschließlich des Spiel-Darstellungsfaktors) skalieren
+mit der Detailvergrößerung. Die Bahn ist 320 px lang, standardmäßig 112 px breit;
+0° zeigt nach rechts. Der gelbe Anker lässt sich ziehen oder über X/Y verschieben.
+Bei `boss-part` bindet „am Pivot andocken“ den Ursprung ohne Offset an den Asset-Pivot.
+Die neuen Regler werden in der URL und in `window.assetReviewSnapshot().review`
+gespeichert; der Snapshot nennt außerdem logische, Atlas- und Elevation-Frames.
+
+Der gemeinsame Shader liegt in
+[`src/effects/kraken/submersionShader.ts`](../../src/effects/kraken/submersionShader.ts).
+`addSubmersionFilter(sprite, elevationFrame, {min,max}, maskKey?)` hängt einen internen
+Phaser-4-Filter an das Sprite. Der Aufrufer aktualisiert `elevationFrame` mit jeder
+Pose und `params.time` in Sekunden. Der Sprite besitzt und zerstört den Controller;
+Elevation und Maske werden geliehen und müssen bis dahin verfügbar bleiben.
+`SUBMERSION_DEFAULTS` ist die gemeinsame, benannte Abstimmungsquelle.
+
+| Parameter / Uniform | Vertrag / Standard |
+| --- | --- |
+| `waterLevel`, `elevationMin/Max` | Blender-Z in BU; Spiegel 0, Min/Max aus dem Export |
+| `time` | Präsentationszeit in Sekunden |
+| `deepColor`, `shallowColor`, `foamColor` | RGB 0–1; dunkles Türkis, flaches Grünblau, Cyanweiß |
+| `wetBand`, `wetDarkening`, `wetSaturation` | 0,06 BU; 0,12; 0,12 |
+| `foamBand`, `foamOpacity` | 0,025 BU; 0,55, durch animiertes Rauschen aufgebrochen |
+| `depthFalloff`, `desaturation`, `shallowTint` | 0,35 BU; 0,45; 0,22 |
+| `fadeStart`, `fadeEnd`, `refractionPx` | 0,15 / 1,2 BU; maximal 2 Anzeigepixel |
+| `uElevation`, `elevationUV/Size/Trim` | Pass desselben logischen Frames; Atlas-Abbildung automatisch aus Phaser-Frame |
+| `uWaterMask` | Ganze Textur im logischen Sprite-Raum, Rot 0 = Land, 1 = Wasser; Default `__WHITE` |
+
+Die PNG-Elevation ist linear UNORM8 mit Deckungsalpha. Phaser lädt PNGs mit
+vormultipliziertem Alpha; der Shader dekodiert Höhe daher aus `r / a`. Filterausgabe
+bleibt vormultipliziert und erweitert die Beauty-Deckung nicht. Ohne Elevation bleibt
+das Asset unverändert. Die Viewer-Maske ist konstant 1; eine spätere Weltmaske muss
+vom Spiel in den logischen Sprite-Raum überführt werden.
 
 Jede PNG-Größe entsteht direkt aus dem Master ohne Autocrop, wiederholtes Verkleinern oder pauschale Nachschärfung. Sharp/libvips berücksichtigt Alpha beim Lanczos3-Resampling. `render.json` enthält Skript-/Rezepthashes, Materialparameter und Texturbelege; `export.json` Master-/Exporthashes, Alpha-Bounds und fast weißen Pixelanteil. `report.native` misst Breite, Höhe und belegte Pixel der Nominaldatei ab Alpha 128/255. Bei `previousReference` enthält `native-comparison.json` dieselben Werte für beide Varianten, Vorgänger und Original. Diese Messungen unterstützen die Sichtprüfung; die GPU-Vorschau kann beim Skalieren leicht abweichen. Kamera, Alpha, Größen, Rand und Texturbelege werden geprüft.
 

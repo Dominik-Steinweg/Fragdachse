@@ -17,162 +17,27 @@ import traceback
 import bpy
 
 
-EPSILON = 2e-6
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts/asset-pipeline'))
+from pose_validation_v2 import (EPSILON, require, near, matrix_values, set_frame, action_curves,
+    animation_owners, snapshot, different_meshes, assert_same_pose, hierarchy_root,
+    fixed_presentation, assert_fixed_presentation, assert_geometry_bounds, assert_clip_boundary)
+from contracts_v2 import validate_clips, validate_extensions
 
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def require(condition, message):
-    if not condition:
-        raise AssertionError(message)
-
-
-def near(a, b, tolerance=EPSILON):
-    return len(a) == len(b) and all(abs(x - y) <= tolerance for x, y in zip(a, b))
-
-
-def matrix_values(matrix):
-    return tuple(value for row in matrix for value in row)
-
-
-def set_frame(scene, frame):
-    scene.frame_set(math.floor(frame), subframe=frame % 1)
-    bpy.context.view_layer.update()
-
-
-def action_curves(owner):
-    animation = getattr(owner, 'animation_data', None)
-    action = animation.action if animation else None
-    if action is None:
-        return []
-    curves = []
-    # Current Blender Actions use layers/strips/channel bags. Legacy Actions are
-    # also inspectable when an archived file is opened in a later Blender.
-    for layer in getattr(action, 'layers', []):
-        for strip in layer.strips:
-            for bag in getattr(strip, 'channelbags', []):
-                curves.extend(bag.fcurves)
-    if not curves:
-        curves.extend(getattr(action, 'fcurves', []))
-    return curves
-
-
-def animation_owners(scene):
-    owners = {}
-    for ob in scene.objects:
-        for item in (ob, ob.data):
-            if item is not None and action_curves(item):
-                owners[item.as_pointer()] = item
-        for slot in ob.material_slots:
-            if slot.material and slot.material.node_tree and action_curves(slot.material.node_tree):
-                owner = slot.material.node_tree
-                owners[owner.as_pointer()] = owner
-    return list(owners.values())
-
-
-def snapshot(scene, meshes, rigs, owners):
-    depsgraph = bpy.context.evaluated_depsgraph_get()
-    geometry = {}
-    for ob in meshes:
-        evaluated = ob.evaluated_get(depsgraph)
-        mesh = evaluated.to_mesh()
-        try:
-            vertices = array('f', [0.0]) * (len(mesh.vertices) * 3)
-            mesh.vertices.foreach_get('co', vertices)
-            geometry[ob.name] = (matrix_values(evaluated.matrix_world), vertices)
-        finally:
-            evaluated.to_mesh_clear()
-    bones = {f'{rig.name}/{bone.name}': matrix_values(bone.matrix)
-             for rig in rigs for bone in rig.evaluated_get(depsgraph).pose.bones}
-    properties = {}
-    for owner in owners:
-        for curve in action_curves(owner):
-            value = owner.path_resolve(curve.data_path)
-            if not isinstance(value, (float, int, bool)):
-                value = value[curve.array_index]
-            key = (owner.as_pointer(), curve.data_path, curve.array_index)
-            properties[key] = float(value)
-    return {'geometry': geometry, 'bones': bones, 'properties': properties}
-
-
-def mesh_equal(a, b):
-    return near(a[0], b[0]) and near(a[1], b[1])
-
-
-def different_meshes(a, b):
-    require(a['geometry'].keys() == b['geometry'].keys(), 'Animated geometry changed its mesh membership')
-    return {name for name in a['geometry'] if not mesh_equal(a['geometry'][name], b['geometry'][name])}
-
-
-def assert_same_pose(a, b, label):
-    moved = different_meshes(a, b)
-    require(not moved, f'{label}: geometry differs in {sorted(moved)}')
-    require(a['bones'].keys() == b['bones'].keys(), f'{label}: rig membership differs')
-    require(all(near(a['bones'][name], b['bones'][name]) for name in a['bones']), f'{label}: rig pose differs')
-    require(a['properties'].keys() == b['properties'].keys(), f'{label}: animated property membership differs')
-    # A continuous mechanical rotor closes at 2*pi. Its Euler value differs by one
-    # turn while its evaluated geometry and matrix above must still match exactly.
-    def property_matches(name, value):
-        difference = value - b['properties'][name]
-        if name[1].endswith('rotation_euler'):
-            difference = math.atan2(math.sin(difference), math.cos(difference))
-        return abs(difference) <= EPSILON
-    require(all(property_matches(name, value) for name, value in a['properties'].items()),
-            f'{label}: animated property differs (including material emission)')
-
-
-def hierarchy_root(mesh):
-    ob = mesh
-    while ob.parent is not None:
-        ob = ob.parent
-    return ob
-
-
-def fixed_presentation(scene, root):
-    depsgraph = bpy.context.evaluated_depsgraph_get()
-    camera = scene.camera
-    require(camera and camera.data.type == 'ORTHO', 'Camera must be orthographic')
-    require(near(camera.rotation_euler, (0, 0, 0)), 'Camera must look exactly down -Z')
-    require(near(camera.location, (0, 0, 8)), 'Camera must retain the locked location')
-    root_matrix = root.evaluated_get(depsgraph).matrix_world
-    scale = root_matrix[0][0]
-    centered_uniform = (scale, 0, 0, 0, 0, scale, 0, 0, 0, 0, scale, 0, 0, 0, 0, 1)
-    require(math.isfinite(scale) and scale > 0 and near(matrix_values(root_matrix), centered_uniform),
-            'Asset root must stay centered, north-facing and uniformly scaled')
-    return {'root': matrix_values(root_matrix),
-            'camera': matrix_values(camera.evaluated_get(depsgraph).matrix_world),
-            'orthoScale': camera.data.ortho_scale,
-            'lights': {ob.name: (matrix_values(ob.evaluated_get(depsgraph).matrix_world),
-                                  tuple(ob.data.color), ob.data.energy, ob.data.size)
-                       for ob in scene.objects if ob.type == 'LIGHT'}}
-
-
-def assert_fixed_presentation(scene, root, baseline, frame):
-    current = fixed_presentation(scene, root)
-    require(current == baseline, f'Camera or lighting changed at timeline frame {frame}')
-
-
-def assert_geometry_bounds(scene, meshes, state, frame):
-    depsgraph = bpy.context.evaluated_depsgraph_get()
-    limit = scene.camera.data.ortho_scale * .48 + EPSILON
-    for ob in meshes:
-        matrix = ob.evaluated_get(depsgraph).matrix_world
-        coords = state['geometry'][ob.name][1]
-        for offset in range(0, len(coords), 3):
-            x, y, z = coords[offset:offset + 3]
-            wx = matrix[0][0] * x + matrix[0][1] * y + matrix[0][2] * z + matrix[0][3]
-            wy = matrix[1][0] * x + matrix[1][1] * y + matrix[1][2] * z + matrix[1][3]
-            require(abs(wx) <= limit and abs(wy) <= limit, f'Clipped evaluated mesh {ob.name} at frame {frame}')
-
-
 def verify(scene, manifest, report, source_folder):
     checks = report['checks']
     spec = json.loads(scene['asset_manifest'])
+    validate_clips(manifest['clips'], sampled=True)
+    validate_extensions(manifest)
     for key in ('id', 'category', 'recipe', 'targetSize', 'sourceSizes', 'forward', 'pivot', 'orthoScale', 'requiredClips'):
         require(spec[key] == manifest[key], f'Embedded asset description differs: {key}')
     require(spec.get('displayScale', 1) == manifest.get('displayScale', 1), 'Padded canvas scale differs')
+    for field in ('elevation', 'runtimeAtlas', 'runtimeContract', 'runtimeBudgetMB'):
+        require(spec.get(field) == manifest.get(field), f'Embedded extension differs: {field}')
     require(json.loads(scene['asset_clips']) == manifest['clips'], 'Embedded clips differ from export manifest')
     require(scene['inputHash'] == manifest['inputHash'], 'Embedded input fingerprint differs')
     require(scene['pipelineVersion'] == manifest['pipelineVersion'] == 2, 'Expected V2 scene and manifest')
@@ -219,6 +84,9 @@ def verify(scene, manifest, report, source_folder):
         require(all(authored[key] == clip[key] for key in ('name', 'motion', 'frameRate', 'loop')),
                 f'Authored timing or motion differs for {clip["name"]}')
         require(authored['frameCount'] == len(clip['frames']), f'Wrong sampled count for {clip["name"]}')
+        for field in ('markers', 'start', 'end', 'next'):
+            default = 'rest' if field == 'end' else None
+            require(clip.get(field, default) == authored.get(field, default), f'Authored {field} differs for {clip["name"]}')
         if clip['name'] == 'claw':
             markers = clip.get('markers', {})
             require(markers == authored.get('markers') and not clip['loop']
@@ -275,7 +143,7 @@ def verify(scene, manifest, report, source_folder):
     if 'mount' in spec:
         require(bases and 0 < spec['mount']['maxBaseDiameter'] < spec['mount']['rockSize'] == 32,
                 'Mounted turret needs an explicit support smaller than its 32-pixel rock')
-    if spec['category'] in ('character', 'enemy'):
+    if spec['category'] in ('character', 'enemy', 'boss-part'):
         require(bool(rigs) and bool(rigged), 'Locomotion requires a saved rig and weighted limb geometry')
     if spec['category'] == 'character' and not balanced_player:
         require(bool(stable_upper), 'No fixed upper-body geometry available to verify')
@@ -284,6 +152,7 @@ def verify(scene, manifest, report, source_folder):
     for clip in manifest['clips']:
         first, last = None, None
         moved = set()
+        movement = set()
         for index in clip['frames']:
             frame = frames[index]['blenderFrame']
             set_frame(scene, frame)
@@ -291,6 +160,7 @@ def verify(scene, manifest, report, source_folder):
             state = snapshot(scene, meshes, rigs, owners)
             first = state if first is None else first
             last = state
+            movement.update(different_meshes(first, state))
             changed = different_meshes(idle, state)
             require(not changed.intersection(stable_upper), f'Player upper body moved: {sorted(changed.intersection(stable_upper))}')
             if clip['motion'] == 'player_idle':
@@ -311,22 +181,17 @@ def verify(scene, manifest, report, source_folder):
                 diameter = 2 * radius * spec['targetSize'] / presentation['orthoScale']
                 require(diameter <= spec['mount']['maxBaseDiameter'] + EPSILON, 'Turret support exceeds its rotational mount footprint')
                 require(abs(diameter - frames[index]['baseDiameter']) < 1e-4, 'Recorded support footprint differs from evaluated source')
-        require(bool(moved), f'Clip {clip["name"]} contains no visible geometric movement')
+        require(bool(movement), f'Clip {clip["name"]} contains no visible geometric movement')
         if clip['motion'] == 'player_idle':
             require(bool(moved.intersection(roles['body'])) and bool(moved.intersection(roles['arms'])),
                     'Breathing must visibly move chest and shoulders')
-        if clip['loop']:
-            closure = clip['timelineStart'] + len(clip['frames']) * 24 / clip['frameRate']
-            require(all(abs(frames[index]['blenderFrame'] - closure) > EPSILON for index in clip['frames']),
-                    'Loop closure was exported as an extra pause frame')
-            set_frame(scene, closure)
-            assert_fixed_presentation(scene, root, presentation, closure)
-            closure_state = snapshot(scene, meshes, rigs, owners)
-            assert_geometry_bounds(scene, meshes, closure_state, closure)
-            assert_same_pose(first, closure_state, f'{clip["name"]} loop closure')
-            require(bool(different_meshes(first, last)), 'Last loop sample duplicates its first pose')
-        else:
-            assert_same_pose(idle, last, f'{clip["name"]} return to idle')
+        def boundary_sample(frame):
+            set_frame(scene, frame)
+            assert_fixed_presentation(scene, root, presentation, frame)
+            state = snapshot(scene, meshes, rigs, owners)
+            assert_geometry_bounds(scene, meshes, state, frame)
+            return state
+        assert_clip_boundary(clip, manifest['clips'], idle, first, last, boundary_sample)
         if clip['name'] == 'claw' and 'leapDistance' in clip.get('parameters', {}):
             controls = [ob for ob in owners if ob.get('attackMotion')]
             require(len(controls) == 1, 'Pounce requires one authored visual motion control')
@@ -394,6 +259,9 @@ def main():
         bpy.context.window.scene = scene
         report['scene'] = scene.name
         verify(scene, manifest, report, Path(args.manifest).resolve().parent.parent / 'archive-source')
+        if 'elevation' in manifest:
+            from elevation_v2 import verify_elevation
+            report['checks'].append(verify_elevation(scene, manifest, Path(args.manifest).resolve().parent))
         if args.render_frame is not None:
             require(0 <= args.render_frame < len(manifest['frames']), 'Render frame index outside manifest')
             output = Path(args.render_output).resolve()

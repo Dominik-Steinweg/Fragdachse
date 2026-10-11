@@ -19,23 +19,26 @@ export const CLAW_VFX_CONTACT_MS = 280;
 /** The ground telegraph dissolves this long after the hit; shared with the shader. */
 export const CLAW_VFX_TELEGRAPH_FADE_MS = 110;
 
-export const ClawVfxKind = { Attack: 0, Contact: 1 } as const;
+export const ClawVfxKind = { Attack: 0, Contact: 1, Lane: 2 } as const;
 
 /** Instance-relative times keep float32 attributes precise; rebased whenever the store is empty. */
 const REBASE_AFTER_MS = 600_000;
 
-export interface ClawVfxAttackSpec {
+interface ClawVfxTiming {
   readonly x: number;
   readonly y: number;
   readonly angle: number;
-  readonly range: number;
-  readonly halfArc: number;
   /** Store-clock milliseconds. */
   readonly startedAt: number;
   readonly strikeAt: number;
   readonly hitAt: number;
   readonly color: number;
 }
+
+export type ClawVfxAttackSpec = ClawVfxTiming & (
+  | { readonly shape?: 'sector'; readonly range: number; readonly halfArc: number }
+  | { readonly shape: 'lane'; readonly length: number; readonly width: number }
+);
 
 export class EnemyClawVfxStore {
   readonly data = new Float32Array(CLAW_VFX_CAPACITY * CLAW_VFX_INSTANCE_FLOATS);
@@ -59,6 +62,15 @@ export class EnemyClawVfxStore {
   addAttack(key: string, spec: ClawVfxAttackSpec, clockMs: number): boolean {
     const slot = this.allocate(key, clockMs);
     if (slot < 0) return false;
+    if (spec.shape === 'lane') {
+      const pad = 4, e = this.epoch;
+      this.writeQuad(slot, spec.x, spec.y, spec.angle,
+        -pad, spec.length + pad, -spec.width / 2 - pad, spec.width / 2 + pad,
+        spec.startedAt - e, spec.strikeAt - e, spec.hitAt - e, spec.hitAt + CLAW_VFX_TELEGRAPH_FADE_MS - e,
+        spec.length, spec.width / 2, ClawVfxKind.Lane, spec.color);
+      this.expiresAt[slot] = spec.hitAt + CLAW_VFX_TELEGRAPH_FADE_MS;
+      return true;
+    }
     const { range: r, halfArc } = spec;
     const pad = 4 + r * 0.08;
     const cos = Math.cos(Math.min(halfArc, Math.PI));

@@ -31,7 +31,23 @@ import { COOP_DEFENSE_UPGRADE_DEFINITIONS, isCoopDefenseUpgradeAvailableForClass
 import { buildScenarioProfile, defaultScenario, parseScenario, scenarioLoadout, encodeScenario, decodeScenario } from '../src/dev/scenario/config';
 import { createMemoryStorage } from '../src/dev/scenario/memoryStorage';
 import { ScenarioClock } from '../src/dev/scenario/clock';
-import { visualTest, bindVisualTestBootClock } from '../src/dev/scenario/visualTest';
+import { visualTest, bindVisualTestBootClock, bindVisualTestTextureKeys } from '../src/dev/scenario/visualTest';
+
+it('keeps render texture identities unique when a deterministic frame repeats its random stream', () => {
+  const enabled = visualTest.enabled;
+  visualTest.enabled = true;
+  const uuid = '12345678-1234-4123-8123-123456789abc';
+  const keys = new Set([uuid, 'authored']);
+  const original = vi.fn((key: string) => { keys.add(key); return key; });
+  const textures = { addDynamicTexture: original, exists: (key: string) => keys.has(key) };
+  const restore = bindVisualTestTextureKeys(textures as never);
+  try {
+    const first = textures.addDynamicTexture(uuid), second = textures.addDynamicTexture(uuid);
+    expect(first).not.toBe(uuid); expect(second).not.toBe(first);
+    expect(textures.addDynamicTexture('authored')).toBe('authored');
+  } finally { restore(); visualTest.enabled = enabled; }
+  expect(textures.addDynamicTexture).toBe(original);
+});
 
 describe('Dev scenario contract', () => {
   it('loads old recipes with visual-review defaults and validates explicit overrides', () => {
