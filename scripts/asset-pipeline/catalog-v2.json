@@ -4484,8 +4484,8 @@
       "pivot": [0.5, 0.5],
       "description": {
         "silhouette": "Open square elevated timber platform without a roof, four stone feet and a south-facing leaning ladder, entirely inside a two-cell square canvas with at least two percent safety border",
-        "colors": "Quiet warm ash floor, darker oiled timber handrails and fascia, matte charcoal iron brackets, cool gray stone foundations",
-        "anatomy": "Concept B with broad east-west floorboards and subtle seams, continuous two-pixel handrails interrupted at the southern entry, four capped corner posts, real splayed piers, underfloor cross braces and protruding knee braces. Strict orthographic plan view; no ground or baked ground shadow. One BU is 32 display pixels; floor and rails occupy about 55 pixels, structural tips about 61 pixels."
+        "colors": "Quiet warm ash floor with restrained board variation, lighter handrail crowns and ladder treads over dark timber fascia, matte charcoal iron brackets, cool gray stone foundations",
+        "anatomy": "Concept B with broad east-west floorboards and soft seams, raised handrails and lower guard rails interrupted at the southern entry, four five-pixel wooden post crowns with iron corner wraps, real splayed piers, underfloor cross braces and protruding knee braces. Strict orthographic plan view; no ground or baked ground shadow. One BU is 32 display pixels; deck and rails occupy about 52 pixels, structural tips about 61 pixels."
       },
       "requiredClips": [],
       "production": "reference",
