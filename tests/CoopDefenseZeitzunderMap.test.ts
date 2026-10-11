@@ -27,6 +27,7 @@ describe('Map 16 - Zeitzünder', () => {
       timeOfDay: '05:00',
       trackMode: 'void-fire',
       objective: 'advance',
+      persistentBaseRewardsOnVictory: ['base_watchtower'],
       persistentBase: {
         baseId: 'coop-base-rear',
         anchor: { gridX: 91, gridY: 19 },

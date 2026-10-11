@@ -477,8 +477,8 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     }
     const removed = this.options.placementSystem.removeRock(id);
     if (!removed) return result;
-    this.options.emitGridChanged({ reason: 'placeable_removed', source: this.sourceFor(removed), runtime: removed });
     this.finalizeRemovedRuntime(removed, 'damage', true, attackerId);
+    this.options.emitGridChanged({ reason: 'placeable_removed', source: this.sourceFor(removed), runtime: removed });
     return result;
   }
 

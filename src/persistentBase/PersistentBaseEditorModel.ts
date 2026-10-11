@@ -1,6 +1,6 @@
 import { COOP_DEFENSE_MAP_CONFIGS } from '../config/coopDefenseMaps';
 import type { CoopDefenseProgressPreferences } from '../utils/localPreferences';
-import { isPersistentBaseRewardCellAllowed, getPersistentConstructionFootprint } from './PersistentBasePlacementRules';
+import { isPersistentBaseRewardCellAllowed, getPersistentConstructionFootprint, getPersistentBaseRewardFootprint, getPersistentBaseRewardCells } from './PersistentBasePlacementRules';
 import { resolvePersistentBaseBuildAreaForStage, resolvePersistentBaseCell, isCellInsidePersistentBaseBuildArea,
   type PersistentBaseBuildArea } from './PersistentBaseCore';
 import type { PersistentBaseRewardId, PersistentBaseRewardPlacement } from './PersistentBaseRewardTypes';
@@ -42,6 +42,7 @@ export class PersistentBaseEditorModel {
     if (!Number.isSafeInteger(x) || !Number.isSafeInteger(y)) return 'outside';
     let footprint: readonly { dx: number; dy: number }[] = [{ dx: 0, dy: 0 }];
     if (object.kind === 'reward') {
+      footprint = getPersistentBaseRewardFootprint(object.id);
       if (!this.baseline.persistentBaseRewardUnlocks.includes(object.id)) return 'locked';
       if (!isPersistentBaseRewardCellAllowed(object.id, x, y, this.area)) return 'surface';
     } else {
@@ -53,7 +54,7 @@ export class PersistentBaseEditorModel {
     const occupied = new Set<string>();
     for (const reward of this.rewards) {
       if (object.kind === 'reward' && reward.rewardId === object.id) continue;
-      occupied.add(`${reward.relativeGridX},${reward.relativeGridY}`);
+      for (const cell of getPersistentBaseRewardCells(reward)) occupied.add(`${cell.gridX},${cell.gridY}`);
     }
     for (const entry of this.constructions) {
       if (object.kind === 'construction' && entry.persistentId === object.id) continue;

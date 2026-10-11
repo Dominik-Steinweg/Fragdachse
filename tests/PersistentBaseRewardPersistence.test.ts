@@ -86,6 +86,19 @@ describe('Persistent-Base-Rewards – V5-Persistenz', () => {
     expect(getStoredPersistentBaseRewardState().revision).toBe(1);
   });
 
+  it('round-trips a watchtower placement with its fixed orientation', () => {
+    grantStoredPersistentBaseRewards(['base_watchtower']);
+    expect(setStoredPersistentBaseRewardState({ schemaVersion: 1, revision: 1, placements: [
+      { rewardId: 'base_watchtower', relativeGridX: 0, relativeGridY: 0, angle: 2 },
+    ] })).toBe(true);
+    const exported = exportStoredGameProgressJson();
+    resetStoredCoopDefenseCharacter();
+    expect(importStoredGameProgressJson(exported).ok).toBe(true);
+    expect(getStoredPersistentBaseRewardState().placements).toEqual([
+      { rewardId: 'base_watchtower', relativeGridX: 0, relativeGridY: 0, angle: 0 },
+    ]);
+  });
+
   it('rejects V3 and incomplete or cross-document V5 imports without backfill', () => {
     const exported = JSON.parse(exportStoredGameProgressJson());
     expect(importStoredGameProgressJson(JSON.stringify({ ...exported, formatVersion: 3 }))).toEqual({

@@ -1,3 +1,4 @@
+import { getConstructionBounds } from '../systems/ConstructionGeometry';
 import * as Phaser from 'phaser';
 import { WaterGeometry } from '../arena/WaterGeometry';
 import type { ArenaBuilderResult } from '../arena/ArenaBuilder';
@@ -327,13 +328,14 @@ export class WorldGeometryBinding implements WorldScopedBinding {
   private rebuildFireObstacles(): void {
     const { arena, placement, baseManager } = this.input;
     this.fireObstacles.reset();
+    const runtimeIds = new Set(placement.getAllRuntimeRocks().map(rock => rock.id));
     for (let rockId = 0; rockId < arena.rockPhysicsProxies.length; rockId += 1) {
       const rock = arena.rockPhysicsProxies[rockId];
-      if (rock?.active) this.fireObstacles.addStaticRock(rockId, rock.getBounds());
+      if (rock?.active && !runtimeIds.has(rockId)) this.fireObstacles.addStaticRock(rockId, rock.getBounds());
     }
     for (const rock of placement.getAllRuntimeRocks()) {
       if (rock.kind !== 'pedestal' && rock.collisionMode !== 'none') {
-        this.fireObstacles.addPlaceableRock(rock.id, rock.gridX, rock.gridY);
+        this.fireObstacles.addPlaceableBounds(rock.id, getConstructionBounds(rock, this.input.world.metrics));
       }
     }
     for (const trunk of arena.trunkBodies) {
@@ -365,7 +367,8 @@ export class WorldGeometryBinding implements WorldScopedBinding {
       && event.gridY !== undefined) {
       if (event.reason === 'placeable_added') {
         if (event.collisionMode !== 'none') {
-          this.fireObstacles.addPlaceableRock(event.obstacleId, event.gridX, event.gridY);
+          const rock = this.input.placement.getRuntimeRock(event.obstacleId);
+          if (rock) this.fireObstacles.addPlaceableBounds(rock.id, getConstructionBounds(rock, this.input.world.metrics));
         }
       } else {
         this.fireObstacles.removePlaceableRock(event.obstacleId);

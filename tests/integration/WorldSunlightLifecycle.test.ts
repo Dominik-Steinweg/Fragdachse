@@ -85,7 +85,7 @@ describe('Sonnenwald production World lifetime',()=>{
    const owner=new WorldSunlightPresentation(f.scene as never,f.targets as never);owner.update(480,16);
    const port=()=>({destroy:vi.fn()});
    const editor=Object.assign(Object.create(PersistentBaseEditorWorld.prototype),{
-    sunlight:owner,fx:port(),fog:port(),powerUps:port(),gpu:port(),animations:{clear:vi.fn()},turrets:new Map(),
+    sunlight:owner,fx:port(),fog:port(),powerUps:port(),gpu:port(),animations:{clear:vi.fn()},turrets:new Map(),watchtowers:new Map(),
     bases:port(),shadows:port(),lighting:port(),arena:{},background:{ground:port(),macro:port()},
    });
    editor.destroy();expectEmpty();

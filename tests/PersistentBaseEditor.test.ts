@@ -1,3 +1,6 @@
+import { resolvePersistentRewardWorldCell, getPersistentBaseRewardCells } from '../src/persistentBase/PersistentBasePlacementRules';
+import { PERSISTENT_BASE_ORIENTATIONS, rotatePersistentBaseCoreOffset, DEFAULT_PERSISTENT_BASE_BUILD_AREA } from '../src/persistentBase/PersistentBaseCore';
+import { getConstructionCells } from '../src/systems/ConstructionGeometry';
 import { describe, expect, it } from 'vitest';
 import { PersistentBaseEditorModel, getMissedBaseRewards } from '../src/persistentBase/PersistentBaseEditorModel';
 import { getStoredCoopDefenseProgress } from '../src/utils/localPreferences';
@@ -109,4 +112,41 @@ describe('host-confirmed lobby layout edits', () => {
     expect(applyPersistentBaseLayoutEdit(current, { ...edit, expectedRevision: current.revision + 3 })).toEqual({ ok: false, reason: 'stale' });
     expect(sanitizePersistentBaseLayoutEdit({ ...edit, constructions: [{ ...construction, relativeGridX: NaN }] })).toBeNull();
   });
+});
+
+describe('watchtower editor footprint', () => {
+  it('validates every cell, prevents overlap in both directions and keeps the reward unrotated', () => {
+    const progress = baseline(); progress.personalBaseContribution.constructions = [];
+    const model = new PersistentBaseEditorModel(progress);
+    const tower = { kind: 'reward' as const, id: 'base_watchtower' as const };
+    expect(model.move(tower, 0, 0)).toBe(true);
+    const footprint = getCoopDefenseConstructionDefinition('watchtower').footprint;
+    expect(getBaseEditorAppearance(model, tower)).toMatchObject({ watchtower: true, wall: false, footprint, angle: 0 });
+    for (const { dx, dy } of footprint) expect(model.validate({ kind: 'reward', id: pedestal }, dx, dy)).toBe('occupied');
+    expect(model.move(tower, 1, 0)).toBe(true);
+    expect(model.validate(tower, 2, 2)).not.toBeNull();
+    expect(model.validate(tower, 3, 0)).not.toBeNull();
+    model.remove(tower);
+    expect(model.move({ kind: 'reward', id: pedestal }, 1, 1)).toBe(true);
+    expect(model.validate(tower, 0, 0)).toBe('occupied');
+  });
+
+  it('offers the victory reward retroactively for a previously completed map', () => {
+    expect(getMissedBaseRewards({ completedMapIds: ['16'], persistentBaseRewardUnlocks: [] }))
+      .toContainEqual({ mapId: '16', rewardId: 'base_watchtower', objectiveId: null });
+  });
+});
+
+it('materializes the entire canonical tower footprint correctly in every site orientation', () => {
+  const placement = { rewardId: 'base_watchtower' as const, relativeGridX: 0, relativeGridY: 1 };
+  for (const orientation of PERSISTENT_BASE_ORIENTATIONS) {
+    const site = { anchor: { gridX: 20, gridY: 20 }, orientation, buildArea: DEFAULT_PERSISTENT_BASE_BUILD_AREA };
+    const cell = resolvePersistentRewardWorldCell(site, placement)!;
+    const actual = getConstructionCells({ ...cell, constructionId: 'watchtower' });
+    const expected = getPersistentBaseRewardCells(placement).map(c => {
+      const offset = rotatePersistentBaseCoreOffset(c.gridX, c.gridY, orientation);
+      return { gridX: site.anchor.gridX + offset.relativeGridX, gridY: site.anchor.gridY + offset.relativeGridY };
+    });
+    expect(new Set(actual.map(c => JSON.stringify(c)))).toEqual(new Set(expected.map(c => JSON.stringify(c))));
+  }
 });

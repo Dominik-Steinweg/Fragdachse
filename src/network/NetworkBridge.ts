@@ -685,7 +685,7 @@ function isSamePlacementPreview(
 function normalizePlacementPreview(preview: unknown): PlacementPreviewNetState | null {
   if (!isRecord(preview) || preview.active !== true || typeof preview.isValid !== 'boolean') return null;
   if (preview.kind !== 'rock' && preview.kind !== 'turret' && preview.kind !== 'pedestal'
-    && preview.kind !== 'tunnel' && preview.kind !== 'drone_station') return null;
+    && preview.kind !== 'tunnel' && preview.kind !== 'drone_station' && preview.kind !== 'watchtower') return null;
   if (!Number.isFinite(preview.x) || !Number.isFinite(preview.y)
     || !Number.isSafeInteger(preview.gridX) || !Number.isSafeInteger(preview.gridY)
     || typeof preview.frame !== 'number' || !Number.isSafeInteger(preview.frame) || preview.frame < 0) return null;

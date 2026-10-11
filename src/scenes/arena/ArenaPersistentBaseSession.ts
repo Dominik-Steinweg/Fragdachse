@@ -1,3 +1,5 @@
+import { resolvePersistentRewardWorldCell } from '../../persistentBase/PersistentBasePlacementRules';
+import { getPersistentBaseRewardFootprint, persistentBaseRewardsOverlap } from '../../persistentBase/PersistentBasePlacementRules';
 import { applyPersistentBaseLayoutEdit, type PersistentBaseLayoutEdit, type PersistentBaseLayoutEditResult } from '../../persistentBase/PersistentBaseLayoutEdit';
 import { getPersistentConstructionFootprint, isPersistentBaseRewardCellAllowed } from '../../persistentBase/PersistentBasePlacementRules';
 import { getStoredPersistentBaseAreaStage } from '../../utils/localPreferences';
@@ -315,7 +317,7 @@ export class ArenaPersistentBaseSession {
       const cell = this.resolvePersistentBaseRewardCell(site, next);
       if (!runtime || !cell || !isPersistentBaseRewardCellAllowed(next.rewardId, next.relativeGridX, next.relativeGridY, site.buildArea, site.orientation)) { binding?.releaseRewardRuntime(before.rewardId); continue; }
       previous.set(runtime.id, { ...runtime });
-      moves.push({ id: runtime.id, gridX: cell.gridX, gridY: cell.gridY, angle: next.angle, footprint: [{ dx: 0, dy: 0 }] });
+      moves.push({ id: runtime.id, gridX: cell.gridX, gridY: cell.gridY, angle: next.angle, footprint: getPersistentBaseRewardFootprint(next.rewardId) });
     }
     const moved = this.world.getConstructionRuntime()?.relocateRuntimeBatch(moves);
     if (moved) for (const runtime of moved) {
@@ -374,26 +376,18 @@ export class ArenaPersistentBaseSession {
       return { ok: false, reason: 'placement' };
     }
     if (store.getState().placements.some((entry) => {
-      const occupied = this.resolvePersistentBaseRewardCell(site, entry);
-      return occupied?.gridX === cell.gridX && occupied.gridY === cell.gridY;
+      return persistentBaseRewardsOverlap(sanitizedRequest, entry);
     })) return { ok: false, reason: 'placement' };
-    if (!placementSystem.canMaterializePersistentBaseRewardCell(cell.gridX, cell.gridY, true)) {
+    if (!placementSystem.canMaterializePersistentBaseRewardCell(cell.gridX, cell.gridY, true, undefined, sanitizedRequest.rewardId)) {
       return { ok: false, reason: 'placement' };
     }
 
     // A reward has higher composite priority than personal contributions. Remove only the
     // conflicting runtime object and release its runtime binding; the owner's blueprint remains.
-    const occupant = placementSystem.getRuntimeRockAt(cell.gridX, cell.gridY);
-    let displacedPersonalRuntimeId: number | null = null;
-    if (occupant && occupant.ownership !== 'base-owned') {
-      const isPersistentContribution = this.session.contributions?.getRuntimeBindings()
-        .some((binding) => binding.runtimeId === occupant.id) === true;
-      // A reward may displace a persistent contribution, but must never silently delete an
-      // unrelated live utility for which there is no blueprint to reconstruct on rollback.
-      if (!isPersistentContribution) return { ok: false, reason: 'placement' };
-      this.world.getWorldBinding()?.releasePersonalRuntimeForRewardConflict(occupant.id);
-      displacedPersonalRuntimeId = occupant.id;
-    }
+    const conflicts = this.getRewardPlacementConflicts(sanitizedRequest.rewardId, cell.gridX, cell.gridY);
+    if (!conflicts) return { ok: false, reason: 'placement' };
+    const displacedPersonalRuntime = conflicts.length > 0;
+    for (const occupant of conflicts) this.world.getWorldBinding()?.releasePersonalRuntimeForRewardConflict(occupant.id);
     const placement: PersistentBaseRewardPlacement = {
       rewardId: sanitizedRequest.rewardId,
       relativeGridX: sanitizedRequest.relativeGridX,
@@ -414,7 +408,7 @@ export class ArenaPersistentBaseSession {
       // restores the displaced personal runtime from its unchanged blueprint, including any
       // pedestal registration, instead of maintaining a second reconstruction path here.
       this.reconcilePersistentBaseWorld();
-      if (displacedPersonalRuntimeId !== null) {
+      if (displacedPersonalRuntime) {
         emitArenaMapGridChanged(this.scene.game.events, {
           reason: 'placeables_batch_removed',
           source: 'placeable_rock',
@@ -422,7 +416,7 @@ export class ArenaPersistentBaseSession {
       }
       return { ok: false, reason: 'placement' };
     }
-    if (displacedPersonalRuntimeId !== null) {
+    if (displacedPersonalRuntime) {
       emitArenaMapGridChanged(this.scene.game.events, {
         reason: 'placeables_batch_removed',
         source: 'placeable_rock',
@@ -527,8 +521,8 @@ export class ArenaPersistentBaseSession {
       COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
     );
     if (!targetCell) return undefined;
-    const relative = this.resolvePersistentBaseRewardRelativeCell(site, targetCell.gridX, targetCell.gridY);
-    const angle = Math.atan2(targetCell.y - player.y, targetCell.x - player.x);
+    const relative = this.resolvePersistentBaseRewardRelativeCell(site, targetCell.gridX, targetCell.gridY, rewardId);
+    const angle = rewardId === 'base_watchtower' ? 0 : Math.atan2(targetCell.y - player.y, targetCell.x - player.x);
     const placement: PersistentBaseRewardPlacement | null = relative
       ? {
           rewardId,
@@ -540,19 +534,13 @@ export class ArenaPersistentBaseSession {
     const domainValid = placement !== null
       && this.isPersistentBaseRewardPlacementInDomain(definition, site, placement);
     const duplicateCell = placement !== null && placements.some((candidate) => {
-      const occupied = this.resolvePersistentBaseRewardCell(site, candidate);
-      return occupied?.gridX === targetCell.gridX && occupied.gridY === targetCell.gridY;
+      return persistentBaseRewardsOverlap(placement, candidate);
     });
-    const occupant = placementSystem.getRuntimeRockAt(targetCell.gridX, targetCell.gridY);
-    const persistentContribution = occupant
-      ? this.session.contributions?.getRuntimeBindings()
-        .some((binding) => binding.runtimeId === occupant.id) === true
-      : false;
-    const conflictAllowed = !occupant || occupant.ownership === 'base-owned' || persistentContribution;
+    const conflictAllowed = this.getRewardPlacementConflicts(rewardId, targetCell.gridX, targetCell.gridY) !== null;
     const isValid = domainValid
       && !duplicateCell
       && conflictAllowed
-      && placementSystem.canMaterializePersistentBaseRewardCell(targetCell.gridX, targetCell.gridY, true);
+      && placementSystem.canMaterializePersistentBaseRewardCell(targetCell.gridX, targetCell.gridY, true, undefined, rewardId);
     const construction = definition.gameplaySource.kind === 'construction-definition'
       ? getCoopDefenseConstructionDefinition(definition.gameplaySource.constructionId)
       : undefined;
@@ -566,7 +554,8 @@ export class ArenaPersistentBaseSession {
       frame: 0,
       range: COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
       targetRange: construction?.kind === 'turret' ? construction.targetRange : undefined,
-      kind: definition.category === 'baseTurret' ? 'turret' : 'pedestal',
+      kind: definition.gameplaySource.kind === 'construction-definition'
+        ? getCoopDefenseConstructionDefinition(definition.gameplaySource.constructionId).kind : 'pedestal',
       sourceSlot: 'utility',
       constructionId: definition.gameplaySource.kind === 'construction-definition'
         ? definition.gameplaySource.constructionId
@@ -589,7 +578,7 @@ export class ArenaPersistentBaseSession {
     const site = this.worldContext?.persistentBaseSite ?? null;
     const world = bridge.getWorldDescriptor();
     if (!site || !world || !isKnownPersistentBaseRewardId(rewardId)) return { ok: false, reason: 'blocked' };
-    const relative = this.resolvePersistentBaseRewardRelativeCell(site, preview.gridX, preview.gridY);
+    const relative = this.resolvePersistentBaseRewardRelativeCell(site, preview.gridX, preview.gridY, rewardId);
     if (!relative) return { ok: false, reason: 'placement' };
     return bridge.sendPersistentBaseRewardPlacement({
       worldRevision: world.worldRevision,
@@ -785,20 +774,17 @@ export class ArenaPersistentBaseSession {
     const rewardId = source.persistentRewardId;
     if (!placementSystem || !site || !store || rewardId === undefined) return { ok: false, reason: 'blocked' };
     const previousPlacement = store.getState().placements.find((entry) => entry.rewardId === rewardId);
-    const relative = this.resolvePersistentBaseRewardRelativeCell(site, preview.gridX, preview.gridY);
+    const relative = this.resolvePersistentBaseRewardRelativeCell(site, preview.gridX, preview.gridY, rewardId);
     if (!previousPlacement || !relative) return { ok: false, reason: 'placement' };
 
     // Ein Reward hat hoehere Composite-Prioritaet als persoenliche Beitraege. Verdraengt wird nur
     // das Runtime-Objekt; der Blueprint seines Besitzers bleibt gespeichert.
-    const occupant = placementSystem.getRuntimeRockAt(preview.gridX, preview.gridY);
-    let displacedPersonalRuntime = false;
-    if (occupant && occupant.id !== source.id && occupant.ownership !== 'base-owned') {
-      const isPersistentContribution = this.session.contributions?.getRuntimeBindings()
-        .some((binding) => binding.runtimeId === occupant.id) === true;
-      if (!isPersistentContribution) return { ok: false, reason: 'placement' };
-      this.world.getWorldBinding()?.releasePersonalRuntimeForRewardConflict(occupant.id);
-      displacedPersonalRuntime = true;
-    }
+    if (!isPersistentBaseRewardCellAllowed(rewardId, relative.relativeGridX, relative.relativeGridY, site.buildArea, site.orientation)
+      || !placementSystem.canMaterializePersistentBaseRewardCell(preview.gridX, preview.gridY, true, source.id, rewardId)) return { ok: false, reason: 'placement' };
+    const conflicts = this.getRewardPlacementConflicts(rewardId, preview.gridX, preview.gridY, source.id);
+    if (!conflicts) return { ok: false, reason: 'placement' };
+    const displacedPersonalRuntime = conflicts.length > 0;
+    for (const occupant of conflicts) this.world.getWorldBinding()?.releasePersonalRuntimeForRewardConflict(occupant.id);
 
     const previous: SyncedPlaceableRock = { ...source };
     if (!store.moveReward({
@@ -860,8 +846,8 @@ export class ArenaPersistentBaseSession {
       COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
     );
     if (!targetCell) return undefined;
-    const relative = this.resolvePersistentBaseRewardRelativeCell(site, targetCell.gridX, targetCell.gridY);
-    const angle = Math.atan2(targetCell.y - player.y, targetCell.x - player.x);
+    const relative = this.resolvePersistentBaseRewardRelativeCell(site, targetCell.gridX, targetCell.gridY, rewardId);
+    const angle = rewardId === 'base_watchtower' ? 0 : Math.atan2(targetCell.y - player.y, targetCell.x - player.x);
     const placement: PersistentBaseRewardPlacement | null = relative
       ? {
           rewardId,
@@ -876,18 +862,9 @@ export class ArenaPersistentBaseSession {
       ?? [];
     const duplicateCell = placement !== null && placements.some((candidate) => {
       if (candidate.rewardId === rewardId) return false;
-      const occupied = this.resolvePersistentBaseRewardCell(site, candidate);
-      return occupied?.gridX === targetCell.gridX && occupied.gridY === targetCell.gridY;
+      return persistentBaseRewardsOverlap(placement, candidate);
     });
-    const occupant = placementSystem.getRuntimeRockAt(targetCell.gridX, targetCell.gridY);
-    const persistentContribution = occupant
-      ? this.session.contributions?.getRuntimeBindings()
-        .some((binding) => binding.runtimeId === occupant.id) === true
-      : false;
-    const conflictAllowed = !occupant
-      || occupant.id === source.id
-      || occupant.ownership === 'base-owned'
-      || persistentContribution;
+    const conflictAllowed = this.getRewardPlacementConflicts(rewardId, targetCell.gridX, targetCell.gridY, source.id) !== null;
     const isValid = placement !== null
       && this.isPersistentBaseRewardPlacementInDomain(definition, site, placement)
       && !duplicateCell
@@ -898,6 +875,7 @@ export class ArenaPersistentBaseSession {
         targetCell.gridY,
         true,
         source.id,
+        rewardId,
       );
     return {
       angle,
@@ -909,7 +887,8 @@ export class ArenaPersistentBaseSession {
       frame: 0,
       range: COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
       targetRange: source.kind === 'turret' ? source.targetRange : undefined,
-      kind: definition.category === 'baseTurret' ? 'turret' : 'pedestal',
+      kind: definition.gameplaySource.kind === 'construction-definition'
+        ? getCoopDefenseConstructionDefinition(definition.gameplaySource.constructionId).kind : 'pedestal',
       sourceSlot: 'utility',
       constructionId: definition.gameplaySource.kind === 'construction-definition'
         ? definition.gameplaySource.constructionId
@@ -1144,34 +1123,34 @@ export class ArenaPersistentBaseSession {
     setStoredPersistentBaseRewardState(store.getState());
   }
 
+  private getRewardPlacementConflicts(rewardId: PersistentBaseRewardId, gridX: number, gridY: number, sourceId?: number): SyncedPlaceableRock[] | null {
+    const occupants = new Map<number, SyncedPlaceableRock>();
+    for (const { dx, dy } of getPersistentBaseRewardFootprint(rewardId)) {
+      const rock = this.placementSystem?.getRuntimeRockAt(gridX + dx, gridY + dy);
+      if (rock && rock.id !== sourceId) occupants.set(rock.id, rock);
+    }
+    const bindings = this.session.contributions?.getRuntimeBindings() ?? [];
+    return [...occupants.values()].some(rock => rock.ownership === 'base-owned' || !bindings.some(b => b.runtimeId === rock.id))
+      ? null : [...occupants.values()];
+  }
+
   resolvePersistentBaseRewardCell(
     site: WorldPersistentBaseSite,
-    placement: Pick<PersistentBaseRewardPlacement, 'relativeGridX' | 'relativeGridY'>,
+    placement: Pick<PersistentBaseRewardPlacement, 'relativeGridX' | 'relativeGridY'> & { rewardId?: PersistentBaseRewardId },
   ): { gridX: number; gridY: number; domain: 'base-surface' | 'courtyard-build-area' | 'entrance' } | null {
-    return resolvePersistentBaseCell(
-      site.anchor,
-      placement.relativeGridX,
-      placement.relativeGridY,
-      site.orientation,
-      site.buildArea,
-    );
+    return resolvePersistentRewardWorldCell(site, placement);
   }
 
   resolvePersistentBaseRewardRelativeCell(
     site: WorldPersistentBaseSite,
     gridX: number,
     gridY: number,
+    rewardId?: PersistentBaseRewardId,
   ): { relativeGridX: number; relativeGridY: number; domain: 'base-surface' | 'courtyard-build-area' | 'entrance' } | null {
     const extent = Math.max(2, getPersistentBaseBuildAreaExtentCells(site.buildArea));
     for (let relativeGridY = -extent; relativeGridY <= extent; relativeGridY += 1) {
       for (let relativeGridX = -extent; relativeGridX <= extent; relativeGridX += 1) {
-        const cell = resolvePersistentBaseCell(
-          site.anchor,
-          relativeGridX,
-          relativeGridY,
-          site.orientation,
-          site.buildArea,
-        );
+        const cell = resolvePersistentRewardWorldCell(site, { rewardId, relativeGridX, relativeGridY });
         if (cell?.gridX === gridX && cell.gridY === gridY) {
           return { relativeGridX, relativeGridY, domain: cell.domain };
         }

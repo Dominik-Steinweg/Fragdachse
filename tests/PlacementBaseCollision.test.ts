@@ -485,3 +485,45 @@ describe('PlacementSystem Coop-Defense base collision contract', () => {
     });
   });
 });
+
+describe('multi-cell reward geometry', () => {
+  it('reserves and releases every catalog cell on host, move and client snapshots', () => {
+    const grid = new RockGridIndex([]);
+    const host = new PlacementSystem(layout, grid, noPlayers, resolveActiveArenaWorldMetrics());
+    const client = createPlacement();
+    const cfg = COOP_DEFENSE_CONSTRUCTIONS.watchtower;
+    const tower = host.materializePersistentBaseReward(cfg, 'base_watchtower', 4, 4, 2, 'base', 0xffffff)!;
+    expect(tower).toMatchObject({ kind: 'watchtower', angle: 0, indestructible: false, hp: cfg.maxHp });
+    expect(tower.collisionMode).not.toBe('none');
+    client.syncFromSnapshot([tower]);
+    for (const { dx, dy } of cfg.footprint) {
+      expect(host.getRuntimeRockAt(4 + dx, 4 + dy)?.id).toBe(tower.id);
+      expect(client.getRuntimeRockAt(4 + dx, 4 + dy)?.id).toBe(tower.id);
+      expect(grid.isBlobOccupiedWithBorder(4 + dx, 4 + dy)).toBe(false);
+      expect(host.canMaterializeCells([{ dx: 0, dy: 0 }], 4 + dx, 4 + dy)).toBe(false);
+    }
+    host.commitDamage(tower.id, cfg.maxHp / 4);
+    const moved = host.relocateRock(tower.id, 5, 4, 1)!;
+    expect(moved).toMatchObject({ id: tower.id, hp: cfg.maxHp * .75, angle: 0 });
+    client.syncFromSnapshot([moved]);
+    expect(host.getRuntimeRockAt(4, 4)).toBeUndefined();
+    expect(client.getRuntimeRockAt(4, 4)).toBeUndefined();
+    for (const { dx, dy } of cfg.footprint) expect(client.getRuntimeRockAt(5 + dx, 4 + dy)?.id).toBe(tower.id);
+    host.removeRock(tower.id); client.syncFromSnapshot([]);
+    for (const { dx, dy } of cfg.footprint) {
+      expect(host.getRuntimeRockAt(5 + dx, 4 + dy)).toBeUndefined();
+      expect(client.getRuntimeRockAt(5 + dx, 4 + dy)).toBeUndefined();
+    }
+  });
+
+  it('rejects a blocked non-anchor cell and any base surface or arena boundary', () => {
+    const cfg = COOP_DEFENSE_CONSTRUCTIONS.watchtower;
+    const placement = createPlacement([makeBase('base', [{ gridX: 5, gridY: 5 }])]);
+    expect(placement.materializePersistentBaseReward(cfg, 'base_watchtower', 4, 4, 0, 'base', 0)).toBeNull();
+    const metrics = resolveActiveArenaWorldMetrics();
+    expect(placement.materializePersistentBaseReward(cfg, 'base_watchtower', metrics.gridCols - 1, 4, 0, 'base', 0)).toBeNull();
+    const occupied = createPlacement();
+    occupied.materializePersistentPlaceable(COOP_DEFENSE_CONSTRUCTIONS.rock_barrier, 5, 5, 0, 'p', 0);
+    expect(occupied.materializePersistentBaseReward(cfg, 'base_watchtower', 4, 4, 0, 'base', 0)).toBeNull();
+  });
+});

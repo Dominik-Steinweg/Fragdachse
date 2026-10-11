@@ -1,3 +1,4 @@
+import { WatchtowerVisual, ensureWatchtowerTexture } from '../effects/watchtower/WatchtowerVisual';
 import { WorldSunlightPresentation } from '../effects/sunlight/WorldSunlightPresentation';
 import * as Phaser from 'phaser';
 import { CELL_SIZE } from '../config';
@@ -46,6 +47,7 @@ export class PersistentBaseEditorWorld {
   private readonly powerUps: PowerUpRenderer;
   private readonly gpu: GpuVfxSystem;
   private readonly animations = new TurretAnimationController();
+  private readonly watchtowers = new Map<string, WatchtowerVisual>();
   private readonly turrets = new Map<string, WorldTurretVisual>();
   private readonly pedestalIds = new Map<string, number>();
   private readonly wallIds = new Map<string, number>();
@@ -55,6 +57,7 @@ export class PersistentBaseEditorWorld {
   private readonly timeOfDay = DEFAULT_LOBBY_TIME_OF_DAY_MINUTES;
 
   constructor(private readonly scene: Phaser.Scene, private readonly model: PersistentBaseEditorModel, private readonly color: number) {
+    ensureWatchtowerTexture(scene);
     this.size = getPersistentBaseEditorSize(model.area);
     this.anchor = (this.size / CELL_SIZE - 1) / 2;
     const cells = this.anchor * 2 + 1;
@@ -114,6 +117,7 @@ export class PersistentBaseEditorWorld {
     const walls = new Map<string, { gridX: number; gridY: number; tint: number; weapon?: TurretWeaponId; angle: number }>();
     const pedestals: SyncedPowerUpPedestal[] = [];
     const turretKeys = new Set<string>();
+    const watchtowerKeys = new Set<string>();
     for (const object of objects) {
       const entry = this.model.getPosition(object)!;
       const appearance = getBaseEditorAppearance(this.model, object);
@@ -121,6 +125,12 @@ export class PersistentBaseEditorWorld {
       const key = baseEditorObjectKey(object);
       const gridX = this.anchor + entry.relativeGridX, gridY = this.anchor + entry.relativeGridY;
       const x = (gridX + .5) * CELL_SIZE, y = (gridY + .5) * CELL_SIZE;
+      if (appearance.watchtower) {
+        watchtowerKeys.add(key);
+        let visual = this.watchtowers.get(key);
+        if (!visual) { visual = new WatchtowerVisual(this.scene); this.watchtowers.set(key, visual); }
+        visual.sync({ gridX, gridY, hp: 1, maxHp: 1 }, this.world.metrics);
+      }
       if (appearance.wall) for (const cell of appearance.footprint) {
         const gx = gridX + cell.dx, gy = gridY + cell.dy;
         walls.set(gx + ',' + gy, { gridX: gx, gridY: gy, tint: appearance.ownerTintStrength,
@@ -144,6 +154,7 @@ export class PersistentBaseEditorWorld {
     for (const [key, visual] of this.turrets) if (!turretKeys.has(key)) {
       visual.image.destroy(); visual.aura.destroy(); this.turrets.delete(key);
     }
+    for (const [key, visual] of this.watchtowers) if (!watchtowerKeys.has(key)) { visual.destroy(); this.watchtowers.delete(key); }
     this.powerUps.syncPedestals(pedestals);
     this.powerUps.sync(pedestals.map(p => ({ uid: p.id, defId: p.defId, x: p.x, y: p.y })));
     const runtime: SyncedPlaceableRock[] = [];
@@ -203,6 +214,8 @@ export class PersistentBaseEditorWorld {
     ChunkedRenderSurface.flushBakeBudget(this.scene);
   }
   destroy(): void {
+    for (const visual of this.watchtowers.values()) visual.destroy();
+    this.watchtowers.clear();
     this.sunlight.destroy();
     this.fx.destroy(); this.fog.destroy(); this.powerUps.destroy(); this.gpu.destroy();
     this.animations.clear();

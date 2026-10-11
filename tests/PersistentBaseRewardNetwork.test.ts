@@ -171,20 +171,20 @@ describe('Persistent-Base-Reward-Grant – reliable host confirmation', () => {
       host.publishPersistentBaseRewardSessionState({
         worldRevision: 404,
         revision: 2,
-        availableRewardIds: ['base_spore_turret', 'base_health_pedestal'],
+        availableRewardIds: ['base_spore_turret', 'base_health_pedestal', 'base_watchtower'],
         placements: [{
           rewardId: 'base_spore_turret', relativeGridX: -2, relativeGridY: 0, angle: 0.5,
-        }],
+        }, { rewardId: 'base_watchtower', relativeGridX: 0, relativeGridY: 0, angle: 0 }],
       });
 
       useRoom(clientRoom);
       expect(client.getPersistentBaseRewardSessionState()).toEqual({
         worldRevision: 404,
         revision: 2,
-        availableRewardIds: ['base_spore_turret', 'base_health_pedestal'],
+        availableRewardIds: ['base_spore_turret', 'base_health_pedestal', 'base_watchtower'],
         placements: [{
           rewardId: 'base_spore_turret', relativeGridX: -2, relativeGridY: 0, angle: 0.5,
-        }],
+        }, { rewardId: 'base_watchtower', relativeGridX: 0, relativeGridY: 0, angle: 0 }],
       });
 
       useRoom(hostRoom);

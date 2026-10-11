@@ -484,7 +484,7 @@ export class ArenaBuilder {
     const { gridX, gridY } = cell;
     const worldX = worldMetrics.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2;
     const worldY = worldMetrics.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2;
-    const isOccupied = (gx: number, gy: number) => rockGrid.isOccupiedWithBorder(gx, gy);
+    const isOccupied = (gx: number, gy: number) => rockGrid.isBlobOccupiedWithBorder(gx, gy);
     const mask = AutoTiler.computeMask(gridX, gridY, isOccupied);
     return {
       id,
@@ -642,7 +642,7 @@ export class ArenaBuilder {
       ROCK_BLOB_SURFACE_PROFILE,
       cell.gridX,
       cell.gridY,
-      (gx, gy) => rockGrid.isOccupiedWithBorder(gx, gy),
+      (gx, gy) => rockGrid.isBlobOccupiedWithBorder(gx, gy),
     );
   }
 
@@ -661,7 +661,7 @@ export class ArenaBuilder {
     const { gridX, gridY } = rocks[id];
     const isOccupied = (gx: number, gy: number) => gx === gridX && gy === gridY
       ? true
-      : rockGrid.isOccupiedWithBorder(gx, gy);
+      : rockGrid.isBlobOccupiedWithBorder(gx, gy);
     const frame = AutoTiler.getFrame(AutoTiler.computeMask(gridX, gridY, isOccupied), ROCK_AUTOTILE);
     const worldX = worldFrame.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2;
     const worldY = worldFrame.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2;
@@ -710,7 +710,7 @@ export class ArenaBuilder {
       const neighbor = result.rockVisualStates.get(neighborId);
       if (!neighbor?.active) continue;
       const cell = rocks[neighborId];
-      const neighborFrame = AutoTiler.getFrame(AutoTiler.computeMask(cell.gridX, cell.gridY, (gx, gy) => rockGrid.isOccupiedWithBorder(gx, gy)), ROCK_AUTOTILE);
+      const neighborFrame = AutoTiler.getFrame(AutoTiler.computeMask(cell.gridX, cell.gridY, (gx, gy) => rockGrid.isBlobOccupiedWithBorder(gx, gy)), ROCK_AUTOTILE);
       result.rockVisualStates.patch(neighborId, { frame: neighborFrame });
     }
 
@@ -734,7 +734,7 @@ export class ArenaBuilder {
     if (rockGrid.getIndex(gridX, gridY) === id) rockGrid.remove(gridX, gridY);
 
     // Nachbar-Tiles neu berechnen
-    const isOccupied = (gx: number, gy: number) => rockGrid.isOccupiedWithBorder(gx, gy);
+    const isOccupied = (gx: number, gy: number) => rockGrid.isBlobOccupiedWithBorder(gx, gy);
     const neighborIds = rockGrid.getNeighborIndices(gridX, gridY);
     for (const nid of neighborIds) {
       const state = rockVisualStates.get(nid);

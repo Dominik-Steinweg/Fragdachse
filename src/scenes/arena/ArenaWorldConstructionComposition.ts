@@ -154,6 +154,9 @@ export function composeWorldConstruction(
     onPlacementExecuted: playerId => ctx.decoySystem.breakStealth(playerId, Date.now()),
     recordConstructionBuilt: (playerId) => bridge.recordConstructionBuilt(playerId),
     onConstructionDestroyed: (runtime, cause, attackerId) => {
+      if (runtime.persistentRewardId && (cause === 'damage' || cause === 'decay')) {
+        persistentBaseBinding.markRewardDestroyed(runtime.persistentRewardId);
+      }
       if (cause === 'damage' && runtime.kind === 'rock'
         && attackerId !== runtime.ownerId && (runtime.enemyDestroyedExplosionRadius ?? 0) > 0) {
         const point = worldCellCenter(world.metrics, runtime.gridX, runtime.gridY);
@@ -203,6 +206,7 @@ export function composeWorldConstruction(
   worldRuntime.bind(constructionRuntime);
   persistentBaseBinding.setMaterializer(new PersistentBaseWorldMaterializer({
     binding: persistentBaseBinding,
+    getMissionRevision: () => bridge.getActivityDescriptor()?.activityRevision ?? null,
     contributions: persistentBaseStores.contributions,
     rewards: persistentBaseStores.rewards,
     placementSystem,

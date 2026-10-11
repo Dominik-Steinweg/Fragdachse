@@ -1,3 +1,4 @@
+import { getConstructionCells } from '../systems/ConstructionGeometry';
 import { weaponFogTrail } from '../effects/groundFog/WeaponFogTrail';
 import type * as Phaser from 'phaser';
 import type { GroundFogSystem } from '../effects/groundFog/GroundFogSystem';
@@ -44,7 +45,7 @@ export class WorldGroundFogBinding {
       melee: (x, y, angle, arc, range, source) => fog.addMelee(x, y, angle, arc, range, weaponFogTrail(source)),
     });
   }
-  sync(placement: Pick<PlacementSystem, 'getAllRuntimeRocks'> | null, bases: BaseManager | null,
+  sync(placement: Pick<PlacementSystem, 'getAllRuntimeRocks' | 'getRuntimeRock'> | null, bases: BaseManager | null,
     projectiles: ProjectilePresentationRuntime | null): void {
     if (this.destroyed) return;
     if (this.projectileOwner !== projectiles) {
@@ -55,7 +56,8 @@ export class WorldGroundFogBinding {
       if (event.source === 'static_rock') this.fog.terrain.removeObstacle(`rock:${event.obstacleId}`);
       else if (event.reason === 'placeable_added' && event.collisionMode !== 'none'
         && event.gridX !== undefined && event.gridY !== undefined) {
-        this.fog.terrain.setObstacle(`construction:${event.obstacleId}`, [{ gridX: event.gridX, gridY: event.gridY }]);
+        const rock = placement?.getRuntimeRock(event.obstacleId!);
+        this.fog.terrain.setObstacle(`construction:${event.obstacleId}`, rock ? getConstructionCells(rock) : [{ gridX: event.gridX, gridY: event.gridY }]);
         this.placeableIds.add(event.obstacleId!);
       } else { this.fog.terrain.removeObstacle(`construction:${event.obstacleId}`); this.placeableIds.delete(event.obstacleId!); }
     }
@@ -64,7 +66,7 @@ export class WorldGroundFogBinding {
       // Batch fallbacks diff only constructed objects, never the static world grid.
       const next = new Set<number>();
       for (const rock of placement?.getAllRuntimeRocks() ?? []) if (rock.kind !== 'pedestal' && rock.collisionMode !== 'none') {
-        next.add(rock.id); this.fog.terrain.setObstacle(`construction:${rock.id}`, [rock]);
+        next.add(rock.id); this.fog.terrain.setObstacle(`construction:${rock.id}`, getConstructionCells(rock));
       }
       for (const id of this.placeableIds) if (!next.has(id)) this.fog.terrain.removeObstacle(`construction:${id}`);
       this.placeableIds.clear(); for (const id of next) this.placeableIds.add(id);

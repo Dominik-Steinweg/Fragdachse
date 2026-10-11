@@ -111,6 +111,7 @@ export class PersistentBaseWorldBinding {
   relocateRewardRuntime(rewardId: PersistentBaseRewardId, runtime: SyncedPlaceableRock): void {
     this.materializer?.relocateRewardRuntime(rewardId, runtime);
   }
+  markRewardDestroyed(rewardId: PersistentBaseRewardId): void { this.materializer?.markRewardDestroyed(rewardId); }
   onRewardRemoved(rewardId: PersistentBaseRewardId): void { this.materializer?.onRewardRemoved(rewardId); }
 
   isDestroyed(): boolean {

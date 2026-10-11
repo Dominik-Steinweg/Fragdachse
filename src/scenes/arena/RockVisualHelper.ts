@@ -1,3 +1,6 @@
+import { WatchtowerVisual } from '../../effects/watchtower/WatchtowerVisual';
+import { getConstructionBounds, getConstructionCells } from '../../systems/ConstructionGeometry';
+import { createRockPhysicsProxy } from '../../arena/rocks/RockPhysicsProxy';
 import { createWorldTurretVisual, syncWorldTurretVisualPose } from '../../entities/WorldTurretVisual';
 import type { TurretAnimationController } from '../../effects/TurretAnimationController';
 import type { WorldHealthBarRenderer, HealthBarHandle } from '../../effects/health/WorldHealthBarRenderer';
@@ -50,6 +53,7 @@ const TEX_TURRET_AURA = '__placeable_turret_aura';
  * (via PlacementSystem snapshot sync) as well as ArenaLifecycleCoordinator (teardown).
  */
 export class RockVisualHelper {
+  private readonly watchtowerVisuals = new Map<number, WatchtowerVisual>();
   private readonly turretVisuals = new Map<number, TurretVisualState>();
   private readonly heardPlacements = new Set<number>();
   private placementAudioScope: object | null = null;
@@ -119,7 +123,8 @@ export class RockVisualHelper {
     const materialization = rocks.filter((rock) => rock.kind !== 'pedestal' && rock.collisionMode !== 'none');
     for (const rock of rocks) this.ensureRuntimeRockSlot(rock);
     for (const rock of materialization) {
-      this.arenaResult.rockGrid.set(rock.gridX, rock.gridY, rock.id);
+      this.arenaResult.rockGrid.setBlobParticipation(rock.id, rock.kind !== 'watchtower');
+      for (const cell of getConstructionCells(rock)) this.arenaResult.rockGrid.set(cell.gridX, cell.gridY, rock.id);
     }
 
     let refreshStaticShadows = false;
@@ -200,6 +205,18 @@ export class RockVisualHelper {
       };
     }
 
+    if (rock.kind === 'watchtower') {
+      const bounds = getConstructionBounds(rock, this.world!.metrics);
+      if (!this.arenaResult.rockPhysicsProxies[rock.id]?.active) {
+        const proxy = createRockPhysicsProxy(this.scene, bounds.x, bounds.y, 'low', bounds.width, bounds.height);
+        this.arenaResult.rockPhysicsProxies[rock.id] = proxy;
+        this.arenaResult.rockGroup.add(proxy);
+        (proxy.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
+      }
+      if (presentation) this.syncWatchtowerVisual(rock);
+      return { refreshStaticShadows: true, requiresObstacleIndexRebuild: true, hasStalePedestalProxy: false };
+    }
+
     let refreshStaticShadows = false;
 
     if (!this.arenaResult.rockPhysicsProxies[rock.id]?.active && (rock.kind === 'rock' || rock.kind === 'drone_station')) {
@@ -275,6 +292,16 @@ export class RockVisualHelper {
 
   removePlaceableRockVisual(rock: SyncedPlaceableRock, playDust: boolean): void {
     if (!this.arenaResult || !this.currentLayout) return;
+    this.watchtowerVisuals.get(rock.id)?.destroy();
+    this.watchtowerVisuals.delete(rock.id);
+    if (rock.kind === 'watchtower') {
+      this.destroyRockProxyIfPresent(rock.id);
+      for (const cell of getConstructionCells(rock)) {
+        if (this.arenaResult.rockGrid.getIndex(cell.gridX, cell.gridY) === rock.id) this.arenaResult.rockGrid.remove(cell.gridX, cell.gridY);
+      }
+      this.markObstaclesDirty(rock.id, false);
+      return;
+    }
     // Release by runtime ID even if an earlier projection assigned the wrong kind.
     this.destroyTurretVisual(rock.id);
     const currentProxy = this.arenaResult.rockPhysicsProxies[rock.id];
@@ -315,6 +342,10 @@ export class RockVisualHelper {
   updateRockVisualById(rockId: number, hp: number): void {
     if (!this.arenaResult || !this.currentLayout) return;
     const runtimeRock = this.placementSystem?.getRuntimeRock(rockId);
+    if (runtimeRock?.kind === 'watchtower') {
+      if (this.arenaResult.rockVisualSystem !== null) this.syncWatchtowerVisual({ ...runtimeRock, hp });
+      return;
+    }
     if (runtimeRock?.kind === 'pedestal') return;
     if (runtimeRock?.collisionMode === 'none') {
       if (runtimeRock.kind === 'turret') this.createOrUpdateTurretVisual({ ...runtimeRock, hp });
@@ -371,6 +402,12 @@ export class RockVisualHelper {
     if (this.arenaResult?.rockPhysicsProxies[rockId]) {
       ArenaBuilder.destroyRock(this.arenaResult, rockId);
     }
+  }
+
+  private syncWatchtowerVisual(rock: SyncedPlaceableRock): void {
+    let visual = this.watchtowerVisuals.get(rock.id);
+    if (!visual) { visual = new WatchtowerVisual(this.scene); this.watchtowerVisuals.set(rock.id, visual); }
+    visual.sync(rock, this.world!.metrics);
   }
 
   createOrUpdateTurretVisual(rock: SyncedPlaceableRock): void {
@@ -453,6 +490,8 @@ export class RockVisualHelper {
   }
 
   destroyAllTurretVisuals(): void {
+    for (const visual of this.watchtowerVisuals.values()) visual.destroy();
+    this.watchtowerVisuals.clear();
     for (const id of [...this.turretVisuals.keys()]) {
       this.destroyTurretVisual(id);
     }

@@ -339,3 +339,19 @@ describe('Move-Request an der Netzwerkgrenze', () => {
     expect(sanitizePersistentBaseMoveRequest(null)).toBeNull();
   });
 });
+
+it('moves watchtower footprints atomically, rejecting another object in a non-anchor cell', () => {
+  const placement = createPlacement();
+  const definition = getCoopDefenseConstructionDefinition('watchtower');
+  const tower = placement.materializePersistentBaseReward(definition, 'base_watchtower', 4, 4, 0, 'base', 0)!;
+  const wall = placeRock(placement, 7, 5);
+  expect(placement.relocateRock(tower.id, 6, 4, 0)).toBeUndefined();
+  expect(placement.getRuntimeRockAt(5, 5)?.id).toBe(tower.id);
+  expect(placement.relocateRocks([
+    { id: tower.id, gridX: 6, gridY: 4, angle: 0, footprint: definition.footprint },
+    { id: wall.id, gridX: 4, gridY: 4, angle: wall.angle, footprint: SINGLE_CELL },
+  ])).not.toBeNull();
+  expect(placement.getRuntimeRockAt(7, 5)?.id).toBe(tower.id);
+  expect(placement.getRuntimeRockAt(4, 4)?.id).toBe(wall.id);
+  expect(placement.getRuntimeRockAt(5, 5)).toBeUndefined();
+});

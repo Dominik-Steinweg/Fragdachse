@@ -763,17 +763,20 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     if (index < 0) return null;
     if (this.intents && !this.intents.allowsAttack(enemy.id, 'obstacle', String(index), 'all')) return null;
 
-    const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, obstacle.x, obstacle.y);
+    const runtime = this.placementSystem?.getRuntimeRock(index);
+    const point = runtime?.kind === 'watchtower'
+      ? this.placementSystem!.getRuntimeRockSurfacePoint(runtime, enemy.sprite.x, enemy.sprite.y) : obstacle;
+    const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, point.x, point.y);
     if (distance > range) return null;
-    if (!this.enemyManager.canSeeThroughSmoke(enemy.id, obstacle.x, obstacle.y, range)) return null;
-    if (!this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, obstacle.x, obstacle.y, { skipRockIndex: index })) return null;
+    if (!this.enemyManager.canSeeThroughSmoke(enemy.id, point.x, point.y, range)) return null;
+    if (!this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, point.x, point.y, { skipRockIndex: index })) return null;
 
     return {
       kind: 'obstacle',
       priority: 4,
       distance,
-      targetX: obstacle.x,
-      targetY: obstacle.y,
+      targetX: point.x,
+      targetY: point.y,
       obstacle,
       obstacleIndex: index,
     };

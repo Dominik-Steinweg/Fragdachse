@@ -1,3 +1,4 @@
+import { WatchtowerVisual } from '../effects/watchtower/WatchtowerVisual';
 import * as Phaser from 'phaser';
 import { CELL_SIZE } from '../config';
 import { AutoTiler, ROCK_AUTOTILE } from '../arena/AutoTiler';
@@ -11,6 +12,11 @@ import type { BaseEditorAppearance } from '../persistentBase/PersistentBaseEdito
 export function createPersistentBaseDragPreview(scene: Phaser.Scene, appearance: BaseEditorAppearance,
   color: number): Phaser.GameObjects.Container {
   const root = scene.add.container(0, 0).setAlpha(.85);
+  if (appearance.watchtower) {
+    const visual = new WatchtowerVisual(scene);
+    visual.sync({ gridX: 0, gridY: 0, hp: 1, maxHp: 1 }, { offsetX: -CELL_SIZE / 2, offsetY: -CELL_SIZE / 2 });
+    root.add(visual.image);
+  }
   if (appearance.wall) {
     const occupied = new Set(appearance.footprint.map(cell => `${cell.dx},${cell.dy}`));
     for (const cell of appearance.footprint) {

@@ -1,3 +1,5 @@
+import { COOP_DEFENSE_CONSTRUCTIONS } from '../src/config/coopDefenseConstructions';
+import { getConstructionBounds } from '../src/systems/ConstructionGeometry';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../src/network/bridge', () => ({ bridge: { isHost: () => false, getLocalPlayerId: () => 'other-player' } }));
 
@@ -375,3 +377,25 @@ function makeLayoutWithRocks(rocks: readonly SyncedPlaceableRock[]): ArenaLayout
     .map(({ gridX, gridY }) => ({ gridX, gridY }));
   return layout;
 }
+
+it('materializes a late-join tower as one full-size low proxy without a rock blob and cleans up its image', () => {
+  const f = createFixture([], false);
+  const tower: SyncedPlaceableRock = { id: 3, kind: 'watchtower', constructionId: 'watchtower', gridX: 5, gridY: 5,
+    hp: 1, maxHp: 2, ownerId: 'base', ownerColor: 0, expiresAt: 0, warningStartsAt: 0, angle: 0 };
+  const expected = getConstructionBounds(tower, resolveActiveArenaWorldMetrics());
+  f.helper.materializePlaceableRock(tower, false);
+  const proxy = f.result.rockPhysicsProxies[tower.id]!;
+  expect(proxy.obstacleClass).toBe('low');
+  expect(proxy.getBounds()).toMatchObject({ width: expected.width, height: expected.height });
+  expect(f.result.rockVisualStates.get(tower.id)?.active).not.toBe(true);
+  for (const { dx, dy } of COOP_DEFENSE_CONSTRUCTIONS.watchtower.footprint) {
+    expect(f.result.rockGrid.getIndex(tower.gridX + dx, tower.gridY + dy)).toBe(tower.id);
+    expect(f.result.rockGrid.isBlobOccupiedWithBorder(tower.gridX + dx, tower.gridY + dy)).toBe(false);
+  }
+  expect(f.turretObjects).toHaveLength(1);
+  expect(f.turretObjects[0].x).toBe(expected.x);
+  f.helper.removePlaceableRockVisual(tower, false);
+  expect(f.result.rockPhysicsProxies[tower.id]).toBeNull();
+  expect(f.turretObjects[0].active).toBe(false);
+  for (const { dx, dy } of COOP_DEFENSE_CONSTRUCTIONS.watchtower.footprint) expect(f.result.rockGrid.getIndex(tower.gridX + dx, tower.gridY + dy)).toBe(-1);
+});

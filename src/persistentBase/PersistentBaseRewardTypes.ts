@@ -113,7 +113,7 @@ export function sanitizePersistentBaseRewardPlacement(value: unknown): Persisten
     rewardId: value.rewardId,
     relativeGridX: value.relativeGridX,
     relativeGridY: value.relativeGridY,
-    angle: value.angle,
+    angle: value.rewardId === 'base_watchtower' ? 0 : value.angle,
   };
 }
 

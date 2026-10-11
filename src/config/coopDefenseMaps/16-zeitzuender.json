@@ -1,4 +1,5 @@
 {
+  "persistentBaseRewardsOnVictory": ["base_watchtower"],
   "mapId": "16",
   "arenaWidthCells": 104,
   "arenaHeightCells": 40,

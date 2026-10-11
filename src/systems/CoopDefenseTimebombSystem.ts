@@ -459,8 +459,10 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
 
   private damageConstructions(attackerId: string, x: number, y: number, radius: number, maxDamage: number): void {
     for (const construction of this.placementSystem.getAllRuntimeRocks()) {
-      if (construction.hp <= 0 || !isOffensiveConstruction(construction)) continue;
-      const world = this.placementSystem.getWorldPointForCell(construction.gridX, construction.gridY);
+      if (construction.hp <= 0 || (!isOffensiveConstruction(construction) && construction.kind !== 'watchtower')) continue;
+      const world = construction.kind === 'watchtower'
+        ? this.placementSystem.getRuntimeRockSurfacePoint(construction, x, y)
+        : this.placementSystem.getWorldPointForCell(construction.gridX, construction.gridY);
       const distance = Math.hypot(world.x - x, world.y - y);
       if (distance > radius) continue;
       const damage = Math.round(maxDamage * (0.2 + 0.8 * (1 - distance / radius)));
