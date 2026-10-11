@@ -258,6 +258,26 @@ export interface CoopDefenseEnemyMortarConfig {
   readonly muzzleForwardPx?: number;
   readonly minRangePx: number;
   readonly preferredRangeMinPx: number;
+  readonly preferredRangeMaxPx: number;
+  readonly coverSearchActivationMarginPx: number;
+  readonly localSearchRadiusPx: number;
+  readonly positionCandidateRings: number;
+  readonly positionCandidateDirections: number;
+  readonly maxLocalSearchCells: number;
+  readonly topTargetCandidates: number;
+  readonly threatScanRadiusPx: number;
+  readonly maxCoverThreats: number;
+  readonly playerThreatRangePx: number;
+  readonly rangeQualityWeight: number;
+  readonly coverQualityWeight: number;
+  readonly exposurePenaltyWeight: number;
+  readonly movementCostPerPx: number;
+  readonly minRepositionImprovement: number;
+  readonly threatCheckIntervalMs: number;
+  readonly threatChangeDistancePx: number;
+  readonly spacingSpeedFactor: number;
+  readonly spacingProbeDistancePx: number;
+  readonly positionArrivalTolerancePx: number;
   readonly maxRangePx: number;
   readonly windupMs: number;
   readonly flightMs: number;
@@ -910,14 +930,28 @@ export function normalizeMortarConfig(config: CoopDefenseEnemyMortarConfig | und
   const normalized = { ...config, muzzleForwardPx: config.muzzleForwardPx ?? 0, trainDamageMult: config.trainDamageMult ?? 0, targetWeights: { ...config.targetWeights } };
   for (const key of ['muzzleForwardPx', 'minRangePx', 'preferredRangeMinPx', 'maxRangePx', 'windupMs', 'flightMs',
     'postImpactDelayMs', 'impactRadiusPx', 'maxDamage', 'minDamage', 'baseDamageMult',
-    'constructionDamageMult', 'rockDamageMult', 'trainDamageMult', 'overlapPenalty', 'overlapMarginPx', 'reevaluateIntervalMs'] as const) {
+    'constructionDamageMult', 'rockDamageMult', 'trainDamageMult', 'overlapPenalty', 'overlapMarginPx', 'reevaluateIntervalMs',
+    'preferredRangeMaxPx', 'coverSearchActivationMarginPx', 'localSearchRadiusPx', 'positionCandidateRings',
+    'positionCandidateDirections', 'maxLocalSearchCells', 'topTargetCandidates', 'threatScanRadiusPx', 'maxCoverThreats',
+    'playerThreatRangePx', 'rangeQualityWeight', 'coverQualityWeight', 'exposurePenaltyWeight', 'movementCostPerPx',
+    'minRepositionImprovement', 'threatCheckIntervalMs', 'threatChangeDistancePx', 'spacingSpeedFactor',
+    'spacingProbeDistancePx', 'positionArrivalTolerancePx'] as const) {
     const value = normalized[key];
     if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) throw new Error(`Invalid mortar.${key}`);
   }
   for (const key of ['base', 'armedConstruct', 'construct', 'barrier', 'player'] as const) {
     if (!Number.isFinite(normalized.targetWeights[key]) || normalized.targetWeights[key] <= 0) throw new Error(`Invalid mortar.targetWeights.${key}`);
   }
-  if (!(config.minRangePx < config.preferredRangeMinPx && config.preferredRangeMinPx <= config.maxRangePx)
+  for (const [key, cap] of [['positionCandidateRings', 4], ['positionCandidateDirections', 16],
+    ['maxLocalSearchCells', 4096], ['topTargetCandidates', 5], ['maxCoverThreats', 6]] as const) {
+    if (!Number.isInteger(config[key]) || config[key] < 1 || config[key] > cap) throw new Error(`Invalid mortar.${key}`);
+  }
+  if (!(config.minRangePx < config.preferredRangeMinPx && config.preferredRangeMinPx <= config.preferredRangeMaxPx
+    && config.preferredRangeMaxPx <= config.maxRangePx)
+    || config.localSearchRadiusPx <= 0 || config.threatScanRadiusPx < config.minRangePx
+    || config.playerThreatRangePx < config.minRangePx || config.threatCheckIntervalMs <= 0
+    || config.threatChangeDistancePx <= 0 || config.spacingSpeedFactor > 1
+    || config.spacingProbeDistancePx <= 0 || config.positionArrivalTolerancePx <= 0
     || config.windupMs <= 0 || config.flightMs <= 0 || config.impactRadiusPx <= 0
     || config.reevaluateIntervalMs <= 0 || config.minDamage > config.maxDamage) throw new Error('Invalid mortar ranges, timing or damage');
   return normalized;

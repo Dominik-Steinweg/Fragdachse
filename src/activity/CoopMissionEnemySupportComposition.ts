@@ -124,7 +124,7 @@ export class CoopMissionEnemySupportComposition {
       } });
       runtime.setMortar(new CoopDefenseMortarSystem(enemyManager, this.options.playerManager,
         this.options.combatSystem, runtime.enemyAiTargetCatalog, this.options.baseManager,
-        this.options.placementSystem, strikes), strikes);
+        this.options.placementSystem, strikes, strategicFlowField), strikes);
     }
 
     const necromancy = this.options.playerModifierReadPort && this.options.weaponExecution

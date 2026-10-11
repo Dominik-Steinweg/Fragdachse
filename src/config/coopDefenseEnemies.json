@@ -824,7 +824,27 @@
         },
         "overlapPenalty": 4,
         "overlapMarginPx": 30,
-        "reevaluateIntervalMs": 200
+        "reevaluateIntervalMs": 2500,
+        "preferredRangeMaxPx": 1000,
+        "coverSearchActivationMarginPx": 250,
+        "localSearchRadiusPx": 420,
+        "positionCandidateRings": 2,
+        "positionCandidateDirections": 8,
+        "maxLocalSearchCells": 4096,
+        "topTargetCandidates": 4,
+        "threatScanRadiusPx": 1400,
+        "maxCoverThreats": 5,
+        "playerThreatRangePx": 1000,
+        "rangeQualityWeight": 1,
+        "coverQualityWeight": 1,
+        "exposurePenaltyWeight": 2,
+        "movementCostPerPx": 0.006,
+        "minRepositionImprovement": 0.5,
+        "threatCheckIntervalMs": 250,
+        "threatChangeDistancePx": 96,
+        "spacingSpeedFactor": 0.45,
+        "spacingProbeDistancePx": 40,
+        "positionArrivalTolerancePx": 10
       }
     }
   ]

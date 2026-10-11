@@ -191,6 +191,16 @@ export class PlacementSystem {
     return [...this.runtimeRocks.values()];
   }
 
+  /** Local semantic query over the existing footprint index, never a world-wide construct scan. */
+  forEachRuntimeRockInRadius(x: number, y: number, radius: number, visit: (rock: SyncedPlaceableRock) => void): void {
+    this.rockGrid.forEachRockInRadius(x, y, radius, this.metrics.offsetX, this.metrics.offsetY, CELL_SIZE, id => {
+      const rock = this.runtimeRocks.get(id);
+      if (!rock) return;
+      const point = this.getWorldPointForCell(rock.gridX, rock.gridY);
+      if (Math.hypot(point.x - x, point.y - y) <= radius) visit(rock);
+    });
+  }
+
   hasRuntimeRock(id: number): boolean {
     return this.runtimeRocks.has(id);
   }

@@ -341,6 +341,9 @@ export class EnemyFlowFieldService {
     return { region, reachable: false };
   }
   getNavigationSnapshot() { return this.view.snapshot(); }
+
+  /** Current topology, including mutations whose worker snapshot has not arrived yet. */
+  getTopologyVersion(): number { return this.view.version().topology; }
   /** A valid live start attachment even when no attack position is currently free. */
   getStartRegion(x: number, y: number): number | null {
     const snapshot = this.view.snapshot(), geometry = this.view.geometry();
