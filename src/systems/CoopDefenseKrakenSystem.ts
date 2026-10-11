@@ -27,11 +27,6 @@ export interface KrakenHostDependencies {
   diagnostic(message: string): void;
 }
 
-/** Missing AP0 authoring fields are explicit integration inputs, never hidden balance defaults. */
-export interface KrakenHostPolicy {
-  readonly eggReleaseSpacingMs: number;
-  readonly eggMinimumShoreDistancePx: number;
-}
 interface EggThrow { effect: KrakenEggLandEffect; from: Point; to: Point; releaseAt: number; released: boolean; }
 interface PartRuntime { state: KrakenTentacleState; lane: KrakenLaneReservation; progress: KrakenHostActionProgress; }
 
@@ -58,10 +53,7 @@ export class CoopDefenseKrakenSystem {
   private lastPose = { x: 0, y: 0, angle: 0 };
   private lastPreAt = -Infinity;
 
-  constructor(private readonly config: KrakenBossConfig, private readonly deps: KrakenHostDependencies,
-    private readonly policy: KrakenHostPolicy) {
-    if (!Number.isFinite(policy.eggReleaseSpacingMs) || policy.eggReleaseSpacingMs <= 0
-      || !Number.isFinite(policy.eggMinimumShoreDistancePx) || policy.eggMinimumShoreDistancePx <= 0) throw new Error('Invalid kraken host policy');
+  constructor(private readonly config: KrakenBossConfig, private readonly deps: KrakenHostDependencies) {
     this.contacts = new KrakenTentacleTargets(config.hitboxProfiles, boss => !!deps.entity.readBoss(boss)?.alive,
       (identity, status) => {
         if (status !== 'stun') return false; // No boss-wide status transfer or invented part DoT HP.
@@ -99,7 +91,11 @@ export class CoopDefenseKrakenSystem {
     if (entity) this.lastPose = { x: entity.x, y: entity.y, angle: entity.angle };
     if (!entity?.alive || entity.hp <= 0) { this.die(now); this.advanceDeath(now); return; }
     if (s.phase.kind === 'dying' || s.phase.kind === 'removed') { this.advanceDeath(now); return; }
-    if (entity.hp <= entity.maxHp * this.config.phaseTwoHpRatio) s.phaseTwoPending = true;
+    if (!s.phaseTwoPending && entity.hp <= entity.maxHp * this.config.phaseTwoHpRatio) {
+      s.phaseTwoPending = true;
+      this.deps.brood.retireBossEggs(s.boss);
+      this.throws = [];
+    }
     if (entity.stunned && s.bodyAction) this.cancelBody();
     const p = s.phase, d = this.config.dive;
     switch (p.kind) {
@@ -164,7 +160,7 @@ export class CoopDefenseKrakenSystem {
   clear(): void {
     const old = this.state;
     // Invalidate owner first so reentrant callbacks cannot restart actions.
-    this.state = null;
+    this.state = null; this.originId = null;
     if (old) {
       this.clearClaw({ kind: 'body' }, old.boss);
       for (const part of this.parts.values()) this.clearClaw(this.slot(part.state), old.boss);
@@ -202,6 +198,8 @@ export class CoopDefenseKrakenSystem {
     const desired = Math.atan2(target.y - entity.y, target.x - entity.x);
     if (Math.abs(Math.atan2(Math.sin(desired - entity.angle), Math.cos(desired - entity.angle))) > Math.PI / 36) return;
     if (s.phase.kind === 'surfaced') {
+      const approach = this.deps.waterApproach(entity, target);
+      if (approach && Math.hypot(approach.x - entity.x, approach.y - entity.y) > 1) return;
       if (this.nextWaterAction === 'ink') this.startAttack('ink', now, entity);
       else this.startEggs(now, entity);
       this.nextWaterAction = this.nextWaterAction === 'ink' ? 'eggs' : 'ink';
@@ -237,10 +235,10 @@ export class CoopDefenseKrakenSystem {
   private startEggs(now: number, entity: Point & { angle: number }): void {
     const c = this.config.eggs, castId = this.id('eggs'), s = this.state!;
     const rotation = this.deps.random() * Math.PI * 2;
-    const points = this.deps.eggLandings(entity, rotation, c.volleyCount, this.policy.eggMinimumShoreDistancePx);
+    const points = this.deps.eggLandings(entity, rotation, c.volleyCount, this.config.eggs.minimumShoreDistancePx);
     const releaseAt = now + c.windupMs;
     const action: KrakenBodyAction = { kind: 'eggs', castId, startedAt: now, releaseAt,
-      endsAt: releaseAt + (c.volleyCount - 1) * this.policy.eggReleaseSpacingMs + c.recoveryMs };
+      endsAt: releaseAt + (c.volleyCount - 1) * this.config.eggs.releaseSpacingMs + c.recoveryMs };
     this.throws = [];
     for (let i = 0; i < c.volleyCount; i++) {
       const to = points[i]; if (!to) continue;
@@ -249,7 +247,7 @@ export class CoopDefenseKrakenSystem {
       const effect: KrakenEggLandEffect = { type: 'kraken_egg_land', boss: s.boss, castId,
         eggId: this.id('egg'), broodTableId: c.broodTable.id, originId: this.originId ?? s.boss.id };
       if (this.deps.brood.reserveEgg(effect)) this.throws.push({ effect, from, to,
-        releaseAt: releaseAt + i * this.policy.eggReleaseSpacingMs, released: false });
+        releaseAt: releaseAt + i * this.config.eggs.releaseSpacingMs, released: false });
     }
     s.bodyAction = action;
     this.bodyProgress = { actionId: castId, released: false, impacted: false };
@@ -266,10 +264,10 @@ export class CoopDefenseKrakenSystem {
         if (egg.released || now < egg.releaseAt) continue;
         egg.released = true;
         // A large host step must not collapse the stagger into a simultaneous catch-up volley.
-        let nextRelease = now + this.policy.eggReleaseSpacingMs;
+        let nextRelease = now + this.config.eggs.releaseSpacingMs;
         for (const future of this.throws) if (!future.released) {
           future.releaseAt = Math.max(future.releaseAt, nextRelease);
-          nextRelease = future.releaseAt + this.policy.eggReleaseSpacingMs;
+          nextRelease = future.releaseAt + this.config.eggs.releaseSpacingMs;
           action.endsAt = Math.max(action.endsAt, future.releaseAt + this.config.eggs.recoveryMs);
         }
         action.endsAt = Math.max(action.endsAt, now + this.config.eggs.recoveryMs);
@@ -283,8 +281,8 @@ export class CoopDefenseKrakenSystem {
           provenance: { gameplaySourceId: s.boss.id, gameplaySourceKind: 'enemy', attributionId: s.boss.id,
             attributionKind: 'enemy', allegiance: { ownerId: s.boss.id, kind: 'enemy' },
             weaponSourceId: 'kraken-eggs', correlation: { executionId: action.castId } },
-          // AP0 has no egg GrenadeVisualPreset yet; the semantic land effect retains its identity.
-          interaction: { grenadeEffect: egg.effect }, presentation: { color: 0xffffff },
+          // Authored presentation; the semantic land effect retains gameplay identity.
+          interaction: { grenadeEffect: egg.effect }, presentation: { style: 'grenade', color: 0xffffff, grenadePreset: this.config.eggs.presentationPreset },
         });
         this.deps.brood.released(egg.effect, projectile);
         break;
@@ -370,7 +368,13 @@ export class CoopDefenseKrakenSystem {
     if (cancelled) this.contacts.invalidate(p.contact.contactId);
     part.progress.impacted = true;
     p.phase = 'retract'; p.revision++;
-    // Preserve promised anchor ordering even when cancelled during rise.
+    if (cancelled) {
+      p.retractAt = this.now;
+      p.startedAt = Math.min(p.startedAt, this.now - .002);
+      p.hoverAt = Math.min(p.hoverAt, this.now - .001);
+      p.endsAt = this.now + this.config.tentacles.retractMs;
+    }
+    // Contact invalidation is immediate; keep the serialized window ordered.
     if (cancelled) p.contact.targetableUntil = Math.max(p.contact.targetableFrom + 0.001, Math.min(p.contact.targetableUntil, this.now));
     p.claw = { revision: p.claw.revision + 1, attack: null };
     this.emitClaw(this.slot(p), p.claw); this.syncParts();

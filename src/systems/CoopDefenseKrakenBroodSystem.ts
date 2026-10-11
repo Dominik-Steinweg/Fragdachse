@@ -127,6 +127,10 @@ export class CoopDefenseKrakenBroodSystem implements KrakenBroodPort {
   }
   clearBoss(boss: BossTargetRef): void {
     this.closedBosses.add(combatTargetInstanceKey(boss));
+    this.retireBossEggs(boss);
+  }
+  /** Phase changes retire the current brood without closing future land casts. */
+  retireBossEggs(boss: BossTargetRef): void {
     const flights: number[] = [];
     for (const [key, p] of this.pending) if (isSameCombatTargetInstance(p.effect.boss, boss)) {
       this.pending.delete(key); this.consumed.add(key);
@@ -138,6 +142,7 @@ export class CoopDefenseKrakenBroodSystem implements KrakenBroodPort {
   clear(): void {
     const bosses = [...this.pending.values()].map(p => p.effect.boss).concat([...this.eggs.values()].map(e => e.boss));
     for (const boss of bosses) this.clearBoss(boss);
+    this.closedBosses.clear(); this.consumed.clear();
   }
   private remove(entry: LiveEgg): void {
     entry.state.status = 'terminal';

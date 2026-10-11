@@ -92,7 +92,7 @@ export class KrakenHabitatRules implements KrakenHabitatPort {
       let last: Point | null = null;
       for (let i = 1; i <= steps; i++) {
         const p = { x: from.x + (shore.x - from.x) * i / steps, y: from.y + (shore.y - from.y) * i / steps };
-        if (!this.wet(p, this.config.bodyRadiusPx) || !this.queries.segmentFree(from, p, this.config.bodyRadiusPx)) break;
+        if (!this.wet(p, this.config.bodyRadiusPx + this.config.waterShoreDistancePx) || !this.queries.segmentFree(from, p, this.config.bodyRadiusPx)) break;
         last = p;
       }
       if (last) return last;
@@ -107,7 +107,7 @@ export class KrakenHabitatRules implements KrakenHabitatPort {
     for (let i = 0; i < count; i++) {
       const angle = rotation + i * Math.PI * 2 / count;
       let point: Point | null = null;
-      for (let d = this.config.bodyRadiusPx + step; d < max; d += step) {
+      for (let d = this.config.eggs.throwDistancePx; d < max; d += step) {
         const p = { x: from.x + Math.cos(angle) * d, y: from.y + Math.sin(angle) * d };
         if (this.dry(p, this.config.eggs.radiusPx + minShoreDistancePx)
           && this.queries.circleFree(p.x, p.y, this.config.eggs.radiusPx)

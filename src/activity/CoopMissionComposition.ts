@@ -50,6 +50,8 @@ import type { TranslocatorProjectilePort } from '../projectile/ProjectileExterna
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 
 export interface CoopMissionCompositionOptions {
+  readonly getKrakenPorts?: () => import('./CoopMissionKrakenComposition').CoopMissionKrakenPorts;
+  readonly getCombatScope?: () => import('../combat/CombatScope').CombatScope;
   readonly getNavigationGeometry?: () => import('../systems/navigation/NavigationGeometry').NavigationGeometrySnapshot;
   readonly getNavigationObstacleIntegrity?: (enemy: import('../entities/EnemyEntity').EnemyEntity, id: string) => number | null;
   readonly scene: Phaser.Scene;
@@ -165,6 +167,8 @@ export class CoopMissionComposition {
     };
 
     new CoopMissionCombatComposition({
+      krakenPorts: this.options.isHost() ? this.options.getKrakenPorts?.() : undefined,
+      combatScope: this.options.getCombatScope?.(),
       scene: this.options.scene,
       activity,
       enemyConfigs: resolveCoopDefenseEnemyConfigs(humanPlayerCount),

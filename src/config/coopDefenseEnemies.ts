@@ -349,6 +349,34 @@ export const COOP_DEFENSE_ENEMY_CONFIGS: Record<CoopDefenseEnemyKind, CoopDefens
  */
 export const COOP_DEFENSE_ENEMY_KINDS: readonly CoopDefenseEnemyKind[] = Object.keys(COOP_DEFENSE_ENEMY_REGISTRY);
 
+/** Diagnostic-only activation. Production registration follows selected atlas promotion (AP2b).
+ * __WHITE is an existing engine texture, never a legacy boss image/preload URL. */
+export function registerKrakenDiagnosticEnemies(config: import('./krakenBoss').KrakenBossConfig): () => void {
+  const bossKind = 'abyssal-kraken', eggKind = config.eggs.enemyKind;
+  if (COOP_DEFENSE_ENEMY_CONFIGS[bossKind] || COOP_DEFENSE_ENEMY_CONFIGS[eggKind]) return () => {};
+  const base = COOP_DEFENSE_ENEMY_CONFIGS[config.eggs.broodTable.entries[0].enemyKind];
+  const registry = normalizeEnemyRegistry({ enemies: [
+    ...Object.entries(COOP_DEFENSE_ENEMY_CONFIGS).map(([id, value]) => ({ id, ...value })),
+    { ...base, id: bossKind, imageKey: '__WHITE', maxHp: 12000, size: config.bodyRadiusPx * 2,
+      isBoss: true, weapons: [], krakenBoss: config, movementTarget: 'players', knockbackFactor: 0,
+      playerScaling: undefined, spawnScaling: undefined },
+    { ...base, id: eggKind, imageKey: '__WHITE', maxHp: config.eggs.maxHp, size: config.eggs.radiusPx * 2,
+      moveSpeed: 0, xp: 0, weapons: [], knockbackFactor: 0, playerScaling: undefined, spawnScaling: undefined,
+      krakenEgg: { assetId: config.assets.egg, stationary: true, drops: false, necromancy: false,
+        countsForEncounter: false, navigation: false } },
+  ] });
+  for (const id of [bossKind, eggKind]) COOP_DEFENSE_ENEMY_CONFIGS[id] = registry[id];
+  const kinds = COOP_DEFENSE_ENEMY_KINDS as string[];
+  kinds.push(bossKind, eggKind);
+  return () => {
+    for (const id of [bossKind, eggKind]) {
+      if (COOP_DEFENSE_ENEMY_CONFIGS[id] !== registry[id]) continue;
+      delete COOP_DEFENSE_ENEMY_CONFIGS[id];
+      const index = kinds.indexOf(id); if (index >= 0) kinds.splice(index, 1);
+    }
+  };
+}
+
 export function getCoopDefenseEnemyKindIndex(kind: CoopDefenseEnemyKind): number {
   return COOP_DEFENSE_ENEMY_KINDS.indexOf(kind);
 }

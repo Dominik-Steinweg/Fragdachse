@@ -96,7 +96,7 @@ function sceneFixture() {
     return s;
   };
   const scene: any = { time: { now: 0 }, sys: { renderer: { gl: {}, renderNodes: { addNodeConstructor: vi.fn() } } },
-    textures: { getFrame: vi.fn(frame), createCanvas(key: string, w: number, h: number) {
+    textures: { exists: vi.fn(() => true), getFrame: vi.fn(frame), createCanvas(key: string, w: number, h: number) {
       const m = { key, context: { createImageData: (x: number, y: number) => ({ data: new Uint8ClampedArray(x * y * 4) }),
         putImageData: vi.fn() }, refresh: vi.fn(), destroy: vi.fn(), width: w, height: h };
       masks.push(m); return m;
@@ -110,6 +110,29 @@ function sceneFixture() {
 }
 
 describe('host timelines and D asset projection', () => {
+  it('hides an unavailable atlas pair without creating filters or repeating diagnostics', () => {
+    const f = sceneFixture(), diagnostic = vi.fn(); f.scene.textures.exists.mockReturnValue(false);
+    const view = new KrakenSpriteView(f.scene, asset('water'), () => 0, diagnostic);
+    for (const now of [0, 16]) expect(view.show({ clip: 'idle', frame: 0 }, { x: 0, y: 0, angle: 0 }, now)).toBe(false);
+    expect(diagnostic).toHaveBeenCalledOnce(); expect(view.sprite.visible).toBe(false);
+    expect(f.masks).toHaveLength(0); view.destroy();
+  });
+  it('takes over the emerged body while the intro camera is still returning', () => {
+    const s = state(), a = assets(), pose = { x: 10, y: 20, angle: 0 };
+    s.phase = { kind: 'intro', startedAt: 0, emergeAt: 2000, cameraReturnedAt: 3000 };
+    expect(sampleKrakenBody(s, pose, a, 1999).visible).toBe(false);
+    expect(sampleKrakenBody(s, pose, a, 2000).visible).toBe(true);
+  });
+  it('advances retract from its cancellation anchor and degrades safely before atlas import', () => {
+    const a = asset('tentacle'), t = part('cancelled');
+    t.phase = 'retract'; t.retractAt = 900; t.endsAt = 1300; t.claw.attack = null;
+    expect(sampleKrakenTentacle(t, a.metadata, 1100).frame).toBeGreaterThan(0);
+    const f = sceneFixture(), diagnostic = vi.fn();
+    const renderer = new KrakenRenderer(f.scene, { assets: null, waterAt: () => 0,
+      readEggPose: () => null, diagnostic });
+    expect(() => { renderer.sync(state(), null, 1000); renderer.sync(state(), null, 1016); renderer.destroy(); }).not.toThrow();
+    expect(diagnostic).toHaveBeenCalledOnce();
+  });
   it('retimes semantic markers without following exported next clips or source frame numbers', () => {
     const s = state(), a = assets(), pose = { x: 10, y: 20, angle: .8 };
     s.tentacles = []; s.phase = { kind: 'diving', startedAt: 100, submergedAt: 800, endsAt: 1200 };

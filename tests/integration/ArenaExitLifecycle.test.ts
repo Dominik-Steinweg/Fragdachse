@@ -39,7 +39,8 @@ vi.mock('phaser', () => ({
       }
     },
   },
-  Filters: { ParallelFilters: class {}, Displacement: class {} },
+  Filters: { Controller: class {}, ParallelFilters: class {}, Displacement: class {} },
+  Renderer: { WebGL: { RenderNodes: { BaseFilterShader: class {} } } },
 }));
 
 import { ArenaScene } from '../../src/scenes/ArenaScene';

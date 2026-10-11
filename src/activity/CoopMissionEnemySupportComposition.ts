@@ -112,7 +112,11 @@ export class CoopMissionEnemySupportComposition {
     }
 
     const necromancy = this.options.playerModifierReadPort && this.options.weaponExecution
-      ? new NecromancySystem(
+      ? new class extends NecromancySystem {
+        override recordEnemyDeath(death: Parameters<NecromancySystem['recordEnemyDeath']>[0], now?: number): void {
+          if (!runtime.kraken?.excluded.has(death.id)) super.recordEnemyDeath(death, now);
+        }
+      }(
         this.options.playerManager,
         enemyManager,
         this.options.combatSystem,
@@ -139,7 +143,7 @@ export class CoopMissionEnemySupportComposition {
             onCorpseRemoved: (corpseId) => this.options.removeCorpseMarker(corpseId),
           });
           enemyManager.setLethalDamageGuard((currentEnemy) => (
-            necromancy.handleLethalDamage(currentEnemy)
+            runtime.kraken?.excluded.has(currentEnemy.id) ? { kind: 'allow-death' as const } : necromancy.handleLethalDamage(currentEnemy)
           ));
         }
       },

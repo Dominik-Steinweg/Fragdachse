@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { getCoopDefenseMapConfig, type CoopDefenseMapConfig } from '../../src/config/coopDefenseMaps';
 import {
   CoopMissionPresentationBinding,
@@ -9,6 +9,8 @@ import { CoopMissionRuntime } from '../../src/activity/CoopMissionRuntime';
 import type { EnemyEntity } from '../../src/entities/EnemyEntity';
 import type { SyncedCoopDefenseCarryItem } from '../../src/types';
 import type { ActivityDescriptor } from '../../src/world/ActivityDescriptor';
+import { krakenAbyssMap } from '../../src/dev/scenario/krakenAbyssMap';
+import { kraken } from '../krakenNetworkFixtures';
 
 const activity = (revision: number): ActivityDescriptor => ({
   activityRevision: revision,
@@ -17,7 +19,9 @@ const activity = (revision: number): ActivityDescriptor => ({
   definitionId: 'activity:coop-mission:1',
 });
 
-function createHarness(): {
+function createHarness(mapConfig = getCoopDefenseMapConfig('1') as CoopDefenseMapConfig): {
+  readonly reads: CoopMissionPresentationReadPort;
+  readonly ui: CoopMissionPresentationUiPort;
   readonly binding: CoopMissionPresentationBinding;
   readonly runtime: CoopMissionRuntime;
   readonly calls: string[];
@@ -89,15 +93,39 @@ function createHarness(): {
     getCarryPresentationItems: () => [],
   };
   const binding = new CoopMissionPresentationBinding(
-    getCoopDefenseMapConfig('1') as CoopDefenseMapConfig,
+    mapConfig,
     reads,
     ui,
   );
   const runtime = new CoopMissionRuntime(activity(1));
-  return { binding, runtime, calls, carrySnapshots, progressTimes, bossSnapshots, clock };
+  return { reads, ui, binding, runtime, calls, carrySnapshots, progressTimes, bossSnapshots, clock };
 }
 
 describe('CoopMissionPresentationBinding', () => {
+  it('hydrates a submerged Kraken into the local replica scope and detaches reliable callbacks', () => {
+    const f = createHarness(krakenAbyssMap()), state = kraken();
+    state.boss.scope.worldRevision = 1; state.boss.instance.activityRevision = 1;
+    const apply = vi.fn(), hide = vi.fn(), releaseClaw = vi.fn(), releaseHit = vi.fn();
+    const localTarget = { ...state.boss, scope: { worldRevision: 1, runtimeGeneration: 99 } };
+    const enemy = { sprite: { x: 1, y: 2, setVisible: hide }, getAimAngle: () => 0,
+      getAreaClawState: () => ({ revision: 0, attack: null }), setVulnerable() {} };
+    const manager = { getCombatTargetRef: () => localTarget, applyKrakenState: apply, getEnemy: () => enemy,
+      getAllEnemies: () => [], setSpawnEffectSuppressor() {}, applySnapshot() {}, updateClientInterpolation() {} };
+    f.runtime.setEnemyManager(manager as never);
+    Object.assign(f.reads, { getKrakenState: () => state,
+      subscribeAreaClaw: vi.fn(() => releaseClaw), subscribePartHit: vi.fn(() => releaseHit) });
+    const render = vi.fn(); Object.assign(f.ui.worldSpace, { syncKraken: render });
+    f.binding.attach(f.runtime); f.binding.attach(f.runtime);
+    f.binding.clientPresentationStep({ stateAvailable: true, newSnapshot: true, enemySnapshot: null,
+      carryItems: [], interpolationFactor: 1 });
+    expect(apply).toHaveBeenCalledWith({ ...state, boss: localTarget });
+    f.binding.sync(16, true);
+    expect(render.mock.calls[0][0]).toBe(state); // wire/part identities are not rewritten
+    expect(hide).toHaveBeenCalledWith(false);
+    f.binding.detach(); f.binding.detach();
+    expect(releaseClaw).toHaveBeenCalledOnce(); expect(releaseHit).toHaveBeenCalledOnce();
+    render.mockClear(); f.binding.sync(16, true); expect(render).not.toHaveBeenCalled();
+  });
   it('freezes displayed mission time and resumes without counting paused combat time', () => {
     const { binding, runtime, clock, progressTimes } = createHarness();
     runtime.bind(binding);

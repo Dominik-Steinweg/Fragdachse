@@ -496,3 +496,25 @@ Browserprüfung bleibt gemäß `AGENTS.md` opt-in. Diese Seite erteilt keine pau
 
 Zug-Abnahme train8: `dev.run({action:"trainShowcase",park:"center",focus:"center",zoom:2.2}); await dev.whenReady();` dann `dev.run({action:"trainExplosion"});` (Zug sofort weg, Splitterzerfall vor der Landung; Rauch/Glut ca. 15 s, kein liegendes Wrack).
 Fahrt: `dev.run({action:"trainShowcase",focus:"center",zoom:2.2,move:true,speedPxPerSec:120});` – Nacht über `options.values.timeOfDay:0`, Tag `720`; Warmlicht benötigt den TrainVfxPorts-Lichtanschluss der World-Komposition.
+
+## Kraken-Mission (AP2a)
+
+Im vorhandenen Dev-Szenario-Einstieg startet der folgende Befehl die echte Host-Coop-Mission
+auf `kraken-abyss-lab`, inklusive Habitat, Boss-Intro, Tauchzyklus, Tentakeln und Brut:
+
+```js
+await devScenario.run({ action: 'krakenMission' });
+await devScenario.whenReady();
+// Intro ueberspringen und aktuelle HP setzen; Max-HP bleiben erhalten (Phase 2 bei <= 50 %).
+await devScenario.run({ action: 'krakenMission', skipIntro: true, hp: 4000 });
+```
+
+Der Einstieg aktiviert die vorbereiteten Boss-/Ei-Registry-Eintraege nur fuer diese Diagnose.
+Die Kampagnenregistry bleibt unveraendert. Vor dem ausgewaehlten Produktionsimport meldet die
+Darstellung fehlende Atlanten und zeigt die autoritative Angriffsgeometrie; sie laedt keine
+Bossbilder ueber den alten Enemy-Preload. Die vollstaendige Koerper-/Ei-Darstellung folgt mit AP2b.
+Das bisherige `krakenReview` bleibt bei eingefrorener Mission nutzbar.
+
+Der bestehende Dev-Host ist eine isolierte `local-only`-Session; externe Client-Joins werden dort
+nicht angeboten. Join/Resume und der Kraken-Slice werden durch die vorhandenen FakeNetwork-
+Integrationstests geprueft. Ein interaktiver Mehrspieler-Abnahmelauf gehoert zu AP3.

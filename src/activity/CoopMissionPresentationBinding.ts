@@ -1,3 +1,7 @@
+import type { KrakenState } from '../systems/KrakenState';
+import type { EnemyAreaClawEvent } from '../systems/EnemyClawAttack';
+import type { CombatPartHitReceipt } from '../combat/CombatPartContact';
+import type { KrakenBodyPose } from '../effects/kraken/KrakenRenderer';
 import type {
   CoopDefenseEncounterPresentationState,
   CoopDefenseMapEventPresentationState,
@@ -40,6 +44,9 @@ import type {
 } from './CoopMissionRuntime';
 
 export interface CoopMissionPresentationReadPort {
+  readonly getKrakenState?: () => KrakenState | null;
+  readonly subscribeAreaClaw?: (handler: (event: EnemyAreaClawEvent) => void) => () => void;
+  readonly subscribePartHit?: (handler: (receipt: CombatPartHitReceipt) => void) => () => void;
   readonly getEncounterPresentationState: () => CoopDefenseEncounterPresentationState | null;
   readonly getMapEventPresentationState: () => CoopDefenseMapEventPresentationState | null;
   readonly getSecondaryObjectivePresentationState: () => CoopDefenseSecondaryObjectivePresentationState | null;
@@ -87,6 +94,9 @@ export interface CoopMissionPresentationUiPort {
     readonly reset: () => void;
   };
   readonly worldSpace: {
+    readonly syncKraken?: (state: KrakenState | null, body: KrakenBodyPose | null, now: number) => void;
+    readonly applyKrakenClaw?: (event: EnemyAreaClawEvent, now: number) => void;
+    readonly confirmKrakenHit?: (receipt: CombatPartHitReceipt, now: number) => void;
     readonly syncEncounterTelegraph: (
       state: CoopDefenseEncounterPresentationState | null,
       elapsedMs: number,
@@ -133,6 +143,7 @@ export interface CoopMissionPresentationUiPort {
  */
 export class CoopMissionPresentationBinding implements CoopMissionScopedBinding {
   private runtime: CoopMissionRuntime | null = null;
+  private releases: (() => void)[] = [];
   private presentationActive = false;
   private clientCarryPresentationItems: readonly SyncedCoopDefenseCarryItem[] | null = null;
   /** Ein inszeniertes Boss-Intro ersetzt den generischen Spawnblitz seines Bosses (Host wie Client). */
@@ -149,18 +160,33 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
 
   attach(runtime: CoopMissionRuntime): void {
     if (this.runtime === runtime) return;
-    if (this.runtime) this.clearPresentation();
+    if (this.runtime) this.detach();
     this.runtime = runtime;
     this.presentationActive = false;
     this.clientCarryPresentationItems = null;
     this.ui.mapEvents.setMapEvents(this.mapConfig.mapEvents ?? []);
     runtime.enemyManager?.setSpawnEffectSuppressor(this.spawnEffectSuppressor);
+    if (this.mapConfig.boss?.habitatId) {
+      const claw = this.reads.subscribeAreaClaw?.(event => {
+        if (!this.runtime || event.activityRevision !== this.runtime.descriptor.activityRevision
+          || event.worldRevision !== this.runtime.descriptor.worldRevision) return;
+        this.runtime.enemyManager?.applyAreaClawEvent(event);
+        this.ui.worldSpace.applyKrakenClaw?.(event, this.reads.getSynchronizedNow());
+      });
+      const hit = this.reads.subscribePartHit?.(receipt => {
+        if (this.runtime && receipt.event.activityRevision === this.runtime.descriptor.activityRevision
+          && receipt.event.scope.worldRevision === this.runtime.descriptor.worldRevision)
+          this.ui.worldSpace.confirmKrakenHit?.(receipt, this.reads.getSynchronizedNow());
+      });
+      this.releases = [claw, hit].filter((f): f is () => void => !!f);
+    }
   }
 
   detach(): void {
     if (!this.runtime) return;
     this.runtime.enemyManager?.setSpawnEffectSuppressor(null);
     this.runtime = null;
+    for (const release of this.releases) release(); this.releases = [];
     this.clearPresentation();
   }
 
@@ -251,7 +277,36 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     );
     this.ui.worldSpace.syncHostileBaseIndicator(this.mapConfig);
     this.ui.worldSpace.syncBossIntro(this.reads.getBossIntroState(), this.reads.getSynchronizedNow());
+    this.syncKraken();
     this.syncBossPresence();
+  }
+
+  private applyKrakenProjection(state: KrakenState): void {
+    const runtime = this.runtime, manager = runtime?.enemyManager;
+    const target = manager?.getCombatTargetRef(state.boss.id);
+    if (!runtime || !target || target.kind !== 'enemy' || state.boss.scope.worldRevision !== runtime.descriptor.worldRevision
+      || state.boss.instance.activityRevision !== runtime.descriptor.activityRevision
+      || target.instance.entityGeneration !== state.boss.instance.entityGeneration) return;
+    // Runtime generation is local. The wire identity remains intact for part receipts/rendering;
+    // only the Enemy replica receives the corresponding local Combat scope.
+    manager!.applyKrakenState({ ...state, boss: { ...state.boss, scope: target.scope } });
+  }
+
+  private syncKraken(): void {
+    const runtime = this.runtime, state = this.reads.getKrakenState?.() ?? null;
+    const valid = state && runtime && state.boss.scope.worldRevision === runtime.descriptor.worldRevision
+      && state.boss.instance.activityRevision === runtime.descriptor.activityRevision ? state : null;
+    const manager = runtime?.enemyManager;
+    if (valid) this.applyKrakenProjection(valid);
+    const enemy = valid && manager?.getCombatTargetRef(valid.boss.id)?.instance.entityGeneration === valid.boss.instance.entityGeneration
+      ? manager.getEnemy(valid.boss.id) : null;
+    const pose = enemy ? { x: enemy.sprite.x, y: enemy.sprite.y, angle: enemy.getAimAngle(), claw: enemy.getAreaClawState() } : null;
+    if (enemy) enemy.sprite.setVisible(false);
+    for (const egg of valid?.eggs ?? []) {
+      if (manager?.getCombatTargetRef(egg.eggId)?.instance.entityGeneration === egg.entityGeneration)
+        manager.getEnemy(egg.eggId)?.sprite.setVisible(false);
+    }
+    this.ui.worldSpace.syncKraken?.(valid, pose, this.reads.getSynchronizedNow());
   }
 
   private readonly bossPresenceSources: BossPresenceSource[] = [];
@@ -290,6 +345,8 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     runtime.enemyManager?.setSpawnEffectSuppressor(this.spawnEffectSuppressor);
     if (frame.newSnapshot) {
       runtime.enemyManager?.applySnapshot(frame.enemySnapshot);
+      const kraken = this.reads.getKrakenState?.();
+      if (kraken) this.applyKrakenProjection(kraken);
     }
     // Carry state is read by the regular Activity presentation step after this call. It is
     // intentionally refreshed on every available state, just like the former Scene adapter,

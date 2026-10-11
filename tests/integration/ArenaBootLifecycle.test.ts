@@ -10,7 +10,8 @@ vi.mock('phaser', () => ({
     Distance: { Between: (x: number, y: number, a: number, b: number) => Math.hypot(x - a, y - b) } },
   BlendModes: { ADD: 1, NORMAL: 0 },
   Geom: { Circle: class {}, Rectangle: class {}, Line: class {} },
-  Filters: { ParallelFilters: class {}, Displacement: class {} },
+  Filters: { Controller: class {}, ParallelFilters: class {}, Displacement: class {} },
+  Renderer: { WebGL: { RenderNodes: { BaseFilterShader: class {} } } },
 }));
 import { ArenaScene } from '../../src/scenes/ArenaScene';
 import { bridge } from '../../src/network/bridge';

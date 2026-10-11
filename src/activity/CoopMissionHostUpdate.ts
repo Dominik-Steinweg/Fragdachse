@@ -202,6 +202,7 @@ export class CoopMissionHostUpdate {
   ): void {
     let measuredAt = metrics ? performance.now() : 0;
     if (!countdownActive) this.runtime.coopDefenseTimebombSystem?.hostUpdate(nowMs);
+    if (!countdownActive && !weaponBalanceLabActive) this.runtime.kraken?.system.preMovement(nowMs, deltaMs);
     // Vor der Bewegung: Wer hat freien Boden erreicht bzw. seine maximale Grabzeit erschöpft?
     if (!countdownActive) this.runtime.coopDefenseEnemyBurrowSystem?.hostUpdate(nowMs);
     if (metrics) { metrics.enemySpecialMs = performance.now() - measuredAt; measuredAt = performance.now(); }
@@ -231,6 +232,7 @@ export class CoopMissionHostUpdate {
     if (!countdownActive) this.runtime.necromancySystem?.hostUpdate(nowMs, deltaMs);
     if (metrics) { metrics.enemyAlliesMs = performance.now() - measuredAt; measuredAt = performance.now(); }
     if (!countdownActive && !weaponBalanceLabActive) {
+      this.runtime.kraken?.system.hostUpdateActions(nowMs);
       this.runtime.coopDefenseVoidHunterSystem?.hostUpdate(nowMs);
       this.runtime.coopDefenseEnemyAbilitySystem?.hostUpdate(nowMs);
       if (metrics) { metrics.enemyAbilitiesMs = performance.now() - measuredAt; measuredAt = performance.now(); }

@@ -107,6 +107,9 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
       if(mode==='explosion')controller.measureWorldLighting(mode,c.radius===undefined?2.5:number(c.radius,1,6));
       else controller.measureWorldLighting(mode);break;
     }
+    case 'krakenMission':
+      if (c.skipIntro !== undefined && typeof c.skipIntro !== 'boolean') throw new Error('skipIntro: boolean erwartet');
+      controller.startKrakenMission(c.skipIntro === true, c.hp === undefined ? null : number(c.hp, 1, 10000000)); break;
     case 'start': controller.start(c.scenario); break;
     case 'target': controller.aim = point(c); break;
     case 'findFree': controller.findFree(); break;

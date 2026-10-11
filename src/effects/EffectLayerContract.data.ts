@@ -2810,6 +2810,8 @@ export const GPU_EFFECT_CONTRACTS = {
   }
 } as const satisfies Record<keyof typeof GpuVfxEffectId, LayerContract & {readonly lanes: readonly (keyof typeof GpuVfxLaneId)[]}>;
 export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
+  {"id":"cpu:effects/kraken/KrakenRenderer.ts:module/this.sprite/setDepth/0","owner":"effects/kraken/KrakenRenderer.ts","component":"module/this.sprite/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"module/this.sprite/setDepth/0","expression":"depth"}},
+  {"id":"cpu:effects/kraken/KrakenRenderer.ts:take/q.object/setDepth/0","owner":"effects/kraken/KrakenRenderer.ts","component":"take/q.object/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"take/q.object/setDepth/0","expression":"depth"}},
   {id:'cpu:effects/kraken/KrakenTentacleShadow.ts:module/this.image/setDepth/0',owner:'effects/kraken/KrakenTentacleShadow.ts',component:'module/this.image/setDepth/0',height:'ground',lighting:'material',camera:'world',depths:[9.7],blends:['NORMAL'],profiles:['M'],role:'effect',source:{selector:'module/this.image/setDepth/0',expression:'DEPTH.PLAYERS - .3'}},
   {id:'cpu:effects/kraken/KrakenReviewEffectRenderer.ts:quad/q.object/setDepth/0',owner:'effects/kraken/KrakenReviewEffectRenderer.ts',component:'quad/q.object/setDepth/0',height:'body',lighting:'material',camera:'world',depths:[],blends:['NORMAL'],profiles:[],role:'delegate',source:{selector:'quad/q.object/setDepth/0',expression:'depth'}},
   {"id":"cpu:ui/AfterRoundTransition.ts:overlayTransitionView/root/setDepth/0","owner":"ui/AfterRoundTransition.ts","component":"overlayTransitionView/root/setDepth/0","height":"body","lighting":"material","camera":"clarity","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"overlayTransitionView/root/setDepth/0","expression":"value"}},
@@ -3304,6 +3306,7 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:ui/UiContextMenu.ts:open/this.container/setDepth/0","owner":"ui/UiContextMenu.ts","component":"open/this.container/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[103],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"open/this.container/setDepth/0","expression":"this.standaloneDepth"}},
 ];
 export const CPU_SOURCE_CONTRACTS = {
+  'effects/kraken/KrakenRenderer.ts': { sites: [{"key":"module/this.sprite/setDepth/0","expression":"depth","blends":["NORMAL"]},{"key":"take/q.object/setDepth/0","expression":"depth","blends":["NORMAL"]}], blends: [], cameras: [], bindings: {} },
   'effects/kraken/KrakenTentacleShadow.ts': {
     sites: [{key:'module/this.image/setDepth/0',expression:'DEPTH.PLAYERS - .3',blends:['NORMAL']}], blends: [], cameras: [], bindings: {},
   },

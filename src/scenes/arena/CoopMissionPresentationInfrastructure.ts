@@ -1,3 +1,6 @@
+import { KrakenRenderer, type KrakenPresentationAssets } from '../../effects/kraken/KrakenRenderer';
+import { KrakenIntroRenderer } from '../../effects/kraken/KrakenIntroRenderer';
+import { KRAKEN_RISE_INTRO } from '../../config/bossIntros';
 import * as Phaser from 'phaser';
 import type { CenterHUD } from '../../ui/CenterHUD';
 import { CoopDefenseObjectiveAnnouncement } from '../../ui/CoopDefenseObjectiveAnnouncement';
@@ -16,6 +19,8 @@ import type {
 } from '../../activity/CoopMissionPresentationBinding';
 
 export interface CoopMissionPresentationInfrastructureInput {
+  readonly krakenAssets?: KrakenPresentationAssets | null;
+  readonly krakenWaterAt?: (x: number, y: number) => number;
   readonly centerHUD: CenterHUD;
   readonly playerManager: PlayerManager;
   readonly clientUpdate: ClientUpdateCoordinator;
@@ -42,6 +47,8 @@ export class CoopMissionPresentationInfrastructure {
   /** Zuletzt angekündigtes Boss-Intro; verhindert Doppelmeldungen pro Frame. */
   private announcedBossIntroKey: string | null = null;
   private destroyed = false;
+  private kraken: KrakenRenderer | null = null;
+  private krakenIntro: KrakenIntroRenderer | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.objectiveAnnouncements = new CoopDefenseObjectiveAnnouncement(scene);
@@ -60,6 +67,16 @@ export class CoopMissionPresentationInfrastructure {
     if (this.ui) return this.ui;
     if (this.destroyed) throw new Error('Coop presentation infrastructure is destroyed');
     this.uiInput = input;
+    const waterAt = input.krakenWaterAt ?? (() => 0);
+    const diagnostic = (message: string) => console.warn('[Kraken presentation]', message);
+    this.kraken = new KrakenRenderer(this.scene, { assets: input.krakenAssets ?? null, waterAt, diagnostic,
+      readEggPose: egg => {
+        const manager = input.getEnemyManager(), target = manager?.getCombatTargetRef(egg.eggId);
+        const e = target?.instance.entityGeneration === egg.entityGeneration ? manager?.getEnemy(egg.eggId) : null;
+        return e ? { x: e.sprite.x, y: e.sprite.y, angle: e.getAimAngle() } : null;
+      },
+    });
+    this.krakenIntro = new KrakenIntroRenderer(this.scene, input.krakenAssets?.water ?? null, waterAt, diagnostic);
 
     this.secondaryObjectiveHud = new CoopDefenseSecondaryObjectiveHud(
       this.scene,
@@ -127,6 +144,9 @@ export class CoopMissionPresentationInfrastructure {
         },
       },
       worldSpace: {
+        syncKraken: (state, body, now) => { if (!this.destroyed) this.kraken?.sync(state, body, now); },
+        applyKrakenClaw: (event, now) => { if (!this.destroyed) this.kraken?.applyAreaClaw(event, now); },
+        confirmKrakenHit: (receipt, now) => { if (!this.destroyed) this.kraken?.confirmContact(receipt, now); },
         syncEncounterTelegraph: (state, elapsedMs) => {
           if (!this.destroyed) input.renderers.encounterTelegraph.sync(state, elapsedMs, true);
         },
@@ -182,6 +202,8 @@ export class CoopMissionPresentationInfrastructure {
           input.renderers.bossIntro.sync(state, now, true);
           input.renderers.voidHunterSparks.syncIntro(state, now);
           input.renderers.voidRift.sync(state, now);
+          this.krakenIntro?.sync(state?.preset === 'kraken-rise' && state.habitatId && state.waterAnchorId
+            ? { ...state, preset: 'kraken-rise', habitatId: state.habitatId, waterAnchorId: state.waterAnchorId } : null, now);
           this.announceBossIntro(state, now);
         },
         syncBossPresence: (sources, now) => {
@@ -192,6 +214,7 @@ export class CoopMissionPresentationInfrastructure {
         bossIntroOwnsSpawn: (state, now) => !this.destroyed && (
           input.renderers.bossIntro.ownsSpawnAt(state, now)
           || input.renderers.voidHunterSparks.ownsSpawnAt(state, now)
+          || (state?.preset === 'kraken-rise' && now >= state.startedAtMs && now < state.startedAtMs + KRAKEN_RISE_INTRO.durationMs)
         ),
         destroy: () => {
           if (!this.destroyed) this.destroyWorldSpace(input);
@@ -236,11 +259,12 @@ export class CoopMissionPresentationInfrastructure {
     this.announcedBossIntroKey = key;
     if (now - state.startedAtMs > 2_500) return;
     const voidIntro = state.preset === 'void-sparks';
+    const krakenIntro = state.preset === 'kraken-rise';
     this.objectiveAnnouncements.enqueue({
       id: `boss-intro:${key}`,
-      kicker: t(voidIntro ? 'ui.bossIntro.void.kicker' : 'ui.bossIntro.graveyard.kicker'),
-      title: t(voidIntro ? 'ui.bossIntro.void.title' : 'ui.bossIntro.graveyard.title'),
-      detail: t(voidIntro ? 'ui.bossIntro.void.detail' : 'ui.bossIntro.graveyard.detail'),
+      kicker: t(krakenIntro ? 'ui.bossIntro.kraken.kicker' : voidIntro ? 'ui.bossIntro.void.kicker' : 'ui.bossIntro.graveyard.kicker'),
+      title: t(krakenIntro ? 'ui.bossIntro.kraken.title' : voidIntro ? 'ui.bossIntro.void.title' : 'ui.bossIntro.graveyard.title'),
+      detail: t(krakenIntro ? 'ui.bossIntro.kraken.detail' : voidIntro ? 'ui.bossIntro.void.detail' : 'ui.bossIntro.graveyard.detail'),
       tone: 'main',
       topic: 'boss-intro',
       priority: 100,
@@ -251,6 +275,7 @@ export class CoopMissionPresentationInfrastructure {
   private destroyWorldSpace(input: CoopMissionPresentationInfrastructureInput): void {
     if (this.worldSpaceDestroyed) return;
     this.worldSpaceDestroyed = true;
+    this.kraken?.destroy(); this.kraken = null; this.krakenIntro?.destroy(); this.krakenIntro = null;
     input.renderers.beer.syncCoopDefenseCarry([]);
     input.clientUpdate.resetEnemyDashVisuals();
     this.hostileBaseIndicator?.destroy();
@@ -275,6 +300,7 @@ export class CoopMissionPresentationInfrastructure {
     input.renderers.bossPresence.clear();
     input.renderers.voidHunterSparks.clear();
     input.renderers.voidRift.clear();
+    this.kraken?.clear(); this.krakenIntro?.clear();
     this.announcedBossIntroKey = null;
     input.renderers.secondaryObjectiveMarkers.clear();
     input.renderers.missionProgress.clear();

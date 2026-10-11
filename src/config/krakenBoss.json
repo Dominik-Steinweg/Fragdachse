@@ -2,7 +2,7 @@
   "assets": { "water": "abyssal-kraken", "land": "abyssal-kraken-land", "tentacle": "abyssal-kraken-tentacle", "egg": "abyssal-kraken-egg" },
   "bodyRadiusPx": 64, "phaseTwoHpRatio": 0.5, "hpGate": false,
   "firstAttackDelayMs": 800, "actionPauseMs": 1800, "turnRateDegPerSec": 90,
-  "waterApproachSpeedPxPerSec": 80, "landMoveSpeedPxPerSec": 65,
+  "waterApproachSpeedPxPerSec": 80, "waterShoreDistancePx": 24, "landMoveSpeedPxPerSec": 65,
   "dive": { "intervalMs": 14000, "durationMs": 1200, "submergedAtMs": 950, "submergedDurationMs": 7000, "surfaceDurationMs": 1400, "vulnerableAtMs": 900, "recoveryMs": 600 },
   "ink": { "range": 360, "arcDegrees": 56, "damage": 60, "mouthOffset": { "x": 64, "y": 0 }, "windupMs": 1000, "spitDelayMs": 180, "recoveryMs": 450, "cloudFadeMs": 700 },
   "tentacles": { "length": 320, "width": 112, "damage": 45, "windupMs": 1100, "strikeMs": 170, "recoveryMs": 450, "maxConcurrent": 3, "retractMs": 650, "retryMs": 350, "safetyMarginPx": 16, "hitboxProfileId": "shore-arm", "riseMs": 650, "targetableAfterRiseMs": 250, "untargetableAfterRetractMs": 450 },
@@ -17,6 +17,7 @@
   "landCooldowns": { "slamMs": 2200, "inkMs": 5000, "eggsMs": 11000 },
   "exit": { "warningMs": 900, "durationMs": 2400, "recoveryMs": 600, "protected": true, "contactDamage": 0, "blockedPolicy": "wait-or-alternate", "retryMs": 400, "diagnosticAfterMs": 5000 },
   "eggs": { "enemyKind": "abyssal-kraken-egg", "maxHp": 20, "radiusPx": 10, "volleyCount": 6, "maxPendingAndLive": 12, "windupMs": 700, "flightMs": 900, "recoveryMs": 450, "incubationMs": 3500, "hatchSpawnAfterMs": 400, "hatchDurationMs": 667, "spawnRetryMs": 200, "spawnRetryWindowMs": 1600,
+    "throwDistancePx": 640, "minimumShoreDistancePx": 128, "releaseSpacingMs": 100, "presentationPreset": "fur_ball",
     "releaseOffsets": [{ "x": 64, "y": -60 }, { "x": 88, "y": -36 }, { "x": 100, "y": -12 }, { "x": 100, "y": 12 }, { "x": 88, "y": 36 }, { "x": 64, "y": 60 }],
     "targetableInFlight": false, "drops": false, "xp": 0, "necromancy": false, "countsForEncounter": false,
     "broodTable": { "id": "kraken-melee-brood", "entries": [{ "enemyKind": "rabid-badger", "weight": 1 }] }

@@ -36,7 +36,7 @@ export interface KrakenBodyPose extends KrakenPose {
   readonly claw?: EnemyAreaClawState;
 }
 export interface KrakenRendererOptions {
-  readonly assets: KrakenPresentationAssets;
+  readonly assets: KrakenPresentationAssets | null;
   readonly waterAt: (x: number, y: number) => number;
   /** Read the matching egg Entity generation; the brood slice deliberately carries no pose. */
   readonly readEggPose: (egg: KrakenEggState) => KrakenPose | null;
@@ -92,7 +92,8 @@ export function krakenSocket(asset: PipelineBossAsset, pose: KrakenPose, socket:
 }
 export function krakenBodyVisible(state: KrakenState, now: number): boolean {
   const p = state.phase;
-  if (['waiting', 'intro', 'submerged', 'removed'].includes(p.kind)) return false;
+  if (['waiting', 'submerged', 'removed'].includes(p.kind)) return false;
+  if (p.kind === 'intro') return now >= p.emergeAt;
   if (p.kind === 'dying') return !p.submerged && now < p.endsAt;
   if (p.kind === 'diving' && now >= p.submergedAt) return false;
   // A surface projection supersedes the preceding hidden-body epoch. Protection is not invisibility.
@@ -183,6 +184,13 @@ export class KrakenSpriteView {
       frame = this.asset.frame('__rest', 0);
     }
     if (!frame) { this.hide(); return false; }
+    if (!this.scene.textures.exists(frame.key) || !this.scene.textures.exists(frame.elevationKey)) {
+      const key = `${sample.clip}/residency`;
+      if (!this.missing.has(key)) {
+        this.missing.add(key); this.diagnostic(`Kraken ${a.id}/${sample.clip} textures unavailable; hiding view`);
+      }
+      this.hide(); return false;
+    }
     const s = this.sprite, size = a.targetSize * (a.displayScale ?? 1) * (options.scale ?? 1);
     const origin = options.socket ? a.sockets[options.socket] : a.pivot;
     if (!origin) throw Error(`Kraken ${a.id} lacks ${options.socket}`);
@@ -370,6 +378,7 @@ export class KrakenRenderer {
   private readonly effects: KrakenEffects;
   private body: KrakenSpriteView | null = null;
   private readonly parts = new Map<string, PartView>();
+  private readonly fallbackSlots = new Map<string, EnemyAreaClawEvent>();
   private readonly eggs = new Map<string, KrakenSpriteView>();
   private readonly impacts = new Map<string, EnemyAreaClawAttack>();
   private readonly contacts = new Map<string, { until: number; key: string }>();
@@ -378,6 +387,7 @@ export class KrakenRenderer {
   private revision = -1;
   private now = 0;
   private destroyed = false;
+  private missingAssetsReported = false;
   private waterMotion: { pose: KrakenPose; diveAt?: number; rise?: KrakenRiseTiming } | null = null;
   constructor(private readonly scene: Phaser.Scene, private readonly options: KrakenRendererOptions) {
     this.claw = new EnemyClawRenderer(scene, () => this.now);
@@ -391,6 +401,22 @@ export class KrakenRenderer {
     if (state.revision < this.revision) return;
     this.revision = state.revision; this.now = now;
     this.effects.begin();
+    if (!this.options.assets) {
+      if (!this.missingAssetsReported) { this.missingAssetsReported = true; this.options.diagnostic('Kraken atlases are not imported/resident; showing authoritative attack geometry only.'); }
+      const bodyEvent = this.event(state, { kind: 'body' }, body?.claw ?? { revision: 0, attack: null });
+      if (state.phase.kind === 'dying') this.claw.releaseArea(bodyEvent);
+      else if (body?.claw) this.claw.syncArea(bodyEvent, now);
+      const current = new Set<string>();
+      for (const part of state.tentacles) {
+        const i = part.contact.identity, key = krakenPartKey(i);
+        const event = this.event(state, { kind: 'part', partId: i.partId, partGeneration: i.partGeneration, cycleId: i.cycleId }, part.claw);
+        current.add(key); this.fallbackSlots.set(key, event); this.claw.syncArea(event, now);
+      }
+      for (const [key, event] of this.fallbackSlots) if (!current.has(key)) {
+        this.claw.releaseArea(event); this.fallbackSlots.delete(key);
+      }
+      return;
+    }
     const terminal = state.phase.kind === 'dying' ? state.phase.terminalPose : null;
     const pose = terminal ?? body;
     if (pose) {
@@ -470,6 +496,9 @@ export class KrakenRenderer {
     }
     for (const [key, view] of this.eggs) if (!eggKeys.has(key)) { view.destroy(); this.eggs.delete(key); }
   }
+  applyAreaClaw(event: EnemyAreaClawEvent, now: number): void {
+    if (!this.destroyed) this.claw.syncArea(event, now);
+  }
   /** Local contact feedback only; stale/cancelled parts are never recreated by a receipt. */
   confirmContact(receipt: CombatPartHitReceipt, now: number): void {
     if (this.destroyed || receipt.event.scope.worldRevision !== receipt.part.boss.scope.worldRevision
@@ -496,7 +525,7 @@ export class KrakenRenderer {
     this.body?.destroy(); this.body = null;
     for (const part of this.parts.values()) part.view.destroy();
     for (const egg of this.eggs.values()) egg.destroy();
-    this.parts.clear(); this.eggs.clear(); this.contacts.clear(); this.contactSeen.clear(); this.impacts.clear();
+    this.parts.clear(); this.fallbackSlots.clear(); this.eggs.clear(); this.contacts.clear(); this.contactSeen.clear(); this.impacts.clear();
     this.claw.clear(); this.effects.clear(); this.waterMotion = null; this.bossKey = ''; this.revision = -1;
   }
   destroy(): void {

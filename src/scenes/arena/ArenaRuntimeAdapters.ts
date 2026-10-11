@@ -1,3 +1,4 @@
+import { KRAKEN_RISE_INTRO, readBossIntroState } from '../../config/bossIntros';
 import type { PlayerManager } from '../../entities/PlayerManager';
 import type { TrainShowcaseState } from '../../dev/scenario/trainShowcase';
 import { TRAIN } from '../../train/TrainConfig';
@@ -49,6 +50,33 @@ export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator, play
       .some(player => player.id !== bridge.getLocalPlayerId() && !isLocalScenarioBotPeer(player.id))) throw new Error('Isolated dev host required.');
   };
   return {
+    startKrakenMission(skipIntro: boolean): boolean {
+      requireLocal();
+      const runtime = flow.getCoopMissionRuntime();
+      if (!runtime?.kraken || !runtime.coopDefenseBossSystem) throw new Error('Kraken diagnosis mission required');
+      const now = bridge.getSynchronizedNow();
+      runtime.coopDefenseBossSystem.hostUpdate(0, false, skipIntro ? now - KRAKEN_RISE_INTRO.durationMs : now);
+      if (skipIntro) runtime.coopDefenseBossSystem.hostUpdate(KRAKEN_RISE_INTRO.emergeAtMs, false, now);
+      const round = bridge.getRoundState();
+      const intro = round?.status === 'active' ? readBossIntroState(round.coopDefenseBossIntro) : null;
+      const started = skipIntro ? runtime.kraken.system.getState() !== null : intro?.startedAtMs === now;
+      if (!started) {
+        runtime.coopDefenseBossSystem.reset();
+        return false;
+      }
+      runtime.analysisScenarioActive = false;
+      runtime.setScenarioOptions(false, true, now);
+      return true;
+    },
+    setKrakenHp(hp: number): boolean {
+      requireLocal();
+      if (!Number.isFinite(hp) || hp <= 0) throw new Error('Positive boss HP required');
+      const runtime = flow.getCoopMissionRuntime(), state = runtime?.kraken?.system.getState();
+      const enemy = state ? runtime?.enemyManager?.getEnemy(state.boss.id) : null;
+      if (!enemy) return false;
+      runtime!.enemyManager!.hostSetVitalsBaseline(enemy.id, Math.min(hp, enemy.getMaxHp()), enemy.getMaxHp());
+      return true;
+    },
     findDestructibleRock(gridX: number, gridY: number) {
       requireLocal();
       const materialization=flow.getWorldRuntime()?.materialization, arena=materialization?.arena, registry=materialization?.rocks;

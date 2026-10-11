@@ -762,6 +762,24 @@ export class ArenaLifecycleCoordinator {
       ) ?? false,
     });
     this.coopMissionComposition = new CoopMissionComposition({
+      getCombatScope: () => this.combatSystem.getCombatScope(),
+      getKrakenPorts: () => ({
+        resolveIntentTarget: candidate => candidate.kind === 'decoy'
+          ? this.ctx.decoySystem.getCombatTargetRef(Number(candidate.id)) : this.combatSystem.getZeusTarget(candidate.id),
+        combat: this.combatSystem, projectiles: this.getWorldProjectileRuntime()!,
+        cancelFlights: ids => { for (const id of ids) this.getWorldProjectileRuntime()?.destroyProjectile(id); },
+        bindBrood: port => this.hostUpdate.setKrakenBroodPort(port),
+        publish: state => bridge.publishKrakenState(state),
+        broadcastClaw: event => {
+          bridge.broadcastEnemyAreaClawAttack(event);
+          this.coopMissionPresentationUi?.worldSpace.applyKrakenClaw?.(event, bridge.getSynchronizedNow());
+        },
+        broadcastHit: receipt => {
+          bridge.broadcastKrakenPartHit(receipt);
+          this.coopMissionPresentationUi?.worldSpace.confirmKrakenHit?.(receipt, bridge.getSynchronizedNow());
+        },
+        now: () => bridge.getSynchronizedNow(), diagnostic: message => console.warn(message),
+      }),
       scene,
       isAuthoredRockDestroyed: (id) => this.worldRuntime?.materialization?.rocks?.readIntegrity(id)?.destroyed === true,
       getNavigationGeometry: () => {

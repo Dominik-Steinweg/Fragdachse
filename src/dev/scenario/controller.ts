@@ -50,6 +50,12 @@ export class DevScenarioController {
   private krakenReview: KrakenBossReview | null = null;
   private readonly unregisterKrakenMap: () => void;
   private krakenLoading = false;
+  private pendingKrakenMission: { skipIntro: boolean; hp: number | null } | null = null;
+  private pendingKrakenHp: number | null = null;
+  startKrakenMission(skipIntro = false, hp: number | null = null): void {
+    this.start({ ...defaultScenario(), mapId: KRAKEN_MAP_ID });
+    this.pendingKrakenMission = { skipIntro, hp };
+  }
   async arrangeKrakenReview(command: Record<string, unknown>): Promise<void> {
     this.requireReady();
     if (this.config.mapId !== KRAKEN_MAP_ID) throw Error(`krakenReview requires ${KRAKEN_MAP_ID}`);
@@ -163,6 +169,7 @@ export class DevScenarioController {
     this.lastAction = { ok: false, error: this.message };
   }
   start(value: unknown): void {
+    this.pendingKrakenMission = null; this.pendingKrakenHp = null;
     this.krakenReview?.destroy(); this.krakenReview = null;
     this.turretMaterialReview?.destroy(); this.turretMaterialReview = null;
     this.armageddonReview?.destroy(); this.armageddonReview = null;
@@ -688,6 +695,14 @@ export class DevScenarioController {
       if (this.runtime.isMatchTerminated() || bridge.getGamePhase() !== 'ARENA') {
         this.stop(); this.state = 'idle'; this.message = 'Runde beendet. Szenario erneut starten.'; return;
       }
+      if (!this.setupPending && this.pendingKrakenMission) {
+        const options = this.pendingKrakenMission;
+        if (this.runtime.devScenarioPort.startKrakenMission(options.skipIntro)) {
+          this.pendingKrakenMission = null; this.pendingKrakenHp = options.hp;
+          this.config.freezeMission = false; this.config.suppressWaves = false;
+        }
+      }
+      if (this.pendingKrakenHp !== null && this.runtime.devScenarioPort.setKrakenHp(this.pendingKrakenHp)) this.pendingKrakenHp = null;
       const now = this.clock.now, id = bridge.getLocalPlayerId();
       this.runtime.devScenarioPort.suppressEncounters(this.config.suppressWaves || this.pendingConstructions.length > 0);
       this.runtime.devScenarioPort.setOptions(this.config.freezeMission, this.config.hideTutorial);
@@ -790,7 +805,7 @@ export class DevScenarioController {
     setCameraBaseScroll(this.scene, camera.scrollX, camera.scrollY);
   }
   snapshot(): Record<string, unknown> {
-    return { state: this.state, ready: this.state === 'ready' && !this.setupPending && !this.pendingTrainShowcase && !this.krakenLoading, message: this.message, isolated: true, network: 'local-only',
+    return { state: this.state, ready: this.state === 'ready' && !this.setupPending && !this.pendingTrainShowcase && !this.krakenLoading && !this.pendingKrakenMission && this.pendingKrakenHp === null, message: this.message, isolated: true, network: 'local-only',
       initialPosition: this.initialPosition, mission: this.runtime.devScenarioPort.readMission(),
       train: this.trainStatus(),
       bots: this.bots.ids().map((id, index) => ({ index, id, ...(this.state === 'ready' ? this.bots.position(index) : null) })),

@@ -28,6 +28,16 @@ describe('kraken registry authoring', () => {
     const c = defaults(); c.ink.damage *= 2; c.dive.intervalMs *= 1.5;
     expect(normalizeKrakenBossConfig(c)).toEqual(c);
   });
+  it('validates authored travel distances and the grenade presentation reference', () => {
+    const c = defaults(); c.waterShoreDistancePx += 10; c.eggs.throwDistancePx *= 1.2;
+    c.eggs.minimumShoreDistancePx += 30; c.eggs.releaseSpacingMs *= 2; c.eggs.presentationPreset = 'he';
+    expect(normalizeKrakenBossConfig(c)).toEqual(c);
+    for (const field of ['throwDistancePx', 'minimumShoreDistancePx', 'releaseSpacingMs'] as const) {
+      expect(() => normalizeKrakenBossConfig({ ...c, eggs: { ...c.eggs, [field]: 0 } })).toThrow();
+    }
+    expect(() => normalizeKrakenBossConfig({ ...c, waterShoreDistancePx: -1 })).toThrow();
+    expect(() => normalizeKrakenBossConfig({ ...c, eggs: { ...c.eggs, presentationPreset: 'missing' } })).toThrow();
+  });
   it('rejects nonfinite tuning, missing profile IDs and impossible action anchors', () => {
     const c = defaults(); c.ink.range = NaN;
     expect(() => normalizeKrakenBossConfig(c)).toThrow();

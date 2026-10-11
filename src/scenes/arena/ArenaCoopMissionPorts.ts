@@ -34,6 +34,9 @@ export function createArenaCoopMissionPresentationPort(
   },
 ): CoopMissionPresentationReadPort {
   return {
+    getKrakenState: () => bridge.getKrakenState(),
+    subscribeAreaClaw: handler => bridge.subscribeEnemyAreaClawAttack(handler),
+    subscribePartHit: handler => bridge.subscribeKrakenPartHit(handler),
     getEncounterPresentationState: () => bridge.getCoopDefenseEncounterPresentationState(),
     getMapEventPresentationState: () => bridge.getCoopDefenseMapEventPresentationState(),
     getSecondaryObjectivePresentationState: () => bridge.getCoopDefenseSecondaryObjectivePresentationState(),

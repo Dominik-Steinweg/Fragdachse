@@ -22,13 +22,13 @@ function setup() {
       reserveExit: () => ({ status: 'valid', value: { reservationId: 'exit', topologyRevision: 1, corridorId: 'east', widthPx: 200, path: [{ x: 0, y: 0 }, { x: 300, y: 0 }] } }),
       revalidateExit: r => ({ status: 'valid', value: r }) },
     combat: { resolveAreaAttack: vi.fn(() => ({} as never)) }, projectiles: { spawnProjectile: vi.fn(() => ++serial) },
-    brood: { reserveEgg: () => true, released: vi.fn(), cancelEgg: vi.fn(), clearBoss: vi.fn(), hostUpdate: vi.fn(), getEggs: () => [] } as never,
+    brood: { reserveEgg: () => true, released: vi.fn(), cancelEgg: vi.fn(), clearBoss: vi.fn(), retireBossEggs: vi.fn(), hostUpdate: vi.fn(), getEggs: () => [] } as never,
     publish: { publish: s => { if (s) { expect(readKrakenState(s)).not.toBeNull(); publications.push(s); } } },
     claw: vi.fn(), waterApproach: () => null, canMove: () => true, flightFree: () => true,
     eggLandings: (_p, _angle, count) => Array.from({ length: count }, (_, i) => ({ x: 600 + i * 50, y: i * 100 })),
     random: () => .25, diagnostic: vi.fn(),
   };
-  const system = new CoopDefenseKrakenSystem(config, deps, { eggReleaseSpacingMs: 100, eggMinimumShoreDistancePx: 100 });
+  const system = new CoopDefenseKrakenSystem(config, deps);
   system.start(boss, 'pond', 0, 0);
   const tick = (at: number) => { system.preMovement(at, at - now); now = at; system.hostUpdateActions(at); };
   const dive = () => { tick(config.dive.intervalMs); tick(config.dive.intervalMs + config.dive.durationMs); };
@@ -57,7 +57,7 @@ describe('Kraken host owner', () => {
     const cast = f.system.getState()!.bodyAction!;
     expect(cast.kind).toBe('eggs'); if (cast.kind !== 'eggs') throw Error();
     for (let i = 0; i < f.config.eggs.volleyCount; i++) {
-      f.tick(cast.releaseAt + i * 100);
+      f.tick(cast.releaseAt + i * f.config.eggs.releaseSpacingMs);
       expect(f.deps.projectiles.spawnProjectile).toHaveBeenCalledTimes(i + 1);
     }
     f.tick(cast.endsAt + 1);
@@ -65,6 +65,7 @@ describe('Kraken host owner', () => {
     for (const [request] of vi.mocked(f.deps.projectiles.spawnProjectile).mock.calls) {
       expect(request.interaction.directHit).toBeUndefined(); expect(request.interaction.explosion).toBeUndefined();
       expect(request.interaction.grenadeEffect?.type).toBe('kraken_egg_land');
+      expect(request.presentation).toMatchObject({ style: 'grenade', grenadePreset: f.config.eggs.presentationPreset });
     }
   });
 

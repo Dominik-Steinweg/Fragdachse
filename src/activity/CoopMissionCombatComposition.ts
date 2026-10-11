@@ -1,3 +1,5 @@
+import { materializeCoopMissionKraken, type CoopMissionKrakenPorts } from './CoopMissionKrakenComposition';
+import { getBossIntroPreset } from '../config/bossIntros';
 import type { BossIntroState } from '../config/bossIntros';
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import { WaterGeometry } from '../arena/WaterGeometry';
@@ -54,6 +56,8 @@ interface BaseStatePort {
 }
 
 export interface CoopMissionCombatCompositionOptions {
+  readonly krakenPorts?: CoopMissionKrakenPorts;
+  readonly combatScope?: import('../combat/CombatScope').CombatScope;
   readonly geometryProvider?: () => import('../systems/navigation/NavigationGeometry').NavigationGeometrySnapshot;
   readonly scene: Phaser.Scene;
   /** Already validated against the current WorldDefinition; mapConfig is only its adapter. */
@@ -90,11 +94,14 @@ export class CoopMissionCombatComposition {
 
   materialize(runtime: CoopMissionRuntime): void {
     runtime.setEnemyManager(this.createEnemyManager());
+    if (this.options.combatScope) runtime.enemyManager!.bindCombatIdentity(this.options.combatScope, runtime.descriptor.activityRevision);
     if (!this.options.isHost) return;
 
     const navigation = this.createNavigation();
     runtime.setNavigation(navigation);
     const activity = this.options.activity.mapConfig;
+    if (this.options.krakenPorts && this.options.geometryProvider) materializeCoopMissionKraken(runtime, activity,
+      this.options.layout, this.options.worldMetrics, this.options.krakenPorts, this.options.geometryProvider);
     const persistentSpawnConfigs = resolveCoopDefenseMapPersistentSpawnConfigs(
       activity,
       this.options.humanPlayerCount,
@@ -236,6 +243,7 @@ export class CoopMissionCombatComposition {
       navigation.boss,
       navigation.player,
       navigation.strategic,
+      runtime.kraken?.habitat,
     );
     const persistentPressure = persistentSpawnConfigs.length > 0
       ? new CoopDefensePersistentPressureSystem(
@@ -250,7 +258,15 @@ export class CoopMissionCombatComposition {
         this.options.activity.mapConfig.boss,
         enemyManager,
         spawnExecutor,
-        this.options.onBossSpawned,
+        (now, boss, intro) => {
+          if (boss && runtime.kraken && this.options.activity.mapConfig.boss?.habitatId) {
+            runtime.kraken.excluded.add(boss.id);
+            runtime.kraken.system.start(boss, this.options.activity.mapConfig.boss.habitatId, now,
+              intro ? intro.startedAtMs + getBossIntroPreset(intro.preset).durationMs : now, intro?.startedAtMs);
+            runtime.kraken.system.originId = enemyManager.getEnemy(boss.id)?.originId ?? boss.id;
+          }
+          this.options.onBossSpawned?.(now);
+        },
         this.options.onBossIntroStarted,
         Math.random,
         () => {
@@ -259,6 +275,7 @@ export class CoopMissionCombatComposition {
         },
       )
       : null;
+    if (runtime.kraken) bossSystem?.setDefeatCompletionSource(() => runtime.kraken?.system.isDefeatComplete() ?? false);
     const mapDirector = encounterConfigs.length > 0
       ? new CoopDefenseMapDirector(
         encounterConfigs,

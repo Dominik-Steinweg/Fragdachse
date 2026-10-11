@@ -17,17 +17,17 @@ export function krakenIntroCameraWeight(elapsed: number): number {
 /** Only the intro silhouette/choreography and local camera. BossSystem owns reservation/spawn.
  * The intro view hands off exactly at emergeAtMs; it never creates an Enemy or advances a phase. */
 export class KrakenIntroRenderer {
-  private readonly body: KrakenSpriteView;
+  private readonly body: KrakenSpriteView | null;
   private readonly effects: KrakenEffects;
   private key = '';
   private lastNow: number | null = null;
   private ownsFocus = false;
   private destroyed = false;
   private feedback: CameraFeedbackController | null = null;
-  constructor(private readonly scene: Phaser.Scene, private readonly asset: KrakenPresentationAsset,
+  constructor(private readonly scene: Phaser.Scene, private readonly asset: KrakenPresentationAsset | null,
     waterAt: (x: number, y: number) => number, diagnostic: (message: string) => void,
     private readonly angle = 0) {
-    this.body = new KrakenSpriteView(scene, asset, waterAt, diagnostic);
+    this.body = asset ? new KrakenSpriteView(scene, asset, waterAt, diagnostic) : null;
     this.effects = new KrakenEffects(scene, waterAt);
   }
   setCameraFeedback(feedback: CameraFeedbackController | null): void { this.feedback = feedback; }
@@ -39,15 +39,21 @@ export class KrakenIntroRenderer {
     if (key !== this.key) { this.clear(); this.key = key; }
     const start = state.startedAtMs, end = start + I.emergeAtMs;
     // The reviewed lead-in gives the rising shadow time to announce the body.
+    if (!this.asset) {
+      const weight = krakenIntroCameraWeight(elapsed);
+      setCameraFocusOverride(this.scene, state.x, state.y, weight, I.camera.zoom);
+      this.ownsFocus = weight > 0;
+      return;
+    }
     const timing = krakenRiseTiming(this.asset.metadata, 'intro-rise', start, start + 600, end);
     const pose = { x: state.x, y: state.y, angle: this.angle };
     this.effects.begin();
     this.effects.rise(pose, timing, now, true);
     if (now >= timing.clipStartedAt && now < end) {
       const clip = krakenClip(this.asset.metadata, I.clip);
-      this.body.show(sampleKrakenClip(clip, now, [[timing.clipStartedAt, 0], [end, clip.frames.length - 1]]), pose, now,
+      this.body?.show(sampleKrakenClip(clip, now, [[timing.clipStartedAt, 0], [end, clip.frames.length - 1]]), pose, now,
         { drain: krakenDrain(timing, now, true) });
-    } else this.body.hide();
+    } else this.body?.hide();
     const weight = krakenIntroCameraWeight(elapsed);
     setCameraFocusOverride(this.scene, state.x, state.y, weight, I.camera.zoom);
     this.ownsFocus = weight > 0;
@@ -60,13 +66,13 @@ export class KrakenIntroRenderer {
     this.lastNow = now;
   }
   clear(): void {
-    this.body.hide(); this.effects.clear(); this.lastNow = null;
+    this.body?.hide(); this.effects.clear(); this.lastNow = null;
     if (this.ownsFocus) clearCameraFocusOverride(this.scene);
     if (this.key) this.feedback?.cancel('kraken-intro-roar');
     this.ownsFocus = false; this.key = '';
   }
   destroy(): void {
     if (this.destroyed) return;
-    this.clear(); this.destroyed = true; this.body.destroy(); this.effects.destroy(); this.feedback = null;
+    this.clear(); this.destroyed = true; this.body?.destroy(); this.effects.destroy(); this.feedback = null;
   }
 }
