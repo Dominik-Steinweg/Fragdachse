@@ -84,6 +84,7 @@ export interface CoopMissionHostUpdatePort {
 export interface CoopMissionNavigationMetrics {
   navIntentMs?: number;
   enemySpecialMs?: number;
+  enemyMortarMs?: number;
   enemyPositioningMs?: number;
   enemyMovementMs?: number;
   enemyAlliesMs?: number;
@@ -205,6 +206,9 @@ export class CoopMissionHostUpdate {
     // Vor der Bewegung: Wer hat freien Boden erreicht bzw. seine maximale Grabzeit erschöpft?
     if (!countdownActive) this.runtime.coopDefenseEnemyBurrowSystem?.hostUpdate(nowMs);
     if (metrics) { metrics.enemySpecialMs = performance.now() - measuredAt; measuredAt = performance.now(); }
+    // Mortar windup/spacing decisions must precede the movement override in this same frame.
+    if (!countdownActive && !weaponBalanceLabActive) this.runtime.coopDefenseMortarSystem?.hostUpdate(nowMs);
+    if (metrics) { metrics.enemyMortarMs = performance.now() - measuredAt; measuredAt = performance.now(); }
     // Gefechtsabstand vor der Bewegung bestimmen: das Ergebnis ersetzt für Fernkämpfer die
     // Wegfindung im selben Frame.
     if (!countdownActive) this.runtime.coopDefenseEnemyCombatPositioningSystem?.hostUpdate();
@@ -233,7 +237,6 @@ export class CoopMissionHostUpdate {
     if (!countdownActive && !weaponBalanceLabActive) {
       this.runtime.coopDefenseVoidHunterSystem?.hostUpdate(nowMs);
       this.runtime.coopDefenseEnemyAbilitySystem?.hostUpdate(nowMs);
-      this.runtime.coopDefenseMortarSystem?.hostUpdate(nowMs);
       this.runtime.coopDefenseMortarStrikeSystem?.hostUpdate(nowMs);
       if (metrics) { metrics.enemyAbilitiesMs = performance.now() - measuredAt; measuredAt = performance.now(); }
       this.runtime.coopDefenseEnemyAttackSystem?.hostUpdate(deltaMs, nowMs);

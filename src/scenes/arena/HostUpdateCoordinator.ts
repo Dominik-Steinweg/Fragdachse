@@ -74,6 +74,7 @@ const SUPPORT_TURRET_GRAZE_RADIUS = 24;
 export interface HostUpdatePerformanceMetrics {
   navIntentMs?: number;
   enemySpecialMs?: number;
+  enemyMortarMs?: number;
   enemyPositioningMs?: number;
   enemyMovementMs?: number;
   enemyAlliesMs?: number;

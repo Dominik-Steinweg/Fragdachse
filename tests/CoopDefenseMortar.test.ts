@@ -8,11 +8,23 @@ import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { SyncedPlaceableRock } from '../src/types';
 import { applyHostileAreaStrikeDamage } from '../src/systems/hostileAreaStrikeDamage';
 import { computeRadialDamage } from '../src/utils/radialDamage';
+import { EnemyFlowFieldService } from '../src/systems/EnemyFlowFieldService';
+import { findMortarLocalPositions, type MortarNavigation } from '../src/systems/MortarLocalPositions';
+import type { CombatGeometryPort } from '../src/combat/CombatCapabilities';
+import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { getCoopDefenseConstructionDefinition } from '../src/config/coopDefenseConstructions';
 
 const config = getCoopDefenseEnemyConfig('mortar-badger').mortar!;
-function fixture() {
+function openField(water: { gridX: number; gridY: number }[] = []) {
+  return new EnemyFlowFieldService({ seed: 1, rocks: [], trees: [], tracks: [], dirt: [], powerUpPedestals: [], water }, [],
+    { cols: 96, rows: 96, cellSize: 32, arenaOffsetX: -1552, arenaOffsetY: -1552 },
+    { goalMode: 'dynamic', dynamicGoalCells: [{ gridX: 70, gridY: 48 }] });
+}
+function fixture(options: { navigation?: MortarNavigation; hasLineOfSight?: CombatGeometryPort['hasLineOfSight']; bases?: ConstructorParameters<typeof CoopDefenseMortarSystem>[4] } = {}) {
   const enemy = { id: 'mortar', kind: 'mortar-badger', faction: 'hostile', sprite: { active: true, x: 0, y: 0 },
-    getHp: () => 45, faceAngle: vi.fn(), pauseAttackMovement: vi.fn(), stopMovement: vi.fn() } as unknown as EnemyEntity;
+    getHp: () => 45, getMoveSpeed: () => 60, getCollisionRadius: () => 15,
+    getAttackWeapons: () => [{ weapon: { config: WEAPON_CONFIGS.MORTAR_BADGER_BITE } }],
+    faceAngle: vi.fn(), pauseAttackMovement: vi.fn(), stopMovement: vi.fn() } as unknown as EnemyEntity;
   const enemies = [enemy];
   const players = [{ id: 'player', active: true, x: config.preferredRangeMinPx, y: 0 }];
   const rocks: SyncedPlaceableRock[] = [];
@@ -21,13 +33,18 @@ function fixture() {
   catalog.updateTargets([{ kind: 'player', id: 'player', x: players[0].x, y: 0,
     resolvePosition: () => ({ x: players[0].x, y: players[0].y }), isTargetable: () => targetAlive }]);
   const impact = vi.fn();
+  const hasLineOfSight = vi.fn(options.hasLineOfSight ?? (() => true));
+  const query = vi.fn((x: number, y: number, radius: number, visit: (rock: SyncedPlaceableRock) => void) => rocks.forEach(rock => {
+    if (Math.hypot(rock.gridX - x, rock.gridY - y) <= radius) visit(rock);
+  }));
   const strikes = new CoopDefenseMortarStrikeSystem({ impact });
   const mortar = new CoopDefenseMortarSystem({ getAllEnemies: () => enemies },
-    { getAllPlayers: () => players } as never, { isAlive: () => true }, catalog, null,
-    { getAllRuntimeRocks: () => rocks, getWorldPointForCell: (x, y) => ({ x, y }) }, strikes);
+    { getAllPlayers: () => players } as never, { isAlive: () => true, hasLineOfSight }, catalog, options.bases ?? null,
+    { forEachRuntimeRockInRadius: query, getRuntimeRock: id => rocks.find(rock => rock.id === id), getCarrierBaseId: () => undefined,
+    getWorldPointForCell: (x, y) => ({ x, y }) }, strikes, options.navigation);
   const snapshot = () => [...mortar.getSnapshot(), ...strikes.getSnapshot()];
   const update = (now: number) => { mortar.hostUpdate(now); strikes.hostUpdate(now); };
-  return { mortar, strikes, impact, enemy, enemies, players, rocks, catalog, snapshot, update,
+  return { mortar, strikes, impact, enemy, enemies, players, rocks, catalog, snapshot, update, hasLineOfSight, query,
     destroyTarget: () => { targetAlive = false; } };
 }
 
@@ -201,6 +218,229 @@ describe('mortar behavior and deferred execution', () => {
       if (rockMult > 0) expect(commits).toHaveBeenCalledWith(1, Math.round(damage * rockMult), f.enemy.id);
       else expect(commits.mock.calls.every(([id]) => id === 2)).toBe(true);
       expect(train).not.toHaveBeenCalled();
+    }
+  });
+});
+
+describe('local mortar siege policy', () => {
+  it('I: prefers reachable cover and starts windup only after reaching the station', () => {
+    const field = openField();
+    const f = fixture({ navigation: field, hasLineOfSight: (_sx, _sy, _x, y) => y > -config.localSearchRadiusPx / 3 });
+    f.update(0);
+    expect(f.snapshot()).toEqual([]);
+    expect(f.mortar.getMovementOverride(f.enemy, 0)!.vy).toBeLessThan(0);
+    for (let now = 50; now <= 10000 && !f.mortar.getSnapshot().length; now += 50) {
+      const velocity = f.mortar.getMovementOverride(f.enemy, now)!;
+      f.enemy.sprite.x += velocity.vx * 0.05; f.enemy.sprite.y += velocity.vy * 0.05;
+      f.update(now);
+    }
+    expect(f.mortar.getSnapshot()).toHaveLength(1);
+    expect(f.enemy.sprite.y).toBeLessThan(-config.localSearchRadiusPx / 3);
+    field.destroy();
+  });
+
+  it('J: rejects a small cover gain that requires a long walk and worsens range', () => {
+    const field = openField();
+    const f = fixture({ navigation: field, hasLineOfSight: (_sx, _sy, x) => x < config.localSearchRadiusPx * 0.9 });
+    f.players[0].x = config.maxRangePx - field.getCellSize();
+    f.update(0);
+    expect(f.mortar.getSnapshot()).toHaveLength(1);
+    expect(f.mortar.getMovementOverride(f.enemy, 0)).toEqual({ vx: 0, vy: 0 });
+    field.destroy();
+  });
+
+  it('K: allows a substantial improvement to take longer than impact plus recovery', () => {
+    const field = openField();
+    let cover = false;
+    const f = fixture({ navigation: field, hasLineOfSight: (_sx, _sy, _x, y) => !cover || y > -config.localSearchRadiusPx * 0.9 });
+    f.players.push({ ...f.players[0], id: 'b', y: 20 }, { ...f.players[0], id: 'c', y: -20 });
+    f.update(0); const shot = f.snapshot()[0];
+    cover = true; f.update(shot.launchAt);
+    expect(f.mortar.getMovementOverride(f.enemy, shot.launchAt)!.vy).toBeLessThan(0);
+    f.update(shot.impactAt + config.postImpactDelayMs);
+    expect(f.mortar.getSnapshot()).toEqual([]); // time alone never authorizes firing mid-route.
+    for (let now = shot.impactAt + config.postImpactDelayMs + 50; now < 18000 && !f.mortar.getSnapshot().length; now += 50) {
+      const velocity = f.mortar.getMovementOverride(f.enemy, now)!;
+      f.enemy.sprite.x += velocity.vx * 0.05; f.enemy.sprite.y += velocity.vy * 0.05; f.update(now);
+    }
+    expect(f.mortar.getSnapshot()).toHaveLength(1);
+    expect(f.enemy.sprite.y).toBeLessThan(-config.localSearchRadiusPx * 0.9 + config.positionArrivalTolerancePx);
+    field.destroy();
+  });
+
+  it('L/N: keeps a good station after THUMP and also fires when every station is open', () => {
+    for (const visible of [false, true]) {
+      const field = openField();
+      const f = fixture({ navigation: field, hasLineOfSight: () => visible });
+      f.update(0); const first = f.snapshot()[0];
+      expect(first).toBeDefined();
+      f.hasLineOfSight.mockClear(); f.update(first.launchAt);
+      expect(f.hasLineOfSight).toHaveBeenCalled();
+      expect(f.mortar.getMovementOverride(f.enemy, first.launchAt)).toEqual({ vx: 0, vy: 0 });
+      f.update(first.impactAt + config.postImpactDelayMs);
+      expect(f.mortar.getSnapshot()).toHaveLength(1);
+      field.destroy();
+    }
+  });
+
+  it('M: topology changes cannot interrupt windup but expose the next decision', () => {
+    const field = openField();
+    let destroyed = false;
+    vi.spyOn(field, 'getTopologyVersion').mockImplementation(() => destroyed ? 2 : 1);
+    const f = fixture({ navigation: field, hasLineOfSight: (_sx, _sy, _x, y) => destroyed && y > -config.localSearchRadiusPx / 3 });
+    f.update(0); const shot = f.snapshot()[0];
+    destroyed = true; f.hasLineOfSight.mockClear(); f.update(shot.launchAt - 1);
+    expect(f.snapshot()).toEqual([shot]); expect(f.hasLineOfSight).not.toHaveBeenCalled();
+    expect(f.mortar.getMovementOverride(f.enemy, shot.launchAt - 1)).toEqual({ vx: 0, vy: 0 });
+    f.update(shot.launchAt);
+    expect(f.strikes.getSnapshot()).toEqual([shot]);
+    expect(f.hasLineOfSight).toHaveBeenCalled();
+    expect(f.mortar.getMovementOverride(f.enemy, shot.launchAt)!.vy).toBeLessThan(0);
+    field.destroy();
+  });
+
+  it('O/P: treats construct danger separately from geometry and uses its real range', () => {
+    const definition = getCoopDefenseConstructionDefinition('rocket_turret');
+    if (definition.kind !== 'turret') throw new Error('Expected a weapon construction');
+    const f = fixture({ hasLineOfSight: (sx, _sy, _x, _y, skip, carrier, clearance, purpose) => {
+      expect(purpose).toBe('directFire'); expect(clearance).toBe(0); expect(carrier).toBeUndefined();
+      // The same world object can occlude another source; its own line must skip itself.
+      if (sx === definition.targetRange * 0.75) { expect(skip).toBe(1); return true; }
+      expect(skip).toBeUndefined(); return false;
+    } });
+    f.rocks.push({ id: 1, kind: 'turret', constructionId: 'rocket_turret', turretWeaponId: definition.weaponId,
+      gridX: definition.targetRange * 0.75, gridY: 0, hp: 100 } as SyncedPlaceableRock);
+    f.update(0);
+    expect(f.hasLineOfSight.mock.calls.some(call => call[4] === 1)).toBe(true);
+    expect(f.hasLineOfSight.mock.calls.some(call => call[4] === undefined)).toBe(true);
+    const distant = fixture(); distant.players.length = 0; distant.catalog.clear();
+    distant.rocks.push({ ...f.rocks[0], gridX: definition.targetRange + 1 });
+    distant.update(0);
+    expect(distant.hasLineOfSight).not.toHaveBeenCalled();
+    expect(distant.mortar.getSnapshot()).toHaveLength(1);
+  });
+
+  it('H/G: spaces slowly outside bite range, gives bite back to AttackSystem, and never cancels windup', () => {
+    const field = openField(); const f = fixture({ navigation: field });
+    f.players[0].x = config.minRangePx * 2 / 3; f.update(0);
+    expect(f.mortar.getSnapshot()).toEqual([]);
+    expect(f.mortar.getMovementOverride(f.enemy, 0)).toEqual({ vx: -f.enemy.getMoveSpeed() * config.spacingSpeedFactor, vy: 0 });
+    expect(f.mortar.blocksRegularAttacks(f.enemy.id)).toBe(false);
+    f.players[0].x = WEAPON_CONFIGS.MORTAR_BADGER_BITE.range; f.update(1);
+    expect(f.mortar.getMovementOverride(f.enemy, 1)).toBeNull();
+    f.players[0].x = config.preferredRangeMinPx; f.update(config.reevaluateIntervalMs);
+    const shot = f.mortar.getSnapshot()[0];
+    f.players[0].x = 1; f.update(shot.launchAt - 1);
+    expect(f.mortar.getSnapshot()).toEqual([shot]);
+    expect(f.mortar.getMovementOverride(f.enemy, shot.launchAt - 1)).toEqual({ vx: 0, vy: 0 });
+    field.destroy();
+  });
+
+  it('Q: applies radius and Top-N before LoS, caches the expensive search between events', () => {
+    const field = openField(); const f = fixture({ navigation: field });
+    for (let id = 0; id < config.maxCoverThreats * 3; id++) f.rocks.push({ id, kind: 'turret', hp: 100,
+      gridX: config.preferredRangeMinPx + id, gridY: 0, targetRange: config.maxRangePx, turretWeaponId: 'TURRET_ROCKET_BURST' } as SyncedPlaceableRock);
+    f.rocks.push({ ...f.rocks[0], id: 999, gridX: config.threatScanRadiusPx * 2 });
+    f.update(0);
+    const sources = new Set(f.hasLineOfSight.mock.calls.map(call => `${call[0]}:${call[1]}`));
+    expect(sources.size).toBeLessThanOrEqual(config.maxCoverThreats);
+    expect([...sources].some(source => source.startsWith(`${config.threatScanRadiusPx * 2}:`))).toBe(false);
+    expect(f.hasLineOfSight.mock.calls.length).toBeLessThanOrEqual((1 + config.positionCandidateRings * config.positionCandidateDirections) * config.maxCoverThreats);
+    f.hasLineOfSight.mockClear(); f.query.mockClear();
+    for (let now = 1; now < Math.min(config.windupMs, config.threatCheckIntervalMs); now++) f.update(now);
+    expect(f.hasLineOfSight).not.toHaveBeenCalled(); expect(f.query).not.toHaveBeenCalled();
+    field.destroy();
+  });
+
+  it('does no tactical search before reaching the siege activation area', () => {
+    const field = openField(); const f = fixture({ navigation: field });
+    const neighbors = vi.spyOn(field, 'hasWalkableCircleLine');
+    f.players[0].x = config.maxRangePx + config.coverSearchActivationMarginPx + 1; f.update(0);
+    expect(neighbors).not.toHaveBeenCalled(); expect(f.hasLineOfSight).not.toHaveBeenCalled();
+    expect(f.mortar.getMovementOverride(f.enemy, 0)).toBeNull();
+    f.players[0].x = config.maxRangePx; f.update(config.threatCheckIntervalMs);
+    expect(neighbors).toHaveBeenCalled(); field.destroy();
+  });
+
+  it('couples targets and stations so a lower-value target can win through substantially better cover', () => {
+    const field = openField();
+    const f = fixture({ navigation: field, hasLineOfSight: (_sx, _sy, _x, y) => y > -config.localSearchRadiusPx * 0.85 });
+    f.players.push({ ...f.players[0], id: 'b', y: 20 }, { ...f.players[0], id: 'c', y: -20 });
+    const stronger = { id: 1, kind: 'turret', hp: 100, gridX: 0, gridY: config.preferredRangeMinPx } as SyncedPlaceableRock;
+    const weaker = { id: 2, kind: 'rock', hp: 100, gridX: config.preferredRangeMinPx, gridY: -config.localSearchRadiusPx } as SyncedPlaceableRock;
+    f.rocks.push(stronger, weaker);
+    f.update(0);
+    expect(f.mortar.getSnapshot()).toEqual([]);
+    for (let now = 50; now < 12000 && !f.mortar.getSnapshot().length; now += 50) {
+      const velocity = f.mortar.getMovementOverride(f.enemy, now)!;
+      f.enemy.sprite.x += velocity.vx * 0.05; f.enemy.sprite.y += velocity.vy * 0.05; f.update(now);
+    }
+    expect(f.mortar.getSnapshot()[0]).toMatchObject({ targetX: weaker.gridX, targetY: weaker.gridY });
+    field.destroy();
+  });
+
+  it('invalidates a cached approach on target death, significant threat movement and obstacle generation', () => {
+    const field = openField(); let generation = 0;
+    const f = fixture({ navigation: field, bases: { getBasesByFaction: () => [], getBase: () => undefined, getObstacleGeneration: () => generation },
+      hasLineOfSight: (_sx, _sy, _x, y) => y > -config.localSearchRadiusPx / 3 });
+    f.update(0); expect(f.mortar.getSnapshot()).toEqual([]);
+    f.hasLineOfSight.mockClear(); f.update(1); expect(f.hasLineOfSight).not.toHaveBeenCalled();
+    generation++; f.update(2); expect(f.hasLineOfSight).toHaveBeenCalled();
+    f.hasLineOfSight.mockClear(); f.players[0].y += config.threatChangeDistancePx;
+    f.update(2 + config.threatCheckIntervalMs); expect(f.hasLineOfSight).toHaveBeenCalled();
+    f.destroyTarget(); f.update(3 + config.threatCheckIntervalMs);
+    expect(f.mortar.getMovementOverride(f.enemy, 3 + config.threatCheckIntervalMs)).toBeNull();
+    field.destroy();
+  });
+
+  it('treats armed bases/outposts as live ranged sources and exempts their own carrier', () => {
+    const field = openField();
+    let alive = true;
+    const base = { id: 'outpost', getHp: () => alive ? 100 : 0, isInert: () => false,
+      getNearestSurfacePoint: () => ({ x: config.minRangePx + 10, y: 0 }),
+      getTurrets: () => [{ id: 'roof', x: config.minRangePx + 100, y: 0 }] };
+    const f = fixture({ navigation: field, bases: { getBasesByFaction: () => [base] as never, getBase: () => base as never, getObstacleGeneration: () => 0 } });
+    f.update(0);
+    const calls = f.hasLineOfSight.mock.calls.filter(call => call[5] === base.id);
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.every(call => call[7] === 'directFire')).toBe(true);
+    alive = false; const shot = f.snapshot()[0]; f.update(shot.launchAt);
+    f.hasLineOfSight.mockClear(); f.update(shot.impactAt + config.postImpactDelayMs);
+    expect(f.hasLineOfSight.mock.calls.some(call => call[5] === base.id)).toBe(false);
+    field.destroy();
+  });
+
+  it('rejects invalid search budgets and non-finite tactical tuning at the config boundary', () => {
+    for (const key of ['localSearchRadiusPx', 'movementCostPerPx', 'spacingSpeedFactor', 'threatCheckIntervalMs'] as const) {
+      expect(() => normalizeMortarConfig({ ...config, [key]: NaN })).toThrow();
+    }
+    expect(() => normalizeMortarConfig({ ...config, maxCoverThreats: 1.5 })).toThrow();
+    expect(() => normalizeMortarConfig({ ...config, topTargetCandidates: 0 })).toThrow();
+    expect(() => normalizeMortarConfig({ ...config, spacingSpeedFactor: 1.1 })).toThrow();
+    expect(() => normalizeMortarConfig({ ...config, preferredRangeMaxPx: config.maxRangePx + 1 })).toThrow();
+  });
+
+  it('uses local topology connectivity and body clearance, including detours and sealed pockets', () => {
+    const wall = Array.from({ length: 11 }, (_, i) => ({ gridX: 51, gridY: 43 + i }));
+    for (const closed of [false, true]) {
+      const water = closed ? Array.from({ length: 96 }, (_, gridY) => ({ gridX: 51, gridY })) : wall;
+      const field = openField(water);
+      const tiny = findMortarLocalPositions({ x: 1, y: 1 }, 15,
+        { ...config, localSearchRadiusPx: 1, positionArrivalTolerancePx: 0.01 }, field);
+      expect(tiny.every(point => Math.hypot(point.x - 1, point.y - 1) <= 1)).toBe(true);
+      const positions = findMortarLocalPositions({ x: 0, y: 0 }, 15, config, field);
+      expect(positions[0]).toMatchObject({ x: 0, y: 0, travelDistance: 0, path: [] });
+      expect(positions.length).toBeLessThanOrEqual(1 + config.positionCandidateRings * config.positionCandidateDirections);
+      const behind = positions.filter(point => point.x > 128);
+      if (closed) expect(behind).toEqual([]);
+      else expect(behind.some(point => point.travelDistance > Math.hypot(point.x, point.y))).toBe(true);
+      for (const position of positions) {
+        let from = { x: 0, y: 0 };
+        for (const point of position.path) {
+          expect(field.hasWalkableCircleLine(from.x, from.y, point.x, point.y, 15)).toBe(true); from = point;
+        }
+      }
+      field.destroy();
     }
   });
 });
