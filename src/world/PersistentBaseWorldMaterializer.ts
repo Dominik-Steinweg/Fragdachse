@@ -65,7 +65,7 @@ export interface PersistentBaseConstructionPort {
     ownership: ConstructionOwnership,
   ) => SyncedPlaceableRock | null;
   readonly materializeRewardConstruction: (
-    constructionId: 'spore_turret' | 'rocket_turret',
+    constructionId: 'spore_turret' | 'rocket_turret' | 'watchtower',
     rewardId: PersistentBaseRewardId,
     gridX: number,
     gridY: number,
