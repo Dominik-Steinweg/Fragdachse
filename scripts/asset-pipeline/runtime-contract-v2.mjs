@@ -31,8 +31,16 @@ export async function verifyBossRuntime(entry, asset, read) {
   }
   const groups = [{ name: '__rest', frames: [asset.idleFrame] }, ...asset.clips];
   const required = requiredSockets(entry.id), socketSamples = new Map();
+  if ((required.length || Object.keys(asset.sockets ?? {}).length) && !asset.socketFrames) throw new Error('Missing boss frame sockets');
   if (asset.socketFrames !== undefined) validateSocketFrames(asset.socketFrames,
     Math.max(...groups.flatMap(c => c.frames)) + 1, required);
+  if (required.includes('mouth')) {
+    const clip = asset.clips.find(c => c.name === 'egg-throw');
+    if (!clip || clip.markers?.release !== undefined || required.slice(1).some((socket, i) => {
+      const index = clip.markers?.[`release-${i + 1}`];
+      return !Number.isInteger(index) || !asset.socketFrames?.[clip.frames[index]]?.[socket];
+    })) throw new Error('Boss egg sockets require release-1 through release-6');
+  }
   const totals = { color: 0, elevation: 0, total: 0 }, clips = {}, files = new Set();
   for (const pass of ['color', 'elevation']) {
     const atlases = asset.atlases?.[pass];
@@ -50,7 +58,7 @@ export async function verifyBossRuntime(entry, asset, read) {
         const [image, json] = await Promise.all([read(page.image), read(page.json)]);
         if (digest(image) !== page.sha256 || digest(json) !== page.jsonSha256) throw new Error('Boss atlas hash mismatch');
         const info = await sharp(image).metadata(), metadata = JSON.parse(json.toString('utf8'));
-        if (page.frameNames && !same(page.frameNames, Object.keys(metadata.frames))) throw new Error('Boss page frame ownership differs');
+        if (!same(page.frameNames, Object.keys(metadata.frames))) throw new Error('Boss page frame ownership differs');
         if (!info.hasAlpha || info.width !== page.width || info.height !== page.height || info.width > 4096 || info.height > 4096
           || page.gpuBytesRGBA8 !== info.width * info.height * 4 || metadata.meta?.size?.w !== info.width || metadata.meta?.size?.h !== info.height
           || metadata.meta?.image !== page.image.split('/').at(-1)) throw new Error('Boss atlas dimensions or GPU bytes invalid');

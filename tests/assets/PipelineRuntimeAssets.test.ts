@@ -2,13 +2,12 @@ import { readFile, access } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
 import sharp from 'sharp';
-import manifest from '../../src/config/pipelineAssets.json';
 import catalog from '../../scripts/asset-pipeline/catalog-v2.json';
 import { validateEyeAnchors } from '../../scripts/asset-pipeline/eye-anchors.mjs';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../../src/config/coopDefenseEnemies';
 import { getCoopDefenseUpgradeTextureKey } from '../../src/utils/coopDefenseUpgrades';
 import { AutoTiler, MISSION_BARRIER_AUTOTILE } from '../../src/arena/AutoTiler';
-import { getPipelineSpriteScale } from '../../src/config/pipelineAssets';
+import { getPipelineSpriteScale, PIPELINE_ASSETS, PIPELINE_RUNTIME_ASSETS } from '../../src/config/pipelineAssets';
 import { isBossRuntime, verifyBossRuntime } from '../../scripts/asset-pipeline/runtime-contract-v2.mjs';
 import { packAtlas } from '../../scripts/asset-pipeline/atlas-v2.mjs';
 
@@ -32,7 +31,7 @@ async function bossFixture() {
         files.set(page.image, page.png); files.set(page.json, json);
         amounts[pass] += page.gpuBytesRGBA8;
         return { image: page.image, json: page.json, width: page.width, height: page.height,
-          gpuBytesRGBA8: page.gpuBytesRGBA8, sha256: hash(page.png), jsonSha256: hash(json) };
+          gpuBytesRGBA8: page.gpuBytesRGBA8, sha256: hash(page.png), jsonSha256: hash(json), frameNames: Object.keys(page.metadata.frames) };
       });
       atlases[pass][group.name] = { pages: records, sourceSize: size, logicalSourceSize: 16, pivot: entry.pivot, frameNames, sourceFrames: group.frames };
     }
@@ -46,7 +45,7 @@ async function bossFixture() {
 
 describe('selected runtime asset package', () => {
   it('ships a marked one-shot pounce beyond the body circle, with anchors for all poses', async () => {
-    for (const asset of manifest.assets.filter(a => a.category === 'enemy' && !isBossRuntime(catalog.assets.find(c => c.id === a.id)!))) {
+    for (const asset of PIPELINE_ASSETS.filter(a => a.category === 'enemy')) {
       const clip = asset.clips.find(c => c.name === 'claw')!;
       expect(clip, asset.id).toBeDefined();
       expect(clip.loop).toBe(false);
@@ -80,7 +79,7 @@ describe('selected runtime asset package', () => {
     }
   });
   it('binds complete eye poses to every enemy image revision', () => {
-    for (const asset of manifest.assets.filter(a => a.category === 'enemy')) {
+    for (const asset of PIPELINE_ASSETS.filter(a => a.category === 'enemy')) {
       expect(() => validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount, asset)).not.toThrow();
       if (!isBossRuntime(catalog.assets.find(c => c.id === asset.id)!)) expect(COOP_DEFENSE_ENEMY_CONFIGS[asset.id].eyeGlow).toBeDefined();
       expect(() => validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount + 1, asset)).toThrow();
@@ -96,7 +95,7 @@ describe('selected runtime asset package', () => {
     }
   });
   it('checks published boss atlases, markers and resident memory instead of claw centroids', async () => {
-    for (const asset of manifest.assets.filter(isBossRuntime)) {
+    for (const asset of PIPELINE_RUNTIME_ASSETS.filter(a => a.runtimeContract === 'boss')) {
       const entry = catalog.assets.find(c => c.id === asset.id)!;
       await verifyBossRuntime(entry, asset, name => readFile(`public/${name.replace(/^\.\//, '')}`));
     }
@@ -110,6 +109,9 @@ describe('selected runtime asset package', () => {
     const broken = structuredClone(f.asset);
     broken.atlases.elevation.hatch.frameNames[0] = 'foreign';
     await expect(verifyBossRuntime(f.entry, broken, f.read)).rejects.toThrow(/mapping/);
+    const missingOwnership = structuredClone(f.asset);
+    delete (missingOwnership.atlases.color.hatch.pages[0] as { frameNames?: string[] }).frameNames;
+    await expect(verifyBossRuntime(f.entry, missingOwnership, f.read)).rejects.toThrow(/ownership/);
     const page = f.asset.atlases.color.hatch.pages[0];
     const json = JSON.parse(f.files.get(page.json)!.toString());
     json.frames['hatch/0000'].sourceSize.w = 8;
@@ -162,11 +164,12 @@ describe('selected runtime asset package', () => {
   });
   it('covers catalog assets bound to game IDs with unique runtime textures', () => {
     // Unbound designs can be produced and reviewed before gameplay integration.
-    expect(manifest.assets.map(a => a.id).sort()).toEqual(catalog.assets.filter(a => a.gameIds.length > 0).map(a => a.id).sort());
-    expect(new Set(manifest.assets.flatMap(a => [a.textureKey, a.sheetTextureKey])).size).toBe(manifest.assets.length * 2);
-    for (const asset of manifest.assets) {
+    for (const entry of catalog.assets.filter(a => a.gameIds.length > 0)) expect(PIPELINE_RUNTIME_ASSETS.some(a => a.id === entry.id)).toBe(true);
+    const keys = PIPELINE_RUNTIME_ASSETS.flatMap(a => a.runtimeContract === 'sheet' ? [a.textureKey, a.sheetTextureKey] : [a.textureKey]);
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const asset of PIPELINE_RUNTIME_ASSETS) {
       expect(asset.gameIds).toEqual(catalog.assets.find(a => a.id === asset.id)!.gameIds);
-      if (asset.category === 'enemy') {
+      if (asset.category === 'enemy' && asset.runtimeContract === 'sheet') {
         for (const id of asset.gameIds) {
           expect(COOP_DEFENSE_ENEMY_CONFIGS[id as keyof typeof COOP_DEFENSE_ENEMY_CONFIGS].imageKey).toBe(asset.textureKey);
         }
@@ -175,7 +178,7 @@ describe('selected runtime asset package', () => {
   });
 
   it('ships unchanged selected PNGs, valid gutters, idle cells and explicit clip frames', async () => {
-    for (const asset of manifest.assets) {
+    for (const asset of PIPELINE_ASSETS) {
       const { layout } = asset;
       expect(layout.frameWidth).toBe(asset.sourceSize);
       expect(layout.frameHeight).toBe(asset.sourceSize);

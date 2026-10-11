@@ -2,116 +2,158 @@
 import { readFile, mkdir, copyFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { verifySelectionV2 } from './export-v2.mjs';
 import { validateEyeAnchors } from './eye-anchors.mjs';
 import { isBossRuntime, verifyBossRuntime } from './runtime-contract-v2.mjs';
 import { validateClipContracts } from './contracts-v2.mjs';
 
-const revision = process.argv[2] ?? 'v2-g';
-// Use the same revision identifiers as the V2 builder/exporter; the manifest
-// carries the pipeline version independently of the human-readable run name.
-if (!/^[a-z0-9][a-z0-9-]*$/.test(revision)) throw new Error('Invalid revision');
-const readJson = async (file) => JSON.parse(await readFile(file, 'utf8'));
-const catalog = await readJson('scripts/asset-pipeline/catalog-v2.json');
-const enemies = (await readJson('src/config/coopDefenseEnemies.json')).enemies;
-const requestedIds = process.argv.slice(3);
-if (new Set(requestedIds).size !== requestedIds.length
-    || requestedIds.some(id => !catalog.assets.some(entry => entry.id === id))) {
-  throw new Error('Specify distinct catalog asset IDs for a partial import');
-}
-const existingRuntime = await readJson('src/config/pipelineAssets.json');
-const previous = requestedIds.length ? existingRuntime : null;
-if (previous && previous.version !== 2) {
-  throw new Error('Partial import requires an existing V2 runtime package');
-}
-const assets = [];
-const copies = [];
-for (const entry of catalog.assets.filter(entry => !requestedIds.length || requestedIds.includes(entry.id))) {
-  const source = `art/poc/pipeline-v2/runs/${revision}/${entry.id}`;
-  const selected = await verifySelectionV2(source);
-  if (selected.id !== entry.id || selected.revision !== revision) throw new Error(`Selection mismatch: ${entry.id}`);
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(selected.variant)) throw new Error('Invalid selected variant');
-  const rendered = await readJson(`${source}/${selected.variant}/render.json`);
-  if (entry.category !== rendered.category || entry.forward !== rendered.forward
-      || JSON.stringify(entry.gameIds) !== JSON.stringify(rendered.gameIds)
-      || JSON.stringify(entry.pivot) !== JSON.stringify(rendered.pivot)) {
-    throw new Error(`Selected model no longer matches the runtime catalog: ${entry.id}`);
+/** Explicit identities: both bodies belong to one enemy; parts need no enemy-registry mapping. */
+export const BOSS_TEXTURE_KEYS = Object.freeze({
+  'abyssal-kraken': 'kraken_water', 'abyssal-kraken-land': 'kraken_land',
+  'abyssal-kraken-tentacle': 'kraken_tentacle', 'abyssal-kraken-egg': 'kraken_egg',
+});
+
+export async function importRuntime({ revision, requestedIds = [], root = process.cwd(),
+  runRoot = path.join(root, 'art/poc/pipeline-v2/runs', revision), outputRoot } = {}) {
+  // Use the same revision identifiers as the V2 builder/exporter; the manifest
+  // carries the pipeline version independently of the human-readable run name.
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(revision)) throw new Error('Invalid revision');
+  const readJson = async (file) => JSON.parse(await readFile(file, 'utf8'));
+  const catalog = await readJson(path.join(root, 'scripts/asset-pipeline/catalog-v2.json'));
+  const enemies = (await readJson(path.join(root, 'src/config/coopDefenseEnemies.json'))).enemies;
+  if (new Set(requestedIds).size !== requestedIds.length
+      || requestedIds.some(id => !catalog.assets.some(entry => entry.id === id))) {
+    throw new Error('Specify distinct catalog asset IDs for a partial import');
   }
-  if ((entry.displayScale ?? 1) !== (rendered.displayScale ?? 1)) throw new Error(`Selected canvas scale differs from catalog: ${entry.id}`);
-  if (entry.runtimeContract !== rendered.runtimeContract) throw new Error(`Selected runtime contract differs from catalog: ${entry.id}`);
-  validateClipContracts(selected.clips);
-  if (entry.category === 'enemy' && !isBossRuntime(entry) && !selected.clips.some(c => c.name === 'claw')) throw new Error(`Enemy claw clip missing: ${entry.id}`);
-  const folder = `assets/sprites/pipeline-v2/${entry.id}`;
-  const hashes = {};
-  for (const [field, name] of [['idle', 'idle.png'], ['sheet', 'sheet.png']]) {
-    const relative = selected[field];
-    if (path.isAbsolute(relative) || relative.split(/[\\/]/).includes('..')) throw new Error('Invalid asset path');
-    const file = `${source}/${relative}`;
-    const hash = createHash('sha256').update(await readFile(file)).digest('hex');
-    if (selected.files[relative] !== hash) throw new Error(`Selection hash mismatch: ${file}`);
-    copies.push({ file, destination: `public/${folder}/${name}` });
-    hashes[field] = hash;
+  const existingRuntime = await readJson(path.join(root, 'src/config/pipelineAssets.json'));
+  const previous = requestedIds.length ? existingRuntime : null;
+  if (previous && previous.version !== 2) {
+    throw new Error('Partial import requires an existing V2 runtime package');
   }
-  const textureKey = entry.category === 'boss-part' ? entry.id.replaceAll('-', '_')
-    : entry.category === 'construction' ? `construction_${entry.gameIds[0]}`
-    : entry.category === 'companion' ? entry.id.replaceAll('-', '_')
-    : entry.category === 'turret'
-    ? `turret_weapon_${entry.id.replaceAll('-', '_')}`
-    : ['weapon', 'utility'].includes(entry.category) ? `held_${entry.gameIds[0]}`
-    : entry.id === 'badger' ? 'badger' : enemies.find((enemy) => entry.gameIds.includes(enemy.id))?.imageKey;
-  if (!textureKey) throw new Error(`Missing game mapping: ${entry.id}`);
-  const asset = {
-    id: entry.id, category: entry.category, gameIds: entry.gameIds, revision,
-    variant: selected.variant, sourceSize: selected.size, textureKey,
-    sheetTextureKey: `${textureKey}_${['weapon', 'utility'].includes(entry.category) ? 'static' : entry.category === 'turret' ? 'animated' : 'walking'}`,
-    idlePath: `./${folder}/idle.png`, sheetPath: `./${folder}/sheet.png`,
-    forward: entry.forward, pivot: entry.pivot, layout: selected.layout,
-    ...(rendered.displayScale !== undefined ? { displayScale: rendered.displayScale } : {}),
-    ...(['weapon', 'utility'].includes(entry.category) ? { heldItem: rendered.heldItem } : {}),
-    idleFrame: selected.idleFrame,
-    clips: selected.clips.map(({ name, frames, frameRate, loop, markers, start, end, next }) => ({ name, frames, frameRate, loop,
-      ...(markers ? { markers } : {}), ...(start !== undefined ? { start } : {}), ...(end !== undefined ? { end } : {}), ...(next !== undefined ? { next } : {}) })),
-    hashes,
-  };
-  if (isBossRuntime(entry)) {
-    Object.assign(asset, { runtimeContract: 'boss', runtimeBudgetMB: entry.runtimeBudgetMB,
-      elevation: rendered.elevation, elevationPass: rendered.elevationPass, atlases: selected.atlases, budget: selected.budget });
-    await verifyBossRuntime(entry, asset, async relative => {
-      if (path.isAbsolute(relative) || /[\\:]/.test(relative) || relative.split('/').includes('..')) throw new Error('Invalid boss atlas path');
-      const file = `${source}/${selected.variant}/${relative}`, bytes = await readFile(file);
-      if (selected.files[`${selected.variant}/${relative}`] !== createHash('sha256').update(bytes).digest('hex')) throw new Error('Boss atlas is not selection-bound');
-      return bytes;
-    });
-    asset.atlases = structuredClone(asset.atlases);
-    for (const pass of Object.values(asset.atlases)) for (const clip of Object.values(pass)) for (const page of clip.pages) {
-      for (const key of ['image', 'json']) {
-        const relative = page[key];
-        copies.push({ file: `${source}/${selected.variant}/${relative}`, destination: `public/${folder}/${relative}` });
-        page[key] = `./${folder}/${relative}`;
+  const assets = [];
+  const copies = [];
+  for (const entry of catalog.assets.filter(entry => !requestedIds.length || requestedIds.includes(entry.id))) {
+    const source = path.join(runRoot, entry.id);
+    const selected = await verifySelectionV2(source);
+    if (selected.id !== entry.id || selected.revision !== revision) throw new Error(`Selection mismatch: ${entry.id}`);
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(selected.variant)) throw new Error('Invalid selected variant');
+    const rendered = await readJson(`${source}/${selected.variant}/render.json`);
+    if (entry.category !== rendered.category || entry.forward !== rendered.forward
+        || JSON.stringify(entry.gameIds) !== JSON.stringify(rendered.gameIds)
+        || JSON.stringify(entry.pivot) !== JSON.stringify(rendered.pivot)) {
+      throw new Error(`Selected model no longer matches the runtime catalog: ${entry.id}`);
+    }
+    if (entry.targetSize !== rendered.targetSize || (entry.displayScale ?? 1) !== (rendered.displayScale ?? 1)) throw new Error(`Selected canvas scale differs from catalog: ${entry.id}`);
+    if (entry.runtimeContract !== rendered.runtimeContract) throw new Error(`Selected runtime contract differs from catalog: ${entry.id}`);
+    validateClipContracts(selected.clips);
+    if (entry.category === 'enemy' && !isBossRuntime(entry) && !selected.clips.some(c => c.name === 'claw')) throw new Error(`Enemy claw clip missing: ${entry.id}`);
+    const folder = `assets/sprites/pipeline-v2/${entry.id}`;
+    const hashes = {};
+    for (const [field, name] of isBossRuntime(entry) ? [] : [['idle', 'idle.png'], ['sheet', 'sheet.png']]) {
+      const relative = selected[field];
+      if (path.isAbsolute(relative) || relative.split(/[\\/]/).includes('..')) throw new Error('Invalid asset path');
+      const file = `${source}/${relative}`;
+      const hash = createHash('sha256').update(await readFile(file)).digest('hex');
+      if (selected.files[relative] !== hash) throw new Error(`Selection hash mismatch: ${file}`);
+      copies.push({ file, destination: `public/${folder}/${name}` });
+      hashes[field] = hash;
+    }
+    const textureKey = isBossRuntime(entry) ? (entry.textureKey ?? BOSS_TEXTURE_KEYS[entry.id])
+      : entry.category === 'boss-part' ? entry.id.replaceAll('-', '_')
+      : entry.category === 'construction' ? `construction_${entry.gameIds[0]}`
+      : entry.category === 'companion' ? entry.id.replaceAll('-', '_')
+      : entry.category === 'turret'
+      ? `turret_weapon_${entry.id.replaceAll('-', '_')}`
+      : ['weapon', 'utility'].includes(entry.category) ? `held_${entry.gameIds[0]}`
+      : entry.id === 'badger' ? 'badger' : enemies.find((enemy) => entry.gameIds.includes(enemy.id))?.imageKey;
+    if (!textureKey) throw new Error(`Missing game mapping: ${entry.id}`);
+    const asset = {
+      id: entry.id, category: entry.category, gameIds: entry.gameIds, revision,
+      variant: selected.variant, sourceSize: selected.size, textureKey,
+      runtimeContract: isBossRuntime(entry) ? 'boss' : 'sheet',
+      forward: entry.forward, pivot: entry.pivot,
+      ...(rendered.displayScale !== undefined ? { displayScale: rendered.displayScale } : {}),
+      ...(['weapon', 'utility'].includes(entry.category) ? { heldItem: rendered.heldItem } : {}),
+      idleFrame: selected.idleFrame,
+      clips: selected.clips.map(({ name, frames, frameRate, loop, markers, start, end, next }) => ({ name, frames, frameRate, loop,
+        ...(markers ? { markers } : {}), ...(start !== undefined ? { start } : {}), ...(end !== undefined ? { end } : {}), ...(next !== undefined ? { next } : {}) })),
+      ...(!isBossRuntime(entry) ? {
+        sheetTextureKey: `${textureKey}_${['weapon', 'utility'].includes(entry.category) ? 'static' : entry.category === 'turret' ? 'animated' : 'walking'}`,
+        idlePath: `./${folder}/idle.png`, sheetPath: `./${folder}/sheet.png`, layout: selected.layout, hashes,
+      } : {}),
+    };
+    if (isBossRuntime(entry)) {
+      const { encoding, min, max, scale, waterline, alpha, colorSpace, premultiplied } = rendered.elevationPass;
+      Object.assign(asset, { targetSize: rendered.targetSize, runtimeBudgetMB: entry.runtimeBudgetMB,
+        sockets: selected.sockets ?? {}, ...(selected.socketFrames ? { socketFrames: selected.socketFrames } : {}),
+        elevation: rendered.elevation, elevationPass: { encoding, min, max, scale, waterline, alpha, colorSpace, premultiplied },
+        atlases: selected.atlases, budget: selected.budget });
+      if (asset.sourceSize !== Math.round(asset.targetSize * (asset.displayScale ?? 1))) throw new Error(`Boss must select displayed canvas resolution: ${entry.id}`);
+      await verifyBossRuntime(entry, asset, async relative => {
+        if (path.isAbsolute(relative) || /[\\:]/.test(relative) || relative.split('/').includes('..')) throw new Error('Invalid boss atlas path');
+        const file = `${source}/${selected.variant}/${relative}`, bytes = await readFile(file);
+        if (selected.files[`${selected.variant}/${relative}`] !== createHash('sha256').update(bytes).digest('hex')) throw new Error('Boss atlas is not selection-bound');
+        return bytes;
+      });
+      asset.atlases = structuredClone(asset.atlases);
+      for (const pass of Object.values(asset.atlases)) for (const clip of Object.values(pass)) for (const page of clip.pages) {
+        for (const key of ['image', 'json']) {
+          const relative = page[key];
+          copies.push({ file: `${source}/${selected.variant}/${relative}`, destination: `public/${folder}/${relative}` });
+          page[key] = `./${folder}/${relative}`;
+        }
       }
     }
+    if (entry.category === 'enemy' && !isBossRuntime(entry)) {
+      // A reimport may retain a reviewed migration only for byte-identical selected images.
+      const previousAsset = existingRuntime.assets.find(asset => asset.id === entry.id);
+      asset.eyeAnchors = rendered.eyeAnchors ? {
+        ...rendered.eyeAnchors,
+        source: { revision, variant: selected.variant, blendSha256: selected.files[`${selected.variant}/asset.blend`],
+          sheetSha256: hashes.sheet, idleSha256: hashes.idle },
+      } : previousAsset?.eyeAnchors;
+      validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount, asset, selected.files[`${selected.variant}/asset.blend`]);
+    }
+    assets.push(asset);
   }
-  if (entry.category === 'enemy') {
-    // A reimport may retain a reviewed migration only for byte-identical selected images.
-    const previousAsset = existingRuntime.assets.find(asset => asset.id === entry.id);
-    asset.eyeAnchors = rendered.eyeAnchors ? {
-      ...rendered.eyeAnchors,
-      source: { revision, variant: selected.variant, blendSha256: selected.files[`${selected.variant}/asset.blend`],
-        sheetSha256: hashes.sheet, idleSha256: hashes.idle },
-    } : previousAsset?.eyeAnchors;
-    validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount, asset, selected.files[`${selected.variant}/asset.blend`]);
+  // The package revision records the last full import; individual revisions override it.
+  const manifest = previous
+    ? { ...previous, assets: [...previous.assets.map(existing => assets.find(asset => asset.id === existing.id) ?? existing),
+        ...assets.filter(asset => !previous.assets.some(existing => existing.id === asset.id))] }
+    : { version: 2, revision, assets };
+  const keys = new Set();
+  for (const asset of manifest.assets) for (const key of [asset.textureKey, asset.sheetTextureKey].filter(Boolean)) {
+    if (keys.has(key)) throw new Error(`Duplicate runtime texture key: ${key}`);
+    keys.add(key);
   }
-  assets.push(asset);
+  // Resolve and hash every selected input before modifying any destination.
+  // An isolated target must be new; it never merges or writes into the live package.
+  const destinationRoot = outputRoot ? path.resolve(outputRoot) : root;
+  if (outputRoot) await mkdir(destinationRoot, { recursive: false });
+  for (const { file, destination } of copies) {
+    const target = path.join(destinationRoot, destination);
+    await mkdir(path.dirname(target), { recursive: true });
+    await copyFile(file, target);
+  }
+  const manifestPath = path.join(destinationRoot, outputRoot ? 'pipelineAssets.json' : 'src/config/pipelineAssets.json');
+  // Isolated runs contain only the imported assets, so every referenced file is present.
+  const published = outputRoot ? { version: 2, revision, assets } : manifest;
+  await writeFile(manifestPath, JSON.stringify(published, null, 2) + '\n');
+  return { manifest: published, manifestPath, copiedFiles: copies.length };
 }
-// Resolve and hash every selected input before modifying the runtime package.
-for (const { file, destination } of copies) {
-  await mkdir(path.dirname(destination), { recursive: true });
-  await copyFile(file, destination);
+
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  const [revision = 'v2-g', ...args] = process.argv.slice(2), requestedIds = [];
+  const options = { revision, requestedIds };
+  for (let i = 0; i < args.length; i++) {
+    if (['--output-root', '--run-root'].includes(args[i])) {
+      const option = args[i], value = args[++i];
+      if (!value || value.startsWith('--')) throw new Error(`Missing ${option} path`);
+      options[option === '--output-root' ? 'outputRoot' : 'runRoot'] = path.resolve(value);
+    } else if (args[i].startsWith('--')) throw new Error(`Unknown option: ${args[i]}`);
+    else requestedIds.push(args[i]);
+  }
+  const result = await importRuntime(options);
+  console.log(`Imported ${result.manifest.assets.length} assets; ${result.copiedFiles} files; ${result.manifestPath}`);
 }
-// The package revision records the last full import; individual revisions override it.
-const manifest = previous
-  ? { ...previous, assets: [...previous.assets.map(existing => assets.find(asset => asset.id === existing.id) ?? existing),
-      ...assets.filter(asset => !previous.assets.some(existing => existing.id === asset.id))] }
-  : { version: 2, revision, assets };
-await writeFile('src/config/pipelineAssets.json', JSON.stringify(manifest, null, 2) + '\n');
-console.log(`Imported ${assets.length} selected assets from ${revision}`);

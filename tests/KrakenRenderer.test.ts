@@ -30,6 +30,7 @@ function asset(role: keyof typeof KRAKEN_ASSET_REQUIREMENTS): KrakenPresentation
     runtimeContract: 'boss', id: role, textureKey: role, category: 'enemy', gameIds: [], revision: 'fixture', variant: 'test',
     sourceSize: 32, targetSize: 16, displayScale: 2, forward: 'north', pivot: [.4, .6], idleFrame: 0,
     sockets: Object.fromEntries(required.sockets.map(s => [s, [.3, .8]])), runtimeBudgetMB: 8,
+    socketFrames: Array.from({ length: 52 }, () => Object.fromEntries(required.sockets.map(s => [s, { x: .3, y: .8, z: 0 }]))),
     elevation: { min: -2, max: 3, scale: .5 }, elevationPass: { encoding: 'linear-unorm8-world-z', min: -2, max: 3,
       scale: .5, waterline: 0, alpha: 'beauty-coverage', colorSpace: 'non-color', premultiplied: false },
     clips: Object.entries(required.clips).map(([name, markers]) => ({ name,

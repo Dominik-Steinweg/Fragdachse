@@ -12,6 +12,7 @@ import { verifyBossRuntime } from '../../scripts/asset-pipeline/runtime-contract
 import { requiredSockets, restSockets, validateSocketFrames } from '../../scripts/asset-pipeline/socket-anchors.mjs';
 import { KRAKEN_ASSET_REQUIREMENTS } from '../../src/config/krakenBoss';
 import { normalizePipelineAsset } from '../../src/config/pipelineAssetContracts';
+import { importRuntime, BOSS_TEXTURE_KEYS } from '../../scripts/asset-pipeline/import-runtime.mjs';
 
 const roots: string[] = [];
 const hash = (data: Buffer | string) => createHash('sha256').update(data).digest('hex');
@@ -132,7 +133,7 @@ describe('V2 animated asset export contracts', () => {
     const f = await fixture();
     const elevation = { min: -2, max: 3, scale: .5 };
     const socketFrames = f.manifest.frames.map((_: unknown, i: number) => ({ waterEntry: { x: .2 + .1 * i, y: .8, z: 0 - i } }));
-    const m = { ...f.manifest, category: 'boss-part', runtimeAtlas: true, runtimeContract: 'boss', runtimeBudgetMB: 2, elevation,
+    const m = { ...f.manifest, gameIds: [], displayScale: 2, category: 'boss-part', runtimeAtlas: true, runtimeContract: 'boss', runtimeBudgetMB: 2, elevation,
       socketFrames, sockets: restSockets(socketFrames, 0),
       elevationPass: { ...elevation, encoding: elevationEncoding, waterline: 0, alpha: 'beauty-coverage', masterSize: 64, colorSpace: 'non-color', premultiplied: false },
       clips: [{ name: 'hatch', motion: 'fixture', frameRate: 12, loop: false, frames: [1, 2, 3], end: 'terminal', markers: { release: 1 } }] };
@@ -171,7 +172,7 @@ describe('V2 animated asset export contracts', () => {
     }
     const ap0 = { id: m.id, category: m.category, gameIds: [], revision: m.revision, variant: m.variant,
       sourceSize: 32, textureKey: 'fixture', forward: m.forward, pivot: m.pivot, idleFrame: 0, clips: m.clips,
-      runtimeContract: 'boss', targetSize: 32, runtimeBudgetMB: m.runtimeBudgetMB, sockets: m.sockets,
+      runtimeContract: 'boss', targetSize: 32, runtimeBudgetMB: m.runtimeBudgetMB, sockets: m.sockets, socketFrames,
       elevation, elevationPass: { encoding: elevationEncoding, ...elevation, waterline: 0, alpha: 'beauty-coverage', colorSpace: 'non-color', premultiplied: false },
       atlases: published, budget: runtime.budget };
     expect(normalizePipelineAsset(ap0)).toMatchObject({ sockets: m.sockets });
@@ -194,6 +195,30 @@ describe('V2 animated asset export contracts', () => {
     expect(selected.socketFrames).toEqual(socketFrames);
     expect(selected.sockets).toEqual(m.sockets);
     await verifySelectionV2(f.asset);
+    // Import the complete selected fixture into a NEW isolated destination, never public/ in the repo.
+    await mkdir(path.join(f.root, 'scripts/asset-pipeline'), { recursive: true });
+    await mkdir(path.join(f.root, 'src/config'), { recursive: true });
+    await save(path.join(f.root, 'scripts/asset-pipeline/catalog-v2.json'), { assets: [{ ...entry, textureKey: 'fixture_boss' }] });
+    await save(path.join(f.root, 'src/config/coopDefenseEnemies.json'), { enemies: [] });
+    await save(path.join(f.root, 'src/config/pipelineAssets.json'), { version: 2, revision: 'original', assets: [] });
+    const outputRoot = path.join(f.root, 'isolated-import');
+    const imported = await importRuntime({ root: f.root, revision: m.revision, requestedIds: [m.id], outputRoot });
+    const publishedAsset = normalizePipelineAsset(imported.manifest.assets[0]);
+    expect(publishedAsset).toMatchObject({ runtimeContract: 'boss', textureKey: 'fixture_boss', sourceSize: 32,
+      targetSize: 16, displayScale: 2, sockets: m.sockets, socketFrames });
+    expect(imported.manifest.assets[0]).not.toHaveProperty('sheetPath');
+    expect(imported.manifest.assets[0]).not.toHaveProperty('idlePath');
+    expect(JSON.stringify(imported.manifest)).not.toContain('/art/poc/');
+    expect(new Set(Object.values(BOSS_TEXTURE_KEYS)).size).toBe(Object.keys(BOSS_TEXTURE_KEYS).length);
+    const fileCount = Object.values(runtime.atlases).flatMap((pass: any) => Object.values(pass).flatMap((clip: any) => clip.pages)).length * 2;
+    expect(imported.copiedFiles).toBe(fileCount);
+    await expect(readFile(path.join(outputRoot, 'public/assets/sprites/pipeline-v2/fixture/idle.png'))).rejects.toThrow();
+    expect(JSON.parse(await readFile(path.join(f.root, 'src/config/pipelineAssets.json'), 'utf8')).assets).toEqual([]);
+    await verifyBossRuntime(entry, publishedAsset, name => readFile(path.join(outputRoot, 'public', name)));
+    // Collision detection happens before writing destination files.
+    await save(path.join(f.root, 'src/config/pipelineAssets.json'), { version: 2, assets: [{ id: 'other', textureKey: 'fixture_boss' }] });
+    await expect(importRuntime({ root: f.root, revision: m.revision, requestedIds: [m.id], outputRoot: path.join(f.root, 'collision') })).rejects.toThrow(/Duplicate runtime texture/);
+    await expect(readFile(path.join(f.root, 'collision/pipelineAssets.json'))).rejects.toThrow();
     await save(path.join(f.asset, 'selection.json'), { ...selected, socketFrames: socketFrames.slice(1) });
     await expect(verifySelectionV2(f.asset)).rejects.toThrow(/bundle changed/);
     await save(path.join(f.asset, 'selection.json'), selected);

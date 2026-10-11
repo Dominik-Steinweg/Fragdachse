@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { normalizePipelineAsset, normalizePipelineAssets, type PipelineBossAsset } from '../src/config/pipelineAssetContracts';
+import { normalizePipelineAsset, normalizePipelineAssets, pipelineEggReleaseSocket, type PipelineBossAsset } from '../src/config/pipelineAssetContracts';
 import { PIPELINE_ASSETS, PIPELINE_RUNTIME_ASSETS } from '../src/config/pipelineAssets';
 import { KRAKEN_ASSET_REQUIREMENTS, KRAKEN_BOSS_DEFAULTS, validateKrakenAssetBindings } from '../src/config/krakenBoss';
 
@@ -12,6 +12,8 @@ function bossAsset(overrides: Partial<Pick<PipelineBossAsset, 'id' | 'textureKey
       waterline: 0, alpha: 'beauty-coverage', colorSpace: 'non-color', premultiplied: false },
     atlases: { color: {}, elevation: {} }, budget: { clips: {}, totals: { color: 0, elevation: 0, total: 0 } } };
   Object.assign(a, overrides);
+  a.socketFrames = Array.from({ length: Math.max(a.idleFrame, ...a.clips.flatMap(c => c.frames)) + 1 }, () =>
+    Object.fromEntries(Object.entries(a.sockets).map(([name, [x, y]]) => [name, { x, y, z: -2 }])));
   for (const { name, frames } of [{ name: '__rest', frames: [a.idleFrame] }, ...a.clips]) {
     for (const pass of ['color', 'elevation'] as const) {
       const size = pass === 'color' ? 16 : 8, frameNames = frames.map((_, i) => `${name}/${String(i).padStart(4, '0')}`);
@@ -39,7 +41,7 @@ it('binds each kraken role to required clips, semantic markers and full-canvas s
     const required = KRAKEN_ASSET_REQUIREMENTS[role];
     return normalizePipelineAsset(bossAsset({ id: KRAKEN_BOSS_DEFAULTS.assets[role], textureKey: `kraken_${role}`,
       sockets: Object.fromEntries(required.sockets.map(s => [s, [.5, .5]])),
-      clips: Object.entries(required.clips).map(([name, markers]) => ({ name, frames: [0, 1, 2], frameRate: 10, loop: false,
+      clips: Object.entries(required.clips).map(([name, markers]) => ({ name, frames: [1, 2, 3, 4, 5, 6], frameRate: 10, loop: false,
         markers: Object.fromEntries(markers.map((m, i) => [m, i])) })),
     })) as PipelineBossAsset;
   });
@@ -47,6 +49,26 @@ it('binds each kraken role to required clips, semantic markers and full-canvas s
   const egg = assets.find(a => a.id === KRAKEN_BOSS_DEFAULTS.assets.egg)!;
   delete egg.clips.find(c => c.name === 'hatch')!.markers!.spawn;
   expect(() => validateKrakenAssetBindings(KRAKEN_BOSS_DEFAULTS, assets)).toThrow('hatch');
+});
+
+it('keeps world-z and resolves release sockets by clip marker and source frame, never rest pose', () => {
+  const asset = bossAsset({ clips: [{ name: 'egg-throw', frames: [2, 1], frameRate: 10, loop: false,
+    markers: { 'release-1': 0 } }], sockets: { egg1: [.5, .5] } });
+  asset.socketFrames![2].egg1 = { x: .2, y: .8, z: -7 };
+  const normalized = normalizePipelineAsset(asset) as PipelineBossAsset;
+  expect(pipelineEggReleaseSocket(normalized, 1)).toEqual({ x: .2, y: .8, z: -7 });
+  expect(() => pipelineEggReleaseSocket(normalized, 0)).toThrow();
+  expect(() => pipelineEggReleaseSocket(normalized, 2)).toThrow();
+  for (const mutate of [
+    (a: PipelineBossAsset) => { a.socketFrames!.pop(); },
+    (a: PipelineBossAsset) => { a.socketFrames![1].egg1.z = Infinity; },
+    (a: PipelineBossAsset) => { a.socketFrames![1].egg1.x = 2; },
+    (a: PipelineBossAsset) => { delete a.socketFrames![1].egg1; },
+    (a: PipelineBossAsset) => { a.socketFrames![0].egg1.x = .1; },
+  ]) {
+    const invalid = structuredClone(asset); mutate(invalid);
+    expect(() => normalizePipelineAsset(invalid)).toThrow();
+  }
 });
 
 it('rejects duplicate texture identities, invalid pass/page ownership and inconsistent budgets', () => {

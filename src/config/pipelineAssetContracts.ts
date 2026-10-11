@@ -10,6 +10,8 @@ const hash = v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/));
 const path = v.pipe(v.string(), v.regex(/^\.\/assets\/[\w./-]+$/), v.check(p => !p.split('/').includes('..')));
 const pair = v.tuple([finite, finite]);
 const pivot = v.tuple([unit, unit]);
+const socketPoint = v.strictObject({ x: unit, y: unit, z: finite });
+export type PipelineSocketPoint = v.InferOutput<typeof socketPoint>;
 const clip = v.pipe(v.object({ name: id, frames: v.pipe(v.array(integer), v.minLength(1)),
   frameRate: positive, loop: v.boolean(), markers: v.optional(v.record(id, integer)),
   start: v.optional(v.picklist(['rest', 'free'])), end: v.optional(v.picklist(['rest', 'free', 'terminal'])), next: v.optional(id),
@@ -48,6 +50,8 @@ export const PipelineBossAssetSchema = v.strictObject({ ...base, runtimeContract
   targetSize: size, runtimeBudgetMB: positive,
   /** Normalized FULL-canvas coordinates, unaffected by trimming. */
   sockets: v.record(id, pivot),
+  /** Source-frame indexed; x/y use the full canvas, z is Blender world height. */
+  socketFrames: v.optional(v.pipe(v.array(v.record(id, socketPoint)), v.minLength(1))),
   elevation: v.strictObject({ min: finite, max: finite, scale: positive, previewWaterLevel: v.optional(finite) }),
   elevationPass: v.strictObject({ encoding: v.literal('linear-unorm8-world-z'), min: finite, max: finite,
     scale: positive, waterline: v.literal(0), alpha: v.literal('beauty-coverage'),
@@ -76,6 +80,20 @@ export function normalizePipelineAsset(raw: unknown): PipelineRuntimeAsset {
   if (!(a.elevation.min < a.elevation.max) || a.elevationPass.min !== a.elevation.min || a.elevationPass.max !== a.elevation.max
     || a.elevationPass.scale !== a.elevation.scale) fail('Elevation encoding mismatch');
   const groups = [{ name: '__rest', frames: [a.idleFrame] }, ...a.clips];
+  const socketNames = Object.keys(a.sockets).sort();
+  if (socketNames.length && !a.socketFrames) fail('Missing frame sockets');
+  if (a.socketFrames) {
+    const count = Math.max(...groups.flatMap(c => c.frames)) + 1;
+    if (a.socketFrames.length !== count) fail('Socket frame count mismatch');
+    for (const frame of a.socketFrames) {
+      if (Object.keys(frame).sort().join('|') !== socketNames.join('|')
+        || socketNames.some(n => ['eyeLeft', 'eyeRight'].includes(n))) fail('Socket names mismatch');
+    }
+    for (const name of socketNames) {
+      const point = a.socketFrames[a.idleFrame][name];
+      if (a.sockets[name][0] !== point.x || a.sockets[name][1] !== point.y) fail('Rest sockets mismatch');
+    }
+  }
   const names = groups.map(c => c.name).sort().join('|');
   if (Object.keys(a.atlases.color).sort().join('|') !== names || Object.keys(a.atlases.elevation).sort().join('|') !== names
     || Object.keys(a.budget.clips).sort().join('|') !== names) fail('Clip/pass/budget mismatch');
@@ -119,4 +137,18 @@ export function normalizePipelineAssets(raw: readonly unknown[]): PipelineRuntim
     }
   }
   return assets;
+}
+
+/** A marker is clip-local, while socket samples are indexed by the exported source frame. */
+export function pipelineMarkerSocket(asset: PipelineBossAsset, clipName: string, marker: string, socket: string): PipelineSocketPoint {
+  const clip = asset.clips.find(c => c.name === clipName);
+  const index = clip?.markers?.[marker];
+  const point = index === undefined ? undefined : asset.socketFrames?.[clip!.frames[index]]?.[socket];
+  if (!point) throw new Error(`[pipelineAssets] ${asset.id}: Missing ${clipName}/${marker} socket ${socket}`);
+  return point;
+}
+
+export function pipelineEggReleaseSocket(asset: PipelineBossAsset, egg: number): PipelineSocketPoint {
+  if (!Number.isInteger(egg) || egg < 1 || egg > 6) throw new Error('Egg socket index must be 1 through 6');
+  return pipelineMarkerSocket(asset, 'egg-throw', `release-${egg}`, `egg${egg}`);
 }

@@ -337,13 +337,13 @@ Trimming, Auflösung und Elevation-Downsampling verändern diese Werte nicht. Ab
 `--max-frames`-Builds halten bereits ausgegebene Samples in `build.json` unter `frames[].sockets`.
 
 `sockets[name] = [x, y]` ist zusätzlich die AP0-kompatible Sicht der Ruhepose (`idleFrame`).
-**Offener AP0-Vertragsschritt:** `PipelineBossAsset` erlaubt derzeit nur diese statische Sicht.
-Vor Teil 2 muss eine Framefolge mit Welt-z (Vorschlag: obiges `socketFrames`) ausdrücklich
-zugelassen und validiert werden; Ruhekoordinaten ersetzen keine animierten Release-Sockets.
-Ebenso verlangt AP0 derzeit `egg-throw.release`, während der aktuelle Katalog diesen Marker
-durch `release-1` bis `release-6` ersetzt. AP0 muss dieselben sechs Marker verlangen; die
-Pipeline prüft sie bereits und ordnet sie jeweils `egg1` bis `egg6` zu. `hatch.spawn` bleibt ein
-Marker, kein Socket. AP0-Dateien werden durch diese Pipeline-Erweiterung nicht geändert.
+`PipelineBossAsset` validiert zusätzlich `socketFrames` samt Welt-z, Framezahl, Namen und
+Übereinstimmung mit der Ruhepose. `pipelineMarkerSocket` löst einen clip-lokalen Marker über
+den Quellframe auf; `pipelineEggReleaseSocket(asset, k)` bindet `release-k` an `egg<k>`.
+`release-1` bis `release-6` gehören zu `egg1` bis `egg6`; Ruhekoordinaten
+ersetzen keine animierten Release-Sockets. `hatch.spawn` bleibt ein Marker, kein Socket.
+Die Gameplay-Bindungsprüfung `KRAKEN_ASSET_REQUIREMENTS` in `krakenBoss.ts` muss beim
+AP0/AP2-Abgleich ebenfalls diesen Markersatz verlangen.
 
 Isolierter Rauchtest ohne Änderung vorhandener Produktionsruns:
 
@@ -425,6 +425,53 @@ Basis und acht matte Reliefsymbole mit gemeinsamem Pivot/Canvas. Der separate Ka
 `node scripts/asset-pipeline/powerups-run.mjs --revision powerups-r01` erzeugt die neue
 Revision auf D:, 128/256er Exporte, acht UI-Komposite, Spielgrößen-/Puls-Review und ein
 geprüftes Quellenarchiv. Runtime-Veröffentlichung bleibt ein separater expliziter Import.
+
+## Boss-Import
+
+Export → Sichtabnahme → Selection → Import bleiben getrennte Schritte. Erst nach User-Abnahme
+die vier `standard`-Varianten auswählen; für `kraken-v11b` sind die nominalen Canvasauflösungen
+384 (Wasser), 432 (Land), 448 (Tentakel) und 64 (Ei). Die Selection bindet Quellen und Atlasbytes;
+der Import prüft Hashes, Frame-/Passzuordnung, Sockets und RGBA8-Budgets vor dem ersten Kopieren.
+Er publiziert ausschließlich Color-/Elevation-Atlanten, keine Idle-/Sheet-Kopie und keine PoC-URL.
+`targetSize`, `displayScale` und `sourceSize = round(targetSize * displayScale)` bleiben explizit.
+
+```powershell
+# Nur nach Abnahme; bereits exportierte Runs nicht neu rendern.
+node scripts/asset-pipeline/export.mjs select art/poc/pipeline-v2/runs/kraken-v11b/abyssal-kraken standard 384 "User-Abnahme kraken-v11b"
+node scripts/asset-pipeline/export.mjs select art/poc/pipeline-v2/runs/kraken-v11b/abyssal-kraken-land standard 432 "User-Abnahme kraken-v11b"
+node scripts/asset-pipeline/export.mjs select art/poc/pipeline-v2/runs/kraken-v11b/abyssal-kraken-tentacle standard 448 "User-Abnahme kraken-v11b"
+node scripts/asset-pipeline/export.mjs select art/poc/pipeline-v2/runs/kraken-v11b/abyssal-kraken-egg standard 64 "User-Abnahme kraken-v11b"
+node scripts/asset-pipeline/import-runtime.mjs kraken-v11b abyssal-kraken abyssal-kraken-land abyssal-kraken-tentacle abyssal-kraken-egg
+```
+
+Für einen isolierten Trockenlauf denselben Import um `--output-root <neues-Verzeichnis>` ergänzen:
+dort entstehen `pipelineAssets.json` und `public/assets/...` nur für die angeforderten Assets.
+Der Zielordner muss neu sein; `--run-root <Verzeichnis-mit-Assetordnern>` erlaubt isolierte Quellen.
+Ohne Selection bzw. bei unvollständigem Build wird auch ein Trockenlauf abgelehnt.
+
+Die expliziten Basisschlüssel `kraken_water`, `kraken_land`, `kraken_tentacle`, `kraken_egg`
+liegen im Importer; es gibt keine zweite Land-Enemy-ID. Tentakel und Ei bleiben `boss-part`.
+`KrakenAssetResidency` ergänzt Scope-, Clip-, Pass- und Seitenkennung zu eindeutigen GPU-Keys.
+`genericEnemyImageKeys` muss am Enemy-Image-Preload benutzt werden; Bosskörper/-eier dürfen
+nicht über dessen Dateinamen-Fallback geladen werden.
+
+Residency: `intro` lädt zuerst Restposen, dann Intro/Wasserzyklus/Teile; `water` behält
+Zyklus/Tentakel/Eier, entfernt Intro und lädt Land nur auf Wunsch und innerhalb des Budgets vor.
+`ashore` lädt Land priorisiert; alte Seiten bleiben ausschließlich durch aktive Pose-Leases resident.
+`land` (einschließlich Landtod) entfernt Wasser/Tentakel/Ashore und behält Land plus aktive Eier.
+`dead` bedeutet Ende der terminalen Darstellung; `detach()` beendet den Scope vollständig.
+
+AP2b bindet `setPhase(...).ready` nur an lokale Restansichten/Telegraphen, niemals an Hostsimulation.
+`settled` zeigt das Ende des lokalen Clip-Nachladens. Late Join startet mit der aktuellen Phase.
+`acquirePose(role, clip, index, cleanup)` liefert passende benannte Color-/Elevation-Frames oder
+eine garantierte geladene Restpose; vor `ready` bzw. bei Restladefehler liefert es `null`.
+Der Renderer hält bis dahin seinen assetfreien Telegraphen und zeigt `port.diagnose` sichtbar an.
+Eine Lease hält ihre Seiten bis `release`; ihr Cleanup stoppt Animation und entfernt Sprite,
+Filter und Maske vor Texturfreigabe. `ownDependent` registriert weitere globale Animationen,
+deren Cleanup vor Phasenfreigabe oder Detach läuft.
+`detach` verwirft auch verspätete Load-Ergebnisse. GPU-Budgets und `additionalGpuBytes` für
+Renderer-Filter/Masken/FX sind Pflichtparameter; `reservedBytes` zählt auch laufende Downloads.
+Die Phasenbudgets ersetzen keine Messung des Übergangs-Peaks auf echter GPU.
 
 ## V1-Kompatibilität und vorhandene statische Referenzen
 

@@ -1,7 +1,7 @@
 import manifest from './pipelineAssets.json';
 import { normalizePipelineAssets, type PipelineNormalAsset, type PipelineBossAsset } from './pipelineAssetContracts';
-export { normalizePipelineAsset, normalizePipelineAssets } from './pipelineAssetContracts';
-export type { PipelineBossAsset, PipelineNormalAsset, PipelineRuntimeAsset, PipelineAtlasPage, PipelineClip } from './pipelineAssetContracts';
+export { normalizePipelineAsset, normalizePipelineAssets, pipelineMarkerSocket, pipelineEggReleaseSocket } from './pipelineAssetContracts';
+export type { PipelineBossAsset, PipelineNormalAsset, PipelineRuntimeAsset, PipelineAtlasPage, PipelineClip, PipelineSocketPoint } from './pipelineAssetContracts';
 import type { PipelineClip } from './pipelineAssetContracts';
 
 /** Normalized full-frame coordinates; rotation follows the image's clockwise Y-down plane. */
@@ -19,6 +19,11 @@ export const PIPELINE_RUNTIME_ASSETS = normalizePipelineAssets(manifest.assets);
 /** Existing sheet consumers remain explicit: boss atlases have no idle/sheet fallback path. */
 export const PIPELINE_ASSETS = PIPELINE_RUNTIME_ASSETS.filter((a): a is PipelineNormalAsset => a.runtimeContract === 'sheet');
 export type PipelineAsset = PipelineNormalAsset;
+
+/** Boss bodies and parts are owned by phase residency, including their static/rest poses. */
+export function isPipelineBossTexture(textureKey: string): boolean {
+  return PIPELINE_RUNTIME_ASSETS.some(a => a.runtimeContract === 'boss' && a.textureKey === textureKey);
+}
 
 export function getPipelineBossAsset(id: string): PipelineBossAsset {
   const asset = PIPELINE_RUNTIME_ASSETS.find(a => a.id === id);
