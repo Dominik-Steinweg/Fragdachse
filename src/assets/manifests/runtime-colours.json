@@ -637,6 +637,30 @@
       "visiblePixelSha256": "9b3a3d741347ae6f5f2e84d67c8b46e38ebdb23beab2469f701a8bc67ccb59b4",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/sprites/pipeline-v2/mortar-badger/mesh/enemy-mesh-mortar-a3a-14-claw/beauty-128.png": {
+      "file": "assets/sprites/pipeline-v2/mortar-badger/mesh/enemy-mesh-mortar-a3a-14-claw/beauty-128.webp",
+      "source": "assets/sprites/pipeline-v2/mortar-badger/mesh/enemy-mesh-mortar-a3a-14-claw/beauty-128.png",
+      "width": 1056,
+      "height": 528,
+      "sourceBytes": 169142,
+      "downloadBytes": 143882,
+      "sourceSha256": "b93b9277012ea05b5b45f20747a6bd53b0ec079132ff8be79d8082de65859438",
+      "sha256": "1241f48e14d995f5f45cae084bac16defbb09e605a2f6c267153ec769408b05b",
+      "visiblePixelSha256": "8e03ac9d623196458a75b4893c382c034b761a7962a8e7f7f62299911f782fbb",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/mortar-badger/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/mortar-badger/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/mortar-badger/sheet.png",
+      "width": 1056,
+      "height": 528,
+      "sourceBytes": 169142,
+      "downloadBytes": 143882,
+      "sourceSha256": "b93b9277012ea05b5b45f20747a6bd53b0ec079132ff8be79d8082de65859438",
+      "sha256": "1241f48e14d995f5f45cae084bac16defbb09e605a2f6c267153ec769408b05b",
+      "visiblePixelSha256": "8e03ac9d623196458a75b4893c382c034b761a7962a8e7f7f62299911f782fbb",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/sprites/pipeline-v2/plasma/sheet.png": {
       "file": "assets/sprites/pipeline-v2/plasma/sheet.webp",
       "source": "assets/sprites/pipeline-v2/plasma/sheet.png",
