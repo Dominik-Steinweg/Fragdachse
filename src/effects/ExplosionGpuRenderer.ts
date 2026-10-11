@@ -135,7 +135,6 @@ export class ExplosionGpuRenderer {
 
     if (request.style === 'time_bubble_release') { this.spawnBubbleRelease(request); return; }
     if (profile.family === 'shock') { this.spawnShockDischarge(request, profile); return; }
-    if (profile.family === 'physical') { this.spawnPhysicalBlast(request, profile); return; }
 
     this.spawnImpact(request, profile);
     if (profile.family === 'pop' || profile.family === 'lightning') return;
@@ -154,56 +153,9 @@ export class ExplosionGpuRenderer {
     }
   }
 
-  /** A contact blast: finite radius pressure front, mineral ejecta and lingering smoke.
-   * No fireball, upward screen-space motion or second gameplay/impact trigger. */
-  private spawnPhysicalBlast(request: ExplosionCombatVisualRequest, profile: ExplosionVisualProfile): void {
-    const { x, y, radius, palette } = request;
-    this.spawnBurst(this.effectFor(request, 'Shockwave'), 1, spec => {
-      this.configure(spec, { x, y, vx: 0, vy: 0, lifeMs: 450,
-        scaleStart: radius * 0.38 / 32, scaleEnd: radius / 32,
-        scaleEase: GpuVfxEase.QuadOut, alphaStart: 1, alphaEase: GpuVfxEase.CubicIn, tint: palette.hot });
-    });
-    this.spawnBurst(this.effectFor(request, 'Shockwave'), 1, spec => {
-      this.configure(spec, { x, y, vx: 0, vy: 0, lifeMs: 190,
-        frame: GpuVfxFrameId.ExplosionCore, scaleStart: radius * 0.62 / 16, scaleEnd: radius * 0.8 / 16,
-        alphaStart: 0.65, tint: palette.body });
-    });
-    this.spawnBurst(this.effectFor(request, 'Core'), 1, spec => {
-      this.configure(spec, { x, y, vx: 0, vy: 0, lifeMs: 150,
-        scaleStart: radius * 0.36 / 16, scaleEnd: radius * 0.12 / 16,
-        alphaStart: 0.95, tint: palette.core });
-    });
-    this.spawnBurst(this.effectFor(request, 'Smoke'), Math.round(12 * profile.smokeScale), (spec, i, count) => {
-      const angle = i / count * TWO_PI, spread = radius * (0.12 + Math.random() * 0.28);
-      const lifeMs = (950 + Math.random() * 450) * profile.lifeScale;
-      const travel = radius * (0.3 + Math.random() * 0.2);
-      this.configure(spec, { x: x + Math.cos(angle) * spread, y: y + Math.sin(angle) * spread,
-        vx: Math.cos(angle) * travel / (lifeMs / 1000), vy: Math.sin(angle) * travel / (lifeMs / 1000),
-        lifeMs, scaleStart: radius / 115, scaleEnd: radius / 60, scaleEase: GpuVfxEase.QuadOut,
-        frame: i % 3 ? GpuVfxFrameId.ExplosionFireballB : GpuVfxFrameId.ExplosionSmoke,
-        alphaStart: 0.85, tint: i % 4 ? (i % 3 ? 0x817568 : 0x413c38) : palette.smoke,
-        rotation: angle, angularVelocity: i % 2 ? 0.25 : -0.25 });
-    });
-    this.spawnBurst(this.effectFor(request, 'EmberDown'), Math.round(26 * profile.chunkScale), (spec, i, count) => {
-      const angle = i / count * TWO_PI + Math.random() * 0.15;
-      const lifeMs = 500 + Math.random() * 350, travel = radius * (0.65 + Math.random() * 0.35);
-      this.configure(spec, { x: x + Math.cos(angle) * radius * 0.15, y: y + Math.sin(angle) * radius * 0.15, vx: Math.cos(angle) * travel / (lifeMs / 1000),
-        vy: Math.sin(angle) * travel / (lifeMs / 1000), lifeMs,
-        scaleStart: (2 + Math.random() * 1.6) * radius / 90, scaleEnd: 1.2,
-        alphaStart: 1, alphaEase: GpuVfxEase.CubicIn, tint: i % 3 ? 0x493c2e : 0xc5b69e, frame: GpuVfxFrameId.LeafBlowerClod,
-        rotation: angle, angularVelocity: Math.random() * 6 - 3 });
-    });
-    this.spawnBurst(this.effectFor(request, 'Spark'), Math.round(12 * profile.countScale), (spec, i, count) => {
-      const angle = i / count * TWO_PI, speed = radius * (1 + Math.random());
-      this.configure(spec, { x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-        lifeMs: 220 + Math.random() * 130, scaleStart: 0.6, scaleEnd: 0,
-        alphaStart: 0.8, tint: palette.hot, frame: GpuVfxFrameId.ExplosionStreak, rotation: angle });
-    });
-  }
-
   /** Meteor volume/flash/smoke are batched procedural fields; only ejecta use the shared
    * particle lanes. Burning gameplay chunks remain exclusively in FireChunkSystem. */
-  spawnMeteorDebris(x:number,y:number,radius:number,variant:'normal'|'void'):void {
+  spawnMeteorDebris(x:number,y:number,radius:number,variant:'normal'|'void',sparkTint?:number):void {
     this.spawnBurst(GpuVfxEffectId.ExplosionLowEmberDown,Math.min(28,Math.max(10,Math.round(radius/4))), (spec,index,count)=>{
       const angle=index/count*TWO_PI+Math.random()*.3;
       const speed=radius*(.6+Math.random()*1.5);
@@ -215,7 +167,7 @@ export class ExplosionGpuRenderer {
     this.spawnBurst(GpuVfxEffectId.ExplosionLowSpark,Math.min(30,Math.round(radius/3)),spec=>{
       const angle=Math.random()*TWO_PI,speed=radius*(.8+Math.random()*1.7);
       this.configure(spec,{x,y,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,lifeMs:350+Math.random()*650,
-        scaleStart:.5+Math.random()*.7,scaleEnd:0,alphaStart:.85,tint:variant==='void'?0xbb72ff:0xffa339,
+        scaleStart:.5+Math.random()*.7,scaleEnd:0,alphaStart:.85,tint:sparkTint??(variant==='void'?0xbb72ff:0xffa339),
         frame:GpuVfxFrameId.ExplosionStreak,rotation:angle,stretchStart:1.9,stretchEnd:.4});
     });
   }

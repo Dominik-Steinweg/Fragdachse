@@ -5,6 +5,7 @@ import { DistortionFilter } from './distortion/DistortionFilter';
 import { EnemyReadabilityRenderer } from './EnemyReadabilityRenderer';
 import { StinkCloudBody } from './StinkCloudBody';
 import { MeteorGpuLayer } from './gpu/MeteorGpuLayer';
+import { MortarGpuLayer } from './gpu/MortarGpuLayer';
 import {
   TESLA_BOLT_FRAGMENT_SOURCE, TESLA_BOLT_SHADER_NAME, TESLA_DOME_FRAGMENT_SOURCE, TESLA_DOME_SHADER_NAME,
   TESLA_NOVA_FRAGMENT_SOURCE, TESLA_NOVA_SHADER_NAME,
@@ -20,6 +21,7 @@ export function createCombatShaderWarmupProbes(scene: Phaser.Scene): ShaderWarmu
   let stink: StinkCloudBody | null = null;
   let displacement: DistortionFilter | null = null;
   let meteor: MeteorGpuLayer | null = null;
+  let mortar: MortarGpuLayer | null = null;
   return [
     {
       name: 'armageddon',
@@ -27,6 +29,12 @@ export function createCombatShaderWarmupProbes(scene: Phaser.Scene): ShaderWarmu
       // prepare() primes every pass, including the v2 material buffer, before combat.
       prepare: context => (meteor ??= new MeteorGpuLayer(scene)).prepare(context),
       destroy: () => { meteor?.destroy(); meteor = null; },
+    },
+    {
+      name: 'mortar',
+      // Telegraph, drop shadow, shell and crater share one program; every pass is primed.
+      prepare: context => (mortar ??= new MortarGpuLayer(scene)).prepare(context),
+      destroy: () => { mortar?.destroy(); mortar = null; },
     },
     {
       name: 'enemy-contour',

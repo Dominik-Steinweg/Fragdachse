@@ -520,6 +520,8 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   effectSystem.setMeteorExplosionRenderer((x,y,radius,variant)=>bundle.meteor.playImpact(x,y,radius,variant));
   effectSystem.setBurrowGpuRenderer(bundle.burrowGpu);
   effectSystem.setCombatGoreGpuRenderer(bundle.combatGoreGpu);
+  bundle.mortarStrike.setImpactSystems(bundle.explosionGpu, bundle.lighting);
+  effectSystem.setMortarImpactRenderer((x, y, radius, color) => bundle.mortarStrike.playImpact(x, y, radius, color));
 }
 
 /**

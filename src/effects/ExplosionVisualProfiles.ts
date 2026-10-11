@@ -1,7 +1,7 @@
 import type { ExplosionVisualStyle } from '../types';
 
 export type CombatExplosionVisualStyle = Exclude<ExplosionVisualStyle, 'brood_hatch' | 'regeneration'>;
-export type ExplosionSpecialFamily = 'standard' | 'physical' | 'cascade' | 'energy' | 'shock' | 'holy' | 'lightning' | 'train' | 'nuke' | 'pop';
+export type ExplosionSpecialFamily = 'standard' | 'cascade' | 'energy' | 'shock' | 'holy' | 'lightning' | 'train' | 'nuke' | 'pop';
 
 export interface ExplosionVisualProfile {
   readonly family: ExplosionSpecialFamily;
@@ -26,9 +26,10 @@ const STANDARD: ExplosionVisualProfile = {
  */
 export const EXPLOSION_VISUAL_PROFILES = {
   default: STANDARD,
+  // Full combat chain in the faction palette; MortarStrikeRenderer adds crater, dust and embers.
   mortar: {
-    family: 'physical', layering: 'ordinary', countScale: 1, lifeScale: 1.1, bodyScale: 0.85,
-    smokeScale: 1.8, chunkScale: 0.8, upwardEmbers: false,
+    family: 'standard', layering: 'ordinary', countScale: 1.1, lifeScale: 1.05, bodyScale: 0.95,
+    smokeScale: 1.45, chunkScale: 1.35, upwardEmbers: false,
   },
   he_cluster_shard: {
     family: 'standard', layering: 'ordinary', countScale: 0.4, lifeScale: 0.55, bodyScale: 0.75,

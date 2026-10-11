@@ -967,7 +967,11 @@ export class EffectSystem implements EnemyVisualSink {
       ? this.mixColor(fillColor, 0xffffff, 0.45)
       : (isHoly ? 0xffef9a : (isNuke ? this.mixColor(fillColor, 0xffffff, 0.35) : this.mixColor(fillColor, 0xffffff, 0.2)));
     this.spawnCombatExplosionGpu(x, y, radius, visualStyle, fillColor, flashColor, haloColor);
-    if (visualStyle === 'mortar') return; // The physical GPU profile owns the whole contact cue.
+    if (visualStyle === 'mortar') {
+      // The shared burst carries flash and fireball; the mortar layer adds crater, dust and embers.
+      this.mortarImpactRenderer?.(x, y, radius, color);
+      return;
+    }
     const startRadius = 8;
     if (isNuke) {
       const skyFlash = this.scene.add.rectangle(
@@ -1066,6 +1070,13 @@ export class EffectSystem implements EnemyVisualSink {
       // springt der Einzeleffekt als Rückfallebene ein – sonst schlüge er doppelt zu.
       this.cameraFeedback?.request(impactExceptional({ sourceX: x, sourceY: y }));
     }
+  }
+
+  private mortarImpactRenderer: ((x: number, y: number, radius: number, color?: number) => void) | null = null;
+
+  /** Mortar crater/dust/ember signature; driven only by the replicated explosion event. */
+  setMortarImpactRenderer(renderer: ((x: number, y: number, radius: number, color?: number) => void) | null): void {
+    this.mortarImpactRenderer = renderer;
   }
 
   /**
