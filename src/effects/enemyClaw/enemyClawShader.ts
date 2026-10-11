@@ -91,19 +91,22 @@ vec4 telegraph(float gain) {
   return vec4(color * a, a);
 }
 
-// Rectangle local x runs from the entry toward the tip. Same danger palette and charge
-// clock as sectors; a firm boundary keeps the long, narrow footprint legible.
+// Rectangle uses the Bite sector's normalized falloffs and diffuse charge swell.
+// Only the geometry changes: no outline or precise advancing front.
 vec4 lane(float gain) {
-  if (uTime < vTiming.x) return vec4(0.0);
-  float d = max(max(-vLocal.x, vLocal.x - vShape.x), abs(vLocal.y) - vShape.y);
-  float mask = 1.0 - smoothstep(-uPixel, uPixel, d);
-  float edge = line(d, 1.8) * mask;
+  float rn = vLocal.x / vShape.x;
+  float an = abs(vLocal.y) / max(vShape.y, 0.001);
+  if (rn <= 0.0 || rn >= 1.0 || an >= 1.0) return vec4(0.0);
   float charge = clamp((uTime - vTiming.x) / max(1.0, vTiming.z - vTiming.x), 0.0, 1.0);
-  float swell = (1.0 - smoothstep(charge * vShape.x - 5.0, charge * vShape.x + 5.0, vLocal.x)) * step(0.001, charge);
-  float front = line(vLocal.x - charge * vShape.x, 1.2) * step(0.001, charge);
-  float fade = 1.0 - smoothstep(vTiming.z, vTiming.z + FADE_MS, uTime);
-  float a = mask * (0.12 + 0.24 * swell + 0.55 * edge + 0.18 * front) * gain * fade;
-  return vec4(mix(vColor.rgb, HOT, 0.15 * front) * a, a);
+  float strike = smoothstep(vTiming.y, vTiming.z, uTime);
+  float vis = smoothstep(vTiming.x, vTiming.x + 90.0, uTime)
+    * (1.0 - smoothstep(vTiming.z, vTiming.z + FADE_MS, uTime));
+  float hub = smoothstep(0.08, 0.4, rn);
+  float flank = 1.0 - smoothstep(0.4, 1.0, an);
+  float reach = 1.0 - smoothstep(0.55, 1.0, rn);
+  float swell = 1.0 - smoothstep(charge - 0.35, charge + 0.1, rn);
+  float a = hub * flank * reach * (0.1 + 0.2 * swell * charge + 0.1 * strike) * gain * vis;
+  return vec4(mix(vColor.rgb, HOT, 0.35 * strike) * a, a);
 }
 
 // Two mirrored paws closing like a pincer: each drags three stacked claw arcs from the
@@ -194,7 +197,8 @@ vec4 contact() {
 
 void main() {
   vec4 color;
-  if (vShape.z > 1.5) color = uPass < 0.5 ? lane(1.0) : uPass > 1.5 ? lane(0.55) : vec4(0.0);
+  if (vShape.z > 2.5) color = uPass < .5 ? telegraph(1.0) : uPass > 1.5 ? telegraph(.55) : vec4(0.0);
+  else if (vShape.z > 1.5) color = uPass < 0.5 ? lane(1.0) : uPass > 1.5 ? lane(0.55) : vec4(0.0);
   else if (uPass < 0.5) color = telegraph(1.0);
   else if (uPass < 1.5) color = vShape.z < 0.5 ? rake() : contact();
   // Emissive trace: a fainter copy of the tint keeps the zone readable under the night lightmap.

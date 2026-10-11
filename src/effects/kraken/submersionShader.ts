@@ -10,7 +10,11 @@ export const SUBMERSION_DEFAULTS = {
   foamBand: 0.022, foamOpacity: 0.42,
   depthFalloff: 0.35, desaturation: 0.45, shallowTint: 0.22,
   fadeStart: 0.15, fadeEnd: 1.2, refractionPx: 2,
+  exposure: 1,
 };
+
+/** World lighting lifts sprites roughly 3x in linear light; the boss keeps its dark plum menace. */
+export const KRAKEN_WORLD_EXPOSURE = 0.55;
 
 export const SUBMERSION_FRAGMENT = `
 #pragma phaserTemplate(shaderName)
@@ -21,7 +25,7 @@ uniform vec2 elevationSize, displaySize;
 uniform float waterLevel, elevationMin, elevationMax, time;
 uniform vec3 deepColor, shallowColor, foamColor;
 uniform float wetBand, wetDarkening, wetSaturation, foamBand, foamOpacity;
-uniform float depthFalloff, desaturation, shallowTint, fadeStart, fadeEnd, refractionPx;
+uniform float depthFalloff, desaturation, shallowTint, fadeStart, fadeEnd, refractionPx, exposure;
 varying vec2 outTexCoord;
 #pragma phaserTemplate(fragmentHeader)
 float hash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
@@ -32,9 +36,10 @@ float noise(vec2 p) {
 void main() {
   vec2 uv=outTexCoord;
   vec4 source=boundedSampler(uMainSampler,uv);
+  source.rgb*=exposure;  // per-object exposure, also on land
   vec2 logical=vec2(uv.x,1.0-uv.y);
   vec2 local=(logical*elevationSize-elevationTrim.xy)/elevationTrim.zw;
-  float mask=texture2D(uWaterMask,uv).r;
+  float mask=texture2D(uWaterMask,logical).r;
   if(source.a<=0.0 || mask<=0.0 || any(lessThan(local,vec2(0))) || any(greaterThan(local,vec2(1)))) {
     gl_FragColor=source; return;
   }
@@ -50,6 +55,7 @@ void main() {
     vec2 shift=vec2(sin(logical.y*37.0+time*1.3),cos(logical.x*31.0+time*1.1));
     shift*=min(refractionPx,2.0)*0.70710678*f/max(displaySize,vec2(1));
     vec4 refracted=boundedSampler(uMainSampler,uv+shift);
+    refracted.rgb*=exposure;
     rgb=refracted.a>0.001 ? refracted.rgb/refracted.a : rgb;
     rgb=mix(rgb,vec3(dot(rgb,vec3(.2126,.7152,.0722))),desaturation*f);
     rgb=mix(rgb,shallowColor,shallowTint*f);

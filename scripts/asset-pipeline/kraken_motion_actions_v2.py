@@ -34,39 +34,60 @@ def key_rest(asset, frame, pose, key, key_arms, key_lids):
     key_eggs(pose)
 
 
+# Throw order: alternating left/right from the front arms backwards.
+THROW_ORDER = (0, 4, 2, 6, 3, 7)
+THROW_START, THROW_STEP, THROW_WINDOW, THROW_RELEASE = .06, .11, .36, .60
+
+
+def throw_windows(p):
+    """Per-arm (start, release) phases; release follows the clip markers release-1..6 when present."""
+    markers = p.get('markerPhases', {})
+    out = {}
+    for k, arm in enumerate(THROW_ORDER):
+        start = THROW_START + THROW_STEP * k
+        release = markers.get(f'release-{k + 1}', start + THROW_RELEASE * THROW_WINDOW)
+        out[arm] = (release - THROW_RELEASE * THROW_WINDOW, release)
+    return out
+
+
 def brood_throw(asset, phase, frame, p, pose, key, key_arms, key_lids, land=False):
-    release = p.get('markerPhases', {}).get('release', .57)
-    windup = release * .67
-    finish = release + (1 - release) * .52
-    gather = envelope(phase, (0, 0), (windup, 1), (release, .25), (finish, 0), (1, 0))
-    snap = envelope(phase, (0, 0), (windup, 0), (release, 1), (finish, -.24), (1, 0))
-    # Six tips emerge in three slightly staggered pairs. Visibility cuts exactly
-    # at release; no egg remains attached to a recovering arm.
+    """Six staggered throws: lift the egg, cock the arm back and up, whip it outward, follow through."""
+    windows = throw_windows(p)
+    local = {arm: (phase - start) / THROW_WINDOW for arm, (start, _) in windows.items()}
+
+    def beats(u):
+        lift = envelope(u, (0, 0), (.30, 1), (.62, 1), (1, 0)) if 0 < u < 1 else 0
+        cock = envelope(u, (0, 0), (.15, 0), (.50, 1), (.60, .2), (.75, 0), (1, 0)) if 0 < u < 1 else 0
+        snap = envelope(u, (0, 0), (.48, 0), (.60, 1), (.74, -.25), (1, 0)) if 0 < u < 1 else 0
+        return lift, cock, snap
+
     eggs = {}
     for n, arm in enumerate(EGG_ARMS, 1):
-        delay = (arm % 4) * .018
-        eggs[n] = smooth(.035 + delay, windup * .85 + delay, phase) if phase < release else 0
+        u = local[arm]
+        eggs[n] = smooth(.05, .30, u) if u < THROW_RELEASE else 0  # gone exactly at its release
     key_eggs(pose, eggs)
-    pose('body', scale=(1 - .045 * gather + .025 * snap,
-                        1 - .025 * gather, 1 + .10 * gather - .07 * snap),
-         location=(0, -.035 * gather, .035 * gather))
-    pose('surfacing', location=(0, 0, (.035 if land else .10) * gather),
-         rotation=(.025 * gather - .018 * snap, 0, 0))
+    # The mantle pumps once per throw; the head leans a little towards the throwing side.
+    pump = sum(beats(u)[2] for u in local.values()) / 2
+    lean = sum((-1 if arm < 4 else 1) * beats(u)[1] for arm, u in local.items()) / 3
+    recover = 1 - smooth(.92, 1, phase)
+    pose('body', scale=(1 + .02 * pump, 1 - .015 * pump, 1 - .04 * pump))
+    pose('surfacing', location=(0, 0, (.02 if land else .05) * min(1, pump) * recover),
+         rotation=(0, .03 * lean * recover, 0))
 
     def bend(i, side, t):
-        if i not in EGG_ARMS:
-            return (-.012 * gather * (1 - t), 0, -side * .008 * snap * t)
-        # The throw propagates towards the tip; the distal flick peaks at release.
-        lag = .065 * t
-        fling = envelope(phase, (0, 0), (windup + lag, 0),
-                         (release + lag * .35, 1), (finish + lag, -.22), (1, 0))
-        pitch = .085 * gather * (.7 + .3 * t) - .065 * fling * (.35 + .65 * t)
-        yaw = -side * .060 * gather * (.25 + .75 * t) + side * .037 * fling * t
-        return (pitch, side * .009 * gather * t, yaw)
+        if i not in local:
+            return (-.008 * pump * (1 - t), 0, 0)
+        lift, cock, snap = beats(local[i])
+        lag = smooth(.0, 1, t) * .06       # the whip travels from the root to the hook
+        _, _, snap_late = beats(local[i] - lag)
+        pitch = .03 * lift * (.5 + .5 * t) + .085 * cock * (.6 + .4 * t) - .055 * snap_late * (.3 + .7 * t)
+        yaw = -side * .07 * cock * (.3 + .7 * t) + side * .065 * snap_late * t
+        twist = side * .05 * cock * t
+        return (pitch, twist, yaw)
 
     key_arms(asset, frame, key, bend)
-    blink = envelope(phase, (0, 0), (windup, .12), (release, .38), (finish, 0), (1, 0))
-    key_lids(pose, lambda name: blink * (.8 if 'second' in name else 1))
+    squint = max(beats(u)[2] for u in local.values())
+    key_lids(pose, lambda name: .35 * squint * (.8 if 'second' in name else 1))
 
 
 def apply_action(asset, motion, phase, frame, p, pose, key, key_arms, key_lids):

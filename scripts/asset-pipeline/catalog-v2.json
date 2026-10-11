@@ -4628,6 +4628,7 @@
       "reference": "scripts/asset-pipeline/references/abyssal-kraken-v2.png",
       "targetSize": 320,
       "sourceSizes": [
+        384,
         512,
         1024
       ],
@@ -4639,14 +4640,16 @@
       "description": {
         "silhouette": "Riesiger Endboss im Teich: gestreckter Speermantel mit segmentiertem Kiel, Hakenstacheln und gezackten Flossenmembranen, acht lange über Schwimmhäute verbundene Arme und eine Krone aus Mundtentakeln.",
         "colors": "Bedrohliches dunkles Indigo-Violett mit violetten Flanken, Pigmentmarmorierung und Lavendel-Säumen; karminrote Saugnäpfe und Mundtentakel; nach vorn blickende Glutaugen mit Schlitzpupille als hellster Akzent.",
-        "anatomy": "Wasserlinie z=0 für den Elevation-Pass. Augen unter schweren Lidern auf eigenen Pivots (Blinzeln, Öffnen im Intro). Sechs getragene Eier an Armspitzen, in Ruhe verborgen. Schlagtentakel und Eier sind eigene Boss-Teile."
+        "anatomy": "Wasserlinie z=0 für den Elevation-Pass. Augen unter schweren Lidern auf eigenen Pivots (Blinzeln, Öffnen im Intro). Sechs getragene Eier an Armspitzen, in Ruhe verborgen. Aufgetaucht: Tintenkegel (ink-spit) und Eierwurf; Abtauchen (dive → surface) macht den Körper unsichtbar, dann greifen separate Schlagtentakel an. Schlagtentakel und Eier sind eigene Boss-Teile."
       },
       "requiredClips": [
         "idle",
         "move",
         "intro-rise",
-        "tentacle-call",
-        "egg-throw"
+        "ink-spit",
+        "egg-throw",
+        "dive",
+        "surface"
       ],
       "production": "reference",
       "recipe": "abyssal-kraken",
@@ -4698,27 +4701,52 @@
           }
         },
         {
-          "name": "tentacle-call",
-          "motion": "kraken_call_tentacle",
-          "frameCount": 20,
+          "name": "ink-spit",
+          "motion": "kraken_ink_spit",
+          "frameCount": 22,
           "frameRate": 20,
           "loop": false,
           "markers": {
-            "dive": 8,
-            "resurface": 16
-          },
-          "parameters": {
-            "arm": 4
+            "charge": 9,
+            "spit": 12
           }
         },
         {
           "name": "egg-throw",
           "motion": "kraken_throw_egg",
+          "frameCount": 36,
+          "frameRate": 20,
+          "loop": false,
+          "markers": {
+            "release-1": 10,
+            "release-2": 14,
+            "release-3": 17,
+            "release-4": 21,
+            "release-5": 25,
+            "release-6": 29
+          }
+        },
+        {
+          "name": "dive",
+          "motion": "kraken_dive",
           "frameCount": 24,
           "frameRate": 20,
           "loop": false,
           "markers": {
-            "release": 13
+            "submerged": 19
+          },
+          "end": "free",
+          "next": "surface"
+        },
+        {
+          "name": "surface",
+          "motion": "kraken_surface",
+          "frameCount": 28,
+          "frameRate": 20,
+          "loop": false,
+          "start": "free",
+          "markers": {
+            "eyes-open": 18
           }
         }
       ],
@@ -4730,7 +4758,7 @@
       },
       "runtimeAtlas": true,
       "runtimeContract": "boss",
-      "runtimeBudgetMB": 64
+      "runtimeBudgetMB": 104
     },
     {
       "id": "abyssal-kraken-land",
@@ -4740,6 +4768,7 @@
       "reference": "scripts/asset-pipeline/references/abyssal-kraken-v2.png",
       "targetSize": 360,
       "sourceSizes": [
+        432,
         512,
         1024
       ],
@@ -4758,6 +4787,7 @@
         "move",
         "ashore",
         "slam",
+        "ink-spit",
         "egg-throw",
         "death"
       ],
@@ -4817,13 +4847,29 @@
           }
         },
         {
-          "name": "egg-throw",
-          "motion": "kraken_land_egg_throw",
-          "frameCount": 20,
+          "name": "ink-spit",
+          "motion": "kraken_land_ink_spit",
+          "frameCount": 22,
           "frameRate": 20,
           "loop": false,
           "markers": {
-            "release": 11
+            "charge": 9,
+            "spit": 12
+          }
+        },
+        {
+          "name": "egg-throw",
+          "motion": "kraken_land_egg_throw",
+          "frameCount": 32,
+          "frameRate": 20,
+          "loop": false,
+          "markers": {
+            "release-1": 9,
+            "release-2": 12,
+            "release-3": 15,
+            "release-4": 19,
+            "release-5": 22,
+            "release-6": 26
           }
         },
         {
@@ -4842,7 +4888,7 @@
       },
       "runtimeAtlas": true,
       "runtimeContract": "boss",
-      "runtimeBudgetMB": 72
+      "runtimeBudgetMB": 100
     },
     {
       "id": "abyssal-kraken-tentacle",
@@ -4868,6 +4914,7 @@
       "runtimeContract": "boss",
       "targetSize": 448,
       "sourceSizes": [
+        448,
         512,
         1024
       ],
@@ -4960,6 +5007,7 @@
       "runtimeContract": "boss",
       "targetSize": 64,
       "sourceSizes": [
+        64,
         128,
         256
       ],
@@ -5006,6 +5054,9 @@
           "end": "terminal",
           "parameters": {
             "idleEmission": 2.5
+          },
+          "markers": {
+            "spawn": 8
           }
         }
       ]

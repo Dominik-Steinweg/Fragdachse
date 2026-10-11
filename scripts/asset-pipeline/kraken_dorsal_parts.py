@@ -249,7 +249,12 @@ def paint_mantle(ob, section, lines, sockets=()):
         flank *= 1 - .35 * head
         # Pale crests on keel plates, muscle plates and brows read as structure on the saddle.
         crest = math.exp(-(ridge_distance(p.x, p.y, lines) / .05) ** 2) * max(0, n.z) ** 2
-        rim = max(.35 * max(0, (across - .9) / .1), .55 * crest)
+        rim = max(.35 * max(0, min(1, (across - .9) / .1)), .55 * crest)
+        # Shoulder tissue beyond the mantle edge sits under the arms: keep it dark, so moving
+        # arms never uncover pale skin.
+        hidden = min(1, max(0, (across - .98) / .18))
+        flank += (.22 - flank) * hidden
+        rim *= 1 - hidden
         # Deep eye sockets read as dark hollows around the glowing irises.
         for sx, sy, sr in sockets:
             d = math.hypot(p.x - sx, p.y - sy) / (sr * 1.7)

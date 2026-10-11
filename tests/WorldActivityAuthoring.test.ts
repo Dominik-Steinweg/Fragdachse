@@ -218,7 +218,7 @@ describe('World-/Activity-Authoring – Partition', () => {
         expect(serialized.includes(`"${missionField}"`), `${world.id} leaks ${missionField}`).toBe(false);
       }
       expect(Object.keys(world).sort()).toEqual([
-        'actionPolicy', 'bases', 'fogStrength', 'id', 'initialTimeOfDay', 'metrics', 'persistentBaseSite', 'sourceMapId', 'terrain', 'tracks',
+        'actionPolicy', 'bases', 'fogStrength', 'id', 'initialTimeOfDay', 'krakenHabitat', 'metrics', 'persistentBaseSite', 'sourceMapId', 'terrain', 'tracks',
       ]);
       for (const base of world.bases) {
         expect(Object.keys(base).sort(), `${world.id}/${base.id}`).toEqual([

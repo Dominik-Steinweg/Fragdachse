@@ -216,7 +216,8 @@ def web(c, name, arm_a, arm_b, chain_a, chain_b, material, reach=.66, rows=30, c
             bones.append([(bone, w * (1 - s)) for bone, w in chain_weights(chain_a, t)] +
                          [(bone, w * s) for bone, w in chain_weights(chain_b, t)])
             edge = smoothstep(.86, 1, u)
-            pattern.append((.56 + .12 * bulge, (.36 + .28 * edge) * bulge, .25))
+            # Dark where the web roots into arms and mantle, pale only across the open membrane.
+            pattern.append((.56 + .12 * bulge, (.36 + .28 * edge) * bulge * smoothstep(0, .30, u), .25))
     for k in range(rows):
         for j in range(cols):
             a = k * (cols + 1) + j

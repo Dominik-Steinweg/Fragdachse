@@ -10,71 +10,185 @@ Der Einstieg und die Bedienoberfläche werden vom normalen Produktionsbuild nich
 
 ### Kraken: Abgrundteich (Dev-Review)
 
-`kraken-abyss-lab` ist nur während des Dev-Szenario-Modus registriert und wird beim
-Controller-Teardown wieder entfernt. Die Karte hat 70×48 Zellen, einen natürlichen
-elliptischen Teich, freie Prüfflächen und einen Spielerstart am Südufer. Es gibt keine
-neue Gegnerart und keine Boss-/Trefferlogik. Wellen bleiben über `suppressWaves` steuerbar.
-
-URL-Rezept (JSON wie bei allen Szenarien URL-kodieren):
+`kraken-abyss-lab` ist eine nur im Dev-Modus registrierte Diagnosekarte (70×48 Zellen)
+mit einem etwa 27×21 Zellen großen Teich und Spielerstart am Südufer. Die Fixture hat
+keine Gegner-, Treffer- oder Netzwerklogik. URL-Rezept (JSON URL-kodieren):
 
 ```js
 location.hash = 'scenario=' + encodeURIComponent(JSON.stringify({
   version: 1, classId: 'dachs_nukem', mapId: 'kraken-abyss-lab', seed: 12345, timeOfDay: 720,
-  player: { gridX: 39, gridY: 33 }, suppressWaves: true,
+  player: { gridX: 39, gridY: 36 }, suppressWaves: true,
   freezeMission: true, hideTutorial: true, hideAim: true
 }));
 await devScenario.whenReady();
-await devScenario.run({ action: 'krakenReview', run: 'kraken-v7', asset: 'abyssal-kraken',
-  size: 320, clip: 'slam', frame: 16, camera: 'overview', grid: true });
+await devScenario.run({ action: 'krakenReview', run: 'kraken-v9', asset: 'abyssal-kraken', size: 320,
+  land: { asset: 'abyssal-kraken-land', size: 360 },
+  tentacle: { asset: 'abyssal-kraken-tentacle', size: 448 },
+  egg: { asset: 'abyssal-kraken-egg', size: 64 }, waterLevel: .38 });
+await devScenario.run({ action: 'krakenReview', clip: 'intro-rise', playing: true });
+await devScenario.run({ action: 'krakenReview', tentacleClip: 'rise', tentacleFrame: 0,
+  tentacleSequence: true, camera: 'tentacle', playing: true });
+await devScenario.run({ action: 'krakenReview', eggClip: 'hatch', eggFrame: 8, camera: 'egg' });
 ```
 
-`krakenReview`-Aufrufe sind Patches auf die aktive Fixture. Den ersten Aufruf und jeden
-Assetwechsel `await`en; `start()` und `destroy()` entfernen Sprites, Texturen, Hooks und GPU-Layer.
-Der URL-Hash speichert das Kartenrezept; die Review-Parameter werden anschließend per Befehl gesetzt.
-`devScenario.status().krakenReview` zeigt Optionen, Clips einschließlich Marker, Texturformat und Frame.
+Aufrufe sind Patches; ersten Aufruf und Assetwechsel immer `await`en. `run` kann auch
+`pipeline-v8-smoke-2` sein, sobald dessen Exporte lokal vorliegen. Der Legacy-Standard
+`kraken-v7` bleibt für den Sheet-Fallback nutzbar, enthält aber keine Elevation/Boss-Teile.
 
 | Parameter | Bedeutung / Standard |
 | --- | --- |
-| `run`, `asset`, `size` | `kraken-v7`, `abyssal-kraken`, `320`; Pfad `/art/poc/pipeline-v2/runs/<run>/<asset>/standard/` |
-| `clip`, `frame` | `idle`, `0`; **nullbasierter Index innerhalb des Clips**, keine Blender-Frame-Nummer. Einzelframe pausiert den Clip, Clipwechsel setzt Frame auf 0. |
-| `playing`, `speed` | `false`, `1`; Clip läuft mit exportierter Bildrate × Geschwindigkeit. Nicht geloopte Clips halten am Ende. Globale Szenariopause hält auch den Clip an. |
-| `phase`, `waterLevel` | `water` / `land`, `0.5` (0–1). Land verschiebt den Körper ans Südufer. `applySubmersion(sprite, level)` ist vorerst ein No-op. |
-| `land` | Optional `{run, asset, size, atlas?, elevationAtlas?}` für den Landkörper; ohne eigenen Landkörper wird dasselbe Asset verwendet. `null` entfernt ihn. |
-| `tentacle` | Optional dieselbe Asset-Schnittstelle für ein zweites Asset am Wassereintritt (auch Ei-Review möglich). `run`/`size` dürfen vom Hauptasset geerbt werden; `null` entfernt es. |
-| `tentaclePivot` | `[0.5, 1]`, normalisierter Pivot im ungetrimmten Quellframe; bleibt bei Rotation am Wassereintritt. Assets zeigen authored nach Norden. |
-| `direction` | `90` Grad, gemeinsame Richtung für Tentakel und Bahn; 0 = rechts, 90 = unten. |
-| `telegraphLength`, `telegraphWidth`, `telegraphProgress` | `320`, `112` Weltpixel, `0.5` (0–1); reine Darstellung ohne Treffer. |
-| `grid`, `camera` | `false`, `overview` / `body`; Raster 32 Weltpixel, an World-Offset/Zellkanten ausgerichtet. |
-| `atlas`, `elevationAtlas` | Automatisch `atlas.json` prüfen; `atlas:false` erzwingt Sheet. Dateinamen relativ zu `standard/`. Elevation optional explizit angeben. |
+| `run`, `asset`, `size` | `kraken-v7`, `abyssal-kraken`, `320`; Pfad unter `art/poc/pipeline-v2/runs/<run>/<asset>/standard/` |
+| `clip`, `frame` | `idle`, `0`; nullbasierter Clip-Index. Frameauswahl pausiert, Clipwechsel setzt den zugehörigen Frame zurück. |
+| `playing`, `speed` | `false`, `1`; exportierte Bildrate × Geschwindigkeit. Szenariopause hält Animation und Shaderzeit an. `next` wird verfolgt; `terminal/free` ohne Nachfolger hält, `rest` kehrt zur Ruhepose zurück. |
+| `phase`, `waterLevel` | `water` / `land`; `waterLevel:null` nutzt je Asset `elevation.previewWaterLevel` (sonst 0), explizit 0–1 Blender-Einheiten. |
+| `submersion` | `true`; `false` schaltet nur den Objektfilter für den Lichtvergleich aus. Kein globaler Lichtwechsel. |
+| `land`, `tentacle`, `egg` | Optionale Quellen `{run, asset, size, atlas?, elevationAtlas?}`; `null` entfernt das Teil. Run/Size können geerbt werden; Teile haben meist andere Zielgrößen. Drei Eier stehen an Land. |
+| `tentacleClip`, `tentacleFrame`, `tentacleSequence` | `rise`, `0`, `false`; Sequenz spielt `rise → hover → slam → retract` je einmal, auch den Hover-Loop. |
+| `eggClip`, `eggFrame` | `idle`, `0`; unabhängig vom Körper, auch `hatch`. |
+| `tentaclePivot` | Fallback `[.5,.85]` im ungetrimmten Frame. Ein exportiertes `manifest.sockets.waterEntry:[u,v]` hat Vorrang. Fehlt der Socket, meldet `socketSource` den Fallback; er ist keine verifizierte Socket-Position. |
+| `direction` | `90` Grad; 0 = rechts, 90 = unten. Nordwärts authored Tentakel und Bahn teilen den am Wassermodell ermittelten Uferpunkt. |
+| `telegraphLength`, `telegraphWidth`, `telegraphProgress` | `320`, `112` Weltpixel, `.5`; reine Darstellung. |
+  | `grid`, `camera` | `false`, `overview` / `body` / `tentacle` / `egg` / `effect`; Raster 32 Weltpixel. `effect` zentriert den Effektbereich. |
+| `atlas`, `elevationAtlas` | Ohne Override: `export.json.atlases[size]` mit Per-Clip-Seiten laden, sonst optional `atlas.json`, sonst Sheet. `atlas:false` erzwingt Sheet. Sichere relative JSON-Pfade unter `standard/`. |
+
+### Kraken-Körper und Eierflug (R5)
+
+`effect: 'intro' | 'dive' | 'surface' | 'egg-throw'` steuert die Körperclips automatisch.
+Alle vier benötigen `phase:'water'` und `submersion:true`; der Eierwurf zusätzlich ein Ei-Asset
+mit `idle` und `hatch`. `effectTime` setzt die absolute Zeit in Sekunden, etwa `123/60` für
+Review-Frame 123. `playback:'play'` spielt dieselbe Zeitachse ab. `camera:'effect'` zeigt den
+Körper beziehungsweise folgt dem ersten Ei. `camera:'overview'` zeigt die gesamte Inszenierung.
+
+| Parameterblock | Benannte Look-/Timing-Parameter (Standard) |
+| --- | --- |
+| `intro` | `lead:.6`, `radius:112`, `lifetime:1.65`, `foamOpacity:.72`, `sprayCount:80`, `spraySpeed:135`, `drain:.85`, `shakeScale:.35` |
+| `intro` Ersatzmarker | `armsBreak:.875`, `keelBreak:1.45`, `eyesOpen:2.0625`, `roar:2.5` |
+| `surface` | `lead:.2`, `radius:96`, `lifetime:1.1`, `foamOpacity:.62`, `sprayCount:56`, `spraySpeed:105`, `drain:.65`; Ersatzmarker `armsBreak:.25`, `keelBreak:.55`, `eyesOpen:.9` |
+| `dive` | `submerged:.95` (Ersatzmarker), `radius:110`, `lifetime:1.5`, `foamOpacity:.65`, `shadowOpacity:.12` |
+| `eggFlight` | `release:.65` (Ersatzmarker), `count:6` (1–8), `flight:.95`, `arcScale:.65`, `launchRadius:108`, `landInset:48`, `incubation:3.5`, `pulse:.16`, `slimeRadius:24`, `residue:1.6` |
+| `eggTargets` | `[]`: radiale Landsuche; alternativ genau `count` Punkte `{x,y}` in Welt-Gridkoordinaten, geprüft auf Land und Weltgrenzen |
+| `eggLaunches` | `[]`: `egg1`…`egg8`-Sockets, sonst radialer `launchRadius`-Fallback; alternativ genau `count` normierte Körperpunkte `{x,y}` in 0…1 |
+
+Marker des Exports haben Vorrang vor Ersatzzeiten. `lead` wird auf die Clipzeit addiert;
+`keel-break` wird verwendet, sofern vorhanden. `krakenReview.choreography` meldet Markerquellen,
+Flugpunkte und die Startpunktquelle. v10 besitzt keine Armsockel: Die radialen Startpunkte sind
+ein abstimmbarer Prototyp-Fallback. Exakte Armspitzen können über `eggLaunches` vorgegeben werden.
+Abtauchen hält nach `submerged` einen schwachen Restschatten bis zum Effektwechsel. Eier und
+Schleim verschwinden nach Hatch plus `residue`. Effektwechsel blendet alle privaten Quads aus;
+die Fixture besitzt Pool, Filter und Texturen. Auftauchen verwendet keinen Kameraruck.
 
 ```js
-await devScenario.run({ action: 'krakenReview', clip: 'idle', playing: true, speed: .5 });
-await devScenario.run({ action: 'krakenReview', clip: 'slam', frame: 11, camera: 'body' });
-await devScenario.run({ action: 'krakenReview', phase: 'land', direction: 135,
-  telegraphLength: 320, telegraphWidth: 112, telegraphProgress: 1 });
+await devScenario.run({action:'krakenReview', run:'kraken-v10', asset:'abyssal-kraken', size:320,
+  egg:{asset:'abyssal-kraken-egg',size:64}, effect:'intro', effectTime:0, camera:'effect'});
+await devScenario.run({action:'krakenReview', effect:'dive', effectTime:75/60});
+await devScenario.run({action:'krakenReview', effect:'surface', effectTime:45/60});
+await devScenario.run({action:'krakenReview', effect:'egg-throw', effectTime:0,
+  eggFlight:{count:3}, eggTargets:[{x:30,y:37},{x:35,y:38},{x:40,y:37}]});
+await devScenario.run({action:'krakenReview', effectTime:0, playback:'play'});
 ```
 
-Sheet-Zuschnitt (inklusive Margin/Spacing), Clips, Bildrate, Loop und Marker kommen aus
-`export.json`. Trimmed Atlanten verwenden Phaser-Atlas-JSON (`frames`, `sourceSize`,
-`spriteSourceSize`, `meta.image`); numerische Clipframes werden als gleichnamige Atlas-Keys
-aufgelöst, alternativ darf `manifest.clips[].frames` String-Keys enthalten. Elevation-Atlanten
-benötigen dieselben Frame-Keys. Der Loader lädt sie bereits; ihre Shader-Verwendung ist TODO.
-Körper und Tentakel liegen über Wasser (`DEPTH.WATER`) und knapp unter Telegraph/Spielern,
-damit Dachs und Gefahr am Ufer lesbar bleiben. Das ersetzt noch keine Boss-Depth-/Untertauchlogik.
+```powershell
+node scripts/visual/kraken-review.mjs --run=kraken-v10 --r5=only
+# Nach Fertigstellung des parallelen Exports:
+node scripts/visual/kraken-review.mjs --run=kraken-v11 --r5=only
+```
 
-Aufnahmen gegen den **laufenden** Server auf Port 8090:
+Der Runner erzeugt je Effekt 8–12 Zeitpunkte in Übersicht und Nahsicht als
+`build/kraken-review/<timestamp>/r5-<effect>-<overview|effect>.png`, plus `report.json`.
+Jede Aufnahme muss bytegleich eingefroren bleiben. R5-Rückwärtssprünge erlauben ausschließlich
+Shader-Rundung von höchstens 3/255 je Kanal, ohne Pixelausnahmen; Messwerte stehen in
+`report.json.seekComparisons`. Die Eier-Nahsicht verwendet Zoom 6 über den vorhandenen Kamerabefehl.
+Der Aufnahme-Tab hält Vites Hot-Reload-Verbindung an, damit parallele Dateiedits keinen
+laufenden Bogen neu laden. Ein neuer Runner-Aufruf lädt den aktuellen Code.
+
+### Kraken-Effekte (R3)
+
+`effect: 'ink' | 'erupt' | 'slam' | 'none'` wählt den Prototyp. `effectTime` ist die absolute
+Zeit in Sekunden; für ein exaktes 60-Hz-Bild `frame / 60` übergeben. `playback:'manual'`
+(Standard) hält diese Zeit, `playback:'play'` führt sie mit Szenariozeit × `speed` fort.
+Ein explizites `effectTime` pausiert die Effektzeit, ein Effektwechsel setzt sie auf null.
+`camera:'effect'` fokussiert die Aktion, `overview` zeigt alle bis zu drei Uferbahnen.
+`clip` und `tentacleClip` bleiben frei wählbar. Die Effektzeit sampelt die gewählte Pose;
+`erupt` sampelt bei vollständigem Export `rise → hover → slam → retract` ohne Schleife.
+`ink-spit:charge/spit` und `slam:impact` (ersatzweise `strike`) aus `export.json` haben Vorrang
+vor Ersatzzeiten. Der Status `krakenReview.effects` nennt Markerquellen, Mundpunkt und fehlende Assets.
+Der scharf begrenzte Tintensektor beginnt bei Clipzeit 0 und füllt sich bis `spit`.
+Die Tinte löst sich über Noise-Schwellen auf; Wasser hält eingerollte Schlieren länger.
+Diese Fixture erzeugt keine Treffer und keinen Schaden.
+
+Alle folgenden Gruppen sind partielle Parameterobjekte, z. B. `ink:{hold:1.15}`:
+
+| Gruppe | Parameter | Standard | Wirkung |
+| --- | --- | --- | --- |
+| `ink` | `range`, `halfAngle` | 240 px, 30° | Reichweite und halbe Sektoröffnung |
+| `ink` | `mouthOffset` | 74 px | Abstand vom Körperanker; ein exportierter `mouth`-Socket hat Vorrang |
+| `ink` | `charge`, `spit` | 0.45, 0.6 s | Ersatzzeiten ab Clipbeginn |
+| `ink` | `travel`, `hold`, `dissolve` | 0.22, 1, 0.65 s | Ausstoß, Halten, Auflösen nach `spit` |
+| `ink` | `opacity`, `waterSpread` | 0.98, 1.18 | Deckkraft; zusätzliche Breite über der tatsächlichen Wassermaske |
+| `ink` | `coreColor`, `edgeColor` | `0x120a1c`, `0x3a2252` | Indigokern und schwacher violetter Rand |
+| `ink` | `cloudWarp`, `sheen` | 1.3, 0.14 | Domain-Warp der Wolken; Glanz entlang der Wasserschlieren |
+| `erupt` | `radius`, `lifetime` | 66 px, 1.25 s | Ausbruchgröße und Lebensdauer je Platschen |
+| `erupt` | `rise`, `retract` | 0.15, 2.5 s | Ausbruchzeit und Ersatzzeit fürs Einziehen; vollständige Clipfolge bestimmt `retract` |
+| `erupt` | `retractScale` | 0.55 | Kleineres Platschen beim Einziehen |
+| `erupt` | `count`, `spacing` | 3, 128 px | Gleichzeitige, am Wassermodell verankerte Bahnen; maximal 3 |
+| `erupt` | `bulgeDuration`, `sprayCount`, `spraySpeed`, `foamOpacity` | 0.15 s, 72, 150 px/s, 0.75 | Vorwölbung, maximal 96 ballistische Tropfen, Spraytempo und Schaumdeckkraft |
+| `slam` | `whipDelay`, `curveBend`, `contactWidth` | 0.18 s, 12 px, 42 px | Basis-Spitze-Verzögerung, S-Kurve und Abdruckbreite innerhalb der unveränderten Lane |
+| `slam` | `impact` | 0.6 s | Ersatzzeit für Aufschlagmarker |
+| `slam` | `dustLifetime`, `decalLifetime` | 0.85, 2 s | Staub-/Brockenwolke und Bodenabdruck |
+| `slam` | `shakeScale` | 0.45 | Anteil des vorhandenen `impactLight`-Kamerapresets; 0 schaltet es aus |
+| Gemeinsam | `direction`, `telegraphLength`, `telegraphWidth` | 90°, 320, 112 px | Blickrichtung bzw. Aufschlagbahn |
+
+```js
+await devScenario.run({action:'krakenReview', run:'kraken-v10', asset:'abyssal-kraken', size:320,
+  effect:'ink', clip:'ink-spit', effectTime:0.75, direction:90, camera:'effect'});
+await devScenario.run({action:'krakenReview', effect:'erupt', effectTime:0.35});
+await devScenario.run({action:'krakenReview', effect:'slam', tentacleClip:'slam', effectTime:0.68});
+await devScenario.run({action:'krakenReview', effectTime:0, playback:'play'});
+```
+
+Der Runner bevorzugt v10. Fehlt der Tentakelexport, lädt er die statische v9-Impact-Referenz
+`tentacle:{run:'kraken-v9-tent-a',asset:'abyssal-kraken-tentacle',size:366,previewFrame:44}`
+mit `tentaclePivot:[0.5,0.948]`. Die Referenz nutzt Clipzeiten/Marker aus `preview.json`,
+zeigt nur das Kontaktbild beim Slam und ersetzt keine Rise-/Retract-Animation.
+`previewFrame` lädt ausschließlich vorhandene Bilder; Produktionsdaten werden nicht geändert.
+
+`idle` bleibt ein expliziter Platzhalter für ältere Runs ohne `ink-spit`. Beim neuen Export
+`run:'kraken-v10', clip:'ink-spit'` setzen und die verfügbaren Tentakelquellen angeben.
+Ohne Tentakelquelle bleiben Ausbruch und Aufschlag sichtbar, die Tentakel-Silhouette fehlt.
+`node scripts/visual/kraken-review.mjs --effects=only` erstellt je Effekt 10–11 feste Zeitpunkte
+in Übersicht und Nahsicht unter `build/kraken-review/<timestamp>/effect-<name>-<camera>.png`.
+`--effects=all` ergänzt die bisherigen Assetbögen. Der Runner prüft eingefrorene Bilder und
+Rückwärtssprünge auf Pixelgleichheit; der JSON-Bericht hält Optionen und Markerquellen fest.
+
+Farbe und Elevation werden über denselben Clip-Frame-Namen aufgelöst, auch auf verschiedenen
+Atlas-Seiten. Phaser erhält Trim/Pivot, der Shader die ungetrimmte Elevation-Größe und den
+aktuellen Frame. Beim Sheet-Fallback kommen Elevationsbilder aus `elevation/frames-<size>/`.
+Die Maske sampelt `WaterSurfaceModel` aus dem tatsächlichen World-Layout mit World-Offset,
+Skalierung, Drehung und Pivot; auf der trockenen Seite ist sie null. Look-Werte stammen
+unverändert aus `SUBMERSION_DEFAULTS`. Status meldet fehlende Elevation ausdrücklich.
+Fixture-Teardown entfernt Sprites/Filter, Maskentexturen, Atlas-Seiten und Loader-Hooks.
+
+Aufnahmen gegen den laufenden Server (HTTP 200 auf Port 8090):
 
 ```sh
 npm run dev:browser
-node scripts/visual/kraken-review.mjs --frames=6 --run=kraken-v7 --asset=abyssal-kraken --size=320
+node scripts/visual/kraken-review.mjs --run=kraken-v9 --frames=6
+node scripts/visual/kraken-review.mjs --run=pipeline-v8-smoke-2 --frames=6
+node scripts/visual/kraken-review.mjs --run=kraken-v7 --frames=3
 ```
 
-Optional `--origin=http://127.0.0.1:8090` und `--options=<JSON>` für weitere Review-Parameter.
-`CHROME_PATH` überschreibt den lokalen Chrome-Pfad. Der Runner schreibt je Clip einen
-Übersichts- und Körper-Kontaktbogen sowie neun Telegraph-Ansichten (0/0.5/1 × 45/90/135°)
-und `report.json` nach `build/kraken-review/<timestamp>/`. Er prüft, dass zwei Aufnahmen
-bei Pause identisch sind. Den Dev-Server lässt er laufen. Die visuelle Szenengruppe `kraken`
-enthält zusätzlich drei feste Shots; Referenzen werden nur mit explizitem `--update` geschrieben.
+Ohne `--run` wird der erste vorhandene Körperexport aus v10, v9, Rauchtest, v7 gewählt.
+Vorhandene Teile werden anhand ihrer exportierten Zielgröße zugeladen. Fehlende Teile und
+Elevation stehen in `report.json.unavailable`; Legacy-Aufnahmen belegen keinen Untertaucheffekt.
+`--origin`, `--asset`, `--size`, `--options=<JSON>` und `CHROME_PATH` bleiben verfügbar.
+
+Ausgabe: `build/kraken-review/<timestamp>/`, Clipbögen (einschließlich Intro, falls vorhanden),
+Wasserstände 0/.38/.8, Telegraphen, Tentakel/Eier und eine schrittweise Tentakelsequenz.
+Pausierte Aufnahmen werden auf Pixelgleichheit geprüft. `lighting-game.png`,
+`lighting-source.png` und `report.json.lighting` vergleichen dieselben deckenden Innenpixel
+bei unverändertem Weltlicht und ausgeschaltetem Untertauchfilter: sRGB-Luma sowie lineare
+Rec.709-Luminanz. Das ist ein Bildvergleich der gesamten Weltkomposition, keine isolierte
+Messung eines einzelnen Lichtpasses. Der Dev-Server bleibt laufen.
 
 ### Allgemeine Steuerung
 

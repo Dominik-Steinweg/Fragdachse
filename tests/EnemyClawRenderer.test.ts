@@ -65,6 +65,17 @@ describe('enemy claw instance store', () => {
   const spec = (x: number) => ({ x, y: 0, angle: 0.5, range: 50, halfArc: 0.7,
     startedAt: 0, strikeAt: 270, hitAt: 350, color: 0xff0000 });
 
+  it('opts into a sector warning without claw rakes, preserving regular sectors', () => {
+    const store = new EnemyClawVfxStore();
+    store.addAttack('soft', spec(10), 0);
+    store.addAttack('telegraphOnly', { ...spec(10), telegraphOnly: true }, 0);
+    expect(store.data[10]).toBe(ClawVfxKind.Attack);
+    expect(store.data[CLAW_VFX_INSTANCE_FLOATS + 10]).toBe(ClawVfxKind.TelegraphSector);
+    expect(store.data[8]).toBe(store.data[CLAW_VFX_INSTANCE_FLOATS + 8]);
+    store.retire(350 + CLAW_VFX_SLASH_MS);
+    expect(store.count).toBe(0);
+  });
+
   it('rotates a lane about its entry, preserves its full width, and retires after the telegraph fade', () => {
     const store = new EnemyClawVfxStore();
     const lane = { shape: 'lane' as const, x: 70, y: 80, angle: Math.PI / 2, length: 240, width: 96,

@@ -2,13 +2,13 @@ import { registerDiagnosticMap, type CoopDefenseMapConfig } from '../../config/c
 
 export const KRAKEN_MAP_ID = 'kraken-abyss-lab';
 export const KRAKEN_CENTER = { gridX: 35, gridY: 22 };
-export const KRAKEN_SHORE = { gridX: 35, gridY: 30 };
-export const KRAKEN_PLAYER = { gridX: 39, gridY: 33 };
+export const KRAKEN_SHORE = { gridX: 35, gridY: 32.4 };
+export const KRAKEN_PLAYER = { gridX: 39, gridY: 36 };
 
 export function krakenAbyssMap(): CoopDefenseMapConfig {
   const water: { gridX: number; gridY: number }[] = [];
-  for (let y = 12; y <= 32; y++) for (let x = 23; x <= 47; x++) {
-    const dx = (x - KRAKEN_CENTER.gridX) / 10, dy = (y - KRAKEN_CENTER.gridY) / 8;
+  for (let y = 10; y <= 34; y++) for (let x = 20; x <= 50; x++) {
+    const dx = (x - KRAKEN_CENTER.gridX) / 13.5, dy = (y - KRAKEN_CENTER.gridY) / 10.5;
     const angle = Math.atan2(dy, dx);
     const shore = 1 + .045 * Math.sin(angle * 5) + .025 * Math.cos(angle * 3);
     if (dx * dx + dy * dy <= shore * shore) water.push({ gridX: x, gridY: y });

@@ -1,12 +1,12 @@
 """Heavy, in-place land locomotion and marker-timed Kraken V8 attacks."""
 import math
 
-from kraken_motion_v2 import key_arms, key_lids, smooth
+from kraken_motion_v2 import ink_spit, key_arms, key_lids, smooth
 from kraken_motion_actions_v2 import brood_throw, envelope, key_eggs, key_rest
 
 
 SUPPORTED_MOTIONS = ('kraken_land_idle', 'kraken_land_move', 'kraken_land_ashore',
-                     'kraken_land_slam', 'kraken_land_egg_throw', 'kraken_land_death')
+                     'kraken_land_slam', 'kraken_land_egg_throw', 'kraken_land_ink_spit', 'kraken_land_death')
 
 
 def apply_kraken_land(asset, motion, phase, frame, idle, p, pose, key):
@@ -16,6 +16,9 @@ def apply_kraken_land(asset, motion, phase, frame, idle, p, pose, key):
         return key_rest(asset, frame, pose, key, key_arms, key_lids)
     if motion == 'kraken_land_egg_throw':
         return brood_throw(asset, phase, frame, p, pose, key, key_arms, key_lids, land=True)
+    if motion == 'kraken_land_ink_spit':
+        key_eggs(pose)
+        return ink_spit(asset, phase, frame, p, pose, key, land=True)
 
     key_eggs(pose)
     cycle = math.tau * phase

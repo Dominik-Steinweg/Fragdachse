@@ -21,6 +21,7 @@ def visible_cups(scene):
     span = scene.camera.data.ortho_scale
     cups = arms = 0
     per_arm = {}
+    evaluated = {}
     grid = 128
     for y in range(grid):
         for x in range(grid):
@@ -29,8 +30,14 @@ def visible_cups(scene):
             if not hit or obj.get('motionRole') != 'tentacle':
                 continue
             arms += 1
-            # Armature deformation preserves this mesh's face/material topology.
-            material = obj.material_slots[obj.data.polygons[face].material_index].material
+            # Scene ray_cast returns an evaluated face index but the original
+            # object. Subdivision changes topology, so resolve both the polygon
+            # and its material slot on the evaluated object for this pose.
+            if obj.name not in evaluated:
+                evaluated[obj.name] = obj.evaluated_get(deps)
+            surface = evaluated[obj.name]
+            assert 0 <= face < len(surface.data.polygons), 'Ray hit has no evaluated polygon'
+            material = surface.material_slots[surface.data.polygons[face].material_index].material
             if material.get('ventralSuckerSurface'):
                 cups += 1
                 index = str(obj['tentacleIndex'])
@@ -80,14 +87,15 @@ def main():
                 normal.append(sample)
                 assert sample['fraction']<.06, f'Normal {loop["name"]} exposes too much underside at {index}'
         report['normalMotion']=normal
-        clip=next(c for c in clips if c['name']=='slam')
-        strike=clip['markers']['strike']
-        impact=clip['markers']['impact']
+        # The water body's current attack is the brood throw; slam belongs to
+        # the land body / separate strike tentacle. Sample the full throw so
+        # anticipation and release are covered without inventing impact markers.
+        clip=next(c for c in clips if c['motion']=='kraken_throw_egg')
         samples=[]
-        for index in (strike,impact,impact+3):
+        for index in range(len(clip['frames'])):
             frame=clip['timelineStart']+index*24/clip['frameRate']
             scene.frame_set(math.floor(frame),subframe=frame%1)
-            samples.append({'index':index,**visible_cups(scene)})
+            samples.append({'clip':clip['name'],'index':index,**visible_cups(scene)})
         report['attack']=samples
         assert max(s['fraction'] for s in samples)>max(rest['fraction']+.015,.025), 'Attack should expose substantially more underside than rest'
         assert all(max(s['perArm'].get(str(i),0) for s in samples)>25 for i in (0,4)), 'Both attacking arms must expose their ventral cups'

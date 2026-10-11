@@ -153,5 +153,11 @@ def build(c, spec):
         egg_ob.matrix_world = world
         egg_ob.scale = tuple(v * .001 for v in egg_ob.scale)
         carried[f'egg_carry_{n + 1}'] = egg_ob
+    # Runtime sockets: the ink origin at the mouth, and the six eggs named in throw order
+    # (release-k in the egg-throw clip launches egg k). Arms 0,2,3,4,6,7 carry egg_carry_1..6.
+    mouth = control(c.scene, 'Mouth ink origin socket', (0, 2.12, .48), body)
+    throw_order = (0, 4, 2, 6, 3, 7)
+    carriers = {arm: carried[f'egg_carry_{n + 1}'] for n, arm in enumerate((0, 2, 3, 4, 6, 7))}
+    sockets = {'mouth': mouth, **{f'egg{k + 1}': carriers[arm] for k, arm in enumerate(throw_order)}}
     return {'root': root, 'parts': {'body': body, 'surfacing': emergence, 'tentacle_chains': chains, **lids, **carried},
-            'rig': rig, 'sockets': {}}
+            'rig': rig, 'sockets': sockets}

@@ -1,4 +1,8 @@
 import manifest from './pipelineAssets.json';
+import { normalizePipelineAssets, type PipelineNormalAsset, type PipelineBossAsset } from './pipelineAssetContracts';
+export { normalizePipelineAsset, normalizePipelineAssets } from './pipelineAssetContracts';
+export type { PipelineBossAsset, PipelineNormalAsset, PipelineRuntimeAsset, PipelineAtlasPage, PipelineClip } from './pipelineAssetContracts';
+import type { PipelineClip } from './pipelineAssetContracts';
 
 /** Normalized full-frame coordinates; rotation follows the image's clockwise Y-down plane. */
 export interface EyeAnchor {
@@ -11,9 +15,16 @@ export interface EyeAnchor {
 export interface EyeAnchorFrame { readonly left: EyeAnchor; readonly right: EyeAnchor }
 
 /** Runtime-only projection of the selected Blender exports, committed with their PNGs. */
-export const PIPELINE_ASSETS = manifest.assets;
-export type PipelineAsset = (typeof PIPELINE_ASSETS)[number];
-export type PipelineClip = PipelineAsset['clips'][number];
+export const PIPELINE_RUNTIME_ASSETS = normalizePipelineAssets(manifest.assets);
+/** Existing sheet consumers remain explicit: boss atlases have no idle/sheet fallback path. */
+export const PIPELINE_ASSETS = PIPELINE_RUNTIME_ASSETS.filter((a): a is PipelineNormalAsset => a.runtimeContract === 'sheet');
+export type PipelineAsset = PipelineNormalAsset;
+
+export function getPipelineBossAsset(id: string): PipelineBossAsset {
+  const asset = PIPELINE_RUNTIME_ASSETS.find(a => a.id === id);
+  if (!asset || asset.runtimeContract !== 'boss') throw new Error(`Missing boss pipeline asset: ${id}`);
+  return asset;
+}
 
 export function getPipelineAsset(id: string): PipelineAsset {
   const asset = PIPELINE_ASSETS.find((candidate) => candidate.id === id);

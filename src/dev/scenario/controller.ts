@@ -60,7 +60,7 @@ export class DevScenarioController {
       fixture?.destroy();
       const metrics = this.runtime.getWorldMetrics()!;
       fixture = new KrakenBossReview(this.scene, options, this.world(KRAKEN_CENTER), this.world(KRAKEN_SHORE),
-        { x: metrics.offsetX, y: metrics.offsetY });
+        { x: metrics.offsetX, y: metrics.offsetY }, this.runtime.getWorldLayout()?.water ?? [], { width: metrics.widthPx, height: metrics.heightPx });
       this.krakenReview = fixture; this.krakenLoading = true;
       try { await fixture.initialize(); }
       catch (error) {
@@ -71,10 +71,12 @@ export class DevScenarioController {
       if (this.krakenReview !== fixture || this.disposed) return;
     } else fixture.configure(options);
     this.cameraAtTarget = true;
-    this.aim = options.camera === 'body'
+    this.aim = options.camera === 'tentacle' ? { gridX: KRAKEN_SHORE.gridX, gridY: KRAKEN_SHORE.gridY + 4 }
+      : options.camera === 'egg' ? { gridX: KRAKEN_SHORE.gridX + 7.5, gridY: KRAKEN_SHORE.gridY + 5.5 }
+      : options.camera === 'body'
       ? options.phase === 'water' ? KRAKEN_CENTER : { gridX: KRAKEN_SHORE.gridX, gridY: KRAKEN_SHORE.gridY + 7 }
       : { gridX: KRAKEN_CENTER.gridX, gridY: 26 };
-    this.zoom = options.camera === 'body' ? 2.5 : .9;
+    this.zoom = options.camera === 'overview' ? .75 : options.camera === 'effect' ? 2 : 2.5;
     this.syncCamera(); this.syncPanel();
   }
   arrangeTurretMaterialReview(): void {
@@ -766,6 +768,11 @@ export class DevScenarioController {
     try { point = this.trainCameraPoint ?? (this.cameraAtTarget ? this.world(this.aim) : this.runtime.navigationLabPort.getPlayerPosition()); }
     catch (error) { this.cameraAtTarget = false; this.fail(error); return; }
     if (!point) return;
+    if (this.krakenReview?.options.camera === 'effect') point = this.krakenReview.effectFocus();
+    if (this.krakenReview) {
+      const offset = this.krakenReview.cameraOffset();
+      point = { x: point.x + offset.x, y: point.y + offset.y };
+    }
     // Inszenierte Fokusse (Boss-Intro) laufen auch hier, damit Schwenk und Zoom pruefbar sind.
     const focus = this.trainCameraPoint ? null : getCameraFocusOverride(this.scene);
     if (focus) point = { x: point.x + (focus.x - point.x) * focus.weight, y: point.y + (focus.y - point.y) * focus.weight };

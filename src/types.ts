@@ -874,6 +874,8 @@ export type SyncedCombatEffect = SyncedHitEffect | SyncedDeathEffect;
 
 /** Kurzlebiger Melee-Swing für VFX-Replikation über den zuverlässigen Gameplay-Kanal. */
 export interface SyncedMeleeSwing {
+  /** Canonical area confirmation; C/E cut over transport/rendering together before publishing. */
+  areaClaw?: import('./systems/EnemyClawAttack').EnemyAreaClawImpact;
   /** Correlates an announced enemy strike with its authoritative contact effects. */
   clawAttackId?: string;
   /** Exact authored source for local presentation settings. */
@@ -1501,6 +1503,7 @@ export interface SpawnEnemyGrenadeEffect {
 }
 
 export type GrenadeEffectConfig =
+  | import('./systems/KrakenState').KrakenEggLandEffect
   | DamageGrenadeEffect
   | SmokeGrenadeEffect
   | FireGrenadeEffect
@@ -2014,6 +2017,7 @@ export interface SyncedBaseTurretState {
 
 /** Per-Frame Zustand eines Coop-Defense-Gegners (Host → Clients, unreliable). */
 export interface SyncedEnemyState {
+  areaClaw?: import('./systems/EnemyClawAttack').EnemyAreaClawState;
   claw?: import('./systems/EnemyClawAttack').EnemyClawState;
   entityGeneration?: number;
   positionRevision?: number;
@@ -2035,7 +2039,7 @@ export interface SyncedEnemyState {
   /** Ausweichschritt-Phase, identisch zum Spieler-Dash: 0 = keiner, 1 = Burst, 2 = Recovery. */
   dashPhase: 0 | 1 | 2;
   /** Replizierte Boss-Spezialaktion; `none` löscht einen zuvor sichtbaren Zustand. */
-  specialAction: 'none' | 'gauss-charge' | 'phase-nuke' | 'armageddon' | 'timebomb-chase' | 'timebomb-fuse' | 'void-molotov-windup';
+  specialAction: 'none' | 'gauss-charge' | 'phase-nuke' | 'armageddon' | 'timebomb-chase' | 'timebomb-fuse' | 'void-molotov-windup' | import('./systems/KrakenState').KrakenSpecialAction;
   specialActionEndsAt: number;
   gaussChargeProgress: number;
   gaussAimAngle: number;
@@ -2045,6 +2049,7 @@ export interface SyncedEnemyState {
 
 /** Delta-Update eines Coop-Defense-Gegners; fehlende Felder bleiben clientseitig unverändert. */
 export interface SyncedEnemyDeltaState {
+  areaClaw?: import('./systems/EnemyClawAttack').EnemyAreaClawState;
   claw?: import('./systems/EnemyClawAttack').EnemyClawState;
   entityGeneration?: number;
   positionRevision?: number;
@@ -2061,7 +2066,7 @@ export interface SyncedEnemyDeltaState {
   faction?: 'hostile' | 'allied';
   burrowed?: boolean;
   dashPhase?: 0 | 1 | 2;
-  specialAction?: 'none' | 'gauss-charge' | 'phase-nuke' | 'armageddon' | 'timebomb-chase' | 'timebomb-fuse' | 'void-molotov-windup';
+  specialAction?: SyncedEnemyState['specialAction'];
   specialActionEndsAt?: number;
   gaussChargeProgress?: number;
   gaussAimAngle?: number;
