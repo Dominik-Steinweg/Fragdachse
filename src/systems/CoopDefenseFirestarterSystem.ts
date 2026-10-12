@@ -9,11 +9,14 @@ import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecution
 import type { EnemyAiTargetCatalog } from './EnemyAiTargetCatalog';
 import { resolveEnemyWeaponFirePayloads } from './AlliedEnemyEffects';
 import { RechargeableCharges } from './RechargeableCharges';
+import type { EnemyDodgeRequestPort } from './CoopDefenseEnemyDodgeSystem';
+import { FirestarterPositioning, findFirestarterCombo, hasFirestarterDirectLine } from './firestarterPositioning';
 
 interface Point { readonly x: number; readonly y: number }
 interface FirestarterState {
   readonly enemy: EnemyEntity;
   readonly charges: RechargeableCharges;
+  readonly positioning: FirestarterPositioning;
   lance: { readonly target: Point; readonly startedAt: number; readonly endsAt: number; readonly commitAt: number } | null;
   lanceReadyAt: number;
   ballReadyAt: number;
@@ -34,6 +37,7 @@ export class CoopDefenseFirestarterSystem implements EnemySpecialMovementSource 
     private readonly weapons: AutomatedWeaponExecution,
     private readonly projectiles: ProjectileDetonableReadPort,
     private readonly targets: Pick<EnemyAiTargetCatalog, 'getCandidates' | 'getPosition'>,
+    private readonly dodge?: EnemyDodgeRequestPort,
   ) {}
 
   hostUpdate(nowMs: number): void {
@@ -46,7 +50,7 @@ export class CoopDefenseFirestarterSystem implements EnemySpecialMovementSource 
       live.add(enemy.id);
       let state = this.states.get(enemy.id);
       if (!state || state.enemy !== enemy) {
-        state = { enemy, charges: new RechargeableCharges({ ...config.charges, rechargeMode: 'restart-on-consume' }, nowMs),
+        state = { enemy, positioning: new FirestarterPositioning(), charges: new RechargeableCharges({ ...config.charges, rechargeMode: 'restart-on-consume' }, nowMs),
           lance: null, lanceReadyAt: nowMs, ballReadyAt: nowMs, lastAttack: null, lastAttackAt: -Infinity,
           actedAt: -Infinity, committed: false };
         this.states.set(enemy.id, state);
@@ -78,9 +82,13 @@ export class CoopDefenseFirestarterSystem implements EnemySpecialMovementSource 
         return point ? [point] : [];
       }).sort((a, b) => distance(enemy.sprite, a) - distance(enemy.sprite, b));
       if (!players.length) continue;
+      // A queued or active step finishes before choosing a new offensive world point.
+      if (this.dodge && (this.dodge.isDodging(enemy.id)
+        || state.positioning.tryReposition(enemy, players, config, this.projectiles, this.combat, this.dodge, nowMs))) continue;
       if (nowMs >= state.lanceReadyAt && this.crossGapReady(state, 'lance', config, nowMs)) {
         const target = this.findCombo(enemy, config, players)
-          ?? players.find(point => distance(enemy.sprite, point) <= config.lance.rangePx && this.hasLine(enemy, config, point));
+          ?? players.find(point => distance(enemy.sprite, point) <= config.lance.rangePx
+            && hasFirestarterDirectLine(enemy.id, enemy.sprite, point, config, this.projectiles, this.combat));
         if (target) {
           state.lance = { target: { ...target }, startedAt: nowMs, endsAt: nowMs + config.lance.telegraphMs,
             commitAt: nowMs + config.lance.telegraphMs - config.lance.commitMs };
@@ -137,20 +145,7 @@ export class CoopDefenseFirestarterSystem implements EnemySpecialMovementSource 
   }
 
   private findCombo(enemy: EnemyEntity, config: CoopDefenseEnemyFirestarterConfig, players: readonly Point[]): Point | null {
-    const tags = findWeaponConfig(config.lanceWeaponId)!.detonator!.triggerTags;
-    let best: Point | null = null;
-    let bestDistance = Infinity;
-    this.projectiles.readDetonableProjectiles(ball => {
-      if (!tags.includes(ball.tag) || (!ball.allowCrossTeam && ball.ownerId !== enemy.id)
-        || (ball.remainingLifetimeMs ?? Infinity) <= config.lance.telegraphMs) return;
-      const seconds = config.lance.telegraphMs / 1000;
-      const point = { x: ball.x + (ball.vx ?? 0) * seconds, y: ball.y + (ball.vy ?? 0) * seconds };
-      const proximity = Math.min(...players.map(player => distance(player, point)));
-      if (proximity > config.comboRadiusPx || proximity >= bestDistance
-        || distance(enemy.sprite, point) > config.lance.rangePx || !this.hasLine(enemy, config, point)) return;
-      best = point; bestDistance = proximity;
-    });
-    return best;
+    return findFirestarterCombo(enemy.id, enemy.sprite, players, config, this.projectiles, this.combat);
   }
 
   private hasLine(enemy: EnemyEntity, config: CoopDefenseEnemyFirestarterConfig, point: Point, clearanceRadius = 0): boolean {

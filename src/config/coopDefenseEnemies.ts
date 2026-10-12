@@ -162,11 +162,11 @@ export interface CoopDefenseEnemyCombatPositioningConfig {
  *  1. seitlich weg von einem Projektil, das ihn sonst treffen wuerde,
  *  2. nach vorne auf einen Spieler zu, der bereits in Naehe ist.
  *
- * Ausgefuehrt wird der Standard-Dash des Spielers (siehe HostPhysicsSystem): Dauer, Kurve und
- * zurueckgelegte Strecke stammen aus den DASH_*-Konstanten und sind deshalb hier nicht
- * konfigurierbar. Konfiguriert wird nur, *wann* der Gegner ausweicht.
+ * Dauer und Kurve stammen aus den Gegner-Dash-Konstanten. Distanzmodi skalieren die
+ * Geschwindigkeit bei gleicher Dauer; ohne Faktoren bleibt die bisherige Strecke erhalten.
  */
 export interface CoopDefenseEnemyDodgeConfig {
+  readonly distanceFactors?: { readonly short: number; readonly long: number };
   /** Optionaler HP-Schwellwert; oberhalb davon bleibt der Dodge vollständig deaktiviert. */
   readonly enabledBelowHpRatio?: number;
   /** Wartezeit nach dem Ende eines Ausweichschritts, bevor der naechste starten darf. */
@@ -333,6 +333,14 @@ export interface CoopDefenseEnemySpawnScaling {
 }
 
 export interface CoopDefenseEnemyFirestarterConfig {
+  readonly positioning: {
+    readonly minDistancePx: number;
+    readonly maxDistancePx: number;
+    readonly minDwellMs: number;
+    readonly reevaluateIntervalMs: number;
+    readonly movementCostPerPx: number;
+    readonly minImprovement: number;
+  };
   readonly charges: { readonly maxCharges: number; readonly rechargeIntervalMs: number };
   readonly fireballIntervalMs: number;
   readonly lance: { readonly telegraphMs: number; readonly commitMs: number; readonly cooldownMs: number; readonly rangePx: number };
@@ -731,11 +739,15 @@ function normalizeCombatPositioningConfig(
   };
 }
 
-function normalizeDodgeConfig(
+export function normalizeDodgeConfig(
   config: CoopDefenseEnemyDodgeConfig | undefined,
 ): CoopDefenseEnemyDodgeConfig | undefined {
   if (!config) return undefined;
+  const factors = config.distanceFactors ?? { short: 1, long: 1 };
+  if (!Number.isFinite(factors.short) || !Number.isFinite(factors.long)
+    || factors.short <= 0 || factors.long < factors.short) throw new Error('Invalid dodge distance relation');
   return {
+    distanceFactors: { ...factors },
     enabledBelowHpRatio: config.enabledBelowHpRatio === undefined
       ? undefined
       : Math.max(0, Math.min(1, config.enabledBelowHpRatio)),
@@ -1099,6 +1111,14 @@ function normalizeSpawnScaling(
 export function normalizeFirestarterConfig(config: CoopDefenseEnemyFirestarterConfig | undefined): CoopDefenseEnemyFirestarterConfig | undefined {
   if (!config) return undefined;
   if (!config.charges || !config.lance) throw new Error('Invalid firestarter timing blocks');
+  const positioning = config.positioning;
+  if (!positioning || [positioning.minDistancePx, positioning.maxDistancePx, positioning.minDwellMs,
+    positioning.reevaluateIntervalMs, positioning.movementCostPerPx, positioning.minImprovement]
+    .some(value => !Number.isFinite(value) || value <= 0)
+    || positioning.minDistancePx >= positioning.maxDistancePx
+    || positioning.maxDistancePx > config.lance.rangePx
+    || positioning.reevaluateIntervalMs > positioning.minDwellMs
+    || positioning.minImprovement >= 1) throw new Error('Invalid firestarter positioning relation');
   for (const value of [config.charges.maxCharges, config.charges.rechargeIntervalMs, config.fireballIntervalMs,
     config.lance.telegraphMs, config.lance.commitMs, config.lance.cooldownMs, config.lance.rangePx, config.comboRadiusPx]) {
     if (!Number.isFinite(value) || value <= 0) throw new Error('Invalid firestarter positive value');
@@ -1115,7 +1135,7 @@ export function normalizeFirestarterConfig(config: CoopDefenseEnemyFirestarterCo
     || lance?.fire.type !== 'hitscan' || !lance.detonator?.stopsAtDetonable
     || !lance.detonator.triggerTags.includes(ball.detonable.tag) || bite?.fire.type !== 'melee'
     || lance.range !== config.lance.rangePx) throw new Error('Invalid firestarter weapon relation');
-  return { ...config, charges: { ...config.charges }, lance: { ...config.lance }, muzzle: { ...config.muzzle } };
+  return { ...config, positioning: { ...positioning }, charges: { ...config.charges }, lance: { ...config.lance }, muzzle: { ...config.muzzle } };
 }
 
 /**

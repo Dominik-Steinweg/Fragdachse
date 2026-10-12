@@ -887,14 +887,23 @@
         "requireLineOfSight": true
       },
       "dodge": {
+        "distanceFactors": { "short": 0.55, "long": 1 },
         "cooldownMs": 1400,
         "evadeScanRadiusPx": 280,
         "evadeLeadTimeMs": 420,
         "evadeMissMarginPx": 24,
-        "approachMinDistancePx": 720,
-        "approachMaxDistancePx": 1000
+        "approachMinDistancePx": 0,
+        "approachMaxDistancePx": 0
       },
       "firestarter": {
+        "positioning": {
+          "minDistancePx": 400,
+          "maxDistancePx": 700,
+          "minDwellMs": 2200,
+          "reevaluateIntervalMs": 200,
+          "movementCostPerPx": 0.001,
+          "minImprovement": 0.25
+        },
         "charges": {
           "maxCharges": 3,
           "rechargeIntervalMs": 2000

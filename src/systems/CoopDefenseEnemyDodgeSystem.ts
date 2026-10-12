@@ -12,6 +12,15 @@ import type { CombatActorStatePort, CombatGeometryPort, CombatRelationshipQueryP
 import type { HostPhysicsSystem } from './HostPhysicsSystem';
 import type { EnemyCirclePathResolver } from './EnemyFlowFieldService';
 
+export type EnemyDodgeMode = 'short' | 'long';
+export interface EnemyDodgeRequestPort {
+  /** Queue for the next pre-physics step; defensive danger and ability locks are checked again there. */
+  requestDodge(enemyId: string, direction: { x: number; y: number }, mode: EnemyDodgeMode, nowMs: number): boolean;
+  getDodgeDistance(enemyId: string, mode: EnemyDodgeMode): number;
+  canDodgeTo(enemyId: string, direction: { x: number; y: number }, mode: EnemyDodgeMode): boolean;
+  isDodging(enemyId: string): boolean;
+}
+
 /** Prüft, ob an einer Weltposition genug freier, erreichbarer Boden für den Gegner ist. */
 export type FreeGroundResolver = (x: number, y: number, radius: number) => boolean;
 
@@ -50,7 +59,8 @@ function projectileBucketKey(gridX: number, gridY: number): number {
  * des Bursts halb so groß und könnte sonst in einer Felslücke landen, in der er beim
  * Zurückwachsen feststeckt.
  */
-export class CoopDefenseEnemyDodgeSystem {
+export class CoopDefenseEnemyDodgeSystem implements EnemyDodgeRequestPort {
+  private readonly requests = new Map<string, { direction: { x: number; y: number }; mode: EnemyDodgeMode }>();
   private blockedChecker: ((enemyId: string) => boolean) | null = null;
 
   setBlockedChecker(checker: ((enemyId: string) => boolean) | null): void { this.blockedChecker = checker; }
@@ -65,26 +75,21 @@ export class CoopDefenseEnemyDodgeSystem {
     if (!enemy.sprite.active || enemy.getHp() <= 0) return;
     this.activeEnemyIds.add(enemy.id);
 
-    const dodge = enemy.faction === 'hostile' ? getCoopDefenseEnemyConfig(enemy.kind).dodge : undefined;
+    const dodge = this.availableDodge(enemy, this.currentNow);
     if (!dodge) return;
-    if (
-      dodge.enabledBelowHpRatio !== undefined
-      && enemy.getHp() / enemy.getMaxHp() > dodge.enabledBelowHpRatio
-    ) return;
-    if (this.hostPhysics.isEnemyDashing(enemy.id)) return;
-    if (this.blockedChecker?.(enemy.id)) return;
-    if (enemy.isBurrowed() || this.enemyManager.isEnemyPanicking(enemy.id)) return;
-    if (this.currentNow < (this.readyAt.get(enemy.id) ?? 0)) return;
-
     if (!this.projectilesPrepared) {
       this.rebuildProjectileBroadphase(this.projectileThreats.getThreatSamples());
       this.projectilesPrepared = true;
     }
-    const direction = this.findEvadeDirection(enemy, dodge)
-      ?? this.findApproachDirection(enemy, dodge);
-    if (!direction) return;
-
-    if (this.hostPhysics.startEnemyDash(enemy.id, direction.x, direction.y)) {
+    const evade = this.findEvadeDirection(enemy, dodge);
+    const request = this.requests.get(enemy.id);
+    const approach = !evade && !request ? this.findApproachDirection(enemy, dodge) : null;
+    const choice = evade ?? request ?? (approach ? { direction: approach, mode: 'long' as const } : null);
+    if (!choice) return;
+    // Approach retains its existing shortened clearance probe; requests revalidate the full step.
+    if (request && !evade && !this.canDodgeTo(enemy.id, request.direction, request.mode)) return;
+    const factor = dodge.distanceFactors?.[choice.mode] ?? 1;
+    if (this.hostPhysics.startEnemyDash(enemy.id, choice.direction.x, choice.direction.y, factor)) {
       this.readyAt.set(enemy.id, this.currentNow + DODGE_TOTAL_DURATION_MS + dodge.cooldownMs);
     }
   };
@@ -106,48 +111,52 @@ export class CoopDefenseEnemyDodgeSystem {
     const manager = this.enemyManager as EnemyManager & {
       forEachEnemy?: (visitor: (enemy: EnemyEntity) => void) => void;
     };
-    if (manager.forEachEnemy) {
-      manager.forEachEnemy(this.processEnemy);
-      this.pruneInactiveEnemies(this.activeEnemyIds);
-      return;
-    }
-    for (const enemy of this.enemyManager.getAllEnemies()) {
-      if (!enemy.sprite.active || enemy.getHp() <= 0) continue;
-      this.activeEnemyIds.add(enemy.id);
-
-      const dodge = enemy.faction === 'hostile' ? getCoopDefenseEnemyConfig(enemy.kind).dodge : undefined;
-      if (!dodge) continue;
-      if (
-        dodge.enabledBelowHpRatio !== undefined
-        && enemy.getHp() / enemy.getMaxHp() > dodge.enabledBelowHpRatio
-      ) continue;
-      if (this.hostPhysics.isEnemyDashing(enemy.id)) continue;
-      // Beim Gauss-Zielen steht der Boss fest; ein Dodge darf die tatsächliche Schussachse nicht
-      // heimlich verschieben. Während Armageddon bleibt Dodge dagegen ausdrücklich erlaubt.
-      if (this.blockedChecker?.(enemy.id)) continue;
-      // Unter der Erde läuft der Gegner stur auf seiner Grabspur, und aus dem Lauffeuer flieht
-      // er ohnehin schon – in beiden Fällen kein Ausweichen.
-      if (enemy.isBurrowed() || this.enemyManager.isEnemyPanicking(enemy.id)) continue;
-      if (now < (this.readyAt.get(enemy.id) ?? 0)) continue;
-
-      if (!this.projectilesPrepared) {
-        this.rebuildProjectileBroadphase(this.projectileThreats.getThreatSamples());
-        this.projectilesPrepared = true;
-      }
-      const direction = this.findEvadeDirection(enemy, dodge)
-        ?? this.findApproachDirection(enemy, dodge);
-      if (!direction) continue;
-
-      if (this.hostPhysics.startEnemyDash(enemy.id, direction.x, direction.y)) {
-        this.readyAt.set(enemy.id, this.currentNow + DODGE_TOTAL_DURATION_MS + dodge.cooldownMs);
-      }
-    }
-
+    if (manager.forEachEnemy) manager.forEachEnemy(this.processEnemy);
+    else for (const enemy of this.enemyManager.getAllEnemies()) this.processEnemy(enemy);
+    this.requests.clear();
     this.pruneInactiveEnemies(this.activeEnemyIds);
+  }
+
+  requestDodge(enemyId: string, direction: { x: number; y: number }, mode: EnemyDodgeMode, nowMs: number): boolean {
+    const enemy = this.enemyManager.getEnemy(enemyId);
+    if (!enemy || !this.availableDodge(enemy, nowMs) || this.requests.has(enemyId)) return false;
+    const length = Math.hypot(direction.x, direction.y);
+    if (!Number.isFinite(length) || length <= 0) return false;
+    const unit = { x: direction.x / length, y: direction.y / length };
+    if (!this.canDodgeTo(enemyId, unit, mode)) return false;
+    this.requests.set(enemyId, { direction: unit, mode });
+    return true;
+  }
+
+  isDodging(enemyId: string): boolean {
+    return this.requests.has(enemyId) || this.hostPhysics.isEnemyDashing(enemyId);
+  }
+
+  getDodgeDistance(enemyId: string, mode: EnemyDodgeMode): number {
+    const enemy = this.enemyManager.getEnemy(enemyId);
+    return enemy ? this.getStepDistance(enemy, mode) : 0;
+  }
+
+  canDodgeTo(enemyId: string, direction: { x: number; y: number }, mode: EnemyDodgeMode): boolean {
+    const enemy = this.enemyManager.getEnemy(enemyId);
+    const length = Math.hypot(direction.x, direction.y);
+    return !!enemy && Number.isFinite(length) && length > 0 && this.hasClearStep(enemy,
+      { x: direction.x / length, y: direction.y / length }, this.getStepDistance(enemy, mode));
+  }
+
+  private availableDodge(enemy: EnemyEntity, now: number): CoopDefenseEnemyDodgeConfig | null {
+    const dodge = enemy.faction === 'hostile' ? getCoopDefenseEnemyConfig(enemy.kind).dodge : undefined;
+    if (!dodge || !enemy.sprite.active || enemy.getHp() <= 0
+      || (dodge.enabledBelowHpRatio !== undefined && enemy.getHp() / enemy.getMaxHp() > dodge.enabledBelowHpRatio)
+      || this.hostPhysics.isEnemyDashing(enemy.id) || this.blockedChecker?.(enemy.id)
+      || enemy.isBurrowed() || this.enemyManager.isEnemyPanicking(enemy.id)
+      || now < (this.readyAt.get(enemy.id) ?? 0)) return null;
+    return dodge;
   }
 
   clear(): void {
     this.readyAt.clear();
+    this.requests.clear();
     this.activeEnemyIds.clear();
     this.projectilesPrepared = false;
     for (const key of this.usedProjectileBucketKeys) this.projectileBuckets.get(key)!.length = 0;
@@ -161,12 +170,13 @@ export class CoopDefenseEnemyDodgeSystem {
   private findEvadeDirection(
     enemy: EnemyEntity,
     dodge: CoopDefenseEnemyDodgeConfig,
-  ): { x: number; y: number } | null {
+  ): { direction: { x: number; y: number }; mode: EnemyDodgeMode } | null {
     const hitRadius = enemy.getCollisionRadius() + dodge.evadeMissMarginPx;
     const leadTimeSeconds = dodge.evadeLeadTimeMs / 1000;
     let bestTime = Number.POSITIVE_INFINITY;
     let bestOffsetX = 0;
     let bestOffsetY = 0;
+    let requiredDistance = 0;
 
     const minBucketX = Math.floor((enemy.sprite.x - dodge.evadeScanRadiusPx) / PROJECTILE_BUCKET_SIZE_PX);
     const maxBucketX = Math.floor((enemy.sprite.x + dodge.evadeScanRadiusPx) / PROJECTILE_BUCKET_SIZE_PX);
@@ -196,6 +206,7 @@ export class CoopDefenseEnemyDodgeSystem {
           const offsetY = toEnemyY - velocityY * timeToClosest;
           if (Math.hypot(offsetX, offsetY) > hitRadius) continue;
 
+          requiredDistance = hitRadius + projectile.radius - Math.hypot(offsetX, offsetY);
           bestTime = timeToClosest;
           bestOffsetX = offsetX;
           bestOffsetY = offsetY;
@@ -213,11 +224,14 @@ export class CoopDefenseEnemyDodgeSystem {
     const length = Math.hypot(bestOffsetX, bestOffsetY);
     if (length <= 0.001) return null;
     const away = { x: bestOffsetX / length, y: bestOffsetY / length };
-    const stepDistance = this.getStepDistance(enemy);
-    if (this.hasClearStep(enemy, away, stepDistance)) return away;
-
-    const back = { x: -away.x, y: -away.y };
-    return this.hasClearStep(enemy, back, stepDistance) ? back : null;
+    const modes: EnemyDodgeMode[] = this.getStepDistance(enemy, 'short') >= requiredDistance ? ['short', 'long'] : ['long'];
+    for (const mode of modes) {
+      const stepDistance = this.getStepDistance(enemy, mode);
+      if (this.hasClearStep(enemy, away, stepDistance)) return { direction: away, mode };
+      const back = { x: -away.x, y: -away.y };
+      if (this.hasClearStep(enemy, back, stepDistance)) return { direction: back, mode };
+    }
+    return null;
   }
 
   /** Nachsetzen auf den nächsten sichtbaren Spieler, sobald er bereits in Reichweite der Waffe ist. */
@@ -302,8 +316,9 @@ export class CoopDefenseEnemyDodgeSystem {
     }
   }
 
-  private getStepDistance(enemy: EnemyEntity): number {
-    return enemy.getMoveSpeed() * DASH_DISTANCE_PER_SPEED;
+  private getStepDistance(enemy: EnemyEntity, mode: EnemyDodgeMode = 'long'): number {
+    return enemy.getMoveSpeed() * DASH_DISTANCE_PER_SPEED
+      * (getCoopDefenseEnemyConfig(enemy.kind).dodge?.distanceFactors?.[mode] ?? 1);
   }
 
   /**

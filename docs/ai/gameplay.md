@@ -26,6 +26,13 @@ World Loading ist an worldRevision gebunden. Round Loading wartet auf die World-
 
 ## KI-Absicht und Navigation
 
+Offensive Ausweichwünsche laufen über den `EnemyDodgeRequestPort` des
+[CoopDefenseEnemyDodgeSystem](../../src/systems/CoopDefenseEnemyDodgeSystem.ts). Ein akzeptierter
+Request wartet bis zum Schritt vor der Physik: Dort haben erkannte Projektilgefahren Vorrang,
+und Ability-Sperre, Bewegungsweg und Landung werden erneut geprüft. Beide Distanzmodi teilen
+den aktiven Dash und den Cooldown dieses Owners; die anfordernde KI besitzt nur ihre lokale
+Entscheidungsverweildauer. Dies sichern die Dodge- und Brandstifter-Verhaltenstests.
+
 Die Coop-Activity besitzt die gemeinsame Zielentscheidung im [EnemyIntentSystem](../../src/systems/navigation/EnemyIntentSystem.ts).
 Gewöhnliche Gegnerbewegung, Gefechtspositionierung und neue gezielte Angriffe lesen dieselbe Zielbindung.
 Ein Waffenmodus `all` erlaubt keinen strategischen Zielwechsel; ausdrücklich konfigurierte Nebenaktionen

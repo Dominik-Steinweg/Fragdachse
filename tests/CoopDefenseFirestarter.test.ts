@@ -12,6 +12,8 @@ import { encodeEnemyUpsert, decodeEnemyUpserts } from '../src/network/enemySnaps
 import { PROJECTILE_STYLES } from '../src/network/projectileSnapshotCodec';
 import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { ProjectileDetonableSample } from '../src/projectile/ProjectileGameplayPort';
+import { FirestarterPositioning, hasFirestarterDirectLine } from '../src/systems/firestarterPositioning';
+import type { EnemyDodgeRequestPort } from '../src/systems/CoopDefenseEnemyDodgeSystem';
 
 const authored = enemyConfig.getCoopDefenseEnemyConfig('firestarter-badger');
 const config = authored.firestarter!;
@@ -173,6 +175,10 @@ describe('firestarter authored and replicated contracts', () => {
       { ...config, fireballWeaponId: config.biteWeaponId },
       { ...config, muzzle: { forwardPx: -1, sidePx: 0 } },
       { ...config, muzzle: { forwardPx: 10, sidePx: NaN } },
+      { ...config, positioning: { ...config.positioning, minDistancePx: config.positioning.maxDistancePx } },
+      { ...config, positioning: { ...config.positioning, maxDistancePx: config.lance.rangePx + 1 } },
+      { ...config, positioning: { ...config.positioning, reevaluateIntervalMs: config.positioning.minDwellMs + 1 } },
+      { ...config, positioning: { ...config.positioning, movementCostPerPx: NaN } },
     ]) expect(() => enemyConfig.normalizeFirestarterConfig(bad)).toThrow(/firestarter/);
   });
 
@@ -201,5 +207,98 @@ describe('firestarter authored and replicated contracts', () => {
       expect(sink.applyAoeDamage).toHaveBeenCalledWith(10, 20, weapon.detonable!.aoeRadius,
         weapon.detonable!.aoeDamage, 'e2', undefined, 1, undefined, weapon.detonable!.sourceId);
     }
+  });
+});
+
+describe('firestarter local positioning', () => {
+  function positioningFixture() {
+    const f = fixture();
+    f.player.x = (config.positioning.minDistancePx + config.positioning.maxDistancePx) / 2;
+    // Deliberate test geometry, independent of the authored dodge tuning.
+    const short = (config.positioning.maxDistancePx - config.positioning.minDistancePx) / 4;
+    const dodge = {
+      requestDodge: vi.fn(() => true), isDodging: vi.fn(() => false),
+      getDodgeDistance: vi.fn((_id, mode) => mode === 'short' ? short : short * 2),
+      canDodgeTo: vi.fn(() => true),
+    } satisfies EnemyDodgeRequestPort;
+    const planner = new FirestarterPositioning();
+    const read = { readDetonableProjectiles: (visit: (ball: ProjectileDetonableSample) => void) => f.balls.forEach(visit) };
+    const run = (now = 0) => planner.tryReposition(f.enemy, [f.player], config, read,
+      { hasClearLineOfFire: f.hasClearLineOfFire }, dodge, now);
+    return { ...f, dodge, short, read, run };
+  }
+
+  it('chooses a free side around blocked LoS, with a ball-width corridor, preferring short', () => {
+    const f = positioningFixture();
+    f.hasClearLineOfFire.mockImplementation((_x, y) => y > f.short / 2);
+    expect(f.run()).toBe(true);
+    expect(f.dodge.requestDodge).toHaveBeenCalledWith(f.enemy.id, { x: -0, y: 1 }, 'short', 0);
+    const ball = WEAPON_CONFIGS[config.fireballWeaponId].fire;
+    expect(f.hasClearLineOfFire.mock.calls.some(call => call[4]?.clearanceRadius === (ball.type === 'projectile' ? ball.projectileSize / 2 : NaN))).toBe(true);
+  });
+
+  it('uses long only when short cannot solve the geometry, never accepting a blocked movement path', () => {
+    const f = positioningFixture();
+    f.hasClearLineOfFire.mockImplementation((_x, y) => y > f.short * 1.5);
+    expect(f.run()).toBe(true);
+    expect(f.dodge.requestDodge.mock.lastCall?.[2]).toBe('long');
+    const blocked = positioningFixture(); blocked.hasClearLineOfFire.mockImplementation((_x, y) => y > blocked.short / 2);
+    blocked.dodge.canDodgeTo.mockReturnValue(false);
+    expect(blocked.run()).toBe(false); expect(blocked.dodge.requestDodge).not.toHaveBeenCalled();
+  });
+
+  it('holds the chosen side across fluctuating LoS for the minimum dwell and stays put when current is good', () => {
+    const f = positioningFixture(); f.hasClearLineOfFire.mockImplementation((_x, y) => y > f.short / 2);
+    expect(f.run()).toBe(true);
+    for (let now = config.positioning.reevaluateIntervalMs; now < config.positioning.minDwellMs; now += config.positioning.reevaluateIntervalMs) {
+      f.hasClearLineOfFire.mockImplementation((_x, y) => y < -f.short / 2);
+      expect(f.run(now)).toBe(false);
+    }
+    expect(f.dodge.requestDodge).toHaveBeenCalledOnce();
+    expect(f.run(config.positioning.minDwellMs)).toBe(true);
+    const settled = positioningFixture(); expect(settled.run()).toBe(false);
+    expect(settled.dodge.requestDodge).not.toHaveBeenCalled();
+  });
+
+  it('keeps every accepted destination in the configured distance band', () => {
+    for (const range of [config.positioning.minDistancePx, config.positioning.maxDistancePx, config.positioning.maxDistancePx + 10]) {
+      const f = positioningFixture(); f.player.x = range;
+      f.hasClearLineOfFire.mockImplementation((_x, y) => Math.abs(y) > f.short / 2);
+      f.run();
+      for (const [, direction, mode] of f.dodge.requestDodge.mock.calls) {
+        const step = f.dodge.getDodgeDistance(f.enemy.id, mode);
+        const distance = Math.hypot(f.player.x - direction.x * step, direction.y * step);
+        expect(distance).toBeGreaterThanOrEqual(config.positioning.minDistancePx);
+        expect(distance).toBeLessThanOrEqual(config.positioning.maxDistancePx);
+      }
+      if (range >= config.positioning.maxDistancePx) expect(f.dodge.requestDodge).not.toHaveBeenCalled();
+    }
+  });
+
+  it('sidesteps an unwanted predicted ball and considers a desired combo behind cover', () => {
+    const f = positioningFixture();
+    f.balls.push({ projectileId: 1, ownerId: f.enemy.id, tag: WEAPON_CONFIGS[config.fireballWeaponId].detonable!.tag,
+      allowCrossTeam: true, x: f.player.x / 3, y: 0 });
+    expect(hasFirestarterDirectLine(f.enemy.id, f.enemy.sprite, f.player, config, f.read, { hasClearLineOfFire: f.hasClearLineOfFire })).toBe(false);
+    expect(f.run()).toBe(true);
+    const combo = positioningFixture();
+    combo.balls.push({ ...f.balls[0], x: combo.player.x, y: config.comboRadiusPx / 2 });
+    combo.hasClearLineOfFire.mockImplementation((_x, y, _tx, ty) => ty === 0 || y > combo.short / 2);
+    expect(combo.run()).toBe(true); // Improves a clear direct shot to an accessible combo.
+  });
+
+  it('queues through the attack owner before starting a lance, then preserves its commit lock', () => {
+    const f = positioningFixture();
+    const system = new CoopDefenseFirestarterSystem({ getAllEnemies: () => f.enemies }, { hasClearLineOfFire: f.hasClearLineOfFire },
+      { fire: f.fire, fireGauss: () => false }, f.read, f.catalog, f.dodge);
+    f.hasClearLineOfFire.mockImplementation((_x, y) => y > f.short / 2);
+    system.hostUpdate(0); expect(f.dodge.requestDodge).toHaveBeenCalledOnce();
+    expect(f.enemy.setSpecialAction).not.toHaveBeenCalled();
+    f.dodge.isDodging.mockReturnValue(true); f.hasClearLineOfFire.mockReturnValue(true);
+    system.hostUpdate(1); expect(f.enemy.setSpecialAction).not.toHaveBeenCalled();
+    f.dodge.isDodging.mockReturnValue(false); system.hostUpdate(2);
+    system.hostUpdate(2 + config.lance.telegraphMs - config.lance.commitMs);
+    expect(system.blocksDodge(f.enemy.id)).toBe(true);
+    expect(f.dodge.requestDodge).toHaveBeenCalledOnce();
   });
 });

@@ -131,7 +131,8 @@ export class CoopMissionEnemySupportComposition {
 
     if (runtime.enemyAiTargetCatalog && this.options.projectileDetonables) {
       runtime.setFirestarter(new CoopDefenseFirestarterSystem(enemyManager, this.options.combatSystem,
-        this.options.weaponExecution, this.options.projectileDetonables, runtime.enemyAiTargetCatalog));
+        this.options.weaponExecution, this.options.projectileDetonables, runtime.enemyAiTargetCatalog,
+        runtime.coopDefenseEnemyDodgeSystem ?? undefined));
     }
 
     const necromancy = this.options.playerModifierReadPort && this.options.weaponExecution
