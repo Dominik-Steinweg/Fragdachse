@@ -13,7 +13,7 @@ vi.mock('../src/effects/kraken/KrakenTentacleShadow', () => ({ KrakenTentacleSha
 } }));
 vi.mock('../src/effects/kraken/KrakenReviewDrainFilter', () => ({ addReviewDrain: () => ({ active: false }) }));
 import { KrakenRenderer, KrakenSpriteView, KrakenEffects, KrakenEggFlightView, krakenSocket, sampleKrakenBody,
-  sampleKrakenTentacle, sampleKrakenEgg, krakenRiseTiming, type KrakenPresentationAsset, type KrakenPresentationAssets } from '../src/effects/kraken/KrakenRenderer';
+  sampleKrakenTentacle, sampleKrakenEgg, krakenRiseTiming, krakenDeathAlpha, type KrakenPresentationAsset, type KrakenPresentationAssets } from '../src/effects/kraken/KrakenRenderer';
 import { KrakenIntroRenderer } from '../src/effects/kraken/KrakenIntroRenderer';
 import { KRAKEN_WORLD_EXPOSURE, krakenWaterMask } from '../src/effects/kraken/submersionShader';
 import { KRAKEN_RISE_INTRO } from '../src/config/bossIntros';
@@ -183,6 +183,15 @@ describe('host timelines and D asset projection', () => {
     s.phase = { kind: 'dying', startedAt: 2200, endsAt: 2600, asset: 'water', submerged: true,
       terminalPose: { x: 99, y: 88, angle: 1 } };
     expect(sampleKrakenBody(s, pose, a, 2300)).toMatchObject({ visible: false, pose: s.phase.terminalPose });
+    // On land the death plays at authored speed, then the corpse holds its last pose and fades instead of popping out.
+    const death = a.land.metadata.clips.find(c => c.name === 'death')!, clipMs = death.frames.length / death.frameRate * 1000;
+    const dying = { kind: 'dying' as const, startedAt: 3000, endsAt: 3000 + clipMs + 1500, asset: 'land' as const, submerged: false,
+      terminalPose: { x: 99, y: 88, angle: 1 } };
+    s.phase = dying;
+    expect(sampleKrakenBody(s, pose, a, 3000 + clipMs).sample).toEqual({ clip: 'death', frame: death.frames.length - 1 });
+    expect(sampleKrakenBody(s, pose, a, dying.endsAt - 1).sample.frame).toBe(death.frames.length - 1);
+    expect(krakenDeathAlpha(a.land.metadata, dying, 3000 + clipMs)).toBe(1);
+    expect(krakenDeathAlpha(a.land.metadata, dying, dying.endsAt)).toBe(0);
     const t = part('a'), slam = a.tentacle.metadata.clips.find(c => c.name === 'slam')!;
     expect(sampleKrakenTentacle(t, a.tentacle.metadata, t.claw.attack!.strikeAt)).toEqual({ clip: 'slam', frame: slam.markers!.strike });
     expect(sampleKrakenTentacle(t, a.tentacle.metadata, t.claw.attack!.hitAt).frame).toBe(slam.markers!.impact);

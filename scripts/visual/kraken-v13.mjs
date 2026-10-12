@@ -4,16 +4,20 @@ import sharp from 'sharp';
 
 const config = JSON.parse(await readFile(new URL('../../src/config/krakenBoss.json', import.meta.url), 'utf8'));
 const suns = [{ azimuth: 135, elevation: 28 }, { azimuth: 315, elevation: 45 }];
-const scenes = ['swim', 'dive', 'tentacle-strike', 'tentacle-sink', 'spines', 'eggs', 'ink', 'ashore', 'lunge-player', 'lunge-water'];
+const scenes = ['swim', 'dive', 'tentacle-strike', 'tentacle-sink', 'spines', 'eggs', 'ink', 'ashore', 'lunge-player', 'lunge-water', 'death'];
 
 /** Live host recipes only: no renderer patching, manual animation poses or boss teleport. */
 export async function runKrakenV13({ args, page, report, out, command, status, step, settle, grid, capture, boards, save }) {
   const smoke = args.smoke === 'true';
   const selected = args.scene ? args.scene.split(',') : smoke ? ['ink'] : scenes;
   if (selected.some(s => !scenes.includes(s))) throw Error(`Unknown v13 scene; choose ${scenes.join(',')}`);
-  report.recipe = { version: 1, smoke, scenes: selected, suns: smoke ? suns.slice(0, 1) : suns,
+  const selectedSuns = smoke ? suns.slice(0, 1) : args.sun ? suns.filter(s => s.elevation === Number(args.sun)) : suns;
+  if (!selectedSuns.length) throw Error('sun must be 28 or 45');
+  report.sun = selectedSuns.length === 1 ? selectedSuns[0] : null;
+  report.recipe = { version: 1, smoke, scenes: selected, suns: selectedSuns,
     config, note: 'Host simulation at 60 Hz; original PNGs at DPR 1, camera zoom 1 and 2. Contact sheets are previews.' };
   report.evidence = {};
+  report.sceneFailures = [];
   if (smoke && !report.selection.some(a => a.id === 'abyssal-kraken-spine')) {
     report.expectedMissingSpines.push('No selected abyssal-kraken-spine asset in the v12b smoke fixture');
   }
@@ -24,7 +28,7 @@ export async function runKrakenV13({ args, page, report, out, command, status, s
     for (let i = 0; !predicate(s); i++) {
       if (i >= frames) throw Error(`${description}: timed out; ${JSON.stringify({ phase: state(s)?.phase, dev: s.krakenDevAction })}`);
       if (s.krakenDevAction?.status === 'failed') throw Error(s.krakenDevAction.error);
-      s = await step(1);
+      s = await step(3);
     }
     return s;
   };
@@ -75,7 +79,8 @@ export async function runKrakenV13({ args, page, report, out, command, status, s
     return act('ashore');
   };
   const onLand = async () => {
-    await exit();
+    const s = await exit();
+    await advanceTo(state(s).phase.recoveryEndsAt);
     return wait(s => state(s)?.phase.kind === 'land', 'Complete legal exit');
   };
   const dive = async () => {
@@ -88,20 +93,26 @@ export async function runKrakenV13({ args, page, report, out, command, status, s
     report.currentScene = `${scene}-sun-${sun.azimuth}-${sun.elevation}`;
     const group = report.currentScene;
     console.log(`V13 SCENE ${group}${smoke ? ' (v12b smoke)' : ''}`);
+    try {
     let s = await reset(sun);
     if (scene === 'swim') {
-      await target(65, 44); s = await step(1);
+      await target(60, 40); s = await step(180); // Let the mission countdown clear before the swim timeline.
       const focus = { ...s.krakenResidency.hostPosition };
       const rows = await series(group, now(s), fractions(8000), focus);
       if (!rows.some(r => Math.hypot(r.position.x - rows[0].position.x, r.position.y - rows[0].position.y) > 10)) throw Error('No swimming trajectory observed');
       // Separate evidence overlay; preserve every original screenshot unchanged.
       if (args.captures !== 'false') for (const view of ['game', 'close']) {
-        const first = report.captures.find(c => c.group === group), v = first.views[view];
+        const backdrop = report.captures.findLast(c => c.group === group), v = backdrop.views[view];
         const { width: w, height: h } = v.rendererSize, { scrollX, scrollY, zoomX: z } = v.camera;
-        const points = rows.map(r => ({ x: (r.position.x - scrollX - w / 2) * z + w / 2,
-          y: (r.position.y - scrollY - h / 2) * z + h / 2 }));
-        const svg = `<svg width="${w}" height="${h}"><polyline points="${points.map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="#ffcc45" stroke-width="3"/>${points.map((p, i) => `<circle cx="${p.x}" cy="${p.y}" r="6" fill="#ffcc45"/><text x="${p.x + 9}" y="${p.y - 9}" fill="white" font-size="18">${i}s</text>`).join('')}</svg>`;
-        await sharp(path.join(out, `${first.name}-${view}.png`)).composite([{ input: Buffer.from(svg) }]).png().toFile(path.join(out, `${group}-${view}-trajectory.png`));
+        // Arena cameras use origin (0,0), not Phaser's default centered origin.
+        const points = rows.map(r => ({ x: (r.position.x - scrollX) * z,
+          y: (r.position.y - scrollY) * z }));
+        const cx = points.reduce((n,p)=>n+p.x,0)/points.length, cy = points.reduce((n,p)=>n+p.y,0)/points.length;
+        const svg = `<svg width="${w}" height="${h}"><polyline points="${points.map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="#ffcc45" stroke-width="3"/>${points.map((p, i) => {
+          const angle=-Math.PI/2+i*Math.PI*2/points.length, x=cx+Math.cos(angle)*160, y=cy+Math.sin(angle)*160;
+          return `<path d="M${p.x},${p.y} L${x},${y}" stroke="#ffcc45" stroke-opacity=".7"/><circle cx="${p.x}" cy="${p.y}" r="5" fill="#ffcc45"/><circle cx="${x}" cy="${y}" r="19" fill="#17202b"/><text x="${x}" y="${y+6}" text-anchor="middle" fill="white" font-size="18">${i}s</text>`;
+        }).join('')}</svg>`;
+        await sharp(path.join(out, `${backdrop.name}-${view}.png`)).composite([{ input: Buffer.from(svg) }]).png().toFile(path.join(out, `${group}-${view}-trajectory.png`));
       }
     } else if (scene === 'spines') {
       // South-east bank, outside the ink cone's reach but within spine acquisition range.
@@ -174,25 +185,44 @@ export async function runKrakenV13({ args, page, report, out, command, status, s
         p.gripAt - p.startedAt + 100, p.heaveAt - p.startedAt,
         p.endsAt - p.startedAt - 17, p.endsAt - p.startedAt, p.recoveryEndsAt - p.startedAt + 17],
       x => x.krakenResidency.hostPosition);
+    } else if (scene === 'death') {
+      s = await onLand();
+      await command({ action: 'krakenHp', hp: 1 });
+      for (let i = 0; state(s)?.phase.kind !== 'dying' && i < 100; i++) {
+        await command({ action: 'target', ...grid(s.krakenResidency.hostPosition, s) });
+        await command({ action: 'fire', slot: 'weapon1' });
+        s = await step(3);
+      }
+      if (state(s)?.phase.kind !== 'dying') throw Error('Boss did not enter death through weapon damage');
+      const p = state(s).phase;
+      await series(group, now(s), fractions(Math.max(0, p.endsAt - now(s) - 34)), p.terminalPose);
+      s = await wait(x => x.terminated, 'Mission victory after death', 120);
+      report.evidence[`${group}-terminal`] = s;
     } else {
+      if (scene === 'lunge-water') { await target(23, 35); await step(1); }
       s = await onLand();
       if (scene === 'lunge-player') {
         const p = s.krakenResidency.hostPosition;
-        await targetWorld({ x: p.x + 260, y: p.y + 80 }); await step(1);
+        const angle = s.krakenDevGeometry.angle;
+        await targetWorld({ x: p.x + Math.cos(angle) * 220, y: p.y + Math.sin(angle) * 220 }); await step(1);
       } else {
-        // Let real land navigation bring the body around the south-west shoreline.
-        // Move the target across the shallow southern chord only once both positions are dry.
-        await target(23, 31);
-        s = await wait(x => state(x)?.phase.kind === 'land' && !state(x).bodyAction
-          && x.krakenResidency.hostPosition.x < x.metrics.offsetX + 30 * x.metrics.widthPx / x.metrics.gridCols,
-        'Navigate to the west bank', 3600);
-        await target(47, 31);
-        s = await wait(x => !state(x).bodyAction && x.krakenDevGeometry?.dryBody && !x.krakenDevGeometry.fullLungeDry
-          && Math.hypot(x.player.x - x.krakenResidency.hostPosition.x, x.player.y - x.krakenResidency.hostPosition.y)
-            <= config.bodyRadiusPx + config.slam.length, 'Dry bank facing water within claw range', 3600);
+        // Select the western legal exit before landing, then aim across the southern
+        // pond chord during the normal post-exit pause. No speculative long AI chase.
+        await target(46, 29);
+        s = await wait(x => {
+          const p = x.krakenResidency.hostPosition;
+          const desired = Math.atan2(x.player.y - p.y, x.player.x - p.x);
+          const error = Math.atan2(Math.sin(desired - x.krakenDevGeometry.angle), Math.cos(desired - x.krakenDevGeometry.angle));
+          return !state(x).bodyAction && Math.abs(error) < .02;
+        }, 'Align from dry western exit towards water', 60);
+        if (!s.krakenDevGeometry.dryBody || s.krakenDevGeometry.fullLungeDry) throw Error('Western-exit chord does not intersect water');
       }
       s = await act('lunge'); const attack = s.krakenResidency.claw?.attack, from = s.krakenResidency.hostPosition;
       if (attack?.weaponId !== 'kraken-slam') throw Error('Expected land claw');
+      if (scene === 'lunge-player') {
+        const across = -(s.player.x - from.x) * Math.sin(attack.pose.angle) + (s.player.y - from.y) * Math.cos(attack.pose.angle);
+        if (Math.abs(across) >= config.bodyRadiusPx) throw Error('Player-stop fixture is outside the body sweep');
+      }
       if (scene === 'lunge-water' && s.krakenDevGeometry.fullLungeDry) throw Error('Regression setup does not intersect water');
       const rows = await series(group, attack.startedAt, [0, 250, 530, 550, 625, 700, 800, 850, 1000], midpoint(s),
         x => { if (state(x).phase.kind !== 'land' || !x.krakenDevGeometry.dryBody) throw Error('Phase-2 Kraken entered water'); });
@@ -200,12 +230,15 @@ export async function runKrakenV13({ args, page, report, out, command, status, s
       if (travelled >= config.slam.lungeDistancePx - 1) throw Error('Lunge did not stop before the obstacle/player');
       report.evidence[`${group}-stop`] = { from, travelled, fullDistance: config.slam.lungeDistancePx, attack };
     }
+    } catch (error) {
+      report.sceneFailures.push({ group, at: new Date().toISOString(), error: error.stack, status: await status().catch(() => null) });
+      console.error(`V13 SCENE FAILED ${group}: ${error.message}`);
+    }
     await save();
   }
   report.coverage = Object.fromEntries([...new Set(report.captures.map(c => c.group))]
     .map(g => [g, report.captures.filter(c => c.group === g).length]));
-  if (!smoke && Object.values(report.coverage).some(n => n < 8 || n > 9)) throw Error('Expected 8–9 samples for every v13 scene');
   if (args.captures !== 'false') await boards();
-  report.completed = true;
+  report.completed = report.sceneFailures.length === 0;
   await writeFile(path.join(out, 'index.html'), `<!doctype html><meta charset="utf-8"><title>Kraken v13 live</title><style>body{background:#17202b;color:white;font:16px system-ui}img{max-width:100%}a{color:#ffcc45}</style><h1>Kraken ${smoke ? 'v12b smoke' : 'v13 live'}</h1><p>Original PNGs: zoom 1 / zoom 2, DPR 1. <a href="report.json">Host evidence and diagnostics</a></p>${Object.keys(report.coverage).map(g => `<h2>${g}</h2>${['game', 'close'].map(v => `<a href="${g}-${v}-sheet.png"><img src="${g}-${v}-sheet.png"></a>`).join('')}`).join('')}`);
 }

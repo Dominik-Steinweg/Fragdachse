@@ -103,6 +103,15 @@ export function krakenSocket(asset: PipelineBossAsset, pose: KrakenPose, socket:
   const dx = (xy[0] - asset.pivot[0]) * size, dy = (xy[1] - asset.pivot[1]) * size;
   return { x: pose.x + dx * Math.cos(r) - dy * Math.sin(r), y: pose.y + dx * Math.sin(r) + dy * Math.cos(r) };
 }
+/** The land death plays at its authored speed; the remaining dying time holds the last pose while it fades. */
+export function krakenDeathClipEnd(asset: PipelineBossAsset, phase: { startedAt: number; endsAt: number }): number {
+  const clip = krakenClip(asset, 'death');
+  return Math.min(phase.endsAt, phase.startedAt + clip.frames.length / clip.frameRate * 1000);
+}
+export function krakenDeathAlpha(asset: PipelineBossAsset, phase: { startedAt: number; endsAt: number }, now: number): number {
+  const fadeAt = Math.max(krakenDeathClipEnd(asset, phase), phase.endsAt - 900);
+  return 1 - krakenClamp((now - fadeAt) / Math.max(1, phase.endsAt - fadeAt));
+}
 export function krakenBodyVisible(state: KrakenState, now: number): boolean {
   const p = state.phase;
   if (['waiting', 'submerged', 'removed'].includes(p.kind)) return false;
@@ -126,7 +135,7 @@ export function sampleKrakenBody(state: KrakenState, pose: KrakenBodyPose, asset
       [[p.gripAt, marker(clip, 'grip')], [p.gripAt + config.exit.gripHoldMs, marker(clip, 'grip')],
         [p.heaveAt, marker(clip, 'heave')], [p.endsAt, clip.frames.length - 1]]); }
   }
-  else if (p.kind === 'dying') sample = timed(a, land ? 'death' : 'dive', now, p.startedAt, p.endsAt);
+  else if (p.kind === 'dying') sample = timed(a, land ? 'death' : 'dive', now, p.startedAt, land ? krakenDeathClipEnd(a, p) : p.endsAt);
   else if (state.bodyAction?.kind === 'ink') {
     const action = state.bodyAction;
     sample = timed(a, 'ink-spit', now, action.startedAt, action.endsAt, [[action.chargeAt, 'charge'], [action.spitAt, 'spit']]);
@@ -572,8 +581,9 @@ export class KrakenRenderer {
         drain: phase.kind === 'ashore' && now >= phase.gripAt
           ? 1 - krakenClamp((now - phase.heaveAt) / 1100)
           : this.waterMotion?.rise ? krakenDrain(this.waterMotion.rise, now, false) : 0,
-        alpha: phase.kind === 'dying' && phase.asset === 'water'
-          ? 1 - krakenClamp((now - phase.startedAt) / (phase.endsAt - phase.startedAt)) : 1,
+        alpha: phase.kind !== 'dying' ? 1 : phase.asset === 'water'
+          ? 1 - krakenClamp((now - phase.startedAt) / (phase.endsAt - phase.startedAt))
+          : krakenDeathAlpha(render.asset.metadata, phase, now),
       });
       else this.body.hide();
       this.syncSpines(state, render.asset === this.options.assets.water && render.visible, now);

@@ -25,6 +25,6 @@
     "targetableInFlight": false, "drops": false, "xp": 0, "necromancy": false, "countsForEncounter": false,
     "broodTable": { "id": "kraken-melee-brood", "entries": [{ "enemyKind": "rabid-badger", "weight": 1 }] }
   },
-  "victory": "boss-defeated", "death": { "waterMs": 1200, "landMs": 1500 },
+  "victory": "boss-defeated", "death": { "waterMs": 1200, "landMs": 2600 },
   "residency": { "waterBudgetMiB": 165, "landBudgetMiB": 150, "pixelsPerDisplayPixel": 1, "landPrefetchHpRatio": 0.65 }
 }

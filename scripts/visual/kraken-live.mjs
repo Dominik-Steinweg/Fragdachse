@@ -1,19 +1,20 @@
 import { chromium } from 'playwright-core';
 import sharp from 'sharp';
-import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { runKrakenV13 } from './kraken-v13.mjs';
+import { runKrakenDraftLive } from './kraken-draft-live.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, '').split('=')));
 const origin = args.origin ?? 'http://127.0.0.1:8090';
 if ((await fetch(origin)).status !== 200) throw Error('npm run dev:browser must serve HTTP 200 on 8090');
 const out = path.resolve('build/kraken-live', new Date().toISOString().replace(/[:.]/g, '-'));
 await mkdir(out, { recursive: true });
-const temp = path.resolve('build/kraken-browser-temp'); await mkdir(temp, { recursive: true });
+const temp = path.join(out, 'browser-temp'); await mkdir(temp, { recursive: true });
 process.env.TEMP = process.env.TMP = process.env.TMPDIR = temp;
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe',
   headless: false, args: ['--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--force-color-profile=srgb'] });
-const page = await browser.newPage({ viewport: args.mode === 'v13' ? { width: 1920, height: 1080 } : { width: 1536, height: 1024 }, deviceScaleFactor: 1, locale: 'de-DE', timezoneId: 'UTC' });
+const page = await browser.newPage({ viewport: ['v13','draft-e2e'].includes(args.mode) ? { width: 1920, height: 1080 } : { width: 1536, height: 1024 }, deviceScaleFactor: 1, locale: 'de-DE', timezoneId: 'UTC' });
 await page.routeWebSocket(url => url.host === new URL(origin).host && url.searchParams.has('token'), () => {});
 page.setDefaultTimeout(180000);
 const report = { mode: args.mode ?? 'probe', revision: args.run ?? (args.mode === 'v13' ? 'kraken-v13' : 'kraken-v12'), quality: args.quality ?? 'high',
@@ -21,25 +22,35 @@ const report = { mode: args.mode ?? 'probe', revision: args.run ?? (args.mode ==
 report.selection = JSON.parse(await readFile('src/config/pipelineAssets.json','utf8')).assets.filter(a=>a.id.startsWith('abyssal-kraken'))
   .map(a=>({id:a.id,revision:a.revision,sourceSize:a.sourceSize,material:a.materialPass}));
 report.bossRequests=[];
+report.draftRequests=[];
+report.residencyErrors=[];
+const residencySeen = new Set();
 report.console=[]; report.loadFailures=[]; report.expectedMissingSpines=[];
+report.errorEvents=[];
 const recordError = message => {
+  report.errorEvents.push({at:new Date().toISOString(),scene:report.currentScene,message});
   // v12b smoke tolerates only the known absent spine asset/clip; preserve the exact diagnostic.
   if (args.mode === 'v13' && args.smoke === 'true' && /abyssal-kraken-spine|spine-volley/.test(message)
     && /404|missing|lacks|not found|unknown|failed to load/i.test(message)) report.expectedMissingSpines.push(message);
   else report.errors.push(message);
 };
 page.on('pageerror', e => recordError(e.stack ?? e.message));
-page.on('console', m => { if (['warning','error'].includes(m.type())) report.console.push({type:m.type(),text:m.text(),location:m.location()});
+page.on('console', m => { if (['warning','error'].includes(m.type())) report.console.push({at:new Date().toISOString(),type:m.type(),text:m.text(),location:m.location()});
   if (m.type() === 'error' && !m.text().includes('404')) recordError(m.text());
   if (m.type() === 'warning' && /shader|GL_INVALID|WebGL.*error/i.test(m.text())) recordError(m.text());
   if (m.text().includes('[Kraken presentation]')) report.diagnostics.push(m.text()); });
 page.on('requestfailed', r => { const error=`${r.failure()?.errorText} ${r.url()}`; report.loadFailures.push(error); recordError(error); });
 page.on('response', r => {
+  if(r.url().includes('/pipeline-v2/drafts/')) report.draftRequests.push({url:r.url(),status:r.status(),at:new Date().toISOString()});
   if(r.url().includes('/sprites/pipeline-v2/abyssal-kraken'))report.bossRequests.push({url:r.url(),status:r.status()});
   if (r.status() >= 400) { const error=`HTTP ${r.status()} ${r.url()}`;report.loadFailures.push(error);
     if (!(r.status() === 404 && r.url().endsWith('/atlas.json'))) recordError(error); }
 });
-const save = () => writeFile(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
+const save = async () => {
+  const temporary = path.join(out, 'report.pending.json');
+  await writeFile(temporary, JSON.stringify(report, null, 2));
+  await rename(temporary, path.join(out, 'report.json'));
+};
 const status = () => page.evaluate(() => window.devScenario.status());
 const command = async c => {
   report.lastCommand = c;
@@ -64,7 +75,14 @@ const settle = async () => {
   throw Error('Render work did not settle');
 };
 const sample = async () => {
-  const s = await status(); report.samples.push(s);
+  const s = await status();
+  for (const error of s.krakenResidency?.errors ?? []) {
+    const key = JSON.stringify([report.currentScene,error]);
+    if (!residencySeen.has(key)) { residencySeen.add(key); report.residencyErrors.push({scene:report.currentScene,
+      at:new Date().toISOString(),simulationMs:s.simulationMs,phase:s.krakenResidency.hostPhase,error}); }
+  }
+  report.samples.push(report.mode === 'v13' || report.mode === 'draft-e2e'
+    ? Object.fromEntries(['simulationMs','terminated','krakenResidency','krakenDevAction','krakenDevGeometry','krakenAssets','player','enemies','effects','camera'].map(k => [k,s[k]])) : s);
   if (s.krakenDevAction?.status === 'failed') throw Error(s.krakenDevAction.error);
   for (const [phase, bytes] of Object.entries(s.krakenResidency?.phasePeaks ?? {})) report.phasePeaks[phase] = Math.max(report.phasePeaks[phase] ?? 0, bytes);
   for(const key of ['phaseResidentPeaks','phaseAtlasPeaks'])for(const [phase,bytes]of Object.entries(s.krakenResidency?.[key]??{}))report[key][phase]=Math.max(report[key][phase]??0,bytes);
@@ -88,16 +106,17 @@ const boards = async () => {
 };
 const capture = async (group, s, focus) => {
   const n = report.captures.filter(c => c.group === group).length, name = `${group}-${String(n).padStart(2,'0')}`;
-  if(args.captures==='false'){report.captures.push({group,name,simulationMs:s.simulationMs,phase:s.krakenResidency?.hostPhase});return;}
+  if(args.captures==='false'){report.captures.push({group,name,at:new Date().toISOString(),simulationMs:s.simulationMs,phase:s.krakenResidency?.hostPhase});return;}
   const p = focus ?? s.krakenResidency?.hostPosition ?? {x:1136,y:880};
   const views = {};
   await command({ action:'target', ...grid(p,s) });
   for (const [view,zoom] of [['game',1],['close',group.startsWith('egg-')?4:2]]) {
+    if (view === 'close' && group.includes('spines')) await command({action:'target',...grid(s.krakenResidency.hostPosition,s)});
     report.captureStage = {group,name,view,stage:'settle'}; await save();
     await command({action:'camera',zoom,focusTarget:true}); await settle();
     const current = await status();
     views[view] = {camera:current.camera,rendererSize:current.rendererSize};
-    if (report.mode === 'v13') {
+    if (['v13','draft-e2e'].includes(report.mode)) {
       report.captureStage.stage = 'screenshot'; await save();
       const canvas = page.locator('#game-container canvas').first(), box = await canvas.boundingBox();
       if (!box || Math.abs(box.width-current.rendererSize.width)>.5 || Math.abs(box.height-current.rendererSize.height)>.5) throw Error('Game canvas is not displayed at native 1:1 pixels');
@@ -107,7 +126,7 @@ const capture = async (group, s, focus) => {
     } else await page.screenshot({path:path.join(out,`${name}-${view}.png`)});
   }
   await command({action:'camera',zoom:1,focusTarget:true});
-  report.captures.push({group,name,simulationMs:s.simulationMs,phase:s.krakenResidency?.hostPhase,action:s.krakenResidency?.state?.bodyAction,views});
+  report.captures.push({group,name,at:new Date().toISOString(),simulationMs:s.simulationMs,phase:s.krakenResidency?.hostPhase,action:s.krakenResidency?.state?.bodyAction,views});
   await save();
 };
 const heartbeat = setInterval(() => { void status().then(s => console.log(JSON.stringify({out,state:s.state,time:s.simulationMs,phase:s.krakenResidency?.hostPhase?.kind,action:s.krakenResidency?.state?.bodyAction?.kind,capture:report.captureStage,pending:s.pendingSteps,work:s.loading.work}))).catch(()=>{}); },15000);
@@ -117,7 +136,9 @@ try {
   await page.waitForFunction(()=>window.devScenario?.status().ready && window.devScenario.status().paused);
   await page.evaluate(()=>document.fonts.ready);
   await page.addStyleTag({content:'#dev-scenario-panel{display:none!important} *,*::before,*::after{caret-color:transparent!important}'});
-  if (report.mode === 'v13') {
+  if (report.mode === 'draft-e2e') {
+    await runKrakenDraftLive({args,page,report,out,command,status,step,settle,grid,capture,boards,save});
+  } else if (report.mode === 'v13') {
     await runKrakenV13({args,page,report,out,command,status,step,settle,grid,capture,boards,save});
   } else if (report.mode === 'shadow') {
     await command({action:'step',frames:240}); await settle();
@@ -288,7 +309,8 @@ try {
       for(const phase of ['intro','water','ashore','land'])if(!(report.phaseResidentPeaks[phase]>0)||report.phaseResidentPeaks[phase]>(['intro','water'].includes(phase)?165:150)*1048576)throw Error('Invalid actual phase peak including CPU mesh cache: '+phase);
     }
   }
-  if(report.errors.length||report.diagnostics.length)throw Error('Kraken review errors: '+JSON.stringify({errors:report.errors,diagnostics:report.diagnostics}));
+  if(report.sceneFailures?.length)throw Error('Kraken review scenes failed: '+report.sceneFailures.map(f=>f.group).join(', '));
+  if(report.errors.length||report.diagnostics.length||report.residencyErrors.length)throw Error('Kraken review errors: '+JSON.stringify({errors:report.errors,diagnostics:report.diagnostics,residencyErrors:report.residencyErrors.length}));
   await save(); console.log(`KRAKEN LIVE REPORT: ${out}`);
 } catch(e){report.failure=e.stack;await save();throw e;}
 finally{clearInterval(heartbeat);await browser.close();}

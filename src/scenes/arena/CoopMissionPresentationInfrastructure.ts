@@ -110,7 +110,9 @@ export class CoopMissionPresentationInfrastructure {
       },
     });
     // Eggs and spines in flight use the kraken's own art instead of the generic grenade/bullet renderers.
-    const clock = () => performance.now();
+    // Date.now is the presentation timebase the dev scenario steps deterministically; a wall clock would
+    // expire the flight window between stepped frames.
+    const clock = () => Date.now();
     this.releaseKrakenProjectiles = input.renderers.projectileVisualOverrides.register(projectile => {
       if (!assets) return null;
       if (projectile.weaponSourceId === 'kraken-eggs') {
