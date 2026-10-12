@@ -210,6 +210,8 @@ export class CoopMissionHostUpdate {
     if (!countdownActive) this.runtime.coopDefenseEnemyBurrowSystem?.hostUpdate(nowMs);
     if (metrics) { metrics.enemySpecialMs = performance.now() - measuredAt; measuredAt = performance.now(); }
     if (!countdownActive && !weaponBalanceLabActive) this.runtime.coopDefenseFirestarterSystem?.hostUpdate(nowMs);
+    // Charge phases (and the run's movement override) are decided before movement in this frame.
+    if (!countdownActive && !weaponBalanceLabActive) this.runtime.coopDefenseShieldChargerSystem?.hostUpdate(nowMs);
     // Mortar windup/spacing decisions must precede the movement override in this same frame.
     if (!countdownActive && !weaponBalanceLabActive) this.runtime.coopDefenseMortarSystem?.hostUpdate(nowMs);
     if (metrics) { metrics.enemyMortarMs = performance.now() - measuredAt; measuredAt = performance.now(); }

@@ -5108,6 +5108,36 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     }, now);
   }
 
+  /** Free lane distance for a charging body: the swept circle stops at the first blocker. */
+  measureChargeLane(x: number, y: number, angle: number, length: number, radius: number): number {
+    const line = new Phaser.Geom.Line(x, y, x + Math.cos(angle) * length, y + Math.sin(angle) * length);
+    let free = length;
+    const obstacle = this.geometry.nearestObstacleHit(line, { purpose: 'physical', clearanceRadius: radius });
+    if (obstacle) free = Math.min(free, obstacle.distance);
+    const inner = new Phaser.Geom.Rectangle(this.arenaBounds.x + radius, this.arenaBounds.y + radius,
+      this.arenaBounds.width - radius * 2, this.arenaBounds.height - radius * 2);
+    const edge = this.findNearestRectangleHit(line, inner);
+    if (edge) free = Math.min(free, edge.distance);
+    const train = this.computeTrainBounds();
+    if (train) {
+      const hit = this.findNearestRectangleHit(line, new Phaser.Geom.Rectangle(train.x - radius, train.y - radius,
+        train.width + radius * 2, train.height + radius * 2));
+      if (hit) free = Math.min(free, hit.distance);
+    }
+    return Math.max(0, free);
+  }
+
+  /** Shield charger body contact: melee category, shield-aware, attributed to the charging enemy. */
+  resolveChargeContact(targetId: string, chargerId: string, damage: number, sourceX: number, sourceY: number, nowMs: number): boolean {
+    return this.runHostExecution(() => {
+      if (!this.isAlive(targetId) || !this.canDamageTarget(chargerId, targetId)) return false;
+      if (this.shouldBlockWithShield(targetId, 'melee', damage, sourceX, sourceY, nowMs)) return false;
+      const outcome = this.applyDamage(targetId, damage, false, chargerId, 'SHIELD_CHARGE',
+        { sourceX, sourceY }, { damageKind: 'direct' });
+      return outcome?.kind === 'damage-applied';
+    }, nowMs);
+  }
+
   private resolveCurrentCombatantTarget(id: string): CombatTargetRef | null {
     return this.enemyManager?.getCombatTargetRef(id) ?? this.playerVitals.getTargetRef(id);
   }

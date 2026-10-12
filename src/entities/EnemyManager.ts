@@ -1415,6 +1415,7 @@ export class EnemyManager {
     if (current.areaClaw?.revision !== previous.areaClaw?.revision) {
       delta.areaClaw = current.areaClaw; delta.entityGeneration = current.entityGeneration;
     }
+    if (current.shieldCharge?.revision !== previous.shieldCharge?.revision) delta.shieldCharge = current.shieldCharge;
     if (current.claw?.revision !== previous.claw?.revision) {
       delta.claw = current.claw;
       delta.entityGeneration = current.entityGeneration;
@@ -1527,6 +1528,8 @@ export class EnemyManager {
       this.enemies.set(remote.id, enemy);
       this.registerCombatTarget(remote.id, remote.entityGeneration ?? this.nextEnemyGeneration++);
       if (remote.claw) enemy.applyClawAttackState(remote.claw);
+    if (remote.shieldCharge) enemy.applyShieldChargeState(remote.shieldCharge);
+      if (remote.shieldCharge) enemy.applyShieldChargeState(remote.shieldCharge);
       if (remote.areaClaw) enemy.applyAreaClawState(remote.areaClaw);
       const pendingArea = this.pendingAreaClawEvents.get(remote.id);
       if (pendingArea) { this.pendingAreaClawEvents.delete(remote.id); this.applyAreaClawEvent(pendingArea); }

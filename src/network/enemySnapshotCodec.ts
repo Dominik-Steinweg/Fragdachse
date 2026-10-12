@@ -1,5 +1,6 @@
 import { isEnemyClawState } from '../systems/EnemyClawAttack';
 import { readAreaClawState } from './krakenSnapshotCodec';
+import { isShieldChargeState, SHIELD_CHARGE_PHASES } from '../systems/ShieldChargeState';
 /**
  * Kompakte (De-)Serialisierung des Gegner-Upsert-Stroms für {@link SyncedEnemySnapshot}.
  *
@@ -23,6 +24,10 @@ const FIELD_GENERATION = 1024;
 const FIELD_CLAW = 2048;
 const FIELD_POSITION_REVISION = 4096;
 const FIELD_AREA_CLAW = 8192;
+/** Host-fixed shield charge lane: revision, phase, origin, angle, length, half width, timeline. */
+const FIELD_SHIELD_CHARGE = 16384;
+/** Lane angles need more precision than body rotation: a 0.01 rad error is 8 px at 800 px. */
+const LANE_ANGLE_QUANT = 10000;
 // Codes 0–6 are deployed legacy values; append new actions without renumbering them.
 const SPECIAL_ACTIONS = ['none', 'gauss-charge', 'phase-nuke', 'armageddon', 'timebomb-chase',
   'timebomb-fuse', 'void-molotov-windup', 'kraken-ink', 'kraken-eggs', 'kraken-dive',
@@ -60,6 +65,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
   }
   let mask = 0;
   if (entry.areaClaw !== undefined) mask |= FIELD_AREA_CLAW;
+  if (entry.shieldCharge !== undefined) mask |= FIELD_SHIELD_CHARGE;
   if (entry.positionRevision !== undefined) mask |= FIELD_POSITION_REVISION;
   if (entry.claw !== undefined) mask |= FIELD_CLAW;
   if (entry.entityGeneration !== undefined) mask |= FIELD_GENERATION;
@@ -107,6 +113,12 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
   }
   if (mask & FIELD_POSITION_REVISION) out.push(entry.positionRevision as number);
   if (mask & FIELD_AREA_CLAW) out.push(JSON.stringify(entry.areaClaw));
+  if (mask & FIELD_SHIELD_CHARGE) {
+    const state = entry.shieldCharge!, lane = state.lane;
+    out.push(state.revision, SHIELD_CHARGE_PHASES.indexOf(state.phase), lane ? 1 : 0);
+    if (lane) out.push(lane.originX, lane.originY, Math.round(lane.angle * LANE_ANGLE_QUANT), lane.length, lane.halfWidth,
+      lane.startedAt, lane.runAt, lane.runEndsAt, lane.recoverUntil);
+  }
 }
 
 /** Dekodiert den flachen Zahlenstrom zurück in Delta-Objekte für die clientseitige Anwendung. */
@@ -169,6 +181,16 @@ export function decodeEnemyUpserts(stream: readonly (number | string)[]): Synced
           if (state?.attack?.presentation !== 'tentacle') entry.areaClaw = state;
         } catch { /* Invalid optional state. */ }
       }
+    }
+    if (mask & FIELD_SHIELD_CHARGE) {
+      const revision = stream[i++] as number, phase = SHIELD_CHARGE_PHASES[stream[i++] as number], hasLane = stream[i++] as number;
+      const lane = hasLane ? {
+        originX: stream[i++] as number, originY: stream[i++] as number, angle: (stream[i++] as number) / LANE_ANGLE_QUANT,
+        length: stream[i++] as number, halfWidth: stream[i++] as number, startedAt: stream[i++] as number,
+        runAt: stream[i++] as number, runEndsAt: stream[i++] as number, recoverUntil: stream[i++] as number,
+      } : null;
+      const state = { revision, phase, lane };
+      if (isShieldChargeState(state)) entry.shieldCharge = state;
     }
     result.push(entry);
   }
