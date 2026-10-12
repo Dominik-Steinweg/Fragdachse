@@ -5,7 +5,7 @@
   "waterApproachSpeedPxPerSec": 80, "waterShoreDistancePx": 24, "landMoveSpeedPxPerSec": 210, "landTurnRateDegPerSec": 300,
   "waterWander": { "speedPxPerSec": 58, "turnRateDegPerSec": 70, "minLegPx": 140, "maxLegPx": 360, "pauseMs": 700, "shoreClearancePx": 110, "diveInteriorRatio": 0.35 },
   "dive": { "intervalMs": 14000, "durationMs": 1200, "submergedAtMs": 950, "submergedDurationMs": 9500, "surfaceDurationMs": 1400, "vulnerableAtMs": 900, "recoveryMs": 600 },
-  "ink": { "range": 432, "arcDegrees": 56, "damage": 60, "mouthOffset": { "x": 64, "y": 0 }, "windupMs": 1000, "spitDelayMs": 180, "recoveryMs": 450, "cloudFadeMs": 1800 },
+  "ink": { "range": 518, "arcDegrees": 56, "damage": 60, "mouthOffset": { "x": 64, "y": 0 }, "windupMs": 1000, "spitDelayMs": 180, "recoveryMs": 450, "cloudFadeMs": 1800 },
   "tentacles": { "length": 320, "width": 112, "damage": 45, "windupMs": 1100, "strikeMs": 170, "recoveryMs": 500, "maxConcurrent": 2, "retractMs": 850, "retryMs": 700, "safetyMarginPx": 16, "hitboxProfileId": "shore-arm", "riseMs": 900, "targetableAfterRiseMs": 300, "untargetableAfterRetractMs": 450,
     "emergeShoreBandPx": 200, "spawnSpacingPx": 180, "repositionDelayMs": 1400, "sinkMs": 1100,
     "baseClearancePx": 40, "rootLengthPx": 110, "strikeArcDegrees": 110, "idealReachPx": 210, "aimTurnRateDegPerSec": 110,
