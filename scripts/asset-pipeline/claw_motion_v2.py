@@ -49,3 +49,4 @@ def apply_claw(asset, phase, frame, idle, parameters, pose, key):
         for name in parts['claw_bones']:
             key(asset['rig'].pose.bones[name], 'location', translation, frame)
         pose('claw_weapon', location=translation)
+    return pull, reach

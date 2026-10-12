@@ -55,6 +55,11 @@ def sheet(c, name, surface, columns, rows, thickness, material, bevel=.014):
     mesh = bpy.data.meshes.new(name)
     mesh.from_pydata([tuple(p) for p in outer+inner], [], faces)
     outward_normals(mesh)
+    # Grid UVs (outer and inner share them) for authored image materials.
+    layer = mesh.uv_layers.new(name='ShieldUV')
+    for loop in mesh.loops:
+        k = loop.vertex_index % count
+        layer.data[loop.index].uv = ((k % (columns+1))/columns, (k//(columns+1))/rows)
     mesh.materials.append(material)
     for polygon in mesh.polygons:
         polygon.use_smooth = True
@@ -64,6 +69,53 @@ def sheet(c, name, surface, columns, rows, thickness, material, bevel=.014):
         edge = ob.modifiers.new('Worn plank edge', 'BEVEL')
         edge.width, edge.segments = bevel, 2
     return ob
+
+
+def tube_uv(ob, sides, radius):
+    """Length-wise UVs for a horn() tube so a horizontally repeating trim texture runs along it."""
+    mesh = ob.data
+    rings = len(mesh.vertices)//sides
+    points = [mesh.vertices[i*sides].co for i in range(rings)]
+    lengths = [0]
+    for a, b in zip(points, points[1:]):
+        lengths.append(lengths[-1]+(b-a).length)
+    repeat = math.tau*radius
+    layer = mesh.uv_layers.new(name='ShieldUV')
+    for polygon in mesh.polygons:
+        ids = [mesh.loops[i].vertex_index for i in polygon.loop_indices]
+        wrap = any(k % sides == 0 for k in ids) and any(k % sides == sides-1 for k in ids)
+        for i, k in zip(polygon.loop_indices, ids):
+            j = k % sides
+            if wrap and j == 0 and len(ids) == 4:
+                j = sides
+            layer.data[i].uv = (lengths[k//sides]/repeat, j/sides) if len(ids) == 4 else (0, 0)
+    return ob
+
+
+def image_material(c, name, key, color, gamma=1.0, saturation=1.0):
+    """Painted albedo from an authored image on ShieldUV; the procedural colour is the fallback.
+
+    Gamma < 1 lifts the scanned swatch so the shield still separates from the coat at 30 px.
+    """
+    mat = c.material(name, color)
+    image = c.images.get(key)
+    if image:
+        nodes, links = mat.node_tree.nodes, mat.node_tree.links
+        coords = nodes.new('ShaderNodeUVMap')
+        coords.uv_map = 'ShieldUV'
+        texture = nodes.new('ShaderNodeTexImage')
+        texture.image = image
+        texture.interpolation = 'Linear'
+        links.new(coords.outputs['UV'], texture.inputs['Vector'])
+        lift = nodes.new('ShaderNodeGamma')
+        lift.inputs['Gamma'].default_value = gamma
+        links.new(texture.outputs['Color'], lift.inputs['Color'])
+        tone = nodes.new('ShaderNodeHueSaturation')
+        tone.inputs['Saturation'].default_value = saturation
+        links.new(lift.outputs['Color'], tone.inputs['Color'])
+        links.new(tone.outputs['Color'], nodes['Principled BSDF'].inputs['Base Color'])
+    mat['FD_ShieldImage'] = key
+    return mat
 
 
 def along(surface, points, lift):
@@ -76,7 +128,9 @@ def along(surface, points, lift):
 
 
 def tower_shield(c, mats):
-    red, iron, edge, recess, leather = mats['red'], mats['iron'], mats['edge'], mats['recess'], mats['leather']
+    iron, edge, recess, leather = mats['iron'], mats['edge'], mats['recess'], mats['leather']
+    red = image_material(c, 'Charger tower front red planks iron struts', 'shieldFront', (.36, .065, .035), .68, 1.2)
+    trim = image_material(c, 'Charger forged iron trim', 'shieldRim', (.105, .105, .11), .45)
     bottom, top, low, high = 1.25, .95, .12, 1.86
     def surface(u, v):
         a = (u*2-1)*ARC
@@ -93,14 +147,14 @@ def tower_shield(c, mats):
                           [.010, .010, .010], recess, 6))
     for v in (.24, .70):
         path = along(surface, [(i/12, v) for i in range(13)], .018)
-        parts.append(horn(c, 'Forged iron cross band', path, [.034]*len(path), iron, 8))
+        parts.append(tube_uv(horn(c, 'Forged iron cross band', path, [.034]*len(path), trim, 8), 8, .034))
         for u in (.08, .3, .5, .7, .92):
             point, normal = surface(u, v)
             parts.append(ell(c, 'Domed iron band rivet', tuple(point+normal*.05), (.045, .045, .045), edge))
     rim = along(surface, [(0, 0), (0, .5), (0, .92), (.04, 1), (.25, 1), (.5, 1), (.75, 1), (.96, 1), (1, .92), (1, .5), (1, 0)], .01)
-    parts.append(horn(c, 'Rubbed iron rim and top cap', rim, [.05]*len(rim), edge, 10))
+    parts.append(tube_uv(horn(c, 'Forged iron rim and top cap', rim, [.05]*len(rim), trim, 10), 10, .05))
     base = along(surface, [(i/10, 0) for i in range(11)], .01)
-    parts.append(horn(c, 'Iron bottom shoe', base, [.04]*len(base), iron, 8))
+    parts.append(tube_uv(horn(c, 'Iron bottom shoe', base, [.04]*len(base), trim, 8), 8, .04))
     boss, normal = surface(.5, .48)
     parts.append(ell(c, 'Low central iron boss', tuple(boss+normal*.05), (.17, .17, .17), iron))
     parts.append(ell(c, 'Rubbed boss crown', tuple(boss+normal*.14), (.075, .075, .075), edge))
@@ -307,6 +361,7 @@ def build(c, spec):
     # Separate prop control: clips lower or swing it around the grip, independent of the arms.
     carrier = control(c.scene, 'Frontal shield carry', form['grip'], asset['parts']['body'])
     attach(shield, carrier)
+    carrier['grip'] = list(form['grip'])
     asset['parts']['shield'] = carrier
     bpy.context.view_layer.update()
     body_radius, _, _ = measure([ob for ob in anatomy if ob.name in bpy.data.objects])
@@ -317,5 +372,5 @@ def build(c, spec):
     print('SHIELD_CHARGER_METRICS ' + json.dumps(metrics))
     asset['root']['formVariant'] = variant
     asset['root']['shieldArcDegrees'] = right-left
-    asset['root']['authoringStage'] = 'Stage A: shape variants'
+    asset['root']['authoringStage'] = 'Stage B: v1 tower draft'
     return asset
