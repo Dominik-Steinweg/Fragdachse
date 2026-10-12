@@ -2,6 +2,7 @@ import type { WorldHealthBarRenderer, HealthBarHandle } from '../effects/health/
 import { EMPTY_ENEMY_CLAW_STATE, isEnemyClawState, type EnemyClawState } from '../systems/EnemyClawAttack';
 import { syncEnemyClawAnimation } from '../animations/EnemyClawAnimation';
 import { stepTurnRateFacing } from './turnRateFacing';
+import { syncEnemyShieldChargeAnimation } from '../animations/EnemyShieldChargeAnimation';
 import { EMPTY_SHIELD_CHARGE_STATE, isShieldChargeState, type ShieldChargeState } from '../systems/ShieldChargeState';
 import { EnemyCastPlayback, syncEnemyCastAnimation } from '../animations/EnemyCastAnimation';
 import { getEnemyFootprintVariant } from '../config/movementEffects';
@@ -221,6 +222,17 @@ export class EnemyEntity {
     if (!this.config.firestarter) return;
     this.castPlayback.orb(now);
     this.syncCastAnimation(now);
+  }
+
+  private shieldChargeAnimating = false;
+
+  /** Charge clips follow the replicated host-fixed charge timeline (windup, run, recover). */
+  syncShieldChargeAnimation(now: number): void {
+    if (!this.config.shieldCharger) return;
+    const wasAnimating = this.shieldChargeAnimating;
+    this.shieldChargeAnimating = syncEnemyShieldChargeAnimation(this.sprite, this.config.imageKey, this.shieldCharge, now,
+      this.clawAnimating || !this.sprite.visible || this.burrowed || this.currentHp <= 0);
+    if (wasAnimating && !this.shieldChargeAnimating) this.syncWalkingAnimation();
   }
 
   syncCastAnimation(now = this.sprite.scene.time.now): void {
@@ -506,7 +518,7 @@ export class EnemyEntity {
   }
 
   private syncWalkingAnimation(): void {
-    if (this.clawAnimating || this.castAnimating) return;
+    if (this.clawAnimating || this.castAnimating || this.shieldChargeAnimating) return;
     if (!this.walkingSheet) return;
     syncBadgerWalkingAnimation(
       this.sprite,

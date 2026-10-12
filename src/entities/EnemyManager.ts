@@ -1297,6 +1297,7 @@ export class EnemyManager {
 
   private syncClawVisuals(enemy: EnemyEntity, now: number): void {
     enemy.syncClawAnimation(now);
+    enemy.syncShieldChargeAnimation(now);
     enemy.syncCastAnimation();
     this.visualSink?.syncEnemyClaw?.(enemy.id, enemy.getClawAttackState(), enemy.sprite.x, enemy.sprite.y, now,
       enemy.sprite.visible && !enemy.isBurrowed() && enemy.getHp() > 0,

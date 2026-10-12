@@ -199,3 +199,26 @@ describe('shield charger contracts', () => {
     expect(() => enemyConfig.normalizeTurnRate(0)).toThrow();
   });
 });
+
+describe('shield charger clip frames', () => {
+  const lane = { originX: 0, originY: 0, angle: 0, length: 600, halfWidth: 15, startedAt: 1000, runAt: 1700, runEndsAt: 2400, recoverUntil: 3100 };
+  const clips: Record<string, { frames: number[]; markers?: Record<string, number> }> = {
+    windup: { frames: [10, 11, 12, 13, 14], markers: { ready: 4 } },
+    charge: { frames: [20, 21, 22] },
+    recover: { frames: [30, 31, 32, 33, 34, 35], markers: { raise: 3 } },
+  };
+  const clip = (name: string) => clips[name] as never;
+  it('reaches and holds the ready pose during the windup, loops the run and lifts the shield at the end of recovery', async () => {
+    const { shieldChargeClipFrame } = await import('../src/animations/EnemyShieldChargeAnimation');
+    const at = (phase: 'windup' | 'run' | 'recover', now: number) => shieldChargeClipFrame({ revision: 1, phase, lane }, now, clip);
+    expect(at('windup', 1000)).toBe(10);
+    expect(at('windup', 1000 + 0.4 * 700)).toBe(14);
+    expect(at('windup', 1690)).toBe(14);
+    expect([at('run', 1700), at('run', 1745), at('run', 1790), at('run', 1835)]).toEqual([20, 21, 22, 20]);
+    expect(at('recover', 2400)).toBe(30);
+    expect(at('recover', 2400 + 0.69 * 700)).toBe(33);
+    expect(at('recover', 3100)).toBe(35);
+    expect(shieldChargeClipFrame({ revision: 1, phase: 'none', lane: null }, 2000, clip)).toBeNull();
+    expect(shieldChargeClipFrame({ revision: 1, phase: 'run', lane }, 2000, () => undefined)).toBeNull();
+  });
+});
