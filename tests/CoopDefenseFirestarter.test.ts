@@ -99,6 +99,19 @@ describe('firestarter host decisions', () => {
     expect(f.fire.mock.calls[0][1]).toMatchObject({ targetX: f.player.x, targetY: 40 });
   });
 
+  it('never lets a direct shot pre-empt a combo between throttled combo searches', () => {
+    const f = fixture(), seconds = config.lance.telegraphMs / 1000;
+    const tag = WEAPON_CONFIGS[config.fireballWeaponId].detonable!.tag;
+    // A fruitless search (no ball, sight blocked) starts the retry cadence.
+    f.hasClearLineOfFire.mockReturnValue(false); f.system.hostUpdate(0);
+    expect(f.enemy.setSpecialAction).not.toHaveBeenCalled();
+    // Within that cadence a ball arrives and sight clears: the combo still wins over the direct shot.
+    f.hasClearLineOfFire.mockReturnValue(true);
+    f.balls.push({ projectileId: 1, ownerId: 'foreign', tag, x: f.player.x - 100 * seconds, y: 30, vx: 100, vy: 0, allowCrossTeam: true });
+    f.system.hostUpdate(1); f.system.hostUpdate(1 + config.lance.telegraphMs);
+    expect(f.fire.mock.calls[0][1]).toMatchObject({ targetX: f.player.x, targetY: 30 });
+  });
+
   it('respects line of sight for both attacks and the cross-attack gap after a lance', () => {
     const f = fixture(); f.hasClearLineOfFire.mockReturnValue(false); f.system.hostUpdate(0);
     expect(f.enemy.setSpecialAction).not.toHaveBeenCalled(); expect(f.fire).not.toHaveBeenCalled();

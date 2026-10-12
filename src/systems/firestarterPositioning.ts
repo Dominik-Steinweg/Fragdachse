@@ -44,18 +44,31 @@ function intercepts(origin: Point, target: Point, ball: Point, config: CoopDefen
 export function hasFirestarterDirectLine(enemyId: string, origin: Point, target: Point,
   config: CoopDefenseEnemyFirestarterConfig, projectiles: ProjectileDetonableReadPort, geometry: Geometry,
   leadMs = config.lance.telegraphMs, clearanceRadius = 0): boolean {
+  return directLine(origin, target, config, geometry, clearanceRadius,
+    () => predictedBalls(enemyId, config, projectiles, leadMs));
+}
+
+function directLine(origin: Point, target: Point, config: CoopDefenseEnemyFirestarterConfig,
+  geometry: Geometry, clearanceRadius: number, balls: () => readonly Point[]): boolean {
   return hasLine(origin, target, config, geometry, clearanceRadius)
-    && !predictedBalls(enemyId, config, projectiles, leadMs).some(ball => intercepts(origin, target, ball, config));
+    && !balls().some(ball => intercepts(origin, target, ball, config));
 }
 
 export function findFirestarterCombo(enemyId: string, origin: Point, targets: readonly Point[],
   config: CoopDefenseEnemyFirestarterConfig, projectiles: ProjectileDetonableReadPort, geometry: Geometry,
   leadMs = config.lance.telegraphMs): Point | null {
-  const balls = predictedBalls(enemyId, config, projectiles, leadMs);
+  return findCombo(origin, targets, config, geometry, predictedBalls(enemyId, config, projectiles, leadMs));
+}
+
+function findCombo(origin: Point, targets: readonly Point[], config: CoopDefenseEnemyFirestarterConfig,
+  geometry: Geometry, balls: readonly Point[]): Point | null {
   let best: Point | null = null, bestDistance = Infinity;
   for (const ball of balls) {
+    // Use the predicted position: a ball outside range now can travel into reach during windup.
+    // Reject before the per-target work, but retain all balls for interception checks.
+    if (distance(origin, ball) > config.lance.rangePx) continue;
     const proximity = Math.min(...targets.map(target => distance(target, ball)));
-    if (proximity > config.comboRadiusPx || proximity >= bestDistance || distance(origin, ball) > config.lance.rangePx
+    if (proximity > config.comboRadiusPx || proximity >= bestDistance
       || !hasLine(origin, ball, config, geometry)
       // A nearer orb would intercept the lance before its intended combo.
       || balls.some(other => other !== ball && distance(origin, other) < distance(origin, ball)
@@ -78,11 +91,22 @@ export class FirestarterPositioning {
     const target = targets[0], origin = enemy.sprite, range = distance(origin, target);
     if (range <= 0) return false;
     const sideways = { x: -(target.y - origin.y) / range, y: (target.x - origin.x) / range };
+    // All candidate positions share the same live sample and just two prediction horizons.
+    // Keep this cache inside one synchronous decision; firing/conversion cannot leave it stale.
+    const predictions = new Map<number, readonly Point[]>();
+    const ballsAt = (leadMs: number) => {
+      let balls = predictions.get(leadMs);
+      if (!balls) {
+        balls = predictedBalls(enemy.id, config, projectiles, leadMs);
+        predictions.set(leadMs, balls);
+      }
+      return balls;
+    };
     // Quality ranks express attack priority; travel cost and the improvement threshold are authored.
     const quality = (point: Point, leadMs: number): number => {
-      if (findFirestarterCombo(enemy.id, point, targets, config, projectiles, geometry, leadMs)) return 2;
+      if (findCombo(point, targets, config, geometry, ballsAt(leadMs))) return 2;
       return targets.some(player => distance(point, player) <= config.lance.rangePx
-        && hasFirestarterDirectLine(enemy.id, point, player, config, projectiles, geometry, leadMs, ballRadius(config))) ? 1 : 0;
+        && directLine(point, player, config, geometry, ballRadius(config), () => ballsAt(leadMs))) ? 1 : 0;
     };
     const current = quality(origin, config.lance.telegraphMs);
     let best: { direction: Point; mode: EnemyDodgeMode; score: number } | null = null;
