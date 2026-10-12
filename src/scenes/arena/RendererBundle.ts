@@ -559,6 +559,7 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   bundle.mortarStrike.setImpactSystems(bundle.explosionGpu, bundle.lighting);
   effectSystem.setMortarImpactRenderer((x, y, radius, color) => bundle.mortarStrike.playImpact(x, y, radius, color));
   effectSystem.setFirestarterRenderer(bundle.firestarter);
+  bundle.shieldCharger.setLaneSink((id, attack, now, visible) => effectSystem.syncEnemyLane(`shield-charge:${id}`, attack, now, visible));
 }
 
 /**

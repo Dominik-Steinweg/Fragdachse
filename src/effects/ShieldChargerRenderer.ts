@@ -10,6 +10,10 @@ import {
   SHIELD_CHARGER_DUST_LIFE_S, SHIELD_CHARGER_KIND, SHIELD_CHARGER_LANE_MARGIN_PX, SHIELD_CHARGER_SKID_LIFE_S,
 } from './gpu/ShieldChargerShader';
 import type { ShieldChargeLane } from '../systems/ShieldChargeState';
+import type { EnemyLaneAttack } from './EnemyClawRenderer';
+
+/** Shared enemy-attack danger zone (the same red family as claws and Kraken slams). */
+export type ShieldChargeLaneSink = (id: string, attack: EnemyLaneAttack | null, now: number, visible: boolean) => void;
 
 interface Skid { ax: number; ay: number; bx: number; by: number; halfWidth: number; endedAt: number; seed: number }
 interface Dust { x: number; y: number; radius: number; born: number; seed: number }
@@ -42,6 +46,8 @@ export class ShieldChargerRenderer {
   private lighting: LightingSystem | null = null;
   private gpuVfx: GpuVfxSystem | null = null;
   private cameraFeedback: CameraFeedbackController | null = null;
+  private laneSink: ShieldChargeLaneSink | null = null;
+  private readonly sunkLanes = new Set<string>();
 
   constructor(private readonly scene: Phaser.Scene) {
     this.layer = new ShieldChargerGpuLayer(scene);
@@ -54,9 +60,13 @@ export class ShieldChargerRenderer {
   setLightingSystem(lighting: LightingSystem | null): void { this.lighting = lighting; }
   registerGpuVfx(system: GpuVfxSystem): void { this.gpuVfx = system; }
   setCameraFeedback(controller: CameraFeedbackController | null): void { this.cameraFeedback = controller; }
+  /** Hostile windups are drawn by the shared enemy danger-zone renderer. */
+  setLaneSink(sink: ShieldChargeLaneSink | null): void { this.laneSink = sink; }
 
   clear(): void {
     this.tracked.clear(); this.skids.length = 0; this.dust.length = 0;
+    for (const id of this.sunkLanes) this.laneSink?.(id, null, this.clock(), false);
+    this.sunkLanes.clear();
     this.layer.clear(); this.releaseLights(new Set());
   }
 
@@ -90,7 +100,13 @@ export class ShieldChargerRenderer {
       if (!track) { track = { revision: 0, phase: 'none', nextDustAt: 0, lane: null }; this.tracked.set(enemy.id, track); }
       if (state.revision !== track.revision) this.transition(track, state.phase, state.lane, local, enemy);
       const lane = state.lane;
-      if (state.phase === 'windup' && lane) lanes.push({ lane, allied, seed: seedOf(enemy.id), id: enemy.id });
+      // Hostile: the shared red danger zone, dangerous from the run start. Allied: a quiet local lane only.
+      if (!allied && this.laneSink) {
+        const announced = (state.phase === 'windup' || state.phase === 'run') && lane;
+        this.laneSink(enemy.id, announced ? laneAttack(enemy.id, lane) : null, now, !suppressed);
+        if (announced) this.sunkLanes.add(enemy.id); else this.sunkLanes.delete(enemy.id);
+      }
+      if (state.phase === 'windup' && lane && (allied || !this.laneSink)) lanes.push({ lane, allied, seed: seedOf(enemy.id), id: enemy.id });
       if (state.phase === 'run' && lane) {
         const bx = enemy.sprite.x, by = enemy.sprite.y;
         const along = (bx - lane.originX) * Math.cos(lane.angle) + (by - lane.originY) * Math.sin(lane.angle);
@@ -105,6 +121,7 @@ export class ShieldChargerRenderer {
       }
     }
     for (const id of this.tracked.keys()) if (!live.has(id)) this.tracked.delete(id);
+    for (const id of [...this.sunkLanes]) if (!live.has(id)) { this.laneSink?.(id, null, now, false); this.sunkLanes.delete(id); }
 
     // Warnings first: an active lane telegraph is never the item a full batch drops.
     for (const { lane, allied, seed, id } of lanes) {
@@ -167,4 +184,11 @@ export class ShieldChargerRenderer {
     this.lightKeys.clear();
     for (const key of next) this.lightKeys.add(key);
   }
+}
+
+/** The windup as an enemy lane attack: it charges up over the windup and hits at the run start. */
+function laneAttack(enemyId: string, lane: ShieldChargeLane): EnemyLaneAttack {
+  return { attackId: `shield-charge:${enemyId}:${lane.startedAt}`, x: lane.originX, y: lane.originY, angle: lane.angle,
+    length: lane.length, width: lane.halfWidth * 2, startedAt: lane.startedAt,
+    strikeAt: Math.max(lane.startedAt, lane.runAt - 120), hitAt: lane.runAt, endsAt: lane.runEndsAt };
 }

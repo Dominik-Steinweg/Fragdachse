@@ -49,6 +49,25 @@ describe('ShieldChargerRenderer', () => {
     expect(laneItem.t).toBeCloseTo(0.5);
   });
 
+  it('hands hostile windups to the shared danger zone (hit at the run start) and releases them on recovery', () => {
+    const f = fixture();
+    const sink = vi.fn();
+    f.renderer.setLaneSink(sink);
+    let state: ShieldChargeState = { revision: 1, phase: 'windup', lane };
+    f.renderer.setEnemySource(() => [charger('e1', () => state)]);
+    f.render(1300);
+    expect(sink).toHaveBeenLastCalledWith('e1', expect.objectContaining({ x: 0, y: 0, angle: 0, length: 600, width: 30,
+      startedAt: 1000, hitAt: 1700 }), 1300, true);
+    expect(f.items().some(item => item.kind === SHIELD_CHARGER_KIND.lane)).toBe(false);
+    const attackId = sink.mock.lastCall![1].attackId;
+    state = { revision: 2, phase: 'run', lane };
+    f.render(1750);
+    expect(sink.mock.lastCall![1].attackId).toBe(attackId); // same announced attack, no restart
+    state = { revision: 3, phase: 'recover', lane };
+    f.render(2500);
+    expect(sink).toHaveBeenLastCalledWith('e1', null, 2500, true);
+  });
+
   it('leaves scuffs and a stop puff when a run ends, and no warning lane during recovery', () => {
     const f = fixture();
     let state: ShieldChargeState = { revision: 1, phase: 'run', lane };

@@ -159,6 +159,11 @@ export class EffectSystem implements EnemyVisualSink {
     this.enemyClawRenderer ??= new EnemyClawRenderer(this.scene);
     return this.enemyClawRenderer.prepare();
   }
+  /** Lane danger zone in the shared enemy-attack family (shield charge windup). */
+  syncEnemyLane(id: string, attack: import('./EnemyClawRenderer').EnemyLaneAttack | null, now: number, visible: boolean, color?: number): void {
+    if (attack) this.enemyClawRenderer ??= new EnemyClawRenderer(this.scene);
+    this.enemyClawRenderer?.syncLane(id, attack, now, visible, color);
+  }
   clearEnemyClaw(id: string): void { this.enemyClawRenderer?.release(id); }
   clearEnemyClawEffects(): void { this.enemyClawRenderer?.clear(); }
   private zeusTaserRenderer: ZeusTaserRenderer | null = null;

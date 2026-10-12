@@ -14,7 +14,12 @@ export interface EnemyFrontalShieldState {
    * Optional look of the replicated arc. Physical shields (a modelled prop) only want a thin rim
    * that flashes on blocks; without it the arc uses the energy-shield faction colours.
    */
-  readonly presentation?: { readonly color: number; readonly alpha: number; readonly thickness: number };
+  readonly presentation?: {
+    readonly color: number; readonly alpha: number; readonly thickness: number;
+    /** Arc radius around the body centre (px); hug a modelled shield instead of floating in front. */
+    readonly radius?: number;
+    readonly anchorDistance?: number;
+  };
 }
 
 export interface EnemyFrontalShieldPort {

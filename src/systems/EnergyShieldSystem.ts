@@ -373,15 +373,17 @@ export class EnergyShieldSystem {
       if (!enemy?.sprite.active || raised.has(enemyId)) return;
       raised.add(enemyId);
       // Der Bogen sitzt knapp vor dem Körper, auch wenn der Gegner größer als ein Spieler ist.
-      const radius = Math.max(fire.visualRadius, Math.round(enemy.getCollisionRadius() + fire.visualThickness));
+      const radius = state.presentation?.radius
+        ?? Math.max(fire.visualRadius, Math.round(enemy.getCollisionRadius() + fire.visualThickness));
+      const anchorDistance = state.presentation?.anchorDistance ?? fire.anchorDistance;
       const flashRemaining = Math.max(0, (this.enemyShieldFlashUntil.get(enemyId) ?? 0) - now);
       const flashFrac = fire.flashDurationMs > 0 ? Math.min(1, flashRemaining / fire.flashDurationMs) : 0;
       synced.push({
         ownerId: enemyId,
-        x: Math.round(enemy.sprite.x + Math.cos(state.facing) * fire.anchorDistance),
-        y: Math.round(enemy.sprite.y + Math.sin(state.facing) * fire.anchorDistance),
+        x: Math.round(enemy.sprite.x + Math.cos(state.facing) * anchorDistance),
+        y: Math.round(enemy.sprite.y + Math.sin(state.facing) * anchorDistance),
         angle: state.facing,
-        anchorDistance: fire.anchorDistance,
+        anchorDistance,
         radius,
         thickness: state.presentation?.thickness ?? fire.visualThickness,
         arcDegrees: state.arcDegrees,

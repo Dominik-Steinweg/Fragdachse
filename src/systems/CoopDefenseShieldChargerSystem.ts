@@ -36,8 +36,9 @@ interface ChargerState {
   lastY: number;
 }
 
-const HOSTILE_SHIELD_RIM = { color: 0xd9a35c, alpha: 0.32, thickness: 2.5 } as const;
-const ALLIED_SHIELD_RIM = { color: 0x8affcf, alpha: 0.26, thickness: 2.5 } as const;
+// A faint glow hugging the modelled tower shield (reach ~15 px): it says "active", the prop gives the form.
+const HOSTILE_SHIELD_RIM = { color: 0xe0ad66, alpha: 0.14, thickness: 1.4, radius: 17, anchorDistance: 0 } as const;
+const ALLIED_SHIELD_RIM = { color: 0x8affcf, alpha: 0.12, thickness: 1.4, radius: 17, anchorDistance: 0 } as const;
 /** Below this residual distance a run counts as having reached its planned end point. */
 const ARRIVAL_EPSILON_PX = 3;
 /** Pull back onto the lane centre line (1/s); no invisible lateral steering beyond drift repair. */
