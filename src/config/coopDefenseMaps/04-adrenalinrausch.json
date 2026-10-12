@@ -88,6 +88,7 @@
       "restAfterMs": 3000,
       "groups": [
         {"enemyKind": "zombie-badger", "count": 8, "front": "west"},
+        {"enemyKind": "shield-charger-badger", "count": 1, "delayMs": 9000, "front": "west"},
         {"enemyKind": "zombie-badger", "count": 22, "delayMs": 16000, "spawnStaggerMs": 250, "front": "west"},
         {"enemyKind": "demon-badger", "count": 4, "delayMs": 18500, "front": "west"}
       ]
@@ -108,7 +109,8 @@
       "groups": [
         {"enemyKind": "zombie-badger", "count": 25, "front": "west"},
         {"enemyKind": "demon-badger", "count": 10, "delayMs": 1000, "front": "west"},
-        {"enemyKind": "rabid-badger", "count": 6, "delayMs": 1800, "front": "west"}
+        {"enemyKind": "rabid-badger", "count": 6, "delayMs": 1800, "front": "west"},
+        {"enemyKind": "shield-charger-badger", "count": 1, "delayMs": 2500, "front": "west"}
       ]
     },
     {
@@ -135,7 +137,8 @@
       "groups": [
         {"enemyKind": "zombie-badger", "count": 15, "front": "west"},
         {"enemyKind": "demon-badger", "count": 10, "delayMs": 1000, "front": "west"},
-        {"enemyKind": "rabid-badger", "count": 10, "delayMs": 1200, "front": "west"}
+        {"enemyKind": "rabid-badger", "count": 10, "delayMs": 1200, "front": "west"},
+        {"enemyKind": "shield-charger-badger", "count": 2, "delayMs": 2000, "spawnStaggerMs": 6000, "front": "west"}
       ]
     }   
   ],
