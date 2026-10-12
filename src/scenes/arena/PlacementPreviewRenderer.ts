@@ -1,3 +1,6 @@
+import { ensureWatchtowerTexture } from '../../effects/watchtower/WatchtowerVisual';
+import { WATCHTOWER_DISPLAY_SIZE } from '../../config/watchtower';
+import { getConstructionBounds } from '../../systems/ConstructionGeometry';
 import type Phaser from 'phaser';
 import { bridge }                from '../../network/bridge';
 import { ULTIMATE_CONFIGS, UTILITY_CONFIGS }       from '../../loadout/LoadoutConfig';
@@ -130,6 +133,7 @@ export class PlacementPreviewRenderer {
       } else {
         const image = this.ensurePlacementPreviewImage(undefined, preview.kind, preview.constructionId, preview.powerUpDefId);
         image.setPosition(preview.targetX, preview.targetY);
+        this.positionStructurePreview(image, preview.kind, preview.targetX, preview.targetY);
         image.setTint(ownerColor);
         image
           .setAlpha(preview.isValid ? this.getPlacementPreviewAlpha(preview.kind) : 0.25)
@@ -202,15 +206,19 @@ export class PlacementPreviewRenderer {
 
   /** Eckenrahmen um die anvisierte Zelle: gruen = eigenes Konstrukt, rot = nichts abbaubar. */
   private drawDismantleMarker(preview: UtilityPlacementPreviewState): void {
-    const half = CELL_SIZE * 0.46;
+    const bounds = preview.kind === 'watchtower'
+      ? getConstructionBounds({ constructionId: 'watchtower', gridX: 0, gridY: 0 },
+        { offsetX: preview.targetX - CELL_SIZE / 2, offsetY: preview.targetY - CELL_SIZE / 2 }) : null;
+    const half = (bounds?.width ?? CELL_SIZE) * 0.46;
+    const centerX = bounds?.x ?? preview.targetX, centerY = bounds?.y ?? preview.targetY;
     const arm = CELL_SIZE * 0.22;
     const color = preview.isValid ? COLORS.GREEN_2 : COLORS.RED_2;
     const pulse = 0.72 + 0.28 * Math.sin(this.scene.time.now / 140);
     this.invalidGraphics.lineStyle(3, color, pulse);
     for (const signX of [-1, 1]) {
       for (const signY of [-1, 1]) {
-        const cornerX = preview.targetX + signX * half;
-        const cornerY = preview.targetY + signY * half;
+        const cornerX = centerX + signX * half;
+        const cornerY = centerY + signY * half;
         this.invalidGraphics.beginPath();
         this.invalidGraphics.moveTo(cornerX - signX * arm, cornerY);
         this.invalidGraphics.lineTo(cornerX, cornerY);
@@ -283,6 +291,7 @@ export class PlacementPreviewRenderer {
           image.setPosition(preview.x, preview.y).setTint(ownerColor)
             .setAlpha(preview.isValid ? 0.38 : 0.18)
             .setVisible(true);
+          this.positionStructurePreview(image, preview.kind, preview.x, preview.y);
           if (preview.kind === 'rock' || preview.kind === 'turret') image.setFrame(preview.frame);
         }
         if (preview.kind === 'turret') {
@@ -431,6 +440,12 @@ export class PlacementPreviewRenderer {
       .setDisplaySize(this.getPlacementPreviewDisplaySize(kind, powerUpDefId), this.getPlacementPreviewDisplaySize(kind, powerUpDefId));
   }
 
+  private positionStructurePreview(image: Phaser.GameObjects.Image, kind: PlacementPreviewNetState['kind'], x: number, y: number): void {
+    if (kind !== 'watchtower') return;
+    const bounds = getConstructionBounds({ constructionId: 'watchtower', gridX: 0, gridY: 0 }, { offsetX: x - CELL_SIZE / 2, offsetY: y - CELL_SIZE / 2 });
+    image.setPosition(bounds.x, bounds.y).setDisplaySize(WATCHTOWER_DISPLAY_SIZE, WATCHTOWER_DISPLAY_SIZE).setRotation(0);
+  }
+
   private getPlacementPreviewAlpha(kind: PlacementPreviewNetState['kind']): number {
     if (kind === 'tunnel') {
       return (ULTIMATE_CONFIGS.DACHS_TUNNEL as TunnelUltimateConfig).placement.previewAlpha;
@@ -445,6 +460,7 @@ export class PlacementPreviewRenderer {
     constructionId?: PlacementPreviewNetState['constructionId'],
     powerUpDefId?: string,
   ): string {
+    if (kind === 'watchtower') return ensureWatchtowerTexture(this.scene);
     if (constructionId === 'medic_pedestal') return 'powerup_hp';
     if (constructionId === 'armor_pedestal') return 'powerup_arm';
     if (kind === 'rock' || kind === 'turret') return 'walls';

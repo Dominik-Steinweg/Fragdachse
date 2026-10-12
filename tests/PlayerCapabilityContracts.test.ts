@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ActivityKind } from '../src/config/authoring/ActivityDefinition';
 import {
+  restrictStructureOccupant,
   resolvePlayerCapabilities,
   type PlayerCapabilities,
 } from '../src/world/PlayerCapabilities';
@@ -90,4 +91,12 @@ describe('Capability Policy – aus dem Runtime-State aufgeloest', () => {
       expect(capabilities(participation, 'coop-mission').canMove, participation).toBe(false);
     }
   });
+});
+
+it('keeps occupant locomotion and combat while excluding construction and mission management', () => {
+  const base = resolvePlayerCapabilities({ participation: 'interactive', activityKind: 'coop-mission', worldCombatAllowed: true });
+  expect(restrictStructureOccupant(base)).toEqual({ ...base, canPlace: false, canDismantle: false, canUseMissionActions: false });
+  const observer = resolvePlayerCapabilities({ participation: 'observer', activityKind: null, worldCombatAllowed: true });
+  expect(restrictStructureOccupant(observer).canUseCombat).toBe(false);
+  expect(restrictStructureOccupant(observer).canMove).toBe(false);
 });

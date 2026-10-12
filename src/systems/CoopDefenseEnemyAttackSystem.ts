@@ -709,7 +709,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
   }
 
   private findNearestArmedConstructTarget(enemy: EnemyEntity, range: number, knownId?: number): EnemyAttackCandidate | null {
-    if (getCoopDefenseEnemyConfig(enemy.kind).movementTarget !== 'players-and-armed-constructs') return null;
+    const huntsArmedConstructions = getCoopDefenseEnemyConfig(enemy.kind).movementTarget === 'players-and-armed-constructs';
     const rockObjects = this.getRockObjects() ?? [];
     let best: EnemyAttackCandidate | null = null;
     const knownConstruction = knownId === undefined ? undefined : this.placementSystem?.getRuntimeRock(knownId);
@@ -717,25 +717,28 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
       : knownConstruction ? [knownConstruction] : [];
     for (const construction of constructions) {
       if (this.intents && !this.intents.allowsAttack(enemy.id, 'obstacle', String(construction.id), 'all')) continue;
-      if (construction.hp <= 0 || !isOffensiveConstruction(construction)) continue;
+      const occupiedTower = construction.kind === 'watchtower' && this.playerManager.getAllPlayers().some(
+        p => this.combatSystem.isAlive(p.id) && this.combatSystem.getStructureOccupancyId?.(p.id) === construction.id);
+      if (construction.hp <= 0 || (!occupiedTower && (!huntsArmedConstructions || !isOffensiveConstruction(construction)))) continue;
       const obstacle = rockObjects[construction.id];
       if (!obstacle?.active) continue;
-      const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, obstacle.x, obstacle.y);
+      const point = occupiedTower ? this.placementSystem!.getRuntimeRockSurfacePoint(construction, enemy.sprite.x, enemy.sprite.y) : obstacle;
+      const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, point.x, point.y);
       if (distance > range) continue;
-      if (!this.enemyManager.canSeeThroughSmoke(enemy.id, obstacle.x, obstacle.y, range)) continue;
+      if (!this.enemyManager.canSeeThroughSmoke(enemy.id, point.x, point.y, range)) continue;
       if (!this.combatSystem.hasClearLineOfFire(
         enemy.sprite.x,
         enemy.sprite.y,
-        obstacle.x,
-        obstacle.y,
+        point.x,
+        point.y,
         { skipRockIndex: construction.id },
       )) continue;
       const candidate: EnemyAttackCandidate = {
         kind: 'obstacle',
         priority: 2,
         distance,
-        targetX: obstacle.x,
-        targetY: obstacle.y,
+        targetX: point.x,
+        targetY: point.y,
         obstacle,
         obstacleIndex: construction.id,
       };
@@ -778,17 +781,20 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     if (index < 0) return null;
     if (this.intents && !this.intents.allowsAttack(enemy.id, 'obstacle', String(index), 'all')) return null;
 
-    const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, obstacle.x, obstacle.y);
+    const runtime = this.placementSystem?.getRuntimeRock(index);
+    const point = runtime?.kind === 'watchtower'
+      ? this.placementSystem!.getRuntimeRockSurfacePoint(runtime, enemy.sprite.x, enemy.sprite.y) : obstacle;
+    const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, point.x, point.y);
     if (distance > range) return null;
-    if (!this.enemyManager.canSeeThroughSmoke(enemy.id, obstacle.x, obstacle.y, range)) return null;
-    if (!this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, obstacle.x, obstacle.y, { skipRockIndex: index })) return null;
+    if (!this.enemyManager.canSeeThroughSmoke(enemy.id, point.x, point.y, range)) return null;
+    if (!this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, point.x, point.y, { skipRockIndex: index })) return null;
 
     return {
       kind: 'obstacle',
       priority: 4,
       distance,
-      targetX: obstacle.x,
-      targetY: obstacle.y,
+      targetX: point.x,
+      targetY: point.y,
       obstacle,
       obstacleIndex: index,
     };
@@ -943,7 +949,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
   private isValidPlayerTarget(enemy: EnemyEntity, playerId: string, range: number): boolean {
     const player = this.playerManager.getPlayer(playerId);
     if (!player?.active) return false;
-    if (!this.combatSystem.isAlive(player.id)) return false;
+    if (!this.combatSystem.isAlive(player.id) || this.combatSystem.isPlayerTargetable?.(player.id) === false) return false;
     if (this.combatSystem.isBurrowed(player.id)) return false;
     if (this.targetCatalog?.isTargetValid({ kind: 'player', id: playerId }) === false) return false;
     if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) return false;

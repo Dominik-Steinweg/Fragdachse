@@ -1,3 +1,4 @@
+import { runWatchtowerReview, releaseWatchtowerReview } from './WatchtowerReview';
 import type { DevScenarioController } from './controller';
 import { parseScenario, type GridPoint } from './config';
 import { COOP_DEFENSE_ENEMY_KINDS, type CoopDefenseEnemyKind } from '../../config/coopDefenseEnemies';
@@ -53,6 +54,7 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
       if (c.source !== 'draft' && c.source !== 'production') throw Error('source: draft or production required');
       return reloadKrakenDraftAssets(c.source);
     case 'krakenReloadAssets': return reloadKrakenDraftAssets();
+    case 'watchtowerReview': return runWatchtowerReview(controller, c);
     case 'krakenReview': return controller.arrangeKrakenReview(c);
     case 'armageddonReview': {
       const count=number(c.count??1,1,256);
@@ -290,6 +292,7 @@ export function installScenarioApi(controller: DevScenarioController) {
   return { destroy() {
     stopDraftPolling();
     active = false;
+    releaseWatchtowerReview(controller);
     for (const check of waiters) check();
     if (window.devScenario === api) delete window.devScenario;
   } };

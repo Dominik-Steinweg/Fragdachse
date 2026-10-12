@@ -283,7 +283,7 @@ export class CombatGeometry {
     if (kind === OBSTACLE_ROCK) {
       if (rockIndex === options.skipRockIndex || options.ignoreRocks) return true;
       const height = this.obstacleIndex.getRockClass(rockIndex);
-      if (!obstacleBlocks(height, options.purpose ?? 'physical')) return true;
+      if (!obstacleBlocks(height, options.purpose ?? 'physical') && !options.targetableLowRock?.(rockIndex)) return true;
       if (height === 'low' && options.purpose === 'support'
         && options.acceptsLowTarget && !options.acceptsLowTarget(rockIndex)) return true;
     }

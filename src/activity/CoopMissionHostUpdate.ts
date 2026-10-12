@@ -29,6 +29,8 @@ export interface CoopMissionDecoyView {
 
 /** Ein bewaffnetes Bauwerk der World als Gegnerziel. */
 export interface CoopMissionArmedConstructionView {
+  readonly cells?: readonly { gridX: number; gridY: number }[];
+  readonly resolveSurfacePoint?: (x: number, y: number) => { x: number; y: number } | null;
   readonly representedPlayerIds?: readonly string[];
   readonly id: string;
   readonly gridX: number;
@@ -368,7 +370,8 @@ export class CoopMissionHostUpdate {
             id: construction.id,
             x: world.x,
             y: world.y,
-            goalCells: buildAdjacentGoalCells([
+            resolvePosition: construction.resolveSurfacePoint,
+            goalCells: buildAdjacentGoalCells(construction.cells ?? [
               { gridX: construction.gridX, gridY: construction.gridY },
             ], strategicGrid),
             isTargetable: construction.isTargetable,

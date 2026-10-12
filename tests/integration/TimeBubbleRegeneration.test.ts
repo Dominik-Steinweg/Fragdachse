@@ -3,7 +3,7 @@ vi.mock('phaser', () => ({
   Math: { Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)) },
 }));
 vi.mock('../../src/network/bridge', () => ({
-  bridge: { canPlayerReceiveRoundRewards: () => true, registerTurretControlHandler: vi.fn() },
+  bridge: { canPlayerReceiveRoundRewards: () => true, registerStructureOccupancyHandler: vi.fn(), registerTurretControlHandler: vi.fn() },
 }));
 vi.mock('../../src/world/WorldPlayerGameplayRuntime', async importOriginal => {
   const actual = await importOriginal<typeof import('../../src/world/WorldPlayerGameplayRuntime')>();
@@ -11,7 +11,7 @@ vi.mock('../../src/world/WorldPlayerGameplayRuntime', async importOriginal => {
     constructor(options: unknown) {
       // Omit unrelated graph construction; retain the real resource binding and host tick.
       return Object.assign(Object.create(actual.WorldPlayerGameplayRuntime.prototype), {
-        options, heldActionUtilityIds: new Map(), turretControl: { reconcile() {} },
+        options, structureOccupancy: { reconcile() {}, getState: () => undefined }, heldActionUtilityIds: new Map(), turretControl: { reconcile() {} },
         systems: { burrow: { setWorldGeometryQueries() {} }, translocator: { getPortalPairs: () => [], update() {} } },
       });
     }
@@ -20,6 +20,7 @@ vi.mock('../../src/world/WorldPlayerGameplayRuntime', async importOriginal => {
 
 import { composeWorldPlayerGameplay } from '../../src/scenes/arena/ArenaWorldPlayerComposition';
 import { TimeBubbleSystem } from '../../src/systems/TimeBubbleSystem';
+import { WATCHTOWER_OCCUPANCY_RULES } from '../../src/config/watchtower';
 import { ResourceSystem } from '../../src/systems/ResourceSystem';
 import { ADRENALINE_REGEN_MAX, ADRENALINE_REGEN_PER_SEC } from '../../src/config';
 import { UTILITY_CONFIGS } from '../../src/loadout/LoadoutConfig';
@@ -39,7 +40,7 @@ describe('Resonance Flow through World composition and passive regeneration', ()
     if (config.type !== 'time_bubble') throw Error('Expected TimeBubble');
     const bubbles = new TimeBubbleSystem();
     const resource = new ResourceSystem();
-    const gameplay: any = { projectiles: { setPortalQueryPort() {} }, combatSystem: {
+    const gameplay: any = { projectiles: { setOccupiedStructureTarget() {}, setSourceStructureResolver() {}, setPortalQueryPort() {} }, combatSystem: {
       setPortalQueryPort() {}, isAlive: () => true, hpRegenTick() {}, armorRegenTick() {} }, combat: null };
     let burrowed = false;
     let otherMultiplier = 1;
@@ -106,6 +107,10 @@ describe('Resonance Flow through World composition and passive regeneration', ()
     bubbles.destroyAll();
     gameplay.combat = null;
     expect(regen(start + config.bubbleDuration + 1)).toBeCloseTo(baseRegen * otherMultiplier ** 2);
+    runtime.structureOccupancy.getState = () => ({ structureId: 8, revision: 1 });
+    expect(regen(start + config.bubbleDuration + 2)).toBeCloseTo(baseRegen * otherMultiplier ** 2 * WATCHTOWER_OCCUPANCY_RULES.adrenalineRegenMultiplier);
+    runtime.structureOccupancy.getState = () => undefined;
+    expect(regen(start + config.bubbleDuration + 3)).toBeCloseTo(baseRegen * otherMultiplier ** 2);
     resource.setAdrenalineRegenRateResolver(null);
   });
 });

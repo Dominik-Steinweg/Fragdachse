@@ -104,6 +104,7 @@ function createSceneScopedCollaborators() {
   };
 
   const hostPhysics = {
+    setStructureObstacleResolver: vi.fn(),
     setWaterGeometry: vi.fn(),
     worldMetrics: undefined as unknown,
     movementBlockedResolver: null as ((gridX: number, gridY: number) => boolean) | null,

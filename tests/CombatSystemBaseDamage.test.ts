@@ -1398,3 +1398,41 @@ describe('Plasmabrenner authoritative pulse contracts',()=>{
     expect(replaced.contacts[0]).toMatchObject({target:{id:'ally'},effectiveAmount:0});expect(replaced.lock).toBeNull();
   });
 });
+
+
+describe('occupied construction damage authority', () => {
+  it('routes direct and radial player contacts before shields/vitals and deduplicates each attack separately', () => {
+    const { combat } = makeSupportCombatHarness();
+    const platform = { id: 8, x: 100, y: 10, footprint: { left: 68, right: 132, top: -22, bottom: 42 } };
+    const apply = vi.fn(() => null);
+    combat.setStructureDamagePort({ getPlatform: id => id === 'ally' || id === 'victim' ? platform : null, apply });
+    const shield = vi.fn(() => true);
+    combat.setEnergyShieldSystem({ tryBlockDamage: shield } as never);
+    const before = [combat.getHP('ally'), combat.getHP('victim')];
+    expect(combat.isPlayerTargetable('victim')).toBe(false);
+    expect(combat.canDamageTarget(undefined, 'victim')).toBe(true);
+    combat.applyDamage('victim', 13, false, 'hostile', 'test.direct');
+    expect(apply).toHaveBeenCalledTimes(1); expect(apply.mock.calls[0][0]).toBe(platform.id);
+    apply.mockClear();
+    combat.applyAoeDamage(100, 10, 100, 17, 'hostile', false, { sourceId: 'test.aoe', baseDamageMult: 0 });
+    expect(apply).toHaveBeenCalledTimes(1); expect(apply.mock.calls[0][1]).toBe(17);
+    combat.applyAoeDamage(100, 10, 100, 17, 'hostile', false, { sourceId: 'test.aoe', baseDamageMult: 0 });
+    expect(apply).toHaveBeenCalledTimes(2);
+    expect([combat.getHP('ally'), combat.getHP('victim')]).toEqual(before);
+    // No occupant shield can absorb damage owed to the construction.
+    expect(shield.mock.calls.every(args => args[0].targetId === 'shooter')).toBe(true);
+  });
+
+  it('guarantees collapse death despite shields and emits the explicit source through normal death callbacks', () => {
+    const { combat } = makeSupportCombatHarness();
+    const death = vi.fn(), kill = vi.fn();
+    combat.setDeathCallback(death); combat.setKillCallback(kill);
+    combat.setEnergyShieldSystem({ tryBlockDamage: () => true } as never);
+    combat.killPlayer('victim', 'environment.watchtower_collapse');
+    combat.killPlayer('victim', 'environment.watchtower_collapse');
+    expect(combat.isAlive('victim')).toBe(false);
+    expect(death).toHaveBeenCalledTimes(1);
+    expect(kill).toHaveBeenCalledTimes(1);
+    expect(kill.mock.calls[0].slice(0, 3)).toEqual(['__watchtower__', 'victim', 'environment.watchtower_collapse']);
+  });
+});

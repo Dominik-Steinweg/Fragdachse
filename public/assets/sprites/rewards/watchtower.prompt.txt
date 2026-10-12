@@ -1,0 +1,5 @@
+Derived reproducibly from the watchtower-v6 production master (standard/frame-0000).
+Strict orthographic overhead timber platform, eleven irregular timber courses on four joists, grained worn timber walkway, denser moss cushions, aged grain and rust.
+1024x1024 transparent icon: master resized to 912x912, padded 56 px on each side.
+Complete silhouette occupies about 85% of the icon; no baked ground shadow or frame.
+Runtime key: reward_watchtower. Original textures, prompt and recipe retained in watchtower-v6/source-bundle.zip.

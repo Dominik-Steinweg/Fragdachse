@@ -17,6 +17,7 @@ import { CoopDefenseEnemyAttackSystem } from '../src/systems/CoopDefenseEnemyAtt
 import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { GenericWeapon } from '../src/loadout/GenericWeapon';
+import type { PlacementSystem } from '../src/systems/PlacementSystem';
 import type { BaseManager } from '../src/entities/BaseManager';
 import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager } from '../src/entities/EnemyManager';
@@ -102,6 +103,7 @@ function createSystem(
   players: readonly TestPlayer[] = [fakeEntity({ id: 'p1', x: 400, y: 100, active: true })],
   rocks: readonly (typeof rock | null)[] = [rock],
   baseManager: BaseManager | null = { getBases: () => [], getBasesByFaction: () => [] } as unknown as BaseManager,
+  tower?: { occupied: boolean; placement: PlacementSystem },
 ) {
   const firedWeaponIds: string[] = [];
   const firedTargetPositions: Array<{ x: number; y: number }> = [];
@@ -125,6 +127,8 @@ function createSystem(
     baseManager,
     {
       isAlive: () => true,
+      getStructureOccupancyId: () => tower?.occupied ? 0 : undefined,
+      isPlayerTargetable: () => !tower,
       isBurrowed: () => false,
       canDamageTarget: () => true,
       hasLineOfSight: () => true,
@@ -138,6 +142,7 @@ function createSystem(
       },
     } as unknown as AutomatedWeaponExecution,
     () => rocks as readonly (Phaser.GameObjects.Image | null)[],
+    null, tower?.placement ?? null,
   );
 
   return { system, firedWeaponIds, firedTargetPositions };
@@ -166,6 +171,28 @@ describe('Enemy stuck in a rock', () => {
     expect(firedTargetPositions).toEqual([{ x: player.x, y: player.y }]);
   });
 
+  it.each([{ kind: 'timebomb-badger', intent: false }, { kind: 'rabid-badger', intent: false }, { kind: 'rabid-badger', intent: true }] as const)('lets $kind fire at an occupied tower surface (intent: $intent), but not an empty tower', ({ kind, intent }) => {
+    const enemy = createStuckEnemy({ wantsToMove: true, pathBlocked: false }, 'all');
+    Object.assign(enemy, { kind });
+    const rangedWeapon = enemy.getAttackWeapons()[1];
+    enemy.getAttackWeapons = () => [rangedWeapon];
+    const rock = { x: 180, y: 100, active: true };
+    const construction = { id: 0, hp: 600, kind: 'watchtower' };
+    const tower = { occupied: true, placement: {
+      getAllRuntimeRocks: () => [construction], getRuntimeRock: () => construction,
+      getRuntimeRockSurfacePoint: () => ({ x: 148, y: 100 }),
+    } as unknown as PlacementSystem };
+    const { system, firedTargetPositions } = createSystem(enemy, rock, undefined, [rock], null, tower);
+    if (intent) system.setIntents({
+      get: () => ({ target: { kind: 'armed-construct', id: '0' }, attackContext: 'primary', reason: 'player' }),
+      allowsAttack: () => tower.occupied,
+    } as unknown as EnemyIntentSystem);
+    system.hostUpdate(16, 1000);
+    expect(firedTargetPositions).toEqual([{ x: 148, y: 100 }]);
+    tower.occupied = false;
+    system.hostUpdate(16, 3040);
+    expect(firedTargetPositions).toHaveLength(1);
+  });
   it('fires at players without a base manager, including weapons that scan all target kinds', () => {
     const enemy = createStuckEnemy({ wantsToMove: true, pathBlocked: false }, 'all');
     const player = fakeEntity({ id: 'p1', x: 400, y: 100, active: true });

@@ -687,7 +687,7 @@ function isSamePlacementPreview(
 function normalizePlacementPreview(preview: unknown): PlacementPreviewNetState | null {
   if (!isRecord(preview) || preview.active !== true || typeof preview.isValid !== 'boolean') return null;
   if (preview.kind !== 'rock' && preview.kind !== 'turret' && preview.kind !== 'pedestal'
-    && preview.kind !== 'tunnel' && preview.kind !== 'drone_station') return null;
+    && preview.kind !== 'tunnel' && preview.kind !== 'drone_station' && preview.kind !== 'watchtower') return null;
   if (!Number.isFinite(preview.x) || !Number.isFinite(preview.y)
     || !Number.isSafeInteger(preview.gridX) || !Number.isSafeInteger(preview.gridY)
     || typeof preview.frame !== 'number' || !Number.isSafeInteger(preview.frame) || preview.frame < 0) return null;
@@ -907,6 +907,7 @@ export class NetworkBridge {
   private hitscanTracerHandler: HitscanTracerHandler | null = null;
   private dashHandler: DashHandler | null = null;
   private burrowHandler: BurrowHandler | null = null;
+  private structureOccupancyHandler: ((id: string, request: import('../systems/StructureOccupancySystem').StructureOccupancyRequest) => boolean) | null = null;
   private turretControlHandler: ((id: string, request: import('../types').TurretControlRequest) => boolean) | null = null;
   private shootingRangeHandler: ((id: string, request: import('../shootingRange/ShootingRangeContracts').ShootingRangeRequest) => boolean) | null = null;
   private shockwaveEffectHandler: ShockwaveEffectHandler | null = null;
@@ -1794,6 +1795,39 @@ export class NetworkBridge {
     const input = this.getPlayerInput(playerId)?.turretControl;
     const receivedAt = requireRoom().getPlayerStateUpdatedAt(playerId, KEY_INPUT);
     return input && receivedAt !== undefined ? { input, receivedAt } : null;
+  }
+
+  broadcastWatchtowerCollapse(x: number, y: number, width: number, height: number): void {
+    const wr = this.getWorldDescriptor()?.worldRevision ?? null;
+    if (isHost() && wr !== null) this.broadcastGameplayEvent('watchtower-collapse', { x, y, width, height, wr });
+  }
+
+  registerWatchtowerCollapseHandler(handler: (x: number, y: number, width: number, height: number) => void): void {
+    this.registerAllRpcHandler('watchtower-collapse', (data: unknown) => {
+      if (!this.acceptsWorldRpc(data)) return;
+      const { x, y, width, height } = data;
+      if ([x, y, width, height].some(v => typeof v !== 'number' || !Number.isFinite(v))) return;
+      if ((width as number) <= 0 || (height as number) <= 0) return;
+      handler(x as number, y as number, width as number, height as number);
+    });
+  }
+
+  sendStructureOccupancyRequest(request: import('../systems/StructureOccupancySystem').StructureOccupancyRequest): void {
+    if (this.getWorldActionRevision() === null) return;
+    if (isHost()) { this.structureOccupancyHandler?.(myPlayer().id, request); return; }
+    this.sendWorldRpc('structure-occupancy', { ...request });
+  }
+
+  registerStructureOccupancyHandler(handler: typeof this.structureOccupancyHandler): void {
+    this.structureOccupancyHandler = handler;
+    this.registerHostRpcHandler('structure-occupancy', (data: unknown, caller: PlayerState): boolean => {
+      if (!isHost() || !this.acceptsWorldRpc(data) || !data || typeof data !== 'object') return false;
+      const request = data as import('../systems/StructureOccupancySystem').StructureOccupancyRequest;
+      if (!Number.isSafeInteger(request.structureId) || request.structureId < 0) return false;
+      if (request.action !== 'enter' && request.action !== 'exit') return false;
+      if (request.action === 'exit' && (!Number.isSafeInteger(request.revision) || request.revision <= 0)) return false;
+      return this.structureOccupancyHandler?.(caller.id, request) ?? false;
+    });
   }
 
   sendTurretControlRequest(request: import('../types').TurretControlRequest): void {

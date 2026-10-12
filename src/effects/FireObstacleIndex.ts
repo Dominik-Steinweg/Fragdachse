@@ -88,6 +88,10 @@ export class FireObstacleIndex {
     }, true);
   }
 
+  addPlaceableBounds(rockId: number, bounds: FireObstacleBounds): void {
+    this.replaceFootprint(this.placeableFootprints, rockId, bounds, true);
+  }
+
   removePlaceableRock(rockId: number): void {
     this.removeFootprint(this.placeableFootprints, rockId, true);
   }

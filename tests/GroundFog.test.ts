@@ -173,7 +173,7 @@ describe('ground fog bounded world state', () => {
     binding.sync(null, null, projectiles as never);
     expect(fog.terrain.changed.size).toBe(1); expect(fog.terrain.sample(48, 48)[2]).toBe(255);
     expect(projectiles.bindGroundFogSegments).toHaveBeenCalledTimes(1);
-    const placement = { getAllRuntimeRocks: vi.fn(() => []) };
+    const placement = { getAllRuntimeRocks: vi.fn(() => []), getRuntimeRock: vi.fn(() => undefined) };
     events.emit(ARENA_MAP_GRID_CHANGED_EVENT, { source: 'placeable_rock', reason: 'placeable_added', obstacleId: 17, gridX: 3, gridY: 3 });
     binding.sync(placement, null, projectiles as never); expect(fog.terrain.sample(112, 112)[0]).toBe(0);
     events.emit(ARENA_MAP_GRID_CHANGED_EVENT, { source: 'placeable_rock', reason: 'placeables_batch_removed', removedObstacles: [{ id: 17, gridX: 3, gridY: 3 }] });

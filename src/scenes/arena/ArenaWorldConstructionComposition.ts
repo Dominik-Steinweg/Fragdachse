@@ -1,3 +1,4 @@
+import { getConstructionBounds } from '../../systems/ConstructionGeometry';
 import { isOffensiveConstruction } from '../../systems/offensiveConstruction';
 import { bridge } from '../../network/bridge';
 import { PICKUP_AUDIO } from '../../audio/GameplayAudioFeedback';
@@ -154,6 +155,14 @@ export function composeWorldConstruction(
     onPlacementExecuted: playerId => ctx.decoySystem.breakStealth(playerId, Date.now()),
     recordConstructionBuilt: (playerId) => bridge.recordConstructionBuilt(playerId),
     onConstructionDestroyed: (runtime, cause, attackerId) => {
+      gameplay.player?.onOccupiedConstructionDestroyed(runtime.id, cause, attackerId);
+      if (runtime.kind === 'watchtower' && (cause === 'damage' || cause === 'decay')) {
+        const bounds = getConstructionBounds(runtime, world.metrics);
+        bridge.broadcastWatchtowerCollapse(bounds.x, bounds.y, bounds.width, bounds.height);
+      }
+      if (runtime.persistentRewardId && (cause === 'damage' || cause === 'decay')) {
+        persistentBaseBinding.markRewardDestroyed(runtime.persistentRewardId);
+      }
       if (cause === 'damage' && runtime.kind === 'rock'
         && attackerId !== runtime.ownerId && (runtime.enemyDestroyedExplosionRadius ?? 0) > 0) {
         const point = worldCellCenter(world.metrics, runtime.gridX, runtime.gridY);
@@ -203,6 +212,7 @@ export function composeWorldConstruction(
   worldRuntime.bind(constructionRuntime);
   persistentBaseBinding.setMaterializer(new PersistentBaseWorldMaterializer({
     binding: persistentBaseBinding,
+    getMissionRevision: () => bridge.getActivityDescriptor()?.activityRevision ?? null,
     contributions: persistentBaseStores.contributions,
     rewards: persistentBaseStores.rewards,
     placementSystem,
@@ -308,6 +318,12 @@ export function composeWorldObjectMutation(
     train: gameplay.train,
     onDestroy: (destroyed) => { if (gameplay.worldMutation === destroyed) gameplay.worldMutation = null; },
   });
+  combatSystem.setStructureDamagePort({
+    getPlatform: id => gameplay.player?.getStructurePlatform(id) ?? null,
+    apply: (id, amount, source, kind) => runtime.applyResolvedDamage('construction', id, amount,
+      source.attribution.id ?? source.allegiance.ownerId, source.authoredSourceId ?? 'environment.damage', kind, source.sourceSlot, source),
+  });
+  worldRuntime.bind({ destroy: () => combatSystem.setStructureDamagePort(null) });
   gameplay.worldMutation = runtime;
   worldRuntime.bind(runtime);
 }

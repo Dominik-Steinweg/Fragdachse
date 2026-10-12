@@ -34,7 +34,7 @@ describe('base editor World terrain', () => {
     const shadows = { rebuildStaticLayoutShadows: vi.fn() };
     const world = Object.assign(Object.create(PersistentBaseEditorWorld.prototype), {
       scene, model, size, anchor, color: 0xffffff,
-      layout: { seed: 17, rocks: [] }, wallIds: new Map(), pedestalIds: new Map(), turrets: new Map(),
+      layout: { seed: 17, rocks: [] }, wallIds: new Map(), pedestalIds: new Map(), turrets: new Map(), watchtowers: new Map(),
       arena: { rockPhysicsProxies: [], rockVisualStates: states, rockGrid,
         rockGroup: {
           add: (child: { body?: unknown }) => { child.body ??= { updateFromGameObject() {} }; },

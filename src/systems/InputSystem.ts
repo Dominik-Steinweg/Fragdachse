@@ -1,3 +1,5 @@
+import { WATCHTOWER_OCCUPANCY_RULES } from '../config/watchtower';
+import { nearestConstructionPoint } from './ConstructionGeometry';
 import { UtilityChargePrediction } from '../loadout/UtilityChargePrediction';
 import { isDevScenarioMode } from '../utils/devScenarioMode';
 import { isFriendlyTurret, TURRET_CONTROL_RULES } from './TurretControlSystem';
@@ -115,6 +117,12 @@ interface RadialActionProviders {
 }
 
 export class InputSystem {
+  private structureProviders: {
+    getStructures: () => readonly import('./StructureOccupancySystem').StructurePlatform[];
+    getState: (id: string) => import('../types').StructureOccupancyState | undefined;
+  } | null = null;
+  setupStructureOccupancyProviders(providers: NonNullable<InputSystem['structureProviders']>): void { this.structureProviders = providers; }
+  private getStructureOccupancyState() { return this.structureProviders?.getState(this.bridge.getLocalPlayerId()); }
   private turretProviders: {
     getTurrets: () => readonly AutomatedTurret[];
     getState: (id: string) => TurretControlState | undefined;
@@ -125,6 +133,7 @@ export class InputSystem {
   private getShootingRange: (() => ShootingRangeWorldBinding | null) | null = null;
   setupShootingRangeProvider(provider: () => ShootingRangeWorldBinding | null): void { this.getShootingRange = provider; }
   private previousTurretRevision: number | null = null;
+  private previousStructureRevision: number | null = null;
 
   setupTurretControlProviders(providers: NonNullable<InputSystem['turretProviders']>): void { this.turretProviders = providers; }
   getTurretControlState(): TurretControlState | undefined { return this.turretProviders?.getState(this.bridge.getLocalPlayerId()); }
@@ -152,6 +161,17 @@ export class InputSystem {
       .filter(turret => !occupied.has(turret.id) && isFriendlyTurret(id, turret, (a, b) => this.bridge.isEnemyPair(a, b)))
       .map(turret => ({ kind: 'turret', key: `turret:${typeof turret.id}:${turret.id}`, x: turret.x, y: turret.y,
         radius: TURRET_CONTROL_RULES.range, turret, label: t('ui.turretControl.enter'), worldRevision })) : [];
+    const structureState = this.getStructureOccupancyState();
+    for (const platform of this.structureProviders?.getStructures() ?? []) {
+      if (structureState && structureState.structureId !== platform.id) continue;
+      const count = (this.bridge.getConnectedPlayers?.() ?? []).filter(p => this.structureProviders?.getState(p.id)?.structureId === platform.id).length;
+      if (!structureState && count >= WATCHTOWER_OCCUPANCY_RULES.capacity) continue;
+      const point = nearestConstructionPoint(platform.footprint, sprite.x, sprite.y);
+      candidates.push({ kind: 'watchtower', structureId: platform.id, exitRevision: structureState?.revision,
+        key: 'watchtower:' + platform.id, x: point.x, y: point.y, radius: WATCHTOWER_OCCUPANCY_RULES.enterRangePx,
+        label: t(structureState ? 'ui.watchtower.exit' : 'ui.watchtower.enter'), worldRevision });
+    }
+    if (structureState) return candidates.filter(c => c.kind === 'watchtower');
     const range = this.getShootingRange?.();
     if (range) {
       const state = range.snapshot();
@@ -181,6 +201,9 @@ export class InputSystem {
     this.cancelRocketMagazine();
     this.cancelScopeAim();
     if (candidate.kind === 'turret') this.bridge.sendTurretControlRequest({ action: 'enter', turretId: candidate.turret.id });
+    else if (candidate.kind === 'watchtower') this.bridge.sendStructureOccupancyRequest(candidate.exitRevision === undefined
+      ? { action: 'enter', structureId: candidate.structureId }
+      : { action: 'exit', structureId: candidate.structureId, revision: candidate.exitRevision });
     else this.bridge.sendShootingRangeRequest(candidate.request);
   }
   private rocketMagazineId: number | null = null;
@@ -1352,7 +1375,8 @@ export class InputSystem {
         || this.scopeWorldRevision !== (this.bridge.getWorldDescriptor()?.worldRevision ?? null)) this.cancelScopeAim();
     }
     const turretState = this.getTurretControlState();
-    if ((turretState?.revision ?? null) !== this.previousTurretRevision) {
+    const structureRevision = this.getStructureOccupancyState()?.revision ?? null;
+    if ((turretState?.revision ?? null) !== this.previousTurretRevision || structureRevision !== this.previousStructureRevision) {
       this.cancelUtilityInteraction();
       this.cancelUltimateCharge();
       this.cancelRocketMagazine();
@@ -1360,6 +1384,7 @@ export class InputSystem {
       this.ultimateTargetingActive = false;
       this.consumedPointerButtons |= this.scene.input.activePointer.buttons ?? 0;
       this.previousTurretRevision = turretState?.revision ?? null;
+      this.previousStructureRevision = structureRevision;
     }
     if (turretState) {
       const pointer = this.scene.input.activePointer;
@@ -1394,13 +1419,15 @@ export class InputSystem {
       dx,
       dy,
       aim: quantizeAngle(this.currentAimAngle),
-      dashHeld: this.inputEnabled && this.keySpace.isDown,
+      dashHeld: this.inputEnabled && !this.getStructureOccupancyState() && this.keySpace.isDown,
     };
     this.bridge.sendLocalInput(input);
 
     // Resolve Shift before Dash, radial menus and every loadout action.
     if (this.inputEnabled && shiftPressed) {
       if (this.radialActionMenu?.isOpen) return;
+      const structure = this.getStructureOccupancyState();
+      if (structure) { this.bridge.sendStructureOccupancyRequest({ action: 'exit', ...structure }); return; }
       const candidate = this.interactionCandidate;
       if (this.localBurrowPhase === 'idle' && candidate) {
         this.executeDisplayedInteraction(candidate);
@@ -1433,7 +1460,7 @@ export class InputSystem {
     }
 
     // ── 4. Dash (Flanke, einmalig auslösen) ────────────────────────────────
-    if (Phaser.Input.Keyboard.JustDown(this.keySpace)) {
+    if (Phaser.Input.Keyboard.JustDown(this.keySpace) && !this.getStructureOccupancyState()) {
       this.releaseRocketMagazine(aimTarget);
       this.cancelScopeAim();
       this.bridge.sendDash(dx, dy);

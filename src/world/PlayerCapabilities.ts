@@ -63,3 +63,8 @@ export function resolvePlayerCapabilities(input: PlayerCapabilityInput): PlayerC
     canControlCamera: true,
   };
 }
+
+/** Occupants retain normal locomotion and weapons; world management and mission actions stop. */
+export function restrictStructureOccupant(capabilities: PlayerCapabilities): PlayerCapabilities {
+  return { ...capabilities, canPlace: false, canDismantle: false, canUseMissionActions: false };
+}

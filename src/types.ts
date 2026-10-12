@@ -177,7 +177,13 @@ export type TurretControlRequest =
   | { readonly action: 'enter'; readonly turretId: number | string }
   | ({ readonly action: 'exit' } & TurretControlState);
 
-export type PlaceableKind = 'rock' | 'turret' | 'pedestal' | 'tunnel' | 'drone_station';
+export type PlaceableKind = 'rock' | 'turret' | 'pedestal' | 'tunnel' | 'drone_station' | 'watchtower';
+
+/** Host-owned occupancy; structureId is the construction's SyncedPlaceableRock.id. */
+export interface StructureOccupancyState {
+  readonly structureId: number;
+  readonly revision: number;
+}
 
 /** Candidate-generation mode owned by projectile gameplay, independent of presentation. */
 export type ProjectileCollisionMode = 'sweep' | 'overlap' | 'physics' | 'none';
@@ -252,6 +258,7 @@ export interface PlayerMovementPredictionState {
 
 /** Spieler-Netzwerkzustand: Position + HP + Lebend-Status + Ressourcen + Mechaniken */
 export interface PlayerNetState {
+  structureOccupancy?: StructureOccupancyState;
   movementPrediction?: PlayerMovementPredictionState;
   turretControl?: TurretControlState;
   plasmaBurnerOverload?: import('./combat/plasmaBurner/PlasmaBurnerContracts').PlasmaBurnerOverloadNetState;
@@ -1048,6 +1055,7 @@ export type CoopDefenseItemSalvageTarget = 'offer' | 'stash';
 
 /** Im ersten Inspector-Prototyp verfuegbare Konstruktionen. */
 export type ConstructionId =
+  | 'watchtower'
   | 'attack_drone_station'
   | 'rock_barrier'
   | 'spore_turret'

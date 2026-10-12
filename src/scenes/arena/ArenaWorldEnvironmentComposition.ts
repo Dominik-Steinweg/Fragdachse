@@ -1,3 +1,4 @@
+import { getConstructionBounds } from '../../systems/ConstructionGeometry';
 import { WorldZeusBinding } from '../../world/WorldZeusBinding';
 import { WorldStinkPlagueBinding } from '../../world/WorldStinkPlagueBinding';
 import { WorldSmokeBinding } from '../../world/WorldSmokeBinding';
@@ -110,6 +111,15 @@ export function composeWorldGeometry(
       if (gameplay.geometry === binding) gameplay.geometry = null;
     },
   });
+  worldGeometryBinding.setStructurePlatformResolver(id => {
+    if (bridge.isHost()) return gameplay.player?.getStructurePlatform(id) ?? null;
+    const state = bridge.getLatestGameState()?.players[id]?.structureOccupancy;
+    const rock = state ? placementSystem.getRuntimeRock(state.structureId) : null;
+    if (!rock || rock.kind !== 'watchtower' || rock.hp <= 0) return null;
+    const bounds = getConstructionBounds(rock, world.metrics);
+    return { id: rock.id, x: bounds.x, y: bounds.y, footprint: bounds };
+  });
+  worldRuntime.bind({ destroy: () => ctx.hostPhysics.setStructureObstacleResolver(null) });
   gameplay.geometry = worldGeometryBinding;
   worldRuntime.bind(worldGeometryBinding);
   // Host und Client halten das System: der Host autoritativ, der Client fuer die Darstellung.

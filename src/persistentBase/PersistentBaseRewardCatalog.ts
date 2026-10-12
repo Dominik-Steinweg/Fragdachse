@@ -1,3 +1,4 @@
+import { WATCHTOWER_REWARD_ICON_KEY } from '../config/watchtower';
 import type { TurretWeaponId } from '../types';
 import {
   isPersistentBaseRewardId,
@@ -12,12 +13,12 @@ export interface PersistentBaseRewardDefinition {
   readonly category: PersistentBaseRewardCategory;
   /**
    * Existing gameplay definitions are references only. The reward category remains the
-   * authority for whether this is a base pedestal or a base turret; this is not a personal
+   * authority for whether this is a base pedestal, turret or structure; this is not a personal
    * construction-runtime contract.
    */
   readonly gameplaySource:
     | { readonly kind: 'power-up-definition'; readonly powerUpDefId: string }
-    | { readonly kind: 'construction-definition'; readonly constructionId: 'spore_turret' | 'rocket_turret'; readonly weaponId?: TurretWeaponId };
+    | { readonly kind: 'construction-definition'; readonly constructionId: 'spore_turret' | 'rocket_turret' | 'watchtower'; readonly weaponId?: TurretWeaponId };
   readonly initialState: {
     readonly respawnMs: number | null;
     readonly spawnOnArenaStart: boolean;
@@ -102,6 +103,14 @@ export const PERSISTENT_BASE_REWARD_DEFINITIONS: readonly PersistentBaseRewardDe
     initialState: { respawnMs: 30_000, spawnOnArenaStart: true },
     placementRule: 'persistent-build-area',
     presentation: { labelKey: 'powerup.HOLY_HAND_GRENADE.name', iconKey: 'powerup_hhg' },
+  },
+  {
+    id: 'base_watchtower',
+    category: 'baseStructure',
+    gameplaySource: { kind: 'construction-definition', constructionId: 'watchtower' },
+    initialState: { respawnMs: null, spawnOnArenaStart: true },
+    placementRule: 'persistent-build-area',
+    presentation: { labelKey: 'construction.watchtower.name', iconKey: WATCHTOWER_REWARD_ICON_KEY },
   },
 ]);
 

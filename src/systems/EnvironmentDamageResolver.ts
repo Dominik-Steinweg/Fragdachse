@@ -3,6 +3,7 @@ import { computeRadialDamage } from '../utils/radialDamage';
 
 /** Ein einzelner Flächenschaden auf die Umgebung. */
 export interface RadialEnvironmentDamageRequest {
+  readonly excludedRockIndices?: readonly number[];
   x:               number;
   y:               number;
   radius:          number;
@@ -88,6 +89,7 @@ export function applyRadialEnvironmentDamage(
   const visitRock = (index: number, rockX: number, rockY: number): void => {
     // Bewusst dieselbe Formel wie `Phaser.Math.Distance.Between`, damit Grenzfälle exakt am
     // Radius sich nicht zwischen Arena und Lobby unterscheiden.
+    if (request.excludedRockIndices?.includes(index)) return;
     const dx = x - rockX;
     const dy = y - rockY;
     const distance = Math.sqrt(dx * dx + dy * dy);

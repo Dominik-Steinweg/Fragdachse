@@ -23,6 +23,7 @@ export class RockGridIndex {
    * waeren stillschweigend uebergelaufen und haetten falsche Felsen adressiert.
    */
   private grid: Int32Array;
+  private readonly nonBlobIds = new Set<number>();
   private cols: number;
   private rows: number;
   /** Wiederverwendete Query-Arbeitsdaten; niemals Quelle des Felszustands. */
@@ -56,6 +57,14 @@ export class RockGridIndex {
   isOccupiedWithBorder(gx: number, gy: number): boolean {
     if (gx < 0 || gx >= this.cols || gy < 0 || gy >= this.rows) return true;
     return this.grid[gy * this.cols + gx] !== -1;
+  }
+
+  setBlobParticipation(id: number, enabled: boolean): void {
+    if (enabled) this.nonBlobIds.delete(id); else this.nonBlobIds.add(id);
+  }
+
+  isBlobOccupiedWithBorder(gx: number, gy: number): boolean {
+    return this.isOccupiedWithBorder(gx, gy) && !this.nonBlobIds.has(this.getIndex(gx, gy));
   }
 
   /** Rock-Index an Grid-Position, oder -1 wenn leer. */

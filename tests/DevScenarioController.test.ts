@@ -67,6 +67,7 @@ afterEach(() => { controller.destroy(); vi.useRealTimers(); vi.unstubAllGlobals(
 
 it('owns the Kraken diagnostic map only for the dev controller lifetime', () => {
   expect(isDiagnosticMapId(KRAKEN_MAP_ID)).toBe(true);
+  expect(isDiagnosticMapId('watchtower-review')).toBe(true);
   expect(COOP_DEFENSE_MAP_CONFIGS.some(map => map.mapId === KRAKEN_MAP_ID)).toBe(false);
   const map = krakenAbyssMap();
   expect(map.water?.length).toBeGreaterThan(0);
@@ -75,6 +76,7 @@ it('owns the Kraken diagnostic map only for the dev controller lifetime', () => 
   expect(map.water?.some(cell => cell.gridX === player.gridX && cell.gridY === player.gridY)).toBe(false);
   controller.destroy();
   expect(isDiagnosticMapId(KRAKEN_MAP_ID)).toBe(false);
+  expect(isDiagnosticMapId('watchtower-review')).toBe(false);
   expect(() => parseScenario({ ...defaultScenario(), mapId: KRAKEN_MAP_ID })).toThrow();
 });
 

@@ -82,6 +82,9 @@ export class RpcCoordinator {
     this.registerCaptureTheBeerFxHandler();
     this.registerCoopDefenseCarryDeliveredFxHandler();
     this.registerExplosionEffectHandler();
+    bridge.registerWatchtowerCollapseHandler((x, y, width, height) => {
+      this.renderers.watchtowerDestruction.play(x, y, width, height);
+    });
     this.registerSlimeBloomEffectHandler();
     this.registerCorpseMarkerHandler();
     this.registerFireChunkEffectHandler();

@@ -653,7 +653,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
 
     for (const ev of stinkDmg) {
       this.plagueBinding?.applyPrimaryContact(ev, now);
-      this.ctx.getWorldCombatCore()!.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, false, {
+      const hitStructures = this.ctx.getWorldCombatCore()!.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, false, {
         category: 'damage_over_time',
         damageKind: 'ground',
         sourceId: ev.combatSource?.authoredSourceId ?? 'weapon.stink_cloud',
@@ -664,7 +664,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       this.applyAoeEnvironmentDamage(
         ev.x, ev.y, ev.radius, ev.damage,
         ev.rockDamageMult, ev.trainDamageMult, ev.ownerId,
-        undefined, undefined, ev.combatSource,
+        undefined, undefined, ev.combatSource, hitStructures,
       );
     }
 
@@ -691,7 +691,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         }, `void-armageddon:${mi.ownerId}`, 'ultimate', 'environment.void_meteor');
         bridge.broadcastExplosionEffect(mi.x, mi.y, mi.radius, 0xa631ff, 'energy', undefined, 'enemy.void_meteor');
       } else {
-        this.ctx.getWorldCombatCore()!.applyAoeDamage(
+        const hitStructures = this.ctx.getWorldCombatCore()!.applyAoeDamage(
           mi.x, mi.y, mi.radius, mi.damage, mi.ownerId,
           mi.selfDamageMult > 0,
           {
@@ -706,7 +706,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         this.applyAoeEnvironmentDamage(
           mi.x, mi.y, mi.radius, mi.damage,
           mi.rockDamageMult, mi.trainDamageMult, mi.ownerId,
-          mi.damageFalloff,
+          mi.damageFalloff, undefined, undefined, hitStructures,
         );
         bridge.broadcastExplosionEffect(mi.x, mi.y, mi.radius, 0xff6622, undefined, undefined, 'ARMAGEDDON');
       }
@@ -1113,6 +1113,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       player.updateMolotovFirewalker(playerFrame?.isMolotovFirewalkerActive ?? false);
       const playerInput = bridge.getPlayerInput(player.id);
       players[player.id] = {
+        structureOccupancy: playerFrame?.structureOccupancy,
         turretControl: playerFrame?.turretControl,
         ...this.ctx.getWorldCombatCore()!.getRocketSupportState(player.id, now),
         rocketMagazine: playerFrame?.rocketMagazine,
@@ -1345,6 +1346,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     damageFalloff?: RadialDamageFalloffConfig,
     source?: { slot: LoadoutSlot; id: string },
     combatSource?: import('../../combat/CombatScope').CombatSource,
+    excludedRockIndices: readonly number[] = [],
   ): void {
     const arenaResult = this.arenaResult;
 
@@ -1373,7 +1375,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
               becameDestroyed: outcome.kind === 'damage-applied' && outcome.transition.kind === 'destroyed' };
           },
         } : this.environmentRockSinkFor(combatSource),
-        { x, y, radius, damage, rockDamageMult: rockMult, falloff: damageFalloff },
+        { x, y, radius, damage, rockDamageMult: rockMult, falloff: damageFalloff, excludedRockIndices },
         attackerId,
         false,
       );
@@ -1529,7 +1531,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         request.x, request.y, effect.radius, effect.knockback, ownerId, effect.selfKnockbackMult ?? 1,
       );
       const combatSource = this.ctx.getWorldCombatCore()!.captureWorldDamageSource(ownerId, request.provenance.weaponSourceId ?? 'projectile.explosion', 'explosion', request.provenance, request.projectileId);
-      this.applyExplosionEnvironmentDamage(request.x, request.y, effect, ownerId, combatSource);
+      this.applyExplosionEnvironmentDamage(request.x, request.y, effect, ownerId, combatSource, damagedTargetKeys);
       bridge.broadcastExplosionEffect(request.x, request.y, effect.radius, effect.color, effect.visualStyle, undefined, effect.audioSourceId ?? request.provenance.weaponSourceId);
       const groundFire = effect.groundFire;
       if (groundFire && groundFire.radius > 0 && groundFire.lingerDuration > 0) {
@@ -1581,7 +1583,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       if (!combat || !world) return;
       const sourceSlot = request.provenance.sourceSlot ?? 'utility';
       const environmentMultiplier = combat.getPlayerRuntimeDamageMultiplier(ownerId, sourceSlot);
-      combat.applyAoeDamage(request.x, request.y, effect.radius, effect.damage, ownerId, false, {
+      const hitStructures = combat.applyAoeDamage(request.x, request.y, effect.radius, effect.damage, ownerId, false, {
         category: 'explosion',
         allowTeamDamage: effect.allowTeamDamage,
         sourceId: request.provenance.weaponSourceId ?? 'weapon.grenade',
@@ -1596,7 +1598,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         effect.rockDamageMult ?? 1, effect.trainDamageMult ?? 1, ownerId,
         effect.damageFalloff ? { ...effect.damageFalloff, minDamage: effect.damageFalloff.minDamage * environmentMultiplier } : undefined,
         { slot: sourceSlot, id: request.provenance.weaponSourceId ?? 'weapon.grenade' },
-        combat.captureWorldDamageSource(ownerId, request.provenance.weaponSourceId ?? 'weapon.grenade', 'explosion', request.provenance, request.projectileId),
+        combat.captureWorldDamageSource(ownerId, request.provenance.weaponSourceId ?? 'weapon.grenade', 'explosion', request.provenance, request.projectileId), hitStructures,
       );
       if (this.worldRuntime !== world || this.ctx.getWorldCombatCore() !== combat) return;
       bridge.broadcastExplosionEffect(request.x, request.y, effect.radius, undefined, effect.visualStyle, undefined, request.provenance.weaponSourceId);
@@ -1621,6 +1623,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     effect: import('../../types').ProjectileExplosionConfig,
     attackerId: string,
     source?: import('../../combat/CombatScope').CombatSource,
+    excludedTargets: readonly string[] = [],
   ): void {
     const arenaResult = this.arenaResult;
     const rockMult  = effect.rockDamageMult  ?? 1;
@@ -1628,7 +1631,10 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
 
     if (rockMult !== 0 && arenaResult) {
       applyRadialEnvironmentDamage(
-        this.environmentRockSinkFor(source),
+        { ...this.environmentRockSinkFor(source),
+          resolveRockDamage: (index, damage, owner) => excludedTargets.includes('constructions:' + index)
+            ? 0 : this.resolveObstacleDamage(index, damage, owner),
+        },
         {
           x,
           y,
@@ -1917,7 +1923,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       bridge.broadcastBfgLaserBatch(pulse.lines, source.color, 'asmd_primary');
     },
     applyAoeDamage: (x, y, radius, damage, attackerId, falloff, baseDamageMult, sourceSlot, sourceId) => {
-      this.ctx.getWorldCombatCore()!.applyAoeDamage(x, y, radius, damage, attackerId, false, {
+      return this.ctx.getWorldCombatCore()!.applyAoeDamage(x, y, radius, damage, attackerId, false, {
         category: 'explosion',
         sourceId,
         damageFalloff: falloff,
@@ -1928,8 +1934,8 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     applyRadialImpulse: (x, y, radius, force, attackerId, selfMultiplier) => {
       this.ctx.hostPhysics.applyRadialImpulse(x, y, radius, force, attackerId, selfMultiplier);
     },
-    applyEnvironmentDamage: (x, y, radius, damage, rockMult, trainMult, attackerId, falloff) => {
-      this.applyAoeEnvironmentDamage(x, y, radius, damage, rockMult, trainMult, attackerId, falloff);
+    applyEnvironmentDamage: (x, y, radius, damage, rockMult, trainMult, attackerId, falloff, excluded) => {
+      this.applyAoeEnvironmentDamage(x, y, radius, damage, rockMult, trainMult, attackerId, falloff, undefined, undefined, excluded);
     },
     playExplosion: (x, y, radius, color, visualStyle, sourceId) => {
       bridge.broadcastExplosionEffect(x, y, radius, color, visualStyle, undefined, sourceId);

@@ -19,8 +19,10 @@ export function createRockPhysicsProxy(
   x: number,
   y: number,
   obstacleClass: ObstacleClass = 'veryHigh',
+  width = CELL_SIZE,
+  height = CELL_SIZE,
 ): RockPhysicsProxy {
-  const proxy = new Phaser.GameObjects.Zone(scene, x, y, CELL_SIZE, CELL_SIZE) as RockPhysicsProxy;
+  const proxy = new Phaser.GameObjects.Zone(scene, x, y, width, height) as RockPhysicsProxy;
   proxy.obstacleClass = obstacleClass;
   return proxy;
 }

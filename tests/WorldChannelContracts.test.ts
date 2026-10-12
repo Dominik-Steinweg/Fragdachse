@@ -1,3 +1,4 @@
+import { StructureOccupancySystem } from '../src/systems/StructureOccupancySystem';
 import { describe, expect, it, vi } from 'vitest';
 import { TurretControlSystem } from '../src/systems/TurretControlSystem';
 import { NetworkBridge } from '../src/network/NetworkBridge';
@@ -71,6 +72,27 @@ async function createRoom(playerCount: number): Promise<TestRoom[]> {
   for (let i = 1; i < playerCount; i += 1) rooms.push(await addClientRoom(network));
   return rooms;
 }
+
+it('delivers collapse once to host and client, rejecting stale-world and client-authored effects', async () => {
+  const [hostRoom, clientRoom] = await createRoom(2);
+  const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+  try {
+    const host = bridgeFor(hostRoom);
+    host.publishLobbySync(); host.publishWorldAndActivity(world(), activity());
+    const hostEffect = vi.fn(); host.registerWatchtowerCollapseHandler(hostEffect);
+    const client = bridgeFor(clientRoom), clientEffect = vi.fn();
+    client.registerWatchtowerCollapseHandler(clientEffect);
+    use(hostRoom); host.broadcastWatchtowerCollapse(160, 240, 64, 64);
+    expect(hostEffect.mock.calls).toEqual([[160, 240, 64, 64]]);
+    expect(clientEffect.mock.calls).toEqual(hostEffect.mock.calls);
+    hostRoom.room.broadcast('watchtower-collapse', { x: 160, y: 240, width: 64, height: 64, wr: 11 });
+    hostRoom.room.broadcast('watchtower-collapse', { x: 160, y: 240, width: -1, height: 64, wr: 12 });
+    use(clientRoom); clientRoom.room.broadcast('watchtower-collapse', { x: 160, y: 240, width: 64, height: 64, wr: 12 });
+    expect(hostEffect).toHaveBeenCalledTimes(1); expect(clientEffect).toHaveBeenCalledTimes(1);
+    expect(hostRoom.transport.links.flatMap(link => link.sent).filter(item =>
+      JSON.stringify(item.message).includes('watchtower-collapse')).every(item => item.channel === 'rel')).toBe(true);
+  } finally { clearActiveSession(); }
+});
 
 describe('World-Kanal – Replikation', () => {
   it('bootstraps mortar markers, retains missing delta slices and explicitly transmits their removal', async () => {
@@ -533,6 +555,36 @@ describe('World-Kanal – Replikation', () => {
     } finally { clock.mockRestore(); clearActiveSession(); }
   });
 
+  it('validates reliable structure requests against world, caller and occupancy revisions', async () => {
+    const network = new FakeNetwork(), hostRoom = await createHostRoom(network), clientRoom = await addClientRoom(network);
+    const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    try {
+      const host = bridgeFor(hostRoom); host.publishLobbySync(); host.publishWorldAndActivity(world(), activity());
+      const owner = new StructureOccupancySystem({
+        getStructures: () => [{ id: 8, x: 32, y: 32, footprint: { left: 0, top: 0, right: 64, bottom: 64 } }],
+        getActor: () => ({ x: -10, y: 32, angle: 0 }), canEnter: () => true, canOccupy: () => true,
+        enter() {}, exit() {}, detach() {}, kill() {},
+      });
+      use(hostRoom); host.registerStructureOccupancyHandler((id, request) => owner.request(id, request));
+      const pilot = clientRoom.room.getLocalPlayerId();
+      for (const request of [{ action: 'enter', structureId: 8, wr: 11 }, { action: 'enter', structureId: '8', wr: 12 }]) {
+        clientRoom.room.sendHost('structure-occupancy', request);
+        expect(owner.getState(pilot)).toBeUndefined();
+      }
+      clientRoom.room.sendHost('structure-occupancy', { action: 'enter', structureId: 8, wr: 12, playerId: 'forged' });
+      const state = owner.getState(pilot)!;
+      expect(state.structureId).toBe(8); expect(owner.getState('forged')).toBeUndefined();
+      clientRoom.room.sendHost('structure-occupancy', { action: 'exit', ...state, revision: state.revision + 1, wr: 12 });
+      expect(owner.getState(pilot)).toEqual(state);
+      clientRoom.room.sendHost('structure-occupancy', { action: 'exit', ...state, wr: 12 });
+      expect(owner.getState(pilot)).toBeUndefined();
+      host.registerStructureOccupancyHandler(null);
+      clientRoom.room.sendHost('structure-occupancy', { action: 'enter', structureId: 8, wr: 12 });
+      expect(owner.getState(pilot)).toBeUndefined();
+      expect(clientRoom.transport.links.flatMap(link => link.sent).filter(item =>
+        JSON.stringify(item.message).includes('structure-occupancy')).every(item => item.channel === 'rel')).toBe(true);
+    } finally { clearActiveSession(); }
+  });
   it('validates reliable turret requests and repeatedly snapshots typed occupancy for clients and late join', async () => {
     const network = new FakeNetwork(), hostRoom = await createHostRoom(network), clientRoom = await addClientRoom(network);
     const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });

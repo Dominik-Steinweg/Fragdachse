@@ -1,3 +1,5 @@
+import { getConstructionCells, getConstructionFootprint, getConstructionBounds, nearestConstructionPoint } from './ConstructionGeometry';
+import { getPersistentBaseRewardFootprint } from '../persistentBase/PersistentBasePlacementRules';
 import { turretAimConfig } from '../config/turretAim';
 import * as Phaser from 'phaser';
 import { AutoTiler, ROCK_AUTOTILE } from '../arena/AutoTiler';
@@ -230,7 +232,7 @@ export class PlacementSystem {
       if (now < rock.expiresAt) continue;
       this.runtimeRocks.delete(rock.id);
       this.carrierBases.delete(rock.id);
-      this.rockGrid.remove(rock.gridX, rock.gridY);
+      this.clearRockCells(rock);
       expired.push({ ...rock });
     }
     return expired;
@@ -241,7 +243,7 @@ export class PlacementSystem {
     const rock = this.runtimeRocks.get(id);
     if (!rock) return undefined;
     this.runtimeRocks.delete(id);
-    this.rockGrid.remove(rock.gridX, rock.gridY);
+    this.clearRockCells(rock);
     return { ...rock };
   }
 
@@ -399,7 +401,7 @@ export class PlacementSystem {
     const rock = this.runtimeRocks.get(id);
     if (!rock) return undefined;
     if (!Number.isSafeInteger(gridX) || !Number.isSafeInteger(gridY)) return undefined;
-    const cells = footprint.length > 0 ? footprint : [{ dx: 0, dy: 0 }];
+    const cells = rock.constructionId ? getConstructionFootprint(rock) : footprint;
     for (const cell of cells) {
       const tx = gridX + cell.dx;
       const ty = gridY + cell.dy;
@@ -409,11 +411,11 @@ export class PlacementSystem {
       const occupiedId = this.rockGrid.getIndex(tx, ty);
       if (occupiedId >= 0 && occupiedId !== id) return undefined;
     }
-    this.rockGrid.remove(rock.gridX, rock.gridY);
+    this.clearRockCells(rock);
     rock.gridX = gridX;
     rock.gridY = gridY;
-    if (Number.isFinite(angle)) rock.angle = angle;
-    this.rockGrid.set(gridX, gridY, id);
+    if (Number.isFinite(angle)) rock.angle = rock.kind === 'watchtower' ? 0 : angle;
+    this.bindRockCells(rock);
     return { ...rock };
   }
 
@@ -425,7 +427,7 @@ export class PlacementSystem {
     const targets = new Set<string>();
     for (const move of moves) {
       if (!this.runtimeRocks.has(move.id) || !Number.isSafeInteger(move.gridX) || !Number.isSafeInteger(move.gridY)) return null;
-      for (const cell of move.footprint.length ? move.footprint : [{ dx: 0, dy: 0 }]) {
+      for (const cell of getConstructionFootprint(this.runtimeRocks.get(move.id)!)) {
         const x = move.gridX + cell.dx, y = move.gridY + cell.dy, key = this.key(x, y);
         if (x < 0 || y < 0 || x >= this.metrics.gridCols || y >= this.metrics.gridRows
           || this.buildReservation?.(x, y) || this.waterCells.has(key) || targets.has(key)) return null;
@@ -436,13 +438,13 @@ export class PlacementSystem {
     }
     for (const move of moves) {
       const rock = this.runtimeRocks.get(move.id)!;
-      this.rockGrid.remove(rock.gridX, rock.gridY);
+      this.clearRockCells(rock);
     }
     return moves.map(move => {
       const rock = this.runtimeRocks.get(move.id)!;
       rock.gridX = move.gridX; rock.gridY = move.gridY;
-      if (Number.isFinite(move.angle)) rock.angle = move.angle;
-      this.rockGrid.set(move.gridX, move.gridY, rock.id);
+      if (Number.isFinite(move.angle)) rock.angle = rock.kind === 'watchtower' ? 0 : move.angle;
+      this.bindRockCells(rock);
       return { ...rock };
     });
   }
@@ -482,7 +484,7 @@ export class PlacementSystem {
       energyInjectorEffect: cfg.energyInjectorEffect,
     };
     this.runtimeRocks.set(rock.id, rock);
-    this.rockGrid.set(rock.gridX, rock.gridY, rock.id);
+    this.bindRockCells(rock);
     return { ...rock };
   }
 
@@ -593,7 +595,7 @@ export class PlacementSystem {
       };
 
     this.runtimeRocks.set(rock.id, rock);
-    this.rockGrid.set(rock.gridX, rock.gridY, rock.id);
+    this.bindRockCells(rock);
     return { ...rock };
   }
 
@@ -607,13 +609,14 @@ export class PlacementSystem {
     gridY: number,
     allowRuntimeReplacement = false,
     movableSourceId?: number,
+    rewardId?: PersistentBaseRewardId,
   ): boolean {
     return this.canPlaceCells(
-      [{ dx: 0, dy: 0 }],
+      rewardId ? getPersistentBaseRewardFootprint(rewardId) : [{ dx: 0, dy: 0 }],
       gridX,
       gridY,
       false,
-      true,
+      !rewardId || getPersistentBaseRewardDefinition(rewardId).placementRule === 'base-surface',
       allowRuntimeReplacement,
       movableSourceId,
     );
@@ -628,15 +631,14 @@ export class PlacementSystem {
     ownerId: string,
     ownerColor: number,
   ): SyncedPlaceableRock | null {
-    if (cfg.kind !== 'turret' || cfg.footprint.length !== 1
-      || cfg.footprint[0].dx !== 0 || cfg.footprint[0].dy !== 0
-      || !this.canMaterializePersistentBaseRewardCell(gridX, gridY)) return null;
+    if ((cfg.kind !== 'turret' && cfg.kind !== 'watchtower')
+      || !this.canMaterializePersistentBaseRewardCell(gridX, gridY, false, undefined, persistentRewardId)) return null;
 
     const source = getPersistentBaseRewardDefinition(persistentRewardId).gameplaySource;
     const maxHp = Math.max(1, cfg.maxHp);
     const rock: RuntimeRockRecord = {
       id: this.nextRockId++,
-      kind: 'turret',
+      kind: cfg.kind,
       constructionId: cfg.id,
       gridX,
       gridY,
@@ -646,19 +648,19 @@ export class PlacementSystem {
       ownerColor,
       expiresAt: 0,
       warningStartsAt: 0,
-      angle: Number.isFinite(angle) ? angle : 0,
+      angle: cfg.kind === 'watchtower' ? 0 : Number.isFinite(angle) ? angle : 0,
       ownership: 'base-owned',
       persistentRewardId,
-      collisionMode: 'none',
-      indestructible: true,
-      targetRange: cfg.targetRange,
-      turretWeaponId: source.kind === 'construction-definition' ? source.weaponId ?? cfg.weaponId : cfg.weaponId,
-      ...turretAimConfig(cfg),
+      collisionMode: cfg.kind === 'watchtower' ? undefined : 'none',
+      indestructible: cfg.kind === 'watchtower' ? cfg.indestructible : true,
+      targetRange: cfg.kind === 'turret' ? cfg.targetRange : undefined,
+      turretWeaponId: cfg.kind !== 'turret' ? undefined : source.kind === 'construction-definition' ? source.weaponId ?? cfg.weaponId : cfg.weaponId,
+      ...(cfg.kind === 'turret' ? turretAimConfig(cfg) : {}),
       toolRef: { kind: 'construction', id: cfg.id } satisfies LoadoutToolRef,
       energyInjectorEffect: undefined,
     };
     this.runtimeRocks.set(rock.id, rock);
-    this.rockGrid.set(rock.gridX, rock.gridY, rock.id);
+    this.bindRockCells(rock);
     return { ...rock };
   }
 
@@ -689,7 +691,7 @@ export class PlacementSystem {
       indestructible: true,
     };
     this.runtimeRocks.set(rock.id, rock);
-    this.rockGrid.set(rock.gridX, rock.gridY, rock.id);
+    this.bindRockCells(rock);
     return { ...rock };
   }
 
@@ -780,6 +782,11 @@ export class PlacementSystem {
       sourceSlot: 'utility',
       mode,
       ...(rock === undefined ? {} : { sourceRuntimeId: rock.id }),
+      ...(rock?.kind === 'watchtower' ? {
+        constructionId: rock.constructionId, gridX: rock.gridX, gridY: rock.gridY,
+        targetX: this.gridToWorld(rock.gridX, rock.gridY).x,
+        targetY: this.gridToWorld(rock.gridX, rock.gridY).y, angle: 0,
+      } : {}),
     };
   }
 
@@ -838,7 +845,7 @@ export class PlacementSystem {
     };
 
     this.runtimeRocks.set(rock.id, rock);
-    this.rockGrid.set(rock.gridX, rock.gridY, rock.id);
+    this.bindRockCells(rock);
     return { ...rock };
   }
 
@@ -859,13 +866,13 @@ export class PlacementSystem {
       if (incoming) {
         // Vacate the complete old layout before assigning new cells, including position swaps.
         if (existing.gridX !== incoming.gridX || existing.gridY !== incoming.gridY) {
-          this.rockGrid.remove(existing.gridX, existing.gridY);
+          this.clearRockCells(existing);
         }
         continue;
       }
       this.runtimeRocks.delete(id);
       this.carrierBases.delete(id);
-      this.rockGrid.remove(existing.gridX, existing.gridY);
+      this.clearRockCells(existing);
       removed.push({ ...existing });
     }
 
@@ -873,7 +880,7 @@ export class PlacementSystem {
       const current = this.runtimeRocks.get(incoming.id);
       if (!current) {
         this.runtimeRocks.set(incoming.id, { ...incoming });
-        this.rockGrid.set(incoming.gridX, incoming.gridY, incoming.id);
+        this.bindRockCells(incoming);
         this.nextRockId = Math.max(this.nextRockId, incoming.id + 1);
         added.push({ ...incoming });
         continue;
@@ -905,7 +912,7 @@ export class PlacementSystem {
         const previous = { ...current };
         this.runtimeRocks.set(incoming.id, { ...incoming });
         if (current.gridX !== incoming.gridX || current.gridY !== incoming.gridY) {
-          this.rockGrid.set(incoming.gridX, incoming.gridY, incoming.id);
+          this.bindRockCells(incoming);
           relocated.push({ previous, next: { ...incoming } });
           continue;
         }
@@ -1112,6 +1119,23 @@ export class PlacementSystem {
 
   private gridToWorld(gridX: number, gridY: number): { x: number; y: number } {
     return worldCellCenter(this.metrics, gridX, gridY);
+  }
+
+  getRuntimeRockCells(rock: SyncedPlaceableRock) { return getConstructionCells(rock); }
+
+  getRuntimeRockSurfacePoint(rock: SyncedPlaceableRock, x: number, y: number) {
+    return nearestConstructionPoint(getConstructionBounds(rock, this.metrics), x, y);
+  }
+
+  private bindRockCells(rock: SyncedPlaceableRock): void {
+    this.rockGrid.setBlobParticipation(rock.id, rock.kind !== 'watchtower');
+    for (const cell of getConstructionCells(rock)) this.rockGrid.set(cell.gridX, cell.gridY, rock.id);
+  }
+
+  private clearRockCells(rock: SyncedPlaceableRock): void {
+    for (const cell of getConstructionCells(rock)) {
+      if (this.rockGrid.getIndex(cell.gridX, cell.gridY) === rock.id) this.rockGrid.remove(cell.gridX, cell.gridY);
+    }
   }
 
   private key(gx: number, gy: number): string {

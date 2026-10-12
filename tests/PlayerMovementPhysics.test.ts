@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type * as Phaser from 'phaser';
 import { ClientPlayerMovementBody } from '../src/entities/ClientPlayerMovementBody';
 import { LocalPlayerPrediction } from '../src/systems/LocalPlayerPrediction';
-import { collidePlayerWater, resolveWalkingVelocity, type PlayerMovementGeometry } from '../src/systems/PlayerMovement';
+import { clampStructureBody, collidePlayerWater, resolveWalkingVelocity, type PlayerMovementGeometry } from '../src/systems/PlayerMovement';
 import { HostPhysicsSystem } from '../src/systems/HostPhysicsSystem';
 import { WaterGeometry } from '../src/arena/WaterGeometry';
 import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
@@ -79,6 +79,35 @@ function fixture(mode: 'wall' | 'water' | 'bounds' | 'rocks' = 'wall') {
 }
 
 describe('isolated client Arcade movement', () => {
+  it('keeps occupied-platform host steps and prediction/replay at the same edges while suppressing impulses', () => {
+    const host = fixture('bounds'), client = fixture('bounds');
+    const x = host.player.x, y = host.player.y;
+    const platform = { id: 7, x, y, footprint: { left: x - 32, right: x + 32, top: y - 32, bottom: y + 32 } };
+    host.system.setWorldMetrics(metrics);
+    host.system.setStructurePlatformResolver(() => platform);
+    Object.assign(client.geometry, { getStructurePlatform: () => platform,
+      collide: () => clampStructureBody(client.body, platform) });
+    client.manual.control(true);
+    host.system.handleDashRPC('p', 1, 0);
+    host.system.setForcedMovement('p', 500, 500);
+    host.system.addRecoil('p', 500, 500, 1000);
+    expect(host.system.getDashPhase('p')).toBe(0);
+    expect(host.system.hasForcedMovement('p')).toBe(false);
+    let frame = 0;
+    for (const [dx, dy] of [[1, 0], [0, 1], [-1, -1], [1, 1]]) {
+      Object.assign(host.input, { dx, dy });
+      for (let step = 0; step < 120; step++) {
+        const now = frame++ * 1000 / 120;
+        host.system.update(false, now); host.world.update(now, 1000 / 120); host.scene.events.emit('postupdate');
+        client.manual.step(dx, dy, 100, 1000 / 120);
+        expect(client.player.x).toBeCloseTo(host.player.x, 6);
+        expect(client.player.y).toBeCloseTo(host.player.y, 6);
+      }
+      expect(host.system.getMovementPredictionState('p', frame * 1000 / 120)?.canPredict).toBe(true);
+      client.manual.reset(host.player.x, host.player.y);
+    }
+    host.system.setWorldMetrics(null);
+  });
   it('keeps burst and recovery host-controlled even when both finish between snapshots', () => {
     const f = fixture('bounds'); f.system.setWorldMetrics(metrics);
     const clock = vi.spyOn(Date, 'now').mockReturnValue(0);

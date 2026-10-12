@@ -1,3 +1,4 @@
+import { scaleWeaponRange } from './scaleWeaponRange';
 import type { ResourceSystem }    from '../systems/ResourceSystem';
 import type { GameMode, LoadoutSlot, PlayerAimNetState, ShieldBuffHudState, WeaponSlot } from '../types';
 import type {
@@ -285,8 +286,11 @@ export class LoadoutManager {
    * Ermöglicht dem AimSystem die echten Waffenwerte (Range, Spread-Parameter)
    * zu nutzen, unabhängig davon welches Loadout der Spieler ausgewählt hat.
    */
+  private weaponRangeMultiplier: ((id: string) => number) | null = null;
+  setWeaponRangeMultiplierResolver(resolver: ((id: string) => number) | null): void { this.weaponRangeMultiplier = resolver; }
   getEquippedWeaponConfig(playerId: string, slot: 'weapon1' | 'weapon2'): WeaponConfig | undefined {
-    return this.loadouts.get(playerId)?.[slot].config;
+    const config = this.loadouts.get(playerId)?.[slot].config;
+    return config ? scaleWeaponRange(config, this.weaponRangeMultiplier?.(playerId) ?? 1) : undefined;
   }
 
   /** Gibt ausschließlich die Config der tatsächlich ausgerüsteten Utility zurück. */

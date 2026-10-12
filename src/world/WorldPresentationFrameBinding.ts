@@ -168,7 +168,7 @@ export interface WorldPresentationFrameBindingInput {
   };
   readonly constructionOwnership?: {
     readonly motes: Pick<ConstructionOwnershipMoteRenderer, 'openWorld' | 'closeWorld' | 'captureFrame'>;
-    readonly getPlacement: () => Pick<PlacementSystem, 'getAllRuntimeRocks' | 'getOwnedConstructions'> | null;
+    readonly getPlacement: () => Pick<PlacementSystem, 'getAllRuntimeRocks' | 'getOwnedConstructions' | 'getRuntimeRock'> | null;
     readonly getLocalPlayerId: () => string;
     readonly interaction: Pick<InputSystem, 'isConstructionPlacementActive' | 'isDismantlePlacementActive'
       | 'isGlobalDismantleHoldActive' | 'isPersistentRewardPlacementActive' | 'isRepositionActive'>;

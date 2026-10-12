@@ -1,3 +1,4 @@
+import { resolvePersistentRewardWorldCell } from '../persistentBase/PersistentBasePlacementRules';
 import type { BaseManager } from '../entities/BaseManager';
 import type { PlacementSystem } from '../systems/PlacementSystem';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
@@ -7,7 +8,7 @@ import {
   getPersistentBaseBuildAreaExtentCells,
   resolvePersistentBaseCell,
 } from '../persistentBase/PersistentBaseCore';
-import { isPersistentBaseRewardCellAllowed } from '../persistentBase/PersistentBasePlacementRules';
+import { isPersistentBaseRewardCellAllowed, getPersistentBaseRewardFootprint } from '../persistentBase/PersistentBasePlacementRules';
 import type { PersistentBaseContributionStore } from '../persistentBase/PersistentBaseContributionStore';
 import type { PersistentBaseRewardStore } from '../persistentBase/PersistentBaseRewardStore';
 import {
@@ -41,6 +42,7 @@ export interface PersistentBaseWorldMaterializerOptions {
     readonly materializePlaceableRock: (runtime: SyncedPlaceableRock, playDust: boolean) => void;
   };
   readonly isHost: () => boolean;
+  readonly getMissionRevision?: () => number | null;
   readonly getMapId: () => string | null;
   readonly getLocalOwnerId: () => string;
   readonly resolvePlayerIdForOwner: (ownerId: string) => string | null;
@@ -65,7 +67,7 @@ export interface PersistentBaseConstructionPort {
     ownership: ConstructionOwnership,
   ) => SyncedPlaceableRock | null;
   readonly materializeRewardConstruction: (
-    constructionId: 'spore_turret' | 'rocket_turret',
+    constructionId: 'spore_turret' | 'rocket_turret' | 'watchtower',
     rewardId: PersistentBaseRewardId,
     gridX: number,
     gridY: number,
@@ -84,6 +86,25 @@ export interface PersistentBaseConstructionPort {
  */
 export class PersistentBaseWorldMaterializer {
   private destroyed = false;
+  private missionRevision: number | null = null;
+  private readonly destroyedRewards = new Set<PersistentBaseRewardId>();
+
+  /** Destruction is mission-local; stored placements and their reservations survive. */
+  markRewardDestroyed(rewardId: PersistentBaseRewardId): void {
+    this.refreshMissionScope();
+    this.destroyedRewards.add(rewardId);
+    this.options.binding.unbindRewardRuntime(rewardId);
+  }
+
+  private refreshMissionScope(): boolean {
+    const revision = this.options.getMissionRevision?.() ?? null;
+    if (revision !== null && revision !== this.missionRevision) {
+      this.missionRevision = revision;
+      this.destroyedRewards.clear();
+      return true;
+    }
+    return false;
+  }
 
   constructor(private readonly options: PersistentBaseWorldMaterializerOptions) {}
 
@@ -91,6 +112,7 @@ export class PersistentBaseWorldMaterializer {
     if (this.destroyed || !this.options.isHost()) return;
     const site = this.bindingSite;
     if (!site) return;
+    this.refreshMissionScope();
     this.reconcileRewards(site);
     this.reconcileComposite(site);
   }
@@ -106,7 +128,7 @@ export class PersistentBaseWorldMaterializer {
       // Revisions are player-local; reconnecting an owner through a different player must also refresh.
       next.set(ownerId, `${playerId}:${this.options.construction.getBuildRevision(playerId)}`);
     }
-    let changed = next.size !== signatures.size;
+    let changed = this.refreshMissionScope() || next.size !== signatures.size;
     if (!changed) {
       for (const [ownerId, signature] of next) {
         if (signatures.get(ownerId) !== signature) {
@@ -127,6 +149,7 @@ export class PersistentBaseWorldMaterializer {
   ): SyncedPlaceableRock | null {
     const site = this.bindingSite;
     if (this.destroyed || !site || !this.options.isHost()) return null;
+    this.refreshMissionScope();
     return this.materializeReward(site, definition, placement);
   }
 
@@ -210,21 +233,21 @@ export class PersistentBaseWorldMaterializer {
       if (!persistentBaseActive && definition.category === 'baseTurret') continue;
       const cell = this.resolveRewardCell(site, placement);
       if (!cell || !this.isRewardPlacementInDomain(definition, site, placement)) continue;
-      const key = cellKey(cell.gridX, cell.gridY);
-      if (occupiedRewardCells.has(key)) continue;
-      occupiedRewardCells.add(key);
+      const cells = getPersistentBaseRewardFootprint(placement.rewardId).map(({ dx, dy }) => ({ gridX: cell.gridX + dx, gridY: cell.gridY + dy }));
+      if (cells.some(c => occupiedRewardCells.has(cellKey(c.gridX, c.gridY)))) continue;
+      for (const c of cells) occupiedRewardCells.add(cellKey(c.gridX, c.gridY));
+      if (this.destroyedRewards.has(placement.rewardId)) continue;
       const binding = this.options.binding.getRewardRuntime(placement.rewardId);
       if (binding && this.options.placementSystem.hasRuntimeRock(binding.runtimeId)) continue;
-      const occupant = this.options.placementSystem.getRuntimeRockAt(cell.gridX, cell.gridY);
-      if (occupant && occupant.ownership !== 'base-owned') {
-        const isPersonalContribution = this.options.contributions.getRuntimeBindings()
-          .some((candidate) => candidate.runtimeId === occupant.id);
-        // Rewards outrank personal persistent constructions, but an unrelated live utility is
-        // not ours to delete merely because the committed reward projection exists.
-        if (!isPersonalContribution) continue;
-        this.releasePersonalRuntimeForRewardConflict(occupant.id);
-      }
-      if (!this.options.placementSystem.canMaterializePersistentBaseRewardCell(cell.gridX, cell.gridY)) continue;
+      const occupants = new Map(cells.flatMap(c => {
+        const rock = this.options.placementSystem.getRuntimeRockAt(c.gridX, c.gridY);
+        return rock ? [[rock.id, rock] as const] : [];
+      }));
+      const contributions = this.options.contributions.getRuntimeBindings();
+      if ([...occupants.values()].some(rock => rock.ownership === 'base-owned'
+        || !contributions.some(entry => entry.runtimeId === rock.id))) continue;
+      if (!this.options.placementSystem.canMaterializePersistentBaseRewardCell(cell.gridX, cell.gridY, true, undefined, placement.rewardId)) continue;
+      for (const id of occupants.keys()) this.releasePersonalRuntimeForRewardConflict(id);
       this.materializeReward(site, definition, placement);
     }
   }
@@ -324,7 +347,7 @@ export class PersistentBaseWorldMaterializer {
       const cell = definition && this.isRewardPlacementInDomain(definition, site, placement)
         ? this.resolveRewardCell(site, placement)
         : null;
-      if (cell) reserved.add(cellKey(cell.gridX, cell.gridY));
+      if (cell) for (const { dx, dy } of getPersistentBaseRewardFootprint(placement.rewardId)) reserved.add(cellKey(cell.gridX + dx, cell.gridY + dy));
     }
     return reserved;
   }
@@ -334,6 +357,7 @@ export class PersistentBaseWorldMaterializer {
     definition: PersistentBaseRewardDefinition,
     placement: PersistentBaseRewardPlacement,
   ): SyncedPlaceableRock | null {
+    if (this.destroyedRewards.has(placement.rewardId) || !this.isRewardPlacementInDomain(definition, site, placement)) return null;
     if (definition.category === 'baseTurret' && !this.isPersistentBaseRuntimeActive(site)) return null;
     const cell = this.resolveRewardCell(site, placement);
     if (!cell) return null;
@@ -341,7 +365,7 @@ export class PersistentBaseWorldMaterializer {
     const ownerColor = TEAM_BLUE_COLOR;
     let runtime: SyncedPlaceableRock | null = null;
     try {
-      runtime = definition.category === 'baseTurret'
+      runtime = (definition.category === 'baseTurret' || definition.category === 'baseStructure')
         && definition.gameplaySource.kind === 'construction-definition'
         && definition.gameplaySource.constructionId
         ? this.options.construction.materializeRewardConstruction(
@@ -442,15 +466,9 @@ export class PersistentBaseWorldMaterializer {
 
   private resolveRewardCell(
     site: WorldPersistentBaseSite,
-    placement: Pick<PersistentBaseRewardPlacement, 'relativeGridX' | 'relativeGridY'>,
+    placement: Pick<PersistentBaseRewardPlacement, 'relativeGridX' | 'relativeGridY'> & { rewardId?: PersistentBaseRewardId },
   ): { gridX: number; gridY: number; domain: 'base-surface' | 'courtyard-build-area' | 'entrance' } | null {
-    return resolvePersistentBaseCell(
-      site.anchor,
-      placement.relativeGridX,
-      placement.relativeGridY,
-      site.orientation,
-      site.buildArea,
-    );
+    return resolvePersistentRewardWorldCell(site, placement);
   }
 
   private isRewardPlacementInDomain(

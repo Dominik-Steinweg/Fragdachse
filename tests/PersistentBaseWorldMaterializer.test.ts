@@ -1,3 +1,12 @@
+import { RockGridIndex } from '../src/arena/RockGridIndex';
+import { PlacementSystem } from '../src/systems/PlacementSystem';
+import { COOP_DEFENSE_CONSTRUCTIONS } from '../src/config/coopDefenseConstructions';
+import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
+import { PersistentBaseWorldBinding } from '../src/world/PersistentBaseWorldBinding';
+import { PersistentBaseRewardStore } from '../src/persistentBase/PersistentBaseRewardStore';
+import { PersistentBaseContributionStore } from '../src/persistentBase/PersistentBaseContributionStore';
+import { DEFAULT_PERSISTENT_BASE_BUILD_AREA } from '../src/persistentBase/PersistentBaseCore';
+import type { WorldPersistentBaseSite } from '../src/world/WorldRuntimeContext';
 import { describe, expect, it, vi } from 'vitest';
 import {
   PersistentBaseWorldMaterializer,
@@ -7,6 +16,8 @@ import {
   ConstructionWorldRuntime,
   type ConstructionWorldRuntimeOptions,
 } from '../src/world/ConstructionWorldRuntime';
+
+vi.mock('phaser', () => ({ Math: { Clamp: (v: number, min: number, max: number) => Math.max(min, Math.min(max, v)) } }));
 
 describe('PersistentBaseWorldMaterializer build revision gate', () => {
   it('does not resolve restore tools when the build revision is unchanged', () => {
@@ -74,5 +85,59 @@ describe('PersistentBaseWorldMaterializer build revision gate', () => {
     expect(runtime.getPersistentBaseBuildRevision('player')).toBe(1);
     expect(runtime.getPersistentBaseBuildRevision('player')).toBe(1);
     expect(call).toBe(2);
+  });
+});
+
+describe('destructible persistent reward lifetime', () => {
+  it('materializes all cells, reserves them after destruction, and restores only in the next mission', () => {
+    let revision = 1;
+    const grid = new RockGridIndex([]);
+    const placement = new PlacementSystem({ seed: 1, rocks: [], trees: [], tracks: [], dirt: [], powerUpPedestals: [] },
+      grid, { getAllPlayers: () => [] } as never, resolveActiveArenaWorldMetrics());
+    const rewards = new PersistentBaseRewardStore();
+    const record = { rewardId: 'base_watchtower' as const, relativeGridX: 0, relativeGridY: 0, angle: 0 };
+    rewards.placeReward(record);
+    const contributions = new PersistentBaseContributionStore();
+    const binding = new PersistentBaseWorldBinding({ finalizeRuntimeObjects: () => {}, releaseRewardRuntime: () => {} });
+    const site = { baseId: 'base', anchor: { gridX: 10, gridY: 10 }, orientation: 'open-left', buildArea: DEFAULT_PERSISTENT_BASE_BUILD_AREA } as WorldPersistentBaseSite;
+    let materializer: PersistentBaseWorldMaterializer;
+    const construction = new ConstructionWorldRuntime({ placementSystem: placement,
+      rockVisualHelper: { removePlaceableRockVisual: () => {}, updatePlaceableRock: () => {} },
+      emitGridChanged: () => materializer.reconcile(),
+      onConstructionDestroyed: (rock, cause) => {
+        if (rock.persistentRewardId && (cause === 'damage' || cause === 'decay')) binding.markRewardDestroyed(rock.persistentRewardId);
+      },
+    } as ConstructionWorldRuntimeOptions);
+    materializer = new PersistentBaseWorldMaterializer({
+      binding, contributions, rewards, placementSystem: placement, powerUpSystem: null, baseManager: null,
+      getSite: () => site, getMissionRevision: () => revision, isHost: () => true, getMapId: () => '16',
+      getLocalOwnerId: () => 'owner', resolvePlayerIdForOwner: () => 'player', getPlayerColor: () => 0,
+      rockVisualHelper: { gridToWorld: (x, y) => ({ x, y }), materializePlaceableRock: () => {} },
+      construction: { getCapacity: () => 20, getBuildRevision: () => 0, getOwnership: () => 'host-persistent',
+        resolveRestoreTools: () => [{ id: 'rock_barrier', footprint: [{ dx: 0, dy: 0 }], capacityCost: 1, unlocked: true, active: true } as never],
+        materializeRestoreCandidate: (candidate, player, color, ownership) => placement.materializePersistentPlaceable(COOP_DEFENSE_CONSTRUCTIONS.rock_barrier, candidate.gridX, candidate.gridY, 0, player, color, ownership),
+        materializeRewardConstruction: (id, reward, x, y, angle, owner, color) => placement.materializePersistentBaseReward(COOP_DEFENSE_CONSTRUCTIONS[id], reward, x, y, angle, owner, color),
+        releaseRuntime: () => {},
+      },
+      emitRestoreAdded: () => {}, emitGridChanged: () => {}, onDiagnosticEvent: () => {},
+    });
+    binding.setMaterializer(materializer);
+    materializer.reconcile();
+    const tower = placement.getAllRuntimeRocks()[0];
+    expect(tower.kind).toBe('watchtower');
+    for (const { dx, dy } of COOP_DEFENSE_CONSTRUCTIONS.watchtower.footprint) expect(placement.getRuntimeRockAt(10 + dx, 10 + dy)?.id).toBe(tower.id);
+    expect(construction.commitDamage(tower.id, tower.maxHp).kind).toBe('applied');
+    // A contribution overlapping a non-anchor cell remains suppressed even while the reward is absent.
+    contributions.offerContribution({ schemaVersion: 1, ownerId: 'owner', revision: 1, constructions: [{
+      persistentId: 'wall', tool: { kind: 'construction', id: 'rock_barrier' }, relativeGridX: 1, relativeGridY: 1, angle: 0, placementOrder: 0,
+    }] });
+    materializer.reconcile(); materializer.refreshForRelevantBuildChanges();
+    expect(materializer.materializeRewardPlacement(record)).toBeNull();
+    expect(placement.getAllRuntimeRocks()).toEqual([]);
+    expect(rewards.getState().placements).toEqual([record]);
+    revision += 1; materializer.reconcile();
+    expect(placement.getAllRuntimeRocks()).toHaveLength(1);
+    expect(placement.getAllRuntimeRocks()[0]).toMatchObject({ kind: 'watchtower', gridX: 10, gridY: 10, hp: COOP_DEFENSE_CONSTRUCTIONS.watchtower.maxHp });
+    expect(placement.getAllRuntimeRocks()[0].id).not.toBe(tower.id);
   });
 });

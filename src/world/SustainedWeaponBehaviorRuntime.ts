@@ -121,6 +121,14 @@ export class SustainedWeaponBehaviorRuntime implements SustainedWeaponBehaviorPo
     this.heldWeapons.delete(playerId);
   }
 
+  refreshEquippedConfig(playerId: string): void {
+    if (this.destroyed) return;
+    const config = this.loadout.getEquippedWeaponConfig(playerId, 'weapon2');
+    if (config?.fire.type === 'energy_shield') {
+      this.energyShieldSystem?.hostUpdateEquippedConfig(playerId, config as WeaponConfig & { fire: EnergyShieldWeaponFireConfig });
+    }
+  }
+
   resetPlayer(playerId: string): void {
     if (this.destroyed) return;
     this.stopPlayerEffect(playerId);

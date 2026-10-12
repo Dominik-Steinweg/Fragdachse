@@ -817,6 +817,18 @@
       "visiblePixelSha256": "b2e3b94a6578f3b9008a9c3844896e83825b3641fd545ae5a0a6bfe59ac5e4ee",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/sprites/rewards/watchtower.png": {
+      "file": "assets/sprites/rewards/watchtower.webp",
+      "source": "assets/sprites/rewards/watchtower.png",
+      "width": 1024,
+      "height": 1024,
+      "sourceBytes": 1566759,
+      "downloadBytes": 709576,
+      "sourceSha256": "9ae179b83735e93e73eab59c55fe482c764d3bbbd5f0e36d521525dac9a5c415",
+      "sha256": "a314a5727d6ce67460b7324cf9846d0f2fa7c166bbc1b3ae898b319a3d7c0b99",
+      "visiblePixelSha256": "8f2e22317c610641afe21586c23070ad45d90f30273fd2a5ff47b84dd073590d",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/sprites/rock_base.png": {
       "file": "assets/sprites/rock_base.webp",
       "source": "assets/sprites/rock_base.png",

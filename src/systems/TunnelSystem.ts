@@ -70,6 +70,7 @@ export class TunnelSystem {
     targetX: number,
     targetY: number,
   ): boolean {
+    if (this.combatSystem.getStructureOccupancyId?.(playerId) !== undefined) return false;
     const startIsValid = this.placementSystem.canPlaceSingleCell(startGridX, startGridY);
     if (!startIsValid) return false;
 
@@ -168,7 +169,7 @@ export class TunnelSystem {
     if (this.tunnels.size === 0) return;
 
     for (const player of this.playerManager.getAllPlayers()) {
-      if (!this.combatSystem.isAlive(player.id)) continue;
+      if (!this.combatSystem.isAlive(player.id) || this.combatSystem.getStructureOccupancyId?.(player.id) !== undefined) continue;
       if (this.activeTransitByPlayer.has(player.id)) continue;
       const reentryGate = this.reentryBlockedUntil.get(player.id);
       if (reentryGate) {

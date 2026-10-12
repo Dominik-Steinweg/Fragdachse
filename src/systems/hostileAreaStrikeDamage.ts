@@ -38,7 +38,8 @@ export function applyHostileAreaStrikeDamage(request: AreaStrikeDamage, ports: A
   const { x, y, radius, maxDamage, attackerId } = request;
   const falloff = { minDamage: request.minDamage };
   const damageAt = (distance: number) => computeRadialDamage(distance, radius, maxDamage, falloff);
-  ports.combat.applyAoeDamage(x, y, radius, maxDamage, attackerId, request.includeSelf, {
+  // Structures already hit by the combat AoE take no second environment hit.
+  const hitStructures = ports.combat.applyAoeDamage(x, y, radius, maxDamage, attackerId, request.includeSelf, {
     ...request.aoe, category: 'explosion', sourceId: request.sourceId,
     damageFalloff: falloff, source: request.source,
   });
@@ -58,15 +59,15 @@ export function applyHostileAreaStrikeDamage(request: AreaStrikeDamage, ports: A
     }
   }
   if (ports.environment) {
-    const sink = ports.environment;
+    const sink = ports.environment, excludedRockIndices = hitStructures ?? [];
     if (request.constructionDamageMult === undefined) {
-      applyRadialEnvironmentDamage(sink, { x, y, radius, damage: maxDamage, rockDamageMult: request.rockDamageMult, falloff }, attackerId, false);
+      applyRadialEnvironmentDamage(sink, { x, y, radius, damage: maxDamage, rockDamageMult: request.rockDamageMult, falloff, excludedRockIndices }, attackerId, false);
     } else {
       for (const construction of [false, true]) {
         const multiplier = construction ? request.constructionDamageMult : request.rockDamageMult;
         applyRadialEnvironmentDamage({ ...sink, resolveRockDamage: (id, damage, ownerId) =>
           ports.isConstruction(id) === construction ? sink.resolveRockDamage(id, damage, ownerId) : 0,
-        }, { x, y, radius, damage: maxDamage, rockDamageMult: multiplier, falloff }, attackerId, false);
+        }, { x, y, radius, damage: maxDamage, rockDamageMult: multiplier, falloff, excludedRockIndices }, attackerId, false);
       }
     }
   }

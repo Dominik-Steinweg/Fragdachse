@@ -9,6 +9,7 @@ vi.mock('phaser', () => ({
 }));
 
 import { WEAPON_CONFIGS, type WeaponConfig } from '../src/loadout/LoadoutConfig';
+import { scaleWeaponRange } from '../src/loadout/scaleWeaponRange';
 import { EnergyShieldSystem } from '../src/systems/EnergyShieldSystem';
 import { SustainedWeaponBehaviorRuntime } from '../src/world/SustainedWeaponBehaviorRuntime';
 
@@ -45,6 +46,23 @@ function request(config: WeaponConfig = WEAPON_CONFIGS.TESLA_DOME) {
 }
 
 describe('SustainedWeaponBehaviorRuntime', () => {
+  it('refreshes an autonomous dome across occupancy changes without toggling it', () => {
+    const base = WEAPON_CONFIGS.ENERGY_SHIELD;
+    const config = { ...base, fire: { ...base.fire, domeEnabled: 1, domeToggleEnabled: 1 } };
+    let equipped = config;
+    const shield = new EnergyShieldSystem({} as never, {} as never, {} as never, {} as never);
+    const behavior = new SustainedWeaponBehaviorRuntime({ getEquippedWeaponConfig: () => equipped }, {} as never);
+    behavior.setEnergyShieldSystem(shield);
+    shield.hostRefresh(PLAYER_ID, 1000, config, 0xffffff, true);
+    behavior.claimWeaponAction(PLAYER_ID, 'weapon2', 1000, 0);
+    for (const factor of [1.2, 1]) {
+      equipped = scaleWeaponRange(config, factor);
+      behavior.interruptCombat(PLAYER_ID);
+      behavior.refreshEquippedConfig(PLAYER_ID);
+      expect(shield.isActive(PLAYER_ID)).toBe(true);
+      expect(shield.getEquippedFireConfig(PLAYER_ID)?.domeRadius).toBeCloseTo(config.fire.domeRadius * factor);
+    }
+  });
   it('refreshes Tesla through the effect owner and stops it at the resource gate', () => {
     const { behavior, tesla } = makeRuntime();
 

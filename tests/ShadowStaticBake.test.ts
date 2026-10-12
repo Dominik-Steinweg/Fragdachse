@@ -21,8 +21,8 @@ vi.mock('../src/effects/CharacterMeshShadowRenderer',()=>({CharacterMeshShadowRe
 }}));
 import {GraphicsQualityController} from '../src/graphics/GraphicsQuality';
 import { ShadowSystem } from '../src/effects/ShadowSystem';
-import { SHADOW_CASTERS } from '../src/effects/ShadowConfig';
-import { ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, DEPTH } from '../src/config';
+import { SHADOW_CASTERS, WATCHTOWER_SHADOW_FOOTPRINT } from '../src/effects/ShadowConfig';
+import { ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, CELL_SIZE, DEPTH } from '../src/config';
 import { ARENA_RENDER_CHUNK_SIZE } from '../src/arena/chunks/ArenaChunkGrid';
 import { CHUNK_SAMPLING_GUTTER_PX, ChunkedRenderSurface } from '../src/arena/chunks/ChunkedRenderSurface';
 import type { ArenaLayout } from '../src/types';
@@ -31,6 +31,43 @@ import type { ArenaLayout } from '../src/types';
 const CHUNK_TARGET_SIZE = ARENA_RENDER_CHUNK_SIZE + 2 * CHUNK_SAMPLING_GUTTER_PX;
 /** Kantenlaenge des Scratch-Ziels einer 128er-Dirty-Region – ebenfalls samt Gutter. */
 const DIRTY_SCRATCH_SIZE = 128 + 2 * CHUNK_SAMPLING_GUTTER_PX;
+
+it('bakes one catalog-sized watchtower caster and clears its long shadow on move and removal', () => {
+  const { scene, textures, graphicsLog } = makeScene();
+  const shadows = new ShadowSystem(scene);
+  shadows.setWorldBoundsOverride({ minX: 0, minY: 0, maxX: 1024, maxY: 512 });
+  const tower = { id: 0, kind: 'watchtower', gridX: 2, gridY: 2, hp: 1 };
+  const arenaLayout = { rocks: [{ gridX: tower.gridX, gridY: tower.gridY }], trees: [] } as unknown as ArenaLayout;
+  const proxy = { active: true };
+  const arena = { rockPhysicsProxies: [proxy] } as never;
+  // Observe submitted caster geometry rather than freezing blur/colour tuning.
+  const draw = vi.spyOn(shadows as any, 'drawFootprint');
+  shadows.rebuildArenaStaticShadows(arenaLayout, arena, [tower] as never);
+  drain(scene);
+  expect(draw.mock.calls.length).toBeGreaterThan(0);
+  for (const call of draw.mock.calls) {
+    expect(call[3]).toBe(SHADOW_CASTERS.watchtower);
+    expect(call[1]).toBe(ARENA_OFFSET_X + (tower.gridX + .5) * CELL_SIZE + WATCHTOWER_SHADOW_FOOTPRINT.centerOffsetX);
+    expect(call[2]).toBe(ARENA_OFFSET_Y + (tower.gridY + .5) * CELL_SIZE + WATCHTOWER_SHADOW_FOOTPRINT.centerOffsetY);
+  }
+  expect(SHADOW_CASTERS.watchtower.castHeightPx).toBeGreaterThan(SHADOW_CASTERS.rock.castHeightPx);
+  for (const texture of textures) texture.cameraScrolls.length = 0;
+  // Mutate both source objects as placement does; the previous position must survive.
+  tower.gridX = 20; arenaLayout.rocks[0].gridX = 20;
+  shadows.rebuildArenaStaticShadowRegions(arenaLayout, arena, new Set([0]), [tower] as never);
+  drain(scene);
+  const regions = textures.filter(texture => texture.width === DIRTY_SCRATCH_SIZE).flatMap(texture => texture.cameraScrolls);
+  expect(regions.some(region => region.x < ARENA_OFFSET_X + CELL_SIZE * 4)).toBe(true);
+  expect(regions.some(region => region.x > ARENA_OFFSET_X + CELL_SIZE * 16)).toBe(true);
+  for (const graphics of graphicsLog) graphics.fillPoints.length = 0;
+  draw.mockClear();
+  proxy.active = false;
+  shadows.rebuildArenaStaticShadowRegions(arenaLayout, arena, new Set([0]), []);
+  drain(scene);
+  expect(draw).not.toHaveBeenCalled();
+  expect(graphicsLog.every(graphics => graphics.fillPoints.length === 0)).toBe(true);
+  shadows.destroy();
+});
 
 /**
  * Die gebackenen statischen Schatten.

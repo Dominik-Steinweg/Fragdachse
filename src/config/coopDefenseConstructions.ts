@@ -1,6 +1,7 @@
 import { validateTurretAimConfig, type TurretAimConfig } from './turretAim';
 import rawCoopDefenseConstructionCooldowns from './coopDefenseConstructions.json';
 import { ATTACK_DRONE_RULES } from './attackDrone';
+import { WATCHTOWER_REWARD_ICON_KEY } from './watchtower';
 import type { ConstructionId, ConstructionOwnership, CoopDefenseClassId, EnergyInjectorConstructionEffect, GameMode, PlaceableKind, TurretWeaponId } from '../types';
 
 interface RawCoopDefenseConstructionCooldownDefinition {
@@ -48,12 +49,14 @@ export interface CoopDefensePowerUpPedestalDefinition extends CoopDefenseConstru
 }
 
 export type CoopDefenseConstructionDefinition =
+  | (CoopDefenseConstructionBaseDefinition & { readonly kind: 'watchtower'; readonly indestructible: false })
   | (CoopDefenseConstructionBaseDefinition & { readonly kind: 'drone_station'; readonly indestructible?: false })
   | CoopDefenseBarrierConstructionDefinition
   | CoopDefenseWeaponConstructionDefinition
   | CoopDefensePowerUpPedestalDefinition;
 
 export const COOP_DEFENSE_CONSTRUCTION_IDS: readonly ConstructionId[] = [
+  'watchtower',
   'attack_drone_station',
   'rock_barrier',
   'spore_turret',
@@ -188,6 +191,16 @@ export function loadConstructionBuildCooldowns(
 
 export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDefenseConstructionDefinition>> =
   Object.freeze({
+    watchtower: {
+      kind: 'watchtower', id: 'watchtower',
+      buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.watchtower,
+      iconKey: WATCHTOWER_REWARD_ICON_KEY,
+      // Base reward only: never offered as a personal loadout construction.
+      unlockUpgradeId: '', allowedModes: [],
+      maxHp: 600, placementRange: COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE,
+      capacityCost: 0, color: 0x99734c, indestructible: false,
+      footprint: Object.freeze([{ dx: 0, dy: 0 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }]),
+    },
     attack_drone_station: {
       kind: 'drone_station', id: 'attack_drone_station',
       buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.attack_drone_station,

@@ -41,7 +41,7 @@ export function createArenaFlowFieldDebugPort(service: EnemyFlowFieldService): E
 }
 
 /** Dev-only mutations resolve activity-owned managers afresh on every command. */
-export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator, players: PlayerManager) {
+export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator, players: PlayerManager, visuals?: import('./RockVisualHelper').RockVisualHelper) {
   const trainOwners = new WeakMap<object, number>();
   let nextTrainOwnerId = 1;
   // Scripted bot peers are the only allowed additional participants of the isolated host.
@@ -50,6 +50,26 @@ export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator, play
       .some(player => player.id !== bridge.getLocalPlayerId() && !isLocalScenarioBotPeer(player.id))) throw new Error('Isolated dev host required.');
   };
   return {
+    arrangeWatchtower(gridX: number, gridY: number) {
+      requireLocal();
+      const construction = flow.getConstructionWorldRuntime();
+      const tower = construction?.materializeRewardConstruction('watchtower', 'base_watchtower', gridX, gridY, 0, 'watchtower-review-base', 0xa68b5b);
+      if (!tower || !visuals) throw new Error('Watchtower fixture placement failed');
+      visuals.materializePlaceableRock(tower, false);
+      return tower;
+    },
+    readWatchtower(id: number) {
+      requireLocal();
+      const playerId = bridge.getLocalPlayerId();
+      return { tower: flow.getWorldRuntime()?.materialization?.placement?.getRuntimeRock(id) ?? null,
+        occupancy: flow.getWorldPlayerGameplayRuntime()?.getStructureOccupancyState(playerId) ?? null,
+        alive: flow.getWorldCombatCore()?.isAlive(playerId) ?? false };
+    },
+    damageWatchtower(id: number, amount: number) {
+      requireLocal();
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error('Positive damage required');
+      return flow.getWorldObjectMutationRuntime()?.applyResolvedDamage('construction', id, amount, 'watchtower-review-attacker', 'dev-scenario.watchtower');
+    },
     startKrakenMission(skipIntro: boolean): boolean {
       requireLocal();
       const runtime = flow.getCoopMissionRuntime();

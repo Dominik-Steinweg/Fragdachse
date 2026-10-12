@@ -5,6 +5,7 @@ import catalog from '../../scripts/asset-pipeline/catalog-v2.json';
 import { PLAYER_SIZE } from '../../src/config';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../../src/config/coopDefenseEnemies';
 import { TURRET_VISUALS } from '../../src/config/turretVisuals';
+import { WATCHTOWER_DISPLAY_SIZE } from '../../src/config/watchtower';
 import { LOADOUT_CATALOG_ENTRIES, findWeaponConfig } from '../../src/loadout/LoadoutConfig';
 import { validateClipContracts, validateExtensions } from '../../scripts/asset-pipeline/contracts-v2.mjs';
 
@@ -13,6 +14,10 @@ const assets = catalog.assets;
 const sorted = (values: string[]) => [...values].sort();
 
 describe('asset pipeline catalog contracts', () => {
+  it('keeps the watchtower runtime canvas at its authored display size', () => {
+    const asset = assets.find(entry => entry.id === 'watchtower')!;
+    expect(asset.targetSize).toBe(WATCHTOWER_DISPLAY_SIZE);
+  });
   it('covers every equipable utility with a portable model and authored held-item anchors', () => {
     const required = LOADOUT_CATALOG_ENTRIES.filter(entry => entry.kind === 'utility').map(entry => entry.id);
     const utilities = assets.filter(asset => asset.category === 'utility');

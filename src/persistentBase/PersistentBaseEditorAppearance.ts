@@ -6,6 +6,7 @@ import type { TurretWeaponId } from '../types';
 
 export interface BaseEditorAppearance {
   readonly wall: boolean;
+  readonly watchtower?: boolean;
   readonly footprint: readonly { dx: number; dy: number }[];
   readonly weapon?: TurretWeaponId;
   readonly powerUpDefId?: string;
@@ -22,6 +23,7 @@ export function getBaseEditorAppearance(model: PersistentBaseEditorModel, object
       angle: model.getPosition(object)?.angle ?? 0, ownerTintStrength: 0 };
     if (source.kind === 'power-up-definition') return { ...common, powerUpDefId: source.powerUpDefId };
     const def = getCoopDefenseConstructionDefinition(source.constructionId);
+    if (def.kind === 'watchtower') return { ...common, footprint: def.footprint, watchtower: true, angle: 0 };
     return def.kind === 'turret' ? { ...common, weapon: source.weaponId ?? def.weaponId } : null;
   }
   const entry = model.getConstruction(object.id);

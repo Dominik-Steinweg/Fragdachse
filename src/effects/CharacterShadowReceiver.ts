@@ -3,6 +3,7 @@ import { CELL_SIZE } from '../config';
 import type { ArenaLayout, SyncedPlaceableRock } from '../types';
 import { CHARACTER_SHADOW_CONFIG } from './ShadowConfig';
 import { sunShaderName } from './sunlight/SunRenderTarget';
+import { COOP_DEFENSE_CONSTRUCTIONS } from '../config/coopDefenseConstructions';
 
 /** One cell-sized receiver texel. Obstacles/bases are exclusions, never casters.
  * Updated on the existing shadow invalidation path, not by scanning per player. */
@@ -36,8 +37,17 @@ export class CharacterShadowReceiver {
       const cell = layout.rocks[i];
       this.set(offsetX + (cell.gridX + .5) * CELL_SIZE, offsetY + (cell.gridY + .5) * CELL_SIZE, 0);
     }
-    for (const cell of runtime) if (cell.hp > 0 && cell.collisionMode !== 'none') {
+    for (const cell of runtime) if (cell.kind !== 'watchtower' && cell.hp > 0 && cell.collisionMode !== 'none') {
       this.set(offsetX + (cell.gridX + .5) * CELL_SIZE, offsetY + (cell.gridY + .5) * CELL_SIZE, 0);
+    }
+    // Restore the raised walkable deck after both obstacle passes (including its anchor).
+    // Bases still win below; water outside the actual platform remains attenuated.
+    for (const tower of runtime) if (tower.kind === 'watchtower' && tower.hp > 0
+      && (!rockVisible || rockVisible(tower.id))) {
+      for (const cell of COOP_DEFENSE_CONSTRUCTIONS.watchtower.footprint) {
+        this.set(offsetX + (tower.gridX + cell.dx + .5) * CELL_SIZE,
+          offsetY + (tower.gridY + cell.dy + .5) * CELL_SIZE, 255);
+      }
     }
     for (const cell of bases) this.set(cell.x, cell.y, 0);
     const renderer = this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer, gl = renderer.gl;
