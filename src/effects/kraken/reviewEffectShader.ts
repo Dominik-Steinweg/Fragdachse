@@ -166,8 +166,27 @@ void main() {
         drops=max(drops,(1.0-smoothstep(1.0,2.7,length(p-pos)))*(1.0-smoothstep(.3,.65,t)));
       }
       alpha=max(pool*.62+rim*.25,drops*.8);
-      color=mix(vec3(.07,.095,.025),vec3(.3,.36,.1),clamp(rim+n*.3+drops,0.0,1.0));
+      // Dark plum brood ichor with a wet violet sheen on its rim, the egg's own palette.
+      color=mix(vec3(.05,.015,.06),vec3(.36,.14,.32),clamp(rim+n*.3+drops,0.0,1.0));
     }
+  } else if(uMode>10.5) {
+    // Spine wake: dark violet ichor bleeding off a homing spine, bent along its turn, widening and tearing
+    // into wisps with distance; only a faint sheen right behind the spine. The quad's front edge is the spine.
+    float lengthPx=uShape.z, width=uShape.w, behind=uShape.x*.5-p.x-uTiming.x;
+    float along=clamp(behind/max(lengthPx,1.0),0.0,1.0);
+    float centre=-.5*uTiming.y*behind*behind;
+    float dy=abs(p.y-centre);
+    vec2 q=vec2(behind*.06-t*2.2,(p.y-centre)*.2)+uTiming.z;
+    float n=field(q), m=field(q*2.3+5.0);
+    float spread=mix(1.6,width,pow(along,.55))*(.7+.6*n);
+    float start=smoothstep(-2.0,4.0,behind), end=1.0-smoothstep(lengthPx*.45,lengthPx,behind);
+    float mist=exp(-pow(dy/spread,2.0))*start*end;
+    float tear=smoothstep(.25+along*.35,.55+along*.35,n*.7+m*.3);
+    float edge=smoothstep(.25,1.0,dy/spread);
+    float sheen=exp(-pow(dy/1.3,2.0))*start*(1.0-smoothstep(0.0,22.0,behind));
+    alpha=max(mist*mix(.8,.4,along)*mix(1.0,tear,along),sheen*.3);
+    color=mix(vec3(.05,.012,.07),vec3(.34,.18,.46),clamp(edge*.8+m*.25,0.0,1.0));
+    color=mix(color,vec3(.58,.48,.68),sheen*.45);
   } else if(uMode>9.5) {
     // Soft elongated shore area: filled gradient with no contour or damage colour.
     float n=field(p*.035);
@@ -231,7 +250,8 @@ void main() {
       sparks=max(sparks,exp(-pow(line(p,pos,pos-d*4.0)/1.2,2.0)));
     }
     alpha=max(flash,sparks*(1.0-smoothstep(.05,.5,t))*.65);
-    color=mix(vec3(.38,.39,.1),vec3(1.0,.39,.07),clamp(flash+exp(-t*14.0),0.0,1.0));
+    // The ember core bursting out of the shell: crimson sparks around a hot centre.
+    color=mix(vec3(.30,.04,.10),vec3(1.0,.24,.10),clamp(flash+exp(-t*14.0),0.0,1.0));
   } else {
     p.x+=uShape.x*.3;
     float lengthPx=uShape.z, width=uTiming.w, along=clamp(p.x/lengthPx,0.0,1.0);

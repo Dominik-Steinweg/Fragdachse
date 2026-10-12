@@ -11,7 +11,8 @@ import type { KrakenState, KrakenTentacleState, KrakenEggState, KrakenInkCloud }
 import { EnemyClawRenderer } from '../EnemyClawRenderer';
 import { registerGraphicsObject } from '../EffectUtils';
 import { disposeShaderWarmupNode } from '../../graphics/disposeShaderWarmupNode';
-import { KRAKEN_LAND_EXPOSURE, KRAKEN_WORLD_EXPOSURE, KrakenSubmersion, krakenWaterMask, krakenMaterialExposure } from './submersionShader';
+import { KRAKEN_BROOD, KRAKEN_LAND_EXPOSURE, KRAKEN_WORLD_EXPOSURE, KrakenSubmersion, krakenBroodBeat, krakenBroodGlow, krakenMaterialGrade, krakenWaterMask,
+  type KrakenBroodMaterial } from './submersionShader';
 import { addReviewDrain, type KrakenReviewDrainFilter } from './KrakenReviewDrainFilter';
 import { KrakenShadowRenderer } from './KrakenShadowRenderer';
 import type { ShadowSystem } from '../ShadowSystem';
@@ -112,6 +113,21 @@ export function krakenDeathAlpha(asset: PipelineBossAsset, phase: { startedAt: n
   const fadeAt = Math.max(krakenDeathClipEnd(asset, phase), phase.endsAt - 900);
   return 1 - krakenClamp((now - fadeAt) / Math.max(1, phase.endsAt - fadeAt));
 }
+/** Brood eggs baked into a body throw frame, regraded to the egg's grade around their per-frame sockets. */
+export function krakenBroodDiscs(asset: PipelineBossAsset, bodyExposure: number,
+  sockets: Readonly<Record<string, PipelineSocketPoint>> | null): KrakenBroodMaterial | null {
+  const egg = krakenMaterialGrade('abyssal-kraken-egg', { exposure: bodyExposure });
+  if (!sockets) return null;
+  const radius = KRAKEN_BROOD.radiusPx / (asset.targetSize * (asset.displayScale ?? 1));
+  const discs = [1, 2, 3, 4, 5, 6].flatMap(i => {
+    const p = sockets[`egg${i}`];
+    return p ? [[p.x, p.y, radius, p.z] as const] : [];
+  });
+  // Exposure is applied per sprite in display space; fold the egg/body ratio into the linear tint. The body render
+  // bakes the brood's shell brighter than the egg asset's own render (albedoMatch, tuned against the flying egg).
+  const ratio = Math.pow(egg.exposure / Math.max(.001, bodyExposure), 2.2), match = KRAKEN_BROOD.albedoMatch;
+  return discs.length ? { discs, tint: [egg.tint[0]! * ratio * match[0]!, egg.tint[1]! * ratio * match[1]!, egg.tint[2]! * ratio * match[2]!, egg.saturation] } : null;
+}
 export function krakenBodyVisible(state: KrakenState, now: number): boolean {
   const p = state.phase;
   if (['waiting', 'submerged', 'removed'].includes(p.kind)) return false;
@@ -196,6 +212,7 @@ const LOOK = {
   surface: { radius: 96, lifetime: 1.1, foam: .62, sprayCount: 56, spraySpeed: 105, drain: .65 },
   dive: { radius: 110, lifetime: 1.5, foam: .65, shadow: .12 },
   egg: { arcScale: .65, pulse: .16, radius: 24 },
+  spineWake: { length: 150, width: 9, lead: 10, opacity: .9 },
 } as const;
 
 /** Owns sprite/filter/shadow only. The asset lease must outlive this view. */
@@ -229,6 +246,8 @@ export class KrakenSpriteView {
   }
   show(sample: KrakenClipSample, pose: KrakenPose, now: number, options: {
     socket?: string; scale?: number; alpha?: number; shadowContact?: number; drain?: number; waterLevel?: number; requireClip?: boolean;
+    /** Ember strength of an egg view (default: carried pulse); body views derive their brood glow themselves. */
+    glow?: number;
   } = {}): boolean {
     if (this.destroyed) return false;
     const a = this.asset.metadata;
@@ -261,14 +280,20 @@ export class KrakenSpriteView {
     const elevation = this.scene.textures.getFrame(frame.elevationKey, frame.elevationFrame);
     if (!this.submersion) this.submersion = new KrakenSubmersion(s, elevation, a.elevation, this.waterAt, this.exposure);
     const level = options.waterLevel ?? a.elevation.previewWaterLevel ?? 0;
+    const clipFrames = a.clips.find(c => c.name === sample.clip)?.frames;
+    const sockets = lease?.pose.sockets ?? (clipFrames ? a.socketFrames?.[clipFrames[sample.frame] ?? -1] : undefined) ?? null;
     if (a.materialPass && a.elevationPass.encoding === 'linear-unorm8-z-oct-normal-v1' && frame.emissionKey) {
       this.environment ??= this.shadows?.borrowFigureEnvironment(() => {
         this.environment = null; if (this.submersion) this.submersion.filter.material = null;
       }) ?? null;
+      const grade = krakenMaterialGrade(a.id, a.materialPass), egg = a.id === 'abyssal-kraken-egg';
+      const brood = !egg && sample.clip === 'egg-throw' && !lease?.pose.fallback ? krakenBroodDiscs(a, grade.exposure, sockets) : null;
+      const glow = egg || brood ? { color: KRAKEN_BROOD.glowColor, falloff: KRAKEN_BROOD.glowFalloff, whole: egg,
+        strength: options.glow ?? krakenBroodGlow(krakenBroodBeat(now / 1000)) } : undefined;
       if (this.environment) this.submersion.filter.material = { clouds: this.environment.clouds,
-        emission: this.scene.textures.getFrame(frame.emissionKey, frame.emissionFrame), emissionRange: a.materialPass.emissionRange, tint: a.materialPass.tint, saturation: a.materialPass.saturation,
-        highlightRollOff: a.id !== 'abyssal-kraken-egg', highlightRole: a.id === 'abyssal-kraken-tentacle' ? 'tentacle' : 'body' };
-      this.submersion.filter.params.exposure = krakenMaterialExposure(a.id, a.materialPass.exposure);
+        emission: this.scene.textures.getFrame(frame.emissionKey, frame.emissionFrame), emissionRange: a.materialPass.emissionRange, tint: grade.tint, saturation: grade.saturation,
+        highlightRollOff: !egg, highlightRole: a.id === 'abyssal-kraken-tentacle' ? 'tentacle' : 'body', glow, brood };
+      this.submersion.filter.params.exposure = grade.exposure;
     }
     this.submersion.update(elevation, level, now / 1000);
     if (options.drain && !this.drain) this.drain = addReviewDrain(s, elevation, a.elevation);
@@ -280,8 +305,7 @@ export class KrakenSpriteView {
       a.id.endsWith('-egg') ? 'egg' : a.id.endsWith('-tentacle') ? 'tentacle' : a.id.endsWith('-land') ? 'land'
         : a.id.endsWith('-spine') ? 'spine' : 'water');
     else this.shadow?.hide();
-    const clipFrames = a.clips.find(c => c.name === sample.clip)?.frames;
-    this.framedSockets = lease?.pose.sockets ?? (clipFrames ? a.socketFrames?.[clipFrames[sample.frame] ?? -1] : undefined) ?? null;
+    this.framedSockets = sockets;
     this.lease?.release(); this.lease = lease;
     return true;
   }
@@ -405,6 +429,13 @@ export class KrakenEffects {
       this.dive({ ...gripPose, x: gripPose.x - Math.cos(gripPose.angle) * 100,
         y: gripPose.y - Math.sin(gripPose.angle) * 100 }, phase.gripAt, now);
     }
+  }
+  /** Ichor wake of a flying spine; `curvature` (1/px) bends it along the homing turn. */
+  spineWake(head: KrakenPose, lengthPx: number, curvature: number, age: number, seed: number): void {
+    const w = LOOK.spineWake, width = lengthPx + w.lead + 8;
+    const q = this.take(11, DEPTH.PROJECTILES - .01, head, head.angle, width, w.width * 6, age, -width / 2);
+    if (!q) return;
+    q.shape[2] = lengthPx; q.shape[3] = w.width; q.timing = [w.lead, curvature, seed, 0]; q.opacity = w.opacity;
   }
   wetTrail(pose: KrakenPose, at: number, now: number): void {
     const age = (now - at) / 1000;
@@ -644,8 +675,13 @@ export class KrakenRenderer {
       if (!view) { view = this.view(this.options.assets.egg); this.eggs.set(key, view); }
       const landingAge = (now - egg.landedAt) / 1000, hatchAge = (now - egg.hatchStartedAt) / 1000;
       const incubation = krakenClamp((now - egg.landedAt) / (egg.hatchStartedAt - egg.landedAt));
-      const pulse = hatchAge < 0 ? Math.sin(landingAge * (5 + incubation * 7)) * LOOK.egg.pulse * incubation : 0;
-      view.show(sampleKrakenEgg(egg, view.asset.metadata, now), pose, now, { scale: 1 + pulse });
+      const beat = Math.sin(landingAge * (5 + incubation * 7));
+      const pulse = hatchAge < 0 ? beat * LOOK.egg.pulse * incubation : 0;
+      // The ember swells with the heartbeat, flares while the shell splits and dies with the spawn.
+      const glow = hatchAge < 0 ? krakenBroodGlow(beat, incubation) : now < egg.spawnAt
+        ? KRAKEN_BROOD.incubatedGlow + (KRAKEN_BROOD.hatchGlow - KRAKEN_BROOD.incubatedGlow) * krakenClamp((now - egg.hatchStartedAt) / Math.max(1, egg.spawnAt - egg.hatchStartedAt))
+        : KRAKEN_BROOD.hatchGlow * (1 - krakenClamp((now - egg.spawnAt) / 250));
+      view.show(sampleKrakenEgg(egg, view.asset.metadata, now), pose, now, { scale: 1 + pulse, glow });
       this.effects.egg(pose, 0, landingAge, hatchAge, 1, egg.entityGeneration);
     }
     for (const [key, view] of this.eggs) if (!eggKeys.has(key)) { view.destroy(); this.eggs.delete(key); }
@@ -775,33 +811,40 @@ export class KrakenEggFlightView implements GrenadeEggVisual {
   }
 }
 
-/** A fired dorsal spine in flight: the same detachable spike art, tip leading along its velocity, with a short
- * fading streak of its recent path. Trajectory and homing stay with the projectile runtime. */
+/** A fired dorsal spine in flight: the same detachable spike art, tip leading along its velocity, trailing a
+ * GPU ichor wake that bends with its homing turn. Trajectory and homing stay with the projectile runtime. */
 export class KrakenSpineFlightView implements GrenadeEggVisual {
   private readonly view: KrakenSpriteView;
-  private readonly streak: Phaser.GameObjects.Image;
-  private readonly path: { x: number; y: number; at: number }[] = [];
+  private readonly effects: KrakenEffects;
+  private readonly startedAt: number;
+  private last: { x: number; y: number; heading: number } | null = null;
+  private travelled = 0;
+  private curvature = 0;
   private destroyed = false;
   constructor(scene: Phaser.Scene, asset: KrakenPresentationAsset, diagnostic: (message: string) => void,
-    private readonly clock: () => number, shadows?: ShadowSystem) {
+    private readonly clock: () => number, shadows?: ShadowSystem, private readonly seed = 0) {
     this.view = new KrakenSpriteView(scene, asset, () => 0, diagnostic, false, DEPTH.PROJECTILES, KRAKEN_WORLD_EXPOSURE, shadows, false);
-    // A stretched soft quad over the recent path, not a vector Graphics object.
-    this.streak = scene.add.image(0, 0, '__WHITE').setDepth(DEPTH.PROJECTILES - .01).setTint(0xb9a6c9).setOrigin(1, .5).setVisible(false);
-    registerGraphicsObject(scene, 'bossIntro', this.streak);
+    this.effects = new KrakenEffects(scene, () => 0);
+    this.startedAt = clock();
   }
   update(x: number, y: number, _size: number, vx: number, vy: number): void {
     if (this.destroyed) return;
-    const now = this.clock();
-    this.path.push({ x, y, at: now });
-    while (this.path.length && now - this.path[0]!.at > 140) this.path.shift();
+    const now = this.clock(), heading = Math.atan2(vy, vx);
+    if (this.last) {
+      const step = Math.hypot(x - this.last.x, y - this.last.y);
+      const turn = Math.atan2(Math.sin(heading - this.last.heading), Math.cos(heading - this.last.heading));
+      this.travelled += step;
+      if (step > .5) this.curvature += (Math.max(-.02, Math.min(.02, turn / step)) - this.curvature) * .35;
+    }
+    this.last = { x, y, heading };
     // The spike's tip points away from its base; lead with the tip.
-    this.view.show({ clip: 'idle', frame: 0 }, { x, y, angle: Math.atan2(vy, vx) + Math.PI }, now, { waterLevel: -1000 });
-    const tail = this.path[0]!, length = Math.hypot(x - tail.x, y - tail.y);
-    this.streak.setVisible(length > 2).setPosition(x, y).setRotation(Math.atan2(y - tail.y, x - tail.x))
-      .setDisplaySize(length, 3).setAlpha(.22);
+    this.view.show({ clip: 'idle', frame: 0 }, { x, y, angle: heading + Math.PI }, now, { waterLevel: -1000 });
+    this.effects.begin();
+    this.effects.spineWake({ x, y, angle: heading }, Math.min(LOOK.spineWake.length, this.travelled),
+      this.curvature, (now - this.startedAt) / 1000, this.seed);
   }
   destroy(): void {
     if (this.destroyed) return;
-    this.destroyed = true; this.view.destroy(); this.streak.destroy();
+    this.destroyed = true; this.view.destroy(); this.effects.destroy();
   }
 }

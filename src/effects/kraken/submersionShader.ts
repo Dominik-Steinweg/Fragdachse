@@ -10,6 +10,30 @@ export function krakenMaterialExposure(id: string, exposure: number): number {
   return exposure * (id === 'abyssal-kraken-tentacle' ? materialLook.tentacleExposureScale : 1);
 }
 
+export interface KrakenMaterialGrade { readonly exposure: number; readonly tint: readonly number[]; readonly saturation: number }
+const AUTHORED_GRADES: Readonly<Record<string, KrakenMaterialGrade>> = materialLook.grades;
+/** Separately rendered parts (spines, eggs) are graded to belong to the body's palette instead of matching
+ * their own isolated beauty render; everything else keeps its hash-bound calibration. */
+export function krakenMaterialGrade(id: string, pass: { exposure: number; tint?: readonly number[]; saturation?: number }): KrakenMaterialGrade {
+  return AUTHORED_GRADES[id] ?? { exposure: krakenMaterialExposure(id, pass.exposure), tint: pass.tint ?? [1, 1, 1], saturation: pass.saturation ?? 1 };
+}
+export const KRAKEN_BROOD = materialLook.brood;
+/** Ember strength of an egg for a heartbeat in [-1, 1]: dim while carried/flying, brighter and throbbing
+ * harder as it incubates (the caller owns the beat so glow and swelling stay in phase). */
+export function krakenBroodGlow(beat: number, incubation = 0): number {
+  const b = KRAKEN_BROOD, k = Math.max(0, Math.min(1, incubation));
+  return b.glow + (b.incubatedGlow - b.glow) * k + (b.glowPulse + (b.incubatedPulse - b.glowPulse) * k) * beat;
+}
+/** The carried/flying heartbeat. */
+export const krakenBroodBeat = (seconds: number): number => Math.sin(seconds * KRAKEN_BROOD.pulseHz * Math.PI * 2);
+/** Brood eggs baked into a body frame, regraded in-shader to the egg's own grade. */
+export interface KrakenBroodMaterial {
+  /** Linear tint (egg grade relative to the body exposure) and saturation. */
+  readonly tint: readonly [number, number, number, number];
+  /** Up to six discs: logical x, y, logical radius, socket z (Blender units). */
+  readonly discs: readonly (readonly [number, number, number, number])[];
+}
+
 /** Heights are Blender units; colours are linear shader RGB in [0, 1]. */
 export const SUBMERSION_DEFAULTS = {
   waterLevel: 0, time: 0,
@@ -108,7 +132,10 @@ type Sprite = Phaser.GameObjects.Sprite | Phaser.GameObjects.Image;
  */
 export class SubmersionFilter extends Phaser.Filters.Controller {
   /** Pilot/new-revision opt-in only; scalar elevation never implies a material. */
-  material: { clouds: SunCloudState; emission: Phaser.Textures.Frame; emissionRange: number; tint?: readonly number[]; saturation?: number; highlightRollOff?: boolean; highlightRole?: 'body' | 'tentacle' } | null = null;
+  material: { clouds: SunCloudState; emission: Phaser.Textures.Frame; emissionRange: number; tint?: readonly number[]; saturation?: number; highlightRollOff?: boolean; highlightRole?: 'body' | 'tentacle';
+    /** Linear ember colour and strength; `whole` lights the entire sprite (an egg) instead of only brood discs. */
+    glow?: { readonly color: readonly number[]; readonly strength: number; readonly falloff: number; readonly whole: boolean };
+    brood?: KrakenBroodMaterial | null } | null = null;
   params = { ...SUBMERSION_DEFAULTS };
   elevationMin: number;
   elevationMax: number;
@@ -145,6 +172,10 @@ class SubmersionNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader 
       materialWorld: [s.x, s.y, Math.cos(s.rotation), Math.sin(s.rotation)], materialOrigin: [s.originX, s.originY],
       emissionRange: m?.emissionRange ?? 1, emissionUV: [e.u0, e.v0, e.u1, e.v1],
       emissionSize: [e.realWidth, e.realHeight], emissionTrim: [e.x, e.y, e.width, e.height],
+      materialGlow: m?.glow ? [...m.glow.color, m.glow.strength] : [0, 0, 0, 0],
+      materialGlowShape: [m?.glow?.falloff ?? 1, m?.glow?.whole ? 1 : 0],
+      broodTint: m?.brood?.tint ?? [1, 1, 1, 0],
+      ...Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`broodDisc${i}`, m?.brood?.discs[i] ?? [0, 0, 0, 0]])),
       ...c.params, uElevation: 1, uWaterMask: 2,
       elevationMin: c.elevationMin, elevationMax: c.elevationMax,
       elevationUV: [f.u0, f.v0, f.u1, f.v1],

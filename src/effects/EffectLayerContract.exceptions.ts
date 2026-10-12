@@ -410,7 +410,6 @@ export const DEPTH_LAYER_EXCEPTIONS: readonly LayerException[] = [
   {"id":"cpu:effects/ZeusTaserRenderer.ts:playSwing/sector/setDepth/0","deviation":"material-outside-sun","finding":"D06"},
   {"id":"cpu:effects/ZeusTaserRenderer.ts:playOriginBurst/halo/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/ZeusTaserRenderer.ts:playOriginBurst/streak/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
-  {"id":"cpu:effects/kraken/KrakenRenderer.ts:module/this.streak/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/ZeusTaserRenderer.ts:playOriginBurst/sparks/createEmitter/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/ZeusTaserRenderer.ts:playVolumeParticles/volume/createEmitter/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/ZeusTaserRenderer.ts:playVolumeParticles/rim/createEmitter/0","deviation":"emission-under-lightmap","finding":"D10"},

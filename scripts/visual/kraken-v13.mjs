@@ -136,6 +136,12 @@ export async function runKrakenV13({ args, page, report, out, command, status, s
       await series(group, a.startedAt, [0, release / 2, release, release + 150, release + 350,
         release + 550, release + 750, release + config.eggs.flightMs, release + config.eggs.flightMs + 550], midpoint(s));
       if (!report.samples.some(x => state(x)?.eggs.length)) throw Error('No landed eggs observed');
+      // Landing → incubation heartbeat → hatch flare → spawn, framed on the player where the brood lands.
+      const landed = release + config.eggs.flightMs, hatch = landed + config.eggs.incubationMs;
+      const brood = await status();
+      await series(`${group}-incubation`, a.startedAt, [landed + 300, landed + 1500, landed + 2700, hatch - 300, hatch,
+        hatch + config.eggs.hatchSpawnAfterMs * .5, hatch + config.eggs.hatchSpawnAfterMs, hatch + config.eggs.hatchSpawnAfterMs + 150,
+        hatch + config.eggs.hatchDurationMs], { x: brood.player.x, y: brood.player.y });
     } else if (scene === 'ink') {
       // Start near enough that the normal water approach can put the mouth in range.
       await target(37, 34); await step(1); s = await act('ink');

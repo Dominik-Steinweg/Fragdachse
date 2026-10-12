@@ -13,7 +13,7 @@ vi.mock('../src/effects/kraken/KrakenTentacleShadow', () => ({ KrakenTentacleSha
 } }));
 vi.mock('../src/effects/kraken/KrakenReviewDrainFilter', () => ({ addReviewDrain: () => ({ active: false }) }));
 import { KrakenRenderer, KrakenSpriteView, KrakenEffects, KrakenEggFlightView, krakenSocket, sampleKrakenBody,
-  sampleKrakenTentacle, sampleKrakenEgg, krakenRiseTiming, krakenDeathAlpha, type KrakenPresentationAsset, type KrakenPresentationAssets } from '../src/effects/kraken/KrakenRenderer';
+  sampleKrakenTentacle, sampleKrakenEgg, krakenRiseTiming, krakenDeathAlpha, krakenBroodDiscs, type KrakenPresentationAsset, type KrakenPresentationAssets } from '../src/effects/kraken/KrakenRenderer';
 import { KrakenIntroRenderer } from '../src/effects/kraken/KrakenIntroRenderer';
 import { KRAKEN_WORLD_EXPOSURE, krakenWaterMask } from '../src/effects/kraken/submersionShader';
 import { KRAKEN_RISE_INTRO } from '../src/config/bossIntros';
@@ -169,6 +169,16 @@ describe('host timelines and D asset projection', () => {
       readEggPose: () => null, diagnostic });
     expect(() => { renderer.sync(state(), null, 1000); renderer.sync(state(), null, 1016); renderer.destroy(); }).not.toThrow();
     expect(diagnostic).toHaveBeenCalledOnce();
+  });
+  it('regrades the brood baked into a body frame around the egg sockets of that frame', () => {
+    const body = asset('water').metadata;
+    const sockets = { ...body.socketFrames![40]!, egg3: { x: .21, y: .68, z: .4 } };
+    const brood = krakenBroodDiscs(body, .6, sockets)!;
+    expect(brood.discs).toHaveLength(6);
+    expect(brood.discs[2]).toEqual([.21, .68, expect.any(Number), .4]);
+    expect(brood.discs[2]![2]).toBeGreaterThan(0);
+    expect(krakenBroodDiscs(body, .6, null)).toBeNull();
+    expect(krakenBroodDiscs(body, .6, { mouth: { x: .5, y: .2, z: 0 } })).toBeNull();
   });
   it('retimes semantic markers without following exported next clips or source frame numbers', () => {
     const s = state(), a = assets(), pose = { x: 10, y: 20, angle: .8 };

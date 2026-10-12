@@ -6,7 +6,7 @@ import { getHeldItemAnchor, PLAYER_VISUAL_SIZE } from '../../../src/config';
 import runtime from '../../../src/config/pipelineAssets.json';
 import { categoryLabels, models, constructionsFor, resolveSource, samplePose, supportsHeldView, assetFromExport, advanceViewerPlayback, resolveSpine, spineGrowth, spineTransform, reviewDefaults, readReviewSettings, writeReviewSettings } from './library.mjs';
 
-import { addSubmersionFilter, krakenMaterialExposure } from '../../../src/effects/kraken/submersionShader';
+import { addSubmersionFilter, krakenMaterialGrade } from '../../../src/effects/kraken/submersionShader';
 import { createPond } from './pond.js';
 
 const $ = id => document.getElementById(id);
@@ -187,9 +187,10 @@ function applyPose(p,r,current,playback = state) {
   if (material?.normal === 'linear-unorm8-z-oct-normal-v1') {
     const azimuth = Number(document.getElementById('material-sun')?.value ?? 0) * Math.PI / 180;
     krakenClouds.sunPath.sun = [Math.cos(azimuth) * Math.SQRT1_2, -Math.sin(azimuth) * Math.SQRT1_2, Math.SQRT1_2];
+    const grade = krakenMaterialGrade(r.asset.id, material);
     p.submersion.material = { clouds: krakenClouds, emission: atlasFrame(r.resources.emission[pose.clip], pose.frameName),
-      emissionRange: material.emissionRange, tint: material.tint, saturation: material.saturation, highlightRollOff: r.asset.id !== 'abyssal-kraken-egg', highlightRole: r.asset.id === 'abyssal-kraken-tentacle' ? 'tentacle' : 'body' };
-    p.submersion.params.exposure = krakenMaterialExposure(r.asset.id,material.exposure);
+      emissionRange: material.emissionRange, tint: grade.tint, saturation: grade.saturation, highlightRollOff: r.asset.id !== 'abyssal-kraken-egg', highlightRole: r.asset.id === 'abyssal-kraken-tentacle' ? 'tentacle' : 'body' };
+    p.submersion.params.exposure = grade.exposure;
   } else p.submersion.material = null;
   p.submersion.active=settings.submersion || !!material;
   p.submersion.params.waterLevel=settings.submersion ? settings.waterLevel : r.source.elevation.min - 1;
