@@ -149,6 +149,14 @@ den World-Maskencache. Die Verträge sichern
 [WorldPresentationFrameLifetime.test.ts](../../tests/integration/WorldPresentationFrameLifetime.test.ts)
 und [LobbyWorldInteractive.test.ts](../../tests/integration/LobbyWorldInteractive.test.ts).
 
+Stoerungen der Wasseroberflaeche (Wellenringe, Aufwoelbungen, Strudel, Kielwasser, kleine Einschlaege)
+gehoeren in die Flaeche selbst: Praesentations-Owner reichen sie pro Frame ueber
+`WaterDisturbanceField.for(scene)?.submit(...)` ein ([WaterDisturbanceField.ts](../../src/arena/WaterDisturbanceField.ts)).
+Das Feld gehoert zum `WaterSurfaceRenderer` (World-Lifetime, GPU-Ziel erst beim ersten Einreichen) und
+wird vom Wassershader in dessen eigenem Licht schattiert (Himmelsreflex, Sonnenglanz, Schaum als
+Rauschspitze). Overlays zeichnen nur, was ueber der Oberflaeche liegt (Gischt, Nebel, Koerper unter
+Wasser); Spielregeln lesen das Feld nie.
+
 [ArenaBuilder.ts](../../src/arena/ArenaBuilder.ts) trennt Runtime-/Physik-Proxies von visuellen World-Objekten. Ohne Presentation werden World-Physik, Runtime-Geometrie und notwendige Indizes weiter aufgebaut; nur die visuellen Flächen, Overlays und Streamer entfallen. Renderer beobachten Runtime und werden bei Teardown vollständig gelöst.
 
 Player- und Tree-Runtime folgen demselben Prinzip: PlayerBody und TreePhysicsProxy sind Simulation; Sprite, Licht, Textur und Overlay sind Präsentation. Kollisionen werden aus expliziter Runtime-Geometrie abgeleitet, nicht aus Displaymaßen.
