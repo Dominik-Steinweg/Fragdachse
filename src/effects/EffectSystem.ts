@@ -967,7 +967,11 @@ export class EffectSystem implements EnemyVisualSink {
       ? this.mixColor(fillColor, 0xffffff, 0.45)
       : (isHoly ? 0xffef9a : (isNuke ? this.mixColor(fillColor, 0xffffff, 0.35) : this.mixColor(fillColor, 0xffffff, 0.2)));
     this.spawnCombatExplosionGpu(x, y, radius, visualStyle, fillColor, flashColor, haloColor);
-    if (visualStyle === 'firestarter_combo') return; // Shared burst in faction colors.
+    if (visualStyle === 'firestarter_combo') {
+      // The shared burst in faction colors; the firestarter layer adds implosion, lance star and scorch.
+      this.firestarterRenderer?.playCombo(x, y, radius, color);
+      return;
+    }
     if (visualStyle === 'mortar') {
       // The shared burst carries flash and fireball; the mortar layer adds crater, dust and embers.
       this.mortarImpactRenderer?.(x, y, radius, color);
@@ -1074,6 +1078,12 @@ export class EffectSystem implements EnemyVisualSink {
   }
 
   private mortarImpactRenderer: ((x: number, y: number, radius: number, color?: number) => void) | null = null;
+  private firestarterRenderer: Pick<import('./FirestarterRenderer').FirestarterRenderer, 'playLance' | 'playCombo'> | null = null;
+
+  /** Firestarter lance and combo signature; driven by the replicated hitscan and explosion events. */
+  setFirestarterRenderer(renderer: Pick<import('./FirestarterRenderer').FirestarterRenderer, 'playLance' | 'playCombo'> | null): void {
+    this.firestarterRenderer = renderer;
+  }
 
   /** Mortar crater/dust/ember signature; driven only by the replicated explosion event. */
   setMortarImpactRenderer(renderer: ((x: number, y: number, radius: number, color?: number) => void) | null): void {
@@ -1393,7 +1403,12 @@ export class EffectSystem implements EnemyVisualSink {
       return;
     }
 
-    if ((visualPreset === 'asmd_primary' || visualPreset === 'fire_lance') && this.asmdPrimaryRenderer) {
+    if (visualPreset === 'fire_lance' && this.firestarterRenderer) {
+      this.firestarterRenderer.playLance(startX, startY, renderEndX, renderEndY, playerColor);
+      return;
+    }
+
+    if (visualPreset === 'asmd_primary' && this.asmdPrimaryRenderer) {
       this.asmdPrimaryRenderer.playTracer(startX, startY, renderEndX, renderEndY, playerColor, thickness, resolvedImpactKind, beamId);
       return;
     }
@@ -1498,7 +1513,7 @@ export class EffectSystem implements EnemyVisualSink {
 
     // ASMD und Plasmabrenner bringen ihr eigenes Strahllicht im gemeinsamen Renderer mit.
     // Hier nur die generische Hitscan-Beleuchtung, sonst leuchten diese Varianten doppelt.
-    if (visualPreset === 'asmd_primary' || visualPreset === 'plasma_burner') return;
+    if (visualPreset === 'asmd_primary' || visualPreset === 'plasma_burner' || visualPreset === 'fire_lance') return;
 
     const dx = endX - startX;
     const dy = endY - startY;

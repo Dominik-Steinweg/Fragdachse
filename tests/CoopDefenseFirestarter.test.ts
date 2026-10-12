@@ -9,6 +9,7 @@ import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { AutomatedWeaponExecutionAdapter } from '../src/world/AutomatedWeaponExecutionAdapter';
 import { WeaponFireExecutor } from '../src/loadout/WeaponFireExecutor';
 import { encodeEnemyUpsert, decodeEnemyUpserts } from '../src/network/enemySnapshotCodec';
+import { PROJECTILE_STYLES } from '../src/network/projectileSnapshotCodec';
 import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { ProjectileDetonableSample } from '../src/projectile/ProjectileGameplayPort';
 
@@ -24,10 +25,10 @@ function fixture() {
   const player = { kind: 'player' as const, id: 'p1', x: config.lance.rangePx / 2, y: 0, isTargetable: () => true };
   const catalog = new EnemyAiTargetCatalog(); catalog.updateTargets([player]);
   const balls: ProjectileDetonableSample[] = [];
-  const fire = vi.fn(() => true), hasLineOfSight = vi.fn(() => true);
-  const system = new CoopDefenseFirestarterSystem({ getAllEnemies: () => enemies }, { hasLineOfSight },
+  const fire = vi.fn(() => true), hasClearLineOfFire = vi.fn(() => true);
+  const system = new CoopDefenseFirestarterSystem({ getAllEnemies: () => enemies }, { hasClearLineOfFire },
     { fire, fireGauss: () => false }, { readDetonableProjectiles: visit => balls.forEach(visit) }, catalog);
-  return { enemy, enemies, player, catalog, balls, fire, system, hasLineOfSight };
+  return { enemy, enemies, player, catalog, balls, fire, system, hasClearLineOfFire };
 }
 
 describe('firestarter host decisions', () => {
@@ -85,19 +86,23 @@ describe('firestarter host decisions', () => {
     const ball = (id: number, y: number): ProjectileDetonableSample => ({ projectileId: id, ownerId: 'foreign', tag,
       x: f.player.x - 100 * seconds, y, vx: 100, vy: 0, allowCrossTeam: true });
     f.balls.push(ball(1, 40), ball(2, 12), { ...ball(3, 0), remainingLifetimeMs: config.lance.telegraphMs - 1 });
-    f.hasLineOfSight.mockImplementation((_x: number, _y: number, _tx: number, ty: number) => ty !== 12);
+    f.hasClearLineOfFire.mockImplementation((_x: number, _y: number, _tx: number, ty: number) => ty !== 12);
     f.system.hostUpdate(0); f.player.y = 500;
     f.system.hostUpdate(config.lance.telegraphMs);
     expect(f.fire.mock.calls[0][1]).toMatchObject({ targetX: f.player.x, targetY: 40 });
   });
 
   it('respects line of sight for both attacks and the cross-attack gap after a lance', () => {
-    const f = fixture(); f.hasLineOfSight.mockReturnValue(false); f.system.hostUpdate(0);
+    const f = fixture(); f.hasClearLineOfFire.mockReturnValue(false); f.system.hostUpdate(0);
     expect(f.enemy.setSpecialAction).not.toHaveBeenCalled(); expect(f.fire).not.toHaveBeenCalled();
-    f.hasLineOfSight.mockReturnValue(true); f.system.hostUpdate(1); f.system.hostUpdate(1 + config.lance.telegraphMs);
+    f.hasClearLineOfFire.mockReturnValue(true); f.system.hostUpdate(1); f.system.hostUpdate(1 + config.lance.telegraphMs);
     const firedAt = 1 + config.lance.telegraphMs;
     f.system.hostUpdate(firedAt + config.crossAttackGapMs - 1); expect(f.fire).toHaveBeenCalledOnce();
     f.system.hostUpdate(firedAt + config.crossAttackGapMs); expect(f.fire).toHaveBeenCalledTimes(2);
+    // The ball's own body width decides its corridor; the lance stays a hairline.
+    const ballWeapon = WEAPON_CONFIGS[config.fireballWeaponId];
+    expect(f.hasClearLineOfFire.mock.lastCall?.[4]).toMatchObject({
+      clearanceRadius: ballWeapon.fire.type === 'projectile' ? ballWeapon.fire.projectileSize / 2 : NaN });
   });
 
   it.each(['death', 'prune', 'clear', 'allied'] as const)('cancels a pending telegraph on %s without firing', cause => {
@@ -121,6 +126,9 @@ describe('firestarter host decisions', () => {
 
 describe('firestarter authored and replicated contracts', () => {
   it('uses append-only codes and roundtrips the telegraph progress and bearing', () => {
+    // The orb style is a wire index too: appended after every deployed projectile style.
+    expect(PROJECTILE_STYLES.indexOf('firestarter_orb')).toBe(PROJECTILE_STYLES.length - 1);
+    expect(WEAPON_CONFIGS[config.fireballWeaponId].projectileStyle).toBe('firestarter_orb');
     const deployedActions = ['none', 'gauss-charge', 'phase-nuke', 'armageddon', 'timebomb-chase',
       'timebomb-fuse', 'void-molotov-windup', 'kraken-ink', 'kraken-eggs', 'kraken-dive',
       'kraken-submerged', 'kraken-surface', 'kraken-ashore', 'kraken-slam', 'kraken-spines'] as const;
@@ -158,7 +166,13 @@ describe('firestarter authored and replicated contracts', () => {
       const weapon = resolveEnemyWeaponFirePayloads(WEAPON_CONFIGS[config.fireballWeaponId], faction);
       const explosion = weapon.detonable!.explosion!;
       expect(explosion).toMatchObject({ damageTarget: target, burnOnHit: { visualStyle: style },
-        groundFire: { damageTarget: target, visualStyle: style }, fireChunkBurst: { damageTarget: target, visualStyle: style } });
+        fireChunkBurst: { damageTarget: target, visualStyle: style } });
+      // Ground-fire zones are a generic detonable payload even though the firestarter scatters chunks instead.
+      const zoneBase = WEAPON_CONFIGS[config.fireballWeaponId];
+      const withZone = resolveEnemyWeaponFirePayloads({ ...zoneBase, detonable: { ...zoneBase.detonable!, explosion: {
+        ...zoneBase.detonable!.explosion!, groundFire: { type: 'fire', radius: 40, lingerDuration: 500, damagePerTick: 1,
+          burnDurationMs: 500, burnDamagePerTick: 1, sourceId: 'test' } } } }, faction);
+      expect(withZone.detonable!.explosion!.groundFire).toMatchObject({ damageTarget: target, visualStyle: style });
       const sink: DetonationEffectSink = { resolveProjectileExplosion: vi.fn(), spawnComboEssence: vi.fn(),
         applyComboLightning: vi.fn(), applyAoeDamage: vi.fn(), applyRadialImpulse: vi.fn(),
         applyEnvironmentDamage: vi.fn(), playExplosion: vi.fn(), spawnDotArea: vi.fn(), resolveOwnerColor: () => undefined };

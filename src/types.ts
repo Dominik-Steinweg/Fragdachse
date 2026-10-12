@@ -379,7 +379,7 @@ export interface SyncedDecoy {
 }
 
 /** Visueller Stil eines Projektils */
-export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'hydra' | 'spore' | 'flame' | 'fireball' | 'leaf_blower' | 'bfg' | 'awp' | 'gauss' | 'rocket' | 'grenade' | 'holy_grenade' | 'translocator_puck' | 'tesla_bolt' | 'plasma_burner_charge';
+export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'hydra' | 'spore' | 'flame' | 'fireball' | 'leaf_blower' | 'bfg' | 'awp' | 'gauss' | 'rocket' | 'grenade' | 'holy_grenade' | 'translocator_puck' | 'tesla_bolt' | 'plasma_burner_charge' | 'firestarter_orb';
 
 /** Semantic owner of a path effect; unlike ProjectileStyle this is gameplay capability data. */
 export type ProjectilePathEffectKind = 'awp' | 'fireball';

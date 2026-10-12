@@ -2,8 +2,7 @@ import * as Phaser from 'phaser';
 import { bridge }            from '../../network/bridge';
 import { dequantizeAngle }   from '../../utils/angle';
 import { DEPTH, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT, getTopDownMuzzleOrigin } from '../../config';
-import { getCoopDefenseEnemyConfig } from '../../config/coopDefenseEnemies';
-import { ALLIED_PALETTE, VOID_PALETTE } from '../../config';
+import { VOID_PALETTE } from '../../config';
 import type { EnemyVisualSource } from '../../entities/EnemyVisualSource';
 import { registerGraphicsObject } from '../../effects/EffectUtils';
 
@@ -78,21 +77,7 @@ export class GaussWarningRenderer {
 
     for (const enemy of this.getEnemies()) {
       const snapshot = enemy.getNetSnapshot();
-      if (!enemy.sprite.active) continue;
-      if (snapshot.specialAction === 'fire-lance-charge') {
-        const config = getCoopDefenseEnemyConfig(snapshot.kind).firestarter;
-        if (!config) continue;
-        const progress = Phaser.Math.Clamp(snapshot.gaussChargeProgress, 0, 1);
-        const committed = progress >= 1 - config.lance.commitMs / config.lance.telegraphMs;
-        const angle = snapshot.gaussAimAngle;
-        this.drawVoidBeam(enemy.sprite.x, enemy.sprite.y,
-          enemy.sprite.x + Math.cos(angle) * config.lance.rangePx,
-          enemy.sprite.y + Math.sin(angle) * config.lance.rangePx,
-          progress, 1, committed ? 0.9 : 0.3 + 0.3 * progress,
-          snapshot.faction === 'allied' ? ALLIED_PALETTE : VOID_PALETTE);
-        continue;
-      }
-      if (snapshot.specialAction !== 'gauss-charge') continue;
+      if (!enemy.sprite.active || snapshot.specialAction !== 'gauss-charge') continue;
       const chargeFraction = Phaser.Math.Clamp(snapshot.gaussChargeProgress, 0, 1);
       const aimAngle = snapshot.gaussAimAngle;
       const muzzle = getTopDownMuzzleOrigin(enemy.sprite.x, enemy.sprite.y, aimAngle);
@@ -120,25 +105,24 @@ export class GaussWarningRenderer {
     progress: number,
     pulse: number,
     alpha: number,
-    palette: { shadow: number; deep: number; primary: number; bright: number; core: number } = VOID_PALETTE,
   ): void {
-    this.gfx.lineStyle(18, palette.shadow, 0.12 * alpha);
+    this.gfx.lineStyle(18, VOID_PALETTE.shadow, 0.12 * alpha);
     this.gfx.beginPath(); this.gfx.moveTo(sx, sy); this.gfx.lineTo(ex, ey); this.gfx.strokePath();
-    this.gfx.lineStyle(12, palette.deep, 0.22 * alpha * pulse);
+    this.gfx.lineStyle(12, VOID_PALETTE.deep, 0.22 * alpha * pulse);
     this.gfx.beginPath(); this.gfx.moveTo(sx, sy); this.gfx.lineTo(ex, ey); this.gfx.strokePath();
-    this.gfx.lineStyle(7, palette.primary, 0.4 * alpha * pulse);
+    this.gfx.lineStyle(7, VOID_PALETTE.primary, 0.4 * alpha * pulse);
     this.gfx.beginPath(); this.gfx.moveTo(sx, sy); this.gfx.lineTo(ex, ey); this.gfx.strokePath();
-    this.gfx.lineStyle(3, palette.bright, 0.7 * alpha);
+    this.gfx.lineStyle(3, VOID_PALETTE.bright, 0.7 * alpha);
     this.gfx.beginPath(); this.gfx.moveTo(sx, sy); this.gfx.lineTo(ex, ey); this.gfx.strokePath();
-    this.gfx.lineStyle(1, palette.core, 0.96 * alpha);
+    this.gfx.lineStyle(1, VOID_PALETTE.core, 0.96 * alpha);
     this.gfx.beginPath(); this.gfx.moveTo(sx, sy); this.gfx.lineTo(ex, ey); this.gfx.strokePath();
 
     const coreRadius = 7 + progress * 11;
-    this.gfx.fillStyle(palette.deep, 0.2 * alpha * pulse);
+    this.gfx.fillStyle(VOID_PALETTE.deep, 0.2 * alpha * pulse);
     this.gfx.fillCircle(sx, sy, coreRadius * 2.1);
-    this.gfx.fillStyle(palette.primary, 0.42 * alpha);
+    this.gfx.fillStyle(VOID_PALETTE.primary, 0.42 * alpha);
     this.gfx.fillCircle(sx, sy, coreRadius * 1.25);
-    this.gfx.fillStyle(palette.core, 0.82 * alpha);
+    this.gfx.fillStyle(VOID_PALETTE.core, 0.82 * alpha);
     this.gfx.fillCircle(sx, sy, Math.max(3, coreRadius * 0.48));
   }
 

@@ -613,12 +613,11 @@ describe('enemy hitscan and firestarter combo through world combat', () => {
     } finally { f.destroy(); }
   });
 
-  it('resolves combo burn, ground fire and chunks once through the normal explosion sink without friendly fire', () => {
+  it('resolves combo burn and chunks once through the normal explosion sink without friendly fire', () => {
     const f = fireFixture(), h = cloudHost(f);
     try {
       const chunks = vi.fn();
       h.host.setPlayerFramePort({ getPlayerGameplayRuntime: () => ({ hostCreateFireChunkBurst: chunks }) } as never);
-      const zone = (h.host as any).ctx.fireSystem.hostCreateZone;
       const ball = f.ball(280);
       f.detonations.detonateProjectile(ball, f.shooter.id);
       const hp = f.combat.getHP('p1'), enemyHp = f.enemy.getHp();
@@ -628,8 +627,7 @@ describe('enemy hitscan and firestarter combo through world combat', () => {
       expect(f.enemy.getHp()).toBe(enemyHp);
       expect(f.combat.getBurnStackCount('p1', clock.now)).toBeGreaterThan(0);
       expect(f.combat.getBurnVisualState('p1', clock.now).visualStyle).toBe('void');
-      expect(zone).toHaveBeenCalledOnce(); expect(chunks).toHaveBeenCalledOnce();
-      expect(zone.mock.calls[0][2]).toMatchObject({ visualStyle: 'void', damageTarget: 'players' });
+      expect(chunks).toHaveBeenCalledOnce();
       expect(chunks.mock.calls[0][3]).toMatchObject({ visualStyle: 'void', damageTarget: 'players' });
       resolveDetonations(sink, f.detonations.flushDetonations());
       expect(chunks).toHaveBeenCalledOnce();

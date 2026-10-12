@@ -6,6 +6,7 @@ import { EnemyReadabilityRenderer } from './EnemyReadabilityRenderer';
 import { StinkCloudBody } from './StinkCloudBody';
 import { MeteorGpuLayer } from './gpu/MeteorGpuLayer';
 import { MortarGpuLayer } from './gpu/MortarGpuLayer';
+import { FirestarterGpuLayer } from './gpu/FirestarterGpuLayer';
 import {
   TESLA_BOLT_FRAGMENT_SOURCE, TESLA_BOLT_SHADER_NAME, TESLA_DOME_FRAGMENT_SOURCE, TESLA_DOME_SHADER_NAME,
   TESLA_NOVA_FRAGMENT_SOURCE, TESLA_NOVA_SHADER_NAME,
@@ -22,6 +23,7 @@ export function createCombatShaderWarmupProbes(scene: Phaser.Scene): ShaderWarmu
   let displacement: DistortionFilter | null = null;
   let meteor: MeteorGpuLayer | null = null;
   let mortar: MortarGpuLayer | null = null;
+  let firestarter: FirestarterGpuLayer | null = null;
   return [
     {
       name: 'armageddon',
@@ -35,6 +37,12 @@ export function createCombatShaderWarmupProbes(scene: Phaser.Scene): ShaderWarmu
       // Telegraph, drop shadow, shell and crater share one program; every pass is primed.
       prepare: context => (mortar ??= new MortarGpuLayer(scene)).prepare(context),
       destroy: () => { mortar?.destroy(); mortar = null; },
+    },
+    {
+      name: 'firestarter',
+      // Telegraph, lance, void orbs and combo share one program; every pass is primed.
+      prepare: context => (firestarter ??= new FirestarterGpuLayer(scene)).prepare(context),
+      destroy: () => { firestarter?.destroy(); firestarter = null; },
     },
     {
       name: 'enemy-contour',

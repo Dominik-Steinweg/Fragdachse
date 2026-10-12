@@ -896,7 +896,7 @@
           "maxCharges": 3,
           "rechargeIntervalMs": 2000
         },
-        "fireballIntervalMs": 400,
+        "fireballIntervalMs": 900,
         "lance": {
           "telegraphMs": 500,
           "commitMs": 150,

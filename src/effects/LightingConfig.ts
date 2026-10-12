@@ -857,6 +857,8 @@ export function getProjectileLightSpec(
       return { preset: 'rocketThruster', baseRadiusPx: 54, radiusPerSizePx: 2.2 };
     case 'fireball':
       return { preset: 'projectileBurn', baseRadiusPx: 60, radiusPerSizePx: 2.6 };
+    case 'firestarter_orb':
+      return { preset: 'sporeVoidProjectile', baseRadiusPx: 56, radiusPerSizePx: 2.2 };
     case 'spore':
       return color === VOID_FIRE_COLOR
         ? { preset: 'sporeVoidProjectile', baseRadiusPx: 48, radiusPerSizePx: 2.0 }

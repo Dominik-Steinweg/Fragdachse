@@ -1,4 +1,5 @@
 import { MortarStrikeRenderer } from '../../effects/MortarStrikeRenderer';
+import { FirestarterRenderer } from '../../effects/FirestarterRenderer';
 import { PlasmaBurnerChargeRenderer } from '../../effects/PlasmaBurnerChargeRenderer';
 import { onBootSceneTeardown } from '../../ui/BootPreparation';
 import { MgAttritionRenderer } from '../../effects/MgAttritionRenderer';
@@ -161,6 +162,7 @@ export interface RendererBundle {
   train:               TrainRenderer | null;
   translocatorTeleport: TranslocatorTeleportRenderer | null;
   mortarStrike: MortarStrikeRenderer;
+  firestarter: FirestarterRenderer;
 }
 
 /** Synchronous entry point for callers that already own their scheduling. */
@@ -442,6 +444,11 @@ export function* createRendererBundleSteps(
   mortarStrike.registerGpuVfx(gpuVfx);
   cleanup.push(() => mortarStrike.destroy());
   yield 'renderers/mortarStrike';
+  const firestarter = new FirestarterRenderer(scene);
+  firestarter.registerGpuVfx(gpuVfx);
+  firestarter.setLightingSystem(lighting);
+  cleanup.push(() => firestarter.destroy());
+  yield 'renderers/firestarter';
   return {
     interactions,
     turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, plasmaBurnerCharge, healingAura, guardianSpirit, repairDrone, attackDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
@@ -467,6 +474,7 @@ export function* createRendererBundleSteps(
     train: null,
     translocatorTeleport: null,
     mortarStrike,
+    firestarter,
   };
 }
 
@@ -493,6 +501,7 @@ export function wireProjectileRenderers(
     holyGrenade: bundle.holyGrenade,
     rocket: bundle.rocket,
     fireball: bundle.fireball,
+    firestarterOrb: bundle.firestarter,
     spore: bundle.spore,
     grenade: bundle.grenade,
     translocatorPuck: bundle.translocatorPuck,
@@ -525,6 +534,7 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   effectSystem.setCombatGoreGpuRenderer(bundle.combatGoreGpu);
   bundle.mortarStrike.setImpactSystems(bundle.explosionGpu, bundle.lighting);
   effectSystem.setMortarImpactRenderer((x, y, radius, color) => bundle.mortarStrike.playImpact(x, y, radius, color));
+  effectSystem.setFirestarterRenderer(bundle.firestarter);
 }
 
 /**
@@ -543,6 +553,7 @@ export function wireRenderersToCameraFeedback(
   bundle.bossIntro.setCameraFeedback(controller);
   bundle.voidRift.setCameraFeedback(controller);
   bundle.mortarStrike.setCameraFeedback(controller);
+  bundle.firestarter.setCameraFeedback(controller);
 }
 
 /**

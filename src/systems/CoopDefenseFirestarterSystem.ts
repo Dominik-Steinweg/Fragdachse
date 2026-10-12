@@ -30,7 +30,7 @@ export class CoopDefenseFirestarterSystem implements EnemySpecialMovementSource 
 
   constructor(
     private readonly enemies: Pick<EnemyManager, 'getAllEnemies'>,
-    private readonly combat: Pick<CombatGeometryPort, 'hasLineOfSight'> & Pick<CombatActorStatePort, 'isStunned'>,
+    private readonly combat: Pick<CombatGeometryPort, 'hasClearLineOfFire'> & Pick<CombatActorStatePort, 'isStunned'>,
     private readonly weapons: AutomatedWeaponExecution,
     private readonly projectiles: ProjectileDetonableReadPort,
     private readonly targets: Pick<EnemyAiTargetCatalog, 'getCandidates' | 'getPosition'>,
@@ -92,7 +92,9 @@ export class CoopDefenseFirestarterSystem implements EnemySpecialMovementSource 
       }
       if (nowMs < state.ballReadyAt || !this.crossGapReady(state, 'ball', config, nowMs) || !state.charges.canConsume(nowMs)) continue;
       const ball = findWeaponConfig(config.fireballWeaponId)!;
-      const target = players.find(point => distance(enemy.sprite, point) <= ball.range && this.hasLine(enemy, point));
+      // A ball is a body: tight cover that passes a hairline still eats it, so test its own corridor.
+      const clearance = (ball.fire.type === 'projectile' ? ball.fire.projectileSize : 0) / 2;
+      const target = players.find(point => distance(enemy.sprite, point) <= ball.range && this.hasLine(enemy, point, clearance));
       if (!target || !this.fire(enemy, ball, target)) continue;
       state.charges.consume(nowMs);
       state.ballReadyAt = nowMs + config.fireballIntervalMs;
@@ -151,8 +153,9 @@ export class CoopDefenseFirestarterSystem implements EnemySpecialMovementSource 
     return best;
   }
 
-  private hasLine(enemy: EnemyEntity, point: Point): boolean {
-    return this.combat.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, point.x, point.y, undefined, undefined, 0, 'directFire');
+  private hasLine(enemy: EnemyEntity, point: Point, clearanceRadius = 0): boolean {
+    return this.combat.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, point.x, point.y,
+      { purpose: 'directFire', clearanceRadius });
   }
 
   private fire(enemy: EnemyEntity, weapon: WeaponConfig, target: Point): boolean {

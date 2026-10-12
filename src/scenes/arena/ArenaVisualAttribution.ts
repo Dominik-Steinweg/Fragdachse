@@ -75,6 +75,7 @@ export const GRAPHICS_FAMILIES = {
   airstrikeWarning: ['AirstrikeRenderer'],
   meteorEffects: ['MeteorGpuLayer'],
   mortarEffects: ['MortarGpuLayer'],
+  firestarterEffects: ['FirestarterGpuLayer'],
   nukeTelegraphs: ['NukeRenderer', 'EffectSystem'],
   effectSystemGraphics: ['EffectSystem'],
   objectiveMarkers: [
