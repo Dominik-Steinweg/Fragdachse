@@ -12,6 +12,7 @@ import { CoopDefenseEnemyDodgeSystem } from '../systems/CoopDefenseEnemyDodgeSys
 import { CoopDefenseEnemyTrainAwarenessSystem } from '../systems/CoopDefenseEnemyTrainAwarenessSystem';
 import { CoopDefenseShieldChargerSystem } from '../systems/CoopDefenseShieldChargerSystem';
 import { PLAYER_SIZE } from '../config';
+import { getFirestarterFactionTargets } from '../systems/firestarterAlliedTargeting';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { StinkCloudSystem } from '../effects/StinkCloudSystem';
 import type { FireChunkBurstPort } from '../systems/FlamethrowerUpgradeSystem';
@@ -168,6 +169,8 @@ export class CoopMissionEnemyBehaviourComposition {
         enemies: enemyManager,
         combat,
         readTarget: enemy => {
+          // Necromancy allies charge the nearest hostile enemy; the lane is fixed the same way.
+          if (enemy.faction === 'allied') return getFirestarterFactionTargets(enemy, catalog, 0)[0] ?? null;
           const decoy = decoyTargets?.getTarget(enemy.id);
           if (decoy) return { x: decoy.x, y: decoy.y };
           const target = intents.get(enemy.id)?.target;
@@ -175,9 +178,16 @@ export class CoopMissionEnemyBehaviourComposition {
           const resolved = catalog.resolve(target);
           return resolved ? catalog.getPosition(resolved, enemy.sprite.x, enemy.sprite.y) : null;
         },
-        // Gate 1: hostile chargers strike players; allied charges arrive with the necromancy gate.
-        contactTargets: enemy => enemy.faction !== 'hostile' ? [] : this.options.playerManager.getAllPlayers()
-          .filter(player => player.active).map(player => ({ id: player.id, x: player.x, y: player.y, radius: PLAYER_SIZE / 2 })),
+        // Bodies of the opposing side; combat still applies the faction and shield rules per strike.
+        contactTargets: enemy => {
+          const opposing = enemyManager.getAllEnemies().filter(other => other !== enemy && other.faction !== enemy.faction
+            && other.sprite.active && other.getHp() > 0 && !other.isBurrowed())
+            .map(other => ({ id: other.id, x: other.sprite.x, y: other.sprite.y, radius: other.getCollisionRadius() }));
+          if (enemy.faction === 'allied') return opposing;
+          const players = this.options.playerManager.getAllPlayers().filter(player => player.active)
+            .map(player => ({ id: player.id, x: player.x, y: player.y, radius: PLAYER_SIZE / 2 }));
+          return [...players, ...opposing];
+        },
         laneClearance: (x, y, angle, length, radius) => {
           let free = combat.measureChargeLane?.(x, y, angle, length, radius) ?? 0;
           // Water and other walkability limits: shorten until the swept body path is walkable.
