@@ -370,6 +370,8 @@ export interface SyncedEnergyShield {
   alpha: number;
   flashAlpha: number;
   isDome: boolean;
+  /** Set only for an enemy frontal shield; `ownerId` is then an enemy id. Absent = player. */
+  ownerKind?: 'enemy';
 }
 
 export interface SyncedDecoy {

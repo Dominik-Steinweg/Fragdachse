@@ -1785,6 +1785,14 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       if (!this.ctx.getWorldCombatCore()!.canDamageTarget(proj.ownerId, enemy.id)) continue;
       if (Phaser.Math.Distance.Squared(originX, originY, enemy.sprite.x, enemy.sprite.y) > radiusSquared) continue;
       if (!this.ctx.getWorldCombatCore()!.hasLineOfSight(originX, originY, enemy.sprite.x, enemy.sprite.y, undefined, undefined, 0, 'directFire')) continue;
+      if (this.combatSystems?.energyShield?.tryBlockDamage({
+        targetId: enemy.id,
+        category: 'hitscan',
+        damage: config.damage,
+        sourceX: originX,
+        sourceY: originY,
+        now: this.hostFrameNowMs,
+      })) continue;
 
       this.ctx.getWorldCombatCore()!.applyDamage(enemy.id, config.damage, false, proj.ownerId, proj.isBfg ? 'BFG' : 'ASMD Kugelgewitter', {
         sourceX: originX,

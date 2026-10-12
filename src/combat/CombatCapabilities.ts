@@ -242,7 +242,16 @@ export interface CombatStructureStatusPort {
   applyBaseStatusDamage(baseId: string, amount: number, source: CombatSource, now: number): void;
 }
 
+/**
+ * Activity attachment for directional enemy shields. The Activity installs its owning system
+ * for its lifetime and clears it on detach; combat blocking and shield replication read it.
+ */
+export interface CombatEnemyFrontalShieldAttachPort {
+  setEnemyFrontalShieldPort(port: import('../systems/enemyFrontalShield').EnemyFrontalShieldPort | null): void;
+}
+
 export type CombatActivityPort =
+  & CombatEnemyFrontalShieldAttachPort
   & CombatStructureStatusPort
   & CombatActorStatePort
   & CombatDamageEffectPort
