@@ -5,6 +5,17 @@ import { encodeEnemyUpsert, decodeEnemyUpserts } from '../src/network/enemySnaps
 import { enemies, event, kraken, packet, phases } from './krakenNetworkFixtures';
 
 describe('Kraken wire cutover', () => {
+  it('roundtrips an active spine volley and partial regrowth losslessly for late join', () => {
+    const state = kraken({ kind: 'surfaced', startedAt: 0, nextDiveAt: 10000 });
+    state.bodyAction = { kind: 'spines', castId: 'volley', startedAt: 100, raiseAt: 200,
+      releaseAt: [300, 400, 500, 600, 700, 800], endsAt: 900 };
+    state.spines = [{ index: 0, castId: 'volley', firedAt: 300, regrowStartsAt: 1000, readyAt: 3000 },
+      { index: 1, castId: 'volley', firedAt: 400, regrowStartsAt: 1100, readyAt: 3100 }];
+    const original = packet(state);
+    const copy = decodeKrakenSnapshot(JSON.parse(JSON.stringify(encodeKrakenSnapshot(original))));
+    expect(copy).toEqual(original);
+    state.spines.push({ ...state.spines[0] }); expect(decodeKrakenSnapshot(packet(state))).toBeUndefined();
+  });
   it.each(phases)('preserves the complete $kind baseline, exact poses and absolute host anchors', phase => {
     const original = packet(kraken(phase));
     expect(decodeKrakenSnapshot(JSON.parse(JSON.stringify(encodeKrakenSnapshot(original))))).toEqual(original);
@@ -19,7 +30,7 @@ describe('Kraken wire cutover', () => {
   it('preserves existing action codes and roundtrips all Kraken actions plus sector/lane body slots', () => {
     const actions = ['none', 'gauss-charge', 'phase-nuke', 'armageddon', 'timebomb-chase', 'timebomb-fuse',
       'void-molotov-windup', 'kraken-ink', 'kraken-eggs', 'kraken-dive', 'kraken-submerged',
-      'kraken-surface', 'kraken-ashore', 'kraken-slam'] as const;
+      'kraken-surface', 'kraken-ashore', 'kraken-slam', 'kraken-spines'] as const;
     for (const [code, specialAction] of actions.entries()) {
       const u: (number | string)[] = [];
       encodeEnemyUpsert(u, { id: 'e1', specialAction });

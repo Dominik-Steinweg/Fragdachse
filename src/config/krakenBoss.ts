@@ -14,21 +14,33 @@ const lane = { length: positive, width: positive, damage: positive,
   windupMs: positive, strikeMs: positive, recoveryMs: positive };
 
 export const KrakenBossConfigSchema = v.pipe(v.strictObject({
-  assets: v.strictObject({ water: id, land: id, tentacle: id, egg: id }),
+  assets: v.strictObject({ water: id, land: id, tentacle: id, egg: id, spine: id }),
   bodyRadiusPx: positive, phaseTwoHpRatio: v.pipe(positive, v.maxValue(1)), hpGate: v.literal(false),
   firstAttackDelayMs: nonnegative, actionPauseMs: nonnegative, turnRateDegPerSec: positive,
   waterApproachSpeedPxPerSec: positive, waterShoreDistancePx: nonnegative, landMoveSpeedPxPerSec: positive, landTurnRateDegPerSec: positive,
+  /** Phase 1 roaming: organic swim legs between interior pond points; dives start well inside the pond. */
+  waterWander: v.strictObject({ speedPxPerSec: positive, turnRateDegPerSec: positive, minLegPx: positive, maxLegPx: positive,
+    pauseMs: nonnegative, shoreClearancePx: nonnegative, diveInteriorRatio: v.pipe(nonnegative, v.maxValue(1)) }),
   dive: v.strictObject({ intervalMs: positive, durationMs: positive, submergedAtMs: positive,
     submergedDurationMs: positive, surfaceDurationMs: positive, vulnerableAtMs: positive, recoveryMs: nonnegative }),
   ink: v.strictObject({ range: positive, arcDegrees: v.pipe(positive, v.maxValue(360)), damage: positive,
     mouthOffset: offset, windupMs: positive, spitDelayMs: positive, recoveryMs: positive, cloudFadeMs: positive }),
   tentacles: v.strictObject({ ...lane, maxConcurrent: count, retractMs: positive, retryMs: positive,
     safetyMarginPx: nonnegative, hitboxProfileId: id, riseMs: positive,
-    targetableAfterRiseMs: nonnegative, untargetableAfterRetractMs: nonnegative }),
+    targetableAfterRiseMs: nonnegative, untargetableAfterRetractMs: nonnegative,
+    /** Lurking: emerge in the water band near the shore, wait upright, strike any reachable target in any direction,
+     * otherwise sink (no slam) and re-emerge elsewhere. */
+    lurkMinMs: positive, lurkMaxMs: positive, emergeShoreBandPx: positive, spawnSpacingPx: nonnegative,
+    repositionDelayMs: nonnegative, sinkMs: positive }),
   hitboxProfiles: v.pipe(v.array(v.strictObject({ id,
     rise: shapes, hover: shapes, slam: shapes, retract: shapes })), v.minLength(1)),
   transfer: CombatPartTransferPolicySchema,
   slam: v.strictObject({ ...lane, lungeDistancePx: positive, frontArcDegrees: v.pipe(positive, v.maxValue(180)) }),
+  /** Phase-1 ranged attack: six dorsal spines become fast homing projectiles and regrow during the cooldown. */
+  spines: v.strictObject({ volleyCount: v.literal(6), range: positive, damage: positive, speedPxPerSec: positive,
+    turnRateDegPerSec: positive, hitRadiusPx: positive, lifetimeMs: positive, windupMs: positive, raiseMs: positive,
+    releaseSpacingMs: positive, recoveryMs: nonnegative, regrowDelayMs: nonnegative, regrowMs: positive, cooldownMs: positive,
+    originOffsets: v.pipe(v.array(offset), v.length(6)) }),
   landCooldowns: v.strictObject({ slamMs: positive, inkMs: positive, eggsMs: positive }),
   exit: v.strictObject({ warningMs: positive, durationMs: positive, recoveryMs: nonnegative,
     roarAfterMs: nonnegative, gripAfterMs: positive, gripHoldMs: nonnegative, heaveAfterMs: positive,
@@ -38,6 +50,8 @@ export const KrakenBossConfigSchema = v.pipe(v.strictObject({
   eggs: v.strictObject({ enemyKind: id, maxHp: positive, radiusPx: positive, volleyCount: count,
     maxPendingAndLive: count, windupMs: positive, flightMs: positive, recoveryMs: positive,
     throwDistancePx: positive, minimumShoreDistancePx: positive, releaseSpacingMs: positive,
+    /** Eggs land inside a cone around the facing towards the target, matching the forward throw. */
+    throwConeDegrees: v.pipe(positive, v.maxValue(180)),
     presentationPreset: v.picklist(['he', 'he_cluster_shard', 'he_demolition_shard', 'smoke', 'molotov', 'molotov_void', 'time_bubble', 'fur_ball', 'molotov_allied']),
     incubationMs: positive, hatchSpawnAfterMs: nonnegative, hatchDurationMs: positive,
     spawnRetryMs: positive, spawnRetryWindowMs: positive,
@@ -61,7 +75,10 @@ v.check(c => c.eggs.hatchSpawnAfterMs < c.eggs.hatchDurationMs
 v.check(c => c.tentacles.targetableAfterRiseMs <= c.tentacles.riseMs
   && c.tentacles.riseMs < c.tentacles.windupMs
   && c.tentacles.untargetableAfterRetractMs <= c.tentacles.retractMs, 'Invalid tentacle visibility anchors'),
-v.check(c => new Set(Object.values(c.assets)).size === 4, 'Boss assets need distinct IDs'),
+v.check(c => new Set(Object.values(c.assets)).size === 5, 'Boss assets need distinct IDs'),
+v.check(c => c.tentacles.lurkMinMs <= c.tentacles.lurkMaxMs && c.waterWander.minLegPx <= c.waterWander.maxLegPx
+  && c.spines.raiseMs <= c.spines.windupMs && c.spines.regrowDelayMs + c.spines.regrowMs <= c.spines.cooldownMs,
+'Invalid lurk/wander/spine anchors'),
 v.check(c => new Set(c.hitboxProfiles.map(p => p.id)).size === c.hitboxProfiles.length
   && c.hitboxProfiles.some(p => p.id === c.tentacles.hitboxProfileId), 'Unknown/duplicate hitbox profile'),
 v.check(c => new Set(c.eggs.broodTable.entries.map(e => e.enemyKind)).size === c.eggs.broodTable.entries.length,
@@ -99,16 +116,21 @@ export function normalizeKrakenEggConfig(raw: unknown): KrakenEggConfig { return
 /** Clip-local marker names, not exported frame numbers or gameplay clock decisions. */
 export const KRAKEN_ASSET_REQUIREMENTS = {
   water: { clips: { idle: [], move: [], 'intro-rise': ['eyes-open'], 'ink-spit': ['charge', 'spit'],
-    'egg-throw': ['release-1', 'release-2', 'release-3', 'release-4', 'release-5', 'release-6'], dive: ['submerged'], surface: ['eyes-open'] }, sockets: ['mouth', 'egg1', 'egg2', 'egg3', 'egg4', 'egg5', 'egg6'] },
+    'egg-throw': ['release-1', 'release-2', 'release-3', 'release-4', 'release-5', 'release-6'], dive: ['submerged'], surface: ['eyes-open'],
+    'spine-volley': ['raise', 'release-1', 'release-2', 'release-3', 'release-4', 'release-5', 'release-6'] },
+    sockets: ['mouth', 'egg1', 'egg2', 'egg3', 'egg4', 'egg5', 'egg6',
+      'spine1', 'spine2', 'spine3', 'spine4', 'spine5', 'spine6', 'spine1Tip', 'spine2Tip', 'spine3Tip', 'spine4Tip', 'spine5Tip', 'spine6Tip'] },
   land: { clips: { idle: [], move: [], ashore: ['grip', 'heave'], 'ink-spit': ['charge', 'spit'],
     slam: ['strike', 'impact'], 'egg-throw': ['release-1', 'release-2', 'release-3', 'release-4', 'release-5', 'release-6'], death: [] }, sockets: ['mouth', 'egg1', 'egg2', 'egg3', 'egg4', 'egg5', 'egg6'] },
   tentacle: { clips: { rise: [], hover: [], slam: ['strike', 'impact'], retract: [] }, sockets: ['waterEntry'] },
   egg: { clips: { idle: [], hatch: ['spawn'] }, sockets: [] },
+  /** One detachable dorsal spine: drawn at the body's spine sockets, regrowing by scale, and as the projectile. */
+  spine: { clips: { idle: [] }, sockets: ['base', 'tip'] },
 } as const;
 
 /** Call only with normalized selected assets at promotion/integration, never fall back to PoC URLs. */
 export function validateKrakenAssetBindings(config: KrakenBossConfig, assets: readonly PipelineBossAsset[]): void {
-  for (const role of ['water', 'land', 'tentacle', 'egg'] as const) {
+  for (const role of ['water', 'land', 'tentacle', 'egg', 'spine'] as const) {
     const asset = assets.find(a => a.id === config.assets[role]), required = KRAKEN_ASSET_REQUIREMENTS[role];
     if (!asset || asset.clips.some(c => c.name === 'tentacle-call')) throw new Error(`[krakenBoss] Missing/obsolete ${role} asset`);
     const clips: Readonly<Record<string, readonly string[]>> = required.clips;

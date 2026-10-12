@@ -84,6 +84,9 @@ export class EnemyEntity {
       effectiveAt: now, mode: 'protected' });
   }
   isOrdinaryMovementEnabled(): boolean { return !this.stationary && (!this.krakenMovement || this.krakenMovement === 'land'); }
+  /** Water/exit positions are validated by the habitat owner; ordinary water separation must not move them. */
+  usesLandWaterCollision(): boolean { return !this.krakenMovement || this.krakenMovement === 'land'; }
+  isKrakenLandBody(): boolean { return !!this.config.krakenBoss && this.krakenMovement === 'land'; }
   setKrakenBodyTargetability(state: import('../systems/KrakenState').KrakenState['bodyTargetability']): void {
     if (this.krakenTargetability && state.revision <= this.krakenTargetability.revision) return;
     this.krakenTargetability = { ...state };
@@ -312,6 +315,8 @@ export class EnemyEntity {
     if (this.stationary) { vx = 0; vy = 0; }
     this.desiredVelocityX = vx;
     this.desiredVelocityY = vy;
+    // The Kraken host owns body facing in both phases, including its turn-rate limit.
+    if (this.krakenMovement) return;
     this.smoothMovementFacing = false;
     if (aimAngle !== undefined) {
       this.faceAngle(aimAngle);

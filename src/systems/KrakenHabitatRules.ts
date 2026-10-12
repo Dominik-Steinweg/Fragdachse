@@ -42,35 +42,125 @@ export class KrakenHabitatRules implements KrakenHabitatPort {
       && this.findExit().status === 'valid';
   }
 
-  reserveLanes(boss: BossTargetRef, habitatId: string, targets: readonly Point[], maxCount: number): readonly KrakenLaneReservation[] {
+  /** Reserve emergence points, not attacks. A hovering arm owns no warning lane. */
+  reserveTentacles(boss: BossTargetRef, habitatId: string, targets: readonly Point[], maxCount: number,
+    avoid: readonly Point[] = []): readonly KrakenLaneReservation[] {
     if (!this.matches(boss, habitatId)) return [];
     const t = this.config.tentacles;
-    const ranked = this.habitat.shores.map((s, index) => {
-      const waterEntry = this.cell(s.waterCell), land = this.cell(s.landCell);
-      const angle = Math.atan2(land.y - waterEntry.y, land.x - waterEntry.x);
-      const origin = { x: land.x + Math.cos(angle) * t.safetyMarginPx, y: land.y + Math.sin(angle) * t.safetyMarginPx };
-      const score = Math.min(...targets.map(p => Math.hypot(p.x - origin.x - Math.cos(angle) * t.length / 2,
-        p.y - origin.y - Math.sin(angle) * t.length / 2)), Infinity);
-      return { index, score, reservationId: '', topologyRevision: this.queries.revisions().topologyRevision,
-        shoreId: s.id, waterEntry, pose: { originX: origin.x, originY: origin.y, angle,
-          geometry: { kind: 'lane' as const, length: t.length, width: t.width } } };
-    }).sort((a, b) => a.score - b.score || a.index - b.index);
-    const active = [...this.reservations.values()].flatMap(r => 'shoreId' in r.value && this.current(r.value) ? [r.value] : []);
+    const active = [...this.reservations.values()].flatMap(r => 'shoreId' in r.value && this.current(r.value) ? [r.value.waterEntry] : []);
+    const ranked = this.pondPoints().filter(p => !this.wet(p, t.emergeShoreBandPx)
+      && this.queries.circleFree(p.x, p.y, t.safetyMarginPx))
+      .map((p, index) => ({ p, index, score: Math.min(...targets.map(q => Math.hypot(q.x - p.x, q.y - p.y)), Infinity) }))
+      .sort((a, b) => a.score - b.score || a.index - b.index);
     const result: KrakenLaneReservation[] = [];
-    for (const { index: _index, score: _score, ...candidate } of ranked) {
-      if (result.length >= Math.min(maxCount, t.maxConcurrent)) break;
-      const occupied = [...active, ...result];
-      // Leave an open half-plane, and keep warnings disjoint rather than closing a ring.
-      if (occupied.some(l => l.shoreId === candidate.shoreId
-        || Math.cos(l.pose.angle - candidate.pose.angle) < 0
-        || Math.hypot(l.pose.originX - candidate.pose.originX, l.pose.originY - candidate.pose.originY) < t.width + 2 * t.safetyMarginPx)) continue;
-      if (!this.laneFree(candidate)) continue;
-      result.push(this.remember({ ...candidate, reservationId: this.id() }));
+    for (const { p, index } of ranked) {
+      if (result.length >= Math.min(maxCount, t.maxConcurrent - active.length)) break;
+      if ([...active, ...avoid, ...result.map(r => r.waterEntry)].some(q => Math.hypot(p.x - q.x, p.y - q.y) < t.spawnSpacingPx)) continue;
+      const target = targets.reduce<Point | null>((best, q) => !best || Math.hypot(q.x - p.x, q.y - p.y)
+        < Math.hypot(best.x - p.x, best.y - p.y) ? q : best, null);
+      result.push(this.remember({ reservationId: this.id(), topologyRevision: this.queries.revisions().topologyRevision,
+        shoreId: 'water-' + index, waterEntry: p, pose: { originX: p.x, originY: p.y,
+          angle: target ? Math.atan2(target.y - p.y, target.x - p.x) : 0,
+          geometry: { kind: 'lane', length: t.length, width: t.width } } }));
     }
     return result;
   }
 
+  aimTentacle(r: KrakenLaneReservation, target: Point): KrakenLaneReservation['pose'] | null {
+    if (!this.current(r)) return null;
+    const d = Math.hypot(target.x - r.waterEntry.x, target.y - r.waterEntry.y);
+    if (d < 1 || d > this.config.tentacles.length - this.config.tentacles.safetyMarginPx) return null;
+    const pose = { ...r.pose, angle: Math.atan2(target.y - r.waterEntry.y, target.x - r.waterEntry.x) };
+    if (!this.laneFree({ ...r, pose })) return null;
+    // Host permit owns the frozen impact geometry from this point onwards.
+    Object.assign(r, { pose });
+    return pose;
+  }
   revalidateLane(r: KrakenLaneReservation): boolean { return this.current(r) && this.laneFree(r); }
+
+  private pondCache: Point[] | null = null;
+  private pondPoints(): Point[] {
+    if (this.pondCache) return this.pondCache;
+    const anchor = this.habitat.waterAnchors.find(a => a.id === this.habitat.initialAnchorId)!;
+    const cells = [anchor.cell], seen = new Set<string>();
+    const points: Point[] = [];
+    for (let i = 0; i < cells.length; i++) {
+      const c = cells[i], key = c.gridX + ':' + c.gridY;
+      if (seen.has(key) || !this.water.hasCell(c.gridX, c.gridY)) continue;
+      seen.add(key); points.push(this.cell(c));
+      for (const [x, y] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) cells.push({ gridX: c.gridX + x, gridY: c.gridY + y });
+    }
+    return this.pondCache = points;
+  }
+  private pondInterior(): { x: number; y: number; radius: number } {
+    const points = this.pondPoints();
+    const xs = points.map(p => p.x), ys = points.map(p => p.y);
+    const left = Math.min(...xs) - CELL_SIZE / 2, right = Math.max(...xs) + CELL_SIZE / 2;
+    const top = Math.min(...ys) - CELL_SIZE / 2, bottom = Math.max(...ys) + CELL_SIZE / 2;
+    return { x: (left + right) / 2, y: (top + bottom) / 2, radius: Math.min(right - left, bottom - top) / 2 };
+  }
+  isDiveInterior(p: Point): boolean {
+    const center = this.pondInterior();
+    return Math.hypot(p.x - center.x, p.y - center.y) <= center.radius * this.config.waterWander.diveInteriorRatio
+      && this.wet(p, this.config.bodyRadiusPx);
+  }
+  divePoint(from: Point): Point | null {
+    const center = this.pondInterior();
+    return [center, ...this.pondPoints()].filter(p => this.isDiveInterior(p))
+      .sort((a, b) => Math.hypot(a.x - from.x, a.y - from.y) - Math.hypot(b.x - from.x, b.y - from.y))
+      .find(p => this.canMove(from, p, 'water-approach')) ?? null;
+  }
+  private wanderCandidates: Point[] | null = null;
+  wanderPoint(from: Point, random: number): Point | null {
+    const c = this.config.waterWander;
+    this.wanderCandidates ??= this.pondPoints().filter(p => this.wet(p, this.config.bodyRadiusPx + c.shoreClearancePx));
+    const candidates = this.wanderCandidates.filter(p => {
+      const d = Math.hypot(p.x - from.x, p.y - from.y);
+      return d >= c.minLegPx && d <= c.maxLegPx;
+    });
+    const start = Math.min(candidates.length - 1, Math.floor(random * candidates.length));
+    for (let i = 0; i < candidates.length; i++) {
+      const point = candidates[(start + i) % candidates.length];
+      if (this.canWander(from, point)) return point;
+    }
+    return null;
+  }
+  canWander(from: Point, to: Point): boolean {
+    const radius = this.config.bodyRadiusPx + this.config.waterWander.shoreClearancePx;
+    const steps = Math.max(1, Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / 8));
+    for (let i = 0; i <= steps; i++) if (!this.wet({ x: from.x + (to.x - from.x) * i / steps,
+      y: from.y + (to.y - from.y) * i / steps }, radius)) return false;
+    return this.queries.segmentFree(from, to, this.config.bodyRadiusPx);
+  }
+
+  /** Shortest body-valid route on the World grid; water is allowed only for this recovery.
+   * Every returned displacement is speed bounded and revalidated against current solids. */
+  recoverLand(from: Point, distance: number): Point | null {
+    const radius = this.config.bodyRadiusPx;
+    if (this.isDryBodyFree(from, radius)) return null;
+    type Node = { p: Point; cost: number; first: Point };
+    const open: Node[] = [{ p: from, cost: 0, first: from }], costs = new Map<string, number>();
+    while (open.length) {
+      open.sort((a, b) => b.cost - a.cost);
+      const n = open.pop()!;
+      const key = n.p.x + ':' + n.p.y;
+      if ((costs.get(key) ?? Infinity) < n.cost) continue;
+      if (this.isDryBodyFree(n.p, radius)) {
+        // Prefer a direct connection when it is shorter and solid-free.
+        const to = this.queries.segmentFree(from, n.p, radius) ? n.p : n.first;
+        const d = Math.hypot(to.x - from.x, to.y - from.y), t = Math.min(1, distance / d);
+        return d ? { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t } : null;
+      }
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]) {
+        const p = { x: n.p.x + dx * CELL_SIZE, y: n.p.y + dy * CELL_SIZE };
+        const cost = n.cost + Math.hypot(dx, dy) * CELL_SIZE, k = p.x + ':' + p.y;
+        if ((costs.get(k) ?? Infinity) <= cost || !this.inside(p, radius)
+          || !this.queries.circleFree(p.x, p.y, radius) || !this.queries.segmentFree(n.p, p, radius)) continue;
+        costs.set(k, cost); open.push({ p, cost, first: n.cost === 0 ? p : n.first });
+      }
+    }
+    return null;
+  }
   reserveExit(boss: BossTargetRef, habitatId: string, target?: Point): KrakenHabitatResult<KrakenExitReservation> {
     if (!this.matches(boss, habitatId)) return this.invalid('Stale boss/habitat');
     const result = this.findExit(target);
@@ -100,12 +190,12 @@ export class KrakenHabitatRules implements KrakenHabitatPort {
     return null;
   }
 
-  /** One point per radial sector. Full clearance from water prevents shoreline egg piles. */
+  /** One point per sector inside the facing cone. Full clearance from water prevents shoreline egg piles. */
   eggLandings(from: Point, rotation: number, count: number, minShoreDistancePx: number): readonly (Point | null)[] {
     const points: (Point | null)[] = [];
     const step = CELL_SIZE / 2, max = Math.hypot(this.metrics.widthPx, this.metrics.heightPx);
     for (let i = 0; i < count; i++) {
-      const angle = rotation + i * Math.PI * 2 / count;
+      const angle = rotation + (count === 1 ? 0 : i / (count - 1) - 0.5) * this.config.eggs.throwConeDegrees * Math.PI / 180;
       let point: Point | null = null;
       for (let d = this.config.eggs.throwDistancePx; d < max; d += step) {
         const p = { x: from.x + Math.cos(angle) * d, y: from.y + Math.sin(angle) * d };
@@ -129,6 +219,7 @@ export class KrakenHabitatRules implements KrakenHabitatPort {
     if (!this.inside(from, radius) || !this.inside(to, radius)
       || !this.queries.segmentFree(from, to, radius) || !this.queries.circleFree(to.x, to.y, radius)) return false;
     if (mode === 'ashore') return [...this.reservations.values()].some(r => 'corridorId' in r.value && this.current(r.value));
+    if (mode === 'land' && this.water.sweep(from.x, from.y, to.x, to.y, radius) < 1) return false;
     const steps = Math.max(1, Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / (CELL_SIZE / 4)));
     for (let i = 0; i <= steps; i++) {
       const point = { x: from.x + (to.x - from.x) * i / steps, y: from.y + (to.y - from.y) * i / steps };
@@ -170,7 +261,7 @@ export class KrakenHabitatRules implements KrakenHabitatPort {
     for (let u = -margin; u <= length - margin; u += step) for (let v = -width / 2; v <= width / 2; v += step) {
       const q = { x: p.originX + Math.cos(p.angle) * u - Math.sin(p.angle) * v,
         y: p.originY + Math.sin(p.angle) * u + Math.cos(p.angle) * v };
-      if (!this.isDryBodyFree(q, radius)) return false;
+      if (!this.inside(q, radius) || !this.queries.circleFree(q.x, q.y, radius)) return false;
     }
     return true;
   }

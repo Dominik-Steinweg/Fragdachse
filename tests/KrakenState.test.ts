@@ -17,7 +17,7 @@ const part = (partId: string): KrakenTentacleState => ({
 const state = (): KrakenState => ({ boss, revision: 6, cycleId: 1, habitatId: 'pond',
   phase: { kind: 'submerged', startedAt: 0, stopSpawningAt: 100 }, phaseTwoPending: false,
   bodyTargetability: { revision: 3, effectiveAt: 0, mode: 'hidden' }, movement: 'water-anchored',
-  bodyAction: null, tentacles: [part('left'), part('right')], eggs: [], inkClouds: [],
+  bodyAction: null, spines: [], tentacles: [part('left'), part('right')], eggs: [], inkClouds: [],
 });
 
 describe('Kraken state boundary', () => {

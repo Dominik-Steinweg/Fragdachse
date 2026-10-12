@@ -37,11 +37,12 @@ it('normalizes the existing sheet manifest and distinguishes boss atlases withou
 });
 
 it('binds each kraken role to required clips, semantic markers and full-canvas sockets', () => {
-  const assets = (['water', 'land', 'tentacle', 'egg'] as const).map(role => {
+  const assets = (Object.keys(KRAKEN_ASSET_REQUIREMENTS) as (keyof typeof KRAKEN_ASSET_REQUIREMENTS)[]).map(role => {
     const required = KRAKEN_ASSET_REQUIREMENTS[role];
     return normalizePipelineAsset(bossAsset({ id: KRAKEN_BOSS_DEFAULTS.assets[role], textureKey: `kraken_${role}`,
       sockets: Object.fromEntries(required.sockets.map(s => [s, [.5, .5]])),
-      clips: Object.entries(required.clips).map(([name, markers]) => ({ name, frames: [1, 2, 3, 4, 5, 6], frameRate: 10, loop: false,
+      clips: Object.entries(required.clips).map(([name, markers]) => ({ name,
+        frames: Array.from({ length: Math.max(1, markers.length) }, (_, i) => i + 1), frameRate: 10, loop: false,
         markers: Object.fromEntries(markers.map((m, i) => [m, i])) })),
     })) as PipelineBossAsset;
   });

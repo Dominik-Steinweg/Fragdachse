@@ -14,20 +14,23 @@ function setup() {
   const deps: KrakenHostDependencies = {
     entity: { readBoss: () => entity, setBodyTargetability: vi.fn(), setFacing: (_, angle) => { entity.angle = angle; },
       setMovement: vi.fn((_, _mode, point) => { if (point) Object.assign(entity, point); }) },
-    intent: { readTarget: () => ({ target: boss, x: 500, y: 0 }), readSecondaryTargets: () => [] },
+    intent: { readTarget: () => ({ target: boss, x: 450, y: 0 }), readSecondaryTargets: () => [] },
     habitat: { reserveWaterSpawn: vi.fn(), revalidate: () => true, release: vi.fn(),
-      reserveLanes: (_boss, _habitat, _targets, count) => !lanesEnabled ? [] : Array.from({ length: count }, (_, i): KrakenLaneReservation => ({
+      reserveTentacles: (_boss, _habitat, _targets, count) => !lanesEnabled ? [] : Array.from({ length: count }, (_, i): KrakenLaneReservation => ({
         reservationId: `lane-${++serial}`, topologyRevision: 1, shoreId: `shore-${serial}`, waterEntry: { x: 100, y: i * 200 },
         pose: { originX: 110, originY: i * 200, angle: 0, geometry: { kind: 'lane', length: config.tentacles.length, width: config.tentacles.width } } })),
       revalidateLane: () => true,
+      aimTentacle: (r, target) => Math.hypot(target.x - r.waterEntry.x, target.y - r.waterEntry.y) <= config.tentacles.length - config.tentacles.safetyMarginPx
+        ? { ...r.pose, angle: Math.atan2(target.y - r.waterEntry.y, target.x - r.waterEntry.x) } : null,
+      canWander: () => true, wanderPoint: () => null, divePoint: () => ({ x: 0, y: 0 }), isDiveInterior: () => true, recoverLand: () => null,
       reserveExit: () => ({ status: 'valid', value: { reservationId: 'exit', topologyRevision: 1, corridorId: 'east', widthPx: 200, path: [{ x: 0, y: 0 }, { x: 300, y: 0 }] } }),
       revalidateExit: r => ({ status: 'valid', value: r }) },
     combat: { resolveAreaAttack: vi.fn(() => ({} as never)) }, projectiles: { spawnProjectile: vi.fn(() => ++serial) },
     brood: { reserveEgg: () => true, released: vi.fn(), cancelEgg: vi.fn(), clearBoss: vi.fn(), retireBossEggs: vi.fn(), hostUpdate: vi.fn(), getEggs: () => [] } as never,
     publish: { publish: s => { if (s) { expect(readKrakenState(s)).not.toBeNull(); publications.push(s); } } },
-    claw: vi.fn(), waterApproach: () => null, canMove: () => true, flightFree: () => true,
+    claw: vi.fn(), waterApproach: () => null, canMove: () => true, flightFree: () => true, bodyTravelLimit: (_p, _a, distance) => distance,
     eggLandings: (_p, _angle, count) => Array.from({ length: count }, (_, i) => ({ x: 600 + i * 50, y: i * 100 })),
-    random: () => .25, diagnostic: vi.fn(),
+    diagnostic: vi.fn(),
   };
   const system = new CoopDefenseKrakenSystem(config, deps);
   system.start(boss, 'pond', 0, 0);
@@ -37,6 +40,133 @@ function setup() {
 }
 
 describe('Kraken host owner', () => {
+  it('faces the target before freezing the egg throw cone', () => {
+    const f = setup();
+    f.deps.intent.readTarget = () => ({ target: boss, x: 0, y: f.config.spines.range + 100 });
+    const landings = vi.fn(f.deps.eggLandings); f.deps.eggLandings = landings;
+    f.tick(f.config.firstAttackDelayMs);
+    expect(f.system.getState()!.bodyAction).toBeNull(); expect(landings).not.toHaveBeenCalled();
+    let at = f.config.firstAttackDelayMs;
+    while (!f.system.getState()!.bodyAction && at < 5000) { at += 20; f.tick(at); }
+    expect(f.system.getState()!.bodyAction?.kind).toBe('eggs');
+    expect(landings).toHaveBeenCalledOnce();
+    expect(landings.mock.calls[0][1]).toBe(f.entity.angle);
+    expect(Math.abs(f.entity.angle - Math.PI / 2)).toBeLessThanOrEqual(Math.PI / 36);
+  });
+  it('uses the authored mouth range for ink selection and the frozen hit cone', () => {
+    const f = setup(), range = f.config.ink.range;
+    f.deps.intent.readTarget = () => ({ target: boss, x: f.config.ink.mouthOffset.x + range, y: 0 });
+    f.tick(f.config.firstAttackDelayMs);
+    expect(f.system.getBodyClaw().attack?.pose.geometry).toEqual({ kind: 'sector', range, arcDegrees: f.config.ink.arcDegrees });
+    const distant = setup();
+    distant.deps.intent.readTarget = () => ({ target: boss, x: distant.config.ink.mouthOffset.x + range + 1, y: 0 });
+    distant.tick(distant.config.firstAttackDelayMs);
+    expect(distant.system.getState()!.bodyAction?.kind).not.toBe('ink');
+  });
+  it('wanders deterministically with bounded turning and pauses without an action', () => {
+    const a = setup(), b = setup();
+    for (const f of [a, b]) {
+      f.deps.intent.readTarget = () => null;
+      f.deps.habitat.wanderPoint = (from, random) => ({ x: from.x + 150, y: from.y + 100 + random * 30 });
+    }
+    let previous = a.entity.angle;
+    for (let now = 20; now < 5000; now += 20) {
+      a.tick(now); b.tick(now);
+      expect(Math.abs(a.entity.angle - previous)).toBeLessThanOrEqual(a.config.waterWander.turnRateDegPerSec * Math.PI / 180 * .02 + 1e-9);
+      expect(a.entity).toEqual(b.entity);
+      previous = a.entity.angle;
+    }
+    expect(a.entity.x).toBeGreaterThan(0); expect(a.entity.y).toBeGreaterThan(0);
+    expect(a.system.getState()?.bodyAction).toBeNull();
+  });
+  it('swims into the pond interior before diving and holds that point through surfacing', () => {
+    const f = setup(); f.entity.x = 200; f.entity.angle = Math.PI;
+    f.config.dive.intervalMs = 100; f.config.firstAttackDelayMs = 1e6;
+    f.system.start(boss, 'pond', 0, 0);
+    f.deps.habitat.isDiveInterior = p => Math.abs(p.x) <= 40;
+    let previous = f.entity.x, now = 100;
+    for (; f.system.getState()?.phase.kind === 'surfaced'; now += 50) {
+      f.tick(now);
+      expect(Math.abs(f.entity.x - previous)).toBeLessThanOrEqual(f.config.waterApproachSpeedPxPerSec * .1 + 1e-9);
+      previous = f.entity.x;
+      if (now > 10000) throw Error('dive did not start');
+    }
+    expect(f.deps.habitat.isDiveInterior(f.entity)).toBe(true);
+    const point = { x: f.entity.x, y: f.entity.y };
+    f.noLanes(); f.tick(now + f.config.dive.durationMs);
+    f.tick(now + f.config.dive.durationMs + f.config.dive.submergedDurationMs);
+    expect(f.system.getState()?.phase.kind).toBe('surfacing');
+    expect({ x: f.entity.x, y: f.entity.y }).toEqual(point);
+  });
+  it('lurks with no warning, sinks without damage and repositions only after the delay', () => {
+    const f = setup(); f.config.tentacles.maxConcurrent = 1;
+    f.deps.intent.readTarget = () => null; f.dive();
+    const part = f.system.getState()!.tentacles[0];
+    f.tick(part.hoverAt); expect(f.system.getState()!.tentacles[0]).toMatchObject({ phase: 'hover', claw: { attack: null } });
+    f.tick(part.retractAt);
+    expect(f.system.getState()!.tentacles[0]).toMatchObject({ phase: 'retract', claw: { attack: null } });
+    expect(part.endsAt - part.retractAt).toBe(f.config.tentacles.sinkMs);
+    f.tick(part.endsAt); expect(f.system.getState()!.tentacles).toEqual([]);
+    f.tick(part.endsAt + f.config.tentacles.repositionDelayMs - 1); expect(f.system.getState()!.tentacles).toEqual([]);
+    f.tick(part.endsAt + f.config.tentacles.repositionDelayMs);
+    expect(f.system.getState()!.tentacles[0].contact.identity.partId).not.toBe(part.contact.identity.partId);
+    expect(f.deps.combat.resolveAreaAttack).not.toHaveBeenCalled();
+  });
+  it('starts a fresh full warning only when a hovering arm can reach a diagonal target', () => {
+    const f = setup(); f.config.tentacles.maxConcurrent = 1; f.dive();
+    const part = f.system.getState()!.tentacles[0]; f.tick(part.hoverAt);
+    expect(f.system.getState()!.tentacles[0].claw.attack).toBeNull();
+    f.deps.intent.readTarget = () => ({ target: boss, x: part.contact.x + 100, y: part.contact.y + 100 });
+    f.tick(part.hoverAt + 100);
+    const armed = f.system.getState()!.tentacles[0], attack = armed.claw.attack!;
+    expect(attack.startedAt).toBe(part.hoverAt + 100);
+    expect(attack.strikeAt - attack.startedAt).toBe(f.config.tentacles.windupMs);
+    expect(armed.contact.angle).toBeCloseTo(Math.PI / 4);
+    expect(armed.retractAt).toBe(attack.endsAt);
+    f.tick(attack.hitAt); f.tick(attack.hitAt);
+    expect(f.deps.combat.resolveAreaAttack).toHaveBeenCalledOnce();
+  });
+  it('releases six homing spines once under reentrancy, regrows them and respects cooldown', () => {
+    const f = setup(); f.config.spines.cooldownMs = 10000;
+    f.deps.intent.readTarget = () => ({ target: boss, x: f.config.spines.range - 1, y: 0 });
+    f.tick(f.config.firstAttackDelayMs);
+    const action = f.system.getState()!.bodyAction!; if (action.kind !== 'spines') throw Error('no spines');
+    expect(action.raiseAt).toBe(action.startedAt + f.config.spines.raiseMs);
+    let now = action.releaseAt[0];
+    vi.mocked(f.deps.projectiles.spawnProjectile).mockImplementation(() => { f.system.hostUpdateActions(now); return 1; });
+    for (let i = 0; i < action.releaseAt.length; i++) {
+      now = action.releaseAt[i]; f.tick(now); f.tick(now);
+      expect(f.deps.projectiles.spawnProjectile).toHaveBeenCalledTimes(i + 1);
+      const spine = f.system.getState()!.spines[i];
+      expect(spine).toMatchObject({ index: i, firedAt: now, regrowStartsAt: now + f.config.spines.regrowDelayMs,
+        readyAt: now + f.config.spines.regrowDelayMs + f.config.spines.regrowMs });
+      const request = vi.mocked(f.deps.projectiles.spawnProjectile).mock.calls[i][0];
+      expect(request.origin.x).toBe(f.config.spines.originOffsets[i].x);
+      expect(request.flight.homing?.maxTurnDegreesPerSecond).toBe(f.config.spines.turnRateDegPerSec);
+      expect(request.provenance.weaponSourceId).toBe('kraken_spine');
+      expect(request.interaction.directHit?.damage).toBe(f.config.spines.damage);
+    }
+    const readyAt = f.system.getState()!.spines.at(-1)!.readyAt;
+    f.tick(action.endsAt); f.entity.stunned = true; f.tick(readyAt);
+    expect(f.system.getState()!.spines).toEqual([]);
+    f.entity.stunned = false; f.tick(readyAt + 1);
+    expect(f.system.getState()!.bodyAction?.kind).not.toBe('spines');
+    f.entity.stunned = true; f.tick(readyAt + 2); f.entity.stunned = false;
+    f.tick(action.startedAt + f.config.spines.cooldownMs);
+    expect(f.system.getState()!.bodyAction?.kind).toBe('spines');
+  });
+  it('holds facing through overlap and hysteresis, then turns at the authored land rate', () => {
+    const f = setup(); f.entity.hp = 40; f.tick(1);
+    const exit = f.system.getState()!.phase; if (exit.kind !== 'ashore') throw Error();
+    f.tick(exit.recoveryEndsAt); f.entity.angle = .4;
+    let x = f.entity.x + 1;
+    f.deps.intent.readTarget = () => ({ target: boss, x, y: f.entity.y });
+    for (let i = 1; i < 10; i++) { x = f.entity.x + (i % 2 ? -1 : 1); f.tick(exit.recoveryEndsAt + i * 16); expect(f.entity.angle).toBe(.4); }
+    x = f.entity.x - f.config.bodyRadiusPx * 1.1; f.tick(exit.recoveryEndsAt + 160); expect(f.entity.angle).toBe(.4);
+    x = f.entity.x - f.config.bodyRadiusPx * 2; f.tick(exit.recoveryEndsAt + 176);
+    expect(f.entity.angle).toBeGreaterThan(.4);
+    expect(f.entity.angle - .4).toBeLessThanOrEqual(f.config.landTurnRateDegPerSec * Math.PI / 180 * .016 + 1e-9);
+  });
   it('reaches the shore before grip even when an authored corridor starts behind the swimming body', () => {
     const coarse = setup(), fine = setup();
     for (const f of [coarse, fine]) {
@@ -146,9 +276,9 @@ describe('Kraken host owner', () => {
   });
 
   it('swims explicitly before ordinary movement, at bounded speed', () => {
-    const f = setup(); f.deps.waterApproach = () => ({ x: 200, y: 0 });
+    const f = setup(); f.deps.habitat.wanderPoint = () => ({ x: 200, y: 0 });
     f.system.preMovement(100, 100);
-    expect(f.entity.x).toBeCloseTo(f.config.waterApproachSpeedPxPerSec / 10);
+    expect(f.entity.x).toBeCloseTo(f.config.waterWander.speedPxPerSec / 10);
     expect(f.system.getState()?.movement).toBe('water-approach');
   });
 
@@ -174,13 +304,15 @@ describe('Kraken host owner', () => {
   });
 
   it('keeps multiple targetable part slots independent; stun retracts only that part', () => {
-    const f = setup(); f.dive();
+    const f = setup(); f.deps.intent.readTarget = () => ({ target: boss, x: 200, y: 80 }); f.dive();
+    const submergedAt = f.config.dive.intervalMs + f.config.dive.durationMs;
+    for (let i = 1; i < f.config.tentacles.maxConcurrent; i++) f.tick(submergedAt + i * f.config.tentacles.retryMs);
+    f.tick(submergedAt + (f.config.tentacles.maxConcurrent - 1) * f.config.tentacles.retryMs + f.config.tentacles.riseMs);
     const state = f.system.getState()!;
     expect(state.phase.kind).toBe('submerged'); expect(state.bodyTargetability.mode).toBe('hidden');
     expect(state.tentacles).toHaveLength(f.config.tentacles.maxConcurrent);
     const part = state.tentacles[0];
-    f.tick(part.contact.targetableFrom);
-    expect(f.system.contacts.getContacts(part.contact.targetableFrom)).toHaveLength(state.tentacles.length);
+    expect(f.system.contacts.getContacts(state.tentacles.at(-1)!.hoverAt)).toHaveLength(state.tentacles.length);
     f.system.contacts.applyPartStatus(part.contact.identity, 'stun', part.endsAt);
     const next = f.system.getState()!;
     expect(next.tentacles[0].claw.attack).toBeNull();

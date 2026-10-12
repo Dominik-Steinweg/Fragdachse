@@ -122,9 +122,22 @@ export function materializeCoopMissionKraken(runtime: CoopMissionRuntime, map: C
     claw: event => { manager.applyAreaClawEvent(event); ports.broadcastClaw(event); },
     waterApproach: (from, target) => habitat.waterApproach(from, target),
     canMove: (from, to, mode) => habitat.canMove(from, to, mode),
+    bodyTravelLimit: (from, angle, distance) => {
+      let limit = distance;
+      ports.combat.readCollisionTargets((kind, _id, _owner, x, y, radius) => {
+        if (kind !== 'player') return;
+        const dx = x - from.x, dy = y - from.y;
+        const along = dx * Math.cos(angle) + dy * Math.sin(angle);
+        const across = -dx * Math.sin(angle) + dy * Math.cos(angle);
+        const clearance = config.bodyRadiusPx + radius;
+        if (Math.abs(across) >= clearance || along < 0) return;
+        limit = Math.min(limit, Math.max(0, along - Math.sqrt(clearance * clearance - across * across)));
+      });
+      return limit;
+    },
     eggLandings: (from, rotation, count, distance) => habitat.eggLandings(from, rotation, count, distance),
     flightFree: (from, to, radius) => solids().canMove(from.x, from.y, to.x, to.y, radius),
-    random: Math.random, diagnostic: ports.diagnostic,
+    diagnostic: ports.diagnostic,
   });
   runtime.setKraken({ system, brood, habitat, excluded });
   let release: (() => void) | null = null;

@@ -111,6 +111,7 @@ function createColossus(x = 100, y = 100, targetModeOverride?: 'all' | 'players'
     decayWeaponSpread: () => {},
     rollWeaponSpreadOffset: () => 0,
     getCollisionRadius: () => 34,
+    getAimAngle() { return this.aimAngle; },
     faceAngle(angle: number) { this.aimAngle = angle; },
     stopMovement() { this.stopCalls += 1; },
     canScanForAttack(now: number) { return now >= this.nextScanAt; },
@@ -282,6 +283,24 @@ function runAttackFrames(
 }
 
 describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
+  it('keeps overlapping target jitter out of facing and bounds turning after leaving the dead zone', () => {
+    const enemy = createColossus(), player = fakeEntity({ id: 'p', x: 101, y: 100, active: true });
+    enemy.aimAngle = .7;
+    const { system } = createAttackSystem(enemy, [player]);
+    for (let now = 1000; now < 1120; now += 16) {
+      player.x = now % 32 ? 99 : 101;
+      const move = system.getCombatMovement(enemy, now)!;
+      expect(move.aimAngle).toBe(.7); enemy.faceAngle(move.aimAngle);
+    }
+    player.x = 100 - enemy.getCollisionRadius() * 1.1;
+    expect(system.getCombatMovement(enemy, 1128)!.aimAngle).toBe(.7);
+    player.x = 100 - enemy.getCollisionRadius() * 2;
+    const move = system.getCombatMovement(enemy, 1144)!;
+    expect(move.aimAngle).toBeGreaterThan(.7);
+    expect(move.aimAngle - .7).toBeLessThanOrEqual(2 * Math.PI * .016 + 1e-9);
+    enemy.faceAngle(move.aimAngle);
+    expect(system.getCombatMovement(enemy, 1144)!.aimAngle).toBe(move.aimAngle);
+  });
   it('movement queries preserve weapon clocks and locks and keep moving attacks mobile', () => {
     const enemy = createColossus();
     const { system, shots } = createAttackSystem(enemy, [fakeEntity({ id: 'p1', x: 800, y: 100, active: true })]);

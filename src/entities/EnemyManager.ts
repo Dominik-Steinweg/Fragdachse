@@ -261,7 +261,7 @@ export class EnemyManager {
     enemy.setKrakenBodyTargetability(state.bodyTargetability);
     const p = state.phase, action = state.bodyAction;
     const special: import('../types').SyncedEnemyState['specialAction'] = action
-      ? action.kind === 'ink' ? 'kraken-ink' : action.kind === 'eggs' ? 'kraken-eggs' : 'kraken-slam'
+      ? action.kind === 'ink' ? 'kraken-ink' : action.kind === 'eggs' ? 'kraken-eggs' : action.kind === 'spines' ? 'kraken-spines' : 'kraken-slam'
       : p.kind === 'diving' ? 'kraken-dive' : p.kind === 'submerged' ? 'kraken-submerged'
       : p.kind === 'surfacing' ? 'kraken-surface' : p.kind === 'ashore' ? 'kraken-ashore' : 'none';
     const endsAt = action && 'endsAt' in action ? action.endsAt : action?.kind === 'slam'

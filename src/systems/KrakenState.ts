@@ -14,7 +14,7 @@ const time = v.pipe(v.number(), v.finite());
 const pose = v.strictObject({ x: time, y: time, angle: time });
 
 export type KrakenSpecialAction = 'kraken-ink' | 'kraken-eggs' | 'kraken-dive' | 'kraken-submerged'
-  | 'kraken-surface' | 'kraken-ashore' | 'kraken-slam';
+  | 'kraken-surface' | 'kraken-ashore' | 'kraken-slam' | 'kraken-spines';
 
 /** Absolute host anchors, never animation frame callbacks. Death is legal from EVERY phase.
  * phaseTwoPending never clamps HP. Finish diving, retract existing parts, surface, then exit.
@@ -53,8 +53,20 @@ export const KrakenEggCastSchema = v.pipe(v.strictObject({
   kind: v.literal('eggs'), castId: id, startedAt: time, releaseAt: time, endsAt: time,
 }), v.check(a => a.startedAt < a.releaseAt && a.releaseAt < a.endsAt, 'Invalid egg release anchors'));
 export type KrakenEggCast = v.InferOutput<typeof KrakenEggCastSchema>;
+/** Six dorsal spines fire in ascending order; each leaves its socket exactly at its release anchor. */
+export const KrakenSpineVolleySchema = v.pipe(v.strictObject({
+  kind: v.literal('spines'), castId: id, startedAt: time, raiseAt: time,
+  releaseAt: v.pipe(v.array(time), v.length(6)), endsAt: time,
+}), v.check(a => a.startedAt < a.raiseAt && a.raiseAt <= a.releaseAt[0]!
+  && a.releaseAt.every((t, i) => i === 0 || a.releaseAt[i - 1]! < t) && a.releaseAt[5]! < a.endsAt, 'Invalid spine volley anchors'));
+export type KrakenSpineVolley = v.InferOutput<typeof KrakenSpineVolleySchema>;
+/** A spine that left its socket: absent until regrowStartsAt, then grows back until readyAt. Present spines are not listed. */
+export const KrakenSpineStateSchema = v.pipe(v.strictObject({
+  index: v.pipe(sequence, v.maxValue(5)), castId: id, firedAt: time, regrowStartsAt: time, readyAt: time,
+}), v.check(s => s.firedAt <= s.regrowStartsAt && s.regrowStartsAt < s.readyAt, 'Invalid spine regrowth anchors'));
+export type KrakenSpineState = v.InferOutput<typeof KrakenSpineStateSchema>;
 export const KrakenBodyActionSchema = v.variant('kind', [
-  KrakenEggCastSchema,
+  KrakenEggCastSchema, KrakenSpineVolleySchema,
   v.strictObject({ kind: v.literal('ink'), attackId: id, startedAt: time, chargeAt: time, spitAt: time, endsAt: time }),
   v.strictObject({ kind: v.literal('slam'), attackId: id }),
 ]);
@@ -97,7 +109,10 @@ export const KrakenStateSchema = v.pipe(v.strictObject({
   movement: v.picklist(['water-anchored', 'water-approach', 'ashore', 'land', 'locked']),
   bodyAction: v.nullable(KrakenBodyActionSchema),
   inkClouds: v.array(KrakenInkCloudSchema), tentacles: v.array(KrakenTentacleStateSchema), eggs: v.array(KrakenEggStateSchema),
+  spines: v.array(KrakenSpineStateSchema),
 }), v.check(s => orderedPhase(s.phase), 'Invalid phase anchors'), v.check(s => {
+  if (new Set(s.spines.map(p => p.index)).size !== s.spines.length) return false;
+  if (s.bodyAction?.kind === 'spines' && s.phase.kind !== 'surfaced') return false;
   const parts = new Set<string>();
   const contacts = new Set<string>();
   const attacks = new Set<string>();
@@ -177,7 +192,7 @@ export interface KrakenEntityPort {
 }
 export interface KrakenIntentReadPort {
   readTarget(boss: BossTargetRef): { readonly target: CombatTargetRef; readonly x: number; readonly y: number } | null;
-  /** Explicit secondary radial selection from the SAME targetability catalogue. */
+  /** Explicit secondary selection from the SAME targetability catalogue. */
   readSecondaryTargets(boss: BossTargetRef): readonly { readonly target: CombatTargetRef; readonly x: number; readonly y: number }[];
 }
 
@@ -200,8 +215,14 @@ export type KrakenHabitatResult<T> = { readonly status: 'valid'; readonly value:
 export interface KrakenHabitatPort {
   reserveWaterSpawn(habitatId: string, bodyRadiusPx: number): KrakenHabitatResult<KrakenHabitatReservation>;
   revalidate(reservation: KrakenHabitatReservation): boolean;
-  reserveLanes(boss: BossTargetRef, habitatId: string, targets: readonly { readonly x: number; readonly y: number }[],
-    maxCount: number): readonly KrakenLaneReservation[];
+  reserveTentacles(boss: BossTargetRef, habitatId: string, targets: readonly { readonly x: number; readonly y: number }[],
+    maxCount: number, avoid?: readonly { x: number; y: number }[]): readonly KrakenLaneReservation[];
+  aimTentacle(reservation: KrakenLaneReservation, target: { x: number; y: number }): KrakenLaneReservation['pose'] | null;
+  wanderPoint(from: { x: number; y: number }, random: number): { x: number; y: number } | null;
+  canWander(from: { x: number; y: number }, to: { x: number; y: number }): boolean;
+  divePoint(from: { x: number; y: number }): { x: number; y: number } | null;
+  isDiveInterior(point: { x: number; y: number }): boolean;
+  recoverLand(from: { x: number; y: number }, distance: number): { x: number; y: number } | null;
   reserveExit(boss: BossTargetRef, habitatId: string): KrakenHabitatResult<KrakenExitReservation>;
   revalidateLane(reservation: KrakenLaneReservation): boolean;
   revalidateExit(reservation: KrakenExitReservation): KrakenHabitatResult<KrakenExitReservation>;

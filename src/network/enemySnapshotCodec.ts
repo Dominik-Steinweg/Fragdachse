@@ -26,7 +26,7 @@ const FIELD_AREA_CLAW = 8192;
 // Codes 0–6 are deployed legacy values; append new actions without renumbering them.
 const SPECIAL_ACTIONS = ['none', 'gauss-charge', 'phase-nuke', 'armageddon', 'timebomb-chase',
   'timebomb-fuse', 'void-molotov-windup', 'kraken-ink', 'kraken-eggs', 'kraken-dive',
-  'kraken-submerged', 'kraken-surface', 'kraken-ashore', 'kraken-slam'] as const;
+  'kraken-submerged', 'kraken-surface', 'kraken-ashore', 'kraken-slam', 'kraken-spines'] as const;
 const FIELD_POS = 1;   // x + y
 const FIELD_ROT = 2;   // rot (quantisiert × ROT_QUANT)
 const FIELD_HP = 4;    // hp + maxHp

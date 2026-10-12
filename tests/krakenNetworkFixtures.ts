@@ -29,7 +29,7 @@ export function part(partId: string): KrakenTentacleState {
 export function kraken(phase: KrakenPhase = phases[4]): KrakenState {
   return { boss, revision: 6, cycleId: 1, habitatId: 'pond', phase, phaseTwoPending: true,
     bodyTargetability: { revision: 3, effectiveAt: 0, mode: phase.kind === 'submerged' ? 'hidden' : 'protected' },
-    movement: 'water-anchored', bodyAction: null,
+    movement: 'water-anchored', bodyAction: null, spines: [],
     tentacles: phase.kind === 'submerged' ? [part('left'), part('right')] : [],
     eggs: phase.kind === 'removed' ? [] : [{ eggId: 'e2', entityGeneration: 2, bossId: boss.id,
       bossGeneration: 4, castId: 'cast', originId: 'encounter', broodTableId: 'brood', enemyKind: 'rabid-badger',

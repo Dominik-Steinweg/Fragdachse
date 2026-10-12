@@ -344,7 +344,13 @@ export class HostPhysicsSystem {
       if (player.active) collide(player.physicsProxy.body as Phaser.Physics.Arcade.Body | null);
     }
     this.enemyManager?.forEachEnemy(enemy => {
-      if (enemy.sprite.active) collide(enemy.sprite.body as Phaser.Physics.Arcade.Body | null);
+      if (!enemy.sprite.active || !enemy.usesLandWaterCollision()) return;
+      const body = enemy.sprite.body as Phaser.Physics.Arcade.Body | null;
+      // A pre-existing invalid land pose belongs to the Kraken's bounded route recovery.
+      // Cell-wise overlap separation can push a large body deeper into a pond.
+      if (body && enemy.isKrakenLandBody() && this.waterGeometry!.isCircleBlocked(
+        body.prev.x + body.halfWidth, body.prev.y + body.halfHeight, body.halfWidth)) return;
+      collide(body);
     });
   };
   /** Landing validation reads the same static bodies that block ordinary movement. */
