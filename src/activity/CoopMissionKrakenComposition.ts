@@ -1,4 +1,5 @@
 import { WaterGeometry } from '../arena/WaterGeometry';
+import { bindKrakenDevHost, krakenDevAuthorized } from '../dev/scenario/krakenHostPort';
 import type { WorldCombatCore } from '../combat/WorldCombatCore';
 import type { CombatScope } from '../combat/CombatScope';
 import type { CombatPartHitReceipt } from '../combat/CombatPartContact';
@@ -109,6 +110,7 @@ export function materializeCoopMissionKraken(runtime: CoopMissionRuntime, map: C
     return target ? { target, x: candidate.x, y: candidate.y } : null;
   };
   const system = new CoopDefenseKrakenSystem(config, {
+    devAuthorized: krakenDevAuthorized,
     entity, habitat, brood, combat: ports.combat, projectiles: ports.projectiles,
     intent: {
       readTarget: boss => {
@@ -141,13 +143,15 @@ export function materializeCoopMissionKraken(runtime: CoopMissionRuntime, map: C
   });
   runtime.setKraken({ system, brood, habitat, excluded });
   let release: (() => void) | null = null;
+  let releaseDev: (() => void) | null = null;
   runtime.bind({
     attach: () => {
       if (release) return;
+      releaseDev = bindKrakenDevHost(system);
       release = ports.combat.bindPartContacts({ contacts: system.contacts, status: system.contacts, policy: config.transfer,
         isBodyTargetable: target => manager.getEnemy(String(target.id))?.isBodyTargetable() ?? false, onHit: ports.broadcastHit });
       ports.bindBrood(brood);
     },
-    detach: () => { release?.(); release = null; ports.bindBrood(null); system.clear(); brood.clear(); habitat.clear(); reservations.clear(); excluded.clear(); },
+    detach: () => { releaseDev?.(); releaseDev = null; release?.(); release = null; ports.bindBrood(null); system.clear(); brood.clear(); habitat.clear(); reservations.clear(); excluded.clear(); },
   });
 }

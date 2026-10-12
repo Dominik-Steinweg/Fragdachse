@@ -40,6 +40,93 @@ function setup() {
 }
 
 describe('Kraken host owner', () => {
+  it('keeps dev selection capability-gated and rejects illegal phases, range and HP', () => {
+    const f = setup();
+    expect(() => f.system.requestDevAction('ink')).toThrow('isolated dev host');
+    f.deps.devAuthorized = () => true;
+    expect(() => f.system.requestDevAction('lunge')).toThrow('phase surfaced');
+    expect(() => f.system.requestDevAction('ashore')).toThrow('HP threshold');
+    expect(() => f.system.requestDevAction('spines')).toThrow('outside ink range');
+    f.deps.intent.readTarget = () => null;
+    expect(() => f.system.requestDevAction('eggs')).toThrow('valid host target');
+    f.system.clear();
+    expect(() => f.system.requestDevAction('dive')).toThrow('living Kraken');
+  });
+  it('selects a queued action once, preserves the active attack, and skips only its wait', () => {
+    const f = setup(); f.deps.devAuthorized = () => true;
+    f.system.requestDevAction('ink'); f.tick(1);
+    const ink = f.system.getBodyClaw().attack!;
+    expect(ink.weaponId).toBe('kraken-ink');
+    f.system.requestDevAction('eggs');
+    expect(() => f.system.requestDevAction('dive')).toThrow('already pending');
+    f.tick(ink.endsAt - 1);
+    expect(f.system.getBodyClaw().attack?.attackId).toBe(ink.attackId);
+    f.tick(ink.endsAt); f.tick(ink.endsAt + 1);
+    expect(f.system.getState()?.bodyAction?.kind).toBe('eggs');
+    expect(f.system.getDevAction()).toMatchObject({ act: 'eggs', status: 'started' });
+    const detached = f.system.getDevAction()!; detached.status = 'failed';
+    expect(f.system.getDevAction()?.status).toBe('started');
+    f.system.clear(); expect(f.system.getDevAction()).toBeNull();
+  });
+  it('accepts ink reachable by turning without granting extra range', () => {
+    const f = setup(); f.deps.devAuthorized = () => true; f.entity.angle = Math.PI;
+    f.deps.intent.readTarget = () => ({ target: boss, x: f.config.ink.range + f.config.ink.mouthOffset.x - 10, y: 0 });
+    f.system.requestDevAction('ink'); f.tick(1);
+    expect(f.system.getDevAction()?.status).toBe('pending');
+    expect(f.system.getState()?.bodyAction).toBeNull();
+    f.deps.intent.readTarget = () => ({ target: boss, x: f.config.spines.range + 1, y: 0 });
+    f.tick(2);
+    expect(f.system.getDevAction()).toMatchObject({ status: 'failed', error: expect.stringContaining('out of range') });
+  });
+  it('waits for real facing, regrowth and dive interior and revalidates pending requests', () => {
+    const f = setup(); f.deps.devAuthorized = () => true;
+    f.deps.intent.readTarget = () => ({ target: boss, x: 0, y: f.config.spines.range - 1 });
+    f.system.requestDevAction('spines'); f.tick(1);
+    expect(f.system.getState()?.bodyAction).toBeNull();
+    let now = 1;
+    while (f.system.getDevAction()?.status === 'pending' && now < 2000) f.tick(now += 20);
+    const action = f.system.getState()!.bodyAction!;
+    if (action.kind !== 'spines') throw Error('spine selection failed');
+    f.tick(action.endsAt);
+    f.system.requestDevAction('spines'); f.tick(action.endsAt + 1);
+    expect(f.system.getDevAction()?.status).toBe('pending');
+    expect(f.system.getState()?.bodyAction).toBeNull();
+    f.deps.devAuthorized = () => false; f.tick(action.endsAt + 2);
+    expect(f.system.getDevAction()).toMatchObject({ status: 'failed', error: 'Isolated dev host no longer active' });
+    const d = setup(); d.deps.devAuthorized = () => true;
+    d.deps.habitat.isDiveInterior = () => false;
+    d.system.requestDevAction('dive'); d.tick(1);
+    expect(d.system.getState()?.phase.kind).toBe('surfaced');
+    d.deps.habitat.isDiveInterior = () => true; d.tick(2);
+    expect(d.system.getState()?.phase.kind).toBe('diving');
+    expect(d.system.getDevAction()?.status).toBe('started');
+  });
+  it('uses the real exit and land lunge collision paths for dev actions', () => {
+    const f = setup(); f.deps.devAuthorized = () => true;
+    f.entity.hp = f.entity.maxHp * f.config.phaseTwoHpRatio;
+    f.system.requestDevAction('ashore'); f.tick(1);
+    const phase = f.system.getState()!.phase;
+    if (phase.kind !== 'ashore') throw Error('no exit');
+    f.tick(phase.recoveryEndsAt);
+    expect(f.system.getState()?.phase.kind).toBe('land');
+    f.deps.bodyTravelLimit = () => 20;
+    f.system.requestDevAction('lunge'); f.tick(phase.recoveryEndsAt + 1);
+    const attack = f.system.getBodyClaw().attack!;
+    const from = f.entity.x;
+    f.tick(attack.hitAt);
+    expect(f.entity.x - from).toBeLessThanOrEqual(20);
+    expect(f.system.getState()?.phase.kind).toBe('land');
+  });
+  it('reports blocked exits and unusable egg casts rather than claiming a dev start', () => {
+    const f = setup(); f.deps.devAuthorized = () => true;
+    f.deps.eggLandings = () => [];
+    f.system.requestDevAction('eggs'); f.tick(1);
+    expect(f.system.getDevAction()).toMatchObject({ status: 'failed', error: expect.stringContaining('landing') });
+    const e = setup(); e.deps.devAuthorized = () => true; e.entity.hp = 1;
+    e.deps.habitat.reserveExit = () => ({ status: 'invalid', reason: 'No corridor' });
+    e.system.requestDevAction('ashore'); e.tick(1);
+    expect(e.system.getDevAction()).toMatchObject({ status: 'failed', error: expect.stringContaining('No corridor') });
+  });
   it('faces the target before freezing the egg throw cone', () => {
     const f = setup();
     f.deps.intent.readTarget = () => ({ target: boss, x: 0, y: f.config.spines.range + 100 });

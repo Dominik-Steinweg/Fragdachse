@@ -559,3 +559,72 @@ gestartet (`--elevation=45`, `--quality=medium|low` optional). `--mode=shadow --
 misst gepaarte Aufnahmen mit/ohne Krakenschatten im Ring außerhalb der Körper-Silhouette.
 Voraussetzung: ausdrücklich erlaubter Browserlauf, `npm run dev:browser` und HTTP 200 auf 8090.
 Aufnahmen, Kontaktbögen und Zustandsprotokolle liegen unter `build/kraken-live/<timestamp>/`.
+
+### Deterministische Hostaktionen und v13-Aufnahmen
+
+`krakenAct` wählt genau die nächste passende Aktion im echten Kraken-Host. Der Befehl ist nur
+in der isolierten Dev-Mission als Host verfügbar; Clients und externe Mitspieler sind ausgeschlossen.
+Es werden nur Auswahl, Cooldown und Wartezeit vor einer Aktion überschrieben. Laufende Angriffe,
+Ausrichtung, Reichweite, Stachel-Nachwachsen, Brutkapazität, Land-/Wassergrenzen und Exit-Reservierungen
+bleiben wirksam. Es gibt keine Boss-Teleportation und keinen direkten Eingriff in Renderer oder Clips.
+
+```js
+await devScenario.run({ action: 'krakenMission', skipIntro: true });
+await devScenario.whenReady();
+await devScenario.run({ action: 'krakenTarget', gridX: 45, gridY: 40 });
+// Nach einer Zielversetzung einen Hostframe für die normale Zielwahl ausführen.
+await devScenario.run({ action: 'step', frames: 1 });
+// Vor dem nächsten Befehl status().pendingSteps === 0 abwarten.
+await devScenario.run({ action: 'krakenAct', act: 'spines' });
+devScenario.status().krakenDevAction; // { act, status:'pending'|'started'|'failed', requestedAt, startedAt?, error? }
+```
+
+| `act` | Voraussetzung |
+| --- | --- |
+| `spines` | Aufgetaucht, Ziel außerhalb Tintenreichweite und innerhalb Stachelreichweite; wartet auf vollständiges Nachwachsen. |
+| `ink` | Aufgetaucht oder an Land, Ziel in Mundreichweite oder durch den normalen Wasser-Anmarsch erreichbar. |
+| `eggs` | Aufgetaucht oder an Land, gültiges Hostziel; normale Flug-/Landeflächen und Brutreservierungen. |
+| `dive` | Aufgetaucht in Phase 1; schwimmt vor dem Abtauchen regulär in den Teichinnenraum. |
+| `ashore` | Aufgetaucht und echte Phase-2-HP-Schwelle erreicht, z. B. vorher `krakenHp` mit `status().krakenResidency.maxHp / 2`. |
+| `lunge` | Phase 2 an Land, Ziel in Klauenreichweite; normaler Sprung-Klauenpfad stoppt an Wasser, Hindernissen und Spielern. |
+
+`krakenTarget` setzt den lokalen Spieler über dieselbe Freiflächenprüfung wie `teleport` (Rasterkoordinaten,
+keine Bossposition). Bei ungültiger Ausgangslage antwortet `run` mit `ok:false` und Klartext.
+Eine akzeptierte Aktion wartet bei Bedarf auf das Ende des laufenden Angriffs, Ausrichtung oder Nachwachsen.
+Eine weitere Anfrage während `pending` wird abgelehnt. Änderungen der Lage oder fehlgeschlagene
+Reservierungen werden als `failed` mit `error` gemeldet. `started` bestätigt den Aktionsbeginn, nicht
+bereits einen Treffer. Neustart/Activity-Teardown verwirft die Anfrage.
+`krakenDevGeometry` protokolliert Position, Winkel, trockenen Körperstand, den trockenen vollständigen
+Ausfallpfad und die Lage im Teichinnenraum für die Regression; es vergibt keine Bewegungsfreigabe.
+
+```powershell
+npm run dev:browser
+# HTTP 200 auf http://127.0.0.1:8090/ abwarten.
+# Kurzer Infrastruktur-Rauchtest mit den aktuell importierten v12b-Assets:
+node scripts/visual/kraken-live.mjs --mode=v13 --smoke=true --run=kraken-v12b
+# Erst NACH Import des v13-Pakets ausführen:
+node scripts/visual/kraken-live.mjs --mode=v13 --run=kraken-v13
+```
+
+Der v13-Modus verwendet Playwright-Core und installiertes Chrome, kein Chrome-Computer-Use.
+Er startet jede Szene neu mit festem Seed und nimmt zwei Sonnenstände auf (135°/28° und 315°/45°).
+Pro Szene entstehen 8–9 Hostzeitpunkte als unveränderte Canvas-PNGs mit Zoom 1 und Zoom 2 bei DPR 1;
+eine Prüfung lehnt CSS-skalierte Canvas-Aufnahmen ab. Kontaktbögen sind verkleinerte Übersichten.
+Enthalten sind Schwimmen über acht Sekunden mit separatem Positionsoverlay, Abtauchen im Teichinneren,
+Tentakel-Aufstieg/Lauern/diagonaler Telegraph/Schlag und Einsinken ohne Schlag, Stacheln mit allen sechs
+Abschüssen und Flug/Nachwachsen, Eierkegel samt Flug, Tinte mit authored 432-px-Reichweite, Phase-2-Ausstieg,
+Sprung-Klaue vor einem Spieler und die Uferregression mit Ausfall Richtung Wasser.
+Die Uferregression setzt den Kraken durch normale Navigation an den Teichrand und verlangt durchgehend
+Phase `land` sowie einen trockenen Körper; ein vollständig trockener Ausgangspfad gilt nicht als Repro.
+
+`--scene=ink,eggs` begrenzt die Rezepte; weitere Namen: `swim`, `dive`, `tentacle-strike`,
+`tentacle-sink`, `spines`, `ashore`, `lunge-player`, `lunge-water`. `--quality=medium|low` und
+`--captures=false` sind für Diagnose verfügbar. Letzteres liefert nur Zustände, keine Sichtprüfung.
+`--smoke=true` nimmt standardmäßig nur drei Tintenzeitpunkte unter einer Sonne auf und ist keine
+v13-Abnahme. Die Tintenaktion vermeidet den in v12b noch fehlenden `spine-volley`-Clip, der bei
+einem expliziten `--scene=spines` den vorhandenen Renderer stoppen kann. Bekannte fehlende
+Spine-Assets/-Clips werden im Rauchtest separat als erwartet protokolliert;
+andere Lade-, Konsolen- und Shaderfehler lassen den Lauf scheitern. `report.json` enthält tatsächliche
+Assetrevisionen, Hostzustände, Abdeckung, Fehler und geometrische Nachweise; `index.html` verlinkt die
+Kontaktbögen. Zeitüberschreitungen oder fehlende Phasen ergeben einen fehlgeschlagenen Bericht statt
+einer scheinbar vollständigen Bildserie.

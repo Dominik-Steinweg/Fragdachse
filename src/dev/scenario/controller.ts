@@ -1,4 +1,6 @@
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
+import { readKrakenDevAction, readKrakenDevGeometry, requireKrakenDevHost } from './krakenHostPort';
+import type { KrakenDevAct } from '../../systems/CoopDefenseKrakenSystem';
 import { EnemyMeshReview } from './EnemyMeshReview';
 import { ArmageddonReview } from './ArmageddonReview';
 import { TurretMaterialReview } from './TurretMaterialReview';
@@ -63,6 +65,17 @@ export class DevScenarioController {
   setKrakenHp(hp: number): void {
     this.requireReady();
     if (this.config.mapId !== KRAKEN_MAP_ID || !this.runtime.devScenarioPort.setKrakenHp(hp)) throw Error('Active diagnosis Kraken required');
+  }
+  krakenAct(act: KrakenDevAct): void {
+    this.requireReady();
+    if (this.config.mapId !== KRAKEN_MAP_ID) throw Error('Kraken diagnosis map required');
+    this.lastAction = requireKrakenDevHost().requestDevAction(act);
+  }
+  krakenTarget(point: GridPoint): void {
+    this.requireReady();
+    if (this.config.mapId !== KRAKEN_MAP_ID) throw Error('Kraken diagnosis map required');
+    requireKrakenDevHost();
+    this.teleport(point, false);
   }
   setFigureSun(value: { azimuth: number; elevation: number; strength: number } | null): void {
     this.requireReady();
@@ -865,7 +878,7 @@ export class DevScenarioController {
     const terminated = this.runtime.isMatchTerminated() || (this.readyAt !== null
       && (!bridge.isArenaStarted() || bridge.getGamePhase() !== 'ARENA'));
     return { state: this.state, ready: this.state === 'ready' && !terminated && !this.setupPending && !this.pendingTrainShowcase && !this.krakenLoading && !this.pendingKrakenMission && this.pendingKrakenHp === null, terminated, message: this.message, isolated: true, network: 'local-only',
-      krakenResidency: this.runtime.getScenarioKrakenResidency(), initialPosition: this.initialPosition, mission: this.runtime.devScenarioPort.readMission(),
+      krakenResidency: this.runtime.getScenarioKrakenResidency(), krakenDevAction: readKrakenDevAction(), krakenDevGeometry: readKrakenDevGeometry(), initialPosition: this.initialPosition, mission: this.runtime.devScenarioPort.readMission(),
       train: this.trainStatus(),
       bots: this.bots.ids().map((id, index) => ({ index, id, ...(this.state === 'ready' ? this.bots.position(index) : null) })),
       readyAfterMs: this.readyAt === null ? null : Math.round(this.readyAt - this.startedAt),

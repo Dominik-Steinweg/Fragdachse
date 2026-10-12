@@ -215,6 +215,18 @@ import { CameraPostFxController } from '../src/effects/postfx/CameraPostFxContro
 import { NEUTRAL_WORLD_GRADE } from '../src/effects/postfx/worldGrade';
 import { GraphicsQualityController } from '../src/graphics/GraphicsQuality';
 import { runScenarioCommand } from '../src/dev/scenario/api';
+
+it('validates the Kraken dev command vocabulary and target coordinates', () => {
+  const krakenAct = vi.fn(), krakenTarget = vi.fn(), controller = { krakenAct, krakenTarget, syncPanel() {} } as never;
+  for (const act of ['spines', 'ink', 'eggs', 'dive', 'lunge', 'ashore']) {
+    runScenarioCommand(controller, { action: 'krakenAct', act });
+    expect(krakenAct).toHaveBeenLastCalledWith(act);
+  }
+  for (const act of ['slam', '', null, 1]) expect(() => runScenarioCommand(controller, { action: 'krakenAct', act })).toThrow('act:');
+  runScenarioCommand(controller, { action: 'krakenTarget', gridX: 35, gridY: 36 });
+  expect(krakenTarget).toHaveBeenCalledWith({ gridX: 35, gridY: 36 });
+  expect(() => runScenarioCommand(controller, { action: 'krakenTarget', gridX: NaN, gridY: 36 })).toThrow();
+});
 const fxMock = vi.hoisted(() => {
   const matrix = () => ({ active: true, colorMatrix: {
     reset() {}, brightness() {}, saturate() {}, contrast() {}, multiply() {},

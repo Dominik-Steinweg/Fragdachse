@@ -10,7 +10,17 @@ import type { KrakenBodyAction, KrakenEggLandEffect, KrakenEntityPort, KrakenExi
   KrakenProjectileSpawnPort, KrakenState, KrakenStatePublishPort, KrakenTentacleState } from './KrakenState';
 
 type Point = { readonly x: number; readonly y: number };
+export type KrakenDevAct = 'spines' | 'ink' | 'eggs' | 'dive' | 'lunge' | 'ashore';
+export interface KrakenDevAction {
+  act: KrakenDevAct;
+  status: 'pending' | 'started' | 'failed';
+  requestedAt: number;
+  startedAt?: number;
+  error?: string;
+}
 export interface KrakenHostDependencies {
+  /** Optional capability supplied only by the isolated dev-host composition. */
+  devAuthorized?: () => boolean;
   entity: KrakenEntityPort;
   intent: KrakenIntentReadPort;
   habitat: KrakenHabitatPort & { reserveExit(boss: BossTargetRef, habitatId: string, target?: Point): ReturnType<KrakenHabitatPort['reserveExit']> };
@@ -62,6 +72,7 @@ export class CoopDefenseKrakenSystem {
   private diagnosticSent = false;
   private lastPose = { x: 0, y: 0, angle: 0 };
   private lastPreAt = -Infinity;
+  private devAction: KrakenDevAction | null = null;
 
   constructor(private readonly config: KrakenBossConfig, private readonly deps: KrakenHostDependencies) {
     this.contacts = new KrakenTentacleTargets(config.hitboxProfiles, boss => !!deps.entity.readBoss(boss)?.alive,
@@ -94,6 +105,93 @@ export class CoopDefenseKrakenSystem {
   getBodyClaw(): EnemyAreaClawState { return structuredClone(this.bodyClaw); }
   isDefeatComplete(): boolean { return this.state?.phase.kind === 'removed'; }
 
+  getDevAction(): KrakenDevAction | null { return this.devAction ? { ...this.devAction } : null; }
+  inspectDevGeometry() {
+    if (!this.deps.devAuthorized?.() || !this.state) return null;
+    const p = this.deps.entity.readBoss(this.state.boss);
+    if (!p) return null;
+    const end = { x: p.x + Math.cos(p.angle) * this.config.slam.lungeDistancePx,
+      y: p.y + Math.sin(p.angle) * this.config.slam.lungeDistancePx };
+    return { position: { x: p.x, y: p.y }, angle: p.angle,
+      dryBody: this.deps.canMove(p, p, 'land'), fullLungeDry: this.deps.canMove(p, end, 'land'),
+      diveInterior: this.deps.habitat.isDiveInterior(p) };
+  }
+
+  /** Select one normal host action; never cancels an attack or grants a movement permit. */
+  requestDevAction(act: KrakenDevAct): KrakenDevAction {
+    if (!this.deps.devAuthorized?.()) throw Error('Kraken action requires an isolated dev host');
+    if (!['spines', 'ink', 'eggs', 'dive', 'lunge', 'ashore'].includes(act)) throw Error('Unknown Kraken action');
+    if (this.devAction?.status === 'pending') throw Error(`Kraken ${this.devAction.act} is already pending`);
+    const error = this.devActionError(act);
+    if (error) throw Error(error);
+    this.devAction = { act, status: 'pending', requestedAt: this.now };
+    return this.getDevAction()!;
+  }
+
+  private devActionError(act: KrakenDevAct): string | null {
+    const s = this.state, entity = s && this.deps.entity.readBoss(s.boss);
+    if (!s || !entity?.alive || entity.hp <= 0 || ['dying', 'removed'].includes(s.phase.kind)) return 'Active living Kraken required';
+    if (act === 'lunge' ? s.phase.kind !== 'land'
+      : ['spines', 'dive', 'ashore'].includes(act) ? s.phase.kind !== 'surfaced'
+      : !['surfaced', 'land'].includes(s.phase.kind)) return `Kraken ${act} is invalid in phase ${s.phase.kind}`;
+    const phaseTwo = s.phaseTwoPending || entity.hp <= entity.maxHp * this.config.phaseTwoHpRatio;
+    if (act === 'ashore') return phaseTwo ? null : 'Kraken ashore requires the phase-2 HP threshold; use krakenHp first';
+    if (s.phase.kind === 'surfaced' && phaseTwo) return 'Kraken phase-2 exit has priority';
+    if (act === 'dive') return this.deps.habitat.isDiveInterior(entity) || this.deps.habitat.divePoint(entity)
+      ? null : 'Kraken has no valid dive interior';
+    const target = this.deps.intent.readTarget(s.boss);
+    if (!target) return 'Kraken has no valid host target; set krakenTarget and step the host';
+    const distance = Math.hypot(target.x - entity.x, target.y - entity.y);
+    // Validate the reachable facing, not the current mouth position: turning remains a host prerequisite.
+    const facing = { ...entity, angle: Math.atan2(target.y - entity.y, target.x - entity.x) };
+    if (act === 'spines' && (this.inkInRange(facing, target) || distance > this.config.spines.range)) return 'Kraken spines requires a target outside ink range and inside spine range';
+    if (act === 'ink' && !this.inkInRange(facing, target)
+      && !(s.phase.kind === 'surfaced' && distance <= this.config.ink.range + this.config.ink.mouthOffset.x + this.config.waterWander.maxLegPx
+        && this.deps.waterApproach(entity, target))) return 'Kraken ink target is out of range and has no valid water approach';
+    if (act === 'lunge' && (!this.deps.canMove(entity, entity, 'land')
+      || distance > this.config.bodyRadiusPx + this.config.slam.length)) return 'Kraken lunge requires dry land and a target in claw range';
+    return null;
+  }
+
+  private prepareDevAction(now: number): void {
+    const request = this.devAction;
+    if (request?.status !== 'pending') return;
+    const error = !this.deps.devAuthorized?.() ? 'Isolated dev host no longer active' : this.devActionError(request.act);
+    if (error) { request.status = 'failed'; request.error = error; return; }
+    const s = this.state!;
+    if (s.bodyAction || this.deps.entity.readBoss(s.boss)?.stunned) return;
+    this.nextActionAt = now;
+    if (request.act === 'dive' && s.phase.kind === 'surfaced') s.phase.nextDiveAt = now;
+    if (request.act === 'ashore') this.nextExitRetry = now;
+    if (request.act === 'ink') this.nextWaterAction = 'ink';
+    // Avoid the ordinary ink approach while waiting to face a ranged dev action.
+    if (request.act === 'eggs' || request.act === 'spines') this.nextWaterAction = 'eggs';
+  }
+
+  private startDevAction(now: number, entity: Point & { angle: number }): void {
+    const request = this.devAction!, s = this.state!, kind = request.act;
+    if (kind === 'dive' || kind === 'ashore') return;
+    const target = this.deps.intent.readTarget(s.boss)!;
+    if (kind === 'ink' && !this.inkInRange(entity, target)) return;
+    if (kind === 'spines') {
+      if (s.spines.length) return; // Regrowth is a physical prerequisite, not a cooldown.
+      this.startSpines(now);
+    } else if (kind === 'eggs') {
+      this.startEggs(now, entity);
+      if (!this.throws.length) {
+        request.status = 'failed'; request.error = 'Kraken eggs has no valid flight/landing or brood capacity';
+        return;
+      }
+    }
+    else this.startAttack(kind === 'lunge' ? 'slam' : 'ink', now, entity);
+    if (s.phase.kind === 'surfaced') this.nextWaterAction = kind === 'eggs' ? 'ink' : 'eggs';
+    if (s.phase.kind === 'land') {
+      const cooldown = kind === 'lunge' ? 'slam' : kind === 'ink' ? 'ink' : 'eggs';
+      this.cooldowns[cooldown] = now + this.config.landCooldowns[`${cooldown}Ms`];
+    }
+    request.status = 'started'; request.startedAt = now;
+  }
+
   preMovement(now: number, deltaMs: number): void {
     if (!this.state || now < this.lastPreAt || !Number.isFinite(now)) return;
     const dt = this.lastPreAt === now ? 0 : Math.max(0, Math.min(deltaMs, now - this.lastPreAt));
@@ -106,6 +204,7 @@ export class CoopDefenseKrakenSystem {
       s.phaseTwoPending = true;
     }
     if (entity.stunned && s.bodyAction) this.cancelBody();
+    this.prepareDevAction(now);
     const p = s.phase, d = this.config.dive;
     switch (p.kind) {
       case 'intro':
@@ -160,6 +259,10 @@ export class CoopDefenseKrakenSystem {
         if (!s.bodyAction && !entity.stunned) this.faceTarget(entity, dt);
         break;
     }
+    if (this.devAction?.status === 'pending' && (this.devAction.act === 'dive' && s.phase.kind === 'diving'
+      || this.devAction.act === 'ashore' && s.phase.kind === 'ashore')) {
+      this.devAction.status = 'started'; this.devAction.startedAt = now;
+    }
     this.syncParts();
   }
 
@@ -185,7 +288,7 @@ export class CoopDefenseKrakenSystem {
   clear(): void {
     const old = this.state;
     // Invalidate owner first so reentrant callbacks cannot restart actions.
-    this.state = null; this.originId = null;
+    this.state = null; this.originId = null; this.devAction = null;
     this.wander = null; this.wanderPauseUntil = 0; this.recentParts = []; this.spineReleases.clear(); this.facingHeld = false;
     if (old) {
       this.clearClaw({ kind: 'body' }, old.boss);
@@ -275,6 +378,11 @@ export class CoopDefenseKrakenSystem {
     if (!entity || !target) return;
     const desired = Math.atan2(target.y - entity.y, target.x - entity.x);
     const error = Math.abs(Math.atan2(Math.sin(desired - entity.angle), Math.cos(desired - entity.angle)));
+    if (this.devAction?.status === 'pending') {
+      const arc = this.devAction.act === 'lunge' ? this.config.slam.frontArcDegrees * Math.PI / 360 : Math.PI / 36;
+      if (error <= arc) this.startDevAction(now, entity);
+      return;
+    }
     if (error > (s.phase.kind === 'land' ? this.config.slam.frontArcDegrees * Math.PI / 360 : Math.PI / 36)) return;
     if (s.phase.kind === 'surfaced') {
       const distance = Math.hypot(target.x - entity.x, target.y - entity.y);
@@ -569,7 +677,12 @@ export class CoopDefenseKrakenSystem {
     const target = intent ?? (players.length ? { x: players.reduce((sum, p) => sum + p.x, 0) / players.length,
       y: players.reduce((sum, p) => sum + p.y, 0) / players.length } : undefined);
     const result = this.deps.habitat.reserveExit(s.boss, s.habitatId, target);
-    if (result.status !== 'valid') { this.blocked(now, result.reason); return; }
+    if (result.status !== 'valid') {
+      if (this.devAction?.status === 'pending' && this.devAction.act === 'ashore' && result.status !== 'pending') {
+        this.devAction.status = 'failed'; this.devAction.error = `Kraken exit blocked: ${result.reason}`;
+      }
+      this.blocked(now, result.reason); return;
+    }
     this.exit = result.value; this.exitIndex = 0;
     const c = this.config.exit, moveAt = now + c.warningMs;
     let previous: Point = this.lastPose, length = 0;
@@ -648,6 +761,9 @@ export class CoopDefenseKrakenSystem {
 
   private die(now: number): void {
     const s = this.state; if (!s || s.phase.kind === 'dying' || s.phase.kind === 'removed') return;
+    if (this.devAction?.status === 'pending') {
+      this.devAction.status = 'failed'; this.devAction.error = 'Kraken died before the requested action';
+    }
     const land = s.phase.kind === 'land' || s.phase.kind === 'ashore' && now >= s.phase.gripAt;
     const submerged = s.bodyTargetability.mode === 'hidden';
     this.cancelBody();

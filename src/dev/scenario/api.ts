@@ -111,6 +111,14 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
       if (c.skipIntro !== undefined && typeof c.skipIntro !== 'boolean') throw new Error('skipIntro: boolean erwartet');
       controller.startKrakenMission(c.skipIntro === true, c.hp === undefined ? null : number(c.hp, 1, 10000000)); break;
     case 'krakenHp': controller.setKrakenHp(number(c.hp, 1, 10000000)); break;
+    case 'krakenAct': {
+      const act = c.act;
+      if (act !== 'spines' && act !== 'ink' && act !== 'eggs' && act !== 'dive' && act !== 'lunge' && act !== 'ashore') {
+        throw Error('act: spines, ink, eggs, dive, lunge or ashore required');
+      }
+      controller.krakenAct(act); break;
+    }
+    case 'krakenTarget': controller.krakenTarget(point(c)); break;
     case 'figureSun':
       controller.setFigureSun(c.reset === true ? null : { azimuth: number(c.azimuth, -360, 360),
         elevation: number(c.elevation, .1, 90), strength: c.strength === undefined ? 1 : number(c.strength, 0, 1) }); break;
