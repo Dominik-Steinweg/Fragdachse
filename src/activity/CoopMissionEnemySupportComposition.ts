@@ -149,6 +149,7 @@ export class CoopMissionEnemySupportComposition {
         (playerId, stat, baseValue) => this.options.playerModifierReadPort?.getResolvedStat(playerId, stat, baseValue) ?? baseValue,
       )
       : null;
+    necromancy?.setSpecialMovementSource(() => runtime.enemySpecialMovementSource);
     if (necromancy) runtime.setNecromancy(necromancy);
 
     if (!necromancy && !runtime.coopDefenseEnemyAttackSystem) return;
