@@ -12,6 +12,8 @@ export interface KrakenHabitatQueries {
   /** Excludes water; includes fixed/dynamic obstacles and current body occupancy. */
   circleFree(x: number, y: number, radius: number): boolean;
   segmentFree(from: Point, to: Point, radius: number): boolean;
+  /** May leave existing solid overlaps only while reducing penetration, never enter another solid. */
+  recoverySegmentFree(from: Point, to: Point, radius: number): boolean;
   landConnection(point: Point, radius: number): 'ready' | 'pending' | 'blocked';
 }
 
@@ -157,14 +159,46 @@ export class KrakenHabitatRules implements KrakenHabitatPort {
     return this.queries.segmentFree(from, to, this.config.bodyRadiusPx);
   }
 
-  /** Shortest body-valid route on the World grid; water is allowed only for this recovery.
-   * Every returned displacement is speed bounded and revalidated against current solids. */
-  recoverLand(from: Point, distance: number): Point | null {
+  /** Nearest full-body land sample in expanding rings, with stable ties and no local search cutoff. */
+  nearestLandPose(from: Point, minimumDistance = 0): Point | null {
+    const step = CELL_SIZE / 2, radius = this.config.bodyRadiusPx;
+    const reach = Math.ceil(Math.max(Math.abs(from.x - this.metrics.offsetX), Math.abs(from.x - this.metrics.maxX),
+      Math.abs(from.y - this.metrics.offsetY), Math.abs(from.y - this.metrics.maxY)) / step);
+    let best: Point | null = null, bestDistance = Infinity;
+    const consider = (p: Point): void => {
+      const d = Math.hypot(p.x - from.x, p.y - from.y);
+      if (d >= minimumDistance && d < bestDistance && this.isDryBodyFree(p, radius)) { best = p; bestDistance = d; }
+    };
+    // Authored exits also cover narrow valid areas between ring samples.
+    for (const exit of this.habitat.exits) consider(this.cell(exit.path[exit.path.length - 1]));
+    for (let ring = 0; ring <= reach && ring * step <= bestDistance; ring++) {
+      for (let i = -ring; i <= ring; i++) {
+        consider({ x: from.x + i * step, y: from.y - ring * step });
+        if (ring) consider({ x: from.x + i * step, y: from.y + ring * step });
+        if (Math.abs(i) < ring) {
+          consider({ x: from.x - ring * step, y: from.y + i * step });
+          consider({ x: from.x + ring * step, y: from.y + i * step });
+        }
+      }
+    }
+    return best;
+  }
+
+  /** Body-sized recovery route; water is allowed, solids may only be exited monotonically. */
+  recoverLand(from: Point, distance: number, destination?: Point): Point | null {
     const radius = this.config.bodyRadiusPx;
-    if (this.isDryBodyFree(from, radius)) return null;
-    // From an overlapping pose the full body cannot sweep anywhere: intermediate steps only need a
-    // thinner clearance, the goal still needs the full dry, solid-free body.
-    const probe = radius / 2, reach = CELL_SIZE * 16;
+    if (distance <= 0 || !destination && this.isDryBodyFree(from, radius)) return null;
+    const segment = (a: Point, b: Point) => this.queries.segmentFree(a, b, radius)
+      || this.queries.recoverySegmentFree(a, b, radius);
+    const stepTo = (to: Point): Point | null => {
+      const d = Math.hypot(to.x - from.x, to.y - from.y), t = d ? Math.min(1, distance / d) : 0;
+      const next = { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t };
+      return d && segment(from, next) ? next : null;
+    };
+    if (destination && this.isDryBodyFree(destination, radius) && segment(from, destination)) return stepTo(destination);
+    // Bound local detour work. The global destination search and host deadline remain the escape
+    // when no local route exists; do not flood the entire World on every movement frame.
+    const reach = CELL_SIZE * 16;
     type Node = { p: Point; cost: number; first: Point };
     const open: Node[] = [{ p: from, cost: 0, first: from }], costs = new Map<string, number>();
     while (open.length) {
@@ -172,17 +206,17 @@ export class KrakenHabitatRules implements KrakenHabitatPort {
       const n = open.pop()!;
       const key = n.p.x + ':' + n.p.y;
       if ((costs.get(key) ?? Infinity) < n.cost) continue;
-      if (this.isDryBodyFree(n.p, radius)) {
+      if (n.cost > 0 && this.isDryBodyFree(n.p, radius)
+        && (!destination || Math.hypot(n.p.x - destination.x, n.p.y - destination.y) <= CELL_SIZE)) {
         // Prefer a direct connection when it is shorter and solid-free.
-        const to = this.queries.segmentFree(from, n.p, radius) ? n.p : n.first;
-        const d = Math.hypot(to.x - from.x, to.y - from.y), t = Math.min(1, distance / d);
-        return d ? { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t } : null;
+        const to = segment(from, n.p) ? n.p : n.first;
+        return stepTo(to);
       }
       for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]) {
         const p = { x: n.p.x + dx * CELL_SIZE, y: n.p.y + dy * CELL_SIZE };
         const cost = n.cost + Math.hypot(dx, dy) * CELL_SIZE, k = p.x + ':' + p.y;
-        if ((costs.get(k) ?? Infinity) <= cost || cost > reach || !this.inside(p, probe)
-          || !this.queries.circleFree(p.x, p.y, probe) || !this.queries.segmentFree(n.p, p, probe)) continue;
+        if ((costs.get(k) ?? Infinity) <= cost || cost > reach || !this.inside(p, radius)
+          || !segment(n.p, p)) continue;
         costs.set(k, cost); open.push({ p, cost, first: n.cost === 0 ? p : n.first });
       }
     }
@@ -246,10 +280,11 @@ export class KrakenHabitatRules implements KrakenHabitatPort {
     return points;
   }
 
-  /** Current land pose: the full body may overlap the bank, a rock or the map edge by a small tolerance. */
+  /** Bank tolerance does not permit overlap with physical solids or world bounds. */
   landPoseValid(point: Point): boolean {
     const radius = this.config.bodyRadiusPx - this.config.landPoseTolerancePx;
-    return this.inside(point, radius) && this.isDryBodyFree(point, radius);
+    return this.dry(point, radius) && this.queries.circleFree(point.x, point.y, this.config.bodyRadiusPx)
+      && this.inside(point, this.config.bodyRadiusPx);
   }
   isDryBodyFree(point: Point, radius: number): boolean {
     return this.dry(point, radius) && this.queries.circleFree(point.x, point.y, radius);

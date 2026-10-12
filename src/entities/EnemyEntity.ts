@@ -275,6 +275,7 @@ export class EnemyEntity {
     this.visualAimAngle = this.currentAimAngle;
     this.smoothMovementFacing = false;
     this.sprite.setRotation(this.visualAimAngle + this.getSpriteRotationOffset());
+    if (this.authoritative && this.config.krakenBoss) this.syncKrakenPhysicsPose();
     this.syncBar();
   }
 
@@ -282,12 +283,24 @@ export class EnemyEntity {
 
   /** A host-owned fixed target keeps its position even through portals and external impulses. */
   setStationary(stationary: boolean): void {
+    const resumingKraken = this.stationary && !stationary && !!this.config.krakenBoss;
     this.stationary = stationary;
     if (this.authoritative) {
+      if (resumingKraken) this.syncKrakenPhysicsPose();
       this.body.moves = !stationary;
       this.body.setImmovable(stationary);
       if (stationary) this.stopMovement();
     }
+  }
+
+  /** Arcade reset uses the rotated sprite corner, while its circle uses an unrotated offset.
+   * Locked preUpdates correct the circle but retain prevFrame. Rebase both at an explicit pose
+   * and before unlocking, otherwise postUpdate replays that stale displacement into the sprite. */
+  private syncKrakenPhysicsPose(): void {
+    const body = this.body;
+    body.updateFromGameObject();
+    body.prev.copy(body.position);
+    body.prevFrame.copy(body.position);
   }
 
   private remotePositionRevision = -1;

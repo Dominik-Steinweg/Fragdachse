@@ -24,13 +24,13 @@ function setup() {
         ? Math.atan2(target.y - r.waterEntry.y, target.x - r.waterEntry.x) : null,
       aimTentacle: (r, target) => Math.hypot(target.x - r.waterEntry.x, target.y - r.waterEntry.y) <= config.tentacles.length - config.tentacles.safetyMarginPx
         ? { ...r.pose, angle: Math.atan2(target.y - r.waterEntry.y, target.x - r.waterEntry.x) } : null,
-      canWander: () => true, wanderPoint: () => null, divePoint: () => ({ x: 0, y: 0 }), isDiveInterior: () => true, recoverLand: () => null,
+      canWander: () => true, wanderPoint: () => null, divePoint: () => ({ x: 0, y: 0 }), isDiveInterior: () => true, recoverLand: () => null, nearestLandPose: () => null,
       reserveExit: () => ({ status: 'valid', value: { reservationId: 'exit', topologyRevision: 1, corridorId: 'east', widthPx: 200, path: [{ x: 0, y: 0 }, { x: 300, y: 0 }] } }),
       revalidateExit: r => ({ status: 'valid', value: r }) },
     combat: { resolveAreaAttack: vi.fn(() => ({} as never)) }, projectiles: { spawnProjectile: vi.fn(() => ++serial) },
     brood: { reserveEgg: () => true, released: vi.fn(), cancelEgg: vi.fn(), clearBoss: vi.fn(), retireBossEggs: vi.fn(), hostUpdate: vi.fn(), getEggs: () => [] } as never,
     publish: { publish: s => { if (s) { expect(readKrakenState(s)).not.toBeNull(); publications.push(s); } } },
-    claw: vi.fn(), waterApproach: () => null, canMove: () => true, landPoseValid: () => true, flightFree: () => true, bodyTravelLimit: (_p, _a, distance) => distance,
+    claw: vi.fn(), waterApproach: () => null, canMove: () => true, landPoseValid: () => true, movementRequested: () => false, flightFree: () => true, bodyTravelLimit: (_p, _a, distance) => distance,
     eggLandings: (_p, _angle, count) => Array.from({ length: count }, (_, i) => ({ x: 600 + i * 50, y: i * 100 })),
     diagnostic: vi.fn(),
   };
@@ -42,6 +42,62 @@ function setup() {
 }
 
 describe('Kraken host owner', () => {
+  it('recovers after sustained movement intent without progress, but not during intentional holds', () => {
+    const f = setup(); f.entity.hp = 40; f.tick(1);
+    const exit = f.system.getState()!.phase; if (exit.kind !== 'ashore') throw Error();
+    f.tick(exit.recoveryEndsAt); f.deps.intent.readTarget = () => null;
+    const start = { x: f.entity.x, y: f.entity.y }, goal = { x: start.x + 64, y: start.y };
+    f.deps.habitat.nearestLandPose = vi.fn(() => goal);
+    f.deps.habitat.recoverLand = (p, distance) => ({ x: Math.min(goal.x, p.x + distance), y: p.y });
+    let now = exit.recoveryEndsAt;
+    for (let i = 0; i < 80; i++) f.tick(now += 20);
+    expect(f.deps.habitat.nearestLandPose).not.toHaveBeenCalled();
+    f.deps.movementRequested = () => true;
+    for (let i = 0; i < 50; i++) f.tick(now += 20);
+    expect(f.entity.x).toBe(start.x);
+    for (let i = 0; i < 20; i++) {
+      const x = f.entity.x; f.tick(now += 20);
+      expect(f.entity.x - x).toBeLessThanOrEqual(f.config.landMoveSpeedPxPerSec * .02 + 1e-8);
+    }
+    expect(f.entity.x).toBe(goal.x);
+    expect(f.deps.diagnostic).not.toHaveBeenCalled();
+    f.tick(now += f.config.landMarginHoldMs);
+    expect(f.system.getState()!.movement).toBe('land');
+  });
+  it('revalidates recovery goals and diagnoses a last-resort escape when no route can progress', () => {
+    const f = setup(); f.entity.hp = 40; f.tick(1);
+    const exit = f.system.getState()!.phase; if (exit.kind !== 'ashore') throw Error();
+    f.tick(exit.recoveryEndsAt); f.deps.intent.readTarget = () => null;
+    const start = { x: f.entity.x, y: f.entity.y };
+    let goal = { x: start.x + 100, y: start.y }, blocked = false;
+    f.deps.landPoseValid = p => p.x === goal.x;
+    f.deps.canMove = (_a, b) => b.x === goal.x && !blocked;
+    f.deps.habitat.nearestLandPose = () => blocked ? null : goal;
+    let now = exit.recoveryEndsAt + 20; f.tick(now);
+    blocked = true;
+    f.tick(now += f.config.exit.diagnosticAfterMs);
+    expect(f.entity.x).toBe(start.x);
+    expect(f.deps.diagnostic).toHaveBeenCalledWith(expect.stringContaining('no valid land pose'));
+    goal = { x: start.x - 100, y: start.y }; blocked = false;
+    f.tick(now += f.config.exit.retryMs);
+    expect(f.entity.x).toBe(goal.x);
+    expect(f.deps.diagnostic).toHaveBeenCalledWith(expect.stringContaining('land recovery fallback'));
+    f.tick(now += f.config.landMarginHoldMs + 20);
+    f.tick(now += f.config.landMarginHoldMs + 20);
+    expect(f.system.getState()!.movement).toBe('land');
+  });
+  it('validates the final lunge pose even when a movement adapter accepts it', () => {
+    const f = setup(); f.entity.hp = 40; f.tick(1);
+    const exit = f.system.getState()!.phase; if (exit.kind !== 'ashore') throw Error();
+    f.tick(exit.recoveryEndsAt); f.tick(exit.recoveryEndsAt + f.config.actionPauseMs);
+    const attack = f.system.getBodyClaw().attack!;
+    const wall = f.entity.x + f.config.slam.lungeDistancePx / 2;
+    f.deps.landPoseValid = p => p.x <= wall;
+    f.tick(attack.hitAt);
+    expect(f.entity.x).toBeLessThanOrEqual(wall);
+    expect(f.deps.landPoseValid(f.entity)).toBe(true);
+    expect(f.deps.combat.resolveAreaAttack).toHaveBeenCalledOnce();
+  });
   it('keeps dev selection capability-gated and rejects illegal phases, range and HP', () => {
     const f = setup();
     expect(() => f.system.requestDevAction('ink')).toThrow('isolated dev host');

@@ -5,6 +5,7 @@ import { KRAKEN_BOSS_DEFAULTS } from '../src/config/krakenBoss';
 import { resolveCoopDefenseWorldMetrics, worldCellCenter } from '../src/world/WorldMetrics';
 import type { KrakenHabitatConfig } from '../src/config/krakenHabitat';
 import type { BossTargetRef } from '../src/combat/CombatPartContact';
+import { NavigationGeometry } from '../src/systems/navigation/NavigationGeometry';
 
 function setup() {
   const metrics = { ...resolveCoopDefenseWorldMetrics(60, 40), offsetX: 0, offsetY: 0, maxX: 1920, maxY: 1280 };
@@ -16,12 +17,31 @@ function setup() {
       path: [{ gridX: 15, gridY: 18 }, { gridX: 25, gridY: 18 }, { gridX: 30, gridY: 18 }] }] };
   let topology = 1, activity = 1;
   const queries: KrakenHabitatQueries = { revisions: () => ({ worldRevision: 1, activityRevision: activity, topologyRevision: topology }),
-    circleFree: () => true, segmentFree: () => true, landConnection: () => 'ready' };
+    circleFree: () => true, segmentFree: () => true, recoverySegmentFree: () => false, landConnection: () => 'ready' };
   const boss: BossTargetRef = { kind: 'enemy', id: 'boss', scope: { worldRevision: 1, runtimeGeneration: 1 }, instance: { entityGeneration: 1, activityRevision: 1 } };
   const rules = new KrakenHabitatRules(habitat, water, metrics, KRAKEN_BOSS_DEFAULTS, queries);
   return { rules, queries, boss, habitat, water, metrics, topology: () => { topology++; }, activity: () => { activity++; } };
 }
 describe('Kraken habitat reservations', () => {
+  it('finds deterministic full-body land beyond the former local recovery cutoff', () => {
+    const f = setup(), from = { x: 960, y: 640 };
+    f.queries.circleFree = (x, _y, radius) => x - radius >= 1600;
+    const goal = f.rules.nearestLandPose(from)!;
+    expect(goal).not.toBeNull();
+    expect(Math.hypot(goal.x - from.x, goal.y - from.y)).toBeGreaterThan(512);
+    expect(f.rules.isDryBodyFree(goal, KRAKEN_BOSS_DEFAULTS.bodyRadiusPx)).toBe(true);
+    expect(f.rules.nearestLandPose(from)).toEqual(goal);
+  });
+  it('does not accept a rock overlap as a valid land pose', () => {
+    const f = setup(), radius = KRAKEN_BOSS_DEFAULTS.bodyRadiusPx;
+    const geometry = new NavigationGeometry({ left: 0, top: 0, right: 1920, bottom: 1280,
+      obstacles: [{ id: 'rock', kind: 'rock', shape: 'circle', x: 1200, y: 600, radius: 32 }] });
+    f.queries.circleFree = (x, y, r) => geometry.isFree(x, y, r);
+    f.queries.segmentFree = (a, b, r) => geometry.canMove(a.x, a.y, b.x, b.y, r);
+    const p = { x: 1200 - 32 - radius + KRAKEN_BOSS_DEFAULTS.landPoseTolerancePx / 2, y: 600 };
+    expect(f.rules.canMove(p, p, 'land')).toBe(false);
+    expect(f.rules.landPoseValid(p)).toBe(false);
+  });
   it('selects interior swim legs with full shore clearance and an interior dive destination', () => {
     const f = setup(), from = worldCellCenter(f.metrics, 15, 18), c = KRAKEN_BOSS_DEFAULTS;
     for (let seed = 0; seed < 20; seed++) {
