@@ -19,7 +19,7 @@ import type { ShadowSystem } from '../ShadowSystem';
 import { WaterDisturbanceField, type WaterDisturbance } from '../../arena/WaterDisturbanceField';
 import type { KrakenPoseLease } from './KrakenAssetResidency';
 import type { KrakenShadowMesh } from './KrakenLightShadowModel';
-import { KRAKEN_REVIEW_FX_SHADER } from './reviewEffectShader';
+import { KRAKEN_REVIEW_FX_SHADER, krakenInkQuad, krakenInkSeed } from './reviewEffectShader';
 import type { GrenadeEggVisual } from '../GrenadeRenderer';
 import { KRAKEN_BOSS_DEFAULTS, type KrakenBossConfig } from '../../config/krakenBoss';
 import { krakenExitRoarAt, type KrakenExitPhase } from '../../systems/CoopDefenseKrakenMotion';
@@ -230,7 +230,7 @@ export function krakenPartKey(part: CombatPartIdentity): string {
 
 /** Review look, now sampled from host timelines. These are visual decay/shape values only. */
 const LOOK = {
-  ink: { travel: .22, hold: .75, dissolve: 1.25, opacity: .98, waterSpread: 1.18,
+  ink: { travel: .22, hold: .6, dissolve: 1.6, opacity: .98, waterSpread: 1.18,
     core: [18 / 255, 10 / 255, 28 / 255], edge: [58 / 255, 34 / 255, 82 / 255], warp: 1.3, sheen: .14 },
   erupt: { radius: 66, lifetime: 1.25, bulge: .15, retractScale: .55, sprayCount: 26, spraySpeed: 120, foam: .75 },
   slam: { dust: .85, decal: 2, whip: .18, bend: 12, width: 42 },
@@ -393,21 +393,22 @@ export class KrakenEffects {
   ink(cloud: KrakenInkCloud, now: number): void {
     const g = cloud.pose.geometry, age = (now - cloud.spitAt) / 1000;
     if (g.kind !== 'sector' || age < 0 || now >= cloud.cloudEndsAt) return;
-    const look = LOOK.ink, size = g.range * 2.8;
+    const look = LOOK.ink, half = g.arcDegrees * Math.PI / 360, quad = krakenInkQuad(g.range, half);
     const q = this.take(0, DEPTH.PLAYERS + .2, { x: cloud.pose.originX, y: cloud.pose.originY },
-      cloud.pose.angle, size, size, age, size * .25);
+      cloud.pose.angle, quad.width, quad.height, age, quad.shift);
     if (!q) return;
     // Preserve the reviewed travel/hold/erosion proportions within the authoritative cloud lifetime.
     const scale = (cloud.cloudEndsAt - cloud.spitAt) / 1000 / (look.travel + look.hold + look.dissolve);
-    q.shape[2] = g.range; q.shape[3] = Math.tan(g.arcDegrees * Math.PI / 360);
+    q.shape[2] = g.range; q.shape[3] = Math.tan(half);
     q.timing = [look.travel * scale, look.hold * scale, look.dissolve * scale, look.waterSpread];
-    q.detail = [look.warp, look.sheen, 0, 0]; q.opacity = look.opacity; q.core = look.core; q.edge = look.edge;
-    const s = q.object, signature = [s.x, s.y, s.rotation, size].join(',');
+    q.detail = [look.warp, look.sheen, krakenInkSeed(cloud.attackId), quad.shift];
+    q.opacity = look.opacity; q.core = look.core; q.edge = look.edge;
+    const s = q.object, signature = [s.x, s.y, s.rotation, quad.width, quad.height].join(',');
     if (signature !== q.maskSignature) {
       q.maskSignature = signature;
       const pixels = q.mask!.context.createImageData(128, 128);
       pixels.data.set(krakenWaterMask(128, 128,
-        { x: s.x, y: s.y, rotation: s.rotation, originX: .5, originY: .5, displayWidth: size, displayHeight: size }, this.waterAt));
+        { x: s.x, y: s.y, rotation: s.rotation, originX: .5, originY: .5, displayWidth: quad.width, displayHeight: quad.height }, this.waterAt));
       q.mask!.context.putImageData(pixels, 0, 0); q.mask!.refresh();
     }
   }

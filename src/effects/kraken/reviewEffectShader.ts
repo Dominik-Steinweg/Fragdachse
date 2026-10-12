@@ -1,4 +1,15 @@
 ﻿/** Fixed-cost, absolute-age samples; no random emissions or wall clock. */
+/** Ink quad around the sector: from just behind the mouth to the farthest flung specks (shader inkSplatter). */
+export function krakenInkQuad(range: number, halfAngle: number): { width: number; height: number; shift: number } {
+  const reach = range * 1.32 + 16, back = 48, spread = Math.min(Math.PI / 2, halfAngle * 1.55 + .08);
+  return { width: reach + back, height: 2 * (reach * Math.sin(spread) + 40), shift: (reach - back) / 2 };
+}
+/** Stable per-cloud splatter pattern. */
+export function krakenInkSeed(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
+  return (h >>> 0) % 997 * .37;
+}
 export const KRAKEN_REVIEW_FX_SHADER = `
 #pragma phaserTemplate(shaderName)
 precision highp float;
@@ -27,25 +38,29 @@ void main() {
   float t=max(0.0,uAge), alpha=0.0;
   vec3 color=vec3(0.0);
   if(uMode<.5) {
-    p.x+=uShape.x*.25;
+    // Ink cloud. uDetail: warp, sheen, per-cloud seed, quad shift to the mouth.
+    p.x+=uDetail.w;
     float wet=texture2D(uWater,uv).r;
     float erosion=clamp((t-uTiming.x-uTiming.y)/uTiming.z,0.0,1.0);
+    // Dissolving ink keeps moving: on water it spreads, curls and thins out; on land it soaks in and dulls.
+    float diffuse=erosion*erosion*(3.0-2.0*erosion);
     float front=min(1.0,t/uTiming.x)*uShape.z;
-    vec2 q=vec2(p.x/68.0,p.y/mix(51.0,35.0,wet));
-    vec2 flow=vec2(field(q+vec2(-t*.18,2)),field(q+vec2(13,t*.12)));
+    vec2 q=vec2(p.x/68.0,p.y/mix(51.0,35.0,wet))+uDetail.z;
+    float drift=t*.15+diffuse*mix(.25,.9,wet);
+    vec2 flow=vec2(field(q+vec2(-drift*1.2,2)),field(q+vec2(13,drift*.8)));
     vec2 warp=vec2(field(q+flow*3.4),field(q+flow*3.4+27.0))-.5;
-    vec2 curled=q+warp*uDetail.x*2.2;
-    float n=field(curled-vec2(t*.15,0));
+    vec2 curled=q+warp*uDetail.x*(2.2+diffuse*mix(.6,2.0,wet));
+    float n=field(curled-vec2(drift,0));
     float marble=.5+.5*sin(curled.y*9.0+field(curled*1.5)*15.0);
     float strands=pow(marble,7.0);
-    float cloud=0.0, ridges=0.0;
+    float cloud=0.0, ridges=0.0, swell=1.0+erosion*.12+diffuse*mix(.12,.6,wet);
     for(int i=0;i<13;i++) {
       float k=float(i), along=(k+.6)/14.0*uShape.z;
       float width=max(9.0,along*uShape.w*.85)*mix(1.0,uTiming.w,wet);
-      vec2 center=vec2(along,sin(k*4.3)*width*.24);
-      vec2 radii=vec2(uShape.z*(.075+k*.003),width)*(1.0+erosion*.23);
-      vec2 local=(p-center)/radii+warp*mix(.95,1.45,wet)*uDetail.x;
-      float d=length(local), lobe=1.0-smoothstep(.35,1.15,d);
+      vec2 center=vec2(along,sin(k*4.3+uDetail.z)*width*.24);
+      vec2 radii=vec2(uShape.z*(.075+k*.003),width)*swell;
+      vec2 local=(p-center)/radii+warp*mix(.95,1.45,wet)*uDetail.x*(1.0+diffuse*.5);
+      float d=length(local), lobe=1.0-smoothstep(.35,1.15+diffuse*.35,d);
       cloud=1.0-(1.0-cloud)*(1.0-lobe);
       ridges=max(ridges,exp(-pow((d-.72)/.19,2.0))*(.35+.65*n));
     }
@@ -53,21 +68,28 @@ void main() {
     tip=mix(tip,1.0,smoothstep(uTiming.x,uTiming.x+.1,t));
     float mouth=smoothstep(-3.0,6.0,p.x);
     float axis=exp(-pow(p.y/max(5.0,10.0+p.x*.16),2.0));
-    float core=axis*(1.0-smoothstep(uShape.z*.75,uShape.z*1.08,p.x))*mouth;
+    // The thick jet along the axis drains first, so the fade never leaves a black line behind.
+    float core=axis*(1.0-smoothstep(uShape.z*.75,uShape.z*1.08,p.x))*mouth*(1.0-smoothstep(0.0,.55,erosion));
     float density=max(cloud*(.8+.2*n),core*.99);
-    // Threshold erodes the cloud before the narrow curled filaments.
+    // Erosion eats the thin cloud before the curled filaments; its band widens so the last wisps blur out
+    // instead of crumbling, and the remaining ink thins as a whole until it is gone before the end time.
     float resistance=max(density*.8+(.5-n)*.25,strands*cloud*.99);
-    // The cloud thins as it erodes, so the last curled strands fade out instead of vanishing at once.
-    float survive=smoothstep(erosion-.08,erosion+.08,resistance)*(1.0-smoothstep(.35,1.0,erosion));
-    alpha=density*tip*mouth*survive*smoothstep(0.0,.025,t);
+    float band=.07+.3*diffuse;
+    float survive=smoothstep(erosion*.7-band,erosion*.7+band,resistance);
+    float thin=1.0-smoothstep(.1,1.0,erosion);
+    alpha=density*tip*mouth*survive*thin*mix(1.0,.75,diffuse*wet)*smoothstep(0.0,.025,t);
     float edge=clamp((1.0-density)*1.15+ridges*.46*(1.0-axis*.85),0.0,1.0);
     color=mix(uCore,uEdge,edge);
-    color+=vec3(.08,.06,.11)*ridges*(1.0-wet)*(1.0-axis*.75);
-    // Oil sheen follows curled contours instead of lighting the whole pool.
-    color+=vec3(.32,.29,.43)*strands*uDetail.y*wet*(1.0-axis*.8);
+    // Glossy rims on land go dull as the ink soaks in.
+    color+=vec3(.08,.06,.11)*ridges*(1.0-wet)*(1.0-axis*.75)*(1.0-diffuse);
+    // Oil sheen follows curled contours instead of lighting the whole pool, and lingers as it spreads thin.
+    color+=vec3(.32,.29,.43)*strands*uDetail.y*wet*(1.0-axis*.8)*(1.0+diffuse*.8);
+    // Spreading ink turns into a violet haze in the water and into a dull stain on land.
+    color=mix(color,uEdge*mix(.9,1.3,n),diffuse*wet*.55);
+    color=mix(color,uCore*1.4+vec3(.012,.01,.008),diffuse*(1.0-wet)*.5);
     float drops=0.0;
     for(int i=0;i<18;i++) {
-      float k=float(i), seed=hash(vec2(k,8));
+      float k=float(i), seed=hash(vec2(k,8.0+uDetail.z));
       vec2 d=normalize(vec2(1,(seed-.5)*uShape.w*1.65));
       vec2 pos=d*(front+8.0+hash(vec2(k,4))*29.0);
       float size=1.2+hash(vec2(k,5))*2.7;
@@ -76,7 +98,7 @@ void main() {
     drops*=smoothstep(.015,.05,t)*(1.0-smoothstep(uTiming.x*.8,uTiming.x+.09,t));
     alpha=max(alpha,drops*.9);
     // Keep the axis at the authored near-black; cloud highlights belong to its shoulders.
-    color=mix(color,uCore,axis*.96);
+    color=mix(color,uCore,axis*.96*(1.0-diffuse));
   } else if(uMode<1.5) {
     // Only what is thrown above the surface: a soft mist veil and round droplets that rise and fall back.
     // Swell, rings and foam belong to the water surface itself (WaterDisturbanceField).

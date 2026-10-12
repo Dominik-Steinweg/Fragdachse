@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import { DEPTH } from '../../config';
 import { disposeShaderWarmupNode } from '../../graphics/disposeShaderWarmupNode';
 import { EnemyClawRenderer, ENEMY_CLAW_HOSTILE_COLOR } from '../EnemyClawRenderer';
-import { KRAKEN_REVIEW_FX_SHADER } from './reviewEffectShader';
+import { KRAKEN_REVIEW_FX_SHADER, krakenInkQuad } from './reviewEffectShader';
 
 type Point = { x: number; y: number };
 interface Quad { object: Phaser.GameObjects.Shader; mode: number; age: number; opacity: number; shape: number[]; timing: number[]; detail: number[]; core: number[]; edge: number[] }
@@ -108,15 +108,15 @@ export class KrakenReviewEffectRenderer {
       });
       const q = this.ink; q.age = f.time - f.spit;
       if (q.age < 0 || q.age >= f.ink.travel + f.ink.hold + f.ink.dissolve) return;
-      const size = f.ink.range * 2.8;
-      this.place(q, f.mouth, f.angle, size, size, size * .25);
+      const quad = krakenInkQuad(f.ink.range, f.ink.halfAngle * Math.PI / 180);
+      this.place(q, f.mouth, f.angle, quad.width, quad.height, quad.shift);
       q.shape[2] = f.ink.range; q.shape[3] = Math.tan(f.ink.halfAngle * Math.PI / 180);
       q.timing = [f.ink.travel, f.ink.hold, f.ink.dissolve, f.ink.waterSpread];
-      q.detail = [f.ink.cloudWarp, f.ink.sheen, 0, 0];
+      q.detail = [f.ink.cloudWarp, f.ink.sheen, 0, quad.shift];
       q.opacity = f.ink.opacity;
       const rgb = (color: number) => [(color >> 16 & 255) / 255, (color >> 8 & 255) / 255, (color & 255) / 255];
       q.core = rgb(f.ink.coreColor); q.edge = rgb(f.ink.edgeColor);
-      this.updateMask(q.object, size);
+      this.updateMask(q.object, quad.width, quad.height);
       return;
     }
     f.shores.forEach((point, index) => {
@@ -147,13 +147,13 @@ export class KrakenReviewEffectRenderer {
       }
     });
   }
-  private updateMask(s: Phaser.GameObjects.Shader, size: number): void {
-    const signature = [s.x, s.y, s.rotation, size].join(',');
+  private updateMask(s: Phaser.GameObjects.Shader, width: number, height: number): void {
+    const signature = [s.x, s.y, s.rotation, width, height].join(',');
     if (signature === this.maskSignature) return;
     this.maskSignature = signature;
     const image = this.mask.context.createImageData(128, 128), c = Math.cos(s.rotation), sn = Math.sin(s.rotation);
     for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
-      const dx = ((x + .5) / 128 - .5) * size, dy = ((y + .5) / 128 - .5) * size;
+      const dx = ((x + .5) / 128 - .5) * width, dy = ((y + .5) / 128 - .5) * height;
       const i = (y * 128 + x) * 4;
       image.data[i] = Math.round(Math.max(0, Math.min(1, this.waterAt(s.x + dx * c - dy * sn, s.y + dx * sn + dy * c))) * 255);
       image.data[i + 3] = 255;
