@@ -12,7 +12,7 @@ import { CoopDefenseKrakenBroodSystem } from '../systems/CoopDefenseKrakenBroodS
 import { KrakenHabitatRules } from '../systems/KrakenHabitatRules';
 import type { KrakenBroodPort, KrakenState } from '../systems/KrakenState';
 import type { EnemyAreaClawEvent } from '../systems/EnemyClawAttack';
-import { NavigationGeometry, type NavigationGeometrySnapshot } from '../systems/navigation/NavigationGeometry';
+import { NavigationGeometry, segmentObstacleDistanceSq, type NavigationGeometrySnapshot } from '../systems/navigation/NavigationGeometry';
 import { ENEMY_FLOW_FIELD_IDS } from '../systems/flowfield/FlowFieldCoordinator';
 import type { WorldMetrics } from '../world/WorldMetrics';
 import type { CoopMissionRuntime } from './CoopMissionRuntime';
@@ -54,6 +54,14 @@ export function materializeCoopMissionKraken(runtime: CoopMissionRuntime, map: C
       topologyRevision: runtime.flowFieldCoordinator?.getFieldView(ENEMY_FLOW_FIELD_IDS.boss)?.version().topology ?? 0 }),
     circleFree: (x, y, radius) => solids().isFree(x, y, radius),
     segmentFree: (from, to, radius) => solids().canMove(from.x, from.y, to.x, to.y, radius),
+    recoverySegmentFree: (from, to, radius) => {
+      const geometry = solids(), overlaps = new Set<string>();
+      geometry.visit(from.x, from.y, from.x, from.y, radius, obstacle => {
+        if (segmentObstacleDistanceSq(from.x, from.y, from.x, from.y, obstacle) < radius * radius) overlaps.add(obstacle.id);
+        return false;
+      });
+      return geometry.canRecover(from.x, from.y, to.x, to.y, radius, overlaps);
+    },
     landConnection: point => {
       const field = runtime.enemyBossFlowFieldService;
       const reachable = field?.canReachCurrentGoals(point.x, point.y);
@@ -125,6 +133,24 @@ export function materializeCoopMissionKraken(runtime: CoopMissionRuntime, map: C
     waterApproach: (from, target) => habitat.waterApproach(from, target),
     canMove: (from, to, mode) => habitat.canMove(from, to, mode),
     landPoseValid: point => habitat.landPoseValid(point),
+    movementRequested: boss => {
+      const feedback = manager.getMovementFeedback(boss.id);
+      if (!feedback || feedback.waitReason === 'crowd') return false;
+      // Players are separated by Arcade, not the enemy crowd solver. Contact in the requested
+      // direction is an intentional wait too; it must not trigger a land relocation watchdog.
+      const body = entity.readBoss(boss);
+      let playerContact = false;
+      if (body && feedback.waitReason === 'none') ports.combat.readCollisionTargets((kind, _id, _owner, x, y, radius) => {
+        if (kind !== 'player') return;
+        const dx = x - body.x, dy = y - body.y;
+        if (dx * feedback.vx + dy * feedback.vy > 0
+          && Math.hypot(dx, dy) <= config.bodyRadiusPx + radius + 1) playerContact = true;
+      });
+      if (playerContact) return false;
+      const intent = manager.getNavigationIntent(boss.id);
+      return ['none', 'geometry', 'recovery'].includes(feedback.waitReason)
+        || feedback.waitReason === 'route-pending' && !!intent?.target && intent.navigation.status === 'invalid-start';
+    },
     bodyTravelLimit: (from, angle, distance) => {
       let limit = distance;
       ports.combat.readCollisionTargets((kind, _id, _owner, x, y, radius) => {

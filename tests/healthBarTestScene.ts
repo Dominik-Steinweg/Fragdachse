@@ -90,7 +90,10 @@ export function healthBarTestScene() {
   scene.physics = { add: {
     existing(object: HealthTestObject) {
       let sourceRadius = object.frame.realWidth * 0.5;
+      const vector = () => ({ x: object.x, y: object.y,
+        copy(p: { x: number; y: number }) { this.x = p.x; this.y = p.y; return this; } });
       const body: any = { velocity: { x: 0, y: 0 },
+        position: vector(), prev: vector(), prevFrame: vector(),
         get halfWidth() { return sourceRadius * object.displayWidth / object.frame.realWidth; },
         set halfWidth(radius: number) { sourceRadius = radius * object.frame.realWidth / object.displayWidth; },
         setCircle(radius: number) { sourceRadius = radius; }, setCollideWorldBounds() {},

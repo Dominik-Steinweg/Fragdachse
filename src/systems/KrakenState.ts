@@ -224,7 +224,8 @@ export interface KrakenHabitatPort {
   canWander(from: { x: number; y: number }, to: { x: number; y: number }): boolean;
   divePoint(from: { x: number; y: number }): { x: number; y: number } | null;
   isDiveInterior(point: { x: number; y: number }): boolean;
-  recoverLand(from: { x: number; y: number }, distance: number): { x: number; y: number } | null;
+  nearestLandPose(from: { x: number; y: number }, minimumDistance?: number): { x: number; y: number } | null;
+  recoverLand(from: { x: number; y: number }, distance: number, destination?: { x: number; y: number }): { x: number; y: number } | null;
   reserveExit(boss: BossTargetRef, habitatId: string): KrakenHabitatResult<KrakenExitReservation>;
   revalidateLane(reservation: KrakenLaneReservation): boolean;
   revalidateExit(reservation: KrakenExitReservation): KrakenHabitatResult<KrakenExitReservation>;

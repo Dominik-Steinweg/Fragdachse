@@ -32,8 +32,10 @@ export interface KrakenHostDependencies {
   claw(event: EnemyAreaClawEvent): void;
   waterApproach(from: Point, target: Point): Point | null;
   canMove(from: Point, to: Point, mode: 'water-approach' | 'ashore' | 'land'): boolean;
-  /** Whether the land body may keep its current pose (small bank/edge overlaps of the full body are tolerated). */
+  /** Full solid-body clearance; only the water bank has a small resting tolerance. */
   landPoseValid(point: Point): boolean;
+  /** Previous ordinary movement step wanted progress (excludes arrival, attack holds and pending routes). */
+  movementRequested(boss: BossTargetRef): boolean;
   eggLandings(from: Point, rotation: number, count: number, minimumShoreDistancePx: number): readonly (Point | null)[];
   bodyTravelLimit(from: Point, angle: number, distance: number): number;
   flightFree(from: Point, to: Point, radius: number): boolean;
@@ -72,8 +74,8 @@ export class CoopDefenseKrakenSystem {
   private exitTravelled = 0;
   private exitMotion: KrakenBossConfig['exit'] | null = null;
   private lunge: { from: Point; distance: number; stopped: boolean } | null = null;
-  /** Last pose where the full body fitted on dry land; ordinary steering uses a smaller physics body. */
-  private lastValidLand: Point | null = null;
+  private landProgress: { point: Point; since: number } | null = null;
+  private landRecovery: { destination: Point | null; point: Point; since: number; deadline: number; retryAt: number; reported: boolean } | null = null;
   private marginHoldUntil = 0;
   private nextExitRetry = 0;
   private blockedSince: number | null = null;
@@ -255,22 +257,7 @@ export class CoopDefenseKrakenSystem {
         break;
       case 'ashore': this.advanceExit(now, dt, entity); break;
       case 'land':
-        if (this.deps.landPoseValid(entity)) this.lastValidLand = { x: entity.x, y: entity.y };
-        else {
-          const back = this.lastValidLand;
-          if (back && Math.hypot(back.x - entity.x, back.y - entity.y) <= this.config.bodyRadiusPx) {
-            // Steering pushed the smaller physics body into a margin (map edge, bank, rocks) the full body
-            // cannot occupy: step back to the last fitting pose and hold briefly, still facing and attacking.
-            this.move('ashore', back); this.marginHoldUntil = now + this.config.landMarginHoldMs;
-            if ((!s.bodyAction || this.aimingVolley(now)) && !entity.stunned) this.faceTarget(entity, dt);
-            break;
-          }
-          if (s.bodyAction) this.cancelBody();
-          const next = this.deps.habitat.recoverLand(entity, this.config.landMoveSpeedPxPerSec * dt / 1000);
-          this.move(next ? 'ashore' : 'locked', next);
-          if (next) this.facePoint(entity, next, dt, 0);
-          break;
-        }
+        if (this.recoverLand(now, dt, entity)) break;
         this.move(s.bodyAction || entity.stunned || now < this.marginHoldUntil ? 'locked' : 'land', null);
         if (s.bodyAction?.kind === 'slam') this.advanceLunge(now, entity);
         if ((!s.bodyAction || this.aimingVolley(now)) && !entity.stunned) this.faceTarget(entity, dt);
@@ -308,7 +295,7 @@ export class CoopDefenseKrakenSystem {
     // Invalidate owner first so reentrant callbacks cannot restart actions.
     this.state = null; this.originId = null; this.devAction = null;
     this.wander = null; this.wanderPauseUntil = 0; this.recentParts = []; this.spineReleases.clear(); this.facingHeld = false;
-    this.lastValidLand = null; this.marginHoldUntil = 0;
+    this.landProgress = null; this.landRecovery = null; this.marginHoldUntil = 0;
     if (old) {
       this.clearClaw({ kind: 'body' }, old.boss);
       for (const part of this.parts.values()) this.clearClaw(this.slot(part.state), old.boss);
@@ -583,22 +570,81 @@ export class CoopDefenseKrakenSystem {
     }
     if (this.state === s && s.bodyAction === action && now >= attack.endsAt) this.finishBody(now);
   }
+  /** A lock is temporary: failed routes retry, and lack of actual progress has a diagnosed escape. */
+  private recoverLand(now: number, dt: number, entity: Point & { angle: number; stunned: boolean }): boolean {
+    const s = this.state!, valid = this.deps.landPoseValid(entity);
+    const wantsMovement = !s.bodyAction && !entity.stunned && now >= this.marginHoldUntil
+      && this.deps.movementRequested(s.boss);
+    if (!wantsMovement) this.landProgress = null;
+    else if (!this.landProgress || Math.hypot(entity.x - this.landProgress.point.x, entity.y - this.landProgress.point.y) >= 4) {
+      this.landProgress = { point: { x: entity.x, y: entity.y }, since: now };
+    }
+    const stuck = this.landProgress !== null && now - this.landProgress.since >= 1000;
+    if (!this.landRecovery && (stuck || !valid)) {
+      this.cancelBody(); this.landProgress = null;
+      const destination = this.deps.habitat.nearestLandPose(entity, valid ? this.config.bodyRadiusPx : 0);
+      this.landRecovery = { destination, point: { x: entity.x, y: entity.y }, since: now,
+        deadline: now + this.config.exit.diagnosticAfterMs + (destination
+          ? Math.hypot(destination.x - entity.x, destination.y - entity.y) / this.config.landMoveSpeedPxPerSec * 4000 : 0),
+        retryAt: now, reported: false };
+    }
+    const recovery = this.landRecovery;
+    if (!recovery) return false;
+    if (recovery.destination && !this.deps.canMove(recovery.destination, recovery.destination, 'land')) recovery.destination = null;
+    if (!recovery.destination && now >= recovery.retryAt) {
+      recovery.destination = this.deps.habitat.nearestLandPose(entity, valid ? this.config.bodyRadiusPx : 0);
+      recovery.retryAt = now + this.config.exit.retryMs;
+    }
+    if (valid && recovery.destination && Math.hypot(entity.x - recovery.destination.x, entity.y - recovery.destination.y) < 1) {
+      this.landRecovery = null; this.marginHoldUntil = now + this.config.landMarginHoldMs;
+      return false;
+    }
+    if (Math.hypot(entity.x - recovery.point.x, entity.y - recovery.point.y) >= 4) {
+      recovery.point = { x: entity.x, y: entity.y }; recovery.since = now;
+    }
+    // Stuns and zero-time updates are deliberate holds, never evidence for a teleport.
+    if (entity.stunned || dt <= 0) {
+      recovery.since = now; recovery.deadline += dt; this.move('locked', null); return true;
+    }
+    const destination = recovery.destination;
+    if (now - recovery.since >= this.config.exit.diagnosticAfterMs || now >= recovery.deadline) {
+      if (destination) {
+        this.deps.diagnostic(`Kraken land recovery fallback: (${entity.x}, ${entity.y}) -> (${destination.x}, ${destination.y}); ${now >= recovery.deadline ? 'recovery deadline' : 'no progress'}`);
+        this.move('ashore', destination); recovery.since = now; recovery.deadline = now + this.config.exit.diagnosticAfterMs; return true;
+      }
+      if (!recovery.reported) {
+        recovery.reported = true;
+        this.deps.diagnostic(`Kraken land recovery: no valid land pose from (${entity.x}, ${entity.y}); retrying`);
+      }
+    }
+    const next = destination && now >= recovery.retryAt
+      ? this.deps.habitat.recoverLand(entity, this.config.landMoveSpeedPxPerSec * dt / 1000, destination) : null;
+    if (destination && !next && now >= recovery.retryAt) recovery.retryAt = now + this.config.exit.retryMs;
+    this.move(next ? 'ashore' : 'locked', next);
+    if (next) this.facePoint(entity, next, dt, 0);
+    return true;
+  }
+
   private advanceLunge(now: number, entity: Point): void {
     const attack = this.bodyClaw.attack, lunge = this.lunge;
     if (!attack || !lunge || lunge.stopped || now < attack.strikeAt) return;
     const desired = this.config.slam.lungeDistancePx * Math.min(1, (now - attack.strikeAt) / (attack.hitAt - attack.strikeAt));
     const point = (d: number): Point => ({ x: lunge.from.x + Math.cos(attack.pose.angle) * d,
       y: lunge.from.y + Math.sin(attack.pose.angle) * d });
+    const valid = (d: number) => this.deps.landPoseValid(point(d)) && this.deps.canMove(entity, point(d), 'land');
     let distance = Math.max(lunge.distance, this.deps.bodyTravelLimit(lunge.from, attack.pose.angle, desired));
     if (distance < desired) lunge.stopped = true;
-    if (!this.deps.canMove(entity, point(distance), 'land')) {
+    if (!valid(distance)) {
       let low = lunge.distance, high = distance;
       // Every query sweeps the complete body circle, including obstacles between both endpoints.
       for (let i = 0; i < 16; i++) { const mid = (low + high) / 2;
-        if (this.deps.canMove(entity, point(mid), 'land')) low = mid; else high = mid;
+        if (valid(mid)) low = mid; else high = mid;
       }
       distance = low; lunge.stopped = true;
     }
+    // A topology change or external displacement can invalidate even the previous distance.
+    // Never restore that unchecked lower bound; the next preMovement owns recovery.
+    if (!valid(distance)) { lunge.stopped = true; return; }
     lunge.distance = distance;
     // Existing explicit-position movement mode; land phase and targetability remain authoritative.
     this.move('ashore', point(distance));

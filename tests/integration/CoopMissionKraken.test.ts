@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createRequire } from 'node:module';
+import { EventEmitter } from 'node:events';
+import { fileURLToPath } from 'node:url';
 vi.mock('phaser', async () => {
   const phaser = (await import('../fakeArenaRenderScene')).createFakePhaserModule();
   return { ...phaser, Geom: { ...phaser.Geom, Line: class {} } };
@@ -26,6 +29,11 @@ import { gameState } from '../krakenNetworkFixtures';
 import type { NavigationGeometrySnapshot } from '../../src/systems/navigation/NavigationGeometry';
 
 const cleanups: (() => void)[] = [];
+const require = createRequire(import.meta.url);
+const phaserSource = (path: string) => require(fileURLToPath(new URL(`../../node_modules/phaser/src/${path}.js`, import.meta.url)));
+const ArcadeWorld = phaserSource('physics/arcade/World');
+const ArcadeBody = phaserSource('physics/arcade/Body');
+const GetBounds = phaserSource('gameobjects/components/GetBounds');
 afterEach(() => { for (const cleanup of cleanups.splice(0).reverse()) cleanup(); });
 function setup() {
   cleanups.push(registerKrakenAbyssMap());
@@ -59,10 +67,11 @@ function setup() {
     publish, broadcastClaw: vi.fn(), broadcastHit: vi.fn(), now: () => now, diagnostic: vi.fn(),
   };
   let geometry: NavigationGeometrySnapshot = { left: metrics.offsetX, top: metrics.offsetY, right: metrics.maxX, bottom: metrics.maxY, obstacles: [] };
-  const block = (x: number, y: number) => {
+  const block = (x: number, y: number, rock = false) => {
     const p = worldCellCenter(metrics, x, y);
     geometry = { ...geometry, obstacles: [...geometry.obstacles,
-      { id: `barrier-${x}-${y}`, kind: 'barrier', shape: 'circle', ...p, radius: 32 }] };
+      rock ? { id: `rock-${x}-${y}`, kind: 'rock', shape: 'rect', left: p.x - 16, top: p.y - 16, right: p.x + 16, bottom: p.y + 16 }
+        : { id: `barrier-${x}-${y}`, kind: 'barrier', shape: 'circle', ...p, radius: 32 }] };
   };
   materializeCoopMissionKraken(runtime, map, { water: map.water } as never, metrics, ports, () => geometry);
   cleanups.push(() => runtime.destroy());
@@ -101,6 +110,49 @@ function setup() {
 }
 
 describe('Coop mission Kraken composition', () => {
+  it.each([0, Math.PI / 4, Math.PI, Math.PI * 1.5])('resumes Arcade land movement without replaying a rotated explicit pose (heading %s)', angle => {
+    const f = setup(), enemy = f.manager.getEnemy(f.boss.id)!;
+    const sprite = enemy.sprite as any, width = sprite.frame.realWidth, scale = enemy.getVisualSize() / width;
+    Object.assign(sprite, GetBounds, { width, height: width, scaleX: scale, scaleY: scale,
+      displayOriginX: width / 2, displayOriginY: width / 2 });
+    Object.defineProperty(sprite, 'angle', { configurable: true,
+      get: () => sprite.rotation * 180 / Math.PI, set: (v: number) => { sprite.rotation = v * Math.PI / 180; } });
+    const scene = { sys: { scale: { width: 2240, height: 1536 } }, events: new EventEmitter() };
+    const world = new ArcadeWorld(scene, { fps: 60, gravity: { x: 0, y: 0 }, width: 2240, height: 1536 });
+    const body = new ArcadeBody(world, sprite); sprite.body = body;
+    body.setCircle(config.bodyRadiusPx / scale); body.setCollideWorldBounds(true);
+    enemy.faceAngle(angle);
+    const point = { x: 1800, y: 700 };
+    enemy.setKrakenMovement('ashore', point); enemy.applyKrakenMovement();
+    body.postUpdate();
+    // Arcade preUpdate runs while still locked, then the host unlocks during Scene.update.
+    for (let i = 0; i < 5; i++) { body.preUpdate(true, 1 / 60); body.postUpdate(); }
+    body.preUpdate(true, 1 / 60);
+    enemy.setKrakenMovement('land', null);
+    body.postUpdate();
+    expect(sprite.x).toBeCloseTo(point.x, 8); expect(sprite.y).toBeCloseTo(point.y, 8);
+    expect(body.center.x).toBeCloseTo(sprite.x, 8); expect(body.center.y).toBeCloseTo(sprite.y, 8);
+    body.setVelocity(60, 0); body.preUpdate(true, 1 / 60); body.postUpdate();
+    expect(sprite.x).toBeCloseTo(point.x + 1, 8); expect(sprite.y).toBeCloseTo(point.y, 8);
+  });
+  it.each(['crowd', 'player'] as const)('does not relocate a valid land body waiting for a %s', blocker => {
+    const f = setup(); f.manager.hostSetVitalsBaseline(f.boss.id, 400, 1000); f.tick(1);
+    const exit = f.system.getState()!.phase; if (exit.kind !== 'ashore') throw Error();
+    f.tick(exit.recoveryEndsAt);
+    Object.assign(f.ports, { resolveIntentTarget: () => null });
+    vi.spyOn(f.manager, 'getMovementFeedback').mockReturnValue({ vx: blocker === 'player' ? 210 : 0, vy: 0, progress: 0,
+      waitReason: blocker === 'player' ? 'none' : 'crowd', neighborsVisited: 1 });
+    const recover = vi.spyOn(f.habitat, 'nearestLandPose');
+    const entity = f.manager.getEnemy(f.boss.id)!, before = { x: entity.sprite.x, y: entity.sprite.y };
+    if (blocker === 'player') vi.mocked(f.ports.combat.readCollisionTargets).mockImplementation(sink => {
+      const x = before.x + config.bodyRadiusPx + 16, y = before.y;
+      sink('player', 'p', 'p', x, y, 16, x - 16, y - 16, x + 16, y + 16);
+    });
+    for (let i = 1; i <= 150; i++) f.tick(exit.recoveryEndsAt + i * 20);
+    expect(recover).not.toHaveBeenCalled();
+    expect({ x: entity.sprite.x, y: entity.sprite.y }).toEqual(before);
+    expect(f.ports.diagnostic).not.toHaveBeenCalled();
+  });
   it('keeps the entire curved wandering path inside the real pond clearance', () => {
     const f = setup(); Object.assign(f.ports, { resolveIntentTarget: () => null });
     const entity = f.manager.getEnemy(f.boss.id)!;
@@ -169,6 +221,33 @@ describe('Coop mission Kraken composition', () => {
     expect(entity.sprite.x - start.x).toBeLessThan(config.slam.lungeDistancePx);
     expect(Math.hypot(entity.sprite.x - obstacle.x, entity.sprite.y - obstacle.y)).toBeGreaterThanOrEqual(config.bodyRadiusPx + 32);
     expect(f.impact).toHaveBeenCalledOnce();
+  });
+  it('escapes a deep rock overlap after a lunge instead of remaining locked', () => {
+    const f = setup(); f.manager.hostSetVitalsBaseline(f.boss.id, 400, 1000); f.tick(1);
+    const exit = f.system.getState()!.phase; if (exit.kind !== 'ashore') throw Error();
+    f.tick(exit.recoveryEndsAt);
+    const entity = f.manager.getEnemy(f.boss.id)!, start = { x: entity.sprite.x, y: entity.sprite.y };
+    f.player.x = start.x + config.slam.length; f.player.y = start.y; entity.faceAngle(0);
+    const gx = Math.floor((start.x + config.slam.lungeDistancePx - f.metrics.offsetX) / 32);
+    const gy = Math.floor((start.y - f.metrics.offsetY) / 32);
+    const rock = worldCellCenter(f.metrics, gx, gy); f.block(gx, gy, true);
+    f.tick(exit.recoveryEndsAt + config.actionPauseMs);
+    const attack = f.system.getBodyClaw().attack!; expect(attack.presentation).toBe('slam');
+    f.tick(attack.hitAt);
+    expect(f.habitat.landPoseValid(entity.sprite)).toBe(true);
+    // Simulate an external displacement while the explicit lunge pose is fixed.
+    // The old recovery cannot leave an overlap of even its half-radius probe.
+    entity.setKrakenMovement('land', null); entity.setPosition(rock.x - 8, rock.y);
+    const displaced = { x: entity.sprite.x, y: entity.sprite.y };
+    for (let i = 1; i <= 100 && !f.habitat.landPoseValid(entity.sprite); i++) {
+      const before = { x: entity.sprite.x, y: entity.sprite.y };
+      f.tick(attack.hitAt + i * 20);
+      expect(Math.hypot(entity.sprite.x - before.x, entity.sprite.y - before.y))
+        .toBeLessThanOrEqual(config.landMoveSpeedPxPerSec * .02 + 1e-8);
+    }
+    expect(f.habitat.landPoseValid(entity.sprite), JSON.stringify({ displaced,
+      position: { x: entity.sprite.x, y: entity.sprite.y }, movement: f.system.getState()!.movement })).toBe(true);
+    expect(f.ports.diagnostic).not.toHaveBeenCalled();
   });
   it('revalidates the full exit against current World geometry and selects the other authored corridor', () => {
     const f = setup(), habitatId = krakenAbyssMap().krakenHabitat!.id;
