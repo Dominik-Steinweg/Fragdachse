@@ -306,6 +306,15 @@ export class CoopMissionHostUpdate {
     const strategicGrid = strategicFlowFieldService ?? playerFlowFieldService;
     if (targetCatalog) {
       const candidates: EnemyAiTargetCandidate[] = [];
+      for (const enemy of this.runtime.enemyManager?.getAllEnemies() ?? []) {
+        if (enemy.faction !== 'hostile') continue;
+        candidates.push({
+          kind: 'hostile-enemy', id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y,
+          resolvePosition: () => ({ x: enemy.sprite.x, y: enemy.sprite.y }),
+          isTargetable: () => enemy.faction === 'hostile' && enemy.sprite.active
+            && enemy.getHp() > 0 && !enemy.isBurrowed(),
+        });
+      }
       for (const player of this.port.getPlayers()) {
         const goal = strategicGrid?.worldToGrid(player.x, player.y);
         candidates.push({

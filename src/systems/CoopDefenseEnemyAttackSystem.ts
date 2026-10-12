@@ -891,7 +891,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     }
 
     const target = this.targetCatalog?.resolve(targetRef);
-    if (!target) return null;
+    if (!target || target.kind === 'hostile-enemy') return null;
     const position = target.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? { x: target.x, y: target.y };
     const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, position.x, position.y);
     if (distance > range + (target.radius ?? PLAYER_SIZE * 0.5)) return null;

@@ -613,21 +613,22 @@ export class HostPhysicsSystem {
    * halbierte Trefferkugel während des Bursts. Liefert false,
    * wenn bereits ein Schritt läuft oder die Richtung leer ist.
    */
-  startEnemyDash(enemyId: string, dx: number, dy: number): boolean {
+  startEnemyDash(enemyId: string, dx: number, dy: number, distanceFactor = 1): boolean {
+    if (!Number.isFinite(distanceFactor) || distanceFactor <= 0) return false;
     if (this.stunChecker?.(enemyId, Date.now())) return false;
     if (this.enemyDashStates.has(enemyId)) return false;
     const enemy = this.enemyManager?.getEnemy(enemyId);
     if (!enemy?.sprite.active || !this.combatSystem?.isAlive(enemyId)) return false;
 
     const length = Math.hypot(dx, dy);
-    if (length === 0) return false;
+    if (!Number.isFinite(length) || length === 0) return false;
 
     this.enemyDashStates.set(enemyId, {
       phase:   1,
       startMs: Date.now(),
       dirX:    dx / length,
       dirY:    dy / length,
-      vNorm:   enemy.getMoveSpeed(),
+      vNorm:   enemy.getMoveSpeed() * distanceFactor,
     });
     enemy.setDashPhase(1);
     return true;

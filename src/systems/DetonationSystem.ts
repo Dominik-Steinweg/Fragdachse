@@ -14,10 +14,12 @@ export interface DetonationEvent {
   pulseSource?:       ProjectileProximityPulseSource;
   x:                  number;
   y:                  number;
-  /** Owner des gezündeten Projektils (für Kill-Attribution) */
+  /** Owner des gezündeten Projektils (für Combo-Ressourcen) */
   projectileOwnerId:  string;
-  /** Spieler, der den Detonator abgefeuert hat */
+  /** Akteur, dem Schaden und Kill der Detonation zugerechnet werden */
   detonatorOwnerId:   string;
+  /** Captured before the detonator can leave the world. */
+  detonatorProvenance?: import('../projectile/ProjectileSpawnRequest').ProjectileProvenance;
   effect:             DetonableConfig;
   sourceId:         string;
   sourceSlot?:        LoadoutSlot;
@@ -138,6 +140,7 @@ function toDetonationEvent(
     y: outcome.y,
     projectileOwnerId: outcome.projectileOwnerId,
     detonatorOwnerId: outcome.detonatorOwnerId,
+    detonatorProvenance: outcome.detonatorProvenance,
     effect: outcome.effect,
     sourceId: outcome.effect.sourceId ?? outcome.sourceId,
     sourceSlot: sourceSlot ?? outcome.sourceSlot,

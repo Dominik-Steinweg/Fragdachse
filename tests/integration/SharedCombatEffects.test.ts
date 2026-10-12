@@ -122,7 +122,7 @@ function fixture(training = false) {
     }
     clock.now += 16;
     projectiles.runHostInteractionStage(clock.now);
-    projectiles.runHostProjectileStage(16, clock.now);
+    return projectiles.runHostProjectileStage(16, clock.now);
   };
   return { scene, enemies, enemy, player, players, combat, receipts, range, plasma, projectiles, physics, spawnSwarm, move, network,
     destroy() { projectiles.destroy(); range?.destroy(); enemies.destroy(); } };
@@ -537,23 +537,26 @@ describe('ASMD detonation through shared world effects', () => {
 
 
 describe('enemy hitscan and firestarter combo through world combat', () => {
-  function fireFixture() {
+  function fireFixture(faction: 'hostile' | 'allied' = 'hostile') {
     const f = fixture();
     f.combat.setWorldMetrics({ ...resolveActiveArenaWorldMetrics(), offsetX: -1000, offsetY: -1000, widthPx: 3000, heightPx: 3000 });
-    const shooter = f.enemies.hostSpawnAtWorld(0, 100, 'firestarter-badger');
+    const shooter = faction === 'allied'
+      ? f.enemies.hostSpawnAllyAtWorld(0, 100, 'firestarter-badger', 'p1', 0xffffff, 1)
+      : f.enemies.hostSpawnAtWorld(0, 100, 'firestarter-badger');
     const detonations = new DetonationSystem(f.projectiles);
     f.combat.setDetonationSystem(detonations);
     const execution = new AutomatedWeaponExecutionAdapter(new WorldWeaponExecutionRuntime({
       projectileSpawn: f.projectiles, combatSystem: f.combat,
     }), f.projectiles);
-    const fire = (id = 'FIRESTARTER_LANCE', ownerId = shooter.id, targetX = 100) => execution.fire(WEAPON_CONFIGS[id], {
+    const fire = (id = 'FIRESTARTER_LANCE', ownerId = shooter.id, targetX = 100) => execution.fire(
+      resolveEnemyWeaponFirePayloads(WEAPON_CONFIGS[id], faction), {
       x: 0, y: 100, angle: 0, targetX, targetY: 100, ownerId, ownerColor: 0xb347ff,
       gameplayMuzzleOrigin: { x: 0, y: 100 },
     });
-    const ball = (x: number, y = 100, tag = 'firestarter_fireball', size = 24) => { const id = f.projectiles.spawnProjectile({
-      origin: { x, y, angle: 0 }, provenance: createSingleOwnerProvenance(shooter.id, { weaponSourceId: 'FIRESTARTER_FIREBALL' }),
+    const ball = (x: number, y = 100, tag = 'firestarter_fireball', size = 24, ballFaction = faction, ballOwner = shooter.id) => { const id = f.projectiles.spawnProjectile({
+      origin: { x, y, angle: 0 }, provenance: createSingleOwnerProvenance(ballOwner, { weaponSourceId: 'FIRESTARTER_FIREBALL' }),
       flight: { speed: 100, size, lifetimeMs: 5000, maxBounces: 0, isGrenade: false },
-      interaction: { directHit: { damage: 0 }, detonable: { ...resolveEnemyWeaponFirePayloads(WEAPON_CONFIGS.FIRESTARTER_FIREBALL, 'hostile').detonable!, tag } },
+      interaction: { directHit: { damage: 0 }, detonable: { ...resolveEnemyWeaponFirePayloads(WEAPON_CONFIGS.FIRESTARTER_FIREBALL, ballFaction).detonable!, tag } },
       presentation: { style: 'fireball', color: 0xb347ff },
     });
       const sprite = f.physics.handles.get(id)!.sprite;
@@ -562,6 +565,93 @@ describe('enemy hitscan and firestarter combo through world combat', () => {
     };
     return { ...f, shooter, detonations, fire, ball };
   }
+
+  it('allied lance passes players and allied bodies and damages a hostile', () => {
+    const f = fireFixture('allied');
+    try {
+      const ally = f.enemies.hostSpawnAllyAtWorld(150, 100, 'zombie-badger', 'p1', 0xffffff, 1);
+      const hp = f.enemy.getHp(), alliedHp = ally.getHp();
+      expect(f.fire()).toBe(true);
+      expect(f.enemy.getHp()).toBeLessThan(hp);
+      expect(f.combat.getHP('p1')).toBe(100); expect(ally.getHp()).toBe(alliedHp);
+    } finally { f.destroy(); }
+  });
+
+  it('hostile lance can hit a necromancy ally under the existing opposing-faction rule', () => {
+    const f = fireFixture();
+    try {
+      const ally = f.enemies.hostSpawnAllyAtWorld(150, 100, 'zombie-badger', 'p1', 0xffffff, 1);
+      const hp = ally.getHp(); f.fire();
+      expect(ally.getHp()).toBeLessThan(hp); expect(f.combat.getHP('p1')).toBe(100);
+    } finally { f.destroy(); }
+  });
+
+  it.each(['allied', 'hostile'] as const)('allied lance detonates a %s ball: allied explosion, burn and chunks survive detonator removal', ballFaction => {
+    const f = fireFixture('allied'), h = cloudHost(f);
+    try {
+      const chunks = vi.fn();
+      h.host.setPlayerFramePort({ getPlayerGameplayRuntime: () => ({ hostCreateFireChunkBurst: chunks }) } as never);
+      const environment = vi.spyOn(h.host, 'applyExplosionEnvironmentDamage');
+      const baseDamage = vi.spyOn(f.combat, 'applyBaseDamage');
+      const foreign = ballFaction === 'hostile' ? f.enemies.hostSpawnAtWorld(0, 500, 'firestarter-badger') : f.shooter;
+      f.ball(280, 100, undefined, 24, ballFaction, foreign.id);
+      const hp = f.enemy.getHp(); f.fire();
+      const events = f.detonations.flushDetonations(); expect(events).toHaveLength(1);
+      expect(events[0].detonatorProvenance?.allegiance.factionId).toBe('allied');
+      // Both base factions and a constructed rock occupy the blast area.
+      const mutation = { applyResolvedDamage: vi.fn() };
+      const bases = { getBasesByFaction: (faction: string) => [{ id: faction, faction, getHp: () => 100,
+        isInert: () => false, getNearestSurfacePoint: () => ({ x: 280, y: 100, distance: 0 }) }] };
+      f.combat.setBaseManager(bases as never);
+      h.host.setWorldFramePort({ getEnemyManager: () => f.enemies, getWorldMutationRuntime: () => mutation,
+        getTrainRuntime: () => null, getWorldRuntime: () => ({ materialization: { bases,
+          arena: { rockPhysicsProxies: [{ active: true, x: 280, y: 100 }],
+            rockGrid: { forEachRockInRadius: (...args: any[]) => args.at(-1)(0) } },
+          placement: { getRuntimeRock: () => ({ id: 0, hp: 100, constructionId: 'rock_barrier' }) },
+        } }) } as never);
+      f.enemies.hostRemoveEnemy(f.shooter.id);
+      const sink = (h.host as unknown as { detonationEffectSink: DetonationEffectSink }).detonationEffectSink;
+      resolveDetonations(sink, events);
+      expect(f.enemy.getHp()).toBeLessThan(hp); expect(f.combat.getHP('p1')).toBe(100);
+      expect(f.combat.getBurnStackCount('p1', clock.now)).toBe(0);
+      expect(f.combat.getBurnVisualState(f.enemy.id, clock.now).visualStyle).toBe('allied');
+      expect(chunks).toHaveBeenCalledOnce();
+      expect(chunks.mock.calls[0][3]).toMatchObject({ visualStyle: 'allied', damageTarget: 'enemies' });
+      expect(environment.mock.calls[0][2]).toMatchObject({ baseDamageMult: 0, rockDamageMult: 0, trainDamageMult: 0 });
+      expect(baseDamage).not.toHaveBeenCalled();
+      expect(mutation.applyResolvedDamage).not.toHaveBeenCalled();
+      expect(f.receipts.at(-1)?.source.attribution).toEqual({ kind: 'player', id: 'p1' });
+    } finally { h.cloud.destroyAll(); f.destroy(); }
+  });
+
+  it('allied fireball hits a hostile and keeps its explosion allegiance after source despawn', () => {
+    const f = fireFixture('allied'), h = cloudHost(f);
+    try {
+      const explosion = vi.spyOn(h.host, 'resolveProjectileExplosion');
+      const hp = f.enemy.getHp();
+      f.fire('FIRESTARTER_FIREBALL');
+      const ids = [...f.physics.handles.keys()]; expect(ids).toHaveLength(1);
+      f.enemies.hostRemoveEnemy(f.shooter.id);
+      f.move(ids, 300);
+      expect(f.enemy.getHp()).toBeLessThan(hp); expect(f.combat.getHP('p1')).toBe(100);
+      expect(f.combat.getBurnStackCount('p1', clock.now)).toBe(0);
+    } finally { h.cloud.destroyAll(); f.destroy(); }
+  });
+
+  it('a hostile detonator owns an allied ball combo, including the hostile fire payload', () => {
+    const f = fireFixture(), h = cloudHost(f);
+    try {
+      const alliedOwner = f.enemies.hostSpawnAllyAtWorld(0, 500, 'firestarter-badger', 'p1', 0xffffff, 1);
+      const chunks = vi.fn();
+      h.host.setPlayerFramePort({ getPlayerGameplayRuntime: () => ({ hostCreateFireChunkBurst: chunks }) } as never);
+      f.ball(280, 100, undefined, 24, 'allied', alliedOwner.id);
+      const hp = f.enemy.getHp(); f.fire();
+      const events = f.detonations.flushDetonations(); expect(events).toHaveLength(1);
+      resolveDetonations((h.host as unknown as { detonationEffectSink: DetonationEffectSink }).detonationEffectSink, events);
+      expect(f.combat.getHP('p1')).toBeLessThan(100); expect(f.enemy.getHp()).toBe(hp);
+      expect(chunks.mock.calls[0][3]).toMatchObject({ visualStyle: 'void', damageTarget: 'players' });
+    } finally { h.cloud.destroyAll(); f.destroy(); }
+  });
 
   it('continues beyond its aim point, ignores hostile allies and damages the player', () => {
     const f = fireFixture();

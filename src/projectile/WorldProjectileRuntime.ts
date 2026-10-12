@@ -1804,8 +1804,12 @@ export class WorldProjectileRuntime implements
     if (!projectile?.spec.interaction.detonable || projectile.pendingDestroy
       || !this.projectiles.activeRecords.has(projectile)) return null;
     const target = createDetonationTarget(projectile);
+    const source = createSingleOwnerProvenance(detonatorOwnerId, {
+      weaponSourceId: target.effect.sourceId ?? target.sourceId, sourceSlot: target.sourceSlot,
+    });
+    const detonatorProvenance = this.resolveProvenance?.(source) ?? source;
     this.destroyProjectile(projectileId);
-    return { ...target, detonatorOwnerId };
+    return { ...target, detonatorOwnerId, detonatorProvenance };
   }
 
   private readonly portalDetonations: ProjectileDetonationOutcome[] = [];

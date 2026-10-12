@@ -37,6 +37,7 @@ import type { TargetFootprint } from '../../systems/ReinforcementMatrixSystem';
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
 import { applyRadialEnvironmentDamage, type EnvironmentRockSink } from '../../systems/EnvironmentDamageResolver';
 import { resolveDetonations, type DetonationEffectSink } from '../../systems/DetonationResolver';
+import { resolveEnemyFireExplosion } from '../../systems/AlliedEnemyEffects';
 import { COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID } from '../../systems/CoopDefenseAirstrikeEventHandler';
 import type { RockPhysicsProxy } from '../../arena/rocks/RockPhysicsProxy';
 import { toMapId } from '../../world/arenaDescriptorAdapter';
@@ -1879,13 +1880,19 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
    */
   private readonly detonationEffectSink: DetonationEffectSink = {
     resolveProjectileExplosion: (event, effect) => {
+      const provenance = event.detonatorProvenance ?? this.ctx.getWorldCombatCore()!.captureProjectileProvenance(
+        createSingleOwnerProvenance(event.detonatorOwnerId, {
+          weaponSourceId: event.sourceId, sourceSlot: event.sourceSlot,
+        }),
+      );
+      const faction = provenance.allegiance.factionId;
+      // An enemy fire payload must follow the combo's owner, including across factions.
+      if (effect.damageTarget !== undefined && (faction === 'allied' || faction === 'hostile')) {
+        effect = resolveEnemyFireExplosion(effect, faction);
+      }
       this.resolveProjectileExplosion({
         projectileId: event.projectileId, x: event.x, y: event.y, effect,
-        provenance: this.ctx.getWorldCombatCore()!.captureProjectileProvenance(
-          createSingleOwnerProvenance(event.detonatorOwnerId, {
-            weaponSourceId: event.sourceId, sourceSlot: event.sourceSlot,
-          }),
-        ),
+        provenance: { ...provenance, weaponSourceId: event.sourceId, sourceSlot: event.sourceSlot },
       });
     },
     spawnComboEssence: (event, amount) => {
