@@ -59,6 +59,8 @@ interface ShieldVisual {
   arcDegrees:        number;
   color:             number;
   isDome:            boolean;
+  /** Enemy frontal shields follow the enemy body instead of a player owner. */
+  enemyOwner:        boolean;
   domeField:         Phaser.GameObjects.Image | null;
   domeGlow:          GlowHandle | null;
 }
@@ -68,6 +70,7 @@ const SHIELD_SMOOTH_TIME_MS = 46;
 export class EnergyShieldRenderer {
   private readonly visuals = new Map<string, ShieldVisual>();
   private ownerPositionProvider: ((ownerId: string) => { x: number; y: number } | null) | null = null;
+  private enemyPositionProvider: ((enemyId: string) => { x: number; y: number } | null) | null = null;
   private audioSystem: GameAudioSystem | null = null;
   private lighting: LightingSystem | null = null;
 
@@ -83,6 +86,11 @@ export class EnergyShieldRenderer {
 
   setOwnerPositionProvider(provider: ((ownerId: string) => { x: number; y: number } | null) | null): void {
     this.ownerPositionProvider = provider;
+  }
+
+  /** Body position for enemy frontal shields (`ownerKind: 'enemy'`); without it they use the synced anchor. */
+  setEnemyPositionProvider(provider: ((enemyId: string) => { x: number; y: number } | null) | null): void {
+    this.enemyPositionProvider = provider;
   }
 
   generateTextures(): void {
@@ -178,7 +186,7 @@ export class EnergyShieldRenderer {
     for (const shield of shields) {
       let visual = this.visuals.get(shield.ownerId);
       // Wechsel zwischen gerichtetem Schild und Kuppel → Visual neu aufbauen.
-      if (visual && visual.isDome !== shield.isDome) {
+      if (visual && (visual.isDome !== shield.isDome || visual.enemyOwner !== (shield.ownerKind === 'enemy'))) {
         this.disposeVisual(visual);
         this.visuals.delete(shield.ownerId);
         visual = undefined;
@@ -186,7 +194,8 @@ export class EnergyShieldRenderer {
       if (!visual) {
         visual = this.createVisual(shield);
         this.visuals.set(shield.ownerId, visual);
-        this.audioSystem?.playSound('sfx_shield_activate', shield.x, shield.y, shield.ownerId);
+        // The activation sound is the player's weapon feedback; an enemy raising its shield stays silent.
+        if (!visual.enemyOwner) this.audioSystem?.playSound('sfx_shield_activate', shield.x, shield.y, shield.ownerId);
       }
       visual.targetX           = shield.x;
       visual.targetY           = shield.y;
@@ -206,7 +215,9 @@ export class EnergyShieldRenderer {
     const now  = this.scene.time.now;
 
     for (const [ownerId, visual] of this.visuals) {
-      const ownerPos = this.ownerPositionProvider?.(ownerId) ?? null;
+      const ownerPos = (visual.enemyOwner
+        ? this.enemyPositionProvider?.(ownerId)
+        : this.ownerPositionProvider?.(ownerId)) ?? null;
       if (ownerPos) {
         visual.currentX = ownerPos.x + Math.cos(visual.targetAngle) * visual.anchorDistance;
         visual.currentY = ownerPos.y + Math.sin(visual.targetAngle) * visual.anchorDistance;
@@ -364,6 +375,7 @@ export class EnergyShieldRenderer {
       arcDegrees:        shield.arcDegrees,
       color:             shield.color,
       isDome:            shield.isDome,
+      enemyOwner:        shield.ownerKind === 'enemy',
       domeField,
       domeGlow,
     };

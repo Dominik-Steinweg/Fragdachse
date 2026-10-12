@@ -53,7 +53,10 @@ export function composeWorldProjectileRuntime(
   });
   projectileRuntime.setProjectileReplicationAdapter(new ProjectileReplicationAdapter(projectileRuntime));
   projectileRuntime.getPresentationRuntime().setAudioSystem(ctx.gameAudioSystem);
-  wireProjectileRenderers(input.renderers, projectileRuntime, ctx.playerManager);
+  wireProjectileRenderers(input.renderers, projectileRuntime, ctx.playerManager, (enemyId) => {
+    const enemy = input.flow.getCoopMissionRuntime()?.enemyManager?.getEnemy(enemyId);
+    return enemy?.sprite.active ? { x: enemy.sprite.x, y: enemy.sprite.y } : null;
+  });
   gameplay.projectiles = projectileRuntime;
   worldRuntime.bind(projectileRuntime);
 }

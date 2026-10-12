@@ -154,6 +154,8 @@ export class CoopMissionEnemySupportComposition {
     if (!necromancy && !runtime.coopDefenseEnemyAttackSystem) return;
     runtime.bind({
       attach: () => {
+        // Raised charger shields block in combat and replicate for this Activity's lifetime.
+        this.options.combatSystem.setEnemyFrontalShieldPort?.(runtime.coopDefenseShieldChargerSystem);
         runtime.coopDefenseEnemyAttackSystem?.setActionBlockedChecker((enemyId) => (
           (runtime.coopDefenseVoidHunterSystem?.blocksRegularAttacks(enemyId) ?? false)
           || (runtime.coopDefenseTimebombSystem?.blocksRegularBehavior(enemyId) ?? false)
@@ -179,6 +181,7 @@ export class CoopMissionEnemySupportComposition {
         }
       },
       detach: () => {
+        this.options.combatSystem.setEnemyFrontalShieldPort?.(null);
         runtime.coopDefenseEnemyAttackSystem?.setActionBlockedChecker(null);
         runtime.coopDefenseEnemyDodgeSystem?.setBlockedChecker(null);
         if (necromancy) {

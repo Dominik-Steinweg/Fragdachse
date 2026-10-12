@@ -250,8 +250,17 @@ export interface CombatChargePort {
   resolveChargeContact?(targetId: string, chargerId: string, damage: number, sourceX: number, sourceY: number, nowMs: number): boolean;
 }
 
+/**
+ * Activity attachment for directional enemy shields. The Activity installs its owning system
+ * for its lifetime and clears it on detach; combat blocking and shield replication read it.
+ */
+export interface CombatEnemyFrontalShieldAttachPort {
+  setEnemyFrontalShieldPort(port: import('../systems/enemyFrontalShield').EnemyFrontalShieldPort | null): void;
+}
+
 export type CombatActivityPort =
   & CombatChargePort
+  & CombatEnemyFrontalShieldAttachPort
   & CombatStructureStatusPort
   & CombatActorStatePort
   & CombatDamageEffectPort

@@ -1,8 +1,10 @@
 import * as Phaser from 'phaser';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { EnergyShieldWeaponFireConfig, WeaponConfig } from '../loadout/LoadoutConfig';
+import { WEAPON_CONFIGS, type EnergyShieldWeaponFireConfig, type WeaponConfig } from '../loadout/LoadoutConfig';
 import type { ShieldBlockCategory, SyncedEnergyShield } from '../types';
+import { ALLIED_COLOR, VOID_PALETTE } from '../config';
+import { isWithinShieldArc, type EnemyFrontalShieldPort } from './enemyFrontalShield';
 import { dequantizeAngle } from '../utils/angle';
 import type { PlayerCombatResourcePort } from '../world/PlayerCombatIntegrationPort';
 import type { ShieldBuffSystem } from './ShieldBuffSystem';
@@ -49,6 +51,9 @@ export class EnergyShieldSystem {
   private combatSystem: CombatPlayerSupportPort | null = null;
   private enemyManager: EnemyManager | null = null;
   private baseManager: BaseManager | null = null;
+  /** Gerichtete Frontschilde von Gegnern; Besitz und Ausrichtung entscheidet das Activity-System. */
+  private enemyFrontalShieldPort: EnemyFrontalShieldPort | null = null;
+  private readonly enemyShieldFlashUntil = new Map<string, number>();
   /** true, wenn Waffe 2 aktuell nicht nutzbar ist (Tod, Einbuddeln, Dodge-Phase-1 …). */
   private weaponUsageBlockedChecker: ((playerId: string) => boolean) | null = null;
 
@@ -62,6 +67,10 @@ export class EnergyShieldSystem {
   setWorldCombatCore(system: CombatPlayerSupportPort | null): void { this.combatSystem = system; }
   setEnemyManager(manager: EnemyManager | null): void { this.enemyManager = manager; }
   setBaseManager(manager: BaseManager | null): void { this.baseManager = manager; }
+  setEnemyFrontalShieldPort(port: EnemyFrontalShieldPort | null): void {
+    this.enemyFrontalShieldPort = port;
+    this.enemyShieldFlashUntil.clear();
+  }
   setWeaponUsageBlockedChecker(checker: ((playerId: string) => boolean) | null): void {
     this.weaponUsageBlockedChecker = checker;
   }
@@ -161,10 +170,11 @@ export class EnergyShieldSystem {
   /**
    * Gerichteter Block des Basis-Schilds (Nicht-Kuppel). Prüft den eigenen Schild des Ziels
    * anhand des Blockbogens in Blickrichtung. Für Kuppeln inaktiv – dort greift {@link tryDomeProtect}.
+   * Ziele ohne Spielerschild fallen auf einen erhobenen Gegner-Frontschild zurück.
    */
   tryBlockDamage(attempt: ShieldBlockAttempt): boolean {
     const shield = this.activeShields.get(attempt.targetId);
-    if (!shield) return false;
+    if (!shield) return this.tryBlockWithEnemyFrontalShield(attempt);
     if (shield.config.fire.domeEnabled > 0) return false; // Kuppel: zentrale Positionsprüfung übernimmt
     if (!shield.config.fire.blockableCategories.includes(attempt.category)) return false;
 
@@ -172,17 +182,34 @@ export class EnergyShieldSystem {
     if (!player?.active) return false;
 
     const aimAngle = this.getAimAngle(attempt.targetId, player.rotation);
-    const dx = attempt.sourceX - player.x;
-    const dy = attempt.sourceY - player.y;
-    if (dx === 0 && dy === 0) return false;
-
-    const sourceAngle = Math.atan2(dy, dx);
-    const halfArcRad = Phaser.Math.DegToRad(shield.config.fire.blockArcDegrees) * 0.5;
-    const angleDiff = Phaser.Math.Angle.Wrap(sourceAngle - aimAngle);
-    if (Math.abs(angleDiff) > halfArcRad) return false;
+    if (!isWithinShieldArc(player.x, player.y, aimAngle, shield.config.fire.blockArcDegrees, attempt.sourceX, attempt.sourceY)) {
+      return false;
+    }
 
     shield.flashUntil = Math.max(shield.flashUntil, attempt.now + shield.config.fire.flashDurationMs);
     this.shieldBuffSystem.addBlockedDamage(attempt.targetId, attempt.damage, shield.config.fire, attempt.now);
+    return true;
+  }
+
+  /**
+   * Gegner-Frontschild: blockt dieselben Kategorien wie der Spielerschild, nie Schaden über Zeit.
+   * Ohne Spielerressourcen – kein Adrenalin, kein Schadensbuff.
+   */
+  private tryBlockWithEnemyFrontalShield(attempt: ShieldBlockAttempt): boolean {
+    const port = this.enemyFrontalShieldPort;
+    if (!port) return false;
+    const fire = enemyFrontalShieldFire();
+    if (attempt.category === 'damage_over_time' || !fire.blockableCategories.includes(attempt.category)) return false;
+    const state = port.getFrontalShield(attempt.targetId);
+    if (!state) return false;
+    const enemy = this.enemyManager?.getEnemy(attempt.targetId);
+    if (!enemy?.sprite.active) return false;
+    if (!isWithinShieldArc(enemy.sprite.x, enemy.sprite.y, state.facing, state.arcDegrees, attempt.sourceX, attempt.sourceY)) {
+      return false;
+    }
+    const flashUntil = attempt.now + fire.flashDurationMs;
+    this.enemyShieldFlashUntil.set(attempt.targetId, Math.max(this.enemyShieldFlashUntil.get(attempt.targetId) ?? 0, flashUntil));
+    port.onFrontalShieldBlocked?.(attempt.targetId, attempt.now);
     return true;
   }
 
@@ -328,7 +355,46 @@ export class EnergyShieldSystem {
       });
     }
 
+    this.appendEnemyFrontalShields(synced, now);
     return synced;
+  }
+
+  /** Erhobene Gegner-Frontschilde laufen über dieselbe Replikation und denselben Renderer. */
+  private appendEnemyFrontalShields(synced: SyncedEnergyShield[], now: number): void {
+    const port = this.enemyFrontalShieldPort;
+    if (!port?.forEachFrontalShield) {
+      this.enemyShieldFlashUntil.clear();
+      return;
+    }
+    const fire = enemyFrontalShieldFire();
+    const raised = new Set<string>();
+    port.forEachFrontalShield((enemyId, state) => {
+      const enemy = this.enemyManager?.getEnemy(enemyId);
+      if (!enemy?.sprite.active || raised.has(enemyId)) return;
+      raised.add(enemyId);
+      // Der Bogen sitzt knapp vor dem Körper, auch wenn der Gegner größer als ein Spieler ist.
+      const radius = Math.max(fire.visualRadius, Math.round(enemy.getCollisionRadius() + fire.visualThickness));
+      const flashRemaining = Math.max(0, (this.enemyShieldFlashUntil.get(enemyId) ?? 0) - now);
+      const flashFrac = fire.flashDurationMs > 0 ? Math.min(1, flashRemaining / fire.flashDurationMs) : 0;
+      synced.push({
+        ownerId: enemyId,
+        x: Math.round(enemy.sprite.x + Math.cos(state.facing) * fire.anchorDistance),
+        y: Math.round(enemy.sprite.y + Math.sin(state.facing) * fire.anchorDistance),
+        angle: state.facing,
+        anchorDistance: fire.anchorDistance,
+        radius,
+        thickness: fire.visualThickness,
+        arcDegrees: state.arcDegrees,
+        color: enemy.faction === 'allied' ? ALLIED_COLOR : VOID_PALETTE.primary,
+        alpha: fire.visualInnerAlpha,
+        flashAlpha: fire.flashMaxAlpha * flashFrac,
+        isDome: false,
+        ownerKind: 'enemy',
+      });
+    });
+    for (const enemyId of this.enemyShieldFlashUntil.keys()) {
+      if (!raised.has(enemyId)) this.enemyShieldFlashUntil.delete(enemyId);
+    }
   }
 
   /** Heilt Spieler (Self + Verbündete), verbündete Gegner und Basen innerhalb der Kuppel. */
@@ -368,4 +434,9 @@ export class EnergyShieldSystem {
     if (input) return dequantizeAngle(input.aim);
     return fallback;
   }
+}
+
+/** Blockkategorien, Blitz und Darstellung des Gegner-Frontschilds folgen der Spielerwaffe. */
+function enemyFrontalShieldFire(): EnergyShieldWeaponFireConfig {
+  return (WEAPON_CONFIGS.ENERGY_SHIELD as WeaponConfig & { fire: EnergyShieldWeaponFireConfig }).fire;
 }
