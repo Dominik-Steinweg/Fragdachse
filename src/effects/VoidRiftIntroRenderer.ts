@@ -9,6 +9,7 @@ import { DISTORTION_PRIORITY } from './distortion/distortionFramePlanner';
 import type { LocalDistortionComposer } from './distortion/LocalDistortionComposer';
 import { ensureCanvasTexture, registerGraphicsObject } from './EffectUtils';
 import type { GroundGlowLightFrame, LightingSystem } from './LightingSystem';
+import { ensureVoidIntroTextures, VOID_INTRO_GLOW_TEXTURE, VOID_INTRO_RING_TEXTURE } from './VoidIntroTextures';
 
 /**
  * Void-Hunter-Intro „aus einer anderen Dimension“: Bodenrisse kriechen aus, ein schwebender
@@ -24,10 +25,8 @@ const I = VOID_SPARKS_INTRO;
 const TEX_RIFT_BODY = '__void_rift_body';
 const TEX_RIFT_NEBULA = '__void_rift_nebula';
 const TEX_RIFT_RIM = '__void_rift_rim';
-const TEX_GLOW = '__void_rift_glow';
 const TEX_VEINS = '__void_rift_veins';
 const TEX_SCAR = '__void_rift_scar';
-const TEX_RING = '__void_rift_ring';
 const RIFT_TEXTURE_W = 512;
 const RIFT_TEXTURE_H = 192;
 const GROUND_TEXTURE = 512;
@@ -82,11 +81,11 @@ export class VoidRiftIntroRenderer {
     ensureRiftTextures(scene.textures);
     this.veins = this.createImage(TEX_VEINS).setDepth(DEPTH_VEINS).setBlendMode(Phaser.BlendModes.ADD);
     this.scar = this.createImage(TEX_SCAR).setDepth(DEPTH_VEINS + 0.005).setBlendMode(Phaser.BlendModes.ADD);
-    this.riftGlow = this.createImage(TEX_GLOW).setDepth(DEPTH_RIFT_GLOW).setBlendMode(Phaser.BlendModes.ADD);
+    this.riftGlow = this.createImage(VOID_INTRO_GLOW_TEXTURE).setDepth(DEPTH_RIFT_GLOW).setBlendMode(Phaser.BlendModes.ADD);
     this.riftBody = this.createImage(TEX_RIFT_BODY).setDepth(DEPTH_RIFT_BODY);
     this.riftNebula = this.createImage(TEX_RIFT_NEBULA).setDepth(DEPTH_RIFT_BODY + 0.005).setBlendMode(Phaser.BlendModes.ADD);
     this.riftRim = this.createImage(TEX_RIFT_RIM).setDepth(DEPTH_RIFT_RIM).setBlendMode(Phaser.BlendModes.ADD);
-    this.shockRing = this.createImage(TEX_RING).setDepth(DEPTH_SHOCK_RING).setBlendMode(Phaser.BlendModes.ADD);
+    this.shockRing = this.createImage(VOID_INTRO_RING_TEXTURE).setDepth(DEPTH_SHOCK_RING).setBlendMode(Phaser.BlendModes.ADD);
   }
 
   setCameraFeedback(controller: CameraFeedbackController | null): void { this.cameraFeedback = controller; }
@@ -386,23 +385,7 @@ function ensureRiftTextures(textures: Phaser.Textures.TextureManager): void {
       ctx.stroke();
     }
   });
-  ensureCanvasTexture(textures, TEX_GLOW, 128, 128, (ctx) => {
-    const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-    gradient.addColorStop(0, 'rgba(255,255,255,1)');
-    gradient.addColorStop(0.35, 'rgba(255,255,255,0.45)');
-    gradient.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 128, 128);
-  });
-  ensureCanvasTexture(textures, TEX_RING, 256, 256, (ctx) => {
-    for (const [width, alpha] of [[18, 0.18], [8, 0.45], [3, 1]] as const) {
-      ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
-      ctx.lineWidth = width;
-      ctx.beginPath();
-      ctx.arc(128, 128, 116, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-  });
+  ensureVoidIntroTextures(textures);
   ensureCanvasTexture(textures, TEX_VEINS, GROUND_TEXTURE, GROUND_TEXTURE, (ctx) => drawVeins(ctx, 53, 9, 0.9));
   ensureCanvasTexture(textures, TEX_SCAR, GROUND_TEXTURE, GROUND_TEXTURE, (ctx) => {
     const c = GROUND_TEXTURE / 2;

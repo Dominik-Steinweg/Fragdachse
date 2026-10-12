@@ -268,6 +268,7 @@ export class CoopMissionPresentationInfrastructure {
           input.renderers.voidRift.sync(state, now);
           this.krakenIntro?.sync(state?.preset === 'kraken-rise' && state.habitatId && state.waterAnchorId
             ? { ...state, preset: 'kraken-rise', habitatId: state.habitatId, waterAnchorId: state.waterAnchorId } : null, now);
+          input.renderers.voidMeteorIntro.sync(state, now);
           this.announceBossIntro(state, now);
         },
         syncBossPresence: (sources, now) => {
@@ -279,6 +280,7 @@ export class CoopMissionPresentationInfrastructure {
           input.renderers.bossIntro.ownsSpawnAt(state, now)
           || input.renderers.voidHunterSparks.ownsSpawnAt(state, now)
           || (state?.preset === 'kraken-rise' && now >= state.startedAtMs && now < state.startedAtMs + KRAKEN_RISE_INTRO.durationMs)
+          || input.renderers.voidMeteorIntro.ownsSpawnAt(state, now)
         ),
         destroy: () => {
           if (!this.destroyed) this.destroyWorldSpace(input);
@@ -323,13 +325,18 @@ export class CoopMissionPresentationInfrastructure {
     if (this.announcedBossIntroKey === key) return;
     this.announcedBossIntroKey = key;
     if (now - state.startedAtMs > 2_500) return;
-    const voidIntro = state.preset === 'void-sparks';
-    const krakenIntro = state.preset === 'kraken-rise';
+    const announcement = {
+      'graveyard-rise': 'ui.bossIntro.graveyard',
+      'void-sparks': 'ui.bossIntro.void',
+      'kraken-rise': 'ui.bossIntro.kraken',
+      'void-meteor': 'ui.bossIntro.meteor',
+    } as const;
+    const prefix = announcement[state.preset];
     this.objectiveAnnouncements.enqueue({
       id: `boss-intro:${key}`,
-      kicker: t(krakenIntro ? 'ui.bossIntro.kraken.kicker' : voidIntro ? 'ui.bossIntro.void.kicker' : 'ui.bossIntro.graveyard.kicker'),
-      title: t(krakenIntro ? 'ui.bossIntro.kraken.title' : voidIntro ? 'ui.bossIntro.void.title' : 'ui.bossIntro.graveyard.title'),
-      detail: t(krakenIntro ? 'ui.bossIntro.kraken.detail' : voidIntro ? 'ui.bossIntro.void.detail' : 'ui.bossIntro.graveyard.detail'),
+      kicker: t(`${prefix}.kicker`),
+      title: t(`${prefix}.title`),
+      detail: t(`${prefix}.detail`),
       tone: 'main',
       topic: 'boss-intro',
       priority: 100,
@@ -352,6 +359,7 @@ export class CoopMissionPresentationInfrastructure {
     input.renderers.bossPresence.clear();
     input.renderers.voidHunterSparks.clear();
     input.renderers.voidRift.clear();
+    input.renderers.voidMeteorIntro.clear();
     input.renderers.secondaryObjectiveMarkers.destroy();
     input.renderers.missionProgress.destroy();
     input.renderers.carryZones.clear();
@@ -368,6 +376,7 @@ export class CoopMissionPresentationInfrastructure {
     input.renderers.voidHunterSparks.clear();
     input.renderers.voidRift.clear();
     this.kraken?.clear(); this.krakenIntro?.clear(); this.krakenResidency?.setPhase('dead');
+    input.renderers.voidMeteorIntro.clear();
     this.announcedBossIntroKey = null;
     input.renderers.secondaryObjectiveMarkers.clear();
     input.renderers.missionProgress.clear();

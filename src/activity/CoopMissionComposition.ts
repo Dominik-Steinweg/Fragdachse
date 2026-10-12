@@ -191,6 +191,10 @@ export class CoopMissionComposition {
       entityBurnGpuController: this.options.entityBurnGpuController,
       onBossSpawned: this.options.onBossSpawned,
       onBossIntroStarted: this.options.onBossIntroStarted,
+      // Activity core precedes world player gameplay; resolve the capability at spawn time.
+      playerFireChunkPort: {
+        hostCreateFireChunkBurst: (...args) => this.options.getPlayerFireChunkPort()?.hostCreateFireChunkBurst(...args),
+      },
       onWaveStarted: this.options.onWaveStarted,
       onDiagnosticEvent: this.options.onDiagnosticEvent,
     }).materialize(runtime);

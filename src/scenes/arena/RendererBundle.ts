@@ -12,6 +12,7 @@ import { MovementEffectsRenderer } from '../../effects/MovementEffectsRenderer';
 import { BurrowGpuRenderer } from '../../effects/BurrowGpuRenderer';
 import { BossIntroGraveyardRenderer } from '../../effects/BossIntroGraveyardRenderer';
 import { BossPresenceRenderer } from '../../effects/BossPresenceRenderer';
+import { VoidMeteorIntroRenderer } from '../../effects/VoidMeteorIntroRenderer';
 import { VoidRiftIntroRenderer } from '../../effects/VoidRiftIntroRenderer';
 import { VoidHunterSparksRenderer } from '../../effects/VoidHunterSparksRenderer';
 import { createEarthbreakFissureLayers } from '../../effects/earthbreak/EarthbreakFissureGpuLayer';
@@ -132,6 +133,7 @@ export interface RendererBundle {
   bossPresence:        BossPresenceRenderer;
   voidHunterSparks:    VoidHunterSparksRenderer;
   voidRift:            VoidRiftIntroRenderer;
+  voidMeteorIntro:     VoidMeteorIntroRenderer;
   combatGoreGpu:      CombatGoreGpuRenderer;
   entityBurnGpu:       EntityBurnGpuController;
   mgAttrition:         MgAttritionRenderer;
@@ -442,6 +444,9 @@ export function* createRendererBundleSteps(
   mortarStrike.registerGpuVfx(gpuVfx);
   cleanup.push(() => mortarStrike.destroy());
   yield 'renderers/mortarStrike';
+  const voidMeteorIntro = new VoidMeteorIntroRenderer(scene, lighting);
+  voidMeteorIntro.registerGpuVfx(gpuVfx);
+  cleanup.push(() => voidMeteorIntro.destroy());
   return {
     interactions,
     turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, plasmaBurnerCharge, healingAura, guardianSpirit, repairDrone, attackDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
@@ -460,6 +465,7 @@ export function* createRendererBundleSteps(
     bossPresence,
     voidHunterSparks,
     voidRift,
+    voidMeteorIntro,
     combatGoreGpu,
     entityBurnGpu,
     mgAttrition,
@@ -520,7 +526,10 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   effectSystem.setLightingSystem(bundle.lighting);
   effectSystem.setExplosionGpuRenderer(bundle.explosionGpu);
   bundle.meteor.setImpactSystems(bundle.explosionGpu,bundle.lighting);
-  effectSystem.setMeteorExplosionRenderer((x,y,radius,variant)=>bundle.meteor.playImpact(x,y,radius,variant));
+  effectSystem.setMeteorExplosionRenderer((x,y,radius,variant,includeCrater)=>bundle.meteor.playImpact(x,y,radius,variant,includeCrater));
+  bundle.voidMeteorIntro.setImpactCallback((x, y, radius) => {
+    effectSystem.playExplosionEffect(x, y, radius, undefined, 'void_nuke', undefined, 'void', { meteorCrater: false });
+  });
   effectSystem.setBurrowGpuRenderer(bundle.burrowGpu);
   effectSystem.setCombatGoreGpuRenderer(bundle.combatGoreGpu);
   bundle.mortarStrike.setImpactSystems(bundle.explosionGpu, bundle.lighting);
@@ -543,6 +552,7 @@ export function wireRenderersToCameraFeedback(
   bundle.bossIntro.setCameraFeedback(controller);
   bundle.voidRift.setCameraFeedback(controller);
   bundle.mortarStrike.setCameraFeedback(controller);
+  bundle.voidMeteorIntro.setCameraFeedback(controller);
 }
 
 /**
@@ -557,6 +567,7 @@ export function wireRenderersToDistortion(
   bundle.timeBubble.setDistortionComposer(composer);
   bundle.blackHole.setDistortionComposer(composer);
   bundle.voidRift.setDistortionComposer(composer);
+  bundle.voidMeteorIntro.setDistortionComposer(composer);
 }
 
 /** Wire GameAudioSystem to renderers that play sounds. */
@@ -567,4 +578,5 @@ export function wireRenderersToAudioSystem(bundle: RendererBundle, audioSystem: 
   bundle.nuke.setAudioSystem(audioSystem);
   bundle.bossIntro.setAudioSystem(audioSystem);
   bundle.voidRift.setAudioSystem(audioSystem);
+  bundle.voidMeteorIntro.setAudioSystem(audioSystem);
 }

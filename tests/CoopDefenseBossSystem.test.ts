@@ -57,6 +57,7 @@ describe('CoopDefenseBossSystem', () => {
 describe.each([
   { preset: 'graveyard-rise' as const, enemyKind: 'grave-titan' as const },
   { preset: 'void-sparks' as const, enemyKind: 'void-hunter' as const },
+  { preset: 'void-meteor' as const, enemyKind: 'inferno-colossus' as const },
 ])('CoopDefenseBossSystem intro $preset', ({ preset, enemyKind }) => {
   function createIntroSystem() {
     let bossActive = false;
@@ -67,9 +68,13 @@ describe.each([
     const spawnBoss = vi.fn(() => true);
     const onBossSpawned = vi.fn();
     const onBossIntroStarted = vi.fn();
+    const fireChunks = { hostCreateFireChunkBurst: vi.fn() };
     const system = new CoopDefenseBossSystem(
       { enemyKind, spawnAtMs: 1_000, intro: { preset } },
-      { hasEnemyKind: (kind: string) => kind === enemyKind && bossActive } as never,
+      {
+        hasEnemyKind: (kind: string) => kind === enemyKind && bossActive,
+        getAllEnemies: () => bossActive ? [{ id: 'boss-owner', kind: enemyKind }] : [],
+      } as never,
       {
         hostSpawnBoss: spawnBoss,
         hostResolveBossSpawnPoint: () => ({ x: 120, y: 340 }),
@@ -78,9 +83,32 @@ describe.each([
       onBossSpawned,
       onBossIntroStarted,
       () => 0.5,
+      undefined,
+      fireChunks,
     );
-    return { system, spawnBoss, spawnBossAt, onBossSpawned, onBossIntroStarted, setBossActive: (v: boolean) => { bossActive = v; } };
+    return { system, spawnBoss, spawnBossAt, onBossSpawned, onBossIntroStarted, fireChunks, setBossActive: (v: boolean) => { bossActive = v; } };
   }
+
+  it('creates an authored fire burst once, owned by the successfully spawned boss, and never for other presets', () => {
+    const { system, spawnBossAt, fireChunks, onBossIntroStarted } = createIntroSystem();
+    const config = getBossIntroPreset(preset);
+    system.hostUpdate(1_000, false, 50_000);
+    system.hostUpdate(config.emergeAtMs - 1, false, 50_000 + config.emergeAtMs - 1);
+    expect(fireChunks.hostCreateFireChunkBurst).not.toHaveBeenCalled();
+    spawnBossAt.mockImplementationOnce(() => false);
+    system.hostUpdate(1, false, 50_000 + config.emergeAtMs);
+    expect(fireChunks.hostCreateFireChunkBurst).not.toHaveBeenCalled();
+    const spawnedAt = 50_000 + config.emergeAtMs + 16;
+    system.hostUpdate(16, false, spawnedAt);
+    system.hostUpdate(1_000, false, spawnedAt + 1_000);
+    if ('fireChunkBurst' in config) {
+      const state = onBossIntroStarted.mock.calls[0][0];
+      expect(fireChunks.hostCreateFireChunkBurst).toHaveBeenCalledExactlyOnceWith(
+        'boss-owner', state.x, state.y, config.fireChunkBurst, `boss-intro:${state.seed}`, spawnedAt,
+      );
+      expect(config.fireChunkBurst).toMatchObject({ visualStyle: 'void', damageTarget: 'players' });
+    } else expect(fireChunks.hostCreateFireChunkBurst).not.toHaveBeenCalled();
+  });
 
   it('announces the reserved point first and spawns there only after the authored emerge delay', () => {
     const { system, spawnBoss, spawnBossAt, onBossSpawned, onBossIntroStarted } = createIntroSystem();

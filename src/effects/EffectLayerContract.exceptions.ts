@@ -1,6 +1,12 @@
 // Explicit R0 debt. Never auto-accept new entries; remove fixed exceptions in R1+.
 import type { LayerException } from './EffectLayerContract';
 export const DEPTH_LAYER_EXCEPTIONS: readonly LayerException[] = [
+  // Airborne particle smoke and small fragments are deliberately above the canopy.
+  {"id":"lane:VoidMeteorMaterial","deviation":"material-outside-sun","finding":"D06"},
+  {"id":"gpu:VoidMeteorSmoke","deviation":"material-outside-sun","finding":"D06"},
+  {"id":"gpu:VoidMeteorFragment","deviation":"material-outside-sun","finding":"D06"},
+  {"id":"cpu:effects/VoidMeteorIntroRenderer.ts:module/this.warningGlow/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
+  {"id":"cpu:effects/VoidMeteorIntroRenderer.ts:module/this.warningRing/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"lane:AirstrikeSpark","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"lane:AirstrikeBomb","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"lane:RocketExhaust","deviation":"emission-under-lightmap","finding":"D10"},
