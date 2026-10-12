@@ -956,7 +956,7 @@
       "attackScanIntervalMs": 140,
       "attackStopDurationMs": 200,
       "obstacleAttackDelayMs": 500,
-      "imageKey": "enemy_pyro_badger",
+      "imageKey": "enemy_shield_charger_badger",
       "shieldCharger": {
         "shieldArcDegrees": 120,
         "triggerMinDistancePx": 120,
