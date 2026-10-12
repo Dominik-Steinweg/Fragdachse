@@ -36,6 +36,8 @@ interface ChargerState {
   lastY: number;
 }
 
+const HOSTILE_SHIELD_RIM = { color: 0xd9a35c, alpha: 0.32, thickness: 2.5 } as const;
+const ALLIED_SHIELD_RIM = { color: 0x8affcf, alpha: 0.26, thickness: 2.5 } as const;
 /** Below this residual distance a run counts as having reached its planned end point. */
 const ARRIVAL_EPSILON_PX = 3;
 /** Pull back onto the lane centre line (1/s); no invisible lateral steering beyond drift repair. */
@@ -93,7 +95,9 @@ export class CoopDefenseShieldChargerSystem implements EnemySpecialMovementSourc
     const state = this.states.get(enemyId);
     if (!state || state.phase !== 'none' || state.enemy.isBurrowed()) return null;
     const config = getCoopDefenseEnemyConfig(state.enemy.kind).shieldCharger;
-    return config ? { facing: state.enemy.getAimAngle(), arcDegrees: config.shieldArcDegrees } : null;
+    // The modelled tower shield carries the form; the arc is only a thin warm rim that flashes on blocks.
+    return config ? { facing: state.enemy.getAimAngle(), arcDegrees: config.shieldArcDegrees,
+      presentation: state.enemy.faction === 'allied' ? ALLIED_SHIELD_RIM : HOSTILE_SHIELD_RIM } : null;
   }
 
   forEachFrontalShield(visit: (enemyId: string, shield: EnemyFrontalShieldState) => void): void {

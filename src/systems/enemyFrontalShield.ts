@@ -10,6 +10,11 @@ export interface EnemyFrontalShieldState {
   readonly facing: number;
   /** Full opening angle of the blocking arc in degrees. */
   readonly arcDegrees: number;
+  /**
+   * Optional look of the replicated arc. Physical shields (a modelled prop) only want a thin rim
+   * that flashes on blocks; without it the arc uses the energy-shield faction colours.
+   */
+  readonly presentation?: { readonly color: number; readonly alpha: number; readonly thickness: number };
 }
 
 export interface EnemyFrontalShieldPort {
