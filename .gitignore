@@ -84,3 +84,7 @@ output/trailer/*.mp4
 # ImageGen candidate/rejected variants: kept locally, not versioned
 tools/source-art/*/candidates/
 tools/source-art/*/candidates-*/
+
+# Python bytecode caches (Blender/verifier imports)
+__pycache__/
+*.py[cod]
