@@ -1,5 +1,5 @@
-Derived reproducibly from the watchtower-v2 production master (standard/frame-0000).
-Strict orthographic overhead timber platform, unchanged colors and geometry.
+Derived reproducibly from the watchtower-v3 production master (standard/frame-0000).
+Strict orthographic overhead timber platform, eleven narrow weathered plank courses.
 1024x1024 transparent icon: master resized to 912x912, padded 56 px on each side.
 Complete silhouette occupies about 85% of the icon; no baked ground shadow or frame.
-Runtime key: reward_watchtower. Original source and recipe retained in watchtower-v2/source-bundle.zip.
+Runtime key: reward_watchtower. Original textures, prompt and recipe retained in watchtower-v3/source-bundle.zip.

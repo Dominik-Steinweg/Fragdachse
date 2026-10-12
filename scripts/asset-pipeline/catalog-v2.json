@@ -4493,7 +4493,7 @@
       "description": {
         "silhouette": "Open square elevated timber platform without a roof, centred on its 64 px two-cell footprint within a 72 px canvas; small stone feet and a south-facing leaning ladder preserve height cues",
         "colors": "Quiet warm ash floor with restrained board variation, lighter handrail crowns and ladder treads over dark timber fascia, matte charcoal iron brackets, cool gray stone foundations",
-        "anatomy": "Concept B with broad east-west floorboards and soft seams, raised handrails and lower guard rails interrupted at the southern entry, unchanged five-pixel wooden post crowns with iron corner wraps, real splayed piers, underfloor cross braces and protruding knee braces. Strict orthographic plan view; no ground or baked ground shadow. One BU is 32 display pixels; deck and rails span about 62 pixels, structural tips stay within 3 pixels beyond the 64 px footprint."
+        "anatomy": "Eleven narrow east-west timber courses, about 156 mm / 5 px wide, with staggered butt joints on transverse joists, millimetric height variation and recessed nail heads. Weathered longitudinal wood albedo with individual UV offsets, matte patinated iron, coarse cool stone with low moss rims. 82 mm handrails, 145 mm corner posts, 450 mm ladder with 302 mm rung spacing. Strict orthographic plan view; no ground or baked ground shadow. One BU is one meter / 32 display pixels; deck and rails span about 62 pixels within the unchanged 72 px canvas."
       },
       "requiredClips": [],
       "production": "reference",
@@ -4501,13 +4501,14 @@
       "model": {},
       "orthoScale": 2.25,
       "textures": {
-        "technical": "art/poc/pipeline-v1/textures/technical.png"
+        "technical": "art/poc/pipeline-v1/textures/technical.png",
+        "wood": "art/poc/pipeline-v2/textures/watchtower-weathered-timber-v3.png"
       },
       "materialVariants": {
         "standard": {
-          "label": "Quiet ash, forged iron and cool stone",
-          "textureStrength": 0.12,
-          "formShadowStrength": 0.38
+          "label": "Weathered timber, patinated iron and mossy stone",
+          "textureStrength": 0.64,
+          "formShadowStrength": 0.32
         }
       },
       "clips": []
