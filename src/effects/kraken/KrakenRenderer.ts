@@ -762,13 +762,14 @@ export class KrakenEggFlightView implements GrenadeEggVisual {
  * fading streak of its recent path. Trajectory and homing stay with the projectile runtime. */
 export class KrakenSpineFlightView implements GrenadeEggVisual {
   private readonly view: KrakenSpriteView;
-  private readonly streak: Phaser.GameObjects.Graphics;
+  private readonly streak: Phaser.GameObjects.Image;
   private readonly path: { x: number; y: number; at: number }[] = [];
   private destroyed = false;
   constructor(scene: Phaser.Scene, asset: KrakenPresentationAsset, diagnostic: (message: string) => void,
     private readonly clock: () => number) {
     this.view = new KrakenSpriteView(scene, asset, () => 0, diagnostic, false, DEPTH.PROJECTILES, KRAKEN_WORLD_EXPOSURE);
-    this.streak = scene.add.graphics().setDepth(DEPTH.PROJECTILES - .01);
+    // A stretched soft quad over the recent path, not a vector Graphics object.
+    this.streak = scene.add.image(0, 0, '__WHITE').setDepth(DEPTH.PROJECTILES - .01).setTint(0xb9a6c9).setOrigin(1, .5).setVisible(false);
     registerGraphicsObject(scene, 'bossIntro', this.streak);
   }
   update(x: number, y: number, _size: number, vx: number, vy: number): void {
@@ -778,11 +779,9 @@ export class KrakenSpineFlightView implements GrenadeEggVisual {
     while (this.path.length && now - this.path[0]!.at > 140) this.path.shift();
     // The spike's tip points away from its base; lead with the tip.
     this.view.show({ clip: 'idle', frame: 0 }, { x, y, angle: Math.atan2(vy, vx) + Math.PI }, now, { waterLevel: -1000 });
-    this.streak.clear();
-    for (let i = 1; i < this.path.length; i++) {
-      const a = this.path[i - 1]!, b = this.path[i]!, fade = i / this.path.length;
-      this.streak.lineStyle(1 + 2.5 * fade, 0xb9a6c9, .28 * fade).lineBetween(a.x, a.y, b.x, b.y);
-    }
+    const tail = this.path[0]!, length = Math.hypot(x - tail.x, y - tail.y);
+    this.streak.setVisible(length > 2).setPosition(x, y).setRotation(Math.atan2(y - tail.y, x - tail.x))
+      .setDisplaySize(length, 3).setAlpha(.22);
   }
   destroy(): void {
     if (this.destroyed) return;
