@@ -45,7 +45,7 @@ export function assetFromExport(report, exportUrl) {
   const url = file => base + file;
   return { id: m.id, label: m.label, category: m.category, targetSize: m.targetSize,
     displayScale: m.displayScale, forward: m.forward, pivot: m.pivot, collisionDiameter: m.collisionDiameter,
-    variants: [{ variant: m.variant, clips: m.clips, idleFrame: m.idleFrame, frameCount: m.frames.length,
+    variants: [{ variant: m.variant, clips: m.clips, sockets: m.sockets, socketFrames: m.socketFrames, idleFrame: m.idleFrame, frameCount: m.frames.length,
       master: url(m.frames[m.idleFrame].file), elevation: m.elevation, nativeMetrics: report.report?.native,
       sources: Object.entries(report.sheets).map(([size, layout]) => ({ ...layout, size: Number(size),
         url: url(`sheet-${size}.png`), idleUrl: url(`sprite-${size}.png`),
@@ -81,8 +81,9 @@ export function advancePlayback(clips, state, dt, sustain = false) {
 }
 
 export const reviewDefaults = { background: 'grass', submersion: true, waterLevel: 0, grid: false,
+  spines: true, regrow: false, regrowSeconds: 2,
   scalePlayer: false, lane: false, laneWidth: 112, laneAngle: 0, laneX: 0, laneY: 0, laneDock: true };
-const ranges = { waterLevel: [-100, 100], laneWidth: [32, 320], laneAngle: [-180, 180], laneX: [-1024, 1024], laneY: [-1024, 1024] };
+const ranges = { regrowSeconds: [.1, 30], waterLevel: [-100, 100], laneWidth: [32, 320], laneAngle: [-180, 180], laneX: [-1024, 1024], laneY: [-1024, 1024] };
 export function readReviewSettings(params) {
   return Object.fromEntries(Object.entries(reviewDefaults).map(([key, fallback]) => {
     const raw = params.get(key);
@@ -95,4 +96,47 @@ export function readReviewSettings(params) {
 export function writeReviewSettings(params, settings) {
   for (const key of Object.keys(reviewDefaults)) params.set(key, String(settings[key]));
   return params;
+}
+
+/** Never borrow a detached part from a different revision. */
+export function resolveSpine(library, body) {
+  if (body.asset.id !== 'abyssal-kraken'
+    || !body.construction.assets.some(a => a.id === 'abyssal-kraken-spine')) return null;
+  return resolveSource(library, { id: 'abyssal-kraken-spine', construction: body.construction.key,
+    variant: body.variant.variant, size: body.source.size });
+}
+
+/** The viewer holds the volley's final pose while its optional regrowth tail runs. */
+export function advanceViewerPlayback(clips, state, dt, sustain, settings) {
+  const current = clips.find(c => c.name === state.clip);
+  if (current?.name !== 'spine-volley') return advancePlayback(clips, state, dt, sustain);
+  if (!state.playing) return state;
+  const end = current.frames.length / current.frameRate + (settings.regrow ? settings.regrowSeconds : 0);
+  const elapsed = Math.min(end, state.elapsed + dt);
+  return { ...state, elapsed, playing: elapsed < end, idle: false };
+}
+
+export function spineGrowth(resolved, index, playback, referenceClip, settings) {
+  const current = resolved.variant.clips?.find(c => c.name === playback.clip);
+  if (playback.idle || current?.name !== 'spine-volley' || !referenceClip) return 1;
+  const release = current.markers?.[`release-${index}`];
+  if (release === undefined) return 1;
+  const duration = referenceClip.frames.length / referenceClip.frameRate;
+  if (playback.elapsed >= duration) return settings.regrow
+    ? Math.min(1, (playback.elapsed - duration) / settings.regrowSeconds) : 0;
+  return playback.elapsed / duration * current.frames.length + 1e-7 >= release ? 0 : 1;
+}
+
+/** Full-canvas normalized sockets, independent of atlas trim and source resolution. */
+export function spineTransform(body, sockets, base, tip, index, growth) {
+  const from = sockets?.[`spine${index}`], to = sockets?.[`spine${index}Tip`];
+  if (!from || !to || !base || !tip || growth <= 0) return null;
+  const assetDistance = Math.hypot(tip[0] - base[0], tip[1] - base[1]);
+  if (!assetDistance) return null;
+  const dx = (from.x - body.originX) * body.displayWidth, dy = (from.y - body.originY) * body.displayHeight;
+  const vx = (to.x - from.x) * body.displayWidth, vy = (to.y - from.y) * body.displayHeight;
+  const c = Math.cos(body.rotation), s = Math.sin(body.rotation);
+  return { x: body.x + dx*c - dy*s, y: body.y + dx*s + dy*c, z: from.z ?? 0,
+    rotation: body.rotation + Math.atan2(vy, vx) - Math.atan2(tip[1] - base[1], tip[0] - base[0]),
+    size: Math.hypot(vx, vy) / assetDistance * growth };
 }
