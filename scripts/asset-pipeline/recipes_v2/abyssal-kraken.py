@@ -76,10 +76,10 @@ def build(c, spec):
             tissue, brow = eye_sculpt(c, name, center, er, look, surface, hide)
             sculpt.extend(tissue)
             crests.append(brow)
-    # Phase-1 body: the six front keel spikes are fireable runtime parts (asset abyssal-kraken-spine).
+    # Water and land bodies: the six front keel spikes are fireable runtime parts (asset abyssal-kraken-spine).
     detached = []
     tissue, spines, dorsal_crests = dorsal(c, surface, section, hide, bone, [(p[0][0], p[0][3]) for p in paths],
-                                           detach=range(6) if part == 'water' else (), detached=detached)
+                                           detach=range(6) if part in ('water', 'land') else (), detached=detached)
     ridges, ridge_crests = face_ridges(c, surface, hide)
     beard, beard_lines = oral_crown(c, surface, hide, grouped=True)
     head = [fuse(c, [shell, *tissue, *sculpt, *ridges, *beard], hide, voxel=.012 * draft.get('voxelScale', 1))]

@@ -3,12 +3,13 @@ import math
 
 SWING = .40  # share of the scuttle cycle an arm spends in the air
 
-from kraken_motion_v2 import beard_motion, ink_spit, key_arms, key_lids, one_shot, smooth
+from kraken_motion_v2 import beard_motion, ink_spit, key_arms, key_lids, one_shot, smooth, spine_volley
 from kraken_motion_actions_v2 import brood_throw, envelope, key_eggs, key_rest
 
 
 SUPPORTED_MOTIONS = ('kraken_land_idle', 'kraken_land_move', 'kraken_land_ashore',
-                     'kraken_land_slam', 'kraken_land_egg_throw', 'kraken_land_ink_spit', 'kraken_land_death')
+                     'kraken_land_slam', 'kraken_land_egg_throw', 'kraken_land_ink_spit', 'kraken_land_death',
+                     'kraken_land_volley_spines')
 
 
 def apply_kraken_land(asset, motion, phase, frame, idle, p, pose, key):
@@ -21,6 +22,10 @@ def apply_kraken_land(asset, motion, phase, frame, idle, p, pose, key):
     if motion == 'kraken_land_ink_spit':
         key_eggs(pose)
         return ink_spit(asset, phase, frame, p, pose, key, land=True)
+    if motion == 'kraken_land_volley_spines':
+        # Same rearing arch and recoil jolts as in the pond; on land the whole animal lifts off its arms.
+        key_eggs(pose)
+        return spine_volley(asset, phase, frame, p, pose, key)
 
     key_eggs(pose)
     cycle = math.tau * phase

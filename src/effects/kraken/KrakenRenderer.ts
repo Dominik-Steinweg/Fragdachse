@@ -160,7 +160,8 @@ export function sampleKrakenBody(state: KrakenState, pose: KrakenBodyPose, asset
   } else if (state.bodyAction?.kind === 'eggs') {
     const action = state.bodyAction;
     sample = timed(a, 'egg-throw', now, action.startedAt, action.endsAt, [[action.releaseAt, krakenClip(a, 'egg-throw').markers?.['release-1'] !== undefined ? 'release-1' : 'release']]);
-  } else if (state.bodyAction?.kind === 'spines' && !land) {
+  } else if (state.bodyAction?.kind === 'spines' && a.clips.some(c => c.name === 'spine-volley')) {
+    // Land selections that predate detachable land spines simply keep idling while the spines fly.
     const action = state.bodyAction;
     sample = timed(a, 'spine-volley', now, action.startedAt, action.endsAt,
       [[action.raiseAt, 'raise'], ...action.releaseAt.map((at, i) => [at, `release-${i + 1}`] as const)]);
@@ -240,7 +241,7 @@ const LOOK = {
   wake: { radius: 70, length: 280, lapPeriod: 2.6, minSpeedPxPerSec: 10, fullSpeedPxPerSec: 70 },
   slime: { life: 10, spacing: 26, maxStamps: 48, stamp: [62, 44] as const, aura: [96, 78] as const },
   tentacleTurnRadPerSec: Math.PI * 1.6,
-  spineWake: { length: 150, width: 9, lead: 10, opacity: .9 },
+  spineWake: { length: 150, width: 12, lead: 10, opacity: .75 },
 } as const;
 
 /** Owns sprite/filter/shadow only. The asset lease must outlive this view. */
@@ -669,7 +670,9 @@ export class KrakenRenderer {
       // On land the kraken soaks the ground under it and drags a slime trail that slowly dries.
       const onLand = render.visible && render.asset === this.options.assets.land
         && (phase.kind === 'land' || phase.kind === 'dying' || phase.kind === 'ashore' && now >= phase.gripAt);
-      if (onLand) {
+      // A leaping body leaves no slime until it lands again.
+      const leap = body?.claw?.attack, airborne = !!leap && now >= leap.strikeAt && now < leap.hitAt;
+      if (onLand && !airborne) {
         const last = this.trails[this.trails.length - 1];
         if (!last || Math.hypot(pose.x - last.pose.x, pose.y - last.pose.y) > LOOK.slime.spacing) {
           this.trails.push({ pose: { ...pose }, at: now });
@@ -689,17 +692,19 @@ export class KrakenRenderer {
         rise: krakenRiseTiming(render.asset.metadata, 'surface', phase.startedAt, phase.startedAt, phase.endsAt, phase.vulnerableAt) };
       if (phase.kind === 'diving') this.waterMotion = { pose: render.pose, diveAt: phase.submergedAt };
       if (phase.kind === 'dying' && phase.asset === 'water') this.waterMotion = { pose: render.pose, diveAt: phase.startedAt };
+      const bodyAlpha = phase.kind !== 'dying' ? 1 : phase.asset === 'water'
+        ? 1 - krakenClamp((now - phase.startedAt) / (phase.endsAt - phase.startedAt))
+        : krakenDeathAlpha(render.asset.metadata, phase, now);
       if (render.visible) this.body.show(render.sample, render.pose, now, {
         drain: phase.kind === 'ashore' && now >= phase.gripAt
           ? 1 - krakenClamp((now - phase.heaveAt) / 1100)
           : this.waterMotion?.rise ? krakenDrain(this.waterMotion.rise, now, false) : 0,
-        alpha: phase.kind !== 'dying' ? 1 : phase.asset === 'water'
-          ? 1 - krakenClamp((now - phase.startedAt) / (phase.endsAt - phase.startedAt))
-          : krakenDeathAlpha(render.asset.metadata, phase, now),
+        alpha: bodyAlpha,
       });
       else this.body.hide();
       const volley = state.bodyAction?.kind === 'spines' ? state.bodyAction : null;
-      if (render.asset === this.options.assets.water && render.visible) this.spines.sync(this.body, state.spines, volley, now);
+      // Bodies exported with detachable spines carry their sockets; older land selections keep them baked in.
+      if (render.visible) this.spines.sync(this.body, state.spines, volley, now, bodyAlpha);
       else this.spines.hide();
     } else { this.body?.hide(); this.spines.hide(); }
     this.trails = this.trails.filter(t => now - t.at < LOOK.slime.life * 1000);
@@ -854,7 +859,7 @@ export class KrakenSpineOverlay {
     private readonly shadows?: ShadowSystem) {}
   get gpuBytes(): number { return this.views.reduce((sum, v) => sum + v.gpuBytes, 0); }
   /** Regrowing spines push slowly out of the back; released ones are gone until their regrowth starts. */
-  sync(body: KrakenSpriteView | null, spines: readonly KrakenSpineState[], volley: KrakenSpineVolley | null, now: number): void {
+  sync(body: KrakenSpriteView | null, spines: readonly KrakenSpineState[], volley: KrakenSpineVolley | null, now: number, bodyAlpha = 1): void {
     const asset = this.asset;
     if (!asset || !body) { this.hide(); return; }
     const a = asset.metadata, base = a.sockets.base, tip = a.sockets.tip, size = a.targetSize * (a.displayScale ?? 1);
@@ -878,7 +883,7 @@ export class KrakenSpineOverlay {
       if (!from || !to || growth <= .02) { view.hide(); continue; }
       const length = Math.hypot(to.x - from.x, to.y - from.y);
       view.show({ clip: 'idle', frame: 0 }, { x: from.x, y: from.y, angle: Math.atan2(to.y - from.y, to.x - from.x) + Math.PI }, now,
-        { socket: 'base', scale: authored > 0 ? length / authored * growth : growth, alpha, waterLevel: bodyLevel - from.z });
+        { socket: 'base', scale: authored > 0 ? length / authored * growth : growth, alpha: alpha * bodyAlpha, waterLevel: bodyLevel - from.z });
     }
   }
   hide(): void { for (const view of this.views) view.hide(); }

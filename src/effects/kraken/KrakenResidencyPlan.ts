@@ -6,7 +6,8 @@ export interface KrakenPhaseOptions { waterMove?: boolean; prefetchLand?: boolea
 export function krakenResidencyPlan(phase: KrakenResidencyPhase, options: KrakenPhaseOptions = {}) {
   // The detachable dorsal spines belong to the water body (overlays and projectiles).
   const current: KrakenAssetRole[] = phase === 'intro' || phase === 'water' ? ['water', 'tentacle', 'egg', 'spine']
-    : phase === 'dead' ? [] : [...(phase === 'ashore' && options.waterBody !== false ? ['water' as const, 'spine' as const] : []), 'land', ...(options.activeEggs === false ? [] : ['egg' as const])];
+    : phase === 'dead' ? [] : [...(phase === 'ashore' && options.waterBody !== false ? ['water' as const] : []), 'land', 'spine' as const,
+      ...(options.activeEggs === false ? [] : ['egg' as const])];
   const required: [KrakenAssetRole, string][] = current.map(role => [role, '__rest']);
   const clips: [KrakenAssetRole, string][] = [];
   const add = (role: KrakenAssetRole, names: readonly string[]) => names.forEach(name => clips.push([role, name]));
@@ -20,11 +21,12 @@ export function krakenResidencyPlan(phase: KrakenResidencyPhase, options: Kraken
     // The crossing clip is urgent even when a burst skipped the HP prefetch window.
     add('land', ['ashore', 'idle', 'move']);
     if (options.waterBody !== false) add('water', ['idle', 'move']);
+    // The land volley waits for the land phase: during the crossing both bodies are resident.
     add('land', ['ink-spit', 'slam', 'egg-throw']);
     // Defer the terminal clip until grip releases the water body; no two full bodies.
     if (options.waterBody === false) add('land', ['death']);
   }
-  if (phase === 'land') add('land', ['idle', 'move', 'ink-spit', 'slam', 'egg-throw', 'death']);
+  if (phase === 'land') add('land', ['idle', 'move', 'ink-spit', 'slam', 'egg-throw', 'spine-volley', 'death']);
   if (current.includes('egg')) add('egg', ['idle', 'hatch']);
   if (current.includes('spine')) add('spine', ['idle']);
   // Only what the crossing needs first: idle/move load during the exit warning, before the body leaves the water.

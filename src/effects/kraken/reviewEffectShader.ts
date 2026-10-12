@@ -156,7 +156,7 @@ void main() {
     float tear=smoothstep(.25+along*.35,.55+along*.35,n*.7+m*.3);
     float edge=smoothstep(.25,1.0,dy/spread);
     float sheen=exp(-pow(dy/1.3,2.0))*start*(1.0-smoothstep(0.0,22.0,behind));
-    alpha=max(mist*mix(.8,.4,along)*mix(1.0,tear,along),sheen*.3);
+    alpha=max(mist*mix(.62,.3,along)*mix(1.0,tear,along),sheen*.3);
     color=mix(vec3(.05,.012,.07),vec3(.34,.18,.46),clamp(edge*.8+m*.25,0.0,1.0));
     color=mix(color,vec3(.58,.48,.68),sheen*.45);
   } else if(uMode>9.5) {
