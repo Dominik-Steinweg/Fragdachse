@@ -1,0 +1,163 @@
+{
+  "frames": {
+    "idle/0000": {
+      "frame": {
+        "x": 2,
+        "y": 2,
+        "w": 28,
+        "h": 38
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 18,
+        "y": 20,
+        "w": 28,
+        "h": 38
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 1,
+      "sockets": {
+        "base": {
+          "x": 0.5,
+          "y": 0.4375,
+          "z": 0.02
+        },
+        "tip": {
+          "x": 0.5,
+          "y": 0.86249998,
+          "z": 0.47999999
+        }
+      }
+    },
+    "idle/0001": {
+      "frame": {
+        "x": 34,
+        "y": 2,
+        "w": 28,
+        "h": 38
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 18,
+        "y": 20,
+        "w": 28,
+        "h": 38
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 2,
+      "sockets": {
+        "base": {
+          "x": 0.5,
+          "y": 0.4375,
+          "z": 0.02
+        },
+        "tip": {
+          "x": 0.5,
+          "y": 0.86249998,
+          "z": 0.47999999
+        }
+      }
+    },
+    "idle/0002": {
+      "frame": {
+        "x": 66,
+        "y": 2,
+        "w": 28,
+        "h": 38
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 18,
+        "y": 20,
+        "w": 28,
+        "h": 38
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 3,
+      "sockets": {
+        "base": {
+          "x": 0.5,
+          "y": 0.4375,
+          "z": 0.02
+        },
+        "tip": {
+          "x": 0.5,
+          "y": 0.86249998,
+          "z": 0.47999999
+        }
+      }
+    },
+    "idle/0003": {
+      "frame": {
+        "x": 98,
+        "y": 2,
+        "w": 28,
+        "h": 35
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 18,
+        "y": 20,
+        "w": 28,
+        "h": 35
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 4,
+      "sockets": {
+        "base": {
+          "x": 0.5,
+          "y": 0.4375,
+          "z": 0.02
+        },
+        "tip": {
+          "x": 0.5,
+          "y": 0.86249998,
+          "z": 0.47999999
+        }
+      }
+    }
+  },
+  "meta": {
+    "app": "Fragdachse V2",
+    "version": "1",
+    "image": "color-idle-0.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 128,
+      "h": 42
+    },
+    "scale": "1"
+  }
+}

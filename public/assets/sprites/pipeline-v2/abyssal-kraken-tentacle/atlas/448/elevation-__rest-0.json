@@ -4,16 +4,16 @@
       "frame": {
         "x": 2,
         "y": 2,
-        "w": 37,
-        "h": 149
+        "w": 43,
+        "h": 65
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 91,
-        "y": 67,
-        "w": 37,
-        "h": 149
+        "x": 85,
+        "y": 151,
+        "w": 43,
+        "h": 65
       },
       "sourceSize": {
         "w": 224,
@@ -39,8 +39,8 @@
     "image": "elevation-__rest-0.png",
     "format": "RGBA8888",
     "size": {
-      "w": 41,
-      "h": 153
+      "w": 47,
+      "h": 69
     },
     "scale": "1"
   }

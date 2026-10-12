@@ -101,15 +101,15 @@
         "x": 172,
         "y": 2,
         "w": 51,
-        "h": 184
+        "h": 182
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
         "x": 77,
-        "y": 32,
+        "y": 34,
         "w": 51,
-        "h": 184
+        "h": 182
       },
       "sourceSize": {
         "w": 224,
@@ -132,16 +132,16 @@
       "frame": {
         "x": 227,
         "y": 2,
-        "w": 49,
-        "h": 185
+        "w": 48,
+        "h": 178
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 79,
-        "y": 31,
-        "w": 49,
-        "h": 185
+        "x": 80,
+        "y": 38,
+        "w": 48,
+        "h": 178
       },
       "sourceSize": {
         "w": 224,
@@ -162,18 +162,18 @@
     },
     "rise/0005": {
       "frame": {
-        "x": 280,
+        "x": 279,
         "y": 2,
-        "w": 48,
-        "h": 183
+        "w": 45,
+        "h": 166
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 80,
-        "y": 33,
-        "w": 48,
-        "h": 183
+        "x": 83,
+        "y": 50,
+        "w": 45,
+        "h": 166
       },
       "sourceSize": {
         "w": 224,
@@ -194,18 +194,18 @@
     },
     "rise/0006": {
       "frame": {
-        "x": 332,
+        "x": 328,
         "y": 2,
-        "w": 46,
-        "h": 177
+        "w": 41,
+        "h": 147
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 82,
-        "y": 39,
-        "w": 46,
-        "h": 177
+        "x": 87,
+        "y": 69,
+        "w": 41,
+        "h": 147
       },
       "sourceSize": {
         "w": 224,
@@ -226,18 +226,18 @@
     },
     "rise/0007": {
       "frame": {
-        "x": 382,
+        "x": 373,
         "y": 2,
-        "w": 46,
-        "h": 168
+        "w": 40,
+        "h": 123
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 82,
-        "y": 48,
-        "w": 46,
-        "h": 168
+        "x": 88,
+        "y": 93,
+        "w": 40,
+        "h": 123
       },
       "sourceSize": {
         "w": 224,
@@ -258,18 +258,18 @@
     },
     "rise/0008": {
       "frame": {
-        "x": 432,
+        "x": 417,
         "y": 2,
-        "w": 43,
-        "h": 159
+        "w": 40,
+        "h": 101
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 85,
-        "y": 57,
-        "w": 43,
-        "h": 159
+        "x": 88,
+        "y": 115,
+        "w": 40,
+        "h": 101
       },
       "sourceSize": {
         "w": 224,
@@ -290,18 +290,18 @@
     },
     "rise/0009": {
       "frame": {
-        "x": 479,
+        "x": 461,
         "y": 2,
-        "w": 39,
-        "h": 152
+        "w": 41,
+        "h": 83
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 89,
-        "y": 64,
-        "w": 39,
-        "h": 152
+        "x": 87,
+        "y": 133,
+        "w": 41,
+        "h": 83
       },
       "sourceSize": {
         "w": 224,
@@ -322,18 +322,18 @@
     },
     "rise/0010": {
       "frame": {
-        "x": 522,
+        "x": 506,
         "y": 2,
-        "w": 37,
-        "h": 147
+        "w": 42,
+        "h": 74
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 91,
-        "y": 69,
-        "w": 37,
-        "h": 147
+        "x": 86,
+        "y": 142,
+        "w": 42,
+        "h": 74
       },
       "sourceSize": {
         "w": 224,
@@ -354,18 +354,18 @@
     },
     "rise/0011": {
       "frame": {
-        "x": 563,
+        "x": 552,
         "y": 2,
-        "w": 37,
-        "h": 147
+        "w": 43,
+        "h": 72
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 91,
-        "y": 69,
-        "w": 37,
-        "h": 147
+        "x": 85,
+        "y": 144,
+        "w": 43,
+        "h": 72
       },
       "sourceSize": {
         "w": 224,
@@ -386,18 +386,18 @@
     },
     "rise/0012": {
       "frame": {
-        "x": 604,
+        "x": 599,
         "y": 2,
-        "w": 37,
-        "h": 148
+        "w": 43,
+        "h": 70
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 91,
-        "y": 68,
-        "w": 37,
-        "h": 148
+        "x": 85,
+        "y": 146,
+        "w": 43,
+        "h": 70
       },
       "sourceSize": {
         "w": 224,
@@ -418,18 +418,18 @@
     },
     "rise/0013": {
       "frame": {
-        "x": 645,
+        "x": 646,
         "y": 2,
-        "w": 37,
-        "h": 149
+        "w": 43,
+        "h": 68
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 91,
-        "y": 67,
-        "w": 37,
-        "h": 149
+        "x": 85,
+        "y": 148,
+        "w": 43,
+        "h": 68
       },
       "sourceSize": {
         "w": 224,
@@ -450,18 +450,18 @@
     },
     "rise/0014": {
       "frame": {
-        "x": 686,
+        "x": 693,
         "y": 2,
-        "w": 37,
-        "h": 149
+        "w": 43,
+        "h": 65
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 91,
-        "y": 67,
-        "w": 37,
-        "h": 149
+        "x": 85,
+        "y": 151,
+        "w": 43,
+        "h": 65
       },
       "sourceSize": {
         "w": 224,
@@ -482,18 +482,18 @@
     },
     "rise/0015": {
       "frame": {
-        "x": 727,
+        "x": 740,
         "y": 2,
-        "w": 37,
-        "h": 149
+        "w": 43,
+        "h": 65
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 91,
-        "y": 67,
-        "w": 37,
-        "h": 149
+        "x": 85,
+        "y": 151,
+        "w": 43,
+        "h": 65
       },
       "sourceSize": {
         "w": 224,
@@ -519,8 +519,8 @@
     "image": "elevation-rise-0.png",
     "format": "RGBA8888",
     "size": {
-      "w": 766,
-      "h": 189
+      "w": 785,
+      "h": 186
     },
     "scale": "1"
   }

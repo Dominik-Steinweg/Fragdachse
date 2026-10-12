@@ -12,6 +12,7 @@ import { validateClipContracts } from './contracts-v2.mjs';
 export const BOSS_TEXTURE_KEYS = Object.freeze({
   'abyssal-kraken': 'kraken_water', 'abyssal-kraken-land': 'kraken_land',
   'abyssal-kraken-tentacle': 'kraken_tentacle', 'abyssal-kraken-egg': 'kraken_egg',
+  'abyssal-kraken-spine': 'kraken_spine',
 });
 
 export async function importRuntime({ revision, requestedIds = [], root = process.cwd(),

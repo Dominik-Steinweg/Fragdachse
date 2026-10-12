@@ -4,16 +4,16 @@
       "frame": {
         "x": 2,
         "y": 2,
-        "w": 68,
-        "h": 293
+        "w": 80,
+        "h": 124
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 185,
-        "y": 136,
-        "w": 68,
-        "h": 293
+        "x": 173,
+        "y": 305,
+        "w": 80,
+        "h": 124
       },
       "sourceSize": {
         "w": 448,
@@ -39,8 +39,8 @@
     "image": "color-__rest-0.png",
     "format": "RGBA8888",
     "size": {
-      "w": 72,
-      "h": 297
+      "w": 84,
+      "h": 128
     },
     "scale": "1"
   }

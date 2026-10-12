@@ -1,8 +1,10 @@
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const bodySockets = ['mouth', ...Array.from({ length: 6 }, (_, i) => `egg${i + 1}`)];
+// The water body also carries the six detachable dorsal spines (base and tip per spine).
+const spineSockets = [...Array.from({ length: 6 }, (_, i) => `spine${i + 1}`), ...Array.from({ length: 6 }, (_, i) => `spine${i + 1}Tip`)];
 export function requiredSockets(id) {
-  return ['abyssal-kraken', 'abyssal-kraken-land'].includes(id) ? bodySockets
-    : id === 'abyssal-kraken-tentacle' ? ['waterEntry'] : [];
+  return id === 'abyssal-kraken' ? [...bodySockets, ...spineSockets] : id === 'abyssal-kraken-land' ? bodySockets
+    : id === 'abyssal-kraken-tentacle' ? ['waterEntry'] : id === 'abyssal-kraken-spine' ? ['base', 'tip'] : [];
 }
 
 export function validateSocketFrames(frames, count, required = []) {

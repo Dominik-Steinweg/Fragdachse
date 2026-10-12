@@ -40,7 +40,7 @@ export async function verifyBossRuntime(entry, asset, read) {
     Math.max(...groups.flatMap(c => c.frames)) + 1, required);
   if (required.includes('mouth')) {
     const clip = asset.clips.find(c => c.name === 'egg-throw');
-    if (!clip || clip.markers?.release !== undefined || required.slice(1).some((socket, i) => {
+    if (!clip || clip.markers?.release !== undefined || required.filter(socket => /^egg[1-6]$/.test(socket)).some((socket, i) => {
       const index = clip.markers?.[`release-${i + 1}`];
       return !Number.isInteger(index) || !asset.socketFrames?.[clip.frames[index]]?.[socket];
     })) throw new Error('Boss egg sockets require release-1 through release-6');

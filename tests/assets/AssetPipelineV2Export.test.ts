@@ -69,7 +69,7 @@ describe('V2 animated asset export contracts', () => {
   it('requires AP0 socket names, finite full-canvas samples and per-egg release markers', async () => {
     const { manifest } = await fixture();
     for (const [role, id] of [['water', 'abyssal-kraken'], ['land', 'abyssal-kraken-land'],
-      ['tentacle', 'abyssal-kraken-tentacle'], ['egg', 'abyssal-kraken-egg']] as const) {
+      ['tentacle', 'abyssal-kraken-tentacle'], ['egg', 'abyssal-kraken-egg'], ['spine', 'abyssal-kraken-spine']] as const) {
       expect(requiredSockets(id)).toEqual(KRAKEN_ASSET_REQUIREMENTS[role].sockets);
     }
     const socketFrames = manifest.frames.map((_: unknown, i: number) => Object.fromEntries(requiredSockets('abyssal-kraken')

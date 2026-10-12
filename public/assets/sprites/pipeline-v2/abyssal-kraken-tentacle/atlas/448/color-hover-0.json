@@ -4,16 +4,16 @@
       "frame": {
         "x": 2,
         "y": 2,
-        "w": 68,
-        "h": 293
+        "w": 80,
+        "h": 124
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 185,
-        "y": 136,
-        "w": 68,
-        "h": 293
+        "x": 173,
+        "y": 305,
+        "w": 80,
+        "h": 124
       },
       "sourceSize": {
         "w": 448,
@@ -34,18 +34,18 @@
     },
     "hover/0001": {
       "frame": {
-        "x": 74,
+        "x": 86,
         "y": 2,
-        "w": 70,
-        "h": 293
+        "w": 83,
+        "h": 123
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 183,
-        "y": 136,
-        "w": 70,
-        "h": 293
+        "x": 170,
+        "y": 306,
+        "w": 83,
+        "h": 123
       },
       "sourceSize": {
         "w": 448,
@@ -66,18 +66,18 @@
     },
     "hover/0002": {
       "frame": {
-        "x": 148,
+        "x": 173,
         "y": 2,
-        "w": 72,
-        "h": 292
+        "w": 88,
+        "h": 121
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 181,
-        "y": 137,
-        "w": 72,
-        "h": 292
+        "x": 165,
+        "y": 308,
+        "w": 88,
+        "h": 121
       },
       "sourceSize": {
         "w": 448,
@@ -98,18 +98,18 @@
     },
     "hover/0003": {
       "frame": {
-        "x": 224,
+        "x": 265,
         "y": 2,
-        "w": 78,
-        "h": 290
+        "w": 103,
+        "h": 117
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 175,
-        "y": 139,
-        "w": 78,
-        "h": 290
+        "x": 150,
+        "y": 312,
+        "w": 103,
+        "h": 117
       },
       "sourceSize": {
         "w": 448,
@@ -130,18 +130,18 @@
     },
     "hover/0004": {
       "frame": {
-        "x": 306,
+        "x": 372,
         "y": 2,
-        "w": 84,
-        "h": 288
+        "w": 121,
+        "h": 112
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 169,
-        "y": 141,
-        "w": 84,
-        "h": 288
+        "x": 132,
+        "y": 317,
+        "w": 121,
+        "h": 112
       },
       "sourceSize": {
         "w": 448,
@@ -162,18 +162,18 @@
     },
     "hover/0005": {
       "frame": {
-        "x": 394,
+        "x": 497,
         "y": 2,
-        "w": 89,
-        "h": 286
+        "w": 135,
+        "h": 107
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 164,
-        "y": 143,
-        "w": 89,
-        "h": 286
+        "x": 118,
+        "y": 322,
+        "w": 135,
+        "h": 107
       },
       "sourceSize": {
         "w": 448,
@@ -194,18 +194,18 @@
     },
     "hover/0006": {
       "frame": {
-        "x": 487,
+        "x": 636,
         "y": 2,
-        "w": 92,
-        "h": 284
+        "w": 143,
+        "h": 102
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 161,
-        "y": 145,
-        "w": 92,
-        "h": 284
+        "x": 110,
+        "y": 327,
+        "w": 143,
+        "h": 102
       },
       "sourceSize": {
         "w": 448,
@@ -226,18 +226,18 @@
     },
     "hover/0007": {
       "frame": {
-        "x": 583,
+        "x": 783,
         "y": 2,
-        "w": 94,
-        "h": 283
+        "w": 143,
+        "h": 99
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 159,
-        "y": 146,
-        "w": 94,
-        "h": 283
+        "x": 110,
+        "y": 330,
+        "w": 143,
+        "h": 99
       },
       "sourceSize": {
         "w": 448,
@@ -258,18 +258,18 @@
     },
     "hover/0008": {
       "frame": {
-        "x": 681,
+        "x": 930,
         "y": 2,
-        "w": 92,
-        "h": 283
+        "w": 136,
+        "h": 99
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 161,
-        "y": 146,
-        "w": 92,
-        "h": 283
+        "x": 117,
+        "y": 330,
+        "w": 136,
+        "h": 99
       },
       "sourceSize": {
         "w": 448,
@@ -290,18 +290,18 @@
     },
     "hover/0009": {
       "frame": {
-        "x": 777,
+        "x": 1070,
         "y": 2,
-        "w": 89,
-        "h": 283
+        "w": 123,
+        "h": 100
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 164,
-        "y": 146,
-        "w": 89,
-        "h": 283
+        "x": 130,
+        "y": 329,
+        "w": 123,
+        "h": 100
       },
       "sourceSize": {
         "w": 448,
@@ -322,18 +322,18 @@
     },
     "hover/0010": {
       "frame": {
-        "x": 870,
+        "x": 1197,
         "y": 2,
-        "w": 84,
-        "h": 284
+        "w": 108,
+        "h": 104
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 169,
-        "y": 145,
-        "w": 84,
-        "h": 284
+        "x": 145,
+        "y": 325,
+        "w": 108,
+        "h": 104
       },
       "sourceSize": {
         "w": 448,
@@ -354,18 +354,18 @@
     },
     "hover/0011": {
       "frame": {
-        "x": 958,
+        "x": 1309,
         "y": 2,
-        "w": 78,
-        "h": 286
+        "w": 94,
+        "h": 109
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 175,
-        "y": 143,
-        "w": 78,
-        "h": 286
+        "x": 159,
+        "y": 320,
+        "w": 94,
+        "h": 109
       },
       "sourceSize": {
         "w": 448,
@@ -386,18 +386,18 @@
     },
     "hover/0012": {
       "frame": {
-        "x": 1040,
+        "x": 1407,
         "y": 2,
-        "w": 72,
-        "h": 288
+        "w": 84,
+        "h": 114
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 181,
-        "y": 141,
-        "w": 72,
-        "h": 288
+        "x": 169,
+        "y": 315,
+        "w": 84,
+        "h": 114
       },
       "sourceSize": {
         "w": 448,
@@ -418,18 +418,18 @@
     },
     "hover/0013": {
       "frame": {
-        "x": 1116,
+        "x": 1495,
         "y": 2,
-        "w": 67,
-        "h": 290
+        "w": 76,
+        "h": 119
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 186,
-        "y": 139,
-        "w": 67,
-        "h": 290
+        "x": 177,
+        "y": 310,
+        "w": 76,
+        "h": 119
       },
       "sourceSize": {
         "w": 448,
@@ -450,18 +450,18 @@
     },
     "hover/0014": {
       "frame": {
-        "x": 1187,
+        "x": 1575,
         "y": 2,
-        "w": 66,
-        "h": 292
+        "w": 75,
+        "h": 123
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 187,
-        "y": 137,
-        "w": 66,
-        "h": 292
+        "x": 178,
+        "y": 306,
+        "w": 75,
+        "h": 123
       },
       "sourceSize": {
         "w": 448,
@@ -482,18 +482,18 @@
     },
     "hover/0015": {
       "frame": {
-        "x": 1257,
+        "x": 1654,
         "y": 2,
-        "w": 67,
-        "h": 293
+        "w": 77,
+        "h": 124
       },
       "rotated": false,
       "trimmed": true,
       "spriteSourceSize": {
-        "x": 186,
-        "y": 136,
-        "w": 67,
-        "h": 293
+        "x": 176,
+        "y": 305,
+        "w": 77,
+        "h": 124
       },
       "sourceSize": {
         "w": 448,
@@ -519,8 +519,8 @@
     "image": "color-hover-0.png",
     "format": "RGBA8888",
     "size": {
-      "w": 1326,
-      "h": 297
+      "w": 1733,
+      "h": 128
     },
     "scale": "1"
   }
