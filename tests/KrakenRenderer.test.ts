@@ -35,7 +35,7 @@ function asset(role: keyof typeof KRAKEN_ASSET_REQUIREMENTS): KrakenPresentation
       scale: .5, waterline: 0, alpha: 'beauty-coverage', colorSpace: 'non-color', premultiplied: false },
     clips: Object.entries(required.clips).map(([name, markers]) => ({ name,
       frames: Array.from({ length: 12 }, (_, i) => 40 + i), frameRate: 12, loop: ['idle', 'move', 'hover'].includes(name),
-      markers: Object.fromEntries(markers.map((m, i) => [m, 3 + i * (name === 'egg-throw' ? 1 : 4)])),
+      markers: Object.fromEntries(markers.map((m, i) => [m, 3 + i * (name === 'egg-throw' || name === 'spine-volley' ? 1 : 4)])),
     })), atlases: { color: {}, elevation: {} }, budget: { clips: {}, totals: { color: 0, elevation: 0, total: 0 } },
   };
   for (const c of [{ name: '__rest', frames: [a.idleFrame] }, ...a.clips]) {
@@ -68,7 +68,7 @@ function part(id: string): KrakenTentacleState {
 function state(): KrakenState {
   return { boss, revision: 1, cycleId: 1, habitatId: 'pond', phase: { kind: 'submerged', startedAt: 0, stopSpawningAt: 3000 },
     phaseTwoPending: false, bodyTargetability: { revision: 1, effectiveAt: 0, mode: 'hidden' }, movement: 'water-anchored',
-    bodyAction: null, inkClouds: [], tentacles: [part('a'), part('b')], eggs: [] };
+    bodyAction: null, inkClouds: [], tentacles: [part('a'), part('b')], eggs: [], spines: [] };
 }
 function egg(): KrakenEggState {
   return { eggId: 'egg', entityGeneration: 1, bossId: boss.id, bossGeneration: 4, castId: 'cast', originId: 'encounter',
@@ -190,6 +190,23 @@ describe('host timelines and D asset projection', () => {
     expect(sampleKrakenEgg(egg(), a.egg.metadata, egg().spawnAt).frame).toBe(a.egg.metadata.clips.find(c => c.name === 'hatch')!.markers!.spawn);
     const immediate = { ...egg(), spawnAt: egg().hatchStartedAt };
     expect(sampleKrakenEgg(immediate, a.egg.metadata, immediate.spawnAt).frame).toBe(a.egg.metadata.clips.find(c => c.name === 'hatch')!.markers!.spawn);
+  });
+  it('sinks a lurking tentacle that never struck by playing its rise backwards', () => {
+    const a = asset('tentacle'), t = part('lurk');
+    Object.assign(t, { phase: 'retract', retractAt: 2000, endsAt: 2600 }); t.claw.attack = null;
+    const last = a.metadata.clips.find(c => c.name === 'rise')!.frames.length - 1;
+    expect(sampleKrakenTentacle(t, a.metadata, 2000)).toEqual({ clip: 'rise', frame: last });
+    expect(sampleKrakenTentacle(t, a.metadata, 2600)).toEqual({ clip: 'rise', frame: 0 });
+  });
+  it('lurks on its own clock and is retimed from the telegraph to reach the slam pose without a jump', () => {
+    const a = asset('tentacle'), t = part('aim'), attack = t.claw.attack!;
+    Object.assign(attack, { startedAt: 1400, strikeAt: 2500, hitAt: 2700, endsAt: 2900 }); Object.assign(t, { retractAt: 2900, endsAt: 3500 });
+    const lurking = { ...t, claw: { ...t.claw, attack: null } };
+    const hover = a.metadata.clips.find(c => c.name === 'hover')!, slam = a.metadata.clips.find(c => c.name === 'slam')!;
+    const slamStart = attack.strikeAt - slam.markers!.strike! / slam.frameRate * 1000;
+    expect(sampleKrakenTentacle(t, a.metadata, 1400)).toEqual(sampleKrakenTentacle(lurking, a.metadata, 1400));
+    expect(sampleKrakenTentacle(t, a.metadata, slamStart - 1)).toEqual({ clip: 'hover', frame: hover.frames.length - 1 });
+    expect(sampleKrakenTentacle(t, a.metadata, slamStart)).toEqual({ clip: 'slam', frame: 0 });
   });
   it('uses the full logical socket and +X orientation independently of trimming', () => {
     const a = asset('tentacle').metadata;

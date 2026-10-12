@@ -25,10 +25,12 @@ export class KrakenPresentationResidency {
   constructor(private readonly scene: Phaser.Scene, diagnostic: (message: string) => void, private readonly additionalGpuBytes: () => number) {
     this.meshes = new KrakenMeshCache(diagnostic);
     this.gpuBudget = new KrakenGpuBudget(scene);
-    const roles = { water: 'abyssal-kraken', land: 'abyssal-kraken-land', tentacle: 'abyssal-kraken-tentacle', egg: 'abyssal-kraken-egg' };
+    const roles = { water: 'abyssal-kraken', land: 'abyssal-kraken-land', tentacle: 'abyssal-kraken-tentacle', egg: 'abyssal-kraken-egg', spine: 'abyssal-kraken-spine' };
     const metadata = Object.fromEntries(Object.entries(roles).map(([role, id]) => [role,
       PIPELINE_RUNTIME_ASSETS.find(a => a.id === id && a.runtimeContract === 'boss')])) as Record<KrakenAssetRole, PipelineBossAsset | undefined>;
-    if (Object.values(metadata).some(a => !a?.materialPass)) { this.assets = null; this.residency = null; return; }
+    // The spine part is optional (older selections predate it); the four body/part roles are required.
+    if ((['water', 'land', 'tentacle', 'egg'] as const).some(role => !metadata[role]?.materialPass)) { this.assets = null; this.residency = null; return; }
+    if (!metadata.spine?.materialPass) delete metadata.spine;
     this.residency = new KrakenAssetResidency(metadata as Record<KrakenAssetRole, PipelineBossAsset>,
       createKrakenResidencyPort(scene, value => diagnostic(value.message)),
       { waterBudgetMiB: KRAKEN_BOSS_DEFAULTS.residency.waterBudgetMiB, landBudgetMiB: KRAKEN_BOSS_DEFAULTS.residency.landBudgetMiB, peakBudgetMiB: KRAKEN_BOSS_DEFAULTS.residency.waterBudgetMiB,
@@ -49,7 +51,8 @@ export class KrakenPresentationResidency {
       },
     });
     scene.game.events.on('postrender', this.measure, this);
-    this.assets = { water: adapter('water'), land: adapter('land'), tentacle: adapter('tentacle'), egg: adapter('egg') };
+    this.assets = { water: adapter('water'), land: adapter('land'), tentacle: adapter('tentacle'), egg: adapter('egg'),
+      ...(metadata.spine ? { spine: adapter('spine') } : {}) };
   }
   setPhase(phase: KrakenResidencyPhase, options: KrakenPhaseOptions = {}): void {
     // Once swimming was used, retain it through this water phase instead of reloading per approach.

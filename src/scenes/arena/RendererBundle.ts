@@ -80,6 +80,7 @@ import { WorldInteractionRenderer } from '../../effects/WorldInteractionRenderer
 import type { CameraFeedbackController } from '../../effects/camera/CameraFeedbackController';
 import type { LocalDistortionComposer } from '../../effects/distortion/LocalDistortionComposer';
 import type { GameAudioSystem }   from '../../audio/GameAudioSystem';
+import { ProjectileVisualOverrides } from '../../projectile/ProjectileVisualOverrides';
 
 /** All visual renderers grouped together. World-dependent renderers start as null. */
 export interface RendererBundle {
@@ -137,6 +138,7 @@ export interface RendererBundle {
   fireball:            FireballRenderer;
   spore:               SporeRenderer;
   grenade:             GrenadeRenderer;
+  projectileVisualOverrides: ProjectileVisualOverrides;
   muzzleFlash:         MuzzleFlashRenderer;
   tracer:              TracerRenderer;
   translocatorPuck:    TranslocatorPuckRenderer;
@@ -437,7 +439,7 @@ export function* createRendererBundleSteps(
   return {
     interactions,
     turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, plasmaBurnerCharge, healingAura, guardianSpirit, repairDrone, attackDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
-    rocket, fireball, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
+    rocket, fireball, spore, grenade, projectileVisualOverrides: new ProjectileVisualOverrides(), muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, missionProgress, carryZones, ak47StrategicTargets, objectiveRepairDrones, meteor, rockDestruction, powerUp, shadow, lighting,
     remoteControl,
     healthBars,
@@ -492,6 +494,7 @@ export function wireProjectileRenderers(
     tracer: bundle.tracer,
     muzzleFlash: bundle.muzzleFlash,
     turretAnimations: bundle.turretAnimations,
+    visualOverrides: bundle.projectileVisualOverrides,
   }, (ownerId) => owners.getOwnerVisualState(ownerId));
   bundle.energyShield.setOwnerPositionProvider((ownerId) => owners.getOwnerVisualState(ownerId));
 }

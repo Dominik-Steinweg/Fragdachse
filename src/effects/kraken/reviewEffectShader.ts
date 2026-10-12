@@ -79,72 +79,76 @@ void main() {
   } else if(uMode<1.5) {
     float radius=uShape.z, life=uTiming.x, retract=uTiming.z;
     float r=length(p), theta=atan(p.y,p.x);
-    float n=field(p*.085+uShape.w*7.0), irregular=r+(n-.5)*radius*.32;
+    float n=field(p*.06+uShape.w*7.0);
+    float irregular=r*(1.0+(n-.5)*.28);
     if(uAge<0.0) {
+      // Water swells over the rising arm: a dark bulge with a soft, broken bright edge.
       float grow=clamp(1.0+uAge/uTiming.y,0.0,1.0);
-      float bulgeR=radius*(.18+.27*grow);
-      float mound=1.0-smoothstep(bulgeR*.6,bulgeR,irregular);
-      float rim=exp(-pow((irregular-bulgeR*.84)/1.8,2.0))*.65;
-      alpha=max(mound*.65,rim)*(.25+.75*grow);
-      color=mix(vec3(.025,.105,.13),vec3(.36,.68,.7),rim);
+      float bulgeR=radius*(.2+.25*grow);
+      float mound=exp(-pow(irregular/bulgeR,2.0)*1.6);
+      float rim=exp(-pow((irregular-bulgeR)/(radius*.06),2.0))*(.4+.6*n);
+      alpha=(mound*.35+rim*.32)*grow;
+      color=mix(vec3(.02,.09,.11),vec3(.55,.74,.76),rim);
     } else {
-      float end=1.0-smoothstep(life*.55,life,t), ring=0.0;
-      for(int i=0;i<3;i++) {
-        float age=t-float(i)*.14, target=radius*(mix(.36,.8,uDetail.w)+max(0.0,age)*1.25);
-        float broken=smoothstep(.38,.65,field(vec2(theta*9.0+float(i)*7.0,r*.06)));
-        ring+=exp(-pow((irregular-target)/max(1.15,uDetail.z),2.0))*step(0.0,age)*broken*(1.0-float(i)*.2);
+      float end=1.0-smoothstep(life*.5,life,t);
+      // Two soft, continuous ripples that thin out as they spread.
+      float ripple=0.0;
+      for(int i=0;i<2;i++) {
+        float age=t-float(i)*.22;
+        if(age<0.0) continue;
+        float spread=radius*(.45+age*1.1), width=radius*(.05+age*.08);
+        ripple+=exp(-pow((irregular-spread)/width,2.0))*(1.0-smoothstep(0.0,.9,age))*(1.0-float(i)*.35);
       }
-      float swirl=theta+retract*(r/radius*6.0-t*8.0);
-      vec2 foamUV=vec2(cos(swirl),sin(swirl))*r*.09;
-      float cells=field(foamUV+vec2(t*.15,uShape.w));
-      float footprint=1.0-smoothstep(radius*.22,radius*(.58+t*.13),irregular);
-      footprint=mix(footprint,exp(-pow((irregular-radius*.78)/(radius*.16+t*4.0),2.0)),uDetail.w);
-      float foam=footprint*smoothstep(.26+t*.24,.48+t*.24,cells);
-      float lace=exp(-pow((cells-(.42+t*.1))/.035,2.0))*footprint;
-      foam=max(foam*.65,lace*.8)*exp(-t*.9)*uTiming.w;
-      float spray=0.0;
-      for(int i=0;i<96;i++) {
-        float k=float(i), seed=k+uShape.w*101.0, birth=hash(vec2(seed,8))*.09;
-        float age=max(0.0,t-birth), flight=.24+hash(vec2(seed,9))*.36;
-        float a=k*2.39996+hash(vec2(seed,3))*.7;
+      // Churned foam hugging the column, tearing apart as it ages.
+      float churn=field(vec2(cos(theta),sin(theta))*r*.07+vec2(t*.4,uShape.w*3.0));
+      float core=exp(-pow(irregular/(radius*(.42+t*.25)),2.0));
+      float foam=core*smoothstep(.40+t*.25,.62+t*.25,churn);
+      // Droplets thrown up and out in uneven clusters, slowing and fading as they fall back.
+      float spray=0.0, count=min(uDetail.x,48.0);
+      for(int i=0;i<48;i++) {
+        float k=float(i);
+        if(k>=count) break;
+        float seed=k*1.37+uShape.w*91.0;
+        float h1=hash(vec2(seed,1.0)), h2=hash(vec2(seed,2.0)), h3=hash(vec2(seed,3.0)), h4=hash(vec2(seed,4.0));
+        float age=t-h1*.12, flight=.35+h2*.45;
+        if(age<0.0 || age>flight) continue;
+        float a=h3*6.2831853+sin(h1*17.0)*.4;
         vec2 d=vec2(cos(a),sin(a));
-        float speed=uDetail.y*(.35+hash(vec2(seed,2))*.65);
-        float z=max(0.0,age*(flight-age))*150.0;
-        vec2 pos=d*(radius*mix(.17,.72,uDetail.w)+speed*age)+vec2(z*.65,0);
-        float size=.65+hash(vec2(seed,4))*1.75;
-        float streak=(2.0+hash(vec2(seed,6))*8.0)*(1.0-clamp(age/flight,0.0,1.0));
-        float drop=1.0-smoothstep(size*.4,size+.65,line(p,pos,pos-d*streak));
-        spray=max(spray,drop*step(birth,t)*(1.0-smoothstep(flight*.75,flight,age))*step(k+.5,uDetail.x));
+        float fall=age/flight;
+        float speed=uDetail.y*(.25+.75*h4)*(retract>.5 ? .6 : 1.0);
+        vec2 pos=d*(radius*(.12+.25*h2)+speed*age*(1.0-.35*fall));
+        float size=.8+h2*1.6, streak=size*(1.5+3.0*(1.0-fall));
+        float drop=1.0-smoothstep(size*.5,size+.8,line(p,pos,pos-d*streak));
+        spray=max(spray,drop*(1.0-smoothstep(.6,1.0,fall)));
       }
-      float cavity=exp(-pow(r/(radius*.3),2.0))*exp(-t*6.0)*(1.0-uDetail.w);
-      alpha=clamp(foam+ring*.24+spray*.9+cavity*.35,0.0,.95)*end;
-      color=mix(vec3(.075,.24,.29),vec3(.7,.9,.93),clamp(foam*1.4+spray+ring*.45,0.0,1.0));
+      alpha=clamp(foam*.55*uTiming.w+ripple*.18+spray*.8,0.0,.9)*end;
+      color=mix(vec3(.10,.28,.31),vec3(.78,.92,.94),clamp(foam*1.2+spray+ripple*.4,0.0,1.0));
     }
   } else if(uMode>3.5 && uMode<4.5) {
     float radius=uShape.z, r=length(p), theta=atan(p.y,p.x);
-    float n=field(p*.055), d=r+(n-.5)*radius*.2;
+    float n=field(p*.05), d=r*(1.0+(n-.5)*.22);
     float diving=uShape.w;
-    float active=diving>.5 ? 1.0-smoothstep(uTiming.x*.25,uTiming.x,t) : smoothstep(0.0,max(.05,uTiming.x),t);
-    float mound=exp(-pow(d/(radius*.65),2.0));
+    float active=diving>.5 ? 1.0-smoothstep(uTiming.x*.3,uTiming.x,t) : smoothstep(0.0,max(.05,uTiming.x),t);
+    // A dark depression where the body sinks; foam is torn into soft swirling streaks, never clean rings.
+    float hollow=exp(-pow(d/(radius*.6),2.0));
     float shadow=diving>.5 ? uTiming.y : .3;
-    float swirl=theta+r/radius*8.0+t*3.5+(n-.5)*1.5;
-    float spiral=pow(.5+.5*sin(swirl*3.0),14.0)*smoothstep(radius*.12,radius*.3,r)
-      *(1.0-smoothstep(radius*.55,radius*1.05,r))*(.25+.75*n);
-    float ring=0.0;
-    for(int i=0;i<3;i++) {
-      float age=t-float(i)*.18;
-      ring+=exp(-pow((d-radius*(.6+max(0.0,age)*.9))/2.2,2.0))*step(0.0,age)*.25;
-    }
+    float swirl=theta*2.0+r/radius*5.0-t*2.2;
+    vec2 sp=vec2(cos(swirl),sin(swirl))*(r*.05+1.0);
+    float streaks=field(sp*1.6+vec2(t*.3,0.0)+n*2.0);
+    float band=smoothstep(radius*.15,radius*.35,r)*(1.0-smoothstep(radius*.6,radius*1.0,r));
+    float foam=smoothstep(.55,.75,streaks)*band*diving;
+    float spread=radius*(.55+t*.8);
+    float ripple=exp(-pow((d-spread)/(radius*.07+t*4.0),2.0))*(1.0-smoothstep(0.0,1.2,t))*diving;
     float bubbles=0.0;
-    for(int i=0;i<24;i++) {
-      float k=float(i), a=k*2.39996, cycle=fract(t*.9+hash(vec2(k,2)));
-      vec2 pos=vec2(cos(a),sin(a))*radius*(.2+hash(vec2(k,8))*.58);
-      float size=(1.0+hash(vec2(k,5))*2.7)*sin(cycle*PI);
-      bubbles=max(bubbles,exp(-pow((length(p-pos)-size)/.65,2.0))*sin(cycle*PI));
+    for(int i=0;i<10;i++) {
+      float k=float(i), a=hash(vec2(k,2.0))*6.2831853, cycle=fract(t*.8+hash(vec2(k,7.0)));
+      vec2 pos=vec2(cos(a),sin(a))*radius*(.08+hash(vec2(k,8.0))*.3);
+      float size=(1.2+hash(vec2(k,5.0))*2.0)*sin(cycle*PI);
+      bubbles=max(bubbles,exp(-pow((length(p-pos)-size)/.8,2.0))*sin(cycle*PI));
     }
-    float foam=(spiral*diving*.7*smoothstep(.28,.6,n)+ring*diving+bubbles*.65)*active*uTiming.z;
-    alpha=clamp(mound*(shadow+active*.24)+foam,0.0,.8);
-    color=mix(vec3(.012,.07,.085),vec3(.62,.83,.85),clamp(foam/max(alpha,.001),0.0,1.0));
+    float light=(foam*.45+ripple*.2+bubbles*.5)*active*uTiming.z;
+    alpha=clamp(hollow*(shadow+active*.2)+light,0.0,.75);
+    color=mix(vec3(.012,.07,.085),vec3(.6,.8,.82),clamp(light/max(alpha,.001),0.0,1.0));
   } else if(uMode>4.5 && uMode<5.5) {
     float radius=uShape.z, r=length(p), theta=atan(p.y,p.x);
     if(uAge<0.0) {
@@ -234,40 +238,34 @@ void main() {
     float localAge=t-along*uTiming.y;
     float lane=smoothstep(-5.0,8.0,p.x)*(1.0-smoothstep(lengthPx-8.0,lengthPx+9.0,p.x));
     if(uMode<2.5) {
+      // Dust kicks up where the arm lands hardest (towards its tip), thinning out quickly; no smears along the lane.
       float dust=0.0, chunks=0.0, lighting=0.0;
-      for(int i=0;i<24;i++) {
-        float k=float(i), x=(floor(k/2.0)+.35)/12.0*lengthPx;
-        float side=mod(k,2.0)*2.0-1.0, age=t-x/lengthPx*uTiming.y, seed=hash(vec2(k,3));
-        vec2 center=vec2(x,curve(x)+side*(width*.22+max(0.0,age)*(22.0+seed*28.0)));
-        vec2 radii=vec2(13.0+seed*9.0,9.0+seed*7.0)+max(0.0,age)*vec2(27,34);
-        vec2 q=(p-center)/radii;
-        float n=field(p*.055+vec2(k*3.0,-age*.6));
-        float cloud=1.0-smoothstep(.25,1.2,length(q)+(n-.5)*.9);
-        float life=smoothstep(0.0,.035,age)*(1.0-smoothstep(uTiming.x*.3,uTiming.x,age));
-        dust=1.0-(1.0-dust)*(1.0-cloud*life*.66);
-        lighting=max(lighting,cloud*n);
-        float flight=.3+seed*.25;
-        vec2 rock=center+vec2(sin(k*9.0)*age*36.0,side*age*seed*55.0);
-        rock.x+=max(0.0,age*(flight-age))*100.0;
-        float size=1.3+seed*3.2;
-        float block=max(abs(p.x-rock.x),abs(p.y-rock.y)*.85)+(noise(p*.5)-.5)*1.7;
-        chunks=max(chunks,(1.0-smoothstep(size*.6,size+1.0,block))*step(0.0,age)*(1.0-smoothstep(flight*.65,flight,age)));
-      }
-      alpha=max(dust,chunks*.95);
-      color=mix(vec3(.32,.285,.24),vec3(.59,.54,.46),lighting);
-      color=mix(color,vec3(.22,.18,.13),chunks*.8);
-    } else {
-      float center=curve(p.x), zig=sin(p.x*.15)*1.4+sin(p.x*.39)*.65;
-      float crack=1.0-smoothstep(.45,1.4,abs(p.y-center-zig));
       for(int i=0;i<14;i++) {
-        float k=float(i), x=(k+.5)/14.0*lengthPx, side=mod(k,2.0)*2.0-1.0;
-        vec2 a=vec2(x,curve(x)), b=a+vec2(8.0+hash(vec2(k,4))*9.0,side*width*.32);
-        vec2 c=b+vec2(-4.0,side*width*.15);
-        crack=max(crack,(1.0-smoothstep(.35,1.15,min(line(p,a,b),line(p,b,c))))*.8);
+        float k=float(i), seed=hash(vec2(k,3.0));
+        float x=(.45+.55*hash(vec2(k,11.0)))*lengthPx, side=mod(k,2.0)*2.0-1.0;
+        float age=t-x/lengthPx*uTiming.y;
+        vec2 center=vec2(x,curve(x)+side*(width*.15+max(0.0,age)*(16.0+seed*22.0)));
+        vec2 radii=vec2(10.0+seed*8.0,8.0+seed*6.0)+max(0.0,age)*vec2(22,26);
+        float nn=field(p*.06+vec2(k*3.0,-age*.6));
+        float cloud=1.0-smoothstep(.3,1.15,length((p-center)/radii)+(nn-.5)*.8);
+        float life=smoothstep(0.0,.04,age)*(1.0-smoothstep(uTiming.x*.25,uTiming.x*.75,age));
+        dust=1.0-(1.0-dust)*(1.0-cloud*life*.45);
+        lighting=max(lighting,cloud*nn);
+        float flight=.25+seed*.2;
+        vec2 rock=center+vec2(sin(k*9.0)*age*30.0,side*age*seed*45.0);
+        float size=1.0+seed*2.2;
+        float block=max(abs(p.x-rock.x),abs(p.y-rock.y)*.85)+(noise(p*.5)-.5)*1.5;
+        chunks=max(chunks,(1.0-smoothstep(size*.6,size+1.0,block))*step(0.0,age)*(1.0-smoothstep(flight*.6,flight,age)));
       }
-      float imprint=exp(-pow((p.y-center)/(width*(.38-.25*along)),2.0))*(.54+field(p*.09)*.26);
-      alpha=max(crack*.9,imprint)*lane*step(0.0,localAge)*(1.0-smoothstep(uTiming.x*.5,uTiming.x,t));
-      color=vec3(.045,.03,.022);
+      alpha=max(dust,chunks*.8);
+      color=mix(vec3(.36,.33,.26),vec3(.58,.55,.46),lighting);
+      color=mix(color,vec3(.24,.2,.15),chunks*.7);
+    } else {
+      // A soft, short-lived imprint of the arm; no crack lines left on the grass.
+      float center=curve(p.x);
+      float imprint=exp(-pow((p.y-center)/(width*(.32-.18*along)),2.0))*(.6+field(p*.08)*.4);
+      alpha=imprint*.22*lane*step(0.0,localAge)*(1.0-smoothstep(uTiming.x*.25,uTiming.x*.6,t));
+      color=vec3(.06,.05,.035);
     }
   }
   alpha*=uOpacity;

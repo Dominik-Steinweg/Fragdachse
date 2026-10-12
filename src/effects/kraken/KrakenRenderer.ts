@@ -2,7 +2,7 @@ import { sampleKrakenClip, type KrakenClipSample } from './KrakenClipTimeline';
 export { sampleKrakenClip, type KrakenClipSample } from './KrakenClipTimeline';
 import * as Phaser from 'phaser';
 import { DEPTH } from '../../config';
-import type { PipelineBossAsset, PipelineClip } from '../../config/pipelineAssetContracts';
+import type { PipelineBossAsset, PipelineClip, PipelineSocketPoint } from '../../config/pipelineAssetContracts';
 import type { CombatPartHitReceipt, CombatPartIdentity } from '../../combat/CombatPartContact';
 import { combatTargetInstanceKey } from '../../combat/CombatScope';
 import type { CombatAreaPose } from '../../combat/CombatAreaAttack';
@@ -41,6 +41,8 @@ export interface KrakenPresentationAsset {
 export interface KrakenPresentationAssets {
   readonly water: KrakenPresentationAsset; readonly land: KrakenPresentationAsset;
   readonly tentacle: KrakenPresentationAsset; readonly egg: KrakenPresentationAsset;
+  /** Detachable dorsal spike drawn at the water body's spine sockets (absent before its import). */
+  readonly spine?: KrakenPresentationAsset;
 }
 export interface KrakenBodyPose extends KrakenPose {
   readonly hpRatio?: number;
@@ -63,7 +65,11 @@ export interface KrakenRendererOptions {
 }
 
 export const krakenClamp = (n: number): number => Math.max(0, Math.min(1, n));
-
+/** 0..1 with a small overshoot near the end: a regrowing spike pops into place. */
+export function krakenOvershoot(t: number): number {
+  const k = 1.7;
+  return 1 + (k + 1) * Math.pow(t - 1, 3) + k * Math.pow(t - 1, 2);
+}
 
 export function krakenClip(asset: PipelineBossAsset, name: string): PipelineClip {
   const clip = asset.clips.find(c => c.name === name);
@@ -126,6 +132,10 @@ export function sampleKrakenBody(state: KrakenState, pose: KrakenBodyPose, asset
   } else if (state.bodyAction?.kind === 'eggs') {
     const action = state.bodyAction;
     sample = timed(a, 'egg-throw', now, action.startedAt, action.endsAt, [[action.releaseAt, krakenClip(a, 'egg-throw').markers?.['release-1'] !== undefined ? 'release-1' : 'release']]);
+  } else if (state.bodyAction?.kind === 'spines' && !land) {
+    const action = state.bodyAction;
+    sample = timed(a, 'spine-volley', now, action.startedAt, action.endsAt,
+      [[action.raiseAt, 'raise'], ...action.releaseAt.map((at, i) => [at, `release-${i + 1}`] as const)]);
   } else if (state.bodyAction?.kind === 'slam' && pose.claw?.attack?.attackId === state.bodyAction.attackId) {
     const action = pose.claw.attack;
     sample = timed(a, 'slam', now, action.startedAt, action.endsAt, [[action.strikeAt, 'strike'], [action.hitAt, 'impact']]);
@@ -133,19 +143,28 @@ export function sampleKrakenBody(state: KrakenState, pose: KrakenBodyPose, asset
   return { asset, sample, pose: p.kind === 'dying' ? p.terminalPose : pose, visible: krakenBodyVisible(state, now) };
 }
 export function sampleKrakenTentacle(t: KrakenTentacleState, asset: PipelineBossAsset, now: number): KrakenClipSample {
-  if (t.phase === 'retract' || now >= t.retractAt) return timed(asset, 'retract', now, t.retractAt, t.endsAt);
-  if (now < t.hoverAt) return timed(asset, 'rise', now, t.startedAt, t.hoverAt);
   const attack = t.claw.attack;
+  if (t.phase === 'retract' || now >= t.retractAt) {
+    // A lurk that found no target sinks back the way it came instead of peeling off a lane it never struck.
+    if (!attack) {
+      const rise = krakenClip(asset, 'rise'), last = rise.frames.length - 1;
+      return { clip: 'rise', frame: Math.round(last * (1 - krakenClamp((now - t.retractAt) / Math.max(1, t.endsAt - t.retractAt)))) };
+    }
+    return timed(asset, 'retract', now, t.retractAt, t.endsAt);
+  }
+  if (now < t.hoverAt) return timed(asset, 'rise', now, t.startedAt, t.hoverAt);
+  const hover = krakenClip(asset, 'hover'), period = hover.frames.length / hover.frameRate * 1000;
   if (attack) {
     const slam = krakenClip(asset, 'slam');
     const start = Math.max(t.hoverAt, attack.strikeAt - marker(slam, 'strike') / slam.frameRate * 1000);
     if (now >= start) return timed(asset, 'slam', now, start, attack.endsAt,
       [[attack.strikeAt, 'strike'], [attack.hitAt, 'impact']]);
-    // Rise ends and slam starts on hover frame 0: play a whole number of retimed hover loops in between,
-    // or hold the raised pose when the window is shorter than half a loop.
-    const hover = krakenClip(asset, 'hover'), period = hover.frames.length / hover.frameRate * 1000;
-    const span = start - t.hoverAt, cycles = Math.round(span / period);
-    return loop(asset, 'hover', cycles ? (now - t.hoverAt) * cycles * period / span : 0);
+    // The lurk loop keeps its own clock until the telegraph appears; from then on it is retimed to arrive
+    // exactly on hover frame 0 (the slam's first pose) when the slam begins, without jumping.
+    const from = Math.max(t.hoverAt, Math.min(attack.startedAt, start)), lurked = from - t.hoverAt, span = start - from;
+    if (now < from) return loop(asset, 'hover', now - t.hoverAt);
+    const arrive = Math.max(Math.ceil(lurked / period), Math.round((lurked + span) / period)) * period;
+    return loop(asset, 'hover', span > 0 ? lurked + (now - from) * (arrive - lurked) / span : arrive);
   }
   return loop(asset, 'hover', now - t.hoverAt);
 }
@@ -179,6 +198,15 @@ export class KrakenSpriteView {
   private environment: ReturnType<ShadowSystem['borrowFigureEnvironment']> = null;
   private missing = new Set<string>();
   private destroyed = false;
+  private framedSockets: Readonly<Record<string, PipelineSocketPoint>> | null = null;
+  /** World position and model height (BU) of a socket in the frame currently on screen. */
+  socketWorld(name: string): { x: number; y: number; z: number } | null {
+    const point = this.sprite.visible ? this.framedSockets?.[name] : undefined;
+    if (!point) return null;
+    const s = this.sprite, dx = (point.x - s.originX) * s.displayWidth, dy = (point.y - s.originY) * s.displayHeight;
+    const c = Math.cos(s.rotation), sn = Math.sin(s.rotation);
+    return { x: s.x + dx * c - dy * sn, y: s.y + dx * sn + dy * c, z: point.z };
+  }
   get gpuBytes(): number { return (this.shadow?.gpuBytes ?? 0) + (this.submersion ? 128 * 128 * 4 : 0); }
   constructor(private readonly scene: Phaser.Scene, readonly asset: KrakenPresentationAsset,
     private readonly waterAt: (x: number, y: number) => number,
@@ -240,10 +268,12 @@ export class KrakenSpriteView {
     if (frame.mesh && a.materialPass) this.shadow?.update(s, frame.mesh, a.sourceSize, a.materialPass.worldPxPerBU, level,
       a.id.endsWith('-egg') ? 'egg' : a.id.endsWith('-tentacle') ? 'tentacle' : a.id.endsWith('-land') ? 'land' : 'water');
     else this.shadow?.hide();
+    const clipFrames = a.clips.find(c => c.name === sample.clip)?.frames;
+    this.framedSockets = lease?.pose.sockets ?? (clipFrames ? a.socketFrames?.[clipFrames[sample.frame] ?? -1] : undefined) ?? null;
     this.lease?.release(); this.lease = lease;
     return true;
   }
-  hide(): void { this.sprite.setVisible(false); this.shadow?.hide(); this.lease?.release(); this.lease = null; }
+  hide(): void { this.sprite.setVisible(false); this.shadow?.hide(); this.lease?.release(); this.lease = null; this.framedSockets = null; }
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
@@ -444,6 +474,7 @@ export class KrakenRenderer {
   private readonly parts = new Map<string, PartView>();
   private readonly fallbackSlots = new Map<string, EnemyAreaClawEvent>();
   private readonly eggs = new Map<string, KrakenSpriteView>();
+  private readonly spineViews: KrakenSpriteView[] = [];
   private readonly impacts = new Map<string, EnemyAreaClawAttack>();
   private readonly contacts = new Map<string, { until: number; key: string }>();
   private readonly contactSeen = new Set<string>();
@@ -542,7 +573,8 @@ export class KrakenRenderer {
           ? 1 - krakenClamp((now - phase.startedAt) / (phase.endsAt - phase.startedAt)) : 1,
       });
       else this.body.hide();
-    } else this.body?.hide();
+      this.syncSpines(state, render.asset === this.options.assets.water && render.visible, now);
+    } else { this.body?.hide(); this.syncSpines(state, false, now); }
     this.trails = this.trails.filter(t => now - t.at < 4000);
     for (const trail of this.trails) this.effects.wetTrail(trail.pose, trail.at, now);
     if (this.waterMotion) {
@@ -636,6 +668,8 @@ export class KrakenRenderer {
     this.body?.destroy(); this.body = null;
     for (const part of this.parts.values()) part.view.destroy();
     for (const egg of this.eggs.values()) egg.destroy();
+    for (const view of this.spineViews) view.destroy();
+    this.spineViews.length = 0;
     this.parts.clear(); this.fallbackSlots.clear(); this.eggs.clear(); this.contacts.clear(); this.contactSeen.clear(); this.impacts.clear();
     this.claw.clear(); this.effects.clear(); this.waterMotion = null; this.bossKey = ''; this.revision = -1;
   }
@@ -650,7 +684,35 @@ export class KrakenRenderer {
   }
   get gpuBytes(): number { return (this.body?.gpuBytes ?? 0) + this.effects.gpuBytes
     + [...this.parts.values()].reduce((sum, p) => sum + p.view.gpuBytes, 0)
-    + [...this.eggs.values()].reduce((sum, v) => sum + v.gpuBytes, 0); }
+    + [...this.eggs.values()].reduce((sum, v) => sum + v.gpuBytes, 0)
+    + this.spineViews.reduce((sum, v) => sum + v.gpuBytes, 0); }
+  /** The water body's six front dorsal spikes are runtime parts: hidden from their release until they regrow
+   * (scale-in with a slight overshoot), raised a little while a volley winds up, and submerged with the body. */
+  private syncSpines(state: KrakenState, bodyShown: boolean, now: number): void {
+    const asset = this.options.assets?.spine, body = this.body;
+    if (!asset || !body || !bodyShown) { for (const view of this.spineViews) view.hide(); return; }
+    const a = asset.metadata, base = a.sockets.base, tip = a.sockets.tip, size = a.targetSize * (a.displayScale ?? 1);
+    if (!base || !tip) return;
+    const authored = Math.hypot((tip[0] - base[0]) * size, (tip[1] - base[1]) * size);
+    const bodyLevel = body.asset.metadata.elevation.previewWaterLevel ?? 0;
+    const volley = state.bodyAction?.kind === 'spines' ? state.bodyAction : null;
+    const bristle = volley ? krakenClamp((now - volley.startedAt) / Math.max(1, volley.raiseAt - volley.startedAt)) : 0;
+    for (let i = 0; i < 6; i++) {
+      const view = this.spineViews[i] ??= new KrakenSpriteView(this.scene, asset, this.options.waterAt, this.options.diagnostic,
+        false, DEPTH.PLAYERS + .01, KRAKEN_WORLD_EXPOSURE, this.options.shadows);
+      const from = body.socketWorld(`spine${i + 1}`), to = body.socketWorld(`spine${i + 1}Tip`);
+      const regrow = state.spines.find(spine => spine.index === i);
+      const released = volley !== null && now >= volley.releaseAt[i]!;
+      let growth = 1;
+      if (regrow) growth = now < regrow.regrowStartsAt ? 0 : krakenOvershoot(krakenClamp((now - regrow.regrowStartsAt) / (regrow.readyAt - regrow.regrowStartsAt)));
+      else if (released) growth = 0;
+      else if (volley) growth = 1 + .12 * bristle;
+      if (!from || !to || growth <= .02) { view.hide(); continue; }
+      const length = Math.hypot(to.x - from.x, to.y - from.y);
+      view.show({ clip: 'idle', frame: 0 }, { x: from.x, y: from.y, angle: Math.atan2(to.y - from.y, to.x - from.x) + Math.PI }, now,
+        { socket: 'base', scale: authored > 0 ? length / authored * growth : growth, waterLevel: bodyLevel - from.z });
+    }
+  }
   private view(asset: KrakenPresentationAsset, tentacle = false): KrakenSpriteView {
     const exposure = asset === this.options.assets?.land ? KRAKEN_LAND_EXPOSURE : KRAKEN_WORLD_EXPOSURE;
     return new KrakenSpriteView(this.scene, asset, this.options.waterAt, this.options.diagnostic, tentacle, DEPTH.PLAYERS, exposure, this.options.shadows);
@@ -693,5 +755,37 @@ export class KrakenEggFlightView implements GrenadeEggVisual {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true; this.view.destroy(); this.effects.destroy();
+  }
+}
+
+/** A fired dorsal spine in flight: the same detachable spike art, tip leading along its velocity, with a short
+ * fading streak of its recent path. Trajectory and homing stay with the projectile runtime. */
+export class KrakenSpineFlightView implements GrenadeEggVisual {
+  private readonly view: KrakenSpriteView;
+  private readonly streak: Phaser.GameObjects.Graphics;
+  private readonly path: { x: number; y: number; at: number }[] = [];
+  private destroyed = false;
+  constructor(scene: Phaser.Scene, asset: KrakenPresentationAsset, diagnostic: (message: string) => void,
+    private readonly clock: () => number) {
+    this.view = new KrakenSpriteView(scene, asset, () => 0, diagnostic, false, DEPTH.PROJECTILES, KRAKEN_WORLD_EXPOSURE);
+    this.streak = scene.add.graphics().setDepth(DEPTH.PROJECTILES - .01);
+    registerGraphicsObject(scene, 'bossIntro', this.streak);
+  }
+  update(x: number, y: number, _size: number, vx: number, vy: number): void {
+    if (this.destroyed) return;
+    const now = this.clock();
+    this.path.push({ x, y, at: now });
+    while (this.path.length && now - this.path[0]!.at > 140) this.path.shift();
+    // The spike's tip points away from its base; lead with the tip.
+    this.view.show({ clip: 'idle', frame: 0 }, { x, y, angle: Math.atan2(vy, vx) + Math.PI }, now, { waterLevel: -1000 });
+    this.streak.clear();
+    for (let i = 1; i < this.path.length; i++) {
+      const a = this.path[i - 1]!, b = this.path[i]!, fade = i / this.path.length;
+      this.streak.lineStyle(1 + 2.5 * fade, 0xb9a6c9, .28 * fade).lineBetween(a.x, a.y, b.x, b.y);
+    }
+  }
+  destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true; this.view.destroy(); this.streak.destroy();
   }
 }

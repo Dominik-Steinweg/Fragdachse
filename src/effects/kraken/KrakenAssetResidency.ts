@@ -40,7 +40,7 @@ interface PageState {
   key: string; page: PipelineAtlasPage; controller: AbortController;
   refs: number; pinned: boolean; registered: boolean; prepared?: KrakenPreparedPage; loading?: Promise<boolean>;
 }
-const roles: readonly KrakenAssetRole[] = ['water', 'land', 'tentacle', 'egg'];
+const roles: readonly KrakenAssetRole[] = ['water', 'land', 'tentacle', 'egg', 'spine'];
 let scopeSerial = 0;
 
 /** Local Activity presentation lifetime. No host/readiness/network dependency. */
@@ -55,9 +55,11 @@ export class KrakenAssetResidency {
   private desired = new Set<string>();
   private diagnostics: KrakenResidencyDiagnostic[] = [];
 
-  constructor(private readonly assets: Readonly<Record<KrakenAssetRole, PipelineBossAsset>>,
+  /** Optional roles (the spine part) and clips missing from an older selected export are simply not planned. */
+  constructor(private readonly assets: Readonly<Partial<Record<KrakenAssetRole, PipelineBossAsset>>
+    & Record<Exclude<KrakenAssetRole, 'spine'>, PipelineBossAsset>>,
     private readonly port: KrakenResidencyPort, private readonly options: KrakenResidencyOptions) {
-    normalizePipelineAssets(roles.map(role => assets[role]));
+    normalizePipelineAssets(roles.flatMap(role => assets[role] ? [assets[role]!] : []));
     if ([options.waterBudgetMiB, options.landBudgetMiB, options.peakBudgetMiB].some(n => !Number.isFinite(n) || n <= 0)) {
       throw new Error('Kraken residency requires finite positive GPU budgets');
     }
@@ -71,8 +73,9 @@ export class KrakenAssetResidency {
   private key(asset: PipelineBossAsset, clip: string, pass: 'color' | 'elevation' | 'emission', index: number): string {
     return `${asset.textureKey}:scope${this.scope}:${clip}:${pass}:${index}`;
   }
+  private planned(role: KrakenAssetRole, clip: string): boolean { return !!this.assets[role]?.atlases.color[clip]; }
   private descriptors(role: KrakenAssetRole, clip: string): { key: string; page: PipelineAtlasPage }[] {
-    const asset = this.assets[role];
+    const asset = this.assets[role]!;
     return (asset.materialPass ? ['color', 'elevation', 'emission'] as const : ['color', 'elevation'] as const).flatMap(pass => {
       const atlas = asset.atlases[pass]?.[clip];
       if (!atlas) throw new Error(`Missing ${asset.id}/${clip}/${pass}`);
@@ -80,7 +83,7 @@ export class KrakenAssetResidency {
     });
   }
   private report(role: KrakenAssetRole, clip: string, error: unknown): void {
-    const diagnostic = { phase: this.phase, assetId: this.assets[role].id, clip,
+    const diagnostic = { phase: this.phase, assetId: this.assets[role]?.id ?? role, clip,
       message: error instanceof Error ? error.message : String(error) };
     this.diagnostics.push(diagnostic);
     this.port.diagnose(diagnostic);
@@ -162,7 +165,9 @@ export class KrakenAssetResidency {
     { ready: Promise<boolean>; settled: Promise<void> } {
     if (this.detached) return { ready: Promise.resolve(false), settled: Promise.resolve() };
     this.phase = phase;
-    const { required, clips } = krakenResidencyPlan(phase, options);
+    const plan = krakenResidencyPlan(phase, options);
+    const required = plan.required.filter(([role, clip]) => this.planned(role, clip));
+    const clips = plan.clips.filter(([role, clip]) => this.planned(role, clip));
     this.desired = new Set([...required, ...clips].flatMap(([role, clip]) => this.descriptors(role, clip).map(p => p.key)));
     // Unleased global animations may reference any page. Remove them before a phase evicts pages.
     if ([...this.pages.values()].some(p => p.pinned && !this.desired.has(p.key))) {
@@ -192,8 +197,8 @@ export class KrakenAssetResidency {
 
   /** A lease pins exactly the matching color/elevation pages, even across a phase change. */
   acquirePose(role: KrakenAssetRole, clip: string, index: number, cleanup: () => void): KrakenPoseLease | null {
-    if (this.detached) return null;
     const asset = this.assets[role];
+    if (this.detached || !asset) return null;
     const select = (name: string, frameIndex: number) => {
       const frame = `${name}/${String(frameIndex).padStart(4, '0')}`;
       const states = (asset.materialPass ? ['color', 'elevation', 'emission'] as const : ['color', 'elevation'] as const).map(pass => {

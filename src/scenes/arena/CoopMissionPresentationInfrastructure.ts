@@ -3,7 +3,7 @@ import type { ArenaLayout } from '../../types';
 import type { WorldMetrics } from '../../world/WorldMetrics';
 import { KrakenPresentationResidency } from '../../effects/kraken/KrakenPresentationResidency';
 import type { CameraFeedbackController } from '../../effects/camera/CameraFeedbackController';
-import { KrakenRenderer, type KrakenPresentationAssets } from '../../effects/kraken/KrakenRenderer';
+import { KrakenEggFlightView, KrakenRenderer, KrakenSpineFlightView, type KrakenPresentationAssets } from '../../effects/kraken/KrakenRenderer';
 import { KrakenIntroRenderer } from '../../effects/kraken/KrakenIntroRenderer';
 import { KRAKEN_RISE_INTRO } from '../../config/bossIntros';
 import { KRAKEN_BOSS_DEFAULTS } from '../../config/krakenBoss';
@@ -57,6 +57,7 @@ export class CoopMissionPresentationInfrastructure {
   private announcedBossIntroKey: string | null = null;
   private destroyed = false;
   private kraken: KrakenRenderer | null = null;
+  private releaseKrakenProjectiles: (() => void) | null = null;
   private krakenResidency: KrakenPresentationResidency | null = null;
   private krakenIntro: KrakenIntroRenderer | null = null;
 
@@ -107,6 +108,17 @@ export class CoopMissionPresentationInfrastructure {
         const e = target?.instance.entityGeneration === egg.entityGeneration ? manager?.getEnemy(egg.eggId) : null;
         return e ? { x: e.sprite.x, y: e.sprite.y, angle: e.getAimAngle() } : null;
       },
+    });
+    // Eggs and spines in flight use the kraken's own art instead of the generic grenade/bullet renderers.
+    const clock = () => performance.now();
+    this.releaseKrakenProjectiles = input.renderers.projectileVisualOverrides.register(projectile => {
+      if (!assets) return null;
+      if (projectile.weaponSourceId === 'kraken-eggs') {
+        const releasedAt = clock();
+        return new KrakenEggFlightView(this.scene, assets.egg, diagnostic, { releasedAt, landsAt: releasedAt + KRAKEN_BOSS_DEFAULTS.eggs.flightMs }, clock);
+      }
+      if (projectile.weaponSourceId === 'kraken_spine' && assets.spine) return new KrakenSpineFlightView(this.scene, assets.spine, diagnostic, clock);
+      return null;
     });
     this.krakenIntro = new KrakenIntroRenderer(this.scene, assets?.water ?? null, waterAt, diagnostic, 0, input.renderers.shadow);
     this.krakenIntro.setCameraFeedback(input.cameraFeedback ?? null);
@@ -321,6 +333,7 @@ export class CoopMissionPresentationInfrastructure {
   private destroyWorldSpace(input: CoopMissionPresentationInfrastructureInput): void {
     if (this.worldSpaceDestroyed) return;
     this.worldSpaceDestroyed = true;
+    this.releaseKrakenProjectiles?.(); this.releaseKrakenProjectiles = null;
     this.kraken?.destroy(); this.kraken = null; this.krakenIntro?.destroy(); this.krakenIntro = null;
     this.krakenResidency?.destroy(); this.krakenResidency = null;
     input.renderers.beer.syncCoopDefenseCarry([]);
