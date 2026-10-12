@@ -66,9 +66,10 @@ export interface KrakenRendererOptions {
 
 export const krakenClamp = (n: number): number => Math.max(0, Math.min(1, n));
 /** 0..1 with a small overshoot near the end: a regrowing spike pops into place. */
-export function krakenOvershoot(t: number): number {
-  const k = 1.7;
-  return 1 + (k + 1) * Math.pow(t - 1, 3) + k * Math.pow(t - 1, 2);
+/** Regrowing spine scale: a slow, even push out of the back (half size at half time), then a short pop. */
+export function krakenRegrowth(t: number): number {
+  const u = krakenClamp(t);
+  return u * u * (3 - 2 * u) + .12 * Math.sin(Math.PI * krakenClamp((u - .82) / .18));
 }
 
 export function krakenClip(asset: PipelineBossAsset, name: string): PipelineClip {
@@ -211,10 +212,11 @@ export class KrakenSpriteView {
   constructor(private readonly scene: Phaser.Scene, readonly asset: KrakenPresentationAsset,
     private readonly waterAt: (x: number, y: number) => number,
     private readonly diagnostic: (message: string) => void, tentacle = false, depth: number = DEPTH.PLAYERS,
-    private readonly exposure = KRAKEN_WORLD_EXPOSURE, private readonly shadows?: ShadowSystem) {
+    private readonly exposure = KRAKEN_WORLD_EXPOSURE, private readonly shadows?: ShadowSystem, castShadow = true) {
     this.sprite = scene.add.sprite(0, 0, '__WHITE').setVisible(false).setDepth(depth);
     registerGraphicsObject(scene, 'bossIntro', this.sprite);
-    if (shadows) this.shadow = new KrakenShadowRenderer(scene, shadows);
+    // The shadow system also supplies sun/cloud lighting; projectiles draw their own ground marker instead.
+    if (shadows && castShadow) this.shadow = new KrakenShadowRenderer(scene, shadows);
   }
   show(sample: KrakenClipSample, pose: KrakenPose, now: number, options: {
     socket?: string; scale?: number; alpha?: number; shadowContact?: number; drain?: number; waterLevel?: number; requireClip?: boolean;
@@ -266,7 +268,8 @@ export class KrakenSpriteView {
       this.drain.amount = options.drain ?? 0; this.drain.active = this.drain.amount > 0;
     }
     if (frame.mesh && a.materialPass) this.shadow?.update(s, frame.mesh, a.sourceSize, a.materialPass.worldPxPerBU, level,
-      a.id.endsWith('-egg') ? 'egg' : a.id.endsWith('-tentacle') ? 'tentacle' : a.id.endsWith('-land') ? 'land' : 'water');
+      a.id.endsWith('-egg') ? 'egg' : a.id.endsWith('-tentacle') ? 'tentacle' : a.id.endsWith('-land') ? 'land'
+        : a.id.endsWith('-spine') ? 'spine' : 'water');
     else this.shadow?.hide();
     const clipFrames = a.clips.find(c => c.name === sample.clip)?.frames;
     this.framedSockets = lease?.pose.sockets ?? (clipFrames ? a.socketFrames?.[clipFrames[sample.frame] ?? -1] : undefined) ?? null;
@@ -703,14 +706,17 @@ export class KrakenRenderer {
       const from = body.socketWorld(`spine${i + 1}`), to = body.socketWorld(`spine${i + 1}Tip`);
       const regrow = state.spines.find(spine => spine.index === i);
       const released = volley !== null && now >= volley.releaseAt[i]!;
-      let growth = 1;
-      if (regrow) growth = now < regrow.regrowStartsAt ? 0 : krakenOvershoot(krakenClamp((now - regrow.regrowStartsAt) / (regrow.readyAt - regrow.regrowStartsAt)));
-      else if (released) growth = 0;
+      let growth = 1, alpha = 1;
+      if (regrow) {
+        const t = krakenClamp((now - regrow.regrowStartsAt) / Math.max(1, regrow.readyAt - regrow.regrowStartsAt));
+        growth = now < regrow.regrowStartsAt ? 0 : krakenRegrowth(t);
+        alpha = .55 + .45 * t;
+      } else if (released) growth = 0;
       else if (volley) growth = 1 + .12 * bristle;
       if (!from || !to || growth <= .02) { view.hide(); continue; }
       const length = Math.hypot(to.x - from.x, to.y - from.y);
       view.show({ clip: 'idle', frame: 0 }, { x: from.x, y: from.y, angle: Math.atan2(to.y - from.y, to.x - from.x) + Math.PI }, now,
-        { socket: 'base', scale: authored > 0 ? length / authored * growth : growth, waterLevel: bodyLevel - from.z });
+        { socket: 'base', scale: authored > 0 ? length / authored * growth : growth, alpha, waterLevel: bodyLevel - from.z });
     }
   }
   private view(asset: KrakenPresentationAsset, tentacle = false): KrakenSpriteView {
@@ -735,8 +741,9 @@ export class KrakenEggFlightView implements GrenadeEggVisual {
   private destroyed = false;
   constructor(scene: Phaser.Scene, asset: KrakenPresentationAsset, diagnostic: (message: string) => void,
     private readonly flight: { readonly releasedAt: number; readonly landsAt: number; readonly target?: KrakenPoint },
-    private readonly clock: () => number) {
-    this.view = new KrakenSpriteView(scene, asset, () => 0, diagnostic, false, DEPTH.PROJECTILES);
+    private readonly clock: () => number, shadows?: ShadowSystem) {
+    // Lit like the landed egg; without the material pass the albedo atlas reads as a dark blot.
+    this.view = new KrakenSpriteView(scene, asset, () => 0, diagnostic, false, DEPTH.PROJECTILES, KRAKEN_WORLD_EXPOSURE, shadows, false);
     this.effects = new KrakenEffects(scene, () => 0);
   }
   update(x: number, y: number, _size: number, vx: number, vy: number): void {
@@ -747,7 +754,7 @@ export class KrakenEggFlightView implements GrenadeEggVisual {
     const progress = krakenClamp((now - this.flight.releasedAt) / Math.max(1, this.flight.landsAt - this.flight.releasedAt));
     const height = Math.sin(progress * Math.PI);
     this.view.show(loop(this.view.asset.metadata, 'idle', now - this.flight.releasedAt),
-      { x, y, angle: Math.atan2(vy, vx) }, now, { scale: 1 + height * LOOK.egg.arcScale });
+      { x, y, angle: Math.atan2(vy, vx) }, now, { scale: 1 + height * LOOK.egg.arcScale, waterLevel: -1000 });
     this.effects.egg({ x, y }, height, -1, -1);
     // A slime-coloured brood marker, not a red damage lane. Target is an optional host projection.
     if (this.flight.target) this.effects.egg(this.flight.target, 1, -1, -1, .55);
@@ -766,8 +773,8 @@ export class KrakenSpineFlightView implements GrenadeEggVisual {
   private readonly path: { x: number; y: number; at: number }[] = [];
   private destroyed = false;
   constructor(scene: Phaser.Scene, asset: KrakenPresentationAsset, diagnostic: (message: string) => void,
-    private readonly clock: () => number) {
-    this.view = new KrakenSpriteView(scene, asset, () => 0, diagnostic, false, DEPTH.PROJECTILES, KRAKEN_WORLD_EXPOSURE);
+    private readonly clock: () => number, shadows?: ShadowSystem) {
+    this.view = new KrakenSpriteView(scene, asset, () => 0, diagnostic, false, DEPTH.PROJECTILES, KRAKEN_WORLD_EXPOSURE, shadows, false);
     // A stretched soft quad over the recent path, not a vector Graphics object.
     this.streak = scene.add.image(0, 0, '__WHITE').setDepth(DEPTH.PROJECTILES - .01).setTint(0xb9a6c9).setOrigin(1, .5).setVisible(false);
     registerGraphicsObject(scene, 'bossIntro', this.streak);

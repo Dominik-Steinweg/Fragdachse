@@ -115,9 +115,10 @@ export class CoopMissionPresentationInfrastructure {
       if (!assets) return null;
       if (projectile.weaponSourceId === 'kraken-eggs') {
         const releasedAt = clock();
-        return new KrakenEggFlightView(this.scene, assets.egg, diagnostic, { releasedAt, landsAt: releasedAt + KRAKEN_BOSS_DEFAULTS.eggs.flightMs }, clock);
+        return new KrakenEggFlightView(this.scene, assets.egg, diagnostic, { releasedAt, landsAt: releasedAt + KRAKEN_BOSS_DEFAULTS.eggs.flightMs }, clock,
+          input.renderers.shadow);
       }
-      if (projectile.weaponSourceId === 'kraken_spine' && assets.spine) return new KrakenSpineFlightView(this.scene, assets.spine, diagnostic, clock);
+      if (projectile.weaponSourceId === 'kraken_spine' && assets.spine) return new KrakenSpineFlightView(this.scene, assets.spine, diagnostic, clock, input.renderers.shadow);
       return null;
     });
     this.krakenIntro = new KrakenIntroRenderer(this.scene, assets?.water ?? null, waterAt, diagnostic, 0, input.renderers.shadow);

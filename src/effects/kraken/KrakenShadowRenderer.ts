@@ -41,6 +41,11 @@ const COMPOSITE = CHARACTER_MESH_COMPOSITE
 type Environment = NonNullable<ReturnType<ShadowSystem['borrowFigureEnvironment']>>;
 
 /** Activity-owned caster; the World owns sun and receiver. No asset/page ownership. */
+export type KrakenShadowRole = 'water' | 'land' | 'tentacle' | 'egg' | 'spine';
+const MASK_SIZE: Readonly<Record<KrakenShadowRole, number>> = { water: 256, land: 256, tentacle: 128, egg: 64, spine: 64 };
+/** Streaming body poses may change topology within a fixed allocation; small static parts need no headroom. */
+const MESH_CAPACITY: Readonly<Record<KrakenShadowRole, number>> = { water: 24000, land: 24000, tentacle: 24000, egg: 0, spine: 0 };
+
 export class KrakenShadowRenderer {
   private environment: Environment | null = null;
   private raw: SunRenderTarget | null = null;
@@ -138,7 +143,7 @@ export class KrakenShadowRenderer {
     this.signature = '';
   }
   update(sprite: Phaser.GameObjects.Sprite, mesh: KrakenShadowMesh, canvas: number, worldPxPerBU: number,
-    waterLevel: number, role: 'water' | 'land' | 'tentacle' | 'egg'): void {
+    waterLevel: number, role: KrakenShadowRole): void {
     if (this.destroyed) return;
     if (!sprite.visible || !sprite.active || sprite.alpha <= 0 || !this.bind()) { this.hide(); return; }
     const path = this.environment!.clouds.sunPath;
@@ -151,7 +156,8 @@ export class KrakenShadowRenderer {
     if (this.meshContact) this.bindContact();
     this.contactHeight = worldPxPerBU * .6 * this.matrix[10];
     this.strength[0] = role === 'egg' ? 0 : meshShadowOpacity(path?.strength ?? 0, path?.elevation ?? 0);
-    this.strength[1] = role === 'tentacle' ? 0 : CHARACTER_SHADOW_CONFIG.contactOpacity;
+    // Lifted tentacles and the dorsal spines on the back never touch the ground.
+    this.strength[1] = role === 'tentacle' || role === 'spine' ? 0 : CHARACTER_SHADOW_CONFIG.contactOpacity;
     this.strength[2] = sprite.alpha;
     this.body[0] = this.matrix[12]; this.body[1] = this.matrix[13];
     const c = Math.cos(sprite.rotation), s = Math.sin(sprite.rotation);
@@ -180,14 +186,15 @@ export class KrakenShadowRenderer {
         this.releaseGpu();
         this.program = sunShaderName('KrakenProjection');
         this.gpu = new EnemyMeshGpu(this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer, this.program, VERTEX, MASK,
-          new Float32Array(Math.max(mesh.positions.length, 24000 * 3)), 3,
-          new Uint16Array(Math.max(mesh.indices.length, 24000)), [{ name: 'inZOffset', size: 1 }], 1);
+          new Float32Array(Math.max(mesh.positions.length, MESH_CAPACITY[role] * 3)), 3,
+          new Uint16Array(Math.max(mesh.indices.length, MESH_CAPACITY[role])), [{ name: 'inZOffset', size: 1 }], 1);
         this.gpu.updateGeometry(mesh.positions, mesh.indices);
       }
       this.mesh = mesh;
       this.signature = '';
     }
-    const size = role === 'tentacle' ? quality === 'high' ? 256 : 128 : quality === 'high' ? 512 : 256;
+    // Mask resolution follows the on-screen size of the part, not the body's.
+    const size = MASK_SIZE[role] * (quality === 'high' ? 2 : 1);
     const width = Math.max(16, Math.ceil(size * w / Math.max(w, h))), heightPx = Math.max(16, Math.ceil(size * h / Math.max(w, h)));
     const signature = [mesh.id, quality, this.meshContact, this.environment!.receiver.revision, ...this.matrix, ...this.sun, ...this.bounds, this.waterHeight, this.strength[0] > 0].join('|');
     if (this.lastTexture !== this.raw!.shader.glTexture?.webGLTexture) this.signature = '';
