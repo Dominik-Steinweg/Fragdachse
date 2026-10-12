@@ -10497,9 +10497,9 @@
       "gameIds": [
         "watchtower"
       ],
-      "revision": "watchtower-v1",
+      "revision": "watchtower-v2",
       "variant": "standard",
-      "sourceSize": 128,
+      "sourceSize": 144,
       "textureKey": "construction_watchtower",
       "runtimeContract": "sheet",
       "forward": "north",
@@ -10513,19 +10513,19 @@
       "idlePath": "./assets/sprites/pipeline-v2/watchtower/idle.png",
       "sheetPath": "./assets/sprites/pipeline-v2/watchtower/sheet.png",
       "layout": {
-        "frameWidth": 128,
-        "frameHeight": 128,
+        "frameWidth": 144,
+        "frameHeight": 144,
         "margin": 2,
         "spacing": 4,
         "columns": 1,
         "rows": 1,
         "frameCount": 1,
-        "width": 132,
-        "height": 132
+        "width": 148,
+        "height": 148
       },
       "hashes": {
-        "idle": "89ac2a628ef17fd6f56e7315142431bdae792d65e3b43f006a521d373a601136",
-        "sheet": "95c6223bd8b5732bb458c61d7169498dbdac22dc66a2ee66957f8420d7dd0989"
+        "idle": "067dd97fb08b3a0cd90e76ea9780214da194c22c3434a4bb6c238aa0cc61efd8",
+        "sheet": "097c512f5e728a92565c001a50cc7cd69635a0f3d68f77f39034d98884f7cbcb"
       }
     }
   ]

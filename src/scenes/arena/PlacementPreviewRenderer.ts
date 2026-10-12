@@ -1,4 +1,5 @@
 import { ensureWatchtowerTexture } from '../../effects/watchtower/WatchtowerVisual';
+import { WATCHTOWER_DISPLAY_SIZE } from '../../config/watchtower';
 import { getConstructionBounds } from '../../systems/ConstructionGeometry';
 import type Phaser from 'phaser';
 import { bridge }                from '../../network/bridge';
@@ -442,7 +443,7 @@ export class PlacementPreviewRenderer {
   private positionStructurePreview(image: Phaser.GameObjects.Image, kind: PlacementPreviewNetState['kind'], x: number, y: number): void {
     if (kind !== 'watchtower') return;
     const bounds = getConstructionBounds({ constructionId: 'watchtower', gridX: 0, gridY: 0 }, { offsetX: x - CELL_SIZE / 2, offsetY: y - CELL_SIZE / 2 });
-    image.setPosition(bounds.x, bounds.y).setDisplaySize(bounds.width, bounds.height).setRotation(0);
+    image.setPosition(bounds.x, bounds.y).setDisplaySize(WATCHTOWER_DISPLAY_SIZE, WATCHTOWER_DISPLAY_SIZE).setRotation(0);
   }
 
   private getPlacementPreviewAlpha(kind: PlacementPreviewNetState['kind']): number {

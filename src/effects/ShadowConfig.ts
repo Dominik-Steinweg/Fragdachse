@@ -122,8 +122,9 @@ export const SHADOW_CASTERS = {
     stretch: 1,
     inflatePx: 0,
     shape: 'cell',
-    footprintWidthPx: WATCHTOWER_SHADOW_FOOTPRINT.widthPx,
-    footprintHeightPx: WATCHTOWER_SHADOW_FOOTPRINT.heightPx,
+    // Cast from the deck edge, not the transparent canvas / projecting stone feet.
+    footprintWidthPx: WATCHTOWER_SHADOW_FOOTPRINT.widthPx - 2,
+    footprintHeightPx: WATCHTOWER_SHADOW_FOOTPRINT.heightPx - 2,
   },
   base: {
     enabled: true,

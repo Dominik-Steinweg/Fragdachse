@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { getPipelineAsset } from '../../config/pipelineAssets';
 import { DEPTH, ROCK_TINT_STEPS } from '../../config';
-import { WATCHTOWER_TEXTURE_KEY, WATCHTOWER_REWARD_ICON_KEY } from '../../config/watchtower';
+import { WATCHTOWER_TEXTURE_KEY, WATCHTOWER_REWARD_ICON_KEY, WATCHTOWER_DISPLAY_SIZE } from '../../config/watchtower';
 import { getConstructionBounds } from '../../systems/ConstructionGeometry';
 import type { SyncedPlaceableRock } from '../../types';
 import type { WorldMetrics } from '../../world/WorldMetrics';
@@ -41,8 +41,9 @@ export class WatchtowerVisual {
     const bounds = getConstructionBounds({ ...rock, constructionId: 'watchtower' }, metrics);
     const ratio = Math.round(Math.max(0, Math.min(1, rock.hp / Math.max(1, rock.maxHp))) * ROCK_TINT_STEPS) / ROCK_TINT_STEPS;
     const gray = Math.round(0x66 + (0xff - 0x66) * ratio);
+    // The authored canvas includes small height cues outside the collision footprint.
     this.image.setTexture(ensureWatchtowerTexture(this.scene)).setPosition(bounds.x, bounds.y)
-      .setDisplaySize(bounds.width, bounds.height).setRotation(0).setTint((gray << 16) | (gray << 8) | gray);
+      .setDisplaySize(WATCHTOWER_DISPLAY_SIZE, WATCHTOWER_DISPLAY_SIZE).setRotation(0).setTint((gray << 16) | (gray << 8) | gray);
   }
   destroy(): void { this.image.destroy(); }
 }

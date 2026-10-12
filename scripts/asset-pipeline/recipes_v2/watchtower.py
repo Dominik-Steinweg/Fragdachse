@@ -1,8 +1,8 @@
 """Open timber watchtower, concept B: a quiet floor over a real braced structure.
 
-One BU is 32 display pixels with the catalog's explicit orthoScale of 2.
-All structure fits inside the 2x2 canvas; these are art dimensions, not a
-second gameplay footprint. Camera, lighting and render defaults stay shared.
+One BU is 32 display pixels: 72 px canvas / 2.25 BU orthoScale.
+The deck fills the centred 64 px footprint; the canvas preserves small footing
+and ladder overhangs. These art dimensions do not define gameplay collision.
 """
 import bpy
 from mathutils import Vector
@@ -64,80 +64,90 @@ def build(ctx, spec):
         ob.rotation_euler = (b - a).to_track_quat('Z', 'Y').to_euler()
         return ob
 
+    # Grow the walking surface, not the post/rail cross sections or player scale.
+    spread = .14
+    support_spread = .12
+    half_floor = .75 + spread
+    post = .747 + spread
+    handrail = .753 + spread
+    lower_rail = .736 + spread
+    fascia = .775 + spread
+
     # Low stone plinths and splayed piers remain visible beyond the deck corners.
     for sx in (-1, 1):
         for sy in (-1, 1):
-            x, y = sx * .826, sy * .826
+            x, y = sx * (.826 + support_spread), sy * (.826 + support_spread)
             box('foundations', 'Chamfered stone footing', (x, y, .10), (.24, .24, .20), stone, .025)
-            beam('supports', 'Splayed main timber pier', (sx*.865, sy*.865, .20),
-                 (sx*.747, sy*.747, 1.46), .13, .13, end)
-            box('hardware', 'Pier shoe iron collar', (sx*.858, sy*.858, .30), (.15, .15, .045), iron)
+            beam('supports', 'Splayed main timber pier', (sx*(.865+support_spread), sy*(.865+support_spread), .20),
+                 (sx*post, sy*post, 1.46), .13, .13, end)
+            box('hardware', 'Pier shoe iron collar', (sx*(.858+support_spread), sy*(.858+support_spread), .30), (.15, .15, .045), iron)
             # Knee braces project beyond the platform and connect beneath joists.
-            beam('supports', 'Outward diagonal knee brace', (sx*.89, sy*.87, .40),
-                 (sx*.52, sy*.72, 1.43), .09, .09, end)
-            beam('supports', 'Transverse diagonal knee brace', (sx*.87, sy*.89, .40),
-                 (sx*.72, sy*.52, 1.43), .09, .09, end)
-            box('railings', 'Continuous corner post', (sx*.747, sy*.747, 1.65), (.153, .153, .72), rail, .014)
-            box('railings', 'Exposed wooden post crown', (sx*.747, sy*.747, 2.021), (.156, .156, .035), ladder, .012)
+            beam('supports', 'Outward diagonal knee brace', (sx*(.89+support_spread), sy*(.87+support_spread), .40),
+                 (sx*(.52+spread), sy*(.72+spread), 1.43), .09, .09, end)
+            beam('supports', 'Transverse diagonal knee brace', (sx*(.87+support_spread), sy*(.89+support_spread), .40),
+                 (sx*(.72+spread), sy*(.52+spread), 1.43), .09, .09, end)
+            box('railings', 'Continuous corner post', (sx*post, sy*post, 1.65), (.153, .153, .72), rail, .014)
+            box('railings', 'Exposed wooden post crown', (sx*post, sy*post, 2.021), (.156, .156, .035), ladder, .012)
             # Slim iron corner wraps leave most of the five-pixel wood crown exposed.
             for edge in (-1, 1):
-                box('hardware', 'Post crown iron side wrap', (sx*.747+edge*.077, sy*.747, 2.016), (.022, .174, .04), iron, .004)
-                box('hardware', 'Post crown iron end wrap', (sx*.747, sy*.747+edge*.077, 2.016), (.15, .022, .04), iron, .004)
-            box('hardware', 'Post connection band', (sx*.747, sy*.747, 1.51), (.168, .168, .043), iron)
+                box('hardware', 'Post crown iron side wrap', (sx*post+edge*.077, sy*post, 2.016), (.022, .174, .04), iron, .004)
+                box('hardware', 'Post crown iron end wrap', (sx*post, sy*post+edge*.077, 2.016), (.15, .022, .04), iron, .004)
+            box('hardware', 'Post connection band', (sx*post, sy*post, 1.51), (.168, .168, .043), iron)
 
     # Real underfloor X bracing, deliberately occluded in the strict plan view.
     for side in (-1, 1):
-        beam('supports', 'East-west undercroft cross brace', (-.80, side*.80, .28),
-             (.80, side*.80, 1.39), .075, .075, end)
-        beam('supports', 'North-south undercroft cross brace', (side*.80, -.80, .28),
-             (side*.80, .80, 1.39), .075, .075, end)
-        box('supports', 'Underfloor joist', (side*.52, 0, 1.39), (.10, 1.59, .15), end)
+        beam('supports', 'East-west undercroft cross brace', (-.80-spread, side*(.80+spread), .28),
+             (.80+spread, side*(.80+spread), 1.39), .075, .075, end)
+        beam('supports', 'North-south undercroft cross brace', (side*(.80+spread), -.80-spread, .28),
+             (side*(.80+spread), .80+spread, 1.39), .075, .075, end)
+        box('supports', 'Underfloor joist', (side*(.52+spread), 0, 1.39), (.10, 1.59+2*spread, .15), end)
         if side == 1:
-            box('deck', 'North fascia', (0, .775, 1.475), (1.63, .078, .13), end)
+            box('deck', 'North fascia', (0, fascia, 1.475), (1.63+2*spread, .078, .13), end)
         else:
             for sx in (-1, 1):
-                box('deck', 'South fascia beside ladder', (sx*.505, -.775, 1.475), (.62, .078, .13), end)
-        box('deck', 'North-south fascia', (side*.775, 0, 1.475), (.078, 1.55, .13), end)
+                box('deck', 'South fascia beside ladder', (sx*(.505+spread/2), -fascia, 1.475), (.62+spread, .078, .13), end)
+        box('deck', 'North-south fascia', (side*fascia, 0, 1.475), (.078, 1.55+2*spread, .13), end)
 
     # Six broad boards with restrained irregular values and a shallow entry notch.
     for index in range(6):
         floor = floors[index]
-        y = -.75 + (index + .5) * .25
+        pitch = half_floor / 3
+        y = -half_floor + (index + .5) * pitch
         if index == 0:
             for side in (-1, 1):
-                box('deck', 'South board beside ladder opening', (side*.48, y, 1.535),
-                    (.54, .246, .095), floor, .004)
-            box('deck', 'South board behind shallow ladder notch', (0, -.574, 1.535),
+                box('deck', 'South board beside ladder opening', (side*(.48+spread/2), y, 1.535),
+                    (.54+spread, pitch-.004, .095), floor, .004)
+            box('deck', 'South board behind shallow ladder notch', (0, -half_floor+pitch-.074, 1.535),
                 (.424, .144, .095), floor, .004)
         else:
             box('deck', 'Broad east-west ash floorboard', (0, y, 1.535),
-                (1.50, .246, .095), floor, .004)
+                (2*half_floor, pitch-.004, .095), floor, .004)
         if index > 0:
-            box('deck', 'Floorboard tongue below joint', (0, -.75+index*.25, 1.56),
-                (1.50, .018, .012), floor, .002)
+            box('deck', 'Floorboard tongue below joint', (0, -half_floor+index*pitch, 1.56),
+                (2*half_floor, .018, .012), floor, .002)
 
     # Handrails are >2 nominal pixels, with a genuinely open southern gate.
-    box('railings', 'North handrail', (0, .753, 1.90), (1.50, .082, .085), rail, .015)
+    box('railings', 'North handrail', (0, handrail, 1.90), (2*half_floor, .082, .085), rail, .015)
     # Lower safety rails sit beneath the handrails in plan view. Their real
     # ambient occlusion adds a soft inner edge on the floor, separated in Z.
-    box('railings', 'North lower guard rail', (0, .736, 1.70), (1.50, .043, .048), end)
+    box('railings', 'North lower guard rail', (0, lower_rail, 1.70), (2*half_floor, .043, .048), end)
     for side in (-1, 1):
-        box('railings', 'Side handrail', (side*.753, 0, 1.90), (.082, 1.50, .085), rail, .015)
-        box('railings', 'Side lower guard rail', (side*.736, 0, 1.70), (.043, 1.50, .048), end)
-        box('railings', 'South handrail beside entry', (side*.489, -.753, 1.90), (.52, .082, .085), rail, .015)
-        box('railings', 'South lower guard rail beside entry', (side*.489, -.736, 1.70), (.52, .043, .048), end)
-        box('railings', 'Entry upright', (side*.225, -.747, 1.71), (.075, .075, .46), rail)
+        box('railings', 'Side handrail', (side*handrail, 0, 1.90), (.082, 2*half_floor, .085), rail, .015)
+        box('railings', 'Side lower guard rail', (side*lower_rail, 0, 1.70), (.043, 2*half_floor, .048), end)
+        box('railings', 'South handrail beside entry', (side*(.489+spread/2), -handrail, 1.90), (.52+spread, .082, .085), rail, .015)
+        box('railings', 'South lower guard rail beside entry', (side*(.489+spread/2), -lower_rail, 1.70), (.52+spread, .043, .048), end)
+        box('railings', 'Entry upright', (side*.225, -post, 1.71), (.075, .075, .46), rail)
         for along in (-.38, .38):
-            box('railings', 'Side intermediate upright', (side*.753, along, 1.70), (.048, .048, .38), rail)
-            box('hardware', 'Side rail iron strap', (side*.753, along, 1.95), (.096, .052, .025), iron, .003)
-            box('hardware', 'End rail iron strap', (along, side*.753, 1.95), (.052, .096, .025), iron, .003)
+            box('railings', 'Side intermediate upright', (side*handrail, along, 1.70), (.048, .048, .38), rail)
+            box('hardware', 'Side rail iron strap', (side*handrail, along, 1.95), (.096, .052, .025), iron, .003)
+            box('hardware', 'End rail iron strap', (along, side*handrail, 1.95), (.052, .096, .025), iron, .003)
         for sy in (-1, 1):
             # An L plate connects each cap to its two perpendicular rails.
-            box('hardware', 'Corner bracket along X', (side*.681, sy*.747, 1.951), (.12, .047, .020), iron, .004)
-            box('hardware', 'Corner bracket along Y', (side*.747, sy*.681, 1.951), (.047, .12, .020), iron, .004)
+            box('hardware', 'Corner bracket along X', (side*(.681+spread), sy*post, 1.951), (.12, .047, .020), iron, .004)
+            box('hardware', 'Corner bracket along Y', (side*post, sy*(.681+spread), 1.951), (.047, .12, .020), iron, .004)
 
     # Leaning ladder: three exposed lower treads project south of the floor.
-    lower_y, upper_y = -.930, -.60
+    lower_y, upper_y = -1.045, -.60-spread
     for side in (-1, 1):
         beam('ladder', 'Leaning access ladder stringer', (side*.176, lower_y, .16),
              (side*.176, upper_y, 1.64), .053, .053, ladder)
