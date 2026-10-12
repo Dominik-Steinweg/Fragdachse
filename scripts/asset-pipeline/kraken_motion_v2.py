@@ -235,13 +235,13 @@ def spine_volley(asset, phase, frame, p, pose, key):
     last = releases[-1]
     arch = smooth(0, raise_at, phase) * (1 - smooth(last, min(.97, last + .2), phase))
     kick = sum(bell(r + .012, .022, phase) for r in releases) * (1 - smooth(.9, 1, phase))
-    pose('body', scale=(1 + .03 * arch - .02 * kick, 1 + .02 * arch, 1 + .11 * arch - .05 * kick),
-         location=(0, -.035 * kick, .06 * arch))
-    pose('surfacing', location=(0, -.05 * arch - .03 * kick, .03 * arch), rotation=(.04 * arch, 0, 0))
+    # Body-only lifts expose the buried arm shoulders; the arch is carried by the whole animal instead.
+    pose('body', scale=(1 + .02 * arch - .015 * kick, 1 + .015 * arch, 1 + .05 * arch - .03 * kick))
+    pose('surfacing', location=(0, -.05 * arch - .03 * kick, .06 * arch), rotation=(.04 * arch, 0, 0))
 
     def bend(i, side, t):
-        # The crown spreads and plants to brace the arched mantle; each shot jolts the tips.
-        return (-.03 * arch * (1 - t) + .02 * kick * t, 0, -side * .02 * arch * (1 - .5 * t) + side * .012 * kick * t)
+        # The crown spreads to brace (yaw only, roots stay seated); each shot jolts the tips.
+        return (.02 * kick * t, 0, -side * .02 * arch * (1 - .5 * t) + side * .012 * kick * t)
     key_arms(asset, frame, key, bend, beard_motion(math.tau * phase * 2, .9 * one_shot(phase), splay=.9 * arch, curl=.3 * kick))
     key_lids(pose, lambda name: .35 * arch)
 
