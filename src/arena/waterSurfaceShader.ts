@@ -11,6 +11,11 @@ uniform float uSize;
 uniform float uHalo;
 uniform float uTime;
 uniform float uSeed;
+// Surface disturbances (rings, swell, vortices, wakes) in frame-local space; see WaterDisturbanceField.
+uniform sampler2D uDisturb;
+uniform vec4 uDisturbRect;
+uniform vec2 uDisturbTexel;
+uniform float uDisturbOn;
 
 float hash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7))) * 43758.5453); }
 float noise(vec2 p) {
@@ -141,6 +146,29 @@ void main() {
   float broken=smoothstep(.28,.70,bank+.10*sin(shoreTime*.14+p.x*.022-p.y*.014));
   color+=vec3(.12,.26,.27)*wave*fringe*broken*.12;
   color+=vec3(.030,.060,.060)*meniscus*(.6+.4*bank);
+  // Disturbances belong to this surface: their slopes catch the same sky light as the ripples, churned
+  // water darkens, and foam is broken into lace by the pond's own noise rather than drawn as strokes.
+  vec2 dSlope=vec2(0.0);
+  if(uDisturbOn>.5) {
+    vec2 du=(p-uDisturbRect.xy)/uDisturbRect.zw;
+    if(du.x>0.0&&du.y>0.0&&du.x<1.0&&du.y<1.0) {
+      vec2 tuv=vec2(du.x,1.0-du.y);
+      vec4 f=texture2D(uDisturb,tuv);
+      float dh=f.r*2.0-1.0;
+      dSlope=vec2(texture2D(uDisturb,tuv+vec2(uDisturbTexel.x,0.0)).r*2.0-1.0-dh,
+        dh-(texture2D(uDisturb,tuv+vec2(0.0,uDisturbTexel.y)).r*2.0-1.0))*5.0;
+      float lit=clamp(dot(dSlope,vec2(-.6,-.8)),-1.0,1.0);
+      color+=vec3(.060,.125,.130)*lit+vec3(.018,.045,.050)*dh;
+      color*=1.0-.32*f.b;
+      // Fine, translucent lace in the tone of the shore wavelets; it thins out instead of forming bands.
+      float lace=smoothstep(.40,.88,pondField(p*.17+vec2(t*.35,-t*.27)+dSlope*.8))*.65
+        +smoothstep(.50,.92,pondField(p*.055+vec2(-t*.12,t*.1)+11.0))*.35;
+      float foam=clamp(f.g*lace,0.0,1.0);
+      color=mix(color,vec3(.34,.52,.52),foam*.62);
+      // Foam rides up onto the thin shore film as well.
+      alpha=max(alpha,foam*.55*smoothstep(.35,.45,mask.b));
+    }
+  }
   gl_FragColor=vec4(color*alpha,alpha);
 }
 `;

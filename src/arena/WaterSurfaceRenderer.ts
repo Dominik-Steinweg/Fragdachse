@@ -1,7 +1,7 @@
 import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 import * as Phaser from 'phaser';
 import { disposeShaderWarmupNode } from '../graphics/disposeShaderWarmupNode';
-import { DEPTH } from '../config';
+import { CELL_SIZE, DEPTH } from '../config';
 import type { WaterCell } from '../types';
 import { ARENA_RENDER_CHUNK_SIZE, ARENA_RENDER_CHUNK_ACQUIRE_MARGIN_PX, ARENA_RENDER_CHUNK_RELEASE_MARGIN_PX,
   type ChunkWorldFrame, type ChunkWorldRect } from './chunks/ArenaChunkGrid';
@@ -9,6 +9,7 @@ import { WaterSurfaceModel, WATER_MASK_HALO, type WaterMask, type WaterMaskView 
 import { WATER_FRAGMENT, WATER_SHADER_NAME } from './waterSurfaceShader';
 import { WATER_SUN_FRAGMENT, setWaterSunUniforms } from './WaterSunlight';
 import type { SunCloudState } from '../effects/sunlight/cloudShadow';
+import { WaterDisturbanceField } from './WaterDisturbanceField';
 
 
 let nextWaterSurfaceId = 0;
@@ -24,9 +25,24 @@ export class WaterSurfaceRenderer {
   private readonly chunks = new Map<string, WaterChunk>();
   private sunlight: SunCloudState | undefined;
   private readonly worldOffset: Float32Array;
+  /** Surface disturbance field over the water's bounds, allocated when something first disturbs the water. */
+  private disturbance: WaterDisturbanceField | null = null;
+  private readonly disturbBounds: { x: number; y: number; width: number; height: number } | null;
+  private readonly releaseDisturbance: () => void;
+  private readonly disturbRect = new Float32Array(4);
+  private readonly disturbTexel = new Float32Array(2);
   constructor(private readonly scene: Phaser.Scene, private readonly frame: ChunkWorldFrame,
     water: readonly WaterCell[], private readonly seed: number) {
     this.worldOffset = new Float32Array([frame.offsetX, frame.offsetY]);
+    if (water.length) {
+      const xs = water.map(c => c.gridX), ys = water.map(c => c.gridY), margin = 2, size = CELL_SIZE;
+      const left = (Math.min(...xs) - margin) * size, top = (Math.min(...ys) - margin) * size;
+      const width = (Math.max(...xs) - Math.min(...xs) + 1 + margin * 2) * size;
+      const height = (Math.max(...ys) - Math.min(...ys) + 1 + margin * 2) * size;
+      this.disturbBounds = { x: frame.offsetX + left, y: frame.offsetY + top, width, height };
+      this.disturbRect.set([left, top, width, height]);
+    } else this.disturbBounds = null;
+    this.releaseDisturbance = WaterDisturbanceField.provide(scene, () => this.ensureDisturbance());
     const model = new WaterSurfaceModel(water, frame);
     const origins = model.getChunkOrigins(ARENA_RENDER_CHUNK_SIZE, frame.width, frame.height);
     this.totalMasks = origins.length;
@@ -57,6 +73,16 @@ export class WaterSurfaceRenderer {
       }
     } while (performance.now() < deadline);
     } finally { loadingTimeline.end('water/mask-slice', measuredAt); }
+  }
+
+  private ensureDisturbance(): WaterDisturbanceField | null {
+    if (this.destroyed || !this.disturbBounds) return null;
+    if (this.disturbance) return this.disturbance;
+    this.disturbance = new WaterDisturbanceField(this.scene, this.disturbBounds);
+    this.disturbTexel.set([1 / this.disturbance.width, 1 / this.disturbance.height]);
+    // Resident quads bind their samplers at creation; rebuild them once with the field attached.
+    for (const chunk of this.chunks.values()) { chunk.quad.destroy(); chunk.quad = this.createQuad(chunk.x, chunk.y, chunk.key); }
+    return this.disturbance;
   }
 
   isPrepared(): boolean { return !this.destroyed && this.preparation === null; }
@@ -128,9 +154,11 @@ export class WaterSurfaceRenderer {
         setupUniforms: (set: (name: string, value: unknown) => void) => {
           set('uMask', 0); set('uOrigin', origin); set('uSize', size); set('uHalo', WATER_MASK_HALO);
           set('uTime', this.getPresentationTime()); set('uSeed', (this.seed >>> 0) % 997);
+          set('uDisturb', 1); set('uDisturbOn', Number(!!this.disturbance?.active));
+          set('uDisturbRect', this.disturbRect); set('uDisturbTexel', this.disturbTexel);
           if(sun) { set('uWorldOffset',this.worldOffset);setWaterSunUniforms(set,this.sunlight); }
         },
-      }, x + size / 2, y + size / 2, size, size, [key]);
+      }, x + size / 2, y + size / 2, size, size, [key, this.disturbance?.textureKey ?? '__DEFAULT']);
       const node = quad.renderNode;
       if (node) quad.once('destroy', () => disposeShaderWarmupNode(node));
       quad.setDepth(DEPTH.WATER).setBlendMode(Phaser.BlendModes.NORMAL);
@@ -141,6 +169,7 @@ export class WaterSurfaceRenderer {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.releaseDisturbance(); this.disturbance?.destroy(); this.disturbance = null;
     this.preparation?.return();
     this.preparation = null;
     this.masks.clear();

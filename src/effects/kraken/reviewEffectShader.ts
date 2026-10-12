@@ -78,53 +78,28 @@ void main() {
     // Keep the axis at the authored near-black; cloud highlights belong to its shoulders.
     color=mix(color,uCore,axis*.96);
   } else if(uMode<1.5) {
-    float radius=uShape.z, life=uTiming.x, retract=uTiming.z;
-    float r=length(p), theta=atan(p.y,p.x);
-    float n=field(p*.06+uShape.w*7.0);
-    float irregular=r*(1.0+(n-.5)*.28);
-    if(uAge<0.0) {
-      // Water swells over the rising arm: a dark bulge with a soft, broken bright edge.
-      float grow=clamp(1.0+uAge/uTiming.y,0.0,1.0);
-      float bulgeR=radius*(.2+.25*grow);
-      float mound=exp(-pow(irregular/bulgeR,2.0)*1.6);
-      float rim=exp(-pow((irregular-bulgeR)/(radius*.06),2.0))*(.4+.6*n);
-      alpha=(mound*.35+rim*.32)*grow;
-      color=mix(vec3(.02,.09,.11),vec3(.55,.74,.76),rim);
-    } else {
-      float end=1.0-smoothstep(life*.5,life,t);
-      // Two soft, continuous ripples that thin out as they spread.
-      float ripple=0.0;
-      for(int i=0;i<2;i++) {
-        float age=t-float(i)*.22;
-        if(age<0.0) continue;
-        float spread=radius*(.45+age*1.1), width=radius*(.05+age*.08);
-        ripple+=exp(-pow((irregular-spread)/width,2.0))*(1.0-smoothstep(0.0,.9,age))*(1.0-float(i)*.35);
-      }
-      // Churned foam hugging the column, tearing apart as it ages.
-      float churn=field(vec2(cos(theta),sin(theta))*r*.07+vec2(t*.4,uShape.w*3.0));
-      float core=exp(-pow(irregular/(radius*(.42+t*.25)),2.0));
-      float foam=core*smoothstep(.40+t*.25,.62+t*.25,churn);
-      // Droplets thrown up and out in uneven clusters, slowing and fading as they fall back.
-      float spray=0.0, count=min(uDetail.x,48.0);
-      for(int i=0;i<48;i++) {
-        float k=float(i);
-        if(k>=count) break;
-        float seed=k*1.37+uShape.w*91.0;
-        float h1=hash(vec2(seed,1.0)), h2=hash(vec2(seed,2.0)), h3=hash(vec2(seed,3.0)), h4=hash(vec2(seed,4.0));
-        float age=t-h1*.12, flight=.35+h2*.45;
-        if(age<0.0 || age>flight) continue;
-        float a=h3*6.2831853+sin(h1*17.0)*.4;
-        vec2 d=vec2(cos(a),sin(a));
-        float fall=age/flight;
-        float speed=uDetail.y*(.25+.75*h4)*(retract>.5 ? .6 : 1.0);
-        vec2 pos=d*(radius*(.12+.25*h2)+speed*age*(1.0-.35*fall));
-        float size=.8+h2*1.6, streak=size*(1.5+3.0*(1.0-fall));
-        float drop=1.0-smoothstep(size*.5,size+.8,line(p,pos,pos-d*streak));
-        spray=max(spray,drop*(1.0-smoothstep(.6,1.0,fall)));
-      }
-      alpha=clamp(foam*.55*uTiming.w+ripple*.18+spray*.8,0.0,.9)*end;
-      color=mix(vec3(.10,.28,.31),vec3(.78,.92,.94),clamp(foam*1.2+spray+ripple*.4,0.0,1.0));
+    // Only what is thrown above the surface: a soft mist veil and round droplets that rise and fall back.
+    // Swell, rings and foam belong to the water surface itself (WaterDisturbanceField).
+    float radius=uShape.z, life=uTiming.x;
+    float end=1.0-smoothstep(life*.45,life,t);
+    float n=field(p*.05+vec2(t*.6,uShape.w*3.0));
+    float mistR=radius*(.30+t*.85);
+    float mist=exp(-pow(length(p)/mistR,2.0))*smoothstep(.25,.75,n)*(1.0-smoothstep(0.0,life*.7,t));
+    float drops=0.0, count=min(uDetail.x,36.0);
+    for(int i=0;i<36;i++) {
+      float k=float(i);
+      if(k>=count) break;
+      float seed=k*1.37+uShape.w*91.0;
+      float h1=hash(vec2(seed,1.0)), h2=hash(vec2(seed,2.0)), h3=hash(vec2(seed,3.0)), h4=hash(vec2(seed,4.0));
+      float age=t-h1*.15, flight=.45+h2*.5;
+      if(age<0.0 || age>flight) continue;
+      float a=h3*6.2831853, u=age/flight, lift=4.0*u*(1.0-u);
+      vec2 pos=vec2(cos(a),sin(a))*(radius*(.12+.3*h2)+uDetail.y*(.15+.5*h4)*age);
+      float size=(.9+h2*1.3)*(1.0+lift*.7);
+      drops=max(drops,exp(-dot(p-pos,p-pos)/(size*size))*(1.0-smoothstep(.7,1.0,u)));
     }
+    alpha=clamp(mist*.26+drops*.55,0.0,.7)*end;
+    color=mix(vec3(.52,.70,.72),vec3(.74,.88,.89),clamp(drops,0.0,1.0));
   } else if(uMode>3.5 && uMode<4.5) {
     float radius=uShape.z, r=length(p), theta=atan(p.y,p.x);
     float n=field(p*.05), d=r*(1.0+(n-.5)*.22);
@@ -133,13 +108,8 @@ void main() {
     // A dark depression where the body sinks; foam is torn into soft swirling streaks, never clean rings.
     float hollow=exp(-pow(d/(radius*.6),2.0));
     float shadow=diving>.5 ? uTiming.y : .3;
-    float swirl=theta*2.0+r/radius*5.0-t*2.2;
-    vec2 sp=vec2(cos(swirl),sin(swirl))*(r*.05+1.0);
-    float streaks=field(sp*1.6+vec2(t*.3,0.0)+n*2.0);
-    float band=smoothstep(radius*.15,radius*.35,r)*(1.0-smoothstep(radius*.6,radius*1.0,r));
-    float foam=smoothstep(.55,.75,streaks)*band*diving;
-    float spread=radius*(.55+t*.8);
-    float ripple=exp(-pow((d-spread)/(radius*.07+t*4.0),2.0))*(1.0-smoothstep(0.0,1.2,t))*diving;
+    // Foam, rings and the funnel are part of the water surface now; this layer is the body's shadow
+    // under the surface and the soft bubbles that escape it.
     float bubbles=0.0;
     for(int i=0;i<10;i++) {
       float k=float(i), a=hash(vec2(k,2.0))*6.2831853, cycle=fract(t*.8+hash(vec2(k,7.0)));
@@ -147,7 +117,7 @@ void main() {
       float size=(1.2+hash(vec2(k,5.0))*2.0)*sin(cycle*PI);
       bubbles=max(bubbles,exp(-pow((length(p-pos)-size)/.8,2.0))*sin(cycle*PI));
     }
-    float light=(foam*.45+ripple*.2+bubbles*.5)*active*uTiming.z;
+    float light=bubbles*.45*active*uTiming.z;
     alpha=clamp(hollow*(shadow+active*.2)+light,0.0,.75);
     color=mix(vec3(.012,.07,.085),vec3(.6,.8,.82),clamp(light/max(alpha,.001),0.0,1.0));
   } else if(uMode>4.5 && uMode<5.5) {
@@ -221,16 +191,19 @@ void main() {
     alpha=mist*.62+drops*.65;
     color=mix(vec3(.42,.66,.67),vec3(.76,.88,.86),clamp(mist*.7+drops,0.0,1.0));
   } else if(uMode>7.5) {
-    float n=field(p*.075), r=length(p/vec2(uShape.z,uShape.w));
-    float drag=exp(-r*r*2.0)*(.6+.4*n);
-    float drops=0.0;
-    for(int i=0;i<12;i++) {
-      float k=float(i), a=k*2.39996;
-      vec2 pos=vec2(cos(a)*uShape.z,sin(a)*uShape.w)*(1.0+hash(vec2(k,8))*.5);
-      drops=max(drops,1.0-smoothstep(1.0,3.0,length(p-pos)));
-    }
-    alpha=(drag*.28+drops*.35)*(1.0-smoothstep(1.0,uTiming.x,t));
-    color=mix(vec3(.04,.1,.095),vec3(.28,.41,.38),n);
+    // Slime the kraken leaves on land: a dark violet wet film soaking the ground, glossy strands stretched
+    // along its path (x) and sparse glints, drying out from the edges inwards.
+    float life=uTiming.x, dry=smoothstep(life*.45,life,t), seed=uDetail.y;
+    float n=field(p*.055+seed*13.0), m=field(vec2(p.x*.022,p.y*.12)+seed*7.0);
+    float r=length(p/vec2(uShape.z,uShape.w))*(1.0+(n-.5)*.55);
+    float film=exp(-r*r*1.7)*(1.0-dry*smoothstep(.0,.9,1.0-exp(-r*r*1.7)+dry*.4));
+    float rim=film*(1.0-smoothstep(.12,.55,film));
+    float gloss=smoothstep(.58,.92,m)*film;
+    float glint=smoothstep(.86,.98,field(p*.24+vec2(seed*3.0,0.0)))*film*(1.0-dry);
+    alpha=(film*.40+rim*.10+gloss*.24+glint*.6)*uOpacity;
+    color=mix(vec3(.030,.020,.040),vec3(.085,.055,.105),n);
+    color=mix(color,vec3(.42,.36,.52),clamp(gloss*.7/max(alpha,.001),0.0,1.0));
+    color=mix(color,vec3(.82,.78,.88),clamp(glint*.45/max(alpha,.001),0.0,1.0));
   } else if(uMode>6.5) {
     float n=field(p*.06+vec2(t*.65,0)), swimming=uDetail.x;
     float front=exp(-pow((p.x-95.0)/62.0,2.0)-pow(p.y/74.0,4.0));

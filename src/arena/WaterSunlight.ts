@@ -26,8 +26,8 @@ void main() {`).replace('gl_FragColor=vec4(color*alpha,alpha);', `
     // View is straight down. Wave slopes meeting the moving sun/view half-vector
     // shift the tiny specular patches across the unchanged ripple field.
     vec3 halfVector=normalize(uWaterSun+vec3(0.0,0.0,1.0));
-    vec3 waveNormal=normalize(vec3(-.28*cos(p.x*.16+p.y*.057+a*2.4+pulseA),
-      -.22*cos(p.y*.13-p.x*.043+b*2.1-pulseA),1.0));
+    vec3 waveNormal=normalize(vec3(-.28*cos(p.x*.16+p.y*.057+a*2.4+pulseA)-dSlope.x*1.5,
+      -.22*cos(p.y*.13-p.x*.043+b*2.1-pulseA)-dSlope.y*1.5,1.0));
     float specular=smoothstep(.77,.995,dot(waveNormal,halfVector));
     color+=vec3(1.0,.87,.60)*glint*specular*direct*uWaterGlint*3.0*surfaceMotion;
     color+=vec3(.025,.033,.035)*reflectedSky*direct*surfaceMotion;

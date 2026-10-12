@@ -16,6 +16,7 @@ import { KRAKEN_BROOD, KRAKEN_LAND_EXPOSURE, KRAKEN_WORLD_EXPOSURE, KrakenSubmer
 import { addReviewDrain, type KrakenReviewDrainFilter } from './KrakenReviewDrainFilter';
 import { KrakenShadowRenderer } from './KrakenShadowRenderer';
 import type { ShadowSystem } from '../ShadowSystem';
+import { WaterDisturbanceField, type WaterDisturbance } from '../../arena/WaterDisturbanceField';
 import type { KrakenPoseLease } from './KrakenAssetResidency';
 import type { KrakenShadowMesh } from './KrakenLightShadowModel';
 import { KRAKEN_REVIEW_FX_SHADER } from './reviewEffectShader';
@@ -230,12 +231,14 @@ export function krakenPartKey(part: CombatPartIdentity): string {
 const LOOK = {
   ink: { travel: .22, hold: .75, dissolve: 1.25, opacity: .98, waterSpread: 1.18,
     core: [18 / 255, 10 / 255, 28 / 255], edge: [58 / 255, 34 / 255, 82 / 255], warp: 1.3, sheen: .14 },
-  erupt: { radius: 66, lifetime: 1.25, bulge: .15, retractScale: .55, sprayCount: 72, spraySpeed: 150, foam: .75 },
+  erupt: { radius: 66, lifetime: 1.25, bulge: .15, retractScale: .55, sprayCount: 26, spraySpeed: 120, foam: .75 },
   slam: { dust: .85, decal: 2, whip: .18, bend: 12, width: 42 },
   intro: { radius: 112, lifetime: 1.65, foam: .72, sprayCount: 80, spraySpeed: 135, drain: .85 },
   surface: { radius: 96, lifetime: 1.1, foam: .62, sprayCount: 56, spraySpeed: 105, drain: .65 },
   dive: { radius: 110, lifetime: 1.5, foam: .65, shadow: .12 },
   egg: { radius: 24 },
+  wake: { radius: 70, length: 280, lapPeriod: 2.6, minSpeedPxPerSec: 10, fullSpeedPxPerSec: 70 },
+  slime: { life: 10, spacing: 26, maxStamps: 48, stamp: [62, 44] as const, aura: [96, 78] as const },
   tentacleTurnRadPerSec: Math.PI * 1.6,
   spineWake: { length: 150, width: 9, lead: 10, opacity: .9 },
 } as const;
@@ -406,10 +409,21 @@ export class KrakenEffects {
       q.mask!.context.putImageData(pixels, 0, 0); q.mask!.refresh();
     }
   }
+  /** Disturbances of the pond surface itself go to the world water field (shaded by the water shader). */
+  private water(d: WaterDisturbance): void { WaterDisturbanceField.for(this.scene)?.submit(d); }
   erupt(point: KrakenPoint, angle: number, age: number, retracting: boolean, seed: number): void {
     const e = LOOK.erupt;
     if (age < -e.bulge || age >= e.lifetime) return;
     const radius = e.radius * (retracting ? e.retractScale : 1);
+    if (retracting) {
+      // The arm drags the surface down after it: a small funnel and a few closing rings, no spray.
+      this.water({ kind: 'vortex', x: point.x, y: point.y, age: Math.max(0, age), radius: e.radius * .9, strength: .75, param: seed % 2 ? 1 : -1 });
+      this.water({ kind: 'ring', x: point.x, y: point.y, age: Math.max(0, age), radius: e.radius * .35, strength: .6 });
+      return;
+    }
+    this.water({ kind: 'surge', x: point.x, y: point.y, age: age + e.bulge, radius: e.radius * .95, strength: 1, param: seed });
+    if (age >= 0) this.water({ kind: 'ring', x: point.x, y: point.y, age, radius: e.radius * .35, strength: .9 });
+    if (age < 0) return;
     const q = this.take(1, DEPTH.PLAYERS + .1, point, angle, radius * 5, radius * 5, age);
     if (!q) return;
     q.shape[2] = radius; q.shape[3] = seed;
@@ -431,6 +445,8 @@ export class KrakenEffects {
   dive(pose: KrakenPose, submergedAt: number, now: number): void {
     const age = (now - submergedAt) / 1000, d = LOOK.dive;
     if (age < 0 || age >= d.lifetime) return;
+    this.water({ kind: 'vortex', x: pose.x, y: pose.y, age, radius: d.radius * 1.25, strength: 1, param: 1 });
+    this.water({ kind: 'ring', x: pose.x, y: pose.y, age, radius: d.radius * .6, strength: .8 });
     const q = this.take(4, DEPTH.PLAYERS - .25, pose, pose.angle, d.radius * 5, d.radius * 5, age);
     if (!q) return;
     q.shape[2] = d.radius; q.shape[3] = 1; q.timing = [d.lifetime, d.shadow, d.foam, 0];
@@ -438,13 +454,13 @@ export class KrakenEffects {
   ashore(pose: KrakenPose, phase: KrakenExitPhase, now: number, gripPose = pose): void {
     const age = (now - phase.startedAt) / 1000;
     if (now < phase.gripAt) {
-      const q = this.take(7, DEPTH.PLAYERS - .25, pose, pose.angle, 560, 360, age);
-      if (q) q.detail[0] = now > phase.moveAt && !phase.blocked ? 1 : 0;
+      if (now > phase.moveAt && !phase.blocked) this.wake(pose, 1, now);
       // A diffuse directional footprint, not an attack ring. Anchor it at the shore contact.
       const shore = this.take(10, DEPTH.PLAYERS - .24, gripPose, gripPose.angle, 300, 240, age, 115);
       if (shore) shore.opacity = .55;
     }
     const sprayAge = (now - phase.gripAt) / 1000;
+    if (sprayAge >= 0 && sprayAge < 1.6) this.water({ kind: 'surge', x: gripPose.x, y: gripPose.y, age: sprayAge, radius: 120, strength: 1, param: 7 });
     if (sprayAge >= 0 && sprayAge < 1.3) {
       const splash = this.take(9, DEPTH.PLAYERS + .1, gripPose, gripPose.angle, 420, 420, sprayAge, 55);
       if (splash) splash.opacity = .8;
@@ -464,11 +480,23 @@ export class KrakenEffects {
     if (!q) return;
     q.shape[2] = lengthPx; q.shape[3] = w.width; q.timing = [w.lead, curvature, seed, 0]; q.opacity = w.opacity;
   }
-  wetTrail(pose: KrakenPose, at: number, now: number): void {
-    const age = (now - at) / 1000;
-    if (age < 0 || age > 4) return;
-    const q = this.take(8, DEPTH.DECALS + .1, pose, pose.angle, 220, 160, age);
-    if (q) { q.shape[2] = 72; q.shape[3] = 36; q.timing = [4, 0, 0, 0]; }
+  /** Bow swell and diverging wake behind the swimming body; `intensity` follows its speed. */
+  wake(pose: KrakenPose, intensity: number, now: number): void {
+    this.water({ kind: 'wake', x: pose.x, y: pose.y, age: now / 1000, radius: LOOK.wake.radius, strength: krakenClamp(intensity),
+      angle: pose.angle, param: LOOK.wake.length });
+  }
+  /** Water lapping against the resting body: slow, faint rings. */
+  lap(pose: KrakenPose, now: number): void {
+    const period = LOOK.wake.lapPeriod, age = (now / 1000) % period;
+    this.water({ kind: 'ring', x: pose.x, y: pose.y, age, radius: LOOK.wake.radius * .9, strength: .35 });
+  }
+  /** One slime stamp of the land trail; `aura` is the wet patch right under the moving body. */
+  wetTrail(pose: KrakenPose, at: number, now: number, seed = 0, aura = false): void {
+    const s = LOOK.slime, age = aura ? 0 : (now - at) / 1000;
+    if (age < 0 || age > s.life) return;
+    const [length, width] = aura ? s.aura : s.stamp;
+    const q = this.take(8, DEPTH.DECALS + .1, pose, pose.angle, length * 3, width * 3, age);
+    if (q) { q.shape[2] = length; q.shape[3] = width; q.timing = [s.life, 0, 0, 0]; q.detail[1] = seed; q.opacity = aura ? .9 : 1; }
   }
   rise(pose: KrakenPose, timing: KrakenRiseTiming, now: number, intro: boolean): void {
     const b = intro ? LOOK.intro : LOOK.surface;
@@ -477,10 +505,14 @@ export class KrakenEffects {
       const q = this.take(4, DEPTH.PLAYERS - .25, pose, pose.angle, b.radius * 5, b.radius * 5, age);
       if (q) { q.shape[2] = b.radius; q.shape[3] = 0; q.timing = [arms, LOOK.dive.shadow, b.foam, 0]; }
     }
+    if (now >= timing.startedAt && now < timing.armsAt + b.lifetime * 1000)
+      this.water({ kind: 'surge', x: pose.x, y: pose.y, age: (now - timing.startedAt) / 1000 * Math.min(1, .6 / Math.max(.1, arms)),
+        radius: b.radius * 1.15, strength: 1, param: intro ? 3 : 5 });
     for (const [i, at] of [timing.armsAt, timing.keelAt, ...(intro ? [timing.roarAt] : [])].entries()) {
       const plumeAge = (now - at) / 1000;
       if (plumeAge < 0 || plumeAge >= b.lifetime) continue;
       const radius = b.radius * (i === 1 ? .7 : i === 2 ? 1.35 : 1);
+      this.water({ kind: 'ring', x: pose.x, y: pose.y, age: plumeAge, radius: radius * .7, strength: i === 2 ? 1 : .85 });
       const q = this.take(1, DEPTH.PLAYERS + .1, pose, pose.angle, radius * 5, radius * 5, plumeAge);
       if (!q) continue;
       q.shape[2] = radius; q.shape[3] = i; q.timing = [b.lifetime, .1, 0, b.foam];
@@ -634,10 +666,23 @@ export class KrakenRenderer {
       if (this.exitVisual && (phase.kind === 'ashore' || phase.kind === 'land')) {
         this.effects.ashore(render.pose, this.exitVisual.phase, now, this.exitVisual.grip ?? render.pose);
       }
-      if (now < this.wetUntil && (phase.kind === 'land' || phase.kind === 'ashore' && now >= phase.gripAt)
-        && (!this.trails.length || Math.hypot(pose.x - this.trails[this.trails.length - 1].pose.x, pose.y - this.trails[this.trails.length - 1].pose.y) > 28)) {
-        this.trails.push({ pose: { ...pose }, at: now });
-        if (this.trails.length > 24) this.trails.shift();
+      // On land the kraken soaks the ground under it and drags a slime trail that slowly dries.
+      const onLand = render.visible && render.asset === this.options.assets.land
+        && (phase.kind === 'land' || phase.kind === 'dying' || phase.kind === 'ashore' && now >= phase.gripAt);
+      if (onLand) {
+        const last = this.trails[this.trails.length - 1];
+        if (!last || Math.hypot(pose.x - last.pose.x, pose.y - last.pose.y) > LOOK.slime.spacing) {
+          this.trails.push({ pose: { ...pose }, at: now });
+          if (this.trails.length > LOOK.slime.maxStamps) this.trails.shift();
+        }
+        this.effects.wetTrail(render.pose, now, now, 0, true);
+      }
+      // The pond answers the body: a wake while it swims, faint lapping rings while it floats.
+      if (render.asset === this.options.assets.water && render.visible && this.lastBody && now > this.lastBody.now
+        && (phase.kind === 'surfaced' || phase.kind === 'surfacing')) {
+        const speed = Math.hypot(pose.x - this.lastBody.pose.x, pose.y - this.lastBody.pose.y) / (now - this.lastBody.now) * 1000;
+        if (speed > LOOK.wake.minSpeedPxPerSec) this.effects.wake(render.pose, speed / LOOK.wake.fullSpeedPxPerSec, now);
+        else this.effects.lap(render.pose, now);
       }
       this.lastBody = { pose: { ...pose }, now };
       if (phase.kind === 'surfacing') this.waterMotion = { pose: render.pose,
@@ -657,8 +702,8 @@ export class KrakenRenderer {
       if (render.asset === this.options.assets.water && render.visible) this.spines.sync(this.body, state.spines, volley, now);
       else this.spines.hide();
     } else { this.body?.hide(); this.spines.hide(); }
-    this.trails = this.trails.filter(t => now - t.at < 4000);
-    for (const trail of this.trails) this.effects.wetTrail(trail.pose, trail.at, now);
+    this.trails = this.trails.filter(t => now - t.at < LOOK.slime.life * 1000);
+    for (const [i, trail] of this.trails.entries()) this.effects.wetTrail(trail.pose, trail.at, now, (trail.at * .37 + i) % 17);
     if (this.waterMotion) {
       if (this.waterMotion.rise) this.effects.rise(this.waterMotion.pose, this.waterMotion.rise, now, false);
       if (this.waterMotion.diveAt !== undefined) this.effects.dive(this.waterMotion.pose, this.waterMotion.diveAt, now);

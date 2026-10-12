@@ -16,6 +16,7 @@ import { KrakenRenderer, KrakenSpriteView, KrakenEffects, KrakenEggFlightView, k
   sampleKrakenTentacle, krakenTentacleSink, sampleKrakenEgg, krakenRiseTiming, krakenDeathAlpha, krakenBroodDiscs, type KrakenPresentationAsset, type KrakenPresentationAssets } from '../src/effects/kraken/KrakenRenderer';
 import { KrakenIntroRenderer } from '../src/effects/kraken/KrakenIntroRenderer';
 import { KRAKEN_BROOD, KRAKEN_WORLD_EXPOSURE, krakenEggArc, krakenWaterMask } from '../src/effects/kraken/submersionShader';
+import { WaterDisturbanceField, type WaterDisturbance } from '../src/arena/WaterDisturbanceField';
 import { KRAKEN_RISE_INTRO } from '../src/config/bossIntros';
 import { getCameraFocusOverride } from '../src/graphics/cameraFocusOverride';
 import { normalizePipelineAsset, type PipelineBossAsset } from '../src/config/pipelineAssetContracts';
@@ -115,14 +116,19 @@ describe('host timelines and D asset projection', () => {
     const phase = { kind: 'ashore' as const, corridorId: 'shore', startedAt: 0, moveAt: 1200, gripAt: 1900,
       heaveAt: 3150, endsAt: 3600, recoveryEndsAt: 4200, blocked: false };
     const pose = { x: 123, y: 456, angle: .73 };
-    for (const [now, blocked, swimming] of [[800, false, 0], [1500, false, 1], [1500, true, 0]] as const) {
+    // The swim towards the bank is a wake in the pond surface itself, never drawn while warned or blocked.
+    const submitted: WaterDisturbance[] = [];
+    const release = WaterDisturbanceField.provide(scene, () => ({ submit: (d: WaterDisturbance) => { submitted.push(d); } }) as never);
+    for (const [now, blocked, swimming] of [[800, false, false], [1500, false, true], [1500, true, false]] as const) {
+      submitted.length = 0;
       fx.begin(); fx.ashore(pose, { ...phase, blocked }, now);
-      expect(shaders.find(s => s.visible && s.uniforms().uMode === 7).uniforms().uDetail[0]).toBe(swimming);
+      expect(submitted.some(d => d.kind === 'wake')).toBe(swimming);
     }
+    release();
     fx.begin(); fx.wetTrail(pose, 2000, 2200);
     const trace = shaders.find(s => s.visible && s.uniforms().uMode === 8);
     expect([trace.x, trace.y, trace.rotation]).toEqual([pose.x, pose.y, pose.angle]);
-    fx.begin(); fx.wetTrail(pose, 2000, 7000);
+    fx.begin(); fx.wetTrail(pose, 2000, 13000); // the slime has dried after its 10 s life
     expect(shaders.some(s => s.visible)).toBe(false);
     fx.destroy();
   });
