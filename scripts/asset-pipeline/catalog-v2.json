@@ -4492,8 +4492,8 @@
       ],
       "description": {
         "silhouette": "Open square elevated timber platform without a roof, centred on its 64 px two-cell footprint within a 72 px canvas; small stone feet and a south-facing leaning ladder preserve height cues",
-        "colors": "Varied weathered warm timber with a softly rubbed grey ladder-to-centre tread, broken forest-green moss in unwalked seams and perimeter, matte charcoal iron brackets and cool gray stone foundations",
-        "anatomy": "Eleven narrow east-west timber courses, about 156 mm / 5 px wide, with 26 pieces and 14 irregular butt joints supported on four transverse joists 440 mm apart; adjacent courses never share a joint position. Millimetric height variation and recessed nail heads. Weathered longitudinal wood albedo with individual UV offsets, moss at timber edges and stone feet, a broad worn central standing area, matte patinated iron. 82 mm handrails, 145 mm corner posts, 450 mm ladder with 302 mm rung spacing. Strict orthographic plan view; no ground or baked ground shadow. One BU is one meter / 32 display pixels; deck and rails span about 62 pixels within the unchanged 72 px canvas."
+        "colors": "Varied weathered warm timber with grain-preserving abrasion along the ladder-to-centre walkway, denser olive forest-green moss cushions at the north edge and corners, matte charcoal iron brackets and cool gray stone foundations",
+        "anatomy": "Eleven narrow east-west timber courses, about 156 mm / 5 px wide, with 26 pieces and 14 irregular butt joints supported on four transverse joists 440 mm apart; adjacent courses never share a joint position. Millimetric height variation and recessed nail heads. Weathered longitudinal wood albedo with individual UV offsets, normal-textured moss cushions at timber edges and stone feet, a fibre-stretched worn standing area with dark joints and abrasion varying by board height, matte patinated iron. 82 mm handrails, 145 mm corner posts, 450 mm ladder with 302 mm rung spacing. Strict orthographic plan view; no ground or baked ground shadow. One BU is one meter / 32 display pixels; deck and rails span about 62 pixels within the unchanged 72 px canvas."
       },
       "requiredClips": [],
       "production": "reference",
@@ -4506,7 +4506,7 @@
       },
       "materialVariants": {
         "standard": {
-          "label": "Irregular weathered timber, rubbed central tread and moss refuges",
+          "label": "Grained timber abrasion and denser normal-textured moss cushions",
           "textureStrength": 0.94,
           "formShadowStrength": 0.44
         }

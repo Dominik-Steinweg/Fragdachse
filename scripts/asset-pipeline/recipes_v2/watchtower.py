@@ -75,6 +75,23 @@ def weathering(mat, floor=False, endgrain=False, iron=False, cracks=False, stone
     perimeter = remap(calc('MAXIMUM', calc('ABSOLUTE', world.outputs['X'], 0),
                           calc('ABSOLUTE', world.outputs['Y'], 0)), .60, .83)
     moss_color = mix((*linear((76, 99, 46)), 1), (*linear((113, 127, 65)), 1), irregular)
+    tufts = node('ShaderNodeTexNoise', 'Rounded moss tuft clusters')
+    tufts.inputs['Scale'].default_value = 22
+    tufts.inputs['Detail'].default_value = 1.2
+    links.new(geom.outputs['Position'], tufts.inputs['Vector'])
+    tuft = remap(tufts.outputs['Fac'], .32, .68)
+
+    def moss_cushion(mask):
+        # A separate rounded normal lobe replaces wood grain only inside moss.
+        # No displacement: the saved geometry and display bounds stay identical.
+        cushion = node('ShaderNodeBump', 'Soft raised moss cushion normal')
+        cushion.inputs['Strength'].default_value = .65
+        cushion.inputs['Distance'].default_value = .032
+        height = calc('MULTIPLY', mask, calc('ADD', .60, calc('MULTIPLY', tuft, .40)))
+        links.new(height, cushion.inputs['Height'])
+        if bs.inputs['Normal'].is_linked:
+            links.new(bs.inputs['Normal'].links[0].from_socket, cushion.inputs['Normal'])
+        links.new(cushion.outputs['Normal'], bs.inputs['Normal'])
     if iron:
         # Broken rust rim and rubbed charcoal faces, also on the nail heads.
         rust = calc('MULTIPLY', calc('MAXIMUM', calc('MULTIPLY', edge, .8), .14), irregular)
@@ -119,32 +136,65 @@ def weathering(mat, floor=False, endgrain=False, iron=False, cracks=False, stone
                 d = calc('ADD', calc('MULTIPLY', a, a), calc('MULTIPLY', b, b))
                 return remap(d, .15, 1.0, 1, 0)
 
-            # Broad pale tread from the southern ladder into the middle.
-            tread = calc('MAXIMUM', oval(-.025, -.47, .32, .72), oval(.055, .025, .51, .43))
-            # A broad, rubbed grey core flattens grain, with soft tracked dirt
-            # outside it. Material coordinates keep wear continuous across joins.
-            apron = calc('MAXIMUM', oval(-.015, -.47, .40, .80), oval(.035, .035, .59, .53))
-            dirt_rim = calc('MULTIPLY', calc('SUBTRACT', apron, tread), .25)
+            # Longitudinal broken abrasion, not a radial pale overlay. The grain
+            # remains in the colour signal and joint dirt never gets bleached.
+            fibre_scale = node('ShaderNodeVectorMath', 'Abrasion along board fibres')
+            fibre_scale.operation = 'MULTIPLY'
+            fibre_scale.inputs[1].default_value = (3, 18, 4)
+            links.new(geom.outputs['Position'], fibre_scale.inputs[0])
+            fibres = node('ShaderNodeTexNoise', 'Stretched irregular wear boundary')
+            fibres.inputs['Scale'].default_value = 1
+            fibres.inputs['Detail'].default_value = 1.2
+            links.new(fibre_scale.outputs[0], fibres.inputs['Vector'])
+            raised = node('ShaderNodeValue', 'Raised board abrasion')
+            raised.outputs[0].default_value = 1
+            width = calc('ADD', .20, calc('MULTIPLY', fibres.outputs['Fac'], .15))
+            middle = remap(calc('ABSOLUTE', world.outputs['Y'], 0), .15, .31, 1, 0)
+            width = calc('ADD', width, calc('MULTIPLY', middle, .12))
+            lateral = calc('SUBTRACT', width, calc('ABSOLUTE', world.outputs['X'], 0))
+            length = calc('MULTIPLY', remap(world.outputs['Y'], -.86, -.77),
+                          remap(world.outputs['Y'], .20, .34, 1, 0))
+            tread = calc('MULTIPLY', remap(lateral, -.015, .055), length)
+            apron = calc('MULTIPLY', remap(lateral, -.075, .01), length)
+            dirt_rim = calc('MULTIPLY', calc('SUBTRACT', apron, tread), .32)
             color = mix(color, (*linear((91, 81, 62)), 1), dirt_rim)
-            wear = calc('MULTIPLY', tread, calc('ADD', .48, calc('MULTIPLY', irregular, .18)))
-            color = mix(color, (*linear((197, 184, 155)), 1), wear)
+            face = calc('MULTIPLY', remap(dx, .01, .06), remap(dy, .04, .17))
+            wear = calc('MULTIPLY', calc('MULTIPLY', tread, face), raised.outputs[0])
+            grey = node('ShaderNodeRGBToBW', 'Rubbed wood retains grain luminance')
+            links.new(color, grey.inputs[0])
+            bare = mix(color, grey.outputs[0], .24)
+            bare = mix(bare, (1.35, 1.45, 1.55, 1), 1, 'MULTIPLY')
+            color = mix(color, bare, wear)
             bump = nodes['Tactile grain and machining']
-            links.new(calc('MULTIPLY', calc('SUBTRACT', 1, wear), .08), bump.inputs['Strength'])
+            links.new(calc('MULTIPLY', calc('SUBTRACT', 1, calc('MULTIPLY', wear, .35)), .08), bump.inputs['Strength'])
             stain = calc('MAXIMUM', oval(-.47, .40, .25, .18), oval(.48, -.27, .17, .24))
             stain = calc('MULTIPLY', stain, calc('ADD', .16, calc('MULTIPLY', irregular, .20)))
             color = mix(color, (*linear((82, 77, 56)), 1), stain)
-            refuge = calc('MAXIMUM', perimeter, calc('MULTIPLY', edge, .65))
-            moss_mask = calc('MULTIPLY', calc('MULTIPLY', refuge, moss_patch),
-                             calc('SUBTRACT', 1, remap(tread, 0, .18)))
-            color = mix(color, moss_color, calc('MULTIPLY', moss_mask, .90))
+            # Larger contiguous cushions on the north edge and corners; thinner
+            # fingers follow joints. Keep the entire walking corridor moss-free.
+            north = remap(world.outputs['Y'], .52, .77)
+            corner = calc('MULTIPLY', remap(calc('ABSOLUTE', world.outputs['X'], 0), .48, .75),
+                          remap(calc('ABSOLUTE', world.outputs['Y'], 0), .46, .73))
+            refuge = calc('MAXIMUM', calc('MAXIMUM', north, corner),
+                          calc('MAXIMUM', calc('MULTIPLY', perimeter, .65), calc('MULTIPLY', edge, .48)))
+            dense = remap(colony.outputs['Fac'], .32, .53)
+            moss_mask = calc('MULTIPLY', calc('MULTIPLY', refuge, dense),
+                             calc('SUBTRACT', 1, remap(apron, 0, .12)))
+            cushion_color = mix((*linear((70, 94, 40)), 1), (*linear((121, 133, 64)), 1), tuft)
+            color = mix(color, cushion_color, calc('MULTIPLY', moss_mask, .95))
+            moss_cushion(moss_mask)
         else:
             # Hand-rubbed, grey exposed crowns with irregular dark patches.
             worn = remap(irregular, .3, .8, 0, .28)
             color = mix(color, (*linear((188, 174, 145)), 1), worn)
             # Damp post feet, exposed joist ends and patches on unhandled rails.
             damp = remap(world.outputs['Z'], .2, 1.9, 1, .35)
-            moss_mask = calc('MULTIPLY', calc('MULTIPLY', perimeter, moss_patch), damp)
+            # Retain v5 wear on handled rails; increase only damp low colonies.
+            damp_patch = mix(moss_patch, remap(colony.outputs['Fac'], .32, .53),
+                             remap(world.outputs['Z'], 1.55, 1.90, 1, 0))
+            moss_mask = calc('MULTIPLY', calc('MULTIPLY', perimeter, damp_patch), damp)
             color = mix(color, moss_color, calc('MULTIPLY', moss_mask, .90))
+            moss_cushion(moss_mask)
     links.new(color, bs.inputs['Base Color'])
 
 
@@ -316,6 +366,10 @@ def build(ctx, spec):
             spans = [(-half_floor, -.216), (.216, half_floor)]
         for piece, (left, right) in enumerate(spans):
             floor = floors[material_index]
+            # Higher boards receive more foot abrasion; piece variation is
+            # deterministic without consuming the geometry/UV random stream.
+            floor.node_tree.nodes['Raised board abrasion'].outputs[0].default_value = (
+                .62 + .30*(z-1.5612)/.0036 + .035*((material_index*7) % 5))
             material_index += 1
             ob = box('deck', 'Narrow weathered floorboard with bearing end', ((left+right)/2, y, z),
                      (right-left, pitch-gap, .04), floor, .0025)

@@ -10497,7 +10497,7 @@
       "gameIds": [
         "watchtower"
       ],
-      "revision": "watchtower-v5",
+      "revision": "watchtower-v6",
       "variant": "standard",
       "sourceSize": 144,
       "textureKey": "construction_watchtower",
@@ -10524,8 +10524,8 @@
         "height": 148
       },
       "hashes": {
-        "idle": "32faaa5ee72d353b5f622fd8e6c30543dfab8a605e0f646aa489759f57138e32",
-        "sheet": "6de971facb1efb140284f15bba8ea40e89d09e84906ef606c773473be74261f5"
+        "idle": "9c3d6a0ae19da26c0a1bdc5acc387d6b904c1d7de6c85b433f344125dd0c5a67",
+        "sheet": "d3f0215c422a8bc015914b7e1c00ff48cc32ba2b2fe979958c43fb0324e26477"
       }
     }
   ]
