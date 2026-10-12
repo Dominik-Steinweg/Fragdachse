@@ -44,3 +44,13 @@ def apply_kraken_egg(asset, motion, phase, frame, idle, p, pose, key):
     if socket is not None:
         socket.default_value = max(0, glow)
         socket.keyframe_insert(data_path='default_value', frame=frame)
+
+def apply_kraken_spine(asset, motion, phase, frame, idle, p, pose, key):
+    """The detachable spike is rigid; its runtime owner scales, rotates and flies it. The idle loop only
+    quivers it a little about its root (used while a volley bristles)."""
+    if motion != 'kraken_spine_idle':
+        raise ValueError(f'Unknown Kraken spine motion: {motion}')
+    bone = asset['rig'].pose.bones['spine']
+    quiver = 0 if idle else .06 * math.sin(math.tau * phase)
+    key(bone, 'rotation_euler', (quiver, 0, .5 * quiver), frame)
+    key(bone, 'location', (0, 0, 0), frame)

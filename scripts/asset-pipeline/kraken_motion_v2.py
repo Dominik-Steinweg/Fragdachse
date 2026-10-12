@@ -8,7 +8,7 @@ import math
 import importlib
 
 SUPPORTED_MOTIONS = ('kraken_idle', 'kraken_swim', 'kraken_intro_rise', 'kraken_call_tentacle', 'kraken_throw_egg',
-                     'kraken_ink_spit', 'kraken_dive', 'kraken_surface')
+                     'kraken_ink_spit', 'kraken_dive', 'kraken_surface', 'kraken_volley_spines')
 DEEP = -1.9  # surfacing depth while dived: the whole body is below the visible water
 LIDS = ('lid_main_l', 'lid_main_r', 'lid_second_l', 'lid_second_r')
 CLOSED = -1.30  # radians: hood fully over the iris
@@ -63,6 +63,8 @@ def apply_kraken(asset, motion, phase, frame, idle, p, pose, key):
         return actions.apply_action(asset, motion, phase, frame, p, pose, key, key_arms, key_lids)
     if not idle and motion == 'kraken_ink_spit':
         return ink_spit(asset, phase, frame, p, pose, key)
+    if not idle and motion == 'kraken_volley_spines':
+        return spine_volley(asset, phase, frame, p, pose, key)
     if not idle and motion in ('kraken_dive', 'kraken_surface'):
         return dive_or_surface(asset, motion, phase, frame, p, pose, key)
     cycle = math.tau * phase
@@ -222,6 +224,26 @@ def swim_stroke(asset, phase, frame, pose, key):
     # The mouth tentacles stream back and gather on each stroke, then drift open again.
     key_arms(asset, frame, key, bend, beard_motion(math.tau * phase, .7, splay=-.6 * p0, curl=.8 * p0))
     key_lids(pose, lambda name: .1)
+
+
+def spine_volley(asset, phase, frame, p, pose, key):
+    """The mantle arches and swells while the crown braces, then six recoil jolts as the dorsal spikes
+    (runtime parts at the spine sockets) leave front to back; the runtime hides each spike at its release."""
+    m = p.get('markerPhases', {})
+    raise_at = m.get('raise', .23)
+    releases = [m.get(f'release-{k}', .43 + .06 * (k - 1)) for k in range(1, 7)]
+    last = releases[-1]
+    arch = smooth(0, raise_at, phase) * (1 - smooth(last, min(.97, last + .2), phase))
+    kick = sum(bell(r + .012, .022, phase) for r in releases) * (1 - smooth(.9, 1, phase))
+    pose('body', scale=(1 + .03 * arch - .02 * kick, 1 + .02 * arch, 1 + .11 * arch - .05 * kick),
+         location=(0, -.035 * kick, .06 * arch))
+    pose('surfacing', location=(0, -.05 * arch - .03 * kick, .03 * arch), rotation=(.04 * arch, 0, 0))
+
+    def bend(i, side, t):
+        # The crown spreads and plants to brace the arched mantle; each shot jolts the tips.
+        return (-.03 * arch * (1 - t) + .02 * kick * t, 0, -side * .02 * arch * (1 - .5 * t) + side * .012 * kick * t)
+    key_arms(asset, frame, key, bend, beard_motion(math.tau * phase * 2, .9 * one_shot(phase), splay=.9 * arch, curl=.3 * kick))
+    key_lids(pose, lambda name: .35 * arch)
 
 
 def ink_spit(asset, phase, frame, p, pose, key, land=False):

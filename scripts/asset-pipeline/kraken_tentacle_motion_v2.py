@@ -1,4 +1,4 @@
-"""Giant strike tentacle: erupts from the water, towers high, crashes down on the lane, pulls back.
+"""Giant strike tentacle: erupts from the water, lurks as an upright column, crashes down on the lane, pulls back.
 
 Geometry lies flat along +Y (the lane) in a soft S; its root climbs out of deep water at the
 `waterEntry` socket (chain fraction ~0.16). Poses are cumulative (pitch, yaw, twist) profiles in
@@ -40,15 +40,15 @@ def profile(points, n):
 # (pitch, yaw, twist) control points per chain fraction; 0.16 is the water entry.
 POSES = {
     'flat': ([(0, 0), (1, 0)], [(0, 0), (1, 0)], [(0, 0), (.3, 0), (1, 32)]),
-    # Hovering: a steep column out of the entry, then a long arm held level high over the lane,
-    # hook hanging towards the target. Twist only in the hook, so the arch bends forward, not sideways.
-    'raised': ([(0, 0), (.16, 0), (.30, 70), (.46, 60), (.58, 22), (.80, -4), (.92, -48), (1, -130)],
-               [(0, 0), (.30, 3), (.55, -5), (.80, 4), (1, 10)],
-               [(0, 0), (.78, 0), (1, 80)]),
-    # Wind-up: the column straightens up, the arm lifts high, the hook coils tight.
-    'windup': ([(0, 0), (.16, 0), (.30, 88), (.46, 86), (.62, 66), (.80, 30), (.92, -40), (1, -150)],
-               [(0, 0), (.30, 4), (.55, -6), (.80, 5), (1, 12)],
-               [(0, 0), (.78, 0), (1, 95)]),
+    # Lurking: an upright column over the entry, the crown bowed with a hanging hook. It does not lie
+    # over the lane, so the rest pose never betrays where it will strike.
+    'raised': ([(0, 0), (.16, 0), (.28, 82), (.45, 92), (.62, 88), (.78, 72), (.90, 34), (1, -40)],
+               [(0, 0), (.40, 6), (.70, -8), (1, 10)],
+               [(0, 0), (.78, 0), (1, 60)]),
+    # Wind-up: the column rears back past vertical and the hook coils, a short load before the fall.
+    'windup': ([(0, 0), (.16, 0), (.28, 96), (.45, 100), (.62, 94), (.78, 78), (.90, 36), (1, -50)],
+               [(0, 0), (.40, 5), (.70, -6), (1, 8)],
+               [(0, 0), (.78, 0), (1, 85)]),
     # Deep under water: a compact serpentine coil, the start of `rise` (buried parts over land are
     # hidden by the submersion shader).
     'coiled': ([(0, 0), (.16, -14), (.40, 0), (.70, 10), (1, -12)],
@@ -84,11 +84,12 @@ def apply_kraken_tentacle(asset, motion, phase, frame, idle, p, pose, key):
             for j in range(n):
                 t = j / (n - 1)
                 up = smooth(.25, .6, t)
-                # Towering menace: the column sways, the hook weaves and tastes the air.
-                # Each term is zero at phase 0, so the loop starts on the exact raised pose.
-                shape[0][j] += 4 * (math.sin(cycle - t * 2.4) - math.sin(-t * 2.4)) * up
-                shape[1][j] += 7 * (math.sin(cycle + 1.1 - t * 3.6) - math.sin(1.1 - t * 3.6)) * up
-                shape[2][j] += 10 * (math.sin(cycle + .4) - math.sin(.4)) * smooth(.6, 1, t)
+                # Lurking: the column breathes, the crown weaves in every direction and the hook tastes
+                # the air, so it never settles on one heading. Each term is zero at phase 0 (exact handover).
+                shape[0][j] += 5 * (math.sin(cycle - t * 2.4) - math.sin(-t * 2.4)) * up
+                shape[1][j] += 12 * (math.sin(cycle + 1.1 - t * 3.6) - math.sin(1.1 - t * 3.6)) * up
+                shape[1][j] += 6 * (math.sin(2 * cycle - t * 4.0) - math.sin(-t * 4.0)) * smooth(.55, 1, t)
+                shape[2][j] += 14 * (math.sin(cycle + .4) - math.sin(.4)) * smooth(.6, 1, t)
     elif motion == 'kraken_tentacle_rise':
         # Bursts straight up out of the deep, overshoots high, settles into the tower.
         surge = smooth(0, .45, phase)

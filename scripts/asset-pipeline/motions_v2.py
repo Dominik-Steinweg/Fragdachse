@@ -91,6 +91,7 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
             ('kraken_land_', 'kraken_motion_land_v2', 'apply_kraken_land'),
             ('kraken_tentacle_', 'kraken_tentacle_motion_v2', 'apply_kraken_tentacle'),
             ('kraken_egg_', 'kraken_egg_motion_v2', 'apply_kraken_egg'),
+            ('kraken_spine_', 'kraken_egg_motion_v2', 'apply_kraken_spine'),
             ('kraken_', 'kraken_motion_v2', 'apply_kraken'),
         ):
             if not motion.startswith(prefix):

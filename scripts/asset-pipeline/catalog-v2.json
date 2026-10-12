@@ -4649,7 +4649,8 @@
         "ink-spit",
         "egg-throw",
         "dive",
-        "surface"
+        "surface",
+        "spine-volley"
       ],
       "production": "reference",
       "recipe": "abyssal-kraken",
@@ -4747,6 +4748,22 @@
           "start": "free",
           "markers": {
             "eyes-open": 18
+          }
+        },
+        {
+          "name": "spine-volley",
+          "motion": "kraken_volley_spines",
+          "frameCount": 36,
+          "frameRate": 20,
+          "loop": false,
+          "markers": {
+            "raise": 8,
+            "release-1": 15,
+            "release-2": 17,
+            "release-3": 20,
+            "release-4": 22,
+            "release-5": 24,
+            "release-6": 26
           }
         }
       ],
@@ -4848,12 +4865,12 @@
         {
           "name": "slam",
           "motion": "kraken_land_slam",
-          "frameCount": 20,
+          "frameCount": 32,
           "frameRate": 24,
           "loop": false,
           "markers": {
-            "strike": 8,
-            "impact": 11
+            "strike": 13,
+            "impact": 20
           }
         },
         {
@@ -4958,7 +4975,7 @@
       },
       "elevation": {
         "min": -5.2,
-        "max": 7,
+        "max": 8.5,
         "scale": 0.5,
         "previewWaterLevel": 0
       },
@@ -5087,6 +5104,75 @@
           "markers": {
             "spawn": 8
           }
+        }
+      ],
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      },
+      "shadowMesh": {
+        "version": 1,
+        "encoding": "u16-world-xyz-per-pose-v1"
+      }
+    },
+    {
+      "id": "abyssal-kraken-spine",
+      "label": "Abgrundkrake — Rückenstachel",
+      "category": "boss-part",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/abyssal-kraken-v2.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "production": "reference",
+      "recipe": "abyssal-kraken",
+      "materialVariants": {
+        "standard": {
+          "label": "Organische Tiefseehaut mit Pigmentierung und Faltentiefe",
+          "textureStrength": 0.93,
+          "formShadowStrength": 0.91
+        }
+      },
+      "runtimeAtlas": true,
+      "runtimeContract": "boss",
+      "targetSize": 64,
+      "sourceSizes": [
+        64,
+        128,
+        256
+      ],
+      "description": {
+        "silhouette": "Einzelner Kielstachel: breite Knochenplatte mit nach hinten geschwungenem Dorn.",
+        "colors": "Dunkles Knochenviolett mit hellerem Grat, identisch zu den Kielplatten des Körpers.",
+        "anatomy": "Starr; wird zur Laufzeit an den Stachel-Sockets des Wasserkörpers gezeichnet, wächst per Skalierung nach und fliegt als Projektil."
+      },
+      "requiredClips": [
+        "idle"
+      ],
+      "model": {
+        "part": "spine"
+      },
+      "orthoScale": 1.6,
+      "textures": {
+        "organic": "art/poc/kraken-v8/textures/kraken-scales-v8.png"
+      },
+      "elevation": {
+        "min": -0.4,
+        "max": 0.9,
+        "scale": 0.5
+      },
+      "runtimeBudgetMB": 2,
+      "clips": [
+        {
+          "name": "idle",
+          "motion": "kraken_spine_idle",
+          "frameCount": 4,
+          "frameRate": 8,
+          "loop": true
         }
       ],
       "materialPass": {

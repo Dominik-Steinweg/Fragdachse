@@ -106,31 +106,39 @@ def apply_kraken_land(asset, motion, phase, frame, idle, p, pose, key):
         beard = beard_motion(cycle * 2, one_shot(phase), splay=.9 * pull)
 
     elif motion == 'kraken_land_slam':
-        # Pounce: a short crouch with the claw arms reared and spread, then a
-        # fast forward whip that closes them in front of the head. The runtime
-        # carries the body forward between `strike` and `impact`.
-        strike, impact = markers.get('strike', 8 / 19), markers.get('impact', 11 / 19)
-        coil = envelope(phase, (0, 0), (strike * .8, 1), (strike, 1), (impact, 0), (1, 0))
-        lunge = envelope(phase, (0, 0), (strike, 0), (impact, 1), (impact + (1 - impact) * .35, .55), (1, 0))
-        snap = envelope(phase, (0, 0), (strike, 0), ((strike + impact) / 2, 1), (impact, .4), (1, 0))
-        pose('surfacing', location=(0, -.14 * coil + .08 * lunge, -.04 * coil + .03 * snap),
-             rotation=(.05 * coil - .03 * lunge, 0, 0))
-        pose('body', scale=(1 + .04 * coil - .02 * lunge, 1 - .05 * coil + .06 * lunge, 1 + .03 * coil - .04 * lunge))
+        # Leaping claw strike: a deep loaded crouch with the claws reared and spread, then a long airborne
+        # leap (the runtime carries the body ~420 px between `strike` and `impact`) with the body stretched,
+        # the claws thrust ahead and the rear arms streaming behind, then a hard landing that drives both
+        # claws into the ground in front of the head, and a short settling bounce.
+        strike, impact = markers.get('strike', 13 / 31), markers.get('impact', 20 / 31)
+        coil = envelope(phase, (0, 0), (strike * .75, 1), (strike, 1), (strike + (impact - strike) * .3, 0), (1, 0))
+        fly = envelope(phase, (0, 0), (strike, 0), (strike + (impact - strike) * .35, 1), (impact, .55), (impact + .06, 0), (1, 0))
+        land = envelope(phase, (0, 0), (impact - .02, 0), (impact + .03, 1), (impact + .18, .25), (1, 0))
+        reach = envelope(phase, (0, 0), (strike, 0), (impact, 1), (impact + (1 - impact) * .45, .5), (1, 0))
+        bounce = envelope(phase, (0, 0), (impact + .10, 0), (impact + .19, 1), (impact + .30, 0), (1, 0))
+        pose('surfacing', location=(0, -.18 * coil + .10 * fly - .04 * land, -.07 * coil + .22 * fly - .06 * land + .03 * bounce),
+             rotation=(.06 * coil - .07 * fly + .04 * land, 0, 0))
+        pose('body', scale=(1 + .05 * coil - .07 * fly + .05 * land, 1 - .06 * coil + .13 * fly - .03 * land,
+                            1 + .04 * coil - .05 * fly - .11 * land))
 
         def bend(i, side, t):
             j = i % 4
             if j < 2:
                 k = 1 if j == 0 else .7
-                spread = -side * .030 * k * coil * (1 - .3 * t)
-                # Swing the whole arm in from the root so both claws meet ahead.
-                close = side * k * lunge * (.16 * (1 - t) ** 2 + .035 * t)
-                pitch = (.10 * coil * (1 - t) ** 1.2 - .04 * coil * t * t
-                         - .035 * lunge * (1 - t) + .025 * snap * t)
+                spread = -side * .034 * k * coil * (1 - .3 * t)
+                # Swing the whole arm in from the root so both claws meet ahead, thrust forward in flight,
+                # and drive down into the ground on landing.
+                close = side * k * reach * (.16 * (1 - t) ** 2 + .035 * t)
+                pitch = (.11 * coil * (1 - t) ** 1.2 - .045 * coil * t * t + .03 * fly * (1 - t)
+                         - .05 * land * t - .02 * reach * (1 - t))
                 return (pitch, 0, spread + close)
-            return (-.02 * coil * (1 - t), 0, -side * .016 * (.6 * coil + lunge) * (1 - .4 * t))
+            # Rear crown loads under the body, then streams backwards like a tail through the leap.
+            drag = math.sin(math.tau * phase * 2 - 3 * t) * fly * t
+            return (-.03 * coil * (1 - t) + .025 * fly * t, 0,
+                    -side * (.022 * coil + .030 * fly) * (1 - .3 * t) + side * .012 * drag)
 
-        closure = .25 * coil
-        beard = beard_motion(cycle * 2, .6 * one_shot(phase), splay=1.3 * coil - .8 * lunge, curl=.4 * snap)
+        closure = .3 * coil + .2 * land
+        beard = beard_motion(cycle * 2, .6 * one_shot(phase), splay=1.3 * coil - .9 * fly, curl=.7 * fly + .4 * land)
 
     else:  # terminal: the final collapsed pose is intentionally held
         collapse = smooth(.25, .9, phase)

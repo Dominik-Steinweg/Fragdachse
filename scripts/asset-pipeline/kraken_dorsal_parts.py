@@ -122,24 +122,49 @@ def keel_scute(c, y, size, surface, material):
     return ob
 
 
-def dorsal(c, surface, section, material, horn_material, arm_roots):
-    """Returns (tissue to fuse, separate bony keel parts, crest polylines for the value plan)."""
+def keel_spine(c, y, f, z, horn_material):
+    """Rearward horn rising from a keel scute; z is the keel surface at y."""
+    top = z + .07 * f
+    pts = [(0, y + .08, top - .11), (0, y, top + .02), (0, y - .13 * f, top + .24 * f), (0, y - .36 * f, top + .39 * f), (0, y - .58 * f, top + .41 * f)]
+    spine = horn(c, 'Rearward keel spine', pts, [.12 * f, .10 * f, .067 * f, .026 * f, .002], horn_material, sides=20)
+    paint_pattern(spine, lambda p, n, base=top, f=f: (.15 + .70 * min(1, max(0, (p.z - base) / (.42 * f))), .15, .12))
+    write_rest(spine)
+    return spine
+
+
+def spine_anchors(y, f, z):
+    """Base and tip of one detachable keel spike (scute root -> horn tip), shared by body sockets and the part asset."""
+    return (0, y + .10 * f, z + .02 * f), (0, y - .58 * f, z + .48 * f)
+
+
+def keel_spike(c, horn_material, f=1.0):
+    """One detachable dorsal spike at the origin: the scute plate plus its rearward horn."""
+    flat = lambda x, y: 0.0
+    return [keel_scute(c, 0, f, flat, horn_material), keel_spine(c, 0, f, 0.0, horn_material)]
+
+
+def dorsal(c, surface, section, material, horn_material, arm_roots, detach=(), detached=None):
+    """Returns (tissue to fuse, separate bony keel parts, crest polylines for the value plan).
+
+    Keel elements listed in `detach` are left out (their fleshy ridge stays); their (index, y, f, z) go to `detached`
+    so the body can export spine sockets for runtime-drawn, fireable spikes.
+    """
     tissue, bones, crests = [], [], []
     # Fleshy keel ridge (fused) carrying a row of pale bony scutes (separate, crisp).
     for k, (y, f) in enumerate(KEEL):
         z = surface(0, y)
         ridge = c.ell('Keel muscle', (0, y, z - .035 * f), (.21 * f, .32 * f, .115 * f), material)
         tissue.append(ridge)
+        if k in detach:
+            # No pale crest under a detachable spike: once fired, dark hide shows, not a bald stripe.
+            if detached is not None:
+                detached.append((k, y, f, z))
+            continue
+        crests.append([(0, y + .17 * f), (0, y - .2 * f)])
         scute = keel_scute(c, y, f, surface, horn_material)
         bones.append(scute)
-        crests.append([(0, y + .17 * f), (0, y - .2 * f)])
         if k in SPINES:
-            top = z + .07 * f
-            pts = [(0, y + .08, top - .11), (0, y, top + .02), (0, y - .13 * f, top + .24 * f), (0, y - .36 * f, top + .39 * f), (0, y - .58 * f, top + .41 * f)]
-            spine = horn(c, 'Rearward keel spine', pts, [.12 * f, .10 * f, .067 * f, .026 * f, .002], horn_material, sides=20)
-            paint_pattern(spine, lambda p, n, base=top, f=f: (.15 + .70 * min(1, max(0, (p.z - base) / (.42 * f))), .15, .12))
-            write_rest(spine)
-            bones.append(spine)
+            bones.append(keel_spine(c, y, f, z, horn_material))
     # Overlapping diamond scales in staggered rows, pointing back and outward like armour.
     for row, (across, size) in enumerate([(.20, 1), (.38, .92), (.56, .80), (.73, .66)]):
         for k in range(16):
