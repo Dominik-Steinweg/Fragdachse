@@ -234,6 +234,75 @@ Die Kategorie `weapon` verwendet [recipes_v2/held-weapon.py](recipes_v2/held-wea
 
 Neue Konstruktionen erzeugen genau eine passende Materialvariante (`standard`). Fell- und Formstärke werden in Vorschau-Iterationen abgestimmt; die historischen Varianten `calm`/`rich` bleiben lesbar. Zusätzliche Varianten werden nur bei ausdrücklichem Vergleichsauftrag authoriert.
 
+## Form-Modus
+
+Die Authoring-Schleife hat drei Stufen: **Form → Animation im Entwurf → Endqualität**.
+Zuerst mit `assets:shape` Silhouette, Proportionen und Spielmaßstab klären. Danach
+mit `assets:draft` bzw. `kraken:iterate` Bewegungen testen. Erst nach dieser Abnahme
+die bestehenden Produktions-, Review-, Auswahl-, Archiv- und Importbefehle verwenden.
+
+```powershell
+npm run assets:shape -- abyssal-kraken --label form-a
+npm run assets:shape -- rabid-badger --watch
+npm run assets:shape -- abyssal-kraken --views top,silhouette --export-draft
+```
+
+Der separate Einstieg baut ausschließlich die Rezept-Ruhepose samt benötigter
+Konstruktionsrig. Er übergibt leere Cliplisten, ruft keinen Motion-Autor auf und
+weist Animation-Actions zurück. Gerendert wird direkt in der angezeigten
+Canvas-Größe (`targetSize × displayScale`), mit den vorhandenen Materialien und
+Lichtern, standardmäßig Cycles OPTIX, 8 Samples und Denoiser. Die Seitenkamera
+ist rein diagnostisch; die Draufsicht bleibt exakt senkrecht und am Exportpivot.
+
+Ausgabe: `art/poc/pipeline-v2/shapes/<asset>/<label>/board.png`, Einzelbilder,
+`shape.json` mit Dauer, Quellen-Hashes, Cache-Status und Kennzahlen sowie Blender-Log.
+Der Bogen zeigt 1:1 und 2×, Silhouetten auf echtem Gras und bei deklarierter Elevation
+im Wasser, Seitenprofil und den 32-px-Spielerdachs. Wasser verwendet den deklarierten
+`previewWaterLevel` (sonst 0) und die vorhandene Vorschau-Submersion. Kennzahlen:
+Alpha ≥ 128, Silhouettenfläche, Bounding-Box und kleinster Canvas-Rand in Pixeln.
+Der vorherige **fertige** Form-Build desselben Assets wird automatisch daneben
+gestellt; `comparison.png` und `difference.png` markieren hinzugefügte Pixel cyan,
+entfernte rot und Farbänderungen gelb. Der erste Build hat noch keinen Vergleich.
+`--views top,side,silhouette` bestimmt die Bogenansichten; die Draufsicht wird immer
+für Kennzahlen und Vergleich gerendert. 2× vergrößert das Zielbild, ohne zweiten Render.
+
+Rezepte können freiwillig `spec.get('draft') or {}` auswerten. Der Form-Modus
+übergibt standardmäßig `{ "voxelScale": 1.5, "creaseSubdivisions": 0 }`.
+Nur die Kraken-Körper verwenden diese Hinweise aktuell: gröbere Hautfusion und
+weniger Arm-Unterteilung. Ohne `spec.draft` gelten exakt die bisherigen Rezeptwerte;
+Produktions- und Animationsentwurfs-Runner setzen keine Form-Hinweise.
+`--model-settings '{}'` verwendet auch hier die Modellqualität der Produktion.
+Ein anderes JSON-Objekt ersetzt die Form-Defaults; Shell-Quoting beachten.
+Weitere Optionen: `--samples`, `--device OPTIX|CUDA|CPU`, `--no-denoise`,
+`--blender <exe>`; alternativ `BLENDER_PATH` oder `PATH`.
+
+Der eigene `.models/`-Cache hängt an Modell-/Rezeptabhängigkeiten, Texturen,
+Modellspec und Draft-Hinweisen. Clipdaten und Motion-Dateien lösen keinen Form-Build
+aus. `--watch` prüft diese Eingaben alle 500 ms, bündelt Speichervorgänge und baut
+seriell. Änderungen während eines Builds werden anschließend verarbeitet; ein
+unvollständiger Build ersetzt nie `latest.json`. Labels bleiben unveränderlich;
+im Watch-Modus erhalten weitere Iterationen automatisch eigene Suffixe.
+Form und Animation teilen die GPU-Sperre `drafts/.lock`.
+
+Mit `--export-draft` entsteht zusätzlich ein Dev-Entwurf unter
+`drafts/<asset>/shape-<label>/standard/`. Jeder Clip enthält denselben Ruheframe;
+Marker liegen auf Frame 0. Das ist eine Formvorschau, keine Timing-Abnahme und
+kein auswählbarer Produktionsbuild. Kraken behalten Albedo, Höhen-/Normalenpass,
+Emission, Sockets und grobe Mesh-Schatten. Die vorhandene Dev-Quelle lädt die
+aktualisierte Rolle automatisch; andere Rollen behalten ihren letzten Entwurf.
+
+```js
+await devScenario.run({ action: 'krakenMission', drafts: true });
+// Normales Sheet-Asset statisch am Szenario-Zielpunkt zeigen, ohne KI/Hitbox:
+await devScenario.run({ action: 'shapeSpawn', asset: 'rabid-badger' });
+```
+
+`shapeSpawn` lädt den letzten mit `--export-draft` veröffentlichten Form-Build.
+Erneuter Aufruf ersetzt die Figur; `clearEnemies`, Szenariowechsel und Teardown
+räumen Bild und Textur auf. Sheet-Formen verwenden die vorbeleuchtete Beauty und
+die Welt-Lightmap; sie haben keinen eigenen Mesh-Schattenpass. Diese Zugriffe sind
+Dev-geschützt. Es gibt keinen Import und keine Schreibzugriffe auf `public/`.
+
 ## Entwurfsmodus
 
 Der separate Entwurfsmodus rendert direkt in der angezeigten Canvas-Größe. Er benutzt

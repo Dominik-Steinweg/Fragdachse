@@ -538,6 +538,11 @@ await devScenario.run({ action: 'krakenAssets', source: 'draft' });
 await devScenario.run({ action: 'krakenReloadAssets' });
 devScenario.status().krakenAssets; // Version, Ladezeit, Renderabschluss oder Ladefehler
 await devScenario.run({ action: 'krakenAssets', source: 'production' });
+// Form-Modus: vorher npm run assets:shape -- <asset> --export-draft.
+// Kraken: dieselbe Entwurfsquelle, alle Clips zeigen die Ruhepose.
+// Normale Gegner: statische Form am Zielpunkt, optional gridX/gridY.
+await devScenario.run({ action: 'shapeSpawn', asset: 'rabid-badger' });
+// Erneuter shapeSpawn-Aufruf lädt die neueste Form; clearEnemies räumt sie auf.
 // Intro ueberspringen und aktuelle HP setzen; Max-HP bleiben erhalten (Phase 2 bei <= 50 %).
 await devScenario.run({ action: 'krakenMission', skipIntro: true, hp: 4000 });
 // HP im laufenden Kampf ändern, ohne Intro oder Welt neu zu starten.

@@ -46,6 +46,9 @@ function slot(value: unknown): WeaponSlot {
 export function runScenarioCommand(controller: DevScenarioController, value: unknown): void | Promise<void> {
   const c = object(value);
   switch (c.action) {
+    case 'shapeSpawn':
+      if (typeof c.asset !== 'string') throw Error('shapeSpawn.asset required');
+      return controller.arrangeShapeDraft(c.asset, c.gridX === undefined && c.gridY === undefined ? undefined : point(c));
     case 'krakenAssets':
       if (c.source !== 'draft' && c.source !== 'production') throw Error('source: draft or production required');
       return reloadKrakenDraftAssets(c.source);

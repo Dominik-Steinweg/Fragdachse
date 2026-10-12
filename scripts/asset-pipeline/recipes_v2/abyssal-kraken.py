@@ -42,6 +42,8 @@ def arm_points(source=ARM_SPECS):
 
 
 def build(c, spec):
+    # Optional form-authoring hints; absent in production and animation drafts.
+    draft = spec.get('draft') or {}
     part = (spec.get('model') or {}).get('part', 'water')
     if part == 'tentacle':
         return strike_tentacle(c, spec)
@@ -80,7 +82,7 @@ def build(c, spec):
                                            detach=range(6) if part == 'water' else (), detached=detached)
     ridges, ridge_crests = face_ridges(c, surface, hide)
     beard, beard_lines = oral_crown(c, surface, hide, grouped=True)
-    head = [fuse(c, [shell, *tissue, *sculpt, *ridges, *beard], hide, voxel=.012)]
+    head = [fuse(c, [shell, *tissue, *sculpt, *ridges, *beard], hide, voxel=.012 * draft.get('voxelScale', 1))]
     sockets = [(side * ex, ey, er) for side in (-1, 1) for ex, ey, er in (MAIN_EYE, SECOND_EYE)]
     paint_mantle(head[0], section, dorsal_crests, sockets)
     # Preserve the original nearest-point tie order used by the material pass.
@@ -112,7 +114,7 @@ def build(c, spec):
     for points, spec, side in paths:
         ob, centers, radii, weights = arm(c, len(arm_data), points, spec['width'], (arm_hide, cups, well), flare_amount=.15,
                                           steps=2, twist=spec['twist'], side=side)
-        creases(ob, .10, .022, subdivide=1, group='Dorsal scales')
+        creases(ob, .10, .022, subdivide=draft.get('creaseSubdivisions', 1), group='Dorsal scales')
         arm_data.append((ob, centers, radii, weights))
 
     data = bpy.data.armatures.new('Kraken eight flexible chains')

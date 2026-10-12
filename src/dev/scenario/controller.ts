@@ -2,6 +2,7 @@ import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { readKrakenDevAction, readKrakenDevGeometry, requireKrakenDevHost } from './krakenHostPort';
 import type { KrakenDevAct } from '../../systems/CoopDefenseKrakenSystem';
 import { EnemyMeshReview } from './EnemyMeshReview';
+import { ShapeDraftSpawn } from './ShapeDraftSpawn';
 import { ArmageddonReview } from './ArmageddonReview';
 import { TurretMaterialReview } from './TurretMaterialReview';
 import { KrakenBossReview, krakenAssetIdentity, krakenReviewOptions } from './KrakenBossReview';
@@ -49,6 +50,7 @@ export class DevScenarioController {
   cameraAtTarget = false;
   private worldLighting: WorldLightingMeasurement | null = null;
   private enemyMeshReview: EnemyMeshReview | null = null;
+  private shapeDraft: ShapeDraftSpawn | null = null;
   private armageddonReview: ArmageddonReview | null = null;
   private turretMaterialReview: TurretMaterialReview | null = null;
   private krakenReview: KrakenBossReview | null = null;
@@ -162,6 +164,14 @@ export class DevScenarioController {
     this.cameraAtTarget = false; this.zoom = count <= 8 ? 2 : .85;
     this.syncCamera();
   }
+  async arrangeShapeDraft(asset: string, point = this.aim): Promise<void> {
+    this.requireReady();
+    this.shapeDraft?.destroy();
+    const fixture = new ShapeDraftSpawn(this.scene), position = this.world(point);
+    this.shapeDraft = fixture;
+    try { await fixture.initialize(asset, position.x, position.y); }
+    catch (error) { fixture.destroy(); if (this.shapeDraft === fixture) this.shapeDraft = null; throw error; }
+  }
   measureEnemyMeshReview(mesh: boolean): void {
     this.requireReady(); if (!this.enemyMeshReview) throw Error('Arrange enemyMeshReview first');
     this.enemyMeshReview.measure(mesh);
@@ -226,6 +236,7 @@ export class DevScenarioController {
     this.lastAction = { ok: false, error: this.message };
   }
   start(value: unknown): void {
+    this.shapeDraft?.destroy(); this.shapeDraft = null;
     this.clearFigureSun();
     this.pendingKrakenMission = null; this.pendingKrakenHp = null;
     this.krakenReview?.destroy(); this.krakenReview = null;
@@ -441,6 +452,7 @@ export class DevScenarioController {
     this.syncCamera(); this.lastAction = { enemyReadability: placements };
   }
   clearEnemies(): void {
+    this.shapeDraft?.destroy(); this.shapeDraft = null;
     this.enemyMeshReview?.destroy(); this.enemyMeshReview = null;
     this.requireReady(); this.runtime.navigationLabPort.removeEnemies(); this.pinned.clear();
     this.config.enemies = []; this.saveLink();
@@ -959,6 +971,7 @@ export class DevScenarioController {
     return { path: result.path, url: result.url, status };
   }
   destroy(): void {
+    this.shapeDraft?.destroy(); this.shapeDraft = null;
     this.clearFigureSun();
     this.krakenReview?.destroy(); this.krakenReview = null;
     this.krakenLightShadowReview?.destroy(); this.krakenLightShadowReview = null;
