@@ -42,36 +42,60 @@ export class KrakenHabitatRules implements KrakenHabitatPort {
       && this.findExit().status === 'valid';
   }
 
-  /** Reserve emergence points, not attacks. A hovering arm owns no warning lane. */
+  /** Reserve emergence points, not attacks. A hovering arm owns no warning lane.
+   * The base lies in open water near the shore with its submerged root (towards the kraken) in water as well, so
+   * the arm visibly reaches out of the pond; bases that can reach a target at a comfortable distance rank first. */
   reserveTentacles(boss: BossTargetRef, habitatId: string, targets: readonly Point[], maxCount: number,
-    avoid: readonly Point[] = []): readonly KrakenLaneReservation[] {
+    avoid: readonly Point[] = [], origin?: Point): readonly KrakenLaneReservation[] {
     if (!this.matches(boss, habitatId)) return [];
-    const t = this.config.tentacles;
+    const t = this.config.tentacles, center = origin ?? this.pondInterior();
     const active = [...this.reservations.values()].flatMap(r => 'shoreId' in r.value && this.current(r.value) ? [r.value.waterEntry] : []);
-    const ranked = this.pondPoints().filter(p => !this.wet(p, t.emergeShoreBandPx)
-      && this.queries.circleFree(p.x, p.y, t.safetyMarginPx))
-      .map((p, index) => ({ p, index, score: Math.min(...targets.map(q => Math.hypot(q.x - p.x, q.y - p.y)), Infinity) }))
-      .sort((a, b) => a.score - b.score || a.index - b.index);
+    const half = t.strikeArcDegrees * Math.PI / 360;
+    const ranked = this.pondPoints().flatMap((p, index) => {
+      const radial = Math.atan2(p.y - center.y, p.x - center.x);
+      if (Math.hypot(p.x - center.x, p.y - center.y) < t.rootLengthPx || this.wet(p, t.emergeShoreBandPx)
+        || !this.wet(p, t.baseClearancePx) || !this.queries.circleFree(p.x, p.y, t.safetyMarginPx)) return [];
+      const root = { x: p.x - Math.cos(radial) * t.rootLengthPx, y: p.y - Math.sin(radial) * t.rootLengthPx };
+      if (!this.wet(root, t.baseClearancePx / 2)) return [];
+      let score = Infinity;
+      for (const q of targets) {
+        const d = Math.hypot(q.x - p.x, q.y - p.y), off = Math.abs(Math.atan2(Math.sin(Math.atan2(q.y - p.y, q.x - p.x) - radial),
+          Math.cos(Math.atan2(q.y - p.y, q.x - p.x) - radial)));
+        const reachable = d <= t.length - t.safetyMarginPx && off <= half;
+        // Unreachable bases still serve as lurk positions, but far behind every reachable one.
+        score = Math.min(score, Math.abs(d - t.idealReachPx) + off * 60 + (reachable ? 0 : 1000 + d));
+      }
+      return [{ p, index, radial, score }];
+    }).sort((a, b) => a.score - b.score || a.index - b.index);
     const result: KrakenLaneReservation[] = [];
-    for (const { p, index } of ranked) {
+    for (const { p, index, radial } of ranked) {
       if (result.length >= Math.min(maxCount, t.maxConcurrent - active.length)) break;
       if ([...active, ...avoid, ...result.map(r => r.waterEntry)].some(q => Math.hypot(p.x - q.x, p.y - q.y) < t.spawnSpacingPx)) continue;
-      const target = targets.reduce<Point | null>((best, q) => !best || Math.hypot(q.x - p.x, q.y - p.y)
-        < Math.hypot(best.x - p.x, best.y - p.y) ? q : best, null);
-      result.push(this.remember({ reservationId: this.id(), topologyRevision: this.queries.revisions().topologyRevision,
-        shoreId: 'water-' + index, waterEntry: p, pose: { originX: p.x, originY: p.y,
-          angle: target ? Math.atan2(target.y - p.y, target.x - p.x) : 0,
-          geometry: { kind: 'lane', length: t.length, width: t.width } } }));
+      const lane: KrakenLaneReservation = { reservationId: this.id(), topologyRevision: this.queries.revisions().topologyRevision,
+        shoreId: 'water-' + index, waterEntry: p, radialAngle: radial, pose: { originX: p.x, originY: p.y, angle: radial,
+          geometry: { kind: 'lane', length: t.length, width: t.width } } };
+      const aim = targets.map(q => this.tentacleHeading(lane, q)).find(a => a !== null);
+      result.push(this.remember({ ...lane, pose: { ...lane.pose, angle: aim ?? radial } }));
     }
     return result;
   }
 
-  aimTentacle(r: KrakenLaneReservation, target: Point): KrakenLaneReservation['pose'] | null {
+  private tentacleHeading(r: KrakenLaneReservation, target: Point): number | null {
+    const t = this.config.tentacles, d = Math.hypot(target.x - r.waterEntry.x, target.y - r.waterEntry.y);
+    if (d < 1 || d > t.length - t.safetyMarginPx) return null;
+    const angle = Math.atan2(target.y - r.waterEntry.y, target.x - r.waterEntry.x);
+    const off = Math.abs(Math.atan2(Math.sin(angle - r.radialAngle), Math.cos(angle - r.radialAngle)));
+    return off <= t.strikeArcDegrees * Math.PI / 360 ? angle : null;
+  }
+  tentacleAim(r: KrakenLaneReservation, target: Point): number | null {
     if (!this.current(r)) return null;
-    const d = Math.hypot(target.x - r.waterEntry.x, target.y - r.waterEntry.y);
-    if (d < 1 || d > this.config.tentacles.length - this.config.tentacles.safetyMarginPx) return null;
-    const pose = { ...r.pose, angle: Math.atan2(target.y - r.waterEntry.y, target.x - r.waterEntry.x) };
-    if (!this.laneFree({ ...r, pose })) return null;
+    const angle = this.tentacleHeading(r, target);
+    return angle !== null && this.laneFree({ ...r, pose: { ...r.pose, angle } }) ? angle : null;
+  }
+  aimTentacle(r: KrakenLaneReservation, target: Point): KrakenLaneReservation['pose'] | null {
+    const angle = this.tentacleAim(r, target);
+    if (angle === null) return null;
+    const pose = { ...r.pose, angle };
     // Host permit owns the frozen impact geometry from this point onwards.
     Object.assign(r, { pose });
     return pose;

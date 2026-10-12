@@ -41,6 +41,22 @@ describe('Kraken habitat reservations', () => {
     const dive = f.rules.divePoint(shore)!; expect(f.rules.isDiveInterior(dive)).toBe(true);
     expect(f.rules.canMove(shore, dive, 'water-approach')).toBe(true);
   });
+  it('reaches arms out of the pond from the kraken and strikes only inside their arc', () => {
+    const f = setup(), c = KRAKEN_BOSS_DEFAULTS.tentacles, kraken = worldCellCenter(f.metrics, 15, 18);
+    const arms = f.rules.reserveTentacles(f.boss, 'pond', [{ x: 860, y: 560 }], 2, [], kraken);
+    expect(arms.length).toBeGreaterThan(0);
+    for (const arm of arms) {
+      const radial = Math.atan2(arm.waterEntry.y - kraken.y, arm.waterEntry.x - kraken.x);
+      expect(arm.radialAngle).toBeCloseTo(radial);
+      // Base in open water, submerged root back towards the kraken in water as well.
+      expect(f.water.isCircleBlocked(arm.waterEntry.x, arm.waterEntry.y, 0)).toBe(true);
+      const root = { x: arm.waterEntry.x - Math.cos(radial) * c.rootLengthPx, y: arm.waterEntry.y - Math.sin(radial) * c.rootLengthPx };
+      expect(f.water.isCircleBlocked(root.x, root.y, 0)).toBe(true);
+      // A target behind the arm (towards the kraken) is never struck; one ahead within reach is.
+      expect(f.rules.tentacleAim(arm, { x: arm.waterEntry.x - Math.cos(radial) * 150, y: arm.waterEntry.y - Math.sin(radial) * 150 })).toBeNull();
+      expect(f.rules.tentacleAim(arm, { x: arm.waterEntry.x + Math.cos(radial) * 150, y: arm.waterEntry.y + Math.sin(radial) * 150 })).toBeCloseTo(radial);
+    }
+  });
   it('spawns spaced water-band arms and permits oblique strikes only within range and free of solids', () => {
     const f = setup(), c = KRAKEN_BOSS_DEFAULTS;
     const arms = f.rules.reserveTentacles(f.boss, 'pond', [{ x: 820, y: 600 }], c.tentacles.maxConcurrent);

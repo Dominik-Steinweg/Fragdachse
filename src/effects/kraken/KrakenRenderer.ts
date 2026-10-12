@@ -169,15 +169,30 @@ export function sampleKrakenBody(state: KrakenState, pose: KrakenBodyPose, asset
   } else sample = loop(a, pose.moving ? 'move' : 'idle', pose.moving ? pose.locomotionTimeMs ?? now : now);
   return { asset, sample, pose: p.kind === 'dying' ? p.terminalPose : pose, visible: krakenBodyVisible(state, now) };
 }
-export function sampleKrakenTentacle(t: KrakenTentacleState, asset: PipelineBossAsset, now: number): KrakenClipSample {
-  const attack = t.claw.attack;
+/** True when the arm leaves straight from a strike (peeling off its lane) rather than from the upright lurk. */
+function krakenRetractsFromStrike(t: KrakenTentacleState, struck: EnemyAreaClawAttack | null): struck is EnemyAreaClawAttack {
+  return !!struck && t.retractAt <= struck.endsAt + 100;
+}
+/** `previous` is the last strike this arm was seen with: the host clears its claw when the arm retreats. */
+export function sampleKrakenTentacle(t: KrakenTentacleState, asset: PipelineBossAsset, now: number,
+  previous: EnemyAreaClawAttack | null = null): KrakenClipSample {
+  const attack = t.claw.attack, struck = attack ?? previous;
   if (t.phase === 'retract' || now >= t.retractAt) {
-    // A lurk that found no target sinks back the way it came instead of peeling off a lane it never struck.
-    if (!attack) {
-      const rise = krakenClip(asset, 'rise'), last = rise.frames.length - 1;
-      return { clip: 'rise', frame: Math.round(last * (1 - krakenClamp((now - t.retractAt) / Math.max(1, t.endsAt - t.retractAt)))) };
+    if (krakenRetractsFromStrike(t, struck)) return timed(asset, 'retract', now, t.retractAt, t.endsAt);
+    // An upright arm lowers itself into the pond (the water level climbs over it, see krakenTentacleSink)
+    // instead of coiling back up the way it rose.
+    const rise = krakenClip(asset, 'rise'), last = rise.frames.length - 1;
+    const u = krakenClamp((now - t.retractAt) / Math.max(1, t.endsAt - t.retractAt));
+    return { clip: 'rise', frame: Math.round(last * (1 - .55 * u * u * (3 - 2 * u))) };
+  }
+  if (struck && now >= struck.endsAt) {
+    // Between strikes the arm lifts back up by rewinding the slam to its raised first pose, then lurks again.
+    if (now < t.hoverAt) {
+      const slam = krakenClip(asset, 'slam'), last = slam.frames.length - 1;
+      const u = krakenClamp((now - struck.endsAt) / Math.max(1, t.hoverAt - struck.endsAt));
+      return { clip: 'slam', frame: Math.round(last * (1 - u * u * (3 - 2 * u))) };
     }
-    return timed(asset, 'retract', now, t.retractAt, t.endsAt);
+    return loop(asset, 'hover', now - t.hoverAt);
   }
   if (now < t.hoverAt) return timed(asset, 'rise', now, t.startedAt, t.hoverAt);
   const hover = krakenClip(asset, 'hover'), period = hover.frames.length / hover.frameRate * 1000;
@@ -194,6 +209,14 @@ export function sampleKrakenTentacle(t: KrakenTentacleState, asset: PipelineBoss
     return loop(asset, 'hover', span > 0 ? lurked + (now - from) * (arrive - lurked) / span : arrive);
   }
   return loop(asset, 'hover', now - t.hoverAt);
+}
+/** How far the pond has risen over a retreating arm (0 = authored waterline, 1 = fully under). */
+export function krakenTentacleSink(t: KrakenTentacleState, now: number, previous: EnemyAreaClawAttack | null = null): number {
+  if (now < t.retractAt) return 0;
+  const u = krakenClamp((now - t.retractAt) / Math.max(1, t.endsAt - t.retractAt));
+  // A peeling arm drags itself back first and only goes under at the end of its retreat.
+  const s = krakenRetractsFromStrike(t, t.claw.attack ?? previous) ? krakenClamp((u - .55) / .45) : u;
+  return s * s * (3 - 2 * s);
 }
 export function sampleKrakenEgg(egg: KrakenEggState, asset: PipelineBossAsset, now: number): KrakenClipSample {
   return now < egg.hatchStartedAt ? loop(asset, 'idle', now - egg.landedAt)
@@ -213,6 +236,7 @@ const LOOK = {
   surface: { radius: 96, lifetime: 1.1, foam: .62, sprayCount: 56, spraySpeed: 105, drain: .65 },
   dive: { radius: 110, lifetime: 1.5, foam: .65, shadow: .12 },
   egg: { radius: 24 },
+  tentacleTurnRadPerSec: Math.PI * 1.6,
   spineWake: { length: 150, width: 9, lead: 10, opacity: .9 },
 } as const;
 
@@ -510,7 +534,11 @@ export function krakenDrain(timing: KrakenRiseTiming, now: number, intro: boolea
   return now < timing.armsAt ? 0 : look.foam * (1 - krakenClamp((now - timing.eyesAt) / (look.drain * 1000)));
 }
 
-interface PartView { view: KrakenSpriteView; event: EnemyAreaClawEvent; state: KrakenTentacleState }
+interface PartView {
+  view: KrakenSpriteView; event: EnemyAreaClawEvent; state: KrakenTentacleState;
+  /** Last strike seen on this arm and the smoothed drawn heading. */
+  previous: EnemyAreaClawAttack | null; angle: number; at: number;
+}
 /** Activity presentation owner. sync is a full current projection; clear/destroy detach every view.
  * All positions are presentation-world coordinates and all times are synchronized host times. */
 export class KrakenRenderer {
@@ -649,15 +677,24 @@ export class KrakenRenderer {
         cycleId: identity.cycleId }, part.claw);
       let entry = this.parts.get(key);
       if (!entry) {
-        entry = { view: this.idleTentacles.pop() ?? this.view(this.options.assets.tentacle, true), event, state: part };
+        entry = { view: this.idleTentacles.pop() ?? this.view(this.options.assets.tentacle, true), event, state: part,
+          previous: null, angle: part.contact.angle, at: now };
         this.parts.set(key, entry);
       }
       entry.event = event; entry.state = part;
-      const sample = sampleKrakenTentacle(part, this.options.assets.tentacle.metadata, now);
+      if (part.claw.attack) entry.previous = part.claw.attack;
+      // Replicated aim arrives in steps; turn the drawn arm smoothly towards it.
+      const turn = Math.atan2(Math.sin(part.contact.angle - entry.angle), Math.cos(part.contact.angle - entry.angle));
+      const step = LOOK.tentacleTurnRadPerSec * Math.max(0, now - entry.at) / 1000;
+      entry.angle += Math.max(-step, Math.min(step, turn)); entry.at = now;
+      const meta = this.options.assets.tentacle.metadata;
+      const sample = sampleKrakenTentacle(part, meta, now, entry.previous);
       const attack = part.claw.attack;
       const contact = sample.clip === 'slam' && attack ? 1 - krakenClamp((now - attack.strikeAt) / (attack.hitAt - attack.strikeAt)) : 1;
+      const sink = krakenTentacleSink(part, now, entry.previous), base = meta.elevation.previewWaterLevel ?? 0;
       // Contact pose is the part's waterEntry frame; outgoing lane origin is independently frozen.
-      entry.view.show(sample, part.contact, now, { socket: 'waterEntry', shadowContact: contact });
+      entry.view.show(sample, { x: part.contact.x, y: part.contact.y, angle: entry.angle }, now, { socket: 'waterEntry', shadowContact: contact,
+        waterLevel: base + sink * (meta.elevation.max - base + .5) });
       entry.view.sprite.clearTint();
       this.claw.syncArea(event, now);
       const retract = part.phase === 'retract' || now >= part.retractAt;

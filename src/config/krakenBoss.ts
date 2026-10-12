@@ -28,10 +28,14 @@ export const KrakenBossConfigSchema = v.pipe(v.strictObject({
   tentacles: v.strictObject({ ...lane, maxConcurrent: count, retractMs: positive, retryMs: positive,
     safetyMarginPx: nonnegative, hitboxProfileId: id, riseMs: positive,
     targetableAfterRiseMs: nonnegative, untargetableAfterRetractMs: nonnegative,
-    /** Lurking: emerge in the water band near the shore, wait upright, strike any reachable target in any direction,
-     * otherwise sink (no slam) and re-emerge elsewhere. */
-    lurkMinMs: positive, lurkMaxMs: positive, emergeShoreBandPx: positive, spawnSpacingPx: nonnegative,
-    repositionDelayMs: nonnegative, sinkMs: positive }),
+    /** An arm reaches out of the pond from the submerged kraken: its base sits in open water near the shore, its
+     * submerged root points back towards the kraken and it only strikes inside an arc around that radial direction.
+     * It lurks upright, turns smoothly onto a reachable target, may strike several times (lifting back up in between)
+     * and sinks when it runs out of strikes or targets. */
+    emergeShoreBandPx: positive, spawnSpacingPx: nonnegative, repositionDelayMs: nonnegative, sinkMs: positive,
+    baseClearancePx: positive, rootLengthPx: positive, strikeArcDegrees: v.pipe(positive, v.maxValue(180)),
+    idealReachPx: positive, aimTurnRateDegPerSec: positive, firstStrikeDelayMs: nonnegative,
+    restrikeDelayMs: nonnegative, liftMs: positive, idleTimeoutMs: positive, maxStrikes: count, staggerMs: nonnegative }),
   hitboxProfiles: v.pipe(v.array(v.strictObject({ id,
     rise: shapes, hover: shapes, slam: shapes, retract: shapes })), v.minLength(1)),
   transfer: CombatPartTransferPolicySchema,
@@ -82,7 +86,7 @@ v.check(c => c.tentacles.targetableAfterRiseMs <= c.tentacles.riseMs
   && c.tentacles.riseMs < c.tentacles.windupMs
   && c.tentacles.untargetableAfterRetractMs <= c.tentacles.retractMs, 'Invalid tentacle visibility anchors'),
 v.check(c => new Set(Object.values(c.assets)).size === 5, 'Boss assets need distinct IDs'),
-v.check(c => c.tentacles.lurkMinMs <= c.tentacles.lurkMaxMs && c.waterWander.minLegPx <= c.waterWander.maxLegPx
+v.check(c => c.tentacles.idealReachPx < c.tentacles.length && c.waterWander.minLegPx <= c.waterWander.maxLegPx
   && c.spines.raiseMs <= c.spines.windupMs && c.spines.regrowDelayMs + c.spines.regrowMs <= c.spines.cooldownMs,
 'Invalid lurk/wander/spine anchors'),
 v.check(c => new Set(c.hitboxProfiles.map(p => p.id)).size === c.hitboxProfiles.length

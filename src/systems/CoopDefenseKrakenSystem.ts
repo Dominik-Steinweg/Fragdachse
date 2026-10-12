@@ -41,7 +41,10 @@ export interface KrakenHostDependencies {
 }
 
 interface EggThrow { effect: KrakenEggLandEffect; from: Point; to: Point; releaseAt: number; released: boolean; }
-interface PartRuntime { state: KrakenTentacleState; lane: KrakenLaneReservation; progress: KrakenHostActionProgress; }
+interface PartRuntime {
+  state: KrakenTentacleState; lane: KrakenLaneReservation; progress: KrakenHostActionProgress;
+  strikes: number; nextStrikeAt: number; lastTargetAt: number; aimedAt: number; settledAttack: string | null;
+}
 
 /** Host-only Activity owner. preMovement runs BEFORE ordinary movement, actions AFTER it. */
 export class CoopDefenseKrakenSystem {
@@ -616,26 +619,22 @@ export class CoopDefenseKrakenSystem {
     const target = this.deps.intent.readTarget(s.boss), secondary = this.deps.intent.readSecondaryTargets(s.boss);
     const targets = target ? [target, ...secondary] : secondary;
     const stopping = s.phaseTwoPending || now >= p.stopSpawningAt;
+    const c = this.config.tentacles;
     for (const part of [...this.parts.values()]) {
-      const state = part.state;
-      if (stopping && !state.claw.attack && state.phase !== 'retract') { this.retractPart(state.contact.identity); continue; }
-      if (!stopping && state.phase === 'hover' && !state.claw.attack && now < state.retractAt) {
-        for (const target of targets) {
-          const pose = this.deps.habitat.aimTentacle(part.lane, target);
-          if (!pose) continue;
-          const c = this.config.tentacles;
-          const attack: EnemyAreaClawAttack = { attackId: this.id('tentacle'), weaponId: 'kraken-tentacle', pose,
-            presentation: 'tentacle', startedAt: now, strikeAt: now + c.windupMs,
-            hitAt: now + c.windupMs + c.strikeMs, endsAt: now + c.windupMs + c.strikeMs + c.recoveryMs };
-          state.claw = { revision: state.claw.revision + 1, attack };
-          state.contact.angle = pose.angle;
-          state.retractAt = attack.endsAt; state.endsAt = attack.endsAt + c.retractMs;
-          state.contact.targetableUntil = attack.endsAt + c.untargetableAfterRetractMs;
+      const state = part.state, last = state.claw.attack, striking = !!last && now < last.endsAt;
+      const dt = Math.max(0, now - part.aimedAt); part.aimedAt = now;
+      if (state.phase !== 'retract' && !striking) {
+        if (stopping) { this.retractPart(state.contact.identity); continue; }
+        if (last && part.settledAttack !== last.attackId) {
+          // A strike just finished: lift back up and lurk for another target, or peel back into the pond.
+          part.settledAttack = last.attackId;
+          if (part.strikes < c.maxStrikes && targets.some(q => this.deps.habitat.tentacleAim(part.lane, q) !== null)) {
+            state.hoverAt = last.endsAt + c.liftMs;
+            part.nextStrikeAt = state.hoverAt + c.restrikeDelayMs; part.lastTargetAt = now;
+            this.extendPart(state, state.hoverAt + c.idleTimeoutMs, c.sinkMs);
+          } else this.extendPart(state, Math.max(now, last.endsAt + .001), c.retractMs);
           state.revision++;
-          part.progress = { actionId: attack.attackId, impacted: false, released: false };
-          this.emitClaw(this.slot(state), state.claw);
-          break;
-        }
+        } else if (now >= state.hoverAt && now < state.retractAt) this.aimPart(part, targets, now, dt);
       }
       const attack = state.claw.attack;
       if (!attack || part.progress.impacted || now < attack.hitAt) continue;
@@ -648,19 +647,59 @@ export class CoopDefenseKrakenSystem {
     if (stopping && !this.parts.size) { this.surface(now); return; }
     if (stopping || now < this.nextPartAt || this.parts.size >= this.config.tentacles.maxConcurrent) return;
     this.nextPartAt = now + this.config.tentacles.retryMs;
-    const lanes = this.deps.habitat.reserveTentacles(s.boss, s.habitatId, targets, 1, this.recentParts);
+    const origin = this.deps.entity.readBoss(s.boss) ?? undefined;
+    const lanes = this.deps.habitat.reserveTentacles(s.boss, s.habitatId, targets, 1, this.recentParts, origin);
     for (const lane of lanes) this.createPart(lane, now);
+    // Arms surface one after another, never as a simultaneous burst.
+    if (lanes.length) this.nextPartAt = now + this.config.tentacles.staggerMs;
+  }
+  /** Lurking arm: turn smoothly onto the nearest reachable target and strike once aligned; sink after a quiet spell. */
+  private aimPart(part: PartRuntime, targets: readonly Point[], now: number, dt: number): void {
+    const c = this.config.tentacles, state = part.state;
+    let best: { target: Point; angle: number; distance: number } | null = null;
+    for (const target of targets) {
+      const angle = this.deps.habitat.tentacleAim(part.lane, target);
+      const distance = Math.hypot(target.x - state.contact.x, target.y - state.contact.y);
+      if (angle !== null && (!best || distance < best.distance)) best = { target, angle, distance };
+    }
+    if (!best) {
+      if (now - part.lastTargetAt >= c.idleTimeoutMs) { this.extendPart(state, now + .001, c.sinkMs); state.revision++; }
+      return;
+    }
+    part.lastTargetAt = now;
+    const diff = Math.atan2(Math.sin(best.angle - state.contact.angle), Math.cos(best.angle - state.contact.angle));
+    const limit = c.aimTurnRateDegPerSec * Math.PI / 180 * dt / 1000;
+    if (Math.abs(diff) > 1e-4) { state.contact.angle += Math.max(-limit, Math.min(limit, diff)); state.revision++; }
+    if (Math.abs(diff) > limit + Math.PI / 45 || now < part.nextStrikeAt || part.strikes >= c.maxStrikes) return;
+    const pose = this.deps.habitat.aimTentacle(part.lane, best.target);
+    if (!pose) return;
+    const attack: EnemyAreaClawAttack = { attackId: this.id('tentacle'), weaponId: 'kraken-tentacle', pose,
+      presentation: 'tentacle', startedAt: now, strikeAt: now + c.windupMs,
+      hitAt: now + c.windupMs + c.strikeMs, endsAt: now + c.windupMs + c.strikeMs + c.recoveryMs };
+    state.claw = { revision: state.claw.revision + 1, attack };
+    state.contact.angle = pose.angle;
+    this.extendPart(state, attack.endsAt + c.liftMs + c.idleTimeoutMs, c.sinkMs);
+    state.revision++; part.strikes++;
+    part.progress = { actionId: attack.attackId, impacted: false, released: false };
+    this.emitClaw(this.slot(state), state.claw);
+  }
+  /** Re-plan when the arm leaves; its contact stays targetable briefly into the retreat. */
+  private extendPart(state: KrakenTentacleState, retractAt: number, retreatMs: number): void {
+    state.retractAt = retractAt; state.endsAt = retractAt + retreatMs;
+    state.contact.targetableUntil = Math.max(state.contact.targetableFrom + .001,
+      Math.min(state.endsAt, retractAt + this.config.tentacles.untargetableAfterRetractMs));
   }
   private createPart(lane: KrakenLaneReservation, now: number): void {
     const s = this.state!, c = this.config.tentacles, partId = this.id('part');
-    const hoverAt = now + c.riseMs, retractAt = hoverAt + c.lurkMinMs + this.random() * (c.lurkMaxMs - c.lurkMinMs);
+    const hoverAt = now + c.riseMs, retractAt = hoverAt + c.idleTimeoutMs;
     const part: KrakenTentacleState = { revision: 1, phase: 'rise', startedAt: now, hoverAt,
       retractAt, endsAt: retractAt + c.sinkMs,
       claw: { revision: 1, attack: null }, contact: { identity: { boss: s.boss, partId, partGeneration: 1, cycleId: s.cycleId },
         contactId: this.id('contact'), hitboxProfileId: c.hitboxProfileId,
         x: lane.waterEntry.x, y: lane.waterEntry.y, angle: lane.pose.angle,
         targetableFrom: now + c.targetableAfterRiseMs, targetableUntil: retractAt + Math.min(c.sinkMs, c.untargetableAfterRetractMs) } };
-    this.parts.set(partId, { state: part, lane, progress: { actionId: partId, impacted: false, released: false } });
+    this.parts.set(partId, { state: part, lane, progress: { actionId: partId, impacted: false, released: false },
+      strikes: 0, nextStrikeAt: hoverAt + c.firstStrikeDelayMs, lastTargetAt: now, aimedAt: now, settledAttack: null });
     this.syncParts(); this.emitClaw(this.slot(part), part.claw);
   }
   private expireParts(now: number): void {
@@ -672,7 +711,9 @@ export class CoopDefenseKrakenSystem {
       if (now >= s.retractAt) {
         if (s.phase !== 'retract') this.retractPart(s.contact.identity, false);
       } else if (s.phase !== 'retract') {
-        const phase = now >= (s.claw.attack?.strikeAt ?? Infinity) ? 'slam' : now >= s.hoverAt ? 'hover' : 'rise';
+        const attack = s.claw.attack;
+        // A finished strike lifts back to the lurking pose (hover hitbox) before hoverAt is reached again.
+        const phase = attack && now >= attack.strikeAt && now < attack.endsAt ? 'slam' : now >= s.hoverAt || attack ? 'hover' : 'rise';
         if (phase !== s.phase) { s.phase = phase; s.revision++; }
       }
     }

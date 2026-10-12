@@ -13,7 +13,7 @@ vi.mock('../src/effects/kraken/KrakenTentacleShadow', () => ({ KrakenTentacleSha
 } }));
 vi.mock('../src/effects/kraken/KrakenReviewDrainFilter', () => ({ addReviewDrain: () => ({ active: false }) }));
 import { KrakenRenderer, KrakenSpriteView, KrakenEffects, KrakenEggFlightView, krakenSocket, sampleKrakenBody,
-  sampleKrakenTentacle, sampleKrakenEgg, krakenRiseTiming, krakenDeathAlpha, krakenBroodDiscs, type KrakenPresentationAsset, type KrakenPresentationAssets } from '../src/effects/kraken/KrakenRenderer';
+  sampleKrakenTentacle, krakenTentacleSink, sampleKrakenEgg, krakenRiseTiming, krakenDeathAlpha, krakenBroodDiscs, type KrakenPresentationAsset, type KrakenPresentationAssets } from '../src/effects/kraken/KrakenRenderer';
 import { KrakenIntroRenderer } from '../src/effects/kraken/KrakenIntroRenderer';
 import { KRAKEN_BROOD, KRAKEN_WORLD_EXPOSURE, krakenEggArc, krakenWaterMask } from '../src/effects/kraken/submersionShader';
 import { KRAKEN_RISE_INTRO } from '../src/config/bossIntros';
@@ -60,7 +60,7 @@ const boss: KrakenState['boss'] = { kind: 'enemy', id: 'boss', scope: { worldRev
 function part(id: string): KrakenTentacleState {
   return { contact: { identity: { boss, partId: id, partGeneration: 1, cycleId: 1 }, contactId: id,
     hitboxProfileId: 'exposed', x: 70, y: 80, angle: .5, targetableFrom: 100, targetableUntil: 2800 },
-    revision: 1, phase: 'hover', startedAt: 0, hoverAt: 500, retractAt: 2300, endsAt: 3000,
+    revision: 1, phase: 'hover', startedAt: 0, hoverAt: 500, retractAt: 2150, endsAt: 3000,
     claw: { revision: 1, attack: { attackId: `${id}:slam`, weaponId: 'tentacle', presentation: 'tentacle',
       pose: { originX: 100, originY: 90, angle: .5, geometry: { kind: 'lane', length: 240, width: 80 } },
       startedAt: 0, strikeAt: 1600, hitAt: 1800, endsAt: 2100 } } };
@@ -219,12 +219,27 @@ describe('host timelines and D asset projection', () => {
     const immediate = { ...egg(), spawnAt: egg().hatchStartedAt };
     expect(sampleKrakenEgg(immediate, a.egg.metadata, immediate.spawnAt).frame).toBe(a.egg.metadata.clips.find(c => c.name === 'hatch')!.markers!.spawn);
   });
-  it('sinks a lurking tentacle that never struck by playing its rise backwards', () => {
+  it('lowers a lurking tentacle that never struck into the pond instead of coiling it back up', () => {
     const a = asset('tentacle'), t = part('lurk');
     Object.assign(t, { phase: 'retract', retractAt: 2000, endsAt: 2600 }); t.claw.attack = null;
     const last = a.metadata.clips.find(c => c.name === 'rise')!.frames.length - 1;
     expect(sampleKrakenTentacle(t, a.metadata, 2000)).toEqual({ clip: 'rise', frame: last });
-    expect(sampleKrakenTentacle(t, a.metadata, 2600)).toEqual({ clip: 'rise', frame: 0 });
+    expect(sampleKrakenTentacle(t, a.metadata, 2600).frame).toBeGreaterThan(0);
+    expect(krakenTentacleSink(t, 2000)).toBe(0);
+    expect(krakenTentacleSink(t, 2600)).toBe(1);
+  });
+  it('lifts an arm back up between strikes and peels it back after its last strike', () => {
+    const a = asset('tentacle'), t = part('again'), strike = t.claw.attack!;
+    const slamLast = a.metadata.clips.find(c => c.name === 'slam')!.frames.length - 1;
+    // Lifting: the slam rewinds from its last pose to its raised first pose, then the lurk loop resumes.
+    Object.assign(t, { hoverAt: strike.endsAt + 600, retractAt: strike.endsAt + 3000, endsAt: strike.endsAt + 4000 });
+    expect(sampleKrakenTentacle(t, a.metadata, strike.endsAt)).toEqual({ clip: 'slam', frame: slamLast });
+    expect(sampleKrakenTentacle(t, a.metadata, strike.endsAt + 599).clip).toBe('slam');
+    expect(sampleKrakenTentacle(t, a.metadata, strike.endsAt + 600).clip).toBe('hover');
+    // Leaving straight from the strike uses the retract clip, even after the host cleared the claw.
+    Object.assign(t, { phase: 'retract', retractAt: strike.endsAt + 16, endsAt: strike.endsAt + 900 }); t.claw.attack = null;
+    expect(sampleKrakenTentacle(t, a.metadata, strike.endsAt + 100, strike).clip).toBe('retract');
+    expect(sampleKrakenTentacle(t, a.metadata, strike.endsAt + 100).clip).toBe('rise');
   });
   it('lurks on its own clock and is retimed from the telegraph to reach the slam pose without a jump', () => {
     const a = asset('tentacle'), t = part('aim'), attack = t.claw.attack!;

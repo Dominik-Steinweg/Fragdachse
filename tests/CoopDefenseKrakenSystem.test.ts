@@ -17,9 +17,11 @@ function setup() {
     intent: { readTarget: () => ({ target: boss, x: 450, y: 0 }), readSecondaryTargets: () => [] },
     habitat: { reserveWaterSpawn: vi.fn(), revalidate: () => true, release: vi.fn(),
       reserveTentacles: (_boss, _habitat, _targets, count) => !lanesEnabled ? [] : Array.from({ length: count }, (_, i): KrakenLaneReservation => ({
-        reservationId: `lane-${++serial}`, topologyRevision: 1, shoreId: `shore-${serial}`, waterEntry: { x: 100, y: i * 200 },
+        reservationId: `lane-${++serial}`, topologyRevision: 1, shoreId: `shore-${serial}`, waterEntry: { x: 100, y: i * 200 }, radialAngle: 0,
         pose: { originX: 110, originY: i * 200, angle: 0, geometry: { kind: 'lane', length: config.tentacles.length, width: config.tentacles.width } } })),
       revalidateLane: () => true,
+      tentacleAim: (r, target) => Math.hypot(target.x - r.waterEntry.x, target.y - r.waterEntry.y) <= config.tentacles.length - config.tentacles.safetyMarginPx
+        ? Math.atan2(target.y - r.waterEntry.y, target.x - r.waterEntry.x) : null,
       aimTentacle: (r, target) => Math.hypot(target.x - r.waterEntry.x, target.y - r.waterEntry.y) <= config.tentacles.length - config.tentacles.safetyMarginPx
         ? { ...r.pose, angle: Math.atan2(target.y - r.waterEntry.y, target.x - r.waterEntry.x) } : null,
       canWander: () => true, wanderPoint: () => null, divePoint: () => ({ x: 0, y: 0 }), isDiveInterior: () => true, recoverLand: () => null,
@@ -199,19 +201,39 @@ describe('Kraken host owner', () => {
     expect(f.system.getState()!.tentacles[0].contact.identity.partId).not.toBe(part.contact.identity.partId);
     expect(f.deps.combat.resolveAreaAttack).not.toHaveBeenCalled();
   });
-  it('starts a fresh full warning only when a hovering arm can reach a diagonal target', () => {
+  it('turns a lurking arm smoothly onto a reachable diagonal target before a full warning', () => {
     const f = setup(); f.config.tentacles.maxConcurrent = 1; f.dive();
     const part = f.system.getState()!.tentacles[0]; f.tick(part.hoverAt);
     expect(f.system.getState()!.tentacles[0].claw.attack).toBeNull();
     f.deps.intent.readTarget = () => ({ target: boss, x: part.contact.x + 100, y: part.contact.y + 100 });
-    f.tick(part.hoverAt + 100);
-    const armed = f.system.getState()!.tentacles[0], attack = armed.claw.attack!;
-    expect(attack.startedAt).toBe(part.hoverAt + 100);
+    let at = part.hoverAt, armed = f.system.getState()!.tentacles[0], previous = armed.contact.angle;
+    const maxStep = f.config.tentacles.aimTurnRateDegPerSec * Math.PI / 180 * .016 + 1e-9;
+    while (!armed.claw.attack && at < part.hoverAt + 3000) {
+      f.tick(at += 16); armed = f.system.getState()!.tentacles[0];
+      if (!armed.claw.attack) expect(Math.abs(armed.contact.angle - previous)).toBeLessThanOrEqual(maxStep);
+      previous = armed.contact.angle;
+    }
+    const attack = armed.claw.attack!;
+    expect(attack.startedAt).toBeGreaterThanOrEqual(part.hoverAt + f.config.tentacles.firstStrikeDelayMs);
     expect(attack.strikeAt - attack.startedAt).toBe(f.config.tentacles.windupMs);
     expect(armed.contact.angle).toBeCloseTo(Math.PI / 4);
-    expect(armed.retractAt).toBe(attack.endsAt);
     f.tick(attack.hitAt); f.tick(attack.hitAt);
     expect(f.deps.combat.resolveAreaAttack).toHaveBeenCalledOnce();
+  });
+  it('lets an arm strike again after lifting back up, then retreat after its last strike', () => {
+    const f = setup(); f.config.tentacles.maxConcurrent = 1; f.config.tentacles.maxStrikes = 2; f.dive();
+    const part = f.system.getState()!.tentacles[0];
+    f.deps.intent.readTarget = () => ({ target: boss, x: part.contact.x + 150, y: part.contact.y });
+    const strikes: string[] = [];
+    let at = part.hoverAt, state = f.system.getState()!.tentacles[0];
+    while (at < part.hoverAt + 12000 && f.system.getState()!.tentacles.length) {
+      f.tick(at += 16); state = f.system.getState()!.tentacles[0] ?? state;
+      const attack = state.claw.attack;
+      if (attack && !strikes.includes(attack.attackId)) strikes.push(attack.attackId);
+      if (state.phase === 'retract') break;
+    }
+    expect(strikes).toHaveLength(2);
+    expect(state.phase).toBe('retract');
   });
   it('releases six homing spines once under reentrancy, regrows them and respects cooldown', () => {
     const f = setup(); f.config.spines.cooldownMs = 10000;
@@ -393,13 +415,18 @@ describe('Kraken host owner', () => {
   it('keeps multiple targetable part slots independent; stun retracts only that part', () => {
     const f = setup(); f.deps.intent.readTarget = () => ({ target: boss, x: 200, y: 80 }); f.dive();
     const submergedAt = f.config.dive.intervalMs + f.config.dive.durationMs;
-    for (let i = 1; i < f.config.tentacles.maxConcurrent; i++) f.tick(submergedAt + i * f.config.tentacles.retryMs);
-    f.tick(submergedAt + (f.config.tentacles.maxConcurrent - 1) * f.config.tentacles.retryMs + f.config.tentacles.riseMs);
+    // Arms surface staggered and each turns onto the target before striking; wait until all strike at once.
+    let at = submergedAt;
+    for (; at < submergedAt + 8000; at += 16) {
+      f.tick(at);
+      const s = f.system.getState()!;
+      if (s.tentacles.length === f.config.tentacles.maxConcurrent && s.tentacles.every(p => p.claw.attack && at < p.claw.attack.endsAt)) break;
+    }
     const state = f.system.getState()!;
     expect(state.phase.kind).toBe('submerged'); expect(state.bodyTargetability.mode).toBe('hidden');
     expect(state.tentacles).toHaveLength(f.config.tentacles.maxConcurrent);
     const part = state.tentacles[0];
-    expect(f.system.contacts.getContacts(state.tentacles.at(-1)!.hoverAt)).toHaveLength(state.tentacles.length);
+    expect(f.system.contacts.getContacts(at)).toHaveLength(state.tentacles.length);
     f.system.contacts.applyPartStatus(part.contact.identity, 'stun', part.endsAt);
     const next = f.system.getState()!;
     expect(next.tentacles[0].claw.attack).toBeNull();

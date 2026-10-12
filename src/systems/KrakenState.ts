@@ -216,7 +216,9 @@ export interface KrakenHabitatPort {
   reserveWaterSpawn(habitatId: string, bodyRadiusPx: number): KrakenHabitatResult<KrakenHabitatReservation>;
   revalidate(reservation: KrakenHabitatReservation): boolean;
   reserveTentacles(boss: BossTargetRef, habitatId: string, targets: readonly { readonly x: number; readonly y: number }[],
-    maxCount: number, avoid?: readonly { x: number; y: number }[]): readonly KrakenLaneReservation[];
+    maxCount: number, avoid?: readonly { x: number; y: number }[], origin?: { readonly x: number; readonly y: number }): readonly KrakenLaneReservation[];
+  /** Strike heading towards a target if it is reachable from this base inside the arm's arc; never commits. */
+  tentacleAim(reservation: KrakenLaneReservation, target: { x: number; y: number }): number | null;
   aimTentacle(reservation: KrakenLaneReservation, target: { x: number; y: number }): KrakenLaneReservation['pose'] | null;
   wanderPoint(from: { x: number; y: number }, random: number): { x: number; y: number } | null;
   canWander(from: { x: number; y: number }, to: { x: number; y: number }): boolean;
@@ -233,6 +235,8 @@ export interface KrakenLaneReservation {
   readonly topologyRevision: number;
   readonly shoreId: string;
   readonly waterEntry: { readonly x: number; readonly y: number };
+  /** Direction from the submerged kraken through the base: the arm comes out of the pond along it. */
+  readonly radialAngle: number;
   readonly pose: CombatAreaPose & { readonly geometry: Extract<CombatAreaPose['geometry'], { kind: 'lane' }> };
 }
 export interface KrakenExitReservation {
