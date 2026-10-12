@@ -49,7 +49,7 @@ export function assetFromExport(report, exportUrl) {
       master: url(m.frames[m.idleFrame].file), elevation: m.elevation, nativeMetrics: report.report?.native,
       sources: Object.entries(report.sheets).map(([size, layout]) => ({ ...layout, size: Number(size),
         url: url(`sheet-${size}.png`), idleUrl: url(`sprite-${size}.png`),
-        atlases: report.atlases?.[size], exportBase: base,
+        atlases: report.atlases?.[size], exportBase: base, materialPass: report.materialPass,
         elevation: m.elevation ? { ...m.elevation, frames: m.frames.map((_, i) => url(`elevation/frames-${size}/frame-${String(i).padStart(4, '0')}.png`)) } : null })) }] };
 }
 

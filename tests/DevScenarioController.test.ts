@@ -54,6 +54,7 @@ beforeEach(() => {
     getWorldMetrics: () => ({ offsetX: 0, offsetY: 12, gridCols: 60, gridRows: 33 }),
     getScenarioLoadingState: () => ({ roundStartPrepared: true }), getScenarioObservation: () => ({}),
     getScenarioLightingTargets: () => ({ sunlight: null, enemyReadability: {getDiagnostics:()=>({})} }),
+    getScenarioKrakenResidency: () => null,
     getWorldDescriptor: () => ({}), getWorldCombatCore: () => null, setTimeOfDayDebugOverride() {},
     setIsLocalReady() {}, stopScenarioUltimate() {}, isMatchTerminated: () => false,
     hostDiscardRound: () => { host.phase = 'LOBBY'; host.started = false; },
@@ -102,15 +103,22 @@ describe('Dev scenario automation lifecycle', () => {
     (controller as any).runtime.getWorldMetrics = () => ({ offsetX: 0, offsetY: 12, gridCols: 70, gridRows: 48 });
     const api = window.devScenario!;
     expect(api.run({ action: 'krakenMission', skipIntro: true, hp: 4000 })).toMatchObject({ ok: true });
+    controller.clock.preparing = true;
     expect(controller.config.mapId).toBe(KRAKEN_MAP_ID);
     controller.update(); controller.update(); host.phase = 'ARENA'; host.started = true; controller.update();
     expect(krakenMission.start).not.toHaveBeenCalled();
-    controller.afterHostFrame(); krakenMission.hp.mockReturnValueOnce(false); controller.update();
+    controller.afterHostFrame();
+    expect(controller.clock.paused).toBe(false);
+    krakenMission.hp.mockReturnValueOnce(false); controller.update();
     expect(krakenMission.start).toHaveBeenCalledExactlyOnceWith(true);
     expect(controller.snapshot().ready).toBe(false);
+    controller.afterHostFrame();
+    expect(controller.clock.paused).toBe(false);
     controller.update();
     expect(krakenMission.hp).toHaveBeenLastCalledWith(4000);
     expect(controller.snapshot().ready).toBe(true);
+    controller.afterHostFrame();
+    expect(controller.clock.paused).toBe(true);
     expect(controller.config.freezeMission).toBe(false);
     expect(api.run({ action: 'krakenMission', hp: 0 })).toMatchObject({ ok: false });
   });

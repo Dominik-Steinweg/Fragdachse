@@ -16,7 +16,9 @@ export function krakenResidencyPlan(phase: KrakenResidencyPhase, options: Kraken
     add('tentacle', ['rise', 'hover', 'slam', 'retract']);
   }
   if (phase === 'ashore') { add('water', ['idle', 'move']); add('land', ['ashore']); }
-  if (phase === 'ashore' || phase === 'land') add('land', ['idle', 'move', 'ink-spit', 'slam', 'egg-throw', 'death']);
+  // During the crossing only ashore is played. Avoid overlapping both complete bodies.
+  if (phase === 'ashore') add('land', ['idle']);
+  if (phase === 'land') add('land', ['idle', 'move', 'ink-spit', 'slam', 'egg-throw', 'death']);
   if (current.includes('egg')) add('egg', ['idle', 'hatch']);
   if (phase === 'water' && options.prefetchLand) add('land', ['__rest', 'ashore', 'idle', 'move', 'ink-spit', 'slam', 'egg-throw', 'death']);
   return { required, clips };

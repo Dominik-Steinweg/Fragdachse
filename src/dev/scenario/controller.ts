@@ -801,7 +801,7 @@ export class DevScenarioController {
       }
       this.flushTrainShowcase();
       this.updateTrainShowcase();
-      if (!this.setupPending && !this.pendingTrainShowcase) this.pauseVisualTest();
+      if (!this.setupPending && !this.pendingTrainShowcase && !this.pendingKrakenMission && this.pendingKrakenHp === null) this.pauseVisualTest();
     } catch (error) { this.fail(error); this.stop(); this.state = 'error'; }
   }
   setPanelCollapsed(collapsed: boolean): void { this.panel.setCollapsed(collapsed); }
@@ -819,14 +819,23 @@ export class DevScenarioController {
       point = { x: point.x + offset.x, y: point.y + offset.y };
     }
     // Inszenierte Fokusse (Boss-Intro) laufen auch hier, damit Schwenk und Zoom pruefbar sind.
-    const focus = this.trainCameraPoint ? null : getCameraFocusOverride(this.scene);
+    const focus = this.trainCameraPoint || this.krakenLightShadowReview ? null : getCameraFocusOverride(this.scene);
     if (focus) point = { x: point.x + (focus.x - point.x) * focus.weight, y: point.y + (focus.y - point.y) * focus.weight };
     const zoom = this.zoom * resolveCameraFocusZoom(focus);
     const camera = this.scene.cameras.main;
     camera.removeBounds();
     if (this.krakenLightShadowReview) camera.setZoom(1); // A source/world pixel is one camera pixel in the pilot.
     else camera.setZoom(this.scene.scale.width / GAME_WIDTH * zoom, this.scene.scale.height / GAME_HEIGHT * zoom);
-    if (this.trainCameraPoint) {
+    if (this.krakenLightShadowReview) {
+      const metrics = this.runtime.getWorldMetrics();
+      if (metrics) {
+        const clampCenter = (value: number, start: number, span: number, viewport: number) => span <= viewport
+          ? start + span / 2 : Math.max(start + viewport / 2, Math.min(start + span - viewport / 2, value));
+        point = { x: clampCenter(point.x, metrics.offsetX, metrics.widthPx, camera.width / camera.zoomX),
+          y: clampCenter(point.y, metrics.offsetY, metrics.heightPx, camera.height / camera.zoomY) };
+      }
+    }
+    if (this.trainCameraPoint || this.krakenLightShadowReview) {
       // Arena uses origin (0,0); Phaser centerOn assumes the unzoomed half viewport.
       // Invert the actual origin/zoom instead, also valid after a DPR or viewport resize.
       camera.stopFollow();
@@ -837,7 +846,7 @@ export class DevScenarioController {
   }
   snapshot(): Record<string, unknown> {
     return { state: this.state, ready: this.state === 'ready' && !this.setupPending && !this.pendingTrainShowcase && !this.krakenLoading && !this.pendingKrakenMission && this.pendingKrakenHp === null, message: this.message, isolated: true, network: 'local-only',
-      initialPosition: this.initialPosition, mission: this.runtime.devScenarioPort.readMission(),
+      krakenResidency: this.runtime.getScenarioKrakenResidency(), initialPosition: this.initialPosition, mission: this.runtime.devScenarioPort.readMission(),
       train: this.trainStatus(),
       bots: this.bots.ids().map((id, index) => ({ index, id, ...(this.state === 'ready' ? this.bots.position(index) : null) })),
       readyAfterMs: this.readyAt === null ? null : Math.round(this.readyAt - this.startedAt),

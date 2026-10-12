@@ -88,7 +88,8 @@ export async function importRuntime({ revision, requestedIds = [], root = proces
       Object.assign(asset, { targetSize: rendered.targetSize, runtimeBudgetMB: entry.runtimeBudgetMB,
         sockets: selected.sockets ?? {}, ...(selected.socketFrames ? { socketFrames: selected.socketFrames } : {}),
         elevation: rendered.elevation, elevationPass: { encoding, min, max, scale, waterline, alpha, colorSpace, premultiplied },
-        atlases: selected.atlases, budget: selected.budget });
+        atlases: selected.atlases, budget: selected.budget,
+        ...(rendered.materialPass ? { materialPass: selected.materialPass, shadowMesh: structuredClone(rendered.shadowMesh) } : {}) });
       if (asset.sourceSize !== Math.round(asset.targetSize * (asset.displayScale ?? 1))) throw new Error(`Boss must select displayed canvas resolution: ${entry.id}`);
       await verifyBossRuntime(entry, asset, async relative => {
         if (path.isAbsolute(relative) || /[\\:]/.test(relative) || relative.split('/').includes('..')) throw new Error('Invalid boss atlas path');
@@ -96,6 +97,11 @@ export async function importRuntime({ revision, requestedIds = [], root = proces
         if (selected.files[`${selected.variant}/${relative}`] !== createHash('sha256').update(bytes).digest('hex')) throw new Error('Boss atlas is not selection-bound');
         return bytes;
       });
+      if (asset.shadowMesh) for (const pose of asset.shadowMesh.frames) for (const key of ['positions', 'indices']) {
+        const relative = pose[key].file;
+        copies.push({ file: `${source}/${selected.variant}/${relative}`, destination: `public/${folder}/${relative}` });
+        pose[key].file = `./${folder}/${relative}`;
+      }
       asset.atlases = structuredClone(asset.atlases);
       for (const pass of Object.values(asset.atlases)) for (const clip of Object.values(pass)) for (const page of clip.pages) {
         for (const key of ['image', 'json']) {

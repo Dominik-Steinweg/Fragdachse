@@ -23,5 +23,5 @@
     "broodTable": { "id": "kraken-melee-brood", "entries": [{ "enemyKind": "rabid-badger", "weight": 1 }] }
   },
   "victory": "boss-defeated", "death": { "waterMs": 1200, "landMs": 1500 },
-  "residency": { "waterBudgetMiB": 110, "landBudgetMiB": 100, "pixelsPerDisplayPixel": 1 }
+  "residency": { "waterBudgetMiB": 165, "landBudgetMiB": 150, "pixelsPerDisplayPixel": 1 }
 }

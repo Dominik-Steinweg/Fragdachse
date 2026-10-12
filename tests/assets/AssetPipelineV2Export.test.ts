@@ -365,6 +365,11 @@ describe('V2 animated asset export contracts', () => {
       'calm/render.json', 'calm/export.json', 'calm/masters/frame-0003.png', 'build.json', 'archive-source/scripts/asset-pipeline/recipes/fixture.py',
       'archive-source/art/poc/pipeline-v2/textures/organic.png']));
     expect(await verifySelectionV2(f.asset)).toEqual(selection);
+    for (const field of ['materialPass', 'shadowMesh']) {
+      await save(path.join(f.asset, 'selection.json'), { ...selection, [field]: { version: 1 } });
+      await expect(verifySelectionV2(f.asset)).rejects.toThrow(/Selected bundle changed/);
+    }
+    await save(path.join(f.asset, 'selection.json'), selection);
     const archive = await archiveManifestV2(f.asset);
     expect(archive.files).toMatchObject(selection.files);
     expect(archive.selectionSha256).toBe(hash(await readFile(path.join(f.asset, 'selection.json'))));
@@ -433,4 +438,15 @@ describe('V2 animated asset export contracts', () => {
     expect(await readFile(path.join(f.asset, 'archive-source', reference))).toEqual(f.frames[1]);
     await expect(readFile(path.join(f.asset, 'review.json'))).rejects.toThrow(/ENOENT/);
   });
+});
+import { decodeOct, encodeOct, resizeKrakenElevation } from '../../scripts/asset-pipeline/kraken-material-v2.mjs';
+
+it('averages decoded packed shading normals across the lower-hemisphere seam and preserves Beauty coverage', async () => {
+  const a = encodeOct(.02, .02, -1), b = encodeOct(-.02, .02, -1);
+  const pixels = Buffer.from([100, ...a, 255, 100, ...b, 255, 100, ...a, 255, 100, ...b, 255]);
+  const packed = await sharp(pixels, { raw: { width: 2, height: 2, channels: 4 } }).png().toBuffer();
+  const beauty = await sharp({ create: { width: 2, height: 2, channels: 4, background: '#604080' } }).png().toBuffer();
+  const result = await sharp(await resizeKrakenElevation(packed, beauty, 1)).raw().toBuffer();
+  expect(result[0]).toBe(100); expect(result[3]).toBe(255);
+  expect(decodeOct(result[1] / 255, result[2] / 255)[2]).toBeLessThan(-.99);
 });

@@ -37,6 +37,18 @@ function setup() {
 }
 
 describe('Kraken host owner', () => {
+  it('completes a diagonal exit at 60 Hz despite subpixel distance roundoff', () => {
+    const f = setup();
+    const path = [{ x: 1136, y: 720 }, { x: 1392, y: 1008 }, { x: 1392, y: 1264 }];
+    Object.assign(f.entity, path[0]); f.system.start(boss, 'pond', 0, 0);
+    f.deps.habitat.reserveExit = () => ({ status: 'valid', value: {
+      reservationId: 'diagonal', topologyRevision: 1, corridorId: 'south', widthPx: 160, path } });
+    f.entity.hp = 40; f.tick(1);
+    const phase = f.system.getState()!.phase; if (phase.kind !== 'ashore') throw Error();
+    for (let frame = 1; frame * 1000 / 60 <= phase.recoveryEndsAt + 1000; frame++) f.tick(Math.floor(frame * 1000 / 60));
+    expect(f.system.getState()?.phase.kind).toBe('land');
+    expect(f.entity.x).toBeCloseTo(1392, 6); expect(f.entity.y).toBeCloseTo(1264, 6);
+  });
   it('finishes an egg volley across half HP without retiring landed eggs or flights', () => {
     const f = setup(); f.tick(f.config.firstAttackDelayMs);
     const ink = f.system.getBodyClaw().attack!; f.tick(ink.endsAt); f.tick(ink.endsAt + f.config.actionPauseMs);

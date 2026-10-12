@@ -91,3 +91,13 @@ it('rejects preview URLs, stale source size, unknown clip markers and missing so
   expect(() => normalizePipelineAsset(b)).toThrow();
   expect(() => normalizePipelineAsset({ ...bossAsset(), sockets: undefined })).toThrow();
 });
+
+it('never interprets a legacy scalar elevation as packed material normals', () => {
+  const asset = bossAsset();
+  asset.elevationPass.encoding = 'linear-unorm8-z-oct-normal-v1';
+  expect(() => normalizePipelineAsset(asset)).toThrow('declared together');
+  asset.elevationPass.encoding = 'linear-unorm8-world-z';
+  asset.materialPass = { version: 1, color: 'srgb-albedo-baked-cavity-v1', normal: 'linear-unorm8-z-oct-normal-v1',
+    emission: 'linear-rgb-unorm8-scaled-v1', worldPxPerBU: 40, emissionRange: 8, exposure: 1, tint: [1,1,1], saturation: 1 };
+  expect(() => normalizePipelineAsset(asset)).toThrow('declared together');
+});

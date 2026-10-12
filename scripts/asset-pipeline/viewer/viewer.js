@@ -1,10 +1,12 @@
+import { SUN_TUNING_DEFAULTS } from '../../../src/config/sunlight';
+const krakenClouds = { tuning: SUN_TUNING_DEFAULTS, timeSec: 0, strength: 0, sunPath: { sun: [Math.SQRT1_2, 0, Math.SQRT1_2], strength: 1, elevation: Math.PI / 4 } };
 import * as Phaser from 'phaser';
 import { createWebGLStartupContext } from '../../../src/utils/webglContext';
 import { getHeldItemAnchor, PLAYER_VISUAL_SIZE } from '../../../src/config';
 import runtime from '../../../src/config/pipelineAssets.json';
 import { categoryLabels, models, constructionsFor, resolveSource, samplePose, supportsHeldView, assetFromExport, advancePlayback, reviewDefaults, readReviewSettings, writeReviewSettings } from './library.mjs';
 
-import { addSubmersionFilter } from '../../../src/effects/kraken/submersionShader';
+import { addSubmersionFilter, krakenMaterialExposure } from '../../../src/effects/kraken/submersionShader';
 import { createPond } from './pond.js';
 
 const $ = id => document.getElementById(id);
@@ -123,10 +125,10 @@ async function loadSource(r, keep) {
       r.variant.clips = extended.clips;
     }
   }
-  r.resources = { color: {}, elevation: {} };
+  r.resources = { color: {}, elevation: {}, emission: {} };
   const jobs = [];
   if (r.source.atlases) {
-    for (const pass of ['color','elevation']) for (const [name, atlas] of Object.entries(r.source.atlases[pass] || {})) {
+    for (const pass of ['color','elevation','emission']) for (const [name, atlas] of Object.entries(r.source.atlases[pass] || {})) {
       r.resources[pass][name] = atlas.pages.map((page, i) => {
         const key = `${r.key}/${pass}/${name}/${i}`; keep.add(key);
         jobs.push(loadTexture(key, r.source.exportBase + page.image, { atlasJson: r.source.exportBase + page.json }));
@@ -166,8 +168,16 @@ function applyPose(p,r,current) {
     : scene.textures.getFrame(r.resources.elevationFrames[pose.logicalFrame]);
   if (!p.submersion) p.submersion=addSubmersionFilter(p.sprite,elevation,r.source.elevation);
   p.submersion.elevationFrame=elevation;
-  p.submersion.active=settings.submersion;
-  p.submersion.params.waterLevel=settings.waterLevel;
+  const material = r.source.materialPass;
+  if (material?.normal === 'linear-unorm8-z-oct-normal-v1') {
+    const azimuth = Number(document.getElementById('material-sun')?.value ?? 0) * Math.PI / 180;
+    krakenClouds.sunPath.sun = [Math.cos(azimuth) * Math.SQRT1_2, -Math.sin(azimuth) * Math.SQRT1_2, Math.SQRT1_2];
+    p.submersion.material = { clouds: krakenClouds, emission: atlasFrame(r.resources.emission[pose.clip], pose.frameName),
+      emissionRange: material.emissionRange, tint: material.tint, saturation: material.saturation, highlightRollOff: r.asset.id !== 'abyssal-kraken-egg', highlightRole: r.asset.id === 'abyssal-kraken-tentacle' ? 'tentacle' : 'body' };
+    p.submersion.params.exposure = krakenMaterialExposure(r.asset.id,material.exposure);
+  } else p.submersion.material = null;
+  p.submersion.active=settings.submersion || !!material;
+  p.submersion.params.waterLevel=settings.submersion ? settings.waterLevel : r.source.elevation.min - 1;
   p.submersion.params.time=state.travelTime;
 }
 function syncSettingsControls() {

@@ -4,7 +4,7 @@ import { CLOUD_SHADOW_GLSL } from '../sunlight/cloudShadow';
 export const KRAKEN_MATERIAL_HEADER = `
 uniform float materialEnabled,materialLow,materialStrength,emissionRange;
 uniform vec3 materialSun; uniform vec4 materialWorld; uniform vec2 materialOrigin;
-uniform vec3 materialNormalScale;
+uniform vec3 materialNormalScale,materialTint; uniform float materialSaturation; uniform vec2 materialHighlightTone;
 uniform vec4 emissionUV,emissionTrim; uniform vec2 emissionSize;
 uniform sampler2D uEmission;
 ${CLOUD_SHADOW_GLSL}
@@ -32,7 +32,14 @@ vec2 p=(logical-materialOrigin)*displaySize;
 vec2 world=materialWorld.xy+vec2(p.x*materialWorld.z-p.y*materialWorld.w,p.x*materialWorld.w+p.y*materialWorld.z);
 float direct=materialStrength*cloudTransmission(world);
 float factor=(${CHARACTER_MATERIAL_CONFIG.ambient}+direct*max(0.0,dot(n,materialSun)))/(${CHARACTER_MATERIAL_CONFIG.ambient}+direct*max(0.0,materialSun.z));
-vec3 color=krakenLinear(source.rgb/source.a)*factor;
+vec3 albedo=krakenLinear(source.rgb/source.a);
+// Preserve dark dermis/AO; roll off only bright albedo (not light or emission).
+// A positive slope retains the relief within pale suction-cup rims.
+float albedoL=dot(albedo,vec3(.2126,.7152,.0722));
+if(albedoL>materialHighlightTone.x)albedo*=(materialHighlightTone.x+(albedoL-materialHighlightTone.x)*materialHighlightTone.y)/albedoL;
+vec3 color=albedo*factor*materialTint;
+color=mix(vec3(dot(color,vec3(.2126,.7152,.0722))),color,materialSaturation);
+color=max(color,vec3(0));
 vec2 local=(logical*emissionSize-emissionTrim.xy)/emissionTrim.zw;
 if(all(greaterThanEqual(local,vec2(0)))&&all(lessThanEqual(local,vec2(1)))){
 vec4 e=texture2D(uEmission,mix(emissionUV.xy,emissionUV.zw,local));

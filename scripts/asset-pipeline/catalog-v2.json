@@ -4758,7 +4758,17 @@
       },
       "runtimeAtlas": true,
       "runtimeContract": "boss",
-      "runtimeBudgetMB": 104
+      "runtimeBudgetMB": 104,
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      },
+      "shadowMesh": {
+        "version": 1,
+        "encoding": "u16-world-xyz-per-pose-v1"
+      }
     },
     {
       "id": "abyssal-kraken-land",
@@ -4888,7 +4898,17 @@
       },
       "runtimeAtlas": true,
       "runtimeContract": "boss",
-      "runtimeBudgetMB": 100
+      "runtimeBudgetMB": 100,
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      },
+      "shadowMesh": {
+        "version": 1,
+        "encoding": "u16-world-xyz-per-pose-v1"
+      }
     },
     {
       "id": "abyssal-kraken-tentacle",
@@ -4980,7 +5000,17 @@
           "loop": false,
           "end": "free"
         }
-      ]
+      ],
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      },
+      "shadowMesh": {
+        "version": 1,
+        "encoding": "u16-world-xyz-per-pose-v1"
+      }
     },
     {
       "id": "abyssal-kraken-egg",
@@ -5058,7 +5088,17 @@
             "spawn": 8
           }
         }
-      ]
+      ],
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      },
+      "shadowMesh": {
+        "version": 1,
+        "encoding": "u16-world-xyz-per-pose-v1"
+      }
     }
   ]
 }

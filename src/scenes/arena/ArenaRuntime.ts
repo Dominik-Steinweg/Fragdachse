@@ -145,6 +145,7 @@ export class ArenaRuntime {
 
   /** Der Arena-Flow bleibt private Implementierungsdetail der ArenaRuntime. */
   private readonly flow: ArenaLifecycleCoordinator;
+  private readonly krakenPresentation: CoopMissionPresentationInfrastructure | null;
   private readonly scene: Phaser.Scene;
   private readonly ctx: ArenaContext;
   private readonly renderers: RendererBundle;
@@ -155,6 +156,7 @@ export class ArenaRuntime {
   private readonly getSynchronizedNow: () => number;
 
   constructor(input: ArenaRuntimeInput) {
+    this.krakenPresentation = input.coopMissionPresentation ?? null;
     this.scene = input.scene;
     this.ctx = input.ctx;
     this.renderers = input.renderers;
@@ -713,6 +715,14 @@ export class ArenaRuntime {
 
   getScenarioMeteorTargets() {
     return { gpuVfx: this.renderers.gpuVfx, explosion: this.renderers.explosionGpu, lighting: this.renderers.lighting };
+  }
+
+  getScenarioKrakenResidency() {
+    const residency = this.krakenPresentation?.inspectKrakenResidency();
+    const runtime = this.flow.getCoopMissionRuntime(), state = runtime?.kraken?.system.getState();
+    const body = state ? runtime?.enemyManager?.getEnemy(state.boss.id) : null;
+    return residency ? { ...residency, hostPhase: state?.phase ?? null,
+      hostPosition: body ? { x: body.sprite.x, y: body.sprite.y } : null } : null;
   }
 
   getScenarioLightingTargets() {

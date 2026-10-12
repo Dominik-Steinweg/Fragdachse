@@ -98,9 +98,9 @@ export function normalizeKrakenEggConfig(raw: unknown): KrakenEggConfig { return
 /** Clip-local marker names, not exported frame numbers or gameplay clock decisions. */
 export const KRAKEN_ASSET_REQUIREMENTS = {
   water: { clips: { idle: [], move: [], 'intro-rise': ['eyes-open'], 'ink-spit': ['charge', 'spit'],
-    'egg-throw': ['release'], dive: ['submerged'], surface: ['eyes-open'] }, sockets: ['mouth', 'egg1', 'egg2', 'egg3', 'egg4', 'egg5', 'egg6'] },
+    'egg-throw': ['release-1', 'release-2', 'release-3', 'release-4', 'release-5', 'release-6'], dive: ['submerged'], surface: ['eyes-open'] }, sockets: ['mouth', 'egg1', 'egg2', 'egg3', 'egg4', 'egg5', 'egg6'] },
   land: { clips: { idle: [], move: [], ashore: ['grip', 'heave'], 'ink-spit': ['charge', 'spit'],
-    slam: ['strike', 'impact'], 'egg-throw': ['release'], death: [] }, sockets: ['mouth', 'egg1', 'egg2', 'egg3', 'egg4', 'egg5', 'egg6'] },
+    slam: ['strike', 'impact'], 'egg-throw': ['release-1', 'release-2', 'release-3', 'release-4', 'release-5', 'release-6'], death: [] }, sockets: ['mouth', 'egg1', 'egg2', 'egg3', 'egg4', 'egg5', 'egg6'] },
   tentacle: { clips: { rise: [], hover: [], slam: ['strike', 'impact'], retract: [] }, sockets: ['waterEntry'] },
   egg: { clips: { idle: [], hatch: ['spawn'] }, sockets: [] },
 } as const;

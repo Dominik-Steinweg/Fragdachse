@@ -1,4 +1,6 @@
+import { validateKrakenMaterial, calibrateKrakenMaterial, readKrakenPasses, resizeKrakenElevation, resizeKrakenEmission } from './kraken-material-v2.mjs';
 import { readFile, writeFile, readdir, access, rename, mkdir } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
@@ -53,6 +55,7 @@ export function validateManifestV2(m) {
   if (!Array.isArray(m.clips) || (!m.clips.length && !['weapon', 'utility', 'construction', 'companion', 'powerup'].includes(m.category))) throw new Error('Animation clips missing');
   validateExtensions(m);
   validateElevationManifest(m);
+  validateKrakenMaterial(m);
   const names = new Set();
   for (const clip of m.clips) {
     if (!/^[a-z][a-z0-9-]*$/.test(clip.name) || names.has(clip.name) || typeof clip.motion !== 'string' || !clip.motion || !Number.isFinite(clip.frameRate) || clip.frameRate <= 0 || typeof clip.loop !== 'boolean' || !Array.isArray(clip.frames) || !clip.frames.length || clip.frames.some(n => !Number.isInteger(n) || n < 0 || n >= m.frames.length)) throw new Error('Invalid animation clip');
@@ -124,7 +127,7 @@ export async function exportVariantV2(folder, workspace = repoRoot) {
   if (acceptedFrames && (acceptedFrames.length !== m.frames.length || m.frames.some((frame, index) => acceptedFrames[index].index !== frame.index || acceptedFrames[index].sha256 !== frame.sha256))) throw new Error('Manifest disagrees with completed frames');
   if (path.basename(folder) !== m.variant || path.basename(assetFolder) !== m.id || path.basename(path.dirname(assetFolder)) !== m.revision) throw new Error('Manifest disagrees with revision folder');
   await verifyArchivedSources(assetFolder, m);
-  const masters = [], reports = [], elevationMasters = [];
+  const masters = [], reports = [], elevationMasters = [], materialMasters = [];
   for (const frame of m.frames) {
     const input = await readFile(inside(folder, frame.file));
     if (sha256(input) !== frame.sha256) throw new Error(`Master frame changed: ${frame.file}`);
@@ -134,8 +137,9 @@ export async function exportVariantV2(folder, workspace = repoRoot) {
     if (m.elevation) {
       const e = frame.elevation, bytes = await readFile(inside(folder, e.file));
       if (sha256(bytes) !== e.sha256 || sha256(await readFile(inside(folder, e.exrFile))) !== e.exrSha256) throw new Error('Elevation master changed');
-      await verifyElevationPixels(bytes, input, m.masterSize);
+      await verifyElevationPixels(bytes, input, m.masterSize, m.elevationPass.encoding);
       elevationMasters.push(bytes);
+      if (m.materialPass) materialMasters.push(await readKrakenPasses(folder, frame));
     }
   }
   const blendHash = sha256(await readFile(path.join(folder, 'asset.blend')));
@@ -156,6 +160,7 @@ export async function exportVariantV2(folder, workspace = repoRoot) {
     if (valid) return prior;
   }
   const outputs = {}, sheets = {}, atlases = {};
+  let materialPass = m.materialPass;
   const budget = { version: 1, format: 'RGBA8', mipmaps: false, unit: 'bytes', sizes: {} };
   const buffers = new Map();
   for (const size of [...new Set([m.targetSize, ...m.sourceSizes])]) {
@@ -167,19 +172,27 @@ export async function exportVariantV2(folder, workspace = repoRoot) {
     let elevations = [];
     const elevationSize = m.elevation ? Math.round(size * (m.elevation.scale ?? .5)) : null;
     if (m.elevation) {
-      elevations = await Promise.all(elevationMasters.map((input, i) => resizeElevation(input, masters[i], elevationSize)));
+      elevations = await Promise.all(elevationMasters.map((input, i) => (m.materialPass ? resizeKrakenElevation : resizeElevation)(input, masters[i], elevationSize)));
       elevations.forEach((bytes, i) => buffers.set(`elevation/frames-${size}/frame-${String(i).padStart(4, '0')}.png`, bytes));
     }
+    const colors = m.materialPass ? await Promise.all(materialMasters.map(p => resizeMaster(p.albedoPng, size))) : frames;
+    if (m.materialPass && size === Math.round(m.targetSize * (m.displayScale ?? 1))) {
+      const fit = await calibrateKrakenMaterial(colors[m.idleFrame], elevations[m.idleFrame], frames[m.idleFrame], size, m.materialPass.exposure,
+        ['abyssal-kraken', 'abyssal-kraken-land'].includes(m.id) ? [.4, .43, .6, .77] : null);
+      materialPass = { ...m.materialPass, exposure: fit.exposure, tint: fit.tint, saturation: fit.saturation };
+      buffers.set('material-calibration.json', jsonBytes(fit));
+    }
+    const emissions = m.materialPass ? await Promise.all(materialMasters.map(p => resizeKrakenEmission(p.emissionPng, size))) : [];
     if (m.runtimeAtlas) {
-      atlases[size] = { color: {}, elevation: {} };
+      atlases[size] = { color: {}, elevation: {}, ...(m.materialPass ? { emission: {} } : {}) };
       const clips = [{ name: '__rest', frames: [m.idleFrame] }, ...m.clips];
-      const totals = { color: 0, elevation: 0, total: 0 }, clipBudgets = {};
+      const totals = { color: 0, elevation: 0, ...(m.materialPass ? { emission: 0 } : {}), total: 0 }, clipBudgets = {};
       for (const clip of clips) {
         const frameNames = clip.frames.map((_, i) => `${clip.name}/${String(i).padStart(4, '0')}`);
-        const clipBudget = { color: 0, elevation: 0, total: 0 };
-        for (const pass of m.elevation ? ['color', 'elevation'] : ['color']) {
-          const passSize = pass === 'color' ? size : elevationSize;
-          const pages = await packAtlas(clip.frames.map(i => (pass === 'color' ? frames : elevations)[i]),
+        const clipBudget = { color: 0, elevation: 0, ...(m.materialPass ? { emission: 0 } : {}), total: 0 };
+        for (const pass of m.materialPass ? ['color', 'elevation', 'emission'] : m.elevation ? ['color', 'elevation'] : ['color']) {
+          const passSize = pass === 'elevation' ? elevationSize : size;
+          const pages = await packAtlas(clip.frames.map(i => (pass === 'color' ? colors : pass === 'elevation' ? elevations : emissions)[i]),
             { frameNames, sourceFrames: clip.frames, socketFrames: m.socketFrames && clip.frames.map(i => m.socketFrames[i]),
               size: passSize, pivot: m.pivot, prefix: `atlas/${size}/${pass}-${clip.name}` });
           const records = [];
@@ -194,9 +207,9 @@ export async function exportVariantV2(folder, workspace = repoRoot) {
           atlases[size][pass][clip.name] = { pages: records, frameNames, sourceFrames: clip.frames,
             sourceSize: passSize, logicalSourceSize: size, pivot: m.pivot };
         }
-        clipBudget.total = clipBudget.color + clipBudget.elevation;
+        clipBudget.total = clipBudget.color + clipBudget.elevation + (clipBudget.emission ?? 0);
         clipBudgets[clip.name] = clipBudget;
-        for (const pass of ['color', 'elevation', 'total']) totals[pass] += clipBudget[pass];
+        for (const pass of Object.keys(totals)) totals[pass] += clipBudget[pass];
       }
       budget.sizes[size] = { clips: clipBudgets, totals };
     }
@@ -206,7 +219,7 @@ export async function exportVariantV2(folder, workspace = repoRoot) {
     outputs[name] = sha256(buffer);
     if (prior && prior.outputs[name] !== outputs[name]) throw new Error('Export algorithm changed; create a new revision instead');
   }
-  const result = { pipelineVersion: 2, provenance, manifest: m, inputHash: build.inputHash, blendSha256: blendHash, outputs, sheets,
+  const result = { pipelineVersion: 2, provenance, manifest: m, inputHash: build.inputHash, blendSha256: blendHash, outputs, sheets, ...(materialPass ? { materialPass } : {}),
     ...(m.socketFrames ? { sockets: m.sockets, socketFrames: m.socketFrames } : {}),
     ...(m.runtimeAtlas ? { atlases, budget } : {}),
     ...(m.elevation ? { elevation: m.elevationPass } : {}), report: { frames: reports, native: reports[m.idleFrame].native } };
@@ -231,7 +244,7 @@ function presentationContract(m) {
   return JSON.stringify({ id: m.id, revision: m.revision, category: m.category, targetSize: m.targetSize, displayScale: m.displayScale, sourceSizes: m.sourceSizes, pivot: m.pivot, forward: m.forward,
     masterSize: m.masterSize, idleFrame: m.idleFrame, frames: m.frames.map(({ index, file, blenderFrame }) => ({ index, file, blenderFrame })), clips: m.clips,
     elevation: m.elevation, runtimeAtlas: m.runtimeAtlas, runtimeContract: m.runtimeContract, runtimeBudgetMB: m.runtimeBudgetMB,
-    sockets: m.sockets, socketFrames: m.socketFrames,
+    sockets: m.sockets, socketFrames: m.socketFrames, materialPass: m.materialPass, shadowMesh: m.shadowMesh,
     camera: { ...m.camera, bounds: undefined }, textures: m.textures, sources: m.sources, reference: m.reference, referenceTransform: m.referenceTransform, heldItem: m.heldItem });
 }
 
@@ -260,9 +273,10 @@ async function bundleFiles(assetFolder, variant, size) {
   for (const file of await listFiles(path.join(assetFolder, 'archive-source'))) checked[`archive-source/${file}`] = sha256(await readFile(inside(assetFolder, `archive-source/${file}`)));
   const wanted = ['build.json', `${variant}/render.json`, `${variant}/export.json`, `${variant}/asset.blend`,
     `${variant}/sprite-${size}.png`, `${variant}/sheet-${size}.png`, ...m.frames.map(f => `${variant}/${f.file}`)];
-  const extraOutputs = m.runtimeAtlas || m.elevation ? Object.keys(exported.outputs).filter(name => name === 'budget.json'
+  const extraOutputs = m.runtimeAtlas || m.elevation ? Object.keys(exported.outputs).filter(name => name === 'budget.json' || name === 'material-calibration.json'
     || name.startsWith(`atlas/${size}/`) || name.startsWith(`elevation/frames-${size}/`)) : [];
   wanted.push(...extraOutputs.map(name => `${variant}/${name}`));
+  if (m.materialPass) wanted.push(...m.frames.flatMap(f => [...Object.values(f.material.passes), f.material.mesh.positions, f.material.mesh.indices].map(p => `${variant}/${p.file}`)));
   if (m.elevation) wanted.push(...m.frames.flatMap(f => [`${variant}/${f.elevation.file}`, `${variant}/${f.elevation.exrFile}`]));
   for (const file of wanted) checked[file] = sha256(await readFile(inside(assetFolder, file)));
   if (checked[`${variant}/asset.blend`] !== exported.blendSha256) throw new Error('Packed Blender source changed');
@@ -284,6 +298,7 @@ export async function selectVariantV2(assetFolder, variant, size, reason) {
     ...(m.socketFrames ? { sockets: m.sockets, socketFrames: m.socketFrames } : {}),
     ...(m.displayScale !== undefined ? { displayScale: m.displayScale } : {}),
     ...(m.runtimeAtlas ? { atlases: exported.atlases[size], budget: exported.budget.sizes[size] } : {}),
+    ...(exported.materialPass ? { materialPass: exported.materialPass, shadowMesh: m.shadowMesh } : {}),
     idle: `${variant}/sprite-${size}.png`, sheet: `${variant}/sheet-${size}.png`, layout: exported.sheets[size], idleFrame: m.idleFrame, clips: m.clips,
     files, bundleSha256: sha256(jsonBytes(files)) };
   await writeFile(selectionFile, jsonBytes(selection), { flag: 'wx' });
@@ -300,6 +315,8 @@ export async function verifySelectionV2(assetFolder) {
     || JSON.stringify(selection.socketFrames) !== JSON.stringify(m.socketFrames)
     || JSON.stringify(selection.atlases) !== JSON.stringify(exported.atlases?.[selection.size])
     || JSON.stringify(selection.budget) !== JSON.stringify(exported.budget?.sizes[selection.size])
+    || JSON.stringify(selection.materialPass) !== JSON.stringify(exported.materialPass)
+    || JSON.stringify(selection.shadowMesh) !== JSON.stringify(m.shadowMesh)
     || selection.idle !== `${selection.variant}/sprite-${selection.size}.png` || selection.sheet !== `${selection.variant}/sheet-${selection.size}.png`
     || JSON.stringify(selection.layout) !== JSON.stringify(exported.sheets[selection.size]) || selection.idleFrame !== m.idleFrame || JSON.stringify(selection.clips) !== JSON.stringify(m.clips)) throw new Error('Selected bundle changed; retain approved revision');
   return selection;
@@ -318,7 +335,9 @@ export async function archiveAssetV2(assetFolder, python = process.env.FD_ASSET_
   await execute(python, [path.join(repoRoot, 'scripts/asset-pipeline/archive-v2.py'), assetFolder, destination], { windowsHide: true, maxBuffer: 1024 * 1024 });
   // The helper independently verifies the same bytes immediately before archiving.
   await verifySelectionV2(assetFolder);
-  return { path: destination, sha256: sha256(await readFile(destination)), manifest };
+  const archiveHash = createHash('sha256');
+  for await (const chunk of createReadStream(destination)) archiveHash.update(chunk);
+  return { path: destination, sha256: archiveHash.digest('hex'), manifest };
 }
 
 export async function reviewAssetV2(assetFolder, exports) {

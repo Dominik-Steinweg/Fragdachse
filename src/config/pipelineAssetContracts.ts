@@ -44,7 +44,14 @@ const atlas = v.strictObject({ sourceSize: size, logicalSourceSize: size, pivot,
   frameNames: v.pipe(v.array(id), v.minLength(1)), sourceFrames: v.pipe(v.array(integer), v.minLength(1)),
   pages: v.pipe(v.array(page), v.minLength(1)),
 });
-const bytes = v.strictObject({ color: integer, elevation: integer, total: integer });
+const bytes = v.strictObject({ color: integer, elevation: integer, emission: v.optional(integer), total: integer });
+const meshFile = v.strictObject({ file: path, sha256: hash, bytes: size });
+const xyz = v.tuple([finite, finite, finite]);
+const meshPose = v.strictObject({ vertexCount: size, triangleCount: size,
+  bounds: v.strictObject({ min: xyz, max: xyz }), positions: meshFile, indices: meshFile });
+const materialPass = v.strictObject({ version: v.literal(1), color: v.literal('srgb-albedo-baked-cavity-v1'),
+  normal: v.literal('linear-unorm8-z-oct-normal-v1'), emission: v.literal('linear-rgb-unorm8-scaled-v1'),
+  worldPxPerBU: positive, emissionRange: positive, exposure: positive, tint: xyz, saturation: positive });
 export const PipelineBossAssetSchema = v.strictObject({ ...base, runtimeContract: v.literal('boss'),
   clips: v.pipe(v.array(clip), v.minLength(1)),
   targetSize: size, runtimeBudgetMB: positive,
@@ -53,10 +60,12 @@ export const PipelineBossAssetSchema = v.strictObject({ ...base, runtimeContract
   /** Source-frame indexed; x/y use the full canvas, z is Blender world height. */
   socketFrames: v.optional(v.pipe(v.array(v.record(id, socketPoint)), v.minLength(1))),
   elevation: v.strictObject({ min: finite, max: finite, scale: positive, previewWaterLevel: v.optional(finite) }),
-  elevationPass: v.strictObject({ encoding: v.literal('linear-unorm8-world-z'), min: finite, max: finite,
+  elevationPass: v.strictObject({ encoding: v.picklist(['linear-unorm8-world-z', 'linear-unorm8-z-oct-normal-v1']), min: finite, max: finite,
     scale: positive, waterline: v.literal(0), alpha: v.literal('beauty-coverage'),
     colorSpace: v.literal('non-color'), premultiplied: v.literal(false) }),
-  atlases: v.strictObject({ color: v.record(id, atlas), elevation: v.record(id, atlas) }),
+  materialPass: v.optional(materialPass),
+  shadowMesh: v.optional(v.strictObject({ version: v.literal(1), encoding: v.literal('u16-world-xyz-per-pose-v1'), frames: v.array(meshPose) })),
+  atlases: v.strictObject({ color: v.record(id, atlas), elevation: v.record(id, atlas), emission: v.optional(v.record(id, atlas)) }),
   budget: v.strictObject({ clips: v.record(id, bytes), totals: bytes }),
 });
 export type PipelineBossAsset = v.InferOutput<typeof PipelineBossAssetSchema>;
@@ -79,6 +88,8 @@ export function normalizePipelineAsset(raw: unknown): PipelineRuntimeAsset {
   if (a.sourceSize !== Math.round(a.targetSize * (a.displayScale ?? 1))) fail('Boss must export at displayed canvas resolution');
   if (!(a.elevation.min < a.elevation.max) || a.elevationPass.min !== a.elevation.min || a.elevationPass.max !== a.elevation.max
     || a.elevationPass.scale !== a.elevation.scale) fail('Elevation encoding mismatch');
+  const packed = a.elevationPass.encoding === 'linear-unorm8-z-oct-normal-v1';
+  if (packed !== !!a.materialPass || packed !== !!a.shadowMesh || packed !== !!a.atlases.emission) fail('Material/normal/mesh passes must be declared together');
   const groups = [{ name: '__rest', frames: [a.idleFrame] }, ...a.clips];
   const socketNames = Object.keys(a.sockets).sort();
   if (socketNames.length && !a.socketFrames) fail('Missing frame sockets');
@@ -94,18 +105,26 @@ export function normalizePipelineAsset(raw: unknown): PipelineRuntimeAsset {
       if (a.sockets[name][0] !== point.x || a.sockets[name][1] !== point.y) fail('Rest sockets mismatch');
     }
   }
+  if (a.shadowMesh) {
+    if (a.shadowMesh.frames.length !== Math.max(...groups.flatMap(c => c.frames)) + 1) fail('Mesh pose mapping mismatch');
+    for (const m of a.shadowMesh.frames) {
+      if (m.vertexCount > 65535 || m.positions.bytes !== m.vertexCount * 6 || m.indices.bytes !== m.triangleCount * 6
+        || m.bounds.min.some((value, axis) => value > m.bounds.max[axis])) fail('Mesh dimensions mismatch');
+    }
+  }
   const names = groups.map(c => c.name).sort().join('|');
   if (Object.keys(a.atlases.color).sort().join('|') !== names || Object.keys(a.atlases.elevation).sort().join('|') !== names
     || Object.keys(a.budget.clips).sort().join('|') !== names) fail('Clip/pass/budget mismatch');
-  const totals = { color: 0, elevation: 0, total: 0 };
+  const totals = { color: 0, elevation: 0, emission: 0, total: 0 };
   const files = new Set<string>();
   for (const group of groups) {
-    const counts = { color: 0, elevation: 0, total: 0 };
+    const counts = { color: 0, elevation: 0, emission: 0, total: 0 };
     const expected = group.frames.map((_, i) => `${group.name}/${String(i).padStart(4, '0')}`);
-    for (const pass of ['color', 'elevation'] as const) {
-      const at = a.atlases[pass][group.name];
+    for (const pass of (packed ? ['color', 'elevation', 'emission'] : ['color', 'elevation']) as ('color' | 'elevation' | 'emission')[]) {
+      const at = a.atlases[pass]![group.name];
+      if (!at) fail('Missing material clip');
       if (JSON.stringify(at.frameNames) !== JSON.stringify(expected) || JSON.stringify(at.sourceFrames) !== JSON.stringify(group.frames)
-        || at.logicalSourceSize !== a.sourceSize || at.sourceSize !== Math.round(a.sourceSize * (pass === 'color' ? 1 : a.elevation.scale))
+        || at.logicalSourceSize !== a.sourceSize || at.sourceSize !== Math.round(a.sourceSize * (pass === 'elevation' ? a.elevation.scale : 1))
         || JSON.stringify(at.pivot) !== JSON.stringify(a.pivot)) fail('Logical canvas/frame mapping mismatch');
       const found = new Set<string>();
       for (const p of at.pages) {
@@ -115,14 +134,14 @@ export function normalizePipelineAsset(raw: unknown): PipelineRuntimeAsset {
       }
       if (found.size !== expected.length) fail('Missing page frames');
     }
-    counts.total = counts.color + counts.elevation;
-    for (const key of ['color', 'elevation', 'total'] as const) {
-      if (a.budget.clips[group.name][key] !== counts[key]) fail('Clip budget mismatch');
+    counts.total = counts.color + counts.elevation + counts.emission;
+    for (const key of ['color', 'elevation', 'emission', 'total'] as const) {
+      if ((a.budget.clips[group.name][key] ?? 0) !== counts[key]) fail('Clip budget mismatch');
       totals[key] += counts[key];
     }
   }
-  if (Object.keys(totals).some(k => totals[k as keyof typeof totals] !== a.budget.totals[k as keyof typeof totals])
-    || totals.total > a.runtimeBudgetMB * 1024 * 1024) fail('Resident budget mismatch/exceeded');
+  if (Object.keys(totals).some(k => totals[k as keyof typeof totals] !== (a.budget.totals[k as keyof typeof totals] ?? 0))
+    || (!packed && totals.total > a.runtimeBudgetMB * 1024 * 1024)) fail('Resident budget mismatch/exceeded');
   return a;
 }
 

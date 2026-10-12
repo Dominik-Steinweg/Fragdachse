@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 const state=vi.hoisted(()=>({targets:[] as any[],shaders:[] as any[],gpus:[] as any[],quality:'high',ready:true}));
 vi.mock('phaser',()=>({BlendModes:{MULTIPLY:3},GameObjects:{Shader:class{
   renderNode:any={};visible=false;destroy=vi.fn();constructor(...args:any[]){this.config=args[1];state.shaders.push(this);}config:any;
-  setDepth(){return this;}setVisible(v:boolean){this.visible=v;return this;}setPosition(){return this;}setSize(){return this;}
+  setDepth(){return this;}setVisible(v:boolean){this.visible=v;return this;}setPosition(){return this;}setSize(){return this;}setOrigin(){return this;}
 }}}));
 vi.mock('../src/graphics/GraphicsQuality',()=>({getGraphicsQualityProfile:()=>({level:state.quality})}));
 vi.mock('../src/effects/sunlight/SunRenderTarget',()=>({ownSunShader(){},sunShaderName:(s:string)=>s,
@@ -13,7 +13,7 @@ vi.mock('../src/effects/sunlight/SunRenderTarget',()=>({ownSunShader(){},sunShad
   draw(){this.draws++;this.shader.renderNode.run(this.shader.drawingContext);}
  }}));
 vi.mock('../src/effects/EnemyMeshGpu',()=>({EnemyMeshGpu:class{
- bytes=100;destroy=vi.fn();draw=vi.fn(()=>state.ready);constructor(){state.gpus.push(this);}
+ bytes=100;updateGeometry=vi.fn(()=>true);destroy=vi.fn();draw=vi.fn(()=>state.ready);constructor(){state.gpus.push(this);}
 }}));
 import { KrakenShadowRenderer } from '../src/effects/kraken/KrakenShadowRenderer';
 import type { KrakenShadowMesh } from '../src/effects/kraken/KrakenLightShadowModel';
@@ -50,4 +50,11 @@ it('Low and egg contact allocate no mesh and hide entirely submerged casters',()
  (f.mesh.bounds.max as number[])[2]=-1;f.update('water');expect(f.renderer.inspect().visible).toBe(false);
  (f.mesh.bounds.max as number[])[2]=20;state.quality='high';f.update('egg');expect(state.gpus).toHaveLength(0);
  expect(f.renderer.inspect().visible).toBe(true);f.renderer.destroy();
+});
+
+it('streams successive mesh poses without creating another shader or GPU allocation', () => {
+ const f=fixture();f.update();
+ f.renderer.update(f.sprite,{...f.mesh,id:'next-pose'},100,40,0,'land');
+ expect(state.gpus).toHaveLength(1);expect(state.gpus[0].updateGeometry).toHaveBeenCalledTimes(2);
+ expect(state.gpus[0].destroy).not.toHaveBeenCalled();f.renderer.destroy();
 });

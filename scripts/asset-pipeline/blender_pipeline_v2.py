@@ -85,7 +85,7 @@ def resolve_spec(root, asset_id, catalog_path=None):
 def inputs(root, spec, device='CPU'):
     names = ['blender_pipeline.py', 'blender_pipeline_v2.py', 'rigs_v2.py', 'motions_v2.py',
              f'recipes_v2/{spec["recipe"]}.py', 'catalog-v2.json',
-             'export.mjs', 'export-v2.mjs', 'export-provenance.mjs', 'contracts-v2.mjs', 'atlas-v2.mjs', 'elevation-v2.mjs', 'runtime-contract-v2.mjs', 'eye-anchors.mjs', 'socket-anchors.mjs', 'index-library.mjs', 'archive-v2.py', 'publish-v2.ps1', 'texture-prompts.json']
+             'export.mjs', 'export-v2.mjs', 'kraken-material-v2.mjs', 'export-provenance.mjs', 'contracts-v2.mjs', 'atlas-v2.mjs', 'elevation-v2.mjs', 'runtime-contract-v2.mjs', 'eye-anchors.mjs', 'socket-anchors.mjs', 'index-library.mjs', 'archive-v2.py', 'publish-v2.ps1', 'texture-prompts.json']
     if spec['recipe'] in ('rocket', 'badger'):
         names.append(f'recipes/{spec["recipe"]}.py')
     # The production library includes shared anatomy/weapon helpers. Snapshot the
@@ -300,6 +300,12 @@ def build(repo, asset_id, revision, max_frames=None, device='CPU', catalog_path=
                     path = shared.contained(out, frame['relative'])
                     if not path.is_file() or shared.digest(path) != frame['sha256']:
                         raise ValueError(f'Partial frame changed or missing: {frame["relative"]}')
+                    if 'material' in frame:
+                        records = list(frame['material']['passes'].values()) + [frame['material']['mesh'][k] for k in ('positions', 'indices')]
+                        for record in records:
+                            extra = shared.contained(path.parent.parent, record['file'])
+                            if not extra.is_file() or shared.digest(extra) != record['sha256']:
+                                raise ValueError(f'Partial material/mesh changed: {extra}')
                     for field, digest_field in (('file', 'sha256'), ('exrFile', 'exrSha256')):
                         if 'elevation' in frame:
                             extra = shared.contained(path.parent.parent, frame['elevation'][field])
@@ -322,6 +328,11 @@ def build(repo, asset_id, revision, max_frames=None, device='CPU', catalog_path=
                 raise ValueError('Sources changed during authoring; use a new revision')
             _sessions[key] = session
         scene, ctx = session['scene'], session['ctx']
+        if spec.get('materialPass'):
+            from kraken_material_v2 import height_range
+            low, high = height_range(scene, session['samples'])
+            spec = dict(spec, elevation=dict(spec['elevation'], min=low, max=high))
+            scene['asset_manifest'] = json.dumps(spec)
         bpy.context.window.scene = scene
         if device != 'CPU':
             # Keep acceleration caches in the same writable workspace as the renders.
@@ -358,7 +369,13 @@ def build(repo, asset_id, revision, max_frames=None, device='CPU', catalog_path=
                 bpy.ops.render.render(write_still=True)
                 record = dict(sample, file=name, relative=f'{variant}/{name}', sha256=shared.digest(folder / name), bounds=session['bounds'][index],
                               sockets=session['socketFrames'][index])
-                if 'elevation' in spec:
+                if spec.get('materialPass'):
+                    from kraken_material_v2 import render_passes, ENCODING
+                    record['material'] = render_passes(scene, folder, index, spec, name)
+                    passes = record['material']['passes']
+                    record['elevation'] = dict(file=passes['elevationPng']['file'], sha256=passes['elevationPng']['sha256'],
+                        exrFile=passes['height']['file'], exrSha256=passes['height']['sha256'], width=1024, height=1024, encoding=ENCODING)
+                elif 'elevation' in spec:
                     from elevation_v2 import render_elevation
                     record['elevation'] = render_elevation(scene, folder, index, spec['elevation'], name)
                 if session['baseDiameters']: record['baseDiameter'] = session['baseDiameters'][index]
@@ -382,9 +399,13 @@ def build(repo, asset_id, revision, max_frames=None, device='CPU', catalog_path=
             manifest['socketFrames'] = session['socketFrames']
             manifest['sockets'] = {name: [p['x'], p['y']] for name, p in session['socketFrames'][0].items()}
             if 'elevation' in spec:
-                manifest['elevationPass'] = dict(encoding='linear-unorm8-world-z', waterline=0,
+                manifest['elevationPass'] = dict(encoding='linear-unorm8-z-oct-normal-v1' if spec.get('materialPass') else 'linear-unorm8-world-z', waterline=0,
                     min=spec['elevation']['min'], max=spec['elevation']['max'], scale=spec['elevation'].get('scale', .5),
                     alpha='beauty-coverage', masterSize=1024, colorSpace='non-color', premultiplied=False)
+            if spec.get('materialPass'):
+                manifest['materialPass'] = dict(spec['materialPass'], worldPxPerBU=spec['targetSize'] * spec.get('displayScale', 1) / spec['orthoScale'],
+                    emissionRange=8, exposure=.55 if spec['id'] == 'abyssal-kraken' else 1)
+                manifest['shadowMesh'] = dict(version=1, encoding='u16-world-xyz-per-pose-v1', frames=[f['material']['mesh'] for f in manifest['frames']])
             from render_integrity import provenance as export_provenance
             manifest['provenance'] = export_provenance(scene, sources)
             save_json(folder / 'render.json', manifest)

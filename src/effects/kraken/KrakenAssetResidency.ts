@@ -1,3 +1,4 @@
+import type { KrakenShadowMesh } from './KrakenLightShadowModel';
 import type * as Phaser from 'phaser';
 import { normalizePipelineAssets, type PipelineAtlasPage, type PipelineBossAsset, type PipelineSocketPoint } from '../../config/pipelineAssetContracts';
 
@@ -24,6 +25,7 @@ export interface KrakenResidencyOptions {
 }
 export interface KrakenResidentPose {
   key: string; frame: string; elevationKey: string; elevationFrame: string;
+  emissionKey?: string; emissionFrame?: string; mesh?: KrakenShadowMesh;
   fallback: boolean; sourceFrame: number; sockets: Readonly<Record<string, PipelineSocketPoint>>;
   /** Full-canvas display dimensions; never derive scale from trimmed atlas bounds. */
   displaySize: number; sourceSize: number; pivot: readonly [number, number];
@@ -66,13 +68,13 @@ export class KrakenAssetResidency {
   get reservedBytes(): number { return [...this.pages.values()].reduce((sum, p) => sum + p.page.gpuBytesRGBA8, 0); }
   get residentBytes(): number { return [...this.pages.values()].reduce((sum, p) => sum + (p.registered ? p.page.gpuBytesRGBA8 : 0), 0); }
 
-  private key(asset: PipelineBossAsset, clip: string, pass: 'color' | 'elevation', index: number): string {
+  private key(asset: PipelineBossAsset, clip: string, pass: 'color' | 'elevation' | 'emission', index: number): string {
     return `${asset.textureKey}:scope${this.scope}:${clip}:${pass}:${index}`;
   }
   private descriptors(role: KrakenAssetRole, clip: string): { key: string; page: PipelineAtlasPage }[] {
     const asset = this.assets[role];
-    return (['color', 'elevation'] as const).flatMap(pass => {
-      const atlas = asset.atlases[pass][clip];
+    return (asset.materialPass ? ['color', 'elevation', 'emission'] as const : ['color', 'elevation'] as const).flatMap(pass => {
+      const atlas = asset.atlases[pass]?.[clip];
       if (!atlas) throw new Error(`Missing ${asset.id}/${clip}/${pass}`);
       return atlas.pages.map((page, i) => ({ key: this.key(asset, clip, pass, i), page }));
     });
@@ -85,7 +87,7 @@ export class KrakenAssetResidency {
   }
   private limit(): number {
     const phase = this.phase === 'land' ? this.options.landBudgetMiB : this.phase === 'ashore'
-      ? this.options.peakBudgetMiB : this.options.waterBudgetMiB;
+      ? Math.min(this.options.peakBudgetMiB, this.options.landBudgetMiB) : this.options.waterBudgetMiB;
     return Math.min(phase, this.options.peakBudgetMiB) * 1024 * 1024;
   }
   private discard(p: PageState): void {
@@ -194,8 +196,8 @@ export class KrakenAssetResidency {
     const asset = this.assets[role];
     const select = (name: string, frameIndex: number) => {
       const frame = `${name}/${String(frameIndex).padStart(4, '0')}`;
-      const states = (['color', 'elevation'] as const).map(pass => {
-        const atlas = asset.atlases[pass][name];
+      const states = (asset.materialPass ? ['color', 'elevation', 'emission'] as const : ['color', 'elevation'] as const).map(pass => {
+        const atlas = asset.atlases[pass]?.[name];
         const page = atlas?.pages.findIndex(p => p.frameNames.includes(frame)) ?? -1;
         return page < 0 ? undefined : this.pages.get(this.key(asset, name, pass, page));
       });
@@ -212,6 +214,7 @@ export class KrakenAssetResidency {
     this.leases.add(release);
     const sourceFrame = asset.atlases.color[name].sourceFrames[frameIndex];
     return { pose: { key: states[0].key, frame, elevationKey: states[1].key, elevationFrame: frame,
+      ...(states[2] ? { emissionKey: states[2].key, emissionFrame: frame } : {}),
       fallback: name !== clip || frameIndex !== index, sourceFrame, sockets: asset.socketFrames?.[sourceFrame] ?? {},
       sourceSize: asset.sourceSize, displaySize: Math.round(asset.targetSize * (asset.displayScale ?? 1)),
       pivot: asset.pivot, elevation: asset.elevation }, release };

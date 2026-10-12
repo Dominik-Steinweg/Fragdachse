@@ -35,7 +35,7 @@ function asset(role: keyof typeof KRAKEN_ASSET_REQUIREMENTS): KrakenPresentation
       scale: .5, waterline: 0, alpha: 'beauty-coverage', colorSpace: 'non-color', premultiplied: false },
     clips: Object.entries(required.clips).map(([name, markers]) => ({ name,
       frames: Array.from({ length: 12 }, (_, i) => 40 + i), frameRate: 12, loop: ['idle', 'move', 'hover'].includes(name),
-      markers: Object.fromEntries(markers.map((m, i) => [m, 3 + i * 4])),
+      markers: Object.fromEntries(markers.map((m, i) => [m, 3 + i * (name === 'egg-throw' ? 1 : 4)])),
     })), atlases: { color: {}, elevation: {} }, budget: { clips: {}, totals: { color: 0, elevation: 0, total: 0 } },
   };
   for (const c of [{ name: '__rest', frames: [a.idleFrame] }, ...a.clips]) {
@@ -317,6 +317,20 @@ describe('Kraken renderer ownership', () => {
 });
 
 describe('intro and egg flight presentation', () => {
+  it('waits for the emergence clip instead of exposing a resident rest-pose fallback', () => {
+    const f = sceneFixture(), a = asset('water'), release = vi.fn(); let ready = false;
+    a.acquire = (clip, index) => ({ release, pose: { ...a.frame(ready ? clip : '__rest', ready ? index : 0)!,
+      fallback: !ready, sourceFrame: ready ? 40 + index : 0, sockets: {}, displaySize: 32, sourceSize: 32,
+      pivot: a.metadata.pivot, elevation: a.metadata.elevation } });
+    const view = new KrakenSpriteView(f.scene, a, () => 1, vi.fn());
+    const sample = { clip: 'intro-rise', frame: 3 }, pose = { x: 10, y: 20, angle: 0 };
+    expect(view.show(sample, pose, 1000, { requireClip: true })).toBe(false);
+    expect(view.sprite.visible).toBe(false); expect(release).toHaveBeenCalledOnce(); expect(f.masks).toHaveLength(0);
+    ready = true;
+    expect(view.show(sample, pose, 1016, { requireClip: true })).toBe(true);
+    expect(view.sprite.frame.name).toBe('intro-rise/0003');
+    view.destroy(); expect(release).toHaveBeenCalledTimes(2);
+  });
   it('focuses only during the active intro, hands off at emergence and releases the override on abort', () => {
     const f = sceneFixture(), a = asset('water');
     const intro = { preset: 'kraken-rise' as const, habitatId: 'pond', waterAnchorId: 'anchor', x: 50, y: 60, seed: 7, startedAtMs: 100 };

@@ -1,8 +1,41 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createKrakenResidencyPort, KrakenAssetResidency, type KrakenAssetRole, type KrakenPreparedPage, type KrakenResidencyPort } from '../src/effects/kraken/KrakenAssetResidency';
 import type { PipelineBossAsset } from '../src/config/pipelineAssetContracts';
+import { KrakenMeshCache } from '../src/effects/kraken/KrakenMeshCache';
 import { genericEnemyImageKeys, getWalkingSheetForStaticTexture } from '../src/animations/BadgerAnimations';
 vi.mock('phaser', () => ({}));
+
+it('uses bounds without downloads on Low, upgrades to meshes, and isolates boss lifetimes', async () => {
+  const asset = fixture().water;
+  const positions = new Uint16Array([0,0,0,65535,0,0,0,65535,65535]), indices = new Uint16Array([0,1,2]);
+  const record = async (file: string, bytes: Uint16Array) => ({ file, bytes: bytes.byteLength,
+    sha256: [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(v => v.toString(16).padStart(2,'0')).join('') });
+  asset.shadowMesh = { version: 1, encoding: 'u16-world-xyz-per-pose-v1', frames: [{ vertexCount: 3, triangleCount: 1,
+    bounds: { min: [0,0,0], max: [10,20,30] }, positions: await record('p.bin', positions), indices: await record('i.bin', indices) }] };
+  const pending: { signal: AbortSignal; reject: (reason: Error) => void }[] = [], diagnostic = vi.fn();
+  let calls = 0;
+  vi.stubGlobal('fetch', vi.fn((url: string, options: { signal: AbortSignal }) => {
+    if (++calls <= 2) return new Promise((_resolve, reject) => pending.push({ signal: options.signal, reject }));
+    return Promise.resolve(new Response(url.startsWith('p.bin') ? positions.buffer : indices.buffer));
+  }));
+  const cache = new KrakenMeshCache(diagnostic);
+  try {
+    expect(cache.get(asset, 0, true)?.bounds).toEqual({ min: [0,0,0], max: [10,20,30] });
+    expect(calls).toBe(0); expect(cache.bytes).toBe(0);
+    expect(cache.get(asset, 0)).toBeUndefined(); cache.clear();
+    expect(pending.every(p => p.signal.aborted)).toBe(true); expect(cache.bytes).toBe(0);
+    expect(cache.get(asset, 0)).toBeUndefined();
+    await vi.waitFor(() => expect(cache.bytes).toBe(42));
+    const mesh = cache.get(asset, 0)!; expect([...mesh.positions]).toEqual([0,0,0,10,0,0,0,20,30]);
+    expect(cache.get(asset, 0, true)?.positions.length).toBe(0);
+    expect(cache.get(asset, 0)).toBe(mesh);
+    pending.forEach(p => p.reject(new Error('late abort')));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(cache.get(asset, 0)).toBe(mesh); expect(calls).toBe(4); expect(diagnostic).not.toHaveBeenCalled();
+    cache.clear(); expect(cache.bytes).toBe(0);
+    cache.destroy(); cache.clear(); expect(cache.get(asset, 0)).toBeUndefined();
+  } finally { cache.destroy(); vi.unstubAllGlobals(); }
+});
 
 function fixture() {
   const names = {
@@ -202,4 +235,40 @@ it('verifies fetched hashes and never removes a foreign texture on registration 
     prepared.dispose();
     await expect(port.prepare({ ...page, sha256: '0'.repeat(64) }, new AbortController().signal)).rejects.toThrow('hash mismatch');
   } finally { vi.unstubAllGlobals(); }
+});
+
+it('leases emission with color/height atomically and falls back when a material page fails', async () => {
+  const assets = fixture();
+  for (const asset of Object.values(assets)) {
+    asset.elevationPass.encoding = 'linear-unorm8-z-oct-normal-v1';
+    asset.materialPass = { version: 1, color: 'srgb-albedo-baked-cavity-v1', normal: 'linear-unorm8-z-oct-normal-v1',
+      emission: 'linear-rgb-unorm8-scaled-v1', worldPxPerBU: 40, emissionRange: 8, exposure: 1, tint: [1,1,1], saturation: 1 };
+    asset.shadowMesh = { version: 1, encoding: 'u16-world-xyz-per-pose-v1', frames: asset.socketFrames!.map((_, i) => ({
+      vertexCount: 3, triangleCount: 1, bounds: { min: [0,0,0], max: [1,1,1] },
+      positions: { file: `./assets/${asset.id}/${i}-p.bin`, sha256: 'a'.repeat(64), bytes: 18 },
+      indices: { file: `./assets/${asset.id}/${i}-i.bin`, sha256: 'b'.repeat(64), bytes: 6 },
+    })) };
+    asset.atlases.emission = structuredClone(asset.atlases.color);
+    let total = 0;
+    for (const [name, atlas] of Object.entries(asset.atlases.emission)) {
+      for (const page of atlas.pages) { page.image = page.image.replace('/color/', '/emission/'); page.json = page.json.replace('/color/', '/emission/'); }
+      const bytes = atlas.pages.reduce((sum,p) => sum + p.gpuBytesRGBA8, 0);
+      asset.budget.clips[name].emission = bytes; asset.budget.clips[name].total += bytes; total += bytes;
+    }
+    asset.budget.totals.emission = total; asset.budget.totals.total += total;
+  }
+  const removed: string[] = [];
+  const port: KrakenResidencyPort = { prepare: async page => {
+    if (page.image.includes('/land/emission/death')) throw Error('Emission unavailable');
+    return { register() {}, dispose() {} };
+  }, remove: key => { removed.push(key); }, diagnose: vi.fn() };
+  const residency = new KrakenAssetResidency(assets, port, { waterBudgetMiB: 1, landBudgetMiB: 1, peakBudgetMiB: 1, additionalGpuBytes: () => 0 });
+  await residency.setPhase('land').settled;
+  const lease = residency.acquirePose('land', 'death', 0, vi.fn())!;
+  expect(lease.pose.fallback).toBe(true); expect(lease.pose.emissionKey).toContain(':emission:');
+  expect(lease.pose.emissionFrame).toBe(lease.pose.frame);
+  residency.setPhase('dead');
+  expect(residency.residentBytes).toBe(assets.land.budget.clips.__rest.total);
+  lease.release(); expect(residency.residentBytes).toBe(0); expect(removed.some(k => k.includes(':emission:'))).toBe(true);
+  residency.detach();
 });

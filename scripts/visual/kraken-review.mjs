@@ -9,7 +9,9 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const args = process.argv.slice(2);
 const value = name => args.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3);
-for (const arg of args) if (!/^--(origin|run|asset|size|frames|options|effects|r4|r5|r7)=/.test(arg)) throw Error(`Unknown option: ${arg}`);
+for (const arg of args) if (!/^--(origin|run|asset|size|frames|options|effects|r4|r5|r7|p9c)=/.test(arg)) throw Error(`Unknown option: ${arg}`);
+const p9c = value('p9c');
+if (p9c && !['smoke', 'mask', 'all', 'runtime'].includes(p9c)) throw Error('p9c: smoke/mask/all/runtime');
 const r7 = ['only', 'ashore'].includes(value('r7'));
 if (value('r7') && !r7) throw Error('r7: only/ashore');
 const r5 = value('r5') === 'only';
@@ -38,7 +40,7 @@ await mkdir(output, { recursive: true });
 const temporary = join(root, 'build/kraken-browser-temp');
 await mkdir(temporary, { recursive: true });
 process.env.TEMP = process.env.TMP = process.env.TMPDIR = temporary;
-const viewport = { width: 1280, height: 720 };
+const viewport = p9c ? { width: 1536, height: 1024 } : { width: 1280, height: 720 };
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? 'C:/Program Files/Google/Chrome/Application/chrome.exe',
   headless: false, args: ['--disable-background-timer-throttling', '--disable-renderer-backgrounding',
     '--disable-backgrounding-occluded-windows', '--force-color-profile=srgb'] });
@@ -47,10 +49,14 @@ const page = await browser.newPage({ viewport, deviceScaleFactor: 1, locale: 'de
 // Runtime/API traffic is unchanged; only the dev server's token-authenticated hot-reload socket is held.
 await page.routeWebSocket(url => url.host === new URL(origin).host && url.searchParams.has('token'), () => {});
 page.setDefaultTimeout(180000);
-const errors = [], captures = [], seekMismatches = [], seekComparisons = [];
+const errors = [], diagnostics = [], captures = [], seekMismatches = [], seekComparisons = [];
 page.on('pageerror', e => { errors.push(e.stack ?? e.message); console.error(e.stack ?? e.message); });
 page.on('console', message => {
   if (message.type() === 'error' && !(message.location().url.endsWith('/atlas.json') && message.text().includes('404'))) errors.push(message.text());
+  if (message.text().includes('[Kraken presentation]')) {
+    diagnostics.push(message.text());
+    if (/budget exceeded|HTTP|hash mismatch|decode failed|registration failed|invalid/i.test(message.text())) errors.push(message.text());
+  }
 });
 page.on('response', r => {
   // Optional atlas discovery is the only expected 404; explicit atlas errors fail the command.
@@ -137,7 +143,7 @@ const measureLighting = async (png, body, canvas) => {
     meanLinearLuminanceGame: sums.gameLinear / samples, linearRatio: sums.gameLinear / sums.sourceLinear,
     roi: { left, top, width, height } };
 };
-const watchdog = setTimeout(() => { console.error('Kraken review exceeded 10 minutes'); void browser.close(); }, 600000);
+const watchdog = setTimeout(() => { console.error('Kraken review exceeded 10 minutes'); void browser.close(); }, p9c ? 1800000 : 600000);
 const heartbeat = setInterval(() => {
   void page.evaluate(() => {
     const s = window.devScenario?.status();
@@ -159,8 +165,121 @@ try {
     return status?.ready && status.paused;
   });
   console.log('Scenario ready; loading review assets...');
+  if (p9c === 'mask') await page.evaluate(async () => {
+    // Vite adds dependency timestamps: patch the constructor actually used by
+    // this loaded scene, not a second module instance without its query string.
+    const moduleUrl = performance.getEntriesByType('resource').map(e => e.name)
+      .findLast(url => url.includes('/src/effects/kraken/KrakenShadowRenderer.ts'));
+    if (!moduleUrl) throw Error('Kraken shadow module was not loaded');
+    const { KrakenShadowRenderer } = await import(moduleUrl);
+    const inspect = KrakenShadowRenderer.prototype.inspect;
+    KrakenShadowRenderer.prototype.inspect = function() {
+      const result = { ...inspect.call(this), strength: [...this.strength], sun: [...this.sun], maskDraws: this.maskDraws };
+      const gl = this.scene.sys.renderer.gl, previous = gl.getParameter(gl.FRAMEBUFFER_BINDING);
+      result.glError = gl.getError();
+      result.matrix = Array.from(this.matrix);
+      result.receiver = this.environment?.receiver.world;
+      result.sample = this.environment?.receiver.sample(this.body[0], this.body[1]);
+      if (this.gpu) {
+        result.geometry = Array.from(this.gpu.geometry.buffer.viewF32.slice(0, 12));
+        result.indices = Array.from(this.gpu.indices.viewU16.slice(0, 12));
+        result.indexCount = this.gpu.indexCount;
+        const program = this.gpu.program.getCurrentProgramSuite()?.program.webGLProgram;
+        result.uniforms = {};
+        if (program) for (const name of ['uModel', 'uBounds', 'uSun', 'uReceiverWorld', 'uPlane', 'uWetPass']) {
+          const location = gl.getUniformLocation(program, name);
+          const value = location ? gl.getUniform(program, location) : null;
+          result.uniforms[name] = ArrayBuffer.isView(value) ? Array.from(value) : value;
+        }
+      }
+      result.targets = {};
+      for (const name of ['raw', 'horizontal', 'blurred']) {
+        const context = this[name]?.shader.drawingContext;
+        if (!context?.framebuffer) continue;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, context.framebuffer.webGLFramebuffer);
+        const bytes = new Uint8Array(context.width * context.height * 4);
+        gl.readPixels(0, 0, context.width, context.height, gl.RGBA, gl.UNSIGNED_BYTE, bytes);
+        let occupied = 0, sum = 0;
+        for (let i = 0; i < bytes.length; i += 4) { occupied += Number(bytes[i] > 0); sum += bytes[i]; }
+        result.targets[name] = { width: context.width, height: context.height, occupied, sum };
+      }
+      gl.bindFramebuffer(gl.FRAMEBUFFER, previous);
+      return result;
+    };
+  });
   await page.evaluate(() => document.fonts.ready);
   await page.addStyleTag({ content: '#dev-scenario-panel{display:none!important} *,*::before,*::after{caret-color:transparent!important}' });
+  if (p9c === 'runtime') {
+    const measurements = [], phasePeaks = {}, phaseAtlasPeaks = {};
+    for (const quality of options.quality ? [options.quality] : ['high', 'medium', 'low']) {
+      for (const trial of value('asset') === 'land' ? ['land'] : ['water', 'land']) {
+        await command({ action: 'krakenMission', skipIntro: trial === 'land', ...(trial === 'land' ? { hp: 1 } : {}) });
+        await page.waitForFunction(() => window.devScenario.status().ready);
+        await command({ action: 'quality', level: quality });
+        await command({ action: 'options', values: { refillHp: true, hideAim: true, hideTutorial: true, timeOfDay: 720 } });
+        await command({ action: 'teleport', gridX: 53, gridY: 39 });
+        await command({ action: 'target', gridX: 35, gridY: 29 });
+        await command({ action: 'camera', zoom: 1, focusTarget: true });
+        const captured = new Set();
+        for (let second = 0; second < 100; second++) {
+          await command({ action: 'step', frames: 60 }); await settle();
+          const status = await page.evaluate(() => window.devScenario.status());
+          const residency = status.krakenResidency;
+          if (residency) phaseAtlasPeaks[residency.phase] = Math.max(phaseAtlasPeaks[residency.phase] ?? 0, residency.atlasBytes);
+          measurements.push({ quality, trial, second, residency, mission: status.mission });
+          if (second % 10 === 0) await writeFile(join(output, 'runtime-progress.json'), JSON.stringify({ quality, trial, second, residency, simulationMs: status.simulationMs, errors, diagnostics }, null, 2));
+          for (const [phase, bytes] of Object.entries(residency?.phasePeaks ?? {})) phasePeaks[phase] = Math.max(phasePeaks[phase] ?? 0, bytes);
+          if (residency?.atlasBytes > 0 && !captured.has(residency.phase)) {
+            captured.add(residency.phase);
+            await command({ action: 'target', gridX: 35, gridY: ['ashore', 'land'].includes(residency.phase) ? 35 : 29 });
+            await command({ action: 'camera', zoom: 1, focusTarget: true });
+            await settle();
+            await page.screenshot({ path: join(output, `runtime-${quality}-${trial}-${residency.phase}.png`) });
+          }
+          if (errors.length) throw Error(errors.join('\n'));
+        }
+        await writeFile(join(output, 'runtime-report.json'), JSON.stringify({ viewport, phasePeaks, phaseAtlasPeaks, errors, diagnostics, measurements }, null, 2));
+      }
+    }
+    for (const phase of ['intro', 'water', 'ashore', 'land']) {
+      if (!(phasePeaks[phase] > 0)) throw Error(`Missing actual phase: ${phase}`);
+      if (phasePeaks[phase] > (['intro', 'water'].includes(phase) ? 165 : 150) * 1024 ** 2) throw Error(`Residency limit exceeded: ${phase}`);
+    }
+    const plan = JSON.parse(readFileSync(join(root, 'art/poc/kraken-v12/build/budget.json'), 'utf8'));
+    for (const row of plan.rows) if ((phaseAtlasPeaks[row.phase] ?? 0) < row.atlasBytes) throw Error(`Incomplete resident clip set: ${row.phase}`);
+    console.log(`RUNTIME MEASUREMENTS: ${output}`);
+  } else if (p9c) {
+    await command({ action: 'step', frames: 240 }); await settle();
+    const revision = value('run') ?? 'kraken-v12';
+    const manifest = await (await fetch(`${origin}/art/poc/pipeline-v2/runs/${revision}/ls-pilot.json`)).json();
+    const selected = ['smoke', 'mask'].includes(p9c) ? manifest.assets.filter(a => a.id === (value('asset') ?? 'abyssal-kraken-land')).flatMap(a => [{ asset: a, pose: a.poses.find(p => p.name === 'hover-0') ?? a.poses[0] }])
+      : manifest.assets.flatMap(asset => asset.poses.map(pose => ({ asset, pose })));
+    const measurements = [];
+    for (const { asset, pose } of selected) {
+      const frames = [], labels = [];
+      for (const quality of ['smoke', 'mask'].includes(p9c) || pose.name.endsWith('-0') ? ['high', 'medium', 'low'] : ['high']) {
+        for (const [azimuth, elevation] of [[0,45], [135,28]]) {
+          const patch = { action: 'krakenReview', pilot: revision, pose: `${asset.id}/${pose.name}`, quality, azimuth, elevation,
+            shore: asset.role === 'water' || asset.role === 'tentacle', night: false };
+          await command(patch); await settle();
+          await command({ action: 'step', frames: 30 }); await settle();
+          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+          const state = await page.evaluate(() => window.devScenario.status());
+          if (!state.krakenReview.ready || errors.length) throw Error(`Material review not ready: ${JSON.stringify(errors)}`);
+          const label = `${asset.role} ${pose.name} F${pose.sourceFrame} ${quality} sun ${azimuth}/${elevation}`;
+          const png = await page.screenshot();
+          await writeFile(join(output, `${asset.role}-${pose.name}-${quality}-${azimuth}.png`), png);
+          frames.push(png); labels.push(label); measurements.push({ label, status: state.krakenReview });
+          if (p9c === 'mask' && asset.role !== 'egg' && quality !== 'low'
+            && state.krakenReview.shadows.some(s => !(s.targets.raw.occupied > 0 && s.targets.blurred.occupied > 0) || s.glError))
+            throw Error('Empty or invalid projected Kraken shadow mask');
+        }
+      }
+      await sheet(`${asset.role}-${pose.name}`, frames, labels, 2);
+    }
+    await writeFile(join(output, 'report.json'), JSON.stringify({ revision, viewport, errors, measurements }, null, 2));
+    console.log(`CONTACT SHEETS: ${output}`);
+  } else {
   const status = await command({ action: 'krakenReview', ...options, playing: false });
   await settle(); await command({ action: 'step', frames: 120 }); await settle();
   await command({ action: 'step', frames: 60 }); await settle();
@@ -387,6 +506,7 @@ try {
   }
   console.log(`CONTACT SHEETS: ${output}`);
   if (seekMismatches.length) throw Error('Rewind differs: ' + seekMismatches.join(', '));
+  }
 } catch (error) {
   await page.screenshot({ path: join(output, 'error.png') }).catch(() => {});
   await writeFile(join(output, 'error.json'), JSON.stringify({ error: String(error), errors, captures,

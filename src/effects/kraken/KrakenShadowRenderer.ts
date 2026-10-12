@@ -137,10 +137,15 @@ export class KrakenShadowRenderer {
     const [x, y, w, h] = this.bounds, view = getVisibleWorldView(this.scene.cameras.main, this.view, 0);
     if (x > view.right || y > view.bottom || x + w < view.x || y + h < view.y) { this.hide(); return; }
     if (!this.analytic && this.mesh !== mesh) {
-      this.releaseGpu(); this.mesh = mesh;
-      this.program = sunShaderName('KrakenProjection');
-      this.gpu = new EnemyMeshGpu(this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer, this.program, VERTEX, MASK,
-        mesh.positions, 3, mesh.indices, [{ name: 'inZOffset', size: 1 }], 1);
+      if (!this.gpu?.updateGeometry(mesh.positions, mesh.indices)) {
+        this.releaseGpu();
+        this.program = sunShaderName('KrakenProjection');
+        this.gpu = new EnemyMeshGpu(this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer, this.program, VERTEX, MASK,
+          new Float32Array(Math.max(mesh.positions.length, 24000 * 3)), 3,
+          new Uint16Array(Math.max(mesh.indices.length, 24000)), [{ name: 'inZOffset', size: 1 }], 1);
+        this.gpu.updateGeometry(mesh.positions, mesh.indices);
+      }
+      this.mesh = mesh;
       this.signature = '';
     }
     const size = role === 'tentacle' ? quality === 'high' ? 256 : 128 : quality === 'high' ? 512 : 256;
@@ -155,7 +160,7 @@ export class KrakenShadowRenderer {
       this.lastTexture = this.raw!.shader.glTexture?.webGLTexture;
       this.signature = this.strength[0] <= 0 || this.maskDraws === 2 ? signature : '';
     }
-    this.display!.setPosition(x + w / 2, y + h / 2).setSize(w, h).setVisible(true);
+    this.display!.setPosition(x + w / 2, y + h / 2).setSize(w, h).setOrigin(.5).setVisible(true);
   }
   hide(): void { this.display?.setVisible(false); }
   get gpuBytes(): number {

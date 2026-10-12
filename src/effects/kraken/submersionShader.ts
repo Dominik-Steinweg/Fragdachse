@@ -1,8 +1,14 @@
 import * as Phaser from 'phaser';
+import materialLook from '../../config/krakenMaterialLighting.json';
 import { characterLocalVector } from '../CharacterMaterialModel';
 import { setCloudUniforms, type SunCloudState } from '../sunlight/cloudShadow';
 import { getGraphicsQualityProfile } from '../../graphics/GraphicsQuality';
 import { KRAKEN_MATERIAL_HEADER } from './krakenMaterialShader';
+
+/** Presentation response after the hash-bound albedo calibration; shared by game and viewer. */
+export function krakenMaterialExposure(id: string, exposure: number): number {
+  return exposure * (id === 'abyssal-kraken-tentacle' ? materialLook.tentacleExposureScale : 1);
+}
 
 /** Heights are Blender units; colours are linear shader RGB in [0, 1]. */
 export const SUBMERSION_DEFAULTS = {
@@ -102,7 +108,7 @@ type Sprite = Phaser.GameObjects.Sprite | Phaser.GameObjects.Image;
  */
 export class SubmersionFilter extends Phaser.Filters.Controller {
   /** Pilot/new-revision opt-in only; scalar elevation never implies a material. */
-  material: { clouds: SunCloudState; emission: Phaser.Textures.Frame; emissionRange: number } | null = null;
+  material: { clouds: SunCloudState; emission: Phaser.Textures.Frame; emissionRange: number; tint?: readonly number[]; saturation?: number; highlightRollOff?: boolean; highlightRole?: 'body' | 'tentacle' } | null = null;
   params = { ...SUBMERSION_DEFAULTS };
   elevationMin: number;
   elevationMax: number;
@@ -131,6 +137,8 @@ class SubmersionNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader 
     characterLocalVector(light[0], light[1], light[2], s.rotation, s.flipX, s.flipY, sun);
     const uniforms = {
       uEmission: 3, materialEnabled: Number(!!m), materialLow: Number(getGraphicsQualityProfile(c.target.scene).level === 'low'),
+      materialTint: m?.tint ?? [1, 1, 1], materialSaturation: m?.saturation ?? 1,
+      materialHighlightTone: m?.highlightRollOff === false ? [1, 1] : [m?.highlightRole === 'tentacle' ? materialLook.tentacleAlbedoHighlightKnee : materialLook.albedoHighlightKnee, materialLook.albedoHighlightSlope],
       materialSun: sun, materialStrength: m?.clouds.sunPath?.strength ?? 0,
       materialNormalScale: [1 / Math.max(.001, Math.abs(s.scaleX)), 1 / Math.max(.001, Math.abs(s.scaleY)),
         1 / Math.max(.001, Math.sqrt(Math.abs(s.scaleX * s.scaleY)))],

@@ -461,10 +461,13 @@ export class CoopDefenseKrakenSystem {
     let position: Point = entity, remaining = Math.max(0, desired - this.exitTravelled), index = this.exitIndex;
     while (index < this.exit.path.length) {
       const waypoint = this.exit.path[index], distance = Math.hypot(waypoint.x - position.x, waypoint.y - position.y);
-      const next = this.step(position, waypoint, remaining);
+      // Accumulated diagonal steps can finish a few ulps short. Snap only the
+      // numerical remainder, still validating the entire move against topology.
+      const reached = distance <= remaining + 1e-6;
+      const next = reached ? waypoint : this.step(position, waypoint, remaining);
       if (!this.deps.canMove(position, next, 'ashore')) { this.pauseExit(now, dt); this.blocked(now, 'Exit movement obstructed'); return; }
-      position = next; remaining -= distance;
-      if (remaining < 0) break;
+      position = next; remaining = Math.max(0, remaining - distance);
+      if (!reached) break;
       index++;
     }
     this.exitIndex = index; this.exitTravelled = desired;

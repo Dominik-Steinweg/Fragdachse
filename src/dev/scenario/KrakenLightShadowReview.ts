@@ -3,17 +3,17 @@ import { DEPTH } from '../../config';
 import type { ShadowSystem } from '../../effects/ShadowSystem';
 import type { WorldSunlightPresentation } from '../../effects/sunlight/WorldSunlightPresentation';
 import { createKrakenResidencyPort, type KrakenPreparedPage } from '../../effects/kraken/KrakenAssetResidency';
-import { KrakenSubmersion } from '../../effects/kraken/submersionShader';
+import { KrakenSubmersion, krakenMaterialExposure } from '../../effects/kraken/submersionShader';
 import { KrakenShadowRenderer } from '../../effects/kraken/KrakenShadowRenderer';
 import { KRAKEN_PACKED_NORMAL_ENCODING, type KrakenShadowMesh } from '../../effects/kraken/KrakenLightShadowModel';
 import { getGraphicsQualityController, type GraphicsQuality } from '../../graphics/GraphicsQuality';
 
-interface Page { image: string; json: string; sha256: string; jsonSha256: string; width: number; height: number; gpuBytes: number }
+interface Page { frameNames?: string[]; image: string; json: string; sha256: string; jsonSha256: string; width: number; height: number; gpuBytes: number }
 interface BufferSpec { file: string; bytes: number; sha256: string }
-interface Pose { name: string; sourceFrame: number; gpuBytes: number; passes: Record<'color' | 'beauty' | 'elevation' | 'emission', Page>;
+interface Pose { frameName?: string; name: string; sourceFrame: number; gpuBytes: number; passes: Record<'color' | 'beauty' | 'elevation' | 'emission', Page>;
   mesh: { vertexCount: number; triangleCount: number; bounds: { min: number[]; max: number[] }; positions: BufferSpec; indices: BufferSpec } }
 interface Asset { id: string; role: 'water' | 'land' | 'tentacle' | 'egg'; encoding: string; colorPass: string; emissionEncoding: string; size: number;
-  canvasWorld: number; worldPxPerBU: number; emissionRange: number; heightRange: [number, number]; pivot: [number, number]; poses: Pose[];
+  tint?: number[]; saturation?: number; canvasWorld: number; worldPxPerBU: number; emissionRange: number; heightRange: [number, number]; pivot: [number, number]; poses: Pose[];
   exposureCalibration: { suggested: number } }
 export interface KrakenLightShadowOptions { pilot: string; pose: string; azimuth: number; elevation: number; night: boolean;
   shore: boolean; quality: GraphicsQuality; exposure: number | null }
@@ -26,7 +26,7 @@ export function krakenLightShadowOptions(raw: Record<string, unknown>, previous 
     if (!(key in defaults)) throw Error(`Unknown lighting pilot option: ${key}`);
     Object.assign(o, { [key]: value });
   }
-  if (!/^kraken-ls-pilot-\d+$/.test(o.pilot) || !/^abyssal-kraken(?:-land|-tentacle|-egg)?\/[\w-]+$/.test(o.pose)) throw Error('Invalid pilot/pose');
+  if (!/^(?:kraken-ls-pilot-\d+|kraken-v\d+)$/.test(o.pilot) || !/^abyssal-kraken(?:-land|-tentacle|-egg)?\/[\w-]+$/.test(o.pose)) throw Error('Invalid pilot/pose');
   if (![o.azimuth, o.elevation].every(Number.isFinite) || o.elevation <= 0 || o.elevation > 90
     || o.exposure !== null && (!Number.isFinite(o.exposure) || o.exposure <= 0 || o.exposure > 4)) throw Error('Invalid light/exposure');
   if (typeof o.night !== 'boolean' || typeof o.shore !== 'boolean' || !['high','medium','low'].includes(o.quality)) throw Error('Invalid quality/shore/night');
@@ -66,7 +66,7 @@ export class KrakenLightShadowReview {
     for (const pass of ['color', 'elevation', 'emission', 'beauty'] as const) {
       const p = pose.passes[pass];
       const prepared = await port.prepare({ ...p, image: base + p.image, json: base + p.json,
-        gpuBytesRGBA8: p.gpuBytes, frameNames: [pose.name] }, this.abort.signal);
+        gpuBytesRGBA8: p.gpuBytes, frameNames: p.frameNames ?? [pose.name] }, this.abort.signal);
       if (this.disposed) { prepared.dispose(); throw Error('Pilot disposed'); }
       this.prepared.push(prepared);
       const key = `kraken-light-pilot-${serial++}`; this.keys.push(key); prepared.register(key); this.pagesBytes += p.gpuBytes;
@@ -83,13 +83,14 @@ export class KrakenLightShadowReview {
     for (let i = 0; i < p.length; i++) p[i] = b.min[i % 3] + packed.getUint16(i * 2, true) / 65535 * (b.max[i % 3] - b.min[i % 3]);
     const ix = new Uint16Array(indices); if (ix.some(i => i >= pose.mesh.vertexCount) || p.some(v => !Number.isFinite(v))) throw Error('Invalid pilot geometry');
     this.mesh = { id: this.options.pose, positions: p, indices: ix, bounds: b };
-    const elevation = this.scene.textures.getFrame(this.keys[1], name);
+    const frameName = pose.frameName ?? name;
+    const elevation = this.scene.textures.getFrame(this.keys[1], frameName);
     for (const [i,key] of [this.keys[3],this.keys[0]].entries()) {
-      const sprite = this.scene.add.sprite(0,0,key,name).setDepth(DEPTH.PLAYERS).setOrigin(...asset.pivot).setDisplaySize(asset.canvasWorld,asset.canvasWorld);
+      const sprite = this.scene.add.sprite(0,0,key,frameName).setDepth(DEPTH.PLAYERS).setOrigin(...asset.pivot).setDisplaySize(asset.canvasWorld,asset.canvasWorld);
       const submersion = new KrakenSubmersion(sprite,elevation,{min:asset.heightRange[0],max:asset.heightRange[1]},this.waterAt,1);
-      if (i === 1) submersion.filter.material = { clouds: this.sunlight.clouds, emission: this.scene.textures.getFrame(this.keys[2],name), emissionRange: asset.emissionRange };
+      if (i === 1) submersion.filter.material = { clouds: this.sunlight.clouds, emission: this.scene.textures.getFrame(this.keys[2],frameName), emissionRange: asset.emissionRange, tint: asset.tint, saturation: asset.saturation, highlightRollOff: asset.role !== 'egg', highlightRole: asset.role === 'tentacle' ? 'tentacle' : 'body' };
       this.views.push({ sprite, submersion, shadow: new KrakenShadowRenderer(this.scene,this.shadowSystem) });
-      this.labels.push(this.scene.add.text(0,0,i===0?'Beauty (v11b)':'Albedo + Normal + Emission',{fontSize:'14px',color:'#ffffff',backgroundColor:'#16201f'}).setDepth(DEPTH.PLAYERS+1).setOrigin(.5));
+      this.labels.push(this.scene.add.text(0,0,i===0?'Beauty (gleiche Pose)':'Albedo + Normal + Emission',{fontSize:'14px',color:'#ffffff',backgroundColor:'#16201f'}).setDepth(DEPTH.PLAYERS+1).setOrigin(.5));
     }
     this.configure(this.options);
     this.scene.events.on('postupdate',this.update,this);
@@ -106,8 +107,8 @@ export class KrakenLightShadowReview {
     const asset = this.asset, level = asset.role === 'water' ? .38 : 0;
     for (const [i,v] of this.views.entries()) {
       v.sprite.setPosition(this.focus.x+(i-.5)*(asset.canvasWorld+70),this.focus.y);
-      v.submersion.filter.params.exposure = i===1?(this.options.exposure??asset.exposureCalibration.suggested):asset.role==='water'?.55:1;
-      v.submersion.update(this.scene.textures.getFrame(this.keys[1],this.pose.name),level,0);
+      v.submersion.filter.params.exposure = i===1?(this.options.exposure??krakenMaterialExposure(asset.id,asset.exposureCalibration.suggested)):asset.role==='water'?.55:1;
+      v.submersion.update(this.scene.textures.getFrame(this.keys[1],this.pose.frameName ?? this.pose.name),level,0);
       v.shadow.update(v.sprite,this.mesh,asset.canvasWorld,asset.worldPxPerBU,level,asset.role);
       this.labels[i].setPosition(v.sprite.x,v.sprite.y-asset.canvasWorld*.5-18);
     }
@@ -118,7 +119,7 @@ export class KrakenLightShadowReview {
     pagesBytes:this.pagesBytes,reviewOnlyBeautyBytes:this.pose?.passes.beauty.gpuBytes??0,
     knownGpuBytes:this.knownGpuBytes(),knownGpuPeakBytes:this.knownGpuPeakBytes,
     accountingExcludes:'shared Phaser filter pool, existing World receiver, driver padding',
-    materialExposure:this.options.exposure??this.asset?.exposureCalibration.suggested,
+    materialExposure:this.options.exposure??(this.asset ? krakenMaterialExposure(this.asset.id,this.asset.exposureCalibration.suggested) : undefined),
     cpuMeshBytes:(this.mesh?.positions.byteLength??0)+(this.mesh?.indices.byteLength??0),
     shadows:this.views.map(v=>v.shadow.inspect()),focus:this.focus,ready:this.views.length===2 }; }
   destroy(): void {

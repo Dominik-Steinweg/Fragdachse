@@ -15,10 +15,14 @@ export const isBossRuntime = entry => entry.runtimeContract === 'boss';
 export async function verifyBossRuntime(entry, asset, read) {
   if (!isBossRuntime(entry)) throw new Error('Expected boss runtime contract');
   validateExtensions(entry);
+  const packed = !!asset.materialPass;
+  const elevation = packed ? asset.elevation : entry.elevation;
+  if (packed && (!entry.materialPass || asset.materialPass.normal !== 'linear-unorm8-z-oct-normal-v1'
+    || asset.materialPass.color !== 'srgb-albedo-baked-cavity-v1' || !asset.shadowMesh || !asset.atlases.emission)) throw Error('Boss material contract missing');
   validateClipContracts(asset.clips);
-  if (asset.runtimeContract !== 'boss' || asset.category !== entry.category || asset.runtimeBudgetMB !== entry.runtimeBudgetMB || !same(asset.elevation, entry.elevation)
-    || !asset.elevationPass || asset.elevationPass.encoding !== elevationEncoding
-    || asset.elevationPass.min !== entry.elevation.min || asset.elevationPass.max !== entry.elevation.max
+  if (asset.runtimeContract !== 'boss' || asset.category !== entry.category || asset.runtimeBudgetMB !== entry.runtimeBudgetMB || !same(asset.elevation, elevation)
+    || !asset.elevationPass || asset.elevationPass.encoding !== (packed ? 'linear-unorm8-z-oct-normal-v1' : elevationEncoding)
+    || asset.elevationPass.min !== elevation.min || asset.elevationPass.max !== elevation.max
     || asset.elevationPass.scale !== (entry.elevation.scale ?? .5) || asset.elevationPass.waterline !== 0
     || asset.elevationPass.alpha !== 'beauty-coverage' || asset.elevationPass.colorSpace !== 'non-color'
     || asset.elevationPass.premultiplied !== false) throw new Error('Boss elevation contract mismatch');
@@ -41,17 +45,17 @@ export async function verifyBossRuntime(entry, asset, read) {
       return !Number.isInteger(index) || !asset.socketFrames?.[clip.frames[index]]?.[socket];
     })) throw new Error('Boss egg sockets require release-1 through release-6');
   }
-  const totals = { color: 0, elevation: 0, total: 0 }, clips = {}, files = new Set();
-  for (const pass of ['color', 'elevation']) {
+  const totals = { color: 0, elevation: 0, ...(packed ? { emission: 0 } : {}), total: 0 }, clips = {}, files = new Set();
+  for (const pass of (packed ? ['color', 'elevation', 'emission'] : ['color', 'elevation'])) {
     const atlases = asset.atlases?.[pass];
     if (!atlases || !same(Object.keys(atlases).sort(), groups.map(c => c.name).sort())) throw new Error('Boss atlases missing clips or rest pose');
-    const size = pass === 'color' ? asset.sourceSize : Math.round(asset.sourceSize * (entry.elevation.scale ?? .5));
+    const size = pass === 'elevation' ? Math.round(asset.sourceSize * (elevation.scale ?? .5)) : asset.sourceSize;
     for (const clip of groups) {
       const atlas = atlases[clip.name], names = clip.frames.map((_, i) => `${clip.name}/${String(i).padStart(4, '0')}`);
       if (!atlas.pages?.length || !same(atlas.frameNames, names) || !same(atlas.sourceFrames, clip.frames)
         || atlas.sourceSize !== size || atlas.logicalSourceSize !== asset.sourceSize || !same(atlas.pivot, entry.pivot)) throw new Error('Boss atlas frame mapping differs');
       const found = new Set();
-      const budget = clips[clip.name] ??= { color: 0, elevation: 0, total: 0 };
+      const budget = clips[clip.name] ??= { color: 0, elevation: 0, ...(packed ? { emission: 0 } : {}), total: 0 };
       for (const page of atlas.pages) {
         if (files.has(page.image) || files.has(page.json)) throw new Error('Duplicate atlas page');
         files.add(page.image); files.add(page.json);
@@ -90,12 +94,25 @@ export async function verifyBossRuntime(entry, asset, read) {
     }
   }
   for (const budget of Object.values(clips)) {
-    budget.total = budget.color + budget.elevation;
+    budget.total = budget.color + budget.elevation + (budget.emission ?? 0);
     for (const key of Object.keys(totals)) totals[key] += budget[key];
   }
   if (!same(Object.keys(asset.budget?.clips ?? {}).sort(), Object.keys(clips).sort())
     || Object.entries(clips).some(([name, values]) => Object.entries(values).some(([pass, bytes]) => asset.budget.clips[name]?.[pass] !== bytes))
     || Object.entries(totals).some(([pass, bytes]) => asset.budget?.totals?.[pass] !== bytes)) throw new Error('Boss budget does not match actual atlas pages');
-  if (totals.total > entry.runtimeBudgetMB * 1024 * 1024) throw new Error('Boss runtimeBudgetMB exceeded');
+  if (!packed && totals.total > entry.runtimeBudgetMB * 1024 * 1024) throw new Error('Boss runtimeBudgetMB exceeded');
+  if (packed) {
+    if (asset.shadowMesh.version !== 1 || asset.shadowMesh.encoding !== 'u16-world-xyz-per-pose-v1'
+      || asset.shadowMesh.frames.length !== Math.max(...groups.flatMap(c => c.frames)) + 1) throw Error('Boss mesh pose count mismatch');
+    for (const pose of asset.shadowMesh.frames) {
+      const [positions, indices] = await Promise.all(['positions', 'indices'].map(async key => {
+        const r = pose[key], data = await read(r.file);
+        if (digest(data) !== r.sha256 || data.length !== r.bytes) throw Error('Boss mesh hash mismatch');
+        return data;
+      }));
+      if (positions.length !== pose.vertexCount * 6 || indices.length !== pose.triangleCount * 6 || pose.vertexCount > 65535) throw Error('Boss mesh size mismatch');
+      for (let i = 0; i < indices.length; i += 2) if (indices.readUInt16LE(i) >= pose.vertexCount) throw Error('Boss mesh index outside pose');
+    }
+  }
   return { clips, totals };
 }

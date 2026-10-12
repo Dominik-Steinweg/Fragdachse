@@ -736,6 +736,8 @@ export class ArenaLifecycleCoordinator {
   ) {
     this.coopMissionPresentationUi = coopMissionPresentation?.createUiPort({
       cameraFeedback: ctx.visualFeedback.camera,
+      getWorldLayout: () => this.worldRuntime?.presentation?.layout ?? null,
+      getWorldMetrics: () => this.worldRuntime?.context.metrics ?? null,
       centerHUD: ctx.centerHUD,
       playerManager: ctx.playerManager,
       clientUpdate,

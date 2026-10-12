@@ -1332,6 +1332,7 @@ export class ShadowSystem {
     // Der statische Puffer wird gebacken und nie selbst gerendert: keine Maske noetig, die
     // traegt stattdessen die RenderTexture.
     const staticGraphics = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'dynamicShadows', staticGraphics);
     staticGraphics.setDepth(depth);
     staticGraphics.setBlendMode(Phaser.BlendModes.MULTIPLY);
     staticGraphics.setVisible(false);
