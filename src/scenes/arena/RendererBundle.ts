@@ -498,6 +498,8 @@ export function wireProjectileRenderers(
   bundle: RendererBundle,
   runtime: WorldProjectileRuntime,
   owners: OwnerVisualSource,
+  /** Enemy bodies carrying a replicated frontal shield; null while the World has no Activity. */
+  enemyPositions: ((enemyId: string) => { x: number; y: number } | null) | null = null,
 ): void {
   runtime.getPresentationRuntime().bindRenderers({
     bullet: bundle.bullet,
@@ -523,6 +525,7 @@ export function wireProjectileRenderers(
     visualOverrides: bundle.projectileVisualOverrides,
   }, (ownerId) => owners.getOwnerVisualState(ownerId));
   bundle.energyShield.setOwnerPositionProvider((ownerId) => owners.getOwnerVisualState(ownerId));
+  bundle.energyShield.setEnemyPositionProvider(enemyPositions);
 }
 
 /** Wire the EffectSystem to renderers that need it (muzzle flash, nuke). */
