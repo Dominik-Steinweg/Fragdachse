@@ -762,11 +762,11 @@
       "source": "assets/sprites/rewards/watchtower.png",
       "width": 1024,
       "height": 1024,
-      "sourceBytes": 1399661,
-      "downloadBytes": 708084,
-      "sourceSha256": "4c687f7c1769745242a492259b6452d9483dec12519af66599dda17c436471e2",
-      "sha256": "6237b0e4f51d8097fe112a7a6a1a5e204f5b9e15a3864774f29f75fac6062a64",
-      "visiblePixelSha256": "bed883de61ae62c6d01ab3f59de7f1492b0a5cc6c93b34dc7a2c8684cd3cd211",
+      "sourceBytes": 1521135,
+      "downloadBytes": 692728,
+      "sourceSha256": "972e84f417e1c7b55777fc0ef3763b2eaeaf7c9a85079810b8db1d0e2178f38e",
+      "sha256": "835c24534bd284986659fd8fdef6855fcfcf69407a02d1770d34f72d1d79697c",
+      "visiblePixelSha256": "edfec348d4c6fe8657bf0bc02fcd37e1161e002bf3ef2ae5a67d972d3efc9fed",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
     "assets/sprites/rock_base.png": {

@@ -5,6 +5,7 @@ The deck fills the centred 64 px footprint; the canvas preserves small footing
 and ladder overhangs. These art dimensions do not define gameplay collision.
 """
 import bpy
+import json
 import random
 from mathutils import Vector
 from weapon_surface_parts import material, paint_depth
@@ -15,7 +16,7 @@ def linear(rgb):
                  for v in (channel / 255 for channel in rgb))
 
 
-def weathering(mat, floor=False, endgrain=False, iron=False, cracks=False):
+def weathering(mat, floor=False, endgrain=False, iron=False, cracks=False, stone=False):
     """Medium-frequency wear on the existing geometry; no baked light or decals."""
     nodes, links = mat.node_tree.nodes, mat.node_tree.links
     bs = nodes['Principled BSDF']
@@ -65,10 +66,22 @@ def weathering(mat, floor=False, endgrain=False, iron=False, cracks=False):
     dx = calc('MINIMUM', local.outputs['X'], calc('SUBTRACT', 1, local.outputs['X']))
     dy = calc('MINIMUM', local.outputs['Y'], calc('SUBTRACT', 1, local.outputs['Y']))
     edge = remap(calc('MINIMUM', dx, dy), .008, .10, 1, 0)
+    # Centimetre-scale colonies stay broad enough to survive the 32 px/m export.
+    colony = node('ShaderNodeTexNoise', 'Broken moss colonies')
+    colony.inputs['Scale'].default_value = 8
+    colony.inputs['Detail'].default_value = 1.3
+    links.new(geom.outputs['Position'], colony.inputs['Vector'])
+    moss_patch = remap(colony.outputs['Fac'], .44, .66)
+    perimeter = remap(calc('MAXIMUM', calc('ABSOLUTE', world.outputs['X'], 0),
+                          calc('ABSOLUTE', world.outputs['Y'], 0)), .60, .83)
+    moss_color = mix((*linear((76, 99, 46)), 1), (*linear((113, 127, 65)), 1), irregular)
     if iron:
         # Broken rust rim and rubbed charcoal faces, also on the nail heads.
         rust = calc('MULTIPLY', calc('MAXIMUM', calc('MULTIPLY', edge, .8), .14), irregular)
         color = mix(color, (*linear((133, 77, 39)), 1), rust)
+    elif stone:
+        damp = remap(world.outputs['Z'], .04, .24, 1, .25)
+        color = mix(color, moss_color, calc('MULTIPLY', damp, moss_patch))
     else:
         # Intermittent pale fibres break the perfect bevel; no bright outline.
         chipped = calc('MULTIPLY', edge, remap(irregular, .58, .88, 0, .42))
@@ -98,21 +111,40 @@ def weathering(mat, floor=False, endgrain=False, iron=False, cracks=False):
                 color = mix(color, (*linear((66, 53, 36)), 1), calc('MULTIPLY', fissure, .8))
 
             def oval(x, y, sx, sy):
-                a = calc('DIVIDE', calc('SUBTRACT', world.outputs['X'], x), sx)
+                # Broad colony noise also breaks the wear contour by a few cm;
+                # this is a rubbed surface, not a precisely painted path.
+                drift = calc('MULTIPLY', calc('SUBTRACT', colony.outputs['Fac'], .5), .16)
+                a = calc('DIVIDE', calc('SUBTRACT', calc('ADD', world.outputs['X'], drift), x), sx)
                 b = calc('DIVIDE', calc('SUBTRACT', world.outputs['Y'], y), sy)
                 d = calc('ADD', calc('MULTIPLY', a, a), calc('MULTIPLY', b, b))
                 return remap(d, .15, 1.0, 1, 0)
 
             # Broad pale tread from the southern ladder into the middle.
-            tread = calc('MAXIMUM', oval(0, -.45, .27, .62), oval(.04, .04, .43, .35))
-            color = mix(color, (*linear((185, 161, 122)), 1), calc('MULTIPLY', tread, .16))
+            tread = calc('MAXIMUM', oval(-.025, -.47, .32, .72), oval(.055, .025, .51, .43))
+            # A broad, rubbed grey core flattens grain, with soft tracked dirt
+            # outside it. Material coordinates keep wear continuous across joins.
+            apron = calc('MAXIMUM', oval(-.015, -.47, .40, .80), oval(.035, .035, .59, .53))
+            dirt_rim = calc('MULTIPLY', calc('SUBTRACT', apron, tread), .25)
+            color = mix(color, (*linear((91, 81, 62)), 1), dirt_rim)
+            wear = calc('MULTIPLY', tread, calc('ADD', .48, calc('MULTIPLY', irregular, .18)))
+            color = mix(color, (*linear((197, 184, 155)), 1), wear)
+            bump = nodes['Tactile grain and machining']
+            links.new(calc('MULTIPLY', calc('SUBTRACT', 1, wear), .08), bump.inputs['Strength'])
             stain = calc('MAXIMUM', oval(-.47, .40, .25, .18), oval(.48, -.27, .17, .24))
             stain = calc('MULTIPLY', stain, calc('ADD', .16, calc('MULTIPLY', irregular, .20)))
             color = mix(color, (*linear((82, 77, 56)), 1), stain)
+            refuge = calc('MAXIMUM', perimeter, calc('MULTIPLY', edge, .65))
+            moss_mask = calc('MULTIPLY', calc('MULTIPLY', refuge, moss_patch),
+                             calc('SUBTRACT', 1, remap(tread, 0, .18)))
+            color = mix(color, moss_color, calc('MULTIPLY', moss_mask, .90))
         else:
             # Hand-rubbed, grey exposed crowns with irregular dark patches.
             worn = remap(irregular, .3, .8, 0, .28)
             color = mix(color, (*linear((188, 174, 145)), 1), worn)
+            # Damp post feet, exposed joist ends and patches on unhandled rails.
+            damp = remap(world.outputs['Z'], .2, 1.9, 1, .35)
+            moss_mask = calc('MULTIPLY', calc('MULTIPLY', perimeter, moss_patch), damp)
+            color = mix(color, moss_color, calc('MULTIPLY', moss_mask, .90))
     links.new(color, bs.inputs['Base Color'])
 
 
@@ -158,8 +190,7 @@ def surface(ctx, name, rgb, kind, floor=False, endgrain=False, cracks=False):
     bs.inputs['Roughness'].default_value = .92
     bs.inputs['Metallic'].default_value = 0
     bs.inputs['Specular IOR Level'].default_value = .08
-    if kind in ('wood', 'steel'):
-        weathering(mat, floor, endgrain, kind == 'steel', cracks)
+    weathering(mat, floor, endgrain, kind == 'steel', cracks, kind == 'coat')
     return mat
 
 
@@ -167,7 +198,8 @@ def build(ctx, spec):
     # Individual pieces vary, rather than striping complete horizontal courses.
     palette = [(177,145,105), (166,141,112), (188,149,102), (177,145,105)]
     factors = (1.10, .97, .90, 1.04, 1.0, 1.13, .95, 1.06, .86, .99, 1.08,
-               .94, 1.02, .89, 1.12, .98, .93, 1.04, 1.14, .96, 1.02, .91)
+               .94, 1.02, .89, 1.12, .98, .93, 1.04, 1.14, .96, 1.02, .91,
+               1.06, .94, 1.10, .98)
     floors = [surface(ctx, 'Weathered timber board '+str(i),
                       tuple(round(v*factor) for v in palette[(i*7+i//3)%4]), 'wood', floor=True, cracks=i in (3, 8, 17))
               for i, factor in enumerate(factors)]
@@ -250,7 +282,6 @@ def build(ctx, spec):
              (.80+spread, side*(.80+spread), 1.39), .075, .075, end)
         beam('supports', 'North-south undercroft cross brace', (side*(.80+spread), -.80-spread, .28),
              (side*(.80+spread), .80+spread, 1.39), .075, .075, end)
-        box('supports', 'Underfloor joist', (side*(.52+spread), 0, 1.39), (.10, 1.59+2*spread, .15), end)
         if side == 1:
             box('deck', 'North fascia', (0, fascia, 1.475), (1.63+2*spread, .078, .13), end)
         else:
@@ -258,28 +289,44 @@ def build(ctx, spec):
                 box('deck', 'South fascia beside ladder', (sx*(.505+spread/2), -fascia, 1.475), (.62+spread, .078, .13), end)
         box('deck', 'North-south fascia', (side*fascia, 0, 1.475), (.078, 1.55+2*spread, .13), end)
 
-    # Eleven 156 mm boards (5 display px) with supported staggered butt joints.
-    # Every join sits on one of these real transverse joists, never in mid-air.
-    for x in (-.30, .30):
+    # Four bearing lines, 440 mm apart. Independent layout RNG avoids changing
+    # joins when material UVs or decorative hardware consume random values.
+    joists = (-.66, -.22, .22, .66)
+    layout_rng = random.Random(605)
+    joins_by_row, previous = [], set()
+    for count in (0, 2, 0, 3, 1, 2, 1, 0, 2, 1, 2):
+        joins = sorted(layout_rng.sample([x for x in joists if x not in previous], count))
+        joins_by_row.append(joins)
+        previous = set(joins)
+    root['Watchtower joists m'] = json.dumps(joists)
+    root['Watchtower row joins m south to north'] = json.dumps(joins_by_row)
+    for x in joists:
         box('supports', 'Butt joint bearing joist', (x, 0, 1.45), (.10, 1.78, .16), end)
     pitch = 2*half_floor/11
+    material_index = 0
     for index in range(11):
         y = -half_floor + (index + .5) * pitch
         gap = rng.uniform(.004, .007)
         z = 1.563+rng.uniform(-.0018, .0018)
-        join = (-.30, .30, -.30, .30, .30, -.30, .30, -.30, -.30, .30, -.30)[index]
-        spans = [(-half_floor, join-.0025), (join+.0025, half_floor)]
+        joins = joins_by_row[index]
+        starts = [-half_floor] + [x+.0025 for x in joins]
+        ends = [x-.0025 for x in joins] + [half_floor]
+        spans = list(zip(starts, ends))
         if index == 0:
             spans = [(-half_floor, -.216), (.216, half_floor)]
         for piece, (left, right) in enumerate(spans):
-            floor = floors[index*2+piece]
+            floor = floors[material_index]
+            material_index += 1
             ob = box('deck', 'Narrow weathered floorboard with bearing end', ((left+right)/2, y, z),
                      (right-left, pitch-gap, .04), floor, .0025)
             ob.rotation_euler.x = rng.uniform(-.006, .006)
             ob.rotation_euler.z = rng.uniform(-.0007, .0007)
+            ob['Watchtower course'] = index
+            ob['Watchtower span m'] = (left, right)
             # Paired nails either side of a butt joint still land within its
             # 100 mm supporting joist; low-poly heads are subpixel at 1x.
-            for bearing in (-.66, join-.025, join+.025, .66):
+            bearings = [x+offset for x in joists for offset in ((-.025, .025) if x in joins else (0,))]
+            for bearing in bearings:
                 if left+.018 < bearing < right-.018:
                     for across in (-.042, .042):
                         nail = ctx.cylinder('Recessed 7 mm nail head', (bearing, y+across, z+.0195), .0035, .0012, iron, vertices=8)
