@@ -203,3 +203,38 @@ Für die spätere Implementierung passende bestehende Tests erweitern und Prüfu
 ## 12. Bezug zum zweiten GDD
 
 Der [Alien-Kegelangriff](Fragdachse_GDD_Alien_Kegelangriff_V1.md) ergänzt diese Rolle: Der Anstürmer überquert den Raum und eröffnet eine Rückseite; der Alien bleibt stehen und bedroht einen breiten Bereich vor sich. Beide Angriffe sollen unterschiedliche Ausweichentscheidungen erzeugen.
+
+---
+
+## 13. V1.1 – Entscheidungen & Ist-Code-Abgleich (12.10.2026)
+
+Dieser Nachtrag beantwortet die offenen Punkte aus Abschnitt 11 und hält den umgesetzten Stand fest. Wo er von V1 abweicht, gilt der Nachtrag. Zahlen sind Startwerte (`src/config/coopDefenseEnemies.json`, Eintrag `shield-charger-badger`).
+
+### 13.1 Entscheidungen
+
+| Thema | Entscheidung |
+| --- | --- |
+| ID / Asset | `shield-charger-badger`; Blender-Asset „Turmschild“ (Form v1: gebogenes Plankenband, von oben ~126°), Clips `move`, `claw`, `windup`, `charge`, `recover`. |
+| Schild | Blockt wie der Spieler-Energieschild im 120°-Frontbogen: Projektile werden verschluckt, Hitscan endet am Schild, Nahkampf, Tesla/Ketten und Explosionen mit Zentrum im Bogen; Schaden über Zeit geht durch. Darstellung: das modellierte Requisit plus ein dünner warm-metallischer Rand, der bei Blocks aufblitzt (kein Void-Lila). |
+| Trefferkategorie Ansturm | Nahkampf: ein Spieler-Energieschild in Ansturmrichtung blockt den Schaden, der Rückstoß wirkt trotzdem. |
+| Rückstoß | Im Lauf immun (keine unsichtbare Umlenkung, kein Treffer-Taumeln); deutliche Verschiebung während der Ankündigung bricht ab (danach Wiederholungssperre). |
+| Nekromantie | Ein verbündeter Anstürmer stürmt gegen feindliche Gegner, nie gegen Spieler; sein Korridor ist nur dezent sichtbar (keine Warnfunktion). |
+| Unerreichbare Spieler | Kein eigener Hindernisangriff: reguläre Navigation und der vorhandene Durchbruch-/Biss-Vertrag gelten weiter. |
+| Kampagne | Einführung auf Karte 4 (`04-adrenalinrausch`): einzeln nach 9 s in der Eröffnung, einer mit den Basisangreifern in `adrenaline-mass`, zwei zeitversetzt im Finale. |
+
+### 13.2 Startwerte
+
+Drehrate 105°/s (180° ≈ 1,7 s), Auslösedistanz 120–380 px bei höchstens 12° Fehlausrichtung (kein Drehsprung), Ankündigung 700 ms, Ansturm 880 px/s, Bahn bis Ziel + 480 px (max. 820 px, an Geometrie, Arenarand, Zug und Wasser gekürzt), Erholung 750 ms, Cooldown 4 s ab Laufstart, Sperre nach Abbruch 1,5 s, Ansturmschaden 15 + Rückstoß. HP 120, Biss wie Rabid. Ausgelegt so, dass gerades Rückwärtslaufen aus typischer Entfernung eingeholt wird, ein Seitenschritt von ~35 px aber reicht.
+
+### 13.3 Ist-Code-Abgleich
+
+| GDD | Status | Umsetzung |
+| --- | --- | --- |
+| §3 Zielwahl | umgesetzt | gemeinsame Zielbindung (`EnemyIntentSystem`), Köder über die Köder-Zielwahl; Bahn nach Ankündigung fix |
+| §4.1 Schild, Drehung | umgesetzt | generischer Gegner-Frontschild-Port in allen Schadenspfaden; autoritative Drehrate `turnRateDegPerSec` (gilt für Körper, Schild und Angriffe; abgewandt nur langsame Fortbewegung) |
+| §4.2 Ankündigung | umgesetzt | Host legt Ursprung, Richtung, Länge, Zeitpunkte fest; eigenes angehängtes Snapshot-Feld (Protokoll 29), Clients sagen nichts vorher |
+| §4.3 Ansturm | umgesetzt | Swept-Capsule, höchstens ein Treffer je Ziel und Ansturm, kein Tunneln (Bahn vorab mit Körperbreite gekürzt; unbekanntes Hindernis beendet den Lauf früher) |
+| §4.4 Erholung | umgesetzt | Schild unten, Blick bleibt, keine Warnfläche; Schild hebt sich am Ende |
+| §5 Sonderfälle | umgesetzt | Tod/Entfernung/Teardown räumen auf; Stun/Verschiebung brechen ab; Biss-/Gegnerangriffe während aller Phasen gesperrt |
+| §6 Darstellung | umgesetzt | GPU-Korridor in Körperbreite (Randlinien, Lade-Füllung, Pfeile, Endbalken), Tempo-Schlieren, Staub, Schleifspuren; Clips folgen der replizierten Zeitachse |
+| §10 Verifikation | teilweise | Unit-, Integrations- und Stresstests; Browser-Bögen Tag/Nacht auf Karte 4. Host+Client-Test braucht den PeerJS-Broker. Spieltests stehen aus. |
