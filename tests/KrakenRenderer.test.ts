@@ -15,7 +15,7 @@ vi.mock('../src/effects/kraken/KrakenReviewDrainFilter', () => ({ addReviewDrain
 import { KrakenRenderer, KrakenSpriteView, KrakenEffects, KrakenEggFlightView, krakenSocket, sampleKrakenBody,
   sampleKrakenTentacle, sampleKrakenEgg, krakenRiseTiming, krakenDeathAlpha, krakenBroodDiscs, type KrakenPresentationAsset, type KrakenPresentationAssets } from '../src/effects/kraken/KrakenRenderer';
 import { KrakenIntroRenderer } from '../src/effects/kraken/KrakenIntroRenderer';
-import { KRAKEN_WORLD_EXPOSURE, krakenWaterMask } from '../src/effects/kraken/submersionShader';
+import { KRAKEN_BROOD, KRAKEN_WORLD_EXPOSURE, krakenEggArc, krakenWaterMask } from '../src/effects/kraken/submersionShader';
 import { KRAKEN_RISE_INTRO } from '../src/config/bossIntros';
 import { getCameraFocusOverride } from '../src/graphics/cameraFocusOverride';
 import { normalizePipelineAsset, type PipelineBossAsset } from '../src/config/pipelineAssetContracts';
@@ -179,6 +179,15 @@ describe('host timelines and D asset projection', () => {
     expect(brood.discs[2]![2]).toBeGreaterThan(0);
     expect(krakenBroodDiscs(body, .6, null)).toBeNull();
     expect(krakenBroodDiscs(body, .6, { mouth: { x: .5, y: .2, z: 0 } })).toBeNull();
+  });
+  it('keeps a thrown egg close to its carried/landed size and shows the arc through its shadow', () => {
+    const ground = krakenEggArc(0, [.5, 0, .5]), apex = krakenEggArc(1, [.5, 0, .5]);
+    expect(ground.scale).toBe(1); expect(Math.hypot(ground.shadowX, ground.shadowY)).toBe(0);
+    expect(apex.scale).toBeLessThanOrEqual(1.2);
+    expect(apex.shadowX).toBeLessThan(0); // away from a sun standing in +x
+    expect(Math.abs(apex.shadowX)).toBeLessThanOrEqual(KRAKEN_BROOD.arcHeightPx * KRAKEN_BROOD.arcShadowMaxSlope + 1e-9);
+    expect(krakenBroodDiscs(asset('water').metadata, .6, asset('water').metadata.socketFrames![40]!)!.scale)
+      .toBeGreaterThan(1);
   });
   it('retimes semantic markers without following exported next clips or source frame numbers', () => {
     const s = state(), a = assets(), pose = { x: 10, y: 20, angle: .8 };

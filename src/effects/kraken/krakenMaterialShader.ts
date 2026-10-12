@@ -6,7 +6,7 @@ uniform float materialEnabled,materialLow,materialStrength,emissionRange;
 uniform vec3 materialSun; uniform vec4 materialWorld; uniform vec2 materialOrigin;
 uniform vec3 materialNormalScale,materialTint; uniform float materialSaturation; uniform vec2 materialHighlightTone;
 uniform vec4 emissionUV,emissionTrim; uniform vec2 emissionSize;
-uniform vec4 materialGlow; uniform vec2 materialGlowShape; uniform vec4 broodTint;
+uniform vec4 materialGlow; uniform vec2 materialGlowShape; uniform vec4 broodTint; uniform float broodScale;
 uniform vec4 broodDisc0,broodDisc1,broodDisc2,broodDisc3,broodDisc4,broodDisc5;
 uniform sampler2D uEmission;
 ${CLOUD_SHADOW_GLSL}

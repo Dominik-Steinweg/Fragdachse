@@ -9,6 +9,11 @@
   },
   "brood": {
     "radiusPx": 14,
+    "carriedScale": 1.4,
+    "arcScale": 0.15,
+    "arcHeightPx": 48,
+    "arcShadowMaxSlope": 1.4,
+    "pulse": 0.1,
     "albedoMatch": [0.45, 0.52, 0.57],
     "glowColor": [1.0, 0.1, 0.05],
     "glowFalloff": 7,

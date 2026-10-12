@@ -11,7 +11,7 @@ import type { KrakenState, KrakenTentacleState, KrakenEggState, KrakenInkCloud }
 import { EnemyClawRenderer } from '../EnemyClawRenderer';
 import { registerGraphicsObject } from '../EffectUtils';
 import { disposeShaderWarmupNode } from '../../graphics/disposeShaderWarmupNode';
-import { KRAKEN_BROOD, KRAKEN_LAND_EXPOSURE, KRAKEN_WORLD_EXPOSURE, KrakenSubmersion, krakenBroodBeat, krakenBroodGlow, krakenMaterialGrade, krakenWaterMask,
+import { KRAKEN_BROOD, KRAKEN_LAND_EXPOSURE, KRAKEN_WORLD_EXPOSURE, KrakenSubmersion, krakenBroodBeat, krakenBroodGlow, krakenEggArc, krakenMaterialGrade, krakenWaterMask,
   type KrakenBroodMaterial } from './submersionShader';
 import { addReviewDrain, type KrakenReviewDrainFilter } from './KrakenReviewDrainFilter';
 import { KrakenShadowRenderer } from './KrakenShadowRenderer';
@@ -126,7 +126,8 @@ export function krakenBroodDiscs(asset: PipelineBossAsset, bodyExposure: number,
   // Exposure is applied per sprite in display space; fold the egg/body ratio into the linear tint. The body render
   // bakes the brood's shell brighter than the egg asset's own render (albedoMatch, tuned against the flying egg).
   const ratio = Math.pow(egg.exposure / Math.max(.001, bodyExposure), 2.2), match = KRAKEN_BROOD.albedoMatch;
-  return discs.length ? { discs, tint: [egg.tint[0]! * ratio * match[0]!, egg.tint[1]! * ratio * match[1]!, egg.tint[2]! * ratio * match[2]!, egg.saturation] } : null;
+  return discs.length ? { discs, tint: [egg.tint[0]! * ratio * match[0]!, egg.tint[1]! * ratio * match[1]!, egg.tint[2]! * ratio * match[2]!, egg.saturation],
+    scale: KRAKEN_BROOD.carriedScale } : null;
 }
 export function krakenBodyVisible(state: KrakenState, now: number): boolean {
   const p = state.phase;
@@ -211,7 +212,7 @@ const LOOK = {
   intro: { radius: 112, lifetime: 1.65, foam: .72, sprayCount: 80, spraySpeed: 135, drain: .85 },
   surface: { radius: 96, lifetime: 1.1, foam: .62, sprayCount: 56, spraySpeed: 105, drain: .65 },
   dive: { radius: 110, lifetime: 1.5, foam: .65, shadow: .12 },
-  egg: { arcScale: .65, pulse: .16, radius: 24 },
+  egg: { radius: 24 },
   spineWake: { length: 150, width: 9, lead: 10, opacity: .9 },
 } as const;
 
@@ -235,6 +236,8 @@ export class KrakenSpriteView {
     return { x: s.x + dx * c - dy * sn, y: s.y + dx * sn + dy * c, z: point.z };
   }
   get gpuBytes(): number { return (this.shadow?.gpuBytes ?? 0) + (this.submersion ? 128 * 128 * 4 : 0); }
+  /** Direction towards the sun (world x/y, up z) of the borrowed lighting environment, once lit. */
+  get sun(): readonly number[] | null { return this.environment?.clouds.sunPath?.sun ?? null; }
   constructor(private readonly scene: Phaser.Scene, readonly asset: KrakenPresentationAsset,
     private readonly waterAt: (x: number, y: number) => number,
     private readonly diagnostic: (message: string) => void, tentacle = false, depth: number = DEPTH.PLAYERS,
@@ -676,7 +679,7 @@ export class KrakenRenderer {
       const landingAge = (now - egg.landedAt) / 1000, hatchAge = (now - egg.hatchStartedAt) / 1000;
       const incubation = krakenClamp((now - egg.landedAt) / (egg.hatchStartedAt - egg.landedAt));
       const beat = Math.sin(landingAge * (5 + incubation * 7));
-      const pulse = hatchAge < 0 ? beat * LOOK.egg.pulse * incubation : 0;
+      const pulse = hatchAge < 0 ? beat * KRAKEN_BROOD.pulse * incubation : 0;
       // The ember swells with the heartbeat, flares while the shell splits and dies with the spawn.
       const glow = hatchAge < 0 ? krakenBroodGlow(beat, incubation) : now < egg.spawnAt
         ? KRAKEN_BROOD.incubatedGlow + (KRAKEN_BROOD.hatchGlow - KRAKEN_BROOD.incubatedGlow) * krakenClamp((now - egg.hatchStartedAt) / Math.max(1, egg.spawnAt - egg.hatchStartedAt))
@@ -798,10 +801,11 @@ export class KrakenEggFlightView implements GrenadeEggVisual {
     this.effects.begin();
     if (now < this.flight.releasedAt || now >= this.flight.landsAt) { this.view.hide(); return; }
     const progress = krakenClamp((now - this.flight.releasedAt) / Math.max(1, this.flight.landsAt - this.flight.releasedAt));
-    const height = Math.sin(progress * Math.PI);
+    // The egg keeps (almost) its carried/landed size; the arc reads from its shadow drifting away from the sun.
+    const height = Math.sin(progress * Math.PI), arc = krakenEggArc(height, this.view.sun);
     this.view.show(loop(this.view.asset.metadata, 'idle', now - this.flight.releasedAt),
-      { x, y, angle: Math.atan2(vy, vx) }, now, { scale: 1 + height * LOOK.egg.arcScale, waterLevel: -1000 });
-    this.effects.egg({ x, y }, height, -1, -1);
+      { x, y, angle: Math.atan2(vy, vx) }, now, { scale: arc.scale, waterLevel: -1000 });
+    this.effects.egg({ x: x + arc.shadowX, y: y + arc.shadowY }, height, -1, -1);
     // A slime-coloured brood marker, not a red damage lane. Target is an optional host projection.
     if (this.flight.target) this.effects.egg(this.flight.target, 1, -1, -1, .55);
   }

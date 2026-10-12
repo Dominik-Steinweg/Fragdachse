@@ -152,7 +152,8 @@ void main() {
   } else if(uMode>4.5 && uMode<5.5) {
     float radius=uShape.z, r=length(p), theta=atan(p.y,p.x);
     if(uAge<0.0) {
-      alpha=exp(-pow(r/(radius*(.65+uTiming.x*.45)),2.0))*(.3-uTiming.x*.15);
+      // Egg-sized contact shadow that softens and widens as the egg climbs (it is offset towards the sun's far side).
+      alpha=exp(-pow(r/(radius*(.4+uTiming.x*.3)),2.0))*(.38-uTiming.x*.16);
       color=vec3(.02,.025,.018);
     } else {
       float n=field(p*.16+uShape.w*5.0);

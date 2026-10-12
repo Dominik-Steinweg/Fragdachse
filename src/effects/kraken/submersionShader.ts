@@ -18,6 +18,12 @@ export function krakenMaterialGrade(id: string, pass: { exposure: number; tint?:
   return AUTHORED_GRADES[id] ?? { exposure: krakenMaterialExposure(id, pass.exposure), tint: pass.tint ?? [1, 1, 1], saturation: pass.saturation ?? 1 };
 }
 export const KRAKEN_BROOD = materialLook.brood;
+/** Lift of a thrown egg (0..1 arc height): mostly read from its shadow, so the egg itself barely grows. */
+export function krakenEggArc(height: number, sun: readonly number[] | null): { scale: number; shadowX: number; shadowY: number } {
+  const b = KRAKEN_BROOD, lift = height * b.arcHeightPx, s = sun ?? [-.45, -.45, .77];
+  const planar = Math.hypot(s[0]!, s[1]!), reach = Math.min(b.arcShadowMaxSlope, planar / Math.max(.05, s[2]!)) * lift;
+  return { scale: 1 + height * b.arcScale, shadowX: planar > 1e-4 ? -s[0]! / planar * reach : 0, shadowY: planar > 1e-4 ? -s[1]! / planar * reach : 0 };
+}
 /** Ember strength of an egg for a heartbeat in [-1, 1]: dim while carried/flying, brighter and throbbing
  * harder as it incubates (the caller owns the beat so glow and swelling stay in phase). */
 export function krakenBroodGlow(beat: number, incubation = 0): number {
@@ -32,6 +38,8 @@ export interface KrakenBroodMaterial {
   readonly tint: readonly [number, number, number, number];
   /** Up to six discs: logical x, y, logical radius, socket z (Blender units). */
   readonly discs: readonly (readonly [number, number, number, number])[];
+  /** Magnification of the carried eggs so they match the thrown/landed egg sprite. */
+  readonly scale: number;
 }
 
 /** Heights are Blender units; colours are linear shader RGB in [0, 1]. */
@@ -69,13 +77,32 @@ uniform float buriedStart, buriedEnd;
 varying vec2 outTexCoord;
 #pragma phaserTemplate(fragmentHeader)
 ${KRAKEN_MATERIAL_HEADER}
+float krakenElevationAt(vec2 logical){
+vec2 local=(logical*elevationSize-elevationTrim.xy)/elevationTrim.zw;
+if(any(lessThan(local,vec2(0)))||any(greaterThan(local,vec2(1))))return -1e3;
+vec4 h=texture2D(uElevation,mix(elevationUV.xy,elevationUV.zw,local));
+return h.a>.001?mix(elevationMin,elevationMax,clamp(h.r/h.a,0.0,1.0)):-1e3;}
+// Carried eggs are baked smaller than the egg sprite: inside a socket disc, read the frame through a lens
+// centred on the egg, but only where that lens lands on the shell (at/above the socket height).
+vec2 krakenMagnify(vec4 disc,vec2 logical,vec2 best){
+if(disc.z<=0.0)return best;
+vec2 d=logical-disc.xy;
+if(length(d)>=disc.z)return best;
+vec2 c=disc.xy+d/broodScale;
+return krakenElevationAt(c)>=disc.w-.02?c:best;}
+vec2 krakenBroodLens(vec2 uv){
+if(broodTint.a<=0.0||broodScale<=1.0)return uv;
+vec2 logical=vec2(uv.x,1.0-uv.y),m=logical;
+m=krakenMagnify(broodDisc0,logical,m);m=krakenMagnify(broodDisc1,logical,m);m=krakenMagnify(broodDisc2,logical,m);
+m=krakenMagnify(broodDisc3,logical,m);m=krakenMagnify(broodDisc4,logical,m);m=krakenMagnify(broodDisc5,logical,m);
+return vec2(m.x,1.0-m.y);}
 float hash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
 float noise(vec2 p) {
   vec2 i=floor(p),f=fract(p); f=f*f*(3.0-2.0*f);
   return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.0),f.x),f.y);
 }
 void main() {
-  vec2 uv=outTexCoord;
+  vec2 uv=krakenBroodLens(outTexCoord);
   vec4 source=boundedSampler(uMainSampler,uv);
   vec2 logical=vec2(uv.x,1.0-uv.y);
   vec2 local=(logical*elevationSize-elevationTrim.xy)/elevationTrim.zw;
@@ -174,7 +201,7 @@ class SubmersionNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader 
       emissionSize: [e.realWidth, e.realHeight], emissionTrim: [e.x, e.y, e.width, e.height],
       materialGlow: m?.glow ? [...m.glow.color, m.glow.strength] : [0, 0, 0, 0],
       materialGlowShape: [m?.glow?.falloff ?? 1, m?.glow?.whole ? 1 : 0],
-      broodTint: m?.brood?.tint ?? [1, 1, 1, 0],
+      broodTint: m?.brood?.tint ?? [1, 1, 1, 0], broodScale: m?.brood?.scale ?? 1,
       ...Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`broodDisc${i}`, m?.brood?.discs[i] ?? [0, 0, 0, 0]])),
       ...c.params, uElevation: 1, uWaterMask: 2,
       elevationMin: c.elevationMin, elevationMax: c.elevationMax,
