@@ -720,3 +720,14 @@ Headless-Nachweise: `tests/CoopDefenseFirestarter.test.ts` und der Brandstifter-
 `tests/integration/SharedCombatEffects.test.ts`. Browser-/Mehrspieler-Sichtprüfung,
 finale Assets, Audio und taktische Dodges sind spätere Gates. Das Explosionsaudio verwendet
 vorerst die vorhandene Void-Feuerball-Aufnahme unter einem eigenen austauschbaren Asset-Key.
+
+Geprüfte Capture-Rezeptur (Seed `12345`, Spieler `(12,50)`, Tageszeit `720`):
+Brandstifter ungepinnt auf `(28,54)`, Kamera auf `(20,52)`, Zoom `1.4`.
+Hier bleibt auch die dicke Feuerkugel frei; auf `(28,52)` ist die Hitscan-Linie zwar frei,
+die Kugel trifft aber nach etwa 33 px den benachbarten Felsen. Für drei gleichzeitig fliegende
+Kugeln den Gegner auf `(42,55)` pinnen und mit Zoom `1.1` auf `(27,53)` schauen:
+973 px Abstand liegen zwischen Lanzen- und Kugelreichweite; die drei Charges werden im
+400-ms-Takt verbraucht, ohne Waffenwerte zu ändern. Für isolierte Combo-Nachwirkungen den
+Schützen unmittelbar nach dem Einschlag mit `clearEnemies` entfernen, sonst entsteht bereits
+nach 1100 ms die nächste Combo. `capture()` zählt einen Frame mit; 17 Schritte plus Capture
+ergeben +300 ms, anschließend 53 Schritte plus Capture insgesamt +1200 ms.
