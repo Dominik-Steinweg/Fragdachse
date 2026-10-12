@@ -63,6 +63,7 @@ export interface CoopMissionCompositionOptions {
   readonly getPlayerManager: () => PlayerManager;
   readonly getWorldCombatCore: () => CombatActivityPort;
   readonly getProjectileSpawnPort: () => ProjectileSpawnPort | null;
+  readonly getProjectileDetonableReadPort: () => import('../projectile/ProjectileGameplayPort').ProjectileDetonableReadPort | null;
   readonly getProjectileThreatReadPort: () => ProjectileThreatReadPort | null;
   readonly getTranslocatorProjectilePort: () => TranslocatorProjectilePort | null;
   readonly getHostPhysics: () => HostPhysicsSystem;
@@ -303,6 +304,7 @@ export class CoopMissionComposition {
     }).materialize(runtime);
 
     new CoopMissionEnemySupportComposition({
+      projectileDetonables: this.options.getProjectileDetonableReadPort(),
       playerManager,
       combatSystem,
       baseManager,

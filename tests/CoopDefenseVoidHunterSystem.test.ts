@@ -105,6 +105,7 @@ describe('Leerenjäger', () => {
     f.system.hostUpdate(0);
     f.system.hostUpdate(c.gauss.initialDelayMs);
     expect(f.system.blocksRegularAttacks(f.enemy.id)).toBe(true);
+    expect(f.system.blocksDodge(f.enemy.id)).toBe(true);
     const interrupted = c.gauss.initialDelayMs + 1;
     f.combat.isStunned.mockReturnValue(true);
     f.system.hostUpdate(interrupted);
@@ -116,6 +117,7 @@ describe('Leerenjäger', () => {
     expect(f.fireGauss).not.toHaveBeenCalled();
     f.system.hostUpdate(restart + c.gauss.chargeDurationMs);
     expect(f.fireGauss).toHaveBeenCalledOnce();
+    expect(f.system.blocksDodge(f.enemy.id)).toBe(false);
   });
 
   it('cannot start a hidden Gauss attack but finishes an announced shot without tracking hidden movement', () => {

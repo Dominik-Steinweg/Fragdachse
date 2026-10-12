@@ -16,7 +16,7 @@ describe('Coop defense multiplayer scaling', () => {
   it('authors locomotion anatomy explicitly and keeps it independent of multiplayer scaling', () => {
     expect(PLAYER_MOVEMENT_VISUAL.pawCount).toBe(2);
     for (const enemy of authoredEnemies.enemies) {
-      expect(enemy.pawCount, enemy.id).toBe(['alien-badger', 'pyro-badger'].includes(enemy.id) ? 2 : 4);
+      expect(enemy.pawCount, enemy.id).toBe(['alien-badger', 'pyro-badger', 'firestarter-badger'].includes(enemy.id) ? 2 : 4);
       expect(COOP_DEFENSE_ENEMY_CONFIGS[enemy.id].pawCount).toBe(enemy.pawCount);
       for (const count of [1, 4, 12]) expect(resolveCoopDefenseEnemyConfigs(count)[enemy.id].pawCount).toBe(enemy.pawCount);
     }

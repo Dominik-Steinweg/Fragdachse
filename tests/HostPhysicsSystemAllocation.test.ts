@@ -572,6 +572,28 @@ describe('HostPhysicsSystem Allocation Optimization', () => {
     }
   });
 
+  it('scales the whole enemy dash distance without changing either phase duration', () => {
+    const { system, enemies } = createHarness();
+    const short = createMockEnemy('short', 200, 200, 0, 0);
+    const long = createMockEnemy('long', 200, 200, 0, 0);
+    enemies.set(short.id, short); enemies.set(long.id, long);
+    vi.spyOn(Date, 'now').mockReturnValue(1000);
+    const shortFactor = 0.4, longFactor = 1.3; // Test input, not authored tuning.
+    expect(system.startEnemyDash(short.id, 1, 0, shortFactor)).toBe(true);
+    expect(system.startEnemyDash(long.id, 1, 0, longFactor)).toBe(true);
+    let shortDistance = 0, longDistance = 0;
+    for (let elapsed = 0; elapsed < (DASH_T1_S + DASH_T2_S) * 1000; elapsed += 10) {
+      system.update(false, 1000 + elapsed);
+      shortDistance += short.setVelocity.mock.lastCall![0] * 0.01;
+      longDistance += long.setVelocity.mock.lastCall![0] * 0.01;
+      expect(short.setDashPhase.mock.lastCall).toEqual(long.setDashPhase.mock.lastCall);
+    }
+    expect(shortDistance / longDistance).toBeCloseTo(shortFactor / longFactor);
+    system.update(false, 1000 + (DASH_T1_S + DASH_T2_S) * 1000 + 20);
+    expect(system.isEnemyDashing(short.id)).toBe(false);
+    expect(system.isEnemyDashing(long.id)).toBe(false);
+  });
+
   it('uses forEachEnemy instead of getAllEnemies in applyRadialImpulse()', () => {
     const { system, enemies, getAllEnemies, forEachEnemy } = createHarness();
     const enemy1 = createMockEnemy('enemy-1', 100, 100);

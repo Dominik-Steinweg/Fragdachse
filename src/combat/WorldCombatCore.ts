@@ -1688,7 +1688,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       `weapon:${sourceId}`,
       sourceId,
       origin,
-      'normal',
+      burn.visualStyle ?? 'normal',
       source ? { ...source, origin: 'burn', correlation: undefined } : undefined,
     );
   }
@@ -2974,21 +2974,28 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     });
     for (const [index, segment] of segments.entries()) {
       const { trace, startX, startY } = segment;
+      // Resolve the projectile blocker before publishing a trace or damaging its far target.
+      const detonationStop = detonatorCfg?.stopsAtDetonable
+        ? this.detonationSystem?.checkHitscanDetonations(
+          startX, startY, trace.endX, trace.endY, shooterId, detonatorCfg, sourceSlot,
+        ) : null;
+      const endX = detonationStop?.x ?? trace.endX;
+      const endY = detonationStop?.y ?? trace.endY;
       const multiplier = portalDamageMultiplier(segment.portalDamage);
     if (this.bubbleChargePort) {
       const chargeDamage = damage * multiplier;
-      this.bubbleChargePort.observeHitscan(startX, startY, trace.endX, trace.endY, traceThickness, chargeDamage, this.hostFrameNowMs);
+      this.bubbleChargePort.observeHitscan(startX, startY, endX, endY, traceThickness, chargeDamage, this.hostFrameNowMs);
     }
 
     this.queueHitscanTrace({
       weaponSourceId: sourceId,
       startX: Math.round(startX),
       startY: Math.round(startY),
-      endX: Math.round(trace.endX),
-      endY: Math.round(trace.endY),
+      endX: Math.round(endX),
+      endY: Math.round(endY),
       color: playerColor,
       thickness: traceThickness,
-      impactKind: (trace.hitPlayerId || trace.hitEnemyId) ? 'player' : (trace.hitObstacle ? 'environment' : 'none'),
+      impactKind: detonationStop ? 'environment' : (trace.hitPlayerId || trace.hitEnemyId) ? 'player' : (trace.hitObstacle ? 'environment' : 'none'),
       visualPreset,
       shooterId,
       shotId,
@@ -2998,7 +3005,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     });
 
     // Hitscan-Detonation prüfen (z.B. ASMD Primary zündet ASMD Secondary-Ball)
-    if (detonatorCfg) {
+    if (detonationStop) return true;
+    if (detonatorCfg && !detonatorCfg.stopsAtDetonable) {
       this.detonationSystem?.checkHitscanDetonations(
         startX, startY, trace.endX, trace.endY, shooterId, detonatorCfg,
         sourceSlot,

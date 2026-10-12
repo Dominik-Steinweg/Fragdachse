@@ -1,5 +1,35 @@
 # Enemy mesh R0/R1 — isolated pipeline
 
+## Incremental production from a selected V2 enemy
+
+The selected-enemy tools preserve the approved Beauty and authored geometry, as
+in the mortar pipeline. First complete the regular V2 render, export, visual
+review, selection and source archive. Then use a fresh mesh revision:
+
+```powershell
+node scripts/asset-pipeline/enemy-mesh-selected-mesh.mjs prepare <asset> <enemy-mesh-revision> <source-revision>
+# With Blender --background --factory-startup --python-exit-code 1:
+# --python scripts/asset-pipeline/enemy-mesh-selected-mesh.py -- --job <job.json>
+# --python scripts/asset-pipeline/enemy-mesh-selected-passes.py -- --job <job.json>
+node scripts/asset-pipeline/enemy-mesh-selected-mesh.mjs validate <asset> <enemy-mesh-revision>
+node scripts/asset-pipeline/enemy-mesh-selected-mesh.mjs seal <asset> <enemy-mesh-revision> <visual-review.json>
+python scripts/asset-pipeline/enemy-mesh-selected-archive.py --revision <enemy-mesh-revision> --root <asset-directory>
+node scripts/asset-pipeline/import-runtime.mjs <source-revision> <asset>
+node scripts/asset-pipeline/enemy-mesh-selected-mesh.mjs import <asset> <enemy-mesh-revision>
+```
+
+Outputs stay under `art/poc/pipeline-v2/enemy-mesh/<revision>/<asset>/`.
+The visual review must contain `status: "reviewed"` and an actual `assessment`.
+Selection hashes, decoded silhouette IoU at both raster densities, every material
+master and packed sheet, and the verified archive are mandatory import gates.
+Run the regular runtime colour publication after import; retain unrelated asset
+entries when publishing a single enemy.
+
+Pose counts and sheet rows follow the selected clips, including optional `cast`
+poses. `move` and `claw` remain required; clip blocks must cover every non-rest
+pose exactly once. Biped and quadruped contacts use the shared authored paw names.
+The historical 31-pose/four-paw examples below describe their original assets.
+
 ## Offline material preparation for all selected enemies
 
 `npm run assets:prepare-enemy-materials -- --out D:/Fragdachse-render/<new-revision>`

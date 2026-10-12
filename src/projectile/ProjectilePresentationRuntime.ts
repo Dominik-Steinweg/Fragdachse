@@ -23,6 +23,7 @@ import type { HolyGrenadeRenderer } from '../effects/HolyGrenadeRenderer';
 import type { MuzzleFlashRenderer } from '../effects/MuzzleFlashRenderer';
 import type { RocketRenderer } from '../effects/RocketRenderer';
 import type { FireballRenderer } from '../effects/FireballRenderer';
+import type { FirestarterRenderer } from '../effects/FirestarterRenderer';
 import type { SporeRenderer } from '../effects/SporeRenderer';
 import type { TracerRenderer } from '../effects/TracerRenderer';
 import type { TranslocatorPuckRenderer } from '../effects/TranslocatorPuckRenderer';
@@ -90,6 +91,7 @@ export interface ProjectilePresentationRenderers {
   readonly holyGrenade: HolyGrenadeRenderer;
   readonly rocket: RocketRenderer;
   readonly fireball: FireballRenderer;
+  readonly firestarterOrb?: FirestarterRenderer;
   readonly spore: SporeRenderer;
   readonly grenade: GrenadeRenderer;
   readonly translocatorPuck: TranslocatorPuckRenderer;
@@ -147,6 +149,7 @@ export class ProjectilePresentationRuntime {
     return this.rocketRenderer?.getPosition(projectileId) ?? null;
   }
   private fireballRenderer: FireballRenderer | null = null;
+  private firestarterOrbRenderer: FirestarterRenderer | null = null;
   private sporeRenderer: SporeRenderer | null = null;
   private grenadeRenderer: GrenadeRenderer | null = null;
   private visualOverrides: ProjectileVisualOverrides | null = null;
@@ -181,6 +184,7 @@ export class ProjectilePresentationRuntime {
     this.holyGrenadeRenderer = renderers.holyGrenade;
     this.rocketRenderer = renderers.rocket;
     this.fireballRenderer = renderers.fireball;
+    this.firestarterOrbRenderer = renderers.firestarterOrb ?? null;
     this.sporeRenderer = renderers.spore;
     this.grenadeRenderer = renderers.grenade;
     this.translocatorPuckRenderer = renderers.translocatorPuck;
@@ -252,6 +256,10 @@ export class ProjectilePresentationRuntime {
     }
     if (style === 'fireball' && this.fireballRenderer) {
       sprite.setVisible(false); sprite.setAlpha(0); this.fireballRenderer.createVisual(id, x, y, cfg.size);
+    }
+    if (style === 'firestarter_orb' && this.firestarterOrbRenderer) {
+      this.firestarterOrbRenderer.onOrbShot(ownerId);
+      sprite.setVisible(false); sprite.setAlpha(0); this.firestarterOrbRenderer.createVisual(id, x, y, cfg.size, cfg.color);
     }
     if (style === 'spore' && this.sporeRenderer) {
       sprite.setVisible(false); sprite.setAlpha(0); this.sporeRenderer.createVisual(id, x, y, cfg.size, cfg.color, cfg.sporeVisualVariant);
@@ -374,6 +382,7 @@ export class ProjectilePresentationRuntime {
     this.holyGrenadeRenderer?.destroyVisual(projectile.id);
     this.rocketRenderer?.destroyVisual(projectile.id);
     this.fireballRenderer?.destroyVisual(projectile.id);
+    this.firestarterOrbRenderer?.destroyVisual(projectile.id);
     this.sporeRenderer?.destroyVisual(projectile.id);
     this.translocatorPuckRenderer?.destroyVisual(projectile.id);
     this.teslaBoltRenderer?.destroyVisual(projectile.id);
@@ -497,6 +506,12 @@ export class ProjectilePresentationRuntime {
             this.fireballRenderer.updateVisual(id, x, y, size, vx, vy);
           }
           break;
+        case 'firestarter_orb':
+          if (this.firestarterOrbRenderer) {
+            if (!this.firestarterOrbRenderer.has(id)) this.firestarterOrbRenderer.createVisual(id, x, y, size, projectile.color);
+            this.firestarterOrbRenderer.updateVisual(id, x, y, size, vx, vy);
+          }
+          break;
         case 'spore':
           if (this.sporeRenderer) {
             if (!this.sporeRenderer.has(id)) this.sporeRenderer.createVisual(id, x, y, size, projectile.color, projectile.sporeVisualVariant);
@@ -573,6 +588,9 @@ export class ProjectilePresentationRuntime {
       const firingTurrets = new Set<string>();
       for (const update of frame.updates) {
         const projectile = update.projectile;
+        if (update.isNew && projectile.style === 'firestarter_orb' && !projectile.suppressSpawnFx && !projectile.flightPath?.ended) {
+          this.firestarterOrbRenderer?.onOrbShot(projectile.ownerId);
+        }
         if (update.isNew && !projectile.suppressSpawnFx && !projectile.flightPath?.ended
           && projectile.sourceTurretId !== undefined) {
           firingTurrets.add(projectile.sourceTurretId);
@@ -720,6 +738,9 @@ export class ProjectilePresentationRuntime {
       } else if (proj.style === 'plasma_burner_charge' && this.plasmaBurnerChargeRenderer) {
         if (!this.plasmaBurnerChargeRenderer.has(id)) this.plasmaBurnerChargeRenderer.createVisual(id, proj.x, proj.y, proj.size, proj.color);
         this.plasmaBurnerChargeRenderer.updateVisual(id, proj.x, proj.y, proj.size, proj.vx, proj.vy, proj.color);
+      } else if (proj.style === 'firestarter_orb' && this.firestarterOrbRenderer) {
+        if (!this.firestarterOrbRenderer.has(id)) this.firestarterOrbRenderer.createVisual(id, proj.x, proj.y, proj.size, proj.color);
+        this.firestarterOrbRenderer.updateVisual(id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
       } else if (proj.style === 'fireball' && this.fireballRenderer) {
         if (!this.fireballRenderer.has(id)) this.fireballRenderer.createVisual(id, proj.x, proj.y, proj.size);
         this.fireballRenderer.updateVisual(id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
@@ -792,6 +813,7 @@ export class ProjectilePresentationRuntime {
     destroyMissing(this.leafBlowerRenderer);
     destroyMissing(this.rocketRenderer);
     destroyMissing(this.fireballRenderer);
+    destroyMissing(this.firestarterOrbRenderer);
     destroyMissing(this.grenadeRenderer);
     destroyMissing(this.holyGrenadeRenderer);
     destroyMissing(this.translocatorPuckRenderer);
@@ -840,6 +862,7 @@ export class ProjectilePresentationRuntime {
       else if (state.style === 'plasma_burner_charge' && this.plasmaBurnerChargeRenderer?.has(id)) this.plasmaBurnerChargeRenderer.updateVisual(id, x, y, state.size, velocityX, velocityY, state.color);
       else if (state.style === 'rocket' && this.rocketRenderer?.has(id)) this.rocketRenderer.updateVisual(id, x, y, state.size, velocityX, velocityY, state.miniRocketPhase, state.miniRocketCascadeStage);
       else if (state.style === 'fireball' && this.fireballRenderer?.has(id)) this.fireballRenderer.updateVisual(id, x, y, state.size, velocityX, velocityY);
+      else if (state.style === 'firestarter_orb' && this.firestarterOrbRenderer?.has(id)) this.firestarterOrbRenderer.updateVisual(id, x, y, state.size, velocityX, velocityY);
       else if (state.style === 'leaf_blower' && this.leafBlowerRenderer?.has(id)) this.leafBlowerRenderer.updateVisual(id, x, y, state.size, velocityX, velocityY);
       else if (state.style === 'flame' && this.flameRenderer?.has(id)) this.flameRenderer.updateVisual(id, x, y, state.size, velocityX, velocityY);
       else if ((state.style === 'awp' || state.style === 'gauss') && this.bulletRenderer?.has(id)) this.bulletRenderer.syncToBody(id, x, y, velocityX, velocityY);
@@ -878,6 +901,7 @@ export class ProjectilePresentationRuntime {
     this.holyGrenadeRenderer?.destroyAll();
     this.rocketRenderer?.destroyAll();
     this.fireballRenderer?.destroyAll();
+    this.firestarterOrbRenderer?.destroyAll();
     this.sporeRenderer?.destroyAll();
     this.translocatorPuckRenderer?.destroyAll();
     this.teslaBoltRenderer?.destroyAll();

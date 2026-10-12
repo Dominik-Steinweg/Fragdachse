@@ -16,6 +16,9 @@ import { SpecializedWeaponExecutionAdapter } from './SpecializedWeaponExecutionA
 
 /** Request data owned by an automatic source; timing/readiness stays with that source. */
 export interface AutomatedWeaponFireParams {
+  readonly gameplayMuzzleOrigin?: MuzzleOrigin;
+  /** Where muzzle flash and tracer start; omitted = derived from the body as before. */
+  readonly visualMuzzleOrigin?: MuzzleOrigin;
   readonly x: number;
   readonly y: number;
   readonly angle: number;
@@ -166,6 +169,12 @@ function scaleAutomatedWeaponDamage(
   }];
   const baseConfig: WeaponConfig = {
     ...config,
+    detonable: config.detonable ? { ...config.detonable,
+      aoeDamage: config.detonable.aoeDamage * payloadFactor,
+      damageFalloff: config.detonable.damageFalloff
+        ? { minDamage: config.detonable.damageFalloff.minDamage * payloadFactor } : undefined,
+      explosion: scaleAutomatedExplosion(config.detonable.explosion, payloadFactor, payloadFactors),
+    } : undefined,
     damage: config.damage * directFactor,
     directDamageOverride: config.directDamageOverride === undefined
       ? undefined

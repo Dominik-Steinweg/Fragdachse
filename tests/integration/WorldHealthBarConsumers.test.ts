@@ -1168,7 +1168,7 @@ describe('World HP consumer boundaries', () => {
       getTargetFootprint: () => null, getPowerUpSystem: () => null,
       getWorldGeometryBinding: () => null, getMissionBarrierObstacles: () => null,
       syncActiveBaseIds: () => {},
-      getMortarSystem: () => null, getTimebombSystem: () => ({ handleKilled: () => { if (hook === 'timebomb') replace(); return hook === 'timebomb'; } }),
+      getFirestarterSystem: () => null, getMortarSystem: () => null, getTimebombSystem: () => ({ handleKilled: () => { if (hook === 'timebomb') replace(); return hook === 'timebomb'; } }),
       getNecromancySystem: () => ({ recordEnemyDeath: () => { if (hook === 'necromancy') replace(); } }),
       isCoopMission: () => false, isActivityActive: () => false, getSpawnContext: () => undefined,
       hostPhysics: inert, decoySystem: inert, fireSystem: inert, gameAudioSystem: inert, placementSystem: inert,

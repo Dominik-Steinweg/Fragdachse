@@ -266,6 +266,7 @@ export const DEPTH_LAYER_EXCEPTIONS: readonly LayerException[] = [
   {"id":"cpu:effects/FireballRenderer.ts:module/this.sparks/createEmitter/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/FireballRenderer.ts:createVisual/glow/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/FireballRenderer.ts:createVisual/core/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
+  {"id":"firestarter:orb","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/FlameRenderer.ts:createVisual/glowImage/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/FlamethrowerUpgradeRenderer.ts:playFireChunkBurst/chunk/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/FlamethrowerUpgradeRenderer.ts:createRingVisual/quad/setDepth/0","deviation":"material-outside-sun","finding":"D06"},

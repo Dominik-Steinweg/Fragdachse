@@ -966,6 +966,14 @@ export class EffectSystem implements EnemyVisualSink {
     const haloColor = isEnergy
       ? this.mixColor(fillColor, 0xffffff, 0.45)
       : (isHoly ? 0xffef9a : (isNuke ? this.mixColor(fillColor, 0xffffff, 0.35) : this.mixColor(fillColor, 0xffffff, 0.2)));
+    if (visualStyle === 'firestarter_combo') {
+      // Faction-tinted flash and halo: the combo's white-hot accents are the GPU layer's thin spines.
+      const palette = color === ALLIED_COLOR ? ALLIED_PALETTE : VOID_PALETTE;
+      this.spawnCombatExplosionGpu(x, y, radius, visualStyle, fillColor, palette.bright, palette.primary);
+      // The shared burst in faction colors; the firestarter layer adds implosion, lance star and scorch.
+      this.firestarterRenderer?.playCombo(x, y, radius, color);
+      return;
+    }
     this.spawnCombatExplosionGpu(x, y, radius, visualStyle, fillColor, flashColor, haloColor);
     if (visualStyle === 'mortar') {
       // The shared burst carries flash and fireball; the mortar layer adds crater, dust and embers.
@@ -1073,6 +1081,12 @@ export class EffectSystem implements EnemyVisualSink {
   }
 
   private mortarImpactRenderer: ((x: number, y: number, radius: number, color?: number) => void) | null = null;
+  private firestarterRenderer: Pick<import('./FirestarterRenderer').FirestarterRenderer, 'playLance' | 'playCombo'> | null = null;
+
+  /** Firestarter lance and combo signature; driven by the replicated hitscan and explosion events. */
+  setFirestarterRenderer(renderer: Pick<import('./FirestarterRenderer').FirestarterRenderer, 'playLance' | 'playCombo'> | null): void {
+    this.firestarterRenderer = renderer;
+  }
 
   /** Mortar crater/dust/ember signature; driven only by the replicated explosion event. */
   setMortarImpactRenderer(renderer: ((x: number, y: number, radius: number, color?: number) => void) | null): void {
@@ -1216,11 +1230,13 @@ export class EffectSystem implements EnemyVisualSink {
     const voidLike = style === 'void_nuke';
     const holyLike = style === 'holy';
     const thermalLike = isThermalExplosionStyle(style);
+    const factionBurst = style === 'mortar' || style === 'firestarter_combo';
     const mortarPalette = bodyColor === ALLIED_COLOR ? ALLIED_PALETTE : VOID_PALETTE;
     const palette: ExplosionCombatPalette = {
-      core: style === 'mortar' ? mortarPalette.core : thermalLike ? 0xfff2d0 : coreColor,
-      hot: style === 'mortar' ? mortarPalette.bright : thermalLike ? FLAME_JET_TINTS_HOT[2] : hotColor,
-      body: style === 'mortar' ? mortarPalette.primary : thermalLike ? FLAME_JET_TINTS_MID[1] : bodyColor,
+      // The firestarter combo keeps a coloured heart; its white-hot accents come from the GPU layer.
+      core: factionBurst ? (style === 'firestarter_combo' ? mortarPalette.bright : mortarPalette.core) : thermalLike ? 0xfff2d0 : coreColor,
+      hot: factionBurst ? mortarPalette.bright : thermalLike ? FLAME_JET_TINTS_HOT[2] : hotColor,
+      body: factionBurst ? mortarPalette.primary : thermalLike ? FLAME_JET_TINTS_MID[1] : bodyColor,
       outer: thermalLike
         ? FLAME_JET_TINTS_COOL[0]
         : this.mixColor(bodyColor, holyLike ? 0xa86912 : (voidLike ? 0x25162e : (energyLike ? 0x15243b : 0x3a1710)), 0.54),
@@ -1391,6 +1407,11 @@ export class EffectSystem implements EnemyVisualSink {
       return;
     }
 
+    if (visualPreset === 'fire_lance' && this.firestarterRenderer) {
+      this.firestarterRenderer.playLance(startX, startY, renderEndX, renderEndY, playerColor);
+      return;
+    }
+
     if (visualPreset === 'asmd_primary' && this.asmdPrimaryRenderer) {
       this.asmdPrimaryRenderer.playTracer(startX, startY, renderEndX, renderEndY, playerColor, thickness, resolvedImpactKind, beamId);
       return;
@@ -1496,7 +1517,7 @@ export class EffectSystem implements EnemyVisualSink {
 
     // ASMD und Plasmabrenner bringen ihr eigenes Strahllicht im gemeinsamen Renderer mit.
     // Hier nur die generische Hitscan-Beleuchtung, sonst leuchten diese Varianten doppelt.
-    if (visualPreset === 'asmd_primary' || visualPreset === 'plasma_burner') return;
+    if (visualPreset === 'asmd_primary' || visualPreset === 'plasma_burner' || visualPreset === 'fire_lance') return;
 
     const dx = endX - startX;
     const dy = endY - startY;

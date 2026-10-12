@@ -8,6 +8,7 @@ import { enemyMeshMatrix, enemyMeshPose, enemyShadowBounds, ENEMY_SHADOW_PAD } f
 import { projectMeshPoint, extendMeshBounds } from '../../src/effects/CharacterMeshModel';
 import { registerEnemyMeshWarmup, subscribeEnemyMeshWarmup, prepareEnemyMeshWarmups } from '../../src/effects/EnemyMeshWarmup';
 import registry from '../../src/config/pipelineAssets.json';
+import { enemyPoses, validateEnemyMeshManifest, decodeEnemyMesh } from '../../scripts/asset-pipeline/enemy-mesh-contract.mjs';
 const asset = ENEMY_MESH_MANIFEST.assets[0];
 const mesh: EnemyMeshData = { asset, positions: new Float32Array(), indices: new Uint16Array() };
 it('extends projected bounds exactly like the reference corners, including below-ground vertices and low sun', () => {
@@ -89,7 +90,36 @@ it('binds Beauty, all poses, binary topology and material sheets to the accepted
     for(const [key,image]of Object.entries(a.images)) {
       const bytes=await readFile('public/'+image.file);expect(createHash('sha256').update(bytes).digest('hex')).toBe(image.sha256);
       const size=Number(key.match(/(\d+)$/)![1]);
-      expect(await sharp(bytes).metadata()).toMatchObject({width:(size+4)*8,height:(size+4)*4,hasAlpha:true});
+      expect(await sharp(bytes).metadata()).toMatchObject({width:(size+4)*live.layout.columns,height:(size+4)*Math.ceil(a.poses.length/live.layout.columns),hasAlpha:true});
     }
   }
+});
+
+it('retains additional authored cast poses and rejects gaps or repeated clip blocks', () => {
+  const sha = 'a'.repeat(64);
+  const render = {
+    idleFrame: 0,
+    frames: Array.from({length:35}, (_,index) => ({index,blenderFrame:index,file:`frame-${index}.png`,sha256:sha})),
+    clips: [
+      {name:'move',loop:true,frames:Array.from({length:12},(_,i)=>i+1)},
+      {name:'claw',loop:false,frames:Array.from({length:12},(_,i)=>i+13),markers:{strike:4,impact:7}},
+      {name:'cast',loop:false,frames:Array.from({length:10},(_,i)=>i+25),markers:{aim:3,release:4}},
+    ],
+  };
+  const poses = enemyPoses(render);
+  expect(poses[34]).toMatchObject({index:34,clip:'cast',clipFrame:9});
+  const incomplete = structuredClone(render); incomplete.clips[2].frames.pop();
+  expect(()=>enemyPoses(incomplete)).toThrow(/cover each/);
+  const m = {
+    ...structuredClone(asset), schema:'fd-projected-enemy-mesh', version:1, status:'diagnostic', revision:'enemy-mesh-cast-fixture',
+    poses, contacts:poses.map(p=>({...structuredClone(asset.contacts[0]),pose:p.index})), sourceFiles:{'source.blend':sha},
+    mesh:{...structuredClone(asset.mesh),poseIndices:poses.map(p=>p.index),positions:{...asset.mesh.positions,bytes:35*asset.mesh.vertexCount*6}},
+  };
+  expect(validateEnemyMeshManifest(m).poses).toHaveLength(35);
+  const decoded = decodeEnemyMesh(m.mesh, Buffer.alloc(m.mesh.positions.bytes), Buffer.alloc(m.mesh.indices.bytes));
+  expect(decoded.positions.length).toBe(35*m.mesh.vertexCount*3);
+  const repeated = structuredClone(m); repeated.poses[34].clip='move'; repeated.poses[34].clipFrame=0;
+  expect(()=>validateEnemyMeshManifest(repeated)).toThrow(/poses/);
+  const truncated = structuredClone(m); truncated.mesh.positions.bytes=31*m.mesh.vertexCount*6;
+  expect(()=>validateEnemyMeshManifest(truncated)).toThrow(/binary size/);
 });

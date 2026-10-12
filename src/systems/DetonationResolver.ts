@@ -1,4 +1,4 @@
-import type { DamageOverTimeAreaConfig, ExplosionVisualStyle, LoadoutSlot, RadialDamageFalloffConfig } from '../types';
+import type { DamageOverTimeAreaConfig, ExplosionVisualStyle, LoadoutSlot, ProjectileExplosionConfig, RadialDamageFalloffConfig } from '../types';
 import type { DetonationEvent } from './DetonationSystem';
 import type { ProjectileProximityPulseSource } from '../projectile/ProjectileGameplayPort';
 
@@ -11,6 +11,7 @@ import type { ProjectileProximityPulseSource } from '../projectile/ProjectileGam
  * Detonationspfad mit abweichender Reihenfolge gibt.
  */
 export interface DetonationEffectSink {
+  resolveProjectileExplosion(event: DetonationEvent, effect: ProjectileExplosionConfig): void;
   /** Confirmed combo reward; resources are only credited when its essence arrives. */
   spawnComboEssence(event: DetonationEvent, amount: number): void;
   /** One final pulse, using the ball's resolved stats and the detonator's attribution. */
@@ -22,6 +23,7 @@ export interface DetonationEffectSink {
     falloff: RadialDamageFalloffConfig | undefined,
     baseDamageMult: number,
     sourceSlot: LoadoutSlot | undefined,
+    sourceId: string,
   ): void;
   /** Radialer Rückstoß auf bewegliche Körper. */
   applyRadialImpulse(
@@ -77,6 +79,7 @@ export function resolveDetonation(sink: DetonationEffectSink, event: DetonationE
     effect.damageFalloff,
     effect.baseDamageMult ?? 1,
     event.sourceSlot,
+    effect.sourceId ?? 'environment.detonation',
   );
 
   if ((effect.knockback ?? 0) > 0) {
@@ -98,7 +101,11 @@ export function resolveDetonation(sink: DetonationEffectSink, event: DetonationE
   if (pulse) sink.applyComboLightning(pulse, event.detonatorOwnerId);
 
   const detonatorColor = sink.resolveOwnerColor(event.detonatorOwnerId);
-  sink.playExplosion(
+  if (effect.explosion) sink.resolveProjectileExplosion(event, {
+    ...effect.explosion,
+    color: effect.explosion.color ?? effect.explosionColor ?? detonatorColor,
+  });
+  else sink.playExplosion(
     event.x, event.y, effect.aoeRadius,
     effect.explosionColor ?? detonatorColor,
     effect.explosionVisualStyle,

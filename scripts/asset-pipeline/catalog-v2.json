@@ -1459,6 +1459,47 @@
       ]
     },
     {
+      "id": "firestarter-badger",
+      "label": "Brandstifter-Dachs B1-v3",
+      "category": "enemy",
+      "gameIds": ["firestarter-badger"],
+      "reference": "public/assets/sprites/enemies/enemy_firestarter_badger.png",
+      "targetSize": 30,
+      "sourceSizes": [64, 128],
+      "displayScale": 2.4,
+      "collisionDiameter": 30,
+      "forward": "north",
+      "pivot": [0.5, 0.5],
+      "description": {
+        "silhouette": "B1 Lanzenarm: ovaler Dachs-Rumpf etwa 1,3:1, zwei Standpfoten, angehobene Schultern und nordgerichteter Kopf; Messingrohr am rechten Unterarm.",
+        "colors": "Graphitfell, helle Dachszeichnung, braunrotes Leder und mattes Messing; Void-Lila nur als kleine lokale Emission an der Lanzenspitze.",
+        "anatomy": "Eigene aufgerichtete 3D-Anatomie mit separaten Armkontrollen und geometrischem muzzle-Socket; Formvarianten 1 parallel, 2 diagonal mit Schulterpanzer, 3 lange Lanze mit Rueckenflasche.",
+        "materials": "Gemeinsame Moerser-Felltextur, enemy_craft_parts.refine und FD_FormMask mit Staerke 0,84. Keine Kameraneigung in der Draufsicht.",
+        "stage": "Gate 2 Stufe B: Form b1-v3 ausgewaehlt, russiges Fell und rotbraunes Leder. move/claw/cast als schneller Draft; keine Produktionsabnahme."
+      },
+      "requiredClips": ["move", "claw", "cast"],
+      "production": "reference",
+      "recipe": "firestarter-badger",
+      "model": {"formVariant": 3},
+      "orthoScale": 6.24,
+      "textures": {
+        "organic": "art/poc/pipeline-v2/textures/mortar-badger-fur-v1.png",
+        "technical": "art/poc/pipeline-v2/textures/mortar-badger-technical-v1.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Graphitfell, Oxblood-Leder, Messing und lokale Void-Flamme",
+          "textureStrength": 0.84,
+          "formShadowStrength": 0.84
+        }
+      },
+      "clips": [
+        {"name": "move", "motion": "biped", "frameCount": 12, "frameRate": 12, "loop": true, "parameters": {"strideForward": 0.17, "strideBack": 0.12, "lift": 0.07, "bodyBob": 0.015, "bodyYaw": 0, "armSwing": 0.035}},
+        {"name": "claw", "motion": "claw_biped", "frameCount": 12, "frameRate": 24, "loop": false, "markers": {"strike": 4, "impact": 7}, "parameters": {"strength": 0.65, "leapDistance": 0.50}},
+        {"name": "cast", "motion": "firestarter_cast", "frameCount": 10, "frameRate": 24, "loop": false, "markers": {"aim": 3, "release": 4}}
+      ]
+    },
+    {
       "id": "thrower-badger",
       "label": "Werfer-Dachs",
       "category": "enemy",

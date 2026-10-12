@@ -1031,3 +1031,51 @@ Der Brandstifter gilt als vollständig umgesetzt, wenn:
 - Host und Clients Telegraph, Dodge und Combo konsistent darstellen,
 - das Verhalten durch Tests und Playtests stabilisiert wurde.
 
+
+---
+
+# 20. V1.1 – Entscheidungen & Ist-Code-Abgleich (12.10.2026)
+
+Dieser Nachtrag ergänzt V1. Wo er von den Abschnitten oben abweicht, gilt der Nachtrag. Der Quellcode bleibt die technische Wahrheit; hier stehen die fachlichen Entscheidungen und der umgesetzte Stand.
+
+## 20.1 Entscheidungen
+
+| Thema | Entscheidung | Bezug |
+|---|---|---|
+| Fraktionsfarben | Feindliche Effekte Void-Lila, verbündete (Nekromantie) Allied-Jade. Abgrenzung zum Pyro über Silhouette, Distanz und Lanze. | §§5, 7, 12 |
+| Kugeldetonation | Spielerwaffen zünden keine Kugeln; nur die Feuerlanze trägt den Detonator. Auch fremde Brandstifter-Kugeln sind zündbar. | §§1, 7, 9 |
+| Combo-Feuer | Kein flächiges Bodenfeuer im Radius. Stattdessen **18 Feuerbrocken** plus eine Zentrumszelle; AoE und Brand bleiben. | ersetzt Bodenfeuer in §7.4 |
+| Combo-Fraktion | Wirkung (Explosion, Brand, Brocken) gehört dem **Zünder**, erfasst beim Zünden – auch nach seinem Despawn. Verbündete Combos treffen nie Spieler, Basen oder Konstrukte. | §7, neu |
+| Kugelkadenz | Mindestens **900 ms** zwischen zwei Kugeln (400 ms wirkte verklumpt); 3 Charges, Regeneration seriell ab letzter Nutzung. | §§3–5 |
+| Sichtlinie | Prüfung ab Lanzenspitze. Die Kugel prüft einen Korridor mit ihrem Radius (12 px), die Lanze eine Linie. Bewegliche Blocker (Zug) zählen. | §13 |
+| Lanzenspitze | Asset-Socket `firestarter.muzzle` (vor/seitlich). Telegraph, Strahl, Kugel und Mündungsfeuer starten dort; die Lanze zielt so, dass sie exakt durch den fixen Weltpunkt geht. | §§6, 12 |
+| Nekromantie | Wie beim Mörser: der verbündete Brandstifter behält Kugeln, Lanze und Combo und kämpft gegen Gegnergruppen. | neu |
+| Einsatz | Zunächst nur `00-test` und Dev-Szenario; Kampagne nach Empfehlung (20.4). | §16 |
+
+## 20.2 Darstellung (GPU, eigener Stil)
+
+- **Kugel:** eigener Projektilstil `firestarter_orb` (angehängter Wire-Index, Protokoll 28): dunkler „Eklipse“-Kern mit brennendem Rand und Schweif.
+- **Telegraph:** zwei verflochtene Flammenstränge, die beim Laden zusammenlaufen. Im Commit eine **gestrichelte, nach außen laufende Warnlinie zwischen zwei sich schließenden Randlinien** – bewusst ohne weißen Kern, damit Warnung und Schuss auf einen Blick unterscheidbar sind.
+- **Schuss:** massiver, heller Strahl; der Doppelstrang dreht sich danach auf, Glutpunkte und Brandspur bleiben kurz.
+- **Combo:** Implosionsring → Stern aus Flammenlanzen → Schockring und Brandfleck über der gemeinsamen Explosion in Fraktionsfarbe.
+- Eine GPU-Schicht mit drei Pässen; unter Last werden Warnungen und fliegende Kugeln vor bereits eingetretenen Effekten gezeichnet.
+- **Asset:** B1-v3 „Langrohr + Rückenflasche“ (Blender, Produktion mit Material-Pässen und Schatten-Mesh), Clips `move`, `claw`, `cast`. `cast` folgt dem Ladefortschritt der Lanze, hält im Commit und schlägt nach dem Schuss zurück; Kugelwurf als kurzer Ruck – ohne zusätzliche Wire-Felder.
+
+## 20.3 Ist-Code-Abgleich
+
+| GDD | Status | Anmerkung |
+|---|---|---|
+| §4 Charges | umgesetzt | generische `RechargeableCharges` (`restart-on-consume`) |
+| §5 Kugel | umgesetzt, abweichend | 900 ms statt 400 ms, eigener Projektilstil |
+| §6 Lanze | umgesetzt | 500/150 ms, 950 px, fixer Weltpunkt, volle Reichweite hinter dem Punkt, Stopp an der ersten Kugel |
+| §7 Combo | umgesetzt, abweichend | Prognose der Kugelposition; Brocken statt Flächenfeuer; Zünder besitzt die Wirkung |
+| §8–9 Grund-KI | umgesetzt | Combo → Direktschuss → Kugel, Kampfabstand 400–700 px |
+| §10 Repositionierung | umgesetzt | lokale Seitenkandidaten (kurz/lang), Bewertung nach Schusslinie, Kugel-Korridor, Combo-Linie, Distanzband; Verweildauer gegen Flattern |
+| §11 Dodge | umgesetzt, abweichend | Distanzmodi `short`/`long` mit gemeinsamem Cooldown und Request-API; defensive Dodges haben Vorrang, nie im Commit. **Kein vorausschauendes Ausweichen vor Hitscan** – die Gefahrenerkennung kennt nur Projektile. |
+| §12 Rendering | umgesetzt | siehe 20.2 |
+| §14 Multiplayer | umgesetzt, Abnahme offen | Host entscheidet; Clients erhalten Special-Action, Fortschritt und Winkel; der fixe Weltpunkt wird nicht separat repliziert. Host+Client-Test braucht den PeerJS-Broker. |
+| §17–19 | teilweise | Stresstest und reale Playtests stehen aus |
+
+## 20.4 Kampagnenempfehlung (nicht angewendet)
+
+Erstkontakt **Map 14**, Encounter `three-front-pyro2`: ein Brandstifter aus Norden ersetzt dort den nördlichen Pyro (der gerade Nordabschnitt passt zum Kampfabstand). Wiederholung **Map 17** (`beer-flank`) mit zwei zeitversetzten Brandstiftern. Balancing-Startwerte bleiben (300 HP, Lanze 25, 18 Brocken); größtes Risiko ist der Nachbrand der Brocken – zuerst `fireChunkBurst.burnDamagePerTick` 0,5 → 0,25 testen.

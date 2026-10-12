@@ -2,6 +2,7 @@
 import math
 import importlib
 from claw_motion_v2 import apply_claw
+from firestarter_motion_v2 import apply_cast
 
 
 def clip_parameters(clip):
@@ -86,7 +87,9 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
         key(bone, 'rotation_euler', (0, 0, 0), frame)
     pose('claw_weapon')
     pose('attack_motion')
-    if motion.startswith('kraken_'):
+    if motion == 'firestarter_cast':
+        apply_cast(asset, phase, frame, idle, p, pose, key)
+    elif motion.startswith('kraken_'):
         for prefix, module, function in (
             ('kraken_land_', 'kraken_motion_land_v2', 'apply_kraken_land'),
             ('kraken_tentacle_', 'kraken_tentacle_motion_v2', 'apply_kraken_tentacle'),
@@ -107,6 +110,8 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
             getattr(implementation, function)(asset, motion, phase, frame, idle, p, pose, key)
             break
     elif motion in ('claw_quadruped', 'claw_biped'):
+        pose('left_arm')
+        pose('right_arm')
         apply_claw(asset, phase, frame, idle, p, pose, key)
     elif motion in ('quad_rotors', 'twin_rotors'):
         for i in range(2 if motion == 'twin_rotors' else 4):

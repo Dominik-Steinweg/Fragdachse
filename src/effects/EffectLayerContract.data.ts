@@ -8191,4 +8191,9 @@ export const MORTAR_LAYER_CONTRACTS: readonly LayerContract[] = [
   {id:'mortar:shell',owner:'effects/gpu/MortarGpuLayer.ts',component:'shell',height:'high',lighting:'emissive',camera:'world',depths:[20.6],blends:['NORMAL'],profiles:['H'],role:'effect'},
   {id:'mortar:smoke',owner:'effects/gpu/MortarGpuLayer.ts',component:'smoke',height:'body',lighting:'material',camera:'world',depths:[13.38],blends:['NORMAL'],profiles:['K'],role:'effect'},
 ];
-export const EFFECT_LAYER_CONTRACTS: readonly LayerContract[] = [...Object.values(GPU_LAYER_CONTRACTS), ...Object.values(GPU_EFFECT_CONTRACTS), ...CPU_LAYER_CONTRACTS, ...METEOR_LAYER_CONTRACTS, ...MORTAR_LAYER_CONTRACTS];
+export const FIRESTARTER_LAYER_CONTRACTS: readonly LayerContract[] = [
+  {id:'firestarter:ground',owner:'effects/gpu/FirestarterGpuLayer.ts',component:'ground',height:'ground',lighting:'material',camera:'world',depths:[5.12],blends:['NORMAL'],profiles:['G'],role:'effect'},
+  {id:'firestarter:orb',owner:'effects/gpu/FirestarterGpuLayer.ts',component:'orb',height:'body',lighting:'emissive',camera:'world',depths:[15.05],blends:['NORMAL'],profiles:['L'],role:'effect'},
+  {id:'firestarter:overlay',owner:'effects/gpu/FirestarterGpuLayer.ts',component:'overlay',height:'body',lighting:'emissive',camera:'world',depths:[19.7],blends:['NORMAL'],profiles:['E'],role:'ui'},
+];
+export const EFFECT_LAYER_CONTRACTS: readonly LayerContract[] = [...Object.values(GPU_LAYER_CONTRACTS), ...Object.values(GPU_EFFECT_CONTRACTS), ...CPU_LAYER_CONTRACTS, ...METEOR_LAYER_CONTRACTS, ...MORTAR_LAYER_CONTRACTS, ...FIRESTARTER_LAYER_CONTRACTS];

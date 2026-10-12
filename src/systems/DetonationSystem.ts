@@ -14,10 +14,12 @@ export interface DetonationEvent {
   pulseSource?:       ProjectileProximityPulseSource;
   x:                  number;
   y:                  number;
-  /** Owner des gezündeten Projektils (für Kill-Attribution) */
+  /** Owner des gezündeten Projektils (für Combo-Ressourcen) */
   projectileOwnerId:  string;
-  /** Spieler, der den Detonator abgefeuert hat */
+  /** Akteur, dem Schaden und Kill der Detonation zugerechnet werden */
   detonatorOwnerId:   string;
+  /** Captured before the detonator can leave the world. */
+  detonatorProvenance?: import('../projectile/ProjectileSpawnRequest').ProjectileProvenance;
   effect:             DetonableConfig;
   sourceId:         string;
   sourceSlot?:        LoadoutSlot;
@@ -63,7 +65,7 @@ export class DetonationSystem {
     shooterId:    string,
     detonatorCfg: DetonatorConfig,
     sourceSlot?:  LoadoutSlot,
-  ): void {
+  ): { x: number; y: number } | null {
     const targets = this.projectileInteraction.searchDetonableProjectiles({
       startX,
       startY,
@@ -72,10 +74,16 @@ export class DetonationSystem {
       shooterId,
       detonator: detonatorCfg,
     });
-    for (const target of targets) {
+    const ordered = detonatorCfg.stopsAtDetonable
+      ? [...targets].sort((a, b) => (a.hit?.distance ?? Math.hypot(a.x - startX, a.y - startY))
+        - (b.hit?.distance ?? Math.hypot(b.x - startX, b.y - startY)) || a.id - b.id)
+      : targets;
+    for (const target of ordered) {
       const outcome = this.projectileInteraction.detonateProjectile(target.id, shooterId);
       if (outcome) this.pendingDetonations.push(toDetonationEvent(outcome, sourceSlot));
+      if (outcome && detonatorCfg.stopsAtDetonable) return target.hit ?? target;
     }
+    return null;
   }
 
   /**
@@ -132,8 +140,9 @@ function toDetonationEvent(
     y: outcome.y,
     projectileOwnerId: outcome.projectileOwnerId,
     detonatorOwnerId: outcome.detonatorOwnerId,
+    detonatorProvenance: outcome.detonatorProvenance,
     effect: outcome.effect,
-    sourceId: outcome.sourceId,
+    sourceId: outcome.effect.sourceId ?? outcome.sourceId,
     sourceSlot: sourceSlot ?? outcome.sourceSlot,
   };
 }

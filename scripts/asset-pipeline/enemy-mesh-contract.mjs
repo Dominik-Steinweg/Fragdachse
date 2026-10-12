@@ -24,14 +24,16 @@ export function enemyCoordinates(render) {
 }
 
 export function enemyPoses(render) {
-  if (render.frames?.length !== 31 || render.idleFrame !== 0) throw Error('Expected 31 enemy poses');
+  if (!render.frames?.length || render.idleFrame !== 0) throw Error('Expected enemy rest and clip poses');
   const clips = render.clips;
-  if (clips?.length !== 2) throw Error('Expected move and claw clips');
+  if (!clips?.length || new Set(clips.map(c => c.name)).size !== clips.length) throw Error('Expected unique enemy clips');
   const move = clips.find(c => c.name === 'move'), claw = clips.find(c => c.name === 'claw');
-  if (!move?.loop || claw?.loop !== false || move.frames.length !== 12 || claw.frames.length !== 18
-    || JSON.stringify(move.frames) !== JSON.stringify(Array.from({ length: 12 }, (_, i) => i + 1))
-    || JSON.stringify(claw.frames) !== JSON.stringify(Array.from({ length: 18 }, (_, i) => i + 13))
-    || claw.markers?.strike !== 8 || claw.markers?.impact !== 11) throw Error('Unsupported enemy clip mapping');
+  if (!move?.loop || claw?.loop !== false || !(claw.markers?.strike > 0)
+    || !(claw.markers.impact > claw.markers.strike) || !(claw.markers.impact < claw.frames.length - 1))
+    throw Error('Unsupported enemy clip mapping');
+  const mapped = clips.flatMap(c => c.frames);
+  if (JSON.stringify(mapped) !== JSON.stringify(Array.from({length:render.frames.length-1},(_,i)=>i+1)))
+    throw Error('Enemy clips must cover each non-rest pose exactly once in order');
   return render.frames.map((frame, index) => {
     if (frame.index !== index || !Number.isFinite(frame.blenderFrame) || !shaPattern.test(frame.sha256))
       throw Error('Invalid enemy pose provenance');
@@ -62,9 +64,14 @@ export function validateEnemyMeshManifest(m) {
   if (m.schema !== ENEMY_MESH_SCHEMA || m.version !== 1 || !/^enemy-mesh-[a-z0-9-]+$/.test(m.revision))
     throw Error('Invalid enemy mesh manifest');
   if (!['diagnostic', 'awaiting-visual-review', 'reviewed-not-imported'].includes(m.status)) throw Error('Invalid enemy mesh status');
-  if (m.poses?.length !== 31 || m.poses.some((p, i) => p.index !== i || !Number.isFinite(p.blenderFrame)
-    || p.clip !== (i === 0 ? 'rest' : i < 13 ? 'move' : 'claw')
-    || p.clipFrame !== (i === 0 ? 0 : i < 13 ? i - 1 : i - 13) || !shaPattern.test(p.sourceBeautySha256)))
+  const seenClips = new Set();
+  if (!m.poses?.length || m.poses[0].clip !== 'rest' || m.poses[0].clipFrame !== 0 || m.poses.some((p, i) => {
+    const previous = m.poses[i-1];
+    const newClip = !previous || p.clip !== previous.clip;
+    const invalid = p.index !== i || !Number.isFinite(p.blenderFrame) || !shaPattern.test(p.sourceBeautySha256)
+      || !/^[a-z][a-z0-9-]*$/.test(p.clip) || (newClip ? seenClips.has(p.clip) || p.clipFrame !== 0 : p.clipFrame !== previous.clipFrame + 1);
+    seenClips.add(p.clip); return invalid;
+  }) || !seenClips.has('move') || !seenClips.has('claw'))
     throw Error('Incomplete enemy poses');
   const c = m.coordinates;
   if (c?.axes !== 'X-right,Y-south,Z-up' || JSON.stringify(c.pivot) !== '[0.5,0.5]'
@@ -81,9 +88,9 @@ export function validateEnemyMeshManifest(m) {
     relativeMember(mesh[part]?.file);
     if (!shaPattern.test(mesh[part].sha256)) throw Error('Unbound enemy binary');
   }
-  if (mesh.positions.bytes !== 31 * mesh.vertexCount * 6 || mesh.indices.bytes !== mesh.triangleCount * 6
+  if (mesh.positions.bytes !== m.poses.length * mesh.vertexCount * 6 || mesh.indices.bytes !== mesh.triangleCount * 6
     || mesh.topologySha256 !== mesh.indices.sha256) throw Error('Enemy binary size/topology mismatch');
-  if (m.contacts?.length !== 31) throw Error('Missing pose contact anchors');
+  if (m.contacts?.length !== m.poses.length) throw Error('Missing pose contact anchors');
   const legs = m.contacts[0]?.feet?.length === 2 ? ['left_leg', 'right_leg'] : ENEMY_LEGS;
   for (const [i, contact] of m.contacts.entries()) {
     if (contact.pose !== i || !Array.isArray(contact.feet) || contact.feet.length !== legs.length
@@ -104,7 +111,7 @@ export function decodeEnemyMesh(mesh, positionBytes, indexBytes) {
     throw Error('Enemy binary byte count mismatch');
   const p = new DataView(positionBytes.buffer, positionBytes.byteOffset, positionBytes.byteLength);
   const i = new DataView(indexBytes.buffer, indexBytes.byteOffset, indexBytes.byteLength);
-  const positions = new Float32Array(mesh.vertexCount * 31 * 3), indices = new Uint16Array(mesh.triangleCount * 3);
+  const positions = new Float32Array(mesh.vertexCount * mesh.poseIndices.length * 3), indices = new Uint16Array(mesh.triangleCount * 3);
   for (let n = 0; n < positions.length; n++) {
     const axis = n % 3;
     positions[n] = mesh.bounds.min[axis] + p.getUint16(n * 2, true) / 65535 * (mesh.bounds.max[axis] - mesh.bounds.min[axis]);

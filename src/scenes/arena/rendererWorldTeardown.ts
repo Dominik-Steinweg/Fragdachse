@@ -76,4 +76,5 @@ export function resetRenderersForWorldPresentationTeardown(
   bundle.lighting.setActive(false);
   bundle.translocatorTeleport = null;
   bundle.mortarStrike.clear();
+  bundle.firestarter.clear();
 }

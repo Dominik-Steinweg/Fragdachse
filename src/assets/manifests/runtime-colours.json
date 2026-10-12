@@ -553,6 +553,42 @@
       "visiblePixelSha256": "707ac5f6cb856e6c25e528c0368fdb403215c3565b3284e2dfbf2368f5987da2",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/sprites/pipeline-v2/firestarter-badger/mesh/enemy-mesh-firestarter-b1-v3-r1/albedo-128.png": {
+      "file": "assets/sprites/pipeline-v2/firestarter-badger/mesh/enemy-mesh-firestarter-b1-v3-r1/albedo-128.webp",
+      "source": "assets/sprites/pipeline-v2/firestarter-badger/mesh/enemy-mesh-firestarter-b1-v3-r1/albedo-128.png",
+      "width": 1056,
+      "height": 660,
+      "sourceBytes": 91477,
+      "downloadBytes": 54084,
+      "sourceSha256": "039cdf8db2f1cab2ca67db70adaf430f8fd716d95886801f10197258956acffc",
+      "sha256": "027bfffba3035e73f5077c39ba443eaa142c746e22270d04d7d12b323bbe0069",
+      "visiblePixelSha256": "08092b85532e16b11e3898d60012e0fa20f7fe5f6052a7f9b9cd1aa1e7c367c2",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/firestarter-badger/mesh/enemy-mesh-firestarter-b1-v3-r1/beauty-128.png": {
+      "file": "assets/sprites/pipeline-v2/firestarter-badger/mesh/enemy-mesh-firestarter-b1-v3-r1/beauty-128.webp",
+      "source": "assets/sprites/pipeline-v2/firestarter-badger/mesh/enemy-mesh-firestarter-b1-v3-r1/beauty-128.png",
+      "width": 1056,
+      "height": 660,
+      "sourceBytes": 123780,
+      "downloadBytes": 107820,
+      "sourceSha256": "2dd9c428b684a3f08d1b66ba1a3bea4a3acfefae3605835f6df7fe3c95c1e91e",
+      "sha256": "46a8736b6e389a24ce4873db62199465156481812ce21d8512f960b0f41dac45",
+      "visiblePixelSha256": "acb13e1d016d21065fbaf2e0769e0c070cb43d633e9c69e00e88b0b9b0088e19",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/firestarter-badger/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/firestarter-badger/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/firestarter-badger/sheet.png",
+      "width": 1056,
+      "height": 660,
+      "sourceBytes": 123780,
+      "downloadBytes": 107820,
+      "sourceSha256": "2dd9c428b684a3f08d1b66ba1a3bea4a3acfefae3605835f6df7fe3c95c1e91e",
+      "sha256": "46a8736b6e389a24ce4873db62199465156481812ce21d8512f960b0f41dac45",
+      "visiblePixelSha256": "acb13e1d016d21065fbaf2e0769e0c070cb43d633e9c69e00e88b0b9b0088e19",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/sprites/pipeline-v2/grave-titan/mesh/enemy-mesh-r4-010/albedo-256.png": {
       "file": "assets/sprites/pipeline-v2/grave-titan/mesh/enemy-mesh-r4-010/albedo-256.webp",
       "source": "assets/sprites/pipeline-v2/grave-titan/mesh/enemy-mesh-r4-010/albedo-256.png",

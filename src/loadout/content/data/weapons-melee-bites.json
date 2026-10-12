@@ -224,6 +224,11 @@
         "successKey": "shot_zeus",
         "failureKey": "shot_dry_trigger"
       }
+    },
+    "FIRESTARTER_BITE": {
+      "id": "FIRESTARTER_BITE",
+      "_notes": "Brandstifter-Nahkampf nutzt die bestehende einfache Gegnerbiss-Familie.",
+      "baseId": "ZOMBIE_BADGER_BITE"
     }
   }
 }

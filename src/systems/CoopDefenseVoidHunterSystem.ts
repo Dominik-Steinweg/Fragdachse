@@ -187,6 +187,8 @@ export class CoopDefenseVoidHunterSystem {
     return Boolean(state && (state.gauss !== null || state.phaseTransitionEndsAt > 0));
   }
 
+  blocksDodge(enemyId: string): boolean { return this.states.get(enemyId)?.gauss != null; }
+
   /** Persistent host-side state query for map encounter triggers. */
   hasReachedPhase(phase: number): boolean {
     return this.reachedPhases.has(phase);

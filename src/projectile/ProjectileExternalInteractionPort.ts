@@ -18,6 +18,8 @@ export interface ProjectileDetonationSearchRequest {
 
 /** Opaque, semantische Sicht eines detonierbaren Projectiles. */
 export interface ProjectileDetonationTarget {
+  /** First segment entry, populated by geometric searches (not the explosion center). */
+  readonly hit?: { readonly x: number; readonly y: number; readonly distance: number };
   readonly id: ProjectileId;
   readonly x: number;
   readonly y: number;
@@ -31,6 +33,7 @@ export interface ProjectileDetonationTarget {
 /** Bestätigtes Ergebnis einer autoritativen externen Detonation. */
 export interface ProjectileDetonationOutcome extends ProjectileDetonationTarget {
   readonly detonatorOwnerId: string;
+  readonly detonatorProvenance?: import('./ProjectileSpawnRequest').ProjectileProvenance;
 }
 
 /** Schmale Runtime-Capability für externe Detonation/Consume-Interaktionen. */

@@ -1,6 +1,7 @@
 import type { WorldHealthBarRenderer, HealthBarHandle } from '../effects/health/WorldHealthBarRenderer';
 import { EMPTY_ENEMY_CLAW_STATE, isEnemyClawState, type EnemyClawState } from '../systems/EnemyClawAttack';
 import { syncEnemyClawAnimation } from '../animations/EnemyClawAnimation';
+import { EnemyCastPlayback, syncEnemyCastAnimation } from '../animations/EnemyCastAnimation';
 import { getEnemyFootprintVariant } from '../config/movementEffects';
 import type { MovementVisualSample } from '../effects/MovementStepSampler';
 import { alliedEnemyHealthBarStyle, enemyHealthBarStyle } from '../effects/health/healthBarStyles';
@@ -168,6 +169,25 @@ export class EnemyEntity {
   private walkingRequested = false;
   private clawState: EnemyClawState = EMPTY_ENEMY_CLAW_STATE;
   private clawAnimating = false;
+  private readonly castPlayback = new EnemyCastPlayback();
+  private castAnimating = false;
+
+  /** New orb presentation, from host spawn or a new replicated projectile ID. */
+  playFirestarterCast(now: number): void {
+    if (!this.config.firestarter) return;
+    this.castPlayback.orb(now);
+    this.syncCastAnimation(now);
+  }
+
+  syncCastAnimation(now = this.sprite.scene.time.now): void {
+    const firestarter = this.config.firestarter;
+    if (!firestarter) return;
+    const wasAnimating = this.castAnimating;
+    this.castAnimating = syncEnemyCastAnimation(this.sprite, this.config.imageKey, this.castPlayback,
+      this.specialAction, this.gaussChargeProgress, now, firestarter.lance.telegraphMs, firestarter.lance.commitMs,
+      this.clawAnimating || !this.sprite.visible || this.burrowed || this.currentHp <= 0);
+    if (wasAnimating && !this.castAnimating) this.syncWalkingAnimation();
+  }
 
   getClawAttackState(): EnemyClawState { return this.clawState; }
 
@@ -432,7 +452,7 @@ export class EnemyEntity {
   }
 
   private syncWalkingAnimation(): void {
-    if (this.clawAnimating) return;
+    if (this.clawAnimating || this.castAnimating) return;
     if (!this.walkingSheet) return;
     syncBadgerWalkingAnimation(
       this.sprite,
