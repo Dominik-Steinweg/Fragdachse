@@ -1,12 +1,13 @@
 import type { EnemyFlowFieldGoalCell } from './EnemyFlowFieldService';
 
-export type EnemyAiTargetKind = 'player' | 'decoy' | 'armed-construct' | 'armed-outpost' | 'armed-base';
+export type EnemyAiTargetKind = 'player' | 'decoy' | 'armed-construct' | 'armed-outpost' | 'armed-base' | 'hostile-enemy';
 
 export type EnemyAiTargetGroup =
   | 'player-threats'
   | 'player-like-threats'
   | 'player-like'
   | 'players'
+  | 'hostile-enemies'
   | 'players-and-armed-constructs'
   | 'armed-constructs'
   | 'armed-outposts';
@@ -42,7 +43,7 @@ export class EnemyAiTargetCatalog {
 
   updateTargets(candidates: readonly EnemyAiTargetCandidate[]): void {
     this.targets.clear();
-    for (const group of ['player-like', 'players', 'player-threats', 'player-like-threats', 'players-and-armed-constructs', 'armed-constructs', 'armed-outposts'] as const) {
+    for (const group of ['player-like', 'players', 'hostile-enemies', 'player-threats', 'player-like-threats', 'players-and-armed-constructs', 'armed-constructs', 'armed-outposts'] as const) {
       const entries = this.groups.get(group);
       if (entries) entries.length = 0;
       else this.groups.set(group, []);
@@ -60,6 +61,7 @@ export class EnemyAiTargetCatalog {
         this.groups.get('players-and-armed-constructs')!.push(candidate);
       }
       if (candidate.kind === 'player') this.groups.get('players')!.push(candidate);
+      if (candidate.kind === 'hostile-enemy') this.groups.get('hostile-enemies')!.push(candidate);
       if (candidate.kind === 'armed-construct') {
         this.groups.get('armed-constructs')!.push(candidate);
         this.groups.get('players-and-armed-constructs')!.push(candidate);

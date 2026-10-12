@@ -106,6 +106,13 @@ Feuerfamilien laufen über den Feuerstil `allied`. Brandflächen eines Verbünde
 Spieler auch nach dem Tod ihres Erzeugers nicht treffen. Eine neue Gegnerfähigkeit, die Verbündete auslösen
 können, muss beides über dieses Modul beziehen.
 
+Brandstifter-Combos dürfen mit `allowCrossTeam` auch gegnerische Kugeln zünden. Der Zünder besitzt
+den Schaden; seine bei der Detonation erfasste Provenance gilt auch nach seinem Despawn.
+Die Feuer-Payload (Explosion, Brand und Chunks) wird über `AlliedEnemyEffects` auf diese Fraktion
+aufgelöst. Verbündete Combos treffen damit feindliche Gegner, keine Spieler oder Bauwerke;
+die ursprüngliche Kugelfraktion entscheidet nicht über den Combo-Schaden. Dies sichert
+[SharedCombatEffects.test.ts](../../tests/integration/SharedCombatEffects.test.ts).
+
 ## RoundParticipation bleibt separat
 
 [RoundParticipationPolicy.ts](../../src/scenes/arena/RoundParticipationPolicy.ts) bildet den Teilnehmer-Snapshot einer laufenden Runde ab und ist nicht mit WorldParticipation zu vermischen:
