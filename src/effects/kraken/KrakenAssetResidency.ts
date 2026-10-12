@@ -66,6 +66,9 @@ export class KrakenAssetResidency {
   }
 
   get errors(): readonly KrakenResidencyDiagnostic[] { return this.diagnostics; }
+  /** A retired Dev source may be destroyed only after the last view has switched. */
+  get activeLeaseCount(): number { return this.leases.size; }
+  ownsTexture(key: string): boolean { return this.pages.has(key); }
   /** Includes in-flight reservations, so concurrent downloads cannot exceed the peak. */
   get reservedBytes(): number { return [...this.pages.values()].reduce((sum, p) => sum + p.page.gpuBytesRGBA8, 0); }
   get residentBytes(): number { return [...this.pages.values()].reduce((sum, p) => sum + (p.registered ? p.page.gpuBytesRGBA8 : 0), 0); }

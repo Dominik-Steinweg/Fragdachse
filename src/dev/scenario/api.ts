@@ -7,6 +7,7 @@ import { POWERUP_DEFS } from '../../powerups/PowerUpConfig';
 import { enemyReadabilityScenario } from './enemyReadabilityRecipe';
 import { runDepthReferenceScene } from './depthReferenceScene';
 import { FOG_ROCK_LIGHTING } from '../../effects/groundFog/FogRockLighting';
+import { installKrakenDraftPolling, krakenDraftStatus, reloadKrakenDraftAssets } from './KrakenDraftAssets';
 
 export type ScenarioResult = { ok: true; status: Record<string, unknown>; path?: string; url?: string }
   | { ok: false; error: string; status: Record<string, unknown> };
@@ -45,6 +46,10 @@ function slot(value: unknown): WeaponSlot {
 export function runScenarioCommand(controller: DevScenarioController, value: unknown): void | Promise<void> {
   const c = object(value);
   switch (c.action) {
+    case 'krakenAssets':
+      if (c.source !== 'draft' && c.source !== 'production') throw Error('source: draft or production required');
+      return reloadKrakenDraftAssets(c.source);
+    case 'krakenReloadAssets': return reloadKrakenDraftAssets();
     case 'krakenReview': return controller.arrangeKrakenReview(c);
     case 'armageddonReview': {
       const count=number(c.count??1,1,256);
@@ -109,6 +114,10 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
     }
     case 'krakenMission':
       if (c.skipIntro !== undefined && typeof c.skipIntro !== 'boolean') throw new Error('skipIntro: boolean erwartet');
+      if (c.drafts !== undefined && typeof c.drafts !== 'boolean') throw Error('drafts: boolean required');
+      if (c.drafts !== undefined) return reloadKrakenDraftAssets(c.drafts ? 'draft' : 'production').then(() => {
+        controller.startKrakenMission(c.skipIntro === true, c.hp === undefined ? null : number(c.hp, 1, 10000000));
+      });
       controller.startKrakenMission(c.skipIntro === true, c.hp === undefined ? null : number(c.hp, 1, 10000000)); break;
     case 'krakenHp': controller.setKrakenHp(number(c.hp, 1, 10000000)); break;
     case 'krakenAct': {
@@ -224,10 +233,11 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
 }
 
 export function installScenarioApi(controller: DevScenarioController) {
+  const stopDraftPolling = import.meta.env.DEV ? installKrakenDraftPolling() : () => {};
   let active = true;
   const waiters = new Set<() => void>();
   // Phaser's Scene plugins can already be shut down when this API is detached.
-  const status = (): Record<string, unknown> => active ? structuredClone(controller.snapshot())
+  const status = (): Record<string, unknown> => active ? { ...structuredClone(controller.snapshot()), krakenAssets: krakenDraftStatus() }
     : { state: 'error', ready: false, message: 'Dev-Szenario wurde beendet.', isolated: true, network: 'local-only' };
   const failure = (error: unknown): ScenarioResult => ({ ok: false, error: error instanceof Error ? error.message : String(error), status: status() });
   const api: DevScenarioApi = {
@@ -275,6 +285,7 @@ export function installScenarioApi(controller: DevScenarioController) {
   };
   window.devScenario = api;
   return { destroy() {
+    stopDraftPolling();
     active = false;
     for (const check of waiters) check();
     if (window.devScenario === api) delete window.devScenario;

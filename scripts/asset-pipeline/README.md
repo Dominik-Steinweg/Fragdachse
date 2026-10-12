@@ -234,6 +234,78 @@ Die Kategorie `weapon` verwendet [recipes_v2/held-weapon.py](recipes_v2/held-wea
 
 Neue Konstruktionen erzeugen genau eine passende Materialvariante (`standard`). Fell- und Formstärke werden in Vorschau-Iterationen abgestimmt; die historischen Varianten `calm`/`rich` bleiben lesbar. Zusätzliche Varianten werden nur bei ausdrücklichem Vergleichsauftrag authoriert.
 
+## Entwurfsmodus
+
+Der separate Entwurfsmodus rendert direkt in der angezeigten Canvas-Größe. Er benutzt
+die vorhandenen Rezepte, Materialien, Kamera und Lichter, standardmäßig Cycles OPTIX
+mit 8 Samples und Denoiser. Zusätzliche Shader-AOVs liefern Albedo, Welt-Z,
+Normalen und Emission in **einem Render pro Frame**. Die Beauty bleibt als Vergleich
+erhalten; Datenpässe werden ohne Farbtransformation gepackt. Mesh-Schatten verwenden
+eine schnelle Vertex-Cluster-Reduktion. Produktionsbefehle bleiben unverändert.
+
+```powershell
+npm run assets:draft -- abyssal-kraken --label erster-entwurf
+npm run assets:draft -- abyssal-kraken --clips spine-volley
+npm run assets:draft -- abyssal-kraken-land abyssal-kraken-tentacle --full
+npm run kraken:iterate -- --clips spine-volley
+```
+
+Ausgabe: `art/poc/pipeline-v2/drafts/<asset>/<label>/standard/` mit `export.json`,
+`runtime.json`, `budget.json`, Clip-Atlanten und Frame-Sockets/-Meshes. `draft.json`
+nennt gerenderte/übernommene Clips, Warnungen, Modell-Cache-Treffer und Dauer.
+Labels sind unveränderlich; ohne `--label` entsteht ein neues. Kein Import,
+Archiv, ZIP, vollständiges Audit oder Kontaktbogen wird erzeugt. Andere ausführbare
+Katalogrezepte benutzen denselben Runner; normale Sheet-Assets erhalten zusätzlich
+ihr Sheet-/Idle-Format. Die direkte Spielumschaltung ist zunächst für Kraken implementiert.
+
+Optionen: `--samples 8`, `--device OPTIX|CUDA|CPU`, `--mesh-triangles 512`
+(Zielkomplexität der Cluster, keine exakt garantierte Dreieckszahl), `--no-denoise`
+und `--blender <exe>`; Blender wird sonst über `BLENDER_PATH` oder `PATH` aufgelöst.
+Auflösung, Elevationsbereich und Elevationsskalierung kommen aus dem Katalog.
+Die Warnschwellen sind mit `--border-ratio 0.02` und `--continuity-tolerance 0.06`
+einstellbar (Canvas-Anteil bzw. mittlere Alpha-Abweichung an Übergängen).
+`--full` rendert alle Clips neu, benutzt aber weiterhin ein gültiges Modell-Blend.
+Ohne Clipauswahl bestimmen Quell-/Katalog-/Render-Hashes die Arbeit. Änderungen
+an gemeinsamem Motion-Code invalidieren konservativ alle betroffenen Clips.
+Mit `--clips` werden die gewählten Clips und die Restpose erneuert; andere bereits
+vorhandene Clips mit geändertem Motion-Hash bleiben mit ausdrücklicher Warnung stehen.
+Fehlende Clips, Modelländerungen und geänderte Clipverträge werden immer neu gebaut.
+Die nächste automatische Iteration erkennt die noch veralteten Clips weiter.
+Das Modell-Blend enthält explizite Rezeptreferenzen und wird vor dem Keying gespeichert.
+Ein Blender-Prozess erledigt sämtliche ausgewählten Assets und Clips.
+
+Marker, Sockets, Canvas-Rand, Höhen-Clamping und End-/Next-Übergänge werden schnell
+geprüft und als Warnungen gemeldet. Defekte Dateiformate oder Renderfehler bleiben
+Fehler. `latest.json` und die gemeinsame `version.json` werden erst nach fertigen
+Exports veröffentlicht. Gleichzeitige Entwurfsjobs sind durch `drafts/.lock` gesperrt;
+nach einem hart abgebrochenen Prozess diese Datei erst entfernen, wenn kein Entwurfsjob
+mehr läuft. Während `kraken-v13` läuft, startet der Runner keine GPU-Arbeit, bis dessen
+`build/build-times.json` alle fünf erfolgreichen Assets enthält.
+
+Auf einer offenen Dev-Szenario-Seite:
+
+```js
+await devScenario.run({ action: 'krakenMission', drafts: true });
+await devScenario.run({ action: 'krakenAssets', source: 'draft' });
+await devScenario.run({ action: 'krakenReloadAssets' });
+await devScenario.run({ action: 'krakenAssets', source: 'production' });
+devScenario.status().krakenAssets;
+```
+
+Pro Rolle gilt der letzte veröffentlichte Entwurf, andernfalls das importierte
+Produktionsasset. Im Entwurfsmodus fragt die Seite `version.json` jede Sekunde ab;
+`kraken:iterate` baut und veröffentlicht diese Version automatisch. Hot-Reload lädt
+die aktuelle Phase vor, tauscht Darstellungsadapter und lässt alte Textur-Leases
+auslaufen. Welt, Mission und Host-Simulation bleiben bestehen. Ein Fehler behält
+die bisherige Quelle. Der Status enthält Ladezeit, Version und den Zeitpunkt des
+ersten Renderabschlusses nach dem Wechsel, sofern die neuen Assets tatsächlich
+geleast wurden. Ohne sichtbare Darstellung bleibt `visibleAt` leer. Die Dev-Quelle
+wird nicht in Produktionsbuilds eingebunden.
+
+Ein Vergleich desselben clip-lokalen Frames bei gleicher Anzeigegröße:
+`node scripts/asset-pipeline/compare-draft-v2.mjs abyssal-kraken --run kraken-v13`
+(optional `--label`, `--clip`, `--frame`). PNG und Quellnachweis liegen unter `drafts/compare/`.
+
 ## V2-Authoring-Vorschauen
 
 [preview-v2.mjs](preview-v2.mjs) verbindet Blender-Render und Bildvergleich in einem Aufruf:

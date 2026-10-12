@@ -14,6 +14,8 @@
     "build:perf-lab": "tsc && vite build --mode performance-lab",
     "ai:sync": "node scripts/sync-ai-skills.mjs",
     "assets:preview": "node scripts/asset-pipeline/preview-v2.mjs",
+    "assets:draft": "node scripts/asset-pipeline/draft-v2.mjs",
+    "kraken:iterate": "node scripts/asset-pipeline/kraken-iterate.mjs",
     "assets:library": "node scripts/asset-pipeline/index-library.mjs",
     "assets:lobby-forest": "node scripts/export-lobby-forest.mjs",
     "assets:hud-frames": "node scripts/export-hud-frames.mjs",

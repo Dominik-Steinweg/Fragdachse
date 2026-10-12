@@ -531,6 +531,13 @@ auf `kraken-abyss-lab`, inklusive Habitat, Boss-Intro, Tauchzyklus, Tentakeln un
 ```js
 await devScenario.run({ action: 'krakenMission' });
 await devScenario.whenReady();
+// Neuester Entwurf je Rolle, sonst Produktion; kein Import nach public/.
+await devScenario.run({ action: 'krakenMission', drafts: true });
+// Quelle während des Kampfes wechseln oder manuell neu laden.
+await devScenario.run({ action: 'krakenAssets', source: 'draft' });
+await devScenario.run({ action: 'krakenReloadAssets' });
+devScenario.status().krakenAssets; // Version, Ladezeit, Renderabschluss oder Ladefehler
+await devScenario.run({ action: 'krakenAssets', source: 'production' });
 // Intro ueberspringen und aktuelle HP setzen; Max-HP bleiben erhalten (Phase 2 bei <= 50 %).
 await devScenario.run({ action: 'krakenMission', skipIntro: true, hp: 4000 });
 // HP im laufenden Kampf ändern, ohne Intro oder Welt neu zu starten.
