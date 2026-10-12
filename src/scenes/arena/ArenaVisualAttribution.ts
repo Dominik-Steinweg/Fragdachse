@@ -76,6 +76,7 @@ export const GRAPHICS_FAMILIES = {
   meteorEffects: ['MeteorGpuLayer'],
   mortarEffects: ['MortarGpuLayer'],
   firestarterEffects: ['FirestarterGpuLayer'],
+  shieldChargerEffects: ['ShieldChargerGpuLayer'],
   nukeTelegraphs: ['NukeRenderer', 'EffectSystem'],
   effectSystemGraphics: ['EffectSystem'],
   objectiveMarkers: [

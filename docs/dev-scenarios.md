@@ -731,3 +731,25 @@ Kugeln den Gegner auf `(42,55)` pinnen und mit Zoom `1.1` auf `(27,53)` schauen:
 Schützen unmittelbar nach dem Einschlag mit `clearEnemies` entfernen, sonst entsteht bereits
 nach 1100 ms die nächste Combo. `capture()` zählt einen Frame mit; 17 Schritte plus Capture
 ergeben +300 ms, anschließend 53 Schritte plus Capture insgesamt +1200 ms.
+
+### Schild-Anstürmer: Gate 1
+
+Map `0` (`00-test`) enthält den Encounter `shield-charger-gate-1` (ein Anstürmer). Für einen isolierten
+Versuch dasselbe Dev-Szenario mit festem Seed, `suppressWaves: true` und `freezeMission: true` verwenden,
+über `target` eine freie Zelle etwa 200–350 px vom Spieler wählen und spawnen:
+
+```js
+await devScenario.whenReady();
+await devScenario.run({ action: 'spawn', kind: 'shield-charger-badger', pinned: false });
+```
+
+Erwartung: Er nähert sich mit erhobenem Frontschild (120°) und dreht sichtbar langsam; seitlich laufen lässt
+ihn nachdrehen statt sofort folgen. Treffer von vorn werden geblockt, von der Seite und von hinten nicht.
+Steht der Spieler im Auslösebereich vor ihm, senkt er den Schild, steht still und zeigt den Korridor
+(zwei Randlinien, sich füllender Boden, Pfeile, Endbalken). Die Richtung bleibt fest; seitlich aus dem
+Korridor treten lässt ihn vorbeistürmen. Rückwärtslaufen entlang der Bahn reicht nicht. Am Endpunkt
+oder an einem Felsen bleibt er erschöpft stehen (Schild unten, keine Warnfläche) – Zeit zum Flankieren.
+Stun oder ein deutlicher Stoß während der Ankündigung brechen sie ab.
+
+Headless-Nachweise: `tests/CoopDefenseShieldCharger.test.ts`. Asset, Clips und Kampagne sind spätere Gates.
+

@@ -1,5 +1,6 @@
 import { MortarStrikeRenderer } from '../../effects/MortarStrikeRenderer';
 import { FirestarterRenderer } from '../../effects/FirestarterRenderer';
+import { ShieldChargerRenderer } from '../../effects/ShieldChargerRenderer';
 import { WatchtowerDestructionFx } from '../../effects/watchtower/WatchtowerDestructionFx';
 import { PlasmaBurnerChargeRenderer } from '../../effects/PlasmaBurnerChargeRenderer';
 import { onBootSceneTeardown } from '../../ui/BootPreparation';
@@ -167,6 +168,7 @@ export interface RendererBundle {
   translocatorTeleport: TranslocatorTeleportRenderer | null;
   mortarStrike: MortarStrikeRenderer;
   firestarter: FirestarterRenderer;
+  shieldCharger: ShieldChargerRenderer;
 }
 
 /** Synchronous entry point for callers that already own their scheduling. */
@@ -458,6 +460,11 @@ export function* createRendererBundleSteps(
   firestarter.setLightingSystem(lighting);
   cleanup.push(() => firestarter.destroy());
   yield 'renderers/firestarter';
+  const shieldCharger = new ShieldChargerRenderer(scene);
+  shieldCharger.registerGpuVfx(gpuVfx);
+  shieldCharger.setLightingSystem(lighting);
+  cleanup.push(() => shieldCharger.destroy());
+  yield 'renderers/shieldCharger';
   return {
     interactions,
     turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, plasmaBurnerCharge, healingAura, guardianSpirit, repairDrone, attackDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
@@ -485,6 +492,7 @@ export function* createRendererBundleSteps(
     translocatorTeleport: null,
     mortarStrike,
     firestarter,
+    shieldCharger,
   };
 }
 
@@ -568,6 +576,7 @@ export function wireRenderersToCameraFeedback(
   bundle.mortarStrike.setCameraFeedback(controller);
   bundle.voidMeteorIntro.setCameraFeedback(controller);
   bundle.firestarter.setCameraFeedback(controller);
+  bundle.shieldCharger.setCameraFeedback(controller);
 }
 
 /**

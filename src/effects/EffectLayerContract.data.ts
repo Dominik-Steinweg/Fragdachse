@@ -8206,4 +8206,9 @@ export const FIRESTARTER_LAYER_CONTRACTS: readonly LayerContract[] = [
   {id:'firestarter:orb',owner:'effects/gpu/FirestarterGpuLayer.ts',component:'orb',height:'body',lighting:'emissive',camera:'world',depths:[15.05],blends:['NORMAL'],profiles:['L'],role:'effect'},
   {id:'firestarter:overlay',owner:'effects/gpu/FirestarterGpuLayer.ts',component:'overlay',height:'body',lighting:'emissive',camera:'world',depths:[19.7],blends:['NORMAL'],profiles:['E'],role:'ui'},
 ];
-export const EFFECT_LAYER_CONTRACTS: readonly LayerContract[] = [...Object.values(GPU_LAYER_CONTRACTS), ...Object.values(GPU_EFFECT_CONTRACTS), ...CPU_LAYER_CONTRACTS, ...METEOR_LAYER_CONTRACTS, ...MORTAR_LAYER_CONTRACTS, ...FIRESTARTER_LAYER_CONTRACTS];
+export const SHIELD_CHARGER_LAYER_CONTRACTS: readonly LayerContract[] = [
+  {id:'shield-charger:ground',owner:'effects/gpu/ShieldChargerGpuLayer.ts',component:'ground',height:'ground',lighting:'material',camera:'world',depths:[5.12],blends:['NORMAL'],profiles:['G'],role:'effect'},
+  {id:'shield-charger:dust',owner:'effects/gpu/ShieldChargerGpuLayer.ts',component:'dust',height:'body',lighting:'material',camera:'world',depths:[13.38],blends:['NORMAL'],profiles:['K'],role:'effect'},
+  {id:'shield-charger:overlay',owner:'effects/gpu/ShieldChargerGpuLayer.ts',component:'overlay',height:'body',lighting:'emissive',camera:'world',depths:[19.7],blends:['NORMAL'],profiles:['E'],role:'ui'},
+];
+export const EFFECT_LAYER_CONTRACTS: readonly LayerContract[] = [...Object.values(GPU_LAYER_CONTRACTS), ...Object.values(GPU_EFFECT_CONTRACTS), ...CPU_LAYER_CONTRACTS, ...METEOR_LAYER_CONTRACTS, ...MORTAR_LAYER_CONTRACTS, ...FIRESTARTER_LAYER_CONTRACTS, ...SHIELD_CHARGER_LAYER_CONTRACTS];
