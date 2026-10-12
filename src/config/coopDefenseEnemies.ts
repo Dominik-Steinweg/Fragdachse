@@ -332,7 +332,19 @@ export interface CoopDefenseEnemySpawnScaling {
   readonly countPerTickFactorPerAdditionalPlayer?: number;
 }
 
+export interface CoopDefenseEnemyFirestarterConfig {
+  readonly charges: { readonly maxCharges: number; readonly rechargeIntervalMs: number };
+  readonly fireballIntervalMs: number;
+  readonly lance: { readonly telegraphMs: number; readonly commitMs: number; readonly cooldownMs: number; readonly rangePx: number };
+  readonly crossAttackGapMs: number;
+  readonly comboRadiusPx: number;
+  readonly fireballWeaponId: string;
+  readonly lanceWeaponId: string;
+  readonly biteWeaponId: string;
+}
+
 export interface CoopDefenseEnemyConfig {
+  readonly firestarter?: CoopDefenseEnemyFirestarterConfig;
   readonly krakenBoss?: KrakenBossConfig;
   readonly krakenEgg?: KrakenEggConfig;
   readonly pawCount: PawCount;
@@ -501,6 +513,7 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         voidMolotov: config.voidMolotov,
         timebomb: config.timebomb,
         mortar: config.mortar ? { ...config.mortar, targetWeights: { ...config.mortar.targetWeights } } : undefined,
+        firestarter: config.firestarter ? { ...config.firestarter, charges: { ...config.firestarter.charges }, lance: { ...config.firestarter.lance } } : undefined,
         stinkAura: config.stinkAura,
         deathSpawns: config.deathSpawns,
         trainAwareness: config.trainAwareness,
@@ -625,6 +638,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     voidMolotov: normalizeVoidMolotovConfig(enemy.voidMolotov, enemy.id),
     timebomb: normalizeTimebombConfig(enemy.timebomb),
     mortar: normalizeMortarConfig(enemy.mortar),
+    firestarter: normalizeFirestarterConfig(enemy.firestarter),
     stinkAura: normalizeStinkAuraConfig(enemy.stinkAura, enemy.id),
     deathSpawns: normalizeDeathSpawns(enemy.deathSpawns, enemy.id),
     trainAwareness: normalizeTrainAwareness(enemy.trainAwareness),
@@ -1077,4 +1091,25 @@ function normalizeSpawnScaling(
     intervalMsFactorPerAdditionalPlayer: normalizeCoopDefensePlayerScalingFactor(scaling.intervalMsFactorPerAdditionalPlayer),
     countPerTickFactorPerAdditionalPlayer: normalizeCoopDefensePlayerScalingFactor(scaling.countPerTickFactorPerAdditionalPlayer),
   };
+}
+
+/** Reject malformed timing and mismatched weapon roles at the authored boundary. */
+export function normalizeFirestarterConfig(config: CoopDefenseEnemyFirestarterConfig | undefined): CoopDefenseEnemyFirestarterConfig | undefined {
+  if (!config) return undefined;
+  if (!config.charges || !config.lance) throw new Error('Invalid firestarter timing blocks');
+  for (const value of [config.charges.maxCharges, config.charges.rechargeIntervalMs, config.fireballIntervalMs,
+    config.lance.telegraphMs, config.lance.commitMs, config.lance.cooldownMs, config.lance.rangePx, config.comboRadiusPx]) {
+    if (!Number.isFinite(value) || value <= 0) throw new Error('Invalid firestarter positive value');
+  }
+  if (!Number.isSafeInteger(config.charges.maxCharges) || !Number.isFinite(config.crossAttackGapMs)
+    || config.crossAttackGapMs < 0 || config.lance.commitMs > config.lance.telegraphMs
+    || config.comboRadiusPx > config.lance.rangePx) throw new Error('Invalid firestarter timing/range relation');
+  const ball = findWeaponConfig(config.fireballWeaponId);
+  const lance = findWeaponConfig(config.lanceWeaponId);
+  const bite = findWeaponConfig(config.biteWeaponId);
+  if (ball?.fire.type !== 'projectile' || !ball.detonable
+    || lance?.fire.type !== 'hitscan' || !lance.detonator?.stopsAtDetonable
+    || !lance.detonator.triggerTags.includes(ball.detonable.tag) || bite?.fire.type !== 'melee'
+    || lance.range !== config.lance.rangePx) throw new Error('Invalid firestarter weapon relation');
+  return { ...config, charges: { ...config.charges }, lance: { ...config.lance } };
 }

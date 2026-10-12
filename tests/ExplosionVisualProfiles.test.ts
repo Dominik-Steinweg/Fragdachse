@@ -12,7 +12,7 @@ describe('explosion visual profiles', () => {
       'default', 'meteor', 'holy', 'energy', 'lightning', 'nuke', 'void_nuke', 'rocket',
       'mini_rocket', 'mini_rocket_cascade', 'train', 'brood_hatch', 'regeneration',
       'timebomb', 'timebomb_pop', 'he_cluster_shard', 'he_demolition_shard',
-      'time_bubble_release', 'asmd_combo', 'mortar',
+      'time_bubble_release', 'asmd_combo', 'mortar', 'firestarter_combo',
     ];
     expect(Object.keys(EXPLOSION_VISUAL_PROFILES).sort()).toEqual([...styles].sort());
     for (const style of styles) {
@@ -28,6 +28,7 @@ describe('explosion visual profiles', () => {
 
   it('maps specialized styles to their authored families', () => {
     expect(getCombatExplosionProfile('mortar')?.family).toBe('standard');
+    expect(getCombatExplosionProfile('firestarter_combo')?.family).toBe('standard');
     expect(getCombatExplosionProfile('mini_rocket_cascade')?.family).toBe('cascade');
     expect(getCombatExplosionProfile('timebomb')?.family).toBe('energy');
     expect(getCombatExplosionProfile('timebomb_pop')?.family).toBe('pop');

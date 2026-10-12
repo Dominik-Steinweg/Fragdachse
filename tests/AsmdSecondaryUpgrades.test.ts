@@ -32,7 +32,7 @@ function event(power = 0, combo = 0): DetonationEvent {
     } };
 }
 function sink(): DetonationEffectSink {
-  return { spawnComboEssence: vi.fn(), applyComboLightning: vi.fn(), applyAoeDamage: vi.fn(),
+  return { resolveProjectileExplosion: vi.fn(), spawnComboEssence: vi.fn(), applyComboLightning: vi.fn(), applyAoeDamage: vi.fn(),
     applyEnvironmentDamage: vi.fn(), applyRadialImpulse: vi.fn(), playExplosion: vi.fn(),
     spawnDotArea: vi.fn(), resolveOwnerColor: () => 0xffffff };
 }

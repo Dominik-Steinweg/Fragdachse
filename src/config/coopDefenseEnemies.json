@@ -852,6 +852,66 @@
         "engageMinDwellMs": 1500,
         "engageSpeedFactor": 1
       }
+    },
+    {
+      "id": "firestarter-badger",
+      "pawCount": 2,
+      "maxHp": 300,
+      "xp": 45,
+      "size": 30,
+      "moveSpeed": 160,
+      "knockbackFactor": 0.7,
+      "movementTarget": "players",
+      "weapons": [
+        {
+          "weaponId": "FIRESTARTER_BITE",
+          "targetMode": "all",
+          "meleeTiming": {
+            "hitDelayMs": 350,
+            "strikeMs": 80,
+            "recoveryMs": 220
+          }
+        }
+      ],
+      "attackScanIntervalMs": 140,
+      "attackStopDurationMs": 120,
+      "obstacleAttackDelayMs": 500,
+      "imageKey": "enemy_pyro_badger",
+      "combatPositioning": {
+        "preferredDistancePx": 550,
+        "toleranceP": 150,
+        "retreatSpeedFactor": 0.85,
+        "requireLineOfSight": true
+      },
+      "dodge": {
+        "cooldownMs": 1400,
+        "evadeScanRadiusPx": 280,
+        "evadeLeadTimeMs": 420,
+        "evadeMissMarginPx": 24,
+        "approachMinDistancePx": 720,
+        "approachMaxDistancePx": 1000
+      },
+      "firestarter": {
+        "charges": {
+          "maxCharges": 3,
+          "rechargeIntervalMs": 2000
+        },
+        "fireballIntervalMs": 400,
+        "lance": {
+          "telegraphMs": 500,
+          "commitMs": 150,
+          "cooldownMs": 600,
+          "rangePx": 950
+        },
+        "crossAttackGapMs": 200,
+        "comboRadiusPx": 125,
+        "fireballWeaponId": "FIRESTARTER_FIREBALL",
+        "lanceWeaponId": "FIRESTARTER_LANCE",
+        "biteWeaponId": "FIRESTARTER_BITE"
+      },
+      "playerScaling": {
+        "maxHpFactorPerAdditionalPlayer": 0.8
+      }
     }
   ]
 }

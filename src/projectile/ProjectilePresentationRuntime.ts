@@ -251,7 +251,7 @@ export class ProjectilePresentationRuntime {
       this.rocketRenderer.createVisual(id, x, y, cfg.size, cfg.color, cfg.ownerColor ?? cfg.color, cfg.smokeTrailColor ?? cfg.color, cfg.projectileVisualScale);
     }
     if (style === 'fireball' && this.fireballRenderer) {
-      sprite.setVisible(false); sprite.setAlpha(0); this.fireballRenderer.createVisual(id, x, y, cfg.size);
+      sprite.setVisible(false); sprite.setAlpha(0); this.fireballRenderer.createVisual(id, x, y, cfg.size, cfg.projectileBurnVisualStyle);
     }
     if (style === 'spore' && this.sporeRenderer) {
       sprite.setVisible(false); sprite.setAlpha(0); this.sporeRenderer.createVisual(id, x, y, cfg.size, cfg.color, cfg.sporeVisualVariant);

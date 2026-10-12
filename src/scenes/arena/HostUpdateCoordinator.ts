@@ -1878,6 +1878,16 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
    * Umgebungsschaden und der replizierte Explosionskanal.
    */
   private readonly detonationEffectSink: DetonationEffectSink = {
+    resolveProjectileExplosion: (event, effect) => {
+      this.resolveProjectileExplosion({
+        projectileId: event.projectileId, x: event.x, y: event.y, effect,
+        provenance: this.ctx.getWorldCombatCore()!.captureProjectileProvenance(
+          createSingleOwnerProvenance(event.detonatorOwnerId, {
+            weaponSourceId: event.sourceId, sourceSlot: event.sourceSlot,
+          }),
+        ),
+      });
+    },
     spawnComboEssence: (event, amount) => {
       const essence = this.activityFramePort?.getAdrenalineEssence?.();
       const resource = this.playerGameplayRuntime?.getPlayerCombatIntegrationPort()?.resource;
@@ -1899,10 +1909,10 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       const pulse = this.resolveProjectileProximityPulse({ ...source, ownerId: detonatorOwnerId, provenance });
       bridge.broadcastBfgLaserBatch(pulse.lines, source.color, 'asmd_primary');
     },
-    applyAoeDamage: (x, y, radius, damage, attackerId, falloff, baseDamageMult, sourceSlot) => {
+    applyAoeDamage: (x, y, radius, damage, attackerId, falloff, baseDamageMult, sourceSlot, sourceId) => {
       this.ctx.getWorldCombatCore()!.applyAoeDamage(x, y, radius, damage, attackerId, false, {
         category: 'explosion',
-        sourceId: 'environment.detonation',
+        sourceId,
         damageFalloff: falloff,
         baseDamageMult,
         sourceSlot,

@@ -118,6 +118,7 @@ describe('CoopMissionRuntime – konkrete Activity-Ownership', () => {
       timebomb: clearable('special:timebomb', calls),
       voidHunter: clearable('special:void-hunter', calls),
     } as unknown as CoopMissionEnemySpecialRuntime);
+    runtime.setFirestarter(clearable('special:firestarter', calls) as unknown as import('../../src/systems/CoopDefenseFirestarterSystem').CoopDefenseFirestarterSystem);
 
     runtime.setNecromancy({
       setCorpseSink: (value: unknown) => { calls.push(`necromancy:sink:${String(value)}`); },
@@ -135,6 +136,7 @@ describe('CoopMissionRuntime – konkrete Activity-Ownership', () => {
       'encounter:director',
       'encounter:pressure',
       'encounter:boss',
+      'special:firestarter',
       'special:void-hunter',
       'special:timebomb',
       'behaviour:ability',
@@ -159,6 +161,7 @@ describe('CoopMissionRuntime – konkrete Activity-Ownership', () => {
     ]);
     expect(bindingSnapshots.at(-1)).toBeNull();
     expect(bindingSnapshots.filter((entry) => entry === null)).toHaveLength(1);
+    expect(runtime.coopDefenseFirestarterSystem).toBeNull();
   });
 
   it('wird ueber den ActivityRuntimeHost getaktet und zerstoert', () => {

@@ -689,3 +689,34 @@ andere Lade-, Konsolen- und Shaderfehler lassen den Lauf scheitern. `report.json
 Assetrevisionen, Hostzustände, Abdeckung, Fehler und geometrische Nachweise; `index.html` verlinkt die
 Kontaktbögen. Zeitüberschreitungen oder fehlende Phasen ergeben einen fehlgeschlagenen Bericht statt
 einer scheinbar vollständigen Bildserie.
+
+
+### Brandstifter-Dachs: Gate 1
+
+Map `0` (`00-test`) enthält zusätzlich den Encounter `firestarter-gate-1`.
+Für einen isolierten Versuch dasselbe Dev-Szenario mit festem Seed, `suppressWaves: true`
+und `freezeMission: true` verwenden. Über `target` eine freie Zelle etwa 400–700 px
+vom Spieler auswählen (eine Zelle = 32 px), dann:
+
+```js
+await devScenario.whenReady();
+await devScenario.run({ action: 'spawn', kind: 'firestarter-badger', pinned: false });
+```
+
+Während der kurzen lila Lanzenwarnung quer laufen: Der Weltzielpunkt bleibt fixiert,
+die Achse geht von der aktuellen Gegnerposition durch ihn bis zur vollen Reichweite.
+Im letzten Commit-Abschnitt verstärkt sich die Linie und der Gegner steht vollständig still.
+Vor dem Schuss töten: Telegraph verschwindet ohne Abschuss. Mit einem natürlichen Felsen
+zwischen Spieler und Gegner wiederholen: keine Angriffsplanung durch die Deckung.
+
+Nach einem Lanzenangriff die langsamen lila Kugeln beobachten. Eine Kugel auf der realen
+Lanzenachse muss den Strahl stoppen und die größere Explosion mit Brandfläche und Chunks
+auslösen, auch wenn sie erst nach Telegraph-Beginn die Linie kreuzt. Bei zwei Kugeln hintereinander
+zündet nur die erste. Ein zweiter Brandstifter darf fremde Kugeln zünden; ASMD-Spielerschüsse
+lassen diese Kugeln intakt. Die nächste Lanze bei ausweichendem Spieler auch hinter dem
+ursprünglichen Zielpunkt prüfen. Wiederbelebte Brandstifter benutzen in Gate 1 nur ihren Biss.
+
+Headless-Nachweise: `tests/CoopDefenseFirestarter.test.ts` und der Brandstifter-Abschnitt in
+`tests/integration/SharedCombatEffects.test.ts`. Browser-/Mehrspieler-Sichtprüfung,
+finale Assets, Audio und taktische Dodges sind spätere Gates. Das Explosionsaudio verwendet
+vorerst die vorhandene Void-Feuerball-Aufnahme unter einem eigenen austauschbaren Asset-Key.

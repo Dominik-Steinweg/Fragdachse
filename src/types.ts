@@ -393,7 +393,7 @@ export type BulletVisualPreset = 'default' | 'glock' | 'xbow' | 'p90' | 'ak47' |
 export type GrenadeVisualPreset = 'he' | 'he_cluster_shard' | 'he_demolition_shard' | 'smoke' | 'molotov' | 'molotov_void' | 'time_bubble' | 'fur_ball' | 'molotov_allied';
 
 /** Visuelles Preset fuer Hitscan-Strahlen. */
-export type HitscanVisualPreset = 'default' | 'asmd_primary' | 'plasma_burner';
+export type HitscanVisualPreset = 'default' | 'asmd_primary' | 'plasma_burner' | 'fire_lance';
 
 /** Kontextabhaengige Supportwirkung eines Hitscan-Strahls. */
 export interface HitscanSupportEffect {
@@ -413,7 +413,7 @@ export type MeleeDamageTarget = 'players' | 'enemies' | 'decoys' | 'bases' | 'ro
 export type EnergyBallVariant = 'default' | 'plasma';
 
 /** Visueller Stil einer Explosion / Detonation. */
-export type ExplosionVisualStyle = 'mortar' | 'default' | 'meteor' | 'he_cluster_shard' | 'he_demolition_shard' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'void_nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train' | 'brood_hatch' | 'regeneration' | 'timebomb' | 'timebomb_pop' | 'time_bubble_release' | 'asmd_combo';
+export type ExplosionVisualStyle = 'mortar' | 'default' | 'meteor' | 'he_cluster_shard' | 'he_demolition_shard' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'void_nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train' | 'brood_hatch' | 'regeneration' | 'timebomb' | 'timebomb_pop' | 'time_bubble_release' | 'asmd_combo' | 'firestarter_combo';
 
 /** Linearer radialer Schadensabfall: innen maxDamage, am Rand minDamage. */
 export interface RadialDamageFalloffConfig {
@@ -432,6 +432,7 @@ export type TracerConfig = import('./projectile/FlightSignature').FlightSignatur
  * durationMs = 0 deaktiviert den Effekt (Default für Waffen ohne Upgrade).
  */
 export interface BurnOnHitConfig {
+  readonly visualStyle?: GroundFireVisualStyle;
   readonly durationMs: number;      // Dauer eines Burn-Stacks
   readonly damagePerTick: number;   // HP-Schaden pro Tick (0 = deaktiviert)
 }
@@ -1515,6 +1516,9 @@ export type GrenadeEffectConfig =
  * Data-driven: konfigurierbar pro Waffe, flexibel erweiterbar (ASMD Ball, Rakete, …).
  */
 export interface DetonableConfig {
+  /** Optional additional payload through the ordinary projectile explosion resolver. */
+  readonly explosion?: ProjectileExplosionConfig;
+  readonly sourceId?: string;
   readonly comboAdrenalineGain?: number;
   /** Zero disables the combo pulse; positive levels multiply resolved damage by level + 1. */
   readonly comboLightningLevel?: number;
@@ -1544,6 +1548,8 @@ export interface ProjectileProximityPulseConfig {
 }
 
 export interface DetonatorConfig {
+  /** Stop at the nearest intersected projectile and detonate only that projectile. */
+  readonly stopsAtDetonable?: boolean;
   readonly triggerTags: readonly string[];  // Tags der Projektile, die gezündet werden können
 }
 
@@ -2039,7 +2045,7 @@ export interface SyncedEnemyState {
   /** Ausweichschritt-Phase, identisch zum Spieler-Dash: 0 = keiner, 1 = Burst, 2 = Recovery. */
   dashPhase: 0 | 1 | 2;
   /** Replizierte Boss-Spezialaktion; `none` löscht einen zuvor sichtbaren Zustand. */
-  specialAction: 'none' | 'gauss-charge' | 'phase-nuke' | 'armageddon' | 'timebomb-chase' | 'timebomb-fuse' | 'void-molotov-windup' | import('./systems/KrakenState').KrakenSpecialAction;
+  specialAction: 'none' | 'gauss-charge' | 'phase-nuke' | 'armageddon' | 'timebomb-chase' | 'timebomb-fuse' | 'void-molotov-windup' | import('./systems/KrakenState').KrakenSpecialAction | 'fire-lance-charge';
   specialActionEndsAt: number;
   gaussChargeProgress: number;
   gaussAimAngle: number;

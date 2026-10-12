@@ -1,3 +1,4 @@
+import * as Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
 
 const clock = vi.hoisted(() => ({ now: 1000 }));
@@ -16,6 +17,8 @@ vi.mock('phaser', async () => {
   return { ...phaser, Math: { ...phaser.Math, Distance: { ...phaser.Math.Distance,
     Squared: (x1: number, y1: number, x2: number, y2: number) => (x2 - x1) ** 2 + (y2 - y1) ** 2,
   } }, Geom: { ...phaser.Geom,
+    Intersects: require(root + 'src/geom/intersects/index.js'),
+    Circle: require(root + 'src/geom/circle/Circle.js'),
     Rectangle: require(root + 'src/geom/rectangle/Rectangle.js'),
     Line: Object.assign(Line, { Length: (l: any) => Math.hypot(l.x2 - l.x1, l.y2 - l.y1) }) } };
 });
@@ -51,6 +54,9 @@ import { plagueSource } from '../StinkPlagueTestHelper';
 import { mgOwner } from '../MgTurretTestHelper';
 import { RockVisualHelper } from '../../src/scenes/arena/RockVisualHelper';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig';
+import { WorldWeaponExecutionRuntime } from '../../src/world/WorldWeaponExecutionRuntime';
+import { AutomatedWeaponExecutionAdapter } from '../../src/world/AutomatedWeaponExecutionAdapter';
+import { resolveEnemyWeaponFirePayloads } from '../../src/systems/AlliedEnemyEffects';
 import type { ProjectileStyle } from '../../src/types';
 import type { ProjectileReplicationRecord } from '../../src/projectile/ProjectileReplicationAdapter';
 
@@ -71,7 +77,7 @@ function fixture(training = false) {
     'setWalking', 'setRageTint', 'setDecoyStealth', 'setHeldItemId', 'syncBar', 'setMovementDashPhase', 'setBurrowPhase']) player[name] = () => {};
   const players = { getPlayer: (id: string) => id === 'p1' ? player : undefined, getAllPlayers: () => [player] };
   const network = { isHost: () => true, getPlayerProfile: players.getPlayer, areTeammates: () => false,
-    getLocalPlayerId: () => 'p1', isEnemyPair: () => true, broadcastEffect: vi.fn(), broadcastAudioFeedback: vi.fn() };
+    getLatestGameState: () => null, getLocalPlayerId: () => 'p1', isEnemyPair: () => true, broadcastEffect: vi.fn(), broadcastAudioFeedback: vi.fn(), broadcastHitscanTracer: vi.fn() };
   const combat = new WorldCombatCore(players as never, network as never);
   combat.bindPlayerVitalsScope({ worldRevision: 71, runtimeGeneration: 1 });
   combat.bindHostExecutionSources({ nowMs: () => clock.now, random: () => 0 });
@@ -130,9 +136,9 @@ function cloudHost(f: ReturnType<typeof fixture>) {
   vi.spyOn(cloud, 'clientUpdate').mockImplementation(() => {});
   const host = new HostUpdateCoordinator(f.scene, {
     getWorldCombatCore: () => f.combat, playerManager: f.players, stinkCloudSystem: cloud,
-    fireSystem: { hostUpdate: () => ({ synced: [], ground: { cells: [] }, damageEvents: [], damageTick: false }) },
+    fireSystem: { hostCreateZone: vi.fn(), hostUpdate: () => ({ synced: [], ground: { cells: [] }, damageEvents: [], damageTick: false }) },
     decoySystem: { hostUpdateLifecycle() {}, hostPostPhysics() {}, createHostSnapshots: () => [], isStealthed: () => false },
-    hostPhysics: { update() {}, getDashPhase: () => 0, isBurrowDash: () => false },
+    hostPhysics: { applyRadialImpulse: vi.fn(), update() {}, getDashPhase: () => 0, isBurrowDash: () => false },
     smokeSystem: { syncVisuals() {}, syncTargetVisuals() {} },
   } as never, {} as never, {} as never, {} as never);
   host.setPresentationActive(false);
@@ -526,5 +532,107 @@ describe('ASMD detonation through shared world effects', () => {
       essence.updateHost(clock.now + 600);
       expect(resource.getAdrenaline('p1')).toBe(30);
     } finally { essence.destroy(); cloud.destroyAll(); f.destroy(); }
+  });
+});
+
+
+describe('enemy hitscan and firestarter combo through world combat', () => {
+  function fireFixture() {
+    const f = fixture();
+    f.combat.setWorldMetrics({ ...resolveActiveArenaWorldMetrics(), offsetX: -1000, offsetY: -1000, widthPx: 3000, heightPx: 3000 });
+    const shooter = f.enemies.hostSpawnAtWorld(0, 100, 'firestarter-badger');
+    const detonations = new DetonationSystem(f.projectiles);
+    f.combat.setDetonationSystem(detonations);
+    const execution = new AutomatedWeaponExecutionAdapter(new WorldWeaponExecutionRuntime({
+      projectileSpawn: f.projectiles, combatSystem: f.combat,
+    }), f.projectiles);
+    const fire = (id = 'FIRESTARTER_LANCE', ownerId = shooter.id, targetX = 100) => execution.fire(WEAPON_CONFIGS[id], {
+      x: 0, y: 100, angle: 0, targetX, targetY: 100, ownerId, ownerColor: 0xb347ff,
+      gameplayMuzzleOrigin: { x: 0, y: 100 },
+    });
+    const ball = (x: number, y = 100, tag = 'firestarter_fireball', size = 24) => { const id = f.projectiles.spawnProjectile({
+      origin: { x, y, angle: 0 }, provenance: createSingleOwnerProvenance(shooter.id, { weaponSourceId: 'FIRESTARTER_FIREBALL' }),
+      flight: { speed: 100, size, lifetimeMs: 5000, maxBounces: 0, isGrenade: false },
+      interaction: { directHit: { damage: 0 }, detonable: { ...resolveEnemyWeaponFirePayloads(WEAPON_CONFIGS.FIRESTARTER_FIREBALL, 'hostile').detonable!, tag } },
+      presentation: { style: 'fireball', color: 0xb347ff },
+    });
+      const sprite = f.physics.handles.get(id)!.sprite;
+      sprite.getBounds = () => new Phaser.Geom.Rectangle(sprite.x - size / 2, sprite.y - size / 2, size, size);
+      return id;
+    };
+    return { ...f, shooter, detonations, fire, ball };
+  }
+
+  it('continues beyond its aim point, ignores hostile allies and damages the player', () => {
+    const f = fireFixture();
+    try {
+      const playerHp = f.combat.getHP('p1'), enemyHp = f.enemy.getHp();
+      expect(f.fire()).toBe(true);
+      expect(f.combat.getHP('p1')).toBeLessThan(playerHp);
+      expect(f.enemy.getHp()).toBe(enemyHp);
+      expect(f.network.broadcastHitscanTracer.mock.calls[0][2]).toBeGreaterThan(100);
+    } finally { f.destroy(); }
+  });
+
+  it('detonates only the first intersected ball even when it entered a direct shot after aiming', () => {
+    const f = fireFixture();
+    try {
+      const far = f.ball(240), near = f.ball(170, 200);
+      f.physics.handles.get(near)!.body.reset(170, 100); // A moving ball crosses the already chosen axis.
+      const hp = f.combat.getHP('p1');
+      f.fire();
+      expect(f.detonations.flushDetonations().map(e => e.projectileId)).toEqual([near]);
+      expect(f.physics.released).toContain(near); expect(f.physics.released).not.toContain(far);
+      expect(f.combat.getHP('p1')).toBe(hp);
+      expect(f.network.broadcastHitscanTracer.mock.calls[0][2]).toBe(158);
+    } finally { f.destroy(); }
+  });
+
+  it('selects geometric entry rather than center order, including a muzzle inside a ball', () => {
+    const f = fireFixture();
+    try {
+      const narrow = f.ball(160, 100, undefined, 8), wide = f.ball(180, 100, undefined, 80);
+      f.fire(); expect(f.detonations.flushDetonations().map(e => e.projectileId)).toEqual([wide]);
+      expect(f.physics.released).not.toContain(narrow);
+      const overlapping = f.ball(0);
+      f.fire(); expect(f.detonations.flushDetonations().map(e => e.projectileId)).toEqual([overlapping]);
+      expect(f.network.broadcastHitscanTracer.mock.lastCall?.[2]).toBe(0);
+    } finally { f.destroy(); }
+  });
+
+  it('ASMD leaves firestarter balls intact and retains its multi-ball nonblocking combo behavior', () => {
+    const f = fireFixture();
+    try {
+      const fireball = f.ball(100), first = f.ball(150, 100, 'asmd_ball'), second = f.ball(220, 100, 'asmd_ball');
+      const hp = f.enemy.getHp();
+      f.shooter.sprite.y = 500;
+      f.fire('ASMD_PRIM', 'p1');
+      expect(f.detonations.flushDetonations().map(e => e.projectileId)).toEqual([first, second]);
+      expect(f.physics.released).not.toContain(fireball);
+      expect(f.enemy.getHp()).toBeLessThan(hp);
+    } finally { f.destroy(); }
+  });
+
+  it('resolves combo burn, ground fire and chunks once through the normal explosion sink without friendly fire', () => {
+    const f = fireFixture(), h = cloudHost(f);
+    try {
+      const chunks = vi.fn();
+      h.host.setPlayerFramePort({ getPlayerGameplayRuntime: () => ({ hostCreateFireChunkBurst: chunks }) } as never);
+      const zone = (h.host as any).ctx.fireSystem.hostCreateZone;
+      const ball = f.ball(280);
+      f.detonations.detonateProjectile(ball, f.shooter.id);
+      const hp = f.combat.getHP('p1'), enemyHp = f.enemy.getHp();
+      const sink = (h.host as unknown as { detonationEffectSink: DetonationEffectSink }).detonationEffectSink;
+      resolveDetonations(sink, f.detonations.flushDetonations());
+      expect(f.combat.getHP('p1')).toBeLessThan(hp);
+      expect(f.enemy.getHp()).toBe(enemyHp);
+      expect(f.combat.getBurnStackCount('p1', clock.now)).toBeGreaterThan(0);
+      expect(f.combat.getBurnVisualState('p1', clock.now).visualStyle).toBe('void');
+      expect(zone).toHaveBeenCalledOnce(); expect(chunks).toHaveBeenCalledOnce();
+      expect(zone.mock.calls[0][2]).toMatchObject({ visualStyle: 'void', damageTarget: 'players' });
+      expect(chunks.mock.calls[0][3]).toMatchObject({ visualStyle: 'void', damageTarget: 'players' });
+      resolveDetonations(sink, f.detonations.flushDetonations());
+      expect(chunks).toHaveBeenCalledOnce();
+    } finally { h.cloud.destroyAll(); f.destroy(); }
   });
 });

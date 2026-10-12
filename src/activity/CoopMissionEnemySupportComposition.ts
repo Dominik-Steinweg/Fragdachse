@@ -1,3 +1,4 @@
+import { CoopDefenseFirestarterSystem } from '../systems/CoopDefenseFirestarterSystem';
 import { ALLIED_COLOR, VOID_PALETTE } from '../config';
 import { CoopDefenseMortarSystem } from '../systems/CoopDefenseMortarSystem';
 import { CoopDefenseMortarStrikeSystem, type CoopDefenseMortarImpactPort } from '../systems/CoopDefenseMortarStrikeSystem';
@@ -19,6 +20,7 @@ import type { WorldMetrics } from '../world/WorldMetrics';
 import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecutionAdapter';
 
 export interface CoopMissionEnemySupportCompositionOptions {
+  readonly projectileDetonables: import('../projectile/ProjectileGameplayPort').ProjectileDetonableReadPort | null;
   readonly mortarImpact: CoopDefenseMortarImpactPort;
   readonly playerManager: PlayerManager;
   readonly combatSystem: CombatActivityPort;
@@ -127,6 +129,11 @@ export class CoopMissionEnemySupportComposition {
         this.options.placementSystem, strikes, strategicFlowField), strikes);
     }
 
+    if (runtime.enemyAiTargetCatalog && this.options.projectileDetonables) {
+      runtime.setFirestarter(new CoopDefenseFirestarterSystem(enemyManager, this.options.combatSystem,
+        this.options.weaponExecution, this.options.projectileDetonables, runtime.enemyAiTargetCatalog));
+    }
+
     const necromancy = this.options.playerModifierReadPort && this.options.weaponExecution
       ? new class extends NecromancySystem {
         override recordEnemyDeath(death: Parameters<NecromancySystem['recordEnemyDeath']>[0], now?: number): void {
@@ -150,8 +157,12 @@ export class CoopMissionEnemySupportComposition {
           (runtime.coopDefenseVoidHunterSystem?.blocksRegularAttacks(enemyId) ?? false)
           || (runtime.coopDefenseTimebombSystem?.blocksRegularBehavior(enemyId) ?? false)
           || (runtime.coopDefenseMortarSystem?.blocksRegularAttacks(enemyId) ?? false)
+          || (runtime.coopDefenseFirestarterSystem?.blocksRegularAttacks(enemyId) ?? false)
           || (runtime.coopDefenseEnemyAbilitySystem?.blocksRegularAttacks(enemyId) ?? false)
         ));
+        runtime.coopDefenseEnemyDodgeSystem?.setBlockedChecker(enemyId =>
+          (runtime.coopDefenseVoidHunterSystem?.blocksDodge(enemyId) ?? false)
+          || (runtime.coopDefenseFirestarterSystem?.blocksDodge(enemyId) ?? false));
         if (necromancy) {
           necromancy.setCorpseSink({
             onCorpseAdded: (corpseId, x, y, enemySize, lifetimeMs) => {
@@ -166,6 +177,7 @@ export class CoopMissionEnemySupportComposition {
       },
       detach: () => {
         runtime.coopDefenseEnemyAttackSystem?.setActionBlockedChecker(null);
+        runtime.coopDefenseEnemyDodgeSystem?.setBlockedChecker(null);
         if (necromancy) {
           necromancy.setCorpseSink(null);
           enemyManager.setLethalDamageGuard(null);

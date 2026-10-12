@@ -425,6 +425,12 @@
   ],
   "encounters": [
     {
+      "id": "firestarter-gate-1",
+      "start": { "type": "time", "atMs": 6000 },
+      "groups": [{ "enemyKind": "firestarter-badger", "count": 2, "spawnStaggerMs": 1000,
+        "spawnArea": { "gridX": 40, "gridY": 30, "widthCells": 4, "heightCells": 6 } }]
+    },
+    {
       "id": "mortar-gate-1",
       "start": { "type": "time", "atMs": 3000 },
       "groups": [{ "enemyKind": "mortar-badger", "count": 2, "spawnStaggerMs": 1500,

@@ -10,6 +10,10 @@ import type { ProjectileProvenance } from './ProjectileSpawnRequest';
 
 /** Stable combat read for chain reactions; no Runtime record crosses this boundary. */
 export interface ProjectileDetonableSample {
+  /** Host velocity for prospective aiming; absent samples are stationary. */
+  readonly vx?: number;
+  readonly vy?: number;
+  readonly remainingLifetimeMs?: number;
   readonly projectileId: number;
   readonly ownerId: string;
   readonly x: number;

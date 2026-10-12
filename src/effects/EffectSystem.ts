@@ -967,6 +967,7 @@ export class EffectSystem implements EnemyVisualSink {
       ? this.mixColor(fillColor, 0xffffff, 0.45)
       : (isHoly ? 0xffef9a : (isNuke ? this.mixColor(fillColor, 0xffffff, 0.35) : this.mixColor(fillColor, 0xffffff, 0.2)));
     this.spawnCombatExplosionGpu(x, y, radius, visualStyle, fillColor, flashColor, haloColor);
+    if (visualStyle === 'firestarter_combo') return; // Shared burst in faction colors.
     if (visualStyle === 'mortar') {
       // The shared burst carries flash and fireball; the mortar layer adds crater, dust and embers.
       this.mortarImpactRenderer?.(x, y, radius, color);
@@ -1216,11 +1217,12 @@ export class EffectSystem implements EnemyVisualSink {
     const voidLike = style === 'void_nuke';
     const holyLike = style === 'holy';
     const thermalLike = isThermalExplosionStyle(style);
+    const factionBurst = style === 'mortar' || style === 'firestarter_combo';
     const mortarPalette = bodyColor === ALLIED_COLOR ? ALLIED_PALETTE : VOID_PALETTE;
     const palette: ExplosionCombatPalette = {
-      core: style === 'mortar' ? mortarPalette.core : thermalLike ? 0xfff2d0 : coreColor,
-      hot: style === 'mortar' ? mortarPalette.bright : thermalLike ? FLAME_JET_TINTS_HOT[2] : hotColor,
-      body: style === 'mortar' ? mortarPalette.primary : thermalLike ? FLAME_JET_TINTS_MID[1] : bodyColor,
+      core: factionBurst ? mortarPalette.core : thermalLike ? 0xfff2d0 : coreColor,
+      hot: factionBurst ? mortarPalette.bright : thermalLike ? FLAME_JET_TINTS_HOT[2] : hotColor,
+      body: factionBurst ? mortarPalette.primary : thermalLike ? FLAME_JET_TINTS_MID[1] : bodyColor,
       outer: thermalLike
         ? FLAME_JET_TINTS_COOL[0]
         : this.mixColor(bodyColor, holyLike ? 0xa86912 : (voidLike ? 0x25162e : (energyLike ? 0x15243b : 0x3a1710)), 0.54),
@@ -1391,7 +1393,7 @@ export class EffectSystem implements EnemyVisualSink {
       return;
     }
 
-    if (visualPreset === 'asmd_primary' && this.asmdPrimaryRenderer) {
+    if ((visualPreset === 'asmd_primary' || visualPreset === 'fire_lance') && this.asmdPrimaryRenderer) {
       this.asmdPrimaryRenderer.playTracer(startX, startY, renderEndX, renderEndY, playerColor, thickness, resolvedImpactKind, beamId);
       return;
     }

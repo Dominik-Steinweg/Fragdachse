@@ -284,6 +284,120 @@
         "successKey": "shot_flame",
         "failureKey": "shot_dry_trigger"
       }
+    },
+    "FIRESTARTER_FIREBALL": {
+      "id": "FIRESTARTER_FIREBALL",
+      "cooldown": 400,
+      "damage": 8,
+      "range": 1000,
+      "allowedSlots": [],
+      "adrenalinCost": 0,
+      "adrenalinGain": 0,
+      "spreadStanding": 0,
+      "spreadMoving": 0,
+      "spreadPerShot": 0,
+      "maxDynamicSpread": 0,
+      "spreadRecoveryDelay": 400,
+      "spreadRecoveryRate": 5,
+      "spreadRecoverySpeed": 100,
+      "rockDamageMult": 0,
+      "trainDamageMult": 0,
+      "projectileStyle": "fireball",
+      "projectileColor": "#b347ff",
+      "projectileBurnVisualStyle": "void",
+      "fire": {
+        "type": "projectile",
+        "projectileSpeed": 180,
+        "projectileSize": 24,
+        "projectileMaxBounces": 0,
+        "impactExplosion": {
+          "radius": 48,
+          "maxDamage": 12,
+          "knockback": 120,
+          "selfDamageMult": 0,
+          "rockDamageMult": 0,
+          "trainDamageMult": 0,
+          "burnOnHit": {
+            "durationMs": 2000,
+            "damagePerTick": 0.5
+          },
+          "visualStyle": "firestarter_combo"
+        }
+      },
+      "detonable": {
+        "tag": "firestarter_fireball",
+        "allowCrossTeam": true,
+        "comboAdrenalineGain": 0,
+        "aoeRadius": 125,
+        "aoeDamage": 0,
+        "rockDamageMult": 0,
+        "trainDamageMult": 0,
+        "sourceId": "FIRESTARTER_FIREBALL",
+        "explosion": {
+          "radius": 125,
+          "maxDamage": 45,
+          "minDamage": 20,
+          "knockback": 500,
+          "selfDamageMult": 0,
+          "rockDamageMult": 0,
+          "trainDamageMult": 0,
+          "visualStyle": "firestarter_combo",
+          "burnOnHit": {
+            "durationMs": 2000,
+            "damagePerTick": 0.5
+          },
+          "groundFire": {
+            "type": "fire",
+            "radius": 100,
+            "lingerDuration": 2000,
+            "damagePerTick": 0.5,
+            "burnDurationMs": 2000,
+            "burnDamagePerTick": 0.5,
+            "sourceId": "FIRESTARTER_FIREBALL",
+            "rockDamageMult": 0,
+            "trainDamageMult": 0
+          },
+          "fireChunkBurst": {
+            "count": 4,
+            "searchRadius": 125,
+            "flightMs": 320,
+            "igniteCenter": false,
+            "durationMs": 2000,
+            "burnDurationMs": 2000,
+            "burnDamagePerTick": 0.5,
+            "sourceId": "FIRESTARTER_FIREBALL"
+          }
+        }
+      }
+    },
+    "FIRESTARTER_LANCE": {
+      "id": "FIRESTARTER_LANCE",
+      "cooldown": 600,
+      "damage": 25,
+      "range": 950,
+      "allowedSlots": [],
+      "adrenalinCost": 0,
+      "adrenalinGain": 0,
+      "spreadStanding": 0,
+      "spreadMoving": 0,
+      "spreadPerShot": 0,
+      "maxDynamicSpread": 0,
+      "spreadRecoveryDelay": 400,
+      "spreadRecoveryRate": 5,
+      "spreadRecoverySpeed": 100,
+      "rockDamageMult": 0,
+      "trainDamageMult": 0,
+      "fire": {
+        "type": "hitscan",
+        "traceThickness": 4,
+        "visualPreset": "fire_lance"
+      },
+      "detonator": {
+        "triggerTags": [
+          "firestarter_fireball"
+        ],
+        "stopsAtDetonable": true
+      }
     }
   }
 }

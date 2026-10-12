@@ -62,6 +62,7 @@ const SHIPPED_AUDIO_FILES = new Set([
   'sfx_explosion_fireball.ogg',
   'sfx_explosion_turret_fireball.ogg',
   'sfx_explosion_void_turret_fireball.ogg',
+  'sfx_explosion_firestarter_fireball.ogg',
   'sfx_explosion_kamikaze.ogg',
   'sfx_explosion_rocket_aftershock.ogg',
   'sfx_explosion_asmd_secondary.ogg',
@@ -122,6 +123,8 @@ const SHOT_ASSETS = {
 const EXPLOSION_ASSETS = {
   sfx_explosion_turret_fireball: './assets/sounds/sfx_explosion_turret_fireball.ogg',
   sfx_explosion_void_turret_fireball: './assets/sounds/sfx_explosion_void_turret_fireball.ogg',
+  // Gate 1 placeholder: existing void fireball recording under an independent replaceable key.
+  sfx_explosion_firestarter_fireball: './assets/sounds/sfx_explosion_firestarter_fireball.ogg',
   sfx_explosion_void_armageddon: './assets/sounds/sfx_explosion_void_armageddon.ogg',
   sfx_explosion_crossbow: './assets/sounds/sfx_explosion_crossbow.ogg',
   sfx_explosion_negev: './assets/sounds/sfx_explosion_negev.ogg',
@@ -267,6 +270,7 @@ export function getMusicAssetPath(key: MusicAssetKey): string {
 export const SOUND_VOLUMES: Record<AudioAssetKey, number> = {
   sfx_explosion_turret_fireball: 0.5,
   sfx_explosion_void_turret_fireball: 0.5,
+  sfx_explosion_firestarter_fireball: 0.5,
   sfx_explosion_void_armageddon: 0.5,
   sfx_explosion_crossbow: 0.15,
   sfx_explosion_negev: 0.5,

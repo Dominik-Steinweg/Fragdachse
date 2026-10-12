@@ -60,6 +60,16 @@ function buildSystem(projectileX: number) {
 }
 
 describe('CoopDefenseEnemyDodgeSystem', () => {
+  it('honors a composed ability block and releases dodge after the commit', () => {
+    const { system, startEnemyDash } = buildSystem(295);
+    let blocked = true;
+    system.setBlockedChecker(() => blocked);
+    system.hostUpdate(1000);
+    expect(startEnemyDash).not.toHaveBeenCalled();
+    blocked = false;
+    system.hostUpdate(1001);
+    expect(startEnemyDash).toHaveBeenCalledOnce();
+  });
   it('findet ein bedrohliches Projektil auch ueber eine Bucket-Grenze hinweg', () => {
     const { system, startEnemyDash } = buildSystem(295);
 

@@ -115,7 +115,7 @@ describe('allied enemy presentation', () => {
 
   it('turns allied ground fire into allied-only damage and leaves hostile fire untouched', () => {
     const fire = { visualStyle: 'void', damageTarget: 'players', durationMs: 1 } as const;
-    expect(resolveEnemyFireEffect('hostile', fire)).toBe(fire);
+    expect(resolveEnemyFireEffect('hostile', fire)).toEqual({ ...fire, visualStyle: 'void', damageTarget: 'players' });
     expect(resolveEnemyFireEffect('allied', fire)).toEqual({ visualStyle: 'allied', damageTarget: 'enemies', durationMs: 1 });
   });
 });

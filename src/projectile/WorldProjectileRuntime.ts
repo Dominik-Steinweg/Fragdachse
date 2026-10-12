@@ -14,6 +14,7 @@ import * as Phaser from 'phaser';
 import type { ProjectilePhysicsContactTarget, ProjectileTargetRef } from './ProjectileTargetPort';
 import { findNearestRectangleHit } from '../utils/geometry';
 import type { ProjectileRuntimeRecord } from './ProjectileRuntimeRecord';
+import { segmentRectInterval } from '../systems/ObstacleRules';
 import type {
   PlaceableKind,
   ProjectileBouncePresentation,
@@ -1777,8 +1778,19 @@ export class WorldProjectileRuntime implements
         || !this.projectiles.activeRecords.has(projectile)) continue;
       if (!request.detonator.triggerTags.includes(projectile.spec.interaction.detonable.tag)) continue;
       if (!projectile.spec.interaction.detonable.allowCrossTeam && projectile.provenance.allegiance.ownerId !== request.shooterId) continue;
-      if (!Phaser.Geom.Intersects.LineToRectangle(line, projectile.physics.sprite.getBounds())) continue;
-      targets.push(createDetonationTarget(projectile));
+      const bounds = projectile.physics.sprite.getBounds();
+      if (!request.detonator.stopsAtDetonable) {
+        if (Phaser.Geom.Intersects.LineToRectangle(line, bounds)) targets.push(createDetonationTarget(projectile));
+        continue;
+      }
+      const interval = segmentRectInterval(request.startX, request.startY, request.endX, request.endY,
+        bounds.left, bounds.top, bounds.right, bounds.bottom);
+      if (!interval) continue;
+      const t = Math.max(0, interval.enter);
+      const dx = request.endX - request.startX, dy = request.endY - request.startY;
+      targets.push({ ...createDetonationTarget(projectile), hit: {
+        x: request.startX + dx * t, y: request.startY + dy * t, distance: Math.hypot(dx, dy) * t,
+      } });
     }
     return targets;
   }
@@ -2238,6 +2250,9 @@ export class WorldProjectileRuntime implements
         x: record.physics.sprite.x,
         y: record.physics.sprite.y,
         tag: record.spec.interaction.detonable.tag,
+        remainingLifetimeMs: Math.max(0, record.spec.flight.lifetimeMs - (record.simulatedAgeMs ?? 0)),
+        vx: record.physics.body.velocity.x,
+        vy: record.physics.body.velocity.y,
         allowCrossTeam: record.spec.interaction.detonable.allowCrossTeam,
       });
     }

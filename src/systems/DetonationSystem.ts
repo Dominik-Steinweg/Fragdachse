@@ -63,7 +63,7 @@ export class DetonationSystem {
     shooterId:    string,
     detonatorCfg: DetonatorConfig,
     sourceSlot?:  LoadoutSlot,
-  ): void {
+  ): { x: number; y: number } | null {
     const targets = this.projectileInteraction.searchDetonableProjectiles({
       startX,
       startY,
@@ -72,10 +72,16 @@ export class DetonationSystem {
       shooterId,
       detonator: detonatorCfg,
     });
-    for (const target of targets) {
+    const ordered = detonatorCfg.stopsAtDetonable
+      ? [...targets].sort((a, b) => (a.hit?.distance ?? Math.hypot(a.x - startX, a.y - startY))
+        - (b.hit?.distance ?? Math.hypot(b.x - startX, b.y - startY)) || a.id - b.id)
+      : targets;
+    for (const target of ordered) {
       const outcome = this.projectileInteraction.detonateProjectile(target.id, shooterId);
       if (outcome) this.pendingDetonations.push(toDetonationEvent(outcome, sourceSlot));
+      if (outcome && detonatorCfg.stopsAtDetonable) return target.hit ?? target;
     }
+    return null;
   }
 
   /**
@@ -133,7 +139,7 @@ function toDetonationEvent(
     projectileOwnerId: outcome.projectileOwnerId,
     detonatorOwnerId: outcome.detonatorOwnerId,
     effect: outcome.effect,
-    sourceId: outcome.sourceId,
+    sourceId: outcome.effect.sourceId ?? outcome.sourceId,
     sourceSlot: sourceSlot ?? outcome.sourceSlot,
   };
 }

@@ -207,6 +207,7 @@ export class CoopMissionHostUpdate {
     // Vor der Bewegung: Wer hat freien Boden erreicht bzw. seine maximale Grabzeit erschöpft?
     if (!countdownActive) this.runtime.coopDefenseEnemyBurrowSystem?.hostUpdate(nowMs);
     if (metrics) { metrics.enemySpecialMs = performance.now() - measuredAt; measuredAt = performance.now(); }
+    if (!countdownActive && !weaponBalanceLabActive) this.runtime.coopDefenseFirestarterSystem?.hostUpdate(nowMs);
     // Mortar windup/spacing decisions must precede the movement override in this same frame.
     if (!countdownActive && !weaponBalanceLabActive) this.runtime.coopDefenseMortarSystem?.hostUpdate(nowMs);
     if (metrics) { metrics.enemyMortarMs = performance.now() - measuredAt; measuredAt = performance.now(); }
@@ -237,6 +238,7 @@ export class CoopMissionHostUpdate {
     if (metrics) { metrics.enemyAlliesMs = performance.now() - measuredAt; measuredAt = performance.now(); }
     if (!countdownActive && !weaponBalanceLabActive) {
       this.runtime.kraken?.system.hostUpdateActions(nowMs);
+      this.runtime.coopDefenseFirestarterSystem?.refreshPresentation(nowMs);
       this.runtime.coopDefenseVoidHunterSystem?.hostUpdate(nowMs);
       this.runtime.coopDefenseEnemyAbilitySystem?.hostUpdate(nowMs);
       this.runtime.coopDefenseMortarStrikeSystem?.hostUpdate(nowMs);

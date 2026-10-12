@@ -51,6 +51,9 @@ function projectileBucketKey(gridX: number, gridY: number): number {
  * Zurückwachsen feststeckt.
  */
 export class CoopDefenseEnemyDodgeSystem {
+  private blockedChecker: ((enemyId: string) => boolean) | null = null;
+
+  setBlockedChecker(checker: ((enemyId: string) => boolean) | null): void { this.blockedChecker = checker; }
   private readonly readyAt = new Map<string, number>();
   private readonly activeEnemyIds = new Set<string>();
   private readonly projectileBuckets = new Map<number, ProjectileThreatSample[]>();
@@ -69,7 +72,7 @@ export class CoopDefenseEnemyDodgeSystem {
       && enemy.getHp() / enemy.getMaxHp() > dodge.enabledBelowHpRatio
     ) return;
     if (this.hostPhysics.isEnemyDashing(enemy.id)) return;
-    if (enemy.getSpecialAction() === 'gauss-charge') return;
+    if (this.blockedChecker?.(enemy.id)) return;
     if (enemy.isBurrowed() || this.enemyManager.isEnemyPanicking(enemy.id)) return;
     if (this.currentNow < (this.readyAt.get(enemy.id) ?? 0)) return;
 
@@ -121,7 +124,7 @@ export class CoopDefenseEnemyDodgeSystem {
       if (this.hostPhysics.isEnemyDashing(enemy.id)) continue;
       // Beim Gauss-Zielen steht der Boss fest; ein Dodge darf die tatsächliche Schussachse nicht
       // heimlich verschieben. Während Armageddon bleibt Dodge dagegen ausdrücklich erlaubt.
-      if (enemy.getSpecialAction() === 'gauss-charge') continue;
+      if (this.blockedChecker?.(enemy.id)) continue;
       // Unter der Erde läuft der Gegner stur auf seiner Grabspur, und aus dem Lauffeuer flieht
       // er ohnehin schon – in beiden Fällen kein Ausweichen.
       if (enemy.isBurrowed() || this.enemyManager.isEnemyPanicking(enemy.id)) continue;
