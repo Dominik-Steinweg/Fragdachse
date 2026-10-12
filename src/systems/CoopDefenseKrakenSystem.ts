@@ -32,6 +32,8 @@ export interface KrakenHostDependencies {
   claw(event: EnemyAreaClawEvent): void;
   waterApproach(from: Point, target: Point): Point | null;
   canMove(from: Point, to: Point, mode: 'water-approach' | 'ashore' | 'land'): boolean;
+  /** Whether the land body may keep its current pose (small bank/edge overlaps of the full body are tolerated). */
+  landPoseValid(point: Point): boolean;
   eggLandings(from: Point, rotation: number, count: number, minimumShoreDistancePx: number): readonly (Point | null)[];
   bodyTravelLimit(from: Point, angle: number, distance: number): number;
   flightFree(from: Point, to: Point, radius: number): boolean;
@@ -67,6 +69,9 @@ export class CoopDefenseKrakenSystem {
   private exitTravelled = 0;
   private exitMotion: KrakenBossConfig['exit'] | null = null;
   private lunge: { from: Point; distance: number; stopped: boolean } | null = null;
+  /** Last pose where the full body fitted on dry land; ordinary steering uses a smaller physics body. */
+  private lastValidLand: Point | null = null;
+  private marginHoldUntil = 0;
   private nextExitRetry = 0;
   private blockedSince: number | null = null;
   private diagnosticSent = false;
@@ -132,7 +137,7 @@ export class CoopDefenseKrakenSystem {
     const s = this.state, entity = s && this.deps.entity.readBoss(s.boss);
     if (!s || !entity?.alive || entity.hp <= 0 || ['dying', 'removed'].includes(s.phase.kind)) return 'Active living Kraken required';
     if (act === 'lunge' ? s.phase.kind !== 'land'
-      : ['spines', 'dive', 'ashore'].includes(act) ? s.phase.kind !== 'surfaced'
+      : ['dive', 'ashore'].includes(act) ? s.phase.kind !== 'surfaced'
       : !['surfaced', 'land'].includes(s.phase.kind)) return `Kraken ${act} is invalid in phase ${s.phase.kind}`;
     const phaseTwo = s.phaseTwoPending || entity.hp <= entity.maxHp * this.config.phaseTwoHpRatio;
     if (act === 'ashore') return phaseTwo ? null : 'Kraken ashore requires the phase-2 HP threshold; use krakenHp first';
@@ -177,16 +182,15 @@ export class CoopDefenseKrakenSystem {
       if (s.spines.length) return; // Regrowth is a physical prerequisite, not a cooldown.
       this.startSpines(now);
     } else if (kind === 'eggs') {
-      this.startEggs(now, entity);
-      if (!this.throws.length) {
-        request.status = 'failed'; request.error = 'Kraken eggs has no valid flight/landing or brood capacity';
+      if (!this.startEggs(now, entity)) {
+        request.status = 'failed'; request.error = 'Kraken eggs has no full volley of valid flights/landings or brood capacity';
         return;
       }
     }
     else this.startAttack(kind === 'lunge' ? 'slam' : 'ink', now, entity);
     if (s.phase.kind === 'surfaced') this.nextWaterAction = kind === 'eggs' ? 'ink' : 'eggs';
     if (s.phase.kind === 'land') {
-      const cooldown = kind === 'lunge' ? 'slam' : kind === 'ink' ? 'ink' : 'eggs';
+      const cooldown = kind === 'lunge' ? 'slam' : kind === 'ink' ? 'ink' : kind === 'spines' ? 'spines' : 'eggs';
       this.cooldowns[cooldown] = now + this.config.landCooldowns[`${cooldown}Ms`];
     }
     request.status = 'started'; request.startedAt = now;
@@ -213,7 +217,8 @@ export class CoopDefenseKrakenSystem {
         break;
       case 'surfaced':
         this.move('water-anchored', null);
-        if (s.bodyAction) break;
+        // A volley keeps turning towards its target until the last spine has left the back.
+        if (s.bodyAction) { if (this.aimingVolley(now) && !entity.stunned) this.faceTarget(entity, dt); break; }
         if (s.phaseTwoPending) { this.beginExit(now); break; }
         if (now >= p.nextDiveAt) {
           if (this.deps.habitat.isDiveInterior(entity)) {
@@ -247,16 +252,25 @@ export class CoopDefenseKrakenSystem {
         break;
       case 'ashore': this.advanceExit(now, dt, entity); break;
       case 'land':
-        if (!this.deps.canMove(entity, entity, 'land')) {
+        if (this.deps.landPoseValid(entity)) this.lastValidLand = { x: entity.x, y: entity.y };
+        else {
+          const back = this.lastValidLand;
+          if (back && Math.hypot(back.x - entity.x, back.y - entity.y) <= this.config.bodyRadiusPx) {
+            // Steering pushed the smaller physics body into a margin (map edge, bank, rocks) the full body
+            // cannot occupy: step back to the last fitting pose and hold briefly, still facing and attacking.
+            this.move('ashore', back); this.marginHoldUntil = now + this.config.landMarginHoldMs;
+            if ((!s.bodyAction || this.aimingVolley(now)) && !entity.stunned) this.faceTarget(entity, dt);
+            break;
+          }
           if (s.bodyAction) this.cancelBody();
           const next = this.deps.habitat.recoverLand(entity, this.config.landMoveSpeedPxPerSec * dt / 1000);
           this.move(next ? 'ashore' : 'locked', next);
           if (next) this.facePoint(entity, next, dt, 0);
           break;
         }
-        this.move(s.bodyAction || entity.stunned ? 'locked' : 'land', null);
+        this.move(s.bodyAction || entity.stunned || now < this.marginHoldUntil ? 'locked' : 'land', null);
         if (s.bodyAction?.kind === 'slam') this.advanceLunge(now, entity);
-        if (!s.bodyAction && !entity.stunned) this.faceTarget(entity, dt);
+        if ((!s.bodyAction || this.aimingVolley(now)) && !entity.stunned) this.faceTarget(entity, dt);
         break;
     }
     if (this.devAction?.status === 'pending' && (this.devAction.act === 'dive' && s.phase.kind === 'diving'
@@ -278,7 +292,8 @@ export class CoopDefenseKrakenSystem {
     if (s.bodyAction) this.updateBody(now);
     else if (now >= this.nextActionAt && ['surfaced', 'land'].includes(s.phase.kind)
       && !(s.phase.kind === 'surfaced' && (s.phaseTwoPending || now >= s.phase.nextDiveAt))
-      && !(s.phase.kind === 'land' && s.movement !== 'land') && !this.deps.entity.readBoss(s.boss)?.stunned) this.chooseAction(now);
+      && !(s.phase.kind === 'land' && s.movement !== 'land' && now >= this.marginHoldUntil)
+      && !this.deps.entity.readBoss(s.boss)?.stunned) this.chooseAction(now);
     if (!this.alive()) this.die(now);
     this.deps.brood.hostUpdate(now);
     s.eggs = this.deps.brood.getEggs(s.boss);
@@ -290,6 +305,7 @@ export class CoopDefenseKrakenSystem {
     // Invalidate owner first so reentrant callbacks cannot restart actions.
     this.state = null; this.originId = null; this.devAction = null;
     this.wander = null; this.wanderPauseUntil = 0; this.recentParts = []; this.spineReleases.clear(); this.facingHeld = false;
+    this.lastValidLand = null; this.marginHoldUntil = 0;
     if (old) {
       this.clearClaw({ kind: 'body' }, old.boss);
       for (const part of this.parts.values()) this.clearClaw(this.slot(part.state), old.boss);
@@ -373,6 +389,16 @@ export class CoopDefenseKrakenSystem {
     this.deps.entity.setFacing(this.state!.boss, entity.angle + Math.max(-limit, Math.min(limit, diff)));
   }
 
+  /** A lunge is only chosen along a dry, open line; a target across the pond is walked around instead. */
+  private lungeReaches(entity: Point, target: Point, distance: number): boolean {
+    const need = Math.min(this.config.slam.lungeDistancePx, Math.max(0, distance - this.config.bodyRadiusPx));
+    const angle = Math.atan2(target.y - entity.y, target.x - entity.x), reach = need * .8;
+    return need <= 1 || this.deps.canMove(entity, { x: entity.x + Math.cos(angle) * reach, y: entity.y + Math.sin(angle) * reach }, 'land');
+  }
+  private aimingVolley(now: number): boolean {
+    const action = this.state?.bodyAction;
+    return action?.kind === 'spines' && now < action.releaseAt[action.releaseAt.length - 1]!;
+  }
   private chooseAction(now: number): void {
     const s = this.state!, entity = this.deps.entity.readBoss(s.boss), target = this.deps.intent.readTarget(s.boss);
     if (!entity || !target) return;
@@ -397,18 +423,25 @@ export class CoopDefenseKrakenSystem {
         && now >= this.cooldowns.spines && !s.spines.length) {
         this.startSpines(now); this.nextWaterAction = 'eggs';
       } else {
-        this.startEggs(now, entity); this.nextWaterAction = 'ink';
+        // Only a full brood is thrown; otherwise the cast is skipped and ink comes next.
+        if (!this.startEggs(now, entity)) this.nextActionAt = now + this.config.actionPauseMs / 2;
+        this.nextWaterAction = 'ink';
       }
     } else {
       // An overdue ability gets priority over repeating slam, avoiding starvation at close range.
-      const ready = (['slam', 'ink', 'eggs'] as const).filter(k => now >= this.cooldowns[k]
+      const distance = Math.hypot(target.x - entity.x, target.y - entity.y);
+      const ready = (['slam', 'ink', 'eggs', 'spines'] as const).filter(k => now >= this.cooldowns[k]
         && (k === 'slam' || error <= Math.PI / 36)
         && (k !== 'ink' || this.inkInRange(entity, target))
-        && (k !== 'slam' || Math.hypot(target.x - entity.x, target.y - entity.y) <= this.config.bodyRadiusPx + this.config.slam.length))
+        && (k !== 'spines' || (!this.inkInRange(entity, target) && distance <= this.config.spines.range && !s.spines.length))
+        && (k !== 'slam' || (distance <= this.config.bodyRadiusPx + this.config.slam.length && this.lungeReaches(entity, target, distance))))
         .sort((a, b) => this.cooldowns[a] - this.cooldowns[b]);
       const kind = ready[0];
       if (!kind) return;
-      if (kind === 'eggs') this.startEggs(now, entity); else this.startAttack(kind, now, entity);
+      if (kind === 'spines') this.startSpines(now);
+      else if (kind === 'eggs') {
+        if (!this.startEggs(now, entity)) { this.cooldowns.eggs = now + this.config.actionPauseMs; return; }
+      } else this.startAttack(kind, now, entity);
       this.cooldowns[kind] = now + this.config.landCooldowns[`${kind}Ms`];
     }
   }
@@ -431,26 +464,33 @@ export class CoopDefenseKrakenSystem {
     this.emitClaw({ kind: 'body' }, this.bodyClaw);
   }
 
-  private startEggs(now: number, entity: Point & { angle: number }): void {
+  /** The throw clip carries six eggs: the volley starts only when all six have a flight, a landing and brood capacity. */
+  private startEggs(now: number, entity: Point & { angle: number }): boolean {
     const c = this.config.eggs, castId = this.id('eggs'), s = this.state!;
     const rotation = entity.angle;
     const points = this.deps.eggLandings(entity, rotation, c.volleyCount, this.config.eggs.minimumShoreDistancePx);
     const releaseAt = now + c.windupMs;
     const action: KrakenBodyAction = { kind: 'eggs', castId, startedAt: now, releaseAt,
       endsAt: releaseAt + (c.volleyCount - 1) * this.config.eggs.releaseSpacingMs + c.recoveryMs };
-    this.throws = [];
+    const throws: EggThrow[] = [];
     for (let i = 0; i < c.volleyCount; i++) {
-      const to = points[i]; if (!to) continue;
+      const to = points[i]; if (!to) break;
       const from = this.rotateOffset(entity, c.releaseOffsets[i]);
-      if (!this.deps.flightFree(from, to, c.radiusPx)) continue;
+      if (!this.deps.flightFree(from, to, c.radiusPx)) break;
       const effect: KrakenEggLandEffect = { type: 'kraken_egg_land', boss: s.boss, castId,
         eggId: this.id('egg'), broodTableId: c.broodTable.id, originId: this.originId ?? s.boss.id };
-      if (this.deps.brood.reserveEgg(effect)) this.throws.push({ effect, from, to,
-        releaseAt: releaseAt + i * this.config.eggs.releaseSpacingMs, released: false });
+      if (!this.deps.brood.reserveEgg(effect)) break;
+      throws.push({ effect, from, to, releaseAt: releaseAt + i * this.config.eggs.releaseSpacingMs, released: false });
     }
+    if (throws.length < c.volleyCount) {
+      for (const egg of throws) this.deps.brood.cancelEgg(egg.effect);
+      return false;
+    }
+    this.throws = throws;
     s.bodyAction = action;
     this.bodyProgress = { actionId: castId, released: false, impacted: false };
     this.move(s.phase.kind === 'land' ? 'locked' : 'water-anchored', null);
+    return true;
   }
 
   private startSpines(now: number): void {
@@ -462,7 +502,7 @@ export class CoopDefenseKrakenSystem {
     this.spineReleases.clear();
     this.bodyProgress = { actionId: castId, released: false, impacted: false };
     this.cooldowns.spines = now + c.cooldownMs;
-    this.move('water-anchored', null);
+    this.move(this.state!.phase.kind === 'land' ? 'locked' : 'water-anchored', null);
   }
 
   /** Encounter origin is supplied by AP2; children keep it across egg/projectile lifetimes. */
@@ -480,12 +520,13 @@ export class CoopDefenseKrakenSystem {
         const firedAt = now, regrowStartsAt = firedAt + c.regrowDelayMs;
         s.spines.push({ index: i, castId: action.castId, firedAt, regrowStartsAt, readyAt: regrowStartsAt + c.regrowMs });
         const origin = this.rotateOffset(entity, c.originOffsets[i]);
+        // A fan around the facing: the kraken has turned to its target, the spines open up and converge on it.
         this.deps.projectiles.spawnProjectile({
-          origin: { ...origin, angle: entity.angle - Math.PI * .6 },
+          origin: { ...origin, angle: entity.angle + c.launchFanDegrees[i]! * Math.PI / 180 },
           flight: { speed: c.speedPxPerSec, size: c.hitRadiusPx * 2, lifetimeMs: c.lifetimeMs,
             maxBounces: 0, isGrenade: false, homing: { acquireDelayMs: 0, searchRadius: c.range + this.config.bodyRadiusPx,
               retargetIntervalMs: 100, maxTurnDegreesPerStep: 180, maxTurnDegreesPerSecond: c.turnRateDegPerSec,
-              targetTypes: ['players', 'enemies'], excludeOwner: true, requireLineOfSight: false } },
+              targetTypes: ['players', 'decoys'], excludeOwner: true, requireLineOfSight: false } },
           provenance: { gameplaySourceId: s.boss.id, gameplaySourceKind: 'enemy', attributionId: s.boss.id,
             attributionKind: 'enemy', allegiance: { ownerId: s.boss.id, kind: 'enemy' },
             weaponSourceId: 'kraken_spine', correlation: { executionId: action.castId } },

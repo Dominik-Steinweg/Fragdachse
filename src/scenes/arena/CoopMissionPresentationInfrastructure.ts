@@ -124,7 +124,7 @@ export class CoopMissionPresentationInfrastructure {
         input.renderers.shadow, projectile.id % 97);
       return null;
     });
-    this.krakenIntro = new KrakenIntroRenderer(this.scene, assets?.water ?? null, waterAt, diagnostic, 0, input.renderers.shadow);
+    this.krakenIntro = new KrakenIntroRenderer(this.scene, assets?.water ?? null, waterAt, diagnostic, 0, input.renderers.shadow, assets?.spine);
     this.krakenIntro.setCameraFeedback(input.cameraFeedback ?? null);
 
     this.secondaryObjectiveHud = new CoopDefenseSecondaryObjectiveHud(

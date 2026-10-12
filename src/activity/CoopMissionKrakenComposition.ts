@@ -124,6 +124,7 @@ export function materializeCoopMissionKraken(runtime: CoopMissionRuntime, map: C
     claw: event => { manager.applyAreaClawEvent(event); ports.broadcastClaw(event); },
     waterApproach: (from, target) => habitat.waterApproach(from, target),
     canMove: (from, to, mode) => habitat.canMove(from, to, mode),
+    landPoseValid: point => habitat.landPoseValid(point),
     bodyTravelLimit: (from, angle, distance) => {
       let limit = distance;
       ports.combat.readCollisionTargets((kind, _id, _owner, x, y, radius) => {

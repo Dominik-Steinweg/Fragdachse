@@ -124,14 +124,15 @@ describe('Coop mission Kraken composition', () => {
     entity.setPosition(waterPoint.x, waterPoint.y);
     expect(f.habitat.isDryBodyFree(entity.sprite, config.bodyRadiusPx)).toBe(false);
     let steps = 0, previous = { x: entity.sprite.x, y: entity.sprite.y };
-    for (; steps < 500 && !f.habitat.isDryBodyFree(entity.sprite, config.bodyRadiusPx); steps++) {
+    // Recovery ends once the pose is valid for the land body (small bank overlaps are tolerated).
+    for (; steps < 500 && !f.habitat.landPoseValid(entity.sprite); steps++) {
       f.tick(exit.recoveryEndsAt + (steps + 1) * 20);
       expect(Math.hypot(entity.sprite.x - previous.x, entity.sprite.y - previous.y)).toBeLessThanOrEqual(config.landMoveSpeedPxPerSec * .02 + 1e-8);
       previous = { x: entity.sprite.x, y: entity.sprite.y };
       expect(f.system.getState()!.bodyAction).toBeNull();
     }
     expect(steps).toBeGreaterThan(1); expect(steps).toBeLessThan(500);
-    expect(f.habitat.isDryBodyFree(entity.sprite, config.bodyRadiusPx)).toBe(true);
+    expect(f.habitat.landPoseValid(entity.sprite)).toBe(true);
     expect(f.system.getState()!.phase.kind).toBe('land');
   });
   it.each(['water', 'player'] as const)('stops the frozen lunge before %s', obstacle => {
@@ -181,6 +182,21 @@ describe('Coop mission Kraken composition', () => {
     f.block(43, 39);
     expect(f.habitat.reserveExit(f.boss, habitatId).status).toBe('blocked');
   });
+  it('walks around the pond instead of lunging at a target across the water', () => {
+    const f = setup();
+    f.manager.hostSetVitalsBaseline(f.boss.id, 400, 1000); f.tick(1);
+    const exit = f.system.getState()!.phase; if (exit.kind !== 'ashore') throw Error('Expected exit');
+    f.tick(exit.recoveryEndsAt);
+    expect(f.system.getState()!.phase.kind).toBe('land');
+    // Within the doubled claw reach, but the straight lunge line crosses the pond.
+    const across = worldCellCenter(f.metrics, 35, 8);
+    f.player.x = across.x; f.player.y = across.y;
+    const actions = new Set<string>();
+    for (let at = exit.recoveryEndsAt; at < exit.recoveryEndsAt + 6000; at += 50) {
+      f.tick(at); const kind = f.system.getState()!.bodyAction?.kind; if (kind) actions.add(kind);
+    }
+    expect(actions.has('slam')).toBe(false);
+  });
   it.each(['dive', 'ashore', 'lunge', 'spines'] as const)('joins the real host projection during %s and follows the terminal clear', async phase => {
     const network = new FakeNetwork(), hostRoom = await createHostRoom(network);
     const rooms = [hostRoom];
@@ -207,8 +223,9 @@ describe('Coop mission Kraken composition', () => {
         const before = Math.atan2(last.body.velocity.y, last.body.velocity.x);
         world.runtime.runHostProjectileStage(20, cast.releaseAt.at(-1)! + 20);
         const after = Math.atan2(last.body.velocity.y, last.body.velocity.x);
-        expect(after).toBeGreaterThan(before);
-        expect(after - before).toBeLessThanOrEqual(config.spines.turnRateDegPerSec * Math.PI / 180 * .02 + 1e-9);
+        // The fan opens off the facing; homing turns each spine towards the target (heading 0), rate-limited.
+        expect(Math.abs(after)).toBeLessThan(Math.abs(before));
+        expect(Math.abs(after - before)).toBeLessThanOrEqual(config.spines.turnRateDegPerSec * Math.PI / 180 * .02 + 1e-9);
         world.runtime.requestFullNetSnapshot();
       } else {
         f.manager.hostSetVitalsBaseline(f.boss.id, 400, 1000); f.tick(1);

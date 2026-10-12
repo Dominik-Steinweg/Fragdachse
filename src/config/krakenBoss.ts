@@ -40,8 +40,14 @@ export const KrakenBossConfigSchema = v.pipe(v.strictObject({
   spines: v.strictObject({ volleyCount: v.literal(6), range: positive, damage: positive, speedPxPerSec: positive,
     turnRateDegPerSec: positive, hitRadiusPx: positive, lifetimeMs: positive, windupMs: positive, raiseMs: positive,
     releaseSpacingMs: positive, recoveryMs: nonnegative, regrowDelayMs: nonnegative, regrowMs: positive, cooldownMs: positive,
-    originOffsets: v.pipe(v.array(offset), v.length(6)) }),
-  landCooldowns: v.strictObject({ slamMs: positive, inkMs: positive, eggsMs: positive }),
+    originOffsets: v.pipe(v.array(offset), v.length(6)),
+    /** Launch heading of each spine relative to the facing; homing converges the fan on the target. */
+    launchFanDegrees: v.pipe(v.array(v.pipe(v.number(), v.minValue(-90), v.maxValue(90))), v.length(6)) }),
+  /** Pause after the land body was stepped back from a margin it cannot occupy. */
+  landMarginHoldMs: positive,
+  /** Tolerated overlap of the full land body with bank, rocks or map edge before it steps back. */
+  landPoseTolerancePx: nonnegative,
+  landCooldowns: v.strictObject({ slamMs: positive, inkMs: positive, eggsMs: positive, spinesMs: positive }),
   exit: v.strictObject({ warningMs: positive, durationMs: positive, recoveryMs: nonnegative,
     roarAfterMs: nonnegative, gripAfterMs: positive, gripHoldMs: nonnegative, heaveAfterMs: positive,
     gripDistanceRatio: positive, heaveDistanceRatio: v.pipe(positive, v.maxValue(1)),

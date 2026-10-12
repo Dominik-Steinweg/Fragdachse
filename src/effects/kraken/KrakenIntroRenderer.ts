@@ -4,7 +4,7 @@ import { KRAKEN_RISE_INTRO, type KrakenBossIntroState } from '../../config/bossI
 import { clearCameraFocusOverride, setCameraFocusOverride } from '../../graphics/cameraFocusOverride';
 import type { CameraFeedbackController } from '../camera/CameraFeedbackController';
 import { impactLight } from '../camera/cameraFeedbackPresets';
-import { KrakenEffects, KrakenSpriteView, krakenClip, krakenDrain, krakenRiseTiming, sampleKrakenClip,
+import { KrakenEffects, KrakenSpineOverlay, KrakenSpriteView, krakenClip, krakenDrain, krakenRiseTiming, sampleKrakenClip,
   krakenClamp, type KrakenPresentationAsset } from './KrakenRenderer';
 
 const I = KRAKEN_RISE_INTRO;
@@ -20,6 +20,8 @@ export function krakenIntroCameraWeight(elapsed: number): number {
 export class KrakenIntroRenderer {
   private body: KrakenSpriteView | null;
   private readonly effects: KrakenEffects;
+  /** The dorsal spines rise with the body instead of popping in when the fight view takes over. */
+  private readonly spines: KrakenSpineOverlay;
   private key = '';
   private lastNow: number | null = null;
   private ownsFocus = false;
@@ -27,9 +29,10 @@ export class KrakenIntroRenderer {
   private feedback: CameraFeedbackController | null = null;
   constructor(private readonly scene: Phaser.Scene, private readonly asset: KrakenPresentationAsset | null,
     private readonly waterAt: (x: number, y: number) => number, private readonly diagnostic: (message: string) => void,
-    private readonly angle = 0, private readonly shadows?: ShadowSystem) {
+    private readonly angle = 0, private readonly shadows?: ShadowSystem, spine?: KrakenPresentationAsset | null) {
     this.body = null;
     this.effects = new KrakenEffects(scene, waterAt);
+    this.spines = new KrakenSpineOverlay(scene, spine ?? undefined, waterAt, diagnostic, shadows);
   }
   setCameraFeedback(feedback: CameraFeedbackController | null): void { this.feedback = feedback; }
   sync(state: KrakenBossIntroState | null, now: number): void {
@@ -53,9 +56,10 @@ export class KrakenIntroRenderer {
     this.effects.rise(pose, timing, now, true);
     if (now >= timing.clipStartedAt && now < end) {
       const clip = krakenClip(this.asset.metadata, I.clip);
-      this.body?.show(sampleKrakenClip(clip, now, [[timing.clipStartedAt, 0], [end, clip.frames.length - 1]]), pose, now,
+      const shown = this.body?.show(sampleKrakenClip(clip, now, [[timing.clipStartedAt, 0], [end, clip.frames.length - 1]]), pose, now,
         { drain: krakenDrain(timing, now, true), requireClip: true });
-    } else this.body?.hide();
+      if (shown) this.spines.sync(this.body, [], null, now); else this.spines.hide();
+    } else { this.body?.hide(); this.spines.hide(); }
     const weight = krakenIntroCameraWeight(elapsed);
     setCameraFocusOverride(this.scene, state.x, state.y, weight, I.camera.zoom);
     this.ownsFocus = weight > 0;
@@ -67,9 +71,9 @@ export class KrakenIntroRenderer {
     }
     this.lastNow = now;
   }
-  get gpuBytes(): number { return (this.body?.gpuBytes ?? 0) + this.effects.gpuBytes; }
+  get gpuBytes(): number { return (this.body?.gpuBytes ?? 0) + this.effects.gpuBytes + this.spines.gpuBytes; }
   clear(): void {
-    this.body?.destroy(); this.body = null; this.effects.clear(); this.lastNow = null;
+    this.body?.destroy(); this.body = null; this.spines.clear(); this.effects.clear(); this.lastNow = null;
     if (this.ownsFocus) clearCameraFocusOverride(this.scene);
     if (this.key) this.feedback?.cancel('kraken-intro-roar');
     this.ownsFocus = false; this.key = '';

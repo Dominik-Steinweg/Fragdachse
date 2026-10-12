@@ -112,7 +112,7 @@ export const KrakenStateSchema = v.pipe(v.strictObject({
   spines: v.array(KrakenSpineStateSchema),
 }), v.check(s => orderedPhase(s.phase), 'Invalid phase anchors'), v.check(s => {
   if (new Set(s.spines.map(p => p.index)).size !== s.spines.length) return false;
-  if (s.bodyAction?.kind === 'spines' && s.phase.kind !== 'surfaced') return false;
+  if (s.bodyAction?.kind === 'spines' && s.phase.kind !== 'surfaced' && s.phase.kind !== 'land') return false;
   const parts = new Set<string>();
   const contacts = new Set<string>();
   const attacks = new Set<string>();

@@ -7,7 +7,7 @@ import type { CombatPartHitReceipt, CombatPartIdentity } from '../../combat/Comb
 import { combatTargetInstanceKey } from '../../combat/CombatScope';
 import type { CombatAreaPose } from '../../combat/CombatAreaAttack';
 import type { EnemyAreaClawAttack, EnemyAreaClawEvent, EnemyAreaClawState } from '../../systems/EnemyClawAttack';
-import type { KrakenState, KrakenTentacleState, KrakenEggState, KrakenInkCloud } from '../../systems/KrakenState';
+import type { KrakenState, KrakenTentacleState, KrakenEggState, KrakenInkCloud, KrakenSpineState } from '../../systems/KrakenState';
 import { EnemyClawRenderer } from '../EnemyClawRenderer';
 import { registerGraphicsObject } from '../EffectUtils';
 import { disposeShaderWarmupNode } from '../../graphics/disposeShaderWarmupNode';
@@ -205,7 +205,7 @@ export function krakenPartKey(part: CombatPartIdentity): string {
 
 /** Review look, now sampled from host timelines. These are visual decay/shape values only. */
 const LOOK = {
-  ink: { travel: .22, hold: 1, dissolve: .65, opacity: .98, waterSpread: 1.18,
+  ink: { travel: .22, hold: .75, dissolve: 1.25, opacity: .98, waterSpread: 1.18,
     core: [18 / 255, 10 / 255, 28 / 255], edge: [58 / 255, 34 / 255, 82 / 255], warp: 1.3, sheen: .14 },
   erupt: { radius: 66, lifetime: 1.25, bulge: .15, retractScale: .55, sprayCount: 72, spraySpeed: 150, foam: .75 },
   slam: { dust: .85, decal: 2, whip: .18, bend: 12, width: 42 },
@@ -520,7 +520,11 @@ export class KrakenRenderer {
   private readonly parts = new Map<string, PartView>();
   private readonly fallbackSlots = new Map<string, EnemyAreaClawEvent>();
   private readonly eggs = new Map<string, KrakenSpriteView>();
-  private readonly spineViews: KrakenSpriteView[] = [];
+  private readonly spines: KrakenSpineOverlay;
+  /** Released part/egg views are reused: each new view would compile its own sun/shadow shader programs
+   * (a visible hitch whenever an arm surfaces or an egg lands). */
+  private readonly idleTentacles: KrakenSpriteView[] = [];
+  private readonly idleEggs: KrakenSpriteView[] = [];
   private readonly impacts = new Map<string, EnemyAreaClawAttack>();
   private readonly contacts = new Map<string, { until: number; key: string }>();
   private readonly contactSeen = new Set<string>();
@@ -540,6 +544,7 @@ export class KrakenRenderer {
   constructor(private readonly scene: Phaser.Scene, private readonly options: KrakenRendererOptions) {
     this.claw = new EnemyClawRenderer(scene, () => this.now);
     this.effects = new KrakenEffects(scene, options.waterAt);
+    this.spines = new KrakenSpineOverlay(scene, options.assets?.spine, options.waterAt, options.diagnostic, options.shadows);
   }
   sync(state: KrakenState | null, body: KrakenBodyPose | null, now: number): void {
     if (this.destroyed) return;
@@ -620,8 +625,10 @@ export class KrakenRenderer {
           : krakenDeathAlpha(render.asset.metadata, phase, now),
       });
       else this.body.hide();
-      this.syncSpines(state, render.asset === this.options.assets.water && render.visible, now);
-    } else { this.body?.hide(); this.syncSpines(state, false, now); }
+      const volley = state.bodyAction?.kind === 'spines' ? state.bodyAction : null;
+      if (render.asset === this.options.assets.water && render.visible) this.spines.sync(this.body, state.spines, volley, now);
+      else this.spines.hide();
+    } else { this.body?.hide(); this.spines.hide(); }
     this.trails = this.trails.filter(t => now - t.at < 4000);
     for (const trail of this.trails) this.effects.wetTrail(trail.pose, trail.at, now);
     if (this.waterMotion) {
@@ -642,7 +649,7 @@ export class KrakenRenderer {
         cycleId: identity.cycleId }, part.claw);
       let entry = this.parts.get(key);
       if (!entry) {
-        entry = { view: this.view(this.options.assets.tentacle, true), event, state: part };
+        entry = { view: this.idleTentacles.pop() ?? this.view(this.options.assets.tentacle, true), event, state: part };
         this.parts.set(key, entry);
       }
       entry.event = event; entry.state = part;
@@ -658,7 +665,7 @@ export class KrakenRenderer {
       this.rememberImpact(attack, now);
     }
     for (const [key, part] of this.parts) if (!partKeys.has(key)) {
-      this.claw.releaseArea(part.event); part.view.destroy(); this.parts.delete(key);
+      this.claw.releaseArea(part.event); part.view.hide(); this.idleTentacles.push(part.view); this.parts.delete(key);
     }
     for (const [key, hit] of this.contacts) {
       if (now >= hit.until || !this.parts.has(hit.key)) { this.contacts.delete(key); continue; }
@@ -675,7 +682,8 @@ export class KrakenRenderer {
       if (!pose || now < egg.landedAt || now >= egg.endsAt || (egg.status === 'terminal' && now < egg.spawnAt)) continue;
       eggKeys.add(key);
       let view = this.eggs.get(key);
-      if (!view) { view = this.view(this.options.assets.egg); this.eggs.set(key, view); }
+      // A landed egg's contact shadow is its brood pool; it needs light, not a shadow renderer.
+      if (!view) { view = this.idleEggs.pop() ?? this.view(this.options.assets.egg, false, false); this.eggs.set(key, view); }
       const landingAge = (now - egg.landedAt) / 1000, hatchAge = (now - egg.hatchStartedAt) / 1000;
       const incubation = krakenClamp((now - egg.landedAt) / (egg.hatchStartedAt - egg.landedAt));
       const beat = Math.sin(landingAge * (5 + incubation * 7));
@@ -687,7 +695,7 @@ export class KrakenRenderer {
       view.show(sampleKrakenEgg(egg, view.asset.metadata, now), pose, now, { scale: 1 + pulse, glow });
       this.effects.egg(pose, 0, landingAge, hatchAge, 1, egg.entityGeneration);
     }
-    for (const [key, view] of this.eggs) if (!eggKeys.has(key)) { view.destroy(); this.eggs.delete(key); }
+    for (const [key, view] of this.eggs) if (!eggKeys.has(key)) { view.hide(); this.idleEggs.push(view); this.eggs.delete(key); }
   }
   applyAreaClaw(event: EnemyAreaClawEvent, now: number): void {
     if (!this.destroyed) this.claw.syncArea(event, now);
@@ -720,8 +728,9 @@ export class KrakenRenderer {
     this.body?.destroy(); this.body = null;
     for (const part of this.parts.values()) part.view.destroy();
     for (const egg of this.eggs.values()) egg.destroy();
-    for (const view of this.spineViews) view.destroy();
-    this.spineViews.length = 0;
+    for (const view of [...this.idleTentacles, ...this.idleEggs]) view.destroy();
+    this.idleTentacles.length = 0; this.idleEggs.length = 0;
+    this.spines.clear();
     this.parts.clear(); this.fallbackSlots.clear(); this.eggs.clear(); this.contacts.clear(); this.contactSeen.clear(); this.impacts.clear();
     this.claw.clear(); this.effects.clear(); this.waterMotion = null; this.bossKey = ''; this.revision = -1;
   }
@@ -737,23 +746,45 @@ export class KrakenRenderer {
   get gpuBytes(): number { return (this.body?.gpuBytes ?? 0) + this.effects.gpuBytes
     + [...this.parts.values()].reduce((sum, p) => sum + p.view.gpuBytes, 0)
     + [...this.eggs.values()].reduce((sum, v) => sum + v.gpuBytes, 0)
-    + this.spineViews.reduce((sum, v) => sum + v.gpuBytes, 0); }
+    + this.spines.gpuBytes; }
   /** The water body's six front dorsal spikes are runtime parts: hidden from their release until they regrow
    * (scale-in with a slight overshoot), raised a little while a volley winds up, and submerged with the body. */
-  private syncSpines(state: KrakenState, bodyShown: boolean, now: number): void {
-    const asset = this.options.assets?.spine, body = this.body;
-    if (!asset || !body || !bodyShown) { for (const view of this.spineViews) view.hide(); return; }
+  private view(asset: KrakenPresentationAsset, tentacle = false, castShadow = true): KrakenSpriteView {
+    const exposure = asset === this.options.assets?.land ? KRAKEN_LAND_EXPOSURE : KRAKEN_WORLD_EXPOSURE;
+    return new KrakenSpriteView(this.scene, asset, this.options.waterAt, this.options.diagnostic, tentacle, DEPTH.PLAYERS, exposure, this.options.shadows, castShadow);
+  }
+  private event(state: KrakenState, slot: EnemyAreaClawEvent['slot'], claw: EnemyAreaClawState): EnemyAreaClawEvent {
+    return { worldRevision: state.boss.scope.worldRevision, activityRevision: state.boss.instance.activityRevision,
+      enemyId: state.boss.id, entityGeneration: state.boss.instance.entityGeneration, slot, state: claw };
+  }
+  private rememberImpact(attack: EnemyAreaClawAttack | null, now: number): void {
+    if (attack && attack.presentation !== 'ink' && attack.pose.geometry.kind === 'lane' && now >= attack.hitAt
+      && now < attack.hitAt + LOOK.slam.decal * 1000) this.impacts.set(attack.attackId, attack);
+  }
+}
+
+type KrakenSpineVolley = Extract<NonNullable<KrakenState['bodyAction']>, { kind: 'spines' }>;
+/** The six detachable dorsal spines on a body view's per-frame sockets; shared by the fight and the intro. */
+export class KrakenSpineOverlay {
+  private readonly views: KrakenSpriteView[] = [];
+  constructor(private readonly scene: Phaser.Scene, private readonly asset: KrakenPresentationAsset | undefined,
+    private readonly waterAt: (x: number, y: number) => number, private readonly diagnostic: (message: string) => void,
+    private readonly shadows?: ShadowSystem) {}
+  get gpuBytes(): number { return this.views.reduce((sum, v) => sum + v.gpuBytes, 0); }
+  /** Regrowing spines push slowly out of the back; released ones are gone until their regrowth starts. */
+  sync(body: KrakenSpriteView | null, spines: readonly KrakenSpineState[], volley: KrakenSpineVolley | null, now: number): void {
+    const asset = this.asset;
+    if (!asset || !body) { this.hide(); return; }
     const a = asset.metadata, base = a.sockets.base, tip = a.sockets.tip, size = a.targetSize * (a.displayScale ?? 1);
     if (!base || !tip) return;
     const authored = Math.hypot((tip[0] - base[0]) * size, (tip[1] - base[1]) * size);
     const bodyLevel = body.asset.metadata.elevation.previewWaterLevel ?? 0;
-    const volley = state.bodyAction?.kind === 'spines' ? state.bodyAction : null;
     const bristle = volley ? krakenClamp((now - volley.startedAt) / Math.max(1, volley.raiseAt - volley.startedAt)) : 0;
     for (let i = 0; i < 6; i++) {
-      const view = this.spineViews[i] ??= new KrakenSpriteView(this.scene, asset, this.options.waterAt, this.options.diagnostic,
-        false, DEPTH.PLAYERS + .01, KRAKEN_WORLD_EXPOSURE, this.options.shadows);
+      const view = this.views[i] ??= new KrakenSpriteView(this.scene, asset, this.waterAt, this.diagnostic,
+        false, DEPTH.PLAYERS + .01, KRAKEN_WORLD_EXPOSURE, this.shadows);
       const from = body.socketWorld(`spine${i + 1}`), to = body.socketWorld(`spine${i + 1}Tip`);
-      const regrow = state.spines.find(spine => spine.index === i);
+      const regrow = spines.find(spine => spine.index === i);
       const released = volley !== null && now >= volley.releaseAt[i]!;
       let growth = 1, alpha = 1;
       if (regrow) {
@@ -768,18 +799,8 @@ export class KrakenRenderer {
         { socket: 'base', scale: authored > 0 ? length / authored * growth : growth, alpha, waterLevel: bodyLevel - from.z });
     }
   }
-  private view(asset: KrakenPresentationAsset, tentacle = false): KrakenSpriteView {
-    const exposure = asset === this.options.assets?.land ? KRAKEN_LAND_EXPOSURE : KRAKEN_WORLD_EXPOSURE;
-    return new KrakenSpriteView(this.scene, asset, this.options.waterAt, this.options.diagnostic, tentacle, DEPTH.PLAYERS, exposure, this.options.shadows);
-  }
-  private event(state: KrakenState, slot: EnemyAreaClawEvent['slot'], claw: EnemyAreaClawState): EnemyAreaClawEvent {
-    return { worldRevision: state.boss.scope.worldRevision, activityRevision: state.boss.instance.activityRevision,
-      enemyId: state.boss.id, entityGeneration: state.boss.instance.entityGeneration, slot, state: claw };
-  }
-  private rememberImpact(attack: EnemyAreaClawAttack | null, now: number): void {
-    if (attack && attack.presentation !== 'ink' && attack.pose.geometry.kind === 'lane' && now >= attack.hitAt
-      && now < attack.hitAt + LOOK.slam.decal * 1000) this.impacts.set(attack.attackId, attack);
-  }
+  hide(): void { for (const view of this.views) view.hide(); }
+  clear(): void { for (const view of this.views) view.destroy(); this.views.length = 0; }
 }
 
 /** D-backed projectile view, owned through GrenadeRenderer.attachEggVisual. The trajectory

@@ -138,6 +138,9 @@ export class KrakenHabitatRules implements KrakenHabitatPort {
   recoverLand(from: Point, distance: number): Point | null {
     const radius = this.config.bodyRadiusPx;
     if (this.isDryBodyFree(from, radius)) return null;
+    // From an overlapping pose the full body cannot sweep anywhere: intermediate steps only need a
+    // thinner clearance, the goal still needs the full dry, solid-free body.
+    const probe = radius / 2, reach = CELL_SIZE * 16;
     type Node = { p: Point; cost: number; first: Point };
     const open: Node[] = [{ p: from, cost: 0, first: from }], costs = new Map<string, number>();
     while (open.length) {
@@ -154,8 +157,8 @@ export class KrakenHabitatRules implements KrakenHabitatPort {
       for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]) {
         const p = { x: n.p.x + dx * CELL_SIZE, y: n.p.y + dy * CELL_SIZE };
         const cost = n.cost + Math.hypot(dx, dy) * CELL_SIZE, k = p.x + ':' + p.y;
-        if ((costs.get(k) ?? Infinity) <= cost || !this.inside(p, radius)
-          || !this.queries.circleFree(p.x, p.y, radius) || !this.queries.segmentFree(n.p, p, radius)) continue;
+        if ((costs.get(k) ?? Infinity) <= cost || cost > reach || !this.inside(p, probe)
+          || !this.queries.circleFree(p.x, p.y, probe) || !this.queries.segmentFree(n.p, p, probe)) continue;
         costs.set(k, cost); open.push({ p, cost, first: n.cost === 0 ? p : n.first });
       }
     }
@@ -190,25 +193,40 @@ export class KrakenHabitatRules implements KrakenHabitatPort {
     return null;
   }
 
-  /** One point per sector inside the facing cone. Full clearance from water prevents shoreline egg piles. */
+  /** One point per sector inside the facing cone. Full clearance from water prevents shoreline egg piles.
+   * Each sector first searches outwards from the authored throw distance, then nearby headings and closer
+   * distances, so a partly blocked cone still yields a full volley. */
   eggLandings(from: Point, rotation: number, count: number, minShoreDistancePx: number): readonly (Point | null)[] {
     const points: (Point | null)[] = [];
-    const step = CELL_SIZE / 2, max = Math.hypot(this.metrics.widthPx, this.metrics.heightPx);
+    const e = this.config.eggs, step = CELL_SIZE / 2, max = Math.hypot(this.metrics.widthPx, this.metrics.heightPx);
+    const sector = count === 1 ? 0 : e.throwConeDegrees / (count - 1);
+    const valid = (p: Point): boolean => this.dry(p, e.radiusPx + minShoreDistancePx)
+      && this.queries.circleFree(p.x, p.y, e.radiusPx) && this.queries.segmentFree(from, p, e.radiusPx)
+      && points.every(q => !q || Math.hypot(q.x - p.x, q.y - p.y) >= e.radiusPx * 2);
+    const distances: number[] = [];
+    for (let d = e.throwDistancePx; d < max; d += step) distances.push(d);
+    for (let d = e.throwDistancePx - step; d >= e.throwDistancePx / 2; d -= step) distances.push(d);
     for (let i = 0; i < count; i++) {
-      const angle = rotation + (count === 1 ? 0 : i / (count - 1) - 0.5) * this.config.eggs.throwConeDegrees * Math.PI / 180;
+      const center = rotation + (count === 1 ? 0 : i / (count - 1) - 0.5) * e.throwConeDegrees * Math.PI / 180;
       let point: Point | null = null;
-      for (let d = this.config.eggs.throwDistancePx; d < max; d += step) {
-        const p = { x: from.x + Math.cos(angle) * d, y: from.y + Math.sin(angle) * d };
-        if (this.dry(p, this.config.eggs.radiusPx + minShoreDistancePx)
-          && this.queries.circleFree(p.x, p.y, this.config.eggs.radiusPx)
-          && this.queries.segmentFree(from, p, this.config.eggs.radiusPx)
-          && points.every(q => !q || Math.hypot(q.x - p.x, q.y - p.y) >= this.config.eggs.radiusPx * 2)) { point = p; break; }
+      for (const offset of [0, -.25, .25, -.5, .5]) {
+        const angle = center + offset * sector * Math.PI / 180;
+        for (const d of distances) {
+          const p = { x: from.x + Math.cos(angle) * d, y: from.y + Math.sin(angle) * d };
+          if (valid(p)) { point = p; break; }
+        }
+        if (point) break;
       }
       points.push(point);
     }
     return points;
   }
 
+  /** Current land pose: the full body may overlap the bank, a rock or the map edge by a small tolerance. */
+  landPoseValid(point: Point): boolean {
+    const radius = this.config.bodyRadiusPx - this.config.landPoseTolerancePx;
+    return this.inside(point, radius) && this.isDryBodyFree(point, radius);
+  }
   isDryBodyFree(point: Point, radius: number): boolean {
     return this.dry(point, radius) && this.queries.circleFree(point.x, point.y, radius);
   }

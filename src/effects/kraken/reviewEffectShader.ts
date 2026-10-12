@@ -57,7 +57,8 @@ void main() {
     float density=max(cloud*(.8+.2*n),core*.99);
     // Threshold erodes the cloud before the narrow curled filaments.
     float resistance=max(density*.8+(.5-n)*.25,strands*cloud*.99);
-    float survive=smoothstep(erosion-.055,erosion+.055,resistance)*step(erosion,.999);
+    // The cloud thins as it erodes, so the last curled strands fade out instead of vanishing at once.
+    float survive=smoothstep(erosion-.08,erosion+.08,resistance)*(1.0-smoothstep(.35,1.0,erosion));
     alpha=density*tip*mouth*survive*smoothstep(0.0,.025,t);
     float edge=clamp((1.0-density)*1.15+ridges*.46*(1.0-axis*.85),0.0,1.0);
     color=mix(uCore,uEdge,edge);

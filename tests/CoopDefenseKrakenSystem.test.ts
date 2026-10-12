@@ -28,7 +28,7 @@ function setup() {
     combat: { resolveAreaAttack: vi.fn(() => ({} as never)) }, projectiles: { spawnProjectile: vi.fn(() => ++serial) },
     brood: { reserveEgg: () => true, released: vi.fn(), cancelEgg: vi.fn(), clearBoss: vi.fn(), retireBossEggs: vi.fn(), hostUpdate: vi.fn(), getEggs: () => [] } as never,
     publish: { publish: s => { if (s) { expect(readKrakenState(s)).not.toBeNull(); publications.push(s); } } },
-    claw: vi.fn(), waterApproach: () => null, canMove: () => true, flightFree: () => true, bodyTravelLimit: (_p, _a, distance) => distance,
+    claw: vi.fn(), waterApproach: () => null, canMove: () => true, landPoseValid: () => true, flightFree: () => true, bodyTravelLimit: (_p, _a, distance) => distance,
     eggLandings: (_p, _angle, count) => Array.from({ length: count }, (_, i) => ({ x: 600 + i * 50, y: i * 100 })),
     diagnostic: vi.fn(),
   };
