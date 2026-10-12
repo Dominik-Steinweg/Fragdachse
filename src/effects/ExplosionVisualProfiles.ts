@@ -26,7 +26,11 @@ const STANDARD: ExplosionVisualProfile = {
  */
 export const EXPLOSION_VISUAL_PROFILES = {
   default: STANDARD,
-  firestarter_combo: STANDARD,
+  // Lighter shared burst: the firestarter layer carries the signature (implosion, lance star).
+  firestarter_combo: {
+    family: 'standard', layering: 'ordinary', countScale: 0.8, lifeScale: 0.85, bodyScale: 0.7,
+    smokeScale: 0.6, chunkScale: 0.8, upwardEmbers: false,
+  },
   // Full combat chain in the faction palette; MortarStrikeRenderer adds crater, dust and embers.
   mortar: {
     family: 'standard', layering: 'ordinary', countScale: 1.1, lifeScale: 1.05, bodyScale: 0.95,

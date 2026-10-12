@@ -147,11 +147,11 @@ export class FirestarterRenderer {
     }
     for (const orb of this.orbs.values()) {
       const speed = Math.hypot(orb.vx, orb.vy);
-      const tail = Phaser.Math.Clamp(speed * 0.28, 16, 60);
+      const tail = Phaser.Math.Clamp(speed * 0.45, 24, 90);
       const dx = speed > 1 ? orb.vx / speed : 1, dy = speed > 1 ? orb.vy / speed : 0;
       const radius = orb.size / 2;
       if (!segmentVisible(orb.x, orb.y, orb.x - dx * tail, orb.y - dy * tail)) continue;
-      add({ ax: orb.x, ay: orb.y, bx: orb.x - dx * tail, by: orb.y - dy * tail, halfWidth: radius * 1.9,
+      add({ ax: orb.x, ay: orb.y, bx: orb.x - dx * tail, by: orb.y - dy * tail, halfWidth: radius * 2.1,
         kind: FIRESTARTER_KIND.orb, t: 0, seed: orb.seed, allied: orb.allied, a1: radius });
     }
 
