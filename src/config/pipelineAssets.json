@@ -60395,10 +60395,11 @@
       "gameIds": [
         "firestarter-badger"
       ],
-      "revision": "b1-v3-cast-r1",
+      "revision": "firestarter-b1-v3-production-r1",
       "variant": "standard",
-      "sourceSize": 72,
+      "sourceSize": 128,
       "textureKey": "enemy_firestarter_badger",
+      "runtimeContract": "sheet",
       "forward": "north",
       "pivot": [
         0.5,
@@ -60424,7 +60425,8 @@
             12
           ],
           "frameRate": 12,
-          "loop": true
+          "loop": true,
+          "end": "rest"
         },
         {
           "name": "claw",
@@ -60447,7 +60449,8 @@
           "markers": {
             "strike": 4,
             "impact": 7
-          }
+          },
+          "end": "rest"
         },
         {
           "name": "cast",
@@ -60468,37 +60471,30 @@
           "markers": {
             "aim": 3,
             "release": 4
-          }
+          },
+          "end": "rest"
         }
       ],
-      "runtimeContract": "sheet",
-      "sheetTextureKey": "enemy_firestarter_badger_animated",
-      "idlePath": "./assets/sprites/pipeline-v2/firestarter-badger/b1-v3-cast-r1/idle-72.png",
-      "sheetPath": "./assets/sprites/pipeline-v2/firestarter-badger/b1-v3-cast-r1/sheet-72.png",
+      "sheetTextureKey": "enemy_firestarter_badger_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/firestarter-badger/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/firestarter-badger/sheet.png",
       "layout": {
-        "frameWidth": 72,
-        "frameHeight": 72,
+        "frameWidth": 128,
+        "frameHeight": 128,
         "margin": 2,
         "spacing": 4,
         "columns": 8,
         "rows": 5,
         "frameCount": 35,
-        "width": 608,
-        "height": 380
+        "width": 1056,
+        "height": 660
       },
       "hashes": {
-        "idle": "eba38c70b075c2c0a18389ed3de5c8ac4ede57d4d0192046aa4b6974b6a06f77",
-        "sheet": "6eec25e7d557064e710c9c6f900b11ff96e92d2b33326f2cbaaeed8092b59bd9"
+        "idle": "8a4dad89c05e88827c1781998fc5fc0b291aa2da4be651ce8b1789d39e64f9bb",
+        "sheet": "2dd9c428b684a3f08d1b66ba1a3bea4a3acfefae3605835f6df7fe3c95c1e91e"
       },
       "eyeAnchors": {
         "version": 1,
-        "source": {
-          "revision": "b1-v3-cast-r1",
-          "variant": "standard",
-          "blendSha256": "2e7cd4b0ac6264b4a024eede98c8b94499d7bede7b39608b7adef69c0bb6ac29",
-          "sheetSha256": "6eec25e7d557064e710c9c6f900b11ff96e92d2b33326f2cbaaeed8092b59bd9",
-          "idleSha256": "eba38c70b075c2c0a18389ed3de5c8ac4ede57d4d0192046aa4b6974b6a06f77"
-        },
         "frames": [
           {
             "left": {
@@ -61060,7 +61056,14 @@
               "rotation": 0.24000055
             }
           }
-        ]
+        ],
+        "source": {
+          "revision": "firestarter-b1-v3-production-r1",
+          "variant": "standard",
+          "blendSha256": "7ffe538b6cfd47582f589c1857998425f7d5703160462549e9d5a02b2d5ad7b5",
+          "sheetSha256": "2dd9c428b684a3f08d1b66ba1a3bea4a3acfefae3605835f6df7fe3c95c1e91e",
+          "idleSha256": "8a4dad89c05e88827c1781998fc5fc0b291aa2da4be651ce8b1789d39e64f9bb"
+        }
       }
     }
   ]

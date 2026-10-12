@@ -1460,7 +1460,7 @@
     },
     {
       "id": "firestarter-badger",
-      "label": "Brandstifter-Dachs B1-v3 (Draft)",
+      "label": "Brandstifter-Dachs B1-v3",
       "category": "enemy",
       "gameIds": ["firestarter-badger"],
       "reference": "public/assets/sprites/enemies/enemy_firestarter_badger.png",

@@ -13,6 +13,8 @@ export const isColourPng = file => file.endsWith('.png') && !/normal|height|elev
 export const bossAtlasImages = assets => new Set(assets.filter(a => a.runtimeContract === 'boss')
   .flatMap(a => Object.values(a.atlases).flatMap(pass => Object.values(pass).flatMap(clip => clip.pages.map(page => page.image.replace(/^\.\//, ''))))));
 export async function colourSources() {
+  // Explicitly published small sheets remain published on later builds too.
+  const published = JSON.parse(await readFile('src/assets/manifests/runtime-colours.json', 'utf8')).assets;
   // The boss residency loader verifies selected PNG bytes itself. Keep its complete
   // atlas publication, including color, independently of generic colour substitutions.
   const boundImages = bossAtlasImages(JSON.parse(await readFile('src/config/pipelineAssets.json', 'utf8')).assets);
@@ -29,7 +31,7 @@ export async function colourSources() {
         const file = `${dir}/${entry.name}`;
         if (entry.isDirectory()) await visit(file);
         else if (isColourPng(file) && !boundImages.has(file.slice('public/'.length))
-          && (await stat(file)).size >= 128 * 1024) files.push(file);
+          && ((await stat(file)).size >= 128 * 1024 || published[file.slice('public/'.length)])) files.push(file);
       }
     };
     await visit(`public/assets/sprites/${family}`);

@@ -183,5 +183,5 @@ def build(c, spec):
     asset['sockets']['muzzle'] = muzzle
     asset['parts']['cast_tip_offset'] = list(point(length+.13)-Vector((.48, .35, 1.22)))
     asset['root']['formVariant'] = variant
-    asset['root']['authoringStage'] = 'Gate 2 B: draft move/claw/cast'
+    asset['root']['authoringStage'] = 'Production: approved B1-v3 move/claw/cast'
     return asset
