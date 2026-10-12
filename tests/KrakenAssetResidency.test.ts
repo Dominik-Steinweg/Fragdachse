@@ -90,7 +90,7 @@ describe('Kraken phase residency', () => {
     const start = h.events.length;
     await h.residency.setPhase('water', { prefetchLand: true }).settled;
     const loaded = [...new Set(h.events.slice(start).filter(k => k.startsWith('add:kraken_land')).map(k => k.split(':')[3]))];
-    expect(loaded).toEqual(['__rest', 'ashore', 'idle', 'move']);
+    expect(loaded).toEqual(['__rest', 'ashore']);
     expect(h.residency.acquirePose('land', 'slam', 0, vi.fn())?.pose.fallback).toBe(true);
     await h.residency.setPhase('ashore').settled;
     expect(h.residency.acquirePose('land', 'slam', 0, vi.fn())?.pose.fallback).toBe(false);

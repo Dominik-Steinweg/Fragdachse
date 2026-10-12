@@ -27,6 +27,7 @@ export function krakenResidencyPlan(phase: KrakenResidencyPhase, options: Kraken
   if (phase === 'land') add('land', ['idle', 'move', 'ink-spit', 'slam', 'egg-throw', 'death']);
   if (current.includes('egg')) add('egg', ['idle', 'hatch']);
   if (current.includes('spine')) add('spine', ['idle']);
-  if (phase === 'water' && options.prefetchLand) add('land', ['__rest', 'ashore', 'idle', 'move']);
+  // Only what the crossing needs first: idle/move load during the exit warning, before the body leaves the water.
+  if (phase === 'water' && options.prefetchLand) add('land', ['__rest', 'ashore']);
   return { required, clips };
 }
