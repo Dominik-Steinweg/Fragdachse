@@ -1,0 +1,47 @@
+{
+  "frames": {
+    "__rest/0000": {
+      "frame": {
+        "x": 2,
+        "y": 2,
+        "w": 37,
+        "h": 149
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 91,
+        "y": 67,
+        "w": 37,
+        "h": 149
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 224
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 0,
+      "sockets": {
+        "waterEntry": {
+          "x": 0.5,
+          "y": 0.80803572,
+          "z": 0
+        }
+      }
+    }
+  },
+  "meta": {
+    "app": "Fragdachse V2",
+    "version": "1",
+    "image": "elevation-__rest-0.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 41,
+      "h": 153
+    },
+    "scale": "1"
+  }
+}
