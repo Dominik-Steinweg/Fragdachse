@@ -131,7 +131,8 @@ void main() {
   float alpha = 0.0;
 
   if (kind < 0.5) {
-    // Telegraph: braid converging over the whole range; one steady fused core in the commit.
+    // Telegraph: braid converging over the whole range. The commit reads as a warning, never as the
+    // shot: a dashed violet line racing outward between two closing rails, with no white-hot core.
     float c = clamp(vAux.y, 0.05, 1.0);
     float p = clamp(t / c, 0.0, 1.0);
     float commit = smoothstep(c - 0.015, c + 0.015, t);
@@ -149,11 +150,14 @@ void main() {
     // Hairline guide: the full range is always legible, faint until the commit.
     float guide = gauss(v, 0.9) * (0.16 + 0.22 * p) * (1.0 - commit);
     float sparks = embers(u, v, 230.0, 34.0, amp * 0.6 + 1.5, seed) * (0.25 + 0.75 * p) * (1.0 - commit);
-    // Commit: fused, steady and hotter, with fine tongues licking off both edges.
+    // Commit: dashes accelerate toward the shot; the rails close onto the lance corridor.
     float pressure = clamp((t - c) / max(1.0 - c, 0.01), 0.0, 1.0);
-    float tongue = smoothstep(0.52, 0.86, fbm(vec2(u * 0.045 - uTime * 6.5, abs(v) * 0.16 + seed * 1.7)));
-    float core = (gauss(v, 1.9) * 1.05 + gauss(v, 6.5) * 0.48 + gauss(v, 15.0) * 0.16
-      + tongue * gauss(abs(v) - 5.0, 3.2) * 0.42) * commit * (0.9 + 0.25 * pressure) + flash * gauss(v, 9.0) * 0.6;
+    float dashPhase = fract((u - uTime * mix(260.0, 720.0, pressure)) / 26.0);
+    float dash = smoothstep(0.0, 0.08, dashPhase) * (1.0 - smoothstep(0.5, 0.6, dashPhase));
+    float railGap = mix(18.0, 7.0, smoothstep(0.0, 0.35, pressure));
+    float rails = gauss(abs(v) - railGap, 0.8) * (0.3 + 0.2 * pressure);
+    float core = (gauss(v, 1.2) * (0.3 + 0.85 * dash) + gauss(v, 4.0) * 0.18 + rails) * commit
+      + flash * gauss(v, 7.0) * 0.35;
     float lineE = (braid * 0.85 + guide + sparks * 0.9 + core) * reach * mix(1.0, mix(0.5, 0.8, commit), along);
     // Muzzle: a swirling flame knot that swells with the charge.
     float r0 = length(vec2(u, v));
@@ -161,7 +165,7 @@ void main() {
     float swirl = noise(vec2(atan(v, u) * 2.0 + uTime * 6.0, r0 * 0.16 - uTime * 5.0));
     float knot = gauss(r0, knotR) * (0.55 + 0.6 * swirl) * (0.45 + 0.55 * p) + gauss(r0, knotR * 0.38) * (0.4 + 0.8 * commit);
     float e = lineE + knot * (1.0 + flash);
-    rgb = flame(e, allied) + hot((gauss(v, 1.1) * commit * reach + gauss(r0, knotR * 0.3) * (0.2 + 0.35 * commit)) * (0.75 + 0.4 * flash), allied);
+    rgb = flame(e, allied) + hot(gauss(r0, knotR * 0.3) * (0.2 + 0.25 * commit), allied);
     // A thin dark seat under the fused core keeps it readable on bright ground.
     alpha = gauss(v, 5.0) * 0.22 * commit * reach;
     rgb += heat(0.0, allied) * alpha * 0.6;

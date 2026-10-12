@@ -76,6 +76,7 @@ describe('firestarter host decisions', () => {
     expect(params.angle).toBeCloseTo(aim.angle);
     // The shot leaves the lance tip and still passes the fixed world point.
     expect(params.gameplayMuzzleOrigin.x).toBeCloseTo(aim.x); expect(params.gameplayMuzzleOrigin.y).toBeCloseTo(aim.y);
+    expect(params.visualMuzzleOrigin).toEqual(params.gameplayMuzzleOrigin);
     const resolveHitscan = vi.fn(() => true);
     const executor = new WeaponFireExecutor({ resolveHitscan } as never);
     new AutomatedWeaponExecutionAdapter(executor, {} as never).fire(weapon, params);

@@ -164,7 +164,8 @@ export class CoopDefenseFirestarterSystem implements EnemySpecialMovementSource 
     enemy.faceAngle(aim.angle);
     return this.weapons.fire(resolveEnemyWeaponFirePayloads(weapon, enemy.faction), {
       x: enemy.sprite.x, y: enemy.sprite.y, angle: aim.angle, targetX: target.x, targetY: target.y,
-      ownerId: enemy.id, ownerColor: VOID_PALETTE.primary, gameplayMuzzleOrigin: { x: aim.x, y: aim.y },
+      ownerId: enemy.id, ownerColor: VOID_PALETTE.primary,
+      gameplayMuzzleOrigin: { x: aim.x, y: aim.y }, visualMuzzleOrigin: { x: aim.x, y: aim.y },
     });
   }
 

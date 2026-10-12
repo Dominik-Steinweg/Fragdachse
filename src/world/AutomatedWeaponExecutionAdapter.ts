@@ -17,6 +17,8 @@ import { SpecializedWeaponExecutionAdapter } from './SpecializedWeaponExecutionA
 /** Request data owned by an automatic source; timing/readiness stays with that source. */
 export interface AutomatedWeaponFireParams {
   readonly gameplayMuzzleOrigin?: MuzzleOrigin;
+  /** Where muzzle flash and tracer start; omitted = derived from the body as before. */
+  readonly visualMuzzleOrigin?: MuzzleOrigin;
   readonly x: number;
   readonly y: number;
   readonly angle: number;
