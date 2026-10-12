@@ -33,6 +33,7 @@ export interface ProjectileDetonationTarget {
 /** Bestätigtes Ergebnis einer autoritativen externen Detonation. */
 export interface ProjectileDetonationOutcome extends ProjectileDetonationTarget {
   readonly detonatorOwnerId: string;
+  readonly detonatorProvenance?: import('./ProjectileSpawnRequest').ProjectileProvenance;
 }
 
 /** Schmale Runtime-Capability für externe Detonation/Consume-Interaktionen. */

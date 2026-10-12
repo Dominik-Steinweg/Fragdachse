@@ -12,6 +12,7 @@ import { encodeEnemyUpsert, decodeEnemyUpserts } from '../src/network/enemySnaps
 import { PROJECTILE_STYLES } from '../src/network/projectileSnapshotCodec';
 import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { ProjectileDetonableSample } from '../src/projectile/ProjectileGameplayPort';
+import { ALLIED_COLOR } from '../src/config';
 
 const authored = enemyConfig.getCoopDefenseEnemyConfig('firestarter-badger');
 const config = authored.firestarter!;
@@ -121,10 +122,55 @@ describe('firestarter host decisions', () => {
     expect(f.system.getChargeSnapshot(f.enemy.id, config.lance.telegraphMs)).toBeNull();
   });
 
-  it('never initializes special attacks for an allied firestarter', () => {
+  it('never targets players as an allied firestarter', () => {
     const f = fixture(); (f.enemy as any).faction = 'allied';
     f.system.hostUpdate(0); f.system.hostUpdate(100000);
     expect(f.fire).not.toHaveBeenCalled(); expect(f.enemy.setSpecialAction).not.toHaveBeenCalled();
+  });
+
+  it.each(['death', 'prune', 'clear'] as const)('cancels an allied telegraph on %s', cause => {
+    const f = fixture(); (f.enemy as any).faction = 'allied';
+    f.catalog.updateTargets([{ kind: 'hostile-enemy', id: 'hostile', x: 400, y: 0 }]);
+    f.system.hostUpdate(0);
+    expect(f.enemy.setSpecialAction).toHaveBeenLastCalledWith('fire-lance-charge', expect.any(Number), 0, expect.any(Number));
+    if (cause === 'death') f.system.handleKilled(f.enemy);
+    if (cause === 'clear') f.system.clear();
+    f.enemies.length = 0; f.system.hostUpdate(config.lance.telegraphMs);
+    expect(f.fire).not.toHaveBeenCalled(); expect(f.enemy.setSpecialAction).toHaveBeenLastCalledWith('none');
+    expect(f.system.getChargeSnapshot(f.enemy.id, config.lance.telegraphMs)).toBeNull();
+  });
+
+  it('reacquires hostiles after conversion and uses allied lance, ball and foreign-ball combo payloads', () => {
+    const f = fixture();
+    f.system.hostUpdate(0);
+    (f.enemy as any).faction = 'allied';
+    f.catalog.updateTargets([f.player, { kind: 'hostile-enemy', id: 'hostile', x: 400, y: 0 }]);
+    f.system.hostUpdate(config.lance.telegraphMs);
+    expect(f.fire).not.toHaveBeenCalled();
+    expect(f.enemy.setSpecialAction).toHaveBeenLastCalledWith('none');
+    const start = config.lance.telegraphMs + 1;
+    f.system.hostUpdate(start); f.system.hostUpdate(start + config.lance.telegraphMs);
+    expect(f.fire.mock.calls[0][1]).toMatchObject({ targetX: 400, targetY: 0, ownerColor: ALLIED_COLOR });
+    const ballAt = start + config.lance.telegraphMs + config.crossAttackGapMs;
+    f.system.hostUpdate(ballAt);
+    expect(f.fire.mock.calls[1][0]).toMatchObject({ id: config.fireballWeaponId,
+      detonable: { explosion: { damageTarget: 'enemies', fireChunkBurst: { visualStyle: 'allied', damageTarget: 'enemies' } } } });
+    f.balls.push({ projectileId: 1, ownerId: 'hostile-shooter', tag: WEAPON_CONFIGS[config.fireballWeaponId].detonable!.tag,
+      allowCrossTeam: true, x: 410, y: 10 });
+    const comboAt = ballAt + config.lance.cooldownMs + config.crossAttackGapMs;
+    f.system.hostUpdate(comboAt); f.system.hostUpdate(comboAt + config.lance.telegraphMs);
+    expect(f.fire.mock.lastCall?.[1]).toMatchObject({ targetX: 410, targetY: 10 });
+  });
+
+  it('uses the same lance sight and ball body corridor as an ally', () => {
+    const f = fixture(); (f.enemy as any).faction = 'allied';
+    f.catalog.updateTargets([{ kind: 'hostile-enemy', id: 'target', x: config.lance.rangePx / 2, y: 0 }]);
+    f.hasClearLineOfFire.mockReturnValue(false); f.system.hostUpdate(0);
+    expect(f.fire).not.toHaveBeenCalled(); expect(f.enemy.setSpecialAction).not.toHaveBeenCalled();
+    f.hasClearLineOfFire.mockReturnValue(true); f.system.hostUpdate(1); f.system.hostUpdate(1 + config.lance.telegraphMs);
+    f.hasClearLineOfFire.mockImplementation((_x, _y, _tx, _ty, opts) => opts.clearanceRadius === 0);
+    f.system.hostUpdate(1 + config.lance.telegraphMs + config.crossAttackGapMs);
+    expect(f.fire).toHaveBeenCalledOnce();
   });
 });
 
@@ -143,10 +189,10 @@ describe('firestarter authored and replicated contracts', () => {
       expect(decodeEnemyUpserts(legacy)[0].specialAction).toBe(specialAction);
     });
     const wire: (string | number)[] = [];
-    encodeEnemyUpsert(wire, { id: 'e1', specialAction: 'fire-lance-charge', specialActionEndsAt: 900,
+    encodeEnemyUpsert(wire, { id: 'e1', faction: 'allied', specialAction: 'fire-lance-charge', specialActionEndsAt: 900,
       gaussChargeProgress: 0.75, gaussAimAngle: 1.2 });
-    expect(wire[2]).toBe(15); // All codes 0..14 were already deployed.
-    expect(decodeEnemyUpserts(wire)[0]).toMatchObject({ specialAction: 'fire-lance-charge',
+    expect(wire[5]).toBe(15); // Faction precedes the action; codes 0..14 were already deployed.
+    expect(decodeEnemyUpserts(wire)[0]).toMatchObject({ faction: 'allied', specialAction: 'fire-lance-charge',
       specialActionEndsAt: 900, gaussChargeProgress: 0.75, gaussAimAngle: 1.2 });
     expect(enemyConfig.getCoopDefenseEnemyKindIndex('firestarter-badger'))
       .toBe(enemyConfig.getCoopDefenseEnemyKindIndex('mortar-badger') + 1);

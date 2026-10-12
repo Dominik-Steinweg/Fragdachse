@@ -1,5 +1,5 @@
 import { getCoopDefenseEnemyConfig, resolveFirestarterAim, type CoopDefenseEnemyFirestarterConfig } from '../config/coopDefenseEnemies';
-import { VOID_PALETTE } from '../config';
+import { ALLIED_COLOR, VOID_PALETTE } from '../config';
 import type { CombatActorStatePort, CombatGeometryPort } from '../combat/CombatCapabilities';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager, EnemySpecialMovementSource } from '../entities/EnemyManager';
@@ -9,10 +9,12 @@ import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecution
 import type { EnemyAiTargetCatalog } from './EnemyAiTargetCatalog';
 import { resolveEnemyWeaponFirePayloads } from './AlliedEnemyEffects';
 import { RechargeableCharges } from './RechargeableCharges';
+import { getFirestarterFactionTargets } from './firestarterAlliedTargeting';
 
 interface Point { readonly x: number; readonly y: number }
 interface FirestarterState {
   readonly enemy: EnemyEntity;
+  readonly faction: EnemyEntity['faction'];
   readonly charges: RechargeableCharges;
   lance: { readonly target: Point; readonly startedAt: number; readonly endsAt: number; readonly commitAt: number } | null;
   lanceReadyAt: number;
@@ -41,12 +43,17 @@ export class CoopDefenseFirestarterSystem implements EnemySpecialMovementSource 
     const live = new Set<string>();
     for (const enemy of this.enemies.getAllEnemies()) {
       const config = getCoopDefenseEnemyConfig(enemy.kind).firestarter;
-      // Gate 1: conversion cancels any pending hostile attack, and allies keep their regular bite.
-      if (!config || enemy.faction !== 'hostile' || !enemy.sprite.active || enemy.getHp() <= 0) continue;
+      if (!config || !enemy.sprite.active || enemy.getHp() <= 0) continue;
       live.add(enemy.id);
       let state = this.states.get(enemy.id);
+      // A conversion invalidates the captured target, including on the exact firing frame.
+      if (state && state.faction !== enemy.faction) {
+        this.cancelLance(state);
+        this.states.delete(enemy.id);
+        continue;
+      }
       if (!state || state.enemy !== enemy) {
-        state = { enemy, charges: new RechargeableCharges({ ...config.charges, rechargeMode: 'restart-on-consume' }, nowMs),
+        state = { enemy, faction: enemy.faction, charges: new RechargeableCharges({ ...config.charges, rechargeMode: 'restart-on-consume' }, nowMs),
           lance: null, lanceReadyAt: nowMs, ballReadyAt: nowMs, lastAttack: null, lastAttackAt: -Infinity,
           actedAt: -Infinity, committed: false };
         this.states.set(enemy.id, state);
@@ -73,10 +80,7 @@ export class CoopDefenseFirestarterSystem implements EnemySpecialMovementSource 
         continue;
       }
       if (enemy.isAttackMovementPaused(nowMs)) continue;
-      const players = this.targets.getCandidates('players').flatMap(target => {
-        const point = this.targets.getPosition(target, enemy.sprite.x, enemy.sprite.y);
-        return point ? [point] : [];
-      }).sort((a, b) => distance(enemy.sprite, a) - distance(enemy.sprite, b));
+      const players = getFirestarterFactionTargets(enemy, this.targets, config.comboRadiusPx);
       if (!players.length) continue;
       if (nowMs >= state.lanceReadyAt && this.crossGapReady(state, 'lance', config, nowMs)) {
         const target = this.findCombo(enemy, config, players)
@@ -164,7 +168,7 @@ export class CoopDefenseFirestarterSystem implements EnemySpecialMovementSource 
     enemy.faceAngle(aim.angle);
     return this.weapons.fire(resolveEnemyWeaponFirePayloads(weapon, enemy.faction), {
       x: enemy.sprite.x, y: enemy.sprite.y, angle: aim.angle, targetX: target.x, targetY: target.y,
-      ownerId: enemy.id, ownerColor: VOID_PALETTE.primary,
+      ownerId: enemy.id, ownerColor: enemy.faction === 'allied' ? ALLIED_COLOR : VOID_PALETTE.primary,
       gameplayMuzzleOrigin: { x: aim.x, y: aim.y }, visualMuzzleOrigin: { x: aim.x, y: aim.y },
     });
   }
