@@ -22,6 +22,7 @@ interface FirestarterState {
   lance: { readonly target: Point; readonly startedAt: number; readonly endsAt: number; readonly commitAt: number } | null;
   lanceReadyAt: number;
   ballReadyAt: number;
+  comboScanAt: number;
   lastAttack: 'ball' | 'lance' | null;
   lastAttackAt: number;
   actedAt: number;
@@ -46,7 +47,8 @@ export class CoopDefenseFirestarterSystem implements EnemySpecialMovementSource 
     this.nowMs = nowMs;
     const live = new Set<string>();
     for (const enemy of this.enemies.getAllEnemies()) {
-      const config = getCoopDefenseEnemyConfig(enemy.kind).firestarter;
+      const authored = getCoopDefenseEnemyConfig(enemy.kind);
+      const config = authored.firestarter;
       if (!config || !enemy.sprite.active || enemy.getHp() <= 0) continue;
       live.add(enemy.id);
       let state = this.states.get(enemy.id);
@@ -58,7 +60,7 @@ export class CoopDefenseFirestarterSystem implements EnemySpecialMovementSource 
       }
       if (!state || state.enemy !== enemy) {
         state = { enemy, faction: enemy.faction, positioning: new FirestarterPositioning(), charges: new RechargeableCharges({ ...config.charges, rechargeMode: 'restart-on-consume' }, nowMs),
-          lance: null, lanceReadyAt: nowMs, ballReadyAt: nowMs, lastAttack: null, lastAttackAt: -Infinity,
+          lance: null, lanceReadyAt: nowMs, ballReadyAt: nowMs, comboScanAt: nowMs, lastAttack: null, lastAttackAt: -Infinity,
           actedAt: -Infinity, committed: false };
         this.states.set(enemy.id, state);
       }
@@ -90,9 +92,18 @@ export class CoopDefenseFirestarterSystem implements EnemySpecialMovementSource 
       if (this.dodge && (this.dodge.isDodging(enemy.id)
         || state.positioning.tryReposition(enemy, players, config, this.projectiles, this.combat, this.dodge, nowMs))) continue;
       if (nowMs >= state.lanceReadyAt && this.crossGapReady(state, 'lance', config, nowMs)) {
-        const target = this.findCombo(enemy, config, players)
-          ?? players.find(point => distance(enemy.sprite, point) <= config.lance.rangePx
-            && hasFirestarterDirectLine(enemy.id, enemy.sprite, point, config, this.projectiles, this.combat));
+        // Fruitless combo searches retry at the attack cadence; a direct shot never pre-empts a
+        // combo, so the search always runs once more before the lance commits to a direct target.
+        let combo: Point | null = null;
+        const scanned = nowMs >= state.comboScanAt;
+        if (scanned) {
+          combo = this.findCombo(enemy, config, players);
+          state.comboScanAt = nowMs + authored.attackScanIntervalMs;
+        }
+        const direct = combo ? null : players.find(point => distance(enemy.sprite, point) <= config.lance.rangePx
+          && hasFirestarterDirectLine(enemy.id, enemy.sprite, point, config, this.projectiles, this.combat));
+        if (!combo && direct && !scanned) combo = this.findCombo(enemy, config, players);
+        const target = combo ?? direct;
         if (target) {
           state.lance = { target: { ...target }, startedAt: nowMs, endsAt: nowMs + config.lance.telegraphMs,
             commitAt: nowMs + config.lance.telegraphMs - config.lance.commitMs };
