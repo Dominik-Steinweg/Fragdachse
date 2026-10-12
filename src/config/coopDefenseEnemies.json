@@ -876,7 +876,10 @@
       "attackScanIntervalMs": 140,
       "attackStopDurationMs": 120,
       "obstacleAttackDelayMs": 500,
-      "imageKey": "enemy_pyro_badger",
+      "imageKey": "enemy_firestarter_badger",
+      "eyeGlow": {
+        "color": 12070911
+      },
       "combatPositioning": {
         "preferredDistancePx": 550,
         "toleranceP": 150,
@@ -906,8 +909,8 @@
         "crossAttackGapMs": 200,
         "comboRadiusPx": 125,
         "muzzle": {
-          "forwardPx": 16,
-          "sidePx": 0
+          "forwardPx": 18.807691,
+          "sidePx": 9
         },
         "fireballWeaponId": "FIRESTARTER_FIREBALL",
         "lanceWeaponId": "FIRESTARTER_LANCE",

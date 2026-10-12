@@ -43,6 +43,25 @@ function passiveRenderer(): Record<string, unknown> {
 }
 
 describe('ProjectilePresentationRuntime', () => {
+  it('casts an orb once for a new live projectile, excluding baselines and replayed snapshots', () => {
+    const runtime = new ProjectilePresentationRuntime({} as never), replica = new ProjectileClientReplica();
+    const orb = { ...passiveRenderer(), onOrbShot: vi.fn() };
+    runtime.bindRenderers({ firestarterOrb: orb } as never, null);
+    const old = projectile({ style: 'firestarter_orb', ownerId: 'brandstifter' });
+    runtime.presentClientFrame(replica.sync([old], 1000));
+    expect(orb.onOrbShot).not.toHaveBeenCalled();
+    const batch = [old, { ...old, id: 8 }, { ...old, id: 9, suppressSpawnFx: true },
+      { ...old, id: 10, flightPath: { timeMs: 0, ended: true, points: [] } }];
+    runtime.presentClientFrame(replica.sync(batch, 1050));
+    runtime.presentClientFrame(replica.sync(batch, 1100));
+    expect(orb.onOrbShot).toHaveBeenCalledExactlyOnceWith('brandstifter');
+    const shape = { setVisible: vi.fn(), setAlpha: vi.fn() };
+    runtime.createSpawnRendererVisuals(11, shape as never, 10, 20,
+      { projectileStyle: 'firestarter_orb', size: 12, color: 0xb347ff } as never, 'host-brandstifter');
+    expect(orb.onOrbShot).toHaveBeenLastCalledWith('host-brandstifter');
+    expect(orb.onOrbShot).toHaveBeenCalledTimes(2);
+    runtime.releaseWorldPresentation();
+  });
   it.each([...PROJECTILE_STYLES, undefined])('samples host %s fog without requiring replicated flight history', style => {
     const runtime = new ProjectilePresentationRuntime({} as never), sink = vi.fn();
     const release = runtime.bindGroundFogSegments(sink);

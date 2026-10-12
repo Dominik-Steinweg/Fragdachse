@@ -157,11 +157,11 @@ void main() {
     float lineE = (braid * 0.85 + guide + sparks * 0.9 + core) * reach * mix(1.0, mix(0.5, 0.8, commit), along);
     // Muzzle: a swirling flame knot that swells with the charge.
     float r0 = length(vec2(u, v));
-    float knotR = mix(4.0, 10.0, p) + 2.5 * commit;
+    float knotR = mix(3.0, 6.0, p) + 1.5 * commit;
     float swirl = noise(vec2(atan(v, u) * 2.0 + uTime * 6.0, r0 * 0.16 - uTime * 5.0));
     float knot = gauss(r0, knotR) * (0.55 + 0.6 * swirl) * (0.45 + 0.55 * p) + gauss(r0, knotR * 0.38) * (0.4 + 0.8 * commit);
     float e = lineE + knot * (1.0 + flash);
-    rgb = flame(e, allied) + hot((gauss(v, 1.1) * commit * reach + gauss(r0, knotR * 0.3) * (0.3 + 0.6 * commit)) * (0.75 + 0.4 * flash), allied);
+    rgb = flame(e, allied) + hot((gauss(v, 1.1) * commit * reach + gauss(r0, knotR * 0.3) * (0.2 + 0.35 * commit)) * (0.75 + 0.4 * flash), allied);
     // A thin dark seat under the fused core keeps it readable on bright ground.
     alpha = gauss(v, 5.0) * 0.22 * commit * reach;
     rgb += heat(0.0, allied) * alpha * 0.6;
@@ -191,7 +191,7 @@ void main() {
       float ri = length(vec2(u - len, v));
       float impact = gauss(ri, 7.0 + 16.0 * e) * live * live * 0.9 + gauss(ri - (6.0 + 34.0 * e), 2.4 + 3.0 * e) * live * 0.6;
       float rm = length(vec2(u, v));
-      float muzzle = gauss(rm, 8.0 + 12.0 * e) * pow(live, 1.5);
+      float muzzle = gauss(rm, 5.0 + 8.0 * e) * pow(live, 1.5) * 0.7;
       float glow = (t < ${FIRESTARTER_LANCE_FLASH_S.toFixed(2)}) ? lance + impact + muzzle : 0.0;
       // Embers settle on the burned line and cool after the flash.
       float cool = 1.0 - smoothstep(0.15, 1.2, t);
@@ -201,7 +201,7 @@ void main() {
     }
   } else if (kind < 2.5) {
     float radius = max(vAux.y, 2.0);
-    float bodyR = radius * 0.82;
+    float bodyR = radius * 0.7;
     vec2 q = vec2(u, v);
     float r = length(q);
     if (uPass < 0.5) {
@@ -217,11 +217,11 @@ void main() {
       vec3 inner = mix(heat(0.02, allied) * 0.5, heat(0.32, allied), smoothstep(0.4, 0.85, swirl) * (0.35 + 0.65 * r / bodyR));
       float back = 0.5 + 0.5 * cos(ang);        // 1 toward the tail (+u), 0 facing the flight
       float tongues = fbm(vec2(ang * 2.6 - uTime * 1.6, uTime * 2.2 + seed));
-      float coronaR = bodyR + 4.0 + 9.0 * tongues * (0.6 + 1.1 * back);
+      float coronaR = bodyR + 2.5 + 4.5 * tongues * (0.6 + 1.0 * back);
       float corona = (1.0 - smoothstep(bodyR, coronaR, r)) * step(bodyR * 0.9, r);
       float tailLen = max(len, 1.0);
       float k = clamp(u / tailLen, 0.0, 1.0);
-      float tw = bodyR * 1.05 * pow(1.0 - k, 0.7) * (0.8 + 0.45 * fbm(vec2(u * 0.05 - uTime * 7.0, seed)));
+      float tw = bodyR * 0.95 * pow(1.0 - k, 0.7) * (0.8 + 0.45 * fbm(vec2(u * 0.05 - uTime * 7.0, seed)));
       float lick = fbm(vec2(u * 0.06 - uTime * 6.5, v * 0.18 + seed));
       float tail = gauss(v, max(tw, 0.6)) * smoothstep(bodyR * 0.2, bodyR * 1.1, u) * (1.0 - k) * (0.45 + 0.85 * lick);
       float sparks = embers(u, v, 70.0, 9.0, bodyR * 0.8, seed) * smoothstep(bodyR, bodyR * 2.0, u) * (1.0 - k);

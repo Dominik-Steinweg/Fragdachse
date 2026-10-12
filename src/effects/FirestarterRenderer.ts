@@ -9,6 +9,7 @@ import { CAMERA_FEEDBACK_PRIORITY } from './camera/cameraFeedbackPresets';
 import type { LightingSystem } from './LightingSystem';
 import type { GpuVfxSystem } from './gpu/GpuVfxSystem';
 import { FirestarterGpuLayer, type FirestarterGpuItem } from './gpu/FirestarterGpuLayer';
+import { sampleFirestarterCharge, firestarterChargeProgress, type FirestarterChargeSample } from './FirestarterChargeProgress';
 import {
   FIRESTARTER_COMBO_LIFE_S, FIRESTARTER_KIND, FIRESTARTER_LANCE_FLASH_S, FIRESTARTER_LANCE_LIFE_S,
 } from './gpu/FirestarterShader';
@@ -19,7 +20,6 @@ const LANCE_HALF_WIDTH = 48;
 interface OrbVisual { x: number; y: number; vx: number; vy: number; size: number; allied: boolean; seed: number }
 interface LanceVisual { sx: number; sy: number; ex: number; ey: number; allied: boolean; born: number; seed: number }
 interface ComboVisual { x: number; y: number; radius: number; allied: boolean; born: number; seed: number }
-interface ChargeSample { progress: number; at: number }
 
 let nextRendererId = 0;
 const seedOf = (key: string | number): number => {
@@ -39,7 +39,7 @@ export class FirestarterRenderer {
   private readonly orbs = new Map<number, OrbVisual>();
   private readonly lances: LanceVisual[] = [];
   private readonly combos: ComboVisual[] = [];
-  private readonly charges = new Map<string, ChargeSample>();
+  private readonly charges = new Map<string, FirestarterChargeSample>();
   private readonly lightKeys = new Set<string>();
   private readonly lightPrefix = `firestarter-${nextRendererId++}-`;
   private sequence = 0;
@@ -54,6 +54,9 @@ export class FirestarterRenderer {
   }
 
   setEnemySource(source: () => readonly EnemyVisualSource[]): void { this.enemies = source; }
+  onOrbShot(ownerId: string): void {
+    this.enemies().find(enemy => enemy.id === ownerId)?.playFirestarterCast?.(this.scene.time.now);
+  }
   setLightingSystem(lighting: LightingSystem | null): void { this.lighting = lighting; }
   registerGpuVfx(system: GpuVfxSystem): void { this.gpuVfx = system; }
   setCameraFeedback(controller: CameraFeedbackController | null): void { this.cameraFeedback = controller; }
@@ -147,7 +150,7 @@ export class FirestarterRenderer {
       const dx = speed > 1 ? orb.vx / speed : 1, dy = speed > 1 ? orb.vy / speed : 0;
       const radius = orb.size / 2;
       if (!segmentVisible(orb.x, orb.y, orb.x - dx * tail, orb.y - dy * tail)) continue;
-      add({ ax: orb.x, ay: orb.y, bx: orb.x - dx * tail, by: orb.y - dy * tail, halfWidth: radius * 2.1,
+      add({ ax: orb.x, ay: orb.y, bx: orb.x - dx * tail, by: orb.y - dy * tail, halfWidth: radius * 1.7,
         kind: FIRESTARTER_KIND.orb, t: 0, seed: orb.seed, allied: orb.allied, a1: radius });
     }
 
@@ -160,10 +163,9 @@ export class FirestarterRenderer {
       if (!config) continue;
       live.add(enemy.id);
       // Snapshots arrive at network rate; advance between them at the authored charge speed.
-      const reported = Phaser.Math.Clamp(snapshot.gaussChargeProgress, 0, 1);
-      let sample = this.charges.get(enemy.id);
-      if (!sample || sample.progress !== reported) { sample = { progress: reported, at: now }; this.charges.set(enemy.id, sample); }
-      const progress = Math.min(1, sample.progress + (now - sample.at) / config.lance.telegraphMs);
+      const sample = sampleFirestarterCharge(this.charges.get(enemy.id), snapshot.gaussChargeProgress, now);
+      this.charges.set(enemy.id, sample);
+      const progress = firestarterChargeProgress(sample, now, config.lance.telegraphMs);
       const angle = snapshot.gaussAimAngle;
       const cos = Math.cos(angle), sin = Math.sin(angle);
       const tip = resolveFirestarterMuzzle(config.muzzle, enemy.sprite.x, enemy.sprite.y, angle);

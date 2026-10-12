@@ -2580,5 +2580,8 @@
   "assets/sprites/pipeline-v2/mortar-badger/mesh/enemy-mesh-mortar-a3a-14-claw/normal-128.png": "assets/sprites/pipeline-v2/mortar-badger/mesh/enemy-mesh-mortar-a3a-14-claw/normal-128.png?v=ac989e1c855b76144ee80a58886dcbfde34fb7b08dafc281005eea4b9fcc4a74",
   "assets/sprites/pipeline-v2/mortar-badger/mesh/enemy-mesh-mortar-a3a-14-claw/normal-64.png": "assets/sprites/pipeline-v2/mortar-badger/mesh/enemy-mesh-mortar-a3a-14-claw/normal-64.png?v=da0c64e5c479d8ec15ae76965945fec28f2282de33a122dd85a469b683d673f0",
   "assets/sprites/pipeline-v2/mortar-badger/sheet.png": "assets/sprites/pipeline-v2/mortar-badger/sheet.webp?v=1241f48e14d995f5f45cae084bac16defbb09e605a2f6c267153ec769408b05b",
-  "assets/sprites/pipeline-v2/mortar-badger/sheet.webp": "assets/sprites/pipeline-v2/mortar-badger/sheet.webp?v=1241f48e14d995f5f45cae084bac16defbb09e605a2f6c267153ec769408b05b"
+  "assets/sprites/pipeline-v2/mortar-badger/sheet.webp": "assets/sprites/pipeline-v2/mortar-badger/sheet.webp?v=1241f48e14d995f5f45cae084bac16defbb09e605a2f6c267153ec769408b05b",
+  "assets/sprites/pipeline-v2/firestarter-badger/b1-v3-cast-r1/idle-72.png": "assets/sprites/pipeline-v2/firestarter-badger/b1-v3-cast-r1/idle-72.png?v=eba38c70b075c2c0a18389ed3de5c8ac4ede57d4d0192046aa4b6974b6a06f77",
+  "assets/sprites/pipeline-v2/firestarter-badger/b1-v3-cast-r1/sheet-72.png": "assets/sprites/pipeline-v2/firestarter-badger/b1-v3-cast-r1/sheet-72.png?v=6eec25e7d557064e710c9c6f900b11ff96e92d2b33326f2cbaaeed8092b59bd9",
+  "assets/sprites/enemies/enemy_firestarter_badger.png": "assets/sprites/enemies/enemy_firestarter_badger.png?v=eba38c70b075c2c0a18389ed3de5c8ac4ede57d4d0192046aa4b6974b6a06f77"
 }

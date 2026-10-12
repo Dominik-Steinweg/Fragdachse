@@ -258,6 +258,7 @@ export class ProjectilePresentationRuntime {
       sprite.setVisible(false); sprite.setAlpha(0); this.fireballRenderer.createVisual(id, x, y, cfg.size);
     }
     if (style === 'firestarter_orb' && this.firestarterOrbRenderer) {
+      this.firestarterOrbRenderer.onOrbShot(ownerId);
       sprite.setVisible(false); sprite.setAlpha(0); this.firestarterOrbRenderer.createVisual(id, x, y, cfg.size, cfg.color);
     }
     if (style === 'spore' && this.sporeRenderer) {
@@ -587,6 +588,9 @@ export class ProjectilePresentationRuntime {
       const firingTurrets = new Set<string>();
       for (const update of frame.updates) {
         const projectile = update.projectile;
+        if (update.isNew && projectile.style === 'firestarter_orb' && !projectile.suppressSpawnFx && !projectile.flightPath?.ended) {
+          this.firestarterOrbRenderer?.onOrbShot(projectile.ownerId);
+        }
         if (update.isNew && !projectile.suppressSpawnFx && !projectile.flightPath?.ended
           && projectile.sourceTurretId !== undefined) {
           firingTurrets.add(projectile.sourceTurretId);
