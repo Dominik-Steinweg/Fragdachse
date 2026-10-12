@@ -123,37 +123,8 @@ export class FirestarterRenderer {
     const add = (item: FirestarterGpuItem) => { if (!suppressed) this.layer.add(item); };
     this.layer.begin(now);
 
-    // Results first: shots and combos keep their batch space ahead of anticipation.
-    for (let i = this.lances.length - 1; i >= 0; i--) {
-      const lance = this.lances[i], age = (now - lance.born) / 1000;
-      if (age >= FIRESTARTER_LANCE_LIFE_S) { this.lances.splice(i, 1); continue; }
-      if (!segmentVisible(lance.sx, lance.sy, lance.ex, lance.ey)) continue;
-      add({ ax: lance.sx, ay: lance.sy, bx: lance.ex, by: lance.ey, halfWidth: LANCE_HALF_WIDTH,
-        kind: FIRESTARTER_KIND.lance, t: age, seed: lance.seed, allied: lance.allied });
-      if (age < FIRESTARTER_LANCE_FLASH_S) {
-        const k = 1 - age / FIRESTARTER_LANCE_FLASH_S;
-        light(`lance-${lance.seed}-a`, lance.ex, lance.ey, 120, lance.allied, 0.55 * k * k);
-        light(`lance-${lance.seed}-b`, (lance.sx + lance.ex) / 2, (lance.sy + lance.ey) / 2, 150, lance.allied, 0.3 * k);
-      }
-    }
-    for (let i = this.combos.length - 1; i >= 0; i--) {
-      const combo = this.combos[i], age = (now - combo.born) / 1000;
-      if (age >= FIRESTARTER_COMBO_LIFE_S) { this.combos.splice(i, 1); continue; }
-      if (!segmentVisible(combo.x, combo.y, combo.x, combo.y)) continue;
-      add({ ax: combo.x, ay: combo.y, bx: combo.x, by: combo.y, halfWidth: combo.radius * 1.3,
-        kind: FIRESTARTER_KIND.combo, t: age, seed: combo.seed, allied: combo.allied, a1: combo.radius });
-      if (age < 0.6) light(`combo-${combo.seed}`, combo.x, combo.y, combo.radius * 1.4, combo.allied, 0.6 * (1 - age / 0.6));
-    }
-    for (const orb of this.orbs.values()) {
-      const speed = Math.hypot(orb.vx, orb.vy);
-      const tail = Phaser.Math.Clamp(speed * 0.45, 24, 90);
-      const dx = speed > 1 ? orb.vx / speed : 1, dy = speed > 1 ? orb.vy / speed : 0;
-      const radius = orb.size / 2;
-      if (!segmentVisible(orb.x, orb.y, orb.x - dx * tail, orb.y - dy * tail)) continue;
-      add({ ax: orb.x, ay: orb.y, bx: orb.x - dx * tail, by: orb.y - dy * tail, halfWidth: radius * 1.7,
-        kind: FIRESTARTER_KIND.orb, t: 0, seed: orb.seed, allied: orb.allied, a1: radius });
-    }
-
+    // Warnings first: under batch pressure an active telegraph or a live orb must never be the
+    // item that is dropped; spent shots and combo signatures are decoration of a resolved result.
     const live = new Set<string>();
     for (const enemy of this.enemies()) {
       if (!enemy.sprite.active) continue;
@@ -180,6 +151,36 @@ export class FirestarterRenderer {
       light(`charge-${enemy.id}`, ax, ay, 70 + 50 * progress, allied, (progress >= commitAt ? 0.42 : 0.12 + 0.2 * progress));
     }
     for (const id of this.charges.keys()) if (!live.has(id)) this.charges.delete(id);
+
+    for (const orb of this.orbs.values()) {
+      const speed = Math.hypot(orb.vx, orb.vy);
+      const tail = Phaser.Math.Clamp(speed * 0.45, 24, 90);
+      const dx = speed > 1 ? orb.vx / speed : 1, dy = speed > 1 ? orb.vy / speed : 0;
+      const radius = orb.size / 2;
+      if (!segmentVisible(orb.x, orb.y, orb.x - dx * tail, orb.y - dy * tail)) continue;
+      add({ ax: orb.x, ay: orb.y, bx: orb.x - dx * tail, by: orb.y - dy * tail, halfWidth: radius * 1.7,
+        kind: FIRESTARTER_KIND.orb, t: 0, seed: orb.seed, allied: orb.allied, a1: radius });
+    }
+    for (let i = this.lances.length - 1; i >= 0; i--) {
+      const lance = this.lances[i], age = (now - lance.born) / 1000;
+      if (age >= FIRESTARTER_LANCE_LIFE_S) { this.lances.splice(i, 1); continue; }
+      if (!segmentVisible(lance.sx, lance.sy, lance.ex, lance.ey)) continue;
+      add({ ax: lance.sx, ay: lance.sy, bx: lance.ex, by: lance.ey, halfWidth: LANCE_HALF_WIDTH,
+        kind: FIRESTARTER_KIND.lance, t: age, seed: lance.seed, allied: lance.allied });
+      if (age < FIRESTARTER_LANCE_FLASH_S) {
+        const k = 1 - age / FIRESTARTER_LANCE_FLASH_S;
+        light(`lance-${lance.seed}-a`, lance.ex, lance.ey, 120, lance.allied, 0.55 * k * k);
+        light(`lance-${lance.seed}-b`, (lance.sx + lance.ex) / 2, (lance.sy + lance.ey) / 2, 150, lance.allied, 0.3 * k);
+      }
+    }
+    for (let i = this.combos.length - 1; i >= 0; i--) {
+      const combo = this.combos[i], age = (now - combo.born) / 1000;
+      if (age >= FIRESTARTER_COMBO_LIFE_S) { this.combos.splice(i, 1); continue; }
+      if (!segmentVisible(combo.x, combo.y, combo.x, combo.y)) continue;
+      add({ ax: combo.x, ay: combo.y, bx: combo.x, by: combo.y, halfWidth: combo.radius * 1.3,
+        kind: FIRESTARTER_KIND.combo, t: age, seed: combo.seed, allied: combo.allied, a1: combo.radius });
+      if (age < 0.6) light(`combo-${combo.seed}`, combo.x, combo.y, combo.radius * 1.4, combo.allied, 0.6 * (1 - age / 0.6));
+    }
 
     this.layer.flush();
     this.releaseLights(lights);

@@ -4,7 +4,7 @@ import { FIRESTARTER_FRAGMENT, FIRESTARTER_VERTEX } from './FirestarterShader';
 import { registerGraphicsObject } from '../EffectUtils';
 
 /** Fixed bounded batch: three draws regardless of how many firestarters fight. */
-export const FIRESTARTER_BATCH_CAPACITY = 256;
+export const FIRESTARTER_BATCH_CAPACITY = 512;
 const WORDS = 14, VERTICES = 6;
 const CORNERS = [-1,-1, 1,-1, 1,1, -1,-1, 1,1, -1,1];
 /** Ground material, projectile body, emissive overlay. */
