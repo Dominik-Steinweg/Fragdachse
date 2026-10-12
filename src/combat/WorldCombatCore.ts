@@ -2099,7 +2099,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     damage: number,
     sourceX: number,
     sourceY: number,
-    now = this.hostFrameNowMs,
+    now?: number,
   ): boolean {
     if (this.getStructureOccupancyId(targetId) !== undefined) return false;
     if (!this.energyShieldSystem) return false;
@@ -2109,7 +2109,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       damage,
       sourceX,
       sourceY,
-      now,
+      now: now ?? this.hostFrameNowMs,
     });
   }
 
