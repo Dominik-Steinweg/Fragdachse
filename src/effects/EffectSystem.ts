@@ -966,12 +966,15 @@ export class EffectSystem implements EnemyVisualSink {
     const haloColor = isEnergy
       ? this.mixColor(fillColor, 0xffffff, 0.45)
       : (isHoly ? 0xffef9a : (isNuke ? this.mixColor(fillColor, 0xffffff, 0.35) : this.mixColor(fillColor, 0xffffff, 0.2)));
-    this.spawnCombatExplosionGpu(x, y, radius, visualStyle, fillColor, flashColor, haloColor);
     if (visualStyle === 'firestarter_combo') {
+      // Faction-tinted flash and halo: the combo's white-hot accents are the GPU layer's thin spines.
+      const palette = color === ALLIED_COLOR ? ALLIED_PALETTE : VOID_PALETTE;
+      this.spawnCombatExplosionGpu(x, y, radius, visualStyle, fillColor, palette.bright, palette.primary);
       // The shared burst in faction colors; the firestarter layer adds implosion, lance star and scorch.
       this.firestarterRenderer?.playCombo(x, y, radius, color);
       return;
     }
+    this.spawnCombatExplosionGpu(x, y, radius, visualStyle, fillColor, flashColor, haloColor);
     if (visualStyle === 'mortar') {
       // The shared burst carries flash and fireball; the mortar layer adds crater, dust and embers.
       this.mortarImpactRenderer?.(x, y, radius, color);

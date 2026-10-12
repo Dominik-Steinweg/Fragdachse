@@ -162,9 +162,10 @@ void main() {
     // Muzzle: a swirling flame knot that swells with the charge.
     // The knot sits just ahead of the tip so the lance's brass end stays readable.
     float r0 = length(vec2(u - 5.0, v));
-    float knotR = mix(3.0, 6.0, p) + 1.5 * commit;
+    float knotR = mix(3.0, 6.0, p) - 1.5 * commit;
     float swirl = noise(vec2(atan(v, u) * 2.0 + uTime * 6.0, r0 * 0.16 - uTime * 5.0));
-    float knot = gauss(r0, knotR) * (0.55 + 0.6 * swirl) * (0.45 + 0.55 * p) + gauss(r0, knotR * 0.38) * (0.4 + 0.35 * commit);
+    // In the commit the knot shrinks so the brass tip and the warning line read separately.
+    float knot = (gauss(r0, knotR) * (0.55 + 0.6 * swirl) * (0.45 + 0.55 * p) + gauss(r0, knotR * 0.38) * 0.4) * (1.0 - 0.55 * commit);
     float e = lineE + knot * (1.0 + flash);
     rgb = flame(e, allied) + hot(gauss(r0, knotR * 0.3) * (0.2 + 0.25 * commit), allied);
     // A thin dark seat under the fused core keeps it readable on bright ground.
@@ -264,9 +265,9 @@ void main() {
       float shockR = radius * (0.2 + smoothstep(0.06, 0.55, t) * 0.95);
       float shock = gauss(r - shockR, 4.0 + 7.0 * t) * (1.0 - smoothstep(0.25, 0.65, t))
         * (0.55 + 0.45 * fbm(vec2(ang * 3.0, t * 4.0 + seed)));
-      float core = gauss(r, radius * 0.16) * exp(-pow((t - 0.09) / 0.05, 2.0));
+      float core = gauss(r, radius * 0.1) * exp(-pow((t - 0.09) / 0.04, 2.0));
       float spine = gauss(perp, 0.7) * step(r, reach * 0.85) * step(0.0, cos(ang - axis)) * (1.0 - smoothstep(0.12, 0.3, t));
-      rgb = flame(ringIn * 1.1 + lances * 1.3 + shock * 0.8 + core * 0.8, allied) + hot(core * 0.9 + spine * 0.6, allied);
+      rgb = flame(ringIn * 1.1 + lances * 1.3 + shock * 0.8 + core * 0.8, allied) + hot(core * 0.5 + spine * 0.6, allied);
     }
   }
   rgb *= uAlpha; alpha = clamp(alpha * uAlpha, 0.0, 1.0);
