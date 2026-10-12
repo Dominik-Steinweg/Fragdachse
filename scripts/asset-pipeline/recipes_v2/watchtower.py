@@ -15,7 +15,108 @@ def linear(rgb):
                  for v in (channel / 255 for channel in rgb))
 
 
-def surface(ctx, name, rgb, kind):
+def weathering(mat, floor=False, endgrain=False, iron=False, cracks=False):
+    """Medium-frequency wear on the existing geometry; no baked light or decals."""
+    nodes, links = mat.node_tree.nodes, mat.node_tree.links
+    bs = nodes['Principled BSDF']
+    color = bs.inputs['Base Color'].links[0].from_socket
+
+    def node(kind, label):
+        n = nodes.new(kind)
+        n.name = n.label = label
+        return n
+
+    def plug(value, socket):
+        if isinstance(value, (float, int, tuple)):
+            socket.default_value = value
+        else:
+            links.new(value, socket)
+
+    def calc(op, a, b):
+        n = node('ShaderNodeMath', 'Weathering '+op)
+        n.operation = op
+        plug(a, n.inputs[0]); plug(b, n.inputs[1])
+        return n.outputs[0]
+
+    def remap(value, low, high, a=0, b=1):
+        n = node('ShaderNodeMapRange', 'Soft weathering mask')
+        n.clamp = True
+        for key, v in [('Value', value), ('From Min', low), ('From Max', high), ('To Min', a), ('To Max', b)]:
+            plug(v, n.inputs[key])
+        return n.outputs[0]
+
+    def mix(a, b, fac, mode='MIX'):
+        n = node('ShaderNodeMixRGB', 'Weathered timber colour')
+        n.blend_type = mode
+        plug(fac, n.inputs[0]); plug(a, n.inputs[1]); plug(b, n.inputs[2])
+        return n.outputs[0]
+
+    coords = node('ShaderNodeTexCoord', 'Wear coordinates')
+    local = node('ShaderNodeSeparateXYZ', 'Timber end distances')
+    links.new(coords.outputs['Generated'], local.inputs[0])
+    geom = node('ShaderNodeNewGeometry', 'World wear position')
+    world = node('ShaderNodeSeparateXYZ', 'Deck wear axes')
+    links.new(geom.outputs['Position'], world.inputs[0])
+    noise = node('ShaderNodeTexNoise', 'Broad irregular wear patches')
+    noise.inputs['Scale'].default_value = 13
+    noise.inputs['Detail'].default_value = 2
+    links.new(geom.outputs['Position'], noise.inputs['Vector'])
+    irregular = remap(noise.outputs['Fac'], .27, .74)
+    dx = calc('MINIMUM', local.outputs['X'], calc('SUBTRACT', 1, local.outputs['X']))
+    dy = calc('MINIMUM', local.outputs['Y'], calc('SUBTRACT', 1, local.outputs['Y']))
+    edge = remap(calc('MINIMUM', dx, dy), .008, .10, 1, 0)
+    if iron:
+        # Broken rust rim and rubbed charcoal faces, also on the nail heads.
+        rust = calc('MULTIPLY', calc('MAXIMUM', calc('MULTIPLY', edge, .8), .14), irregular)
+        color = mix(color, (*linear((133, 77, 39)), 1), rust)
+    else:
+        # Intermittent pale fibres break the perfect bevel; no bright outline.
+        chipped = calc('MULTIPLY', edge, remap(irregular, .58, .88, 0, .42))
+        color = mix(color, (*linear((171, 156, 127)), 1), chipped)
+        if endgrain:
+            # Exposed post crowns are cross-cut timber, not longitudinal flooring.
+            centre = node('ShaderNodeVectorMath', 'Endgrain pith')
+            centre.operation = 'SUBTRACT'
+            centre.inputs[1].default_value = (.38, .57, 0)
+            links.new(coords.outputs['Generated'], centre.inputs[0])
+            grain = node('ShaderNodeTexWave', 'Coarse endgrain rings')
+            grain.wave_type = 'RINGS'
+            grain.rings_direction = 'Z'
+            grain.inputs['Scale'].default_value = 3
+            grain.inputs['Distortion'].default_value = 1.7
+            links.new(centre.outputs[0], grain.inputs['Vector'])
+            color = mix(color, remap(grain.outputs['Fac'], 0, 1, .55, .98), .58, 'MULTIPLY')
+        if floor:
+            dirt = calc('MULTIPLY', edge, calc('ADD', .28, calc('MULTIPLY', irregular, .28)))
+            color = mix(color, (*linear((71, 60, 42)), 1), dirt)
+            if cracks:
+                # Sparse tapered end splits, millimetres wide; the albedo supplies
+                # the less regular surrounding fibres without changing the mesh.
+                centre = calc('ADD', .43, calc('MULTIPLY', irregular, .08))
+                width = calc('MULTIPLY', remap(dx, 0, .15, 1, 0), .025)
+                fissure = calc('LESS_THAN', calc('ABSOLUTE', calc('SUBTRACT', local.outputs['Y'], centre), 0), width)
+                color = mix(color, (*linear((66, 53, 36)), 1), calc('MULTIPLY', fissure, .8))
+
+            def oval(x, y, sx, sy):
+                a = calc('DIVIDE', calc('SUBTRACT', world.outputs['X'], x), sx)
+                b = calc('DIVIDE', calc('SUBTRACT', world.outputs['Y'], y), sy)
+                d = calc('ADD', calc('MULTIPLY', a, a), calc('MULTIPLY', b, b))
+                return remap(d, .15, 1.0, 1, 0)
+
+            # Broad pale tread from the southern ladder into the middle.
+            tread = calc('MAXIMUM', oval(0, -.45, .27, .62), oval(.04, .04, .43, .35))
+            color = mix(color, (*linear((185, 161, 122)), 1), calc('MULTIPLY', tread, .16))
+            stain = calc('MAXIMUM', oval(-.47, .40, .25, .18), oval(.48, -.27, .17, .24))
+            stain = calc('MULTIPLY', stain, calc('ADD', .16, calc('MULTIPLY', irregular, .20)))
+            color = mix(color, (*linear((82, 77, 56)), 1), stain)
+        else:
+            # Hand-rubbed, grey exposed crowns with irregular dark patches.
+            worn = remap(irregular, .3, .8, 0, .28)
+            color = mix(color, (*linear((188, 174, 145)), 1), worn)
+    links.new(color, bs.inputs['Base Color'])
+
+
+def surface(ctx, name, rgb, kind, floor=False, endgrain=False, cracks=False):
     # The shared finish starts with Authoring.material(..., 'technical').
     mat = material(ctx, name, linear(rgb), 0, kind)
     nodes = mat.node_tree.nodes
@@ -31,10 +132,10 @@ def surface(ctx, name, rgb, kind):
         uv = nodes.new('ShaderNodeTexCoord')
         mat.node_tree.links.new(uv.outputs['UV'], tex.inputs['Vector'])
         remap = next(n for n in nodes if n.type == 'MAP_RANGE')
-        remap.inputs['From Min'].default_value = .14
-        remap.inputs['From Max'].default_value = .34
-        remap.inputs['To Min'].default_value = .68
-        remap.inputs['To Max'].default_value = 1.28
+        remap.inputs['From Min'].default_value = .08
+        remap.inputs['From Max'].default_value = .38
+        remap.inputs['To Min'].default_value = .48
+        remap.inputs['To Max'].default_value = 1.65
         nodes['Longitudinal walnut fibres direction'].inputs[1].default_value = (.6, 16, 5)
         nodes['Restrained exposed grain'].inputs[1].default_value = .025
         nodes['Surface-specific scoring'].inputs[1].default_value = .012
@@ -57,23 +158,29 @@ def surface(ctx, name, rgb, kind):
     bs.inputs['Roughness'].default_value = .92
     bs.inputs['Metallic'].default_value = 0
     bs.inputs['Specular IOR Level'].default_value = .08
+    if kind in ('wood', 'steel'):
+        weathering(mat, floor, endgrain, kind == 'steel', cracks)
     return mat
 
 
 def build(ctx, spec):
-    # Tiny, non-alternating board variation stays below the character contrast.
+    # Individual pieces vary, rather than striping complete horizontal courses.
+    palette = [(177,145,105), (166,141,112), (188,149,102), (177,145,105)]
+    factors = (1.10, .97, .90, 1.04, 1.0, 1.13, .95, 1.06, .86, .99, 1.08,
+               .94, 1.02, .89, 1.12, .98, .93, 1.04, 1.14, .96, 1.02, .91)
     floors = [surface(ctx, 'Weathered timber board '+str(i),
-                      tuple(round(v*factor) for v in (181, 140, 94)), 'wood')
-              for i, factor in enumerate((.96, 1.025, .985, 1.045, 1.01, .95, 1.035, .98, 1.055, 1.0, .97))]
+                      tuple(round(v*factor) for v in palette[(i*7+i//3)%4]), 'wood', floor=True, cracks=i in (3, 8, 17))
+              for i, factor in enumerate(factors)]
     for mat in floors:
         # Actual elevated rails occlude the deck; no painted perimeter stripe.
-        mat.node_tree.nodes['Contact dirt in seams'].inputs['Distance'].default_value = .55
-    rail = surface(ctx, 'Sun worn timber handrails', (185, 147, 100), 'wood')
-    ladder = surface(ctx, 'Light worn ladder treads', (190, 150, 101), 'wood')
-    end = surface(ctx, 'Dark endgrain fascia and structural timber', (111, 80, 50), 'wood')
-    iron = surface(ctx, 'Matte forged iron connections', (68, 72, 71), 'steel')
+        mat.node_tree.nodes['Contact dirt in seams'].inputs['Distance'].default_value = .65
+    rail = surface(ctx, 'Sun worn timber handrails', (169, 140, 104), 'wood')
+    crown = surface(ctx, 'Dry dark post endgrain', (144, 122, 91), 'wood', endgrain=True)
+    ladder = surface(ctx, 'Light worn ladder treads', (183, 150, 111), 'wood')
+    end = surface(ctx, 'Dark endgrain fascia and structural timber', (112, 92, 66), 'wood')
+    iron = surface(ctx, 'Matte forged iron connections', (46, 49, 47), 'steel')
     stone = surface(ctx, 'Cool dressed stone foundations', (149, 160, 165), 'coat')
-    moss = surface(ctx, 'Earth stained moss at footing', (87, 99, 73), 'coat')
+    moss = surface(ctx, 'Earth stained moss at footing', (86, 111, 58), 'coat')
     root = bpy.data.objects.new('Watchtower export pivot', None)
     ctx.scene.collection.objects.link(root)
     parts = {key: [] for key in ('deck', 'railings', 'supports', 'foundations', 'ladder', 'hardware')}
@@ -130,7 +237,7 @@ def build(ctx, spec):
             beam('supports', 'Transverse diagonal knee brace', (sx*(.87+support_spread), sy*(.89+support_spread), .40),
                  (sx*(.72+spread), sy*(.52+spread), 1.43), .09, .09, end)
             box('railings', 'Continuous corner post', (sx*post, sy*post, 1.65), (.145, .145, .72), rail, .006)
-            box('railings', 'Exposed wooden post crown', (sx*post, sy*post, 2.021), (.15, .15, .025), rail, .005)
+            box('railings', 'Exposed wooden post crown', (sx*post, sy*post, 2.021), (.15, .15, .025), crown, .005)
             # Slim iron corner wraps leave most of the five-pixel wood crown exposed.
             for edge in (-1, 1):
                 box('hardware', 'Post crown iron side wrap', (sx*post+edge*.077, sy*post, 2.016), (.006, .16, .025), iron, .002)
@@ -157,7 +264,6 @@ def build(ctx, spec):
         box('supports', 'Butt joint bearing joist', (x, 0, 1.45), (.10, 1.78, .16), end)
     pitch = 2*half_floor/11
     for index in range(11):
-        floor = floors[index]
         y = -half_floor + (index + .5) * pitch
         gap = rng.uniform(.004, .007)
         z = 1.563+rng.uniform(-.0018, .0018)
@@ -165,7 +271,8 @@ def build(ctx, spec):
         spans = [(-half_floor, join-.0025), (join+.0025, half_floor)]
         if index == 0:
             spans = [(-half_floor, -.216), (.216, half_floor)]
-        for left, right in spans:
+        for piece, (left, right) in enumerate(spans):
+            floor = floors[index*2+piece]
             ob = box('deck', 'Narrow weathered floorboard with bearing end', ((left+right)/2, y, z),
                      (right-left, pitch-gap, .04), floor, .0025)
             ob.rotation_euler.x = rng.uniform(-.006, .006)

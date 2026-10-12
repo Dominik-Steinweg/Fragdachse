@@ -4502,13 +4502,13 @@
       "orthoScale": 2.25,
       "textures": {
         "technical": "art/poc/pipeline-v1/textures/technical.png",
-        "wood": "art/poc/pipeline-v2/textures/watchtower-weathered-timber-v3.png"
+        "wood": "art/poc/pipeline-v2/textures/watchtower-weathered-timber-v4.png"
       },
       "materialVariants": {
         "standard": {
-          "label": "Weathered timber, patinated iron and mossy stone",
-          "textureStrength": 0.64,
-          "formShadowStrength": 0.32
+          "label": "Varied silvered timber, worn treads, dirt and rust",
+          "textureStrength": 0.94,
+          "formShadowStrength": 0.44
         }
       },
       "clips": []
