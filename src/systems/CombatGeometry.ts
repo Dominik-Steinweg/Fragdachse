@@ -1,4 +1,6 @@
 import * as Phaser from 'phaser';
+import type { CombatAreaPose } from '../combat/CombatAreaAttack';
+import type { CombatPartContactSnapshot } from '../combat/CombatPartContact';
 import {
   findNearestCircleHit as geomNearestCircleHit,
   findNearestRectangleHit as geomNearestRectangleHit,
@@ -43,6 +45,97 @@ export interface ObstacleTraceOptions extends ObstacleShotOptions {
  * Bedingung der entsprechenden `WorldCombatCore`-Privatmethoden.
  */
 export class CombatGeometry {
+  /** Sector deliberately retains melee's center-angle rule; lane uses rounded circle corners. */
+  static areaContainsCircle(pose: CombatAreaPose, x: number, y: number, radius: number): boolean {
+    const dx = x - pose.originX, dy = y - pose.originY;
+    const g = pose.geometry;
+    if (g.kind === 'sector') return Math.hypot(dx, dy) <= g.range + radius
+      && CombatGeometry.isWithinArc(dx, dy, pose.angle, g.arcDegrees * Math.PI / 360);
+    const c = Math.cos(pose.angle), s = Math.sin(pose.angle);
+    const u = dx * c + dy * s, v = -dx * s + dy * c;
+    return (u - Math.max(0, Math.min(g.length, u))) ** 2
+      + (v - Math.max(-g.width / 2, Math.min(g.width / 2, v))) ** 2 <= radius ** 2 + 1e-9;
+  }
+
+  static partShapes(snapshot: CombatPartContactSnapshot): readonly { ax: number; ay: number; bx: number; by: number; radius: number }[] {
+    const { x, y, angle } = snapshot.contact, c = Math.cos(angle), s = Math.sin(angle);
+    const point = (px: number, py: number) => ({ x: x + px * c - py * s, y: y + px * s + py * c });
+    return snapshot.shapes.map(shape => {
+      const a = shape.kind === 'circle' ? point(shape.x, shape.y) : point(shape.fromX, shape.fromY);
+      const b = shape.kind === 'circle' ? a : point(shape.toX, shape.toY);
+      return { ax: a.x, ay: a.y, bx: b.x, by: b.y, radius: shape.radius };
+    });
+  }
+
+  /** Nearest exposed surface, never the hidden root or the outgoing attack lane. */
+  static nearestPartPoint(snapshot: CombatPartContactSnapshot, x: number, y: number) {
+    let best: { x: number; y: number; distance: number } | null = null;
+    for (const p of CombatGeometry.partShapes(snapshot)) {
+      const dx = p.bx - p.ax, dy = p.by - p.ay, length2 = dx * dx + dy * dy;
+      const t = length2 ? Math.max(0, Math.min(1, ((x - p.ax) * dx + (y - p.ay) * dy) / length2)) : 0;
+      const cx = p.ax + t * dx, cy = p.ay + t * dy, d = Math.hypot(x - cx, y - cy);
+      const distance = Math.max(0, d - p.radius), scale = d > 0 ? distance / d : 0;
+      const candidate = { x: x + (cx - x) * scale, y: y + (cy - y) * scale, distance };
+      if (!best || distance < best.distance) best = candidate;
+    }
+    return best;
+  }
+
+  /** Sector membership of exposed capsule centerlines, retaining the melee radius rule. */
+  static partMeleeContact(snapshot: CombatPartContactSnapshot, pose: CombatAreaPose) {
+    if (pose.geometry.kind !== 'sector') return null;
+    let best: { x: number; y: number; radius: number; distance: number } | null = null;
+    for (const p of CombatGeometry.partShapes(snapshot)) {
+      const dx = p.bx - p.ax, dy = p.by - p.ay, length2 = dx * dx + dy * dy;
+      const ts = [0, 1, length2 ? Math.max(0, Math.min(1,
+        ((pose.originX - p.ax) * dx + (pose.originY - p.ay) * dy) / length2)) : 0];
+      for (const angle of [pose.angle - pose.geometry.arcDegrees * Math.PI / 360, pose.angle + pose.geometry.arcDegrees * Math.PI / 360]) {
+        const c = Math.cos(angle), s = Math.sin(angle), denominator = dx * s - dy * c;
+        if (Math.abs(denominator) < 1e-12) continue;
+        const t = ((pose.originX - p.ax) * s - (pose.originY - p.ay) * c) / denominator;
+        if (t >= 0 && t <= 1) ts.push(t);
+      }
+      for (const t of ts) {
+        const x = p.ax + dx * t, y = p.ay + dy * t;
+        if (!CombatGeometry.areaContainsCircle(pose, x, y, p.radius)) continue;
+        const distance = Math.hypot(x - pose.originX, y - pose.originY);
+        if (!best || distance < best.distance) best = { x, y, radius: p.radius, distance };
+      }
+    }
+    return best;
+  }
+
+  /** Exact segment vs circle/capsule union, expanded by the projectile's collision radius. */
+  static tracePart(snapshot: CombatPartContactSnapshot, sx: number, sy: number, ex: number, ey: number, padding = 0) {
+    const dx = ex - sx, dy = ey - sy, length = Math.hypot(dx, dy);
+    let first = Infinity;
+    for (const p of CombatGeometry.partShapes(snapshot)) {
+      const radius = p.radius + padding;
+      const vx = p.bx - p.ax, vy = p.by - p.ay, vl = Math.hypot(vx, vy);
+      const circle = (x: number, y: number) => {
+        const ox = sx - x, oy = sy - y, cc = ox * ox + oy * oy - radius * radius;
+        if (cc <= 0) { first = 0; return; }
+        const aa = dx * dx + dy * dy, bb = ox * dx + oy * dy, disc = bb * bb - aa * cc;
+        if (aa === 0 || disc < 0) return;
+        const t = (-bb - Math.sqrt(disc)) / aa;
+        if (t >= 0 && t <= 1) first = Math.min(first, t);
+      };
+      circle(p.ax, p.ay); circle(p.bx, p.by);
+      if (vl > 0) {
+        const c = vx / vl, s = vy / vl;
+        const u = (sx - p.ax) * c + (sy - p.ay) * s, v = -(sx - p.ax) * s + (sy - p.ay) * c;
+        const du = dx * c + dy * s, dv = -dx * s + dy * c;
+        let lo = 0, hi = 1;
+        for (const [start, delta, min, max] of [[u, du, 0, vl], [v, dv, -radius, radius]]) {
+          if (delta === 0) { if (start < min || start > max) hi = -1; }
+          else { const a = (min - start) / delta, b = (max - start) / delta;
+            lo = Math.max(lo, Math.min(a, b)); hi = Math.min(hi, Math.max(a, b)); }
+        }
+        if (lo <= hi) first = Math.min(first, lo);
+      }
+    }
+    return Number.isFinite(first) ? { x: sx + dx * first, y: sy + dy * first, distance: length * first } : null;
+  }
   private readonly scratchCircle = new Phaser.Geom.Circle();
   private readonly scratchPoints: Phaser.Math.Vector2[] = [];
   /** Ziel der aus dem Index gelieferten Hindernis-Bounds, damit kein Rechteck pro Kandidat entsteht. */

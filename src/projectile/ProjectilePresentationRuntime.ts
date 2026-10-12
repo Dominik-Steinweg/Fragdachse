@@ -1,3 +1,4 @@
+import type { ProjectileCustomVisual, ProjectileVisualOverrides } from './ProjectileVisualOverrides';
 import type { PlasmaBurnerChargeRenderer } from '../effects/PlasmaBurnerChargeRenderer';
 import type { TurretAnimationController } from '../effects/TurretAnimationController';
 import { ProjectilePathCursor, type ProjectilePathPoint, type ProjectileTrailSegment } from './ProjectileFlightPath';
@@ -97,6 +98,8 @@ export interface ProjectilePresentationRenderers {
   readonly tracer: TracerRenderer;
   readonly muzzleFlash: MuzzleFlashRenderer;
   readonly turretAnimations?: TurretAnimationController;
+  /** Feature-owned projectile art (kraken eggs/spines), keyed by replicated weapon source. */
+  readonly visualOverrides?: ProjectileVisualOverrides;
 }
 
 /**
@@ -146,6 +149,8 @@ export class ProjectilePresentationRuntime {
   private fireballRenderer: FireballRenderer | null = null;
   private sporeRenderer: SporeRenderer | null = null;
   private grenadeRenderer: GrenadeRenderer | null = null;
+  private visualOverrides: ProjectileVisualOverrides | null = null;
+  private readonly customVisuals = new Map<number, ProjectileCustomVisual>();
   private translocatorPuckRenderer: TranslocatorPuckRenderer | null = null;
   private plasmaBurnerChargeRenderer: PlasmaBurnerChargeRenderer | null = null;
   private teslaBoltRenderer: TeslaBoltRenderer | null = null;
@@ -184,7 +189,23 @@ export class ProjectilePresentationRuntime {
     this.tracerRenderer = renderers.tracer;
     this.muzzleFlashRenderer = renderers.muzzleFlash;
     this.turretAnimations = renderers.turretAnimations ?? null;
+    this.visualOverrides = renderers.visualOverrides ?? null;
     this.ownerPositionProvider = ownerPositionProvider;
+  }
+
+  /** Draws a projectile with a feature-owned view when one claims it; the generic visuals are then removed. */
+  private syncCustomVisual(id: number, weaponSourceId: string | undefined, x: number, y: number, size: number, vx: number, vy: number): boolean {
+    let visual = this.customVisuals.get(id);
+    if (!visual) {
+      visual = this.visualOverrides?.create({ id, weaponSourceId, x, y }) ?? undefined;
+      if (!visual) return false;
+      this.customVisuals.set(id, visual);
+      this.bulletRenderer?.destroyVisual(id); this.grenadeRenderer?.destroyVisual(id); this.tracerRenderer?.destroyTracer(id);
+      const fallback = this.clientVisuals.get(id);
+      if (fallback) { fallback.destroy(); this.clientVisuals.delete(id); }
+    }
+    visual.update(x, y, size, vx, vy);
+    return true;
   }
 
   setAudioSystem(system: GameAudioSystem | null): void {
@@ -315,6 +336,7 @@ export class ProjectilePresentationRuntime {
   }
 
   destroyProjectileVisuals(projectile: ProjectilePresentationDespawnState): void {
+    this.customVisuals.get(projectile.id)?.destroy(); this.customVisuals.delete(projectile.id);
     this.groundFogPoses.delete(projectile.id);
     this.ownershipAppearance.delete(projectile.id);
     this.pathCursors.delete(projectile.id);
@@ -418,6 +440,7 @@ export class ProjectilePresentationRuntime {
       if (burning) burningProjectiles.add(id);
       this.consumeFlightPath(projectile);
       if (!projectile.flightPath) this.sampleGroundFogPose(projectile, presentationTime);
+      if (this.syncCustomVisual(id, projectile.weaponSourceId, x, y, size, vx, vy)) continue;
       if (style === 'bullet' || style === 'awp' || style === 'gauss') this.bulletRenderer?.syncToBody(id, x, y, vx, vy);
       switch (style) {
         case 'flame':
@@ -668,7 +691,9 @@ export class ProjectilePresentationRuntime {
         if (proj.ownerId !== localPlayerId || isUtilityProjectile) this.audioSystem?.playSound(proj.shotAudioKey, flashOrigin.x, flashOrigin.y, proj.ownerId);
       }
       const id = proj.id;
-      if (proj.style === 'bfg' && this.bfgRenderer) {
+      if (this.syncCustomVisual(id, proj.weaponSourceId, proj.x, proj.y, proj.size, proj.vx, proj.vy)) {
+        // Feature-owned view (e.g. kraken egg/spine) replaces the generic style renderer.
+      } else if (proj.style === 'bfg' && this.bfgRenderer) {
         if (!this.bfgRenderer.has(id)) this.bfgRenderer.createVisual(id, proj.x, proj.y, proj.size);
         this.bfgRenderer.updateVisual(id, proj.x, proj.y, proj.size);
       } else if (proj.style === 'holy_grenade' && this.holyGrenadeRenderer) {
@@ -827,6 +852,8 @@ export class ProjectilePresentationRuntime {
   }
 
   releaseWorldPresentation(): void {
+    for (const visual of this.customVisuals.values()) visual.destroy();
+    this.customVisuals.clear();
     this.groundFogSegment = null;
     this.groundFogPoses.clear();
     this.clientTurretBaselineReceived = false;

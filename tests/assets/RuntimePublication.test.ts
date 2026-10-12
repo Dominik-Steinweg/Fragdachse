@@ -9,8 +9,20 @@ import atlases from '../../src/assets/manifests/runtime-atlases.json';
 import runtimeFrames from '../../src/assets/manifests/runtime-atlas-frames.json';
 import { atlasSources, packAtlas } from '../../scripts/lib/runtime-atlases.mjs';
 import { publicDeploymentFiles, publicDeploymentExclusions } from '../../scripts/lib/public-deployment.mjs';
+import { isColourPng, bossAtlasImages } from '../../scripts/prepare-runtime-assets.mjs';
 const hash=(data:Buffer)=>createHash('sha256').update(data).digest('hex');
 const visible=(pixels:Buffer)=>{for(let i=0;i<pixels.length;i+=4)if(pixels[i+3]===0)pixels.fill(0,i,i+3);return pixels;};
+
+it('retains packed elevation and linear emission as data PNGs', () => {
+ for (const pass of ['elevation', 'emission', 'normal', 'height']) {
+  expect(isColourPng(`assets/sprites/pipeline-v2/kraken/atlas/432/${pass}-idle-0.png`)).toBe(false);
+  expect(isColourPng(`assets/sprites/pipeline-v2/kraken/${pass}/frame-0000.png`)).toBe(false);
+ }
+ expect(isColourPng('assets/sprites/pipeline-v2/kraken/atlas/432/color-idle-0.png')).toBe(true);
+ expect(bossAtlasImages([{ runtimeContract: 'boss', atlases: { color: { idle: { pages: [{ image: './assets/boss/color.png' }] } },
+  elevation: { idle: { pages: [{ image: './assets/boss/packed.png' }] } } } }, { runtimeContract: 'sheet' }]))
+  .toEqual(new Set(['assets/boss/color.png', 'assets/boss/packed.png']));
+});
 
 it('packs exactly the active registries with untrimmed frames, lossless PMA pixels and two clamped edge texels', async () => {
  const sources = await atlasSources(), ids = new Set<string>();

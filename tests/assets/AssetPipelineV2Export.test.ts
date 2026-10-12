@@ -9,6 +9,10 @@ import { prepareReviewV2 } from '../../scripts/asset-pipeline/prepare-review-v2.
 import { packAtlas } from '../../scripts/asset-pipeline/atlas-v2.mjs';
 import { elevationEncoding, resizeElevation, verifyElevationPixels } from '../../scripts/asset-pipeline/elevation-v2.mjs';
 import { verifyBossRuntime } from '../../scripts/asset-pipeline/runtime-contract-v2.mjs';
+import { requiredSockets, restSockets, validateSocketFrames } from '../../scripts/asset-pipeline/socket-anchors.mjs';
+import { KRAKEN_ASSET_REQUIREMENTS } from '../../src/config/krakenBoss';
+import { normalizePipelineAsset } from '../../src/config/pipelineAssetContracts';
+import { importRuntime, BOSS_TEXTURE_KEYS } from '../../scripts/asset-pipeline/import-runtime.mjs';
 
 const roots: string[] = [];
 const hash = (data: Buffer | string) => createHash('sha256').update(data).digest('hex');
@@ -62,6 +66,32 @@ async function fixture() {
 }
 
 describe('V2 animated asset export contracts', () => {
+  it('requires AP0 socket names, finite full-canvas samples and per-egg release markers', async () => {
+    const { manifest } = await fixture();
+    for (const [role, id] of [['water', 'abyssal-kraken'], ['land', 'abyssal-kraken-land'],
+      ['tentacle', 'abyssal-kraken-tentacle'], ['egg', 'abyssal-kraken-egg'], ['spine', 'abyssal-kraken-spine']] as const) {
+      expect(requiredSockets(id)).toEqual(KRAKEN_ASSET_REQUIREMENTS[role].sockets);
+    }
+    const socketFrames = manifest.frames.map((_: unknown, i: number) => Object.fromEntries(requiredSockets('abyssal-kraken')
+      .map(name => [name, { x: .2 + i * .1, y: .4, z: i - 2 }])));
+    const m = { ...manifest, id: 'abyssal-kraken', socketFrames, sockets: restSockets(socketFrames, 0),
+      clips: [...manifest.clips, { name: 'egg-throw', motion: 'fixture', frameRate: 12, loop: false,
+        frames: [0, 1, 2, 3, 0, 1, 2], markers: Object.fromEntries(Array.from({ length: 6 }, (_, i) => [`release-${i + 1}`, i])) }] };
+    expect(() => validateManifestV2(m)).not.toThrow();
+    for (const frames of [socketFrames.slice(1), socketFrames.map((f: object) => ({ ...f, egg6: undefined })),
+      socketFrames.map((f: object) => ({ ...f, mouth: { x: 1.01, y: .5, z: 0 } })),
+      socketFrames.map((f: object) => ({ ...f, mouth: { x: .5, y: .5, z: NaN } })),
+      socketFrames.map((f: object) => ({ ...f, eyeLeft: { x: .5, y: .5, z: 0 } }))]) {
+      expect(() => validateSocketFrames(frames, socketFrames.length, requiredSockets(m.id))).toThrow(/socket/i);
+    }
+    expect(() => validateManifestV2({ ...m, socketFrames: undefined })).toThrow(/Socket/);
+    expect(() => validateManifestV2({ ...m, sockets: {} })).toThrow(/Rest sockets/);
+    expect(() => validateManifestV2({ ...m, clips: manifest.clips })).toThrow(/release-k/);
+    const egg = { ...manifest, id: 'abyssal-kraken-egg', category: 'boss-part',
+      clips: [{ ...manifest.clips[0], name: 'hatch', loop: false, markers: { spawn: 1 } }] };
+    expect(() => validateManifestV2(egg)).not.toThrow();
+    expect(() => validateManifestV2({ ...egg, clips: [{ ...egg.clips[0], markers: {} }] })).toThrow(/spawn/);
+  });
   it('accepts arbitrary sortable markers and explicit clip transitions without relaxing claw', async () => {
     const { manifest: m } = await fixture();
     const rise = { name: 'rise', motion: 'fixture', frameRate: 12, loop: false, frames: [0, 1, 2, 3],
@@ -80,12 +110,14 @@ describe('V2 animated asset export contracts', () => {
 
   it('packs multiple trimmed atlas pages with lossless pixels, stable names, canvas and pivot', async () => {
     const inputs = await Promise.all(['#ab523380', '#16aa22ff', '#1122cc40'].map(frame));
+    const socketFrames = inputs.map((_, i) => ({ anchor: { x: .1 + i * .1, y: .9, z: i - 1 } }));
     const pages = await packAtlas(inputs, { frameNames: ['clip/0', 'clip/1', 'clip/2'], sourceFrames: [3, 7, 9], size: 64,
-      pivot: [.5, .5], prefix: 'atlas/clip', maxSize: 40 });
+      socketFrames, pivot: [.5, .5], prefix: 'atlas/clip', maxSize: 40 });
     expect(pages).toHaveLength(3);
     for (const [i, page] of pages.entries()) {
       expect(page.width).toBeLessThanOrEqual(40); expect(page.height).toBeLessThanOrEqual(40);
       const record = page.metadata.frames[`clip/${i}`];
+      expect(record.sockets).toEqual(socketFrames[i]);
       expect(record).toMatchObject({ sourceSize: { w: 64, h: 64 }, pivot: { x: .5, y: .5 },
         spriteSourceSize: { x: 16, y: 16, w: 32, h: 32 }, trimmed: true, sourceFrame: [3, 7, 9][i] });
       const { x, y, w, h } = record.frame;
@@ -100,7 +132,9 @@ describe('V2 animated asset export contracts', () => {
   it('exports hash-bound height atlases and a byte-accurate resident budget without changing sheets', async () => {
     const f = await fixture();
     const elevation = { min: -2, max: 3, scale: .5 };
-    const m = { ...f.manifest, category: 'boss-part', runtimeAtlas: true, runtimeContract: 'boss', runtimeBudgetMB: 2, elevation,
+    const socketFrames = f.manifest.frames.map((_: unknown, i: number) => ({ waterEntry: { x: .2 + .1 * i, y: .8, z: 0 - i } }));
+    const m = { ...f.manifest, gameIds: [], displayScale: 2, category: 'boss-part', runtimeAtlas: true, runtimeContract: 'boss', runtimeBudgetMB: 2, elevation,
+      socketFrames, sockets: restSockets(socketFrames, 0),
       elevationPass: { ...elevation, encoding: elevationEncoding, waterline: 0, alpha: 'beauty-coverage', masterSize: 64, colorSpace: 'non-color', premultiplied: false },
       clips: [{ name: 'hatch', motion: 'fixture', frameRate: 12, loop: false, frames: [1, 2, 3], end: 'terminal', markers: { release: 1 } }] };
     for (const record of m.frames) {
@@ -120,13 +154,74 @@ describe('V2 animated asset export contracts', () => {
     expect(JSON.parse(await readFile(path.join(f.asset, 'budget.json'), 'utf8')).variants.calm).toEqual(result.budget);
     const entry = { ...m, clips: m.clips.map(c => ({ ...c, frameCount: c.frames.length })) };
     const runtime = { ...m, sourceSize: 32, atlases: result.atlases[32], budget: result.budget.sizes[32] };
+    expect(result.socketFrames).toEqual(socketFrames);
+    expect(result.sockets).toEqual(m.sockets);
+    for (const pass of ['color', 'elevation']) for (const page of result.atlases[32][pass].hatch.pages) {
+      const metadata = JSON.parse(await readFile(path.join(f.folder, page.json), 'utf8'));
+      expect(page.frameNames).toEqual(Object.keys(metadata.frames));
+      for (const record of Object.values(metadata.frames) as { sockets: unknown; sourceFrame: number }[]) {
+        expect(record.sockets).toEqual(socketFrames[record.sourceFrame]);
+      }
+    }
+    // The static rest projection and page ownership already satisfy unchanged AP0.
+    const published = structuredClone(runtime.atlases);
+    for (const pass of Object.values(published) as Record<string, { pages: { image: string; json: string }[] }>[]) {
+      for (const atlas of Object.values(pass)) for (const page of atlas.pages) {
+        page.image = `./assets/${page.image}`; page.json = `./assets/${page.json}`;
+      }
+    }
+    const ap0 = { id: m.id, category: m.category, gameIds: [], revision: m.revision, variant: m.variant,
+      sourceSize: 32, textureKey: 'fixture', forward: m.forward, pivot: m.pivot, idleFrame: 0, clips: m.clips,
+      runtimeContract: 'boss', targetSize: 32, runtimeBudgetMB: m.runtimeBudgetMB, sockets: m.sockets, socketFrames,
+      elevation, elevationPass: { encoding: elevationEncoding, ...elevation, waterline: 0, alpha: 'beauty-coverage', colorSpace: 'non-color', premultiplied: false },
+      atlases: published, budget: runtime.budget };
+    expect(normalizePipelineAsset(ap0)).toMatchObject({ sockets: m.sockets });
     await expect(verifyBossRuntime(entry, runtime, name => readFile(path.join(f.folder, name)))).resolves.toEqual(runtime.budget);
+    const changed = structuredClone(runtime), changedPage = changed.atlases.elevation.hatch.pages[0];
+    const metadata = JSON.parse(await readFile(path.join(f.folder, changedPage.json), 'utf8'));
+    metadata.frames['hatch/0000'].sockets.waterEntry.z += 1;
+    const changedBytes = Buffer.from(JSON.stringify(metadata));
+    changedPage.jsonSha256 = hash(changedBytes);
+    await expect(verifyBossRuntime(entry, changed, name => name === changedPage.json ? Promise.resolve(changedBytes)
+      : readFile(path.join(f.folder, name)))).rejects.toThrow(/socket frame\/pass mapping/);
     await exportVariantV2(f.folder, f.root);
     expect(await readFile(path.join(f.folder, 'sheet-32.png'))).toEqual(sheet);
+    await save(path.join(f.folder, 'export.json'), { ...result, socketFrames: socketFrames.slice(1) });
+    await expect(selectVariantV2(f.asset, 'calm', 32, 'Reject socket drift.')).rejects.toThrow(/no longer matches/);
+    await save(path.join(f.folder, 'export.json'), result);
     const selected = await selectVariantV2(f.asset, 'calm', 32, 'Boss contract fixture.');
     expect(selected.clips[0]).toMatchObject({ end: 'terminal', markers: { release: 1 } });
     expect(selected.atlases).toEqual(runtime.atlases);
+    expect(selected.socketFrames).toEqual(socketFrames);
+    expect(selected.sockets).toEqual(m.sockets);
     await verifySelectionV2(f.asset);
+    // Import the complete selected fixture into a NEW isolated destination, never public/ in the repo.
+    await mkdir(path.join(f.root, 'scripts/asset-pipeline'), { recursive: true });
+    await mkdir(path.join(f.root, 'src/config'), { recursive: true });
+    await save(path.join(f.root, 'scripts/asset-pipeline/catalog-v2.json'), { assets: [{ ...entry, textureKey: 'fixture_boss' }] });
+    await save(path.join(f.root, 'src/config/coopDefenseEnemies.json'), { enemies: [] });
+    await save(path.join(f.root, 'src/config/pipelineAssets.json'), { version: 2, revision: 'original', assets: [] });
+    const outputRoot = path.join(f.root, 'isolated-import');
+    const imported = await importRuntime({ root: f.root, revision: m.revision, requestedIds: [m.id], outputRoot });
+    const publishedAsset = normalizePipelineAsset(imported.manifest.assets[0]);
+    expect(publishedAsset).toMatchObject({ runtimeContract: 'boss', textureKey: 'fixture_boss', sourceSize: 32,
+      targetSize: 16, displayScale: 2, sockets: m.sockets, socketFrames });
+    expect(imported.manifest.assets[0]).not.toHaveProperty('sheetPath');
+    expect(imported.manifest.assets[0]).not.toHaveProperty('idlePath');
+    expect(JSON.stringify(imported.manifest)).not.toContain('/art/poc/');
+    expect(new Set(Object.values(BOSS_TEXTURE_KEYS)).size).toBe(Object.keys(BOSS_TEXTURE_KEYS).length);
+    const fileCount = Object.values(runtime.atlases).flatMap((pass: any) => Object.values(pass).flatMap((clip: any) => clip.pages)).length * 2;
+    expect(imported.copiedFiles).toBe(fileCount);
+    await expect(readFile(path.join(outputRoot, 'public/assets/sprites/pipeline-v2/fixture/idle.png'))).rejects.toThrow();
+    expect(JSON.parse(await readFile(path.join(f.root, 'src/config/pipelineAssets.json'), 'utf8')).assets).toEqual([]);
+    await verifyBossRuntime(entry, publishedAsset, name => readFile(path.join(outputRoot, 'public', name)));
+    // Collision detection happens before writing destination files.
+    await save(path.join(f.root, 'src/config/pipelineAssets.json'), { version: 2, assets: [{ id: 'other', textureKey: 'fixture_boss' }] });
+    await expect(importRuntime({ root: f.root, revision: m.revision, requestedIds: [m.id], outputRoot: path.join(f.root, 'collision') })).rejects.toThrow(/Duplicate runtime texture/);
+    await expect(readFile(path.join(f.root, 'collision/pipelineAssets.json'))).rejects.toThrow();
+    await save(path.join(f.asset, 'selection.json'), { ...selected, socketFrames: socketFrames.slice(1) });
+    await expect(verifySelectionV2(f.asset)).rejects.toThrow(/bundle changed/);
+    await save(path.join(f.asset, 'selection.json'), selected);
     const page = runtime.atlases.elevation.hatch.pages[0];
     await writeFile(path.join(f.folder, page.image), f.frames[0]);
     await expect(verifySelectionV2(f.asset)).rejects.toThrow(/Selected export changed/);
@@ -270,6 +365,11 @@ describe('V2 animated asset export contracts', () => {
       'calm/render.json', 'calm/export.json', 'calm/masters/frame-0003.png', 'build.json', 'archive-source/scripts/asset-pipeline/recipes/fixture.py',
       'archive-source/art/poc/pipeline-v2/textures/organic.png']));
     expect(await verifySelectionV2(f.asset)).toEqual(selection);
+    for (const field of ['materialPass', 'shadowMesh']) {
+      await save(path.join(f.asset, 'selection.json'), { ...selection, [field]: { version: 1 } });
+      await expect(verifySelectionV2(f.asset)).rejects.toThrow(/Selected bundle changed/);
+    }
+    await save(path.join(f.asset, 'selection.json'), selection);
     const archive = await archiveManifestV2(f.asset);
     expect(archive.files).toMatchObject(selection.files);
     expect(archive.selectionSha256).toBe(hash(await readFile(path.join(f.asset, 'selection.json'))));
@@ -338,4 +438,15 @@ describe('V2 animated asset export contracts', () => {
     expect(await readFile(path.join(f.asset, 'archive-source', reference))).toEqual(f.frames[1]);
     await expect(readFile(path.join(f.asset, 'review.json'))).rejects.toThrow(/ENOENT/);
   });
+});
+import { decodeOct, encodeOct, resizeKrakenElevation } from '../../scripts/asset-pipeline/kraken-material-v2.mjs';
+
+it('averages decoded packed shading normals across the lower-hemisphere seam and preserves Beauty coverage', async () => {
+  const a = encodeOct(.02, .02, -1), b = encodeOct(-.02, .02, -1);
+  const pixels = Buffer.from([100, ...a, 255, 100, ...b, 255, 100, ...a, 255, 100, ...b, 255]);
+  const packed = await sharp(pixels, { raw: { width: 2, height: 2, channels: 4 } }).png().toBuffer();
+  const beauty = await sharp({ create: { width: 2, height: 2, channels: 4, background: '#604080' } }).png().toBuffer();
+  const result = await sharp(await resizeKrakenElevation(packed, beauty, 1)).raw().toBuffer();
+  expect(result[0]).toBe(100); expect(result[3]).toBe(255);
+  expect(decodeOct(result[1] / 255, result[2] / 255)[2]).toBeLessThan(-.99);
 });

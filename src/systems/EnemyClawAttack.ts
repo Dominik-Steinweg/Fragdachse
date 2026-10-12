@@ -1,3 +1,6 @@
+import * as v from 'valibot';
+import { CombatAreaPoseSchema, type CombatAreaPose } from '../combat/CombatAreaAttack';
+
 /** Host-owned timing; presentation samples this timeline without deciding hits. */
 export interface EnemyMeleeTiming {
   readonly hitDelayMs: number;
@@ -31,6 +34,59 @@ export interface EnemyClawEvent {
 export interface EnemyClawNetworkPort {
   broadcast(event: EnemyClawEvent): void;
   subscribe(handler: (event: EnemyClawEvent) => void): () => void;
+}
+
+const id = v.pipe(v.string(), v.trim(), v.minLength(1));
+const revision = v.pipe(v.number(), v.safeInteger(), v.minValue(0));
+const generation = v.pipe(revision, v.minValue(1));
+const time = v.pipe(v.number(), v.finite());
+export const EnemyClawSlotSchema = v.variant('kind', [
+  v.strictObject({ kind: v.literal('body') }),
+  v.strictObject({ kind: v.literal('part'), partId: id, partGeneration: generation, cycleId: generation }),
+]);
+export type EnemyClawSlot = v.InferOutput<typeof EnemyClawSlotSchema>;
+
+/** Canonical area contract for new attacks. No duplicate sector fields on a lane.
+ * Existing EnemyClawAttack/State are the pre-cutover sector wire contract; C/E migrate their
+ * consumers explicitly. The adapter below is the only legacy -> area normalization boundary.
+ */
+export const EnemyAreaClawAttackSchema = v.pipe(v.strictObject({
+  attackId: id, weaponId: id, pose: CombatAreaPoseSchema,
+  presentation: v.picklist(['claw', 'ink', 'tentacle', 'slam']),
+  startedAt: time, strikeAt: time, hitAt: time, endsAt: time,
+}), v.check(a => a.startedAt < a.strikeAt && a.strikeAt < a.hitAt && a.hitAt < a.endsAt, 'Invalid claw timeline'),
+v.check(a => (a.presentation !== 'ink' || a.pose.geometry.kind === 'sector')
+  && (!['tentacle', 'slam'].includes(a.presentation) || a.pose.geometry.kind === 'lane'), 'Presentation/geometry mismatch'));
+export type EnemyAreaClawAttack = v.InferOutput<typeof EnemyAreaClawAttackSchema>;
+export const EnemyAreaClawStateSchema = v.strictObject({ revision, attack: v.nullable(EnemyAreaClawAttackSchema) });
+export type EnemyAreaClawState = v.InferOutput<typeof EnemyAreaClawStateSchema>;
+export const EnemyAreaClawEventSchema = v.pipe(v.strictObject({
+  worldRevision: revision, activityRevision: generation, enemyId: id, entityGeneration: generation,
+  slot: EnemyClawSlotSchema, state: EnemyAreaClawStateSchema,
+}), v.check(e => e.state.attack === null || (e.state.attack.presentation === 'tentacle') === (e.slot.kind === 'part'),
+'Tentacles require independent part slots'));
+export type EnemyAreaClawEvent = v.InferOutput<typeof EnemyAreaClawEventSchema>;
+
+/** A confirmation always names an actual attack; a clear event cannot masquerade as an impact. */
+export interface EnemyAreaClawImpact extends Omit<EnemyAreaClawEvent, 'state'> {
+  readonly revision: number;
+  readonly attack: EnemyAreaClawAttack;
+}
+
+export interface EnemyAreaClawNetworkPort {
+  broadcast(event: EnemyAreaClawEvent): void;
+  subscribe(handler: (event: EnemyAreaClawEvent) => void): () => void;
+}
+
+export function readEnemyAreaClawEvent(raw: unknown): EnemyAreaClawEvent | null {
+  const result = v.safeParse(EnemyAreaClawEventSchema, raw);
+  return result.success ? result.output : null;
+}
+
+export function normalizeEnemyClawAttack(attack: EnemyClawAttack, origin: Pick<CombatAreaPose, 'originX' | 'originY'>): EnemyAreaClawAttack {
+  const { range, arcDegrees, angle, ...timeline } = attack;
+  return v.parse(EnemyAreaClawAttackSchema, { ...timeline, presentation: 'claw',
+    pose: { ...origin, angle, geometry: { kind: 'sector', range, arcDegrees } } });
 }
 
 export const EMPTY_ENEMY_CLAW_STATE: EnemyClawState = Object.freeze({ revision: 0, attack: null });

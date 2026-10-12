@@ -1,0 +1,52 @@
+{
+  "frames": {
+    "__rest/0000": {
+      "frame": {
+        "x": 2,
+        "y": 2,
+        "w": 28,
+        "h": 38
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 18,
+        "y": 20,
+        "w": 28,
+        "h": 38
+      },
+      "sourceSize": {
+        "w": 64,
+        "h": 64
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "sourceFrame": 0,
+      "sockets": {
+        "base": {
+          "x": 0.5,
+          "y": 0.4375,
+          "z": 0.02
+        },
+        "tip": {
+          "x": 0.5,
+          "y": 0.86249998,
+          "z": 0.47999999
+        }
+      }
+    }
+  },
+  "meta": {
+    "app": "Fragdachse V2",
+    "version": "1",
+    "image": "color-__rest-0.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 32,
+      "h": 42
+    },
+    "scale": "1"
+  }
+}

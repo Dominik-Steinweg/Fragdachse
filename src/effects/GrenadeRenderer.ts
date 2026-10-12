@@ -7,6 +7,13 @@ import { configureAdditiveImage, createEmitter, destroyEmitter, ensureCanvasText
 const TEX_GRENADE_GLOW       = '__grenade_glow';
 const TEX_MOLOTOV_FIRE_PUFF  = '__grenade_fire_puff';
 
+/** AP2 hands Kraken egg flights to their D-backed view without extending the old preset wire union.
+ * The projectile owner still supplies the displayed flight position and owns terminal reactions. */
+export interface GrenadeEggVisual {
+  update(x: number, y: number, size: number, vx: number, vy: number): void;
+  destroy(): void;
+}
+
 const BODY_KEYS: Record<GrenadeVisualPreset, string> = {
   he_cluster_shard: TEX_EXPLOSION_CHUNK,
   he_demolition_shard: TEX_EXPLOSION_CHUNK,
@@ -228,9 +235,17 @@ function cssRgba(color: number, alpha: number): string {
 
 export class GrenadeRenderer {
   private visuals   = new Map<number, GrenadeVisual>();
+  private readonly eggVisuals = new Map<number, GrenadeEggVisual>();
   private firePuffs = new Set<Phaser.GameObjects.Image>();
 
   constructor(private readonly scene: Phaser.Scene) {}
+
+  /** Transfers view ownership; replacing/ending a flight never triggers egg landing or hatching. */
+  attachEggVisual(id: number, visual: GrenadeEggVisual): void {
+    if (this.eggVisuals.get(id) === visual) return;
+    this.destroyVisual(id);
+    this.eggVisuals.set(id, visual);
+  }
 
   generateTextures(): void {
     const textures = this.scene.textures;
@@ -273,7 +288,7 @@ export class GrenadeRenderer {
     preset: GrenadeVisualPreset,
     playerColor?: number,
   ): void {
-    if (this.visuals.has(id)) return;
+    if (this.has(id)) return;
 
     const cfg      = PRESETS[preset];
     const glowTint = cfg.glowTint ?? playerColor ?? 0xffffff;
@@ -308,6 +323,8 @@ export class GrenadeRenderer {
   }
 
   updateVisual(id: number, x: number, y: number, size: number, vx: number, vy: number): void {
+    const egg = this.eggVisuals.get(id);
+    if (egg) { egg.update(x, y, size, vx, vy); return; }
     const visual = this.visuals.get(id);
     if (!visual) return;
 
@@ -377,6 +394,8 @@ export class GrenadeRenderer {
   }
 
   destroyVisual(id: number): void {
+    const egg = this.eggVisuals.get(id);
+    if (egg) { this.eggVisuals.delete(id); egg.destroy(); }
     const visual = this.visuals.get(id);
     if (!visual) return;
     visual.glow.destroy();
@@ -387,11 +406,11 @@ export class GrenadeRenderer {
   }
 
   has(id: number): boolean {
-    return this.visuals.has(id);
+    return this.visuals.has(id) || this.eggVisuals.has(id);
   }
 
   getActiveIds(): number[] {
-    return [...this.visuals.keys()];
+    return [...this.visuals.keys(), ...this.eggVisuals.keys()];
   }
 
   destroyAll(): void {

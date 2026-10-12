@@ -1,4 +1,14 @@
 import * as Phaser from 'phaser';
+import materialLook from '../../config/krakenMaterialLighting.json';
+import { characterLocalVector } from '../CharacterMaterialModel';
+import { setCloudUniforms, type SunCloudState } from '../sunlight/cloudShadow';
+import { getGraphicsQualityProfile } from '../../graphics/GraphicsQuality';
+import { KRAKEN_MATERIAL_HEADER } from './krakenMaterialShader';
+
+/** Presentation response after the hash-bound albedo calibration; shared by game and viewer. */
+export function krakenMaterialExposure(id: string, exposure: number): number {
+  return exposure * (id === 'abyssal-kraken-tentacle' ? materialLook.tentacleExposureScale : 1);
+}
 
 /** Heights are Blender units; colours are linear shader RGB in [0, 1]. */
 export const SUBMERSION_DEFAULTS = {
@@ -10,7 +20,16 @@ export const SUBMERSION_DEFAULTS = {
   foamBand: 0.022, foamOpacity: 0.42,
   depthFalloff: 0.35, desaturation: 0.45, shallowTint: 0.22,
   fadeStart: 0.15, fadeEnd: 1.2, refractionPx: 2,
+  // On land nothing can lie below the ground: parts deeper than this under the waterline (a tentacle's
+  // coil before it erupts, the bank side of the body during ashore) fade out instead of being drawn on grass.
+  buriedStart: 0.5, buriedEnd: 1.0,
+  exposure: 1,
 };
+
+/** World lighting lifts sprites roughly 3x in linear light; the boss keeps its dark plum menace. */
+export const KRAKEN_WORLD_EXPOSURE = 0.55;
+/** On land the body sits in ordinary (often shaded) world light; dimming it like the sunlit pond made it unreadable. */
+export const KRAKEN_LAND_EXPOSURE = 1;
 
 export const SUBMERSION_FRAGMENT = `
 #pragma phaserTemplate(shaderName)
@@ -21,9 +40,11 @@ uniform vec2 elevationSize, displaySize;
 uniform float waterLevel, elevationMin, elevationMax, time;
 uniform vec3 deepColor, shallowColor, foamColor;
 uniform float wetBand, wetDarkening, wetSaturation, foamBand, foamOpacity;
-uniform float depthFalloff, desaturation, shallowTint, fadeStart, fadeEnd, refractionPx;
+uniform float depthFalloff, desaturation, shallowTint, fadeStart, fadeEnd, refractionPx, exposure;
+uniform float buriedStart, buriedEnd;
 varying vec2 outTexCoord;
 #pragma phaserTemplate(fragmentHeader)
+${KRAKEN_MATERIAL_HEADER}
 float hash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
 float noise(vec2 p) {
   vec2 i=floor(p),f=fract(p); f=f*f*(3.0-2.0*f);
@@ -34,15 +55,19 @@ void main() {
   vec4 source=boundedSampler(uMainSampler,uv);
   vec2 logical=vec2(uv.x,1.0-uv.y);
   vec2 local=(logical*elevationSize-elevationTrim.xy)/elevationTrim.zw;
-  float mask=texture2D(uWaterMask,uv).r;
-  if(source.a<=0.0 || mask<=0.0 || any(lessThan(local,vec2(0))) || any(greaterThan(local,vec2(1)))) {
+  vec4 height=texture2D(uElevation,mix(elevationUV.xy,elevationUV.zw,clamp(local,0.0,1.0)));
+  source=krakenLight(source,logical,height);
+  source.rgb*=exposure;
+  float mask=texture2D(uWaterMask,logical).r;
+  if(source.a<=0.0 || any(lessThan(local,vec2(0))) || any(greaterThan(local,vec2(1)))) {
     gl_FragColor=source; return;
   }
-  vec4 height=texture2D(uElevation,mix(elevationUV.xy,elevationUV.zw,local));
   if(height.a<=0.001) { gl_FragColor=source; return; }
   // Phaser uploads PNGs with premultiplied alpha. Undo it for this data pass.
   float elevation=mix(elevationMin,elevationMax,clamp(height.r/height.a,0.0,1.0));
   float d=waterLevel-elevation;
+  vec4 ground=source*(1.0-smoothstep(buriedStart,buriedEnd,d));
+  if(mask<=0.0) { gl_FragColor=ground; return; }
   vec3 rgb=source.rgb/source.a;
   float alpha=source.a;
   if(d>0.0) {
@@ -50,6 +75,11 @@ void main() {
     vec2 shift=vec2(sin(logical.y*37.0+time*1.3),cos(logical.x*31.0+time*1.1));
     shift*=min(refractionPx,2.0)*0.70710678*f/max(displaySize,vec2(1));
     vec4 refracted=boundedSampler(uMainSampler,uv+shift);
+    vec2 refractedLogical=vec2(uv.x+shift.x,1.0-uv.y-shift.y);
+    vec2 refractedLocal=(refractedLogical*elevationSize-elevationTrim.xy)/elevationTrim.zw;
+    vec4 refractedData=texture2D(uElevation,mix(elevationUV.xy,elevationUV.zw,clamp(refractedLocal,0.0,1.0)));
+    refracted=krakenLight(refracted,refractedLogical,refractedData);
+    refracted.rgb*=exposure;
     rgb=refracted.a>0.001 ? refracted.rgb/refracted.a : rgb;
     rgb=mix(rgb,vec3(dot(rgb,vec3(.2126,.7152,.0722))),desaturation*f);
     rgb=mix(rgb,shallowColor,shallowTint*f);
@@ -64,7 +94,7 @@ void main() {
   foam*=smoothstep(.25,.65,noise(logical*displaySize*.16+vec2(time*.5,-time*.3)));
   rgb=mix(rgb,foamColor,foam);
   // No halo beyond beauty coverage; premultiplied output remains valid as it fades.
-  gl_FragColor=mix(source,vec4(clamp(rgb,0.0,1.0)*alpha,alpha),clamp(mask,0.0,1.0));
+  gl_FragColor=mix(ground,vec4(clamp(rgb,0.0,1.0)*alpha,alpha),clamp(mask,0.0,1.0));
 }
 `;
 
@@ -77,6 +107,8 @@ type Sprite = Phaser.GameObjects.Sprite | Phaser.GameObjects.Image;
  * __WHITE supplies constant 1. Owners update the matching elevation frame each pose.
  */
 export class SubmersionFilter extends Phaser.Filters.Controller {
+  /** Pilot/new-revision opt-in only; scalar elevation never implies a material. */
+  material: { clouds: SunCloudState; emission: Phaser.Textures.Frame; emissionRange: number; tint?: readonly number[]; saturation?: number; highlightRollOff?: boolean; highlightRole?: 'body' | 'tentacle' } | null = null;
   params = { ...SUBMERSION_DEFAULTS };
   elevationMin: number;
   elevationMax: number;
@@ -96,10 +128,23 @@ class SubmersionNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader 
   override setupTextures(c: SubmersionFilter, textures: Phaser.Renderer.WebGL.Wrappers.WebGLTextureWrapper[]): void {
     textures[1] = c.elevationFrame.glTexture;
     textures[2] = c.waterMask.glTexture;
+    textures[3] = (c.material?.emission ?? c.elevationFrame).glTexture;
   }
   override setupUniforms(c: SubmersionFilter): void {
     const f = c.elevationFrame;
+    const m = c.material, e = m?.emission ?? f, sun = [0, 0, 1], s = c.target;
+    const light = m?.clouds.sunPath?.sun ?? [0, 0, 1];
+    characterLocalVector(light[0], light[1], light[2], s.rotation, s.flipX, s.flipY, sun);
     const uniforms = {
+      uEmission: 3, materialEnabled: Number(!!m), materialLow: Number(getGraphicsQualityProfile(c.target.scene).level === 'low'),
+      materialTint: m?.tint ?? [1, 1, 1], materialSaturation: m?.saturation ?? 1,
+      materialHighlightTone: m?.highlightRollOff === false ? [1, 1] : [m?.highlightRole === 'tentacle' ? materialLook.tentacleAlbedoHighlightKnee : materialLook.albedoHighlightKnee, materialLook.albedoHighlightSlope],
+      materialSun: sun, materialStrength: m?.clouds.sunPath?.strength ?? 0,
+      materialNormalScale: [1 / Math.max(.001, Math.abs(s.scaleX)), 1 / Math.max(.001, Math.abs(s.scaleY)),
+        1 / Math.max(.001, Math.sqrt(Math.abs(s.scaleX * s.scaleY)))],
+      materialWorld: [s.x, s.y, Math.cos(s.rotation), Math.sin(s.rotation)], materialOrigin: [s.originX, s.originY],
+      emissionRange: m?.emissionRange ?? 1, emissionUV: [e.u0, e.v0, e.u1, e.v1],
+      emissionSize: [e.realWidth, e.realHeight], emissionTrim: [e.x, e.y, e.width, e.height],
       ...c.params, uElevation: 1, uWaterMask: 2,
       elevationMin: c.elevationMin, elevationMax: c.elevationMax,
       elevationUV: [f.u0, f.v0, f.u1, f.v1],
@@ -108,6 +153,7 @@ class SubmersionNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader 
       displaySize: [Math.abs(c.target.displayWidth), Math.abs(c.target.displayHeight)],
     };
     for (const [key, value] of Object.entries(uniforms)) this.programManager.setUniform(key, value);
+    setCloudUniforms((key, value) => this.programManager.setUniform(key, value), m?.clouds);
   }
 }
 
@@ -122,4 +168,65 @@ export function addSubmersionFilter(target: Sprite, elevationFrame: Phaser.Textu
   const filter = new SubmersionFilter(target, elevationFrame, encoding, target.scene.textures.getFrame(maskKey));
   target.filters!.internal.add(filter);
   return filter;
+}
+
+export interface KrakenMaskTransform {
+  readonly x: number; readonly y: number; readonly rotation: number;
+  readonly originX: number; readonly originY: number;
+  readonly displayWidth: number; readonly displayHeight: number;
+}
+
+/** Full logical canvas -> world, independent of color/elevation atlas trimming or resolution.
+ * waterAt accepts world presentation coordinates (the composition owns any world offset). */
+export function krakenWaterMask(width: number, height: number, transform: KrakenMaskTransform,
+  waterAt: (x: number, y: number) => number): Uint8ClampedArray {
+  const result = new Uint8ClampedArray(width * height * 4);
+  const c = Math.cos(transform.rotation), s = Math.sin(transform.rotation);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const dx = ((x + .5) / width - transform.originX) * transform.displayWidth;
+    const dy = ((y + .5) / height - transform.originY) * transform.displayHeight;
+    const offset = (y * width + x) * 4;
+    result[offset] = Math.round(Math.max(0, Math.min(1,
+      waterAt(transform.x + dx * c - dy * s, transform.y + dx * s + dy * c))) * 255);
+    result[offset + 3] = 255;
+  }
+  return result;
+}
+
+let maskSerial = 0;
+/** Owns only its small world mask and filter. Residency owns the borrowed atlas frames. */
+export class KrakenSubmersion {
+  readonly filter: SubmersionFilter;
+  private readonly mask: Phaser.Textures.CanvasTexture;
+  private signature = '';
+  private destroyed = false;
+
+  constructor(private readonly sprite: Sprite, elevation: Phaser.Textures.Frame, encoding: { min: number; max: number },
+    private readonly waterAt: (x: number, y: number) => number, exposure = KRAKEN_WORLD_EXPOSURE) {
+    this.mask = sprite.scene.textures.createCanvas(`kraken-runtime-mask-${++maskSerial}`, 128, 128)!;
+    this.filter = addSubmersionFilter(sprite, elevation, encoding, this.mask.key);
+    this.filter.params.exposure = exposure;
+  }
+
+  update(elevation: Phaser.Textures.Frame, level: number, timeSeconds: number, waterRevision = 0): void {
+    if (this.destroyed) return;
+    this.filter.elevationFrame = elevation;
+    this.filter.params.waterLevel = level;
+    this.filter.params.time = timeSeconds;
+    const s = this.sprite;
+    const signature = [s.x, s.y, s.originX, s.originY, s.displayWidth, s.displayHeight, s.rotation, waterRevision].join(',');
+    if (signature === this.signature) return;
+    this.signature = signature;
+    const pixels = this.mask.context.createImageData(128, 128);
+    pixels.data.set(krakenWaterMask(128, 128, s, this.waterAt));
+    this.mask.context.putImageData(pixels, 0, 0);
+    this.mask.refresh();
+  }
+
+  destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.sprite.filters?.internal.remove(this.filter);
+    this.mask.destroy();
+  }
 }

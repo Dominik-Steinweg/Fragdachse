@@ -6,6 +6,7 @@ vi.mock('../src/effects/enemyClaw/EnemyClawGpuLayer', () => ({
   createEnemyClawGpuLayer: () => null,
 }));
 import { EnemyClawRenderer } from '../src/effects/EnemyClawRenderer';
+import type { EnemyAreaClawEvent } from '../src/systems/EnemyClawAttack';
 import {
   CLAW_VFX_CAPACITY, CLAW_VFX_INSTANCE_FLOATS, CLAW_VFX_SLASH_MS, EnemyClawVfxStore,
   CLAW_VFX_FLOATS_PER_VERTEX, CLAW_VFX_TELEGRAPH_FADE_MS, ClawVfxKind,
@@ -65,6 +66,17 @@ describe('enemy claw instance store', () => {
   const spec = (x: number) => ({ x, y: 0, angle: 0.5, range: 50, halfArc: 0.7,
     startedAt: 0, strikeAt: 270, hitAt: 350, color: 0xff0000 });
 
+  it('opts into a sector warning without claw rakes, preserving regular sectors', () => {
+    const store = new EnemyClawVfxStore();
+    store.addAttack('soft', spec(10), 0);
+    store.addAttack('telegraphOnly', { ...spec(10), telegraphOnly: true }, 0);
+    expect(store.data[10]).toBe(ClawVfxKind.Attack);
+    expect(store.data[CLAW_VFX_INSTANCE_FLOATS + 10]).toBe(ClawVfxKind.TelegraphSector);
+    expect(store.data[8]).toBe(store.data[CLAW_VFX_INSTANCE_FLOATS + 8]);
+    store.retire(350 + CLAW_VFX_SLASH_MS);
+    expect(store.count).toBe(0);
+  });
+
   it('rotates a lane about its entry, preserves its full width, and retires after the telegraph fade', () => {
     const store = new EnemyClawVfxStore();
     const lane = { shape: 'lane' as const, x: 70, y: 80, angle: Math.PI / 2, length: 240, width: 96,
@@ -121,5 +133,62 @@ describe('enemy claw instance store', () => {
     store.retire(10_000);
     expect(store.count).toBe(0);
     expect(store.time(5_000_000)).toBe(0);
+  });
+});
+
+describe('canonical area claw projection', () => {
+  const event = (partId: string): EnemyAreaClawEvent => ({ worldRevision: 1, activityRevision: 2,
+    enemyId: 'kraken', entityGeneration: 3, slot: { kind: 'part', partId, partGeneration: 1, cycleId: 2 },
+    state: { revision: 1, attack: { attackId: 'slam', weaponId: 'tentacle', presentation: 'tentacle',
+      pose: { originX: 75, originY: 30, angle: Math.PI / 2, geometry: { kind: 'lane', length: 240, width: 80 } },
+      startedAt: 1000, strikeAt: 1500, hitAt: 1700, endsAt: 1900 } } });
+  function fixture() {
+    const scene = { time: { now: 0 } };
+    const renderer = new EnemyClawRenderer(scene as never);
+    return { scene, renderer, store: (renderer as unknown as { store: EnemyClawVfxStore }).store };
+  }
+  it('keeps simultaneous lanes independent and rejects stale baselines after cancellation', () => {
+    const { renderer, store } = fixture(), left = event('left'), right = event('right');
+    renderer.syncArea(left, 1100); renderer.syncArea(right, 1100);
+    expect(store.count).toBe(2);
+    expect(store.data[10]).toBe(ClawVfxKind.Lane);
+    const before = store.data.slice();
+    renderer.syncArea({ ...left, state: { ...left.state, attack: { ...left.state.attack!,
+      pose: { ...left.state.attack!.pose, originX: 999 } } } }, 1200);
+    expect(store.data).toEqual(before); // the warning cannot chase a moving target
+    renderer.syncArea({ ...left, state: { revision: 2, attack: null } }, 1200);
+    renderer.syncArea(left, 1200);
+    expect(store.count).toBe(1);
+    renderer.releaseArea(right);
+    expect(store.count).toBe(0);
+    renderer.syncArea(right, 1200);
+    expect(store.count).toBe(0);
+  });
+  it.each(['ink', 'tentacle', 'slam'] as const)('%s confirmation never draws claw scratches or replays a cancelled part', presentation => {
+    const { renderer, store } = fixture();
+    const e = event('a'), a = { ...e.state.attack!, presentation };
+    if (presentation === 'ink') a.pose = { ...a.pose, geometry: { kind: 'sector', range: 300, arcDegrees: 60 } };
+    if (presentation !== 'tentacle') e.slot = { kind: 'body' };
+    e.state.attack = a;
+    renderer.syncArea(e, 1100);
+    const kind = presentation === 'ink' ? ClawVfxKind.TelegraphSector : ClawVfxKind.Lane;
+    expect(store.data[10]).toBe(kind);
+    const swing = { swingId: 1, shooterId: 'kraken', x: -999, y: -999, angle: 0, range: 1, arcDegrees: 1,
+      color: 0, hitPlayer: true, impactX: 10, impactY: 20, areaClaw: { ...e, state: undefined, revision: 1, attack: a } };
+    renderer.confirm(swing); renderer.confirm(swing);
+    expect(store.count).toBe(1);
+    renderer.releaseArea(e); renderer.confirm(swing);
+    expect(store.count).toBe(0);
+  });
+  it('uses canonical sector geometry even when the legacy confirmation fields disagree', () => {
+    const { renderer, store } = fixture(), e = event('a');
+    e.slot = { kind: 'body' };
+    const a = { ...e.state.attack!, presentation: 'claw' as const,
+      pose: { originX: 90, originY: 60, angle: 0, geometry: { kind: 'sector' as const, range: 120, arcDegrees: 70 } } };
+    renderer.confirm({ swingId: 1, shooterId: 'k', x: -1, y: -1, angle: 0, range: 1, arcDegrees: 1, color: 0,
+      areaClaw: { ...e, revision: 1, attack: a } });
+    expect(store.data[8]).toBe(a.pose.geometry.range);
+    expect(store.data[0] - store.data[2]).toBeCloseTo(a.pose.originX, 4);
+    expect(store.data[10]).toBe(ClawVfxKind.Attack);
   });
 });

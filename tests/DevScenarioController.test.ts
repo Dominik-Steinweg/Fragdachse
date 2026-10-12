@@ -30,6 +30,7 @@ vi.mock('../src/network/bridge', () => ({ bridge: {
 let controller: DevScenarioController;
 let player: { x: number; y: number; alive: boolean };
 let attacks: string[];
+const krakenMission = { start: vi.fn(), hp: vi.fn() };
 beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal('window', new EventTarget());
@@ -38,19 +39,22 @@ beforeEach(() => {
   host.phase = 'LOBBY'; host.started = false;
   arenaSystem.pause.mockClear(); arenaSystem.resume.mockClear(); arenaSystem.setVisible.mockClear();
   player = { x: 208, y: 668, alive: true }; attacks = [];
+  krakenMission.start.mockReset().mockReturnValue(true); krakenMission.hp.mockReset().mockReturnValue(true);
   const runtime = {
     navigationLabPort: {
       setNextRoundSeed() {}, isReady: () => host.started,
       getPlayerPosition: () => ({ ...player }), getGeometry: () => ({}),
       placePlayer: (x: number, y: number) => { player.x = x; player.y = y; }, readEnemies: () => [],
     },
-    devScenarioPort: { suppressEncounters() {}, setOptions() {}, readMission: () => ({}), updateTrain() {} },
+    devScenarioPort: { suppressEncounters() {}, setOptions() {}, readMission: () => ({}), updateTrain() {},
+      startKrakenMission: krakenMission.start, setKrakenHp: krakenMission.hp },
     weaponBalanceLabPort: { setAdrenaline() {}, getMaxAdrenaline: () => 100,
       useWeaponAction: (slot: string) => { attacks.push(slot); return { ok: true }; } },
     rpcPorts: { heldAction: { clearPlayer() {} } },
     getWorldMetrics: () => ({ offsetX: 0, offsetY: 12, gridCols: 60, gridRows: 33 }),
     getScenarioLoadingState: () => ({ roundStartPrepared: true }), getScenarioObservation: () => ({}),
     getScenarioLightingTargets: () => ({ sunlight: null, enemyReadability: {getDiagnostics:()=>({})} }),
+    getScenarioKrakenResidency: () => null,
     getWorldDescriptor: () => ({}), getWorldCombatCore: () => null, setTimeOfDayDebugOverride() {},
     setIsLocalReady() {}, stopScenarioUltimate() {}, isMatchTerminated: () => false,
     hostDiscardRound: () => { host.phase = 'LOBBY'; host.started = false; },
@@ -95,6 +99,54 @@ function enter() {
 }
 
 describe('Dev scenario automation lifecycle', () => {
+  it('starts the Kraken mission after placement and waits for the requested HP to be applied', () => {
+    (controller as any).runtime.getWorldMetrics = () => ({ offsetX: 0, offsetY: 12, gridCols: 70, gridRows: 48 });
+    const api = window.devScenario!;
+    expect(api.run({ action: 'krakenMission', skipIntro: true, hp: 4000 })).toMatchObject({ ok: true });
+    controller.clock.preparing = true;
+    expect(controller.config.mapId).toBe(KRAKEN_MAP_ID);
+    controller.update(); controller.update(); host.phase = 'ARENA'; host.started = true; controller.update();
+    expect(krakenMission.start).not.toHaveBeenCalled();
+    controller.afterHostFrame();
+    expect(controller.clock.paused).toBe(false);
+    krakenMission.hp.mockReturnValueOnce(false); controller.update();
+    expect(krakenMission.start).toHaveBeenCalledExactlyOnceWith(true);
+    expect(controller.snapshot().ready).toBe(false);
+    controller.afterHostFrame();
+    expect(controller.clock.paused).toBe(false);
+    controller.update();
+    expect(krakenMission.hp).toHaveBeenLastCalledWith(4000);
+    expect(controller.snapshot().ready).toBe(true);
+    controller.afterHostFrame();
+    expect(controller.clock.paused).toBe(true);
+    expect(controller.config.freezeMission).toBe(false);
+    expect(api.run({ action: 'krakenHp', hp: 7000 })).toMatchObject({ ok: true });
+    expect(krakenMission.hp).toHaveBeenLastCalledWith(7000);
+    expect(krakenMission.start).toHaveBeenCalledOnce();
+    expect(api.run({ action: 'krakenMission', hp: 0 })).toMatchObject({ ok: false });
+  });
+  it('clears a figure-sun override when the diagnosis controller ends', () => {
+    enter(); controller.afterHostFrame();
+    const setFigureReviewSun = vi.fn();
+    (controller as any).runtime.getScenarioLightingTargets = () => ({ sunlight: { setFigureReviewSun }, enemyReadability: { getDiagnostics: () => ({}) } });
+    controller.setFigureSun({ azimuth: 135, elevation: 28, strength: 1 });
+    controller.destroy();
+    expect(setFigureReviewSun).toHaveBeenLastCalledWith(null);
+  });
+  it('reports mission termination before another visual-test step can be requested', () => {
+    enter(); controller.afterHostFrame();
+    (controller as any).runtime.isMatchTerminated = () => true;
+    expect(controller.snapshot()).toMatchObject({ ready: false, terminated: true });
+    expect(window.devScenario!.run({ action: 'settle', frames: 1 })).toMatchObject({ ok: false });
+  });
+  it('keeps termination observable after the finished round returned to the lobby', () => {
+    enter(); controller.afterHostFrame();
+    host.phase = 'LOBBY'; host.started = false;
+    controller.afterHostFrame();
+    expect(controller.snapshot()).toMatchObject({ ready: false, terminated: true });
+    controller.start(defaultScenario());
+    expect(controller.snapshot()).toMatchObject({ terminated: false });
+  });
   it('routes the readability recipe and both terrain stations through the public API',()=>{
     const start=vi.spyOn(controller,'start').mockImplementation(()=>{});
     const arrange=vi.spyOn(controller,'arrangeEnemyReadability').mockImplementation(()=>{});
@@ -348,7 +400,8 @@ it('cancels a queued train explosion on stop and refuses unsafe observer positio
 });
 
 // Exercise the real start/tick chain; only Phaser bodies and lifecycle services are stubbed.
-vi.mock('phaser', () => ({ BlendModes: { NORMAL: 0, ADD: 1 } }));
+vi.mock('phaser', () => ({ BlendModes: { NORMAL: 0, ADD: 1 }, Filters: { Controller: class {} },
+  Renderer: { WebGL: { RenderNodes: { BaseFilterShader: class {} } } } }));
 import { TrainManager } from '../src/train/TrainManager';
 import { CoopDefenseTrainEventHandler } from '../src/train/CoopDefenseTrainEventHandler';
 import { createDevScenarioWorldPort } from '../src/scenes/arena/ArenaRuntimeAdapters';

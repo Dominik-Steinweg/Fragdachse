@@ -13,6 +13,8 @@ import type {
   TargetSupportMutationPort,
 } from './CombatMutation';
 import type { CombatSource, CombatTargetRef } from './CombatScope';
+export type { CombatAreaAttackPort, CombatAreaAttackRequest } from './CombatAreaAttack';
+export type { CombatPartContactReadPort, CombatPartStatusPort } from './CombatPartContact';
 import type { ActiveBurnSource } from './rules/BurnStateMachine';
 import type { HitscanShotRequest, MeleeSwingRequest } from '../loadout/WeaponFireExecutor';
 import type {

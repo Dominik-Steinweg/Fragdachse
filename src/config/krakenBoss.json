@@ -1,0 +1,30 @@
+{
+  "assets": { "water": "abyssal-kraken", "land": "abyssal-kraken-land", "tentacle": "abyssal-kraken-tentacle", "egg": "abyssal-kraken-egg", "spine": "abyssal-kraken-spine" },
+  "bodyRadiusPx": 64, "phaseTwoHpRatio": 0.5, "hpGate": false,
+  "firstAttackDelayMs": 800, "actionPauseMs": 1800, "turnRateDegPerSec": 90,
+  "waterApproachSpeedPxPerSec": 80, "waterShoreDistancePx": 24, "landMoveSpeedPxPerSec": 175, "landTurnRateDegPerSec": 300,
+  "waterWander": { "speedPxPerSec": 58, "turnRateDegPerSec": 70, "minLegPx": 140, "maxLegPx": 360, "pauseMs": 700, "shoreClearancePx": 110, "diveInteriorRatio": 0.35 },
+  "dive": { "intervalMs": 14000, "durationMs": 1200, "submergedAtMs": 950, "submergedDurationMs": 7000, "surfaceDurationMs": 1400, "vulnerableAtMs": 900, "recoveryMs": 600 },
+  "ink": { "range": 432, "arcDegrees": 56, "damage": 60, "mouthOffset": { "x": 64, "y": 0 }, "windupMs": 1000, "spitDelayMs": 180, "recoveryMs": 450, "cloudFadeMs": 700 },
+  "tentacles": { "length": 320, "width": 112, "damage": 45, "windupMs": 1100, "strikeMs": 170, "recoveryMs": 450, "maxConcurrent": 3, "retractMs": 650, "retryMs": 350, "safetyMarginPx": 16, "hitboxProfileId": "shore-arm", "riseMs": 650, "targetableAfterRiseMs": 250, "untargetableAfterRetractMs": 450,
+    "lurkMinMs": 1600, "lurkMaxMs": 3800, "emergeShoreBandPx": 170, "spawnSpacingPx": 150, "repositionDelayMs": 450, "sinkMs": 600 },
+  "hitboxProfiles": [{ "id": "shore-arm",
+    "rise": [{ "kind": "capsule", "fromX": 16, "fromY": 0, "toX": 64, "toY": 0, "radius": 18 }],
+    "hover": [{ "kind": "capsule", "fromX": 8, "fromY": 0, "toX": 56, "toY": 0, "radius": 26 }],
+    "slam": [{ "kind": "capsule", "fromX": 16, "fromY": 0, "toX": 270, "toY": 0, "radius": 24 }],
+    "retract": [{ "kind": "capsule", "fromX": 16, "fromY": 0, "toX": 96, "toY": 0, "radius": 18 }]
+  }],
+  "transfer": { "damageMultiplier": 1, "ownHp": false, "severable": false, "deduplication": "event-boss-max", "status": "contact-only", "hiddenBodyDot": "suppress-ticks-keep-expiry" },
+  "slam": { "length": 560, "width": 128, "damage": 50, "windupMs": 550, "strikeMs": 300, "recoveryMs": 500, "lungeDistancePx": 420, "frontArcDegrees": 40 },
+  "spines": { "volleyCount": 6, "range": 960, "damage": 24, "speedPxPerSec": 880, "turnRateDegPerSec": 210, "hitRadiusPx": 10, "lifetimeMs": 1700, "windupMs": 760, "raiseMs": 420, "releaseSpacingMs": 110, "recoveryMs": 450, "regrowDelayMs": 600, "regrowMs": 3600, "cooldownMs": 5200, "originOffsets": [{ "x": 35, "y": 0 }, { "x": 20, "y": 0 }, { "x": 6, "y": 0 }, { "x": -9, "y": 0 }, { "x": -24, "y": 0 }, { "x": -39, "y": 0 }] },
+  "landCooldowns": { "slamMs": 2000, "inkMs": 5000, "eggsMs": 11000 },
+  "exit": { "warningMs": 1200, "roarAfterMs": 450, "durationMs": 2400, "gripAfterMs": 700, "gripHoldMs": 150, "heaveAfterMs": 1950, "gripDistanceRatio": 0.2, "heaveDistanceRatio": 0.85, "recoveryMs": 600, "protected": true, "contactDamage": 0, "blockedPolicy": "wait-or-alternate", "retryMs": 400, "diagnosticAfterMs": 5000 },
+  "eggs": { "enemyKind": "abyssal-kraken-egg", "maxHp": 20, "radiusPx": 10, "volleyCount": 6, "maxPendingAndLive": 12, "windupMs": 700, "flightMs": 900, "recoveryMs": 450, "incubationMs": 3500, "hatchSpawnAfterMs": 400, "hatchDurationMs": 667, "spawnRetryMs": 200, "spawnRetryWindowMs": 1600,
+    "throwDistancePx": 640, "minimumShoreDistancePx": 128, "releaseSpacingMs": 100, "throwConeDegrees": 85, "presentationPreset": "fur_ball",
+    "releaseOffsets": [{ "x": 64, "y": -60 }, { "x": 88, "y": -36 }, { "x": 100, "y": -12 }, { "x": 100, "y": 12 }, { "x": 88, "y": 36 }, { "x": 64, "y": 60 }],
+    "targetableInFlight": false, "drops": false, "xp": 0, "necromancy": false, "countsForEncounter": false,
+    "broodTable": { "id": "kraken-melee-brood", "entries": [{ "enemyKind": "rabid-badger", "weight": 1 }] }
+  },
+  "victory": "boss-defeated", "death": { "waterMs": 1200, "landMs": 1500 },
+  "residency": { "waterBudgetMiB": 165, "landBudgetMiB": 150, "pixelsPerDisplayPixel": 1, "landPrefetchHpRatio": 0.65 }
+}

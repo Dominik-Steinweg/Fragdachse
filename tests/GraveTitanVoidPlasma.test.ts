@@ -79,6 +79,8 @@ function createTitan(): TestTitan {
     isBurrowed: () => false,
     decayWeaponSpread: () => {},
     rollWeaponSpreadOffset: () => 0,
+    getCollisionRadius: () => TITAN.size / 2,
+    getAimAngle: () => 0,
     faceAngle: () => {},
     stopMovement: () => {},
     canScanForAttack(now: number) { return now >= this.nextScanAt; },

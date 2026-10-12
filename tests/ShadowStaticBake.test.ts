@@ -13,11 +13,11 @@ vi.mock('../src/effects/EnemyMeshShadowRenderer',()=>({EnemyMeshShadowRenderer:c
  destroy(){expect(characters.receivers.has(this.receiver)).toBe(true);characters.enemies.delete(this);}
 }}));
 vi.mock('../src/effects/CharacterShadowReceiver',()=>({CharacterShadowReceiver:class {
- constructor(){characters.receivers.add(this);}update(){}destroy(){characters.receivers.delete(this);}
+ constructor(){characters.receivers.add(this);}update(){}destroy(){expect(characters.receivers.has(this)).toBe(true);characters.receivers.delete(this);}
 }}));
 vi.mock('../src/effects/CharacterMeshShadowRenderer',()=>({CharacterMeshShadowRenderer:class {
  count=0;activeCount=0;constructor(_scene:any,readonly clouds:any,readonly receiver:any){characters.live.add(this);}
-  sync(){}setVisible(){}setDebugSolid(){}destroy(){characters.live.delete(this);this.receiver.destroy();}
+  sync(){}setVisible(){}setDebugSolid(){}destroy(){expect(characters.receivers.has(this.receiver)).toBe(true);characters.live.delete(this);}
 }}));
 import {GraphicsQualityController} from '../src/graphics/GraphicsQuality';
 import { ShadowSystem } from '../src/effects/ShadowSystem';
@@ -621,4 +621,21 @@ it('character world binding survives high-low-high and releases receivers on eve
   shadows.clear();
  }
  shadows.destroy();quality.destroy();expect(characters.live.size).toBe(0);expect(characters.receivers.size).toBe(0);
+});
+
+it('World receiver is shared with player-free Low casters and outlives each borrower',()=>{
+ const {scene}=makeScene();(scene as any).add.particles=vi.fn();const quality=new GraphicsQualityController();quality.attach(scene);
+ const shadows=new ShadowSystem(scene);shadows.rebuildStaticLayoutShadows(layout(0,0));
+ shadows.setCharacterSunlight({name:'pilot'} as any);quality.setLevel('low');
+ const released:string[]=[],first=shadows.borrowFigureEnvironment(()=>{
+   expect(characters.receivers.has(first!.receiver)).toBe(true);released.push('first');first!.release();
+ });
+ const second=shadows.borrowFigureEnvironment(()=>{
+   expect(characters.receivers.has(second!.receiver)).toBe(true);released.push('second');second!.release();
+ });
+ expect(first).not.toBeNull();expect(second!.receiver).toBe(first!.receiver);expect(characters.live.size).toBe(0);
+ first!.release();quality.setLevel('medium');expect(released).toEqual(['second']);
+ expect(characters.receivers.size).toBe(0);
+ const third=shadows.borrowFigureEnvironment(()=>released.push('third'));expect(third!.receiver).not.toBe(second!.receiver);
+ shadows.destroy();expect(released).toEqual(['second','third']);expect(characters.receivers.size).toBe(0);quality.destroy();
 });

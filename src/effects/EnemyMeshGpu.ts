@@ -13,7 +13,7 @@ export class EnemyMeshGpu {
   readonly geometry: Layout;
   readonly instances: Layout;
   private readonly indices: Phaser.Renderer.WebGL.Wrappers.WebGLBufferWrapper;
-  readonly indexCount: number;
+  indexCount: number;
   readonly bytes: number;
   private destroyed = false;
   constructor(private readonly renderer: Phaser.Renderer.WebGL.WebGLRenderer, name: string,
@@ -38,6 +38,21 @@ export class EnemyMeshGpu {
     this.bytes = positions.byteLength + indices.byteLength + capacity * attributes.reduce((n, a) => n + a.size * 4, 0);
   }
   prepare(): boolean { return !!this.program.getCurrentProgramSuite(); }
+  /** Streaming poses may change topology within the buffers' fixed allocation. */
+  updateGeometry(positions: Float32Array, indices: Uint16Array): boolean {
+    if (positions.length > this.geometry.buffer.viewF32!.length || indices.length > this.indices.viewU16!.length) return false;
+    this.renderer.renderNodes.finishBatch();
+    this.renderer.glWrapper.update({ vao: null } as unknown as Phaser.Types.Renderer.WebGL.WebGLGlobalParameters);
+    this.geometry.buffer.viewF32!.set(positions); this.geometry.buffer.update(positions.byteLength);
+    // ELEMENT_ARRAY_BUFFER belongs to the VAO, but Phaser also caches its
+    // binding globally. Synchronize around streaming so a subsequently created
+    // VAO actually binds this buffer instead of inheriting a stale cache hit.
+    this.indices.bind(true);
+    this.indices.viewU16!.set(indices); this.indices.update(indices.byteLength);
+    this.indices.bind(true);
+    this.indexCount = indices.length;
+    return true;
+  }
   draw(context: Phaser.Renderer.WebGL.DrawingContext, data: Float32Array, count: number,
     textures: Phaser.Renderer.WebGL.Wrappers.WebGLTextureWrapper[], uniforms: (set: (name: string, value: unknown) => void) => void): boolean {
     const suite = this.program.getCurrentProgramSuite() as Suite | null; if (!suite || !count) return false;

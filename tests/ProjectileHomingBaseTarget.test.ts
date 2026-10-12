@@ -39,6 +39,18 @@ const BASE_HOMING: ProjectileHomingConfig = {
 };
 
 describe('projectile homing against hostile bases', () => {
+  it('honours per-second turning without a weapon-specific target policy, including repeated host steps', () => {
+    const controller = new ProjectileHomingController();
+    controller.setTargetQueryPort({ queryTargets: (_c, _owner, _x, _y, _r, emit) => emit('target', 'players', 0, 100) });
+    const config = { ...BASE_HOMING, targetTypes: ['players'] as const, maxTurnDegreesPerSecond: 90 };
+    const projectile = makeProjectile(config);
+    const angle = () => Math.atan2(projectile.kinematics.velocityY, projectile.kinematics.velocityX);
+    controller.update(projectile, 100);
+    expect(angle()).toBeCloseTo(config.maxTurnDegreesPerSecond * Math.PI / 180 * .1);
+    controller.update(projectile, 100); expect(angle()).toBeCloseTo(Math.PI / 20);
+    controller.update(projectile, 200); expect(angle()).toBeCloseTo(Math.PI / 10);
+    expect(Math.hypot(projectile.kinematics.velocityX, projectile.kinematics.velocityY)).toBeCloseTo(100);
+  });
   it('permanently excludes the origin incarnation, but permits a successor with the same id', () => {
     const controller = new ProjectileHomingController();
     let original = true;
@@ -202,7 +214,7 @@ describe('plasma burner opt-in continuous homing',()=>{
     c.update(request,120);expect(p.state.lockedTargetId).toBe('other');
     exited=true;c.update(request,121);expect(p.state.lockedTargetId).toBe('other');
     other=false;c.update(request,122);expect(p.state.lockedTargetId).toBe('origin');
-    const legacy=makeProjectile({...BASE_HOMING,targetTypes:['players'],maxTurnDegreesPerStep:10,maxTurnDegreesPerSecond:1,requireLineOfSight:false});
+    const legacy=makeProjectile({...BASE_HOMING,targetTypes:['players'],maxTurnDegreesPerStep:10,requireLineOfSight:false});
     c.setTargetQueryPort({queryTargets:(_c,_o,_x,_y,_r,emit)=>emit('up','players',0,200)});
     c.update(legacy,1,true);expect(Math.atan2(legacy.kinematics.velocityY,legacy.kinematics.velocityX)).toBeCloseTo(Math.PI/18);
   });

@@ -127,7 +127,7 @@ export class ProjectileHomingController {
   update(request: ProjectileHomingRequest, simulatedAgeMs: number, forceSearch = false, hostNowMs = 0): boolean {
     const { homing, ownerId, kinematics, state } = request;
     if (!this.targetQueryPort) return false;
-    if (homing.targetPolicy === 'plasma_burner' && homing.maxTurnDegreesPerSecond !== undefined)
+    if (homing.maxTurnDegreesPerSecond !== undefined)
       return this.updateContinuous(request, simulatedAgeMs, hostNowMs);
 
     if (
@@ -180,16 +180,16 @@ export class ProjectileHomingController {
     let target = state.lockedTargetId && state.lockedTargetType
       ? this.targetQueryPort?.readTargetPosition?.(homing, ownerId, state.lockedTargetId, state.lockedTargetType, kinematics.x, kinematics.y) ?? null : null;
     if (target && (request.isTargetAllowed?.(target.id, target.type) === false
+      || (homing.targetPolicy !== 'plasma_burner' && !this.isTargetCurrentlyValid(target.id, target.type, ownerId))
       || Math.hypot(target.x - kinematics.x, target.y - kinematics.y) > homing.searchRadius
       || (homing.requireLineOfSight && this.lineOfFirePort
         && !this.hasClearTargetLine(request, target)))) target = null;
     if (!target) {
       const lost = state.lockedTargetId != null;
-      state.lockedTargetId = null; state.lockedTargetType = undefined;
       if (!lost && state.lastSearchAtSimulatedMs !== undefined && age - state.lastSearchAtSimulatedMs < homing.retargetIntervalMs) return false;
       state.lastSearchAtSimulatedMs = age;
       target = this.selectTarget(request, age, hostNow);
-      if (!target) return false;
+      if (!target) { state.lockedTargetId = null; state.lockedTargetType = undefined; return false; }
       state.lockedTargetId = target.id; state.lockedTargetType = target.type;
     }
     const speed = Math.hypot(kinematics.velocityX, kinematics.velocityY);

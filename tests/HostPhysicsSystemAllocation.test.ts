@@ -93,6 +93,8 @@ function createMockEnemy(id: string, x = 100, y = 100, vx = 50, vy = 60) {
     setWalking,
     syncBar,
     getDesiredVelocity,
+    usesLandWaterCollision: () => true,
+    isKrakenLandBody: () => false,
     getKnockbackFactor,
     getMoveSpeed: () => 100,
     setDashPhase: vi.fn(),
@@ -233,6 +235,22 @@ function createBurrowDashHarness(blocked: () => boolean = () => false) {
 }
 
 describe('Water physics lifetime', () => {
+  it('leaves authorized Kraken water poses and invalid land starts to the habitat owner', () => {
+    const h = createHarness(), m = resolveActiveArenaWorldMetrics();
+    const cell = { gridX: 5, gridY: 5 }, water = new WaterGeometry([cell], m);
+    const x = m.offsetX + 5.5 * CELL_SIZE, y = m.offsetY + 5.5 * CELL_SIZE;
+    const enemy = createMockEnemy('kraken'); h.enemies.set(enemy.id, enemy);
+    const body = enemy.sprite.body as any;
+    Object.assign(body, { enable: true, halfWidth: 8, halfHeight: 8,
+      prev: { x: x - 8, y: y - 8 }, center: { x, y },
+      position: { set: vi.fn() }, updateCenter: vi.fn() });
+    let land = false;
+    enemy.usesLandWaterCollision = () => land; enemy.isKrakenLandBody = () => land;
+    h.system.setWaterGeometry(water);
+    const step = (h.scene.physics.world.on as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    step(); expect(body.position.set).not.toHaveBeenCalled();
+    land = true; step(); expect(body.position.set).not.toHaveBeenCalled();
+  });
   it.each([{ burrowed: false, tangent: 0 }, { burrowed: true, tangent: 0 },
     { burrowed: false, tangent: 12 }, { burrowed: true, tangent: 12 }])(
     'sweeps players and enemies while burrowed=$burrowed, retaining tangent=$tangent', ({ burrowed, tangent }) => {

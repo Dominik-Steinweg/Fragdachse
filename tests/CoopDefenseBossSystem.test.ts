@@ -4,6 +4,28 @@ import { CoopDefenseBossSystem } from '../src/systems/CoopDefenseBossSystem';
 import { getBossIntroPreset } from '../src/config/bossIntros';
 
 describe('CoopDefenseBossSystem', () => {
+  it('keeps water intro and spawn on the same permit, forbids land fallback and waits for terminal completion', () => {
+    let active = true, complete = false;
+    const r = { worldRevision: 1, activityRevision: 1, topologyRevision: 1, reservationId: 'r', habitatId: 'pond', waterAnchorId: 'center', bodyRadiusPx: 64, x: 100, y: 200 };
+    const boss = { kind: 'enemy' as const, id: 'boss', scope: { worldRevision: 1, runtimeGeneration: 1 }, instance: { entityGeneration: 1, activityRevision: 1 } };
+    const spawn = { hostSpawnBoss: vi.fn(() => true), hostReserveBossHabitat: vi.fn(() => ({ status: 'valid' as const, value: r })),
+      spawnAtHabitat: vi.fn(() => boss), releaseBossHabitat: vi.fn() };
+    const onIntro = vi.fn(), onSpawn = vi.fn();
+    const system = new CoopDefenseBossSystem({ enemyKind: 'kraken', spawnAtMs: 0, habitatId: 'pond', intro: { preset: 'kraken-rise' } },
+      { hasEnemyKind: () => active } as never, spawn, onSpawn, onIntro);
+    system.setDefeatCompletionSource(() => complete);
+    system.hostUpdate(0, false, 100);
+    expect(onIntro).toHaveBeenCalledWith(expect.objectContaining({ habitatId: 'pond', waterAnchorId: 'center', x: r.x, y: r.y }));
+    system.hostUpdate(getBossIntroPreset('kraken-rise').emergeAtMs, false, 3100);
+    expect(spawn.spawnAtHabitat).toHaveBeenCalledWith('kraken', r); expect(spawn.hostSpawnBoss).not.toHaveBeenCalled();
+    expect(onSpawn).toHaveBeenCalledWith(3100, boss, expect.objectContaining({ preset: 'kraken-rise' }));
+    active = false; expect(system.isBossDefeated()).toBe(false); complete = true; expect(system.isBossDefeated()).toBe(true);
+  });
+  it('does not fall back when water placement is pending or absent', () => {
+    const spawn = { hostSpawnBoss: vi.fn(() => true), hostReserveBossHabitat: () => ({ status: 'pending' as const, reason: 'navigation' }), spawnAtHabitat: () => null };
+    const system = new CoopDefenseBossSystem({ enemyKind: 'kraken', spawnAtMs: 0, habitatId: 'pond', intro: { preset: 'kraken-rise' } }, {} as never, spawn);
+    system.hostUpdate(10000, false, 10000); expect(spawn.hostSpawnBoss).not.toHaveBeenCalled();
+  });
   it('owns boss timing and reports defeat only after a successful spawn disappears', () => {
     let bossActive = false;
     const spawnBoss = vi.fn(() => {

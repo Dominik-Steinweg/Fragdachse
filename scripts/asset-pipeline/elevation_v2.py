@@ -133,7 +133,8 @@ def verify_elevation(scene, manifest, folder):
         beauty = read_pixels(folder / frame['file'])
         require(data.shape == beauty.shape == (manifest['masterSize'], manifest['masterSize'], 4), 'Elevation master dimensions differ')
         require(np.max(np.abs(data[:, :, 3] - beauty[:, :, 3])) <= 1.01 / 255, 'Elevation alpha differs from Beauty')
-        require(np.max(np.abs(data[:, :, :3] - data[:, :, :1])) <= 1 / 255, 'Elevation RGB must be scalar linear data')
+        if manifest['elevationPass']['encoding'] == ENCODING:
+            require(np.max(np.abs(data[:, :, :3] - data[:, :, :1])) <= 1 / 255, 'Elevation RGB must be scalar linear data')
         set_frame(scene, frame['blenderFrame'])
         deps = bpy.context.evaluated_depsgraph_get()
         span, size = scene.camera.data.ortho_scale, manifest['masterSize']

@@ -234,6 +234,147 @@ Die Kategorie `weapon` verwendet [recipes_v2/held-weapon.py](recipes_v2/held-wea
 
 Neue Konstruktionen erzeugen genau eine passende Materialvariante (`standard`). Fell- und Formstärke werden in Vorschau-Iterationen abgestimmt; die historischen Varianten `calm`/`rich` bleiben lesbar. Zusätzliche Varianten werden nur bei ausdrücklichem Vergleichsauftrag authoriert.
 
+## Form-Modus
+
+Die Authoring-Schleife hat drei Stufen: **Form → Animation im Entwurf → Endqualität**.
+Zuerst mit `assets:shape` Silhouette, Proportionen und Spielmaßstab klären. Danach
+mit `assets:draft` bzw. `kraken:iterate` Bewegungen testen. Erst nach dieser Abnahme
+die bestehenden Produktions-, Review-, Auswahl-, Archiv- und Importbefehle verwenden.
+
+```powershell
+npm run assets:shape -- abyssal-kraken --label form-a
+npm run assets:shape -- rabid-badger --watch
+npm run assets:shape -- abyssal-kraken --views top,silhouette --export-draft
+```
+
+Der separate Einstieg baut ausschließlich die Rezept-Ruhepose samt benötigter
+Konstruktionsrig. Er übergibt leere Cliplisten, ruft keinen Motion-Autor auf und
+weist Animation-Actions zurück. Gerendert wird direkt in der angezeigten
+Canvas-Größe (`targetSize × displayScale`), mit den vorhandenen Materialien und
+Lichtern, standardmäßig Cycles OPTIX, 8 Samples und Denoiser. Die Seitenkamera
+ist rein diagnostisch; die Draufsicht bleibt exakt senkrecht und am Exportpivot.
+
+Ausgabe: `art/poc/pipeline-v2/shapes/<asset>/<label>/board.png`, Einzelbilder,
+`shape.json` mit Dauer, Quellen-Hashes, Cache-Status und Kennzahlen sowie Blender-Log.
+Der Bogen zeigt 1:1 und 2×, Silhouetten auf echtem Gras und bei deklarierter Elevation
+im Wasser, Seitenprofil und den 32-px-Spielerdachs. Wasser verwendet den deklarierten
+`previewWaterLevel` (sonst 0) und die vorhandene Vorschau-Submersion. Kennzahlen:
+Alpha ≥ 128, Silhouettenfläche, Bounding-Box und kleinster Canvas-Rand in Pixeln.
+Der vorherige **fertige** Form-Build desselben Assets wird automatisch daneben
+gestellt; `comparison.png` und `difference.png` markieren hinzugefügte Pixel cyan,
+entfernte rot und Farbänderungen gelb. Der erste Build hat noch keinen Vergleich.
+`--views top,side,silhouette` bestimmt die Bogenansichten; die Draufsicht wird immer
+für Kennzahlen und Vergleich gerendert. 2× vergrößert das Zielbild, ohne zweiten Render.
+
+Rezepte können freiwillig `spec.get('draft') or {}` auswerten. Der Form-Modus
+übergibt standardmäßig `{ "voxelScale": 1.5, "creaseSubdivisions": 0 }`.
+Nur die Kraken-Körper verwenden diese Hinweise aktuell: gröbere Hautfusion und
+weniger Arm-Unterteilung. Ohne `spec.draft` gelten exakt die bisherigen Rezeptwerte;
+Produktions- und Animationsentwurfs-Runner setzen keine Form-Hinweise.
+`--model-settings '{}'` verwendet auch hier die Modellqualität der Produktion.
+Ein anderes JSON-Objekt ersetzt die Form-Defaults; Shell-Quoting beachten.
+Weitere Optionen: `--samples`, `--device OPTIX|CUDA|CPU`, `--no-denoise`,
+`--blender <exe>`; alternativ `BLENDER_PATH` oder `PATH`.
+
+Der eigene `.models/`-Cache hängt an Modell-/Rezeptabhängigkeiten, Texturen,
+Modellspec und Draft-Hinweisen. Clipdaten und Motion-Dateien lösen keinen Form-Build
+aus. `--watch` prüft diese Eingaben alle 500 ms, bündelt Speichervorgänge und baut
+seriell. Änderungen während eines Builds werden anschließend verarbeitet; ein
+unvollständiger Build ersetzt nie `latest.json`. Labels bleiben unveränderlich;
+im Watch-Modus erhalten weitere Iterationen automatisch eigene Suffixe.
+Form und Animation teilen die GPU-Sperre `drafts/.lock`.
+
+Mit `--export-draft` entsteht zusätzlich ein Dev-Entwurf unter
+`drafts/<asset>/shape-<label>/standard/`. Jeder Clip enthält denselben Ruheframe;
+Marker liegen auf Frame 0. Das ist eine Formvorschau, keine Timing-Abnahme und
+kein auswählbarer Produktionsbuild. Kraken behalten Albedo, Höhen-/Normalenpass,
+Emission, Sockets und grobe Mesh-Schatten. Die vorhandene Dev-Quelle lädt die
+aktualisierte Rolle automatisch; andere Rollen behalten ihren letzten Entwurf.
+
+```js
+await devScenario.run({ action: 'krakenMission', drafts: true });
+// Normales Sheet-Asset statisch am Szenario-Zielpunkt zeigen, ohne KI/Hitbox:
+await devScenario.run({ action: 'shapeSpawn', asset: 'rabid-badger' });
+```
+
+`shapeSpawn` lädt den letzten mit `--export-draft` veröffentlichten Form-Build.
+Erneuter Aufruf ersetzt die Figur; `clearEnemies`, Szenariowechsel und Teardown
+räumen Bild und Textur auf. Sheet-Formen verwenden die vorbeleuchtete Beauty und
+die Welt-Lightmap; sie haben keinen eigenen Mesh-Schattenpass. Diese Zugriffe sind
+Dev-geschützt. Es gibt keinen Import und keine Schreibzugriffe auf `public/`.
+
+## Entwurfsmodus
+
+Der separate Entwurfsmodus rendert direkt in der angezeigten Canvas-Größe. Er benutzt
+die vorhandenen Rezepte, Materialien, Kamera und Lichter, standardmäßig Cycles OPTIX
+mit 8 Samples und Denoiser. Zusätzliche Shader-AOVs liefern Albedo, Welt-Z,
+Normalen und Emission in **einem Render pro Frame**. Die Beauty bleibt als Vergleich
+erhalten; Datenpässe werden ohne Farbtransformation gepackt. Mesh-Schatten verwenden
+eine schnelle Vertex-Cluster-Reduktion. Produktionsbefehle bleiben unverändert.
+
+```powershell
+npm run assets:draft -- abyssal-kraken --label erster-entwurf
+npm run assets:draft -- abyssal-kraken --clips spine-volley
+npm run assets:draft -- abyssal-kraken-land abyssal-kraken-tentacle --full
+npm run kraken:iterate -- --clips spine-volley
+```
+
+Ausgabe: `art/poc/pipeline-v2/drafts/<asset>/<label>/standard/` mit `export.json`,
+`runtime.json`, `budget.json`, Clip-Atlanten und Frame-Sockets/-Meshes. `draft.json`
+nennt gerenderte/übernommene Clips, Warnungen, Modell-Cache-Treffer und Dauer.
+Labels sind unveränderlich; ohne `--label` entsteht ein neues. Kein Import,
+Archiv, ZIP, vollständiges Audit oder Kontaktbogen wird erzeugt. Andere ausführbare
+Katalogrezepte benutzen denselben Runner; normale Sheet-Assets erhalten zusätzlich
+ihr Sheet-/Idle-Format. Die direkte Spielumschaltung ist zunächst für Kraken implementiert.
+
+Optionen: `--samples 8`, `--device OPTIX|CUDA|CPU`, `--mesh-triangles 512`
+(Zielkomplexität der Cluster, keine exakt garantierte Dreieckszahl), `--no-denoise`
+und `--blender <exe>`; Blender wird sonst über `BLENDER_PATH` oder `PATH` aufgelöst.
+Auflösung, Elevationsbereich und Elevationsskalierung kommen aus dem Katalog.
+Die Warnschwellen sind mit `--border-ratio 0.02` und `--continuity-tolerance 0.06`
+einstellbar (Canvas-Anteil bzw. mittlere Alpha-Abweichung an Übergängen).
+`--full` rendert alle Clips neu, benutzt aber weiterhin ein gültiges Modell-Blend.
+Ohne Clipauswahl bestimmen Quell-/Katalog-/Render-Hashes die Arbeit. Änderungen
+an gemeinsamem Motion-Code invalidieren konservativ alle betroffenen Clips.
+Mit `--clips` werden die gewählten Clips und die Restpose erneuert; andere bereits
+vorhandene Clips mit geändertem Motion-Hash bleiben mit ausdrücklicher Warnung stehen.
+Fehlende Clips, Modelländerungen und geänderte Clipverträge werden immer neu gebaut.
+Die nächste automatische Iteration erkennt die noch veralteten Clips weiter.
+Das Modell-Blend enthält explizite Rezeptreferenzen und wird vor dem Keying gespeichert.
+Ein Blender-Prozess erledigt sämtliche ausgewählten Assets und Clips.
+
+Marker, Sockets, Canvas-Rand, Höhen-Clamping und End-/Next-Übergänge werden schnell
+geprüft und als Warnungen gemeldet. Defekte Dateiformate oder Renderfehler bleiben
+Fehler. `latest.json` und die gemeinsame `version.json` werden erst nach fertigen
+Exports veröffentlicht. Gleichzeitige Entwurfsjobs sind durch `drafts/.lock` gesperrt;
+nach einem hart abgebrochenen Prozess diese Datei erst entfernen, wenn kein Entwurfsjob
+mehr läuft. Während `kraken-v13` läuft, startet der Runner keine GPU-Arbeit, bis dessen
+`build/build-times.json` alle fünf erfolgreichen Assets enthält.
+
+Auf einer offenen Dev-Szenario-Seite:
+
+```js
+await devScenario.run({ action: 'krakenMission', drafts: true });
+await devScenario.run({ action: 'krakenAssets', source: 'draft' });
+await devScenario.run({ action: 'krakenReloadAssets' });
+await devScenario.run({ action: 'krakenAssets', source: 'production' });
+devScenario.status().krakenAssets;
+```
+
+Pro Rolle gilt der letzte veröffentlichte Entwurf, andernfalls das importierte
+Produktionsasset. Im Entwurfsmodus fragt die Seite `version.json` jede Sekunde ab;
+`kraken:iterate` baut und veröffentlicht diese Version automatisch. Hot-Reload lädt
+die aktuelle Phase vor, tauscht Darstellungsadapter und lässt alte Textur-Leases
+auslaufen. Welt, Mission und Host-Simulation bleiben bestehen. Ein Fehler behält
+die bisherige Quelle. Der Status enthält Ladezeit, Version und den Zeitpunkt des
+ersten Renderabschlusses nach dem Wechsel, sofern die neuen Assets tatsächlich
+geleast wurden. Ohne sichtbare Darstellung bleibt `visibleAt` leer. Die Dev-Quelle
+wird nicht in Produktionsbuilds eingebunden.
+
+Ein Vergleich desselben clip-lokalen Frames bei gleicher Anzeigegröße:
+`node scripts/asset-pipeline/compare-draft-v2.mjs abyssal-kraken --run kraken-v13`
+(optional `--label`, `--clip`, `--frame`). PNG und Quellnachweis liegen unter `drafts/compare/`.
+
 ## V2-Authoring-Vorschauen
 
 [preview-v2.mjs](preview-v2.mjs) verbindet Blender-Render und Bildvergleich in einem Aufruf:
@@ -324,6 +465,39 @@ Vor der Auswahl die tatsächlichen Prüfergebnisse als JSON-Objekt innerhalb des
 
 `art/poc/pipeline-v2/` bleibt lokal und Git-ignoriert. Skripte, Rezepte, Katalog und Prompts werden versioniert. Für die Abnahme `npm run test:assets`, `node scripts/asset-pipeline/check-viewer.mjs`, `npm run check` und `git diff --check` ausführen. Bei Skilländerungen zusätzlich `npm run ai:sync`. Der Viewer-Build ersetzt keinen sichtbaren Browserreview.
 
+## Generische Sockets pro Frame
+
+Rezepte liefern direkte Objektreferenzen in `asset['sockets']`. Die Pipeline projiziert deren
+ausgewerteten Weltursprung mit der unveränderten orthografischen Kamera; `eyeLeft`/`eyeRight`
+bleiben beim separaten Augenvertrag. `socketFrames[index][name] = {x, y, z}` steht in
+`render.json`, `export.json` und der hashgebundenen Selection: `x/y` sind normierte
+Full-Canvas-Koordinaten (links/oben = 0, rechts/unten = 1), `z` ist Welt-z in Blender-Einheiten.
+Die Framezahl entspricht exakt den ausgegebenen Masters einschließlich separater Ruhepose.
+Jeder Atlas-Frame trägt dieselben Werte unter `sockets`; `sourceFrame` ordnet ihn zu.
+Trimming, Auflösung und Elevation-Downsampling verändern diese Werte nicht. Abgebrochene
+`--max-frames`-Builds halten bereits ausgegebene Samples in `build.json` unter `frames[].sockets`.
+
+`sockets[name] = [x, y]` ist zusätzlich die AP0-kompatible Sicht der Ruhepose (`idleFrame`).
+`PipelineBossAsset` validiert zusätzlich `socketFrames` samt Welt-z, Framezahl, Namen und
+Übereinstimmung mit der Ruhepose. `pipelineMarkerSocket` löst einen clip-lokalen Marker über
+den Quellframe auf; `pipelineEggReleaseSocket(asset, k)` bindet `release-k` an `egg<k>`.
+`release-1` bis `release-6` gehören zu `egg1` bis `egg6`; Ruhekoordinaten
+ersetzen keine animierten Release-Sockets. `hatch.spawn` bleibt ein Marker, kein Socket.
+Die Gameplay-Bindungsprüfung `KRAKEN_ASSET_REQUIREMENTS` in `krakenBoss.ts` muss beim
+AP0/AP2-Abgleich ebenfalls diesen Markersatz verlangen.
+
+Isolierter Rauchtest ohne Änderung vorhandener Produktionsruns:
+
+```powershell
+blender --background --python-exit-code 1 --python scripts/asset-pipeline/blender_pipeline_v2.py -- --repo C:/Fragdachse --asset abyssal-kraken --revision socket-smoke-1 --device OPTIX --max-frames 2 --output-root art/poc/kraken-v11/socket-smoke
+```
+
+Den Aufruf für `abyssal-kraken-tentacle` wiederholen. Der optionale `--output-root` muss
+innerhalb des Repositories liegen; darunter gelten dieselben unveränderlichen `runs/` und
+fortsetzbaren `incomplete/`-Revisionen. Ein begrenzter Lauf ist kein auswählbarer Produktionsbuild.
+Ein unveränderndes, hashgeprüftes Socket-Overlay aus einem bereits gerenderten Sample erzeugt
+`node scripts/asset-pipeline/socket-overlay.mjs <build.json> standard 0 <neues-overlay.png>`.
+
 ## Gespeicherte V2-Animation in echtem Blender verifizieren
 
 `player_idle` authoriert Atmung über Brustskalierung und eine kleine Kopfreaktion. Die
@@ -392,6 +566,71 @@ Basis und acht matte Reliefsymbole mit gemeinsamem Pivot/Canvas. Der separate Ka
 `node scripts/asset-pipeline/powerups-run.mjs --revision powerups-r01` erzeugt die neue
 Revision auf D:, 128/256er Exporte, acht UI-Komposite, Spielgrößen-/Puls-Review und ein
 geprüftes Quellenarchiv. Runtime-Veröffentlichung bleibt ein separater expliziter Import.
+
+## Boss-Import
+
+Export → Sichtabnahme → Selection → Import bleiben getrennte Schritte. Erst nach User-Abnahme
+die vier `standard`-Varianten auswählen; für `kraken-v11b` sind die nominalen Canvasauflösungen
+384 (Wasser), 432 (Land), 448 (Tentakel) und 64 (Ei). Die Selection bindet Quellen und Atlasbytes;
+der Import prüft Hashes, Frame-/Passzuordnung, Sockets und RGBA8-Budgets vor dem ersten Kopieren.
+Er publiziert die deklarierten Color-/Elevation-/Emission-Atlanten und Mesh-Posen, keine Idle-/Sheet-Kopie und keine PoC-URL.
+`targetSize`, `displayScale` und `sourceSize = round(targetSize * displayScale)` bleiben explizit.
+
+```powershell
+# Nur nach Abnahme; bereits exportierte Runs nicht neu rendern.
+node scripts/asset-pipeline/export.mjs select art/poc/pipeline-v2/runs/kraken-v11b/abyssal-kraken standard 384 "User-Abnahme kraken-v11b"
+node scripts/asset-pipeline/export.mjs select art/poc/pipeline-v2/runs/kraken-v11b/abyssal-kraken-land standard 432 "User-Abnahme kraken-v11b"
+node scripts/asset-pipeline/export.mjs select art/poc/pipeline-v2/runs/kraken-v11b/abyssal-kraken-tentacle standard 448 "User-Abnahme kraken-v11b"
+node scripts/asset-pipeline/export.mjs select art/poc/pipeline-v2/runs/kraken-v11b/abyssal-kraken-egg standard 64 "User-Abnahme kraken-v11b"
+node scripts/asset-pipeline/import-runtime.mjs kraken-v11b abyssal-kraken abyssal-kraken-land abyssal-kraken-tentacle abyssal-kraken-egg
+```
+
+Ein Teilimport ersetzt nur die genannten IDs. Für die freigegebene Kombination aus v12b-Körpern
+und bereits importierten v12-Teilen bleiben Tentakel und Ei unverändert:
+
+```powershell
+node scripts/asset-pipeline/export.mjs select art/poc/pipeline-v2/runs/kraken-v12b/abyssal-kraken standard 384 "P11-Mandat: v12b Wasser importieren; finale Sichtprüfung Opus"
+node scripts/asset-pipeline/export.mjs select art/poc/pipeline-v2/runs/kraken-v12b/abyssal-kraken-land standard 432 "P11-Mandat: v12b Land importieren; finale Sichtprüfung Opus"
+node scripts/asset-pipeline/import-runtime.mjs kraken-v12b abyssal-kraken abyssal-kraken-land
+npm run assets:runtime
+```
+
+Die Revision jedes Asset-Eintrags ist maßgeblich; das Manifest kann mehrere Revisionen enthalten.
+Vor einer Aufnahme im bereits laufenden Dev-Server die Runtime-URL-Hashes mit `assets:runtime`
+aktualisieren; `npm run build` führt diesen Schritt ebenfalls aus.
+Materialpässe müssen die versionierte Normalen-Semantik deklarieren. Ein älterer skalarer
+Elevation-Pass darf nicht als gepackte Normalen interpretiert werden.
+
+Für einen isolierten Trockenlauf denselben Import um `--output-root <neues-Verzeichnis>` ergänzen:
+dort entstehen `pipelineAssets.json` und `public/assets/...` nur für die angeforderten Assets.
+Der Zielordner muss neu sein; `--run-root <Verzeichnis-mit-Assetordnern>` erlaubt isolierte Quellen.
+Ohne Selection bzw. bei unvollständigem Build wird auch ein Trockenlauf abgelehnt.
+
+Die expliziten Basisschlüssel `kraken_water`, `kraken_land`, `kraken_tentacle`, `kraken_egg`
+liegen im Importer; es gibt keine zweite Land-Enemy-ID. Tentakel und Ei bleiben `boss-part`.
+`KrakenAssetResidency` ergänzt Scope-, Clip-, Pass- und Seitenkennung zu eindeutigen GPU-Keys.
+`genericEnemyImageKeys` muss am Enemy-Image-Preload benutzt werden; Bosskörper/-eier dürfen
+nicht über dessen Dateinamen-Fallback geladen werden.
+
+Residency: `intro` lädt zuerst Restposen, dann Intro/Wasserzyklus/Teile; `water` behält
+Zyklus/Tentakel/Eier und entfernt Intro. Ab `landPrefetchHpRatio` werden Land-`__rest`, `ashore`,
+`idle` und `move` vorgeladen; ein benutzter Wasser-Move-Clip bleibt für weitere Anläufe resident.
+`ashore` lädt Landangriffe nach und hält Wasser bis zum Griffwechsel; Landtod folgt danach.
+Alte Seiten bleiben ausschließlich durch aktive Pose-Leases resident.
+`land` (einschließlich Landtod) entfernt Wasser/Tentakel/Ashore und behält Land plus aktive Eier.
+`dead` bedeutet Ende der terminalen Darstellung; `detach()` beendet den Scope vollständig.
+
+AP2b bindet `setPhase(...).ready` nur an lokale Restansichten/Telegraphen, niemals an Hostsimulation.
+`settled` zeigt das Ende des lokalen Clip-Nachladens. Late Join startet mit der aktuellen Phase.
+`acquirePose(role, clip, index, cleanup)` liefert passende benannte Color-/Elevation-Frames oder
+eine garantierte geladene Restpose; vor `ready` bzw. bei Restladefehler liefert es `null`.
+Der Renderer hält bis dahin seinen assetfreien Telegraphen und zeigt `port.diagnose` sichtbar an.
+Eine Lease hält ihre Seiten bis `release`; ihr Cleanup stoppt Animation und entfernt Sprite,
+Filter und Maske vor Texturfreigabe. `ownDependent` registriert weitere globale Animationen,
+deren Cleanup vor Phasenfreigabe oder Detach läuft.
+`detach` verwirft auch verspätete Load-Ergebnisse. GPU-Budgets und `additionalGpuBytes` für
+Renderer-Filter/Masken/FX sind Pflichtparameter; `reservedBytes` zählt auch laufende Downloads.
+Die Phasenbudgets ersetzen keine Messung des Übergangs-Peaks auf echter GPU.
 
 ## V1-Kompatibilität und vorhandene statische Referenzen
 

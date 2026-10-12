@@ -10,6 +10,8 @@ import type { SpawnFront } from '../types';
 import { DEFAULT_SPAWN_FRONT } from '../utils/spawnFront';
 import { EnemyFlowFieldService } from './EnemyFlowFieldService';
 import { worldCellCenter, type WorldMetrics } from '../world/WorldMetrics';
+import type { KrakenBossSpawnPort, KrakenHabitatPort, KrakenHabitatReservation, KrakenHabitatResult } from './KrakenState';
+import type { BossTargetRef } from '../combat/CombatPartContact';
 
 const RECENT_CELL_MEMORY = 12;
 const MIN_INTRA_GROUP_DISTANCE_CELLS = 2;
@@ -31,7 +33,7 @@ export interface CoopDefenseSpawnResult {
  * Gemeinsame autoritative Spawn-Ausfuehrung fuer Encounter, Druckquellen und Bosses.
  * Zeitplanung und Quell-Lebenszyklus liegen bewusst in separaten Round-Systemen.
  */
-export class CoopDefenseSpawnExecutor {
+export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
   private readonly recentCells: string[] = [];
   private exhaustionWarned = false;
   private waitingForNavigation = false;
@@ -44,7 +46,18 @@ export class CoopDefenseSpawnExecutor {
     private readonly bossFlowFieldService?: EnemyFlowFieldService | null,
     private readonly playerFlowFieldService?: EnemyFlowFieldService | null,
     private readonly strategicFlowFieldService?: EnemyFlowFieldService | null,
+    private readonly krakenHabitat?: KrakenHabitatPort,
   ) {}
+
+  hostReserveBossHabitat(kind: CoopDefenseEnemyKind, habitatId: string): KrakenHabitatResult<KrakenHabitatReservation> {
+    const config = getCoopDefenseEnemyConfig(kind).krakenBoss;
+    return config && this.krakenHabitat ? this.krakenHabitat.reserveWaterSpawn(habitatId, config.bodyRadiusPx)
+      : { status: 'invalid', reason: 'Kraken habitat/config not bound' };
+  }
+  spawnAtHabitat(kind: CoopDefenseEnemyKind, reservation: KrakenHabitatReservation): BossTargetRef | null {
+    return this.krakenHabitat ? this.enemyManager.hostSpawnAtHabitat(kind, reservation, this.krakenHabitat) : null;
+  }
+  releaseBossHabitat(reservationId: string): void { this.krakenHabitat?.release(reservationId); }
 
   /** Spawn-Pfad fuer endliche Encounter; die Herkunft bleibt fuer Clear-Tracking erhalten. */
   hostSpawnEncounterGroup(
@@ -102,6 +115,7 @@ export class CoopDefenseSpawnExecutor {
     kind: CoopDefenseEnemyKind,
     edgeMarginCells = 0,
   ): { readonly x: number; readonly y: number } | null {
+    if (getCoopDefenseEnemyConfig(kind).krakenBoss) return null;
     const candidates = this.collectBossCandidates(kind);
     if (candidates.length === 0) return null;
     const { gridCols, gridRows } = this.metrics;
@@ -122,6 +136,7 @@ export class CoopDefenseSpawnExecutor {
    * wird der naechstgelegene gueltige Kandidat genommen, damit das Intro nicht ins Leere laeuft.
    */
   hostSpawnBossAt(kind: CoopDefenseEnemyKind, x: number, y: number, options: EnemySpawnOptions = {}): boolean {
+    if (getCoopDefenseEnemyConfig(kind).krakenBoss) return false;
     const candidates = this.collectBossCandidates(kind);
     if (candidates.length === 0) return false;
     let best = candidates[0];

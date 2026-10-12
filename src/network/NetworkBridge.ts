@@ -1,4 +1,9 @@
 import { isEnemyClawEvent } from '../systems/EnemyClawAttack';
+import { readEnemyAreaClawEvent, type EnemyAreaClawEvent } from '../systems/EnemyClawAttack';
+import { readKrakenState, type KrakenState, type KrakenSnapshotPatch } from '../systems/KrakenState';
+import type { CombatPartHitReceipt } from '../combat/CombatPartContact';
+import { encodeKrakenSnapshot, readAreaClawImpact, readKrakenPartHit, sameKrakenBoss, type KrakenSnapshotPacket } from './krakenSnapshotCodec';
+import { KrakenSnapshotReceiver } from './KrakenSnapshotReceiver';
 import { isVoiceChecksum, VOICE_EVENTS } from '../voice/VoicePackage';
 import type { VoicePlayback } from '../voice/VoiceDirector';
 import { encodeBurrowEarthbreak, decodeBurrowEarthbreak } from './burrowEarthbreakCodec';
@@ -345,7 +350,7 @@ export interface RoundState {
   endedAt?: number;
 }
 
-export interface GameState {
+export interface GameState extends KrakenSnapshotPatch {
   earthbreak?: readonly import('../systems/BurrowEarthbreakRuntime').SyncedBurrowEarthbreak[];
   shootingRange?: import('../shootingRange/ShootingRangeContracts').ShootingRangeState | null;
   /** Activity-scoped independent delta stream; consumed only by the passive essence replica. */
@@ -396,7 +401,7 @@ export interface GameState {
   // Hitscan-Traces und Melee-Swings werden per RPC gesendet (nicht mehr Teil des GameState)
 }
 
-interface OutboundGameState {
+interface OutboundGameState extends KrakenSnapshotPatch {
   earthbreak?: readonly import('../systems/BurrowEarthbreakRuntime').SyncedBurrowEarthbreak[];
   shootingRange?: import('../shootingRange/ShootingRangeContracts').ShootingRangeState | null;
   mgAttrition?: MgAttritionSnapshot;
@@ -938,6 +943,10 @@ export class NetworkBridge {
   private fullGameStateRequested = false;
 
   constructor() {
+    this.registerAllRpcHandler('earea', raw => {
+      this.syncKrakenScope();
+      this.krakenReceiver.receiveEvent(raw);
+    });
     this.pingController = new NetworkPingController({
       isHost: () => isHost(),
       getLocalPlayerId: () => myPlayer().id,
@@ -3043,6 +3052,59 @@ export class NetworkBridge {
 
   // Client-seitiger Cache für Partial-State-Merge (leere Arrays werden nicht gesendet)
   private cachedGameState: GameState | undefined;
+  private krakenScope = '';
+  private krakenPublishSequence = 0;
+  private publishedKraken: KrakenSnapshotPacket | undefined;
+  private readonly areaClawSubscribers = new Set<(event: EnemyAreaClawEvent) => void>();
+  private readonly krakenReceiver = new KrakenSnapshotReceiver(event => {
+    for (const handler of this.areaClawSubscribers) handler(event);
+  });
+
+  private syncKrakenScope(): void {
+    const wr = this.getWorldDescriptor()?.worldRevision ?? null;
+    const ar = this.getActivityDescriptor()?.activityRevision ?? null;
+    const scope = `${wr}:${ar}`;
+    if (scope === this.krakenScope) return;
+    this.krakenScope = scope;
+    this.publishedKraken = undefined;
+    this.krakenReceiver.setScope(wr, ar);
+    if (this.cachedGameState) this.cachedGameState = { ...this.cachedGameState, kraken: null };
+  }
+
+  /** Bind KrakenStatePublishPort.publish here in AP2. Changes travel reliably; snapshots repeat them. */
+  publishKrakenState(state: KrakenState | null): void {
+    if (!isHost()) return;
+    this.syncKrakenScope();
+    const worldRevision = this.getWorldDescriptor()?.worldRevision;
+    if (worldRevision === undefined) return;
+    const activityRevision = this.getActivityDescriptor()?.activityRevision ?? null;
+    const kraken = state === null ? null : readKrakenState(state);
+    if (state !== null && (!kraken || kraken.boss.scope.worldRevision !== worldRevision
+      || kraken.boss.instance.activityRevision !== activityRevision)) return;
+    if (JSON.stringify(kraken) === JSON.stringify(this.publishedKraken?.kraken)) return;
+    const previous = this.publishedKraken?.kraken;
+    if (kraken && previous && sameKrakenBoss(kraken, previous)
+      && (kraken.revision <= previous.revision || kraken.cycleId < previous.cycleId
+        || kraken.bodyTargetability.revision < previous.bodyTargetability.revision)) return;
+    const packet = encodeKrakenSnapshot({ worldRevision, activityRevision,
+      sequence: ++this.krakenPublishSequence, kraken });
+    this.publishedKraken = packet;
+    setState('kraken', packet, true);
+  }
+
+  /** Bind KrakenStateReadPort.getState here. No simulation or retrospective effects run on receipt. */
+  getKrakenState(): KrakenState | null {
+    this.syncKrakenScope();
+    if (isHost()) return this.publishedKraken?.kraken ?? null;
+    this.krakenReceiver.applySnapshot(getState('kraken'));
+    return this.krakenReceiver.getState();
+  }
+
+  private getKrakenPacket(): KrakenSnapshotPacket {
+    return this.publishedKraken ?? { worldRevision: this.getCurrentWorldRevision()!,
+      activityRevision: this.getActivityDescriptor()?.activityRevision ?? null,
+      sequence: this.krakenPublishSequence, kraken: null };
+  }
   /** Revision des World-Snapshots, auf dem der Merge-Cache basiert. */
   private cachedGameStateWorldRevision: number | null = null;
   // Host-seitige Sequenznummer: wird bei jedem publishGameState() inkrementiert
@@ -3076,6 +3138,8 @@ export class NetworkBridge {
    * ein Full-Resync ankommt. Wird beim Arena-Aufbau aufgerufen.
    */
   resetGameStateCache(): void {
+    this.krakenReceiver.reset(this.getWorldDescriptor()?.worldRevision ?? null,
+      this.getActivityDescriptor()?.activityRevision ?? null);
     this.cachedGameState = undefined;
     this.cachedGameStateWorldRevision = this.getWorldDescriptor()?.worldRevision ?? null;
     this.lastSeenSeq = -1;
@@ -3100,18 +3164,22 @@ export class NetworkBridge {
     const worldRevision = this.getWorldDescriptor()?.worldRevision;
     if (worldRevision === undefined) return;
     if (state.worldRevision !== undefined && state.worldRevision !== worldRevision) return;
+    this.syncKrakenScope();
+    if (state.kraken !== undefined) this.publishKrakenState(state.kraken);
     if (fullSnapshot) {
       this.publishFullGameState(state, worldRevision);
       return;
     }
     const payload: Record<string, unknown> = {
       wr: worldRevision,
+      ar: this.getActivityDescriptor()?.activityRevision ?? null,
       p: encodePlayerStates(state.players),
       _s: ++this.publishSeq,
       _b: this.publishedGameStateBaseline?.worldRevision === worldRevision
         ? this.publishedGameStateBaseline.sequence : 0,
     };
     payload.rt = state.roundStartTime;
+    payload.kr = this.getKrakenPacket();
     payload.sr = encodeShootingRange(state.shootingRange);
     if (state.adrenalineEssence !== undefined) payload.ae = state.adrenalineEssence ? encodeEssenceSnapshot(state.adrenalineEssence) : null;
     // Fehlender Schluessel heisst hier "keine aktiven Projektile": der Dynamik-Strom fuehrt jeden
@@ -3223,10 +3291,12 @@ export class NetworkBridge {
     this.publishedGameStateBaseline = { worldRevision, sequence };
     const payload: Record<string, unknown> = {
       wr: worldRevision,
+      ar: this.getActivityDescriptor()?.activityRevision ?? null,
       p: encodePlayerStates(state.players),
       _s: sequence,
       _b: sequence,
       _full: true,
+      kr: this.getKrakenPacket(),
       ae: state.adrenalineEssence ? encodeEssenceSnapshot(state.adrenalineEssence) : null,
       sr: encodeShootingRange(state.shootingRange),
       rt: state.roundStartTime,
@@ -3280,6 +3350,12 @@ export class NetworkBridge {
   getLatestGameState(): GameState | undefined {
     const expectedWorldRevision = this.getWorldDescriptor()?.worldRevision ?? null;
     this.ensureGameStateWorldRevision(expectedWorldRevision);
+    this.syncKrakenScope();
+    this.krakenReceiver.applySnapshot(getState('kraken'));
+    const kraken = this.krakenReceiver.getState();
+    if (this.cachedGameState && !this.holdFullGameStateUntilFlush && this.cachedGameState.kraken !== kraken) {
+      this.cachedGameState = { ...this.cachedGameState, kraken };
+    }
     if (expectedWorldRevision === null) return undefined;
     // HUD and input may read first, including between frames. Preserve a full snapshot until
     // the frame-end flush so the entity consumers see its baseline before any following delta.
@@ -3349,7 +3425,12 @@ export class NetworkBridge {
       this.cachedGameState?.burningGround ?? { cells: [] },
     );
 
+    this.krakenReceiver.applySnapshot(raw.kr);
+    const enemySnapshot = (raw.e as SyncedEnemySnapshot | undefined) ?? null;
+    const enemies = raw.ar === (this.getActivityDescriptor()?.activityRevision ?? null)
+      ? this.krakenReceiver.applyEnemies(enemySnapshot) : enemySnapshot;
     const state: GameState = {
+      kraken: this.krakenReceiver.getState(),
       adrenalineEssence: raw.ae === undefined
         ? this.cachedGameState?.adrenalineEssence ?? null
         : decodeEssenceSnapshot(raw.ae),
@@ -3360,7 +3441,7 @@ export class NetworkBridge {
         this.projectileStaticCache,
         raw.j as SyncedProjectileSnapshot | undefined,
       ),
-      enemies:       (raw.e as SyncedEnemySnapshot | undefined) ?? null,
+      enemies,
       shootingRange: decodeShootingRange(raw.sr),
       rocks:         nextRocks,
       rockRemovals:  rockSnapshot?.removals ?? [],
@@ -4281,6 +4362,37 @@ export class NetworkBridge {
 
   // ── Melee-Swing-RPC: Host → Alle ──────────────────────────────────────────
 
+  broadcastEnemyAreaClawAttack(raw: EnemyAreaClawEvent): void {
+    if (!isHost()) return;
+    const event = readEnemyAreaClawEvent(raw);
+    if (!event || event.worldRevision !== this.getCurrentWorldRevision()
+      || event.activityRevision !== this.getActivityDescriptor()?.activityRevision) return;
+    this.broadcastGameplayEvent('earea', event);
+  }
+
+  subscribeEnemyAreaClawAttack(handler: (event: EnemyAreaClawEvent) => void): () => void {
+    this.areaClawSubscribers.add(handler);
+    return () => { this.areaClawSubscribers.delete(handler); };
+  }
+
+  broadcastKrakenPartHit(raw: CombatPartHitReceipt): void {
+    if (!isHost()) return;
+    const receipt = readKrakenPartHit(raw);
+    if (!receipt || receipt.event.scope.worldRevision !== this.getCurrentWorldRevision()
+      || receipt.event.activityRevision !== this.getActivityDescriptor()?.activityRevision) return;
+    this.broadcastGameplayEvent('krhit', receipt);
+  }
+
+  subscribeKrakenPartHit(handler: (receipt: CombatPartHitReceipt) => void): () => void {
+    const listener = (raw: unknown) => {
+      this.getKrakenState();
+      const receipt = readKrakenPartHit(raw);
+      if (receipt && this.krakenReceiver.acceptPartHit(receipt)) handler(receipt);
+    };
+    this.registerAllRpcHandler('krhit', listener);
+    return () => { if (this.allRpcHandlers.get('krhit') === listener) this.allRpcHandlers.delete('krhit'); };
+  }
+
   broadcastEnemyClawAttack(event: import('../systems/EnemyClawAttack').EnemyClawEvent): void {
     this.broadcastGameplayEvent('eclaw', { ...event, wr: this.getCurrentWorldRevision(),
       ar: this.getActivityDescriptor()?.activityRevision ?? null });
@@ -4308,6 +4420,7 @@ export class NetworkBridge {
       hy: swing.impactY,
       sa: swing.shotAudioKey,
       ca: swing.clawAttackId,
+      ac: swing.areaClaw,
       wr: this.getCurrentWorldRevision(), ar: this.getActivityDescriptor()?.activityRevision ?? null,
     });
   }
@@ -4317,6 +4430,12 @@ export class NetworkBridge {
     this.registerAllRpcHandler('msfx', async (data: unknown): Promise<unknown> => {
       const meleeSwingHandler = this.meleeSwingHandler;
       if (!meleeSwingHandler) return undefined;
+      const areaRaw = (data as { ac?: unknown })?.ac;
+      const areaClaw = areaRaw === undefined ? undefined : readAreaClawImpact(areaRaw);
+      if (areaRaw !== undefined) {
+        this.getKrakenState();
+        if (!areaClaw || !this.krakenReceiver.acceptImpact(areaClaw)) return undefined;
+      }
       if ((data as { ca?: string })?.ca && (!this.acceptsWorldRpc(data)
         || (data as { ar?: number | null }).ar !== (this.getActivityDescriptor()?.activityRevision ?? null))) return undefined;
       const { sid, x, y, a, ad, r, c, id, vp, hp, hx, hy, sa, ca } = data as {
@@ -4330,7 +4449,7 @@ export class NetworkBridge {
         hy?: number;
         sa?: string;
       };
-      meleeSwingHandler({ clawAttackId: ca, swingId: sid, x, y, angle: a, arcDegrees: ad, range: r, color: c, shooterId: id, visualPreset: vp, hitPlayer: hp, impactX: hx, impactY: hy, shotAudioKey: sa });
+      meleeSwingHandler({ areaClaw, clawAttackId: ca, swingId: sid, x, y, angle: a, arcDegrees: ad, range: r, color: c, shooterId: id, visualPreset: vp, hitPlayer: hp, impactX: hx, impactY: hy, shotAudioKey: sa });
       return undefined;
     });
   }

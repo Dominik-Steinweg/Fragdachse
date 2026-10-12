@@ -1,12 +1,14 @@
 import sharp from 'sharp';
+import { validateSocketFrames } from './socket-anchors.mjs';
 
 /** Deterministic shelf packing, transparent two-pixel gutters, no rotation.
  * Pixel copies are raw: data-pass RGB must never be alpha-composited or gamma transformed.
  */
-export async function packAtlas(frames, { frameNames, sourceFrames, size, pivot, prefix, maxSize = 4096 }) {
+export async function packAtlas(frames, { frameNames, sourceFrames, socketFrames, size, pivot, prefix, maxSize = 4096 }) {
   if (!Number.isInteger(maxSize) || maxSize < 5 || maxSize > 4096 || frames.length !== frameNames.length
     || new Set(frameNames).size !== frames.length) throw new Error('Invalid atlas inputs');
   const entries = [];
+  if (socketFrames !== undefined) validateSocketFrames(socketFrames, frames.length);
   for (let index = 0; index < frames.length; index++) {
     const { data, info } = await sharp(frames[index]).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     if (info.width !== size || info.height !== size) throw new Error('Atlas source size mismatch');
@@ -39,7 +41,8 @@ export async function packAtlas(frames, { frameNames, sourceFrames, size, pivot,
       hash[frameNames[entry.index]] = { frame: { x: entry.x, y: entry.y, w: entry.w, h: entry.h }, rotated: false,
         trimmed: entry.w !== size || entry.h !== size,
         spriteSourceSize: { x: entry.left, y: entry.top, w: entry.w, h: entry.h }, sourceSize: { w: size, h: size },
-        pivot: { x: pivot[0], y: pivot[1] }, sourceFrame: sourceFrames[entry.index] };
+        pivot: { x: pivot[0], y: pivot[1] }, sourceFrame: sourceFrames[entry.index],
+        ...(socketFrames ? { sockets: socketFrames[entry.index] } : {}) };
     }
     const image = `${prefix}-${pageIndex}.png`, json = `${prefix}-${pageIndex}.json`;
     const metadata = { frames: hash, meta: { app: 'Fragdachse V2', version: '1', image: image.split('/').at(-1),

@@ -13,7 +13,8 @@
 // Input stops fence old movement; Tunnel commits require a host-observed first selection.
 // Ready is lobby-revision-bound; active rounds use the host-frozen loadout snapshot.
 // GameState deltas name the full baseline that must be consumed before them.
-export const PEER_PROTOCOL_VERSION = 25;
+// Kraken spine/regrowth baselines and the appended spine action code require matching peers.
+export const PEER_PROTOCOL_VERSION = 27;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

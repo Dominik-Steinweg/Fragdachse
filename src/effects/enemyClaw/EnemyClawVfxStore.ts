@@ -19,7 +19,7 @@ export const CLAW_VFX_CONTACT_MS = 280;
 /** The ground telegraph dissolves this long after the hit; shared with the shader. */
 export const CLAW_VFX_TELEGRAPH_FADE_MS = 110;
 
-export const ClawVfxKind = { Attack: 0, Contact: 1, Lane: 2 } as const;
+export const ClawVfxKind = { Attack: 0, Contact: 1, Lane: 2, TelegraphSector: 3 } as const;
 
 /** Instance-relative times keep float32 attributes precise; rebased whenever the store is empty. */
 const REBASE_AFTER_MS = 600_000;
@@ -36,7 +36,7 @@ interface ClawVfxTiming {
 }
 
 export type ClawVfxAttackSpec = ClawVfxTiming & (
-  | { readonly shape?: 'sector'; readonly range: number; readonly halfArc: number }
+  | { readonly shape?: 'sector'; readonly range: number; readonly halfArc: number; readonly telegraphOnly?: boolean }
   | { readonly shape: 'lane'; readonly length: number; readonly width: number }
 );
 
@@ -79,7 +79,7 @@ export class EnemyClawVfxStore {
     this.writeQuad(slot, spec.x, spec.y, spec.angle,
       Math.min(0, r * cos) - pad, r + pad, -lateral - pad, lateral + pad,
       spec.startedAt - e, spec.strikeAt - e, spec.hitAt - e, spec.hitAt + CLAW_VFX_SLASH_MS - e,
-      r, halfArc, ClawVfxKind.Attack, spec.color);
+      r, halfArc, spec.telegraphOnly ? ClawVfxKind.TelegraphSector : ClawVfxKind.Attack, spec.color);
     this.expiresAt[slot] = spec.hitAt + CLAW_VFX_SLASH_MS;
     return true;
   }

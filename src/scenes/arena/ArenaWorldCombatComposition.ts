@@ -1,3 +1,4 @@
+import { CombatProjectileQueryAdapter } from '../../combat/CombatProjectileQueryAdapter';
 import { bridge } from '../../network/bridge';
 import { EnergyShieldSystem } from '../../systems/EnergyShieldSystem';
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE } from '../../config';
@@ -129,10 +130,31 @@ export function composeWorldCombatGameplay(
     projectileUtility: projectileRuntime,
     projectileEvents: projectileRuntime,
     projectileTimeField: projectileRuntime,
-    projectileHoming: projectileRuntime,
+    projectileHoming: {
+      setLineOfFireReadPort: port => projectileRuntime.setLineOfFireReadPort(port),
+      setProjectileTargetQueryPort: port => projectileRuntime.setProjectileTargetQueryPort(
+        port ? new CombatProjectileQueryAdapter(combatSystem, port) : null),
+    },
     projectileWorldImpact: projectileRuntime,
     projectileSwarm: projectileRuntime,
-    projectileInteraction: projectileRuntime,
+    projectileInteraction: {
+      setTimeBubbleChargePort: port => projectileRuntime.setTimeBubbleChargePort(port),
+      setProjectileBarrierPort: port => projectileRuntime.setProjectileBarrierPort(port),
+      setProjectileCombatPort: port => projectileRuntime.setProjectileCombatPort(port),
+      setProjectileMiniRocketStatePort: port => projectileRuntime.setProjectileMiniRocketStatePort(port),
+      readDetonableProjectiles: (...args) => projectileRuntime.readDetonableProjectiles(...args),
+      setProjectileTargetabilityPort: port => projectileRuntime.setProjectileTargetabilityPort(port),
+      setProjectileWorldBlockerPort: port => projectileRuntime.setProjectileWorldBlockerPort(port),
+      setProjectileCollisionTargetQueryPort: port => {
+        const parts = new CombatProjectileQueryAdapter(combatSystem);
+        projectileRuntime.setProjectileCollisionTargetQueryPort(port ? { ...port,
+          getWorldTargetHit: (target, ...args) => {
+            const hit = parts.getWorldTargetHit(target, ...args);
+            return hit === undefined ? port.getWorldTargetHit?.(target, ...args) : hit;
+          },
+        } : null);
+      },
+    },
     combatSystem,
     hostPhysics: ctx.hostPhysics,
     decoySystem: ctx.decoySystem,

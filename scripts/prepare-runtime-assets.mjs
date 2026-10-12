@@ -7,7 +7,15 @@ import { prepareRuntimeAtlases } from './lib/runtime-atlases.mjs';
 // Explicit colour-only families. Never infer data semantics from size or alpha.
 const materials = ['rock_base', 'gras_bg_tile', 'ground_macro', 'gravel_material', 'gravel_material_alt',
   'dirt_material', 'dirt_material_alt', 'bank_material', 'bank_material_wet', 'lobby_bg'];
+// Elevation carries world Z + oct normals; emission carries linear radiance.
+// Both must retain their data channels, even when their atlas filenames lack "height".
+export const isColourPng = file => file.endsWith('.png') && !/normal|height|elevation|emission|mask|depth|horizon/i.test(file);
+export const bossAtlasImages = assets => new Set(assets.filter(a => a.runtimeContract === 'boss')
+  .flatMap(a => Object.values(a.atlases).flatMap(pass => Object.values(pass).flatMap(clip => clip.pages.map(page => page.image.replace(/^\.\//, ''))))));
 export async function colourSources() {
+  // The boss residency loader verifies selected PNG bytes itself. Keep its complete
+  // atlas publication, including color, independently of generic colour substitutions.
+  const boundImages = bossAtlasImages(JSON.parse(await readFile('src/config/pipelineAssets.json', 'utf8')).assets);
   const root = 'public/assets/environment/woodland';
   const files = ['rock/mineral-colour.png', 'rock/mineral-colour-2x.png', 'canopy/albedo.png',
     'ecology/rock-colonies-atlas.png', 'ecology/ground-litter-atlas.png', 'ecology/lilies-atlas.png',
@@ -20,7 +28,7 @@ export async function colourSources() {
       for (const entry of await readdir(dir, { withFileTypes: true })) {
         const file = `${dir}/${entry.name}`;
         if (entry.isDirectory()) await visit(file);
-        else if (entry.name.endsWith('.png') && !/normal|height|mask|depth|horizon/i.test(entry.name)
+        else if (isColourPng(file) && !boundImages.has(file.slice('public/'.length))
           && (await stat(file)).size >= 128 * 1024) files.push(file);
       }
     };

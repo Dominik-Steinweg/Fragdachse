@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { PIPELINE_ASSETS, pipelineAnimationKey, getPipelineSpriteScale } from '../config/pipelineAssets';
+import { PIPELINE_ASSETS, pipelineAnimationKey, getPipelineSpriteScale, isPipelineBossTexture } from '../config/pipelineAssets';
 
 /**
  * Shared walking-animation contract for every badger-shaped figure.
@@ -46,7 +46,7 @@ export interface WalkingSheet {
 export const WALKING_IDLE_FRAME = 0;
 
 const WALKING_SHEETS: readonly WalkingSheet[] = PIPELINE_ASSETS
-  .filter((asset) => asset.category === 'character' || asset.category === 'enemy')
+  .filter((asset) => asset.runtimeContract === 'sheet' && (asset.category === 'character' || asset.category === 'enemy'))
   .map((asset) => {
     const clip = asset.clips.find((candidate) => candidate.name === 'move')!;
     const idle = asset.clips.find((candidate) => candidate.name === 'idle');
@@ -98,6 +98,11 @@ export function preloadBadgerAnimationAssets(loader: Phaser.Loader.LoaderPlugin)
       endFrame: sheet.frameCount - 1,
     });
   }
+}
+
+/** Enemy image preload must use this projection too; boss rest poses come from residency. */
+export function genericEnemyImageKeys(enemies: readonly { imageKey: string; krakenBoss?: unknown; krakenEgg?: unknown }[]): string[] {
+  return [...new Set(enemies.filter(e => !e.krakenBoss && !e.krakenEgg && !isPipelineBossTexture(e.imageKey)).map(e => e.imageKey))];
 }
 
 /** Register the global animations once; AnimationManager is shared by all Scenes. */

@@ -204,6 +204,13 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     this.baseVoidFireOwner?.destroy();
     this.baseVoidFireOwner = system;
   }
+  private krakenOwner: { system: import('../systems/CoopDefenseKrakenSystem').CoopDefenseKrakenSystem;
+    brood: import('../systems/CoopDefenseKrakenBroodSystem').CoopDefenseKrakenBroodSystem;
+    habitat: import('../systems/KrakenHabitatRules').KrakenHabitatRules; excluded: Set<string> } | null = null;
+  get kraken() { return this.krakenOwner; }
+  setKraken(owner: NonNullable<CoopMissionRuntime['krakenOwner']>): void {
+    this.claimEmptySlot('kraken', this.krakenOwner); this.krakenOwner = owner;
+  }
   private enemyOwner: EnemyManager | null = null;
   private navigationOwner: CoopMissionNavigationRuntime | null = null;
   private encounterOwner: CoopMissionEncounterRuntime | null = null;
@@ -543,6 +550,8 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     this.mortarOwner?.strikes.clear();
     this.mortarOwner = null;
     this.specialMovementOwner = null;
+    this.krakenOwner?.system.clear(); this.krakenOwner?.brood.clear(); this.krakenOwner?.habitat.clear();
+    this.krakenOwner = null;
     this.enemySpecialOwner?.voidHunter?.clear();
     this.enemySpecialOwner?.timebomb?.clear();
     this.enemyBehaviourOwner?.decoyTargets?.destroy();

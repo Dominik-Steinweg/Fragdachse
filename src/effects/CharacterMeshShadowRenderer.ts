@@ -198,6 +198,6 @@ export class CharacterMeshShadowRenderer {
   }
   destroy(): void {
     for (const slot of this.pool) slot.destroy(); this.pool.length = 0; this.assignments.clear();
-    this.projector.destroy(); this.receiver.destroy();
+    this.projector.destroy(); // Receiver is borrowed from ShadowSystem.
   }
 }

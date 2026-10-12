@@ -2816,6 +2816,11 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"mortar:glow","owner":"effects/MortarStrikeRenderer.ts","component":"glow","height":"body","lighting":"emissive","camera":"world","depths":[19.7],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"createVisual/glow/setDepth/0","expression":"19.7"}},
   {"id":"mortar:core","owner":"effects/MortarStrikeRenderer.ts","component":"core","height":"body","lighting":"emissive","camera":"world","depths":[19.7],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"createVisual/core/setDepth/0","expression":"19.7"}},
   {"id":"mortar:wave","owner":"effects/MortarStrikeRenderer.ts","component":"wave","height":"body","lighting":"emissive","camera":"world","depths":[19.7],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"createVisual/wave/setDepth/0","expression":"19.7"}},
+  {id:'cpu:effects/kraken/KrakenShadowRenderer.ts:bind/this.display/setDepth/0',owner:'effects/kraken/KrakenShadowRenderer.ts',component:'bind/this.display/setDepth/0',height:'ground',lighting:'material',camera:'world',depths:[9.92],blends:['NORMAL'],profiles:['M'],role:'effect',source:{selector:'bind/this.display/setDepth/0',expression:'CHARACTER_SHADOW_CONFIG.depth'}},
+  {"id":"cpu:effects/kraken/KrakenRenderer.ts:module/this.sprite/setDepth/0","owner":"effects/kraken/KrakenRenderer.ts","component":"module/this.sprite/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"module/this.sprite/setDepth/0","expression":"depth"}},
+  {"id":"cpu:effects/kraken/KrakenRenderer.ts:take/q.object/setDepth/0","owner":"effects/kraken/KrakenRenderer.ts","component":"take/q.object/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"take/q.object/setDepth/0","expression":"depth"}},
+  {id:'cpu:effects/kraken/KrakenTentacleShadow.ts:module/this.image/setDepth/0',owner:'effects/kraken/KrakenTentacleShadow.ts',component:'module/this.image/setDepth/0',height:'ground',lighting:'material',camera:'world',depths:[9.7],blends:['NORMAL'],profiles:['M'],role:'effect',source:{selector:'module/this.image/setDepth/0',expression:'DEPTH.PLAYERS - .3'}},
+  {id:'cpu:effects/kraken/KrakenReviewEffectRenderer.ts:quad/q.object/setDepth/0',owner:'effects/kraken/KrakenReviewEffectRenderer.ts',component:'quad/q.object/setDepth/0',height:'body',lighting:'material',camera:'world',depths:[],blends:['NORMAL'],profiles:[],role:'delegate',source:{selector:'quad/q.object/setDepth/0',expression:'depth'}},
   {"id":"cpu:ui/AfterRoundTransition.ts:overlayTransitionView/root/setDepth/0","owner":"ui/AfterRoundTransition.ts","component":"overlayTransitionView/root/setDepth/0","height":"body","lighting":"material","camera":"clarity","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"overlayTransitionView/root/setDepth/0","expression":"value"}},
   {"id":"cpu:ui/AfterRoundTransition.ts:overlayTransitionView/root/setDepth/1","owner":"ui/AfterRoundTransition.ts","component":"overlayTransitionView/root/setDepth/1","height":"body","lighting":"material","camera":"clarity","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"overlayTransitionView/root/setDepth/1","expression":"depth"}},
   {"id":"cpu:ui/AfterRoundTransition.ts:opening/view/setDepth/0","owner":"ui/AfterRoundTransition.ts","component":"opening/view/setDepth/0","height":"body","lighting":"material","camera":"clarity","depths":[],"blends":["NORMAL"],"profiles":[],"role":"delegate","source":{"selector":"opening/view/setDepth/0","expression":"Math.max(view.depth, (this.source?.depth ?? view.depth) + 1)"}},
@@ -3309,6 +3314,14 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
 ];
 export const CPU_SOURCE_CONTRACTS = {
   'effects/MortarStrikeRenderer.ts': {"bindings":{},"blends":["Phaser.BlendModes.ADD"],"cameras":[],"sites":[{"key":"createVisual/glow/setDepth/0","expression":"19.7","blends":["ADD"]},{"key":"createVisual/core/setDepth/0","expression":"19.7","blends":["ADD"]},{"key":"createVisual/wave/setDepth/0","expression":"19.7","blends":["ADD"]}]},
+  'effects/kraken/KrakenShadowRenderer.ts': { sites: [{key:'bind/this.display/setDepth/0',expression:'CHARACTER_SHADOW_CONFIG.depth',blends:['NORMAL']}], blends: [], cameras: [], bindings: {} },
+  'effects/kraken/KrakenRenderer.ts': { sites: [{"key":"module/this.sprite/setDepth/0","expression":"depth","blends":["NORMAL"]},{"key":"take/q.object/setDepth/0","expression":"depth","blends":["NORMAL"]}], blends: [], cameras: [], bindings: {} },
+  'effects/kraken/KrakenTentacleShadow.ts': {
+    sites: [{key:'module/this.image/setDepth/0',expression:'DEPTH.PLAYERS - .3',blends:['NORMAL']}], blends: [], cameras: [], bindings: {},
+  },
+  'effects/kraken/KrakenReviewEffectRenderer.ts': {
+    sites: [{key:'quad/q.object/setDepth/0',expression:'depth',blends:['NORMAL']}], blends: [], cameras: [], bindings: {},
+  },
   "ui/AfterRoundTransition.ts": {
   "blends": [],
   "cameras": [],

@@ -24,6 +24,7 @@ if str(BASE) not in sys.path:
 import blender_pipeline as shared
 import motions_v2
 import eye_anchors
+import socket_anchors
 from contracts_v2 import validate_clips, validate_extensions
 
 _sessions = {}
@@ -84,7 +85,7 @@ def resolve_spec(root, asset_id, catalog_path=None):
 def inputs(root, spec, device='CPU'):
     names = ['blender_pipeline.py', 'blender_pipeline_v2.py', 'rigs_v2.py', 'motions_v2.py',
              f'recipes_v2/{spec["recipe"]}.py', 'catalog-v2.json',
-             'export.mjs', 'export-v2.mjs', 'export-provenance.mjs', 'contracts-v2.mjs', 'atlas-v2.mjs', 'elevation-v2.mjs', 'runtime-contract-v2.mjs', 'eye-anchors.mjs', 'index-library.mjs', 'archive-v2.py', 'publish-v2.ps1', 'texture-prompts.json']
+             'export.mjs', 'export-v2.mjs', 'kraken-material-v2.mjs', 'export-provenance.mjs', 'contracts-v2.mjs', 'atlas-v2.mjs', 'elevation-v2.mjs', 'runtime-contract-v2.mjs', 'eye-anchors.mjs', 'socket-anchors.mjs', 'index-library.mjs', 'archive-v2.py', 'publish-v2.ps1', 'texture-prompts.json']
     if spec['recipe'] in ('rocket', 'badger'):
         names.append(f'recipes/{spec["recipe"]}.py')
     # The production library includes shared anatomy/weapon helpers. Snapshot the
@@ -163,7 +164,7 @@ def validate_base(scene, asset, spec):
 def prepare(root, spec, revision, fingerprint, sources, textures):
     # MCP keeps Python alive. Hashing current files must never label cached old code.
     importlib.invalidate_caches()
-    for name in ('blender_pipeline', 'rigs_v2', 'claw_motion_v2', 'kraken_motion_v2', 'motions_v2', 'eye_anchors',
+    for name in ('blender_pipeline', 'rigs_v2', 'claw_motion_v2', 'kraken_motion_v2', 'motions_v2', 'eye_anchors', 'socket_anchors',
                  'kraken_motion_land_v2', 'kraken_tentacle_motion_v2', 'kraken_egg_motion_v2',
                  'contracts_v2', 'pose_validation_v2', 'elevation_v2',
                  'recipes.badger', 'recipes_v2.badger',
@@ -216,7 +217,10 @@ def prepare(root, spec, revision, fingerprint, sources, textures):
         text = bpy.data.texts.new(relative)
         text.write(path.read_text(encoding='utf-8'))
         texts.add(text)
-    bounds, bases, eyes = {}, {}, []
+    bounds, bases, eyes, sockets = {}, {}, [], []
+    # Persist explicit references for independent verification of the saved Blend.
+    scene['asset_socket_objects'] = json.dumps({name: obj.name for name, obj in asset['sockets'].items()
+                                               if name not in socket_anchors.EYE_SOCKETS})
     # Validate every evaluated pose before spending time rendering any frame.
     for sample in samples:
         set_frame(scene, sample['blenderFrame'])
@@ -227,8 +231,9 @@ def prepare(root, spec, revision, fingerprint, sources, textures):
         if base is not None: bases[sample['index']] = base
         if ctx.eye_sockets:
             eyes.append(eye_anchors.sample_eyes(scene, asset['sockets']))
+        sockets.append(socket_anchors.sample_sockets(scene, asset['sockets']))
     scene.frame_set(0)
-    return {'scene': scene, 'ctx': ctx, 'asset': asset, 'samples': samples, 'clips': clips, 'bounds': bounds, 'baseDiameters': bases, 'texts': texts, 'eyeFrames': eyes}
+    return {'scene': scene, 'ctx': ctx, 'asset': asset, 'samples': samples, 'clips': clips, 'bounds': bounds, 'baseDiameters': bases, 'texts': texts, 'eyeFrames': eyes, 'socketFrames': sockets}
 
 
 def archive_inputs(root, out, sources, textures):
@@ -262,7 +267,7 @@ def publish(base, source, target):
                        check=True, capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
 
 
-def build(repo, asset_id, revision, max_frames=None, device='CPU', catalog_path=None):
+def build(repo, asset_id, revision, max_frames=None, device='CPU', catalog_path=None, output_root=None):
     """Render a fresh revision, or resume an identical partial build in bounded chunks."""
     root = Path(repo).resolve()
     identifier(asset_id); identifier(revision)
@@ -272,7 +277,7 @@ def build(repo, asset_id, revision, max_frames=None, device='CPU', catalog_path=
         raise ValueError('max_frames must be a positive integer')
     spec = resolve_spec(root, asset_id, catalog_path)
     fingerprint, sources, textures = inputs(root, spec, device)
-    base = root / 'art/poc/pipeline-v2'
+    base = shared.contained(root, output_root) if output_root else root / 'art/poc/pipeline-v2'
     out = base / 'incomplete' / revision / asset_id
     complete = base / 'runs' / revision / asset_id
     if complete.exists():
@@ -295,6 +300,12 @@ def build(repo, asset_id, revision, max_frames=None, device='CPU', catalog_path=
                     path = shared.contained(out, frame['relative'])
                     if not path.is_file() or shared.digest(path) != frame['sha256']:
                         raise ValueError(f'Partial frame changed or missing: {frame["relative"]}')
+                    if 'material' in frame:
+                        records = list(frame['material']['passes'].values()) + [frame['material']['mesh'][k] for k in ('positions', 'indices')]
+                        for record in records:
+                            extra = shared.contained(path.parent.parent, record['file'])
+                            if not extra.is_file() or shared.digest(extra) != record['sha256']:
+                                raise ValueError(f'Partial material/mesh changed: {extra}')
                     for field, digest_field in (('file', 'sha256'), ('exrFile', 'exrSha256')):
                         if 'elevation' in frame:
                             extra = shared.contained(path.parent.parent, frame['elevation'][field])
@@ -309,7 +320,7 @@ def build(repo, asset_id, revision, max_frames=None, device='CPU', catalog_path=
             archive_inputs(root, out, sources, textures)
             save_json(out / 'archive-source/resolved-spec.json', spec)
             save_json(out / 'build.json', state)
-        key = (str(root), asset_id, revision, fingerprint)
+        key = (str(root), str(base), asset_id, revision, fingerprint)
         session = _sessions.get(key)
         if session is None:
             session = prepare(root, spec, revision, fingerprint, sources, textures)
@@ -317,6 +328,11 @@ def build(repo, asset_id, revision, max_frames=None, device='CPU', catalog_path=
                 raise ValueError('Sources changed during authoring; use a new revision')
             _sessions[key] = session
         scene, ctx = session['scene'], session['ctx']
+        if spec.get('materialPass'):
+            from kraken_material_v2 import height_range
+            low, high = height_range(scene, session['samples'])
+            spec = dict(spec, elevation=dict(spec['elevation'], min=low, max=high))
+            scene['asset_manifest'] = json.dumps(spec)
         bpy.context.window.scene = scene
         if device != 'CPU':
             # Keep acceleration caches in the same writable workspace as the renders.
@@ -351,8 +367,15 @@ def build(repo, asset_id, revision, max_frames=None, device='CPU', catalog_path=
                 name = f'masters/frame-{index:04d}.png'
                 scene.render.filepath = str(folder / name)
                 bpy.ops.render.render(write_still=True)
-                record = dict(sample, file=name, relative=f'{variant}/{name}', sha256=shared.digest(folder / name), bounds=session['bounds'][index])
-                if 'elevation' in spec:
+                record = dict(sample, file=name, relative=f'{variant}/{name}', sha256=shared.digest(folder / name), bounds=session['bounds'][index],
+                              sockets=session['socketFrames'][index])
+                if spec.get('materialPass'):
+                    from kraken_material_v2 import render_passes, ENCODING
+                    record['material'] = render_passes(scene, folder, index, spec, name)
+                    passes = record['material']['passes']
+                    record['elevation'] = dict(file=passes['elevationPng']['file'], sha256=passes['elevationPng']['sha256'],
+                        exrFile=passes['height']['file'], exrSha256=passes['height']['sha256'], width=1024, height=1024, encoding=ENCODING)
+                elif 'elevation' in spec:
                     from elevation_v2 import render_elevation
                     record['elevation'] = render_elevation(scene, folder, index, spec['elevation'], name)
                 if session['baseDiameters']: record['baseDiameter'] = session['baseDiameters'][index]
@@ -373,10 +396,16 @@ def build(repo, asset_id, revision, max_frames=None, device='CPU', catalog_path=
                                     'transparent':True,'bounds':session['bounds'][0]})
             if session['eyeFrames']:
                 manifest['eyeAnchors'] = {'version': 1, 'frames': session['eyeFrames']}
+            manifest['socketFrames'] = session['socketFrames']
+            manifest['sockets'] = {name: [p['x'], p['y']] for name, p in session['socketFrames'][0].items()}
             if 'elevation' in spec:
-                manifest['elevationPass'] = dict(encoding='linear-unorm8-world-z', waterline=0,
+                manifest['elevationPass'] = dict(encoding='linear-unorm8-z-oct-normal-v1' if spec.get('materialPass') else 'linear-unorm8-world-z', waterline=0,
                     min=spec['elevation']['min'], max=spec['elevation']['max'], scale=spec['elevation'].get('scale', .5),
                     alpha='beauty-coverage', masterSize=1024, colorSpace='non-color', premultiplied=False)
+            if spec.get('materialPass'):
+                manifest['materialPass'] = dict(spec['materialPass'], worldPxPerBU=spec['targetSize'] * spec.get('displayScale', 1) / spec['orthoScale'],
+                    emissionRange=8, exposure=.55 if spec['id'] == 'abyssal-kraken' else 1)
+                manifest['shadowMesh'] = dict(version=1, encoding='u16-world-xyz-per-pose-v1', frames=[f['material']['mesh'] for f in manifest['frames']])
             from render_integrity import provenance as export_provenance
             manifest['provenance'] = export_provenance(scene, sources)
             save_json(folder / 'render.json', manifest)
@@ -407,8 +436,9 @@ if __name__ == '__main__':
     parser.add_argument('--revision', required=True)
     parser.add_argument('--max-frames', type=int)
     parser.add_argument('--catalog', help='Temporary catalog copy; resolved spec is archived and fingerprinted')
+    parser.add_argument('--output-root', help='Repository-contained output root for isolated smoke builds')
     parser.add_argument('--device', choices=['CPU', 'CUDA', 'OPTIX'], default='CPU')
     args = parser.parse_args(sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else [])
     targets = [a['id'] for a in json.loads((Path(args.catalog) if args.catalog else Path(args.repo)/'scripts/asset-pipeline/catalog-v2.json').read_text(encoding='utf-8'))['assets'] if a.get('production') == 'reference'] if args.asset == 'references' else [args.asset]
     for target in targets:
-        print(json.dumps(build(args.repo, target, args.revision, args.max_frames, args.device, args.catalog)), flush=True)
+        print(json.dumps(build(args.repo, target, args.revision, args.max_frames, args.device, args.catalog, args.output_root)), flush=True)

@@ -3,9 +3,18 @@
  * repliziert Ort/Startzeit/Seed; Renderer leiten die Inszenierung aus diesem Anker
  * und der synchronisierten Zeit ab.
  */
-export type BossIntroPresetId = 'graveyard-rise' | 'void-sparks';
+export type BossIntroPresetId = 'graveyard-rise' | 'void-sparks' | 'kraken-rise';
 
-export const BOSS_INTRO_PRESET_IDS: readonly BossIntroPresetId[] = ['graveyard-rise', 'void-sparks'];
+export const BOSS_INTRO_PRESET_IDS: readonly BossIntroPresetId[] = ['graveyard-rise', 'void-sparks', 'kraken-rise'];
+
+/** The reserved water anchor is also the eventual spawn position. No dry-spawn fallback.
+ * BossSystem owns this intro; the kraken owner takes over at emergeAtMs and waits for camera return.
+ */
+export const KRAKEN_RISE_INTRO = {
+  clip: 'intro-rise', emergeAtMs: 3000, durationMs: 4400, spawnEdgeMarginCells: 0,
+  camera: { panInMs: 800, holdAfterEmergeMs: 400, panOutMs: 1000, zoom: 1.35 },
+  habitat: 'water', fallback: 'none',
+} as const;
 
 /**
  * „Riss aus einer anderen Dimension“: Anomalie → Riss öffnet sich → Kollaps → Erscheinen.
@@ -119,9 +128,12 @@ export const GRAVEYARD_RISE_INTRO: GraveyardRiseIntroPreset = {
 
 export function getBossIntroPreset(id: 'graveyard-rise'): GraveyardRiseIntroPreset;
 export function getBossIntroPreset(id: 'void-sparks'): typeof VOID_SPARKS_INTRO;
-export function getBossIntroPreset(id: BossIntroPresetId): GraveyardRiseIntroPreset | typeof VOID_SPARKS_INTRO;
-export function getBossIntroPreset(id: BossIntroPresetId): GraveyardRiseIntroPreset | typeof VOID_SPARKS_INTRO {
+export function getBossIntroPreset(id: 'kraken-rise'): typeof KRAKEN_RISE_INTRO;
+export function getBossIntroPreset(id: BossIntroPresetId): GraveyardRiseIntroPreset | typeof VOID_SPARKS_INTRO | typeof KRAKEN_RISE_INTRO;
+export function getBossIntroPreset(id: BossIntroPresetId): GraveyardRiseIntroPreset | typeof VOID_SPARKS_INTRO | typeof KRAKEN_RISE_INTRO {
   switch (id) {
+    case 'kraken-rise':
+      return KRAKEN_RISE_INTRO;
     case 'graveyard-rise':
       return GRAVEYARD_RISE_INTRO;
     case 'void-sparks':
@@ -135,6 +147,9 @@ export function isBossIntroPresetId(value: unknown): value is BossIntroPresetId 
 
 /** Replizierter, Late-Join-fähiger Intro-Anker. */
 export interface BossIntroState {
+  /** Required together for kraken-rise; the host reservation binds the same anchor through spawn. */
+  readonly habitatId?: string;
+  readonly waterAnchorId?: string;
   readonly preset: BossIntroPresetId;
   readonly x: number;
   readonly y: number;
@@ -142,15 +157,24 @@ export interface BossIntroState {
   readonly seed: number;
 }
 
+export interface KrakenBossIntroState extends BossIntroState {
+  readonly preset: 'kraken-rise';
+  readonly habitatId: string;
+  readonly waterAnchorId: string;
+}
+
 /** Validiert einen replizierten Intro-Anker; fremde oder kaputte Werte ergeben `null`. */
 export function readBossIntroState(raw: unknown): BossIntroState | null {
   if (!raw || typeof raw !== 'object') return null;
   const value = raw as Record<string, unknown>;
   if (!isBossIntroPresetId(value.preset)) return null;
+  if (value.preset === 'kraken-rise' && (typeof value.habitatId !== 'string' || !value.habitatId.trim()
+    || typeof value.waterAnchorId !== 'string' || !value.waterAnchorId.trim())) return null;
   const { x, y, startedAtMs, seed } = value;
   if (![x, y, startedAtMs, seed].every((entry) => typeof entry === 'number' && Number.isFinite(entry))) return null;
   return {
     preset: value.preset,
+    ...(value.preset === 'kraken-rise' ? { habitatId: value.habitatId as string, waterAnchorId: value.waterAnchorId as string } : {}),
     x: x as number,
     y: y as number,
     startedAtMs: startedAtMs as number,

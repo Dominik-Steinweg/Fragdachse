@@ -179,6 +179,30 @@ export class ShadowSystem {
   private characterClouds: SunCloudState | null = null;
   private characterShadows: CharacterMeshShadowRenderer | null = null;
   private enemyShadows: EnemyMeshShadowRenderer | null = null;
+  private figureReceiver: CharacterShadowReceiver | null = null;
+  private readonly figureBorrowers = new Set<() => void>();
+  /** The World shadow owner owns the receiver, including Low and player-free worlds. */
+  borrowFigureEnvironment(onRelease: () => void): { receiver: CharacterShadowReceiver; clouds: SunCloudState; release: () => void } | null {
+    const receiver = this.syncFigureReceiver();
+    if (!receiver || !this.characterClouds) return null;
+    this.figureBorrowers.add(onRelease);
+    return { receiver, clouds: this.characterClouds, release: () => this.figureBorrowers.delete(onRelease) };
+  }
+  private syncFigureReceiver(): CharacterShadowReceiver | null {
+    if (!this.characterClouds || !this.lastStaticLayout) return null;
+    if (!this.figureReceiver) {
+      this.figureReceiver = new CharacterShadowReceiver(this.scene, this.getStaticWorldBounds());
+      this.characterReceiverDirty = true;
+    }
+    if (this.characterReceiverDirty) {
+      const options = this.lastStaticOptions;
+      this.figureReceiver.update(this.lastStaticLayout, options.offsetX ?? ARENA_OFFSET_X,
+        options.offsetY ?? ARENA_OFFSET_Y, options.rockVisibilityPredicate, options.runtimeRocks ?? EMPTY_RUNTIME_ROCKS,
+        this.baseCells.values());
+      this.characterReceiverDirty = false;
+    }
+    return this.figureReceiver;
+  }
   private readonly enemyShadowSources: EnemyEntity[] = [];
   private enemyMeshesSuppressed = false;
   private readonly collectShadowEnemy = (enemy: EnemyEntity): void => { this.enemyShadowSources.push(enemy); };
@@ -188,9 +212,12 @@ export class ShadowSystem {
   }
   getEnemyShadowsStatus() { return { suppressed: this.enemyMeshesSuppressed, ...(this.enemyShadows?.inspect() ?? { activeInstances: 0 }) }; }
   private destroyFigureShadows(): void {
-    // Borrower first: player renderer alone owns the shared receiver.
+    // Borrowers detach their display textures before the World receiver is destroyed.
+    for (const release of this.figureBorrowers) release();
+    this.figureBorrowers.clear();
     this.enemyShadows?.destroy(); this.enemyShadows = null;
     this.characterShadows?.destroy(); this.characterShadows = null;
+    this.figureReceiver?.destroy(); this.figureReceiver = null;
     this.enemyShadowSources.length = 0;
   }
   private characterReceiverDirty = true;
@@ -219,22 +246,17 @@ export class ShadowSystem {
       ...(this.characterShadows?.inspect() ?? { activeInstances: 0, instances: [] }) };
   }
   private syncCharacterShadows(players: readonly PlayerEntity[]): boolean {
+    const receiver = this.syncFigureReceiver();
     if (CHARACTER_SHADOW_MODE !== 'mesh' || !this.characterClouds || !this.lastStaticLayout || this.quality.level === 'low') return false;
     if (!this.characterShadows) {
       const meshes = getCharacterMeshes(this.scene);
       if (!meshes) return false;
       this.characterShadows = new CharacterMeshShadowRenderer(this.scene, this.characterClouds,
-        new CharacterShadowReceiver(this.scene, this.getStaticWorldBounds()), meshes, CHARACTER_MESH_TARGET_SIZE[this.quality.level]);
+        receiver!, meshes, CHARACTER_MESH_TARGET_SIZE[this.quality.level]);
       this.characterReceiverDirty = true;
       this.characterShadows.setDebugSolid(this.characterSolid);
     }
-    if (this.characterReceiverDirty) {
-      const options = this.lastStaticOptions;
-      this.characterShadows.receiver.update(this.lastStaticLayout, options.offsetX ?? ARENA_OFFSET_X,
-        options.offsetY ?? ARENA_OFFSET_Y, options.rockVisibilityPredicate, options.runtimeRocks ?? EMPTY_RUNTIME_ROCKS,
-        this.baseCells.values());
-      this.characterReceiverDirty = false;
-    }
+    this.syncFigureReceiver();
     this.characterShadows.sync(players, this.dynamicVisible && !this.characterSuppressed);
     return true;
   }
@@ -1310,6 +1332,7 @@ export class ShadowSystem {
     // Der statische Puffer wird gebacken und nie selbst gerendert: keine Maske noetig, die
     // traegt stattdessen die RenderTexture.
     const staticGraphics = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'dynamicShadows', staticGraphics);
     staticGraphics.setDepth(depth);
     staticGraphics.setBlendMode(Phaser.BlendModes.MULTIPLY);
     staticGraphics.setVisible(false);

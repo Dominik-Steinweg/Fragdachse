@@ -243,6 +243,6 @@ export class EnemyMeshShadowRenderer {
     for (const key of Object.keys(programs)) if (this.programNames.some(n => key === n || key.startsWith(n + '_'))) {
       this.renderer.deleteProgram(programs[key]); delete programs[key];
     }
-    // Receiver lifetime belongs exclusively to CharacterMeshShadowRenderer.
+    // Receiver lifetime belongs exclusively to ShadowSystem.
   }
 }

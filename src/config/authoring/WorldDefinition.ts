@@ -27,6 +27,7 @@ import type {
  * Registries bleiben die einzige Wahrheit fuer den Inhalt der einzelnen Felder.
  */
 export interface WorldDefinition {
+  readonly krakenHabitat?: import('../krakenHabitat').KrakenHabitatConfig;
   /** Stabile World-Identitaet, z. B. `world:coop-defense:7`. */
   readonly id: string;
   /**

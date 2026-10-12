@@ -80,6 +80,7 @@ function createStuckEnemy(
     isBurrowed: () => false,
     decayWeaponSpread: () => {},
     rollWeaponSpreadOffset: () => 0,
+    getAimAngle: () => 0,
     faceAngle: () => {},
     stopMovement: () => {},
     getCollisionRadius: () => 15,

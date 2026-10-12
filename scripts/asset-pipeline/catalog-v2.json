@@ -4715,6 +4715,7 @@
       "reference": "scripts/asset-pipeline/references/abyssal-kraken-v2.png",
       "targetSize": 320,
       "sourceSizes": [
+        384,
         512,
         1024
       ],
@@ -4726,14 +4727,17 @@
       "description": {
         "silhouette": "Riesiger Endboss im Teich: gestreckter Speermantel mit segmentiertem Kiel, Hakenstacheln und gezackten Flossenmembranen, acht lange über Schwimmhäute verbundene Arme und eine Krone aus Mundtentakeln.",
         "colors": "Bedrohliches dunkles Indigo-Violett mit violetten Flanken, Pigmentmarmorierung und Lavendel-Säumen; karminrote Saugnäpfe und Mundtentakel; nach vorn blickende Glutaugen mit Schlitzpupille als hellster Akzent.",
-        "anatomy": "Wasserlinie z=0 für den Elevation-Pass. Augen unter schweren Lidern auf eigenen Pivots (Blinzeln, Öffnen im Intro). Sechs getragene Eier an Armspitzen, in Ruhe verborgen. Schlagtentakel und Eier sind eigene Boss-Teile."
+        "anatomy": "Wasserlinie z=0 für den Elevation-Pass. Augen unter schweren Lidern auf eigenen Pivots (Blinzeln, Öffnen im Intro). Sechs getragene Eier an Armspitzen, in Ruhe verborgen. Aufgetaucht: Tintenkegel (ink-spit) und Eierwurf; Abtauchen (dive → surface) macht den Körper unsichtbar, dann greifen separate Schlagtentakel an. Schlagtentakel und Eier sind eigene Boss-Teile."
       },
       "requiredClips": [
         "idle",
         "move",
         "intro-rise",
-        "tentacle-call",
-        "egg-throw"
+        "ink-spit",
+        "egg-throw",
+        "dive",
+        "surface",
+        "spine-volley"
       ],
       "production": "reference",
       "recipe": "abyssal-kraken",
@@ -4785,27 +4789,68 @@
           }
         },
         {
-          "name": "tentacle-call",
-          "motion": "kraken_call_tentacle",
-          "frameCount": 20,
+          "name": "ink-spit",
+          "motion": "kraken_ink_spit",
+          "frameCount": 22,
           "frameRate": 20,
           "loop": false,
           "markers": {
-            "dive": 8,
-            "resurface": 16
-          },
-          "parameters": {
-            "arm": 4
+            "charge": 9,
+            "spit": 12
           }
         },
         {
           "name": "egg-throw",
           "motion": "kraken_throw_egg",
+          "frameCount": 36,
+          "frameRate": 20,
+          "loop": false,
+          "markers": {
+            "release-1": 10,
+            "release-2": 14,
+            "release-3": 17,
+            "release-4": 21,
+            "release-5": 25,
+            "release-6": 29
+          }
+        },
+        {
+          "name": "dive",
+          "motion": "kraken_dive",
           "frameCount": 24,
           "frameRate": 20,
           "loop": false,
           "markers": {
-            "release": 13
+            "submerged": 19
+          },
+          "end": "free",
+          "next": "surface"
+        },
+        {
+          "name": "surface",
+          "motion": "kraken_surface",
+          "frameCount": 28,
+          "frameRate": 20,
+          "loop": false,
+          "start": "free",
+          "markers": {
+            "eyes-open": 18
+          }
+        },
+        {
+          "name": "spine-volley",
+          "motion": "kraken_volley_spines",
+          "frameCount": 36,
+          "frameRate": 20,
+          "loop": false,
+          "markers": {
+            "raise": 8,
+            "release-1": 15,
+            "release-2": 17,
+            "release-3": 20,
+            "release-4": 22,
+            "release-5": 24,
+            "release-6": 26
           }
         }
       ],
@@ -4817,7 +4862,17 @@
       },
       "runtimeAtlas": true,
       "runtimeContract": "boss",
-      "runtimeBudgetMB": 64
+      "runtimeBudgetMB": 104,
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      },
+      "shadowMesh": {
+        "version": 1,
+        "encoding": "u16-world-xyz-per-pose-v1"
+      }
     },
     {
       "id": "abyssal-kraken-land",
@@ -4827,6 +4882,7 @@
       "reference": "scripts/asset-pipeline/references/abyssal-kraken-v2.png",
       "targetSize": 360,
       "sourceSizes": [
+        432,
         512,
         1024
       ],
@@ -4845,6 +4901,7 @@
         "move",
         "ashore",
         "slam",
+        "ink-spit",
         "egg-throw",
         "death"
       ],
@@ -4877,7 +4934,7 @@
           "name": "move",
           "motion": "kraken_land_move",
           "frameCount": 12,
-          "frameRate": 12,
+          "frameRate": 24,
           "loop": true
         },
         {
@@ -4895,22 +4952,38 @@
         {
           "name": "slam",
           "motion": "kraken_land_slam",
-          "frameCount": 20,
+          "frameCount": 32,
           "frameRate": 24,
           "loop": false,
           "markers": {
-            "strike": 7,
-            "impact": 11
+            "strike": 13,
+            "impact": 20
+          }
+        },
+        {
+          "name": "ink-spit",
+          "motion": "kraken_land_ink_spit",
+          "frameCount": 22,
+          "frameRate": 20,
+          "loop": false,
+          "markers": {
+            "charge": 9,
+            "spit": 12
           }
         },
         {
           "name": "egg-throw",
           "motion": "kraken_land_egg_throw",
-          "frameCount": 20,
+          "frameCount": 32,
           "frameRate": 20,
           "loop": false,
           "markers": {
-            "release": 11
+            "release-1": 9,
+            "release-2": 12,
+            "release-3": 15,
+            "release-4": 19,
+            "release-5": 22,
+            "release-6": 26
           }
         },
         {
@@ -4929,7 +5002,17 @@
       },
       "runtimeAtlas": true,
       "runtimeContract": "boss",
-      "runtimeBudgetMB": 72
+      "runtimeBudgetMB": 100,
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      },
+      "shadowMesh": {
+        "version": 1,
+        "encoding": "u16-world-xyz-per-pose-v1"
+      }
     },
     {
       "id": "abyssal-kraken-tentacle",
@@ -4955,6 +5038,7 @@
       "runtimeContract": "boss",
       "targetSize": 448,
       "sourceSizes": [
+        448,
         512,
         1024
       ],
@@ -4977,8 +5061,8 @@
         "organic": "art/poc/kraken-v8/textures/kraken-scales-v8.png"
       },
       "elevation": {
-        "min": -3.5,
-        "max": 4.5,
+        "min": -5.2,
+        "max": 8.5,
         "scale": 0.5,
         "previewWaterLevel": 0
       },
@@ -5018,10 +5102,19 @@
           "frameCount": 16,
           "frameRate": 24,
           "loop": false,
-          "end": "free",
-          "next": "rise"
+          "end": "free"
         }
-      ]
+      ],
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      },
+      "shadowMesh": {
+        "version": 1,
+        "encoding": "u16-world-xyz-per-pose-v1"
+      }
     },
     {
       "id": "abyssal-kraken-egg",
@@ -5047,6 +5140,7 @@
       "runtimeContract": "boss",
       "targetSize": 64,
       "sourceSizes": [
+        64,
         128,
         256
       ],
@@ -5093,9 +5187,91 @@
           "end": "terminal",
           "parameters": {
             "idleEmission": 2.5
+          },
+          "markers": {
+            "spawn": 8
           }
         }
-      ]
+      ],
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      },
+      "shadowMesh": {
+        "version": 1,
+        "encoding": "u16-world-xyz-per-pose-v1"
+      }
+    },
+    {
+      "id": "abyssal-kraken-spine",
+      "label": "Abgrundkrake — Rückenstachel",
+      "category": "boss-part",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/abyssal-kraken-v2.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "production": "reference",
+      "recipe": "abyssal-kraken",
+      "materialVariants": {
+        "standard": {
+          "label": "Organische Tiefseehaut mit Pigmentierung und Faltentiefe",
+          "textureStrength": 0.93,
+          "formShadowStrength": 0.91
+        }
+      },
+      "runtimeAtlas": true,
+      "runtimeContract": "boss",
+      "targetSize": 64,
+      "sourceSizes": [
+        64,
+        128,
+        256
+      ],
+      "description": {
+        "silhouette": "Einzelner Kielstachel: breite Knochenplatte mit nach hinten geschwungenem Dorn.",
+        "colors": "Dunkles Knochenviolett mit hellerem Grat, identisch zu den Kielplatten des Körpers.",
+        "anatomy": "Starr; wird zur Laufzeit an den Stachel-Sockets des Wasserkörpers gezeichnet, wächst per Skalierung nach und fliegt als Projektil."
+      },
+      "requiredClips": [
+        "idle"
+      ],
+      "model": {
+        "part": "spine"
+      },
+      "orthoScale": 1.6,
+      "textures": {
+        "organic": "art/poc/kraken-v8/textures/kraken-scales-v8.png"
+      },
+      "elevation": {
+        "min": -0.4,
+        "max": 0.9,
+        "scale": 0.5
+      },
+      "runtimeBudgetMB": 2,
+      "clips": [
+        {
+          "name": "idle",
+          "motion": "kraken_spine_idle",
+          "frameCount": 4,
+          "frameRate": 8,
+          "loop": true
+        }
+      ],
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      },
+      "shadowMesh": {
+        "version": 1,
+        "encoding": "u16-world-xyz-per-pose-v1"
+      }
     }
   ]
 }

@@ -209,11 +209,65 @@ export class EnemyManager {
   private readonly committedDeathWork = new WeakMap<CombatDamageMutationOutcome, (isCurrent: () => boolean) => void>();
   private combatActive = true;
   /** Distinguishes rebuilt Activity owners until P4 supplies the full World/Activity target binding. */
-  private readonly combatScope: CombatScope = Object.freeze({
+  private combatScope: CombatScope = Object.freeze({
     worldRevision: 1,
     runtimeGeneration: nextEnemyCombatOwnerGeneration++,
   });
   private readonly enemyTargets = new Map<string, CombatTargetRef>();
+  private activityRevision: number | undefined;
+  private readonly pendingAreaClawEvents = new Map<string, import('../systems/EnemyClawAttack').EnemyAreaClawEvent>();
+  private readonly krakenProjectionRevisions = new Map<string, number>();
+  /** AP2 binds the actual World/Activity before any entity identity is materialized. */
+  bindCombatIdentity(scope: CombatScope, activityRevision: number): void {
+    if (this.enemies.size) throw new Error('Bind enemy Combat identity before spawning');
+    this.pendingClawEvents.clear(); this.pendingAreaClawEvents.clear(); this.krakenProjectionRevisions.clear();
+    this.combatScope = Object.freeze({ ...scope }); this.activityRevision = activityRevision;
+  }
+
+  getKrakenEntityPort(isStunned: (id: string) => boolean): import('../systems/KrakenState').KrakenEntityPort {
+    const resolve = (boss: import('../combat/CombatPartContact').BossTargetRef) => {
+      const target = this.getCombatTargetRef(boss.id);
+      return target && isSameCombatTargetInstance(target, boss) ? this.enemies.get(boss.id) : undefined;
+    };
+    return {
+      readBoss: boss => { const e = resolve(boss); return e ? { x: e.sprite.x, y: e.sprite.y, angle: e.getAimAngle(),
+        hp: e.getHp(), maxHp: e.getMaxHp(), alive: e.getHp() > 0, stunned: isStunned(e.id) } : null; },
+      setBodyTargetability: (boss, state) => resolve(boss)?.setKrakenBodyTargetability(state),
+      setMovement: (boss, mode, destination) => resolve(boss)?.setKrakenMovement(mode, destination),
+      setFacing: (boss, angle) => resolve(boss)?.faceAngle(angle),
+    };
+  }
+
+  applyAreaClawEvent(event: import('../systems/EnemyClawAttack').EnemyAreaClawEvent): void {
+    if (event.slot.kind !== 'body' || event.worldRevision !== this.combatScope.worldRevision
+      || event.activityRevision !== this.activityRevision) return;
+    const target = this.getCombatTargetRef(event.enemyId);
+    if (target?.instance.entityGeneration === event.entityGeneration) this.enemies.get(event.enemyId)?.applyAreaClawState(event.state);
+    else if (!target || target.instance.entityGeneration < event.entityGeneration) {
+      const previous = this.pendingAreaClawEvents.get(event.enemyId);
+      if (previous && (previous.entityGeneration > event.entityGeneration
+        || previous.entityGeneration === event.entityGeneration && previous.state.revision >= event.state.revision)) return;
+      if (this.pendingAreaClawEvents.size >= 1024) this.pendingAreaClawEvents.delete(this.pendingAreaClawEvents.keys().next().value!);
+      this.pendingAreaClawEvents.set(event.enemyId, event);
+    }
+  }
+
+  /** Projection only: no phase decision or hidden-body global invulnerability. */
+  applyKrakenState(state: import('../systems/KrakenState').KrakenState): void {
+    const target = this.getCombatTargetRef(state.boss.id), enemy = this.enemies.get(state.boss.id);
+    if (!target || !enemy || !isSameCombatTargetInstance(target, state.boss)
+      || state.revision <= (this.krakenProjectionRevisions.get(enemy.id) ?? -1)) return;
+    this.krakenProjectionRevisions.set(enemy.id, state.revision);
+    enemy.setKrakenBodyTargetability(state.bodyTargetability);
+    const p = state.phase, action = state.bodyAction;
+    const special: import('../types').SyncedEnemyState['specialAction'] = action
+      ? action.kind === 'ink' ? 'kraken-ink' : action.kind === 'eggs' ? 'kraken-eggs' : action.kind === 'spines' ? 'kraken-spines' : 'kraken-slam'
+      : p.kind === 'diving' ? 'kraken-dive' : p.kind === 'submerged' ? 'kraken-submerged'
+      : p.kind === 'surfacing' ? 'kraken-surface' : p.kind === 'ashore' ? 'kraken-ashore' : 'none';
+    const endsAt = action && 'endsAt' in action ? action.endsAt : action?.kind === 'slam'
+      ? enemy.getAreaClawState().attack?.endsAt ?? 0 : 'endsAt' in p ? p.endsAt : 0;
+    enemy.setSpecialAction(special, endsAt);
+  }
   private readonly pendingClawEvents = new Map<string, import('../systems/EnemyClawAttack').EnemyClawEvent>();
 
   publishClawState(enemy: EnemyEntity, state: import('../systems/EnemyClawAttack').EnemyClawState): import('../systems/EnemyClawAttack').EnemyClawEvent | null {
@@ -378,6 +432,30 @@ export class EnemyManager {
     return this.hostSpawnUnitAtWorld(x, y, kind, 'hostile', undefined, undefined, options);
   }
 
+  hostSpawnAtHabitat(kind: CoopDefenseEnemyKind, reservation: import('../systems/KrakenState').KrakenHabitatReservation,
+    habitat: import('../systems/KrakenState').KrakenHabitatPort): import('../combat/CombatPartContact').BossTargetRef | null {
+    const config = this.resolvedConfigs[kind];
+    if (!config?.krakenBoss || reservation.bodyRadiusPx !== config.krakenBoss.bodyRadiusPx
+      || reservation.worldRevision !== this.combatScope.worldRevision || reservation.activityRevision !== this.activityRevision
+      || !habitat.revalidate(reservation)) return null;
+    const enemy = this.hostSpawnUnitAtWorld(reservation.x, reservation.y, kind, 'hostile', undefined, undefined,
+      { skipSpawnEffect: true }, reservation);
+    return this.getCombatTargetRef(enemy.id) as import('../combat/CombatPartContact').BossTargetRef;
+  }
+
+  /** Landed eggs use the ordinary dry contract but may never relocate from their terminal point. */
+  hostSpawnKrakenEggAtWorld(x: number, y: number, kind: CoopDefenseEnemyKind, originId: string,
+    isBodyFree: (x: number, y: number, radius: number) => boolean): EnemyEntity | null {
+    const config = this.resolvedConfigs[kind];
+    if (!config?.krakenEgg || this.waterGeometry?.isCircleBlocked(x, y, config.size / 2)
+      || !isBodyFree(x, y, config.size / 2)) return null;
+    return this.hostSpawnAtWorld(x, y, kind, { originId, skipSpawnEffect: true });
+  }
+
+  hostRetireKrakenEgg(id: string, generation: number, now: number): void {
+    if (this.enemyTargets.get(id)?.instance.entityGeneration === generation) this.enemies.get(id)?.retireKrakenEgg(now);
+  }
+
   hostSpawnAllyAtWorld(
     x: number,
     y: number,
@@ -400,8 +478,10 @@ export class EnemyManager {
     ownerId?: string,
     ownerColor?: number,
     options: EnemySpawnOptions = {},
+    habitatPermit?: import('../systems/KrakenState').KrakenHabitatReservation,
   ): EnemyEntity {
-    if (this.waterGeometry) {
+    if (this.resolvedConfigs[kind].krakenBoss && !habitatPermit) throw new Error('Kraken requires a validated habitat spawn');
+    if (this.waterGeometry && !habitatPermit) {
       const dry = this.waterGeometry.resolveDryPoint(x, y, this.resolvedConfigs[kind].size * .5);
       if (!dry) throw new Error('[EnemyManager] No dry ground available for enemy spawn');
       x = dry.x; y = dry.y;
@@ -468,6 +548,7 @@ export class EnemyManager {
     const geometry = baseFlowFieldService?.getNavigationGeometry();
     if (geometry) this.locomotion.begin([...this.enemies.values()]
       .filter(enemy => enemy.sprite.active && !enemy.isBurrowed() && !burrowSystem?.isBurrowed(enemy.id)
+        && enemy.isOrdinaryMovementEnabled()
         && (enemy.sprite.body as Phaser.Physics.Arcade.Body | null)?.enable !== false)
       .map(enemy => ({
       id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y, radius: enemy.getSize() / 2,
@@ -486,6 +567,9 @@ export class EnemyManager {
       // Observational only. Obstacle damage requires a separate, current breach authorization.
       enemy.setPathBlocked(false);
       const config = this.resolvedConfigs[enemy.kind];
+      if (!enemy.isOrdinaryMovementEnabled()) {
+        enemy.applyKrakenMovement(); enemy.stopMovement(); continue;
+      }
       const isBurrowed = burrowSystem?.isBurrowed(enemy.id) ?? false;
       const burrowSpeedFactor = isBurrowed ? (burrowSystem?.getSpeedFactor(enemy.id) ?? 1) : 1;
       // Unter der Erde ist der Zug keine Gefahr – die Gleis-KI bleibt dann komplett aussen vor.
@@ -850,7 +934,7 @@ export class EnemyManager {
 
   getActiveEnemyIdsForOrigin(originId: string): string[] {
     return [...this.enemies.values()]
-      .filter((enemy) => enemy.faction === 'hostile' && enemy.sprite.active && enemy.originId === originId)
+      .filter((enemy) => enemy.faction === 'hostile' && enemy.sprite.active && enemy.countsForEncounter() && enemy.originId === originId)
       .map((enemy) => enemy.id);
   }
 
@@ -897,7 +981,7 @@ export class EnemyManager {
       kind: 'enemy' as const,
       id,
       scope: this.combatScope,
-      instance: Object.freeze({ entityGeneration: generation }),
+      instance: Object.freeze({ entityGeneration: generation, ...(this.activityRevision === undefined ? {} : { activityRevision: this.activityRevision }) }),
     }));
   }
 
@@ -1110,7 +1194,7 @@ export class EnemyManager {
       ownerId: enemy.ownerId,
       ...visual,
     };
-    const deathSpawns = enemy.faction === 'hostile' ? (this.resolvedConfigs[enemy.kind].deathSpawns ?? []) : [];
+    const deathSpawns = enemy.faction === 'hostile' && !enemy.isKrakenEgg() ? (this.resolvedConfigs[enemy.kind].deathSpawns ?? []) : [];
     const outcome = freezeTargetMutationOutcome({
       kind: 'damage-applied', outcomeId: request.outcomeId, target: request.target,
       source: request.source, damage: request.damage, actualDamage: hpLost,
@@ -1123,7 +1207,7 @@ export class EnemyManager {
           position: { x: death.x, y: death.y },
           targetAllegiance: enemy.ownerId ? { ownerId: enemy.ownerId, factionId: enemy.faction } : undefined,
           targetCategory: enemy.kind,
-          rewardEligible: enemy.faction === 'hostile',
+          rewardEligible: enemy.faction === 'hostile' && !enemy.isKrakenEgg(),
           molotovWildfire: this.captureWildfireDeath(id),
           presentation: { ...death },
         },
@@ -1193,6 +1277,7 @@ export class EnemyManager {
    * müssen sie vor dessen Zerstörung abgeräumt werden.
    */
   private destroyEnemyEntity(id: string, enemy: EnemyEntity): void {
+    this.krakenProjectionRevisions.delete(id);
     this.onEnemyRemoving?.(enemy);
     this.visualSink?.clearEnemyClaw?.(id);
     this.plaguePursuers.delete(id);
@@ -1257,6 +1342,7 @@ export class EnemyManager {
 
   destroy(): void {
     this.pendingClawEvents.clear();
+    this.pendingAreaClawEvents.clear(); this.krakenProjectionRevisions.clear();
     this.locomotion.clear(); this.movementFeedback.clear(); this.intents = null;
     this.waterGeometry = null;
     this.combatActive = false;
@@ -1325,6 +1411,9 @@ export class EnemyManager {
 
   private buildDeltaState(previous: SyncedEnemyState, current: SyncedEnemyState): SyncedEnemyDeltaState | null {
     const delta: SyncedEnemyDeltaState = { id: current.id };
+    if (current.areaClaw?.revision !== previous.areaClaw?.revision) {
+      delta.areaClaw = current.areaClaw; delta.entityGeneration = current.entityGeneration;
+    }
     if (current.claw?.revision !== previous.claw?.revision) {
       delta.claw = current.claw;
       delta.entityGeneration = current.entityGeneration;
@@ -1437,6 +1526,9 @@ export class EnemyManager {
       this.enemies.set(remote.id, enemy);
       this.registerCombatTarget(remote.id, remote.entityGeneration ?? this.nextEnemyGeneration++);
       if (remote.claw) enemy.applyClawAttackState(remote.claw);
+      if (remote.areaClaw) enemy.applyAreaClawState(remote.areaClaw);
+      const pendingArea = this.pendingAreaClawEvents.get(remote.id);
+      if (pendingArea) { this.pendingAreaClawEvents.delete(remote.id); this.applyAreaClawEvent(pendingArea); }
       const pendingClaw = this.pendingClawEvents.get(remote.id);
       if (pendingClaw) { this.pendingClawEvents.delete(remote.id); this.applyClawEvent(pendingClaw); }
       if (this.remoteSnapshotSeen && !remote.burrowed) this.playSpawnEffect(enemy, {});
@@ -1446,6 +1538,7 @@ export class EnemyManager {
     }
 
     const wasBurrowed = enemy.isBurrowed();
+    if (remote.areaClaw) enemy.applyAreaClawState(remote.areaClaw);
     if (remote.claw) enemy.applyClawAttackState(remote.claw);
     if (remote.burrowed !== undefined) this.setEnemyBurrowed(remote.id, remote.burrowed);
 

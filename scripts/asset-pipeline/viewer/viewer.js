@@ -1,10 +1,12 @@
+import { SUN_TUNING_DEFAULTS } from '../../../src/config/sunlight';
+const krakenClouds = { tuning: SUN_TUNING_DEFAULTS, timeSec: 0, strength: 0, sunPath: { sun: [Math.SQRT1_2, 0, Math.SQRT1_2], strength: 1, elevation: Math.PI / 4 } };
 import * as Phaser from 'phaser';
 import { createWebGLStartupContext } from '../../../src/utils/webglContext';
 import { getHeldItemAnchor, PLAYER_VISUAL_SIZE } from '../../../src/config';
 import runtime from '../../../src/config/pipelineAssets.json';
-import { categoryLabels, models, constructionsFor, resolveSource, samplePose, supportsHeldView, assetFromExport, advancePlayback, reviewDefaults, readReviewSettings, writeReviewSettings } from './library.mjs';
+import { categoryLabels, models, constructionsFor, resolveSource, samplePose, supportsHeldView, assetFromExport, advanceViewerPlayback, resolveSpine, spineGrowth, spineTransform, reviewDefaults, readReviewSettings, writeReviewSettings } from './library.mjs';
 
-import { addSubmersionFilter } from '../../../src/effects/kraken/submersionShader';
+import { addSubmersionFilter, krakenMaterialExposure } from '../../../src/effects/kraken/submersionShader';
 import { createPond } from './pond.js';
 
 const $ = id => document.getElementById(id);
@@ -80,9 +82,23 @@ function updateControls() {
   const current = clip(), count = current?.frames.length || 1;
   const frame = current ? Math.min(count - 1, Math.floor(state.elapsed * current.frameRate + 1e-7)) : 0;
   $('frame').max = count - 1; $('frame').value = frame;
+  $('regrow').disabled = $('spines').disabled || current?.name !== 'spine-volley';
+  $('regrowSeconds').disabled = $('regrow').disabled || !settings.regrow;
+  const markerKey = JSON.stringify([state.resolved.a?.key, current?.name, current?.markers, count]);
+  if ($('frame-markers').dataset.key !== markerKey) {
+    $('frame-markers').dataset.key = markerKey;
+    $('frame-markers').replaceChildren(...Object.entries(current?.markers ?? {}).map(([name,index]) => {
+      const marker = document.createElement('button'); marker.type = 'button';
+      marker.style.left = `${index/Math.max(1,count-1)*100}%`;
+      marker.title = `${name} · Frame ${index+1}`; marker.setAttribute('aria-label',marker.title);
+      marker.textContent = '▴'; marker.addEventListener('click',()=>seek(index)); return marker;
+    }));
+  }
   $('frame').disabled = $('play').disabled = $('frame-back').disabled = $('frame-next').disabled = !current;
   $('play').textContent = state.playing ? 'Pause' : 'Abspielen'; $('play').setAttribute('aria-pressed', String(state.playing));
   $('frame-value').textContent = state.idle ? 'Ruhe' : `${frame + 1} / ${count}`;
+  if (current?.name === 'spine-volley' && state.elapsed >= count/current.frameRate && settings.regrow)
+    $('frame-value').textContent += ` · Nachwachsen ${Math.round(Math.min(1,(state.elapsed-count/current.frameRate)/settings.regrowSeconds)*100)} %`;
   $('fire').hidden = $('sustain-control').hidden = state.clip !== 'fire';
   const bClip = state.resolved.b?.variant.clips?.find(c => c.name === state.clip);
   $('animation-info').textContent = current ? `${current.frameRate} fps · ${count} Frames. ${bClip ? 'A/B vergleichen dieselbe Bewegungsphase.' : 'B bleibt ohne passenden Clip in Ruhe.'}` : 'Statische Ruhepose. Rotation und Verschieben sind separat steuerbar.';
@@ -109,7 +125,7 @@ function loadTexture(key, url, source, version) {
 }
 async function loadSource(r, keep) {
   // Historical catalogs predate the optional passes. Read the export, never rewrite it.
-  if (r.construction.version === 2 && !r.source.exportBase) {
+  if (r.construction.version === 2 && (!r.source.exportBase || r.variant.socketFrames === undefined)) {
     const url = r.source.url.replace(/[^/]+$/, 'export.json');
     if (!exportReports.has(url)) exportReports.set(url, fetch(url).then(async response => {
       if (response.status === 404) return null;
@@ -121,12 +137,13 @@ async function loadSource(r, keep) {
       const extended = assetFromExport(report, url).variants[0];
       Object.assign(r.source, extended.sources.find(s => s.size === r.source.size));
       r.variant.clips = extended.clips;
+      r.variant.sockets = extended.sockets; r.variant.socketFrames = extended.socketFrames;
     }
   }
-  r.resources = { color: {}, elevation: {} };
+  r.resources = { color: {}, elevation: {}, emission: {} };
   const jobs = [];
   if (r.source.atlases) {
-    for (const pass of ['color','elevation']) for (const [name, atlas] of Object.entries(r.source.atlases[pass] || {})) {
+    for (const pass of ['color','elevation','emission']) for (const [name, atlas] of Object.entries(r.source.atlases[pass] || {})) {
       r.resources[pass][name] = atlas.pages.map((page, i) => {
         const key = `${r.key}/${pass}/${name}/${i}`; keep.add(key);
         jobs.push(loadTexture(key, r.source.exportBase + page.image, { atlasJson: r.source.exportBase + page.json }));
@@ -155,8 +172,8 @@ function atlasFrame(keys, name) {
   if (!key) throw new Error(`Atlas-Frame fehlt: ${name}`);
   return scene.textures.getFrame(key,name);
 }
-function applyPose(p,r,current) {
-  const pose = samplePose(r,state.clip,state.elapsed,state.idle,current); p.pose = pose;
+function applyPose(p,r,current,playback = state) {
+  const pose = samplePose(r,playback.clip,playback.elapsed,playback.idle,current); p.pose = pose;
   const color = r.source.atlases ? atlasFrame(r.resources.color[pose.clip],pose.frameName) : scene.textures.getFrame(r.key,pose.logicalFrame);
   p.sprite.setTexture(color.texture.key,color.name);
   if (!r.source.elevation) return;
@@ -166,9 +183,32 @@ function applyPose(p,r,current) {
     : scene.textures.getFrame(r.resources.elevationFrames[pose.logicalFrame]);
   if (!p.submersion) p.submersion=addSubmersionFilter(p.sprite,elevation,r.source.elevation);
   p.submersion.elevationFrame=elevation;
-  p.submersion.active=settings.submersion;
-  p.submersion.params.waterLevel=settings.waterLevel;
+  const material = r.source.materialPass;
+  if (material?.normal === 'linear-unorm8-z-oct-normal-v1') {
+    const azimuth = Number(document.getElementById('material-sun')?.value ?? 0) * Math.PI / 180;
+    krakenClouds.sunPath.sun = [Math.cos(azimuth) * Math.SQRT1_2, -Math.sin(azimuth) * Math.SQRT1_2, Math.SQRT1_2];
+    p.submersion.material = { clouds: krakenClouds, emission: atlasFrame(r.resources.emission[pose.clip], pose.frameName),
+      emissionRange: material.emissionRange, tint: material.tint, saturation: material.saturation, highlightRollOff: r.asset.id !== 'abyssal-kraken-egg', highlightRole: r.asset.id === 'abyssal-kraken-tentacle' ? 'tentacle' : 'body' };
+    p.submersion.params.exposure = krakenMaterialExposure(r.asset.id,material.exposure);
+  } else p.submersion.material = null;
+  p.submersion.active=settings.submersion || !!material;
+  p.submersion.params.waterLevel=settings.submersion ? settings.waterLevel : r.source.elevation.min - 1;
   p.submersion.params.time=state.travelTime;
+}
+function drawSpines(p,r) {
+  const spine = p.spineSource;
+  if (!settings.spines || !spine) return;
+  const sockets = r.variant.socketFrames?.[p.pose?.logicalFrame];
+  const {base,tip} = spine.variant.sockets ?? {};
+  for (let i=1;i<=6;i++) {
+    const transform = spineTransform(p.sprite,sockets,base,tip,i,spineGrowth(r,i,state,clip(),settings));
+    if (!transform) continue;
+    const view = p.spines[i-1] ??= {sprite:scene.add.sprite(0,0,'__MISSING').setDepth(1)};
+    applyPose(view,spine,null,{clip:'rest',elapsed:0,idle:true});
+    view.sprite.setVisible(true).setOrigin(...base).setDisplaySize(transform.size,transform.size)
+      .setPosition(transform.x,transform.y).setRotation(transform.rotation);
+    if (view.submersion && settings.submersion) view.submersion.params.waterLevel = settings.waterLevel-transform.z;
+  }
 }
 function syncSettingsControls() {
   for (const [key,value] of Object.entries(settings)) {
@@ -242,14 +282,17 @@ async function refresh() {
   if (!$('frame-overview').hidden) $('frame-overview-image').src = $('frame-overview-link').href = reviewUrl;
   $('metrics').textContent = active.map((r,i) => `${i ? 'B' : 'A'}: ${r.asset.forward === 'north' ? 'Norden' : 'Osten'} · ${r.asset.targetSize} Einheiten · ${r.variant.variant}${r.variant.nativeMetrics ? ` · belegte Fläche ${r.variant.nativeMetrics.width}×${r.variant.nativeMetrics.height} Pixel` : ''}`).join('\n');
   const keep = new Set();
+  const spines = active.map(r => resolveSpine(library, r));
   const originalKey = `${a.construction.key}/${a.asset.id}/original`;
   if ($('original').checked && a.asset.reference) keep.add(originalKey);
   try {
-    await Promise.all([...active.map(r => loadSource(r, keep)),
+    await Promise.all([...active.map(r => loadSource(r, keep)), ...spines.filter(Boolean).map(r => loadSource(r, keep)),
       ...($('original').checked && a.asset.reference ? [loadTexture(originalKey, a.asset.reference)] : [])]);
     if (token !== generation) return;
     for (const [i,which] of ['a','b','original'].entries()) {
       const r = which === 'original' ? a : state.resolved[which];
+      panels[i].spines.forEach(v => v.sprite.destroy()); panels[i].spines = [];
+      panels[i].spineSource = which === 'original' ? null : spines[i] ?? null;
       if (panels[i].submersion) { panels[i].sprite.filters.internal.remove(panels[i].submersion); panels[i].submersion = null; }
       const key = which === 'original' ? originalKey : r.key;
       panels[i].sprite.setTexture(scene.textures.exists(key) ? key : '__MISSING');
@@ -257,6 +300,7 @@ async function refresh() {
     // Retain only the displayed source sheets, preventing unbounded GPU growth
     // while browsing many historical constructions.
     for (const key of loaded) if (!keep.has(key) && !pending.has(key)) { scene.textures.remove(key); loaded.delete(key); }
+    $('spines').disabled = !panels.some(p => p.spineSource?.variant.sockets?.base && p.spineSource?.variant.sockets?.tip);
     configureWater(active); state.ready = true; layout(); updateControls(); saveUrl();
 
   } catch (error) { if (token === generation) showError(error); }
@@ -287,7 +331,7 @@ class ReviewScene extends Phaser.Scene {
     for (let i=0;i<3;i++) panels.push({fill:this.add.rectangle(0,0,1,1),tile:this.add.tileSprite(0,0,1,1,'bg-grass'),
       pond:createPond(this),grid:this.add.graphics(),lane:this.add.graphics().setDepth(10),scalePlayer:this.add.image(0,0,'review-player'),
       rock:this.add.image(0,0,'mount-rock',36),player:this.add.image(0,0,'review-player'),
-      circle:this.add.circle(0,0,16).setStrokeStyle(1,0xe7c887,.7),sprite:this.add.sprite(0,0,'__MISSING')});
+      circle:this.add.circle(0,0,16).setStrokeStyle(1,0xe7c887,.7),sprite:this.add.sprite(0,0,'__MISSING'),spines:[]});
     this.input.on('pointerdown', pointer => moveLaneAnchor(pointer, true));
     this.input.on('pointermove', pointer => { if (pointer.isDown) moveLaneAnchor(pointer, false); });
     this.input.on('pointerup', () => { state.draggingLane = null; });
@@ -302,10 +346,10 @@ class ReviewScene extends Phaser.Scene {
       sprites:panels.filter(p=>p.sprite.visible).map(p=>({source:p.sprite.texture.key,frame:p.sprite.frame.name,logicalFrame:p.pose?.logicalFrame,elevationFrame:p.submersion?.elevationFrame.name,submersion:!!p.submersion?.active,width:p.sprite.displayWidth,height:p.sprite.displayHeight,origin:[p.sprite.originX,p.sprite.originY]}))});
   }
   update(_time,delta) {
-    if (!state.ready) { panels.forEach(p=>[p.sprite,p.player,p.rock,p.circle].forEach(o=>o.setVisible(false))); return; }
+    if (!state.ready) { panels.forEach(p=>[p.sprite,p.player,p.rock,p.circle,...p.spines.filter(Boolean).map(v=>v.sprite)].forEach(o=>o.setVisible(false))); return; }
     const dt=Math.min(delta,100)/1000, current=clip(); state.travelTime+=dt;
     if (state.playing && current) {
-      const playback = advancePlayback(state.resolved.a.variant.clips, state, dt*Number($('time-scale').value), $('sustain').checked);
+      const playback = advanceViewerPlayback(state.resolved.a.variant.clips, state, dt*Number($('time-scale').value), $('sustain').checked, settings);
       state.clip=playback.clip; state.elapsed=playback.elapsed; state.playing=playback.playing; state.idle=playback.idle;
       $('clip').value=state.clip;
       updateControls();
@@ -314,6 +358,7 @@ class ReviewScene extends Phaser.Scene {
     const visible=visibleSlots(),w=$('canvas').clientWidth,h=$('canvas').clientHeight,factor=Number($('factor').value),bg=$('background').value;
     for (const [i,which] of ['a','b','original'].entries()) {
       const p=panels[i],column=visible.indexOf(which),shown=column>=0;
+      p.spines.forEach(v=>v.sprite.setVisible(false));
       [p.fill,p.tile,p.pond,p.grid,p.lane,p.scalePlayer,p.sprite,p.circle,p.rock,p.player].forEach(o=>o.setVisible(shown)); if(!shown)continue;
       const r=which==='original'?state.resolved.a:state.resolved[which],a=r.asset;
       const x=w*(column+.5)/visible.length+($('move').checked?Math.sin(state.travelTime*.7)*Math.min(45,w/visible.length*.15):0), y=(h-55)*.5;
@@ -335,6 +380,7 @@ class ReviewScene extends Phaser.Scene {
         if($('held').checked){const anchor=getHeldItemAnchor(x,y,rotation,factor);p.sprite.setOrigin(grip[0]/fw,grip[1]/fh).setPosition(anchor.x,anchor.y);}
         else if(original){const dx=(a.heldItem.grip[0]-grip[0]+fw/2-a.targetSize/2)*factor,dy=(a.heldItem.grip[1]-grip[1]+fh/2-a.targetSize/2)*factor;p.sprite.setPosition(x+Math.cos(rotation)*dx-Math.sin(rotation)*dy,y+Math.sin(rotation)*dx+Math.cos(rotation)*dy);}
       }else if(which==='original'&&a.referenceTransform){const t=a.referenceTransform,angle=rotation+(t.rotationOffset||0),dx=(t.centerCorrectionX||0)*factor,dy=(t.centerCorrectionY||0)*factor;p.sprite.setPosition(x+Math.cos(angle)*dx-Math.sin(angle)*dy,y+Math.sin(angle)*dx+Math.cos(angle)*dy).setRotation(angle);}
+      if (which !== 'original') drawSpines(p,r);
       drawGuides(p,r,{x,y,w,h,column,count:visible.length,factor});
     }
   }
@@ -365,7 +411,7 @@ try {
   $('factor').addEventListener('change',layout);
   $('held').addEventListener('change',layout);
   $('clip').addEventListener('change',()=>{state.clip=$('clip').value;rest();if(state.clip==='move'||state.clip==='idle')start();});
-  $('play').addEventListener('click',()=>{if(state.playing){state.playing=false;updateControls();}else if(state.idle)start();else{state.playing=true;updateControls();}});
+  $('play').addEventListener('click',()=>{if(state.playing){state.playing=false;updateControls();}else if(state.idle || (state.clip==='spine-volley' && state.elapsed >= clip().frames.length/clip().frameRate + (settings.regrow ? settings.regrowSeconds : 0)))start();else{state.playing=true;updateControls();}});
   $('idle').addEventListener('click',rest);$('fire').addEventListener('click',start);$('sustain').addEventListener('change',()=>{$('sustain').checked?start():rest();});
   $('frame').addEventListener('input',e=>seek(Number(e.target.value)));$('frame-back').addEventListener('click',()=>seek(Number($('frame').value)-1));$('frame-next').addEventListener('click',()=>seek(Number($('frame').value)+1));
   function angle(value){state.angle=Number(value);$('angle').value=value;$('angle-value').textContent=`${value}°`;$('rotate').checked=false;}
@@ -375,7 +421,7 @@ try {
   for (const key of Object.keys(reviewDefaults)) $(key).addEventListener('input',()=>{
     const raw = new URLSearchParams();
     for (const k of Object.keys(reviewDefaults)) raw.set(k,typeof reviewDefaults[k]==='boolean'?String($(k).checked):$(k).value);
-    Object.assign(settings,readReviewSettings(raw)); syncSettingsControls(); layout(); saveUrl();
+    Object.assign(settings,readReviewSettings(raw)); syncSettingsControls(); updateControls(); layout(); saveUrl();
   });
   startup=createWebGLStartupContext();if(!startup)throw new Error('WebGL konnte nicht gestartet werden.');
   game=new Phaser.Game({type:Phaser.WEBGL,parent:'canvas',canvas:startup.canvas,context:startup.context,width:1000,height:245,backgroundColor:'#243238',scene:ReviewScene,banner:false,

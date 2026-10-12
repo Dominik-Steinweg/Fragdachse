@@ -1,12 +1,14 @@
-"""Heavy, in-place land locomotion and marker-timed Kraken V8 attacks."""
+"""Agile in-place land locomotion and marker-timed Kraken V8 attacks."""
 import math
 
-from kraken_motion_v2 import key_arms, key_lids, smooth
+SWING = .40  # share of the scuttle cycle an arm spends in the air
+
+from kraken_motion_v2 import beard_motion, ink_spit, key_arms, key_lids, one_shot, smooth
 from kraken_motion_actions_v2 import brood_throw, envelope, key_eggs, key_rest
 
 
 SUPPORTED_MOTIONS = ('kraken_land_idle', 'kraken_land_move', 'kraken_land_ashore',
-                     'kraken_land_slam', 'kraken_land_egg_throw', 'kraken_land_death')
+                     'kraken_land_slam', 'kraken_land_egg_throw', 'kraken_land_ink_spit', 'kraken_land_death')
 
 
 def apply_kraken_land(asset, motion, phase, frame, idle, p, pose, key):
@@ -16,11 +18,15 @@ def apply_kraken_land(asset, motion, phase, frame, idle, p, pose, key):
         return key_rest(asset, frame, pose, key, key_arms, key_lids)
     if motion == 'kraken_land_egg_throw':
         return brood_throw(asset, phase, frame, p, pose, key, key_arms, key_lids, land=True)
+    if motion == 'kraken_land_ink_spit':
+        key_eggs(pose)
+        return ink_spit(asset, phase, frame, p, pose, key, land=True)
 
     key_eggs(pose)
     cycle = math.tau * phase
     markers = p.get('markerPhases', {})
     closure = 0
+    beard = None
 
     if motion == 'kraken_land_idle':
         breath = .5 - .5 * math.cos(cycle)
@@ -32,67 +38,107 @@ def apply_kraken_land(asset, motion, phase, frame, idle, p, pose, key):
             wave = math.sin(cycle - 3.4 * t + i * .8)
             return (.018 * wave * t * t, 0, side * .021 * wave * t * t)
 
+        beard = beard_motion(cycle)
         # Compact periodic blink: identical first/closure poses, no Gaussian tail.
         closure = envelope(phase, (0, 0), (.42, 0), (.54, .94), (.69, 0), (1, 0))
 
     elif motion == 'kraken_land_move':
-        sway = math.sin(cycle)
+        # Agile tetrapod scuttle: two alternating arm groups swing forward fast
+        # and sweep back linearly while planted, so the tips keep pace with the
+        # ground. The whole animal surges once per push; the mantle stays fused.
+        def gait(u):
+            u %= 1
+            if u < SWING:
+                k = smooth(0, SWING, u)
+                return -1 + 2 * k, math.sin(math.pi * u / SWING), 1 - k
+            k = (u - SWING) / (1 - SWING)
+            return 1 - 2 * k, 0, k
+
+        push = math.sin(2 * cycle)
         load = .5 - .5 * math.cos(2 * cycle)
-        pose('body', scale=(1 + .018 * load, 1 - .016 * load, 1 + .07 * load),
-             location=(0, -.035 * math.cos(2 * cycle), .045 * load))
-        pose('surfacing', rotation=(.012 * math.sin(2 * cycle), .023 * sway, .012 * sway))
+        pose('body', scale=(1 - .012 * load, 1 + .025 * load, 1 - .02 * load))
+        pose('surfacing', location=(0, .10 * push, .05 * load),
+             rotation=(0, .03 * math.sin(cycle), .055 * math.sin(cycle)))
 
         def bend(i, side, t):
-            group = 0 if i in (0, 2, 5, 7) else math.pi
-            stroke = cycle + group
-            reach = math.sin(stroke - .75 * t)
-            lift = max(0, math.cos(stroke)) ** 2
-            # Proximal yaw swings the arm north; the tip lags and plants before
-            # the body loads it. Opposite groups exchange support every half-cycle.
-            return (.037 * lift * (1 - .65 * t), side * .004 * reach * t,
-                    side * .025 * reach * (1 - .45 * t))
+            j = i % 4
+            offset = 0 if i in (0, 2, 5, 7) else .5
+            sweep, lift, pull = gait(phase + offset - .05 * j)  # front-to-back ripple
+            wave = math.sin(math.tau * 2 * (phase + offset) - 4.5 * t)
+            # Lifted arms foreshorten from above; the hook flicks up while in the air.
+            step = .09 * lift * (1 - t) ** 1.4 - .035 * lift * t + .03 * lift * t ** 4
+            if j == 0:  # reach out ahead, then hook in and drag
+                return (step, 0, side * (.065 * pull * t * t - .024 * (1 - pull) * (1 - t)))
+            if j == 3:  # push off behind and trail
+                return (.7 * step, 0, side * (.026 * sweep * (1 - .5 * t) + .016 * wave * t))
+            return (step, 0, side * (.028 * sweep * (1 - .45 * t) + .009 * wave * t))
+
+        closure = .12
+        beard = beard_motion(cycle, .8, rate=2)  # quick flicks with every push
 
     elif motion == 'kraken_land_ashore':
+        # The runtime shows the water body until `grip`; from there the front
+        # arms are planted on the shore, drag the body out and the rest of the
+        # crown swings forward to land on `heave`.
         grip, heave = markers.get('grip', 9 / 27), markers.get('heave', 18 / 27)
-        pull = envelope(phase, (0, 0), (grip, .25), (heave, 1), (1, 0))
-        depth = -.70 * (1 - smooth(grip * .7, heave, phase))
-        settle = envelope(phase, (0, 0), (grip, 0), (heave, 1), (1, 0))
-        pose('surfacing', location=(0, 0, depth + .07 * settle),
-             rotation=(-.07 * (1 - smooth(grip, 1, phase)), 0, 0))
-        pose('body', scale=(1 + .035 * pull, 1 - .025 * pull, 1 + .065 * pull))
+        reach = smooth(0, grip, phase) * (1 - smooth(grip, heave, phase))
+        pull = envelope(phase, (0, 0), (grip, 0), (heave, 1), (1, 0))
+        heaved = envelope(phase, (0, 0), (grip + (heave - grip) * .5, 0), (heave, 1), (1, 0))
+        depth = -.70 * (1 - smooth(grip * .6, heave, phase))
+        pose('surfacing', location=(0, .06 * pull, depth + .12 * heaved),
+             rotation=(-.08 * (1 - smooth(grip, heave, phase)) + .04 * heaved, 0, 0))
+        pose('body', scale=(1 - .02 * pull + .03 * heaved, 1 + .05 * pull, 1 + .06 * heaved))
 
         def bend(i, side, t):
-            front = i % 4 < 2
-            reach = 1 - smooth(grip if front else heave * .7, 1, phase)
-            plant = envelope(phase, (0, 0), (grip if front else heave, 1), (1, 0))
-            # Front tips must clear z=0 while the shoulders are still submerged.
-            # Proximal lift carries them to the shore; it unloads as the body rises.
-            lift = smooth(0, grip * .85, phase) * (1 - smooth(grip, heave, phase))
-            pitch = (.035 * reach * t + .065 * lift * (1 - t) ** 1.3 - .016 * pull * (1 - t)
-                     if front else .035 * reach * t - .027 * plant * (1 - t))
-            return (pitch, 0,
-                    side * (.025 * reach * (1 - t) - .027 * pull * t))
+            j = i % 4
+            if j < 2:
+                # Front tips arc over the waterline, slap down at grip and hook in.
+                lift = smooth(0, grip * .8, phase) * (1 - smooth(grip * .8, grip, phase))
+                pitch = .07 * lift * (1 - t) ** 1.3 - .03 * reach * t + .02 * pull * (1 - t)
+                k = 1 if j == 0 else 1.3
+                drag = side * k * (.07 * reach * (1 - t) ** 2 - .05 * pull * (1 - t) ** 2)
+                return (pitch, 0, drag + side * .07 * pull * t * t)
+            trail = 1 - smooth(grip, heave + (1 - heave) * .5, phase)
+            return (-.02 * heaved * (1 - t) + .02 * heaved * t, 0,
+                    side * (-.018 * trail * (1 - .3 * t) + .012 * heaved * (1 - t)))
 
-        closure = .35 * (1 - smooth(grip, heave, phase))
+        closure = .3 * (1 - smooth(grip, heave, phase))
+        beard = beard_motion(cycle * 2, one_shot(phase), splay=.9 * pull)
 
     elif motion == 'kraken_land_slam':
-        strike, impact = markers.get('strike', 7 / 19), markers.get('impact', 11 / 19)
-        recoil = impact + (1 - impact) * .36
-        rear = envelope(phase, (0, 0), (strike, 1), (impact, 0), (1, 0))
-        hit = envelope(phase, (0, 0), (strike, 0), (impact, 1), (recoil, -.22), (1, 0))
-        pose('body', scale=(1 - .025 * rear + .045 * hit, 1, 1 + .09 * rear - .11 * hit),
-             location=(0, 0, .07 * hit))
-        pose('surfacing', location=(0, 0, .09 * rear - .025 * hit), rotation=(.035 * rear - .025 * hit, 0, 0))
+        # Leaping claw strike: a deep loaded crouch with the claws reared and spread, then a long airborne
+        # leap (the runtime carries the body ~420 px between `strike` and `impact`) with the body stretched,
+        # the claws thrust ahead and the rear arms streaming behind, then a hard landing that drives both
+        # claws into the ground in front of the head, and a short settling bounce.
+        strike, impact = markers.get('strike', 13 / 31), markers.get('impact', 20 / 31)
+        coil = envelope(phase, (0, 0), (strike * .75, 1), (strike, 1), (strike + (impact - strike) * .3, 0), (1, 0))
+        fly = envelope(phase, (0, 0), (strike, 0), (strike + (impact - strike) * .35, 1), (impact, .55), (impact + .06, 0), (1, 0))
+        land = envelope(phase, (0, 0), (impact - .02, 0), (impact + .03, 1), (impact + .18, .25), (1, 0))
+        reach = envelope(phase, (0, 0), (strike, 0), (impact, 1), (impact + (1 - impact) * .45, .5), (1, 0))
+        bounce = envelope(phase, (0, 0), (impact + .10, 0), (impact + .19, 1), (impact + .30, 0), (1, 0))
+        pose('surfacing', location=(0, -.18 * coil + .10 * fly - .04 * land, -.07 * coil + .22 * fly - .06 * land + .03 * bounce),
+             rotation=(.06 * coil - .07 * fly + .04 * land, 0, 0))
+        pose('body', scale=(1 + .05 * coil - .07 * fly + .05 * land, 1 - .06 * coil + .13 * fly - .03 * land,
+                            1 + .04 * coil - .05 * fly - .11 * land))
 
         def bend(i, side, t):
-            if i not in (0, 4):
-                return (-.012 * rear * (1 - t) + .012 * hit * t, 0, -side * .008 * hit * t)
-            whip = envelope(phase, (0, 0), (strike + .035 * t, 0),
-                            (impact, 1), (recoil + .055 * t, -.25), (1, 0))
-            return (.12 * rear * (1 - .35 * t) - .009 * whip,
-                    0, side * (.025 * rear * t + .055 * whip * (1 - .5 * t)))
+            j = i % 4
+            if j < 2:
+                k = 1 if j == 0 else .7
+                spread = -side * .034 * k * coil * (1 - .3 * t)
+                # Swing the whole arm in from the root so both claws meet ahead, thrust forward in flight,
+                # and drive down into the ground on landing.
+                close = side * k * reach * (.16 * (1 - t) ** 2 + .035 * t)
+                pitch = (.11 * coil * (1 - t) ** 1.2 - .045 * coil * t * t + .03 * fly * (1 - t)
+                         - .05 * land * t - .02 * reach * (1 - t))
+                return (pitch, 0, spread + close)
+            # Rear crown loads under the body, then streams backwards like a tail through the leap.
+            drag = math.sin(math.tau * phase * 2 - 3 * t) * fly * t
+            return (-.03 * coil * (1 - t) + .025 * fly * t, 0,
+                    -side * (.022 * coil + .030 * fly) * (1 - .3 * t) + side * .012 * drag)
 
-        closure = .32 * max(0, hit)
+        closure = .3 * coil + .2 * land
+        beard = beard_motion(cycle * 2, .6 * one_shot(phase), splay=1.3 * coil - .9 * fly, curl=.7 * fly + .4 * land)
 
     else:  # terminal: the final collapsed pose is intentionally held
         collapse = smooth(.25, .9, phase)
@@ -112,6 +158,7 @@ def apply_kraken_land(asset, motion, phase, frame, idle, p, pose, key):
                     side * (.026 * twitch - .21 * curl * t ** 1.25))
 
         closure = smooth(.18, .94, phase)
+        beard = beard_motion(cycle * 3, spasm, curl=1.2 * collapse)
 
-    key_arms(asset, frame, key, bend)
+    key_arms(asset, frame, key, bend, beard)
     key_lids(pose, lambda name: closure)

@@ -9,7 +9,7 @@ import math
 import bpy
 import bmesh
 from mathutils import Vector
-from rigs_v2 import control, limb_rig
+from rigs_v2 import attach, control, limb_rig
 from recipes_v2.enemy_parts_a import horn, outward_normals
 from kraken_skin_v8 import PALETTE, linear, skin, cup_material, well_material, paint_pattern, write_rest
 from kraken_arm_parts import arm, bind, chain_weights, creases
@@ -27,7 +27,8 @@ def strike_tentacle(c, spec):
     well = well_material(c, 'Kraken V8 strike tentacle wells')
     root = control(c.scene, 'Strike tentacle fixed export pivot')
     body = control(c.scene, 'Strike tentacle surge control', parent=root)
-    ob, centers, radii, weights = arm(c, 0, STRIKE_PATH, .58, (arm_hide, cups, well), flare_amount=0)
+    # Rolled like the body arms: the pale cup-lined underside shows along one edge.
+    ob, centers, radii, weights = arm(c, 0, STRIKE_PATH, .58, (arm_hide, cups, well), flare_amount=0, twist=(34, 46))
     ob.name = 'Kraken V8 giant strike tentacle'
     ob['motionRole'] = 'strike-tentacle'
     creases(ob, .24, .014, subdivide=1)
@@ -87,12 +88,31 @@ def petal_mesh(c, name, k, size, material):
     return ob
 
 
+def ember_core(c):
+    """Glowing yolk: hot centre fading to a dark crimson rim, so it never reads as a flat disc."""
+    material = c.material('Kraken V8 brood ember core', linear('#e2361c'), emission=3)
+    nodes, links = material.node_tree.nodes, material.node_tree.links
+    bs = nodes.get('Principled BSDF')
+    facing = nodes.new('ShaderNodeLayerWeight')
+    facing.inputs['Blend'].default_value = .55
+    ramp = nodes.new('ShaderNodeValToRGB')
+    ramp.color_ramp.interpolation = 'EASE'
+    stops = [(0, linear('#ffb24a')), (.35, linear('#e8401a')), (.8, linear('#6a0712'))]
+    for i, (pos, color) in enumerate(stops):
+        e = ramp.color_ramp.elements[i] if i < 2 else ramp.color_ramp.elements.new(pos)
+        e.position, e.color = pos, (*color, 1)
+    links.new(facing.outputs['Facing'], ramp.inputs[0])
+    links.new(ramp.outputs[0], bs.inputs['Emission Color'])
+    links.new(ramp.outputs[0], bs.inputs['Base Color'])
+    return material
+
+
 def egg(c, spec):
     membrane = skin(c, 'Kraken V8 leathery brood membrane', PALETTE['saddle'], linear('#5b3f78'), rim=linear('#a8739a'), softness=.6)
     bs = membrane.node_tree.nodes.get('Principled BSDF')
     bs.inputs['Subsurface Weight'].default_value = .28
     bs.inputs['Subsurface Scale'].default_value = .05
-    core_mat = c.material('Kraken V8 brood ember core', linear('#e2361c'), emission=3)
+    core_mat = ember_core(c)
     embryo_mat = c.material('Kraken V8 curled embryo shadow', linear('#1a0710'))
     root = control(c.scene, 'Egg fixed export pivot')
     size = (.25, .25, .31)
@@ -114,6 +134,7 @@ def egg(c, spec):
     for k, ob in enumerate(petals):
         u = math.radians(90 * k + 45)
         limbs[f'petal_{k + 1}'] = ((.22 * math.cos(u), .22 * math.sin(u), .02), [ob])
+    attach(petals, root)  # one authored hierarchy root for the whole egg
     rig = limb_rig(c.scene, asset, limbs)
     asset['parts']['petals'] = [f'petal_{k + 1}' for k in range(4)]
     return asset

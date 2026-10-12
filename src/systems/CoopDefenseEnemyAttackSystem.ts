@@ -63,6 +63,26 @@ interface EnemySalvoState {
 }
 
 export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
+  private readonly targetFacing = new WeakMap<EnemyEntity, { angle: number; at: number; held: boolean }>();
+  /** Overlapping centers do not define a stable bearing. Hysteresis avoids toggling at the boundary. */
+  private aimAt(enemy: EnemyEntity, x: number, y: number, now: number): number {
+    const previous = this.targetFacing.get(enemy);
+    const dx = x - enemy.sprite.x, dy = y - enemy.sprite.y, distance = Math.hypot(dx, dy);
+    const radius = enemy.getCollisionRadius();
+    const held = distance < radius * (previous?.held ? 1.25 : 1);
+    const current = enemy.getAimAngle();
+    let angle = current;
+    if (!held && distance > .001) {
+      const desired = Math.atan2(dy, dx);
+      const diff = Math.atan2(Math.sin(desired - current), Math.cos(desired - current));
+      const limit = previous ? Math.PI * 2 * Math.min(100, Math.max(0, now - previous.at)) / 1000 : Math.PI;
+      angle += Math.max(-limit, Math.min(limit, diff));
+    }
+    // Repeated read/fire in one host step must not spend the turn budget twice.
+    if (previous?.at === now) return previous.angle;
+    this.targetFacing.set(enemy, { angle, at: now, held });
+    return angle;
+  }
   private intents: EnemyIntentSystem | null = null;
   setIntents(intents: EnemyIntentSystem | null): void { this.intents = intents; }
   private decoyTargets: DecoyTargetPort | null = null;
@@ -162,7 +182,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
           : this.resolveWeaponTarget(enemy, attackWeapon, now, salvo?.shotsFired, false);
       if (!target || (!obscured && !this.isWithinWeaponMinDistance(enemy, attackWeapon, target))) continue;
       return {
-        aimAngle: Math.atan2(target.targetY - enemy.sprite.y, target.targetX - enemy.sprite.x),
+        aimAngle: this.aimAt(enemy, target.targetX, target.targetY, now),
         holdPosition: attackWeapon.attackMovementSpeedFactor <= 0,
       };
     }
@@ -304,7 +324,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     const timing = attack.attackWeapon.meleeTiming!;
     const config = attack.attackWeapon.weapon.config;
     if (config.fire.type !== 'melee') return;
-    const angle = Math.atan2(attack.target.targetY - enemy.sprite.y, attack.target.targetX - enemy.sprite.x);
+    const angle = this.aimAt(enemy, attack.target.targetX, attack.target.targetY, now);
     const revision = ++this.clawRevision;
     const presentation: EnemyClawAttack = {
       attackId: enemy.id + ':' + now + ':' + revision, weaponId: config.id, angle,
@@ -355,12 +375,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
       }
     }
     const weapon = attackWeapon.weapon;
-    const angle = forcedAngle ?? Phaser.Math.Angle.Between(
-      enemy.sprite.x,
-      enemy.sprite.y,
-      target.targetX,
-      target.targetY,
-    );
+    const angle = forcedAngle ?? this.aimAt(enemy, target.targetX, target.targetY, now);
     enemy.faceAngle(angle);
 
     const didFire = this.weaponExecution.fire(weapon.config, {

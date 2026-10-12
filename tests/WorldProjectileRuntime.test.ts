@@ -27,6 +27,7 @@ vi.mock('phaser', () => ({
 }));
 
 import { WorldProjectileRuntime } from '../src/projectile/WorldProjectileRuntime';
+import { routeKrakenEggLanding } from '../src/projectile/KrakenEggLandingReaction';
 import { decodeProjectileDynamics, decodeProjectileStatics } from '../src/network/projectileSnapshotCodec';
 import { ProjectileReplicationAdapter } from '../src/projectile/ProjectileReplicationAdapter';
 import type { ProjectileSpawnConfig } from '../src/types';
@@ -139,6 +140,48 @@ function configureEnemyImpact(runtime: WorldProjectileRuntime, combat = vi.fn(()
 }
 
 describe('WorldProjectileRuntime – technical Physics boundary', () => {
+  it('emits one Kraken egg landing payload at the terminal position and cancels without a landing', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const effect = { type: 'kraken_egg_land' as const,
+      boss: { kind: 'enemy' as const, id: 'kraken', scope: { worldRevision: 1, runtimeGeneration: 1 },
+        instance: { entityGeneration: 1, activityRevision: 1 } },
+      castId: 'cast', eggId: 'egg', broodTableId: 'brood', originId: 'encounter' };
+    const base = baseRequest({ isGrenade: true });
+    const request = { ...base, flight: { ...base.flight, fuseTimeMs: 100 },
+      interaction: { grenadeEffect: effect }, presentation: { ...base.presentation, grenadeVisual: 'kraken_egg' as const } };
+    const id = runtime.spawnProjectile(request)!;
+    physics.handles.get(id)!.sprite.x = 73;
+    physics.handles.get(id)!.sprite.y = 91;
+    const result = runtime.runHostProjectileStage(100, 1100);
+    expect(result.projectileExplosions).toEqual([]);
+    expect(result.grenadePayloads).toEqual([{ projectileId: id, x: 73, y: 91, effect,
+      provenance: expect.objectContaining(base.provenance) }]);
+    const landEgg = vi.fn(() => 'incubating' as const);
+    expect(routeKrakenEggLanding(result.grenadePayloads[0], 1100, { landEgg, clearBoss: vi.fn() })).toBe(true);
+    expect(landEgg).toHaveBeenCalledExactlyOnceWith({ ...result.grenadePayloads[0], landedAt: 1100 });
+    expect(runtime.runHostProjectileStage(100, 1200).grenadePayloads).toEqual([]);
+    runtime.completeGrenadeDetonation(id);
+    const cancelled = runtime.spawnProjectile(request)!;
+    runtime.destroyProjectile(cancelled);
+    expect(runtime.runHostProjectileStage(200, 1400).grenadePayloads).toEqual([]);
+    runtime.destroy();
+  });
+
+  it.each(['sweep', 'overlap'] as const)('honors exact combat-part misses in %s queries', collisionMode => {
+    const { runtime, physics } = createRuntimeHarness();
+    const impact = configureEnemyImpact(runtime);
+    const exact = vi.fn(() => null);
+    runtime.setProjectileCollisionTargetQueryPort({
+      readCollisionTargets: sink => sink('enemy', 'part', 'boss', 10, 0, 100, -90, -100, 110, 100),
+      getWorldTargetHit: exact,
+    });
+    const id = runtime.spawnProjectile(baseRequest({ collisionMode }))!;
+    physics.handles.get(id)!.sprite.x = 20;
+    runtime.runHostInteractionStage(1100);
+    expect(exact).toHaveBeenCalled();
+    expect(impact).not.toHaveBeenCalled();
+    runtime.destroy();
+  });
   it.each(['sweep', 'overlap'] as const)('separates a %s train ricochet so later frames cannot repeat its damage', collisionMode => {
     const { runtime, physics } = createRuntimeHarness();
     const damage = vi.fn();

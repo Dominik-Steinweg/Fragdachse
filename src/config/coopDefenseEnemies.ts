@@ -1,4 +1,7 @@
 import rawCoopDefenseEnemies from './coopDefenseEnemies.json';
+import { normalizeKrakenBossConfig, normalizeKrakenEggConfig, validateKrakenBroodRegistry,
+  type KrakenBossConfig, type KrakenEggConfig } from './krakenBoss';
+import { findWeaponConfig } from '../loadout/LoadoutConfig';
 import { requirePawCount, type PawCount } from './movementEffects';
 import type { ArmageddonMeteorConfig, UtilityConfig, WeaponConfig } from '../loadout/LoadoutConfig';
 import type { FireChunkBurstConfig, GroundFireCellEffect } from '../types';
@@ -330,6 +333,8 @@ export interface CoopDefenseEnemySpawnScaling {
 }
 
 export interface CoopDefenseEnemyConfig {
+  readonly krakenBoss?: KrakenBossConfig;
+  readonly krakenEgg?: KrakenEggConfig;
   readonly pawCount: PawCount;
   readonly maxHp: number;
   readonly xp: number;
@@ -397,6 +402,34 @@ export const COOP_DEFENSE_ENEMY_CONFIGS: Record<CoopDefenseEnemyKind, CoopDefens
  */
 export const COOP_DEFENSE_ENEMY_KINDS: readonly CoopDefenseEnemyKind[] = Object.keys(COOP_DEFENSE_ENEMY_REGISTRY);
 
+/** Diagnostic-only activation; selected boss atlases are bound by the presentation residency.
+ * __WHITE is an existing engine texture, never a legacy boss image/preload URL. */
+export function registerKrakenDiagnosticEnemies(config: import('./krakenBoss').KrakenBossConfig): () => void {
+  const bossKind = 'abyssal-kraken', eggKind = config.eggs.enemyKind;
+  if (COOP_DEFENSE_ENEMY_CONFIGS[bossKind] || COOP_DEFENSE_ENEMY_CONFIGS[eggKind]) return () => {};
+  const base = COOP_DEFENSE_ENEMY_CONFIGS[config.eggs.broodTable.entries[0].enemyKind];
+  const registry = normalizeEnemyRegistry({ enemies: [
+    ...Object.entries(COOP_DEFENSE_ENEMY_CONFIGS).map(([id, value]) => ({ id, ...value })),
+    { ...base, id: bossKind, imageKey: '__WHITE', maxHp: 12000, size: config.bodyRadiusPx * 2,
+      isBoss: true, weapons: [], krakenBoss: config, movementTarget: 'players', knockbackFactor: 0,
+      playerScaling: undefined, spawnScaling: undefined },
+    { ...base, id: eggKind, imageKey: '__WHITE', maxHp: config.eggs.maxHp, size: config.eggs.radiusPx * 2,
+      moveSpeed: 0, xp: 0, weapons: [], knockbackFactor: 0, playerScaling: undefined, spawnScaling: undefined,
+      krakenEgg: { assetId: config.assets.egg, stationary: true, drops: false, necromancy: false,
+        countsForEncounter: false, navigation: false } },
+  ] });
+  for (const id of [bossKind, eggKind]) COOP_DEFENSE_ENEMY_CONFIGS[id] = registry[id];
+  const kinds = COOP_DEFENSE_ENEMY_KINDS as string[];
+  kinds.push(bossKind, eggKind);
+  return () => {
+    for (const id of [bossKind, eggKind]) {
+      if (COOP_DEFENSE_ENEMY_CONFIGS[id] !== registry[id]) continue;
+      delete COOP_DEFENSE_ENEMY_CONFIGS[id];
+      const index = kinds.indexOf(id); if (index >= 0) kinds.splice(index, 1);
+    }
+  };
+}
+
 export function getCoopDefenseEnemyKindIndex(kind: CoopDefenseEnemyKind): number {
   return COOP_DEFENSE_ENEMY_KINDS.indexOf(kind);
 }
@@ -435,7 +468,7 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         ),
         xp: Math.max(0, Math.floor(config.xp)),
         size: config.size,
-        moveSpeed: resolveCoopDefensePositiveNumber(
+        moveSpeed: config.krakenEgg ? 0 : resolveCoopDefensePositiveNumber(
           config.moveSpeed,
           config.playerScaling?.moveSpeedFactorPerAdditionalPlayer,
           normalizedHumanPlayerCount,
@@ -460,6 +493,8 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         dodge: config.dodge,
         combatPositioning: config.combatPositioning,
         voidHunterBoss: config.voidHunterBoss,
+        krakenBoss: config.krakenBoss,
+        krakenEgg: config.krakenEgg,
         spawnThrow: config.spawnThrow,
         voidFireChunks: config.voidFireChunks,
         voidFireTrail: config.voidFireTrail,
@@ -498,7 +533,7 @@ export function resolveCoopDefenseEnemySpawnConfig(
   };
 }
 
-function normalizeEnemyRegistry(registry: CoopDefenseEnemyRegistryFile): Record<string, CoopDefenseEnemyConfig> {
+export function normalizeEnemyRegistry(registry: CoopDefenseEnemyRegistryFile): Record<string, CoopDefenseEnemyConfig> {
   const byId: Record<string, CoopDefenseEnemyConfig> = {};
   for (const enemy of registry.enemies) {
     if (typeof enemy.id !== 'string' || enemy.id.trim().length === 0) {
@@ -510,6 +545,13 @@ function normalizeEnemyRegistry(registry: CoopDefenseEnemyRegistryFile): Record<
     byId[enemy.id] = normalizeEnemyConfig(enemy);
   }
   for (const [enemyId, config] of Object.entries(byId)) {
+    if (config.krakenBoss) {
+      validateKrakenBroodRegistry(config.krakenBoss, byId, id => findWeaponConfig(id)?.fire.type === 'melee', MAX_REGULAR_ENEMY_SIZE_PX);
+      const egg = byId[config.krakenBoss.eggs.enemyKind];
+      if (!egg?.krakenEgg || egg.krakenEgg.assetId !== config.krakenBoss.assets.egg) {
+        throw new Error(`[coopDefenseEnemies] Invalid kraken egg reference: ${enemyId}`);
+      }
+    }
     for (const deathSpawn of config.deathSpawns ?? []) {
       if (!byId[deathSpawn.enemyKind]) {
         throw new Error(
@@ -528,6 +570,17 @@ function normalizeEnemyRegistry(registry: CoopDefenseEnemyRegistryFile): Record<
 
 function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefenseEnemyConfig {
   const isBoss = enemy.isBoss === true;
+  const krakenBoss = enemy.krakenBoss === undefined ? undefined : normalizeKrakenBossConfig(enemy.krakenBoss);
+  const krakenEgg = enemy.krakenEgg === undefined ? undefined : normalizeKrakenEggConfig(enemy.krakenEgg);
+  if ((krakenBoss || krakenEgg) && (enemy.voidHunterBoss || enemy.timebomb || enemy.spawnThrow
+    || enemy.translocator || enemy.burrow || enemy.dodge || enemy.combatPositioning
+    || enemy.voidFireChunks || enemy.voidFireTrail || enemy.voidMolotov || enemy.stinkAura || enemy.deathSpawns?.length)) {
+    throw new Error(`[coopDefenseEnemies] Conflicting kraken ability owner: ${enemy.id}`);
+  }
+  if ((krakenBoss && (!isBoss || krakenEgg || enemy.weapons.length || enemy.size !== krakenBoss.bodyRadiusPx * 2))
+    || (krakenEgg && (isBoss || enemy.weapons.length || enemy.moveSpeed !== 0 || enemy.xp !== 0 || enemy.deathSpawns?.length))) {
+    throw new Error(`[coopDefenseEnemies] Invalid exclusive kraken role: ${enemy.id}`);
+  }
   if (!isBoss && enemy.size > MAX_REGULAR_ENEMY_SIZE_PX) {
     throw new Error(
       `[coopDefenseEnemies] Regular enemy ${enemy.id} exceeds ${MAX_REGULAR_ENEMY_SIZE_PX}px: configured size ${enemy.size}px`,
@@ -538,10 +591,12 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     maxHp: Math.max(1, Math.floor(enemy.maxHp)),
     xp: Math.max(0, Math.floor(enemy.xp)),
     size: Math.max(1, enemy.size),
-    moveSpeed: Math.max(1, enemy.moveSpeed),
+    moveSpeed: krakenEgg ? 0 : Math.max(1, enemy.moveSpeed),
     knockbackFactor: normalizeKnockbackFactor(enemy.knockbackFactor),
     movementTarget: normalizeMovementTarget(enemy.movementTarget),
-    weapons: normalizeWeapons(enemy.weapons, enemy.id),
+    weapons: krakenBoss || krakenEgg ? [] : normalizeWeapons(enemy.weapons, enemy.id),
+    krakenBoss,
+    krakenEgg,
     attackScanIntervalMs: Math.max(1, Math.floor(enemy.attackScanIntervalMs)),
     attackStopDurationMs: Math.max(0, Math.floor(enemy.attackStopDurationMs)),
     obstacleAttackDelayMs: Math.max(0, Math.floor(enemy.obstacleAttackDelayMs)),

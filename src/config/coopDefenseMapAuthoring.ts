@@ -2,6 +2,7 @@ import { resolveEnemyLifecycleTotals } from './coopDefenseEnemyLifecycle';
 import { isBossIntroPresetId, type BossIntroPresetId } from './bossIntros';
 import { normalizeFogStrength } from './groundFog';
 import { normalizeCoopDefenseWater } from './coopDefenseWater';
+import { normalizeKrakenHabitat, type KrakenHabitatConfig } from './krakenHabitat';
 import { turretAimConfig, validateTurretAimConfig, type TurretAimConfig } from './turretAim';
 import {
   getCoopDefenseEnemyConfig,
@@ -425,6 +426,8 @@ export interface ResolvedCoopDefenseMapMissionProgressConfig {
 }
 
 export interface CoopDefenseMapBossConfig {
+  /** Required for krakenBoss; references World-owned water/shore/exit authoring. */
+  readonly habitatId?: string;
   readonly enemyKind: CoopDefenseEnemyKind;
   readonly spawnAtMs: number;
   /** Optionales inszeniertes Intro; der eigentliche Spawn folgt erst nach dessen `emergeAtMs`. */
@@ -751,6 +754,7 @@ export interface CoopDefenseMapAuthoringConfig extends CoopDefenseMapConfig {
 }
 
 export interface CoopDefenseMapConfig {
+  readonly krakenHabitat?: KrakenHabitatConfig;
   readonly water?: readonly import('../types').WaterCell[];
   readonly mapId: string;
   /**
@@ -1184,6 +1188,12 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     water: mapConfig.water, waterAreas: mapConfig.waterAreas,
     bases, persistentBase, rockWalls, missionProgress, trackMode, trackPosition,
   }, arenaWidthCells, arenaHeightCells);
+  const krakenConfig = boss ? getCoopDefenseEnemyConfig(boss.enemyKind).krakenBoss : undefined;
+  const krakenHabitat = mapConfig.krakenHabitat === undefined ? undefined : normalizeKrakenHabitat(mapConfig.krakenHabitat, {
+    widthCells: arenaWidthCells, heightCells: arenaHeightCells, water: water ?? [],
+    bodyRadiusCells: krakenConfig ? krakenConfig.bodyRadiusPx / CELL_SIZE : undefined,
+  });
+  if (boss?.habitatId && boss.habitatId !== krakenHabitat?.id) throw new Error('[coopDefenseMaps] Unknown boss habitat');
   const tutorialSteps = normalizeTutorialSteps(
     mapConfig.mapId,
     mapConfig.tutorialSteps,
@@ -1210,6 +1220,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     rockWalls,
     tutorialAnchor,
     water,
+    krakenHabitat,
     tutorialSteps,
     trackMode,
     trackPosition,
@@ -3585,10 +3596,17 @@ function normalizeBossConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapBos
   if (intro !== undefined && !isBossIntroPresetId(intro?.preset)) {
     throw new Error(`[coopDefenseMaps] Boss slot on map ${mapConfig.mapId} references unknown intro preset`);
   }
+  if (enemyConfig.krakenBoss && (!mapConfig.boss.habitatId || intro?.preset !== 'kraken-rise')) {
+    throw new Error('[coopDefenseMaps] Kraken requires a water habitat and kraken-rise intro');
+  }
+  if (!enemyConfig.krakenBoss && (mapConfig.boss.habitatId !== undefined || intro?.preset === 'kraken-rise')) {
+    throw new Error('[coopDefenseMaps] Water boss contract requires krakenBoss config');
+  }
 
   return {
     enemyKind: mapConfig.boss.enemyKind,
     spawnAtMs: Math.floor(mapConfig.boss.spawnAtMs),
+    ...(mapConfig.boss.habitatId ? { habitatId: mapConfig.boss.habitatId } : {}),
     ...(intro ? { intro: { preset: intro.preset } } : {}),
     ...(startAfterEncounterId ? { startAfterEncounterId } : {}),
   };

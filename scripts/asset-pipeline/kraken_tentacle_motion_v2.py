@@ -1,20 +1,24 @@
-"""Giant strike tentacle: erupt, lurk like a cobra, whip down along the lane, dive back.
+"""Giant strike tentacle: erupts from the water, lurks as an upright column, crashes down on the lane, pulls back.
 
-Geometry lies flat along +Y (the lane) in a soft S; its root climbs out of deep water.
-Poses are cumulative (pitch, yaw, twist) profiles in degrees per chain fraction; each
-bone keys only its local share, so the arc stays continuous. Top-down readability
-drives the shapes: the rear half stays on the ground, only the front rears up.
-Rest (frame 0) is the lurking hover.
+Geometry lies flat along +Y (the lane) in a soft S; its root climbs out of deep water at the
+`waterEntry` socket (chain fraction ~0.16). Poses are cumulative (pitch, yaw, twist) profiles in
+degrees per chain fraction; each bone keys only its local share, so the arc stays continuous.
+Rest (frame 0) is the towering hover: a near-vertical column over the water entry whose upper
+third arches forward over the lane with a hanging hook, cups turned towards the target.
 """
 import math
 
 SUPPORTED = ('kraken_tentacle_rise', 'kraken_tentacle_hover', 'kraken_tentacle_slam', 'kraken_tentacle_retract')
-DEEP = -2.9
+DEEP = -3.3
 
 
 def smooth(a, b, x):
     t = max(0, min(1, (x - a) / (b - a)))
     return t * t * (3 - 2 * t)
+
+
+def bell(center, width, x):
+    return math.exp(-((x - center) / width) ** 2)
 
 
 def lerp(a, b, t):
@@ -33,21 +37,28 @@ def profile(points, n):
     return out
 
 
-# (pitch, yaw, twist) control points per chain fraction.
+# (pitch, yaw, twist) control points per chain fraction; 0.16 is the water entry.
 POSES = {
     'flat': ([(0, 0), (1, 0)], [(0, 0), (1, 0)], [(0, 0), (.3, 0), (1, 32)]),
-    'hover': ([(0, 0), (.42, 0), (.58, 82), (.72, 26), (.86, -72), (1, -165)],
-              [(0, 0), (.30, 8), (.50, -10), (.70, 6), (1, 22)],
-              [(0, 0), (.45, 0), (.7, 55), (1, 80)]),
-    'windup': ([(0, 0), (.30, 6), (.46, 30), (.60, 118), (.76, 70), (.88, -40), (1, -150)],
-               [(0, 0), (.30, 12), (.50, -14), (.70, 8), (1, 30)],
-               [(0, 0), (.45, 0), (.7, 70), (1, 95)]),
-    'coiled': ([(0, 0), (.16, -10), (.40, 20), (.70, 35), (1, 10)],
+    # Lurking: an upright column over the entry, the crown bowed with a hanging hook. It does not lie
+    # over the lane, so the rest pose never betrays where it will strike.
+    'raised': ([(0, 0), (.16, 0), (.28, 82), (.45, 92), (.62, 88), (.78, 72), (.90, 34), (1, -40)],
+               [(0, 0), (.40, 6), (.70, -8), (1, 10)],
+               [(0, 0), (.78, 0), (1, 60)]),
+    # Wind-up: the column rears back past vertical and the hook coils, a short load before the fall.
+    'windup': ([(0, 0), (.16, 0), (.28, 96), (.45, 100), (.62, 94), (.78, 78), (.90, 36), (1, -50)],
+               [(0, 0), (.40, 5), (.70, -6), (1, 8)],
+               [(0, 0), (.78, 0), (1, 85)]),
+    # Deep under water: a compact serpentine coil, the start of `rise` (buried parts over land are
+    # hidden by the submersion shader).
+    'coiled': ([(0, 0), (.16, -14), (.40, 0), (.70, 10), (1, -12)],
                [(0, 0), (.25, 55), (.45, -55), (.65, 50), (.85, -40), (1, 35)],
                [(0, 0), (1, 40)]),
-    'lifted': ([(0, 0), (.20, 6), (.40, 48), (.65, 25), (.85, -20), (1, -60)],
-               [(0, 0), (.4, 18), (.7, 70), (1, 140)],
-               [(0, 0), (1, 45)]),
+    # End of `retract`: the arm tips steeply down into the water at the entry. From above its
+    # projection shrinks back towards the entry while buried parts fade, so it withdraws backwards.
+    'plunged': ([(0, 0), (.16, -55), (.40, -62), (.70, -58), (.90, -40), (1, -20)],
+                [(0, 0), (.40, 12), (.70, -15), (1, 10)],
+                [(0, 0), (.30, 0), (1, 32)]),
 }
 
 
@@ -67,43 +78,47 @@ def apply_kraken_tentacle(asset, motion, phase, frame, idle, p, pose, key):
     shapes = {name: sample(name, n) for name in POSES}
     depth = 0
     if idle or motion == 'kraken_tentacle_hover':
-        shape = [list(c) for c in shapes['hover']]
+        shape = [list(c) for c in shapes['raised']]
         if not idle:
             cycle = math.tau * phase
             for j in range(n):
                 t = j / (n - 1)
-                # Lurking: the raised head bobs and weaves, the tip tastes the air.
-                shape[0][j] += 5 * math.sin(cycle - t * 3.2) * smooth(.4, .7, t)
-                shape[1][j] += 6 * math.sin(cycle + 1.3 - t * 4.0) * smooth(.3, .6, t)
+                up = smooth(.25, .6, t)
+                # Lurking: the column breathes, the crown weaves in every direction and the hook tastes
+                # the air, so it never settles on one heading. Each term is zero at phase 0 (exact handover).
+                shape[0][j] += 5 * (math.sin(cycle - t * 2.4) - math.sin(-t * 2.4)) * up
+                shape[1][j] += 12 * (math.sin(cycle + 1.1 - t * 3.6) - math.sin(1.1 - t * 3.6)) * up
+                shape[1][j] += 6 * (math.sin(2 * cycle - t * 4.0) - math.sin(-t * 4.0)) * smooth(.55, 1, t)
+                shape[2][j] += 14 * (math.sin(cycle + .4) - math.sin(.4)) * smooth(.6, 1, t)
     elif motion == 'kraken_tentacle_rise':
-        # Deep spiral, erupts through the surface, unfurls and overshoots into the lurk.
-        surge = smooth(0, .55, phase)
+        # Bursts straight up out of the deep, overshoots high, settles into the tower.
+        surge = smooth(0, .45, phase)
         depth = DEEP * (1 - surge)
-        shape = mix(shapes['coiled'], shapes['hover'], smooth(.12, .82, phase))
-        overshoot = math.sin(math.pi * smooth(.5, 1, phase)) * (1 - smooth(.85, 1, phase))
-        shape[0] = [s + 16 * overshoot * smooth(.4, .8, j / (n - 1)) for j, s in enumerate(shape[0])]
+        shape = mix(shapes['coiled'], shapes['raised'], smooth(.05, .70, phase))
+        stretch = math.sin(math.pi * smooth(.35, 1, phase)) * (1 - smooth(.85, 1, phase))
+        shape[0] = [s - 18 * stretch * smooth(.55, .95, j / (n - 1)) for j, s in enumerate(shape[0])]
     elif motion == 'kraken_tentacle_slam':
         m = p.get('markerPhases', {})
         strike, impact = m.get('strike', .34), m.get('impact', .52)
-        ready = mix(shapes['hover'], shapes['windup'], smooth(0, strike, phase))
+        ready = mix(shapes['raised'], shapes['windup'], smooth(0, strike, phase))
         shape = [[], [], []]
         for j in range(n):
             t = j / (n - 1)
-            delay = .12 * t  # the tip arrives last: a whip, not a falling log
-            whip = smooth(strike - .05 + delay * .4, impact + delay * .3, phase)
+            delay = .14 * t  # the column topples first, the tip lands last: a whip
+            fall = smooth(strike - .04 + delay * .35, impact + delay * .30, phase)
             for k in range(3):
-                target = shapes['flat'][k][j] - (6 * smooth(.7, 1, t) if k == 0 else 0)
-                shape[k].append(lerp(ready[k][j], target, whip))
-            # Impact shudder runs down the arm and fades before the hand-over to retract.
+                target = shapes['flat'][k][j] - (8 * smooth(.6, 1, t) if k == 0 else 0)
+                shape[k].append(lerp(ready[k][j], target, fall))
             after = max(0, phase - impact)
-            shape[1][j] += (5 * math.sin(after * 40 - t * 9) * math.exp(-after * 6) * smooth(.1, .4, t)
+            shape[1][j] += (6 * math.sin(after * 42 - t * 9) * math.exp(-after * 6) * smooth(.15, .45, t)
                             * (phase > impact) * (1 - smooth(.85, 1, phase)))
-        settle = smooth(impact + .1, 1, phase)
-        shape = mix(shape, shapes['flat'], settle)
-    else:  # kraken_tentacle_retract: peel off the lane, coil and dive vertically home.
-        shape = mix(shapes['flat'], shapes['lifted'], smooth(0, .4, phase))
-        shape = mix(shape, shapes['coiled'], smooth(.35, 1, phase))
-        depth = DEEP * smooth(.4, 1, phase)
+        shape = mix(shape, shapes['flat'], smooth(impact + .12, 1, phase))
+    else:  # kraken_tentacle_retract: peel up from the tip, gather over the entry, plunge home.
+        # The hook lets go of the ground, then the arm is hauled down into the water at the entry.
+        shape = mix(shapes['flat'], shapes['plunged'], smooth(.08, .90, phase))
+        release = bell(.16, .10, phase) * smooth(0, .08, phase)  # exactly flat on the slam handover
+        shape[0] = [a + 45 * release * smooth(.70, 1, j / (n - 1)) for j, a in enumerate(shape[0])]
+        depth = DEEP * smooth(.35, 1, phase)
     rig = asset['rig']
     previous = [0, 0, 0]
     for j, name in enumerate(chain):

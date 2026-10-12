@@ -7,6 +7,7 @@ import { POWERUP_DEFS } from '../../powerups/PowerUpConfig';
 import { enemyReadabilityScenario } from './enemyReadabilityRecipe';
 import { runDepthReferenceScene } from './depthReferenceScene';
 import { FOG_ROCK_LIGHTING } from '../../effects/groundFog/FogRockLighting';
+import { installKrakenDraftPolling, krakenDraftStatus, reloadKrakenDraftAssets } from './KrakenDraftAssets';
 
 export type ScenarioResult = { ok: true; status: Record<string, unknown>; path?: string; url?: string }
   | { ok: false; error: string; status: Record<string, unknown> };
@@ -45,6 +46,13 @@ function slot(value: unknown): WeaponSlot {
 export function runScenarioCommand(controller: DevScenarioController, value: unknown): void | Promise<void> {
   const c = object(value);
   switch (c.action) {
+    case 'shapeSpawn':
+      if (typeof c.asset !== 'string') throw Error('shapeSpawn.asset required');
+      return controller.arrangeShapeDraft(c.asset, c.gridX === undefined && c.gridY === undefined ? undefined : point(c));
+    case 'krakenAssets':
+      if (c.source !== 'draft' && c.source !== 'production') throw Error('source: draft or production required');
+      return reloadKrakenDraftAssets(c.source);
+    case 'krakenReloadAssets': return reloadKrakenDraftAssets();
     case 'krakenReview': return controller.arrangeKrakenReview(c);
     case 'armageddonReview': {
       const count=number(c.count??1,1,256);
@@ -107,6 +115,25 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
       if(mode==='explosion')controller.measureWorldLighting(mode,c.radius===undefined?2.5:number(c.radius,1,6));
       else controller.measureWorldLighting(mode);break;
     }
+    case 'krakenMission':
+      if (c.skipIntro !== undefined && typeof c.skipIntro !== 'boolean') throw new Error('skipIntro: boolean erwartet');
+      if (c.drafts !== undefined && typeof c.drafts !== 'boolean') throw Error('drafts: boolean required');
+      if (c.drafts !== undefined) return reloadKrakenDraftAssets(c.drafts ? 'draft' : 'production').then(() => {
+        controller.startKrakenMission(c.skipIntro === true, c.hp === undefined ? null : number(c.hp, 1, 10000000));
+      });
+      controller.startKrakenMission(c.skipIntro === true, c.hp === undefined ? null : number(c.hp, 1, 10000000)); break;
+    case 'krakenHp': controller.setKrakenHp(number(c.hp, 1, 10000000)); break;
+    case 'krakenAct': {
+      const act = c.act;
+      if (act !== 'spines' && act !== 'ink' && act !== 'eggs' && act !== 'dive' && act !== 'lunge' && act !== 'ashore') {
+        throw Error('act: spines, ink, eggs, dive, lunge or ashore required');
+      }
+      controller.krakenAct(act); break;
+    }
+    case 'krakenTarget': controller.krakenTarget(point(c)); break;
+    case 'figureSun':
+      controller.setFigureSun(c.reset === true ? null : { azimuth: number(c.azimuth, -360, 360),
+        elevation: number(c.elevation, .1, 90), strength: c.strength === undefined ? 1 : number(c.strength, 0, 1) }); break;
     case 'start': controller.start(c.scenario); break;
     case 'target': controller.aim = point(c); break;
     case 'findFree': controller.findFree(); break;
@@ -209,10 +236,11 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
 }
 
 export function installScenarioApi(controller: DevScenarioController) {
+  const stopDraftPolling = import.meta.env.DEV ? installKrakenDraftPolling() : () => {};
   let active = true;
   const waiters = new Set<() => void>();
   // Phaser's Scene plugins can already be shut down when this API is detached.
-  const status = (): Record<string, unknown> => active ? structuredClone(controller.snapshot())
+  const status = (): Record<string, unknown> => active ? { ...structuredClone(controller.snapshot()), krakenAssets: krakenDraftStatus() }
     : { state: 'error', ready: false, message: 'Dev-Szenario wurde beendet.', isolated: true, network: 'local-only' };
   const failure = (error: unknown): ScenarioResult => ({ ok: false, error: error instanceof Error ? error.message : String(error), status: status() });
   const api: DevScenarioApi = {
@@ -260,6 +288,7 @@ export function installScenarioApi(controller: DevScenarioController) {
   };
   window.devScenario = api;
   return { destroy() {
+    stopDraftPolling();
     active = false;
     for (const check of waiters) check();
     if (window.devScenario === api) delete window.devScenario;

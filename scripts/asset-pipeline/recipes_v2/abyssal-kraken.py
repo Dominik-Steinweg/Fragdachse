@@ -7,24 +7,27 @@ the arms arc in and out of the water with their tips curling clear of the surfac
 import math
 import bpy
 from mathutils import Vector
-from rigs_v2 import control, attach
+from rigs_v2 import control, attach, limb_rig
 from eye_anchors import register_eye
 from kraken_skin_v8 import PALETTE, linear, skin, cup_material, well_material, paint_pattern, write_rest
 from kraken_eye_parts import eye, eye_sculpt, eye_materials
-from kraken_dorsal_parts import MAIN_EYE, SECOND_EYE, mantle, dorsal, face_ridges, fuse, paint_mantle, fins, oral_crown, colour_beard
+from kraken_dorsal_parts import (MAIN_EYE, SECOND_EYE, mantle, dorsal, face_ridges, fuse, paint_mantle, fins, oral_crown,
+                                  colour_beard, keel_spike, spine_anchors)
 from kraken_arm_parts import CHAIN, arm, arm_curve, web, bind, chain_weights, creases
 from kraken_part_assets import strike_tentacle, egg
+from kraken_beard_rig import add_beard_chains, bind_beard
 
 # Right-side arm specs (mirrored left): broad muscular sweeps with relaxed distal hooks.
 # Front arms ride higher so they overlap the ones behind them.
 ARM_SPECS = [
-    dict(base=(.64, 1.30), heading=76, length=3.95, bend=-64, turns=.24, curl=1.55, width=.40, z=(.36, .16, .38), twist=(18, 58)),
-    dict(base=(.74, 1.02), heading=26, length=4.10, bend=-66, turns=.30, curl=1.70, width=.40, z=(.35, .06, .35), twist=(22, 64)),
-    dict(base=(.74, .70), heading=-14, length=4.15, bend=-57, turns=.22, curl=1.65, width=.38, z=(.34, -.02, .29), twist=(20, 56)),
-    dict(base=(.76, .38), heading=-48, length=4.30, bend=-30, turns=.28, curl=1.80, width=.38, z=(.32, -.06, .30), twist=(18, 62)),
+    dict(base=(.64, 1.30), heading=76, length=3.95, bend=-64, turns=.24, curl=1.55, width=.40, z=(.36, .16, .02), twist=(18, 34)),
+    dict(base=(.74, 1.02), heading=26, length=4.10, bend=-66, turns=.30, curl=1.70, width=.40, z=(.35, .06, -.06), twist=(22, 38)),
+    dict(base=(.74, .70), heading=-14, length=4.15, bend=-57, turns=.22, curl=1.65, width=.38, z=(.34, -.02, -.12), twist=(20, 32)),
+    dict(base=(.76, .38), heading=-48, length=4.30, bend=-30, turns=.28, curl=1.80, width=.38, z=(.32, -.06, -.14), twist=(18, 36)),
 ]
+# Arm tips droop below the mid-arm (into the water / onto the ground); only throws lift them.
 # On land the crown flattens onto the ground and spreads a little wider.
-LAND_SPECS = [dict(spec, z=(spec['z'][0] - .06, .10, .30), bend=spec['bend'] * .85, length=spec['length'] * 1.03) for spec in ARM_SPECS]
+LAND_SPECS = [dict(spec, z=(spec['z'][0] - .06, .10, -.01), bend=spec['bend'] * .85, length=spec['length'] * 1.03) for spec in ARM_SPECS]
 
 
 def arm_points(source=ARM_SPECS):
@@ -39,11 +42,15 @@ def arm_points(source=ARM_SPECS):
 
 
 def build(c, spec):
+    # Optional form-authoring hints; absent in production and animation drafts.
+    draft = spec.get('draft') or {}
     part = (spec.get('model') or {}).get('part', 'water')
     if part == 'tentacle':
         return strike_tentacle(c, spec)
     if part == 'egg':
         return egg(c, spec)
+    if part == 'spine':
+        return spine_part(c)
     hide = skin(c, 'Kraken V8 abyssal dorsal hide', PALETTE['saddle'], PALETTE['flank'], rim=PALETTE['rim'])
     arm_hide = skin(c, 'Kraken V8 muscular arm hide', PALETTE['saddle'], PALETTE['flank'], rim=PALETTE['rim'])
     membrane = skin(c, 'Kraken V8 fin membranes', PALETTE['dorsal'], PALETTE['flank'], rim=PALETTE['rim'], softness=.5)
@@ -69,13 +76,18 @@ def build(c, spec):
             tissue, brow = eye_sculpt(c, name, center, er, look, surface, hide)
             sculpt.extend(tissue)
             crests.append(brow)
-    tissue, spines, dorsal_crests = dorsal(c, surface, section, hide, bone, [(p[0][0], p[0][3]) for p in paths])
+    # Phase-1 body: the six front keel spikes are fireable runtime parts (asset abyssal-kraken-spine).
+    detached = []
+    tissue, spines, dorsal_crests = dorsal(c, surface, section, hide, bone, [(p[0][0], p[0][3]) for p in paths],
+                                           detach=range(6) if part == 'water' else (), detached=detached)
     ridges, ridge_crests = face_ridges(c, surface, hide)
-    beard, beard_lines = oral_crown(c, surface, hide)
-    head = [fuse(c, [shell, *tissue, *sculpt, *ridges, *beard], hide, voxel=.012)]
+    beard, beard_lines = oral_crown(c, surface, hide, grouped=True)
+    head = [fuse(c, [shell, *tissue, *sculpt, *ridges, *beard], hide, voxel=.012 * draft.get('voxelScale', 1))]
     sockets = [(side * ex, ey, er) for side in (-1, 1) for ex, ey, er in (MAIN_EYE, SECOND_EYE)]
     paint_mantle(head[0], section, dorsal_crests, sockets)
-    colour_beard(head[0], beard_lines, oral)
+    # Preserve the original nearest-point tie order used by the material pass.
+    colour_lines = list(reversed(beard_lines[:5])) + beard_lines[5:]
+    colour_beard(head[0], [sample for line in colour_lines for sample in line], oral)
     write_rest(head[0])
     c.paint_form_mask(head[0], lambda p: .60 + .40 * max(0, min(1, p.z)))
     creases(head[0], .30, .018)
@@ -102,7 +114,7 @@ def build(c, spec):
     for points, spec, side in paths:
         ob, centers, radii, weights = arm(c, len(arm_data), points, spec['width'], (arm_hide, cups, well), flare_amount=.15,
                                           steps=2, twist=spec['twist'], side=side)
-        creases(ob, .10, .022, subdivide=1, group='Dorsal scales')
+        creases(ob, .10, .022, subdivide=draft.get('creaseSubdivisions', 1), group='Dorsal scales')
         arm_data.append((ob, centers, radii, weights))
 
     data = bpy.data.armatures.new('Kraken eight flexible chains')
@@ -123,7 +135,9 @@ def build(c, spec):
             b.align_roll(Vector((0, 0, 1)))
             previous = b; chain.append(b.name)
         chains.append(chain)
+    beard_chains = add_beard_chains(data, base, beard_lines)
     bpy.ops.object.mode_set(mode='OBJECT')
+    bind_beard(head[0], rig, beard_lines, beard_chains)
     for i, (ob, _, _, weights) in enumerate(arm_data):
         ob.parent = emergence
         bind(ob, rig, [chain_weights(chains[i], t) for t in weights])
@@ -153,5 +167,32 @@ def build(c, spec):
         egg_ob.matrix_world = world
         egg_ob.scale = tuple(v * .001 for v in egg_ob.scale)
         carried[f'egg_carry_{n + 1}'] = egg_ob
-    return {'root': root, 'parts': {'body': body, 'surfacing': emergence, 'tentacle_chains': chains, **lids, **carried},
-            'rig': rig, 'sockets': {}}
+    # Runtime sockets: the ink origin at the mouth, and the six eggs named in throw order
+    # (release-k in the egg-throw clip launches egg k). Arms 0,2,3,4,6,7 carry egg_carry_1..6.
+    mouth = control(c.scene, 'Mouth ink origin socket', (0, 2.12, .48), body)
+    throw_order = (0, 4, 2, 6, 3, 7)
+    carriers = {arm: carried[f'egg_carry_{n + 1}'] for n, arm in enumerate((0, 2, 3, 4, 6, 7))}
+    sockets = {'mouth': mouth, **{f'egg{k + 1}': carriers[arm] for k, arm in enumerate(throw_order)}}
+    for k, y, f, z in detached:
+        base, tip = spine_anchors(y, f, z)
+        sockets[f'spine{k + 1}'] = control(c.scene, f'Dorsal spine {k + 1} base socket', base, body)
+        sockets[f'spine{k + 1}Tip'] = control(c.scene, f'Dorsal spine {k + 1} tip socket', tip, body)
+    return {'root': root, 'parts': {'body': body, 'surfacing': emergence, 'tentacle_chains': chains,
+                                  'beard_chains': beard_chains, **lids, **carried},
+            'rig': rig, 'sockets': sockets}
+
+def spine_part(c):
+    """One detachable dorsal spike (largest, f = 1). Runtime scales it per socket and fires it as a projectile."""
+    bone = skin(c, 'Kraken V8 bony scutes and spines', linear('#211529'), linear('#65415e'), rim=linear('#947085'), softness=.4, roughness=(.48, .64))
+    root = control(c.scene, 'Spine fixed export pivot')
+    pieces = keel_spike(c, bone)
+    for ob in pieces:
+        c.paint_form_mask(ob, lambda p: .70 + .30 * max(0, min(1, p.z)))
+    attach(pieces, root)
+    base, tip = spine_anchors(0, 1, 0)
+    asset = {'root': root, 'parts': {}, 'rig': None,
+             'sockets': {'base': control(c.scene, 'Spine base socket', base, root),
+                         'tip': control(c.scene, 'Spine tip socket', tip, root)}}
+    asset['rig'] = limb_rig(c.scene, asset, {'spine': (base, pieces)})
+    return asset
+

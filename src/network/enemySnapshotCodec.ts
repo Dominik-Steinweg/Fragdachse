@@ -1,4 +1,5 @@
 import { isEnemyClawState } from '../systems/EnemyClawAttack';
+import { readAreaClawState } from './krakenSnapshotCodec';
 /**
  * Kompakte (De-)Serialisierung des Gegner-Upsert-Stroms für {@link SyncedEnemySnapshot}.
  *
@@ -21,6 +22,11 @@ import type { SyncedEnemyDeltaState } from '../types';
 const FIELD_GENERATION = 1024;
 const FIELD_CLAW = 2048;
 const FIELD_POSITION_REVISION = 4096;
+const FIELD_AREA_CLAW = 8192;
+// Codes 0–6 are deployed legacy values; append new actions without renumbering them.
+const SPECIAL_ACTIONS = ['none', 'gauss-charge', 'phase-nuke', 'armageddon', 'timebomb-chase',
+  'timebomb-fuse', 'void-molotov-windup', 'kraken-ink', 'kraken-eggs', 'kraken-dive',
+  'kraken-submerged', 'kraken-surface', 'kraken-ashore', 'kraken-slam', 'kraken-spines'] as const;
 const FIELD_POS = 1;   // x + y
 const FIELD_ROT = 2;   // rot (quantisiert × ROT_QUANT)
 const FIELD_HP = 4;    // hp + maxHp
@@ -48,7 +54,12 @@ export function enemyNumToId(num: number): string {
 
 /** Hängt einen (vollständigen oder Delta-)Upsert an den flachen Zahlenstrom an. */
 export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnemyDeltaState): void {
+  if (entry.areaClaw !== undefined && (!readAreaClawState(entry.areaClaw)
+    || entry.areaClaw.attack?.presentation === 'tentacle')) {
+    throw new Error('Enemy snapshots carry only validated body area-claw slots');
+  }
   let mask = 0;
+  if (entry.areaClaw !== undefined) mask |= FIELD_AREA_CLAW;
   if (entry.positionRevision !== undefined) mask |= FIELD_POSITION_REVISION;
   if (entry.claw !== undefined) mask |= FIELD_CLAW;
   if (entry.entityGeneration !== undefined) mask |= FIELD_GENERATION;
@@ -78,19 +89,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
   if (mask & FIELD_BURROW) out.push(entry.burrowed ? 1 : 0);
   if (mask & FIELD_DASH) out.push(entry.dashPhase as number);
   if (mask & FIELD_SPECIAL) {
-    const actionCode = entry.specialAction === 'gauss-charge'
-      ? 1
-      : entry.specialAction === 'phase-nuke'
-        ? 2
-        : entry.specialAction === 'armageddon'
-          ? 3
-          : entry.specialAction === 'timebomb-chase'
-            ? 4
-            : entry.specialAction === 'timebomb-fuse'
-              ? 5
-              : entry.specialAction === 'void-molotov-windup'
-                ? 6
-          : 0;
+    const actionCode = SPECIAL_ACTIONS.indexOf(entry.specialAction!);
     out.push(
       actionCode,
       entry.specialActionEndsAt ?? 0,
@@ -107,6 +106,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
       attack.hitAt, attack.endsAt, attack.angle, attack.range, attack.arcDegrees);
   }
   if (mask & FIELD_POSITION_REVISION) out.push(entry.positionRevision as number);
+  if (mask & FIELD_AREA_CLAW) out.push(JSON.stringify(entry.areaClaw));
 }
 
 /** Dekodiert den flachen Zahlenstrom zurück in Delta-Objekte für die clientseitige Anwendung. */
@@ -137,19 +137,7 @@ export function decodeEnemyUpserts(stream: readonly (number | string)[]): Synced
     if (mask & FIELD_DASH) { entry.dashPhase = (stream[i++] as number) as 0 | 1 | 2; }
     if (mask & FIELD_SPECIAL) {
       const actionCode = stream[i++] as number;
-      entry.specialAction = actionCode === 1
-        ? 'gauss-charge'
-        : actionCode === 2
-          ? 'phase-nuke'
-        : actionCode === 3
-            ? 'armageddon'
-            : actionCode === 4
-              ? 'timebomb-chase'
-              : actionCode === 5
-                ? 'timebomb-fuse'
-                : actionCode === 6
-                  ? 'void-molotov-windup'
-            : 'none';
+      entry.specialAction = SPECIAL_ACTIONS[actionCode] ?? 'none';
       entry.specialActionEndsAt = stream[i++] as number;
       entry.gaussChargeProgress = (stream[i++] as number) / 1000;
       entry.gaussAimAngle = (stream[i++] as number) / ROT_QUANT;
@@ -172,6 +160,15 @@ export function decodeEnemyUpserts(stream: readonly (number | string)[]): Synced
     if (mask & FIELD_POSITION_REVISION) {
       const revision = stream[i++] as number;
       if (Number.isSafeInteger(revision) && revision >= 0) entry.positionRevision = revision;
+    }
+    if (mask & FIELD_AREA_CLAW) {
+      const encoded = stream[i++];
+      if (typeof encoded === 'string') {
+        try {
+          const state = readAreaClawState(JSON.parse(encoded));
+          if (state?.attack?.presentation !== 'tentacle') entry.areaClaw = state;
+        } catch { /* Invalid optional state. */ }
+      }
     }
     result.push(entry);
   }

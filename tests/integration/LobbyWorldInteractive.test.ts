@@ -71,7 +71,8 @@ vi.mock('phaser', () => ({
       }
     },
   },
-  Filters: { ParallelFilters: class {}, Displacement: class {} },
+  Filters: { Controller: class {}, ParallelFilters: class {}, Displacement: class {} },
+  Renderer: { WebGL: { RenderNodes: { BaseFilterShader: class {} } } },
 }));
 import { CELL_SIZE, getAuthoredWorldMetricsProfile, isGridCellInArenaRegion } from '../../src/config';
 import { buildLobbyWorldLayout } from '../../src/arena/LobbyWorldLayout';
