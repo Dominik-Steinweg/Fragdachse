@@ -242,7 +242,7 @@ export function installScenarioApi(controller: DevScenarioController) {
   let active = true;
   const waiters = new Set<() => void>();
   // Phaser's Scene plugins can already be shut down when this API is detached.
-  const status = (): Record<string, unknown> => active ? { ...structuredClone(controller.snapshot()), krakenAssets: krakenDraftStatus() }
+  const status = (): Record<string, unknown> => active ? { ...controller.cloneSnapshot(), krakenAssets: krakenDraftStatus() }
     : { state: 'error', ready: false, message: 'Dev-Szenario wurde beendet.', isolated: true, network: 'local-only' };
   const failure = (error: unknown): ScenarioResult => ({ ok: false, error: error instanceof Error ? error.message : String(error), status: status() });
   const api: DevScenarioApi = {
