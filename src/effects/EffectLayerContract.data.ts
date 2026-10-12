@@ -2813,7 +2813,6 @@ export const GPU_EFFECT_CONTRACTS = {
   "MortarSmoke": {"id":"gpu:MortarSmoke","owner":"effects/gpu/GpuVfxEffects.ts","component":"MortarSmoke","height":"body","lighting":"material","camera":"world","depths":[13.36],"blends":["NORMAL"],"profiles":["K"],"role":"effect","lanes":["ExplosionLowSmoke"]},
 } as const satisfies Record<keyof typeof GpuVfxEffectId, LayerContract & {readonly lanes: readonly (keyof typeof GpuVfxLaneId)[]}>;
 export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
-  {"id":"mortar:arrow","owner":"effects/MortarStrikeRenderer.ts","component":"arrow","height":"body","lighting":"emissive","camera":"clarity","depths":[100],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"module/arrow/setDepth/0","expression":"DEPTH.OVERLAY"}},
   {"id":"mortar:glow","owner":"effects/MortarStrikeRenderer.ts","component":"glow","height":"body","lighting":"emissive","camera":"world","depths":[19.7],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"createVisual/glow/setDepth/0","expression":"19.7"}},
   {"id":"mortar:core","owner":"effects/MortarStrikeRenderer.ts","component":"core","height":"body","lighting":"emissive","camera":"world","depths":[19.7],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"createVisual/core/setDepth/0","expression":"19.7"}},
   {"id":"mortar:wave","owner":"effects/MortarStrikeRenderer.ts","component":"wave","height":"body","lighting":"emissive","camera":"world","depths":[19.7],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"createVisual/wave/setDepth/0","expression":"19.7"}},
@@ -3309,7 +3308,7 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:ui/UiContextMenu.ts:open/this.container/setDepth/0","owner":"ui/UiContextMenu.ts","component":"open/this.container/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[103],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"open/this.container/setDepth/0","expression":"this.standaloneDepth"}},
 ];
 export const CPU_SOURCE_CONTRACTS = {
-  'effects/MortarStrikeRenderer.ts': {"bindings":{},"blends":["Phaser.BlendModes.ADD"],"cameras":["promoteToClarityCamera(scene, arrow)"],"sites":[{"key":"module/arrow/setDepth/0","expression":"DEPTH.OVERLAY","blends":["NORMAL"]},{"key":"createVisual/glow/setDepth/0","expression":"19.7","blends":["ADD"]},{"key":"createVisual/core/setDepth/0","expression":"19.7","blends":["ADD"]},{"key":"createVisual/wave/setDepth/0","expression":"19.7","blends":["ADD"]}]},
+  'effects/MortarStrikeRenderer.ts': {"bindings":{},"blends":["Phaser.BlendModes.ADD"],"cameras":[],"sites":[{"key":"createVisual/glow/setDepth/0","expression":"19.7","blends":["ADD"]},{"key":"createVisual/core/setDepth/0","expression":"19.7","blends":["ADD"]},{"key":"createVisual/wave/setDepth/0","expression":"19.7","blends":["ADD"]}]},
   "ui/AfterRoundTransition.ts": {
   "blends": [],
   "cameras": [],

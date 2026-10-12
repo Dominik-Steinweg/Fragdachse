@@ -46,6 +46,9 @@ interface MortarBehavior {
   evaluatedFrom: MortarPoint | null;
   spacing: { vx: number; vy: number } | null;
   closeThreatId: string | null;
+  /** Player the mortar has committed to rushing and biting; null while it retreats or sieges. */
+  engagedPlayerId: string | null;
+  engagedSince: number;
 }
 
 /** Host-only hostile siege decisions and windup. EnemyManager still owns global navigation and movement. */
@@ -151,7 +154,7 @@ export class CoopDefenseMortarSystem implements EnemySpecialMovementSource {
   private createState(): MortarBehavior {
     return { windup: null, windupAngle: 0, readyAt: 0, evaluateAt: 0, probeAt: 0, topology: -1, obstacles: -1,
       inSiegeArea: false, target: null, position: null, waypoint: 0, threats: [], evaluatedThreats: [], evaluatedFrom: null,
-      spacing: null, closeThreatId: null };
+      spacing: null, closeThreatId: null, engagedPlayerId: null, engagedSince: 0 };
   }
 
   /** Integration seam: allied target selection plugs in here, outside hostile siege policy. */
@@ -185,6 +188,14 @@ export class CoopDefenseMortarSystem implements EnemySpecialMovementSource {
       state.inSiegeArea = inSiegeArea;
       state.threats = this.findThreats(enemy, config, inSiegeArea ? config.threatScanRadiusPx : config.minRangePx);
       if (this.threatsChanged(enemy.sprite, state, config)) state.evaluateAt = 0;
+    }
+    const engaged = this.updateEngagement(enemy, state, config, nowMs);
+    if (engaged) {
+      // Committed rush: close in, then hand the bite to AttackSystem inside bite range.
+      state.spacing = engaged.distance <= this.biteRange(enemy) ? null : this.chaseVelocity(enemy, engaged, config);
+      state.closeThreatId = engaged.id;
+      state.topology = topology; state.obstacles = obstacles;
+      return null;
     }
     const near = this.findCloseThreat(enemy, state, config);
     if (state.closeThreatId && !near) { state.evaluateAt = 0; state.position = null; }
@@ -392,6 +403,42 @@ export class CoopDefenseMortarSystem implements EnemySpecialMovementSource {
     }
     for (const threat of state.threats) consider(threat.id, threat.resolve(), threat.range);
     return closest;
+  }
+
+  /**
+   * Retreat vs. rush with hysteresis: a player inside `engageEnterPx` starts a committed bite rush,
+   * which only ends beyond `engageExitPx` and after `engageMinDwellMs`. The gap and the dwell time
+   * keep the mode from flickering while a player hovers around a single threshold.
+   */
+  private updateEngagement(enemy: EnemyEntity, state: MortarBehavior, config: CoopDefenseEnemyMortarConfig,
+    nowMs: number): (MortarPoint & { id: string; distance: number }) | null {
+    const livePlayer = (id: string | null) => id === null ? null
+      : this.players.getAllPlayers().find(player => `player:${player.id}` === id && player.active && this.combat.isAlive(player.id)) ?? null;
+    const current = livePlayer(state.engagedPlayerId);
+    if (current) {
+      const d = distance(enemy.sprite, current);
+      const settled = nowMs - state.engagedSince >= config.engageMinDwellMs;
+      if (d <= config.engageExitPx || !settled) return { x: current.x, y: current.y, id: state.engagedPlayerId!, distance: d };
+    }
+    if (state.engagedPlayerId !== null) {
+      // Leaving the rush: drop the chase velocity so retreat or siege takes over in this frame.
+      state.engagedPlayerId = null; state.spacing = null; state.closeThreatId = null; state.evaluateAt = 0;
+    }
+    let nearest: (MortarPoint & { id: string; distance: number }) | null = null;
+    for (const player of this.players.getAllPlayers()) {
+      if (!player.active || !this.combat.isAlive(player.id)) continue;
+      const d = distance(enemy.sprite, player);
+      if (d <= config.engageEnterPx && (!nearest || d < nearest.distance)) nearest = { x: player.x, y: player.y, id: `player:${player.id}`, distance: d };
+    }
+    if (!nearest) return null;
+    state.engagedPlayerId = nearest.id; state.engagedSince = nowMs; state.position = null;
+    return nearest;
+  }
+
+  private chaseVelocity(enemy: EnemyEntity, target: MortarPoint, config: CoopDefenseEnemyMortarConfig): { vx: number; vy: number } {
+    const length = Math.max(1e-6, distance(enemy.sprite, target));
+    const speed = enemy.getMoveSpeed() * config.engageSpeedFactor;
+    return { vx: (target.x - enemy.sprite.x) / length * speed, vy: (target.y - enemy.sprite.y) / length * speed };
   }
 
   private spacingVelocity(enemy: EnemyEntity, threat: MortarPoint, config: CoopDefenseEnemyMortarConfig): { vx: number; vy: number } | null {

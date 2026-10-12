@@ -278,6 +278,13 @@ export interface CoopDefenseEnemyMortarConfig {
   readonly spacingSpeedFactor: number;
   readonly spacingProbeDistancePx: number;
   readonly positionArrivalTolerancePx: number;
+  /** A player closer than this turns retreat into a committed bite rush. */
+  readonly engageEnterPx: number;
+  /** The rush ends only beyond this distance (hysteresis) and after `engageMinDwellMs`. */
+  readonly engageExitPx: number;
+  readonly engageMinDwellMs: number;
+  /** Fraction of move speed used to close in on the engaged player. */
+  readonly engageSpeedFactor: number;
   readonly maxRangePx: number;
   readonly windupMs: number;
   readonly flightMs: number;
@@ -938,7 +945,8 @@ export function normalizeMortarConfig(config: CoopDefenseEnemyMortarConfig | und
     'positionCandidateDirections', 'maxLocalSearchCells', 'topTargetCandidates', 'threatScanRadiusPx', 'maxCoverThreats',
     'playerThreatRangePx', 'rangeQualityWeight', 'coverQualityWeight', 'exposurePenaltyWeight', 'movementCostPerPx',
     'minRepositionImprovement', 'threatCheckIntervalMs', 'threatChangeDistancePx', 'spacingSpeedFactor',
-    'spacingProbeDistancePx', 'positionArrivalTolerancePx'] as const) {
+    'spacingProbeDistancePx', 'positionArrivalTolerancePx', 'engageEnterPx', 'engageExitPx', 'engageMinDwellMs',
+    'engageSpeedFactor'] as const) {
     const value = normalized[key];
     if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) throw new Error(`Invalid mortar.${key}`);
   }
@@ -959,6 +967,8 @@ export function normalizeMortarConfig(config: CoopDefenseEnemyMortarConfig | und
     || config.playerThreatRangePx < config.minRangePx || config.threatCheckIntervalMs <= 0
     || config.threatChangeDistancePx <= 0 || config.spacingSpeedFactor > 1
     || config.spacingProbeDistancePx <= 0 || config.positionArrivalTolerancePx <= 0
+    || !(config.engageEnterPx > 0 && config.engageEnterPx < config.engageExitPx && config.engageExitPx <= config.minRangePx)
+    || config.engageSpeedFactor <= 0 || config.engageSpeedFactor > 1.5
     || config.windupMs <= 0 || config.flightMs <= 0 || config.impactRadiusPx <= 0
     || config.reevaluateIntervalMs <= 0 || config.minDamage > config.maxDamage) throw new Error('Invalid mortar ranges, timing or damage');
   return normalized;

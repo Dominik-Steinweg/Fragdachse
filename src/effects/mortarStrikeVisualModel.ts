@@ -14,19 +14,9 @@ export function mortarStrikePhase(strike: SyncedMortarStrike, nowMs: number) {
   return { phase, windup, flight, pulse, launchAgeMs: nowMs - strike.launchAt } as const;
 }
 
-export function isMortarSourceOffscreen(strike: SyncedMortarStrike, nowMs: number,
-  view: { x: number; y: number; width: number; height: number }): boolean {
-  return strike.faction === 'hostile' && mortarStrikePhase(strike, nowMs).phase === 'windup'
-    && (strike.sourceX < view.x || strike.sourceX > view.x + view.width
-      || strike.sourceY < view.y || strike.sourceY > view.y + view.height);
-}
-
-/** The shared edge helper returns unzoomed, scroll-fixed world-camera coordinates.
- * HUD/clarity has its own zoom (notably in dev scenarios and scoped views). */
-export function mortarEdgePointForClarity(point: { x: number; y: number },
-  worldZoom: { x: number; y: number }, clarityZoom: { x: number; y: number }) {
-  return { x: point.x * worldZoom.x / Math.max(0.001, clarityZoom.x),
-    y: point.y * worldZoom.y / Math.max(0.001, clarityZoom.y) };
+/** World angle from the announced aim point toward the shooter; the telegraph shows where fire comes from. */
+export function mortarFireDirection(strike: SyncedMortarStrike): number {
+  return Math.atan2(strike.sourceY - strike.targetY, strike.sourceX - strike.targetX);
 }
 
 interface Observation { windup: boolean; handled: boolean; cancelled: boolean; launched: boolean; impactAt: number }

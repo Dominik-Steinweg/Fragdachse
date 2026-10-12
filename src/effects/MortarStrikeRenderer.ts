@@ -1,10 +1,8 @@
 import * as Phaser from 'phaser';
-import { ALLIED_COLOR, ALLIED_PALETTE, DEPTH, VOID_PALETTE } from '../config';
+import { ALLIED_COLOR, ALLIED_PALETTE, VOID_PALETTE } from '../config';
 import type { SyncedMortarStrike } from '../types';
-import { getClarityCameraRegistry, promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
-import { getVisibleWorldView, getArrowPointOnScreenViewEdge } from '../ui/HostileBaseIndicator';
+import { getVisibleWorldView } from '../ui/HostileBaseIndicator';
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
-import { clusterEdgeMarkers, type EdgeMarkerCandidate } from './coopDefenseSecondaryObjectiveEdgeMarkers';
 import type { CameraFeedbackController } from './camera/CameraFeedbackController';
 import { CAMERA_FEEDBACK_PRIORITY } from './camera/cameraFeedbackPresets';
 import type { ExplosionGpuRenderer } from './ExplosionGpuRenderer';
@@ -12,7 +10,7 @@ import type { LightingSystem } from './LightingSystem';
 import type { GpuVfxSystem } from './gpu/GpuVfxSystem';
 import { MortarGpuLayer } from './gpu/MortarGpuLayer';
 import { MortarMuzzleVfx } from './MortarMuzzleVfx';
-import { MortarStrikePresentationTimeline, isMortarSourceOffscreen, mortarEdgePointForClarity } from './mortarStrikeVisualModel';
+import { MortarStrikePresentationTimeline, mortarFireDirection } from './mortarStrikeVisualModel';
 import { ensureMortarStrikeTextures, MORTAR_TEXTURE, MORTAR_FRAME } from './mortarStrikeTextures';
 
 /** Source-side accents only; the whole target area is drawn by the batched GPU layer. */
@@ -28,13 +26,13 @@ let nextRendererId = 0;
 const strikeSeed = (id: number) => (Math.imul(id + 1, 2654435761) >>> 0) % 997;
 
 /** Scene lifetime. Snapshots own anticipation; only the explosion RPC owns impact.
- * Target telegraph, drop shadow, shell, crater and smoke are four GPU draws for all strikes. */
+ * Target telegraph with direction of fire, drop shadow, shell, crater and smoke are four GPU draws
+ * for all strikes. */
 export class MortarStrikeRenderer {
   private readonly timeline = new MortarStrikePresentationTimeline();
   private readonly layer: MortarGpuLayer;
   private readonly visuals = new Map<number, MortarSourceVisual>();
   private readonly impacts: MortarImpactVisual[] = [];
-  private readonly arrows: Phaser.GameObjects.Image[] = [];
   private readonly lightKeys = new Set<string>();
   private readonly lightPrefix = `mortar-${nextRendererId++}-`;
   private impactSequence = 0;
@@ -48,11 +46,6 @@ export class MortarStrikeRenderer {
   constructor(private readonly scene: Phaser.Scene) {
     ensureMortarStrikeTextures(scene);
     this.layer = new MortarGpuLayer(scene);
-    for (let i = 0; i < 8; i++) {
-      const arrow = scene.add.image(0, 0, MORTAR_TEXTURE, MORTAR_FRAME.arrow)
-        .setDepth(DEPTH.OVERLAY).setScrollFactor(0).setTint(VOID_PALETTE.bright).setVisible(false);
-      promoteToClarityCamera(scene, arrow); this.arrows.push(arrow);
-    }
   }
   registerGpuVfx(system: GpuVfxSystem): void { this.clear(); this.gpuVfx = system; this.muzzle = new MortarMuzzleVfx(system); }
   setImpactSystems(explosion: ExplosionGpuRenderer, lighting: LightingSystem): void {
@@ -83,22 +76,20 @@ export class MortarStrikeRenderer {
   /** `nowMs` must be host-synchronized time: strike timestamps are host timestamps. */
   sync(strikes: readonly SyncedMortarStrike[], nowMs: number): void {
     this.muzzle?.update();
-    const camera = this.scene.cameras.main, view = getVisibleWorldView(camera);
-    const clarity = getClarityCameraRegistry(this.scene)?.getClarityCamera() ?? camera;
+    const view = getVisibleWorldView(this.scene.cameras.main);
     const visible = (x: number, y: number, reach: number) => x + reach >= view.x && x - reach <= view.x + view.width
       && y + reach >= view.y && y - reach <= view.y + view.height;
     const suppressed = this.gpuVfx?.isSuppressed() ?? false;
     const lightLimit = getGraphicsQualityProfile(this.scene).level === 'low' ? 3 : 8;
     const nextLights = new Set<string>();
-    const active = new Set<number>(), edges: EdgeMarkerCandidate[] = [];
-    const edgePulses: number[] = [];
+    const active = new Set<number>();
     this.layer.begin(this.scene.time.now);
     // Impacts first: the real result keeps its batch space ahead of decorative anticipation.
     for (let i = this.impacts.length - 1; i >= 0; i--) {
       const impact = this.impacts[i], age = (this.scene.time.now - impact.born) / 1000;
       if (age >= IMPACT_LIFETIME_S) { this.impacts.splice(i, 1); continue; }
       if (suppressed || !visible(impact.x, impact.y, impact.radius * 2.1)) continue;
-      this.layer.add({ x: impact.x, y: impact.y, radius: impact.radius, timeline: 2, seed: impact.seed, allied: impact.allied, age });
+      this.layer.add({ x: impact.x, y: impact.y, radius: impact.radius, timeline: 2, seed: impact.seed, allied: impact.allied, age, dir: 0 });
       if (age < 2.4 && nextLights.size < lightLimit) {
         const key = `${this.lightPrefix}impact-${impact.seed}`;
         nextLights.add(key);
@@ -115,7 +106,8 @@ export class MortarStrikeRenderer {
       active.add(strike.id);
       if (!suppressed && visible(strike.targetX, strike.targetY, strike.radius * 1.8)) {
         this.layer.add({ x: strike.targetX, y: strike.targetY, radius: strike.radius,
-          timeline: loading ? windup : 1 + flight, seed: strikeSeed(strike.id), allied, age: -1 });
+          timeline: loading ? windup : 1 + flight, seed: strikeSeed(strike.id), allied, age: -1,
+          dir: mortarFireDirection(strike) });
         if (!loading && nextLights.size < lightLimit) {
           const key = `${this.lightPrefix}strike-${strike.id}`;
           nextLights.add(key);
@@ -148,32 +140,11 @@ export class MortarStrikeRenderer {
           this.cameraFeedback?.request({ channel: 'impact', amplitudePx: 2.2, durationMs: 140, priority: 40,
             sourceX: sx, sourceY: sy, falloffPx: 550, decay: 'impulse' });
       }
-      if (isMortarSourceOffscreen(strike, nowMs, view)) {
-        const projected = getArrowPointOnScreenViewEdge(sx, sy, view, camera, 48);
-        const point = mortarEdgePointForClarity(projected, { x: camera.zoomX, y: camera.zoomY },
-          { x: clarity.zoomX, y: clarity.zoomY });
-        const distancePx = Math.hypot(sx - view.centerX, sy - view.centerY);
-        edges.push({ screenX: point.x, screenY: point.y, angle: Math.atan2(sy - view.centerY, sx - view.centerX),
-          distancePx, category: 'mortar-windup' });
-        edgePulses.push(0.65 + pulse * 0.35);
-      }
     }
     this.layer.flush();
     for (const key of this.lightKeys) if (!nextLights.has(key)) this.lighting?.releaseLight(key, { immediate: true });
     this.lightKeys.clear(); for (const key of nextLights) this.lightKeys.add(key);
     for (const [id, visual] of this.visuals) if (!active.has(id)) { this.remove(visual); this.visuals.delete(id); }
-    const clusters = clusterEdgeMarkers(edges, 48, this.arrows.length);
-    this.arrows.forEach((arrow, i) => {
-      const edge = clusters[i]; arrow.setVisible(!!edge);
-      if (edge) {
-        // The cluster represents its first nearest source. Equal distances on different
-        // edges must not borrow each other's charge pulse.
-        const source = edges.findIndex(candidate => candidate.screenX === edge.screenX
-          && candidate.screenY === edge.screenY && candidate.distancePx === edge.distancePx);
-        arrow.setPosition(edge.screenX, edge.screenY).setRotation(edge.angle)
-          .setAlpha(edgePulses[source] ?? 1).setScale(1.5 + (edgePulses[source] ?? 1) * 0.12);
-      }
-    });
   }
 
   private remove(visual: MortarSourceVisual): void {
@@ -186,11 +157,9 @@ export class MortarStrikeRenderer {
     this.impacts.length = 0; this.layer.clear();
     for (const key of this.lightKeys) this.lighting?.releaseLight(key, { immediate: true });
     this.lightKeys.clear();
-    for (const arrow of this.arrows) arrow.setVisible(false);
   }
   destroy(): void {
     this.clear(); this.layer.destroy();
-    for (const arrow of this.arrows) arrow.destroy();
     this.scene.textures.remove(MORTAR_TEXTURE);
   }
 }

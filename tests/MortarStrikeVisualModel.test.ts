@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
 import type { SyncedMortarStrike } from '../src/types';
-import { isMortarSourceOffscreen, mortarEdgePointForClarity, mortarStrikePhase, MortarStrikePresentationTimeline,
+import { mortarFireDirection, mortarStrikePhase, MortarStrikePresentationTimeline,
   MORTAR_THUMP_JOIN_WINDOW_MS } from '../src/effects/mortarStrikeVisualModel';
 
 const config = getCoopDefenseEnemyConfig('mortar-badger').mortar!;
@@ -46,24 +46,11 @@ describe('mortar presentation timeline', () => {
   });
 });
 
-describe('mortar source edge warning', () => {
-  const view = { x: 0, y: 0, width: 400, height: 200 };
-  it('stays on the pixel edge when the world zoom differs from the HUD zoom', () => {
-    const worldZoom = { x: 1.5, y: 1.5 }, clarityZoom = { x: 5 / 6, y: 5 / 6 };
-    const point = mortarEdgePointForClarity({ x: (1600 - 38) / worldZoom.x, y: 450 / worldZoom.y }, worldZoom, clarityZoom);
-    expect(point.x * clarityZoom.x).toBeCloseTo(1600 - 38);
-    expect(point.y * clarityZoom.y).toBeCloseTo(450);
-    expect(mortarEdgePointForClarity({ x: 12, y: 24 }, worldZoom, worldZoom)).toEqual({ x: 12, y: 24 });
-  });
-  it('warns only about hostile offscreen sources during the interruptible phase', () => {
-    expect(isMortarSourceOffscreen(strike, strike.armedAt, view)).toBe(true);
-    expect(isMortarSourceOffscreen(strike, strike.launchAt, view)).toBe(false);
-    expect(isMortarSourceOffscreen(strike, strike.armedAt - 1, view)).toBe(false);
-    expect(isMortarSourceOffscreen({ ...strike, faction: 'allied' }, strike.armedAt, view)).toBe(false);
-    // Target visibility is irrelevant; include the exact viewport boundary.
-    expect(isMortarSourceOffscreen({ ...strike, sourceX: 400, targetX: 900 }, strike.armedAt, view)).toBe(false);
-    expect(isMortarSourceOffscreen({ ...strike, sourceX: 100, sourceY: -1 }, strike.armedAt, view)).toBe(true);
-    expect(isMortarSourceOffscreen({ ...strike, sourceX: -1 }, strike.armedAt, view)).toBe(true);
-    expect(isMortarSourceOffscreen({ ...strike, sourceX: 100, sourceY: 201 }, strike.armedAt, view)).toBe(true);
+describe('mortar direction of fire', () => {
+  it('points from the aim point toward the shooter, in world space', () => {
+    const toward = (s: SyncedMortarStrike) => { const a = mortarFireDirection(s); return { x: Math.cos(a), y: Math.sin(a) }; };
+    expect(toward(strike).x).toBeCloseTo(1); // shooter east of the aim point
+    expect(toward({ ...strike, sourceX: strike.targetX, sourceY: strike.targetY - 500 }).y).toBeCloseTo(-1);
+    expect(toward({ ...strike, sourceX: strike.targetX - 300, sourceY: strike.targetY + 300 }).x).toBeCloseTo(-Math.SQRT1_2);
   });
 });

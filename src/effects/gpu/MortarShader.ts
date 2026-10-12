@@ -16,7 +16,7 @@
  */
 const SHARED = /* glsl */ `
 const vec2 SHADOW_DIR = vec2(0.6, 0.8); // Shared top-left sun: shadows fall to the lower right.
-float passSize(float pass) { return pass < 0.5 ? 1.75 : (pass < 1.5 ? 1.3 : (pass < 2.5 ? 0.5 : 2.1)); }`;
+float passSize(float pass) { return pass < 0.5 ? 2.05 : (pass < 1.5 ? 2.05 : (pass < 2.5 ? 0.5 : 2.1)); }`;
 
 export const MORTAR_VERTEX = `
 #pragma phaserTemplate(shaderName)
@@ -28,12 +28,14 @@ attribute vec2 inCenter;
 attribute vec2 inCorner;
 attribute vec4 inState;
 attribute float inAge;
+attribute float inDir;
 varying vec2 vLocal;
 varying vec4 vState;
 varying float vAge;
+varying float vDir;
 ${SHARED}
 void main() {
-  vState = inState; vAge = inAge;
+  vState = inState; vAge = inAge; vDir = inDir;
   vLocal = inCorner * passSize(uPass);
   vec2 world = inCenter + vLocal * inState.x;
   gl_Position = uProjectionMatrix * vec4((uViewMatrix * vec3(world, 1.0)).xy, 0.0, 1.0);
@@ -49,6 +51,7 @@ uniform float uTime;
 varying vec2 vLocal;
 varying vec4 vState;
 varying float vAge;
+varying float vDir;
 ${SHARED}
 const float TAU = 6.2831853;
 const float SEGMENTS = 24.0;
@@ -65,6 +68,39 @@ float fbm(vec2 v) {
   return sum;
 }
 float band(float r, float at, float width) { float d = (r - at) / width; return exp(-d * d); }
+// Shot frame: x points from the aim point toward the shooter, y across that line.
+vec2 shotFrame(vec2 q, float dir) { vec2 d = vec2(cos(dir), sin(dir)); return vec2(dot(q, d), dot(q, vec2(-d.y, d.x))); }
+// Three chevrons outside the ring on the shooter's side, apex toward the centre, drifting inward:
+// they read as "incoming from there". flow advances them; stroke is the half line width.
+// Returns the crisp stroke in x and a soft glow around it in y.
+vec2 incomingChevrons(vec2 s, float flow, float stroke) {
+  vec2 sum = vec2(0.0);
+  for (int k = 0; k < 3; k++) {
+    float p = fract(float(k) / 3.0 - flow);
+    float c = mix(1.6, 1.07, p);
+    // Fade in far out, full in the middle, dissolve into the ring.
+    float life = smoothstep(0.0, 0.25, p) * (1.0 - smoothstep(0.82, 1.0, p));
+    float d = abs((s.x - c) - abs(s.y) * 0.85) * 0.76;
+    // Arms taper from a strong apex to soft tips instead of ending in square cuts.
+    float t = clamp(abs(s.y) / 0.12, 0.0, 1.0);
+    float w = stroke * (1.0 - 0.55 * t);
+    float tip = 1.0 - smoothstep(0.55, 1.0, t);
+    float line = (1.0 - smoothstep(w, w + 0.012, d)) * tip * (1.0 - 0.3 * t);
+    float halo = exp(-d * d / 0.0018) * (1.0 - smoothstep(0.3, 1.25, t));
+    sum += vec2(line, halo) * life;
+  }
+  return min(sum, vec2(1.0));
+}
+// Soft guide along the shot line, from the ring outward, tapering away from the target.
+float shotLane(vec2 s) {
+  float width = mix(0.05, 0.022, smoothstep(1.0, 1.65, s.x));
+  return exp(-s.y * s.y / (width * width)) * smoothstep(0.95, 1.03, s.x) * (1.0 - smoothstep(1.2, 1.68, s.x));
+}
+// Bright gate on the ring where the shot line crosses it.
+float ringNotch(vec2 s, float r) {
+  float a = atan(s.y, s.x);
+  return exp(-a * a / 0.018) * band(r, 0.958, 0.04);
+}
 // Faction palette: void (hostile) or allied. Index 0 deep .. 3 core.
 vec3 palette(float k, float allied) {
   vec3 v = k < 0.5 ? vec3(0.435, 0.086, 0.659) : (k < 1.5 ? vec3(0.702, 0.278, 1.0)
@@ -92,6 +128,10 @@ void main() {
   vec3 rgb = vec3(0.0); float alpha = 0.0;
   float size = passSize(uPass);
   float edgeFade = 1.0 - smoothstep(size * 0.8, size * 0.98, r);
+  // Direction of fire, shown at the aim point: calm while interruptible, fast once committed.
+  vec2 shot = shotFrame(q, vDir);
+  float flow = uTime * (committed ? 1.7 : 0.55);
+  float dirStrength = committed ? 1.0 : 0.35 + 0.65 * windup;
 
   if (uPass < 0.5) {
     if (incoming) {
@@ -104,6 +144,11 @@ void main() {
       vec3 shadeC = mix(vec3(0.02, 0.012, 0.03), vec3(0.0, 0.025, 0.018), allied);
       alpha = clamp(shadeA + grooveA, 0.0, 0.75);
       rgb = shadeC * alpha;
+      // Dark under-stroke for the direction chevrons and lane, so they read on bright ground too.
+      vec2 under = incomingChevrons(shot, flow, 0.028);
+      float underA = clamp(under.x * 0.5 + under.y * 0.18 + shotLane(shot) * 0.22, 0.0, 0.6) * dirStrength;
+      alpha = underA + alpha * (1.0 - underA);
+      rgb = shadeC * underA + rgb * (1.0 - underA);
       if (committed) {
         // Drop shadow: soft and displaced while high, contracting and sharpening onto the
         // aim point as the shell descends. Only the last part of the fall is visible.
@@ -180,22 +225,33 @@ void main() {
       // Faint charge haze builds inside the area.
       float haze = (1.0 - smoothstep(0.55, RING, r)) * fbm(q * 2.6 + vec2(uTime * 0.25, -uTime * 0.18) + seed);
       rgb += palette(0.0, allied) * haze * windup * windup * 0.12;
+      // Direction of fire: calm chevrons that strengthen while the shot charges.
+      vec2 chev = incomingChevrons(shot, flow, 0.014);
+      rgb += (hot * chev.x * (0.6 + 0.3 * pulse) + palette(1.0, allied) * chev.y * 0.3) * dirStrength
+        + palette(1.0, allied) * shotLane(shot) * 0.2 * dirStrength
+        + palette(2.0, allied) * ringNotch(shot, r) * 0.6 * dirStrength;
     } else if (committed) {
       // Committed: closed, brighter, faster. Energy crawls along the ring and a contraction
       // front pulls toward the aim point until impact.
       float fast = 0.5 + 0.5 * sin(TAU * flight * 5.0);
       float launchFlash = 1.0 - smoothstep(0.0, 0.12, flight);
-      float flow = fbm(vec2(u * 26.0 - uTime * 4.0, r * 9.0) + seed);
+      float crawl = fbm(vec2(u * 26.0 - uTime * 4.0, r * 9.0) + seed);
       float core = band(r, RING - 0.016, 0.022);
       float glow = band(r, RING - 0.02, 0.085);
       vec3 ringC = mix(palette(2.0, allied), palette(3.0, allied), 0.35 + 0.4 * fast);
-      rgb = ringC * core * (1.0 + 0.45 * (flow - 0.5) + 0.5 * launchFlash)
+      rgb = ringC * core * (1.0 + 0.45 * (crawl - 0.5) + 0.5 * launchFlash)
         + palette(1.0, allied) * glow * (0.38 + 0.22 * fast + 0.5 * launchFlash);
       // The front stops short of the aim point and fades, so it never frames the shell like a reticle.
       float rc = mix(0.93, 0.24, pow(flight, 0.85));
       float contraction = band(r, rc, 0.016) * (0.55 + 0.25 * fast) * (1.0 - smoothstep(0.7, 0.92, flight));
       float wake = (smoothstep(rc, rc + 0.18, r) - smoothstep(rc + 0.18, RING, r)) * 0.08;
-      rgb += palette(2.0, allied) * contraction + palette(1.0, allied) * wake * (0.6 + flow * 0.8);
+      rgb += palette(2.0, allied) * contraction + palette(1.0, allied) * wake * (0.6 + crawl * 0.8);
+      // Direction of fire: bright, fast chevrons; a flash when the shot is fired.
+      vec2 chev = incomingChevrons(shot, flow, 0.016);
+      rgb += mix(palette(2.0, allied), palette(3.0, allied), 0.2) * chev.x * (1.0 + launchFlash)
+        + palette(1.0, allied) * chev.y * (0.5 + 0.4 * launchFlash)
+        + palette(1.0, allied) * shotLane(shot) * (0.32 + 0.4 * launchFlash)
+        + palette(3.0, allied) * ringNotch(shot, r) * (0.75 + launchFlash);
       // Approach heat on the aim point.
       // Broad and faint, so it lights the ground without haloing the shell into a ring.
       float pool = exp(-r * r / mix(0.35, 0.18, flight));

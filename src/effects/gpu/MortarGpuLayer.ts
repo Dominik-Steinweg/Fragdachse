@@ -5,12 +5,14 @@ import { registerGraphicsObject } from '../EffectUtils';
 
 /** Fixed bounded batch: four draws regardless of strike count. No per-strike GameObjects. */
 export const MORTAR_BATCH_CAPACITY = 128;
-const WORDS = 9, VERTICES = 6;
+const WORDS = 10, VERTICES = 6;
 const CORNERS = [-1,-1, 1,-1, 1,1, -1,-1, 1,1, -1,1];
 /** Ground material, emissive telegraph/embers, airborne shell, lit smoke. */
 export const MORTAR_PASS_DEPTHS = [5.12, 19.7, 20.6, 13.38] as const;
 /** timeline: 0..1 windup, 1..2 committed flight; age < 0 incoming, else seconds since impact. */
-export interface MortarGpuItem { x: number; y: number; radius: number; timeline: number; seed: number; allied: boolean; age: number }
+export interface MortarGpuItem { x: number; y: number; radius: number; timeline: number; seed: number; allied: boolean; age: number;
+  /** World angle from the aim point toward the shooter; drives the direction-of-fire chevrons. */
+  dir: number }
 
 export class MortarGpuLayer {
   private readonly data = new Float32Array(MORTAR_BATCH_CAPACITY * VERTICES * WORDS);
@@ -49,6 +51,7 @@ export class MortarGpuLayer {
       this.data[offset++] = CORNERS[i * 2]; this.data[offset++] = CORNERS[i * 2 + 1];
       this.data[offset++] = item.radius; this.data[offset++] = item.timeline;
       this.data[offset++] = item.seed; this.data[offset++] = item.allied ? 1 : 0; this.data[offset++] = item.age;
+      this.data[offset++] = item.dir;
     }
     return true;
   }
@@ -82,7 +85,7 @@ function createMortarBatch(renderer: Phaser.Renderer.WebGL.WebGLRenderer, image:
         instancesPerBatch: MORTAR_BATCH_CAPACITY, verticesPerInstance: VERTICES, indicesPerInstance: VERTICES,
         topology: renderer.gl.TRIANGLES, vertexSource: MORTAR_VERTEX, fragmentSource: MORTAR_FRAGMENT,
         vertexBufferLayout: { usage: 'DYNAMIC_DRAW', layout: [{ name: 'inCenter', size: 2 }, { name: 'inCorner', size: 2 },
-          { name: 'inState', size: 4 }, { name: 'inAge', size: 1 }] },
+          { name: 'inState', size: 4 }, { name: 'inAge', size: 1 }, { name: 'inDir', size: 1 }] },
       });
     }
     _generateElementIndices(instances: number): ArrayBuffer {

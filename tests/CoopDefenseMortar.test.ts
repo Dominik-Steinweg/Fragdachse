@@ -408,6 +408,33 @@ describe('local mortar siege policy', () => {
     field.destroy();
   });
 
+  it('rushes a very close player and only gives up the rush with distance hysteresis and dwell time', () => {
+    const field = openField(); const f = fixture({ navigation: field });
+    const toward = (now: number) => Math.sign(f.mortar.getMovementOverride(f.enemy, now)?.vx ?? 0);
+    const between = (config.engageEnterPx + config.engageExitPx) / 2;
+    const outside = (config.engageExitPx + config.minRangePx) / 2;
+    // Retreat while the player stays outside the rush radius.
+    f.players[0].x = outside; f.update(0);
+    expect(toward(0)).toBe(-1);
+    // Inside the rush radius it turns and closes in, without a new windup.
+    f.players[0].x = config.engageEnterPx - 1; f.update(10);
+    expect(toward(10)).toBe(1);
+    expect(f.mortar.getSnapshot()).toEqual([]);
+    // Between enter and exit it keeps rushing (no flip at the entry threshold).
+    f.players[0].x = between; f.update(20);
+    expect(toward(20)).toBe(1);
+    // Beyond the exit distance it still commits until the dwell time has passed …
+    f.players[0].x = outside; f.update(10 + config.engageMinDwellMs - 1);
+    expect(toward(10 + config.engageMinDwellMs - 1)).toBe(1);
+    // … and then retreats again.
+    f.update(10 + config.engageMinDwellMs);
+    expect(toward(10 + config.engageMinDwellMs)).toBe(-1);
+    // Within bite range the rush hands movement to AttackSystem.
+    f.players[0].x = WEAPON_CONFIGS.MORTAR_BADGER_BITE.range; f.update(20 + config.engageMinDwellMs);
+    expect(f.mortar.getMovementOverride(f.enemy, 20 + config.engageMinDwellMs)).toBeNull();
+    field.destroy();
+  });
+
   it('uses player coordinates inherited through accessors for retreat and bite handoff', () => {
     const field = openField(); const f = fixture({ navigation: field });
     let playerX = config.minRangePx * 2 / 3;
