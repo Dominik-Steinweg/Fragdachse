@@ -1230,7 +1230,8 @@ export class EffectSystem implements EnemyVisualSink {
     const factionBurst = style === 'mortar' || style === 'firestarter_combo';
     const mortarPalette = bodyColor === ALLIED_COLOR ? ALLIED_PALETTE : VOID_PALETTE;
     const palette: ExplosionCombatPalette = {
-      core: factionBurst ? mortarPalette.core : thermalLike ? 0xfff2d0 : coreColor,
+      // The firestarter combo keeps a coloured heart; its white-hot accents come from the GPU layer.
+      core: factionBurst ? (style === 'firestarter_combo' ? mortarPalette.bright : mortarPalette.core) : thermalLike ? 0xfff2d0 : coreColor,
       hot: factionBurst ? mortarPalette.bright : thermalLike ? FLAME_JET_TINTS_HOT[2] : hotColor,
       body: factionBurst ? mortarPalette.primary : thermalLike ? FLAME_JET_TINTS_MID[1] : bodyColor,
       outer: thermalLike

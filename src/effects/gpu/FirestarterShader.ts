@@ -160,10 +160,11 @@ void main() {
       + flash * gauss(v, 7.0) * 0.35;
     float lineE = (braid * 0.85 + guide + sparks * 0.9 + core) * reach * mix(1.0, mix(0.5, 0.8, commit), along);
     // Muzzle: a swirling flame knot that swells with the charge.
-    float r0 = length(vec2(u, v));
+    // The knot sits just ahead of the tip so the lance's brass end stays readable.
+    float r0 = length(vec2(u - 5.0, v));
     float knotR = mix(3.0, 6.0, p) + 1.5 * commit;
     float swirl = noise(vec2(atan(v, u) * 2.0 + uTime * 6.0, r0 * 0.16 - uTime * 5.0));
-    float knot = gauss(r0, knotR) * (0.55 + 0.6 * swirl) * (0.45 + 0.55 * p) + gauss(r0, knotR * 0.38) * (0.4 + 0.8 * commit);
+    float knot = gauss(r0, knotR) * (0.55 + 0.6 * swirl) * (0.45 + 0.55 * p) + gauss(r0, knotR * 0.38) * (0.4 + 0.35 * commit);
     float e = lineE + knot * (1.0 + flash);
     rgb = flame(e, allied) + hot(gauss(r0, knotR * 0.3) * (0.2 + 0.25 * commit), allied);
     // A thin dark seat under the fused core keeps it readable on bright ground.
@@ -194,7 +195,7 @@ void main() {
       float lance = (core * 0.9 + body * 0.5 * live + jets * 0.6 * live + braid * 0.8) * span * (live + 0.08);
       float ri = length(vec2(u - len, v));
       float impact = gauss(ri, 7.0 + 16.0 * e) * live * live * 0.9 + gauss(ri - (6.0 + 34.0 * e), 2.4 + 3.0 * e) * live * 0.6;
-      float rm = length(vec2(u, v));
+      float rm = length(vec2(u - 6.0, v));
       float muzzle = gauss(rm, 5.0 + 8.0 * e) * pow(live, 1.5) * 0.7;
       float glow = (t < ${FIRESTARTER_LANCE_FLASH_S.toFixed(2)}) ? lance + impact + muzzle : 0.0;
       // Embers settle on the burned line and cool after the flash.
