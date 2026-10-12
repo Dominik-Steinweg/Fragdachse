@@ -238,7 +238,8 @@ const LOOK = {
   surface: { radius: 96, lifetime: 1.1, foam: .62, sprayCount: 56, spraySpeed: 105, drain: .65 },
   dive: { radius: 110, lifetime: 1.5, foam: .65, shadow: .12 },
   egg: { radius: 24 },
-  wake: { radius: 70, length: 280, lapPeriod: 2.6, minSpeedPxPerSec: 10, fullSpeedPxPerSec: 70 },
+  // Sized to the whole animal: its trailing arms cover ~190 px, the visible V starts behind them.
+  wake: { radius: 140, length: 560, lapPeriod: 2.6, minSpeedPxPerSec: 10, fullSpeedPxPerSec: 55, smoothingMs: 220 },
   slime: { life: 10, spacing: 26, maxStamps: 48, stamp: [62, 44] as const, aura: [96, 78] as const },
   tentacleTurnRadPerSec: Math.PI * 1.6,
   spineWake: { length: 150, width: 12, lead: 10, opacity: .75 },
@@ -483,7 +484,8 @@ export class KrakenEffects {
   }
   /** Bow swell and diverging wake behind the swimming body; `intensity` follows its speed. */
   wake(pose: KrakenPose, intensity: number, now: number): void {
-    this.water({ kind: 'wake', x: pose.x, y: pose.y, age: now / 1000, radius: LOOK.wake.radius, strength: krakenClamp(intensity),
+    // The running clock wraps: absolute host seconds lose all fractional precision in float32 shaders.
+    this.water({ kind: 'wake', x: pose.x, y: pose.y, age: (now / 1000) % 600, radius: LOOK.wake.radius, strength: krakenClamp(intensity),
       angle: pose.angle, param: LOOK.wake.length });
   }
   /** Water lapping against the resting body: slow, faint rings. */
@@ -596,6 +598,7 @@ export class KrakenRenderer {
   private missingAssetsReported = false;
   private waterMotion: { pose: KrakenPose; diveAt?: number; rise?: KrakenRiseTiming } | null = null;
   private lastBody: { pose: KrakenPose; now: number } | null = null;
+  private swimSpeed = 0;
   private locomotionTime = 0;
   private exitKey = '';
   private announcedExit = '';
@@ -681,12 +684,14 @@ export class KrakenRenderer {
         this.effects.wetTrail(render.pose, now, now, 0, true);
       }
       // The pond answers the body: a wake while it swims, faint lapping rings while it floats.
-      if (render.asset === this.options.assets.water && render.visible && this.lastBody && now > this.lastBody.now
-        && (phase.kind === 'surfaced' || phase.kind === 'surfacing')) {
-        const speed = Math.hypot(pose.x - this.lastBody.pose.x, pose.y - this.lastBody.pose.y) / (now - this.lastBody.now) * 1000;
-        if (speed > LOOK.wake.minSpeedPxPerSec) this.effects.wake(render.pose, speed / LOOK.wake.fullSpeedPxPerSec, now);
+      // The speed is smoothed so the wake swells and settles, and it holds through repeated frames.
+      if (render.asset === this.options.assets.water && render.visible && (phase.kind === 'surfaced' || phase.kind === 'surfacing')) {
+        if (this.lastBody && elapsed > 0 && elapsed < 500) {
+          this.swimSpeed += (distance / elapsed * 1000 - this.swimSpeed) * Math.min(1, elapsed / LOOK.wake.smoothingMs);
+        }
+        if (this.swimSpeed > LOOK.wake.minSpeedPxPerSec) this.effects.wake(render.pose, this.swimSpeed / LOOK.wake.fullSpeedPxPerSec, now);
         else this.effects.lap(render.pose, now);
-      }
+      } else this.swimSpeed = 0;
       this.lastBody = { pose: { ...pose }, now };
       if (phase.kind === 'surfacing') this.waterMotion = { pose: render.pose,
         rise: krakenRiseTiming(render.asset.metadata, 'surface', phase.startedAt, phase.startedAt, phase.endsAt, phase.vulnerableAt) };
@@ -811,7 +816,7 @@ export class KrakenRenderer {
   }
   clear(): void {
     for (const id of ['roar', 'grip', 'claw']) this.options.feedback?.cancel(`kraken-${id}`);
-    this.lastBody = null; this.locomotionTime = 0; this.exitKey = ''; this.announcedExit = ''; this.exitVisual = null; this.trails = []; this.wetUntil = 0;
+    this.lastBody = null; this.swimSpeed = 0; this.locomotionTime = 0; this.exitKey = ''; this.announcedExit = ''; this.exitVisual = null; this.trails = []; this.wetUntil = 0;
     this.body?.destroy(); this.body = null;
     for (const part of this.parts.values()) part.view.destroy();
     for (const egg of this.eggs.values()) egg.destroy();

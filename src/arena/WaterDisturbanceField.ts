@@ -62,17 +62,27 @@ void acc(vec4 A,vec4 B,vec2 p,inout float h,inout float foam,inout float churn){
     foam+=smoothstep(.62,.95,spiral)*smoothstep(.25,.65,n)*env*smoothstep(R*.12,R*.35,r)*1.3;
     churn+=env;
   } else {
-    // Wake: bow swell, churned flanks and a V of diverging crests behind a moving body.
+    // Wake: a soft bow swell, a churned track and feathered Kelvin crests that break up and fade behind the body.
     vec2 dir=vec2(cos(B.z),sin(B.z));
-    float along=-dot(d,dir), across=dot(d,vec2(-dir.y,dir.x)), len=max(B.w,1.0), behind=max(along,0.0);
-    float arm=abs(across)-behind*.36-R*.55;
-    float armEnv=exp(-arm*arm/324.0)*smoothstep(-R*.5,R*.2,along)*(1.0-smoothstep(len*.45,len,behind));
-    h+=sin(behind*.25-age*7.0)*armEnv*B.y*.8;
-    foam+=armEnv*smoothstep(.45,.85,n)*B.y*.6*(1.0-behind/len);
-    float bow=exp(-pow((along+R*.75)/(R*.32),2.0)-pow(across/(R*.85),2.0));
-    h+=bow*B.y*.9; foam+=bow*smoothstep(.4,.8,n)*B.y*.5;
-    float trail=exp(-across*across/(R*R*.22))*smoothstep(0.0,R,behind)*(1.0-smoothstep(len*.3,len*.8,behind));
-    foam+=trail*smoothstep(.55,.85,n)*B.y*.4; churn+=(trail*.5+exp(-pow(length(vec2(along*.8,across))/(R*1.1),2.0))*.5)*B.y;
+    float along=-dot(d,dir), across=dot(d,vec2(-dir.y,dir.x)), len=max(B.w,1.0);
+    float behind=max(along-R*.15,0.0), side=abs(across);
+    float decay=B.y*(1.0-smoothstep(len*.35,len,behind))/sqrt(1.0+behind/(R*.8));
+    // The arms open at about 19.5 degrees; their short crests lie obliquely and tear apart in the noise.
+    float arm=side-R*.32-behind*.354, width=10.0+behind*.09;
+    float armEnv=exp(-arm*arm/(2.0*width*width))*smoothstep(-R*.2,R*.3,along);
+    float crest=sin((behind*.82+side*.57)*.17-age*4.2);
+    float torn=smoothstep(.25,.75,noise(p*.035+vec2(age*.6,B.w*.01)));
+    h+=crest*armEnv*decay*torn*.75;
+    foam+=smoothstep(.45,1.0,crest)*armEnv*decay*torn*smoothstep(.35,.75,n)*.95;
+    // Transverse crests curve across the track.
+    float track=exp(-side*side/(R*R*.35))*smoothstep(0.0,R*.6,behind);
+    h+=sin(length(vec2(behind,side*.6))*.13-age*3.6)*track*decay*.4;
+    // White water churned up right behind the body.
+    float churned=exp(-side*side/(R*R*(.12+behind/len*.25)))*smoothstep(-R*.3,R*.4,along)*(1.0-smoothstep(len*.15,len*.6,behind));
+    foam+=churned*smoothstep(.3,.8,n)*B.y*.85; churn+=churned*B.y*.75;
+    float bow=exp(-pow((along+R*.7)/(R*.38),2.0)-pow(across/(R*.75),2.0));
+    h+=bow*B.y*.5; foam+=bow*smoothstep(.45,.8,n)*B.y*.35;
+    churn+=exp(-pow(length(vec2(along*.8,across))/R,2.0))*B.y*.35;
   }
 }
 void main(){
