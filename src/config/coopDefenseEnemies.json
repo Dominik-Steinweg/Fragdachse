@@ -905,6 +905,10 @@
         },
         "crossAttackGapMs": 200,
         "comboRadiusPx": 125,
+        "muzzle": {
+          "forwardPx": 16,
+          "sidePx": 0
+        },
         "fireballWeaponId": "FIRESTARTER_FIREBALL",
         "lanceWeaponId": "FIRESTARTER_LANCE",
         "biteWeaponId": "FIRESTARTER_BITE"

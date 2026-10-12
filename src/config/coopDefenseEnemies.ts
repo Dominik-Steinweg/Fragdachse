@@ -338,6 +338,8 @@ export interface CoopDefenseEnemyFirestarterConfig {
   readonly lance: { readonly telegraphMs: number; readonly commitMs: number; readonly cooldownMs: number; readonly rangePx: number };
   readonly crossAttackGapMs: number;
   readonly comboRadiusPx: number;
+  /** Lance-tip socket from the asset, in game px: ahead of the body centre and to its right. */
+  readonly muzzle: { readonly forwardPx: number; readonly sidePx: number };
   readonly fireballWeaponId: string;
   readonly lanceWeaponId: string;
   readonly biteWeaponId: string;
@@ -1104,6 +1106,8 @@ export function normalizeFirestarterConfig(config: CoopDefenseEnemyFirestarterCo
   if (!Number.isSafeInteger(config.charges.maxCharges) || !Number.isFinite(config.crossAttackGapMs)
     || config.crossAttackGapMs < 0 || config.lance.commitMs > config.lance.telegraphMs
     || config.comboRadiusPx > config.lance.rangePx) throw new Error('Invalid firestarter timing/range relation');
+  if (!config.muzzle || !Number.isFinite(config.muzzle.forwardPx) || !Number.isFinite(config.muzzle.sidePx)
+    || config.muzzle.forwardPx < 0) throw new Error('Invalid firestarter muzzle socket');
   const ball = findWeaponConfig(config.fireballWeaponId);
   const lance = findWeaponConfig(config.lanceWeaponId);
   const bite = findWeaponConfig(config.biteWeaponId);
@@ -1111,5 +1115,28 @@ export function normalizeFirestarterConfig(config: CoopDefenseEnemyFirestarterCo
     || lance?.fire.type !== 'hitscan' || !lance.detonator?.stopsAtDetonable
     || !lance.detonator.triggerTags.includes(ball.detonable.tag) || bite?.fire.type !== 'melee'
     || lance.range !== config.lance.rangePx) throw new Error('Invalid firestarter weapon relation');
-  return { ...config, charges: { ...config.charges }, lance: { ...config.lance } };
+  return { ...config, charges: { ...config.charges }, lance: { ...config.lance }, muzzle: { ...config.muzzle } };
+}
+
+/**
+ * Lance aim through a fixed world point: the shot leaves the lance tip and passes the point.
+ * The tip sits `sidePx` beside the body axis, so the aim turns by asin(side / distance);
+ * the forward offset only moves the origin along the line.
+ */
+export function resolveFirestarterAim(
+  muzzle: CoopDefenseEnemyFirestarterConfig['muzzle'], x: number, y: number, targetX: number, targetY: number,
+): { readonly angle: number; readonly x: number; readonly y: number } {
+  const reach = Math.hypot(targetX - x, targetY - y);
+  const turn = reach > Math.abs(muzzle.sidePx) ? Math.asin(muzzle.sidePx / reach) : 0;
+  const angle = Math.atan2(targetY - y, targetX - x) - turn;
+  const origin = resolveFirestarterMuzzle(muzzle, x, y, angle);
+  return { angle, x: origin.x, y: origin.y };
+}
+
+/** World position of the lance tip for a body at (x, y) aiming along `angle`. */
+export function resolveFirestarterMuzzle(
+  muzzle: CoopDefenseEnemyFirestarterConfig['muzzle'], x: number, y: number, angle: number,
+): { readonly x: number; readonly y: number } {
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  return { x: x + cos * muzzle.forwardPx - sin * muzzle.sidePx, y: y + sin * muzzle.forwardPx + cos * muzzle.sidePx };
 }

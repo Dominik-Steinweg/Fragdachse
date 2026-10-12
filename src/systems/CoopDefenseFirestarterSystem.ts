@@ -1,4 +1,4 @@
-import { getCoopDefenseEnemyConfig, type CoopDefenseEnemyFirestarterConfig } from '../config/coopDefenseEnemies';
+import { getCoopDefenseEnemyConfig, resolveFirestarterAim, type CoopDefenseEnemyFirestarterConfig } from '../config/coopDefenseEnemies';
 import { VOID_PALETTE } from '../config';
 import type { CombatActorStatePort, CombatGeometryPort } from '../combat/CombatCapabilities';
 import type { EnemyEntity } from '../entities/EnemyEntity';
@@ -65,7 +65,7 @@ export class CoopDefenseFirestarterSystem implements EnemySpecialMovementSource 
         const target = state.lance.target;
         this.cancelLance(state);
         // Geometry can change during the telegraph; the real weapon trace resolves new blockers.
-        if (this.fire(enemy, findWeaponConfig(config.lanceWeaponId)!, target)) {
+        if (this.fire(enemy, config, findWeaponConfig(config.lanceWeaponId)!, target)) {
           state.lastAttack = 'lance'; state.lastAttackAt = nowMs;
         }
         state.lanceReadyAt = nowMs + config.lance.cooldownMs;
@@ -80,7 +80,7 @@ export class CoopDefenseFirestarterSystem implements EnemySpecialMovementSource 
       if (!players.length) continue;
       if (nowMs >= state.lanceReadyAt && this.crossGapReady(state, 'lance', config, nowMs)) {
         const target = this.findCombo(enemy, config, players)
-          ?? players.find(point => distance(enemy.sprite, point) <= config.lance.rangePx && this.hasLine(enemy, point));
+          ?? players.find(point => distance(enemy.sprite, point) <= config.lance.rangePx && this.hasLine(enemy, config, point));
         if (target) {
           state.lance = { target: { ...target }, startedAt: nowMs, endsAt: nowMs + config.lance.telegraphMs,
             commitAt: nowMs + config.lance.telegraphMs - config.lance.commitMs };
@@ -94,8 +94,8 @@ export class CoopDefenseFirestarterSystem implements EnemySpecialMovementSource 
       const ball = findWeaponConfig(config.fireballWeaponId)!;
       // A ball is a body: tight cover that passes a hairline still eats it, so test its own corridor.
       const clearance = (ball.fire.type === 'projectile' ? ball.fire.projectileSize : 0) / 2;
-      const target = players.find(point => distance(enemy.sprite, point) <= ball.range && this.hasLine(enemy, point, clearance));
-      if (!target || !this.fire(enemy, ball, target)) continue;
+      const target = players.find(point => distance(enemy.sprite, point) <= ball.range && this.hasLine(enemy, config, point, clearance));
+      if (!target || !this.fire(enemy, config, ball, target)) continue;
       state.charges.consume(nowMs);
       state.ballReadyAt = nowMs + config.fireballIntervalMs;
       state.lastAttack = 'ball'; state.lastAttackAt = nowMs; state.actedAt = nowMs;
@@ -147,29 +147,31 @@ export class CoopDefenseFirestarterSystem implements EnemySpecialMovementSource 
       const point = { x: ball.x + (ball.vx ?? 0) * seconds, y: ball.y + (ball.vy ?? 0) * seconds };
       const proximity = Math.min(...players.map(player => distance(player, point)));
       if (proximity > config.comboRadiusPx || proximity >= bestDistance
-        || distance(enemy.sprite, point) > config.lance.rangePx || !this.hasLine(enemy, point)) return;
+        || distance(enemy.sprite, point) > config.lance.rangePx || !this.hasLine(enemy, config, point)) return;
       best = point; bestDistance = proximity;
     });
     return best;
   }
 
-  private hasLine(enemy: EnemyEntity, point: Point, clearanceRadius = 0): boolean {
-    return this.combat.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, point.x, point.y,
-      { purpose: 'directFire', clearanceRadius });
+  private hasLine(enemy: EnemyEntity, config: CoopDefenseEnemyFirestarterConfig, point: Point, clearanceRadius = 0): boolean {
+    const aim = resolveFirestarterAim(config.muzzle, enemy.sprite.x, enemy.sprite.y, point.x, point.y);
+    return this.combat.hasClearLineOfFire(aim.x, aim.y, point.x, point.y, { purpose: 'directFire', clearanceRadius });
   }
 
-  private fire(enemy: EnemyEntity, weapon: WeaponConfig, target: Point): boolean {
-    const angle = Math.atan2(target.y - enemy.sprite.y, target.x - enemy.sprite.x);
-    enemy.faceAngle(angle);
+  /** Both attacks leave the lance tip; the lance and its telegraph share this aim. */
+  private fire(enemy: EnemyEntity, config: CoopDefenseEnemyFirestarterConfig, weapon: WeaponConfig, target: Point): boolean {
+    const aim = resolveFirestarterAim(config.muzzle, enemy.sprite.x, enemy.sprite.y, target.x, target.y);
+    enemy.faceAngle(aim.angle);
     return this.weapons.fire(resolveEnemyWeaponFirePayloads(weapon, enemy.faction), {
-      x: enemy.sprite.x, y: enemy.sprite.y, angle, targetX: target.x, targetY: target.y,
-      ownerId: enemy.id, ownerColor: VOID_PALETTE.primary, gameplayMuzzleOrigin: { x: enemy.sprite.x, y: enemy.sprite.y },
+      x: enemy.sprite.x, y: enemy.sprite.y, angle: aim.angle, targetX: target.x, targetY: target.y,
+      ownerId: enemy.id, ownerColor: VOID_PALETTE.primary, gameplayMuzzleOrigin: { x: aim.x, y: aim.y },
     });
   }
 
   private present(state: FirestarterState, now: number): void {
     const lance = state.lance!;
-    const angle = Math.atan2(lance.target.y - state.enemy.sprite.y, lance.target.x - state.enemy.sprite.x);
+    const muzzle = getCoopDefenseEnemyConfig(state.enemy.kind).firestarter!.muzzle;
+    const angle = resolveFirestarterAim(muzzle, state.enemy.sprite.x, state.enemy.sprite.y, lance.target.x, lance.target.y).angle;
     state.enemy.faceAngle(angle);
     state.enemy.setSpecialAction('fire-lance-charge', lance.endsAt,
       Math.min(1, (now - lance.startedAt) / (lance.endsAt - lance.startedAt)), angle);

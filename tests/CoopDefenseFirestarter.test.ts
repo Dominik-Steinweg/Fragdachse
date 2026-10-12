@@ -63,7 +63,8 @@ describe('firestarter host decisions', () => {
     f.system.hostUpdate(config.lance.telegraphMs - config.lance.commitMs - 1);
     expect(f.system.blocksDodge(f.enemy.id)).toBe(false);
     f.system.refreshPresentation(config.lance.telegraphMs - config.lance.commitMs - 1);
-    expect(vi.mocked(f.enemy.setSpecialAction).mock.lastCall?.[3]).toBeCloseTo(Math.atan2(-80, target.x));
+    const aim = enemyConfig.resolveFirestarterAim(config.muzzle, 0, 80, target.x, target.y);
+    expect(vi.mocked(f.enemy.setSpecialAction).mock.lastCall?.[3]).toBeCloseTo(aim.angle);
     f.system.hostUpdate(config.lance.telegraphMs - config.lance.commitMs);
     expect(f.system.blocksDodge(f.enemy.id)).toBe(true);
     expect(f.system.blocksRegularAttacks(f.enemy.id)).toBe(true);
@@ -72,11 +73,13 @@ describe('firestarter host decisions', () => {
     expect(f.fire).toHaveBeenCalledOnce();
     const [weapon, params] = f.fire.mock.calls[0] as any;
     expect(params).toMatchObject({ x: 0, y: 80, targetX: target.x, targetY: target.y });
-    expect(params.angle).toBeCloseTo(Math.atan2(-80, target.x));
+    expect(params.angle).toBeCloseTo(aim.angle);
+    // The shot leaves the lance tip and still passes the fixed world point.
+    expect(params.gameplayMuzzleOrigin.x).toBeCloseTo(aim.x); expect(params.gameplayMuzzleOrigin.y).toBeCloseTo(aim.y);
     const resolveHitscan = vi.fn(() => true);
     const executor = new WeaponFireExecutor({ resolveHitscan } as never);
     new AutomatedWeaponExecutionAdapter(executor, {} as never).fire(weapon, params);
-    expect(resolveHitscan.mock.calls[0][0]).toMatchObject({ range: config.lance.rangePx, startX: 0, startY: 80 });
+    expect(resolveHitscan.mock.calls[0][0]).toMatchObject({ range: config.lance.rangePx, startX: aim.x, startY: aim.y });
     expect(weapon.range).toBeGreaterThan(Math.hypot(target.x, target.y - 80));
   });
 
@@ -148,6 +151,17 @@ describe('firestarter authored and replicated contracts', () => {
       .toBe(enemyConfig.getCoopDefenseEnemyKindIndex('mortar-badger') + 1);
   });
 
+  it('aims an offset lance tip exactly through the fixed world point', () => {
+    const socket = { forwardPx: 22, sidePx: 9 };
+    for (const [tx, ty] of [[400, 0], [-300, 250], [5, -600]]) {
+      const aim = enemyConfig.resolveFirestarterAim(socket, 10, 20, tx, ty);
+      const tip = enemyConfig.resolveFirestarterMuzzle(socket, 10, 20, aim.angle);
+      expect(tip.x).toBeCloseTo(aim.x); expect(tip.y).toBeCloseTo(aim.y);
+      const miss = Math.abs(Math.cos(aim.angle) * (ty - aim.y) - Math.sin(aim.angle) * (tx - aim.x));
+      expect(miss).toBeLessThan(1e-6);
+    }
+  });
+
   it('copies nested config and rejects invalid relationships and weapon roles', () => {
     const copy = enemyConfig.resolveCoopDefenseEnemyConfigs(1)['firestarter-badger'].firestarter!;
     expect(copy).toEqual(config); expect(copy.charges).not.toBe(config.charges); expect(copy.lance).not.toBe(config.lance);
@@ -156,6 +170,8 @@ describe('firestarter authored and replicated contracts', () => {
       { ...config, lance: { ...config.lance, commitMs: config.lance.telegraphMs + 1 } },
       { ...config, lance: { ...config.lance, rangePx: NaN } },
       { ...config, fireballWeaponId: config.biteWeaponId },
+      { ...config, muzzle: { forwardPx: -1, sidePx: 0 } },
+      { ...config, muzzle: { forwardPx: 10, sidePx: NaN } },
     ]) expect(() => enemyConfig.normalizeFirestarterConfig(bad)).toThrow(/firestarter/);
   });
 

@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { ALLIED_COLOR, ALLIED_PALETTE, VOID_PALETTE } from '../config';
-import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
+import { getCoopDefenseEnemyConfig, resolveFirestarterMuzzle } from '../config/coopDefenseEnemies';
 import type { EnemyVisualSource } from '../entities/EnemyVisualSource';
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
 import { getVisibleWorldView } from '../ui/HostileBaseIndicator';
@@ -13,8 +13,6 @@ import {
   FIRESTARTER_COMBO_LIFE_S, FIRESTARTER_KIND, FIRESTARTER_LANCE_FLASH_S, FIRESTARTER_LANCE_LIFE_S,
 } from './gpu/FirestarterShader';
 
-/** Until the asset's lance socket exists, telegraph and shot leave the body edge, not its centre. */
-export const FIRESTARTER_LANCE_MUZZLE_PX = 16;
 const TELEGRAPH_HALF_WIDTH = 30;
 const LANCE_HALF_WIDTH = 48;
 
@@ -76,13 +74,11 @@ export class FirestarterRenderer {
   destroyVisual(id: number): void { this.orbs.delete(id); }
   destroyAll(): void { this.orbs.clear(); }
 
-  /** Reliable hitscan event; the trace already ends at the first blocker or fireball. */
+  /** Reliable hitscan event from the lance tip; the trace already ends at the first blocker or fireball. */
   playLance(startX: number, startY: number, endX: number, endY: number, color: number): void {
     if (this.gpuVfx?.isSuppressed()) return;
-    const angle = Math.atan2(endY - startY, endX - startX);
-    const offset = Math.min(FIRESTARTER_LANCE_MUZZLE_PX, Math.hypot(endX - startX, endY - startY) * 0.5);
     if (this.lances.length === 24) this.lances.shift();
-    this.lances.push({ sx: startX + Math.cos(angle) * offset, sy: startY + Math.sin(angle) * offset, ex: endX, ey: endY,
+    this.lances.push({ sx: startX, sy: startY, ex: endX, ey: endY,
       allied: color === ALLIED_COLOR, born: this.scene.time.now, seed: seedOf(++this.sequence) });
   }
 
@@ -170,7 +166,8 @@ export class FirestarterRenderer {
       const progress = Math.min(1, sample.progress + (now - sample.at) / config.lance.telegraphMs);
       const angle = snapshot.gaussAimAngle;
       const cos = Math.cos(angle), sin = Math.sin(angle);
-      const ax = enemy.sprite.x + cos * FIRESTARTER_LANCE_MUZZLE_PX, ay = enemy.sprite.y + sin * FIRESTARTER_LANCE_MUZZLE_PX;
+      const tip = resolveFirestarterMuzzle(config.muzzle, enemy.sprite.x, enemy.sprite.y, angle);
+      const ax = tip.x, ay = tip.y;
       const bx = ax + cos * config.lance.rangePx, by = ay + sin * config.lance.rangePx;
       const allied = snapshot.faction === 'allied';
       const commitAt = 1 - config.lance.commitMs / config.lance.telegraphMs;
