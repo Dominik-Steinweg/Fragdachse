@@ -5,8 +5,21 @@ model.formVariant is only the default. North is +Y, character-right is +X.
 The shield owns its own control ('shield', pivot at the grip between both
 hands, parented to the body) so windup/charge/recover can lower or swing it
 without touching the anatomy. Arms are separate 'left_arm'/'right_arm' parts.
-Planned clips: move, claw, windup (shield lowered aside, body crouched),
-charge (lunge), recover (exhausted, shield down).
+Clips (shield_charger_motion_v2): move, claw (shield bash), windup (shield
+swung to the left flank, body crouched), charge (run, shield aside), recover
+(exhausted, shield lifted back from marker 'raise').
+
+Texture provenance (catalog keys -> art/poc/pipeline-v2/textures/shield-charger/,
+512 px downscales of Astra/Codex image-generation candidates; prompts and source
+paths in that session's candidates/prompts.json, archived copies in
+D:/Fragdachse-render/texture-archive/shield-charger/):
+  organic       charger-fur-01.png      <- fur_01      sooty brown coat (detail value)
+  shieldFront   shield-front-02.png     <- shield_02   red planks, two iron struts (shield_06 with
+                the claw emblem was tried: top-down it only reads as pale specks)
+  shieldRim     shield-rim-02.png       <- rim_02      riveted iron band, repeats along X; partly
+                desaturated so the top edge keeps its iron contrast against the red face
+  shieldLeather charger-leather-01.png  <- leather_01  oxblood leather straps
+Picks by the lead session for the draft review; the user may still swap them.
 """
 import json
 import math
@@ -92,21 +105,31 @@ def tube_uv(ob, sides, radius):
     return ob
 
 
-def image_material(c, name, key, color, gamma=1.0, saturation=1.0):
-    """Painted albedo from an authored image on ShieldUV; the procedural colour is the fallback.
+def image_material(c, name, key, color, gamma=1.0, saturation=1.0, density=None):
+    """Painted albedo from an authored image; the procedural colour is the fallback.
 
-    Gamma < 1 lifts the scanned swatch so the shield still separates from the coat at 30 px.
+    Mapped on ShieldUV, or repeated in object space at `density` tiles per BU for
+    parts without authored UVs (straps). Gamma < 1 lifts a scanned swatch so the
+    shield still separates from the coat at 30 px.
     """
     mat = c.material(name, color)
     image = c.images.get(key)
     if image:
         nodes, links = mat.node_tree.nodes, mat.node_tree.links
-        coords = nodes.new('ShaderNodeUVMap')
-        coords.uv_map = 'ShieldUV'
         texture = nodes.new('ShaderNodeTexImage')
         texture.image = image
         texture.interpolation = 'Linear'
-        links.new(coords.outputs['UV'], texture.inputs['Vector'])
+        if density:
+            coords = nodes.new('ShaderNodeTexCoord')
+            scale = nodes.new('ShaderNodeVectorMath')
+            scale.operation = 'SCALE'
+            scale.inputs['Scale'].default_value = density
+            links.new(coords.outputs['Object'], scale.inputs[0])
+            links.new(scale.outputs['Vector'], texture.inputs['Vector'])
+        else:
+            coords = nodes.new('ShaderNodeUVMap')
+            coords.uv_map = 'ShieldUV'
+            links.new(coords.outputs['UV'], texture.inputs['Vector'])
         lift = nodes.new('ShaderNodeGamma')
         lift.inputs['Gamma'].default_value = gamma
         links.new(texture.outputs['Color'], lift.inputs['Color'])
@@ -130,7 +153,7 @@ def along(surface, points, lift):
 def tower_shield(c, mats):
     iron, edge, recess, leather = mats['iron'], mats['edge'], mats['recess'], mats['leather']
     red = image_material(c, 'Charger tower front red planks iron struts', 'shieldFront', (.36, .065, .035), .68, 1.2)
-    trim = image_material(c, 'Charger forged iron trim', 'shieldRim', (.105, .105, .11), .45)
+    trim = image_material(c, 'Charger riveted iron trim', 'shieldRim', (.105, .105, .11), .5, .45)
     bottom, top, low, high = 1.25, .95, .12, 1.86
     def surface(u, v):
         a = (u*2-1)*ARC
@@ -281,7 +304,7 @@ def build(c, spec):
     pale = c.material('Charger warm ivory crown', (.66, .60, .48), 'organic')
     tips = c.material('Charger dusty flank fur', (.25, .205, .16), 'organic', form_shading=True)
     claw = c.material('Charger horn claws', (.43, .34, .23), 'organic')
-    leather = c.material('Charger saddle brown leather', (.20, .085, .035), 'organic')
+    leather = image_material(c, 'Charger oxblood leather straps', 'shieldLeather', (.20, .06, .03), .85, density=1.6)
     seams = c.material('Charger pale leather seams', (.36, .20, .09), 'organic')
     mats = dict(
         leather=leather,

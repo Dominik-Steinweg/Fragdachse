@@ -1516,7 +1516,7 @@
         "colors": "Warmes umbrabraunes Fell mit heller Dachszeichnung, sattelbraunes Leder, ochsenblutrotes Holz bzw. rote Haut und dunkles geschmiedetes Eisen; kein Void-Lila.",
         "anatomy": "Eigene aufrechte 3D-Anatomie mit getrennten Armkontrollen; der Schild ist ein eigenes Prop an der Kontrolle 'shield' (Pivot am Griff, Kind des Körpers). Formvarianten 1 Turmschild (gewählt), 2 Rundschild, 3 Keil-Rammschild. claw = Schildstoß; windup schwenkt den Schild an die linke Flanke (Marker ready), charge läuft mit seitlichem Schild, recover hebt ihn ab Marker raise wieder an.",
         "materials": "Gemeinsame Mörser-Felltextur, enemy_craft_parts.refine und FD_FormMask mit Stärke 0,84; Holz, Eisen und Leder als technische Oberflächen. Keine Kameraneigung in der Draufsicht.",
-        "stage": "Stufe B: Form v1 (Turmschild) ausgewählt; schneller Draft mit move/claw/windup/charge/recover, Schildfront und Eisenrand aus Astra-Kandidaten shield_02/rim_01. Keine Produktionsabnahme."
+        "stage": "Stufe B: Form v1 (Turmschild) ausgewählt; schneller Draft mit move/claw/windup/charge/recover, Astra-Texturen: Schildfront shield_02, Nietenrand rim_02, Fell fur_01, Leder leather_01. Keine Produktionsabnahme."
       },
       "requiredClips": ["move", "claw", "windup", "charge", "recover"],
       "production": "reference",
@@ -1524,10 +1524,11 @@
       "model": {"formVariant": 1},
       "orthoScale": 6.24,
       "textures": {
-        "organic": "art/poc/pipeline-v2/textures/mortar-badger-fur-v1.png",
+        "organic": "art/poc/pipeline-v2/textures/shield-charger/charger-fur-01.png",
         "technical": "art/poc/pipeline-v2/textures/mortar-badger-technical-v1.png",
         "shieldFront": "art/poc/pipeline-v2/textures/shield-charger/shield-front-02.png",
-        "shieldRim": "art/poc/pipeline-v2/textures/shield-charger/shield-rim-01.png"
+        "shieldRim": "art/poc/pipeline-v2/textures/shield-charger/shield-rim-02.png",
+        "shieldLeather": "art/poc/pipeline-v2/textures/shield-charger/charger-leather-01.png"
       },
       "materialVariants": {
         "standard": {

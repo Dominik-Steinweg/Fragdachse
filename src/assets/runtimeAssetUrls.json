@@ -2602,7 +2602,7 @@
   "assets/ui/upgrades/runtime/xp-frame.webp": "assets/ui/upgrades/runtime/xp-frame.webp?v=fc88b5a29703b76e95af6897f58a7c190a5af6acad88b117056ccbf8c55e616d",
   "assets/ui/upgrades/xp-frame-v2.png": "assets/ui/upgrades/xp-frame-v2.png?v=43c81ac414ed5d2fdcc95a96b9e19149779e96662d13ba2d4c5bd430a0c378e8",
   "assets/ui/upgrades/xp-frame.png": "assets/ui/upgrades/xp-frame.png?v=dc2671323a4f1d80482ae20dc315e47ef6acf7b3bf20bd21f8e00a6b195f812d",
-  "assets/sprites/pipeline-v2/shield-charger-badger/sc-v1-draft-r2/idle-72.png": "assets/sprites/pipeline-v2/shield-charger-badger/sc-v1-draft-r2/idle-72.png?v=58a38b5d29268e2c528c629428bb3d12475d49f1e26bbdfcf0cadebe2dafe2b0",
-  "assets/sprites/pipeline-v2/shield-charger-badger/sc-v1-draft-r2/sheet-72.png": "assets/sprites/pipeline-v2/shield-charger-badger/sc-v1-draft-r2/sheet-72.png?v=91eefb08bd57a86db9215c50974da2309cdc28b022829d9117f7a610b9e6af8f",
-  "assets/sprites/enemies/enemy_shield_charger_badger.png": "assets/sprites/enemies/enemy_shield_charger_badger.png?v=58a38b5d29268e2c528c629428bb3d12475d49f1e26bbdfcf0cadebe2dafe2b0"
+  "assets/sprites/pipeline-v2/shield-charger-badger/sc-v1-draft-r3/idle-72.png": "assets/sprites/pipeline-v2/shield-charger-badger/sc-v1-draft-r3/idle-72.png?v=3073842136f8210541a1283ac1cf4411817655475c53471326707bbbdeba2ab0",
+  "assets/sprites/pipeline-v2/shield-charger-badger/sc-v1-draft-r3/sheet-72.png": "assets/sprites/pipeline-v2/shield-charger-badger/sc-v1-draft-r3/sheet-72.png?v=903229236a3535ee1ca8f57e534f2a708bdfedcca71f7505d95e12f51285de29",
+  "assets/sprites/enemies/enemy_shield_charger_badger.png": "assets/sprites/enemies/enemy_shield_charger_badger.png?v=3073842136f8210541a1283ac1cf4411817655475c53471326707bbbdeba2ab0"
 }

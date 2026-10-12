@@ -61109,7 +61109,7 @@
       "gameIds": [
         "shield-charger-badger"
       ],
-      "revision": "sc-v1-draft-r2",
+      "revision": "sc-v1-draft-r3",
       "variant": "standard",
       "sourceSize": 72,
       "textureKey": "enemy_shield_charger_badger",
@@ -61229,8 +61229,8 @@
       ],
       "runtimeContract": "sheet",
       "sheetTextureKey": "enemy_shield_charger_badger_animated",
-      "idlePath": "./assets/sprites/pipeline-v2/shield-charger-badger/sc-v1-draft-r2/idle-72.png",
-      "sheetPath": "./assets/sprites/pipeline-v2/shield-charger-badger/sc-v1-draft-r2/sheet-72.png",
+      "idlePath": "./assets/sprites/pipeline-v2/shield-charger-badger/sc-v1-draft-r3/idle-72.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/shield-charger-badger/sc-v1-draft-r3/sheet-72.png",
       "layout": {
         "frameWidth": 72,
         "frameHeight": 72,
@@ -61243,17 +61243,17 @@
         "height": 608
       },
       "hashes": {
-        "idle": "58a38b5d29268e2c528c629428bb3d12475d49f1e26bbdfcf0cadebe2dafe2b0",
-        "sheet": "91eefb08bd57a86db9215c50974da2309cdc28b022829d9117f7a610b9e6af8f"
+        "idle": "3073842136f8210541a1283ac1cf4411817655475c53471326707bbbdeba2ab0",
+        "sheet": "903229236a3535ee1ca8f57e534f2a708bdfedcca71f7505d95e12f51285de29"
       },
       "eyeAnchors": {
         "version": 1,
         "source": {
-          "revision": "sc-v1-draft-r2",
+          "revision": "sc-v1-draft-r3",
           "variant": "standard",
-          "blendSha256": "1fa20cff059f2e064a54a5217b805c4ad2ef40e3cb3fac3660bedf42ae892d6b",
-          "sheetSha256": "91eefb08bd57a86db9215c50974da2309cdc28b022829d9117f7a610b9e6af8f",
-          "idleSha256": "58a38b5d29268e2c528c629428bb3d12475d49f1e26bbdfcf0cadebe2dafe2b0"
+          "blendSha256": "06dd5cf65f4651f15671f4129410e4f598c88c077cafd41d2366314a63095087",
+          "sheetSha256": "903229236a3535ee1ca8f57e534f2a708bdfedcca71f7505d95e12f51285de29",
+          "idleSha256": "3073842136f8210541a1283ac1cf4411817655475c53471326707bbbdeba2ab0"
         },
         "frames": [
           {
