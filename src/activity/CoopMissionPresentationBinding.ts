@@ -300,7 +300,8 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     if (valid) this.applyKrakenProjection(valid);
     const enemy = valid && manager?.getCombatTargetRef(valid.boss.id)?.instance.entityGeneration === valid.boss.instance.entityGeneration
       ? manager.getEnemy(valid.boss.id) : null;
-    const pose = enemy ? { x: enemy.sprite.x, y: enemy.sprite.y, angle: enemy.getAimAngle(), claw: enemy.getAreaClawState() } : null;
+    const pose = enemy ? { x: enemy.sprite.x, y: enemy.sprite.y, angle: enemy.getAimAngle(), claw: enemy.getAreaClawState(),
+      hpRatio: enemy.getHp() / enemy.getMaxHp() } : null;
     if (enemy) enemy.sprite.setVisible(false);
     for (const egg of valid?.eggs ?? []) {
       if (manager?.getCombatTargetRef(egg.eggId)?.instance.entityGeneration === egg.entityGeneration)

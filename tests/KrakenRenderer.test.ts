@@ -224,20 +224,21 @@ describe('Kraken renderer ownership', () => {
     const joined = new KrakenRenderer(f.scene, options); joined.sync(s, pose, s.phase.gripAt + 200);
     expect(announceExit).not.toHaveBeenCalled(); expect(feedback.request).not.toHaveBeenCalled(); joined.destroy();
   });
-  it('advances land movement frames by distance and idles when the body stops', () => {
+  it.each(['water', 'land'] as const)('advances %s movement frames by distance and idles when the body stops', role => {
     const f = sceneFixture(), a = assets(), s = state();
     s.phase = { kind: 'land', startedAt: 0 }; s.bodyTargetability.mode = 'exposed'; s.tentacles = [];
+    if (role === 'water') { s.phase = { kind: 'surfaced', startedAt: 0, nextDiveAt: 20000 }; s.movement = 'water-approach'; }
     const renderer = new KrakenRenderer(f.scene, { assets: a, waterAt: () => 0, readEggPose: () => null, diagnostic: vi.fn() });
     renderer.sync(s, { x: 0, y: 0, angle: 0 }, 0);
-    const step = KRAKEN_BOSS_DEFAULTS.landMoveSpeedPxPerSec / 10;
+    const step = (role === 'land' ? KRAKEN_BOSS_DEFAULTS.landMoveSpeedPxPerSec : KRAKEN_BOSS_DEFAULTS.waterApproachSpeedPxPerSec) / 10;
     renderer.sync(s, { x: step, y: 0, angle: 0 }, 100);
-    expect(vi.mocked(a.land.frame).mock.calls.at(-1)?.[0]).toBe('move');
-    const firstFrame = vi.mocked(a.land.frame).mock.calls.at(-1)![1];
+    expect(vi.mocked(a[role].frame).mock.calls.at(-1)?.[0]).toBe('move');
+    const firstFrame = vi.mocked(a[role].frame).mock.calls.at(-1)![1];
     renderer.sync(s, { x: step * 2, y: 0, angle: 0 }, 300);
-    const secondFrame = vi.mocked(a.land.frame).mock.calls.at(-1)![1];
+    const secondFrame = vi.mocked(a[role].frame).mock.calls.at(-1)![1];
     expect(secondFrame).toBeGreaterThan(firstFrame);
     renderer.sync(s, { x: step * 2, y: 0, angle: 0 }, 400);
-    expect(vi.mocked(a.land.frame).mock.calls.at(-1)?.[0]).toBe('idle'); renderer.destroy();
+    expect(vi.mocked(a[role].frame).mock.calls.at(-1)?.[0]).toBe('idle'); renderer.destroy();
   });
   it('binds matching passes, uses exposure on land and releases the filter before its owned mask', () => {
     const f = sceneFixture(), a = asset('land'), diagnostic = vi.fn();
@@ -253,6 +254,21 @@ describe('Kraken renderer ownership', () => {
     v.destroy(); v.destroy();
     expect(s.filters.internal.list).toHaveLength(0);
     expect(s.destroy).toHaveBeenCalledTimes(1); expect(f.masks[0].destroy).toHaveBeenCalledTimes(1);
+  });
+  it('waits quietly for a cold residency lease and recovers when its paired passes arrive', () => {
+    const f = sceneFixture(), a = asset('water'), diagnostic = vi.fn(), release = vi.fn();
+    const frame = a.frame('idle', 0)!; let ready = false;
+    a.frame = vi.fn(() => null);
+    a.acquire = () => ready ? { release, pose: { ...frame, fallback: false, sourceFrame: 0,
+      sockets: {}, displaySize: 32, sourceSize: 32, pivot: a.metadata.pivot, elevation: a.metadata.elevation } } : null;
+    const v = new KrakenSpriteView(f.scene, a, () => 1, diagnostic);
+    const sample = { clip: 'idle', frame: 0 }, pose = { x: 0, y: 0, angle: 0 };
+    expect(v.show(sample, pose, 0)).toBe(false);
+    expect(v.sprite.visible).toBe(false); expect(diagnostic).not.toHaveBeenCalled();
+    expect(a.frame).not.toHaveBeenCalled(); expect(f.masks).toHaveLength(0);
+    ready = true; expect(v.show(sample, pose, 16)).toBe(true);
+    expect(v.sprite.frame.name).toBe('idle/0000'); expect(diagnostic).not.toHaveBeenCalled();
+    v.destroy(); expect(release).toHaveBeenCalledOnce();
   });
   it('reports clip unavailability once and recovers from paired resident rest frames without loading assets', () => {
     const f = sceneFixture(), a = asset('water'), original = a.frame, diagnostic = vi.fn();

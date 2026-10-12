@@ -43,6 +43,7 @@ export interface KrakenPresentationAssets {
   readonly tentacle: KrakenPresentationAsset; readonly egg: KrakenPresentationAsset;
 }
 export interface KrakenBodyPose extends KrakenPose {
+  readonly hpRatio?: number;
   readonly moving?: boolean;
   readonly locomotionTimeMs?: number;
   readonly claw?: EnemyAreaClawState;
@@ -128,7 +129,7 @@ export function sampleKrakenBody(state: KrakenState, pose: KrakenBodyPose, asset
   } else if (state.bodyAction?.kind === 'slam' && pose.claw?.attack?.attackId === state.bodyAction.attackId) {
     const action = pose.claw.attack;
     sample = timed(a, 'slam', now, action.startedAt, action.endsAt, [[action.strikeAt, 'strike'], [action.hitAt, 'impact']]);
-  } else sample = loop(a, pose.moving && land ? 'move' : 'idle', pose.moving && land ? pose.locomotionTimeMs ?? now : now);
+  } else sample = loop(a, pose.moving ? 'move' : 'idle', pose.moving ? pose.locomotionTimeMs ?? now : now);
   return { asset, sample, pose: p.kind === 'dying' ? p.terminalPose : pose, visible: krakenBodyVisible(state, now) };
 }
 export function sampleKrakenTentacle(t: KrakenTentacleState, asset: PipelineBossAsset, now: number): KrakenClipSample {
@@ -193,6 +194,9 @@ export class KrakenSpriteView {
     if (this.destroyed) return false;
     const a = this.asset.metadata;
     const lease = this.asset.acquire?.(sample.clip, sample.frame) ?? null;
+    // The residency owner reports actual load failures. A pending lease during
+    // cold entry is expected and must not raise a false visible error.
+    if (this.asset.acquire && !lease) { this.hide(); return false; }
     let frame = lease?.pose ?? this.asset.frame(sample.clip, sample.frame);
     // An intro rest fallback would expose the whole body before its authored emergence.
     if (options.requireClip && (!frame || lease?.pose.fallback)) { lease?.release(); this.hide(); return false; }
@@ -502,8 +506,9 @@ export class KrakenRenderer {
       const config = this.options.config ?? KRAKEN_BOSS_DEFAULTS;
       const elapsed = this.lastBody ? now - this.lastBody.now : 0;
       const distance = this.lastBody ? Math.hypot(pose.x - this.lastBody.pose.x, pose.y - this.lastBody.pose.y) : 0;
-      const moving = state.phase.kind === 'land' && !state.bodyAction && elapsed > 0 && elapsed < 500 && distance > .01;
-      if (moving) this.locomotionTime += distance / config.landMoveSpeedPxPerSec * 1000;
+      const moving = (state.phase.kind === 'land' || state.movement === 'water-approach')
+        && !state.bodyAction && elapsed > 0 && elapsed < 500 && distance > .01;
+      if (moving) this.locomotionTime += distance / (state.phase.kind === 'land' ? config.landMoveSpeedPxPerSec : config.waterApproachSpeedPxPerSec) * 1000;
       const render = sampleKrakenBody(state, { ...(body ?? pose), moving, locomotionTimeMs: this.locomotionTime }, this.options.assets, now, config);
       if (this.body?.asset !== render.asset) {
         this.body?.destroy(); this.body = this.view(render.asset);

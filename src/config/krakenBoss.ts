@@ -48,7 +48,8 @@ export const KrakenBossConfigSchema = v.pipe(v.strictObject({
   }),
   victory: v.literal('boss-defeated'),
   death: v.strictObject({ waterMs: positive, landMs: positive }),
-  residency: v.strictObject({ waterBudgetMiB: positive, landBudgetMiB: positive, pixelsPerDisplayPixel: v.literal(1) }),
+  residency: v.strictObject({ waterBudgetMiB: positive, landBudgetMiB: positive, pixelsPerDisplayPixel: v.literal(1),
+    landPrefetchHpRatio: v.pipe(positive, v.maxValue(1)) }),
 }), v.check(c => c.dive.submergedAtMs <= c.dive.durationMs && c.dive.vulnerableAtMs <= c.dive.surfaceDurationMs,
 'Submersion markers must fit their host clips'),
 v.check(c => c.exit.roarAfterMs < c.exit.warningMs && c.exit.gripAfterMs + c.exit.gripHoldMs < c.exit.heaveAfterMs

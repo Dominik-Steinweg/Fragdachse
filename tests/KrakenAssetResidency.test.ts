@@ -84,6 +84,21 @@ function harness(options = {}) {
 }
 
 describe('Kraken phase residency', () => {
+  it('prefetches only landing essentials, then loads attacks after exit and releases water at grip', async () => {
+    const h = harness(); await h.residency.setPhase('water').settled;
+    expect([...h.textures].some(k => k.startsWith('kraken_land'))).toBe(false);
+    const start = h.events.length;
+    await h.residency.setPhase('water', { prefetchLand: true }).settled;
+    const loaded = [...new Set(h.events.slice(start).filter(k => k.startsWith('add:kraken_land')).map(k => k.split(':')[3]))];
+    expect(loaded).toEqual(['__rest', 'ashore', 'idle', 'move']);
+    expect(h.residency.acquirePose('land', 'slam', 0, vi.fn())?.pose.fallback).toBe(true);
+    await h.residency.setPhase('ashore').settled;
+    expect(h.residency.acquirePose('land', 'slam', 0, vi.fn())?.pose.fallback).toBe(false);
+    await h.residency.setPhase('ashore', { waterBody: false }).settled;
+    expect([...h.textures].some(k => k.startsWith('kraken_water'))).toBe(false);
+    expect(h.residency.acquirePose('land', 'death', 0, vi.fn())?.pose.fallback).toBe(false);
+    h.residency.detach(); expect(h.textures.size).toBe(0);
+  });
   it('matches independently packed color/elevation pages by frame ownership, not page index', async () => {
     const assets = fixture(), asset = assets.land;
     asset.clips.find(c => c.name === 'idle')!.frames = [1, 2];

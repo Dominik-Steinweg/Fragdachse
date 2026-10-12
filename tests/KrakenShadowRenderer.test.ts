@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 const state=vi.hoisted(()=>({targets:[] as any[],shaders:[] as any[],gpus:[] as any[],quality:'high',ready:true}));
 vi.mock('phaser',()=>({BlendModes:{MULTIPLY:3},GameObjects:{Shader:class{
-  renderNode:any={};visible=false;destroy=vi.fn();constructor(...args:any[]){this.config=args[1];state.shaders.push(this);}config:any;
+  renderNode:any={};visible=false;destroy=vi.fn();textures:any[];constructor(...args:any[]){this.config=args[1];this.textures=args[6];state.shaders.push(this);}config:any;
   setDepth(){return this;}setVisible(v:boolean){this.visible=v;return this;}setPosition(){return this;}setSize(){return this;}setOrigin(){return this;}
 }}}));
 vi.mock('../src/graphics/GraphicsQuality',()=>({getGraphicsQualityProfile:()=>({level:state.quality})}));
@@ -20,7 +20,7 @@ import type { KrakenShadowMesh } from '../src/effects/kraken/KrakenLightShadowMo
 beforeEach(()=>{state.targets=[];state.shaders=[];state.gpus=[];state.quality='high';state.ready=true;});
 function fixture(){
  const receiver={revision:1,sample:()=>1,destroy:vi.fn(),world:[0,0,2000,1000],texture:{get:()=>({source:{glTexture:{}}})}};
- const clouds={sunPath:{sun:[1,0,1],strength:1,elevation:Math.PI/4}},release=vi.fn();let handoff=()=>{};
+ const clouds={tuning:{},sunPath:{sun:[1,0,1],strength:1,elevation:Math.PI/4}},release=vi.fn();let handoff=()=>{};
  const shadows={borrowFigureEnvironment:(callback:()=>void)=>{handoff=callback;return {receiver,clouds,release};}};
  const scene:any={sys:{renderer:{config:{stencil:true},shaderProgramFactory:{programs:{}},deleteProgram(){}}},add:{existing(){}},
    cameras:{main:{width:1000,height:1000,originX:0,originY:0,scrollX:0,scrollY:0,zoom:1}}};
@@ -34,7 +34,7 @@ it('retries shader compilation, caches still poses and invalidates on receiver c
  state.ready=true;f.update();expect(state.targets[0].draws).toBe(2);f.update();expect(state.targets[0].draws).toBe(2);
  f.receiver.revision++;f.update();expect(state.targets[0].draws).toBe(3);
  f.clouds.sunPath.sun[0]=-1;f.update();expect(state.targets[0].draws).toBe(4);
- expect(state.gpus[0].draw).toHaveBeenCalledTimes(8);f.renderer.destroy();
+ expect(state.gpus[0].draw).toHaveBeenCalledTimes(16);f.renderer.destroy();
 });
 it('culls projected bounds and releases every own resource before rebinding after World handoff',()=>{
  const f=fixture();f.sprite.x=1200;f.update();expect(f.renderer.inspect().visible).toBe(true);
@@ -57,4 +57,16 @@ it('streams successive mesh poses without creating another shader or GPU allocat
  f.renderer.update(f.sprite,{...f.mesh,id:'next-pose'},100,40,0,'land');
  expect(state.gpus).toHaveLength(1);expect(state.gpus[0].updateGeometry).toHaveBeenCalledTimes(2);
  expect(state.gpus[0].destroy).not.toHaveBeenCalled();f.renderer.destroy();
+});
+
+it('keeps ground-mesh contact at night for both bodies, using the same allocation', () => {
+ const f=fixture();f.clouds.sunPath.strength=0;f.update('water');
+ expect(f.renderer.inspect().meshContact).toBe(true);
+ expect(state.gpus[0].draw).toHaveBeenCalledTimes(2); // ground union, no directional mask
+ expect(state.targets).toHaveLength(6);
+ f.update('land');expect(state.gpus).toHaveLength(1);expect(state.targets).toHaveLength(6);
+ const uniforms:Record<string,unknown>={};state.shaders[0].config.setupUniforms((name:string,value:unknown)=>uniforms[name]=value);
+ expect((uniforms.uStrength as number[])[0]).toBe(0);expect((uniforms.uStrength as number[])[1]).toBeGreaterThan(0);
+ expect(uniforms.uMeshContact).toBe(1);f.renderer.destroy();
+ for(const t of state.targets)expect(t.destroy).toHaveBeenCalledOnce();
 });

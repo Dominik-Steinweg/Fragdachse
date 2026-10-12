@@ -349,7 +349,7 @@ export const COOP_DEFENSE_ENEMY_CONFIGS: Record<CoopDefenseEnemyKind, CoopDefens
  */
 export const COOP_DEFENSE_ENEMY_KINDS: readonly CoopDefenseEnemyKind[] = Object.keys(COOP_DEFENSE_ENEMY_REGISTRY);
 
-/** Diagnostic-only activation. Production registration follows selected atlas promotion (AP2b).
+/** Diagnostic-only activation; selected boss atlases are bound by the presentation residency.
  * __WHITE is an existing engine texture, never a legacy boss image/preload URL. */
 export function registerKrakenDiagnosticEnemies(config: import('./krakenBoss').KrakenBossConfig): () => void {
   const bossKind = 'abyssal-kraken', eggKind = config.eggs.enemyKind;

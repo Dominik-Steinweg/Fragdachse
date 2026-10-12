@@ -523,7 +523,7 @@ Browserprüfung bleibt gemäß `AGENTS.md` opt-in. Diese Seite erteilt keine pau
 Zug-Abnahme train8: `dev.run({action:"trainShowcase",park:"center",focus:"center",zoom:2.2}); await dev.whenReady();` dann `dev.run({action:"trainExplosion"});` (Zug sofort weg, Splitterzerfall vor der Landung; Rauch/Glut ca. 15 s, kein liegendes Wrack).
 Fahrt: `dev.run({action:"trainShowcase",focus:"center",zoom:2.2,move:true,speedPxPerSec:120});` – Nacht über `options.values.timeOfDay:0`, Tag `720`; Warmlicht benötigt den TrainVfxPorts-Lichtanschluss der World-Komposition.
 
-## Kraken-Mission (AP2a)
+## Kraken-Mission (AP2b / Live-Prüfung)
 
 Im vorhandenen Dev-Szenario-Einstieg startet der folgende Befehl die echte Host-Coop-Mission
 auf `kraken-abyss-lab`, inklusive Habitat, Boss-Intro, Tauchzyklus, Tentakeln und Brut:
@@ -533,14 +533,29 @@ await devScenario.run({ action: 'krakenMission' });
 await devScenario.whenReady();
 // Intro ueberspringen und aktuelle HP setzen; Max-HP bleiben erhalten (Phase 2 bei <= 50 %).
 await devScenario.run({ action: 'krakenMission', skipIntro: true, hp: 4000 });
+// HP im laufenden Kampf ändern, ohne Intro oder Welt neu zu starten.
+await devScenario.run({ action: 'krakenHp', hp: 7680 });
+// Figurenlicht/Schatten bei einer reproduzierbaren Sonne; reset hebt den Override auf.
+await devScenario.run({ action: 'figureSun', azimuth: 135, elevation: 28 });
+await devScenario.run({ action: 'figureSun', reset: true });
 ```
 
 Der Einstieg aktiviert die vorbereiteten Boss-/Ei-Registry-Eintraege nur fuer diese Diagnose.
-Die Kampagnenregistry bleibt unveraendert. Vor dem ausgewaehlten Produktionsimport meldet die
-Darstellung fehlende Atlanten und zeigt die autoritative Angriffsgeometrie; sie laedt keine
-Bossbilder ueber den alten Enemy-Preload. Die vollstaendige Koerper-/Ei-Darstellung folgt mit AP2b.
+Die Kampagnenregistry bleibt unveraendert. Ausgewählte Körper-/Teilatlanten werden über die
+Activity-Residency geladen; Materiallicht und Mesh-/Kontaktschatten sind aktiv. Ab der authored
+HP-Schwelle werden Land-Restpose, Ausstieg, Idle und Bewegung vorgeladen. Weitere Landclips folgen
+beim Ausstieg; mit der Greifpose werden die Wasserseiten freigegeben. Tatsächlich genutztes
+Schwimmen bleibt während der Wasserphase resident. Ladefehler erscheinen im HUD-Meldungskanal.
+`status().krakenResidency` enthält Hostphase/-anker, HP, Ladefehler und gemessene Phasen-Peaks
+(Atlanten, Renderziele, GPU-Meshpuffer); der CPU-Meshcache wird separat ausgewiesen.
 Das bisherige `krakenReview` bleibt bei eingefrorener Mission nutzbar.
 
 Der bestehende Dev-Host ist eine isolierte `local-only`-Session; externe Client-Joins werden dort
 nicht angeboten. Join/Resume und der Kraken-Slice werden durch die vorhandenen FakeNetwork-
 Integrationstests geprueft. Ein interaktiver Mehrspieler-Abnahmelauf gehoert zu AP3.
+
+Die vorhandene Playwright-Prüfung wird über `node scripts/visual/kraken-live.mjs --mode=live`
+gestartet (`--elevation=45`, `--quality=medium|low` optional). `--mode=shadow --run=kraken-v12b`
+misst gepaarte Aufnahmen mit/ohne Krakenschatten im Ring außerhalb der Körper-Silhouette.
+Voraussetzung: ausdrücklich erlaubter Browserlauf, `npm run dev:browser` und HTTP 200 auf 8090.
+Aufnahmen, Kontaktbögen und Zustandsprotokolle liegen unter `build/kraken-live/<timestamp>/`.

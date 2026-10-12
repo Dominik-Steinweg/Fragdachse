@@ -25,7 +25,7 @@ describe('Kraken pilot spatial contracts', () => {
     expect(b[0]).toBeCloseTo(780-258/Math.tan(e)-4);expect(b[0]+b[2]).toBeCloseTo(824);
     expect(b[1]).toBeCloseTo(86);expect(b[3]).toBeCloseTo(28);
   });
-  it('releases intro/ashore clips between phases and only opts into full land prefetch', () => {
+  it('releases intro/ashore clips between phases and limits early land prefetch to landing poses', () => {
     const plan=(phase:Parameters<typeof krakenResidencyPlan>[0],options={})=>{
       const p=krakenResidencyPlan(phase,options);return [...p.required,...p.clips].map(v=>v.join('/'));
     };
@@ -34,6 +34,8 @@ describe('Kraken pilot spatial contracts', () => {
     expect(plan('ashore')).toContain('land/ashore');expect(plan('land')).not.toContain('land/ashore');
     expect(plan('land',{activeEggs:false}).some(v=>v.startsWith('egg/'))).toBe(false);
     expect(plan('water').some(v=>v.startsWith('land/'))).toBe(false);
-    expect(plan('water',{prefetchLand:true})).toContain('land/death');expect(plan('dead')).toEqual([]);
+    expect(plan('water',{prefetchLand:true})).toContain('land/ashore');
+    expect(plan('water',{prefetchLand:true})).not.toContain('land/death');
+    expect(plan('ashore',{waterBody:false})).toContain('land/death');expect(plan('dead')).toEqual([]);
   });
 });

@@ -26,7 +26,7 @@ export function krakenLightShadowOptions(raw: Record<string, unknown>, previous 
     if (!(key in defaults)) throw Error(`Unknown lighting pilot option: ${key}`);
     Object.assign(o, { [key]: value });
   }
-  if (!/^(?:kraken-ls-pilot-\d+|kraken-v\d+)$/.test(o.pilot) || !/^abyssal-kraken(?:-land|-tentacle|-egg)?\/[\w-]+$/.test(o.pose)) throw Error('Invalid pilot/pose');
+    if (!/^(?:kraken-ls-pilot-\d+|kraken-v\d+[a-z]?)$/.test(o.pilot) || !/^abyssal-kraken(?:-land|-tentacle|-egg)?\/[\w-]+$/.test(o.pose)) throw Error('Invalid pilot/pose');
   if (![o.azimuth, o.elevation].every(Number.isFinite) || o.elevation <= 0 || o.elevation > 90
     || o.exposure !== null && (!Number.isFinite(o.exposure) || o.exposure <= 0 || o.exposure > 4)) throw Error('Invalid light/exposure');
   if (typeof o.night !== 'boolean' || typeof o.shore !== 'boolean' || !['high','medium','low'].includes(o.quality)) throw Error('Invalid quality/shore/night');

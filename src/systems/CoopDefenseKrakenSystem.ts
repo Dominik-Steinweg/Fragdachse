@@ -1,7 +1,7 @@
 import type { CombatAreaAttackPort } from '../combat/CombatAreaAttack';
 import type { BossTargetRef, CombatPartIdentity } from '../combat/CombatPartContact';
 import type { KrakenBossConfig } from '../config/krakenBoss';
-import { krakenExitDistance } from './CoopDefenseKrakenMotion';
+import { krakenExitDistance, krakenExitShoreDistance } from './CoopDefenseKrakenMotion';
 import { KrakenTentacleTargets } from '../entities/KrakenTentacleTargets';
 import type { EnemyAreaClawAttack, EnemyAreaClawEvent, EnemyAreaClawState, EnemyClawSlot } from './EnemyClawAttack';
 import type { CoopDefenseKrakenBroodSystem } from './CoopDefenseKrakenBroodSystem';
@@ -49,6 +49,7 @@ export class CoopDefenseKrakenSystem {
   private exitIndex = 0;
   private exitLength = 0;
   private exitTravelled = 0;
+  private exitMotion: KrakenBossConfig['exit'] | null = null;
   private lunge: { from: Point; distance: number; stopped: boolean } | null = null;
   private nextExitRetry = 0;
   private blockedSince: number | null = null;
@@ -171,7 +172,7 @@ export class CoopDefenseKrakenSystem {
     for (const p of this.parts.values()) this.deps.habitat.release(p.lane.reservationId);
     this.parts.clear(); this.contacts.clear(); this.throws = []; this.bodyProgress = null; this.lunge = null;
     if (this.exit) this.deps.habitat.release(this.exit.reservationId);
-    this.exit = null; this.blockedSince = null; this.diagnosticSent = false;
+    this.exit = null; this.exitMotion = null; this.blockedSince = null; this.diagnosticSent = false;
     if (old) this.deps.publish.publish(null);
   }
 
@@ -433,9 +434,21 @@ export class CoopDefenseKrakenSystem {
     let previous: Point = this.lastPose, length = 0;
     for (const p of this.exit.path) { length += Math.hypot(p.x - previous.x, p.y - previous.y); previous = p; }
     this.exitLength = length; this.exitTravelled = 0;
+    const gripDistance = krakenExitShoreDistance(this.lastPose, this.exit.path,
+      point => this.deps.canMove(point, point, 'water-approach'), this.config.waterShoreDistancePx);
+    this.exitMotion = c;
+    let approachDelay = 0;
+    if (gripDistance !== null && length > 0) {
+      const gripDistanceRatio = Math.min(1, gripDistance / length);
+      const heaveDistanceRatio = gripDistanceRatio + (1 - gripDistanceRatio)
+        * (c.heaveDistanceRatio - c.gripDistanceRatio) / (1 - c.gripDistanceRatio);
+      this.exitMotion = { ...c, gripDistanceRatio, heaveDistanceRatio };
+      // A distant corridor must be approached by swimming before the fixed grip/pull sequence.
+      approachDelay = Math.max(0, gripDistance / this.config.waterApproachSpeedPxPerSec * 1000 - c.gripAfterMs);
+    }
     s.phase = { kind: 'ashore', corridorId: this.exit.corridorId, startedAt: now, moveAt,
-      gripAt: moveAt + c.gripAfterMs, heaveAt: moveAt + c.heaveAfterMs,
-      endsAt: moveAt + c.durationMs, recoveryEndsAt: moveAt + c.durationMs + c.recoveryMs, blocked: false };
+      gripAt: moveAt + c.gripAfterMs + approachDelay, heaveAt: moveAt + c.heaveAfterMs + approachDelay,
+      endsAt: moveAt + c.durationMs + approachDelay, recoveryEndsAt: moveAt + c.durationMs + c.recoveryMs + approachDelay, blocked: false };
     this.targetability('protected', now); this.move('locked', null);
     this.blockedSince = null;
   }
@@ -457,7 +470,7 @@ export class CoopDefenseKrakenSystem {
     const facing = this.exit.path.slice(this.exitIndex).find(q => Math.hypot(q.x - entity.x, q.y - entity.y) > 1);
     if (facing) this.facePoint(entity, facing, dt);
     if (now < p.moveAt) { this.move('locked', null); return; }
-    const desired = this.exitLength * krakenExitDistance(p, now, this.config.exit);
+    const desired = this.exitLength * krakenExitDistance(p, now, this.exitMotion ?? this.config.exit);
     let position: Point = entity, remaining = Math.max(0, desired - this.exitTravelled), index = this.exitIndex;
     while (index < this.exit.path.length) {
       const waypoint = this.exit.path[index], distance = Math.hypot(waypoint.x - position.x, waypoint.y - position.y);

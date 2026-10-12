@@ -6,6 +6,7 @@ import type { CameraFeedbackController } from '../../effects/camera/CameraFeedba
 import { KrakenRenderer, type KrakenPresentationAssets } from '../../effects/kraken/KrakenRenderer';
 import { KrakenIntroRenderer } from '../../effects/kraken/KrakenIntroRenderer';
 import { KRAKEN_RISE_INTRO } from '../../config/bossIntros';
+import { KRAKEN_BOSS_DEFAULTS } from '../../config/krakenBoss';
 import * as Phaser from 'phaser';
 import type { CenterHUD } from '../../ui/CenterHUD';
 import { CoopDefenseObjectiveAnnouncement } from '../../ui/CoopDefenseObjectiveAnnouncement';
@@ -87,7 +88,12 @@ export class CoopMissionPresentationInfrastructure {
       return waterModel!.sample(x - metrics.offsetX, y - metrics.offsetY);
     });
     const diagnostic = (message: string) => console.warn('[Kraken presentation]', message);
-    this.krakenResidency = new KrakenPresentationResidency(this.scene, diagnostic, () => (this.kraken?.gpuBytes ?? 0) + (this.krakenIntro?.gpuBytes ?? 0));
+    this.krakenResidency = new KrakenPresentationResidency(this.scene, message => {
+      diagnostic(message);
+      this.objectiveAnnouncements.enqueue({ id: 'kraken-assets:' + message, topic: 'kraken-assets',
+        kicker: 'Abgrundkrake', title: 'Darstellung konnte nicht geladen werden', detail: message,
+        tone: 'negative', priority: 100, holdMs: 6000 });
+    }, () => (this.kraken?.gpuBytes ?? 0) + (this.krakenIntro?.gpuBytes ?? 0));
     const assets = input.krakenAssets ?? this.krakenResidency.assets;
     this.kraken = new KrakenRenderer(this.scene, { assets, waterAt, diagnostic, shadows: input.renderers.shadow,
       feedback: input.cameraFeedback,
@@ -175,7 +181,11 @@ export class CoopMissionPresentationInfrastructure {
           if (this.destroyed) return;
           if (state) this.krakenResidency?.setPhase(state.phase.kind === 'ashore' ? 'ashore'
             : state.phase.kind === 'land' || (state.phase.kind === 'dying' && state.phase.asset === 'land') ? 'land'
-            : state.phase.kind === 'removed' ? 'dead' : state.phase.kind === 'intro' ? 'intro' : 'water');
+            : state.phase.kind === 'removed' ? 'dead' : state.phase.kind === 'intro' ? 'intro' : 'water', {
+              prefetchLand: body?.hpRatio !== undefined && body.hpRatio <= KRAKEN_BOSS_DEFAULTS.residency.landPrefetchHpRatio,
+              waterMove: state.movement === 'water-approach',
+              waterBody: state.phase.kind !== 'ashore' || now < state.phase.gripAt,
+            });
           this.kraken?.sync(state, body, now);
         },
         applyKrakenClaw: (event, now) => { if (!this.destroyed) this.kraken?.applyAreaClaw(event, now); },

@@ -5,7 +5,7 @@ import { packAtlas } from './atlas-v2.mjs';
 import { resizeMaster } from './export.mjs';
 
 const revision = process.argv[2];
-if (!/^kraken-v\d+$/.test(revision ?? '')) throw Error('Supply a production Kraken revision');
+if (!/^kraken-v\d+[a-z]?$/.test(revision ?? '')) throw Error('Supply a production Kraken revision');
 const selectedId = process.argv[3];
 if (selectedId && !['abyssal-kraken', 'abyssal-kraken-land', 'abyssal-kraken-tentacle', 'abyssal-kraken-egg'].includes(selectedId)) throw Error('Unknown Kraken review asset');
 const root = path.resolve('art/poc/pipeline-v2/runs', revision), assets = [];
@@ -17,6 +17,7 @@ for (const [role, id, clips] of [
   ['egg', 'abyssal-kraken-egg', ['idle', 'hatch']],
 ]) {
   if (selectedId && id !== selectedId) continue;
+  if (!selectedId && !await fs.access(path.join(root, id)).then(() => true, () => false)) continue;
   const folder = path.join(root, id, 'standard'), e = JSON.parse(await fs.readFile(path.join(folder, 'export.json'), 'utf8'));
   const m = e.manifest, size = Math.round(m.targetSize * (m.displayScale ?? 1)), material = e.materialPass;
   const asset = { id, role, size, canvasWorld: size, worldPxPerBU: material.worldPxPerBU, pivot: m.pivot,

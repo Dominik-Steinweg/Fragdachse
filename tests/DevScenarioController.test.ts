@@ -120,7 +120,32 @@ describe('Dev scenario automation lifecycle', () => {
     controller.afterHostFrame();
     expect(controller.clock.paused).toBe(true);
     expect(controller.config.freezeMission).toBe(false);
+    expect(api.run({ action: 'krakenHp', hp: 7000 })).toMatchObject({ ok: true });
+    expect(krakenMission.hp).toHaveBeenLastCalledWith(7000);
+    expect(krakenMission.start).toHaveBeenCalledOnce();
     expect(api.run({ action: 'krakenMission', hp: 0 })).toMatchObject({ ok: false });
+  });
+  it('clears a figure-sun override when the diagnosis controller ends', () => {
+    enter(); controller.afterHostFrame();
+    const setFigureReviewSun = vi.fn();
+    (controller as any).runtime.getScenarioLightingTargets = () => ({ sunlight: { setFigureReviewSun }, enemyReadability: { getDiagnostics: () => ({}) } });
+    controller.setFigureSun({ azimuth: 135, elevation: 28, strength: 1 });
+    controller.destroy();
+    expect(setFigureReviewSun).toHaveBeenLastCalledWith(null);
+  });
+  it('reports mission termination before another visual-test step can be requested', () => {
+    enter(); controller.afterHostFrame();
+    (controller as any).runtime.isMatchTerminated = () => true;
+    expect(controller.snapshot()).toMatchObject({ ready: false, terminated: true });
+    expect(window.devScenario!.run({ action: 'settle', frames: 1 })).toMatchObject({ ok: false });
+  });
+  it('keeps termination observable after the finished round returned to the lobby', () => {
+    enter(); controller.afterHostFrame();
+    host.phase = 'LOBBY'; host.started = false;
+    controller.afterHostFrame();
+    expect(controller.snapshot()).toMatchObject({ ready: false, terminated: true });
+    controller.start(defaultScenario());
+    expect(controller.snapshot()).toMatchObject({ terminated: false });
   });
   it('routes the readability recipe and both terrain stations through the public API',()=>{
     const start=vi.spyOn(controller,'start').mockImplementation(()=>{});

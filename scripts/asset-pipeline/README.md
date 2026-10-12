@@ -432,7 +432,7 @@ Export → Sichtabnahme → Selection → Import bleiben getrennte Schritte. Ers
 die vier `standard`-Varianten auswählen; für `kraken-v11b` sind die nominalen Canvasauflösungen
 384 (Wasser), 432 (Land), 448 (Tentakel) und 64 (Ei). Die Selection bindet Quellen und Atlasbytes;
 der Import prüft Hashes, Frame-/Passzuordnung, Sockets und RGBA8-Budgets vor dem ersten Kopieren.
-Er publiziert ausschließlich Color-/Elevation-Atlanten, keine Idle-/Sheet-Kopie und keine PoC-URL.
+Er publiziert die deklarierten Color-/Elevation-/Emission-Atlanten und Mesh-Posen, keine Idle-/Sheet-Kopie und keine PoC-URL.
 `targetSize`, `displayScale` und `sourceSize = round(targetSize * displayScale)` bleiben explizit.
 
 ```powershell
@@ -443,6 +443,22 @@ node scripts/asset-pipeline/export.mjs select art/poc/pipeline-v2/runs/kraken-v1
 node scripts/asset-pipeline/export.mjs select art/poc/pipeline-v2/runs/kraken-v11b/abyssal-kraken-egg standard 64 "User-Abnahme kraken-v11b"
 node scripts/asset-pipeline/import-runtime.mjs kraken-v11b abyssal-kraken abyssal-kraken-land abyssal-kraken-tentacle abyssal-kraken-egg
 ```
+
+Ein Teilimport ersetzt nur die genannten IDs. Für die freigegebene Kombination aus v12b-Körpern
+und bereits importierten v12-Teilen bleiben Tentakel und Ei unverändert:
+
+```powershell
+node scripts/asset-pipeline/export.mjs select art/poc/pipeline-v2/runs/kraken-v12b/abyssal-kraken standard 384 "P11-Mandat: v12b Wasser importieren; finale Sichtprüfung Opus"
+node scripts/asset-pipeline/export.mjs select art/poc/pipeline-v2/runs/kraken-v12b/abyssal-kraken-land standard 432 "P11-Mandat: v12b Land importieren; finale Sichtprüfung Opus"
+node scripts/asset-pipeline/import-runtime.mjs kraken-v12b abyssal-kraken abyssal-kraken-land
+npm run assets:runtime
+```
+
+Die Revision jedes Asset-Eintrags ist maßgeblich; das Manifest kann mehrere Revisionen enthalten.
+Vor einer Aufnahme im bereits laufenden Dev-Server die Runtime-URL-Hashes mit `assets:runtime`
+aktualisieren; `npm run build` führt diesen Schritt ebenfalls aus.
+Materialpässe müssen die versionierte Normalen-Semantik deklarieren. Ein älterer skalarer
+Elevation-Pass darf nicht als gepackte Normalen interpretiert werden.
 
 Für einen isolierten Trockenlauf denselben Import um `--output-root <neues-Verzeichnis>` ergänzen:
 dort entstehen `pipelineAssets.json` und `public/assets/...` nur für die angeforderten Assets.
@@ -456,8 +472,10 @@ liegen im Importer; es gibt keine zweite Land-Enemy-ID. Tentakel und Ei bleiben 
 nicht über dessen Dateinamen-Fallback geladen werden.
 
 Residency: `intro` lädt zuerst Restposen, dann Intro/Wasserzyklus/Teile; `water` behält
-Zyklus/Tentakel/Eier, entfernt Intro und lädt Land nur auf Wunsch und innerhalb des Budgets vor.
-`ashore` lädt Land priorisiert; alte Seiten bleiben ausschließlich durch aktive Pose-Leases resident.
+Zyklus/Tentakel/Eier und entfernt Intro. Ab `landPrefetchHpRatio` werden Land-`__rest`, `ashore`,
+`idle` und `move` vorgeladen; ein benutzter Wasser-Move-Clip bleibt für weitere Anläufe resident.
+`ashore` lädt Landangriffe nach und hält Wasser bis zum Griffwechsel; Landtod folgt danach.
+Alte Seiten bleiben ausschließlich durch aktive Pose-Leases resident.
 `land` (einschließlich Landtod) entfernt Wasser/Tentakel/Ashore und behält Land plus aktive Eier.
 `dead` bedeutet Ende der terminalen Darstellung; `detach()` beendet den Scope vollständig.
 

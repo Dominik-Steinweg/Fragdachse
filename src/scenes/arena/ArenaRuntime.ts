@@ -721,7 +721,9 @@ export class ArenaRuntime {
     const residency = this.krakenPresentation?.inspectKrakenResidency();
     const runtime = this.flow.getCoopMissionRuntime(), state = runtime?.kraken?.system.getState();
     const body = state ? runtime?.enemyManager?.getEnemy(state.boss.id) : null;
-    return residency ? { ...residency, hostPhase: state?.phase ?? null,
+      return residency ? { ...residency, hostNow: bridge.getSynchronizedNow(), hostPhase: state?.phase ?? null,
+        state: state ?? null, hp: body?.getHp() ?? null, maxHp: body?.getMaxHp() ?? null,
+        claw: body?.getAreaClawState() ?? null,
       hostPosition: body ? { x: body.sprite.x, y: body.sprite.y } : null } : null;
   }
 

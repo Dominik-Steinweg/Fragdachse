@@ -108,7 +108,7 @@ describe('CoopMissionPresentationBinding', () => {
     const apply = vi.fn(), hide = vi.fn(), releaseClaw = vi.fn(), releaseHit = vi.fn();
     const localTarget = { ...state.boss, scope: { worldRevision: 1, runtimeGeneration: 99 } };
     const enemy = { sprite: { x: 1, y: 2, setVisible: hide }, getAimAngle: () => 0,
-      getAreaClawState: () => ({ revision: 0, attack: null }), setVulnerable() {} };
+      getAreaClawState: () => ({ revision: 0, attack: null }), getHp: () => 60, getMaxHp: () => 100, setVulnerable() {} };
     const manager = { getCombatTargetRef: () => localTarget, applyKrakenState: apply, getEnemy: () => enemy,
       getAllEnemies: () => [], setSpawnEffectSuppressor() {}, applySnapshot() {}, updateClientInterpolation() {} };
     f.runtime.setEnemyManager(manager as never);
@@ -121,6 +121,7 @@ describe('CoopMissionPresentationBinding', () => {
     expect(apply).toHaveBeenCalledWith({ ...state, boss: localTarget });
     f.binding.sync(16, true);
     expect(render.mock.calls[0][0]).toBe(state); // wire/part identities are not rewritten
+    expect(render.mock.calls[0][1].hpRatio).toBe(.6);
     expect(hide).toHaveBeenCalledWith(false);
     f.binding.detach(); f.binding.detach();
     expect(releaseClaw).toHaveBeenCalledOnce(); expect(releaseHit).toHaveBeenCalledOnce();

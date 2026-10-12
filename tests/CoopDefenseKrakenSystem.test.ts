@@ -37,6 +37,26 @@ function setup() {
 }
 
 describe('Kraken host owner', () => {
+  it('reaches the shore before grip even when an authored corridor starts behind the swimming body', () => {
+    const coarse = setup(), fine = setup();
+    for (const f of [coarse, fine]) {
+      f.entity.x = 100; f.system.start(boss, 'pond', 0, 0);
+      f.deps.canMove = (_from, to, mode) => mode !== 'water-approach' || to.x < 220;
+      f.entity.hp = 40; f.tick(1);
+    }
+    const p = coarse.system.getState()!.phase; if (p.kind !== 'ashore') throw Error();
+    expect(p.gripAt - p.moveAt).toBeGreaterThan(coarse.config.exit.gripAfterMs);
+    for (let t = 17; t < p.gripAt; t += 17) fine.tick(t);
+    fine.tick(p.gripAt); coarse.tick(p.gripAt);
+    expect(coarse.entity.x).toBeCloseTo(220 - coarse.config.waterShoreDistancePx, 1);
+    expect(fine.entity.x).toBeCloseTo(coarse.entity.x, 6);
+    const grip = coarse.entity.x;
+    coarse.tick(p.gripAt + coarse.config.exit.gripHoldMs);
+    expect(coarse.entity.x).toBeCloseTo(grip, 6);
+    coarse.tick(p.recoveryEndsAt);
+    expect(coarse.entity.x).toBeCloseTo(300, 6);
+    expect(coarse.system.getState()?.phase.kind).toBe('land');
+  });
   it('completes a diagonal exit at 60 Hz despite subpixel distance roundoff', () => {
     const f = setup();
     const path = [{ x: 1136, y: 720 }, { x: 1392, y: 1008 }, { x: 1392, y: 1264 }];
