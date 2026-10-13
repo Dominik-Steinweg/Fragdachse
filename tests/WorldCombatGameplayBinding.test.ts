@@ -734,6 +734,59 @@ describe('WorldCombatGameplayBinding turret fire wiring', () => {
     fixture.binding.destroy();
   });
 
+  it('lets player turrets in coop attack the nearest exposed face of a hostile base, never base-owned or control turrets', () => {
+    const player = { id: 'builder', x: 0, y: 0, active: true };
+    const playerManager = {
+      getAllPlayers: () => [player] as unknown as PlayerEntity[],
+      getPlayer: (id: string) => id === player.id ? player as unknown as PlayerEntity : undefined,
+    } as unknown as PlayerManager;
+    const metrics = resolveActiveArenaWorldMetrics();
+    // L-förmige Basis rechts vom Turm; ihr Mittelpunkt liegt weit hinter der nahen Westwand.
+    const base = {
+      id: 'hostile-base',
+      isDamageable: () => true,
+      isInert: () => false,
+      getHp: () => 100,
+      getSpec: () => ({ cells: [{ gridX: 14, gridY: 10 }, { gridX: 15, gridY: 10 }, { gridX: 16, gridY: 10 }, { gridX: 16, gridY: 11 }] }),
+    } as unknown as BaseEntity;
+    const baseManager = methodBag({
+      getBases: () => [base],
+      getBasesByFaction: (faction: string) => faction === 'hostile' ? [base] : [],
+      getObstacleGeneration: () => 1,
+      getTurrets: () => [],
+      getBase: () => undefined,
+      getObstacleRectangles: () => [],
+    }) as unknown as BaseManager;
+    const run = (constructionId: 'rocket_turret' | 'gravity_turret', ownership: 'guest-session' | 'base-owned', coop: boolean) => {
+      const placement = createPlacement(playerManager);
+      expect(placement.materializePersistentPlaceable(COOP_DEFENSE_CONSTRUCTIONS[constructionId],
+        10, 10, 0, ownership === 'base-owned' ? 'base' : player.id, 0xff8a3d, ownership)).not.toBeNull();
+      const combatSystem = methodBag({
+        observeEnemyDamageCommitted: vi.fn(() => () => {}),
+        getCombatScope: vi.fn(() => ({ worldRevision: 1, runtimeGeneration: 1 })),
+        isAlive: vi.fn(() => true), isBurrowed: vi.fn(() => false), canDamageTarget: vi.fn(() => true),
+        hasClearLineOfFire: vi.fn(() => true), hasLineOfSight: vi.fn(() => true),
+        captureWorldDamageSource: vi.fn(() => ({})), canDamageStructure: vi.fn(() => true),
+      }) as unknown as CombatSystem;
+      const fixture = createFixture({ coop, placementSystem: placement, players: [player], enemies: [], baseManager, combatSystem });
+      fixture.binding.systems?.turret.hostUpdate(0, UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPORES);
+      const calls = fixture.projectileSpawn.spawnProjectile.mock.calls;
+      fixture.binding.destroy();
+      return calls;
+    };
+
+    const shots = run('rocket_turret', 'guest-session', true);
+    expect(shots).toHaveLength(1);
+    // Ziel ist der nächste Punkt der Westwand auf Turmhöhe, nicht der ferne Mittelpunkt.
+    const { origin, provenance } = shots[0][0] as ProjectileSpawnRequest;
+    expect(origin.angle).toBeCloseTo(0, 10);
+    expect(origin.y).toBeCloseTo(metrics.offsetY + 10 * CELL_SIZE + CELL_SIZE / 2, 6);
+    expect(provenance).toMatchObject({ attributionId: player.id, sourceSlot: 'utility' });
+    expect(run('rocket_turret', 'guest-session', false)).toHaveLength(0);
+    expect(run('rocket_turret', 'base-owned', true)).toHaveLength(0);
+    expect(run('gravity_turret', 'guest-session', true)).toHaveLength(0);
+  });
+
   it('fires a hostile base turret with player homing targets through the same path', () => {
     const player = { id: 'defender', x: 100, y: 0, active: true };
     const fixture = createFixture({

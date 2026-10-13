@@ -125,6 +125,8 @@ describe('turret fire sources', () => {
     expect(buff).toHaveBeenCalledWith(turret.x, turret.y);
     expect(score.mock.calls.some(([source]) => source.id === COPY_ID && source.identityId === turret.id)).toBe(true);
     expect(f.angles.mock.calls.map(([source]) => source.id)).toEqual([COPY_ID]);
+    // Konsumenten des Konstruktionsbestands (Bemannung, Injektor, Fernsteuerung) sehen keine Kopie.
+    expect(f.system.getTurrets()).toEqual([turret]);
   });
 
   it('hands the sequence back to the original when the projection ends', () => {

@@ -107,6 +107,13 @@ import { EnergyShieldSystem as ConcreteEnergyShieldSystem } from '../systems/Ene
 import { ShieldBuffSystem as ConcreteShieldBuffSystem } from '../systems/ShieldBuffSystem';
 import { TimeBubbleSystem as ConcreteTimeBubbleSystem } from '../systems/TimeBubbleSystem';
 import { TurretSystem as ConcreteTurretSystem, toLocalTurretFireSource } from '../systems/TurretSystem';
+import { computeExposedBaseFaces, ExposedBaseFaceCache, rankBaseAimPoints } from '../systems/TurretBaseTargeting';
+
+/**
+ * Budget der Basis-Zielstufe je Turm und Suche: so viele nächstgelegene Außenflächen prüft das
+ * TurretSystem höchstens per Schusslinie. Leistungsgrenze, kein Balancewert.
+ */
+const BASE_AIM_CANDIDATE_LIMIT = 4;
 
 export interface WorldCombatKillEvent {
   readonly killerId: string;
@@ -315,6 +322,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
    */
   private readonly projectileBaseGeometry: CachedProjectileBaseGeometry[] = [];
   private projectileBaseGeometryGeneration = -1;
+  /** Freiliegende Außenflächen feindlicher Basen für die dritte Turm-Zielstufe, je Hindernis-Generation. */
+  private readonly turretBaseFaces = new ExposedBaseFaceCache();
   /** Only the current synchronous Base commit delays its Objective reward until its receipt. */
   private baseObjectiveCommit: { readonly baseId: string; complete?: () => void } | null = null;
 
@@ -402,6 +411,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.mgTurret?.clear();
     this.attackDrone?.clearActivity();
     this.mgOwnerGroups.clear();
+    this.turretBaseFaces.clear();
   }
 
   setPowerUpSystem(powerUpSystem: PowerUpSystem | null): void {
@@ -546,6 +556,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       this.systems.turret.setEnemyTargetProvider(null);
       this.systems.turret.setFocusTargetProvider(null);
       this.systems.turret.setFocusedBaseTargetProvider(null);
+      this.systems.turret.setBaseTargetCandidateProvider(null);
       this.systems.turret.setFireHandler(null);
       this.systems.turret.setTurretDamageBuffProvider(null);
       this.systems.turret.setTurretDamageMultiplierProvider(null);
@@ -832,6 +843,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       const surface = base.getNearestSurfacePoint(turretX, turretY);
       return surface ? { id: base.id, x: surface.x, y: surface.y } : null;
     });
+    turret.setBaseTargetCandidateProvider((source, x, y, range) => this.getHostileBaseAimCandidates(source, x, y, range));
     turret.setTargetScoreProvider((source, kind, id, now) => this.isPersonalMg(source.identityId)
       ? this.mgTurret?.score(source.ownerId, String(source.identityId), kind, id, now) ?? 0 : 0);
     turret.setFireHandler((ownerId, color, weaponId, x, y, angle, targetX, targetY, damageFactor = 1, rangeFactor = 1, sourceTurretId, skipRockIndex, sourceCarrierBaseId) => {
@@ -1436,6 +1448,40 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     if (!this.options.isCoopDefense?.() || id === undefined) return false;
     const rock = this.options.placementSystem.getRuntimeRock(Number(id));
     return !!rock && rock.kind === 'turret' && rock.constructionId === 'machine_gun_turret' && rock.ownership !== 'base-owned';
+  }
+
+  /**
+   * Dritte Zielstufe (GDD V2 §2.1): Spielertürme im Coop greifen erreichbare feindliche Basen an
+   * deren nächster freiliegender Außenfläche an. Basisgeschütze und basisgehörige Bauten sind
+   * ausgenommen; ob die Waffe Basen überhaupt schädigt, Reichweite und Schusslinie entscheidet das
+   * TurretSystem. Verdeckung durch Felsen klärt allein die Schusslinie, weil sich Felsen unabhängig
+   * von der Basis-Generation ändern.
+   */
+  private getHostileBaseAimCandidates(
+    source: TurretFireSource, x: number, y: number, range: number,
+  ): readonly { id: string; x: number; y: number }[] {
+    const o = this.options;
+    const bases = o.baseManager;
+    if (!bases || !o.isCoopDefense?.()) return [];
+    if (source.ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID || source.ownerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID) return [];
+    const generation = bases.getObstacleGeneration();
+    const candidates: { id: string; x: number; y: number; distance: number }[] = [];
+    for (const base of bases.getBasesByFaction('hostile')) {
+      if (!base.isDamageable() || base.getHp() <= 0) continue;
+      const faces = this.turretBaseFaces.get(base.id, generation, () => computeExposedBaseFaces({
+        cells: base.getSpec().cells, cellSize: CELL_SIZE,
+        offsetX: o.worldMetrics.offsetX, offsetY: o.worldMetrics.offsetY,
+        isCoveredCell: () => false,
+      }));
+      for (const point of rankBaseAimPoints(faces, x, y, range, BASE_AIM_CANDIDATE_LIMIT)) {
+        candidates.push({ id: base.id, x: point.x, y: point.y, distance: point.distance });
+      }
+    }
+    if (candidates.length === 0) return [];
+    // Gleiche Strukturberechtigung wie die Angriffsdrohne.
+    const damageSource = o.combatSystem.captureWorldDamageSource(source.ownerId, source.weaponId ?? 'turret');
+    if (!o.combatSystem.canDamageStructure(damageSource, undefined, 'hostile')) return [];
+    return candidates.sort((a, b) => a.distance - b.distance).slice(0, BASE_AIM_CANDIDATE_LIMIT);
   }
 
   getOffensiveConstructionSources(): readonly RemoteControlSource[] {

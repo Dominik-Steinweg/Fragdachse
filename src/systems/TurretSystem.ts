@@ -6,6 +6,7 @@ import type { TurretDamageBuff } from '../types';
 import { DEFAULT_TURRET_AIM_TOLERANCE_DEG, type TurretAimConfig } from '../config/turretAim';
 import { stepTurretAngle, turretAngleDifference } from '../utils/turretAngle';
 import type { ManualTurretControl } from './TurretControlSystem';
+import { canWeaponDamageBases } from './TurretBaseTargeting';
 
 /**
  * Schusslinienprüfung des Turrets. Bewusst die Schuss- und nicht die Sichtlinie: ein Turret,
@@ -75,6 +76,13 @@ type TurretAngleUpdater = (source: TurretFireSource, angle: number) => void;
 type EnemyTargetProvider = () => readonly { id: string; x: number; y: number }[];
 type FocusTargetProvider = (ownerId: string) => { targetType: 'enemy' | 'base'; targetId: string } | null;
 type FocusedBaseTargetProvider = (targetId: string, turretX: number, turretY: number) => { id: string; x: number; y: number } | null;
+/**
+ * Erreichbare Außenflächen-Punkte feindlicher Basen, nach Distanz sortiert und begrenzt. Der
+ * Provider entscheidet Besitz- und Modusberechtigung; Reichweite und Schusslinie prüft das TurretSystem.
+ */
+type BaseTargetCandidateProvider = (
+  source: TurretFireSource, turretX: number, turretY: number, range: number,
+) => readonly { id: string; x: number; y: number }[];
 interface PendingTurretBurst {
   /** Eintrag, der die Salve begonnen hat; nur er darf sie fortsetzen. */
   ownerEntryId: AutomatedTurretId;
@@ -119,6 +127,8 @@ export class TurretSystem {
   private enemyTargetProvider: EnemyTargetProvider | null = null;
   private focusTargetProvider: FocusTargetProvider | null = null;
   private focusedBaseTargetProvider: FocusedBaseTargetProvider | null = null;
+  private baseTargetCandidateProvider: BaseTargetCandidateProvider | null = null;
+  private readonly baseDamageByWeapon = new Map<string, boolean>();
   private fireHandler: TurretFireHandler | null = null;
   private turretDamageBuffProvider: ((x: number, y: number) => TurretDamageBuff | null) | null = null;
   private turretDamageMultiplierProvider: ((turret: AutomatedTurret, turrets: readonly AutomatedTurret[]) => number) | null = null;
@@ -167,6 +177,11 @@ export class TurretSystem {
 
   setFocusedBaseTargetProvider(provider: FocusedBaseTargetProvider | null): void {
     this.focusedBaseTargetProvider = provider;
+  }
+
+  /** Dritte Zielstufe: feindliche Basen, nur ohne Fokus- und Figurenziel. */
+  setBaseTargetCandidateProvider(provider: BaseTargetCandidateProvider | null): void {
+    this.baseTargetCandidateProvider = provider;
   }
 
   setFireHandler(handler: TurretFireHandler | null): void {
@@ -491,19 +506,20 @@ export class TurretSystem {
     let bestKey = '';
     const focus = this.focusTargetProvider?.(turret.ownerId) ?? null;
 
-    const consider = (candidate: { x: number; y: number }, priority: number, kind: 'player' | 'enemy' | 'base', id: string): void => {
+    const consider = (candidate: { x: number; y: number }, priority: number, kind: 'player' | 'enemy' | 'base', id: string): boolean => {
       const distance = Phaser.Math.Distance.Between(turretX, turretY, candidate.x, candidate.y);
-      if (distance > range) return;
-      if (!this.hasLineOfFireFromMuzzle(turret, turretX, turretY, candidate.x, candidate.y, lineOfFireStartOffset)) return;
+      if (distance > range) return false;
+      if (!this.hasLineOfFireFromMuzzle(turret, turretX, turretY, candidate.x, candidate.y, lineOfFireStartOffset)) return false;
       const score = this.targetScore?.(turret, kind, id, now) ?? 0;
       const key = kind + ':' + id;
       if (priority > bestPriority || (priority === bestPriority && (score < bestScore
-        || (score === bestScore && (distance > bestDistance || (distance === bestDistance && key >= bestKey)))))) return;
+        || (score === bestScore && (distance > bestDistance || (distance === bestDistance && key >= bestKey)))))) return false;
       bestPriority = priority;
       bestScore = score;
       bestKey = key;
       bestDistance = distance;
       bestTarget = candidate;
+      return true;
     };
 
     if (turret.targetMode !== 'enemies') for (const player of this.playerManager.getAllPlayers()) {
@@ -534,12 +550,33 @@ export class TurretSystem {
       );
     }
 
-    if (focus?.targetType === 'base') {
+    // Türme ohne Wirkung gegen Basen (Kontrolltürme) schießen nie auf Basen, auch nicht im Fokus.
+    const canDamageBases = this.canDamageBases(turret);
+    if (focus?.targetType === 'base' && canDamageBases) {
       const base = this.focusedBaseTargetProvider?.(focus.targetId, turretX, turretY) ?? null;
       if (base) consider({ x: base.x, y: base.y }, 0, 'base', base.id);
     }
 
+    if (bestTarget === null && canDamageBases && this.baseTargetCandidateProvider) {
+      // Kandidaten kommen nach Distanz sortiert: Die erste frei beschießbare Fläche ist die nächste.
+      for (const base of this.baseTargetCandidateProvider(turret, turretX, turretY, range)) {
+        if (excluded && base.x === excluded.x && base.y === excluded.y) continue;
+        if (consider({ x: base.x, y: base.y }, 2, 'base', base.id)) break;
+      }
+    }
+
     return bestTarget;
+  }
+
+  private canDamageBases(turret: AutomatedTurret): boolean {
+    const weaponId = turret.weaponId ?? 'SPORES';
+    let result = this.baseDamageByWeapon.get(weaponId);
+    if (result === undefined) {
+      const weapon = WEAPON_CONFIGS[weaponId];
+      result = !!weapon && canWeaponDamageBases(weapon);
+      this.baseDamageByWeapon.set(weaponId, result);
+    }
+    return result;
   }
 
   private hasLineOfFireFromMuzzle(

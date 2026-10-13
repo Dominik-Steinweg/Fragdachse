@@ -518,6 +518,8 @@ Status:
 | D22 | 2026-10-13 | Basisziel-Regeln liegen in `src/systems/TurretBaseTargeting.ts` statt in `src/systems/fireControl/` | Die Regel gilt für alle Spielertürme, unabhängig von der Feuerleitung | Default, an Gate kippbar |
 | D23 | 2026-10-13 | Basisgeschütze und basisgehörige Konstruktionen greifen Basen weiterhin nicht selbstständig an | Plan: Spielerbesitz als Kriterium; Basisgeschütze haben eigene Zielmodi | Default, an Gate kippbar (Frage F4) |
 | D24 | 2026-10-13 | Für die Platzierung der Kopien ist keine Sichtlinie vom Spieler zum Punkt nötig, nur Reichweite und freie Formation | Projektion, kein Wurf; einfache Regel | Default, an Gate kippbar |
+| D25 | 2026-10-13 | Freiliegende Basisflächen werden nur aus der Basisgeometrie abgeleitet (je Basis-Generation gecacht). Verdeckung durch Felsen klärt allein die Schusslinie; je Turm und Suche werden höchstens die 4 nächsten Flächen geprüft | Felsen ändern sich unabhängig von der Basis-Generation; begrenzte Sichtlinienprüfungen | Default, an Gate kippbar |
+| D26 | 2026-10-13 | Automatische Basisziele sind nur beschädigbare feindliche Basen (`isDamageable`, HP > 0). Der bestehende Fokus-Pfad bleibt bis auf das Kontrollturm-Gate unverändert | Keine Schüsse auf immune Basen; kein ungeplanter Eingriff in den Injektor-Fokus | Default, an Gate kippbar |
 
 ## 10 Abnahmeszenarien und Testzuordnung
 

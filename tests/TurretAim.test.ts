@@ -234,6 +234,62 @@ describe('turret aiming and discharge', () => {
   });
 });
 
+describe('hostile bases as third target tier', () => {
+  const faces = [{ id: 'base', x: 200, y: 0 }, { id: 'base', x: 0, y: -220 }];
+
+  it('attacks the nearest reachable base face only without focus or figure targets', () => {
+    const f = fixture({ weaponId: 'TURRET_MG', cooldownMs: 1 });
+    const candidates = vi.fn(() => faces);
+    f.system.setBaseTargetCandidateProvider(candidates);
+    f.tick(0);
+    expect(f.fire.mock.calls[0].slice(6, 8)).toEqual([0, 100]);
+    expect(candidates).not.toHaveBeenCalled();
+
+    f.targets([]);
+    f.tick(10);
+    expect(f.fire.mock.calls[1].slice(6, 8)).toEqual([200, 0]);
+    // Eine verdeckte Fläche wird nicht durchschossen; die nächste freie Fläche derselben Basis zählt.
+    f.system.setLineOfFireChecker((_sx, _sy, ex) => ex !== 200);
+    f.tick(20);
+    expect(f.fire.mock.calls[2].slice(6, 8)).toEqual([0, -220]);
+    f.system.setLineOfFireChecker(() => false);
+    f.tick(30);
+    expect(f.fire).toHaveBeenCalledTimes(3);
+  });
+
+  it('respects the turret range for base faces', () => {
+    const f = fixture({ weaponId: 'TURRET_MG', targetRange: 150 });
+    f.targets([]);
+    f.system.setBaseTargetCandidateProvider(() => faces);
+    f.tick(0);
+    expect(f.fire).not.toHaveBeenCalled();
+  });
+
+  it.each(['TURRET_GRAVITY', 'TURRET_SLOW_BUBBLE'] as const)('never lets the control turret %s shoot at bases, not even in focus', weaponId => {
+    const f = fixture({ weaponId });
+    const candidates = vi.fn(() => faces);
+    f.targets([]);
+    f.system.setBaseTargetCandidateProvider(candidates);
+    f.system.setFocusTargetProvider(() => ({ targetType: 'base', targetId: 'base' }));
+    f.system.setFocusedBaseTargetProvider(() => ({ id: 'base', x: 200, y: 0 }));
+    f.tick(0);
+    expect(f.fire).not.toHaveBeenCalled();
+    expect(candidates).not.toHaveBeenCalled();
+    // Figurenziele bleiben unberührt.
+    f.targets([{ id: 'enemy', x: 0, y: 100 }]);
+    f.tick(1);
+    expect(f.fire.mock.calls[0].slice(6, 8)).toEqual([0, 100]);
+  });
+
+  it('keeps a valid base focus ahead of figures for damaging turrets', () => {
+    const f = fixture({ weaponId: 'TURRET_MG' });
+    f.system.setFocusTargetProvider(() => ({ targetType: 'base', targetId: 'base' }));
+    f.system.setFocusedBaseTargetProvider(() => ({ id: 'base', x: 200, y: 0 }));
+    f.tick(0);
+    expect(f.fire.mock.calls[0].slice(6, 8)).toEqual([200, 0]);
+  });
+});
+
 describe('angular motion and authoring', () => {
   it('crosses the wrap via the shortest path with deterministic half turns', () => {
     expect(stepTurretAngle(rad(179), rad(-170), 10, 500)).toBeCloseTo(rad(184));
