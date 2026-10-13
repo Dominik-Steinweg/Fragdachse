@@ -41,6 +41,8 @@ export class DawnHUD {
     active: boolean; world: WorldDescriptor | null; activity: ActivityDescriptor | null;
     startTime: number; now: number; sharedScrap: number;
     objectives: CoopDefenseSecondaryObjectivePresentationState | null;
+    /** Dargestellte Tageszeit des Lichtsystems. */
+    clockMinutes: number;
   }): void {
     const plan = input.activity?.parameters?.dawn;
     if (!input.active || !plan || !input.world?.parameters?.dawn || input.startTime <= 0) {
@@ -58,7 +60,8 @@ export class DawnHUD {
     }
     if (!this.world || !this.metrics) return;
     const model = buildDawnHudModel({ schedule: getDawnSchedule(plan.scheduleId), elapsedMs: input.now - input.startTime,
-      sharedScrap: input.sharedScrap, threat: plan.threat, dayNumber: plan.dayNumber, sites: this.sites, objectives: input.objectives });
+      sharedScrap: input.sharedScrap, threat: plan.threat, dayNumber: plan.dayNumber, sites: this.sites, objectives: input.objectives,
+      clockMinutes: input.clockMinutes });
     const label = t(`ui.dawn.phase.${model.phase}`);
     const kicker = t('ui.dawn.dayThreat', { day: model.dayNumber, threat: model.threat });
     const tone = model.phase === 'night' ? 'purple' : model.phase === 'dawn' ? 'green' : model.phase === 'dusk' ? 'orange' : 'neutral';
@@ -90,14 +93,16 @@ export class DawnHUD {
       let marker = this.markers.get(target.id);
       if (!marker) {
         marker = { world: this.createMarker(target.visualKey), edge: this.createMarker(target.visualKey) };
+        // Nur der Randpfeil ist Bildschirm-UI; das Weltabzeichen folgt der Hauptkamera.
         marker.edge.setScrollFactor(0).setDepth(DEPTH.OVERLAY);
+        promoteToClarityCamera(this.scene, marker.edge);
         this.markers.set(target.id, marker);
       }
       const x = this.metrics.offsetX + (target.gridX + 0.5) * CELL_SIZE;
       const y = this.metrics.offsetY + (target.gridY + 0.5) * CELL_SIZE;
       const inside = isWorldPointInsideView(x, y, view);
-      // Clarity has no scroll; project world targets into the shared design space explicitly.
-      marker.world.setPosition(camera.x / camera.zoom + x - view.x, camera.y / camera.zoom + y - view.y).setVisible(inside);
+      // Wie die Nebenziel-Marker: das Weltabzeichen lebt in Weltkoordinaten der Hauptkamera.
+      marker.world.setPosition(x, y).setVisible(inside);
       marker.edge.setVisible(!inside);
       if (!inside) {
         const edge = getArrowPointOnScreenViewEdge(x, y, view, camera, 30);
@@ -108,10 +113,8 @@ export class DawnHUD {
 
   /** Replace these keyed drawings with final visualKey assets after the gameplay gate. */
   private createMarker(visualKey: string): Phaser.GameObjects.Graphics {
-    const marker = this.scene.add.graphics().setDepth(DEPTH.BASES + 8).setScrollFactor(0);
+    const marker = this.scene.add.graphics().setDepth(DEPTH.BASES + 8);
     registerGraphicsObject(this.scene, 'baseMarkers', marker);
-    // Both the world badge and its edge counterpart are navigation UI, independent of world lighting.
-    promoteToClarityCamera(this.scene, marker);
     const home = visualKey === 'return-base';
     marker.fillStyle(0x101916, 0.82).lineStyle(2, home ? 0xe8b46a : 0x79b8dc, 1);
     marker.beginPath().moveTo(0, -19).lineTo(19, 0).lineTo(0, 19).lineTo(-19, 0)

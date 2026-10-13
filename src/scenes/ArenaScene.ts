@@ -2024,6 +2024,7 @@ export class ArenaScene extends Phaser.Scene {
       startTime: bridge.getArenaStartTime(), now: bridge.getSynchronizedNow(),
       sharedScrap: bridge.getDawnRoundScrap(),
       objectives: bridge.getCoopDefenseSecondaryObjectivePresentationState(),
+      clockMinutes: this.renderers?.lighting.getTimeOfDayMinutes() ?? DEFAULT_TIME_OF_DAY_MINUTES,
     });
     if ((gameplayActive || countdownActive) && !terminated) {
       diagnosticsFrame?.begin('arenaHud');

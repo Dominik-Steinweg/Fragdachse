@@ -28,15 +28,13 @@ export function buildDawnHudModel(input: {
   readonly dayNumber: number;
   readonly sites: readonly DawnSiteMarker[];
   readonly objectives: CoopDefenseSecondaryObjectivePresentationState | null;
+  /** Tatsaechlich dargestellte Tageszeit (Lichtsystem); die Uhr zeigt sie statt sie neu zu rechnen. */
+  readonly clockMinutes: number;
 }) {
   const elapsed = Math.max(0, Number.isFinite(input.elapsedMs) ? input.elapsedMs : 0);
   const state = resolveDawnPhase(input.schedule, elapsed);
-  const index = input.schedule.phases.findIndex(entry => entry.id === state.phase);
-  const minutes = (clock: string) => { const [h, m] = clock.split(':').map(Number); return h * 60 + m; };
-  const from = minutes(input.schedule.phases[index].clock);
-  const to = minutes(input.schedule.phases[index + 1]?.clock ?? input.schedule.endClock);
   const fraction = Math.min(1, (elapsed - state.phaseStartMs) / (state.phaseEndMs - state.phaseStartMs));
-  const clockMinute = Math.floor(from + ((to - from + 1440) % 1440) * fraction) % 1440;
+  const clockMinute = ((Math.floor(Number.isFinite(input.clockMinutes) ? input.clockMinutes : 0) % 1440) + 1440) % 1440;
   const activated = new Set(input.objectives?.filter(entry => entry.state !== 'dormant').map(entry => entry.objectiveId));
   return {
     phase: state.phase,

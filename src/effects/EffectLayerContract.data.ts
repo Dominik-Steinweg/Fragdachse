@@ -2821,7 +2821,7 @@ export const GPU_EFFECT_CONTRACTS = {
 export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {id:'cpu:ui/DawnHUD.ts:module/this.card.root/setDepth/0',owner:'ui/DawnHUD.ts',component:'module/this.card.root/setDepth/0',height:'body',lighting:'emissive',camera:'clarity',depths:[100],blends:['NORMAL'],profiles:['C'],role:'ui',source:{selector:'module/this.card.root/setDepth/0',expression:'DEPTH.OVERLAY'}},
   {id:'cpu:ui/DawnHUD.ts:sync/marker.edge/setDepth/0',owner:'ui/DawnHUD.ts',component:'sync/marker.edge/setDepth/0',height:'body',lighting:'emissive',camera:'clarity',depths:[100],blends:['NORMAL'],profiles:['C'],role:'ui',source:{selector:'sync/marker.edge/setDepth/0',expression:'DEPTH.OVERLAY'}},
-  {id:'cpu:ui/DawnHUD.ts:createMarker/marker/setDepth/0',owner:'ui/DawnHUD.ts',component:'createMarker/marker/setDepth/0',height:'body',lighting:'emissive',camera:'clarity',depths:[12],blends:['NORMAL'],profiles:['C'],role:'ui',source:{selector:'createMarker/marker/setDepth/0',expression:'DEPTH.BASES + 8'}},
+  {id:'cpu:ui/DawnHUD.ts:createMarker/marker/setDepth/0',owner:'ui/DawnHUD.ts',component:'createMarker/marker/setDepth/0',height:'body',lighting:'emissive',camera:'world',depths:[12],blends:['NORMAL'],profiles:['K'],role:'ui',source:{selector:'createMarker/marker/setDepth/0',expression:'DEPTH.BASES + 8'}},
   {id:'cpu:ui/DawnMerchantOverlay.ts:build/this.root/setDepth/0',owner:'ui/DawnMerchantOverlay.ts',component:'build/this.root/setDepth/0',height:'body',lighting:'emissive',camera:'clarity',depths:[103],blends:['NORMAL'],profiles:['C'],role:'ui',source:{selector:'build/this.root/setDepth/0',expression:'DEPTH.OVERLAY + 3'}},
   {"id":"mortar:glow","owner":"effects/MortarStrikeRenderer.ts","component":"glow","height":"body","lighting":"emissive","camera":"world","depths":[19.7],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"createVisual/glow/setDepth/0","expression":"19.7"}},
   {"id":"mortar:core","owner":"effects/MortarStrikeRenderer.ts","component":"core","height":"body","lighting":"emissive","camera":"world","depths":[19.7],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"createVisual/core/setDepth/0","expression":"19.7"}},
@@ -3337,7 +3337,7 @@ export const CPU_SOURCE_CONTRACTS = {
       { "key": "createMarker/marker/setDepth/0", "expression": "DEPTH.BASES + 8", "blends": ["NORMAL"] }
     ],
     "blends": [],
-    "cameras": ["promoteToClarityCamera(scene, this.card.root)", "promoteToClarityCamera(this.scene, marker)"],
+    "cameras": ["promoteToClarityCamera(scene, this.card.root)", "promoteToClarityCamera(this.scene, marker.edge)"],
     "bindings": {}
   },
   "ui/DawnMerchantOverlay.ts": {

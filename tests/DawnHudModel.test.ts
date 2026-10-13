@@ -9,7 +9,7 @@ describe('Dawn HUD projection', () => {
   const schedule = getDawnSchedule(plans.activity.scheduleId);
   const world = resolveDawnScenario(plans.world, plans.activity).world;
   const sites = buildDawnSiteMarkers(plans.world, world);
-  const input = { schedule, sites, sharedScrap: 72, threat: 1, dayNumber: 3, objectives: null };
+  const input = { schedule, sites, sharedScrap: 72, threat: 1, dayNumber: 3, objectives: null, clockMinutes: 420 };
 
   it('takes positions from world clearings and icons from the planned archetype tier', () => {
     expect(sites.length).toBeGreaterThan(0);
@@ -23,7 +23,8 @@ describe('Dawn HUD projection', () => {
 
   it('follows each schedule boundary and clamps the end clock and countdown', () => {
     for (const [index, phase] of schedule.phases.entries()) {
-      const model = buildDawnHudModel({ ...input, elapsedMs: phase.startMs });
+      const [hours, minutes] = phase.clock.split(':').map(Number);
+      const model = buildDawnHudModel({ ...input, elapsedMs: phase.startMs, clockMinutes: hours * 60 + minutes });
       expect(model.phase).toBe(phase.id);
       expect(model.clock).toBe(phase.clock);
       expect(model.remainingSeconds).toBe(((schedule.phases[index + 1]?.startMs ?? schedule.durationMs) - phase.startMs) / 1000);
@@ -32,8 +33,8 @@ describe('Dawn HUD projection', () => {
       expect(model).toMatchObject({ scrap: input.sharedScrap, threat: input.threat, dayNumber: input.dayNumber });
     }
     expect(buildDawnHudModel({ ...input, elapsedMs: schedule.durationMs + 1000 }))
-      .toMatchObject({ clock: schedule.endClock, remainingSeconds: 0, remainingFraction: 0, sites: [] });
-    expect(buildDawnHudModel({ ...input, elapsedMs: -1000 }).clock).toBe(schedule.phases[0].clock);
+      .toMatchObject({ remainingSeconds: 0, remainingFraction: 0, sites: [] });
+    expect(buildDawnHudModel({ ...input, elapsedMs: 0, clockMinutes: 1439.6 }).clock).toBe('23:59');
   });
 
   it('hands activated sites to secondary objective markers, including completed and failed sites', () => {
@@ -45,12 +46,4 @@ describe('Dawn HUD projection', () => {
     }
   });
 
-  it('interpolates the night clock forward through midnight', () => {
-    const night = schedule.phases.find(entry => entry.id === 'night')!;
-    const dawn = schedule.phases.find(entry => entry.id === 'dawn')!;
-    const model = buildDawnHudModel({ ...input, elapsedMs: (night.startMs + dawn.startMs) / 2 });
-    const toMinutes = (clock: string) => { const [h, m] = clock.split(':').map(Number); return h * 60 + m; };
-    const start = toMinutes(night.clock), end = toMinutes(dawn.clock);
-    expect(toMinutes(model.clock)).toBe(Math.floor(start + (end - start + 1440) % 1440 / 2) % 1440);
-  });
 });
