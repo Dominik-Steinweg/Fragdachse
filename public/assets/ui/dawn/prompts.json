@@ -115,6 +115,41 @@
       ]
     },
     {
+      "key": "scrap-magnet",
+      "original": "scrap-magnet.png",
+      "source": "icons/candidates/icon-scrap-magnet-02.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "e5c83c49e5673fb2c7fc07d28f120c6e5fdb3b8059eb105765114c96ca3f8241",
+      "date": "2026-10-13",
+      "promptSource": "icons/candidates/scrap-magnet-prompts.json",
+      "promptFidelity": "Full built-in image_gen requests for all four candidates recorded below.",
+      "candidatePrompts": [
+        {
+          "file": "icon-scrap-magnet-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn, square PNG with genuine transparent alpha background. Match the Dawn icons visually inspected in this conversation: softly shaded, textured lightly stylized painted metal, broad bevels, restrained highlights, subtle brushed scuffs, warm brass and rust with charcoal and pale steel, no hard black outlines, no photoreal reflections. Compact emblem composition, strong coherent silhouette, large value-separated masses, very sparse detail, readable at 32-48 pixels. Center with 12% transparent padding. No ground, pedestal, backdrop, drop shadow, text, letters, numbers, logos, watermark, pixel grid or bright glow. One chunky horseshoe magnet, muted red chipped paint and two broad scraped pale steel poles, opening diagonally down-right. Three small clearly separated scrap pieces are drawn toward the poles: a brass nut, a rusty six-tooth gear and a pale bent sheet fragment. Magnet dominates, wide open negative space between its arms. No field lines."
+        },
+        {
+          "file": "icon-scrap-magnet-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn, square PNG with genuine transparent alpha background. Match the Dawn icons visually inspected in this conversation: softly shaded, textured lightly stylized painted metal, broad bevels, restrained highlights, subtle brushed scuffs, warm brass and rust with charcoal and pale steel, no hard black outlines, no photoreal reflections. Compact emblem composition, strong coherent silhouette, large value-separated masses, very sparse detail, readable at 32-48 pixels. Center with 12% transparent padding. No ground, pedestal, backdrop, drop shadow, text, letters, numbers, logos, watermark, pixel grid or bright glow. One bold upright inverted-U horseshoe magnet, warm worn red paint, broad pale steel pole tips facing downward. Just below the tips float a small brass hex nut, a rusty cog and a pale sheet fragment, close enough for a compact square silhouette. Wide clear gap inside U; magnet occupies most of icon. No field lines."
+        },
+        {
+          "file": "icon-scrap-magnet-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn, square PNG with genuine transparent alpha background. Match the Dawn icons visually inspected in this conversation: softly shaded, textured lightly stylized painted metal, broad bevels, restrained highlights, subtle brushed scuffs, warm brass and rust with charcoal and pale steel, no hard black outlines, no photoreal reflections. Compact emblem composition, strong coherent silhouette, large value-separated masses, very sparse detail, readable at 32-48 pixels. Center with 12% transparent padding. No ground, pedestal, backdrop, drop shadow, text, letters, numbers, logos, watermark, pixel grid or bright glow. One compact industrial electromagnet disc suspended from a short chunky crane hook. Worn muted red upper casing, brass rim and broad steel lower face. A nut, rusty gear and bent pale sheet are being lifted immediately beneath the disc. Keep hook short and bold, few mechanical details, unified compact icon without crane structure. No field lines."
+        },
+        {
+          "file": "icon-scrap-magnet-04.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn, square PNG with genuine transparent alpha background. Match the Dawn icons visually inspected in this conversation: softly shaded, textured lightly stylized painted metal, broad bevels, restrained highlights, subtle brushed scuffs, warm brass and rust with charcoal and pale steel, no hard black outlines, no photoreal reflections. Compact emblem composition, strong coherent silhouette, large value-separated masses, very sparse detail, readable at 32-48 pixels. Center with 12% transparent padding. No ground, pedestal, backdrop, drop shadow, text, letters, numbers, logos, watermark, pixel grid or bright glow. One very chunky red horseshoe magnet tilted slightly left, opening down-left with broad scraped silver steel pole tips. A single small rusty gear floats nearest one pole, with a brass nut and tiny bent sheet nearby; only two short subtle pale magnetic attraction strokes. Big uninterrupted red arch, very wide open center and minimal scrap cluster, especially clear at 32 pixels."
+        }
+      ],
+      "promptCore": "Upright worn red horseshoe magnet with broad pale steel poles; brass nut, rusty gear and sheet fragment attracted below.",
+      "selectionReason": "02: Aufrechte Hufeisenform, offener Innenraum und zwei helle Stahlpole bleiben bei 32/48 px klar. Textur und Metallpalette passen zu scrap und dealer-infrastructure. 01/04 verteilen kleine Schrottteile diagonal; 03 verliert bei kleinen Groessen die eindeutige Magnetform. Bei 24 px sind einzelne Schrottteile nur eingeschraenkt erkennbar.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
       "key": "dealer-portrait",
       "original": "dealer-portrait.png",
       "source": "dealer/candidates/dealer-portrait-01.png",

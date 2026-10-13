@@ -1,4 +1,4 @@
-# Dawn UI — V1-5
+# Dawn UI — V1-5 / V1-6
 
 Auswahl der Leit-Session vom 2026-10-13. Acht Imagegen-PNGs unverändert aus
 `C:/Fragdachse-worktrees/dawn/art/poc/dawn/` kopiert. [prompts.json](prompts.json)
@@ -9,6 +9,7 @@ keine vollständigen Tool-Aufrufe. UI-Embleme und Dreiviertelbüste sind keine W
 | Asset | Verwendung | Runtime-Größen |
 | --- | --- | --- |
 | [scrap.png](scrap.png) | Schrott-Währung / Ressourcenanzeige | 32, 64, 128 |
+| [scrap-magnet.png](scrap-magnet.png) | Infrastruktur-Angebot Schrottmagnet | 32, 64, 128 |
 | [threat.png](threat.png) | Nachtbedrohung / Threat-Emblem | 32, 64, 128 |
 | [dealer-expansion.png](dealer-expansion.png) | Händlerkategorie Basiserweiterung | 32, 64, 128 |
 | [dealer-infrastructure.png](dealer-infrastructure.png) | Händlerkategorie Infrastruktur / Reparaturdrohne | 32, 64, 128 |
@@ -18,6 +19,30 @@ keine vollständigen Tool-Aufrufe. UI-Embleme und Dreiviertelbüste sind keine W
 | [dealer-portrait.png](dealer-portrait.png) | Händlerdialog / UI-Büste | 256 |
 
 ## Export
+
+V1-6 ergänzt vier mit dem integrierten Imagegen erzeugte Schrottmagnet-Kandidaten:
+`art/poc/dawn/icons/candidates/icon-scrap-magnet-01.png` bis `-04.png` im aktuellen
+Worktree `dawn-assets`. Kandidat **02** wurde unverändert als `scrap-magnet.png`
+übernommen. Seine aufrechte Hufeisenform, der offene Innenraum und die hellen Stahlpole
+sind bei 32/48 px am klarsten; abgenutzter Lack, Stahl, Messing und Rost passen zu
+`scrap` und `dealer-infrastructure`. Die diagonalen Varianten 01/04 verteilen die
+Schrottteile stärker, die Kranvariante 03 verliert klein ihre eindeutige Magnetform.
+Bei 24 px bleiben einzelne Schrottteile nur eingeschränkt lesbar.
+
+Die vollständigen vier Tool-Prompts stehen im Asset-Eintrag von [prompts.json](prompts.json)
+und lokal in `art/poc/dawn/icons/candidates/scrap-magnet-prompts.json`.
+Der Eintrag überschreibt für dieses neue Asset den historischen `sourceWorktree`.
+Der zusätzliche [Lesbarkeitsbogen](../../../../art/poc/dawn/v1-review/ui-scrap-magnet.png)
+zeigt alle vier Kandidaten sowie die gewählten Runtime-Exporte bei 24/32/48 px auf
+dunklem HUD-Ton `#24282b`, ergänzt durch 72-px-Detailansichten. Alle Anzeigegrößen
+enthalten den transparenten Rand. Der Export erzeugt diesen Bogen erneut, sofern die
+vier lokalen Kandidaten vorhanden sind; sie sind wie der restliche `art/poc/`-Ordner
+Git-ignoriert. Die Runtime-Exporte benötigen diese Kandidaten nicht.
+
+V1-6-Dateien: `scrap-magnet.png`, `runtime/scrap-magnet-{32,64,128}.webp`,
+`runtime/manifest.json`, `prompts.json`, diese README und
+`scripts/export-dawn-ui.mjs`; lokal die vier Kandidaten, deren Prompt-JSON und beide
+Prüfbögen (`ui-icons.png`, `ui-scrap-magnet.png`).
 
 `npm run assets:dawn-ui` oder `node scripts/export-dawn-ui.mjs` aus dem Repository.
 Das [Skript](../../../../scripts/export-dawn-ui.mjs) löst Pfade relativ zu sich selbst auf;
