@@ -239,6 +239,7 @@ const KEY_SHIELD_BUFF  = 'sbf';   // per-player: ShieldBuffHudState (HUD-State d
 const KEY_FRAGS        = 'frg';   // per-player: number (Frag-Zähler)
 const KEY_ROOM_STATS   = 'rst';   // global reliable: kompakter, kumulierter Raum-Statistik-Snapshot
 const KEY_COOP_ROUND_XP = 'crx';  // global: number (gemeinsame, matchweite Coop-Defense-XP)
+const KEY_DAWN_ROUND_SCRAP = 'dsc'; // global reliable: number (gemeinsamer Schrott der laufenden Dawn-Runde)
 const KEY_COOP_XP      = 'cxp';   // per-player: number (lokal persistierte Coop-Defense-XP fuer Lobby-Anzeige)
 const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschluss-Snapshot)
 const KEY_ROUND_STATE  = 'rds';   // global reliable: RoundState | null (aktueller/finaler Rundenstatus)
@@ -328,6 +329,8 @@ export interface RoundResult {
   /** Beide CTB-Endstände, auch wenn ein Team keine berechtigte Spielerzeile mehr hat. */
   teamScores?: Readonly<Record<TeamId, number>>;
   sharedXp?: number;
+  /** Dawn: gemeinsamer Rundenschrott; die persoenliche Gutschrift (inkl. Niederlagenquote) folgt im Meta-Fortschritt. */
+  sharedScrap?: number;
   /** Gemeinsame, autoritative B8-Epic-Garantie; pro berechtigter Zeile wiederholt. */
   epicGuaranteeCount?: number;
 }
@@ -5327,6 +5330,19 @@ export class NetworkBridge {
 
   resetCoopDefenseRoundXp(): void {
     this.setCoopDefenseRoundXp(0);
+  }
+
+  /** Gemeinsamer Schrott der laufenden Dawn-Runde; Late Join erhaelt ihn mit dem Welcome. */
+  getDawnRoundScrap(): number {
+    const raw = getState(KEY_DAWN_ROUND_SCRAP) as number | undefined;
+    if (typeof raw !== 'number' || !Number.isFinite(raw)) return 0;
+    return Math.max(0, Math.floor(raw));
+  }
+
+  /** Host-only: veroeffentlicht den vom Dawn-Ledger gefuehrten Rundenschrott. */
+  hostPublishDawnRoundScrap(total: number): void {
+    if (!isHost()) return;
+    setState(KEY_DAWN_ROUND_SCRAP, Math.max(0, Math.floor(Number.isFinite(total) ? total : 0)), true);
   }
 
   setLocalCoopDefenseTotalXp(totalXp: number): void {

@@ -76,6 +76,7 @@ describe('Dawn round lifecycle (S2)', () => {
       host.publishLobbySync();
       const round = hostComposedRound(4101);
       host.publishWorldAndActivity(round.world, round.activity);
+      host.hostPublishDawnRoundScrap(42);
       hostRoom.room.update();
 
       const lateRoom = await addClientRoom(network); rooms.push(lateRoom);
@@ -90,6 +91,10 @@ describe('Dawn round lifecycle (S2)', () => {
         preparedLayout: { descriptor: round.world, layout: round.layout },
       });
       const peers = [composeFromReplication(clientRoom, client), composeFromReplication(lateRoom, late)];
+      for (const [room, bridge] of [[clientRoom, client], [lateRoom, late]] as const) {
+        use(room);
+        expect(bridge.getDawnRoundScrap()).toBe(42);
+      }
 
       expect(hostPrepared.isCoopMission).toBe(true);
       expect(hostPrepared.mapConfig).toEqual(round.mapConfig);

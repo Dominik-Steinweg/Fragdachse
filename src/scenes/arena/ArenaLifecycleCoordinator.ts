@@ -1757,6 +1757,7 @@ export class ArenaLifecycleCoordinator {
     bridge.setMatchHostId();
     bridge.resetAllFrags();
     bridge.resetCoopDefenseRoundXp();
+    bridge.hostPublishDawnRoundScrap(0);
     // Der Endstand der Vorrunde bleibt in der Lobby sichtbar, wird aber beim Start atomar
     // geleert. So kann ein Client beim naechsten Phasenwechsel keine veraltete Auswertung zeigen.
     bridge.publishRoundResults([]);
@@ -2092,6 +2093,7 @@ export class ArenaLifecycleCoordinator {
           teamScore: teamId ? teamScores?.[teamId] : undefined,
           teamScores,
           sharedXp: isCoopDefenseMode(gameMode) ? bridge.getCoopDefenseRoundXp() : undefined,
+          sharedScrap: roundState?.dawn ? bridge.getDawnRoundScrap() : undefined,
           epicGuaranteeCount: isCoopDefenseMode(gameMode) ? epicGuaranteeCount : undefined,
         };
       });

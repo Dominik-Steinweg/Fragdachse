@@ -223,7 +223,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     for (const method of ['publishLobbySync', 'setMatchHostId', 'resetAllFrags', 'resetCoopDefenseRoundXp',
       'publishRoundResults', 'publishCoopDefenseEncounterPresentationState', 'publishCoopDefenseMapEventPresentationState',
       'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState',
-      'setArenaStartTime', 'setRoundEndTime', 'requestFullGameState'] as const) {
+      'setArenaStartTime', 'setRoundEndTime', 'requestFullGameState', 'hostPublishDawnRoundScrap'] as const) {
       vi.spyOn(bridge, method).mockImplementation(() => {});
     }
     vi.spyOn(bridge, 'areAllPlayersReady').mockReturnValue(true);
@@ -280,7 +280,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     for (const method of ['publishLobbySync', 'setMatchHostId', 'resetAllFrags', 'resetCoopDefenseRoundXp',
       'publishRoundResults', 'publishCoopDefenseEncounterPresentationState', 'publishCoopDefenseMapEventPresentationState',
       'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState',
-      'setArenaStartTime', 'setRoundEndTime', 'requestFullGameState', 'hostStartRoundParticipants'] as const) {
+      'setArenaStartTime', 'setRoundEndTime', 'requestFullGameState', 'hostPublishDawnRoundScrap', 'hostStartRoundParticipants'] as const) {
       vi.spyOn(bridge, method).mockImplementation(() => {});
     }
     vi.spyOn(bridge, 'areAllPlayersReady').mockReturnValue(true);
