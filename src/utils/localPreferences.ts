@@ -103,7 +103,8 @@ import {
 } from '../persistentBase/PersistentBaseRewardTypes';
 import {
   DEFAULT_PERSISTENT_BASE_AREA_STAGE,
-  isPersistentBaseAreaStage,
+  isCampaignPersistentBaseAreaStage,
+  type CampaignPersistentBaseAreaStage,
   type PersistentBaseAreaStage,
 } from '../persistentBase/PersistentBaseCore';
 
@@ -146,7 +147,7 @@ export interface CoopDefenseProgressPreferences {
    */
   persistentBaseUnlocked: boolean;
   /** Semantische Ausbau-Stufe; niemals aus der aktuellen oder hoechsten Map rekonstruiert. */
-  persistentBaseAreaStage: PersistentBaseAreaStage;
+  persistentBaseAreaStage: CampaignPersistentBaseAreaStage;
   persistentBaseHealthRewards: PersistentBaseHealthReward[];
   /** Personal reward ownership; never used as host placement authority. */
   persistentBaseRewardUnlocks: PersistentBaseRewardId[];
@@ -252,7 +253,7 @@ export interface LocalProgressDocument {
     loadoutsByClass?: LocalPreferences['loadoutByClass'];
     itemsUnlocked: boolean;
     persistentBaseUnlocked: boolean;
-    persistentBaseAreaStage: PersistentBaseAreaStage;
+    persistentBaseAreaStage: CampaignPersistentBaseAreaStage;
     persistentBaseHealthRewards: PersistentBaseHealthReward[];
     persistentBaseRewardUnlocks: PersistentBaseRewardId[];
     items: CoopDefenseItem[];
@@ -885,7 +886,8 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     || typeof coop.itemsUnlocked !== 'boolean'
     || typeof coop.persistentBaseUnlocked !== 'boolean'
     || !isPersistentBaseHealthRewards(coop.persistentBaseHealthRewards)
-    || !isPersistentBaseAreaStage(coop.persistentBaseAreaStage)
+    // Gespeichert wird nur die Kampagnenstufe; Dawn-Ausbau steht getrennt in `dawn.expansionLevel`.
+    || !isCampaignPersistentBaseAreaStage(coop.persistentBaseAreaStage)
     || !Array.isArray(coop.persistentBaseRewardUnlocks)
     || !Array.isArray(coop.items)
     || !isRecord(coop.equippedItemIds)
@@ -1619,7 +1621,7 @@ export function setStoredPersonalBaseContribution(contribution: PersistentPlayer
 }
 
 /** Die semantische, persoenliche Ausbau-Stufe der persistenten Basis. */
-export function getStoredPersistentBaseAreaStage(): PersistentBaseAreaStage {
+export function getStoredPersistentBaseAreaStage(): CampaignPersistentBaseAreaStage {
   return readPreferences().progression.coopDefense.persistentBaseAreaStage;
 }
 
@@ -1629,7 +1631,7 @@ export function getStoredPersistentBaseAreaStage(): PersistentBaseAreaStage {
  * verkleinern.
  */
 export function setStoredPersistentBaseAreaStage(areaStage: PersistentBaseAreaStage): boolean {
-  if (!isPersistentBaseAreaStage(areaStage)) return false;
+  if (!isCampaignPersistentBaseAreaStage(areaStage)) return false;
   const current = readPreferences();
   const progress = current.progression.coopDefense;
   if (areaStage <= progress.persistentBaseAreaStage) return false;

@@ -59,7 +59,7 @@ export type PersistentBaseAreaStage = CampaignPersistentBaseAreaStage | 3 | 4 | 
 export const PERSISTENT_BASE_MAX_AREA_STAGE = 11;
 export const PERSISTENT_BASE_CAMPAIGN_MAX_AREA_STAGE = 2;
 
-export const DEFAULT_PERSISTENT_BASE_AREA_STAGE: PersistentBaseAreaStage = 0;
+export const DEFAULT_PERSISTENT_BASE_AREA_STAGE: CampaignPersistentBaseAreaStage = 0;
 
 /** Authoritative Stage-Werte an der Persistenz- und Netzwerkgrenze. */
 export const PERSISTENT_BASE_AREA_STAGES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as const satisfies readonly PersistentBaseAreaStage[];

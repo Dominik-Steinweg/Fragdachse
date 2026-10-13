@@ -109,11 +109,17 @@ import { resolveWorldLoadProgress } from '../../world/WorldLoadReady';
 import { getActiveRoundParticipantIds } from './RoundParticipationPolicy';
 import { resolveArenaStartTime } from './ArenaStartTiming';
 import {
+  getStoredDawnProgress,
   getStoredPersistentBaseAreaStage,
   getStoredPersistentBaseHealthRewards,
   getStoredPersistentBaseUnlocked,
   getStoredPersistentBaseRewardState,
 } from '../../utils/localPreferences';
+import {
+  resolveFrozenPersistentBaseAreaStage,
+  resolvePersonalPersistentBaseAreaStage,
+} from '../../persistentBase/PersistentBaseAreaStageResolution';
+import { PERSISTENT_BASE_CAMPAIGN_MAX_AREA_STAGE } from '../../persistentBase/PersistentBaseCore';
 import type { PersistentBaseContributionStore } from '../../persistentBase/PersistentBaseContributionStore';
 import type { PersistentBaseRewardStore } from '../../persistentBase/PersistentBaseRewardStore';
 import type { PersistentBaseTransactionIdentity } from '../../persistentBase/PersistentBaseTransaction';
@@ -133,7 +139,7 @@ import {
   resolveCoopDefenseMapConfig,
   resolveWorldDefinition,
 } from '../../world/WorldDefinitionResolution';
-import { isLobbyWorldDefinitionId, LOBBY_WORLD_DEFINITION_ID } from '../../config/authoring/lobbyWorld';
+import { getLobbyWorldDefinition, isLobbyWorldDefinitionId, LOBBY_WORLD_DEFINITION_ID } from '../../config/authoring/lobbyWorld';
 import { createAuthoredWorldDescriptor } from '../../world/WorldLayout';
 import { isArenaTransitionReady } from './ArenaTransitionReadiness';
 import { isValidPersistentBaseSite } from '../../world/WorldRuntimeContext';
@@ -1621,7 +1627,7 @@ export class ArenaLifecycleCoordinator {
     const persistentBaseHealthRewards = getStoredPersistentBaseHealthRewards();
     const healthRewardsKey = [...persistentBaseHealthRewards].sort().join(',');
     const persistentBaseAreaStage = isCoopDefenseMode(currentMode)
-      ? getStoredPersistentBaseAreaStage()
+      ? resolveHostFrozenPersistentBaseAreaStage(getLobbyWorldDefinition().persistentBaseSite?.maxAreaStage)
       : null;
     const currentWorld = this.worldLifecycle.descriptor;
     if (currentWorld !== null) {
@@ -1787,7 +1793,7 @@ export class ArenaLifecycleCoordinator {
       worldParameters: coopDefenseMapConfig?.persistentBase
         ? {
           persistentBaseUnlocked: true,
-          persistentBaseAreaStage: getStoredPersistentBaseAreaStage(),
+          persistentBaseAreaStage: resolveHostFrozenPersistentBaseAreaStage(coopDefenseMapConfig.persistentBase.maxAreaStage),
           persistentBaseHealthRewards: getStoredPersistentBaseHealthRewards(),
         }
         : undefined,
@@ -3713,6 +3719,22 @@ export class ArenaLifecycleCoordinator {
  * gar keine persistente Basisstelle, und eine Stufe ohne Stelle waere eine Konfiguration fuer
  * etwas, das es in dieser Instanz nicht gibt.
  */
+/**
+ * Area-Stufe, die der Host fuer eine neue World einfriert: sein persoenlicher Ausbau aus Kampagne
+ * und Dawn-Expansion, begrenzt durch die Obergrenze der Site dieser World.
+ */
+function resolveHostFrozenPersistentBaseAreaStage(
+  siteMaxAreaStage: PersistentBaseAreaStage | undefined,
+): PersistentBaseAreaStage {
+  return resolveFrozenPersistentBaseAreaStage({
+    personalStage: resolvePersonalPersistentBaseAreaStage({
+      campaignStage: getStoredPersistentBaseAreaStage(),
+      dawnExpansionLevel: getStoredDawnProgress().expansionLevel,
+    }),
+    siteMaxAreaStage: siteMaxAreaStage ?? PERSISTENT_BASE_CAMPAIGN_MAX_AREA_STAGE,
+  });
+}
+
 /** Host-Festlegung einer neuen Runde bis zur Layout-Generierung hinter dem Ladebild. */
 interface HostArenaGenerationRequest {
   readonly roundRevision: number;

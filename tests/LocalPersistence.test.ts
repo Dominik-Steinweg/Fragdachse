@@ -166,7 +166,7 @@ describe('local progress generation', () => {
     const before = storage.getItem(LOCAL_PROGRESS_STORAGE_KEY);
     const invalid = [undefined, null, [], 1, { scrap: -1 }, { scrap: 0.5 }, { scrap: DAWN_MAX_SCRAP + 1 },
       { expansionLevel: DAWN_MAX_EXPANSION_LEVEL + 1 }, { expansionLevel: '1' },
-      { purchasedBossPoints: DAWN_MAX_PURCHASED_BOSS_POINTS + 1 }, { unlockedBranchIds: ['unknown'] },
+      { purchasedBossPoints: DAWN_MAX_PURCHASED_BOSS_POINTS + 1 }, { unlockedBranchIds: [1] },
       { unlockedBranchIds: null }, { infrastructure: [] }, { infrastructure: { 'Bad-ID': 1 } },
       { infrastructure: { bench: 11 } }, { infrastructure: { bench: 0.5 } },
       { crafting: null }, { crafting: { recalibrationCores: -1 } }, { stats: { bestStreak: 0.5 } },
@@ -181,6 +181,9 @@ describe('local progress generation', () => {
     expect(importStoredGameProgressJson(JSON.stringify(valid)).ok).toBe(true);
     expect(getStoredDawnProgress()).toEqual(createDefaultDawnProgress());
     expect(sanitizeDawnProgress({ scrap: Infinity })).toBeNull();
+    // A retired branch id is dropped instead of invalidating the personal progress.
+    expect(sanitizeDawnProgress({ unlockedBranchIds: ['retired-branch', 'necromancy'] })?.unlockedBranchIds)
+      .toEqual(['necromancy']);
     expect(sanitizeDawnProgress({ stats: { defeats: NaN } })).toBeNull();
   });
 

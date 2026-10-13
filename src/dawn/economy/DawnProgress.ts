@@ -47,9 +47,11 @@ export function sanitizeDawnProgress(raw: unknown): DawnProgress | null {
   }
   if (raw.unlockedBranchIds !== undefined) {
     const ids = raw.unlockedBranchIds;
-    if (!Array.isArray(ids) || !ids.every(id => typeof id === 'string'
-      && DAWN_UPGRADE_BRANCHES.some(branch => branch.id === id))) return null;
-    result.unlockedBranchIds = [...new Set<string>(ids)].sort();
+    if (!Array.isArray(ids) || !ids.every(id => typeof id === 'string')) return null;
+    // A branch retired from the registry must not invalidate the whole personal progress.
+    result.unlockedBranchIds = [...new Set<string>(ids)]
+      .filter(id => DAWN_UPGRADE_BRANCHES.some(branch => branch.id === id))
+      .sort();
   }
   if (raw.infrastructure !== undefined) {
     if (!isRecord(raw.infrastructure)) return null;
