@@ -1,4 +1,6 @@
 export const deUi = {
+  "ui.lobby.dawn.name": "From Dachs Till Dawn",
+  "ui.lobby.dawn.locked": "Wird nach Map {map} freigeschaltet",
   "ui.lobby.necromancyMovedTitle": "Nekromantie",
   "ui.lobby.necromancyMovedMessage": "Nekromantie gibt es jetzt beim Schrotthändler – deine Boss-Punkte wurden zurückerstattet.",
   "ui.voice.volume": "SPRACHE",

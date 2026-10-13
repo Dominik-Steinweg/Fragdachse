@@ -1,3 +1,4 @@
+import { DEFAULT_COOP_PROGRAM, isSameCoopProgram, parseCoopProgram, type CoopProgram } from '../dawn/contracts/CoopProgram';
 import { isEnemyClawEvent } from '../systems/EnemyClawAttack';
 import { readEnemyAreaClawEvent, type EnemyAreaClawEvent } from '../systems/EnemyClawAttack';
 import { readKrakenState, type KrakenState, type KrakenSnapshotPatch } from '../systems/KrakenState';
@@ -206,6 +207,7 @@ const KEY_NAME         = 'pnm';   // per-player string: selbst gesetzter Anzeige
 const KEY_GAME_PHASE   = 'gph';   // global: 'LOBBY' | 'ARENA'
 const KEY_GAME_MODE    = 'gmd';   // global: 'deathmatch' | 'team_deathmatch' | 'capture_the_beer'
 const KEY_COOP_MAP_ID  = 'cmd';   // global: string (ausgewaehlte Coop-Defense-Map)
+const KEY_COOP_PROGRAM = 'cpg';   // global: CoopProgram (host-authoritative, reliable)
 const KEY_TIME_OF_DAY  = 'tod';   // global reliable: number (Lobby-Uhrzeit in Minuten seit Mitternacht)
 const KEY_ARENA_START  = 'ast';   // global: number (timestamp ms ab dem Input/Game freigegeben wird)
 const KEY_ROUND_END    = 'ret';   // global: number (timestamp ms)
@@ -261,7 +263,7 @@ const KEY_PING           = 'png'; // per-player: number (Roundtrip-Zeit in ms, u
 const KEY_GAME_STATE     = 'gs';  // global: komprimierter Game State (unreliable, single setState)
 const KEY_GAME_STATE_INITIAL = 'gsi'; // global reliable: vollstaendiger Bootstrap-Snapshot der laufenden Runde
 const KEY_ROOM_QUALITY   = 'rql'; // global reliable: aktuelle Lobby-Raumqualitaet fuer Startschutz/Retry-UX
-const KEY_LOBBY_SYNC     = 'lsy'; // global reliable: host-autoritativer Lobby-Snapshot {r:readyRevision, m:mode, c:mapId, t:time, p:playerIds}
+const KEY_LOBBY_SYNC     = 'lsy'; // global reliable: host-autoritativer Lobby-Snapshot {r:readyRevision, m:mode, c:mapId, cpg:CoopProgram, t:time, p:playerIds}
 const KEY_PB_CONTRIBUTION = 'pbo'; // per-player reliable: angebotener PersistentPlayerBaseContribution
 const KEY_PB_CONFIRMED   = 'pbk'; // per-player reliable: host-bestaetigter Beitrag nach einem Sieg
 const KEY_PB_REWARD_GRANT = 'pbr'; // per-player reliable: host-bestaetigte kumulative Reward-IDs
@@ -1257,10 +1259,10 @@ export class NetworkBridge {
 
   /**
    * Host-only: Veröffentlicht einen autoritativen Lobby-Snapshot (reliable, ein Objekt):
-   * verbundene Spieler-IDs, aktueller Game-Mode, Coop-Map und Lobby-Uhrzeit.
+   * verbundene Spieler-IDs, aktueller Game-Mode, Coop-Map, Coop-Programm und Lobby-Uhrzeit.
    *
    * Clients vergleichen beim "Bereit"-Klick ihren *separat* propagierten Stand gegen diesen
-   * gebündelten Snapshot. Da die Einzel-Keys (Roster via Join-Callbacks, KEY_GAME_MODE, KEY_COOP_MAP_ID)
+   * gebündelten Snapshot. Da die Einzel-Keys (Roster via Join-Callbacks, Modus, Map, Programm)
    * unabhängig voneinander ankommen, deckt der Vergleich genau die Fälle auf, in denen ein Client
    * noch nicht aufgeschlossen hat – z. B. einen Mitspieler nicht kennt (Bug A/B) oder mit veraltetem
    * Modus bereit würde (und so ein für den Modus ungültiges Loadout committen könnte).
@@ -1276,6 +1278,7 @@ export class NetworkBridge {
       r: this.getLobbyReadyRevision() + (advanceReadyRevision ? 1 : 0),
       m: this.getGameMode(),
       c: this.getCoopDefenseMapId(),
+      cpg: this.getCoopProgram(),
       t: this.getLobbyTimeOfDayMinutes(),
       p: [...this.connectedPlayers.keys()].sort(),
     }, true);
@@ -1303,7 +1306,7 @@ export class NetworkBridge {
    * kein Snapshot angekommen ist (dann keine Blockade, um Fehlalarme zu vermeiden).
    */
   getLobbySyncConsistency(): { consistent: boolean; hostStatePresent: boolean; issues: string[] } {
-    const snapshot = getState(KEY_LOBBY_SYNC) as { m?: GameMode; c?: string; t?: number; p?: string[] } | undefined;
+    const snapshot = getState(KEY_LOBBY_SYNC) as { m?: GameMode; c?: string; cpg?: unknown; t?: number; p?: string[] } | undefined;
     if (!snapshot || !Array.isArray(snapshot.p)) {
       return { consistent: true, hostStatePresent: false, issues: [] };
     }
@@ -1323,6 +1326,12 @@ export class NetworkBridge {
     if (isCoopDefenseMode(snapshot.m ?? this.getGameMode())
       && snapshot.c !== undefined && snapshot.c !== this.getCoopDefenseMapId()) {
       issues.push(`Coop-Map: lokal=${this.getCoopDefenseMapId()} host=${snapshot.c}`);
+    }
+
+    const hostProgram = parseCoopProgram(snapshot.cpg) ?? DEFAULT_COOP_PROGRAM;
+    if (isCoopDefenseMode(snapshot.m ?? this.getGameMode())
+      && !isSameCoopProgram(hostProgram, this.getCoopProgram())) {
+      issues.push(`Coop-Programm: lokal=${this.getCoopProgram().kind} host=${hostProgram.kind}`);
     }
 
     if (!isCoopDefenseMode(snapshot.m ?? this.getGameMode())
@@ -1446,11 +1455,26 @@ export class NetworkBridge {
     this.hostPublishLobbySync();
   }
 
+  getCoopProgram(): CoopProgram {
+    return parseCoopProgram(getState(KEY_COOP_PROGRAM)) ?? DEFAULT_COOP_PROGRAM;
+  }
+
+  setCoopProgram(program: CoopProgram): void {
+    if (!isHost()) return;
+    const parsed = parseCoopProgram(program);
+    if (!parsed || isSameCoopProgram(this.getCoopProgram(), parsed)) return;
+    setState(KEY_COOP_PROGRAM, parsed, true);
+    this.hostInvalidateLobbyReadyStateForAllPlayers();
+    this.hostPublishLobbySync();
+  }
+
   setCoopDefenseMapId(mapId: string): void {
     if (!isHost()) return;
     const normalizedMapId = getCoopDefenseMapConfig(mapId).mapId;
-    if (this.getCoopDefenseMapId() === normalizedMapId) return;
+    if (this.getCoopDefenseMapId() === normalizedMapId
+      && isSameCoopProgram(this.getCoopProgram(), DEFAULT_COOP_PROGRAM)) return;
     setState(KEY_COOP_MAP_ID, normalizedMapId, true);
+    setState(KEY_COOP_PROGRAM, DEFAULT_COOP_PROGRAM, true);
     this.hostInvalidateLobbyReadyStateForAllPlayers();
     this.hostPublishLobbySync();
   }

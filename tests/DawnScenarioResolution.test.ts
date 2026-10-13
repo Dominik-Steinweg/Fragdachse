@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { getMapName } from '../src/i18n/contentPresentation';
 import { DAWN_CONTENT_HASH, getDawnArenaTemplates } from '../src/config/dawn/dawnContent';
 import { composeDawnRoundPlans } from '../src/dawn/composition/DawnRoundComposition';
 import {
@@ -89,6 +90,13 @@ describe('Dawn scenario transport', () => {
 });
 
 describe('Dawn scenario resolution', () => {
+  it('localizes the resolved clearing map ID in both player languages', () => {
+    const { plans } = dawnRound();
+    const resolved = resolveDawnScenario({ ...plans.world, templateId: 'clearing' }, plans.activity);
+    expect(getMapName(resolved.mapConfig.mapId, 'de')).toBe('Lichtung');
+    expect(getMapName(resolved.mapConfig.mapId, 'en')).toBe('Clearing');
+  });
+
   it('builds the same Coop config on every peer from the same plans', () => {
     const { plans } = dawnRound();
     const host = resolveDawnScenario(plans.world, plans.activity);

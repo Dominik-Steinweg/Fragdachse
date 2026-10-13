@@ -9,11 +9,12 @@ import { getLocale, t } from '../i18n';
 import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
 import { getMapName } from '../i18n/contentPresentation';
 import { getUnlockedCoopDefenseMapConfigs } from '../config/coopDefenseMapUnlocks';
-import { getStoredHighestUnlockedCoopDefenseMapId } from '../utils/localPreferences';
+import { getStoredCoopDefenseProgress, getStoredHighestUnlockedCoopDefenseMapId } from '../utils/localPreferences';
+import { DAWN_UNLOCK_AFTER_MAP_ID, isDawnUnlocked } from '../dawn/rules/DawnUnlock';
 import { areCoopDefenseUnreleasedMapsUnlocked, isCoopDefenseTestMapUnlocked } from '../utils/coopDefenseDebugSession';
 import { formatTimeOfDay, MINUTES_PER_DAY } from '../effects/TimeOfDay';
 import { toDesignSpace } from '../graphics/RenderResolution';
-import { LoadoutSlotPicker } from './LoadoutSlotPicker';
+import { LoadoutSlotPicker, type LoadoutPickerGroup } from './LoadoutSlotPicker';
 import { LOBBY_ROSTER_CONTENT, LOBBY_POPUP_SAFE_AREA } from './LobbyLayout';
 import { UiButton } from './UiButton';
 import { textStyle } from './uiTheme';
@@ -93,8 +94,9 @@ export class LobbySettingsControls {
   refresh(): void {
     const mode = this.bridge.getGameMode();
     const mapId = this.bridge.getCoopDefenseMapId();
+    const program = this.bridge.getCoopProgram();
     const minutes = this.bridge.getLobbyTimeOfDayMinutes();
-    const interactionSignature = `${mode}|${mapId}|${getLocale()}|${this.canEdit()}`;
+    const interactionSignature = `${mode}|${mapId}|${program.kind}|${getLocale()}|${this.canEdit()}`;
     const signature = `${interactionSignature}|${minutes}`;
     if (signature === this.signature) return;
     // Updating the dragged value must not cancel the active gesture.
@@ -106,7 +108,7 @@ export class LobbySettingsControls {
     this.modeLabel.setText(t('ui.lobby.gameMode'));
     this.mapLabel.setText(coop ? t('ui.lobby.map') : '');
     this.mode.setLabel(getLocalizedGameModeLabel(mode)).setEnabled(true).setIcon(enabled ? 'chevron-right' : null);
-    this.map.setLabel(getMapName(mapId, getLocale())).setVisible(coop).setEnabled(true)
+    this.map.setLabel(program.kind === 'dawn' ? t('ui.lobby.dawn.name') : getMapName(mapId, getLocale())).setVisible(coop).setEnabled(true)
       .setIcon(enabled ? 'chevron-right' : null);
     // Values remain legible for guests even though they cannot change the room settings.
     // UiButton stays visually enabled, so restore its hit area explicitly on unlock:
@@ -127,7 +129,7 @@ export class LobbySettingsControls {
     const entries = maps
       ? getUnlockedCoopDefenseMapConfigs(getStoredHighestUnlockedCoopDefenseMapId(), isCoopDefenseTestMapUnlocked(), areCoopDefenseUnreleasedMapsUnlocked()).map(map => ({
         key: map.mapId, displayName: map.mapId, textureKey: null, accentColor: FOREST.border,
-        selected: map.mapId === this.bridge.getCoopDefenseMapId(), disabled: false,
+        selected: this.bridge.getCoopProgram().kind === 'campaign' && map.mapId === this.bridge.getCoopDefenseMapId(), disabled: false,
         onPick: () => {
           if (this.canEdit() && isCoopDefenseMode(this.bridge.getGameMode())) this.bridge.setCoopDefenseMapId(map.mapId);
           this.refresh();
@@ -138,8 +140,22 @@ export class LobbySettingsControls {
         selected: mode === this.bridge.getGameMode(), disabled: false,
         onPick: () => { if (this.canEdit()) this.bridge.setGameMode(mode); this.refresh(); },
       }));
+    const groups: LoadoutPickerGroup[] = [{ label: null, entries }];
+    if (maps) {
+      const unlocked = isDawnUnlocked(getStoredCoopDefenseProgress());
+      groups.push({ label: null, fullWidth: true, entries: [{
+        key: 'dawn', displayName: t('ui.lobby.dawn.name'), textureKey: null, accentColor: FOREST.border,
+        selected: this.bridge.getCoopProgram().kind === 'dawn', disabled: !unlocked,
+        tooltip: unlocked ? undefined : t('ui.lobby.dawn.locked', { map: DAWN_UNLOCK_AFTER_MAP_ID }),
+        onPick: () => {
+          if (this.canEdit() && isCoopDefenseMode(this.bridge.getGameMode())
+            && isDawnUnlocked(getStoredCoopDefenseProgress())) this.bridge.setCoopProgram({ kind: 'dawn' });
+          this.refresh();
+        },
+      }] });
+    }
     this.picker.open({ anchorX: VALUE_X, anchorY: (maps ? MAP_Y : MODE_Y) + 28,
-      title: t(maps ? 'ui.lobby.map' : 'ui.lobby.gameMode'), groups: [{ label: null, entries }],
+      title: t(maps ? 'ui.lobby.map' : 'ui.lobby.gameMode'), groups,
       columns: maps ? 5 : 1, entryWidth: maps ? 52 : 300, entryHeight: 40,
       centeredLabels: maps, safeArea: LOBBY_POPUP_SAFE_AREA });
   }

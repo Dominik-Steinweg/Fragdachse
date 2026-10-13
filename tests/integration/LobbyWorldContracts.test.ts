@@ -487,6 +487,26 @@ describe('LobbyWorld – normaler World-Kanal', () => {
     return bridge;
   }
 
+  it('bootstraps the selected Coop program through Welcome for a late join', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    let clientRoom: TestRoom | undefined;
+    try {
+      const host = bridgeFor(hostRoom);
+      host.setCoopProgram({ kind: 'dawn' });
+      const revision = (hostRoom.room.getGlobal('lsy') as { r: number }).r;
+      clientRoom = await addClientRoom(network);
+      const client = bridgeFor(clientRoom);
+      expect(client.getCoopProgram()).toEqual({ kind: 'dawn' });
+      expect(clientRoom.room.getGlobal('lsy')).toMatchObject({ r: revision, cpg: { kind: 'dawn' } });
+      expect(client.getLobbySyncConsistency()).toEqual({ consistent: true, hostStatePresent: true, issues: [] });
+    } finally {
+      clearActiveSession();
+      clientRoom?.room.destroy();
+      hostRoom.room.destroy();
+    }
+  });
+
   it('repliziert die LobbyWorld ohne Activity und ohne Teilnehmer', async () => {
     const [hostRoom, clientRoom] = await createRoom(2);
     try {

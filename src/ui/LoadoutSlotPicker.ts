@@ -1,5 +1,6 @@
 import { runtimeImage, runtimeTextureExists, setRuntimeTexture } from '../assets/RuntimeAtlases';
 import { BUTTON_CURSOR } from './gameCursor';
+import { UiTooltip } from './UiTooltip';
 import * as Phaser from 'phaser';
 import { activateUi, playUiHover } from './UiAudio';
 import { FOREST, skinTextColor, type UiSkin } from './UiSkin';
@@ -18,8 +19,9 @@ export interface LoadoutPickerEntry {
   readonly accentColor: number;
   /** Liegt bereits in genau diesem Slot. */
   readonly selected: boolean;
-  /** Liegt in einem anderen Slot derselben Gruppe und ist deshalb hier nicht waehlbar. */
+  /** Gesperrt oder bereits in einem anderen Slot derselben Gruppe; nicht waehlbar. */
   readonly disabled: boolean;
+  readonly tooltip?: string;
   readonly onPick: () => void | boolean;
 }
 
@@ -27,6 +29,8 @@ export interface LoadoutPickerEntry {
 export interface LoadoutPickerGroup {
   readonly label: string | null;
   readonly entries: readonly LoadoutPickerEntry[];
+  /** One full-width row per entry, following the compact grid. */
+  readonly fullWidth?: boolean;
 }
 
 export interface LoadoutPickerSafeArea {
@@ -79,10 +83,11 @@ interface RowVisualState {
 }
 
 /**
- * Auswahl-Popup fuer einen Loadout-Slot. Zeigt ausschliesslich freigeschaltete Items;
+ * Auswahl-Popup fuer Loadout-Slots und Lobby-Einstellungen;
  * die Freischaltungslogik bleibt beim Aufrufer.
  */
 export class LoadoutSlotPicker {
+  private tooltip: UiTooltip | null = null;
   private container: Phaser.GameObjects.Container | null = null;
   private readonly parentDestroyed = (): void => this.close();
   private readonly escape = (event: KeyboardEvent): void => {
@@ -103,6 +108,8 @@ export class LoadoutSlotPicker {
   }
 
   close(): void {
+    this.tooltip?.destroy();
+    this.tooltip = null;
     this.parent.off('destroy', this.parentDestroyed);
     this.scene.input.keyboard?.off('keydown-ESC', this.escape);
     this.container?.destroy(true);
@@ -137,14 +144,16 @@ export class LoadoutSlotPicker {
         })).setOrigin(0, 0).setScrollFactor(0)));
         cursorY += GROUP_LABEL_H;
       }
-      const groupRows = Math.ceil(group.entries.length / columns);
+      const groupColumns = group.fullWidth ? 1 : columns;
+      const groupEntryW = group.fullWidth ? bodyW : entryW;
+      const groupRows = Math.ceil(group.entries.length / groupColumns);
       for (let index = 0; index < group.entries.length; index += 1) {
         const entry = group.entries[index];
-        const column = index % columns;
-        const row = Math.floor(index / columns);
-        const x = PADDING + column * (entryW + ENTRY_GAP);
+        const column = index % groupColumns;
+        const row = Math.floor(index / groupColumns);
+        const x = PADDING + column * (groupEntryW + ENTRY_GAP);
         const y = cursorY + row * (entryH + ENTRY_GAP);
-        rows.push(() => this.buildEntry(children, entry, x, y, entryW, entryH, options.centeredLabels ?? false));
+        rows.push(() => this.buildEntry(children, entry, x, y, groupEntryW, entryH, options.centeredLabels ?? false));
       }
       cursorY += groupRows * (entryH + ENTRY_GAP) + 4;
     }
@@ -200,6 +209,12 @@ export class LoadoutSlotPicker {
     })).setOrigin(0, 0).setScrollFactor(0);
 
     for (const build of rows) build();
+
+    if (groups.some(group => group.entries.some(entry => entry.tooltip))) {
+      this.tooltip = new UiTooltip(this.scene, 320, undefined, undefined, this.skin);
+      // UiTooltip positions itself in design coordinates; cancel the popup's offset.
+      children.push(this.scene.add.container(-x, -y, [this.tooltip.build()]));
+    }
 
     this.container = this.scene.add.container(x, y, [backdrop, background, title, ...children])
       .setDepth(this.depth)
@@ -267,6 +282,12 @@ export class LoadoutSlotPicker {
     )).setOrigin(centered ? 0.5 : 0, 0.5).setScrollFactor(0);
     children.push(label);
 
+    if (entry.tooltip) {
+      background.setInteractive();
+      background.on('pointerover', (pointer: Phaser.Input.Pointer) => this.tooltip?.showText(entry.displayName, entry.tooltip!, pointer));
+      background.on('pointermove', (pointer: Phaser.Input.Pointer) => this.tooltip?.move(pointer));
+      background.on('pointerout', () => this.tooltip?.hide());
+    }
     if (entry.disabled) return;
 
     background.setInteractive({ cursor: BUTTON_CURSOR });

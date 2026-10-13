@@ -1,4 +1,5 @@
 export const deContent = {
+  "map.dawn:clearing.name": "Lichtung",
   "construction.attack_drone_station.name": "Angriffsdrohnenstation",
   "construction.attack_drone_station.description": "Eine verwundbare Station versorgt eine unverwundbare autonome Kampfdrohne.",
   "reward.plasma_turret.name": "Plasma-Turm",

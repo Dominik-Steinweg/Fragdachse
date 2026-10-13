@@ -244,6 +244,79 @@ describe('PeerRoom handshake and roster', () => {
   });
 });
 
+describe('Coop program lobby state', () => {
+  it('restricts writes to the host, resets Ready once per change and detects divergent program state', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const clientRoom = await addClientRoom(network);
+    const useHost = () => setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'ABC123' });
+    const useClient = () => setActiveSession({ room: clientRoom.room, transport: clientRoom.transport, roomCode: 'ABC123' });
+    try {
+      useHost();
+      const host = new NetworkBridge();
+      host.activate();
+      expect(host.getCoopProgram()).toEqual({ kind: 'campaign' });
+      hostRoom.room.setGlobal('cpg', { kind: 'invalid' }, true);
+      expect(host.getCoopProgram()).toEqual({ kind: 'campaign' });
+      useClient();
+      const client = new NetworkBridge();
+      client.activate();
+      client.setCoopProgram({ kind: 'dawn' });
+      expect(client.getCoopProgram()).toEqual({ kind: 'campaign' });
+
+      useHost();
+      host.hostSetPlayerReady('p0', true);
+      host.hostSetPlayerReady('p1', true);
+      const revision = () => (hostRoom.room.getGlobal('lsy') as { r: number }).r;
+      const before = revision();
+      host.setCoopProgram({ kind: 'dawn' });
+      expect(host.getCoopProgram()).toEqual({ kind: 'dawn' });
+      expect(hostRoom.room.getGlobal('lsy')).toMatchObject({ cpg: { kind: 'dawn' } });
+      expect(revision()).toBe(before + 1);
+      expect(host.getPlayerReady('p0')).toBe(false);
+      expect(host.getPlayerReady('p1')).toBe(false);
+      host.hostSetPlayerReady('p0', true);
+      host.setCoopProgram({ kind: 'dawn' });
+      expect(revision()).toBe(before + 1);
+      expect(host.getPlayerReady('p0')).toBe(true);
+
+      useClient();
+      expect(client.getCoopProgram()).toEqual({ kind: 'dawn' });
+      expect(client.getLobbySyncConsistency().consistent).toBe(true);
+      client.setCoopProgram({ kind: 'campaign' });
+      client.setCoopDefenseMapId('2');
+      expect(client.getCoopProgram()).toEqual({ kind: 'dawn' });
+      useHost();
+      // Simulate the reliable key arriving before the separately published sync snapshot.
+      hostRoom.room.setGlobal('cpg', { kind: 'campaign' }, true);
+      useClient();
+      expect(client.getLobbySyncConsistency()).toMatchObject({
+        consistent: false, issues: [expect.stringContaining('Coop-Programm')],
+      });
+      useHost();
+      hostRoom.room.setGlobal('cpg', { kind: 'dawn' }, true);
+      for (const mapId of [host.getCoopDefenseMapId(), '2']) {
+        host.setCoopProgram({ kind: 'dawn' });
+        host.hostSetPlayerReady('p0', true);
+        host.hostSetPlayerReady('p1', true);
+        const mapRevision = revision();
+        host.setCoopDefenseMapId(mapId);
+        expect(host.getCoopProgram()).toEqual({ kind: 'campaign' });
+        expect(host.getCoopDefenseMapId()).toBe(mapId);
+        expect(revision()).toBe(mapRevision + 1);
+        expect(host.getPlayerReady('p0')).toBe(false);
+        expect(host.getPlayerReady('p1')).toBe(false);
+        host.setCoopDefenseMapId(mapId);
+        expect(revision()).toBe(mapRevision + 1);
+      }
+    } finally {
+      clearActiveSession();
+      clientRoom.room.destroy();
+      hostRoom.room.destroy();
+    }
+  });
+});
+
 describe('lobby Ready revision', () => {
   it.each(['mode change', 'same configuration reset', 'mode round trip'])(
     'rejects an old in-flight Ready after %s and accepts a fresh Ready', async boundary => {

@@ -1,4 +1,5 @@
 export const enContent = {
+  "map.dawn:clearing.name": "Clearing",
   "construction.attack_drone_station.name": "Attack Drone Station",
   "construction.attack_drone_station.description": "A vulnerable station supplies an invulnerable autonomous attack drone.",
   "reward.plasma_turret.name": "Plasma Turret",

@@ -1,4 +1,6 @@
 export const enUi = {
+  "ui.lobby.dawn.name": "From Dachs Till Dawn",
+  "ui.lobby.dawn.locked": "Unlocked after Map {map}",
   "ui.lobby.necromancyMovedTitle": "Necromancy",
   "ui.lobby.necromancyMovedMessage": "Necromancy is now available from the Scrap Merchant – your boss points have been refunded.",
   "ui.voice.volume": "VOICE",
