@@ -29,7 +29,7 @@ Threat 10 ist das Langzeitziel.
 | Thema | V1 | V2-Default | Warum |
 |---|---|---|---|
 | Arenen | Kampagnen-Maps wiederverwenden | Eigene Dawn-Arenen mit Basis in der Mitte, Angriffen von allen vier Rändern und authored Salvage-Slots; Seed pro Runde | Kampagnen-Maps sind auf eine Front und Radius 6 gebaut; Dawn braucht Radius 15 und Fronten rundum |
-| Arenen-Anzahl | offen | M0/M1: 1 („Lichtung“), ab M3 mindestens 4 | Erst den Loop beweisen, dann Vielfalt |
+| Arenen-Anzahl | offen | M0/M1: 1 („Lichtung“, ca. 140×96), ab M3 mindestens 4 | Erst den Loop beweisen, dann Vielfalt |
 | Zeitplan | 3–4 min Tag, ~4 min Nacht | Tabelle in Abschnitt 4 | Nacht etwas länger als der Tag, damit die Verteidigung das Finale bleibt |
 | Niederlage nachts | offen | Nur der Fall des Basiskerns verliert; Spieler respawnen an der Basis, nachts mit längerer Verzögerung | Kein Team-Wipe-Frust, Fokus auf Basisverteidigung |
 | Expansion | Kosten steigen nichtlinear | Jede Expansion: Radius +1, Threat +1, Baukapazität +2; Radius 6 (Threat 1) bis 15 (Threat 10) | Ohne Kapazität nützt die Fläche nichts |
@@ -139,8 +139,13 @@ M2-Simulation legt die tatsächlichen Kosten fest.
 | D-12 | 2026-10-13 | Kapazitätsbonus +2 je Stufe über 2; verdrahtet wird er mit der Infrastruktur in M2, solange in M0/M1 niemand über Stufe 2 kommt. | ja |
 | D-13 | 2026-10-13 | Dawn-Runden buchen keinen Kampagnenabschluss (`RoundState.coopDefenseMapId` bleibt leer, `RoundState.dawn` trägt Threat und Tag). | ja |
 | D-14 | 2026-10-13 | Freischaltung ausschließlich über den Sieg auf der letzten Kampagnenkarte. | ja |
+| D-15 | 2026-10-13 (G0) | Arena größer: Lichtung ca. 140×96 Zellen, Basis mittig; Distanzbänder mitskaliert (fern grob 45–55 Zellen). Reicht die Tagesphase für die längeren Wege nicht, wird der Tag maßvoll verlängert; die Runde darf dafür leicht über 8:00 gehen. | ja |
+| D-16 | 2026-10-13 (G0) | Nach einer gewonnenen Dawn-Runde gibt es ein Item-Angebot (3 zur Wahl) mit Itemlevel nach Threat (Tabelle in den Threat-Kurven) über den vorhandenen Sieg-Item-Pfad; Händler-Items kommen in M2 zusätzlich. | ja |
+| D-17 | 2026-10-13 (G0) | Nekromantie-Forschung ist früh erschwinglich, nach etwa 3–4 Runden (Preis im Economy-Modell, Umsetzung M2). | ja |
+| D-18 | 2026-10-13 (G0) | „Beste Serie“ zählt nur aufeinanderfolgende Siege; eine Niederlage setzt die laufende Serie zurück. | ja |
+| D-19 | 2026-10-13 (G0) | Late Join in laufende Dawn-Runden ist wie in der Kampagne erlaubt. | ja |
 
-## 11. Offene Fragen für Gate G0
+## 11. Offene Fragen für Gate G0 (an G0 beantwortet, siehe D-15 … D-19)
 
 1. **Arenagröße:** Ist eine große Arena (Größenordnung 112×80, Basis mittig) gewünscht, oder
    lieber kompakter mit kürzeren Tageswegen? Beeinflusst Laufzeit, Generierung und Performance.
