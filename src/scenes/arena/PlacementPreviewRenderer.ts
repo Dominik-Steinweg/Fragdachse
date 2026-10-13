@@ -1,13 +1,13 @@
 import { ensureWatchtowerTexture } from '../../effects/watchtower/WatchtowerVisual';
 import { WATCHTOWER_DISPLAY_SIZE } from '../../config/watchtower';
 import { getConstructionBounds } from '../../systems/ConstructionGeometry';
-import type Phaser from 'phaser';
+import type * as Phaser from 'phaser';
 import { bridge }                from '../../network/bridge';
 import { ULTIMATE_CONFIGS, UTILITY_CONFIGS }       from '../../loadout/LoadoutConfig';
 import type { PlaceableRockUtilityConfig, PlaceableTurretUtilityConfig, PlaceableUtilityConfig, TunnelUltimateConfig } from '../../loadout/LoadoutConfig';
 import { GAME_WIDTH, ARENA_OFFSET_Y, CELL_SIZE, COLORS, DEPTH, PLAYER_COLORS } from '../../config';
 import type { ArenaContext }             from './ArenaContext';
-import type { PlacementPreviewNetState, UtilityPlacementPreviewState } from '../../types';
+import type { FireControlPlacementPreview, LocalPlacementPreview, PlacementPreviewNetState, UtilityPlacementPreviewState } from '../../types';
 import { TUNNEL_HOLE_DIAMETER, TUNNEL_VISUAL_DEPTH, TunnelEndpointVisual } from './TunnelEndpointVisual';
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
 import { getTurretVisualSpec, getTurretVisualTransform } from '../../config/turretVisuals';
@@ -81,7 +81,7 @@ export class PlacementPreviewRenderer {
     this.airstrikeTargetingHint = this.createAirstrikeTargetingHint();
   }
 
-  renderPlacementPreview(inArena: boolean, preview: UtilityPlacementPreviewState | undefined, localPlayerAlive: boolean, localPlayerBurrowed: boolean): void {
+  renderPlacementPreview(inArena: boolean, preview: LocalPlacementPreview | undefined, localPlayerAlive: boolean, localPlayerBurrowed: boolean): void {
     this.rangeGraphics.clear();
     this.turretRangeGraphics.clear();
     this.invalidGraphics.clear();
@@ -91,6 +91,14 @@ export class PlacementPreviewRenderer {
       this.localPlacementPreviewImage?.setVisible(false);
       this.localTurretPreviewImage?.setVisible(false);
       this.hideTunnelPreview(this.localTunnelPreview);
+      return;
+    }
+
+    if (preview.kind === 'fire_control_relay') {
+      this.localPlacementPreviewImage?.setVisible(false);
+      this.localTurretPreviewImage?.setVisible(false);
+      this.hideTunnelPreview(this.localTunnelPreview);
+      this.drawFireControlPreview(preview);
       return;
     }
 
@@ -166,6 +174,25 @@ export class PlacementPreviewRenderer {
       this.invalidGraphics.moveTo(preview.targetX - radius * 0.7, preview.targetY - radius * 0.7);
       this.invalidGraphics.lineTo(preview.targetX + radius * 0.7, preview.targetY + radius * 0.7);
       this.invalidGraphics.strokePath();
+    }
+  }
+
+  private drawFireControlPreview(preview: FireControlPlacementPreview): void {
+    const color = preview.valid ? 0x3dffd0 : COLORS.RED_2;
+    const graphics = this.rangeGraphics;
+    graphics.lineStyle(2, color, 0.6);
+    if (Number.isFinite(preview.rangePx) && preview.rangePx >= 0
+      && Number.isFinite(preview.playerX) && Number.isFinite(preview.playerY)) {
+      graphics.strokeCircle(preview.playerX, preview.playerY, preview.rangePx);
+    }
+    graphics.lineStyle(2, color, 1);
+    if (Number.isFinite(preview.pointX) && Number.isFinite(preview.pointY)) {
+      graphics.strokeCircle(preview.pointX, preview.pointY, 10);
+    }
+    for (const original of preview.originals) graphics.strokeCircle(original.x, original.y, 6);
+    for (const ghost of preview.ghosts) {
+      graphics.strokeRect(ghost.x - 12, ghost.y - 12, 24, 24);
+      graphics.strokeCircle(ghost.x, ghost.y, 7);
     }
   }
 
@@ -340,11 +367,14 @@ export class PlacementPreviewRenderer {
     this.airstrikeTargetingHint.alpha = 0.9 + 0.1 * Math.sin(this.scene.time.now / 160);
   }
 
-  syncPlaceableUtilityHint(inArena: boolean, preview: UtilityPlacementPreviewState | undefined, alive: boolean, burrowed: boolean): void {
+  syncPlaceableUtilityHint(inArena: boolean, preview: LocalPlacementPreview | undefined, alive: boolean, burrowed: boolean): void {
     const visible = inArena && preview !== undefined && alive && !burrowed;
     this.placeableUtilityHint.setVisible(visible);
     if (!visible) return;
-    if (preview?.mode === 'dismantle') {
+    if (preview?.kind === 'fire_control_relay') {
+      this.placeableUtilityHintTitle.setText(t('loadout.FIRE_CONTROL_RELAY.name'));
+      this.placeableUtilityHintSubtitle.setText(t('ui.placement.nukeTargetHint'));
+    } else if (preview?.mode === 'dismantle') {
       this.placeableUtilityHintTitle.setText(t('ui.placement.dismantleTitle'));
       this.placeableUtilityHintSubtitle.setText(t('ui.placement.dismantleHint'));
     } else if (preview?.mode === 'move-source') {

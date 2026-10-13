@@ -1202,6 +1202,22 @@ export interface UtilityTargetingPreviewState {
   targetY: number;
 }
 
+/** Local-only projection; copy candidates and formation are never sent as authority. */
+export interface FireControlPlacementPreview {
+  readonly kind: 'fire_control_relay';
+  readonly valid: boolean;
+  readonly reason?: 'range' | 'no_fire_sources' | 'placement' | 'invalid';
+  readonly pointX: number;
+  readonly pointY: number;
+  readonly playerX: number;
+  readonly playerY: number;
+  readonly rangePx: number;
+  readonly originals: readonly { readonly id: number; readonly x: number; readonly y: number }[];
+  readonly ghosts: readonly { readonly x: number; readonly y: number; readonly constructionId: string; readonly weaponId: string }[];
+}
+
+export type LocalPlacementPreview = UtilityPlacementPreviewState | FireControlPlacementPreview;
+
 export interface UtilityPlacementPreviewState {
   targetRange?: number;
   angle: number;

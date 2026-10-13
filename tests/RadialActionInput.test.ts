@@ -30,6 +30,7 @@ vi.mock('../src/ui/RadialActionMenu', () => ({ RadialActionMenu: class {
   destroy() {}
 } }));
 import { InputSystem } from '../src/systems/InputSystem';
+import type { FireControlPlacementPreview } from '../src/types';
 import { NetworkBridge } from '../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 import { addClientRoom, createHostRoom, FakeNetwork, type TestRoom } from './fakePeerNetwork';
@@ -80,6 +81,70 @@ function createSystem(position = { x: 0, y: 0 }) {
   Object.assign(keys.keyShift, { consumeEdge: true });
   return { system, keys, bridge, pointerState, scene };
 }
+
+describe('fire control placement input', () => {
+  function fixture() {
+    const f = createSystem();
+    const config = UTILITY_CONFIGS.FIRE_CONTROL_RELAY;
+    const preview: FireControlPlacementPreview = { kind: 'fire_control_relay', valid: true,
+      pointX: 100, pointY: 0, playerX: 0, playerY: 0, rangePx: 200, originals: [], ghosts: [] };
+    f.system.setupRadialActionProviders({ getTools: () => [{ kind: 'utility', id: config.id }], utilityUsesToolRef: () => true,
+      getCooldownUntil: () => 0, getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }) });
+    // Fixtures bypass availability; the authored M1 class lock stays untouched.
+    f.system.setupUtilityConfigProvider(() => config);
+    f.system.setupUtilityCooldownProvider(() => 0);
+    f.system.setupUtilityPlacementPreviewProvider(() => preview);
+    const uses = vi.fn();
+    f.system.setupLoadoutListener(uses);
+    f.keys.keyE.justDown = true; f.system.update();
+    f.keys.keyE.justDown = false; f.system.update();
+    expect(f.system.isUtilityPlacementActive()).toBe(true);
+    expect(uses).not.toHaveBeenCalled();
+    return { ...f, uses, preview };
+  }
+
+  it.each(['E', 'right'])('cancels locally with %s', button => {
+    const f = fixture();
+    if (button === 'E') f.keys.keyE.justDown = true;
+    else f.pointerState.right = true;
+    f.system.update();
+    expect(f.system.isUtilityPlacementActive()).toBe(false);
+    expect(f.uses).not.toHaveBeenCalled();
+    expect(f.bridge.sendLoadoutUse).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid clicks locally and accepts exactly one target-point use after correction', () => {
+    const f = fixture(), rejected = vi.fn();
+    f.system.onInvalidFireControlPlacement = rejected;
+    f.system.setupUtilityPlacementPreviewProvider(() => ({ ...f.preview, valid: false, reason: 'no_fire_sources' }));
+    f.pointerState.left = true; f.system.update(); f.system.update();
+    expect(f.uses).not.toHaveBeenCalled();
+    expect(rejected).toHaveBeenCalledExactlyOnceWith('no_fire_sources');
+    expect(f.system.isUtilityPlacementActive()).toBe(true);
+    f.pointerState.left = false; f.system.update();
+    f.system.setupUtilityPlacementPreviewProvider(() => f.preview);
+    f.pointerState.left = true; f.system.update(); f.system.update();
+    expect(f.uses).toHaveBeenCalledExactlyOnceWith('utility', 0, f.preview.pointX, f.preview.pointY,
+      { toolRef: { kind: 'utility', id: 'FIRE_CONTROL_RELAY' } });
+    expect(f.system.isUtilityPlacementActive()).toBe(false);
+    expect(f.bridge.sendLocalPlacementPreview.mock.calls.every(([state]) => state === null || !state?.active)).toBe(true);
+  });
+
+  it('still confirms a rock barrier with E', () => {
+    const f = createSystem(), uses = vi.fn();
+    const config = Object.values(UTILITY_CONFIGS).find(config => config.type === 'placeable_rock')!;
+    f.system.setupUtilityConfigProvider(() => config);
+    f.system.setupUtilityCooldownProvider(() => 0);
+    f.system.setupUtilityPlacementPreviewProvider(() => ({ kind: 'rock', angle: 0, targetX: 100, targetY: 0,
+      gridX: 1, gridY: 0, isValid: true, frame: 0, range: 200 }));
+    f.system.setupLoadoutListener(uses);
+    Object.assign(f.system, { utilityPlacementActive: true });
+    expect(f.system.isUtilityPlacementActive()).toBe(true);
+    f.keys.keyE.justDown = true; f.system.update();
+    expect(uses).toHaveBeenCalledTimes(1);
+    expect(uses.mock.calls[0].slice(0, 4)).toEqual(['utility', 0, 100, 0]);
+  });
+});
 
 describe('focus loss during charged input', () => {
   it('sends the first tunnel selection before its commit and releases it on input cancellation', () => {

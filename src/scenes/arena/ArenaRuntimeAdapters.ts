@@ -10,7 +10,7 @@ import type { EnemyIntent, MovementFeedback } from '../../systems/navigation/Nav
 import { bridge } from '../../network/bridge';
 import { isDevScenarioMode } from '../../utils/devScenarioMode';
 import { isLocalScenarioBotPeer } from '../../network/peer/LocalScenarioSession';
-import type { UtilityConfig } from '../../loadout/LoadoutConfig';
+import { WEAPON_CONFIGS, type UtilityConfig } from '../../loadout/LoadoutConfig';
 import type { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
 import type { WeaponBalanceLabWorldPort } from '../../debug/coopDefenseBalance/WeaponBalanceLabRuntime';
 import type { ArenaInputPersistentBasePorts, ArenaInputPlacementPorts } from './ArenaInputBindings';
@@ -521,6 +521,30 @@ export function createArenaRuntimeRpcPorts(
 
 export function createArenaPlacementPorts(flow: ArenaLifecycleCoordinator): ArenaInputPlacementPorts {
   return {
+    getFireControlConstructions: () => {
+      const placement = flow.getWorldRuntime()?.materialization?.placement;
+      const turrets = flow.getWorldCombatGameplayBinding()?.getTurretDefinitions() ?? [];
+      const mannedIds = new Set(bridge.isHost()
+        ? bridge.getConnectedPlayerIds().map(id => flow.getWorldPlayerGameplayRuntime()?.getTurretControlState(id)?.turretId)
+        : Object.values(bridge.getLatestGameState()?.players ?? {}).map(player => player.turretControl?.turretId));
+      // Definitions filter dead/missing/inert carriers when the mounting relation is known.
+      // PlacementSystem's carrier map is host-only; clients cannot reconstruct missing relations.
+      return turrets.flatMap(turret => {
+        if (typeof turret.id !== 'number') return [];
+        const rock = placement?.getRuntimeRock(turret.id);
+        if (!rock) return [];
+        const weaponId = turret.weaponId ?? 'SPORES';
+        return [{ id: rock.id, ownerId: rock.ownerId, baseOwned: rock.ownership === 'base-owned',
+          constructionId: rock.constructionId, weaponId, weaponFireType: WEAPON_CONFIGS[weaponId].fire.type,
+          combatReady: rock.hp > 0 && flow.getWorldParticipation(rock.ownerId) === 'interactive'
+            && flow.getPlayerCapabilities(rock.ownerId).canUseCombat,
+          manned: mannedIds.has(rock.id), x: turret.x, y: turret.y }];
+      });
+    },
+    isFireControlPointFree: (x, y, radius) => {
+      const point = flow.getWorldGeometryBinding()?.getQueries().resolveSafeGroundPoint(x, y, radius);
+      return !!point && point.x === x && point.y === y;
+    },
     getUsedCapacity: (ownerId) => flow.getWorldRuntime()?.materialization?.placement?.getUsedCapacity(ownerId) ?? 0,
     getDismantlePreview: (ownerId, originX, originY, pointerX, pointerY, range) => (
       flow.getWorldRuntime()?.materialization?.placement?.getDismantlePreview(
