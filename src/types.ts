@@ -1122,6 +1122,12 @@ export interface LoadoutCommitSnapshot {
    * damit Items im laufenden Match unveraenderlich sind und der Host die finalen Werte kennt.
    */
   equippedItems?: readonly CoopDefenseItem[];
+  /**
+   * Persoenliche Dawn-Entitlements des committenden Spielers (freigeschaltete Upgrade-Zweig-IDs).
+   * Der Host beschraenkt das Upgrade-Profil dieses Spielers damit, vertrauensbasiert wie Boss-Punkte;
+   * unbekannte IDs verwirft er. Fehlt das Feld, gelten keine Zweige als freigeschaltet.
+   */
+  coopDefenseEntitlements?: readonly string[];
 }
 
 /** Zusätzliche Parameter für eine konkrete Loadout-Aktion. */

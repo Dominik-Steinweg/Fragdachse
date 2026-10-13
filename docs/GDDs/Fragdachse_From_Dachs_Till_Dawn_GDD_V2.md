@@ -45,7 +45,7 @@ Threat 10 ist das Langzeitziel.
 
 | Phase | Rundenzeit | Uhrzeit im Spiel | Inhalt |
 |---|---|---|---|
-| Tag | 0:00–3:30 | 07:00 → 18:30 | Salvage-Sites, Tagesdruck |
+| Tag | 0:00–3:30 | 10:00 → 18:45 | Salvage-Sites, stiller Tagesdruck |
 | Dämmerung | 3:30–4:15 | → 20:45 | Sites schließen, Rückkehr-Marker |
 | Nacht | 4:15–7:45 | → 04:45 | 3 Wellen und ein Finale |
 | Morgengrauen | 7:45–8:00 | → 06:15 | Sonnenaufgang, Sieg |
@@ -96,6 +96,15 @@ in Expansion, der Rest in Infrastruktur, Zweige und Ausrüstung.
 Zielwerte aus dem Plan: Threat 2 nach etwa 2 Runden, Threat 5 nach 4–5 h, Threat 10 nach 25–30 h.
 Niederlagen (50 % Schrott) und Ausgaben außerhalb der Expansion verlängern die Kurve; die
 M2-Simulation legt die tatsächlichen Kosten fest.
+
+## 7a. Händler (Vertrag M2)
+
+Vier Bereiche: **Expansion** (Kosten in `economy.json`), **Infrastruktur** (Reparaturdrohnen Stufe 1–3,
+Schrottmagnet), **Upgrades** (Zweig-Forschung wie Nekromantie, Boss-Punkte mit steigendem Preis) und **Ausrüstung**
+(Item-Angebot pro Runde, Rekalibrierungskern). Katalog und Preise stehen in `src/config/dawn/merchant.json`;
+Käufe sind persönlich und ändern nur den eigenen Fortschritt. Das Item-Angebot wird einmal pro abgeschlossener Runde
+gewürfelt und als `dawn.shopOffer` gespeichert, damit Neuladen nichts neu würfelt. Gast-Entitlements reisen im
+Loadout-Commit (`coopDefenseEntitlements`) zum Host. Die Preise sind v0 und werden in M2 per Simulation kalibriert.
 
 ## 8. Multiplayer
 
@@ -155,6 +164,7 @@ M2-Simulation legt die tatsächlichen Kosten fest.
 | D-25 | 2026-10-13 (M1) | Sites sind schon vor der Aktivierung sichtbar: eigener Präsentations-Owner (`DawnSitePropRenderer`) aus repliziertem World-Plan und Nebenziel-Zustand, Bauwerke 3×3 Zellen (96 px, Sprite statt Basis-Blobfläche, World-Feld `surface: none`). Vor der Aktivierung ohne Kollision, weil die Aktivierung beim Betreten der Lichtung greift, bevor man das Bauwerk erreicht. Asset-Keys: `construction_dawn_wreck_t1..t3`, `construction_dawn_extractor` (+ `_active`-Loop), `dawn_scrap_t1..t3`. | ja |
 | D-26 | 2026-10-13 (M1) | Der Tag läuft 10:00–18:45 statt ab 07:00: 07:00–09:00 liegt im dichtesten Morgennebel-Keyframe und las sich wie Morgengrauen. Dämmerung 18:45–20:45, Nacht und Morgengrauen unverändert; die Uhr bleibt aus dem Phasenplan abgeleitet. | ja |
 | D-27 | 2026-10-13 (M1) | Ansagen nur nachts: Tagesdruck und Site-Angriffe sind still (Encounter-Feld `announce: false`), gezählt werden die vier Nachtwellen als Gruppen (`announce.group`, letzte als „FINALE“). Zeit erscheint als Rundenzeit und Phasenkarte; das Hauptziel nennt nur das Ende („bis 06:15“). Aktive Wracks behalten ihre Farben, Treffer zeigen einen kurzen Flash. | ja |
+| D-28 | 2026-10-13 (M2) | Händlervertrag: Katalog `merchant.json` (vier Bereiche, IDs `repair-drones`, `scrap-magnet`, Zweige aus `upgradeBranches.json`, Boss-Punkt-Preisliste mit Kaufgrenze), Item-Angebot pro Runde persistiert (`dawn.shopOffer`), Gast-Entitlements im Loadout-Commit; Nekromantie-Forschung v0 250 Schrott (früh, D-17). | ja |
 
 ## 11. Offene Fragen für Gate G0 (an G0 beantwortet, siehe D-15 … D-19)
 
