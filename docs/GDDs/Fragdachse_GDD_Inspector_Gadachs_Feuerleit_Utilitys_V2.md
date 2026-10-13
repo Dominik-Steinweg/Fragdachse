@@ -92,8 +92,9 @@ Reichweite, Zielberechtigung und freie Schusslinie gelten auf jeder Stufe.
 - Die Suche läuft nur, wenn weder ein Fokus- noch ein Figurenziel vorhanden ist.
 - Damit genügt eine nahe Außenwand auch bei weit entferntem Mittelpunkt. Konkave oder verdeckte Flächen
   werden nicht durchschossen.
-- Der Zielpunkt hält Abstand zu Basisecken. Drehbegrenzte Türme feuern auf eine Basis erst, wenn das Rohr
-  den Zielabschnitt tatsächlich trifft; Basen werden nicht durch Homing erreicht (D27).
+- Der Zielpunkt hält Abstand zu Basisecken. Drehbegrenzte Türme feuern auf eine Basis erst, wenn der Strahl
+  ihres tatsächlichen Rohrwinkels den Zielabschnitt der Fläche trifft; Basen werden nicht durch Homing
+  erreicht (D27).
 
 **Wirksamkeit**
 - Die reine Regel `canWeaponDamageBases` bewertet den gesamten Angriff: direkten Treffer, Explosion,
@@ -522,7 +523,12 @@ Status:
 | D24 | 2026-10-13 | Für die Platzierung der Kopien ist keine Sichtlinie vom Spieler zum Punkt nötig, nur Reichweite und freie Formation | Projektion, kein Wurf; einfache Regel | Default, an Gate kippbar |
 | D25 | 2026-10-13 | Freiliegende Basisflächen werden nur aus der Basisgeometrie abgeleitet (je Basis-Generation gecacht). Verdeckung durch Felsen klärt allein die Schusslinie; je Turm und Suche werden höchstens die 4 nächsten Flächen geprüft | Felsen ändern sich unabhängig von der Basis-Generation; begrenzte Sichtlinienprüfungen | Default, an Gate kippbar |
 | D26 | 2026-10-13 | Automatische Basisziele sind nur beschädigbare feindliche Basen (`isDamageable`, HP > 0). Der bestehende Fokus-Pfad bleibt bis auf das Kontrollturm-Gate unverändert | Keine Schüsse auf immune Basen; kein ungeplanter Eingriff in den Injektor-Fokus | Default, an Gate kippbar |
-| D27 | 2026-10-13 | Basis-Zielpunkte halten eine Viertelzelle Abstand zu den Kantenenden. Drehbegrenzte Türme feuern auf eine Basis erst, wenn das Rohr diesen Kantenabschnitt tatsächlich trifft; ihre allgemeine Zieltoleranz wird dafür eingeengt | G0-Bogen: Raketentürme (18° Toleranz, Homing nur gegen Figuren) verfehlten kleine Basen während der Drehung | Default, an Gate kippbar |
+| D27 | 2026-10-13 | Basis-Zielpunkte halten eine Viertelzelle Abstand zu den Kantenenden. Drehbegrenzte Türme feuern auf eine Basis erst, wenn der Strahl ihres tatsächlichen Rohrwinkels den Zielabschnitt der Fläche innerhalb ihrer Reichweite schneidet | G0-Bogen und Review: Raketentürme (18° Toleranz, Homing nur gegen Figuren) verfehlten kleine Basen während der Drehung, ein Kreisradius reichte bei streifendem Winkel nicht | Default, an Gate kippbar |
+| D28 | 2026-10-13 | Ein Kopieneinsatz endet sofort, wenn seine letzte Kopie entfällt (Original zerstört, Bemannung D13, Kampfberechtigung verloren); Cooldown ab diesem Zeitpunkt | Kein leerer Einsatz; früherer Cooldown ist fair | Default, an Gate kippbar |
+| D29 | 2026-10-13 | Formationspunkte und Projektormittelpunkt müssen mit einem Freiraumradius (authored, Default 16 px) frei sein: in der Arena, ohne Hindernis, ohne Zug; ein vom Safe-Point-Read verschobener Punkt gilt als nicht frei | Kopien blockieren nicht, sollen aber nicht in Wänden oder Wasser stehen | Default, an Gate kippbar |
+| D30 | 2026-10-13 | D13 gilt für jede Bemannung, auch durch Verbündete. Bereits bemannte Originale sind in der Grundversion nicht wählbar, mit Parallelbetrieb schon | Bemannte Türme sind in Benutzung; keine Doppelsteuerung | Default, an Gate kippbar |
+| D31 | 2026-10-13 | Bei Aktivierung eingefroren werden nur Utility-Werte (Dauer, Kopienzahl, Parallelbetrieb, Reichweite, Ring, Materialisierung, Cooldown); Turmwerte folgen live dem Original | Kopie ist eine Projektion; Turm-Upgrades wirken sofort | Default, an Gate kippbar |
+| D32 | 2026-10-13 | Activity-Ende, World-Wechsel und Besitzerentfernung räumen Einsätze und Nutzungszustand still (kein Ende-Callback, kein Cooldown); Tod, Respawn und Umrüstung beenden nichts | Kein Cooldown-Übertrag in die nächste Activity | Default, an Gate kippbar |
 
 ## 10 Abnahmeszenarien und Testzuordnung
 
