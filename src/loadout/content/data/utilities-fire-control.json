@@ -3,7 +3,7 @@
     "FIRE_CONTROL_RELAY": {
       "id": "FIRE_CONTROL_RELAY",
       "type": "fire_control_relay",
-      "cooldown": 10000,
+      "cooldown": 2000,
       "activation": {
         "type": "placement_mode"
       },
