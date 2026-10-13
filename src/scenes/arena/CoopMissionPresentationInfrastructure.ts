@@ -1,4 +1,5 @@
 import { WaterSurfaceModel } from '../../arena/WaterSurfaceModel';
+import type { KrakenWaterSampler } from '../../effects/kraken/submersionShader';
 import type { ArenaLayout } from '../../types';
 import type { WorldMetrics } from '../../world/WorldMetrics';
 import { KrakenPresentationResidency } from '../../effects/kraken/KrakenPresentationResidency';
@@ -79,15 +80,28 @@ export class CoopMissionPresentationInfrastructure {
     if (this.destroyed) throw new Error('Coop presentation infrastructure is destroyed');
     this.uiInput = input;
     let waterLayout: ArenaLayout | null = null, waterModel: WaterSurfaceModel | null = null;
-    const waterAt = input.krakenWaterAt ?? ((x: number, y: number) => {
+    const waterAt: KrakenWaterSampler = input.krakenWaterAt ?? ((x: number, y: number) => {
       const layout = input.getWorldLayout?.() ?? null, metrics = input.getWorldMetrics?.();
-      if (!layout || !metrics) return -64;
+      if (!layout || !metrics) { waterLayout = null; waterModel = null; return -64; }
       if (layout !== waterLayout) {
         waterLayout = layout;
         waterModel = new WaterSurfaceModel(layout.water ?? [], { width: metrics.widthPx, height: metrics.heightPx });
       }
       return waterModel!.sample(x - metrics.offsetX, y - metrics.offsetY);
     });
+    if (!input.krakenWaterAt) waterAt.uniformMask = s => {
+      // Refresh the World-bound topology before proving constant coverage. An
+      // enclosed island or a shore anywhere inside the rectangle forces sampling.
+      waterAt(s.x, s.y);
+      const metrics = input.getWorldMetrics?.();
+      if (!waterModel || !metrics) return null;
+      const c = Math.cos(s.rotation), sn = Math.sin(s.rotation);
+      const dx = (.5 - s.originX) * s.displayWidth, dy = (.5 - s.originY) * s.displayHeight;
+      const cx = s.x + dx * c - dy * sn - metrics.offsetX, cy = s.y + dx * sn + dy * c - metrics.offsetY;
+      const rx = (Math.abs(s.displayWidth * c) + Math.abs(s.displayHeight * sn)) / 2;
+      const ry = (Math.abs(s.displayWidth * sn) + Math.abs(s.displayHeight * c)) / 2;
+      return waterModel.uniformCoverage(cx - rx, cy - ry, cx + rx, cy + ry);
+    };
     const diagnostic = (message: string) => console.warn('[Kraken presentation]', message);
     this.krakenResidency = new KrakenPresentationResidency(this.scene, message => {
       diagnostic(message);

@@ -74,12 +74,22 @@ describe('asset pipeline catalog contracts', () => {
     }
   });
 
-  it('covers current enemies and player at configured display sizes with north-facing movement', () => {
+  it('covers current enemies through their standard or boss asset contracts and the north-facing player', () => {
     const enemies = assets.filter((asset) => asset.category === 'enemy');
-    expect(sorted(enemies.flatMap((asset) => asset.gameIds))).toEqual(sorted(Object.keys(COOP_DEFENSE_ENEMY_CONFIGS)));
+    const standard = Object.entries(COOP_DEFENSE_ENEMY_CONFIGS).filter(([, config]) => !config.krakenBoss && !config.krakenEgg);
+    expect(sorted(enemies.flatMap((asset) => asset.gameIds))).toEqual(sorted(standard.map(([id]) => id)));
     for (const [enemyId, config] of Object.entries(COOP_DEFENSE_ENEMY_CONFIGS)) {
+      // Boss silhouettes and brood have explicit asset IDs and separate visual
+      // sizes; their collision radius is not a regular enemy sprite size.
+      const bossAssets = config.krakenBoss ? Object.values(config.krakenBoss.assets)
+        : config.krakenEgg ? [config.krakenEgg.assetId] : null;
+      if (bossAssets) {
+        for (const id of bossAssets) expect(assets.find(asset => asset.id === id), `${enemyId}/${id}`)
+          .toMatchObject({ runtimeContract: 'boss', forward: 'north' });
+        continue;
+      }
       const asset = enemies.find((entry) => entry.gameIds.includes(enemyId))!;
-      expect(asset.targetSize).toBe(config.size);
+      expect(asset.targetSize, enemyId).toBe(config.size);
       expect(asset.forward).toBe('north');
       expect(asset.requiredClips).toEqual(expect.arrayContaining((asset as { runtimeContract?: string }).runtimeContract === 'boss' ? ['move'] : ['move', 'claw']));
       expect(asset.reference).toBe(`public/assets/sprites/enemies/${config.imageKey}.png`);

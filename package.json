@@ -11,6 +11,7 @@
     "perf:network:report": "node scripts/performance/network-report.mjs",
     "perf:chrome": "node scripts/performance/run.mjs",
     "perf:compare": "node scripts/performance/compare.mjs",
+    "perf:kraken": "node scripts/performance/kraken.mjs",
     "build:perf-lab": "tsc && vite build --mode performance-lab",
     "ai:sync": "node scripts/sync-ai-skills.mjs",
     "assets:preview": "node scripts/asset-pipeline/preview-v2.mjs",

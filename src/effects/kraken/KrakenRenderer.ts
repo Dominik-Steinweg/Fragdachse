@@ -11,7 +11,7 @@ import type { KrakenState, KrakenTentacleState, KrakenEggState, KrakenInkCloud, 
 import { EnemyClawRenderer } from '../EnemyClawRenderer';
 import { registerGraphicsObject } from '../EffectUtils';
 import { disposeShaderWarmupNode } from '../../graphics/disposeShaderWarmupNode';
-import { KRAKEN_BROOD, KRAKEN_LAND_EXPOSURE, KRAKEN_WORLD_EXPOSURE, KrakenSubmersion, krakenBroodBeat, krakenBroodGlow, krakenEggArc, krakenMaterialGrade, krakenWaterMask,
+import { KRAKEN_BROOD, KRAKEN_DRY_SAMPLER, KRAKEN_LAND_EXPOSURE, KRAKEN_WORLD_EXPOSURE, KrakenSubmersion, krakenBroodBeat, krakenBroodGlow, krakenEggArc, krakenMaterialGrade, krakenWaterMask,
   type KrakenBroodMaterial } from './submersionShader';
 import { addReviewDrain, type KrakenReviewDrainFilter } from './KrakenReviewDrainFilter';
 import { KrakenShadowRenderer } from './KrakenShadowRenderer';
@@ -906,7 +906,7 @@ export class KrakenEggFlightView implements GrenadeEggVisual {
     private readonly flight: { readonly releasedAt: number; readonly landsAt: number; readonly target?: KrakenPoint },
     private readonly clock: () => number, shadows?: ShadowSystem) {
     // Lit like the landed egg; without the material pass the albedo atlas reads as a dark blot.
-    this.view = new KrakenSpriteView(scene, asset, () => 0, diagnostic, false, DEPTH.PROJECTILES, KRAKEN_WORLD_EXPOSURE, shadows, false);
+    this.view = new KrakenSpriteView(scene, asset, KRAKEN_DRY_SAMPLER, diagnostic, false, DEPTH.PROJECTILES, KRAKEN_WORLD_EXPOSURE, shadows, false);
     this.effects = new KrakenEffects(scene, () => 0);
   }
   update(x: number, y: number, _size: number, vx: number, vy: number): void {
@@ -941,7 +941,7 @@ export class KrakenSpineFlightView implements GrenadeEggVisual {
   private destroyed = false;
   constructor(scene: Phaser.Scene, asset: KrakenPresentationAsset, diagnostic: (message: string) => void,
     private readonly clock: () => number, shadows?: ShadowSystem, private readonly seed = 0) {
-    this.view = new KrakenSpriteView(scene, asset, () => 0, diagnostic, false, DEPTH.PROJECTILES, KRAKEN_WORLD_EXPOSURE, shadows, false);
+    this.view = new KrakenSpriteView(scene, asset, KRAKEN_DRY_SAMPLER, diagnostic, false, DEPTH.PROJECTILES, KRAKEN_WORLD_EXPOSURE, shadows, false);
     this.effects = new KrakenEffects(scene, () => 0);
     this.startedAt = clock();
   }

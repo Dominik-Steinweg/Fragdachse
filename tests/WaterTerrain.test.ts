@@ -20,6 +20,23 @@ const x = metrics.offsetX + (cell.gridX + .5) * CELL_SIZE;
 const y = metrics.offsetY + (cell.gridY + .5) * CELL_SIZE;
 
 describe('Water terrain contracts', () => {
+  it('proves constant mask coverage across whole regions, including enclosed holes and clamped edges', () => {
+    const cells = [];
+    for (let y = 0; y < 9; y++) for (let x = 0; x < 9; x++) if (x !== 4 || y !== 4) cells.push({ gridX: x, gridY: y });
+    const model = new WaterSurfaceModel(cells, { width: CELL_SIZE * 12, height: CELL_SIZE * 12 });
+    expect(model.uniformCoverage(CELL_SIZE, CELL_SIZE, CELL_SIZE * 2, CELL_SIZE * 2)).toBe(1);
+    expect(model.uniformCoverage(CELL_SIZE * 10, 0, CELL_SIZE * 15, CELL_SIZE * 12)).toBe(0);
+    expect(model.uniformCoverage(CELL_SIZE * 2, CELL_SIZE * 2, CELL_SIZE * 7, CELL_SIZE * 7)).toBeNull();
+    for (let y = -2; y < 13; y++) for (let x = -2; x < 13; x++) {
+      const left = x * CELL_SIZE + .1, top = y * CELL_SIZE + .1;
+      const right = left + CELL_SIZE * .9, bottom = top + CELL_SIZE * .9;
+      const coverage = model.uniformCoverage(left, top, right, bottom);
+      if (coverage === null) continue;
+      for (let py = 0; py <= 4; py++) for (let px = 0; px <= 4; px++) {
+        expect(Math.max(0, Math.min(1, model.sample(left + px / 4 * (right - left), top + py / 4 * (bottom - top))))).toBe(coverage);
+      }
+    }
+  });
   const areaMap: CoopDefenseMapAuthoringConfig = {
     mapId: 'area-test', arenaWidthCells: 60, arenaHeightCells: 40, balanceReferenceDurationSec: 60,
     bases: [], powerUps: [], objective: 'survive', surviveDurationSec: 60, respawnsPerPlayer: 0,

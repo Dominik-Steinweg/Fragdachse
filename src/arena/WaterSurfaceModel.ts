@@ -65,6 +65,22 @@ export class WaterSurfaceModel {
     return mask < 0 ? undefined : mask;
   }
 
+  /** Exact constant coverage proof for an axis-aligned region, including the
+   * same clamped world boundary as sample(). Shore cells always fall back. */
+  uniformCoverage(left: number, top: number, right: number, bottom: number): 0 | 1 | null {
+    const col = (x: number) => Math.min(this.columns - 1, Math.floor(Math.max(0, Math.min(x, this.dimensions.width)) / CELL_SIZE));
+    const row = (y: number) => Math.min(this.rows - 1, Math.floor(Math.max(0, Math.min(y, this.dimensions.height)) / CELL_SIZE));
+    const x0 = col(left), x1 = col(right), y0 = row(top), y1 = row(bottom);
+    let coverage: 0 | 1 | null = null;
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const mask = this.masks[y * this.columns + x];
+      const next = mask < 0 ? 0 : mask === 255 ? 1 : null;
+      if (next === null || (coverage !== null && coverage !== next)) return null;
+      coverage = next;
+    }
+    return coverage;
+  }
+
   sample(x: number, y: number): number {
     // Extend the boundary field into the bake halo so blur and shader displacement
     // cannot introduce a shore at the map edge. Dry boundary cells stay dry.
@@ -73,6 +89,9 @@ export class WaterSurfaceModel {
     const gx = Math.min(Math.floor(x / CELL_SIZE), this.columns - 1);
     const gy = Math.min(Math.floor(y / CELL_SIZE), this.rows - 1);
     const mask = this.masks[gy * this.columns + gx];
+    // All eight neighbours are wet: the distance expression has no active
+    // edge or corner terms, so its exact value is the initial distance cap.
+    if (mask === 255) return WATER_SHORE_DISTANCE;
     return mask === undefined || mask < 0 ? -WATER_SHORE_DISTANCE : waterBlobDistance(mask, x - gx * CELL_SIZE, y - gy * CELL_SIZE);
   }
 

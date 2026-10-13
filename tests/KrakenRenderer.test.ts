@@ -15,7 +15,7 @@ vi.mock('../src/effects/kraken/KrakenReviewDrainFilter', () => ({ addReviewDrain
 import { KrakenRenderer, KrakenSpriteView, KrakenEffects, KrakenEggFlightView, krakenSocket, sampleKrakenBody,
   sampleKrakenTentacle, krakenTentacleSink, sampleKrakenEgg, krakenRiseTiming, krakenDeathAlpha, krakenBroodDiscs, type KrakenPresentationAsset, type KrakenPresentationAssets } from '../src/effects/kraken/KrakenRenderer';
 import { KrakenIntroRenderer } from '../src/effects/kraken/KrakenIntroRenderer';
-import { KRAKEN_BROOD, KRAKEN_WORLD_EXPOSURE, krakenEggArc, krakenWaterMask } from '../src/effects/kraken/submersionShader';
+import { KRAKEN_BROOD, KRAKEN_WORLD_EXPOSURE, KrakenSubmersion, krakenEggArc, krakenWaterMask, type KrakenWaterSampler } from '../src/effects/kraken/submersionShader';
 import { WaterDisturbanceField, type WaterDisturbance } from '../src/arena/WaterDisturbanceField';
 import { KRAKEN_RISE_INTRO } from '../src/config/bossIntros';
 import { getCameraFocusOverride } from '../src/graphics/cameraFocusOverride';
@@ -111,6 +111,29 @@ function sceneFixture() {
 }
 
 describe('host timelines and D asset projection', () => {
+  it('reuses proven constant masks and returns to exact shoreline sampling after movement or revision', () => {
+    const { scene, masks } = sceneFixture(), sprite = scene.add.sprite();
+    let uniform: 0 | 1 | null = 0;
+    const sample = vi.fn((x: number, _y: number) => x / 20);
+    const waterAt: KrakenWaterSampler = Object.assign(sample, { uniformMask: () => uniform });
+    const elevation = scene.textures.getFrame('height', 'pose');
+    const filter = new KrakenSubmersion(sprite, elevation, { min: 0, max: 1 }, waterAt);
+    let actual = new Uint8ClampedArray();
+    masks[0].context.putImageData.mockImplementation((pixels: ImageData) => { actual = pixels.data.slice(); });
+    filter.update(elevation, 0, 1);
+    expect(sample).not.toHaveBeenCalled();
+    expect(actual).toEqual(krakenWaterMask(128, 128, sprite, () => 0));
+    sprite.x += 1; filter.update(elevation, 0, 2);
+    expect(masks[0].refresh).toHaveBeenCalledTimes(1);
+    uniform = null; sprite.rotation = .67; sprite.originX = .2;
+    filter.update(elevation, 0, 3);
+    expect(actual).toEqual(krakenWaterMask(128, 128, sprite, sample));
+    uniform = 1; filter.update(elevation, 0, 4, 1);
+    expect(actual).toEqual(krakenWaterMask(128, 128, sprite, () => 1));
+    uniform = 0; filter.update(elevation, 0, 5, 2);
+    expect(actual).toEqual(krakenWaterMask(128, 128, sprite, () => 0));
+    filter.destroy(); expect(masks[0].destroy).toHaveBeenCalledOnce();
+  });
   it('keeps warning and blocked wakes still and stamps wet traces at sampled world poses', () => {
     const { scene, shaders } = sceneFixture(), fx = new KrakenEffects(scene, () => 0);
     const phase = { kind: 'ashore' as const, corridorId: 'shore', startedAt: 0, moveAt: 1200, gripAt: 1900,

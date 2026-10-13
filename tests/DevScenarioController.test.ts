@@ -5,7 +5,8 @@ import { runInNewContext } from 'node:vm';
 import EventEmitter from 'eventemitter3';
 import { krakenReviewOptions } from '../src/dev/scenario/KrakenBossReview';
 import { KRAKEN_MAP_ID, krakenAbyssMap } from '../src/dev/scenario/krakenAbyssMap';
-import { isDiagnosticMapId, COOP_DEFENSE_MAP_CONFIGS } from '../src/config/coopDefenseMaps';
+import { isDiagnosticMapId, COOP_DEFENSE_MAP_CONFIGS, getCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
+import { KRAKEN_PERFORMANCE_MAP_ID } from '../src/dev/scenario/krakenPerformanceMap';
 import type * as Phaser from 'phaser';
 import type { ArenaRuntime } from '../src/scenes/arena/ArenaRuntime';
 import { defaultScenario, encodeScenario, parseScenario } from '../src/dev/scenario/config';
@@ -92,6 +93,19 @@ it('validates Kraken patches and treats frame selection as a paused clip-local p
     { phase: 'other' }, { speed: Infinity }, { playing: 'yes' }, { tentaclePivot: [0, 2] }, { atlas: '../atlas.json' }]) {
     expect(() => krakenReviewOptions(invalid)).toThrow();
   }
+});
+
+it('owns the performance fixture without mutating campaign waves or habitat', () => {
+  const campaign = structuredClone(getCoopDefenseMapConfig('20'));
+  controller.startKrakenMission(false, null, true);
+  const fixture = getCoopDefenseMapConfig(KRAKEN_PERFORMANCE_MAP_ID);
+  expect(fixture.encounters).toEqual(campaign.encounters);
+  expect(fixture.krakenHabitat).toEqual(campaign.krakenHabitat);
+  expect(fixture.water).toEqual(campaign.water);
+  expect(fixture.boss?.startAfterEncounterId).toBeUndefined();
+  expect(getCoopDefenseMapConfig('20')).toEqual(campaign);
+  controller.destroy();
+  expect(isDiagnosticMapId(KRAKEN_PERFORMANCE_MAP_ID)).toBe(false);
 });
 
 function enter() {

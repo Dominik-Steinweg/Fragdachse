@@ -39,14 +39,19 @@ it('keeps render texture identities unique when a deterministic frame repeats it
   const uuid = '12345678-1234-4123-8123-123456789abc';
   const keys = new Set([uuid, 'authored']);
   const original = vi.fn((key: string) => { keys.add(key); return key; });
-  const textures = { addDynamicTexture: original, exists: (key: string) => keys.has(key) };
+  const originalCanvas = vi.fn((key: string) => { keys.add(key); return key; });
+  const textures = { addDynamicTexture: original, createCanvas: originalCanvas, exists: (key: string) => keys.has(key) };
   const restore = bindVisualTestTextureKeys(textures as never);
   try {
     const first = textures.addDynamicTexture(uuid), second = textures.addDynamicTexture(uuid);
     expect(first).not.toBe(uuid); expect(second).not.toBe(first);
     expect(textures.addDynamicTexture('authored')).toBe('authored');
+    const canvas = textures.createCanvas(uuid);
+    expect(canvas).not.toBe(uuid); expect(canvas).not.toBe(first); expect(canvas).not.toBe(second);
+    expect(textures.createCanvas('authored')).toBe('authored');
   } finally { restore(); visualTest.enabled = enabled; }
   expect(textures.addDynamicTexture).toBe(original);
+  expect(textures.createCanvas).toBe(originalCanvas);
 });
 
 describe('Dev scenario contract', () => {

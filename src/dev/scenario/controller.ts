@@ -26,6 +26,8 @@ import type { TrainDevPassOptions } from '../../train/TrainManager';
 import { setCameraBaseScroll } from '../../graphics/cameraBaseScroll';
 import { getCameraFocusOverride, resolveCameraFocusZoom } from '../../graphics/cameraFocusOverride';
 import { ScenarioClock } from './clock';
+import { KrakenPerformanceMeasurement } from './KrakenPerformanceMeasurement';
+import { KRAKEN_PERFORMANCE_MAP_ID, registerKrakenPerformanceMap } from './krakenPerformanceMap';
 import { visualTest, bindVisualTestBootClock, bindVisualTestTextureKeys } from './visualTest';
 import { BootScreen } from '../../ui/BootScreen';
 import { getGraphicsQualityController, type GraphicsQuality } from '../../graphics/GraphicsQuality';
@@ -59,23 +61,34 @@ export class DevScenarioController {
   private krakenLoading = false;
   private pendingKrakenMission: { skipIntro: boolean; hp: number | null } | null = null;
   private pendingKrakenHp: number | null = null;
+  private krakenPerformance: KrakenPerformanceMeasurement | null = null;
+  private unregisterKrakenPerformanceMap: (() => void) | null = null;
+  measureKraken(phase: string | null): void {
+    if (phase === null) { this.krakenPerformance?.stop(); return; }
+    this.requireReady();
+    this.krakenPerformance ??= new KrakenPerformanceMeasurement(this.scene, this.runtime, this.clock);
+    this.krakenPerformance.start(phase);
+  }
+  readKrakenPerformance() { return this.krakenPerformance?.read() ?? null; }
   private figureSunOverride = false;
-  startKrakenMission(skipIntro = false, hp: number | null = null): void {
-    this.start({ ...defaultScenario(), mapId: KRAKEN_MAP_ID });
+  startKrakenMission(skipIntro = false, hp: number | null = null, performance = false): void {
+    this.krakenPerformance?.stop();
+    if (performance) this.unregisterKrakenPerformanceMap ??= registerKrakenPerformanceMap();
+    this.start({ ...defaultScenario(), mapId: performance ? KRAKEN_PERFORMANCE_MAP_ID : KRAKEN_MAP_ID });
     this.pendingKrakenMission = { skipIntro, hp };
   }
   setKrakenHp(hp: number): void {
     this.requireReady();
-    if (this.config.mapId !== KRAKEN_MAP_ID || !this.runtime.devScenarioPort.setKrakenHp(hp)) throw Error('Active diagnosis Kraken required');
+    if (![KRAKEN_MAP_ID, KRAKEN_PERFORMANCE_MAP_ID].includes(this.config.mapId) || !this.runtime.devScenarioPort.setKrakenHp(hp)) throw Error('Active diagnosis Kraken required');
   }
   krakenAct(act: KrakenDevAct): void {
     this.requireReady();
-    if (this.config.mapId !== KRAKEN_MAP_ID) throw Error('Kraken diagnosis map required');
+    if (![KRAKEN_MAP_ID, KRAKEN_PERFORMANCE_MAP_ID].includes(this.config.mapId)) throw Error('Kraken diagnosis map required');
     this.lastAction = requireKrakenDevHost().requestDevAction(act);
   }
   krakenTarget(point: GridPoint): void {
     this.requireReady();
-    if (this.config.mapId !== KRAKEN_MAP_ID) throw Error('Kraken diagnosis map required');
+    if (![KRAKEN_MAP_ID, KRAKEN_PERFORMANCE_MAP_ID].includes(this.config.mapId)) throw Error('Kraken diagnosis map required');
     requireKrakenDevHost();
     this.teleport(point, false);
   }
@@ -769,6 +782,12 @@ export class DevScenarioController {
       }
       if (!this.setupPending && this.pendingKrakenMission) {
         const options = this.pendingKrakenMission;
+        if (this.config.mapId === KRAKEN_PERFORMANCE_MAP_ID) {
+          // Align integer host ticks and seed independently of asset-loading time
+          // and the World revision. Production RNG/clock contracts stay unchanged.
+          if (Math.round(this.clock.now * .06) % 3 !== 0) return;
+          requireKrakenDevHost().seedDevScenario(this.config.seed);
+        }
         if (this.runtime.devScenarioPort.startKrakenMission(options.skipIntro)) {
           this.pendingKrakenMission = null; this.pendingKrakenHp = options.hp;
           this.config.freezeMission = false; this.config.suppressWaves = false;
@@ -972,6 +991,7 @@ export class DevScenarioController {
     return { path: result.path, url: result.url, status };
   }
   destroy(): void {
+    this.krakenPerformance?.stop(); this.unregisterKrakenPerformanceMap?.(); this.unregisterKrakenPerformanceMap = null;
     this.shapeDraft?.destroy(); this.shapeDraft = null;
     this.clearFigureSun();
     this.krakenReview?.destroy(); this.krakenReview = null;

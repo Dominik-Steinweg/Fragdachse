@@ -574,6 +574,75 @@ Fahrt: `dev.run({action:"trainShowcase",focus:"center",zoom:2.2,move:true,speedP
 
 ## Kraken-Mission (AP2b / Live-Prüfung)
 
+### Reproduzierbarer Performance-Parcours
+
+Bei bereits laufendem Dev-Server auf `http://127.0.0.1:8090/`:
+
+```powershell
+npm run perf:kraken -- --output=build/kraken-perf/current
+# Wiederholungen oder einzelne Qualitätsstufen:
+npm run perf:kraken -- --qualities=high,medium,low --runs=3 --output=build/kraken-perf/repeated
+# Vergleich mit einem gespeicherten Lauf (inklusive Inhalts-/Workload-Prüfung):
+npm run perf:kraken -- --compare=build/kraken-perf/current/report.json --output=build/kraken-perf/next
+# Separater Diagnoselauf: CPU-Profil, gesampelte Allokationen, GC-Trace
+npm run perf:kraken -- --qualities=high --profile=true --output=build/kraken-perf/profile
+```
+
+Der Runner verwendet das vorhandene Playwright-Core/Chrome, den Dev-Host, feste
+60-Hz-Simulationsschritte, Seed 12345 und die echten `krakenAct`-Aktionen. Er startet
+keinen Server und beendet keinen vorhandenen Browser. Jeder Lauf erhält einen
+eigenen Browserprozess, 1920×1080 und DPR 1. `CHROME_PATH` überschreibt den lokalen
+Chrome-Pfad. Alle Optionen verwenden `--name=wert`.
+
+Die nur im Dev-Controller registrierte Karte `kraken-performance` übernimmt die
+authored Geometrie und sämtliche Begleitwellen aus Map 20. Sie überspringt die
+Boss-Freigabe durch die Eröffnungswelle und ersetzt die zu verteidigende Basis durch
+den vorhandenen unbewaffneten Diagnose-Außenposten. Der Beobachter erhält laufend
+HP zurück. Das ist eine Lastmessung, kein Balance- oder Kampagnen-Abnahmetest.
+Der Einmal-Seed für den Diagnoseboss ist unabhängig von Ladezeit und World-Revision;
+er ist nur vor dem Start und nur im isolierten Dev-Host erlaubt.
+
+Der Ablauf enthält Intro, Wasserphase, Tinte, vollständige Stachelsalve, Eierflug
+und Schlüpfen, Tauchgang mit mehreren Tentakeln, Begleitwellen, Landgang,
+Klauen-Ausfall, Land-Salve, Schleimspur und Tod durch normalen Waffenschaden.
+Angriffsanfragen warten auf einen frischen Wasserzyklus, statt den regulären
+Tauch-Timer zu verändern. Ab der Landphase folgt die Kamera dem Beobachter.
+
+`report.json`, `report.md` und Frame-Rohdaten je Phase enthalten Mittelwert, p95,
+p99, Maxima und Hitches >33 ms, CPU-Callbackzeit, asynchrone GPU-Zeitmessungen,
+Draw Calls, Programmwechsel, Compile-/Link-Aufrufe, Kraken-Residenz einschließlich
+Renderzielen sowie Heap-Zuwächse/-Rückgänge. Der GPU-Timer umfasst die Submissionen
+des ganzen Callbacks einschließlich Lücken zwischen ihnen; er misst keine reine
+GPU-Auslastung. Heap-Differenzen sind Näherungen, keine gemessenen GC-Pausen.
+`--profile=true` liefert dafür gesonderte `.cpuprofile`, `.heapprofile` und
+`.trace.json` sowie Main-Thread-GC-Pausen und hochgerechnete Allokationsmengen je Phase.
+Das Heap-Sampling verwendet 32 KiB Abstand und behält auch bereits eingesammelte
+Objekte in der Schätzung. Profilierte Zeiten nicht mit normalen Messläufen vermischen.
+
+Die Phasenfenster enthalten ihre ausdrücklich skriptierten Wartezeiten und
+Ausläufe. Die Rohdaten nennen zusätzlich echte Hostphase und Aktion. Pausen durch
+Steuerbefehle und Screenshots zählen nicht zu den Frameintervallen; CPU-Zeiten
+erfassen alle ausgeführten Spielschritte. Berichte führen Inhalts-Hashes und
+Workload-Hashes, damit abweichende Kampagneninhalte oder Kampfverläufe beim
+Vergleich erkennbar bleiben. Asynchrone Worker-/Asset-Fertigstellung und
+Browser-Scheduling bleiben reale Messbedingungen.
+
+Abdeckung, Browserfehler und Residenzbudgets werden geprüft; unvollständige Läufe
+sind keine gültige Regressionsevidenz. High-Aufnahmen und Kontaktbogen landen im
+Ausgabeverzeichnis. `--captures=false` deaktiviert sie. Die erweiterten
+Dev-Befehle sind `krakenMission` mit `performance:true`, `measureKraken` mit
+`phase:'name'` bzw. `stop:true`, und `devScenario.krakenPerformance()` für Rohdaten.
+
+Für lokale A/B-Diagnosen kann `--modules=<Archiv>` explizit archivierte, vom selben
+Vite-Server transformierte Module laden (`manifest.json`: geordnete Repositorypfade,
+`0.js`, `1.js`, …). Nur aufgelistete Module werden ersetzt; der Archivpfad steht
+im Bericht. Das ist kein portabler Produktionsbuild. `--parity=<Quellarchiv>` prüft
+in einem separaten High-Lauf die frühere `KrakenSubmersion.update`-Methode gegen
+die aktuelle an eingefrorenen Zuständen: Originalbilder, Differenzbilder und
+Ergebnisse nach den vorhandenen Pixelgrenzen werden gespeichert. Das Quellarchiv
+enthält den ursprünglichen Repositorypfad der Datei. Solche Bildprüfläufe sind
+wegen zusätzlicher Render-Schritte von den Zeitvergleichen getrennt.
+
 Im vorhandenen Dev-Szenario-Einstieg startet der folgende Befehl die echte Host-Coop-Mission
 auf `kraken-abyss-lab`, inklusive Habitat, Boss-Intro, Tauchzyklus, Tentakeln und Brut:
 

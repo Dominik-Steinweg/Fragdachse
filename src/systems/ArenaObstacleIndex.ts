@@ -172,12 +172,31 @@ function circlesOverlap(
 export class ArenaObstacleIndex {
   private rebuildCount = 0;
   private segmentCandidateCount = 0;
+  private movementSnapshot: NavigationGeometrySnapshot | null = null;
+  private movementSnapshotRebuild = -1;
+  private movementSnapshotWater: WaterGeometry | null = null;
+  private movementActive = new Uint8Array(0);
   getWorkCounters(): { obstacleRebuilds: number; obstacleSegmentCandidates: number } {
     return { obstacleRebuilds: this.rebuildCount, obstacleSegmentCandidates: this.segmentCandidateCount };
   }
   /** Numeric copy for asynchronous navigation, sourced from the same bodies as physical queries. */
   snapshotMovementGeometry(): NavigationGeometrySnapshot {
     if (this.needsRebuild()) this.rebuild();
+    // The projection is immutable. Keep its identity while geometry is unchanged,
+    // but inspect live active flags on every call: destruction must be visible even
+    // before a topology revision or explicit markDirty reaches this index.
+    let changed = !this.movementSnapshot || this.movementSnapshotRebuild !== this.rebuildCount
+      || this.movementSnapshotWater !== this.waterGeometry;
+    if (this.movementActive.length !== this.rectCount + this.circleSource.length) {
+      this.movementActive = new Uint8Array(this.rectCount + this.circleSource.length);
+      changed = true;
+    }
+    for (let i = 0; i < this.movementActive.length; i++) {
+      const active = Number(i < this.rectCount ? this.rectSource[i].active : this.circleSource[i - this.rectCount].active);
+      if (this.movementActive[i] !== active) changed = true;
+      this.movementActive[i] = active;
+    }
+    if (!changed) return this.movementSnapshot!;
     const bounds = this.sources.bounds();
     const obstacles: NavigationObstacle[] = [];
     for (let i = 0; i < this.rectCount; i++) {
@@ -200,7 +219,9 @@ export class ArenaObstacleIndex {
       obstacles.push({ shape: 'rect', id: `water:${cell.gridX}:${cell.gridY}`, kind: 'water',
         left: x, top: y, right: x + 32, bottom: y + 32 });
     }
-    return { left: bounds.offsetX, top: bounds.offsetY, right: bounds.offsetX + bounds.width,
+    this.movementSnapshotRebuild = this.rebuildCount;
+    this.movementSnapshotWater = this.waterGeometry;
+    return this.movementSnapshot = { left: bounds.offsetX, top: bounds.offsetY, right: bounds.offsetX + bounds.width,
       bottom: bounds.offsetY + bounds.height, obstacles };
   }
   /** Rechteck-Hindernisse als flaches [l,t,r,b]. */
@@ -329,6 +350,9 @@ export class ArenaObstacleIndex {
 
   /** Release World references immediately, even if no later query triggers a rebuild. */
   clear(): void {
+    this.movementSnapshot = null;
+    this.movementSnapshotWater = null;
+    this.movementActive = new Uint8Array(0);
     this.carrierOverflightArea = null;
     this.rectSource.length = 0;
     this.circleSource.length = 0;
