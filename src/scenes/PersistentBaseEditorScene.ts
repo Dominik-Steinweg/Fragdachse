@@ -119,7 +119,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     const model = this.options.model;
     this.label(WORLD_PANEL.x + WORLD_PANEL.width / 2, 216,
       t(model.area.kind === 'radius' ? 'ui.base.statsRadius' : 'ui.base.stats', {
-        stage: model.baseline.persistentBaseAreaStage, hp: resolvePersistentBaseMaxHp(model.baseline.persistentBaseHealthRewards),
+        stage: model.areaStage, hp: resolvePersistentBaseMaxHp(model.baseline.persistentBaseHealthRewards),
         radius: model.area.kind === 'radius' ? model.area.radiusCells : 0,
       }), 'section', .5, WORLD_PANEL.width);
     const frameSize = this.view.width + 40;

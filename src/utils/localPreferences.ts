@@ -1,4 +1,5 @@
 import { createDefaultDawnProgress, sanitizeDawnProgress, type DawnProgress } from '../dawn/economy/DawnProgress';
+import { resolvePersonalPersistentBaseAreaStage } from '../persistentBase/PersistentBaseAreaStageResolution';
 import { getPersistentBaseHealthReward, isPersistentBaseHealthRewards, type PersistentBaseHealthReward } from '../persistentBase/PersistentBaseHealth';
 import { getLoadoutUtilityId, loadoutToolFromId } from '../loadout/LoadoutTools';
 import { setLoadoutToolSlots } from './coopDefenseUpgrades';
@@ -1621,6 +1622,18 @@ export function setStoredPersonalBaseContribution(contribution: PersistentPlayer
 }
 
 /** Die semantische, persoenliche Ausbau-Stufe der persistenten Basis. */
+/**
+ * Persoenliche Ausbaustufe aus Kampagne und Dawn-Expansion. Sie ist die Stufe, die der Spieler
+ * jedem Host anbietet und im Basis-Editor bearbeitet; jede World begrenzt sie nach ihrer Site.
+ */
+export function getStoredPersonalPersistentBaseAreaStage(): PersistentBaseAreaStage {
+  const coop = readPreferences().progression.coopDefense;
+  return resolvePersonalPersistentBaseAreaStage({
+    campaignStage: coop.persistentBaseAreaStage,
+    dawnExpansionLevel: sanitizeDawnProgress(coop.dawn)?.expansionLevel ?? 0,
+  });
+}
+
 export function getStoredPersistentBaseAreaStage(): CampaignPersistentBaseAreaStage {
   return readPreferences().progression.coopDefense.persistentBaseAreaStage;
 }

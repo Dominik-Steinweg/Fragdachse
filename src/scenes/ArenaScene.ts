@@ -9,7 +9,7 @@ import { preloadRockBase } from '../arena/RockBaseConfig';
 import { PersistentBaseEditorScene } from './PersistentBaseEditorScene';
 import { PersistentBaseEditorModel } from '../persistentBase/PersistentBaseEditorModel';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
-import { getStoredCoopDefenseProgress, getStoredPersistentBaseUnlocked, getStoredPersistentBaseRewardState, getStoredPersistentBaseRewardUnlocks, getStoredPersonalBaseContribution, setStoredPersonalBaseContribution, setStoredPersistentBaseRewardState } from '../utils/localPreferences';
+import { getStoredCoopDefenseProgress, getStoredPersistentBaseUnlocked, getStoredPersistentBaseRewardState, getStoredPersistentBaseRewardUnlocks, getStoredPersonalBaseContribution, getStoredPersonalPersistentBaseAreaStage, setStoredPersonalBaseContribution, setStoredPersistentBaseRewardState } from '../utils/localPreferences';
 import { getDeferredAssets, preloadDeferredImages } from '../assets/DeferredAssets';
 import { SHOOTING_RANGE_CONTROLS } from '../shootingRange/ShootingRangeLayout';
 import { getPipelineAssetForTexture } from '../config/pipelineAssets';
@@ -2204,7 +2204,11 @@ export class ArenaScene extends Phaser.Scene {
   private openBaseEditor(newRewardIds: readonly PersistentBaseRewardId[]): void {
     if (this.baseEditor || !bridge.isHost() || bridge.getGamePhase() !== 'LOBBY') return;
     const baseline = getStoredCoopDefenseProgress();
-    const model = new PersistentBaseEditorModel({ ...baseline, personalBaseContribution: getStoredPersonalBaseContribution() });
+    const personalAreaStage = getStoredPersonalPersistentBaseAreaStage();
+    const model = new PersistentBaseEditorModel(
+      { ...baseline, personalBaseContribution: getStoredPersonalBaseContribution() },
+      personalAreaStage,
+    );
     const revision = bridge.getCurrentWorldRevision();
     if (revision === null) {
       if (this.afterRoundTransition?.active) this.meta?.finishAfterRoundStep('base');
@@ -2227,9 +2231,9 @@ export class ArenaScene extends Phaser.Scene {
         if (current.persistentBaseRewardState.revision !== baseline.persistentBaseRewardState.revision) return false;
         const changedConstructions = JSON.stringify(model.constructions) !== JSON.stringify(model.baseline.personalBaseContribution.constructions);
         if (changedConstructions) {
-          bridge.offerPersonalBaseAreaStage(baseline.persistentBaseAreaStage);
+          bridge.offerPersonalBaseAreaStage(personalAreaStage);
           const result = await bridge.sendPersistentBaseLayoutEdit({ worldRevision: revision,
-            expectedRevision: model.baseline.personalBaseContribution.revision, areaStage: baseline.persistentBaseAreaStage,
+            expectedRevision: model.baseline.personalBaseContribution.revision, areaStage: personalAreaStage,
             constructions: model.constructions });
           if (!result.ok) return false;
           setStoredPersonalBaseContribution(result.contribution);

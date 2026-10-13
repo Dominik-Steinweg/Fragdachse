@@ -63,13 +63,13 @@ export class PersistentBaseEditorWorld {
     const cells = this.anchor * 2 + 1;
     const viewport = { width: this.size, height: this.size };
     const site = { baseId: 'personal-base', anchor: { gridX: this.anchor, gridY: this.anchor },
-      maxAreaStage: model.baseline.persistentBaseAreaStage };
+      maxAreaStage: model.areaStage };
     const definition: WorldDefinition = { id: 'world:base-editor', metrics: { widthCells: cells, heightCells: cells },
       bases: [buildPersistentBaseCoreBaseConfig(site)], persistentBaseSite: site, terrain: {}, initialTimeOfDay: '08:00',
       actionPolicy: { combat: false }, participationPolicy: { selfAdmit: false }, presentationPolicy: { previewWithoutParticipation: true } };
     this.world = createWorldRuntimeContext({ definition, descriptor: {
       worldRevision: 1, definitionId: definition.id, seed: 20260524, generatorVersion: 1, layoutFingerprint: 'personal-editor',
-      parameters: { persistentBaseUnlocked: true, persistentBaseAreaStage: model.baseline.persistentBaseAreaStage,
+      parameters: { persistentBaseUnlocked: true, persistentBaseAreaStage: model.areaStage,
         persistentBaseHealthRewards: model.baseline.persistentBaseHealthRewards } },
       metricsProfile: { arenaWidth: this.size, arenaHeight: this.size, arenaOffsetX: 0, arenaOffsetY: 0,
         arenaViewportWidth: viewport.width, arenaViewportHeight: viewport.height, usesDynamicCamera: true, showStaticArenaFrames: false } });

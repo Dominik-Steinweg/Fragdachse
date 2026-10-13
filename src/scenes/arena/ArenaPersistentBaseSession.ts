@@ -2,7 +2,7 @@ import { resolvePersistentRewardWorldCell } from '../../persistentBase/Persisten
 import { getPersistentBaseRewardFootprint, persistentBaseRewardsOverlap } from '../../persistentBase/PersistentBasePlacementRules';
 import { applyPersistentBaseLayoutEdit, type PersistentBaseLayoutEdit, type PersistentBaseLayoutEditResult } from '../../persistentBase/PersistentBaseLayoutEdit';
 import { getPersistentConstructionFootprint, isPersistentBaseRewardCellAllowed } from '../../persistentBase/PersistentBasePlacementRules';
-import { getStoredPersistentBaseAreaStage } from '../../utils/localPreferences';
+import { getStoredPersonalPersistentBaseAreaStage } from '../../utils/localPreferences';
 import type Phaser from 'phaser';
 import { bridge } from '../../network/bridge';
 import { emitArenaMapGridChanged } from './ArenaEvents';
@@ -218,7 +218,7 @@ export class ArenaPersistentBaseSession {
   syncPersistentBaseContributions(): void {
     // Anbieten heisst nicht bauen: Der Host entscheidet, was davon in seiner Welt steht.
     bridge.offerPersistentBaseContribution(getStoredPersonalBaseContribution());
-    bridge.offerPersonalBaseAreaStage(getStoredPersistentBaseAreaStage());
+    bridge.offerPersonalBaseAreaStage(getStoredPersonalPersistentBaseAreaStage());
 
     // Nur ein host-bestaetigter Stand darf lokal fortgeschrieben werden. Ohne diese Regel koennte
     // ein manipulierter Client seine eigene Revision erhoehen und ungeprueftes Bauwerk dauerhaft
@@ -257,7 +257,7 @@ export class ArenaPersistentBaseSession {
     this.ingestOfferedPersistentBaseContributions();
     const ownerId = this.session.getOwnerIdForPlayer(playerId);
     const current = ownerId ? this.session.contributions.getCommittedContribution(ownerId) : null;
-    const stage = playerId === bridge.getLocalPlayerId() ? getStoredPersistentBaseAreaStage() : bridge.getPersonalBaseAreaStage(playerId);
+    const stage = playerId === bridge.getLocalPlayerId() ? getStoredPersonalPersistentBaseAreaStage() : bridge.getPersonalBaseAreaStage(playerId);
     if (!current || stage === null || stage !== edit.areaStage) return { ok: false, reason: 'stale' };
     const result = applyPersistentBaseLayoutEdit(current, edit);
     if (!result.ok) return result;

@@ -9,7 +9,7 @@ import { COOP_DEFENSE_MAP_CONFIGS } from '../src/config/coopDefenseMaps';
 import { getPersistentBaseRewardDefinition } from '../src/persistentBase/PersistentBaseRewardCatalog';
 import { PERSISTENT_BASE_REWARD_IDS } from '../src/persistentBase/PersistentBaseRewardTypes';
 import type { PersistentConstruction } from '../src/persistentBase/PersistentBaseTypes';
-import { resolvePersistentBaseCoreCellsRelative } from '../src/persistentBase/PersistentBaseCore';
+import { resolvePersistentBaseCoreCellsRelative, resolvePersistentBaseBuildAreaForStage } from '../src/persistentBase/PersistentBaseCore';
 import { getBaseEditorAppearance } from '../src/persistentBase/PersistentBaseEditorAppearance';
 import { getCoopDefenseConstructionDefinition } from '../src/config/coopDefenseConstructions';
 
@@ -26,6 +26,14 @@ const pedestal = PERSISTENT_BASE_REWARD_IDS.find(id => getPersistentBaseRewardDe
 const turret = PERSISTENT_BASE_REWARD_IDS.find(id => getPersistentBaseRewardDefinition(id).category === 'baseTurret')!;
 
 describe('personal base editor draft', () => {
+  it('edits the personal stage including Dawn expansion beyond the stored campaign stage', () => {
+    const progress = baseline();
+    const model = new PersistentBaseEditorModel(progress, 7);
+    expect(model.areaStage).toBe(7);
+    expect(model.area).toEqual(resolvePersistentBaseBuildAreaForStage(7));
+    expect(new PersistentBaseEditorModel(progress).areaStage).toBe(progress.persistentBaseAreaStage);
+  });
+
   it('keeps removed personal builds in the draft list and allows placing them again without changing identity', () => {
     const model = new PersistentBaseEditorModel(baseline());
     const object = { kind: 'construction' as const, id: construction.persistentId };

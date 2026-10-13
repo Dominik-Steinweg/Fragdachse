@@ -2,7 +2,7 @@ import { createDefaultDawnProgress, sanitizeDawnProgress, DAWN_MAX_SCRAP, DAWN_M
 import { DAWN_UPGRADE_BRANCHES, validateDawnUpgradeBranches } from '../src/config/dawn/upgradeBranches';
 import { COOP_DEFENSE_CLASS_IDS } from '../src/config/coopDefenseClasses';
 import { getLockedCoopDefenseBranchUpgradeIds, resolveCoopDefenseUpgradeEntitlements, resolveEarnedCoopDefenseBossPoints, getSpentCoopDefenseBossPoints, COOP_DEFENSE_UPGRADE_DEFINITIONS } from '../src/utils/coopDefenseUpgrades';
-import { getStoredDawnProgress, updateStoredDawnProgress, acknowledgeStoredDawnNotice, restoreStoredCoopDefenseProgress } from '../src/utils/localPreferences';
+import { getStoredDawnProgress, updateStoredDawnProgress, acknowledgeStoredDawnNotice, restoreStoredCoopDefenseProgress, getStoredPersonalPersistentBaseAreaStage, getStoredPersistentBaseAreaStage } from '../src/utils/localPreferences';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   LEGACY_LOCAL_PREFERENCES_KEY,
@@ -159,6 +159,13 @@ describe('local progress generation', () => {
       expect(importStoredGameProgressJson(JSON.stringify(envelope)).ok).toBe(false);
       expect(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)).toBe(before);
     }
+  });
+
+  it('derives the personal base stage from campaign stage and Dawn expansion', () => {
+    expect(getStoredPersonalPersistentBaseAreaStage()).toBe(getStoredPersistentBaseAreaStage());
+    expect(updateStoredDawnProgress(dawn => { dawn.expansionLevel = 3; })).toBe(true);
+    expect(getStoredPersonalPersistentBaseAreaStage()).toBeGreaterThan(getStoredPersistentBaseAreaStage());
+    expect(getStoredPersistentBaseAreaStage()).toBeLessThanOrEqual(2);
   });
 
   it('rejects malformed current Dawn documents atomically and defaults omitted optional fields', () => {

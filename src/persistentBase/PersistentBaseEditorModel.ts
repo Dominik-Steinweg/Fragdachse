@@ -1,5 +1,6 @@
 import { COOP_DEFENSE_MAP_CONFIGS } from '../config/coopDefenseMaps';
 import type { CoopDefenseProgressPreferences } from '../utils/localPreferences';
+import type { PersistentBaseAreaStage } from './PersistentBaseCore';
 import { isPersistentBaseRewardCellAllowed, getPersistentConstructionFootprint, getPersistentBaseRewardFootprint, getPersistentBaseRewardCells } from './PersistentBasePlacementRules';
 import { resolvePersistentBaseBuildAreaForStage, resolvePersistentBaseCell, isCellInsidePersistentBaseBuildArea,
   type PersistentBaseBuildArea } from './PersistentBaseCore';
@@ -17,8 +18,14 @@ export class PersistentBaseEditorModel {
   readonly constructions: PersistentConstruction[];
   /** Removed personal builds stay available in this draft until Apply/Cancel. */
   readonly availableConstructions: readonly PersistentConstruction[];
-  constructor(readonly baseline: CoopDefenseProgressPreferences) {
-    this.area = resolvePersistentBaseBuildAreaForStage(baseline.persistentBaseAreaStage);
+  /**
+   * Die bearbeitete persoenliche Ausbaustufe. Sie umfasst die Dawn-Expansion und kann damit ueber
+   * der gespeicherten Kampagnenstufe der Baseline liegen.
+   */
+  readonly areaStage: PersistentBaseAreaStage;
+  constructor(readonly baseline: CoopDefenseProgressPreferences, areaStage?: PersistentBaseAreaStage) {
+    this.areaStage = areaStage ?? baseline.persistentBaseAreaStage;
+    this.area = resolvePersistentBaseBuildAreaForStage(this.areaStage);
     this.rewards = baseline.persistentBaseRewardState.placements.map(p => ({ ...p }));
     this.constructions = baseline.personalBaseContribution.constructions.map(p => ({ ...p, tool: { ...p.tool } }));
     this.availableConstructions = this.constructions.map(p => ({ ...p, tool: { ...p.tool } }));
