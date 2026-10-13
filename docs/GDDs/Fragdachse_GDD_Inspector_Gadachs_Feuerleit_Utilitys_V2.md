@@ -393,7 +393,7 @@ Das Einstiegsverhalten ist: Raketenturm bauen, einen entfernten Kampf aufsuchen 
 - Je Spieler läuft **höchstens ein Kopien- und ein Portaleinsatz** gleichzeitig. Eine erneute Nutzung
   während eines Einsatzes wird abgelehnt.
 - Es gibt eine Ladung und keine Adrenalinkosten.
-- Der **Cooldown beginnt erst mit dem Einsatzende**: Kopien 25 s, Portale 20 s.
+- Der **Cooldown beginnt erst mit dem Einsatzende**: Kopien 10 s (E18), Portale 20 s.
 - Nutzungszustand in `PlayerUtilityActionRuntime`:
   - Kopien: aktiv → Cooldown
   - Portale: fliegt → aktiv → Cooldown
@@ -489,16 +489,16 @@ Status:
 | E13 | 2026-10-13 | Keine Änderung am Flammenschaden gegen Basen: Keine Flammenwaffe setzt `baseDamageMult` (nur `HE_GRENADE`), das fehlende Durchreichen wirkt heute nicht (F8). Notiz für künftige Flammenwaffen | Kein Verhaltensunterschied | Entschieden |
 | E14 | 2026-10-13 | Der Host feuert nur mit gültig gebauten Feuerleit-Routen; bei ungültiger Route feuert der Turm in diesem Tick nicht. `assertFireControlRoute` bleibt als Schutz gegen Programmierfehler (F9) | Kein Absturz im Host-Loop, Programmierfehler bleiben sichtbar | Entschieden |
 | E15 | 2026-10-13 | Der Injektor-Fokus auf eine Basis nutzt in M1 die Basis-Zielregel (D25/D27) (F10) | Gleiche Treffsicherheit wie die dritte Zielstufe | Entschieden |
-| E16 | 2026-10-13 | D30 als einfache Regel: Jede Bemannung beendet die Projektion des Originals, auch mit Parallelbetrieb; bemannte Originale sind nicht wählbar | Einfach, keine Doppelsteuerung | Entschieden für M1, an G1 kippbar |
+| E16 | 2026-10-13 | D30 als einfache Regel: Jede Bemannung beendet die Projektion des Originals, auch mit Parallelbetrieb; bemannte Originale sind nicht wählbar | Einfach, keine Doppelsteuerung | Gekippt an G1 (E17) |
 | E17 | 2026-10-13 | Bemannung und Parallelbetrieb sind gleichzeitig möglich: Mit Parallelbetrieb beendet das Bemannen des Originals die Projektion nicht, die Kopie kämpft autonom weiter. Ohne Parallelbetrieb beendet die Bemannung eines pausierten Originals dessen Projektion (D13) (G1-c) | Spielgefühl an G1 | Entschieden (User) |
 | E18 | 2026-10-13 | Turmkopien: Dauer 6 s (statt 12 s), Cooldown 10 s ab Einsatzende (statt 25 s); „Längere Übertragung“ bleibt +3 s je Stufe (max. 12 s) (G1-d) | Spielgefühl an G1 | Entschieden (User) |
 | E19 | 2026-10-13 | Platzierungsreichweite der Turmkopien = Baureichweite des Inspektors aus demselben Resolver wie die Konstruktionsplatzierung, inklusive Upgrades; keine eigene Zahl (G1-d) | Eine Regel, ein Owner | Entschieden (User) |
 | E20 | 2026-10-13 | Balance bleibt: Basisschadensfaktor 1, kein Spawn-HP-Tuning; Tuning später über Spieltests. Zwischenstand-Loadout D42 ok (G1-b, G1-f) | Erst spielen, dann tunen | Entschieden (User) |
-| D1 | 2026-10-13 | Laufzeit Kopien 12 s (+3 s je Stufe „Längere Übertragung“, 2 Stufen); Portale 5 s (+1,5 s je Stufe „Längere Öffnung“, 2 Stufen) | GDD: Portale kürzer als Kopien; Startwerte für Tuning | Default, an Gate kippbar |
-| D2 | 2026-10-13 | Cooldown beginnt erst mit dem Einsatzende (Kopien 25 s, Portale 20 s); eine Ladung; kein Adrenalin | Verhindert Überlappung ohne Sperrlogik; Utilities kosten kein Adrenalin | Default, an Gate kippbar |
+| D1 | 2026-10-13 | Laufzeit Kopien 12 s (+3 s je Stufe „Längere Übertragung“, 2 Stufen); Portale 5 s (+1,5 s je Stufe „Längere Öffnung“, 2 Stufen) | GDD: Portale kürzer als Kopien; Startwerte für Tuning | Kopien geändert an G1 (E18); Portale offen für G2 (F11) |
+| D2 | 2026-10-13 | Cooldown beginnt erst mit dem Einsatzende (Kopien 25 s, Portale 20 s); eine Ladung; kein Adrenalin | Verhindert Überlappung ohne Sperrlogik; Utilities kosten kein Adrenalin | Kopien-Cooldown geändert an G1 (E18); Portale offen für G2 (F11) |
 | D3 | 2026-10-13 | Je Spieler höchstens ein Kopien- und ein Portaleinsatz; erneute Nutzung während eines Einsatzes wird abgelehnt | Keine unbegrenzte Vervielfachung; einfache V2-Regel | Default, an Gate kippbar |
 | D4 | 2026-10-13 | Bäume: Kopien L „Mehr Verbindungen“ (2/3), R „Längere Übertragung“, B „Parallelbetrieb“; Portale L „Längere Öffnung“, R „Verstärkter Durchschuss“ (+20 % je Stufe), B „Lokale Feuerfreigabe“ | Bestehendes D-U-Muster; Spitzenupgrades laut GDD | Default, an Gate kippbar |
-| D5 | 2026-10-13 | Platzierungsreichweite der Kopien 280 px; abbrechen mit E oder Rechtsklick | Wurfweite in ähnlicher Größenordnung; vorhandene Abbruchgesten | Default, an Gate kippbar |
+| D5 | 2026-10-13 | Platzierungsreichweite der Kopien 280 px; abbrechen mit E oder Rechtsklick | Wurfweite in ähnlicher Größenordnung; vorhandene Abbruchgesten | Reichweite geändert an G1 (E19); Abbruch unverändert |
 | D6 | 2026-10-13 | Portale werden geworfen (`charged_throw` ohne Abpraller, Luftreibung, deterministische Landepunkt-Vorschau, ungültiger Ort → letzte gültige Flugposition) | GDD-Bedienung; HE-Muster | Default, an Gate kippbar (Frage F1) |
 | D7 | 2026-10-13 | Fehlt eine geeignete Quelle, wird die Nutzung vor dem Verbrauch abgelehnt („Keine kampffähigen eigenen Türme“, eigener Failure-Grund) | GDD §3.1; kein frustrierender Verbrauch | Default, an Gate kippbar |
 | D8 | 2026-10-13 | Formation: 1 Kopie am Punkt, mehrere auf einem Ring von etwa 36 px an freien, begehbaren Punkten; Relais-Projektor am Punkt, in V2 unzerstörbar | Kompakte, lesbare Gruppe; kein neues Angriffsziel | Default, an Gate kippbar (Frage F2) |
@@ -506,7 +506,7 @@ Status:
 | D10 | 2026-10-13 | Kopien sind nicht anvisierbar, nicht blockierend, weder bemannbar noch reparierbar | GDD §3.2 | Default, an Gate kippbar |
 | D11 | 2026-10-13 | Pausiertes Original bleibt mit `fireState: 'paused'` in der Turmliste; die Kopie teilt seine Feuerfolge; mit Parallelbetrieb eigene Folge ab `nextFireAt` des Originals | Kein Reset, keine Sofortsalve | Default, an Gate kippbar |
 | D12 | 2026-10-13 | Endet ein Einsatz mitten in einer Salve, wird sie abgebrochen und der Cooldown gesetzt | Eindeutige Route; keine freie Salve | Default, an Gate kippbar |
-| D13 | 2026-10-13 | Bemannt der Spieler ein pausiertes Original, endet dessen Projektion; mit Parallelbetrieb ist die Bemannung frei | Bemannung hat Vorrang; keine Doppelsteuerung | Default, an Gate kippbar |
+| D13 | 2026-10-13 | Bemannt der Spieler ein pausiertes Original, endet dessen Projektion; mit Parallelbetrieb ist die Bemannung frei | Bemannung hat Vorrang; keine Doppelsteuerung | Bestätigt an G1 (E17) |
 | D14 | 2026-10-13 | Identität: MG-Stacks an der ID des Originals (gemeinsamer Stack bei Parallelbetrieb), Injektor-Buff über Identität, Fernsteuerung nur auf echte Konstruktionen | GDD §5.2: weder still entfallen noch vervielfachen | Default, Freigabe an G0 |
 | D15 | 2026-10-13 | Einsätze laufen über den Tod des Besitzers hinaus; Besitzerentfernung, Activity-Ende und World-Wechsel räumen auf | Einfach, keine Strafe beim Tod; keine Verwaisung | Default, an Gate kippbar |
 | D16 | 2026-10-13 | Portalroute wird bei der Schussabgabe fixiert; Bonus einmal je Einsatz und Projektil (`fc:<deploymentId>`); Translocator-Stacking unverändert | Löst die offene Frage nach „nicht transportierten Schüssen“; ein Transfer-Helper für beide | Default, an Gate kippbar |
@@ -523,10 +523,10 @@ Status:
 | D27 | 2026-10-13 | Basis-Zielpunkte halten eine Viertelzelle Abstand zu den Kantenenden. Drehbegrenzte Türme feuern auf eine Basis erst, wenn der Strahl ihres tatsächlichen Rohrwinkels den Zielabschnitt der Fläche innerhalb ihrer Reichweite schneidet | G0-Bogen und Review: Raketentürme (18° Toleranz, Homing nur gegen Figuren) verfehlten kleine Basen während der Drehung, ein Kreisradius reichte bei streifendem Winkel nicht | Default, an Gate kippbar |
 | D28 | 2026-10-13 | Ein Kopieneinsatz endet sofort, wenn seine letzte Kopie entfällt (Original zerstört, Bemannung D13, Kampfberechtigung verloren); Cooldown ab diesem Zeitpunkt | Kein leerer Einsatz; früherer Cooldown ist fair | Default, an Gate kippbar |
 | D29 | 2026-10-13 | Formationspunkte und Projektormittelpunkt müssen mit einem Freiraumradius (authored, Default 16 px) frei sein: in der Arena, ohne Hindernis, ohne Zug; ein vom Safe-Point-Read verschobener Punkt gilt als nicht frei | Kopien blockieren nicht, sollen aber nicht in Wänden oder Wasser stehen | Default, an Gate kippbar |
-| D30 | 2026-10-13 | D13 gilt für jede Bemannung, auch durch Verbündete. Bereits bemannte Originale sind in der Grundversion nicht wählbar, mit Parallelbetrieb schon | Bemannte Türme sind in Benutzung; keine Doppelsteuerung | Default, an Gate kippbar |
+| D30 | 2026-10-13 | D13 gilt für jede Bemannung, auch durch Verbündete. Bereits bemannte Originale sind in der Grundversion nicht wählbar, mit Parallelbetrieb schon | Bemannte Türme sind in Benutzung; keine Doppelsteuerung | Teilweise gekippt an G1 (E17): mit Parallelbetrieb beendet Bemannung die Projektion nicht |
 | D31 | 2026-10-13 | Bei Aktivierung eingefroren werden nur Utility-Werte (Dauer, Kopienzahl, Parallelbetrieb, Reichweite, Ring, Materialisierung, Cooldown); Turmwerte folgen live dem Original | Kopie ist eine Projektion; Turm-Upgrades wirken sofort | Default, an Gate kippbar |
 | D32 | 2026-10-13 | Activity-Ende, World-Wechsel und Besitzerentfernung räumen Einsätze und Nutzungszustand still (kein Ende-Callback, kein Cooldown); Tod, Respawn und Umrüstung beenden nichts | Kein Cooldown-Übertrag in die nächste Activity | Default, an Gate kippbar |
-| D42 | 2026-10-13 | Zwischenstand M1 bis P3.1: Turmkopien sind für den Inspektor gratis freigeschaltet und werden wie jede neue Freischaltung bis zur Werkzeugkapazität angehängt; HE bleibt bis P3.1 gratis im Standard-Loadout. Portale bleiben bis M2 gesperrt | Spielbar für G1 ohne vorgezogene Persistenz-Migration (Dawn-Abstimmung) | Default, an G1 kippbar |
+| D42 | 2026-10-13 | Zwischenstand M1 bis P3.1: Turmkopien sind für den Inspektor gratis freigeschaltet und werden wie jede neue Freischaltung bis zur Werkzeugkapazität angehängt; HE bleibt bis P3.1 gratis im Standard-Loadout. Portale bleiben bis M2 gesperrt | Spielbar für G1 ohne vorgezogene Persistenz-Migration (Dawn-Abstimmung) | Entschieden an G1 (E20) |
 
 ## 10 Abnahmeszenarien und Testzuordnung
 
