@@ -5,6 +5,7 @@ import type { ResolvedDawnSite } from '../resolution/DawnScenarioResolution';
 import { resolveDawnPhase } from '../rules/DawnPhase';
 import { DawnSalvageDirector } from './DawnSalvageDirector';
 import { DawnScrapLedger } from './DawnScrapLedger';
+import { getCoopDefenseEnemyConfig } from '../../config/coopDefenseEnemies';
 
 export interface DawnActivityRuntimePorts {
   /** Bereits veroeffentlichter Rundenschrott dieser Runde (0 direkt nach dem Rundenstart). */
@@ -37,7 +38,7 @@ export class DawnActivityRuntime {
       ports.feedback(x, y, amount);
     });
     this.detachDrops = ports.pickups.bindDawnScrap({
-      onEnemyKilled: (x, y) => this.onEnemyKilled(x, y),
+      onEnemyKilled: (x, y, kind) => this.onEnemyKilled(x, y, kind),
       canCollect: uid => this.ledger !== null && ports.isActive() && this.pendingDrops.has(uid),
       onPickupCollected: (_playerId, pickup) => {
         if (!this.pendingDrops.delete(pickup.uid) || !this.ledger) return;
@@ -53,14 +54,15 @@ export class DawnActivityRuntime {
     if (this.ports.isActive()) this.director?.onObjectiveCompleted(objectiveId);
   }
 
-  private onEnemyKilled(x: number, y: number): void {
+  private onEnemyKilled(x: number, y: number, kind?: string): void {
     if (!this.ledger || !this.ports.isActive()) return;
     const phase = resolveDawnPhase(this.schedule, this.ports.elapsedMs());
     if (phase.finished) return;
+    const guaranteedDrop = kind ? getCoopDefenseEnemyConfig(kind).flee?.scrapPickupDefId : undefined;
     const drops = this.curve.scrapDrops;
     const chance = phase.phase === 'night' ? drops.nightChance : drops.dayChance;
-    if ((this.ports.random ?? Math.random)() >= chance) return;
-    const uid = this.ports.pickups.spawnPickup(drops.pickupDefId, x, y);
+    if (!guaranteedDrop && (this.ports.random ?? Math.random)() >= chance) return;
+    const uid = this.ports.pickups.spawnPickup(guaranteedDrop ?? drops.pickupDefId, x, y);
     if (uid !== null) this.pendingDrops.add(uid);
   }
 

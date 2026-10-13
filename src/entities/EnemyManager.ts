@@ -28,6 +28,7 @@ import {
   enemyNumToId,
 } from '../network/enemySnapshotCodec';
 import { EnemyEntity, type EnemyFaction } from './EnemyEntity';
+import { DAWN_SCAVENGER_KIND, type DawnScavengerOutcome } from '../dawn/runtime/DawnScavengerPort';
 import type { LightingSystem } from '../effects/LightingSystem';
 import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import {
@@ -188,6 +189,16 @@ export class EnemyManager {
     this.eliteExplosion = explode;
   }
 
+  private readonly scavengerListeners = new Set<(event: DawnScavengerOutcome) => void>();
+  onScavengerOutcome(listener: (event: DawnScavengerOutcome) => void): () => void {
+    this.scavengerListeners.add(listener);
+    return () => { this.scavengerListeners.delete(listener); };
+  }
+  private publishScavengerOutcome(enemy: EnemyEntity, outcome: DawnScavengerOutcome['outcome'], x: number, y: number): void {
+    if (enemy.kind !== DAWN_SCAVENGER_KIND || enemy.faction !== 'hostile') return;
+    const event: DawnScavengerOutcome = Object.freeze({ enemyId: enemy.id, originId: enemy.originId, outcome, x, y });
+    for (const listener of this.scavengerListeners) listener(event);
+  }
   private intents: EnemyIntentSystem | null = null;
   private readonly locomotion = new EnemyLocomotion();
   private readonly movementFeedback = new Map<string, MovementFeedback>();
@@ -610,6 +621,20 @@ export class EnemyManager {
 
       if (movementLocked) {
         enemy.stopMovement();
+        continue;
+      }
+
+      if (config.flee) {
+        const intent = this.intents?.get(enemy.id);
+        if (intent?.reason === 'flee' && intent.escapeReached) {
+          const { x, y } = enemy.sprite;
+          if (this.hostRemoveWithoutKill(enemy.id)) this.publishScavengerOutcome(enemy, 'escaped', x, y);
+          continue;
+        }
+        const route = intent?.reason === 'flee' ? intent.navigation : null;
+        const waypoint = route?.status === 'ready' ? route.waypoint
+          : route?.status === 'pending' ? route.continuation ?? null : null;
+        this.moveNormally(enemy, waypoint, enemy.getMoveSpeed());
         continue;
       }
 
@@ -1250,6 +1275,10 @@ export class EnemyManager {
         this.eliteExplosion?.(id, deathX, deathY, eliteExplosion);
         if (!isCurrent()) return;
       }
+      // A scavenger kill listener may also end the scope; ordinary deaths keep the authored spawn order.
+      const scavenger = enemy.kind === DAWN_SCAVENGER_KIND && enemy.faction === 'hostile';
+      this.publishScavengerOutcome(enemy, 'killed', deathX, deathY);
+      if (scavenger && !isCurrent()) return;
       for (const spawnConfig of deathSpawns) {
         const baseAngle = Phaser.Math.RND.realInRange(0, Math.PI * 2);
         for (let index = 0; index < spawnConfig.count; index += 1) {
@@ -1374,6 +1403,7 @@ export class EnemyManager {
 
   destroy(): void {
     this.dawnElites = null; this.eliteExplosion = null; this.eliteShields.clear();
+    this.scavengerListeners.clear();
     this.pendingClawEvents.clear();
     this.pendingAreaClawEvents.clear(); this.krakenProjectionRevisions.clear();
     this.locomotion.clear(); this.movementFeedback.clear(); this.intents = null;

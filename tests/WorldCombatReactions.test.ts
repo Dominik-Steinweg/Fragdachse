@@ -9,6 +9,7 @@ const playerLife: CombatTargetRef = { kind: 'player', id: 'credited',
 
 function fixture(training = false) {
   const damage = vi.fn(), xp = vi.fn(), frag = vi.fn(), popup = vi.fn(), itemKill = vi.fn(), registerKill = vi.fn();
+  const drop = vi.fn();
   const owner = new WorldCombatReactions({
     isCoopMission: () => !training, isActivityActive: () => !training,
     isTrainingTarget: () => training,
@@ -18,7 +19,7 @@ function fixture(training = false) {
       reactions: { registerKill, handleCoopDefenseItemKill: itemKill,
         handlePlayerDamageTaken: () => ({ reflectedDamage: 5, reflectTargetId: 'source', adrenalineGain: 0 }) },
     }) as never,
-    getPowerUpSystem: () => null,
+    getPowerUpSystem: () => ({ onCoopDefenseEnemyKilled: drop }) as never,
     network: {
       authority: { isHost: () => true, isEnemyPair: () => true,
         getPlayerProfile: id => id === 'credited' ? { id, name: id, colorHex: 0 } as never : undefined,
@@ -28,10 +29,26 @@ function fixture(training = false) {
       effects: { broadcastCoopDefenseXpPopup: popup } as never,
     },
   });
-  return { owner, damage, xp, frag, popup, itemKill, registerKill };
+  return { owner, damage, xp, frag, popup, itemKill, registerKill, drop };
 }
 
 describe('World Combat reaction policies', () => {
+  it('forwards the scavenger identity to the host drop path', () => {
+    const f = fixture();
+    f.owner.handleKill('credited', 'scavenger', 'glock', 10, 20, {
+      enemyKind: 'dawn-scavenger', victimFaction: 'hostile', victimKind: 'enemy',
+    }, () => true);
+    expect(f.drop).toHaveBeenCalledExactlyOnceWith('credited', getCoopDefenseEnemyXp('dawn-scavenger'), 10, 20, 'dawn-scavenger');
+    f.owner.handleKill('credited', 'stale', 'glock', 10, 20, {
+      enemyKind: 'dawn-scavenger', victimFaction: 'hostile', victimKind: 'enemy',
+    }, () => false);
+    expect(f.drop).toHaveBeenCalledTimes(1);
+    const training = fixture(true);
+    training.owner.handleKill('credited', 'training', 'glock', 10, 20, {
+      enemyKind: 'dawn-scavenger', victimFaction: 'hostile', victimKind: 'enemy',
+    }, () => true);
+    expect(training.drop).not.toHaveBeenCalled();
+  });
   it('keeps training weapon and item kill reactions without recording kills or awarding XP', () => {
     const f = fixture(true);
     f.owner.handleKill('credited', 'training-target', 'glock', 10, 20, {

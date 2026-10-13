@@ -61,7 +61,7 @@ describe('Shared strategic intent and demolition permission', () => {
     world.destroy();
   });
 
-  it.each(COOP_DEFENSE_ENEMY_KINDS)('keeps authored primary intent and body-safe attack goals for %s', kind => {
+  it.each(COOP_DEFENSE_ENEMY_KINDS)('keeps authored intent and body-safe goals for %s', kind => {
     const world = navigationTestWorld([rect('base:main', 176, 96, 208, 160, 'base')],
       [{ id: 'main', isGoalSource: true, cellCoords: Int32Array.of(12, 8) }]);
     const unit = enemy(kind, kind, 64, 128), config = getCoopDefenseEnemyConfig(kind);
@@ -69,10 +69,11 @@ describe('Shared strategic intent and demolition permission', () => {
     settle(world, [unit]);
     const intent = world.intents.get(unit.id);
     const siege = config.movementTarget === 'bases';
-    expect(intent?.target).toEqual(siege ? { kind: 'base', id: 'main' } : { kind: 'player', id: 'player' });
+    expect(intent?.target).toEqual(config.flee ? null : siege ? { kind: 'base', id: 'main' } : { kind: 'player', id: 'player' });
+    if (config.flee) expect(intent).toMatchObject({ reason: 'flee', attackContext: 'none' });
     expect(intent?.navigation.status).toBe('ready');
     expect(world.intents.allowsAttack(unit.id, 'base', 'main', 'all')).toBe(siege);
-    expect(world.intents.allowsAttack(unit.id, 'player', 'player', 'all')).toBe(!siege);
+    expect(world.intents.allowsAttack(unit.id, 'player', 'player', 'all')).toBe(!siege && !config.flee);
     expect(world.intents.getBreach(unit.id)).toBeNull();
     const field = world.intents.getField(unit.id)!;
     for (const goal of field.getGoalCells()) {

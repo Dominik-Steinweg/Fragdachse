@@ -11,7 +11,8 @@ export type NavigationResult = (NavigationVersion & (
 export interface EnemyIntent {
   readonly target: EnemyAiTargetRef | { readonly kind: 'base'; readonly id: string } | { readonly kind: 'ally'; readonly id: string } | null;
   readonly point: NavigationPoint | null;
-  readonly reason: 'player' | 'siege' | 'strategic' | 'decoy' | 'fallback-base' | 'memory' | 'follow' | 'wait';
+  readonly reason: 'player' | 'siege' | 'strategic' | 'decoy' | 'fallback-base' | 'memory' | 'follow' | 'wait' | 'flee';
+  readonly escapeReached?: boolean;
   readonly attackContext: 'primary' | 'breach' | 'none';
   readonly selectedAt: number;
   readonly navigation: NavigationResult;

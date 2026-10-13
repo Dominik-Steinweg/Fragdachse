@@ -5,6 +5,7 @@ vi.mock('phaser', () => ({ Math: { Distance: {
 import { DawnScrapLedger } from '../src/dawn/runtime/DawnScrapLedger';
 import { DawnSalvageDirector } from '../src/dawn/runtime/DawnSalvageDirector';
 import { DawnActivityRuntime } from '../src/dawn/runtime/DawnActivityRuntime';
+import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
 import { composeDawnRoundPlans } from '../src/dawn/composition/DawnRoundComposition';
 import { resolveDawnScenario, resolveDawnSites } from '../src/dawn/resolution/DawnScenarioResolution';
 import { getDawnSchedule, getDawnThreatCurve } from '../src/config/dawn/dawnContent';
@@ -135,6 +136,26 @@ describe('Dawn salvage rewards', () => {
 });
 
 describe('Dawn activity drops', () => {
+  it('guarantees the configured scavenger pickup instead of rolling an additional ordinary drop', () => {
+    const system = pickups(), random = vi.fn(() => 1);
+    let active = true;
+    const runtime = new DawnActivityRuntime(sites, curve, schedule, {
+      publishScrap: vi.fn(), sitePosition: () => ({ x: 0, y: 0 }), feedback: vi.fn(),
+      elapsedMs: () => 0, isActive: () => active, random, pickups: system,
+    });
+    const defId = getCoopDefenseEnemyConfig('dawn-scavenger').flee!.scrapPickupDefId;
+    system.onCoopDefenseEnemyKilled('p', 0, 100, 200, 'dawn-scavenger');
+    expect(random).not.toHaveBeenCalled();
+    const [pickup] = system.getWorldItemSnapshot();
+    expect(system.getWorldItemSnapshot()).toHaveLength(1);
+    expect(system.tryPickup('p', pickup.uid, 100, 200)).toBe(true);
+    expect(runtime.total).toBe(POWERUP_DEFS[defId].amount);
+    expect(system.tryPickup('p', pickup.uid, 100, 200)).toBe(false);
+    active = false;
+    system.onCoopDefenseEnemyKilled('p', 0, 100, 200, 'dawn-scavenger');
+    expect(system.getWorldItemSnapshot()).toHaveLength(0);
+    runtime.destroy();
+  });
   it('keeps normal modes free of scrap and collects each Dawn pickup only once for the team', () => {
     const system = pickups();
     for (const table of Object.values(DROP_TABLES)) {

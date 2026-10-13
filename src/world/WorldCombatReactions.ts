@@ -91,7 +91,7 @@ export class WorldCombatReactions {
         o.network.effects.broadcastCoopDefenseXpPopup(x, y, enemyXp);
       }
       if (!current()) return;
-      if (!training) o.getPowerUpSystem()?.onCoopDefenseEnemyKilled(killerId, enemyXp, x, y);
+      if (!training) o.getPowerUpSystem()?.onCoopDefenseEnemyKilled(killerId, enemyXp, x, y, source?.enemyKind);
       if (!current()) return;
       for (const profile of o.network.authority.getConnectedPlayers()) {
         const playerCombat = o.getPlayerCombatIntegration();

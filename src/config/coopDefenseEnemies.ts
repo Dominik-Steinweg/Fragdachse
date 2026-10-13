@@ -1,4 +1,5 @@
 import rawCoopDefenseEnemies from './coopDefenseEnemies.json';
+import { DAWN_SCRAP_DEFS } from '../powerups/PowerUpConfig';
 import { KRAKEN_BOSS_DEFAULTS, normalizeKrakenBossConfig, normalizeKrakenEggConfig, validateKrakenBroodRegistry,
   type KrakenBossConfig, type KrakenEggConfig } from './krakenBoss';
 import { findWeaponConfig } from '../loadout/LoadoutConfig';
@@ -15,7 +16,14 @@ import {
 
 export type CoopDefenseEnemyKind = string;
 
-export type CoopDefenseEnemyMovementTarget = 'bases' | 'players' | 'players-and-armed-constructs';
+export type CoopDefenseEnemyMovementTarget = 'bases' | 'players' | 'players-and-armed-constructs' | 'flee';
+
+export interface CoopDefenseEnemyFleeConfig {
+  readonly playerAvoidanceRadiusPx: number;
+  readonly arrivalRadiusPx: number;
+  /** The pickup definition owns the scrap amount and visual tier. */
+  readonly scrapPickupDefId: string;
+}
 
 /** Maximale Kantenlaenge normaler Gegner; Bosse duerfen groesser sein. */
 export const MAX_REGULAR_ENEMY_SIZE_PX = 30;
@@ -354,6 +362,7 @@ export interface CoopDefenseEnemyFirestarterConfig {
 }
 
 export interface CoopDefenseEnemyConfig {
+  readonly flee?: CoopDefenseEnemyFleeConfig;
   readonly firestarter?: CoopDefenseEnemyFirestarterConfig;
   readonly krakenBoss?: KrakenBossConfig;
   readonly krakenEgg?: KrakenEggConfig;
@@ -501,6 +510,7 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         ),
         knockbackFactor: config.knockbackFactor,
         movementTarget: config.movementTarget,
+        flee: config.flee,
         weapons: config.weapons,
         attackScanIntervalMs: config.attackScanIntervalMs,
         attackStopDurationMs: config.attackStopDurationMs,
@@ -596,6 +606,14 @@ export function normalizeEnemyRegistry(registry: CoopDefenseEnemyRegistryFile): 
 }
 
 function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefenseEnemyConfig {
+  const flee = normalizeEnemyFleeConfig(enemy.flee);
+  if ((enemy.movementTarget === 'flee') !== !!flee
+    || (flee && (enemy.weapons.length || enemy.isBoss || enemy.krakenBoss || enemy.krakenEgg
+      || enemy.firestarter || enemy.mortar || enemy.timebomb || enemy.voidHunterBoss || enemy.spawnThrow
+      || enemy.translocator || enemy.burrow || enemy.dodge || enemy.combatPositioning
+      || enemy.voidFireChunks || enemy.voidFireTrail || enemy.voidMolotov || enemy.stinkAura || enemy.deathSpawns?.length))) {
+    throw new Error(`[coopDefenseEnemies] Fleeing enemy must be non-combatant: ${enemy.id}`);
+  }
   const isBoss = enemy.isBoss === true;
   const krakenBoss = enemy.krakenBoss === undefined ? undefined : normalizeKrakenBossConfig(enemy.krakenBoss);
   const krakenEgg = enemy.krakenEgg === undefined ? undefined : normalizeKrakenEggConfig(enemy.krakenEgg);
@@ -621,7 +639,8 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     moveSpeed: krakenEgg ? 0 : Math.max(1, enemy.moveSpeed),
     knockbackFactor: normalizeKnockbackFactor(enemy.knockbackFactor),
     movementTarget: normalizeMovementTarget(enemy.movementTarget),
-    weapons: krakenBoss || krakenEgg ? [] : normalizeWeapons(enemy.weapons, enemy.id),
+    weapons: krakenBoss || krakenEgg || flee ? [] : normalizeWeapons(enemy.weapons, enemy.id),
+    flee,
     krakenBoss,
     krakenEgg,
     attackScanIntervalMs: Math.max(1, Math.floor(enemy.attackScanIntervalMs)),
@@ -1016,10 +1035,20 @@ function normalizeKnockbackFactor(value: number | undefined): number {
 }
 
 function normalizeMovementTarget(target: CoopDefenseEnemyMovementTarget): CoopDefenseEnemyMovementTarget {
-  if (target === 'bases' || target === 'players' || target === 'players-and-armed-constructs') {
+  if (target === 'bases' || target === 'players' || target === 'players-and-armed-constructs' || target === 'flee') {
     return target;
   }
   throw new Error(`[coopDefenseEnemies] Unsupported movementTarget: ${String(target)}`);
+}
+
+export function normalizeEnemyFleeConfig(config: CoopDefenseEnemyFleeConfig | undefined): CoopDefenseEnemyFleeConfig | undefined {
+  if (config === undefined) return undefined;
+  if (!config || !Number.isFinite(config.playerAvoidanceRadiusPx) || config.playerAvoidanceRadiusPx <= 0
+    || !Number.isFinite(config.arrivalRadiusPx) || config.arrivalRadiusPx <= 0
+    || !Object.prototype.hasOwnProperty.call(DAWN_SCRAP_DEFS, config.scrapPickupDefId)) {
+    throw new Error('[coopDefenseEnemies] Invalid flee config');
+  }
+  return { ...config };
 }
 
 export function normalizeMortarConfig(config: CoopDefenseEnemyMortarConfig | undefined): CoopDefenseEnemyMortarConfig | undefined {

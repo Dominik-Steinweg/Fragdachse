@@ -928,6 +928,26 @@
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.8
       }
+    },
+    {
+      "id": "dawn-scavenger",
+      "pawCount": 4,
+      "maxHp": 30,
+      "xp": 0,
+      "size": 26,
+      "moveSpeed": 245,
+      "knockbackFactor": 1.3,
+      "movementTarget": "flee",
+      "weapons": [],
+      "attackScanIntervalMs": 200,
+      "attackStopDurationMs": 0,
+      "obstacleAttackDelayMs": 0,
+      "imageKey": "enemy_zombie_badger",
+      "flee": {
+        "playerAvoidanceRadiusPx": 240,
+        "arrivalRadiusPx": 24,
+        "scrapPickupDefId": "dawn_scrap_3"
+      }
     }
   ]
 }

@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
+it('spawns the scavenger through the existing isolated scenario command', () => {
+  const spawn = vi.fn(), controller = { spawn, syncPanel() {} } as never;
+  runScenarioCommand(controller, { action: 'spawn', kind: 'dawn-scavenger', gridX: 20, gridY: 21 });
+  expect(spawn).toHaveBeenCalledWith('dawn-scavenger', false, null, { gridX: 20, gridY: 21 });
+});
+
 it('validates fog-rock optical controls and lobby time before renderDebug dispatch',()=>{
   const setRenderDebug=vi.fn(),controller={setRenderDebug,syncPanel(){}} as never;
   for(const key of ['fogRockContactStrength','fogRockSunShadowStrength','rockAerialPerspectiveStrength'])for(const value of [-1,1,NaN,Infinity,'0.2',null])

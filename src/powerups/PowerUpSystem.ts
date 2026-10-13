@@ -105,7 +105,7 @@ export interface PowerUpSystemOptions {
 }
 
 export interface DawnScrapPickupBinding {
-  readonly onEnemyKilled: (x: number, y: number) => void;
+  readonly onEnemyKilled: (x: number, y: number, enemyKind?: string) => void;
   readonly canCollect: (uid: number) => boolean;
   readonly onPickupCollected: NonNullable<PowerUpSystemOptions['onPickupCollected']>;
 }
@@ -601,8 +601,8 @@ export class PowerUpSystem {
     this.spawnFromTable('ENEMY_KILL', x, y);
   }
 
-  onCoopDefenseEnemyKilled(killerId: string, enemyXp: number, x: number, y: number): void {
-    this.dawnScrap?.onEnemyKilled(x, y);
+  onCoopDefenseEnemyKilled(killerId: string, enemyXp: number, x: number, y: number, enemyKind?: string): void {
+    this.dawnScrap?.onEnemyKilled(x, y, enemyKind);
     if (!this.options.isAdrenalineDropEnabled?.(killerId)) return;
     const multiplier = Math.max(0, this.options.getAdrenalineDropChanceMultiplier?.(killerId) ?? 1);
     const chance = getAdrenalineSyringeDropChance(
