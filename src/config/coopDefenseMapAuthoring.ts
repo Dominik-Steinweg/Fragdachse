@@ -26,12 +26,14 @@ import { DEFAULT_TIME_OF_DAY_MINUTES, formatTimeOfDay, parseTimeOfDay } from '..
 import { normalizeCoopDefensePlayerScalingFactor } from './coopDefenseScaling';
 import type { GroundFireVisualStyle, SpawnFront } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
-import { MAX_PERSISTENT_BASE_RADIUS_CELLS, PERSISTENT_BASE_CLEARANCE_CELLS } from './persistentBase';
 import {
   buildPersistentBaseCoreBaseConfig,
   DEFAULT_PERSISTENT_BASE_BUILD_AREA,
   DEFAULT_PERSISTENT_BASE_ORIENTATION,
   isPersistentBaseOrientation,
+  isPersistentBaseAreaStage,
+  resolvePersistentBaseReservationRadiusCells,
+  type PersistentBaseAreaStage,
   type PersistentBaseBuildArea,
   type PersistentBaseOrientation,
 } from '../persistentBase/PersistentBaseCore';
@@ -710,6 +712,8 @@ export interface CoopDefenseMapTutorialStepConfig {
  */
 export interface CoopDefenseMapPersistentBaseConfig {
   readonly baseId: string;
+  /** Maximum frozen stage supported by this site; omitted = campaign maximum. */
+  readonly maxAreaStage?: PersistentBaseAreaStage;
   /** Kanonischer Bezugspunkt des Kerns: die Mittelzelle seiner 7x7-Grundflaeche. */
   readonly anchor: PersistentBaseAnchor;
   /** Ohne Angabe die kanonische Ausrichtung. */
@@ -1320,7 +1324,10 @@ function normalizePersistentBaseConfig(
     throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} cannot author hpMax`);
   }
 
-  const reservationRadius = MAX_PERSISTENT_BASE_RADIUS_CELLS + PERSISTENT_BASE_CLEARANCE_CELLS;
+  if (config.maxAreaStage !== undefined && !isPersistentBaseAreaStage(config.maxAreaStage)) {
+    throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} has an invalid maxAreaStage`);
+  }
+  const reservationRadius = resolvePersistentBaseReservationRadiusCells(config.maxAreaStage);
   if (
     anchor.gridX - reservationRadius < 0
     || anchor.gridX + reservationRadius >= arenaWidthCells
@@ -1333,6 +1340,7 @@ function normalizePersistentBaseConfig(
   }
   const site: CoopDefenseMapPersistentBaseConfig = {
     baseId,
+    ...(config.maxAreaStage === undefined ? {} : { maxAreaStage: config.maxAreaStage }),
     anchor: { gridX: anchor.gridX, gridY: anchor.gridY },
     ...(config.orientation === undefined ? {} : { orientation: config.orientation }),
   };

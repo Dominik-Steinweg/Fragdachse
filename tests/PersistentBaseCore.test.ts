@@ -7,6 +7,10 @@ import {
   DEFAULT_PERSISTENT_BASE_ORIENTATION,
   PERSISTENT_BASE_CORE_SIZE_CELLS,
   PERSISTENT_BASE_ORIENTATIONS,
+  PERSISTENT_BASE_AREA_STAGES,
+  PERSISTENT_BASE_MAX_AREA_STAGE,
+  isCampaignPersistentBaseAreaStage,
+  resolvePersistentBaseReservationRadiusCells,
   buildPersistentBaseCoreBaseConfig,
   getCanonicalPersistentBaseCoreCells,
   getPersistentBaseCoreOrigin,
@@ -95,7 +99,7 @@ describe('PersistentBaseCore – kanonische Form', () => {
     expect(isPersistentBaseAreaStage(0)).toBe(true);
     expect(isPersistentBaseAreaStage(1)).toBe(true);
     expect(isPersistentBaseAreaStage(2)).toBe(true);
-    expect(isPersistentBaseAreaStage(3)).toBe(false);
+    expect(isPersistentBaseAreaStage(3)).toBe(true);
     const expanded = resolvePersistentBaseBuildAreaForStage(2);
     const previous = resolvePersistentBaseBuildAreaForStage(1);
     expect(expanded.kind).toBe('radius');
@@ -106,6 +110,8 @@ describe('PersistentBaseCore – kanonische Form', () => {
     }
     expect(resolvePersistentBaseBuildAreaForStage(0)).toEqual({ kind: 'square', sizeCells: 7 });
     expect(resolvePersistentBaseBuildAreaForStage(1)).toEqual({ kind: 'radius', radiusCells: 5 });
+    expect(resolvePersistentBaseBuildAreaForStage(2)).toEqual({ kind: 'radius', radiusCells: 6 });
+    expect(resolvePersistentBaseBuildAreaForStage(11)).toEqual({ kind: 'radius', radiusCells: 15 });
     expect(DEFAULT_PERSISTENT_BASE_BUILD_AREA).toEqual({ kind: 'square', sizeCells: 7 });
     expect(isPersistentBaseBuildArea(DEFAULT_PERSISTENT_BASE_BUILD_AREA)).toBe(true);
     expect(isPersistentBaseBuildArea({ kind: 'square', sizeCells: 4 })).toBe(false);
@@ -122,6 +128,25 @@ describe('PersistentBaseCore – kanonische Form', () => {
       }
     }
     expect(isCellInsidePersistentBaseBuildArea(3, 4, { kind: 'radius', radiusCells: 5 })).toBe(true);
+  });
+
+  it('accepts only supported integer stages and keeps the campaign storage boundary separate', () => {
+    expect(PERSISTENT_BASE_AREA_STAGES).toEqual(Array.from({ length: PERSISTENT_BASE_MAX_AREA_STAGE + 1 }, (_, i) => i));
+    for (const stage of PERSISTENT_BASE_AREA_STAGES) {
+      expect(isPersistentBaseAreaStage(stage)).toBe(true);
+      expect(isCampaignPersistentBaseAreaStage(stage)).toBe(stage <= 2);
+    }
+    for (const value of [-1, 12, 1.5, NaN, Infinity, '2', null, undefined, true]) {
+      expect(isPersistentBaseAreaStage(value)).toBe(false);
+      expect(isCampaignPersistentBaseAreaStage(value)).toBe(false);
+    }
+  });
+
+  it('retains campaign and lobby reservations while accommodating the largest site', () => {
+    expect(resolvePersistentBaseReservationRadiusCells()).toBe(12);
+    expect(resolvePersistentBaseReservationRadiusCells(2)).toBe(12);
+    expect(resolvePersistentBaseReservationRadiusCells(6)).toBe(12);
+    expect(resolvePersistentBaseReservationRadiusCells(11)).toBe(17);
   });
 });
 

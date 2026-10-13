@@ -1,10 +1,7 @@
-import {
-  MAX_PERSISTENT_BASE_RADIUS_CELLS,
-  PERSISTENT_BASE_CLEARANCE_CELLS,
-} from '../config/persistentBase';
 import type { BaseSpec } from '../arena/BaseRegistry';
 import {
   isCellInsidePersistentBaseBuildArea,
+  resolvePersistentBaseReservationRadiusCells,
   type PersistentBaseBuildArea,
 } from './PersistentBaseCore';
 import type { PersistentBaseAnchor } from './PersistentBaseTypes';
@@ -61,12 +58,13 @@ export function isCellInsidePersistentBaseReservation(
   gridX: number,
   gridY: number,
   anchor: PersistentBaseAnchor,
+  reservationRadiusCells: number = resolvePersistentBaseReservationRadiusCells(),
 ): boolean {
   return isAbsoluteCellInsidePersistentBaseZone(
     gridX,
     gridY,
     anchor,
-    MAX_PERSISTENT_BASE_RADIUS_CELLS + PERSISTENT_BASE_CLEARANCE_CELLS,
+    reservationRadiusCells,
   );
 }
 

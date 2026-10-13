@@ -62,7 +62,8 @@ export class PersistentBaseEditorWorld {
     this.anchor = (this.size / CELL_SIZE - 1) / 2;
     const cells = this.anchor * 2 + 1;
     const viewport = { width: this.size, height: this.size };
-    const site = { baseId: 'personal-base', anchor: { gridX: this.anchor, gridY: this.anchor } };
+    const site = { baseId: 'personal-base', anchor: { gridX: this.anchor, gridY: this.anchor },
+      maxAreaStage: model.baseline.persistentBaseAreaStage };
     const definition: WorldDefinition = { id: 'world:base-editor', metrics: { widthCells: cells, heightCells: cells },
       bases: [buildPersistentBaseCoreBaseConfig(site)], persistentBaseSite: site, terrain: {}, initialTimeOfDay: '08:00',
       actionPolicy: { combat: false }, participationPolicy: { selfAdmit: false }, presentationPolicy: { previewWithoutParticipation: true } };

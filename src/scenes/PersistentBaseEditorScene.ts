@@ -70,10 +70,13 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private closed = false;
   private disposed = false;
   private page = 0;
+  private readonly worldZoom: number;
   private readonly view: { x: number; y: number; width: number; height: number };
   constructor(private readonly options: PersistentBaseEditorOptions) {
     super(PersistentBaseEditorScene.KEY);
-    const size = getPersistentBaseEditorSize(options.model.area);
+    const worldSize = getPersistentBaseEditorSize(options.model.area);
+    const size = Math.min(worldSize, WORLD_PANEL.width - 40, WORLD_PANEL.height - 40);
+    this.worldZoom = size / worldSize;
     this.view = { x: WORLD_PANEL.x + (WORLD_PANEL.width - size) / 2,
       y: WORLD_PANEL.y + (WORLD_PANEL.height - size) / 2, width: size, height: size };
   }
@@ -250,13 +253,13 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     const scale = getRenderScale(this.scale);
     this.clarity.setViewport(0, 0, this.scale.width, this.scale.height).setOrigin(0, 0).setZoom(scale);
     this.cameras.main.setViewport(this.view.x * scale, this.view.y * scale, this.view.width * scale, this.view.height * scale)
-      .setOrigin(0, 0).setZoom(scale).setScroll(0, 0);
+      .setOrigin(0, 0).setZoom(scale * this.worldZoom).setScroll(0, 0);
   }
   private cellAt(pointer: Phaser.Input.Pointer): { x: number; y: number } | null {
     const scale = getRenderScale(this.scale), x = pointer.x / scale, y = pointer.y / scale;
     if (x < this.view.x || y < this.view.y || x >= this.view.x + this.view.width || y >= this.view.y + this.view.height) return null;
-    return { x: Math.floor((x - this.view.x) / CELL_SIZE) - this.world.anchor,
-      y: Math.floor((y - this.view.y) / CELL_SIZE) - this.world.anchor };
+    return { x: Math.floor((x - this.view.x) / (CELL_SIZE * this.worldZoom)) - this.world.anchor,
+      y: Math.floor((y - this.view.y) / (CELL_SIZE * this.worldZoom)) - this.world.anchor };
   }
   private isOverTable(pointer: Phaser.Input.Pointer): boolean {
     const scale = getRenderScale(this.scale), x = pointer.x / scale, y = pointer.y / scale;
@@ -284,9 +287,10 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       cell.x -= drag.offsetX; cell.y -= drag.offsetY;
       const valid = !this.options.model.validate(this.selected, cell.x, cell.y);
       this.drawFootprint(this.preview, cell.x, cell.y, valid ? 0xb1ed94 : 0xff9991, .2);
-      this.dragPreview?.setPosition(this.view.x + (this.world.anchor + cell.x + .5) * CELL_SIZE,
-        this.view.y + (this.world.anchor + cell.y + .5) * CELL_SIZE);
-    } else this.dragPreview?.setPosition(pointer.x / scale - drag.offsetX * CELL_SIZE, pointer.y / scale - drag.offsetY * CELL_SIZE);
+      this.dragPreview?.setScale(this.worldZoom).setPosition(
+        this.view.x + (this.world.anchor + cell.x + .5) * CELL_SIZE * this.worldZoom,
+        this.view.y + (this.world.anchor + cell.y + .5) * CELL_SIZE * this.worldZoom);
+    } else this.dragPreview?.setScale(1).setPosition(pointer.x / scale - drag.offsetX * CELL_SIZE, pointer.y / scale - drag.offsetY * CELL_SIZE);
     const removing = this.isOverTable(pointer) && !!this.options.model.getPosition(this.selected);
     this.tableOutline.setStrokeStyle(removing ? 2 : 1, removing ? 0xb1ed94 : 0x718160, removing ? 1 : .5);
   }
@@ -395,6 +399,6 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private finish(): void { if (!this.closed) { this.closed = true; this.options.close(); } }
   update(now: number, delta: number): void {
     if (!this.world || this.closed) return;
-    this.world.update(now, delta, { x: 0, y: 0, width: this.view.width, height: this.view.height });
+    this.world.update(now, delta, { x: 0, y: 0, width: this.world.size, height: this.world.size });
   }
 }

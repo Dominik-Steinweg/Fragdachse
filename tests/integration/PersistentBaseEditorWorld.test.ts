@@ -69,7 +69,7 @@ describe('base editor World terrain', () => {
     expect(shadows.rebuildStaticLayoutShadows.mock.calls.every(call => call[2] === true)).toBe(true);
   });
 
-  it.each([0, 1, 2] as const)('finishes real gravel bakes through normal editor frames at base stage %s', stage => {
+  it.each([0, 1, 2, 6, 11] as const)('finishes real gravel bakes through normal editor frames at base stage %s', stage => {
     const scene = createFakeArenaScene();
     const area = resolvePersistentBaseBuildAreaForStage(stage);
     const size = getPersistentBaseEditorSize(area);

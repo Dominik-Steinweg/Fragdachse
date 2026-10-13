@@ -48,6 +48,7 @@ export const LOBBY_PERSISTENT_BASE_ID = 'lobby-persistent-base';
  * `persistentBaseUnlocked` – eine Definition ist keine Progression.
  */
 const LOBBY_PERSISTENT_BASE_SITE: WorldPersistentBaseSiteDefinition = {
+  maxAreaStage: 6,
   baseId: LOBBY_PERSISTENT_BASE_ID,
   anchor: { gridX: LOBBY_SPAWN_FOCUS_CELL.gridX, gridY: LOBBY_SPAWN_FOCUS_CELL.gridY },
   // Ohne Activity nimmt der Kern ohnehin keinen Schaden; der Wert ist die Grunddauerhaftigkeit

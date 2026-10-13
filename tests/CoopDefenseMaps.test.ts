@@ -26,9 +26,49 @@ import {
   PERSISTENT_BASE_CLEARANCE_CELLS,
 } from '../src/config/persistentBase';
 import { shouldDelayFirstPedestalSpawn } from '../src/powerups/PowerUpConfig';
+import { type PersistentBaseAreaStage } from '../src/persistentBase/PersistentBaseCore';
+import { resolveWorldBases } from '../src/arena/BaseRegistry';
+import { toWorldDefinition } from '../src/config/authoring/coopDefenseAuthoringAdapter';
+import { resolveCoopDefenseWorldMetrics } from '../src/world/WorldMetrics';
 import { formatTimeOfDay, parseTimeOfDay } from '../src/effects/TimeOfDay';
 import { getMapName, getMapTutorial } from '../src/i18n/contentPresentation';
 import { getLocalizedMapObjectiveLabel } from '../src/i18n/gameModePresentation';
+
+describe('persistent site stage ceilings', () => {
+  const rawMap = (maxAreaStage?: PersistentBaseAreaStage, gridX = 20, gridY = 20) => ({
+    mapId: 'site-ceiling', arenaWidthCells: 60, arenaHeightCells: 50,
+    balanceReferenceDurationSec: 60, objective: 'survive' as const, surviveDurationSec: 60,
+    respawnsPerPlayer: 0, bases: [], powerUps: [], trackMode: 'none' as const,
+    persistentBase: { baseId: 'home', anchor: { gridX, gridY }, ...(maxAreaStage === undefined ? {} : { maxAreaStage }) },
+  });
+
+  it.each([undefined, 2, 6, 11] as const)('reserves the same site geometry in map and World resolution for ceiling %s', ceiling => {
+    const map = normalizeCoopDefenseMapConfig(rawMap(ceiling));
+    const radius = ceiling === 11 ? 17 : 12;
+    const mapBases = resolveCoopDefenseBases(map);
+    const worldBases = resolveWorldBases(toWorldDefinition(map), resolveCoopDefenseWorldMetrics(map.arenaWidthCells, map.arenaHeightCells));
+    for (const bases of [mapBases, worldBases]) {
+      expect(bases[0].persistentReservationRadiusCells).toBe(radius);
+      expect(isPersistentBaseReservationCell(20 + radius, 20, bases)).toBe(true);
+      expect(isPersistentBaseReservationCell(21 + radius, 20, bases)).toBe(false);
+    }
+    expect(() => normalizeCoopDefenseMapConfig(rawMap(ceiling, radius, radius))).not.toThrow();
+    for (const [x, y] of [[radius - 1, 20], [60 - radius, 20], [20, radius - 1], [20, 50 - radius]]) {
+      expect(() => normalizeCoopDefenseMapConfig(rawMap(ceiling, x, y))).toThrow(`${radius} free cells`);
+    }
+  });
+
+  it.each([-1, 12, 1.5, NaN, Infinity, '11', null])('rejects malformed site ceiling %s', ceiling => {
+    expect(() => normalizeCoopDefenseMapConfig(rawMap(ceiling as PersistentBaseAreaStage))).toThrow(/maxAreaStage/);
+  });
+
+  it('keeps authored water outside the larger site reservation', () => {
+    const withWater = { ...rawMap(11), water: [{ gridX: 37, gridY: 20 }] };
+    expect(() => normalizeCoopDefenseMapConfig(withWater)).toThrow(/persistent base reservation/);
+    expect(() => normalizeCoopDefenseMapConfig({ ...withWater, persistentBase: rawMap(2).persistentBase })).not.toThrow();
+    expect(() => normalizeCoopDefenseMapConfig({ ...withWater, water: [{ gridX: 38, gridY: 20 }] })).not.toThrow();
+  });
+});
 
 function getShapeBounds(shape: CoopBaseShape): { width: number; height: number } {
   if (shape.kind === 'rectangle') return { width: shape.widthCells, height: shape.heightCells };

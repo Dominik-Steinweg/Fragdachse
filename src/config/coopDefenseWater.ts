@@ -1,5 +1,6 @@
 import type { CoopBaseAnchor, CoopBaseShape, CoopDefenseMapAuthoringConfig, CoopDefenseMapConfig } from './coopDefenseMapAuthoring';
 import { isCellInsidePersistentBaseReservation } from '../persistentBase/PersistentBaseZone';
+import { resolvePersistentBaseReservationRadiusCells } from '../persistentBase/PersistentBaseCore';
 import type { WaterCell } from '../types';
 
 /** Water leaves one free cell around ordinary bases, including outposts and spawn points. */
@@ -16,6 +17,7 @@ export function normalizeCoopDefenseWater(config: WaterAuthoring, cols: number, 
   const { water: cells, waterAreas: areas, bases, persistentBase, rockWalls: walls, missionProgress: mission } = config;
   const tracks = config.trackMode === 'none' ? undefined : config.trackPosition;
   if (cells === undefined && areas === undefined) return undefined;
+  const reservationRadius = resolvePersistentBaseReservationRadiusCells(persistentBase?.maxAreaStage);
   if (cells !== undefined && !Array.isArray(cells)) throw new Error('[coopDefenseMaps] Water must be an array');
   if (areas !== undefined && !Array.isArray(areas)) throw new Error('[coopDefenseMaps] Water areas must be an array');
   const baseRegions = bases.map(base => {
@@ -52,7 +54,7 @@ export function normalizeCoopDefenseWater(config: WaterAuthoring, cols: number, 
     const key = gridX + '_' + gridY;
     const base = baseRegions.find(region => gridX >= region.minX && gridX <= region.maxX && gridY >= region.minY && gridY <= region.maxY);
     if (base) throw new Error(`[coopDefenseMaps] Water overlaps authored structure or base clearance (${base.id}): ${key}`);
-    if (persistentBase && isCellInsidePersistentBaseReservation(gridX, gridY, persistentBase.anchor))
+    if (persistentBase && isCellInsidePersistentBaseReservation(gridX, gridY, persistentBase.anchor, reservationRadius))
       throw new Error(`[coopDefenseMaps] Water overlaps persistent base reservation (${persistentBase.baseId}): ${key}`);
     if (blocked.has(key)) throw new Error('[coopDefenseMaps] Water overlaps authored structure: ' + key);
     if (typeof tracks === 'object' && (gridX === tracks.gridX || gridX === tracks.gridX + 1))
