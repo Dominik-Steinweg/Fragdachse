@@ -161,6 +161,396 @@
       "sizes": [
         256
       ]
+    },
+    {
+      "key": "elite-armored",
+      "original": "elite-armored.png",
+      "source": "icons/candidates/icon-elite-armored-01.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "770ae805cc7bf2a29258e78a2ace05d4cf5fa860557c839277719b9358005745",
+      "date": "2026-10-13",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "m3",
+      "promptSource": "icons/candidates/ui-m3-prompts.json",
+      "promptFidelity": "Full built-in tool prompts; candidate 01 of elite-armored reused from interrupted run.",
+      "candidatePrompts": [
+        {
+          "key": "elite-armored",
+          "file": "icon-elite-armored-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE production UI icon, elite-armored candidate 01 for Fragdachse Dawn. Genuine transparent background, square canvas. A dark charcoal-plum rounded-square plaque with a restrained worn violet and crimson enemy rim. Center one large bright ivory metal armor plate glyph: broad solid hexagonal plate with one deep vertical slot. Shape first, clearly legible at 16/24/32 pixels. Glyph fills 65% of plaque width. Softly shaded, lightly stylized painted texture, matte worn metal and broad soft bevels matching inspected Dawn dealer icons; subtle texture must never disrupt simple silhouette. Front-facing flat UI emblem, no perspective. 12% transparent canvas padding. No text, letters, numerals, extra symbols, ground, cast shadow, glow, black cartoon outlines, pixel art, photographic reflections. Reference concept is elite-affix-colors-02 shown above: light glyph on dark plaque with red/violet border. Make only this single icon.",
+          "sha256": "770ae805cc7bf2a29258e78a2ace05d4cf5fa860557c839277719b9358005745"
+        },
+        {
+          "key": "elite-armored",
+          "file": "icon-elite-armored-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. Dark charcoal-plum rounded-square plaque, thin worn violet/crimson enemy rim. One large bright ivory glyph occupies 65% of plaque width. Light glyph on dark plaque, meaning depends on shape, not color. Glyph: two overlapping broad ivory armor plates forming a compact angular breastplate; just one wide dark separation.",
+          "sha256": "6c8f4dfeaf0b0b7df8f081dbcabe287f377225018a565b8311088dffd5459f56"
+        },
+        {
+          "key": "elite-armored",
+          "file": "icon-elite-armored-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. Dark charcoal-plum rounded-square plaque, thin worn violet/crimson enemy rim. One large bright ivory glyph occupies 65% of plaque width. Light glyph on dark plaque, meaning depends on shape, not color. Glyph: one solid angular ivory shield plate with a broad raised central ridge; filled shield, no hollow outline.",
+          "sha256": "0ee3d36723738b8496c94db1e3698dd552f371a39fa8bdd81d3874772a65e3a2"
+        }
+      ],
+      "selectionReason": "Breite Panzerplatte mit dunklem Mittelschlitz; bei 16/24 klarer als die geschichtete Brustplatte und eigenstaendiger als der volle Schild.",
+      "sizes": [
+        16,
+        24,
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "elite-swift",
+      "original": "elite-swift.png",
+      "source": "icons/candidates/icon-elite-swift-01.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "c791d9145d3f5e8860cdd625031783fd6dc054078a887cd3f79db6c0a4db7787",
+      "date": "2026-10-13",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "m3",
+      "promptSource": "icons/candidates/ui-m3-prompts.json",
+      "promptFidelity": "Full built-in tool prompts; candidate 01 of elite-armored reused from interrupted run.",
+      "candidatePrompts": [
+        {
+          "key": "elite-swift",
+          "file": "icon-elite-swift-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. Dark charcoal-plum rounded-square plaque, thin worn violet/crimson enemy rim. One large bright ivory glyph occupies 65% of plaque width. Light glyph on dark plaque, meaning depends on shape, not color. Glyph: two thick ivory upward chevrons, vertically stacked with a wide dark gap.",
+          "sha256": "c791d9145d3f5e8860cdd625031783fd6dc054078a887cd3f79db6c0a4db7787"
+        },
+        {
+          "key": "elite-swift",
+          "file": "icon-elite-swift-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. Dark charcoal-plum rounded-square plaque, thin worn violet/crimson enemy rim. One large bright ivory glyph occupies 65% of plaque width. Light glyph on dark plaque, meaning depends on shape, not color. Glyph: two broad ivory right-pointing chevrons with a wide dark gap.",
+          "sha256": "7db1f89a41d0b65ab88d2da51f0028944b6c98210334a412c55ff1f9d74a7f1c"
+        },
+        {
+          "key": "elite-swift",
+          "file": "icon-elite-swift-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. Dark charcoal-plum rounded-square plaque, thin worn violet/crimson enemy rim. One large bright ivory glyph occupies 65% of plaque width. Light glyph on dark plaque, meaning depends on shape, not color. Glyph: two ivory upward chevrons with gently curved broad wings and wide spacing.",
+          "sha256": "1a55e07beb4f3ffd38bd357ba358fece30ba7023842e684ed7cae1a783c82e62"
+        }
+      ],
+      "selectionReason": "Gerade doppelte Aufwaerts-Chevrons mit breitem Abstand; nahe am M3-Konzept, bei 16/24 klar getrennt.",
+      "sizes": [
+        16,
+        24,
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "elite-volatile",
+      "original": "elite-volatile.png",
+      "source": "icons/candidates/icon-elite-volatile-01.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "cbb97b4291a78bb63724fc6e71c735d95fade601176b6f7c3bc68f44c5f841d6",
+      "date": "2026-10-13",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "m3",
+      "promptSource": "icons/candidates/ui-m3-prompts.json",
+      "promptFidelity": "Full built-in tool prompts; candidate 01 of elite-armored reused from interrupted run.",
+      "candidatePrompts": [
+        {
+          "key": "elite-volatile",
+          "file": "icon-elite-volatile-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. Dark charcoal-plum rounded-square plaque, thin worn violet/crimson enemy rim. One large bright ivory glyph occupies 65% of plaque width. Light glyph on dark plaque, meaning depends on shape, not color. Glyph: a single bold ivory four-point spark star, large center and short thick tapering tips.",
+          "sha256": "cbb97b4291a78bb63724fc6e71c735d95fade601176b6f7c3bc68f44c5f841d6"
+        },
+        {
+          "key": "elite-volatile",
+          "file": "icon-elite-volatile-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. Dark charcoal-plum rounded-square plaque, thin worn violet/crimson enemy rim. One large bright ivory glyph occupies 65% of plaque width. Light glyph on dark plaque, meaning depends on shape, not color. Glyph: a single ivory six-point explosion spark star, alternating broad long and short rays.",
+          "sha256": "2a44374f063a81991b8917defd414f42a7c429c71ddb00933d4cce8552b7fb56"
+        },
+        {
+          "key": "elite-volatile",
+          "file": "icon-elite-volatile-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. Dark charcoal-plum rounded-square plaque, thin worn violet/crimson enemy rim. One large bright ivory glyph occupies 65% of plaque width. Light glyph on dark plaque, meaning depends on shape, not color. Glyph: a single bold ivory asymmetric five-point burst with a broad center, no detached particles.",
+          "sha256": "ec9920c0f261e029d69d1a706042b47296dcf0f9781458875c2ef4b3bc431859"
+        }
+      ],
+      "selectionReason": "Ruhiger vierstrahliger Funkenstern mit grosser Mitte; weniger kleinteilig als die zusaetzlichen Zacken von 02/03.",
+      "sizes": [
+        16,
+        24,
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "elite-regenerating",
+      "original": "elite-regenerating.png",
+      "source": "icons/candidates/icon-elite-regenerating-02.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "1cc2c6331eb116c0cae9d967cdd2ad983ed80b031187f3dded11fb2d8e0d6532",
+      "date": "2026-10-13",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "m3",
+      "promptSource": "icons/candidates/ui-m3-prompts.json",
+      "promptFidelity": "Full built-in tool prompts; candidate 01 of elite-armored reused from interrupted run.",
+      "candidatePrompts": [
+        {
+          "key": "elite-regenerating",
+          "file": "icon-elite-regenerating-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. Dark charcoal-plum rounded-square plaque, thin worn violet/crimson enemy rim. One large bright ivory glyph occupies 65% of plaque width. Light glyph on dark plaque, meaning depends on shape, not color. Glyph: one broad ivory equal-armed healing cross, with one subtle sage vine hugging only the lower stem.",
+          "sha256": "d01a8a1223350d00ec07dff09631e5a6e550c5c478cf813c932f1a4a82b234c7"
+        },
+        {
+          "key": "elite-regenerating",
+          "file": "icon-elite-regenerating-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. Dark charcoal-plum rounded-square plaque, thin worn violet/crimson enemy rim. One large bright ivory glyph occupies 65% of plaque width. Light glyph on dark plaque, meaning depends on shape, not color. Glyph: one very bold ivory healing cross with softly chamfered corners; a single small leaf growing from the lower right.",
+          "sha256": "1cc2c6331eb116c0cae9d967cdd2ad983ed80b031187f3dded11fb2d8e0d6532"
+        },
+        {
+          "key": "elite-regenerating",
+          "file": "icon-elite-regenerating-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. Dark charcoal-plum rounded-square plaque, thin worn violet/crimson enemy rim. One large bright ivory glyph occupies 65% of plaque width. Light glyph on dark plaque, meaning depends on shape, not color. Glyph: one ivory cross whose lower stem bends slightly like a plant stalk, two short broad leaves; keep cross unmistakable.",
+          "sha256": "4bc8f8be4ea2f2c7c23728f7d4bfe87bdba969ea97088af6d7a83ac11cdf1101"
+        }
+      ],
+      "selectionReason": "Breites helles Kreuz mit einzelnem Blatt; die Hauptform bleibt klein staerker als bei Ranke oder Pflanzenstiel.",
+      "sizes": [
+        16,
+        24,
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "elite-shielding",
+      "original": "elite-shielding.png",
+      "source": "icons/candidates/icon-elite-shielding-01.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "c1c79e79236e12b338b261976b3b94593a0403671cd44ee1162e3d01036df92e",
+      "date": "2026-10-13",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "m3",
+      "promptSource": "icons/candidates/ui-m3-prompts.json",
+      "promptFidelity": "Full built-in tool prompts; candidate 01 of elite-armored reused from interrupted run.",
+      "candidatePrompts": [
+        {
+          "key": "elite-shielding",
+          "file": "icon-elite-shielding-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. Dark charcoal-plum rounded-square plaque, thin worn violet/crimson enemy rim. One large bright ivory glyph occupies 65% of plaque width. Light glyph on dark plaque, meaning depends on shape, not color. Glyph: one thick ivory hollow shield outline under a separate broad ivory dome arch; large clear dark interior.",
+          "sha256": "c1c79e79236e12b338b261976b3b94593a0403671cd44ee1162e3d01036df92e"
+        },
+        {
+          "key": "elite-shielding",
+          "file": "icon-elite-shielding-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. Dark charcoal-plum rounded-square plaque, thin worn violet/crimson enemy rim. One large bright ivory glyph occupies 65% of plaque width. Light glyph on dark plaque, meaning depends on shape, not color. Glyph: one ivory shield outline with a wide horizontal protective dome arch across its upper half; open dark center.",
+          "sha256": "df619f05c0461ee2ce4968432cf38db833bacdb807c9f5be601790a303cf816c"
+        },
+        {
+          "key": "elite-shielding",
+          "file": "icon-elite-shielding-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. Dark charcoal-plum rounded-square plaque, thin worn violet/crimson enemy rim. One large bright ivory glyph occupies 65% of plaque width. Light glyph on dark plaque, meaning depends on shape, not color. Glyph: one thick pale shield outline containing a simple ivory hemispherical dome cap; wide dark gap below dome.",
+          "sha256": "14bdc530008794601f03c470a5a4fe54b393a22586a9f92d763bb94c2a01d009"
+        }
+      ],
+      "selectionReason": "Offener Schild mit separatem Schutzbogen; grosse dunkle Innenflaeche unterscheidet ihn von der massiven Panzerplatte.",
+      "sizes": [
+        16,
+        24,
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "night-blood-moon",
+      "original": "night-blood-moon.png",
+      "source": "icons/candidates/icon-night-blood-moon-02.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "75b8f970ce910ed4d4ab3b010dc31d76ef6a176af912c2e24a7ccc25d803b018",
+      "date": "2026-10-13",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "m3",
+      "promptSource": "icons/candidates/ui-m3-prompts.json",
+      "promptFidelity": "Full built-in tool prompts for all three candidates.",
+      "candidatePrompts": [
+        {
+          "key": "night-blood-moon",
+          "file": "icon-night-blood-moon-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. A compact circular dark wood medallion with a restrained warm worn brass rim, matching Dawn merchant medals. No ribbons. Large central raised motif occupies most of face: one large terracotta crimson full moon with a bright coral upper rim and only two broad crater marks.",
+          "sha256": "7a341274a3dffc690f61d3b0df4cbcc5a3ba474e885904a6b84f77383648899f"
+        },
+        {
+          "key": "night-blood-moon",
+          "file": "icon-night-blood-moon-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. A compact circular dark wood medallion with a restrained warm worn brass rim, matching Dawn merchant medals. No ribbons. Large central raised motif occupies most of face: one bold red crescent moon with a broad vermilion lit face, dark center and wide readable crescent.",
+          "sha256": "75b8f970ce910ed4d4ab3b010dc31d76ef6a176af912c2e24a7ccc25d803b018"
+        },
+        {
+          "key": "night-blood-moon",
+          "file": "icon-night-blood-moon-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. A compact circular dark wood medallion with a restrained warm worn brass rim, matching Dawn merchant medals. No ribbons. Large central raised motif occupies most of face: one near-full red moon with a narrow dark crescent at lower right, softly mottled coral-red surface.",
+          "sha256": "2272b518b14b9d3c31cc4bb8d4350f8d8cc8dded6487b3e1d93c47b5567cf412"
+        }
+      ],
+      "selectionReason": "Breite rote Sichel mit grossem dunklem Innenraum; Mondform bei 16/24 eindeutiger als die fast vollen Scheiben 01/03.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "night-fog",
+      "original": "night-fog.png",
+      "source": "icons/candidates/icon-night-fog-01.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "7eb422244f3b86ff6e6fbef3515b3498e106b7f44c0c4248a869ee69c35f6fbe",
+      "date": "2026-10-13",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "m3",
+      "promptSource": "icons/candidates/ui-m3-prompts.json",
+      "promptFidelity": "Full built-in tool prompts for all three candidates.",
+      "candidatePrompts": [
+        {
+          "key": "night-fog",
+          "file": "icon-night-fog-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. A compact circular dark wood medallion with a restrained warm worn brass rim, matching Dawn merchant medals. No ribbons. Large central raised motif occupies most of face: one pale blue moon behind two thick horizontal lavender-gray fog bands, broad dark gaps.",
+          "sha256": "7eb422244f3b86ff6e6fbef3515b3498e106b7f44c0c4248a869ee69c35f6fbe"
+        },
+        {
+          "key": "night-fog",
+          "file": "icon-night-fog-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. A compact circular dark wood medallion with a restrained warm worn brass rim, matching Dawn merchant medals. No ribbons. Large central raised motif occupies most of face: one ivory crescent moon partly covered by three broad curling pale blue fog ribbons.",
+          "sha256": "72ad94689f1486e663d2d8d1667564fc13f9bc6f84e4e80268cc49b0a96efa74"
+        },
+        {
+          "key": "night-fog",
+          "file": "icon-night-fog-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. A compact circular dark wood medallion with a restrained warm worn brass rim, matching Dawn merchant medals. No ribbons. Large central raised motif occupies most of face: one broad pale moon half-disc emerging above two thick lilac-blue undulating fog banks.",
+          "sha256": "eca320f341cfdcbcba13d87cb88c2b48b2486740a03581f86e8522e7c0af828f"
+        }
+      ],
+      "selectionReason": "Zwei horizontale Nebelbaender vor hellem Mond; ruhiger als drei gekraeuselte Baender und weniger wellenartig als 03.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "night-bombers",
+      "original": "night-bombers.png",
+      "source": "icons/candidates/icon-night-bombers-02.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "2eff548c80bbc5c96ab09d4843c7f52680d136265ad1891502c84c06f4400b45",
+      "date": "2026-10-13",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "m3",
+      "promptSource": "icons/candidates/ui-m3-prompts.json",
+      "promptFidelity": "Full built-in tool prompts for all three candidates.",
+      "candidatePrompts": [
+        {
+          "key": "night-bombers",
+          "file": "icon-night-bombers-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. A compact circular dark wood medallion with a restrained warm worn brass rim, matching Dawn merchant medals. No ribbons. Large central raised motif occupies most of face: one large pale steel aerial bomb, diagonal nose down left and broad tail fins up right; simple iconic silhouette.",
+          "sha256": "a9bb2146d7552d3021716a5533dedff27df51dc39407803c665158973c8e2b69"
+        },
+        {
+          "key": "night-bombers",
+          "file": "icon-night-bombers-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. A compact circular dark wood medallion with a restrained warm worn brass rim, matching Dawn merchant medals. No ribbons. Large central raised motif occupies most of face: one large ivory top-view bomber airplane silhouette with broad straight wings and short tail, nose upward.",
+          "sha256": "2eff548c80bbc5c96ab09d4843c7f52680d136265ad1891502c84c06f4400b45"
+        },
+        {
+          "key": "night-bombers",
+          "file": "icon-night-bombers-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. A compact circular dark wood medallion with a restrained warm worn brass rim, matching Dawn merchant medals. No ribbons. Large central raised motif occupies most of face: one upright pale aerial bomb nose down, thick dark tail-fin separation and a small muted red band.",
+          "sha256": "7c9837cd21c9d5fd8e28cb8d07acd131c8b312de28da50e8c227d37aa763c237"
+        }
+      ],
+      "selectionReason": "Helle breite Flugzeugsilhouette nutzt die Medaillonflaeche und kennzeichnet Luftangriff deutlicher als die schmalen Bomben.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "night-fire",
+      "original": "night-fire.png",
+      "source": "icons/candidates/icon-night-fire-01.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "ad131673e1001bdefd8259a2d6135f6e25fe1a2e7a79b2541e1b235746358755",
+      "date": "2026-10-13",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "m3",
+      "promptSource": "icons/candidates/ui-m3-prompts.json",
+      "promptFidelity": "Full built-in tool prompts for all three candidates.",
+      "candidatePrompts": [
+        {
+          "key": "night-fire",
+          "file": "icon-night-fire-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. A compact circular dark wood medallion with a restrained warm worn brass rim, matching Dawn merchant medals. No ribbons. Large central raised motif occupies most of face: one broad orange flame front with three tall tongues and a single warm pale central core.",
+          "sha256": "ad131673e1001bdefd8259a2d6135f6e25fe1a2e7a79b2541e1b235746358755"
+        },
+        {
+          "key": "night-fire",
+          "file": "icon-night-fire-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. A compact circular dark wood medallion with a restrained warm worn brass rim, matching Dawn merchant medals. No ribbons. Large central raised motif occupies most of face: one sweeping bank of three connected terracotta orange flames leaning right, pale amber front edge.",
+          "sha256": "0b63f040dd350a3c153d340ca85067cfe7664a33449616348523b6a5019b78fb"
+        },
+        {
+          "key": "night-fire",
+          "file": "icon-night-fire-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. A compact circular dark wood medallion with a restrained warm worn brass rim, matching Dawn merchant medals. No ribbons. Large central raised motif occupies most of face: one compact bright amber flame front with a tall center tongue and two short red-orange side tongues.",
+          "sha256": "77551cded0279dd520c1fec775f53091bbc5529f65ff55e897a3e641ab027d1e"
+        }
+      ],
+      "selectionReason": "Drei hohe Flammenzungen und heller Kern; starke zusammenhaengende Flammenfront mit guter Trennung vom dunklen Holz.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "scrap-scanner",
+      "original": "scrap-scanner.png",
+      "source": "icons/candidates/icon-scrap-scanner-02.png",
+      "sourceWorktree": "C:/Fragdachse-worktrees/dawn-assets",
+      "sha256": "2ce34e2dc45c0da4adf1fc616bb53df904efb17da42327162ba8b08d23dc9b20",
+      "date": "2026-10-13",
+      "generator": "Integrated image_gen tool",
+      "reviewGroup": "m3",
+      "promptSource": "icons/candidates/ui-m3-prompts.json",
+      "promptFidelity": "Full built-in tool prompts for all three candidates.",
+      "candidatePrompts": [
+        {
+          "key": "scrap-scanner",
+          "file": "icon-scrap-scanner-01.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. Infrastructure merchant category icon, forest scrap technology, compact coherent device silhouette, warm brass, matte olive metal, dark wood accents. Subject: one compact olive and brass handheld radar device with a large dark circular screen; one thick pale radar sweep and a single warm amber gear-shaped scrap echo; short antenna.",
+          "sha256": "173b3994111c87473d32f5a53a96380a95c070192a89838b9f102134d6f39819"
+        },
+        {
+          "key": "scrap-scanner",
+          "file": "icon-scrap-scanner-02.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. Infrastructure merchant category icon, forest scrap technology, compact coherent device silhouette, warm brass, matte olive metal, dark wood accents. Subject: one round brass-rimmed dark olive radar screen in a squat worn wooden case; one broad pale sweep wedge and one bold rusty gear echo, no fine grid.",
+          "sha256": "2ce34e2dc45c0da4adf1fc616bb53df904efb17da42327162ba8b08d23dc9b20"
+        },
+        {
+          "key": "scrap-scanner",
+          "file": "icon-scrap-scanner-03.png",
+          "prompt": "Use case: stylized-concept. Create ONE isolated production game UI icon for Fragdachse Dawn. Square PNG, genuine transparent alpha, centered with 12% transparent padding. Match Dawn dealer icon style inspected in conversation: softly shaded lightly stylized painted texture, subtle worn metal/wood texture, matte surfaces, soft broad bevels, restrained highlights. Strong simple masses legible at 16/24/32 pixels, sparse detail. Front-facing UI emblem. No text, letters, numbers, logos, watermarks, ground, backdrop, cast shadow, bloom, hard black cartoon outlines, pixel grid or photographic reflections. Infrastructure merchant category icon, forest scrap technology, compact coherent device silhouette, warm brass, matte olive metal, dark wood accents. Subject: one rugged olive square peilgeraet with a round dark radar face, short brass antenna, one pale scan arc and a single large amber hex-nut scrap echo.",
+          "sha256": "f84c5908b1e1c69f95ac4a61778cc7b787722cc75e57144a472180c8b1afb180"
+        }
+      ],
+      "selectionReason": "Grosser Radarschirm, breiter heller Suchsektor und rostiges Zahnrad-Echo; kompakter als die Antennengeraete 01/03.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
     }
   ]
 }

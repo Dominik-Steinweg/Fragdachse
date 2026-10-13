@@ -133,3 +133,59 @@ art/poc/dawn/v1-review/ui-icons.png
 
 `art/poc/` ist repositoryweit Git-ignoriert. Der lokale Prüfbogen wird bei jedem Export
 neu erzeugt und gehört zur Lieferung im Worktree; keine Ignore-Regeln wurden geändert.
+
+## V1-7: Elite-Affixe, Nacht-Modifikatoren und Schrottscanner
+
+29 neue Einzelbilder mit dem integrierten Imagegen erzeugt; Panzer-Kandidat 01 aus
+dem abgebrochenen Vorlauf wiederverwendet. Je drei Kandidaten pro Icon, insgesamt 30.
+Alle zehn gew?hlten PNG-Originale wurden unver?ndert kopiert. Vollst?ndige Prompts,
+Kandidaten-Hashes, Auswahlgr?nde und Original-Hashes stehen in [prompts.json](prompts.json).
+Die lokalen Kandidaten und ihr Prompt-Satz liegen unter
+`art/poc/dawn/icons/candidates/icon-<name>-{01,02,03}.png` und `ui-m3-prompts.json`.
+UI-Plaketten und Medaillons sind frontale Embleme, keine World-Sprites.
+
+| Original / Vertragsname | Wahl | Grund |
+| --- | --- | --- |
+| [elite-armored.png](elite-armored.png) | 01 | Breite Panzerplatte mit gut sichtbarem Mittelschlitz. |
+| [elite-swift.png](elite-swift.png) | 01 | Gerade doppelte Chevrons mit klarem Abstand. |
+| [elite-volatile.png](elite-volatile.png) | 01 | Ruhiger vierstrahliger Funkenstern statt vieler d?nner Zacken. |
+| [elite-regenerating.png](elite-regenerating.png) | 02 | Breites Kreuz; einzelnes Blatt st?rt die Hauptform wenig. |
+| [elite-shielding.png](elite-shielding.png) | 01 | Offener Schild und separater Schutzbogen, klar anders als die Panzerplatte. |
+| [night-blood-moon.png](night-blood-moon.png) | 02 | Rote Sichel bleibt klein eindeutig als Mond erkennbar. |
+| [night-fog.png](night-fog.png) | 01 | Zwei horizontale Nebelb?nder vor dem Mond, wenig Unruhe. |
+| [night-bombers.png](night-bombers.png) | 02 | Breite helle Flugzeugsilhouette nutzt die Medaillonfl?che. |
+| [night-fire.png](night-fire.png) | 01 | Drei hohe Flammenzungen mit hellem Kern. |
+| [scrap-scanner.png](scrap-scanner.png) | 02 | Gro?er Radarschirm und breiter Suchsektor im kompakten Holz/Messing-Geh?use. |
+
+Runtime: `runtime/<name>-{32,64,128}.webp`, bei allen f?nf Elite-Glyphen zus?tzlich
+`runtime/<name>-{16,24}.webp` (40 neue WebPs). Rand pro Seite: `round(size / 16)`,
+also 1 px bei 16, 2 px bei 24/32, 4 px bei 64 und 8 px bei 128. Die ?lteren Gr??en
+behalten ihre bisherigen Pixel. SHA-Pr?fung, Alpha-Zuschnitt, kubischer Filter und
+verlustfreie WebP-Kodierung gelten unver?ndert; keine manuelle Farb-/Formkorrektur.
+
+[Lesbarkeitsbogen](../../../../art/poc/dawn/v1-review/ui-m3-icons.png): alle drei
+Kandidaten plus gew?hlte Runtime bei 16/24/32/48 px auf HUD `#24282b` und auf einem
+Waldbodenausschnitt aus `art/poc/dawn/m3-concepts/night-mod-fog-02.png` (x820/y390,
+660?340). Zus?tzlich 72-px-Details. Elite 16/24 verwenden die entsprechenden Exporte;
+sonstige 16/24/32 werden aus 32, 48 aus 64 und Details aus 128 verkleinert.
+Bei 100 % betrachten: ein Bildpixel entspricht einem Anzeigepixel, inklusive Rand.
+Der Waldboden stammt aus einem freigegebenen Konzept, nicht aus einer neuen Spielaufnahme.
+Die lokale Bildpr?fung ersetzt keinen Browser-/Spieltest; es wurde kein Browser gestartet.
+
+Die Elite-Hauptformen sind auch in Graustufen bei 16/24 unterscheidbar; Materialtextur
+und Blattdetails brauchen gr??ere Darstellung. Der zus?tzliche Schutzbogen ist bei
+16 px eng, ab 24 klarer. F?r Nacht-Medaillons sind 24?32 px sinnvoller als 16;
+bei 16 gehen Krater, Nebeldetails und Bomberdetails verloren. Der Scanner ist ab 32
+als Radar lesbar, das Zahnrad-Echo ben?tigt eher 48 px; bei 16/24 bleibt vor allem
+Ger?tesilhouette plus Suchsektor.
+
+`npm run assets:dawn-ui` erzeugt Runtime und den M3-Bogen (wenn alle lokalen
+Kandidaten und das Waldkonzept vorhanden sind). Runtime funktioniert ohne diese
+Git-ignorierten Pr?fquellen. Historische B?gen `ui-icons.png`/`ui-scrap-magnet.png`
+werden nur noch explizit mit `node scripts/export-dawn-ui.mjs --legacy-review` geschrieben.
+Die V1-5/V1-6-Abschnitte oben beschreiben deren urspr?ngliche Lieferung.
+
+V1-7-Dateien: zehn PNG-Originale, 40 Runtime-WebPs, `runtime/manifest.json`,
+`prompts.json`, diese README, `scripts/export-dawn-ui.mjs`; lokal 30 Kandidaten,
+Prompt-JSON, Detail-/Graustufenpr?fungen im Kandidatenordner und `ui-m3-icons.png`.
+Keine ?nderungen an `src/`, Katalogen oder Blender-Rezepten.
