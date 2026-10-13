@@ -75,27 +75,28 @@ daraus. Zeitpläne liegen in `src/config/dawn/schedules.json`.
   Elite-Wrack.
 - Sites schließen in der Dämmerung; ein Schrottscanner (M3) zeigt seltene, versteckte Sites.
 
-## 7. Economy-Modell v0 (Zielkurve, in M2 per Simulation kalibriert)
+## 7. Economy-Modell (in M2 per Simulation kalibriert)
 
-Annahmen: etwa 6 Runden pro Spielstunde (8 min Runde plus Lobby), Schrott pro gewonnener Runde
-wächst mit Threat um ca. 25 % je Stufe (Site-Tiers, Entfernung), etwa 60 % des Schrotts fließen
-in Expansion, der Rest in Infrastruktur, Zweige und Ausrüstung.
+Die Simulation `src/dawn/economy/DawnEconomySimulation.ts` (Balance-Lab-Test `DawnEconomySimulation`, Bericht
+`build/dawn/M2-economy.md`) mittelt den Produktionskomponisten über 1.024 Seeds je Threat. Annahmen: 6 Runden pro
+Spielstunde, 85 % Siege, 80 % Site-Erfolg, alle Drops gesammelt, 60 % des Schrotts in Expansion, 40 % in andere Käufe
+(Nekromantie zuerst).
 
-| Schritt | Runden (kumuliert) | Spielzeit (kumuliert) | Schrott/Runde | Expansionskosten |
+| Threat | erreicht nach Runden | Stunden | Gutschrift/Runde | Expansion zum nächsten Threat |
 |---|---|---|---|---|
-| T1→2 | 2 (2) | 0,3 h | 100 | 120 |
-| T2→3 | 6 (8) | 1,3 h | 125 | 450 |
-| T3→4 | 8 (16) | 2,7 h | 155 | 750 |
-| T4→5 | 11 (27) | 4,5 h | 195 | 1.300 |
-| T5→6 | 18 (45) | 7,5 h | 245 | 2.600 |
-| T6→7 | 22 (67) | 11 h | 305 | 4.000 |
-| T7→8 | 27 (94) | 16 h | 380 | 6.200 |
-| T8→9 | 32 (126) | 21 h | 475 | 9.200 |
-| T9→10 | 39 (165) | 27,5 h | 595 | 14.000 |
+| 1 | 0 | 0 | 71 | 80 |
+| 2 | 2 | 0,3 | 84 | 300 |
+| 3 | 8 | 1,3 | 126 | 600 |
+| 4 | 16 | 2,7 | 153 | 1.000 |
+| 5 | 27 | 4,5 | 245 | 2.650 |
+| 6 | 45 | 7,5 | 283 | 3.750 |
+| 7 | 67 | 11,2 | 378 | 6.100 |
+| 8 | 94 | 15,7 | 459 | 8.800 |
+| 9 | 126 | 21 | 563 | 13.200 |
+| 10 | 165 | 27,5 | 613 | – |
 
-Zielwerte aus dem Plan: Threat 2 nach etwa 2 Runden, Threat 5 nach 4–5 h, Threat 10 nach 25–30 h.
-Niederlagen (50 % Schrott) und Ausgaben außerhalb der Expansion verlängern die Kurve; die
-M2-Simulation legt die tatsächlichen Kosten fest.
+Ziele erreicht: Threat 2 nach 2 Runden, Threat 5 nach 4,5 h, Threat 10 nach 27,5 h, Nekromantie-Forschung (100 Schrott)
+in Runde 4. Händlerpreise siehe `src/config/dawn/merchant.json`.
 
 ## 7a. Händler (Vertrag M2)
 
@@ -104,7 +105,7 @@ Schrottmagnet), **Upgrades** (Zweig-Forschung wie Nekromantie, Boss-Punkte mit s
 (Item-Angebot pro Runde, Rekalibrierungskern). Katalog und Preise stehen in `src/config/dawn/merchant.json`;
 Käufe sind persönlich und ändern nur den eigenen Fortschritt. Das Item-Angebot wird einmal pro abgeschlossener Runde
 gewürfelt und als `dawn.shopOffer` gespeichert, damit Neuladen nichts neu würfelt. Gast-Entitlements reisen im
-Loadout-Commit (`coopDefenseEntitlements`) zum Host. Die Preise sind v0 und werden in M2 per Simulation kalibriert.
+Loadout-Commit (`coopDefenseEntitlements`) zum Host. Die Preise sind per Simulation kalibriert (Abschnitt 7).
 
 ## 8. Multiplayer
 
@@ -165,6 +166,7 @@ Loadout-Commit (`coopDefenseEntitlements`) zum Host. Die Preise sind v0 und werd
 | D-26 | 2026-10-13 (M1) | Der Tag läuft 10:00–18:45 statt ab 07:00: 07:00–09:00 liegt im dichtesten Morgennebel-Keyframe und las sich wie Morgengrauen. Dämmerung 18:45–20:45, Nacht und Morgengrauen unverändert; die Uhr bleibt aus dem Phasenplan abgeleitet. | ja |
 | D-27 | 2026-10-13 (M1) | Ansagen nur nachts: Tagesdruck und Site-Angriffe sind still (Encounter-Feld `announce: false`), gezählt werden die vier Nachtwellen als Gruppen (`announce.group`, letzte als „FINALE“). Zeit erscheint als Rundenzeit und Phasenkarte; das Hauptziel nennt nur das Ende („bis 06:15“). Aktive Wracks behalten ihre Farben, Treffer zeigen einen kurzen Flash. | ja |
 | D-28 | 2026-10-13 (M2) | Händlervertrag: Katalog `merchant.json` (vier Bereiche, IDs `repair-drones`, `scrap-magnet`, Zweige aus `upgradeBranches.json`, Boss-Punkt-Preisliste mit Kaufgrenze), Item-Angebot pro Runde persistiert (`dawn.shopOffer`), Gast-Entitlements im Loadout-Commit; Nekromantie-Forschung v0 250 Schrott (früh, D-17). | ja |
+| D-29 | 2026-10-13 (M2) | Kalibrierte Kosten aus der Economy-Simulation: Expansion 80/300/600/1.000/2.650/3.750/6.100/8.800/13.200, Nekromantie-Forschung 100 (statt 250, sonst erst Runde 8), Infrastruktur und Boss-Punkte rund 60 % der v0-Preise, Ausrüstung etwa zwei Drittel. Site-Belohnungen und Threat-Kurven unverändert. | ja |
 
 ## 11. Offene Fragen für Gate G0 (an G0 beantwortet, siehe D-15 … D-19)
 
