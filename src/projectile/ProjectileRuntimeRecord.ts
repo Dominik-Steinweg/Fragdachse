@@ -158,6 +158,8 @@ export interface ProjectileResolvedInteraction {
   };
 }
 export interface ProjectilePresentationMetadata {
+  /** Sprite of the firing source; attribution stays in provenance.sourceTurretId. */
+  readonly turretVisualId?: string;
   readonly flameStreamKey?: string;
   readonly color: number;
   readonly ownerColor?: number;

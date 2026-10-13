@@ -6,7 +6,8 @@ import { PLAYER_SIZE } from '../../src/config';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../../src/config/coopDefenseEnemies';
 import { TURRET_VISUALS } from '../../src/config/turretVisuals';
 import { WATCHTOWER_DISPLAY_SIZE } from '../../src/config/watchtower';
-import { LOADOUT_CATALOG_ENTRIES, findWeaponConfig } from '../../src/loadout/LoadoutConfig';
+import { LOADOUT_CATALOG_ENTRIES, findWeaponConfig, findUtilityConfig } from '../../src/loadout/LoadoutConfig';
+import { EQUIPABLE_LOADOUT_CATALOG_ENTRIES } from '../equipableLoadoutEntries';
 import { validateClipContracts, validateExtensions } from '../../scripts/asset-pipeline/contracts-v2.mjs';
 
 const root = process.cwd();
@@ -44,14 +45,39 @@ describe('asset pipeline catalog contracts', () => {
       }
     }
   });
+  it('keeps fire-control HQ exports compatible with the approved draft canvases and grips', () => {
+    const expected = [
+      ['fire-control-relay', 24, [48, 96], 3, undefined],
+      ['held-fire-control-relay', 32, [128, 256], 3.2, [16, 18.4]],
+      ['held-fire-control-portal', 32, [128, 256], 3.2, [16, 18]],
+      ['fire-control-portal-flight', 34, [34, 68], 1.5, undefined],
+    ] as const;
+    for (const [id, size, sources, orthoScale, muzzle] of expected) {
+      const asset = assets.find(entry => entry.id === id)!;
+      expect(asset.targetSize).toBe(size);
+      expect(asset.sourceSizes).toEqual(sources);
+      expect(asset.orthoScale).toBe(orthoScale);
+      expect(asset.pivot).toEqual([0.5, 0.5]);
+      expect(asset.forward).toBe('north');
+      if (muzzle) expect(asset.heldItem).toEqual({ referenceSize: 32, grip: [16, 24], muzzle });
+      if (id !== 'fire-control-relay') expect(asset.clips).toEqual([]);
+    }
+    expect(assets.find(entry => entry.id === 'fire-control-relay')!.clips).toEqual([
+      { name: 'deploy', motion: 'relay_deploy', frameCount: 8, frameRate: 24, loop: false, start: 'free', end: 'rest' },
+    ]);
+  });
   it('keeps the watchtower runtime canvas at its authored display size', () => {
     const asset = assets.find(entry => entry.id === 'watchtower')!;
     expect(asset.targetSize).toBe(WATCHTOWER_DISPLAY_SIZE);
   });
   it('covers every equipable utility with a portable model and authored held-item anchors', () => {
-    const required = LOADOUT_CATALOG_ENTRIES.filter(entry => entry.kind === 'utility').map(entry => entry.id);
+    const required = EQUIPABLE_LOADOUT_CATALOG_ENTRIES.filter(entry => entry.kind === 'utility').map(entry => entry.id);
     const utilities = assets.filter(asset => asset.category === 'utility');
-    expect(sorted(utilities.flatMap(asset => asset.gameIds))).toEqual(sorted(required));
+    const authoredIds = utilities.flatMap(asset => asset.gameIds);
+    expect(authoredIds).toEqual(expect.arrayContaining(required));
+    expect(new Set(authoredIds).size).toBe(authoredIds.length);
+    // Locked content may be authored before release, but never invent a utility ID.
+    for (const id of authoredIds) expect(findUtilityConfig(id), id).toBeDefined();
     for (const asset of utilities) {
       expect(asset.forward).toBe('north');
       expect(asset.clips).toEqual([]);
@@ -104,12 +130,22 @@ describe('asset pipeline catalog contracts', () => {
     }
   });
 
-  it('covers current enemies and player at configured display sizes with north-facing movement', () => {
+  it('covers current enemies through their standard or boss asset contracts and the north-facing player', () => {
     const enemies = assets.filter((asset) => asset.category === 'enemy');
-    expect(sorted(enemies.flatMap((asset) => asset.gameIds))).toEqual(sorted(Object.keys(COOP_DEFENSE_ENEMY_CONFIGS)));
+    const standard = Object.entries(COOP_DEFENSE_ENEMY_CONFIGS).filter(([, config]) => !config.krakenBoss && !config.krakenEgg);
+    expect(sorted(enemies.flatMap((asset) => asset.gameIds))).toEqual(sorted(standard.map(([id]) => id)));
     for (const [enemyId, config] of Object.entries(COOP_DEFENSE_ENEMY_CONFIGS)) {
+      // Boss silhouettes and brood have explicit asset IDs and separate visual
+      // sizes; their collision radius is not a regular enemy sprite size.
+      const bossAssets = config.krakenBoss ? Object.values(config.krakenBoss.assets)
+        : config.krakenEgg ? [config.krakenEgg.assetId] : null;
+      if (bossAssets) {
+        for (const id of bossAssets) expect(assets.find(asset => asset.id === id), `${enemyId}/${id}`)
+          .toMatchObject({ runtimeContract: 'boss', forward: 'north' });
+        continue;
+      }
       const asset = enemies.find((entry) => entry.gameIds.includes(enemyId))!;
-      expect(asset.targetSize).toBe(config.size);
+      expect(asset.targetSize, enemyId).toBe(config.size);
       expect(asset.forward).toBe('north');
       expect(asset.requiredClips).toEqual(expect.arrayContaining((asset as { runtimeContract?: string }).runtimeContract === 'boss' ? ['move'] : ['move', 'claw']));
       expect(asset.reference).toBe(`public/assets/sprites/enemies/${config.imageKey}.png`);
@@ -140,7 +176,7 @@ describe('asset pipeline catalog contracts', () => {
   });
 
   it('distinguishes executable reference recipes from planned briefs and defines complete motion contracts', () => {
-    const motions = new Set(['dawn_broodnest_idle', 'dawn_extractor_idle', 'dawn_extractor_active', 'firestarter_cast', 'mechanical_fire', 'energy_fire', 'organic_pulse', 'sustained', 'quadruped', 'biped', 'player_walk', 'player_idle', 'quad_rotors', 'twin_rotors', 'claw_quadruped', 'claw_biped', 'kraken_idle', 'kraken_swim', 'kraken_slam', 'kraken_emerge']);
+    const motions = new Set(['relay_deploy', 'dawn_broodnest_idle', 'dawn_extractor_idle', 'dawn_extractor_active', 'firestarter_cast', 'shield_bash', 'shield_windup', 'shield_charge', 'shield_recover', 'mechanical_fire', 'energy_fire', 'organic_pulse', 'sustained', 'quadruped', 'biped', 'player_walk', 'player_idle', 'quad_rotors', 'twin_rotors', 'claw_quadruped', 'claw_biped', 'kraken_idle', 'kraken_swim', 'kraken_slam', 'kraken_emerge']);
     for (const motion of ['kraken_intro_rise', 'kraken_call_tentacle', 'kraken_throw_egg', 'kraken_ink_spit', 'kraken_dive', 'kraken_surface', 'kraken_land_ink_spit', 'kraken_volley_spines', 'kraken_spine_idle',
       'kraken_land_idle', 'kraken_land_move', 'kraken_land_ashore', 'kraken_land_slam', 'kraken_land_egg_throw', 'kraken_land_death', 'kraken_land_volley_spines',
       'kraken_tentacle_rise', 'kraken_tentacle_hover', 'kraken_tentacle_slam', 'kraken_tentacle_retract', 'kraken_egg_idle', 'kraken_egg_hatch']) motions.add(motion);

@@ -47,6 +47,30 @@ class PipelineContracts(unittest.TestCase):
         for value in (dict(materialSource='procedural', textures={'organic':'source.png'}), dict(materialSource='other', textures={})):
             with self.assertRaises(ValueError): validate_extensions(value)
 
+    def test_relay_deploy_opens_hinges_and_returns_to_deployed_rest(self):
+        parts = {name: types.SimpleNamespace() for name in
+                 ('relay_leg_0', 'relay_leg_1', 'relay_leg_2', 'relay_head')}
+        rests = {id(ob): ((0, .4, .22), (0, 0, .7), (1, 1, 1)) for ob in parts.values()}
+        asset = dict(parts=parts, rig=None)
+        def sample(phase, idle=False):
+            values = {}
+            def capture(ob, path, value, frame):
+                values[(next(n for n, item in parts.items() if item is ob), path)] = value
+            with patch.object(motions_v2, 'key', capture):
+                motions_v2.apply(asset, 'relay_deploy', phase, 1, idle=idle, rests=rests)
+            return values
+        folded, middle, final, rest = sample(0), sample(.5), sample(1), sample(0, True)
+        self.assertEqual(final, rest)
+        for i in range(3):
+            key = (f'relay_leg_{i}', 'rotation_euler')
+            self.assertGreater(folded[key][0], middle[key][0])
+            self.assertGreater(middle[key][0], final[key][0])
+            self.assertEqual(final[key][2], .7)
+            self.assertEqual(folded[(f'relay_leg_{i}', 'location')], (0, .4, .22))
+        key = ('relay_head', 'location')
+        self.assertLess(folded[key][2], middle[key][2])
+        self.assertLess(middle[key][2], final[key][2])
+
     def test_socket_projection_follows_evaluated_parent_and_preserves_world_height(self):
         import bpy
         import blender_pipeline as shared

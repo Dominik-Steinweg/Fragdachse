@@ -8,9 +8,10 @@ import type {
   ReinforcementMatrixWeaponFireConfig,
   WeaponConfig,
 } from '../loadout/LoadoutConfig';
-import type {
-  SpecializedWeaponExecutionCapability,
-  WeaponFireParams,
+import {
+  assertFireControlRouteSupported,
+  type SpecializedWeaponExecutionCapability,
+  type WeaponFireParams,
 } from '../loadout/WeaponFireExecutor';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
@@ -27,6 +28,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
   constructor(private readonly projectileSpawn: ProjectileSpawnPort) {}
 
   fire(config: WeaponConfig, params: WeaponFireParams): boolean {
+    assertFireControlRouteSupported(config, params.options);
     switch (config.fire.type) {
       case 'flamethrower':
         return this.fireFlamethrower(config, config.fire, params);
@@ -69,6 +71,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
         : undefined;
       const ground = flameConfig?.fire.type === 'flamethrower' ? flameConfig.fire.burningGround : undefined;
       this.projectileSpawn.spawnProjectile({
+        fireControlRoute: params.options?.fireControlRoute,
         flameEmission: flame && flameConfig ? {
           intervalMs: flameConfig.cooldown,
           angularSpeedRadiansPerSecond: FIREBALL_FLAME_ROTATION_DEGREES_PER_SECOND * Math.PI / 180,
@@ -80,7 +83,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
             durationMs: (ground?.createOnFlameExpiry ?? 0) > 0 ? ground?.durationMs ?? 0 : 0,
             burn: { durationMs: flame.interaction.burn?.durationMs ?? 0, damagePerTick: flame.interaction.burn?.damagePerTick ?? 0 },
             igniteProjectiles: (ground?.igniteProjectiles ?? 0) > 0,
-            baseDamageMult: flameConfig.baseDamageMult ?? 1,
+            baseDamageMult: (flameConfig.baseDamageMult ?? 1) * (params.options?.automatedBaseDamageFactor ?? 1),
           }, presentation: { ...flame.presentation, shotAudioKey: undefined, suppressSpawnFx: true } },
         } : undefined,
         origin: { x: params.x, y: params.y, angle: params.angle, gameplayMuzzleOrigin: params.gameplayMuzzleOrigin },
@@ -133,6 +136,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
           pathEffect: (fireball?.trailEnabled ?? 0) > 0 ? { kind: 'fireball', fireTrail: groundEffect } : undefined,
         },
         presentation: {
+          turretVisualId: params.options?.turretVisualId,
           color: 0xff7417,
           style: 'fireball',
           ownerColor: params.ownerColor,
@@ -143,10 +147,12 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
       return true;
     }
 
-    this.projectileSpawn.spawnProjectile(this.createFlame(config, fireConfig, params));
+    this.projectileSpawn.spawnProjectile({ ...this.createFlame(config, fireConfig, params),
+      fireControlRoute: params.options?.fireControlRoute });
     return true;
   }
 
+  /** Also the fireball's child template, so it never carries the shot's route. */
   private createFlame(config: WeaponConfig, fireConfig: FlamethrowerWeaponFireConfig, params: WeaponFireParams): ProjectileSpawnRequest {
     const sourceSlot = resolveSourceSlot(params);
     const lifetime = calculateDecayLifetime(config.range, fireConfig.projectileSpeed, fireConfig.velocityDecay);
@@ -180,6 +186,8 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
           adrenalinGain: config.adrenalinGain,
           rockDamageMult: config.rockDamageMult,
           trainDamageMult: config.trainDamageMult,
+          // E13: flames still ignore weapon.baseDamageMult; only the new source option applies.
+          baseDamageMult: params.options?.automatedBaseDamageFactor,
         },
         burn: {
           durationMs: fireConfig.burnDurationMs,
@@ -188,6 +196,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
         },
       },
       presentation: {
+        turretVisualId: params.options?.turretVisualId,
         color: config.projectileColor ?? params.ownerColor,
         style: 'flame',
         ownerColor: params.ownerColor,
@@ -233,6 +242,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
           adrenalinGain: config.adrenalinGain,
           rockDamageMult: config.rockDamageMult,
           trainDamageMult: config.trainDamageMult,
+          baseDamageMult: params.options?.automatedBaseDamageFactor,
           slowFraction: debuffHit ? config.hitSlowFraction : undefined,
           slowDurationMs: debuffHit ? config.hitSlowDurationMs : undefined,
           vulnerabilityDurationMs: debuffHit ? config.hitVulnerabilityDurationMs : undefined,
@@ -245,6 +255,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
         },
       },
       presentation: {
+        turretVisualId: params.options?.turretVisualId,
         color: config.projectileColor ?? params.ownerColor,
         style: 'leaf_blower',
         ownerColor: params.ownerColor,
@@ -298,6 +309,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
         },
       },
       presentation: {
+        turretVisualId: params.options?.turretVisualId,
         color: config.projectileColor ?? fireConfig.fieldColor,
         style: config.projectileStyle,
         ownerColor: params.ownerColor,
@@ -341,6 +353,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
         },
       },
       presentation: {
+        turretVisualId: params.options?.turretVisualId,
         color: config.projectileColor ?? fireConfig.injectorColor,
         style: config.projectileStyle,
         ownerColor: params.ownerColor,

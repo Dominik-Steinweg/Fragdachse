@@ -3,10 +3,11 @@ import type {
   WeaponConfig,
 } from '../loadout/LoadoutConfig';
 import { calcPelletAngles } from '../loadout/SpreadMath';
-import type {
-  SpecializedWeaponExecutionCapability,
-  WeaponExecutionCapability,
-  WeaponFireOptions,
+import {
+  assertFireControlRouteSupported,
+  type SpecializedWeaponExecutionCapability,
+  type WeaponExecutionCapability,
+  type WeaponFireOptions,
 } from '../loadout/WeaponFireExecutor';
 import type { ProjectileDamageSourceFactor, ProjectileExplosionConfig } from '../types';
 import type { MuzzleOrigin } from '../config';
@@ -59,11 +60,14 @@ export class AutomatedWeaponExecutionAdapter implements AutomatedWeaponExecution
   ) {}
 
   fire(config: WeaponConfig, params: AutomatedWeaponFireParams): boolean {
+    // Also covers fire types that no executor handles; a route must never vanish silently.
+    assertFireControlRouteSupported(config, params.options);
     const resolvedConfig = scaleAutomatedWeaponDamage(
       config,
       params.options?.directDamageMultiplier ?? 1,
       params.options?.payloadDamageMultiplier ?? params.options?.directDamageMultiplier ?? 1,
       params.options?.payloadSourceDamageFactors,
+      params.options?.automatedBaseDamageFactor ?? 1,
     );
     const pelletCount = Math.max(
       1,
@@ -161,6 +165,7 @@ function scaleAutomatedWeaponDamage(
   directDamageMultiplier: number,
   payloadDamageMultiplier: number,
   payloadSourceDamageFactors?: readonly ProjectileDamageSourceFactor[],
+  baseFactor = 1,
 ): WeaponConfig {
   const directFactor = Math.max(0, directDamageMultiplier);
   const payloadFactor = Math.max(0, payloadDamageMultiplier);
@@ -169,11 +174,12 @@ function scaleAutomatedWeaponDamage(
   }];
   const baseConfig: WeaponConfig = {
     ...config,
+    baseDamageMult: scaleBaseMultiplier(config.baseDamageMult, baseFactor),
     detonable: config.detonable ? { ...config.detonable,
       aoeDamage: config.detonable.aoeDamage * payloadFactor,
       damageFalloff: config.detonable.damageFalloff
         ? { minDamage: config.detonable.damageFalloff.minDamage * payloadFactor } : undefined,
-      explosion: scaleAutomatedExplosion(config.detonable.explosion, payloadFactor, payloadFactors),
+      explosion: scaleAutomatedExplosion(config.detonable.explosion, payloadFactor, payloadFactors, baseFactor),
     } : undefined,
     damage: config.damage * directFactor,
     directDamageOverride: config.directDamageOverride === undefined
@@ -189,10 +195,11 @@ function scaleAutomatedWeaponDamage(
       ...baseConfig,
       fire: {
         ...config.fire,
-        impactExplosion: scaleAutomatedExplosion(config.fire.impactExplosion, payloadFactor, payloadFactors),
-        enemyHitExplosion: scaleAutomatedExplosion(config.fire.enemyHitExplosion, payloadFactor, payloadFactors),
+        impactExplosion: scaleAutomatedExplosion(config.fire.impactExplosion, payloadFactor, payloadFactors, baseFactor),
+        enemyHitExplosion: scaleAutomatedExplosion(config.fire.enemyHitExplosion, payloadFactor, payloadFactors, baseFactor),
         impactCloud: config.fire.impactCloud
-          ? { ...config.fire.impactCloud, damagePerTick: config.fire.impactCloud.damagePerTick * payloadFactor }
+          ? { ...config.fire.impactCloud, damagePerTick: config.fire.impactCloud.damagePerTick * payloadFactor,
+            baseDamageMult: scaleBaseMultiplier(config.fire.impactCloud.baseDamageMult, baseFactor) }
           : undefined,
       },
     };
@@ -233,10 +240,12 @@ function scaleAutomatedExplosion(
   effect: ProjectileExplosionConfig | undefined,
   multiplier: number,
   sourceFactors: readonly ProjectileDamageSourceFactor[],
+  baseFactor: number,
 ): ProjectileExplosionConfig | undefined {
   if (!effect) return undefined;
   return {
     ...effect,
+    baseDamageMult: scaleBaseMultiplier(effect.baseDamageMult, baseFactor),
     appliedSourceDamageFactors: [...effect.appliedSourceDamageFactors ?? [], ...sourceFactors]
       .map(factor => ({ ...factor })),
     maxDamage: effect.maxDamage * multiplier,
@@ -247,6 +256,7 @@ function scaleAutomatedExplosion(
     groundFire: effect.groundFire
       ? {
         ...effect.groundFire,
+        baseDamageMult: scaleBaseMultiplier(effect.groundFire.baseDamageMult, baseFactor),
         damagePerTick: effect.groundFire.damagePerTick * multiplier,
         burnDamagePerTick: effect.groundFire.burnDamagePerTick === undefined
           ? undefined
@@ -256,8 +266,17 @@ function scaleAutomatedExplosion(
     fireChunkBurst: effect.fireChunkBurst
       ? {
         ...effect.fireChunkBurst,
+        baseDamageMult: scaleBaseMultiplier(effect.fireChunkBurst.baseDamageMult, baseFactor),
+        landingExplosion: effect.fireChunkBurst.landingExplosion && baseFactor !== 1
+          ? { ...effect.fireChunkBurst.landingExplosion,
+            baseDamageMult: scaleBaseMultiplier(effect.fireChunkBurst.landingExplosion.baseDamageMult, baseFactor) }
+          : effect.fireChunkBurst.landingExplosion,
         burnDamagePerTick: effect.fireChunkBurst.burnDamagePerTick * multiplier,
       }
       : undefined,
   };
+}
+
+function scaleBaseMultiplier(authored: number | undefined, factor: number): number | undefined {
+  return factor === 1 ? authored : (authored ?? 1) * factor;
 }

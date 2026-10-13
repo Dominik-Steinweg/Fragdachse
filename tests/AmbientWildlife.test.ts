@@ -219,7 +219,7 @@ describe('cosmetic wildlife', () => {
     }
     // Bounded steering must still let animals leave a blocked heading.
     expect(travelled.every((distance, i) => model.animals[i].diurnalActive ? distance > CELL_SIZE : distance === 0)).toBe(true);
-  });
+  }, 30000); // 1200 simulated frames; seconds when other suites share the CPU.
 
   it.each<WildlifeKind>(['snake', 'fish'])('reacts to movement, not a stationary or departed player: %s', kind => {
     const model = new AmbientWildlifeModel(layout(), frame);

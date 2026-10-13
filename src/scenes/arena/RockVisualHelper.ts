@@ -1,4 +1,5 @@
 import { WatchtowerVisual } from '../../effects/watchtower/WatchtowerVisual';
+import type { FireControlOriginalVisual } from '../../effects/fireControl/FireControlRenderer';
 import { getConstructionBounds, getConstructionCells } from '../../systems/ConstructionGeometry';
 import { createRockPhysicsProxy } from '../../arena/rocks/RockPhysicsProxy';
 import { createWorldTurretVisual, syncWorldTurretVisualPose } from '../../entities/WorldTurretVisual';
@@ -456,6 +457,14 @@ export class RockVisualHelper {
     visual.image
       .setPosition(transform.x, transform.y)
       .setRotation(transform.rotation);
+  }
+
+  /** Live registry lookup: relocation and visual replacement never leave a cached sprite behind. */
+  getTurretOriginalVisual(id: number): FireControlOriginalVisual | undefined {
+    const visual = this.turretVisuals.get(id);
+    if (!visual || visual.image.isDestroyed) return undefined;
+    // The aura remains at the construction center while the barrel sprite can have an offset.
+    return { sprite: visual.image, x: visual.aura.x, y: visual.aura.y };
   }
 
   /**

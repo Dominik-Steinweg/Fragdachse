@@ -232,3 +232,25 @@ Spätere Implementierungsprüfung gemäß Projekt-Testmatrix. Browserprüfung un
 - Bestehende Combat-/Schildkategorie für den Energieimpuls.
 - Technische Darstellung des an Deckung begrenzten Warnbereichs.
 - Erste Einführungsbegegnung innerhalb der bestehenden Alien-Progression; keine pauschale Vorverlegung aller Alien-Vorkommen.
+
+---
+
+## 13. Umsetzungsstand V1.1 (13. Oktober 2026)
+
+Dieser Nachtrag hält die Entscheidungen vom 13.10.2026 und den Umsetzungsstand fest. Bei Abweichungen zu V1 gilt dieser Nachtrag.
+
+| Bereich | Status | Umsetzung |
+| --- | --- | --- |
+| Fächer und Ankündigung | umgesetzt | Ausgefüllter Fächer; rote Gefahrenfamilie der Nahkampfangriffe, an schussblockierender Deckung abgeschnitten. Der Host misst während der Ankündigung 16 Strahlen und aktualisiert sie alle 120 ms. Rote Keil-Fläche über `EnemyClawRenderer.syncSector`. |
+| Treffer und Schild | umgesetzt | `WorldCombatCore.resolveConeImpulse`: Sichtlinie vom Ursprung, Schildprüfung und Köder über das Köder-System. Der Spieler-Energieschild blockt den Impuls; Richtung vom Ursprung des Aliens aus, Kategorie `tesla`. |
+| Fraktionen | umgesetzt | Ziele sind die gegnerische Fraktion: feindliche Aliens treffen Spieler, Köder und verbündete Gegner; verbündete Aliens (Nekromantie) treffen feindliche Gegner und zeigen eine sehr dezente jadegrüne Ankündigung. |
+| Ablauf und Replikation | umgesetzt | Activity-owned `CoopDefenseEnergyConeSystem`; replizierter Zustand `energyCone` als angehängtes Snapshot-Feld, Protokoll 30. Plasma bleibt außerhalb von Ankündigung und Erholung frei. Abbruch bei Stun, Einbuddeln, Spezialaktion, Verschiebung, Fraktionswechsel oder Tod. |
+| Pose und Impuls | umgesetzt | Aufladepose ist die Ausholhälfte des `claw`-Clips. Void-lila GPU-Optik über `AlienConeGpuLayer`/`AlienConeShader`: Schönheit vor exakter Anzeige; die rote Ankündigung trägt den Schadensbereich. Impulsdauer 0,9 s, kein Restschaden. |
+| Begegnungen | entschieden | Keine Staffelung gleichzeitiger Fächer. Einführung automatisch mit dem ersten Auftreten der Aliens auf Karte 12 über Persistent-Spawns. |
+| Audio | Platzhalter | `sfx_alien_cone_charge` und `sfx_alien_cone_pulse`, ersetzbar. |
+
+**Werte als Testhypothesen:** `src/config/coopDefenseEnemies.json` → `alien-badger.energyCone`: Startband 120–280 px, Öffnung 80°, Reichweite 340 px, Ankündigung 1000 ms, Erholung 400 ms, Cooldown 5 s ab Impuls, Abbruchsperre 1,2 s, Verschiebe-Abbruch 18 px, Schaden 30.
+
+**Darstellung:** Beim Aufladen spiralförmig angesogene Partikel, Runenring und pulsierender Kern. Beim Impuls ein turbulentes Plasma-Band mit Nachhall-Ringen, Energieströmen, verzweigten Blitzen, Funken, Glut und ausfransenden Flanken.
+
+**Offen:** Echte Sounds, Spieltest-Tuning und gegebenenfalls ein eigener Cast-Clip.

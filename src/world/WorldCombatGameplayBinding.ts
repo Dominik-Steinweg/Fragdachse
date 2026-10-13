@@ -1,3 +1,6 @@
+import { FireControlRuntime } from '../systems/fireControl/FireControlRuntime';
+import type { FireControlConstructionFacts } from '../systems/fireControl/FireControlCopyPlan';
+import type { FireControlSnapshot } from '../systems/fireControl/FireControlSnapshot';
 import { isOffensiveConstruction } from '../systems/offensiveConstruction';
 import { PlasmaBurnerTargetCatalog } from './PlasmaBurnerTargetCatalog';
 import { homingTargetKind } from '../projectile/ProjectileOrigin';
@@ -5,6 +8,7 @@ import { plasmaBurnerTargetEffect } from '../combat/plasmaBurner/PlasmaBurnerTar
 import { OBSTACLE_ROCK } from '../systems/ArenaObstacleIndex';
 import { turretAimConfig } from '../config/turretAim';
 import { getCoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
+import { COOP_DEFENSE_TURRET_RULES } from '../config/coopDefenseTurrets';
 import type { BaseManager } from '../entities/BaseManager';
 import type { TimeBubbleChargePort } from '../systems/TimeBubbleChargePort';
 import type { BaseEntity } from '../entities/BaseEntity';
@@ -81,7 +85,7 @@ import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { ShieldBuffSystem } from '../systems/ShieldBuffSystem';
 import type { ShieldBuffPort } from '../loadout/ShieldBuffPort';
 import type { TimeBubbleSystem } from '../systems/TimeBubbleSystem';
-import type { TurretSystem, AutomatedTurretId } from '../systems/TurretSystem';
+import type { TurretSystem, AutomatedTurretId, TurretFireSource } from '../systems/TurretSystem';
 import {
   COOP_DEFENSE_BASE_TURRET_OWNER_ID,
   COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID,
@@ -106,7 +110,16 @@ import { TeslaDomeSystem as ConcreteTeslaDomeSystem } from '../systems/TeslaDome
 import { EnergyShieldSystem as ConcreteEnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import { ShieldBuffSystem as ConcreteShieldBuffSystem } from '../systems/ShieldBuffSystem';
 import { TimeBubbleSystem as ConcreteTimeBubbleSystem } from '../systems/TimeBubbleSystem';
-import { TurretSystem as ConcreteTurretSystem } from '../systems/TurretSystem';
+import { TurretSystem as ConcreteTurretSystem, toLocalTurretFireSource } from '../systems/TurretSystem';
+import { computeExposedBaseFaces, ExposedBaseFaceCache, rankBaseAimPoints, type BaseAimPoint } from '../systems/TurretBaseTargeting';
+
+/**
+ * Budget der Basis-Zielstufe je Turm und Suche: so viele nächstgelegene Außenflächen prüft das
+ * TurretSystem höchstens per Schusslinie. Leistungsgrenze, kein Balancewert.
+ */
+const BASE_AIM_CANDIDATE_LIMIT = 4;
+/** Abstand des Zielpunkts zu den Enden einer Zellkante, damit Schüsse nicht an Basisecken vorbeistreifen. */
+const BASE_AIM_FACE_END_INSET = CELL_SIZE / 4;
 
 export interface WorldCombatKillEvent {
   readonly killerId: string;
@@ -203,6 +216,7 @@ export interface ProjectileInteractionBinding {
 export interface WorldCombatGameplayBindingOptions {
   /** Respawn-Verzoegerung der laufenden Activity (z. B. nachts laenger); `null` = Standard. */
   readonly getRespawnDelayMs?: (playerId: string) => number | null;
+  readonly readConstructionSlotOrder?: (ownerId: string) => readonly string[];
   readonly getManualTurretControl?: (id: AutomatedTurretId, now: number) => import('../systems/TurretControlSystem').ManualTurretControl | null;
   readonly projectileUtility?: {
     focusProjectilesInCircle(request: import('../projectile/ProjectileExternalInteractionPort').ProjectileFocusRequest): number;
@@ -274,6 +288,8 @@ export interface WorldCombatGameplayBindingOptions {
   readonly getWorldTrain: () => { getActiveSegmentPositions: () => { x: number; y: number }[]; applyDamage: (damage: number, ownerId: string) => void } | null;
   readonly getWorldMutation: () => WorldObjectMutationRuntime | null;
   readonly getFirestarterSystem: () => import('../systems/CoopDefenseFirestarterSystem').CoopDefenseFirestarterSystem | null;
+  readonly getShieldChargerSystem?: () => import('../systems/CoopDefenseShieldChargerSystem').CoopDefenseShieldChargerSystem | null;
+  readonly getEnergyConeSystem?: () => import('../systems/CoopDefenseEnergyConeSystem').CoopDefenseEnergyConeSystem | null;
   readonly getMortarSystem: () => import('../systems/CoopDefenseMortarSystem').CoopDefenseMortarSystem | null;
   readonly getTimebombSystem: () => CoopDefenseTimebombSystem | null;
   readonly getNecromancySystem: () => NecromancySystem | null;
@@ -306,6 +322,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
   readonly attackDrone: WorldAttackDroneBinding | null;
   readonly mgTurret: WorldMgTurretBinding | null;
   readonly systems: WorldCombatGameplaySystems | null;
+  readonly fireControl: FireControlRuntime | null;
+  private fireControlNowMs = 0;
   private plasmaCatalog: PlasmaBurnerTargetCatalog | null = null;
   private destroyed = false;
   private activityGeneration = 0;
@@ -317,11 +335,30 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
    */
   private readonly projectileBaseGeometry: CachedProjectileBaseGeometry[] = [];
   private projectileBaseGeometryGeneration = -1;
+  /** Freiliegende Außenflächen feindlicher Basen für die dritte Turm-Zielstufe, je Hindernis-Generation. */
+  private readonly turretBaseFaces = new ExposedBaseFaceCache();
   /** Only the current synchronous Base commit delays its Objective reward until its receipt. */
   private baseObjectiveCommit: { readonly baseId: string; complete?: () => void } | null = null;
 
   constructor(private readonly options: WorldCombatGameplayBindingOptions) {
     const playerCombat = options.getPlayerCombatIntegration();
+    this.fireControl = options.network.authority.isHost() ? new FireControlRuntime({
+      readConstructions: () => this.readFireControlConstructions(),
+      readSlotOrder: ownerId => options.readConstructionSlotOrder?.(ownerId) ?? [],
+      isPointFree: (x, y, radius) => {
+        const point = options.getWorldGeometryBinding()?.getQueries().resolveSafeGroundPoint(x, y, radius);
+        return !!point && point.x === x && point.y === y;
+      },
+      onDeploymentEnded: (id, _ownerId, endedAt) =>
+        options.getPlayerCombatIntegration()?.utility.onFireControlDeploymentEnded?.(id, endedAt),
+    }) : null;
+    if (this.fireControl) playerCombat?.utility.setFireControlPort?.({
+      activateCopies: request => {
+        this.fireControlNowMs = request.nowMs;
+        return this.fireControl!.activateCopies(request);
+      },
+      removeOwner: ownerId => this.fireControl!.removeOwner(ownerId),
+    });
     this.attackDrone = playerCombat && options.network.authority.isHost() ? new WorldAttackDroneBinding({
       combat: options.combatSystem, players: options.playerManager, placement: options.placementSystem,
       bases: options.baseManager, metrics: options.worldMetrics, projectiles: options.projectileSpawn,
@@ -395,6 +432,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
   /** Removes the Activity projection without touching the World-owned WorldCombatCore itself. */
   clearActivityBindings(): void {
     if (this.destroyed) return;
+    this.fireControl?.clear();
+    this.options.getPlayerCombatIntegration()?.utility.clearFireControlUses?.();
     this.activityGeneration += 1;
     this.options.combatSystem.invalidatePlayerLifecyclePolicy();
     this.options.combatSystem.setBarrierObstacles(null);
@@ -404,6 +443,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.mgTurret?.clear();
     this.attackDrone?.clearActivity();
     this.mgOwnerGroups.clear();
+    this.turretBaseFaces.clear();
   }
 
   setPowerUpSystem(powerUpSystem: PowerUpSystem | null): void {
@@ -414,6 +454,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
   destroy(): void {
     if (this.destroyed) return;
     this.clearActivityBindings();
+    this.options.getPlayerCombatIntegration()?.utility.setFireControlPort?.(null);
     this.destroyed = true;
     this.mgTurret?.destroy();
     this.attackDrone?.destroy();
@@ -545,9 +586,11 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       this.systems.turret.setLineOfFireChecker(null);
       this.systems.turret.setManualControlProvider(null);
       this.systems.turret.setTurretProvider(null, null);
+      this.systems.turret.setFireSourceProvider(null);
       this.systems.turret.setEnemyTargetProvider(null);
       this.systems.turret.setFocusTargetProvider(null);
       this.systems.turret.setFocusedBaseTargetProvider(null);
+      this.systems.turret.setBaseTargetCandidateProvider(null);
       this.systems.turret.setFireHandler(null);
       this.systems.turret.setTurretDamageBuffProvider(null);
       this.systems.turret.setTurretDamageMultiplierProvider(null);
@@ -709,7 +752,9 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       o.getPlayerCombatIntegration()?.slimeTrail?.getEnemyMovementFactor(enemyId, now) ?? 1,
       combat.getEnemyMovementFactor(enemyId, now),
     ));
-    hostPhysics.setEnemyHitStaggerResolver((enemyId, now) => combat.isEnemyHitStaggered(enemyId, now));
+    // A committed shield charge is not halted by ordinary hit stagger.
+    hostPhysics.setEnemyHitStaggerResolver((enemyId, now) => combat.isEnemyHitStaggered(enemyId, now)
+      && !(o.getShieldChargerSystem?.()?.isRunning(enemyId) ?? false));
     combat.setEnemyDeathCallback((enemyId, x, y, burnSources, death, _target, wildfire) => {
       const generation = this.activityGeneration;
       const current = () => !this.destroyed && generation === this.activityGeneration;
@@ -720,6 +765,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       }
       if (death) o.getMortarSystem()?.handleKilled(death, combat.getHostTime());
       if (death) o.getFirestarterSystem()?.handleKilled(death);
+      if (death) o.getShieldChargerSystem?.()?.handleKilled(death);
+      if (death) o.getEnergyConeSystem?.()?.handleKilled(death);
       const wasTimebomb = death ? (o.getTimebombSystem()?.handleKilled(death, combat.getHostTime()) ?? false) : false;
       if (!current()) return true;
       if (wasTimebomb) {
@@ -817,23 +864,26 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     teslaDome.setLineOfSightChecker((sx, sy, ex, ey, skipRockIndex, sourceCarrierBaseId) =>
       o.combatSystem.hasLineOfSight(sx, sy, ex, ey, skipRockIndex, sourceCarrierBaseId, 0, 'directFire'));
     turret.setLineOfFireChecker((sx, sy, ex, ey, skipRockIndex, sourceCarrierBaseId) => o.combatSystem.hasClearLineOfFire(sx, sy, ex, ey, { skipRockIndex, sourceCarrierBaseId }));
-    turret.setTurretProvider(() => this.getTurretDefinitions(), (id, angle) => {
+    turret.setTurretProvider(() => this.getTurretDefinitions(), (source, angle) => {
+      // Nur die Konstruktion selbst besitzt ihren Rohrwinkel; temporäre Quellen gehören ihrem Einsatz.
+      if (source.id !== source.identityId) {
+        if (typeof source.id === 'string') this.fireControl?.setCopyAngle(source.id, angle);
+        return;
+      }
+      const id = source.id;
       if (typeof id === 'number') {
         o.placementSystem.updateAngle(id, angle);
         o.updateTurretAngle(id, angle);
       } else o.baseManager?.setTurretAngle(id, angle);
     });
+    turret.setFireSourceProvider(() => this.getTurretFireSources());
     turret.setEnemyTargetProvider(() => (o.getEnemyManager()?.getAllEnemies() ?? []).filter(enemy => enemy.sprite.active).map(enemy => ({ id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y })));
     turret.setFocusTargetProvider((ownerId) => o.getEnergyInjectorSystem()?.getFocusTarget(ownerId) as { targetType: 'enemy' | 'base'; targetId: string } | null);
-    turret.setFocusedBaseTargetProvider((targetId, turretX, turretY) => {
-      const base = o.baseManager?.getBase(targetId);
-      if (!base || base.faction !== 'hostile' || base.isInert?.() || base.getHp() <= 0) return null;
-      const surface = base.getNearestSurfacePoint(turretX, turretY);
-      return surface ? { id: base.id, x: surface.x, y: surface.y } : null;
-    });
-    turret.setTargetScoreProvider((source, kind, id, now) => this.isPersonalMg(source.id)
-      ? this.mgTurret?.score(source.ownerId, String(source.id), kind, id, now) ?? 0 : 0);
-    turret.setFireHandler((ownerId, color, weaponId, x, y, angle, targetX, targetY, damageFactor = 1, rangeFactor = 1, sourceTurretId, skipRockIndex, sourceCarrierBaseId) => {
+    turret.setFocusedBaseTargetProvider((targetId, x, y, range) => this.getBaseAimCandidates(x, y, range, targetId));
+    turret.setBaseTargetCandidateProvider((source, x, y, range) => this.getHostileBaseAimCandidates(source, x, y, range));
+    turret.setTargetScoreProvider((source, kind, id, now) => this.isPersonalMg(source.identityId)
+      ? this.mgTurret?.score(source.ownerId, String(source.identityId), kind, id, now) ?? 0 : 0);
+    turret.setFireHandler((ownerId, color, weaponId, x, y, angle, targetX, targetY, damageFactor = 1, rangeFactor = 1, sourceTurretId, skipRockIndex, sourceCarrierBaseId, context) => {
       const turretCfg = UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig;
       const weapon = WEAPON_CONFIGS[weaponId] ?? WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
       const isFriendlyBaseTurret = ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID;
@@ -870,9 +920,14 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
             // durch denselben ausgehenden Modifier-/Krit-Pfad wie dessen eigene Treffer.
             sourceSlot: isBaseTurret ? undefined : 'utility',
             sourceTurretId: sourceTurretId === undefined ? undefined : String(sourceTurretId),
+            // Attribution bleibt beim Original; die Schussanimation spielt am Sprite der feuernden Quelle.
+            turretVisualId: context && context.source.visualId !== context.source.identityId
+              ? String(context.source.visualId) : undefined,
             personalMgOwnerId: this.isPersonalMg(sourceTurretId) ? ownerId : undefined,
             personalMgScope: this.isPersonalMg(sourceTurretId) ? o.combatSystem.getCombatScope() : undefined,
             directDamageMultiplier: damageFactor,
+            automatedBaseDamageFactor: o.isCoopDefense?.() && !isHostileBaseTurret
+              ? COOP_DEFENSE_TURRET_RULES.baseDamageMultiplier : undefined,
             // Payload P is frozen at execution; explosion resolution must retain that ownership.
             payloadDamageMultiplier: damageFactor * ownerRuntimeDamageMultiplier,
             payloadSourceDamageFactors: [
@@ -888,7 +943,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       const damageMultiplier = o.getEnergyInjectorSystem()?.getTurretDamageMultiplierAt(x, y) ?? 1;
       return damageMultiplier > 1 ? { damageMultiplier } : null;
     });
-    turret.setTurretDamageMultiplierProvider(turretData => playerCombat.item.getRemoteControlDamageMultiplier(turretData.ownerId, turretData, this.getOffensiveConstructionSources()));
+    turret.setTurretDamageMultiplierProvider((turretData, constructions) => playerCombat.item.getRemoteControlDamageMultiplier(
+      turretData.ownerId, turretData, [...constructions, ...(this.attackDrone?.getStationSources() ?? [])]));
     teslaDome.setRockCallbacks(
       () => o.getRockTargets().flatMap(rock => rock.active ? [{ index: rock.index, x: rock.x, y: rock.y }] : []),
       (index, damage, ownerId) => o.hostUpdate.applyTeslaRockDamage(index, damage, ownerId),
@@ -1437,6 +1493,55 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     return !!rock && rock.kind === 'turret' && rock.constructionId === 'machine_gun_turret' && rock.ownership !== 'base-owned';
   }
 
+  /**
+   * Dritte Zielstufe (GDD V2 §2.1): Spieler- und befreundete Basistürme im Coop greifen feindliche
+   * Basen an deren nächster freiliegender Außenfläche an. Ob die Waffe Basen überhaupt schädigt,
+   * Reichweite und Schusslinie entscheidet das TurretSystem. Verdeckung durch Felsen klärt allein
+   * die Schusslinie, weil sich Felsen unabhängig
+   * von der Basis-Generation ändern.
+   */
+  private getHostileBaseAimCandidates(
+    source: TurretFireSource, x: number, y: number, range: number,
+  ): readonly (BaseAimPoint & { id: string })[] {
+    const o = this.options;
+    const bases = o.baseManager;
+    if (!bases || !o.isCoopDefense?.()) return [];
+    if (source.ownerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID) return [];
+    const damageSource = o.combatSystem.captureWorldDamageSource(source.ownerId, source.weaponId ?? 'turret');
+    if (!o.combatSystem.canDamageStructure(damageSource, undefined, 'hostile')) return [];
+    return this.getBaseAimCandidates(x, y, range).map(point => ({ ...point,
+      isValid: () => point.isValid() && o.combatSystem.canDamageStructure(
+        o.combatSystem.captureWorldDamageSource(source.ownerId, source.weaponId ?? 'turret'), undefined, 'hostile'),
+    }));
+  }
+
+  /** Shared surface selection for the third tier and injector focus (E10/E15). */
+  private getBaseAimCandidates(x: number, y: number, range: number, targetId?: string): readonly (BaseAimPoint & { id: string; isValid: () => boolean })[] {
+    const o = this.options, bases = o.baseManager;
+    if (!bases || !o.isCoopDefense?.()) return [];
+    const generation = bases.getObstacleGeneration();
+    const candidates: (BaseAimPoint & { id: string; isValid: () => boolean })[] = [];
+    const targets = targetId === undefined ? bases.getBasesByFaction('hostile') : [bases.getBase(targetId)];
+    for (const base of targets) {
+      if (!base || base.faction !== 'hostile' || !base.isDamageable() || base.isInert() || base.getHp() <= 0) continue;
+      const faces = this.turretBaseFaces.get(base.id, generation, () => computeExposedBaseFaces({
+        cells: base.getSpec().cells, cellSize: CELL_SIZE,
+        offsetX: o.worldMetrics.offsetX, offsetY: o.worldMetrics.offsetY,
+        isCoveredCell: () => false,
+      }));
+      const isValid = () => bases.getObstacleGeneration() === generation
+        && base.faction === 'hostile' && base.isDamageable() && !base.isInert() && base.getHp() > 0;
+      for (const point of rankBaseAimPoints(faces, x, y, range, BASE_AIM_CANDIDATE_LIMIT, 1, BASE_AIM_FACE_END_INSET)) {
+        let at = candidates.length;
+        while (at > 0 && point.distance < candidates[at - 1].distance) at--;
+        if (at >= BASE_AIM_CANDIDATE_LIMIT) continue;
+        candidates.splice(at, 0, { id: base.id, ...point, isValid });
+        if (candidates.length > BASE_AIM_CANDIDATE_LIMIT) candidates.pop();
+      }
+    }
+    return candidates;
+  }
+
   getOffensiveConstructionSources(): readonly RemoteControlSource[] {
     return [...(this.systems?.turret.getTurrets() ?? []), ...(this.attackDrone?.getStationSources() ?? [])];
   }
@@ -1477,6 +1582,42 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.mgOwnerGroups.clear();
     for (const owner of owners) this.mgOwnerGroups.set(owner.id, owner.group);
     return owners;
+  }
+
+  /**
+   * Feuerquellen des Turmfeuers. Ohne Feuerleit-Einsatz ist jede Konstruktion genau eine lokale
+   * Quelle; temporäre Quellen kommen nur hier hinzu und nie in `getTurretDefinitions()`.
+   */
+  getTurretFireSources(definitions = this.getTurretDefinitions()): readonly TurretFireSource[] {
+    return this.fireControl?.deriveFireSources(definitions, this.fireControlNowMs) ?? definitions.map(toLocalTurretFireSource);
+  }
+
+  advanceFireControl(now: number): readonly TurretFireSource[] {
+    this.fireControlNowMs = now;
+    // Explicit tick-local input: other construction consumers always read live definitions.
+    const definitions = this.getTurretDefinitions();
+    this.fireControl?.update(now, () => this.readFireControlConstructions(definitions));
+    return this.getTurretFireSources(definitions);
+  }
+
+  getFireControlSnapshot(now: number): FireControlSnapshot {
+    return this.fireControl?.getSnapshot(now) ?? { deployments: [] };
+  }
+
+  private readFireControlConstructions(definitions = this.getTurretDefinitions()): readonly FireControlConstructionFacts[] {
+    const o = this.options;
+    return definitions.flatMap(definition => {
+      if (typeof definition.id !== 'number') return [];
+      const rock = o.placementSystem.getRuntimeRock(definition.id);
+      if (!rock) return [];
+      return [{ id: definition.id, ownerId: rock.ownerId, baseOwned: rock.ownership === 'base-owned',
+        constructionId: rock.constructionId, weaponId: definition.weaponId, angle: definition.angle,
+        weaponFireType: WEAPON_CONFIGS[definition.weaponId ?? 'SPORES'].fire.type,
+        combatReady: rock.hp > 0 && o.getWorldParticipation(rock.ownerId) === 'interactive'
+          && o.getPlayerCapabilities(rock.ownerId).canUseCombat,
+        manned: (o.getManualTurretControl?.(definition.id, this.fireControlNowMs) ?? null) !== null,
+        x: definition.x, y: definition.y }];
+    });
   }
 
   getTurretDefinitions(): readonly import('../systems/TurretSystem').AutomatedTurret[] {

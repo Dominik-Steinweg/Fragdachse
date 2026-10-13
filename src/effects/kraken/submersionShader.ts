@@ -215,13 +215,21 @@ class SubmersionNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader 
   }
 }
 
+function registerSubmersionNode(renderer: Phaser.Renderer.WebGL.WebGLRenderer): void {
+  const manager = renderer.renderNodes;
+  if (!managers.has(manager)) { manager.addNodeConstructor(NODE, SubmersionNode); managers.add(manager); }
+}
+export function getSubmersionNode(renderer: Phaser.Renderer.WebGL.WebGLRenderer): SubmersionNode {
+  registerSubmersionNode(renderer);
+  return renderer.renderNodes.getNode(NODE) as SubmersionNode;
+}
+
 /** Sprite owns the controller through its internal FilterList (including teardown). */
 export function addSubmersionFilter(target: Sprite, elevationFrame: Phaser.Textures.Frame,
   encoding: { min: number; max: number }, maskKey = '__WHITE'): SubmersionFilter {
   const renderer = target.scene.sys.renderer;
   if (!('gl' in renderer)) throw new Error('Submersion requires WebGL');
-  const manager = renderer.renderNodes;
-  if (!managers.has(manager)) { manager.addNodeConstructor(NODE, SubmersionNode); managers.add(manager); }
+  registerSubmersionNode(renderer);
   target.enableFilters();
   const filter = new SubmersionFilter(target, elevationFrame, encoding, target.scene.textures.getFrame(maskKey));
   target.filters!.internal.add(filter);
@@ -234,11 +242,17 @@ export interface KrakenMaskTransform {
   readonly displayWidth: number; readonly displayHeight: number;
 }
 
+export interface KrakenWaterSampler {
+  (x: number, y: number): number;
+  /** Optional exact proof for the entire transformed rectangle, never a corner approximation. */
+  uniformMask?(transform: KrakenMaskTransform): 0 | 1 | null;
+}
+export const KRAKEN_DRY_SAMPLER: KrakenWaterSampler = Object.assign(() => 0, { uniformMask: () => 0 as const });
+
 /** Full logical canvas -> world, independent of color/elevation atlas trimming or resolution.
  * waterAt accepts world presentation coordinates (the composition owns any world offset). */
 export function krakenWaterMask(width: number, height: number, transform: KrakenMaskTransform,
-  waterAt: (x: number, y: number) => number): Uint8ClampedArray {
-  const result = new Uint8ClampedArray(width * height * 4);
+  waterAt: (x: number, y: number) => number, result = new Uint8ClampedArray(width * height * 4)): Uint8ClampedArray {
   const c = Math.cos(transform.rotation), s = Math.sin(transform.rotation);
   for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
     const dx = ((x + .5) / width - transform.originX) * transform.displayWidth;
@@ -246,6 +260,7 @@ export function krakenWaterMask(width: number, height: number, transform: Kraken
     const offset = (y * width + x) * 4;
     result[offset] = Math.round(Math.max(0, Math.min(1,
       waterAt(transform.x + dx * c - dy * s, transform.y + dx * s + dy * c))) * 255);
+    result[offset + 1] = result[offset + 2] = 0;
     result[offset + 3] = 255;
   }
   return result;
@@ -257,11 +272,14 @@ export class KrakenSubmersion {
   readonly filter: SubmersionFilter;
   private readonly mask: Phaser.Textures.CanvasTexture;
   private signature = '';
+  private readonly pixels: ImageData;
+  private uniform: 0 | 1 | null = null;
   private destroyed = false;
 
   constructor(private readonly sprite: Sprite, elevation: Phaser.Textures.Frame, encoding: { min: number; max: number },
-    private readonly waterAt: (x: number, y: number) => number, exposure = KRAKEN_WORLD_EXPOSURE) {
+    private readonly waterAt: KrakenWaterSampler, exposure = KRAKEN_WORLD_EXPOSURE) {
     this.mask = sprite.scene.textures.createCanvas(`kraken-runtime-mask-${++maskSerial}`, 128, 128)!;
+    this.pixels = this.mask.context.createImageData(128, 128);
     this.filter = addSubmersionFilter(sprite, elevation, encoding, this.mask.key);
     this.filter.params.exposure = exposure;
   }
@@ -275,9 +293,14 @@ export class KrakenSubmersion {
     const signature = [s.x, s.y, s.originX, s.originY, s.displayWidth, s.displayHeight, s.rotation, waterRevision].join(',');
     if (signature === this.signature) return;
     this.signature = signature;
-    const pixels = this.mask.context.createImageData(128, 128);
-    pixels.data.set(krakenWaterMask(128, 128, s, this.waterAt));
-    this.mask.context.putImageData(pixels, 0, 0);
+    const uniform = this.waterAt.uniformMask?.(s) ?? null;
+    if (uniform !== null && uniform === this.uniform) return;
+    this.uniform = uniform;
+    if (uniform === null) krakenWaterMask(128, 128, s, this.waterAt, this.pixels.data);
+    else for (let i = 0; i < this.pixels.data.length; i += 4) {
+      this.pixels.data[i] = uniform * 255; this.pixels.data[i + 3] = 255;
+    }
+    this.mask.context.putImageData(this.pixels, 0, 0);
     this.mask.refresh();
   }
 

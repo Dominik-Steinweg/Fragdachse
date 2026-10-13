@@ -1,14 +1,15 @@
 import { ensureWatchtowerTexture } from '../../effects/watchtower/WatchtowerVisual';
 import { WATCHTOWER_DISPLAY_SIZE } from '../../config/watchtower';
 import { getConstructionBounds } from '../../systems/ConstructionGeometry';
-import type Phaser from 'phaser';
+import type * as Phaser from 'phaser';
 import { bridge }                from '../../network/bridge';
 import { ULTIMATE_CONFIGS, UTILITY_CONFIGS }       from '../../loadout/LoadoutConfig';
 import type { PlaceableRockUtilityConfig, PlaceableTurretUtilityConfig, PlaceableUtilityConfig, TunnelUltimateConfig } from '../../loadout/LoadoutConfig';
 import { GAME_WIDTH, ARENA_OFFSET_Y, CELL_SIZE, COLORS, DEPTH, PLAYER_COLORS } from '../../config';
 import type { ArenaContext }             from './ArenaContext';
-import type { PlacementPreviewNetState, UtilityPlacementPreviewState } from '../../types';
+import type { FireControlPlacementPreview, LocalPlacementPreview, PlacementPreviewNetState, UtilityPlacementPreviewState } from '../../types';
 import { TUNNEL_HOLE_DIAMETER, TUNNEL_VISUAL_DEPTH, TunnelEndpointVisual } from './TunnelEndpointVisual';
+import { FireControlPlacementPreviewVisual } from '../../effects/fireControl/FireControlPlacementPreviewVisual';
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
 import { getTurretVisualSpec, getTurretVisualTransform } from '../../config/turretVisuals';
 import { POWERUP_DEFS, POWERUP_PEDESTAL_CONFIG } from '../../powerups/PowerUpConfig';
@@ -32,6 +33,8 @@ interface TunnelPreviewVisualState {
 export class PlacementPreviewRenderer {
   private localPlacementPreviewImage: Phaser.GameObjects.Image | null = null;
   private localTurretPreviewImage: Phaser.GameObjects.Image | null = null;
+  /** Created on first use; scene-lifetime like the other preview objects. */
+  private fireControlPreview: FireControlPlacementPreviewVisual | null = null;
   private readonly remotePlacementPreviewImages = new Map<string, Phaser.GameObjects.Image>();
   private readonly remoteTurretPreviewImages = new Map<string, Phaser.GameObjects.Image>();
   private readonly localTunnelPreview: TunnelPreviewVisualState;
@@ -81,7 +84,7 @@ export class PlacementPreviewRenderer {
     this.airstrikeTargetingHint = this.createAirstrikeTargetingHint();
   }
 
-  renderPlacementPreview(inArena: boolean, preview: UtilityPlacementPreviewState | undefined, localPlayerAlive: boolean, localPlayerBurrowed: boolean): void {
+  renderPlacementPreview(inArena: boolean, preview: LocalPlacementPreview | undefined, localPlayerAlive: boolean, localPlayerBurrowed: boolean): void {
     this.rangeGraphics.clear();
     this.turretRangeGraphics.clear();
     this.invalidGraphics.clear();
@@ -91,6 +94,16 @@ export class PlacementPreviewRenderer {
       this.localPlacementPreviewImage?.setVisible(false);
       this.localTurretPreviewImage?.setVisible(false);
       this.hideTunnelPreview(this.localTunnelPreview);
+      this.fireControlPreview?.hide();
+      return;
+    }
+    if (preview.kind !== 'fire_control_relay') this.fireControlPreview?.hide();
+
+    if (preview.kind === 'fire_control_relay') {
+      this.localPlacementPreviewImage?.setVisible(false);
+      this.localTurretPreviewImage?.setVisible(false);
+      this.hideTunnelPreview(this.localTunnelPreview);
+      this.drawFireControlPreview(preview);
       return;
     }
 
@@ -166,6 +179,24 @@ export class PlacementPreviewRenderer {
       this.invalidGraphics.moveTo(preview.targetX - radius * 0.7, preview.targetY - radius * 0.7);
       this.invalidGraphics.lineTo(preview.targetX + radius * 0.7, preview.targetY + radius * 0.7);
       this.invalidGraphics.strokePath();
+    }
+  }
+
+  private drawFireControlPreview(preview: FireControlPlacementPreview): void {
+    const finite = Number.isFinite(preview.pointX) && Number.isFinite(preview.pointY);
+    const visual = this.fireControlPreview ??= new FireControlPlacementPreviewVisual(this.scene);
+    if (finite) visual.update(preview, this.scene.time.now, COLORS.RED_2);
+    else visual.hide();
+    // Placement range around the player: quiet turquoise, red only when the cursor is out of range.
+    if (Number.isFinite(preview.rangePx) && preview.rangePx >= 0
+      && Number.isFinite(preview.playerX) && Number.isFinite(preview.playerY)) {
+      const outOfRange = !preview.valid && preview.reason === 'range';
+      this.rangeGraphics.lineStyle(outOfRange ? 2 : 1.5, outOfRange ? COLORS.RED_2 : 0x3dffd0, outOfRange ? 0.75 : 0.32);
+      this.rangeGraphics.strokeCircle(preview.playerX, preview.playerY, preview.rangePx);
+    }
+    if (!preview.valid && finite) {
+      this.invalidGraphics.lineStyle(2, COLORS.RED_2, 0.9);
+      this.invalidGraphics.strokeCircle(preview.pointX, preview.pointY, 14);
     }
   }
 
@@ -340,11 +371,18 @@ export class PlacementPreviewRenderer {
     this.airstrikeTargetingHint.alpha = 0.9 + 0.1 * Math.sin(this.scene.time.now / 160);
   }
 
-  syncPlaceableUtilityHint(inArena: boolean, preview: UtilityPlacementPreviewState | undefined, alive: boolean, burrowed: boolean): void {
+  syncPlaceableUtilityHint(inArena: boolean, preview: LocalPlacementPreview | undefined, alive: boolean, burrowed: boolean): void {
     const visible = inArena && preview !== undefined && alive && !burrowed;
     this.placeableUtilityHint.setVisible(visible);
     if (!visible) return;
-    if (preview?.mode === 'dismantle') {
+    if (preview?.kind === 'fire_control_relay') {
+      this.placeableUtilityHintTitle.setText(t('loadout.FIRE_CONTROL_RELAY.name'));
+      // The hint names the rejection before the click, with the same texts as the host rejection.
+      this.placeableUtilityHintSubtitle.setText(preview.valid ? t('ui.placement.nukeTargetHint')
+        : preview.reason === 'no_fire_sources' ? t('ui.errors.no_fire_sources')
+        : preview.reason === 'range' || preview.reason === 'placement' ? t('ui.errors.placement')
+        : t('ui.errors.blocked'));
+    } else if (preview?.mode === 'dismantle') {
       this.placeableUtilityHintTitle.setText(t('ui.placement.dismantleTitle'));
       this.placeableUtilityHintSubtitle.setText(t('ui.placement.dismantleHint'));
     } else if (preview?.mode === 'move-source') {
@@ -387,6 +425,7 @@ export class PlacementPreviewRenderer {
     this.remoteMissionPedestalPreviewGraphics.clear();
     this.localPlacementPreviewImage?.setVisible(false);
     this.localTurretPreviewImage?.setVisible(false);
+    this.fireControlPreview?.hide();
     this.destroyTunnelPreview(this.localTunnelPreview);
     this.placeableUtilityHint.setVisible(false);
     this.airstrikeTargetingHint.setVisible(false);

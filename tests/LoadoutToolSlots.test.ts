@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { LoadoutToolRef } from '../src/types';
 import {
+  COOP_DEFENSE_UPGRADE_DEFINITIONS,
+  isCoopDefenseUpgradeAvailableForClass,
   buildDefaultCoopDefenseUpgradeProfile,
   canLevelDownCoopDefenseUpgrade,
   getCoopDefenseConstructionSlotCapacity,
@@ -20,13 +22,18 @@ describe('shared tool slots', () => {
     let profile = buildDefaultCoopDefenseUpgradeProfile('inspector_gadachs');
     const initialCapacity = getCoopDefenseConstructionSlotCapacity(profile);
     expect(initialCapacity).toBeGreaterThan(0);
+    // Turmkopien sind für den Inspektor gratis freigeschaltet und werden wie jede neue Freischaltung
+    // angehängt. Der Ersatz von HE im Standard-Loadout folgt mit der Persistenz-Stufe (P3.1).
     expect(getLoadoutToolSlots(profile)).toEqual([
       { kind: 'construction', id: 'rocket_turret' },
       { kind: 'utility', id: 'HE_GRENADE' },
+      { kind: 'utility', id: 'FIRE_CONTROL_RELAY' },
     ]);
 
+    // Die Turmkopie hat den letzten freien Slot belegt; weitere Freischaltungen werden nicht angehängt.
+    expect(getLoadoutToolSlots(profile)).toHaveLength(initialCapacity);
     profile = levelUpCoopDefenseUpgrade(profile, 'unlock_machine_gun_turret', 20, 0, 'inspector_gadachs')!;
-    expect(getLoadoutToolSlots(profile)).toContainEqual({ kind: 'construction', id: 'machine_gun_turret' });
+    expect(getLoadoutToolSlots(profile)).not.toContainEqual({ kind: 'construction', id: 'machine_gun_turret' });
 
     profile = levelUpCoopDefenseUpgrade(profile, 'unlock_flame_turret', 20, 0, 'inspector_gadachs')!;
     expect(getLoadoutToolSlots(profile)).not.toContainEqual({ kind: 'construction', id: 'flame_turret' });
@@ -132,4 +139,25 @@ describe('category naming per class', () => {
     const nukem = getCoopDefenseUpgradeCategories('dachs_nukem');
     expect(nukem.find((category) => category.id === 'construction')).toBeUndefined();
   });
+});
+
+
+describe('unavailable utility unlocks', () => {
+  it.each(['dachs_nukem', 'dachs_of_steel', 'inspector_gadachs'] as const)(
+    'rejects unavailable utilities and forged unlocks for %s', classId => {
+      const unavailable = Object.values(COOP_DEFENSE_UPGRADE_DEFINITIONS).filter(definition =>
+        definition.loadoutUnlock?.slot === 'utility' && !isCoopDefenseUpgradeAvailableForClass(definition.id, classId));
+      const profile = buildDefaultCoopDefenseUpgradeProfile(classId);
+      const forged = sanitizeCoopDefenseUpgradeProfile({
+        upgrades: Object.fromEntries(Object.values(COOP_DEFENSE_UPGRADE_DEFINITIONS).map(definition =>
+          [definition.id, { unlocked: true, level: definition.maxLevel }])),
+        toolLoadout: unavailable.map(definition => ({ kind: 'utility', id: definition.loadoutUnlock!.itemId })),
+      }, classId);
+      for (const definition of unavailable) {
+        const tool = { kind: 'utility' as const, id: definition.loadoutUnlock!.itemId };
+        expect(levelUpCoopDefenseUpgrade(profile, definition.id, 100, 100, classId)).toBeNull();
+        expect(getUnlockedLoadoutToolRefs(forged, classId)).not.toContainEqual(tool);
+        expect(getLoadoutToolSlots(setLoadoutToolSlots(forged, [tool], classId), classId)).not.toContainEqual(tool);
+      }
+    });
 });

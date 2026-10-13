@@ -15,6 +15,7 @@ import { getUtilityChargeReadyAt, parseUtilityChargeState, type UtilityChargeSta
 import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, ConstructionId, LoadoutToolRef, LoadoutUseResult, PlacementPreviewNetState, PlayerInput, LoadoutSlot, LoadoutUseParams, TemporaryUtilityInstanceDescriptor, UltimateChargePreviewState, UtilityChargePreviewState, UtilityPlacementPreviewState, UtilityTargetingPreviewState } from '../types';
+import type { FireControlPlacementPreview, LocalPlacementPreview } from '../types';
 import {
   DASH_T1_S, DASH_T2_S,
   clampPointToArena,
@@ -24,6 +25,7 @@ import { COOP_DEFENSE_CONSTRUCTION_CAPACITY, getConstructionIdForUtility, getUti
 import { quantizeAngle } from '../utils/angle';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { RadialActionMenu } from '../ui/RadialActionMenu';
+import { getFireControlCopiesStatus } from './fireControl/FireControlCopiesStatus';
 import {
   cloneRadialActionRef,
   getTimeBubbleStatusLabel,
@@ -286,6 +288,7 @@ export class InputSystem {
   private localDecoyActive = false;
   private readonly predictedUtilityCooldownUntil = new Map<string, number>();
   public onUtilityPressedDuringCooldown: (() => void) | null = null;
+  public onInvalidFireControlPlacement: ((reason: FireControlPlacementPreview['reason']) => void) | null = null;
   public onUltimatePressedWithoutRage: (() => void) | null = null;
   private utilityHoldActive = false;
   private utilityChargeEligibleAt: number | null = null;
@@ -306,7 +309,7 @@ export class InputSystem {
   private gaussReleasePending = false;
   private gaussChargeReady = false;
   private ultimateTargetingActive = false;   // Zielmodus für Airstrike-Ultimate
-  private getUtilityPlacementPreviewProvider: (() => UtilityPlacementPreviewState | undefined) | null = null;
+  private getUtilityPlacementPreviewProvider: (() => LocalPlacementPreview | undefined) | null = null;
   private getUltimatePlacementPreviewProvider: (() => UtilityPlacementPreviewState | undefined) | null = null;
   private placementPreviewState: PlacementPreviewNetState | null = null;
   private tunnelPlacementAnchor: { x: number; y: number; gridX: number; gridY: number } | null = null;
@@ -437,7 +440,7 @@ export class InputSystem {
     this.keyN     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.N, false);
     // Kontextmenü deaktivieren damit Rechtsklick im Spiel registriert wird
     this.scene.input.mouse?.disableContextMenu();
-    this.radialActionMenu = new RadialActionMenu(this.scene);
+    this.radialActionMenu = new RadialActionMenu(this.scene, () => this.getCooldownNow());
     const cancelOnInputLoss = () => {
       this.bridge.cancelLocalInput();
       this.shiftPressPending = false;
@@ -661,7 +664,12 @@ export class InputSystem {
       canPlace: this.inputEnabled,
       canManage: this.inputEnabled,
     };
+    const fireControlSnapshot = this.bridge.getFireControlSnapshot?.();
     const actions = resolveRadialActions({
+      fireControlCopiesStatus: fireControlSnapshot ? getFireControlCopiesStatus(
+        fireControlSnapshot,
+        this.bridge.getLocalPlayerId(), now,
+      ) : null,
       translocatorState: this.bridge.getPlayerTranslocatorUseState?.(this.bridge.getLocalPlayerId()),
       stinkCloudState: this.bridge.getPlayerStinkCloudUtilityState?.(this.bridge.getLocalPlayerId()),
       timeBubbleState: this.bridge.getPlayerTimeBubbleUtilityState?.(this.bridge.getLocalPlayerId()),
@@ -823,7 +831,7 @@ export class InputSystem {
 
     if (!this.radialActionMenu?.isOpen) return false;
     if (this.keyR.isDown) {
-      this.radialActionMenu.update(pointer.x, pointer.y);
+      this.radialActionMenu.update(pointer.x, pointer.y, this.getCooldownNow(), this.getRadialActionStates());
     } else {
       const candidate = this.radialActionMenu.close(pointer.x, pointer.y);
       if (candidate) {
@@ -1185,12 +1193,12 @@ export class InputSystem {
     this.finishLocalGaussCharge();
   }
 
-  getUtilityPlacementPreviewState(): UtilityPlacementPreviewState | undefined {
+  getUtilityPlacementPreviewState(): LocalPlacementPreview | undefined {
     if (!this.utilityPlacementActive) return undefined;
     return this.getUtilityPlacementPreviewProvider?.();
   }
 
-  setupUtilityPlacementPreviewProvider(cb: () => UtilityPlacementPreviewState | undefined): void {
+  setupUtilityPlacementPreviewProvider(cb: () => LocalPlacementPreview | undefined): void {
     this.getUtilityPlacementPreviewProvider = cb;
   }
 
@@ -1705,8 +1713,23 @@ export class InputSystem {
         return;
       }
 
-      if (rightPointerDown) {
+      if (rightPointerDown || (utilityPressed && this.getLocalUtilityConfig?.()?.type === 'fire_control_relay')) {
+        if (leftInputStarted) this.consumeLeftClickForModeConfirmation();
         this.cancelUtilityPlacement();
+        return;
+      }
+
+      if (preview.kind === 'fire_control_relay') {
+        if (leftInputStarted) {
+          this.consumeLeftClickForModeConfirmation();
+          if (!preview.valid) {
+            this.onInvalidFireControlPlacement?.(preview.reason);
+            return;
+          }
+          const angle = Math.atan2(preview.pointY - preview.playerY, preview.pointX - preview.playerX);
+          this.onLoadoutUse('utility', angle, preview.pointX, preview.pointY, this.getSelectedUtilityParams());
+          this.cancelUtilityPlacement();
+        }
         return;
       }
 
@@ -2394,12 +2417,12 @@ export class InputSystem {
       { scope: { id, phase: 'cancel' } });
   }
 
-  private syncPlacementPreviewState(preview: UtilityPlacementPreviewState | undefined): void {
+  private syncPlacementPreviewState(preview: LocalPlacementPreview | undefined): void {
     if ((!this.utilityPlacementActive
       && !this.constructionPlacementActive
       && !this.dismantlePlacementActive
       && !this.persistentRewardPlacementActive
-      && !this.repositionActive) || !preview) {
+      && !this.repositionActive) || !preview || preview.kind === 'fire_control_relay') {
       this.placementPreviewState = null;
       return;
     }

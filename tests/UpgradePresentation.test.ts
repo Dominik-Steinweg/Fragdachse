@@ -81,3 +81,17 @@ describe('upgrade presentation values', () => {
     }
   });
 });
+
+
+it.each(['de', 'en'] as const)('renders fire-control upgrades with authored values in %s', locale => {
+  for (const id of ['unlock_fire_control_relay', 'fire_control_relay_connections', 'fire_control_relay_duration',
+    'fire_control_relay_parallel', 'unlock_fire_control_portal', 'fire_control_portal_duration',
+    'fire_control_portal_damage', 'fire_control_portal_local_fire']) {
+    const description = getUpgradeDescription(id, locale);
+    expect(description).not.toMatch(/[{}\u27e6\u27e7]/);
+    for (const effect of getCoopDefenseUpgradeDefinition(id)!.effects) {
+      if (effect.stat.endsWith('Enabled')) continue;
+      expect(description).toContain(formatUpgradeEffectValue(effect, locale));
+    }
+  }
+});

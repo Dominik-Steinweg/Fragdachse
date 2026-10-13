@@ -20,6 +20,7 @@ import type {
   LoadoutToolRef,
   LoadoutUseParams,
   LoadoutUseResult,
+  LocalPlacementPreview,
   TemporaryUtilityInstanceDescriptor,
   UtilityPlacementPreviewState,
 } from '../../types';
@@ -27,6 +28,7 @@ import { t } from '../../i18n';
 import type { PersistentBaseRewardId } from '../../persistentBase/PersistentBaseRewardTypes';
 import type { RadialActionRef } from '../../systems/RadialActionModel';
 import type { InputSystem } from '../../systems/InputSystem';
+import { planFireControlCopies, type FireControlConstructionFacts } from '../../systems/fireControl/FireControlCopyPlan';
 import { resolveInputPolicy, type InputPolicyInput } from '../../world/InputPolicy';
 import type { PlayerCapabilities } from '../../world/PlayerCapabilities';
 import type {
@@ -78,6 +80,9 @@ export interface ArenaInputHotkeyPorts {
 }
 
 export interface ArenaInputPlacementPorts {
+  getConstructionPlacementRange(): number;
+  getFireControlConstructions(): readonly FireControlConstructionFacts[];
+  isFireControlPointFree(x: number, y: number, radius: number): boolean;
   getUsedCapacity(ownerId: string): number;
   getDismantlePreview(
     ownerId: string,
@@ -689,8 +694,12 @@ export class ArenaInputBindings {
         case 'capacity': return t('ui.errors.capacity');
         case 'cooldown': return t('ui.errors.cooldown');
         case 'placement': return t('ui.errors.placement');
+        case 'no_fire_sources': return t('ui.errors.no_fire_sources');
         default: return t('ui.errors.blocked');
       }
+    };
+    inputSystem.onInvalidFireControlPlacement = reason => {
+      actions.feedback.showPlacementError(getConstructionFailureMessage(reason === 'range' ? 'placement' : reason));
     };
     let lastScopeStartId: number | null = null;
     inputSystem.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
@@ -890,7 +899,9 @@ export class ArenaInputBindings {
           }
           if (isUtilityPlacementAction || isUltimatePlacementAction) {
             actions.feedback.showPlacementError(
-              result?.reason === 'capacity' ? t('ui.errors.capacity') : t('ui.errors.buildFailed'),
+              utilityConfig?.type === 'fire_control_relay' && isUtilityPlacementAction
+                ? getConstructionFailureMessage(result?.reason)
+                : result?.reason === 'capacity' ? t('ui.errors.capacity') : t('ui.errors.buildFailed'),
             );
             return;
           }
@@ -958,13 +969,41 @@ export class ArenaInputBindings {
     return { aimVisible, cursorVisible };
   }
 
-  getLocalPlacementPreview(): UtilityPlacementPreviewState | undefined {
+  getLocalPlacementPreview(): LocalPlacementPreview | undefined {
     if (this.destroyed) return undefined;
     const position = this.input.actions.getLocalPlayerPosition();
     const config = this.input.actions.getLocalUtilityConfig();
     if (!position || !config || !this.input.inputSystem.isUtilityPlacementActive()) return undefined;
     if (config.activation.type !== 'placement_mode') return undefined;
     const pointer = this.input.actions.getPointerWorldPoint();
+    if (config.type === 'fire_control_relay') {
+      const actions = this.input.actions;
+      const constructions = actions.placement.getFireControlConstructions();
+      const buildRangePx = actions.placement.getConstructionPlacementRange();
+      // getLocalUtilityConfig already applies the same loadout stat descriptors as the host
+      // (maxCopies, durationMs, parallelEnabled). Duration does not affect the copy plan.
+      const plan = planFireControlCopies({
+        ownerId: actions.getLocalPlayerId(), playerX: position.x, playerY: position.y,
+        pointX: pointer.x, pointY: pointer.y, constructions,
+        slotOrder: actions.getLocalInspectorTools().flatMap(tool => tool.kind === 'construction' ? [tool.id] : []),
+        // P1.1 has no replicated deployment/paused-original slice yet. The host still validates it.
+        pausedOriginalIds: new Set(),
+        config: { ...config, buildRangePx, parallel: config.parallelEnabled > 0 },
+        isPointFree: (x, y, radius) => actions.placement.isFireControlPointFree(x, y, radius),
+      });
+      const byId = new Map(constructions.map(source => [source.id, source]));
+      const selected = plan.ok ? plan.copies.map(copy => copy.originalId) : plan.candidates;
+      return {
+        kind: 'fire_control_relay', valid: plan.ok, reason: plan.ok ? undefined : plan.reason,
+        pointX: pointer.x, pointY: pointer.y, playerX: position.x, playerY: position.y,
+        rangePx: buildRangePx,
+        originals: selected.map(id => { const source = byId.get(id)!; return { id, x: source.x, y: source.y }; }),
+        ghosts: plan.ok ? plan.copies.map(copy => {
+          const source = byId.get(copy.originalId)!;
+          return { x: copy.x, y: copy.y, constructionId: source.constructionId!, weaponId: source.weaponId ?? 'SPORES' };
+        }) : [],
+      };
+    }
     return this.input.actions.placement.getPlacementPreview(
       config as PlaceableUtilityConfig,
       position.x,
@@ -1030,6 +1069,7 @@ export class ArenaInputBindings {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.input.inputSystem.onInvalidFireControlPlacement = null;
 
     const keyboard = this.input.scene.input.keyboard;
     if (keyboard) {

@@ -750,7 +750,7 @@ export class ClientUpdateCoordinator {
         ).length > 0
           ? this.getLocalConstructionCapacity()
           : 0,
-      });
+      }, bridge);
       const readyIdentity = `${bridge.getCurrentWorldRevision()}:${bridge.getActivityDescriptor()?.activityRevision ?? 'world'}:${localId2}:${hudData.ultimateId}`;
       if (!localState.alive) this.ultimateReadyFeedback.reset();
       else if (this.ultimateReadyFeedback.update(readyIdentity, localState.rage, localUltimateConfig.rageRequired)) {

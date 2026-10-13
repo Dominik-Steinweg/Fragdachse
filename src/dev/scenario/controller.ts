@@ -1,3 +1,5 @@
+import { FireControlVisualReview, FIRE_CONTROL_REVIEW_SCENARIO, type FireControlReviewOptions } from './FireControlVisualReview';
+import { runFireControlReview, releaseFireControlReview, fireControlReviewStatus } from './FireControlReview';
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { readKrakenDevAction, readKrakenDevGeometry, requireKrakenDevHost } from './krakenHostPort';
 import type { KrakenDevAct } from '../../systems/CoopDefenseKrakenSystem';
@@ -28,6 +30,8 @@ import { getCameraFocusOverride, resolveCameraFocusZoom } from '../../graphics/c
 import { ScenarioClock } from './clock';
 import { prepareScenarioProgram, dawnPhaseElapsed } from './dawn';
 import { getDawnSchedule, type DawnPhaseId } from '../../config/dawn/dawnContent';
+import { KrakenPerformanceMeasurement } from './KrakenPerformanceMeasurement';
+import { KRAKEN_PERFORMANCE_MAP_ID, registerKrakenPerformanceMap } from './krakenPerformanceMap';
 import { visualTest, bindVisualTestBootClock, bindVisualTestTextureKeys } from './visualTest';
 import { BootScreen } from '../../ui/BootScreen';
 import { getGraphicsQualityController, type GraphicsQuality } from '../../graphics/GraphicsQuality';
@@ -55,6 +59,8 @@ export class DevScenarioController {
   private enemyMeshReview: EnemyMeshReview | null = null;
   private shapeDraft: ShapeDraftSpawn | null = null;
   private armageddonReview: ArmageddonReview | null = null;
+  private fireControlVisualReview: FireControlVisualReview | null = null;
+  private pendingFireControlReview: FireControlReviewOptions | null = null;
   private turretMaterialReview: TurretMaterialReview | null = null;
   private krakenReview: KrakenBossReview | null = null;
   private krakenLightShadowReview: KrakenLightShadowReview | null = null;
@@ -62,23 +68,34 @@ export class DevScenarioController {
   private krakenLoading = false;
   private pendingKrakenMission: { skipIntro: boolean; hp: number | null } | null = null;
   private pendingKrakenHp: number | null = null;
+  private krakenPerformance: KrakenPerformanceMeasurement | null = null;
+  private unregisterKrakenPerformanceMap: (() => void) | null = null;
+  measureKraken(phase: string | null): void {
+    if (phase === null) { this.krakenPerformance?.stop(); return; }
+    this.requireReady();
+    this.krakenPerformance ??= new KrakenPerformanceMeasurement(this.scene, this.runtime, this.clock);
+    this.krakenPerformance.start(phase);
+  }
+  readKrakenPerformance() { return this.krakenPerformance?.read() ?? null; }
   private figureSunOverride = false;
-  startKrakenMission(skipIntro = false, hp: number | null = null): void {
-    this.start({ ...defaultScenario(), mapId: KRAKEN_MAP_ID });
+  startKrakenMission(skipIntro = false, hp: number | null = null, performance = false): void {
+    this.krakenPerformance?.stop();
+    if (performance) this.unregisterKrakenPerformanceMap ??= registerKrakenPerformanceMap();
+    this.start({ ...defaultScenario(), mapId: performance ? KRAKEN_PERFORMANCE_MAP_ID : KRAKEN_MAP_ID });
     this.pendingKrakenMission = { skipIntro, hp };
   }
   setKrakenHp(hp: number): void {
     this.requireReady();
-    if (this.config.mapId !== KRAKEN_MAP_ID || !this.runtime.devScenarioPort.setKrakenHp(hp)) throw Error('Active diagnosis Kraken required');
+    if (![KRAKEN_MAP_ID, KRAKEN_PERFORMANCE_MAP_ID].includes(this.config.mapId ?? '') || !this.runtime.devScenarioPort.setKrakenHp(hp)) throw Error('Active diagnosis Kraken required');
   }
   krakenAct(act: KrakenDevAct): void {
     this.requireReady();
-    if (this.config.mapId !== KRAKEN_MAP_ID) throw Error('Kraken diagnosis map required');
+    if (![KRAKEN_MAP_ID, KRAKEN_PERFORMANCE_MAP_ID].includes(this.config.mapId ?? '')) throw Error('Kraken diagnosis map required');
     this.lastAction = requireKrakenDevHost().requestDevAction(act);
   }
   krakenTarget(point: GridPoint): void {
     this.requireReady();
-    if (this.config.mapId !== KRAKEN_MAP_ID) throw Error('Kraken diagnosis map required');
+    if (![KRAKEN_MAP_ID, KRAKEN_PERFORMANCE_MAP_ID].includes(this.config.mapId ?? '')) throw Error('Kraken diagnosis map required');
     requireKrakenDevHost();
     this.teleport(point, false);
   }
@@ -146,6 +163,21 @@ export class DevScenarioController {
       : { gridX: KRAKEN_CENTER.gridX, gridY: 26 };
     this.zoom = options.camera === 'overview' ? .75 : options.camera === 'effect' ? 2 : 2.5;
     this.syncCamera(); this.syncPanel();
+  }
+  arrangeFireControlVisualReview(options: FireControlReviewOptions): void {
+    if (this.state !== 'ready' || this.runtime.getTurretDefinitions().filter(t => typeof t.id === 'number'
+      && (t.weaponId === 'TURRET_ROCKET_BURST' || t.weaponId === 'TURRET_MG')).length < 4) {
+      this.start({ ...FIRE_CONTROL_REVIEW_SCENARIO, timeOfDay: options.timeOfDay ?? 1320 });
+      this.pendingFireControlReview = options;
+      return;
+    }
+    if (options.timeOfDay !== undefined) this.config.timeOfDay = options.timeOfDay;
+    const now = bridge.getSynchronizedNow();
+    if (this.fireControlVisualReview) this.fireControlVisualReview.configure(options, now);
+    else this.fireControlVisualReview = new FireControlVisualReview(this.scene, this.runtime, options, now);
+  }
+  arrangeFireControlReview(command: Record<string, unknown>): Promise<void> {
+    return runFireControlReview(this, this.runtime, command);
   }
   arrangeTurretMaterialReview(): void {
     this.requireReady();
@@ -217,7 +249,12 @@ export class DevScenarioController {
     this.restoreTextureKeys = bindVisualTestTextureKeys(scene.textures);
     this.clock = new ScenarioClock(scene.game.loop);
     this.restoreBootClock = bindVisualTestBootClock(BootScreen, scene.time);
-    this.clock.holdLoadingTime = () => this.runtime.getScenarioLoadingState().work?.renderReady === false;
+    this.clock.holdLoadingTime = () => {
+      const loading = this.runtime.getScenarioLoadingState();
+      // Parallel shader completion is wall time, just like streamed render work.
+      // Driver speed must not advance the diagnostic fight's simulation clock.
+      return loading.work?.renderReady === false || loading.krakenShaderWarmupReady === false;
+    };
     this.bots = new ScenarioBots(runtime, () => this.clock.now);
     bindWatchtowerReview(this, this.runtime);
     let imported: DevScenario | null = null;
@@ -240,11 +277,13 @@ export class DevScenarioController {
     this.lastAction = { ok: false, error: this.message };
   }
   start(value: unknown): void {
+    releaseFireControlReview(this);
     this.shapeDraft?.destroy(); this.shapeDraft = null;
     this.clearFigureSun();
     this.pendingKrakenMission = null; this.pendingKrakenHp = null;
     this.krakenReview?.destroy(); this.krakenReview = null;
     this.krakenLightShadowReview?.destroy(); this.krakenLightShadowReview = null;
+    this.fireControlVisualReview?.destroy(); this.fireControlVisualReview = null; this.pendingFireControlReview = null;
     this.turretMaterialReview?.destroy(); this.turretMaterialReview = null;
     this.armageddonReview?.destroy(); this.armageddonReview = null;
     const config = parseScenario(value);
@@ -518,7 +557,8 @@ export class DevScenarioController {
   }
   build(id: ConstructionId, point = this.aim, remember = true): LoadoutUseResult {
     this.requireReady(); const position = this.world(point);
-    const result = this.runtime.rpcPorts.construction.placeInspectorConstruction(bridge.getLocalPlayerId(), id, position.x, position.y, bridge.getSynchronizedNow());
+    const result = this.runtime.rpcPorts.construction.placeInspectorConstruction(bridge.getLocalPlayerId(), id,
+      position.x, position.y, bridge.getSynchronizedNow(), bridge.getActivityDescriptor()?.activityRevision);
     this.lastAction = result;
     if (!result.ok) throw new Error(`Bauen abgelehnt: ${result.reason}. Freischaltung, Werkzeug-Slot, Reichweite, Baufläche und Kapazität beachten.`);
     if (remember) { this.config.constructions.push({ ...point, id }); this.saveLink(); }
@@ -821,6 +861,12 @@ export class DevScenarioController {
       }
       if (!this.setupPending && this.pendingKrakenMission) {
         const options = this.pendingKrakenMission;
+        if (this.config.mapId === KRAKEN_PERFORMANCE_MAP_ID) {
+          // Align integer host ticks and seed independently of asset-loading time
+          // and the World revision. Production RNG/clock contracts stay unchanged.
+          if (Math.round(this.clock.now * .06) % 3 !== 0) return;
+          requireKrakenDevHost().seedDevScenario(this.config.seed);
+        }
         if (this.runtime.devScenarioPort.startKrakenMission(options.skipIntro)) {
           this.pendingKrakenMission = null; this.pendingKrakenHp = options.hp;
           this.config.freezeMission = false; this.config.suppressWaves = false;
@@ -896,6 +942,11 @@ export class DevScenarioController {
         loadingTimeline.get('scenario')?.finish();
         this.message = 'Szenario bereit. Startposition und Aufbau geprüft.';
       }
+      if (!this.setupPending && this.pendingFireControlReview) {
+        const options = this.pendingFireControlReview; this.pendingFireControlReview = null;
+        this.arrangeFireControlVisualReview(options);
+      }
+      this.fireControlVisualReview?.update(bridge.getSynchronizedNow());
       this.flushTrainShowcase();
       this.updateTrainShowcase();
       if (!this.setupPending && !this.pendingTrainShowcase && !this.pendingKrakenMission && this.pendingKrakenHp === null) this.pauseVisualTest();
@@ -941,12 +992,17 @@ export class DevScenarioController {
     } else camera.setScroll(point.x - GAME_WIDTH / zoom / 2, point.y - GAME_HEIGHT / zoom / 2);
     setCameraBaseScroll(this.scene, camera.scrollX, camera.scrollY);
   }
+  /** Status for the page API and downloads; never throws on an accidental live reference. */
+  cloneSnapshot(): Record<string, unknown> { return cloneScenarioStatus(this.snapshot()); }
+
   snapshot(): Record<string, unknown> {
     const terminated = this.runtime.isMatchTerminated() || (this.readyAt !== null
       && (!bridge.isArenaStarted() || bridge.getGamePhase() !== 'ARENA'));
     return { state: this.state, ready: this.state === 'ready' && !terminated && !this.setupPending && !this.pendingTrainShowcase && !this.krakenLoading && !this.pendingKrakenMission && this.pendingKrakenHp === null, terminated, message: this.message, isolated: true, network: 'local-only',
       krakenResidency: this.runtime.getScenarioKrakenResidency(), krakenDevAction: readKrakenDevAction(), krakenDevGeometry: readKrakenDevGeometry(), initialPosition: this.initialPosition, mission: this.runtime.devScenarioPort.readMission(),
       dawnPhaseReview: this.dawnPhaseReview, dawnSkipping: this.clock.fastForwarding,
+      fireControlVisualReview: this.fireControlVisualReview?.status() ?? null,
+      fireControlReview: fireControlReviewStatus(this),
       train: this.trainStatus(),
       bots: this.bots.ids().map((id, index) => ({ index, id, ...(this.state === 'ready' ? this.bots.position(index) : null) })),
       readyAfterMs: this.readyAt === null ? null : Math.round(this.readyAt - this.startedAt),
@@ -1003,7 +1059,7 @@ export class DevScenarioController {
   }
   async saveReportToWorkspace(): Promise<{ path: string; url: string; status: Record<string, unknown> }> {
     if(this.disposed||!isDevScenarioMode())throw new Error('Aktives Dev-Szenario erforderlich.');
-    const status=structuredClone(this.snapshot()),body=new Blob([JSON.stringify(status,null,2)],{type:'application/json'});
+    const status=this.cloneSnapshot(),body=new Blob([JSON.stringify(status,null,2)],{type:'application/json'});
     if(body.size>4*1024*1024)throw new Error('Bericht überschreitet 4 MiB.');
     const response=await fetch('/__dev-scenario-report',{method:'POST',headers:{'content-type':'application/json'},body,signal:AbortSignal.timeout(15000)});
     const result=await response.json();
@@ -1017,7 +1073,7 @@ export class DevScenarioController {
     };
     const url = await this.capture();
     assertCurrent();
-    const status = structuredClone(this.snapshot());
+    const status = this.cloneSnapshot();
     const png = await (await fetch(url)).blob();
     assertCurrent();
     const response = await fetch('/__dev-scenario-capture', { method: 'POST', headers: { 'content-type': 'image/png' }, body: png, signal: AbortSignal.timeout(15000) });
@@ -1027,10 +1083,13 @@ export class DevScenarioController {
     return { path: result.path, url: result.url, status };
   }
   destroy(): void {
+    releaseFireControlReview(this);
+    this.krakenPerformance?.stop(); this.unregisterKrakenPerformanceMap?.(); this.unregisterKrakenPerformanceMap = null;
     this.shapeDraft?.destroy(); this.shapeDraft = null;
     this.clearFigureSun();
     this.krakenReview?.destroy(); this.krakenReview = null;
     this.krakenLightShadowReview?.destroy(); this.krakenLightShadowReview = null;
+    this.fireControlVisualReview?.destroy(); this.fireControlVisualReview = null; this.pendingFireControlReview = null;
     this.turretMaterialReview?.destroy(); this.turretMaterialReview = null;
     this.armageddonReview?.destroy(); this.armageddonReview = null;
     if (this.disposed) return;
@@ -1046,3 +1105,25 @@ export class DevScenarioController {
 }
 
 import { bindWatchtowerReview } from './WatchtowerReview';
+
+/**
+ * structuredClone, falling back to a plain-data copy when a live object (a scene, a function) slipped
+ * into the status: the failure that triggered a status read must not be hidden by a DataCloneError.
+ */
+export function cloneScenarioStatus(value: Record<string, unknown>): Record<string, unknown> {
+  try { return structuredClone(value); } catch {
+    const seen = new WeakSet<object>();
+    return JSON.parse(JSON.stringify(value, (_key, item: unknown) => {
+      if (typeof item === 'function') return undefined;
+      if (item instanceof Map) return Object.fromEntries(item);
+      if (item instanceof Set) return [...item];
+      if (item && typeof item === 'object') {
+        // Only plain data: a class instance (scene, entity, service) becomes a short marker.
+        const proto = Object.getPrototypeOf(item);
+        if (proto !== Object.prototype && proto !== Array.prototype && proto !== null) return `[${proto?.constructor?.name ?? 'object'}]`;
+        if (seen.has(item)) return undefined; seen.add(item);
+      }
+      return item;
+    })) as Record<string, unknown>;
+  }
+}

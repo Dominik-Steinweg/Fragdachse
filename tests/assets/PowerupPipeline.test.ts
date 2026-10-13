@@ -2,6 +2,7 @@ import {finishPowerupSymbol} from '../../scripts/asset-pipeline/powerup-symbol-f
 import {test} from 'vitest';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
+import {existsSync} from 'node:fs';
 import sharp from 'sharp';
 import {validatePowerupSpec,POWERUP_IDS,sameProjectionScale} from '../../scripts/asset-pipeline/powerups-contract.mjs';
 import {validateManifestV2} from '../../scripts/asset-pipeline/export-v2.mjs';
@@ -79,8 +80,10 @@ test('base pixels stay identical while only the center symbol pulses',async()=>{
   }
   await assert.rejects(compositePowerup(base,symbol,2));
 });
-test('existing player beauty remains accepted unchanged',async()=>{
-  const original=JSON.parse(await readFile('art/poc/pipeline-v2/runs/v2-ai/badger/standard/render.json','utf8'));
+// The authored player beauty run is local (art/poc is not versioned); worktrees without it skip.
+const PLAYER_BEAUTY='art/poc/pipeline-v2/runs/v2-ai/badger/standard/render.json';
+test.skipIf(!existsSync(PLAYER_BEAUTY))('existing player beauty remains accepted unchanged',async()=>{
+  const original=JSON.parse(await readFile(PLAYER_BEAUTY,'utf8'));
   validateManifestV2(original);
 });
 test('Blender float32 projection is accepted but real drift and nonfinite scales fail',()=>{

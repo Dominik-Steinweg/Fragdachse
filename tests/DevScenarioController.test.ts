@@ -5,7 +5,8 @@ import { runInNewContext } from 'node:vm';
 import EventEmitter from 'eventemitter3';
 import { krakenReviewOptions } from '../src/dev/scenario/KrakenBossReview';
 import { KRAKEN_MAP_ID, krakenAbyssMap } from '../src/dev/scenario/krakenAbyssMap';
-import { isDiagnosticMapId, COOP_DEFENSE_MAP_CONFIGS } from '../src/config/coopDefenseMaps';
+import { isDiagnosticMapId, COOP_DEFENSE_MAP_CONFIGS, getCoopDefenseMapConfig } from '../src/config/coopDefenseMaps';
+import { KRAKEN_PERFORMANCE_MAP_ID } from '../src/dev/scenario/krakenPerformanceMap';
 import type * as Phaser from 'phaser';
 import type { ArenaRuntime } from '../src/scenes/arena/ArenaRuntime';
 import { defaultScenario, encodeScenario, parseScenario } from '../src/dev/scenario/config';
@@ -80,6 +81,17 @@ beforeEach(() => {
 });
 afterEach(() => { controller.destroy(); invalidateLocalStorageCache(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
+it('holds diagnostic loading time while parallel Kraken shaders are pending, even with resident terrain', () => {
+  const runtime = (controller as unknown as { runtime: ArenaRuntime }).runtime;
+  const loading = { work: { renderReady: true }, krakenShaderWarmupReady: false };
+  vi.spyOn(runtime, 'getScenarioLoadingState').mockImplementation(() => loading as never);
+  expect(controller.clock.holdLoadingTime()).toBe(true);
+  loading.krakenShaderWarmupReady = true;
+  expect(controller.clock.holdLoadingTime()).toBe(false);
+  loading.work.renderReady = false;
+  expect(controller.clock.holdLoadingTime()).toBe(true);
+});
+
 it('owns the Kraken diagnostic map only for the dev controller lifetime', () => {
   expect(isDiagnosticMapId(KRAKEN_MAP_ID)).toBe(true);
   expect(isDiagnosticMapId('watchtower-review')).toBe(true);
@@ -107,6 +119,19 @@ it('validates Kraken patches and treats frame selection as a paused clip-local p
     { phase: 'other' }, { speed: Infinity }, { playing: 'yes' }, { tentaclePivot: [0, 2] }, { atlas: '../atlas.json' }]) {
     expect(() => krakenReviewOptions(invalid)).toThrow();
   }
+});
+
+it('owns the performance fixture without mutating campaign waves or habitat', () => {
+  const campaign = structuredClone(getCoopDefenseMapConfig('20'));
+  controller.startKrakenMission(false, null, true);
+  const fixture = getCoopDefenseMapConfig(KRAKEN_PERFORMANCE_MAP_ID);
+  expect(fixture.encounters).toEqual(campaign.encounters);
+  expect(fixture.krakenHabitat).toEqual(campaign.krakenHabitat);
+  expect(fixture.water).toEqual(campaign.water);
+  expect(fixture.boss?.startAfterEncounterId).toBeUndefined();
+  expect(getCoopDefenseMapConfig('20')).toEqual(campaign);
+  controller.destroy();
+  expect(isDiagnosticMapId(KRAKEN_PERFORMANCE_MAP_ID)).toBe(false);
 });
 
 function enter() {

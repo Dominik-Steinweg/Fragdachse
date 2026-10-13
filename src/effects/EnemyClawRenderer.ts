@@ -9,6 +9,26 @@ import { ClawVfxPass, createEnemyClawGpuLayer, type EnemyClawGpuLayer } from './
 /** One danger family for every hostile claw: the sector must read as "leave" regardless of species. */
 export const ENEMY_CLAW_HOSTILE_COLOR = 0xff4a36;
 
+/** A lane danger zone announced by the host, on the synchronised clock. */
+export interface EnemyLaneAttack {
+  readonly attackId: string;
+  readonly x: number; readonly y: number; readonly angle: number;
+  readonly length: number; readonly width: number;
+  readonly startedAt: number; readonly strikeAt: number; readonly hitAt: number; readonly endsAt: number;
+}
+
+/**
+ * A filled fan danger zone announced by the host (energy cone), on the synchronised clock. `clip`
+ * is the replicated cover profile (reach per ray, fraction of `range`, left to right edge).
+ */
+export interface EnemySectorAttack {
+  readonly attackId: string;
+  readonly x: number; readonly y: number; readonly angle: number;
+  readonly range: number; readonly arcDegrees: number;
+  readonly clip: readonly number[];
+  readonly startedAt: number; readonly strikeAt: number; readonly hitAt: number; readonly endsAt: number;
+}
+
 /** Bounded warmup: a pass that never renders must not hold the world-load barrier. */
 const MAX_PREPARE_CALLS = 30;
 const IDENTITY_TTL_MS = 4000;
@@ -18,6 +38,8 @@ interface ActiveClaw {
   readonly attackId: string;
   /** Hit time on the local presentation clock. */
   readonly hitClock: number;
+  /** Fan telegraphs own one instance per wedge; `clipKey` detects a changed cover profile. */
+  readonly fan?: { readonly clipKey: string };
 }
 
 /** Includes the lifetime of a part, not just its reusable boss/entity ID. */
@@ -101,6 +123,48 @@ export class EnemyClawRenderer {
       startedAt: attack.startedAt + offset, strikeAt: attack.strikeAt + offset, hitAt: attack.hitAt + offset, color,
     }, clock);
     if (added) this.active.set(id, { attackId: attack.attackId, hitClock: attack.hitAt + offset });
+  }
+
+  /**
+   * Host-fixed lane attack outside the claw state (e.g. a shield charge): the same red danger
+   * family, charging from `startedAt` toward `hitAt`. `null` releases it; before the hit it vanishes.
+   */
+  syncLane(id: string, attack: EnemyLaneAttack | null, now: number, visible: boolean,
+    color = ENEMY_CLAW_HOSTILE_COLOR): void {
+    const clock = this.clock();
+    this.retire(clock);
+    if (!attack || !visible || now >= attack.endsAt) { this.release(id); return; }
+    if (this.active.get(id)?.attackId === attack.attackId) return;
+    this.release(id);
+    if (now >= attack.hitAt) { this.remember(this.struck, attack.attackId, clock); return; }
+    const offset = clock - now;
+    if (this.store.addAttack(attack.attackId, { x: attack.x, y: attack.y, angle: attack.angle, shape: 'lane',
+      length: attack.length, width: attack.width, startedAt: attack.startedAt + offset, strikeAt: attack.strikeAt + offset,
+      hitAt: attack.hitAt + offset, color }, clock)) {
+      this.active.set(id, { attackId: attack.attackId, hitClock: attack.hitAt + offset });
+    }
+  }
+
+  /**
+   * Host-fixed fan (energy cone): the same red danger family as claws, with crisp edges clipped
+   * by the replicated cover profile. A changed profile rewrites the wedges on the same timeline;
+   * `null` releases it, and before the hit it vanishes (cancelled windup).
+   */
+  syncSector(id: string, attack: EnemySectorAttack | null, now: number, visible: boolean,
+    color = ENEMY_CLAW_HOSTILE_COLOR): void {
+    const clock = this.clock();
+    this.retire(clock);
+    if (!attack || !visible || now >= attack.endsAt) { this.release(id); return; }
+    const clipKey = attack.clip.join(',');
+    const current = this.active.get(id);
+    if (current?.attackId === attack.attackId && current.fan?.clipKey === clipKey) return;
+    if (current && current.attackId !== attack.attackId) this.release(id);
+    if (now >= attack.hitAt) { this.remember(this.struck, attack.attackId, clock); return; }
+    const offset = clock - now;
+    this.store.addFan(attack.attackId, { x: attack.x, y: attack.y, angle: attack.angle, range: attack.range,
+      halfArc: attack.arcDegrees * Math.PI / 360, clip: attack.clip, startedAt: attack.startedAt + offset,
+      strikeAt: attack.strikeAt + offset, hitAt: attack.hitAt + offset, color }, clock);
+    this.active.set(id, { attackId: attack.attackId, hitClock: attack.hitAt + offset, fan: { clipKey } });
   }
 
   confirm(swing: SyncedMeleeSwing): void {
@@ -187,6 +251,7 @@ export class EnemyClawRenderer {
     this.active.delete(id);
     const clock = this.clock();
     if (clock >= entry.hitClock) this.remember(this.struck, entry.attackId, clock);
+    else if (entry.fan) this.store.removeFan(entry.attackId);
     else this.store.remove(entry.attackId);
   }
 

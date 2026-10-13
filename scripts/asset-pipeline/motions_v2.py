@@ -3,6 +3,7 @@ import math
 import importlib
 from claw_motion_v2 import apply_claw
 from firestarter_motion_v2 import apply_cast
+from shield_charger_motion_v2 import apply_shield
 
 
 def clip_parameters(clip):
@@ -87,7 +88,18 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
         key(bone, 'rotation_euler', (0, 0, 0), frame)
     pose('claw_weapon')
     pose('attack_motion')
-    if motion == 'dawn_broodnest_idle':
+    pose('shield')
+    if motion == 'relay_deploy':
+        # Deployed rest is also the final one-shot pose. Hinges retain their
+        # nonzero pivots; lens rise follows the initial leg clearance phase.
+        t = 1 if idle else min(1, max(0, phase / .78))
+        opened = t*t*(3-2*t)
+        for i in range(3):
+            pose(f'relay_leg_{i}', rotation=(math.radians(72)*(1-opened), 0, 0))
+        t = 1 if idle else min(1, max(0, (phase-.25)/.75))
+        raised = t*t*(3-2*t)
+        pose('relay_head', location=(0, 0, -.29*(1-raised)))
+    elif motion == 'dawn_broodnest_idle':
         for i in range(3):
             pulse = 0 if idle else math.sin(angle + i * .65) - math.sin(i * .65)
             amount = p.get('breath', .035) * pulse
@@ -124,6 +136,10 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
                 raise ValueError(f'Unknown Kraken motion: {motion}')
             getattr(implementation, function)(asset, motion, phase, frame, idle, p, pose, key)
             break
+    elif motion.startswith('shield_'):
+        pose('left_arm')
+        pose('right_arm')
+        apply_shield(asset, motion, phase, frame, idle, p, pose, key)
     elif motion in ('claw_quadruped', 'claw_biped'):
         pose('left_arm')
         pose('right_arm')

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { WorldCombatGameplayBindingOptions } from '../../src/world/WorldCombatGameplayBinding';
+import type { FireControlSnapshotSource } from '../../src/world/WorldPresentationFrameBinding';
 
 vi.mock('phaser', () => ({
   BlendModes: { NORMAL: 0, ADD: 1, SCREEN: 2 },
@@ -12,14 +13,19 @@ vi.mock('phaser', () => ({
     GetColor: (r: number, g: number, b: number) => (r << 16) | (g << 8) | b,
   } },
 }));
-const composed = vi.hoisted(() => ({ options: null as WorldCombatGameplayBindingOptions | null }));
+const composed = vi.hoisted(() => ({ options: null as WorldCombatGameplayBindingOptions | null,
+  getFireControlSnapshot: vi.fn() }));
 vi.mock('../../src/world/WorldCombatGameplayBinding', () => ({
   WorldCombatGameplayBinding: class {
     constructor(options: WorldCombatGameplayBindingOptions) { composed.options = options; }
+    getFireControlSnapshot = composed.getFireControlSnapshot;
   },
 }));
 vi.mock('../../src/scenes/arena/RendererBundle', () => ({ wireProjectileRenderers: vi.fn() }));
 const bridgeMock = vi.hoisted(() => ({
+  isHost: vi.fn(() => true),
+  setFireControlSnapshotProvider: vi.fn(), getFireControlSnapshot: vi.fn(),
+  getSynchronizedNow: () => 4567,
   broadcastExplosionEffect: vi.fn(), registerExplosionEffectHandler: vi.fn(),
 }));
 vi.mock('../../src/network/bridge', () => ({ bridge: bridgeMock }));
@@ -27,6 +33,39 @@ vi.mock('../../src/network/bridge', () => ({ bridge: bridgeMock }));
 import { composeWorldCombatGameplay } from '../../src/scenes/arena/ArenaWorldCombatComposition';
 import { RpcCoordinator } from '../../src/scenes/arena/RpcCoordinator';
 import { EffectSystem } from '../../src/effects/EffectSystem';
+
+describe('Fire control World composition', () => {
+  it.each([true, false])('binds the replicated snapshot, original lookup and copy-shot port (host=%s)', host => {
+    bridgeMock.isHost.mockReturnValue(host);
+    const snapshot = { deployments: [{ kind: 'portal', id: 7, ownerId: 'host', ownerColor: 0xffffff,
+      x: 100, y: 200, startedAt: 1000, expiresAt: 10000, localFireRelease: false, entries: [] }] };
+    composed.getFireControlSnapshot.mockReset().mockReturnValue(snapshot);
+    bridgeMock.getFireControlSnapshot.mockReset().mockReturnValue(snapshot);
+    bridgeMock.setFireControlSnapshotProvider.mockReset();
+    const bindFireControl = vi.fn();
+    const presentation = { bindFireControlCopyShots: vi.fn() };
+    const original = { sprite: {}, x: 23, y: 45 };
+    const getTurretOriginalVisual = vi.fn(() => original);
+    composeWorldCombatGameplay({
+      ctx: {}, worldRuntime: { bind: vi.fn(), presentationFrame: { bindFireControl } }, world: { metrics: {} },
+      rockVisualHelper: { getTurretOriginalVisual },
+    } as never, { projectiles: { getPresentationRuntime: () => presentation },
+      combatSystem: { setPlayerMountedResolver: vi.fn() } } as never);
+    const [source, lookup] = bindFireControl.mock.lastCall! as [FireControlSnapshotSource, (id: number) => unknown];
+    expect(source(4567)).toBe(snapshot);
+    expect(bridgeMock.getFireControlSnapshot).toHaveBeenCalledOnce();
+    expect(bindFireControl.mock.lastCall![2]).toBe(presentation);
+    expect(composed.getFireControlSnapshot).not.toHaveBeenCalled();
+    if (host) {
+      expect(bridgeMock.setFireControlSnapshotProvider).toHaveBeenCalledOnce();
+      expect(bridgeMock.setFireControlSnapshotProvider.mock.lastCall![0]()).toBe(snapshot);
+      expect(composed.getFireControlSnapshot).toHaveBeenCalledExactlyOnceWith(4567);
+    } else expect(bridgeMock.setFireControlSnapshotProvider).not.toHaveBeenCalled();
+    expect(lookup(9)).toBe(original);
+    expect(getTurretOriginalVisual).toHaveBeenCalledExactlyOnceWith(9);
+    bridgeMock.isHost.mockReturnValue(true);
+  });
+});
 
 describe('Time Bubble release across World composition and presentation', () => {
   it('selects exactly one source sound independently of the explosion visual style', () => {

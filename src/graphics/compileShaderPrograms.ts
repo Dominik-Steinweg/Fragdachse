@@ -1,5 +1,12 @@
 import type * as Phaser from 'phaser';
 
+export interface ShaderProgramBarrier {
+  (): void;
+  /** KHR completion query only; never waits for the driver to finish linking.
+   * Without the extension, the owner must use the ordinary blocking completion. */
+  isReady(): boolean;
+}
+
 /** Submit independent links before requesting any link status. All programs are
  * complete before returning: ordinary rendering and reveal never skip a draw.
  * The config flag is scoped to synchronous factory calls, not a rendered frame.
@@ -11,18 +18,18 @@ export function compileShaderPrograms(
   beginShaderPrograms(renderer, managers)();
 }
 
-/** Boot-only split phase. The caller MUST finish before any consumer can render,
+/** Loading-only split phase. The caller MUST finish before any consumer can render,
  * and on cancellation. This overlaps links with unrelated CPU preparation.
  */
 export function beginShaderPrograms(
   renderer: Phaser.Renderer.WebGL.WebGLRenderer,
   managers: readonly Phaser.Renderer.WebGL.ProgramManager[],
-): () => void {
+): ShaderProgramBarrier {
   // Runtime config is mutable; Phaser exposes it as readonly in declarations.
   const config = renderer.game.config as { skipUnreadyShaders: boolean };
   const previous = config.skipUnreadyShaders;
   const programs = new Set<Phaser.Renderer.WebGL.Wrappers.WebGLProgramWrapper>();
-  const finish = (): void => {
+  const finish = Object.assign((): void => {
     // On context loss Phaser recreates the cached wrappers on restoration.
     if (renderer.gl?.isContextLost()) { programs.clear(); return; }
     let failure: unknown;
@@ -41,7 +48,13 @@ export function beginShaderPrograms(
     }
     programs.clear();
     if (failure) throw failure;
-  };
+  }, { isReady: (): boolean => {
+    const gl = renderer.gl, extension = renderer.parallelShaderCompileExtension;
+    if (!extension || gl?.isContextLost()) return true;
+    for (const program of programs) if (program.compiling && program.webGLProgram
+      && !gl.getProgramParameter(program.webGLProgram, extension.COMPLETION_STATUS_KHR)) return false;
+    return true;
+  } });
   try {
     config.skipUnreadyShaders = true;
     for (const manager of managers) {

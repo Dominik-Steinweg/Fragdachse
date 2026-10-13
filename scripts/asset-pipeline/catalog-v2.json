@@ -1552,6 +1552,125 @@
       ]
     },
     {
+      "id": "shield-charger-badger",
+      "label": "Schild-Anstürmer",
+      "category": "enemy",
+      "gameIds": [
+        "shield-charger-badger"
+      ],
+      "reference": "public/assets/sprites/enemies/enemy_shield_charger_badger.png",
+      "targetSize": 30,
+      "sourceSizes": [
+        64,
+        128
+      ],
+      "displayScale": 2.4,
+      "collisionDiameter": 30,
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Gedrungener aufrechter Dachs (Rumpf etwa 1,3:1, zwei Standpfoten) hinter einem großen Frontschild, der aus der Draufsicht den 120-Grad-Blockbogen nach Norden zeigt; Kopf und Schultern bleiben hinter dem Schild sichtbar.",
+        "colors": "Warmes umbrabraunes Fell mit heller Dachszeichnung, sattelbraunes Leder, ochsenblutrotes Holz bzw. rote Haut und dunkles geschmiedetes Eisen; kein Void-Lila.",
+        "anatomy": "Eigene aufrechte 3D-Anatomie mit getrennten Armkontrollen; der Schild ist ein eigenes Prop an der Kontrolle 'shield' (Pivot am Griff, Kind des Körpers). Formvarianten 1 Turmschild (gewählt), 2 Rundschild, 3 Keil-Rammschild. claw = Schildstoß; windup schwenkt den Schild an die linke Flanke (Marker ready), charge läuft mit seitlichem Schild, recover hebt ihn ab Marker raise wieder an.",
+        "materials": "Gemeinsame Mörser-Felltextur, enemy_craft_parts.refine und FD_FormMask mit Stärke 0,84; Holz, Eisen und Leder als technische Oberflächen. Keine Kameraneigung in der Draufsicht.",
+        "stage": "Produktion: V2-Quelle shield-charger-v1-production-r3, Enemy-Mesh enemy-mesh-shield-charger-v1-r5 (128-px-Beauty/Albedo/Normal/Emission, animiertes Schattenmesh). Abgenommen als Draft sc-v1-draft-r3; Texturen fur_01, rim_02, leather_01, shield_02."
+      },
+      "requiredClips": [
+        "move",
+        "claw",
+        "windup",
+        "charge",
+        "recover"
+      ],
+      "production": "reference",
+      "recipe": "shield-charger-badger",
+      "model": {
+        "formVariant": 1
+      },
+      "orthoScale": 6.24,
+      "textures": {
+        "organic": "art/poc/pipeline-v2/textures/shield-charger/charger-fur-01.png",
+        "technical": "art/poc/pipeline-v2/textures/mortar-badger-technical-v1.png",
+        "shieldFront": "art/poc/pipeline-v2/textures/shield-charger/shield-front-02.png",
+        "shieldRim": "art/poc/pipeline-v2/textures/shield-charger/shield-rim-02.png",
+        "shieldLeather": "art/poc/pipeline-v2/textures/shield-charger/charger-leather-01.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Umbrafell, Sattelleder, rotes Holz und geschmiedetes Eisen",
+          "textureStrength": 0.84,
+          "formShadowStrength": 0.84
+        }
+      },
+      "clips": [
+        {
+          "name": "move",
+          "motion": "biped",
+          "frameCount": 12,
+          "frameRate": 12,
+          "loop": true,
+          "parameters": {
+            "strideForward": 0.15,
+            "strideBack": 0.11,
+            "lift": 0.06,
+            "bodyBob": 0.014,
+            "bodyYaw": 0.012,
+            "armSwing": 0
+          }
+        },
+        {
+          "name": "claw",
+          "motion": "shield_bash",
+          "frameCount": 12,
+          "frameRate": 24,
+          "loop": false,
+          "markers": {
+            "strike": 4,
+            "impact": 7
+          },
+          "parameters": {
+            "strength": 0.65,
+            "leapDistance": 0.45
+          }
+        },
+        {
+          "name": "windup",
+          "motion": "shield_windup",
+          "frameCount": 10,
+          "frameRate": 20,
+          "loop": false,
+          "markers": {
+            "ready": 9
+          },
+          "end": "free"
+        },
+        {
+          "name": "charge",
+          "motion": "shield_charge",
+          "frameCount": 8,
+          "frameRate": 16,
+          "loop": true,
+          "parameters": {
+            "stride": 0.3,
+            "lift": 0.11
+          }
+        },
+        {
+          "name": "recover",
+          "motion": "shield_recover",
+          "frameCount": 16,
+          "frameRate": 12,
+          "loop": false,
+          "markers": {
+            "raise": 10
+          }
+        }
+      ]
+    },
+    {
       "id": "thrower-badger",
       "label": "Werfer-Dachs",
       "category": "enemy",
@@ -1960,7 +2079,7 @@
         "void-hunter"
       ],
       "reference": "public/assets/sprites/enemies/enemy_void_hunter.png",
-      "targetSize": 52,
+      "targetSize": 78,
       "sourceSizes": [
         128,
         256
@@ -5423,6 +5542,202 @@
         "version": 1,
         "encoding": "u16-world-xyz-per-pose-v1"
       }
+    },
+    {
+      "gameIds": [],
+      "production": "reference",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "HQ4: lifted petrol panels, readable gunmetal and thin bare-steel bevels",
+          "textureStrength": 0.12,
+          "formShadowStrength": 0.65
+        }
+      },
+      "id": "fire-control-relay",
+      "label": "Feuerleit-Relais-Projektor (HQ)",
+      "category": "construction",
+      "reference": "scripts/asset-pipeline/references/fire-control-relay-concept.png",
+      "targetSize": 24,
+      "sourceSizes": [
+        48,
+        96
+      ],
+      "recipe": "fire-control-relay",
+      "orthoScale": 3,
+      "model": {},
+      "description": {
+        "silhouette": "Three broad folding feet around a telescoping concentric lens head, following RELAY_v01.",
+        "materials": "HQ4 value groups: chipped #637e86 petrol panels (L*51), rough #484e52 gunmetal (L*33), #b5bfc2 bare-steel bevels (L*77), restrained cool contact dust and dark seams; unchanged #3dffd0 optics and #e8fff9 core.",
+        "anatomy": "Three real hinged legs, raised lens head, fixed centre pivot and strictly orthographic top-down camera."
+      },
+      "requiredClips": [
+        "deploy"
+      ],
+      "clips": [
+        {
+          "name": "deploy",
+          "motion": "relay_deploy",
+          "frameCount": 8,
+          "frameRate": 24,
+          "loop": false,
+          "start": "free",
+          "end": "rest"
+        }
+      ]
+    },
+    {
+      "gameIds": [
+        "FIRE_CONTROL_PORTAL"
+      ],
+      "production": "reference",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "HQ4: lifted petrol panels, readable gunmetal and thin bare-steel bevels",
+          "textureStrength": 0.12,
+          "formShadowStrength": 0.65
+        }
+      },
+      "reference": "scripts/asset-pipeline/references/fire-control-portal-concept.png",
+      "recipe": "fire-control-portal",
+      "description": {
+        "silhouette": "Spherical segmented steel casing, target-grid lens, north striker and bent side spoon.",
+        "materials": "HQ4 value groups: chipped #637e86 petrol panels (L*51), rough #484e52 gunmetal (L*33), #b5bfc2 bare-steel bevels (L*77), restrained cool contact dust and dark seams; unchanged #3dffd0 optics and #e8fff9 core.",
+        "anatomy": "Real spherical shell and upward optical stack; strict orthographic top-down, no baked halo."
+      },
+      "requiredClips": [],
+      "clips": [],
+      "id": "held-fire-control-portal",
+      "label": "Feuerleitgranate getragen (HQ)",
+      "category": "utility",
+      "designReference": "scripts/asset-pipeline/references/fire-control-portal-concept.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "orthoScale": 3.2,
+      "model": {
+        "part": "held"
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          18
+        ]
+      }
+    },
+    {
+      "gameIds": [],
+      "production": "reference",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "HQ4: lifted petrol panels, readable gunmetal and thin bare-steel bevels",
+          "textureStrength": 0.12,
+          "formShadowStrength": 0.65
+        }
+      },
+      "reference": "scripts/asset-pipeline/references/fire-control-portal-concept.png",
+      "recipe": "fire-control-portal",
+      "description": {
+        "silhouette": "Spherical segmented steel casing, target-grid lens, north striker and bent side spoon.",
+        "materials": "HQ4 value groups: chipped #637e86 petrol panels (L*51), rough #484e52 gunmetal (L*33), #b5bfc2 bare-steel bevels (L*77), restrained cool contact dust and dark seams; unchanged #3dffd0 optics and #e8fff9 core.",
+        "anatomy": "Real spherical shell and upward optical stack; strict orthographic top-down, no baked halo."
+      },
+      "requiredClips": [],
+      "clips": [],
+      "id": "fire-control-portal-flight",
+      "label": "Feuerleitgranate Flug (HQ)",
+      "category": "construction",
+      "targetSize": 34,
+      "sourceSizes": [
+        34,
+        68
+      ],
+      "orthoScale": 1.5,
+      "model": {
+        "part": "flight"
+      }
+    },
+    {
+      "gameIds": [
+        "FIRE_CONTROL_RELAY"
+      ],
+      "production": "reference",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "HQ4: lifted petrol panels, readable gunmetal and thin bare-steel bevels",
+          "textureStrength": 0.12,
+          "formShadowStrength": 0.65
+        }
+      },
+      "id": "held-fire-control-relay",
+      "label": "Feuerleit-Relais getragen (HQ)",
+      "category": "utility",
+      "reference": "scripts/asset-pipeline/references/fire-control-relay-concept.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "recipe": "held-fire-control-relay",
+      "orthoScale": 3.2,
+      "model": {},
+      "description": {
+        "silhouette": "Compact folded three-foot projector with north-facing lens head and narrow turquoise inlays.",
+        "materials": "HQ4 value groups: chipped #637e86 petrol panels (L*51), rough #484e52 gunmetal (L*33), #b5bfc2 bare-steel bevels (L*77), restrained cool contact dust and dark seams; unchanged #3dffd0 optics and #e8fff9 core.",
+        "anatomy": "Three real hinged legs, raised lens head, fixed centre pivot and strictly orthographic top-down camera."
+      },
+      "requiredClips": [],
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          18.4
+        ]
+      },
+      "designReference": "scripts/asset-pipeline/references/fire-control-relay-concept.png"
     },
     {
       "id": "construction_dawn_wreck_t1",

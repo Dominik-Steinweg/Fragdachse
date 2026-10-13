@@ -14,6 +14,20 @@ const jobs = [
       + 'orchestral action, pounding low brass, fast staccato string ostinato, distorted synth bass, metallic hits, '
       + 'rising intensity, a short breath around twenty-four seconds, then a final enormous orchestral impact with a long '
       + 'reverb tail. Polished Hollywood trailer production, wide stereo, no vocals.' })),
+  // V2 beds: punchier hybrid action with clear downbeats; cut in 8 s phrases (120 BPM = 4 bars).
+  ...[3, 52, 64, 77, 88, 95].map(seed => ({ name: `beat-${seed}`, model: 'medium', seconds: 32, seed, negative: NEG_MUSIC,
+    text: 'Aggressive epic hybrid trailer action music, 120 BPM, D minor, four-on-the-floor huge taiko and cinematic '
+      + 'drum kit, heavy distorted synth bass pulse on every eighth note, pounding low brass stabs on the downbeats, '
+      + 'fast staccato strings, metallic percussion hits, tension risers every eight bars, relentless driving energy '
+      + 'from the first second, punchy transients, loud and dynamic, polished modern game trailer production, no vocals.' })),
+  { name: 'shield', model: 'sfx', seconds: 5, seed: 31, negative: NEG_SFX,
+    text: 'Bullets ricocheting off a glowing energy shield, rapid electric zaps and crackling force field impacts' },
+  { name: 'charge', model: 'sfx', seconds: 5, seed: 37, negative: NEG_SFX,
+    text: 'Heavy armored beast charging at full speed, thundering footsteps and a violent rushing whoosh ending in a crash' },
+  { name: 'reverse', model: 'sfx', seconds: 5, seed: 41, negative: NEG_SFX,
+    text: 'Reverse cymbal swell and reversed boom rising into a sudden cut, cinematic trailer transition' },
+  { name: 'subdrop', model: 'sfx', seconds: 5, seed: 43, negative: NEG_SFX,
+    text: 'Deep cinematic sub drop, massive low frequency boom with dark tail, trailer hit' },
   { name: 'braam', model: 'sfx', seconds: 5, seed: 5, negative: NEG_SFX,
     text: 'Huge cinematic trailer braam, massive low brass blast with sub bass boom and long dark reverb tail' },
   { name: 'impact', model: 'sfx', seconds: 5, seed: 7, negative: NEG_SFX,

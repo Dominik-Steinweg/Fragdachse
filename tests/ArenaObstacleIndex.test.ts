@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, CELL_SIZE } from '../src/config';
+import { ACTIVE_ARENA_METRICS_PROFILE, ARENA_HEIGHT, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, CELL_SIZE } from '../src/config';
 import { ArenaObstacleIndex, OBSTACLE_BARRIER, OBSTACLE_BASE, OBSTACLE_ROCK } from '../src/systems/ArenaObstacleIndex';
+import { WaterGeometry } from '../src/arena/WaterGeometry';
+import { resolveWorldMetrics } from '../src/world/WorldMetrics';
 
 /**
  * Minimaler Stand-in für die Phaser-Objekte, aus denen der Index gebaut wird.
@@ -107,6 +109,44 @@ function segmentHitsBox(
 }
 
 describe('ArenaObstacleIndex', () => {
+  it('reuses immutable navigation geometry while observing live destruction and every source change', () => {
+    const rock = new FakeBox(100, 100), trunk = new FakeCircle(200, 200, 10);
+    const rocks: AnyBox[] = [rock];
+    const bounds = { ...TEST_BOUNDS };
+    // Stable arrays are the World's normal source contract.
+    const trunks = [trunk];
+    const stable = new ArenaObstacleIndex({ bounds: () => bounds, rocks: () => rocks,
+      trunks: () => trunks, bases: () => null });
+    let snapshot = stable.snapshotMovementGeometry();
+    expect(stable.snapshotMovementGeometry()).toBe(snapshot);
+    rock.active = false;
+    let next = stable.snapshotMovementGeometry();
+    expect(next.obstacles.map(o => o.kind)).toEqual(['trunk']);
+    expect(snapshot.obstacles.map(o => o.kind)).toEqual(['rock', 'trunk']);
+    expect(stable.snapshotMovementGeometry()).toBe(next);
+    trunk.active = false;
+    expect(stable.snapshotMovementGeometry().obstacles).toEqual([]);
+    rock.active = true;
+    expect(stable.snapshotMovementGeometry().obstacles.map(o => o.kind)).toEqual(['rock']);
+    rocks.push(new FakeBox(300, 300));
+    expect(stable.snapshotMovementGeometry().obstacles).toHaveLength(2);
+    snapshot = stable.snapshotMovementGeometry();
+    bounds.offsetX += 32;
+    next = stable.snapshotMovementGeometry();
+    expect(next.left).toBe(snapshot.left + 32);
+    const water = new WaterGeometry([{ gridX: 1, gridY: 1 }], resolveWorldMetrics(ACTIVE_ARENA_METRICS_PROFILE));
+    stable.setWaterGeometry(water);
+    expect(stable.snapshotMovementGeometry().obstacles.map(o => o.kind)).toEqual(['rock', 'rock', 'water']);
+    stable.setWaterGeometry(null);
+    expect(stable.snapshotMovementGeometry().obstacles).toHaveLength(2);
+    snapshot = stable.snapshotMovementGeometry();
+    stable.markDirty();
+    expect(stable.snapshotMovementGeometry()).not.toBe(snapshot);
+    snapshot = stable.snapshotMovementGeometry();
+    stable.clear();
+    expect(stable.snapshotMovementGeometry()).toEqual(snapshot);
+    expect(stable.snapshotMovementGeometry()).not.toBe(snapshot);
+  });
   it('bindet sein Bucket-Raster an explizite Bounds statt an die aktive globale Arena', () => {
     const bounds = { offsetX: 100, offsetY: 200, width: 640, height: 480 };
     const index = new ArenaObstacleIndex({

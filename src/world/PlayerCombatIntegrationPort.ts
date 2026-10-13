@@ -104,6 +104,9 @@ export interface PlayerCombatUtilityPort {
   getTranslocatorHpRegen?(playerId: string, nowMs: number): number;
   setZeusPort?(port: import('./ZeusUtilityPort').ZeusUtilityPort | null): void;
   onZeusDashStarted?(playerId: string, now: number): void;
+  setFireControlPort?(port: import('./FireControlUtilityPort').FireControlUtilityPort | null): void;
+  onFireControlDeploymentEnded?(deploymentId: number, endedAt: number): void;
+  clearFireControlUses?(): void;
   setTimeBubblePort?(port: import('./TimeBubbleUtilityPort').TimeBubbleUtilityPort | null): void;
   onTimeBubbleEnded?(bubbleId: number, endedAt: number): void;
   onUtilityProjectileResolved?(projectileId: number, now: number, grenadePayloadPending?: boolean): void;

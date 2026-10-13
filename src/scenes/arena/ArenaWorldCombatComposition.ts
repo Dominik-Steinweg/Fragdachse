@@ -1,3 +1,4 @@
+import { normalizeConstructionId } from '../../config/coopDefenseConstructions';
 import { CombatProjectileQueryAdapter } from '../../combat/CombatProjectileQueryAdapter';
 import { bridge } from '../../network/bridge';
 import { EnergyShieldSystem } from '../../systems/EnergyShieldSystem';
@@ -53,7 +54,10 @@ export function composeWorldProjectileRuntime(
   });
   projectileRuntime.setProjectileReplicationAdapter(new ProjectileReplicationAdapter(projectileRuntime));
   projectileRuntime.getPresentationRuntime().setAudioSystem(ctx.gameAudioSystem);
-  wireProjectileRenderers(input.renderers, projectileRuntime, ctx.playerManager);
+  wireProjectileRenderers(input.renderers, projectileRuntime, ctx.playerManager, (enemyId) => {
+    const enemy = input.flow.getCoopMissionRuntime()?.enemyManager?.getEnemy(enemyId);
+    return enemy?.sprite.active ? { x: enemy.sprite.x, y: enemy.sprite.y } : null;
+  });
   gameplay.projectiles = projectileRuntime;
   worldRuntime.bind(projectileRuntime);
 }
@@ -268,6 +272,8 @@ export function composeWorldCombatGameplay(
     getEnemyManager: () => gameplay.shootingRange?.enemies ?? flow.getCoopMissionRuntime()?.enemyManager ?? null,
     isTrainingTarget: id => gameplay.shootingRange?.isTrainingTarget(id) ?? false,
     getPlayerCombatIntegration: () => gameplay.player?.getPlayerCombatIntegrationPort() ?? null,
+    readConstructionSlotOrder: ownerId => (bridge.getPlayerCurrentLoadoutSnapshot(ownerId)?.tools ?? [])
+      .flatMap(tool => { const id = normalizeConstructionId(tool.id); return id ? [id] : []; }),
     getManualTurretControl: (id, now) => gameplay.player?.getManualTurretControl(id, now) ?? null,
     bindPlayerShieldBuffPort: (port) => gameplay.player?.bindShieldBuffPort(port),
     automatedWeaponExecution: gameplay.automatedWeaponExecution,
@@ -315,6 +321,8 @@ export function composeWorldCombatGameplay(
     getWorldTrain: () => gameplay.train,
     getWorldMutation: () => gameplay.worldMutation,
     getFirestarterSystem: () => flow.getCoopMissionRuntime()?.coopDefenseFirestarterSystem ?? null,
+    getShieldChargerSystem: () => flow.getCoopMissionRuntime()?.coopDefenseShieldChargerSystem ?? null,
+    getEnergyConeSystem: () => flow.getCoopMissionRuntime()?.coopDefenseEnergyConeSystem ?? null,
     getMortarSystem: () => flow.getCoopMissionRuntime()?.coopDefenseMortarSystem ?? null,
     getTimebombSystem: () => flow.getCoopMissionRuntime()?.coopDefenseTimebombSystem ?? null,
     getNecromancySystem: () => gameplay.shootingRange?.necromancy ?? flow.getCoopMissionRuntime()?.necromancySystem ?? null,
@@ -370,6 +378,16 @@ export function composeWorldCombatGameplay(
   });
   gameplay.combat = combatGameplayBinding;
   worldRuntime.bind(combatGameplayBinding);
+  // Der Host-Owner speist den Slice `fc`; die Darstellung liest auf Host und Client dieselbe Quelle.
+  if (bridge.isHost()) {
+    bridge.setFireControlSnapshotProvider(() => combatGameplayBinding.getFireControlSnapshot(bridge.getSynchronizedNow()));
+    worldRuntime.bind({ destroy: () => bridge.setFireControlSnapshotProvider(null) });
+  }
+  worldRuntime.presentationFrame?.bindFireControl(
+    () => bridge.getFireControlSnapshot(),
+    id => rockVisualHelper.getTurretOriginalVisual(id),
+    projectileRuntime.getPresentationRuntime(),
+  );
 }
 
 function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): number {

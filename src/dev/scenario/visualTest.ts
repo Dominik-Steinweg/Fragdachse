@@ -24,16 +24,25 @@ export function installVisualTest(): void {
  * Only repair a colliding auto UUID; authored texture-key errors remain visible. */
 export function bindVisualTestTextureKeys(textures: import('phaser').Textures.TextureManager): () => void {
   if (!visualTest.enabled) return () => {};
-  const original = textures.addDynamicTexture;
+  const original = textures.addDynamicTexture, originalCanvas = textures.createCanvas;
   let serial = 0;
-  const wrapped: typeof original = function (key, width, height, forceEven) {
+  const unique = (key: string) => {
     if (typeof key === 'string' && /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i.test(key) && textures.exists(key)) {
       do { key = `__visual_test_dynamic_${++serial}`; } while (textures.exists(key));
     }
-    return original.call(textures, key, width, height, forceEven);
+    return key;
   };
+  const wrapped: typeof original = function (key, width, height, forceEven) {
+    return original.call(textures, typeof key === 'string' ? unique(key) : key, width, height, forceEven);
+  };
+  // Quality switches also rebuild UUID-named canvas masks at a frozen frame.
+  const canvas: typeof originalCanvas = (key, width, height) => originalCanvas.call(textures, unique(key), width, height);
   textures.addDynamicTexture = wrapped;
-  return () => { if (textures.addDynamicTexture === wrapped) textures.addDynamicTexture = original; };
+  textures.createCanvas = canvas;
+  return () => {
+    if (textures.addDynamicTexture === wrapped) textures.addDynamicTexture = original;
+    if (textures.createCanvas === canvas) textures.createCanvas = originalCanvas;
+  };
 }
 
 /** The DOM boot fade normally resolves on CSS transitionend / a wall-time fallback.

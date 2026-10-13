@@ -41,6 +41,26 @@ function setup() {
   return { system, deps, config, entity, tick, dive, publications, noLanes: () => { lanesEnabled = false; } };
 }
 
+it('gates one-shot diagnostic seeds and clears them with the boss lifetime', () => {
+  const f = setup();
+  expect(() => f.system.seedDevScenario(12345)).toThrow(/isolated/);
+  f.deps.devAuthorized = () => true;
+  expect(() => f.system.seedDevScenario(12345)).toThrow(/inactive/);
+  const samples: number[] = [];
+  f.deps.intent.readTarget = () => null;
+  f.deps.habitat.wanderPoint = (_p, random) => { samples.push(random); return null; };
+  const start = (revision: number, seeded: boolean) => {
+    f.system.clear(); if (seeded) f.system.seedDevScenario(12345);
+    f.system.start({ ...boss, scope: { ...boss.scope, worldRevision: revision } }, 'pond', 0, 0);
+    f.system.preMovement(20, 20); return samples.at(-1);
+  };
+  const first = start(10, true);
+  expect(first).toBeTypeOf('number'); expect(start(20, true)).toBe(first);
+  expect(start(20, false)).not.toBe(first);
+  f.system.clear(); f.system.seedDevScenario(12345); f.system.clear();
+  expect(start(20, false)).not.toBe(first);
+});
+
 describe('Kraken host owner', () => {
   it('recovers after sustained movement intent without progress, but not during intentional holds', () => {
     const f = setup(); f.entity.hp = 40; f.tick(1);

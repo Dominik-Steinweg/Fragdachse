@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { runtimeAssetCache } from './scripts/asset-cache';
 import { publicDeployment } from './scripts/lib/public-deployment.mjs';
 import gameVersion from './game-version.json';
@@ -139,6 +140,14 @@ export default defineConfig(({ mode }) => {
     __NAVIGATION_BUILD_ID__: JSON.stringify(navigationBuildId),
     __GAME_VERSION__: JSON.stringify(gameVersion.version),
     __BUILD_TIMESTAMP__: JSON.stringify(buildTimestamp),
+  },
+  // Every vitest invocation (also a bare `npx vitest run <path>`) ignores session worktrees under
+  // .claude/, tool copies under .cache/, build output and local art; suite selection stays in the npm scripts.
+  test: {
+    exclude: ['**/node_modules/**', '**/.git/**', '.claude/**', '.cache/**', 'build/**', 'dist/**', 'art/**'],
+    // Several worktrees often run full suites at once on this machine; the 5 s default turned
+    // ordinary CPU contention into false failures. Real hangs still fail.
+    testTimeout: 20000,
   },
   };
 });

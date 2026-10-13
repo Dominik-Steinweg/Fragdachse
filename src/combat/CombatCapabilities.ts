@@ -242,7 +242,43 @@ export interface CombatStructureStatusPort {
   applyBaseStatusDamage(baseId: string, amount: number, source: CombatSource, now: number): void;
 }
 
+/** Shield charger: lane measurement and shield-aware body contact (optional for narrow fakes). */
+export interface CombatChargePort {
+  /** Free distance for a body of `radius` along the lane (rocks, trunks, bases, arena edge, train). */
+  measureChargeLane?(x: number, y: number, angle: number, length: number, radius: number): number;
+  /** Melee-category contact by a charging enemy; false when a shield blocked it or it may not hit. */
+  resolveChargeContact?(targetId: string, chargerId: string, damage: number, sourceX: number, sourceY: number, nowMs: number): boolean;
+}
+
+/**
+ * Energy cone (Energie-Fächer) of an enemy: cover profile for the telegraph and the single impulse.
+ * Cover is shot-blocking geometry (`directFire`: low walls do not block, rocks, trunks, bases, the
+ * arena edge and the train do), the same rule as plasma and hitscan.
+ */
+export interface CombatEnergyConePort {
+  /** Free reach (px) of one ray from (x, y) along `angle`, at most `length`. */
+  measureConeRay?(x: number, y: number, angle: number, length: number): number;
+  /**
+   * Impulse on one target already inside the sector: false without a clear line of fire from the
+   * origin to (targetX, targetY), when an energy shield facing the origin blocks it (`tesla`
+   * category) or when the caster may not damage the target.
+   */
+  resolveConeImpulse?(targetId: string, casterId: string, damage: number, originX: number, originY: number,
+    targetX: number, targetY: number, nowMs: number): boolean;
+}
+
+/**
+ * Activity attachment for directional enemy shields. The Activity installs its owning system
+ * for its lifetime and clears it on detach; combat blocking and shield replication read it.
+ */
+export interface CombatEnemyFrontalShieldAttachPort {
+  setEnemyFrontalShieldPort(port: import('../systems/enemyFrontalShield').EnemyFrontalShieldPort | null): void;
+}
+
 export type CombatActivityPort =
+  & CombatChargePort
+  & CombatEnergyConePort
+  & CombatEnemyFrontalShieldAttachPort
   & CombatStructureStatusPort
   & CombatActorStatePort
   & CombatDamageEffectPort

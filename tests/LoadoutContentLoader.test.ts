@@ -43,6 +43,12 @@ function expectContentError(run: () => unknown, fragment: string): void {
 }
 
 describe('loadout content loader', () => {
+  it('rejects an independent authored fire-control placement range', () => {
+    const sources = clonedSources();
+    documentWith(sources, 'utilities', 'FIRE_CONTROL_RELAY').utilities!.FIRE_CONTROL_RELAY.placementRangePx = 1;
+    expectContentError(() => buildLoadoutRegistries(sources), 'placementRangePx');
+  });
+
   it.each(['constructor', 'toString', '__proto__'])('reports inherited type names as content errors: %s', (type) => {
     for (const [registry, id, nested] of [
       ['weapons', 'GLOCK', 'fire'], ['utilities', 'HE_GRENADE', null],
@@ -299,4 +305,14 @@ describe('loadout content loader', () => {
     documentWith(modeSources, 'ultimates', 'AIRSTRIKE').ultimates!.AIRSTRIKE.allowedModes = ['unknown_mode'];
     expectContentError(() => buildLoadoutRegistries(modeSources), 'allowedModes');
   });
+});
+
+// Placement geometry is authored and must fail at the content boundary.
+it.each(['clearanceRadiusPx', 'singleCopyOffsetPx'])('validates relay geometry field %s', field => {
+  for (const value of [undefined, 0, -1, NaN, Infinity, '16']) {
+    const sources = clonedSources();
+    const config = documentWith(sources, 'utilities', 'FIRE_CONTROL_RELAY').utilities!.FIRE_CONTROL_RELAY;
+    if (value === undefined) delete config[field]; else config[field] = value;
+    expectContentError(() => buildLoadoutRegistries(sources), field);
+  }
 });

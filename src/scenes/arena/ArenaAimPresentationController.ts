@@ -2,6 +2,7 @@ import type {
   UltimateChargePreviewState,
   UtilityChargePreviewState,
   UtilityPlacementPreviewState,
+  LocalPlacementPreview,
   UtilityTargetingPreviewState,
   SyncedTunnel,
 } from '../../types';
@@ -24,7 +25,7 @@ export interface ArenaAimPresentationInputPort {
 }
 
 export interface ArenaAimPresentationBindingPort {
-  readonly getLocalPlacementPreview: () => UtilityPlacementPreviewState | undefined;
+  readonly getLocalPlacementPreview: () => LocalPlacementPreview | undefined;
   readonly getLocalUltimatePlacementPreview: () => UtilityPlacementPreviewState | undefined;
   readonly getAimPresentationState: (
     worldInteractive: boolean,

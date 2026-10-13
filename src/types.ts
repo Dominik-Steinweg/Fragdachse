@@ -373,6 +373,8 @@ export interface SyncedEnergyShield {
   alpha: number;
   flashAlpha: number;
   isDome: boolean;
+  /** Set only for an enemy frontal shield; `ownerId` is then an enemy id. Absent = player. */
+  ownerKind?: 'enemy';
 }
 
 export interface SyncedDecoy {
@@ -725,6 +727,8 @@ export interface SyncedProjectile {
   ownerColor?: number; // Spielerfarbe des Schützen für projektilspezifische Akzente/VFX
   /** Visuelle Quellenkennung; insbesondere für owner-/quellenabhängige Flame-Ketten. */
   sourceTurretId?: string;
+  /** Sprite of the firing source; omitted = sourceTurretId. Never attribution. */
+  turretVisualId?: string;
   flameStreamKey?: string;
   /** Reiner VFX-Ursprung; x/y ist hier die replizierte tatsächliche Projektilposition. */
   visualMuzzleOrigin?: { x: number; y: number };
@@ -764,8 +768,10 @@ export interface SyncedProjectileStatic {
   color?:  number;
   allowTeamDamage?: boolean;
   ownerColor?: number;
-  /** Visuelle Quellenkennung; bleibt bei Static-Updates derselben Projectile-ID explizit. */
+  /** Original identity; preserved independently of the firing sprite on static replacements. */
   sourceTurretId?: string;
+  /** Sprite of the firing source; omitted = sourceTurretId. Never attribution. */
+  turretVisualId?: string;
   flameStreamKey?: string;
   visualMuzzleOrigin?: { x: number; y: number };
   projectileVisualScale?: number;
@@ -1170,7 +1176,7 @@ export interface LoadoutUseParams {
 
 export type HostHeldActionKind = 'charged_throw' | 'charged_gate' | 'charged_alternate' | 'global_dismantle';
 
-export type LoadoutUseFailureReason = 'cooldown' | 'resource' | 'blocked' | 'invalid' | 'capacity' | 'placement';
+export type LoadoutUseFailureReason = 'cooldown' | 'resource' | 'blocked' | 'invalid' | 'capacity' | 'placement' | 'no_fire_sources';
 export type LoadoutUseResourceKind = 'adrenaline' | 'rage';
 
 export interface LoadoutUseResult {
@@ -1218,6 +1224,22 @@ export interface UtilityTargetingPreviewState {
   targetX: number;
   targetY: number;
 }
+
+/** Local-only projection; copy candidates and formation are never sent as authority. */
+export interface FireControlPlacementPreview {
+  readonly kind: 'fire_control_relay';
+  readonly valid: boolean;
+  readonly reason?: 'range' | 'no_fire_sources' | 'placement' | 'invalid';
+  readonly pointX: number;
+  readonly pointY: number;
+  readonly playerX: number;
+  readonly playerY: number;
+  readonly rangePx: number;
+  readonly originals: readonly { readonly id: number; readonly x: number; readonly y: number }[];
+  readonly ghosts: readonly { readonly x: number; readonly y: number; readonly constructionId: string; readonly weaponId: string }[];
+}
+
+export type LocalPlacementPreview = UtilityPlacementPreviewState | FireControlPlacementPreview;
 
 export interface UtilityPlacementPreviewState {
   targetRange?: number;
@@ -1315,6 +1337,8 @@ export interface ProjectileSpawnConfig {
   plasmaBurnerCharge?: import('./projectile/ProjectileSpawnRequest').ProjectileSupportSpec['plasmaBurnerCharge'];
   energyInjectorPayload?: ProjectileEnergyInjectorPayload;
   sourceTurretId?: string;
+  /** Sprite of the firing source; omitted = sourceTurretId. Never attribution. */
+  turretVisualId?: string;
   flameStreamKey?: string;
   smokeTrailColor?: number;
   fuseTime?:       number;        // ms bis AoE-Explosion (nur Granaten)
@@ -2051,6 +2075,10 @@ export interface SyncedEnemyState {
   eliteAffixId?: import('./dawn/contracts/DawnContentIds').DawnEliteAffixId;
   areaClaw?: import('./systems/EnemyClawAttack').EnemyAreaClawState;
   claw?: import('./systems/EnemyClawAttack').EnemyClawState;
+  /** Host-fixed shield charge (lane + phase timeline); absent until the first charge. */
+  shieldCharge?: import('./systems/ShieldChargeState').ShieldChargeState;
+  /** Host-fixed energy cone (sector, cover profile, phase timeline); absent until the first cone. */
+  energyCone?: import('./systems/EnergyConeState').EnergyConeState;
   entityGeneration?: number;
   positionRevision?: number;
   id:     string;
@@ -2084,6 +2112,10 @@ export interface SyncedEnemyDeltaState {
   eliteAffixId?: import('./dawn/contracts/DawnContentIds').DawnEliteAffixId;
   areaClaw?: import('./systems/EnemyClawAttack').EnemyAreaClawState;
   claw?: import('./systems/EnemyClawAttack').EnemyClawState;
+  /** Host-fixed shield charge (lane + phase timeline); absent until the first charge. */
+  shieldCharge?: import('./systems/ShieldChargeState').ShieldChargeState;
+  /** Host-fixed energy cone (sector, cover profile, phase timeline); absent until the first cone. */
+  energyCone?: import('./systems/EnergyConeState').EnergyConeState;
   entityGeneration?: number;
   positionRevision?: number;
   id:     string;

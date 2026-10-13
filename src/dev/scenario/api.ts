@@ -15,6 +15,8 @@ export type ScenarioResult = { ok: true; status: Record<string, unknown>; path?:
 export interface DevScenarioApi {
   readonly version: 1;
   status(): Record<string, unknown>;
+  pendingSteps(): number;
+  krakenPerformance(): ReturnType<DevScenarioController['readKrakenPerformance']>;
   run(command: unknown): ScenarioResult | Promise<ScenarioResult>;
   whenReady(timeoutMs?: number): Promise<ScenarioResult>;
   capture(): Promise<ScenarioResult>;
@@ -73,6 +75,14 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
       controller.arrangeArmageddonReview({count,progress:number(c.progress??.65,0,1),quality:(c.quality??'high') as 'high'|'medium'|'low',
         impacts:c.impacts===undefined?false:boolean(c.impacts),singleImpact:c.singleImpact===undefined?false:boolean(c.singleImpact),variant:(c.variant??'normal') as 'normal'|'void'});break;
     }
+    case 'fireControlVisualReview': {
+      if (c.hologramPreset !== undefined && !['A','B','C'].includes(String(c.hologramPreset))) throw Error('hologramPreset: A, B or C');
+      if (c.step !== undefined && !['start','deploy','vanish','expireWarning','portalOpen','portalClose','transport','preview','previewInvalid','previewOff'].includes(String(c.step))) throw Error('Invalid fire-control review step');
+      const timeOfDay = c.timeOfDay === undefined ? undefined : c.timeOfDay === 'day' ? 720 : c.timeOfDay === 'night' ? 1320 : number(c.timeOfDay,0,1439);
+      controller.arrangeFireControlVisualReview({ hologramPreset: c.hologramPreset as 'A'|'B'|'C'|undefined, timeOfDay,
+        step: c.step as import('./FireControlVisualReview').FireControlReviewOptions['step'] }); break;
+    }
+    case 'fireControlReview': return controller.arrangeFireControlReview(c);
     case 'turretMaterialReview': controller.arrangeTurretMaterialReview(); break;
     case 'enemyMeshReview': {
       const count = number(c.count ?? 4, 1, 500), pose = number(c.pose ?? -1, -1, 30);
@@ -126,13 +136,14 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
       if(mode==='explosion')controller.measureWorldLighting(mode,c.radius===undefined?2.5:number(c.radius,1,6));
       else controller.measureWorldLighting(mode);break;
     }
+    case 'measureKraken': controller.measureKraken(c.stop === true ? null : String(c.phase ?? 'kraken')); break;
     case 'krakenMission':
       if (c.skipIntro !== undefined && typeof c.skipIntro !== 'boolean') throw new Error('skipIntro: boolean erwartet');
       if (c.drafts !== undefined && typeof c.drafts !== 'boolean') throw Error('drafts: boolean required');
       if (c.drafts !== undefined) return reloadKrakenDraftAssets(c.drafts ? 'draft' : 'production').then(() => {
         controller.startKrakenMission(c.skipIntro === true, c.hp === undefined ? null : number(c.hp, 1, 10000000));
       });
-      controller.startKrakenMission(c.skipIntro === true, c.hp === undefined ? null : number(c.hp, 1, 10000000)); break;
+      controller.startKrakenMission(c.skipIntro === true, c.hp === undefined ? null : number(c.hp, 1, 10000000), c.performance === true); break;
     case 'krakenHp': controller.setKrakenHp(number(c.hp, 1, 10000000)); break;
     case 'krakenAct': {
       const act = c.act;
@@ -252,11 +263,13 @@ export function installScenarioApi(controller: DevScenarioController) {
   let active = true;
   const waiters = new Set<() => void>();
   // Phaser's Scene plugins can already be shut down when this API is detached.
-  const status = (): Record<string, unknown> => active ? { ...structuredClone(controller.snapshot()), krakenAssets: krakenDraftStatus() }
+  const status = (): Record<string, unknown> => active ? { ...controller.cloneSnapshot(), krakenAssets: krakenDraftStatus() }
     : { state: 'error', ready: false, message: 'Dev-Szenario wurde beendet.', isolated: true, network: 'local-only' };
   const failure = (error: unknown): ScenarioResult => ({ ok: false, error: error instanceof Error ? error.message : String(error), status: status() });
   const api: DevScenarioApi = {
     version: 1, status,
+    pendingSteps: () => active ? controller.clock.pendingSteps : 0,
+    krakenPerformance: () => active ? controller.readKrakenPerformance() : null,
     run(command) {
       try {
         if (!active) throw new Error('Dev-Szenario wurde beendet.');

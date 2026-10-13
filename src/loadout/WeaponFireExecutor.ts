@@ -13,7 +13,7 @@ import type {
   WeaponSlot,
 } from '../types';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
-import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
+import { createSingleOwnerProvenance, type ProjectileFireControlRoute } from '../projectile/ProjectileSpawnRequest';
 import type {
   HitscanWeaponFireConfig,
   MeleeWeaponFireConfig,
@@ -111,14 +111,26 @@ export interface WeaponFireOptions {
   sourceSlot?: LoadoutSlot;
   /** Quellkonstrukt eines automatischen Turms fuer typisierte Projektilwirkungen. */
   sourceTurretId?: string;
+  /** Sprite of the firing source; omitted = sourceTurretId. Never attribution. */
+  turretVisualId?: string;
   personalMgOwnerId?: string;
   readonly personalMgScope?: import('../combat/CombatScope').CombatScope;
   /** Orts-/konstruktspezifischer Faktor fuer den unmittelbaren Treffer. */
   directDamageMultiplier?: number;
   /** Gesamtfaktor fuer Folgeschaden, der nicht erneut durch den Projektiltreffer-Resolver laeuft. */
   payloadDamageMultiplier?: number;
+  /** Automatic turret balance against hostile bases only; omitted/1 preserves weapon semantics. */
+  readonly automatedBaseDamageFactor?: number;
   /** Factors included in the payload multiplier; omission denotes an automation factor only. */
   payloadSourceDamageFactors?: readonly ProjectileDamageSourceFactor[];
+  /** One-way muzzle portal of a fire-control deployment, fixed for this shot. */
+  readonly fireControlRoute?: ProjectileFireControlRoute;
+}
+
+/** Only straight projectile and flame shots can enter a muzzle portal; others reject the route. */
+export function assertFireControlRouteSupported(config: WeaponConfig, options: WeaponFireOptions | undefined): void {
+  if (!options?.fireControlRoute || config.fire.type === 'projectile' || config.fire.type === 'flamethrower') return;
+  throw new Error(`Fire-control route is not supported by ${config.id} (fire type ${config.fire.type})`);
 }
 
 /** Aufrufkontext eines einzelnen Schusses. */
@@ -227,6 +239,7 @@ export class WeaponFireExecutor implements WeaponExecutionCapability {
    * Pfad läuft – der Aufrufer entscheidet dann selbst, ob er einen Spezialpfad hat.
    */
   fire(config: WeaponConfig, params: WeaponFireParams): boolean {
+    assertFireControlRouteSupported(config, params.options);
     switch (config.fire.type) {
       case 'projectile':
         return this.fireProjectile(config, config.fire, params);
@@ -274,6 +287,7 @@ export class WeaponFireExecutor implements WeaponExecutionCapability {
     const isAwp = config.id === 'AWP';
 
     const spawnResult = this.sink.spawnProjectile({
+      fireControlRoute: options?.fireControlRoute,
       origin: { x, y, angle, gameplayMuzzleOrigin },
       flight: {
         speed:      fireConfig.projectileSpeed,
@@ -412,6 +426,7 @@ export class WeaponFireExecutor implements WeaponExecutionCapability {
         proximityPulse: config.proximityPulse,
       },
       presentation: {
+        turretVisualId: options?.turretVisualId,
         color:      config.projectileColor ?? ownerColor,  // Waffen-eigene Farbe hat Vorrang
         style:      config.projectileStyle,
         ownerColor,

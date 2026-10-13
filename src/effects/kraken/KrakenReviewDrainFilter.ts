@@ -50,11 +50,18 @@ class DrainNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader {
       elevationSize: [f.realWidth, f.realHeight], elevationTrim: [f.x, f.y, f.width, f.height] })) this.programManager.setUniform(key, value);
   }
 }
+function registerKrakenDrainNode(renderer: Phaser.Renderer.WebGL.WebGLRenderer): void {
+  if (!managers.has(renderer.renderNodes)) { renderer.renderNodes.addNodeConstructor(NODE, DrainNode); managers.add(renderer.renderNodes); }
+}
+export function getKrakenDrainNode(renderer: Phaser.Renderer.WebGL.WebGLRenderer): DrainNode {
+  registerKrakenDrainNode(renderer);
+  return renderer.renderNodes.getNode(NODE) as DrainNode;
+}
 export function addReviewDrain(target: Phaser.GameObjects.Sprite, elevation: Phaser.Textures.Frame,
   encoding: { min: number; max: number }): KrakenReviewDrainFilter {
   const renderer = target.scene.sys.renderer;
   if (!('gl' in renderer)) throw Error('Kraken drain requires WebGL');
-  if (!managers.has(renderer.renderNodes)) { renderer.renderNodes.addNodeConstructor(NODE, DrainNode); managers.add(renderer.renderNodes); }
+  registerKrakenDrainNode(renderer);
   target.enableFilters();
   const filter = new KrakenReviewDrainFilter(target, elevation, encoding);
   target.filters!.internal.add(filter); filter.active = false;

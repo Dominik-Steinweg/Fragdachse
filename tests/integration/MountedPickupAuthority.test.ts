@@ -12,6 +12,10 @@ vi.mock('../../src/network/bridge', () => ({ bridge }));
 
 import { TurretControlSystem } from '../../src/systems/TurretControlSystem';
 import { PowerUpSystem } from '../../src/powerups/PowerUpSystem';
+// This headless lifecycle fixture does not create GPU programs.
+vi.mock('../../src/effects/kraken/KrakenShaderWarmup', () => ({
+  warmupKrakenShaders: () => Object.assign(() => {}, { isReady: () => true }),
+}));
 import { ArenaLifecycleCoordinator } from '../../src/scenes/arena/ArenaLifecycleCoordinator';
 import { HostUpdateCoordinator } from '../../src/scenes/arena/HostUpdateCoordinator';
 import { RpcCoordinator } from '../../src/scenes/arena/RpcCoordinator';

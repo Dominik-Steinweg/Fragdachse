@@ -205,8 +205,15 @@ describe('selected runtime asset package', () => {
       }
       for (const clip of asset.clips) {
         expect(clip.frameRate).toBeGreaterThan(0);
-        expect(clip.frames.length).toBeGreaterThan(1);
-        expect(clip.frames).not.toContain(asset.idleFrame);
+        // A quiet device may loop its single authored rest pose. Action clips still
+        // need their own sampled motion; do not duplicate idle pixels to satisfy a count.
+        if (clip.name === 'idle') {
+          expect(clip.frames.length).toBeGreaterThan(0);
+          expect(clip.loop).toBe(true);
+        } else {
+          expect(clip.frames.length).toBeGreaterThan(1);
+          expect(clip.frames).not.toContain(asset.idleFrame);
+        }
         for (const frame of [asset.idleFrame, ...clip.frames]) {
           expect(Number.isInteger(frame) && frame >= 0 && frame < layout.frameCount).toBe(true);
           const x = layout.margin + frame % layout.columns * (layout.frameWidth + layout.spacing);

@@ -33,12 +33,15 @@ describe('optional fog woodland presentation',()=>{
   it('releases display nodes after display-list teardown precedes the field owner',()=>{
     const gl={DITHER:1,MAX_TEXTURE_SIZE:2,MAX_TEXTURE_IMAGE_UNITS:3,FRAMEBUFFER_COMPLETE:4,
       isEnabled:()=>false,getParameter:(key:number)=>key===2?8192:8,getShaderPrecisionFormat:()=>({precision:23}),
-      getProgramParameter:()=>true,checkFramebufferStatus:()=>4,texSubImage2D(){},disable(){},enable(){}};
+      getProgramParameter:vi.fn(()=>true),checkFramebufferStatus:()=>4,texSubImage2D(){},disable(){},enable(){}};
     const listed:any[]=[],scene={sys:{renderer:{gl,createTexture2D:()=>({}),glTextureUnits:{bind(){}},glWrapper:{updateTexturing(){},update(){}}}},
       textures:{addGLTexture:()=>({}),get:()=>({}),remove(){}},add:{existing:(value:any)=>{listed.push(value);return value;}}};
     const terrain=new FogTerrainModel({offsetX:0,offsetY:0,width:512,height:512},[]),tuning=fogTuning(1);
     const field=new FogGpuField(scene as never,terrain,1,tuning,10),view={x:0,y:0,width:512,height:512};
     field.prepare(view,0);field.step([], [.3,.5],tuning,0);field.render(view,256,256,'normal',1,[],'low');
+    // ProgramManager publishes only completed suites. New fog tiles must reuse
+    // that verified program without introducing another synchronous GL query.
+    expect(gl.getProgramParameter).not.toHaveBeenCalled();
     expect(listed).toHaveLength(1);
     const node=listed[0].renderNode;
     listed.forEach(quad=>quad.destroy());

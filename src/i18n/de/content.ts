@@ -3,6 +3,8 @@ export const deContent = {
   "map.dawn:rockbasin.name": "Felskessel",
   "map.dawn:oldwood.name": "Altwald",
   "map.dawn:clearing.name": "Lichtung",
+  "loadout.FIRE_CONTROL_RELAY.name": "Turmkopien",
+  "loadout.FIRE_CONTROL_PORTAL.name": "Portale",
   "construction.attack_drone_station.name": "Angriffsdrohnenstation",
   "construction.attack_drone_station.description": "Eine verwundbare Station versorgt eine unverwundbare autonome Kampfdrohne.",
   "reward.plasma_turret.name": "Plasma-Turm",

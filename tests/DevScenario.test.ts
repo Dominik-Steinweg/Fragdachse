@@ -54,20 +54,38 @@ it.each(['pause', 'cancel', 'destroy'] as const)('cancels accelerated simulation
 });
 import { visualTest, bindVisualTestBootClock, bindVisualTestTextureKeys } from '../src/dev/scenario/visualTest';
 
+it('offers turret copies only to the Inspector while portals stay locked', () => {
+  const relay = COOP_DEFENSE_UPGRADE_DEFINITIONS.unlock_fire_control_relay;
+  expect(isCoopDefenseUpgradeAvailableForClass(relay.id, 'inspector_gadachs')).toBe(true);
+  expect(isCoopDefenseUpgradeAvailableForClass('fire_control_relay_parallel', 'inspector_gadachs')).toBe(true);
+  for (const classId of COOP_DEFENSE_CLASS_IDS.filter(id => id !== 'inspector_gadachs')) {
+    expect(isCoopDefenseUpgradeAvailableForClass(relay.id, classId)).toBe(false);
+  }
+  expect(isCoopDefenseUpgradeAvailableForClass('unlock_fire_control_portal', 'inspector_gadachs')).toBe(false);
+  const profile = buildScenarioProfile('inspector_gadachs', { fire_control_relay_parallel: 1 },
+    [{ kind: 'utility', id: 'FIRE_CONTROL_RELAY' }]);
+  expect(profile.toolLoadout).toEqual([{ kind: 'utility', id: 'FIRE_CONTROL_RELAY' }]);
+});
+
 it('keeps render texture identities unique when a deterministic frame repeats its random stream', () => {
   const enabled = visualTest.enabled;
   visualTest.enabled = true;
   const uuid = '12345678-1234-4123-8123-123456789abc';
   const keys = new Set([uuid, 'authored']);
   const original = vi.fn((key: string) => { keys.add(key); return key; });
-  const textures = { addDynamicTexture: original, exists: (key: string) => keys.has(key) };
+  const originalCanvas = vi.fn((key: string) => { keys.add(key); return key; });
+  const textures = { addDynamicTexture: original, createCanvas: originalCanvas, exists: (key: string) => keys.has(key) };
   const restore = bindVisualTestTextureKeys(textures as never);
   try {
     const first = textures.addDynamicTexture(uuid), second = textures.addDynamicTexture(uuid);
     expect(first).not.toBe(uuid); expect(second).not.toBe(first);
     expect(textures.addDynamicTexture('authored')).toBe('authored');
+    const canvas = textures.createCanvas(uuid);
+    expect(canvas).not.toBe(uuid); expect(canvas).not.toBe(first); expect(canvas).not.toBe(second);
+    expect(textures.createCanvas('authored')).toBe('authored');
   } finally { restore(); visualTest.enabled = enabled; }
   expect(textures.addDynamicTexture).toBe(original);
+  expect(textures.createCanvas).toBe(originalCanvas);
 });
 
 describe('Dev scenario contract', () => {

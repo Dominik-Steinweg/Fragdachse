@@ -65,6 +65,7 @@ export class CoopDefenseKrakenSystem {
   private wander: Point | null = null;
   private wanderPauseUntil = 0;
   private randomSeed = 1;
+  private nextDevSeed: number | null = null;
   private readonly spineReleases = new Set<number>();
   private recentParts: Point[] = [];
   private facingHeld = false;
@@ -94,13 +95,14 @@ export class CoopDefenseKrakenSystem {
 
   /** Called exactly at successful BossSystem emergence; BossSystem remains the sole intro writer. */
   start(boss: BossTargetRef, habitatId: string, spawnedAt: number, cameraReturnedAt: number, introStartedAt?: number): void {
+    const devSeed = this.nextDevSeed;
     this.clear();
     this.now = spawnedAt; this.lastPreAt = spawnedAt;
     const entity = this.deps.entity.readBoss(boss);
     if (!entity?.alive) return;
     this.lastPose = { x: entity.x, y: entity.y, angle: entity.angle };
     this.nextWaterAction = 'ink'; this.cooldowns = { ink: 0, eggs: 0, slam: 0, spines: 0 };
-    this.randomSeed = [...boss.id + habitatId].reduce((n, c) => Math.imul(n ^ c.charCodeAt(0), 16777619), boss.scope.worldRevision ^ boss.instance.entityGeneration) >>> 0;
+    this.randomSeed = devSeed ?? ([...boss.id + habitatId].reduce((n, c) => Math.imul(n ^ c.charCodeAt(0), 16777619), boss.scope.worldRevision ^ boss.instance.entityGeneration) >>> 0);
     this.nextActionAt = Math.max(cameraReturnedAt, spawnedAt) + this.config.firstAttackDelayMs;
     this.state = { boss: structuredClone(boss), revision: 0, cycleId: 1, habitatId,
       phase: cameraReturnedAt > spawnedAt ? { kind: 'intro', startedAt: introStartedAt ?? spawnedAt - 1,
@@ -128,6 +130,13 @@ export class CoopDefenseKrakenSystem {
   }
 
   /** Select one normal host action; never cancels an attack or grants a movement permit. */
+  /** One-shot seed for the next isolated diagnostic boss; never a wire field. */
+  seedDevScenario(seed: number): void {
+    if (!this.deps.devAuthorized?.()) throw Error('Kraken seed requires an isolated dev host');
+    if (this.state || !Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) throw Error('Seed requires an inactive Kraken and a uint32');
+    this.nextDevSeed = seed;
+  }
+
   requestDevAction(act: KrakenDevAct): KrakenDevAction {
     if (!this.deps.devAuthorized?.()) throw Error('Kraken action requires an isolated dev host');
     if (!['spines', 'ink', 'eggs', 'dive', 'lunge', 'ashore'].includes(act)) throw Error('Unknown Kraken action');
@@ -291,6 +300,7 @@ export class CoopDefenseKrakenSystem {
   }
 
   clear(): void {
+    this.nextDevSeed = null;
     const old = this.state;
     // Invalidate owner first so reentrant callbacks cannot restart actions.
     this.state = null; this.originId = null; this.devAction = null;

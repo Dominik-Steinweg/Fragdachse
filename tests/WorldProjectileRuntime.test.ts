@@ -1168,7 +1168,7 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
         burn: { canReceiveFireImbue: true },
         pathEffect: { kind: 'awp', awpCorridor: { halfWidth: 24, damage: 40 } },
       },
-      presentation: { color: 0xffffff },
+      presentation: { color: 0xffffff, turretVisualId: 'fc-copy:1:0' },
     };
 
     const id = runtime.spawnProjectile(request);
@@ -1194,6 +1194,8 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
         id,
         ownerId: 'team-owner',
         allowTeamDamage: true,
+        sourceTurretId: 'turret-17',
+        turretVisualId: 'fc-copy:1:0',
       }),
     })]);
     runtime.destroy();

@@ -9,7 +9,7 @@ import { digest } from './draft-v2.mjs';
 
 export async function compareDraft(argv, root = repoRoot) {
   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: {
-    label: { type: 'string' }, run: { type: 'string', default: 'kraken-v13' }, clip: { type: 'string', default: '__rest' }, frame: { type: 'string', default: '0' },
+    label: { type: 'string' }, run: { type: 'string', default: 'kraken-v14' }, clip: { type: 'string', default: '__rest' }, frame: { type: 'string', default: '0' },
   } });
   const id = positionals[0];
   if (positionals.length !== 1 || [id, values.run, ...(values.label ? [values.label] : [])].some(s => !/^[a-z0-9][a-z0-9-]*$/.test(s))) throw Error('Asset, run and label identifiers required');

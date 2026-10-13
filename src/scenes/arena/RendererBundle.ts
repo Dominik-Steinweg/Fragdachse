@@ -1,5 +1,7 @@
 import { MortarStrikeRenderer } from '../../effects/MortarStrikeRenderer';
 import { FirestarterRenderer } from '../../effects/FirestarterRenderer';
+import { ShieldChargerRenderer } from '../../effects/ShieldChargerRenderer';
+import { AlienConeRenderer } from '../../effects/AlienConeRenderer';
 import { WatchtowerDestructionFx } from '../../effects/watchtower/WatchtowerDestructionFx';
 import { PlasmaBurnerChargeRenderer } from '../../effects/PlasmaBurnerChargeRenderer';
 import { onBootSceneTeardown } from '../../ui/BootPreparation';
@@ -169,6 +171,8 @@ export interface RendererBundle {
   translocatorTeleport: TranslocatorTeleportRenderer | null;
   mortarStrike: MortarStrikeRenderer;
   firestarter: FirestarterRenderer;
+  shieldCharger: ShieldChargerRenderer;
+  alienCone: AlienConeRenderer;
 }
 
 /** Synchronous entry point for callers that already own their scheduling. */
@@ -263,7 +267,6 @@ export function* createRendererBundleSteps(
   yield 'renderers/gauss';
 
   const energyShield = new EnergyShieldRenderer(scene);
-  energyShield.generateTextures();
   yield 'renderers/energyShield';
 
   const turretAnimations = new TurretAnimationController();
@@ -462,6 +465,16 @@ export function* createRendererBundleSteps(
   firestarter.setLightingSystem(lighting);
   cleanup.push(() => firestarter.destroy());
   yield 'renderers/firestarter';
+  const shieldCharger = new ShieldChargerRenderer(scene);
+  shieldCharger.registerGpuVfx(gpuVfx);
+  shieldCharger.setLightingSystem(lighting);
+  cleanup.push(() => shieldCharger.destroy());
+  yield 'renderers/shieldCharger';
+  const alienCone = new AlienConeRenderer(scene);
+  alienCone.registerGpuVfx(gpuVfx);
+  alienCone.setLightingSystem(lighting);
+  cleanup.push(() => alienCone.destroy());
+  yield 'renderers/alienCone';
   return {
     interactions,
     turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, plasmaBurnerCharge, healingAura, guardianSpirit, repairDrone, attackDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
@@ -490,6 +503,8 @@ export function* createRendererBundleSteps(
     translocatorTeleport: null,
     mortarStrike,
     firestarter,
+    shieldCharger,
+    alienCone,
   };
 }
 
@@ -503,6 +518,8 @@ export function wireProjectileRenderers(
   bundle: RendererBundle,
   runtime: WorldProjectileRuntime,
   owners: OwnerVisualSource,
+  /** Enemy bodies carrying a replicated frontal shield; null while the World has no Activity. */
+  enemyPositions: ((enemyId: string) => { x: number; y: number } | null) | null = null,
 ): void {
   runtime.getPresentationRuntime().bindRenderers({
     bullet: bundle.bullet,
@@ -528,6 +545,7 @@ export function wireProjectileRenderers(
     visualOverrides: bundle.projectileVisualOverrides,
   }, (ownerId) => owners.getOwnerVisualState(ownerId));
   bundle.energyShield.setOwnerPositionProvider((ownerId) => owners.getOwnerVisualState(ownerId));
+  bundle.energyShield.setEnemyPositionProvider(enemyPositions);
 }
 
 /** Wire the EffectSystem to renderers that need it (muzzle flash, nuke). */
@@ -553,6 +571,8 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   bundle.mortarStrike.setImpactSystems(bundle.explosionGpu, bundle.lighting);
   effectSystem.setMortarImpactRenderer((x, y, radius, color) => bundle.mortarStrike.playImpact(x, y, radius, color));
   effectSystem.setFirestarterRenderer(bundle.firestarter);
+  bundle.shieldCharger.setLaneSink((id, attack, now, visible) => effectSystem.syncEnemyLane(`shield-charge:${id}`, attack, now, visible));
+  bundle.alienCone.setSectorSink((id, attack, now, visible) => effectSystem.syncEnemySector(`energy-cone:${id}`, attack, now, visible));
 }
 
 /**
@@ -573,6 +593,8 @@ export function wireRenderersToCameraFeedback(
   bundle.mortarStrike.setCameraFeedback(controller);
   bundle.voidMeteorIntro.setCameraFeedback(controller);
   bundle.firestarter.setCameraFeedback(controller);
+  bundle.shieldCharger.setCameraFeedback(controller);
+  bundle.alienCone.setCameraFeedback(controller);
 }
 
 /**
@@ -595,6 +617,7 @@ export function wireRenderersToAudioSystem(bundle: RendererBundle, audioSystem: 
   bundle.bfg.setAudioSystem(audioSystem);
   bundle.teslaDome.setAudioSystem(audioSystem);
   bundle.energyShield.setAudioSystem(audioSystem);
+  bundle.alienCone.setAudioSystem(audioSystem);
   bundle.nuke.setAudioSystem(audioSystem);
   bundle.bossIntro.setAudioSystem(audioSystem);
   bundle.voidRift.setAudioSystem(audioSystem);
