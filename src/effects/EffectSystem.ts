@@ -164,6 +164,11 @@ export class EffectSystem implements EnemyVisualSink {
     if (attack) this.enemyClawRenderer ??= new EnemyClawRenderer(this.scene);
     this.enemyClawRenderer?.syncLane(id, attack, now, visible, color);
   }
+  /** Fan danger zone in the shared enemy-attack family (energy cone windup, clipped by cover). */
+  syncEnemySector(id: string, attack: import('./EnemyClawRenderer').EnemySectorAttack | null, now: number, visible: boolean, color?: number): void {
+    if (attack) this.enemyClawRenderer ??= new EnemyClawRenderer(this.scene);
+    this.enemyClawRenderer?.syncSector(id, attack, now, visible, color);
+  }
   clearEnemyClaw(id: string): void { this.enemyClawRenderer?.release(id); }
   clearEnemyClawEffects(): void { this.enemyClawRenderer?.clear(); }
   private zeusTaserRenderer: ZeusTaserRenderer | null = null;

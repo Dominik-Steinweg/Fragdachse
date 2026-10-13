@@ -19,7 +19,12 @@ export const CLAW_VFX_CONTACT_MS = 280;
 /** The ground telegraph dissolves this long after the hit; shared with the shader. */
 export const CLAW_VFX_TELEGRAPH_FADE_MS = 110;
 
-export const ClawVfxKind = { Attack: 0, Contact: 1, Lane: 2, TelegraphSector: 3 } as const;
+export const ClawVfxKind = { Attack: 0, Contact: 1, Lane: 2, TelegraphSector: 3, FanWedge: 4 } as const;
+
+/** Rays of a fan telegraph (wedges = rays - 1); matches the replicated energy cone cover profile. */
+export const CLAW_VFX_FAN_RAYS = 16;
+/** Reach quantization shared with the shader packing (two reaches per wedge in one float). */
+const FAN_REACH_QUANT = 255;
 
 /** Instance-relative times keep float32 attributes precise; rebased whenever the store is empty. */
 const REBASE_AFTER_MS = 600_000;
@@ -39,6 +44,17 @@ export type ClawVfxAttackSpec = ClawVfxTiming & (
   | { readonly shape?: 'sector'; readonly range: number; readonly halfArc: number; readonly telegraphOnly?: boolean }
   | { readonly shape: 'lane'; readonly length: number; readonly width: number }
 );
+
+/**
+ * Filled fan telegraph clipped by a ray profile: `clip[i]` is the reach of ray `i` (left to right
+ * edge, fraction of `range`). Each wedge between two rays is one instance; the shader interpolates
+ * the reach across it, so the boundary follows cover without steps.
+ */
+export interface ClawVfxFanSpec extends ClawVfxTiming {
+  readonly range: number;
+  readonly halfArc: number;
+  readonly clip: readonly number[];
+}
 
 export class EnemyClawVfxStore {
   readonly data = new Float32Array(CLAW_VFX_CAPACITY * CLAW_VFX_INSTANCE_FLOATS);
@@ -82,6 +98,35 @@ export class EnemyClawVfxStore {
       r, halfArc, spec.telegraphOnly ? ClawVfxKind.TelegraphSector : ClawVfxKind.Attack, spec.color);
     this.expiresAt[slot] = spec.hitAt + CLAW_VFX_SLASH_MS;
     return true;
+  }
+
+  /** Writes (or rewrites) all wedges of a fan under `key`; false when the batch is full. */
+  addFan(key: string, spec: ClawVfxFanSpec, clockMs: number): boolean {
+    if (spec.clip.length !== CLAW_VFX_FAN_RAYS) throw new Error('Fan telegraph needs one reach per ray');
+    const step = (2 * spec.halfArc) / (CLAW_VFX_FAN_RAYS - 1);
+    const e = this.epoch, pad = 6;
+    let complete = true;
+    for (let wedge = 0; wedge < CLAW_VFX_FAN_RAYS - 1; wedge++) {
+      const slot = this.allocate(`${key}#${wedge}`, clockMs);
+      if (slot < 0) { complete = false; continue; }
+      const q0 = Math.round(Math.min(1, Math.max(0, spec.clip[wedge])) * FAN_REACH_QUANT);
+      const q1 = Math.round(Math.min(1, Math.max(0, spec.clip[wedge + 1])) * FAN_REACH_QUANT);
+      const reach = Math.max(q0, q1) / FAN_REACH_QUANT * spec.range;
+      const a0 = -spec.halfArc + wedge * step, a1 = a0 + step;
+      // Local bounds of the wedge (origin, both edge ends, the axis crest when it lies inside).
+      const xs = [0, reach * Math.cos(a0), reach * Math.cos(a1), a0 < 0 && a1 > 0 ? reach : 0];
+      const ys = [0, reach * Math.sin(a0), reach * Math.sin(a1)];
+      this.writeQuad(slot, spec.x, spec.y, spec.angle,
+        Math.min(...xs) - pad, Math.max(...xs) + pad, Math.min(...ys) - pad, Math.max(...ys) + pad,
+        spec.startedAt - e, spec.strikeAt - e, spec.hitAt - e, spec.hitAt + CLAW_VFX_TELEGRAPH_FADE_MS - e,
+        spec.range, spec.halfArc, ClawVfxKind.FanWedge, spec.color, q0 * 256 + q1, wedge);
+      this.expiresAt[slot] = spec.hitAt + CLAW_VFX_TELEGRAPH_FADE_MS;
+    }
+    return complete;
+  }
+
+  removeFan(key: string): void {
+    for (let wedge = 0; wedge < CLAW_VFX_FAN_RAYS - 1; wedge++) this.remove(`${key}#${wedge}`);
   }
 
   addContact(key: string, x: number, y: number, angle: number, size: number, color: number, clockMs: number): boolean {
@@ -171,10 +216,10 @@ export class EnemyClawVfxStore {
   private writeQuad(slot: number, x: number, y: number, angle: number,
     left: number, right: number, top: number, bottom: number,
     t0: number, t1: number, t2: number, t3: number,
-    size: number, halfArc: number, kind: number, color: number): void {
+    size: number, halfArc: number, kind: number, color: number, seedOverride?: number, aux = 1): void {
     const cos = Math.cos(angle), sin = Math.sin(angle);
     const r = ((color >> 16) & 0xff) / 255, g = ((color >> 8) & 0xff) / 255, b = (color & 0xff) / 255;
-    const seed = (slot * 0.618034) % 1;
+    const seed = seedOverride ?? (slot * 0.618034) % 1;
     const corners = [left, top, right, top, right, bottom, left, top, right, bottom, left, bottom];
     let o = slot * CLAW_VFX_INSTANCE_FLOATS;
     const d = this.data;
@@ -184,7 +229,7 @@ export class EnemyClawVfxStore {
       d[o++] = lx; d[o++] = ly;
       d[o++] = t0; d[o++] = t1; d[o++] = t2; d[o++] = t3;
       d[o++] = size; d[o++] = halfArc; d[o++] = kind; d[o++] = seed;
-      d[o++] = r; d[o++] = g; d[o++] = b; d[o++] = 1;
+      d[o++] = r; d[o++] = g; d[o++] = b; d[o++] = aux;
     }
     this.angles[slot] = angle;
     this.version++;

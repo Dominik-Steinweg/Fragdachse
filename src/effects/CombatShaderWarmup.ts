@@ -8,6 +8,7 @@ import { MeteorGpuLayer } from './gpu/MeteorGpuLayer';
 import { MortarGpuLayer } from './gpu/MortarGpuLayer';
 import { FirestarterGpuLayer } from './gpu/FirestarterGpuLayer';
 import { ShieldChargerGpuLayer } from './gpu/ShieldChargerGpuLayer';
+import { AlienConeGpuLayer } from './gpu/AlienConeGpuLayer';
 import { EnergyShieldGpuLayer } from './gpu/EnergyShieldGpuLayer';
 import {
   TESLA_BOLT_FRAGMENT_SOURCE, TESLA_BOLT_SHADER_NAME, TESLA_DOME_FRAGMENT_SOURCE, TESLA_DOME_SHADER_NAME,
@@ -27,6 +28,7 @@ export function createCombatShaderWarmupProbes(scene: Phaser.Scene): ShaderWarmu
   let mortar: MortarGpuLayer | null = null;
   let firestarter: FirestarterGpuLayer | null = null;
   let shieldCharger: ShieldChargerGpuLayer | null = null;
+  let alienCone: AlienConeGpuLayer | null = null;
   let energyShield: EnergyShieldGpuLayer | null = null;
   return [
     {
@@ -53,6 +55,12 @@ export function createCombatShaderWarmupProbes(scene: Phaser.Scene): ShaderWarmu
       // Lane telegraph, run streak, dust and scuffs share one program; every pass is primed.
       prepare: context => (shieldCharger ??= new ShieldChargerGpuLayer(scene)).prepare(context),
       destroy: () => { shieldCharger?.destroy(); shieldCharger = null; },
+    },
+    {
+      name: 'alien-cone',
+      // Charge, wavefront and allied outline of the energy cone share one program.
+      prepare: context => (alienCone ??= new AlienConeGpuLayer(scene)).prepare(context),
+      destroy: () => { alienCone?.destroy(); alienCone = null; },
     },
     {
       name: 'energy-shield',

@@ -3,6 +3,7 @@ import { EMPTY_ENEMY_CLAW_STATE, isEnemyClawState, type EnemyClawState } from '.
 import { syncEnemyClawAnimation } from '../animations/EnemyClawAnimation';
 import { stepTurnRateFacing } from './turnRateFacing';
 import { syncEnemyShieldChargeAnimation } from '../animations/EnemyShieldChargeAnimation';
+import { syncEnemyEnergyConeAnimation } from '../animations/EnemyEnergyConeAnimation';
 import { EMPTY_SHIELD_CHARGE_STATE, isShieldChargeState, type ShieldChargeState } from '../systems/ShieldChargeState';
 import { EMPTY_ENERGY_CONE_STATE, isEnergyConeState, type EnergyConeState } from '../systems/EnergyConeState';
 import { EnemyCastPlayback, syncEnemyCastAnimation } from '../animations/EnemyCastAnimation';
@@ -243,6 +244,17 @@ export class EnemyEntity {
     this.shieldChargeAnimating = syncEnemyShieldChargeAnimation(this.sprite, this.config.imageKey, this.shieldCharge, now,
       this.clawAnimating || !this.sprite.visible || this.burrowed || this.currentHp <= 0);
     if (wasAnimating && !this.shieldChargeAnimating) this.syncWalkingAnimation();
+  }
+
+  private energyConeAnimating = false;
+
+  /** Cone pose follows the replicated host-fixed cone timeline (wind-up, strike at the impulse). */
+  syncEnergyConeAnimation(now: number): void {
+    if (!this.config.energyCone) return;
+    const wasAnimating = this.energyConeAnimating;
+    this.energyConeAnimating = syncEnemyEnergyConeAnimation(this.sprite, this.config.imageKey, this.energyCone, now,
+      this.clawAnimating || !this.sprite.visible || this.burrowed || this.currentHp <= 0);
+    if (wasAnimating && !this.energyConeAnimating) this.syncWalkingAnimation();
   }
 
   syncCastAnimation(now = this.sprite.scene.time.now): void {
@@ -528,7 +540,7 @@ export class EnemyEntity {
   }
 
   private syncWalkingAnimation(): void {
-    if (this.clawAnimating || this.castAnimating || this.shieldChargeAnimating) return;
+    if (this.clawAnimating || this.castAnimating || this.shieldChargeAnimating || this.energyConeAnimating) return;
     if (!this.walkingSheet) return;
     syncBadgerWalkingAnimation(
       this.sprite,
