@@ -224,7 +224,7 @@ Dieser Nachtrag beantwortet die offenen Punkte aus Abschnitt 11 und hält den um
 
 ### 13.2 Startwerte
 
-Drehrate 105°/s (180° ≈ 1,7 s), Auslösedistanz 120–380 px bei höchstens 12° Fehlausrichtung (kein Drehsprung), Ankündigung 700 ms, Ansturm 880 px/s, Bahn bis Ziel + 480 px (max. 820 px, an Geometrie, Arenarand, Zug und Wasser gekürzt), Erholung 750 ms, Cooldown 4 s ab Laufstart, Sperre nach Abbruch 1,5 s, Ansturmschaden 15 + Rückstoß. HP 120, Biss wie Rabid. Ausgelegt so, dass gerades Rückwärtslaufen aus typischer Entfernung eingeholt wird, ein Seitenschritt von ~35 px aber reicht.
+Nach Spieltest (13.10.) dynamischer: Laufgeschwindigkeit 160, Drehrate 170°/s (180° ≈ 1,1 s), Auslösedistanz 120–560 px bei höchstens 12° Fehlausrichtung (kein Drehsprung), Ankündigung 700 ms, Ansturm 1250 px/s, Bahn bis Ziel + 480 px (max. 1100 px, an Geometrie, Arenarand, Zug und Wasser gekürzt), Erholung 600 ms, Cooldown 3,2 s ab Laufstart, Sperre nach Abbruch 1,5 s, Ansturmschaden 45 + starker Rückstoß (1100 px/s für 340 ms). HP 120, Biss wie Rabid. Ausgelegt so, dass gerades Rückwärtslaufen aus typischer Entfernung eingeholt wird, ein Seitenschritt von ~35 px aber reicht.
 
 ### 13.3 Ist-Code-Abgleich
 
