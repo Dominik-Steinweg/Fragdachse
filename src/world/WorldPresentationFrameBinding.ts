@@ -346,25 +346,7 @@ export class WorldPresentationFrameBinding {
     const canSpectatorPan = canSpectatorPanX || canSpectatorPanY;
     // Die Weltkamera ist World-Presentation: ohne lokale Darstellung dieser World gibt es sie
     // nicht, auch wenn die Simulation weiterlaeuft.
-    const presentation = this.input.getLocalWorldPresentation();
-    const metrics = this.input.getWorldMetrics();
-    // A passive preview frames the complete authored World without enabling camera input.
-    // Use this World's metrics, never a player's position or another active arena's profile.
-    if (showWorld && presentation.mode === 'preview' && metrics) {
-      const zoom = this.syncFocusZoom(Math.min(1,
-        metrics.viewportWidth / metrics.widthPx, metrics.viewportHeight / metrics.heightPx));
-      this.lastCameraScrollX = metrics.offsetX + metrics.widthPx / 2
-        - (metrics.offsetX + metrics.viewportWidth / 2) / zoom;
-      this.lastCameraScrollY = metrics.offsetY + metrics.heightPx / 2
-        - (metrics.offsetY + metrics.viewportHeight / 2) / zoom;
-      this.spectatorCameraScrollX = 0;
-      this.spectatorCameraScrollY = 0;
-      camera.scrollX = this.lastCameraScrollX;
-      camera.scrollY = this.lastCameraScrollY;
-      setCameraBaseScroll(this.input.scene, this.lastCameraScrollX, this.lastCameraScrollY);
-      return;
-    }
-    const worldCamera = allowsWorldPresentationSurface(presentation, 'worldCamera');
+    const worldCamera = allowsWorldPresentationSurface(this.input.getLocalWorldPresentation(), 'worldCamera');
     if (!showWorld || !worldCamera
       || (!ACTIVE_ARENA_METRICS_PROFILE.usesDynamicCamera && !(spectator && canSpectatorPan))) {
       this.lastCameraScrollX = 0;
@@ -449,18 +431,18 @@ export class WorldPresentationFrameBinding {
    * Phasers Bounds sind auf den Designzoom zugeschnitten und werden so lange ausgesetzt.
    */
   private syncFocusZoom(factor: number): number {
-    const zoom = Number.isFinite(factor) && Math.abs(factor - 1) > 0.0005 ? Math.max(0.001, factor) : 1;
+    const zoom = factor > 1.0005 ? factor : 1;
     if (zoom === 1 && !this.focusZoomApplied) return 1;
     const scene = this.input.scene;
     const camera = scene.cameras.main;
     camera.setZoom(scene.scale.width / GAME_WIDTH * zoom, scene.scale.height / GAME_HEIGHT * zoom);
-    if (zoom !== 1 && !this.focusZoomApplied) {
+    if (zoom > 1 && !this.focusZoomApplied) {
       this.focusZoomBoundsWereUsed = camera.useBounds;
       camera.useBounds = false;
     } else if (zoom === 1 && this.focusZoomApplied) {
       camera.useBounds = this.focusZoomBoundsWereUsed;
     }
-    this.focusZoomApplied = zoom !== 1;
+    this.focusZoomApplied = zoom > 1;
     return zoom;
   }
 
@@ -852,7 +834,6 @@ export class WorldPresentationFrameBinding {
    */
   destroy(): void {
     if (this.destroyed) return;
-    this.syncFocusZoom(1);
     this.destroyed = true;
     this.input.getLobbyMerchant?.()?.update(null);
     this.cancelRenderRelease();
