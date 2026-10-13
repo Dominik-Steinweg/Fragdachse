@@ -79,6 +79,8 @@ export interface CoopMissionDefinition {
   readonly itemDrop?: CoopDefenseMapItemDropConfig;
   /** Rein visuelle kanonische Persistent-Base-Vorschau innerhalb dieser Activity. */
   readonly persistentBasePreview?: CoopDefenseMapPersistentBasePreviewConfig;
+  /** Respawn-Verzoegerung nach Missionszeit (z. B. nachts laenger). */
+  readonly respawnDelaySchedule?: readonly import('../coopDefenseMapAuthoring').CoopDefenseMapRespawnDelayStep[];
 
   /**
    * Activity-getriggerte Weltveraenderung: der Uhrverlauf laeuft gegen den Rundenstart und

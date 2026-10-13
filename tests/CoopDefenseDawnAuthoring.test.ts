@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getCoopMissionTimeLimitSec,
   normalizeCoopDefenseMapConfig,
+  resolveCoopDefenseRespawnDelayMs,
   type CoopDefenseMapAuthoringConfig,
 } from '../src/config/coopDefenseMapAuthoring';
 import { toAuthoredScenario, toCoopDefenseMapConfig } from '../src/config/authoring/coopDefenseAuthoringAdapter';
@@ -66,6 +67,18 @@ describe('Dawn extensions of the Coop authoring contract', () => {
     expect(() => normalizeCoopDefenseMapConfig(dawnLikeMap({
       siteClearings: [{ id: 'near-1', gridX: 11, gridY: 9, radiusCells: 0 }],
     }))).toThrow('radius');
+  });
+
+  it('resolves a phase-based respawn delay schedule and keeps it on the Activity side', () => {
+    const respawnDelaySchedule = [{ fromMs: 0, delayMs: 2000 }, { fromMs: 255_000, delayMs: 6000 }];
+    const map = normalizeCoopDefenseMapConfig(dawnLikeMap({ respawnDelaySchedule }));
+
+    expect(toAuthoredScenario(map).activity?.respawnDelaySchedule).toEqual(respawnDelaySchedule);
+    expect(resolveCoopDefenseRespawnDelayMs(map.respawnDelaySchedule, 254_999)).toBe(2000);
+    expect(resolveCoopDefenseRespawnDelayMs(map.respawnDelaySchedule, 255_000)).toBe(6000);
+    expect(resolveCoopDefenseRespawnDelayMs(undefined, 1)).toBeNull();
+    expect(() => normalizeCoopDefenseMapConfig(dawnLikeMap({ respawnDelaySchedule: [{ fromMs: 5, delayMs: 1 }] })))
+      .toThrow('respawnDelaySchedule');
   });
 
   it('has no time limit for untimed objectives', () => {

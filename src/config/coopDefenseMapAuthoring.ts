@@ -868,6 +868,11 @@ export interface CoopDefenseMapConfig {
   readonly respawnsPerPlayer?: number;
   /** Gesetzt: Ein Sieg auf dieser Map bietet dem Spieler drei Items zur Auswahl an. */
   readonly itemDrop?: CoopDefenseMapItemDropConfig;
+  /**
+   * Optionale Respawn-Verzoegerung nach Missionszeit, aufsteigend nach `fromMs`; der erste
+   * Eintrag beginnt bei 0. Ohne Angabe gilt die globale Verzoegerung.
+   */
+  readonly respawnDelaySchedule?: readonly CoopDefenseMapRespawnDelayStep[];
   /** Rein visuelle kanonische Persistent-Base-Vorschau; erzeugt keine World-Struktur. */
   readonly persistentBasePreview?: CoopDefenseMapPersistentBasePreviewConfig;
   /** Reuses the authored friendly main base as the persistent anchor. */
@@ -877,6 +882,25 @@ export interface CoopDefenseMapConfig {
    * ist die Site-ID, auf die `site-activated` verweist; der Generator fraest den Kern frei.
    */
   readonly siteClearings?: readonly CoopDefenseMapSiteClearingConfig[];
+}
+
+export interface CoopDefenseMapRespawnDelayStep {
+  readonly fromMs: number;
+  readonly delayMs: number;
+}
+
+/** Respawn-Verzoegerung zur Missionszeit `elapsedMs`; `null` ohne authored Plan. */
+export function resolveCoopDefenseRespawnDelayMs(
+  schedule: readonly CoopDefenseMapRespawnDelayStep[] | undefined,
+  elapsedMs: number,
+): number | null {
+  if (!schedule || schedule.length === 0) return null;
+  let delayMs = schedule[0].delayMs;
+  for (const step of schedule) {
+    if (step.fromMs > elapsedMs) break;
+    delayMs = step.delayMs;
+  }
+  return delayMs;
 }
 
 export interface CoopDefenseMapSiteClearingConfig {
@@ -1283,7 +1307,31 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     persistentBasePreview,
     persistentBase,
     ...(siteClearings === undefined ? {} : { siteClearings }),
+    ...(mapConfig.respawnDelaySchedule === undefined
+      ? {}
+      : { respawnDelaySchedule: normalizeRespawnDelaySchedule(mapConfig.mapId, mapConfig.respawnDelaySchedule) }),
   };
+}
+
+function normalizeRespawnDelaySchedule(
+  mapId: string,
+  schedule: readonly CoopDefenseMapRespawnDelayStep[],
+): readonly CoopDefenseMapRespawnDelayStep[] {
+  if (!Array.isArray(schedule) || schedule.length === 0) {
+    throw new Error(`[coopDefenseMaps] Map ${mapId} respawnDelaySchedule needs at least one step`);
+  }
+  let previousFromMs = -1;
+  return schedule.map((step, index) => {
+    const { fromMs, delayMs } = step ?? {};
+    if (!Number.isSafeInteger(fromMs) || fromMs <= previousFromMs || (index === 0 && fromMs !== 0)) {
+      throw new Error(`[coopDefenseMaps] Map ${mapId} respawnDelaySchedule must start at 0 and ascend`);
+    }
+    if (!Number.isSafeInteger(delayMs) || delayMs <= 0) {
+      throw new Error(`[coopDefenseMaps] Map ${mapId} respawnDelaySchedule needs positive integer delays`);
+    }
+    previousFromMs = fromMs;
+    return { fromMs, delayMs };
+  });
 }
 
 function normalizeSiteClearings(
