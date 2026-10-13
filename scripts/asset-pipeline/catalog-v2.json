@@ -5371,6 +5371,148 @@
         "version": 1,
         "encoding": "u16-world-xyz-per-pose-v1"
       }
+    },
+    {
+      "gameIds": [],
+      "production": "reference",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Matte gunmetal, narrow turquoise optics",
+          "textureStrength": 0.18,
+          "formShadowStrength": 0.65
+        }
+      },
+      "id": "fire-control-relay",
+      "label": "Feuerleit-Relais-Projektor (Draft)",
+      "category": "construction",
+      "reference": "scripts/asset-pipeline/references/fire-control-relay-concept.png",
+      "targetSize": 24,
+      "sourceSizes": [
+        48,
+        96
+      ],
+      "recipe": "fire-control-relay",
+      "orthoScale": 3.0,
+      "model": {},
+      "description": {
+        "silhouette": "Three broad folding feet around a telescoping concentric lens head, following RELAY_v01.",
+        "materials": "Matte gunmetal and bead-blasted steel; narrow #3dffd0 optical inlays with #e8fff9 core.",
+        "anatomy": "Three real hinged legs, raised lens head, fixed centre pivot and strictly orthographic top-down camera."
+      },
+      "requiredClips": [
+        "deploy"
+      ],
+      "clips": [
+        {
+          "name": "deploy",
+          "motion": "relay_deploy",
+          "frameCount": 8,
+          "frameRate": 24,
+          "loop": false,
+          "start": "free",
+          "end": "rest"
+        }
+      ]
+    },
+    {
+      "gameIds": [],
+      "production": "reference",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Matte gunmetal, narrow turquoise optics",
+          "textureStrength": 0.18,
+          "formShadowStrength": 0.65
+        }
+      },
+      "reference": "scripts/asset-pipeline/references/fire-control-portal-concept.png",
+      "recipe": "fire-control-portal",
+      "description": {
+        "silhouette": "Spherical segmented steel casing, target-grid lens, north striker and bent side spoon.",
+        "materials": "Matte gunmetal and steel, confined #3dffd0 accents with #e8fff9 core; no warm or purple accents.",
+        "anatomy": "Real spherical shell and upward optical stack; strict orthographic top-down, no baked halo."
+      },
+      "requiredClips": [],
+      "clips": [],
+      "id": "held-fire-control-portal",
+      "label": "Feuerleitgranate getragen (Draft)",
+      "category": "utility",
+      "designReference": "scripts/asset-pipeline/references/fire-control-portal-concept.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "orthoScale": 3.2,
+      "model": {
+        "part": "held"
+      },
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          18
+        ]
+      }
+    },
+    {
+      "gameIds": [],
+      "production": "reference",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Matte gunmetal, narrow turquoise optics",
+          "textureStrength": 0.18,
+          "formShadowStrength": 0.65
+        }
+      },
+      "reference": "scripts/asset-pipeline/references/fire-control-portal-concept.png",
+      "recipe": "fire-control-portal",
+      "description": {
+        "silhouette": "Spherical segmented steel casing, target-grid lens, north striker and bent side spoon.",
+        "materials": "Matte gunmetal and steel, confined #3dffd0 accents with #e8fff9 core; no warm or purple accents.",
+        "anatomy": "Real spherical shell and upward optical stack; strict orthographic top-down, no baked halo."
+      },
+      "requiredClips": [],
+      "clips": [],
+      "id": "fire-control-portal-flight",
+      "label": "Feuerleitgranate Flug (Draft)",
+      "category": "construction",
+      "targetSize": 34,
+      "sourceSizes": [
+        34,
+        68
+      ],
+      "orthoScale": 1.5,
+      "model": {
+        "part": "flight"
+      }
     }
   ]
 }
