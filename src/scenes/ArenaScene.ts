@@ -91,6 +91,7 @@ import {
 import { LeftSidePanel }         from '../ui/LeftSidePanel';
 import { RightSidePanel }        from '../ui/RightSidePanel';
 import { CenterHUD }             from '../ui/CenterHUD';
+import { DawnHUD } from '../ui/DawnHUD';
 import { LobbyOverlay }          from './LobbyOverlay';
 import { BootScreen, BOOT_ERROR_EVENT } from '../ui/BootScreen';
 import { BootPreparation, onBootSceneTeardown } from '../ui/BootPreparation';
@@ -273,6 +274,7 @@ export class ArenaScene extends Phaser.Scene {
   private enemyHoverNameLabel: EnemyHoverNameLabel | null = null;
   private removeReconnectStatusListener: (() => void) | null = null;
   private coopMissionPresentation!: CoopMissionPresentationInfrastructure;
+  private dawnHUD: DawnHUD | null = null;
   private captureTheBeerPresentation!: CaptureTheBeerPresentationBinding;
   private aimPresentation: ArenaAimPresentationController | null = null;
   private combatPresentation: ArenaCombatPresentationController | null = null;
@@ -753,6 +755,9 @@ export class ArenaScene extends Phaser.Scene {
     const rightPanel = new RightSidePanel(this);
     rightPanel.build();
     this.coopMissionPresentation = new CoopMissionPresentationInfrastructure(this);
+    this.dawnHUD = new DawnHUD(this);
+    this.coopMissionPresentation.bindDawnHud(this.dawnHUD);
+    onBootSceneTeardown(this.events, () => { this.dawnHUD?.destroy(); this.dawnHUD = null; });
     const centerHUD  = new CenterHUD(this);
     centerHUD.build();
     this.coopMissionPresentation.bindCenterHud(centerHUD);
@@ -1737,6 +1742,7 @@ export class ArenaScene extends Phaser.Scene {
       delta,
       [
         ...this.ctx.centerHUD.getReservedHudRects(),
+        ...(this.dawnHUD?.getReservedHudRects() ?? []),
         ...this.coopMissionPresentation.getReservedHudRects(),
       ],
     );
@@ -2012,6 +2018,13 @@ export class ArenaScene extends Phaser.Scene {
     terminated: boolean,
     diagnosticsFrame: ArenaDiagnosticsFrame | null,
   ): void {
+    this.dawnHUD?.sync({
+      active: gameplayActive && !terminated,
+      world: bridge.getWorldDescriptor(), activity: bridge.getActivityDescriptor(),
+      startTime: bridge.getArenaStartTime(), now: bridge.getSynchronizedNow(),
+      sharedScrap: bridge.getDawnRoundScrap(),
+      objectives: bridge.getCoopDefenseSecondaryObjectivePresentationState(),
+    });
     if ((gameplayActive || countdownActive) && !terminated) {
       diagnosticsFrame?.begin('arenaHud');
       const secs = bridge.computeSecondsLeft(this.arenaRuntime.getMissionNow());

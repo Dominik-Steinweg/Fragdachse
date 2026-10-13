@@ -1,4 +1,7 @@
 import * as Phaser from 'phaser';
+import { DawnMerchantOverlay } from './DawnMerchantOverlay';
+import { isDawnUnlocked } from '../dawn/rules/DawnUnlock';
+import { getStoredCoopDefenseProgress } from '../utils/localPreferences';
 import { FOREST } from './UiSkin';
 import { COLORS, DEPTH } from '../config';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
@@ -27,7 +30,7 @@ const COOP_LABEL_Y = 820;
 const COOP_BAR_Y = 876;
 const COOP_BAR_H = 12;
 const COOP_BTN_Y = 926;
-const COOP_BTN_W = (CONTENT_W - 24) / 3;
+const COOP_BTN_W = (CONTENT_W - 36) / 4;
 const COOP_BTN_H = 48;
 const COOP_UPGRADE_BTN_X = CONTENT_L + COOP_BTN_W / 2;
 const COOP_ITEMS_BTN_X = CONTENT_L + CONTENT_W - COOP_BTN_W / 2;
@@ -35,6 +38,11 @@ const COOP_BAR_TEX_KEY = '_lobby_player_coop_xpbar';
 
 /** Personal progression presentation; no room or round authority. */
 export class LobbyPlayerProgress {
+  private merchant: DawnMerchantOverlay | null = null;
+  private merchantBtn: UiButton | null = null;
+  private merchantProgress: CoopDefenseProgressSnapshot | null = null;
+  private dawnUnlocked = false;
+  private merchantLayoutUnlocked: boolean | null = null;
   private coopBand: Phaser.GameObjects.Container | null = null;
   private coopProgressLevelText: Phaser.GameObjects.Text | null = null;
   private coopProgressBarFill: Phaser.GameObjects.Image | null = null;
@@ -69,6 +77,7 @@ export class LobbyPlayerProgress {
     this.isReady = ready; this.connectionEnded = ended; this.updateCoopDefenseMenuButtons();
   }
   destroy(): void {
+    this.merchant?.destroy(); this.merchantBtn?.destroy();
     this.upgradeBtnEffect?.destroy(); this.itemsBtnEffect?.destroy(); this.coopBarEffect?.destroy();
     this.itemsTooltip?.destroy(); this.coopUpgradesBtn?.destroy(); this.coopItemsBtn?.destroy();
     this.coopBaseBtn?.destroy();
@@ -76,6 +85,12 @@ export class LobbyPlayerProgress {
     this.coopBand?.destroy(true);
   }
   build(objects: Phaser.GameObjects.GameObject[]): void {
+    this.merchant = new DawnMerchantOverlay(this.scene,
+      () => this.visible && this.coopProgressAvailable && !this.isReady && !this.connectionEnded);
+    this.merchantBtn = new UiButton(this.scene, { skin: 'forest',
+      x: COOP_ITEMS_BTN_X, y: COOP_BTN_Y, w: COOP_BTN_W, h: COOP_BTN_H,
+      label: t('ui.dawn.merchant'), onClick: () => this.merchant?.show(),
+    }).setVisible(false);
     // Das Band gibt es nur bei voller Panelhoehe, deshalb die feste Obergrenze.
     const bandBottom = 966;
     const bandH = bandBottom - COOP_BAND_BG_TOP;
@@ -154,6 +169,7 @@ export class LobbyPlayerProgress {
       this.coopUpgradesBtn.getRoot(),
       this.coopBaseBtn.getRoot(),
       this.coopItemsBtn.getRoot(),
+      this.merchantBtn.getRoot(),
     ]).setScrollFactor(0).setVisible(false);
     objects.push(this.coopBand);
 
@@ -261,6 +277,10 @@ export class LobbyPlayerProgress {
   setCoopDefenseProgress(progress: CoopDefenseProgressSnapshot | null): void {
     if (!this.coopBand || !this.coopProgressLevelText) return;
     this.coopProgressAvailable = progress !== null;
+    if (progress !== this.merchantProgress) {
+      this.merchantProgress = progress;
+      this.dawnUnlocked = progress !== null && isDawnUnlocked(getStoredCoopDefenseProgress());
+    }
 
     const signature = progress
       ? [
@@ -328,6 +348,14 @@ export class LobbyPlayerProgress {
 
   private syncCoopEffectActivity(): void {
     const visible = this.visible && this.coopProgressAvailable;
+    const unlocked = this.dawnUnlocked;
+    this.merchantBtn?.setVisible(unlocked);
+    if (visible && this.merchantLayoutUnlocked !== unlocked) {
+      this.merchantLayoutUnlocked = unlocked;
+      const buttons = [this.coopUpgradesBtn, this.coopBaseBtn, this.coopItemsBtn, ...(unlocked ? [this.merchantBtn] : [])];
+      buttons.forEach((button, index) => button?.setPosition(CONTENT_L + CONTENT_W * (index + 0.5) / buttons.length, COOP_BTN_Y));
+    }
+    if (!visible || this.isReady || this.connectionEnded || !unlocked) this.merchant?.hide();
     if (!visible) this.hideTooltip();
     if (this.coopBand && this.coopBand.visible !== visible) {
       this.coopBand.setVisible(visible);
@@ -354,6 +382,8 @@ export class LobbyPlayerProgress {
 
   private updateCoopDefenseMenuButtons(): void {
     const enabled = !this.isReady && !this.connectionEnded;
+    this.merchantBtn?.setEnabled(enabled);
+    if (!enabled) this.merchant?.hide();
     this.coopBaseBtn?.setEnabled(enabled && this.coopBaseHost && this.coopBaseUnlocked);
     this.coopUpgradesBtn?.setEnabled(enabled);
     this.coopItemsBtn?.setEnabled(enabled && this.coopItemsUnlocked);

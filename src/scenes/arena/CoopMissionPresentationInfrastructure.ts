@@ -9,6 +9,7 @@ import { KRAKEN_RISE_INTRO } from '../../config/bossIntros';
 import { KRAKEN_BOSS_DEFAULTS } from '../../config/krakenBoss';
 import * as Phaser from 'phaser';
 import type { CenterHUD } from '../../ui/CenterHUD';
+import type { DawnHUD } from '../../ui/DawnHUD';
 import { CoopDefenseObjectiveAnnouncement } from '../../ui/CoopDefenseObjectiveAnnouncement';
 import { CoopDefenseMapEventAnnouncementPresenter } from '../../ui/CoopDefenseMapEventAnnouncementPresenter';
 import { CoopDefenseSecondaryObjectiveHud } from '../../ui/CoopDefenseSecondaryObjectiveHud';
@@ -72,6 +73,10 @@ export class CoopMissionPresentationInfrastructure {
   bindCenterHud(centerHUD: CenterHUD): void {
     if (this.destroyed) return;
     centerHUD.setObjectiveAnnouncements(this.objectiveAnnouncements);
+  }
+
+  bindDawnHud(hud: DawnHUD): void {
+    if (!this.destroyed) hud.setObjectiveAnnouncements(this.objectiveAnnouncements);
   }
 
   createUiPort(input: CoopMissionPresentationInfrastructureInput): CoopMissionPresentationUiPort {
