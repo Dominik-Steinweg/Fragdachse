@@ -1954,7 +1954,7 @@
         "void-hunter"
       ],
       "reference": "public/assets/sprites/enemies/enemy_void_hunter.png",
-      "targetSize": 52,
+      "targetSize": 78,
       "sourceSizes": [
         128,
         256

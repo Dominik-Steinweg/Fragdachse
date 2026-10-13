@@ -1,6 +1,7 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import sharp from 'sharp';
 import { validatePassSpec, validatePassManifest, validateCanvas, sampleWeights, localAzimuth, lightVector, relativePath } from '../../scripts/asset-pipeline/character-pass-contract.mjs';
 import { interleaveMasks, layoutTiles } from '../../scripts/asset-pipeline/export-character-passes.mjs';
@@ -72,8 +73,10 @@ test('bounded pages preserve gutter and never overlap sample rectangles', () => 
   }
   assert.throws(()=>layoutTiles([{width:33,height:8}],32,2));
 });
-test('immutable beauty manifest still passes its unchanged V2 validator', async () => {
-  const original=JSON.parse(await readFile('art/poc/pipeline-v2/runs/v2-ai/badger/standard/render.json','utf8'));
+// The authored player beauty run is local (art/poc is not versioned); worktrees without it skip.
+const PLAYER_BEAUTY='art/poc/pipeline-v2/runs/v2-ai/badger/standard/render.json';
+test.skipIf(!existsSync(PLAYER_BEAUTY))('immutable beauty manifest still passes its unchanged V2 validator', async () => {
+  const original=JSON.parse(await readFile(PLAYER_BEAUTY,'utf8'));
   const before=JSON.stringify(original);validateManifestV2(original);assert.equal(JSON.stringify(original),before);
 });
 
