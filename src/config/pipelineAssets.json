@@ -75816,6 +75816,69 @@
           "idleSha256": "8a4dad89c05e88827c1781998fc5fc0b291aa2da4be651ce8b1789d39e64f9bb"
         }
       }
+    },
+    {
+      "id": "fire-control-relay",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "devices-relay-v2-runtime-draft",
+      "variant": "standard",
+      "sourceSize": 48,
+      "textureKey": "fire_control_relay",
+      "sheetTextureKey": "fire_control_relay_sheet",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "idlePath": "./assets/sprites/pipeline-v2/fire-control-relay/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/fire-control-relay/sheet.png",
+      "layout": {
+        "frameWidth": 48,
+        "frameHeight": 48,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 9,
+        "width": 416,
+        "height": 104
+      },
+      "clips": [
+        {
+          "name": "deploy",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "frameRate": 20,
+          "loop": false,
+          "start": "free",
+          "end": "rest"
+        },
+        {
+          "name": "idle",
+          "frames": [
+            0
+          ],
+          "frameRate": 1,
+          "loop": true,
+          "start": "rest",
+          "end": "rest"
+        }
+      ],
+      "hashes": {
+        "idle": "e3c0c45d554521f6b15c3514cd00bb7eca416b384332608dd2f879860244eb94",
+        "sheet": "a1ff4c32d6d4665e70ee68a18b8ff9ee352d2f16290ca6816c25a9fc4a8a869e"
+      }
     }
   ]
 }

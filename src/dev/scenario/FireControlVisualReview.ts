@@ -9,7 +9,7 @@ import type { TurretWeaponId } from '../../types';
 export interface FireControlReviewOptions {
   hologramPreset?: HologramPreset;
   timeOfDay?: number;
-  step?: 'start' | 'vanish' | 'expireWarning' | 'portalOpen' | 'portalClose' | 'transport';
+  step?: 'start' | 'deploy' | 'vanish' | 'expireWarning' | 'portalOpen' | 'portalClose' | 'transport';
 }
 export const FIRE_CONTROL_REVIEW_SCENARIO = {
   version: 1, mapId: '4', seed: 12345, classId: 'inspector_gadachs',
@@ -63,6 +63,9 @@ export class FireControlVisualReview {
   configure(options: FireControlReviewOptions, now: number): void {
     if (options.hologramPreset) this.renderer.preset = options.hologramPreset;
     switch (options.step) {
+      case 'deploy':
+        this.startedAt = now; this.expiresAt = now+15000;
+        this.copiesVisible = true; this.lastTick = -1; break;
       case 'start':
         this.startedAt = this.portalStartedAt = now; this.expiresAt = now+15000;
         this.copiesVisible = this.portalVisible = true; this.lastTick = -1; this.lastTransportAt = undefined; break;
