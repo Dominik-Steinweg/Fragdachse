@@ -16,6 +16,7 @@ import { POWERUP_DEFS } from '../powerups/PowerUpConfig';
 import type { ConstructionId, GameMode, LoadoutToolRef, TemporaryUtilityInstanceDescriptor } from '../types';
 import type { TimeBubbleUtilityState } from '../loadout/TimeBubbleUtilityState';
 import type { TranslocatorUseState } from '../loadout/TranslocatorUseState';
+import type { FireControlCopiesStatus } from './fireControl/FireControlCopiesStatus';
 
 export type RadialActionCategory =
   | 'utility'
@@ -61,6 +62,7 @@ export interface RadialActionState {
 }
 
 export interface ResolveRadialActionsInput {
+  readonly fireControlCopiesStatus?: FireControlCopiesStatus | null;
   readonly translocatorState?: TranslocatorUseState | null;
   readonly stinkCloudState?: import('../loadout/StinkCloudUtilityState').StinkCloudUtilityState | null;
   readonly timeBubbleState?: TimeBubbleUtilityState | null;
@@ -299,6 +301,13 @@ export function resolveRadialActions(input: ResolveRadialActionsInput): RadialAc
     }
   }
   const projected = entries.map(entry => {
+    const copies = input.fireControlCopiesStatus;
+    if (copies && (entry.ref.kind === 'utility' || entry.ref.kind === 'temporary-utility')
+      && entry.ref.utilityId === 'FIRE_CONTROL_RELAY') {
+      return { ...entry, label: `${entry.label} · ${getFireControlCopiesStatusLabel(copies)}`,
+        available: false, disabledReason: input.canUseUtility ? 'unavailable' as const : 'player-blocked' as const,
+        cooldownUntil: 0 };
+    }
     if (stink && (entry.ref.kind === 'utility' || entry.ref.kind === 'temporary-utility') && entry.ref.utilityId === stink.utilityId) {
       const cooldownUntil = stink.phase === 'cooldown' ? stink.cooldownUntil : 0;
       const disabledReason: RadialActionDisabledReason | undefined = !input.canUseUtility ? 'player-blocked'
@@ -352,6 +361,10 @@ export function getStinkCloudStatusLabel(state: import('../loadout/StinkCloudUti
 export function getTimeBubbleStatusLabel(state: TimeBubbleUtilityState): string {
   return state.phase === 'flying' ? t('ui.timeBubble.flying')
     : state.phase === 'active' ? t(state.focusEnabled ? 'ui.timeBubble.focus' : 'ui.timeBubble.active') : '';
+}
+
+export function getFireControlCopiesStatusLabel(state: FireControlCopiesStatus): string {
+  return `${t('ui.fireControl.copiesActive')} ${(state.remainingMs / 1000).toFixed(1)} s`;
 }
 
 export function getTranslocatorStatusLabel(state: TranslocatorUseState, now: number): string {

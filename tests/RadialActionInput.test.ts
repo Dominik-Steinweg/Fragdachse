@@ -31,6 +31,9 @@ vi.mock('../src/ui/RadialActionMenu', () => ({ RadialActionMenu: class {
 } }));
 import { InputSystem } from '../src/systems/InputSystem';
 import type { FireControlPlacementPreview } from '../src/types';
+import type { FireControlSnapshot } from '../src/systems/fireControl/FireControlSnapshot';
+import type { RadialActionState } from '../src/systems/RadialActionModel';
+import { t } from '../src/i18n';
 import { NetworkBridge } from '../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 import { addClientRoom, createHostRoom, FakeNetwork, type TestRoom } from './fakePeerNetwork';
@@ -83,6 +86,47 @@ function createSystem(position = { x: 0, y: 0 }) {
 }
 
 describe('fire control placement input', () => {
+  it('refreshes the own replicated copies status in the open radial and hands back to cooldown at expiry', () => {
+    const { system, keys, bridge } = createSystem();
+    let now = 3_000;
+    let cooldownUntil = 0;
+    let snapshot: FireControlSnapshot = { deployments: [{
+      kind: 'copies', id: 1, ownerId: 'p1', ownerColor: 0, x: 0, y: 0,
+      startedAt: 1_000, expiresAt: 5_000, parallel: false, copies: [],
+    }] };
+    Object.assign(bridge, {
+      getSynchronizedNow: () => now,
+      getFireControlSnapshot: () => snapshot,
+    });
+    system.setupRadialActionProviders({
+      getTools: () => [{ kind: 'utility', id: 'FIRE_CONTROL_RELAY' }],
+      getCooldownUntil: () => cooldownUntil,
+      getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+    });
+    const menu = { isOpen: true, update: vi.fn(), close: vi.fn() };
+    Object.assign(system, { radialActionMenu: menu });
+    keys.keyR.isDown = true;
+    const refresh = (): RadialActionState => {
+      system.update();
+      const args = menu.update.mock.lastCall!;
+      expect(args[2]).toBe(now);
+      return (args[3] as RadialActionState[])[0];
+    };
+    const active = refresh();
+    expect(active).toMatchObject({ available: false, disabledReason: 'unavailable', cooldownUntil: 0 });
+    expect(active.label).toContain(`${t('ui.fireControl.copiesActive')} 2.0 s`);
+    now = 4_000;
+    expect(refresh().label).toContain(`${t('ui.fireControl.copiesActive')} 1.0 s`);
+    now = 5_000;
+    cooldownUntil = 8_000;
+    const expired = refresh();
+    expect(expired).toMatchObject({ available: false, disabledReason: 'cooldown', cooldownUntil });
+    expect(expired.label).not.toContain(t('ui.fireControl.copiesActive'));
+    snapshot = { deployments: [] };
+    now = cooldownUntil;
+    expect(refresh()).toMatchObject({ available: true });
+  });
+
   function fixture() {
     const f = createSystem();
     const config = UTILITY_CONFIGS.FIRE_CONTROL_RELAY;

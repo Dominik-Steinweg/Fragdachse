@@ -25,6 +25,7 @@ import { COOP_DEFENSE_CONSTRUCTION_CAPACITY, getConstructionIdForUtility, getUti
 import { quantizeAngle } from '../utils/angle';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { RadialActionMenu } from '../ui/RadialActionMenu';
+import { getFireControlCopiesStatus } from './fireControl/FireControlCopiesStatus';
 import {
   cloneRadialActionRef,
   getTimeBubbleStatusLabel,
@@ -439,7 +440,7 @@ export class InputSystem {
     this.keyN     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.N, false);
     // Kontextmenü deaktivieren damit Rechtsklick im Spiel registriert wird
     this.scene.input.mouse?.disableContextMenu();
-    this.radialActionMenu = new RadialActionMenu(this.scene);
+    this.radialActionMenu = new RadialActionMenu(this.scene, () => this.getCooldownNow());
     const cancelOnInputLoss = () => {
       this.bridge.cancelLocalInput();
       this.shiftPressPending = false;
@@ -663,7 +664,12 @@ export class InputSystem {
       canPlace: this.inputEnabled,
       canManage: this.inputEnabled,
     };
+    const fireControlSnapshot = this.bridge.getFireControlSnapshot?.();
     const actions = resolveRadialActions({
+      fireControlCopiesStatus: fireControlSnapshot ? getFireControlCopiesStatus(
+        fireControlSnapshot,
+        this.bridge.getLocalPlayerId(), now,
+      ) : null,
       translocatorState: this.bridge.getPlayerTranslocatorUseState?.(this.bridge.getLocalPlayerId()),
       stinkCloudState: this.bridge.getPlayerStinkCloudUtilityState?.(this.bridge.getLocalPlayerId()),
       timeBubbleState: this.bridge.getPlayerTimeBubbleUtilityState?.(this.bridge.getLocalPlayerId()),
@@ -825,7 +831,7 @@ export class InputSystem {
 
     if (!this.radialActionMenu?.isOpen) return false;
     if (this.keyR.isDown) {
-      this.radialActionMenu.update(pointer.x, pointer.y);
+      this.radialActionMenu.update(pointer.x, pointer.y, this.getCooldownNow(), this.getRadialActionStates());
     } else {
       const candidate = this.radialActionMenu.close(pointer.x, pointer.y);
       if (candidate) {

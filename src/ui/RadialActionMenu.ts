@@ -111,7 +111,7 @@ function formatSeconds(ms: number): string {
 }
 
 interface SegmentView {
-  readonly entry: RadialActionState;
+  entry: RadialActionState;
   readonly tone: HudTone;
   readonly angle: number;
   readonly root: Phaser.GameObjects.Container;
@@ -160,7 +160,7 @@ export class RadialActionMenu {
   private lastRenderAt = 0;
   private pointerAngle = 0;
 
-  constructor(private readonly scene: Phaser.Scene) {}
+  constructor(private readonly scene: Phaser.Scene, private readonly getNow: () => number = Date.now) {}
 
   get isOpen(): boolean {
     return this.container !== null;
@@ -185,15 +185,25 @@ export class RadialActionMenu {
     if (this.currentIndex < 0) this.currentIndex = 0;
     this.hoveredIndex = -1;
     this.cardIndex = -1;
-    const now = Date.now();
+    const now = this.getNow();
     this.openedAt = now;
     this.lastRenderAt = now;
     this.build();
     this.render(now);
   }
 
-  update(pointerX: number, pointerY: number, now = Date.now()): void {
+  update(pointerX: number, pointerY: number, now = this.getNow(), entries?: readonly RadialActionState[]): void {
     if (!this.container || this.entries.length === 0) return;
+    // Keep the open-time ring layout, but refresh status text and cooldowns while held open.
+    if (entries) {
+      for (const view of this.segments) {
+        const entry = entries.find(candidate => isSameRadialActionRef(candidate.ref, view.entry.ref));
+        if (!entry) continue;
+        if (entry.label !== view.entry.label || entry.available !== view.entry.available
+          || entry.disabledReason !== view.entry.disabledReason) this.cardIndex = -1;
+        view.entry = entry;
+      }
+    }
     const designX = toDesignSpace(this.scene.scale, pointerX);
     const designY = toDesignSpace(this.scene.scale, pointerY);
     this.hoveredIndex = getRadialMenuSegmentIndex(
