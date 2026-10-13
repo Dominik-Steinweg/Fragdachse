@@ -3,6 +3,7 @@ import { createFireControlWorldFixture } from '../FireControlTestHelper';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig';
 import { resolveMgTurretStats } from '../../src/config/mgTurret';
 import { applyCoopDefenseModifiersToUtilityConfig } from '../../src/loadout/CoopDefenseLoadoutModifiers';
+import { COOP_DEFENSE_UPGRADE_DEFINITIONS } from '../../src/utils/coopDefenseUpgrades';
 
 const hostClock = vi.hoisted(() => ({ now: 1000 }));
 vi.mock('../../src/network/bridge', () => ({ bridge: {
@@ -26,6 +27,70 @@ const start = (parallelEnabled = 0) => {
 };
 
 describe('host utility → deployment → turret fire → lifecycle', () => {
+  it('GDD 4: forms the authored upgraded ring from three weapon types without copying a copy', () => {
+    const upgrade = COOP_DEFENSE_UPGRADE_DEFINITIONS.fire_control_relay_connections;
+    const effect = upgrade.effects.find(e => e.stat === 'utility.FIRE_CONTROL_RELAY.maxCopies')!;
+    const config = applyCoopDefenseModifiersToUtilityConfig(UTILITY_CONFIGS.FIRE_CONTROL_RELAY,
+      { additive: { [effect.stat]: effect.value * upgrade.maxLevel }, percentage: {} });
+    if (config.type !== 'fire_control_relay') throw Error('relay');
+    f = createFireControlWorldFixture(config);
+    const originals = [f.add('rocket_turret'), f.add('machine_gun_turret', 'inspector', 9),
+      f.add('flame_turret', 'inspector', 13)];
+    const constructions = f.placement.getAllRuntimeRocks().map(r => r.id);
+    expect(f.place(1000, 100).ok).toBe(true);
+    const snapshot = f.binding.getFireControlSnapshot(1000).deployments[0];
+    if (snapshot.kind !== 'copies') throw Error('copies');
+    expect(snapshot.copies).toHaveLength(Math.min(config.maxCopies, originals.length));
+    expect(snapshot.copies.map(c => c.originalId)).toEqual(originals.map(r => r.id));
+    for (const copy of snapshot.copies) {
+      expect(Math.hypot(copy.x - snapshot.x, copy.y - snapshot.y)).toBeCloseTo(config.ringRadiusPx);
+      expect(copy.originalPaused).toBe(true);
+    }
+    const at = 1000 + config.materializeMs;
+    f.tick(at, false);
+    expect(f.binding.getTurretDefinitions().map(t => t.id)).toEqual(constructions);
+    expect(f.placement.getAllRuntimeRocks().map(r => r.id)).toEqual(constructions);
+    expect(f.binding.getTurretFireSources().filter(s => s.id !== s.identityId).map(s => s.identityId))
+      .toEqual(originals.map(r => r.id));
+    expect(f.place(at, 100)).toMatchObject({ ok: false, reason: 'blocked' });
+    expect(f.binding.getFireControlSnapshot(at).deployments).toHaveLength(1);
+  });
+
+  it('GDD 5/14: parallel shots share attribution, then last-source destruction ends the deployment and starts cooldown', () => {
+    const rock = start(1); f.spawnEnemy();
+    const at = 1000 + f.config.materializeMs;
+    f.tick(at);
+    const shots = f.projectile.spawn.mock.calls.map(([request]) => request);
+    expect(shots).toHaveLength(2);
+    expect(new Set(shots.map(s => s.origin.x)).size).toBe(2);
+    expect(shots.every(s => s.provenance.sourceTurretId === String(rock.id))).toBe(true);
+    f.placement.removeRock(rock.id); f.tick(at + 1);
+    expect(f.binding.getFireControlSnapshot(at + 1).deployments).toEqual([]);
+    expect(f.binding.getTurretFireSources()).toEqual([]);
+    expect(f.binding.fireControl!.getPausedOriginalIds().size).toBe(0);
+    expect(f.action.getFireControlState('inspector')).toMatchObject({ phase: 'cooldown', cooldownUntil: at + 1 + f.config.cooldown });
+    expect(f.projectile.spawn.mock.calls).toHaveLength(shots.length);
+    // Already fired projectiles retain original provenance after the source is gone.
+    expect(shots.every(s => s.provenance.sourceTurretId === String(rock.id))).toBe(true);
+  });
+
+  it.each(['foreign', 'destroyed', 'manned', 'unsupported'] as const)(
+    'GDD 15: only %s sources reject with no_fire_sources and preserve a temporary charge', kind => {
+      f = createFireControlWorldFixture();
+      const rock = f.add(kind === 'unsupported' ? 'tesla_turret' : 'rocket_turret', kind === 'foreign' ? 'ally' : 'inspector');
+      if (kind === 'destroyed') f.placement.getRuntimeRock(rock.id)!.hp = 0;
+      if (kind === 'manned') f.setManned(rock.id);
+      const instanceId = f.action.addTemporaryUtility('inspector', f.config, 1)!;
+      const before = structuredClone(f.inventory.mock.calls.at(-1)![1]);
+      const result = f.action.execute({ category: 'utility', playerId: 'inspector', angle: 0,
+        targetX: 100, targetY: 0, hostNowMs: 1000, params: { temporaryUtilityInstanceId: instanceId } });
+      expect(result).toEqual({ ok: false, reason: 'no_fire_sources' });
+      expect(f.inventory.mock.calls.at(-1)![1]).toEqual(before);
+      expect(f.used).not.toHaveBeenCalled(); expect(f.noteUsed).not.toHaveBeenCalled();
+      expect(f.action.getFireControlState('inspector')).toBeNull();
+      expect(f.binding.getFireControlSnapshot(1000).deployments).toEqual([]);
+    });
+
   it('advances deployments in the production host tick before turret fire at expiry', () => {
     const rock = start(); f.spawnEnemy();
     const host = new HostUpdateCoordinator(healthBarTestScene().scene, {

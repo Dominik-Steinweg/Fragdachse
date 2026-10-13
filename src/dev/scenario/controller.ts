@@ -1,4 +1,5 @@
 import { FireControlVisualReview, FIRE_CONTROL_REVIEW_SCENARIO, type FireControlReviewOptions } from './FireControlVisualReview';
+import { runFireControlReview, releaseFireControlReview, fireControlReviewStatus } from './FireControlReview';
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { readKrakenDevAction, readKrakenDevGeometry, requireKrakenDevHost } from './krakenHostPort';
 import type { KrakenDevAct } from '../../systems/CoopDefenseKrakenSystem';
@@ -172,6 +173,9 @@ export class DevScenarioController {
     if (this.fireControlVisualReview) this.fireControlVisualReview.configure(options, now);
     else this.fireControlVisualReview = new FireControlVisualReview(this.scene, this.runtime, options, now);
   }
+  arrangeFireControlReview(command: Record<string, unknown>): Promise<void> {
+    return runFireControlReview(this, this.runtime, command);
+  }
   arrangeTurretMaterialReview(): void {
     this.requireReady();
     this.turretMaterialReview?.destroy();
@@ -265,6 +269,7 @@ export class DevScenarioController {
     this.lastAction = { ok: false, error: this.message };
   }
   start(value: unknown): void {
+    releaseFireControlReview(this);
     this.shapeDraft?.destroy(); this.shapeDraft = null;
     this.clearFigureSun();
     this.pendingKrakenMission = null; this.pendingKrakenHp = null;
@@ -934,6 +939,7 @@ export class DevScenarioController {
     return { state: this.state, ready: this.state === 'ready' && !terminated && !this.setupPending && !this.pendingTrainShowcase && !this.krakenLoading && !this.pendingKrakenMission && this.pendingKrakenHp === null, terminated, message: this.message, isolated: true, network: 'local-only',
       krakenResidency: this.runtime.getScenarioKrakenResidency(), krakenDevAction: readKrakenDevAction(), krakenDevGeometry: readKrakenDevGeometry(), initialPosition: this.initialPosition, mission: this.runtime.devScenarioPort.readMission(),
       fireControlVisualReview: this.fireControlVisualReview?.status() ?? null,
+      fireControlReview: fireControlReviewStatus(this),
       train: this.trainStatus(),
       bots: this.bots.ids().map((id, index) => ({ index, id, ...(this.state === 'ready' ? this.bots.position(index) : null) })),
       readyAfterMs: this.readyAt === null ? null : Math.round(this.readyAt - this.startedAt),
@@ -1014,6 +1020,7 @@ export class DevScenarioController {
     return { path: result.path, url: result.url, status };
   }
   destroy(): void {
+    releaseFireControlReview(this);
     this.krakenPerformance?.stop(); this.unregisterKrakenPerformanceMap?.(); this.unregisterKrakenPerformanceMap = null;
     this.shapeDraft?.destroy(); this.shapeDraft = null;
     this.clearFigureSun();

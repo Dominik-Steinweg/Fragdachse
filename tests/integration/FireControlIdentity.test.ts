@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createFireControlWorldFixture } from '../FireControlTestHelper';
 import { resolveMgTurretStats } from '../../src/config/mgTurret';
+import { COOP_DEFENSE_CONSTRUCTIONS } from '../../src/config/coopDefenseConstructions';
+import { WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig';
 
 let f: ReturnType<typeof createFireControlWorldFixture>;
 afterEach(() => { f?.destroy(); vi.restoreAllMocks(); });
@@ -32,14 +34,18 @@ describe('real copy activation and original combat identity', () => {
 
   it.each([false, true])('injector damage follows only the original location (buff at copy=%s)', atCopy => {
     vi.spyOn(Date, 'now').mockReturnValue(1000);
-    f = createFireControlWorldFixture(); const rock = f.add(); f.spawnEnemy();
+    f = createFireControlWorldFixture({ parallelEnabled: 1 }); const rock = f.add(); f.spawnEnemy();
     const position = atCopy ? { x: 100 + f.config.singleCopyOffsetPx, y: 0 } : f.point(rock);
-    f.injector.applyConstructionEffect('buff', 'inspector', position.x, position.y,
-      { type: 'damage_turret', damageMultiplier: 2 }, { durationMs: 10000, focusDurationMs: 0, vulnerabilityBonus: 0, color: 1 }, 1000);
+    const effect = COOP_DEFENSE_CONSTRUCTIONS.machine_gun_turret.energyInjectorEffect!;
+    if (effect.type !== 'damage_turret') throw Error('damage turret');
+    f.injector.applyConstructionEffect(String(rock.id), 'inspector', position.x, position.y,
+      effect, { durationMs: f.config.durationMs, focusDurationMs: 0, vulnerabilityBonus: 0, color: 1 }, 1000);
     expect(f.place(1000, 100).ok).toBe(true); f.tick(1000 + f.config.materializeMs);
-    const [request] = f.projectile.spawn.mock.calls[0];
+    const requests = f.projectile.spawn.mock.calls.map(([request]) => request);
+    expect(requests).toHaveLength(2);
     const stats = resolveMgTurretStats();
-    expect(request.interaction?.directHit?.damage).toBeCloseTo(stats.damage * (atCopy ? 1 : 2));
+    for (const request of requests) expect(request.interaction?.directHit?.damage)
+      .toBeCloseTo(stats.damage * (atCopy ? 1 : effect.damageMultiplier));
   });
 
   it('remote control selects a real construction and the copy inherits its single bonus', () => {
@@ -74,11 +80,40 @@ describe('real copy activation and original combat identity', () => {
     expect(requests).toHaveLength(2);
     for (const request of requests) expect(request.origin.angle).toBeCloseTo(Math.atan2(focus.sprite.y - request.origin.y, focus.sprite.x - request.origin.x));
   });
+
+  it('GDD 13: live original range upgrades reach both sources without restarting the deployment', () => {
+    f = createFireControlWorldFixture({ parallelEnabled: 1 });
+    const rock = f.add('rocket_turret');
+    expect(f.place(1000, 100).ok).toBe(true);
+    const before = f.binding.getFireControlSnapshot(1000);
+    const runtimeRock = f.placement.getRuntimeRock(rock.id)!;
+    // Synthetic upgrade input; parity with the live original is the invariant, not a balance value.
+    runtimeRock.targetRange = WEAPON_CONFIGS.TURRET_ROCKET_BURST.range * 1.5;
+    const original = f.binding.getTurretDefinitions().find(t => t.id === rock.id)!;
+    const sources = f.binding.getTurretFireSources().filter(s => s.identityId === rock.id);
+    expect(sources).toHaveLength(2);
+    for (const source of sources) expect(source.targetRange).toBe(original.targetRange);
+    expect(original.targetRange).toBe(runtimeRock.targetRange);
+    expect(f.binding.getFireControlSnapshot(1000)).toEqual(before);
+  });
 });
 
-// Spatial fields and presentation/portal contracts remain with their later packages.
-  it.todo('Arrange: pausiertes Original und schießende Kopie mit eigener visualId; Act: Projektil-Snapshot an die Darstellung übergeben; Assert: turretVisualId löst nur die Kopienanimation aus und das pausierte Original animiert keinen Schuss');
-  it.todo('Arrange: Original und parallele Flammenkopie mit gemeinsamer Identität; Act: beide lokal und durch Portale feuern lassen; Assert: flameStreamKey bleibt je Quelle getrennt und Attribution bleibt beim Original');
+it('GDD 13: parallel original and flame copy fire locally from separate origins with original attribution', () => {
+  f = createFireControlWorldFixture({ parallelEnabled: 1 });
+  const rock = f.add('flame_turret'), original = f.point(rock);
+  f.spawnEnemy((original.x + 100 + f.config.singleCopyOffsetPx) / 2, original.y / 2);
+  expect(f.place(1000, 100).ok).toBe(true);
+  f.tick(1000 + f.config.materializeMs);
+  const shots = f.projectile.spawn.mock.calls.map(([request]) => request).filter(r => r.flight.isFlame);
+  expect(shots.some(r => r.origin.x === original.x && r.origin.y === original.y)).toBe(true);
+  expect(shots.some(r => r.origin.x === 100 + f.config.singleCopyOffsetPx && r.origin.y === 0)).toBe(true);
+  for (const shot of shots) expect(shot.provenance.sourceTurretId).toBe(String(rock.id));
+});
 
-  it.todo('Arrange: örtliches Verstärkungsfeld nur am Original oder nur am Projektionsort; Act: Original und Kopie getrennt feuern lassen; Assert: jeder Schuss erhält ausschließlich das Feld seiner tatsächlich feuernden Quelle');
+// Remaining presentation/stream replication is P1.3; portal transport is M2.
+  it.todo('Arrange: pausiertes Original und schießende Kopie mit eigener visualId; Act: Projektil-Snapshot an die Darstellung übergeben; Assert: turretVisualId löst nur die Kopienanimation aus und das pausierte Original animiert keinen Schuss');
+  it.todo('P1.3/M2: Original und parallele Flammenkopie durch Portale feuern und replizieren; flameStreamKey bleibt je Quelle getrennt und Attribution beim Original');
+
+  // The host turret execution does not yet consume spatial amplification fields (distinct from injector identity).
+  it.todo('GDD 13: örtliches Verstärkungsfeld nur am Original oder Projektionsort; jeder Schuss erhält ausschließlich das Feld seiner tatsächlich feuernden Quelle');
   it.todo('Arrange: Verstärkungsfeld ausschließlich am Portalausgang; Act: entfernte Originalquelle und Kopie durch das Portal feuern lassen; Assert: Ausgangsfeld verstärkt keine der beiden Quellen');

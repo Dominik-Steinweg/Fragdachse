@@ -73,6 +73,7 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
       controller.arrangeFireControlVisualReview({ hologramPreset: c.hologramPreset as 'A'|'B'|'C'|undefined, timeOfDay,
         step: c.step as import('./FireControlVisualReview').FireControlReviewOptions['step'] }); break;
     }
+    case 'fireControlReview': return controller.arrangeFireControlReview(c);
     case 'turretMaterialReview': controller.arrangeTurretMaterialReview(); break;
     case 'enemyMeshReview': {
       const count = number(c.count ?? 4, 1, 500), pose = number(c.pose ?? -1, -1, 30);

@@ -50,6 +50,16 @@ export function createDevScenarioWorldPort(flow: ArenaLifecycleCoordinator, play
       .some(player => player.id !== bridge.getLocalPlayerId() && !isLocalScenarioBotPeer(player.id))) throw new Error('Isolated dev host required.');
   };
   return {
+    /** Read-only host projection for capture predicates, resolved afresh after World handoff. */
+    readFireControl() {
+      requireLocal();
+      const binding = flow.getWorldCombatGameplayBinding();
+      return {
+        now: bridge.getSynchronizedNow(),
+        snapshot: binding?.getFireControlSnapshot(bridge.getSynchronizedNow()) ?? { deployments: [] },
+        sources: binding?.getTurretFireSources() ?? [],
+      };
+    },
     arrangeWatchtower(gridX: number, gridY: number) {
       requireLocal();
       const construction = flow.getConstructionWorldRuntime();
