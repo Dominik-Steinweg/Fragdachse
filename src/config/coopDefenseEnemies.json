@@ -951,9 +951,9 @@
       "maxHp": 120,
       "xp": 12,
       "size": 30,
-      "moveSpeed": 120,
+      "moveSpeed": 160,
       "knockbackFactor": 0.6,
-      "turnRateDegPerSec": 105,
+      "turnRateDegPerSec": 170,
       "movementTarget": "players",
       "weapons": [
         {
@@ -973,19 +973,19 @@
       "shieldCharger": {
         "shieldArcDegrees": 120,
         "triggerMinDistancePx": 120,
-        "triggerMaxDistancePx": 380,
+        "triggerMaxDistancePx": 560,
         "alignToleranceDegrees": 12,
         "windupMs": 700,
-        "runSpeedPx": 880,
+        "runSpeedPx": 1250,
         "overshootPx": 480,
-        "maxRunPx": 820,
-        "recoverMs": 750,
-        "cooldownMs": 4000,
+        "maxRunPx": 1100,
+        "recoverMs": 600,
+        "cooldownMs": 3200,
         "cancelLockoutMs": 1500,
         "windupDisplacementCancelPx": 18,
-        "hitDamage": 15,
-        "hitKnockbackSpeed": 420,
-        "hitKnockbackMs": 200
+        "hitDamage": 45,
+        "hitKnockbackSpeed": 1100,
+        "hitKnockbackMs": 340
       },
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.8

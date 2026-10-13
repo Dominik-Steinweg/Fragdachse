@@ -14,7 +14,7 @@ function charger(index: number) {
   const enemy = {
     id: `sc${index}`, kind: 'shield-charger-badger', faction: 'hostile', sprite,
     getHp: () => 120, isBurrowed: () => false, isAttackMovementPaused: () => false,
-    getAimAngle: () => 0, getCollisionRadius: () => 15, stopMovement() {}, setKnockbackImmune() {},
+    getAimAngle: () => 0, getCollisionRadius: () => 15, stopMovement() {}, faceAngle() {}, setKnockbackImmune() {},
     getShieldChargeState: () => charge,
     applyShieldChargeState: (state: ShieldChargeState) => { if (state.revision > charge.revision) charge = state; },
   } as unknown as EnemyEntity;
