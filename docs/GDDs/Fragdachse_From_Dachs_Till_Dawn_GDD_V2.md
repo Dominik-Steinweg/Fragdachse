@@ -152,6 +152,7 @@ M2-Simulation legt die tatsächlichen Kosten fest.
 | D-22 | 2026-10-13 (M1) | Threat eskaliert über Fronten (1 → 4), Spezialgegner, Nacht- und Tagesbudget, Site-Zahl (3 → 7) und Tiers; Itemlevel des Sieg-Angebots = Threat + 1. | ja |
 | D-23 | 2026-10-13 (M1) | Extraktoren (Hold-Sites) lösen beim Betreten eine eigene Angriffswelle am Lichtungsrand aus (Budget je Tier), sonst wäre Halten trivial. Wracks bleiben ohne Begleitwelle. | ja |
 | D-24 | 2026-10-13 (M1) | Schrott: Site-Abschluss = Tier-Belohnung × Threat-Multiplikator (abgerundet); Gegner-Drops nachts 18 %, sonst 4 %, 1–3 Schrott; Niederlage 50 % abgerundet; Expansion kostet laut Economy-Modell v0. | ja |
+| D-25 | 2026-10-13 (M1) | Sites sind schon vor der Aktivierung sichtbar: eigener Präsentations-Owner (`DawnSitePropRenderer`) aus repliziertem World-Plan und Nebenziel-Zustand, Bauwerke 3×3 Zellen (96 px, Sprite statt Basis-Blobfläche, World-Feld `surface: none`). Vor der Aktivierung ohne Kollision, weil die Aktivierung beim Betreten der Lichtung greift, bevor man das Bauwerk erreicht. Asset-Keys: `construction_dawn_wreck_t1..t3`, `construction_dawn_extractor` (+ `_active`-Loop), `dawn_scrap_t1..t3`. | ja |
 
 ## 11. Offene Fragen für Gate G0 (an G0 beantwortet, siehe D-15 … D-19)
 
