@@ -219,6 +219,18 @@ export class CoopMissionComposition {
       onWaveStarted: this.options.onWaveStarted,
       onDiagnosticEvent: this.options.onDiagnosticEvent,
     }).materialize(runtime);
+    if (this.options.isHost() && isDawnActivityDefinitionId(activity.definitionId)) {
+      const plan = runtime.descriptor.parameters?.dawn;
+      if (!plan) throw new Error('[CoopMissionComposition] Dawn elites need the Activity plan');
+      runtime.enemyManager!.bindDawnElites({ roundSeed: world.descriptor.seed, threat: plan.threat }, (id, x, y, effect) => {
+        this.options.getWorldCombatCore().applyExplosionDamage(x, y, effect, id, undefined, 'elite-volatile', {
+          gameplaySource: { kind: 'enemy', id }, actor: { kind: 'enemy', id }, attribution: { kind: 'enemy', id },
+          allegiance: { ownerId: id, factionId: 'hostile' }, authoredSourceId: 'elite-volatile', origin: 'explosion',
+        });
+        this.options.getHostPhysics().applyRadialImpulse(x, y, effect.radius, effect.knockback, id, 0);
+        this.options.broadcastExplosion(x, y, effect.radius, 'timebomb_pop');
+      });
+    }
     if (this.options.getNavigationObstacleIntegrity) runtime.enemyIntents?.setObstacleIntegrityResolver(this.options.getNavigationObstacleIntegrity);
   }
 

@@ -3500,6 +3500,7 @@ export class NetworkBridge {
     );
 
     this.krakenReceiver.applySnapshot(raw.kr);
+    // The compact slice includes optional eliteAffixId; enemySnapshotCodec validates its ID on decode.
     const enemySnapshot = (raw.e as SyncedEnemySnapshot | undefined) ?? null;
     const enemies = raw.ar === (this.getActivityDescriptor()?.activityRevision ?? null)
       ? this.krakenReceiver.applyEnemies(enemySnapshot) : enemySnapshot;

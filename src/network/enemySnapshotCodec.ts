@@ -1,3 +1,4 @@
+import { DAWN_ELITE_AFFIX_IDS } from '../dawn/contracts/DawnContentIds';
 import { isEnemyClawState } from '../systems/EnemyClawAttack';
 import { readAreaClawState } from './krakenSnapshotCodec';
 /**
@@ -23,6 +24,7 @@ const FIELD_GENERATION = 1024;
 const FIELD_CLAW = 2048;
 const FIELD_POSITION_REVISION = 4096;
 const FIELD_AREA_CLAW = 8192;
+const FIELD_ELITE_AFFIX = 16384;
 // Codes 0–6 are deployed legacy values; append new actions without renumbering them.
 const SPECIAL_ACTIONS = ['none', 'gauss-charge', 'phase-nuke', 'armageddon', 'timebomb-chase',
   'timebomb-fuse', 'void-molotov-windup', 'kraken-ink', 'kraken-eggs', 'kraken-dive',
@@ -59,6 +61,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
     throw new Error('Enemy snapshots carry only validated body area-claw slots');
   }
   let mask = 0;
+  if (entry.eliteAffixId !== undefined) mask |= FIELD_ELITE_AFFIX;
   if (entry.areaClaw !== undefined) mask |= FIELD_AREA_CLAW;
   if (entry.positionRevision !== undefined) mask |= FIELD_POSITION_REVISION;
   if (entry.claw !== undefined) mask |= FIELD_CLAW;
@@ -107,6 +110,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
   }
   if (mask & FIELD_POSITION_REVISION) out.push(entry.positionRevision as number);
   if (mask & FIELD_AREA_CLAW) out.push(JSON.stringify(entry.areaClaw));
+  if (mask & FIELD_ELITE_AFFIX) out.push(entry.eliteAffixId!);
 }
 
 /** Dekodiert den flachen Zahlenstrom zurück in Delta-Objekte für die clientseitige Anwendung. */
@@ -169,6 +173,10 @@ export function decodeEnemyUpserts(stream: readonly (number | string)[]): Synced
           if (state?.attack?.presentation !== 'tentacle') entry.areaClaw = state;
         } catch { /* Invalid optional state. */ }
       }
+    }
+    if (mask & FIELD_ELITE_AFFIX) {
+      const affix = stream[i++];
+      if (DAWN_ELITE_AFFIX_IDS.some(id => id === affix)) entry.eliteAffixId = affix as SyncedEnemyDeltaState['eliteAffixId'];
     }
     result.push(entry);
   }

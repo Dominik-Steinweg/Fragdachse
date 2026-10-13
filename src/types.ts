@@ -2048,6 +2048,7 @@ export interface SyncedBaseTurretState {
 
 /** Per-Frame Zustand eines Coop-Defense-Gegners (Host → Clients, unreliable). */
 export interface SyncedEnemyState {
+  eliteAffixId?: import('./dawn/contracts/DawnContentIds').DawnEliteAffixId;
   areaClaw?: import('./systems/EnemyClawAttack').EnemyAreaClawState;
   claw?: import('./systems/EnemyClawAttack').EnemyClawState;
   entityGeneration?: number;
@@ -2080,6 +2081,7 @@ export interface SyncedEnemyState {
 
 /** Delta-Update eines Coop-Defense-Gegners; fehlende Felder bleiben clientseitig unverändert. */
 export interface SyncedEnemyDeltaState {
+  eliteAffixId?: import('./dawn/contracts/DawnContentIds').DawnEliteAffixId;
   areaClaw?: import('./systems/EnemyClawAttack').EnemyAreaClawState;
   claw?: import('./systems/EnemyClawAttack').EnemyClawState;
   entityGeneration?: number;

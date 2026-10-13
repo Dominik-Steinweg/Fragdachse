@@ -8,6 +8,9 @@ import { alliedEnemyHealthBarStyle, enemyHealthBarStyle } from '../effects/healt
 import { addPlayerGlow } from '../effects/PlayerGlow';
 import { removeInternalFx, type GlowHandle } from '../utils/phaserFx';
 import { resolveAlliedEnemyWeaponConfig } from '../systems/AlliedEnemyEffects';
+import type { DawnEliteAffixId } from '../dawn/contracts/DawnContentIds';
+import { dawnEliteSpeedMultiplier } from '../systems/DawnEliteRules';
+import { ELITE_VISUAL_SCALE } from '../effects/dawn/EliteMarkerModel';
 import * as Phaser from 'phaser';
 import { GenericWeapon } from '../loadout/GenericWeapon';
 import { WEAPON_CONFIGS, type WeaponConfig } from '../loadout/LoadoutConfig';
@@ -223,6 +226,7 @@ export class EnemyEntity {
     ownerId?: string,
     ownerColor?: number,
     originId?: string,
+    readonly eliteAffixId?: DawnEliteAffixId,
   ) {
     this.id = id;
     this.kind = kind;
@@ -581,7 +585,7 @@ export class EnemyEntity {
   }
 
   getMoveSpeed(): number {
-    return (this.config.krakenBoss?.landMoveSpeedPxPerSec ?? this.config.moveSpeed) * this.moveSpeedMultiplier;
+    return (this.config.krakenBoss?.landMoveSpeedPxPerSec ?? this.config.moveSpeed) * this.moveSpeedMultiplier * dawnEliteSpeedMultiplier(this.eliteAffixId);
   }
 
   setMoveSpeedMultiplier(multiplier: number): void {
@@ -612,7 +616,7 @@ export class EnemyEntity {
 
   /** Canvas includes the pounce's transparent margin; the physical size stays authored. */
   getVisualSize(): number {
-    return this.config.size * (this.walkingSheet?.displayScale ?? 1);
+    return this.config.size * (this.walkingSheet?.displayScale ?? 1) * (this.eliteAffixId ? ELITE_VISUAL_SCALE : 1);
   }
 
   private syncCollisionCircle(): void {
@@ -832,6 +836,7 @@ export class EnemyEntity {
       positionRevision: this.movementRevision,
       id: this.id,
       kind: this.kind,
+      ...(this.eliteAffixId ? { eliteAffixId: this.eliteAffixId } : {}),
       x: this.sprite.x,
       y: this.sprite.y,
       rot: this.currentAimAngle,

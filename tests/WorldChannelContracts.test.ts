@@ -1,3 +1,5 @@
+import { DAWN_ELITE_AFFIX_IDS } from '../src/dawn/contracts/DawnContentIds';
+import { encodeEnemyUpsert, decodeEnemyUpserts } from '../src/network/enemySnapshotCodec';
 import { StructureOccupancySystem } from '../src/systems/StructureOccupancySystem';
 import { describe, expect, it, vi } from 'vitest';
 import { TurretControlSystem } from '../src/systems/TurretControlSystem';
@@ -65,6 +67,35 @@ function snapshot(x: number, rocks: Parameters<NetworkBridge['publishGameState']
     burningGround: { cells: [] },
   };
 }
+
+
+it('round-trips elite IDs through fast snapshots and the reliable late-join baseline', async () => {
+  const network = new FakeNetwork(), hostRoom = await createHostRoom(network);
+  let clientRoom: TestRoom | undefined, lateRoom: TestRoom | undefined;
+  const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+  try {
+    const host = bridgeFor(hostRoom);
+    host.publishWorldAndActivity(world(), activity());
+    clientRoom = await addClientRoom(network);
+    const client = bridgeFor(clientRoom);
+    const u: (number | string)[] = [];
+    DAWN_ELITE_AFFIX_IDS.forEach((eliteAffixId, i) => encodeEnemyUpsert(u, {
+      id: 'e' + (i + 1), kind: 'rabid-badger', x: 100 + i * 20, y: 100, hp: 30, maxHp: 30, eliteAffixId,
+    }));
+    use(hostRoom); host.publishGameState({ ...snapshot(0), enemies: { c: 5, u, r: [], a: [1, 2, 3, 4, 5] } }, true);
+    hostRoom.room.update();
+    use(clientRoom); expect(decodeEnemyUpserts(client.getLatestGameState()!.enemies!.u).map(e => e.eliteAffixId)).toEqual(DAWN_ELITE_AFFIX_IDS);
+    client.flushNetwork();
+    lateRoom = await addClientRoom(network);
+    const late = bridgeFor(lateRoom);
+    expect(decodeEnemyUpserts(late.getLatestGameState()!.enemies!.u).map(e => e.eliteAffixId)).toEqual(DAWN_ELITE_AFFIX_IDS);
+    use(hostRoom);
+    const delta: (number | string)[] = []; encodeEnemyUpsert(delta, { id: 'e6', eliteAffixId: 'armored', x: 300, y: 100, kind: 'rabid-badger' });
+    host.publishGameState({ ...snapshot(1), enemies: { c: 6, u: delta, r: [] } }); hostRoom.room.update();
+    use(clientRoom);
+    expect(decodeEnemyUpserts(client.getLatestGameState()!.enemies!.u)).toEqual([{ id: 'e6', eliteAffixId: 'armored', x: 300, y: 100, kind: 'rabid-badger' }]);
+  } finally { clearActiveSession(); lateRoom?.room.destroy(); clientRoom?.room.destroy(); hostRoom.room.destroy(); }
+});
 
 async function createRoom(playerCount: number): Promise<TestRoom[]> {
   const network = new FakeNetwork();

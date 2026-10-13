@@ -22,6 +22,7 @@ import rawSchedules from './schedules.json';
 import rawSalvage from './salvage.json';
 import rawSiteArchetypes from './siteArchetypes.json';
 import rawThreatCurves from './threatCurves.json';
+import { DAWN_ELITE_CONFIG } from './elites';
 
 /**
  * Loader, Validatoren und Content-Hash der Dawn-Registries.
@@ -217,6 +218,7 @@ const THREAT_CURVES = validateThreatCurves(rawThreatCurves.curves);
 /** Hash ueber alle Dawn-Registries; Teil jedes Dawn-Plans. */
 export const DAWN_CONTENT_HASH = hashCanonicalJson({
   schemaVersion: DAWN_CONTENT_SCHEMA_VERSION,
+  elites: DAWN_ELITE_CONFIG,
   templates: [...TEMPLATES.values()],
   waveBlocks: [...WAVE_BLOCKS.values()],
   schedules: [...SCHEDULES.values()],

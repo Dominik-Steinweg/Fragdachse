@@ -153,6 +153,7 @@ function makeCombatController() {
     enemyEyes: { sync: vi.fn() },
     enemyVulnerability: { sync: vi.fn() },
     enemyReadability: { sync: vi.fn() },
+    eliteMarkers: { sync: vi.fn() },
     beer: { update: vi.fn() },
     timeBubble: { update: vi.fn() },
     blackHole: { update: vi.fn() },
@@ -205,6 +206,7 @@ describe('ArenaCombatPresentationController', () => {
     expect(harness.sources.syncEnemyHostVisuals).toHaveBeenCalledExactlyOnceWith(16);
     expect(harness.renderers.enemyEyes.sync).toHaveBeenCalledWith([]);
     expect(harness.renderers.enemyReadability.sync).toHaveBeenCalledWith([]);
+    expect(harness.renderers.eliteMarkers.sync).toHaveBeenCalledWith([]);
     expect(vi.mocked(harness.sources.syncEnemyHostVisuals).mock.invocationCallOrder[0])
       .toBeLessThan(harness.renderers.enemyEyes.sync.mock.invocationCallOrder[0]);
     expect(harness.renderers.healthBars.update).toHaveBeenCalledExactlyOnceWith(true);

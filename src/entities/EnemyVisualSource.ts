@@ -4,6 +4,7 @@ import type { SyncedEnemyState } from '../types';
 
 /** Presentation capabilities; no simulation mutations are exposed. */
 export interface EnemyVisualSource {
+  readonly eliteAffixId?: import('../dawn/contracts/DawnContentIds').DawnEliteAffixId;
   readonly id: string;
   readonly kind: CoopDefenseEnemyKind;
   readonly faction: 'hostile' | 'allied';

@@ -1,3 +1,5 @@
+import { dawnEliteDamageMultiplier, dawnEliteDeathExplosion, dawnEliteRegeneration, rollDawnElite, type DawnEliteSpawnContext } from '../systems/DawnEliteRules';
+import type { ProjectileExplosionConfig } from '../types';
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import * as Phaser from 'phaser';
 import type { WaterGeometry } from '../arena/WaterGeometry';
@@ -174,6 +176,18 @@ export interface EnemySpawnOptions {
 }
 
 export class EnemyManager {
+  private dawnElites: DawnEliteSpawnContext | null = null;
+  private eliteExplosion: ((id: string, x: number, y: number, effect: ProjectileExplosionConfig) => void) | null = null;
+  private readonly eliteShields = new Set<EnemyEntity>();
+
+  /** Bound only by the host's Dawn Activity composition, before its first spawn. */
+  bindDawnElites(context: DawnEliteSpawnContext,
+    explode: (id: string, x: number, y: number, effect: ProjectileExplosionConfig) => void): void {
+    if (this.enemies.size) throw new Error('Bind Dawn elites before spawning');
+    this.dawnElites = { ...context };
+    this.eliteExplosion = explode;
+  }
+
   private intents: EnemyIntentSystem | null = null;
   private readonly locomotion = new EnemyLocomotion();
   private readonly movementFeedback = new Map<string, MovementFeedback>();
@@ -499,11 +513,14 @@ export class EnemyManager {
       ownerId,
       ownerColor,
       options.originId,
+      faction === 'hostile' && this.dawnElites
+        ? rollDawnElite(this.dawnElites, options.originId ?? 'unassigned', id) : undefined,
     );
     enemy.setLightingSystem(this.lighting);
     enemy.setEntityBurnGpuController(this.burnGpu);
     enemy.setHealthBarRenderer(this.healthBars);
     this.enemies.set(id, enemy);
+    if (enemy.eliteAffixId === 'shielding') this.eliteShields.add(enemy);
     this.registerCombatTarget(id, this.nextEnemyGeneration++);
     this.playSpawnEffect(enemy, options);
     this.onEnemySpawned?.(enemy, options);
@@ -542,6 +559,13 @@ export class EnemyManager {
     combatMovementSource?: EnemyCombatMovementSource | null,
   ): void {
     this.movementNow = now;
+    if (this.dawnElites && !movementLocked) {
+      for (const enemy of this.enemies.values()) {
+        if (enemy.faction !== 'hostile' || !enemy.sprite.active || enemy.getHp() <= 0) continue;
+        const healing = dawnEliteRegeneration(enemy.eliteAffixId, enemy.getMaxHp(), deltaMs);
+        if (healing > 0 && enemy.getHp() < enemy.getMaxHp()) this.applyHealing(enemy.id, healing, 'hp-regeneration');
+      }
+    }
     this.plaguePursuers.clear();
     const lerpT = 1 - Math.exp(-STEER_RESPONSIVENESS * (deltaMs / 1000));
     this.movementFeedback.clear();
@@ -1138,7 +1162,7 @@ export class EnemyManager {
       };
     }
 
-    const hpLost = Math.min(enemy.getHp(), damage);
+    const hpLost = Math.min(enemy.getHp(), damage * dawnEliteDamageMultiplier(enemy, this.eliteShields));
     const remainingHp = enemy.getHp() - hpLost;
     enemy.setHp(remainingHp);
     if (remainingHp > 0) {
@@ -1219,7 +1243,13 @@ export class EnemyManager {
     this.wildfirePanicStates.delete(id);
     this.smokeConfusionStates.delete(id);
     const originId = enemy.originId;
+    const eliteExplosion = dawnEliteDeathExplosion(enemy.eliteAffixId);
     this.committedDeathWork.set(outcome, isCurrent => {
+      // The elite blast may end the owner or Combat scope; only then skip the authored death spawns.
+      if (eliteExplosion) {
+        this.eliteExplosion?.(id, deathX, deathY, eliteExplosion);
+        if (!isCurrent()) return;
+      }
       for (const spawnConfig of deathSpawns) {
         const baseAngle = Phaser.Math.RND.realInRange(0, Math.PI * 2);
         for (let index = 0; index < spawnConfig.count; index += 1) {
@@ -1277,6 +1307,7 @@ export class EnemyManager {
    * müssen sie vor dessen Zerstörung abgeräumt werden.
    */
   private destroyEnemyEntity(id: string, enemy: EnemyEntity): void {
+    this.eliteShields.delete(enemy);
     this.krakenProjectionRevisions.delete(id);
     this.onEnemyRemoving?.(enemy);
     this.visualSink?.clearEnemyClaw?.(id);
@@ -1342,6 +1373,7 @@ export class EnemyManager {
   }
 
   destroy(): void {
+    this.dawnElites = null; this.eliteExplosion = null; this.eliteShields.clear();
     this.pendingClawEvents.clear();
     this.pendingAreaClawEvents.clear(); this.krakenProjectionRevisions.clear();
     this.locomotion.clear(); this.movementFeedback.clear(); this.intents = null;
@@ -1505,6 +1537,8 @@ export class EnemyManager {
         remote.faction ?? 'hostile',
         remote.ownerId,
         remote.ownerColor,
+        undefined,
+        remote.eliteAffixId,
       );
       enemy.setLightingSystem(this.lighting);
       enemy.setEntityBurnGpuController(this.burnGpu);
