@@ -1,6 +1,7 @@
 """Shared matte steel and confined turquoise optics for the two contact devices."""
 from weapon_surface_parts import material, paint_depth
 from turret_parts import annulus
+from fire_control_surface import steel, fastener, scuff, contact_dust
 
 
 def linear(hex_color):
@@ -10,13 +11,14 @@ def linear(hex_color):
 
 def surfaces(c):
     return {
-        'steel': material(c, 'Matte graphite gunmetal', (.105, .125, .13), .16, 'steel'),
-        'armor': material(c, 'Bead blasted steel panels', (.29, .315, .32), .20, 'steel'),
-        'edge': material(c, 'Restrained machined rim', (.40, .435, .44), .22, 'edge'),
+        'steel': steel(c, 'Rough readable gunmetal structure', linear('484e52'), .28),
+        'armor': steel(c, 'Chipped petrol painted steel panels', linear('637e86'), .05, 'coat'),
+        'edge': steel(c, 'Bright brushed bare steel', linear('b5bfc2'), .42, 'edge'),
         'dark': material(c, 'Recessed graphite gasket', (.012, .022, .024), 0, 'recess'),
         'glass': c.material('Deep teal optical glass', (.006, .075, .061)),
         'light': c.material('Turquoise 3dffd0 inlay', linear('3dffd0'), emission=.65),
         'core': c.material('Pale e8fff9 optical core', linear('e8fff9'), emission=.35),
+        'wear': c.material('Exposed neutral steel scuffs', (.36, .385, .385)),
     }
 
 
@@ -39,10 +41,17 @@ def lens(c, p, radius, z, crosshair=False):
         c.ell('Small pale lens core', (0, 0, z+.128), (radius*.27, radius*.27, .02), p['core'])
 
 
-def finish(c):
+def finish(c, p):
     for ob in c.scene.objects:
         if ob.type == 'MESH':
             paint_depth(c, ob)
+            # Reuse the exact existing bevel geometry for a thin bare-steel edge.
+            # No new outline mesh, silhouette expansion or optical changes.
+            if ob.data.materials and ob.data.materials[0] in (p['armor'], p['steel']):
+                ob.data.materials.append(p['edge'])
+                for modifier in ob.modifiers:
+                    if modifier.type == 'BEVEL':
+                        modifier.material = len(ob.data.materials)-1
 
 
 def relay(c):
@@ -57,11 +66,19 @@ def relay(c):
         angle = i*math.tau/3
         before = set(c.scene.objects)
         outline = [(-.15, .35), (.15, .35), (.205, 1.10), (.12, 1.30), (-.12, 1.30), (-.205, 1.10)]
-        plate(c, 'Faceted folding leg', (0, 0, .18), outline, .19, p['armor'], .035)
+        leg = plate(c, 'Faceted folding leg', (0, 0, .18), outline, .19, p['steel'], .035)
+        contact_dust(c, leg, lambda point: (point.y-.80)/.46)
         c.box('Rubber foot', (0, 1.14, .06), (.31, .29, .10), p['dark'], .045)
         c.box('Inset leg channel', (0, .87, .287), (.19, .46, .026), p['dark'], .023)
         c.box('Narrow turquoise leg strip', (0, .87, .306), (.095, .38, .02), p['light'], .015)
-        c.cylinder('Hinge cap', (0, .48, .32), .085, .025, p['edge'], 12)
+        c.cylinder('Hinge cap', (0, .48, .32), .085, .025, p['steel'], 12)
+        fastener(c, p, 0, .48, .335, .037)
+        fastener(c, p, 0, 1.17, .28, .032)
+        # Interrupted edge contacts, not a bright outline around every panel.
+        scuff(c, p, -.155, .99-i*.055, .279, .16, math.pi/2-.08)
+        scuff(c, p, .105, 1.195, .279, .065, -.23)
+        if i != 1:
+            scuff(c, p, .133, .73, .279, .095, .95)
         meshes = list(set(c.scene.objects)-before)
         # Build around +Y, rotate the complete group around the fixed export centre.
         anchor = control(c.scene, f'Leg {i} azimuth')
@@ -81,8 +98,13 @@ def relay(c):
         annulus(c, 'Segmented lens head armor', (0, 0, .64), .57, .43, .13,
                 p['armor'], a+.035, a+math.tau/6-.035, 8)
     lens(c, p, .38, .70)
+    for i in range(3):
+        a = math.tau*i/3 + math.pi/6
+        fastener(c, p, .50*math.cos(a), .50*math.sin(a), .710, .025)
+        a += .25
+        scuff(c, p, .54*math.cos(a), .54*math.sin(a), .707, .11, a+math.pi/2)
     head_meshes = list(set(c.scene.objects)-before)
-    finish(c)
+    finish(c, p)
     root = control(c.scene, 'Asset root - fixed export pivot')
     asset = {'root': root, 'parts': {}, 'rig': None, 'sockets': {}}
     for i in range(3):

@@ -15,6 +15,27 @@ const assets = catalog.assets;
 const sorted = (values: string[]) => [...values].sort();
 
 describe('asset pipeline catalog contracts', () => {
+  it('keeps fire-control HQ exports compatible with the approved draft canvases and grips', () => {
+    const expected = [
+      ['fire-control-relay', 24, [48, 96], 3, undefined],
+      ['held-fire-control-relay', 32, [128, 256], 3.2, [16, 18.4]],
+      ['held-fire-control-portal', 32, [128, 256], 3.2, [16, 18]],
+      ['fire-control-portal-flight', 34, [34, 68], 1.5, undefined],
+    ] as const;
+    for (const [id, size, sources, orthoScale, muzzle] of expected) {
+      const asset = assets.find(entry => entry.id === id)!;
+      expect(asset.targetSize).toBe(size);
+      expect(asset.sourceSizes).toEqual(sources);
+      expect(asset.orthoScale).toBe(orthoScale);
+      expect(asset.pivot).toEqual([0.5, 0.5]);
+      expect(asset.forward).toBe('north');
+      if (muzzle) expect(asset.heldItem).toEqual({ referenceSize: 32, grip: [16, 24], muzzle });
+      if (id !== 'fire-control-relay') expect(asset.clips).toEqual([]);
+    }
+    expect(assets.find(entry => entry.id === 'fire-control-relay')!.clips).toEqual([
+      { name: 'deploy', motion: 'relay_deploy', frameCount: 8, frameRate: 24, loop: false, start: 'free', end: 'rest' },
+    ]);
+  });
   it('keeps the watchtower runtime canvas at its authored display size', () => {
     const asset = assets.find(entry => entry.id === 'watchtower')!;
     expect(asset.targetSize).toBe(WATCHTOWER_DISPLAY_SIZE);
