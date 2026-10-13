@@ -586,6 +586,12 @@ npm run perf:kraken -- --qualities=high,medium,low --runs=3 --output=build/krake
 npm run perf:kraken -- --compare=build/kraken-perf/current/report.json --output=build/kraken-perf/next
 # Separater Diagnoselauf: CPU-Profil, gesampelte Allokationen, GC-Trace
 npm run perf:kraken -- --qualities=high --profile=true --output=build/kraken-perf/profile
+# Zusätzlicher Kaltstartlauf einschließlich Boot-/Lade-Statusabfragen:
+npm run perf:kraken -- --qualities=high --cold=true --output=build/kraken-perf/cold
+# Kontrollmessung auf regulärer Map 1, gleicher Recorder und gleiche Auflösung:
+npm run perf:kraken -- --scenario=regular --qualities=high --output=build/kraken-perf/regular
+# Eingefrorene High-Vergleichsbilder: gemeinsame gegen private Shaderprogramme:
+npm run perf:kraken -- --qualities=high --rendererParity=true --output=build/kraken-perf/program-parity
 ```
 
 Der Runner verwendet das vorhandene Playwright-Core/Chrome, den Dev-Host, feste
@@ -611,7 +617,26 @@ Tauch-Timer zu verändern. Ab der Landphase folgt die Kamera dem Beobachter.
 `report.json`, `report.md` und Frame-Rohdaten je Phase enthalten Mittelwert, p95,
 p99, Maxima und Hitches >33 ms, CPU-Callbackzeit, asynchrone GPU-Zeitmessungen,
 Draw Calls, Programmwechsel, Compile-/Link-Aufrufe, Kraken-Residenz einschließlich
-Renderzielen sowie Heap-Zuwächse/-Rückgänge. Der GPU-Timer umfasst die Submissionen
+Renderzielen sowie Heap-Zuwächse/-Rückgänge. `glStatus` zählt und misst synchrone
+Framebuffer-/Programmstatusabfragen und Framebuffer-Erzeugungen. `shaderPrograms`
+nennt neu angelegte Phaser-Programmschlüssel. `cold.first` hält pro Effekt den ersten
+beobachteten Auftritt samt den nächsten bis zu 30 Frames fest; `cold.worst` enthält
+die fünf teuersten Frames jeder Phase, auch vor dem Host-Intro. `--cold=true` ergänzt
+separat die GL-Aufrufe während Boot und Missionsladen. Ein frischer Browser leert
+weder OS- noch Treiber-Shadercache. `--rendererParity=true` vergleicht an zehn
+eingefrorenen Kampfzuständen private gegen geteilte Programme und prüft zusätzlich
+die Stabilität einer unveränderten Kontrollaufnahme; dieser Lauf ist keine Zeitmessbasis.
+Der Bildlauf erzwingt außerdem Renderziel-Resizes und vergleicht Phasers ursprünglichen
+Framebuffer-Resize mit der Wiederverwendung, jeweils bei gleicher finaler Auflösung.
+Die reguläre Kontrollmessung verwendet Map 1 ohne Wellen, mit kaltem Vorlauf und
+1200 festen Schritten im eingeschwungenen Zustand.
+
+Ab Messformat 5 wird die Qualitätsstufe über `dev-scenario.html?visual-test=1&quality=medium`
+im privaten Einstellungsspeicher vor dem Spielimport gesetzt, damit die
+Lade-Warmups bereits die richtige Stufe vorbereiten. Format 4 maß zusätzlich einen
+Live-Qualitätswechsel nach Ready; direkte Regressionspaare daher neu aufnehmen.
+
+Der GPU-Timer umfasst die Submissionen
 des ganzen Callbacks einschließlich Lücken zwischen ihnen; er misst keine reine
 GPU-Auslastung. Heap-Differenzen sind Näherungen, keine gemessenen GC-Pausen.
 `--profile=true` liefert dafür gesonderte `.cpuprofile`, `.heapprofile` und
@@ -800,3 +825,99 @@ Kugeln den Gegner auf `(42,55)` pinnen und mit Zoom `1.1` auf `(27,53)` schauen:
 Schützen unmittelbar nach dem Einschlag mit `clearEnemies` entfernen, sonst entsteht bereits
 nach 1100 ms die nächste Combo. `capture()` zählt einen Frame mit; 17 Schritte plus Capture
 ergeben +300 ms, anschließend 53 Schritte plus Capture insgesamt +1200 ms.
+
+### Schild-Anstürmer: Gate 1
+
+Map `0` (`00-test`) enthält den Encounter `shield-charger-gate-1` (ein Anstürmer). Für einen isolierten
+Versuch dasselbe Dev-Szenario mit festem Seed, `suppressWaves: true` und `freezeMission: true` verwenden,
+über `target` eine freie Zelle etwa 200–350 px vom Spieler wählen und spawnen:
+
+```js
+await devScenario.whenReady();
+await devScenario.run({ action: 'spawn', kind: 'shield-charger-badger', pinned: false });
+```
+
+Erwartung: Er nähert sich mit erhobenem Frontschild (120°) und dreht sichtbar langsam; seitlich laufen lässt
+ihn nachdrehen statt sofort folgen. Treffer von vorn werden geblockt, von der Seite und von hinten nicht.
+Steht der Spieler im Auslösebereich vor ihm (bis 560 px), senkt er den Schild, steht still und zeigt die
+rote Gefahrenbahn der gemeinsamen Nahkampf-Familie, exakt auf den Spieler gerichtet. Die Richtung bleibt
+fest; ein Seitenschritt aus der Bahn lässt ihn vorbeistürmen, Rückwärtslaufen reicht nicht. Ein Treffer
+macht 45 Schaden mit starkem Rückstoß; ein Energieschild nach vorn blockt ihn. Am Endpunkt oder an einem
+Felsen bleibt er erschöpft stehen (Schild unten, keine Warnfläche) – Zeit zum Flankieren. Stun oder ein
+deutlicher Stoß während der Ankündigung brechen sie ab. Im Spiel: Karte 4 (Adrenalinrausch).
+
+Headless-Nachweise: `tests/CoopDefenseShieldCharger.test.ts`, `tests/ShieldChargerRenderer.test.ts`,
+`tests/stress/CoopDefenseShieldChargerStress.test.ts`.
+
+### Alien-Energie-Fächer: Gate 1
+
+Map `0` (`00-test`) enthält den Encounter `alien-cone-gate-1` (ein Alien, Start nach 12 s).
+Für einen isolierten Versuch dieses Szenario-JSON verwenden; `suppressWaves` unterdrückt die
+authored Encounter, der Alien wird anschließend gezielt gespawnt:
+
+```json
+{
+  "version": 1,
+  "mapId": "0",
+  "seed": 12345,
+  "classId": "inspector_gadachs",
+  "player": { "gridX": 12, "gridY": 50 },
+  "timeOfDay": 720,
+  "suppressWaves": true,
+  "freezeMission": true,
+  "hideTutorial": true,
+  "hideAim": true
+}
+```
+
+Über `target` eine freie Zelle mit freier Sichtlinie etwa 220 px vom Spieler wählen
+(Startband 120–280 px; eine Zelle = 32 px), dann:
+
+```js
+await devScenario.whenReady();
+await devScenario.run({ action: 'spawn', kind: 'alien-badger', pinned: false });
+```
+
+Erwartung: Der Alien bleibt eine Sekunde stehen. Ein ausgefüllter roter Fächer (80°, maximal
+340 px) kündigt den Treffer an; am Ursprung sammelt sich Void-Energie. Ursprung und Richtung
+bleiben fest. Seitlich ausweichen und mit einem Felsen oder Baumstamm am Fächerrand wiederholen:
+Die Warnfläche endet an der Deckung. Beim Impuls läuft eine lila Wellenfront vom Alien bis zur
+abgeschnittenen Reichweite, blitzt an der Deckung auf und verschwindet nach etwa 0,5 s.
+Danach schießt der Alien wieder Plasma. Den Alien ungepinnt lassen, damit er den Angriff beginnt.
+
+Für die Schildprobe `classId: "dachs_nukem"`, `upgrades: { "unlock_energy_shield": 1 }` und
+`weapon2: "ENERGY_SHIELD"` ins Rezept setzen; auf den Alien zielen und
+`devScenario.run({ action: 'holdWeapon', slot: 'weapon2' })` ausführen. Das Frontschild blockt
+den Impuls. Ein verbündeter Alien gegen einen festgehaltenen feindlichen Zombie im Startband
+zeigt eine dezente jadegrüne Ankündigung ohne rotes Gefahrenfeld und eine sichtbare Welle.
+
+Reproduzierbare Tag-/Nacht-Aufnahmen auf der neutral eingefärbten Map `12`:
+`build/capture-kit/examples/alien-cone.json`, `alien-cone-cover.json`, `alien-cone-shield.json`
+und `alien-cone-allied.json`. Jede Datei mit
+`node build/capture-kit/capture.mjs build/capture-kit/examples/<datei>.json --port 8091`
+ausführen. Das Kit verwaltet seinen Server und Browser selbst. Die Schüsse warten auf
+`energyCone.phase` und die Host-Zeit relativ zu `startedAt`/`hitAt`. Nach `recoverUntil` ist
+`attack` null; die späten Schüsse verwenden deshalb den zuvor gespeicherten Angriffstermin.
+Die Deckungsprobe verlangt ausdrücklich mindestens einen `clip`-Wert unter `0.9`.
+
+Capture-Positionen (Grid, Seed `12345`; Spawnabstand jeweils 224 px):
+
+| Rezept | Alien-Spawn | Ziel | Spieler | Kamera / Zoom |
+|---|---|---|---|---|
+| `alien-cone` | `(90,5)` | Spieler | `(90,12)` | `(90,10)` / `1.3` |
+| `alien-cone-cover` | `(96,11)` | Spieler | `(103,11)` | `(101,11)` / `1.3` |
+| `alien-cone-shield` | `(90,5)` | Spieler | `(90,12)` | Alien, nach Windup-Start neu zentriert / `1.0` |
+| `alien-cone-allied` | `(90,5)` | Zombie `(90,12)`, gepinnt | `(84,12)` | `(90,10)` / `1.3` |
+
+Der ungepinnte Alien kann vor dem Start ausweichen; die tatsächliche Position und das
+Deckungsprofil stehen deshalb pro Schuss im `log.json`. Die offene Serie verlangt alle
+`clip`-Werte über `0.99`. Der zusätzliche Schild-Schuss `impulse-contact` erfasst den Kontakt
+direkt bei `hitAt`; +40/+120 ms werden auf den nächsten 60-Hz-Schritt aufgerundet.
+Die Schildserie ergänzt den Host-Snapshot lesend um `shieldEvidence` (HP, aktiver Schild,
+Block-Blitz-Endzeit, übernommenes Loadout, gehaltene Waffe und Zielpunkt), damit ein schwach
+sichtbarer Kontakt nicht als bestätigte Schadensblockierung missverstanden wird.
+
+Headless-Nachweise: `tests/CoopDefenseEnergyCone.test.ts`, `tests/AlienConeRenderer.test.ts`
+und `tests/EnergyConeContracts.test.ts`. Die Capture-Bögen zeigen den lokalen Host;
+eine Mehrspieler-Sichtprüfung ist damit nicht abgedeckt.
+

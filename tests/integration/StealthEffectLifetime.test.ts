@@ -25,6 +25,10 @@ vi.mock('../../src/scenes/arena/rendererWorldTeardown', () => ({
 import { EffectSystem } from '../../src/effects/EffectSystem';
 import { HostUpdateCoordinator } from '../../src/scenes/arena/HostUpdateCoordinator';
 import { WorldCombatCore } from '../../src/combat/WorldCombatCore';
+// This headless lifecycle fixture does not create GPU programs.
+vi.mock('../../src/effects/kraken/KrakenShaderWarmup', () => ({
+  warmupKrakenShaders: () => Object.assign(() => {}, { isReady: () => true }),
+}));
 import { ArenaLifecycleCoordinator } from '../../src/scenes/arena/ArenaLifecycleCoordinator';
 
 import { healthBarTestScene } from '../healthBarTestScene';

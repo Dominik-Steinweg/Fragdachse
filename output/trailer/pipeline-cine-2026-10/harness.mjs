@@ -8,8 +8,11 @@ import { dirname } from 'node:path';
 export const ROOT = 'C:/Fragdachse/output/trailer/pipeline-cine-2026-10';
 const ORIGIN = 'http://127.0.0.1:8090';
 export const FPS = 60;
+// DRAFT=1: 1080p masters in masters-draft/ for fast choreography checks.
+export const DRAFT = !!process.env.DRAFT;
+export const MASTERS = `${ROOT}/${DRAFT ? 'masters-draft' : 'masters'}`;
 
-export async function open(scenario, { dpr = 2, headless = true } = {}) {
+export async function open(scenario, { dpr = DRAFT ? 1 : 2, headless = true } = {}) {
   const browser = await chromium.launch({ channel: 'chrome', headless, args: ['--use-angle=d3d11', '--enable-gpu',
     '--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--disable-renderer-backgrounding',
     '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows', '--autoplay-policy=no-user-gesture-required'] });
@@ -81,6 +84,13 @@ async function install(page) {
         return s;
       };
     }
+    // Clean hits (C.cleanHits): no blood clouds or "KRIT!" labels on the boss; tracers, flashes and sounds stay.
+    const fx = scene.ctx?.effectSystem;
+    if (fx && !fx.__cine) {
+      fx.__cine = true;
+      const hit = fx.playHitEffect.bind(fx);
+      fx.playHitEffect = effect => { if (!C.cleanHits) hit(effect); };
+    }
     scene.clarityCamera?.setVisible(false); // no HUD; titles are added in post
     scene.events.on('prerender', () => { if (!C.showRing) scene.playerStatusRing?.container?.setVisible(false); });
   });
@@ -123,7 +133,7 @@ function writer(out) {
  * dt defaults to real time. Masters are 4K; sound events and per-frame sim times are saved alongside.
  */
 export async function record(page, name, frames, frame) {
-  const out = `${ROOT}/masters/${name}.mp4`, w = writer(out), t = Date.now(), sim = [];
+  const out = `${MASTERS}/${name}.mp4`, w = writer(out), t = Date.now(), sim = [];
   await page.evaluate(() => { const C = window.__C; C.sounds = []; C.t0 = C.now(); C.recording = true; });
   let s = 0;
   for (let f = 0; f < frames; f++) {
@@ -136,7 +146,7 @@ export async function record(page, name, frames, frame) {
   }
   await w.close();
   const sounds = await page.evaluate(() => { const C = window.__C; C.recording = false; return C.sounds; });
-  writeFileSync(`${ROOT}/masters/${name}.json`, JSON.stringify({ frames, fps: FPS, sim, sounds }));
+  writeFileSync(`${MASTERS}/${name}.json`, JSON.stringify({ frames, fps: FPS, sim, sounds }));
   console.log(`  recorded ${name} (${frames} f) in ${((Date.now() - t) / 1000).toFixed(0)} s, ${sounds.length} sounds`);
 }
 

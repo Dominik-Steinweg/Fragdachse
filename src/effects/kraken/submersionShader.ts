@@ -215,13 +215,21 @@ class SubmersionNode extends Phaser.Renderer.WebGL.RenderNodes.BaseFilterShader 
   }
 }
 
+function registerSubmersionNode(renderer: Phaser.Renderer.WebGL.WebGLRenderer): void {
+  const manager = renderer.renderNodes;
+  if (!managers.has(manager)) { manager.addNodeConstructor(NODE, SubmersionNode); managers.add(manager); }
+}
+export function getSubmersionNode(renderer: Phaser.Renderer.WebGL.WebGLRenderer): SubmersionNode {
+  registerSubmersionNode(renderer);
+  return renderer.renderNodes.getNode(NODE) as SubmersionNode;
+}
+
 /** Sprite owns the controller through its internal FilterList (including teardown). */
 export function addSubmersionFilter(target: Sprite, elevationFrame: Phaser.Textures.Frame,
   encoding: { min: number; max: number }, maskKey = '__WHITE'): SubmersionFilter {
   const renderer = target.scene.sys.renderer;
   if (!('gl' in renderer)) throw new Error('Submersion requires WebGL');
-  const manager = renderer.renderNodes;
-  if (!managers.has(manager)) { manager.addNodeConstructor(NODE, SubmersionNode); managers.add(manager); }
+  registerSubmersionNode(renderer);
   target.enableFilters();
   const filter = new SubmersionFilter(target, elevationFrame, encoding, target.scene.textures.getFrame(maskKey));
   target.filters!.internal.add(filter);

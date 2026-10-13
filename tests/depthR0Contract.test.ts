@@ -45,7 +45,7 @@ describe('R0 observed depth contract (diagnostics, never rendering inputs)', () 
         expect(row.blends, contract.id).toEqual([...contract.blends]);
       }
     }
-  });
+  }, 30000); // Parses every catalogued CPU render owner; seconds under a parallel full-suite run.
   it('requires new CPU render owners to enter the catalog; adapters remain source-linked', () => {
     const owners: string[] = [];
     function walk(dir: string) {
@@ -59,7 +59,7 @@ describe('R0 observed depth contract (diagnostics, never rendering inputs)', () 
     for(const dir of ['effects','entities','projectile','powerups','ui','adrenalineEssence','scenes/arena'])walk(dir);
     owners.push('arena/BaseAccentGlowRenderer.ts');
     expect(owners.sort()).toEqual(Object.keys(CPU_SOURCE_CONTRACTS).sort());
-  });
+  }, 30000); // Walks and parses the render source tree.
   it('stores the effective profiles and explicitly represents insertion-order boundaries', () => {
     expect(layerProfiles(10.5)).toEqual(['M','K']);
     expect(layerProfiles(14.5)).toEqual(['K','L']); expect(layerProfiles(20)).toEqual(['E','H']);

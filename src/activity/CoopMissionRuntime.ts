@@ -1,4 +1,6 @@
 import type { CoopDefenseFirestarterSystem } from '../systems/CoopDefenseFirestarterSystem';
+import type { CoopDefenseShieldChargerSystem } from '../systems/CoopDefenseShieldChargerSystem';
+import type { CoopDefenseEnergyConeSystem } from '../systems/CoopDefenseEnergyConeSystem';
 import type { SyncedMortarStrike } from '../types';
 import type { CoopDefenseMortarSystem } from '../systems/CoopDefenseMortarSystem';
 import type { CoopDefenseMortarStrikeSystem } from '../systems/CoopDefenseMortarStrikeSystem';
@@ -225,9 +227,26 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     this.refreshSpecialMovementSource();
     this.publishBindings();
   }
+  private shieldChargerOwner: CoopDefenseShieldChargerSystem | null = null;
+  get coopDefenseShieldChargerSystem() { return this.shieldChargerOwner; }
+  setShieldCharger(system: CoopDefenseShieldChargerSystem): void {
+    this.claimEmptySlot('shield charger runtime', this.shieldChargerOwner);
+    this.shieldChargerOwner = system;
+    this.refreshSpecialMovementSource();
+    this.publishBindings();
+  }
+  private energyConeOwner: CoopDefenseEnergyConeSystem | null = null;
+  get coopDefenseEnergyConeSystem() { return this.energyConeOwner; }
+  setEnergyCone(system: CoopDefenseEnergyConeSystem): void {
+    this.claimEmptySlot('energy cone runtime', this.energyConeOwner);
+    this.energyConeOwner = system;
+    this.refreshSpecialMovementSource();
+    this.publishBindings();
+  }
   private refreshSpecialMovementSource(): void {
     this.specialMovementOwner = new CompositeEnemySpecialMovementSource([
-      this.coopDefenseTimebombSystem, this.coopDefenseMortarSystem, this.firestarterOwner,
+      this.coopDefenseTimebombSystem, this.coopDefenseMortarSystem, this.firestarterOwner, this.shieldChargerOwner,
+      this.energyConeOwner,
     ]);
   }
   private mortarOwner: { behavior: CoopDefenseMortarSystem; strikes: CoopDefenseMortarStrikeSystem } | null = null;
@@ -562,6 +581,10 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
 
     this.firestarterOwner?.clear();
     this.firestarterOwner = null;
+    this.shieldChargerOwner?.clear();
+    this.shieldChargerOwner = null;
+    this.energyConeOwner?.clear();
+    this.energyConeOwner = null;
     this.mortarOwner?.behavior.clear();
     this.mortarOwner?.strikes.clear();
     this.mortarOwner = null;

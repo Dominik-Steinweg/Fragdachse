@@ -10,6 +10,7 @@ from pathlib import Path
 import platform
 import shutil
 import tempfile
+import time
 
 
 def sha(path):
@@ -117,7 +118,15 @@ def store(cache, key, source):
         root = Path(temporary)
         shutil.copyfile(source, root/'pass.exr')
         (root/'receipt.json').write_text(json.dumps(dict(key=key, sha256=sha(root/'pass.exr'))))
-        try:
-            os.rename(root, cache/key)
-        except FileExistsError:
-            pass
+        for attempt in range(8):
+            try:
+                os.rename(root, cache/key)
+                break
+            except FileExistsError:
+                break
+            except PermissionError:
+                # Windows: a virus scanner or indexer can hold the fresh pass.exr for a moment
+                # (WinError 5); wait briefly instead of failing the whole pass job.
+                if attempt == 7:
+                    raise
+                time.sleep(0.05 * 2 ** attempt)

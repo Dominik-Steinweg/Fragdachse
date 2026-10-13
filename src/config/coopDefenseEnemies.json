@@ -356,6 +356,19 @@
         "retreatSpeedFactor": 0.85,
         "requireLineOfSight": true
       },
+      "energyCone": {
+        "triggerMinDistancePx": 120,
+        "triggerMaxDistancePx": 280,
+        "arcDegrees": 80,
+        "rangePx": 340,
+        "windupMs": 1000,
+        "recoverMs": 400,
+        "cooldownMs": 5000,
+        "cancelLockoutMs": 1200,
+        "windupDisplacementCancelPx": 18,
+        "coverRefreshMs": 120,
+        "damage": 30
+      },
       "trainAwareness": {
         "safetyDistancePx": 48,
         "timeSafetyMarginMs": 600
@@ -924,6 +937,55 @@
         "fireballWeaponId": "FIRESTARTER_FIREBALL",
         "lanceWeaponId": "FIRESTARTER_LANCE",
         "biteWeaponId": "FIRESTARTER_BITE"
+      },
+      "playerScaling": {
+        "maxHpFactorPerAdditionalPlayer": 0.8
+      }
+    },
+    {
+      "id": "shield-charger-badger",
+      "eyeGlow": {
+        "color": 16734746
+      },
+      "pawCount": 4,
+      "maxHp": 120,
+      "xp": 12,
+      "size": 30,
+      "moveSpeed": 160,
+      "knockbackFactor": 0.6,
+      "turnRateDegPerSec": 170,
+      "movementTarget": "players",
+      "weapons": [
+        {
+          "weaponId": "RABID_BADGER_BITE",
+          "targetMode": "all",
+          "meleeTiming": {
+            "hitDelayMs": 300,
+            "strikeMs": 80,
+            "recoveryMs": 200
+          }
+        }
+      ],
+      "attackScanIntervalMs": 140,
+      "attackStopDurationMs": 200,
+      "obstacleAttackDelayMs": 500,
+      "imageKey": "enemy_shield_charger_badger",
+      "shieldCharger": {
+        "shieldArcDegrees": 120,
+        "triggerMinDistancePx": 120,
+        "triggerMaxDistancePx": 560,
+        "alignToleranceDegrees": 12,
+        "windupMs": 700,
+        "runSpeedPx": 1250,
+        "overshootPx": 480,
+        "maxRunPx": 1100,
+        "recoverMs": 600,
+        "cooldownMs": 3200,
+        "cancelLockoutMs": 1500,
+        "windupDisplacementCancelPx": 18,
+        "hitDamage": 45,
+        "hitKnockbackSpeed": 1100,
+        "hitKnockbackMs": 340
       },
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.8

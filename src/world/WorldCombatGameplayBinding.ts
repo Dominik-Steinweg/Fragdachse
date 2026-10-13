@@ -286,6 +286,8 @@ export interface WorldCombatGameplayBindingOptions {
   readonly getWorldTrain: () => { getActiveSegmentPositions: () => { x: number; y: number }[]; applyDamage: (damage: number, ownerId: string) => void } | null;
   readonly getWorldMutation: () => WorldObjectMutationRuntime | null;
   readonly getFirestarterSystem: () => import('../systems/CoopDefenseFirestarterSystem').CoopDefenseFirestarterSystem | null;
+  readonly getShieldChargerSystem?: () => import('../systems/CoopDefenseShieldChargerSystem').CoopDefenseShieldChargerSystem | null;
+  readonly getEnergyConeSystem?: () => import('../systems/CoopDefenseEnergyConeSystem').CoopDefenseEnergyConeSystem | null;
   readonly getMortarSystem: () => import('../systems/CoopDefenseMortarSystem').CoopDefenseMortarSystem | null;
   readonly getTimebombSystem: () => CoopDefenseTimebombSystem | null;
   readonly getNecromancySystem: () => NecromancySystem | null;
@@ -746,7 +748,9 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       o.getPlayerCombatIntegration()?.slimeTrail?.getEnemyMovementFactor(enemyId, now) ?? 1,
       combat.getEnemyMovementFactor(enemyId, now),
     ));
-    hostPhysics.setEnemyHitStaggerResolver((enemyId, now) => combat.isEnemyHitStaggered(enemyId, now));
+    // A committed shield charge is not halted by ordinary hit stagger.
+    hostPhysics.setEnemyHitStaggerResolver((enemyId, now) => combat.isEnemyHitStaggered(enemyId, now)
+      && !(o.getShieldChargerSystem?.()?.isRunning(enemyId) ?? false));
     combat.setEnemyDeathCallback((enemyId, x, y, burnSources, death, _target, wildfire) => {
       const generation = this.activityGeneration;
       const current = () => !this.destroyed && generation === this.activityGeneration;
@@ -757,6 +761,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       }
       if (death) o.getMortarSystem()?.handleKilled(death, combat.getHostTime());
       if (death) o.getFirestarterSystem()?.handleKilled(death);
+      if (death) o.getShieldChargerSystem?.()?.handleKilled(death);
+      if (death) o.getEnergyConeSystem?.()?.handleKilled(death);
       const wasTimebomb = death ? (o.getTimebombSystem()?.handleKilled(death, combat.getHostTime()) ?? false) : false;
       if (!current()) return true;
       if (wasTimebomb) {

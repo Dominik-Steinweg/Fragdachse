@@ -1,4 +1,5 @@
 import { VOID_PALETTE } from '../../config';
+import { warmupKrakenShaders } from '../../effects/kraken/KrakenShaderWarmup';
 import { restrictStructureOccupant } from '../../world/PlayerCapabilities';
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { type PersistentBaseHealthReward } from '../../persistentBase/PersistentBaseHealth';
@@ -304,6 +305,7 @@ export class ArenaLifecycleCoordinator {
   private roundStartPrepared = false;
   private preparedRoundLayout: { descriptor: WorldDescriptor; layout: ArenaLayout } | null = null;
   private combatPresentationPrepared = false;
+  private finishKrakenShaderWarmup: ReturnType<typeof warmupKrakenShaders> | null = null;
   private pendingHostArenaGeneration: {
     readonly roundRevision: number;
     readonly gameMode: GameMode;
@@ -1152,13 +1154,15 @@ export class ArenaLifecycleCoordinator {
       && !this.combatPresentationPrepared && this.getLocalWorldPresentation().required) {
       const measuredAt = loadingTimeline.start();
       const fragmentsReady = this.renderers.combatGoreGpu.fragmentTemplateCache.stepPreparation();
+      const krakenReady = this.completeKrakenShaderWarmup(true);
       const xpReady = this.ctx.effectSystem.prepareXpText();
       const smokeReady = this.ctx.smokeSystem.prepare();
       const clawReady = this.ctx.effectSystem.prepareEnemyClawEffects();
-      this.combatPresentationPrepared = fragmentsReady && xpReady && smokeReady && clawReady;
+      this.combatPresentationPrepared = fragmentsReady && xpReady && smokeReady && clawReady && krakenReady;
       loadingTimeline.end('combat/presentation-prepare', measuredAt);
       const run = loadingTimeline.get('world');
       run?.gate('combat-fragments', fragmentsReady); run?.gate('combat-xp', xpReady);
+      run?.gate('combat-kraken-shaders', krakenReady);
       run?.gate('combat-smoke', smokeReady); run?.gate('combat-claws', clawReady);
     }
   }
@@ -1189,6 +1193,7 @@ export class ArenaLifecycleCoordinator {
 
   getWorldLoadingDiagnostics() {
     return { loadTimelineId: loadingTimeline.get('world')?.id ?? null, terrainSnapshotReady: this.terrainSnapshotReady, combatPresentationPrepared: this.combatPresentationPrepared,
+      krakenShaderWarmupReady: this.finishKrakenShaderWarmup === null,
       shaderWarmupReady: this.renderers.gpuVfx.isShaderWarmupComplete(), localArenaLoadReady: this.localArenaLoadReady,
       roundStartPrepared: this.roundStartPrepared, terrainSnapshotRetryCount: this.terrainSnapshotRetryCount };
   }
@@ -2776,6 +2781,13 @@ export class ArenaLifecycleCoordinator {
     this.hostSyncWorldParticipation();
     const presentation = this.getLocalWorldPresentation().required;
     if (presentation) {
+      // A rebuilt world must not drop an unfinished barrier of the previous one.
+      this.completeKrakenShaderWarmup();
+      if (coopDefenseMapConfig?.boss?.enemyKind === 'abyssal-kraken') {
+        const measuredAt = loadingTimeline.start();
+        this.finishKrakenShaderWarmup = warmupKrakenShaders(this.scene);
+        loadingTimeline.end('kraken/shader-links', measuredAt);
+      }
       this.renderers.combatGoreGpu.fragmentTemplateCache.prepare(
         collectDeathFragmentFrames(activityConfiguration?.mapConfig ?? coopDefenseMapConfig),
       );
@@ -2982,7 +2994,19 @@ export class ArenaLifecycleCoordinator {
     loadRun.gate('world-build', true);
   }
 
+  private completeKrakenShaderWarmup(waitForReady = false): boolean {
+    const finish = this.finishKrakenShaderWarmup;
+    if (waitForReady && finish && !finish.isReady()) return false;
+    this.finishKrakenShaderWarmup = null;
+    if (finish) {
+      const measuredAt = loadingTimeline.start();
+      try { finish(); } finally { loadingTimeline.end('kraken/shader-ready', measuredAt); }
+    }
+    return true;
+  }
+
   tearDownArena(preserveAuthoredPresentation = false): void {
+    this.completeKrakenShaderWarmup();
     this.clearArenaExitPresentation();
     // Mit der World fallen ihre Spieler. Das gilt fuer jede Instanz und auf jedem Peer: ein
     // Testgelaende-Teilnehmer darf beim Matchstart genauso wenig stehen bleiben wie ein

@@ -1,4 +1,4 @@
-import { CLAW_VFX_SLASH_MS, CLAW_VFX_TELEGRAPH_FADE_MS } from './EnemyClawVfxStore';
+import { CLAW_VFX_FAN_RAYS, CLAW_VFX_SLASH_MS, CLAW_VFX_TELEGRAPH_FADE_MS } from './EnemyClawVfxStore';
 
 /**
  * Analytic claw visuals, all passes reading the same instance buffer:
@@ -88,6 +88,43 @@ vec4 telegraph(float gain) {
   float swell = 1.0 - smoothstep(charge - 0.35, charge + 0.1, rn);
   float a = mask * (0.1 + 0.2 * swell * charge + 0.1 * strike) * gain * vis;
   vec3 color = mix(vColor.rgb, HOT, 0.35 * strike);
+  return vec4(color * a, a);
+}
+
+// Large filled fan (energy cone): the same tint and charge swell as the melee sector, but the
+// boundary is the gameplay contract here, so both flanks and the clipped reach end in crisp
+// edges. One quad per wedge between two cover rays; vShape.w packs both ray reaches
+// (q0 * 256 + q1, 0..255), vColor.a carries the wedge index. The wedge is picked from the
+// global ray position, so neighbouring quads neither overlap nor leave seams.
+vec4 fan(float gain) {
+  float range = vShape.x;
+  float halfArc = vShape.y;
+  float r = length(vLocal);
+  float ang = atan(vLocal.y, vLocal.x);
+  float rayStep = 2.0 * halfArc / ${(CLAW_VFX_FAN_RAYS - 1).toFixed(1)};
+  float g = (ang + halfArc) / rayStep;
+  float wedge = vColor.a;
+  if (g < -0.02 || clamp(floor(g), 0.0, ${(CLAW_VFX_FAN_RAYS - 2).toFixed(1)}) != wedge) return vec4(0.0);
+  float q0 = floor(vShape.w / 256.0), q1 = vShape.w - q0 * 256.0;
+  float reach = mix(q0, q1, clamp(g - wedge, 0.0, 1.0)) / 255.0 * range;
+  float side = (halfArc - abs(ang)) * r;   // px to the nearer flank
+  float inside = (1.0 - smoothstep(reach - 1.5 * uPixel, reach + 0.5 * uPixel, r))
+    * smoothstep(-0.5 * uPixel, 1.5 * uPixel, side);
+  if (inside <= 0.0) return vec4(0.0);
+
+  float charge = clamp((uTime - vTiming.x) / max(1.0, vTiming.z - vTiming.x), 0.0, 1.0);
+  float strike = smoothstep(vTiming.y, vTiming.z, uTime);
+  float vis = smoothstep(vTiming.x, vTiming.x + 90.0, uTime)
+    * (1.0 - smoothstep(vTiming.z, vTiming.z + FADE_MS, uTime));
+  float rn = r / range;
+  // The caster covers the hub; the fill brightens slightly toward the rim.
+  float hub = smoothstep(10.0, 34.0, r);
+  float swell = 1.0 - smoothstep(charge - 0.3, charge + 0.05, rn);
+  float fill = hub * mix(0.75, 1.0, rn) * (0.1 + 0.2 * swell * charge + 0.1 * strike);
+  // Outline: rim at the (clipped) reach and both flanks, firming up as the impulse nears.
+  float edge = max(line(r - reach, 1.1), line(side, 1.0)) * smoothstep(14.0, 30.0, r);
+  float a = (fill + edge * (0.22 + 0.28 * charge)) * inside * gain * vis;
+  vec3 color = mix(vColor.rgb, HOT, 0.35 * strike + 0.15 * edge * charge);
   return vec4(color * a, a);
 }
 
@@ -197,7 +234,8 @@ vec4 contact() {
 
 void main() {
   vec4 color;
-  if (vShape.z > 2.5) color = uPass < .5 ? telegraph(1.0) : uPass > 1.5 ? telegraph(.55) : vec4(0.0);
+  if (vShape.z > 3.5) color = uPass < .5 ? fan(1.0) : uPass > 1.5 ? fan(.55) : vec4(0.0);
+  else if (vShape.z > 2.5) color = uPass < .5 ? telegraph(1.0) : uPass > 1.5 ? telegraph(.55) : vec4(0.0);
   else if (vShape.z > 1.5) color = uPass < 0.5 ? lane(1.0) : uPass > 1.5 ? lane(0.55) : vec4(0.0);
   else if (uPass < 0.5) color = telegraph(1.0);
   else if (uPass < 1.5) color = vShape.z < 0.5 ? rake() : contact();

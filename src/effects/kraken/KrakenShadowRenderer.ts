@@ -11,7 +11,11 @@ import { getGraphicsQualityProfile } from '../../graphics/GraphicsQuality';
 import { createVisibleWorldView, getVisibleWorldView } from '../../graphics/CameraWorldView';
 import { krakenMeshMatrix, krakenProjectedBounds, type KrakenShadowMesh } from './KrakenLightShadowModel';
 
-const VERTEX = `precision highp float;
+export const KRAKEN_SHADOW_BLUR = 'KrakenSharedBlur';
+export const KRAKEN_SHADOW_TARGET = 'KrakenSharedTarget';
+export const KRAKEN_SHADOW_COMPOSITE = 'KrakenSharedComposite';
+export const KRAKEN_SHADOW_PROJECTION = 'KrakenSharedProjection';
+export const KRAKEN_SHADOW_VERTEX = `precision highp float;
 attribute vec3 inPosition;
 attribute float inZOffset;
 uniform mat4 uModel; uniform vec3 uSun; uniform vec4 uBounds; uniform float uPlane,uContact;
@@ -20,7 +24,7 @@ void main(){sourceWorld=(uModel*vec4(inPosition,1.0)).xyz;sourceWorld.z+=inZOffs
 receiverWorld=sourceWorld.xy-(1.0-uContact)*uSun.xy*max(0.0,sourceWorld.z-uPlane)/max(.05,uSun.z);
 vec2 uv=(receiverWorld-uBounds.xy)/uBounds.zw;
 gl_Position=vec4(uv.x*2.0-1.0,1.0-uv.y*2.0,0,1);}`;
-const MASK = `precision highp float;
+export const KRAKEN_SHADOW_MASK = `precision highp float;
 uniform sampler2D uReceiver; uniform vec4 uReceiverWorld; uniform float uWetPass,uWaterLevel,uContact,uContactHeight;
 varying vec3 sourceWorld; varying vec2 receiverWorld;
 float response(vec2 p){vec2 uv=(p-uReceiverWorld.xy)/uReceiverWorld.zw;
@@ -33,7 +37,7 @@ if(target<=.0||abs(wet-uWetPass)>.1||sourceWorld.z<sourcePlane||sourceWorld.z<uW
 if(uContact>.5&&sourceWorld.z-sourcePlane>uContactHeight)discard;
 gl_FragColor=vec4(1);}`;
 // Reuse the exact common finish; only the coverage producer differs on Low.
-const COMPOSITE = CHARACTER_MESH_COMPOSITE
+export const KRAKEN_SHADOW_COMPOSITE_FRAGMENT = CHARACTER_MESH_COMPOSITE
   .replace('uniform float uDebugSolid;', 'uniform float uDebugSolid,uAnalytic,uMeshContact; uniform sampler2D uContactMask; uniform vec4 uEllipse;')
   .replace('float direct=mask', 'if(uMeshContact>.5)contact=texture2D(uContactMask,outTexCoord).r*uStrength.y;\n  float direct=mask')
   .replace('float mask=texture2D(uMask,outTexCoord).r;', `float mask=texture2D(uMask,outTexCoord).r;
@@ -85,7 +89,7 @@ export class KrakenShadowRenderer {
     this.environment = this.shadows.borrowFigureEnvironment(() => this.releaseResources());
     if (!this.environment) return false;
     const env = this.environment;
-    this.raw = new SunRenderTarget(this.scene, 'KrakenMask', CHARACTER_MESH_MASK, () => {});
+    this.raw = new SunRenderTarget(this.scene, 'KrakenMask', CHARACTER_MESH_MASK, () => {}, ['__DEFAULT'], KRAKEN_SHADOW_TARGET);
     this.raw.shader.drawingContext!.setAutoClear(true, false, false);
     this.raw.shader.drawingContext!.setClearColor(0, 0, 0, 0);
     this.raw.shader.renderNode.run = context => {
@@ -99,18 +103,18 @@ export class KrakenShadowRenderer {
         })) this.maskDraws++;
     };
     this.horizontal = new SunRenderTarget(this.scene, 'KrakenBlurH', CHARACTER_MESH_BLUR,
-      set => { set('uMask', 0); set('uStep', this.stepH); }, [this.raw.shader.texture!]);
+      set => { set('uMask', 0); set('uStep', this.stepH); }, [this.raw.shader.texture!], KRAKEN_SHADOW_BLUR);
     this.blurred = new SunRenderTarget(this.scene, 'KrakenBlurV', CHARACTER_MESH_BLUR,
-      set => { set('uMask', 0); set('uStep', this.stepV); }, [this.horizontal.shader.texture!]);
+      set => { set('uMask', 0); set('uStep', this.stepV); }, [this.horizontal.shader.texture!], KRAKEN_SHADOW_BLUR);
     const name = sunShaderName('KrakenShadowComposite');
-    this.display = new Phaser.GameObjects.Shader(this.scene, { name, shaderName: name, fragmentSource: COMPOSITE,
+    this.display = new Phaser.GameObjects.Shader(this.scene, { name, shaderName: KRAKEN_SHADOW_COMPOSITE, fragmentSource: KRAKEN_SHADOW_COMPOSITE_FRAGMENT,
       setupUniforms: (set: (name: string, value: unknown) => void) => {
         set('uMask', 0); set('uReceiver', 1); set('uReceiverWorld', env.receiver.world);
         set('uBounds', this.bounds); set('uBody', this.body); set('uBodyInverse', this.inverse); set('uStrength', this.strength);
         set('uDebugSolid', 0); set('uAnalytic', Number(this.analytic)); set('uEllipse', this.ellipse); setCloudUniforms(set, env.clouds);
         set('uMeshContact', Number(this.meshContact)); set('uContactMask', 2);
       } }, 0, 0, 1, 1, [this.blurred.shader.texture!, env.receiver.texture, this.blurred.shader.texture!]);
-    ownSunShader(this.display, name);
+    ownSunShader(this.display, name, true);
     this.display.setDepth(CHARACTER_SHADOW_CONFIG.depth).setVisible(false);
     const node = this.display.renderNode, run = node.run;
     node.run = function(context, object, parent) { runWithScopedBlend(this, run, context, Phaser.BlendModes.MULTIPLY, object, parent); };
@@ -120,7 +124,7 @@ export class KrakenShadowRenderer {
   private bindContact(): void {
     if (this.contact) return;
     const env = this.environment!;
-    const raw = new SunRenderTarget(this.scene, 'KrakenContactMask', CHARACTER_MESH_MASK, () => {});
+    const raw = new SunRenderTarget(this.scene, 'KrakenContactMask', CHARACTER_MESH_MASK, () => {}, ['__DEFAULT'], KRAKEN_SHADOW_TARGET);
     raw.shader.drawingContext!.setAutoClear(true, false, false);
     raw.shader.drawingContext!.setClearColor(0, 0, 0, 0);
     raw.shader.renderNode.run = context => {
@@ -135,9 +139,9 @@ export class KrakenShadowRenderer {
         })) this.contactDraws++;
     };
     const horizontal = new SunRenderTarget(this.scene, 'KrakenContactH', CHARACTER_MESH_BLUR,
-      set => { set('uMask', 0); set('uStep', this.contactStepH); }, [raw.shader.texture!]);
+      set => { set('uMask', 0); set('uStep', this.contactStepH); }, [raw.shader.texture!], KRAKEN_SHADOW_BLUR);
     const blurred = new SunRenderTarget(this.scene, 'KrakenContactV', CHARACTER_MESH_BLUR,
-      set => { set('uMask', 0); set('uStep', this.contactStepV); }, [horizontal.shader.texture!]);
+      set => { set('uMask', 0); set('uStep', this.contactStepV); }, [horizontal.shader.texture!], KRAKEN_SHADOW_BLUR);
     this.contact = { raw, horizontal, blurred };
     this.display!.textures[2] = blurred.shader.texture!;
     this.signature = '';
@@ -184,8 +188,8 @@ export class KrakenShadowRenderer {
     if (!this.analytic && this.mesh !== mesh) {
       if (!this.gpu?.updateGeometry(mesh.positions, mesh.indices)) {
         this.releaseGpu();
-        this.program = sunShaderName('KrakenProjection');
-        this.gpu = new EnemyMeshGpu(this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer, this.program, VERTEX, MASK,
+        this.program = KRAKEN_SHADOW_PROJECTION;
+        this.gpu = new EnemyMeshGpu(this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer, this.program, KRAKEN_SHADOW_VERTEX, KRAKEN_SHADOW_MASK,
           new Float32Array(Math.max(mesh.positions.length, MESH_CAPACITY[role] * 3)), 3,
           new Uint16Array(Math.max(mesh.indices.length, MESH_CAPACITY[role])), [{ name: 'inZOffset', size: 1 }], 1);
         this.gpu.updateGeometry(mesh.positions, mesh.indices);
@@ -223,12 +227,7 @@ export class KrakenShadowRenderer {
     meshGpuBytes: this.gpu?.bytes ?? 0, meshContact: this.meshContact, maskPixels: this.pixels, receiverRevision: this.environment?.receiver.revision, bounds: [...this.bounds] }; }
   private releaseGpu(): void {
     this.gpu?.destroy(); this.gpu = null; this.mesh = null;
-    if (!this.program) return;
-    const renderer = this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
-    const programs = renderer.shaderProgramFactory.programs as Record<string, Phaser.Renderer.WebGL.Wrappers.WebGLProgramWrapper>;
-    for (const key of Object.keys(programs)) if (key === this.program || key.startsWith(this.program + '_')) {
-      renderer.deleteProgram(programs[key]); delete programs[key];
-    }
+    // Fixed projection program is renderer-owned; streamed geometry and VAOs are private.
     this.program = '';
   }
   private releaseResources(): void {

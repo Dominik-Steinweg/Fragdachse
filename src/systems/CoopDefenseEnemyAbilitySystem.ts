@@ -290,6 +290,14 @@ export class CoopDefenseEnemyAbilitySystem {
         if (!this.combatSystem.canDamageTarget(enemy.id, target.id)) continue;
         if (Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, target.sprite.x, target.sprite.y) > fire.radius) continue;
         if (fire.requireLineOfSight && !this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, target.sprite.x, target.sprite.y)) continue;
+        if (this.energyShieldSystem?.tryBlockDamage({
+          targetId: target.id,
+          category: 'tesla',
+          damage,
+          sourceX: enemy.sprite.x,
+          sourceY: enemy.sprite.y,
+          now,
+        })) continue;
         this.combatSystem.applyDamage(target.id, damage, false, enemy.id, weapon.id, {
           sourceX: enemy.sprite.x,
           sourceY: enemy.sprite.y,

@@ -30,6 +30,7 @@ const titles = {
   meteor: o => label(o, 'Boss-Intro · Karte 10', 'VOID-METEOR'),
   mortar: o => label(o, 'Neuer Gegner', 'MÖRSER-DACHS'),
   fire: o => label(o, 'Neuer Gegner', 'BRANDSTIFTER-DACHS'),
+  charger: o => label(o, 'Neuer Gegner', 'SCHILD-ANSTÜRMER'),
   tower: o => label(o, 'Neue Belohnung', 'DER WACHTURM'),
   end: o => `<div style="position:absolute;inset:0;background:radial-gradient(ellipse at center, rgba(4,10,9,.35) 0%, rgba(4,10,9,.82) 70%)"></div>
     <div class="center shadow" style="top:${o === 'h' ? 330 : 700}px">
@@ -38,7 +39,7 @@ const titles = {
       <div class="gold" style="font-weight:700;font-size:${o === 'h' ? 200 : 150}px;line-height:1;letter-spacing:.03em">FRAGDACHSE</div>
       <div class="rule" style="width:${o === 'h' ? 900 : 760}px;margin:20px auto 28px"></div>
       <div style="font-weight:500;font-size:${o === 'h' ? 40 : 44}px;letter-spacing:.12em;color:#f4e7c8;line-height:1.45">
-        ${o === 'h' ? 'Neuer Endboss · Neue Gegner · Neuer Wachturm' : 'Neuer Endboss<br>Neue Gegner<br>Neuer Wachturm'}</div></div>`,
+        ${o === 'h' ? 'Neuer Endboss · Neue Gegner · Neue Karten' : 'Neuer Endboss<br>Neue Gegner<br>Neue Karten'}</div></div>`,
 };
 function label(o, kicker, name) {
   const h = o === 'h';

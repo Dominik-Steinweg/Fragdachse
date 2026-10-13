@@ -98,6 +98,15 @@ export class NecromancySystem {
     private readonly resolveStat: NecromancyStatResolver,
   ) {}
 
+  private specialMovement: (() => import('../entities/EnemyManager').EnemySpecialMovementSource | null) | null = null;
+  /**
+   * Ability-owned movement (e.g. a committed shield charge) wins over following and attacking:
+   * while a source returns an override for an ally, this system neither steers nor attacks with it.
+   */
+  setSpecialMovementSource(source: (() => import('../entities/EnemyManager').EnemySpecialMovementSource | null) | null): void {
+    this.specialMovement = source;
+  }
+
   /** Registriert die Leichen-Darstellung; ohne Sink bleibt das System rein mechanisch. */
   setCorpseSink(sink: NecromancyCorpseSink | null): void {
     this.corpseSink = sink;
@@ -338,6 +347,8 @@ export class NecromancySystem {
     now: number,
     deltaMs: number,
   ): void {
+    const override = this.specialMovement?.()?.getMovementOverride(ally, now);
+    if (override) { ally.setDesiredVelocity(override.vx, override.vy, now); return; }
     const route = this.enemyManager.routeAlly(ally, `ally:${ownerId}:${destination.target?.id ?? 'follow'}`,
       destination, destination.target ? Math.max(16, ...ally.getAttackWeapons().map(attack => attack.weapon.config.range)) : 32);
     if (!ally.isAttackMovementPaused(now)) {

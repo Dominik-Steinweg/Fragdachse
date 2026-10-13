@@ -2,6 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { beginShaderPrograms, compileShaderPrograms } from '../src/graphics/compileShaderPrograms';
 
 describe('grouped shader links', () => {
+  it('polls only nonblocking KHR completion while loading, then validates once at the barrier', () => {
+    let ready=false,completed=0;const queries:number[]=[];
+    const program={compiling:true,webGLProgram:{},_completeProgram(){completed++;this.compiling=false;}};
+    const renderer={game:{config:{skipUnreadyShaders:false}},parallelShaderCompileExtension:{COMPLETION_STATUS_KHR:91},
+      gl:{isContextLost:()=>false,getProgramParameter(_p:unknown,key:number){queries.push(key);return ready;}},
+      shaderProgramFactory:{getShaderProgram:()=>program}};
+    const finish=beginShaderPrograms(renderer as never,[{currentConfig:{}}] as never);
+    expect(finish.isReady()).toBe(false);expect(completed).toBe(0);
+    ready=true;expect(finish.isReady()).toBe(true);expect(completed).toBe(0);
+    expect(queries).toEqual([91,91]);finish();finish();
+    expect(completed).toBe(1);expect(finish.isReady()).toBe(true);expect(queries).toEqual([91,91]);
+  });
   it('keeps the rendering config unchanged between submission and an idempotent completion barrier', () => {
     const config={skipUnreadyShaders:false};let completions=0;
     const program={compiling:true,_completeProgram(){completions++;this.compiling=false;}};

@@ -823,6 +823,16 @@ export class TeslaDomeSystem {
     if (enemyTargets && this.enemyTargetProvider) {
       for (const enemy of this.enemyTargetProvider()) {
         if (!enemyTargets.has(enemy.id)) continue;
+        if (this.energyShieldSystem?.tryBlockDamage({
+          targetId: enemy.id,
+          category: 'tesla',
+          damage: targetDamage,
+          sourceX: dome.x,
+          sourceY: dome.y,
+          now: Date.now(),
+        })) {
+          continue;
+        }
         this.combatSystem.applyDamage(enemy.id, targetDamage, false, dome.ownerId, dome.config.id, {
           sourceX: dome.x,
           sourceY: dome.y,

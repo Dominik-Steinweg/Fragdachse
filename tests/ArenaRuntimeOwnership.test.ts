@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+vi.mock('../src/effects/kraken/KrakenShaderWarmup', () => ({
+  warmupKrakenShaders: () => Object.assign(() => {}, { isReady: () => true }),
+}));
 
 vi.mock('phaser', async () => {
   const { createFakePhaserModule } = await import('./fakeArenaRenderScene');

@@ -149,21 +149,28 @@ export class CoopMissionEnemySupportComposition {
         (playerId, stat, baseValue) => this.options.playerModifierReadPort?.getResolvedStat(playerId, stat, baseValue) ?? baseValue,
       )
       : null;
+    necromancy?.setSpecialMovementSource(() => runtime.enemySpecialMovementSource);
     if (necromancy) runtime.setNecromancy(necromancy);
 
     if (!necromancy && !runtime.coopDefenseEnemyAttackSystem) return;
     runtime.bind({
       attach: () => {
+        // Raised charger shields block in combat and replicate for this Activity's lifetime.
+        this.options.combatSystem.setEnemyFrontalShieldPort?.(runtime.coopDefenseShieldChargerSystem);
         runtime.coopDefenseEnemyAttackSystem?.setActionBlockedChecker((enemyId) => (
           (runtime.coopDefenseVoidHunterSystem?.blocksRegularAttacks(enemyId) ?? false)
           || (runtime.coopDefenseTimebombSystem?.blocksRegularBehavior(enemyId) ?? false)
           || (runtime.coopDefenseMortarSystem?.blocksRegularAttacks(enemyId) ?? false)
           || (runtime.coopDefenseFirestarterSystem?.blocksRegularAttacks(enemyId) ?? false)
+          || (runtime.coopDefenseShieldChargerSystem?.blocksRegularAttacks(enemyId) ?? false)
+          || (runtime.coopDefenseEnergyConeSystem?.blocksRegularAttacks(enemyId) ?? false)
           || (runtime.coopDefenseEnemyAbilitySystem?.blocksRegularAttacks(enemyId) ?? false)
         ));
         runtime.coopDefenseEnemyDodgeSystem?.setBlockedChecker(enemyId =>
           (runtime.coopDefenseVoidHunterSystem?.blocksDodge(enemyId) ?? false)
-          || (runtime.coopDefenseFirestarterSystem?.blocksDodge(enemyId) ?? false));
+          || (runtime.coopDefenseFirestarterSystem?.blocksDodge(enemyId) ?? false)
+          || (runtime.coopDefenseShieldChargerSystem?.blocksDodge(enemyId) ?? false)
+          || (runtime.coopDefenseEnergyConeSystem?.blocksDodge(enemyId) ?? false));
         if (necromancy) {
           necromancy.setCorpseSink({
             onCorpseAdded: (corpseId, x, y, enemySize, lifetimeMs) => {
@@ -177,6 +184,7 @@ export class CoopMissionEnemySupportComposition {
         }
       },
       detach: () => {
+        this.options.combatSystem.setEnemyFrontalShieldPort?.(null);
         runtime.coopDefenseEnemyAttackSystem?.setActionBlockedChecker(null);
         runtime.coopDefenseEnemyDodgeSystem?.setBlockedChecker(null);
         if (necromancy) {

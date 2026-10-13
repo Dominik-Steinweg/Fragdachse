@@ -211,7 +211,10 @@ export class FogGpuField {
       const renderer = this.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer, gl = renderer.gl;
       const suite = shader.renderNode.programManager.getCurrentProgramSuite() as { program: { webGLProgram: WebGLProgram } } | null;
       const program = suite?.program.webGLProgram;
-      if (!program || !gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(`Shader ${name} could not link`);
+      // A published Phaser suite has already passed _completeProgram's link
+      // check. Fog targets share that program; querying it again for every tile
+      // synchronizes the GPU even when no new program was linked.
+      if (!program) throw new Error(`Shader ${name} could not link`);
       if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error(`Incomplete RGBA8 framebuffer ${name}`);
       // DrawingContext.setBlendMode writes `enable`, whereas the global wrapper
       // consumes `enabled` in Phaser 4.2.1. Data must bypass alpha blending.

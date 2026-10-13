@@ -4,6 +4,7 @@ import math
 from types import SimpleNamespace
 import bpy
 import numpy as np
+from mathutils.kdtree import KDTree
 from mesh_shadow_blender import evaluated, fixed_proxy, bind
 from mesh_shadow_weapon_blender import voxel_union
 
@@ -25,13 +26,19 @@ def shell(points, triangles, thickness):
 
 
 def prepare_union(scene, sources, scale, anatomy, max_vertices, poses):
-    volume=[];points=[];faces=[];offset=0;owners=[]
+    # Recipes may tag rigid props that swing away from the body (e.g. a shield) with
+    # ob['meshUnionGroup']; each group gets its own rest volume and its proxy vertices
+    # bind only to that group's source triangles, so the proxy never bridges parts that
+    # separate in later poses. Untagged sources share one group (unchanged behaviour).
+    names=sorted({str(p['ob'].get('meshUnionGroup','body')) for p in sources})
+    volume={name:[] for name in names};points=[];faces=[];offset=0;owners=[];source_groups=[]
     legs=list(anatomy['limbs'])
     for p in sources:
         name=p['ob'].name;rest,tri=p['rest'],p['sourceTris']
         if 'fur' in name.lower() or 'coat' in name.lower():
             rest,tri=shell(rest,tri,.012)
-        volume.append(dict(rest=rest,sourceTris=tri))
+        group=str(p['ob'].get('meshUnionGroup','body'))
+        volume[group].append(dict(rest=rest,sourceTris=tri));source_groups.extend([names.index(group)]*len(p['rest']))
         points.append(p['rest']);faces.append(p['sourceTris']+offset)
         owner=0
         for i,leg in enumerate(legs):
@@ -39,7 +46,12 @@ def prepare_union(scene, sources, scale, anatomy, max_vertices, poses):
             if name.startswith(leg) or ob.vertex_groups.get(leg) or ob.parent_bone==leg:
                 owner=i+1;break
         owners.extend([owner]*len(p['rest']));offset+=len(p['rest'])
-    union_points,union_faces=voxel_union(scene,volume,.08,scale,evaluated)
+    union_points,union_faces,union_groups,count=[],[],[],0
+    for index,group in enumerate(names):
+        group_points,group_faces=voxel_union(scene,volume[group],.08,scale,evaluated)
+        union_points.append(group_points);union_faces.append(group_faces+count);count+=len(group_points)
+        union_groups.append(np.full(len(group_points),index,np.int32))
+    union_points,union_faces,union_groups=np.concatenate(union_points),np.concatenate(union_faces),np.concatenate(union_groups)
     placeholder=SimpleNamespace(name='Enemy rest volume union')
     candidate=dict(ob=placeholder,rest=union_points,sourceTris=union_faces,weight=1.,signature='rest-union')
     attempts=fixed_proxy(scene,[candidate],max_vertices*2-8,(1000,max_vertices,1,max_vertices*2))
@@ -48,8 +60,28 @@ def prepare_union(scene, sources, scale, anatomy, max_vertices, poses):
                      signature=hashlib.sha256(''.join(p['signature'] for p in sources).encode()).hexdigest(),
                      sourceTriangleCleanup=dict(degenerateTriangles=0,duplicateTriangles=0),
                      sourceOwners=np.array(owners,dtype=np.int8),
-                     unionAudit=dict(voxelWorld=.08,furShellBlender=.012,restVertices=len(union_points),
+                     unionAudit=dict(voxelWorld=.08,furShellBlender=.012,restVertices=len(union_points),unionGroups=names,
                                      sourceParts=[p['ob'].name for p in sources]))
+    source_groups=np.array(source_groups,np.int32)
+    if len(names)>1:
+        # Decimation never joins components, so each connected proxy component keeps
+        # the group of the rest union it came from. Vote per component: touching or
+        # overlapping groups (a paw inside a grip strap) make single-vertex lookups ambiguous.
+        nearest=KDTree(len(union_points))
+        for i,point in enumerate(union_points):nearest.insert(point,i)
+        nearest.balance()
+        votes=np.array([union_groups[nearest.find(p)[1]] for p in candidate['proxy']],np.int32)
+        parent=np.arange(len(votes))
+        def root(i):
+            while parent[i]!=i:parent[i]=parent[parent[i]];i=parent[i]
+            return i
+        for a,b,c in candidate['triangles']:
+            for x,y in ((a,b),(b,c)):parent[root(x)]=root(y)
+        roots=np.array([root(i) for i in range(len(votes))])
+        groups=np.empty_like(votes)
+        for component in np.unique(roots):
+            members=roots==component;groups[members]=np.bincount(votes[members]).argmax()
+        candidate['bindGroups']=dict(source=source_groups,proxy=groups)
     # Spend the remaining vertices on the edges which deform least faithfully.
     # One immutable refinement in rest space; all poses share these new identities.
     bind(candidate)
@@ -58,6 +90,8 @@ def prepare_union(scene, sources, scale, anatomy, max_vertices, poses):
     snapped=(source_points[candidate['binding']]*candidate['weights'][:,:,None]).sum(1)
     midpoint=(snapped[edges[:,0]]+snapped[edges[:,1]])/2
     middle=dict(ob=placeholder,rest=source_points,sourceTris=source_faces,proxy=midpoint)
+    if 'bindGroups' in candidate:
+        middle['bindGroups']=dict(source=source_groups,proxy=candidate['bindGroups']['proxy'][edges[:,0]])
     bind(middle)
     error=np.zeros(len(edges))
     for pose in poses:
@@ -79,6 +113,8 @@ def prepare_union(scene, sources, scale, anatomy, max_vertices, poses):
         incident=sum(int(a in face and b in face) for face in faces)
         if not incident or len(faces)+incident>max_vertices*2:continue
         accepted+=1;new=len(vertices)
+        if 'bindGroups' in candidate:
+            groups=candidate['bindGroups'];groups['proxy']=np.append(groups['proxy'],groups['proxy'][a])
         point=(source_points[middle['binding'][edge_index]]*middle['weights'][edge_index,:,None]).sum(0)
         vertices.append(point.tolist());refined=[]
         for face in faces:

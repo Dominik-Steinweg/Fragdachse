@@ -21,7 +21,8 @@ const KIND: Readonly<Record<WaterDisturbanceKind, number>> = { ring: 0, surge: 1
 const SLOTS = 8;
 const MAX_TEXELS = 768;
 
-const FRAGMENT = `
+export const WATER_DISTURBANCE_PROGRAM = 'WaterDisturbanceShared';
+export const WATER_DISTURBANCE_FRAGMENT = `
 #pragma phaserTemplate(shaderName)
 precision highp float;
 varying vec2 outTexCoord;
@@ -118,10 +119,10 @@ export class WaterDisturbanceField {
     this.rect = new Float32Array([bounds.x, bounds.y, Math.max(1, bounds.width), Math.max(1, bounds.height)]);
     const texel = Math.max(2, Math.max(bounds.width, bounds.height) / MAX_TEXELS);
     this.width = Math.max(4, Math.ceil(bounds.width / texel)); this.height = Math.max(4, Math.ceil(bounds.height / texel));
-    this.target = new SunRenderTarget(scene, 'WaterDisturbance', FRAGMENT, set => {
+    this.target = new SunRenderTarget(scene, 'WaterDisturbance', WATER_DISTURBANCE_FRAGMENT, set => {
       set('uRect', this.rect);
       for (let i = 0; i < SLOTS; i++) { set(`uA${i}`, this.a[i]); set(`uB${i}`, this.b[i]); }
-    });
+    }, ['__DEFAULT'], WATER_DISTURBANCE_PROGRAM);
     scene.events.on('prerender', this.flush, this);
   }
   get active(): boolean { return this.live && !this.destroyed; }

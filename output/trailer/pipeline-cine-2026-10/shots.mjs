@@ -20,6 +20,7 @@ async function kraken({ skipIntro = true, player = { gridX: 35, gridY: 33.6 }, t
   await run(page, { action: 'quality', level: 'high' });
   await run(page, { action: 'options', values: { refillHp: true, hideAim: true, hideTutorial: true, timeOfDay: time } });
   await run(page, { action: 'teleport', ...player });
+  await page.evaluate(() => { window.__C.cleanHits = true; });
   await step(page, 2);
   return { browser, page, s: await status(page) };
 }
@@ -28,6 +29,7 @@ async function act(page, act, max = 900) {
   return until(page, s => { const a = s.krakenDevAction; if (a?.status === 'failed') throw Error(a.error); return a?.status === 'started'; }, max, 1);
 }
 async function session(open, body) { const ctx = await open(); try { await body(ctx); } finally { await ctx.browser.close(); } }
+const enemy = (page, kind) => page.evaluate(k => window.devScenario.status().enemies.find(e => e.kind === k) ?? null, kind);
 
 export const shots = {
   /** Cold open: still water, slow-motion eruption, pull back to reveal its size. */
@@ -46,19 +48,21 @@ export const shots = {
     await act(page, 'dive');
     await until(page, st => st.krakenResidency?.state?.phase?.kind === 'submerged', 900);
     const p = await playerPos(page);
+    await run(page, { action: 'holdWeapon', slot: 'weapon2' });
     await record(page, 'tentacles', frames, f => ({ dt: OC,
-      cam: shake(path([[0, { x: p.x, y: p.y - 170, zoom: 2.05 }], [960, { x: p.x, y: p.y - 140, zoom: 2.3 }]], f), f, 3) }));
+      cam: shake(path([[0, { x: p.x, y: p.y - 130, zoom: 2.6 }], [960, { x: p.x, y: p.y - 110, zoom: 2.9 }]], f), f, 3) }));
   }),
 
   /** Ink: the kraken spits across the bank, the badger is engulfed. */
   ink: (frames = 640) => session(() => kraken({ player: { gridX: 40, gridY: 34 } }), async ({ page, s }) => {
     await run(page, { action: 'krakenTarget', gridX: 40, gridY: 34 });
     await run(page, { action: 'target', gridX: 36, gridY: 24 });
+    await run(page, { action: 'holdWeapon', slot: 'weapon2' });
     await act(page, 'ink');
     const p = await playerPos(page), follow = follower(.06);
     await record(page, 'ink', frames, async f => {
-      const k = await krakenPos(page), c = follow(mid(k, p, .4));
-      return { dt: OC, cam: shake({ ...c, zoom: path([[0, { x: 0, y: 0, zoom: 1.45 }], [200, { x: 0, y: 0, zoom: 1.6 }], [640, { x: 0, y: 0, zoom: 1.7 }]], f).zoom }, f) };
+      const k = await krakenPos(page), c = follow(mid(k, p, .5));
+      return { dt: OC, cam: shake({ ...c, zoom: path([[0, { x: 0, y: 0, zoom: 1.75 }], [200, { x: 0, y: 0, zoom: 1.85 }], [640, { x: 0, y: 0, zoom: 1.95 }]], f).zoom }, f) };
     });
   }),
 
@@ -89,11 +93,13 @@ export const shots = {
   /** Phase two: it hauls itself out of the pond and comes for the badger. */
   ashore: (frames = 960) => session(() => kraken({ player: { gridX: 37, gridY: 41 } }), async ({ page, s }) => {
     await run(page, { action: 'krakenHp', hp: 5400 });
+    await run(page, { action: 'holdWeapon', slot: 'weapon2' });
     await act(page, 'ashore', 1800);
     const follow = follower(.05);
     await record(page, 'ashore', frames, async f => {
       const k = await krakenPos(page), c = follow({ x: k.x, y: k.y + 60 });
-      return { dt: OC, cam: shake({ ...c, zoom: path([[0, { x: 0, y: 0, zoom: 1.9 }], [960, { x: 0, y: 0, zoom: 1.6 }]], f).zoom }, f) };
+      if (f % 8 === 0) await run(page, { action: 'target', ...toGrid(s, k) });
+      return { dt: OC, cam: shake({ ...c, zoom: path([[0, { x: 0, y: 0, zoom: 2.35 }], [960, { x: 0, y: 0, zoom: 2.0 }]], f).zoom }, f) };
     });
   }),
 
@@ -108,11 +114,12 @@ export const shots = {
     await run(page, { action: 'teleport', ...toGrid(s, p0) });
     await run(page, { action: 'krakenTarget', ...toGrid(s, p0) });
     await step(page, 20);
+    await run(page, { action: 'holdWeapon', slot: 'weapon2' });
     await act(page, 'lunge', 600);
     const follow = follower(.07);
     await record(page, 'lunge', frames, async f => {
       const k = await krakenPos(page), c = follow(mid(k, p0, .4));
-      return { dt: OC, cam: shake({ x: c.x, y: Math.min(c.y, s.metrics.offsetY + 36.5 * 32), zoom: path([[0, { x: 0, y: 0, zoom: 1.55 }], [520, { x: 0, y: 0, zoom: 1.8 }]], f).zoom }, f, 3) };
+      return { dt: OC, cam: shake({ x: c.x, y: Math.min(c.y, s.metrics.offsetY + 36.5 * 32), zoom: path([[0, { x: 0, y: 0, zoom: 2.05 }], [520, { x: 0, y: 0, zoom: 2.35 }]], f).zoom }, f, 3) };
     });
   }),
 
@@ -130,8 +137,15 @@ export const shots = {
     }
     if (!intro) throw Error('boss intro did not start');
     console.log('intro', JSON.stringify(intro));
-    await record(page, 'meteor', frames, f => ({ dt: OC,
-      cam: shake(path([[0, { x: intro.x, y: intro.y - 40, zoom: 1.15 }], [900, { x: intro.x, y: intro.y, zoom: 1.45 }]], f), f, 4) }));
+    // Map 10 drops the meteor near the west edge: keep the view inside the map (no black void) and
+    // let the edit push in on the impact (zx/zy logged below).
+    const m = (await status(page)).metrics;
+    const inside = c => { const hw = 960 / c.zoom + 10, hh = 540 / c.zoom + 10;
+      return { x: Math.min(Math.max(c.x, m.offsetX + hw), m.maxX - hw), y: Math.min(Math.max(c.y, m.offsetY + hh), m.maxY - hh), zoom: c.zoom }; };
+    const keys = [[0, { x: intro.x, y: intro.y - 40, zoom: 1.3 }], [900, { x: intro.x, y: intro.y, zoom: 1.5 }]];
+    const c0 = inside(path(keys, 700));
+    console.log('impact frame position', JSON.stringify({ zx: +(.5 + (intro.x - c0.x) * c0.zoom / 1920).toFixed(3), zy: +(.5 + (intro.y - c0.y) * c0.zoom / 1080).toFixed(3) }));
+    await record(page, 'meteor', frames, f => ({ dt: OC, cam: inside(shake(path(keys, f), f, 4)) }));
   }),
 
   /** Mortar badgers lay a barrage around the badger. */
@@ -147,7 +161,7 @@ export const shots = {
     await step(page, 30);
     const p = await playerPos(page);
     await record(page, 'mortar', frames, f => ({ dt: OC,
-      cam: shake(path([[0, { x: p.x + 90, y: p.y - 10, zoom: 1.55 }], [840, { x: p.x + 50, y: p.y, zoom: 1.85 }]], f), f, 3) }));
+      cam: shake(path([[0, { x: p.x + 70, y: p.y - 10, zoom: 2.1 }], [840, { x: p.x + 40, y: p.y, zoom: 2.4 }]], f), f, 3) }));
   }),
 
   /** Firestarter: purple orbs drift in, a lance ignites them into a firestorm. */
@@ -162,7 +176,33 @@ export const shots = {
     await step(page, 30);
     const c = await world(page, { gridX: 23, gridY: 42 });
     await record(page, 'fire', frames, f => ({ dt: OC,
-      cam: shake(path([[0, { ...c, zoom: 1.35 }], [1080, { x: c.x - 60, y: c.y, zoom: 1.6 }]], f), f, 3) }));
+      cam: shake(path([[0, { ...c, zoom: 1.8 }], [1080, { x: c.x - 50, y: c.y, zoom: 2.1 }]], f), f, 3) }));
+  }),
+
+  /** Shield charger: two badgers pour fire into the raised shield, then it drops it and charges. */
+  charger: (frames = 900) => session(() => open({ ...KRAKEN, weapon2: 'NEGEV', player: { gridX: 31, gridY: 37.5 },
+    bots: [{ name: 'Grimbart', weapon1: 'GLOCK', weapon2: 'AK47', player: { gridX: 29.5, gridY: 36.4 } }] }),
+  async ({ page }) => {
+    await run(page, { action: 'quality', level: 'high' });
+    await run(page, { action: 'spawn', kind: 'shield-charger-badger', pinned: false, hp: 6000, gridX: 48, gridY: 37.5 }); // far enough to finish its slow turn
+    await run(page, { action: 'settle', frames: 60 }); await step(page, 2);
+    const s = await status(page), p = await playerPos(page), follow = follower(.08), fast = follower(.2);
+    // Phases: approach (tight on the shield) → windup (corridor and badger) → charge (ride the streak).
+    let windup = null, charge = null, last = null;
+    await record(page, 'charger', frames, async f => {
+      const e = await enemy(page, 'shield-charger-badger') ?? last; last = e;
+      // Open fire once it faces the badgers, so every round lands on the shield.
+      if (f === 200) { await run(page, { action: 'holdWeapon', slot: 'weapon2' }); await run(page, { action: 'bot', index: 0, fire: 'weapon2' }); }
+      const speed = Math.hypot(e.vx, e.vy);
+      if (!windup && f > 40 && !e.moving) { windup = f; console.log('  windup at', f, JSON.stringify({ e, p: await playerPos(page) })); }
+      if (windup && !charge && speed > 300) { charge = f; console.log('  charge at', f); }
+      if (windup && f === windup + 24) await run(page, { action: 'move', dx: -.3, dy: -1, durationMs: 420 }); // dive out of the lane
+      if (!charge && f % 6 === 0) { const g = toGrid(s, e); await run(page, { action: 'target', ...g }); await run(page, { action: 'bot', index: 0, aim: g }); }
+      const k = windup ? Math.min(1, (f - windup) / 50) : 0, ease = k * k * (3 - 2 * k);
+      const focus = charge ? e : mid(e, p, .2 + .3 * ease);
+      const c = charge ? fast(focus) : follow(focus);
+      return { dt: OC, cam: shake({ ...c, zoom: charge ? 2.8 : 4.2 - 1.3 * ease }, f, charge ? 4 : 2.5) };
+    });
   }),
 
   /** The watchtower: the badger fires down into a horde, then the tower collapses. */

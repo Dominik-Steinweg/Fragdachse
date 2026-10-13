@@ -29,6 +29,7 @@ import type { PlayerCombatResourcePort } from '../world/PlayerCombatIntegrationP
 import type { WorldMetrics } from '../world/WorldMetrics';
 import type { DetonationSystem }  from '../systems/DetonationSystem';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
+import type { EnemyFrontalShieldPort } from '../systems/enemyFrontalShield';
 import type { DecoySystem, DecoyTargetSnapshot } from '../systems/DecoySystem';
 import type { BurnOnHitConfig, BurnOrigin, ChainLightningConfig, CombatDamageKind, CombatDamageTargetType, GroundFireVisualStyle, HitscanSupportEffect, HitscanVisualPreset, LoadoutSlot, MeleeDamageTarget, MeleeVisualPreset, ProjectileSpawnConfig, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, WeaponSlot } from '../types';
 import {
@@ -595,7 +596,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   private loadoutManager:   LoadoutManagerType  | null  = null;
   private ak47Behavior:     Pick<Ak47BehaviorPort, 'registerProjectileHit' | 'resetPlayer'> | null = null;
   private energyShieldSystem: EnergyShieldSystem | null = null;
-  private powerUpSystem:    PowerUpSystemType   | null  = null;
+  private enemyFrontalShieldPort: EnemyFrontalShieldPort | null = null;
+  private powerUpSystem:   PowerUpSystemType   | null  = null;
   private detonationSystem: DetonationSystem    | null  = null;  private stinkCloudSystem: StinkCloudSystemType | null = null;  private rockObjects: readonly (RockPhysicsProxy | null)[] | null = null;
   private decoySystem:      DecoySystem | null = null;
   private enemyManager:     EnemyManager | null = null;
@@ -1095,7 +1097,19 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   setAk47Behavior(behavior: Pick<Ak47BehaviorPort, 'registerProjectileHit' | 'resetPlayer'> | null): void {
     this.ak47Behavior = behavior;
   }
-  setEnergyShieldSystem(es: EnergyShieldSystem | null): void { this.energyShieldSystem = es; }
+  setEnergyShieldSystem(es: EnergyShieldSystem | null): void {
+    if (this.enemyFrontalShieldPort && this.energyShieldSystem !== es) this.energyShieldSystem?.setEnemyFrontalShieldPort(null);
+    this.energyShieldSystem = es;
+    if (this.enemyFrontalShieldPort) es?.setEnemyFrontalShieldPort(this.enemyFrontalShieldPort);
+  }
+  /**
+   * Activity-owned directional enemy shields. Blocking and replication live with the player's
+   * directional shield in {@link EnergyShieldSystem}; this entry only survives a shield-system swap.
+   */
+  setEnemyFrontalShieldPort(port: EnemyFrontalShieldPort | null): void {
+    this.enemyFrontalShieldPort = port;
+    this.energyShieldSystem?.setEnemyFrontalShieldPort(port);
+  }
   setPowerUpSystem(ps: PowerUpSystemType | null): void   { this.powerUpSystem  = ps; }
   setDetonationSystem(ds: DetonationSystem | null): void { this.detonationSystem = ds; }
   setProjectileDetonableReadPort(port: ProjectileDetonableReadPort | null): void {
@@ -1861,6 +1875,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       const derivedBasis = derivedFrom
         ? createDerivedDamageBasis(derivedFrom, roundedDamage / derivedFrom.actualDamage)
         : undefined;
+      const category = options?.category ?? (damageKind === 'ground' ? 'damage_over_time' : 'explosion');
+      if (this.shouldBlockWithShield(enemy.bossId, category, roundedDamage, x, y)) continue;
       if ((options?.enemySlowFraction ?? 0) > 0 && (options?.enemySlowDurationMs ?? 0) > 0) {
         this.applyEnemySlow(enemy.id, options?.enemySlowFraction ?? 0, options?.enemySlowDurationMs ?? 0);
       }
@@ -2002,6 +2018,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       const basis = this.resolveExplosionDamageBasis(dist, effect, ownerId, sourceSlot);
       const roundedDamage = basis.amount;
       if (roundedDamage <= 0) continue;
+      if (this.shouldBlockWithShield(contact.bossId, 'explosion', roundedDamage, x, y)) continue;
       if ((effect.enemySlowFraction ?? 0) > 0 && (effect.enemySlowDurationMs ?? 0) > 0) {
         this.applyEnemySlow(enemy.id, effect.enemySlowFraction ?? 0, effect.enemySlowDurationMs ?? 0);
       }
@@ -2082,7 +2099,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     damage: number,
     sourceX: number,
     sourceY: number,
-    now = this.hostFrameNowMs,
+    now?: number,
   ): boolean {
     if (this.getStructureOccupancyId(targetId) !== undefined) return false;
     if (!this.energyShieldSystem) return false;
@@ -2092,7 +2109,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       damage,
       sourceX,
       sourceY,
-      now,
+      now: now ?? this.hostFrameNowMs,
     });
   }
 
@@ -2666,6 +2683,11 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     const enemy = this.enemyManager?.getEnemy(enemyId);
     const target = this.resolveProjectileCombatTarget(request);
     if (!enemy || !target || target.kind !== 'enemy') return { accepted: false };
+    // A raised frontal shield absorbs the projectile before any hit reaction (AK47 focus, swarm).
+    if (!findEnergyInjector(request)
+      && this.shouldBlockWithShield(enemyId, 'projectile', this.computeDirectDamage(request), request.impact.x, request.impact.y)) {
+      return { accepted: true, blocked: true, actualDamage: 0, defense: { kind: 'absorbed' } };
+    }
     const ak47Impact = this.resolveAk47DirectEnemyHit(request, enemyId);
     const plasmaSwarm = this.resolvePlasmaSwarmReaction(request, enemyId, enemy.sprite.x, enemy.sprite.y);
     if (plasmaSwarm) this.onPlasmaSwarmReaction?.(plasmaSwarm);
@@ -3099,6 +3121,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         : (this.loadoutManager?.getDamageMultiplier(shooterId, this.hostFrameNowMs) ?? 1);
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
+      // Like the player shield: the trace ends at the shielded enemy, without damage, burn or chain.
+      if (this.shouldBlockWithShield(trace.hitEnemyId, 'hitscan', actualDamage, startX, startY)) return true;
       const outcome = this.applyDamage(trace.hitEnemyId, actualDamage, false, shooterId, sourceId, {
         sourceX: startX,
         sourceY: startY,
@@ -3474,6 +3498,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         } : { damageKind: 'chain' as const };
         if (jump.target.kind === 'enemy') {
           opts.visitedEnemies.add(runtimeId);
+          if (this.shouldBlockWithShield(runtimeId, 'hitscan', jump.damage, jump.originX, jump.originY)) return;
           const outcome = this.applyDamage(physicalHandles.get(jump.target.id) ?? runtimeId, jump.damage, false, opts.shooterId, opts.sourceId, visualContext, damageOptions);
           this.publishPrimaryHitReward(outcome, opts.primaryHitReward, { x: jump.target.x, y: jump.target.y });
         } else if (jump.target.kind === 'player') {
@@ -3751,7 +3776,12 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         if (!next) break;
         meleeHitIds.add(next.key);
         chainDamage *= chain.damageFactor;
-        this.applyDamage(next.id, chainDamage, false, shooterId, sourceId, { sourceX: chainX, sourceY: chainY }, { damageKind: 'chain' });
+        // Players keep their established melee-chain rule; an enemy frontal shield stops the arc.
+        const enemyShielded = this.enemyManager?.hasEnemy(next.id) === true
+          && this.shouldBlockWithShield(next.id, 'tesla', chainDamage, chainX, chainY);
+        if (!enemyShielded) {
+          this.applyDamage(next.id, chainDamage, false, shooterId, sourceId, { sourceX: chainX, sourceY: chainY }, { damageKind: 'chain' });
+        }
         chainX = next.x;
         chainY = next.y;
       }
@@ -5106,6 +5136,67 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
           allowCritical: !ground, basis: { kind: 'source-resolved', amount: damage,
             sourceFactors: [{ kind: 'runtime-power', multiplier, resolvedAt: 'execution' }] } });
     }, now);
+  }
+
+  /** Free lane distance for a charging body: the swept circle stops at the first blocker. */
+  measureChargeLane(x: number, y: number, angle: number, length: number, radius: number): number {
+    const line = new Phaser.Geom.Line(x, y, x + Math.cos(angle) * length, y + Math.sin(angle) * length);
+    let free = length;
+    const obstacle = this.geometry.nearestObstacleHit(line, { purpose: 'physical', clearanceRadius: radius });
+    if (obstacle) free = Math.min(free, obstacle.distance);
+    const inner = new Phaser.Geom.Rectangle(this.arenaBounds.x + radius, this.arenaBounds.y + radius,
+      this.arenaBounds.width - radius * 2, this.arenaBounds.height - radius * 2);
+    const edge = this.findNearestRectangleHit(line, inner);
+    if (edge) free = Math.min(free, edge.distance);
+    const train = this.computeTrainBounds();
+    if (train) {
+      const hit = this.findNearestRectangleHit(line, new Phaser.Geom.Rectangle(train.x - radius, train.y - radius,
+        train.width + radius * 2, train.height + radius * 2));
+      if (hit) free = Math.min(free, hit.distance);
+    }
+    return Math.max(0, free);
+  }
+
+  /** Shield charger body contact: melee category, shield-aware, attributed to the charging enemy. */
+  resolveChargeContact(targetId: string, chargerId: string, damage: number, sourceX: number, sourceY: number, nowMs: number): boolean {
+    return this.runHostExecution(() => {
+      if (!this.isAlive(targetId) || !this.canDamageTarget(chargerId, targetId)) return false;
+      if (this.shouldBlockWithShield(targetId, 'melee', damage, sourceX, sourceY, nowMs)) return false;
+      const outcome = this.applyDamage(targetId, damage, false, chargerId, 'SHIELD_CHARGE',
+        { sourceX, sourceY }, { damageKind: 'direct' });
+      return outcome?.kind === 'damage-applied';
+    }, nowMs);
+  }
+
+  /** Energy cone cover profile: first shot-blocking obstacle, the arena edge or the train along one ray. */
+  measureConeRay(x: number, y: number, angle: number, length: number): number {
+    const line = new Phaser.Geom.Line(x, y, x + Math.cos(angle) * length, y + Math.sin(angle) * length);
+    const hit = this.findNearestObstacleHit(line, { purpose: 'directFire' });
+    return Math.max(0, Math.min(length, hit?.distance ?? length));
+  }
+
+  /** Energy cone impulse: cover-checked from the origin, energy-shield aware, attributed to the caster. */
+  resolveConeImpulse(targetId: string, casterId: string, damage: number, originX: number, originY: number,
+    targetX: number, targetY: number, nowMs: number): boolean {
+    return this.runHostExecution(() => {
+      if (targetId.startsWith('decoy_')) {
+        // Decoys take damage through their own system (numeric id, owner relationship).
+        const decoyId = Number(targetId.slice('decoy_'.length));
+        const decoy = this.decoySystem?.getHostTargets().find(entry => entry.id === decoyId);
+        if (!decoy || !this.canDamageTarget(casterId, decoy.ownerId)) return false;
+        if (!this.hasClearLineOfFire(originX, originY, targetX, targetY)) return false;
+        const length = Math.hypot(targetX - originX, targetY - originY) || 1;
+        const outcome = this.decoySystem?.applyDamage(decoyId, damage, casterId, 'ALIEN_BADGER_ENERGY_CONE',
+          { sourceX: originX, sourceY: originY, dirX: (targetX - originX) / length, dirY: (targetY - originY) / length });
+        return outcome?.kind === 'damage-applied';
+      }
+      if (!this.isAlive(targetId) || !this.canDamageTarget(casterId, targetId)) return false;
+      if (!this.hasClearLineOfFire(originX, originY, targetX, targetY)) return false;
+      if (this.shouldBlockWithShield(targetId, 'tesla', damage, originX, originY, nowMs)) return false;
+      const outcome = this.applyDamage(targetId, damage, false, casterId, 'ALIEN_BADGER_ENERGY_CONE',
+        { sourceX: originX, sourceY: originY }, { damageKind: 'direct' });
+      return outcome?.kind === 'damage-applied';
+    }, nowMs);
   }
 
   private resolveCurrentCombatantTarget(id: string): CombatTargetRef | null {
