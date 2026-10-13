@@ -72,7 +72,8 @@ describe('persistent base expansion preview', () => {
     const atCeiling = buildPersistentBaseExpansionPreview(progress, 2, true, next.stage)!;
     expect(atCeiling.edges).toEqual(next.edges);
     const beyond = buildPersistentBaseExpansionPreview(progress, 2, true, 2)!;
-    expect(beyond).toMatchObject({ dawnOnly: true, cost: next.cost, radius: next.radius, edges: [] });
+    expect(beyond).toMatchObject({ dawnOnly: true, cost: next.cost, radius: next.radius });
+    expect(beyond?.edges.length).toBeGreaterThan(0);
   });
 
   it('traces exactly exposed cell edges for every supported area, including cardinal strips', () => {

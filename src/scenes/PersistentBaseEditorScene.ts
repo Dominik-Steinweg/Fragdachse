@@ -88,8 +88,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     const baseline = options.model.baseline;
     this.expansion = site ? buildPersistentBaseExpansionPreview(baseline.dawn,
       baseline.persistentBaseAreaStage, isDawnUnlocked(baseline), site.maxAreaStage) : null;
-    this.framing = getPersistentBaseEditorFraming(WORLD_PANEL, options.model.area,
-      this.expansion?.dawnOnly ? undefined : this.expansion?.area);
+    this.framing = getPersistentBaseEditorFraming(WORLD_PANEL, options.model.area, this.expansion?.area);
     this.worldZoom = this.framing.zoom;
     this.view = this.framing.view;
   }
@@ -154,18 +153,13 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.actionButton('cancel', chrome.centerX - (chrome.buttonGap + chrome.buttonWidth) / 2, () => this.finish());
     this.actionButton('apply', chrome.centerX + (chrome.buttonGap + chrome.buttonWidth) / 2, () => { void this.save(); });
     const expansion = this.expansion;
-    this.world = new PersistentBaseEditorWorld(this, model, this.options.color, expansion?.dawnOnly ? undefined : expansion?.area);
+    this.world = new PersistentBaseEditorWorld(this, model, this.options.color, expansion?.area);
     this.ui.add(createPersistentBaseEditorBoundary(this, model.area, this.framing));
-    if (expansion) {
-      if (expansion.dawnOnly) {
-        this.label(WORLD_PANEL.x + WORLD_PANEL.width / 2, 935,
-          t('ui.dawn.expansionDawnOnly'), 'body', .5, WORLD_PANEL.width)
-          .setColor('#ffe4a3').setBackgroundColor('#201a10').setPadding(9, 6).setStroke('#100d08', 2);
-      } else if (expansion.edges.length) {
-        this.expansionPreview = createDawnMerchantExpansionPreview(this, this.framing, expansion.edges,
-          t('ui.base.expansionRingLabel', { radius: expansion.radius, cost: expansion.cost }));
-        this.ui.add(this.expansionPreview);
-      }
+    if (expansion?.edges.length) {
+      this.expansionPreview = createDawnMerchantExpansionPreview(this, this.framing, expansion.edges,
+        t(expansion.dawnOnly ? 'ui.base.expansionRingLabelDawnOnly' : 'ui.base.expansionRingLabel',
+          { radius: expansion.radius, cost: expansion.cost }));
+      this.ui.add(this.expansionPreview);
     }
     this.grid = this.add.graphics().setDepth(10000);
     this.selection = this.add.graphics().setDepth(10001);

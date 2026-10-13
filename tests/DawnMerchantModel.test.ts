@@ -17,10 +17,10 @@ function equipment(): DawnEquipmentProgressDraft {
 }
 
 describe('merchant tab projections', () => {
-  it('distinguishes infrastructure with existing drone and scrap artwork', () => {
+  it('distinguishes infrastructure with its own drone and magnet artwork', () => {
     expect(buildDawnInfrastructureModel(equipment().dawn, true)).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'repair-drones', icon: DAWN_UI_TEXTURES.dealerInfrastructure }),
-      expect.objectContaining({ id: 'scrap-magnet', icon: DAWN_UI_TEXTURES.scrap }),
+      expect.objectContaining({ id: 'scrap-magnet', icon: DAWN_UI_TEXTURES.scrapMagnet }),
     ]));
   });
   it('projects each infrastructure purchase through its maximum, without mutating the save', () => {

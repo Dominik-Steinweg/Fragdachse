@@ -43,7 +43,7 @@ export const deUi = {
   "ui.dawn.saveFailed": "Aktion nicht gespeichert. Bitte Guthaben und Lager prüfen und erneut versuchen.",
   "ui.dawn.nextExpansion": "Nächste Expansion: Radius {radius} (Preis {cost} Schrott)",
   "ui.base.expansionRingLabel": "Radius {radius} · {cost} Schrott",
-  "ui.dawn.expansionDawnOnly": "Nächste Expansion wirkt in Dawn-Arenen.",
+  "ui.base.expansionRingLabelDawnOnly": "Radius {radius} · {cost} Schrott · nur Dawn-Arenen",
   "ui.dawn.expansionStats": "Expansion: {expansionLevel}\nBasisradius (Dawn): {radius} Zellen",
   "ui.dawn.threat": "Threat: {threat}",
   "ui.dawn.threatConsequence": "Threat: {threat} → {nextThreat} nach Expansion",

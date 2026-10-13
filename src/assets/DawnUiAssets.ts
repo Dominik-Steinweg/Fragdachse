@@ -10,6 +10,7 @@ export const DAWN_UI_TEXTURES = {
   dealerUpgrades: 'dawn-ui-dealer-upgrades',
   dealerEquipment: 'dawn-ui-dealer-equipment',
   recalibrationCore: 'dawn-ui-recalibration-core',
+  scrapMagnet: 'dawn-ui-scrap-magnet',
   dealerPortrait: 'dawn-ui-dealer-portrait',
 } as const;
 
@@ -21,6 +22,7 @@ export const DAWN_UI_ASSETS = [
   { key: DAWN_UI_TEXTURES.dealerUpgrades, file: 'dealer-upgrades-64.webp' },
   { key: DAWN_UI_TEXTURES.dealerEquipment, file: 'dealer-equipment-64.webp' },
   { key: DAWN_UI_TEXTURES.recalibrationCore, file: 'recalibration-core-64.webp' },
+  { key: DAWN_UI_TEXTURES.scrapMagnet, file: 'scrap-magnet-64.webp' },
   { key: DAWN_UI_TEXTURES.dealerPortrait, file: 'dealer-portrait-256.webp' },
 ] as const;
 

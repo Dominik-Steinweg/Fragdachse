@@ -65,5 +65,6 @@ export function buildPersistentBaseExpansionPreview(progress: Pick<DawnProgress,
   const area = resolvePersistentBaseBuildAreaForStage(stage);
   const dawnOnly = stage > siteMaxAreaStage;
   return { stage, area, radius: getPersistentBaseBuildAreaExtentCells(area), cost, dawnOnly,
-    edges: dawnOnly ? [] : buildPersistentBaseAreaBoundary(area) };
+    // Beyond the site ceiling the ring still shows the Dawn-arena size; the label says so.
+    edges: buildPersistentBaseAreaBoundary(area) };
 }
