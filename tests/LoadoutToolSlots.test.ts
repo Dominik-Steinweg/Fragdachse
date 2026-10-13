@@ -22,13 +22,18 @@ describe('shared tool slots', () => {
     let profile = buildDefaultCoopDefenseUpgradeProfile('inspector_gadachs');
     const initialCapacity = getCoopDefenseConstructionSlotCapacity(profile);
     expect(initialCapacity).toBeGreaterThan(0);
+    // Turmkopien sind für den Inspektor gratis freigeschaltet und werden wie jede neue Freischaltung
+    // angehängt. Der Ersatz von HE im Standard-Loadout folgt mit der Persistenz-Stufe (P3.1).
     expect(getLoadoutToolSlots(profile)).toEqual([
       { kind: 'construction', id: 'rocket_turret' },
       { kind: 'utility', id: 'HE_GRENADE' },
+      { kind: 'utility', id: 'FIRE_CONTROL_RELAY' },
     ]);
 
+    // Die Turmkopie hat den letzten freien Slot belegt; weitere Freischaltungen werden nicht angehängt.
+    expect(getLoadoutToolSlots(profile)).toHaveLength(initialCapacity);
     profile = levelUpCoopDefenseUpgrade(profile, 'unlock_machine_gun_turret', 20, 0, 'inspector_gadachs')!;
-    expect(getLoadoutToolSlots(profile)).toContainEqual({ kind: 'construction', id: 'machine_gun_turret' });
+    expect(getLoadoutToolSlots(profile)).not.toContainEqual({ kind: 'construction', id: 'machine_gun_turret' });
 
     profile = levelUpCoopDefenseUpgrade(profile, 'unlock_flame_turret', 20, 0, 'inspector_gadachs')!;
     expect(getLoadoutToolSlots(profile)).not.toContainEqual({ kind: 'construction', id: 'flame_turret' });
