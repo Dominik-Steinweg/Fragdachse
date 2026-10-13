@@ -16,7 +16,7 @@ function fixture(options: { facing?: number; target?: { x: number; y: number }; 
   const enemy = {
     id: 'e1', kind: 'shield-charger-badger', faction: 'hostile', sprite: { active: true, x: 0, y: 0 },
     getHp: () => 120, isBurrowed: () => false, isAttackMovementPaused: () => false,
-    getAimAngle: () => options.facing ?? 0, getCollisionRadius: () => RADIUS, stopMovement: vi.fn(),
+    getAimAngle: () => options.facing ?? 0, getCollisionRadius: () => RADIUS, stopMovement: vi.fn(), faceAngle: vi.fn(),
     setKnockbackImmune: immune,
     getShieldChargeState: () => charge,
     applyShieldChargeState: (state: ShieldChargeState) => { if (state.revision > charge.revision) charge = state; },
@@ -62,6 +62,17 @@ describe('shield charger host decisions', () => {
     expect(f.system.getFrontalShield('e1')).toBeNull();
     expect(f.system.blocksRegularAttacks('e1')).toBe(true);
     expect(f.system.getMovementOverride(f.enemy)).toEqual({ vx: 0, vy: 0 });
+  });
+
+  it('aims the lane exactly at a standing target even when the body is slightly off, and hits it at long range', () => {
+    const off = config.alignToleranceDegrees * 0.8 * Math.PI / 180;
+    const distance = config.triggerMaxDistancePx - 10;
+    const f = fixture({ facing: off, target: { x: distance, y: 0 } });
+    f.system.hostUpdate(0);
+    expect(f.charge().lane!.angle).toBeCloseTo(0, 6);
+    expect(f.enemy.faceAngle).toHaveBeenCalledWith(0);
+    for (let now = 0; now <= config.windupMs + 2000 && f.charge().phase !== 'recover'; now += 16) { f.system.hostUpdate(now); f.move(16); }
+    expect(f.strike).toHaveBeenCalledWith('p1', 'e1', config.hitDamage, expect.any(Number), expect.any(Number), expect.any(Number));
   });
 
   it('keeps the announced lane when the target moves, then runs past it and recovers', () => {

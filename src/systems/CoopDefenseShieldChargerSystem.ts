@@ -131,7 +131,10 @@ export class CoopDefenseShieldChargerSystem implements EnemySpecialMovementSourc
       if (Math.hypot(enemy.sprite.x - lane.originX, enemy.sprite.y - lane.originY) > config.windupDisplacementCancelPx) {
         // Origin and telegraph would no longer match the body.
         this.cancel(state, config, now);
-      } else if (now >= lane.runAt) {
+      } else if (now < lane.runAt) {
+        // Keep turning the body into the fixed lane (rate-limited by the entity).
+        enemy.faceAngle(lane.angle);
+      } else {
         state.struck.clear();
         state.lastX = enemy.sprite.x; state.lastY = enemy.sprite.y;
         state.cooldownUntil = lane.runAt + config.cooldownMs;
@@ -156,22 +159,25 @@ export class CoopDefenseShieldChargerSystem implements EnemySpecialMovementSourc
     if (!target) return;
     const dx = target.x - enemy.sprite.x, dy = target.y - enemy.sprite.y, distance = Math.hypot(dx, dy);
     if (distance < config.triggerMinDistancePx || distance > config.triggerMaxDistancePx) return;
-    const facing = enemy.getAimAngle();
-    const misalignment = Math.abs(Math.atan2(Math.sin(Math.atan2(dy, dx) - facing), Math.cos(Math.atan2(dy, dx) - facing)));
-    // No instant turn at the start: the lane is the current facing, aimed closely enough.
+    const facing = enemy.getAimAngle(), aim = Math.atan2(dy, dx);
+    const misalignment = Math.abs(Math.atan2(Math.sin(aim - facing), Math.cos(aim - facing)));
+    // No big turn at the start: the body must already face the target closely. The lane itself points
+    // exactly at the target (a facing-based lane missed standing players by up to ~115 px at long
+    // range); the body turns the small rest into the lane during the windup at its authored rate.
     if (misalignment > config.alignToleranceDegrees * Math.PI / 180) return;
     const radius = enemy.getCollisionRadius();
     if (!this.ports.combat.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, target.x, target.y,
       { purpose: 'physical', clearanceRadius: radius })) return;
     const wanted = Math.min(config.maxRunPx, distance + config.overshootPx);
-    const length = Math.min(wanted, this.ports.laneClearance(enemy.sprite.x, enemy.sprite.y, facing, wanted, radius));
+    const length = Math.min(wanted, this.ports.laneClearance(enemy.sprite.x, enemy.sprite.y, aim, wanted, radius));
     // A lane that cannot even reach the target is a blocked start, not a short charge.
     if (length < distance) return;
     const runMs = length / this.runSpeed(enemy) * 1000;
     const runAt = now + config.windupMs;
-    const lane: ShieldChargeLane = { originX: enemy.sprite.x, originY: enemy.sprite.y, angle: facing, length,
+    const lane: ShieldChargeLane = { originX: enemy.sprite.x, originY: enemy.sprite.y, angle: aim, length,
       halfWidth: radius, startedAt: now, runAt, runEndsAt: runAt + runMs, recoverUntil: runAt + runMs + config.recoverMs };
     enemy.stopMovement();
+    enemy.faceAngle(aim);
     this.publish(state, 'windup', lane);
   }
 
