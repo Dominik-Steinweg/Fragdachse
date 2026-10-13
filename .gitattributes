@@ -1,2 +1,3 @@
-# Hash-bound boss runtime data: the residency loader verifies the exact bytes, so never convert line endings.
-public/assets/sprites/pipeline-v2/abyssal-kraken*/** -text
+# Runtime assets are served byte for byte and versioned by content hash (src/assets/runtimeAssetUrls.json;
+# the kraken residency loader also verifies exact bytes), so never convert their line endings per checkout.
+public/** -text
