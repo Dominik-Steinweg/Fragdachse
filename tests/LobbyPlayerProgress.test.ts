@@ -10,7 +10,7 @@ import { getStoredCoopDefenseProgress, restoreStoredCoopDefenseProgress } from '
 import { getCoopDefenseProgressSnapshot } from '../src/utils/coopDefenseProgression';
 
 describe('lobby base menu access', () => {
-  it('shows the merchant only after Dawn unlock and closes it when the lobby locks or hides', () => {
+  it('allows browsing the merchant before Dawn unlock and closes it when the lobby locks or hides', () => {
     const saved = getStoredCoopDefenseProgress();
     const progress = new LobbyPlayerProgress({} as never, () => {}, () => {});
     const button = { setVisible: vi.fn(), setEnabled: vi.fn(), setPosition: vi.fn() };
@@ -20,8 +20,10 @@ describe('lobby base menu access', () => {
     try {
       restoreStoredCoopDefenseProgress({ ...saved, completedMapIds: [] });
       progress.setVisible(true);
+      merchant.hide.mockClear();
       progress.setCoopDefenseProgress(getCoopDefenseProgressSnapshot(0));
-      expect(button.setVisible).toHaveBeenLastCalledWith(false);
+      expect(button.setVisible).toHaveBeenLastCalledWith(true);
+      expect(merchant.hide).not.toHaveBeenCalled();
       restoreStoredCoopDefenseProgress({ ...saved, completedMapIds: [DAWN_UNLOCK_AFTER_MAP_ID] });
       progress.setCoopDefenseProgress(getCoopDefenseProgressSnapshot(0));
       expect(button.setVisible).toHaveBeenLastCalledWith(true);

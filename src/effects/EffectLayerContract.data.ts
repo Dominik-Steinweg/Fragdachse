@@ -2826,6 +2826,7 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {id:'cpu:ui/DawnHUD.ts:sync/marker.edge/setDepth/0',owner:'ui/DawnHUD.ts',component:'sync/marker.edge/setDepth/0',height:'body',lighting:'emissive',camera:'clarity',depths:[100],blends:['NORMAL'],profiles:['C'],role:'ui',source:{selector:'sync/marker.edge/setDepth/0',expression:'DEPTH.OVERLAY'}},
   {id:'cpu:ui/DawnHUD.ts:createMarker/marker/setDepth/0',owner:'ui/DawnHUD.ts',component:'createMarker/marker/setDepth/0',height:'body',lighting:'emissive',camera:'world',depths:[12],blends:['NORMAL'],profiles:['K'],role:'ui',source:{selector:'createMarker/marker/setDepth/0',expression:'DEPTH.BASES + 8'}},
   {id:'cpu:ui/DawnMerchantOverlay.ts:build/this.root/setDepth/0',owner:'ui/DawnMerchantOverlay.ts',component:'build/this.root/setDepth/0',height:'body',lighting:'emissive',camera:'clarity',depths:[103],blends:['NORMAL'],profiles:['C'],role:'ui',source:{selector:'build/this.root/setDepth/0',expression:'DEPTH.OVERLAY + 3'}},
+  {id:'cpu:ui/DawnMerchantExpansionPreview.ts:createDawnMerchantExpansionPreview/outline/setDepth/0',owner:'ui/DawnMerchantExpansionPreview.ts',component:'createDawnMerchantExpansionPreview/outline/setDepth/0',height:'ground',lighting:'emissive',camera:'world',depths:[9999],blends:['NORMAL'],profiles:['H'],role:'ui',source:{selector:'createDawnMerchantExpansionPreview/outline/setDepth/0',expression:'9999'}},
   {"id":"mortar:glow","owner":"effects/MortarStrikeRenderer.ts","component":"glow","height":"body","lighting":"emissive","camera":"world","depths":[19.7],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"createVisual/glow/setDepth/0","expression":"19.7"}},
   {"id":"mortar:core","owner":"effects/MortarStrikeRenderer.ts","component":"core","height":"body","lighting":"emissive","camera":"world","depths":[19.7],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"createVisual/core/setDepth/0","expression":"19.7"}},
   {"id":"mortar:wave","owner":"effects/MortarStrikeRenderer.ts","component":"wave","height":"body","lighting":"emissive","camera":"world","depths":[19.7],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"createVisual/wave/setDepth/0","expression":"19.7"}},
@@ -3340,7 +3341,12 @@ export const CPU_SOURCE_CONTRACTS = {
     "bindings": {}
   },
   // Dawn UI images inherit the existing card/modal container depth and clarity camera.
-  // HudCard owns counter icons; the merchant owns portrait and category/value rows.
+  // HudCard owns counter icons; the merchant owns tabs, cards and recalibration within one modal.
+  // The editor's dashed expansion annotation stays below its placement grid (10000), on the World camera.
+  "ui/DawnMerchantExpansionPreview.ts": {
+    "sites": [{ "key": "createDawnMerchantExpansionPreview/outline/setDepth/0", "expression": "9999", "blends": ["NORMAL"] }],
+    "blends": [], "cameras": [], "bindings": {}
+  },
   "ui/DawnHUD.ts": {
     "sites": [
       { "key": "module/this.card.root/setDepth/0", "expression": "DEPTH.OVERLAY", "blends": ["NORMAL"] },

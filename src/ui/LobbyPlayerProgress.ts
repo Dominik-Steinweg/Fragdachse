@@ -1,7 +1,5 @@
 import * as Phaser from 'phaser';
 import { DawnMerchantOverlay } from './DawnMerchantOverlay';
-import { isDawnUnlocked } from '../dawn/rules/DawnUnlock';
-import { getStoredCoopDefenseProgress } from '../utils/localPreferences';
 import { FOREST } from './UiSkin';
 import { COLORS, DEPTH } from '../config';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
@@ -40,9 +38,7 @@ const COOP_BAR_TEX_KEY = '_lobby_player_coop_xpbar';
 export class LobbyPlayerProgress {
   private merchant: DawnMerchantOverlay | null = null;
   private merchantBtn: UiButton | null = null;
-  private merchantProgress: CoopDefenseProgressSnapshot | null = null;
-  private dawnUnlocked = false;
-  private merchantLayoutUnlocked: boolean | null = null;
+  private merchantLayoutReady = false;
   private coopBand: Phaser.GameObjects.Container | null = null;
   private coopProgressLevelText: Phaser.GameObjects.Text | null = null;
   private coopProgressBarFill: Phaser.GameObjects.Image | null = null;
@@ -277,10 +273,6 @@ export class LobbyPlayerProgress {
   setCoopDefenseProgress(progress: CoopDefenseProgressSnapshot | null): void {
     if (!this.coopBand || !this.coopProgressLevelText) return;
     this.coopProgressAvailable = progress !== null;
-    if (progress !== this.merchantProgress) {
-      this.merchantProgress = progress;
-      this.dawnUnlocked = progress !== null && isDawnUnlocked(getStoredCoopDefenseProgress());
-    }
 
     const signature = progress
       ? [
@@ -348,14 +340,13 @@ export class LobbyPlayerProgress {
 
   private syncCoopEffectActivity(): void {
     const visible = this.visible && this.coopProgressAvailable;
-    const unlocked = this.dawnUnlocked;
-    this.merchantBtn?.setVisible(unlocked);
-    if (visible && this.merchantLayoutUnlocked !== unlocked) {
-      this.merchantLayoutUnlocked = unlocked;
-      const buttons = [this.coopUpgradesBtn, this.coopBaseBtn, this.coopItemsBtn, ...(unlocked ? [this.merchantBtn] : [])];
+    this.merchantBtn?.setVisible(visible);
+    if (visible && !this.merchantLayoutReady) {
+      this.merchantLayoutReady = true;
+      const buttons = [this.coopUpgradesBtn, this.coopBaseBtn, this.coopItemsBtn, this.merchantBtn];
       buttons.forEach((button, index) => button?.setPosition(CONTENT_L + CONTENT_W * (index + 0.5) / buttons.length, COOP_BTN_Y));
     }
-    if (!visible || this.isReady || this.connectionEnded || !unlocked) this.merchant?.hide();
+    if (!visible || this.isReady || this.connectionEnded) this.merchant?.hide();
     if (!visible) this.hideTooltip();
     if (this.coopBand && this.coopBand.visible !== visible) {
       this.coopBand.setVisible(visible);

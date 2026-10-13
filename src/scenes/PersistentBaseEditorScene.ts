@@ -25,6 +25,11 @@ import { BUTTON_CURSOR } from '../ui/gameCursor';
 import { activateUi } from '../ui/UiAudio';
 import { attachHoverEffect } from '../ui/uiHover';
 import { t } from '../i18n';
+import { isDawnUnlocked } from '../dawn/rules/DawnUnlock';
+import { buildPersistentBaseExpansionPreview } from '../persistentBase/PersistentBaseExpansionPreview';
+import { createDawnMerchantExpansionPreview } from '../ui/DawnMerchantExpansionPreview';
+import { resolveWorldDefinition } from '../world/WorldDefinitionResolution';
+import { LOBBY_WORLD_DEFINITION_ID } from '../config/authoring/lobbyWorld';
 
 const WORLD_PANEL = { x: 88, y: 236, width: 648, height: 680 };
 const TABLE = { x: 800, y: 248, width: 1038, height: 608 };
@@ -56,6 +61,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private grid!: Phaser.GameObjects.Graphics;
   private preview!: Phaser.GameObjects.Graphics;
   private selection!: Phaser.GameObjects.Graphics;
+  private expansionPreview: Phaser.GameObjects.Graphics | null = null;
   private dragPreview: Phaser.GameObjects.Container | null = null;
   private tableOutline!: Phaser.GameObjects.Rectangle;
   private error!: Phaser.GameObjects.Text;
@@ -71,10 +77,16 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private disposed = false;
   private page = 0;
   private readonly worldZoom: number;
+  private readonly expansion: ReturnType<typeof buildPersistentBaseExpansionPreview>;
   private readonly view: { x: number; y: number; width: number; height: number };
   constructor(private readonly options: PersistentBaseEditorOptions) {
     super(PersistentBaseEditorScene.KEY);
-    const worldSize = getPersistentBaseEditorSize(options.model.area);
+    // The local menu uses the lobby ceiling but can edit a personal area larger than that site.
+    const site = resolveWorldDefinition({ definitionId: LOBBY_WORLD_DEFINITION_ID }, null)?.persistentBaseSite;
+    const baseline = options.model.baseline;
+    this.expansion = site ? buildPersistentBaseExpansionPreview(baseline.dawn,
+      baseline.persistentBaseAreaStage, isDawnUnlocked(baseline), site.maxAreaStage) : null;
+    const worldSize = getPersistentBaseEditorSize(options.model.area, this.expansion?.dawnOnly ? undefined : this.expansion?.area);
     const size = Math.min(worldSize, WORLD_PANEL.width - 40, WORLD_PANEL.height - 40);
     this.worldZoom = size / worldSize;
     this.view = { x: WORLD_PANEL.x + (WORLD_PANEL.width - size) / 2,
@@ -138,7 +150,14 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.error = this.label(chrome.centerX, 192, '', 'caption', .5, 1600).setColor('#ffc2a9').setVisible(false);
     this.actionButton('cancel', chrome.centerX - (chrome.buttonGap + chrome.buttonWidth) / 2, () => this.finish());
     this.actionButton('apply', chrome.centerX + (chrome.buttonGap + chrome.buttonWidth) / 2, () => { void this.save(); });
-    this.world = new PersistentBaseEditorWorld(this, model, this.options.color);
+    const expansion = this.expansion;
+    this.world = new PersistentBaseEditorWorld(this, model, this.options.color, expansion?.dawnOnly ? undefined : expansion?.area);
+    if (expansion) {
+      this.label(WORLD_PANEL.x + WORLD_PANEL.width / 2, 935,
+        t(expansion.dawnOnly ? 'ui.dawn.expansionDawnOnly' : 'ui.dawn.nextExpansion',
+          { radius: expansion.radius, cost: expansion.cost }), 'body', .5, WORLD_PANEL.width);
+      if (expansion.edges.length) this.expansionPreview = createDawnMerchantExpansionPreview(this, this.world.anchor, expansion.edges);
+    }
     this.grid = this.add.graphics().setDepth(10000);
     this.selection = this.add.graphics().setDepth(10001);
     this.preview = this.add.graphics().setDepth(10002);
@@ -208,6 +227,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.input.enabled = false;
     this.scale.off('resize', this.resize, this);
     this.dragPreview?.destroy(true);
+    this.expansionPreview?.destroy(); this.expansionPreview = null;
     this.world?.destroy(); this.cameraRegistry?.destroy(); this.quality?.destroy();
     for (const button of this.buttons) button.destroy();
     this.buttons = [];
