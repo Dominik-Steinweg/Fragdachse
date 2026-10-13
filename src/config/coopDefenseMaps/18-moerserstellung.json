@@ -1,0 +1,220 @@
+{
+  "mapId": "18",
+  "arenaWidthCells": 88,
+  "arenaHeightCells": 40,
+  "timeOfDay": "16:30",
+  "tutorialAnchor": {
+    "gridX": 44,
+    "gridY": 2
+  },
+  "rockFillRatio": 0.3,
+  "trackMode": "none",
+  "mapEvents": [],
+  "balanceReferenceDurationSec": 180,
+  "objective": "repel-assault",
+  "bases": [],
+  "persistentBase": {
+    "baseId": "coop-base-center",
+    "anchor": {
+      "gridX": 44,
+      "gridY": 20
+    }
+  },
+  "powerUps": [
+    {
+      "defId": "HEALTH_PACK",
+      "region": "front",
+      "respawnMs": 6000,
+      "spawnOnArenaStart": true
+    },
+    {
+      "defId": "HEALTH_PACK",
+      "region": "middle",
+      "respawnMs": 6000,
+      "spawnOnArenaStart": true
+    },
+    {
+      "defId": "HEALTH_PACK",
+      "region": "rear",
+      "respawnMs": 6000,
+      "spawnOnArenaStart": true
+    }
+  ],
+  "encounters": [
+    {
+      "id": "mortar-opening",
+      "start": {
+        "type": "time",
+        "atMs": 1500
+      },
+      "restAfterMs": 4000,
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 10,
+          "front": "west"
+        },
+        {
+          "enemyKind": "rabid-badger",
+          "count": 3,
+          "delayMs": 800,
+          "front": "east"
+        },
+        {
+          "enemyKind": "mortar-badger",
+          "count": 1,
+          "delayMs": 2500,
+          "front": "east"
+        }
+      ]
+    },
+    {
+      "id": "mortar-first-shells",
+      "start": {
+        "type": "after-previous"
+      },
+      "restAfterMs": 4000,
+      "groups": [
+        {
+          "enemyKind": "mortar-badger",
+          "count": 1,
+          "front": "east"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 8,
+          "delayMs": 600,
+          "front": "east"
+        }
+      ]
+    },
+    {
+      "id": "mortar-crossfire",
+      "start": {
+        "type": "after-previous"
+      },
+      "restAfterMs": 4000,
+      "groups": [
+        {
+          "enemyKind": "mortar-badger",
+          "count": 1,
+          "front": "west"
+        },
+        {
+          "enemyKind": "mortar-badger",
+          "count": 1,
+          "delayMs": 400,
+          "front": "east"
+        },
+        {
+          "enemyKind": "rabid-badger",
+          "count": 4,
+          "delayMs": 900,
+          "spawnStaggerMs": 400,
+          "front": "west"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 8,
+          "delayMs": 1200,
+          "front": "east"
+        }
+      ]
+    },
+    {
+      "id": "mortar-battery",
+      "start": {
+        "type": "after-previous"
+      },
+      "restAfterMs": 3500,
+      "groups": [
+        {
+          "enemyKind": "mortar-badger",
+          "count": 3,
+          "spawnStaggerMs": 700,
+          "front": "east"
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 2,
+          "delayMs": 600,
+          "front": "west"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 10,
+          "delayMs": 1200,
+          "front": "west"
+        }
+      ]
+    },
+    {
+      "id": "mortar-barrage",
+      "start": {
+        "type": "after-previous"
+      },
+      "restAfterMs": 3500,
+      "groups": [
+        {
+          "enemyKind": "mortar-badger",
+          "count": 2,
+          "spawnStaggerMs": 600,
+          "front": "west"
+        },
+        {
+          "enemyKind": "mortar-badger",
+          "count": 2,
+          "spawnStaggerMs": 600,
+          "delayMs": 300,
+          "front": "east"
+        },
+        {
+          "enemyKind": "rabid-badger",
+          "count": 6,
+          "delayMs": 900,
+          "spawnStaggerMs": 300,
+          "front": "east"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 12,
+          "delayMs": 1500,
+          "front": "west"
+        }
+      ]
+    },
+    {
+      "id": "mortar-final",
+      "start": {
+        "type": "after-previous"
+      },
+      "groups": [
+        {
+          "enemyKind": "mortar-badger",
+          "count": 3,
+          "spawnStaggerMs": 500,
+          "front": "west"
+        },
+        {
+          "enemyKind": "mortar-badger",
+          "count": 3,
+          "spawnStaggerMs": 500,
+          "delayMs": 300,
+          "front": "east"
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 3,
+          "delayMs": 800,
+          "front": "east"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 14,
+          "delayMs": 1400,
+          "front": "west"
+        }
+      ]
+    }
+  ]
+}

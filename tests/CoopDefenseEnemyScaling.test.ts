@@ -44,7 +44,9 @@ describe('Coop defense multiplayer scaling', () => {
       expect(Number.isFinite(config.maxHp), kind).toBe(true);
       expect(config.maxHp, kind).toBeGreaterThan(0);
       expect(Number.isFinite(config.moveSpeed), kind).toBe(true);
-      expect(config.moveSpeed, kind).toBeGreaterThan(0);
+      // Kraken eggs are stationary brood objects; everything else must move.
+      if (config.krakenEgg?.stationary) expect(config.moveSpeed, kind).toBe(0);
+      else expect(config.moveSpeed, kind).toBeGreaterThan(0);
       expect(Number.isFinite(config.xp), kind).toBe(true);
       expect(config.xp, kind).toBeGreaterThanOrEqual(0);
     }

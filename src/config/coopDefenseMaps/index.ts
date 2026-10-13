@@ -16,6 +16,9 @@ import map14 from './14-brandschneise.json';
 import map15 from './15-leerenjaeger.json';
 import map16 from './16-zeitzuender.json';
 import map17 from './17-bierrettung.json';
+import map18 from './18-moerserstellung.json';
+import map19 from './19-brandherd.json';
+import map20 from './20-abgrundteich.json';
 
 import sources from '../coopDefenseMapSources.json';
 
@@ -29,6 +32,8 @@ const files: Record<string, unknown> = {
   '12-gegenschlag.json': map12, '13-brutbomben.json': map13,
   '14-brandschneise.json': map14, '15-leerenjaeger.json': map15,
   '16-zeitzuender.json': map16, '17-bierrettung.json': map17,
+  '18-moerserstellung.json': map18, '19-brandherd.json': map19,
+  '20-abgrundteich.json': map20,
 };
 
 /** File ownership and campaign ordering are shared with the local map editor. */

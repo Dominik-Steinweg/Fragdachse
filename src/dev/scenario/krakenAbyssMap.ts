@@ -1,6 +1,6 @@
 import { registerDiagnosticMap, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { KRAKEN_BOSS_DEFAULTS } from '../../config/krakenBoss';
-import { registerKrakenDiagnosticEnemies } from '../../config/coopDefenseEnemies';
+import { registerKrakenEnemies } from '../../config/coopDefenseEnemies';
 import { normalizeKrakenHabitat } from '../../config/krakenHabitat';
 
 export const KRAKEN_MAP_ID = 'kraken-abyss-lab';
@@ -45,7 +45,7 @@ export function krakenAbyssMap(): CoopDefenseMapConfig {
 }
 
 export const registerKrakenAbyssMap = (): (() => void) => {
-  const releaseEnemies = registerKrakenDiagnosticEnemies(KRAKEN_BOSS_DEFAULTS);
+  const releaseEnemies = registerKrakenEnemies(KRAKEN_BOSS_DEFAULTS);
   try {
     const releaseMap = registerDiagnosticMap(krakenAbyssMap());
     return () => { releaseMap(); releaseEnemies(); };

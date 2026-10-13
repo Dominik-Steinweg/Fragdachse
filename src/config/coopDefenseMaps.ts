@@ -5,6 +5,9 @@ import { COOP_DEFENSE_MAP_REGISTRY } from './coopDefenseMaps/index';
 import rawWeaponBalanceLabMap from './coopDefenseMaps/weapon-balance-lab.internal.json';
 import { DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS, DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS } from '../config';
 
+/** Campaign maps 1..N; the registry lists them contiguously and in order. */
+export const COOP_DEFENSE_CAMPAIGN_MAP_COUNT = 20;
+
 const NORMALIZED_COOP_DEFENSE_MAP_REGISTRY = normalizeMapRegistry(
   COOP_DEFENSE_MAP_REGISTRY as CoopDefenseMapRegistryFile<CoopDefenseMapAuthoringConfig>,
 );
@@ -125,8 +128,8 @@ function normalizeMapRegistry(registry: CoopDefenseMapRegistryFile<CoopDefenseMa
   }
   const campaignIds = maps.filter((mapConfig) => mapConfig.mapId !== '0').map((mapConfig) => mapConfig.mapId);
   const expectedCampaignIds = campaignIds.map((_, index) => String(index + 1));
-  if (campaignIds.length !== 17 || campaignIds.some((mapId, index) => mapId !== expectedCampaignIds[index])) {
-    throw new Error('[coopDefenseMaps] Campaign registry must contain exactly maps 1 through 17 in order');
+  if (campaignIds.length !== COOP_DEFENSE_CAMPAIGN_MAP_COUNT || campaignIds.some((mapId, index) => mapId !== expectedCampaignIds[index])) {
+    throw new Error(`[coopDefenseMaps] Campaign registry must contain exactly maps 1 through ${COOP_DEFENSE_CAMPAIGN_MAP_COUNT} in order`);
   }
   return {
     defaultMapId: registry.defaultMapId,

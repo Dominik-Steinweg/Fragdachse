@@ -13,7 +13,7 @@ import { COOP_DEFENSE_MAP_CONFIGS, type CoopDefenseMapConfig } from './coopDefen
 export const COOP_DEFENSE_TEST_MAP_ID = '0';
 
 /** Authored maps withheld from normal play until balancing is complete. */
-export const COOP_DEFENSE_UNRELEASED_MAP_IDS: readonly string[] = ['16', '17'];
+export const COOP_DEFENSE_UNRELEASED_MAP_IDS: readonly string[] = [];
 
 /** Freischaltstand eines neuen Spielers: alles bis einschliesslich Map 1. */
 export const INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID = '1';

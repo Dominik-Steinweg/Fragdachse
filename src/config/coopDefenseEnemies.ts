@@ -1,5 +1,5 @@
 import rawCoopDefenseEnemies from './coopDefenseEnemies.json';
-import { normalizeKrakenBossConfig, normalizeKrakenEggConfig, validateKrakenBroodRegistry,
+import { KRAKEN_BOSS_DEFAULTS, normalizeKrakenBossConfig, normalizeKrakenEggConfig, validateKrakenBroodRegistry,
   type KrakenBossConfig, type KrakenEggConfig } from './krakenBoss';
 import { findWeaponConfig } from '../loadout/LoadoutConfig';
 import { requirePawCount, type PawCount } from './movementEffects';
@@ -461,7 +461,8 @@ export const COOP_DEFENSE_ENEMY_KINDS: readonly CoopDefenseEnemyKind[] = Object.
 
 /** Diagnostic-only activation; selected boss atlases are bound by the presentation residency.
  * __WHITE is an existing engine texture, never a legacy boss image/preload URL. */
-export function registerKrakenDiagnosticEnemies(config: import('./krakenBoss').KrakenBossConfig): () => void {
+/** Registers the kraken boss and its egg; returns a release only for entries it created itself. */
+export function registerKrakenEnemies(config: import('./krakenBoss').KrakenBossConfig): () => void {
   const bossKind = 'abyssal-kraken', eggKind = config.eggs.enemyKind;
   if (COOP_DEFENSE_ENEMY_CONFIGS[bossKind] || COOP_DEFENSE_ENEMY_CONFIGS[eggKind]) return () => {};
   const base = COOP_DEFENSE_ENEMY_CONFIGS[config.eggs.broodTable.entries[0].enemyKind];
@@ -486,6 +487,9 @@ export function registerKrakenDiagnosticEnemies(config: import('./krakenBoss').K
     }
   };
 }
+
+// Map 20 places the kraken in the campaign: boss and egg are regular registry entries.
+registerKrakenEnemies(KRAKEN_BOSS_DEFAULTS);
 
 export function getCoopDefenseEnemyKindIndex(kind: CoopDefenseEnemyKind): number {
   return COOP_DEFENSE_ENEMY_KINDS.indexOf(kind);
