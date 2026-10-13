@@ -230,7 +230,11 @@ describe('Dawn scenario resolution', () => {
     const { plans } = dawnRound(1, 5);
     const harder = dawnRound(DAWN_MAX_THREAT, 6);
     const calm = resolveDawnScenario(plans.world, plans.activity);
-    const stormy = resolveDawnScenario(plans.world, harder.plans.activity);
+    // Site-Wellen gehoeren zu den Sites ihres World-Plans; fremde Activity-Plaene tragen nur Frontwellen.
+    const stormy = resolveDawnScenario(plans.world, {
+      ...harder.plans.activity,
+      waves: harder.plans.activity.waves.filter((wave) => 'front' in wave),
+    });
 
     expect(stormy.world).toEqual(calm.world);
     expect(stormy.activity).not.toEqual(calm.activity);

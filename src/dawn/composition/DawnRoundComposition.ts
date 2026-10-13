@@ -13,7 +13,7 @@ import {
 } from '../contracts/DawnPlans';
 import { createDawnRandom } from './DawnRandom';
 import { composeDawnSites } from './DawnSiteComposition';
-import { assignDawnFronts, composeDawnDayPressure, composeDawnNight } from './DawnWaveComposition';
+import { assignDawnFronts, composeDawnDayPressure, composeDawnNight, composeDawnSiteAssaults } from './DawnWaveComposition';
 
 export interface DawnRoundCompositionInput {
   /** Rundenseed des Hosts; gleicher Seed und gleiche Eingaben ergeben dieselben Plaene. */
@@ -45,6 +45,7 @@ export function composeDawnRoundPlans(input: DawnRoundCompositionInput): DawnRou
   const waves = [
     ...composeDawnDayPressure({ random: createDawnRandom(seed, 'day'), curve, schedule, fronts }),
     ...composeDawnNight({ random: createDawnRandom(seed, 'night'), curve, schedule, fronts }),
+    ...composeDawnSiteAssaults({ random: createDawnRandom(seed, 'site-assaults'), curve, sites }),
   ].sort((left, right) => left.atMs - right.atMs || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
 
   const world: DawnWorldPlan = { version: DAWN_PLAN_VERSION, templateId: template.id, contentHash: DAWN_CONTENT_HASH, sites };

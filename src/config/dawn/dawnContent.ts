@@ -122,6 +122,8 @@ export interface DawnSiteArchetypeTier {
   readonly scrapReward: number;
   /** Austauschpunkt fuer die Darstellung (Platzhalter bis zu den finalen Assets). */
   readonly visualKey: string;
+  /** Nur `hold`: Budget der Angriffswelle, die bei Aktivierung der Site am Lichtungsrand erscheint. */
+  readonly assaultBudget?: number;
 }
 
 export interface DawnSiteArchetype {
@@ -135,6 +137,8 @@ export interface DawnSiteArchetype {
   readonly holdDurationMs?: number;
   /** Nur `hold`. */
   readonly requiredSurvivors?: number;
+  /** Nur `hold`: Verzoegerung der Angriffswelle nach der Aktivierung. */
+  readonly assaultDelayMs?: number;
   readonly structure: DawnSiteStructureTemplate;
   /** Genau ein Eintrag je Tier 1..DAWN_MAX_SITE_TIER, aufsteigend. */
   readonly tiers: readonly DawnSiteArchetypeTier[];
@@ -378,7 +382,16 @@ function validateSiteArchetypes(raw: { readonly archetypes: readonly unknown[] }
       if (!isPositiveInteger(archetype.holdDurationMs)) throw new Error(`[dawnContent] ${label} needs a holdDurationMs`);
       // Eine Site hat genau ein Bauwerk; mehr Ueberlebende kann sie nicht stellen.
       if (archetype.requiredSurvivors !== 1) throw new Error(`[dawnContent] ${label} needs requiredSurvivors 1`);
-    } else if (archetype.holdDurationMs !== undefined || archetype.requiredSurvivors !== undefined) {
+      // Ohne Angreifer waere Halten trivial: jede Hold-Site bringt ihre eigene Welle mit.
+      if (!Number.isSafeInteger(archetype.assaultDelayMs) || archetype.assaultDelayMs! < 0
+        || archetype.assaultDelayMs! >= archetype.holdDurationMs!) {
+        throw new Error(`[dawnContent] ${label} needs an assaultDelayMs inside its hold window`);
+      }
+      if (archetype.tiers?.some((tier) => !isPositiveFinite(tier?.assaultBudget))) {
+        throw new Error(`[dawnContent] ${label} needs a positive assaultBudget per tier`);
+      }
+    } else if (archetype.holdDurationMs !== undefined || archetype.requiredSurvivors !== undefined
+      || archetype.assaultDelayMs !== undefined || archetype.tiers?.some((tier) => tier?.assaultBudget !== undefined)) {
       throw new Error(`[dawnContent] ${label} must not declare hold fields`);
     }
     if (!Array.isArray(archetype.tiers) || archetype.tiers.length !== DAWN_MAX_SITE_TIER) {

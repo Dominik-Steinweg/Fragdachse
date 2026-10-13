@@ -42,13 +42,14 @@ export interface DawnSitePlan {
   readonly tier: number;
 }
 
-/** Eine explizit komponierte Welle: authored Block an einer Front zu einer Activity-Zeit. */
-export interface DawnWavePlan {
-  readonly id: string;
-  readonly blockId: string;
-  readonly front: SpawnFront;
-  readonly atMs: number;
-}
+/**
+ * Eine explizit komponierte Welle: authored Block entweder an einer Front zu einer Activity-Zeit
+ * oder an einer Salvage-Site; dann startet sie bei deren Aktivierung und `atMs` ist die
+ * Verzoegerung danach. Genau eines von `front` und `siteId` ist gesetzt.
+ */
+export type DawnWavePlan =
+  | { readonly id: string; readonly blockId: string; readonly front: SpawnFront; readonly atMs: number }
+  | { readonly id: string; readonly blockId: string; readonly siteId: string; readonly atMs: number };
 
 /** Activity-Teil: Bedrohung, Zeitplan und Wellen der Runde. */
 export interface DawnActivityPlan {
@@ -132,8 +133,12 @@ export function haveSameDawnPlan(
 function parseDawnWavePlan(raw: unknown): DawnWavePlan | null {
   if (!isRecord(raw)) return null;
   if (!isDawnPlanId(raw.id) || !isDawnPlanId(raw.blockId)) return null;
-  if (!isSpawnFront(raw.front)) return null;
   if (!isIntegerInRange(raw.atMs, 0, MAX_WAVE_START_MS)) return null;
+  if (raw.siteId !== undefined) {
+    if (raw.front !== undefined || !isDawnPlanId(raw.siteId)) return null;
+    return { id: raw.id, blockId: raw.blockId, siteId: raw.siteId, atMs: raw.atMs };
+  }
+  if (!isSpawnFront(raw.front)) return null;
   return { id: raw.id, blockId: raw.blockId, front: raw.front, atMs: raw.atMs };
 }
 

@@ -1,4 +1,6 @@
 import {
+  getDawnSiteArchetype,
+  getDawnSiteArchetypeTier,
   getDawnWaveBlocks,
   getDawnWaveComposition,
   resolveDawnWaveBlockWeight,
@@ -10,7 +12,7 @@ import {
   type DawnThreatCurve,
 } from '../../config/dawn/dawnContent';
 import type { SpawnFront } from '../../types';
-import type { DawnWavePlan } from '../contracts/DawnPlans';
+import type { DawnSitePlan, DawnWavePlan } from '../contracts/DawnPlans';
 import { getDawnPhaseStartMs, resolveDawnPhase } from '../rules/DawnPhase';
 import type { DawnRandom } from './DawnRandom';
 
@@ -51,6 +53,42 @@ export function assignDawnFronts(
  */
 export function composeDawnNight(input: DawnWaveCompositionInput): DawnWavePlan[] {
   return composePhaseWaves(input, 'night', input.curve.nightBudget, getDawnWaveComposition().night, () => input.fronts);
+}
+
+/**
+ * Angriffswellen der Hold-Sites: je Site ein Budget aus ihrem Tier, ausgeloest bei ihrer
+ * Aktivierung. Ohne Angreifer waere das Halten trivial.
+ */
+export function composeDawnSiteAssaults(input: {
+  readonly random: DawnRandom;
+  readonly curve: DawnThreatCurve;
+  readonly sites: readonly DawnSitePlan[];
+}): DawnWavePlan[] {
+  const { random, curve, sites } = input;
+  const { day } = getDawnWaveComposition();
+  const blocks = getDawnWaveBlocks();
+  const plans: DawnWavePlan[] = [];
+  for (const site of sites) {
+    const archetype = getDawnSiteArchetype(site.archetypeId);
+    const budget = getDawnSiteArchetypeTier(archetype, site.tier).assaultBudget;
+    if (budget === undefined || archetype.assaultDelayMs === undefined) continue;
+    let remaining = budget;
+    for (let index = 0; index < day.maxBlocksPerFront; index += 1) {
+      const block = random.pickWeighted(
+        blocks.filter((candidate) => candidate.roles.includes(day.frontRole) && candidate.cost <= remaining + COST_EPSILON),
+        (candidate) => resolveDawnWaveBlockWeight(candidate, curve),
+      );
+      if (!block) break;
+      remaining -= block.cost;
+      plans.push({
+        id: `assault-${site.slotId}-${index + 1}`,
+        blockId: block.id,
+        siteId: site.slotId,
+        atMs: archetype.assaultDelayMs + index * day.blockStaggerMs,
+      });
+    }
+  }
+  return plans;
 }
 
 /** Leichter Tagesdruck mit demselben Komponisten: je Welle eine der Fronten dieser Runde. */

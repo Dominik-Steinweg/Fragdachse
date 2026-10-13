@@ -9,14 +9,47 @@
         "role": "outpost",
         "faction": "hostile",
         "cells": [
-          { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 }, { "gridX": 2, "gridY": 0 },
-          { "gridX": 1, "gridY": 1 }, { "gridX": 2, "gridY": 1 }
+          {
+            "gridX": 0,
+            "gridY": 0
+          },
+          {
+            "gridX": 1,
+            "gridY": 0
+          },
+          {
+            "gridX": 2,
+            "gridY": 0
+          },
+          {
+            "gridX": 1,
+            "gridY": 1
+          },
+          {
+            "gridX": 2,
+            "gridY": 1
+          }
         ]
       },
       "tiers": [
-        { "tier": 1, "hpMax": 700, "scrapReward": 25, "visualKey": "dawn-site-wreck-t1" },
-        { "tier": 2, "hpMax": 1200, "scrapReward": 45, "visualKey": "dawn-site-wreck-t2" },
-        { "tier": 3, "hpMax": 1900, "scrapReward": 70, "visualKey": "dawn-site-wreck-t3" }
+        {
+          "tier": 1,
+          "hpMax": 700,
+          "scrapReward": 25,
+          "visualKey": "dawn-site-wreck-t1"
+        },
+        {
+          "tier": 2,
+          "hpMax": 1200,
+          "scrapReward": 45,
+          "visualKey": "dawn-site-wreck-t2"
+        },
+        {
+          "tier": 3,
+          "hpMax": 1900,
+          "scrapReward": 70,
+          "visualKey": "dawn-site-wreck-t3"
+        }
       ]
     },
     {
@@ -30,15 +63,48 @@
         "role": "outpost",
         "faction": "friendly",
         "cells": [
-          { "gridX": 0, "gridY": 0 }, { "gridX": 1, "gridY": 0 },
-          { "gridX": 0, "gridY": 1 }, { "gridX": 1, "gridY": 1 }
+          {
+            "gridX": 0,
+            "gridY": 0
+          },
+          {
+            "gridX": 1,
+            "gridY": 0
+          },
+          {
+            "gridX": 0,
+            "gridY": 1
+          },
+          {
+            "gridX": 1,
+            "gridY": 1
+          }
         ]
       },
       "tiers": [
-        { "tier": 1, "hpMax": 900, "scrapReward": 30, "visualKey": "dawn-site-extractor-t1" },
-        { "tier": 2, "hpMax": 1400, "scrapReward": 55, "visualKey": "dawn-site-extractor-t2" },
-        { "tier": 3, "hpMax": 2000, "scrapReward": 85, "visualKey": "dawn-site-extractor-t3" }
-      ]
+        {
+          "tier": 1,
+          "hpMax": 900,
+          "scrapReward": 30,
+          "visualKey": "dawn-site-extractor-t1",
+          "assaultBudget": 16
+        },
+        {
+          "tier": 2,
+          "hpMax": 1400,
+          "scrapReward": 55,
+          "visualKey": "dawn-site-extractor-t2",
+          "assaultBudget": 26
+        },
+        {
+          "tier": 3,
+          "hpMax": 2000,
+          "scrapReward": 85,
+          "visualKey": "dawn-site-extractor-t3",
+          "assaultBudget": 38
+        }
+      ],
+      "assaultDelayMs": 4000
     }
   ]
 }

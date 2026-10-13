@@ -5,6 +5,7 @@ import {
   getDawnSalvageSlot,
   getDawnSchedule,
   getDawnSiteArchetype,
+  getDawnSiteArchetypeTier,
   getDawnSlotQuadrant,
   getDawnThreatCurve,
   getDawnWaveBlock,
@@ -28,9 +29,14 @@ function compose(seed: number, threat: number): DawnRoundPlans {
   return composeDawnRoundPlans({ seed, threat, dayNumber: 3 });
 }
 
-function phaseWaves(plans: DawnRoundPlans, phase: 'day' | 'night'): DawnWavePlan[] {
+type DawnFrontWavePlan = Extract<DawnWavePlan, { readonly front: unknown }>;
+type DawnSiteWavePlan = Extract<DawnWavePlan, { readonly siteId: string }>;
+const frontWaves = (plans: DawnRoundPlans) => plans.activity.waves.filter((wave): wave is DawnFrontWavePlan => 'front' in wave);
+const siteWaves = (plans: DawnRoundPlans) => plans.activity.waves.filter((wave): wave is DawnSiteWavePlan => 'siteId' in wave);
+
+function phaseWaves(plans: DawnRoundPlans, phase: 'day' | 'night'): DawnFrontWavePlan[] {
   const schedule = getDawnSchedule(plans.activity.scheduleId);
-  return plans.activity.waves.filter((wave) => resolveDawnPhase(schedule, wave.atMs).phase === phase);
+  return frontWaves(plans).filter((wave) => resolveDawnPhase(schedule, wave.atMs).phase === phase);
 }
 
 const costOf = (waves: readonly DawnWavePlan[]) => waves.reduce((sum, wave) => sum + getDawnWaveBlock(wave.blockId).cost, 0);
@@ -55,6 +61,27 @@ describe('Dawn round composition', () => {
     expect(() => composeDawnRoundPlans({ seed: 1, threat: DAWN_MAX_THREAT + 1, dayNumber: 1 })).toThrow('threat');
   });
 
+  it('gives every hold site its own assault inside its tier budget and no other site', () => {
+    for (const threat of THREATS) {
+      for (const seed of SEEDS) {
+        const plans = compose(seed, threat);
+        const assaults = siteWaves(plans);
+        for (const site of plans.world.sites) {
+          const archetype = getDawnSiteArchetype(site.archetypeId);
+          const waves = assaults.filter((wave) => wave.siteId === site.slotId);
+          const budget = getDawnSiteArchetypeTier(archetype, site.tier).assaultBudget;
+          if (budget === undefined) {
+            expect(waves, `${threat}/${seed} ${site.slotId}`).toEqual([]);
+            continue;
+          }
+          expect(waves.length, `${threat}/${seed} ${site.slotId}`).toBeGreaterThan(0);
+          expect(costOf(waves)).toBeLessThanOrEqual(budget + 1e-6);
+        }
+        expect(assaults.every((wave) => plans.world.sites.some((site) => site.slotId === wave.siteId))).toBe(true);
+      }
+    }
+  });
+
   it('keeps every phase inside its threat budget and attacks from the curve fronts', () => {
     const { night, day } = getDawnWaveComposition();
     for (const threat of THREATS) {
@@ -65,7 +92,7 @@ describe('Dawn round composition', () => {
         const nightWaves = phaseWaves(plans, 'night');
         const dayWaves = phaseWaves(plans, 'day');
 
-        expect(nightWaves.length + dayWaves.length, 'waves only during day and night').toBe(plans.activity.waves.length);
+        expect(nightWaves.length + dayWaves.length, 'front waves only during day and night').toBe(frontWaves(plans).length);
         expect(costOf(nightWaves)).toBeLessThanOrEqual(curve.nightBudget + 1e-6);
         expect(costOf(dayWaves)).toBeLessThanOrEqual(curve.dayPressureBudget + 1e-6);
         const nightFronts = new Set(nightWaves.map(({ front }) => front));
@@ -79,7 +106,7 @@ describe('Dawn round composition', () => {
         }
         for (const wave of day.waves) expect(dayWaves.some(({ id }) => id.startsWith(`${wave.id}-`))).toBe(true);
         expect(dayWaves.every(({ front }) => nightFronts.has(front))).toBe(true);
-        for (const wave of plans.activity.waves) {
+        for (const wave of frontWaves(plans)) {
           expect(template.fronts).toContain(wave.front);
           expect(resolveDawnWaveBlockWeight(getDawnWaveBlock(wave.blockId), curve), wave.blockId).toBeGreaterThan(0);
         }

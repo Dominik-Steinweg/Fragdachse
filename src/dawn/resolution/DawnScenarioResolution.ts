@@ -57,6 +57,34 @@ export interface ResolvedDawnSite {
   readonly tier: DawnSiteArchetypeTier;
 }
 
+/** Kantenlaenge des Spawnbereichs einer Site-Angriffswelle. */
+const SITE_ASSAULT_AREA_CELLS = 3;
+
+/**
+ * Angreifer einer Site erscheinen am Rand ihrer garantiert freien Lichtung, auf der von der Basis
+ * abgewandten Seite: Sie kommen aus dem Gelaende auf das Bauwerk zu, nicht aus der Basis.
+ */
+export function resolveDawnSiteAssaultArea(
+  template: DawnArenaTemplate,
+  site: Pick<ResolvedDawnSite, 'slot' | 'archetype'>,
+): { gridX: number; gridY: number; widthCells: number; heightCells: number } {
+  const base = template.world.persistentBase.anchor;
+  const anchor = site.slot.anchor;
+  const length = Math.hypot(anchor.gridX - base.gridX, anchor.gridY - base.gridY) || 1;
+  const reach = site.archetype.clearingRadiusCells - 1.5;
+  const centerX = Math.round(anchor.gridX + ((anchor.gridX - base.gridX) / length) * reach);
+  const centerY = Math.round(anchor.gridY + ((anchor.gridY - base.gridY) / length) * reach);
+  const half = Math.floor(SITE_ASSAULT_AREA_CELLS / 2);
+  const width = template.world.arenaWidthCells!;
+  const height = template.world.arenaHeightCells!;
+  return {
+    gridX: Math.min(Math.max(0, centerX - half), width - SITE_ASSAULT_AREA_CELLS),
+    gridY: Math.min(Math.max(0, centerY - half), height - SITE_ASSAULT_AREA_CELLS),
+    widthCells: SITE_ASSAULT_AREA_CELLS,
+    heightCells: SITE_ASSAULT_AREA_CELLS,
+  };
+}
+
 export function toDawnSiteBaseId(slotId: string): string {
   return `site-${slotId}`;
 }
@@ -154,13 +182,24 @@ function composeActivityAuthoring(
     // Sieg-Item-Angebot (D-16) mit dem Itemlevel der Threat-Kurve.
     itemDrop: { itemLevel: curve.itemLevel },
     encounters: activityPlan.waves.map((wave): CoopDefenseMapEncounterConfig => {
+      const groups = getDawnWaveBlock(wave.blockId).groups;
+      if ('siteId' in wave) {
+        const site = sites.find((candidate) => candidate.siteId === wave.siteId);
+        if (!site) throw new Error(`[DawnScenarioResolution] Wave ${wave.id} targets unknown site ${wave.siteId}`);
+        const spawnArea = resolveDawnSiteAssaultArea(template, site);
+        return {
+          id: wave.id,
+          start: { type: 'site-activated', siteId: site.siteId },
+          groups: groups.map((group) => ({ ...group, delayMs: (group.delayMs ?? 0) + wave.atMs, spawnArea })),
+        };
+      }
       if (!template.fronts.includes(wave.front)) {
         throw new Error(`[DawnScenarioResolution] Wave ${wave.id} uses front ${wave.front}, not offered by ${template.id}`);
       }
       return {
         id: wave.id,
         start: { type: 'time', atMs: wave.atMs },
-        groups: getDawnWaveBlock(wave.blockId).groups.map((group) => ({ ...group, front: wave.front })),
+        groups: groups.map((group) => ({ ...group, front: wave.front })),
       };
     }),
     secondaryObjectives: sites.map((site): CoopDefenseMapSecondaryObjectiveConfig => ({

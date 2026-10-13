@@ -90,6 +90,16 @@ describe('Dawn extensions of the Coop authoring contract', () => {
     }))).toThrow('must not declare focusUntil');
   });
 
+  it('lets encounters start on a known site activation only', () => {
+    const encounter = { id: 'site-assault', start: { type: 'site-activated', siteId: 'near-1' } as const,
+      groups: [{ enemyKind: 'zombie-badger', count: 3, spawnArea: { gridX: 12, gridY: 9, widthCells: 3, heightCells: 3 } }] };
+    expect(normalizeCoopDefenseMapConfig(dawnLikeMap({ encounters: [encounter] })).encounters?.[0].start)
+      .toEqual({ type: 'site-activated', siteId: 'near-1' });
+    expect(() => normalizeCoopDefenseMapConfig(dawnLikeMap({
+      encounters: [{ ...encounter, start: { type: 'site-activated', siteId: 'elsewhere' } }],
+    }))).toThrow('unknown site');
+  });
+
   it('has no time limit for untimed objectives', () => {
     expect(getCoopMissionTimeLimitSec({ objective: 'repel-assault' })).toBeNull();
   });

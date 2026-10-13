@@ -201,7 +201,7 @@ export type CoopDefenseMapEncounterStart =
   /** Startet `delayMs` nach dem tatsaechlichen Boss-Spawn (also nach einem Boss-Intro). */
   | { readonly type: 'after-boss-spawn'; readonly delayMs: number }
   | { readonly type: 'base-destroyed'; readonly baseId: string }
-  /** Nur fuer Nebenziele: die Salvage-Site mit dieser ID wurde aktiviert (z. B. betreten). */
+  /** Die Salvage-Site mit dieser ID wurde aktiviert (betreten); fuer Nebenziele und Encounter. */
   | { readonly type: 'site-activated'; readonly siteId: string };
 
 /** Endlicher Encounter; `repel-assault` verwendet die Reihenfolge als Clear-/Rest-Kette. */
@@ -1176,11 +1176,14 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     mapConfig.mapId,
     mapConfig.balanceReferenceDurationSec,
   );
+  const siteClearings = normalizeSiteClearings(mapConfig.mapId, mapConfig.siteClearings, arenaWidthCells, arenaHeightCells);
+  const siteIds = new Set((siteClearings ?? []).map(({ id }) => id));
   const encounters = normalizeEncounterConfigs(mapConfig.mapId, mapConfig.encounters, {
     bases,
     boss,
     arenaWidthCells,
     arenaHeightCells,
+    siteIds,
   });
   const trackMode: CoopDefenseMapTrackMode = mapConfig.trackMode === 'none' ? 'none' : mapConfig.trackMode === 'void-fire' ? 'void-fire' : 'rails';
   const trackPosition = normalizeTrackPosition(
@@ -1200,7 +1203,6 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     new Set(mapConfig.missionProgress?.checkpoints.map((checkpoint) => checkpoint.id) ?? []),
   );
   const itemDrop = normalizeItemDropConfig(mapConfig.mapId, mapConfig.itemDrop);
-  const siteClearings = normalizeSiteClearings(mapConfig.mapId, mapConfig.siteClearings, arenaWidthCells, arenaHeightCells);
   const secondaryObjectives = normalizeSecondaryObjectiveConfigs(mapConfig.mapId, mapConfig.secondaryObjectives, {
     bases,
     encounters,
@@ -1208,7 +1210,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     itemDrop,
     arenaWidthCells,
     arenaHeightCells,
-    siteIds: new Set((siteClearings ?? []).map(({ id }) => id)),
+    siteIds,
   });
   const persistentBaseRewardsOnVictory = normalizePersistentBaseRewardIds(
     mapConfig.mapId,
@@ -2344,6 +2346,8 @@ interface EncounterTriggerNormalizationContext {
   readonly arenaWidthCells: number;
   readonly arenaHeightCells: number;
   readonly checkpointIds?: ReadonlySet<string>;
+  /** Bekannte Salvage-Sites (aus `siteClearings`) fuer `site-activated`. */
+  readonly siteIds?: ReadonlySet<string>;
 }
 
 function normalizeEncounterStart(
@@ -2389,6 +2393,16 @@ function normalizeEncounterStart(
           `[coopDefenseMaps] Encounter ${mapId}:${encounterId} needs a defense id`,
         ),
       };
+    case 'site-activated': {
+      const siteId = normalizeRequiredId(
+        start.siteId,
+        `[coopDefenseMaps] Encounter ${mapId}:${encounterId} needs a site id`,
+      );
+      if (!context.siteIds?.has(siteId)) {
+        throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} references unknown site: ${siteId}`);
+      }
+      return { type: 'site-activated', siteId };
+    }
     case 'after-event':
       if (typeof start.eventId !== 'string' || start.eventId.trim().length === 0) {
         throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} needs an event id`);
