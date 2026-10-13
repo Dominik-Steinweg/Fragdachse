@@ -1,3 +1,4 @@
+import { DAWN_SCRAP_DEFS } from '../../powerups/PowerUpConfig';
 import {
   MAX_COOP_DEFENSE_SITE_CLEARING_RADIUS_CELLS,
   type CoopBaseCellOffset,
@@ -180,6 +181,13 @@ export interface DawnThreatCurve {
   /** Itemlevel des Sieg-Item-Angebots (D-16). */
   readonly itemLevel: number;
   readonly scrapMultiplier: number;
+  readonly scrapDrops: {
+    /** Low background chance in all phases outside the night. */
+    readonly dayChance: number;
+    readonly nightChance: number;
+    /** The definition owns the integer value of one drop. */
+    readonly pickupDefId: string;
+  };
 }
 
 export interface DawnWaveCompositionConfig {
@@ -214,6 +222,7 @@ export const DAWN_CONTENT_HASH = hashCanonicalJson({
   enemyThreatCosts: Object.fromEntries(ENEMY_THREAT_COSTS),
   waveComposition: WAVE_COMPOSITION,
   threatCurves: THREAT_CURVES,
+  scrapPickups: Object.values(DAWN_SCRAP_DEFS).map(({ id, amount }) => ({ id, amount })),
 });
 
 export class DawnContentMismatchError extends Error {
@@ -735,6 +744,14 @@ function validateThreatCurves(raw: readonly unknown[]): readonly DawnThreatCurve
       throw new Error(`[dawnContent] ${label} needs a positive, non-decreasing itemLevel`);
     }
     if (!isPositiveFinite(curve.scrapMultiplier)) throw new Error(`[dawnContent] ${label} needs a positive scrapMultiplier`);
+    const drops = curve.scrapDrops;
+    if (!drops || ![drops.dayChance, drops.nightChance].every(
+      chance => Number.isFinite(chance) && chance >= 0 && chance <= 1,
+    )) throw new Error('[dawnContent] ' + label + ' needs scrap drop chances in [0, 1]');
+    const pickup = DAWN_SCRAP_DEFS[drops.pickupDefId];
+    if (!pickup || !isPositiveInteger(pickup.amount!)) {
+      throw new Error('[dawnContent] ' + label + ' needs a scrap pickup with a positive integer value');
+    }
     validateCurveAffordability(label, curve);
     curves.push(curve);
   });

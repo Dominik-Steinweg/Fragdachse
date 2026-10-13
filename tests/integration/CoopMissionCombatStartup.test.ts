@@ -60,6 +60,8 @@ vi.mock('phaser', () => ({
 }));
 vi.mock('../../src/network/bridge', () => ({
   bridge: {
+    hostPublishDawnRoundScrap: vi.fn(),
+    broadcastEffect: vi.fn(),
     getRoundState: () => null,
     getGamePhase: () => 'LOBBY',
     getGameMode: () => 'DEATHMATCH',
@@ -118,6 +120,72 @@ import type { CoopMissionActivityConfiguration } from '../../src/activity/CoopMi
 import survivalMap from '../../src/config/coopDefenseMaps/09-ueberleben.json';
 import { normalizeCoopDefenseMapConfig, getCoopDefenseMapObjectiveZoneWorldRect } from '../../src/config/coopDefenseMaps';
 import { CoopMissionObjectiveComposition, type CoopMissionObjectiveCompositionOptions } from '../../src/activity/CoopMissionObjectiveComposition';
+import { composeDawnRoundPlans } from '../../src/dawn/composition/DawnRoundComposition';
+import { resolveDawnScenario, resolveDawnSites } from '../../src/dawn/resolution/DawnScenarioResolution';
+import { getDawnThreatCurve } from '../../src/config/dawn/dawnContent';
+import { worldCellCenter } from '../../src/world/WorldMetrics';
+
+describe('Dawn composition ownership', () => {
+  it.each(['host', 'client', 'campaign'] as const)('binds scrap only for a Dawn host (%s)', role => {
+    const plans = composeDawnRoundPlans({ seed: 7, threat: 2, dayNumber: 1 });
+    const { mapConfig, activity: definition } = resolveDawnScenario(plans.world, plans.activity);
+    const descriptor: ActivityDescriptor = {
+      kind: 'coop-mission', activityRevision: 3, worldRevision: 1,
+      definitionId: role === 'campaign' ? 'activity:coop-mission:1' : definition.id,
+      parameters: { dawn: plans.activity },
+    };
+    const mission = new CoopMissionRuntime(descriptor);
+    const metrics = resolveCoopDefenseWorldMetrics(mapConfig.arenaWidthCells, mapConfig.arenaHeightCells);
+    const detach = vi.fn();
+    const pickups = { bindDawnScrap: vi.fn(() => detach), spawnPickup: vi.fn(), removePickup: vi.fn() };
+    const completed = vi.fn();
+    const activitySpy = vi.spyOn(bridge, 'getActivityDescriptor').mockReturnValue(descriptor);
+    const roundSpy = vi.spyOn(bridge, 'getRoundState').mockReturnValue({ status: 'active', roundStartTime: 1 });
+    vi.mocked(bridge.hostPublishDawnRoundScrap).mockClear();
+    vi.mocked(bridge.broadcastEffect).mockClear();
+    try {
+      const composition = new CoopMissionComposition({
+        getWorld: () => ({ descriptor: { worldRevision: 1, parameters: { dawn: plans.world } }, metrics }),
+        getLayout: () => ({ rocks: [] }), getArenaResult: () => ({}), getBaseManager: () => null,
+        getHumanPlayerCount: () => 1, isHost: () => role !== 'client',
+        getPlayerManager: () => ({ getAllPlayers: () => [] }), getWorldCombatCore: () => ({}),
+        getPowerUpSystem: () => pickups, getTemporaryUtilityPort: () => null,
+        getAutomatedWeaponExecution: () => null, getPlacementSystem: () => null,
+        getProjectileSpawnPort: () => null, getProjectileThreatReadPort: () => null,
+        getTranslocatorProjectilePort: () => null, getPlayerWorldRuntime: () => null,
+        getParticipantIds: () => [], publishRespawnBudget: vi.fn(), publishMissionProgress: vi.fn(),
+        getSecondsLeft: () => mapConfig.surviveDurationSec!, train: { releaseActivityTrain: vi.fn() },
+        grantPersistentBaseRewards: vi.fn(), onObjectiveCompleted: completed,
+      } as unknown as CoopMissionCompositionOptions);
+      composition.materializeDependents({ definitionId: descriptor.definitionId, mapConfig }, mission);
+      if (role !== 'host') {
+        expect(pickups.bindDawnScrap).not.toHaveBeenCalled();
+        expect(bridge.hostPublishDawnRoundScrap).not.toHaveBeenCalled();
+        return;
+      }
+      expect(pickups.bindDawnScrap).toHaveBeenCalledOnce();
+      const site = resolveDawnSites(plans.world)[0];
+      const position = worldCellCenter(metrics, site.slot.anchor.gridX, site.slot.anchor.gridY);
+      mission.coopDefenseSiteActivationSystem!.hostUpdate(false, [{
+        playerId: 'player', ...position, eligible: true,
+      }]);
+      const objectives = mission.coopDefenseSecondaryObjectiveSystem!;
+      objectives.hostUpdate(0, false);
+      if (site.archetype.objectiveType === 'destroy') objectives.reportTargetDestroyed(site.objectiveId, site.baseId);
+      else objectives.hostUpdate(site.archetype.holdDurationMs! + 1, false);
+      const amount = Math.floor(site.tier.scrapReward * getDawnThreatCurve(plans.activity.threat).scrapMultiplier);
+      expect(completed).toHaveBeenCalledWith(site.objectiveId);
+      expect(bridge.hostPublishDawnRoundScrap).toHaveBeenLastCalledWith(amount);
+      expect(bridge.broadcastEffect).toHaveBeenLastCalledWith({ type: 'dawn-scrap', ...position, amount });
+      mission.destroy();
+      expect(detach).toHaveBeenCalledOnce();
+      expect(bridge.hostPublishDawnRoundScrap).toHaveBeenLastCalledWith(amount);
+    } finally {
+      mission.destroy();
+      activitySpy.mockRestore(); roundSpy.mockRestore();
+    }
+  });
+});
 
 const activity: ActivityDescriptor = {
   activityRevision: 2,

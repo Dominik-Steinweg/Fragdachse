@@ -58,6 +58,24 @@ function setup() {
 }
 
 describe('Coop XP text presentation', () => {
+  it('renders scrap with complete glyphs in the same bounded popup pool', () => {
+    const h = setup();
+    h.prepare();
+    h.renderer.play(10, 20, 12, 'Schrott');
+    const label = h.labels.find(label => label.active)!;
+    expect(label.text).toBe('+12 Schrott');
+    const font = h.fonts.get(label.font);
+    const texture = h.textures.get(font.texture);
+    for (const char of label.text) {
+      const glyph = font.data.chars[char.charCodeAt(0)];
+      expect(glyph).toBeDefined();
+      expect(glyph.x + glyph.width).toBeLessThanOrEqual(texture.width);
+    }
+    h.renderer.clear();
+    expect(h.labels.every(label => !label.active)).toBe(true);
+    h.renderer.destroy();
+  });
+
   it('prepares shared glyphs without popups and reuses objects across changing numbers', () => {
     const h = setup();
     h.prepare();

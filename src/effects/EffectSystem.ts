@@ -428,6 +428,10 @@ export class EffectSystem implements EnemyVisualSink {
     this.ensureTextures();
 
     this.bridge.registerEffectHandler((effect: SyncedCombatEffect) => {
+      if (effect.type === 'dawn-scrap') {
+        this.xpTextRenderer ??= new CoopXpTextRenderer(this.scene);
+        this.xpTextRenderer.play(effect.x, effect.y, effect.amount, 'Schrott');
+      }
       if (effect.type === 'hit') {
         if (effect.shooterId === this.bridge.getLocalPlayerId()) {
           onLocalConfirmedHit?.();

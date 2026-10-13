@@ -1,3 +1,4 @@
+import { DawnScrapLedger } from '../../src/dawn/runtime/DawnScrapLedger';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', async () => {
   const { createRequire } = await import('node:module');
@@ -76,7 +77,10 @@ describe('Dawn round lifecycle (S2)', () => {
       host.publishLobbySync();
       const round = hostComposedRound(4101);
       host.publishWorldAndActivity(round.world, round.activity);
-      host.hostPublishDawnRoundScrap(42);
+      const ledger = new DawnScrapLedger(total => host.hostPublishDawnRoundScrap(total));
+      ledger.reset();
+      ledger.credit(17, 'site');
+      ledger.credit(25, 'drop');
       hostRoom.room.update();
 
       const lateRoom = await addClientRoom(network); rooms.push(lateRoom);

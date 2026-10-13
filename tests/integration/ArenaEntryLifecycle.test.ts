@@ -397,6 +397,7 @@ describe('Lobby exit gates local Arena work', () => {
   it('keeps host Ready preparation light and delays teardown/generation until after the covered render', () => {
     const f = fixture(true); f.net.phase = 'LOBBY';
     for (const method of ['publishLobbySync', 'setMatchHostId', 'resetAllFrags', 'resetCoopDefenseRoundXp',
+      'hostPublishDawnRoundScrap',
       'publishRoundResults', 'publishCoopDefenseEncounterPresentationState', 'publishCoopDefenseMapEventPresentationState',
       'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState',
       'setArenaStartTime', 'setRoundEndTime', 'requestFullGameState', 'publishRoundState'] as const) {

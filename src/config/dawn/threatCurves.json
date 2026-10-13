@@ -39,13 +39,15 @@
       "threat": 1, "scheduleId": "standard", "nightBudget": 60, "dayPressureBudget": 10,
       "fronts": ["primary"], "siteCount": 3, "tierWeights": [100, 0, 0],
       "enemyWeights": { "zombie-badger": 10, "demon-badger": 4, "rabid-badger": 3 },
-      "itemLevel": 2, "scrapMultiplier": 1
+      "itemLevel": 2, "scrapMultiplier": 1,
+      "scrapDrops": { "dayChance": 0.04, "nightChance": 0.18, "pickupDefId": "dawn_scrap_1" }
     },
     {
       "threat": 2, "scheduleId": "standard", "nightBudget": 90, "dayPressureBudget": 12,
       "fronts": ["primary", "flank"], "siteCount": 3, "tierWeights": [85, 15, 0],
       "enemyWeights": { "zombie-badger": 10, "demon-badger": 4, "rabid-badger": 3, "spore-warden": 2 },
-      "itemLevel": 3, "scrapMultiplier": 1.05
+      "itemLevel": 3, "scrapMultiplier": 1.05,
+      "scrapDrops": { "dayChance": 0.04, "nightChance": 0.18, "pickupDefId": "dawn_scrap_1" }
     },
     {
       "threat": 3, "scheduleId": "standard", "nightBudget": 120, "dayPressureBudget": 14,
@@ -54,7 +56,8 @@
         "zombie-badger": 10, "demon-badger": 4, "rabid-badger": 3, "spore-warden": 2,
         "plague-medic": 2, "thrower-badger": 2
       },
-      "itemLevel": 4, "scrapMultiplier": 1.1
+      "itemLevel": 4, "scrapMultiplier": 1.1,
+      "scrapDrops": { "dayChance": 0.04, "nightChance": 0.18, "pickupDefId": "dawn_scrap_1" }
     },
     {
       "threat": 4, "scheduleId": "standard", "nightBudget": 160, "dayPressureBudget": 18,
@@ -63,7 +66,8 @@
         "zombie-badger": 10, "demon-badger": 4, "rabid-badger": 3, "spore-warden": 2,
         "plague-medic": 2, "thrower-badger": 2, "alien-badger": 2, "void-stalker": 2, "timebomb-badger": 2
       },
-      "itemLevel": 5, "scrapMultiplier": 1.15
+      "itemLevel": 5, "scrapMultiplier": 1.15,
+      "scrapDrops": { "dayChance": 0.04, "nightChance": 0.18, "pickupDefId": "dawn_scrap_1" }
     },
     {
       "threat": 5, "scheduleId": "standard", "nightBudget": 200, "dayPressureBudget": 22,
@@ -73,7 +77,8 @@
         "plague-medic": 2, "thrower-badger": 2, "alien-badger": 2, "void-stalker": 2, "timebomb-badger": 2,
         "pyro-badger": 2
       },
-      "itemLevel": 6, "scrapMultiplier": 1.2
+      "itemLevel": 6, "scrapMultiplier": 1.2,
+      "scrapDrops": { "dayChance": 0.04, "nightChance": 0.18, "pickupDefId": "dawn_scrap_2" }
     },
     {
       "threat": 6, "scheduleId": "standard", "nightBudget": 250, "dayPressureBudget": 26,
@@ -83,7 +88,8 @@
         "plague-medic": 2, "thrower-badger": 3, "alien-badger": 2, "void-stalker": 2, "timebomb-badger": 2,
         "pyro-badger": 2, "stink-broodmother": 1
       },
-      "itemLevel": 7, "scrapMultiplier": 1.25
+      "itemLevel": 7, "scrapMultiplier": 1.25,
+      "scrapDrops": { "dayChance": 0.04, "nightChance": 0.18, "pickupDefId": "dawn_scrap_2" }
     },
     {
       "threat": 7, "scheduleId": "standard", "nightBudget": 300, "dayPressureBudget": 30,
@@ -93,7 +99,8 @@
         "plague-medic": 3, "thrower-badger": 3, "alien-badger": 3, "void-stalker": 3, "timebomb-badger": 2,
         "pyro-badger": 3, "stink-broodmother": 2, "mortar-badger": 2, "firestarter-badger": 2
       },
-      "itemLevel": 8, "scrapMultiplier": 1.3
+      "itemLevel": 8, "scrapMultiplier": 1.3,
+      "scrapDrops": { "dayChance": 0.04, "nightChance": 0.18, "pickupDefId": "dawn_scrap_2" }
     },
     {
       "threat": 8, "scheduleId": "standard", "nightBudget": 360, "dayPressureBudget": 36,
@@ -103,7 +110,8 @@
         "plague-medic": 3, "thrower-badger": 3, "alien-badger": 3, "void-stalker": 3, "timebomb-badger": 3,
         "pyro-badger": 3, "stink-broodmother": 2, "mortar-badger": 3, "firestarter-badger": 3
       },
-      "itemLevel": 9, "scrapMultiplier": 1.35
+      "itemLevel": 9, "scrapMultiplier": 1.35,
+      "scrapDrops": { "dayChance": 0.04, "nightChance": 0.18, "pickupDefId": "dawn_scrap_3" }
     },
     {
       "threat": 9, "scheduleId": "standard", "nightBudget": 430, "dayPressureBudget": 42,
@@ -113,7 +121,8 @@
         "plague-medic": 4, "thrower-badger": 4, "alien-badger": 4, "void-stalker": 4, "timebomb-badger": 3,
         "pyro-badger": 4, "stink-broodmother": 3, "mortar-badger": 4, "firestarter-badger": 4
       },
-      "itemLevel": 10, "scrapMultiplier": 1.4
+      "itemLevel": 10, "scrapMultiplier": 1.4,
+      "scrapDrops": { "dayChance": 0.04, "nightChance": 0.18, "pickupDefId": "dawn_scrap_3" }
     },
     {
       "threat": 10, "scheduleId": "standard", "nightBudget": 500, "dayPressureBudget": 48,
@@ -123,7 +132,8 @@
         "plague-medic": 5, "thrower-badger": 5, "alien-badger": 5, "void-stalker": 5, "timebomb-badger": 4,
         "pyro-badger": 5, "stink-broodmother": 3, "mortar-badger": 5, "firestarter-badger": 5
       },
-      "itemLevel": 11, "scrapMultiplier": 1.45
+      "itemLevel": 11, "scrapMultiplier": 1.45,
+      "scrapDrops": { "dayChance": 0.04, "nightChance": 0.18, "pickupDefId": "dawn_scrap_3" }
     }
   ]
 }

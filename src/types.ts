@@ -878,7 +878,15 @@ export interface SyncedDeathEffect {
   dirY?: number;
 }
 
-export type SyncedCombatEffect = SyncedHitEffect | SyncedDeathEffect;
+/** Presentation receipt only; the authoritative balance travels separately via dsc. */
+export interface SyncedDawnScrapEffect {
+  type: 'dawn-scrap';
+  x: number;
+  y: number;
+  amount: number;
+}
+
+export type SyncedCombatEffect = SyncedHitEffect | SyncedDeathEffect | SyncedDawnScrapEffect;
 
 /** Kurzlebiger Melee-Swing für VFX-Replikation über den zuverlässigen Gameplay-Kanal. */
 export interface SyncedMeleeSwing {

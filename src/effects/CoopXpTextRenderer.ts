@@ -2,7 +2,7 @@ import type * as Phaser from 'phaser';
 import { COLORS, DEPTH, toCssColor } from '../config';
 
 const ATLAS_KEY = '__coop_xp_glyphs';
-const CHARS = [...new Set('+0123456789 XP.e-InfinityNa')].join('');
+const CHARS = [...new Set('+0123456789 XP.e-InfinityNaSchrott')].join('');
 const CELL = 32;
 const WIDTH = 1024;
 const HEIGHT = 512;
@@ -118,7 +118,7 @@ export class CoopXpTextRenderer {
     return { outline, label, elapsed: 0, startY: 0 };
   }
 
-  play(x: number, y: number, xp: number): void {
+  play(x: number, y: number, xp: number, unit: 'XP' | 'Schrott' = 'XP'): void {
     const value = Math.max(0, Math.floor(xp));
     if (value <= 0) return;
     // Normal gameplay is gated by prepare(); direct tooling consumers can prepare synchronously.
@@ -129,7 +129,7 @@ export class CoopXpTextRenderer {
     popup.elapsed = 0;
     popup.startY = y - 18;
     const fontIndex = ((Number.isFinite(stroke) ? stroke : 3) - 3) * 2;
-    const text = `+${value} XP`;
+    const text = `+${value} ${unit}`;
     // All outlines precede all fills within a popup, just as Canvas strokeText/fillText do.
     this.showLabel(popup.outline, this.fontKeys[fontIndex], text, x, popup.startY, stroke);
     this.showLabel(popup.label, this.fontKeys[fontIndex + 1], text, x, popup.startY, stroke);
