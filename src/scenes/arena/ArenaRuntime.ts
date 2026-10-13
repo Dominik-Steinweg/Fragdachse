@@ -609,6 +609,11 @@ export class ArenaRuntime {
     this.flow.setTimeOfDayDebugOverride(minutes);
   }
 
+  seekDevScenarioDawnTime(elapsedMs: number): void {
+    this.flow.seekDevScenarioDawnTime(elapsedMs);
+    this.requestWorldStaticShadowBake(true);
+  }
+
   clearTimeOfDayDebugOverride(): void {
     this.flow.clearTimeOfDayDebugOverride();
   }

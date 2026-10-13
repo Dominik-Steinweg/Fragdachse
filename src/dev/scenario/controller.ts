@@ -26,6 +26,8 @@ import type { TrainDevPassOptions } from '../../train/TrainManager';
 import { setCameraBaseScroll } from '../../graphics/cameraBaseScroll';
 import { getCameraFocusOverride, resolveCameraFocusZoom } from '../../graphics/cameraFocusOverride';
 import { ScenarioClock } from './clock';
+import { prepareScenarioProgram, dawnPhaseElapsed } from './dawn';
+import { getDawnSchedule, type DawnPhaseId } from '../../config/dawn/dawnContent';
 import { visualTest, bindVisualTestBootClock, bindVisualTestTextureKeys } from './visualTest';
 import { BootScreen } from '../../ui/BootScreen';
 import { getGraphicsQualityController, type GraphicsQuality } from '../../graphics/GraphicsQuality';
@@ -42,6 +44,7 @@ export class DevScenarioController {
   readonly clock: ScenarioClock;
   readonly bots: ScenarioBots;
   config = defaultScenario();
+  private dawnPhaseReview = false;
   state: 'idle' | 'waiting-lobby' | 'loading' | 'ready' | 'error' = 'idle';
   message = 'Szenario konfigurieren und starten.';
   lastAction: unknown = null;
@@ -257,6 +260,7 @@ export class DevScenarioController {
     this.clock.paused = false; this.clock.speed = 1;
     this.clock.preparing = visualTest.enabled;
     this.config = config;
+    this.dawnPhaseReview = false;
     this.saveLink();
     this.pinned.clear(); this.pendingConstructions = [];
     if (bridge.getGamePhase() !== 'LOBBY') this.runtime.hostDiscardRound();
@@ -268,6 +272,24 @@ export class DevScenarioController {
     this.message = 'Warte auf Lobby und normalen Rundenstart …';
   }
   saveLink(): void { history.replaceState(null, '', encodeScenario(this.config)); }
+  jumpDawnPhase(phase: DawnPhaseId, offsetMs = 0): void {
+    this.requireReady();
+    if (this.setupPending || this.clock.pendingSteps) throw new Error('Zuerst Aufbau und ausstehende Schritte abschließen.');
+    const plan = bridge.getActivityDescriptor()?.parameters?.dawn;
+    if (!this.config.dawn || !plan) throw new Error('Aktive Dawn-Runde erforderlich.');
+    const elapsedMs = dawnPhaseElapsed(getDawnSchedule(plan.scheduleId), phase, offsetMs);
+    this.runtime.seekDevScenarioDawnTime(elapsedMs);
+    this.dawnPhaseReview = true;
+    this.config.freezeMission = true;
+    this.config.suppressWaves = true;
+    this.lastAction = { ok: true, action: 'dawnPhase', phase, offsetMs, elapsedMs };
+    this.saveLink();
+  }
+  validateLiveOptions(options: Record<string, unknown>): void {
+    if (this.dawnPhaseReview && (options.freezeMission === false || options.suppressWaves === false)) {
+      throw new Error('Nach dawnPhase bleiben Mission und Encounter eingefroren. Für Gameplay das Szenario neu starten.');
+    }
+  }
   setRenderDebug(disable: readonly string[], composite: import('../../effects/sunlight/WorldSunComposite').SunCompositeDebugView = 'normal', probe = false, characterShadowSolid = false,
     characterMaterialView: import('../../effects/CharacterMaterialModel').CharacterMaterialView = 'material',
     fogOptions: FogRockLightingOptions & { lobbyTimeOfDay?: number } = {}): void {
@@ -734,7 +756,7 @@ export class DevScenarioController {
       if (this.state === 'idle' && this.lobbyReady()) this.pauseVisualTest();
       if ((this.state === 'waiting-lobby' || this.state === 'loading') && performance.now() - this.startedAt > 180000) throw new Error('Start überschreitet 180 s; Ladezustand im Bericht prüfen.');
       if (this.state === 'waiting-lobby' && bridge.getGamePhase() === 'LOBBY' && this.lobbyReady() && ++this.lobbyFrames >= 2) {
-        bridge.setGameMode('coop_defense'); bridge.setCoopDefenseMapId(this.config.mapId);
+        bridge.setGameMode('coop_defense'); prepareScenarioProgram(this.config);
         this.runtime.navigationLabPort.setNextRoundSeed(this.config.seed);
         this.bots.prepare(this.config);
         bridge.setLocalReadyWithCommittedLoadout(scenarioLoadout(this.config)); this.runtime.setIsLocalReady(true);
@@ -776,10 +798,12 @@ export class DevScenarioController {
       }
       if (this.pendingKrakenHp !== null && this.runtime.devScenarioPort.setKrakenHp(this.pendingKrakenHp)) this.pendingKrakenHp = null;
       const now = this.clock.now, id = bridge.getLocalPlayerId();
+      if (this.dawnPhaseReview) { this.config.freezeMission = true; this.config.suppressWaves = true; }
       this.runtime.devScenarioPort.suppressEncounters(this.config.suppressWaves || this.pendingConstructions.length > 0);
       this.runtime.devScenarioPort.setOptions(this.config.freezeMission, this.config.hideTutorial);
       this.worldLighting?.update(this.config.timeOfDay,this.clock.now);
-      this.runtime.setTimeOfDayDebugOverride(this.config.timeOfDay);
+      if (this.config.dawn) this.runtime.clearTimeOfDayDebugOverride();
+      else this.runtime.setTimeOfDayDebugOverride(this.config.timeOfDay);
       bridge.setDevScenarioPlayerFreeForAll(this.config.playerFreeForAll);
       this.runtime.devScenarioPort.updateTrain(Math.max(0, now - this.lastTrainUpdate), this.trainInvulnerable); this.lastTrainUpdate = now;
       this.bots.update();
@@ -892,6 +916,7 @@ export class DevScenarioController {
       && (!bridge.isArenaStarted() || bridge.getGamePhase() !== 'ARENA'));
     return { state: this.state, ready: this.state === 'ready' && !terminated && !this.setupPending && !this.pendingTrainShowcase && !this.krakenLoading && !this.pendingKrakenMission && this.pendingKrakenHp === null, terminated, message: this.message, isolated: true, network: 'local-only',
       krakenResidency: this.runtime.getScenarioKrakenResidency(), krakenDevAction: readKrakenDevAction(), krakenDevGeometry: readKrakenDevGeometry(), initialPosition: this.initialPosition, mission: this.runtime.devScenarioPort.readMission(),
+      dawnPhaseReview: this.dawnPhaseReview,
       train: this.trainStatus(),
       bots: this.bots.ids().map((id, index) => ({ index, id, ...(this.state === 'ready' ? this.bots.position(index) : null) })),
       readyAfterMs: this.readyAt === null ? null : Math.round(this.readyAt - this.startedAt),

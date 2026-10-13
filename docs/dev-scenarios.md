@@ -8,6 +8,48 @@ Der Einstieg und die Bedienoberfläche werden vom normalen Produktionsbuild nich
 
 ## Bedienung
 
+### Dawn: Phasen-Review
+
+Ein Dawn-Rezept verwendet `dawn: { threat: 1…10 }` **statt** `mapId`; Threat muss ganzzahlig sein.
+Der isolierte Dev-Speicher erhält den Abschluss der letzten Kampagnenmap und
+`dawn.expansionLevel = threat - 1`. Danach wählt der Host das Dawn-Programm und startet über
+den normalen Seed-/Ready-/Ladeweg. Der echte Spielstand bleibt unberührt. Ein späterer Start
+mit `mapId` wählt wieder das Kampagnenprogramm. Dawn verwendet seine automatische Tageszeit;
+das Rezeptfeld und die Live-Option `timeOfDay` werden dabei nicht als Licht-Override angewendet.
+
+```js
+const dev = window.devScenario;
+dev.run({ action: 'start', scenario: {
+  version: 1, classId: 'dachs_nukem', dawn: { threat: 3 }, seed: 12345,
+  suppressWaves: true, freezeMission: true, hideTutorial: true, hideAim: true
+} });
+await dev.whenReady();
+dev.run({ action: 'pause' });
+dev.run({ action: 'dawnPhase', phase: 'day' });
+// Nach Bedarf separat: await dev.capture();
+dev.run({ action: 'dawnPhase', phase: 'dusk' });
+dev.run({ action: 'dawnPhase', phase: 'night', offsetMs: 1000 });
+dev.run({ action: 'dawnPhase', phase: 'dawn' });
+```
+
+`dawnPhase` setzt den gemeinsamen Host-Missionszeitanker auf den Phasenbeginn des **aktiven**
+Dawn-Zeitplans plus `offsetMs` (Standard 0). Der Offset muss eine nichtnegative ganze
+Millisekundenzahl sein und innerhalb der gewählten Phase liegen. Rückwärtssprünge sind erlaubt.
+Der Aufbau muss fertig sein; ausstehende `step`-/`settle`-Frames zuerst abwarten.
+`status().mission.elapsedMs` und die letzte Aktionsantwort melden den Zielzeitpunkt.
+Tageszeit und HUD verwenden dieselbe eingefrorene Missionszeit; bei globaler Pause aktualisiert
+der nächste Schritt oder die nächste Aufnahme die Darstellung. Kampf- und Effektzeit werden
+durch den Sprung nicht vor- oder zurückgespult.
+
+Jeder Sprung aktiviert dauerhaft `freezeMission` und `suppressWaves` für diesen Aufbau
+(`status().dawnPhaseReview: true`). Encounter, Nebenziel-Abläufe, Missionsabschluss und
+Respawn-Verbrauch bleiben angehalten: Übersprungene Wellen werden weder nachgespawnt noch als
+besiegt verbucht, Ziele weder automatisch abgeschlossen noch zurückgesetzt. Vorhandene Gegner
+und Bauten bleiben erhalten; Kampf läuft bei `resume` weiter. Das ist ein Phasen-/Licht-Review,
+kein Replay einer bis dahin gespielten Mission. Ausschalten der beiden Schutzoptionen wird
+nach einem Sprung abgelehnt. Für Gameplay das Rezept mit beiden Optionen `false` neu starten;
+für unabhängige Kontaktbogenbilder ebenfalls jeweils frisch starten und dann springen.
+
 ### Mörser-Dachs: Gate 1
 
 Map `0` (`00-test`) enthält einen Mörser-Encounter. Für isolierte Versuche im bestehenden
@@ -356,6 +398,7 @@ Aufnahme ab. Nach Scene-Teardown wird die globale API entfernt und wartende Aufr
 | Aktion | Zusätzliche Felder |
 |---|---|
 | `start` | `scenario`: vollständiges oder um Standardwerte ergänzbares Rezept |
+| `dawnPhase` | `phase`: `day`, `dusk`, `night`, `dawn`; optional `offsetMs` innerhalb der Phase; friert Missionsabläufe und Encounter bis zum Neustart ein |
 | `status`, `findFree`, `stop`, `utility`, `clearEnemies`, `pause`, `resume` | keine |
 | `target`, `teleport` | `gridX`, `gridY`; Teleport ohne Koordinaten verwendet das Ziel |
 | `move` | `dx`, `dy` (−1…1), `durationMs` (0…10000) |

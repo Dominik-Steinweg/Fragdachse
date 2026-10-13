@@ -50,6 +50,35 @@ it('keeps render texture identities unique when a deterministic frame repeats it
 });
 
 describe('Dev scenario contract', () => {
+  it('round-trips Dawn recipes instead of campaign maps and validates threat strictly', () => {
+    const recipe = { version: 1, classId: 'dachs_nukem', dawn: { threat: 1 }, seed: 42 };
+    for (const threat of [1, 10]) {
+      const config = parseScenario({ ...recipe, dawn: { threat } });
+      expect(config.mapId).toBeUndefined();
+      expect(config.dawn).toEqual({ threat });
+      expect(decodeScenario(encodeScenario(config))).toEqual(config);
+    }
+    for (const dawn of [null, [], {}, { threat: 0 }, { threat: 11 }, { threat: 1.5 }, { threat: '2' },
+      { threat: NaN }, { threat: Infinity }, { threat: 1, typo: true }]) {
+      expect(() => parseScenario({ ...recipe, dawn })).toThrow();
+    }
+    expect(() => parseScenario({ ...recipe, mapId: '1' })).toThrow();
+  });
+  it('validates phase actions before invoking the host port', () => {
+    const jumpDawnPhase = vi.fn();
+    const controller = { jumpDawnPhase, syncPanel() {} } as never;
+    for (const phase of ['day', 'dusk', 'night', 'dawn']) {
+      runScenarioCommand(controller, { action: 'dawnPhase', phase });
+      expect(jumpDawnPhase).toHaveBeenLastCalledWith(phase, 0);
+    }
+    for (const phase of [undefined, null, 'Night', 'missing', 1]) {
+      expect(() => runScenarioCommand(controller, { action: 'dawnPhase', phase })).toThrow();
+    }
+    for (const offsetMs of [null, -1, 1.5, NaN, Infinity, '5', Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() => runScenarioCommand(controller, { action: 'dawnPhase', phase: 'night', offsetMs })).toThrow();
+    }
+    expect(jumpDawnPhase).toHaveBeenCalledTimes(4);
+  });
   it('loads old recipes with visual-review defaults and validates explicit overrides', () => {
     const old = { version: 1, classId: 'dachs_nukem', mapId: '1' };
     expect(parseScenario(old)).toMatchObject({ freezeMission: true, hideTutorial: true });

@@ -13,17 +13,25 @@ import { resolveRockAerialPerspective } from '../src/effects/groundFog/FogRockLi
 import { DevScenarioController } from '../src/dev/scenario/controller';
 import { WorldLightingMeasurement } from '../src/dev/scenario/WorldLightingMeasurement';
 import { onBootSceneTeardown } from '../src/ui/BootPreparation';
+import { bridge } from '../src/network/bridge';
+import { createMemoryStorage } from '../src/dev/scenario/memoryStorage';
+import { getStoredCoopDefenseProgress, getStoredDawnProgress, invalidateLocalStorageCache } from '../src/utils/localPreferences';
+import { isDawnUnlocked } from '../src/dawn/rules/DawnUnlock';
+import { getDawnSchedule, getDawnThreatCurve } from '../src/config/dawn/dawnContent';
+import { getDawnPhaseStartMs } from '../src/dawn/rules/DawnPhase';
 
-const host = vi.hoisted(() => ({ phase: 'LOBBY', started: false, lobbyMinute:480 }));
+const host = vi.hoisted(() => ({ phase: 'LOBBY', started: false, lobbyMinute:480, isolated: true, authority: true }));
 const arenaSystem = vi.hoisted(() => ({ pause: vi.fn(), resume: vi.fn(), setVisible: vi.fn(), isActive: () => true, settings: { visible: true } }));
-vi.mock('../src/utils/devScenarioMode', () => ({ isDevScenarioMode: () => true }));
+vi.mock('../src/utils/devScenarioMode', () => ({ isDevScenarioMode: () => host.isolated }));
 vi.mock('../src/dev/scenario/panel', () => ({ createScenarioPanel: () => ({ sync() {}, syncTarget() {}, refresh() {}, setCollapsed() {}, destroy() {} }) }));
 vi.mock('../src/systems/navigation/NavigationGeometry', () => ({ NavigationGeometry: class { isFree() { return true; } } }));
 vi.mock('../src/network/bridge', () => ({ bridge: {
+  isHost: () => host.authority, getConnectedPlayers: () => [{ id: 'p1' }], setCoopProgram: vi.fn(),
+  getActivityDescriptor: vi.fn(),
   getGamePhase: () => host.phase, isArenaStarted: () => host.started, getLocalPlayerId: () => 'p1',
   getLobbyTimeOfDayMinutes:()=>host.lobbyMinute,setLobbyTimeOfDayMinutes:(minute:number)=>{host.lobbyMinute=minute;},
-  sendLocalInput() {}, setLocalReady() {}, setGameMode() {}, setCoopDefenseMapId() {},
-  setLocalReadyWithCommittedLoadout() {}, getSynchronizedNow: () => Date.now(), getPlayerCommittedLoadout: () => null,
+  sendLocalInput() {}, setLocalReady() {}, setGameMode() {}, setCoopDefenseMapId: vi.fn(),
+  setLocalReadyWithCommittedLoadout: vi.fn(), getSynchronizedNow: () => Date.now(), getPlayerCommittedLoadout: () => null,
   setDevScenarioPlayerFreeForAll() {}, setDevScenarioBotState() {},
 } }));
 
@@ -33,6 +41,12 @@ let attacks: string[];
 const krakenMission = { start: vi.fn(), hp: vi.fn() };
 beforeEach(() => {
   vi.useFakeTimers();
+  host.isolated = true; host.authority = true;
+  vi.stubGlobal('localStorage', createMemoryStorage()); invalidateLocalStorageCache();
+  vi.mocked(bridge.setCoopProgram).mockClear();
+  vi.mocked(bridge.setCoopDefenseMapId).mockClear();
+  vi.mocked(bridge.setLocalReadyWithCommittedLoadout).mockClear();
+  vi.mocked(bridge.getActivityDescriptor).mockReset();
   vi.stubGlobal('window', new EventTarget());
   vi.stubGlobal('location', { hash: '' });
   vi.stubGlobal('history', { replaceState: (_a: unknown, _b: unknown, hash: string) => { location.hash = hash; } });
@@ -55,7 +69,8 @@ beforeEach(() => {
     getScenarioLoadingState: () => ({ roundStartPrepared: true }), getScenarioObservation: () => ({}),
     getScenarioLightingTargets: () => ({ sunlight: null, enemyReadability: {getDiagnostics:()=>({})} }),
     getScenarioKrakenResidency: () => null,
-    getWorldDescriptor: () => ({}), getWorldCombatCore: () => null, setTimeOfDayDebugOverride() {},
+    getWorldDescriptor: () => ({}), getWorldCombatCore: () => null, setTimeOfDayDebugOverride: vi.fn(),
+    clearTimeOfDayDebugOverride: vi.fn(), seekDevScenarioDawnTime: vi.fn(),
     setIsLocalReady() {}, stopScenarioUltimate() {}, isMatchTerminated: () => false,
     hostDiscardRound: () => { host.phase = 'LOBBY'; host.started = false; },
   } as unknown as ArenaRuntime;
@@ -63,7 +78,7 @@ beforeEach(() => {
     cameras: { main: { scrollX: 0, scrollY: 0, zoomX: 1, zoomY: 1 } } } as unknown as Phaser.Scene;
   controller = new DevScenarioController(scene, runtime, () => {}, () => true);
 });
-afterEach(() => { controller.destroy(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => { controller.destroy(); invalidateLocalStorageCache(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 it('owns the Kraken diagnostic map only for the dev controller lifetime', () => {
   expect(isDiagnosticMapId(KRAKEN_MAP_ID)).toBe(true);
@@ -101,6 +116,66 @@ function enter() {
 }
 
 describe('Dev scenario automation lifecycle', () => {
+  it('prepares Dawn progress only in dev storage before Ready, and switches back to campaign', () => {
+    const realStorage = localStorage;
+    const realProgress = getStoredCoopDefenseProgress();
+    realStorage.setItem('saved-progress', 'untouched');
+    const saved = Array.from({ length: realStorage.length }, (_, i) => [realStorage.key(i)!, realStorage.getItem(realStorage.key(i)!)!]);
+    vi.stubGlobal('localStorage', createMemoryStorage()); invalidateLocalStorageCache();
+    controller.start({ version: 1, classId: 'dachs_nukem', dawn: { threat: 7 }, seed: 42 });
+    const runtime = (controller as any).runtime;
+    const seed = vi.spyOn(runtime.navigationLabPort, 'setNextRoundSeed');
+    controller.update(); controller.update();
+    expect(isDawnUnlocked(getStoredCoopDefenseProgress())).toBe(true);
+    expect(getStoredDawnProgress().expansionLevel).toBe(6);
+    expect(bridge.setCoopProgram).toHaveBeenCalledWith({ kind: 'dawn' });
+    expect(bridge.setCoopDefenseMapId).not.toHaveBeenCalled();
+    expect(seed).toHaveBeenCalledWith(42);
+    expect(vi.mocked(bridge.setCoopProgram).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(bridge.setLocalReadyWithCommittedLoadout).mock.invocationCallOrder[0]);
+    expect(Array.from({ length: realStorage.length }, (_, i) => [realStorage.key(i)!, realStorage.getItem(realStorage.key(i)!)]))
+      .toEqual(saved);
+    const devStorage = localStorage;
+    vi.stubGlobal('localStorage', realStorage); invalidateLocalStorageCache();
+    expect(getStoredCoopDefenseProgress()).toEqual(realProgress);
+    vi.stubGlobal('localStorage', devStorage); invalidateLocalStorageCache();
+    host.phase = 'ARENA'; host.started = true; controller.update();
+    expect(runtime.clearTimeOfDayDebugOverride).toHaveBeenCalled();
+    expect(runtime.setTimeOfDayDebugOverride).not.toHaveBeenCalled();
+    controller.start(defaultScenario()); controller.update(); controller.update();
+    expect(bridge.setCoopProgram).toHaveBeenLastCalledWith({ kind: 'campaign' });
+    expect(bridge.setCoopDefenseMapId).toHaveBeenLastCalledWith('1');
+  });
+  it.each(['normal session', 'client'])('rejects Dawn preparation in a %s without changing progress or Ready', mode => {
+    controller.start({ version: 1, classId: 'dachs_nukem', dawn: { threat: 10 } });
+    const before = getStoredCoopDefenseProgress();
+    if (mode === 'normal session') host.isolated = false; else host.authority = false;
+    controller.update(); controller.update();
+    expect(getStoredCoopDefenseProgress()).toEqual(before);
+    expect(bridge.setCoopProgram).not.toHaveBeenCalled();
+    expect(bridge.setLocalReadyWithCommittedLoadout).not.toHaveBeenCalled();
+  });
+  it('seeks the active Dawn schedule and locks the skipped mission until restart', () => {
+    const schedule = getDawnSchedule(getDawnThreatCurve(3).scheduleId);
+    controller.start({ version: 1, classId: 'dachs_nukem', dawn: { threat: 3 } });
+    controller.update(); controller.update(); host.phase = 'ARENA'; host.started = true;
+    controller.update(); controller.afterHostFrame();
+    vi.mocked(bridge.getActivityDescriptor).mockReturnValue({ parameters: { dawn: { scheduleId: schedule.id } } } as never);
+    const seek = (controller as any).runtime.seekDevScenarioDawnTime;
+    const api = window.devScenario!;
+    for (const phase of ['night', 'dawn', 'dusk', 'day'] as const) {
+      expect(api.run({ action: 'dawnPhase', phase, offsetMs: 123 })).toMatchObject({ ok: true });
+      expect(seek).toHaveBeenLastCalledWith(getDawnPhaseStartMs(schedule, phase) + 123);
+    }
+    expect(controller.config).toMatchObject({ freezeMission: true, suppressWaves: true });
+    expect(api.run({ action: 'options', values: { suppressWaves: false } })).toMatchObject({ ok: false });
+    expect(api.run({ action: 'options', values: { freezeMission: false } })).toMatchObject({ ok: false });
+    expect(api.run({ action: 'dawnPhase', phase: 'dawn', offsetMs: schedule.durationMs })).toMatchObject({ ok: false });
+    expect(seek).toHaveBeenCalledTimes(4);
+    controller.start(defaultScenario());
+    expect(api.run({ action: 'options', values: { freezeMission: false, suppressWaves: false } })).toMatchObject({ ok: true });
+    expect(api.run({ action: 'dawnPhase', phase: 'day' })).toMatchObject({ ok: false });
+  });
   it('starts the Kraken mission after placement and waits for the requested HP to be applied', () => {
     (controller as any).runtime.getWorldMetrics = () => ({ offsetX: 0, offsetY: 12, gridCols: 70, gridRows: 48 });
     const api = window.devScenario!;

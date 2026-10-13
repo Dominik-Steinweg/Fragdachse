@@ -4,6 +4,7 @@ import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { type PersistentBaseHealthReward } from '../../persistentBase/PersistentBaseHealth';
 import { getDeferredAssets } from '../../assets/DeferredAssets';
 import { isDevScenarioMode } from '../../utils/devScenarioMode';
+import { isLocalScenarioBotPeer } from '../../network/peer/LocalScenarioSession';
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
 import { collectDeathFragmentFrames } from '../../effects/gpu/DeathFragmentPreparation';
 import * as Phaser from 'phaser';
@@ -978,6 +979,9 @@ export class ArenaLifecycleCoordinator {
   syncRuntimeTimeOfDay(synchronizedNowMs: number, signals: ArenaTimeOfDaySignals = {}): boolean {
     const controller = this.timeOfDayController;
     if (!controller) return false;
+    if (isDevScenarioMode() && bridge.getActivityDescriptor()?.parameters?.dawn) {
+      synchronizedNowMs = this.coopMissionRuntime?.getMissionNow(synchronizedNowMs) ?? synchronizedNowMs;
+    }
     const sample = controller.sample(synchronizedNowMs, signals);
     if (sample.minutes !== this.appliedRuntimeTimeOfDayMinutes) {
       this.applyRuntimeTimeOfDay(sample.minutes);
@@ -1978,6 +1982,28 @@ export class ArenaLifecycleCoordinator {
     this.worldLifecycle.bindActivityStartAnchor(roundStartTime);
     this.worldTrainRuntime?.bindRoundStart(roundStartTime);
     this.worldPowerUpRuntime?.system.setArenaStartTime(roundStartTime);
+  }
+
+  /** Isolated review only: move mission anchors without aging combat or replaying skipped waves. */
+  seekDevScenarioDawnTime(elapsedMs: number): void {
+    if (!isDevScenarioMode() || !bridge.isHost() || !bridge.getConnectedPlayers()
+      .every(player => player.id === bridge.getLocalPlayerId() || isLocalScenarioBotPeer(player.id))) {
+      throw new Error('Isolated dev host required');
+    }
+    const mission = this.coopMissionRuntime;
+    const round = bridge.getRoundState();
+    if (!mission || !bridge.isArenaStarted() || round?.status !== 'active'
+      || !bridge.getActivityDescriptor()?.parameters?.dawn) throw new Error('Active Dawn mission required');
+    if (!Number.isSafeInteger(elapsedMs) || elapsedMs < 0) throw new Error('Invalid mission time');
+    mission.analysisScenarioActive = true;
+    mission.setScenarioOptions(true, mission.scenarioHideTutorial, bridge.getSynchronizedNow());
+    const start = mission.getMissionNow(bridge.getSynchronizedNow()) - elapsedMs;
+    bridge.setArenaStartTime(start);
+    bridge.setRoundEndTime(this.resolveRoundEndTime(start));
+    bridge.publishRoundState({ ...round, roundStartTime: start });
+    this.syncAuthoritativeRoundStartAnchors();
+    this.clearTimeOfDayDebugOverride();
+    this.syncRuntimeTimeOfDay(bridge.getSynchronizedNow());
   }
 
   private resolveRoundEndTime(arenaStartTime: number): number {

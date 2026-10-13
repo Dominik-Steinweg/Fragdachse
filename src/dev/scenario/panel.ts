@@ -64,11 +64,12 @@ export function createScenarioPanel(controller: DevScenarioController) {
   function hint(parent: HTMLElement, text: string): void { const p = document.createElement('p'); p.className = 'hint'; p.textContent = text; parent.append(p); }
   const setup = section('1 · Map und Ausrüstung', true);
   const map = select(setup, 'Map', 'mapId', scenarioMaps().map(value => value.mapId));
-  map.onchange = () => { controller.config.mapId = map.value; syncJson(); };
+  map.onchange = () => { delete controller.config.dawn; controller.config.mapId = map.value; syncJson(); };
   const cls = select(setup, 'Klasse', 'classId', COOP_DEFENSE_CLASS_IDS);
   cls.onchange = () => run(() => {
     const previous = controller.config;
-    controller.config = { ...defaultScenario(cls.value as CoopDefenseClassId), mapId: previous.mapId, seed: previous.seed };
+    controller.config = { ...defaultScenario(cls.value as CoopDefenseClassId), mapId: previous.mapId,
+      ...(previous.dawn ? { dawn: previous.dawn } : {}), seed: previous.seed };
     sync(); controller.message = 'Klasse geändert: Ausrüstung und Aufbau zurückgesetzt.';
   });
   const seed = field(setup, 'Welt-Seed', 'seed', 'number'); seed.onchange = () => { controller.config.seed = Number(seed.value); syncJson(); };
@@ -217,7 +218,7 @@ export function createScenarioPanel(controller: DevScenarioController) {
   function syncTarget(): void { gx.value = String(controller.aim.gridX); gy.value = String(controller.aim.gridY); }
   function sync(): void {
 
-    const config = controller.config; map.value = config.mapId; cls.value = config.classId; seed.value = String(config.seed);
+    const config = controller.config; map.value = config.mapId ?? ''; cls.value = config.classId; seed.value = String(config.seed);
     const profile = buildScenarioProfile(config.classId, config.upgrades, config.tools);
     for (const slot of ['weapon1', 'weapon2', 'ultimate'] as const) {
       fill(controls[slot] as HTMLSelectElement, getSelectableLoadoutItems(slot, 'coop_defense', profile, config.classId).map(item => item.id)); controls[slot].value = config[slot];
