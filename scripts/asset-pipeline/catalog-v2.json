@@ -5423,7 +5423,9 @@
       ]
     },
     {
-      "gameIds": [],
+      "gameIds": [
+        "FIRE_CONTROL_PORTAL"
+      ],
       "production": "reference",
       "forward": "north",
       "pivot": [
@@ -5513,6 +5515,58 @@
       "model": {
         "part": "flight"
       }
+    },
+    {
+      "gameIds": [
+        "FIRE_CONTROL_RELAY"
+      ],
+      "production": "reference",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Matte gunmetal, narrow turquoise optics",
+          "textureStrength": 0.18,
+          "formShadowStrength": 0.65
+        }
+      },
+      "id": "held-fire-control-relay",
+      "label": "Feuerleit-Relais getragen (Draft)",
+      "category": "utility",
+      "reference": "scripts/asset-pipeline/references/fire-control-relay-concept.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "recipe": "held-fire-control-relay",
+      "orthoScale": 3.2,
+      "model": {},
+      "description": {
+        "silhouette": "Compact folded three-foot projector with north-facing lens head and narrow turquoise inlays.",
+        "materials": "Matte gunmetal and bead-blasted steel; narrow #3dffd0 optical inlays with #e8fff9 core.",
+        "anatomy": "Three real hinged legs, raised lens head, fixed centre pivot and strictly orthographic top-down camera."
+      },
+      "requiredClips": [],
+      "clips": [],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          18.4
+        ]
+      },
+      "designReference": "scripts/asset-pipeline/references/fire-control-relay-concept.png"
     }
   ]
 }
