@@ -84,6 +84,12 @@ sind `concurrent` (aktivieren ohne Fokus-Slot), starten mit `site-activated` und
 `expiresAt`. Das Zeitlimit zeitgesteuerter Ziele (`survive`, `defend-until-dawn`) kommt ausschließlich
 aus `getCoopMissionTimeLimitSec`.
 
+Bauwerke mit `surface: 'none'` (World-Feld) zeichnen weder Blobfläche noch Basisleuchten; ihre Darstellung besitzt ein
+eigener Präsentations-Owner (Dawn: `DawnSitePropRenderer`, auch im ruhenden Zustand). Encounter-Ansagen steuert
+`announce`: fehlt es, ist jeder Encounter eine eigene Welle; `false` hält ihn aus Wellenkarte, -ansage und -zählung;
+`{ group, finale? }` fasst Encounter zu einer angesagten Welle zusammen. Index, Anzahl und Finale bestimmt der Host im
+`CoopDefenseMapDirector`; Clients zeigen nur den replizierten Zustand.
+
 ## Checkpoint-Fortschritt
 
 Checkpoint-Aktivierung und -Abschluss sind getrennte host-autoritative Zustände des
