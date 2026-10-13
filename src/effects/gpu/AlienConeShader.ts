@@ -152,48 +152,63 @@ void main() {
     float e = (core * 1.4 + rings * 0.55 * (0.4 + pr) + aperture * 0.9) * flicker * intensity;
     rgb = glow(e, allied);
   } else if (kind < 1.5) {
-    // Wave: the front races out, clipped by cover; filaments and interference trail it.
+    // Wave: a thin hot front races out and stops at the clipped reach, where it lingers as a
+    // cooling rim; behind it only a short trail with fine scan lines and filaments. The cone
+    // interior stays mostly clear so players inside remain readable.
     float aa = abs(ang);
     if (aa > halfArc + 0.04 || r > range + 24.0) discard;
     float reach = reachAt(ang, halfArc) * range;
     float u = clamp(t / TRAVEL, 0.0, 1.0);
     float front = range * (1.0 - pow(1.0 - u, 2.2));
-    float fade = 1.0 - smoothstep(TRAVEL * 0.9, LIFE, t);
+    float fade = 1.0 - smoothstep(TRAVEL, LIFE, t);
     float within = 1.0 - smoothstep(reach - 1.0, reach + 1.5, r);
     float sideDist = (halfArc - aa) * r;
     float sides = smoothstep(-1.0, 2.0, sideDist);
     float hub = smoothstep(8.0, 26.0, r);
     float mask = within * sides * hub;
     float behind = step(r, front);
-    // Hot leading edge.
-    float frontW = 3.0 + 7.0 * u;
-    float lead = gauss(r - min(front, reach), frontW) * smoothstep(0.0, 0.05, t) * (1.0 - smoothstep(TRAVEL, TRAVEL + 0.12, t));
-    // Interference rings trailing the front, sliding outward.
-    float rings = (0.5 + 0.5 * sin((front - r) * 0.22 - t * 55.0)) * exp(-max(front - r, 0.0) / 90.0) * behind;
-    // Filaments: thin jittering arcs along rays from the core to the front.
+    float since = max(front - r, 0.0);
+    float edgeR = min(front, reach);
+    // Leading front: a crisp hot line with a soft halo; it dissolves into the rim on arrival.
+    float travel = 1.0 - smoothstep(TRAVEL * 0.85, TRAVEL * 1.5, t);
+    float lead = gauss(r - edgeR, 1.4 + 1.6 * u) * travel;
+    float halo = gauss(r - edgeR, 7.0 + 9.0 * u) * 0.35 * travel;
+    // Short trail behind the front.
+    float trail = behind * exp(-since / (22.0 + 26.0 * u));
+    // Fine concentric scan lines inside the trail.
+    float scan = pow(0.5 + 0.5 * sin(since * 0.55 - t * 80.0), 8.0) * trail;
+    // Rim afterglow where the front came to rest (range end or cover).
+    float arrived = smoothstep(reach - 8.0, reach, front);
+    float rimLife = clamp((t - TRAVEL * 0.6) / max(LIFE - TRAVEL * 0.6, 0.01), 0.0, 1.0);
+    float rim = arrived * gauss(r - reach, 1.2 + 4.0 * rimLife) * (1.0 - rimLife) * (1.0 - rimLife);
+    // Sparks riding the front.
+    vec2 cell = floor(vec2(ang * 90.0, r * 0.22));
+    float spark = step(0.94, hash(cell + floor(t * 36.0) + seed * 17.0)) * gauss(r - edgeR, 6.0) * travel;
+    // Filaments: thin jittering arcs just behind the front.
     float fil = 0.0;
     if (uDetail > 0.5) {
       for (int k = 0; k < 5; k++) {
         float fk = float(k);
         float base = (hash(vec2(fk, seed)) * 2.0 - 1.0) * halfArc * 0.85;
-        float jitter = (noise(vec2(r * 0.045 + fk * 11.0, t * 26.0 + seed * 5.0)) - 0.5) * 0.16;
+        float jitter = (noise(vec2(r * 0.05 + fk * 11.0, t * 30.0 + seed * 5.0)) - 0.5) * 0.14;
         float d = abs(ang - base - jitter) * r;
-        fil += gauss(d, 0.8) * behind * smoothstep(front, front - 40.0, r) * (0.6 + 0.4 * hash(vec2(fk, floor(t * 40.0))));
+        fil += gauss(d, 0.6) * behind * exp(-since / 70.0) * (0.55 + 0.45 * hash(vec2(fk, floor(t * 45.0))));
       }
     }
-    // Flank glints keep both edges readable while the wave is alive.
-    float flank = gauss(sideDist, 1.6) * behind * 0.6;
+    // Flank glints only near the front.
+    float flank = gauss(sideDist, 1.2) * trail;
     // Cover impact: where the profile clipped the cone, the front flares against the obstacle.
     float clipped = step(reach, range * 0.97);
-    float arrive = smoothstep(reach - 12.0, reach, front);
-    float impact = clipped * arrive * gauss(r - reach, 3.5 + 6.0 * u)
-      * (0.8 + 0.6 * noise(vec2(ang * 60.0, t * 30.0 + seed * 9.0)));
-    float sweep = behind * exp(-max(front - r, 0.0) / 140.0);
-    float e = (lead * 2.2 + rings * 0.35 + fil * 1.1 + flank + sweep * 0.25) * mask + impact * 1.6 * sides * hub;
+    float impact = clipped * arrived * gauss(r - reach, 3.0 + 5.0 * rimLife) * (1.0 - rimLife)
+      * (0.7 + 0.6 * noise(vec2(ang * 60.0, t * 30.0 + seed * 9.0)));
+    // Muzzle flash at the moment of release.
+    float flash = gauss(length(p - vec2(muzzle, 0.0)), 14.0) * (1.0 - smoothstep(0.0, 0.1, t));
+    float e = (lead * 2.6 + halo + trail * 0.16 + scan * 0.45 + fil * 0.9 + flank * 0.5 + spark * 1.4) * mask
+      + rim * 1.3 * sides * hub + impact * 1.5 * sides * hub + flash * 1.6;
     e *= fade * intensity;
     rgb = glow(e, allied);
-    // A violet veil under the energy gives it body on bright daylight ground.
-    alpha = clamp(sweep * mask * fade * 0.14 * intensity * (1.0 - allied * 0.6), 0.0, 0.2);
+    // A faint violet veil in the trail only, for body on bright ground.
+    alpha = clamp(trail * mask * fade * 0.06 * intensity * (1.0 - allied * 0.6), 0.0, 0.1);
     rgb += ramp(0.05, allied) * alpha * 0.4;
   } else {
     // Allied windup: a faint outline only, no warning role.
