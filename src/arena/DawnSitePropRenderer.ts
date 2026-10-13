@@ -7,18 +7,20 @@ import { toDawnSiteBaseId, toDawnSiteObjectiveId } from '../dawn/resolution/Dawn
 import type { CoopDefenseSecondaryObjectivePresentationState } from '../types';
 import { resolveCoopDefenseWorldMetrics } from '../world/WorldMetrics';
 import { getBaseWorldBounds, resolveWorldBases } from './BaseRegistry';
-import { resolveDawnSitePropVisual } from './DawnSitePropModel';
+import { resolveDawnSitePropHitFlash, resolveDawnSitePropVisual, type DawnSitePropHitFlash } from './DawnSitePropModel';
 
 /** World material on the main camera, independent of the base's dormant representation. */
 export class DawnSitePropRenderer {
   private readonly sites;
   private readonly sprites = new Map<string, Phaser.GameObjects.Sprite>();
+  private readonly hitFlashes = new Map<string, DawnSitePropHitFlash>();
 
   constructor(
     private readonly scene: Phaser.Scene,
     plan: DawnWorldPlan,
     world: WorldDefinition,
     private readonly isStructureDestroyed: (baseId: string) => boolean,
+    private readonly getStructureHp: (baseId: string) => number | null,
   ) {
     const metrics = resolveCoopDefenseWorldMetrics(world.metrics.widthCells, world.metrics.heightCells);
     const bases = resolveWorldBases(world, metrics);
@@ -41,6 +43,7 @@ export class DawnSitePropRenderer {
         || (visual.animationKey !== null && !this.scene.anims.exists(visual.animationKey))) {
         sprite?.destroy();
         this.sprites.delete(site.baseId);
+        this.hitFlashes.delete(site.baseId);
         continue;
       }
       if (!sprite) {
@@ -55,11 +58,18 @@ export class DawnSitePropRenderer {
         sprite.setTexture(visual.textureKey);
       }
       sprite.setDisplaySize(DAWN_SITE_DISPLAY_SIZE, DAWN_SITE_DISPLAY_SIZE);
+      const flash = resolveDawnSitePropHitFlash(
+        this.hitFlashes.get(site.baseId), this.getStructureHp(site.baseId), this.scene.time.now,
+      );
+      this.hitFlashes.set(site.baseId, flash);
+      if (flash.active) sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+      else sprite.clearTint();
     }
   }
 
   destroy(): void {
     for (const sprite of this.sprites.values()) sprite.destroy();
     this.sprites.clear();
+    this.hitFlashes.clear();
   }
 }

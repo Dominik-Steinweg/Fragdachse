@@ -362,6 +362,11 @@ export class BaseManager {
     return this.byId.get(id);
   }
 
+  /** Same HP source for host mutations and applied client snapshots. */
+  getStructureHp(baseId: string): number | null {
+    return this.byId.get(baseId)?.getHp() ?? null;
+  }
+
   getTurrets(): readonly BaseTurretRuntimeState[] {
     return this.entities.flatMap((entity) => entity.getTurrets());
   }

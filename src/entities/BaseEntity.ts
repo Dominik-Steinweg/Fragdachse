@@ -228,7 +228,7 @@ export class BaseEntity {
 
   /** Lichtpunkte des Basisleuchtens, oder leer wenn die Basis inert ist. */
   getLightSpots(): readonly { x: number; y: number; radius: number }[] {
-    return !this.presentation || this.isInert() ? EMPTY_LIGHT_SPOTS : this.lightSpots;
+    return !this.presentation || this.spec.surface === 'none' || this.isInert() ? EMPTY_LIGHT_SPOTS : this.lightSpots;
   }
 
   /** Liefert alle Zell-Kollisions-Rectangles (für StaticGroup-Aufnahme & LoS). */

@@ -9,6 +9,26 @@ export interface DawnSitePropVisual {
   readonly animationKey: string | null;
 }
 
+export const DAWN_SITE_HIT_FLASH_MS = 100;
+
+export interface DawnSitePropHitFlash {
+  readonly hp: number | null;
+  readonly untilMs: number;
+  readonly active: boolean;
+}
+
+/** First observation is a baseline; only an observed HP decrease renews the flash. */
+export function resolveDawnSitePropHitFlash(
+  previous: DawnSitePropHitFlash | undefined,
+  hp: number | null,
+  nowMs: number,
+): DawnSitePropHitFlash {
+  if (hp === null) return { hp, untilMs: 0, active: false };
+  const damaged = previous?.hp != null && hp < previous.hp;
+  const untilMs = damaged ? nowMs + DAWN_SITE_HIT_FLASH_MS : previous?.untilMs ?? 0;
+  return { hp, untilMs, active: nowMs < untilMs };
+}
+
 /** Pure projection of replicated state; absent objective entries are dormant. */
 export function resolveDawnSitePropVisual(
   archetypeId: string,
