@@ -11,6 +11,14 @@ await mkdir(new URL('runtime/', assets), { recursive: true });
 await mkdir(review, { recursive: true });
 const manifest = { paddingFraction: 0.0625, alphaThreshold: 1, sourceEdgeGuard: 2, assets: {} };
 
+async function sampleSquare(square, size) {
+  // Round to whole pixels: 24px receives 2px per side, all older sizes are unchanged.
+  const margin = Math.round(size * manifest.paddingFraction);
+  return sharp(square).resize(size - 2 * margin, size - 2 * margin, { kernel: 'cubic' })
+    .extend({ left: margin, right: margin, top: margin, bottom: margin,
+      background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+}
+
 async function prepareSquare(original, key) {
   const metadata = await sharp(original).metadata();
   if (!metadata.hasAlpha) throw new Error(`${key}: source needs real transparency`);
@@ -49,7 +57,7 @@ for (const spec of provenance.assets) {
   const { square, crop, side } = await prepareSquare(original, spec.key);
   const exports = [];
   for (const size of spec.sizes) {
-    const margin = size * manifest.paddingFraction;
+    const margin = Math.round(size * manifest.paddingFraction);
     const inner = size - 2 * margin;
     if (!Number.isInteger(margin) || inner > side) throw new Error(`${spec.key}: invalid export size`);
     // Cubic filtering keeps antialiased edges soft; no sharpening, tint or alpha thresholding.
@@ -65,7 +73,66 @@ for (const spec of provenance.assets) {
   manifest.assets[spec.key] = { original: spec.original, sha256: hash, crop, exports };
 }
 await writeFile(new URL('runtime/manifest.json', assets), JSON.stringify(manifest, null, 2) + '\n');
+console.log(`Exported ${provenance.assets.length} Dawn originals and runtime/manifest.json`);
 
+// Candidate comparison is local-only. No generated source is needed for runtime exports.
+const m3 = provenance.assets.filter(spec => spec.reviewGroup === 'm3');
+if (m3.length) {
+  const candidateRoot = new URL('art/poc/dawn/icons/candidates/', root);
+  const conceptPath = new URL('art/poc/dawn/m3-concepts/night-mod-fog-02.png', root);
+  let forest, candidates;
+  try {
+    forest = await sharp(await readFile(conceptPath))
+      .extract({ left: 820, top: 390, width: 660, height: 340 }).png().toBuffer();
+    candidates = await Promise.all(m3.map(async spec => Promise.all(spec.candidatePrompts.map(async candidate => ({
+      ...candidate, ...await prepareSquare(await readFile(new URL(candidate.file, candidateRoot)), candidate.file),
+    })))));
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    console.log('Skipping M3 review: local candidates or forest concept unavailable.');
+  }
+  if (forest && candidates) {
+    const width = 1320, height = 100 + m3.length * 340;
+    const layers = [], text = [];
+    const label = (x, y, value, size = 13, color = '#eee6d6') => text.push(
+      `<text x="${x}" y="${y}" font-family="DejaVu Sans, sans-serif" font-size="${size}" fill="${color}">${value}</text>`);
+    label(20, 28, 'DAWN M3 - Kandidaten und gewaehlte Runtime / 1:1 Pixel', 20);
+    label(20, 53, 'Links HUD #24282b | rechts Waldboden aus night-mod-fog-02 (Konzept, kein Spieltest)');
+    label(20, 76, '16 / 24 / 32 / 48 px inkl. Rand; 72 px Detail. Elite 16/24 direkt; sonst aus 32. 48 aus 64.');
+    for (const [group, spec] of m3.entries()) {
+      const base = 100 + group * 340;
+      for (let panel = 0; panel < 2; panel++) {
+        const x = panel * 660;
+        if (panel) layers.push({ input: forest, left: x, top: base });
+        label(x + 16, base + 20, spec.key, 16);
+        const centers = [300, 365, 430, 505, 595];
+        const sizes = [16, 24, 32, 48, 72];
+        sizes.forEach((size, i) => label(x + centers[i] - 12, base + 20, String(size), 12));
+        for (let row = 0; row < 4; row++) {
+          const y = base + 62 + row * 76;
+          const candidate = candidates[group][row];
+          const selected = row < 3 && spec.source.endsWith(candidate.file);
+          label(x + 16, y + 5, row === 3 ? 'WAHL / Runtime' : `Kandidat 0${row + 1}${selected ? ' - WAHL' : ''}`, 13, selected || row === 3 ? '#ffd99a' : '#eee6d6');
+          for (const [column, size] of sizes.entries()) {
+            const runtimeSize = size < 32 && spec.sizes.includes(size) ? size : size <= 32 ? 32 : size <= 48 ? 64 : 128;
+            const source = row === 3
+              ? await readFile(new URL(`runtime/${spec.key}-${runtimeSize}.webp`, assets))
+              : await sampleSquare(candidate.square, runtimeSize);
+            const input = await sharp(source).resize(size, size, { kernel: 'cubic' }).png().toBuffer();
+            layers.push({ input, left: x + centers[column] - size / 2, top: y - size / 2 });
+          }
+        }
+      }
+    }
+    layers.push({ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${text.join('')}</svg>`), left: 0, top: 0 });
+    await sharp({ create: { width, height, channels: 4, background: '#24282b' } }).composite(layers)
+      .png({ compressionLevel: 9 }).toFile(fileURLToPath(new URL('ui-m3-icons.png', review)));
+    console.log('Wrote art/poc/dawn/v1-review/ui-m3-icons.png');
+  }
+}
+
+// Historical review sheets are opt-in; the M3 task only writes its own review file.
+if (process.argv.includes('--legacy-review')) {
 // Actual runtime samples, shown at 1 output pixel per labelled display pixel.
 // FOREST.wood: lerpColor(BROWN_6=0x4d2b32, GOLD_4=0x884b2b, .38).
 const backgrounds = ['#63372f', '#f2eee5'];
@@ -157,4 +224,5 @@ if (candidateSources.length === 4) {
     .png({ compressionLevel: 9 }).toFile(fileURLToPath(new URL('ui-scrap-magnet.png', review)));
 } else {
   console.log('Skipping magnet candidate sheet: local art/poc candidates are unavailable.');
+}
 }

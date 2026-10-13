@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <g fill="#fff">
+    <ellipse cx="21" cy="39" rx="13" ry="17"/>
+    <path d="M4 31l7-4 4 9-8 3ZM4 48l6-6 6 9-8 4ZM28 30l7-3 3 9-7 3ZM28 46l7-3 3 9-7 3ZM18 52h6v8h-6Z"/>
+    <circle cx="10" cy="22" r="4"/>
+    <circle cx="32" cy="22" r="4"/>
+    <path fill-rule="evenodd" d="M18 4h6l11 18-7 7H14l-7-7ZM15 12l4 3-5 10-4-3ZM23 15l4-3 5 10-4 3Z"/>
+    <path d="M43 26h12l-2 6c5 4 7 11 7 17 0 12-20 12-20 0 0-6 2-13 7-17ZM43 17l7-5 8 7-5 4h-8Z"/>
+  </g>
+</svg>
