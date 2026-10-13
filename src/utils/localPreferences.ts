@@ -1,4 +1,5 @@
 import { createDefaultDawnProgress, sanitizeDawnProgress, type DawnProgress } from '../dawn/economy/DawnProgress';
+import type { DawnEquipmentProgressDraft } from '../dawn/economy/DawnMerchantEquipment';
 import { resolvePersonalPersistentBaseAreaStage } from '../persistentBase/PersistentBaseAreaStageResolution';
 import { getPersistentBaseHealthReward, isPersistentBaseHealthRewards, type PersistentBaseHealthReward } from '../persistentBase/PersistentBaseHealth';
 import { getLoadoutUtilityId, loadoutToolFromId } from '../loadout/LoadoutTools';
@@ -2580,6 +2581,31 @@ function constrainLocalProgressProfiles(progress: CoopDefenseProgressPreferences
 
 export function getStoredDawnProgress(): DawnProgress {
   return sanitizeDawnProgress(readPreferences().progression.coopDefense.dawn)!;
+}
+
+/** One durable write for currency and items. A rejection or write failure also preserves the cache. */
+export function updateStoredDawnEquipmentProgress(mutator: (draft: DawnEquipmentProgressDraft) => boolean): boolean {
+  const current = readPreferences();
+  const progress = current.progression.coopDefense;
+  const draft: DawnEquipmentProgressDraft = structuredClone({
+    dawn: progress.dawn, items: progress.items,
+    equippedItemIds: progress.equippedItemIds, unseenItems: progress.unseenItems,
+  });
+  if (!mutator(draft)) return false;
+  const dawn = sanitizeDawnProgress(draft.dawn);
+  const items = sanitizeCoopDefenseItems(draft.items, draft.equippedItemIds);
+  const equippedItemIds = sanitizeCoopDefenseEquippedItemIds(draft.equippedItemIds, items);
+  // Never charge for an item that the storage limits or validator would discard.
+  if (!dawn || items.length !== draft.items.length || typeof draft.unseenItems !== 'boolean'
+    || Object.entries(draft.equippedItemIds).some(([slot, uid]) => equippedItemIds[slot as CoopDefenseItemSlot] !== uid)) return false;
+  const next = { ...current, progression: { ...current.progression,
+    coopDefense: constrainLocalProgressProfiles({ ...progress, dawn, items, equippedItemIds, unseenItems: draft.unseenItems }),
+  } };
+  const storage = getLocalStorage();
+  if (!safeWrite(storage, LOCAL_PROGRESS_STORAGE_KEY, encodeProgressDocument(next))) return false;
+  preferencesCache = next;
+  cachedStorage = storage;
+  return true;
 }
 
 /** Mutate a defensive draft; invalid updates leave both storage and cache unchanged. */

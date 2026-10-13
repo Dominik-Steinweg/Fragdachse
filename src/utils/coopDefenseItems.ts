@@ -219,18 +219,7 @@ export function rollCoopDefenseItem(
 ): CoopDefenseItem {
   const level = sanitizeItemLevel(itemLevel);
   const rarity = rollRarity(random);
-  const affixCount = getCoopDefenseItemRarityDefinition(rarity).affixCount;
-  const affixes = pickWeightedDistinct(
-    getCoopDefenseItemAffixesForRoll(slot, classId),
-    affixCount,
-    (definition) => definition.weight,
-    random,
-  )
-    .map((definition) => ({
-      affixId: definition.id,
-      value: rollAffixValue(definition, level, random),
-    }));
-
+  const affixes = rollItemAffixes(slot, rarity, level, classId, random);
   return {
     uid: createItemUid(random),
     slot,
@@ -238,6 +227,37 @@ export function rollCoopDefenseItem(
     itemLevel: level,
     baseValue: rollBaseValue(slot, level, random),
     affixes,
+  };
+}
+
+function rollItemAffixes(
+  slot: CoopDefenseItemSlot,
+  rarity: CoopDefenseItemRarity,
+  itemLevel: number,
+  classId: CoopDefenseClassId | null,
+  random: () => number,
+): CoopDefenseItemAffix[] {
+  const affixCount = getCoopDefenseItemRarityDefinition(rarity).affixCount;
+  return pickWeightedDistinct(
+    getCoopDefenseItemAffixesForRoll(slot, classId),
+    affixCount,
+    (definition) => definition.weight,
+    random,
+  )
+    .map((definition) => ({
+      affixId: definition.id,
+      value: rollAffixValue(definition, itemLevel, random),
+    }));
+}
+
+/** Rerolls every affix from the slot pool, preserving the item's identity and base roll. */
+export function recalibrateCoopDefenseItem(
+  item: CoopDefenseItem,
+  random: () => number = Math.random,
+): CoopDefenseItem {
+  return {
+    ...item,
+    affixes: rollItemAffixes(item.slot, item.rarity, item.itemLevel, null, random),
   };
 }
 
