@@ -81,8 +81,10 @@ describe('Portal throw, usage and deployment (GDD V2 §4.1, §7.1)', () => {
     const payload = land(1100, 300);
     f.setFree(false);
     f.action.createFireControlPortalFromGrenade(payload, 1100);
-    // The fixture geometry rejects every point, so the walk back ends at the release point.
-    expect(f.binding.getFireControlSnapshot(1100).deployments[0]).toMatchObject({ kind: 'portal', x: 0, y: 0 });
+    // The fixture geometry rejects every point, so the walk back ends at the release point (the throw muzzle).
+    const { origin } = f.projectile.spawn.mock.calls.at(-1)![0];
+    const release = origin.gameplayMuzzleOrigin ?? origin;
+    expect(f.binding.getFireControlSnapshot(1100).deployments[0]).toMatchObject({ kind: 'portal', x: release.x, y: release.y });
     expect(portal()?.phase).toBe('active');
   });
 

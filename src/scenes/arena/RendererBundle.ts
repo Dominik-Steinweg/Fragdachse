@@ -87,6 +87,7 @@ import type { CameraFeedbackController } from '../../effects/camera/CameraFeedba
 import type { LocalDistortionComposer } from '../../effects/distortion/LocalDistortionComposer';
 import type { GameAudioSystem }   from '../../audio/GameAudioSystem';
 import { ProjectileVisualOverrides } from '../../projectile/ProjectileVisualOverrides';
+import { createFireControlPortalFlightFactory } from '../../effects/fireControl/FireControlPortalFlightView';
 
 /** All visual renderers grouped together. World-dependent renderers start as null. */
 export interface RendererBundle {
@@ -471,10 +472,13 @@ export function* createRendererBundleSteps(
   alienCone.setLightingSystem(lighting);
   cleanup.push(() => alienCone.destroy());
   yield 'renderers/alienCone';
+  const projectileVisualOverrides = new ProjectileVisualOverrides();
+  // Scene lifetime: the thrown fire-control portal device draws with its own HQ art.
+  projectileVisualOverrides.register(createFireControlPortalFlightFactory(scene));
   return {
     interactions,
     turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, plasmaBurnerCharge, healingAura, guardianSpirit, repairDrone, attackDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
-    rocket, fireball, spore, grenade, projectileVisualOverrides: new ProjectileVisualOverrides(), muzzleFlash, tracer, translocatorPuck, beer,
+    rocket, fireball, spore, grenade, projectileVisualOverrides, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, missionProgress, carryZones, ak47StrategicTargets, objectiveRepairDrones, meteor, rockDestruction, watchtowerDestruction, powerUp, shadow, lighting,
     remoteControl,
     healthBars,

@@ -10,6 +10,7 @@ import type { ArenaContext }             from './ArenaContext';
 import type { FireControlPlacementPreview, LocalPlacementPreview, PlacementPreviewNetState, UtilityPlacementPreviewState } from '../../types';
 import { TUNNEL_HOLE_DIAMETER, TUNNEL_VISUAL_DEPTH, TunnelEndpointVisual } from './TunnelEndpointVisual';
 import { FireControlPlacementPreviewVisual } from '../../effects/fireControl/FireControlPlacementPreviewVisual';
+import { FireControlPortalLandingPreviewVisual } from '../../effects/fireControl/FireControlPortalLandingPreviewVisual';
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
 import { getTurretVisualSpec, getTurretVisualTransform } from '../../config/turretVisuals';
 import { POWERUP_DEFS, POWERUP_PEDESTAL_CONFIG } from '../../powerups/PowerUpConfig';
@@ -35,6 +36,7 @@ export class PlacementPreviewRenderer {
   private localTurretPreviewImage: Phaser.GameObjects.Image | null = null;
   /** Created on first use; scene-lifetime like the other preview objects. */
   private fireControlPreview: FireControlPlacementPreviewVisual | null = null;
+  private portalLandingPreview: FireControlPortalLandingPreviewVisual | null = null;
   private readonly remotePlacementPreviewImages = new Map<string, Phaser.GameObjects.Image>();
   private readonly remoteTurretPreviewImages = new Map<string, Phaser.GameObjects.Image>();
   private readonly localTunnelPreview: TunnelPreviewVisualState;
@@ -180,6 +182,12 @@ export class PlacementPreviewRenderer {
       this.invalidGraphics.lineTo(preview.targetX + radius * 0.7, preview.targetY + radius * 0.7);
       this.invalidGraphics.strokePath();
     }
+  }
+
+  /** Dimmed exit ring at the predicted landing point of a charged portal throw. */
+  syncFireControlPortalLanding(point: { readonly x: number; readonly y: number } | undefined): void {
+    if (!point && !this.portalLandingPreview) return;
+    (this.portalLandingPreview ??= new FireControlPortalLandingPreviewVisual(this.scene)).update(point, this.scene.time.now);
   }
 
   private drawFireControlPreview(preview: FireControlPlacementPreview): void {
@@ -426,6 +434,7 @@ export class PlacementPreviewRenderer {
     this.localPlacementPreviewImage?.setVisible(false);
     this.localTurretPreviewImage?.setVisible(false);
     this.fireControlPreview?.hide();
+    this.portalLandingPreview?.hide();
     this.destroyTunnelPreview(this.localTunnelPreview);
     this.placeableUtilityHint.setVisible(false);
     this.airstrikeTargetingHint.setVisible(false);

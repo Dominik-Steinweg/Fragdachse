@@ -553,6 +553,10 @@ export function createArenaPlacementPorts(flow: ArenaLifecycleCoordinator): Aren
       });
     },
     getConstructionPlacementRange: () => resolveConstructionPlacementRange(),
+    isFireControlFlightBlocked: (x0, y0, x1, y1) => {
+      const queries = flow.getWorldGeometryBinding()?.getQueries();
+      return !!queries && !queries.hasLineOfFire(x0, y0, x1, y1);
+    },
     isFireControlPointFree: (x, y, radius) => {
       const point = flow.getWorldGeometryBinding()?.getQueries().resolveSafeGroundPoint(x, y, radius);
       return !!point && point.x === x && point.y === y;

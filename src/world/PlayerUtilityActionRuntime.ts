@@ -945,7 +945,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     });
     if (projectileId !== null && cfg.type === 'fire_control_portal') {
       this.setFireControlState(playerId, { phase: 'flying', utilityId: 'FIRE_CONTROL_PORTAL', projectileId,
-        cooldownDurationMs: cfg.cooldown, originX: x, originY: y, config: { durationMs: cfg.durationMs,
+        cooldownDurationMs: cfg.cooldown, originX: muzzle?.x ?? x, originY: muzzle?.y ?? y, config: { durationMs: cfg.durationMs,
           cooldownMs: cfg.cooldown, damageBonus: cfg.damageBonus, localFireRelease: cfg.localFireEnabled > 0,
           exitClearanceRadiusPx: cfg.exitClearanceRadiusPx } });
       this.options.network.loadout.publishUtilityCooldownUntil(playerId, 0, cfg.id);

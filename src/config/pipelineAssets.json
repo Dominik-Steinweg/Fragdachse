@@ -75866,6 +75866,41 @@
       }
     },
     {
+      "id": "fire-control-portal-flight",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "fc-hq-4",
+      "variant": "standard",
+      "sourceSize": 68,
+      "textureKey": "fire_control_portal_flight",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "fire_control_portal_flight_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/fire-control-portal-flight/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/fire-control-portal-flight/sheet.png",
+      "layout": {
+        "frameWidth": 68,
+        "frameHeight": 68,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 72,
+        "height": 72
+      },
+      "hashes": {
+        "idle": "fa110413edcf3338ab9c9a8c8940996392932d5371017c7e0b1baa205e699a81",
+        "sheet": "0846ff140b65046bc03235208a4bbba9561c7fef116a272fd2b2b748ba3f39e3"
+      }
+    },
+    {
       "id": "held-fire-control-relay",
       "category": "utility",
       "gameIds": [

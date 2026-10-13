@@ -1114,6 +1114,16 @@ export class InputSystem {
       || this.repositionActive;
   }
 
+  /** Local portal throw being charged: the inputs of the shared landing rule (D43); no authority. */
+  getFireControlPortalChargePreview(): { readonly config: Extract<UtilityConfig, { type: 'fire_control_portal' }>;
+    readonly angle: number; readonly chargeFraction: number } | undefined {
+    if (!this.utilityHoldActive) return undefined;
+    const config = this.utilityChargeConfig ?? this.getChargeableUtilityConfig();
+    if (config?.type !== 'fire_control_portal') return undefined;
+    const preview = this.getUtilityChargePreviewState();
+    return preview ? { config, angle: preview.angle, chargeFraction: preview.chargeFraction } : undefined;
+  }
+
   isUtilityChargePreviewActive(): boolean {
     return this.utilityHoldActive || this.globalDismantleHoldStartedAt !== null;
   }
