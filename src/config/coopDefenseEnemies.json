@@ -993,6 +993,9 @@
     },
     {
       "id": "dawn-scavenger",
+      "eyeGlow": {
+        "color": 16757575
+      },
       "pawCount": 4,
       "maxHp": 30,
       "xp": 0,

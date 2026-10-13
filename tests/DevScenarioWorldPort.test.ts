@@ -5,6 +5,8 @@ vi.mock('../src/network/bridge',()=>({bridge:{isHost:()=>authority.host,getConne
   getSynchronizedNow:vi.fn(), getArenaStartTime:vi.fn(), setArenaStartTime:vi.fn(),
   setRoundEndTime:vi.fn(), publishRoundState:vi.fn(),
 }}));
+// The coordinator's Kraken shader warmup needs real Phaser filter classes; this port test never renders.
+vi.mock('../src/effects/kraken/KrakenShaderWarmup',()=>({warmupKrakenShaders:vi.fn(()=>null)}));
 vi.mock('../src/utils/devScenarioMode',()=>({isDevScenarioMode:()=>authority.isolated}));
 vi.mock('phaser', async () => ({
   ...(await import('./fakeArenaRenderScene')).createFakePhaserModule(), Scene: class {},
