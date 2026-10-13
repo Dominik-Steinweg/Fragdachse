@@ -113,6 +113,16 @@ describe('exposed base geometry and aim ranking', () => {
     expect(rankBaseAimPoints(faces, -5, -5, 100, 0)).toEqual([]);
     expect(rankBaseAimPoints([], 0, 0, 100, 3)).toEqual([]);
   });
+
+  it('keeps aim points away from convex corners, at most at the face midpoint', () => {
+    const faces = facesFor([{ gridX: 0, gridY: 0 }]);
+    const [corner] = rankBaseAimPoints(faces, -5, -5, 100, 1, 1, 2);
+    expect(corner).toEqual({ x: -1, y: 2, distance: Math.hypot(5, 7) });
+    // Ein Inset über die halbe Kantenlänge hinaus zielt auf die Kantenmitte.
+    expect(rankBaseAimPoints(faces, -5, -5, 100, 1, 1, 50)[0]).toMatchObject({ x: -1, y: 5 });
+    // Frontal bleibt der nächste Punkt unverändert.
+    expect(rankBaseAimPoints(faces, -5, 5, 100, 1, 1, 2)[0]).toEqual({ x: -1, y: 5, distance: 5 });
+  });
 });
 
 it('caches even empty geometry and invalidates every base on generation changes and clear', () => {

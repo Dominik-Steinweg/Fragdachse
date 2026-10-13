@@ -114,6 +114,8 @@ import { computeExposedBaseFaces, ExposedBaseFaceCache, rankBaseAimPoints } from
  * TurretSystem höchstens per Schusslinie. Leistungsgrenze, kein Balancewert.
  */
 const BASE_AIM_CANDIDATE_LIMIT = 4;
+/** Abstand des Zielpunkts zu den Enden einer Zellkante, damit Schüsse nicht an Basisecken vorbeistreifen. */
+const BASE_AIM_FACE_END_INSET = CELL_SIZE / 4;
 
 export interface WorldCombatKillEvent {
   readonly killerId: string;
@@ -1473,7 +1475,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         offsetX: o.worldMetrics.offsetX, offsetY: o.worldMetrics.offsetY,
         isCoveredCell: () => false,
       }));
-      for (const point of rankBaseAimPoints(faces, x, y, range, BASE_AIM_CANDIDATE_LIMIT)) {
+      for (const point of rankBaseAimPoints(faces, x, y, range, BASE_AIM_CANDIDATE_LIMIT, 1, BASE_AIM_FACE_END_INSET)) {
         candidates.push({ id: base.id, x: point.x, y: point.y, distance: point.distance });
       }
     }

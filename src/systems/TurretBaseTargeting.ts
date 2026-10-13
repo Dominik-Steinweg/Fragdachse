@@ -129,17 +129,20 @@ export interface BaseAimPoint { readonly x: number; readonly y: number; readonly
 /**
  * Range and returned distance refer to the actual surface, before the LOS epsilon.
  * The caller checks visibility at the returned (outward-offset) x/y, never the center.
+ * `endInset` keeps the point that far from both face ends (at most the midpoint): a shot aimed
+ * exactly at a convex corner grazes past it on the slightest aim error.
  */
 export function rankBaseAimPoints(
   faces: readonly ExposedBaseFace[], fromX: number, fromY: number,
-  range: number, limit: number, outwardOffset = 1,
+  range: number, limit: number, outwardOffset = 1, endInset = 0,
 ): readonly BaseAimPoint[] {
   if (limit <= 0 || range < 0) return [];
   const points: (BaseAimPoint & { index: number })[] = [];
   faces.forEach((face, index) => {
     const dx = face.x2 - face.x1, dy = face.y2 - face.y1;
     const lengthSquared = dx * dx + dy * dy;
-    const t = lengthSquared === 0 ? 0 : Math.max(0, Math.min(1,
+    const margin = lengthSquared === 0 ? 0 : Math.min(0.5, Math.max(0, endInset) / Math.sqrt(lengthSquared));
+    const t = lengthSquared === 0 ? 0 : Math.max(margin, Math.min(1 - margin,
       ((fromX - face.x1) * dx + (fromY - face.y1) * dy) / lengthSquared));
     const x = face.x1 + t * dx, y = face.y1 + t * dy;
     if ((fromX - x) * face.normalX + (fromY - y) * face.normalY <= 0) return;
