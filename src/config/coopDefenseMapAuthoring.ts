@@ -206,9 +206,13 @@ export type CoopDefenseMapEncounterStart =
   /** Die Salvage-Site mit dieser ID wurde aktiviert (betreten); fuer Nebenziele und Encounter. */
   | { readonly type: 'site-activated'; readonly siteId: string };
 
+/** Missing: one announced wave per encounter. False: silent. Objects combine a named wave. */
+export type CoopDefenseMapEncounterAnnouncement = false | { readonly group: string; readonly finale?: true };
+
 /** Endlicher Encounter; `repel-assault` verwendet die Reihenfolge als Clear-/Rest-Kette. */
 export interface CoopDefenseMapEncounterConfig {
   readonly id: string;
+  readonly announce?: CoopDefenseMapEncounterAnnouncement;
   readonly start: CoopDefenseMapEncounterStart;
   /** Authored pause after this encounter is cleared; ignored after the final encounter. */
   readonly restAfterMs?: number;
@@ -227,6 +231,7 @@ export interface ResolvedCoopDefenseMapEncounterGroupConfig {
 
 export interface ResolvedCoopDefenseMapEncounterConfig {
   readonly id: string;
+  readonly announce?: CoopDefenseMapEncounterAnnouncement;
   readonly start: CoopDefenseMapEncounterStart;
   readonly restAfterMs: number;
   readonly groups: readonly ResolvedCoopDefenseMapEncounterGroupConfig[];
@@ -1014,6 +1019,7 @@ export function resolveCoopDefenseMapEncounterConfigs(
 ): readonly ResolvedCoopDefenseMapEncounterConfig[] {
   return (mapConfig.encounters ?? []).map((encounter) => ({
     id: encounter.id,
+    ...(encounter.announce === undefined ? {} : { announce: encounter.announce }),
     start: encounter.start,
     restAfterMs: Math.max(0, Math.floor(encounter.restAfterMs ?? 0)),
     groups: encounter.groups.map((group) => {
@@ -1620,6 +1626,7 @@ function normalizeEncounterConfigs(
   if (encounters === undefined) return undefined;
 
   const uniqueEncounterIds = new Set<string>();
+  let announcementMode: 'grouped' | 'individual' | undefined;
   return encounters.map((encounter, encounterIndex) => {
     if (typeof encounter.id !== 'string' || encounter.id.trim().length === 0) {
       throw new Error(`[coopDefenseMaps] Encounter on map ${mapId} needs a non-empty id`);
@@ -1629,17 +1636,40 @@ function normalizeEncounterConfigs(
       throw new Error(`[coopDefenseMaps] Duplicate encounter id on map ${mapId}: ${id}`);
     }
     uniqueEncounterIds.add(id);
+    const announce = normalizeEncounterAnnouncement(mapId, id, encounter.announce);
+    if (announce !== false) {
+      const mode = announce === undefined ? 'individual' : 'grouped';
+      if (announcementMode !== undefined && announcementMode !== mode) {
+        throw new Error(`[coopDefenseMaps] Map ${mapId} must not mix grouped and ungrouped announce encounters`);
+      }
+      announcementMode = mode;
+    }
     if (!Array.isArray(encounter.groups) || encounter.groups.length === 0) {
       throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${id} needs at least one group`);
     }
 
     return {
       id,
+      ...(announce === undefined ? {} : { announce }),
       start: normalizeEncounterStart(mapId, id, encounter.start, encounterIndex, context),
       restAfterMs: normalizeNonNegativeMilliseconds(encounter.restAfterMs),
       groups: encounter.groups.map((group) => normalizeEncounterGroup(mapId, id, group, context)),
     };
   });
+}
+
+function normalizeEncounterAnnouncement(
+  mapId: string,
+  encounterId: string,
+  announce: CoopDefenseMapEncounterAnnouncement | undefined,
+): CoopDefenseMapEncounterAnnouncement | undefined {
+  if (announce === undefined || announce === false) return announce;
+  if (!announce || typeof announce !== 'object' || Array.isArray(announce)
+    || typeof announce.group !== 'string' || announce.group.trim().length === 0
+    || (announce.finale !== undefined && announce.finale !== true)) {
+    throw new Error(`[coopDefenseMaps] Invalid announce on encounter ${mapId}:${encounterId}: needs group ID and optional finale: true`);
+  }
+  return { group: announce.group.trim(), ...(announce.finale === true ? { finale: true as const } : {}) };
 }
 
 interface SecondaryObjectiveNormalizationContext {

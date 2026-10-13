@@ -508,6 +508,8 @@ export const enUi = {
   "ui.direction.south": "SOUTH",
   "ui.encounter.waveLabel": "WAVE {index} / {count}: {fronts}",
   "ui.encounter.waveKicker": "WAVE {index} / {count}",
+  "ui.encounter.finaleKicker": "FINALE",
+  "ui.mainObjective.untilTime": "until {time}",
   "ui.encounter.attackFrom": "ATTACK FROM {fronts}",
   "ui.encounter.prepare": "GET READY",
   "ui.encounter.series": "ASSAULT SERIES",

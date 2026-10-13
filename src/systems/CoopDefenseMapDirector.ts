@@ -35,7 +35,7 @@ export interface CoopDefenseMapDirectorOptions {
   readonly onWaveStarted?: (encounterId: string) => void;
   /** A3: Clear wird ausschliesslich ueber die vom Encounter registrierten IDs bestimmt. */
   readonly mode?: CoopDefenseMapDirectorMode;
-  /** Scheduled-Encounter sind Support-Inhalt; nur `repel-assault` darf dauerhaft complete zeigen. */
+  /** Ungrouped scheduled support may hide complete; explicit announcement groups form a full series. */
   readonly showComplete?: boolean;
   readonly isEnemyActive?: (enemyId: string) => boolean;
   /** Semantic map-state query; the director never imports the owning gameplay systems. */
@@ -88,6 +88,11 @@ interface EncounterEnemyProgress {
   readonly total: number;
 }
 
+interface AnnouncedWave {
+  readonly indices: number[];
+  finale: boolean;
+}
+
 type RepelAssaultPhase = 'waiting' | 'active' | 'rest' | 'complete';
 
 /**
@@ -117,6 +122,9 @@ export class CoopDefenseMapDirector {
   private restUntilMs = 0;
   private assaultRepelled = false;
   private lastDeltaMs = 0;
+  /** Null preserves the existing presentation path for maps without announce authoring. */
+  private readonly announcedWaves: readonly AnnouncedWave[] | null;
+  private readonly announcedWaveStarts = new Set<string>();
 
   constructor(
     private readonly encounters: readonly ResolvedCoopDefenseMapEncounterConfig[],
@@ -138,6 +146,9 @@ export class CoopDefenseMapDirector {
       DEFAULT_TECHNICAL_STUCK_BACKSTOP_MS,
     );
     this.onDiagnosticEvent = options.onDiagnosticEvent ?? null;
+    this.announcedWaves = encounters.some((encounter) => encounter.announce !== undefined)
+      ? this.resolveAnnouncedWaves()
+      : null;
     this.executionStates = encounters.map((encounter) => ({
       encounterId: encounter.id,
       started: false,
@@ -174,6 +185,7 @@ export class CoopDefenseMapDirector {
   }
 
   reset(): void {
+    this.announcedWaveStarts.clear();
     this.elapsedMs = 0;
     this.repelEncounterIndex = 0;
     this.repelPhase = 'waiting';
@@ -244,9 +256,136 @@ export class CoopDefenseMapDirector {
    */
   getPresentationState(): CoopDefenseEncounterPresentationState | null {
     if (this.encounters.length === 0) return null;
+    if (this.announcedWaves) return this.getAnnouncedPresentationState(this.announcedWaves);
     return this.mode === 'repel-assault'
       ? this.getRepelPresentationState()
       : this.getScheduledPresentationState();
+  }
+
+  private resolveAnnouncedWaves(): AnnouncedWave[] {
+    const waves: AnnouncedWave[] = [];
+    const groups = new Map<string, AnnouncedWave>();
+    this.encounters.forEach((encounter, index) => {
+      if (encounter.announce === false) return;
+      const group = encounter.announce?.group;
+      let wave = group === undefined ? undefined : groups.get(group);
+      if (!wave) {
+        wave = { indices: [], finale: false };
+        waves.push(wave);
+        if (group !== undefined) groups.set(group, wave);
+      }
+      wave.indices.push(index);
+      wave.finale ||= encounter.announce?.finale === true;
+    });
+    return waves;
+  }
+
+  /** Presentation groups never change execution, trigger dependencies or enemy provenance. */
+  private getAnnouncedPresentationState(waves: readonly AnnouncedWave[]): CoopDefenseEncounterPresentationState | null {
+    const summaries = waves.map((wave, sequenceIndex) => {
+      const states = wave.indices.map((index) => this.executionStates[index]);
+      const started = states.filter((state) => state.started);
+      return {
+        wave, sequenceIndex,
+        started: started.length > 0,
+        startedAtMs: Math.min(...started.map((state) => state.startedAtMs)),
+        cleared: states.every((state) => state.cleared),
+        clearedAtMs: Math.max(...states.map((state) => state.clearedAtMs ?? 0)),
+        firstSpawnAtMs: Math.min(...states.map((state) => state.firstGroupSpawnedAtMs ?? Infinity)),
+      };
+    });
+    const active = summaries.filter((entry) => entry.started && !entry.cleared)
+      .sort((a, b) => b.startedAtMs - a.startedAtMs || b.sequenceIndex - a.sequenceIndex)[0];
+    const latestCleared = summaries.filter((entry) => entry.cleared)
+      .sort((a, b) => b.clearedAtMs - a.clearedAtMs || b.sequenceIndex - a.sequenceIndex)[0];
+    if (latestCleared && this.elapsedMs < latestCleared.clearedAtMs + ENCOUNTER_CLEARED_HOLD_MS
+      && (!active || latestCleared.clearedAtMs >= active.startedAtMs)) {
+      return this.createAnnouncedPresentationState(latestCleared.wave, latestCleared.sequenceIndex, 'cleared',
+        latestCleared.clearedAtMs, latestCleared.clearedAtMs + ENCOUNTER_CLEARED_HOLD_MS);
+    }
+    if (active) {
+      const hasSpawned = Number.isFinite(active.firstSpawnAtMs);
+      const firstArrival = Math.min(...active.wave.indices.filter((index) => this.executionStates[index].started)
+        .map((index) => this.executionStates[index].startedAtMs + this.getFirstGroupDelayMs(index)));
+      return this.createAnnouncedPresentationState(active.wave, active.sequenceIndex,
+        hasSpawned ? 'active' : 'incoming', hasSpawned ? active.firstSpawnAtMs : active.startedAtMs,
+        hasSpawned ? null : Math.max(active.startedAtMs, firstArrival));
+    }
+    if (latestCleared && summaries.every((entry) => entry.cleared)
+      && (this.showComplete || waves.some((wave) => this.encounters[wave.indices[0]].announce))) {
+      // Explicit groups author a complete wave series, including on timed missions such as Dawn.
+      return this.createAnnouncedPresentationState(waves[waves.length - 1], waves.length - 1, 'complete',
+        latestCleared.clearedAtMs + ENCOUNTER_CLEARED_HOLD_MS, null);
+    }
+    // Group announcements begin only with their first actual encounter. Individual waves retain
+    // their predictable warning/rest display, with silent encounters excluded from the sequence.
+    for (const entry of summaries) {
+      if (entry.started || this.encounters[entry.wave.indices[0]].announce !== undefined) continue;
+      const index = entry.wave.indices[0];
+      if (this.mode === 'repel-assault' && index !== this.repelEncounterIndex
+        && !(this.repelPhase === 'rest' && index === this.repelEncounterIndex + 1)) continue;
+      const start = this.encounters[index].start;
+      const previous = this.executionStates[index - 1];
+      const startAtMs = start.type === 'time' ? start.atMs
+        : start.type === 'after-previous' && previous?.cleared
+          ? previous.clearedAtMs! + this.encounters[index - 1].restAfterMs : null;
+      if (startAtMs === null || this.elapsedMs >= startAtMs) continue;
+      if (this.elapsedMs >= startAtMs - ENCOUNTER_INCOMING_TELEGRAPH_MS) {
+        return this.createAnnouncedPresentationState(entry.wave, entry.sequenceIndex, 'incoming',
+          startAtMs - ENCOUNTER_INCOMING_TELEGRAPH_MS, startAtMs);
+      }
+      if (start.type === 'after-previous') {
+        return this.createAnnouncedPresentationState(entry.wave, entry.sequenceIndex, 'rest', previous.clearedAtMs!, startAtMs);
+      }
+    }
+    return null;
+  }
+
+  private createAnnouncedPresentationState(
+    wave: AnnouncedWave,
+    sequenceIndex: number,
+    phase: CoopDefenseEncounterPresentationPhase,
+    phaseStartedAtMs: number,
+    phaseEndsAtMs: number | null,
+  ): CoopDefenseEncounterPresentationState {
+    const states = wave.indices.map((index) => this.executionStates[index]);
+    const progress = wave.indices.map((index) => this.getEncounterEnemyProgress(index, this.executionStates[index]));
+    const hasProgress = progress.some((entry) => entry !== null);
+    const enemiesTotal = wave.indices.reduce((sum, index, member) => sum + (progress[member]?.total
+      ?? this.encounters[index].groups.reduce((total, group) => total + group.count, 0)), 0);
+    const relevantIndices = wave.indices.filter((index) => this.executionStates[index].started && !this.executionStates[index].cleared);
+    return {
+      encounterId: this.encounters[wave.indices[0]].id,
+      sequenceIndex: sequenceIndex + 1,
+      sequenceCount: this.announcedWaves!.length,
+      ...(wave.finale ? { finale: true } : {}),
+      phase,
+      phaseStartedAtMs: Math.max(0, phaseStartedAtMs),
+      phaseEndsAtMs,
+      encounterFronts: [...new Set(wave.indices.flatMap((index) => this.getEncounterFronts(index)))],
+      fronts: [...new Set((relevantIndices.length ? relevantIndices : wave.indices)
+        .flatMap((index) => this.getPresentationFronts(index)))],
+      ...(phase === 'active' || phase === 'incoming' ? {
+        spawnComplete: states.every((state) => this.isEncounterSpawnCompleteState(state)),
+      } : {}),
+      ...(phase === 'active' && hasProgress ? {
+        enemiesDefeated: progress.reduce((sum, entry) => sum + (entry?.defeated ?? 0), 0), enemiesTotal,
+      } : {}),
+    };
+  }
+
+  private announceWaveStart(state: EncounterExecutionState): void {
+    if (this.announcedWaves === null) {
+      this.options.onWaveStarted?.(state.encounterId);
+      return;
+    }
+    const index = this.findEncounterIndex(state.encounterId);
+    const wave = this.announcedWaves.find((entry) => entry.indices.includes(index));
+    if (!wave) return;
+    const id = this.encounters[wave.indices[0]].id;
+    if (this.announcedWaveStarts.has(id)) return;
+    this.announcedWaveStarts.add(id);
+    this.options.onWaveStarted?.(id);
   }
 
   private hostUpdateScheduled(): number {
@@ -773,7 +912,7 @@ export class CoopDefenseMapDirector {
       state.groupsExecuted[groupIndex] = state.groupSpawnedCounts[groupIndex] >= group.count;
       if (group.count > 0 && state.firstGroupSpawnedAtMs === null) {
         state.firstGroupSpawnedAtMs = this.elapsedMs;
-        this.options.onWaveStarted?.(state.encounterId);
+        this.announceWaveStart(state);
       }
       this.onDiagnosticEvent?.('wave:spawn', {
         encounterId: state.encounterId,
@@ -803,7 +942,7 @@ export class CoopDefenseMapDirector {
     if (spawnedCount > 0) {
       if (state.firstGroupSpawnedAtMs === null) {
         state.firstGroupSpawnedAtMs = this.elapsedMs;
-        this.options.onWaveStarted?.(state.encounterId);
+        this.announceWaveStart(state);
       }
       state.groupNoProgressSinceMs[groupIndex] = null;
       this.onDiagnosticEvent?.('wave:spawn', {

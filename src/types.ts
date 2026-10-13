@@ -57,7 +57,10 @@ export type CoopDefenseEncounterPresentationPhase =
   | 'complete';
 
 export interface CoopDefenseEncounterPresentationState {
+  /** Stable presentation identity; grouped waves use their first authored encounter ID. */
   encounterId: string;
+  /** Host-resolved finale marker of the announced group. */
+  finale?: true;
   /** 1-basierter Index innerhalb der endlichen Encounter-Sequenz. */
   sequenceIndex: number;
   sequenceCount: number;

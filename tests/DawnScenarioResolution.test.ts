@@ -8,6 +8,7 @@ import {
   getDawnArenaTemplates,
   getDawnSchedule,
   getDawnThreatCurve,
+  getDawnWaveComposition,
   validateTemplates,
 } from '../src/config/dawn/dawnContent';
 import { composeDawnRoundPlans } from '../src/dawn/composition/DawnRoundComposition';
@@ -105,6 +106,30 @@ describe('Dawn scenario transport', () => {
 });
 
 describe('Dawn scenario resolution', () => {
+  it('announces four night slots at threat 3 and keeps day pressure and site assaults silent', () => {
+    const { plans } = dawnRound(3);
+    const { mapConfig } = resolveDawnScenario(plans.world, plans.activity);
+    const nightStart = getDawnPhaseStartMs(getDawnSchedule(plans.activity.scheduleId), 'night');
+    const encounters = mapConfig.encounters!;
+    const silent = encounters.filter(encounter => encounter.start.type === 'site-activated'
+      || (encounter.start.type === 'time' && encounter.start.atMs < nightStart));
+    expect(silent.some(encounter => encounter.start.type === 'site-activated')).toBe(true);
+    expect(silent.some(encounter => encounter.start.type === 'time')).toBe(true);
+    expect(silent.every(encounter => encounter.announce === false)).toBe(true);
+    const night = encounters.filter(encounter => !silent.includes(encounter));
+    const groups = [...new Set(night.map(encounter => encounter.announce && encounter.announce.group))];
+    expect(groups).toEqual(getDawnWaveComposition().night.waves.map(slot => slot.id));
+    expect(groups).toHaveLength(4);
+    expect(groups.at(-1)).toBe('finale');
+    for (const encounter of night) {
+      expect(encounter.announce).toEqual({ group: groups.find(group => encounter.id.startsWith(`${group}-`)),
+        ...(encounter.id.startsWith('finale-') ? { finale: true } : {}) });
+    }
+    const unknown = { ...plans.activity, waves: plans.activity.waves.map(wave =>
+      !('siteId' in wave) && wave.atMs >= nightStart ? { ...wave, id: `unknown-${wave.id}` } : wave) };
+    expect(() => resolveDawnScenario(plans.world, unknown)).toThrow('no matching night slot');
+  });
+
   it.each(['wreck', 'extractor'])('centers the complete 3x3 %s prop footprint on its slot', archetypeId => {
     const { plans } = dawnRound(10, 77);
     const plan = { ...plans.world, sites: plans.world.sites.map(site => ({ ...site, archetypeId })) };

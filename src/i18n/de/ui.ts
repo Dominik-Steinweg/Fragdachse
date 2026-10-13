@@ -508,6 +508,8 @@ export const deUi = {
   "ui.direction.south": "SÜD",
   "ui.encounter.waveLabel": "WELLE {index} / {count}: {fronts}",
   "ui.encounter.waveKicker": "WELLE {index} / {count}",
+  "ui.encounter.finaleKicker": "FINALE",
+  "ui.mainObjective.untilTime": "bis {time}",
   "ui.encounter.attackFrom": "ANGRIFF AUS {fronts}",
   "ui.encounter.prepare": "BEREITMACHEN",
   "ui.encounter.series": "ANGRIFFSSERIE",

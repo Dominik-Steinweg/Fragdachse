@@ -3,6 +3,7 @@ import {
   getCoopMissionTimeLimitSec,
   normalizeCoopDefenseMapConfig,
   resolveCoopDefenseRespawnDelayMs,
+  resolveCoopDefenseMapEncounterConfigs,
   type CoopDefenseMapAuthoringConfig,
 } from '../src/config/coopDefenseMapAuthoring';
 import { toAuthoredScenario, toCoopDefenseMapConfig } from '../src/config/authoring/coopDefenseAuthoringAdapter';
@@ -40,6 +41,37 @@ function dawnLikeMap(overrides: Partial<CoopDefenseMapAuthoringConfig> = {}): Co
 }
 
 describe('Dawn extensions of the Coop authoring contract', () => {
+  const announcementMap = (announcements: readonly unknown[]) => dawnLikeMap({
+    encounters: announcements.map((announce, index) => ({
+      id: `encounter-${index}`, announce,
+      start: { type: 'time', atMs: index * 1000 },
+      groups: [{ enemyKind: 'zombie-badger', count: 1 }],
+    })) as CoopDefenseMapAuthoringConfig['encounters'],
+  });
+
+  it('preserves silent and grouped announcements through normalization, scaling and the Activity adapter', () => {
+    const map = normalizeCoopDefenseMapConfig(announcementMap([false, { group: ' night ' }, { group: 'night', finale: true }]));
+    const expected = [false, { group: 'night' }, { group: 'night', finale: true }];
+    expect(map.encounters?.map(encounter => encounter.announce)).toEqual(expected);
+    expect(resolveCoopDefenseMapEncounterConfigs(map, 3).map(encounter => encounter.announce)).toEqual(expected);
+    const scenario = toAuthoredScenario(map);
+    expect(scenario.activity?.encounters?.map(encounter => encounter.announce)).toEqual(expected);
+    expect(toCoopDefenseMapConfig(scenario)).toEqual(map);
+    const legacy = normalizeCoopDefenseMapConfig(announcementMap([undefined, false]));
+    expect(Object.hasOwn(legacy.encounters![0], 'announce')).toBe(false);
+  });
+
+  it.each([true, null, 'night', {}, [], { group: '' }, { group: '   ' }, { group: 1 },
+    { group: 'night', finale: false }, { group: 'night', finale: 'true' }])('rejects invalid announce %j', announce => {
+    expect(() => normalizeCoopDefenseMapConfig(announcementMap([announce]))).toThrow('announce');
+  });
+
+  it.each([[undefined, { group: 'night' }], [{ group: 'night' }, false, undefined]])(
+    'rejects a mixture of individual and grouped announcements: %j', (...announcements) => {
+      expect(() => normalizeCoopDefenseMapConfig(announcementMap(announcements))).toThrow('must not mix');
+    },
+  );
+
   it('normalizes surfaces without changing default configs and keeps them on the World side', () => {
     const input = dawnLikeMap();
     const withSurface = (surface: unknown) => ({ ...input,

@@ -2340,6 +2340,7 @@ export class NetworkBridge {
     const raw = getState(KEY_COOP_ENCOUNTER_PRESENTATION) as Partial<CoopDefenseEncounterPresentationState> | null | undefined;
     if (!raw || typeof raw !== 'object' || typeof raw.encounterId !== 'string' || raw.encounterId.length === 0) return null;
     const sequenceIndex = raw.sequenceIndex;
+    if (raw.finale !== undefined && raw.finale !== true) return null;
     const sequenceCount = raw.sequenceCount;
     const phaseStartedAtMs = raw.phaseStartedAtMs;
     const phase = raw.phase;
@@ -2380,6 +2381,7 @@ export class NetworkBridge {
       && enemiesDefeated >= 0 && enemiesDefeated <= enemiesTotal;
     return {
       encounterId: raw.encounterId,
+      ...(raw.finale === true ? { finale: true } : {}),
       sequenceIndex,
       sequenceCount,
       phase: phase as CoopDefenseEncounterPresentationState['phase'],

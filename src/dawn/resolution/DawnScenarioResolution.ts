@@ -19,6 +19,7 @@ import {
   getDawnSiteArchetypeTier,
   getDawnThreatCurve,
   getDawnWaveBlock,
+  getDawnWaveComposition,
   resolveDawnSiteStructurePlacement,
   type DawnArenaTemplate,
   type DawnSalvageSlot,
@@ -187,6 +188,8 @@ function composeActivityAuthoring(
   const schedule = getDawnSchedule(activityPlan.scheduleId);
   const curve = getDawnThreatCurve(activityPlan.threat);
   const durationSec = schedule.durationMs / 1000;
+  const nightStartMs = getDawnPhaseStartMs(schedule, 'night');
+  const nightSlots = getDawnWaveComposition().night.waves;
   // Sites schliessen in der Daemmerung: ein noch laufendes Ziel scheitert dann ohne Belohnung.
   const siteClosesAt = { type: 'time', atMs: getDawnPhaseStartMs(schedule, 'dusk') } as const;
   return {
@@ -206,6 +209,7 @@ function composeActivityAuthoring(
         const spawnArea = resolveDawnSiteAssaultArea(template, site);
         return {
           id: wave.id,
+          announce: false,
           start: { type: 'site-activated', siteId: site.siteId },
           groups: groups.map((group) => ({ ...group, delayMs: (group.delayMs ?? 0) + wave.atMs, spawnArea })),
         };
@@ -213,8 +217,13 @@ function composeActivityAuthoring(
       if (!template.fronts.includes(wave.front)) {
         throw new Error(`[DawnScenarioResolution] Wave ${wave.id} uses front ${wave.front}, not offered by ${template.id}`);
       }
+      const slot = wave.atMs < nightStartMs ? undefined : nightSlots.find((candidate) => wave.id.startsWith(`${candidate.id}-`));
+      if (wave.atMs >= nightStartMs && !slot) {
+        throw new Error(`[DawnScenarioResolution] Night wave ${wave.id} has no matching night slot`);
+      }
       return {
         id: wave.id,
+        announce: slot ? { group: slot.id, ...(slot.id === 'finale' ? { finale: true } : {}) } : false,
         start: { type: 'time', atMs: wave.atMs },
         groups: groups.map((group) => ({ ...group, front: wave.front })),
       };

@@ -1,7 +1,117 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CoopDefenseMapDirector } from '../src/systems/CoopDefenseMapDirector';
+import type { CoopDefenseMapEncounterAnnouncement } from '../src/config/coopDefenseMapAuthoring';
 
 describe('CoopDefenseMapDirector', () => {
+  const announcedEncounter = (id: string, atMs: number, announce?: CoopDefenseMapEncounterAnnouncement) => ({
+    id, announce, start: { type: 'time' as const, atMs }, restAfterMs: 0,
+    groups: [{ enemyKind: 'zombie-badger', count: 1, delayMs: 0 }],
+  });
+
+  it.each(['scheduled', 'repel-assault'] as const)('runs silent %s encounters without any presentation or wave sound', mode => {
+    const started = vi.fn();
+    const spawn = vi.fn(() => ['enemy']);
+    const director = new CoopDefenseMapDirector([announcedEncounter('silent', 1000, false)], spawn,
+      { mode, onWaveStarted: started, isEnemyActive: () => false });
+    director.hostUpdate(500, false);
+    expect(director.getPresentationState()).toBeNull();
+    director.hostUpdate(500, false);
+    expect(spawn).toHaveBeenCalledExactlyOnceWith('zombie-badger', 1, 'silent');
+    expect(director.isEncounterCleared('silent')).toBe(true);
+    expect(director.getPresentationState()).toBeNull();
+    director.hostUpdate(1000, false);
+    expect(director.getPresentationState()).toBeNull();
+    expect(started).not.toHaveBeenCalled();
+  });
+
+  it('counts groups in first authored order, waits for every member and announces each group once', () => {
+    const started = vi.fn();
+    const alive = new Set<string>();
+    const director = new CoopDefenseMapDirector([
+      announcedEncounter('day', 0, false),
+      announcedEncounter('night-west', 2000, { group: 'night' }),
+      announcedEncounter('finale-west', 8000, { group: 'finale' }),
+      announcedEncounter('night-east', 4000, { group: 'night' }),
+      announcedEncounter('finale-east', 9000, { group: 'finale', finale: true }),
+      announcedEncounter('unactivated-site', 999999, false),
+    ], (_kind, _count, id) => { alive.add(id!); return [id!]; }, {
+      showComplete: false, onWaveStarted: started, isEnemyActive: id => alive.has(id),
+    });
+    director.hostUpdate(0, false);
+    expect(director.getPresentationState()).toBeNull();
+    director.hostUpdate(1999, false);
+    expect(director.getPresentationState()).toBeNull();
+    director.hostUpdate(1, false);
+    expect(director.getPresentationState()).toMatchObject({ encounterId: 'night-west', phase: 'active',
+      sequenceIndex: 1, sequenceCount: 2, enemiesTotal: 2, spawnComplete: false });
+    alive.delete('night-west');
+    director.hostUpdate(0, false);
+    expect(director.getPresentationState()?.phase).toBe('active');
+    director.hostUpdate(2000, false);
+    expect(director.getPresentationState()).toMatchObject({ encounterId: 'night-west', spawnComplete: true,
+      enemiesDefeated: 1, enemiesTotal: 2 });
+    expect(started).toHaveBeenCalledExactlyOnceWith('night-west');
+    alive.delete('night-east');
+    director.hostUpdate(0, false);
+    expect(director.getPresentationState()?.phase).toBe('cleared');
+    director.hostUpdate(4000, false);
+    expect(director.getPresentationState()).toMatchObject({ encounterId: 'finale-west', sequenceIndex: 2,
+      sequenceCount: 2, finale: true, phase: 'active' });
+    director.hostUpdate(1000, false);
+    alive.delete('finale-east');
+    director.hostUpdate(0, false);
+    expect(director.getPresentationState()?.phase).toBe('active');
+    alive.delete('finale-west');
+    director.hostUpdate(0, false);
+    expect(director.getPresentationState()?.phase).toBe('cleared');
+    director.hostUpdate(800, false);
+    expect(director.getPresentationState()).toMatchObject({ phase: 'complete', finale: true, sequenceIndex: 2, sequenceCount: 2 });
+    expect(started.mock.calls).toEqual([['night-west'], ['finale-west']]);
+    expect(alive.has('day')).toBe(true); // Silent threats do not hold the wave series open.
+    director.reset();
+    director.hostUpdate(2000, false);
+    expect(started).toHaveBeenCalledTimes(3);
+  });
+
+  it('excludes silent encounters from an otherwise individual announced sequence', () => {
+    const director = new CoopDefenseMapDirector([
+      announcedEncounter('silent', 0, false), announcedEncounter('wave', 2000),
+    ], (_kind, _count, id) => [id!], { isEnemyActive: () => false });
+    director.hostUpdate(1000, false);
+    expect(director.getPresentationState()).toBeNull();
+    director.hostUpdate(100, false);
+    expect(director.getPresentationState()).toMatchObject({ encounterId: 'wave', sequenceIndex: 1, sequenceCount: 1, phase: 'incoming' });
+    director.hostUpdate(1700, false);
+    director.hostUpdate(800, false);
+    expect(director.getPresentationState()).toMatchObject({ phase: 'complete', sequenceCount: 1 });
+  });
+
+  it.each(['scheduled', 'repel-assault'] as const)('keeps group identity and clear across different member start times (%s)', mode => {
+    const alive = new Set<string>();
+    const started = vi.fn();
+    const members = [announcedEncounter('first-authored', 2000, { group: 'shared' }),
+      announcedEncounter('second-authored', 0, { group: 'shared' })];
+    const director = new CoopDefenseMapDirector(members,
+      (_kind, _count, id) => { alive.add(id!); return [id!]; },
+      { mode, onWaveStarted: started, isEnemyActive: id => alive.has(id) });
+    director.hostUpdate(0, false);
+    if (mode === 'scheduled') {
+      expect(director.hasStartedEncounter('first-authored')).toBe(false);
+      expect(director.getPresentationState()).toMatchObject({ encounterId: 'first-authored', phase: 'active' });
+    } else {
+      expect(director.getPresentationState()).toBeNull();
+    }
+    director.hostUpdate(2000, false);
+    expect(director.getPresentationState()).toMatchObject({ encounterId: 'first-authored', sequenceCount: 1, phase: 'active' });
+    alive.delete('first-authored');
+    director.hostUpdate(0, false);
+    expect(director.getPresentationState()?.phase).toBe('active');
+    alive.delete('second-authored');
+    director.hostUpdate(0, false);
+    expect(director.getPresentationState()?.phase).toBe('cleared');
+    expect(started).toHaveBeenCalledExactlyOnceWith('first-authored');
+  });
+
   const encounters = [
     {
       id: 'opening',

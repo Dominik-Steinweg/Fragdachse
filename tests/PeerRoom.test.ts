@@ -11,7 +11,7 @@ import { NetworkBridge } from '../src/network/NetworkBridge';
 import { createPeerNetworkError } from '../src/network/peer/PeerSignaling';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 import { PEER_PROTOCOL_VERSION, type PeerChannelKind, type PeerMessage } from '../src/network/peer/protocol';
-import type { LoadoutCommitSnapshot } from '../src/types';
+import type { CoopDefenseEncounterPresentationState, LoadoutCommitSnapshot } from '../src/types';
 import { DEFAULT_LOADOUT } from '../src/loadout/LoadoutConfig';
 import { CoopDefensePlayerModifierSystem } from '../src/systems/CoopDefensePlayerModifierSystem';
 
@@ -37,6 +37,49 @@ function connectUnadmittedClient(network: FakeNetwork) {
 }
 
 describe('PeerRoom handshake and roster', () => {
+  it('replicates the host wave identity, sequence and finale to clients and late joiners', async () => {
+    const network = new FakeNetwork();
+    const host = await createHostRoom(network);
+    let client: Awaited<ReturnType<typeof addClientRoom>> | undefined;
+    const use = (room: typeof host) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    const state: CoopDefenseEncounterPresentationState = {
+      encounterId: 'finale-west-1', sequenceIndex: 4, sequenceCount: 4, finale: true,
+      phase: 'active', phaseStartedAtMs: 12000, phaseEndsAtMs: null,
+      encounterFronts: ['west', 'east'], fronts: ['east'], spawnComplete: false,
+      enemiesDefeated: 3, enemiesTotal: 9,
+    };
+    try {
+      use(host);
+      const hostBridge = new NetworkBridge(); hostBridge.activate();
+      hostBridge.publishCoopDefenseEncounterPresentationState(state);
+      client = await addClientRoom(network);
+      use(client);
+      const clientBridge = new NetworkBridge(); clientBridge.activate();
+      expect(clientBridge.getCoopDefenseEncounterPresentationState()).toEqual(state);
+      clientBridge.publishCoopDefenseEncounterPresentationState({ ...state, sequenceCount: 99 });
+      expect(clientBridge.getCoopDefenseEncounterPresentationState()).toEqual(state);
+      use(host);
+      hostBridge.publishCoopDefenseEncounterPresentationState({ ...state, phase: 'cleared' });
+      use(client);
+      expect(clientBridge.getCoopDefenseEncounterPresentationState()).toEqual({ ...state, phase: 'cleared' });
+      for (const finale of [false, 'true', null]) {
+        use(host);
+        host.room.setGlobal('cep', { ...state, finale }, true);
+        use(client);
+        expect(clientBridge.getCoopDefenseEncounterPresentationState()).toBeNull();
+      }
+      use(host);
+      const { finale: _finale, ...legacy } = state;
+      hostBridge.publishCoopDefenseEncounterPresentationState(legacy);
+      use(client);
+      expect(clientBridge.getCoopDefenseEncounterPresentationState()).toEqual(legacy);
+      use(host);
+      hostBridge.publishCoopDefenseEncounterPresentationState(null);
+      use(client);
+      expect(clientBridge.getCoopDefenseEncounterPresentationState()).toBeNull();
+    } finally { clearActiveSession(); client?.room.destroy(); host.room.destroy(); }
+  });
+
   it.each(['team_deathmatch', 'capture_the_beer'] as const)('keeps the team fixed during %s even if its client clears ready', async mode => {
     const network = new FakeNetwork();
     const host = await createHostRoom(network);

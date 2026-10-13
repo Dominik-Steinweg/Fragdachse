@@ -1,4 +1,4 @@
-import type { CoopDefenseMapObjective } from '../config/coopDefenseMaps';
+import type { CoopDefenseDynamicTimeOfDayConfig, CoopDefenseMapObjective } from '../config/coopDefenseMaps';
 import type { CoopDefenseEncounterPresentationState } from '../types';
 import { formatDuration, formatNumber, getLocale, t } from '../i18n';
 
@@ -26,6 +26,7 @@ export interface MainObjectiveModelInput {
   readonly objective: CoopDefenseMapObjective;
   readonly elapsedMs: number;
   readonly surviveDurationSec?: number;
+  readonly dynamicTimeOfDay?: CoopDefenseDynamicTimeOfDayConfig;
   readonly encounterCount: number;
   readonly encounter: CoopDefenseEncounterPresentationState | null;
   readonly boss: MainObjectiveBossProgress | null;
@@ -58,10 +59,14 @@ export function buildMainObjectiveViewModel(input: MainObjectiveModelInput): Mai
   if (input.objective === 'survive' || input.objective === 'defend-until-dawn') {
     const totalMs = Math.max(1, Math.round((input.surviveDurationSec ?? 0) * 1000));
     const elapsedMs = Math.max(0, Math.min(totalMs, input.elapsedMs));
+    const transitions = input.dynamicTimeOfDay?.transitions;
+    const endTime = transitions?.[transitions.length - 1]?.targetTimeOfDay;
     return {
       id,
       title: t(input.objective === 'survive' ? 'ui.mainObjective.survive' : 'ui.mainObjective.defendUntilDawn'),
-      progressLabel: `${formatDuration(elapsedMs / 1000, getLocale())} / ${formatDuration(totalMs / 1000, getLocale())}`,
+      progressLabel: input.objective === 'defend-until-dawn'
+        ? (endTime ? t('ui.mainObjective.untilTime', { time: endTime }) : '')
+        : `${formatDuration(elapsedMs / 1000, getLocale())} / ${formatDuration(totalMs / 1000, getLocale())}`,
       progress: clamp01(elapsedMs / totalMs),
     };
   }
