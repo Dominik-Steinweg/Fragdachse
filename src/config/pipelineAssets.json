@@ -75816,6 +75816,102 @@
           "idleSha256": "8a4dad89c05e88827c1781998fc5fc0b291aa2da4be651ce8b1789d39e64f9bb"
         }
       }
+    },
+    {
+      "id": "held-fire-control-portal",
+      "category": "utility",
+      "gameIds": [
+        "FIRE_CONTROL_PORTAL"
+      ],
+      "revision": "fc-v1-h-draft",
+      "variant": "standard",
+      "sourceSize": 128,
+      "textureKey": "held_FIRE_CONTROL_PORTAL",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          18
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "held_FIRE_CONTROL_PORTAL_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-fire-control-portal/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-fire-control-portal/sheet.png",
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 132,
+        "height": 132
+      },
+      "hashes": {
+        "idle": "9c90239b0270af1ee4cf247b9e52cc31227a7df2ef5d72881ca3cbbee241bac1",
+        "sheet": "ef9b2bdd577636c4aed633c16e2c0531e173da098f1221f597b7f106db5ed4e7"
+      }
+    },
+    {
+      "id": "held-fire-control-relay",
+      "category": "utility",
+      "gameIds": [
+        "FIRE_CONTROL_RELAY"
+      ],
+      "revision": "fc-v1-h-draft",
+      "variant": "standard",
+      "sourceSize": 128,
+      "textureKey": "held_FIRE_CONTROL_RELAY",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          18.4
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "held_FIRE_CONTROL_RELAY_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-fire-control-relay/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-fire-control-relay/sheet.png",
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 132,
+        "height": 132
+      },
+      "hashes": {
+        "idle": "5b9f2cb5e19461cb0a7d9b28d04ea8b24fa20578e632950b62ab1a5f908550d8",
+        "sheet": "b2cf6de9d6ede8497097a74da33069d7985f3e6542e0db6024caf66df5305ecf"
+      }
     }
   ]
 }

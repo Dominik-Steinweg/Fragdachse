@@ -61,6 +61,15 @@ describe('Getragene Loadout-Items: Bildvertrag', () => {
     }
   });
 
+  it('resolves authored fire-control utilities before their class unlock is released', () => {
+    for (const id of ['FIRE_CONTROL_RELAY', 'FIRE_CONTROL_PORTAL']) {
+      const spec = getHeldItemSpriteSpec(id)!;
+      expect(spec).toBe(HELD_ITEM_SPRITES[id]);
+      expect(spec.assetPath).toContain('/pipeline-v2/');
+      expect(spec.sourceScale).toBeGreaterThan(1);
+    }
+  });
+
   it('haelt jedes Bild im Pixelraster der Figur und den Griffpunkt darin', () => {
     for (const spec of Object.values(HELD_ITEM_SPRITES)) {
       const file = path.join(REPOSITORY_ROOT, 'public', spec.assetPath.replace(/^\.\//, ''));

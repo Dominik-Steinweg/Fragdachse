@@ -6,7 +6,7 @@ import { PLAYER_SIZE } from '../../src/config';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../../src/config/coopDefenseEnemies';
 import { TURRET_VISUALS } from '../../src/config/turretVisuals';
 import { WATCHTOWER_DISPLAY_SIZE } from '../../src/config/watchtower';
-import { LOADOUT_CATALOG_ENTRIES, findWeaponConfig } from '../../src/loadout/LoadoutConfig';
+import { LOADOUT_CATALOG_ENTRIES, findWeaponConfig, findUtilityConfig } from '../../src/loadout/LoadoutConfig';
 import { EQUIPABLE_LOADOUT_CATALOG_ENTRIES } from '../equipableLoadoutEntries';
 import { validateClipContracts, validateExtensions } from '../../scripts/asset-pipeline/contracts-v2.mjs';
 
@@ -43,7 +43,11 @@ describe('asset pipeline catalog contracts', () => {
   it('covers every equipable utility with a portable model and authored held-item anchors', () => {
     const required = EQUIPABLE_LOADOUT_CATALOG_ENTRIES.filter(entry => entry.kind === 'utility').map(entry => entry.id);
     const utilities = assets.filter(asset => asset.category === 'utility');
-    expect(sorted(utilities.flatMap(asset => asset.gameIds))).toEqual(sorted(required));
+    const authoredIds = utilities.flatMap(asset => asset.gameIds);
+    expect(authoredIds).toEqual(expect.arrayContaining(required));
+    expect(new Set(authoredIds).size).toBe(authoredIds.length);
+    // Locked content may be authored before release, but never invent a utility ID.
+    for (const id of authoredIds) expect(findUtilityConfig(id), id).toBeDefined();
     for (const asset of utilities) {
       expect(asset.forward).toBe('north');
       expect(asset.clips).toEqual([]);
