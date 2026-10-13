@@ -1,18 +1,18 @@
 {
   "upgrades": {
     "branches": [
-      { "branchId": "necromancy", "price": 250 }
+      { "branchId": "necromancy", "price": 100 }
     ],
-    "bossPointPrices": [150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000, 1050, 1100]
+    "bossPointPrices": [90, 120, 150, 180, 210, 240, 270, 300, 330, 360, 390, 420, 450, 480, 510, 540, 570, 600, 630, 660]
   },
   "infrastructure": [
-    { "id": "repair-drones", "levelPrices": [400, 1500, 4000] },
-    { "id": "scrap-magnet", "levelPrices": [600] }
+    { "id": "repair-drones", "levelPrices": [240, 900, 2400] },
+    { "id": "scrap-magnet", "levelPrices": [360] }
   ],
   "equipment": {
     "itemOfferCount": 3,
-    "itemPriceByRarity": { "white": 60, "blue": 140, "yellow": 320 },
-    "itemPriceGrowthPerThreat": 0.25,
-    "recalibrationCorePrice": 200
+    "itemPriceByRarity": { "white": 40, "blue": 90, "yellow": 200 },
+    "itemPriceGrowthPerThreat": 0.2,
+    "recalibrationCorePrice": 120
   }
 }
