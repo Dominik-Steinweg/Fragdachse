@@ -100,8 +100,8 @@ export function createFireControlWorldFixture(overrides: Partial<Extract<Utility
     network: { authority: { isHost: () => true, isEnemyPair: () => false, getPlayerProfile: () => player, getConnectedPlayers: () => [player] },
       round: bag({ canPlayerReceiveRoundRewards: () => true }), stats: bag(), effects: bag() },
   }) as unknown as WorldCombatGameplayBindingOptions);
-  const add = (id: keyof typeof COOP_DEFENSE_CONSTRUCTIONS = 'machine_gun_turret', owner = 'inspector', gridX = 5) => {
-    const rock = placement.materializePersistentPlaceable(COOP_DEFENSE_CONSTRUCTIONS[id], gridX, 5, 0, owner, 0xffffff)!;
+  const add = (id: keyof typeof COOP_DEFENSE_CONSTRUCTIONS = 'machine_gun_turret', owner = 'inspector', gridX = 5, gridY = 5) => {
+    const rock = placement.materializePersistentPlaceable(COOP_DEFENSE_CONSTRUCTIONS[id], gridX, gridY, 0, owner, 0xffffff)!;
     if (!rock) throw Error('Fixture construction did not fit');
     // Identity/lifecycle tests isolate timing from authored rotation tuning.
     placement.getRuntimeRock(rock.id)!.rotationSpeedDegPerSec = 10000;
