@@ -72,8 +72,8 @@ void main() {
       float pulse = .5+.5*sin(uTime*TAU/1.2);
       intensity = line(r-R,.28) * (.16+.25*pulse);
     } else {
-      intensity = line(r-R,.35)*.60 + line(r-R*.58,.20)*.22;
-      core = exp(-r*r/2.0)*.7;
+        // Halo outside the physical tripod; the sprite owns the central optical core.
+        intensity = line(r-R,.35)*.42;
     }
     intensity += exp(-pow((r-R)/2.1,2.0))*.11;
   }

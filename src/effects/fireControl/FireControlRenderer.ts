@@ -10,6 +10,7 @@ import type { LightingSystem } from '../LightingSystem';
 import { FireControlHologramFilter, type HologramPreset } from './FireControlHologramFilter';
 import { createFireControlPortalGpuLayer } from './FireControlPortalGpuLayer';
 import { FireControlGpuKind as Kind, FireControlPortalGpuStore } from './FireControlPortalGpuStore';
+import { FIRE_CONTROL_RELAY, FIRE_CONTROL_RELAY_SIZE, ensureFireControlRelayAssets, fireControlRelayFrame } from './FireControlRelayAssets';
 
 /** Optional presentation extension; never changes the replicated/domain contract. */
 export interface FireControlEntryView extends FireControlEntrySnapshot { readonly lastTransportAt?: number }
@@ -25,6 +26,7 @@ interface CopyVisual {
   copy: FireControlCopySnapshot; expiresAt: number; removedAt?: number; removedMaterialize?: number;
 }
 interface PortalVisual { snapshot: FireControlPortalView; removedAt?: number; removedOpen?: number }
+interface RelayVisual { sprite: Phaser.GameObjects.Sprite; removedAt?: number }
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 const EXIT_RADIUS = 23;
 const FLASH_MS = 220;
@@ -37,6 +39,7 @@ export class FireControlRenderer {
   private readonly layer;
   private readonly copies = new Map<string, CopyVisual>();
   private readonly portals = new Map<number, PortalVisual>();
+  private readonly relays = new Map<number, RelayVisual>();
   private readonly paused = new Map<number, { sprite: Phaser.GameObjects.Sprite; filter: Phaser.Filters.ColorMatrix }>();
   private readonly animations = new TurretAnimationController();
   private previousNow: number | null = null;
@@ -48,6 +51,7 @@ export class FireControlRenderer {
     public preset: HologramPreset = 'A',
     private readonly lighting?: Pick<LightingSystem, 'setLight' | 'releaseLight'>) {
     this.layer = createFireControlPortalGpuLayer(scene, this.store);
+    ensureFireControlRelayAssets(scene);
   }
   /** Confirmed shot events can be forwarded independently of snapshot refreshes. */
   onShot(sourceId: string): void { this.animations.onShot(sourceId); }
@@ -59,14 +63,16 @@ export class FireControlRenderer {
     this.animations.update(delta);
     this.store.begin(now);
     this.touchedLights.clear();
-    const liveCopies = new Set<string>(), livePortals = new Set<number>();
+    const liveCopies = new Set<string>(), livePortals = new Set<number>(), liveRelays = new Set<number>();
     for (const deployment of snapshot.deployments) {
       if (deployment.kind === 'portal') {
         livePortals.add(deployment.id);
         this.portals.set(deployment.id, { snapshot: deployment });
         continue;
       }
-      this.store.add({ x: deployment.x, y: deployment.y, radius: 5, angle: 0, kind: Kind.Projector,
+      liveRelays.add(deployment.id);
+      this.updateRelay(deployment, now);
+      this.store.add({ x: deployment.x, y: deployment.y, radius: 12, angle: 0, kind: Kind.Projector,
         open: clamp((now-deployment.startedAt)/400), remaining: 1, flash: 0 });
       for (const copy of deployment.copies) {
         liveCopies.add(copy.sourceId);
@@ -90,6 +96,15 @@ export class FireControlRenderer {
         if (length < 90) this.store.add({ x: deployment.x, y: deployment.y, radius: length, length,
           angle: Math.atan2(copy.y-deployment.y,copy.x-deployment.x), kind: Kind.Filament,
           open: 1 - settle * .8, remaining: 1, flash: 0, seed: copy.originalId });
+      }
+    }
+    for (const [id, relay] of this.relays) {
+      if (!liveRelays.has(id)) relay.removedAt ??= now;
+      const alpha = relay.removedAt === undefined ? 1 : 1 - clamp((now - relay.removedAt) / 300);
+      if (alpha <= 0) { relay.sprite.destroy(); this.relays.delete(id); }
+      else {
+        relay.sprite.setAlpha(alpha);
+        this.light(`relay:${id}`, relay.sprite.x, relay.sprite.y, 28, 3.8 * alpha);
       }
     }
     for (const [id, v] of this.copies) {
@@ -155,6 +170,20 @@ export class FireControlRenderer {
       this.lighting?.releaseLight(key, { immediate: true }); this.lightKeys.delete(key);
     }
   }
+  private updateRelay(deployment: FireControlCopiesDeploymentSnapshot, now: number): void {
+    let relay = this.relays.get(deployment.id);
+    if (!relay && this.scene.textures.exists(FIRE_CONTROL_RELAY.sheetTextureKey)) {
+      const sprite = this.scene.add.sprite(deployment.x, deployment.y, FIRE_CONTROL_RELAY.sheetTextureKey)
+        .setOrigin(...FIRE_CONTROL_RELAY.pivot).setDisplaySize(FIRE_CONTROL_RELAY_SIZE, FIRE_CONTROL_RELAY_SIZE)
+        .setDepth(DEPTH.ROCKS + 0.1);
+      sprite.name = `fire-control-relay:${deployment.id}`;
+      relay = { sprite }; this.relays.set(deployment.id, relay);
+    }
+    if (!relay) return;
+    relay.removedAt = undefined;
+    relay.sprite.setPosition(deployment.x, deployment.y).setAlpha(1)
+      .setFrame(fireControlRelayFrame(now - deployment.startedAt));
+  }
   private light(id: string, x: number, y: number, radiusPx: number, intensity: number): void {
     if (!this.lighting) return;
     const key = `fc-visual:${id}`;
@@ -166,6 +195,8 @@ export class FireControlRenderer {
     if (this.destroyed) return;
     this.destroyed = true;
     for (const v of this.copies.values()) { v.filter.destroy(); v.sprite.destroy(); }
+    for (const relay of this.relays.values()) relay.sprite.destroy();
+    this.relays.clear();
     this.copies.clear(); this.portals.clear(); this.animations.clear();
     for (const { sprite, filter } of this.paused.values()) if (!sprite.isDestroyed) sprite.filters?.internal.remove(filter);
     this.paused.clear(); this.store.clear(); this.layer?.destroy();

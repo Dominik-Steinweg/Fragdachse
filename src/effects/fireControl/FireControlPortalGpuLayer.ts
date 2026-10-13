@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { DEPTH } from '../../config';
 import type { ShaderWarmupProbe } from '../../graphics/ShaderWarmupProbe';
 import { FIRE_CONTROL_FRAGMENT, FIRE_CONTROL_VERTEX } from './fireControlPortalShader';
+import { ensureFireControlRelayAssets, FIRE_CONTROL_RELAY } from './FireControlRelayAssets';
 import {
   FireControlPortalGpuStore,
   FIRE_CONTROL_CAPACITY, FIRE_CONTROL_WORDS, FIRE_CONTROL_VERTICES,
@@ -32,13 +33,15 @@ export function createFireControlPortalGpuLayer(scene: Phaser.Scene, store: Fire
  * round does not stall on shader linking.
  */
 export function createFireControlPortalShaderProbe(scene: Phaser.Scene): ShaderWarmupProbe {
+  ensureFireControlRelayAssets(scene);
   let layer: FireControlPortalGpuLayer | null = null;
   return {
     name: 'fire-control',
     prepare: context => {
       layer ??= buildLayer(scene, new FireControlPortalGpuStore());
       layer?.image.setVisible(false);
-      return layer?.prepare(context) ?? true;
+      const shaderReady = layer?.prepare(context) ?? true;
+      return shaderReady && scene.textures.exists(FIRE_CONTROL_RELAY.sheetTextureKey);
     },
     destroy: () => { layer?.image.destroy(); layer = null; },
   };
