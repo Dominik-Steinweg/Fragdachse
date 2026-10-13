@@ -1,0 +1,140 @@
+{
+  "quality": "accepted-authoring-draft",
+  "previewInputHash": "a145c0dd1a431db18606d6ddbbc85d86afd182793737dbaa7077127687482638",
+  "targetSize": 24,
+  "masters": [
+    {
+      "frame": 0,
+      "sha256": "262c56bcb6d0854eb7afc90ca22de09ca25b36e05e254fefb11705fad9cc3538"
+    },
+    {
+      "frame": 1,
+      "sha256": "a7a4d81d8711ff2964d51fa902882a70098b07de856cdf715553f9d094e13c18"
+    },
+    {
+      "frame": 2,
+      "sha256": "11b7f2a365355bc2d9e79364aa65608942b73daa33c19cad95355b3fa88d633d"
+    },
+    {
+      "frame": 3,
+      "sha256": "389e498e4ddb8de513687a11329dfb648eb7d1da551ff208fa758e3697ee60c9"
+    },
+    {
+      "frame": 4,
+      "sha256": "31496db6f3d0140a53900b9db4e4d813858390702d2b81397490bc6e952ff3ff"
+    },
+    {
+      "frame": 5,
+      "sha256": "015ae21e8c11e237db9cd097c1a04d0b4421ffcc630f04761bb02097dbd1da5c"
+    },
+    {
+      "frame": 6,
+      "sha256": "6b3925bcd1d334d8f2be3b7c97ebd06935916402f3a9733c96fd7a1558616779"
+    },
+    {
+      "frame": 7,
+      "sha256": "354db3ab4f96004a439161b37269a2bf8ddf6caf46b2efda26b244582d3f7d51"
+    },
+    {
+      "frame": 8,
+      "sha256": "4a0dab60bc47e45beadc910036738d7bc0db4c13ae8692e79aa1eada5307c55f"
+    }
+  ],
+  "runtime": {
+    "id": "fire-control-relay",
+    "category": "construction",
+    "gameIds": [],
+    "revision": "devices-relay-v2-runtime-draft",
+    "variant": "standard",
+    "sourceSize": 48,
+    "textureKey": "fire_control_relay",
+    "sheetTextureKey": "fire_control_relay_sheet",
+    "runtimeContract": "sheet",
+    "forward": "north",
+    "pivot": [
+      0.5,
+      0.5
+    ],
+    "idleFrame": 0,
+    "idlePath": "./assets/sprites/pipeline-v2/fire-control-relay/idle.png",
+    "sheetPath": "./assets/sprites/pipeline-v2/fire-control-relay/sheet.png",
+    "layout": {
+      "frameWidth": 48,
+      "frameHeight": 48,
+      "margin": 2,
+      "spacing": 4,
+      "columns": 8,
+      "rows": 2,
+      "frameCount": 9,
+      "width": 416,
+      "height": 104
+    },
+    "clips": [
+      {
+        "name": "deploy",
+        "frames": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "frameRate": 20,
+        "loop": false,
+        "start": "free",
+        "end": "rest"
+      },
+      {
+        "name": "idle",
+        "frames": [
+          0
+        ],
+        "frameRate": 1,
+        "loop": true,
+        "start": "rest",
+        "end": "rest"
+      }
+    ],
+    "hashes": {
+      "idle": "e3c0c45d554521f6b15c3514cd00bb7eca416b384332608dd2f879860244eb94",
+      "sheet": "a1ff4c32d6d4665e70ee68a18b8ff9ee352d2f16290ca6816c25a9fc4a8a869e"
+    }
+  },
+  "export": {
+    "script": "scripts/asset-pipeline/export-fire-control-relay.mjs",
+    "sharp": {
+      "aom": "3.9.1",
+      "archive": "3.7.4",
+      "cairo": "1.18.0",
+      "cgif": "0.4.1",
+      "exif": "0.6.24",
+      "expat": "2.6.2",
+      "ffi": "3.4.6",
+      "fontconfig": "2.15.0",
+      "freetype": "2.13.2",
+      "fribidi": "1.0.15",
+      "glib": "2.81.1",
+      "harfbuzz": "9.0.0",
+      "heif": "1.18.2",
+      "highway": "1.2.0",
+      "imagequant": "2.4.1",
+      "lcms": "2.16",
+      "mozjpeg": "4.1.5",
+      "pango": "1.54.0",
+      "pixman": "0.43.4",
+      "png": "1.6.43",
+      "proxy-libintl": "0.4",
+      "rsvg": "2.58.93",
+      "spng": "0.7.4",
+      "tiff": "4.6.0",
+      "vips": "8.15.3",
+      "webp": "1.4.0",
+      "xml": "2.13.3",
+      "zlib-ng": "2.2.1",
+      "sharp": "0.33.5"
+    }
+  }
+}

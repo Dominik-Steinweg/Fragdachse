@@ -4,12 +4,14 @@ import { getTurretVisualSpec } from '../../config/turretVisuals';
 import { FireControlRenderer, type FireControlEntryView, type FireControlView } from '../../effects/fireControl/FireControlRenderer';
 import type { HologramPreset } from '../../effects/fireControl/FireControlHologramFilter';
 import { fireControlCopySourceId, type FireControlCopySnapshot } from '../../systems/fireControl/FireControlSnapshot';
-import type { TurretWeaponId } from '../../types';
+import type { FireControlPlacementPreview, TurretWeaponId } from '../../types';
+import { FireControlPlacementPreviewVisual } from '../../effects/fireControl/FireControlPlacementPreviewVisual';
+import { COLORS, DEPTH } from '../../config';
 
 export interface FireControlReviewOptions {
   hologramPreset?: HologramPreset;
   timeOfDay?: number;
-  step?: 'start' | 'vanish' | 'expireWarning' | 'portalOpen' | 'portalClose' | 'transport';
+  step?: 'start' | 'deploy' | 'vanish' | 'expireWarning' | 'portalOpen' | 'portalClose' | 'transport' | 'preview' | 'previewInvalid' | 'previewOff';
 }
 export const FIRE_CONTROL_REVIEW_SCENARIO = {
   version: 1, mapId: '4', seed: 12345, classId: 'inspector_gadachs',
@@ -36,9 +38,14 @@ export class FireControlVisualReview {
   private lastTransportAt: number | undefined;
   private transportIndex = 0;
   private lastNow: number;
+  private preview: 'valid' | 'invalid' | null = null;
+  private previewVisual: FireControlPlacementPreviewVisual | null = null;
+  private previewRing: Phaser.GameObjects.Graphics | null = null;
+  private readonly scene: Phaser.Scene;
   snapshot: FireControlView = { deployments: [] };
 
   constructor(scene: Phaser.Scene, runtime: ArenaRuntime, options: FireControlReviewOptions, now: number) {
+    this.scene = scene;
     this.startedAt = this.portalStartedAt = this.lastNow = now;
     this.expiresAt = now + 15000;
     this.originals = runtime.getTurretDefinitions().filter(t => typeof t.id === 'number' &&
@@ -63,6 +70,9 @@ export class FireControlVisualReview {
   configure(options: FireControlReviewOptions, now: number): void {
     if (options.hologramPreset) this.renderer.preset = options.hologramPreset;
     switch (options.step) {
+      case 'deploy':
+        this.startedAt = now; this.expiresAt = now+15000;
+        this.copiesVisible = true; this.lastTick = -1; break;
       case 'start':
         this.startedAt = this.portalStartedAt = now; this.expiresAt = now+15000;
         this.copiesVisible = this.portalVisible = true; this.lastTick = -1; this.lastTransportAt = undefined; break;
@@ -71,6 +81,10 @@ export class FireControlVisualReview {
       case 'portalOpen': this.portalStartedAt = now; this.portalVisible = true; break;
       case 'portalClose': this.portalVisible = false; break;
       case 'transport': this.lastTransportAt = now; this.transportIndex++; break;
+      // Placement preview look (local UI): deployments hidden so only the preview is judged.
+      case 'preview': this.preview = 'valid'; this.copiesVisible = this.portalVisible = false; break;
+      case 'previewInvalid': this.preview = 'invalid'; this.copiesVisible = this.portalVisible = false; break;
+      case 'previewOff': this.preview = null; this.previewVisual?.hide(); this.previewRing?.clear(); break;
     }
     this.update(now);
   }
@@ -104,7 +118,27 @@ export class FireControlVisualReview {
         expiresAt: this.expiresAt, localFireRelease: true, entries }] : []),
     ] };
     this.renderer.update(this.snapshot,now);
+    this.updatePreview(now);
     if (shot && this.copiesVisible) for (const copy of copies) this.renderer.onShot(copy.sourceId);
+  }
+  /** Same visual and range-ring rules as PlacementPreviewRenderer, fed with a synthetic preview. */
+  private updatePreview(now: number): void {
+    if (!this.preview) return;
+    const [rocket, mg] = this.originals;
+    const valid = this.preview === 'valid';
+    const pointX = rocket.x + 150, pointY = rocket.y + 150;
+    const playerX = pointX - (valid ? 150 : 330), playerY = pointY - 40;
+    const ghosts = [rocket, mg].map((t, i) => ({ x: pointX + (i === 0 ? -36 : 36), y: pointY,
+      constructionId: i === 0 ? 'rocket_turret' : 'machine_gun_turret', weaponId: t.weaponId! }));
+    const preview: FireControlPlacementPreview = { kind: 'fire_control_relay', valid, reason: valid ? undefined : 'range',
+      pointX, pointY, playerX, playerY, rangePx: 280,
+      originals: [rocket, mg].map(t => ({ id: t.id as number, x: t.x, y: t.y })), ghosts };
+    this.previewVisual ??= new FireControlPlacementPreviewVisual(this.scene);
+    this.previewVisual.update(preview, now, COLORS.RED_2);
+    const ring = this.previewRing ??= this.scene.add.graphics().setDepth(DEPTH.OVERLAY - 2);
+    ring.clear().lineStyle(valid ? 1.5 : 2, valid ? 0x3dffd0 : COLORS.RED_2, valid ? 0.32 : 0.75)
+      .strokeCircle(playerX, playerY, 280);
+    if (!valid) ring.lineStyle(2, COLORS.RED_2, 0.9).strokeCircle(pointX, pointY, 14);
   }
   status() {
     return { preset: this.renderer.preset, now: this.lastNow, ageMs: this.lastNow-this.startedAt,
@@ -112,6 +146,8 @@ export class FireControlVisualReview {
   }
   destroy(): void {
     this.renderer.destroy();
+    this.previewVisual?.destroy();
+    this.previewRing?.destroy();
     for (const { sprite, rotation } of this.sprites.values()) if (!sprite.isDestroyed) sprite.setRotation(rotation);
     this.sprites.clear();
   }

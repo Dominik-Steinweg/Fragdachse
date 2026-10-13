@@ -42,10 +42,25 @@ void main() {
     intensity += streak * 1.4 * flash;
     core += streak * flash * 1.2 + line(r - R, .5) * wedge * flash;
   } else if (kind > 3.5) {
-    // Local projector thread only. Length is radius; no portal-distance connection exists.
-    float wobble = sin(q.x*.7-uTime*15.0+vState.w) * .45;
-    intensity = line(q.y-wobble,.15) * step(0.0,q.x) * (1.0-smoothstep(radius*.7,radius,q.x))
-      * (.16+.12*sin(uTime*31.0+vState.w));
+    // Projection beam: projector lens (x = 0) to its copy (x = radius). Strictly local; the
+    // renderer never emits one across portal or map distances. A narrow cone widens toward the
+    // hologram, data motes flow outward, and the whole beam flares when the copy fires (flash).
+    float L = radius;
+    float inside = step(0.0, q.x) * (1.0 - smoothstep(L - 13.0, L - 8.0, q.x));
+    float t = clamp(q.x / max(L, 1.0), 0.0, 1.0);
+    float across = abs(q.y) / mix(.7, 5.0, t);
+    float cone = (1.0 - smoothstep(.45, 1.0, across)) * inside;
+    float axis = line(q.y, .22) * inside;
+    float motes = 0.0;
+    for (int i = 0; i < 3; i++) {
+      float phase = fract(uTime * 1.5 + float(i) / 3.0 + vState.w * .137);
+      float mx = phase * (L - 9.0);
+      motes += exp(-pow((q.x - mx) / 1.5, 2.0) - pow(q.y / .8, 2.0)) * sin(phase * 3.14159);
+    }
+    float shimmer = .85 + .15 * sin(uTime * 9.0 + q.x * .6 + vState.w);
+    intensity = (cone * .20 + axis * .17) * shimmer + motes * inside * .85;
+    intensity *= 1.0 + flash * 2.4;
+    core = motes * inside * .30 + axis * flash * .5;
   } else {
     if (kind > .5 && kind < 1.5) q.x *= 2.9;
     float r = length(q), a = atan(q.y,q.x);
@@ -72,8 +87,8 @@ void main() {
       float pulse = .5+.5*sin(uTime*TAU/1.2);
       intensity = line(r-R,.28) * (.16+.25*pulse);
     } else {
-      intensity = line(r-R,.35)*.60 + line(r-R*.58,.20)*.22;
-      core = exp(-r*r/2.0)*.7;
+        // Halo outside the physical tripod; the sprite owns the central optical core.
+        intensity = line(r-R,.35)*.42;
     }
     intensity += exp(-pow((r-R)/2.1,2.0))*.11;
   }

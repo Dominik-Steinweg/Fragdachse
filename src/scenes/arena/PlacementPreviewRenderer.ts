@@ -9,6 +9,7 @@ import { GAME_WIDTH, ARENA_OFFSET_Y, CELL_SIZE, COLORS, DEPTH, PLAYER_COLORS } f
 import type { ArenaContext }             from './ArenaContext';
 import type { FireControlPlacementPreview, LocalPlacementPreview, PlacementPreviewNetState, UtilityPlacementPreviewState } from '../../types';
 import { TUNNEL_HOLE_DIAMETER, TUNNEL_VISUAL_DEPTH, TunnelEndpointVisual } from './TunnelEndpointVisual';
+import { FireControlPlacementPreviewVisual } from '../../effects/fireControl/FireControlPlacementPreviewVisual';
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
 import { getTurretVisualSpec, getTurretVisualTransform } from '../../config/turretVisuals';
 import { POWERUP_DEFS, POWERUP_PEDESTAL_CONFIG } from '../../powerups/PowerUpConfig';
@@ -32,6 +33,8 @@ interface TunnelPreviewVisualState {
 export class PlacementPreviewRenderer {
   private localPlacementPreviewImage: Phaser.GameObjects.Image | null = null;
   private localTurretPreviewImage: Phaser.GameObjects.Image | null = null;
+  /** Created on first use; scene-lifetime like the other preview objects. */
+  private fireControlPreview: FireControlPlacementPreviewVisual | null = null;
   private readonly remotePlacementPreviewImages = new Map<string, Phaser.GameObjects.Image>();
   private readonly remoteTurretPreviewImages = new Map<string, Phaser.GameObjects.Image>();
   private readonly localTunnelPreview: TunnelPreviewVisualState;
@@ -91,8 +94,10 @@ export class PlacementPreviewRenderer {
       this.localPlacementPreviewImage?.setVisible(false);
       this.localTurretPreviewImage?.setVisible(false);
       this.hideTunnelPreview(this.localTunnelPreview);
+      this.fireControlPreview?.hide();
       return;
     }
+    if (preview.kind !== 'fire_control_relay') this.fireControlPreview?.hide();
 
     if (preview.kind === 'fire_control_relay') {
       this.localPlacementPreviewImage?.setVisible(false);
@@ -178,21 +183,20 @@ export class PlacementPreviewRenderer {
   }
 
   private drawFireControlPreview(preview: FireControlPlacementPreview): void {
-    const color = preview.valid ? 0x3dffd0 : COLORS.RED_2;
-    const graphics = this.rangeGraphics;
-    graphics.lineStyle(2, color, 0.6);
+    const finite = Number.isFinite(preview.pointX) && Number.isFinite(preview.pointY);
+    const visual = this.fireControlPreview ??= new FireControlPlacementPreviewVisual(this.scene);
+    if (finite) visual.update(preview, this.scene.time.now, COLORS.RED_2);
+    else visual.hide();
+    // Placement range around the player: quiet turquoise, red only when the cursor is out of range.
     if (Number.isFinite(preview.rangePx) && preview.rangePx >= 0
       && Number.isFinite(preview.playerX) && Number.isFinite(preview.playerY)) {
-      graphics.strokeCircle(preview.playerX, preview.playerY, preview.rangePx);
+      const outOfRange = !preview.valid && preview.reason === 'range';
+      this.rangeGraphics.lineStyle(outOfRange ? 2 : 1.5, outOfRange ? COLORS.RED_2 : 0x3dffd0, outOfRange ? 0.75 : 0.32);
+      this.rangeGraphics.strokeCircle(preview.playerX, preview.playerY, preview.rangePx);
     }
-    graphics.lineStyle(2, color, 1);
-    if (Number.isFinite(preview.pointX) && Number.isFinite(preview.pointY)) {
-      graphics.strokeCircle(preview.pointX, preview.pointY, 10);
-    }
-    for (const original of preview.originals) graphics.strokeCircle(original.x, original.y, 6);
-    for (const ghost of preview.ghosts) {
-      graphics.strokeRect(ghost.x - 12, ghost.y - 12, 24, 24);
-      graphics.strokeCircle(ghost.x, ghost.y, 7);
+    if (!preview.valid && finite) {
+      this.invalidGraphics.lineStyle(2, COLORS.RED_2, 0.9);
+      this.invalidGraphics.strokeCircle(preview.pointX, preview.pointY, 14);
     }
   }
 
@@ -373,7 +377,11 @@ export class PlacementPreviewRenderer {
     if (!visible) return;
     if (preview?.kind === 'fire_control_relay') {
       this.placeableUtilityHintTitle.setText(t('loadout.FIRE_CONTROL_RELAY.name'));
-      this.placeableUtilityHintSubtitle.setText(t('ui.placement.nukeTargetHint'));
+      // The hint names the rejection before the click, with the same texts as the host rejection.
+      this.placeableUtilityHintSubtitle.setText(preview.valid ? t('ui.placement.nukeTargetHint')
+        : preview.reason === 'no_fire_sources' ? t('ui.errors.no_fire_sources')
+        : preview.reason === 'range' || preview.reason === 'placement' ? t('ui.errors.placement')
+        : t('ui.errors.blocked'));
     } else if (preview?.mode === 'dismantle') {
       this.placeableUtilityHintTitle.setText(t('ui.placement.dismantleTitle'));
       this.placeableUtilityHintSubtitle.setText(t('ui.placement.dismantleHint'));
@@ -417,6 +425,7 @@ export class PlacementPreviewRenderer {
     this.remoteMissionPedestalPreviewGraphics.clear();
     this.localPlacementPreviewImage?.setVisible(false);
     this.localTurretPreviewImage?.setVisible(false);
+    this.fireControlPreview?.hide();
     this.destroyTunnelPreview(this.localTunnelPreview);
     this.placeableUtilityHint.setVisible(false);
     this.airstrikeTargetingHint.setVisible(false);

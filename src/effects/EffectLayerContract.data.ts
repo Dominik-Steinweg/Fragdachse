@@ -8221,6 +8221,11 @@ Object.assign(CPU_SOURCE_CONTRACTS, {
         "blends": [
           "NORMAL"
         ]
+      },
+      {
+        "key": "updateRelay/sprite/setDepth/0",
+        "expression": "DEPTH.ROCKS + 0.1",
+        "blends": ["NORMAL"]
       }
     ],
     "bindings": {}
@@ -8245,6 +8250,22 @@ Object.assign(CPU_SOURCE_CONTRACTS, {
   }
 });
 const FIRE_CONTROL_LAYER_CONTRACTS: readonly LayerContract[] = [
+  {
+    "id": "cpu:effects/fireControl/FireControlRenderer.ts:updateRelay/sprite/setDepth/0",
+    "owner": "effects/fireControl/FireControlRenderer.ts",
+    "component": "updateRelay/sprite/setDepth/0",
+    "height": "ground",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [9.1],
+    "blends": ["NORMAL"],
+    "profiles": ["M"],
+    "role": "effect",
+    "source": {
+      "selector": "updateRelay/sprite/setDepth/0",
+      "expression": "DEPTH.ROCKS + 0.1"
+    }
+  },
   {
     "id": "cpu:effects/fireControl/FireControlRenderer.ts:update/sprite/setDepth/0",
     "owner": "effects/fireControl/FireControlRenderer.ts",
@@ -8292,3 +8313,36 @@ const FIRE_CONTROL_LAYER_CONTRACTS: readonly LayerContract[] = [
 ];
 (CPU_LAYER_CONTRACTS as LayerContract[]).push(...FIRE_CONTROL_LAYER_CONTRACTS);
 (EFFECT_LAYER_CONTRACTS as LayerContract[]).push(...FIRE_CONTROL_LAYER_CONTRACTS);
+
+// fire-control placement preview: local UI projection in the overlay band like every other preview.
+Object.assign(CPU_SOURCE_CONTRACTS, {
+  "effects/fireControl/FireControlPlacementPreviewVisual.ts": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      { "key": "module/this.layer?.image/setDepth/0", "expression": "DEPTH.OVERLAY - 1.02", "blends": ["NORMAL"] },
+      { "key": "updateProjector/this.projector/setDepth/0", "expression": "DEPTH.OVERLAY - 1.01", "blends": ["NORMAL"] },
+      { "key": "ghostAt/sprite/setDepth/0", "expression": "DEPTH.OVERLAY - 1", "blends": ["NORMAL"] }
+    ],
+    "bindings": {}
+  }
+});
+const FIRE_CONTROL_PREVIEW_LAYER_CONTRACTS: readonly LayerContract[] = [
+  ['module/this.layer?.image/setDepth/0', 'DEPTH.OVERLAY - 1.02', 98.98, 'NORMAL'],
+  ['updateProjector/this.projector/setDepth/0', 'DEPTH.OVERLAY - 1.01', 98.99, 'NORMAL'],
+  ['ghostAt/sprite/setDepth/0', 'DEPTH.OVERLAY - 1', 99, 'NORMAL'],
+].map(([component, expression, depth, blend]) => ({
+  id: `cpu:effects/fireControl/FireControlPlacementPreviewVisual.ts:${component}`,
+  owner: 'effects/fireControl/FireControlPlacementPreviewVisual.ts',
+  component: component as string,
+  height: 'body',
+  lighting: 'emissive',
+  camera: 'world',
+  depths: [depth as number],
+  blends: [blend as LayerContract['blends'][number]],
+  profiles: ['H'],
+  role: 'ui',
+  source: { selector: component as string, expression: expression as string },
+}));
+(CPU_LAYER_CONTRACTS as LayerContract[]).push(...FIRE_CONTROL_PREVIEW_LAYER_CONTRACTS);
+(EFFECT_LAYER_CONTRACTS as LayerContract[]).push(...FIRE_CONTROL_PREVIEW_LAYER_CONTRACTS);
