@@ -378,6 +378,12 @@ def build(c, spec):
             paint_depth(c, ob)
     for ob in shield:
         ob['chargerPart'] = 'shield'
+        # Own rest volume in the enemy shadow proxy: the shield swings off the body.
+        ob['meshUnionGroup'] = 'shield'
+    for name, objects in arms.items():
+        # The arms swing out to the flank with it; at rest the paws sit beside the head.
+        for ob in objects:
+            ob['meshUnionGroup'] = name
     asset = finish_b(c, legs, body+gear, skull, (0, .50, 1.20),
                      {'tail': ((0, -.86, .46), tail), 'left_arm': ((-.46, .28, 1.18), arms['left_arm']),
                       'right_arm': ((.46, .28, 1.18), arms['right_arm'])})

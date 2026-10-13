@@ -61109,10 +61109,11 @@
       "gameIds": [
         "shield-charger-badger"
       ],
-      "revision": "sc-v1-draft-r3",
+      "revision": "shield-charger-v1-production-r3",
       "variant": "standard",
-      "sourceSize": 72,
+      "sourceSize": 128,
       "textureKey": "enemy_shield_charger_badger",
+      "runtimeContract": "sheet",
       "forward": "north",
       "pivot": [
         0.5,
@@ -61138,7 +61139,8 @@
             12
           ],
           "frameRate": 12,
-          "loop": true
+          "loop": true,
+          "end": "rest"
         },
         {
           "name": "claw",
@@ -61161,7 +61163,8 @@
           "markers": {
             "strike": 4,
             "impact": 7
-          }
+          },
+          "end": "rest"
         },
         {
           "name": "windup",
@@ -61182,8 +61185,7 @@
           "markers": {
             "ready": 9
           },
-          "end": "free",
-          "next": "charge"
+          "end": "free"
         },
         {
           "name": "charge",
@@ -61198,7 +61200,8 @@
             42
           ],
           "frameRate": 16,
-          "loop": true
+          "loop": true,
+          "end": "rest"
         },
         {
           "name": "recover",
@@ -61224,37 +61227,30 @@
           "loop": false,
           "markers": {
             "raise": 10
-          }
+          },
+          "end": "rest"
         }
       ],
-      "runtimeContract": "sheet",
-      "sheetTextureKey": "enemy_shield_charger_badger_animated",
-      "idlePath": "./assets/sprites/pipeline-v2/shield-charger-badger/sc-v1-draft-r3/idle-72.png",
-      "sheetPath": "./assets/sprites/pipeline-v2/shield-charger-badger/sc-v1-draft-r3/sheet-72.png",
+      "sheetTextureKey": "enemy_shield_charger_badger_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/shield-charger-badger/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/shield-charger-badger/sheet.png",
       "layout": {
-        "frameWidth": 72,
-        "frameHeight": 72,
+        "frameWidth": 128,
+        "frameHeight": 128,
         "margin": 2,
         "spacing": 4,
         "columns": 8,
         "rows": 8,
         "frameCount": 59,
-        "width": 608,
-        "height": 608
+        "width": 1056,
+        "height": 1056
       },
       "hashes": {
-        "idle": "3073842136f8210541a1283ac1cf4411817655475c53471326707bbbdeba2ab0",
-        "sheet": "903229236a3535ee1ca8f57e534f2a708bdfedcca71f7505d95e12f51285de29"
+        "idle": "0423eefa50462faae2ffc0dafbe02910e609a3dcfd3269f0fe1c224a58584fd3",
+        "sheet": "1d5c3cdc015f88c376ba355f6918cf73eb2f38f7cf5d5a6e4271e651c4232dcd"
       },
       "eyeAnchors": {
         "version": 1,
-        "source": {
-          "revision": "sc-v1-draft-r3",
-          "variant": "standard",
-          "blendSha256": "06dd5cf65f4651f15671f4129410e4f598c88c077cafd41d2366314a63095087",
-          "sheetSha256": "903229236a3535ee1ca8f57e534f2a708bdfedcca71f7505d95e12f51285de29",
-          "idleSha256": "3073842136f8210541a1283ac1cf4411817655475c53471326707bbbdeba2ab0"
-        },
         "frames": [
           {
             "left": {
@@ -62200,7 +62196,14 @@
               "rotation": 0.24000108
             }
           }
-        ]
+        ],
+        "source": {
+          "revision": "shield-charger-v1-production-r3",
+          "variant": "standard",
+          "blendSha256": "8a4a10dea3efbb7905dde395737b19bfe604dd17046370a10422af86476c7d67",
+          "sheetSha256": "1d5c3cdc015f88c376ba355f6918cf73eb2f38f7cf5d5a6e4271e651c4232dcd",
+          "idleSha256": "0423eefa50462faae2ffc0dafbe02910e609a3dcfd3269f0fe1c224a58584fd3"
+        }
       }
     }
   ]
