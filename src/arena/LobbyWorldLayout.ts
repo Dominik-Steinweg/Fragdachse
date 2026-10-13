@@ -1,9 +1,3 @@
-import {
-  DEFAULT_ARENA_OFFSET_Y,
-  CELL_SIZE,
-  DEFAULT_ARENA_HEIGHT,
-  FULL_ARENA_WIDTH,
-} from '../config';
 import type { ArenaLayout, DecalCell, DirtCell, RockCell, TreeCell, WaterCell } from '../types';
 import {
   ARENA_DECAL_CONFIG,
@@ -49,12 +43,11 @@ interface RockClusterAnchor {
 /**
  * Zellmass der LobbyWorld.
  *
- * Volle Bildschirmbreite ohne Seitenbalken, als einziger nicht nutzbarer Rand die schmalen
- * Streifen oben und unten. Es ist bewusst ein authored Wert der World und keine Ableitung aus
- * der gerade global aktiven Arena - zwei Worlds duerfen gleichzeitig existieren.
+ * Feste authored Flaeche fuer Radius 15 plus zwei Zellen Reservierung, Schiessstand,
+ * Haendler und Landschaft. Unabhaengig von persoenlicher Stufe und aktiver Arena.
  */
-export const LOBBY_WORLD_WIDTH_CELLS = Math.floor(FULL_ARENA_WIDTH / CELL_SIZE);
-export const LOBBY_WORLD_HEIGHT_CELLS = Math.floor(DEFAULT_ARENA_HEIGHT / CELL_SIZE);
+export const LOBBY_WORLD_WIDTH_CELLS = 60;
+export const LOBBY_WORLD_HEIGHT_CELLS = 45;
 
 /** Deterministischer Seed der authored Lobby-Geometrie; jeder Peer baut dieselbe World. */
 const LOBBY_WORLD_SEED = 20260524;
@@ -413,23 +406,27 @@ function generateLobbyDecals(
 // -- Authored Freiflaeche fuer die persistente Basis -------------------------
 
 const TITLE_START_X = Math.floor((GRID_COLS - textWidth(TITLE_TEXT, TITLE_GAP)) * 0.5);
-const BASE_CLEAR_ZONE: GridRect = { minX: 16, maxX: 42, minY: 7, maxY: 28 };
+// Encloses the complete radius-17 reservation, including its cardinal extremes.
+const BASE_CLEAR_ZONE: GridRect = { minX: 19, maxX: 53, minY: 8, maxY: 42 };
+// The stall, dealer, nameplate and approach remain readable against quiet ground.
+const MERCHANT_CLEAR_ZONE: GridRect = { minX: 53, maxX: 59, minY: 20, maxY: 29 };
+const RANGE_APPROACH: GridRect = { minX: 16, maxX: 18, minY: 10, maxY: 39 };
 
-/** Only the central base reserve excludes landscape; UI cards do not reserve world cells. */
+/** Authored base clearing; screen-space UI cards do not reserve world cells. */
 export function isLobbyBaseReservedCell(gridX: number, gridY: number): boolean {
   return isInsideRect(gridX, gridY, BASE_CLEAR_ZONE);
 }
 
 /**
- * Mitte der LobbyWorld als authored Spawn-Fokus.
+ * Innenhof der Basis als authored Spawn-Fokus.
  *
  * Ohne ihn waere jede freie Zelle gleich gut und die Figur erschiene irgendwo am Rand. Der Fokus
  * ist eine Praeferenz, keine Zusicherung: ist die Mitte belegt, faellt die Spawn-Bewertung auf
  * die volle World zurueck.
  */
 export const LOBBY_SPAWN_FOCUS_CELL = {
-  gridX: Math.floor(GRID_COLS / 2),
-  gridY: Math.floor(GRID_ROWS / 2),
+  gridX: 36,
+  gridY: 25,
 } as const;
 
 // -- Authored Geometrie ------------------------------------------------------
@@ -440,11 +437,8 @@ const titleRocks: RockCell[] = textRocks(TITLE_TEXT, TITLE_START_X, 1, TITLE_GAP
 const ambientRockAnchors: readonly RockClusterAnchor[] = [
   { gridX: 8.8, gridY: 12.1, radiusX: 3.0, radiusY: 1.6, lobeCount: 4 },
   { gridX: 18.2, gridY: GRID_ROWS, radiusX: 4.2, radiusY: 4.3, lobeCount: 1 },
-  { gridX: 50.8, gridY: 12.1, radiusX: 2.7, radiusY: 1.6, lobeCount: 4 },
-  { gridX: 58.0, gridY: 20.5, radiusX: 1.0, radiusY: 1.3 },
-  { gridX: 56.8, gridY: 27.5, radiusX: 1.8, radiusY: 1.1, lobeCount: 3 },
-  { gridX: 54.1, gridY: 12.6, radiusX: 2.2, radiusY: 2.2, lobeCount: 4 },
-  { gridX: 57.3, gridY: 30.4, radiusX: 4.8, radiusY: 3.6 },
+  { gridX: 57.8, gridY: 33.5, radiusX: 1.6, radiusY: 2.1, lobeCount: 3 },
+  { gridX: 57.3, gridY: 42.4, radiusX: 3.2, radiusY: 2.6 },
   { gridX: 38.4, gridY: GRID_ROWS, radiusX: 3.8, radiusY: 4.1, lobeCount: 1 },
   { gridX: 41.8, gridY: 6.8, radiusX: 2.5, radiusY: 1.5 },
   { gridX: 59.0, gridY: 6.4, radiusX: 2.2, radiusY: 1.4 },
@@ -470,7 +464,7 @@ function waterPatch(startX: number, startY: number, rows: readonly string[]): Wa
 }
 
 const lobbyWater: WaterCell[] = [
-  ...waterPatch(0, 27, [
+  ...waterPatch(0, 39, [
     '#####......',
     '#######....',
     '########...',
@@ -478,19 +472,19 @@ const lobbyWater: WaterCell[] = [
     '###########',
     '###########',
   ]),
-  ...waterPatch(45, 15, [
-    '...#####....',
-    '..########..',
-    '.##########.',
-    '.###########',
-    '############',
-    '############',
-    '.###########',
-    '..##########',
-    '..#########.',
-    '.##########.',
-    '..########..',
-    '....#####...',
+  ...waterPatch(54, 8, [
+    '..###.',
+    '.#####',
+    '######',
+    '######',
+    '######',
+    '######',
+    '.#####',
+    '.#####',
+    '######',
+    '.#####',
+    '..####',
+    '...##.',
   ]),
 ];
 const waterKeys = new Set(lobbyWater.map(cell => cellKey(cell.gridX, cell.gridY)));
@@ -510,7 +504,7 @@ const ambientRocks: RockCell[] = excludeWater(excludeRectCells(
       { gridX: GRID_COLS - 1, gridY: GRID_ROWS - 1 },
     ],
   ),
-  [BASE_CLEAR_ZONE, titleRockGapZone, SHOOTING_RANGE.clearArea],
+  [BASE_CLEAR_ZONE, MERCHANT_CLEAR_ZONE, RANGE_APPROACH, titleRockGapZone, SHOOTING_RANGE.clearArea],
 )).filter(cell => !ambientRockCutouts.has(cellKey(cell.gridX, cell.gridY)));
 
 const titleTreeClearZone: GridRect = {
@@ -527,23 +521,23 @@ const titleDirtClearZone: GridRect = {
   maxY: 9,
 };
 
-const dirtQuietZones: readonly GridRect[] = [BASE_CLEAR_ZONE];
+const dirtQuietZones: readonly GridRect[] = [BASE_CLEAR_ZONE, MERCHANT_CLEAR_ZONE];
 
 /** Authored title and landscape rocks remain destructible world objects. */
 const lobbyRocks: RockCell[] = mergeUnique<RockCell>(titleRocks, ambientRocks);
 
-const lobbyTrees: TreeCell[] = excludeRectCells(
-  points<TreeCell>([[1, 4], [12, 18], [1, 23], [15, 31], [57, 4], [44, 13], [44, 27], [59, 24], [51, 31]]),
-  [BASE_CLEAR_ZONE, titleTreeClearZone, SHOOTING_RANGE.clearArea],
-);
+const lobbyTrees: TreeCell[] = excludeWater(excludeRectCells(
+  points<TreeCell>([[1, 4], [2, 34], [12, 36], [57, 4], [57, 36], [10, 43]]),
+  [BASE_CLEAR_ZONE, MERCHANT_CLEAR_ZONE, RANGE_APPROACH, titleTreeClearZone, SHOOTING_RANGE.clearArea],
+));
 
-const lobbyDirt: DirtCell[] = excludeWater(mergeUnique<DirtCell>(
+const lobbyDirt: DirtCell[] = excludeWater(excludeRectCells(mergeUnique<DirtCell>(
   excludeRectCells(
     mergeUnique<DirtCell>(
       excludeRectCells(createOrganicTopDirtBand(LOBBY_WORLD_SEED + 211), [titleDirtClearZone]),
-      line(44, 59, 30),
-      line(43, 59, 31),
-      line(46, 59, 32),
+      line(44, 59, 42),
+      line(43, 59, 43),
+      line(46, 59, 44),
     ),
     dirtQuietZones,
   ),
@@ -553,13 +547,13 @@ const lobbyDirt: DirtCell[] = excludeWater(mergeUnique<DirtCell>(
     maxRows: GRID_ROWS,
     rng: createLobbyRng(LOBBY_WORLD_SEED + 223),
   }),
-));
+), [MERCHANT_CLEAR_ZONE]));
 
-const lobbyDecals: DecalCell[] = excludeWater(generateLobbyDecals(
+const lobbyDecals: DecalCell[] = excludeWater(excludeRectCells(generateLobbyDecals(
   lobbyRocks,
   lobbyTrees,
   lobbyDirt,
-));
+), [MERCHANT_CLEAR_ZONE]));
 
 const LOBBY_WORLD_LAYOUT: ArenaLayout = {
   seed: LOBBY_WORLD_SEED,

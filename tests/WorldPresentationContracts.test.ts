@@ -117,7 +117,7 @@ describe('World Presentation – besitzt die Simulation nicht', () => {
     // Presentation-Frame-Owner, ueber den von der Scene durchgereichten Port.
     const frameBinding = read('src/world/WorldPresentationFrameBinding.ts');
     expect(frameBinding).toContain(
-      "allowsWorldPresentationSurface(this.input.getLocalWorldPresentation(), 'worldCamera')",
+      "allowsWorldPresentationSurface(presentation, 'worldCamera')",
     );
   });
 

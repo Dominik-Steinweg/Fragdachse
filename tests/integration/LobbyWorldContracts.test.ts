@@ -9,7 +9,8 @@ import {
   isLobbyBaseReservedCell,
 } from '../../src/arena/LobbyWorldLayout';
 import { LOBBY_MERCHANT, LOBBY_MERCHANT_BASE } from '../../src/config/authoring/lobbyMerchant';
-import { resolvePersistentBaseReservationRadiusCells } from '../../src/persistentBase/PersistentBaseCore';
+import { resolvePersistentBaseReservationRadiusCells, resolvePersistentBaseBuildAreaForStage,
+  type PersistentBaseAreaStage } from '../../src/persistentBase/PersistentBaseCore';
 import { RockHpRegistry } from '../../src/arena/RockHpRegistry';
 import { SHOOTING_RANGE, insideRangeRect } from '../../src/shootingRange/ShootingRangeLayout';
 import { getWorldDefinition } from '../../src/config/authoring/authoredScenarios';
@@ -53,7 +54,7 @@ function read(path: string): string {
   return readFileSync(resolve(process.cwd(), path), 'utf8');
 }
 
-function lobbyWorldContextFor(mode: GameMode, persistentBaseUnlocked: boolean) {
+function lobbyWorldContextFor(mode: GameMode, persistentBaseUnlocked: boolean, areaStage: PersistentBaseAreaStage = 0) {
   const ownsPersistentBase = mode === 'coop_defense' && persistentBaseUnlocked;
   const definition = getLobbyWorldDefinition();
   return createWorldRuntimeContext({
@@ -61,7 +62,7 @@ function lobbyWorldContextFor(mode: GameMode, persistentBaseUnlocked: boolean) {
       LOBBY_WORLD_DEFINITION_ID,
       ownsPersistentBase ? 9 : 10,
       ownsPersistentBase
-        ? { persistentBaseUnlocked: true, persistentBaseHealthRewards: [], persistentBaseAreaStage: 0 }
+        ? { persistentBaseUnlocked: true, persistentBaseHealthRewards: [], persistentBaseAreaStage: areaStage }
         : undefined,
     ),
     metricsProfile: getAuthoredWorldMetricsProfile(
@@ -125,13 +126,32 @@ describe('LobbyWorld – Authoring', () => {
     );
     expect(metricsProfile.arenaOffsetX).toBe(0);
     expect(metricsProfile.arenaWidth).toBe(LOBBY_WORLD_WIDTH_CELLS * 32);
-    // Bildschirmbreite ohne Schwenk: die Lobby zeigt ihre World vollstaendig.
-    expect(metricsProfile.usesDynamicCamera).toBe(false);
+    // Passive preview fits the whole World; participation follows the player vertically.
+    expect(metricsProfile.usesDynamicCamera).toBe(true);
   });
 });
 
 describe('LobbyWorld – authored Geometrie', () => {
   const layout = buildLobbyWorldLayout();
+
+  it('reserves the complete maximum Dawn site inside the authored World', () => {
+    const site = getLobbyWorldDefinition().persistentBaseSite!;
+    expect(site.maxAreaStage).toBe(11);
+    expect(resolvePersistentBaseBuildAreaForStage(site.maxAreaStage!)).toEqual({ kind: 'radius', radiusCells: 15 });
+    const radius = resolvePersistentBaseReservationRadiusCells(site.maxAreaStage);
+    expect(radius).toBe(17);
+    expect(site.anchor.gridX - radius).toBeGreaterThanOrEqual(0);
+    expect(site.anchor.gridY - radius).toBeGreaterThanOrEqual(0);
+    expect(site.anchor.gridX + radius).toBeLessThan(LOBBY_WORLD_WIDTH_CELLS);
+    expect(site.anchor.gridY + radius).toBeLessThan(LOBBY_WORLD_HEIGHT_CELLS);
+    const obstacles = [...layout.rocks, ...layout.trees, ...(layout.water ?? [])];
+    for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
+      if (dx * dx + dy * dy > radius * radius) continue;
+      const x = site.anchor.gridX + dx, y = site.anchor.gridY + dy;
+      expect(isLobbyBaseReservedCell(x, y)).toBe(true);
+      expect(obstacles.some(cell => cell.gridX === x && cell.gridY === y), `${x}:${y}`).toBe(false);
+    }
+  });
 
   it('haelt die Standkollision ausserhalb der Basisreservierung und den dekorativen Haendler erreichbar', () => {
     const definition = getLobbyWorldDefinition();
@@ -151,10 +171,15 @@ describe('LobbyWorld – authored Geometrie', () => {
       expect(cell.gridX).toBeLessThan(LOBBY_WORLD_WIDTH_CELLS);
       expect(cell.gridY).toBeLessThan(LOBBY_WORLD_HEIGHT_CELLS);
     }
-    // The dealer has no collision body and may decorate the reservation edge.
+    // The dealer has no collision body and stays beyond the maximum reservation.
     // Ground decals may remain underneath it; obstacles and the stall must stay clear.
     const dealer = LOBBY_MERCHANT.dealer;
     const halfSizeCells = dealer.displaySize / CELL_SIZE / 2;
+    expect(dealer.gridX - halfSizeCells - site.anchor.gridX).toBeGreaterThan(radius);
+    expect(dealer.gridX).toBeLessThan(LOBBY_MERCHANT.stall.gridX);
+    expect(dealer.gridY).toBeLessThan(LOBBY_MERCHANT.stall.gridY);
+    expect(Math.hypot(dealer.gridX - site.anchor.gridX, dealer.gridY - site.anchor.gridY))
+      .toBeLessThan(LOBBY_MERCHANT.nameplate.fullVisibilityCells);
     // Even a fully opaque crown must not cover the dealer when the player walks away.
     const canopyReach = CANOPY_RADIUS * Math.max(...CANOPY_ASSETS.map(asset => asset.displayScale));
     for (const tree of layout.trees) {
@@ -168,8 +193,10 @@ describe('LobbyWorld – authored Geometrie', () => {
       }
     }
     // A walking route from spawn to the front of the stall remains open.
-    const blocked = new Set([...layout.rocks, ...layout.trees, ...(layout.water ?? []), ...stall.cells].map(cell => `${cell.gridX}:${cell.gridY}`));
-    const queue = [LOBBY_SPAWN_FOCUS_CELL];
+    const bases = lobbyWorldContextFor('coop_defense', true, 11).bases.flatMap(base => base.cells);
+    const blocked = new Set([...layout.rocks, ...layout.trees, ...(layout.water ?? []), ...bases].map(cell => `${cell.gridX}:${cell.gridY}`));
+    expect(blocked.has(`${LOBBY_SPAWN_FOCUS_CELL.gridX}:${LOBBY_SPAWN_FOCUS_CELL.gridY}`)).toBe(false);
+    const queue: Array<{ gridX: number; gridY: number }> = [LOBBY_SPAWN_FOCUS_CELL];
     const visited = new Set<string>();
     for (let i = 0; i < queue.length; i++) {
       const cell = queue[i];
@@ -181,6 +208,12 @@ describe('LobbyWorld – authored Geometrie', () => {
       }
     }
     expect(visited.has(`${Math.round(dealer.gridX)}:${Math.round(dealer.gridY)}`)).toBe(true);
+    for (const [x, y] of Object.values(SHOOTING_RANGE.controls)) expect(visited.has(`${x}:${y}`)).toBe(true);
+    for (const rect of SHOOTING_RANGE.access) {
+      for (let y = rect.minY; y <= rect.maxY; y++) for (let x = rect.minX; x <= rect.maxX; x++) {
+        expect(visited.has(`${x}:${y}`), `range access ${x}:${y}`).toBe(true);
+      }
+    }
   });
 
   it('materialisiert dieselben Standzellen fuer alle Peers und ohne Freischaltung', () => {
@@ -218,8 +251,8 @@ describe('LobbyWorld – authored Geometrie', () => {
       expect(isLobbyBaseReservedCell(x, y)).toBe(false);
     }
     for (const side of [(x: number) => x >= 50]) {
-      expect(layout.rocks.some(cell => side(cell.gridX) && cell.gridY > 9 && cell.gridY < 28)).toBe(true);
-      expect(layout.decals?.some(cell => side(cell.gridX) && cell.gridY > 9 && cell.gridY < 28)).toBe(true);
+      expect(layout.rocks.some(cell => side(cell.gridX) && cell.gridY > 9)).toBe(true);
+      expect(layout.decals?.some(cell => side(cell.gridX) && cell.gridY > 9)).toBe(true);
     }
     expect(getLobbyWorldDefinition().spawnExclusionZones ?? []).toEqual([]);
   });
@@ -292,6 +325,17 @@ describe('LobbyWorld – authored Geometrie', () => {
 });
 
 describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => {
+  it.each([2, 6, 11] as const)('resolves stage %i and its layout identically for host and late peers', (stage) => {
+    const host = lobbyWorldContextFor('coop_defense', true, stage);
+    const peer = lobbyWorldContextFor('coop_defense', true, stage);
+    expect(peer).toEqual(host);
+    expect(host.persistentBaseSite).toMatchObject({ areaStage: stage, buildArea: resolvePersistentBaseBuildAreaForStage(stage) });
+    const input = (world: typeof host) => ({ ...world.descriptor, generation: {
+      metrics: world.metrics, treeCount: 0, captureTheBeerBasesActive: false, coopDefenseBasesActive: true,
+    } });
+    expect(generateWorldLayout(input(peer))).toEqual(generateWorldLayout(input(host)));
+    expect(generateWorldLayout(input(host))).toEqual(buildLobbyWorldLayout());
+  });
   it('kommt aus der World-Layout-Quelle statt aus dem prozeduralen Generator', () => {
     const world = getLobbyWorldDefinition();
     const metrics = getAuthoredWorldMetricsProfile(world.metrics.widthCells, world.metrics.heightCells);
@@ -579,7 +623,9 @@ describe('LobbyWorld – normaler World-Kanal', () => {
       setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'LOBBY1' });
       host.publishLobbySync();
       host.setMatchHostId();
-      const descriptor = createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, 4242);
+      const descriptor = createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, 4242, {
+        persistentBaseUnlocked: true, persistentBaseAreaStage: 11, persistentBaseHealthRewards: [],
+      });
       host.publishWorldAndActivity(descriptor, null);
 
       // Der Raum bleibt in der Lobby; die World haengt an keiner Phase und an keiner Runde.

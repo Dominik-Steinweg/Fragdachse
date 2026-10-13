@@ -38,7 +38,7 @@ export function isLobbyWorldDefinitionId(definitionId: string): boolean {
 export const LOBBY_PERSISTENT_BASE_ID = 'lobby-persistent-base';
 
 /**
- * Die persistente Basis der Lobby steht in der Mitte der World.
+ * Die persistente Basis steht auf der grossen Lichtung oestlich des Schiessstands.
  *
  * Das ist genau die Flaeche, die das Lobby-Authoring von Geometrie freihaelt,
  * und zugleich der authored Spawn-Fokus: Weil der Anker die Mittelzelle des Innenhofs ist,
@@ -49,7 +49,7 @@ export const LOBBY_PERSISTENT_BASE_ID = 'lobby-persistent-base';
  * `persistentBaseUnlocked` – eine Definition ist keine Progression.
  */
 const LOBBY_PERSISTENT_BASE_SITE: WorldPersistentBaseSiteDefinition = {
-  maxAreaStage: 6,
+  maxAreaStage: 11,
   baseId: LOBBY_PERSISTENT_BASE_ID,
   anchor: { gridX: LOBBY_SPAWN_FOCUS_CELL.gridX, gridY: LOBBY_SPAWN_FOCUS_CELL.gridY },
   // Ohne Activity nimmt der Kern ohnehin keinen Schaden; der Wert ist die Grunddauerhaftigkeit

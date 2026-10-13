@@ -14,14 +14,15 @@ import type { ArenaBuilderResult } from '../../src/arena/ArenaBuilder';
 import { ArenaBuilder } from '../../src/arena/ArenaBuilder';
 import { WaterSurfaceRenderer } from '../../src/arena/WaterSurfaceRenderer';
 import { WaterSurfaceModel } from '../../src/arena/WaterSurfaceModel';
-import { applyArenaWorldMetrics, type ArenaMetricsProfile } from '../../src/config';
+import { applyArenaWorldMetrics, getAuthoredWorldMetricsProfile, type ArenaMetricsProfile } from '../../src/config';
+import { getLobbyWorldDefinition } from '../../src/config/authoring/lobbyWorld';
 import type { ArenaLayout } from '../../src/types';
 import { WorldLifecycle, type WorldLifecycleSink } from '../../src/world/WorldLifecycle';
 import { WorldPresentationBinding } from '../../src/world/WorldPresentationBinding';
 import { WorldPresentationHandoff } from '../../src/world/WorldPresentationHandoff';
 import { getCameraBaseScroll } from '../../src/graphics/cameraBaseScroll';
 import { findFakeLane, makeFakeGpuVfxScene } from '../fakeGpuVfxScene';
-import { resolveCoopDefenseWorldMetrics } from '../../src/world/WorldMetrics';
+import { resolveCoopDefenseWorldMetrics, resolveWorldMetrics, worldCellCenter } from '../../src/world/WorldMetrics';
 import type { SyncedPlaceableRock } from '../../src/types';
 import {
   resetWorldCameraBase,
@@ -184,6 +185,63 @@ function fakeBindingInput(
 }
 
 describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalten (Phase 6A.2/6B)', () => {
+  it('fits the full lobby preview, restores player framing and releases zoom on World transitions', () => {
+    const definition = getLobbyWorldDefinition();
+    const profile = getAuthoredWorldMetricsProfile(definition.metrics.widthCells, definition.metrics.heightCells);
+    const metrics = resolveWorldMetrics(profile);
+    applyArenaWorldMetrics(profile);
+    const camera = Object.assign(fakeCamera(), { useBounds: true, setZoom(x: number) { this.zoom = x; } });
+    const scene = Object.assign(fakeScene(camera), { scale: { width: 1920, height: 1080 } });
+    let presentation = PREVIEW_PRESENTATION;
+    const sprite = { active: true, ...worldCellCenter(metrics, definition.spawnFocusCell!.gridX, definition.spawnFocusCell!.gridY) };
+    const binding = new WorldPresentationFrameBinding(fakeBindingInput(scene as never, {
+      getLocalWorldPresentation: () => presentation,
+      getWorldMetrics: () => metrics,
+      getLocalPlayerSprite: () => sprite as never,
+      isLocalPlayerAlive: () => true,
+      isArenaLoading: () => true,
+    }));
+    const expectOverview = () => {
+      expect(camera.zoom).toBeGreaterThan(0);
+      expect(camera.zoom).toBeLessThan(1);
+      expect((metrics.offsetX - camera.scrollX) * camera.zoom).toBeGreaterThanOrEqual(-0.001);
+      expect((metrics.offsetY - camera.scrollY) * camera.zoom).toBeGreaterThanOrEqual(-0.001);
+      expect((metrics.maxX - camera.scrollX) * camera.zoom).toBeLessThanOrEqual(camera.width + 0.001);
+      expect((metrics.maxY - camera.scrollY) * camera.zoom).toBeLessThanOrEqual(camera.height + 0.001);
+      expect(camera.useBounds).toBe(false);
+    };
+    binding.syncCamera(16, true);
+    expectOverview();
+    const previewScroll = getCameraBaseScroll(scene as never);
+    sprite.y += 200;
+    binding.syncCamera(16, true);
+    expect(getCameraBaseScroll(scene as never)).toEqual(previewScroll);
+    presentation = INTERACTIVE_PRESENTATION;
+    binding.syncCamera(16, true);
+    expect(camera.zoom).toBe(1);
+    expect(camera.useBounds).toBe(true);
+    for (const y of [metrics.offsetY, metrics.maxY]) {
+      sprite.y = y;
+      binding.syncCamera(16, true);
+      expect(camera.scrollY).toBeGreaterThanOrEqual(0);
+      expect(camera.scrollY).toBeLessThanOrEqual(metrics.heightPx - metrics.viewportHeight);
+    }
+    presentation = PREVIEW_PRESENTATION;
+    binding.syncCamera(16, true);
+    expectOverview();
+    binding.syncCamera(16, false);
+    expect(camera.zoom).toBe(1);
+    expect(camera.scrollX).toBe(0);
+    expect(camera.scrollY).toBe(0);
+    binding.syncCamera(16, true);
+    binding.destroy();
+    expect(camera.zoom).toBe(1);
+    expect(camera.useBounds).toBe(true);
+    camera.scrollY = 123;
+    binding.syncCamera(16, true);
+    expect(camera.scrollY).toBe(123);
+  });
+
   it('updates the lobby label from the local displayed pose and suppresses it outside participation', () => {
     const merchant = { update: vi.fn() };
     const player = { active: true, x: 200, y: 300 };

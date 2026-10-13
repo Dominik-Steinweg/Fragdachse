@@ -4,10 +4,22 @@ import { resolveDawnExpansionCost } from '../src/dawn/economy/DawnEconomy';
 import { buildPersistentBaseAreaBoundary, buildPersistentBaseExpansionPreview, getPersistentBaseEditorSize,
   getPersistentBaseEditorFraming, projectPersistentBaseBoundary, getPersistentBaseExpansionLabelPosition } from '../src/persistentBase/PersistentBaseExpansionPreview';
 import { CELL_SIZE } from '../src/config';
+import { getLobbyWorldDefinition } from '../src/config/authoring/lobbyWorld';
 import { isCellInsidePersistentBaseBuildArea, PERSISTENT_BASE_AREA_STAGES, resolvePersistentBaseBuildAreaForStage } from '../src/persistentBase/PersistentBaseCore';
 
 describe('persistent base expansion preview', () => {
   const panel = { x: 88, y: 236, width: 648, height: 680 };
+
+  it('offers every remaining expansion in the lobby and no Dawn-only or twelfth stage', () => {
+    const ceiling = getLobbyWorldDefinition().persistentBaseSite!.maxAreaStage;
+    for (let expansionLevel = 0; expansionLevel < DAWN_MAX_EXPANSION_LEVEL; expansionLevel++) {
+      const next = buildPersistentBaseExpansionPreview({ expansionLevel }, 2, true, ceiling)!;
+      expect(next.dawnOnly).toBe(false);
+      expect(next.stage).toBeLessThanOrEqual(11);
+      expect(next.edges.length).toBeGreaterThan(0);
+    }
+    expect(buildPersistentBaseExpansionPreview({ expansionLevel: DAWN_MAX_EXPANSION_LEVEL }, 2, true, ceiling)).toBeNull();
+  });
 
   it('frames every radius from 0 to 15 with room for the complete contour and its under-stroke', () => {
     for (let radiusCells = 0; radiusCells <= 15; radiusCells++) {
