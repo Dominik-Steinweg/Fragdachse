@@ -5179,6 +5179,17 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   resolveConeImpulse(targetId: string, casterId: string, damage: number, originX: number, originY: number,
     targetX: number, targetY: number, nowMs: number): boolean {
     return this.runHostExecution(() => {
+      if (targetId.startsWith('decoy_')) {
+        // Decoys take damage through their own system (numeric id, owner relationship).
+        const decoyId = Number(targetId.slice('decoy_'.length));
+        const decoy = this.decoySystem?.getHostTargets().find(entry => entry.id === decoyId);
+        if (!decoy || !this.canDamageTarget(casterId, decoy.ownerId)) return false;
+        if (!this.hasClearLineOfFire(originX, originY, targetX, targetY)) return false;
+        const length = Math.hypot(targetX - originX, targetY - originY) || 1;
+        const outcome = this.decoySystem?.applyDamage(decoyId, damage, casterId, 'ALIEN_BADGER_ENERGY_CONE',
+          { sourceX: originX, sourceY: originY, dirX: (targetX - originX) / length, dirY: (targetY - originY) / length });
+        return outcome?.kind === 'damage-applied';
+      }
       if (!this.isAlive(targetId) || !this.canDamageTarget(casterId, targetId)) return false;
       if (!this.hasClearLineOfFire(originX, originY, targetX, targetY)) return false;
       if (this.shouldBlockWithShield(targetId, 'tesla', damage, originX, originY, nowMs)) return false;

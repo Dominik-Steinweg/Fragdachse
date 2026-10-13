@@ -273,6 +273,7 @@ export interface WorldCombatGameplayBindingOptions {
   readonly getWorldMutation: () => WorldObjectMutationRuntime | null;
   readonly getFirestarterSystem: () => import('../systems/CoopDefenseFirestarterSystem').CoopDefenseFirestarterSystem | null;
   readonly getShieldChargerSystem?: () => import('../systems/CoopDefenseShieldChargerSystem').CoopDefenseShieldChargerSystem | null;
+  readonly getEnergyConeSystem?: () => import('../systems/CoopDefenseEnergyConeSystem').CoopDefenseEnergyConeSystem | null;
   readonly getMortarSystem: () => import('../systems/CoopDefenseMortarSystem').CoopDefenseMortarSystem | null;
   readonly getTimebombSystem: () => CoopDefenseTimebombSystem | null;
   readonly getNecromancySystem: () => NecromancySystem | null;
@@ -720,6 +721,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       if (death) o.getMortarSystem()?.handleKilled(death, combat.getHostTime());
       if (death) o.getFirestarterSystem()?.handleKilled(death);
       if (death) o.getShieldChargerSystem?.()?.handleKilled(death);
+      if (death) o.getEnergyConeSystem?.()?.handleKilled(death);
       const wasTimebomb = death ? (o.getTimebombSystem()?.handleKilled(death, combat.getHostTime()) ?? false) : false;
       if (!current()) return true;
       if (wasTimebomb) {
