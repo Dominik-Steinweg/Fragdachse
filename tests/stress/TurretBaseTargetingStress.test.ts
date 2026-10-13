@@ -20,7 +20,7 @@ import { ExposedBaseFaceCache, type BaseAimPoint } from '../../src/systems/Turre
 import { TurretSystem, type TurretFireSource, type AutomatedTurret } from '../../src/systems/TurretSystem';
 import { FireControlRuntime } from '../../src/systems/fireControl/FireControlRuntime';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig';
-import { COOP_DEFENSE_CONSTRUCTIONS } from '../../src/config/coopDefenseConstructions';
+import { COOP_DEFENSE_CONSTRUCTIONS, resolveConstructionPlacementRange } from '../../src/config/coopDefenseConstructions';
 import { resolveCoopDefenseWorldMetrics } from '../../src/world/WorldMetrics';
 import { WorldCombatCore } from '../../src/combat/WorldCombatCore';
 import { fakeEntity } from '../fakeEntity';
@@ -67,7 +67,7 @@ describe('turret base target search: four inspectors and twelve parallel copies'
       readSlotOrder: () => ['rocket_turret'], isPointFree: () => true, onDeploymentEnded() {} });
     for (let i = 0; i < 4; i++) expect(copies.activateCopies({ ownerId: `p${i}`, ownerColor: 1,
       playerX: poses[i * 6].x, playerY: poses[i * 6].y, pointX: poses[i * 6].x, pointY: poses[i * 6].y, nowMs: 0,
-      config: { ...relay, maxCopies: 3, parallel: true, cooldownMs: relay.cooldown } }).ok).toBe(true);
+      config: { ...relay, buildRangePx: resolveConstructionPlacementRange(), maxCopies: 3, parallel: true, cooldownMs: relay.cooldown } }).ok).toBe(true);
     const sources = copies.deriveFireSources(poses, relay.materializeMs);
     expect(sources).toHaveLength(36);
     const turret = new TurretSystem({ getAllPlayers: () => [] } as never, { isAlive: () => true } as never);

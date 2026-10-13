@@ -41,6 +41,7 @@ import { ProjectileIdentityScope } from '../../src/projectile/ProjectileIdentity
 import { ProjectileReplicationAdapter } from '../../src/projectile/ProjectileReplicationAdapter';
 import { ProjectilePhysicsBinding } from '../../src/projectile/ProjectilePhysicsBinding';
 import { WEAPON_CONFIGS, UTILITY_CONFIGS } from '../../src/loadout/LoadoutConfig';
+import { resolveConstructionPlacementRange } from '../../src/config/coopDefenseConstructions';
 import { createTechnicalPhysicsBinding, createPresentation } from '../ProjectileRuntimeTestHelper';
 import { healthBarTestScene } from '../healthBarTestScene';
 import { fakeEntity } from '../fakeEntity';
@@ -239,7 +240,7 @@ function runAssault(spec: BaseSpec, metrics: WorldMetrics, poses: AutomatedTurre
   if (relay) {
     const cfg = UTILITY_CONFIGS.FIRE_CONTROL_RELAY;
     if (cfg.type !== 'fire_control_relay') throw Error('Expected relay');
-    const config: ResolvedFireControlRelayConfig = { ...cfg, durationMs: relay.duration,
+    const config: ResolvedFireControlRelayConfig = { ...cfg, buildRangePx: resolveConstructionPlacementRange(), durationMs: relay.duration,
       maxCopies: relay.count, parallel: relay.parallel, cooldownMs: cfg.cooldown };
     const point = { x: poses[0].x, y: poses[0].y };
     // Original is remote; only copies can reach this base. Neutral free deployment pocket.
