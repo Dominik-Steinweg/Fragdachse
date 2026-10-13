@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { CELL_SIZE, DEPTH } from '../config';
+import { DAWN_SITE_DISPLAY_SIZE } from '../assets/DawnAssets';
 import { DAWN_UI_TEXTURES } from '../assets/DawnUiAssets';
 import { getDawnSchedule } from '../config/dawn/dawnContent';
 import type { WorldDefinition } from '../config/authoring/WorldDefinition';
@@ -113,8 +114,10 @@ export class DawnHUD {
       const x = this.metrics.offsetX + (target.gridX + 0.5) * CELL_SIZE;
       const y = this.metrics.offsetY + (target.gridY + 0.5) * CELL_SIZE;
       const inside = isWorldPointInsideView(x, y, view);
-      // Wie die Nebenziel-Marker: das Weltabzeichen lebt in Weltkoordinaten der Hauptkamera.
-      marker.world.setPosition(x, y).setVisible(inside);
+      // Wie die Nebenziel-Marker: das Weltabzeichen lebt in Weltkoordinaten der Hauptkamera. Ueber einer
+      // Site schwebt es oberhalb des Bauwerks, damit es das Prop nicht verdeckt.
+      const badgeY = target.id === 'return-base' ? y : y - DAWN_SITE_DISPLAY_SIZE / 2 - 14;
+      marker.world.setPosition(x, badgeY).setVisible(inside);
       marker.edge.setVisible(!inside);
       if (!inside) {
         const edge = getArrowPointOnScreenViewEdge(x, y, view, camera, 30);
