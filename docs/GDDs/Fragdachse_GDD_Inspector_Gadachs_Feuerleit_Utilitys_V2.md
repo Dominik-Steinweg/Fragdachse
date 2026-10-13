@@ -1,4 +1,4 @@
-Entschieden für M1, an G1 kippbar (E16)
+Entschieden an G1 (E20)
 | Thema | V1 | V2 |
 |---|---|---|
 | Name und Bedienung der Kopien | Relais wird geworfen | **Turmkopien werden per Maus platziert**: E startet die Vorschau, ein Linksklick platziert |
@@ -20,7 +20,7 @@ bleiben für die Unterstützung bestimmend.
 |---|---|---|
 | Wirkung | Temporäre Kopien ausgewählter eigener Türme am Platzierungspunkt | Beschuss durch Mündungsportale vor aktiven eigenen Feuerquellen und einen gemeinsamen Ausgang |
 | Aktivierung | `placement_mode`: E → Vorschau, Linksklick → platzieren | `charged_throw` wie HE, ohne Abpraller |
-| Einsatzdauer | 12 s, mit Upgrades +3 s je Stufe | 5 s, mit Upgrades +1,5 s je Stufe |
+| Einsatzdauer | 6 s, mit Upgrades +3 s je Stufe (E18) | 5 s, mit Upgrades +1,5 s je Stufe |
 | Feuerquellen | 1 Kopie, mit Upgrades 2 und 3 | Alle geeigneten aktiven eigenen Feuerquellen einschließlich Kopien |
 | Originale in der Grundversion | Pausieren während der Projektion | Richten ihr Feuer auf Ziele am Ausgang |
 | Boss-Upgrade | Parallelbetrieb: Original und Kopie kämpfen gleichzeitig | Lokale Feuerfreigabe: lokales Feuer ohne Ziel am Ausgang |
@@ -142,7 +142,7 @@ Das Turmfeuer arbeitet mit **Feuerquellen** statt mit Konstruktions-IDs. Jede Qu
 
 - **E** startet den Vorschaumodus über die vorhandene Aktivierung `placement_mode`, wie bei
   Felsbarriere und Sporenturm (`InputSystem.beginPlacementUtilityAim`). Die Vorschau zeigt:
-  - einen Reichweitenring um den Spieler (Default **280 px**)
+  - einen Reichweitenring um den Spieler (gleich der **Baureichweite** des Inspektors, inklusive Upgrades; E19)
   - hervorgehobene Originale, die gewählt würden
   - Hologramm-Geister in der späteren Formation am Cursor
 - **Linksklick** platziert. Der Host prüft:
@@ -208,9 +208,10 @@ Die Kopienzahl ist durch die Upgrades und durch die Zahl geeigneter Originale be
 - Sie endet, wenn das Original zerstört oder abgebaut wird oder seine Kampfberechtigung verliert, zum
   Beispiel weil sein Träger zerstört ist.
 - Endet ein Einsatz mitten in einer Salve, wird die Salve abgebrochen und der reguläre Cooldown gesetzt.
-- **Bemannung:** Jede Bemannung eines Originals, auch durch Verbündete und auch mit Parallelbetrieb, beendet
-  dessen Projektion; das Original kämpft wieder bemannt. Bemannte Originale sind nicht wählbar (D30,
-  entschieden für M1, an G1 kippbar).
+- **Bemannung:** Ohne Parallelbetrieb beendet jede Bemannung eines pausierten Originals (auch durch
+  Verbündete) dessen Projektion; bemannte Originale sind dann nicht wählbar. Mit Parallelbetrieb sind
+  Bemannung und Projektion gleichzeitig möglich: Das Original wird manuell gesteuert, die Kopie kämpft
+  autonom weiter (E17).
 
 ### 3.5 Parallelbetrieb
 
@@ -228,7 +229,7 @@ Die zusätzliche Feuerleistung ist der beabsichtigte Effekt.
 
 | Knoten | Wirkung | Default |
 |---|---|---|
-| Wurzel | 1 Turmkopie, 12 s Laufzeit | gratis, Standard-Utility des Inspektors |
+| Wurzel | 1 Turmkopie, 6 s Laufzeit, Cooldown 10 s ab Einsatzende (E18) | gratis, Standard-Utility des Inspektors |
 | L1 / L2 „Mehr Verbindungen“ | maximal 2 bzw. 3 Kopien | je 1 Punkt |
 | R1 / R2 „Längere Übertragung“ | +3 s Laufzeit je Stufe | je 1 Punkt |
 | B „Parallelbetrieb“ | Originale kämpfen weiter (§3.5) | Boss-Punkt |
@@ -489,6 +490,10 @@ Status:
 | E14 | 2026-10-13 | Der Host feuert nur mit gültig gebauten Feuerleit-Routen; bei ungültiger Route feuert der Turm in diesem Tick nicht. `assertFireControlRoute` bleibt als Schutz gegen Programmierfehler (F9) | Kein Absturz im Host-Loop, Programmierfehler bleiben sichtbar | Entschieden |
 | E15 | 2026-10-13 | Der Injektor-Fokus auf eine Basis nutzt in M1 die Basis-Zielregel (D25/D27) (F10) | Gleiche Treffsicherheit wie die dritte Zielstufe | Entschieden |
 | E16 | 2026-10-13 | D30 als einfache Regel: Jede Bemannung beendet die Projektion des Originals, auch mit Parallelbetrieb; bemannte Originale sind nicht wählbar | Einfach, keine Doppelsteuerung | Entschieden für M1, an G1 kippbar |
+| E17 | 2026-10-13 | Bemannung und Parallelbetrieb sind gleichzeitig möglich: Mit Parallelbetrieb beendet das Bemannen des Originals die Projektion nicht, die Kopie kämpft autonom weiter. Ohne Parallelbetrieb beendet die Bemannung eines pausierten Originals dessen Projektion (D13) (G1-c) | Spielgefühl an G1 | Entschieden (User) |
+| E18 | 2026-10-13 | Turmkopien: Dauer 6 s (statt 12 s), Cooldown 10 s ab Einsatzende (statt 25 s); „Längere Übertragung“ bleibt +3 s je Stufe (max. 12 s) (G1-d) | Spielgefühl an G1 | Entschieden (User) |
+| E19 | 2026-10-13 | Platzierungsreichweite der Turmkopien = Baureichweite des Inspektors aus demselben Resolver wie die Konstruktionsplatzierung, inklusive Upgrades; keine eigene Zahl (G1-d) | Eine Regel, ein Owner | Entschieden (User) |
+| E20 | 2026-10-13 | Balance bleibt: Basisschadensfaktor 1, kein Spawn-HP-Tuning; Tuning später über Spieltests. Zwischenstand-Loadout D42 ok (G1-b, G1-f) | Erst spielen, dann tunen | Entschieden (User) |
 | D1 | 2026-10-13 | Laufzeit Kopien 12 s (+3 s je Stufe „Längere Übertragung“, 2 Stufen); Portale 5 s (+1,5 s je Stufe „Längere Öffnung“, 2 Stufen) | GDD: Portale kürzer als Kopien; Startwerte für Tuning | Default, an Gate kippbar |
 | D2 | 2026-10-13 | Cooldown beginnt erst mit dem Einsatzende (Kopien 25 s, Portale 20 s); eine Ladung; kein Adrenalin | Verhindert Überlappung ohne Sperrlogik; Utilities kosten kein Adrenalin | Default, an Gate kippbar |
 | D3 | 2026-10-13 | Je Spieler höchstens ein Kopien- und ein Portaleinsatz; erneute Nutzung während eines Einsatzes wird abgelehnt | Keine unbegrenzte Vervielfachung; einfache V2-Regel | Default, an Gate kippbar |
@@ -560,6 +565,12 @@ heißt: Der Test entsteht im genannten Paket. Der Stand wird im jeweiligen Gate-
 | F8 | Flammen reichen `baseDamageMult` nicht weiter | Keine Änderung, Notiz (E13) |
 | F9 | Ungültige Feuerleit-Route im Host-Loop | Turm feuert in diesem Tick nicht; Validierung bleibt als Schutz (E14) |
 | F10 | Injektor-Fokus auf Basen mit der neuen Zielregel? | Ja, in M1 (E15) |
+
+### Offen für G2
+
+| Nr. | Frage | Stand |
+|---|---|---|
+| F11 | Portal-Werte an die neuen Kopien-Werte anpassen? Kopien jetzt 6 s / 10 s, Portale bisher 5 s / 20 s | Unverändert bis G2 |
 
 ## 12 Technische Anknüpfungspunkte
 
