@@ -54,7 +54,8 @@ import * as devScenarioMode from '../../src/utils/devScenarioMode';
 import { DEFAULT_COOP_DEFENSE_MAP_ID } from '../../src/config/coopDefenseMaps';
 import { registerDiagnosticMap, getCoopDefenseMapConfig, WEAPON_BALANCE_LAB_MAP_ID } from '../../src/config/coopDefenseMaps';
 import { CoopDefenseBalanceTracker } from '../../src/debug/coopDefenseBalance/tracker';
-import { invalidateLocalStorageCache } from '../../src/utils/localPreferences';
+import { invalidateLocalStorageCache, markStoredCoopDefenseMapCompleted } from '../../src/utils/localPreferences';
+import { DAWN_UNLOCK_AFTER_MAP_ID } from '../../src/dawn/rules/DawnUnlock';
 
 function fixture(host: boolean, outcome = 'victory') {
   let phase = 'LOBBY';
@@ -228,6 +229,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     vi.spyOn(bridge, 'areAllPlayersReady').mockReturnValue(true);
     vi.spyOn(bridge, 'getLobbyTimeOfDayMinutes').mockReturnValue(720);
     vi.spyOn(bridge, 'getCoopDefenseMapId').mockReturnValue(DEFAULT_COOP_DEFENSE_MAP_ID);
+    vi.spyOn(bridge, 'getCoopProgram').mockReturnValue({ kind: 'campaign' });
     vi.spyOn(bridge, 'getConnectedPlayerIds').mockReturnValue(['local']);
     vi.spyOn(bridge, 'getConnectedPlayers').mockReturnValue([{ id: 'local', name: 'Local', colorHex: 0xffffff }]);
     vi.spyOn(bridge, 'hostStartRoundParticipants').mockImplementation((_ids, _time, revision) => { roundRevision = revision!; });
@@ -267,6 +269,47 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
       const record = tracker.finalizePendingRound(roundState.endedAt, identity);
       expect(record?.roundIdentity).toEqual(identity);
       expect(tracker.getRound(roundState.endedAt, identity)).toMatchObject({ outcome: 'victory', sharedXp: 20 });
+    } finally {
+      invalidateLocalStorageCache();
+    }
+  });
+
+  it('starts the Dawn program only when unlocked and never books it as a campaign map', () => {
+    const { flow } = fixture(true);
+    let roundState: any = null;
+    for (const method of ['publishLobbySync', 'setMatchHostId', 'resetAllFrags', 'resetCoopDefenseRoundXp',
+      'publishRoundResults', 'publishCoopDefenseEncounterPresentationState', 'publishCoopDefenseMapEventPresentationState',
+      'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState',
+      'setArenaStartTime', 'setRoundEndTime', 'requestFullGameState', 'hostStartRoundParticipants'] as const) {
+      vi.spyOn(bridge, method).mockImplementation(() => {});
+    }
+    vi.spyOn(bridge, 'areAllPlayersReady').mockReturnValue(true);
+    vi.spyOn(bridge, 'getLobbyTimeOfDayMinutes').mockReturnValue(720);
+    vi.spyOn(bridge, 'getCoopDefenseMapId').mockReturnValue(DEFAULT_COOP_DEFENSE_MAP_ID);
+    vi.spyOn(bridge, 'getCoopProgram').mockReturnValue({ kind: 'dawn' });
+    const setProgram = vi.spyOn(bridge, 'setCoopProgram').mockImplementation(() => {});
+    vi.spyOn(bridge, 'getConnectedPlayerIds').mockReturnValue(['local']);
+    vi.spyOn(bridge, 'getConnectedPlayers').mockReturnValue([{ id: 'local', name: 'Local', colorHex: 0xffffff }]);
+    vi.spyOn(bridge, 'publishRoundState').mockImplementation(value => { roundState = value; });
+    Object.assign(flow, {
+      lastRoundRevision: 10, roundStartPending: false,
+      roomQualityMonitor: { shouldBlockStart: () => false },
+      lobbyOverlay: { lockButton: vi.fn() }, onTransitionToArena: vi.fn(),
+    });
+    invalidateLocalStorageCache();
+    try {
+      flow.hostCheckReadyToStart();
+      expect(setProgram).toHaveBeenCalledWith({ kind: 'campaign' });
+      expect(roundState).toBeNull();
+
+      markStoredCoopDefenseMapCompleted(DAWN_UNLOCK_AFTER_MAP_ID);
+      flow.hostCheckReadyToStart();
+      expect(roundState.coopDefenseMapId).toBeUndefined();
+      expect(roundState.dawn).toEqual({ threat: 1, dayNumber: 1 });
+      const pending = (flow as any).pendingHostArenaGeneration;
+      expect(pending.dawn.world.templateId).toBeTruthy();
+      expect(pending.mapConfig.persistentBase).toBeDefined();
+      expect(pending.worldParameters.persistentBaseUnlocked).toBe(true);
     } finally {
       invalidateLocalStorageCache();
     }

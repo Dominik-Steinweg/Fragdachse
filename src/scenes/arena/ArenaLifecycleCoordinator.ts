@@ -109,6 +109,7 @@ import { resolveWorldLoadProgress } from '../../world/WorldLoadReady';
 import { getActiveRoundParticipantIds } from './RoundParticipationPolicy';
 import { resolveArenaStartTime } from './ArenaStartTiming';
 import {
+  getStoredCoopDefenseProgress,
   getStoredDawnProgress,
   getStoredPersistentBaseAreaStage,
   getStoredPersistentBaseHealthRewards,
@@ -129,7 +130,11 @@ import type {
 } from '../../persistentBase/PersistentBaseCore';
 import { nextMonotonicRevision } from '../../world/WorldRevision';
 import { generateRoundWorld } from '../../world/RoundWorldGeneration';
-import type { DawnRoundPlans } from '../../dawn/composition/DawnRoundComposition';
+import { composeDawnRoundPlans, type DawnRoundPlans } from '../../dawn/composition/DawnRoundComposition';
+import { DEFAULT_COOP_PROGRAM } from '../../dawn/contracts/CoopProgram';
+import { resolveDawnScenario } from '../../dawn/resolution/DawnScenarioResolution';
+import { isDawnUnlocked } from '../../dawn/rules/DawnUnlock';
+import { resolveDawnThreat } from '../../dawn/rules/DawnThreat';
 import {
   resolveActiveGameMode,
   toActivityKind,
@@ -1739,6 +1744,14 @@ export class ArenaLifecycleCoordinator {
     // Stand aus der Vorrunde durchschlagen.
     if (!bridge.areAllPlayersReady()) return;
     if (this.roomQualityMonitor.shouldBlockStart()) return;
+    const coopMode = isCoopDefenseMode(bridge.getGameMode());
+    const dawnSelected = coopMode && bridge.getCoopProgram().kind === 'dawn';
+    if (dawnSelected && !isDawnUnlocked(getStoredCoopDefenseProgress())) {
+      // Gewaehlt werden kann Dawn nur freigeschaltet. Ging die Freischaltung danach verloren
+      // (Reset, Import), kehrt der Raum zur Kampagne zurueck; Ready wird dabei invalidiert.
+      bridge.setCoopProgram(DEFAULT_COOP_PROGRAM);
+      return;
+    }
     this.roundStartPending = true;
     this.lobbyOverlay.lockButton();
     // Autoritativen Lobby-Snapshot final aktualisieren, damit der Stand, mit dem gestartet wird,
@@ -1754,9 +1767,10 @@ export class ArenaLifecycleCoordinator {
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     bridge.publishCoopDefenseMissionProgressPresentationState(null);
-    const coopDefenseMapConfig = isCoopDefenseMode(bridge.getGameMode())
-      ? getCoopDefenseMapConfig(bridge.getCoopDefenseMapId())
-      : null;
+    const dawnPlans = dawnSelected ? composeHostDawnRoundPlans() : null;
+    const coopDefenseMapConfig = dawnPlans
+      ? resolveDawnScenario(dawnPlans.world, dawnPlans.activity).mapConfig
+      : coopMode ? getCoopDefenseMapConfig(bridge.getCoopDefenseMapId()) : null;
     // Enter ARENA with no gameplay timestamp yet. The round revision is the identity used by
     // the separate local arena-load barrier; it must not be confused with Lobby Ready or with
     // the later authoritative gameplay start timestamp.
@@ -1785,7 +1799,7 @@ export class ArenaLifecycleCoordinator {
       roundRevision,
       gameMode: bridge.getGameMode(),
       mapConfig: coopDefenseMapConfig,
-      dawn: null,
+      dawn: dawnPlans,
       seed,
       // Auf einer Kampagnenkarte ist der Basiskern Map-Inhalt: Wer die Karte erreicht, hat die
       // Basis laengst freigeschaltet. Nur die LobbyWorld fragt das Entitlement ab, weil dort
@@ -1806,8 +1820,9 @@ export class ArenaLifecycleCoordinator {
       coopDefenseHumanPlayerCount: isCoopDefenseMode(bridge.getGameMode())
         ? Math.max(1, bridge.getConnectedPlayers().length)
         : undefined,
-      coopDefenseMapId: isCoopDefenseMode(bridge.getGameMode())
-        ? bridge.getCoopDefenseMapId()
+      coopDefenseMapId: coopMode && !dawnPlans ? bridge.getCoopDefenseMapId() : undefined,
+      dawn: dawnPlans
+        ? { threat: dawnPlans.activity.threat, dayNumber: dawnPlans.activity.dayNumber }
         : undefined,
     };
     bridge.publishRoundState(roundState);
@@ -2135,6 +2150,7 @@ export class ArenaLifecycleCoordinator {
         coopDefenseBossSpawnedAtMs: currentRoundState?.coopDefenseBossSpawnedAtMs,
         coopDefenseHumanPlayerCount: currentRoundState?.coopDefenseHumanPlayerCount,
         coopDefenseMapId: currentRoundState?.coopDefenseMapId,
+        dawn: currentRoundState?.dawn,
         resultEligiblePlayerIds: bridge.getRoundResultEligiblePlayerIds(),
         endedAt: roundEndedAt,
       });
@@ -3719,6 +3735,18 @@ export class ArenaLifecycleCoordinator {
  * gar keine persistente Basisstelle, und eine Stufe ohne Stelle waere eine Konfiguration fuer
  * etwas, das es in dieser Instanz nicht gibt.
  */
+/**
+ * Host: komponiert die Dawn-Runde aus dem eigenen Fortschritt. Threat und Tag folgen dem Host
+ * (User-Entscheidung); Clients erhalten nur die fertigen Plaene.
+ */
+function composeHostDawnRoundPlans(): DawnRoundPlans {
+  const dawn = getStoredDawnProgress();
+  return composeDawnRoundPlans({
+    threat: resolveDawnThreat(dawn.expansionLevel),
+    dayNumber: dawn.stats.roundsPlayed + 1,
+  });
+}
+
 /**
  * Area-Stufe, die der Host fuer eine neue World einfriert: sein persoenlicher Ausbau aus Kampagne
  * und Dawn-Expansion, begrenzt durch die Obergrenze der Site dieser World.

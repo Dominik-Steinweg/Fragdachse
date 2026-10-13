@@ -332,6 +332,11 @@ export interface RoundResult {
   epicGuaranteeCount?: number;
 }
 
+export interface RoundDawnState {
+  readonly threat: number;
+  readonly dayNumber: number;
+}
+
 export interface RoundState {
   status: 'active' | RoundConclusion;
   roundStartTime: number;
@@ -346,7 +351,10 @@ export interface RoundState {
   coopDefenseHumanPlayerCount?: number;
   // Historischer Ergebnis-/Round-Snapshot. Der aktive World-Aufbau liest die Map aus dem
   // WorldDescriptor; dieses Feld bleibt nur fuer Ergebnisdarstellung und Unlock-Auswertung.
+  // Dawn-Runden sind keine Kampagnenkarte und lassen es leer.
   coopDefenseMapId?: string;
+  /** Gesetzt genau fuer Dawn-Runden: Threat und Tag des Hosts beim Rundenstart. */
+  dawn?: RoundDawnState;
   /** Spieler, die beim Abschluss fuer Ergebnisse/Belohnungen qualifiziert waren. */
   resultEligiblePlayerIds?: string[];
   endedAt?: number;

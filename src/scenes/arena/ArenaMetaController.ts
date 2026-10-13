@@ -63,7 +63,7 @@ import {
   type MatchItemRewardPresentation,
   type MatchResultsPresentation,
 } from '../../ui/MatchResultsModel';
-import { getLocale } from '../../i18n';
+import { getLocale, t } from '../../i18n';
 import { getLocalizedGameModeLabel } from '../../i18n/gameModePresentation';
 import { getMapName } from '../../i18n/contentPresentation';
 
@@ -711,12 +711,12 @@ export class ArenaMetaController {
 
     const mode = this.input.session.getGameMode();
     const roundState = this.input.resultRead.getRoundState();
-    const mapLabel = isCoopDefenseMode(mode)
-      ? getMapName(
-        roundState?.coopDefenseMapId ?? this.input.session.getCoopDefenseMapId(),
-        getLocale(),
-      )
-      : 'Zufallsarena';
+    // Dawn-Runden tragen keine Kampagnenkarte; sie duerfen nicht auf die Lobby-Auswahl fallen.
+    const mapLabel = !isCoopDefenseMode(mode)
+      ? 'Zufallsarena'
+      : roundState?.dawn
+        ? t('ui.lobby.dawn.name')
+        : getMapName(roundState?.coopDefenseMapId ?? this.input.session.getCoopDefenseMapId(), getLocale());
 
     this.matchResultsPending = true;
     this.matchResultsProgressBefore = isCoopDefenseMode(mode) ? this.getProgress() : null;
