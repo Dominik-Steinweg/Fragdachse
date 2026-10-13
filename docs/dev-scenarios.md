@@ -839,13 +839,15 @@ await devScenario.run({ action: 'spawn', kind: 'shield-charger-badger', pinned: 
 
 Erwartung: Er nähert sich mit erhobenem Frontschild (120°) und dreht sichtbar langsam; seitlich laufen lässt
 ihn nachdrehen statt sofort folgen. Treffer von vorn werden geblockt, von der Seite und von hinten nicht.
-Steht der Spieler im Auslösebereich vor ihm, senkt er den Schild, steht still und zeigt den Korridor
-(zwei Randlinien, sich füllender Boden, Pfeile, Endbalken). Die Richtung bleibt fest; seitlich aus dem
-Korridor treten lässt ihn vorbeistürmen. Rückwärtslaufen entlang der Bahn reicht nicht. Am Endpunkt
-oder an einem Felsen bleibt er erschöpft stehen (Schild unten, keine Warnfläche) – Zeit zum Flankieren.
-Stun oder ein deutlicher Stoß während der Ankündigung brechen sie ab.
+Steht der Spieler im Auslösebereich vor ihm (bis 560 px), senkt er den Schild, steht still und zeigt die
+rote Gefahrenbahn der gemeinsamen Nahkampf-Familie, exakt auf den Spieler gerichtet. Die Richtung bleibt
+fest; ein Seitenschritt aus der Bahn lässt ihn vorbeistürmen, Rückwärtslaufen reicht nicht. Ein Treffer
+macht 45 Schaden mit starkem Rückstoß; ein Energieschild nach vorn blockt ihn. Am Endpunkt oder an einem
+Felsen bleibt er erschöpft stehen (Schild unten, keine Warnfläche) – Zeit zum Flankieren. Stun oder ein
+deutlicher Stoß während der Ankündigung brechen sie ab. Im Spiel: Karte 4 (Adrenalinrausch).
 
-Headless-Nachweise: `tests/CoopDefenseShieldCharger.test.ts`. Asset, Clips und Kampagne sind spätere Gates.
+Headless-Nachweise: `tests/CoopDefenseShieldCharger.test.ts`, `tests/ShieldChargerRenderer.test.ts`,
+`tests/stress/CoopDefenseShieldChargerStress.test.ts`.
 
 ### Alien-Energie-Fächer: Gate 1
 
