@@ -3,7 +3,9 @@ export class DawnScrapLedger {
   private totalValue = 0;
   private sources = { site: 0, drop: 0 };
 
-  constructor(private readonly publish: (total: number) => void) {}
+  constructor(private readonly publish: (total: number) => void, initialTotal = 0) {
+    this.totalValue = Number.isSafeInteger(initialTotal) && initialTotal > 0 ? initialTotal : 0;
+  }
 
   get total(): number { return this.totalValue; }
   getDiagnostics(): Readonly<{ site: number; drop: number }> { return { ...this.sources }; }

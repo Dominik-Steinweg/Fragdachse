@@ -7,6 +7,8 @@ import { DawnSalvageDirector } from './DawnSalvageDirector';
 import { DawnScrapLedger } from './DawnScrapLedger';
 
 export interface DawnActivityRuntimePorts {
+  /** Bereits veroeffentlichter Rundenschrott dieser Runde (0 direkt nach dem Rundenstart). */
+  readonly initialScrap?: number;
   readonly publishScrap: (total: number) => void;
   readonly sitePosition: (site: ResolvedDawnSite) => { readonly x: number; readonly y: number };
   readonly feedback: (x: number, y: number, amount: number) => void;
@@ -29,7 +31,7 @@ export class DawnActivityRuntime {
     private readonly schedule: DawnSchedule,
     private readonly ports: DawnActivityRuntimePorts,
   ) {
-    this.ledger = new DawnScrapLedger(ports.publishScrap);
+    this.ledger = new DawnScrapLedger(ports.publishScrap, ports.initialScrap ?? 0);
     this.director = new DawnSalvageDirector(sites, curve, this.ledger, (site, amount) => {
       const { x, y } = ports.sitePosition(site);
       ports.feedback(x, y, amount);
@@ -43,7 +45,6 @@ export class DawnActivityRuntime {
         if (amount > 0) ports.feedback(pickup.x, pickup.y, amount);
       },
     });
-    this.ledger.reset();
   }
 
   get total(): number { return this.ledger?.total ?? 0; }

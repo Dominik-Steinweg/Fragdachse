@@ -139,10 +139,10 @@ describe('Dawn composition ownership', () => {
     const detach = vi.fn();
     const pickups = { bindDawnScrap: vi.fn(() => detach), spawnPickup: vi.fn(), removePickup: vi.fn() };
     const completed = vi.fn();
-    const activitySpy = vi.spyOn(bridge, 'getActivityDescriptor').mockReturnValue(descriptor);
-    const roundSpy = vi.spyOn(bridge, 'getRoundState').mockReturnValue({ status: 'active', roundStartTime: 1 });
-    vi.mocked(bridge.hostPublishDawnRoundScrap).mockClear();
-    vi.mocked(bridge.broadcastEffect).mockClear();
+    const network = {
+      getRoundScrap: () => 0, publishRoundScrap: vi.fn(), broadcastScrapFeedback: vi.fn(),
+      getSynchronizedNow: () => 0, getArenaStartTime: () => 0, isActivityLive: () => true,
+    };
     try {
       const composition = new CoopMissionComposition({
         getWorld: () => ({ descriptor: { worldRevision: 1, parameters: { dawn: plans.world } }, metrics }),
@@ -155,12 +155,12 @@ describe('Dawn composition ownership', () => {
         getTranslocatorProjectilePort: () => null, getPlayerWorldRuntime: () => null,
         getParticipantIds: () => [], publishRespawnBudget: vi.fn(), publishMissionProgress: vi.fn(),
         getSecondsLeft: () => mapConfig.surviveDurationSec!, train: { releaseActivityTrain: vi.fn() },
-        grantPersistentBaseRewards: vi.fn(), onObjectiveCompleted: completed,
+        grantPersistentBaseRewards: vi.fn(), onObjectiveCompleted: completed, dawnNetwork: network,
       } as unknown as CoopMissionCompositionOptions);
       composition.materializeDependents({ definitionId: descriptor.definitionId, mapConfig }, mission);
       if (role !== 'host') {
         expect(pickups.bindDawnScrap).not.toHaveBeenCalled();
-        expect(bridge.hostPublishDawnRoundScrap).not.toHaveBeenCalled();
+        expect(network.publishRoundScrap).not.toHaveBeenCalled();
         return;
       }
       expect(pickups.bindDawnScrap).toHaveBeenCalledOnce();
@@ -175,14 +175,13 @@ describe('Dawn composition ownership', () => {
       else objectives.hostUpdate(site.archetype.holdDurationMs! + 1, false);
       const amount = Math.floor(site.tier.scrapReward * getDawnThreatCurve(plans.activity.threat).scrapMultiplier);
       expect(completed).toHaveBeenCalledWith(site.objectiveId);
-      expect(bridge.hostPublishDawnRoundScrap).toHaveBeenLastCalledWith(amount);
-      expect(bridge.broadcastEffect).toHaveBeenLastCalledWith({ type: 'dawn-scrap', ...position, amount });
+      expect(network.publishRoundScrap).toHaveBeenLastCalledWith(amount);
+      expect(network.broadcastScrapFeedback).toHaveBeenLastCalledWith(position.x, position.y, amount);
       mission.destroy();
       expect(detach).toHaveBeenCalledOnce();
-      expect(bridge.hostPublishDawnRoundScrap).toHaveBeenLastCalledWith(amount);
+      expect(network.publishRoundScrap).toHaveBeenLastCalledWith(amount);
     } finally {
       mission.destroy();
-      activitySpy.mockRestore(); roundSpy.mockRestore();
     }
   });
 });

@@ -25,6 +25,17 @@ function pickups() {
   }, { seed: 1, rocks: [], trees: [], tracks: [], dirt: [], powerUpPedestals: [] });
 }
 
+describe('DawnScrapLedger re-materialization', () => {
+  it('continues from the already published round total instead of resetting it', () => {
+    const publish = vi.fn();
+    const ledger = new DawnScrapLedger(publish, 40);
+    expect(ledger.total).toBe(40);
+    expect(publish).not.toHaveBeenCalled();
+    ledger.credit(2, 'drop');
+    expect(publish).toHaveBeenLastCalledWith(42);
+  });
+});
+
 describe('Dawn scrap ledger', () => {
   it('publishes a shared integral total, resets both diagnostic sources and refuses invalid grants', () => {
     const publish = vi.fn();

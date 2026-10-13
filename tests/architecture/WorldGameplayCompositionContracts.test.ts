@@ -60,16 +60,13 @@ describe('World gameplay composition – dauerhafte Grenzen', () => {
   it('hält Domain-Schichten vom Transport-Singleton und World-Owner vom Scene-Context frei', () => {
     const domainFiles = DOMAIN_ROOTS.flatMap(listTypeScriptFiles);
     const singletonOffenders = domainFiles
-      // This explicit composition root injects Dawn ports; runtime/domain files remain forbidden.
-      .filter((path) => path !== 'src/activity/CoopMissionComposition.ts')
       .filter((path) => /from ['"][^'"]*network\/bridge['"]/.test(read(path)));
 
     expect(singletonOffenders).toEqual([]);
 
     const ownerOffenders = WORLD_ACTIVITY_ROOTS
       .flatMap(listTypeScriptFiles)
-      .filter((path) => /from ['"][^'"]*(?:ArenaContext|NetworkBridge)['"]/.test(read(path))
-        || (path !== 'src/activity/CoopMissionComposition.ts' && /from ['"][^'"]*network\/bridge['"]/.test(read(path))));
+      .filter((path) => /from ['"][^'"]*(?:ArenaContext|NetworkBridge|network\/bridge)['"]/.test(read(path)));
 
     expect(ownerOffenders).toEqual([]);
   });

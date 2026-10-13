@@ -1,4 +1,3 @@
-import { bridge } from '../network/bridge';
 import { isDawnActivityDefinitionId } from '../dawn/contracts/DawnIds';
 import { resolveDawnSites } from '../dawn/resolution/DawnScenarioResolution';
 import { getDawnSchedule, getDawnThreatCurve } from '../config/dawn/dawnContent';
@@ -55,7 +54,22 @@ import type { ProjectileThreatReadPort } from '../projectile/ProjectileReadPorts
 import type { TranslocatorProjectilePort } from '../projectile/ProjectileExternalInteractionPort';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 
+/**
+ * Netzwerk-Sicht der Dawn-Runtime. Die Composition-Grenze, die die Bridge besitzt, liefert sie;
+ * Activity-Code importiert das Transport-Singleton nicht.
+ */
+export interface CoopMissionDawnNetworkPort {
+  readonly getRoundScrap: () => number;
+  readonly publishRoundScrap: (total: number) => void;
+  readonly broadcastScrapFeedback: (x: number, y: number, amount: number) => void;
+  readonly getSynchronizedNow: () => number;
+  readonly getArenaStartTime: () => number;
+  /** True, solange genau diese Activity laeuft (kein Countdown, Runde aktiv). */
+  readonly isActivityLive: (activity: { readonly worldRevision: number; readonly activityRevision: number }) => boolean;
+}
+
 export interface CoopMissionCompositionOptions {
+  readonly dawnNetwork?: CoopMissionDawnNetworkPort;
   readonly getKrakenPorts?: () => import('./CoopMissionKrakenComposition').CoopMissionKrakenPorts;
   readonly getCombatScope?: () => import('../combat/CombatScope').CombatScope;
   readonly getNavigationGeometry?: () => import('../systems/navigation/NavigationGeometry').NavigationGeometrySnapshot;
@@ -246,22 +260,19 @@ export class CoopMissionComposition {
     if (this.options.isHost() && isDawnActivityDefinitionId(activity.definitionId)) {
       const worldPlan = world.descriptor.parameters?.dawn;
       const activityPlan = runtime.descriptor.parameters?.dawn;
-      if (!worldPlan || !activityPlan || !powerUpSystem) {
-        throw new Error('[CoopMissionComposition] Dawn needs its plans and host pickups');
+      const network = this.options.dawnNetwork;
+      if (!worldPlan || !activityPlan || !powerUpSystem || !network) {
+        throw new Error('[CoopMissionComposition] Dawn needs its plans, host pickups and network port');
       }
       const schedule = getDawnSchedule(activityPlan.scheduleId);
       dawn = new DawnActivityRuntime(resolveDawnSites(worldPlan), getDawnThreatCurve(activityPlan.threat), schedule, {
-        publishScrap: total => bridge.hostPublishDawnRoundScrap(total),
+        // Eine Re-Materialisierung derselben Runde setzt den Stand nicht zurueck; der Rundenstart tut es.
+        initialScrap: network.getRoundScrap(),
+        publishScrap: total => network.publishRoundScrap(total),
         sitePosition: site => worldCellCenter(world.metrics, site.slot.anchor.gridX, site.slot.anchor.gridY),
-        feedback: (x, y, amount) => bridge.broadcastEffect({ type: 'dawn-scrap', x, y, amount }),
-        elapsedMs: () => runtime.getMissionNow(bridge.getSynchronizedNow()) - bridge.getArenaStartTime(),
-        isActive: () => {
-          const current = bridge.getActivityDescriptor();
-          return bridge.isHost() && !bridge.isArenaCountdownActive()
-            && current?.worldRevision === runtime.descriptor.worldRevision
-            && current.activityRevision === runtime.descriptor.activityRevision
-            && bridge.getRoundState()?.status === 'active';
-        },
+        feedback: (x, y, amount) => network.broadcastScrapFeedback(x, y, amount),
+        elapsedMs: () => runtime.getMissionNow(network.getSynchronizedNow()) - network.getArenaStartTime(),
+        isActive: () => network.isActivityLive(runtime.descriptor),
         pickups: powerUpSystem,
       });
       runtime.bind({ attach: () => {}, detach: () => { dawn?.destroy(); dawn = null; } });

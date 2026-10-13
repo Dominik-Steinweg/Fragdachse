@@ -771,6 +771,20 @@ export class ArenaLifecycleCoordinator {
       ) ?? false,
     });
     this.coopMissionComposition = new CoopMissionComposition({
+      dawnNetwork: {
+        getRoundScrap: () => bridge.getDawnRoundScrap(),
+        publishRoundScrap: (total) => bridge.hostPublishDawnRoundScrap(total),
+        broadcastScrapFeedback: (x, y, amount) => bridge.broadcastEffect({ type: 'dawn-scrap', x, y, amount }),
+        getSynchronizedNow: () => bridge.getSynchronizedNow(),
+        getArenaStartTime: () => bridge.getArenaStartTime(),
+        isActivityLive: (activity) => {
+          const current = bridge.getActivityDescriptor();
+          return bridge.isHost() && !bridge.isArenaCountdownActive()
+            && current?.worldRevision === activity.worldRevision
+            && current.activityRevision === activity.activityRevision
+            && bridge.getRoundState()?.status === 'active';
+        },
+      },
       getCombatScope: () => this.combatSystem.getCombatScope(),
       getKrakenPorts: () => ({
         resolveIntentTarget: candidate => candidate.kind === 'decoy'
