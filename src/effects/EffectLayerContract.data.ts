@@ -2819,6 +2819,8 @@ export const GPU_EFFECT_CONTRACTS = {
   "VoidMeteorFragment": {"id":"gpu:VoidMeteorFragment","owner":"effects/gpu/GpuVfxEffects.ts","component":"VoidMeteorFragment","height":"high","lighting":"material","camera":"world","depths":[20.55],"blends":["NORMAL"],"profiles":["H"],"role":"effect","lanes":["VoidMeteorMaterial"]},
 } as const satisfies Record<keyof typeof GpuVfxEffectId, LayerContract & {readonly lanes: readonly (keyof typeof GpuVfxLaneId)[]}>;
 export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
+  {"id":"cpu:arena/LobbyMerchantRenderer.ts:module/this.stall/setDepth/0","owner":"arena/LobbyMerchantRenderer.ts","component":"module/this.stall/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[4],"blends":["NORMAL"],"profiles":["G"],"role":"effect","source":{"selector":"module/this.stall/setDepth/0","expression":"DEPTH.BASES"}},
+  {"id":"cpu:arena/LobbyMerchantRenderer.ts:module/this.dealer/setDepth/0","owner":"arena/LobbyMerchantRenderer.ts","component":"module/this.dealer/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[10],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.dealer/setDepth/0","expression":"DEPTH.PLAYERS"}},
   {"id":"cpu:arena/DawnSitePropRenderer.ts:sync/sprite/setDepth/0","owner":"arena/DawnSitePropRenderer.ts","component":"sync/sprite/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[4],"blends":["NORMAL"],"profiles":["G"],"role":"effect","source":{"selector":"sync/sprite/setDepth/0","expression":"DEPTH.BASES"}},
   {id:'cpu:ui/DawnHUD.ts:module/this.card.root/setDepth/0',owner:'ui/DawnHUD.ts',component:'module/this.card.root/setDepth/0',height:'body',lighting:'emissive',camera:'clarity',depths:[100],blends:['NORMAL'],profiles:['C'],role:'ui',source:{selector:'module/this.card.root/setDepth/0',expression:'DEPTH.OVERLAY'}},
   {id:'cpu:ui/DawnHUD.ts:sync/marker.edge/setDepth/0',owner:'ui/DawnHUD.ts',component:'sync/marker.edge/setDepth/0',height:'body',lighting:'emissive',camera:'clarity',depths:[100],blends:['NORMAL'],profiles:['C'],role:'ui',source:{selector:'sync/marker.edge/setDepth/0',expression:'DEPTH.OVERLAY'}},
@@ -3331,6 +3333,7 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:ui/UiContextMenu.ts:open/this.container/setDepth/0","owner":"ui/UiContextMenu.ts","component":"open/this.container/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[103],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"open/this.container/setDepth/0","expression":"this.standaloneDepth"}},
 ];
 export const CPU_SOURCE_CONTRACTS = {
+  "arena/LobbyMerchantRenderer.ts": {"blends":[],"cameras":[],"sites":[{"key":"module/this.stall/setDepth/0","expression":"DEPTH.BASES","blends":["NORMAL"]},{"key":"module/this.dealer/setDepth/0","expression":"DEPTH.PLAYERS","blends":["NORMAL"]}],"bindings":{}},
   "arena/DawnSitePropRenderer.ts": {
     "blends": [], "cameras": [],
     "sites": [{ "key": "sync/sprite/setDepth/0", "expression": "DEPTH.BASES", "blends": ["NORMAL"] }],

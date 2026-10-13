@@ -26,7 +26,7 @@ describe('selected figure animations', () => {
   });
   it('loads every figure with gutters and registers authored move and idle frames once', () => {
     const spritesheet = vi.fn();
-    preloadBadgerAnimationAssets({ spritesheet } as unknown as Phaser.Loader.LoaderPlugin);
+    preloadBadgerAnimationAssets({ spritesheet, image: vi.fn() } as unknown as Phaser.Loader.LoaderPlugin);
     const create = vi.fn(), generateFrameNumbers = vi.fn((_key, config) => config.frames);
     const keys = new Set<string>();
     const anims = { exists: (key: string) => keys.has(key), generateFrameNumbers,
