@@ -10,6 +10,7 @@ import {
   type DawnPhaseWavesConfig,
   type DawnSchedule,
   type DawnThreatCurve,
+  type DawnWaveBlock,
 } from '../../config/dawn/dawnContent';
 import type { SpawnFront } from '../../types';
 import type { DawnSitePlan, DawnWavePlan } from '../contracts/DawnPlans';
@@ -32,6 +33,16 @@ export interface DawnWaveCompositionInput {
 
 /** Rundungsreserve fuer Budgetanteile; Blockkosten liegen weit darueber. */
 const COST_EPSILON = 1e-6;
+
+/** Fit the budget into the bounded wire slots instead of filling them with cheap leftovers. */
+function pickBudgetBlock(random: DawnRandom, blocks: readonly DawnWaveBlock[], curve: DawnThreatCurve,
+  role: DawnFrontRole, remaining: number, slots: number): DawnWaveBlock | undefined {
+  const affordable = blocks.filter(block => block.roles.includes(role)
+    && block.cost <= remaining + COST_EPSILON && resolveDawnWaveBlockWeight(block, curve) > 0);
+  const target = Math.min(remaining / slots, Math.max(...affordable.map(block => block.cost)));
+  return random.pickWeighted(affordable.filter(block => block.cost + COST_EPSILON >= target),
+    block => resolveDawnWaveBlockWeight(block, curve)) ?? undefined;
+}
 
 /**
  * Verteilt die Frontrollen der Threat-Kurve auf zufaellige Fronten des Templates. Bietet eine
@@ -56,8 +67,8 @@ export function composeDawnNight(input: DawnWaveCompositionInput): DawnWavePlan[
 }
 
 /**
- * Angriffswellen der Hold-Sites: je Site ein Budget aus ihrem Tier, ausgeloest bei ihrer
- * Aktivierung. Ohne Angreifer waere das Halten trivial.
+ * Angriffswellen und Wrackwaechter: je Site ein Budget aus ihrem Tier, ausgeloest bei ihrer
+ * Aktivierung. Der Archetyp bestimmt, ob eine Site einen Angriff mitbringt.
  */
 export function composeDawnSiteAssaults(input: {
   readonly random: DawnRandom;
@@ -74,10 +85,7 @@ export function composeDawnSiteAssaults(input: {
     if (budget === undefined || archetype.assaultDelayMs === undefined) continue;
     let remaining = budget;
     for (let index = 0; index < day.maxBlocksPerFront; index += 1) {
-      const block = random.pickWeighted(
-        blocks.filter((candidate) => candidate.roles.includes(day.frontRole) && candidate.cost <= remaining + COST_EPSILON),
-        (candidate) => resolveDawnWaveBlockWeight(candidate, curve),
-      );
+      const block = pickBudgetBlock(random, blocks, curve, day.frontRole, remaining, day.maxBlocksPerFront - index);
       if (!block) break;
       remaining -= block.cost;
       plans.push({
@@ -91,7 +99,7 @@ export function composeDawnSiteAssaults(input: {
   return plans;
 }
 
-/** Leichter Tagesdruck mit demselben Komponisten: je Welle eine der Fronten dieser Runde. */
+/** Stiller Tagesdruck mit demselben Komponisten: je Welle eine der Fronten dieser Runde. */
 export function composeDawnDayPressure(input: DawnWaveCompositionInput): DawnWavePlan[] {
   const { day } = getDawnWaveComposition();
   return composePhaseWaves(input, 'day', input.curve.dayPressureBudget, day, () => [{
@@ -122,10 +130,7 @@ function composePhaseWaves(
     for (const { front, role } of fronts) {
       let remaining = waveBudget * roleShares[role] / shareSum;
       for (let index = 0; index < config.maxBlocksPerFront; index += 1) {
-        const block = random.pickWeighted(
-          blocks.filter((candidate) => candidate.roles.includes(role) && candidate.cost <= remaining + COST_EPSILON),
-          (candidate) => resolveDawnWaveBlockWeight(candidate, curve),
-        );
+        const block = pickBudgetBlock(random, blocks, curve, role, remaining, config.maxBlocksPerFront - index);
         if (!block) break;
         remaining -= block.cost;
         spent += block.cost;

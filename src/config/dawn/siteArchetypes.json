@@ -52,21 +52,25 @@
           "tier": 1,
           "hpMax": 700,
           "scrapReward": 25,
-          "visualKey": "dawn-site-wreck-t1"
+          "visualKey": "dawn-site-wreck-t1",
+          "assaultBudget": 24
         },
         {
           "tier": 2,
           "hpMax": 1200,
           "scrapReward": 45,
-          "visualKey": "dawn-site-wreck-t2"
+          "visualKey": "dawn-site-wreck-t2",
+          "assaultBudget": 40
         },
         {
           "tier": 3,
           "hpMax": 1900,
           "scrapReward": 70,
-          "visualKey": "dawn-site-wreck-t3"
+          "visualKey": "dawn-site-wreck-t3",
+          "assaultBudget": 60
         }
-      ]
+      ],
+      "assaultDelayMs": 0
     },
     {
       "id": "extractor",
@@ -123,24 +127,24 @@
           "hpMax": 900,
           "scrapReward": 30,
           "visualKey": "dawn-site-extractor-t1",
-          "assaultBudget": 16
+          "assaultBudget": 64
         },
         {
           "tier": 2,
           "hpMax": 1400,
           "scrapReward": 55,
           "visualKey": "dawn-site-extractor-t2",
-          "assaultBudget": 26
+          "assaultBudget": 104
         },
         {
           "tier": 3,
           "hpMax": 2000,
           "scrapReward": 85,
           "visualKey": "dawn-site-extractor-t3",
-          "assaultBudget": 38
+          "assaultBudget": 152
         }
       ],
-      "assaultDelayMs": 4000
+      "assaultDelayMs": 1500
     }
   ]
 }

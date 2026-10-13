@@ -61,7 +61,7 @@ describe('Dawn round composition', () => {
     expect(() => composeDawnRoundPlans({ seed: 1, threat: DAWN_MAX_THREAT + 1, dayNumber: 1 })).toThrow('threat');
   });
 
-  it('gives every hold site its own assault inside its tier budget and no other site', () => {
+  it('gives guarded sites their own assaults inside their authored budgets and delays', () => {
     for (const threat of THREATS) {
       for (const seed of SEEDS) {
         const plans = compose(seed, threat);
@@ -76,6 +76,8 @@ describe('Dawn round composition', () => {
           }
           expect(waves.length, `${threat}/${seed} ${site.slotId}`).toBeGreaterThan(0);
           expect(costOf(waves)).toBeLessThanOrEqual(budget + 1e-6);
+          expect(costOf(waves)).toBeGreaterThan(budget * 0.75);
+          expect(Math.min(...waves.map(wave => wave.atMs))).toBe(archetype.assaultDelayMs);
         }
         expect(assaults.every((wave) => plans.world.sites.some((site) => site.slotId === wave.siteId))).toBe(true);
       }
@@ -95,6 +97,9 @@ describe('Dawn round composition', () => {
         expect(nightWaves.length + dayWaves.length, 'front waves only during day and night').toBe(frontWaves(plans).length);
         expect(costOf(nightWaves)).toBeLessThanOrEqual(curve.nightBudget + 1e-6);
         expect(costOf(dayWaves)).toBeLessThanOrEqual(curve.dayPressureBudget + 1e-6);
+        // A larger budget must become actual pressure even with a bounded number of wire slots.
+        expect(costOf(nightWaves)).toBeGreaterThan(curve.nightBudget * 0.85);
+        expect(costOf(dayWaves)).toBeGreaterThan(curve.dayPressureBudget * 0.85);
         const nightFronts = new Set(nightWaves.map(({ front }) => front));
         expect(nightFronts.size).toBe(Math.min(curve.fronts.length, template.fronts.length));
         // Jede aktive Front greift in jeder authored Nachtwelle an; Tagesdruck nur von diesen Fronten.
@@ -153,6 +158,16 @@ describe('Dawn round composition', () => {
       expect(times).toEqual([...times].sort((left, right) => left - right));
       expect(Math.min(...times)).toBeGreaterThanOrEqual(0);
       expect(Math.max(...times)).toBeLessThan(getDawnPhaseStartMs(schedule, 'dawn'));
+      for (const wave of plans.activity.waves) {
+        const end = Math.max(...getDawnWaveBlock(wave.blockId).groups.map(group =>
+          wave.atMs + (group.delayMs ?? 0) + (group.count - 1) * (group.spawnStaggerMs ?? 0)));
+        if ('front' in wave) expect(end).toBeLessThan(resolveDawnPhase(schedule, wave.atMs).phaseEndMs);
+        else {
+          const site = plans.world.sites.find(site => site.slotId === wave.siteId)!;
+          const hold = getDawnSiteArchetype(site.archetypeId).holdDurationMs;
+          if (hold !== undefined) expect(end).toBeLessThan(hold);
+        }
+      }
     }
   });
 

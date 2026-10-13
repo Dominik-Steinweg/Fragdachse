@@ -116,6 +116,14 @@ describe('Dawn scenario resolution', () => {
     expect(silent.some(encounter => encounter.start.type === 'site-activated')).toBe(true);
     expect(silent.some(encounter => encounter.start.type === 'time')).toBe(true);
     expect(silent.every(encounter => encounter.announce === false)).toBe(true);
+    for (const site of resolveDawnSites(plans.world)) {
+      const guards = silent.filter(encounter => encounter.start.type === 'site-activated'
+        && encounter.start.siteId === site.siteId);
+      expect(guards.length, site.archetype.id).toBeGreaterThan(0);
+      for (const guard of guards) {
+        expect(guard.groups.every(group => group.spawnArea !== undefined)).toBe(true);
+      }
+    }
     const night = encounters.filter(encounter => !silent.includes(encounter));
     const groups = [...new Set(night.map(encounter => encounter.announce && encounter.announce.group))];
     expect(groups).toEqual(getDawnWaveComposition().night.waves.map(slot => slot.id));

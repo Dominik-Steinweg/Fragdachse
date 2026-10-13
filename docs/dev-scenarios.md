@@ -8,7 +8,36 @@ Der Einstieg und die Bedienoberfläche werden vom normalen Produktionsbuild nich
 
 ## Bedienung
 
-### Dawn: Phasen-Review
+### Dawn: Threat x durchspielen und Phasen-Review
+
+Zum Durchspielen einen frischen Dawn-Aufbau mit aktiver Mission und aktiven Encountern starten:
+Das Beispiel setzt den Threat; für den Endgame-Vergleich das gewünschte Loadout und die Basis
+über `upgrades`, `items` und `constructions` ergänzen. Der isolierte Speicher kopiert keinen echten Fortschritt.
+
+```js
+const dev = window.devScenario;
+dev.run({ action: 'start', scenario: {
+  version: 1, classId: 'dachs_nukem', dawn: { threat: 5 }, seed: 12345,
+  suppressWaves: false, freezeMission: false, hideTutorial: true,
+  refillHp: false, refillAdrenaline: false
+} });
+await dev.whenReady();
+// Tagsüber Sites testen und die Basis vorbereiten, dann bis zur Nacht vorspulen:
+await dev.run({ action: 'dawnSkip', phase: 'night' });
+// Die Nacht normal spielen; optional später bis zum Morgengrauen vorspulen:
+await dev.run({ action: 'dawnSkip', phase: 'dawn' });
+```
+
+`dawnSkip` spielt die laufende Simulation in beschleunigten, normalen Frames bis zum Ziel weiter
+(bis zu 30 Simulationsframes pro Browserframe). Director, Nebenziele, Site-Aktivierung mit eigener
+Uhr, Spawns, Kampf und Missionszeit laufen gemeinsam weiter. Es vergibt keine automatischen Siege
+und entfernt keine Gegner: Auch während des Vorspulens kann die Basis fallen. Bei Rundenende wird
+abgebrochen. `status().dawnSkipping` zeigt einen laufenden Sprung; `await` wartet auf das Ergebnis.
+Danach läuft das Spiel mit der zuvor gewählten Geschwindigkeit weiter. `pause`, `stop` oder ein
+neues Szenario brechen das Vorspulen ab. `offsetMs` funktioniert wie unten bei `dawnPhase`.
+Nur Vorwärtssprünge sind erlaubt, nur im isolierten Dev-Host und nach abgeschlossenem Aufbau.
+Die Aktion aktiviert Mission und Encounter und löst eine globale Pause; nach einem `dawnPhase`-Review
+ist zuerst ein neuer Aufbau nötig. Für Gameplay-Threat-Vergleiche dieselbe Ausrüstung und Basis verwenden.
 
 Ein Dawn-Rezept verwendet `dawn: { threat: 1…10 }` **statt** `mapId`; Threat muss ganzzahlig sein.
 Der isolierte Dev-Speicher erhält den Abschluss der letzten Kampagnenmap und

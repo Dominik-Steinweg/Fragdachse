@@ -176,6 +176,45 @@ describe('Dev scenario automation lifecycle', () => {
     expect(api.run({ action: 'options', values: { freezeMission: false, suppressWaves: false } })).toMatchObject({ ok: true });
     expect(api.run({ action: 'dawnPhase', phase: 'day' })).toMatchObject({ ok: false });
   });
+  it('fast-forwards Dawn through live frames and resumes mission and encounters at the target', async () => {
+    const schedule = getDawnSchedule(getDawnThreatCurve(3).scheduleId);
+    controller.start({ version: 1, classId: 'dachs_nukem', dawn: { threat: 3 } });
+    controller.update(); controller.update(); host.phase = 'ARENA'; host.started = true;
+    controller.update(); controller.afterHostFrame();
+    vi.mocked(bridge.getActivityDescriptor).mockReturnValue({ parameters: { dawn: { scheduleId: schedule.id } } } as never);
+    const runtime = (controller as any).runtime;
+    const epoch = Date.now();
+    runtime.devScenarioPort.readMission = () => ({ elapsedMs: Date.now() - epoch });
+    const options = vi.spyOn(runtime.devScenarioPort, 'setOptions');
+    const encounters = vi.spyOn(runtime.devScenarioPort, 'suppressEncounters');
+    controller.clock.paused = true;
+    const result = window.devScenario!.run({ action: 'dawnSkip', phase: 'night' });
+    expect(controller.clock.fastForwarding).toBe(true);
+    const loop = (controller as any).scene.game.loop;
+    for (let frames = 0; controller.clock.fastForwarding && frames < 1000; frames++) loop.callback(frames * 16, 16);
+    expect(await result).toMatchObject({ ok: true });
+    expect(runtime.devScenarioPort.readMission().elapsedMs).toBe(getDawnPhaseStartMs(schedule, 'night'));
+    expect(controller.config).toMatchObject({ freezeMission: false, suppressWaves: false });
+    expect(options).toHaveBeenCalledWith(false, controller.config.hideTutorial);
+    expect(encounters).toHaveBeenCalledWith(false);
+    expect(runtime.seekDevScenarioDawnTime).not.toHaveBeenCalled();
+    expect(controller.clock.paused).toBe(false);
+    loop.callback(20000, 16);
+    expect(runtime.devScenarioPort.readMission().elapsedMs).toBeGreaterThan(getDawnPhaseStartMs(schedule, 'night'));
+    expect(await window.devScenario!.run({ action: 'dawnSkip', phase: 'day' })).toMatchObject({ ok: false });
+  });
+  it.each(['client', 'normal session', 'phase review'])('rejects live Dawn skipping in a %s', async mode => {
+    const schedule = getDawnSchedule(getDawnThreatCurve(1).scheduleId);
+    controller.start({ version: 1, classId: 'dachs_nukem', dawn: { threat: 1 } });
+    controller.update(); controller.update(); host.phase = 'ARENA'; host.started = true;
+    controller.update(); controller.afterHostFrame();
+    vi.mocked(bridge.getActivityDescriptor).mockReturnValue({ parameters: { dawn: { scheduleId: schedule.id } } } as never);
+    if (mode === 'client') host.authority = false;
+    else if (mode === 'normal session') host.isolated = false;
+    else controller.jumpDawnPhase('day');
+    expect(await window.devScenario!.run({ action: 'dawnSkip', phase: 'night' })).toMatchObject({ ok: false });
+    expect(controller.clock.fastForwarding).toBe(false);
+  });
   it('starts the Kraken mission after placement and waits for the requested HP to be applied', () => {
     (controller as any).runtime.getWorldMetrics = () => ({ offsetX: 0, offsetY: 12, gridCols: 70, gridRows: 48 });
     const api = window.devScenario!;

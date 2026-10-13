@@ -37,6 +37,21 @@ import { COOP_DEFENSE_UPGRADE_DEFINITIONS, isCoopDefenseUpgradeAvailableForClass
 import { buildScenarioProfile, defaultScenario, parseScenario, scenarioLoadout, encodeScenario, decodeScenario } from '../src/dev/scenario/config';
 import { createMemoryStorage } from '../src/dev/scenario/memoryStorage';
 import { ScenarioClock } from '../src/dev/scenario/clock';
+it.each(['pause', 'cancel', 'destroy'] as const)('cancels accelerated simulation on %s without leaving pending work', async action => {
+  const loop = { callback: vi.fn() };
+  const clock = new ScenarioClock(loop);
+  try {
+    const result = clock.fastForward(() => 10000 - clock.now);
+    const rejected = expect(result).rejects.toThrow('cancelled');
+    loop.callback(100, 16);
+    expect(clock.now).toBeGreaterThan(0);
+    if (action === 'pause') clock.paused = true;
+    else if (action === 'destroy') clock.destroy();
+    else clock.cancelFastForward();
+    await rejected;
+    expect(clock.fastForwarding).toBe(false);
+  } finally { clock.destroy(); }
+});
 import { visualTest, bindVisualTestBootClock, bindVisualTestTextureKeys } from '../src/dev/scenario/visualTest';
 
 it('keeps render texture identities unique when a deterministic frame repeats its random stream', () => {
@@ -70,18 +85,18 @@ describe('Dev scenario contract', () => {
     }
     expect(() => parseScenario({ ...recipe, mapId: '1' })).toThrow();
   });
-  it('validates phase actions before invoking the host port', () => {
+  it.each(['dawnPhase', 'dawnSkip'])('validates %s before invoking the host port', action => {
     const jumpDawnPhase = vi.fn();
-    const controller = { jumpDawnPhase, syncPanel() {} } as never;
+    const controller = { jumpDawnPhase, skipDawnPhase: jumpDawnPhase, syncPanel() {} } as never;
     for (const phase of ['day', 'dusk', 'night', 'dawn']) {
-      runScenarioCommand(controller, { action: 'dawnPhase', phase });
+      runScenarioCommand(controller, { action, phase });
       expect(jumpDawnPhase).toHaveBeenLastCalledWith(phase, 0);
     }
     for (const phase of [undefined, null, 'Night', 'missing', 1]) {
-      expect(() => runScenarioCommand(controller, { action: 'dawnPhase', phase })).toThrow();
+      expect(() => runScenarioCommand(controller, { action, phase })).toThrow();
     }
     for (const offsetMs of [null, -1, 1.5, NaN, Infinity, '5', Number.MAX_SAFE_INTEGER + 1]) {
-      expect(() => runScenarioCommand(controller, { action: 'dawnPhase', phase: 'night', offsetMs })).toThrow();
+      expect(() => runScenarioCommand(controller, { action, phase: 'night', offsetMs })).toThrow();
     }
     expect(jumpDawnPhase).toHaveBeenCalledTimes(4);
   });

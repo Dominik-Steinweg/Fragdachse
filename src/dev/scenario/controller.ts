@@ -274,7 +274,7 @@ export class DevScenarioController {
   saveLink(): void { history.replaceState(null, '', encodeScenario(this.config)); }
   jumpDawnPhase(phase: DawnPhaseId, offsetMs = 0): void {
     this.requireReady();
-    if (this.setupPending || this.clock.pendingSteps) throw new Error('Zuerst Aufbau und ausstehende Schritte abschließen.');
+    if (this.setupPending || this.clock.pendingSteps || this.clock.fastForwarding) throw new Error('Zuerst Aufbau und ausstehende Schritte abschließen.');
     const plan = bridge.getActivityDescriptor()?.parameters?.dawn;
     if (!this.config.dawn || !plan) throw new Error('Aktive Dawn-Runde erforderlich.');
     const elapsedMs = dawnPhaseElapsed(getDawnSchedule(plan.scheduleId), phase, offsetMs);
@@ -285,7 +285,36 @@ export class DevScenarioController {
     this.lastAction = { ok: true, action: 'dawnPhase', phase, offsetMs, elapsedMs };
     this.saveLink();
   }
+  async skipDawnPhase(phase: DawnPhaseId, offsetMs = 0): Promise<void> {
+    this.requireReady();
+    if (!isDevScenarioMode() || !bridge.isHost() || !bridge.getConnectedPlayers()
+      .every(player => player.id === bridge.getLocalPlayerId() || this.bots.ids().includes(player.id))) {
+      throw new Error('Isolated dev host required');
+    }
+    if (this.dawnPhaseReview) throw new Error('Nach dawnPhase das Szenario für Gameplay neu starten.');
+    if (this.setupPending || this.clock.pendingSteps || this.clock.fastForwarding || this.clock.preparing) {
+      throw new Error('Zuerst Aufbau und ausstehende Schritte abschließen.');
+    }
+    const plan = bridge.getActivityDescriptor()?.parameters?.dawn;
+    if (!this.config.dawn || !plan) throw new Error('Aktive Dawn-Runde erforderlich.');
+    const elapsedMs = dawnPhaseElapsed(getDawnSchedule(plan.scheduleId), phase, offsetMs);
+    if (elapsedMs < this.runtime.devScenarioPort.readMission().elapsedMs) throw new Error('dawnSkip spult nur vorwärts.');
+    const config = this.config;
+    this.config.freezeMission = false; this.config.suppressWaves = false;
+    this.runtime.devScenarioPort.setOptions(false, this.config.hideTutorial);
+    this.runtime.devScenarioPort.suppressEncounters(false);
+    this.saveLink();
+    await this.clock.fastForward(() => {
+      this.requireReady();
+      if (this.config !== config) throw new Error('Dawn scenario changed.');
+      return elapsedMs - this.runtime.devScenarioPort.readMission().elapsedMs;
+    });
+    this.lastAction = { ok: true, action: 'dawnSkip', phase, offsetMs, elapsedMs };
+  }
   validateLiveOptions(options: Record<string, unknown>): void {
+    if (this.clock.fastForwarding && (options.freezeMission === true || options.suppressWaves === true)) {
+      throw new Error('Während dawnSkip bleiben Mission und Encounter aktiv.');
+    }
     if (this.dawnPhaseReview && (options.freezeMission === false || options.suppressWaves === false)) {
       throw new Error('Nach dawnPhase bleiben Mission und Encounter eingefroren. Für Gameplay das Szenario neu starten.');
     }
@@ -546,6 +575,7 @@ export class DevScenarioController {
       hostNowMs: bridge.getSynchronizedNow(), params: { ultimateAction: action } });
   }
   stop(): void {
+    this.clock.cancelFastForward();
     this.pendingTrainShowcase = null; this.activeTrainShowcase = null; this.trainReadyOwner = null; this.trainFollow = false;
     this.trainCameraPoint = null; this.trainExplosionDeadline = null;
     this.worldLighting?.stopMeasurement();
@@ -916,7 +946,7 @@ export class DevScenarioController {
       && (!bridge.isArenaStarted() || bridge.getGamePhase() !== 'ARENA'));
     return { state: this.state, ready: this.state === 'ready' && !terminated && !this.setupPending && !this.pendingTrainShowcase && !this.krakenLoading && !this.pendingKrakenMission && this.pendingKrakenHp === null, terminated, message: this.message, isolated: true, network: 'local-only',
       krakenResidency: this.runtime.getScenarioKrakenResidency(), krakenDevAction: readKrakenDevAction(), krakenDevGeometry: readKrakenDevGeometry(), initialPosition: this.initialPosition, mission: this.runtime.devScenarioPort.readMission(),
-      dawnPhaseReview: this.dawnPhaseReview,
+      dawnPhaseReview: this.dawnPhaseReview, dawnSkipping: this.clock.fastForwarding,
       train: this.trainStatus(),
       bots: this.bots.ids().map((id, index) => ({ index, id, ...(this.state === 'ready' ? this.bots.position(index) : null) })),
       readyAfterMs: this.readyAt === null ? null : Math.round(this.readyAt - this.startedAt),

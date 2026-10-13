@@ -408,9 +408,15 @@ function validateSiteArchetypes(raw: { readonly archetypes: readonly unknown[] }
       if (archetype.tiers?.some((tier) => !isPositiveFinite(tier?.assaultBudget))) {
         throw new Error(`[dawnContent] ${label} needs a positive assaultBudget per tier`);
       }
-    } else if (archetype.holdDurationMs !== undefined || archetype.requiredSurvivors !== undefined
-      || archetype.assaultDelayMs !== undefined || archetype.tiers?.some((tier) => tier?.assaultBudget !== undefined)) {
+    } else if (archetype.holdDurationMs !== undefined || archetype.requiredSurvivors !== undefined) {
       throw new Error(`[dawnContent] ${label} must not declare hold fields`);
+    }
+    // Destroy sites may have guards too; delay and budgets form one complete assault contract.
+    if (archetype.assaultDelayMs !== undefined || archetype.tiers?.some(tier => tier?.assaultBudget !== undefined)) {
+      if (!isNonNegativeInteger(archetype.assaultDelayMs)
+        || archetype.tiers?.some(tier => !isPositiveFinite(tier?.assaultBudget))) {
+        throw new Error(`[dawnContent] ${label} needs an assault delay and positive budgets for every tier`);
+      }
     }
     if (!Array.isArray(archetype.tiers) || archetype.tiers.length !== DAWN_MAX_SITE_TIER) {
       throw new Error(`[dawnContent] ${label} needs exactly ${DAWN_MAX_SITE_TIER} tiers`);
