@@ -68,7 +68,7 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
     }
     case 'fireControlVisualReview': {
       if (c.hologramPreset !== undefined && !['A','B','C'].includes(String(c.hologramPreset))) throw Error('hologramPreset: A, B or C');
-      if (c.step !== undefined && !['start','deploy','vanish','expireWarning','portalOpen','portalClose','transport'].includes(String(c.step))) throw Error('Invalid fire-control review step');
+      if (c.step !== undefined && !['start','deploy','vanish','expireWarning','portalOpen','portalClose','transport','preview','previewInvalid','previewOff'].includes(String(c.step))) throw Error('Invalid fire-control review step');
       const timeOfDay = c.timeOfDay === undefined ? undefined : c.timeOfDay === 'day' ? 720 : c.timeOfDay === 'night' ? 1320 : number(c.timeOfDay,0,1439);
       controller.arrangeFireControlVisualReview({ hologramPreset: c.hologramPreset as 'A'|'B'|'C'|undefined, timeOfDay,
         step: c.step as import('./FireControlVisualReview').FireControlReviewOptions['step'] }); break;
