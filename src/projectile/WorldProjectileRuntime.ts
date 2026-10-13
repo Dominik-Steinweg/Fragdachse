@@ -511,6 +511,7 @@ export class WorldProjectileRuntime implements
             && (projectile.interaction.burnAugment?.burn?.damagePerTick ?? 0) > 0)
         ),
         sourceTurretId: projectile.provenance.sourceTurretId,
+        turretVisualId: projectile.presentation.turretVisualId,
         flameStreamKey: projectile.presentation.flameStreamKey,
         flightPath,
       });
@@ -1397,6 +1398,7 @@ export class WorldProjectileRuntime implements
         allowTeamDamage: projectile.provenance.allegiance.allowTeamDamage,
         ownerColor: projectile.presentation.ownerColor,
         sourceTurretId: projectile.provenance.sourceTurretId,
+        turretVisualId: projectile.presentation.turretVisualId,
         flameStreamKey: projectile.presentation.flameStreamKey,
         visualMuzzleOrigin: projectile.presentation.visualMuzzleOrigin,
         projectileVisualScale: projectile.presentation.projectileVisualScale,
@@ -1442,6 +1444,12 @@ export class WorldProjectileRuntime implements
       collisionFilter: { ...request.flight.collisionFilter, ignoreRockIndex: ownStructure } } };
     if (this.destroyed) return null;
     const { origin, fireControlRoute: route } = request;
+    if (request.flight.isFlame && request.presentation.turretVisualId !== undefined) {
+      const baseKey = request.presentation.flameStreamKey ?? request.provenance.sourceTurretId
+        ?? request.provenance.allegiance.ownerId;
+      request = { ...request, presentation: { ...request.presentation,
+        flameStreamKey: `${baseKey}#${request.presentation.turretVisualId}` } };
+    }
     if (route) {
       assertFireControlRoute(request);
       // Renderer chains flames per stream key: a flame at the exit never links to one at the muzzle.
@@ -3068,6 +3076,7 @@ export class WorldProjectileRuntime implements
         },
       },
       presentation: {
+        turretVisualId: cfg.turretVisualId,
         flameStreamKey: cfg.flameStreamKey,
         color: cfg.color,
         ownerColor: cfg.ownerColor,

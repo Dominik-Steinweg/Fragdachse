@@ -111,6 +111,8 @@ export interface WeaponFireOptions {
   sourceSlot?: LoadoutSlot;
   /** Quellkonstrukt eines automatischen Turms fuer typisierte Projektilwirkungen. */
   sourceTurretId?: string;
+  /** Sprite of the firing source; omitted = sourceTurretId. Never attribution. */
+  turretVisualId?: string;
   personalMgOwnerId?: string;
   readonly personalMgScope?: import('../combat/CombatScope').CombatScope;
   /** Orts-/konstruktspezifischer Faktor fuer den unmittelbaren Treffer. */
@@ -422,6 +424,7 @@ export class WeaponFireExecutor implements WeaponExecutionCapability {
         proximityPulse: config.proximityPulse,
       },
       presentation: {
+        turretVisualId: options?.turretVisualId,
         color:      config.projectileColor ?? ownerColor,  // Waffen-eigene Farbe hat Vorrang
         style:      config.projectileStyle,
         ownerColor,

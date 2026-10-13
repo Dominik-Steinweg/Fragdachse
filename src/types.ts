@@ -722,6 +722,8 @@ export interface SyncedProjectile {
   ownerColor?: number; // Spielerfarbe des Schützen für projektilspezifische Akzente/VFX
   /** Visuelle Quellenkennung; insbesondere für owner-/quellenabhängige Flame-Ketten. */
   sourceTurretId?: string;
+  /** Sprite of the firing source; omitted = sourceTurretId. Never attribution. */
+  turretVisualId?: string;
   flameStreamKey?: string;
   /** Reiner VFX-Ursprung; x/y ist hier die replizierte tatsächliche Projektilposition. */
   visualMuzzleOrigin?: { x: number; y: number };
@@ -761,8 +763,10 @@ export interface SyncedProjectileStatic {
   color?:  number;
   allowTeamDamage?: boolean;
   ownerColor?: number;
-  /** Visuelle Quellenkennung; bleibt bei Static-Updates derselben Projectile-ID explizit. */
+  /** Original identity; preserved independently of the firing sprite on static replacements. */
   sourceTurretId?: string;
+  /** Sprite of the firing source; omitted = sourceTurretId. Never attribution. */
+  turretVisualId?: string;
   flameStreamKey?: string;
   visualMuzzleOrigin?: { x: number; y: number };
   projectileVisualScale?: number;
@@ -1298,6 +1302,8 @@ export interface ProjectileSpawnConfig {
   plasmaBurnerCharge?: import('./projectile/ProjectileSpawnRequest').ProjectileSupportSpec['plasmaBurnerCharge'];
   energyInjectorPayload?: ProjectileEnergyInjectorPayload;
   sourceTurretId?: string;
+  /** Sprite of the firing source; omitted = sourceTurretId. Never attribution. */
+  turretVisualId?: string;
   flameStreamKey?: string;
   smokeTrailColor?: number;
   fuseTime?:       number;        // ms bis AoE-Explosion (nur Granaten)

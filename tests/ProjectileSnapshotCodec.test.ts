@@ -46,6 +46,7 @@ describe('Projektil-Statik-Codec', () => {
       allowTeamDamage: true,
       ownerColor: 0xff0000,
       sourceTurretId: 'turret-42',
+      turretVisualId: 'fc-copy:1:0',
       flameStreamKey: 'fireball:123',
       visualMuzzleOrigin: { x: 1230.5, y: 570.25 },
       projectileVisualScale: 1.4,
@@ -290,6 +291,16 @@ describe('Projektil-Snapshot-Zusammenfuehrung', () => {
       snapshot([bulletStatic], [{ ...bulletDynamic, x: 120, bounce }]),
     );
     expect(projectile.bounce).toEqual(bounce);
+  });
+
+  it('replaces the optional firing sprite without changing original identity', () => {
+    const cache = new Map<number, SyncedProjectileStatic>();
+    const original = { ...bulletStatic, sourceTurretId: '7' };
+    const copied = applyProjectileSnapshot(cache, snapshot([{ ...original, turretVisualId: 'fc-copy:1:0' }], [bulletDynamic]));
+    expect(copied[0]).toMatchObject({ sourceTurretId: '7', turretVisualId: 'fc-copy:1:0' });
+    const restored = applyProjectileSnapshot(cache, snapshot([original], [bulletDynamic]));
+    expect(restored[0].sourceTurretId).toBe('7');
+    expect(restored[0].turretVisualId).toBeUndefined();
   });
 
   it('despawns via absence from the dynamic stream and releases the cached static', () => {
