@@ -1,4 +1,41 @@
-Entschieden an G1 (E20)
+# Fragdachse Inspector Gadachs Feuerleit Utilitys GDD V2
+
+**Version:** 2.0
+
+**Stand:** 13. Oktober 2026 (Umsetzungsstand nach Gate G1)
+
+**Klasse:** Inspector Gadachs
+
+**Geltungsbereich:** Gameplay, Progression, Mehrspieler und Darstellung für Coop-Defense
+
+**Status:** Umsetzungsgrundlage für den Branch `fire-control`. V2 ersetzt V1. Sie übernimmt die
+User-Entscheidungen vom 13.10.2026 und die Design-Defaults des Umsetzungsplans. Defaults sind im
+[Entscheidungslog](#9-entscheidungslog) markiert und an jedem Meilenstein-Gate (G0–G3) kippbar. Alle
+Zahlen sind Startwerte, stehen später in authored JSON und sind tunebar. Die Regeln beschreiben
+Soll-Verhalten. Was bereits umgesetzt ist, steht im Gate-Bericht `build/fire-control/GATE-Gx.md`.
+
+**Umsetzungsstand (nur Branch `fire-control`, nicht auf `main`):**
+- Umgesetzt und an G0/G1 abgenommen: Basis als dritte Zielstufe für Spielertürme (§2.1), Feuerquellen und
+  Identität (§2.3), **Turmkopien** vollständig mit Upgradebaum, Netz-Slice, Darstellung und HUD (§3), inklusive
+  der G1-Entscheidungen E17–E20.
+- Zwischenstand D42: Turmkopien sind für den Inspektor gratis freigeschaltet; HE bleibt bis P3.1 gratis.
+- **Nicht begonnen:** Portale (§4, Meilenstein M2) – im Content gesperrt, Vertragsentwurf
+  `build/fire-control/P2-contract.md`; HE-Kosten und Loadout-Migration (P3.1); Balance-Tuning (E20: erst
+  Spieltests).
+- Testanleitung für den User: `build/fire-control/TESTING.md`.
+
+Inspector Gadachs erhält zwei Utilities, mit denen seine gebauten Türme entfernte Kämpfe unterstützen:
+
+- **Turmkopien** (V1: „Feuerleit-Relais“): Der Spieler platziert per Maus temporäre Projektionen
+  eigener Türme.
+- **Portale** (V1: „Feuerleitgranate“): Ein geworfenes Gerät öffnet einen festen Ausgang. Vor dem Rohr
+  jedes aktiven eigenen Turms entsteht ein Mündungsportal, durch das der Turm feuert.
+
+Dazu kommt eine allgemeine Regel: **Spielereigene Türme greifen im Coop-Defense feindliche Basen
+selbstständig an**, als dritte Zielpriorität.
+
+### Änderungen gegenüber V1
+
 | Thema | V1 | V2 |
 |---|---|---|
 | Name und Bedienung der Kopien | Relais wird geworfen | **Turmkopien werden per Maus platziert**: E startet die Vorschau, ein Linksklick platziert |
@@ -435,7 +472,9 @@ vorhandenen Binding-Pfade genügen.
 - Ein nachträglich beitretender Spieler sieht aktive Kopien und Verbindungen mit Restlaufzeit.
 - `sourceTurretId` bleibt die ID des Originals. Ein neues Feld `turretVisualId` im Projektil-Snapshot
   steuert die Schussanimation; `flameStreamKey` gilt je Quelle.
-- Das Protokoll wird einmal angehoben, auf 30, aber erst nach dem Merge von Shield-Charger.
+- Das Protokoll wird einmal angehoben. Im Branch `fire-control` steht es auf 30; `main` hat 30 inzwischen
+  selbst erreicht (Shield-Charger, Alien-Kegel). Beim Merge braucht die Feuerleitung eine weitere Anhebung
+  über den dann aktuellen `main`-Stand (Checkliste im G1-Bericht §7).
 
 ## 8 Darstellung und Lesbarkeit
 
