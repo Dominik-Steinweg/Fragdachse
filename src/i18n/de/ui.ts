@@ -1,5 +1,8 @@
 export const deUi = {
   "ui.dawn.merchant": "Händler",
+  "ui.dawn.expansionStats": "Expansion: {expansionLevel}\nBasisradius (Dawn): {radius} Zellen",
+  "ui.dawn.threat": "Threat: {threat}",
+  "ui.dawn.threatConsequence": "Threat: {threat} → {nextThreat} nach Expansion",
   "ui.dawn.buyExpansion": "Expansion kaufen",
   "ui.dawn.merchantStats": "Schrott: {scrap}\nThreat: {threat} · Expansion: {expansionLevel}\nBasisradius (Dawn): {radius} Zellen",
   "ui.dawn.expansionCost": "Kosten: {cost} Schrott",

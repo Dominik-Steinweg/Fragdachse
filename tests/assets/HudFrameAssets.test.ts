@@ -4,14 +4,20 @@ import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
 import exportsJson from '../../src/ui/hudFrameExports.json';
 import { HUD_FRAME_TEXTURE, HUD_TONES, preloadHudFrameAssets } from '../../src/ui/HudFrameAssets';
+import { DAWN_UI_ASSETS } from '../../src/assets/DawnUiAssets';
+import { runtimeAssetUrl } from '../../src/assets/RuntimeAssetUrls';
 
 const root = resolve(__dirname, '../../public/assets/ui/hud-frames');
 const frames = exportsJson.atlas.frames as Record<string, { frame: { x: number; y: number; w: number; h: number } }>;
 
 describe('HUD frame artwork', () => {
-  it('preloads only the exported atlas and retains its original and generation prompt', async () => {
+  it('preloads the exported atlas and Dawn icons and retains its original and generation prompt', async () => {
     const atlas = vi.fn();
-    preloadHudFrameAssets({ atlas } as never);
+    const image = vi.fn();
+    preloadHudFrameAssets({ atlas, image } as never);
+    for (const asset of DAWN_UI_ASSETS) {
+      expect(image).toHaveBeenCalledWith(asset.key, runtimeAssetUrl(`./assets/ui/dawn/runtime/${asset.file}`));
+    }
     expect(atlas).toHaveBeenCalledExactlyOnceWith(HUD_FRAME_TEXTURE, './assets/ui/hud-frames/' + exportsJson.file, exportsJson.atlas);
     expect(exportsJson.file.startsWith('runtime/')).toBe(true);
 

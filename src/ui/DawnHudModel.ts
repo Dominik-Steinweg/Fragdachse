@@ -5,6 +5,16 @@ import { resolveDawnSites } from '../dawn/resolution/DawnScenarioResolution';
 import { resolveDawnPhase } from '../dawn/rules/DawnPhase';
 import type { CoopDefenseSecondaryObjectivePresentationState } from '../types';
 
+/** Measured text and optional icons must fit without abbreviating phase/time or resources. */
+export function resolveDawnHudWidth(input: {
+  minimum: number; inset: number; title: number; value: number; kicker: number;
+  valueIcon: number; kickerIcon: number;
+}): number {
+  return Math.ceil(Math.max(input.minimum,
+    input.inset * 2 + input.title + 12 + input.value + input.valueIcon,
+    input.inset * 2 + input.kicker + input.kickerIcon));
+}
+
 export interface DawnSiteMarker {
   readonly objectiveId: string;
   readonly visualKey: string;

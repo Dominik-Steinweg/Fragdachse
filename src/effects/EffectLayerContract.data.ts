@@ -3330,6 +3330,8 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:ui/UiContextMenu.ts:open/this.container/setDepth/0","owner":"ui/UiContextMenu.ts","component":"open/this.container/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[103],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"open/this.container/setDepth/0","expression":"this.standaloneDepth"}},
 ];
 export const CPU_SOURCE_CONTRACTS = {
+  // Dawn UI images inherit the existing card/modal container depth and clarity camera.
+  // HudCard owns counter icons; the merchant owns portrait and category/value rows.
   "ui/DawnHUD.ts": {
     "sites": [
       { "key": "module/this.card.root/setDepth/0", "expression": "DEPTH.OVERLAY", "blends": ["NORMAL"] },

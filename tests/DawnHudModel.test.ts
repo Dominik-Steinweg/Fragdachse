@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { buildDawnHudModel, buildDawnSiteMarkers } from '../src/ui/DawnHudModel';
+import { buildDawnHudModel, buildDawnSiteMarkers, resolveDawnHudWidth } from '../src/ui/DawnHudModel';
 import { getDawnSchedule } from '../src/config/dawn/dawnContent';
 import { composeDawnRoundPlans } from '../src/dawn/composition/DawnRoundComposition';
 import { resolveDawnScenario, resolveDawnSites } from '../src/dawn/resolution/DawnScenarioResolution';
 
 describe('Dawn HUD projection', () => {
+  it('reserves enough width for full text plus icons and collapses missing-icon spacing', () => {
+    const measured = { minimum: 480, inset: 38, title: 340, value: 120, kicker: 200, valueIcon: 22, kickerIcon: 22 };
+    const width = resolveDawnHudWidth(measured);
+    expect(width - 2 * measured.inset).toBeGreaterThanOrEqual(measured.title + 12 + measured.value + measured.valueIcon);
+    expect(resolveDawnHudWidth({ ...measured, valueIcon: 0 })).toBe(width - measured.valueIcon);
+    const longKicker = { ...measured, kicker: 700 };
+    expect(resolveDawnHudWidth(longKicker) - 2 * measured.inset).toBeGreaterThanOrEqual(longKicker.kicker + measured.kickerIcon);
+    expect(resolveDawnHudWidth({ ...measured, title: 40, value: 20, kicker: 20 })).toBe(measured.minimum);
+  });
+
   const plans = composeDawnRoundPlans({ seed: 11, threat: 1, dayNumber: 3 });
   const schedule = getDawnSchedule(plans.activity.scheduleId);
   const world = resolveDawnScenario(plans.world, plans.activity).world;

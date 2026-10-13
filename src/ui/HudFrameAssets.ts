@@ -8,6 +8,7 @@
  * dieselbe Farbsprache wie bei Balken und Texten.
  */
 import type * as Phaser from 'phaser';
+import { preloadDawnUiAssets } from '../assets/DawnUiAssets';
 import { COLORS } from '../config';
 import type { LivingBarPalette } from './LivingBarEffect';
 import exports from './hudFrameExports.json';
@@ -50,6 +51,7 @@ export const HUD_TONES: Readonly<Record<HudTone, HudToneStyle>> = {
 };
 
 export function preloadHudFrameAssets(loader: Phaser.Loader.LoaderPlugin): void {
+  preloadDawnUiAssets(loader);
   loader.atlas(HUD_FRAME_TEXTURE, './assets/ui/hud-frames/' + exports.file, exports.atlas);
 }
 

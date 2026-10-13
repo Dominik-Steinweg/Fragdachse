@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { CELL_SIZE, DEPTH } from '../config';
+import { DAWN_UI_TEXTURES } from '../assets/DawnUiAssets';
 import { getDawnSchedule } from '../config/dawn/dawnContent';
 import type { WorldDefinition } from '../config/authoring/WorldDefinition';
 import type { WorldDescriptor } from '../world/WorldDescriptor';
@@ -13,7 +14,7 @@ import { t } from '../i18n';
 import { HudCard } from './HudCard';
 import type { CoopDefenseObjectiveAnnouncement } from './CoopDefenseObjectiveAnnouncement';
 import { getArrowPointOnScreenViewEdge, getVisibleWorldView, isWorldPointInsideView } from './HostileBaseIndicator';
-import { buildDawnHudModel, buildDawnSiteMarkers, type DawnSiteMarker } from './DawnHudModel';
+import { buildDawnHudModel, buildDawnSiteMarkers, resolveDawnHudWidth, type DawnSiteMarker } from './DawnHudModel';
 
 const CARD = { x: 270, y: 66, width: 480, scale: 0.62 };
 
@@ -30,7 +31,10 @@ export class DawnHUD {
   private readonly markers = new Map<string, { world: Phaser.GameObjects.Graphics; edge: Phaser.GameObjects.Graphics }>();
 
   constructor(private readonly scene: Phaser.Scene) {
-    this.card = new HudCard(scene, { ...CARD, tone: 'neutral', titleSize: 14, valueSize: 14, kickerSize: 10 });
+    this.card = new HudCard(scene, { ...CARD, tone: 'neutral', titleSize: 14, valueSize: 14, kickerSize: 10,
+      valueIcon: { key: DAWN_UI_TEXTURES.scrap, size: 18 },
+      kickerIcon: { key: DAWN_UI_TEXTURES.threat, size: 18 },
+    });
     this.card.root.setPosition(CARD.x, CARD.y).setDepth(DEPTH.OVERLAY).setScrollFactor(0).setVisible(false);
     promoteToClarityCamera(scene, this.card.root);
   }
@@ -77,8 +81,16 @@ export class DawnHUD {
     if (signature !== this.signature) {
       this.signature = signature;
       this.card.setTone(tone).setKicker(model.returnToBase ? `${kicker} · ${t('ui.dawn.returnToBase')}` : kicker)
-        .setValue(t('ui.dawn.scrapCount', { scrap: model.scrap }))
-        .setTitle(t('ui.dawn.phaseTime', { phase: label, clock: model.clock, time: remaining }));
+        .setValue(t('ui.dawn.scrapCount', { scrap: model.scrap }));
+      const title = t('ui.dawn.phaseTime', { phase: label, clock: model.clock, time: remaining });
+      this.card.title.setText(title);
+      this.card.setWidth(resolveDawnHudWidth({ minimum: CARD.width,
+        inset: this.card.width / 2 - this.card.contentRight,
+        title: this.card.title.width, value: this.card.value.width, kicker: this.card.kicker.width,
+        valueIcon: this.card.valueIconWidth, kickerIcon: this.card.kickerIconWidth,
+      })).setTitle(title);
+      // Keep the original left edge when long phase names or counters need more room.
+      this.card.root.setPosition(CARD.x - CARD.width / 2 + this.card.width / 2, CARD.y);
     }
     this.card.setProgress(model.remainingFraction).root.setVisible(true);
     const targets = model.sites.map(site => ({ id: site.objectiveId, ...site }));
@@ -132,7 +144,7 @@ export class DawnHUD {
   }
 
   getReservedHudRects() {
-    return this.card.root.visible ? [{ left: CARD.x - CARD.width / 2, right: CARD.x + CARD.width / 2,
+    return this.card.root.visible ? [{ left: this.card.root.x - this.card.width / 2, right: this.card.root.x + this.card.width / 2,
       top: CARD.y - this.card.height / 2, bottom: CARD.y + this.card.height / 2 }] : [];
   }
 

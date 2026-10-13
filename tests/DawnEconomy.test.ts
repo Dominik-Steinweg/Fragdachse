@@ -49,14 +49,17 @@ describe('Dawn economy', () => {
       expect(purchaseDawnExpansion(progress, true)).toBe(false);
       progress.scrap = cost;
       expect(purchaseDawnExpansion(progress, false)).toBe(false);
-      expect(buildDawnMerchantModel(progress, 2, true)).toMatchObject({ cost, canBuy: true, threat: resolveDawnThreat(level) });
+      expect(buildDawnMerchantModel(progress, 2, true)).toMatchObject({ cost, canBuy: true,
+        threat: resolveDawnThreat(level), nextThreat: resolveDawnThreat(level + 1) });
+      expect(buildDawnMerchantModel(progress, 2, false)).toMatchObject({ canBuy: false,
+        nextThreat: resolveDawnThreat(level + 1) });
       expect(purchaseDawnExpansion(progress, true)).toBe(true);
       expect(progress).toMatchObject({ scrap: 0, expansionLevel: level + 1 });
     }
     progress.scrap = DAWN_MAX_SCRAP;
     expect(resolveDawnExpansionCost(progress.expansionLevel)).toBeNull();
     expect(purchaseDawnExpansion(progress, true)).toBe(false);
-    expect(buildDawnMerchantModel(progress, 2, true).canBuy).toBe(false);
+    expect(buildDawnMerchantModel(progress, 2, true)).toMatchObject({ canBuy: false, cost: null, nextThreat: null });
   });
 
   it('persists an unlocked purchase and exposes the new personal stage without a world mutation', () => {

@@ -12,6 +12,7 @@ export function buildDawnMerchantModel(progress: DawnProgress, campaignStage: Ca
   return {
     scrap: progress.scrap, expansionLevel: progress.expansionLevel,
     threat: resolveDawnThreat(progress.expansionLevel),
+    nextThreat: cost === null ? null : resolveDawnThreat(progress.expansionLevel + 1),
     radius: area.kind === 'radius' ? area.radiusCells : 3,
     cost, canBuy: unlocked && cost !== null && progress.scrap >= cost,
   };
