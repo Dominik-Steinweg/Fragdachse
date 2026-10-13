@@ -4,7 +4,7 @@ import type { ProjectileSupportImpactPort } from './ProjectileSupportImpactPort'
 import { scalePrimaryHitRewardIntent } from '../combat/PrimaryHitReward';
 import { scalePortalDamagePayload } from '../combat/PortalDamagePayload';
 import { acquirePortalDamage, findPortalCrossing, gatePortalExit, portalCircleEntry, portalDamageMultiplier, releasePortalGates,
-  type PortalQueryPort } from '../systems/PortalTraversal';
+  type PortalDamageContext, type PortalPoint, type PortalQueryPort } from '../systems/PortalTraversal';
 import type { TimeBubbleChargePort } from '../systems/TimeBubbleChargePort';
 import { createGrenadeFragments, isGrenadeFragment } from '../systems/GrenadeFragmentRules';
 import { ProjectilePathRecorder } from './ProjectileFlightPath';
@@ -2184,38 +2184,49 @@ export class WorldProjectileRuntime implements
         if (record.pendingDestroy || record.bounceProcessedThisStep
           || Math.abs(record.physics.body.velocity.x - velocity.x * distanceRatio) > 0.000001
           || Math.abs(record.physics.body.velocity.y - velocity.y * distanceRatio) > 0.000001) break;
-        advanceProjectileDistance(record, crossing.entry.x, crossing.entry.y);
-        velocity.x = record.physics.body.velocity.x;
-        velocity.y = record.physics.body.velocity.y;
-        if (record.remainingRangePx !== undefined) record.remainingRangePx -= prefixLength;
-        this.flightPaths.redirect(record.id, crossing.entry.x, crossing.entry.y, velocity.x, velocity.y, nowMs, false);
-        this.flightPaths.redirect(record.id, crossing.exit.x, crossing.exit.y, velocity.x, velocity.y, nowMs, true);
-        const context = acquirePortalDamage(record.provenance.portalDamage, crossing.pair,
-          this.portalQuery!.isPortalFriendly(crossing.pair.ownerId, record.provenance.allegiance.ownerId));
-        const ratio = portalDamageMultiplier(context) / portalDamageMultiplier(record.provenance.portalDamage);
-        if (ratio !== 1) {
-          record.damage *= ratio;
-          record.spec = { ...record.spec, interaction: scalePortalDamagePayload(record.spec.interaction, ratio) };
-          record.interaction = { ...record.interaction,
-            explosion: scalePortalDamagePayload(record.interaction.explosion, ratio),
-            burnAugment: record.interaction.burnAugment ? { ...record.interaction.burnAugment,
-              burn: scalePortalDamagePayload(record.interaction.burnAugment.burn, ratio) } : undefined };
-          record.provenance = { ...record.provenance, portalDamage: context };
-        }
+        end = this.transferThroughPortal(record, crossing.entry, crossing.exit, end, prefixLength,
+          acquirePortalDamage(record.provenance.portalDamage, crossing.pair,
+            this.portalQuery!.isPortalFriendly(crossing.pair.ownerId, record.provenance.allegiance.ownerId)), nowMs);
         if (prefixLength > 1e-6) zeroProgress.clear();
         zeroProgress.add(crossing.sourceKey);
         gatePortalExit(gates, crossing);
-        end = { x: crossing.exit.x + end.x - crossing.entry.x, y: crossing.exit.y + end.y - crossing.entry.y };
         from = crossing.exit;
-        record.sourceCarrierBaseId = undefined;
-        record.lastX = from.x; record.lastY = from.y;
-        resetProjectileDistanceAnchor(record, from.x, from.y);
-        record.physics.body.reset(end.x, end.y);
-        record.physics.body.setVelocity(velocity.x, velocity.y);
         record.portalFlightPending = true;
         releasePortalGates(gates, from);
       }
     }
+  }
+
+  /**
+   * One-way transfer shared by Translocator pairs and fire-control routes. The real prefix up to
+   * `entry` counts as flight; the jump to `exit` is free (no range, distance bonus or trail) and
+   * keeps direction and lifetime. `portalDamage` is the already acquired context: each
+   * contribution scales the payload once and children inherit it. Returns the new step end.
+   */
+  private transferThroughPortal(record: ProjectileRuntimeRecord, entry: PortalPoint, exit: PortalPoint,
+    end: PortalPoint, prefixLength: number, portalDamage: PortalDamageContext | undefined, nowMs: number): PortalPoint {
+    advanceProjectileDistance(record, entry.x, entry.y);
+    const velocity = { x: record.physics.body.velocity.x, y: record.physics.body.velocity.y };
+    if (record.remainingRangePx !== undefined) record.remainingRangePx -= prefixLength;
+    this.flightPaths.redirect(record.id, entry.x, entry.y, velocity.x, velocity.y, nowMs, false);
+    this.flightPaths.redirect(record.id, exit.x, exit.y, velocity.x, velocity.y, nowMs, true);
+    const ratio = portalDamageMultiplier(portalDamage) / portalDamageMultiplier(record.provenance.portalDamage);
+    if (ratio !== 1) {
+      record.damage *= ratio;
+      record.spec = { ...record.spec, interaction: scalePortalDamagePayload(record.spec.interaction, ratio) };
+      record.interaction = { ...record.interaction,
+        explosion: scalePortalDamagePayload(record.interaction.explosion, ratio),
+        burnAugment: record.interaction.burnAugment ? { ...record.interaction.burnAugment,
+          burn: scalePortalDamagePayload(record.interaction.burnAugment.burn, ratio) } : undefined };
+      record.provenance = { ...record.provenance, portalDamage };
+    }
+    const next = { x: exit.x + end.x - entry.x, y: exit.y + end.y - entry.y };
+    record.sourceCarrierBaseId = undefined;
+    record.lastX = exit.x; record.lastY = exit.y;
+    resetProjectileDistanceAnchor(record, exit.x, exit.y);
+    record.physics.body.reset(next.x, next.y);
+    record.physics.body.setVelocity(velocity.x, velocity.y);
+    return next;
   }
 
   private bubbleChargePort: Pick<TimeBubbleChargePort, 'observeProjectile'> | null = null;

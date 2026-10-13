@@ -80,6 +80,11 @@ export function portalDamageMultiplier(context: PortalDamageContext | undefined)
 }
 export function acquirePortalDamage(context: PortalDamageContext | undefined, pair: PortalPair,
   friendly: boolean): PortalDamageContext | undefined {
-  if (!friendly || pair.damageBonus <= 0 || context?.some(entry => entry.pairId === pair.id)) return context;
-  return [...(context ?? []), { pairId: pair.id, bonus: pair.damageBonus }];
+  return friendly ? acquirePortalDamageContribution(context, { pairId: pair.id, bonus: pair.damageBonus }) : context;
+}
+/** At most once per contribution id: a pair, or a fire-control deployment shared by all its entries. */
+export function acquirePortalDamageContribution(context: PortalDamageContext | undefined,
+  contribution: PortalDamageContribution): PortalDamageContext | undefined {
+  if (contribution.bonus <= 0 || context?.some(entry => entry.pairId === contribution.pairId)) return context;
+  return [...(context ?? []), contribution];
 }
