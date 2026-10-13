@@ -75823,7 +75823,7 @@
       "gameIds": [
         "FIRE_CONTROL_PORTAL"
       ],
-      "revision": "fc-v1-h-draft",
+      "revision": "fc-hq-4",
       "variant": "standard",
       "sourceSize": 128,
       "textureKey": "held_FIRE_CONTROL_PORTAL",
@@ -75861,8 +75861,8 @@
         "height": 132
       },
       "hashes": {
-        "idle": "9c90239b0270af1ee4cf247b9e52cc31227a7df2ef5d72881ca3cbbee241bac1",
-        "sheet": "ef9b2bdd577636c4aed633c16e2c0531e173da098f1221f597b7f106db5ed4e7"
+        "idle": "30faedfb6ed522c2554bc638c60606a88f3228ac428d2a754fab8a63ed944209",
+        "sheet": "602dd90a9459135c2663796a9741a478ef9667ba8e3d5ff7b50250318968dd98"
       }
     },
     {
@@ -75871,7 +75871,7 @@
       "gameIds": [
         "FIRE_CONTROL_RELAY"
       ],
-      "revision": "fc-v1-h-draft",
+      "revision": "fc-hq-4",
       "variant": "standard",
       "sourceSize": 128,
       "textureKey": "held_FIRE_CONTROL_RELAY",
@@ -75909,15 +75909,15 @@
         "height": 132
       },
       "hashes": {
-        "idle": "5b9f2cb5e19461cb0a7d9b28d04ea8b24fa20578e632950b62ab1a5f908550d8",
-        "sheet": "b2cf6de9d6ede8497097a74da33069d7985f3e6542e0db6024caf66df5305ecf"
+        "idle": "cb2dcaf2a09fcc81711ab42e2e5801463ffeda7ace0d32ee06f21a644c4e5d4e",
+        "sheet": "9862bfb51f5a127a32ae1e7b320d94263769b539fd8692c2d0ab41cda77eb445"
       }
     },
     {
       "id": "fire-control-relay",
       "category": "construction",
       "gameIds": [],
-      "revision": "devices-relay-v2-runtime-draft",
+      "revision": "fc-hq-4",
       "variant": "standard",
       "sourceSize": 48,
       "textureKey": "fire_control_relay",
@@ -75972,8 +75972,8 @@
         }
       ],
       "hashes": {
-        "idle": "e3c0c45d554521f6b15c3514cd00bb7eca416b384332608dd2f879860244eb94",
-        "sheet": "a1ff4c32d6d4665e70ee68a18b8ff9ee352d2f16290ca6816c25a9fc4a8a869e"
+        "idle": "bb6e88c725ac422c81709fdd4d84a49fb59c17013dbda4280515e17f34e595e3",
+        "sheet": "b1aca45def6eb37b731156e192d171e76744d07afa6cdb63697bae28f496f50d"
       }
     }
   ]
