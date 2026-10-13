@@ -103,7 +103,8 @@ export class CoopMissionPresentationInfrastructure {
       if (!definition) return;
       this.dawnSiteProps = new DawnSitePropRenderer(this.scene, plan, definition,
         baseId => this.uiInput?.getBaseManager()?.getBase(baseId)?.isDestroyed() ?? false,
-        baseId => this.uiInput?.getBaseManager()?.getStructureHp(baseId) ?? null);
+        baseId => this.uiInput?.getBaseManager()?.getStructureHp(baseId) ?? null,
+        this.uiInput?.renderers.lighting ?? null);
       this.dawnWorldRevision = world.worldRevision;
     }
     this.dawnSiteProps?.sync(objectives);

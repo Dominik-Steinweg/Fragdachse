@@ -659,6 +659,21 @@ export const LIGHT_PRESETS = {
     flickerAmount: 0.14,
     flickerHz: 9,
   },
+  /** Quiet site light; the model owns its state-dependent tuning and pulse. */
+  dawnSiteGlow: {
+    enabled: true,
+    shape: 'radial',
+    // The pure Dawn site model supplies state-dependent colour, radius and intensity.
+    radiusPx: 1,
+    color: 0xffffff,
+    intensity: 1,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 2,
+    flickerAmount: 0,
+    flickerHz: 0,
+  },
   /**
    * Ruhiges Standlicht einer Basis in ihrer Teamfarbe. Groß und schwach – es soll die
    * Basis bei Dunkelheit erkennbar machen, nicht die Umgebung ausleuchten.

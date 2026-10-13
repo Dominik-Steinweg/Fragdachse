@@ -2823,6 +2823,8 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:arena/LobbyMerchantRenderer.ts:module/this.nameplate/setDepth/0","owner":"arena/LobbyMerchantRenderer.ts","component":"module/this.nameplate/setDepth/0","height":"high","lighting":"material","camera":"world","depths":[22],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"module/this.nameplate/setDepth/0","expression":"DEPTH.LOCAL_UI"}},
   {"id":"cpu:arena/LobbyMerchantRenderer.ts:module/this.dealer/setDepth/0","owner":"arena/LobbyMerchantRenderer.ts","component":"module/this.dealer/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[10],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.dealer/setDepth/0","expression":"DEPTH.PLAYERS"}},
   {"id":"cpu:arena/DawnSitePropRenderer.ts:sync/sprite/setDepth/0","owner":"arena/DawnSitePropRenderer.ts","component":"sync/sprite/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[4],"blends":["NORMAL"],"profiles":["G"],"role":"effect","source":{"selector":"sync/sprite/setDepth/0","expression":"DEPTH.BASES"}},
+  {id:'cpu:arena/DawnSitePropRenderer.ts:syncLight/emission/setDepth/0',owner:'arena/DawnSitePropRenderer.ts',component:'syncLight/emission/setDepth/0',height:'body',lighting:'emissive',camera:'world',depths:[19.58],blends:['ADD'],profiles:['E'],role:'effect',source:{selector:'syncLight/emission/setDepth/0',expression:'DEPTH_LIGHTING + 0.08'}},
+  {id:'cpu:arena/DawnSitePropRenderer.ts:syncSparks/emitter/setDepth/0',owner:'arena/DawnSitePropRenderer.ts',component:'syncSparks/emitter/setDepth/0',height:'body',lighting:'emissive',camera:'world',depths:[19.59],blends:['ADD'],profiles:['E'],role:'effect',source:{selector:'syncSparks/emitter/setDepth/0',expression:'DEPTH_LIGHTING + 0.09'}},
   {id:'cpu:ui/DawnHUD.ts:module/this.card.root/setDepth/0',owner:'ui/DawnHUD.ts',component:'module/this.card.root/setDepth/0',height:'body',lighting:'emissive',camera:'clarity',depths:[100],blends:['NORMAL'],profiles:['C'],role:'ui',source:{selector:'module/this.card.root/setDepth/0',expression:'DEPTH.OVERLAY'}},
   {id:'cpu:ui/DawnHUD.ts:sync/marker.edge/setDepth/0',owner:'ui/DawnHUD.ts',component:'sync/marker.edge/setDepth/0',height:'body',lighting:'emissive',camera:'clarity',depths:[100],blends:['NORMAL'],profiles:['C'],role:'ui',source:{selector:'sync/marker.edge/setDepth/0',expression:'DEPTH.OVERLAY'}},
   {id:'cpu:ui/DawnHUD.ts:createMarker/marker/setDepth/0',owner:'ui/DawnHUD.ts',component:'createMarker/marker/setDepth/0',height:'body',lighting:'emissive',camera:'world',depths:[12],blends:['NORMAL'],profiles:['K'],role:'ui',source:{selector:'createMarker/marker/setDepth/0',expression:'DEPTH.BASES + 8'}},
@@ -3336,8 +3338,12 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
 export const CPU_SOURCE_CONTRACTS = {
   "arena/LobbyMerchantRenderer.ts": {"blends":[],"cameras":[],"sites":[{"key":"module/this.stall/setDepth/0","expression":"DEPTH.BASES","blends":["NORMAL"]},{"key":"module/this.dealer/setDepth/0","expression":"DEPTH.PLAYERS","blends":["NORMAL"]},{"key":"module/this.nameplate/setDepth/0","expression":"DEPTH.LOCAL_UI","blends":["NORMAL"]}],"bindings":{}},
   "arena/DawnSitePropRenderer.ts": {
-    "blends": [], "cameras": [],
-    "sites": [{ "key": "sync/sprite/setDepth/0", "expression": "DEPTH.BASES", "blends": ["NORMAL"] }],
+    "blends": ["Phaser.BlendModes.ADD"], "cameras": [],
+    "sites": [
+      { "key": "sync/sprite/setDepth/0", "expression": "DEPTH.BASES", "blends": ["NORMAL"] },
+      { "key": "syncLight/emission/setDepth/0", "expression": "DEPTH_LIGHTING + 0.08", "blends": ["ADD"] },
+      { "key": "syncSparks/emitter/setDepth/0", "expression": "DEPTH_LIGHTING + 0.09", "blends": ["ADD"] }
+    ],
     "bindings": {}
   },
   // Dawn UI images inherit the existing card/modal container depth and clarity camera.

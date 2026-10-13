@@ -11,6 +11,62 @@ export interface DawnSitePropVisual {
 
 export const DAWN_SITE_HIT_FLASH_MS = 100;
 
+/** Local presentation tuning in world pixels; never changes the night's ambient light. */
+export const DAWN_SITE_LIGHT = {
+  warm: 0xffba70, ember: 0xff9850, cyan: 0x65e4f2,
+  extractorIdleRadius: 112, extractorIdleIntensity: 0.42,
+  extractorActiveRadius: 156, extractorActiveIntensity: 0.78,
+  extractorCompletedRadius: 132, extractorCompletedIntensity: 0.64,
+  pulsePeriodMs: 1400, pulseDepth: 0.28,
+  lampX: 0, lampY: 1, lampSize: 9, lampAlpha: 0.9,
+  wreckRadius: 104, wreckIntensity: 0.48, emberX: -8, emberY: 9,
+  emberSize: 7, emberAlpha: 0.48,
+  techRadius: 52, techIntensity: 0.28, techX: 15, techY: -10,
+  techSize: 5, techAlpha: 0.5,
+} as const;
+
+export const DAWN_SITE_SPARKS = {
+  intervalMs: 450, lifespanMinMs: 220, lifespanMaxMs: 480,
+  speedMin: 7, speedMax: 20, scaleStart: 0.5, scaleEnd: 0.08,
+  spreadPx: 9, maxParticles: 3,
+} as const;
+
+export interface DawnSiteLight {
+  readonly id: 'warm' | 'tech';
+  readonly color: number;
+  readonly radiusPx: number;
+  readonly intensity: number;
+  readonly offsetX: number;
+  readonly offsetY: number;
+  readonly emissionSize: number;
+  readonly emissionAlpha: number;
+}
+
+/** Same replicated inputs as the prop; time animates presentation only, without local state. */
+export function resolveDawnSiteLights(
+  archetypeId: string, tier: number,
+  objectiveState: CoopDefenseSecondaryObjectiveState | undefined,
+  destroyed: boolean, nowMs: number,
+): readonly DawnSiteLight[] {
+  if (!resolveDawnSitePropVisual(archetypeId, tier, objectiveState, destroyed)) return [];
+  const c = DAWN_SITE_LIGHT;
+  if (archetypeId === 'extractor') {
+    const active = objectiveState === 'active', completed = objectiveState === 'completed';
+    const pulse = active ? 1 - c.pulseDepth * (0.5 + 0.5 * Math.cos(nowMs * Math.PI * 2 / c.pulsePeriodMs)) : 1;
+    return [{ id: 'warm', color: c.warm,
+      radiusPx: active ? c.extractorActiveRadius : completed ? c.extractorCompletedRadius : c.extractorIdleRadius,
+      intensity: (active ? c.extractorActiveIntensity : completed ? c.extractorCompletedIntensity : c.extractorIdleIntensity) * pulse,
+      offsetX: c.lampX, offsetY: c.lampY, emissionSize: c.lampSize,
+      emissionAlpha: active || completed ? c.lampAlpha * pulse : 0 }];
+  }
+  const warm: DawnSiteLight = { id: 'warm', color: c.ember, radiusPx: c.wreckRadius,
+    intensity: c.wreckIntensity, offsetX: c.emberX, offsetY: c.emberY,
+    emissionSize: c.emberSize, emissionAlpha: c.emberAlpha };
+  return tier === 3 ? [warm, { id: 'tech', color: c.cyan, radiusPx: c.techRadius,
+    intensity: c.techIntensity, offsetX: c.techX, offsetY: c.techY,
+    emissionSize: c.techSize, emissionAlpha: c.techAlpha }] : [warm];
+}
+
 export interface DawnSitePropHitFlash {
   readonly hp: number | null;
   readonly untilMs: number;

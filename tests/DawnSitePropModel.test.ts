@@ -1,8 +1,57 @@
 import { describe, expect, it } from 'vitest';
-import { DAWN_SITE_HIT_FLASH_MS, resolveDawnSitePropHitFlash, resolveDawnSitePropVisual } from '../src/arena/DawnSitePropModel';
+import { DAWN_SITE_HIT_FLASH_MS, DAWN_SITE_LIGHT, resolveDawnSiteLights, resolveDawnSitePropHitFlash, resolveDawnSitePropVisual } from '../src/arena/DawnSitePropModel';
 import type { CoopDefenseSecondaryObjectiveState } from '../src/types';
 
 const states: readonly (CoopDefenseSecondaryObjectiveState | undefined)[] = [undefined, 'dormant', 'active', 'completed', 'failed'];
+
+describe('Dawn site lighting projection', () => {
+  it('keeps dormant and failed extractor silhouettes lit with their warning lamp off', () => {
+    for (const state of [undefined, 'dormant', 'failed'] as const) {
+      const lights = resolveDawnSiteLights('extractor', 1, state, false, 0);
+      expect(lights[0].intensity).toBeGreaterThan(0);
+      expect(lights[0].emissionAlpha).toBe(0);
+      expect(resolveDawnSiteLights('extractor', 1, state, false, 350)).toEqual(lights);
+    }
+  });
+
+  it('pulses only the active extractor smoothly and keeps its trough above dormant light', () => {
+    const sample = (state: CoopDefenseSecondaryObjectiveState, time: number) =>
+      resolveDawnSiteLights('extractor', 1, state, false, time)[0];
+    const period = DAWN_SITE_LIGHT.pulsePeriodMs;
+    const trough = sample('active', 0), peak = sample('active', period / 2);
+    expect(trough.intensity).toBeGreaterThan(sample('dormant', 0).intensity);
+    expect(trough.radiusPx).toBeGreaterThan(sample('dormant', 0).radiusPx);
+    expect(peak.intensity).toBeGreaterThan(trough.intensity);
+    expect(peak.emissionAlpha).toBeGreaterThan(trough.emissionAlpha);
+    expect(trough.emissionAlpha).toBeGreaterThan(0);
+    expect(sample('active', period)).toEqual(trough);
+    expect(sample('active', 1).intensity).toBeCloseTo(trough.intensity, 4);
+    expect(sample('completed', 0)).toEqual(sample('completed', period / 2));
+    expect(sample('completed', 0).emissionAlpha).toBeGreaterThan(0);
+  });
+
+  it('adds a smaller cyan source only to rare wrecks, independent of activation', () => {
+    for (const tier of [1, 2, 3]) {
+      const lights = resolveDawnSiteLights('wreck', tier, undefined, false, 0);
+      expect(resolveDawnSiteLights('wreck', tier, 'active', false, 123)).toEqual(lights);
+      expect(lights.map(light => light.id)).toEqual(tier === 3 ? ['warm', 'tech'] : ['warm']);
+      if (tier === 3) {
+        expect(lights[1].color).not.toBe(lights[0].color);
+        expect(lights[1].radiusPx).toBeLessThan(lights[0].radiusPx);
+        expect(lights[1].intensity).toBeLessThan(lights[0].intensity);
+      }
+    }
+  });
+
+  it('never lights removed, salvaged or unknown props', () => {
+    for (const state of states) for (const archetype of ['wreck', 'extractor']) {
+      expect(resolveDawnSiteLights(archetype, 3, state, true, 100)).toEqual([]);
+    }
+    expect(resolveDawnSiteLights('wreck', 3, 'completed', false, 100)).toEqual([]);
+    expect(resolveDawnSiteLights('wreck', 4, undefined, false, 100)).toEqual([]);
+    expect(resolveDawnSiteLights('unknown', 1, undefined, false, 100)).toEqual([]);
+  });
+});
 
 describe('Dawn site damage flash', () => {
   it('baselines first observation and ignores unchanged or repaired HP', () => {
