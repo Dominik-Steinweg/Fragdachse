@@ -689,6 +689,7 @@ export class ArenaInputBindings {
         case 'capacity': return t('ui.errors.capacity');
         case 'cooldown': return t('ui.errors.cooldown');
         case 'placement': return t('ui.errors.placement');
+        case 'no_fire_sources': return t('ui.errors.no_fire_sources');
         default: return t('ui.errors.blocked');
       }
     };

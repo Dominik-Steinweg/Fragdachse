@@ -1153,7 +1153,7 @@ export interface LoadoutUseParams {
 
 export type HostHeldActionKind = 'charged_throw' | 'charged_gate' | 'charged_alternate' | 'global_dismantle';
 
-export type LoadoutUseFailureReason = 'cooldown' | 'resource' | 'blocked' | 'invalid' | 'capacity' | 'placement';
+export type LoadoutUseFailureReason = 'cooldown' | 'resource' | 'blocked' | 'invalid' | 'capacity' | 'placement' | 'no_fire_sources';
 export type LoadoutUseResourceKind = 'adrenaline' | 'rage';
 
 export interface LoadoutUseResult {

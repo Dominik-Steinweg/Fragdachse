@@ -1,4 +1,5 @@
 export const enUi = {
+  "ui.errors.no_fire_sources": "No combat-ready turrets of your own",
   "ui.voice.volume": "VOICE",
   "ui.voice.off": "OFF",
   "ui.performance.noSample": "No companion sample yet.",

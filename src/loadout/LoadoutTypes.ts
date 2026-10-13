@@ -429,7 +429,7 @@ export interface NegevKillstreakConfig {
   readonly fireChunkBurnDamagePerTick: number;
 }
 
-export type UtilityType = 'explosive' | 'smoke' | 'molotov' | 'time_bubble' | 'bfg' | 'nuke' | 'stinkcloud' | 'translocator' | 'placeable_rock' | 'placeable_turret' | 'placeable_pedestal' | 'taser' | 'decoy';
+export type UtilityType = 'fire_control_relay' | 'fire_control_portal' | 'explosive' | 'smoke' | 'molotov' | 'time_bubble' | 'bfg' | 'nuke' | 'stinkcloud' | 'translocator' | 'placeable_rock' | 'placeable_turret' | 'placeable_pedestal' | 'taser' | 'decoy';
 
 export interface InstantUtilityActivationConfig {
   readonly type: 'instant';
@@ -673,6 +673,26 @@ export interface DecoyUtilityConfig extends BaseUtilityConfig {
   readonly explosionKnockback?: number;
 }
 
+/** Content contract: the deployment owner starts cooldown only after the deployment ends. */
+export interface FireControlRelayUtilityConfig extends BaseUtilityConfig {
+  readonly type: 'fire_control_relay';
+  readonly activation: PlacementModeUtilityActivationConfig;
+  readonly durationMs: number;
+  readonly placementRangePx: number;
+  readonly maxCopies: number;
+  readonly ringRadiusPx: number;
+  readonly materializeMs: number;
+  readonly parallelEnabled: number;
+}
+
+export interface FireControlPortalUtilityConfig extends BaseUtilityConfig {
+  readonly type: 'fire_control_portal';
+  readonly activation: ChargedThrowUtilityActivationConfig;
+  readonly durationMs: number;
+  readonly damageBonus: number;
+  readonly localFireEnabled: number;
+}
+
 export interface TranslocatorUtilityConfig extends BaseUtilityConfig {
   readonly type: 'translocator';
   readonly telefragRadius: number;
@@ -722,7 +742,7 @@ export interface PlaceablePedestalUtilityConfig extends BaseUtilityConfig {
 
 export type PlaceableUtilityConfig = PlaceableRockUtilityConfig | PlaceableTurretUtilityConfig | PlaceablePedestalUtilityConfig;
 
-export type UtilityConfigShape = ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | TimeBubbleUtilityConfig | BfgUtilityConfig | NukeUtilityConfig | StinkCloudUtilityConfig | TaserUtilityConfig | DecoyUtilityConfig | TranslocatorUtilityConfig | PlaceableRockUtilityConfig | PlaceableTurretUtilityConfig | PlaceablePedestalUtilityConfig;
+export type UtilityConfigShape = FireControlRelayUtilityConfig | FireControlPortalUtilityConfig | ExplosiveUtilityConfig | SmokeUtilityConfig | MolotovUtilityConfig | TimeBubbleUtilityConfig | BfgUtilityConfig | NukeUtilityConfig | StinkCloudUtilityConfig | TaserUtilityConfig | DecoyUtilityConfig | TranslocatorUtilityConfig | PlaceableRockUtilityConfig | PlaceableTurretUtilityConfig | PlaceablePedestalUtilityConfig;
 
 const STANDARD_GRENADE_CHARGE = {
   type: 'charged_throw',

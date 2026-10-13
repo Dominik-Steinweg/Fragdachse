@@ -23,6 +23,11 @@ const SLOTS: readonly LoadoutSlot[] = ['weapon1', 'weapon2', 'utility', 'ultimat
 const CLASSES: readonly CoopDefenseClassId[] = ['dachs_nukem', 'dachs_of_steel', 'inspector_gadachs'];
 
 describe('loadout catalog', () => {
+  it.each(['deathmatch', 'team_deathmatch', 'capture_the_beer'] as const)('excludes fire-control utilities from %s', mode => {
+    const ids = getLoadoutSlotItems('utility', mode).map(item => item.id);
+    expect(ids).not.toContain('FIRE_CONTROL_RELAY');
+    expect(ids).not.toContain('FIRE_CONTROL_PORTAL');
+  });
   it('offers only unlocked items per slot and never an empty list', () => {
     for (const classId of CLASSES) {
       const profile = buildDefaultCoopDefenseUpgradeProfile(classId);

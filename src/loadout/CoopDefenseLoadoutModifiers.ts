@@ -951,7 +951,7 @@ function getDescriptorStage(stat: string): number {
 
 function isIntegerTarget(path: readonly string[]): boolean {
   const leaf = path[path.length - 1] ?? '';
-  return /(?:Count|maxJumps|maxBounces|piercingCount|enabled|Enabled)$/.test(leaf);
+  return /(?:Count|maxCopies|maxJumps|maxBounces|piercingCount|enabled|Enabled)$/.test(leaf);
 }
 
 function getTargetContract(stat: string, target: PathTarget): ModifierTargetContract {

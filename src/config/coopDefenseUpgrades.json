@@ -5044,6 +5044,206 @@
                            "id":  "utility",
                            "sortOrder":  40,
                            "upgrades":  [
+{
+  "id": "unlock_fire_control_relay",
+  "code": "D-U11",
+  "kind": "unlock",
+  "maxLevel": 1,
+  "startingLevel": 1,
+  "costPerLevel": 0,
+  "refundable": false,
+  "sortOrder": 400,
+  "availableClasses": [],
+  "loadoutUnlock": {
+    "slot": "utility",
+    "itemId": "FIRE_CONTROL_RELAY"
+  }
+},
+{
+  "id": "fire_control_relay_connections",
+  "code": "D-U11-L1",
+  "kind": "upgrade",
+  "maxLevel": 2,
+  "startingLevel": 0,
+  "costPerLevel": 1,
+  "bossPointCostPerLevel": 0,
+  "refundable": true,
+  "sortOrder": 410,
+  "availableClasses": [
+    "inspector_gadachs"
+  ],
+  "requires": [
+    {
+      "upgradeId": "unlock_fire_control_relay",
+      "minLevel": 1
+    }
+  ],
+  "effects": [
+    {
+      "stat": "utility.FIRE_CONTROL_RELAY.maxCopies",
+      "mode": "add_per_level",
+      "value": 1
+    }
+  ]
+},
+{
+  "id": "fire_control_relay_duration",
+  "code": "D-U11-R1",
+  "kind": "upgrade",
+  "maxLevel": 2,
+  "startingLevel": 0,
+  "costPerLevel": 1,
+  "bossPointCostPerLevel": 0,
+  "refundable": true,
+  "sortOrder": 420,
+  "availableClasses": [
+    "inspector_gadachs"
+  ],
+  "requires": [
+    {
+      "upgradeId": "unlock_fire_control_relay",
+      "minLevel": 1
+    }
+  ],
+  "effects": [
+    {
+      "stat": "utility.FIRE_CONTROL_RELAY.durationMs",
+      "mode": "add_per_level",
+      "value": 3000
+    }
+  ]
+},
+{
+  "id": "fire_control_relay_parallel",
+  "code": "D-U11-B",
+  "kind": "upgrade",
+  "maxLevel": 1,
+  "startingLevel": 0,
+  "costPerLevel": 0,
+  "bossPointCostPerLevel": 1,
+  "refundable": true,
+  "sortOrder": 430,
+  "availableClasses": [
+    "inspector_gadachs"
+  ],
+  "requires": [
+    {
+      "upgradeId": "fire_control_relay_connections",
+      "minLevel": 2
+    },
+    {
+      "upgradeId": "fire_control_relay_duration",
+      "minLevel": 2
+    }
+  ],
+  "effects": [
+    {
+      "stat": "utility.FIRE_CONTROL_RELAY.parallelEnabled",
+      "mode": "add_per_level",
+      "value": 1
+    }
+  ]
+},
+{
+  "id": "unlock_fire_control_portal",
+  "code": "D-U12",
+  "kind": "unlock",
+  "maxLevel": 1,
+  "startingLevel": 0,
+  "costPerLevel": 1,
+  "refundable": true,
+  "sortOrder": 440,
+  "availableClasses": [],
+  "loadoutUnlock": {
+    "slot": "utility",
+    "itemId": "FIRE_CONTROL_PORTAL"
+  }
+},
+{
+  "id": "fire_control_portal_duration",
+  "code": "D-U12-L1",
+  "kind": "upgrade",
+  "maxLevel": 2,
+  "startingLevel": 0,
+  "costPerLevel": 1,
+  "bossPointCostPerLevel": 0,
+  "refundable": true,
+  "sortOrder": 450,
+  "availableClasses": [
+    "inspector_gadachs"
+  ],
+  "requires": [
+    {
+      "upgradeId": "unlock_fire_control_portal",
+      "minLevel": 1
+    }
+  ],
+  "effects": [
+    {
+      "stat": "utility.FIRE_CONTROL_PORTAL.durationMs",
+      "mode": "add_per_level",
+      "value": 1500
+    }
+  ]
+},
+{
+  "id": "fire_control_portal_damage",
+  "code": "D-U12-R1",
+  "kind": "upgrade",
+  "maxLevel": 2,
+  "startingLevel": 0,
+  "costPerLevel": 1,
+  "bossPointCostPerLevel": 0,
+  "refundable": true,
+  "sortOrder": 460,
+  "availableClasses": [
+    "inspector_gadachs"
+  ],
+  "requires": [
+    {
+      "upgradeId": "unlock_fire_control_portal",
+      "minLevel": 1
+    }
+  ],
+  "effects": [
+    {
+      "stat": "utility.FIRE_CONTROL_PORTAL.damageBonus",
+      "mode": "add_per_level",
+      "value": 0.2
+    }
+  ]
+},
+{
+  "id": "fire_control_portal_local_fire",
+  "code": "D-U12-B",
+  "kind": "upgrade",
+  "maxLevel": 1,
+  "startingLevel": 0,
+  "costPerLevel": 0,
+  "bossPointCostPerLevel": 1,
+  "refundable": true,
+  "sortOrder": 470,
+  "availableClasses": [
+    "inspector_gadachs"
+  ],
+  "requires": [
+    {
+      "upgradeId": "fire_control_portal_duration",
+      "minLevel": 2
+    },
+    {
+      "upgradeId": "fire_control_portal_damage",
+      "minLevel": 2
+    }
+  ],
+  "effects": [
+    {
+      "stat": "utility.FIRE_CONTROL_PORTAL.localFireEnabled",
+      "mode": "add_per_level",
+      "value": 1
+    }
+  ]
+},
                                             {
                                                 "id":  "unlock_he_grenade",
                                                 "code":  "D-U1",

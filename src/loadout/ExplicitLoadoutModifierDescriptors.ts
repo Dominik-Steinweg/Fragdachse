@@ -2,6 +2,12 @@ import type { ConfigStatDescriptor } from './CoopDefenseLoadoutModifiers';
 
 /** Explicit contracts for formerly convention-resolved upgrade paths. */
 export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
+  'utility.FIRE_CONTROL_RELAY.maxCopies': { kind: 'utility', itemId: 'FIRE_CONTROL_RELAY', targets: [{ path: ['maxCopies'], formula: 'add' }] },
+  'utility.FIRE_CONTROL_RELAY.durationMs': { kind: 'utility', itemId: 'FIRE_CONTROL_RELAY', targets: [{ path: ['durationMs'], formula: 'add' }] },
+  'utility.FIRE_CONTROL_RELAY.parallelEnabled': { kind: 'utility', itemId: 'FIRE_CONTROL_RELAY', targets: [{ path: ['parallelEnabled'], formula: 'add' }] },
+  'utility.FIRE_CONTROL_PORTAL.durationMs': { kind: 'utility', itemId: 'FIRE_CONTROL_PORTAL', targets: [{ path: ['durationMs'], formula: 'add' }] },
+  'utility.FIRE_CONTROL_PORTAL.damageBonus': { kind: 'utility', itemId: 'FIRE_CONTROL_PORTAL', targets: [{ path: ['damageBonus'], formula: 'add' }] },
+  'utility.FIRE_CONTROL_PORTAL.localFireEnabled': { kind: 'utility', itemId: 'FIRE_CONTROL_PORTAL', targets: [{ path: ['localFireEnabled'], formula: 'add' }] },
   'utility.ZEUS_TASER.zeus.dynamoRefundMs': { kind: 'utility', itemId: 'ZEUS_TASER', targets: [{ path: ['zeus', 'dynamoRefundMs'], formula: 'add' }] },
   'utility.ZEUS_TASER.zeus.stunDurationMs': { kind: 'utility', itemId: 'ZEUS_TASER', targets: [{ path: ['zeus', 'stunDurationMs'], formula: 'add' }] },
   'utility.ZEUS_TASER.zeus.ballDurationMs': { kind: 'utility', itemId: 'ZEUS_TASER', targets: [{ path: ['zeus', 'ballDurationMs'], formula: 'add' }] },

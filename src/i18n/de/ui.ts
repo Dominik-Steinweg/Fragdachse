@@ -1,4 +1,5 @@
 export const deUi = {
+  "ui.errors.no_fire_sources": "Keine kampffähigen eigenen Türme",
   "ui.voice.volume": "SPRACHE",
   "ui.voice.off": "AUS",
   "ui.performance.noSample": "Noch kein Companion-Sample vorhanden.",

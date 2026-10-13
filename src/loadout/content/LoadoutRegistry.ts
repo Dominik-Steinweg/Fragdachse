@@ -61,7 +61,7 @@ export function getUtilityBaseId(id: string): string | undefined {
 export function resolveUtilityIdForMode(id: string, mode: GameMode): string | undefined {
   const baseId = getUtilityBaseId(id) ?? id;
   if (!UTILITY_CONFIGS[baseId]) return undefined;
-  if (baseId === 'SPORE_TURRET' && !isCoopDefenseMode(mode)) return undefined;
+  if (['SPORE_TURRET', 'FIRE_CONTROL_RELAY', 'FIRE_CONTROL_PORTAL'].includes(baseId) && !isCoopDefenseMode(mode)) return undefined;
   // Available placeables are permanent constructions. There is no Coop-only
   // lifetime/config variant; legacy IDs have already been normalized above.
   return baseId;
