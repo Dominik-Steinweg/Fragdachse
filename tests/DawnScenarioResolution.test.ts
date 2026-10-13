@@ -1,14 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import { getMapName } from '../src/i18n/contentPresentation';
-import { DAWN_CONTENT_HASH, getDawnArenaTemplates, validateTemplates } from '../src/config/dawn/dawnContent';
+import { getCoopMissionTimeLimitSec } from '../src/config/coopDefenseMapAuthoring';
+import {
+  DAWN_CONTENT_HASH,
+  getDawnArenaTemplates,
+  getDawnSchedule,
+  getDawnThreatCurve,
+  validateTemplates,
+} from '../src/config/dawn/dawnContent';
 import { composeDawnRoundPlans } from '../src/dawn/composition/DawnRoundComposition';
 import {
   getDawnTemplateIdOfWorld,
   toDawnActivityDefinitionId,
   toDawnWorldDefinitionId,
 } from '../src/dawn/contracts/DawnIds';
-import { haveSameDawnPlan, parseDawnActivityPlan, parseDawnWorldPlan } from '../src/dawn/contracts/DawnPlans';
-import { resolveDawnScenario } from '../src/dawn/resolution/DawnScenarioResolution';
+import {
+  DAWN_MAX_THREAT,
+  haveSameDawnPlan,
+  parseDawnActivityPlan,
+  parseDawnWorldPlan,
+} from '../src/dawn/contracts/DawnPlans';
+import { resolveDawnScenario, resolveDawnSites } from '../src/dawn/resolution/DawnScenarioResolution';
+import { getDawnPhaseStartMs, toDawnDynamicTimeOfDay } from '../src/dawn/rules/DawnPhase';
 import { isSameActivityInstance, parseActivityDescriptor, type ActivityDescriptor } from '../src/world/ActivityDescriptor';
 import { resolveActiveGameMode, toMapId } from '../src/world/arenaDescriptorAdapter';
 import { isSameWorldInstance, parseWorldDescriptor, type WorldDescriptor } from '../src/world/WorldDescriptor';
@@ -18,8 +31,8 @@ import {
   resolveWorldDefinition,
 } from '../src/world/WorldDefinitionResolution';
 
-function dawnRound(threat = 1) {
-  const plans = composeDawnRoundPlans({ threat, dayNumber: 1 });
+function dawnRound(threat = 1, seed = 11) {
+  const plans = composeDawnRoundPlans({ seed, threat, dayNumber: 1 });
   const world: WorldDescriptor = {
     worldRevision: 7,
     definitionId: toDawnWorldDefinitionId(plans.world.templateId),
@@ -146,7 +159,8 @@ describe('Dawn scenario resolution', () => {
     const { plans } = dawnRound();
     for (const template of getDawnArenaTemplates()) {
       const resolved = resolveDawnScenario(
-        { ...plans.world, templateId: template.id },
+        // Sites belegen Slots ihres eigenen Templates; fremde Templates laufen ohne Sites.
+        { ...plans.world, templateId: template.id, sites: template.id === plans.world.templateId ? plans.world.sites : [] },
         {
           ...plans.activity,
           waves: template.fronts.map((front, index) => ({
@@ -159,6 +173,77 @@ describe('Dawn scenario resolution', () => {
       );
       expect(resolved.world.persistentBaseSite?.anchor).toEqual(template.world.persistentBase.anchor);
     }
+  });
+
+  it('resolves a normalizable timed defense for every threat over several seeds', () => {
+    for (let threat = 1; threat <= DAWN_MAX_THREAT; threat++) {
+      for (const seed of [3, 1009, 65_537]) {
+        const { plans } = dawnRound(threat, seed);
+        const { mapConfig, activity } = resolveDawnScenario(plans.world, plans.activity);
+        const schedule = getDawnSchedule(plans.activity.scheduleId);
+
+        expect(mapConfig.objective).toBe('defend-until-dawn');
+        expect(getCoopMissionTimeLimitSec(mapConfig)).toBe(schedule.durationMs / 1000);
+        expect(mapConfig.dynamicTimeOfDay).toEqual(toDawnDynamicTimeOfDay(schedule));
+        expect(activity.respawnDelaySchedule).toEqual(
+          schedule.phases.map((phase) => ({ fromMs: phase.startMs, delayMs: phase.respawnDelayMs })),
+        );
+        expect(activity.itemDrop?.itemLevel).toBe(getDawnThreatCurve(threat).itemLevel);
+        expect(mapConfig.encounters?.map(({ id }) => id)).toEqual(plans.activity.waves.map(({ id }) => id));
+      }
+    }
+  });
+
+  it('keeps site structures and clearings in the World and their missions in the Activity', () => {
+    const { plans } = dawnRound(10, 77);
+    const { world, activity } = resolveDawnScenario(plans.world, plans.activity);
+    const sites = resolveDawnSites(plans.world);
+    const duskMs = getDawnPhaseStartMs(getDawnSchedule(plans.activity.scheduleId), 'dusk');
+    expect(sites.length).toBeGreaterThan(0);
+
+    expect(world.terrain.siteClearings).toEqual(sites.map((site) => ({
+      id: site.siteId, gridX: site.slot.anchor.gridX, gridY: site.slot.anchor.gridY,
+      radiusCells: site.archetype.clearingRadiusCells,
+    })));
+    for (const site of sites) {
+      const structure = world.bases.find(({ id }) => id === site.baseId);
+      expect(structure).toMatchObject({
+        hpMax: site.tier.hpMax, faction: site.archetype.structure.faction, role: site.archetype.structure.role,
+      });
+      expect(structure).not.toHaveProperty('dormant');
+      expect(activity.baseOverlays?.find(({ baseId }) => baseId === site.baseId)?.dormant).toBe(true);
+
+      const objective = activity.secondaryObjectives?.find(({ id }) => id === site.objectiveId);
+      expect(objective).toMatchObject({
+        type: site.archetype.objectiveType,
+        concurrent: true,
+        start: { type: 'site-activated', siteId: site.siteId },
+        expiresAt: { type: 'time', atMs: duskMs },
+        targets: [site.baseId],
+      });
+      expect(objective?.holdDurationMs).toBe(site.archetype.holdDurationMs);
+    }
+    expect(activity.secondaryObjectives).toHaveLength(sites.length);
+  });
+
+  it('derives the World only from the World plan', () => {
+    const { plans } = dawnRound(1, 5);
+    const harder = dawnRound(DAWN_MAX_THREAT, 6);
+    const calm = resolveDawnScenario(plans.world, plans.activity);
+    const stormy = resolveDawnScenario(plans.world, harder.plans.activity);
+
+    expect(stormy.world).toEqual(calm.world);
+    expect(stormy.activity).not.toEqual(calm.activity);
+  });
+
+  it('fails fast on unknown slots, archetypes and tiers', () => {
+    const { plans } = dawnRound(4, 9);
+    const [site] = plans.world.sites;
+    const withSite = (override: object) => ({ ...plans.world, sites: [{ ...site, ...override }] });
+
+    expect(() => resolveDawnScenario(withSite({ slotId: 'nowhere' }), plans.activity)).toThrow('salvage slot');
+    expect(() => resolveDawnScenario(withSite({ archetypeId: 'unknown' }), plans.activity)).toThrow('site archetype');
+    expect(() => resolveDawnScenario(withSite({ tier: 99 }), plans.activity)).toThrow('tier');
   });
 
   it('keeps Dawn identities out of the campaign map namespace', () => {

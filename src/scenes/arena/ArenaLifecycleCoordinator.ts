@@ -111,15 +111,12 @@ import { resolveArenaStartTime } from './ArenaStartTiming';
 import {
   getStoredCoopDefenseProgress,
   getStoredDawnProgress,
-  getStoredPersistentBaseAreaStage,
+  getStoredPersonalPersistentBaseAreaStage,
   getStoredPersistentBaseHealthRewards,
   getStoredPersistentBaseUnlocked,
   getStoredPersistentBaseRewardState,
 } from '../../utils/localPreferences';
-import {
-  resolveFrozenPersistentBaseAreaStage,
-  resolvePersonalPersistentBaseAreaStage,
-} from '../../persistentBase/PersistentBaseAreaStageResolution';
+import { resolveFrozenPersistentBaseAreaStage } from '../../persistentBase/PersistentBaseAreaStageResolution';
 import { PERSISTENT_BASE_CAMPAIGN_MAX_AREA_STAGE } from '../../persistentBase/PersistentBaseCore';
 import type { PersistentBaseContributionStore } from '../../persistentBase/PersistentBaseContributionStore';
 import type { PersistentBaseRewardStore } from '../../persistentBase/PersistentBaseRewardStore';
@@ -1767,7 +1764,10 @@ export class ArenaLifecycleCoordinator {
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     bridge.publishCoopDefenseMissionProgressPresentationState(null);
-    const dawnPlans = dawnSelected ? composeHostDawnRoundPlans() : null;
+    // Der Seed steht vor der Komposition fest: Dawn-Plaene und Layout derselben Runde teilen ihn.
+    const seed = this.nextScenarioSeed ?? Date.now();
+    this.nextScenarioSeed = null;
+    const dawnPlans = dawnSelected ? composeHostDawnRoundPlans(seed) : null;
     const coopDefenseMapConfig = dawnPlans
       ? resolveDawnScenario(dawnPlans.world, dawnPlans.activity).mapConfig
       : coopMode ? getCoopDefenseMapConfig(bridge.getCoopDefenseMapId()) : null;
@@ -1790,8 +1790,6 @@ export class ArenaLifecycleCoordinator {
     bridge.setRoundEndTime(0);
     bridge.requestFullGameState();
     const timeOfDayMinutes = resolveRoundTimeOfDayMinutes(coopDefenseMapConfig, bridge.getLobbyTimeOfDayMinutes());
-    const seed = this.nextScenarioSeed ?? Date.now();
-    this.nextScenarioSeed = null;
     // The phase and participation state deliberately become visible before the expensive
     // generator/fingerprint step. The next scene tick installs the loading veil and schedules
     // generation, so a host never blocks the lobby while still reporting LOBBY.
@@ -3734,9 +3732,10 @@ export class ArenaLifecycleCoordinator {
  * Host: komponiert die Dawn-Runde aus dem eigenen Fortschritt. Threat und Tag folgen dem Host
  * (User-Entscheidung); Clients erhalten nur die fertigen Plaene.
  */
-function composeHostDawnRoundPlans(): DawnRoundPlans {
+function composeHostDawnRoundPlans(seed: number): DawnRoundPlans {
   const dawn = getStoredDawnProgress();
   return composeDawnRoundPlans({
+    seed,
     threat: resolveDawnThreat(dawn.expansionLevel),
     dayNumber: dawn.stats.roundsPlayed + 1,
   });
@@ -3750,10 +3749,7 @@ function resolveHostFrozenPersistentBaseAreaStage(
   siteMaxAreaStage: PersistentBaseAreaStage | undefined,
 ): PersistentBaseAreaStage {
   return resolveFrozenPersistentBaseAreaStage({
-    personalStage: resolvePersonalPersistentBaseAreaStage({
-      campaignStage: getStoredPersistentBaseAreaStage(),
-      dawnExpansionLevel: getStoredDawnProgress().expansionLevel,
-    }),
+    personalStage: getStoredPersonalPersistentBaseAreaStage(),
     siteMaxAreaStage: siteMaxAreaStage ?? PERSISTENT_BASE_CAMPAIGN_MAX_AREA_STAGE,
   });
 }

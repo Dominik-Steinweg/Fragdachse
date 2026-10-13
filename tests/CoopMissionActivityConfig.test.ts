@@ -45,7 +45,7 @@ describe('CoopMissionActivityConfig', () => {
   });
 
   it('resolves a Dawn activity from its replicated plans without a registry entry', () => {
-    const plans = composeDawnRoundPlans({ threat: 1, dayNumber: 1 });
+    const plans = composeDawnRoundPlans({ seed: 7, threat: 1, dayNumber: 1 });
     const descriptor = {
       definitionId: toDawnWorldDefinitionId(plans.world.templateId),
       parameters: { dawn: plans.world },

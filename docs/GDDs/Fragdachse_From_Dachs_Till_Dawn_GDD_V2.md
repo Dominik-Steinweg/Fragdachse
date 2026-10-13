@@ -66,7 +66,10 @@ daraus. Zeitpläne liegen in `src/config/dawn/schedules.json`.
 ## 6. Salvage-Sites und Arenen
 
 - Eine Dawn-Arena ist ein Template: World-Authoring im Coop-Map-Format, angebotene Fronten und
-  12–16 Salvage-Slots in drei Distanzbändern (nah, mittel, fern).
+  Salvage-Slots in drei Distanzbändern (nah, mittel, fern), jedes Band in jedem Quadranten. Die Lichtung
+  hat 140×96 Zellen und 16 Slots (nah 24–31, mittel 34–43, fern 45–55 Zellen).
+- Eine Site wird aktiviert, sobald ein Spieler ihre Lichtung betritt; ihr Ziel läuft parallel zu
+  anderen Sites und schließt in der Dämmerung. Wracks werden zerstört, Extraktoren 45 s gehalten.
 - Pro Runde wählt der Host Slots, Archetypen und Tiers. Archetypen M1: Wrack (zerstören),
   Extraktor (halten); M3: Brutnest, Versorgung (tragen), Schrottsammler, verstreute Funde,
   Elite-Wrack.
@@ -135,7 +138,7 @@ M2-Simulation legt die tatsächlichen Kosten fest.
 | D-08 | 2026-10-13 | Die aufgelöste Dawn-Config trägt `mapId = dawn:<template>` nur als Kompatibilitätsschlüssel; sie wird nie in der Map-Registry gesucht. | ja |
 | D-09 | 2026-10-13 | Nekromantie-Hinweis nur, wenn die Migration tatsächlich Stufen entfernt hat. Unbekannte Zweig-IDs im Progress werden verworfen statt den Fortschritt abzulehnen. | ja |
 | D-10 | 2026-10-13 | Händlerangebot (`shopOffer`) kommt in M2 als optionales Feld ohne Schema-Sprung. | ja |
-| D-11 | 2026-10-13 | Erste Arena „Lichtung“: 112×80 Zellen, Basis mittig, 12 Salvage-Slots in drei Distanzbändern. Spike S1: 500/500 Seeds erzeugbar, alle Fronten mit Route zur Basis; Slots ohne Generator-Lichtung nur zu ~80 % erreichbar, daher Site-Lichtungen im Generator ab M1. | ja |
+| D-11 | 2026-10-13 | Erste Arena „Lichtung“ (M0): 112×80 Zellen, Basis mittig, 12 Salvage-Slots in drei Distanzbändern; mit D-15 auf 140×96 und 16 Slots vergrößert. Spike S1: 500/500 Seeds erzeugbar, alle Fronten mit Route zur Basis; Slots ohne Generator-Lichtung nur zu ~80 % erreichbar, daher Site-Lichtungen im Generator ab M1. | ja |
 | D-12 | 2026-10-13 | Kapazitätsbonus +2 je Stufe über 2; verdrahtet wird er mit der Infrastruktur in M2, solange in M0/M1 niemand über Stufe 2 kommt. | ja |
 | D-13 | 2026-10-13 | Dawn-Runden buchen keinen Kampagnenabschluss (`RoundState.coopDefenseMapId` bleibt leer, `RoundState.dawn` trägt Threat und Tag). | ja |
 | D-14 | 2026-10-13 | Freischaltung ausschließlich über den Sieg auf der letzten Kampagnenkarte. | ja |
@@ -144,6 +147,9 @@ M2-Simulation legt die tatsächlichen Kosten fest.
 | D-17 | 2026-10-13 (G0) | Nekromantie-Forschung ist früh erschwinglich, nach etwa 3–4 Runden (Preis im Economy-Modell, Umsetzung M2). | ja |
 | D-18 | 2026-10-13 (G0) | „Beste Serie“ zählt nur aufeinanderfolgende Siege; eine Niederlage setzt die laufende Serie zurück. | ja |
 | D-19 | 2026-10-13 (G0) | Late Join in laufende Dawn-Runden ist wie in der Kampagne erlaubt. | ja |
+| D-20 | 2026-10-13 (M1) | Tag bleibt 3:30: Bei 280 px/s braucht der Weg zum fernen Band etwa 6–9 s; die Tagesphase wird von der Site-Arbeit bestimmt, nicht vom Laufen. Neu bewertet im G1-Spieltest. | ja |
+| D-21 | 2026-10-13 (M1) | Sites aktivieren beim Betreten ihrer Lichtung, laufen gleichzeitig (eigenes Nebenziel-Flag `concurrent`) und schließen in der Dämmerung ohne Belohnung (`expiresAt`). Nachts respawnen Spieler mit 6 s statt 2 s. | ja |
+| D-22 | 2026-10-13 (M1) | Threat eskaliert über Fronten (1 → 4), Spezialgegner, Nacht- und Tagesbudget, Site-Zahl (3 → 7) und Tiers; Itemlevel des Sieg-Angebots = Threat + 1. | ja |
 
 ## 11. Offene Fragen für Gate G0 (an G0 beantwortet, siehe D-15 … D-19)
 

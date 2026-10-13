@@ -1,10 +1,10 @@
 {
   "id": "clearing",
   "world": {
-    "arenaWidthCells": 112,
-    "arenaHeightCells": 80,
+    "arenaWidthCells": 140,
+    "arenaHeightCells": 96,
     "rockFillRatio": 0.46,
-    "treeCount": 50,
+    "treeCount": 75,
     "rockField": {
       "fillMode": "organic",
       "corridorRadiusCells": 3.5,
@@ -12,10 +12,21 @@
       "corridorWanderCells": 2,
       "waypointJitterCells": 2,
       "corridors": [
-        { "id": "west-approach", "points": [{ "gridX": 0, "gridY": 40 }, { "gridX": 56, "gridY": 40 }] },
-        { "id": "north-approach", "points": [{ "gridX": 56, "gridY": 0 }, { "gridX": 56, "gridY": 40 }] },
-        { "id": "east-approach", "points": [{ "gridX": 111, "gridY": 40 }, { "gridX": 56, "gridY": 40 }] },
-        { "id": "south-approach", "points": [{ "gridX": 56, "gridY": 79 }, { "gridX": 56, "gridY": 40 }] }
+        { "id": "west-approach", "points": [{ "gridX": 0, "gridY": 48 }, { "gridX": 34, "gridY": 47 }, { "gridX": 70, "gridY": 48 }] },
+        { "id": "north-approach", "points": [{ "gridX": 70, "gridY": 0 }, { "gridX": 71, "gridY": 22 }, { "gridX": 70, "gridY": 48 }] },
+        { "id": "east-approach", "points": [{ "gridX": 139, "gridY": 48 }, { "gridX": 106, "gridY": 49 }, { "gridX": 70, "gridY": 48 }] },
+        { "id": "south-approach", "points": [{ "gridX": 70, "gridY": 95 }, { "gridX": 69, "gridY": 74 }, { "gridX": 70, "gridY": 48 }] },
+        {
+          "id": "mid-ring",
+          "radiusCells": 2.5,
+          "points": [
+            { "gridX": 108, "gridY": 48 }, { "gridX": 103, "gridY": 62 }, { "gridX": 89, "gridY": 71 },
+            { "gridX": 70, "gridY": 75 }, { "gridX": 51, "gridY": 71 }, { "gridX": 37, "gridY": 62 },
+            { "gridX": 32, "gridY": 48 }, { "gridX": 37, "gridY": 35 }, { "gridX": 51, "gridY": 25 },
+            { "gridX": 70, "gridY": 21 }, { "gridX": 89, "gridY": 25 }, { "gridX": 103, "gridY": 34 },
+            { "gridX": 108, "gridY": 48 }
+          ]
+        }
       ]
     },
     "timeOfDay": "07:00",
@@ -23,22 +34,26 @@
     "persistentBase": {
       "baseId": "dawn-core",
       "maxAreaStage": 11,
-      "anchor": { "gridX": 56, "gridY": 40 }
+      "anchor": { "gridX": 70, "gridY": 48 }
     }
   },
   "fronts": ["west", "north", "east", "south"],
   "salvageSlots": [
-    { "id": "near-1", "anchor": { "gridX": 40, "gridY": 24 }, "band": "near" },
-    { "id": "near-2", "anchor": { "gridX": 72, "gridY": 24 }, "band": "near" },
-    { "id": "near-3", "anchor": { "gridX": 72, "gridY": 56 }, "band": "near" },
-    { "id": "near-4", "anchor": { "gridX": 40, "gridY": 56 }, "band": "near" },
-    { "id": "mid-1", "anchor": { "gridX": 30, "gridY": 22 }, "band": "mid" },
-    { "id": "mid-2", "anchor": { "gridX": 82, "gridY": 22 }, "band": "mid" },
-    { "id": "mid-3", "anchor": { "gridX": 82, "gridY": 58 }, "band": "mid" },
-    { "id": "mid-4", "anchor": { "gridX": 30, "gridY": 58 }, "band": "mid" },
-    { "id": "far-1", "anchor": { "gridX": 22, "gridY": 16 }, "band": "far" },
-    { "id": "far-2", "anchor": { "gridX": 90, "gridY": 16 }, "band": "far" },
-    { "id": "far-3", "anchor": { "gridX": 90, "gridY": 64 }, "band": "far" },
-    { "id": "far-4", "anchor": { "gridX": 22, "gridY": 64 }, "band": "far" }
+    { "id": "nw-near", "anchor": { "gridX": 52, "gridY": 30 }, "band": "near" },
+    { "id": "nw-mid-west", "anchor": { "gridX": 35, "gridY": 40 }, "band": "mid" },
+    { "id": "nw-mid-north", "anchor": { "gridX": 46, "gridY": 20 }, "band": "mid" },
+    { "id": "nw-far", "anchor": { "gridX": 30, "gridY": 25 }, "band": "far" },
+    { "id": "ne-near", "anchor": { "gridX": 88, "gridY": 30 }, "band": "near" },
+    { "id": "ne-mid", "anchor": { "gridX": 100, "gridY": 30 }, "band": "mid" },
+    { "id": "ne-far-north", "anchor": { "gridX": 106, "gridY": 20 }, "band": "far" },
+    { "id": "ne-far-east", "anchor": { "gridX": 112, "gridY": 31 }, "band": "far" },
+    { "id": "se-near", "anchor": { "gridX": 87, "gridY": 68 }, "band": "near" },
+    { "id": "se-mid-east", "anchor": { "gridX": 106, "gridY": 56 }, "band": "mid" },
+    { "id": "se-mid-south", "anchor": { "gridX": 95, "gridY": 75 }, "band": "mid" },
+    { "id": "se-far", "anchor": { "gridX": 110, "gridY": 70 }, "band": "far" },
+    { "id": "sw-near", "anchor": { "gridX": 49, "gridY": 65 }, "band": "near" },
+    { "id": "sw-mid", "anchor": { "gridX": 38, "gridY": 66 }, "band": "mid" },
+    { "id": "sw-far-west", "anchor": { "gridX": 27, "gridY": 62 }, "band": "far" },
+    { "id": "sw-far-south", "anchor": { "gridX": 29, "gridY": 74 }, "band": "far" }
   ]
 }

@@ -30,7 +30,7 @@ const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: r
 const connect = (room: TestRoom) => { use(room); const bridge = new NetworkBridge(); bridge.activate(); return bridge; };
 
 function hostComposedRound(roundRevision: number): GeneratedRoundWorld {
-  const plans = composeDawnRoundPlans({ threat: 1, dayNumber: 1 });
+  const plans = composeDawnRoundPlans({ seed: roundRevision * 31, threat: 1, dayNumber: 1 });
   return generateRoundWorld({
     roundRevision,
     gameMode: 'coop_defense',
