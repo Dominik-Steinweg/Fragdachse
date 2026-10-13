@@ -4,6 +4,17 @@ import { UTILITY_CONFIGS, WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig
 import { resolveMgTurretStats } from '../../src/config/mgTurret';
 import { applyCoopDefenseModifiersToUtilityConfig } from '../../src/loadout/CoopDefenseLoadoutModifiers';
 
+const hostClock = vi.hoisted(() => ({ now: 1000 }));
+vi.mock('../../src/network/bridge', () => ({ bridge: {
+  getSynchronizedNow: () => hostClock.now, isArenaCountdownActive: () => false,
+  getActivityDescriptor: () => null, getActiveGameMode: () => 'coop_defense',
+  getConnectedPlayers: () => [], getLocalPlayerId: () => 'headless',
+  getPlayerHeldItemId: () => null, getPlayerInput: () => null, flushEffects() {},
+  consumeFullGameStateRequest: () => false, publishGameState() {},
+} }));
+import { HostUpdateCoordinator } from '../../src/scenes/arena/HostUpdateCoordinator';
+import { healthBarTestScene } from '../healthBarTestScene';
+
 type Fixture = ReturnType<typeof createFireControlWorldFixture>;
 let f: Fixture;
 afterEach(() => f?.destroy());
@@ -15,6 +26,83 @@ const start = (parallelEnabled = 0) => {
 };
 
 describe('host utility → deployment → turret fire → lifecycle', () => {
+  it('advances deployments in the production host tick before turret fire at expiry', () => {
+    const rock = start(); f.spawnEnemy();
+    const host = new HostUpdateCoordinator(healthBarTestScene().scene, {
+      getWorldCombatCore: () => f.combat, playerManager: { getAllPlayers: () => [], getPlayer: () => undefined },
+      decoySystem: { hostUpdateLifecycle() {}, hostPostPhysics() {}, createHostSnapshots: () => [] },
+      hostPhysics: { update() {} }, smokeSystem: { syncVisuals() {}, syncTargetVisuals() {} },
+      fireSystem: { hostUpdate: () => ({ synced: [], ground: { cells: [] }, damageEvents: [], damageTick: false }) },
+      stinkCloudSystem: { hostUpdate: () => ({ synced: [], damageEvents: [] }), syncPlagueVisuals() {}, clientUpdate() {} },
+    } as never, {} as never, {} as never, {} as never);
+    host.setPresentationActive(false);
+    host.setWorldFramePort({ getWorldRuntime: () => ({ context: { descriptor: { definitionId: 'world:lobby' } } }),
+      getEnemyManager: () => null, getWorldMutationRuntime: () => null, getTrainRuntime: () => null,
+    } as never);
+    // Keep unrelated combat systems out of this tick fixture; advance and turret are production owners.
+    const advance = vi.spyOn(f.binding, 'advanceFireControl');
+    const turret = f.binding.systems!.turret;
+    host.setCombatFramePort({ getTargetingRuntime: () => null, getSupportGameplayRuntime: () => null,
+      getCombatGameplayBinding: () => ({ systems: { turret }, advanceMgTurrets() {}, advanceAttackDrones() {},
+        advanceFireControl: (now: number) => f.binding.advanceFireControl(now) }),
+    } as never);
+    const fire = vi.spyOn(turret, 'hostUpdate');
+    hostClock.now = 1000 + f.config.materializeMs;
+    host.runHostUpdate(16);
+    expect(f.projectile.spawn.mock.calls.at(-1)![0].origin.x).toBe(100 + f.config.singleCopyOffsetPx);
+    hostClock.now = 1000 + f.config.durationMs;
+    const shotsBefore = f.projectile.spawn.mock.calls.length;
+    host.runHostUpdate(16);
+    expect(advance).toHaveBeenLastCalledWith(hostClock.now);
+    expect(f.projectile.spawn.mock.calls.length).toBeGreaterThan(shotsBefore);
+    expect(f.projectile.spawn.mock.calls.at(-1)![0].origin.x).toBe(f.point(rock).x);
+    expect(f.binding.getFireControlSnapshot(hostClock.now).deployments).toEqual([]);
+    expect(fire.mock.calls.at(-1)![4]).toBe(advance.mock.results.at(-1)!.value);
+    fire.mockRestore(); advance.mockRestore();
+  });
+
+  it('preserves temporary charges on rejection and consumes exactly once on success and retry', () => {
+    f = createFireControlWorldFixture();
+    const instanceId = f.action.addTemporaryUtility('inspector', f.config, 2)!;
+    const stock = () => f.inventory.mock.calls.at(-1)![1];
+    const before = structuredClone(stock());
+    const request = { category: 'utility' as const, playerId: 'inspector', angle: 0, targetX: 100, targetY: 0,
+      hostNowMs: 1000, attemptId: 'temporary-copy', params: { temporaryUtilityInstanceId: instanceId } };
+    expect(f.action.execute(request)).toMatchObject({ ok: false, reason: 'no_fire_sources' });
+    expect(stock()).toEqual(before);
+    f.add(); expect(f.action.execute(request).ok).toBe(true);
+    expect(stock()).toEqual([expect.objectContaining({ instanceId, charges: 1 })]);
+    expect(f.action.execute(request).ok).toBe(true);
+    expect(stock()).toEqual([expect.objectContaining({ instanceId, charges: 1 })]);
+    expect(f.used).toHaveBeenCalledOnce();
+  });
+
+  it('preserves an already running cooldown when the fire-control port detaches', () => {
+    start();
+    const end = 1000 + f.config.durationMs;
+    f.tick(end, false);
+    const state = f.action.getFireControlState('inspector');
+    expect(state).toMatchObject({ phase: 'cooldown', cooldownUntil: end + f.config.cooldown });
+    f.action.setFireControlPort(null);
+    expect(f.action.getFireControlState('inspector')).toEqual(state);
+    expect(f.place(end + 1, 100)).toMatchObject({ ok: false, reason: 'cooldown' });
+  });
+
+  it('uses one definition list for advance and fire without caching construction reads across ticks', () => {
+    start(); f.spawnEnemy();
+    const definitions = vi.spyOn(f.binding, 'getTurretDefinitions');
+    const at = 1000 + f.config.materializeMs;
+    const sources = f.binding.advanceFireControl(at);
+    f.binding.systems!.turret.hostUpdate(at, UTILITY_CONFIGS.SPORE_TURRET as never, WEAPON_CONFIGS.SPORES, 1000, sources);
+    expect(definitions).toHaveBeenCalledOnce();
+    expect(f.projectile.spawn).toHaveBeenCalled();
+    f.placement.removeRock(Number(sources[0].id));
+    expect(f.binding.getTurretDefinitions()).toEqual([]);
+    expect(f.binding.advanceFireControl(at + 1)).toEqual([]);
+    expect(f.binding.getFireControlSnapshot(at + 1).deployments).toEqual([]);
+    definitions.mockRestore();
+  });
+
   it('freezes resolved additive utility upgrades while equipment changes cannot shorten the pending cooldown', () => {
     const resolved = applyCoopDefenseModifiersToUtilityConfig(UTILITY_CONFIGS.FIRE_CONTROL_RELAY, {
       additive: { 'utility.FIRE_CONTROL_RELAY.maxCopies': 1, 'utility.FIRE_CONTROL_RELAY.durationMs': 900,

@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-vi.mock('phaser', () => ({}));
 import { FireControlRuntime } from '../src/systems/fireControl/FireControlRuntime';
 import type { FireControlConstructionFacts } from '../src/systems/fireControl/FireControlCopyPlan';
 import type { ResolvedFireControlRelayConfig } from '../src/world/FireControlUtilityPort';
@@ -24,6 +23,18 @@ function fixture() {
 }
 
 describe('host copy deployment facts', () => {
+  it('copies the activation config instead of retaining the caller object', () => {
+    const f = fixture(), supplied = { ...config };
+    expect(f.runtime.activateCopies({ ownerId: 'owner', ownerColor: 123, playerX: 0, playerY: 0,
+      pointX: 100, pointY: 0, nowMs: 100, config: supplied }).ok).toBe(true);
+    supplied.parallel = true; supplied.durationMs = 1; supplied.materializeMs = 0;
+    expect(f.sources(199).map(s => s.fireState)).toEqual(['paused', 'paused']);
+    expect(f.sources(200)[1].sequenceKey).toBe(7);
+    f.runtime.update(200);
+    expect(f.runtime.getSnapshot(200).deployments[0]).toMatchObject({ parallel: false, expiresAt: 1100 });
+    f.runtime.update(1100); expect(f.ended).toHaveBeenCalledExactlyOnceWith(1, 'owner', 1100);
+  });
+
   it('commits atomically, blocks a second use and ends once at the exact deadline on a late tick', () => {
     const f = fixture();
     expect(f.activate({}, 201)).toEqual({ ok: false, reason: 'placement' });

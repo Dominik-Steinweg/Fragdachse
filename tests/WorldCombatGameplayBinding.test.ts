@@ -351,24 +351,46 @@ describe('hostile base aim candidates', () => {
   function candidateFixture() {
     let generation = 1;
     const bases = Array.from({ length: 6 }, (_, index) => ({
-      id: `base-${index}`, damageable: true, hp: 100,
+      id: `base-${index}`, faction: 'hostile', damageable: true, inert: false, hp: 100,
+      isInert() { return this.inert; },
       cells: [{ gridX: 14 + index, gridY: 10 }],
       isDamageable() { return this.damageable; },
       getHp() { return this.hp; },
       getSpec() { return { cells: this.cells }; },
     }));
     const capture = vi.spyOn(TurretSystem.prototype, 'setBaseTargetCandidateProvider');
+    const focusCapture = vi.spyOn(TurretSystem.prototype, 'setFocusedBaseTargetProvider');
     const baseManager = methodBag({ getBases: () => bases, getBasesByFaction: () => bases,
-      getObstacleGeneration: () => generation, getTurrets: () => [], getBase: () => undefined,
+      getObstacleGeneration: () => generation, getTurrets: () => [], getBase: (id: string) => bases.find(b => b.id === id),
       getObstacleRectangles: () => [] }) as unknown as BaseManager;
     const fixture = createFixture({ coop: true, players: [], enemies: [], baseManager,
       combatSystem: methodBag({ captureWorldDamageSource: () => ({}), canDamageStructure: () => true }) as unknown as CombatSystem });
     const provider = capture.mock.calls.at(-1)![0]!;
     const x = fixture.metrics.offsetX + 10 * CELL_SIZE, y = fixture.metrics.offsetY + 10.5 * CELL_SIZE;
     const source = toLocalTurretFireSource({ id: 1, ownerId: 'builder', ownerColor: 0, x, y, weaponId: 'TURRET_MG' });
-    return { ...fixture, bases, query: () => provider(source, x, y, 1000),
+    return { ...fixture, bases, source,
+      focus: (id: string) => focusCapture.mock.calls.at(-1)![0]!(id, x, y, 1000),
+      query: (ownerId = source.ownerId) => provider({ ...source, ownerId }, x, y, 1000),
       nextGeneration: () => { generation += 1; } };
   }
+
+  it('shares focused surfaces and excludes other, immune, dead and inert bases', () => {
+    const f = candidateFixture();
+    expect(f.focus('base-1')).toEqual(f.query().filter(p => p.id === 'base-1'));
+    expect(f.focus('missing')).toEqual([]);
+    f.bases[1].damageable = false; expect(f.focus('base-1')).toEqual([]);
+    f.bases[1].damageable = true; f.bases[1].hp = 0; expect(f.focus('base-1')).toEqual([]);
+    f.bases[1].hp = 100; f.bases[1].inert = true; expect(f.focus('base-1')).toEqual([]);
+    expect(f.query().some(p => p.id === 'base-1')).toBe(false);
+    f.binding.destroy();
+  });
+
+  it('admits friendly base owners but excludes hostile base guns', () => {
+    const f = candidateFixture();
+    expect(f.query(COOP_DEFENSE_BASE_TURRET_OWNER_ID)).toEqual(f.query());
+    expect(f.query(COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID)).toEqual([]);
+    f.binding.destroy();
+  });
 
   it('returns at most four nearest candidates and excludes immune and dead bases immediately', () => {
     const f = candidateFixture();
@@ -417,7 +439,7 @@ describe('personal MG profile and World lifetime', () => {
     let focus: { targetType: 'enemy' | 'base'; targetId: string } | null = null;
     let blockedX: number | null = null;
     turret.setEnemyTargetProvider(() => enemies); turret.setTargetScoreProvider((_turret,_kind,id) => scores.get(id) ?? 0);
-    turret.setFocusTargetProvider(() => focus); turret.setFocusedBaseTargetProvider(() => ({ id: 'base', x: 300, y: 0 }));
+    turret.setFocusTargetProvider(() => focus); turret.setFocusedBaseTargetProvider(() => [{ id: 'base', x: 300, y: 0 }]);
     turret.setLineOfFireChecker((_sx,_sy,ex) => ex !== blockedX);
     const fire = vi.fn(); turret.setFireHandler(fire); let now = 0;
     const target = () => { turret.hostUpdate(now += 1000, UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPORES); return fire.mock.calls.at(-1)!.slice(6,8); };
@@ -794,7 +816,7 @@ describe('WorldCombatGameplayBinding turret fire wiring', () => {
     fixture.binding.destroy();
   });
 
-  it('lets player turrets in coop attack the nearest exposed face of a hostile base, never base-owned or control turrets', () => {
+  it('lets player and friendly base turrets attack hostile base faces only in coop, excluding control weapons', () => {
     const player = { id: 'builder', x: 0, y: 0, active: true };
     const playerManager = {
       getAllPlayers: () => [player] as unknown as PlayerEntity[],
@@ -803,7 +825,7 @@ describe('WorldCombatGameplayBinding turret fire wiring', () => {
     const metrics = resolveActiveArenaWorldMetrics();
     // L-förmige Basis rechts vom Turm; ihr Mittelpunkt liegt weit hinter der nahen Westwand.
     const base = {
-      id: 'hostile-base',
+      id: 'hostile-base', faction: 'hostile',
       isDamageable: () => true,
       isInert: () => false,
       getHp: () => 100,
@@ -817,9 +839,9 @@ describe('WorldCombatGameplayBinding turret fire wiring', () => {
       getBase: () => undefined,
       getObstacleRectangles: () => [],
     }) as unknown as BaseManager;
-    const run = (constructionId: 'rocket_turret' | 'gravity_turret', ownership: 'guest-session' | 'base-owned', coop: boolean) => {
+    const run = (constructionId: 'rocket_turret' | 'gravity_turret', ownership: 'guest-session' | 'base-owned', coop: boolean, gun = false) => {
       const placement = createPlacement(playerManager);
-      expect(placement.materializePersistentPlaceable(COOP_DEFENSE_CONSTRUCTIONS[constructionId],
+      if (!gun) expect(placement.materializePersistentPlaceable(COOP_DEFENSE_CONSTRUCTIONS[constructionId],
         10, 10, 0, ownership === 'base-owned' ? 'base' : player.id, 0xff8a3d, ownership)).not.toBeNull();
       const combatSystem = methodBag({
         observeEnemyDamageCommitted: vi.fn(() => () => {}),
@@ -828,7 +850,13 @@ describe('WorldCombatGameplayBinding turret fire wiring', () => {
         hasClearLineOfFire: vi.fn(() => true), hasLineOfSight: vi.fn(() => true),
         captureWorldDamageSource: vi.fn(() => ({})), canDamageStructure: vi.fn(() => true),
       }) as unknown as CombatSystem;
-      const fixture = createFixture({ coop, placementSystem: placement, players: [player], enemies: [], baseManager, combatSystem });
+      const manager = gun ? methodBag({ getBases: () => [base], getBasesByFaction: () => [base],
+        getObstacleGeneration: () => 1, getObstacleRectangles: () => [],
+        getBase: () => ({ getHp: () => 100, isInert: () => false, getSpec: () => ({ cells: [] }) }),
+        getTurrets: () => [{ id: 'friendly:gun', baseId: 'friendly', faction: 'friendly', weaponId: 'BASE_SPORES',
+          x: metrics.offsetX + 10.5 * CELL_SIZE, y: metrics.offsetY + 10.5 * CELL_SIZE, angle: 0 }],
+      }) as unknown as BaseManager : baseManager;
+      const fixture = createFixture({ coop, placementSystem: placement, players: [player], enemies: [], baseManager: manager, combatSystem });
       fixture.binding.systems?.turret.hostUpdate(0, UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPORES);
       const calls = fixture.projectileSpawn.spawnProjectile.mock.calls;
       fixture.binding.destroy();
@@ -843,7 +871,15 @@ describe('WorldCombatGameplayBinding turret fire wiring', () => {
     expect(origin.y).toBeCloseTo(metrics.offsetY + 10 * CELL_SIZE + CELL_SIZE / 2, 6);
     expect(provenance).toMatchObject({ attributionId: player.id, sourceSlot: 'utility' });
     expect(run('rocket_turret', 'guest-session', false)).toHaveLength(0);
-    expect(run('rocket_turret', 'base-owned', true)).toHaveLength(0);
+    for (const gun of [false, true]) {
+      const baseShots = run('rocket_turret', 'base-owned', true, gun);
+      expect(baseShots).toHaveLength(1);
+      expect(baseShots[0][0].provenance).toMatchObject({ attributionId: COOP_DEFENSE_BASE_TURRET_OWNER_ID });
+      expect(baseShots[0][0].provenance.sourceSlot).toBeUndefined();
+      expect(baseShots[0][0].origin.angle).toBeCloseTo(0);
+      expect(run('rocket_turret', 'base-owned', false, gun)).toHaveLength(0);
+    }
+    expect(run('gravity_turret', 'base-owned', true)).toHaveLength(0);
     expect(run('gravity_turret', 'guest-session', true)).toHaveLength(0);
   });
 

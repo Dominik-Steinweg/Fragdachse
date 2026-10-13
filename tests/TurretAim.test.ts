@@ -342,14 +342,10 @@ describe('hostile bases as third target tier', () => {
     expect(f.fire).toHaveBeenCalledTimes(fires ? 1 : 0);
   });
 
-  it.each(['figure', 'focused base', 'legacy base'] as const)('preserves early discharge without segment gating: %s', kind => {
+  it.each(['figure', 'legacy base'] as const)('preserves early discharge without segment gating: %s', kind => {
     const f = fixture({ weaponId: 'TURRET_MG', aimToleranceDeg: 18, angle: rad(75),
       ...(kind === 'legacy base' ? {} : { rotationSpeedDegPerSec: 90 }) });
     if (kind !== 'figure') f.targets([]);
-    if (kind === 'focused base') {
-      f.system.setFocusTargetProvider(() => ({ targetType: 'base', targetId: 'base' }));
-      f.system.setFocusedBaseTargetProvider(() => ({ id: 'base', x: 0, y: 100 }));
-    }
     f.system.setBaseTargetCandidateProvider(() => [{ id: 'base', x: 0, y: 100,
       hitSegment: { x1: -2, y1: 100, x2: 2, y2: 100 } }]);
     f.tick(0);
@@ -362,7 +358,7 @@ describe('hostile bases as third target tier', () => {
     f.targets([]);
     f.system.setBaseTargetCandidateProvider(candidates);
     f.system.setFocusTargetProvider(() => ({ targetType: 'base', targetId: 'base' }));
-    f.system.setFocusedBaseTargetProvider(() => ({ id: 'base', x: 200, y: 0 }));
+    f.system.setFocusedBaseTargetProvider(() => [{ id: 'base', x: 200, y: 0 }]);
     f.tick(0);
     expect(f.fire).not.toHaveBeenCalled();
     expect(candidates).not.toHaveBeenCalled();
@@ -372,10 +368,41 @@ describe('hostile bases as third target tier', () => {
     expect(f.fire.mock.calls[0].slice(6, 8)).toEqual([0, 100]);
   });
 
+  it('tries focused faces in order, skips range and cover, and stays ahead of figures', () => {
+    const f = fixture({ weaponId: 'TURRET_MG', targetRange: 300 });
+    f.system.setFocusTargetProvider(() => ({ targetType: 'base', targetId: 'base' }));
+    f.system.setFocusedBaseTargetProvider(() => [
+      { id: 'base', x: 400, y: 0 }, { id: 'base', x: 150, y: 0 }, { id: 'base', x: 200, y: 0 },
+    ]);
+    f.system.setLineOfFireChecker((_sx, _sy, x) => x !== 150);
+    f.tick(0);
+    expect(f.fire.mock.calls[0].slice(6, 8)).toEqual([200, 0]);
+  });
+
+  it('gates focused base shots and the remaining salvo by the face segment', () => {
+    const f = fixture({ weaponId: 'TURRET_ROCKET_BURST', rotationSpeedDegPerSec: 90,
+      aimToleranceDeg: 18, angle: 0 });
+    f.system.setFocusTargetProvider(() => ({ targetType: 'base', targetId: 'base' }));
+    f.system.setFocusedBaseTargetProvider(() => [{ id: 'base', x: 100, y: 2,
+      hitSegment: { x1: 100, y1: 2, x2: 100, y2: 20 } }]);
+    f.tick(0);
+    expect(f.fire).not.toHaveBeenCalled();
+    f.tick(1, 100);
+    expect(f.fire).toHaveBeenCalledOnce();
+    f.system.setFocusedBaseTargetProvider(() => []);
+    f.source.angle = 0;
+    const interval = WEAPON_CONFIGS.TURRET_ROCKET_BURST.turretBurst!.intervalMs;
+    f.tick(1 + interval);
+    expect(f.fire).toHaveBeenCalledOnce();
+    f.tick(2 + interval, 100);
+    expect(f.fire).toHaveBeenCalledTimes(2);
+    expect(f.fire.mock.calls[1].slice(6, 8)).toEqual([100, 2]);
+  });
+
   it('keeps a valid base focus ahead of figures for damaging turrets', () => {
     const f = fixture({ weaponId: 'TURRET_MG' });
     f.system.setFocusTargetProvider(() => ({ targetType: 'base', targetId: 'base' }));
-    f.system.setFocusedBaseTargetProvider(() => ({ id: 'base', x: 200, y: 0 }));
+    f.system.setFocusedBaseTargetProvider(() => [{ id: 'base', x: 200, y: 0 }]);
     f.tick(0);
     expect(f.fire.mock.calls[0].slice(6, 8)).toEqual([200, 0]);
   });

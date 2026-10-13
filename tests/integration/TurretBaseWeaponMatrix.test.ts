@@ -41,6 +41,11 @@ import { ProjectileIdentityScope } from '../../src/projectile/ProjectileIdentity
 import { ProjectileReplicationAdapter } from '../../src/projectile/ProjectileReplicationAdapter';
 import { ProjectilePhysicsBinding } from '../../src/projectile/ProjectilePhysicsBinding';
 import { WEAPON_CONFIGS, type WeaponConfig } from '../../src/loadout/LoadoutConfig';
+import { WorldCombatGameplayBinding } from '../../src/world/WorldCombatGameplayBinding';
+import { TurretSystem } from '../../src/systems/TurretSystem';
+import { COOP_DEFENSE_BASE_TURRET_OWNER_ID } from '../../src/config';
+import { COOP_DEFENSE_MAP_CONFIGS } from '../../src/config/coopDefenseMaps';
+import { resolveCoopDefenseBases } from '../../src/arena/BaseRegistry';
 import { canWeaponDamageBases } from '../../src/systems/TurretBaseTargeting';
 import { createTechnicalPhysicsBinding, createPresentation } from '../ProjectileRuntimeTestHelper';
 import { healthBarTestScene } from '../healthBarTestScene';
@@ -61,7 +66,7 @@ function fixture() {
     'setWalking', 'setRageTint', 'setDecoyStealth', 'setHeldItemId', 'syncBar', 'setMovementDashPhase', 'setBurrowPhase', 'updateMolotovFirewalker']) {
     player[name] = () => {};
   }
-  const players = { getPlayer: (id: string) => id === 'p1' ? player : undefined, getAllPlayers: () => [player] };
+  const players = { setSpawnContextProvider() {}, getPlayer: (id: string) => id === 'p1' ? player : undefined, getAllPlayers: () => [player] };
   const combat = new WorldCombatCore(players as never, { isHost: () => true,
     getPlayerProfile: players.getPlayer, getLocalPlayerId: () => 'p1', areTeammates: () => false,
     isEnemyPair: () => true, broadcastEffect() {}, broadcastAudioFeedback() {}, broadcastHitscanTracer() {},
@@ -148,6 +153,36 @@ function fixture() {
     getProjectileRuntime: () => projectiles, getShootingRange: () => null,
   } as never);
   const execution = new AutomatedWeaponExecutionAdapter(new WorldWeaponExecutionRuntime({ projectileSpawn: projectiles, combatSystem: combat }), projectiles);
+  let binding: WorldCombatGameplayBinding | undefined;
+  const baseShot = (weapon: WeaponConfig) => {
+    const bag = (values: Record<string, unknown> = {}): any => new Proxy(values, {
+      get(target, key) { if (!(key in target)) target[key as string] = vi.fn(); return target[key as string]; },
+    });
+    const capture = vi.spyOn(TurretSystem.prototype, 'setFireHandler');
+    const playerCombat = { resource: bag(), movement: bag(), state: bag(), utility: bag(), item: bag(),
+      modifier: bag(), loadout: bag(), sustainedWeapon: bag(), reactions: bag(), ak47: null, slimeTrail: null };
+    binding = new WorldCombatGameplayBinding(bag({ playerManager: players,
+      combatSystem: bag({ observeEnemyDamageCommitted: () => () => {} }),
+      placementSystem: bag(), worldMetrics: metrics, baseManager: null, hostPhysics: bag(), decoySystem: bag(),
+      fireSystem: bag(), gameAudioSystem: bag(), projectileSpawn: projectiles, projectileEvents: bag(),
+      projectileTimeField: bag(), projectileHoming: bag(), projectileWorldImpact: bag(), projectileSwarm: bag(), projectileInteraction: bag(),
+      isCoopMission: () => false, isCoopDefense: () => true, isActivityActive: () => true,
+      getEnemyManager: () => null, getPlayerCombatIntegration: () => playerCombat,
+      automatedWeaponExecution: execution, getEnergyInjectorSystem: () => null, getTargetStatusSystem: () => null,
+      getWorldGeometryBinding: () => null, createEnergyShieldSystem: () => bag(), hostUpdate: bag(),
+      network: { authority: { isHost: () => true }, round: bag(), stats: bag(), effects: bag() },
+    }));
+    const fireHandler = capture.mock.calls.at(-1)![0]!;
+    const execute = vi.spyOn(execution, 'fire');
+    fireHandler(COOP_DEFENSE_BASE_TURRET_OWNER_ID, 0xffffff, weapon.id, 0, 100, 0, 100, 100,
+      1, 1, 'friendly:gun');
+    expect(execute).toHaveBeenCalledOnce();
+    const [resolved, request] = execute.mock.calls[0];
+    expect(request.ownerId).toBe(COOP_DEFENSE_BASE_TURRET_OWNER_ID);
+    expect(request.options?.sourceSlot).toBeUndefined();
+    if (resolved.fire.type === 'projectile' && resolved.fire.homing) expect(resolved.fire.homing.targetTypes).toEqual(['enemies']);
+    capture.mockRestore(); execute.mockRestore();
+  };
   const shot = (weapon: WeaponConfig) => {
     const surface = base.getNearestSurfacePoint(0, 100)!;
     expect(surface.distance).toBeLessThan(weapon.range);
@@ -173,8 +208,8 @@ function fixture() {
       host.runHostUpdate(16);
     }
   };
-  return { base, shot, advance, damageOwners, projectiles, physics, execution, explosions,
-    destroy() { projectiles.destroy(); cloud.destroyAll(); fire.destroyAll(); mutation.destroy(); bases.destroy(); vitals.destroy(); dateNow.mockRestore(); } };
+  return { base, shot, baseShot, advance, damageOwners, projectiles, physics, execution, explosions,
+    destroy() { binding?.destroy(); projectiles.destroy(); cloud.destroyAll(); fire.destroyAll(); mutation.destroy(); bases.destroy(); vitals.destroy(); dateNow.mockRestore(); } };
 }
 
 const turretWeapons = Object.entries(WEAPON_CONFIGS)
@@ -222,4 +257,25 @@ describe('player-owned utility turret attacks against hostile bases', () => {
       } finally { f.destroy(); }
     });
   }
+});
+
+const baseWeapons = [...new Set(COOP_DEFENSE_MAP_CONFIGS.flatMap(map => resolveCoopDefenseBases(map)
+  .filter(base => base.faction === 'friendly').flatMap(base => base.turrets.map(turret => turret.weaponId))))].sort();
+
+describe('authored friendly base gun weapons through the production fire handler', () => {
+  it('finds friendly gun configurations in the map registry', () => expect(baseWeapons.length).toBeGreaterThan(0));
+  it.each(baseWeapons)('%s: observed damage matches the base targeting capability', id => {
+    const f = fixture(), weapon = WEAPON_CONFIGS[id];
+    try {
+      const hp = f.base.getHp();
+      f.baseShot(weapon);
+      const flight = weapon.fire.type === 'projectile' ? weapon.range / weapon.fire.projectileSpeed * 1000 : 3000;
+      const cloud = weapon.fire.type === 'projectile' ? weapon.fire.impactCloud?.duration ?? 0 : 0;
+      f.advance(flight + cloud + 5000);
+      const damage = hp - f.base.getHp();
+      console.info(id + ': friendly base gun damage=' + damage + ', canWeaponDamageBases=' + canWeaponDamageBases(weapon));
+      expect(damage > 0).toBe(canWeaponDamageBases(weapon));
+      for (const source of f.damageOwners) expect(source).toEqual({ owner: COOP_DEFENSE_BASE_TURRET_OWNER_ID, slot: undefined });
+    } finally { f.destroy(); }
+  });
 });

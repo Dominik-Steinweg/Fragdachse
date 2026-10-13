@@ -20,7 +20,7 @@ function explosionDamagesBases(effect: ProjectileExplosionConfig | undefined): b
 }
 
 /**
- * Can one player-owned automated attack hurt a hostile base, before runtime buffs,
+ * Can one automated turret attack hurt a hostile base, before runtime buffs,
  * target eligibility, range and line of sight? This is not a figure-damage predicate.
  * Tesla returns false: AutomatedWeaponExecutionAdapter does not fire tesla_dome;
  * TeslaDomeSystem owns that field's separate base callbacks.

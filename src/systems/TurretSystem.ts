@@ -3,10 +3,16 @@ import type { PlayerManager } from '../entities/PlayerManager';
 import { WEAPON_CONFIGS, type PlaceableTurretUtilityConfig, type WeaponConfig } from '../loadout/LoadoutConfig';
 import type { CombatActorStatePort, CombatRelationshipQueryPort } from '../combat/CombatCapabilities';
 import type { TurretDamageBuff } from '../types';
-import { DEFAULT_TURRET_AIM_TOLERANCE_DEG, type TurretAimConfig } from '../config/turretAim';
+import { DEFAULT_TURRET_AIM_TOLERANCE_DEG } from '../config/turretAim';
 import { stepTurretAngle, turretAngleDifference } from '../utils/turretAngle';
 import type { ManualTurretControl } from './TurretControlSystem';
 import { canWeaponDamageBases, type TurretHitSegment } from './TurretBaseTargeting';
+import { toLocalTurretFireSource, type AutomatedTurretId, type AutomatedTurret, type TurretFireSource, type TurretFireContext } from './TurretFireSource';
+
+export {
+  toLocalTurretFireSource, type AutomatedTurretId, type AutomatedTurretTargetMode,
+  type AutomatedTurret, type TurretFireState, type TurretFireSource, type TurretFireContext,
+} from './TurretFireSource';
 
 /**
  * Schusslinienprüfung des Turrets. Bewusst die Schuss- und nicht die Sichtlinie: ein Turret,
@@ -20,62 +26,12 @@ type LineOfFireChecker = (
   skipRockIndex?: number,
   sourceCarrierBaseId?: string,
 ) => boolean;
-export type AutomatedTurretId = number | string;
-export type AutomatedTurretTargetMode = 'players' | 'enemies';
-export interface AutomatedTurret extends TurretAimConfig {
-  /** Occupant exit contour; retained through removal of the turret or its carrier. */
-  readonly footprint?: { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number };
-  readonly angle?: number;
-  readonly id: AutomatedTurretId;
-  readonly x: number;
-  readonly y: number;
-  readonly ownerId: string;
-  readonly ownerColor: number;
-  readonly weaponId?: keyof typeof WEAPON_CONFIGS;
-  readonly skipRockIndex?: number;
-  /** Nur der konkrete Träger ist bis zum ersten vollständigen Austritt freigegeben. */
-  readonly sourceCarrierBaseId?: string;
-  readonly secondProjectileDamageFactor?: number;
-  /** Beim Platzieren eingefrorene Zielreichweite; fehlt bei Basis-Turrets (dann gilt die Config). */
-  readonly targetRange?: number;
-  readonly projectileRange?: number;
-  readonly cooldownMs?: number;
-  readonly damage?: number;
-  readonly muzzleOffset?: number;
-  /** Erzwingt die Laufzeit-Zielfraktion; ohne Wert bleibt das bisherige gemischte Verhalten. */
-  readonly targetMode?: AutomatedTurretTargetMode;
-}
-export type TurretFireState = 'active' | 'paused';
-/**
- * Eintrag des Turmfeuers. Eine Konstruktion ist ohne Feuerleitung genau eine Quelle, deren
- * Identitäts-, Folge- und Darstellungsschlüssel ihre eigene ID sind. Temporäre Quellen (Turmkopien)
- * tragen eine eigene `id`, verweisen aber über `identityId` auf ihr Original.
- */
-export interface TurretFireSource extends AutomatedTurret {
-  /** Konstruktion, der identitätsgebundene Effekte, Bemannung und Attribution gehören. */
-  readonly identityId: AutomatedTurretId;
-  /** Owner von Cooldown und laufender Salve; Einträge mit gleichem Schlüssel teilen ihre Feuerfolge. */
-  readonly sequenceKey: AutomatedTurretId;
-  /** Startzustand einer noch unbekannten eigenen Folge (`nextFireAt` dieses Schlüssels). */
-  readonly sequenceSeedKey?: AutomatedTurretId;
-  /** Pausierte Quellen beginnen nichts Neues, halten aber ihre Feuerfolge am Leben. */
-  readonly fireState: TurretFireState;
-  /** Sprite, das Schussanimation und Rohrdrehung dieses Eintrags darstellt. */
-  readonly visualId: AutomatedTurretId;
-}
-/** Zusatzwissen eines Schusses, das nicht in die positionalen Fire-Handler-Argumente gehört. */
-export interface TurretFireContext {
-  readonly source: TurretFireSource;
-}
-export function toLocalTurretFireSource(turret: AutomatedTurret): TurretFireSource {
-  return { ...turret, identityId: turret.id, sequenceKey: turret.id, visualId: turret.id, fireState: 'active' };
-}
 type TurretProvider = () => readonly AutomatedTurret[];
 type TurretFireSourceProvider = () => readonly TurretFireSource[];
 type TurretAngleUpdater = (source: TurretFireSource, angle: number) => void;
 type EnemyTargetProvider = () => readonly { id: string; x: number; y: number }[];
 type FocusTargetProvider = (ownerId: string) => { targetType: 'enemy' | 'base'; targetId: string } | null;
-type FocusedBaseTargetProvider = (targetId: string, turretX: number, turretY: number) => { id: string; x: number; y: number } | null;
+type FocusedBaseTargetProvider = (targetId: string, turretX: number, turretY: number, range: number) => readonly TurretTargetPoint[];
 /**
  * Erreichbare Außenflächen-Punkte feindlicher Basen, nach Distanz sortiert und begrenzt. Der
  * Provider entscheidet Besitz- und Modusberechtigung; Reichweite und Schusslinie prüft das TurretSystem.
@@ -210,7 +166,7 @@ export class TurretSystem {
     this.turretDamageBuffProvider = provider;
   }
 
-  /** Zusätzlicher, quellenbezogener Schadensmultiplikator für Konstrukte; erhält die Identität. */
+  /** Zusätzlicher Schadensmultiplikator; erhält die Identität und nur Originale aus der Quellenliste. */
   setTurretDamageMultiplierProvider(
     provider: ((turret: AutomatedTurret, turrets: readonly AutomatedTurret[]) => number) | null,
   ): void {
@@ -232,17 +188,15 @@ export class TurretSystem {
     config: PlaceableTurretUtilityConfig,
     _weaponConfig: WeaponConfig,
     deltaMs = 0,
+    sources?: readonly TurretFireSource[],
   ): void {
-    const turrets = this.fireSourceProvider?.() ?? (this.turretProvider?.() ?? []).map(toLocalTurretFireSource);
+    const turrets = sources ?? this.fireSourceProvider?.() ?? (this.turretProvider?.() ?? []).map(toLocalTurretFireSource);
     const entrySequences = new Map<AutomatedTurretId, AutomatedTurretId>();
     const activeSequences = new Set<AutomatedTurretId>();
     const activeIdentities = new Set<AutomatedTurretId>();
-    let constructions: Map<AutomatedTurretId, AutomatedTurret> | null = null;
-    const identityOf = (source: TurretFireSource): AutomatedTurret | null => {
-      if (source.id === source.identityId) return source;
-      constructions ??= new Map((this.turretProvider?.() ?? []).map(turret => [turret.id, turret]));
-      return constructions.get(source.identityId) ?? null;
-    };
+    const constructions = turrets.filter(source => source.id === source.identityId);
+    const identities = new Map(constructions.map(source => [source.id, source]));
+    const identityOf = (source: TurretFireSource): AutomatedTurret | null => identities.get(source.identityId) ?? null;
     // Neue eigene Folgen übernehmen den Stand ihres Seeds vom Tick-Beginn, unabhängig davon, ob der
     // Seed in diesem Tick vor ihnen feuert. Eine laufende Seed-Salve muss erst ihren Cooldown
     // buchen (auch beim Abbruch); bis zum nächsten Tick bleibt die neue Folge vollständig inaktiv.
@@ -380,7 +334,7 @@ export class TurretSystem {
       const buff = this.turretDamageBuffProvider?.(identity.x, identity.y) ?? null;
       const damageMultiplier = (buff?.damageMultiplier ?? 1)
         * (turret.damage === undefined ? 1 : turret.damage / turretWeaponConfig.damage)
-        * Math.max(0, this.turretDamageMultiplierProvider?.(identity, turrets) ?? 1);
+        * Math.max(0, this.turretDamageMultiplierProvider?.(identity, constructions) ?? 1);
 
       const muzzleDistance = muzzleOffset;
       const muzzleX = turretX + Math.cos(angle) * muzzleDistance;
@@ -596,8 +550,10 @@ export class TurretSystem {
     // Türme ohne Wirkung gegen Basen (Kontrolltürme) schießen nie auf Basen, auch nicht im Fokus.
     const canDamageBases = this.canDamageBases(turret);
     if (focus?.targetType === 'base' && canDamageBases) {
-      const base = this.focusedBaseTargetProvider?.(focus.targetId, turretX, turretY) ?? null;
-      if (base) consider({ x: base.x, y: base.y }, 0, 'base', base.id);
+      for (const base of this.focusedBaseTargetProvider?.(focus.targetId, turretX, turretY, range) ?? []) {
+        if (excluded && base.x === excluded.x && base.y === excluded.y) continue;
+        if (consider(base, 0, 'base', base.id)) break;
+      }
     }
 
     if (bestTarget === null && canDamageBases && this.baseTargetCandidateProvider) {

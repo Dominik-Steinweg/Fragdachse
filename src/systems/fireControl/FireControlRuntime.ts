@@ -1,4 +1,4 @@
-import { toLocalTurretFireSource, type AutomatedTurret, type TurretFireSource } from '../TurretSystem';
+import { toLocalTurretFireSource, type AutomatedTurret, type TurretFireSource } from '../TurretFireSource';
 import type { FireControlActivation, FireControlUtilityPort, ResolvedFireControlRelayConfig } from '../../world/FireControlUtilityPort';
 import { planFireControlCopies, type FireControlConstructionFacts } from './FireControlCopyPlan';
 import { fireControlCopySourceId, type FireControlSnapshot } from './FireControlSnapshot';
@@ -52,12 +52,12 @@ export class FireControlRuntime implements FireControlUtilityPort {
     return { ok: true, deploymentId: id, expiresAt };
   }
 
-  update(nowMs: number): void {
+  update(nowMs: number, readConstructions = this.deps.readConstructions): void {
     for (const deployment of this.deployments.values()) {
       if (nowMs >= deployment.expiresAt) this.end(deployment, deployment.expiresAt);
     }
     if (!this.deployments.size) return;
-    const facts = new Map(this.deps.readConstructions().map(source => [source.id, source]));
+    const facts = new Map(readConstructions().map(source => [source.id, source]));
     for (const deployment of this.deployments.values()) {
       deployment.copies = deployment.copies.filter(copy => {
         const source = facts.get(copy.originalId);

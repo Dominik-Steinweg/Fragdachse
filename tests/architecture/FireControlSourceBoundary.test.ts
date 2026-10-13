@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import * as ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
@@ -43,6 +43,28 @@ function modulePath(file: string, specifier: string): string {
   return normalize(specifier.startsWith('.') ? resolve(dirname(file), specifier) : specifier);
 }
 
+/** Follow emitted value imports, so type-only contracts do not load their modules. */
+function transitivePhaserImports(roots: readonly string[]): string[] {
+  const visited = new Set<string>(), violations: string[] = [];
+  const inspect = (file: string, chain: readonly string[]) => {
+    if (visited.has(file)) return;
+    visited.add(file);
+    const emitted = ts.transpileModule(readFileSync(file, 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ESNext },
+    }).outputText;
+    const source = ts.createSourceFile(file, emitted, ts.ScriptTarget.Latest, true);
+    for (const specifier of moduleReferences(source)) {
+      if (/^phaser(?:\/|$)/i.test(specifier)) violations.push([...chain, file, specifier].map(normalize).join(' -> '));
+      if (!specifier.startsWith('.')) continue;
+      const path = resolve(dirname(file), specifier);
+      const next = [path + '.ts', resolve(path, 'index.ts')].find(existsSync);
+      if (next) inspect(next, [...chain, file]);
+    }
+  };
+  roots.forEach(file => inspect(file, []));
+  return violations;
+}
+
 describe('Feuerleit-Regeln bleiben unabhängig von Phaser, Netzwerk und Szenen', () => {
   it('Arrange: alle Fire-Control-Module; Act: direkte Modulreferenzen einschließlich Typen lesen; Assert: keine Abhängigkeit auf Phaser, Netzwerk oder Szenen', () => {
     const modules = files(resolve('src/systems/fireControl'));
@@ -52,6 +74,7 @@ describe('Feuerleit-Regeln bleiben unabhängig von Phaser, Netzwerk und Szenen',
       return /(^|\/)phaser(?:\/|$)/i.test(target) || /(^|\/)(network|scenes)(\/|$)/i.test(target);
     }).map(specifier => `${normalize(file)} -> ${specifier}`));
     expect(forbidden).toEqual([]);
+    expect(transitivePhaserImports(modules)).toEqual([]);
   });
 });
 
