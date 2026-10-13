@@ -5371,6 +5371,382 @@
         "version": 1,
         "encoding": "u16-world-xyz-per-pose-v1"
       }
+    },
+    {
+      "id": "construction_dawn_wreck_t1",
+      "label": "Dawn wreck T1",
+      "category": "construction",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-wreck.png",
+      "designReference": "scripts/asset-pipeline/references/dawn-tier-row.png",
+      "targetSize": 96,
+      "sourceSizes": [
+        192,
+        384
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Crashed cargo quadcopter with three intact ducts, split fourth rotor and scattered opened cargo.",
+        "colors": "Rust-orange and brown, charcoal steel, old moss and grass.",
+        "anatomy": "One tier-parametric static model. Open cargo, severed wires and damaged spar; 96 px / three 32 px cells."
+      },
+      "requiredClips": [],
+      "production": "reference",
+      "recipe": "dawn-wreck",
+      "model": {
+        "tier": 1
+      },
+      "orthoScale": 3.6,
+      "textures": {},
+      "materialVariants": {
+        "standard": {
+          "label": "Weathered matte pigment, machined relief and cavity depth",
+          "textureStrength": 0,
+          "formShadowStrength": 0.83
+        }
+      },
+      "clips": [],
+      "elevation": {
+        "min": 0,
+        "max": 1,
+        "scale": 0.5
+      },
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      }
+    },
+    {
+      "id": "construction_dawn_wreck_t2",
+      "label": "Dawn wreck T2",
+      "category": "construction",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-wreck.png",
+      "designReference": "scripts/asset-pipeline/references/dawn-tier-row.png",
+      "targetSize": 96,
+      "sourceSizes": [
+        192,
+        384
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Crashed cargo quadcopter with three intact ducts, split fourth rotor and scattered opened cargo.",
+        "colors": "Dark military olive, contrasting khaki panels, worn bright edges and yellow-black cargo warnings.",
+        "anatomy": "One tier-parametric static model. Open cargo, severed wires and damaged spar; 96 px / three 32 px cells."
+      },
+      "requiredClips": [],
+      "production": "reference",
+      "recipe": "dawn-wreck",
+      "model": {
+        "tier": 2
+      },
+      "orthoScale": 3.6,
+      "textures": {},
+      "materialVariants": {
+        "standard": {
+          "label": "Weathered matte pigment, machined relief and cavity depth",
+          "textureStrength": 0,
+          "formShadowStrength": 0.83
+        }
+      },
+      "clips": [],
+      "elevation": {
+        "min": 0,
+        "max": 1,
+        "scale": 0.5
+      },
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      }
+    },
+    {
+      "id": "construction_dawn_wreck_t3",
+      "label": "Dawn wreck T3",
+      "category": "construction",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-wreck.png",
+      "designReference": "scripts/asset-pipeline/references/dawn-tier-row.png",
+      "targetSize": 96,
+      "sourceSizes": [
+        192,
+        384
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Crashed cargo quadcopter with three intact ducts, split fourth rotor and scattered opened cargo.",
+        "colors": "White-silver alloy, graphite panels and sparse cyan seams plus a small cargo crystal.",
+        "anatomy": "One tier-parametric static model. Open cargo, severed wires and damaged spar; 96 px / three 32 px cells."
+      },
+      "requiredClips": [],
+      "production": "reference",
+      "recipe": "dawn-wreck",
+      "model": {
+        "tier": 3
+      },
+      "orthoScale": 3.6,
+      "textures": {},
+      "materialVariants": {
+        "standard": {
+          "label": "Weathered matte pigment, machined relief and cavity depth",
+          "textureStrength": 0,
+          "formShadowStrength": 0.83
+        }
+      },
+      "clips": [],
+      "elevation": {
+        "min": 0,
+        "max": 1,
+        "scale": 0.5
+      },
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      }
+    },
+    {
+      "id": "construction_dawn_extractor",
+      "label": "Dawn extractor",
+      "category": "construction",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-extractor.png",
+      "targetSize": 96,
+      "sourceSizes": [
+        192,
+        384
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Twin round tanks, tracked chassis and a curved flexible vacuum hose with separate suction head.",
+        "colors": "Dark steel frame and tracks, selective worn yellow panels, copper-brass tanks and an amber beacon.",
+        "anatomy": "Rest plus additive in-plane hose pumping and warning lamp pulse; stable 96 px canvas, centered pivot."
+      },
+      "requiredClips": [
+        "idle",
+        "active"
+      ],
+      "production": "reference",
+      "recipe": "dawn-extractor",
+      "model": {},
+      "orthoScale": 3.4,
+      "textures": {},
+      "materialVariants": {
+        "standard": {
+          "label": "Weathered matte pigment, machined relief and cavity depth",
+          "textureStrength": 0,
+          "formShadowStrength": 0.83
+        }
+      },
+      "clips": [
+        {
+          "name": "idle",
+          "motion": "dawn_extractor_idle",
+          "frameCount": 2,
+          "frameRate": 12,
+          "loop": true,
+          "parameters": {
+            "stroke": 0.32,
+            "hoseReach": 0.54,
+            "idleEmission": 0.02,
+            "activeEmission": 4.5,
+            "blinkPower": 2
+          }
+        },
+        {
+          "name": "active",
+          "motion": "dawn_extractor_active",
+          "frameCount": 12,
+          "frameRate": 12,
+          "loop": true,
+          "parameters": {
+            "stroke": 0.32,
+            "hoseReach": 0.54,
+            "idleEmission": 0.02,
+            "activeEmission": 4.5,
+            "blinkPower": 2
+          }
+        }
+      ],
+      "elevation": {
+        "min": 0,
+        "max": 1,
+        "scale": 0.5
+      },
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      }
+    },
+    {
+      "id": "dawn_scrap_t1",
+      "label": "Dawn scrap T1",
+      "category": "powerup",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-scrap-t1.png",
+      "targetSize": 24,
+      "sourceSizes": [
+        48,
+        96
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Loose hex nut on torn rust sheet; no pedestal or symbol base.",
+        "colors": "Rust orange and gray steel.",
+        "anatomy": "Static actual component. Centered 24 px canvas; compare 22, 32 and 40 px."
+      },
+      "requiredClips": [],
+      "production": "reference",
+      "recipe": "dawn-scrap",
+      "model": {
+        "tier": 1
+      },
+      "orthoScale": 1.76,
+      "textures": {},
+      "materialVariants": {
+        "standard": {
+          "label": "Weathered matte pigment, machined relief and cavity depth",
+          "textureStrength": 0,
+          "formShadowStrength": 0.83
+        }
+      },
+      "clips": [],
+      "elevation": {
+        "min": 0,
+        "max": 1,
+        "scale": 0.5
+      },
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      }
+    },
+    {
+      "id": "dawn_scrap_t2",
+      "label": "Dawn scrap T2",
+      "category": "powerup",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-scrap-t2.png",
+      "targetSize": 24,
+      "sourceSizes": [
+        48,
+        96
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Loose toothed gear and copper coil; no pedestal or symbol base.",
+        "colors": "Steel gear and copper winding.",
+        "anatomy": "Static actual component. Centered 24 px canvas; compare 22, 32 and 40 px."
+      },
+      "requiredClips": [],
+      "production": "reference",
+      "recipe": "dawn-scrap",
+      "model": {
+        "tier": 2
+      },
+      "orthoScale": 1.76,
+      "textures": {},
+      "materialVariants": {
+        "standard": {
+          "label": "Weathered matte pigment, machined relief and cavity depth",
+          "textureStrength": 0,
+          "formShadowStrength": 0.83
+        }
+      },
+      "clips": [],
+      "elevation": {
+        "min": 0,
+        "max": 1,
+        "scale": 0.5
+      },
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      }
+    },
+    {
+      "id": "dawn_scrap_t3",
+      "label": "Dawn scrap T3",
+      "category": "powerup",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-scrap-t3.png",
+      "targetSize": 24,
+      "sourceSizes": [
+        48,
+        96
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Loose triangular alloy component and cyan core; no pedestal or symbol base.",
+        "colors": "Pale alloy triangle, small cyan core, brass connectors.",
+        "anatomy": "Static actual component. Centered 24 px canvas; compare 22, 32 and 40 px."
+      },
+      "requiredClips": [],
+      "production": "reference",
+      "recipe": "dawn-scrap",
+      "model": {
+        "tier": 3
+      },
+      "orthoScale": 1.76,
+      "textures": {},
+      "materialVariants": {
+        "standard": {
+          "label": "Weathered matte pigment, machined relief and cavity depth",
+          "textureStrength": 0,
+          "formShadowStrength": 0.83
+        }
+      },
+      "clips": [],
+      "elevation": {
+        "min": 0,
+        "max": 1,
+        "scale": 0.5
+      },
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      }
     }
   ]
 }

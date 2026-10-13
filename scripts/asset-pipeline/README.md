@@ -305,6 +305,16 @@ Dev-geschützt. Es gibt keinen Import und keine Schreibzugriffe auf `public/`.
 
 ## Entwurfsmodus
 
+Mit `--output D:/Fragdachse-render/dawn-v1/drafts` liegen Entwurfsbilder,
+Modell-Caches und Logs auf dem angegebenen Laufwerk. Bei knappem Systemlaufwerk
+auch `OPTIX_CACHE_PATH` und `CUDA_CACHE_PATH` auf Verzeichnisse dort setzen.
+Asset-IDs im Entwurfsrunner erlauben Unterstriche; Labels und Clipnamen behalten
+ihren bisherigen Vertrag. Die Dawn-Rezepte `dawn-wreck`, `dawn-extractor` und
+`dawn-scrap` verwenden prozedurale matte Materialien ohne externe Texturbasis.
+Ihre leeren `gameIds` markieren fehlende Runtime-Bindung. Review-Bögen entstehen
+mit `node scripts/asset-pipeline/review-dawn-v1.mjs --draft-root <Ausgabeordner>
+--label <Label> --output art/poc/dawn/v1-review` (als eine Befehlszeile).
+
 Der separate Entwurfsmodus rendert direkt in der angezeigten Canvas-Größe. Er benutzt
 die vorhandenen Rezepte, Materialien, Kamera und Lichter, standardmäßig Cycles OPTIX
 mit 8 Samples und Denoiser. Zusätzliche Shader-AOVs liefern Albedo, Welt-Z,
