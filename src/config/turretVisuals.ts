@@ -77,13 +77,13 @@ export function getTurretVisualTransform(
   };
 }
 
-export function preloadTurretVisualAssets(loader: Phaser.Loader.LoaderPlugin): void {
+export function preloadTurretVisualAssets(loader: Phaser.Loader.LoaderPlugin, additionalAssets: readonly PipelineAsset[] = []): void {
   const loaded = new Set<string>();
-  for (const spec of Object.values(TURRET_VISUALS)) {
-    if (!spec.assetPath || loaded.has(spec.textureKey)) continue;
-    loaded.add(spec.textureKey);
-    loader.image(spec.textureKey, spec.assetPath);
-    const { asset } = spec;
+  const assets = [...Object.values(TURRET_VISUALS).filter(spec => spec.assetPath).map(spec => spec.asset), ...additionalAssets];
+  for (const asset of assets) {
+    if (loaded.has(asset.textureKey)) continue;
+    loaded.add(asset.textureKey);
+    loader.image(asset.textureKey, asset.idlePath);
     loader.spritesheet(asset.sheetTextureKey, asset.sheetPath, {
       frameWidth: asset.layout.frameWidth,
       frameHeight: asset.layout.frameHeight,
@@ -94,13 +94,14 @@ export function preloadTurretVisualAssets(loader: Phaser.Loader.LoaderPlugin): v
   }
 }
 
-export function registerTurretAnimations(anims: Phaser.Animations.AnimationManager): void {
-  for (const spec of new Set(Object.values(TURRET_VISUALS))) {
-    for (const clip of spec.asset.clips) {
-      const key = pipelineAnimationKey(spec.asset, clip);
+export function registerTurretAnimations(anims: Phaser.Animations.AnimationManager, additionalAssets: readonly PipelineAsset[] = []): void {
+  for (const asset of new Set([...Object.values(TURRET_VISUALS).map(spec => spec.asset), ...additionalAssets])) {
+    for (const clip of asset.clips) {
+      const key = pipelineAnimationKey(asset, clip);
       if (anims.exists(key)) continue;
-      anims.create({ key,
-        frames: anims.generateFrameNumbers(spec.asset.sheetTextureKey, { frames: clip.frames }),
+      const frames = anims.generateFrameNumbers(asset.sheetTextureKey, { frames: clip.frames });
+      if (frames.length === 0) continue;
+      anims.create({ key, frames,
         frameRate: clip.frameRate, repeat: clip.loop ? -1 : 0,
       });
     }

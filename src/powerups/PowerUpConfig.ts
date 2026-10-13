@@ -1,6 +1,7 @@
 // ── Power-Up-Definitionen ──────────────────────────────────────────────────
 
 import { ARMOR_COLOR, COLORS } from '../config';
+import { DAWN_SCRAP_KEYS } from '../assets/DawnAssets';
 
 export type PowerUpType = 'dawn_scrap' | 'instant_heal' | 'instant_armor' | 'instant_rage' | 'buff_regen' | 'buff_damage' | 'weapon_buff' | 'shield_overcharge' | 'global_nuke' | 'holy_hand_grenade' | 'bfg' | 'decoy_stealth';
 
@@ -35,11 +36,10 @@ export function shouldDelayFirstPedestalSpawn(defId: string): boolean {
 }
 
 /** Replacement point for the temporary scrap visual; absent from normal drop tables. */
-export const DAWN_SCRAP_ASSET_KEY = 'powerup_dawn_scrap';
 export const DAWN_SCRAP_DEFS: Record<string, PowerUpDef> = Object.fromEntries(
   [1, 2, 3].map(amount => {
     const id = 'dawn_scrap_' + amount;
-    return [id, { id, type: 'dawn_scrap', amount, color: 0xc69762, spriteKey: DAWN_SCRAP_ASSET_KEY }];
+    return [id, { id, type: 'dawn_scrap', amount, color: 0xc69762, spriteKey: DAWN_SCRAP_KEYS[amount] }];
   }),
 );
 

@@ -1,4 +1,9 @@
 import { WaterSurfaceModel } from '../../arena/WaterSurfaceModel';
+import { DawnSitePropRenderer } from '../../arena/DawnSitePropRenderer';
+import type { WorldDescriptor } from '../../world/WorldDescriptor';
+import type { ActivityDescriptor } from '../../world/ActivityDescriptor';
+import { resolveWorldDefinition } from '../../world/WorldDefinitionResolution';
+import type { CoopDefenseSecondaryObjectivePresentationState } from '../../types';
 import type { ArenaLayout } from '../../types';
 import type { WorldMetrics } from '../../world/WorldMetrics';
 import { KrakenPresentationResidency } from '../../effects/kraken/KrakenPresentationResidency';
@@ -50,6 +55,8 @@ export class CoopMissionPresentationInfrastructure {
   private readonly objectiveAnnouncements: CoopDefenseObjectiveAnnouncement;
   private readonly mapEventAnnouncementPresenter: CoopDefenseMapEventAnnouncementPresenter;
   private secondaryObjectiveHud: CoopDefenseSecondaryObjectiveHud | null = null;
+  private dawnSiteProps: DawnSitePropRenderer | null = null;
+  private dawnWorldRevision: number | null = null;
   private hostileBaseIndicator: HostileBaseIndicator | null = null;
   private ui: CoopMissionPresentationUiPort | null = null;
   private uiInput: CoopMissionPresentationInfrastructureInput | null = null;
@@ -77,6 +84,34 @@ export class CoopMissionPresentationInfrastructure {
 
   bindDawnHud(hud: DawnHUD): void {
     if (!this.destroyed) hud.setObjectiveAnnouncements(this.objectiveAnnouncements);
+  }
+
+  syncDawnSites(
+    world: WorldDescriptor | null,
+    activity: ActivityDescriptor | null,
+    objectives: CoopDefenseSecondaryObjectivePresentationState | null,
+  ): void {
+    if (this.destroyed) return;
+    const plan = world?.parameters?.dawn;
+    if (!plan || !world || !activity?.parameters?.dawn || activity.worldRevision !== world.worldRevision) {
+      this.clearDawnSites();
+      return;
+    }
+    if (this.dawnWorldRevision !== world.worldRevision) {
+      this.clearDawnSites();
+      const definition = resolveWorldDefinition(world, activity);
+      if (!definition) return;
+      this.dawnSiteProps = new DawnSitePropRenderer(this.scene, plan, definition,
+        baseId => this.uiInput?.getBaseManager()?.getBase(baseId)?.isDestroyed() ?? false);
+      this.dawnWorldRevision = world.worldRevision;
+    }
+    this.dawnSiteProps?.sync(objectives);
+  }
+
+  private clearDawnSites(): void {
+    this.dawnSiteProps?.destroy();
+    this.dawnSiteProps = null;
+    this.dawnWorldRevision = null;
   }
 
   createUiPort(input: CoopMissionPresentationInfrastructureInput): CoopMissionPresentationUiPort {
@@ -309,6 +344,7 @@ export class CoopMissionPresentationInfrastructure {
 
   destroy(): void {
     if (this.destroyed) return;
+    this.clearDawnSites();
     this.secondaryObjectiveHud?.destroy();
     this.secondaryObjectiveHud = null;
     this.mapEventAnnouncementPresenter.reset();
@@ -350,6 +386,7 @@ export class CoopMissionPresentationInfrastructure {
   }
 
   private destroyWorldSpace(input: CoopMissionPresentationInfrastructureInput): void {
+    this.clearDawnSites();
     if (this.worldSpaceDestroyed) return;
     this.worldSpaceDestroyed = true;
     this.releaseKrakenProjectiles?.(); this.releaseKrakenProjectiles = null;
@@ -372,6 +409,7 @@ export class CoopMissionPresentationInfrastructure {
   }
 
   private resetWorldSpace(input: CoopMissionPresentationInfrastructureInput): void {
+    this.clearDawnSites();
     if (this.worldSpaceDestroyed) return;
     input.renderers.beer.syncCoopDefenseCarry([]);
     input.clientUpdate.resetEnemyDashVisuals();

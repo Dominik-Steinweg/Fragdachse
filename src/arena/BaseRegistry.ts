@@ -60,6 +60,7 @@ export interface BasePowerUpPedestalSpec {
  *             spielerzahlabhaengiges Overlay aufloesen.
  */
 export interface BaseSpec {
+  readonly surface?: 'cells' | 'none';
   readonly id: string;
   readonly cells: readonly { gridX: number; gridY: number }[];
   readonly region: ArenaGridRegion;
@@ -274,6 +275,7 @@ function resolveBaseSpec(
 
   return {
     id: config.id,
+    ...(config.surface === undefined ? {} : { surface: config.surface }),
     cells: absoluteCells,
     region,
     hpMax,
@@ -445,6 +447,7 @@ function resolveWorldBaseSpec(config: WorldBaseDefinition, metrics: WorldMetrics
   const resolved = resolveBaseSpec(config as CoopBaseConfig, 1, metrics);
   return {
     id: resolved.id,
+    ...(resolved.surface === undefined ? {} : { surface: resolved.surface }),
     cells: resolved.cells,
     region: resolved.region,
     hpMax: config.hpMax,

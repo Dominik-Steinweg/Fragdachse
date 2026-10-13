@@ -18,6 +18,7 @@ import { ParticleFlowScheduler } from '../effects/gpu/ParticleFlowScheduler';
 import type { LightingSystem } from '../effects/LightingSystem';
 import { POWERUP_DEFS, POWERUP_PEDESTAL_CONFIG, POWERUP_RENDER_SIZE, powerUpSymbolScale } from './PowerUpConfig';
 import { POWERUP_BASE_KEY, powerUpSymbolKey } from '../assets/PowerUpAssets';
+import { DAWN_SCRAP_DISPLAY_SIZE, isDawnScrapTexture } from '../assets/DawnAssets';
 import {
   PowerUpPedestalGpuSystem,
   resolvePowerUpPedestalGpuMode,
@@ -123,6 +124,9 @@ export class PowerUpRenderer {
       const isMissionMarker = pu.pickupKind === 'objective-marker';
       const isMissionReward = pu.pickupKind === 'objective-placement';
       const isMissionVisual = isMissionMarker || isMissionReward;
+      const isDawnScrap = !isMissionVisual && isDawnScrapTexture(def?.spriteKey);
+      if (isDawnScrap && !this.scene.textures.exists(def.spriteKey!)) continue;
+      const renderSize = isDawnScrap ? DAWN_SCRAP_DISPLAY_SIZE : POWERUP_RENDER_SIZE;
       const glowColor = isMissionVisual ? MISSION_REWARD_COLOR : (def?.color ?? 0xffffff);
       // Deterministischer Phasen-Offset: Items pulsieren leicht gegeneinander versetzt
       const phaseMs   = (pu.uid * 137) % 1400;
@@ -132,7 +136,7 @@ export class PowerUpRenderer {
       container.setDepth(DEPTH.PLAYERS - 1);
 
       // Feste Zielgröße; die Einblendanimation skaliert relativ zu diesem Fit.
-      const symbolKey = !isMissionVisual && def?.spriteKey ? powerUpSymbolKey(def.spriteKey) : undefined;
+      const symbolKey = !isMissionVisual && !isDawnScrap && def?.spriteKey ? powerUpSymbolKey(def.spriteKey) : undefined;
       const symbol = symbolKey
         ? this.scene.add.image(0, 0, symbolKey).setDisplaySize(POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE)
         : undefined;
@@ -148,7 +152,7 @@ export class PowerUpRenderer {
         isMissionReward
           ? this.scene.add.image(0, 0, 'mission_reward_pickup').setDisplaySize(MISSION_REWARD_PICKUP_SIZE, MISSION_REWARD_PICKUP_SIZE)
           : layered ?? (def?.spriteKey
-          ? this.scene.add.image(0, 0, def.spriteKey).setDisplaySize(POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE)
+          ? this.scene.add.image(0, 0, def.spriteKey).setDisplaySize(renderSize, renderSize)
           : this.scene.add.rectangle(0, 0, POWERUP_RENDER_SIZE, POWERUP_RENDER_SIZE, glowColor));
       // Nur der seltene Shape-Fallback gehoert zur Vector-Attribution; Bilder bleiben normale
       // Sprite-Last und werden nicht in eine Graphics-Familie eingemischt.

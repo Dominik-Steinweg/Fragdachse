@@ -40,6 +40,23 @@ function dawnLikeMap(overrides: Partial<CoopDefenseMapAuthoringConfig> = {}): Co
 }
 
 describe('Dawn extensions of the Coop authoring contract', () => {
+  it('normalizes surfaces without changing default configs and keeps them on the World side', () => {
+    const input = dawnLikeMap();
+    const withSurface = (surface: unknown) => ({ ...input,
+      bases: input.bases!.map(base => ({ ...base, surface })),
+    }) as CoopDefenseMapAuthoringConfig;
+    const baseline = normalizeCoopDefenseMapConfig(input);
+    expect(normalizeCoopDefenseMapConfig(withSurface('cells'))).toEqual(baseline);
+    expect(baseline.bases.every(base => !Object.hasOwn(base, 'surface'))).toBe(true);
+    const map = normalizeCoopDefenseMapConfig(withSurface('none'));
+    const scenario = toAuthoredScenario(map);
+    expect(scenario.world.bases.find(base => base.id === input.bases![0].id)?.surface).toBe('none');
+    expect(JSON.stringify(scenario.activity)).not.toContain('surface');
+    expect(toCoopDefenseMapConfig(scenario)).toEqual(map);
+    for (const invalid of ['invalid', '', null, false, 1]) {
+      expect(() => normalizeCoopDefenseMapConfig(withSurface(invalid))).toThrow('surface');
+    }
+  });
   it('normalizes a timed defend-until-dawn mission with site-bound objectives', () => {
     const map = normalizeCoopDefenseMapConfig(dawnLikeMap());
 

@@ -145,6 +145,7 @@ export interface WorldTrackDefinition {
  * Deshalb bleibt {@link WorldBaseDefinition.turrets} hier.
  */
 export interface WorldBaseDefinition {
+  readonly surface?: 'cells' | 'none';
   readonly id: string;
   /** Grunddauerhaftigkeit der Struktur; die Skalierung nach Spielerzahl gehoert zur Activity. */
   readonly hpMax: number;

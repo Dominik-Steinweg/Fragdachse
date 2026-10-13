@@ -19,6 +19,8 @@ import { PowerUpRenderer } from '../src/powerups/PowerUpRenderer';
 import { createEmitter, destroyEmitter } from '../src/effects/EffectUtils';
 import { POWERUP_DEFS, POWERUP_RENDER_SIZE, POWERUP_SYMBOL_PULSE } from '../src/powerups/PowerUpConfig';
 import { POWERUP_BASE_KEY, powerUpSymbolKey, POWERUP_ASSETS, preloadPowerUpAssets, assertPowerUpAssetsReady } from '../src/assets/PowerUpAssets';
+import { DAWN_PIPELINE_ASSETS, DAWN_SCRAP_DISPLAY_SIZE, isDawnScrapTexture } from '../src/assets/DawnAssets';
+import { preloadTurretVisualAssets, registerTurretAnimations } from '../src/config/turretVisuals';
 
 // Pedestal GPU rendering is covered separately; this test exercises item sync and reveal.
 vi.mock('../src/powerups/PowerUpPedestalGpuSystem', () => ({
@@ -127,14 +129,17 @@ describe('PowerUpRenderer materialization sizing', () => {
       time: { delayedCall: vi.fn() },
     };
     const renderer = new PowerUpRenderer(scene as never);
+    Object.assign(scene, { textures: { exists: () => true } });
     const definitions = Object.values(POWERUP_DEFS).filter(def => def.spriteKey);
     const pickups = definitions.map((def, uid) => ({ uid, defId: def.id, x: 100, y: 100 }));
     renderer.sync(pickups);
     const icons = images.filter(image => image.key === POWERUP_BASE_KEY);
     const symbols = images.filter(image => definitions.some(def => powerUpSymbolKey(def.spriteKey!) === image.key));
     const reveals = tweens.filter(tween => 'value' in tween.targets);
-    expect(icons).toHaveLength(pickups.length);
-    expect(symbols).toHaveLength(pickups.length);
+    const scrap = images.filter(image => isDawnScrapTexture(image.key));
+    expect(scrap).toHaveLength(3);
+    expect(icons).toHaveLength(pickups.length - scrap.length);
+    expect(symbols).toHaveLength(pickups.length - scrap.length);
     expect(reveals).toHaveLength(pickups.length);
     const checkBounds = () => {
       for (const icon of icons) {
@@ -154,6 +159,11 @@ describe('PowerUpRenderer materialization sizing', () => {
     }
     reveals.forEach(tween => tween.onComplete?.());
     renderer.sync(pickups);
+    for (const item of scrap) {
+      expect(item.displayWidth).toBe(DAWN_SCRAP_DISPLAY_SIZE);
+      expect(item.displayHeight).toBe(DAWN_SCRAP_DISPLAY_SIZE);
+      expect(item.parent?.children.some(child => child.key === POWERUP_BASE_KEY)).toBe(false);
+    }
     for (const icon of icons) {
       expect(icon.displayWidth).toBeCloseTo(POWERUP_RENDER_SIZE);
       expect(icon.displayHeight).toBeCloseTo(POWERUP_RENDER_SIZE);
@@ -196,6 +206,11 @@ it('loads layered pickups and static UI keys through versioned colour URLs, and 
   }
   expect(() => assertPowerUpAssetsReady(scene as never)).not.toThrow();
   for (const def of Object.values(POWERUP_DEFS).filter(def => def.spriteKey)) {
+    if (isDawnScrapTexture(def.spriteKey)) {
+      expect(powerUpSymbolKey(def.spriteKey!)).toBeUndefined();
+      expect(loaded.has(def.spriteKey!)).toBe(false);
+      continue;
+    }
     expect(loaded.has(def.spriteKey!)).toBe(true);
     expect(loaded.has(powerUpSymbolKey(def.spriteKey!)!)).toBe(true);
   }
@@ -204,4 +219,27 @@ it('loads layered pickups and static UI keys through versioned colour URLs, and 
   expect(requests).toHaveLength(0);
   loaded.delete(POWERUP_BASE_KEY);
   expect(() => assertPowerUpAssetsReady(scene as never)).toThrow('Power-Up');
+});
+
+it('loads Dawn art and registers its clips through the existing construction pipeline', () => {
+  const loader = { image: vi.fn(), spritesheet: vi.fn() };
+  preloadTurretVisualAssets(loader as never, DAWN_PIPELINE_ASSETS);
+  const anims = { exists: () => false,
+    generateFrameNumbers: vi.fn((_key, options) => options.frames), create: vi.fn() };
+  registerTurretAnimations(anims as never, DAWN_PIPELINE_ASSETS);
+  for (const asset of DAWN_PIPELINE_ASSETS) {
+    expect(loader.image).toHaveBeenCalledWith(asset.textureKey, asset.idlePath);
+    expect(loader.spritesheet).toHaveBeenCalledWith(asset.sheetTextureKey, asset.sheetPath, {
+      frameWidth: asset.layout.frameWidth, frameHeight: asset.layout.frameHeight,
+      margin: asset.layout.margin, spacing: asset.layout.spacing, endFrame: asset.layout.frameCount - 1,
+    });
+    for (const clip of asset.clips) {
+      expect(anims.create).toHaveBeenCalledWith({ key: `${asset.sheetTextureKey}_${clip.name}`,
+        frames: clip.frames, frameRate: clip.frameRate, repeat: clip.loop ? -1 : 0 });
+    }
+  }
+  anims.create.mockClear();
+  anims.generateFrameNumbers.mockReturnValue([]);
+  registerTurretAnimations(anims as never, DAWN_PIPELINE_ASSETS);
+  expect(anims.create).not.toHaveBeenCalled();
 });

@@ -1,6 +1,7 @@
 import { resolveEarnedCoopDefenseBossPoints } from '../utils/coopDefenseUpgrades';
 import { preloadWatchtowerAssets } from '../effects/watchtower/WatchtowerVisual';
 import { installRuntimeAssetUrls } from '../assets/RuntimeAssetUrls';
+import { DAWN_PIPELINE_ASSETS } from '../assets/DawnAssets';
 import { preloadPowerUpAssets, assertPowerUpAssetsReady } from '../assets/PowerUpAssets';
 import { preloadWoodlandAssets, assertWoodlandAssetsReady } from '../assets/WoodlandAssets';
 import { preloadCharacterMeshAssets, assertCharacterMeshAssetsReady } from '../assets/CharacterMeshAssets';
@@ -405,7 +406,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadPersistentBaseGravelAssets(this.load);
     preloadRockMossAssets(this.load);
     preloadRockVegetationMask(this.load);
-    preloadTurretVisualAssets(this.load);
+    preloadTurretVisualAssets(this.load, DAWN_PIPELINE_ASSETS);
     preloadCanopyAssets(this.load);
     preloadTrainMaterialAssets(this.load);
     preloadPowerUpAssets(this);
@@ -657,7 +658,7 @@ export class ArenaScene extends Phaser.Scene {
       });
     }
     registerBadgerAnimations(this.anims);
-    registerTurretAnimations(this.anims);
+    registerTurretAnimations(this.anims, DAWN_PIPELINE_ASSETS);
 
     yield 'cameras-and-diagnostics';
     if (__PERFORMANCE_LAB__ && this.diagnostics) startPerformanceCapture(this.diagnostics);
@@ -2018,6 +2019,11 @@ export class ArenaScene extends Phaser.Scene {
     terminated: boolean,
     diagnosticsFrame: ArenaDiagnosticsFrame | null,
   ): void {
+    this.coopMissionPresentation?.syncDawnSites(
+      this.arenaRuntime?.getWorldDescriptor() ?? null,
+      this.arenaRuntime?.getActivityDescriptor() ?? null,
+      bridge.getCoopDefenseSecondaryObjectivePresentationState(),
+    );
     this.dawnHUD?.sync({
       active: gameplayActive && !terminated,
       world: bridge.getWorldDescriptor(), activity: bridge.getActivityDescriptor(),

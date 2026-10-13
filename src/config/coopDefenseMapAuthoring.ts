@@ -115,6 +115,8 @@ export type CoopBaseFaction = 'friendly' | 'hostile';
 export type CoopBaseRole = 'main' | 'outpost' | 'spawn-point';
 
 export interface CoopBaseConfig {
+  /** World surface presentation; omitted means the usual cell surface. */
+  readonly surface?: 'cells' | 'none';
   readonly id: string;
   readonly hpMax: number;
   /**
@@ -3804,6 +3806,9 @@ function normalizeBossConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapBos
 }
 
 function normalizeBaseConfig(baseConfig: CoopBaseConfig): CoopBaseConfig {
+  if (baseConfig.surface !== undefined && baseConfig.surface !== 'cells' && baseConfig.surface !== 'none') {
+    throw new Error(`[coopDefenseMaps] Base ${baseConfig.id} has an invalid surface`);
+  }
   const uniqueTurretIds = new Set<string>();
   const turrets = (baseConfig.turrets ?? []).map((turret) => {
     if (uniqueTurretIds.has(turret.id)) {
@@ -3863,6 +3868,7 @@ function normalizeBaseConfig(baseConfig: CoopBaseConfig): CoopBaseConfig {
 
   return {
     id: baseConfig.id,
+    ...(baseConfig.surface === 'none' ? { surface: 'none' as const } : {}),
     hpMax: Math.max(1, Math.floor(baseConfig.hpMax)),
     ...(baseConfig.startHpFactor === undefined ? {} : { startHpFactor: baseConfig.startHpFactor }),
     playerScaling: normalizeBasePlayerScaling(baseConfig.playerScaling),

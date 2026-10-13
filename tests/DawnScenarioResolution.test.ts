@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { resolveWorldBases } from '../src/arena/BaseRegistry';
+import { resolveCoopDefenseWorldMetrics } from '../src/world/WorldMetrics';
 import { getMapName } from '../src/i18n/contentPresentation';
 import { getCoopMissionTimeLimitSec } from '../src/config/coopDefenseMapAuthoring';
 import {
@@ -103,6 +105,20 @@ describe('Dawn scenario transport', () => {
 });
 
 describe('Dawn scenario resolution', () => {
+  it.each(['wreck', 'extractor'])('centers the complete 3x3 %s prop footprint on its slot', archetypeId => {
+    const { plans } = dawnRound(10, 77);
+    const plan = { ...plans.world, sites: plans.world.sites.map(site => ({ ...site, archetypeId })) };
+    const world = resolveDawnWorldDefinition(plan);
+    const bases = resolveWorldBases(world, resolveCoopDefenseWorldMetrics(world.metrics.widthCells, world.metrics.heightCells));
+    for (const site of resolveDawnSites(plan)) {
+      expect(world.bases.find(base => base.id === site.baseId)?.surface).toBe('none');
+      const base = bases.find(base => base.id === site.baseId)!;
+      expect(base.surface).toBe('none');
+      expect(base.cells).toHaveLength(9);
+      expect(new Set(base.cells.map(cell => `${cell.gridX - site.slot.anchor.gridX}:${cell.gridY - site.slot.anchor.gridY}`)))
+        .toEqual(new Set(['-1:-1', '0:-1', '1:-1', '-1:0', '0:0', '1:0', '-1:1', '0:1', '1:1']));
+    }
+  });
   it('localizes the resolved clearing map ID in both player languages', () => {
     const { plans } = dawnRound();
     const resolved = resolveDawnScenario({ ...plans.world, templateId: 'clearing' }, plans.activity);

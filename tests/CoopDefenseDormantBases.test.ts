@@ -530,14 +530,16 @@ describe('Coop-Defense dormant mission structures', () => {
     expect(manager.isMovementBlockedCell(11, 10)).toBe(true);
   });
 
-  it('activates exactly once, restores turrets and increments obstacles', () => {
-    const { scene, groupObjects } = makeScene();
-    const dormant = makeBaseSpec('dormant-outpost', {
+  it.each(['cells', 'none'] as const)('activates exactly once with surface %s, restoring turrets and obstacles', surface => {
+    const { scene, groupObjects, presentationCalls } = makeScene();
+    const dormant = { ...makeBaseSpec('dormant-outpost', {
       dormant: true,
       dormantObjectiveId: 'reveal-outpost',
       turret: true,
-    });
+    }), surface };
     const manager = new BaseManager(scene, [dormant], TEST_WORLD_METRICS, {}, true, true);
+    expect(manager.getBase(dormant.id)!.getCellBodies()).toHaveLength(0);
+    expect(presentationCalls.image).toBe(0);
     const activated = vi.fn();
     manager.setOnBaseActivated(activated);
     const state: CoopDefenseSecondaryObjectiveState = 'active';
@@ -554,12 +556,17 @@ describe('Coop-Defense dormant mission structures', () => {
     expect(manager.getTurrets()[0]?.targetRange)
       .toBe((UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig).placeable.targetRange);
     expect(groupObjects).toHaveLength(1);
+    expect(manager.getBase(dormant.id)!.getSurfaceImages()).toHaveLength(surface === 'none' ? 0 : dormant.cells.length);
+    expect(manager.getBase(dormant.id)!.getLightSpots().length).toBeGreaterThan(0);
+    if (surface === 'none') expect(presentationCalls.image).toBe(dormant.turrets.length);
+    const imageCount = presentationCalls.image;
 
     manager.setTurretAngle('dormant-outpost-turret', 1.25);
     expect(manager.getTurrets()[0]?.angle).toBe(1.25);
     manager.syncDormantStates();
     expect(activated).toHaveBeenCalledTimes(1);
     expect(manager.getObstacleGeneration()).toBe(1);
+    expect(presentationCalls.image).toBe(imageCount);
   });
 
   it('suppresses linked pedestal registration until its base is active', () => {

@@ -60,6 +60,7 @@ export const SPLIT_SOURCE_FIELDS = ['bases'] as const satisfies readonly (keyof 
 
 /** Felder einer Basis, die das Bauwerk selbst beschreiben. */
 export const WORLD_BASE_FIELDS = [
+  'surface',
   'hpMax',
   'faction',
   'role',
@@ -300,6 +301,7 @@ export function toCoopDefenseMapConfig(scenario: AuthoredScenario): CoopDefenseM
 
 function toWorldBaseDefinition(base: CoopBaseConfig): WorldBaseDefinition {
   return {
+    ...(base.surface === undefined ? {} : { surface: base.surface }),
     id: base.id,
     hpMax: base.hpMax,
     faction: base.faction,
@@ -328,6 +330,7 @@ function toCoopBaseConfig(
   overlay: CoopMissionBaseOverlay | undefined,
 ): CoopBaseConfig {
   const restored: CoopBaseConfig = {
+    ...(base.surface === undefined ? {} : { surface: base.surface }),
     id: base.id,
     hpMax: base.hpMax,
     playerScaling: overlay?.playerScaling,

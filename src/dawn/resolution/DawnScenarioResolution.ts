@@ -166,6 +166,7 @@ function toSiteStructure(site: ResolvedDawnSite): CoopBaseConfig {
   const placement = resolveDawnSiteStructurePlacement(structure, site.slot.anchor);
   return {
     id: site.baseId,
+    surface: 'none',
     hpMax: site.tier.hpMax,
     faction: structure.faction,
     role: structure.role,

@@ -83,6 +83,7 @@ export class BaseEntity {
   private damageable: boolean;
   private voidBurning = false;
   private readonly cellImages: Phaser.GameObjects.Image[] = [];
+  private presentationCreated = false;
   private grounding: BaseGroundingRenderer | null = null;
   private accentGlow: BaseAccentGlowRenderer | null = null;
   private readonly cellBodies: Phaser.GameObjects.Rectangle[] = [];
@@ -162,15 +163,18 @@ export class BaseEntity {
 
   /** Creates the optional visual representation exactly once. */
   private createPresentationRepresentation(): void {
-    if (this.cellImages.length > 0) return;
+    if (this.presentationCreated) return;
+    this.presentationCreated = true;
     const hostile = this.spec.faction === 'hostile';
     // Eigenes Void-Tileset mit dunkler Panzerung und violetten Energiefugen.
     const cellTexture = hostile ? 'base_hostile' : 'base';
 
     // ── 1) 47-Blob-Sprites pro Zelle ────────────────────────────────────
-    this.cellImages.push(...createBaseSurfaceImages(this.scene, this.spec.cells, this.metrics, cellTexture));
-    this.grounding = new BaseGroundingRenderer(this.scene, this.spec.cells, this.metrics);
-    this.accentGlow = new BaseAccentGlowRenderer(this.scene, this.cellImages, cellTexture);
+    if (this.spec.surface !== 'none') {
+      this.cellImages.push(...createBaseSurfaceImages(this.scene, this.spec.cells, this.metrics, cellTexture));
+      this.grounding = new BaseGroundingRenderer(this.scene, this.spec.cells, this.metrics);
+      this.accentGlow = new BaseAccentGlowRenderer(this.scene, this.cellImages, cellTexture);
+    }
 
     // Basistürme sind reine Anbauten: keine eigenen Bodies und keine eigenen HP.
     for (const turret of this.spec.turrets) {
@@ -561,6 +565,7 @@ export class BaseEntity {
   }
 
   private resetRepresentation(): void {
+    this.presentationCreated = false;
     this.accentGlow?.destroy();
     this.accentGlow = null;
     this.grounding?.destroy();

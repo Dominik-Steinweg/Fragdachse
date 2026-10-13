@@ -58,6 +58,7 @@ describe('R0 observed depth contract (diagnostics, never rendering inputs)', () 
     }
     for(const dir of ['effects','entities','projectile','powerups','ui','adrenalineEssence','scenes/arena'])walk(dir);
     owners.push('arena/BaseAccentGlowRenderer.ts');
+    owners.push('arena/DawnSitePropRenderer.ts');
     expect(owners.sort()).toEqual(Object.keys(CPU_SOURCE_CONTRACTS).sort());
   });
   it('stores the effective profiles and explicitly represents insertion-order boundaries', () => {
