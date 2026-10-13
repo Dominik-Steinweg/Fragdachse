@@ -68,6 +68,8 @@ async function fixture() {
 describe('V2 animated asset export contracts', () => {
   it.each([
     ['construction_dawn_extractor', 'construction'], ['dawn_scrap_t2', 'powerup'], ['dawn_dealer', 'character'],
+    ['construction_dawn_wreck_tractor_t1', 'construction'], ['construction_dawn_wreck_minecart_t3', 'construction'],
+    ['construction_dawn_broodnest', 'construction'],
   ])('imports the unbound Dawn identity %s without inventing gameplay bindings', async (id, category) => {
     const f = await fixture();
     const asset = path.join(f.run, id);

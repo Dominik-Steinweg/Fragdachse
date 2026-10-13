@@ -2720,5 +2720,20 @@
   "assets/sprites/pipeline-v2/dawn_scrap_t2/idle.png": "assets/sprites/pipeline-v2/dawn_scrap_t2/idle.png?v=8f1b5117c763ea8fb520be341f4b3253e97a4a1dbd5a24098c2376c6cbc6d514",
   "assets/sprites/pipeline-v2/dawn_scrap_t2/sheet.png": "assets/sprites/pipeline-v2/dawn_scrap_t2/sheet.png?v=7ec72c5ce0e2a363d96fc0e51216706aab6e6817aebe7b90873b3b1256c2827b",
   "assets/sprites/pipeline-v2/dawn_scrap_t3/idle.png": "assets/sprites/pipeline-v2/dawn_scrap_t3/idle.png?v=d50376f6141ca89e6f7650753791394320739c9c990659b829fbc6ceee91bd2f",
-  "assets/sprites/pipeline-v2/dawn_scrap_t3/sheet.png": "assets/sprites/pipeline-v2/dawn_scrap_t3/sheet.png?v=dc76933cc4165d802dca5b0772c77d72096ae90e750e4138454b93fb7f04e62f"
+  "assets/sprites/pipeline-v2/dawn_scrap_t3/sheet.png": "assets/sprites/pipeline-v2/dawn_scrap_t3/sheet.png?v=dc76933cc4165d802dca5b0772c77d72096ae90e750e4138454b93fb7f04e62f",
+  "assets/sprites/pipeline-v2/construction_dawn_broodnest/idle.png": "assets/sprites/pipeline-v2/construction_dawn_broodnest/idle.png?v=7345f1c5b7fad3fa85456afa82cacd09b2ba78d3a2fbdabfd0326090166e9810",
+  "assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.png": "assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.webp?v=c0ca8544c30f4e6a91b8f4f31d7433c2df183155f346f36846a09a76a377c09d",
+  "assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.webp": "assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.webp?v=c0ca8544c30f4e6a91b8f4f31d7433c2df183155f346f36846a09a76a377c09d",
+  "assets/sprites/pipeline-v2/construction_dawn_wreck_minecart_t1/idle.png": "assets/sprites/pipeline-v2/construction_dawn_wreck_minecart_t1/idle.png?v=50edd5abe1d745e9340d412d4f630078f1b03ab2f484c0cf5ea8b8775c566d7c",
+  "assets/sprites/pipeline-v2/construction_dawn_wreck_minecart_t1/sheet.png": "assets/sprites/pipeline-v2/construction_dawn_wreck_minecart_t1/sheet.png?v=162b304642abd78c0cd53df47ac9b3d1b155d942d1bfd07ce85d9afe880c685e",
+  "assets/sprites/pipeline-v2/construction_dawn_wreck_minecart_t2/idle.png": "assets/sprites/pipeline-v2/construction_dawn_wreck_minecart_t2/idle.png?v=490e510481d2bd3eaf447c2594f0a23dbbe0e3592f52d685b932598a65c31191",
+  "assets/sprites/pipeline-v2/construction_dawn_wreck_minecart_t2/sheet.png": "assets/sprites/pipeline-v2/construction_dawn_wreck_minecart_t2/sheet.png?v=2d9a0f05968c4d5a615069314e37dc74948d3f4830f4d1b47d660235fc88295b",
+  "assets/sprites/pipeline-v2/construction_dawn_wreck_minecart_t3/idle.png": "assets/sprites/pipeline-v2/construction_dawn_wreck_minecart_t3/idle.png?v=13270d04401d35d1b9da96386c55201e167591e3856268115ea9b2e56215d62f",
+  "assets/sprites/pipeline-v2/construction_dawn_wreck_minecart_t3/sheet.png": "assets/sprites/pipeline-v2/construction_dawn_wreck_minecart_t3/sheet.png?v=d358d7b7655de9c35b298aee1a03294a47cfa204b7a88089fe33cbbbdaae7abf",
+  "assets/sprites/pipeline-v2/construction_dawn_wreck_tractor_t1/idle.png": "assets/sprites/pipeline-v2/construction_dawn_wreck_tractor_t1/idle.png?v=6b7440d85e45a8a36bdca78aa26396ed08b5292729d20e026b6587c4983462e0",
+  "assets/sprites/pipeline-v2/construction_dawn_wreck_tractor_t1/sheet.png": "assets/sprites/pipeline-v2/construction_dawn_wreck_tractor_t1/sheet.png?v=8df68f70cedf9928472680601b79c05da3299640a6db8aca6e6a853493c477fe",
+  "assets/sprites/pipeline-v2/construction_dawn_wreck_tractor_t2/idle.png": "assets/sprites/pipeline-v2/construction_dawn_wreck_tractor_t2/idle.png?v=0b5c0236deb14edc49ca027bd06970947beba835db7eaa8ae82af8701631f15c",
+  "assets/sprites/pipeline-v2/construction_dawn_wreck_tractor_t2/sheet.png": "assets/sprites/pipeline-v2/construction_dawn_wreck_tractor_t2/sheet.png?v=1f39005e5811f4f0927e098f422f9ca4acae1e9fb6a51e2199e6cae4c39da63e",
+  "assets/sprites/pipeline-v2/construction_dawn_wreck_tractor_t3/idle.png": "assets/sprites/pipeline-v2/construction_dawn_wreck_tractor_t3/idle.png?v=833d932f39e68d13e4551c5e7c012c67b4e2bbede354d13bbd8b629b92e35ec7",
+  "assets/sprites/pipeline-v2/construction_dawn_wreck_tractor_t3/sheet.png": "assets/sprites/pipeline-v2/construction_dawn_wreck_tractor_t3/sheet.png?v=b90684a6052fe67f8ecab07d0d9da7562eb35b2de3e55ce873d4e0f9e241d127"
 }

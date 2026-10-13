@@ -936,6 +936,18 @@
       "sha256": "985eeafeb68f21f9bb5a3b6da0e0fad11252a111441bcbd480699cc163b58331",
       "visiblePixelSha256": "3ab206ca105636cea3b90c93039e95e3a5c8cd0bf220297e8294dcae935611d4",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.png",
+      "width": 1568,
+      "height": 392,
+      "sourceBytes": 439704,
+      "downloadBytes": 410302,
+      "sourceSha256": "b3c7ea5413a5dc16096f8c1f5be6aa92cd23c8c2b09bda63e33ff126434c012f",
+      "sha256": "c0ca8544c30f4e6a91b8f4f31d7433c2df183155f346f36846a09a76a377c09d",
+      "visiblePixelSha256": "a2be847dcd5e1380b9043aec07cb1cda053a8868510825b815a0a2e7bc09ce41",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     }
   }
 }
