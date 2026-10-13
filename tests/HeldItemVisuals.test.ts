@@ -4,22 +4,15 @@ import { describe, expect, it } from 'vitest';
 import { getHeldItemAnchor, HELD_ITEM_ANCHOR_X, HELD_ITEM_ANCHOR_Y, HELD_ITEM_TEXTURE_SIZE, PLAYER_SIZE } from '../src/config';
 import { HELD_ITEM_SPRITES, getHeldItemPointWorld, getHeldItemSpriteSpec, getHeldWeaponGameplayMuzzleOrigin, getHeldWeaponMuzzleOrigin } from '../src/loadout/HeldItemVisuals';
 import { HELD_UTILITY_DISPLAY_MS, HeldItemSlotTracker } from '../src/loadout/HeldItemSlotTracker';
-import { COOP_DEFENSE_CLASS_IDS } from '../src/config/coopDefenseClasses';
-import { getCoopDefenseLoadoutUnlockUpgradeId, isCoopDefenseUpgradeAvailableForClass } from '../src/utils/coopDefenseUpgrades';
+import { EQUIPABLE_LOADOUT_CATALOG_ENTRIES } from './equipableLoadoutEntries';
 import {
   DEFAULT_LOADOUT,
   LOADOUT_CATALOG_ENTRIES,
   findUtilityConfig,
   findWeaponConfig,
-  resolveUtilityIdForMode,
 } from '../src/loadout/LoadoutConfig';
 
-const equipableCatalogEntries = LOADOUT_CATALOG_ENTRIES.filter(entry => {
-  if (entry.kind !== 'utility' || resolveUtilityIdForMode(entry.id, 'deathmatch')) return true;
-  const unlockId = getCoopDefenseLoadoutUnlockUpgradeId('utility', entry.id);
-  return unlockId !== null && COOP_DEFENSE_CLASS_IDS.some(classId =>
-    isCoopDefenseUpgradeAvailableForClass(unlockId, classId));
-});
+const equipableCatalogEntries = EQUIPABLE_LOADOUT_CATALOG_ENTRIES;
 
 const REPOSITORY_ROOT = path.resolve(__dirname, '..');
 
