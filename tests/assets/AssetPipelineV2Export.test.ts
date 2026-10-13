@@ -66,6 +66,47 @@ async function fixture() {
 }
 
 describe('V2 animated asset export contracts', () => {
+  it.each([
+    ['construction_dawn_extractor', 'construction'], ['dawn_scrap_t2', 'powerup'], ['dawn_dealer', 'character'],
+  ])('imports the unbound Dawn identity %s without inventing gameplay bindings', async (id, category) => {
+    const f = await fixture();
+    const asset = path.join(f.run, id);
+    await rename(f.asset, asset);
+    const folder = path.join(asset, 'calm');
+    const m = { ...f.manifest, id, category, gameIds: [], requiredClips: ['idle'],
+      clips: [{ ...f.manifest.clips[0], name: 'idle', motion: 'player_idle' }] };
+    await save(path.join(folder, 'render.json'), m);
+    await exportVariantV2(folder, f.root);
+    await selectVariantV2(asset, 'calm', 32, 'Reviewed unbound identity.');
+    await mkdir(path.join(f.root, 'scripts/asset-pipeline'), { recursive: true });
+    await mkdir(path.join(f.root, 'src/config'), { recursive: true });
+    await save(path.join(f.root, 'scripts/asset-pipeline/catalog-v2.json'), { assets: [m] });
+    await save(path.join(f.root, 'src/config/coopDefenseEnemies.json'), { enemies: [] });
+    await save(path.join(f.root, 'src/config/pipelineAssets.json'), { version: 2, assets: [] });
+    const result = await importRuntime({ root: f.root, revision: m.revision, requestedIds: [id], outputRoot: path.join(f.root, 'published') });
+    expect(result.manifest.assets[0]).toMatchObject({ textureKey: id, sheetTextureKey: `${id}_sheet`, gameIds: [], clips: [{ name: 'idle' }] });
+    expect(result.copiedFiles).toBe(2);
+    expect(await readFile(path.join(f.root, 'published/public/assets/sprites/pipeline-v2', id, 'sheet.png'))).toEqual(await readFile(path.join(folder, 'sheet-32.png')));
+  });
+
+  it('permits idle-only unbound characters but keeps movement mandatory for the player', async () => {
+    const { manifest } = await fixture();
+    const npc = { ...manifest, category: 'character', gameIds: [], requiredClips: ['idle'],
+      clips: [{ ...manifest.clips[0], name: 'idle', motion: 'player_idle' }] };
+    expect(() => validateManifestV2(npc)).not.toThrow();
+    expect(() => validateManifestV2({ ...npc, gameIds: ['player'] })).toThrow(/move/);
+    expect(() => validateManifestV2({ ...npc, requiredClips: ['move', 'idle'] })).toThrow(/move/);
+    expect(() => validateManifestV2({ ...npc, clips: [{ ...npc.clips[0], loop: false }] })).toThrow(/loop/);
+    expect(() => validateManifestV2({ ...npc, clips: [] })).toThrow();
+  });
+  it('accepts explicit procedural provenance and safe underscore IDs without accepting missing dependencies', async () => {
+    const { manifest } = await fixture();
+    const procedural = { ...manifest, id: 'construction_dawn_wreck_t1', materialSource: 'procedural', textures: {} };
+    expect(() => validateManifestV2(procedural)).not.toThrow();
+    expect(() => validateManifestV2({ ...procedural, materialSource: undefined })).toThrow(/provenance/);
+    expect(() => validateManifestV2({ ...procedural, textures: manifest.textures })).toThrow(/Procedural/);
+    for (const id of ['../wreck', 'dawn/wreck', 'dawn\\wreck']) expect(() => validateManifestV2({ ...procedural, id })).toThrow();
+  });
   it('requires AP0 socket names, finite full-canvas samples and per-egg release markers', async () => {
     const { manifest } = await fixture();
     for (const [role, id] of [['water', 'abyssal-kraken'], ['land', 'abyssal-kraken-land'],
@@ -437,6 +478,29 @@ describe('V2 animated asset export contracts', () => {
     await expect(prepareReviewV2(f.asset, reportFile, f.root)).rejects.toThrow(/Archived review input changed/);
     expect(await readFile(path.join(f.asset, 'archive-source', reference))).toEqual(f.frames[1]);
     await expect(readFile(path.join(f.asset, 'review.json'))).rejects.toThrow(/ENOENT/);
+  });
+
+  it('attaches verifier receipts to an explicit external run without changing its source snapshot', async () => {
+    const f = await fixture();
+    const external = await mkdtemp(path.join(tmpdir(), 'fd-asset-v2-')); roots.push(external);
+    const runRoot = path.join(external, 'runs'), asset = path.join(runRoot, 'reference-test/dawn_dealer');
+    await mkdir(path.dirname(asset), { recursive: true });
+    await rename(f.asset, asset);
+    const reference = 'reference.png';
+    await writeFile(path.join(f.root, reference), f.frames[0]);
+    for (const variant of ['calm', 'rich']) await save(path.join(asset, variant, 'render.json'), { ...f.manifest, id: 'dawn_dealer', variant, reference });
+    const receipt = 'verification.json', report = path.join(f.root, 'review.json');
+    await save(path.join(f.root, receipt), { status: 'passed' });
+    await save(report, { archiveInputs: [receipt] });
+    await expect(prepareReviewV2(asset, report, f.root)).rejects.toThrow(/escapes/);
+    const result = await prepareReviewV2(asset, report, f.root, { runRoot });
+    expect(result.files[receipt]).toBe(hash(await readFile(path.join(f.root, receipt))));
+    expect(await readFile(path.join(asset, 'archive-source', receipt))).toEqual(await readFile(path.join(f.root, receipt)));
+    await save(report, { archiveInputs: ['../escape.json'] });
+    await expect(prepareReviewV2(asset, report, f.root, { runRoot })).rejects.toThrow(/repository-relative/);
+    await save(report, { archiveInputs: [receipt] });
+    await save(path.join(f.root, receipt), { status: 'changed' });
+    await expect(prepareReviewV2(asset, report, f.root, { runRoot })).rejects.toThrow(/Archived review input changed/);
   });
 });
 import { decodeOct, encodeOct, resizeKrakenElevation } from '../../scripts/asset-pipeline/kraken-material-v2.mjs';

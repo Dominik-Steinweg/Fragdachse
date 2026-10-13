@@ -87,7 +87,17 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
         key(bone, 'rotation_euler', (0, 0, 0), frame)
     pose('claw_weapon')
     pose('attack_motion')
-    if motion == 'firestarter_cast':
+    if motion in ('dawn_extractor_idle', 'dawn_extractor_active'):
+        pulse = 0 if idle or motion == 'dawn_extractor_idle' else .5 - .5 * math.cos(angle)
+        stroke = p.get('stroke', .10) * pulse
+        pose('hose', scale=(1, 1 + stroke, 1))
+        pose('nozzle', location=(0, -p.get('hoseReach', .89) * stroke, 0))
+        if 'drill' in parts:
+            pose('drill', rotation=(0, 0, 0 if idle or motion == 'dawn_extractor_idle' else angle))
+        socket = parts['warning_emission']
+        socket.default_value = p.get('idleEmission', .08) + p.get('activeEmission', .9) * pulse ** p.get('blinkPower', 1)
+        socket.keyframe_insert(data_path='default_value', frame=frame)
+    elif motion == 'firestarter_cast':
         apply_cast(asset, phase, frame, idle, p, pose, key)
     elif motion.startswith('kraken_'):
         for prefix, module, function in (

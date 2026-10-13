@@ -305,6 +305,34 @@ Dev-geschützt. Es gibt keinen Import und keine Schreibzugriffe auf `public/`.
 
 ## Entwurfsmodus
 
+Die Dawn-Produktionsvorlage lässt sich separat mit
+`node scripts/asset-pipeline/produce-dawn-v1.mjs --output D:/Fragdachse-render/dawn-v1/production --revision <neue-revision>`
+bauen (Blender über `BLENDER_PATH`). Der Helfer baut nacheinander, exportiert über
+`exportVariantV2` und prüft jedes gespeicherte Blend unabhängig. Bei einer Wiederaufnahme
+müssen die aktuellen Quellhashes unverändert sein. Er wählt nichts aus und erzeugt
+weder ZIP-Archive noch Runtime-Imports. Auswahlbögen folgen mit
+`node scripts/asset-pipeline/review-dawn-production.mjs --run <output>/runs/<revision> --output art/poc/dawn/v1-review`.
+Einzelne neuere Assetrevisionen k?nnen mit `--asset-run <anderer-run>/<asset-id>`
+und einem gemeinsamen `--label` in denselben Auswahlbogen aufgenommen werden.
+
+Rein prozedurale Materialien deklarieren `materialSource: "procedural"` und `textures: {}`;
+der gespeicherte Blend-Prüfer verlangt dann keine Bildtexturen und prüft weiterhin den
+vollständigen Shader-/Rezeptquellstand. Bei `player_idle` ohne Laufclip müssen die
+expliziten Beinrollen fest stehen, während Körper, Kopf und Arme atmen. Der inaktive
+`dawn_extractor_idle` ist ein echter Rest-Hold: sämtliche Posen einschließlich Emission
+müssen der Ruhe entsprechen. Andere Loops müssen weiterhin geometrische Bewegung
+und einen nicht doppelt exportierten Loop-Schluss nachweisen.
+
+Mit `--output D:/Fragdachse-render/dawn-v1/drafts` liegen Entwurfsbilder,
+Modell-Caches und Logs auf dem angegebenen Laufwerk. Bei knappem Systemlaufwerk
+auch `OPTIX_CACHE_PATH` und `CUDA_CACHE_PATH` auf Verzeichnisse dort setzen.
+Asset-IDs im Entwurfsrunner erlauben Unterstriche; Labels und Clipnamen behalten
+ihren bisherigen Vertrag. Die Dawn-Rezepte `dawn-wreck`, `dawn-extractor` und
+`dawn-scrap` verwenden prozedurale matte Materialien ohne externe Texturbasis.
+Ihre leeren `gameIds` markieren fehlende Runtime-Bindung. Review-Bögen entstehen
+mit `node scripts/asset-pipeline/review-dawn-v1.mjs --draft-root <Ausgabeordner>
+--label <Label> --output art/poc/dawn/v1-review` (als eine Befehlszeile).
+
 Der separate Entwurfsmodus rendert direkt in der angezeigten Canvas-Größe. Er benutzt
 die vorhandenen Rezepte, Materialien, Kamera und Lichter, standardmäßig Cycles OPTIX
 mit 8 Samples und Denoiser. Zusätzliche Shader-AOVs liefern Albedo, Welt-Z,
@@ -453,6 +481,14 @@ node scripts/asset-pipeline/export.mjs export art/poc/pipeline-v2/runs/v2-a
 
 Der Auswahlgrund muss die tatsächliche Sichtprüfung beschreiben. `archive` nutzt Python aus `FD_ASSET_PYTHON`, sonst `python`; alternativ `--python <absoluter-Pfad-zur-python.exe>` übergeben.
 
+Für Produktionsruns auf einem separaten Laufwerk akzeptieren `prepare-review-v2.mjs` und
+`export.mjs select/archive` zusätzlich `--run-root <absoluter-runs-Ordner>` (der Ordner
+oberhalb der Revisionen). Assetpfade müssen weiterhin genau `<Revision>/<Asset-ID>`
+unter diesem Root liegen. Review-JSON und seine `archiveInputs` bleiben im Repository;
+`archiveInputs` ist eine optionale Liste repositoryrelativer Dateien, etwa des echten
+Blender-Prüfers, seiner JSON-Berichte und der abgenommenen Bögen. Auch diese Dateien
+werden vor der Auswahl unverändert und hashgebunden unter `archive-source/` angehängt.
+
 Vor der Auswahl die tatsächlichen Prüfergebnisse als JSON-Objekt innerhalb des Repositorys festhalten und mit `prepare-review-v2.mjs` beilegen. Der separate Review-Schritt kopiert Original- und gegebenenfalls Vorgänger-PNG unter ihren Repositorypfaden nach `archive-source/`, erhält den Bericht unverändert als `review.json` am Asset und als Quellenkopie und archiviert seinen eigenen Skriptstand. `archive-source/review-inputs.json` belegt diese zusätzlichen Eingaben mit SHA-256; Render- und Exportmanifeste bleiben unverändert. Eine vorhandene Auswahl sperrt spätere Review-Änderungen. Ein identischer erneuter Aufruf ist vorher erlaubt; abweichende bereits archivierte Quelldateien werden nicht überschrieben.
 
 - Jeder transparente Masterframe hat 1024 × 1024 Pixel. Kamera, Licht, Canvas und Drehpunkt bleiben über alle Posen gleich. Ausgewertete Geometrie und Alpha-Bounds werden pro Frame auf Clipping geprüft; kein Autocrop oder automatisches Zentrieren.
@@ -492,8 +528,9 @@ Isolierter Rauchtest ohne Änderung vorhandener Produktionsruns:
 blender --background --python-exit-code 1 --python scripts/asset-pipeline/blender_pipeline_v2.py -- --repo C:/Fragdachse --asset abyssal-kraken --revision socket-smoke-1 --device OPTIX --max-frames 2 --output-root art/poc/kraken-v11/socket-smoke
 ```
 
-Den Aufruf für `abyssal-kraken-tentacle` wiederholen. Der optionale `--output-root` muss
-innerhalb des Repositories liegen; darunter gelten dieselben unveränderlichen `runs/` und
+Den Aufruf für `abyssal-kraken-tentacle` wiederholen. Der optionale `--output-root` akzeptiert
+einen expliziten absoluten Renderordner oder einen relativen Pfad innerhalb des Repositories;
+darunter gelten dieselben unveränderlichen `runs/` und
 fortsetzbaren `incomplete/`-Revisionen. Ein begrenzter Lauf ist kein auswählbarer Produktionsbuild.
 Ein unveränderndes, hashgeprüftes Socket-Overlay aus einem bereits gerenderten Sample erzeugt
 `node scripts/asset-pipeline/socket-overlay.mjs <build.json> standard 0 <neues-overlay.png>`.

@@ -37,8 +37,9 @@ def save_json(path, value):
     temp.replace(path)
 
 
-def identifier(value):
-    if not isinstance(value, str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]*', value):
+def identifier(value, asset=False):
+    pattern = r'[a-z0-9][a-z0-9_-]*' if asset else r'[a-z0-9][a-z0-9-]*'
+    if not isinstance(value, str) or not re.fullmatch(pattern, value):
         raise ValueError('Use a lowercase asset/revision identifier')
     return value
 
@@ -270,14 +271,18 @@ def publish(base, source, target):
 def build(repo, asset_id, revision, max_frames=None, device='CPU', catalog_path=None, output_root=None):
     """Render a fresh revision, or resume an identical partial build in bounded chunks."""
     root = Path(repo).resolve()
-    identifier(asset_id); identifier(revision)
+    identifier(asset_id, asset=True); identifier(revision)
     if device not in ('CPU', 'CUDA', 'OPTIX'):
         raise ValueError('Supported render device: CPU, CUDA, OPTIX')
     if max_frames is not None and (type(max_frames) is not int or max_frames < 1):
         raise ValueError('max_frames must be a positive integer')
     spec = resolve_spec(root, asset_id, catalog_path)
     fingerprint, sources, textures = inputs(root, spec, device)
-    base = shared.contained(root, output_root) if output_root else root / 'art/poc/pipeline-v2'
+    # An explicit absolute output root supports a separate render drive. Relative
+    # roots remain repository-contained; all descendants use validated identifiers.
+    base = (Path(output_root).resolve() if Path(output_root).is_absolute() else shared.contained(root, output_root)) if output_root else root / 'art/poc/pipeline-v2'
+    if base == Path(base.anchor) or base == root:
+        raise ValueError('Output root must be a dedicated pipeline directory')
     out = base / 'incomplete' / revision / asset_id
     complete = base / 'runs' / revision / asset_id
     if complete.exists():
@@ -436,7 +441,7 @@ if __name__ == '__main__':
     parser.add_argument('--revision', required=True)
     parser.add_argument('--max-frames', type=int)
     parser.add_argument('--catalog', help='Temporary catalog copy; resolved spec is archived and fingerprinted')
-    parser.add_argument('--output-root', help='Repository-contained output root for isolated smoke builds')
+    parser.add_argument('--output-root', help='Dedicated absolute render directory, or repository-contained relative root')
     parser.add_argument('--device', choices=['CPU', 'CUDA', 'OPTIX'], default='CPU')
     args = parser.parse_args(sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else [])
     targets = [a['id'] for a in json.loads((Path(args.catalog) if args.catalog else Path(args.repo)/'scripts/asset-pipeline/catalog-v2.json').read_text(encoding='utf-8'))['assets'] if a.get('production') == 'reference'] if args.asset == 'references' else [args.asset]
