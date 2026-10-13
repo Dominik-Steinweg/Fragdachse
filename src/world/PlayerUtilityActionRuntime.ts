@@ -1,3 +1,5 @@
+import type { FireControlUtilityPort } from './FireControlUtilityPort';
+import type { FireControlUtilityState } from '../loadout/FireControlUtilityState';
 import type { StinkCloudUtilityState } from '../loadout/StinkCloudUtilityState';
 import { resolveTimeBubblePrismEmitter } from '../loadout/TimeBubbleConfig';
 import { resolveMolotovFireEffect } from '../loadout/resolveMolotovFireEffect';
@@ -215,6 +217,43 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     this.publishStinkCloudState(playerId);
   }
 
+  private readonly fireControlUses = new Map<string, FireControlUtilityState>();
+  private fireControlPort: FireControlUtilityPort | null = null;
+
+  setFireControlPort(port: FireControlUtilityPort | null): void {
+    if (!port) for (const [playerId, state] of this.fireControlUses) {
+      if (state.phase === 'active') this.clearFireControlUse(playerId);
+    }
+    this.fireControlPort = port;
+  }
+
+  getFireControlState(playerId: string): FireControlUtilityState | null {
+    return this.fireControlUses.get(playerId) ?? null;
+  }
+
+  onFireControlDeploymentEnded(deploymentId: number, endedAt: number): void {
+    if (this.destroyed) return;
+    for (const [playerId, state] of this.fireControlUses) {
+      if (state.phase !== 'active' || state.deploymentId !== deploymentId) continue;
+      const cooldownUntil = endedAt + state.cooldownDurationMs;
+      this.fireControlUses.set(playerId, { phase: 'cooldown', utilityId: state.utilityId,
+        cooldownDurationMs: state.cooldownDurationMs, cooldownUntil });
+      this.options.network.loadout.publishUtilityCooldownUntil(playerId, cooldownUntil, state.utilityId);
+    }
+  }
+
+  private clearFireControlUse(playerId: string): void {
+    const state = this.fireControlUses.get(playerId);
+    this.fireControlUses.delete(playerId);
+    this.fireControlPort?.removeOwner(playerId);
+    if (state) this.options.network.loadout.publishUtilityCooldownUntil(playerId, 0, state.utilityId);
+  }
+
+  /** Activity teardown also discards cooldowns; merely detaching a port preserves them. */
+  clearFireControlUses(): void {
+    for (const playerId of this.fireControlUses.keys()) this.clearFireControlUse(playerId);
+  }
+
   private readonly timeBubbleUses = new Map<string, TimeBubbleUtilityState>();
   private timeBubblePort: TimeBubbleUtilityPort | null = null;
 
@@ -323,9 +362,9 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
 
   syncEquippedUtility(playerId: string): void {
     const config = this.options.loadout.getEquippedUtilityConfig(playerId);
-    if (config?.charges) this.getChargeStock(playerId, config, this.hostFrameNowMs);
+    if (config?.charges && config.type !== 'fire_control_relay') this.getChargeStock(playerId, config, this.hostFrameNowMs);
     for (const toolConfig of Object.values(UTILITY_CONFIGS)) {
-      if (!toolConfig.charges || toolConfig.id === config?.id
+      if (!toolConfig.charges || toolConfig.type === 'fire_control_relay' || toolConfig.id === config?.id
         || !this.options.isToolAuthorized?.(playerId, { kind: 'utility', id: toolConfig.id })) continue;
       this.getChargeStock(playerId, this.options.loadout.resolveUtilityConfig(playerId, toolConfig), this.hostFrameNowMs);
     }
@@ -346,6 +385,9 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     const timeBubble = this.timeBubbleUses.get(playerId);
     if (timeBubble?.phase === 'cooldown')
       this.options.network.loadout.publishUtilityCooldownUntil(playerId, timeBubble.cooldownUntil, timeBubble.utilityId);
+    const fireControl = this.fireControlUses.get(playerId);
+    if (fireControl?.phase === 'cooldown')
+      this.options.network.loadout.publishUtilityCooldownUntil(playerId, fireControl.cooldownUntil, fireControl.utilityId);
     const decoyCooldown = this.decoyCooldowns.get(playerId);
     if (config.type === 'decoy' && decoyCooldown?.utilityId === config.id) {
       next.setLastUsedAt(decoyCooldown.until - config.cooldown);
@@ -356,6 +398,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   }
 
   removePlayer(playerId: string): void {
+    this.clearFireControlUse(playerId);
     this.zeusPort?.removePlayer(playerId);
     this.stinkCloudUses.delete(playerId);
     this.options.stinkCloud?.hostDeactivateForPlayer(playerId, this.hostFrameNowMs);
@@ -553,6 +596,12 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       if (reason) return { ok: false, reason };
       if (!this.timeBubblePort) return { ok: false, reason: 'blocked' };
     }
+    if (cfg.type === 'fire_control_relay') {
+      const state = this.fireControlUses.get(request.playerId);
+      if (state?.phase === 'active') return { ok: false, reason: 'blocked' };
+      if (state?.phase === 'cooldown' && state.cooldownUntil > request.hostNowMs) return { ok: false, reason: 'cooldown' };
+      if (!this.fireControlPort) return { ok: false, reason: 'blocked' };
+    }
     if (cfg.type === 'decoy') {
       if ((this.decoyCooldowns.get(request.playerId)?.until ?? 0) > request.hostNowMs)
         return { ok: false, reason: 'cooldown' };
@@ -561,10 +610,11 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     if (source.temporary && (source.temporary.charges <= 0 || source.temporary.cooldownUntil > request.hostNowMs)) {
       return { ok: false, reason: source.temporary.cooldownUntil > request.hostNowMs ? 'cooldown' : 'invalid' };
     }
-    const charges = !source.temporary && cfg.charges
+    // Relay's single charge is owned by its active/cooldown state, without start-time recharge.
+    const charges = !source.temporary && cfg.charges && cfg.type !== 'fire_control_relay'
       ? this.getChargeStock(request.playerId, cfg, request.hostNowMs) : null;
     if (charges ? !charges.stock.canConsume(request.hostNowMs) || charges.lockoutUntil > request.hostNowMs
-      : cfg.id !== 'STINK_CLOUD' && cfg.type !== 'decoy' && cfg.type !== 'time_bubble' && cfg.type !== 'translocator' && !source.temporary && utility.isOnCooldown(request.hostNowMs)) {
+      : cfg.id !== 'STINK_CLOUD' && cfg.type !== 'decoy' && cfg.type !== 'time_bubble' && cfg.type !== 'fire_control_relay' && cfg.type !== 'translocator' && !source.temporary && utility.isOnCooldown(request.hostNowMs)) {
       return { ok: false, reason: 'cooldown', ...(charges ? {
         utilityChargeState: this.publishChargeStock(request.playerId, charges, request.hostNowMs),
       } : {}) };
@@ -593,7 +643,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       this.options.heldAction.clearPlayer(request.playerId);
     }
 
-    const position = useAuthoritativePosition ? { x: player.x, y: player.y } : {
+    const position = useAuthoritativePosition || cfg.type === 'fire_control_relay' ? { x: player.x, y: player.y } : {
       x: request.clientPosition?.x ?? player.x,
       y: request.clientPosition?.y ?? player.y,
     };
@@ -610,6 +660,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       PLAYER_SIZE,
       authoritativeParams,
     );
+    if (typeof didUse === 'object' && !didUse.ok) return didUse;
     if (!didUse) return { ok: false, reason: 'blocked' };
     if (cfg.id === 'STINK_CLOUD') {
       const state = this.stinkCloudUses.get(request.playerId)!;
@@ -627,14 +678,14 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
 
     if (source.temporary) {
       this.temporaryUtilities.recordSuccessfulUse(request.playerId, source.temporary.instanceId, request.hostNowMs,
-        cfg.id !== 'STINK_CLOUD' && cfg.type !== 'time_bubble' && cfg.type !== 'translocator');
+        cfg.id !== 'STINK_CLOUD' && cfg.type !== 'time_bubble' && cfg.type !== 'fire_control_relay' && cfg.type !== 'translocator');
       this.publishTemporaryUtilities(request.playerId);
     } else if (charges) {
       charges.stock.consume(request.hostNowMs);
       charges.lockoutUntil = request.hostNowMs + cfg.charges!.burstLockoutMs;
       charges.lastCommittedAttemptId = request.attemptId;
       this.publishChargeStock(request.playerId, charges, request.hostNowMs);
-    } else if (!cfg.skipCooldownPublish && cfg.id !== 'STINK_CLOUD' && cfg.type !== 'time_bubble' && cfg.type !== 'translocator') {
+    } else if (!cfg.skipCooldownPublish && cfg.id !== 'STINK_CLOUD' && cfg.type !== 'time_bubble' && cfg.type !== 'fire_control_relay' && cfg.type !== 'translocator') {
       utility.recordUse(request.hostNowMs);
       this.options.network.loadout.publishUtilityCooldownUntil(
         request.playerId,
@@ -750,7 +801,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     playerColor: number,
     displaySize: number,
     params?: LoadoutUseParams,
-  ): boolean {
+  ): boolean | LoadoutUseResult {
     const muzzle = getHeldWeaponGameplayMuzzleOrigin(cfg.id, x, y, angle, displaySize) ?? undefined;
     switch (cfg.activation.type) {
       case 'charged_throw':
@@ -776,6 +827,20 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       case 'targeted_click':
         return cfg.type === 'nuke' && this.options.nukeStrike(playerId, targetX, targetY);
       case 'placement_mode':
+        if (cfg.type === 'fire_control_relay') {
+          // Source resolution has already applied the player's loadout modifier port.
+          const result = this.fireControlPort?.activateCopies({ ownerId: playerId, ownerColor: playerColor,
+            playerX: x, playerY: y, pointX: targetX, pointY: targetY, nowMs: now,
+            config: { durationMs: cfg.durationMs, cooldownMs: cfg.cooldown, maxCopies: cfg.maxCopies,
+              parallel: cfg.parallelEnabled > 0, placementRangePx: cfg.placementRangePx, ringRadiusPx: cfg.ringRadiusPx,
+              clearanceRadiusPx: cfg.clearanceRadiusPx, singleCopyOffsetPx: cfg.singleCopyOffsetPx, materializeMs: cfg.materializeMs } });
+          if (!result) return { ok: false, reason: 'blocked' };
+          if (!result.ok) return result;
+          this.fireControlUses.set(playerId, { phase: 'active', utilityId: cfg.id,
+            deploymentId: result.deploymentId, cooldownDurationMs: cfg.cooldown });
+          this.options.network.loadout.publishUtilityCooldownUntil(playerId, 0, cfg.id);
+          return { ok: true };
+        }
         return (cfg.type === 'placeable_rock' || cfg.type === 'placeable_turret' || cfg.type === 'placeable_pedestal')
           && (this.placeableCapability?.use(cfg as PlaceableUtilityConfig, playerId, x, y, targetX, targetY, now, playerColor, params) ?? false);
       case 'instant':
@@ -963,6 +1028,9 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   /** Called from the world player tick, including when the utility is not currently selected. */
   update(now: number): void {
     this.hostFrameNowMs = now;
+    for (const [playerId, state] of this.fireControlUses) {
+      if (state.phase === 'cooldown' && state.cooldownUntil <= now) this.fireControlUses.delete(playerId);
+    }
     for (const [playerId, state] of this.stinkCloudUses) {
       if (state.phase === 'active' && !this.options.actor.isAlive(playerId)) this.options.stinkCloud?.hostDeactivateForPlayer(playerId, now);
       if (state.phase === 'cooldown' && state.cooldownUntil <= now) { this.stinkCloudUses.delete(playerId); this.publishStinkCloudState(playerId); }
@@ -1016,6 +1084,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   destroy(): void {
     this.zeusPort = null;
     if (this.destroyed) return;
+    this.setFireControlPort(null);
     this.destroyed = true;
     this.options.stinkCloud?.setPrimaryCloudEndHandler(null);
     for (const playerId of this.stinkCloudUses.keys()) {

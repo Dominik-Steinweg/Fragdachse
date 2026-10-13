@@ -1,61 +1,188 @@
-import { afterEach, beforeEach, describe, it } from 'vitest';
-import { createFireControlSourceFixture, createFireControlUtilityFixture } from '../FireControlTestHelper';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createFireControlWorldFixture } from '../FireControlTestHelper';
+import { UTILITY_CONFIGS, WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig';
+import { resolveMgTurretStats } from '../../src/config/mgTurret';
+import { applyCoopDefenseModifiersToUtilityConfig } from '../../src/loadout/CoopDefenseLoadoutModifiers';
 
-// GDD §10: 3, 4, 5, 14, 15. Durations/count limits must come from resolved configs.
-describe.skip('Fixture-Entwurf: Utility-Aktion → Einsatz-Owner → Feuerquellen → World-Lifecycle', () => {
-  let sources: ReturnType<typeof createFireControlSourceFixture>;
-  let utility: ReturnType<typeof createFireControlUtilityFixture> | undefined;
-  beforeEach(() => {
-    sources = createFireControlSourceFixture();
-    // M1: createFireControlUtilityFixture(resolvedCopyConfig) aufrufen, echten Einsatz-Owner
-    // aus WorldCombatGameplayBinding anschließen und dessen Quellen-Provider installieren.
-    // clearActivityBindings/removePlayer/destroy am echten Binding aufrufen, nicht nachbauen.
-    // M2: resolvedPortalConfig, Grenade-Payload-Dispatch und Eingänge ergänzen.
+type Fixture = ReturnType<typeof createFireControlWorldFixture>;
+let f: Fixture;
+afterEach(() => f?.destroy());
+const start = (parallelEnabled = 0) => {
+  f = createFireControlWorldFixture({ parallelEnabled });
+  const rock = f.add();
+  expect(f.place(1000, 100, 0).ok).toBe(true);
+  return rock;
+};
+
+describe('host utility → deployment → turret fire → lifecycle', () => {
+  it('freezes resolved additive utility upgrades while equipment changes cannot shorten the pending cooldown', () => {
+    const resolved = applyCoopDefenseModifiersToUtilityConfig(UTILITY_CONFIGS.FIRE_CONTROL_RELAY, {
+      additive: { 'utility.FIRE_CONTROL_RELAY.maxCopies': 1, 'utility.FIRE_CONTROL_RELAY.durationMs': 900,
+        'utility.FIRE_CONTROL_RELAY.parallelEnabled': 1 }, percentage: {},
+    });
+    if (resolved.type !== 'fire_control_relay') throw Error('relay');
+    f = createFireControlWorldFixture(resolved); f.add(); f.add('rocket_turret', 'inspector', 9);
+    expect(f.place(1000, 100).ok).toBe(true);
+    const initial = f.binding.getFireControlSnapshot(1000);
+    expect(initial.deployments[0]).toMatchObject({ parallel: true, expiresAt: 1000 + resolved.durationMs });
+    expect(initial.deployments[0].kind === 'copies' && initial.deployments[0].copies.length).toBe(2);
+    f.equip({ ...resolved, maxCopies: 1, durationMs: 1, cooldown: 1, parallelEnabled: 0 });
+    f.tick(1100, false); expect(f.binding.getFireControlSnapshot(1000)).toEqual(initial);
+    f.tick(1000 + resolved.durationMs, false);
+    expect(f.action.getFireControlState('inspector')).toMatchObject({ cooldownUntil: 1000 + resolved.durationMs + resolved.cooldown });
   });
-  afterEach(() => { utility?.destroy(); sources.destroy(); });
-  it.todo('Arrange: World ohne Activity und bereite Kopien-Utility; Act: über action.execute platzieren; Assert: Owner-Snapshot und TurretSystem lesen denselben Einsatz');
+
+  it('removes only the departing owner and distinguishes active port-detach from completed cooldown', () => {
+    start(); f.add('machine_gun_turret', 'ally', 9);
+    expect(f.action.execute({ category: 'utility', playerId: 'ally', angle: 0, targetX: 100, targetY: 0,
+      hostNowMs: 1001, params: {} }).ok).toBe(true);
+    f.action.removePlayer('inspector');
+    expect(f.binding.getFireControlSnapshot(1001).deployments.map(d => d.ownerId)).toEqual(['ally']);
+    f.action.setFireControlPort(null);
+    expect(f.binding.getFireControlSnapshot(1001).deployments).toEqual([]);
+    expect(f.action.getFireControlState('ally')).toBeNull();
+    f.action.onFireControlDeploymentEnded(2, 1002); expect(f.action.getFireControlState('ally')).toBeNull();
+  });
+
+  it.each([0, 1])('preserves original readiness through projection and return (parallel=%s)', parallelEnabled => {
+    const cooldown = resolveMgTurretStats().cooldownMs;
+    f = createFireControlWorldFixture({ parallelEnabled, materializeMs: 1, durationMs: cooldown * (parallelEnabled ? 2 : .5) });
+    f.add(); f.spawnEnemy(); f.tick(0);
+    expect(f.projectile.spawn).toHaveBeenCalledTimes(1);
+    expect(f.place(1, 100).ok).toBe(true);
+    f.tick(2); expect(f.projectile.spawn).toHaveBeenCalledTimes(1);
+    if (!parallelEnabled) f.tick(1 + f.config.durationMs);
+    f.tick(cooldown - 1); expect(f.projectile.spawn).toHaveBeenCalledTimes(1);
+    f.tick(cooldown); expect(f.projectile.spawn).toHaveBeenCalledTimes(parallelEnabled ? 3 : 2);
+  });
+
+  it('finishes the original salvo, transfers its readiness and books regular cooldown when a copy salvo expires', () => {
+    const weapon = WEAPON_CONFIGS.TURRET_ROCKET_BURST, burst = weapon.turretBurst!;
+    const originalEnd = (burst.count - 1) * burst.intervalMs;
+    const copyStart = originalEnd + weapon.cooldown, end = copyStart + 1;
+    f = createFireControlWorldFixture({ materializeMs: 1, durationMs: end - 1 });
+    const rock = f.add('rocket_turret'); f.spawnEnemy(); f.tick(0);
+    expect(f.projectile.spawn).toHaveBeenCalledTimes(1);
+    expect(f.place(1, 100).ok).toBe(true); f.tick(2);
+    for (let shot = 1; shot < burst.count; shot++) f.tick(shot * burst.intervalMs);
+    expect(f.projectile.spawn).toHaveBeenCalledTimes(burst.count);
+    expect(f.projectile.spawn.mock.calls.every(([r]) => r.origin.x === f.point(rock).x)).toBe(true);
+    f.tick(copyStart - 1); expect(f.projectile.spawn).toHaveBeenCalledTimes(burst.count);
+    f.tick(copyStart); expect(f.projectile.spawn).toHaveBeenCalledTimes(burst.count + 1);
+    expect(f.projectile.spawn.mock.calls.at(-1)![0].origin.x).toBe(100 + f.config.singleCopyOffsetPx);
+    f.tick(end); f.tick(end + weapon.cooldown - 1);
+    expect(f.projectile.spawn).toHaveBeenCalledTimes(burst.count + 1);
+    f.tick(end + weapon.cooldown); expect(f.projectile.spawn).toHaveBeenCalledTimes(burst.count + 2);
+    expect(f.projectile.spawn.mock.calls.at(-1)![0].origin.x).toBe(f.point(rock).x);
+  });
+
+  it('materializes at the deadline with stable identity, matching snapshot and unchanged construction stock', () => {
+    const rock = start();
+    const at = 1000 + f.config.materializeMs;
+    f.tick(at - 1, false);
+    expect(f.binding.getTurretFireSources().map(s => s.fireState)).toEqual(['paused', 'paused']);
+    f.tick(at, false);
+    expect(f.binding.getTurretFireSources().map(s => s.fireState)).toEqual(['paused', 'active']);
+    expect(f.binding.getTurretFireSources()[1]).toMatchObject({ identityId: rock.id, sequenceKey: rock.id,
+      x: 100 + f.config.singleCopyOffsetPx, y: 0 });
+    expect(f.binding.systems!.turret.getTurrets().map(t => t.id)).toEqual([rock.id]);
+    expect(f.placement.getAllRuntimeRocks().map(t => t.id)).toEqual([rock.id]);
+    expect(f.binding.getFireControlSnapshot(at).deployments[0]).toMatchObject({ copies: [{ status: 'active' }] });
+  });
+
+  it('consumes once, rejects overlapping use, starts only the frozen end-cooldown and becomes ready at its end', () => {
+    start();
+    const end = 1000 + f.config.durationMs, ready = end + f.config.cooldown;
+    expect(f.place(1001, 100).ok).toBe(false); expect(f.used).toHaveBeenCalledTimes(1);
+    expect(f.cooldown.mock.calls.filter(([, until]) => until > 0)).toEqual([]);
+    f.tick(end + 10, false);
+    expect(f.action.getFireControlState('inspector')).toMatchObject({ phase: 'cooldown', cooldownUntil: ready });
+    expect(f.place(ready - 1, 100)).toMatchObject({ ok: false, reason: 'cooldown' });
+    expect(f.place(ready, 100).ok).toBe(true); expect(f.used).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([0, 1])('ends projections on stale allied occupancy with parallelEnabled=%s', parallel => {
+    const rock = start(parallel); f.setManned(rock.id); f.tick(1100, false);
+    expect(f.binding.getFireControlSnapshot(1100).deployments).toEqual([]);
+    expect(f.binding.getTurretFireSources()[0].fireState).toBe('active');
+    expect(f.action.getFireControlState('inspector')).toMatchObject({ cooldownUntil: 1100 + f.config.cooldown });
+    f.setManned(null); f.tick(1101, false); expect(f.binding.getTurretFireSources()).toHaveLength(1);
+  });
+
+  it('keeps death, respawn, equipment changes and live turret upgrades separate from frozen utility config', () => {
+    start(1); const end = 1000 + f.config.durationMs;
+    f.setAlive(false); f.tick(1100, false);
+    f.equip(UTILITY_CONFIGS.HE_GRENADE); f.setAlive(true); f.tick(1200, false);
+    expect(f.binding.getFireControlSnapshot(1200).deployments[0]).toMatchObject({ expiresAt: end, parallel: true });
+    f.tick(end, false);
+    f.equip(f.config);
+    expect(f.cooldown).toHaveBeenLastCalledWith('inspector', end + f.config.cooldown, f.config.id);
+  });
+
+  it.each(['remove', 'hp', 'carrier', 'permission'] as const)('drops only invalid sources (%s) and ends on last loss', cause => {
+    f = createFireControlWorldFixture({ maxCopies: 2 }); const first = f.add(), second = f.add('rocket_turret', 'inspector', 9);
+    expect(f.place(1000, 100).ok).toBe(true);
+    if (cause === 'remove') f.placement.removeRock(first.id);
+    if (cause === 'hp') f.placement.getRuntimeRock(first.id)!.hp = 0;
+    if (cause === 'carrier') vi.spyOn(f.placement, 'getCarrierBaseId').mockImplementation(id => id === first.id ? 'missing-carrier' : undefined);
+    if (cause === 'permission') f.setCombatAllowed(false);
+    f.tick(1100, false);
+    const snapshot = f.binding.getFireControlSnapshot(1100);
+    if (cause !== 'permission') {
+      expect(snapshot.deployments[0]).toMatchObject({ copies: [{ originalId: second.id, sourceId: 'fc-copy:1:0' }] });
+      f.placement.removeRock(second.id); f.tick(1200, false);
+    }
+    expect(f.binding.getFireControlSnapshot(1200).deployments).toEqual([]);
+    expect(f.binding.fireControl!.getPausedOriginalIds().size).toBe(0);
+  });
+
+  it('selects diverse owned sources in slot order and never creates runtime constructions for copies', () => {
+    f = createFireControlWorldFixture({ maxCopies: 3 });
+    const mg = f.add(), rocket = f.add('rocket_turret', 'inspector', 9);
+    f.add('machine_gun_turret', 'foreign', 13); const dead = f.add('machine_gun_turret', 'inspector', 17); f.placement.getRuntimeRock(dead.id)!.hp = 0;
+    const before = f.placement.getAllRuntimeRocks().map(r => r.id);
+    expect(f.place(1000, 100).ok).toBe(true);
+    const copySources = f.binding.getTurretFireSources().filter(s => s.id !== s.identityId);
+    expect(copySources.map(s => s.identityId)).toEqual([rocket.id, mg.id]);
+    expect(f.placement.getAllRuntimeRocks().map(r => r.id)).toEqual(before);
+  });
+
+  it.each(['no_fire_sources', 'placement', 'range', 'invalid'] as const)('rejects %s without usage, charge, deployment or cooldown', reason => {
+    f = createFireControlWorldFixture();
+    if (reason !== 'no_fire_sources') f.add();
+    if (reason === 'placement') f.setFree(false);
+    const x = reason === 'range' ? f.config.placementRangePx + 1 : reason === 'invalid' ? NaN : 100;
+    expect(f.place(1000, x)).toEqual({ ok: false, reason: reason === 'range' ? 'placement' : reason });
+    expect(f.used).not.toHaveBeenCalled(); expect(f.noteUsed).not.toHaveBeenCalled();
+    expect(f.action.getFireControlState('inspector')).toBeNull();
+    expect(f.binding.getFireControlSnapshot(1000).deployments).toEqual([]);
+    expect(f.cooldown.mock.calls.filter(([, until]) => until > 0)).toEqual([]);
+  });
+
+  it('revalidates current sources and uses the host position despite a forged client position', () => {
+    f = createFireControlWorldFixture(); const rock = f.add(); f.placement.removeRock(rock.id);
+    expect(f.place(1000, 100)).toMatchObject({ reason: 'no_fire_sources' }); f.add();
+    expect(f.action.execute({ category: 'utility', playerId: 'inspector', angle: 0, targetX: 10000, targetY: 0,
+      clientPosition: { x: 10000, y: 0 }, hostNowMs: 1000, params: {} })).toMatchObject({ reason: 'placement' });
+    expect(f.place(1000, 100).ok).toBe(true); // No enemies required.
+  });
+
+  it('silently removes owners, activity cooldowns and world deployments, including repeated cleanup and late callbacks', () => {
+    start(); f.action.removePlayer('inspector');
+    expect(f.binding.getFireControlSnapshot(1100).deployments).toEqual([]);
+    f.action.onFireControlDeploymentEnded(1, 1100); expect(f.action.getFireControlState('inspector')).toBeNull();
+    expect(f.place(1100, 100).ok).toBe(true); f.tick(1100 + f.config.durationMs, false);
+    expect(f.action.getFireControlState('inspector')?.phase).toBe('cooldown');
+    f.binding.clearActivityBindings(); f.binding.clearActivityBindings();
+    expect(f.action.getFireControlState('inspector')).toBeNull();
+    expect(f.place(50000, 100).ok).toBe(true); f.binding.destroy(); f.binding.destroy();
+    expect(f.action.getFireControlState('inspector')).toBeNull();
+    expect(f.binding.getFireControlSnapshot(50000).deployments).toEqual([]);
+    expect(f.place(50001, 100)).toMatchObject({ reason: 'blocked' });
+  });
 });
 
-describe('Die Grundversion erzeugt eine passende Kopie und pausiert ihr Original; nach dem Ende setzt das Original seine Feuerfolge ohne Reset fort', () => {
-  // M1: Einsatz-Owner, Materialisierungsuhr und FireControlUtilityPort fehlen.
-  it.todo('Arrange: eigenes kampffähiges Original und freie Platzierung; Act: platzieren und Materialisierungsgrenze überschreiten; Assert: genau eine passende aktive Kopie und ein physisch vorhandenes pausiertes Original');
-  it.todo('Arrange: Original mit laufender Salve; Act: Kopie materialisieren; Assert: Original beendet seine eigene Salve und Kopie übernimmt erst danach dieselbe sequenceKey ohne Sofortsalve');
-  it.todo('Arrange: aktive Kopie mit noch laufendem Waffen-Cooldown; Act: Einsatz beenden und vor sowie bei nextFireAt ticken; Assert: Original setzt die gemeinsame Folge erst bei Bereitschaft fort');
-  it.todo('Arrange: aktive Kopie mitten in einer Salve; Act: Einsatz beenden; Assert: Restschüsse entfallen und Original erhält den regulären Salven-Cooldown');
-  it.todo('Arrange: laufender Kopieneinsatz; Act: erneut aktivieren und dann expiresAt erreichen; Assert: zweite Nutzung verbraucht nichts und genau ein Utility-Cooldown beginnt erst am Einsatzende');
-  it.todo('Arrange: pausiertes Original mit aktiver Kopie; Act: Original bemannen; Assert: dessen Projektion endet und das Original ist ohne verwaiste Pause bemannt nutzbar');
-});
-
-describe('Höhere Kopienzahl erzeugt nur aus geeigneten Originalen zusätzliche Projektionen; Kopien erzeugen keine Kopien', () => {
-  // M1: Host-Aktivierung muss die vorhandenen Eligibility/Selection/Layout-Regeln verbinden.
-  it.todo('Arrange: höheres Kopienlimit, Bau-Slots und gemischte eigene, fremde, tote, basisgehörige und Tesla-Konstruktionen; Act: platzieren; Assert: nur geeignete eigene Originale bis zum aufgelösten Limit liefern Kopien in Auswahlreihenfolge');
-  it.todo('Arrange: weniger geeignete Originale als Kopienplätze sowie bereits vorhandene Kopien; Act: Quellenauswahl über den Host ausführen; Assert: jede Projektion referenziert ein echtes Original und keine Kopie wird vervielfacht');
-  it.todo('Arrange: gleiche Typen mit Distanzgleichstand und Typen ohne Bau-Slot; Act: Vorschau und Host-Platzierung aus denselben Fakten auflösen; Assert: Original-IDs und freie Formationsplätze stimmen deterministisch überein');
-  it.todo('Arrange: unzureichende freie Formationsplätze oder Punkt außerhalb der Platzierungsreichweite; Act: bestätigen; Assert: keine Projektion, Pause oder Verbrauch entsteht');
-});
-
-describe('Parallelbetrieb lässt Original und Kopie gleichzeitig kämpfen; die Zerstörung des Originals beendet die Kopie', () => {
-  // M1: Aktivierung mit eingefrorenem Parallelbetrieb und Konstruktion-Lifetime anbinden.
-  it.todo('Arrange: Parallelbetrieb und Original im Cooldown; Act: Kopie aktivieren und über die Bereitschaftsgrenze ticken; Assert: unabhängige sequenceKeys starten ab demselben nextFireAt ohne kostenlose Salve');
-  it.todo('Arrange: Original und parallele Kopie mit eigenen laufenden Salven; Act: Original zerstören; Assert: Kopie verschwindet aus dem Snapshot und feuert keine weiteren Restschüsse');
-  it.todo('Arrange: parallele Kopie und intaktes Original; Act: Original bemannen und weiter ticken; Assert: Kopie bleibt autonom aktiv und die Bemannung kontrolliert nur das Original');
-});
-
-describe('Entfernen von Quellen, Einsatzende, Besitzerentfernung und World-Wechsel hinterlassen weder Portale noch Pausen; Clients und Late Join sehen den richtigen Zustand', () => {
-  // M1: Binding-Lifecycle und Einsatz-Owner; M2: dieselben Fälle mit Portalen wiederholen.
-  it.todo('Arrange: mehrere Besitzer mit Kopien und Portalen; Act: ein Original zerstören, abbauen oder durch Trägerverlust kampfunfähig machen; Assert: nur dessen Kopie und Eingänge verschwinden ohne verwaiste Pause');
-  it.todo('Arrange: beide Einsätze eines Besitzers; Act: Besitzer töten und respawnen; Assert: Einsätze behalten expiresAt und enden erst regulär');
-  it.todo('Arrange: Einsätze zweier Besitzer; Act: removePlayer für einen Besitzer aufrufen; Assert: nur dessen Einsätze, Eingänge und Pausen sind sofort entfernt');
-  it.todo('Arrange: Kopien und Portale in aktiver Activity; Act: clearActivityBindings zweimal aufrufen; Assert: alle Einsätze, Eingänge und Pausen sind weg und kein späterer Tick reaktiviert sie');
-  it.todo('Arrange: Einsätze in alter World und bereits abgegebene Geschosse; Act: Binding destroy und neue World erzeugen; Assert: neue World enthält keine alten Einsätze, Quellen oder Pausen');
+// Portal and combined deployment cases belong to M2.
   it.todo('Arrange: transportiertes Geschoss mit Herkunft und Bonus sowie auslaufender Einsatz; Act: expiresAt erreichen und das Geschoss treffen lassen; Assert: Portale und Pausen enden, Projektilherkunft und erworbene Beiträge bleiben erhalten');
   it.todo('Arrange: Kopien- und Portaleinsatz mit unterschiedlichen Endzeiten; Act: jeden Ablauf einzeln passieren; Assert: nur abgelaufener Einsatz endet und Original wird weder vorzeitig entpausiert noch dauerhaft blockiert');
-});
-
-describe('Ein neuer Inspektor startet mit Raketenturm und Turmkopien; fehlende Originale werden verständlich gemeldet; bestehende Ausrüstungen folgen der Migration', () => {
-  // M1: Utility-Port/Failure-Grund; M2: Portal-Wurf; Loadout/Migration bleiben in den §10-Partnersuites.
-  it.todo('Arrange: bereite Kopien-Utility ohne geeignete eigene Originale und gespeicherter Ressourcenstand; Act: Platzierung anfordern; Assert: eigener Failure-Grund für fehlende Quellen, keine Ladung, kein Cooldown und kein Nutzungsstatistik-Eintrag werden verbraucht');
   it.todo('Arrange: bereite Portal-Utility mit ausschließlich fremden, zerstörten oder ungeeigneten Quellen; Act: Wurf anfordern; Assert: derselbe verständliche Failure-Grund und unveränderte Ressourcen ohne geworfenes Projektil');
-  it.todo('Arrange: gültige Kopienvorschau und danach entferntes letztes Original; Act: Platzierung beim Host bestätigen; Assert: aktuelle Fakten verhindern den Einsatz ohne Verbrauch');
-  it.todo('Arrange: geeignete eigene Quelle aber kein Gegner; Act: beide Utilities getrennt aktivieren; Assert: fehlende Ziele verursachen keine Quellen-Ablehnung');
-});

@@ -1,9 +1,11 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import * as ts from 'typescript';
-import { describe, expect, it } from 'vitest';
-import { createFireControlSourceFixture, fireControlConstruction, fireControlCopy } from '../FireControlTestHelper';
+import { describe, expect, it, vi } from 'vitest';
+import { createFireControlSourceFixture, createFireControlWorldFixture, fireControlConstruction, fireControlCopy } from '../FireControlTestHelper';
 import { toLocalTurretFireSource, type TurretFireContext } from '../../src/systems/TurretSystem';
+import { TurretControlSystem } from '../../src/systems/TurretControlSystem';
+import { TeslaDomeSystem } from '../../src/systems/TeslaDomeSystem';
 
 function files(root: string): string[] {
   return readdirSync(root, { withFileTypes: true }).flatMap(entry => {
@@ -105,10 +107,39 @@ describe('Entfernen von Quellen, Einsatzende, Besitzerentfernung und World-Wechs
     expect([...violations]).toEqual([]);
   });
 
-  // M1: echte Konstruktion-Consumer mit dem Einsatz-Owner zusammenstecken.
-  it.todo('Arrange: bemannbare Konstruktion und nahe Kopie; Act: Bemannungsziele abfragen und Kopien-ID anfordern; Assert: nur das Original ist auswählbar und die Kopie wird abgelehnt');
-  it.todo('Arrange: Original, Kopie und Relais-Projektor; Act: Reparatur-, Abbau- und Interaktionsziele sowie Baukapazität abfragen; Assert: nur echte Konstruktionen erscheinen und Kopie sowie Projektor verbrauchen keine Baukapazität');
-  it.todo('Arrange: gegnerische Konstruktion und näher liegende Kopie; Act: Homing-Zielsuche ausführen; Assert: Kopie und Projektor sind keine anvisierbaren Ziele');
-  it.todo('Arrange: Konstruktionen und aktive Kopien desselben Besitzers; Act: Fernsteuerungsquellen abfragen; Assert: Ergebnis enthält nur Konstruktions-IDs und keine Kopien-ID');
-  it.todo('Arrange: gegnerisches Original und Kopie im Tesla-Radius; Act: Tesla-Ziele ermitteln; Assert: nur das Original erhält einen Konstruktionstreffer');
+  it('keeps real placement, turret, remote-control, homing and Tesla reads construction-only after host activation', () => {
+    const tesla = vi.spyOn(TeslaDomeSystem.prototype, 'setTurretCallbacks');
+    const f = createFireControlWorldFixture();
+    try {
+      const rock = f.add();
+      const before = f.placement.getAllRuntimeRocks();
+      const capacity = f.placement.getUsedCapacity('inspector');
+      expect(f.place(1000, 100).ok).toBe(true);
+      f.tick(1000 + f.config.materializeMs, false);
+      expect(f.binding.getTurretFireSources()).toHaveLength(2);
+      expect(f.binding.getTurretDefinitions().map(t => t.id)).toEqual([rock.id]);
+      expect(f.binding.systems!.turret.getTurrets().map(t => t.id)).toEqual([rock.id]);
+      expect(f.binding.getOffensiveConstructionSources().map(t => t.id)).toEqual([rock.id]);
+      expect(f.placement.getAllRuntimeRocks()).toEqual(before);
+      expect(f.placement.getUsedCapacity('inspector')).toBe(capacity);
+      const homing = f.homing.setProjectileTargetQueryPort.mock.calls[0][0];
+      const emit = vi.fn();
+      homing.queryTargets({ targetTypes: ['turrets'] }, 'enemy', 0, 0, 100000, emit);
+      expect(emit.mock.calls.filter(([, type]) => type === 'turrets').map(([id]) => id)).toEqual([String(rock.id)]);
+      const query = tesla.mock.calls.find(([provider]) => provider !== null)![0]!;
+      expect(query().map(t => t.id)).toEqual([rock.id]);
+    } finally { f.destroy(); tesla.mockRestore(); }
+  });
+
+  it('rejects a nearby deployed copy at the actual occupancy boundary', () => {
+    const f = createFireControlWorldFixture();
+    try {
+      const rock = f.add(); expect(f.place(1000, 100).ok).toBe(true);
+      const control = new TurretControlSystem({ getTurrets: () => f.binding.systems!.turret.getTurrets(),
+        getActor: () => ({ ...f.point(rock), angle: 0 }), canOccupy: () => true, canEnter: () => true,
+        isFriendly: () => true, getInput: () => null, enter() {}, pin() {}, exit() {} });
+      expect(control.request('inspector', { action: 'enter', turretId: 'fc-copy:1:0' })).toBe(false);
+      expect(control.request('inspector', { action: 'enter', turretId: rock.id })).toBe(true);
+    } finally { f.destroy(); }
+  });
 });

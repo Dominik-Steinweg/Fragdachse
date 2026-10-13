@@ -23,6 +23,8 @@
       "placementRangePx": 280,
       "maxCopies": 1,
       "ringRadiusPx": 36,
+      "clearanceRadiusPx": 16,
+      "singleCopyOffsetPx": 30,
       "materializeMs": 400,
       "parallelEnabled": 0
     },

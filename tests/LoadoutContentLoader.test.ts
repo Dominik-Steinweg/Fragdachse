@@ -300,3 +300,13 @@ describe('loadout content loader', () => {
     expectContentError(() => buildLoadoutRegistries(modeSources), 'allowedModes');
   });
 });
+
+// Placement geometry is authored and must fail at the content boundary.
+it.each(['clearanceRadiusPx', 'singleCopyOffsetPx'])('validates relay geometry field %s', field => {
+  for (const value of [undefined, 0, -1, NaN, Infinity, '16']) {
+    const sources = clonedSources();
+    const config = documentWith(sources, 'utilities', 'FIRE_CONTROL_RELAY').utilities!.FIRE_CONTROL_RELAY;
+    if (value === undefined) delete config[field]; else config[field] = value;
+    expectContentError(() => buildLoadoutRegistries(sources), field);
+  }
+});

@@ -23,25 +23,25 @@ describe('fire control copy layout', () => {
   it('returns no slots for nonpositive counts without querying placement', () => {
     const isFree = vi.fn(() => false);
     for (const count of [0, -2]) {
-      expect(layoutFireControlCopies({ pointX: 2, pointY: 3, count, ringRadius: 10, isFree })).toEqual([]);
+      expect(layoutFireControlCopies({ singleCopyOffsetPx: 30, directionAngle: 0, pointX: 2, pointY: 3, count, ringRadius: 10, isFree })).toEqual([]);
     }
     expect(isFree).not.toHaveBeenCalled();
   });
 
-  it('places a single copy exactly at the free cursor position', () => {
+  it('places a single copy beyond the projector in the player-to-point direction', () => {
     const input = { pointX: 12.5, pointY: -3, count: 1, ringRadius: 10 };
-    expect(layoutFireControlCopies({ ...input, isFree: () => true })).toEqual([{ x: 12.5, y: -3 }]);
-    expect(layoutFireControlCopies({ ...input, isFree: () => false })).toBeNull();
+    expect(layoutFireControlCopies({ singleCopyOffsetPx: 30, directionAngle: 0, ...input, isFree: () => true })).toEqual([{ x: 42.5, y: -3 }]);
+    expect(layoutFireControlCopies({ singleCopyOffsetPx: 30, directionAngle: 0, ...input, isFree: () => false })).toBeNull();
   });
 
   it('requires a free projector center even when every ring position is free', () => {
-    expect(layoutFireControlCopies({
+    expect(layoutFireControlCopies({ singleCopyOffsetPx: 30, directionAngle: 0,
       pointX: 0, pointY: 0, count: 3, ringRadius: 10, isFree: (x, y) => x !== 0 || y !== 0,
     })).toBeNull();
   });
 
   it.each([2, 3, 4, 6])('starts %i regular slots at the top and orders them clockwise', count => {
-    const result = layoutFireControlCopies({ pointX: 7, pointY: 9, count, ringRadius: 10, isFree: () => true });
+    const result = layoutFireControlCopies({ singleCopyOffsetPx: 30, directionAngle: 0, pointX: 7, pointY: 9, count, ringRadius: 10, isFree: () => true });
     expect(result).toHaveLength(count);
     for (let slot = 0; slot < count; slot++) {
       const offset = ringPoint(slot, count);
@@ -62,7 +62,7 @@ describe('fire control copy layout', () => {
   });
 
   it('uses 24 rotation steps when candidateCount is omitted', () => {
-    const result = layoutFireControlCopies({
+    const result = layoutFireControlCopies({ singleCopyOffsetPx: 30, directionAngle: 0,
       pointX: 0, pointY: 0, count: 2, ringRadius: 10, isFree: onlyRingIndices([1, 13], 24),
     });
     expect(result).toHaveLength(2);
@@ -71,7 +71,7 @@ describe('fire control copy layout', () => {
   });
 
   it('falls back to the most separated free samples and uses lower indices for ties', () => {
-    const result = layoutFireControlCopies({
+    const result = layoutFireControlCopies({ singleCopyOffsetPx: 30, directionAngle: 0,
       pointX: 0, pointY: 0, count: 3, ringRadius: 10, candidateCount: 8,
       isFree: onlyRingIndices([0, 1, 2, 4, 6], 8),
     });
@@ -80,7 +80,7 @@ describe('fire control copy layout', () => {
   });
 
   it('accounts for the closing gap across the top when maximizing separation', () => {
-    const result = layoutFireControlCopies({
+    const result = layoutFireControlCopies({ singleCopyOffsetPx: 30, directionAngle: 0,
       pointX: 0, pointY: 0, count: 3, ringRadius: 10, candidateCount: 8,
       minSeparation: 0, isFree: onlyRingIndices([0, 3, 6, 7], 8),
     });
@@ -89,7 +89,7 @@ describe('fire control copy layout', () => {
   });
 
   it('returns null for too few free samples instead of a partial formation', () => {
-    expect(layoutFireControlCopies({
+    expect(layoutFireControlCopies({ singleCopyOffsetPx: 30, directionAngle: 0,
       pointX: 0, pointY: 0, count: 3, ringRadius: 10, candidateCount: 8,
       isFree: onlyRingIndices([0, 3], 8),
     })).toBeNull();
@@ -97,10 +97,10 @@ describe('fire control copy layout', () => {
 
   it('enforces separation in both regular and fallback formations', () => {
     const input = { pointX: 0, pointY: 0, count: 3, ringRadius: 10, candidateCount: 8 };
-    expect(layoutFireControlCopies({ ...input, minSeparation: 18, isFree: () => true })).toBeNull();
+    expect(layoutFireControlCopies({ singleCopyOffsetPx: 30, directionAngle: 0, ...input, minSeparation: 18, isFree: () => true })).toBeNull();
     const isFree = onlyRingIndices([0, 1, 2], 8);
-    expect(layoutFireControlCopies({ ...input, isFree })).toBeNull();
-    const relaxed = layoutFireControlCopies({ ...input, isFree, minSeparation: 7 });
+    expect(layoutFireControlCopies({ singleCopyOffsetPx: 30, directionAngle: 0, ...input, isFree })).toBeNull();
+    const relaxed = layoutFireControlCopies({ singleCopyOffsetPx: 30, directionAngle: 0, ...input, isFree, minSeparation: 7 });
     expect(relaxed).toHaveLength(3);
     for (const a of relaxed!) for (const b of relaxed!) {
       if (a !== b) expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual(7);
@@ -108,7 +108,7 @@ describe('fire control copy layout', () => {
   });
 
   it('supports arbitrary counts when the supplied separation permits them', () => {
-    const result = layoutFireControlCopies({
+    const result = layoutFireControlCopies({ singleCopyOffsetPx: 30, directionAngle: 0,
       pointX: 0, pointY: 0, count: 9, ringRadius: 10, minSeparation: 1, candidateCount: 8, isFree: () => true,
     });
     expect(result).toHaveLength(9);
@@ -149,7 +149,7 @@ describe('fire control copy layout', () => {
             }
           }
         }
-        const result = layoutFireControlCopies({
+        const result = layoutFireControlCopies({ singleCopyOffsetPx: 30, directionAngle: 0,
           pointX: 0, pointY: 0, count: 3, ringRadius: 10, candidateCount: total,
           minSeparation, isFree: onlyRingIndices(free, total),
         });

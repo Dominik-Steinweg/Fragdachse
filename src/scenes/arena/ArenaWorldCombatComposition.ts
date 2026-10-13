@@ -1,3 +1,4 @@
+import { normalizeConstructionId } from '../../config/coopDefenseConstructions';
 import { CombatProjectileQueryAdapter } from '../../combat/CombatProjectileQueryAdapter';
 import { bridge } from '../../network/bridge';
 import { EnergyShieldSystem } from '../../systems/EnergyShieldSystem';
@@ -264,6 +265,8 @@ export function composeWorldCombatGameplay(
     getEnemyManager: () => gameplay.shootingRange?.enemies ?? flow.getCoopMissionRuntime()?.enemyManager ?? null,
     isTrainingTarget: id => gameplay.shootingRange?.isTrainingTarget(id) ?? false,
     getPlayerCombatIntegration: () => gameplay.player?.getPlayerCombatIntegrationPort() ?? null,
+    readConstructionSlotOrder: ownerId => (bridge.getPlayerCurrentLoadoutSnapshot(ownerId)?.tools ?? [])
+      .flatMap(tool => { const id = normalizeConstructionId(tool.id); return id ? [id] : []; }),
     getManualTurretControl: (id, now) => gameplay.player?.getManualTurretControl(id, now) ?? null,
     bindPlayerShieldBuffPort: (port) => gameplay.player?.bindShieldBuffPort(port),
     automatedWeaponExecution: gameplay.automatedWeaponExecution,

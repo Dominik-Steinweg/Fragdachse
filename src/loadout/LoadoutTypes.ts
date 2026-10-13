@@ -681,6 +681,8 @@ export interface FireControlRelayUtilityConfig extends BaseUtilityConfig {
   readonly placementRangePx: number;
   readonly maxCopies: number;
   readonly ringRadiusPx: number;
+  readonly clearanceRadiusPx: number;
+  readonly singleCopyOffsetPx: number;
   readonly materializeMs: number;
   readonly parallelEnabled: number;
 }

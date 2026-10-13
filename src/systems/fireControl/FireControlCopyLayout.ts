@@ -8,6 +8,8 @@ export interface FireControlCopyLayoutInput {
   readonly pointY: number;
   readonly count: number;
   readonly ringRadius: number;
+  readonly singleCopyOffsetPx: number;
+  readonly directionAngle: number;
   /** Must return the same answer for the same position during a layout calculation. */
   readonly isFree: (x: number, y: number) => boolean;
   readonly minSeparation?: number;
@@ -26,7 +28,13 @@ export function layoutFireControlCopies(
   if (count <= 0) return [];
   if (!Number.isInteger(count) || !Number.isFinite(pointX) || !Number.isFinite(pointY)) return null;
   if (!isFree(pointX, pointY)) return null;
-  if (count === 1) return [{ x: pointX, y: pointY }];
+  if (count === 1) {
+    if (!Number.isFinite(input.singleCopyOffsetPx) || input.singleCopyOffsetPx < 0
+      || !Number.isFinite(input.directionAngle)) return null;
+    const point = { x: pointX + Math.cos(input.directionAngle) * input.singleCopyOffsetPx,
+      y: pointY + Math.sin(input.directionAngle) * input.singleCopyOffsetPx };
+    return isFree(point.x, point.y) ? [point] : null;
+  }
 
   const minSeparation = input.minSeparation ?? ringRadius;
   const candidateCount = input.candidateCount ?? 24;

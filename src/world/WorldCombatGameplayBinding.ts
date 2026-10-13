@@ -1,3 +1,6 @@
+import { FireControlRuntime } from '../systems/fireControl/FireControlRuntime';
+import type { FireControlConstructionFacts } from '../systems/fireControl/FireControlCopyPlan';
+import type { FireControlSnapshot } from '../systems/fireControl/FireControlSnapshot';
 import { isOffensiveConstruction } from '../systems/offensiveConstruction';
 import { PlasmaBurnerTargetCatalog } from './PlasmaBurnerTargetCatalog';
 import { homingTargetKind } from '../projectile/ProjectileOrigin';
@@ -210,6 +213,7 @@ export interface ProjectileInteractionBinding {
 }
 
 export interface WorldCombatGameplayBindingOptions {
+  readonly readConstructionSlotOrder?: (ownerId: string) => readonly string[];
   readonly getManualTurretControl?: (id: AutomatedTurretId, now: number) => import('../systems/TurretControlSystem').ManualTurretControl | null;
   readonly projectileUtility?: {
     focusProjectilesInCircle(request: import('../projectile/ProjectileExternalInteractionPort').ProjectileFocusRequest): number;
@@ -313,6 +317,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
   readonly attackDrone: WorldAttackDroneBinding | null;
   readonly mgTurret: WorldMgTurretBinding | null;
   readonly systems: WorldCombatGameplaySystems | null;
+  readonly fireControl: FireControlRuntime | null;
+  private fireControlNowMs = 0;
   private plasmaCatalog: PlasmaBurnerTargetCatalog | null = null;
   private destroyed = false;
   private activityGeneration = 0;
@@ -331,6 +337,23 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
 
   constructor(private readonly options: WorldCombatGameplayBindingOptions) {
     const playerCombat = options.getPlayerCombatIntegration();
+    this.fireControl = options.network.authority.isHost() ? new FireControlRuntime({
+      readConstructions: () => this.readFireControlConstructions(),
+      readSlotOrder: ownerId => options.readConstructionSlotOrder?.(ownerId) ?? [],
+      isPointFree: (x, y, radius) => {
+        const point = options.getWorldGeometryBinding()?.getQueries().resolveSafeGroundPoint(x, y, radius);
+        return !!point && point.x === x && point.y === y;
+      },
+      onDeploymentEnded: (id, _ownerId, endedAt) =>
+        options.getPlayerCombatIntegration()?.utility.onFireControlDeploymentEnded?.(id, endedAt),
+    }) : null;
+    if (this.fireControl) playerCombat?.utility.setFireControlPort?.({
+      activateCopies: request => {
+        this.fireControlNowMs = request.nowMs;
+        return this.fireControl!.activateCopies(request);
+      },
+      removeOwner: ownerId => this.fireControl!.removeOwner(ownerId),
+    });
     this.attackDrone = playerCombat && options.network.authority.isHost() ? new WorldAttackDroneBinding({
       combat: options.combatSystem, players: options.playerManager, placement: options.placementSystem,
       bases: options.baseManager, metrics: options.worldMetrics, projectiles: options.projectileSpawn,
@@ -404,6 +427,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
   /** Removes the Activity projection without touching the World-owned WorldCombatCore itself. */
   clearActivityBindings(): void {
     if (this.destroyed) return;
+    this.fireControl?.clear();
+    this.options.getPlayerCombatIntegration()?.utility.clearFireControlUses?.();
     this.activityGeneration += 1;
     this.options.combatSystem.invalidatePlayerLifecyclePolicy();
     this.options.combatSystem.setBarrierObstacles(null);
@@ -424,6 +449,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
   destroy(): void {
     if (this.destroyed) return;
     this.clearActivityBindings();
+    this.options.getPlayerCombatIntegration()?.utility.setFireControlPort?.(null);
     this.destroyed = true;
     this.mgTurret?.destroy();
     this.attackDrone?.destroy();
@@ -829,7 +855,10 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     turret.setLineOfFireChecker((sx, sy, ex, ey, skipRockIndex, sourceCarrierBaseId) => o.combatSystem.hasClearLineOfFire(sx, sy, ex, ey, { skipRockIndex, sourceCarrierBaseId }));
     turret.setTurretProvider(() => this.getTurretDefinitions(), (source, angle) => {
       // Nur die Konstruktion selbst besitzt ihren Rohrwinkel; temporäre Quellen gehören ihrem Einsatz.
-      if (source.id !== source.identityId) return;
+      if (source.id !== source.identityId) {
+        if (typeof source.id === 'string') this.fireControl?.setCopyAngle(source.id, angle);
+        return;
+      }
       const id = source.id;
       if (typeof id === 'number') {
         o.placementSystem.updateAngle(id, angle);
@@ -1534,7 +1563,33 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
    * Quelle; temporäre Quellen kommen nur hier hinzu und nie in `getTurretDefinitions()`.
    */
   getTurretFireSources(): readonly TurretFireSource[] {
-    return this.getTurretDefinitions().map(toLocalTurretFireSource);
+    const definitions = this.getTurretDefinitions();
+    return this.fireControl?.deriveFireSources(definitions, this.fireControlNowMs) ?? definitions.map(toLocalTurretFireSource);
+  }
+
+  advanceFireControl(now: number): void {
+    this.fireControlNowMs = now;
+    this.fireControl?.update(now);
+  }
+
+  getFireControlSnapshot(now: number): FireControlSnapshot {
+    return this.fireControl?.getSnapshot(now) ?? { deployments: [] };
+  }
+
+  private readFireControlConstructions(): readonly FireControlConstructionFacts[] {
+    const o = this.options;
+    return this.getTurretDefinitions().flatMap(definition => {
+      if (typeof definition.id !== 'number') return [];
+      const rock = o.placementSystem.getRuntimeRock(definition.id);
+      if (!rock) return [];
+      return [{ id: definition.id, ownerId: rock.ownerId, baseOwned: rock.ownership === 'base-owned',
+        constructionId: rock.constructionId, weaponId: definition.weaponId, angle: definition.angle,
+        weaponFireType: WEAPON_CONFIGS[definition.weaponId ?? 'SPORES'].fire.type,
+        combatReady: rock.hp > 0 && o.getWorldParticipation(rock.ownerId) === 'interactive'
+          && o.getPlayerCapabilities(rock.ownerId).canUseCombat,
+        manned: (o.getManualTurretControl?.(definition.id, this.fireControlNowMs) ?? null) !== null,
+        x: definition.x, y: definition.y }];
+    });
   }
 
   getTurretDefinitions(): readonly import('../systems/TurretSystem').AutomatedTurret[] {
