@@ -4,7 +4,7 @@ import type {
   CoopDefenseMapPersistentBaseConfig,
 } from '../coopDefenseMapAuthoring';
 import { hasCoopDefenseEnemyKind } from '../coopDefenseEnemies';
-import { PERSISTENT_BASE_MAX_AREA_STAGE } from '../../persistentBase/PersistentBaseCore';
+import { PERSISTENT_BASE_MAX_AREA_STAGE, resolvePersistentBaseReservationRadiusCells } from '../../persistentBase/PersistentBaseCore';
 import { parseTimeOfDay } from '../../effects/TimeOfDay';
 import type { SpawnFront } from '../../types';
 import { isSpawnFront } from '../../utils/spawnFront';
@@ -14,6 +14,7 @@ import { isDawnPlanId } from '../../dawn/contracts/DawnPlans';
 import { DAWN_ARENA_TEMPLATE_SOURCES } from './arenaTemplates/index';
 import rawWaveBlocks from './waveBlocks.json';
 import rawSchedules from './schedules.json';
+import rawSalvage from './salvage.json';
 
 /**
  * Loader, Validatoren und Content-Hash der Dawn-Registries.
@@ -84,6 +85,7 @@ export interface DawnSchedule {
   readonly endClock: string;
 }
 
+export const DAWN_SALVAGE_CONFIG = validateSalvage(rawSalvage);
 const TEMPLATES = validateTemplates(DAWN_ARENA_TEMPLATE_SOURCES);
 const WAVE_BLOCKS = validateWaveBlocks(rawWaveBlocks);
 const SCHEDULES = validateSchedules(rawSchedules);
@@ -94,6 +96,7 @@ export const DAWN_CONTENT_HASH = hashCanonicalJson({
   templates: [...TEMPLATES.values()],
   waveBlocks: [...WAVE_BLOCKS.values()],
   schedules: [...SCHEDULES.values()],
+  salvage: DAWN_SALVAGE_CONFIG,
 });
 
 export class DawnContentMismatchError extends Error {
@@ -130,7 +133,31 @@ function requireEntry<T>(registry: ReadonlyMap<string, T>, id: string, label: st
   return entry;
 }
 
-function validateTemplates(sources: readonly unknown[]): ReadonlyMap<string, DawnArenaTemplate> {
+/** Authored distances are cell-center distances; interval endpoints are inclusive. */
+function validateSalvage(raw: typeof rawSalvage): typeof rawSalvage {
+  let previousMax = -1;
+  for (const band of DISTANCE_BANDS) {
+    const range = raw.bands?.[band];
+    if (!range || !Number.isFinite(range.minCells) || !Number.isFinite(range.maxCells)
+      || range.minCells < 0 || range.minCells <= previousMax || range.maxCells < range.minCells) {
+      throw new Error(`[dawnContent] Salvage band ${band} needs ordered, non-overlapping finite distances`);
+    }
+    previousMax = range.maxCells;
+  }
+  for (const key of ['minBaseReservationGapCells', 'minArenaEdgeGapCells',
+    'minFrontSpawnBandGapCells', 'minSlotSpacingCells'] as const) {
+    if (!Number.isFinite(raw[key]) || raw[key] <= 0) {
+      throw new Error(`[dawnContent] Salvage ${key} must be positive and finite`);
+    }
+  }
+  if (!Number.isFinite(raw.frontSpawnBandRatio) || raw.frontSpawnBandRatio <= 0 || raw.frontSpawnBandRatio >= 0.5) {
+    throw new Error('[dawnContent] Salvage frontSpawnBandRatio must be between 0 and 0.5');
+  }
+  return raw;
+}
+
+/** Also used by authoring checks before registering a template. */
+export function validateTemplates(sources: readonly unknown[]): ReadonlyMap<string, DawnArenaTemplate> {
   const templates = new Map<string, DawnArenaTemplate>();
   for (const source of sources) {
     const template = source as DawnArenaTemplate;
@@ -147,12 +174,27 @@ function validateTemplates(sources: readonly unknown[]): ReadonlyMap<string, Daw
     if (!isPositiveInteger(world.arenaWidthCells) || !isPositiveInteger(world.arenaHeightCells)) {
       throw new Error(`[dawnContent] ${label} needs explicit arena dimensions`);
     }
+    const width = world.arenaWidthCells;
+    const height = world.arenaHeightCells;
+    const baseAnchor = world.persistentBase.anchor;
+    const reservation = resolvePersistentBaseReservationRadiusCells(world.persistentBase.maxAreaStage);
+    if (!baseAnchor || !Number.isSafeInteger(baseAnchor.gridX) || !Number.isSafeInteger(baseAnchor.gridY)
+      || baseAnchor.gridX - reservation < 0 || baseAnchor.gridX + reservation >= width
+      || baseAnchor.gridY - reservation < 0 || baseAnchor.gridY + reservation >= height) {
+      throw new Error(`[dawnContent] ${label} needs an in-bounds base reservation`);
+    }
     if (!Array.isArray(template.fronts) || template.fronts.length === 0
       || template.fronts.some((front) => !isSpawnFront(front))
       || new Set(template.fronts).size !== template.fronts.length) {
       throw new Error(`[dawnContent] ${label} needs unique valid fronts`);
     }
     const slotIds = new Set<string>();
+    const previousSlots: DawnSalvageSlot[] = [];
+    const salvage = DAWN_SALVAGE_CONFIG;
+    // Same inclusive band depth as CoopDefenseSpawnExecutor.getEdgeBand / ArenaGenerator.
+    // The ratio is authored here so Dawn spacing participates in the content hash.
+    const depthX = Math.min(Math.max(2, Math.floor(width * salvage.frontSpawnBandRatio)), width - 1);
+    const depthY = Math.min(Math.max(2, Math.floor(height * salvage.frontSpawnBandRatio)), height - 1);
     for (const slot of template.salvageSlots ?? []) {
       if (!isDawnPlanId(slot.id) || slotIds.has(slot.id)) {
         throw new Error(`[dawnContent] ${label} has an invalid or duplicate salvage slot ${slot.id}`);
@@ -166,6 +208,29 @@ function validateTemplates(sources: readonly unknown[]): ReadonlyMap<string, Daw
         || gridX < 0 || gridY < 0 || gridX >= world.arenaWidthCells! || gridY >= world.arenaHeightCells!) {
         throw new Error(`[dawnContent] ${label} slot ${slot.id} lies outside the arena`);
       }
+      const distance = Math.hypot(gridX - baseAnchor.gridX, gridY - baseAnchor.gridY);
+      if (distance < reservation + salvage.minBaseReservationGapCells) {
+        throw new Error(`[dawnContent] ${label} slot ${slot.id} overlaps the base reservation or its gap`);
+      }
+      const band = salvage.bands[slot.band];
+      if (distance < band.minCells || distance > band.maxCells) {
+        throw new Error(`[dawnContent] ${label} slot ${slot.id} lies outside its ${slot.band} distance band`);
+      }
+      if (Math.min(gridX, gridY, width - 1 - gridX, height - 1 - gridY) < salvage.minArenaEdgeGapCells) {
+        throw new Error(`[dawnContent] ${label} slot ${slot.id} is too close to the arena edge`);
+      }
+      const frontGaps: Record<SpawnFront, number> = {
+        west: gridX - depthX, east: width - 1 - depthX - gridX,
+        north: gridY - depthY, south: height - 1 - depthY - gridY,
+      };
+      if (template.fronts.some((front: SpawnFront) => frontGaps[front] < salvage.minFrontSpawnBandGapCells)) {
+        throw new Error(`[dawnContent] ${label} slot ${slot.id} is too close to a front spawn band`);
+      }
+      if (previousSlots.some(other => Math.hypot(gridX - other.anchor.gridX, gridY - other.anchor.gridY)
+        < salvage.minSlotSpacingCells)) {
+        throw new Error(`[dawnContent] ${label} slot ${slot.id} is too close to another salvage slot`);
+      }
+      previousSlots.push(slot);
     }
     templates.set(template.id, { ...template, salvageSlots: template.salvageSlots ?? [] });
   }

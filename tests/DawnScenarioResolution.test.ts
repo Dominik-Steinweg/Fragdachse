@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getMapName } from '../src/i18n/contentPresentation';
-import { DAWN_CONTENT_HASH, getDawnArenaTemplates } from '../src/config/dawn/dawnContent';
+import { DAWN_CONTENT_HASH, getDawnArenaTemplates, validateTemplates } from '../src/config/dawn/dawnContent';
 import { composeDawnRoundPlans } from '../src/dawn/composition/DawnRoundComposition';
 import {
   getDawnTemplateIdOfWorld,
@@ -95,6 +95,26 @@ describe('Dawn scenario resolution', () => {
     const resolved = resolveDawnScenario({ ...plans.world, templateId: 'clearing' }, plans.activity);
     expect(getMapName(resolved.mapConfig.mapId, 'de')).toBe('Lichtung');
     expect(getMapName(resolved.mapConfig.mapId, 'en')).toBe('Clearing');
+  });
+
+  it('rejects salvage slots in the wrong band or inside the base reservation', () => {
+    const template = getDawnArenaTemplates().find(entry => entry.salvageSlots.length > 0)!;
+    const slot = template.salvageSlots[0];
+    const wrongBand = slot.band === 'far' ? 'near' : 'far';
+    expect(() => validateTemplates([{ ...template, salvageSlots: [{ ...slot, band: wrongBand }] }]))
+      .toThrow('distance band');
+    expect(() => validateTemplates([{
+      ...template, salvageSlots: [{ ...slot, anchor: template.world.persistentBase.anchor }],
+    }])).toThrow('base reservation');
+  });
+
+  it('rejects overlapping salvage slots even with distinct ids', () => {
+    const template = getDawnArenaTemplates().find(entry => entry.salvageSlots.length > 0)!;
+    const slot = template.salvageSlots[0];
+    expect(() => validateTemplates([{
+      ...template, salvageSlots: [slot, { ...slot, id: 'overlapping-slot' }],
+    }])).toThrow('too close to another salvage slot');
+    expect(validateTemplates([template]).get(template.id)).toEqual(template);
   });
 
   it('builds the same Coop config on every peer from the same plans', () => {

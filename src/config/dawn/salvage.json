@@ -1,0 +1,12 @@
+{
+  "bands": {
+    "near": { "minCells": 20, "maxCells": 25 },
+    "mid": { "minCells": 27, "maxCells": 34 },
+    "far": { "minCells": 36, "maxCells": 43 }
+  },
+  "minBaseReservationGapCells": 3,
+  "minArenaEdgeGapCells": 3,
+  "frontSpawnBandRatio": 0.15,
+  "minFrontSpawnBandGapCells": 3,
+  "minSlotSpacingCells": 8
+}
