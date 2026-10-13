@@ -41,6 +41,7 @@ export const enUi = {
   "ui.dawn.purchaseFailed": "Purchase unavailable. Check your balance and unlock status.",
   "ui.dawn.saveFailed": "Action not saved. Please check your balance and stash, then try again.",
   "ui.dawn.nextExpansion": "Next expansion: radius {radius} (cost {cost} scrap)",
+  "ui.base.expansionRingLabel": "Radius {radius} · {cost} scrap",
   "ui.dawn.expansionDawnOnly": "Next expansion applies in Dawn arenas.",
   "ui.dawn.expansionStats": "Expansion: {expansionLevel}\nBase radius (Dawn): {radius} cells",
   "ui.dawn.threat": "Threat: {threat}",

@@ -5,7 +5,7 @@ import { GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { getStoredGraphicsQuality } from '../utils/localPreferences';
 import { getRenderScale } from '../graphics/RenderResolution';
 import { ClarityCameraRegistry } from './arena/ClarityCameraRegistry';
-import { PersistentBaseEditorWorld, getPersistentBaseEditorSize } from '../persistentBase/PersistentBaseEditorWorld';
+import { PersistentBaseEditorWorld } from '../persistentBase/PersistentBaseEditorWorld';
 import { getMissedBaseRewards, type BaseEditorObject, type PersistentBaseEditorModel } from '../persistentBase/PersistentBaseEditorModel';
 import { baseEditorObjectKey, getBaseEditorAppearance } from '../persistentBase/PersistentBaseEditorAppearance';
 import { getPersistentConstructionFootprint } from '../persistentBase/PersistentBasePlacementRules';
@@ -26,8 +26,8 @@ import { activateUi } from '../ui/UiAudio';
 import { attachHoverEffect } from '../ui/uiHover';
 import { t } from '../i18n';
 import { isDawnUnlocked } from '../dawn/rules/DawnUnlock';
-import { buildPersistentBaseExpansionPreview } from '../persistentBase/PersistentBaseExpansionPreview';
-import { createDawnMerchantExpansionPreview } from '../ui/DawnMerchantExpansionPreview';
+import { buildPersistentBaseExpansionPreview, getPersistentBaseEditorFraming } from '../persistentBase/PersistentBaseExpansionPreview';
+import { createDawnMerchantExpansionPreview, createPersistentBaseEditorBoundary } from '../ui/DawnMerchantExpansionPreview';
 import { resolveWorldDefinition } from '../world/WorldDefinitionResolution';
 import { LOBBY_WORLD_DEFINITION_ID } from '../config/authoring/lobbyWorld';
 
@@ -61,7 +61,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private grid!: Phaser.GameObjects.Graphics;
   private preview!: Phaser.GameObjects.Graphics;
   private selection!: Phaser.GameObjects.Graphics;
-  private expansionPreview: Phaser.GameObjects.Graphics | null = null;
+  private expansionPreview: Phaser.GameObjects.Container | null = null;
   private dragPreview: Phaser.GameObjects.Container | null = null;
   private tableOutline!: Phaser.GameObjects.Rectangle;
   private error!: Phaser.GameObjects.Text;
@@ -77,6 +77,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private disposed = false;
   private page = 0;
   private readonly worldZoom: number;
+  private readonly framing: ReturnType<typeof getPersistentBaseEditorFraming>;
   private readonly expansion: ReturnType<typeof buildPersistentBaseExpansionPreview>;
   private readonly view: { x: number; y: number; width: number; height: number };
   constructor(private readonly options: PersistentBaseEditorOptions) {
@@ -86,11 +87,10 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     const baseline = options.model.baseline;
     this.expansion = site ? buildPersistentBaseExpansionPreview(baseline.dawn,
       baseline.persistentBaseAreaStage, isDawnUnlocked(baseline), site.maxAreaStage) : null;
-    const worldSize = getPersistentBaseEditorSize(options.model.area, this.expansion?.dawnOnly ? undefined : this.expansion?.area);
-    const size = Math.min(worldSize, WORLD_PANEL.width - 40, WORLD_PANEL.height - 40);
-    this.worldZoom = size / worldSize;
-    this.view = { x: WORLD_PANEL.x + (WORLD_PANEL.width - size) / 2,
-      y: WORLD_PANEL.y + (WORLD_PANEL.height - size) / 2, width: size, height: size };
+    this.framing = getPersistentBaseEditorFraming(WORLD_PANEL, options.model.area,
+      this.expansion?.dawnOnly ? undefined : this.expansion?.area);
+    this.worldZoom = this.framing.zoom;
+    this.view = this.framing.view;
   }
 
   create(): void {
@@ -152,11 +152,17 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.actionButton('apply', chrome.centerX + (chrome.buttonGap + chrome.buttonWidth) / 2, () => { void this.save(); });
     const expansion = this.expansion;
     this.world = new PersistentBaseEditorWorld(this, model, this.options.color, expansion?.dawnOnly ? undefined : expansion?.area);
+    this.ui.add(createPersistentBaseEditorBoundary(this, model.area, this.framing));
     if (expansion) {
-      this.label(WORLD_PANEL.x + WORLD_PANEL.width / 2, 935,
-        t(expansion.dawnOnly ? 'ui.dawn.expansionDawnOnly' : 'ui.dawn.nextExpansion',
-          { radius: expansion.radius, cost: expansion.cost }), 'body', .5, WORLD_PANEL.width);
-      if (expansion.edges.length) this.expansionPreview = createDawnMerchantExpansionPreview(this, this.world.anchor, expansion.edges);
+      if (expansion.dawnOnly) {
+        this.label(WORLD_PANEL.x + WORLD_PANEL.width / 2, 935,
+          t('ui.dawn.expansionDawnOnly'), 'body', .5, WORLD_PANEL.width)
+          .setColor('#ffe4a3').setBackgroundColor('#201a10').setPadding(9, 6).setStroke('#100d08', 2);
+      } else if (expansion.edges.length) {
+        this.expansionPreview = createDawnMerchantExpansionPreview(this, this.framing, expansion.edges,
+          t('ui.base.expansionRingLabel', { radius: expansion.radius, cost: expansion.cost }));
+        this.ui.add(this.expansionPreview);
+      }
     }
     this.grid = this.add.graphics().setDepth(10000);
     this.selection = this.add.graphics().setDepth(10001);
@@ -227,7 +233,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.input.enabled = false;
     this.scale.off('resize', this.resize, this);
     this.dragPreview?.destroy(true);
-    this.expansionPreview?.destroy(); this.expansionPreview = null;
+    this.expansionPreview?.destroy(true); this.expansionPreview = null;
     this.world?.destroy(); this.cameraRegistry?.destroy(); this.quality?.destroy();
     for (const button of this.buttons) button.destroy();
     this.buttons = [];

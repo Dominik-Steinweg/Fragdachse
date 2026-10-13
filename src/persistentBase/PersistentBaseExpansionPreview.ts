@@ -7,6 +7,35 @@ import { getPersistentBaseBuildAreaExtentCells, isCellInsidePersistentBaseBuildA
   type CampaignPersistentBaseAreaStage, type PersistentBaseAreaStage, type PersistentBaseBuildArea } from './PersistentBaseCore';
 
 export interface ExpansionBoundaryEdge { x1: number; y1: number; x2: number; y2: number }
+interface EditorRect { x: number; y: number; width: number; height: number }
+
+/** Logical UI coordinates; world zoom never scales annotation strokes or text. */
+export function getPersistentBaseEditorFraming(panel: EditorRect, area: PersistentBaseBuildArea,
+  previewArea?: PersistentBaseBuildArea) {
+  const worldSize = getPersistentBaseEditorSize(area, previewArea);
+  const size = Math.min(worldSize, panel.width - 40, panel.height - 40);
+  return { worldSize, zoom: size / worldSize,
+    view: { x: panel.x + (panel.width - size) / 2, y: panel.y + (panel.height - size) / 2, width: size, height: size } };
+}
+
+export function projectPersistentBaseBoundary(edges: readonly ExpansionBoundaryEdge[],
+  frame: ReturnType<typeof getPersistentBaseEditorFraming>): ExpansionBoundaryEdge[] {
+  const cx = frame.view.x + frame.view.width / 2, cy = frame.view.y + frame.view.height / 2;
+  const cell = CELL_SIZE * frame.zoom;
+  return edges.map(e => ({ x1: cx + e.x1 * cell, y1: cy + e.y1 * cell,
+    x2: cx + e.x2 * cell, y2: cy + e.y2 * cell }));
+}
+
+/** Attach to a real northeast contour edge, keeping the measured label inside the map. */
+export function getPersistentBaseExpansionLabelPosition(edges: readonly ExpansionBoundaryEdge[], view: EditorRect,
+  label: { width: number; height: number }) {
+  if (!edges.length) return null;
+  const edge = edges.reduce((best, e) => e.x1 + e.x2 - e.y1 - e.y2 > best.x1 + best.x2 - best.y1 - best.y2 ? e : best);
+  const anchorX = (edge.x1 + edge.x2) / 2, anchorY = (edge.y1 + edge.y2) / 2;
+  return { anchorX, anchorY,
+    x: Math.max(view.x + 8, Math.min(anchorX - label.width / 2, view.x + view.width - label.width - 8)),
+    y: Math.max(view.y + 8, Math.min(anchorY - label.height - 10, view.y + view.height - label.height - 8)) };
+}
 
 /** Presentation bounds include the next outline, independently of which campaign rewards were claimed. */
 export function getPersistentBaseEditorSize(area: PersistentBaseBuildArea, previewArea: PersistentBaseBuildArea = area): number {

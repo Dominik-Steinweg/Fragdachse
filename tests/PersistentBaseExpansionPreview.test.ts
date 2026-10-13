@@ -1,11 +1,54 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultDawnProgress, DAWN_MAX_EXPANSION_LEVEL } from '../src/dawn/economy/DawnProgress';
 import { resolveDawnExpansionCost } from '../src/dawn/economy/DawnEconomy';
-import { buildPersistentBaseAreaBoundary, buildPersistentBaseExpansionPreview, getPersistentBaseEditorSize } from '../src/persistentBase/PersistentBaseExpansionPreview';
+import { buildPersistentBaseAreaBoundary, buildPersistentBaseExpansionPreview, getPersistentBaseEditorSize,
+  getPersistentBaseEditorFraming, projectPersistentBaseBoundary, getPersistentBaseExpansionLabelPosition } from '../src/persistentBase/PersistentBaseExpansionPreview';
 import { CELL_SIZE } from '../src/config';
 import { isCellInsidePersistentBaseBuildArea, PERSISTENT_BASE_AREA_STAGES, resolvePersistentBaseBuildAreaForStage } from '../src/persistentBase/PersistentBaseCore';
 
 describe('persistent base expansion preview', () => {
+  const panel = { x: 88, y: 236, width: 648, height: 680 };
+
+  it('frames every radius from 0 to 15 with room for the complete contour and its under-stroke', () => {
+    for (let radiusCells = 0; radiusCells <= 15; radiusCells++) {
+      const area = { kind: 'radius' as const, radiusCells };
+      const frame = getPersistentBaseEditorFraming(panel, area);
+      expect(frame.zoom).toBeGreaterThan(0);
+      expect(frame.zoom).toBeLessThanOrEqual(1);
+      expect(frame.worldSize * frame.zoom).toBeCloseTo(frame.view.width);
+      expect(frame.view.x).toBeGreaterThan(panel.x);
+      expect(frame.view.y + frame.view.height).toBeLessThan(panel.y + panel.height);
+      const edges = projectPersistentBaseBoundary(buildPersistentBaseAreaBoundary(area), frame);
+      expect(edges.length).toBeGreaterThan(0);
+      for (const e of edges) for (const [x, y] of [[e.x1, e.y1], [e.x2, e.y2]]) {
+        expect(x).toBeGreaterThan(frame.view.x + 3);
+        expect(x).toBeLessThan(frame.view.x + frame.view.width - 3);
+        expect(y).toBeGreaterThan(frame.view.y + 3);
+        expect(y).toBeLessThan(frame.view.y + frame.view.height - 3);
+      }
+    }
+  });
+
+  it('anchors labels to northeast contour edges and keeps both locales inside the viewport', () => {
+    for (const stage of PERSISTENT_BASE_AREA_STAGES) {
+      const area = resolvePersistentBaseBuildAreaForStage(stage);
+      const frame = getPersistentBaseEditorFraming(panel, area);
+      const edges = projectPersistentBaseBoundary(buildPersistentBaseAreaBoundary(area), frame);
+      for (const width of [180, 260]) {
+        const label = { width, height: 36 };
+        const position = getPersistentBaseExpansionLabelPosition(edges, frame.view, label)!;
+        expect(position.anchorX).toBeGreaterThanOrEqual(frame.view.x + frame.view.width / 2);
+        expect(position.anchorY).toBeLessThan(frame.view.y + frame.view.height / 2);
+        expect(edges.some(e => (e.x1 + e.x2) / 2 === position.anchorX && (e.y1 + e.y2) / 2 === position.anchorY)).toBe(true);
+        expect(position.x).toBeGreaterThan(frame.view.x);
+        expect(position.x + width).toBeLessThan(frame.view.x + frame.view.width);
+        expect(position.y).toBeGreaterThan(frame.view.y);
+        expect(position.y + label.height).toBeLessThan(position.anchorY);
+      }
+    }
+    expect(getPersistentBaseExpansionLabelPosition([], panel, { width: 200, height: 36 })).toBeNull();
+  });
+
   it('fits the entire next contour even when campaign area rewards were skipped', () => {
     for (const campaignStage of [0, 1, 2] as const) {
       const current = resolvePersistentBaseBuildAreaForStage(campaignStage);
