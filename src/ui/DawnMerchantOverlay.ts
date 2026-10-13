@@ -13,7 +13,8 @@ import { isDawnUnlocked } from '../dawn/rules/DawnUnlock';
 import { getStoredCoopDefenseProgress, updateStoredDawnProgress, updateStoredDawnEquipmentProgress } from '../utils/localPreferences';
 import type { CoopDefenseItem } from '../types';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
-import { ensureModalPanelTexture, ensureTintedSectionTexture, mountForestModal, textStyle } from './ForestModal';
+import { ensureModalPanelTexture, ensureTintedSectionTexture, mountForestModal, SURFACE, textStyle } from './ForestModal';
+import { ensureRoundedTexture } from './uiTextures';
 import { resolveCoopDefenseItemIconTexture } from './coopDefenseItemIcons';
 import { UiButton } from './UiButton';
 import { buildDawnMerchantModel, buildDawnInfrastructureModel, buildDawnUpgradesModel,
@@ -91,10 +92,12 @@ export class DawnMerchantOverlay {
     this.root.add(this.content);
     for (const [index, category] of DAWN_MERCHANT_CATEGORIES.entries()) {
       const cx = LEFT + CONTENT_WIDTH * (index + 0.5) / 4;
-      this.icon(this.root, cx, 266, CATEGORY_ICONS[category], 64);
-      const button = this.button(this.root, cx, 323, 296, t(`ui.dawn.tab.${category}`), true, () => {
+      const button = this.button(this.root, cx, 302, 296, '', true, () => {
         this.category = category; this.selecting = false; this.confirming = false; this.message = ''; this.refresh();
-      }, false);
+      }, false, 76);
+      const tabRoot = button.getRoot();
+      this.icon(tabRoot, -108, 0, CATEGORY_ICONS[category], 56);
+      this.label(tabRoot, -66, 0, t(`ui.dawn.tab.${category}`), 192, 21).setOrigin(0, 0.5);
       this.tabs.set(category, button);
     }
     this.button(this.root, LEFT + CONTENT_WIDTH - 180, 943, 220, t('ui.common.close'), true, () => this.hide(), false);
@@ -107,7 +110,11 @@ export class DawnMerchantOverlay {
     const stored = getStoredCoopDefenseProgress(), unlocked = isDawnUnlocked(stored);
     this.balance?.setText(t('ui.dawn.scrapCount', { scrap: stored.dawn.scrap }));
     this.notice?.setText(unlocked ? this.message : t('ui.dawn.locked'));
-    for (const [category, button] of this.tabs) button.setIntent(category === this.category ? 'attention' : 'neutral');
+    for (const [category, button] of this.tabs) {
+      const active = category === this.category;
+      button.setIntent(active ? 'attention' : 'neutral');
+      button.getRoot().setAlpha(active ? 1 : 0.65);
+    }
     switch (this.category) {
       case 'expansion': {
         const model = buildDawnMerchantModel(stored.dawn, stored.persistentBaseAreaStage, unlocked);
@@ -116,7 +123,7 @@ export class DawnMerchantOverlay {
         this.icon(this.content!, LEFT + 58, 563, DAWN_UI_TEXTURES.threat, 32);
         this.label(this.content!, LEFT + 86, 550, t(model.nextThreat === null ? 'ui.dawn.threat' : 'ui.dawn.threatConsequence',
           { threat: model.threat, nextThreat: model.nextThreat ?? model.threat }), 980, 23);
-        this.label(this.content!, LEFT + 40, 625, this.price(model.cost), 900, 23);
+        this.price(LEFT + 40, 625, model.cost, 900, 23);
         this.button(this.content!, LEFT + 220, 729, 360, t(model.cost === null ? 'ui.dawn.maximal' : 'ui.dawn.buyExpansion'),
           model.canBuy, () => this.purchaseDawn(purchaseDawnExpansion));
         break;
@@ -126,7 +133,7 @@ export class DawnMerchantOverlay {
           this.purchaseRow(index, t(`ui.dawn.infrastructure.${entry.id}.name`),
             `${t('ui.dawn.level', { level: entry.level, max: entry.maxLevel })}\n${t(entry.effectIsNextLevel ? 'ui.dawn.nextLevelEffect' : 'ui.dawn.activeLevelEffect', { effect: t(entry.effectKey) })}`,
             entry.cost, entry.canBuy, entry.cost === null ? t('ui.dawn.maximal') : t('ui.dawn.buy'),
-            () => this.purchaseDawn((draft, allowed) => purchaseDawnInfrastructure(draft, entry.id, allowed)));
+            () => this.purchaseDawn((draft, allowed) => purchaseDawnInfrastructure(draft, entry.id, allowed)), entry.icon);
         });
         break;
       case 'upgrades': {
@@ -153,9 +160,9 @@ export class DawnMerchantOverlay {
       const entry = model.owned[index];
       if (entry) {
         this.selectedUid = entry.item.uid;
-        this.itemCard(entry.item, LEFT + 310, 660);
-        this.label(this.content!, LEFT + 334, 714, t(entry.equipped ? 'ui.dawn.equipped' : 'ui.dawn.stored'), 250, 18);
-        this.button(this.content!, GAME_WIDTH / 2, 760, 360,
+        const footer = this.itemCard(entry.item, LEFT + 310, 660);
+        this.label(this.content!, LEFT + 334, footer, t(entry.equipped ? 'ui.dawn.equipped' : 'ui.dawn.stored'), 610, 18);
+        this.button(this.content!, GAME_WIDTH / 2, footer + 52, 360,
           t(this.confirming ? 'ui.dawn.confirmRecalibration' : 'ui.dawn.recalibrate'), entry.canRecalibrate, () => {
             if (!this.confirming) { this.confirming = true; this.message = t('ui.dawn.recalibrationWarning'); this.refresh(); return; }
             this.purchaseEquipment((draft, allowed) => recalibrateDawnItem(draft, entry.item.uid, allowed), 'ui.dawn.recalibrated');
@@ -175,57 +182,77 @@ export class DawnMerchantOverlay {
       return;
     }
     const gap = 20, cardWidth = (CONTENT_WIDTH - 2 * gap) / 3;
+    let cardsBottom = 480;
     model.offers.forEach(entry => {
       const left = LEFT + entry.index * (cardWidth + gap);
-      this.itemCard(entry.item, left, cardWidth);
-      this.label(this.content!, left + 20, 710, this.price(entry.price), cardWidth - 40, 17);
-      if (entry.stashFull && !entry.sold) this.label(this.content!, left + 20, 791, t('ui.dawn.stashFull'), cardWidth - 40, 14);
-      this.button(this.content!, left + cardWidth / 2, 760, cardWidth - 48, t(entry.sold ? 'ui.dawn.sold' : 'ui.dawn.buy'),
+      const stashFull = entry.stashFull && !entry.sold;
+      const footer = this.itemCard(entry.item, left, cardWidth, stashFull);
+      cardsBottom = Math.max(cardsBottom, footer + (stashFull ? 132 : 96));
+      this.price(left + 20, footer, entry.price, cardWidth - 40, 19);
+      if (stashFull) this.label(this.content!, left + 20, footer + 82, t('ui.dawn.stashFull'), cardWidth - 40, 16);
+      this.button(this.content!, left + cardWidth / 2, footer + 52, cardWidth - 48, t(entry.sold ? 'ui.dawn.sold' : 'ui.dawn.buy'),
         entry.canBuy, () => this.purchaseEquipment((draft, allowed) => purchaseDawnShopItem(draft, entry.index, allowed)));
     });
     if (!model.offers.length) this.label(this.content!, LEFT + 30, 410, t(unlocked ? 'ui.dawn.saveFailed' : 'ui.dawn.locked'), CONTENT_WIDTH - 60, 23);
-    this.section(LEFT, 822, CONTENT_WIDTH, 80);
-    this.icon(this.content!, LEFT + 50, 862, DAWN_UI_TEXTURES.recalibrationCore, 64);
-    this.label(this.content!, LEFT + 96, 830, t('ui.dawn.coreCount', { count: model.cores }), 550, 21);
-    this.label(this.content!, LEFT + 96, 865, this.price(model.coreCost), 550, 17);
-    this.button(this.content!, LEFT + CONTENT_WIDTH - 398, 862, 240, t('ui.dawn.buy'), model.canBuyCore,
+    const coreTop = cardsBottom + 28;
+    this.section(LEFT, coreTop, CONTENT_WIDTH, 92);
+    this.icon(this.content!, LEFT + 50, coreTop + 46, DAWN_UI_TEXTURES.recalibrationCore, 64);
+    this.label(this.content!, LEFT + 96, coreTop + 12, t('ui.dawn.coreCount', { count: model.cores }), 550, 21);
+    this.price(LEFT + 96, coreTop + 49, model.coreCost, 550, 19);
+    this.button(this.content!, LEFT + CONTENT_WIDTH - 398, coreTop + 46, 240, t('ui.dawn.buy'), model.canBuyCore,
       () => this.purchaseDawn(purchaseDawnRecalibrationCore));
-    this.button(this.content!, LEFT + CONTENT_WIDTH - 138, 862, 240, t('ui.dawn.use'), model.canUseCore, () => {
+    this.button(this.content!, LEFT + CONTENT_WIDTH - 138, coreTop + 46, 240, t('ui.dawn.use'), model.canUseCore, () => {
       this.selecting = true; this.confirming = false; this.message = t('ui.dawn.chooseItem'); this.refresh();
     });
   }
 
-  private itemCard(item: CoopDefenseItem, left: number, width: number): void {
+  private itemCard(item: CoopDefenseItem, left: number, width: number, stashFull = false): number {
     const model = buildDawnMerchantItemModel(item, getLocale());
-    this.section(left, 375, width, 410, model.rarityColor);
-    this.icon(this.content!, left + 48, 416, resolveCoopDefenseItemIconTexture(this.scene, item.slot, item.itemLevel, 64), 64);
-    this.label(this.content!, left + 93, 390, `${model.slotLabel} · ${t('ui.items.level')} ${item.itemLevel}`, width - 115, 21)
+    const title = this.label(this.content!, left + 128, 390, `${model.slotLabel} · ${t('ui.items.level')} ${item.itemLevel}`, width - 148, 22)
       .setColor(toCssColor(model.rarityColor));
-    this.label(this.content!, left + 93, 427, model.rarityLabel, width - 115, 17).setColor(toCssColor(model.rarityColor));
-    const description = this.label(this.content!, left + 20, 468, model.lines.join('\n'), width - 40, 17);
+    const rarity = this.label(this.content!, left + 128, title.y + title.height + 6, model.rarityLabel, width - 148, 18)
+      .setColor(toCssColor(model.rarityColor));
+    this.icon(this.content!, left + 66, 433, resolveCoopDefenseItemIconTexture(this.scene, item.slot, item.itemLevel, 128), 96);
+    const descriptionTop = Math.max(495, rarity.y + rarity.height + 16);
+    const description = this.label(this.content!, left + 20, descriptionTop, model.lines.join('\n'), width - 40, 19);
     // Page at the measured line height, preserving all wrapped affix text at a readable size.
     const lines = description.getWrappedText();
     const lineHeight = description.height / Math.max(1, lines.length);
-    const perPage = Math.max(1, Math.floor(195 / lineHeight));
+    // Reserve the footer and core row before paging; even a full stash must fit the modal.
+    const descriptionBudget = Math.min(144, 895 - descriptionTop - 64 - (stashFull ? 132 : 96) - 120);
+    const perPage = Math.max(1, Math.floor(descriptionBudget / lineHeight));
     const pages = Math.ceil(lines.length / perPage);
-    if (pages <= 1) return;
+    const descriptionHeight = pages > 1 ? perPage * lineHeight : description.height;
+    const paginationY = descriptionTop + descriptionHeight + 28;
+    const footer = descriptionTop + descriptionHeight + (pages > 1 ? 64 : 20);
+    const height = footer + (stashFull ? 132 : 96) - 375;
+    const background = this.scene.add.image(left + width / 2, 375 + height / 2,
+      ensureRoundedTexture(this.scene, { key: `_merchant_item_${width}x${height}_${model.rarityColor}`,
+        w: width, h: height, radius: 16, topColor: SURFACE.raised, bottomColor: SURFACE.sunken,
+        fillAlpha: 0.94, strokeColor: model.rarityColor, strokeAlpha: 0.95, strokeWidth: 3, highlightAlpha: 0.02 }));
+    this.content!.add(background);
+    this.content!.sendToBack(background);
+    if (pages <= 1) return footer;
     let page = 0;
-    const status = this.label(this.content!, left + width / 2 - 40, 678, '', 80, 16);
-    const previous = this.button(this.content!, left + 52, 688, 64, '‹', false, () => { page--; update(); });
-    const next = this.button(this.content!, left + width - 52, 688, 64, '›', true, () => { page++; update(); });
+    const status = this.label(this.content!, left + width / 2 - 40, paginationY - 10, '', 80, 16);
+    const previous = this.button(this.content!, left + 52, paginationY, 64, '‹', false, () => { page--; update(); });
+    const next = this.button(this.content!, left + width - 52, paginationY, 64, '›', true, () => { page++; update(); });
     const update = () => {
       description.setText(lines.slice(page * perPage, (page + 1) * perPage).join('\n'));
       status.setText(`${page + 1} / ${pages}`); previous.setEnabled(page > 0); next.setEnabled(page + 1 < pages);
     };
     update();
+    return footer;
   }
 
-  private purchaseRow(index: number, title: string, effect: string, cost: number | null, enabled: boolean, action: string, buy: () => void): void {
+  private purchaseRow(index: number, title: string, effect: string, cost: number | null, enabled: boolean, action: string, buy: () => void, icon?: string): void {
     const top = 380 + index * 216;
     this.section(LEFT, top, CONTENT_WIDTH, 194);
-    this.label(this.content!, LEFT + 28, top + 22, title, 870, 27);
-    this.label(this.content!, LEFT + 28, top + 68, effect, 870, 22);
-    this.label(this.content!, LEFT + 960, top + 32, this.price(cost), 290, 21);
+    const inset = icon ? 116 : 28;
+    if (icon) this.icon(this.content!, LEFT + 62, top + 78, icon, 64);
+    this.label(this.content!, LEFT + inset, top + 22, title, 900 - inset, 27);
+    this.label(this.content!, LEFT + inset, top + 68, effect, 900 - inset, 22);
+    this.price(LEFT + 960, top + 32, cost, 290, 21);
     this.button(this.content!, LEFT + CONTENT_WIDTH - 165, top + 130, 280, action, enabled, buy);
   }
 
@@ -252,7 +279,11 @@ export class DawnMerchantOverlay {
     this.content?.removeAll(true);
   }
 
-  private price(cost: number | null): string { return t(cost === null ? 'ui.dawn.maximal' : 'ui.dawn.expansionCost', { cost: cost ?? 0 }); }
+  private price(x: number, y: number, cost: number | null, width: number, size: number): void {
+    if (cost === null) { this.label(this.content!, x, y, t('ui.dawn.maximal'), width, size); return; }
+    this.icon(this.content!, x + 16, y + size / 2 + 2, DAWN_UI_TEXTURES.scrap, 32);
+    this.label(this.content!, x + 42, y, t('ui.dawn.scrapCount', { scrap: cost }), width - 42, size);
+  }
 
   private section(x: number, y: number, w: number, h: number, accent = 0x8b9870): void {
     this.content!.add(this.scene.add.image(x + w / 2, y + h / 2,
@@ -270,8 +301,8 @@ export class DawnMerchantOverlay {
   }
 
   private button(parent: Phaser.GameObjects.Container, x: number, y: number, w: number, label: string,
-    enabled: boolean, onClick: () => void, transient = true): UiButton {
-    const button = new UiButton(this.scene, { skin: 'forest', x, y, w, h: 44, label,
+    enabled: boolean, onClick: () => void, transient = true, height = 44): UiButton {
+    const button = new UiButton(this.scene, { skin: 'forest', x, y, w, h: height, label,
       isEnabled: this.canInteract, onClick }).setEnabled(enabled);
     parent.add(button.getRoot());
     (transient ? this.contentButtons : this.buttons).push(button);

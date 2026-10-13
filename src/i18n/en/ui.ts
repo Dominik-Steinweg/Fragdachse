@@ -1,5 +1,6 @@
 export const enUi = {
   "ui.dawn.merchant": "Merchant",
+  "ui.dawn.dealerName": "Scrap dealer",
   "ui.dawn.tab.expansion": "Expansion",
   "ui.dawn.tab.infrastructure": "Infrastructure",
   "ui.dawn.tab.upgrades": "Upgrades",

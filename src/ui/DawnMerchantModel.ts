@@ -11,6 +11,12 @@ import { canPurchaseDawnRecalibrationCore, canPurchaseDawnShopItem, canRecalibra
 import { describeCoopDefenseItem, formatCoopDefenseItemValue, isCoopDefenseStashFull } from '../utils/coopDefenseItems';
 import type { CoopDefenseItem } from '../types';
 import type { Locale } from '../i18n/types';
+import { DAWN_UI_TEXTURES } from '../assets/DawnUiAssets';
+
+const INFRASTRUCTURE_ICONS = {
+  'repair-drones': DAWN_UI_TEXTURES.dealerInfrastructure,
+  'scrap-magnet': DAWN_UI_TEXTURES.scrap,
+};
 
 export function buildDawnMerchantModel(progress: DawnProgress, campaignStage: CampaignPersistentBaseAreaStage, unlocked: boolean) {
   const cost = resolveDawnExpansionCost(progress.expansionLevel);
@@ -31,7 +37,7 @@ export function buildDawnInfrastructureModel(progress: DawnProgress, unlocked: b
   return DAWN_MERCHANT.infrastructure.map(entry => {
     const level = getDawnInfrastructureLevel(progress, entry.id);
     const cost = resolveDawnInfrastructureCost(progress, entry.id);
-    return { id: entry.id, level, maxLevel: entry.levelPrices.length, cost,
+    return { id: entry.id, icon: INFRASTRUCTURE_ICONS[entry.id], level, maxLevel: entry.levelPrices.length, cost,
       effectKey: `ui.dawn.infrastructure.${entry.id}.effect${Math.min(level + 1, entry.levelPrices.length)}`,
       // Below the maximum the line describes the purchasable next level, at the maximum the active one.
       effectIsNextLevel: level < entry.levelPrices.length,

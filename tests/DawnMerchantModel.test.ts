@@ -8,6 +8,7 @@ import { purchaseDawnBossPoint, purchaseDawnBranch } from '../src/dawn/economy/D
 import { buildDawnEquipmentModel, buildDawnInfrastructureModel, buildDawnMerchantItemModel, buildDawnUpgradesModel } from '../src/ui/DawnMerchantModel';
 import { describeCoopDefenseItem, rollCoopDefenseItem } from '../src/utils/coopDefenseItems';
 import { translate } from '../src/i18n/catalog';
+import { DAWN_UI_TEXTURES } from '../src/assets/DawnUiAssets';
 
 function equipment(): DawnEquipmentProgressDraft {
   const dawn = { ...createDefaultDawnProgress(), scrap: DAWN_MAX_SCRAP };
@@ -16,6 +17,12 @@ function equipment(): DawnEquipmentProgressDraft {
 }
 
 describe('merchant tab projections', () => {
+  it('distinguishes infrastructure with existing drone and scrap artwork', () => {
+    expect(buildDawnInfrastructureModel(equipment().dawn, true)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'repair-drones', icon: DAWN_UI_TEXTURES.dealerInfrastructure }),
+      expect.objectContaining({ id: 'scrap-magnet', icon: DAWN_UI_TEXTURES.scrap }),
+    ]));
+  });
   it('projects each infrastructure purchase through its maximum, without mutating the save', () => {
     const progress = equipment().dawn;
     for (const entry of DAWN_MERCHANT.infrastructure) {

@@ -159,6 +159,7 @@ export interface WorldClientPresentationRenderers {
  * schmalen, benannten Ports dieses Inputs. Activity-Presentation bleibt ausserhalb dieses Owners.
  */
 export interface WorldPresentationFrameBindingInput {
+  readonly getLobbyMerchant?: () => Pick<import('../arena/LobbyMerchantRenderer').LobbyMerchantRenderer, 'update'> | null;
   readonly enemyEyes?: import('../effects/EnemyEyeGlowRenderer').EnemyEyeGlowRenderer;
   readonly groundFog?: {
     readonly getSystem: () => GroundFogSystem | null;
@@ -707,6 +708,8 @@ export class WorldPresentationFrameBinding {
     ) && this.input.isLocalPlayerAttachedToWorld();
     this.input.setLocalPlayerStatusRingActive(localPlayerVisuals && !spectator);
     this.input.setLocalPlayerWorldBarsVisible(!showWorld);
+    const player = showWorld && localPlayerVisuals && !spectator ? this.input.getLocalPlayerSprite() : null;
+    this.input.getLobbyMerchant?.()?.update(player?.active ? player : null);
   }
 
   /** World-lokale Gravel-/Baustellenprojektion der persistenten Basis. */
@@ -832,6 +835,7 @@ export class WorldPresentationFrameBinding {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.input.getLobbyMerchant?.()?.update(null);
     this.cancelRenderRelease();
     this.releasedView = null;
     this.sunlightOwner?.destroy();this.sunlightOwner=null;

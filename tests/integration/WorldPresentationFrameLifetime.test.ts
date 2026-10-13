@@ -184,6 +184,40 @@ function fakeBindingInput(
 }
 
 describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalten (Phase 6A.2/6B)', () => {
+  it('updates the lobby label from the local displayed pose and suppresses it outside participation', () => {
+    const merchant = { update: vi.fn() };
+    const player = { active: true, x: 200, y: 300 };
+    let attached = true;
+    const binding = new WorldPresentationFrameBinding(fakeBindingInput(fakeScene(), {
+      getLobbyMerchant: () => merchant,
+      getLocalPlayerSprite: () => player as never,
+      isLocalPlayerAttachedToWorld: () => attached,
+    }));
+    binding.syncLocalPlayerPresentation(true, false);
+    expect(merchant.update).toHaveBeenLastCalledWith(player);
+    player.x += 100;
+    binding.syncLocalPlayerPresentation(true, false);
+    expect(merchant.update).toHaveBeenLastCalledWith(expect.objectContaining({ x: 300 }));
+    for (const [showWorld, spectator] of [[false, false], [true, true]]) {
+      binding.syncLocalPlayerPresentation(showWorld, spectator);
+      expect(merchant.update).toHaveBeenLastCalledWith(null);
+    }
+    attached = false;
+    binding.syncLocalPlayerPresentation(true, false);
+    expect(merchant.update).toHaveBeenLastCalledWith(null);
+    attached = true;
+    player.active = false;
+    binding.syncLocalPlayerPresentation(true, false);
+    expect(merchant.update).toHaveBeenLastCalledWith(null);
+    player.active = true;
+    binding.syncLocalPlayerPresentation(true, false);
+    expect(merchant.update).toHaveBeenLastCalledWith(player);
+    binding.destroy();
+    expect(merchant.update).toHaveBeenLastCalledWith(null);
+    merchant.update.mockClear();
+    binding.syncLocalPlayerPresentation(true, false);
+    expect(merchant.update).not.toHaveBeenCalled();
+  });
   it('releases a complete preview only after rendering; cancels new work, view changes and stale owners', () => {
     const camera = fakeCamera(), events = new EventEmitter(), gameEvents = new EventEmitter();
     const scene = Object.assign(fakeScene(camera), { events, game: { events: gameEvents } });
