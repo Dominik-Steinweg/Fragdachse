@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MK2 · Messing-Plaketten</title>
+<style>
+@font-face{font-family:'Chakra Petch';font-weight:700;src:url('/assets/fonts/chakra-petch-700.woff2')}
+@font-face{font-family:'Chakra Petch';font-weight:500;src:url('/assets/fonts/chakra-petch-500.woff2')}
+*{box-sizing:border-box}body{margin:0;background:#141710;color:#eddfbf;font:500 14px 'Chakra Petch',sans-serif}
+header{height:56px;display:flex;align-items:center;gap:22px;padding:0 24px;border-bottom:1px solid #80613a}
+strong{font-size:19px;margin-right:auto}select,button{font:inherit;background:#2d281e;color:#eddfbf;border:1px solid #80613a;padding:5px 9px}#preview{width:100%;height:calc(100vh - 56px)}
+</style></head><body><header><strong>MK2 / Messing-Plaketten</strong>
+<label>Licht <select id="light"><option value="day">Tag</option><option value="night">Nacht</option></select></label>
+<label>Zoom <select id="zoom"><option>0.5</option><option selected>1</option><option>2</option></select></label>
+<label><input id="low" type="checkbox"> Low / ruhige Bewegung</label>
+<label><input id="animate" type="checkbox"> Animation</label><output id="status">Lädt…</output></header>
+<main id="preview"></main><script type="module" src="/src/dev/markerReview.ts"></script></body></html>
