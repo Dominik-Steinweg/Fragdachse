@@ -53,7 +53,10 @@ export function composeWorldProjectileRuntime(
   });
   projectileRuntime.setProjectileReplicationAdapter(new ProjectileReplicationAdapter(projectileRuntime));
   projectileRuntime.getPresentationRuntime().setAudioSystem(ctx.gameAudioSystem);
-  wireProjectileRenderers(input.renderers, projectileRuntime, ctx.playerManager);
+  wireProjectileRenderers(input.renderers, projectileRuntime, ctx.playerManager, (enemyId) => {
+    const enemy = input.flow.getCoopMissionRuntime()?.enemyManager?.getEnemy(enemyId);
+    return enemy?.sprite.active ? { x: enemy.sprite.x, y: enemy.sprite.y } : null;
+  });
   gameplay.projectiles = projectileRuntime;
   worldRuntime.bind(projectileRuntime);
 }
@@ -311,6 +314,7 @@ export function composeWorldCombatGameplay(
     getWorldTrain: () => gameplay.train,
     getWorldMutation: () => gameplay.worldMutation,
     getFirestarterSystem: () => flow.getCoopMissionRuntime()?.coopDefenseFirestarterSystem ?? null,
+    getShieldChargerSystem: () => flow.getCoopMissionRuntime()?.coopDefenseShieldChargerSystem ?? null,
     getMortarSystem: () => flow.getCoopMissionRuntime()?.coopDefenseMortarSystem ?? null,
     getTimebombSystem: () => flow.getCoopMissionRuntime()?.coopDefenseTimebombSystem ?? null,
     getNecromancySystem: () => gameplay.shootingRange?.necromancy ?? flow.getCoopMissionRuntime()?.necromancySystem ?? null,

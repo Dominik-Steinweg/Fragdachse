@@ -25,6 +25,12 @@ master and packed sheet, and the verified archive are mandatory import gates.
 Run the regular runtime colour publication after import; retain unrelated asset
 entries when publishing a single enemy.
 
+Rigid props or limbs that swing far from their rest neighbours (the shield
+charger's shield and arms) carry `ob['meshUnionGroup']` in the recipe. Each group
+gets its own rest union, and its proxy vertices bind only to that group's source
+triangles (group vote per connected proxy component), so no shadow triangle
+bridges parts that separate later. Untagged recipes keep the single union.
+
 Pose counts and sheet rows follow the selected clips, including optional `cast`
 poses. `move` and `claw` remain required; clip blocks must cover every non-rest
 pose exactly once. Biped and quadruped contacts use the shared authored paw names.

@@ -242,7 +242,25 @@ export interface CombatStructureStatusPort {
   applyBaseStatusDamage(baseId: string, amount: number, source: CombatSource, now: number): void;
 }
 
+/** Shield charger: lane measurement and shield-aware body contact (optional for narrow fakes). */
+export interface CombatChargePort {
+  /** Free distance for a body of `radius` along the lane (rocks, trunks, bases, arena edge, train). */
+  measureChargeLane?(x: number, y: number, angle: number, length: number, radius: number): number;
+  /** Melee-category contact by a charging enemy; false when a shield blocked it or it may not hit. */
+  resolveChargeContact?(targetId: string, chargerId: string, damage: number, sourceX: number, sourceY: number, nowMs: number): boolean;
+}
+
+/**
+ * Activity attachment for directional enemy shields. The Activity installs its owning system
+ * for its lifetime and clears it on detach; combat blocking and shield replication read it.
+ */
+export interface CombatEnemyFrontalShieldAttachPort {
+  setEnemyFrontalShieldPort(port: import('../systems/enemyFrontalShield').EnemyFrontalShieldPort | null): void;
+}
+
 export type CombatActivityPort =
+  & CombatChargePort
+  & CombatEnemyFrontalShieldAttachPort
   & CombatStructureStatusPort
   & CombatActorStatePort
   & CombatDamageEffectPort

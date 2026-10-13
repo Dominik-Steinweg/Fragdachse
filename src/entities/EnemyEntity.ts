@@ -1,6 +1,9 @@
 import type { WorldHealthBarRenderer, HealthBarHandle } from '../effects/health/WorldHealthBarRenderer';
 import { EMPTY_ENEMY_CLAW_STATE, isEnemyClawState, type EnemyClawState } from '../systems/EnemyClawAttack';
 import { syncEnemyClawAnimation } from '../animations/EnemyClawAnimation';
+import { stepTurnRateFacing } from './turnRateFacing';
+import { syncEnemyShieldChargeAnimation } from '../animations/EnemyShieldChargeAnimation';
+import { EMPTY_SHIELD_CHARGE_STATE, isShieldChargeState, type ShieldChargeState } from '../systems/ShieldChargeState';
 import { EnemyCastPlayback, syncEnemyCastAnimation } from '../animations/EnemyCastAnimation';
 import { getEnemyFootprintVariant } from '../config/movementEffects';
 import type { MovementVisualSample } from '../effects/MovementStepSampler';
@@ -169,6 +172,48 @@ export class EnemyEntity {
   private walkingRequested = false;
   private clawState: EnemyClawState = EMPTY_ENEMY_CLAW_STATE;
   private clawAnimating = false;
+  private shieldCharge: ShieldChargeState = EMPTY_SHIELD_CHARGE_STATE;
+  private knockbackImmune = false;
+  /** Host clock of the last rate-limited turn step; null until the first step. */
+  private turnClockMs: number | null = null;
+  /** Facing requested by other systems while the turn rate owns the body. */
+  private requestedHeading: number | null = null;
+
+  getShieldChargeState(): ShieldChargeState { return this.shieldCharge; }
+
+  /** Host: publish a new charge state (revision must grow). Clients: apply a newer replicated state. */
+  applyShieldChargeState(state: ShieldChargeState): void {
+    if (!isShieldChargeState(state) || state.revision <= this.shieldCharge.revision) return;
+    this.shieldCharge = state;
+  }
+
+  /** While set, external impulses (knockback, recoil, stagger scaling) do not move this enemy. */
+  setKnockbackImmune(immune: boolean): void { this.knockbackImmune = immune; }
+
+  /** Authoritative turn rate in rad/ms, or null for ordinary instant facing. */
+  private turnRateRadPerMs(): number | null {
+    const rate = this.config.turnRateDegPerSec;
+    return rate !== undefined && rate > 0 ? rate * Math.PI / 180 / 1000 : null;
+  }
+
+  /**
+   * Rate-limited facing: turn toward `heading` by at most rate × elapsed host time and return the
+   * locomotion factor for moving along `heading` with the current facing (slow while turned away).
+   */
+  private stepLimitedTurn(heading: number | null, now: number, rate: number): number {
+    const elapsed = this.turnClockMs === null ? 0 : Phaser.Math.Clamp(now - this.turnClockMs, 0, 100);
+    this.turnClockMs = now;
+    const turn = stepTurnRateFacing(this.currentAimAngle, heading, rate, elapsed);
+    if (heading !== null) this.setBodyFacing(turn.angle);
+    return turn.locomotion;
+  }
+
+  private setBodyFacing(angle: number): void {
+    const wrapped = Phaser.Math.Angle.Wrap(angle);
+    this.currentAimAngle = this.targetAimAngle = this.visualAimAngle = wrapped;
+    this.smoothMovementFacing = false;
+    this.sprite.setRotation(wrapped + this.getSpriteRotationOffset());
+  }
   private readonly castPlayback = new EnemyCastPlayback();
   private castAnimating = false;
 
@@ -177,6 +222,17 @@ export class EnemyEntity {
     if (!this.config.firestarter) return;
     this.castPlayback.orb(now);
     this.syncCastAnimation(now);
+  }
+
+  private shieldChargeAnimating = false;
+
+  /** Charge clips follow the replicated host-fixed charge timeline (windup, run, recover). */
+  syncShieldChargeAnimation(now: number): void {
+    if (!this.config.shieldCharger) return;
+    const wasAnimating = this.shieldChargeAnimating;
+    this.shieldChargeAnimating = syncEnemyShieldChargeAnimation(this.sprite, this.config.imageKey, this.shieldCharge, now,
+      this.clawAnimating || !this.sprite.visible || this.burrowed || this.currentHp <= 0);
+    if (wasAnimating && !this.shieldChargeAnimating) this.syncWalkingAnimation();
   }
 
   syncCastAnimation(now = this.sprite.scene.time.now): void {
@@ -350,6 +406,16 @@ export class EnemyEntity {
     this.desiredVelocityY = vy;
     // The Kraken host owns body facing in both phases, including its turn-rate limit.
     if (this.krakenMovement) return;
+    const turnRate = this.turnRateRadPerMs();
+    if (turnRate !== null) {
+      const moving = vx !== 0 || vy !== 0;
+      const heading = aimAngle ?? (moving ? Math.atan2(vy, vx) : this.requestedHeading);
+      this.requestedHeading = null;
+      const factor = this.stepLimitedTurn(heading, now ?? this.sprite.scene.time.now, turnRate);
+      // Moving along the current facing is unaffected; turned away, the body shuffles.
+      if (moving && aimAngle === undefined) { this.desiredVelocityX = vx * factor; this.desiredVelocityY = vy * factor; }
+      return;
+    }
     this.smoothMovementFacing = false;
     if (aimAngle !== undefined) {
       this.faceAngle(aimAngle);
@@ -452,7 +518,7 @@ export class EnemyEntity {
   }
 
   private syncWalkingAnimation(): void {
-    if (this.clawAnimating || this.castAnimating) return;
+    if (this.clawAnimating || this.castAnimating || this.shieldChargeAnimating) return;
     if (!this.walkingSheet) return;
     syncBadgerWalkingAnimation(
       this.sprite,
@@ -590,7 +656,7 @@ export class EnemyEntity {
 
   /** Faktor, mit dem Wegstoss-Impulse auf diesen Gegner skaliert werden (1 = normal). */
   getKnockbackFactor(): number {
-    if (this.stationary) return 0;
+    if (this.stationary || this.knockbackImmune) return 0;
     return this.config.knockbackFactor ?? DEFAULT_ENEMY_KNOCKBACK_FACTOR;
   }
 
@@ -782,6 +848,8 @@ export class EnemyEntity {
   }
 
   faceAngle(angle: number): void {
+    // A turn-limited body only records the wish; setDesiredVelocity turns it at the authored rate.
+    if (this.authoritative && this.turnRateRadPerMs() !== null) { this.requestedHeading = angle; return; }
     this.currentAimAngle = angle;
     this.targetAimAngle = angle;
     this.visualAimAngle = angle;
@@ -829,6 +897,7 @@ export class EnemyEntity {
   getNetSnapshot(): SyncedEnemyState {
     return {
       claw: this.clawState,
+      ...(this.shieldCharge.revision > 0 ? { shieldCharge: this.shieldCharge } : {}),
       positionRevision: this.movementRevision,
       id: this.id,
       kind: this.kind,

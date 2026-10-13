@@ -911,6 +911,9 @@ export class DevScenarioController {
     } else camera.setScroll(point.x - GAME_WIDTH / zoom / 2, point.y - GAME_HEIGHT / zoom / 2);
     setCameraBaseScroll(this.scene, camera.scrollX, camera.scrollY);
   }
+  /** Status for the page API and downloads; never throws on an accidental live reference. */
+  cloneSnapshot(): Record<string, unknown> { return cloneScenarioStatus(this.snapshot()); }
+
   snapshot(): Record<string, unknown> {
     const terminated = this.runtime.isMatchTerminated() || (this.readyAt !== null
       && (!bridge.isArenaStarted() || bridge.getGamePhase() !== 'ARENA'));
@@ -972,7 +975,7 @@ export class DevScenarioController {
   }
   async saveReportToWorkspace(): Promise<{ path: string; url: string; status: Record<string, unknown> }> {
     if(this.disposed||!isDevScenarioMode())throw new Error('Aktives Dev-Szenario erforderlich.');
-    const status=structuredClone(this.snapshot()),body=new Blob([JSON.stringify(status,null,2)],{type:'application/json'});
+    const status=this.cloneSnapshot(),body=new Blob([JSON.stringify(status,null,2)],{type:'application/json'});
     if(body.size>4*1024*1024)throw new Error('Bericht überschreitet 4 MiB.');
     const response=await fetch('/__dev-scenario-report',{method:'POST',headers:{'content-type':'application/json'},body,signal:AbortSignal.timeout(15000)});
     const result=await response.json();
@@ -986,7 +989,7 @@ export class DevScenarioController {
     };
     const url = await this.capture();
     assertCurrent();
-    const status = structuredClone(this.snapshot());
+    const status = this.cloneSnapshot();
     const png = await (await fetch(url)).blob();
     assertCurrent();
     const response = await fetch('/__dev-scenario-capture', { method: 'POST', headers: { 'content-type': 'image/png' }, body: png, signal: AbortSignal.timeout(15000) });
@@ -1016,3 +1019,25 @@ export class DevScenarioController {
 }
 
 import { bindWatchtowerReview } from './WatchtowerReview';
+
+/**
+ * structuredClone, falling back to a plain-data copy when a live object (a scene, a function) slipped
+ * into the status: the failure that triggered a status read must not be hidden by a DataCloneError.
+ */
+export function cloneScenarioStatus(value: Record<string, unknown>): Record<string, unknown> {
+  try { return structuredClone(value); } catch {
+    const seen = new WeakSet<object>();
+    return JSON.parse(JSON.stringify(value, (_key, item: unknown) => {
+      if (typeof item === 'function') return undefined;
+      if (item instanceof Map) return Object.fromEntries(item);
+      if (item instanceof Set) return [...item];
+      if (item && typeof item === 'object') {
+        // Only plain data: a class instance (scene, entity, service) becomes a short marker.
+        const proto = Object.getPrototypeOf(item);
+        if (proto !== Object.prototype && proto !== Array.prototype && proto !== null) return `[${proto?.constructor?.name ?? 'object'}]`;
+        if (seen.has(item)) return undefined; seen.add(item);
+      }
+      return item;
+    })) as Record<string, unknown>;
+  }
+}

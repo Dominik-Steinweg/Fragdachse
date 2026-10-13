@@ -425,6 +425,12 @@
   ],
   "encounters": [
     {
+      "id": "shield-charger-gate-1",
+      "start": { "type": "time", "atMs": 9000 },
+      "groups": [{ "enemyKind": "shield-charger-badger", "count": 1,
+        "spawnArea": { "gridX": 30, "gridY": 46, "widthCells": 4, "heightCells": 4 } }]
+    },
+    {
       "id": "firestarter-gate-1",
       "start": { "type": "time", "atMs": 6000 },
       "groups": [{ "enemyKind": "firestarter-badger", "count": 2, "spawnStaggerMs": 1000,

@@ -10,6 +10,9 @@ import { CoopDefenseEnemyBurrowSystem } from '../systems/CoopDefenseEnemyBurrowS
 import { CoopDefenseEnemyCombatPositioningSystem } from '../systems/CoopDefenseEnemyCombatPositioningSystem';
 import { CoopDefenseEnemyDodgeSystem } from '../systems/CoopDefenseEnemyDodgeSystem';
 import { CoopDefenseEnemyTrainAwarenessSystem } from '../systems/CoopDefenseEnemyTrainAwarenessSystem';
+import { CoopDefenseShieldChargerSystem } from '../systems/CoopDefenseShieldChargerSystem';
+import { PLAYER_SIZE } from '../config';
+import { getFirestarterFactionTargets } from '../systems/firestarterAlliedTargeting';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { StinkCloudSystem } from '../effects/StinkCloudSystem';
 import type { FireChunkBurstPort } from '../systems/FlamethrowerUpgradeSystem';
@@ -159,6 +162,48 @@ export class CoopMissionEnemyBehaviourComposition {
     runtime.enemyIntents?.setPerception((enemy, x, y, range) => enemyManager.canSeeThroughSmoke(enemy.id, x, y, range));
     combatPositioning.setDecoyTargets(decoyTargets);
     ability.setDecoyTargets(decoyTargets);
+
+    if (runtime.enemyIntents && runtime.enemyAiTargetCatalog) {
+      const catalog = runtime.enemyAiTargetCatalog, intents = runtime.enemyIntents, combat = this.options.combatSystem;
+      runtime.setShieldCharger(new CoopDefenseShieldChargerSystem({
+        enemies: enemyManager,
+        combat,
+        readTarget: enemy => {
+          // Necromancy allies charge the nearest hostile enemy; the lane is fixed the same way.
+          if (enemy.faction === 'allied') return getFirestarterFactionTargets(enemy, catalog, 0)[0] ?? null;
+          const decoy = decoyTargets?.getTarget(enemy.id);
+          if (decoy) return { x: decoy.x, y: decoy.y };
+          const target = intents.get(enemy.id)?.target;
+          if (!target || target.kind === 'base' || target.kind === 'ally' || target.kind === 'decoy') return null;
+          const resolved = catalog.resolve(target);
+          return resolved ? catalog.getPosition(resolved, enemy.sprite.x, enemy.sprite.y) : null;
+        },
+        // Bodies of the opposing side; combat still applies the faction and shield rules per strike.
+        contactTargets: enemy => {
+          const opposing = enemyManager.getAllEnemies().filter(other => other !== enemy && other.faction !== enemy.faction
+            && other.sprite.active && other.getHp() > 0 && !other.isBurrowed())
+            .map(other => ({ id: other.id, x: other.sprite.x, y: other.sprite.y, radius: other.getCollisionRadius() }));
+          if (enemy.faction === 'allied') return opposing;
+          const players = this.options.playerManager.getAllPlayers().filter(player => player.active)
+            .map(player => ({ id: player.id, x: player.x, y: player.y, radius: PLAYER_SIZE / 2 }));
+          return [...players, ...opposing];
+        },
+        laneClearance: (x, y, angle, length, radius) => {
+          let free = combat.measureChargeLane?.(x, y, angle, length, radius) ?? 0;
+          // Water and other walkability limits: shorten until the swept body path is walkable.
+          const walkable = (distance: number) => this.options.hasWalkableEnemyCircleLine(x, y,
+            x + Math.cos(angle) * distance, y + Math.sin(angle) * distance, radius);
+          if (free > 0 && !walkable(free)) {
+            let low = 0, high = free;
+            for (let i = 0; i < 10; i++) { const mid = (low + high) / 2; if (walkable(mid)) low = mid; else high = mid; }
+            free = low;
+          }
+          return free;
+        },
+        strike: (targetId, chargerId, damage, x, y, now) => combat.resolveChargeContact?.(targetId, chargerId, damage, x, y, now) ?? false,
+        knockback: (targetId, vx, vy, durationMs, sourceId) => this.options.hostPhysics.addRecoil(targetId, vx, vy, durationMs, sourceId),
+      }));
+    }
 
     runtime.setEnemyBehaviour({
       trainAwareness,

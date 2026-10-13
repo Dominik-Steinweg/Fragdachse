@@ -153,6 +153,23 @@ def fixed_proxy(scene, parts, target, limits):
 
 
 def bind(part):
+    groups = part.get('bindGroups')
+    if groups is not None and len(np.unique(groups['proxy'])) > 1:
+        # Grouped proxies (separate rest unions) bind only to their own group's
+        # source surface, so no proxy triangle spans parts that move apart.
+        proxy, binding = part['proxy'], np.zeros((len(part['proxy']), 3), np.int32)
+        weights, worst, cleanup = np.zeros((len(proxy), 3)), 0., {}
+        for group in np.unique(groups['proxy']):
+            mask = groups['proxy'] == group
+            sub = dict(ob=part['ob'], rest=part['rest'], proxy=proxy[mask],
+                       sourceTris=part['sourceTris'][groups['source'][part['sourceTris'][:, 0]] == group])
+            bind(sub)
+            binding[mask], weights[mask] = sub['binding'], sub['weights']
+            worst = max(worst, sub['maxRestSnapBlender'])
+            for key, value in sub['bindingTriangleCleanup'].items():
+                cleanup[key] = cleanup.get(key, 0) + value
+        part.update(binding=binding, weights=weights, maxRestSnapBlender=worst, bindingTriangleCleanup=cleanup)
+        return
     source, tris = part['rest'], part['sourceTris']
     # Defense in depth: no degenerate face may enter BVH nearest-surface queries.
     tris, part['bindingTriangleCleanup'] = clean_triangles(source, tris)

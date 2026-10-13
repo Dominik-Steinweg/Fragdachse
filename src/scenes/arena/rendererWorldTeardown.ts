@@ -78,4 +78,5 @@ export function resetRenderersForWorldPresentationTeardown(
   bundle.translocatorTeleport = null;
   bundle.mortarStrike.clear();
   bundle.firestarter.clear();
+  bundle.shieldCharger.clear();
 }

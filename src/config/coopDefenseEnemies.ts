@@ -353,8 +353,43 @@ export interface CoopDefenseEnemyFirestarterConfig {
   readonly biteWeaponId: string;
 }
 
+/** Schild-Anstürmer: frontal shield while approaching, telegraphed straight charge, recovery window. */
+export interface CoopDefenseEnemyShieldChargerConfig {
+  /** Full blocking arc of the raised shield in degrees (player energy shield: 120). */
+  readonly shieldArcDegrees: number;
+  /** A charge may start only with the target inside this distance band (centre to centre). */
+  readonly triggerMinDistancePx: number;
+  readonly triggerMaxDistancePx: number;
+  /** The body must already face the target within this tolerance; no instant turn at the start. */
+  readonly alignToleranceDegrees: number;
+  /** Shield down, lane fixed, attackable. */
+  readonly windupMs: number;
+  readonly runSpeedPx: number;
+  /** The lane continues this far beyond the target point captured at the start ... */
+  readonly overshootPx: number;
+  /** ... but never longer than this (before world-geometry clipping). */
+  readonly maxRunPx: number;
+  readonly recoverMs: number;
+  /** Next charge earliest this long after the previous run started. */
+  readonly cooldownMs: number;
+  /** Retry lock after a cancelled windup or run (stun, displacement). */
+  readonly cancelLockoutMs: number;
+  /** Being pushed farther than this during the windup cancels it. */
+  readonly windupDisplacementCancelPx: number;
+  readonly hitDamage: number;
+  /** Knockback recoil speed (px/s) and duration given to a struck target. */
+  readonly hitKnockbackSpeed: number;
+  readonly hitKnockbackMs: number;
+}
+
 export interface CoopDefenseEnemyConfig {
   readonly firestarter?: CoopDefenseEnemyFirestarterConfig;
+  readonly shieldCharger?: CoopDefenseEnemyShieldChargerConfig;
+  /**
+   * Authoritative turn-rate limit in degrees per second. Body, shields and attack direction share
+   * this facing, and locomotion slows while the body is turned away from its heading.
+   */
+  readonly turnRateDegPerSec?: number;
   readonly krakenBoss?: KrakenBossConfig;
   readonly krakenEgg?: KrakenEggConfig;
   readonly pawCount: PawCount;
@@ -528,6 +563,8 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         timebomb: config.timebomb,
         mortar: config.mortar ? { ...config.mortar, targetWeights: { ...config.mortar.targetWeights } } : undefined,
         firestarter: config.firestarter ? { ...config.firestarter, charges: { ...config.firestarter.charges }, lance: { ...config.firestarter.lance } } : undefined,
+        shieldCharger: config.shieldCharger ? { ...config.shieldCharger } : undefined,
+        turnRateDegPerSec: config.turnRateDegPerSec,
         stinkAura: config.stinkAura,
         deathSpawns: config.deathSpawns,
         trainAwareness: config.trainAwareness,
@@ -653,6 +690,8 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     timebomb: normalizeTimebombConfig(enemy.timebomb),
     mortar: normalizeMortarConfig(enemy.mortar),
     firestarter: normalizeFirestarterConfig(enemy.firestarter),
+    shieldCharger: normalizeShieldChargerConfig(enemy.shieldCharger),
+    turnRateDegPerSec: normalizeTurnRate(enemy.turnRateDegPerSec),
     stinkAura: normalizeStinkAuraConfig(enemy.stinkAura, enemy.id),
     deathSpawns: normalizeDeathSpawns(enemy.deathSpawns, enemy.id),
     trainAwareness: normalizeTrainAwareness(enemy.trainAwareness),
@@ -1109,6 +1148,27 @@ function normalizeSpawnScaling(
     intervalMsFactorPerAdditionalPlayer: normalizeCoopDefensePlayerScalingFactor(scaling.intervalMsFactorPerAdditionalPlayer),
     countPerTickFactorPerAdditionalPlayer: normalizeCoopDefensePlayerScalingFactor(scaling.countPerTickFactorPerAdditionalPlayer),
   };
+}
+
+export function normalizeTurnRate(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isFinite(value) || value <= 0) throw new Error('Invalid enemy turnRateDegPerSec');
+  return value;
+}
+
+/** Reject malformed timing and inconsistent distances at the authored boundary. */
+export function normalizeShieldChargerConfig(config: CoopDefenseEnemyShieldChargerConfig | undefined): CoopDefenseEnemyShieldChargerConfig | undefined {
+  if (!config) return undefined;
+  const positive = [config.shieldArcDegrees, config.triggerMaxDistancePx, config.alignToleranceDegrees, config.windupMs,
+    config.runSpeedPx, config.maxRunPx, config.recoverMs, config.cooldownMs, config.windupDisplacementCancelPx, config.hitKnockbackMs];
+  const nonNegative = [config.triggerMinDistancePx, config.overshootPx, config.cancelLockoutMs, config.hitDamage, config.hitKnockbackSpeed];
+  if (positive.some(v => !Number.isFinite(v) || v <= 0) || nonNegative.some(v => !Number.isFinite(v) || v < 0)) {
+    throw new Error('Invalid shield charger value');
+  }
+  if (config.shieldArcDegrees > 360 || config.alignToleranceDegrees >= 90
+    || config.triggerMinDistancePx >= config.triggerMaxDistancePx || config.maxRunPx < config.triggerMaxDistancePx
+    || config.cooldownMs < config.windupMs) throw new Error('Invalid shield charger relation');
+  return { ...config };
 }
 
 /** Reject malformed timing and mismatched weapon roles at the authored boundary. */

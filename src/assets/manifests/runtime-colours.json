@@ -924,6 +924,42 @@
       "sha256": "985eeafeb68f21f9bb5a3b6da0e0fad11252a111441bcbd480699cc163b58331",
       "visiblePixelSha256": "3ab206ca105636cea3b90c93039e95e3a5c8cd0bf220297e8294dcae935611d4",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/shield-charger-badger/mesh/enemy-mesh-shield-charger-v1-r5/albedo-128.png": {
+      "file": "assets/sprites/pipeline-v2/shield-charger-badger/mesh/enemy-mesh-shield-charger-v1-r5/albedo-128.webp",
+      "source": "assets/sprites/pipeline-v2/shield-charger-badger/mesh/enemy-mesh-shield-charger-v1-r5/albedo-128.png",
+      "width": 1056,
+      "height": 1056,
+      "sourceBytes": 157802,
+      "downloadBytes": 94626,
+      "sourceSha256": "5d327921a42308653d414b7e7c9fc2fc8c2398a1e359aba9d7acd1ad6fd4de59",
+      "sha256": "ebccc94c876fee2e80d266c85a57b98851985eb78267b87b13ef6cbc7dabea39",
+      "visiblePixelSha256": "ad95d5aeba0ea492730439669f47107cbdcf636dee06446d1862b0baa8677a1b",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/shield-charger-badger/mesh/enemy-mesh-shield-charger-v1-r5/beauty-128.png": {
+      "file": "assets/sprites/pipeline-v2/shield-charger-badger/mesh/enemy-mesh-shield-charger-v1-r5/beauty-128.webp",
+      "source": "assets/sprites/pipeline-v2/shield-charger-badger/mesh/enemy-mesh-shield-charger-v1-r5/beauty-128.png",
+      "width": 1056,
+      "height": 1056,
+      "sourceBytes": 250314,
+      "downloadBytes": 196688,
+      "sourceSha256": "1d5c3cdc015f88c376ba355f6918cf73eb2f38f7cf5d5a6e4271e651c4232dcd",
+      "sha256": "ca85e68d65c64ae91709a3ace5c19cc7c91a305cd5da18a7518c0afb0b089673",
+      "visiblePixelSha256": "bc84926fb8676525ebf3834cdee0333e9bb3c73bf3aa94b5b86c6120b0c57f1d",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/shield-charger-badger/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/shield-charger-badger/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/shield-charger-badger/sheet.png",
+      "width": 1056,
+      "height": 1056,
+      "sourceBytes": 250314,
+      "downloadBytes": 196688,
+      "sourceSha256": "1d5c3cdc015f88c376ba355f6918cf73eb2f38f7cf5d5a6e4271e651c4232dcd",
+      "sha256": "ca85e68d65c64ae91709a3ace5c19cc7c91a305cd5da18a7518c0afb0b089673",
+      "visiblePixelSha256": "bc84926fb8676525ebf3834cdee0333e9bb3c73bf3aa94b5b86c6120b0c57f1d",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     }
   }
 }

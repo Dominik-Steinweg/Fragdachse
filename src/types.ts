@@ -370,6 +370,8 @@ export interface SyncedEnergyShield {
   alpha: number;
   flashAlpha: number;
   isDome: boolean;
+  /** Set only for an enemy frontal shield; `ownerId` is then an enemy id. Absent = player. */
+  ownerKind?: 'enemy';
 }
 
 export interface SyncedDecoy {
@@ -2033,6 +2035,8 @@ export interface SyncedBaseTurretState {
 export interface SyncedEnemyState {
   areaClaw?: import('./systems/EnemyClawAttack').EnemyAreaClawState;
   claw?: import('./systems/EnemyClawAttack').EnemyClawState;
+  /** Host-fixed shield charge (lane + phase timeline); absent until the first charge. */
+  shieldCharge?: import('./systems/ShieldChargeState').ShieldChargeState;
   entityGeneration?: number;
   positionRevision?: number;
   id:     string;
@@ -2065,6 +2069,8 @@ export interface SyncedEnemyState {
 export interface SyncedEnemyDeltaState {
   areaClaw?: import('./systems/EnemyClawAttack').EnemyAreaClawState;
   claw?: import('./systems/EnemyClawAttack').EnemyClawState;
+  /** Host-fixed shield charge (lane + phase timeline); absent until the first charge. */
+  shieldCharge?: import('./systems/ShieldChargeState').ShieldChargeState;
   entityGeneration?: number;
   positionRevision?: number;
   id:     string;

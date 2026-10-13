@@ -928,6 +928,55 @@
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.8
       }
+    },
+    {
+      "id": "shield-charger-badger",
+      "eyeGlow": {
+        "color": 16734746
+      },
+      "pawCount": 4,
+      "maxHp": 120,
+      "xp": 12,
+      "size": 30,
+      "moveSpeed": 120,
+      "knockbackFactor": 0.6,
+      "turnRateDegPerSec": 105,
+      "movementTarget": "players",
+      "weapons": [
+        {
+          "weaponId": "RABID_BADGER_BITE",
+          "targetMode": "all",
+          "meleeTiming": {
+            "hitDelayMs": 300,
+            "strikeMs": 80,
+            "recoveryMs": 200
+          }
+        }
+      ],
+      "attackScanIntervalMs": 140,
+      "attackStopDurationMs": 200,
+      "obstacleAttackDelayMs": 500,
+      "imageKey": "enemy_shield_charger_badger",
+      "shieldCharger": {
+        "shieldArcDegrees": 120,
+        "triggerMinDistancePx": 120,
+        "triggerMaxDistancePx": 380,
+        "alignToleranceDegrees": 12,
+        "windupMs": 700,
+        "runSpeedPx": 880,
+        "overshootPx": 480,
+        "maxRunPx": 820,
+        "recoverMs": 750,
+        "cooldownMs": 4000,
+        "cancelLockoutMs": 1500,
+        "windupDisplacementCancelPx": 18,
+        "hitDamage": 15,
+        "hitKnockbackSpeed": 420,
+        "hitKnockbackMs": 200
+      },
+      "playerScaling": {
+        "maxHpFactorPerAdditionalPlayer": 0.8
+      }
     }
   ]
 }

@@ -21,7 +21,7 @@ export function emptyEnemyLifecycleTotals(): EnemyLifecycleTotals {
 function mechanicTags(config: ResolvedCoopDefenseEnemyConfig): Set<string> {
   const tags = new Set<string>();
   if (config.deathSpawns?.length) tags.add('deathSpawns');
-  for (const key of ['spawnThrow', 'dodge', 'burrow', 'timebomb', 'mortar', 'firestarter', 'translocator', 'combatPositioning'] as const) {
+  for (const key of ['spawnThrow', 'dodge', 'burrow', 'timebomb', 'mortar', 'firestarter', 'shieldCharger', 'translocator', 'combatPositioning'] as const) {
     if (config[key]) tags.add(key);
   }
   if (config.voidHunterBoss) tags.add('boss-phases');
