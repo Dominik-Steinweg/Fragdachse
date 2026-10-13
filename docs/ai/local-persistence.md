@@ -29,7 +29,7 @@ Import ist atomar: Erst nach vollständiger Validierung darf der bestehende Save
 Persönlicher Dawn-Fortschritt liegt in `progression.coopDefense.dawn`; sein Subdokumentvertrag
 steht in [DawnProgress.ts](../../src/dawn/economy/DawnProgress.ts). Ein aktuelles Dokument benötigt
 dieses Subdokument; fehlende optionale Felder darin erhalten Defaults, ungültige Werte werden
-abgelehnt. Charakter-Reset setzt auch Dawn zurück; ein reiner Upgrade-Reset erhält Dawn.
+abgelehnt. Nicht mehr registrierte Zweig-IDs entfallen, statt den Fortschritt ungültig zu machen. Charakter-Reset setzt auch Dawn zurück; ein reiner Upgrade-Reset erhält Dawn.
 Boss-Punkte werden ausschließlich über `resolveEarnedCoopDefenseBossPoints` aus eindeutigen
 Boss-Map-Abschlüssen und `dawn.purchasedBossPoints` abgeleitet. Lokale Profile werden zuerst
 gegen die persönlichen Zweig-Entitlements und danach gegen dieses Budget begrenzt.
