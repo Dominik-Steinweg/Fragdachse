@@ -126,7 +126,7 @@ export class FireControlRenderer {
         materialize: v.removedMaterialize ?? clamp(1-(v.copy.materializedAt-now)/400), vanish,
         warning: clamp(1-(v.expiresAt-now)/2000) });
       this.beam(id, v, now, vanish);
-      this.light(`copy:${id}`, v.copy.x, v.copy.y, 40, 3.4 * v.filter.uniforms.materialize * (1-vanish));
+      this.light(`copy:${id}`, v.copy.x, v.copy.y, 40, 2.4 * v.filter.uniforms.materialize * (1-vanish));
     }
     for (const [id, v] of this.portals) {
       if (!livePortals.has(id) && v.removedAt === undefined) {

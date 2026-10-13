@@ -48,8 +48,9 @@ void main() {
   float scan = mix(1.0, .45 + .55 * smoothstep(.3, .7, fract(scanY / (scanPreset ? 2.5 : 3.0) - uTime * .9)), scanPreset ? .75 : .45);
   // A soft bright band sweeps over the projection every ~2.4 s.
   float band = exp(-pow(fract(uTime * .42) * 1.5 - .25 - (1.0 - uv.y), 2.0) / .006);
-  float detail = scanPreset ? .30 : .62;
-  float bodyLight = (.20 + detail * smoothstep(.04, .72, lum)) * scan;
+  float detail = scanPreset ? .30 : .52;
+  // Contrast curve: dark panels stay dark so pods, hatches and barrels read as detail, not as glow.
+  float bodyLight = (.07 + detail * pow(smoothstep(.04, .80, lum), 1.35)) * scan;
   float body = bodyLight;
   float grid = 1.0;
   if (uPreset > 1.5) {
@@ -73,10 +74,10 @@ void main() {
   }
   // Premultiplied glass: the body only partly covers the ground (alpha < light), so the
   // projection reads as emitted light; panel lines and the Fresnel rim carry the silhouette.
-  vec3 rgb = uColor * (body * src.a * grid + band * src.a * .30 + halo * (1.0 - src.a) * .20);
-  rgb += mix(uColor, CORE, .40) * (lines * .85 + rim * 1.05);
+  vec3 rgb = uColor * (body * src.a * grid + band * src.a * .16 + halo * (1.0 - src.a) * .14);
+  rgb += uColor * lines * .55 + mix(uColor, CORE, .25) * rim * .80;
   rgb += CORE * (front * hi * .85 + sparks);
-  float alpha = clamp(src.a * .30 + lines * .35 + rim * .85 + halo * (1.0 - src.a) * .16, 0.0, 1.0);
+  float alpha = clamp(src.a * .46 + lines * .25 + rim * .75 + halo * (1.0 - src.a) * .12, 0.0, 1.0);
   float flicker = 1.0 - glitch * (.2 + .25 * uWarning);
   gl_FragColor = vec4(rgb, alpha) * reveal * flicker;
 }`;
