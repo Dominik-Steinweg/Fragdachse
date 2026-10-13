@@ -1,31 +1,4 @@
-# Fragdachse Inspector Gadachs Feuerleit Utilitys GDD V2
-
-**Version:** 2.0
-
-**Stand:** 13. Oktober 2026
-
-**Klasse:** Inspector Gadachs
-
-**Geltungsbereich:** Gameplay, Progression, Mehrspieler und Darstellung für Coop-Defense
-
-**Status:** Umsetzungsgrundlage für den Branch `fire-control`. V2 ersetzt V1. Sie übernimmt die
-User-Entscheidungen vom 13.10.2026 und die Design-Defaults des Umsetzungsplans. Defaults sind im
-[Entscheidungslog](#9-entscheidungslog) markiert und an jedem Meilenstein-Gate (G0–G3) kippbar. Alle
-Zahlen sind Startwerte, stehen später in authored JSON und sind tunebar. Die Regeln beschreiben
-Soll-Verhalten. Was bereits umgesetzt ist, steht im Gate-Bericht `build/fire-control/GATE-Gx.md`.
-
-Inspector Gadachs erhält zwei Utilities, mit denen seine gebauten Türme entfernte Kämpfe unterstützen:
-
-- **Turmkopien** (V1: „Feuerleit-Relais“): Der Spieler platziert per Maus temporäre Projektionen
-  eigener Türme.
-- **Portale** (V1: „Feuerleitgranate“): Ein geworfenes Gerät öffnet einen festen Ausgang. Vor dem Rohr
-  jedes aktiven eigenen Turms entsteht ein Mündungsportal, durch das der Turm feuert.
-
-Dazu kommt eine allgemeine Regel: **Spielereigene Türme greifen im Coop-Defense feindliche Basen
-selbstständig an**, als dritte Zielpriorität.
-
-### Änderungen gegenüber V1
-
+Entschieden für M1, an G1 kippbar (E16)
 | Thema | V1 | V2 |
 |---|---|---|
 | Name und Bedienung der Kopien | Relais wird geworfen | **Turmkopien werden per Maus platziert**: E startet die Vorschau, ein Linksklick platziert |
@@ -70,10 +43,11 @@ Mehrspielerregeln.
 
 ### 2.1 Feindliche Basen als dritte Zielstufe
 
-**Geltung:** alle **spielereigenen** Türme im Coop-Defense, auch ohne Utility. Ein vorgeschobener
-Turmaufbau kann so eine feindliche Basis allein zerstören.
-- Das Kriterium ist der Spielerbesitz, nicht `targetMode`. Spielertürme haben keinen `targetMode`.
-- Basisgeschütze und basisgehörige Konstruktionen (`ownership: 'base-owned'`) sind nicht erfasst.
+**Geltung:** alle **spielereigenen** Türme im Coop-Defense, auch ohne Utility, sowie **befreundete
+Basisgeschütze und basisgehörige Konstruktionen** (G0-Entscheidung E10). Ein vorgeschobener Turmaufbau kann
+so eine feindliche Basis allein zerstören.
+- Das Kriterium ist die Seite (Spieler oder befreundete Basis), nicht `targetMode`.
+- Feindliche Basisgeschütze greifen Spielerbasen nicht über diese Stufe an; sie bleiben, wie sie sind.
 
 Die automatische Zielpriorität lautet:
 
@@ -105,6 +79,10 @@ Reichweite, Zielberechtigung und freie Schusslinie gelten auf jeder Stufe.
 - **Kontrolltürme** wie Gravitation und Zeitblase schießen nie auf Basen. Das gilt auch für den
   bestehenden Injektor-Fokus auf eine Basis: Ein wirkungsloser Turm ignoriert diesen Fokus und sucht
   stattdessen Figurenziele.
+- Auch der Injektor-Fokus auf eine Basis nutzt die Basis-Zielregel (freiliegende Flächen, Abstand zu Ecken,
+  Trefferabschnitt; E15).
+- Eine laufende Salve auf eine Basis läuft zu Ende; der Wechsel zu einer Figur kommt ab der nächsten Salve
+  (E12).
 
 Die Prüfung der Strukturberechtigung folgt dem Muster der Angriffsdrohne
 (`canDamageStructure(..., 'hostile')`).
@@ -196,7 +174,8 @@ Die Kopienzahl ist durch die Upgrades und durch die Zahl geeigneter Originale be
 
 ### 3.3 Formation
 
-- Bei **einer Kopie** steht sie genau am Platzierungspunkt.
+- Bei **einer Kopie** steht sie etwa **30 px hinter dem Projektor**, in Richtung Spieler → Klickpunkt
+  verlängert. Der Projektor bleibt sichtbar (G0-Entscheidung E8).
 - Bei **mehreren Kopien** stehen sie gleichmäßig auf einem **Ring von etwa 36 px** um den
   Platzierungspunkt. Die Formation beginnt oben und rotiert bei Bedarf, bis alle Punkte frei und begehbar
   sind (keine Wand, kein Wasser, innerhalb der Arena).
@@ -229,8 +208,9 @@ Die Kopienzahl ist durch die Upgrades und durch die Zahl geeigneter Originale be
 - Sie endet, wenn das Original zerstört oder abgebaut wird oder seine Kampfberechtigung verliert, zum
   Beispiel weil sein Träger zerstört ist.
 - Endet ein Einsatz mitten in einer Salve, wird die Salve abgebrochen und der reguläre Cooldown gesetzt.
-- **Bemannung:** Bemannt der Spieler ein pausiertes Original, endet dessen Projektion. Das Original kämpft
-  wieder bemannt. Mit Parallelbetrieb ist die Bemannung frei, und die Kopie läuft weiter.
+- **Bemannung:** Jede Bemannung eines Originals, auch durch Verbündete und auch mit Parallelbetrieb, beendet
+  dessen Projektion; das Original kämpft wieder bemannt. Bemannte Originale sind nicht wählbar (D30,
+  entschieden für M1, an G1 kippbar).
 
 ### 3.5 Parallelbetrieb
 
@@ -327,6 +307,8 @@ wirkt deshalb rundum.
 - Der zweite Projektilpfad (`secondProjectileDamageFactor`) nutzt dieselbe Route.
 - Geeignete Turmwaffen sind ausschließlich vom Feuertyp `projectile` oder `flamethrower`; das wird
   validiert.
+- Der Host feuert nur mit gültig gebauten Routen. Ist eine Route ungültig, feuert der Turm in diesem Tick
+  nicht; die Runtime-Validierung bleibt als Schutz gegen Programmierfehler bestehen (E14).
 
 ### 4.6 Modi je Quelle und lokale Feuerfreigabe
 
@@ -497,6 +479,16 @@ Status:
 | E4 | 2026-10-13 | Turmkopien sind Standard: freigeschaltet, ausgerüstet, ersetzen HE im Standard-Loadout | GDD-Ziel: Einstieg über Raketenturm plus Kopien | User |
 | E5 | 2026-10-13 | Portale kosten 1 Upgradepunkt, ohne weitere Voraussetzung | Wie andere Utilities | User |
 | E6 | 2026-10-13 | Fragen, Sichtprüfung und Abnahme gebündelt an den Gates G0–G3; dazwischen autark mit dokumentierten Defaults | Arbeitsfluss | User |
+| E7 | 2026-10-13 | Optik: Farbwelt P1 Signal-Türkis `#3dffd0` mit Kern `#e8fff9`, Glas-Hologramm, Zielgitter-Iris, Dreibein-Projektor, gewählte Icons (F6) | Sichtprüfung der Konzept- und Prototypbögen | Entschieden |
+| E8 | 2026-10-13 | Eine Einzelkopie steht etwa 30 px hinter dem Projektor, in Richtung Spieler → Klickpunkt verlängert; mehrere Kopien bilden den Ring um den Projektor (F2) | Der Projektor bleibt sichtbar | Entschieden |
+| E9 | 2026-10-13 | Identität = Original: MG-Stack gemeinsam über die ID des Originals mit gemeinsamem Cap, Injektor-Buff über die Identität des Originals, Fernsteuerung nur auf echte Konstruktionen, die Kopie erbt den Bonus über das Original; nichts fällt weg, nichts verdoppelt sich (F3) | GDD §5.2 | Entschieden (User) |
+| E10 | 2026-10-13 | Auch befreundete Basisgeschütze und basisgehörige Bauten greifen feindliche Basen als dritte Zielstufe an, nach denselben Regeln (Wirkung, Sichtlinie, freiliegende Flächen, Kontrollwaffen nie); feindliche Basisgeschütze gegen Spielerbasen bleiben unverändert (F4) | User-Entscheidung, abweichend vom Default D23 | Entschieden (User) |
+| E11 | 2026-10-13 | Gravitations- und Zeitblasenturm zielen nie auf Basen (F5) | Keine Wirkung gegen Basen | Entschieden |
+| E12 | 2026-10-13 | Eine laufende Salve auf eine Basis läuft zu Ende; der Wechsel kommt ab der nächsten Salve, ohne Sonderfall (F7) | Bestehende Salvenregel | Entschieden |
+| E13 | 2026-10-13 | Keine Änderung am Flammenschaden gegen Basen: Keine Flammenwaffe setzt `baseDamageMult` (nur `HE_GRENADE`), das fehlende Durchreichen wirkt heute nicht (F8). Notiz für künftige Flammenwaffen | Kein Verhaltensunterschied | Entschieden |
+| E14 | 2026-10-13 | Der Host feuert nur mit gültig gebauten Feuerleit-Routen; bei ungültiger Route feuert der Turm in diesem Tick nicht. `assertFireControlRoute` bleibt als Schutz gegen Programmierfehler (F9) | Kein Absturz im Host-Loop, Programmierfehler bleiben sichtbar | Entschieden |
+| E15 | 2026-10-13 | Der Injektor-Fokus auf eine Basis nutzt in M1 die Basis-Zielregel (D25/D27) (F10) | Gleiche Treffsicherheit wie die dritte Zielstufe | Entschieden |
+| E16 | 2026-10-13 | D30 als einfache Regel: Jede Bemannung beendet die Projektion des Originals, auch mit Parallelbetrieb; bemannte Originale sind nicht wählbar | Einfach, keine Doppelsteuerung | Entschieden für M1, an G1 kippbar |
 | D1 | 2026-10-13 | Laufzeit Kopien 12 s (+3 s je Stufe „Längere Übertragung“, 2 Stufen); Portale 5 s (+1,5 s je Stufe „Längere Öffnung“, 2 Stufen) | GDD: Portale kürzer als Kopien; Startwerte für Tuning | Default, an Gate kippbar |
 | D2 | 2026-10-13 | Cooldown beginnt erst mit dem Einsatzende (Kopien 25 s, Portale 20 s); eine Ladung; kein Adrenalin | Verhindert Überlappung ohne Sperrlogik; Utilities kosten kein Adrenalin | Default, an Gate kippbar |
 | D3 | 2026-10-13 | Je Spieler höchstens ein Kopien- und ein Portaleinsatz; erneute Nutzung während eines Einsatzes wird abgelehnt | Keine unbegrenzte Vervielfachung; einfache V2-Regel | Default, an Gate kippbar |
@@ -519,7 +511,7 @@ Status:
 | D20 | 2026-10-13 | Ist keine gleichmäßige Ringformation frei, werden freie Ringpunkte mit maximalem Winkelabstand gewählt; sonst ist die Platzierung ungültig | Nutzbar an Wänden, ohne Kopien in Wände zu setzen | Default, an Gate kippbar |
 | D21 | 2026-10-13 | Eine vorzeitig endende Kopie verschwindet aus dem Snapshot; die Darstellung spielt das Vergehen beim Entfernen; kein eigener Endstatus | Kleiner Netzvertrag; Darstellung bleibt abgeleitet | Default, an Gate kippbar |
 | D22 | 2026-10-13 | Basisziel-Regeln liegen in `src/systems/TurretBaseTargeting.ts` statt in `src/systems/fireControl/` | Die Regel gilt für alle Spielertürme, unabhängig von der Feuerleitung | Default, an Gate kippbar |
-| D23 | 2026-10-13 | Basisgeschütze und basisgehörige Konstruktionen greifen Basen weiterhin nicht selbstständig an | Plan: Spielerbesitz als Kriterium; Basisgeschütze haben eigene Zielmodi | Default, an Gate kippbar (Frage F4) |
+| D23 | 2026-10-13 | Basisgeschütze und basisgehörige Konstruktionen greifen Basen weiterhin nicht selbstständig an | Plan: Spielerbesitz als Kriterium; Basisgeschütze haben eigene Zielmodi | Gekippt an G0 (E10) |
 | D24 | 2026-10-13 | Für die Platzierung der Kopien ist keine Sichtlinie vom Spieler zum Punkt nötig, nur Reichweite und freie Formation | Projektion, kein Wurf; einfache Regel | Default, an Gate kippbar |
 | D25 | 2026-10-13 | Freiliegende Basisflächen werden nur aus der Basisgeometrie abgeleitet (je Basis-Generation gecacht). Verdeckung durch Felsen klärt allein die Schusslinie; je Turm und Suche werden höchstens die 4 nächsten Flächen geprüft | Felsen ändern sich unabhängig von der Basis-Generation; begrenzte Sichtlinienprüfungen | Default, an Gate kippbar |
 | D26 | 2026-10-13 | Automatische Basisziele sind nur beschädigbare feindliche Basen (`isDamageable`, HP > 0). Der bestehende Fokus-Pfad bleibt bis auf das Kontrollturm-Gate unverändert | Keine Schüsse auf immune Basen; kein ungeplanter Eingriff in den Injektor-Fokus | Default, an Gate kippbar |
@@ -553,17 +545,20 @@ heißt: Der Test entsteht im genannten Paket. Der Stand wird im jeweiligen Gate-
 | 14 | Entfernen von Quellen, Einsatzende, Besitzerentfernung und World-Wechsel hinterlassen weder Portale noch Pausen; Clients und Late Join sehen den richtigen Zustand | `tests/integration/FireControlLifecycle.test.ts`; `tests/integration/FireControlNetwork.test.ts` (Host/Client/Late Join); `tests/architecture/FireControlSourceBoundary.test.ts` (Kopien nie in Konstruktions-Konsumenten); `tests/stress/FireControlStress.test.ts` | P1.1, P1.3, P1.5, P2.4 |
 | 15 | Ein neuer Inspektor startet mit Raketenturm und Turmkopien; fehlende Originale werden verständlich gemeldet; bestehende Ausrüstungen folgen der Migration | `tests/LoadoutToolSlots.test.ts`; `tests/CoopDefenseClassLoadoutPersistence.test.ts`; `tests/LocalPersistence.test.ts`; `tests/I18n.test.ts` (Failure-Text); `tests/integration/FireControlLifecycle.test.ts` (Ablehnung ohne Verbrauch) | P1.2, P3.1 |
 
-## 11 Offene Fragen für G0
+## 11 Fragen an G0 (entschieden 2026-10-13)
 
-| Nr. | Frage | Default bis zur Antwort |
+| Nr. | Frage | Entscheidung |
 |---|---|---|
-| F1 | Sollen auch die Portale per Maus platziert statt geworfen werden? | Wurf (D6) |
-| F2 | Bei genau einer Kopie stehen Kopie und Relais-Projektor auf demselben Punkt. Ist das lesbar genug, oder soll die Einzelkopie leicht versetzt stehen? | Kopie am Punkt, Projektor darunter (D8) |
-| F3 | Freigabe der Identitätsregeln aus §5 (gemeinsamer MG-Stack, Injektor über Identität, Fernsteuerung über das Original) | Wie in §5 (D14) |
-| F4 | Sollen auch freundliche Basisgeschütze und basisgehörige Spielerbauten feindliche Basen angreifen? | Nein (D23) |
-| F5 | Turmwaffen, die laut Waffenmatrix keine Basen schädigen, zielen nie auf Basen. Ist das für jede dieser Waffen gewollt, oder soll ihre Wirkung gegen Basen ergänzt werden? Konkrete Liste im Gate-Bericht G0 | Regel folgt der beobachteten Laufzeit |
-| F6 | Farbwelt der Feuerleitung (Kopien, Portale, Projektor) | Auswahl der Leit-Session aus den Kandidaten (D18) |
-| F7 | Zielwechsel bei Basisbeschuss: Taucht während einer Salve auf eine Basis eine Figur auf, läuft die Salve auf die Basis zu Ende (heutige Salvenregel). Soll stattdessen sofort umgeschwenkt werden? | Salve läuft zu Ende |
+| F1 | Portale per Maus platzieren statt werfen? | Wurf bleibt (E6) |
+| F2 | Einzelkopie auf dem Projektor lesbar genug? | Einzelkopie etwa 30 px hinter dem Projektor (E8) |
+| F3 | Identitätsregeln aus §5 | Original-Identität, wie in §5 (E9) |
+| F4 | Greifen auch befreundete Basisgeschütze und basisgehörige Bauten feindliche Basen an? | Ja (E10) |
+| F5 | Zielen Waffen ohne Basiswirkung nie auf Basen? | Ja, Gravitation und Zeitblase nie (E11) |
+| F6 | Farbwelt und Look | P1 Türkis, Glas-Hologramm, Zielgitter-Iris, Dreibein-Projektor (E7) |
+| F7 | Salve auf eine Basis bei auftauchender Figur | Salve läuft zu Ende, Wechsel ab der nächsten (E12) |
+| F8 | Flammen reichen `baseDamageMult` nicht weiter | Keine Änderung, Notiz (E13) |
+| F9 | Ungültige Feuerleit-Route im Host-Loop | Turm feuert in diesem Tick nicht; Validierung bleibt als Schutz (E14) |
+| F10 | Injektor-Fokus auf Basen mit der neuen Zielregel? | Ja, in M1 (E15) |
 
 ## 12 Technische Anknüpfungspunkte
 
