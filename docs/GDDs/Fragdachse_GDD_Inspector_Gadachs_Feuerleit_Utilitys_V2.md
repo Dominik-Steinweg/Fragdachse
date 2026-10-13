@@ -92,6 +92,8 @@ Reichweite, Zielberechtigung und freie Schusslinie gelten auf jeder Stufe.
 - Die Suche läuft nur, wenn weder ein Fokus- noch ein Figurenziel vorhanden ist.
 - Damit genügt eine nahe Außenwand auch bei weit entferntem Mittelpunkt. Konkave oder verdeckte Flächen
   werden nicht durchschossen.
+- Der Zielpunkt hält Abstand zu Basisecken. Drehbegrenzte Türme feuern auf eine Basis erst, wenn das Rohr
+  den Zielabschnitt tatsächlich trifft; Basen werden nicht durch Homing erreicht (D27).
 
 **Wirksamkeit**
 - Die reine Regel `canWeaponDamageBases` bewertet den gesamten Angriff: direkten Treffer, Explosion,
@@ -520,6 +522,7 @@ Status:
 | D24 | 2026-10-13 | Für die Platzierung der Kopien ist keine Sichtlinie vom Spieler zum Punkt nötig, nur Reichweite und freie Formation | Projektion, kein Wurf; einfache Regel | Default, an Gate kippbar |
 | D25 | 2026-10-13 | Freiliegende Basisflächen werden nur aus der Basisgeometrie abgeleitet (je Basis-Generation gecacht). Verdeckung durch Felsen klärt allein die Schusslinie; je Turm und Suche werden höchstens die 4 nächsten Flächen geprüft | Felsen ändern sich unabhängig von der Basis-Generation; begrenzte Sichtlinienprüfungen | Default, an Gate kippbar |
 | D26 | 2026-10-13 | Automatische Basisziele sind nur beschädigbare feindliche Basen (`isDamageable`, HP > 0). Der bestehende Fokus-Pfad bleibt bis auf das Kontrollturm-Gate unverändert | Keine Schüsse auf immune Basen; kein ungeplanter Eingriff in den Injektor-Fokus | Default, an Gate kippbar |
+| D27 | 2026-10-13 | Basis-Zielpunkte halten eine Viertelzelle Abstand zu den Kantenenden. Drehbegrenzte Türme feuern auf eine Basis erst, wenn das Rohr diesen Kantenabschnitt tatsächlich trifft; ihre allgemeine Zieltoleranz wird dafür eingeengt | G0-Bogen: Raketentürme (18° Toleranz, Homing nur gegen Figuren) verfehlten kleine Basen während der Drehung | Default, an Gate kippbar |
 
 ## 10 Abnahmeszenarien und Testzuordnung
 
