@@ -187,6 +187,7 @@ Loadout-Commit (`coopDefenseEntitlements`) zum Host. Die Preise sind per Simulat
 | D-35 | 2026-10-13 (M3) | Nacht-Modifikatoren Blutmond/Nebel/Bomber/Brand als Activity-Plan-Feld `nightModifierId`; keiner bei niedrigem Threat, Chance steigend. | ja |
 | D-36 | 2026-10-13 (M3) | Elite-System: Host vergibt Affixe beim Spawn (Chance je Threat), Snapshot trägt nur `eliteAffixId`; Lesbarkeit über Bodenring + Affix-Glyphe (SELECTION.md). | ja |
 | D-37 | 2026-10-13 (M3) | Lobby-Ausbau: LobbyWorld trägt die Dawn-Basis bis Stufe 11 (Radius 15); Händlerstand außerhalb der neuen Reservierung. | ja |
+| D-38 | 2026-10-13 (M3) | Schwierigkeit neu: Threat 1 ≈ Kampagnen-Maps 18–19 (~90 Gegnerkosten/min, zwei Fronten, Spezialgegner ab Start), bis Threat 10 ~5,5-fach; Tagesdruck stärker, Extraktor-Angriffe vierfach, Wracks mit Wächterwellen (ändert D-23). Dropchancen so skaliert, dass die Economy-Ziele gelten (Bericht `build/dawn/M3-difficulty.md`). | ja |
 
 ## 11. Offene Fragen für Gate G0 (an G0 beantwortet, siehe D-15 … D-19)
 
