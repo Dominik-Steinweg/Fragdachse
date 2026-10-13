@@ -1,6 +1,7 @@
 import { isEnemyClawState } from '../systems/EnemyClawAttack';
 import { readAreaClawState } from './krakenSnapshotCodec';
 import { isShieldChargeState, SHIELD_CHARGE_PHASES } from '../systems/ShieldChargeState';
+import { ENERGY_CONE_CLIP_QUANT, ENERGY_CONE_CLIP_RAYS, ENERGY_CONE_PHASES, isEnergyConeState } from '../systems/EnergyConeState';
 /**
  * Kompakte (De-)Serialisierung des Gegner-Upsert-Stroms für {@link SyncedEnemySnapshot}.
  *
@@ -26,6 +27,8 @@ const FIELD_POSITION_REVISION = 4096;
 const FIELD_AREA_CLAW = 8192;
 /** Host-fixed shield charge lane: revision, phase, origin, angle, length, half width, timeline. */
 const FIELD_SHIELD_CHARGE = 16384;
+/** Host-fixed energy cone: revision, phase, origin, angle, range, arc, timeline, quantized cover profile. */
+const FIELD_ENERGY_CONE = 32768;
 /** Lane angles need more precision than body rotation: a 0.01 rad error is 8 px at 800 px. */
 const LANE_ANGLE_QUANT = 10000;
 // Codes 0–6 are deployed legacy values; append new actions without renumbering them.
@@ -66,6 +69,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
   let mask = 0;
   if (entry.areaClaw !== undefined) mask |= FIELD_AREA_CLAW;
   if (entry.shieldCharge !== undefined) mask |= FIELD_SHIELD_CHARGE;
+  if (entry.energyCone !== undefined) mask |= FIELD_ENERGY_CONE;
   if (entry.positionRevision !== undefined) mask |= FIELD_POSITION_REVISION;
   if (entry.claw !== undefined) mask |= FIELD_CLAW;
   if (entry.entityGeneration !== undefined) mask |= FIELD_GENERATION;
@@ -118,6 +122,15 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
     out.push(state.revision, SHIELD_CHARGE_PHASES.indexOf(state.phase), lane ? 1 : 0);
     if (lane) out.push(lane.originX, lane.originY, Math.round(lane.angle * LANE_ANGLE_QUANT), lane.length, lane.halfWidth,
       lane.startedAt, lane.runAt, lane.runEndsAt, lane.recoverUntil);
+  }
+  if (mask & FIELD_ENERGY_CONE) {
+    const state = entry.energyCone!, attack = state.attack;
+    out.push(state.revision, ENERGY_CONE_PHASES.indexOf(state.phase), attack ? 1 : 0);
+    if (attack) {
+      out.push(attack.originX, attack.originY, Math.round(attack.angle * LANE_ANGLE_QUANT), attack.range, attack.arcDegrees,
+        attack.startedAt, attack.hitAt, attack.recoverUntil);
+      for (const reach of attack.clip) out.push(Math.round(reach * ENERGY_CONE_CLIP_QUANT));
+    }
   }
 }
 
@@ -191,6 +204,20 @@ export function decodeEnemyUpserts(stream: readonly (number | string)[]): Synced
       } : null;
       const state = { revision, phase, lane };
       if (isShieldChargeState(state)) entry.shieldCharge = state;
+    }
+    if (mask & FIELD_ENERGY_CONE) {
+      const revision = stream[i++] as number, phase = ENERGY_CONE_PHASES[stream[i++] as number], hasAttack = stream[i++] as number;
+      let attack = null;
+      if (hasAttack) {
+        const head = { originX: stream[i++] as number, originY: stream[i++] as number, angle: (stream[i++] as number) / LANE_ANGLE_QUANT,
+          range: stream[i++] as number, arcDegrees: stream[i++] as number, startedAt: stream[i++] as number,
+          hitAt: stream[i++] as number, recoverUntil: stream[i++] as number };
+        const clip: number[] = [];
+        for (let ray = 0; ray < ENERGY_CONE_CLIP_RAYS; ray++) clip.push((stream[i++] as number) / ENERGY_CONE_CLIP_QUANT);
+        attack = { ...head, clip };
+      }
+      const state = { revision, phase, attack };
+      if (isEnergyConeState(state)) entry.energyCone = state;
     }
     result.push(entry);
   }

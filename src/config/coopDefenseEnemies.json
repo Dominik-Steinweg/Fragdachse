@@ -356,6 +356,19 @@
         "retreatSpeedFactor": 0.85,
         "requireLineOfSight": true
       },
+      "energyCone": {
+        "triggerMinDistancePx": 120,
+        "triggerMaxDistancePx": 280,
+        "arcDegrees": 80,
+        "rangePx": 340,
+        "windupMs": 1000,
+        "recoverMs": 400,
+        "cooldownMs": 5000,
+        "cancelLockoutMs": 1200,
+        "windupDisplacementCancelPx": 18,
+        "coverRefreshMs": 120,
+        "damage": 30
+      },
       "trainAwareness": {
         "safetyDistancePx": 48,
         "timeSafetyMarginMs": 600
