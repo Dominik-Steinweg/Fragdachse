@@ -81,7 +81,7 @@ import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { ShieldBuffSystem } from '../systems/ShieldBuffSystem';
 import type { ShieldBuffPort } from '../loadout/ShieldBuffPort';
 import type { TimeBubbleSystem } from '../systems/TimeBubbleSystem';
-import type { TurretSystem, AutomatedTurretId } from '../systems/TurretSystem';
+import type { TurretSystem, AutomatedTurretId, TurretFireSource } from '../systems/TurretSystem';
 import {
   COOP_DEFENSE_BASE_TURRET_OWNER_ID,
   COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID,
@@ -106,7 +106,7 @@ import { TeslaDomeSystem as ConcreteTeslaDomeSystem } from '../systems/TeslaDome
 import { EnergyShieldSystem as ConcreteEnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import { ShieldBuffSystem as ConcreteShieldBuffSystem } from '../systems/ShieldBuffSystem';
 import { TimeBubbleSystem as ConcreteTimeBubbleSystem } from '../systems/TimeBubbleSystem';
-import { TurretSystem as ConcreteTurretSystem } from '../systems/TurretSystem';
+import { TurretSystem as ConcreteTurretSystem, toLocalTurretFireSource } from '../systems/TurretSystem';
 
 export interface WorldCombatKillEvent {
   readonly killerId: string;
@@ -542,6 +542,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       this.systems.turret.setLineOfFireChecker(null);
       this.systems.turret.setManualControlProvider(null);
       this.systems.turret.setTurretProvider(null, null);
+      this.systems.turret.setFireSourceProvider(null);
       this.systems.turret.setEnemyTargetProvider(null);
       this.systems.turret.setFocusTargetProvider(null);
       this.systems.turret.setFocusedBaseTargetProvider(null);
@@ -813,12 +814,16 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     teslaDome.setLineOfSightChecker((sx, sy, ex, ey, skipRockIndex, sourceCarrierBaseId) =>
       o.combatSystem.hasLineOfSight(sx, sy, ex, ey, skipRockIndex, sourceCarrierBaseId, 0, 'directFire'));
     turret.setLineOfFireChecker((sx, sy, ex, ey, skipRockIndex, sourceCarrierBaseId) => o.combatSystem.hasClearLineOfFire(sx, sy, ex, ey, { skipRockIndex, sourceCarrierBaseId }));
-    turret.setTurretProvider(() => this.getTurretDefinitions(), (id, angle) => {
+    turret.setTurretProvider(() => this.getTurretDefinitions(), (source, angle) => {
+      // Nur die Konstruktion selbst besitzt ihren Rohrwinkel; temporäre Quellen gehören ihrem Einsatz.
+      if (source.id !== source.identityId) return;
+      const id = source.id;
       if (typeof id === 'number') {
         o.placementSystem.updateAngle(id, angle);
         o.updateTurretAngle(id, angle);
       } else o.baseManager?.setTurretAngle(id, angle);
     });
+    turret.setFireSourceProvider(() => this.getTurretFireSources());
     turret.setEnemyTargetProvider(() => (o.getEnemyManager()?.getAllEnemies() ?? []).filter(enemy => enemy.sprite.active).map(enemy => ({ id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y })));
     turret.setFocusTargetProvider((ownerId) => o.getEnergyInjectorSystem()?.getFocusTarget(ownerId) as { targetType: 'enemy' | 'base'; targetId: string } | null);
     turret.setFocusedBaseTargetProvider((targetId, turretX, turretY) => {
@@ -827,8 +832,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       const surface = base.getNearestSurfacePoint(turretX, turretY);
       return surface ? { id: base.id, x: surface.x, y: surface.y } : null;
     });
-    turret.setTargetScoreProvider((source, kind, id, now) => this.isPersonalMg(source.id)
-      ? this.mgTurret?.score(source.ownerId, String(source.id), kind, id, now) ?? 0 : 0);
+    turret.setTargetScoreProvider((source, kind, id, now) => this.isPersonalMg(source.identityId)
+      ? this.mgTurret?.score(source.ownerId, String(source.identityId), kind, id, now) ?? 0 : 0);
     turret.setFireHandler((ownerId, color, weaponId, x, y, angle, targetX, targetY, damageFactor = 1, rangeFactor = 1, sourceTurretId, skipRockIndex, sourceCarrierBaseId) => {
       const turretCfg = UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig;
       const weapon = WEAPON_CONFIGS[weaponId] ?? WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
@@ -1473,6 +1478,14 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.mgOwnerGroups.clear();
     for (const owner of owners) this.mgOwnerGroups.set(owner.id, owner.group);
     return owners;
+  }
+
+  /**
+   * Feuerquellen des Turmfeuers. Ohne Feuerleit-Einsatz ist jede Konstruktion genau eine lokale
+   * Quelle; temporäre Quellen kommen nur hier hinzu und nie in `getTurretDefinitions()`.
+   */
+  getTurretFireSources(): readonly TurretFireSource[] {
+    return this.getTurretDefinitions().map(toLocalTurretFireSource);
   }
 
   getTurretDefinitions(): readonly import('../systems/TurretSystem').AutomatedTurret[] {

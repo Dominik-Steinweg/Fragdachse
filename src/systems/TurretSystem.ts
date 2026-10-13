@@ -44,12 +44,42 @@ export interface AutomatedTurret extends TurretAimConfig {
   /** Erzwingt die Laufzeit-Zielfraktion; ohne Wert bleibt das bisherige gemischte Verhalten. */
   readonly targetMode?: AutomatedTurretTargetMode;
 }
+export type TurretFireState = 'active' | 'paused';
+/**
+ * Eintrag des Turmfeuers. Eine Konstruktion ist ohne Feuerleitung genau eine Quelle, deren
+ * Identitäts-, Folge- und Darstellungsschlüssel ihre eigene ID sind. Temporäre Quellen (Turmkopien)
+ * tragen eine eigene `id`, verweisen aber über `identityId` auf ihr Original.
+ */
+export interface TurretFireSource extends AutomatedTurret {
+  /** Konstruktion, der identitätsgebundene Effekte, Bemannung und Attribution gehören. */
+  readonly identityId: AutomatedTurretId;
+  /** Owner von Cooldown und laufender Salve; Einträge mit gleichem Schlüssel teilen ihre Feuerfolge. */
+  readonly sequenceKey: AutomatedTurretId;
+  /** Startzustand einer noch unbekannten eigenen Folge (`nextFireAt` dieses Schlüssels). */
+  readonly sequenceSeedKey?: AutomatedTurretId;
+  /** Pausierte Quellen beginnen nichts Neues, halten aber ihre Feuerfolge am Leben. */
+  readonly fireState: TurretFireState;
+  /** Sprite, das Schussanimation und Rohrdrehung dieses Eintrags darstellt. */
+  readonly visualId: AutomatedTurretId;
+}
+/** Zusatzwissen eines Schusses, das nicht in die positionalen Fire-Handler-Argumente gehört. */
+export interface TurretFireContext {
+  readonly source: TurretFireSource;
+}
+export function toLocalTurretFireSource(turret: AutomatedTurret): TurretFireSource {
+  return { ...turret, identityId: turret.id, sequenceKey: turret.id, visualId: turret.id, fireState: 'active' };
+}
 type TurretProvider = () => readonly AutomatedTurret[];
-type TurretAngleUpdater = (id: AutomatedTurretId, angle: number) => void;
+type TurretFireSourceProvider = () => readonly TurretFireSource[];
+type TurretAngleUpdater = (source: TurretFireSource, angle: number) => void;
 type EnemyTargetProvider = () => readonly { id: string; x: number; y: number }[];
 type FocusTargetProvider = (ownerId: string) => { targetType: 'enemy' | 'base'; targetId: string } | null;
 type FocusedBaseTargetProvider = (targetId: string, turretX: number, turretY: number) => { id: string; x: number; y: number } | null;
 interface PendingTurretBurst {
+  /** Eintrag, der die Salve begonnen hat; nur er darf sie fortsetzen. */
+  ownerEntryId: AutomatedTurretId;
+  /** Cooldown der Folge, falls die Salve mit ihrem Eintrag abgebrochen wird. */
+  cooldownMs: number;
   shotsRemaining: number;
   nextShotAt: number;
   targetX: number;
@@ -68,9 +98,11 @@ type TurretFireHandler = (
   targetY: number,
   damageFactor?: number,
   rangeFactor?: number,
+  /** Identität (Original) für Attribution und identitätsgebundene Trefferwirkungen. */
   sourceTurretId?: AutomatedTurretId,
   skipRockIndex?: number,
   sourceCarrierBaseId?: string,
+  context?: TurretFireContext,
 ) => void;
 
 export class TurretSystem {
@@ -82,6 +114,7 @@ export class TurretSystem {
   }
   private lineOfFireChecker: LineOfFireChecker | null = null;
   private turretProvider: TurretProvider | null = null;
+  private fireSourceProvider: TurretFireSourceProvider | null = null;
   private turretAngleUpdater: TurretAngleUpdater | null = null;
   private enemyTargetProvider: EnemyTargetProvider | null = null;
   private focusTargetProvider: FocusTargetProvider | null = null;
@@ -89,9 +122,11 @@ export class TurretSystem {
   private fireHandler: TurretFireHandler | null = null;
   private turretDamageBuffProvider: ((x: number, y: number) => TurretDamageBuff | null) | null = null;
   private turretDamageMultiplierProvider: ((turret: AutomatedTurret, turrets: readonly AutomatedTurret[]) => number) | null = null;
+  /** Nach `sequenceKey`; überlebt Pausen und Wechsel zwischen Original und Kopie. */
   private nextFireAt = new Map<AutomatedTurretId, number>();
+  /** Nach `sequenceKey`; `ownerEntryId` bindet die Salve an ihren Eintrag. */
   private pendingBursts = new Map<AutomatedTurretId, PendingTurretBurst>();
-  private targetScore: ((turret: AutomatedTurret, kind: 'player' | 'enemy' | 'base', id: string, now: number) => number) | null = null;
+  private targetScore: ((turret: TurretFireSource, kind: 'player' | 'enemy' | 'base', id: string, now: number) => number) | null = null;
 
   setTargetScoreProvider(provider: typeof this.targetScore): void { this.targetScore = provider; }
 
@@ -104,9 +139,22 @@ export class TurretSystem {
     this.lineOfFireChecker = checker;
   }
 
+  /**
+   * Konstruktionsbestand (für `getTurrets()`) und Winkel-Senke. Ohne eigenen Feuerquellen-Provider
+   * ist jede Konstruktion genau eine lokale Feuerquelle.
+   */
   setTurretProvider(provider: TurretProvider | null, angleUpdater: TurretAngleUpdater | null): void {
     this.turretProvider = provider;
     this.turretAngleUpdater = angleUpdater;
+  }
+
+  /**
+   * Vollständige Feuerquellen-Liste einschließlich temporärer Quellen. Temporäre Quellen gelangen
+   * bewusst nur hierüber ins Turmfeuer und nie in `getTurrets()`: Bemannung, Interaktion, Homing und
+   * Fernsteuerung lesen den Konstruktionsbestand.
+   */
+  setFireSourceProvider(provider: TurretFireSourceProvider | null): void {
+    this.fireSourceProvider = provider;
   }
 
   setEnemyTargetProvider(provider: EnemyTargetProvider | null): void {
@@ -133,13 +181,14 @@ export class TurretSystem {
   /**
    * Ortsbezogener Konstruktionsbuff aus der Verstärkungsmatrix-/Energieinjektor-Pipeline.
    * Bewusst positionsbasiert, damit platzierte Konstruktionen, Fliegenpilze und Basistuerme
-   * ohne Sonderfall profitieren.
+   * ohne Sonderfall profitieren. Abgefragt wird die Position der Identität (des Originals), nie die
+   * einer temporären Quelle.
    */
   setTurretDamageBuffProvider(provider: ((x: number, y: number) => TurretDamageBuff | null) | null): void {
     this.turretDamageBuffProvider = provider;
   }
 
-  /** Zusätzlicher, quellenbezogener Schadensmultiplikator für Konstrukte. */
+  /** Zusätzlicher, quellenbezogener Schadensmultiplikator für Konstrukte; erhält die Identität. */
   setTurretDamageMultiplierProvider(
     provider: ((turret: AutomatedTurret, turrets: readonly AutomatedTurret[]) => number) | null,
   ): void {
@@ -147,9 +196,10 @@ export class TurretSystem {
   }
 
   /**
-   * Aktueller Turmbestand aus derselben Quelle, die auch das Turmfeuer speist. Der
+   * Aktueller Konstruktionsbestand aus derselben Quelle, die auch das Turmfeuer speist. Der
    * Energieinjektor braucht ihn fuer Zielsuche und Treffer-Zuordnung; ein zweiter
-   * Enumerationspfad wuerde sonst Basistuerme oder Fliegenpilze vergessen.
+   * Enumerationspfad wuerde sonst Basistuerme oder Fliegenpilze vergessen. Temporäre
+   * Feuerquellen (`setFireSourceProvider`) sind bewusst nicht enthalten.
    */
   getTurrets(): readonly AutomatedTurret[] {
     return this.turretProvider?.() ?? [];
@@ -161,11 +211,32 @@ export class TurretSystem {
     _weaponConfig: WeaponConfig,
     deltaMs = 0,
   ): void {
-    const turrets = this.turretProvider?.() ?? [];
-    const activeIds = new Set<AutomatedTurretId>();
+    const turrets = this.fireSourceProvider?.() ?? (this.turretProvider?.() ?? []).map(toLocalTurretFireSource);
+    const entrySequences = new Map<AutomatedTurretId, AutomatedTurretId>();
+    const activeSequences = new Set<AutomatedTurretId>();
+    const activeIdentities = new Set<AutomatedTurretId>();
+    let constructions: Map<AutomatedTurretId, AutomatedTurret> | null = null;
+    const identityOf = (source: TurretFireSource): AutomatedTurret | null => {
+      if (source.id === source.identityId) return source;
+      constructions ??= new Map((this.turretProvider?.() ?? []).map(turret => [turret.id, turret]));
+      return constructions.get(source.identityId) ?? null;
+    };
+    // Neue eigene Folgen übernehmen den Stand ihres Seeds vom Tick-Beginn, unabhängig davon, ob der
+    // Seed in diesem Tick vor ihnen feuert.
+    for (const source of turrets) {
+      if (source.sequenceSeedKey === undefined || this.nextFireAt.has(source.sequenceKey)) continue;
+      this.nextFireAt.set(source.sequenceKey, this.nextFireAt.get(source.sequenceSeedKey) ?? 0);
+    }
 
     for (const turret of turrets) {
-      activeIds.add(turret.id);
+      // Eine temporäre Quelle ohne bestehendes Original ist verwaist: Sie feuert nicht und hält
+      // weder Feuerfolge noch Bemannungszustand am Leben.
+      const identity = identityOf(turret);
+      if (!identity) continue;
+      const sequenceKey = turret.sequenceKey;
+      entrySequences.set(turret.id, sequenceKey);
+      activeSequences.add(sequenceKey);
+      activeIdentities.add(turret.identityId);
 
       const turretX = turret.x;
       const turretY = turret.y;
@@ -175,30 +246,40 @@ export class TurretSystem {
       const targetRange = turret.targetRange ?? baseTargetRange;
       const turretWeaponId = turret.weaponId ?? 'SPORES';
       const turretWeaponConfig = WEAPON_CONFIGS[turretWeaponId] ?? _weaponConfig;
-      const manual = this.manualControlProvider?.(turret.id, now) ?? null;
-      const revision = manual?.revision ?? 0;
-      if ((this.controlRevisions.get(turret.id) ?? 0) !== revision) {
-        if (this.pendingBursts.delete(turret.id)) {
-          this.nextFireAt.set(turret.id, Math.max(this.nextFireAt.get(turret.id) ?? 0,
-            now + Math.max(1, turret.cooldownMs ?? turretWeaponConfig.cooldown)));
+      const cooldownMs = Math.max(1, turret.cooldownMs ?? turretWeaponConfig.cooldown);
+      // Bemannbar ist nur die Konstruktion selbst, nie eine temporäre Projektion.
+      const construction = turret.id === turret.identityId;
+      const manned = construction ? this.manualControlProvider?.(turret.identityId, now) ?? null : null;
+      if (construction) {
+        const revision = manned?.revision ?? 0;
+        if ((this.controlRevisions.get(turret.identityId) ?? 0) !== revision) {
+          if (this.deleteOwnedBurst(turret)) {
+            this.nextFireAt.set(sequenceKey, Math.max(this.nextFireAt.get(sequenceKey) ?? 0, now + cooldownMs));
+          }
+          this.controlRevisions.set(turret.identityId, revision);
         }
-        this.controlRevisions.set(turret.id, revision);
       }
       // Tesla-Konstrukte werden vom TeslaDomeSystem als Feldwaffe verarbeitet und
       // duerfen hier nicht zusaetzlich den generischen Projektilpfad ausloesen.
       if (turretWeaponConfig.fire.type === 'tesla_dome') continue;
+      const pendingBurst = this.pendingBursts.get(sequenceKey);
+      // Eine Salve gehört ihrem Eintrag: Eine andere Quelle derselben Folge wartet ihr Ende ab,
+      // statt sie fortzusetzen oder parallel eine neue zu beginnen.
+      if (pendingBurst && pendingBurst.ownerEntryId !== turret.id) continue;
+      // Pausierte Quellen beginnen nichts Neues; eine eigene laufende Salve führen sie zu Ende.
+      const paused = turret.fireState === 'paused';
+      if (paused && !pendingBurst) continue;
+      const manual = paused ? null : manned;
       const rangeFactor = turret.projectileRange !== undefined ? turret.projectileRange / turretWeaponConfig.range : turret.muzzleOffset === undefined
         ? (baseTargetRange > 0 ? targetRange / baseTargetRange : 1)
         : Math.max(1, targetRange / Math.max(1, turretWeaponConfig.range));
       const muzzleOffset = turret.muzzleOffset ?? config.placeable.muzzleOffset;
       const manualTarget = manual ? this.resolveManualTarget(turret, manual, targetRange, muzzleOffset) : null;
       if (manual && !manual.fresh) {
-        if (this.pendingBursts.delete(turret.id)) this.nextFireAt.set(turret.id,
-          now + Math.max(1, turret.cooldownMs ?? turretWeaponConfig.cooldown));
+        if (this.deleteOwnedBurst(turret)) this.nextFireAt.set(sequenceKey, now + cooldownMs);
         continue;
       }
 
-      const pendingBurst = this.pendingBursts.get(turret.id);
       if (pendingBurst) {
         if (manualTarget) {
           pendingBurst.targetX = manualTarget.x;
@@ -230,16 +311,17 @@ export class TurretSystem {
           pendingBurst.targetY,
           pendingBurst.damageMultiplier,
           pendingBurst.rangeFactor,
-          turret.id,
+          turret.identityId,
           turret.skipRockIndex,
           turret.sourceCarrierBaseId,
+          { source: turret },
         );
         pendingBurst.shotsRemaining -= 1;
         if (pendingBurst.shotsRemaining > 0) {
           pendingBurst.nextShotAt = now + Math.max(1, turretWeaponConfig.turretBurst?.intervalMs ?? 1);
         } else {
-          this.pendingBursts.delete(turret.id);
-          this.nextFireAt.set(turret.id, now + Math.max(1, turret.cooldownMs ?? turretWeaponConfig.cooldown));
+          this.pendingBursts.delete(sequenceKey);
+          this.nextFireAt.set(sequenceKey, now + cooldownMs);
         }
         continue;
       }
@@ -257,14 +339,16 @@ export class TurretSystem {
       const angle = this.updateAim(turret, Phaser.Math.Angle.Between(turretX, turretY, target.x, target.y), deltaMs);
 
       if (manual && !manual.fireHeld) continue;
-      if (now < (this.nextFireAt.get(turret.id) ?? 0)) continue;
+      if (now < (this.nextFireAt.get(sequenceKey) ?? 0)) continue;
       if (manual && turret.rotationSpeedDegPerSec === undefined
         && !this.hasLineOfFireFromMuzzle(turret, turretX, turretY, target.x, target.y, muzzleOffset)) continue;
       if (!this.canFireAtAngle(turret, angle, target.x, target.y, muzzleOffset)) continue;
-      const buff = this.turretDamageBuffProvider?.(turretX, turretY) ?? null;
+      // Identitätsgebundene Verstärkungen (Injektor, Fernsteuerung) folgen dem Original, auch wenn
+      // eine temporäre Quelle an anderem Ort feuert.
+      const buff = this.turretDamageBuffProvider?.(identity.x, identity.y) ?? null;
       const damageMultiplier = (buff?.damageMultiplier ?? 1)
         * (turret.damage === undefined ? 1 : turret.damage / turretWeaponConfig.damage)
-        * Math.max(0, this.turretDamageMultiplierProvider?.(turret, turrets) ?? 1);
+        * Math.max(0, this.turretDamageMultiplierProvider?.(identity, turrets) ?? 1);
 
       const muzzleDistance = muzzleOffset;
       const muzzleX = turretX + Math.cos(angle) * muzzleDistance;
@@ -281,15 +365,18 @@ export class TurretSystem {
         target.y,
         damageMultiplier,
         rangeFactor,
-        turret.id,
+        turret.identityId,
         turret.skipRockIndex,
         turret.sourceCarrierBaseId,
+        { source: turret },
       );
       const burstCount = turretWeaponConfig.turretBurst
         ? Math.max(1, Math.floor(turretWeaponConfig.turretBurst.count))
         : 1;
       if (burstCount > 1) {
-        this.pendingBursts.set(turret.id, {
+        this.pendingBursts.set(sequenceKey, {
+          ownerEntryId: turret.id,
+          cooldownMs,
           shotsRemaining: burstCount - 1,
           nextShotAt: now + Math.max(1, turretWeaponConfig.turretBurst?.intervalMs ?? 1),
           targetX: target.x,
@@ -298,7 +385,7 @@ export class TurretSystem {
           rangeFactor,
         });
       } else {
-        this.nextFireAt.set(turret.id, now + Math.max(1, turret.cooldownMs ?? turretWeaponConfig.cooldown));
+        this.nextFireAt.set(sequenceKey, now + cooldownMs);
       }
       if (burstCount <= 1 && (turret.secondProjectileDamageFactor ?? 0) > 0) {
         const secondTarget = manualTarget ?? this.findNearestTarget(
@@ -325,23 +412,37 @@ export class TurretSystem {
             secondTarget.y,
             (turret.secondProjectileDamageFactor ?? 0) * damageMultiplier,
             rangeFactor,
-            turret.id,
+            turret.identityId,
             turret.skipRockIndex,
             turret.sourceCarrierBaseId,
+            { source: turret },
           );
         }
       }
     }
 
-    for (const id of [...this.nextFireAt.keys()]) {
-      if (!activeIds.has(id)) this.nextFireAt.delete(id);
+    for (const [sequenceKey, burst] of [...this.pendingBursts]) {
+      if (entrySequences.get(burst.ownerEntryId) === sequenceKey) continue;
+      this.pendingBursts.delete(sequenceKey);
+      // Lebt die Folge in einem anderen Eintrag weiter, kostet der Abbruch den regulären Cooldown,
+      // statt eine freie Salve zu hinterlassen.
+      if (activeSequences.has(sequenceKey)) {
+        this.nextFireAt.set(sequenceKey, Math.max(this.nextFireAt.get(sequenceKey) ?? 0, now + burst.cooldownMs));
+      }
     }
-    for (const id of [...this.pendingBursts.keys()]) {
-      if (!activeIds.has(id)) this.pendingBursts.delete(id);
+    for (const sequenceKey of [...this.nextFireAt.keys()]) {
+      if (!activeSequences.has(sequenceKey)) this.nextFireAt.delete(sequenceKey);
     }
     for (const id of this.controlRevisions.keys()) {
-      if (!activeIds.has(id)) this.controlRevisions.delete(id);
+      if (!activeIdentities.has(id)) this.controlRevisions.delete(id);
     }
+  }
+
+  /** Entfernt die Salve der Folge nur, wenn dieser Eintrag sie begonnen hat. */
+  private deleteOwnedBurst(source: TurretFireSource): boolean {
+    const burst = this.pendingBursts.get(source.sequenceKey);
+    if (!burst || burst.ownerEntryId !== source.id) return false;
+    return this.pendingBursts.delete(source.sequenceKey);
   }
 
   private resolveManualTarget(turret: AutomatedTurret, control: ManualTurretControl, range: number, muzzle: number): { x: number; y: number } {
@@ -351,10 +452,10 @@ export class TurretSystem {
     return { x: turret.x + Math.cos(angle) * distance, y: turret.y + Math.sin(angle) * distance };
   }
 
-  private updateAim(turret: AutomatedTurret, desiredAngle: number, deltaMs: number): number {
+  private updateAim(turret: TurretFireSource, desiredAngle: number, deltaMs: number): number {
     const angle = turret.rotationSpeedDegPerSec === undefined ? desiredAngle
       : stepTurretAngle(turret.angle ?? 0, desiredAngle, turret.rotationSpeedDegPerSec, deltaMs);
-    this.turretAngleUpdater?.(turret.id, angle);
+    this.turretAngleUpdater?.(turret, angle);
     return angle;
   }
 
@@ -375,7 +476,7 @@ export class TurretSystem {
   }
 
   private findNearestTarget(
-    turret: AutomatedTurret,
+    turret: TurretFireSource,
     turretX: number,
     turretY: number,
     range: number,

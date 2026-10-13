@@ -66,7 +66,7 @@ describe('turret aiming and discharge', () => {
     expect(line).toHaveBeenCalledWith(20, 0, 100, 0, 1, 'carrier');
     expect(f.fire.mock.calls[0].slice(6, 9)).toEqual([100, 0, 6]);
     expect(f.fire.mock.calls[1].slice(6, 9)).toEqual([100, 0, 3]);
-    expect(f.fire.mock.calls[1].slice(-3)).toEqual([1, 1, 'carrier']);
+    expect(f.fire.mock.calls[1].slice(10, 13)).toEqual([1, 1, 'carrier']);
   });
   it('manually tracks the mouse through a burst using the normal muzzle, cadence and alignment', () => {
     const f = fixture({ weaponId: 'TURRET_ROCKET_BURST', rotationSpeedDegPerSec: 90, angle: 0 });
@@ -200,7 +200,7 @@ describe('turret aiming and discharge', () => {
     expect(f.fire).toHaveBeenCalledOnce();
     clear.mockReturnValue(true); f.tick(interval + 1);
     expect(f.fire).toHaveBeenCalledTimes(2);
-    expect(f.fire.mock.calls.every(call => call.at(-1) === 'carrier')).toBe(true);
+    expect(f.fire.mock.calls.every(call => call[12] === 'carrier')).toBe(true);
   });
 
   it.each([undefined, 90])('gates secondary shots only for limited turrets (%s)', speed => {
