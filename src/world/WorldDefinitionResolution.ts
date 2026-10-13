@@ -10,7 +10,11 @@ import {
   toDawnActivityDefinitionId,
   toDawnWorldDefinitionId,
 } from '../dawn/contracts/DawnIds';
-import { resolveDawnScenario, type ResolvedDawnScenario } from '../dawn/resolution/DawnScenarioResolution';
+import {
+  resolveDawnScenario,
+  resolveDawnWorldDefinition,
+  type ResolvedDawnScenario,
+} from '../dawn/resolution/DawnScenarioResolution';
 import type { ActivityDescriptor } from './ActivityDescriptor';
 import { toMapId } from './arenaDescriptorAdapter';
 import type { WorldDescriptor } from './WorldDescriptor';
@@ -31,7 +35,10 @@ export function resolveWorldDefinition(
   activity: ActivityDescriptor | null,
 ): WorldDefinition | null {
   if (!isDawnWorldDefinitionId(world.definitionId)) return getWorldDefinition(world.definitionId);
-  return resolveDawnWorldScenario(world, activity).world;
+  // Mit Activity-Plan aus der (gecachten) Gesamtaufloesung; ohne ihn genuegt der World-Plan, z. B.
+  // waehrend die Activity derselben Instanz gerade erst beginnt.
+  if (activity?.parameters?.dawn) return resolveDawnWorldScenario(world, activity).world;
+  return resolveDawnWorldOnly(world);
 }
 
 export function resolveActivityDefinition(
@@ -67,6 +74,24 @@ const dawnScenarioByPlanIdentity = new WeakMap<DawnWorldPlan, {
   readonly activityPlan: DawnActivityPlan;
   readonly resolved: ResolvedDawnScenario;
 }>();
+
+const dawnWorldOnlyCache = new Map<string, WorldDefinition>();
+
+function resolveDawnWorldOnly(world: WorldIdentity): WorldDefinition {
+  const worldPlan = world.parameters?.dawn;
+  if (!worldPlan) throw new Error(`[WorldDefinitionResolution] Dawn world ${world.definitionId} needs its World plan`);
+  if (world.definitionId !== toDawnWorldDefinitionId(worldPlan.templateId)) {
+    throw new Error(`[WorldDefinitionResolution] Dawn identity ${world.definitionId} does not match template ${worldPlan.templateId}`);
+  }
+  const key = toCanonicalJson(worldPlan);
+  let definition = dawnWorldOnlyCache.get(key);
+  if (!definition) {
+    definition = resolveDawnWorldDefinition(worldPlan);
+    if (dawnWorldOnlyCache.size >= DAWN_CACHE_LIMIT) dawnWorldOnlyCache.delete(dawnWorldOnlyCache.keys().next().value!);
+    dawnWorldOnlyCache.set(key, definition);
+  }
+  return definition;
+}
 
 function resolveDawnWorldScenario(world: WorldIdentity, activity: ActivityDescriptor | null): ResolvedDawnScenario {
   const worldPlan = world.parameters?.dawn;

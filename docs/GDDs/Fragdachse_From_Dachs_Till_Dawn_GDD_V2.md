@@ -129,7 +129,7 @@ M2-Simulation legt die tatsächlichen Kosten fest.
 | ID | Datum | Entscheidung | Umkehrbar |
 |---|---|---|---|
 | D-01 | 2026-10-13 | User-Entscheidungen aus Abschnitt 2 | – |
-| D-02 | 2026-10-13 | Eine Dawn-World ist nur zusammen mit ihrer Dawn-Activity gültig (beide Pläne gepaart; `WorldLifecycle` lehnt ungepaarte Paare ab). Die Darstellung behandelt eine Dawn-World ohne Activity (Exit-Fade) wie eine World ohne Coop-Karte. | ja |
+| D-02 | 2026-10-13, präzisiert M1 | Eine Dawn-Activity ist nur gepaart mit ihrer Dawn-World gültig (`WorldLifecycle` lehnt ungepaarte Paare ab). Die World-Definition hängt nur vom World-Plan ab und ist allein daraus auflösbar (nötig beim Activity-Start); Coop-Config und Activity-Definition brauchen beide Pläne. Die Darstellung behandelt eine Dawn-World ohne Activity (Exit-Fade) wie eine World ohne Coop-Karte. | ja |
 | D-03 | 2026-10-13 | Threat = 1 + Expansionsstufe, keine eigene gespeicherte Größe. | ja |
 | D-04 | 2026-10-13 | M0-World-Plan trägt nur Template und Content-Hash; Site-Belegung kommt mit der Archetyp-Registry in M1. | ja |
 | D-05 | 2026-10-13 | M0 beweist den Transport mit einer Welle als `repel-assault`; `defend-until-dawn` löst das in M1 ab. | ja |

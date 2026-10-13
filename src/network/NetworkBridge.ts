@@ -126,7 +126,7 @@ import { isCommittedLoadoutEqual, isCoopDefenseReadyLoadoutComplete, resolveLoad
 import { DEFAULT_LOADOUT, getUtilityBaseId, ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import type { HeldItemSlot } from '../loadout/HeldItemSlotTracker';
 import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
-import { isDawnWorld, resolveWorldDefinition } from '../world/WorldDefinitionResolution';
+import { resolveWorldDefinition } from '../world/WorldDefinitionResolution';
 import { COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS, isConstructionId, normalizeConstructionId } from '../config/coopDefenseConstructions';
 import { TURRET_VISUALS } from '../config/turretVisuals';
 import { POWERUP_DEFS } from '../powerups/PowerUpConfig';
@@ -1595,8 +1595,7 @@ export class NetworkBridge {
     if (import.meta.env.DEV && this.devScenarioPlayerFreeForAll) return true;
     if (this.getActivityDescriptor() !== null) return false;
     const world = this.getWorldDescriptor();
-    // Eine Dawn-World ist nur mit ihrer Activity aufloesbar und wie jede Coop-Kartenwelt nie FFA.
-    if (!world || isDawnWorld(world)) return false;
+    if (!world) return false;
     return resolveWorldDefinition(world, null)?.actionPolicy?.playerRelationships === 'free-for-all';
   }
 

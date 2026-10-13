@@ -20,7 +20,7 @@ import {
   parseDawnActivityPlan,
   parseDawnWorldPlan,
 } from '../src/dawn/contracts/DawnPlans';
-import { resolveDawnScenario, resolveDawnSites } from '../src/dawn/resolution/DawnScenarioResolution';
+import { resolveDawnWorldDefinition, resolveDawnScenario, resolveDawnSites } from '../src/dawn/resolution/DawnScenarioResolution';
 import { getDawnPhaseStartMs, toDawnDynamicTimeOfDay } from '../src/dawn/rules/DawnPhase';
 import { isSameActivityInstance, parseActivityDescriptor, type ActivityDescriptor } from '../src/world/ActivityDescriptor';
 import { resolveActiveGameMode, toMapId } from '../src/world/arenaDescriptorAdapter';
@@ -226,6 +226,13 @@ describe('Dawn scenario resolution', () => {
     expect(activity.secondaryObjectives).toHaveLength(sites.length);
   });
 
+  it('resolves the World definition from the World plan alone, equal to the paired resolution', () => {
+    for (const [threat, seed] of [[1, 3], [5, 11], [DAWN_MAX_THREAT, 29]] as const) {
+      const { plans } = dawnRound(threat, seed);
+      expect(resolveDawnWorldDefinition(plans.world)).toEqual(resolveDawnScenario(plans.world, plans.activity).world);
+    }
+  });
+
   it('derives the World only from the World plan', () => {
     const { plans } = dawnRound(1, 5);
     const harder = dawnRound(DAWN_MAX_THREAT, 6);
@@ -264,7 +271,9 @@ describe('Dawn scenario resolution', () => {
 
   it('refuses to resolve a Dawn world without its paired plans', () => {
     const { world, activity } = dawnRound();
-    expect(() => resolveWorldDefinition(world, null)).toThrow('needs its World and Activity plan');
+    // Die World-Definition genuegt mit dem World-Plan; Config und Activity brauchen beide Plaene.
+    expect(resolveWorldDefinition(world, null)).toEqual(resolveWorldDefinition(world, activity));
+    expect(() => resolveCoopDefenseMapConfig(world, null)).toThrow('needs its World and Activity plan');
     expect(() => resolveCoopDefenseMapConfig({ ...world, parameters: {} }, activity))
       .toThrow('needs its World and Activity plan');
     expect(() => resolveActivityDefinition({ ...activity, definitionId: toDawnActivityDefinitionId('other') }, world))

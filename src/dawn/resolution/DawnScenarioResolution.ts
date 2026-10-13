@@ -110,6 +110,22 @@ export function resolveDawnScenario(worldPlan: DawnWorldPlan, activityPlan: Dawn
   return { mapConfig, world: scenario.world, activity: scenario.activity };
 }
 
+/**
+ * Die World-Definition allein aus dem World-Plan. Die World-Seite haengt nur von Template und Sites
+ * ab; die Activity-Seite wird dafuer mit einem wellenlosen Plan derselben Sites normalisiert und
+ * verworfen. Coop-Config und Activity-Definition brauchen weiterhin beide Plaene.
+ */
+export function resolveDawnWorldDefinition(worldPlan: DawnWorldPlan): WorldDefinition {
+  return resolveDawnScenario(worldPlan, {
+    version: worldPlan.version,
+    contentHash: worldPlan.contentHash,
+    threat: 1,
+    dayNumber: 1,
+    scheduleId: getDawnThreatCurve(1).scheduleId,
+    waves: [],
+  }).world;
+}
+
 /** Sites eines World-Plans; unbekannte Slots, Archetypen oder Tiers brechen ab. */
 export function resolveDawnSites(worldPlan: DawnWorldPlan): readonly ResolvedDawnSite[] {
   const template = getDawnArenaTemplate(worldPlan.templateId);
