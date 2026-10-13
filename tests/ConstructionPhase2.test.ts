@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { PERSISTENT_BASE_AREA_STAGES } from '../src/persistentBase/PersistentBaseCore';
+import { resolvePersistentBaseConstructionCapacityBonus } from '../src/persistentBase/PersistentBaseConstructionCapacity';
 import {
   getPlaceableCapacityCost,
   getToolCapacityCost,
@@ -64,6 +66,30 @@ describe('phase-2 construction identity and access', () => {
     expect(resolveConstructionCapacity({ gameMode: 'coop_defense', classId: 'dachs_of_steel', modifiers: 7 })).toBe(37);
     expect(resolveConstructionCapacity({ gameMode: 'coop_defense', classId: 'inspector_gadachs' })).toBe(100);
     expect(resolveConstructionCapacity({ gameMode: 'deathmatch', classId: null, modifiers: 4 })).toBe(104);
+  });
+
+  it.each(PERSISTENT_BASE_AREA_STAGES)('adds the frozen World bonus at stage %i for every builder class', persistentBaseAreaStage => {
+    for (const classId of ['dachs_nukem', 'dachs_of_steel', 'inspector_gadachs'] as const) {
+      for (const modifiers of [undefined, 7, { capacityBonus: 7 }]) {
+        const input = { gameMode: 'coop_defense' as const, classId, modifiers };
+        const bonus = resolvePersistentBaseConstructionCapacityBonus(persistentBaseAreaStage);
+        expect(resolveConstructionCapacity({ ...input, persistentBaseAreaStage }))
+          .toBe(resolveConstructionCapacity(input) + bonus);
+        if (persistentBaseAreaStage <= 2) {
+          expect(resolveConstructionCapacity({ ...input, persistentBaseAreaStage })).toBe(resolveConstructionCapacity(input));
+        }
+      }
+    }
+  });
+
+  it('keeps worlds without a stage and non-coop modes unchanged', () => {
+    for (const gameMode of ['coop_defense', 'deathmatch', 'team_deathmatch', 'capture_the_beer'] as const) {
+      const input = { gameMode, classId: 'inspector_gadachs' as const, modifiers: 7 };
+      expect(resolveConstructionCapacity({ ...input, persistentBaseAreaStage: undefined })).toBe(resolveConstructionCapacity(input));
+      if (gameMode !== 'coop_defense') {
+        expect(resolveConstructionCapacity({ ...input, persistentBaseAreaStage: 11 })).toBe(resolveConstructionCapacity(input));
+      }
+    }
   });
 
   it('separates unlocked, active loadout and class eligibility', () => {

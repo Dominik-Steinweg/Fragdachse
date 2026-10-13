@@ -1392,6 +1392,7 @@ export class ClientUpdateCoordinator {
     return resolveConstructionCapacity({
       gameMode: bridge.getActiveGameMode(),
       classId: currentLoadout?.coopDefenseClassId ?? this.getLocalCoopDefenseClassId(),
+      persistentBaseAreaStage: bridge.getWorldDescriptor()?.parameters?.persistentBaseAreaStage,
       modifiers: this.getLocalEffectTotals().additive[COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT] ?? 0,
     });
   }

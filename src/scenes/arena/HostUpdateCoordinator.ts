@@ -975,6 +975,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
           ? resolveConstructionCapacity({
             gameMode,
             classId: currentLoadout?.coopDefenseClassId,
+            persistentBaseAreaStage: bridge.getWorldDescriptor()?.parameters?.persistentBaseAreaStage,
             modifiers: this.playerGameplayRuntime?.getPlayerCombatIntegrationPort()?.modifier.getNumericStat(
               localId,
               COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT,

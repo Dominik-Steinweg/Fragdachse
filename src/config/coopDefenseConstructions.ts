@@ -2,6 +2,8 @@ import { validateTurretAimConfig, type TurretAimConfig } from './turretAim';
 import rawCoopDefenseConstructionCooldowns from './coopDefenseConstructions.json';
 import { ATTACK_DRONE_RULES } from './attackDrone';
 import { WATCHTOWER_REWARD_ICON_KEY } from './watchtower';
+import { resolvePersistentBaseConstructionCapacityBonus } from '../persistentBase/PersistentBaseConstructionCapacity';
+import type { PersistentBaseAreaStage } from '../persistentBase/PersistentBaseCore';
 import type { ConstructionId, ConstructionOwnership, CoopDefenseClassId, EnergyInjectorConstructionEffect, GameMode, PlaceableKind, TurretWeaponId } from '../types';
 
 interface RawCoopDefenseConstructionCooldownDefinition {
@@ -96,6 +98,8 @@ export interface ConstructionCapacityResolverInput {
   readonly classId: CoopDefenseClassId | null | undefined;
   /** Additive item/upgrade modifiers; malformed values are treated as zero. */
   readonly modifiers?: number | { readonly capacityBonus?: number } | null;
+  /** Frozen current World stage, never a player's personal expansion progress. */
+  readonly persistentBaseAreaStage?: PersistentBaseAreaStage;
 }
 
 /**
@@ -112,7 +116,10 @@ export function resolveConstructionCapacity(input: ConstructionCapacityResolverI
     ? input.modifiers
     : input.modifiers?.capacityBonus ?? 0;
   const bonus = Number.isFinite(rawBonus) ? rawBonus : 0;
-  return Math.max(0, base + bonus);
+  const worldBonus = input.gameMode === 'coop_defense' && input.persistentBaseAreaStage !== undefined
+    ? resolvePersistentBaseConstructionCapacityBonus(input.persistentBaseAreaStage)
+    : 0;
+  return Math.max(0, base + bonus + worldBonus);
 }
 
 /**
