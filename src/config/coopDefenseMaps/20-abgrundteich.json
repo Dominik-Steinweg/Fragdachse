@@ -1,0 +1,2031 @@
+{
+  "mapId": "20",
+  "arenaWidthCells": 92,
+  "arenaHeightCells": 52,
+  "timeOfDay": "18:30",
+  "tutorialAnchor": {
+    "gridX": 76,
+    "gridY": 3
+  },
+  "rockFillRatio": 0,
+  "trackMode": "none",
+  "mapEvents": [],
+  "balanceReferenceDurationSec": 300,
+  "objective": "defeat-boss",
+  "bases": [],
+  "persistentBase": {
+    "baseId": "coop-base-rear",
+    "anchor": {
+      "gridX": 76,
+      "gridY": 30
+    }
+  },
+  "rockWalls": [
+    {
+      "id": "north-rocks",
+      "gridX": 16,
+      "gridY": 5,
+      "widthCells": 3,
+      "heightCells": 2
+    },
+    {
+      "id": "east-rocks",
+      "gridX": 61,
+      "gridY": 24,
+      "widthCells": 2,
+      "heightCells": 3
+    }
+  ],
+  "water": [
+    {
+      "gridX": 30,
+      "gridY": 12
+    },
+    {
+      "gridX": 31,
+      "gridY": 12
+    },
+    {
+      "gridX": 32,
+      "gridY": 12
+    },
+    {
+      "gridX": 33,
+      "gridY": 12
+    },
+    {
+      "gridX": 34,
+      "gridY": 12
+    },
+    {
+      "gridX": 35,
+      "gridY": 12
+    },
+    {
+      "gridX": 27,
+      "gridY": 13
+    },
+    {
+      "gridX": 28,
+      "gridY": 13
+    },
+    {
+      "gridX": 29,
+      "gridY": 13
+    },
+    {
+      "gridX": 30,
+      "gridY": 13
+    },
+    {
+      "gridX": 31,
+      "gridY": 13
+    },
+    {
+      "gridX": 32,
+      "gridY": 13
+    },
+    {
+      "gridX": 33,
+      "gridY": 13
+    },
+    {
+      "gridX": 34,
+      "gridY": 13
+    },
+    {
+      "gridX": 35,
+      "gridY": 13
+    },
+    {
+      "gridX": 36,
+      "gridY": 13
+    },
+    {
+      "gridX": 37,
+      "gridY": 13
+    },
+    {
+      "gridX": 38,
+      "gridY": 13
+    },
+    {
+      "gridX": 39,
+      "gridY": 13
+    },
+    {
+      "gridX": 40,
+      "gridY": 13
+    },
+    {
+      "gridX": 41,
+      "gridY": 13
+    },
+    {
+      "gridX": 42,
+      "gridY": 13
+    },
+    {
+      "gridX": 26,
+      "gridY": 14
+    },
+    {
+      "gridX": 27,
+      "gridY": 14
+    },
+    {
+      "gridX": 28,
+      "gridY": 14
+    },
+    {
+      "gridX": 29,
+      "gridY": 14
+    },
+    {
+      "gridX": 30,
+      "gridY": 14
+    },
+    {
+      "gridX": 31,
+      "gridY": 14
+    },
+    {
+      "gridX": 32,
+      "gridY": 14
+    },
+    {
+      "gridX": 33,
+      "gridY": 14
+    },
+    {
+      "gridX": 34,
+      "gridY": 14
+    },
+    {
+      "gridX": 35,
+      "gridY": 14
+    },
+    {
+      "gridX": 36,
+      "gridY": 14
+    },
+    {
+      "gridX": 37,
+      "gridY": 14
+    },
+    {
+      "gridX": 38,
+      "gridY": 14
+    },
+    {
+      "gridX": 39,
+      "gridY": 14
+    },
+    {
+      "gridX": 40,
+      "gridY": 14
+    },
+    {
+      "gridX": 41,
+      "gridY": 14
+    },
+    {
+      "gridX": 42,
+      "gridY": 14
+    },
+    {
+      "gridX": 43,
+      "gridY": 14
+    },
+    {
+      "gridX": 44,
+      "gridY": 14
+    },
+    {
+      "gridX": 25,
+      "gridY": 15
+    },
+    {
+      "gridX": 26,
+      "gridY": 15
+    },
+    {
+      "gridX": 27,
+      "gridY": 15
+    },
+    {
+      "gridX": 28,
+      "gridY": 15
+    },
+    {
+      "gridX": 29,
+      "gridY": 15
+    },
+    {
+      "gridX": 30,
+      "gridY": 15
+    },
+    {
+      "gridX": 31,
+      "gridY": 15
+    },
+    {
+      "gridX": 32,
+      "gridY": 15
+    },
+    {
+      "gridX": 33,
+      "gridY": 15
+    },
+    {
+      "gridX": 34,
+      "gridY": 15
+    },
+    {
+      "gridX": 35,
+      "gridY": 15
+    },
+    {
+      "gridX": 36,
+      "gridY": 15
+    },
+    {
+      "gridX": 37,
+      "gridY": 15
+    },
+    {
+      "gridX": 38,
+      "gridY": 15
+    },
+    {
+      "gridX": 39,
+      "gridY": 15
+    },
+    {
+      "gridX": 40,
+      "gridY": 15
+    },
+    {
+      "gridX": 41,
+      "gridY": 15
+    },
+    {
+      "gridX": 42,
+      "gridY": 15
+    },
+    {
+      "gridX": 43,
+      "gridY": 15
+    },
+    {
+      "gridX": 44,
+      "gridY": 15
+    },
+    {
+      "gridX": 45,
+      "gridY": 15
+    },
+    {
+      "gridX": 24,
+      "gridY": 16
+    },
+    {
+      "gridX": 25,
+      "gridY": 16
+    },
+    {
+      "gridX": 26,
+      "gridY": 16
+    },
+    {
+      "gridX": 27,
+      "gridY": 16
+    },
+    {
+      "gridX": 28,
+      "gridY": 16
+    },
+    {
+      "gridX": 29,
+      "gridY": 16
+    },
+    {
+      "gridX": 30,
+      "gridY": 16
+    },
+    {
+      "gridX": 31,
+      "gridY": 16
+    },
+    {
+      "gridX": 32,
+      "gridY": 16
+    },
+    {
+      "gridX": 33,
+      "gridY": 16
+    },
+    {
+      "gridX": 34,
+      "gridY": 16
+    },
+    {
+      "gridX": 35,
+      "gridY": 16
+    },
+    {
+      "gridX": 36,
+      "gridY": 16
+    },
+    {
+      "gridX": 37,
+      "gridY": 16
+    },
+    {
+      "gridX": 38,
+      "gridY": 16
+    },
+    {
+      "gridX": 39,
+      "gridY": 16
+    },
+    {
+      "gridX": 40,
+      "gridY": 16
+    },
+    {
+      "gridX": 41,
+      "gridY": 16
+    },
+    {
+      "gridX": 42,
+      "gridY": 16
+    },
+    {
+      "gridX": 43,
+      "gridY": 16
+    },
+    {
+      "gridX": 44,
+      "gridY": 16
+    },
+    {
+      "gridX": 45,
+      "gridY": 16
+    },
+    {
+      "gridX": 24,
+      "gridY": 17
+    },
+    {
+      "gridX": 25,
+      "gridY": 17
+    },
+    {
+      "gridX": 26,
+      "gridY": 17
+    },
+    {
+      "gridX": 27,
+      "gridY": 17
+    },
+    {
+      "gridX": 28,
+      "gridY": 17
+    },
+    {
+      "gridX": 29,
+      "gridY": 17
+    },
+    {
+      "gridX": 30,
+      "gridY": 17
+    },
+    {
+      "gridX": 31,
+      "gridY": 17
+    },
+    {
+      "gridX": 32,
+      "gridY": 17
+    },
+    {
+      "gridX": 33,
+      "gridY": 17
+    },
+    {
+      "gridX": 34,
+      "gridY": 17
+    },
+    {
+      "gridX": 35,
+      "gridY": 17
+    },
+    {
+      "gridX": 36,
+      "gridY": 17
+    },
+    {
+      "gridX": 37,
+      "gridY": 17
+    },
+    {
+      "gridX": 38,
+      "gridY": 17
+    },
+    {
+      "gridX": 39,
+      "gridY": 17
+    },
+    {
+      "gridX": 40,
+      "gridY": 17
+    },
+    {
+      "gridX": 41,
+      "gridY": 17
+    },
+    {
+      "gridX": 42,
+      "gridY": 17
+    },
+    {
+      "gridX": 43,
+      "gridY": 17
+    },
+    {
+      "gridX": 44,
+      "gridY": 17
+    },
+    {
+      "gridX": 45,
+      "gridY": 17
+    },
+    {
+      "gridX": 46,
+      "gridY": 17
+    },
+    {
+      "gridX": 24,
+      "gridY": 18
+    },
+    {
+      "gridX": 25,
+      "gridY": 18
+    },
+    {
+      "gridX": 26,
+      "gridY": 18
+    },
+    {
+      "gridX": 27,
+      "gridY": 18
+    },
+    {
+      "gridX": 28,
+      "gridY": 18
+    },
+    {
+      "gridX": 29,
+      "gridY": 18
+    },
+    {
+      "gridX": 30,
+      "gridY": 18
+    },
+    {
+      "gridX": 31,
+      "gridY": 18
+    },
+    {
+      "gridX": 32,
+      "gridY": 18
+    },
+    {
+      "gridX": 33,
+      "gridY": 18
+    },
+    {
+      "gridX": 34,
+      "gridY": 18
+    },
+    {
+      "gridX": 35,
+      "gridY": 18
+    },
+    {
+      "gridX": 36,
+      "gridY": 18
+    },
+    {
+      "gridX": 37,
+      "gridY": 18
+    },
+    {
+      "gridX": 38,
+      "gridY": 18
+    },
+    {
+      "gridX": 39,
+      "gridY": 18
+    },
+    {
+      "gridX": 40,
+      "gridY": 18
+    },
+    {
+      "gridX": 41,
+      "gridY": 18
+    },
+    {
+      "gridX": 42,
+      "gridY": 18
+    },
+    {
+      "gridX": 43,
+      "gridY": 18
+    },
+    {
+      "gridX": 44,
+      "gridY": 18
+    },
+    {
+      "gridX": 45,
+      "gridY": 18
+    },
+    {
+      "gridX": 46,
+      "gridY": 18
+    },
+    {
+      "gridX": 47,
+      "gridY": 18
+    },
+    {
+      "gridX": 23,
+      "gridY": 19
+    },
+    {
+      "gridX": 24,
+      "gridY": 19
+    },
+    {
+      "gridX": 25,
+      "gridY": 19
+    },
+    {
+      "gridX": 26,
+      "gridY": 19
+    },
+    {
+      "gridX": 27,
+      "gridY": 19
+    },
+    {
+      "gridX": 28,
+      "gridY": 19
+    },
+    {
+      "gridX": 29,
+      "gridY": 19
+    },
+    {
+      "gridX": 30,
+      "gridY": 19
+    },
+    {
+      "gridX": 31,
+      "gridY": 19
+    },
+    {
+      "gridX": 32,
+      "gridY": 19
+    },
+    {
+      "gridX": 33,
+      "gridY": 19
+    },
+    {
+      "gridX": 34,
+      "gridY": 19
+    },
+    {
+      "gridX": 35,
+      "gridY": 19
+    },
+    {
+      "gridX": 36,
+      "gridY": 19
+    },
+    {
+      "gridX": 37,
+      "gridY": 19
+    },
+    {
+      "gridX": 38,
+      "gridY": 19
+    },
+    {
+      "gridX": 39,
+      "gridY": 19
+    },
+    {
+      "gridX": 40,
+      "gridY": 19
+    },
+    {
+      "gridX": 41,
+      "gridY": 19
+    },
+    {
+      "gridX": 42,
+      "gridY": 19
+    },
+    {
+      "gridX": 43,
+      "gridY": 19
+    },
+    {
+      "gridX": 44,
+      "gridY": 19
+    },
+    {
+      "gridX": 45,
+      "gridY": 19
+    },
+    {
+      "gridX": 46,
+      "gridY": 19
+    },
+    {
+      "gridX": 47,
+      "gridY": 19
+    },
+    {
+      "gridX": 23,
+      "gridY": 20
+    },
+    {
+      "gridX": 24,
+      "gridY": 20
+    },
+    {
+      "gridX": 25,
+      "gridY": 20
+    },
+    {
+      "gridX": 26,
+      "gridY": 20
+    },
+    {
+      "gridX": 27,
+      "gridY": 20
+    },
+    {
+      "gridX": 28,
+      "gridY": 20
+    },
+    {
+      "gridX": 29,
+      "gridY": 20
+    },
+    {
+      "gridX": 30,
+      "gridY": 20
+    },
+    {
+      "gridX": 31,
+      "gridY": 20
+    },
+    {
+      "gridX": 32,
+      "gridY": 20
+    },
+    {
+      "gridX": 33,
+      "gridY": 20
+    },
+    {
+      "gridX": 34,
+      "gridY": 20
+    },
+    {
+      "gridX": 35,
+      "gridY": 20
+    },
+    {
+      "gridX": 36,
+      "gridY": 20
+    },
+    {
+      "gridX": 37,
+      "gridY": 20
+    },
+    {
+      "gridX": 38,
+      "gridY": 20
+    },
+    {
+      "gridX": 39,
+      "gridY": 20
+    },
+    {
+      "gridX": 40,
+      "gridY": 20
+    },
+    {
+      "gridX": 41,
+      "gridY": 20
+    },
+    {
+      "gridX": 42,
+      "gridY": 20
+    },
+    {
+      "gridX": 43,
+      "gridY": 20
+    },
+    {
+      "gridX": 44,
+      "gridY": 20
+    },
+    {
+      "gridX": 45,
+      "gridY": 20
+    },
+    {
+      "gridX": 46,
+      "gridY": 20
+    },
+    {
+      "gridX": 47,
+      "gridY": 20
+    },
+    {
+      "gridX": 48,
+      "gridY": 20
+    },
+    {
+      "gridX": 23,
+      "gridY": 21
+    },
+    {
+      "gridX": 24,
+      "gridY": 21
+    },
+    {
+      "gridX": 25,
+      "gridY": 21
+    },
+    {
+      "gridX": 26,
+      "gridY": 21
+    },
+    {
+      "gridX": 27,
+      "gridY": 21
+    },
+    {
+      "gridX": 28,
+      "gridY": 21
+    },
+    {
+      "gridX": 29,
+      "gridY": 21
+    },
+    {
+      "gridX": 30,
+      "gridY": 21
+    },
+    {
+      "gridX": 31,
+      "gridY": 21
+    },
+    {
+      "gridX": 32,
+      "gridY": 21
+    },
+    {
+      "gridX": 33,
+      "gridY": 21
+    },
+    {
+      "gridX": 34,
+      "gridY": 21
+    },
+    {
+      "gridX": 35,
+      "gridY": 21
+    },
+    {
+      "gridX": 36,
+      "gridY": 21
+    },
+    {
+      "gridX": 37,
+      "gridY": 21
+    },
+    {
+      "gridX": 38,
+      "gridY": 21
+    },
+    {
+      "gridX": 39,
+      "gridY": 21
+    },
+    {
+      "gridX": 40,
+      "gridY": 21
+    },
+    {
+      "gridX": 41,
+      "gridY": 21
+    },
+    {
+      "gridX": 42,
+      "gridY": 21
+    },
+    {
+      "gridX": 43,
+      "gridY": 21
+    },
+    {
+      "gridX": 44,
+      "gridY": 21
+    },
+    {
+      "gridX": 45,
+      "gridY": 21
+    },
+    {
+      "gridX": 46,
+      "gridY": 21
+    },
+    {
+      "gridX": 47,
+      "gridY": 21
+    },
+    {
+      "gridX": 48,
+      "gridY": 21
+    },
+    {
+      "gridX": 22,
+      "gridY": 22
+    },
+    {
+      "gridX": 23,
+      "gridY": 22
+    },
+    {
+      "gridX": 24,
+      "gridY": 22
+    },
+    {
+      "gridX": 25,
+      "gridY": 22
+    },
+    {
+      "gridX": 26,
+      "gridY": 22
+    },
+    {
+      "gridX": 27,
+      "gridY": 22
+    },
+    {
+      "gridX": 28,
+      "gridY": 22
+    },
+    {
+      "gridX": 29,
+      "gridY": 22
+    },
+    {
+      "gridX": 30,
+      "gridY": 22
+    },
+    {
+      "gridX": 31,
+      "gridY": 22
+    },
+    {
+      "gridX": 32,
+      "gridY": 22
+    },
+    {
+      "gridX": 33,
+      "gridY": 22
+    },
+    {
+      "gridX": 34,
+      "gridY": 22
+    },
+    {
+      "gridX": 35,
+      "gridY": 22
+    },
+    {
+      "gridX": 36,
+      "gridY": 22
+    },
+    {
+      "gridX": 37,
+      "gridY": 22
+    },
+    {
+      "gridX": 38,
+      "gridY": 22
+    },
+    {
+      "gridX": 39,
+      "gridY": 22
+    },
+    {
+      "gridX": 40,
+      "gridY": 22
+    },
+    {
+      "gridX": 41,
+      "gridY": 22
+    },
+    {
+      "gridX": 42,
+      "gridY": 22
+    },
+    {
+      "gridX": 43,
+      "gridY": 22
+    },
+    {
+      "gridX": 44,
+      "gridY": 22
+    },
+    {
+      "gridX": 45,
+      "gridY": 22
+    },
+    {
+      "gridX": 46,
+      "gridY": 22
+    },
+    {
+      "gridX": 47,
+      "gridY": 22
+    },
+    {
+      "gridX": 48,
+      "gridY": 22
+    },
+    {
+      "gridX": 22,
+      "gridY": 23
+    },
+    {
+      "gridX": 23,
+      "gridY": 23
+    },
+    {
+      "gridX": 24,
+      "gridY": 23
+    },
+    {
+      "gridX": 25,
+      "gridY": 23
+    },
+    {
+      "gridX": 26,
+      "gridY": 23
+    },
+    {
+      "gridX": 27,
+      "gridY": 23
+    },
+    {
+      "gridX": 28,
+      "gridY": 23
+    },
+    {
+      "gridX": 29,
+      "gridY": 23
+    },
+    {
+      "gridX": 30,
+      "gridY": 23
+    },
+    {
+      "gridX": 31,
+      "gridY": 23
+    },
+    {
+      "gridX": 32,
+      "gridY": 23
+    },
+    {
+      "gridX": 33,
+      "gridY": 23
+    },
+    {
+      "gridX": 34,
+      "gridY": 23
+    },
+    {
+      "gridX": 35,
+      "gridY": 23
+    },
+    {
+      "gridX": 36,
+      "gridY": 23
+    },
+    {
+      "gridX": 37,
+      "gridY": 23
+    },
+    {
+      "gridX": 38,
+      "gridY": 23
+    },
+    {
+      "gridX": 39,
+      "gridY": 23
+    },
+    {
+      "gridX": 40,
+      "gridY": 23
+    },
+    {
+      "gridX": 41,
+      "gridY": 23
+    },
+    {
+      "gridX": 42,
+      "gridY": 23
+    },
+    {
+      "gridX": 43,
+      "gridY": 23
+    },
+    {
+      "gridX": 44,
+      "gridY": 23
+    },
+    {
+      "gridX": 45,
+      "gridY": 23
+    },
+    {
+      "gridX": 46,
+      "gridY": 23
+    },
+    {
+      "gridX": 47,
+      "gridY": 23
+    },
+    {
+      "gridX": 48,
+      "gridY": 23
+    },
+    {
+      "gridX": 49,
+      "gridY": 23
+    },
+    {
+      "gridX": 22,
+      "gridY": 24
+    },
+    {
+      "gridX": 23,
+      "gridY": 24
+    },
+    {
+      "gridX": 24,
+      "gridY": 24
+    },
+    {
+      "gridX": 25,
+      "gridY": 24
+    },
+    {
+      "gridX": 26,
+      "gridY": 24
+    },
+    {
+      "gridX": 27,
+      "gridY": 24
+    },
+    {
+      "gridX": 28,
+      "gridY": 24
+    },
+    {
+      "gridX": 29,
+      "gridY": 24
+    },
+    {
+      "gridX": 30,
+      "gridY": 24
+    },
+    {
+      "gridX": 31,
+      "gridY": 24
+    },
+    {
+      "gridX": 32,
+      "gridY": 24
+    },
+    {
+      "gridX": 33,
+      "gridY": 24
+    },
+    {
+      "gridX": 34,
+      "gridY": 24
+    },
+    {
+      "gridX": 35,
+      "gridY": 24
+    },
+    {
+      "gridX": 36,
+      "gridY": 24
+    },
+    {
+      "gridX": 37,
+      "gridY": 24
+    },
+    {
+      "gridX": 38,
+      "gridY": 24
+    },
+    {
+      "gridX": 39,
+      "gridY": 24
+    },
+    {
+      "gridX": 40,
+      "gridY": 24
+    },
+    {
+      "gridX": 41,
+      "gridY": 24
+    },
+    {
+      "gridX": 42,
+      "gridY": 24
+    },
+    {
+      "gridX": 43,
+      "gridY": 24
+    },
+    {
+      "gridX": 44,
+      "gridY": 24
+    },
+    {
+      "gridX": 45,
+      "gridY": 24
+    },
+    {
+      "gridX": 46,
+      "gridY": 24
+    },
+    {
+      "gridX": 47,
+      "gridY": 24
+    },
+    {
+      "gridX": 48,
+      "gridY": 24
+    },
+    {
+      "gridX": 49,
+      "gridY": 24
+    },
+    {
+      "gridX": 22,
+      "gridY": 25
+    },
+    {
+      "gridX": 23,
+      "gridY": 25
+    },
+    {
+      "gridX": 24,
+      "gridY": 25
+    },
+    {
+      "gridX": 25,
+      "gridY": 25
+    },
+    {
+      "gridX": 26,
+      "gridY": 25
+    },
+    {
+      "gridX": 27,
+      "gridY": 25
+    },
+    {
+      "gridX": 28,
+      "gridY": 25
+    },
+    {
+      "gridX": 29,
+      "gridY": 25
+    },
+    {
+      "gridX": 30,
+      "gridY": 25
+    },
+    {
+      "gridX": 31,
+      "gridY": 25
+    },
+    {
+      "gridX": 32,
+      "gridY": 25
+    },
+    {
+      "gridX": 33,
+      "gridY": 25
+    },
+    {
+      "gridX": 34,
+      "gridY": 25
+    },
+    {
+      "gridX": 35,
+      "gridY": 25
+    },
+    {
+      "gridX": 36,
+      "gridY": 25
+    },
+    {
+      "gridX": 37,
+      "gridY": 25
+    },
+    {
+      "gridX": 38,
+      "gridY": 25
+    },
+    {
+      "gridX": 39,
+      "gridY": 25
+    },
+    {
+      "gridX": 40,
+      "gridY": 25
+    },
+    {
+      "gridX": 41,
+      "gridY": 25
+    },
+    {
+      "gridX": 42,
+      "gridY": 25
+    },
+    {
+      "gridX": 43,
+      "gridY": 25
+    },
+    {
+      "gridX": 44,
+      "gridY": 25
+    },
+    {
+      "gridX": 45,
+      "gridY": 25
+    },
+    {
+      "gridX": 46,
+      "gridY": 25
+    },
+    {
+      "gridX": 47,
+      "gridY": 25
+    },
+    {
+      "gridX": 48,
+      "gridY": 25
+    },
+    {
+      "gridX": 23,
+      "gridY": 26
+    },
+    {
+      "gridX": 24,
+      "gridY": 26
+    },
+    {
+      "gridX": 25,
+      "gridY": 26
+    },
+    {
+      "gridX": 26,
+      "gridY": 26
+    },
+    {
+      "gridX": 27,
+      "gridY": 26
+    },
+    {
+      "gridX": 28,
+      "gridY": 26
+    },
+    {
+      "gridX": 29,
+      "gridY": 26
+    },
+    {
+      "gridX": 30,
+      "gridY": 26
+    },
+    {
+      "gridX": 31,
+      "gridY": 26
+    },
+    {
+      "gridX": 32,
+      "gridY": 26
+    },
+    {
+      "gridX": 33,
+      "gridY": 26
+    },
+    {
+      "gridX": 34,
+      "gridY": 26
+    },
+    {
+      "gridX": 35,
+      "gridY": 26
+    },
+    {
+      "gridX": 36,
+      "gridY": 26
+    },
+    {
+      "gridX": 37,
+      "gridY": 26
+    },
+    {
+      "gridX": 38,
+      "gridY": 26
+    },
+    {
+      "gridX": 39,
+      "gridY": 26
+    },
+    {
+      "gridX": 40,
+      "gridY": 26
+    },
+    {
+      "gridX": 41,
+      "gridY": 26
+    },
+    {
+      "gridX": 42,
+      "gridY": 26
+    },
+    {
+      "gridX": 43,
+      "gridY": 26
+    },
+    {
+      "gridX": 44,
+      "gridY": 26
+    },
+    {
+      "gridX": 45,
+      "gridY": 26
+    },
+    {
+      "gridX": 46,
+      "gridY": 26
+    },
+    {
+      "gridX": 47,
+      "gridY": 26
+    },
+    {
+      "gridX": 48,
+      "gridY": 26
+    },
+    {
+      "gridX": 23,
+      "gridY": 27
+    },
+    {
+      "gridX": 24,
+      "gridY": 27
+    },
+    {
+      "gridX": 25,
+      "gridY": 27
+    },
+    {
+      "gridX": 26,
+      "gridY": 27
+    },
+    {
+      "gridX": 27,
+      "gridY": 27
+    },
+    {
+      "gridX": 28,
+      "gridY": 27
+    },
+    {
+      "gridX": 29,
+      "gridY": 27
+    },
+    {
+      "gridX": 30,
+      "gridY": 27
+    },
+    {
+      "gridX": 31,
+      "gridY": 27
+    },
+    {
+      "gridX": 32,
+      "gridY": 27
+    },
+    {
+      "gridX": 33,
+      "gridY": 27
+    },
+    {
+      "gridX": 34,
+      "gridY": 27
+    },
+    {
+      "gridX": 35,
+      "gridY": 27
+    },
+    {
+      "gridX": 36,
+      "gridY": 27
+    },
+    {
+      "gridX": 37,
+      "gridY": 27
+    },
+    {
+      "gridX": 38,
+      "gridY": 27
+    },
+    {
+      "gridX": 39,
+      "gridY": 27
+    },
+    {
+      "gridX": 40,
+      "gridY": 27
+    },
+    {
+      "gridX": 41,
+      "gridY": 27
+    },
+    {
+      "gridX": 42,
+      "gridY": 27
+    },
+    {
+      "gridX": 43,
+      "gridY": 27
+    },
+    {
+      "gridX": 44,
+      "gridY": 27
+    },
+    {
+      "gridX": 45,
+      "gridY": 27
+    },
+    {
+      "gridX": 46,
+      "gridY": 27
+    },
+    {
+      "gridX": 47,
+      "gridY": 27
+    },
+    {
+      "gridX": 24,
+      "gridY": 28
+    },
+    {
+      "gridX": 25,
+      "gridY": 28
+    },
+    {
+      "gridX": 26,
+      "gridY": 28
+    },
+    {
+      "gridX": 27,
+      "gridY": 28
+    },
+    {
+      "gridX": 28,
+      "gridY": 28
+    },
+    {
+      "gridX": 29,
+      "gridY": 28
+    },
+    {
+      "gridX": 30,
+      "gridY": 28
+    },
+    {
+      "gridX": 31,
+      "gridY": 28
+    },
+    {
+      "gridX": 32,
+      "gridY": 28
+    },
+    {
+      "gridX": 33,
+      "gridY": 28
+    },
+    {
+      "gridX": 34,
+      "gridY": 28
+    },
+    {
+      "gridX": 35,
+      "gridY": 28
+    },
+    {
+      "gridX": 36,
+      "gridY": 28
+    },
+    {
+      "gridX": 37,
+      "gridY": 28
+    },
+    {
+      "gridX": 38,
+      "gridY": 28
+    },
+    {
+      "gridX": 39,
+      "gridY": 28
+    },
+    {
+      "gridX": 40,
+      "gridY": 28
+    },
+    {
+      "gridX": 41,
+      "gridY": 28
+    },
+    {
+      "gridX": 42,
+      "gridY": 28
+    },
+    {
+      "gridX": 43,
+      "gridY": 28
+    },
+    {
+      "gridX": 44,
+      "gridY": 28
+    },
+    {
+      "gridX": 45,
+      "gridY": 28
+    },
+    {
+      "gridX": 46,
+      "gridY": 28
+    },
+    {
+      "gridX": 26,
+      "gridY": 29
+    },
+    {
+      "gridX": 27,
+      "gridY": 29
+    },
+    {
+      "gridX": 28,
+      "gridY": 29
+    },
+    {
+      "gridX": 29,
+      "gridY": 29
+    },
+    {
+      "gridX": 30,
+      "gridY": 29
+    },
+    {
+      "gridX": 31,
+      "gridY": 29
+    },
+    {
+      "gridX": 32,
+      "gridY": 29
+    },
+    {
+      "gridX": 33,
+      "gridY": 29
+    },
+    {
+      "gridX": 34,
+      "gridY": 29
+    },
+    {
+      "gridX": 35,
+      "gridY": 29
+    },
+    {
+      "gridX": 36,
+      "gridY": 29
+    },
+    {
+      "gridX": 37,
+      "gridY": 29
+    },
+    {
+      "gridX": 38,
+      "gridY": 29
+    },
+    {
+      "gridX": 39,
+      "gridY": 29
+    },
+    {
+      "gridX": 40,
+      "gridY": 29
+    },
+    {
+      "gridX": 41,
+      "gridY": 29
+    },
+    {
+      "gridX": 42,
+      "gridY": 29
+    },
+    {
+      "gridX": 43,
+      "gridY": 29
+    },
+    {
+      "gridX": 44,
+      "gridY": 29
+    },
+    {
+      "gridX": 27,
+      "gridY": 30
+    },
+    {
+      "gridX": 28,
+      "gridY": 30
+    },
+    {
+      "gridX": 29,
+      "gridY": 30
+    },
+    {
+      "gridX": 30,
+      "gridY": 30
+    },
+    {
+      "gridX": 31,
+      "gridY": 30
+    },
+    {
+      "gridX": 32,
+      "gridY": 30
+    },
+    {
+      "gridX": 33,
+      "gridY": 30
+    },
+    {
+      "gridX": 34,
+      "gridY": 30
+    },
+    {
+      "gridX": 35,
+      "gridY": 30
+    },
+    {
+      "gridX": 36,
+      "gridY": 30
+    },
+    {
+      "gridX": 37,
+      "gridY": 30
+    },
+    {
+      "gridX": 38,
+      "gridY": 30
+    },
+    {
+      "gridX": 39,
+      "gridY": 30
+    },
+    {
+      "gridX": 40,
+      "gridY": 30
+    },
+    {
+      "gridX": 41,
+      "gridY": 30
+    },
+    {
+      "gridX": 42,
+      "gridY": 30
+    },
+    {
+      "gridX": 29,
+      "gridY": 31
+    },
+    {
+      "gridX": 30,
+      "gridY": 31
+    },
+    {
+      "gridX": 31,
+      "gridY": 31
+    },
+    {
+      "gridX": 32,
+      "gridY": 31
+    },
+    {
+      "gridX": 33,
+      "gridY": 31
+    },
+    {
+      "gridX": 34,
+      "gridY": 31
+    },
+    {
+      "gridX": 35,
+      "gridY": 31
+    },
+    {
+      "gridX": 36,
+      "gridY": 31
+    },
+    {
+      "gridX": 37,
+      "gridY": 31
+    },
+    {
+      "gridX": 38,
+      "gridY": 31
+    },
+    {
+      "gridX": 39,
+      "gridY": 31
+    },
+    {
+      "gridX": 40,
+      "gridY": 31
+    },
+    {
+      "gridX": 31,
+      "gridY": 32
+    },
+    {
+      "gridX": 32,
+      "gridY": 32
+    },
+    {
+      "gridX": 33,
+      "gridY": 32
+    },
+    {
+      "gridX": 34,
+      "gridY": 32
+    },
+    {
+      "gridX": 35,
+      "gridY": 32
+    },
+    {
+      "gridX": 36,
+      "gridY": 32
+    },
+    {
+      "gridX": 37,
+      "gridY": 32
+    },
+    {
+      "gridX": 38,
+      "gridY": 32
+    }
+  ],
+  "krakenHabitat": {
+    "id": "abyss-pond",
+    "kind": "water",
+    "initialAnchorId": "center",
+    "waterAnchors": [
+      {
+        "id": "center",
+        "cell": {
+          "gridX": 35,
+          "gridY": 22
+        }
+      }
+    ],
+    "shores": [
+      {
+        "id": "south-32",
+        "waterCell": {
+          "gridX": 32,
+          "gridY": 32
+        },
+        "landCell": {
+          "gridX": 32,
+          "gridY": 33
+        }
+      },
+      {
+        "id": "south-37",
+        "waterCell": {
+          "gridX": 37,
+          "gridY": 32
+        },
+        "landCell": {
+          "gridX": 37,
+          "gridY": 33
+        }
+      },
+      {
+        "id": "south-43",
+        "waterCell": {
+          "gridX": 43,
+          "gridY": 29
+        },
+        "landCell": {
+          "gridX": 43,
+          "gridY": 30
+        }
+      }
+    ],
+    "exits": [
+      {
+        "id": "exit-south-32",
+        "fromAnchorId": "center",
+        "shoreId": "south-32",
+        "widthCells": 5,
+        "path": [
+          {
+            "gridX": 35,
+            "gridY": 22
+          },
+          {
+            "gridX": 32,
+            "gridY": 33
+          },
+          {
+            "gridX": 32,
+            "gridY": 39
+          }
+        ]
+      },
+      {
+        "id": "exit-south-43",
+        "fromAnchorId": "center",
+        "shoreId": "south-43",
+        "widthCells": 5,
+        "path": [
+          {
+            "gridX": 35,
+            "gridY": 22
+          },
+          {
+            "gridX": 43,
+            "gridY": 30
+          },
+          {
+            "gridX": 43,
+            "gridY": 39
+          }
+        ]
+      }
+    ]
+  },
+  "boss": {
+    "enemyKind": "abyssal-kraken",
+    "habitatId": "abyss-pond",
+    "spawnAtMs": 0,
+    "startAfterEncounterId": "abyss-opening",
+    "intro": {
+      "preset": "kraken-rise"
+    }
+  },
+  "powerUps": [
+    {
+      "defId": "HEALTH_PACK",
+      "region": "front",
+      "respawnMs": 6000,
+      "spawnOnArenaStart": true
+    },
+    {
+      "defId": "HEALTH_PACK",
+      "region": "middle",
+      "respawnMs": 6000,
+      "spawnOnArenaStart": true
+    },
+    {
+      "defId": "HEALTH_PACK",
+      "region": "rear",
+      "respawnMs": 6000,
+      "spawnOnArenaStart": true
+    }
+  ],
+  "encounters": [
+    {
+      "id": "abyss-opening",
+      "start": {
+        "type": "time",
+        "atMs": 1500
+      },
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 6,
+          "front": "west"
+        },
+        {
+          "enemyKind": "rabid-badger",
+          "count": 3,
+          "delayMs": 900,
+          "front": "east"
+        }
+      ]
+    },
+    {
+      "id": "abyss-tide-1",
+      "start": {
+        "type": "after-boss-spawn",
+        "delayMs": 20000
+      },
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 6,
+          "front": "west"
+        },
+        {
+          "enemyKind": "rabid-badger",
+          "count": 2,
+          "delayMs": 1200,
+          "front": "east"
+        }
+      ]
+    },
+    {
+      "id": "abyss-tide-2",
+      "start": {
+        "type": "after-boss-spawn",
+        "delayMs": 50000
+      },
+      "groups": [
+        {
+          "enemyKind": "demon-badger",
+          "count": 2,
+          "front": "east"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 6,
+          "delayMs": 1000,
+          "front": "west"
+        }
+      ]
+    },
+    {
+      "id": "abyss-tide-3",
+      "start": {
+        "type": "after-boss-spawn",
+        "delayMs": 85000
+      },
+      "groups": [
+        {
+          "enemyKind": "rabid-badger",
+          "count": 4,
+          "front": "west"
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 2,
+          "delayMs": 1200,
+          "front": "east"
+        }
+      ]
+    }
+  ]
+}

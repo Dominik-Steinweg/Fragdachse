@@ -102,7 +102,8 @@ describe('figure source resolution and Arcade geometry', () => {
     player.destroy();
   });
   it('keeps authored enemy diameters and centered bodies across source sizes and dashes', () => {
-    for (const config of Object.values(resolveCoopDefenseEnemyConfigs(1))) {
+    // Kraken boss and egg are drawn by the kraken renderer from their own boss assets, not as pipeline figures.
+    for (const config of Object.values(resolveCoopDefenseEnemyConfigs(1)).filter(c => !c.krakenBoss && !c.krakenEgg)) {
       const asset = getPipelineAssetForTexture(config.imageKey)!;
       const { scene } = sceneWithArcadeBodies(asset.sourceSize);
       const enemy = new EnemyEntity(scene, 'enemy', 100, 200, true, config.id,

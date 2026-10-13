@@ -63,13 +63,12 @@ describe('Coop defense map unlocks', () => {
     expect(sanitizeHighestUnlockedCoopDefenseMapId(undefined)).toBe(INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID);
   });
 
-  it('keeps map 17 as the final campaign map and rejects removed maps', () => {
-    expect(LAST_MAP_ID).toBe('17');
-    expect(sanitizeHighestUnlockedCoopDefenseMapId('17')).toBe('17');
-    expect(getCoopDefenseMapUnlockedByVictoryOn('17')).toBeNull();
-    expect(sanitizeHighestUnlockedCoopDefenseMapId('18')).toBe(INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID);
-    expect(getCoopDefenseMapUnlockedByVictoryOn('18')).toBeNull();
-    expect(getCoopDefenseMapUnlockedByVictoryOn('19')).toBeNull();
+  it('keeps map 20 as the final campaign map and rejects unknown maps', () => {
+    expect(LAST_MAP_ID).toBe('20');
+    expect(sanitizeHighestUnlockedCoopDefenseMapId('20')).toBe('20');
+    expect(getCoopDefenseMapUnlockedByVictoryOn('20')).toBeNull();
+    expect(sanitizeHighestUnlockedCoopDefenseMapId('21')).toBe(INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID);
+    expect(getCoopDefenseMapUnlockedByVictoryOn('21')).toBeNull();
   });
 
   it('unlocks every earlier map once a late map is reached', () => {
@@ -78,11 +77,12 @@ describe('Coop defense map unlocks', () => {
       .filter(map => map.mapId !== '0' && !COOP_DEFENSE_UNRELEASED_MAP_IDS.includes(map.mapId)).map(map => map.mapId));
   });
 
-  it.each(['16', '17'])('preserves saved progress %s but selects only released maps', highest => {
+  it.each(['16', '17'])('plays released map %s as a regular campaign step', highest => {
     expect(sanitizeHighestUnlockedCoopDefenseMapId(highest)).toBe(highest);
-    expect(getHighestAvailableCoopDefenseMapId(highest)).toBe('15');
-    expect(isCoopDefenseMapUnlocked(highest, highest)).toBe(false);
-    expect(getCoopDefenseMapUnlockedByVictoryOn('15')).toBeNull();
+    expect(getHighestAvailableCoopDefenseMapId(highest)).toBe(highest);
+    expect(isCoopDefenseMapUnlocked(highest, highest)).toBe(true);
+    expect(getCoopDefenseMapUnlockedByVictoryOn(String(Number(highest) - 1))).toBe(highest);
+    expect(getCoopDefenseMapUnlockedByVictoryOn(highest)).toBe(String(Number(highest) + 1));
   });
 
   it('offers unfinished maps only through their independent debug override', () => {

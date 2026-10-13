@@ -110,11 +110,11 @@ function makeInput(): {
 }
 
 describe('ArenaMetaController', () => {
-  it.each(['16', '17'])('selects a released default after importing progress %s without lowering the save', highest => {
+  it.each(['16', '17'])('selects the imported map %s as default without lowering the save', highest => {
     const { controller, store, session } = makeInput();
     store.getProgress().highestUnlockedMapId = highest;
     expect(controller.handleImportedGameProgress()).toBe(true);
-    expect(session.setCoopDefenseMapId).toHaveBeenCalledWith('15');
+    expect(session.setCoopDefenseMapId).toHaveBeenCalledWith(highest);
     expect(store.getProgress().highestUnlockedMapId).toBe(highest);
     expect(store.restoreProgress).not.toHaveBeenCalled();
     expect(store.setDebugProgress).not.toHaveBeenCalled();

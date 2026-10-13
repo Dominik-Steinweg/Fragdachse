@@ -267,16 +267,16 @@ describe('local progress generation', () => {
     expect(getStoredPersistentBaseHealthRewards()).toEqual(rewards);
   });
 
-  it.each(['15', '16', '17'])('keeps imported campaign progress %s without unlocking unfinished maps', highest => {
+  it.each(['15', '16', '17'])('keeps imported campaign progress %s and continues the linear campaign', highest => {
     const exported = JSON.parse(exportStoredGameProgressJson());
     exported.progress.coopDefense.highestUnlockedMapId = highest;
     expect(importStoredGameProgressJson(JSON.stringify(exported)).ok).toBe(true);
-    expect(unlockStoredCoopDefenseMapAfterVictory('15')).toBe(false);
     invalidateLocalStorageCache();
     const stored = getStoredCoopDefenseProgress().highestUnlockedMapId;
     expect(stored).toBe(highest);
-    expect(getUnlockedCoopDefenseMapConfigs(stored).map(map => map.mapId)).not.toContain('16');
-    expect(getUnlockedCoopDefenseMapConfigs(stored).map(map => map.mapId)).not.toContain('17');
+    const unlocked = getUnlockedCoopDefenseMapConfigs(stored).map(map => map.mapId);
+    expect(unlocked.at(-1)).toBe(highest);
+    expect(unlocked).not.toContain(String(Number(highest) + 1));
   });
 
   it('does not infer HP rewards from campaign unlocks in the current format and rejects corrupt rewards atomically', () => {
