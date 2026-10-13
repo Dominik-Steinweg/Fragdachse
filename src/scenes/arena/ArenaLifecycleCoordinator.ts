@@ -133,6 +133,7 @@ import { DEFAULT_COOP_PROGRAM } from '../../dawn/contracts/CoopProgram';
 import { resolveDawnScenario } from '../../dawn/resolution/DawnScenarioResolution';
 import { isDawnUnlocked } from '../../dawn/rules/DawnUnlock';
 import { resolveDawnThreat } from '../../dawn/rules/DawnThreat';
+import { freezeDawnInfrastructure } from '../../dawn/economy/DawnMerchantInfrastructure';
 import {
   resolveActiveGameMode,
   toActivityKind,
@@ -692,7 +693,7 @@ export class ArenaLifecycleCoordinator {
       this.persistentBase.grantAuthoredPersistentBaseRewards(rewardIds);
     },
     applyPersistentBaseOutcome: (outcome, identity) => {
-      this.persistentBase.applyRoundOutcome(outcome, identity);
+      this.persistentBase.applyRoundOutcome(outcome, identity, this.getRoundDawnInfrastructure()?.repairDrones ?? 0);
     },
     publishCompletion: (completion, endedAt) => {
       this.publishCoopMissionCompletion(completion, endedAt);
@@ -1749,7 +1750,19 @@ export class ArenaLifecycleCoordinator {
     this.nextScenarioSeed = seed;
   }
 
+  private dawnInfrastructure: {
+    readonly roundRevision: number;
+    readonly levels: ReturnType<typeof freezeDawnInfrastructure>;
+  } | null = null;
+
+  private getRoundDawnInfrastructure(): ReturnType<typeof freezeDawnInfrastructure> | null {
+    const frozen = this.dawnInfrastructure;
+    const round = bridge.getRoundState();
+    return frozen && round?.dawn && round.roundRevision === frozen.roundRevision ? frozen.levels : null;
+  }
+
   hostCheckReadyToStart(): void {
+    if (!bridge.isHost()) return;
     // Defensiv: eine Runde darf ausschließlich aus einer sauberen LOBBY-Phase heraus starten.
     if (bridge.getGamePhase() !== 'LOBBY') return;
     if (this.roundStartPending) return;
@@ -1804,6 +1817,9 @@ export class ArenaLifecycleCoordinator {
     this.pendingLobbyWorldPresentationRebuild = false;
     const roundRevision = nextMonotonicRevision(this.lastRoundRevision, Date.now());
     this.lastRoundRevision = roundRevision;
+    this.dawnInfrastructure = dawnSelected
+      ? { roundRevision, levels: freezeDawnInfrastructure(getStoredDawnProgress()) }
+      : null;
     bridge.hostStartRoundParticipants(bridge.getConnectedPlayerIds(), 0, roundRevision);
     bridge.setArenaStartTime(0);
     bridge.setRoundEndTime(0);
@@ -2228,6 +2244,7 @@ export class ArenaLifecycleCoordinator {
     bridge.hostResetRoundParticipation();
     bridge.publishCoopDefenseRespawnBudgetState(null);
     this.clearCoopMissionPresentationState();
+    this.dawnInfrastructure = null;
   }
 
   private broadcastMissionAudio(
@@ -2972,6 +2989,13 @@ export class ArenaLifecycleCoordinator {
       coopMissionRuntime,
       activityDescriptor,
     }, buildingGameplay);
+    if (bridge.isHost()) {
+      this.worldPowerUpRuntime?.system.setDawnScrapMagnet(
+        this.getRoundDawnInfrastructure()?.scrapMagnet ?? 0,
+        playerId => bridge.getRoundState()?.status === 'active'
+          && this.getPlayerCapabilities(playerId).canInteract,
+      );
+    }
     if (!bridge.isHost() && this.worldGameplay.geometry) {
       const prediction = new LocalPlayerPrediction(worldDescriptor.worldRevision, {
         getInput: () => bridge.getLocalMovementInput(),

@@ -11,7 +11,7 @@ import { getDawnSchedule, getDawnThreatCurve } from '../src/config/dawn/dawnCont
 import { resolveCoopDefenseMapSecondaryObjectives } from '../src/config/coopDefenseMaps';
 import { CoopDefenseSecondaryObjectiveSystem } from '../src/systems/CoopDefenseSecondaryObjectiveSystem';
 import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
-import { DAWN_SCRAP_DEFS, DROP_TABLES, POWERUP_DEFS } from '../src/powerups/PowerUpConfig';
+import { DAWN_SCRAP_DEFS, DROP_TABLES, POWERUP_DEFS, PICKUP_RADIUS, resolvePowerUpPickupRadius } from '../src/powerups/PowerUpConfig';
 
 const plans = composeDawnRoundPlans({ seed: 7, threat: 4, dayNumber: 1 });
 const sites = resolveDawnSites(plans.world);
@@ -37,6 +37,49 @@ describe('DawnScrapLedger re-materialization', () => {
 });
 
 describe('Dawn scrap ledger', () => {
+  it('extends only scrap collection, automatically for remote participants and through normal consumption', () => {
+    const players = [
+      { id: 'spectator', x: 0, y: 0, active: true },
+      { id: 'dead', x: 0, y: 0, active: true },
+      { id: 'burrowed', x: 0, y: 0, active: true },
+      { id: 'inactive', x: 0, y: 0, active: false },
+      { id: 'remote', x: 0, y: 0, active: true },
+    ];
+    const collected = vi.fn();
+    const system = new PowerUpSystem({ getAllPlayers: () => players } as never, {
+      isAlive: id => id !== 'dead', isBurrowed: id => id === 'burrowed',
+      healToFull: vi.fn(), addArmor: vi.fn(), applyDamage: vi.fn(), applyExplosionDamage: vi.fn(),
+    }, { seed: 1, rocks: [], trees: [], tracks: [], dirt: [], powerUpPedestals: [] });
+    const unbind = system.bindDawnScrap({ onEnemyKilled: vi.fn(), canCollect: () => true, onPickupCollected: collected });
+    const normalRadius = PICKUP_RADIUS * 2;
+    const radius = normalRadius * 2.5;
+    for (const def of Object.values(POWERUP_DEFS)) {
+      expect(resolvePowerUpPickupRadius(def.type, 1)).toBe(def.type === 'dawn_scrap' ? radius : normalRadius);
+      expect(resolvePowerUpPickupRadius(def.type, 0)).toBe(normalRadius);
+    }
+    const scrap = system.spawnPickup('dawn_scrap_1', radius, 0)!;
+    const far = system.spawnPickup('dawn_scrap_2', radius + 0.01, 0)!;
+    const health = system.spawnPickup('HEALTH_PACK', radius, 0)!;
+    system.setDawnScrapMagnet(0, id => id !== 'spectator');
+    system.update(16);
+    expect(collected).not.toHaveBeenCalled();
+    expect(system.tryPickup('remote', scrap, 0, 0)).toBe(false);
+    system.setDawnScrapMagnet(1, id => id !== 'spectator');
+    system.update(16); system.update(16);
+    expect(collected).toHaveBeenCalledExactlyOnceWith('remote', expect.objectContaining({ uid: scrap }));
+    expect(system.tryPickup('remote', health, 0, 0)).toBe(false);
+    expect(system.getWorldItemSnapshot().map(p => p.uid)).toEqual([far, health]);
+    unbind();
+    players[4].x = 1;
+    system.update(16);
+    expect(collected).toHaveBeenCalledTimes(1);
+    system.reset();
+    system.bindDawnScrap({ onEnemyKilled: vi.fn(), canCollect: () => true, onPickupCollected: collected });
+    system.spawnPickup('dawn_scrap_1', radius, 0);
+    system.update(16);
+    expect(collected).toHaveBeenCalledTimes(1);
+  });
+
   it('publishes a shared integral total, resets both diagnostic sources and refuses invalid grants', () => {
     const publish = vi.fn();
     const ledger = new DawnScrapLedger(publish);

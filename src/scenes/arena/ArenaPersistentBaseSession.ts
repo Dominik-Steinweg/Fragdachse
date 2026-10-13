@@ -1,4 +1,5 @@
 import { resolvePersistentRewardWorldCell } from '../../persistentBase/PersistentBasePlacementRules';
+import { selectDawnRepairDroneRuntimeIds } from '../../persistentBase/PersistentBaseRepairDrones';
 import { getPersistentBaseRewardFootprint, persistentBaseRewardsOverlap } from '../../persistentBase/PersistentBasePlacementRules';
 import { applyPersistentBaseLayoutEdit, type PersistentBaseLayoutEdit, type PersistentBaseLayoutEditResult } from '../../persistentBase/PersistentBaseLayoutEdit';
 import { getPersistentConstructionFootprint, isPersistentBaseRewardCellAllowed } from '../../persistentBase/PersistentBasePlacementRules';
@@ -983,11 +984,19 @@ export class ArenaPersistentBaseSession {
   applyRoundOutcome(
     outcome: Parameters<typeof applyPersistentBaseRoundOutcome>[0],
     identity?: PersistentBaseTransactionIdentity,
+    dawnRepairDroneLevel = 0,
   ): void {
+    if (!bridge.isHost()) return;
+    const isAlive = (runtimeId: number) => this.placementSystem?.hasRuntimeRock(runtimeId) === true;
+    const repaired = selectDawnRepairDroneRuntimeIds(
+      this.session.contributions.getRuntimeBindings().filter(binding => !isAlive(binding.runtimeId)),
+      { isDawn: bridge.getActivityDescriptor()?.parameters?.dawn !== undefined,
+        victory: outcome === 'commit', level: dawnRepairDroneLevel },
+    );
     this.publishConfirmedPersistentBaseContributions(
       applyPersistentBaseRoundOutcome(outcome, {
         session: this.session,
-        isRuntimeObjectAlive: (runtimeId) => this.placementSystem?.hasRuntimeRock(runtimeId) === true,
+        isRuntimeObjectAlive: (runtimeId) => isAlive(runtimeId) || repaired.has(runtimeId),
         identity,
       }),
     );

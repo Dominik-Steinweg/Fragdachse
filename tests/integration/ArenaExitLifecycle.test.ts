@@ -54,7 +54,7 @@ import * as devScenarioMode from '../../src/utils/devScenarioMode';
 import { DEFAULT_COOP_DEFENSE_MAP_ID } from '../../src/config/coopDefenseMaps';
 import { registerDiagnosticMap, getCoopDefenseMapConfig, WEAPON_BALANCE_LAB_MAP_ID } from '../../src/config/coopDefenseMaps';
 import { CoopDefenseBalanceTracker } from '../../src/debug/coopDefenseBalance/tracker';
-import { invalidateLocalStorageCache, markStoredCoopDefenseMapCompleted } from '../../src/utils/localPreferences';
+import { invalidateLocalStorageCache, markStoredCoopDefenseMapCompleted, updateStoredDawnProgress } from '../../src/utils/localPreferences';
 import { DAWN_UNLOCK_AFTER_MAP_ID } from '../../src/dawn/rules/DawnUnlock';
 
 function fixture(host: boolean, outcome = 'victory') {
@@ -303,6 +303,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
       expect(roundState).toBeNull();
 
       markStoredCoopDefenseMapCompleted(DAWN_UNLOCK_AFTER_MAP_ID);
+      updateStoredDawnProgress(draft => { draft.infrastructure = { 'repair-drones': 2, 'scrap-magnet': 1 }; });
       flow.hostCheckReadyToStart();
       expect(roundState.coopDefenseMapId).toBeUndefined();
       expect(roundState.dawn).toEqual({ threat: 1, dayNumber: 1 });
@@ -310,6 +311,11 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
       expect(pending.dawn.world.templateId).toBeTruthy();
       expect(pending.mapConfig.persistentBase).toBeDefined();
       expect(pending.worldParameters.persistentBaseUnlocked).toBe(true);
+      vi.mocked(bridge.getRoundState).mockImplementation(() => roundState);
+      updateStoredDawnProgress(draft => { draft.infrastructure = {}; });
+      expect(flow.getRoundDawnInfrastructure()).toEqual({ repairDrones: 2, scrapMagnet: 1 });
+      roundState = { ...roundState, roundRevision: roundState.roundRevision + 1 };
+      expect(flow.getRoundDawnInfrastructure()).toBeNull();
     } finally {
       invalidateLocalStorageCache();
     }
