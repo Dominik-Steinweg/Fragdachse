@@ -8207,3 +8207,88 @@ export const FIRESTARTER_LAYER_CONTRACTS: readonly LayerContract[] = [
   {id:'firestarter:overlay',owner:'effects/gpu/FirestarterGpuLayer.ts',component:'overlay',height:'body',lighting:'emissive',camera:'world',depths:[19.7],blends:['NORMAL'],profiles:['E'],role:'ui'},
 ];
 export const EFFECT_LAYER_CONTRACTS: readonly LayerContract[] = [...Object.values(GPU_LAYER_CONTRACTS), ...Object.values(GPU_EFFECT_CONTRACTS), ...CPU_LAYER_CONTRACTS, ...METEOR_LAYER_CONTRACTS, ...MORTAR_LAYER_CONTRACTS, ...FIRESTARTER_LAYER_CONTRACTS];
+
+// fire-control (prototype)
+// Mixed sprite/glass and additive ground light intentionally share the turret receiver band.
+Object.assign(CPU_SOURCE_CONTRACTS, {
+  "effects/fireControl/FireControlRenderer.ts": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "update/sprite/setDepth/0",
+        "expression": "DEPTH.ROCKS + 0.2",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  }
+});
+Object.assign(CPU_SOURCE_CONTRACTS, {
+  "effects/fireControl/FireControlPortalGpuLayer.ts": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createFireControlPortalGpuLayer/layer?.image/setDepth/0",
+        "expression": "DEPTH.ROCKS + 0.3",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  }
+});
+const FIRE_CONTROL_LAYER_CONTRACTS: readonly LayerContract[] = [
+  {
+    "id": "cpu:effects/fireControl/FireControlRenderer.ts:update/sprite/setDepth/0",
+    "owner": "effects/fireControl/FireControlRenderer.ts",
+    "component": "update/sprite/setDepth/0",
+    "height": "body",
+    "lighting": "mixed",
+    "camera": "world",
+    "depths": [
+      9.2
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "M"
+    ],
+    "role": "effect",
+    "source": {
+      "selector": "update/sprite/setDepth/0",
+      "expression": "DEPTH.ROCKS + 0.2"
+    }
+  },
+  {
+    "id": "cpu:effects/fireControl/FireControlPortalGpuLayer.ts:createFireControlPortalGpuLayer/layer?.image/setDepth/0",
+    "owner": "effects/fireControl/FireControlPortalGpuLayer.ts",
+    "component": "createFireControlPortalGpuLayer/layer?.image/setDepth/0",
+    "height": "ground",
+    "lighting": "mixed",
+    "camera": "world",
+    "depths": [
+      9.3
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "M"
+    ],
+    "role": "effect",
+    "source": {
+      "selector": "createFireControlPortalGpuLayer/layer?.image/setDepth/0",
+      "expression": "DEPTH.ROCKS + 0.3"
+    }
+  }
+];
+(CPU_LAYER_CONTRACTS as LayerContract[]).push(...FIRE_CONTROL_LAYER_CONTRACTS);
+(EFFECT_LAYER_CONTRACTS as LayerContract[]).push(...FIRE_CONTROL_LAYER_CONTRACTS);

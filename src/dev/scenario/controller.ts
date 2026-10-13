@@ -1,3 +1,4 @@
+import { FireControlVisualReview, FIRE_CONTROL_REVIEW_SCENARIO, type FireControlReviewOptions } from './FireControlVisualReview';
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { readKrakenDevAction, readKrakenDevGeometry, requireKrakenDevHost } from './krakenHostPort';
 import type { KrakenDevAct } from '../../systems/CoopDefenseKrakenSystem';
@@ -54,6 +55,8 @@ export class DevScenarioController {
   private enemyMeshReview: EnemyMeshReview | null = null;
   private shapeDraft: ShapeDraftSpawn | null = null;
   private armageddonReview: ArmageddonReview | null = null;
+  private fireControlVisualReview: FireControlVisualReview | null = null;
+  private pendingFireControlReview: FireControlReviewOptions | null = null;
   private turretMaterialReview: TurretMaterialReview | null = null;
   private krakenReview: KrakenBossReview | null = null;
   private krakenLightShadowReview: KrakenLightShadowReview | null = null;
@@ -157,6 +160,18 @@ export class DevScenarioController {
     this.zoom = options.camera === 'overview' ? .75 : options.camera === 'effect' ? 2 : 2.5;
     this.syncCamera(); this.syncPanel();
   }
+  arrangeFireControlVisualReview(options: FireControlReviewOptions): void {
+    if (this.state !== 'ready' || this.runtime.getTurretDefinitions().filter(t => typeof t.id === 'number'
+      && (t.weaponId === 'TURRET_ROCKET_BURST' || t.weaponId === 'TURRET_MG')).length < 4) {
+      this.start({ ...FIRE_CONTROL_REVIEW_SCENARIO, timeOfDay: options.timeOfDay ?? 1320 });
+      this.pendingFireControlReview = options;
+      return;
+    }
+    if (options.timeOfDay !== undefined) this.config.timeOfDay = options.timeOfDay;
+    const now = bridge.getSynchronizedNow();
+    if (this.fireControlVisualReview) this.fireControlVisualReview.configure(options, now);
+    else this.fireControlVisualReview = new FireControlVisualReview(this.scene, this.runtime, options, now);
+  }
   arrangeTurretMaterialReview(): void {
     this.requireReady();
     this.turretMaterialReview?.destroy();
@@ -255,6 +270,7 @@ export class DevScenarioController {
     this.pendingKrakenMission = null; this.pendingKrakenHp = null;
     this.krakenReview?.destroy(); this.krakenReview = null;
     this.krakenLightShadowReview?.destroy(); this.krakenLightShadowReview = null;
+    this.fireControlVisualReview?.destroy(); this.fireControlVisualReview = null; this.pendingFireControlReview = null;
     this.turretMaterialReview?.destroy(); this.turretMaterialReview = null;
     this.armageddonReview?.destroy(); this.armageddonReview = null;
     const config = parseScenario(value);
@@ -480,7 +496,8 @@ export class DevScenarioController {
   }
   build(id: ConstructionId, point = this.aim, remember = true): LoadoutUseResult {
     this.requireReady(); const position = this.world(point);
-    const result = this.runtime.rpcPorts.construction.placeInspectorConstruction(bridge.getLocalPlayerId(), id, position.x, position.y, bridge.getSynchronizedNow());
+    const result = this.runtime.rpcPorts.construction.placeInspectorConstruction(bridge.getLocalPlayerId(), id,
+      position.x, position.y, bridge.getSynchronizedNow(), bridge.getActivityDescriptor()?.activityRevision);
     this.lastAction = result;
     if (!result.ok) throw new Error(`Bauen abgelehnt: ${result.reason}. Freischaltung, Werkzeug-Slot, Reichweite, Baufläche und Kapazität beachten.`);
     if (remember) { this.config.constructions.push({ ...point, id }); this.saveLink(); }
@@ -861,6 +878,11 @@ export class DevScenarioController {
         loadingTimeline.get('scenario')?.finish();
         this.message = 'Szenario bereit. Startposition und Aufbau geprüft.';
       }
+      if (!this.setupPending && this.pendingFireControlReview) {
+        const options = this.pendingFireControlReview; this.pendingFireControlReview = null;
+        this.arrangeFireControlVisualReview(options);
+      }
+      this.fireControlVisualReview?.update(bridge.getSynchronizedNow());
       this.flushTrainShowcase();
       this.updateTrainShowcase();
       if (!this.setupPending && !this.pendingTrainShowcase && !this.pendingKrakenMission && this.pendingKrakenHp === null) this.pauseVisualTest();
@@ -911,6 +933,7 @@ export class DevScenarioController {
       && (!bridge.isArenaStarted() || bridge.getGamePhase() !== 'ARENA'));
     return { state: this.state, ready: this.state === 'ready' && !terminated && !this.setupPending && !this.pendingTrainShowcase && !this.krakenLoading && !this.pendingKrakenMission && this.pendingKrakenHp === null, terminated, message: this.message, isolated: true, network: 'local-only',
       krakenResidency: this.runtime.getScenarioKrakenResidency(), krakenDevAction: readKrakenDevAction(), krakenDevGeometry: readKrakenDevGeometry(), initialPosition: this.initialPosition, mission: this.runtime.devScenarioPort.readMission(),
+      fireControlVisualReview: this.fireControlVisualReview?.status() ?? null,
       train: this.trainStatus(),
       bots: this.bots.ids().map((id, index) => ({ index, id, ...(this.state === 'ready' ? this.bots.position(index) : null) })),
       readyAfterMs: this.readyAt === null ? null : Math.round(this.readyAt - this.startedAt),
@@ -996,6 +1019,7 @@ export class DevScenarioController {
     this.clearFigureSun();
     this.krakenReview?.destroy(); this.krakenReview = null;
     this.krakenLightShadowReview?.destroy(); this.krakenLightShadowReview = null;
+    this.fireControlVisualReview?.destroy(); this.fireControlVisualReview = null; this.pendingFireControlReview = null;
     this.turretMaterialReview?.destroy(); this.turretMaterialReview = null;
     this.armageddonReview?.destroy(); this.armageddonReview = null;
     if (this.disposed) return;
