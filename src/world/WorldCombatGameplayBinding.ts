@@ -107,7 +107,7 @@ import { EnergyShieldSystem as ConcreteEnergyShieldSystem } from '../systems/Ene
 import { ShieldBuffSystem as ConcreteShieldBuffSystem } from '../systems/ShieldBuffSystem';
 import { TimeBubbleSystem as ConcreteTimeBubbleSystem } from '../systems/TimeBubbleSystem';
 import { TurretSystem as ConcreteTurretSystem, toLocalTurretFireSource } from '../systems/TurretSystem';
-import { computeExposedBaseFaces, ExposedBaseFaceCache, rankBaseAimPoints } from '../systems/TurretBaseTargeting';
+import { computeExposedBaseFaces, ExposedBaseFaceCache, rankBaseAimPoints, type BaseAimPoint } from '../systems/TurretBaseTargeting';
 
 /**
  * Budget der Basis-Zielstufe je Turm und Suche: so viele nächstgelegene Außenflächen prüft das
@@ -1461,13 +1461,13 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
    */
   private getHostileBaseAimCandidates(
     source: TurretFireSource, x: number, y: number, range: number,
-  ): readonly (import('../systems/TurretBaseTargeting').BaseAimPoint & { id: string })[] {
+  ): readonly (BaseAimPoint & { id: string })[] {
     const o = this.options;
     const bases = o.baseManager;
     if (!bases || !o.isCoopDefense?.()) return [];
     if (source.ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID || source.ownerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID) return [];
     const generation = bases.getObstacleGeneration();
-    const candidates: (import('../systems/TurretBaseTargeting').BaseAimPoint & { id: string })[] = [];
+    const candidates: (BaseAimPoint & { id: string })[] = [];
     for (const base of bases.getBasesByFaction('hostile')) {
       if (!base.isDamageable() || base.getHp() <= 0) continue;
       const faces = this.turretBaseFaces.get(base.id, generation, () => computeExposedBaseFaces({

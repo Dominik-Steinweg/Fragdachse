@@ -246,11 +246,10 @@ export class TurretSystem {
     // Neue eigene Folgen übernehmen den Stand ihres Seeds vom Tick-Beginn, unabhängig davon, ob der
     // Seed in diesem Tick vor ihnen feuert. Eine laufende Seed-Salve muss erst ihren Cooldown
     // buchen (auch beim Abbruch); bis zum nächsten Tick bleibt die neue Folge vollständig inaktiv.
-    const seedCooldowns = new Map(this.nextFireAt);
     for (const source of turrets) {
       if (source.sequenceSeedKey === undefined || this.nextFireAt.has(source.sequenceKey)) continue;
       if (this.pendingBursts.has(source.sequenceSeedKey)) continue;
-      this.nextFireAt.set(source.sequenceKey, seedCooldowns.get(source.sequenceSeedKey) ?? 0);
+      this.nextFireAt.set(source.sequenceKey, this.nextFireAt.get(source.sequenceSeedKey) ?? 0);
     }
 
     for (const turret of turrets) {
