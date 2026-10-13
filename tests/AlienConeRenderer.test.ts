@@ -6,7 +6,7 @@ vi.mock('phaser', () => ({
   Math: { Clamp: (v: number, min: number, max: number) => Math.min(max, Math.max(min, v)) },
 }));
 import { AlienConeRenderer } from '../src/effects/AlienConeRenderer';
-import { ALIEN_CONE_KIND } from '../src/effects/gpu/AlienConeShader';
+import { ALIEN_CONE_KIND, ALIEN_CONE_WAVE_LIFE_S } from '../src/effects/gpu/AlienConeShader';
 import { CLAW_VFX_FAN_RAYS, ClawVfxKind, CLAW_VFX_INSTANCE_FLOATS, CLAW_VFX_FLOATS_PER_VERTEX, EnemyClawVfxStore } from '../src/effects/enemyClaw/EnemyClawVfxStore';
 import type { EnemyVisualSource } from '../src/entities/EnemyVisualSource';
 import { ENERGY_CONE_CLIP_RAYS, type EnergyConeState } from '../src/systems/EnergyConeState';
@@ -58,7 +58,7 @@ describe('AlienConeRenderer', () => {
     const wave = f.items().find(item => item.kind === ALIEN_CONE_KIND.wave)!;
     expect(wave.t).toBeCloseTo(0.1);
     expect(f.sink).not.toHaveBeenCalledWith('a1', expect.anything(), expect.anything(), expect.anything());
-    f.render(2600);
+    f.render(attack.hitAt + ALIEN_CONE_WAVE_LIFE_S * 1000 + 20);
     expect(f.items()).toEqual([]);
 
     const g = fixture();
