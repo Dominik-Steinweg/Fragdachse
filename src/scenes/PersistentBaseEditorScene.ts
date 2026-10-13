@@ -75,6 +75,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private saving = false;
   private closed = false;
   private disposed = false;
+  private presentationReady = false;
   private page = 0;
   private readonly worldZoom: number;
   private readonly framing: ReturnType<typeof getPersistentBaseEditorFraming>;
@@ -97,6 +98,8 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.quality = new GraphicsQualityController(getStoredGraphicsQuality());
     this.quality.attach(this);
     this.clarity = this.cameras.add(0, 0, this.scale.width, this.scale.height, false, 'base-ui');
+    // Keep the previous menu visible while this standalone World's worker/chunk queue warms up.
+    this.getTransitionView().setAlpha(0);
     this.cameraRegistry = new ClarityCameraRegistry(this, this.cameras.main, this.clarity);
     this.cameraRegistry.install();
     this.ui = this.add.container(0, 0);
@@ -207,10 +210,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       }
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.dispose());
-    if (this.options.presented) {
-      this.setTransitionInputBlocked(true);
-      this.options.presented(this.getTransitionView());
-    }
+    this.setTransitionInputBlocked(true);
   }
 
   getTransitionView(): AfterRoundView {
@@ -224,8 +224,9 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   }
 
   setTransitionInputBlocked(blocked: boolean): void {
-    this.input.enabled = !blocked;
-    if (this.input.keyboard) { this.input.keyboard.resetKeys(); this.input.keyboard.enabled = !blocked; }
+    const enabled = !blocked && this.presentationReady;
+    this.input.enabled = enabled;
+    if (this.input.keyboard) { this.input.keyboard.resetKeys(); this.input.keyboard.enabled = enabled; }
   }
   dispose(): void {
     if (this.disposed) return;
@@ -425,6 +426,16 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private finish(): void { if (!this.closed) { this.closed = true; this.options.close(); } }
   update(now: number, delta: number): void {
     if (!this.world || this.closed) return;
-    this.world.update(now, delta, { x: 0, y: 0, width: this.world.size, height: this.world.size });
+    const view = { x: 0, y: 0, width: this.world.size, height: this.world.size };
+    this.world.update(now, delta, view);
+    if (!this.presentationReady && this.world.isReadyForView(view)) {
+      this.presentationReady = true;
+      const transition = this.getTransitionView();
+      if (this.options.presented) this.options.presented(transition);
+      else {
+        transition.setAlpha(1);
+        this.setTransitionInputBlocked(false);
+      }
+    }
   }
 }

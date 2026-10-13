@@ -70,12 +70,16 @@ describe('Lobby merchant presentation', () => {
   it('fades in world coordinates from the local player and hides without a player', () => {
     const f = fixture();
     const renderer = f.render();
-    const stand = f.objects[0], nameplate = f.objects[2];
+    const dealer = f.objects[1], nameplate = f.objects[2];
+    const position = worldCellCenter(f.metrics, LOBBY_MERCHANT.dealer.gridX, LOBBY_MERCHANT.dealer.gridY);
+    expect(dealer).toMatchObject(position);
+    expect(nameplate).toMatchObject({ x: position.x,
+      y: position.y + LOBBY_MERCHANT.nameplate.offsetYCells * CELL_SIZE });
     expect(nameplate.setAlpha).toHaveBeenLastCalledWith(0);
     const { fullVisibilityCells, hiddenAtCells } = LOBBY_MERCHANT.nameplate;
-    renderer.update({ x: stand.x + fullVisibilityCells * CELL_SIZE, y: stand.y });
+    renderer.update({ x: dealer.x + fullVisibilityCells * CELL_SIZE, y: dealer.y });
     expect(nameplate.setAlpha).toHaveBeenLastCalledWith(1);
-    renderer.update({ x: stand.x, y: stand.y - (fullVisibilityCells + hiddenAtCells) / 2 * CELL_SIZE });
+    renderer.update({ x: dealer.x, y: dealer.y - (fullVisibilityCells + hiddenAtCells) / 2 * CELL_SIZE });
     expect(nameplate.setAlpha).toHaveBeenLastCalledWith(0.5);
     renderer.update(null);
     expect(nameplate.setAlpha).toHaveBeenLastCalledWith(0);

@@ -48,6 +48,46 @@ function harness(scale = 1, stage: PersistentBaseAreaStage = 0) {
 const object = { kind: 'reward', id: 'base_health_pedestal' } as const;
 
 describe('base menu drag interaction', () => {
+  it.each([false, true])('reveals the whole editor only after its World is ready (transition: %s)', transitioning => {
+    const { scene, world } = harness(1, 11);
+    let ready = false;
+    const camera = { setAlpha: vi.fn() };
+    const presented = vi.fn();
+    Object.assign(world, { update: vi.fn(), isReadyForView: vi.fn(() => ready) });
+    Object.assign(scene, { cameras: { cameras: [camera] },
+      input: { enabled: false, keyboard: { enabled: false, resetKeys: vi.fn() } } });
+    if (transitioning) scene.options.presented = presented;
+    scene.getTransitionView().setAlpha(0);
+    scene.setTransitionInputBlocked(false);
+    scene.update(0, 16);
+    expect(scene.input.enabled).toBe(false);
+    expect(scene.input.keyboard.enabled).toBe(false);
+    expect(camera.setAlpha).toHaveBeenLastCalledWith(0);
+    expect(presented).not.toHaveBeenCalled();
+    expect(world.update).toHaveBeenCalledWith(0, 16, { x: 0, y: 0, width: world.size, height: world.size });
+    ready = true;
+    scene.update(16, 16);
+    scene.update(32, 16);
+    if (transitioning) {
+      expect(presented).toHaveBeenCalledTimes(1);
+      expect(scene.input.enabled).toBe(false);
+      presented.mock.calls[0][0].setAlpha(1);
+      scene.setTransitionInputBlocked(false);
+    }
+    expect(camera.setAlpha).toHaveBeenLastCalledWith(1);
+    expect(scene.input.enabled).toBe(true);
+    expect(scene.input.keyboard.enabled).toBe(true);
+  });
+  it('does not present a closed editor when its pending terrain finishes', () => {
+    const { scene, world } = harness();
+    const presented = vi.fn();
+    scene.options.presented = presented;
+    Object.assign(world, { update: vi.fn(), isReadyForView: () => true });
+    scene.closed = true;
+    scene.update(0, 16);
+    expect(world.update).not.toHaveBeenCalled();
+    expect(presented).not.toHaveBeenCalled();
+  });
   it.each([0, 1, 2] as const)('retains unscaled campaign geometry at stage %s', stage => {
     const { scene, world } = harness(1, stage);
     expect(scene.worldZoom).toBe(1);

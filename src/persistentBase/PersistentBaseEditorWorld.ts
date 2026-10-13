@@ -186,6 +186,11 @@ export class PersistentBaseEditorWorld {
       this.shadowsInitialized = true;
     }
   }
+  /** The editor reveals the entire World at once, after its asynchronous bakes finish. */
+  isReadyForView(view: { x: number; y: number; width: number; height: number }): boolean {
+    return ArenaBuilder.isSurfaceWorkingSetReady(this.arena, view)
+      && this.shadows.isStaticReadyForView(view);
+  }
   update(now: number, delta: number, view: { x: number; y: number; width: number; height: number }): void {
     this.arena.groundSurface?.updateResidency(view);
     this.arena.rockOverlaySurface?.updateResidency(view);

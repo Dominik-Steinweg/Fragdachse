@@ -21,7 +21,8 @@ import {
 } from '../../src/config/authoring/lobbyWorld';
 import { getPersistentBaseCoreSurfaceOffsets } from '../../src/persistentBase/PersistentBaseCore';
 import { isValidPersistentBaseSite } from '../../src/world/WorldRuntimeContext';
-import { ROCK_HP_MAX } from '../../src/config';
+import { CANOPY_RADIUS, CELL_SIZE, ROCK_HP_MAX } from '../../src/config';
+import { CANOPY_ASSETS } from '../../src/arena/trees/CanopyAssets';
 import type { GameMode } from '../../src/types';
 import { NetworkBridge } from '../../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../../src/network/peer/session';
@@ -132,7 +133,7 @@ describe('LobbyWorld – Authoring', () => {
 describe('LobbyWorld – authored Geometrie', () => {
   const layout = buildLobbyWorldLayout();
 
-  it('haelt den Haendler samt Zugang ausserhalb der maximalen Basis und bestehender Lobby-Elemente', () => {
+  it('haelt die Standkollision ausserhalb der Basisreservierung und den dekorativen Haendler erreichbar', () => {
     const definition = getLobbyWorldDefinition();
     const site = definition.persistentBaseSite!;
     const radius = resolvePersistentBaseReservationRadiusCells(site.maxAreaStage);
@@ -150,13 +151,20 @@ describe('LobbyWorld – authored Geometrie', () => {
       expect(cell.gridX).toBeLessThan(LOBBY_WORLD_WIDTH_CELLS);
       expect(cell.gridY).toBeLessThan(LOBBY_WORLD_HEIGHT_CELLS);
     }
-    // The dealer's entire visible footprint stays outside the reservation and collision cells.
+    // The dealer has no collision body and may decorate the reservation edge.
+    // Ground decals may remain underneath it; obstacles and the stall must stay clear.
     const dealer = LOBBY_MERCHANT.dealer;
-    const halfSizeCells = dealer.displaySize / 32 / 2;
-    expect(dealer.gridX + 0.5 - halfSizeCells).toBeGreaterThan(site.anchor.gridX + radius + 1);
+    const halfSizeCells = dealer.displaySize / CELL_SIZE / 2;
+    // Even a fully opaque crown must not cover the dealer when the player walks away.
+    const canopyReach = CANOPY_RADIUS * Math.max(...CANOPY_ASSETS.map(asset => asset.displayScale));
+    for (const tree of layout.trees) {
+      expect(Math.hypot(tree.gridX - dealer.gridX, tree.gridY - dealer.gridY) * CELL_SIZE)
+        .toBeGreaterThan(canopyReach + dealer.displaySize * Math.SQRT1_2);
+    }
     for (let y = Math.floor(dealer.gridY + .5 - halfSizeCells); y <= Math.floor(dealer.gridY + .5 + halfSizeCells); y++) {
       for (let x = Math.floor(dealer.gridX + .5 - halfSizeCells); x <= Math.floor(dealer.gridX + .5 + halfSizeCells); x++) {
-        expect([...occupied, ...stall.cells].some(cell => cell.gridX === x && cell.gridY === y)).toBe(false);
+        expect([...layout.rocks, ...layout.trees, ...(layout.water ?? []), ...stall.cells]
+          .some(cell => cell.gridX === x && cell.gridY === y)).toBe(false);
       }
     }
     // A walking route from spawn to the front of the stall remains open.
