@@ -17,7 +17,8 @@
 // Firestarter: appended `fire-lance-charge` action and `firestarter_orb` projectile style.
 // Shield charger: appended enemy snapshot field for the host-fixed charge lane.
 // Alien energy cone: appended enemy snapshot field for the host-fixed cone and cover profile.
-export const PEER_PROTOCOL_VERSION = 30;
+// Fire control: required fc world slice and optional turretVisualId projectile static bit.
+export const PEER_PROTOCOL_VERSION = 31;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

@@ -1,0 +1,64 @@
+{
+  "utilities": {
+    "FIRE_CONTROL_RELAY": {
+      "id": "FIRE_CONTROL_RELAY",
+      "type": "fire_control_relay",
+      "cooldown": 10000,
+      "activation": {
+        "type": "placement_mode"
+      },
+      "projectileSpeed": 0,
+      "projectileSize": 0,
+      "fuseTime": 0,
+      "maxBounces": 0,
+      "allowedSlots": [
+        "utility"
+      ],
+      "charges": {
+        "maxCharges": 1,
+        "burstLockoutMs": 0
+      },
+      "skipCooldownPublish": true,
+      "durationMs": 6000,
+      "maxCopies": 1,
+      "ringRadiusPx": 36,
+      "clearanceRadiusPx": 16,
+      "singleCopyOffsetPx": 30,
+      "materializeMs": 400,
+      "parallelEnabled": 0
+    },
+    "FIRE_CONTROL_PORTAL": {
+      "id": "FIRE_CONTROL_PORTAL",
+      "type": "fire_control_portal",
+      "cooldown": 20000,
+      "activation": {
+        "type": "charged_throw",
+        "minThrowSpeed": 50,
+        "fullChargeDuration": 700
+      },
+      "projectileSpeed": 800,
+      "projectileSize": 10,
+      "fuseTime": 1000,
+      "frictionDelayMs": 300,
+      "airFrictionDecayPerSec": 0.3,
+      "bounceFrictionMultiplier": 0.7,
+      "stopSpeedThreshold": 20,
+      "shotAudio": {
+        "successKey": "shot_throw",
+        "failureKey": "shot_dry_trigger"
+      },
+      "maxBounces": 0,
+      "allowedSlots": [
+        "utility"
+      ],
+      "charges": {
+        "maxCharges": 1,
+        "burstLockoutMs": 0
+      },
+      "skipCooldownPublish": true,
+      "durationMs": 5000,
+      "damageBonus": 0,
+      "localFireEnabled": 0
+    }
+  }
+}

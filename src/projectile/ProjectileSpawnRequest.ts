@@ -31,7 +31,45 @@ import type { PortalDamageContext } from '../systems/PortalTraversal';
 export interface ProjectileFlameEmission {
   readonly intervalMs: number;
   readonly angularSpeedRadiansPerSecond: number;
-  readonly flame: Omit<ProjectileSpawnRequest, 'flameEmission'>;
+  /** Children inherit the parent's acquired portal context, never its route. */
+  readonly flame: Omit<ProjectileSpawnRequest, 'flameEmission' | 'fireControlRoute'>;
+}
+
+/**
+ * Einseitige Feuerleit-Route eines eigenen Turmschusses, beim Abfeuern fixiert.
+ *
+ * Die Runtime versetzt das Projektil direkt nach dem Spawn vom Eingang zum Ausgang und verbraucht
+ * die Route dabei; sie wird weder gespeichert noch an Kinder vererbt. Der Abschnitt Mündung →
+ * Eingang zählt als Flug, die Sprungstrecke ist kostenlos, Richtung und Lebensdauer bleiben.
+ * Die Querablage der Mündung zur Schusslinie durch `entry` bleibt am Ausgang erhalten.
+ */
+export interface ProjectileFireControlRoute {
+  /** Einsatz-ID (`fc:<deploymentId>`), geteilt von allen Eingängen: Bonus höchstens einmal je Angriff. */
+  readonly contributionId: string;
+  /** Muss der Allegiance-Owner des Schusses sein; fremde Projektile bekommen nie eine Route. */
+  readonly ownerId: string;
+  /** Mündungsportal auf der Schusslinie, innerhalb der Restreichweite. */
+  readonly entry: { readonly x: number; readonly y: number };
+  readonly exit: { readonly x: number; readonly y: number };
+  /** Additiver Anteil wie beim Translocator (0.2 = +20 %); 0 lässt die Wirkung unverändert. */
+  readonly damageBonus: number;
+}
+
+/** Rejects malformed, foreign or unreachable routes visibly; a route is never silently dropped. */
+export function assertFireControlRoute(request: ProjectileSpawnRequest): void {
+  const { fireControlRoute: route, origin, provenance } = request;
+  if (!route) return;
+  const finite = [route.entry.x, route.entry.y, route.exit.x, route.exit.y, route.damageBonus].every(Number.isFinite);
+  if (!finite || route.damageBonus < 0 || route.contributionId === '') {
+    throw new Error(`Invalid fire-control route ${JSON.stringify(route)}`);
+  }
+  if (route.ownerId !== provenance.allegiance.ownerId) {
+    throw new Error(`Fire-control route of ${route.ownerId} on a projectile of ${provenance.allegiance.ownerId}`);
+  }
+  const reach = (route.entry.x - origin.x) * Math.cos(origin.angle) + (route.entry.y - origin.y) * Math.sin(origin.angle);
+  if (request.flight.remainingRangePx !== undefined && reach >= request.flight.remainingRangePx) {
+    throw new Error(`Fire-control entry ${reach.toFixed(1)} px ahead is beyond the shot range ${request.flight.remainingRangePx}`);
+  }
 }
 
 export interface ProjectileFlameExpiryGround {
@@ -48,6 +86,7 @@ export interface ProjectileFlameExpiryGround {
  * Identity, Simulation und Teardown gehören der Projectile-Runtime.
  */
 export interface ProjectileSpawnRequest {
+  readonly fireControlRoute?: ProjectileFireControlRoute;
   readonly flameEmission?: ProjectileFlameEmission;
   readonly flameExpiryGround?: ProjectileFlameExpiryGround;
   readonly origin: ProjectileSpawnOrigin;
@@ -401,6 +440,8 @@ export interface ProjectileSupportSpec {
  * opaque: kein Processor, Resolver oder Combat-Pfad verzweigt auf ein Feld dieses Descriptors.
  */
 export interface ProjectilePresentationDescriptor {
+  /** Sprite of the firing source; attribution stays in provenance.sourceTurretId. */
+  readonly turretVisualId?: string;
   readonly flameStreamKey?: string;
   readonly color: number;
   readonly style?: ProjectileStyle;

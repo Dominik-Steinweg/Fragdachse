@@ -3,7 +3,7 @@
   "extrude": 2,
   "groups": {
     "icons": {
-      "sourceHash": "06e9127cf4700e5e3ed53823d9756722bdc698786eed763fa2a9971578c4df1e",
+      "sourceHash": "f4ca070c5d0c873933bd7d41654469feedf759cbc482ef98c9bdfc8c04b488a6",
       "filter": "linear",
       "encoding": "srgb-pma-colour",
       "sources": [
@@ -105,6 +105,24 @@
           "width": 32,
           "height": 32,
           "bytes": 2592
+        },
+        {
+          "id": "FIRE_CONTROL_PORTAL",
+          "source": "assets/sprites/Loadout/FIRE_CONTROL_PORTAL.png",
+          "file": "assets/sprites/Loadout/FIRE_CONTROL_PORTAL.png",
+          "sha256": "efac48d562bb311af98584ffe68df5ca8b7de505897abf3373d5cd308b3efe2d",
+          "width": 32,
+          "height": 32,
+          "bytes": 2481
+        },
+        {
+          "id": "FIRE_CONTROL_RELAY",
+          "source": "assets/sprites/Loadout/FIRE_CONTROL_RELAY.png",
+          "file": "assets/sprites/Loadout/FIRE_CONTROL_RELAY.png",
+          "sha256": "0e5525a496a584a0fc9af38c988c3d58b2a8f4428cf055c5c8b8d3a8e8d91655",
+          "width": 32,
+          "height": 32,
+          "bytes": 2418
         },
         {
           "id": "FLAMETHROWER",
@@ -1068,6 +1086,60 @@
           "width": 32,
           "height": 32,
           "bytes": 2425
+        },
+        {
+          "id": "UPGRADE_FIRE_CONTROL_PORTAL_DAMAGE",
+          "source": "assets/sprites/Loadout/UPGRADE_FIRE_CONTROL_PORTAL_DAMAGE.png",
+          "file": "assets/sprites/Loadout/UPGRADE_FIRE_CONTROL_PORTAL_DAMAGE.png",
+          "sha256": "19d90941af8ba3566d10d8e98b4cf28edbb3412184891cd22b212ffc6989272c",
+          "width": 32,
+          "height": 32,
+          "bytes": 2597
+        },
+        {
+          "id": "UPGRADE_FIRE_CONTROL_PORTAL_DURATION",
+          "source": "assets/sprites/Loadout/UPGRADE_FIRE_CONTROL_PORTAL_DURATION.png",
+          "file": "assets/sprites/Loadout/UPGRADE_FIRE_CONTROL_PORTAL_DURATION.png",
+          "sha256": "efb1bf087776c7f88613f4038bb6c6d7172f08dee1291c146ca34372b5920c5d",
+          "width": 32,
+          "height": 32,
+          "bytes": 2806
+        },
+        {
+          "id": "UPGRADE_FIRE_CONTROL_PORTAL_LOCAL_FIRE",
+          "source": "assets/sprites/Loadout/UPGRADE_FIRE_CONTROL_PORTAL_LOCAL_FIRE.png",
+          "file": "assets/sprites/Loadout/UPGRADE_FIRE_CONTROL_PORTAL_LOCAL_FIRE.png",
+          "sha256": "cedc14f56212522e049854736ec2ae28189343ab8eab48f2511202280c6b65b8",
+          "width": 32,
+          "height": 32,
+          "bytes": 2292
+        },
+        {
+          "id": "UPGRADE_FIRE_CONTROL_RELAY_CONNECTIONS",
+          "source": "assets/sprites/Loadout/UPGRADE_FIRE_CONTROL_RELAY_CONNECTIONS.png",
+          "file": "assets/sprites/Loadout/UPGRADE_FIRE_CONTROL_RELAY_CONNECTIONS.png",
+          "sha256": "39031fe8bda2c31c840947ce0df57d8c11253eaea956fd3ab395d4ffb3c16b46",
+          "width": 32,
+          "height": 32,
+          "bytes": 2081
+        },
+        {
+          "id": "UPGRADE_FIRE_CONTROL_RELAY_DURATION",
+          "source": "assets/sprites/Loadout/UPGRADE_FIRE_CONTROL_RELAY_DURATION.png",
+          "file": "assets/sprites/Loadout/UPGRADE_FIRE_CONTROL_RELAY_DURATION.png",
+          "sha256": "6e1234e31a6c14ce45bf57e0f5d969c9256a7c99d86797d3d00621f966e49f1d",
+          "width": 32,
+          "height": 32,
+          "bytes": 3144
+        },
+        {
+          "id": "UPGRADE_FIRE_CONTROL_RELAY_PARALLEL",
+          "source": "assets/sprites/Loadout/UPGRADE_FIRE_CONTROL_RELAY_PARALLEL.png",
+          "file": "assets/sprites/Loadout/UPGRADE_FIRE_CONTROL_RELAY_PARALLEL.png",
+          "sha256": "9844541491b3dcaf035e4f483997cd3d5e4e3cef98899e83a1fc675410ac9222",
+          "width": 32,
+          "height": 32,
+          "bytes": 2859
         },
         {
           "id": "UPGRADE_FLAMETHROWER_ADRENALIN_EFFICIENCY",
@@ -3066,10 +3138,10 @@
           "data": "assets/atlases/icons-0.json",
           "width": 1024,
           "height": 1024,
-          "sha256": "3efe6eb289507651eb643ef2dee9f55c409f03e1d7eead9d84fe87787a1b9acf",
-          "dataSha256": "de81d19b6bf98fec32ffd297f6cda7ea6fff9ca778d298374d4d02b778a244bb",
-          "bytes": 770182,
-          "dataBytes": 61103,
+          "sha256": "8da64043a32dc5e0028d12c933d0b22f8b92cf8e9cb74874660c6e1684bfa384",
+          "dataSha256": "2b741d89cbb55ebebe5ecf86150fcbf6bc8e7fe5e15491753776caccb92c8762",
+          "bytes": 786302,
+          "dataBytes": 62577,
           "frames": [
             "ASMD_PRIM",
             "ASMD_SEC",
@@ -3101,6 +3173,8 @@
             "DECOY",
             "ENERGY_SHIELD",
             "FELSBAU",
+            "FIRE_CONTROL_PORTAL",
+            "FIRE_CONTROL_RELAY",
             "FLAMETHROWER",
             "FLIEGENPILZ",
             "GAUSS_RIFLE",
@@ -3200,6 +3274,12 @@
             "UPGRADE_ENERGY_SHIELD_MOBILITY",
             "UPGRADE_ENERGY_SHIELD_OVERCHARGE",
             "UPGRADE_ENERGY_SHIELD_SUSTAIN",
+            "UPGRADE_FIRE_CONTROL_PORTAL_DAMAGE",
+            "UPGRADE_FIRE_CONTROL_PORTAL_DURATION",
+            "UPGRADE_FIRE_CONTROL_PORTAL_LOCAL_FIRE",
+            "UPGRADE_FIRE_CONTROL_RELAY_CONNECTIONS",
+            "UPGRADE_FIRE_CONTROL_RELAY_DURATION",
+            "UPGRADE_FIRE_CONTROL_RELAY_PARALLEL",
             "UPGRADE_FLAMETHROWER_ADRENALIN_EFFICIENCY",
             "UPGRADE_FLAMETHROWER_BURNING_GROUND",
             "UPGRADE_FLAMETHROWER_DEATH_FIRE_BURST",

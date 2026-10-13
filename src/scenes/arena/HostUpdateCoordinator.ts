@@ -555,7 +555,8 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     if (!countdownActive) {
       const turretCfg    = UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig;
       const turretWeapon = WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
-      this.combatSystems?.turret?.hostUpdate(now, turretCfg, turretWeapon, delta);
+      const sources = this.combatFramePort?.getCombatGameplayBinding()?.advanceFireControl(now);
+      this.combatSystems?.turret?.hostUpdate(now, turretCfg, turretWeapon, delta, sources);
     }
 
     const teslaDomes = countdownActive ? [] : (this.combatSystems?.teslaDome?.hostUpdate(now) ?? []);
@@ -980,7 +981,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
             ) ?? 0,
           })
           : 0,
-      });
+      }, bridge);
       const readyIdentity = `${bridge.getCurrentWorldRevision()}:${bridge.getActivityDescriptor()?.activityRevision ?? 'world'}:${localId}:${hudData.ultimateId}`;
       if (!this.ctx.getWorldCombatCore()!.isAlive(localId)) this.ultimateReadyFeedback.reset();
       else if (this.ultimateReadyFeedback.update(readyIdentity, hudData.rage, hudData.ultimateRequiredRage)

@@ -75818,6 +75818,165 @@
       }
     },
     {
+      "id": "held-fire-control-portal",
+      "category": "utility",
+      "gameIds": [
+        "FIRE_CONTROL_PORTAL"
+      ],
+      "revision": "fc-hq-4",
+      "variant": "standard",
+      "sourceSize": 128,
+      "textureKey": "held_FIRE_CONTROL_PORTAL",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          18
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "held_FIRE_CONTROL_PORTAL_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-fire-control-portal/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-fire-control-portal/sheet.png",
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 132,
+        "height": 132
+      },
+      "hashes": {
+        "idle": "30faedfb6ed522c2554bc638c60606a88f3228ac428d2a754fab8a63ed944209",
+        "sheet": "602dd90a9459135c2663796a9741a478ef9667ba8e3d5ff7b50250318968dd98"
+      }
+    },
+    {
+      "id": "held-fire-control-relay",
+      "category": "utility",
+      "gameIds": [
+        "FIRE_CONTROL_RELAY"
+      ],
+      "revision": "fc-hq-4",
+      "variant": "standard",
+      "sourceSize": 128,
+      "textureKey": "held_FIRE_CONTROL_RELAY",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "heldItem": {
+        "referenceSize": 32,
+        "grip": [
+          16,
+          24
+        ],
+        "muzzle": [
+          16,
+          18.4
+        ]
+      },
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "held_FIRE_CONTROL_RELAY_static",
+      "idlePath": "./assets/sprites/pipeline-v2/held-fire-control-relay/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/held-fire-control-relay/sheet.png",
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 132,
+        "height": 132
+      },
+      "hashes": {
+        "idle": "cb2dcaf2a09fcc81711ab42e2e5801463ffeda7ace0d32ee06f21a644c4e5d4e",
+        "sheet": "9862bfb51f5a127a32ae1e7b320d94263769b539fd8692c2d0ab41cda77eb445"
+      }
+    },
+    {
+      "id": "fire-control-relay",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "fc-hq-4",
+      "variant": "standard",
+      "sourceSize": 48,
+      "textureKey": "fire_control_relay",
+      "sheetTextureKey": "fire_control_relay_sheet",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "idlePath": "./assets/sprites/pipeline-v2/fire-control-relay/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/fire-control-relay/sheet.png",
+      "layout": {
+        "frameWidth": 48,
+        "frameHeight": 48,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 9,
+        "width": 416,
+        "height": 104
+      },
+      "clips": [
+        {
+          "name": "deploy",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "frameRate": 20,
+          "loop": false,
+          "start": "free",
+          "end": "rest"
+        },
+        {
+          "name": "idle",
+          "frames": [
+            0
+          ],
+          "frameRate": 1,
+          "loop": true,
+          "start": "rest",
+          "end": "rest"
+        }
+      ],
+      "hashes": {
+        "idle": "bb6e88c725ac422c81709fdd4d84a49fb59c17013dbda4280515e17f34e595e3",
+        "sheet": "b1aca45def6eb37b731156e192d171e76744d07afa6cdb63697bae28f496f50d"
+      }
+    },
+    {
       "id": "shield-charger-badger",
       "category": "enemy",
       "gameIds": [

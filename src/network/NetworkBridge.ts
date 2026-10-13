@@ -109,6 +109,8 @@ import {
   SHOCKWAVE_RADIUS,
 } from '../config';
 import { KEY_FAST_PING_PROBE, NetworkPingController } from './NetworkPingController';
+import { EMPTY_FIRE_CONTROL_SNAPSHOT, type FireControlSnapshot } from '../systems/fireControl/FireControlSnapshot';
+import { encodeFireControlSnapshot, decodeFireControlSnapshot } from './fireControlSnapshotCodec';
 import { isCompleteGameStatePayload } from './FullGameStateBootstrap';
 import type { EssenceSnapshot } from '../adrenalineEssence/AdrenalineEssenceReplication';
 import { decodeEssenceSnapshot, encodeEssenceSnapshot } from '../adrenalineEssence/AdrenalineEssenceWireCodec';
@@ -351,6 +353,7 @@ export interface RoundState {
 }
 
 export interface GameState extends KrakenSnapshotPatch {
+  fireControl: FireControlSnapshot;
   earthbreak?: readonly import('../systems/BurrowEarthbreakRuntime').SyncedBurrowEarthbreak[];
   shootingRange?: import('../shootingRange/ShootingRangeContracts').ShootingRangeState | null;
   /** Activity-scoped independent delta stream; consumed only by the passive essence replica. */
@@ -3086,6 +3089,20 @@ export class NetworkBridge {
 
   // Client-seitiger Cache für Partial-State-Merge (leere Arrays werden nicht gesendet)
   private cachedGameState: GameState | undefined;
+  private fireControlSnapshotProvider: () => FireControlSnapshot = () => EMPTY_FIRE_CONTROL_SNAPSHOT;
+
+  /** World composition binds the host owner; detach with null before destroying that owner. */
+  setFireControlSnapshotProvider(provider: (() => FireControlSnapshot) | null): void {
+    this.fireControlSnapshotProvider = provider ?? (() => EMPTY_FIRE_CONTROL_SNAPSHOT);
+  }
+
+  /** Presentation reads confirmed facts, never reconstructing deployments from local config. */
+  getFireControlSnapshot(): FireControlSnapshot {
+    if (!this.getWorldDescriptor()) return EMPTY_FIRE_CONTROL_SNAPSHOT;
+    return isHost() ? this.fireControlSnapshotProvider()
+      : this.getLatestGameState()?.fireControl ?? EMPTY_FIRE_CONTROL_SNAPSHOT;
+  }
+
   private krakenScope = '';
   private krakenPublishSequence = 0;
   private publishedKraken: KrakenSnapshotPacket | undefined;
@@ -3195,6 +3212,7 @@ export class NetworkBridge {
    * Enthält eine Sequenznummer (_s) für zuverlässige Change-Detection auf Clients.
    */
   publishGameState(state: OutboundGameState, fullSnapshot = false): void {
+    if (!isHost()) return;
     const worldRevision = this.getWorldDescriptor()?.worldRevision;
     if (worldRevision === undefined) return;
     if (state.worldRevision !== undefined && state.worldRevision !== worldRevision) return;
@@ -3212,6 +3230,7 @@ export class NetworkBridge {
       _b: this.publishedGameStateBaseline?.worldRevision === worldRevision
         ? this.publishedGameStateBaseline.sequence : 0,
     };
+    payload.fc = encodeFireControlSnapshot(this.fireControlSnapshotProvider());
     payload.rt = state.roundStartTime;
     payload.kr = this.getKrakenPacket();
     payload.sr = encodeShootingRange(state.shootingRange);
@@ -3352,6 +3371,7 @@ export class NetworkBridge {
       f: state.fires,
       sc: state.stinkClouds,
       tb: state.timeBubbles,
+      fc: encodeFireControlSnapshot(this.fireControlSnapshotProvider()),
       td: state.teslaDomes,
       es: state.energyShields,
       g: state.guardianSpirits,
@@ -3464,6 +3484,8 @@ export class NetworkBridge {
     const enemies = raw.ar === (this.getActivityDescriptor()?.activityRevision ?? null)
       ? this.krakenReceiver.applyEnemies(enemySnapshot) : enemySnapshot;
     const state: GameState = {
+      fireControl: decodeFireControlSnapshot(raw.fc === undefined ? [] : raw.fc, this.cachedGameState?.fireControl)
+        ?? this.cachedGameState?.fireControl ?? EMPTY_FIRE_CONTROL_SNAPSHOT,
       kraken: this.krakenReceiver.getState(),
       adrenalineEssence: raw.ae === undefined
         ? this.cachedGameState?.adrenalineEssence ?? null

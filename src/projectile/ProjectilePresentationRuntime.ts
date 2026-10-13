@@ -1,6 +1,7 @@
 import type { ProjectileCustomVisual, ProjectileVisualOverrides } from './ProjectileVisualOverrides';
 import type { PlasmaBurnerChargeRenderer } from '../effects/PlasmaBurnerChargeRenderer';
 import type { TurretAnimationController } from '../effects/TurretAnimationController';
+import { isFireControlCopySourceId } from '../systems/fireControl/FireControlSnapshot';
 import { ProjectilePathCursor, type ProjectilePathPoint, type ProjectileTrailSegment } from './ProjectileFlightPath';
 import { tracerBounceDebug } from '../effects/TracerBounceDebugSettings';
 import { TracerBounceDebugOverlay } from '../effects/TracerBounceDebugOverlay';
@@ -55,6 +56,7 @@ export type ProjectilePresentationState = Readonly<Pick<SyncedProjectile,
   | 'color'
   | 'ownerColor'
   | 'sourceTurretId'
+  | 'turretVisualId'
   | 'flameStreamKey'
   | 'projectileVisualScale'
   | 'smokeTrailColor'
@@ -104,6 +106,11 @@ export interface ProjectilePresentationRenderers {
   readonly visualOverrides?: ProjectileVisualOverrides;
 }
 
+/** World presentation owns the copy-shot subscription and its release. */
+export interface FireControlCopyShotSource {
+  bindFireControlCopyShots(sink: (sourceId: string) => void): () => void;
+}
+
 /**
  * Presentation-Owner für Host- und Client-Projektile.
  *
@@ -111,6 +118,13 @@ export interface ProjectilePresentationRenderers {
  * erzeugt aber selbst keine Gameplay-Entscheidung und schreibt keinen Runtime-State zurück.
  */
 export class ProjectilePresentationRuntime {
+  private fireControlCopyShot: ((sourceId: string) => void) | null = null;
+
+  bindFireControlCopyShots(sink: (sourceId: string) => void): () => void {
+    this.fireControlCopyShot = sink;
+    return () => { if (this.fireControlCopyShot === sink) this.fireControlCopyShot = null; };
+  }
+
   private groundFogSegment: ((segment: ProjectileTrailSegment, size: number, style: string, sourceId: number, weaponSourceId?: string) => void) | null = null;
   private readonly groundFogPoses = new Map<number, ProjectilePathPoint>();
   bindGroundFogSegments(sink: (segment: ProjectileTrailSegment, size: number, style: string, sourceId: number, weaponSourceId?: string) => void): () => void {
@@ -164,6 +178,7 @@ export class ProjectilePresentationRuntime {
     color: number;
     ownerColor?: number;
     sourceTurretId?: string;
+    turretVisualId?: string;
     flameStreamKey?: string;
   }>();
 
@@ -239,6 +254,7 @@ export class ProjectilePresentationRuntime {
       color: cfg.color,
       ownerColor: cfg.ownerColor,
       sourceTurretId: cfg.sourceTurretId,
+      turretVisualId: cfg.turretVisualId,
     });
     const style = cfg.projectileStyle;
     if (style === 'bullet' && this.bulletRenderer) {
@@ -308,7 +324,9 @@ export class ProjectilePresentationRuntime {
       this.tracerRenderer?.createTracer(id, tracerX, tracerY, cfg.tracerConfig, cfg.color);
     }
     if (cfg.suppressSpawnFx) return;
-    if (cfg.sourceTurretId !== undefined) this.turretAnimations?.onShot(cfg.sourceTurretId);
+    const turretVisualId = cfg.turretVisualId ?? cfg.sourceTurretId;
+    if (isFireControlCopySourceId(cfg.turretVisualId)) this.fireControlCopyShot?.(cfg.turretVisualId);
+    else if (turretVisualId !== undefined) this.turretAnimations?.onShot(turretVisualId);
     const muzzleOrigin = cfg.visualMuzzleOrigin ?? getTopDownMuzzleOrigin(muzzleX, muzzleY, angle);
     this.muzzleFlashRenderer?.playProjectileFlash(
       muzzleOrigin.x,
@@ -390,18 +408,20 @@ export class ProjectilePresentationRuntime {
   }
 
   /** Rebuild cached visuals when a stable ID receives new owner/source appearance metadata. */
-  private refreshOwnershipAppearance(projectile: Pick<ProjectilePresentationState, 'id' | 'ownerId' | 'color' | 'ownerColor' | 'sourceTurretId' | 'flameStreamKey'>): boolean {
+  private refreshOwnershipAppearance(projectile: Pick<ProjectilePresentationState, 'id' | 'ownerId' | 'color' | 'ownerColor' | 'sourceTurretId' | 'turretVisualId' | 'flameStreamKey'>): boolean {
     const previous = this.ownershipAppearance.get(projectile.id);
     if (previous?.ownerId === projectile.ownerId
       && previous.color === projectile.color
       && previous.ownerColor === projectile.ownerColor
       && previous.sourceTurretId === projectile.sourceTurretId
+      && previous.turretVisualId === projectile.turretVisualId
       && previous.flameStreamKey === projectile.flameStreamKey) return false;
     this.ownershipAppearance.set(projectile.id, {
       ownerId: projectile.ownerId,
       color: projectile.color,
       ownerColor: projectile.ownerColor,
       sourceTurretId: projectile.sourceTurretId,
+      turretVisualId: projectile.turretVisualId,
       flameStreamKey: projectile.flameStreamKey,
     });
     if (!previous) return false;
@@ -454,7 +474,7 @@ export class ProjectilePresentationRuntime {
       switch (style) {
         case 'flame':
           if (this.flameRenderer) {
-            if (!this.flameRenderer.has(id)) this.flameRenderer.createVisual(id, x, y, size, projectile.color, projectile.flameStreamKey ?? projectile.sourceTurretId ?? projectile.ownerId);
+            if (!this.flameRenderer.has(id)) this.flameRenderer.createVisual(id, x, y, size, projectile.color, projectile.flameStreamKey ?? projectile.turretVisualId ?? projectile.sourceTurretId ?? projectile.ownerId);
             this.flameRenderer.updateVisual(id, x, y, size, vx, vy);
           }
           break;
@@ -586,17 +606,21 @@ export class ProjectilePresentationRuntime {
   presentClientFrame(frame: ProjectileClientReplicaFrame, localPlayerId?: string): void {
     if (this.clientTurretBaselineReceived) {
       const firingTurrets = new Set<string>();
+      const firingCopies = new Set<string>();
       for (const update of frame.updates) {
         const projectile = update.projectile;
         if (update.isNew && projectile.style === 'firestarter_orb' && !projectile.suppressSpawnFx && !projectile.flightPath?.ended) {
           this.firestarterOrbRenderer?.onOrbShot(projectile.ownerId);
         }
+        const turretVisualId = projectile.turretVisualId ?? projectile.sourceTurretId;
         if (update.isNew && !projectile.suppressSpawnFx && !projectile.flightPath?.ended
-          && projectile.sourceTurretId !== undefined) {
-          firingTurrets.add(projectile.sourceTurretId);
+          && turretVisualId !== undefined) {
+          if (isFireControlCopySourceId(projectile.turretVisualId)) firingCopies.add(projectile.turretVisualId);
+          else firingTurrets.add(turretVisualId);
         }
       }
       for (const id of firingTurrets) this.turretAnimations?.onShot(id);
+      for (const id of firingCopies) this.fireControlCopyShot?.(id);
     }
     this.clientTurretBaselineReceived = true;
     this.clientPlayerId = localPlayerId;
@@ -751,7 +775,7 @@ export class ProjectilePresentationRuntime {
         if (!this.leafBlowerRenderer.has(id)) this.leafBlowerRenderer.createVisual(id, proj.x, proj.y, proj.size);
         this.leafBlowerRenderer.updateVisual(id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
       } else if (proj.style === 'flame' && this.flameRenderer) {
-        if (!this.flameRenderer.has(id)) this.flameRenderer.createVisual(id, proj.x, proj.y, proj.size, proj.color, proj.flameStreamKey ?? proj.sourceTurretId ?? proj.ownerId);
+        if (!this.flameRenderer.has(id)) this.flameRenderer.createVisual(id, proj.x, proj.y, proj.size, proj.color, proj.flameStreamKey ?? proj.turretVisualId ?? proj.sourceTurretId ?? proj.ownerId);
         this.flameRenderer.updateVisual(id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
       } else if ((proj.style === 'awp' || proj.style === 'gauss') && this.bulletRenderer) {
         if (!this.bulletRenderer.has(id)) this.bulletRenderer.createVisual(id, proj.x, proj.y, proj.size, proj.color, bulletPreset, proj.ownerColor ?? proj.color);
@@ -875,6 +899,7 @@ export class ProjectilePresentationRuntime {
   }
 
   releaseWorldPresentation(): void {
+    this.fireControlCopyShot = null;
     for (const visual of this.customVisuals.values()) visual.destroy();
     this.customVisuals.clear();
     this.groundFogSegment = null;

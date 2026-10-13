@@ -4,12 +4,15 @@ import { describe, expect, it } from 'vitest';
 import { getHeldItemAnchor, HELD_ITEM_ANCHOR_X, HELD_ITEM_ANCHOR_Y, HELD_ITEM_TEXTURE_SIZE, PLAYER_SIZE } from '../src/config';
 import { HELD_ITEM_SPRITES, getHeldItemPointWorld, getHeldItemSpriteSpec, getHeldWeaponGameplayMuzzleOrigin, getHeldWeaponMuzzleOrigin } from '../src/loadout/HeldItemVisuals';
 import { HELD_UTILITY_DISPLAY_MS, HeldItemSlotTracker } from '../src/loadout/HeldItemSlotTracker';
+import { EQUIPABLE_LOADOUT_CATALOG_ENTRIES } from './equipableLoadoutEntries';
 import {
   DEFAULT_LOADOUT,
   LOADOUT_CATALOG_ENTRIES,
   findUtilityConfig,
   findWeaponConfig,
 } from '../src/loadout/LoadoutConfig';
+
+const equipableCatalogEntries = EQUIPABLE_LOADOUT_CATALOG_ENTRIES;
 
 const REPOSITORY_ROOT = path.resolve(__dirname, '..');
 
@@ -32,7 +35,7 @@ describe('Getragene Loadout-Items: Bildvertrag', () => {
   it('hat fuer jedes tragbare Katalog-Item ein eigenes Bild', () => {
     const slotlessWeaponTypes = new Set(['melee', 'energy_shield', 'tesla_dome', 'healing_aura']);
 
-    for (const entry of LOADOUT_CATALOG_ENTRIES.filter((candidate) => candidate.kind !== 'ultimate')) {
+    for (const entry of equipableCatalogEntries.filter((candidate) => candidate.kind !== 'ultimate')) {
       const weapon = findWeaponConfig(entry.id);
       const utility = findUtilityConfig(entry.id);
       const shouldHaveSprite = weapon
@@ -49,12 +52,21 @@ describe('Getragene Loadout-Items: Bildvertrag', () => {
   });
 
   it('nutzt für alle Utilities hochaufgelöste Modelle und vererbt sie an Modusvarianten', () => {
-    for (const { id } of LOADOUT_CATALOG_ENTRIES.filter(entry => entry.kind === 'utility')) {
+    for (const { id } of equipableCatalogEntries.filter(entry => entry.kind === 'utility')) {
       const spec = getHeldItemSpriteSpec(id)!;
       expect(spec.assetPath).toContain('/pipeline-v2/');
       expect(spec.sourceScale).toBeGreaterThan(1);
       const variant = `${id}_COOP`;
       if (findUtilityConfig(variant)) expect(getHeldItemSpriteSpec(variant)).toBe(spec);
+    }
+  });
+
+  it('resolves authored fire-control utilities before their class unlock is released', () => {
+    for (const id of ['FIRE_CONTROL_RELAY', 'FIRE_CONTROL_PORTAL']) {
+      const spec = getHeldItemSpriteSpec(id)!;
+      expect(spec).toBe(HELD_ITEM_SPRITES[id]);
+      expect(spec.assetPath).toContain('/pipeline-v2/');
+      expect(spec.sourceScale).toBeGreaterThan(1);
     }
   });
 

@@ -95,7 +95,7 @@ function measure(s:Scenario) {
   const poses:AutomatedTurret[]=Array.from({length:s.reference==='machine_gun_turret'?3:1},(_,i)=>({
     ...config,id:i+1,x:p.x,y:p.y+(i-1)*32,angle:0,ownerId:'p',ownerColor:1,targetMode:'enemies',
     ...(s.reference==='machine_gun_turret'?{damage:mg.damage,cooldownMs:mg.cooldownMs,targetRange:mg.targetRange,projectileRange:mg.projectileRange}:{})}));
-  turrets.setTurretProvider(()=>poses,(id,angle)=>{const pose=poses.find(t=>t.id===id)!;Object.assign(pose,{angle});});
+  turrets.setTurretProvider(()=>poses,(source,angle)=>{const pose=poses.find(t=>t.id===source.id)!;Object.assign(pose,{angle});});
   turrets.setEnemyTargetProvider(()=>enemies.map(e=>({id:e.id,...e.sprite})));
   turrets.setFireHandler((ownerId,ownerColor,weaponId,x,y,angle,targetX,targetY,damageMultiplier=1,rangeFactor=1,sourceTurretId)=>{
     const weapon=WEAPON_CONFIGS[weaponId];automated.fire({...weapon,range:weapon.range*rangeFactor},{x,y,angle,targetX,targetY,ownerId,ownerColor,

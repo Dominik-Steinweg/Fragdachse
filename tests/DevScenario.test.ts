@@ -33,6 +33,19 @@ import { createMemoryStorage } from '../src/dev/scenario/memoryStorage';
 import { ScenarioClock } from '../src/dev/scenario/clock';
 import { visualTest, bindVisualTestBootClock, bindVisualTestTextureKeys } from '../src/dev/scenario/visualTest';
 
+it('offers turret copies only to the Inspector while portals stay locked', () => {
+  const relay = COOP_DEFENSE_UPGRADE_DEFINITIONS.unlock_fire_control_relay;
+  expect(isCoopDefenseUpgradeAvailableForClass(relay.id, 'inspector_gadachs')).toBe(true);
+  expect(isCoopDefenseUpgradeAvailableForClass('fire_control_relay_parallel', 'inspector_gadachs')).toBe(true);
+  for (const classId of COOP_DEFENSE_CLASS_IDS.filter(id => id !== 'inspector_gadachs')) {
+    expect(isCoopDefenseUpgradeAvailableForClass(relay.id, classId)).toBe(false);
+  }
+  expect(isCoopDefenseUpgradeAvailableForClass('unlock_fire_control_portal', 'inspector_gadachs')).toBe(false);
+  const profile = buildScenarioProfile('inspector_gadachs', { fire_control_relay_parallel: 1 },
+    [{ kind: 'utility', id: 'FIRE_CONTROL_RELAY' }]);
+  expect(profile.toolLoadout).toEqual([{ kind: 'utility', id: 'FIRE_CONTROL_RELAY' }]);
+});
+
 it('keeps render texture identities unique when a deterministic frame repeats its random stream', () => {
   const enabled = visualTest.enabled;
   visualTest.enabled = true;

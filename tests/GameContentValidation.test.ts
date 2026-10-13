@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { validateResolvedUtility } from '../src/loadout/content/LoadoutSchemas';
+import { applyCoopDefenseModifiersToUtilityConfig } from '../src/loadout/CoopDefenseLoadoutModifiers';
 import { AUDIO_ASSETS, preloadAllAudio } from '../src/audio/AudioCatalog';
 import {
   CONFIG_STAT_DESCRIPTORS,
@@ -104,6 +106,74 @@ describe('game-wide loadout content validation', () => {
         expect(contract.minimum, stat).toBe(0);
         expect(Number.isInteger(contract.stage), stat).toBe(true);
         expect(contract.operations.length, stat).toBeGreaterThan(0);
+      }
+    }
+  });
+});
+
+
+describe('fire-control content contracts', () => {
+  const cases = [
+    ['FIRE_CONTROL_RELAY', ['durationMs', 'maxCopies', 'ringRadiusPx', 'materializeMs']],
+    ['FIRE_CONTROL_PORTAL', ['durationMs', 'projectileSpeed', 'projectileSize', 'stopSpeedThreshold']],
+  ] as const;
+
+  it.each(cases)('validates required positive finite values for %s', (id, fields) => {
+    const config = UTILITY_CONFIGS[id];
+    expect(validateResolvedUtility(config)).toEqual([]);
+    for (const field of fields) {
+      for (const invalid of [undefined, '1', 0, -1, NaN, Infinity]) {
+        expect(validateResolvedUtility({ ...config, [field]: invalid }), field).not.toEqual([]);
+      }
+    }
+    for (const invalid of [undefined, -1, 0.5, 2, NaN, Infinity]) {
+      const flag = id === 'FIRE_CONTROL_RELAY' ? 'parallelEnabled' : 'localFireEnabled';
+      expect(validateResolvedUtility({ ...config, [flag]: invalid }), flag).not.toEqual([]);
+    }
+    expect(validateResolvedUtility({ ...config, durationMs: 0.5 })).not.toEqual([]);
+    expect(validateResolvedUtility({ ...config, activation: { type: 'instant' } })).not.toEqual([]);
+    expect(validateResolvedUtility({ ...config, maxBounces: 1 })).not.toEqual([]);
+    expect(validateResolvedUtility({ ...config, charges: undefined })).not.toEqual([]);
+    expect(validateResolvedUtility({ ...config, skipCooldownPublish: false })).not.toEqual([]);
+    expect(validateResolvedUtility({ ...config, placeable: {} })).not.toEqual([]);
+  });
+
+  it('rejects fractional copy counts and materialization that outlasts the deployment', () => {
+    const relay = UTILITY_CONFIGS.FIRE_CONTROL_RELAY;
+    if (relay.type !== 'fire_control_relay') throw new Error('Wrong relay type');
+    expect(validateResolvedUtility({ ...relay, maxCopies: 1.5 })).not.toEqual([]);
+    expect(validateResolvedUtility({ ...relay, materializeMs: 0.5 })).not.toEqual([]);
+    expect(validateResolvedUtility({ ...relay, materializeMs: relay.durationMs })).not.toEqual([]);
+  });
+
+  it('requires real air deceleration and a nonnegative damage bonus', () => {
+    const portal = UTILITY_CONFIGS.FIRE_CONTROL_PORTAL;
+    for (const field of ['damageBonus', 'frictionDelayMs', 'bounceFrictionMultiplier']) {
+      for (const invalid of [undefined, -1, NaN, Infinity])
+        expect(validateResolvedUtility({ ...portal, [field]: invalid }), field).not.toEqual([]);
+    }
+    for (const invalid of [undefined, 0, 1, -1, NaN, Infinity])
+      expect(validateResolvedUtility({ ...portal, airFrictionDecayPerSec: invalid })).not.toEqual([]);
+  });
+
+  it.each(cases)('resolves every authored upgrade through descriptors for %s', (id) => {
+    const base = UTILITY_CONFIGS[id];
+    const upgrades = Object.values(COOP_DEFENSE_UPGRADE_DEFINITIONS)
+      .filter(definition => definition.effects.some(effect => effect.stat.startsWith('utility.' + id + '.')));
+    expect(upgrades.length).toBeGreaterThan(0);
+    const additive: Record<string, number> = {};
+    for (const definition of upgrades) {
+      for (let level = 1; level <= definition.maxLevel; level++) {
+        for (const effect of definition.effects) additive[effect.stat] = effect.value * level;
+        const resolved = applyCoopDefenseModifiersToUtilityConfig(base, { additive, percentage: {} });
+        expect(validateResolvedUtility(resolved)).toEqual([]);
+        for (const [stat, value] of Object.entries(additive)) {
+          const field = stat.split('.').at(-1)!;
+          expect((resolved as unknown as Record<string, number>)[field]).toBeCloseTo(
+            (base as unknown as Record<string, number>)[field] + value);
+        }
+        expect(resolved.activation).toEqual(base.activation);
+        expect(resolved.cooldown).toBe(base.cooldown);
       }
     }
   });

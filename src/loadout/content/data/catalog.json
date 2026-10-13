@@ -251,6 +251,20 @@
       "slot": "ultimate",
       "order": 4,
       "iconKey": "DACHS_TUNNEL"
+    },
+    {
+      "kind": "utility",
+      "id": "FIRE_CONTROL_RELAY",
+      "slot": "utility",
+      "order": 19,
+      "iconKey": "FIRE_CONTROL_RELAY"
+    },
+    {
+      "kind": "utility",
+      "id": "FIRE_CONTROL_PORTAL",
+      "slot": "utility",
+      "order": 20,
+      "iconKey": "FIRE_CONTROL_PORTAL"
     }
   ]
 }

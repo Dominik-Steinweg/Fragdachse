@@ -1,4 +1,5 @@
 export const enUi = {
+  "ui.errors.no_fire_sources": "No combat-ready turrets of your own",
   "ui.voice.volume": "VOICE",
   "ui.voice.off": "OFF",
   "ui.performance.noSample": "No companion sample yet.",
@@ -208,6 +209,7 @@ export const enUi = {
   "ui.turretControl.enter": "Shift: Man turret",
   "ui.stinkCloud.active": "Active",
   "ui.stinkCloud.cooldown": "Cooldown",
+  "ui.fireControl.copiesActive": "Copies active",
   "ui.timeBubble.flying": "In flight",
   "ui.translocator.puck": "Puck active · E teleports",
   "ui.translocator.portals": "E closes · Portals",

@@ -97,6 +97,8 @@ const FIRE_REQUIRED: Readonly<Record<string, readonly string[]>> = {
 };
 
 const UTILITY_REQUIRED: Readonly<Record<string, readonly string[]>> = {
+  fire_control_relay: ['durationMs', 'maxCopies', 'ringRadiusPx', 'clearanceRadiusPx', 'singleCopyOffsetPx', 'materializeMs', 'parallelEnabled', 'charges', 'skipCooldownPublish'],
+  fire_control_portal: ['durationMs', 'damageBonus', 'localFireEnabled', 'charges', 'skipCooldownPublish', 'frictionDelayMs', 'airFrictionDecayPerSec', 'bounceFrictionMultiplier', 'stopSpeedThreshold'],
   explosive: ['aoeRadius', 'aoeDamage'],
   smoke: [
     'smokeRadius', 'smokeExpandDuration', 'smokeLingerDuration', 'smokeDissipateDuration',
@@ -293,6 +295,46 @@ export function validateResolvedUtility(value: unknown): string[] {
   validateCommonConfig(value, issues);
   if (value.type === 'placeable_turret' && isRecord(value.placeable)) {
     issues.push(...validateTurretAimConfig(value.placeable).map(issue => '$.placeable.' + issue));
+  }
+  if (value.type === 'fire_control_relay' || value.type === 'fire_control_portal') {
+    const relay = value.type === 'fire_control_relay';
+    const positiveFields = relay
+      ? ['cooldown', 'durationMs', 'maxCopies', 'ringRadiusPx', 'clearanceRadiusPx', 'singleCopyOffsetPx', 'materializeMs']
+      : ['cooldown', 'durationMs', 'projectileSpeed', 'projectileSize', 'stopSpeedThreshold'];
+    for (const key of positiveFields) {
+      const n = value[key];
+      if (typeof n !== 'number' || !Number.isFinite(n) || n <= 0)
+        issues.push('$.' + key + ': positive finite number required');
+    }
+    for (const key of relay ? ['durationMs', 'materializeMs', 'maxCopies'] : ['durationMs']) {
+      if (!Number.isSafeInteger(value[key])) issues.push('$.' + key + ': integer required');
+    }
+    const flag = relay ? 'parallelEnabled' : 'localFireEnabled';
+    if (value[flag] !== 0 && value[flag] !== 1) issues.push('$.' + flag + ': zero or one required');
+    if (!isRecord(value.activation) || value.activation.type !== (relay ? 'placement_mode' : 'charged_throw'))
+      issues.push('$.activation: invalid fire-control activation');
+    if (value.maxBounces !== 0) issues.push('$.maxBounces: fire control cannot bounce');
+    if (value.skipCooldownPublish !== true) issues.push('$.skipCooldownPublish: cooldown belongs to deployment end');
+    if (!isRecord(value.charges) || value.charges.maxCharges !== 1) issues.push('$.charges: one deployment charge required');
+    if (value.placeable !== undefined) issues.push('$.placeable: fire control is not a construction');
+    if (relay) {
+      if (typeof value.materializeMs === 'number' && typeof value.durationMs === 'number' && value.materializeMs >= value.durationMs)
+        issues.push('$.materializeMs: must finish before deployment ends');
+    } else {
+      for (const key of ['damageBonus', 'frictionDelayMs', 'bounceFrictionMultiplier']) {
+        const n = value[key];
+        if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) issues.push('$.' + key + ': nonnegative finite number required');
+      }
+      const decay = value.airFrictionDecayPerSec;
+      if (typeof decay !== 'number' || !Number.isFinite(decay) || decay <= 0 || decay >= 1)
+        issues.push('$.airFrictionDecayPerSec: deceleration factor strictly between zero and one required');
+      if (isRecord(value.activation)) {
+        for (const key of ['minThrowSpeed', 'fullChargeDuration']) {
+          const n = value.activation[key];
+          if (typeof n !== 'number' || !Number.isFinite(n) || n <= 0) issues.push('$.activation.' + key + ': positive finite number required');
+        }
+      }
+    }
   }
   if (value.type === 'translocator') {
     for (const key of ['telefragRadius', 'telefragDamage', 'phaseMoveSpeedBonus', 'phaseMoveDurationMs',

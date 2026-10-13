@@ -1,4 +1,5 @@
 export const deUi = {
+  "ui.errors.no_fire_sources": "Keine kampffähigen eigenen Türme",
   "ui.voice.volume": "SPRACHE",
   "ui.voice.off": "AUS",
   "ui.performance.noSample": "Noch kein Companion-Sample vorhanden.",
@@ -208,6 +209,7 @@ export const deUi = {
   "ui.turretControl.enter": "Shift: Bemannen",
   "ui.stinkCloud.active": "Aktiv",
   "ui.stinkCloud.cooldown": "Abklingzeit",
+  "ui.fireControl.copiesActive": "Kopien aktiv",
   "ui.timeBubble.flying": "Unterwegs",
   "ui.translocator.puck": "Puck aktiv · E teleportiert",
   "ui.translocator.portals": "E schließt · Portale",

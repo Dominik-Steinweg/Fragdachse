@@ -1,3 +1,4 @@
+import { resolveConstructionPlacementRange } from '../src/config/coopDefenseConstructions';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -13,6 +14,10 @@ import {
   ArenaInputBindings,
   type ArenaInputBindingsInput,
 } from '../src/scenes/arena/ArenaInputBindings';
+import { UTILITY_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { applyCoopDefenseModifiersToUtilityConfig } from '../src/loadout/CoopDefenseLoadoutModifiers';
+import { planFireControlCopies, type FireControlConstructionFacts } from '../src/systems/fireControl/FireControlCopyPlan';
+import { t } from '../src/i18n';
 
 interface FakeKey {
   isDown: boolean;
@@ -156,6 +161,9 @@ function makeInput(): {
     getConstructionCapacityForPlayer: vi.fn(() => undefined),
     getTranslocatorActivePuckId: vi.fn(() => undefined),
     placement: {
+      getConstructionPlacementRange: vi.fn(() => resolveConstructionPlacementRange()),
+      getFireControlConstructions: vi.fn(() => []),
+      isFireControlPointFree: vi.fn(() => true),
       getUsedCapacity: vi.fn(() => 0),
       getDismantlePreview: vi.fn(() => undefined),
       getPlacementPreview: vi.fn(() => undefined),
@@ -201,6 +209,85 @@ function makeInput(): {
 }
 
 describe('ArenaInputBindings', () => {
+  function fireControlFixture() {
+    const f = makeInput();
+    const config = applyCoopDefenseModifiersToUtilityConfig(UTILITY_CONFIGS.FIRE_CONTROL_RELAY, {
+      additive: { 'utility.FIRE_CONTROL_RELAY.maxCopies': 2, 'utility.FIRE_CONTROL_RELAY.durationMs': 1000,
+        'utility.FIRE_CONTROL_RELAY.parallelEnabled': 1 }, percentage: {},
+    });
+    if (config.type !== 'fire_control_relay') throw new Error('Expected relay fixture');
+    const source = (id: number, overrides: Partial<FireControlConstructionFacts> = {}): FireControlConstructionFacts => ({
+      id, ownerId: 'local', baseOwned: false, constructionId: 'machine_gun_turret', weaponId: 'TURRET_MG',
+      weaponFireType: 'projectile', combatReady: true, manned: false, x: id * 10, y: 80, ...overrides,
+    });
+    const constructions = [source(8), source(7), source(6, { constructionId: 'rocket_turret', weaponId: 'TURRET_ROCKET' }),
+      source(1, { ownerId: 'other' }), source(2, { baseOwned: true }), source(3, { manned: true }),
+      source(4, { combatReady: false }), source(5, { constructionId: 'tesla_turret' })];
+    vi.mocked(f.actions.getLocalUtilityConfig).mockReturnValue(config);
+    vi.mocked(f.actions.getLocalPlayerPosition).mockReturnValue({ x: 0, y: 0 });
+    vi.mocked(f.actions.getPointerWorldPoint).mockReturnValue({ x: 100, y: 0 });
+    vi.mocked(f.actions.getLocalInspectorTools).mockReturnValue([
+      { kind: 'construction', id: 'rocket_turret' }, { kind: 'utility', id: config.id },
+      { kind: 'construction', id: 'machine_gun_turret' },
+    ]);
+    vi.mocked(f.actions.placement.getFireControlConstructions).mockReturnValue(constructions);
+    f.inputSystem.isUtilityPlacementActive.mockReturnValue(true);
+    return { ...f, config, constructions };
+  }
+
+  it.each(['valid', 'range', 'invalid', 'no_fire_sources', 'placement'] as const)(
+    'projects the shared copy plan and its %s result without placeable casts', outcome => {
+      const f = fireControlFixture();
+      if (outcome === 'range') vi.mocked(f.actions.getPointerWorldPoint).mockReturnValue({ x: f.actions.placement.getConstructionPlacementRange() + 1, y: 0 });
+      if (outcome === 'invalid') vi.mocked(f.actions.getPointerWorldPoint).mockReturnValue({ x: NaN, y: 0 });
+      if (outcome === 'no_fire_sources') vi.mocked(f.actions.placement.getFireControlConstructions).mockReturnValue(f.constructions.slice(3).filter(source => !source.manned));
+      if (outcome === 'placement') vi.mocked(f.actions.placement.isFireControlPointFree).mockReturnValue(false);
+      const point = f.actions.getPointerWorldPoint();
+      const plan = planFireControlCopies({ ownerId: 'local', playerX: 0, playerY: 0, pointX: point.x, pointY: point.y,
+        constructions: f.actions.placement.getFireControlConstructions(), slotOrder: ['rocket_turret', 'machine_gun_turret'],
+        pausedOriginalIds: new Set(), config: { ...f.config, buildRangePx: f.actions.placement.getConstructionPlacementRange(), parallel: f.config.parallelEnabled > 0 },
+        isPointFree: f.actions.placement.isFireControlPointFree });
+      const preview = f.binding.getLocalPlacementPreview();
+      expect(preview?.kind).toBe('fire_control_relay');
+      if (preview?.kind !== 'fire_control_relay') throw new Error('Expected copy preview');
+      expect(preview.valid).toBe(plan.ok);
+      expect(preview.reason).toBe(outcome === 'valid' ? undefined : outcome);
+      const ids = plan.ok ? plan.copies.map(copy => copy.originalId) : plan.candidates;
+      expect(preview.originals).toEqual(ids.map(id => {
+        const source = f.constructions.find(source => source.id === id)!;
+        return { id, x: source.x, y: source.y };
+      }));
+      expect(preview.ghosts).toEqual(plan.ok ? plan.copies.map(copy => {
+        const source = f.constructions.find(source => source.id === copy.originalId)!;
+        return { x: copy.x, y: copy.y, constructionId: source.constructionId, weaponId: source.weaponId };
+      }) : []);
+      expect(preview.originals.every(source => [3, 6, 7, 8].includes(source.id))).toBe(true);
+      if (plan.ok) expect(preview.originals.map(source => source.id)).toEqual([6, 8, 7]);
+      expect(f.actions.placement.getPlacementPreview).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['range', 'placement', 'invalid', 'no_fire_sources'] as const)(
+    'uses the host failure text for local %s rejection', async reason => {
+      const f = fireControlFixture();
+      vi.mocked(f.actions.getPlayerCapabilities).mockReturnValue({ canInteract: true, canUseCombat: true } as never);
+      vi.mocked(f.actions.isLocalPlayerAlive).mockReturnValue(true);
+      const hostReason = reason === 'range' ? 'placement' : reason;
+      vi.mocked(f.actions.sendLoadoutUse).mockResolvedValue({ ok: false, reason: hostReason });
+      f.binding.setup();
+      (f.inputSystem.onInvalidFireControlPlacement as unknown as (reason: string) => void)(reason);
+      expect(f.actions.sendLoadoutUse).not.toHaveBeenCalled();
+      const showError = vi.mocked(f.actions.feedback.showPlacementError);
+      const localText = showError.mock.calls[0][0];
+      const use = f.inputSystem.setupLoadoutListener.mock.calls[0][0];
+      use('utility', 0, 100, 0, { toolRef: { kind: 'utility', id: 'FIRE_CONTROL_RELAY' } });
+      await Promise.resolve();
+      expect(showError).toHaveBeenCalledTimes(2);
+      expect(showError).toHaveBeenLastCalledWith(localText);
+      if (reason === 'no_fire_sources') expect(localText).toBe(t('ui.errors.no_fire_sources'));
+    },
+  );
+
   it('awaits first tunnel selection approval and forwards cleanup across input gates', async () => {
     const { binding, actions, inputSystem } = makeInput();
     vi.mocked(actions.getPlayerCapabilities).mockReturnValue({ canInteract: true, canUseCombat: true } as never);

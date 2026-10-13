@@ -3,9 +3,16 @@ import type { PlayerManager } from '../entities/PlayerManager';
 import { WEAPON_CONFIGS, type PlaceableTurretUtilityConfig, type WeaponConfig } from '../loadout/LoadoutConfig';
 import type { CombatActorStatePort, CombatRelationshipQueryPort } from '../combat/CombatCapabilities';
 import type { TurretDamageBuff } from '../types';
-import { DEFAULT_TURRET_AIM_TOLERANCE_DEG, type TurretAimConfig } from '../config/turretAim';
+import { DEFAULT_TURRET_AIM_TOLERANCE_DEG } from '../config/turretAim';
 import { stepTurretAngle, turretAngleDifference } from '../utils/turretAngle';
 import type { ManualTurretControl } from './TurretControlSystem';
+import { canWeaponDamageBases, type TurretHitSegment } from './TurretBaseTargeting';
+import { toLocalTurretFireSource, type AutomatedTurretId, type AutomatedTurret, type TurretFireSource, type TurretFireContext } from './TurretFireSource';
+
+export {
+  toLocalTurretFireSource, type AutomatedTurretId, type AutomatedTurretTargetMode,
+  type AutomatedTurret, type TurretFireState, type TurretFireSource, type TurretFireContext,
+} from './TurretFireSource';
 
 /**
  * Schusslinienprüfung des Turrets. Bewusst die Schuss- und nicht die Sichtlinie: ein Turret,
@@ -19,43 +26,55 @@ type LineOfFireChecker = (
   skipRockIndex?: number,
   sourceCarrierBaseId?: string,
 ) => boolean;
-export type AutomatedTurretId = number | string;
-export type AutomatedTurretTargetMode = 'players' | 'enemies';
-export interface AutomatedTurret extends TurretAimConfig {
-  /** Occupant exit contour; retained through removal of the turret or its carrier. */
-  readonly footprint?: { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number };
-  readonly angle?: number;
-  readonly id: AutomatedTurretId;
-  readonly x: number;
-  readonly y: number;
-  readonly ownerId: string;
-  readonly ownerColor: number;
-  readonly weaponId?: keyof typeof WEAPON_CONFIGS;
-  readonly skipRockIndex?: number;
-  /** Nur der konkrete Träger ist bis zum ersten vollständigen Austritt freigegeben. */
-  readonly sourceCarrierBaseId?: string;
-  readonly secondProjectileDamageFactor?: number;
-  /** Beim Platzieren eingefrorene Zielreichweite; fehlt bei Basis-Turrets (dann gilt die Config). */
-  readonly targetRange?: number;
-  readonly projectileRange?: number;
-  readonly cooldownMs?: number;
-  readonly damage?: number;
-  readonly muzzleOffset?: number;
-  /** Erzwingt die Laufzeit-Zielfraktion; ohne Wert bleibt das bisherige gemischte Verhalten. */
-  readonly targetMode?: AutomatedTurretTargetMode;
-}
 type TurretProvider = () => readonly AutomatedTurret[];
-type TurretAngleUpdater = (id: AutomatedTurretId, angle: number) => void;
+type TurretFireSourceProvider = () => readonly TurretFireSource[];
+type TurretAngleUpdater = (source: TurretFireSource, angle: number) => void;
 type EnemyTargetProvider = () => readonly { id: string; x: number; y: number }[];
 type FocusTargetProvider = (ownerId: string) => { targetType: 'enemy' | 'base'; targetId: string } | null;
-type FocusedBaseTargetProvider = (targetId: string, turretX: number, turretY: number) => { id: string; x: number; y: number } | null;
+type FocusedBaseTargetProvider = (targetId: string, turretX: number, turretY: number, range: number) => readonly TurretTargetPoint[];
+/**
+ * Erreichbare Außenflächen-Punkte feindlicher Basen, nach Distanz sortiert und begrenzt. Der
+ * Provider entscheidet Besitz- und Modusberechtigung; Reichweite und Schusslinie prüft das TurretSystem.
+ */
+type BaseTargetCandidateProvider = (
+  source: TurretFireSource, turretX: number, turretY: number, range: number,
+) => readonly TurretTargetPoint[];
+/**
+ * Basisziele tragen ihren Trefferabschnitt: Drehbegrenzte Türme müssen ihn mit dem tatsächlichen
+ * Rohrstrahl innerhalb ihrer Reichweite schneiden. Ziele ohne Abschnitt behalten die normale Toleranz.
+ */
+interface TurretAimTarget { readonly x: number; readonly y: number; readonly hitSegment?: TurretHitSegment }
+interface TurretTargetPoint extends TurretAimTarget {
+  readonly id: string;
+  /** Live eligibility and geometry generation, without rebuilding/ranking surfaces. */
+  readonly isValid?: () => boolean;
+}
+const BASE_SEARCH_INTERVAL_MS = 225;
+function baseSearchPhase(id: AutomatedTurretId): number {
+  if (typeof id === 'number') return ((id - 1) * 97 % BASE_SEARCH_INTERVAL_MS + BASE_SEARCH_INTERVAL_MS) % BASE_SEARCH_INTERVAL_MS;
+  let hash = 2166136261;
+  for (let i = 0; i < id.length; i++) hash = Math.imul(hash ^ id.charCodeAt(i), 16777619);
+  return (hash >>> 0) % BASE_SEARCH_INTERVAL_MS;
+}
+interface BaseSearchState {
+  sequenceKey: AutomatedTurretId;
+  nextSearchAt: number;
+  searchDue: boolean;
+  target: TurretTargetPoint | null;
+  candidates: readonly TurretTargetPoint[];
+}
 interface PendingTurretBurst {
+  /** Eintrag, der die Salve begonnen hat; nur er darf sie fortsetzen. */
+  ownerEntryId: AutomatedTurretId;
+  /** Cooldown der Folge, falls die Salve mit ihrem Eintrag abgebrochen wird. */
+  cooldownMs: number;
   shotsRemaining: number;
   nextShotAt: number;
   targetX: number;
   targetY: number;
   damageMultiplier: number;
   rangeFactor: number;
+  hitSegment?: TurretHitSegment;
 }
 type TurretFireHandler = (
   ownerId: string,
@@ -68,9 +87,11 @@ type TurretFireHandler = (
   targetY: number,
   damageFactor?: number,
   rangeFactor?: number,
+  /** Identität (Original) für Attribution und identitätsgebundene Trefferwirkungen. */
   sourceTurretId?: AutomatedTurretId,
   skipRockIndex?: number,
   sourceCarrierBaseId?: string,
+  context?: TurretFireContext,
 ) => void;
 
 export class TurretSystem {
@@ -82,16 +103,23 @@ export class TurretSystem {
   }
   private lineOfFireChecker: LineOfFireChecker | null = null;
   private turretProvider: TurretProvider | null = null;
+  private fireSourceProvider: TurretFireSourceProvider | null = null;
   private turretAngleUpdater: TurretAngleUpdater | null = null;
   private enemyTargetProvider: EnemyTargetProvider | null = null;
   private focusTargetProvider: FocusTargetProvider | null = null;
   private focusedBaseTargetProvider: FocusedBaseTargetProvider | null = null;
+  private baseTargetCandidateProvider: BaseTargetCandidateProvider | null = null;
+  private readonly baseDamageByWeapon = new Map<string, boolean>();
+  /** A shared firing sequence can move between entries, but each pose owns its aim. */
+  private readonly baseSearches = new Map<AutomatedTurretId, BaseSearchState>();
   private fireHandler: TurretFireHandler | null = null;
   private turretDamageBuffProvider: ((x: number, y: number) => TurretDamageBuff | null) | null = null;
   private turretDamageMultiplierProvider: ((turret: AutomatedTurret, turrets: readonly AutomatedTurret[]) => number) | null = null;
+  /** Nach `sequenceKey`; überlebt Pausen und Wechsel zwischen Original und Kopie. */
   private nextFireAt = new Map<AutomatedTurretId, number>();
+  /** Nach `sequenceKey`; `ownerEntryId` bindet die Salve an ihren Eintrag. */
   private pendingBursts = new Map<AutomatedTurretId, PendingTurretBurst>();
-  private targetScore: ((turret: AutomatedTurret, kind: 'player' | 'enemy' | 'base', id: string, now: number) => number) | null = null;
+  private targetScore: ((turret: TurretFireSource, kind: 'player' | 'enemy' | 'base', id: string, now: number) => number) | null = null;
 
   setTargetScoreProvider(provider: typeof this.targetScore): void { this.targetScore = provider; }
 
@@ -104,9 +132,22 @@ export class TurretSystem {
     this.lineOfFireChecker = checker;
   }
 
+  /**
+   * Konstruktionsbestand (für `getTurrets()`) und Winkel-Senke. Ohne eigenen Feuerquellen-Provider
+   * ist jede Konstruktion genau eine lokale Feuerquelle.
+   */
   setTurretProvider(provider: TurretProvider | null, angleUpdater: TurretAngleUpdater | null): void {
     this.turretProvider = provider;
     this.turretAngleUpdater = angleUpdater;
+  }
+
+  /**
+   * Vollständige Feuerquellen-Liste einschließlich temporärer Quellen. Temporäre Quellen gelangen
+   * bewusst nur hierüber ins Turmfeuer und nie in `getTurrets()`: Bemannung, Interaktion, Homing und
+   * Fernsteuerung lesen den Konstruktionsbestand.
+   */
+  setFireSourceProvider(provider: TurretFireSourceProvider | null): void {
+    this.fireSourceProvider = provider;
   }
 
   setEnemyTargetProvider(provider: EnemyTargetProvider | null): void {
@@ -121,25 +162,33 @@ export class TurretSystem {
     this.focusedBaseTargetProvider = provider;
   }
 
+  /** Dritte Zielstufe: feindliche Basen, nur ohne Fokus- und Figurenziel. */
+  setBaseTargetCandidateProvider(provider: BaseTargetCandidateProvider | null): void {
+    this.baseTargetCandidateProvider = provider;
+    this.baseSearches.clear();
+  }
+
   setFireHandler(handler: TurretFireHandler | null): void {
     this.fireHandler = handler;
     if (!handler) {
       this.nextFireAt.clear();
       this.pendingBursts.clear();
       this.controlRevisions.clear();
+      this.baseSearches.clear();
     }
   }
 
   /**
    * Ortsbezogener Konstruktionsbuff aus der Verstärkungsmatrix-/Energieinjektor-Pipeline.
    * Bewusst positionsbasiert, damit platzierte Konstruktionen, Fliegenpilze und Basistuerme
-   * ohne Sonderfall profitieren.
+   * ohne Sonderfall profitieren. Abgefragt wird die Position der Identität (des Originals), nie die
+   * einer temporären Quelle.
    */
   setTurretDamageBuffProvider(provider: ((x: number, y: number) => TurretDamageBuff | null) | null): void {
     this.turretDamageBuffProvider = provider;
   }
 
-  /** Zusätzlicher, quellenbezogener Schadensmultiplikator für Konstrukte. */
+  /** Zusätzlicher Schadensmultiplikator; erhält die Identität und nur Originale aus der Quellenliste. */
   setTurretDamageMultiplierProvider(
     provider: ((turret: AutomatedTurret, turrets: readonly AutomatedTurret[]) => number) | null,
   ): void {
@@ -147,9 +196,10 @@ export class TurretSystem {
   }
 
   /**
-   * Aktueller Turmbestand aus derselben Quelle, die auch das Turmfeuer speist. Der
+   * Aktueller Konstruktionsbestand aus derselben Quelle, die auch das Turmfeuer speist. Der
    * Energieinjektor braucht ihn fuer Zielsuche und Treffer-Zuordnung; ein zweiter
-   * Enumerationspfad wuerde sonst Basistuerme oder Fliegenpilze vergessen.
+   * Enumerationspfad wuerde sonst Basistuerme oder Fliegenpilze vergessen. Temporäre
+   * Feuerquellen (`setFireSourceProvider`) sind bewusst nicht enthalten.
    */
   getTurrets(): readonly AutomatedTurret[] {
     return this.turretProvider?.() ?? [];
@@ -160,12 +210,41 @@ export class TurretSystem {
     config: PlaceableTurretUtilityConfig,
     _weaponConfig: WeaponConfig,
     deltaMs = 0,
+    sources?: readonly TurretFireSource[],
   ): void {
-    const turrets = this.turretProvider?.() ?? [];
-    const activeIds = new Set<AutomatedTurretId>();
+    const turrets = sources ?? this.fireSourceProvider?.() ?? (this.turretProvider?.() ?? []).map(toLocalTurretFireSource);
+    const entrySequences = new Map<AutomatedTurretId, AutomatedTurretId>();
+    const activeSequences = new Set<AutomatedTurretId>();
+    const activeIdentities = new Set<AutomatedTurretId>();
+    const constructions = turrets.filter(source => source.id === source.identityId);
+    const identities = new Map(constructions.map(source => [source.id, source]));
+    const identityOf = (source: TurretFireSource): AutomatedTurret | null => identities.get(source.identityId) ?? null;
+    // Neue eigene Folgen übernehmen den Stand ihres Seeds vom Tick-Beginn, unabhängig davon, ob der
+    // Seed in diesem Tick vor ihnen feuert. Eine laufende Seed-Salve muss erst ihren Cooldown
+    // buchen (auch beim Abbruch); bis zum nächsten Tick bleibt die neue Folge vollständig inaktiv.
+    for (const source of turrets) {
+      if (source.sequenceSeedKey === undefined || this.nextFireAt.has(source.sequenceKey)) continue;
+      if (this.pendingBursts.has(source.sequenceSeedKey)) continue;
+      this.nextFireAt.set(source.sequenceKey, this.nextFireAt.get(source.sequenceSeedKey) ?? 0);
+    }
 
     for (const turret of turrets) {
-      activeIds.add(turret.id);
+      // Eine temporäre Quelle ohne bestehendes Original ist verwaist: Sie feuert nicht und hält
+      // weder Feuerfolge noch Bemannungszustand am Leben.
+      const identity = identityOf(turret);
+      if (!identity) continue;
+      const sequenceKey = turret.sequenceKey;
+      entrySequences.set(turret.id, sequenceKey);
+      activeSequences.add(sequenceKey);
+      activeIdentities.add(turret.identityId);
+      let baseSearch = this.baseSearches.get(turret.id);
+      if (!baseSearch || baseSearch.sequenceKey !== sequenceKey) {
+        baseSearch = { sequenceKey, nextSearchAt: now + baseSearchPhase(turret.id), searchDue: false, target: null, candidates: [] };
+        this.baseSearches.set(turret.id, baseSearch);
+      }
+      baseSearch.searchDue = now >= baseSearch.nextSearchAt;
+      if (baseSearch.searchDue) baseSearch.nextSearchAt = now + BASE_SEARCH_INTERVAL_MS;
+      if (turret.sequenceSeedKey !== undefined && !this.nextFireAt.has(sequenceKey)) continue;
 
       const turretX = turret.x;
       const turretY = turret.y;
@@ -175,30 +254,40 @@ export class TurretSystem {
       const targetRange = turret.targetRange ?? baseTargetRange;
       const turretWeaponId = turret.weaponId ?? 'SPORES';
       const turretWeaponConfig = WEAPON_CONFIGS[turretWeaponId] ?? _weaponConfig;
-      const manual = this.manualControlProvider?.(turret.id, now) ?? null;
-      const revision = manual?.revision ?? 0;
-      if ((this.controlRevisions.get(turret.id) ?? 0) !== revision) {
-        if (this.pendingBursts.delete(turret.id)) {
-          this.nextFireAt.set(turret.id, Math.max(this.nextFireAt.get(turret.id) ?? 0,
-            now + Math.max(1, turret.cooldownMs ?? turretWeaponConfig.cooldown)));
+      const cooldownMs = Math.max(1, turret.cooldownMs ?? turretWeaponConfig.cooldown);
+      // Bemannbar ist nur die Konstruktion selbst, nie eine temporäre Projektion.
+      const construction = turret.id === turret.identityId;
+      const manned = construction ? this.manualControlProvider?.(turret.identityId, now) ?? null : null;
+      if (construction) {
+        const revision = manned?.revision ?? 0;
+        if ((this.controlRevisions.get(turret.identityId) ?? 0) !== revision) {
+          if (this.deleteOwnedBurst(turret)) {
+            this.nextFireAt.set(sequenceKey, Math.max(this.nextFireAt.get(sequenceKey) ?? 0, now + cooldownMs));
+          }
+          this.controlRevisions.set(turret.identityId, revision);
         }
-        this.controlRevisions.set(turret.id, revision);
       }
       // Tesla-Konstrukte werden vom TeslaDomeSystem als Feldwaffe verarbeitet und
       // duerfen hier nicht zusaetzlich den generischen Projektilpfad ausloesen.
       if (turretWeaponConfig.fire.type === 'tesla_dome') continue;
+      const pendingBurst = this.pendingBursts.get(sequenceKey);
+      // Eine Salve gehört ihrem Eintrag: Eine andere Quelle derselben Folge wartet ihr Ende ab,
+      // statt sie fortzusetzen oder parallel eine neue zu beginnen.
+      if (pendingBurst && pendingBurst.ownerEntryId !== turret.id) continue;
+      // Pausierte Quellen beginnen nichts Neues; eine eigene laufende Salve führen sie zu Ende.
+      const paused = turret.fireState === 'paused';
+      if (paused && !pendingBurst) continue;
+      const manual = paused ? null : manned;
       const rangeFactor = turret.projectileRange !== undefined ? turret.projectileRange / turretWeaponConfig.range : turret.muzzleOffset === undefined
         ? (baseTargetRange > 0 ? targetRange / baseTargetRange : 1)
         : Math.max(1, targetRange / Math.max(1, turretWeaponConfig.range));
       const muzzleOffset = turret.muzzleOffset ?? config.placeable.muzzleOffset;
       const manualTarget = manual ? this.resolveManualTarget(turret, manual, targetRange, muzzleOffset) : null;
       if (manual && !manual.fresh) {
-        if (this.pendingBursts.delete(turret.id)) this.nextFireAt.set(turret.id,
-          now + Math.max(1, turret.cooldownMs ?? turretWeaponConfig.cooldown));
+        if (this.deleteOwnedBurst(turret)) this.nextFireAt.set(sequenceKey, now + cooldownMs);
         continue;
       }
 
-      const pendingBurst = this.pendingBursts.get(turret.id);
       if (pendingBurst) {
         if (manualTarget) {
           pendingBurst.targetX = manualTarget.x;
@@ -214,9 +303,16 @@ export class TurretSystem {
         );
         const burstAngle = this.updateAim(turret, desiredAngle, deltaMs);
         if (now < pendingBurst.nextShotAt || !this.fireHandler) continue;
-        if (turret.rotationSpeedDegPerSec === undefined
-          && !this.hasLineOfFireFromMuzzle(turret, turretX, turretY, pendingBurst.targetX, pendingBurst.targetY, muzzleOffset)) continue;
-        if (!this.canFireAtAngle(turret, burstAngle, pendingBurst.targetX, pendingBurst.targetY, muzzleOffset)) continue;
+        if ((turret.rotationSpeedDegPerSec === undefined
+          && !this.hasLineOfFireFromMuzzle(turret, turretX, turretY, pendingBurst.targetX, pendingBurst.targetY, muzzleOffset))
+          || !this.canFireAtAngle(turret, burstAngle, pendingBurst.targetX, pendingBurst.targetY, muzzleOffset, targetRange, pendingBurst.hitSegment)) {
+          // Aktive Einträge warten wie bisher; eine pausierte Restsalve darf die geteilte Folge
+          // nicht festhalten. Ohne fälligen Schuss oder Fire-Handler erreichen wir diesen Pfad nicht.
+          if (paused && this.deleteOwnedBurst(turret)) {
+            this.nextFireAt.set(sequenceKey, Math.max(this.nextFireAt.get(sequenceKey) ?? 0, now + pendingBurst.cooldownMs));
+          }
+          continue;
+        }
         const muzzleX = turretX + Math.cos(burstAngle) * muzzleOffset;
         const muzzleY = turretY + Math.sin(burstAngle) * muzzleOffset;
         this.fireHandler?.(
@@ -230,21 +326,22 @@ export class TurretSystem {
           pendingBurst.targetY,
           pendingBurst.damageMultiplier,
           pendingBurst.rangeFactor,
-          turret.id,
+          turret.identityId,
           turret.skipRockIndex,
           turret.sourceCarrierBaseId,
+          { source: turret },
         );
         pendingBurst.shotsRemaining -= 1;
         if (pendingBurst.shotsRemaining > 0) {
           pendingBurst.nextShotAt = now + Math.max(1, turretWeaponConfig.turretBurst?.intervalMs ?? 1);
         } else {
-          this.pendingBursts.delete(turret.id);
-          this.nextFireAt.set(turret.id, now + Math.max(1, turret.cooldownMs ?? turretWeaponConfig.cooldown));
+          this.pendingBursts.delete(sequenceKey);
+          this.nextFireAt.set(sequenceKey, now + cooldownMs);
         }
         continue;
       }
 
-      const target = manualTarget ?? this.findNearestTarget(
+      const target: TurretAimTarget | null = manualTarget ?? this.findNearestTarget(
         turret,
         turretX,
         turretY,
@@ -257,14 +354,16 @@ export class TurretSystem {
       const angle = this.updateAim(turret, Phaser.Math.Angle.Between(turretX, turretY, target.x, target.y), deltaMs);
 
       if (manual && !manual.fireHeld) continue;
-      if (now < (this.nextFireAt.get(turret.id) ?? 0)) continue;
+      if (now < (this.nextFireAt.get(sequenceKey) ?? 0)) continue;
       if (manual && turret.rotationSpeedDegPerSec === undefined
         && !this.hasLineOfFireFromMuzzle(turret, turretX, turretY, target.x, target.y, muzzleOffset)) continue;
-      if (!this.canFireAtAngle(turret, angle, target.x, target.y, muzzleOffset)) continue;
-      const buff = this.turretDamageBuffProvider?.(turretX, turretY) ?? null;
+      if (!this.canFireAtAngle(turret, angle, target.x, target.y, muzzleOffset, targetRange, target.hitSegment)) continue;
+      // Identitätsgebundene Verstärkungen (Injektor, Fernsteuerung) folgen dem Original, auch wenn
+      // eine temporäre Quelle an anderem Ort feuert.
+      const buff = this.turretDamageBuffProvider?.(identity.x, identity.y) ?? null;
       const damageMultiplier = (buff?.damageMultiplier ?? 1)
         * (turret.damage === undefined ? 1 : turret.damage / turretWeaponConfig.damage)
-        * Math.max(0, this.turretDamageMultiplierProvider?.(turret, turrets) ?? 1);
+        * Math.max(0, this.turretDamageMultiplierProvider?.(identity, constructions) ?? 1);
 
       const muzzleDistance = muzzleOffset;
       const muzzleX = turretX + Math.cos(angle) * muzzleDistance;
@@ -281,27 +380,31 @@ export class TurretSystem {
         target.y,
         damageMultiplier,
         rangeFactor,
-        turret.id,
+        turret.identityId,
         turret.skipRockIndex,
         turret.sourceCarrierBaseId,
+        { source: turret },
       );
       const burstCount = turretWeaponConfig.turretBurst
         ? Math.max(1, Math.floor(turretWeaponConfig.turretBurst.count))
         : 1;
       if (burstCount > 1) {
-        this.pendingBursts.set(turret.id, {
+        this.pendingBursts.set(sequenceKey, {
+          ownerEntryId: turret.id,
+          cooldownMs,
           shotsRemaining: burstCount - 1,
           nextShotAt: now + Math.max(1, turretWeaponConfig.turretBurst?.intervalMs ?? 1),
           targetX: target.x,
           targetY: target.y,
           damageMultiplier,
           rangeFactor,
+          hitSegment: target.hitSegment,
         });
       } else {
-        this.nextFireAt.set(turret.id, now + Math.max(1, turret.cooldownMs ?? turretWeaponConfig.cooldown));
+        this.nextFireAt.set(sequenceKey, now + cooldownMs);
       }
       if (burstCount <= 1 && (turret.secondProjectileDamageFactor ?? 0) > 0) {
-        const secondTarget = manualTarget ?? this.findNearestTarget(
+        const secondTarget: TurretAimTarget | null = manualTarget ?? this.findNearestTarget(
           turret,
           turretX,
           turretY,
@@ -313,7 +416,7 @@ export class TurretSystem {
         if (secondTarget) {
           const secondAngle = turret.rotationSpeedDegPerSec === undefined
             ? Phaser.Math.Angle.Between(turretX, turretY, secondTarget.x, secondTarget.y) : angle;
-          if (!this.canFireAtAngle(turret, secondAngle, secondTarget.x, secondTarget.y, muzzleOffset)) continue;
+          if (!this.canFireAtAngle(turret, secondAngle, secondTarget.x, secondTarget.y, muzzleOffset, targetRange, secondTarget.hitSegment)) continue;
           this.fireHandler?.(
             turret.ownerId,
             turret.ownerColor,
@@ -325,23 +428,40 @@ export class TurretSystem {
             secondTarget.y,
             (turret.secondProjectileDamageFactor ?? 0) * damageMultiplier,
             rangeFactor,
-            turret.id,
+            turret.identityId,
             turret.skipRockIndex,
             turret.sourceCarrierBaseId,
+            { source: turret },
           );
         }
       }
     }
 
-    for (const id of [...this.nextFireAt.keys()]) {
-      if (!activeIds.has(id)) this.nextFireAt.delete(id);
+    for (const [sequenceKey, burst] of [...this.pendingBursts]) {
+      if (entrySequences.get(burst.ownerEntryId) === sequenceKey) continue;
+      this.pendingBursts.delete(sequenceKey);
+      // Lebt die Folge in einem anderen Eintrag weiter, kostet der Abbruch den regulären Cooldown,
+      // statt eine freie Salve zu hinterlassen.
+      if (activeSequences.has(sequenceKey)) {
+        this.nextFireAt.set(sequenceKey, Math.max(this.nextFireAt.get(sequenceKey) ?? 0, now + burst.cooldownMs));
+      }
     }
-    for (const id of [...this.pendingBursts.keys()]) {
-      if (!activeIds.has(id)) this.pendingBursts.delete(id);
+    for (const sequenceKey of [...this.nextFireAt.keys()]) {
+      if (!activeSequences.has(sequenceKey)) this.nextFireAt.delete(sequenceKey);
     }
     for (const id of this.controlRevisions.keys()) {
-      if (!activeIds.has(id)) this.controlRevisions.delete(id);
+      if (!activeIdentities.has(id)) this.controlRevisions.delete(id);
     }
+    for (const id of this.baseSearches.keys()) {
+      if (!entrySequences.has(id)) this.baseSearches.delete(id);
+    }
+  }
+
+  /** Entfernt die Salve der Folge nur, wenn dieser Eintrag sie begonnen hat. */
+  private deleteOwnedBurst(source: TurretFireSource): boolean {
+    const burst = this.pendingBursts.get(source.sequenceKey);
+    if (!burst || burst.ownerEntryId !== source.id) return false;
+    return this.pendingBursts.delete(source.sequenceKey);
   }
 
   private resolveManualTarget(turret: AutomatedTurret, control: ManualTurretControl, range: number, muzzle: number): { x: number; y: number } {
@@ -351,58 +471,85 @@ export class TurretSystem {
     return { x: turret.x + Math.cos(angle) * distance, y: turret.y + Math.sin(angle) * distance };
   }
 
-  private updateAim(turret: AutomatedTurret, desiredAngle: number, deltaMs: number): number {
+  private updateAim(turret: TurretFireSource, desiredAngle: number, deltaMs: number): number {
     const angle = turret.rotationSpeedDegPerSec === undefined ? desiredAngle
       : stepTurretAngle(turret.angle ?? 0, desiredAngle, turret.rotationSpeedDegPerSec, deltaMs);
-    this.turretAngleUpdater?.(turret.id, angle);
+    this.turretAngleUpdater?.(turret, angle);
     return angle;
   }
 
-  private canFireAtAngle(turret: AutomatedTurret, angle: number, targetX: number, targetY: number, muzzleOffset: number): boolean {
+  private canFireAtAngle(
+    turret: AutomatedTurret, angle: number, targetX: number, targetY: number, muzzleOffset: number,
+    targetRange: number, hitSegment?: TurretHitSegment,
+  ): boolean {
     if (turret.rotationSpeedDegPerSec === undefined) return true;
     const desiredAngle = Math.atan2(targetY - turret.y, targetX - turret.x);
     const tolerance = (turret.aimToleranceDeg ?? DEFAULT_TURRET_AIM_TOLERANCE_DEG) * Math.PI / 180;
     if (Math.abs(turretAngleDifference(angle, desiredAngle)) > tolerance + 1e-10) return false;
-    if (!this.lineOfFireChecker) return true;
     const dx = Math.cos(angle);
     const dy = Math.sin(angle);
-    const distance = Math.max(muzzleOffset, Math.hypot(targetX - turret.x, targetY - turret.y));
+    const muzzleX = turret.x + dx * muzzleOffset, muzzleY = turret.y + dy * muzzleOffset;
+    let distance = Math.max(muzzleOffset, Math.hypot(targetX - turret.x, targetY - turret.y));
+    if (hitSegment) {
+      const sx = hitSegment.x2 - hitSegment.x1, sy = hitSegment.y2 - hitSegment.y1;
+      const qx = hitSegment.x1 - muzzleX, qy = hitSegment.y1 - muzzleY;
+      const cross = dx * sy - dy * sx;
+      const epsilon = 1e-8;
+      let rayDistance: number;
+      if (Math.abs(cross) <= epsilon) {
+        // Parallel: Nur ein kollinearer Abschnitt (auch ein einzelner Punkt) kann getroffen werden.
+        if (Math.abs(qx * dy - qy * dx) > epsilon) return false;
+        const start = qx * dx + qy * dy, end = start + sx * dx + sy * dy;
+        if (Math.max(start, end) < -epsilon) return false;
+        rayDistance = Math.max(0, Math.min(start, end));
+      } else {
+        rayDistance = (qx * sy - qy * sx) / cross;
+        const segmentFraction = (qx * dy - qy * dx) / cross;
+        if (rayDistance < -epsilon || segmentFraction < -epsilon || segmentFraction > 1 + epsilon) return false;
+      }
+      // Zielreichweite wird wie bei der Zielwahl ab Turmmitte gemessen, nicht erneut ab Mündung.
+      distance = muzzleOffset + Math.max(0, rayDistance);
+      if (distance > targetRange + epsilon) return false;
+    }
+    if (!this.lineOfFireChecker) return true;
     return this.lineOfFireChecker(
-      turret.x + dx * muzzleOffset, turret.y + dy * muzzleOffset,
+      muzzleX, muzzleY,
       turret.x + dx * distance, turret.y + dy * distance,
       turret.skipRockIndex, turret.sourceCarrierBaseId,
     );
   }
 
   private findNearestTarget(
-    turret: AutomatedTurret,
+    turret: TurretFireSource,
     turretX: number,
     turretY: number,
     range: number,
     lineOfFireStartOffset: number,
     now: number,
     excluded?: { x: number; y: number },
-  ): { x: number; y: number } | null {
-    let bestTarget: { x: number; y: number } | null = null;
+  ): TurretAimTarget | null {
+    let bestTarget: TurretAimTarget | null = null;
     let bestDistance = Number.POSITIVE_INFINITY;
     let bestPriority = Number.POSITIVE_INFINITY;
     let bestScore = Number.NEGATIVE_INFINITY;
     let bestKey = '';
     const focus = this.focusTargetProvider?.(turret.ownerId) ?? null;
 
-    const consider = (candidate: { x: number; y: number }, priority: number, kind: 'player' | 'enemy' | 'base', id: string): void => {
+    const consider = (candidate: TurretAimTarget & { readonly isValid?: () => boolean }, priority: number, kind: 'player' | 'enemy' | 'base', id: string): boolean => {
+      if (candidate.isValid?.() === false) return false;
       const distance = Phaser.Math.Distance.Between(turretX, turretY, candidate.x, candidate.y);
-      if (distance > range) return;
-      if (!this.hasLineOfFireFromMuzzle(turret, turretX, turretY, candidate.x, candidate.y, lineOfFireStartOffset)) return;
+      if (distance > range) return false;
+      if (!this.hasLineOfFireFromMuzzle(turret, turretX, turretY, candidate.x, candidate.y, lineOfFireStartOffset)) return false;
       const score = this.targetScore?.(turret, kind, id, now) ?? 0;
       const key = kind + ':' + id;
       if (priority > bestPriority || (priority === bestPriority && (score < bestScore
-        || (score === bestScore && (distance > bestDistance || (distance === bestDistance && key >= bestKey)))))) return;
+        || (score === bestScore && (distance > bestDistance || (distance === bestDistance && key >= bestKey)))))) return false;
       bestPriority = priority;
       bestScore = score;
       bestKey = key;
       bestDistance = distance;
       bestTarget = candidate;
+      return true;
     };
 
     if (turret.targetMode !== 'enemies') for (const player of this.playerManager.getAllPlayers()) {
@@ -433,12 +580,54 @@ export class TurretSystem {
       );
     }
 
-    if (focus?.targetType === 'base') {
-      const base = this.focusedBaseTargetProvider?.(focus.targetId, turretX, turretY) ?? null;
-      if (base) consider({ x: base.x, y: base.y }, 0, 'base', base.id);
+    // Türme ohne Wirkung gegen Basen (Kontrolltürme) schießen nie auf Basen, auch nicht im Fokus.
+    const canDamageBases = this.canDamageBases(turret);
+    if (focus?.targetType === 'base' && canDamageBases) {
+      for (const base of this.focusedBaseTargetProvider?.(focus.targetId, turretX, turretY, range) ?? []) {
+        if (excluded && base.x === excluded.x && base.y === excluded.y) continue;
+        if (consider(base, 0, 'base', base.id)) break;
+      }
+    }
+
+    const state = this.baseSearches.get(turret.id)!;
+    if (bestTarget !== null || !canDamageBases) {
+      if (!excluded) state.target = null;
+      return bestTarget;
+    }
+    if (this.baseTargetCandidateProvider) {
+      if (state.target) {
+        const held = state.target;
+        if (!excluded || held.x !== excluded.x || held.y !== excluded.y) {
+          if (consider(held, 2, 'base', held.id)) return held;
+          state.target = null;
+        }
+      }
+      if (state.searchDue) {
+        state.searchDue = false;
+        state.candidates = this.baseTargetCandidateProvider(turret, turretX, turretY, range);
+      } else if (!excluded) return null;
+      // Kandidaten kommen nach Distanz sortiert: Die erste frei beschießbare Fläche ist die nächste.
+      for (const base of state.candidates) {
+        if (excluded && base.x === excluded.x && base.y === excluded.y) continue;
+        if (consider(base, 2, 'base', base.id)) {
+          if (!excluded) state.target = base;
+          break;
+        }
+      }
     }
 
     return bestTarget;
+  }
+
+  private canDamageBases(turret: AutomatedTurret): boolean {
+    const weaponId = turret.weaponId ?? 'SPORES';
+    let result = this.baseDamageByWeapon.get(weaponId);
+    if (result === undefined) {
+      const weapon = WEAPON_CONFIGS[weaponId];
+      result = !!weapon && canWeaponDamageBases(weapon);
+      this.baseDamageByWeapon.set(weaponId, result);
+    }
+    return result;
   }
 
   private hasLineOfFireFromMuzzle(

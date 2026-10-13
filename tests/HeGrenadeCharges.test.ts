@@ -16,7 +16,9 @@ function fixture(realLoadout = false) {
   let state: UtilityChargeState | null = null;
   const held = new HostHeldActionSystem();
   const spawn = vi.fn(() => spawnAccepted ? 1 : null);
-  const publish = vi.fn((_p, _id, value) => { state = value; });
+  const publish = vi.fn((_p, utilityId, value) => {
+    if (utilityId === 'HE_GRENADE') state = value;
+  });
   const manager = new LoadoutManager({} as never, { getGameMode: () => 'coop_defense' });
   if (realLoadout) {
     manager.assignDefaultLoadout('p1', { utility: equipped });

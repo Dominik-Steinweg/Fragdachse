@@ -381,6 +381,7 @@ export class HeadlessStaticTargetWorld implements WeaponFireSink {
   /** Spawnt ein fliegendes Projektil in der virtuellen Welt. */
   spawnProjectile(request: ProjectileSpawnRequest): ProjectileSpawnResult {
     if (this.failingSink) return null;
+    if (request.fireControlRoute) throw new Error('Headless balance world does not model fire-control routes');
 
     const { x, y, angle } = request.origin;
     const ownerId = request.provenance.attributionId;

@@ -13,7 +13,7 @@ import { BADGER_WALKING_FRAME_WIDTH } from '../../src/animations/BadgerAnimation
 import { getHeldItemSpriteSpec } from '../../src/loadout/HeldItemVisuals';
 import { resolveCoopDefenseEnemyConfigs } from '../../src/config/coopDefenseEnemies';
 import { getPipelineAssetForTexture, getPipelineSpriteScale } from '../../src/config/pipelineAssets';
-import { LOADOUT_CATALOG_ENTRIES } from '../../src/loadout/LoadoutConfig';
+import { EQUIPABLE_LOADOUT_CATALOG_ENTRIES } from '../equipableLoadoutEntries';
 import { PLAYER_SIZE, PLAYER_VISUAL_SCALE } from '../../src/config';
 import { healthBarTestScene } from '../healthBarTestScene';
 
@@ -187,7 +187,7 @@ describe('figure source resolution and Arcade geometry', () => {
     expectPlayerBody(player.body, 100, 200);
   });
 
-  it.each(['GLOCK', ...LOADOUT_CATALOG_ENTRIES.filter(entry => entry.kind === 'utility').map(entry => entry.id)])(
+  it.each(['GLOCK', ...EQUIPABLE_LOADOUT_CATALOG_ENTRIES.filter(entry => entry.kind === 'utility').map(entry => entry.id)])(
     'scales %s consistently in the arena, decoy and custom lobby preview', (itemId) => {
     const { scene, images } = sceneWithArcadeBodies(BADGER_WALKING_FRAME_WIDTH);
     const player = new PlayerEntity(scene, { id: 'p', name: 'P', colorHex: 0xffffff },

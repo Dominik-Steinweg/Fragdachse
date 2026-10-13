@@ -5,6 +5,10 @@ import { getContentDisplayName, getContentTranslationKeys, getSourceName } from 
 import { getUpgradePresentationKeys } from '../src/i18n/upgradePresentation';
 
 describe('player locale catalogs', () => {
+  it('explains missing own combat-ready turrets in both languages', () => {
+    expect(translate('de', 'ui.errors.no_fire_sources')).toBe('Keine kampffähigen eigenen Türme');
+    expect(translate('en', 'ui.errors.no_fire_sources')).toBe('No combat-ready turrets of your own');
+  });
   it('keeps German and English catalogs structurally identical', () => {
     expect(getTranslationParityIssues()).toEqual([]);
     for (const domain of ['ui', 'content', 'upgrades'] as const) {

@@ -80,6 +80,7 @@ describe('coop-defense class loadout persistence', () => {
     expect(getStoredCoopDefenseLoadoutSlot('dachs_nukem', 'weapon1')).toBe('AK47');
     expect(getStoredCoopDefenseProgress().profilesByClass.inspector_gadachs.toolLoadout).toEqual([
       { kind: 'construction', id: 'rocket_turret' }, { kind: 'utility', id: 'HE_GRENADE' },
+      { kind: 'utility', id: 'FIRE_CONTROL_RELAY' },
     ]);
   });
 

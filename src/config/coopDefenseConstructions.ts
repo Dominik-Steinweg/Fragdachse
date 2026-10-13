@@ -141,6 +141,15 @@ const COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS = loadConstructionBuildCooldowns
 export const COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE = 350;
 
 /**
+ * Eine Quelle fuer Konstruktionsplatzierung und Turmkopien (E19).
+ * Ein kuenftiges Upgrade wird hier angeschlossen und muss Host-Bau,
+ * Client-Bauvorschau und Turmkopien gemeinsam erreichen.
+ */
+export function resolveConstructionPlacementRange(): number {
+  return COOP_DEFENSE_CONSTRUCTION_INTERACTION_RANGE;
+}
+
+/**
  * Fester Doppelinput-Schutz fuer Verschieben und Einzel-Rueckbau.
  *
  * Bewusst unabhaengig vom Objekttyp und nicht aus einem individuellen Build-Cooldown abgeleitet:
