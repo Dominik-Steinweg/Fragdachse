@@ -586,6 +586,12 @@ npm run perf:kraken -- --qualities=high,medium,low --runs=3 --output=build/krake
 npm run perf:kraken -- --compare=build/kraken-perf/current/report.json --output=build/kraken-perf/next
 # Separater Diagnoselauf: CPU-Profil, gesampelte Allokationen, GC-Trace
 npm run perf:kraken -- --qualities=high --profile=true --output=build/kraken-perf/profile
+# Zusätzlicher Kaltstartlauf einschließlich Boot-/Lade-Statusabfragen:
+npm run perf:kraken -- --qualities=high --cold=true --output=build/kraken-perf/cold
+# Kontrollmessung auf regulärer Map 1, gleicher Recorder und gleiche Auflösung:
+npm run perf:kraken -- --scenario=regular --qualities=high --output=build/kraken-perf/regular
+# Eingefrorene High-Vergleichsbilder: gemeinsame gegen private Shaderprogramme:
+npm run perf:kraken -- --qualities=high --rendererParity=true --output=build/kraken-perf/program-parity
 ```
 
 Der Runner verwendet das vorhandene Playwright-Core/Chrome, den Dev-Host, feste
@@ -611,7 +617,26 @@ Tauch-Timer zu verändern. Ab der Landphase folgt die Kamera dem Beobachter.
 `report.json`, `report.md` und Frame-Rohdaten je Phase enthalten Mittelwert, p95,
 p99, Maxima und Hitches >33 ms, CPU-Callbackzeit, asynchrone GPU-Zeitmessungen,
 Draw Calls, Programmwechsel, Compile-/Link-Aufrufe, Kraken-Residenz einschließlich
-Renderzielen sowie Heap-Zuwächse/-Rückgänge. Der GPU-Timer umfasst die Submissionen
+Renderzielen sowie Heap-Zuwächse/-Rückgänge. `glStatus` zählt und misst synchrone
+Framebuffer-/Programmstatusabfragen und Framebuffer-Erzeugungen. `shaderPrograms`
+nennt neu angelegte Phaser-Programmschlüssel. `cold.first` hält pro Effekt den ersten
+beobachteten Auftritt samt den nächsten bis zu 30 Frames fest; `cold.worst` enthält
+die fünf teuersten Frames jeder Phase, auch vor dem Host-Intro. `--cold=true` ergänzt
+separat die GL-Aufrufe während Boot und Missionsladen. Ein frischer Browser leert
+weder OS- noch Treiber-Shadercache. `--rendererParity=true` vergleicht an zehn
+eingefrorenen Kampfzuständen private gegen geteilte Programme und prüft zusätzlich
+die Stabilität einer unveränderten Kontrollaufnahme; dieser Lauf ist keine Zeitmessbasis.
+Der Bildlauf erzwingt außerdem Renderziel-Resizes und vergleicht Phasers ursprünglichen
+Framebuffer-Resize mit der Wiederverwendung, jeweils bei gleicher finaler Auflösung.
+Die reguläre Kontrollmessung verwendet Map 1 ohne Wellen, mit kaltem Vorlauf und
+1200 festen Schritten im eingeschwungenen Zustand.
+
+Ab Messformat 5 wird die Qualitätsstufe über `dev-scenario.html?visual-test=1&quality=medium`
+im privaten Einstellungsspeicher vor dem Spielimport gesetzt, damit die
+Lade-Warmups bereits die richtige Stufe vorbereiten. Format 4 maß zusätzlich einen
+Live-Qualitätswechsel nach Ready; direkte Regressionspaare daher neu aufnehmen.
+
+Der GPU-Timer umfasst die Submissionen
 des ganzen Callbacks einschließlich Lücken zwischen ihnen; er misst keine reine
 GPU-Auslastung. Heap-Differenzen sind Näherungen, keine gemessenen GC-Pausen.
 `--profile=true` liefert dafür gesonderte `.cpuprofile`, `.heapprofile` und

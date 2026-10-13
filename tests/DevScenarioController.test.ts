@@ -66,6 +66,17 @@ beforeEach(() => {
 });
 afterEach(() => { controller.destroy(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
+it('holds diagnostic loading time while parallel Kraken shaders are pending, even with resident terrain', () => {
+  const runtime = (controller as unknown as { runtime: ArenaRuntime }).runtime;
+  const loading = { work: { renderReady: true }, krakenShaderWarmupReady: false };
+  vi.spyOn(runtime, 'getScenarioLoadingState').mockImplementation(() => loading as never);
+  expect(controller.clock.holdLoadingTime()).toBe(true);
+  loading.krakenShaderWarmupReady = true;
+  expect(controller.clock.holdLoadingTime()).toBe(false);
+  loading.work.renderReady = false;
+  expect(controller.clock.holdLoadingTime()).toBe(true);
+});
+
 it('owns the Kraken diagnostic map only for the dev controller lifetime', () => {
   expect(isDiagnosticMapId(KRAKEN_MAP_ID)).toBe(true);
   expect(isDiagnosticMapId('watchtower-review')).toBe(true);

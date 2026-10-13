@@ -10,7 +10,7 @@ import { FOG_SURFACE_FRAGMENT } from './FogSurfaceMask';
 /** Lobby's ordinary fog variants. No framebuffer, draw or display-list entry;
  * the real fields reuse the renderer's cached programs with their own uniforms.
  */
-export function warmupFogShaders(scene: Phaser.Scene, quality: string): () => void {
+export function warmupFogShaders(scene: Phaser.Scene, _quality: string): () => void {
   const renderer = scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
   if (!renderer?.gl) return () => {};
   const prelit = canPrelightFog(SUN_TUNING_DEFAULTS, renderer.gl.getParameter(renderer.gl.MAX_TEXTURE_IMAGE_UNITS), true);
@@ -18,8 +18,9 @@ export function warmupFogShaders(scene: Phaser.Scene, quality: string): () => vo
     ['impulse', FOG_IMPULSE_FRAGMENT], ['density', FOG_DENSITY_FRAGMENT], ['velocity', FOG_VELOCITY_FRAGMENT],
     [prelit ? 'materialLit' : 'material', prelit ? FOG_K_MATERIAL_FRAGMENT : FOG_MATERIAL_FRAGMENT],
     ['display', FOG_DISPLAY_FRAGMENT], ['rockAerial', FOG_DISPLAY_FRAGMENT], ['surface', FOG_SURFACE_FRAGMENT],
+    // Low omits decorative trails, but FogGpuField still draws projectile wakes.
+    ['trails', FOG_TRAIL_FRAGMENT, FOG_TRAIL_VERTEX],
   ];
-  if (quality !== 'low') configs.push(['trails', FOG_TRAIL_FRAGMENT, FOG_TRAIL_VERTEX]);
   const probes: Phaser.GameObjects.Shader[] = [];
   try {
     for (const [name, fragmentSource, vertexSource] of configs) {

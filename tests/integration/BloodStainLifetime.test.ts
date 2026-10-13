@@ -22,6 +22,10 @@ import { CombatGoreGpuRenderer } from '../../src/effects/CombatGoreGpuRenderer';
 import { HoneyBadgerRageRenderer } from '../../src/effects/HoneyBadgerRageRenderer';
 import { PlayerEntity } from '../../src/entities/PlayerEntity';
 import { ULTIMATE_CONFIGS } from '../../src/loadout/LoadoutConfig';
+// This headless lifecycle fixture does not create GPU programs.
+vi.mock('../../src/effects/kraken/KrakenShaderWarmup', () => ({
+  warmupKrakenShaders: () => Object.assign(() => {}, { isReady: () => true }),
+}));
 import { ArenaLifecycleCoordinator } from '../../src/scenes/arena/ArenaLifecycleCoordinator';
 
 import { healthBarTestScene } from '../healthBarTestScene';

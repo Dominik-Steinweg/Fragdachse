@@ -3,7 +3,7 @@ import * as Phaser from 'phaser';
 let nextId = 0;
 const RESTORE_BLEND = {blend:{enabled:true}};
 /** World-owned ShaderQuad resources, including Phaser 4.2.1's orphaned nodes. */
-export function ownSunShader(shader: Phaser.GameObjects.Shader, name: string): void {
+export function ownSunShader(shader: Phaser.GameObjects.Shader, name: string, sharedProgram = false): void {
   const node = shader.renderNode, renderer = node.renderer;
   // ShaderQuad.setupTextures allocates an array on every draw in 4.2.1.
   const textures: Phaser.Renderer.WebGL.Wrappers.WebGLTextureWrapper[] = [];
@@ -23,6 +23,9 @@ export function ownSunShader(shader: Phaser.GameObjects.Shader, name: string): v
     }
     node.programManager.programs = {};
     renderer.deleteBuffer(node.vertexBufferLayout.buffer);
+    // Fixed shader keys belong to the renderer cache, like combat warmup keys.
+    // Uniforms and VAOs remain private; releasing one caster must not invalidate others.
+    if (sharedProgram) return;
     const programs = renderer.shaderProgramFactory.programs as Record<string, Phaser.Renderer.WebGL.Wrappers.WebGLProgramWrapper>;
     for (const key of Object.keys(programs)) if (key === name || key.startsWith(`${name}_`)) {
       renderer.deleteProgram(programs[key]); delete programs[key];
@@ -35,10 +38,10 @@ export class SunRenderTarget {
   readonly shader: Phaser.GameObjects.Shader;
   constructor(scene: Phaser.Scene, kind: string, fragmentSource: string,
     setupUniforms: (set: (name: string, value: unknown) => void) => void,
-    textures: string[] | Phaser.Textures.Texture[] = ['__DEFAULT']) {
+    textures: string[] | Phaser.Textures.Texture[] = ['__DEFAULT'], sharedShaderName?: string) {
     const name = sunShaderName(kind);
-    this.shader = new Phaser.GameObjects.Shader(scene, { name, shaderName: name, fragmentSource, setupUniforms },0,0,3,3,textures);
-    ownSunShader(this.shader,name);
+    this.shader = new Phaser.GameObjects.Shader(scene, { name, shaderName: sharedShaderName ?? name, fragmentSource, setupUniforms },0,0,3,3,textures);
+    ownSunShader(this.shader,name,!!sharedShaderName);
     try {
       // A non-power-of-two initial size selects CLAMP_TO_EDGE in Phaser.
       // Phaser resets sampling on resize; draw() restores the finite-field contract.

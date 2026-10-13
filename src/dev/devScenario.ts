@@ -8,7 +8,17 @@ if (import.meta.env.DEV) {
   Object.defineProperty(window, 'sessionStorage', { value: createMemoryStorage() });
   enableDevScenarioMode();
   installVisualTest();
-  void import('../main');
+  const quality = new URLSearchParams(location.search).get('quality');
+  if (quality === 'high' || quality === 'medium' || quality === 'low') {
+    // Use the ordinary preference decoder before Scene creation and warmup.
+    // Storage is private to this diagnostic page, never the player's settings.
+    void import('../utils/localPreferences').then(({ setStoredGraphicsQuality }) => {
+      setStoredGraphicsQuality(quality);
+      return import('../main');
+    });
+  } else {
+    void import('../main');
+  }
 } else {
   document.body.textContent = 'Dev-Szenarien sind nur im Entwicklungsserver verfügbar.';
 }

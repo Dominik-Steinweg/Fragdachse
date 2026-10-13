@@ -132,6 +132,19 @@ it.each([0, .4, 1])('redraws a restored cloud target even at unchanged time and 
   expect(draw).toHaveBeenCalledTimes(2);
 });
 
+it('keeps shared programs alive when one private Sun shader is released',async()=>{
+ const {ownSunShader}=await import('../src/effects/sunlight/SunRenderTarget');
+ const vao={destroy:vi.fn()},program={},buffer={};let dispose!:()=>void;
+ const renderer={renderNodes:{finishBatch:vi.fn()},glWrapper:{update:vi.fn()},glVAOWrappers:[vao],
+  deleteBuffer:vi.fn(),deleteProgram:vi.fn(),shaderProgramFactory:{programs:{Shared:program}}};
+ const shader={renderNode:{renderer,programManager:{programs:{Shared:{vao,program}}},vertexBufferLayout:{buffer}},
+  once:(_event:string,callback:()=>void)=>{dispose=callback;}};
+ ownSunShader(shader as never,'Shared',true);dispose();
+ expect(renderer.shaderProgramFactory.programs.Shared).toBe(program);
+ expect(renderer.deleteProgram).not.toHaveBeenCalled();
+ expect(vao.destroy).toHaveBeenCalledOnce();expect(renderer.deleteBuffer).toHaveBeenCalledWith(buffer);
+});
+
 it('program disposal cannot disable the regular sprite VAO (Phaser 4.2.1 regression)',async()=>{
  const {createRequire}=await import('node:module');
  const require=createRequire(process.cwd()+'/package.json');

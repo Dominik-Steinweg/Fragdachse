@@ -227,7 +227,12 @@ export class DevScenarioController {
     this.restoreTextureKeys = bindVisualTestTextureKeys(scene.textures);
     this.clock = new ScenarioClock(scene.game.loop);
     this.restoreBootClock = bindVisualTestBootClock(BootScreen, scene.time);
-    this.clock.holdLoadingTime = () => this.runtime.getScenarioLoadingState().work?.renderReady === false;
+    this.clock.holdLoadingTime = () => {
+      const loading = this.runtime.getScenarioLoadingState();
+      // Parallel shader completion is wall time, just like streamed render work.
+      // Driver speed must not advance the diagnostic fight's simulation clock.
+      return loading.work?.renderReady === false || loading.krakenShaderWarmupReady === false;
+    };
     this.bots = new ScenarioBots(runtime, () => this.clock.now);
     bindWatchtowerReview(this, this.runtime);
     let imported: DevScenario | null = null;

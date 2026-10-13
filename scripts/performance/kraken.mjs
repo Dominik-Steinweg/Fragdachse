@@ -14,6 +14,7 @@ const out = path.resolve(args.output ?? `build/kraken-perf/${new Date().toISOStr
 await mkdir(out, { recursive: true });
 const temp = path.join(out, 'browser-temp'); await mkdir(temp, { recursive: true });
 process.env.TEMP = process.env.TMP = process.env.TMPDIR = temp;
+if(args.scenario && !['kraken','regular'].includes(args.scenario))throw Error('Invalid scenario');
 const qualities = (args.qualities ?? 'high,medium,low').split(',');
 if (qualities.some(q => !['high','medium','low'].includes(q))) throw Error('Invalid quality');
 const repeats=Number(args.runs??1);
@@ -22,11 +23,18 @@ const config = JSON.parse(await readFile('src/config/krakenBoss.json', 'utf8'));
 const hashes = {};
 for (const file of ['src/config/coopDefenseMaps/20-abgrundteich.json','src/config/krakenBoss.json','src/config/pipelineAssets.json'])
   hashes[file] = createHash('sha256').update(await readFile(file)).digest('hex');
-const report = { version: 4, seed: 12345, hashes, origin, viewport: { width: 1920, height: 1080 }, runs: [],
+const report = { version: 5, seed: 12345, hashes, origin, viewport: { width: 1920, height: 1080 }, runs: [],
   environment: { platform:os.platform(), release:os.release(), cpu:os.cpus()[0]?.model, logicalCpus:os.cpus().length, memoryGiB:os.totalmem()/2**30 },
   scope: 'Fixed 60 Hz host steps. CPU: whole game callback, excluding recorder bookkeeping; GPU: asynchronous elapsed query over all callback submissions, including submission gaps (not pure GPU busy time). RAF intervals omit command pauses. Heap increases/drops are proxies, not allocation or GC pause measurements; --profile records sampled allocations and GC traces separately. Diagnostic map copies Map 20, bypasses its opening-wave boss gate and uses the existing unarmed diagnostic outpost.' };
 const save = () => writeFile(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
+report.scenario=args.scenario??'kraken';
+if(report.scenario==='regular') report.scope=report.scope.slice(0,report.scope.indexOf('Diagnostic map'))+
+  'Regular Map 1, fixed observer, noon, suppressed waves and frozen mission. Same recorder and viewport as Kraken.';
 let parityCode;
+const framebufferReference=args.rendererParity==='true'
+  ? (await readFile('node_modules/phaser/src/renderer/webgl/wrappers/WebGLFramebufferWrapper.js','utf8'))
+    .match(/resize: (function \(width, height\)[\s\S]*?\r?\n    }),/)?.[1] : null;
+if(args.rendererParity==='true'&&!framebufferReference)throw Error('Installed Phaser resize reference not found');
 if(args.parity) {
   if(args.modules)throw Error('Parity runs use the candidate plus a reference method, not archived modules');
   const source=await readFile(path.join(args.parity,'src/effects/kraken/submersionShader.ts'),'utf8');
@@ -43,6 +51,18 @@ report.browser = browser.version();
 try {
   console.log(`${quality}/${repeat} opening scenario`);
   const page = await browser.newPage({ viewport: report.viewport, deviceScaleFactor: 1, locale: 'de-DE', timezoneId: 'UTC' });
+  if(args.cold==='true') await page.addInitScript(()=>{
+    const stats={startedAt:performance.now(),calls:{},milliseconds:{}},restores=[];
+    for(const type of [globalThis.WebGLRenderingContext,globalThis.WebGL2RenderingContext])if(type)
+      for(const key of ['compileShader','linkProgram','getProgramParameter','checkFramebufferStatus','createFramebuffer']) {
+        const prototype=type.prototype,original=prototype[key];
+        prototype[key]=function(...args){const start=performance.now();try{return Reflect.apply(original,this,args);}
+          finally{stats.calls[key]=(stats.calls[key]??0)+1;stats.milliseconds[key]=(stats.milliseconds[key]??0)+performance.now()-start;}};
+        restores.push(()=>{prototype[key]=original;});
+      }
+    globalThis.__krakenCold=()=>{for(const restore of restores)restore();return{...stats,readyAt:performance.now(),
+      scope:'Fresh browser/context and HTTP profile; OS and driver caches are not cleared. Includes lobby boot and mission loading.'};};
+  });
   // Optional local archive from the same Vite server for alternating A/B runs;
   // only the explicitly listed transformed modules are replaced, never assets.
   if(args.modules) {
@@ -62,6 +82,8 @@ try {
   await page.routeWebSocket(url => url.host === new URL(origin).host && url.searchParams.has('token'), () => {});
   page.setDefaultTimeout(180000);
   const run = { quality, repeat, phases: [], errors: [], complete: false }; report.runs.push(run);
+  run.scenario = args.scenario ?? 'kraken';
+  const loadStarted = performance.now();
   page.on('pageerror', e => { run.errors.push(e.stack ?? e.message); console.error(e.message); });
   page.on('console', m => { if (m.type() === 'error' || /GL_INVALID|WebGL.*error/.test(m.text())) run.errors.push(m.text()); });
   const status = () => page.evaluate(() => window.devScenario.status());
@@ -100,7 +122,7 @@ try {
   const grid = (p,s) => ({gridX:(p.x-s.metrics.offsetX)/(s.metrics.widthPx/s.metrics.gridCols)-.5,
     gridY:(p.y-s.metrics.offsetY)/(s.metrics.heightPx/s.metrics.gridRows)-.5});
   const parity = async name => {
-    if(!parityCode)return;
+    if(!parityCode && args.rendererParity!=='true')return;
     const stem=`${quality}-${repeat}-${name}`;
     const zero=async()=>{await command({action:'settle',frames:8});await page.waitForFunction(()=>window.devScenario.pendingSteps()===0);};
     await page.evaluate(()=>window.__krakenParity.toggle(true));await zero();
@@ -147,6 +169,20 @@ try {
         f.bodyX===null?null:Math.round(f.bodyX*100),f.bodyY===null?null:Math.round(f.bodyY*100),f.tentacles,f.eggs,f.enemies]))).digest('hex'),
       observedPhases:[...new Set(rows.map(f=>f.hostPhase))], observedActions:[...new Set(rows.map(f=>f.action))],
       status:s, failure:failure?.stack };
+    summary.glStatus = Object.fromEntries(['framebufferStatusCalls','framebufferStatusMs','programStatusCalls','programStatusMs','framebufferCreates']
+      .map(key=>[key,rows.reduce((n,f)=>n+(f[key]??0),0)]));
+    summary.shaderPrograms=[...new Set(rows.flatMap(f=>f.shaderPrograms??[]))];
+    // Fresh browser/context per run. Retain the slowest frames and the first
+    // observed occurrence, including its next 30 simulation frames.
+    summary.cold = { worst: [...rows].sort((a,b)=>b.cpuMs-a.cpuMs).slice(0,5).map(({spans,errors,...f})=>f), first: {} };
+    for(const [event,predicate] of Object.entries({intro:f=>f.hostPhase==='intro',tentacles:f=>f.tentacles>0,
+      ink:f=>f.ink>0,spines:f=>f.spines>0,eggs:f=>f.eggs>0,hatch:f=>f.hatching>0,ashore:f=>f.hostPhase==='ashore',land:f=>f.hostPhase==='land',death:f=>f.hostPhase==='dying'})) {
+      if(run.phases.some(p=>p.cold?.first[event]))continue;
+      const index=rows.findIndex(predicate);if(index<0)continue;
+      const window=rows.slice(index,index+30);
+      summary.cold.first[event]={simulationMs:rows[index].simulationMs,cpuMs:metric(window.map(f=>f.cpuMs)),
+        compileLinkCalls:window.reduce((n,f)=>n+f.shaderCompileLinkCalls,0)};
+    }
     for(let i=1;i<rows.length;i++) {const d=rows[i].heapBytes-rows[i-1].heapBytes;if(d>0)summary.heapIncreaseBytes+=d;else summary.heapDropBytes-=d;}
     if(cdp){const {profile}=await cdp.send('HeapProfiler.getSamplingProfile');
       const bytes=profile.samples.reduce((n,s)=>n+s.size,0);summary.sampledAllocationBytes=bytes-allocationTotal;allocationTotal=bytes;}
@@ -162,16 +198,22 @@ try {
   try {
     // Start exactly one World. A preceding throwaway World changes its revision
     // (part of the boss RNG seed) according to that World's loading duration.
-    await page.goto(`${origin}/dev-scenario.html?visual-test=1`,{waitUntil:'domcontentloaded'});
+    await page.goto(`${origin}/dev-scenario.html?visual-test=1&quality=${quality}`,{waitUntil:'domcontentloaded'});
     await page.waitForFunction(()=>window.devScenario?.status().lobbyReady && window.devScenario.status().paused,null,{timeout:60000});
     await page.addStyleTag({content:'#dev-scenario-panel{display:none!important} *,*::before,*::after{caret-color:transparent!important}'});
-    await command({action:'krakenMission',performance:true});
+    await command(args.scenario==='regular' ? {action:'start',scenario:{version:1,classId:'dachs_nukem',mapId:'1',seed:12345,timeOfDay:720,
+      player:{gridX:27,gridY:28},hideAim:true,freezeMission:true,suppressWaves:true,hideTutorial:true}} : {action:'krakenMission',performance:true});
     await page.waitForFunction(()=>{const s=window.devScenario.status();if(s.state==='error')throw Error(s.message);return s.ready&&s.paused;});
+    if((await status()).quality!==quality)throw Error(`Mission did not start with requested quality ${quality}`);
     run.graphics=await page.evaluate(()=>{const canvas=document.querySelector('canvas'),gl=canvas.getContext('webgl2')??canvas.getContext('webgl');
       const ext=gl.getExtension('WEBGL_debug_renderer_info');return{version:gl.getParameter(gl.VERSION),renderer:ext?gl.getParameter(ext.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER)};});
-    await command({action:'quality',level:quality});
+    run.loadToReadyMs=performance.now()-loadStarted;
+    if(args.cold==='true') {
+      run.coldStart=await page.evaluate(()=>globalThis.__krakenCold());
+      run.loadingTimeline=await page.evaluate(()=>globalThis.__FD_BOOT__?.timeline?.());
+    }
     await command({action:'options',values:{refillHp:true,hideAim:true,hideTutorial:true,timeOfDay:720}});
-    await target(39,36);
+    if(args.scenario!=='regular') await target(39,36);
     await command({action:'target',gridX:35,gridY:29}); await command({action:'camera',zoom:1,focusTarget:true});
     if(parityCode)await page.evaluate(async code=>{
       const url=performance.getEntriesByType('resource').find(e=>e.name.includes('/src/effects/kraken/submersionShader.ts')).name;
@@ -181,12 +223,45 @@ try {
         prototype.update=function(...args){seen.add(this);return(old?reference:optimized).apply(this,args);};}};
       window.__krakenParity.toggle(false);
     },parityCode);
+    if(args.rendererParity==='true') await page.evaluate(async framebufferReference=>{
+      const url=performance.getEntriesByType('resource').find(e=>/\/phaser\.js\?/.test(e.name)).name;
+      const module=await import(url),Phaser=module.default??module;
+      const prototype=Phaser.Renderer.WebGL.ProgramManager.prototype,original=prototype.getCurrentProgramSuite;
+      let reference=false,serial=0;const ids=new WeakMap();
+      const shadowUrl=performance.getEntriesByType('resource').find(e=>e.name.includes('/src/effects/kraken/KrakenShadowRenderer.ts')).name;
+      const shadow=(await import(shadowUrl)).KrakenShadowRenderer.prototype,update=shadow.update,seen=new Set();
+      shadow.update=function(...args){seen.add(this);return update.apply(this,args);};
+      const framebuffer=Phaser.Renderer.WebGL.Wrappers.WebGLFramebufferWrapper.prototype,resize=framebuffer.resize;
+      const referenceResize=new Function(`return (${framebufferReference});`)();
+      const sunUrl=performance.getEntriesByType('resource').find(e=>e.name.includes('/src/effects/sunlight/SunRenderTarget.ts')).name;
+      const target=(await import(sunUrl)).SunRenderTarget.prototype,draw=target.draw;
+      // Exercise real attachment resizing even in a frozen pose, then render
+      // at the original resolution. Only this separate image pass does extra work.
+      target.draw=function(width,height){this.shader.drawingContext.resize(width+1,height);
+        this.shader.drawingContext.resize(width,height);return draw.call(this,width,height);};
+      // Same frozen scene: compare shared programs against separate programs
+      // per manager, with precisely the same shader sources and private uniforms.
+      prototype.getCurrentProgramSuite=function(){
+        const base=this.currentConfig.base,name=base.name;
+        if(reference && /^(KrakenShared|WaterDisturbanceShared)/.test(name)) {
+          if(!ids.has(this))ids.set(this,++serial);base.name=name+'_ParityPrivate'+ids.get(this);
+        }
+        try{return original.call(this);}finally{base.name=name;}
+      };
+      window.__krakenParity={toggle(old){reference=old;framebuffer.resize=old?referenceResize:resize;
+        for(const view of seen)view.signature='';}};
+    },framebufferReference);
     if(args.profile==='true') {
       run.profiled=true;cdp=await page.context().newCDPSession(page);
       await cdp.send('Tracing.start',{categories:'devtools.timeline,v8,blink.user_timing',transferMode:'ReturnAsStream'});
       await cdp.send('HeapProfiler.startSampling',{samplingInterval:32768,includeObjectsCollectedByMajorGC:true,includeObjectsCollectedByMinorGC:true});
       await cdp.send('Profiler.enable');await cdp.send('Profiler.start');
     }
+    if(args.scenario==='regular') {
+      await phase('regular-cold',()=>step(480));
+      await phase('regular-steady',()=>step(1200));
+      run.coverage={regular:true};
+    } else {
     await phase('intro',async()=>{await step(180);await parity('intro-rise');await step(300);});
     await phase('water',()=>step(300));
     await phase('ink',async()=>{await surfaced();await target(37,34);await act('ink');await step(72);await parity('ink-active');await step(168);});
@@ -214,6 +289,7 @@ try {
       waves:run.phases.some(p=>p.enemies.maximum>20),
       hatch:run.phases.some(p=>p.hatchingMax>0),land:run.phases.some(p=>p.observedPhases.includes('land')),
       death:run.phases.some(p=>p.observedPhases.includes('dying')),victory:(await status()).terminated===true};
+    }
     if(Object.values(run.coverage).some(v=>!v))throw Error(`Incomplete coverage: ${JSON.stringify(run.coverage)}`);
     if(run.parity?.some(p=>!p.stable||!p.passed))throw Error('Visual parity failed; inspect all checkpoint results');
     run.complete=true;
@@ -241,7 +317,7 @@ try {
 }
 if(args.compare) {
   const before=JSON.parse(await readFile(args.compare,'utf8'));
-  report.comparison={source:args.compare,sameScenario:before.version===report.version&&before.seed===report.seed,
+  report.comparison={source:args.compare,sameScenario:before.version===report.version&&before.seed===report.seed&&(before.scenario??before.runs[0]?.scenario??'kraken')===report.scenario,
     sameContent:JSON.stringify(before.hashes)===JSON.stringify(report.hashes),phases:[]};
   for(const run of report.runs)for(const phase of run.phases){
     const previousRun=before.runs.find(r=>r.quality===run.quality&&r.repeat===run.repeat);
@@ -259,6 +335,19 @@ if(args.compare) {
 const lines=['# Kraken-Performance', '', report.scope, '', '| Qualität | Phase | CPU Ø / p95 / p99 ms | Frame Ø / p95 / p99 ms | >33 ms | GPU Ø ms | Draws Ø | MiB Peak | Compile/Link |','|---|---|---|---|---:|---:|---:|---:|---:|'];
 const triple=m=>m?[m.average,m.p95,m.p99].map(n=>n.toFixed(2)).join(' / '):'n/a';
 for(const r of report.runs)for(const p of r.phases) lines.push(`| ${r.quality} | ${p.name} | ${triple(p.cpuMs)} | ${triple(p.frameMs)} | ${p.hitches33} | ${p.gpuMs?.average.toFixed(2)??'n/a'} | ${p.drawCalls?.average.toFixed(1)} | ${p.residentMiB.toFixed(2)} | ${p.shaderCompileLinkCalls} |`);
+lines.push('', '## Statusabfragen und Erstauftritte', '',
+  '| Qualität | Phase | FBO neu / Status | FBO-Status ms | Programmstatus Anzahl / ms | CPU-Maximum ms |',
+  '|---|---|---:|---:|---:|---:|');
+for(const r of report.runs)for(const p of r.phases) {
+  const g=p.glStatus;
+  lines.push(`| ${r.quality} | ${p.name} | ${g.framebufferCreates} / ${g.framebufferStatusCalls} | ${g.framebufferStatusMs.toFixed(2)} | ${g.programStatusCalls} / ${g.programStatusMs.toFixed(2)} | ${p.cpuMs.maximum.toFixed(2)} |`);
+}
+for(const r of report.runs) {
+  lines.push('',`${r.quality}: Navigation bis Bereitschaft inkl. Qualitätswahl ${r.loadToReadyMs?.toFixed(0)??'nicht bereit'} ms.`);
+  if(r.coldStart)lines.push(`Kaltstart: ${JSON.stringify(r.coldStart)}.`);
+  for(const p of r.phases)for(const [event,first] of Object.entries(p.cold.first))
+    lines.push(`- Erster ${event} (${p.name}, Simulation ${first.simulationMs.toFixed(0)} ms): CPU-Maximum der ersten ${first.cpuMs.count} Frames ${first.cpuMs.maximum.toFixed(2)} ms; Compile/Link ${first.compileLinkCalls}.`);
+}
 if(report.comparison){lines.push('','## Vergleich','',`Szenario identisch: ${report.comparison.sameScenario}; Inhalte identisch: ${report.comparison.sameContent}. Abweichende Workload-Hashes kennzeichnen abweichende Kampfverläufe; kein pixel- oder tickgenauer A/B-Nachweis.`,'',
   '| Qualität | Phase | CPU Ø vorher → nachher ms | Änderung | Workload / Messmodus identisch |','|---|---|---|---:|---|');
   for(const p of report.comparison.phases)lines.push(`| ${p.quality} | ${p.phase} | ${p.before.cpuMs.average.toFixed(2)} → ${p.after.cpuMs.average.toFixed(2)} | ${p.cpuMeanChangePct.toFixed(1)} % | ${p.sameWorkload} / ${p.sameMeasurementMode} |`);}
