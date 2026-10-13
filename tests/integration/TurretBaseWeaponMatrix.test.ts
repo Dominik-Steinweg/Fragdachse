@@ -56,7 +56,7 @@ import { fakeEntity } from '../fakeEntity';
  * loadout/resource lifecycle. The fire options are those of bindHostSystems for a player
  * construction with neutral buffs. Only rendering, network and technical physics are fake.
  */
-function fixture() {
+function fixture(figureTarget = false) {
   clock.now = 1000;
   const dateNow = vi.spyOn(Date, 'now').mockImplementation(() => clock.now);
   const scene = healthBarTestScene().scene;
@@ -66,7 +66,10 @@ function fixture() {
     'setWalking', 'setRageTint', 'setDecoyStealth', 'setHeldItemId', 'syncBar', 'setMovementDashPhase', 'setBurrowPhase', 'updateMolotovFirewalker']) {
     player[name] = () => {};
   }
-  const players = { setSpawnContextProvider() {}, getPlayer: (id: string) => id === 'p1' ? player : undefined, getAllPlayers: () => [player] };
+  const victim = fakeEntity({ ...player, id: 'victim', x: 116, y: 100,
+    getBounds: () => ({ left: 100, right: 132, top: 84, bottom: 116 }) });
+  const figures = figureTarget ? [player, victim] : [player];
+  const players = { setSpawnContextProvider() {}, getPlayer: (id: string) => figures.find(p => p.id === id), getAllPlayers: () => figures };
   const combat = new WorldCombatCore(players as never, { isHost: () => true,
     getPlayerProfile: players.getPlayer, getLocalPlayerId: () => 'p1', areTeammates: () => false,
     isEnemyPair: () => true, broadcastEffect() {}, broadcastAudioFeedback() {}, broadcastHitscanTracer() {},
@@ -74,6 +77,7 @@ function fixture() {
   const vitals = combat.bindPlayerVitalsScope({ worldRevision: 72, runtimeGeneration: 1 });
   combat.bindHostExecutionSources({ nowMs: () => clock.now, random: () => 0.5 });
   combat.initPlayer('p1');
+  if (figureTarget) combat.initPlayer('victim');
   const metrics = { ...resolveCoopDefenseWorldMetrics(20, 20), offsetX: 100, offsetY: 80 };
   const bases = new BaseManager(scene, [{ id: 'hostile-base', faction: 'hostile', role: 'main',
     hpMax: 1_000_000, startHp: 1_000_000, cells: [{ gridX: 0, gridY: 0 }],
@@ -84,8 +88,8 @@ function fixture() {
     left: cell.x - cell.width / 2, right: cell.x + cell.width / 2,
     top: cell.y - cell.height / 2, bottom: cell.y + cell.height / 2,
   }) });
-  combat.setBaseManager(bases);
-  combat.setBaseObstacles(base.getCellBodies());
+  combat.setBaseManager(figureTarget ? null : bases);
+  combat.setBaseObstacles(figureTarget ? [] : base.getCellBodies());
   const mutation = new WorldObjectMutationRuntime({ scope: combat.getCombatScope(), metrics, bases, train: null } as never);
   const damageOwners: { owner: string; slot: string | undefined }[] = [];
   combat.setBaseDamageCallback((id, damage, owner, slot, source) => {
@@ -97,7 +101,7 @@ function fixture() {
   // Ordinary bullets use the production base/rock sweep, while growing flames use
   // canonical overlaps. Reuse the actual sweep geometry against BaseManager's bodies.
   const geometryBinding = new ProjectilePhysicsBinding(scene);
-  geometryBinding.setBaseGroup({ getChildren: () => base.getCellBodies() } as never);
+  geometryBinding.setBaseGroup({ getChildren: () => figureTarget ? [] : base.getCellBodies() } as never);
   physics.binding.findNearestRockSweep = geometryBinding.findNearestRockSweep.bind(geometryBinding);
   const projectiles = new WorldProjectileRuntime({ physicsBinding: physics.binding, presentation: createPresentation(),
     identityScope: new ProjectileIdentityScope(72), hostNowMs: () => clock.now,
@@ -107,6 +111,7 @@ function fixture() {
   projectiles.setProjectileCollisionTargetQueryPort({
     readCollisionTargets: sink => combat.readCollisionTargets(sink),
     queryWorldCollisionTargets: (_region, sink) => {
+      if (figureTarget) return;
       const cell = base.getCellBodies()[0], b = cell.getBounds();
       sink('base', base.id, '__world__', cell.x, cell.y, Math.hypot(cell.width, cell.height) / 2,
         b.left, b.top, b.right, b.bottom);
@@ -183,11 +188,12 @@ function fixture() {
     if (resolved.fire.type === 'projectile' && resolved.fire.homing) expect(resolved.fire.homing.targetTypes).toEqual(['enemies']);
     capture.mockRestore(); execute.mockRestore();
   };
-  const shot = (weapon: WeaponConfig) => {
+  const shot = (weapon: WeaponConfig, automatedBaseDamageFactor?: number) => {
     const surface = base.getNearestSurfacePoint(0, 100)!;
     expect(surface.distance).toBeLessThan(weapon.range);
     return execution.fire(weapon, { x: 0, y: 100, angle: 0, targetX: surface.x, targetY: surface.y,
       ownerId: 'p1', ownerColor: 0xffffff, options: {
+        automatedBaseDamageFactor,
         sourceSlot: 'utility', sourceTurretId: 'player-turret', directDamageMultiplier: 1, payloadDamageMultiplier: 1,
         payloadSourceDamageFactors: [
           { kind: 'automated-source', multiplier: 1, resolvedAt: 'execution' },
@@ -209,6 +215,7 @@ function fixture() {
     }
   };
   return { base, shot, baseShot, advance, damageOwners, projectiles, physics, execution, explosions,
+    figureHp: () => combat.getHP('victim'),
     destroy() { binding?.destroy(); projectiles.destroy(); cloud.destroyAll(); fire.destroyAll(); mutation.destroy(); bases.destroy(); vitals.destroy(); dateNow.mockRestore(); } };
 }
 
@@ -217,6 +224,72 @@ const turretWeapons = Object.entries(WEAPON_CONFIGS)
 
 describe('player-owned utility turret attacks against hostile bases', () => {
   afterEach(() => vi.restoreAllMocks());
+  it.each(['TURRET_MG', 'TURRET_ROCKET_BURST', 'TURRET_SPORES', 'TURRET_FLAME'] as const)(
+    '%s: scales only base damage, preserving neutral options and figure damage', id => {
+      const weapon = WEAPON_CONFIGS[id];
+      const measure = (figure: boolean, factor?: number) => {
+        const f = fixture(figure);
+        try {
+          const before = figure ? f.figureHp() : f.base.getHp();
+          f.shot(weapon, factor);
+          f.advance(8000);
+          return before - (figure ? f.figureHp() : f.base.getHp());
+        } finally { f.destroy(); }
+      };
+      const base = measure(false), figure = measure(true);
+      expect(base).toBeGreaterThan(0); expect(figure).toBeGreaterThan(0);
+      expect(measure(false, 1)).toBe(base);
+      expect(measure(true, 1)).toBe(figure);
+      for (const factor of [0, 0.5, 2]) {
+        expect(measure(false, factor)).toBeCloseTo(base * factor, 7);
+        expect(measure(true, factor)).toBe(figure);
+      }
+    });
+
+  it('keeps E13: the flame ignores weapon.baseDamageMult even with an automatic factor', () => {
+    const measure = (baseDamageMult: number, factor?: number) => {
+      const f = fixture();
+      try {
+        const hp = f.base.getHp();
+        f.shot({ ...WEAPON_CONFIGS.TURRET_FLAME, baseDamageMult }, factor); f.advance(8000);
+        return hp - f.base.getHp();
+      } finally { f.destroy(); }
+    };
+    const normal = measure(1);
+    expect(normal).toBeGreaterThan(0);
+    expect(measure(0)).toBe(normal);
+    expect(measure(0, 1)).toBe(normal);
+    expect(measure(0, 2)).toBe(normal * 2);
+  });
+
+  it.each(['TURRET_MG', 'TURRET_ROCKET_BURST'] as const)('%s multiplies existing base factors, including zero', id => {
+    const measure = (authored: number, factor: number) => {
+      const f = fixture(), weapon = WEAPON_CONFIGS[id];
+      if (weapon.fire.type !== 'projectile') throw Error('Expected projectile');
+      try {
+        const hp = f.base.getHp();
+        f.shot({ ...weapon, baseDamageMult: authored, fire: { ...weapon.fire,
+          impactExplosion: weapon.fire.impactExplosion ? { ...weapon.fire.impactExplosion, baseDamageMult: authored } : undefined,
+        } }, factor);
+        f.advance(8000);
+        return hp - f.base.getHp();
+      } finally { f.destroy(); }
+    };
+    const neutral = measure(1, 1);
+    expect(neutral).toBeGreaterThan(0);
+    expect(measure(3, 0.5)).toBeCloseTo(neutral * 1.5, 7);
+    expect(measure(0, 2)).toBe(0);
+  });
+
+  it.each(['TURRET_GRAVITY', 'TURRET_SLOW_BUBBLE'] as const)('%s stays harmless with a nonneutral base factor', id => {
+    const f = fixture();
+    try {
+      const hp = f.base.getHp();
+      f.shot(WEAPON_CONFIGS[id], 2); f.advance(8000);
+      expect(f.explosions).toHaveBeenCalled();
+      expect(f.base.getHp()).toBe(hp);
+    } finally { f.destroy(); }
+  });
   for (const [id, weapon] of turretWeapons) {
     if (weapon.fire.type === 'tesla_dome') {
       it(`${id}: field weapon is rejected by automated fire (TeslaDomeSystem owns base callbacks)`, () => {

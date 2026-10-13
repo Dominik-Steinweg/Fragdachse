@@ -247,14 +247,89 @@ describe('hostile bases as third target tier', () => {
 
     f.targets([]);
     f.tick(10);
+    expect(f.fire).toHaveBeenCalledOnce();
+    f.tick(250);
     expect(f.fire.mock.calls[1].slice(6, 8)).toEqual([200, 0]);
     // Eine verdeckte Fläche wird nicht durchschossen; die nächste freie Fläche derselben Basis zählt.
     f.system.setLineOfFireChecker((_sx, _sy, ex) => ex !== 200);
-    f.tick(20);
+    f.tick(260);
+    expect(f.fire).toHaveBeenCalledTimes(2);
+    f.tick(500);
     expect(f.fire.mock.calls[2].slice(6, 8)).toEqual([0, -220]);
     f.system.setLineOfFireChecker(() => false);
-    f.tick(30);
+    f.tick(510);
     expect(f.fire).toHaveBeenCalledTimes(3);
+  });
+
+  it('bounds acquisition delay, retains the chosen point, and lets figures and focus preempt immediately', () => {
+    const f = fixture({ weaponId: 'TURRET_MG', cooldownMs: 1 });
+    f.targets([]);
+    let points = [faces[0]];
+    const candidates = vi.fn(() => points);
+    f.system.setBaseTargetCandidateProvider(candidates);
+    f.system.setLineOfFireChecker(() => false);
+    f.tick(0);
+    f.system.setLineOfFireChecker(() => true);
+    for (let t = 1; t < 200; t++) f.tick(t);
+    expect(f.fire).not.toHaveBeenCalled();
+    for (let t = 200; t <= 250; t++) f.tick(t);
+    expect(f.fire).toHaveBeenCalled();
+    expect(candidates).toHaveBeenCalledTimes(2);
+    points = [{ id: 'nearer', x: 50, y: 0 }];
+    f.tick(1000);
+    expect(f.fire.mock.calls.at(-1)!.slice(6, 8)).toEqual([200, 0]);
+    expect(candidates).toHaveBeenCalledTimes(2);
+    f.targets([{ id: 'figure', x: 100, y: 0 }]);
+    f.tick(1001);
+    expect(f.fire.mock.calls.at(-1)!.slice(6, 8)).toEqual([100, 0]);
+    f.system.setFocusTargetProvider(() => ({ targetType: 'base', targetId: 'focused' }));
+    f.system.setFocusedBaseTargetProvider(() => [{ id: 'focused', x: 300, y: 0 }]);
+    f.tick(1002);
+    expect(f.fire.mock.calls.at(-1)!.slice(6, 8)).toEqual([300, 0]);
+    expect(candidates).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['eligibility', 'range', 'line'] as const)('drops a held target immediately on invalid %s', reason => {
+    const f = fixture({ weaponId: 'TURRET_MG', cooldownMs: 1 });
+    f.targets([]);
+    let valid = true;
+    const candidates = vi.fn(() => [{ ...faces[0], isValid: () => valid }]);
+    f.system.setBaseTargetCandidateProvider(candidates);
+    f.tick(0); expect(f.fire).toHaveBeenCalledOnce();
+    if (reason === 'eligibility') valid = false;
+    if (reason === 'range') f.source.targetRange = 100;
+    if (reason === 'line') f.system.setLineOfFireChecker(() => false);
+    f.tick(1); expect(f.fire).toHaveBeenCalledOnce();
+    valid = true; f.source.targetRange = 500; f.system.setLineOfFireChecker(() => true);
+    f.tick(2); expect(f.fire).toHaveBeenCalledOnce(); // Invalidated, not merely hidden for a tick.
+    f.tick(250); expect(f.fire).toHaveBeenCalledTimes(2);
+    expect(candidates).toHaveBeenCalledTimes(2);
+  });
+
+  it('finishes the base salvo before a newly available figure takes over', () => {
+    const f = fixture({ weaponId: 'TURRET_ROCKET_BURST', cooldownMs: 1 });
+    const burst = WEAPON_CONFIGS.TURRET_ROCKET_BURST.turretBurst!;
+    f.targets([]); f.system.setBaseTargetCandidateProvider(() => faces);
+    f.tick(0);
+    f.targets([{ id: 'figure', x: 0, y: 100 }]);
+    for (let shot = 1; shot < burst.count; shot++) f.tick(shot * burst.intervalMs);
+    expect(f.fire).toHaveBeenCalledTimes(burst.count);
+    expect(f.fire.mock.calls.every(call => call[6] === 200 && call[7] === 0)).toBe(true);
+    f.tick((burst.count - 1) * burst.intervalMs + 1);
+    expect(f.fire.mock.calls.at(-1)!.slice(6, 8)).toEqual([0, 100]);
+  });
+
+  it('cleans held targets and search deadlines when the source disappears', () => {
+    const f = fixture({ weaponId: 'TURRET_MG', cooldownMs: 1 });
+    f.targets([]);
+    let point = faces[0];
+    const candidates = vi.fn(() => [point]);
+    f.system.setBaseTargetCandidateProvider(candidates);
+    f.tick(0);
+    f.remove(); f.tick(1);
+    point = faces[1]; f.restore(); f.tick(2);
+    expect(candidates).toHaveBeenCalledTimes(2);
+    expect(f.fire.mock.calls.at(-1)!.slice(6, 8)).toEqual([0, -220]);
   });
 
   it('lets limited turrets fire at a base face only once the barrel actually covers it', () => {

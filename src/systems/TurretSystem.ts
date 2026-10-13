@@ -44,7 +44,25 @@ type BaseTargetCandidateProvider = (
  * Rohrstrahl innerhalb ihrer Reichweite schneiden. Ziele ohne Abschnitt behalten die normale Toleranz.
  */
 interface TurretAimTarget { readonly x: number; readonly y: number; readonly hitSegment?: TurretHitSegment }
-interface TurretTargetPoint extends TurretAimTarget { readonly id: string }
+interface TurretTargetPoint extends TurretAimTarget {
+  readonly id: string;
+  /** Live eligibility and geometry generation, without rebuilding/ranking surfaces. */
+  readonly isValid?: () => boolean;
+}
+const BASE_SEARCH_INTERVAL_MS = 225;
+function baseSearchPhase(id: AutomatedTurretId): number {
+  if (typeof id === 'number') return ((id - 1) * 97 % BASE_SEARCH_INTERVAL_MS + BASE_SEARCH_INTERVAL_MS) % BASE_SEARCH_INTERVAL_MS;
+  let hash = 2166136261;
+  for (let i = 0; i < id.length; i++) hash = Math.imul(hash ^ id.charCodeAt(i), 16777619);
+  return (hash >>> 0) % BASE_SEARCH_INTERVAL_MS;
+}
+interface BaseSearchState {
+  sequenceKey: AutomatedTurretId;
+  nextSearchAt: number;
+  searchDue: boolean;
+  target: TurretTargetPoint | null;
+  candidates: readonly TurretTargetPoint[];
+}
 interface PendingTurretBurst {
   /** Eintrag, der die Salve begonnen hat; nur er darf sie fortsetzen. */
   ownerEntryId: AutomatedTurretId;
@@ -92,6 +110,8 @@ export class TurretSystem {
   private focusedBaseTargetProvider: FocusedBaseTargetProvider | null = null;
   private baseTargetCandidateProvider: BaseTargetCandidateProvider | null = null;
   private readonly baseDamageByWeapon = new Map<string, boolean>();
+  /** A shared firing sequence can move between entries, but each pose owns its aim. */
+  private readonly baseSearches = new Map<AutomatedTurretId, BaseSearchState>();
   private fireHandler: TurretFireHandler | null = null;
   private turretDamageBuffProvider: ((x: number, y: number) => TurretDamageBuff | null) | null = null;
   private turretDamageMultiplierProvider: ((turret: AutomatedTurret, turrets: readonly AutomatedTurret[]) => number) | null = null;
@@ -145,6 +165,7 @@ export class TurretSystem {
   /** Dritte Zielstufe: feindliche Basen, nur ohne Fokus- und Figurenziel. */
   setBaseTargetCandidateProvider(provider: BaseTargetCandidateProvider | null): void {
     this.baseTargetCandidateProvider = provider;
+    this.baseSearches.clear();
   }
 
   setFireHandler(handler: TurretFireHandler | null): void {
@@ -153,6 +174,7 @@ export class TurretSystem {
       this.nextFireAt.clear();
       this.pendingBursts.clear();
       this.controlRevisions.clear();
+      this.baseSearches.clear();
     }
   }
 
@@ -215,6 +237,13 @@ export class TurretSystem {
       entrySequences.set(turret.id, sequenceKey);
       activeSequences.add(sequenceKey);
       activeIdentities.add(turret.identityId);
+      let baseSearch = this.baseSearches.get(turret.id);
+      if (!baseSearch || baseSearch.sequenceKey !== sequenceKey) {
+        baseSearch = { sequenceKey, nextSearchAt: now + baseSearchPhase(turret.id), searchDue: false, target: null, candidates: [] };
+        this.baseSearches.set(turret.id, baseSearch);
+      }
+      baseSearch.searchDue = now >= baseSearch.nextSearchAt;
+      if (baseSearch.searchDue) baseSearch.nextSearchAt = now + BASE_SEARCH_INTERVAL_MS;
       if (turret.sequenceSeedKey !== undefined && !this.nextFireAt.has(sequenceKey)) continue;
 
       const turretX = turret.x;
@@ -423,6 +452,9 @@ export class TurretSystem {
     for (const id of this.controlRevisions.keys()) {
       if (!activeIdentities.has(id)) this.controlRevisions.delete(id);
     }
+    for (const id of this.baseSearches.keys()) {
+      if (!entrySequences.has(id)) this.baseSearches.delete(id);
+    }
   }
 
   /** Entfernt die Salve der Folge nur, wenn dieser Eintrag sie begonnen hat. */
@@ -503,7 +535,8 @@ export class TurretSystem {
     let bestKey = '';
     const focus = this.focusTargetProvider?.(turret.ownerId) ?? null;
 
-    const consider = (candidate: TurretAimTarget, priority: number, kind: 'player' | 'enemy' | 'base', id: string): boolean => {
+    const consider = (candidate: TurretAimTarget & { readonly isValid?: () => boolean }, priority: number, kind: 'player' | 'enemy' | 'base', id: string): boolean => {
+      if (candidate.isValid?.() === false) return false;
       const distance = Phaser.Math.Distance.Between(turretX, turretY, candidate.x, candidate.y);
       if (distance > range) return false;
       if (!this.hasLineOfFireFromMuzzle(turret, turretX, turretY, candidate.x, candidate.y, lineOfFireStartOffset)) return false;
@@ -556,11 +589,30 @@ export class TurretSystem {
       }
     }
 
-    if (bestTarget === null && canDamageBases && this.baseTargetCandidateProvider) {
+    const state = this.baseSearches.get(turret.id)!;
+    if (bestTarget !== null || !canDamageBases) {
+      if (!excluded) state.target = null;
+      return bestTarget;
+    }
+    if (this.baseTargetCandidateProvider) {
+      if (state.target) {
+        const held = state.target;
+        if (!excluded || held.x !== excluded.x || held.y !== excluded.y) {
+          if (consider(held, 2, 'base', held.id)) return held;
+          state.target = null;
+        }
+      }
+      if (state.searchDue) {
+        state.searchDue = false;
+        state.candidates = this.baseTargetCandidateProvider(turret, turretX, turretY, range);
+      } else if (!excluded) return null;
       // Kandidaten kommen nach Distanz sortiert: Die erste frei beschießbare Fläche ist die nächste.
-      for (const base of this.baseTargetCandidateProvider(turret, turretX, turretY, range)) {
+      for (const base of state.candidates) {
         if (excluded && base.x === excluded.x && base.y === excluded.y) continue;
-        if (consider({ x: base.x, y: base.y, hitSegment: base.hitSegment }, 2, 'base', base.id)) break;
+        if (consider(base, 2, 'base', base.id)) {
+          if (!excluded) state.target = base;
+          break;
+        }
       }
     }
 

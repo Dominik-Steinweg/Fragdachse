@@ -1,4 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
+import { COOP_DEFENSE_TURRET_RULES, validateCoopDefenseTurretRules } from '../src/config/coopDefenseTurrets';
+
+describe('authored automatic turret base damage factor', () => {
+  it('defaults to neutral damage and accepts finite nonnegative factors', () => {
+    expect(COOP_DEFENSE_TURRET_RULES.baseDamageMultiplier).toBe(1);
+    for (const baseDamageMultiplier of [0, 0.25, 1, 2]) {
+      expect(() => validateCoopDefenseTurretRules({ baseDamageMultiplier })).not.toThrow();
+    }
+    for (const baseDamageMultiplier of [-1, NaN, Infinity, -Infinity]) {
+      expect(() => validateCoopDefenseTurretRules({ baseDamageMultiplier })).toThrow('baseDamageMultiplier');
+    }
+  });
+});
 import type { ProjectileWeaponFireConfig, WeaponConfig } from '../src/loadout/LoadoutConfig';
 import { canWeaponDamageBases, computeExposedBaseFaces, ExposedBaseFaceCache, rankBaseAimPoints,
   type BaseCell, type ExposedBaseFace } from '../src/systems/TurretBaseTargeting';
@@ -139,6 +152,16 @@ describe('exposed base geometry and aim ranking', () => {
     expect(rankBaseAimPoints(faces, -5, -5, 100, 1, 1, 50)[0]).toMatchObject({ x: -1, y: 5 });
     // Frontal bleibt der nächste Punkt unverändert.
     expect(rankBaseAimPoints(faces, -5, 5, 100, 1, 1, 2)[0]).toMatchObject({ x: -1, y: 5, distance: 5 });
+  });
+
+  it('keeps the nearest limited set when closer faces arrive late, with stable ties', () => {
+    const faces = [90, 50, 70, 30, 10, 30, 20].map((x, i) => ({
+      x1: x, x2: x, y1: -10 - i, y2: 10 + i, normalX: -1, normalY: 0,
+    }));
+    const points = rankBaseAimPoints(faces, 0, 0, 100, 4);
+    expect(points.map(p => p.distance)).toEqual([10, 20, 30, 30]);
+    expect(points.slice(2).map(p => p.hitSegment.y1)).toEqual([-13, -15]);
+    expect(rankBaseAimPoints(faces, 0, 0, 20, 4).map(p => p.distance)).toEqual([10, 20]);
   });
 });
 

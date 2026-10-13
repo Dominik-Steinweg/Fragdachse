@@ -61,6 +61,26 @@ function fixture() {
 }
 
 describe('turret fire sources', () => {
+  it('keeps base aim at each source pose across a shared-sequence handoff and cleans removed copies', () => {
+    const f = fixture();
+    const turret = construction({ id: 1, cooldownMs: 1 });
+    const copy = copyOf(turret);
+    f.system.setEnemyTargetProvider(() => []);
+    const candidates = vi.fn((source: TurretFireSource) => [{ id: 'base', x: source.x + 80, y: 0 }]);
+    f.system.setBaseTargetCandidateProvider(candidates);
+    f.set([turret], [original(turret, 'paused'), copy]);
+    f.tick(0); f.tick(250);
+    expect(f.fire.mock.calls.at(-1)![6]).toBe(380);
+    f.set([turret], [original(turret), { ...copy, fireState: 'paused' }]);
+    f.tick(500);
+    expect(f.fire.mock.calls.at(-1)![6]).toBe(80);
+    f.set([turret], [original(turret, 'paused')]); f.tick(501);
+    f.set([turret], [original(turret, 'paused'), { ...copy, x: 500 }]);
+    f.tick(502); f.tick(752);
+    expect(f.fire.mock.calls.at(-1)![6]).toBe(580);
+    expect(candidates.mock.calls.filter(([s]) => s.id === copy.id)).toHaveLength(2);
+  });
+
   it.each([false, true])('waits completely for a running seed salvo, independent of order (%s)', copyFirst => {
     const f = fixture();
     const turret = construction({ weaponId: 'TURRET_ROCKET_BURST' });

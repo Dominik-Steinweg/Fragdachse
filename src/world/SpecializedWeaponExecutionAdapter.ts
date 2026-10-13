@@ -83,7 +83,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
             durationMs: (ground?.createOnFlameExpiry ?? 0) > 0 ? ground?.durationMs ?? 0 : 0,
             burn: { durationMs: flame.interaction.burn?.durationMs ?? 0, damagePerTick: flame.interaction.burn?.damagePerTick ?? 0 },
             igniteProjectiles: (ground?.igniteProjectiles ?? 0) > 0,
-            baseDamageMult: flameConfig.baseDamageMult ?? 1,
+            baseDamageMult: (flameConfig.baseDamageMult ?? 1) * (params.options?.automatedBaseDamageFactor ?? 1),
           }, presentation: { ...flame.presentation, shotAudioKey: undefined, suppressSpawnFx: true } },
         } : undefined,
         origin: { x: params.x, y: params.y, angle: params.angle, gameplayMuzzleOrigin: params.gameplayMuzzleOrigin },
@@ -186,6 +186,8 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
           adrenalinGain: config.adrenalinGain,
           rockDamageMult: config.rockDamageMult,
           trainDamageMult: config.trainDamageMult,
+          // E13: flames still ignore weapon.baseDamageMult; only the new source option applies.
+          baseDamageMult: params.options?.automatedBaseDamageFactor,
         },
         burn: {
           durationMs: fireConfig.burnDurationMs,
@@ -240,6 +242,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
           adrenalinGain: config.adrenalinGain,
           rockDamageMult: config.rockDamageMult,
           trainDamageMult: config.trainDamageMult,
+          baseDamageMult: params.options?.automatedBaseDamageFactor,
           slowFraction: debuffHit ? config.hitSlowFraction : undefined,
           slowDurationMs: debuffHit ? config.hitSlowDurationMs : undefined,
           vulnerabilityDurationMs: debuffHit ? config.hitVulnerabilityDurationMs : undefined,

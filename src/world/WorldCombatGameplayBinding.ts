@@ -8,6 +8,7 @@ import { plasmaBurnerTargetEffect } from '../combat/plasmaBurner/PlasmaBurnerTar
 import { OBSTACLE_ROCK } from '../systems/ArenaObstacleIndex';
 import { turretAimConfig } from '../config/turretAim';
 import { getCoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
+import { COOP_DEFENSE_TURRET_RULES } from '../config/coopDefenseTurrets';
 import type { BaseManager } from '../entities/BaseManager';
 import type { TimeBubbleChargePort } from '../systems/TimeBubbleChargePort';
 import type { BaseEntity } from '../entities/BaseEntity';
@@ -915,6 +916,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
             personalMgOwnerId: this.isPersonalMg(sourceTurretId) ? ownerId : undefined,
             personalMgScope: this.isPersonalMg(sourceTurretId) ? o.combatSystem.getCombatScope() : undefined,
             directDamageMultiplier: damageFactor,
+            automatedBaseDamageFactor: o.isCoopDefense?.() && !isHostileBaseTurret
+              ? COOP_DEFENSE_TURRET_RULES.baseDamageMultiplier : undefined,
             // Payload P is frozen at execution; explosion resolution must retain that ownership.
             payloadDamageMultiplier: damageFactor * ownerRuntimeDamageMultiplier,
             payloadSourceDamageFactors: [
@@ -1496,15 +1499,18 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     if (source.ownerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID) return [];
     const damageSource = o.combatSystem.captureWorldDamageSource(source.ownerId, source.weaponId ?? 'turret');
     if (!o.combatSystem.canDamageStructure(damageSource, undefined, 'hostile')) return [];
-    return this.getBaseAimCandidates(x, y, range);
+    return this.getBaseAimCandidates(x, y, range).map(point => ({ ...point,
+      isValid: () => point.isValid() && o.combatSystem.canDamageStructure(
+        o.combatSystem.captureWorldDamageSource(source.ownerId, source.weaponId ?? 'turret'), undefined, 'hostile'),
+    }));
   }
 
   /** Shared surface selection for the third tier and injector focus (E10/E15). */
-  private getBaseAimCandidates(x: number, y: number, range: number, targetId?: string): readonly (BaseAimPoint & { id: string })[] {
+  private getBaseAimCandidates(x: number, y: number, range: number, targetId?: string): readonly (BaseAimPoint & { id: string; isValid: () => boolean })[] {
     const o = this.options, bases = o.baseManager;
     if (!bases || !o.isCoopDefense?.()) return [];
     const generation = bases.getObstacleGeneration();
-    const candidates: (BaseAimPoint & { id: string })[] = [];
+    const candidates: (BaseAimPoint & { id: string; isValid: () => boolean })[] = [];
     const targets = targetId === undefined ? bases.getBasesByFaction('hostile') : [bases.getBase(targetId)];
     for (const base of targets) {
       if (!base || base.faction !== 'hostile' || !base.isDamageable() || base.isInert() || base.getHp() <= 0) continue;
@@ -1513,11 +1519,17 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         offsetX: o.worldMetrics.offsetX, offsetY: o.worldMetrics.offsetY,
         isCoveredCell: () => false,
       }));
+      const isValid = () => bases.getObstacleGeneration() === generation
+        && base.faction === 'hostile' && base.isDamageable() && !base.isInert() && base.getHp() > 0;
       for (const point of rankBaseAimPoints(faces, x, y, range, BASE_AIM_CANDIDATE_LIMIT, 1, BASE_AIM_FACE_END_INSET)) {
-        candidates.push({ id: base.id, ...point });
+        let at = candidates.length;
+        while (at > 0 && point.distance < candidates[at - 1].distance) at--;
+        if (at >= BASE_AIM_CANDIDATE_LIMIT) continue;
+        candidates.splice(at, 0, { id: base.id, ...point, isValid });
+        if (candidates.length > BASE_AIM_CANDIDATE_LIMIT) candidates.pop();
       }
     }
-    return candidates.sort((a, b) => a.distance - b.distance).slice(0, BASE_AIM_CANDIDATE_LIMIT);
+    return candidates;
   }
 
   getOffensiveConstructionSources(): readonly RemoteControlSource[] {

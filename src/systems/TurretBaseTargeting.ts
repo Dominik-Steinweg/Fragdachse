@@ -145,25 +145,41 @@ export function rankBaseAimPoints(
   range: number, limit: number, outwardOffset = 1, endInset = 0,
 ): readonly BaseAimPoint[] {
   if (limit <= 0 || range < 0) return [];
-  const points: (BaseAimPoint & { index: number })[] = [];
-  faces.forEach((face, index) => {
+  const count = Math.min(faces.length, Math.floor(limit));
+  if (count === 0) return [];
+  // Keep only the best k indices/distances. No point or segment allocation per face.
+  const indices: number[] = [], distances: number[] = [], fractions: number[] = [], margins: number[] = [];
+  const rangeSquared = range * range;
+  for (let index = 0; index < faces.length; index++) {
+    const face = faces[index];
     const dx = face.x2 - face.x1, dy = face.y2 - face.y1;
     const lengthSquared = dx * dx + dy * dy;
     const margin = lengthSquared === 0 ? 0 : Math.min(0.5, Math.max(0, endInset) / Math.sqrt(lengthSquared));
     const t = lengthSquared === 0 ? 0 : Math.max(margin, Math.min(1 - margin,
       ((fromX - face.x1) * dx + (fromY - face.y1) * dy) / lengthSquared));
     const x = face.x1 + t * dx, y = face.y1 + t * dy;
-    if ((fromX - x) * face.normalX + (fromY - y) * face.normalY <= 0) return;
-    const distance = Math.hypot(fromX - x, fromY - y);
-    if (distance <= range) points.push({ x: x + outwardOffset * face.normalX,
-      y: y + outwardOffset * face.normalY, distance, index,
+    if ((fromX - x) * face.normalX + (fromY - y) * face.normalY <= 0) continue;
+    const distance = (fromX - x) ** 2 + (fromY - y) ** 2;
+    if (distance > rangeSquared) continue;
+    let at = distances.length;
+    while (at > 0 && distance < distances[at - 1]) at--;
+    if (at >= count) continue;
+    for (let i = Math.min(count - 1, distances.length); i > at; i--) {
+      indices[i] = indices[i - 1]; distances[i] = distances[i - 1];
+      fractions[i] = fractions[i - 1]; margins[i] = margins[i - 1];
+    }
+    indices[at] = index; distances[at] = distance; fractions[at] = t; margins[at] = margin;
+  }
+  return indices.map((index, i) => {
+    const face = faces[index], margin = margins[i], t = fractions[i];
+    const dx = face.x2 - face.x1, dy = face.y2 - face.y1;
+    return { x: face.x1 + t * dx + outwardOffset * face.normalX,
+      y: face.y1 + t * dy + outwardOffset * face.normalY, distance: Math.sqrt(distances[i]),
       hitSegment: {
         x1: face.x1 + margin * dx + outwardOffset * face.normalX,
         y1: face.y1 + margin * dy + outwardOffset * face.normalY,
         x2: face.x1 + (1 - margin) * dx + outwardOffset * face.normalX,
         y2: face.y1 + (1 - margin) * dy + outwardOffset * face.normalY,
-      } });
+      } };
   });
-  points.sort((a, b) => a.distance - b.distance || a.index - b.index);
-  return points.slice(0, Math.floor(limit)).map(({ x, y, distance, hitSegment }) => ({ x, y, distance, hitSegment }));
 }

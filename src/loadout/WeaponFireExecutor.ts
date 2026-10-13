@@ -119,6 +119,8 @@ export interface WeaponFireOptions {
   directDamageMultiplier?: number;
   /** Gesamtfaktor fuer Folgeschaden, der nicht erneut durch den Projektiltreffer-Resolver laeuft. */
   payloadDamageMultiplier?: number;
+  /** Automatic turret balance against hostile bases only; omitted/1 preserves weapon semantics. */
+  readonly automatedBaseDamageFactor?: number;
   /** Factors included in the payload multiplier; omission denotes an automation factor only. */
   payloadSourceDamageFactors?: readonly ProjectileDamageSourceFactor[];
   /** One-way muzzle portal of a fire-control deployment, fixed for this shot. */

@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const turretBalance = vi.hoisted(() => ({ factor: 1 }));
+vi.mock('../src/config/coopDefenseTurrets', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/config/coopDefenseTurrets')>(),
+  COOP_DEFENSE_TURRET_RULES: { get baseDamageMultiplier() { return turretBalance.factor; } },
+}));
+
 vi.mock('phaser', () => ({
   Math: {
     Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)),
@@ -344,6 +350,7 @@ function createFixture(options: {
 }
 
 afterEach(() => {
+  turretBalance.factor = 1;
   vi.restoreAllMocks();
 });
 
@@ -376,7 +383,8 @@ describe('hostile base aim candidates', () => {
 
   it('shares focused surfaces and excludes other, immune, dead and inert bases', () => {
     const f = candidateFixture();
-    expect(f.focus('base-1')).toEqual(f.query().filter(p => p.id === 'base-1'));
+    expect(f.focus('base-1').map(({ isValid: _valid, ...point }) => point))
+      .toEqual(f.query().filter(p => p.id === 'base-1').map(({ isValid: _valid, ...point }) => point));
     expect(f.focus('missing')).toEqual([]);
     f.bases[1].damageable = false; expect(f.focus('base-1')).toEqual([]);
     f.bases[1].damageable = true; f.bases[1].hp = 0; expect(f.focus('base-1')).toEqual([]);
@@ -387,7 +395,8 @@ describe('hostile base aim candidates', () => {
 
   it('admits friendly base owners but excludes hostile base guns', () => {
     const f = candidateFixture();
-    expect(f.query(COOP_DEFENSE_BASE_TURRET_OWNER_ID)).toEqual(f.query());
+    expect(f.query(COOP_DEFENSE_BASE_TURRET_OWNER_ID).map(({ isValid: _valid, ...point }) => point))
+      .toEqual(f.query().map(({ isValid: _valid, ...point }) => point));
     expect(f.query(COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID)).toEqual([]);
     f.binding.destroy();
   });
@@ -407,12 +416,12 @@ describe('hostile base aim candidates', () => {
     const f = candidateFixture();
     const first = f.query();
     for (const base of f.bases) base.cells = base.cells.map(cell => ({ ...cell, gridX: cell.gridX + 1 }));
-    expect(f.query()).toEqual(first);
+    expect(f.query().map(p => p.x)).toEqual(first.map(p => p.x));
     f.nextGeneration();
     const second = f.query();
     expect(second.map(point => point.x)).toEqual(first.map(point => point.x + CELL_SIZE));
     for (const base of f.bases) base.cells = base.cells.map(cell => ({ ...cell, gridX: cell.gridX + 1 }));
-    expect(f.query()).toEqual(second);
+    expect(f.query().map(p => p.x)).toEqual(second.map(p => p.x));
     f.binding.clearActivityBindings();
     expect(f.query().map(point => point.x)).toEqual(second.map(point => point.x + CELL_SIZE));
     f.binding.destroy();
@@ -425,6 +434,20 @@ describe('hostile base aim candidates', () => {
       x1: point.x, y1: point.y - CELL_SIZE / 4,
       x2: point.x, y2: point.y + CELL_SIZE / 4,
     } });
+    f.binding.destroy();
+  });
+
+  it('checks held candidate life, immunity, dormancy, faction and geometry without ranking again', () => {
+    const f = candidateFixture();
+    const point = f.query()[0];
+    const base = f.bases[0];
+    expect(point.isValid?.()).toBe(true);
+    base.hp = 0; expect(point.isValid?.()).toBe(false); base.hp = 100;
+    base.damageable = false; expect(point.isValid?.()).toBe(false); base.damageable = true;
+    base.inert = true; expect(point.isValid?.()).toBe(false); base.inert = false;
+    base.faction = 'friendly'; expect(point.isValid?.()).toBe(false); base.faction = 'hostile';
+    expect(point.isValid?.()).toBe(true);
+    f.nextGeneration(); expect(point.isValid?.()).toBe(false);
     f.binding.destroy();
   });
 });
@@ -746,6 +769,40 @@ describe('Decoy combat and fire ports', () => {
 });
 
 describe('WorldCombatGameplayBinding turret fire wiring', () => {
+  it.each([
+    { owner: 'builder', copy: false, coop: true, scales: true },
+    { owner: 'builder', copy: true, coop: true, scales: true },
+    { owner: COOP_DEFENSE_BASE_TURRET_OWNER_ID, copy: false, coop: true, scales: true },
+    { owner: COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, copy: false, coop: true, scales: false },
+    { owner: 'builder', copy: false, coop: false, scales: false },
+  ])('applies authored base-only damage at the fire boundary: $owner copy=$copy coop=$coop', ({ owner, copy, coop, scales }) => {
+    const capture = vi.spyOn(TurretSystem.prototype, 'setFireHandler');
+    const f = createFixture({ coop, players: [], enemies: [], loadoutDamageMultiplier: 1 });
+    const handler = capture.mock.calls.at(-1)![0]!;
+    const original = toLocalTurretFireSource({ id: 1, ownerId: owner, ownerColor: 1, x: 0, y: 0 });
+    const source = copy ? { ...original, id: 'copy', visualId: 'copy', sequenceKey: 'copy' } : original;
+    // Compare every other request field, including figure damage, terrain factors, radius and control payloads.
+    const withoutBaseFactors = (request: ProjectileSpawnRequest) => JSON.parse(JSON.stringify(request,
+      (key, value) => key === 'baseDamageMult' ? undefined : value));
+    try {
+      for (const weaponId of ['TURRET_MG', 'TURRET_ROCKET_BURST', 'TURRET_FLAME', 'TURRET_GRAVITY'] as const) {
+        const fire = (factor: number) => {
+          turretBalance.factor = factor;
+          handler(owner, 1, weaponId, 0, 0, 0, 100, 0, 1, 1, original.id, undefined, undefined, { source });
+          return f.projectileSpawn.spawnProjectile.mock.calls.at(-1)![0];
+        };
+        const neutral = fire(1), scaled = fire(0.25);
+        expect(withoutBaseFactors(scaled)).toEqual(withoutBaseFactors(neutral));
+        const factor = scales ? 0.25 : 1;
+        expect(scaled.interaction.directHit?.baseDamageMult ?? 1)
+          .toBe((neutral.interaction.directHit?.baseDamageMult ?? 1) * factor);
+        if (neutral.interaction.explosion) expect(scaled.interaction.explosion?.baseDamageMult ?? 1)
+          .toBe((neutral.interaction.explosion.baseDamageMult ?? 1) * factor);
+        expect(fire(1)).toEqual(neutral); // The registry was not mutated by the prior shot.
+      }
+    } finally { f.binding.destroy(); }
+  });
+
   it('routes Burrow dash exits to the player movement owner and detaches the command on teardown', () => {
     const f = createFixture({ players: [], enemies: [] });
     const handler = vi.mocked(f.hostPhysics.setBurrowDashExitHandler).mock.calls.at(-1)![0]!;
@@ -858,6 +915,10 @@ describe('WorldCombatGameplayBinding turret fire wiring', () => {
       }) as unknown as BaseManager : baseManager;
       const fixture = createFixture({ coop, placementSystem: placement, players: [player], enemies: [], baseManager: manager, combatSystem });
       fixture.binding.systems?.turret.hostUpdate(0, UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPORES);
+      // A newly registered source acquires its first base within one stagger period.
+      if (fixture.projectileSpawn.spawnProjectile.mock.calls.length === 0) {
+        fixture.binding.systems?.turret.hostUpdate(250, UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPORES);
+      }
       const calls = fixture.projectileSpawn.spawnProjectile.mock.calls;
       fixture.binding.destroy();
       return calls;
