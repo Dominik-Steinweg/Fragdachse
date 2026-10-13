@@ -460,7 +460,7 @@ describe('advance map validation', () => {
     expect(() => normalizeCoopDefenseMapConfig(makeAdvanceMap({ respawnsPerPlayer: undefined })))
       .toThrow(/Invalid respawnsPerPlayer/);
     expect(() => normalizeCoopDefenseMapConfig(makeAdvanceMap({ surviveDurationSec: 120 })))
-      .toThrow(/Only survive maps may declare surviveDurationSec/);
+      .toThrow(/Only timed objectives may declare surviveDurationSec/);
     expect(normalizeCoopDefenseMapConfig(makeAdvanceMap({ respawnsPerPlayer: 0 })).respawnsPerPlayer)
       .toBe(0);
   });

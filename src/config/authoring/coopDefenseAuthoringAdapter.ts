@@ -46,6 +46,7 @@ export const WORLD_SOURCE_FIELDS = [
   'timeOfDay',
   'fogStrength',
   'persistentBase',
+  'siteClearings',
 ] as const satisfies readonly (keyof CoopDefenseMapConfig)[];
 
 /**
@@ -145,6 +146,7 @@ export function toWorldDefinition(
       rockField: mapConfig.rockField,
       rockWalls: mapConfig.rockWalls,
       water: mapConfig.water,
+      ...(mapConfig.siteClearings === undefined ? {} : { siteClearings: mapConfig.siteClearings }),
     },
     bases: mapConfig.bases.map(toWorldBaseDefinition),
     tracks: {
@@ -173,6 +175,7 @@ export function toWorldGenerationConfig(world: WorldDefinition): ArenaGeneration
     rockField: world.terrain.rockField,
     rockWalls: world.terrain.rockWalls,
     water: world.terrain.water,
+    siteClearings: world.terrain.siteClearings,
     krakenHabitat: world.krakenHabitat,
     trackMode: world.tracks?.mode,
     trackPosition: world.tracks?.position,
@@ -288,6 +291,7 @@ export function toCoopDefenseMapConfig(scenario: AuthoredScenario): CoopDefenseM
     itemDrop: activity.itemDrop,
     persistentBasePreview: activity.persistentBasePreview,
     persistentBase: world.persistentBaseSite,
+    ...(world.terrain.siteClearings === undefined ? {} : { siteClearings: world.terrain.siteClearings }),
   };
 }
 

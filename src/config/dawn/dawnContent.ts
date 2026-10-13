@@ -76,6 +76,8 @@ export interface DawnSchedulePhase {
   readonly startMs: number;
   /** Uhrzeit im Spiel bei Phasenbeginn, `HH:MM`. */
   readonly clock: string;
+  /** Respawn-Verzoegerung der Spieler in dieser Phase (nachts laenger). */
+  readonly respawnDelayMs: number;
 }
 
 export interface DawnSchedule {
@@ -283,6 +285,9 @@ function validateSchedules(raw: { readonly schedules: readonly unknown[] }): Rea
         throw new Error(`[dawnContent] ${label} phase ${phase.id} has an invalid start`);
       }
       if (parseTimeOfDay(phase.clock) === null) throw new Error(`[dawnContent] ${label} phase ${phase.id} has an invalid clock`);
+      if (!isPositiveInteger(phase.respawnDelayMs)) {
+        throw new Error(`[dawnContent] ${label} phase ${phase.id} needs a positive respawnDelayMs`);
+      }
     });
     schedules.set(schedule.id, schedule);
   }

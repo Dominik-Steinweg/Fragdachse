@@ -24,7 +24,7 @@ const PROBE_WAVE_BLOCK_ID = 'probe-zombie-pack';
 export function composeDawnRoundPlans(input: DawnRoundCompositionInput): DawnRoundPlans {
   const template = getDawnArenaTemplates()[0];
   return {
-    world: { version: DAWN_PLAN_VERSION, templateId: template.id, contentHash: DAWN_CONTENT_HASH },
+    world: { version: DAWN_PLAN_VERSION, templateId: template.id, contentHash: DAWN_CONTENT_HASH, sites: [] },
     activity: {
       version: DAWN_PLAN_VERSION,
       contentHash: DAWN_CONTENT_HASH,

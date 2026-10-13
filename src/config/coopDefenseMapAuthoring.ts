@@ -200,7 +200,9 @@ export type CoopDefenseMapEncounterStart =
   | { readonly type: 'boss-phase'; readonly phase: number }
   /** Startet `delayMs` nach dem tatsaechlichen Boss-Spawn (also nach einem Boss-Intro). */
   | { readonly type: 'after-boss-spawn'; readonly delayMs: number }
-  | { readonly type: 'base-destroyed'; readonly baseId: string };
+  | { readonly type: 'base-destroyed'; readonly baseId: string }
+  /** Nur fuer Nebenziele: die Salvage-Site mit dieser ID wurde aktiviert (z. B. betreten). */
+  | { readonly type: 'site-activated'; readonly siteId: string };
 
 /** Endlicher Encounter; `repel-assault` verwendet die Reihenfolge als Clear-/Rest-Kette. */
 export interface CoopDefenseMapEncounterConfig {
@@ -306,6 +308,11 @@ export interface CoopDefenseMapSecondaryObjectiveConfig {
   readonly start: CoopDefenseMapEncounterStart;
   readonly focusUntil?: CoopDefenseMapEncounterStart;
   /**
+   * Ein noch aktives Ziel scheitert ohne Belohnung, sobald dieser Trigger erfuellt ist - etwa
+   * wenn eine Salvage-Site in der Daemmerung schliesst. Abgeschlossene Ziele bleiben abgeschlossen.
+   */
+  readonly expiresAt?: CoopDefenseMapEncounterStart;
+  /**
    * Nur fuer `hold`: alternativ zu holdDurationMs/holdUntilVictory der Zeitpunkt, bis zu dem die Ziele leben muessen. Hold besitzt
    * keinen Hintergrundzustand – dieses Fenster ist zugleich sein Fokusfenster.
    */
@@ -333,6 +340,7 @@ export interface ResolvedCoopDefenseMapSecondaryObjectiveConfig {
   readonly type: CoopDefenseSecondaryObjectiveType;
   readonly start: CoopDefenseMapEncounterStart;
   readonly focusUntil?: CoopDefenseMapEncounterStart;
+  readonly expiresAt?: CoopDefenseMapEncounterStart;
   readonly holdUntil?: CoopDefenseMapEncounterStart;
   readonly holdUntilVictory?: true;
   readonly holdDurationMs?: number;
@@ -475,7 +483,12 @@ export type CoopDefenseMapObjective =
   | 'survive'
   | 'defeat-boss'
   | 'destroy-hostile-bases'
-  | 'advance';
+  | 'advance'
+  /**
+   * Bis zum Ablauf der Missionszeit (`surviveDurationSec`) durchhalten. Verloren wird wie bei den
+   * Basiszielen ueber die eigene Hauptbasis, nicht ueber den Team-Wipe; Spieler respawnen.
+   */
+  | 'defend-until-dawn';
 
 /**
  * Belohnt einen Sieg auf dieser Map mit einem Item-Angebot. Bewusst pro Map konfigurierbar und
@@ -859,7 +872,22 @@ export interface CoopDefenseMapConfig {
   readonly persistentBasePreview?: CoopDefenseMapPersistentBasePreviewConfig;
   /** Reuses the authored friendly main base as the persistent anchor. */
   readonly persistentBase?: CoopDefenseMapPersistentBaseConfig;
+  /**
+   * World-Geometrie: garantiert freie, organisch umrandete Lichtungen um Salvage-Sites. Ihre ID
+   * ist die Site-ID, auf die `site-activated` verweist; der Generator fraest den Kern frei.
+   */
+  readonly siteClearings?: readonly CoopDefenseMapSiteClearingConfig[];
 }
+
+export interface CoopDefenseMapSiteClearingConfig {
+  readonly id: string;
+  readonly gridX: number;
+  readonly gridY: number;
+  readonly radiusCells: number;
+}
+
+/** Groesster erlaubter Lichtungsradius; groessere Flaechen gehoeren in eigenes Terrain-Authoring. */
+export const MAX_COOP_DEFENSE_SITE_CLEARING_RADIUS_CELLS = 12;
 
 /** Maschinenlesbarer Kampagnen-Audit fuer das GDD-Review und Balancing-Tools. */
 export interface CoopDefenseCampaignAuditEntry {
@@ -982,6 +1010,7 @@ export function resolveCoopDefenseMapSecondaryObjectives(
     type: objective.type,
     start: objective.start,
     ...(objective.focusUntil ? { focusUntil: objective.focusUntil } : {}),
+    ...(objective.expiresAt ? { expiresAt: objective.expiresAt } : {}),
     ...(objective.holdUntil ? { holdUntil: objective.holdUntil } : {}),
     ...(objective.holdUntilVictory ? { holdUntilVictory: objective.holdUntilVictory } : {}),
     ...(objective.holdDurationMs === undefined ? {} : { holdDurationMs: objective.holdDurationMs }),
@@ -1139,6 +1168,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     new Set(mapConfig.missionProgress?.checkpoints.map((checkpoint) => checkpoint.id) ?? []),
   );
   const itemDrop = normalizeItemDropConfig(mapConfig.mapId, mapConfig.itemDrop);
+  const siteClearings = normalizeSiteClearings(mapConfig.mapId, mapConfig.siteClearings, arenaWidthCells, arenaHeightCells);
   const secondaryObjectives = normalizeSecondaryObjectiveConfigs(mapConfig.mapId, mapConfig.secondaryObjectives, {
     bases,
     encounters,
@@ -1146,6 +1176,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     itemDrop,
     arenaWidthCells,
     arenaHeightCells,
+    siteIds: new Set((siteClearings ?? []).map(({ id }) => id)),
   });
   const persistentBaseRewardsOnVictory = normalizePersistentBaseRewardIds(
     mapConfig.mapId,
@@ -1251,7 +1282,36 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     itemDrop,
     persistentBasePreview,
     persistentBase,
+    ...(siteClearings === undefined ? {} : { siteClearings }),
   };
+}
+
+function normalizeSiteClearings(
+  mapId: string,
+  clearings: readonly CoopDefenseMapSiteClearingConfig[] | undefined,
+  arenaWidthCells: number,
+  arenaHeightCells: number,
+): readonly CoopDefenseMapSiteClearingConfig[] | undefined {
+  if (clearings === undefined) return undefined;
+  if (!Array.isArray(clearings)) throw new Error(`[coopDefenseMaps] Map ${mapId} siteClearings must be an array`);
+  const ids = new Set<string>();
+  return clearings.map((clearing) => {
+    const id = normalizeRequiredId(clearing?.id, `[coopDefenseMaps] Map ${mapId} has a site clearing without id`);
+    if (ids.has(id)) throw new Error(`[coopDefenseMaps] Map ${mapId} has duplicate site clearing ${id}`);
+    ids.add(id);
+    const { gridX, gridY, radiusCells } = clearing;
+    if (!Number.isSafeInteger(gridX) || !Number.isSafeInteger(gridY)
+      || gridX < 0 || gridY < 0 || gridX >= arenaWidthCells || gridY >= arenaHeightCells) {
+      throw new Error(`[coopDefenseMaps] Site clearing ${mapId}:${id} lies outside the arena`);
+    }
+    if (typeof radiusCells !== 'number' || !Number.isFinite(radiusCells)
+      || radiusCells < 1 || radiusCells > MAX_COOP_DEFENSE_SITE_CLEARING_RADIUS_CELLS) {
+      throw new Error(
+        `[coopDefenseMaps] Site clearing ${mapId}:${id} needs a radius between 1 and ${MAX_COOP_DEFENSE_SITE_CLEARING_RADIUS_CELLS}`,
+      );
+    }
+    return { id, gridX, gridY, radiusCells };
+  });
 }
 
 function validateMapSpawnModel(
@@ -1376,9 +1436,9 @@ function normalizeSurviveDurationSec(
   objective: CoopDefenseMapObjective,
   value: number | undefined,
 ): number | undefined {
-  if (objective !== 'survive') {
+  if (!isTimedCoopDefenseObjective(objective)) {
     if (value !== undefined) {
-      throw new Error(`[coopDefenseMaps] Only survive maps may declare surviveDurationSec: ${mapId}`);
+      throw new Error(`[coopDefenseMaps] Only timed objectives may declare surviveDurationSec: ${mapId}`);
     }
     return undefined;
   }
@@ -1401,6 +1461,25 @@ function normalizeBalanceReferenceDurationSec(mapId: string, value: number): num
     throw new Error(`[coopDefenseMaps] Map ${mapId} needs a positive balanceReferenceDurationSec`);
   }
   return normalized;
+}
+
+/** Ziele, die ueber den Ablauf ihrer Missionszeit gewonnen werden. */
+export function isTimedCoopDefenseObjective(objective: CoopDefenseMapObjective): boolean {
+  return objective === 'survive' || objective === 'defend-until-dawn';
+}
+
+/**
+ * Die eine Quelle fuer das Zeitlimit einer Coop-Mission in Sekunden; `null` ohne Zeitlimit.
+ * Rundenende, HUD-Timer und Hauptziel-Anzeige lesen es hier, statt das Ziel selbst zu pruefen.
+ */
+export function getCoopMissionTimeLimitSec(
+  mapConfig: Pick<CoopDefenseMapConfig, 'objective' | 'surviveDurationSec'>,
+): number | null {
+  if (!isTimedCoopDefenseObjective(mapConfig.objective)) return null;
+  if (mapConfig.surviveDurationSec === undefined) {
+    throw new Error(`[coopDefenseMaps] Timed objective ${mapConfig.objective} has no surviveDurationSec`);
+  }
+  return mapConfig.surviveDurationSec;
 }
 
 /**
@@ -1442,6 +1521,7 @@ function normalizeObjective(
     && objective !== 'defeat-boss'
     && objective !== 'destroy-hostile-bases'
     && objective !== 'advance'
+    && objective !== 'defend-until-dawn'
   ) {
     throw new Error(`[coopDefenseMaps] Map ${mapId} needs a valid explicit objective`);
   }
@@ -1458,6 +1538,8 @@ function normalizeObjective(
   }
   if (normalizedObjective === 'repel-assault') return normalizedObjective;
   if (normalizedObjective === 'survive') return normalizedObjective;
+  // Die eigene Hauptbasis prueft validateFriendlyMainBase; gewonnen wird ueber die Zeit.
+  if (normalizedObjective === 'defend-until-dawn') return normalizedObjective;
   // Der Vorstoss gewinnt ueber die Route und verliert ueber den Team-Wipe: keine Basispflicht.
   if (normalizedObjective === 'advance') return normalizedObjective;
   // Ohne feindliche Basis waere das Ziel sofort erfuellt und die Map in der ersten Sekunde gewonnen.
@@ -1507,6 +1589,8 @@ interface SecondaryObjectiveNormalizationContext {
   readonly itemDrop: CoopDefenseMapItemDropConfig | undefined;
   readonly arenaWidthCells: number;
   readonly arenaHeightCells: number;
+  /** Bekannte Salvage-Sites (aus `siteClearings`) fuer `site-activated`. */
+  readonly siteIds: ReadonlySet<string>;
 }
 
 function normalizeSecondaryObjectiveConfigs(
@@ -1627,6 +1711,9 @@ function normalizeSecondaryObjectiveConfigs(
       ...(objective.focusUntil === undefined
         ? {}
         : { focusUntil: normalizeSecondaryObjectiveTrigger(mapId, id, objective.focusUntil, 'focusUntil', context) }),
+      ...(objective.expiresAt === undefined
+        ? {}
+        : { expiresAt: normalizeSecondaryObjectiveTrigger(mapId, id, objective.expiresAt, 'expiresAt', context) }),
       ...(objective.holdUntil === undefined
         ? {}
         : { holdUntil: normalizeSecondaryObjectiveTrigger(mapId, id, objective.holdUntil, 'holdUntil', context) }),
@@ -1801,7 +1888,7 @@ function normalizeSecondaryObjectiveTrigger(
   mapId: string,
   objectiveId: string,
   trigger: CoopDefenseMapEncounterStart | undefined,
-  fieldName: 'start' | 'focusUntil' | 'holdUntil',
+  fieldName: 'start' | 'focusUntil' | 'holdUntil' | 'expiresAt',
   context: SecondaryObjectiveNormalizationContext,
 ): CoopDefenseMapEncounterStart {
   if (!trigger || typeof trigger.type !== 'string') {
@@ -1842,6 +1929,16 @@ function normalizeSecondaryObjectiveTrigger(
         `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} needs a defense id for ${fieldName}`,
       );
       return { type: 'after-defense', defenseId };
+    }
+    case 'site-activated': {
+      const siteId = normalizeRequiredId(
+        trigger.siteId,
+        `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} needs a site id for ${fieldName}`,
+      );
+      if (!context.siteIds.has(siteId)) {
+        throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} references unknown site: ${siteId}`);
+      }
+      return { type: 'site-activated', siteId };
     }
     default:
       throw new Error(

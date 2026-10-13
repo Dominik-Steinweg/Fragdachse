@@ -123,6 +123,8 @@ export interface WorldTerrainDefinition {
   readonly treeCount?: number;
   readonly rockField?: CoopDefenseMapRockFieldConfig;
   readonly rockWalls?: readonly CoopDefenseMapRockWallConfig[];
+  /** Garantiert freie Lichtungen um Salvage-Sites; ihre ID ist die Site-ID. */
+  readonly siteClearings?: readonly import('../coopDefenseMapAuthoring').CoopDefenseMapSiteClearingConfig[];
 }
 
 export interface WorldTrackDefinition {

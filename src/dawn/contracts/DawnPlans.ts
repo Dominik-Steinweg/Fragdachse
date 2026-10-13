@@ -19,6 +19,9 @@ export const DAWN_PLAN_VERSION = 1;
 /** Wire-Obergrenze; die fachliche Kurve liegt im Content. */
 export const DAWN_MAX_THREAT = 10;
 const MAX_WAVES = 64;
+const MAX_SITES = 32;
+/** Site-Tiers: rostiger Schrott, Militaergeraet, seltene Technik. */
+export const DAWN_MAX_SITE_TIER = 3;
 const MAX_WAVE_START_MS = 60 * 60 * 1000;
 const PLAN_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const CONTENT_HASH_PATTERN = /^[0-9a-f]{16}$/;
@@ -28,6 +31,15 @@ export interface DawnWorldPlan {
   readonly version: typeof DAWN_PLAN_VERSION;
   readonly templateId: string;
   readonly contentHash: string;
+  /** Belegte Salvage-Slots dieser Runde; ihre Strukturen sind World-Inhalt. */
+  readonly sites: readonly DawnSitePlan[];
+}
+
+/** Eine Salvage-Site: authored Slot des Templates, Archetyp aus der Registry und Tier. */
+export interface DawnSitePlan {
+  readonly slotId: string;
+  readonly archetypeId: string;
+  readonly tier: number;
 }
 
 /** Eine explizit komponierte Welle: authored Block an einer Front zu einer Activity-Zeit. */
@@ -62,7 +74,23 @@ export function parseDawnWorldPlan(raw: unknown): DawnWorldPlan | null {
   if (raw.version !== DAWN_PLAN_VERSION) return null;
   if (!isDawnTemplateId(raw.templateId)) return null;
   if (!isDawnContentHash(raw.contentHash)) return null;
-  return { version: DAWN_PLAN_VERSION, templateId: raw.templateId, contentHash: raw.contentHash };
+  if (!Array.isArray(raw.sites) || raw.sites.length > MAX_SITES) return null;
+  const sites: DawnSitePlan[] = [];
+  const slotIds = new Set<string>();
+  for (const candidate of raw.sites) {
+    const site = parseDawnSitePlan(candidate);
+    if (!site || slotIds.has(site.slotId)) return null;
+    slotIds.add(site.slotId);
+    sites.push(site);
+  }
+  return { version: DAWN_PLAN_VERSION, templateId: raw.templateId, contentHash: raw.contentHash, sites };
+}
+
+function parseDawnSitePlan(raw: unknown): DawnSitePlan | null {
+  if (!isRecord(raw)) return null;
+  if (!isDawnPlanId(raw.slotId) || !isDawnPlanId(raw.archetypeId)) return null;
+  if (!isIntegerInRange(raw.tier, 1, DAWN_MAX_SITE_TIER)) return null;
+  return { slotId: raw.slotId, archetypeId: raw.archetypeId, tier: raw.tier };
 }
 
 /** Netzwerkgrenze: ungueltige Plaene werden vollstaendig verworfen. */

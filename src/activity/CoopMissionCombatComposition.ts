@@ -308,6 +308,8 @@ export class CoopMissionCombatComposition {
               }
               case 'time':
               case 'after-previous':
+              // Encounter-Normalisierung lehnt Site-Trigger ab; sie gelten nur fuer Nebenziele.
+              case 'site-activated':
                 return false;
             }
           },
