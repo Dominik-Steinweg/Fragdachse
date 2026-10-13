@@ -13,6 +13,7 @@ import {
 } from '../contracts/DawnPlans';
 import { createDawnRandom } from './DawnRandom';
 import { composeDawnSites } from './DawnSiteComposition';
+import { composeDawnSiteVariants } from './DawnSiteVariantComposition';
 import { assignDawnFronts, composeDawnDayPressure, composeDawnSiteAssaults } from './DawnWaveComposition';
 import { composeDawnModifiedNight } from './DawnNightModifierComposition';
 import type { DawnNightModifierId } from '../contracts/DawnContentIds';
@@ -44,7 +45,8 @@ export function composeDawnRoundPlans(input: DawnRoundCompositionInput): DawnRou
   const templates = getDawnArenaTemplates();
   const template = templates[createDawnRandom(seed, 'template').int(templates.length)];
   const schedule = getDawnSchedule(curve.scheduleId);
-  const sites = composeDawnSites({ random: createDawnRandom(seed, 'sites'), template, curve });
+  const sites = composeDawnSiteVariants(seed,
+    composeDawnSites({ random: createDawnRandom(seed, 'sites'), template, curve }));
   const fronts = assignDawnFronts(createDawnRandom(seed, 'fronts'), template, curve);
   const night = composeDawnModifiedNight({ seed, random: createDawnRandom(seed, 'night'), curve, schedule, fronts, nightModifier: input.nightModifier });
   const waves = [

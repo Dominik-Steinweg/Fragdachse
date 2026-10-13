@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DAWN_SITE_HIT_FLASH_MS, DAWN_SITE_LIGHT, resolveDawnSiteLights, resolveDawnSitePropHitFlash, resolveDawnSitePropVisual } from '../src/arena/DawnSitePropModel';
 import type { CoopDefenseSecondaryObjectiveState } from '../src/types';
+import { DAWN_M3_ASSET_KEYS, DAWN_WRECK_VARIANTS } from '../src/dawn/contracts/DawnContentIds';
+import { DAWN_PIPELINE_ASSETS } from '../src/assets/DawnAssets';
 
 const states: readonly (CoopDefenseSecondaryObjectiveState | undefined)[] = [undefined, 'dormant', 'active', 'completed', 'failed'];
 
@@ -86,6 +88,20 @@ describe('Dawn site damage flash', () => {
 });
 
 describe('Dawn site prop projection', () => {
+  it.each(DAWN_WRECK_VARIANTS)('loads and projects every tier and state of %s with its lights', variant => {
+    for (const tier of [1, 2, 3]) for (const state of states) {
+      const textureKey = DAWN_M3_ASSET_KEYS.wreckVariant(variant, tier);
+      expect(DAWN_PIPELINE_ASSETS.some(asset => asset.textureKey === textureKey)).toBe(true);
+      expect(resolveDawnSitePropVisual('wreck', tier, state, false, variant)).toEqual(state === 'completed'
+        ? null : { textureKey, animationKey: null });
+      expect(resolveDawnSitePropVisual('wreck', tier, state, true, variant)).toBeNull();
+      const lights = resolveDawnSiteLights('wreck', tier, state, false, 0, variant);
+      expect(lights.map(light => light.id)).toEqual(state === 'completed' ? [] : tier === 3 ? ['warm', 'tech'] : ['warm']);
+      expect(resolveDawnSiteLights('wreck', tier, state, true, 0, variant)).toEqual([]);
+      expect(lights.every(light => light.intensity > 0)).toBe(true);
+    }
+  });
+
   it.each([1, 2, 3])('shows wreck tier %i until salvaged or destroyed', tier => {
     for (const state of states) {
       expect(resolveDawnSitePropVisual('wreck', tier, state, false)).toEqual(state === 'completed'
@@ -109,5 +125,6 @@ describe('Dawn site prop projection', () => {
   it('does not invent a visual for unknown art', () => {
     expect(resolveDawnSitePropVisual('unknown', 1, undefined, false)).toBeNull();
     expect(resolveDawnSitePropVisual('wreck', 4, undefined, false)).toBeNull();
+    expect(resolveDawnSitePropVisual('wreck', 1, undefined, false, 'unknown')).toBeNull();
   });
 });

@@ -28,6 +28,7 @@ import {
 } from '../../config/dawn/dawnContent';
 import { toDawnActivityDefinitionId, toDawnMapId, toDawnWorldDefinitionId } from '../contracts/DawnIds';
 import type { DawnActivityPlan, DawnWorldPlan } from '../contracts/DawnPlans';
+import { DAWN_WRECK_VARIANTS } from '../contracts/DawnContentIds';
 import { getDawnPhaseStartMs, toDawnDynamicTimeOfDay } from '../rules/DawnPhase';
 import { resolveDawnNightModifierContent } from './DawnNightModifierResolution';
 
@@ -128,11 +129,19 @@ export function resolveDawnWorldDefinition(worldPlan: DawnWorldPlan): WorldDefin
   }).world;
 }
 
-/** Sites eines World-Plans; unbekannte Slots, Archetypen oder Tiers brechen ab. */
+/** Sites eines World-Plans; unbekannte Slots, Archetypen, Varianten oder Tiers brechen ab. */
 export function resolveDawnSites(worldPlan: DawnWorldPlan): readonly ResolvedDawnSite[] {
   const template = getDawnArenaTemplate(worldPlan.templateId);
   return worldPlan.sites.map((site) => {
     const archetype = getDawnSiteArchetype(site.archetypeId);
+    if (site.variant !== undefined) {
+      if (site.archetypeId !== 'wreck') {
+        throw new Error(`[DawnScenarioResolution] Site ${site.slotId}: variant is only allowed on wreck sites`);
+      }
+      if (!DAWN_WRECK_VARIANTS.some(variant => variant === site.variant)) {
+        throw new Error(`[DawnScenarioResolution] Site ${site.slotId}: unknown wreck variant ${site.variant}`);
+      }
+    }
     return {
       slotId: site.slotId,
       siteId: site.slotId,

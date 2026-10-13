@@ -14,6 +14,7 @@ import {
 } from '../src/config/dawn/dawnContent';
 import { composeDawnRoundPlans, type DawnRoundPlans } from '../src/dawn/composition/DawnRoundComposition';
 import { resolveDawnNightCurve } from '../src/dawn/composition/DawnNightModifierComposition';
+import { composeDawnSiteVariants } from '../src/dawn/composition/DawnSiteVariantComposition';
 import {
   DAWN_MAX_THREAT,
   haveSameDawnPlan,
@@ -43,6 +44,16 @@ function phaseWaves(plans: DawnRoundPlans, phase: 'day' | 'night'): DawnFrontWav
 const costOf = (waves: readonly DawnWavePlan[]) => waves.reduce((sum, wave) => sum + getDawnWaveBlock(wave.blockId).cost, 0);
 
 describe('Dawn round composition', () => {
+  it('stores the dedicated variant stream in the replicated World plan', () => {
+    for (const seed of SEEDS) {
+      const { world } = compose(seed, 4);
+      const undecorated = world.sites.map(({ variant: _variant, ...site }) => site);
+      expect(world.sites).toEqual(composeDawnSiteVariants(seed, undecorated));
+      expect(world.sites.filter(site => site.archetypeId === 'wreck').every(site => site.variant !== undefined)).toBe(true);
+      expect(world.sites.filter(site => site.archetypeId !== 'wreck').every(site => site.variant === undefined)).toBe(true);
+    }
+  });
+
   it('composes identical plans from the same seed and input', () => {
     const distinct = new Set<string>();
     for (const threat of THREATS) {

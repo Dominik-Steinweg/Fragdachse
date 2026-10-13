@@ -12,6 +12,7 @@ import {
   validateTemplates,
 } from '../src/config/dawn/dawnContent';
 import { composeDawnRoundPlans } from '../src/dawn/composition/DawnRoundComposition';
+import { DAWN_WRECK_VARIANTS } from '../src/dawn/contracts/DawnContentIds';
 import {
   getDawnTemplateIdOfWorld,
   toDawnActivityDefinitionId,
@@ -106,6 +107,30 @@ describe('Dawn scenario transport', () => {
 });
 
 describe('Dawn scenario resolution', () => {
+  it('accepts known wreck variants and the absent drone default without changing gameplay', () => {
+    const { plans } = dawnRound();
+    const site = { ...plans.world.sites[0], archetypeId: 'wreck', variant: undefined };
+    const baseline = { ...plans.world, sites: [site] };
+    for (const variant of DAWN_WRECK_VARIANTS) {
+      const plan = { ...baseline, sites: [{ ...site, variant }] };
+      expect(resolveDawnWorldDefinition(plan)).toEqual(resolveDawnWorldDefinition(baseline));
+    }
+  });
+
+  it('rejects unknown variants and every variant on a non-wreck site at resolution', () => {
+    const { plans } = dawnRound();
+    const site = plans.world.sites[0];
+    for (const override of [
+      { archetypeId: 'wreck', variant: 'unknown' },
+      ...DAWN_WRECK_VARIANTS.map(variant => ({ archetypeId: 'extractor', variant })),
+    ]) {
+      const plan = { ...plans.world, sites: [{ ...site, ...override }] };
+      expect(() => resolveDawnSites(plan)).toThrow('variant');
+      expect(() => resolveDawnWorldDefinition(plan)).toThrow('variant');
+      expect(() => resolveDawnScenario(plan, plans.activity)).toThrow('variant');
+    }
+  });
+
   it('announces four night slots at threat 3 and keeps day pressure and site assaults silent', () => {
     const { plans } = dawnRound(3);
     const { mapConfig } = resolveDawnScenario(plans.world, plans.activity);
@@ -140,7 +165,7 @@ describe('Dawn scenario resolution', () => {
 
   it.each(['wreck', 'extractor'])('centers the complete 3x3 %s prop footprint on its slot', archetypeId => {
     const { plans } = dawnRound(10, 77);
-    const plan = { ...plans.world, sites: plans.world.sites.map(site => ({ ...site, archetypeId })) };
+    const plan = { ...plans.world, sites: plans.world.sites.map(site => ({ ...site, archetypeId, variant: undefined })) };
     const world = resolveDawnWorldDefinition(plan);
     const bases = resolveWorldBases(world, resolveCoopDefenseWorldMetrics(world.metrics.widthCells, world.metrics.heightCells));
     for (const site of resolveDawnSites(plan)) {

@@ -25,6 +25,7 @@ import rawThreatCurves from './threatCurves.json';
 import { DAWN_ELITE_CONFIG } from './elites';
 import rawNightModifiers from './nightModifiers.json';
 import { validateDawnNightModifiers } from './dawnNightModifiers';
+import { DAWN_SITE_VARIANTS } from './siteVariants';
 
 /**
  * Loader, Validatoren und Content-Hash der Dawn-Registries.
@@ -227,6 +228,7 @@ export const DAWN_CONTENT_HASH = hashCanonicalJson({
   schedules: [...SCHEDULES.values()],
   salvage: DAWN_SALVAGE_CONFIG,
   siteArchetypes: [...SITE_ARCHETYPES.values()],
+  siteVariants: DAWN_SITE_VARIANTS,
   enemyThreatCosts: Object.fromEntries(ENEMY_THREAT_COSTS),
   waveComposition: WAVE_COMPOSITION,
   threatCurves: THREAT_CURVES,

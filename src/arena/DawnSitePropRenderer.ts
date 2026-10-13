@@ -50,7 +50,7 @@ export class DawnSitePropRenderer {
     for (const site of this.sites) {
       const state = objectives?.find(entry => entry.objectiveId === site.objectiveId)?.state;
       const destroyed = this.isStructureDestroyed(site.baseId);
-      const visual = resolveDawnSitePropVisual(site.archetypeId, site.tier, state, destroyed);
+      const visual = resolveDawnSitePropVisual(site.archetypeId, site.tier, state, destroyed, site.variant);
       let sprite = this.sprites.get(site.baseId);
       if (!visual || !this.scene.textures.exists(visual.textureKey)
         || (visual.animationKey !== null && !this.scene.anims.exists(visual.animationKey))) {
@@ -80,13 +80,16 @@ export class DawnSitePropRenderer {
       if (flash.active) sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
       else sprite.clearTint();
       if (this.lighting) {
-        const lights = resolveDawnSiteLights(site.archetypeId, site.tier, state, destroyed, this.scene.time.now);
+        const lights = resolveDawnSiteLights(site.archetypeId, site.tier, state, destroyed, this.scene.time.now, site.variant);
         for (const light of lights) {
           const key = `dawn-site:${site.baseId}:${light.id}`;
           this.syncLight(key, site.x, site.y, light);
           seenLights.add(key);
         }
-        if (site.archetypeId === 'wreck') this.syncSparks(site.baseId, site.x, site.y);
+        if (site.archetypeId === 'wreck') {
+          const ember = lights.find(light => light.id === 'warm')!;
+          this.syncSparks(site.baseId, site.x + ember.offsetX, site.y + ember.offsetY);
+        }
       }
     }
     for (const key of this.lightKeys) {
@@ -117,7 +120,7 @@ export class DawnSitePropRenderer {
     if (!emitter) {
       ensureExplosionSparkTexture(this.scene);
       const c = DAWN_SITE_SPARKS;
-      emitter = this.scene.add.particles(x + DAWN_SITE_LIGHT.emberX, y + DAWN_SITE_LIGHT.emberY, TEX_EXPLOSION_SPARK, {
+      emitter = this.scene.add.particles(x, y, TEX_EXPLOSION_SPARK, {
         frequency: c.intervalMs, quantity: 1, maxParticles: c.maxParticles,
         lifespan: { min: c.lifespanMinMs, max: c.lifespanMaxMs },
         speed: { min: c.speedMin, max: c.speedMax },

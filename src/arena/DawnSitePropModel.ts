@@ -1,7 +1,9 @@
 import {
   DAWN_EXTRACTOR_ACTIVE_ANIMATION, DAWN_EXTRACTOR_IDLE_ANIMATION,
-  DAWN_EXTRACTOR_KEY, DAWN_EXTRACTOR_SHEET_KEY, DAWN_WRECK_KEYS,
+  DAWN_EXTRACTOR_KEY, DAWN_EXTRACTOR_SHEET_KEY,
 } from '../assets/DawnAssets';
+import { DAWN_M3_ASSET_KEYS, DAWN_WRECK_VARIANTS } from '../dawn/contracts/DawnContentIds';
+import { DAWN_MAX_SITE_TIER } from '../dawn/contracts/DawnPlans';
 import type { CoopDefenseSecondaryObjectiveState } from '../types';
 
 export interface DawnSitePropVisual {
@@ -47,8 +49,9 @@ export function resolveDawnSiteLights(
   archetypeId: string, tier: number,
   objectiveState: CoopDefenseSecondaryObjectiveState | undefined,
   destroyed: boolean, nowMs: number,
+  variant?: string,
 ): readonly DawnSiteLight[] {
-  if (!resolveDawnSitePropVisual(archetypeId, tier, objectiveState, destroyed)) return [];
+  if (!resolveDawnSitePropVisual(archetypeId, tier, objectiveState, destroyed, variant)) return [];
   const c = DAWN_SITE_LIGHT;
   if (archetypeId === 'extractor') {
     const active = objectiveState === 'active', completed = objectiveState === 'completed';
@@ -59,11 +62,13 @@ export function resolveDawnSiteLights(
       offsetX: c.lampX, offsetY: c.lampY, emissionSize: c.lampSize,
       emissionAlpha: active || completed ? c.lampAlpha * pulse : 0 }];
   }
+  // Tractor chassis and minecart wreckage meet at the center; drone keeps its authored offsets.
+  const centered = variant !== undefined && variant !== 'drone';
   const warm: DawnSiteLight = { id: 'warm', color: c.ember, radiusPx: c.wreckRadius,
-    intensity: c.wreckIntensity, offsetX: c.emberX, offsetY: c.emberY,
+    intensity: c.wreckIntensity, offsetX: centered ? 0 : c.emberX, offsetY: centered ? 0 : c.emberY,
     emissionSize: c.emberSize, emissionAlpha: c.emberAlpha };
   return tier === 3 ? [warm, { id: 'tech', color: c.cyan, radiusPx: c.techRadius,
-    intensity: c.techIntensity, offsetX: c.techX, offsetY: c.techY,
+    intensity: c.techIntensity, offsetX: centered ? 0 : c.techX, offsetY: centered ? 0 : c.techY,
     emissionSize: c.techSize, emissionAlpha: c.techAlpha }] : [warm];
 }
 
@@ -91,11 +96,14 @@ export function resolveDawnSitePropVisual(
   tier: number,
   objectiveState: CoopDefenseSecondaryObjectiveState | undefined,
   destroyed: boolean,
+  variant?: string,
 ): DawnSitePropVisual | null {
   if (destroyed) return null;
   if (archetypeId === 'wreck') {
-    const textureKey = DAWN_WRECK_KEYS[tier];
-    return objectiveState === 'completed' || !textureKey ? null : { textureKey, animationKey: null };
+    const wreckVariant = DAWN_WRECK_VARIANTS.find(key => key === (variant ?? 'drone'));
+    if (objectiveState === 'completed' || !wreckVariant
+      || !Number.isInteger(tier) || tier < 1 || tier > DAWN_MAX_SITE_TIER) return null;
+    return { textureKey: DAWN_M3_ASSET_KEYS.wreckVariant(wreckVariant, tier), animationKey: null };
   }
   if (archetypeId !== 'extractor') return null;
   if (objectiveState === 'active' || objectiveState === 'completed') {
