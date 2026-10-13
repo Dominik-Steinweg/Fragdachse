@@ -521,6 +521,7 @@ Status:
 | D30 | 2026-10-13 | D13 gilt für jede Bemannung, auch durch Verbündete. Bereits bemannte Originale sind in der Grundversion nicht wählbar, mit Parallelbetrieb schon | Bemannte Türme sind in Benutzung; keine Doppelsteuerung | Default, an Gate kippbar |
 | D31 | 2026-10-13 | Bei Aktivierung eingefroren werden nur Utility-Werte (Dauer, Kopienzahl, Parallelbetrieb, Reichweite, Ring, Materialisierung, Cooldown); Turmwerte folgen live dem Original | Kopie ist eine Projektion; Turm-Upgrades wirken sofort | Default, an Gate kippbar |
 | D32 | 2026-10-13 | Activity-Ende, World-Wechsel und Besitzerentfernung räumen Einsätze und Nutzungszustand still (kein Ende-Callback, kein Cooldown); Tod, Respawn und Umrüstung beenden nichts | Kein Cooldown-Übertrag in die nächste Activity | Default, an Gate kippbar |
+| D42 | 2026-10-13 | Zwischenstand M1 bis P3.1: Turmkopien sind für den Inspektor gratis freigeschaltet und werden wie jede neue Freischaltung bis zur Werkzeugkapazität angehängt; HE bleibt bis P3.1 gratis im Standard-Loadout. Portale bleiben bis M2 gesperrt | Spielbar für G1 ohne vorgezogene Persistenz-Migration (Dawn-Abstimmung) | Default, an G1 kippbar |
 
 ## 10 Abnahmeszenarien und Testzuordnung
 
