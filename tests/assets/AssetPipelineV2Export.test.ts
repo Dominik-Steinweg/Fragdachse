@@ -70,6 +70,8 @@ describe('V2 animated asset export contracts', () => {
     ['construction_dawn_extractor', 'construction'], ['dawn_scrap_t2', 'powerup'], ['dawn_dealer', 'character'],
     ['construction_dawn_wreck_tractor_t1', 'construction'], ['construction_dawn_wreck_minecart_t3', 'construction'],
     ['construction_dawn_broodnest', 'construction'],
+    ['construction_dawn_supply_capsule', 'construction'], ['dawn_supply_crate', 'powerup'],
+    ['dawn_scrap_heap_t1', 'construction'], ['dawn_scrap_heap_t2', 'construction'], ['dawn_scrap_heap_t3', 'construction'],
   ])('imports the unbound Dawn identity %s without inventing gameplay bindings', async (id, category) => {
     const f = await fixture();
     const asset = path.join(f.run, id);
@@ -89,6 +91,29 @@ describe('V2 animated asset export contracts', () => {
     expect(result.manifest.assets[0]).toMatchObject({ textureKey: id, sheetTextureKey: `${id}_sheet`, gameIds: [], clips: [{ name: 'idle' }] });
     expect(result.copiedFiles).toBe(2);
     expect(await readFile(path.join(f.root, 'published/public/assets/sprites/pipeline-v2', id, 'sheet.png'))).toEqual(await readFile(path.join(folder, 'sheet-32.png')));
+  });
+
+  it('imports the fleeing Dawn enemy with enemy sheet naming and bound eye anchors, without a claw attack', async () => {
+    const f = await fixture(), id = 'enemy_dawn_scavenger', asset = path.join(f.run, id);
+    await rename(f.asset, asset);
+    const folder = path.join(asset, 'calm');
+    const eye = { x: .45, y: .3, width: .03, height: .02, rotation: 0 };
+    const m = { ...f.manifest, id, category: 'enemy', gameIds: [], requiredClips: ['idle', 'move'],
+      clips: [{ ...f.manifest.clips[0], name: 'idle' }, f.manifest.clips[0]],
+      eyeAnchors: { version: 1, frames: f.frames.map(() => ({ left: eye, right: { ...eye, x: .55 } })) } };
+    await save(path.join(folder, 'render.json'), m);
+    await exportVariantV2(folder, f.root);
+    await selectVariantV2(asset, 'calm', 32, 'Approved fleeing enemy.');
+    await mkdir(path.join(f.root, 'scripts/asset-pipeline'), { recursive: true });
+    await mkdir(path.join(f.root, 'src/config'), { recursive: true });
+    await save(path.join(f.root, 'scripts/asset-pipeline/catalog-v2.json'), { assets: [m] });
+    await save(path.join(f.root, 'src/config/coopDefenseEnemies.json'), { enemies: [] });
+    await save(path.join(f.root, 'src/config/pipelineAssets.json'), { version: 2, assets: [] });
+    const result = await importRuntime({ root: f.root, revision: m.revision, requestedIds: [id], outputRoot: path.join(f.root, 'published') });
+    const imported = result.manifest.assets[0];
+    expect(imported).toMatchObject({ category: 'enemy', textureKey: id, sheetTextureKey: `${id}_walking`, gameIds: [], clips: [{ name: 'idle' }, { name: 'move' }] });
+    expect(imported.eyeAnchors.source).toMatchObject({ revision: m.revision, sheetSha256: imported.hashes.sheet, idleSha256: imported.hashes.idle });
+    expect(result.copiedFiles).toBe(2);
   });
 
   it('permits idle-only unbound characters but keeps movement mandatory for the player', async () => {

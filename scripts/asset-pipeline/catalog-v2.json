@@ -1462,14 +1462,22 @@
       "id": "firestarter-badger",
       "label": "Brandstifter-Dachs B1-v3",
       "category": "enemy",
-      "gameIds": ["firestarter-badger"],
+      "gameIds": [
+        "firestarter-badger"
+      ],
       "reference": "public/assets/sprites/enemies/enemy_firestarter_badger.png",
       "targetSize": 30,
-      "sourceSizes": [64, 128],
+      "sourceSizes": [
+        64,
+        128
+      ],
       "displayScale": 2.4,
       "collisionDiameter": 30,
       "forward": "north",
-      "pivot": [0.5, 0.5],
+      "pivot": [
+        0.5,
+        0.5
+      ],
       "description": {
         "silhouette": "B1 Lanzenarm: ovaler Dachs-Rumpf etwa 1,3:1, zwei Standpfoten, angehobene Schultern und nordgerichteter Kopf; Messingrohr am rechten Unterarm.",
         "colors": "Graphitfell, helle Dachszeichnung, braunrotes Leder und mattes Messing; Void-Lila nur als kleine lokale Emission an der Lanzenspitze.",
@@ -1477,10 +1485,16 @@
         "materials": "Gemeinsame Moerser-Felltextur, enemy_craft_parts.refine und FD_FormMask mit Staerke 0,84. Keine Kameraneigung in der Draufsicht.",
         "stage": "Gate 2 Stufe B: Form b1-v3 ausgewaehlt, russiges Fell und rotbraunes Leder. move/claw/cast als schneller Draft; keine Produktionsabnahme."
       },
-      "requiredClips": ["move", "claw", "cast"],
+      "requiredClips": [
+        "move",
+        "claw",
+        "cast"
+      ],
       "production": "reference",
       "recipe": "firestarter-badger",
-      "model": {"formVariant": 3},
+      "model": {
+        "formVariant": 3
+      },
       "orthoScale": 6.24,
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/mortar-badger-fur-v1.png",
@@ -1494,9 +1508,47 @@
         }
       },
       "clips": [
-        {"name": "move", "motion": "biped", "frameCount": 12, "frameRate": 12, "loop": true, "parameters": {"strideForward": 0.17, "strideBack": 0.12, "lift": 0.07, "bodyBob": 0.015, "bodyYaw": 0, "armSwing": 0.035}},
-        {"name": "claw", "motion": "claw_biped", "frameCount": 12, "frameRate": 24, "loop": false, "markers": {"strike": 4, "impact": 7}, "parameters": {"strength": 0.65, "leapDistance": 0.50}},
-        {"name": "cast", "motion": "firestarter_cast", "frameCount": 10, "frameRate": 24, "loop": false, "markers": {"aim": 3, "release": 4}}
+        {
+          "name": "move",
+          "motion": "biped",
+          "frameCount": 12,
+          "frameRate": 12,
+          "loop": true,
+          "parameters": {
+            "strideForward": 0.17,
+            "strideBack": 0.12,
+            "lift": 0.07,
+            "bodyBob": 0.015,
+            "bodyYaw": 0,
+            "armSwing": 0.035
+          }
+        },
+        {
+          "name": "claw",
+          "motion": "claw_biped",
+          "frameCount": 12,
+          "frameRate": 24,
+          "loop": false,
+          "markers": {
+            "strike": 4,
+            "impact": 7
+          },
+          "parameters": {
+            "strength": 0.65,
+            "leapDistance": 0.5
+          }
+        },
+        {
+          "name": "cast",
+          "motion": "firestarter_cast",
+          "frameCount": 10,
+          "frameRate": 24,
+          "loop": false,
+          "markers": {
+            "aim": 3,
+            "release": 4
+          }
+        }
       ]
     },
     {
@@ -5792,7 +5844,11 @@
         }
       },
       "clips": [],
-      "elevation": { "min": 0, "max": 1.4, "scale": 0.5 },
+      "elevation": {
+        "min": 0,
+        "max": 1.4,
+        "scale": 0.5
+      },
       "materialPass": {
         "version": 1,
         "color": "srgb-albedo-baked-cavity-v1",
@@ -6273,6 +6329,277 @@
         "normal": "linear-unorm8-z-oct-normal-v1",
         "emission": "linear-rgb-unorm8-scaled-v1"
       }
+    },
+    {
+      "id": "construction_dawn_supply_capsule",
+      "label": "Dawn supply capsule",
+      "category": "construction",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-extractor.png",
+      "targetSize": 96,
+      "sourceSizes": [
+        192
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Burst cargo capsule, peeled hatch, collapsed parachute and three portable crates.",
+        "colors": "Player faction warm ochre and brass, unbleached canvas and dark recesses.",
+        "anatomy": "Static centered 96 px canvas, 3 x 3 cells."
+      },
+      "requiredClips": [],
+      "production": "reference",
+      "recipe": "dawn-supply-capsule",
+      "model": {},
+      "orthoScale": 3.8,
+      "textures": {},
+      "materialSource": "procedural",
+      "materialVariants": {
+        "standard": {
+          "label": "Weathered matte pigment, machined relief and cavity depth",
+          "textureStrength": 0,
+          "formShadowStrength": 0.83
+        }
+      },
+      "clips": []
+    },
+    {
+      "id": "dawn_supply_crate",
+      "label": "Dawn portable supply crate",
+      "category": "powerup",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-extractor.png",
+      "targetSize": 28,
+      "sourceSizes": [
+        56
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Compact brass-bound ochre crate with exposed carry handle.",
+        "colors": "Player faction warm yellow brass, dark gasket and handle recess.",
+        "anatomy": "Static centered 28 px canvas, portable pickup."
+      },
+      "requiredClips": [],
+      "production": "reference",
+      "recipe": "dawn-supply-crate",
+      "model": {},
+      "orthoScale": 0.94,
+      "textures": {},
+      "materialSource": "procedural",
+      "materialVariants": {
+        "standard": {
+          "label": "Weathered matte pigment, machined relief and cavity depth",
+          "textureStrength": 0,
+          "formShadowStrength": 0.83
+        }
+      },
+      "clips": []
+    },
+    {
+      "id": "dawn_scrap_heap_t1",
+      "label": "Dawn scrap heap T1",
+      "category": "construction",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-scrap-t1.png",
+      "targetSize": 64,
+      "sourceSizes": [
+        128
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Broken ribbed hull panel, hollow gear and bent pipes partly buried in moss and fallen leaves.",
+        "colors": "Rust and moss",
+        "anatomy": "Static centered 64 px canvas, 2 x 2 cells."
+      },
+      "requiredClips": [],
+      "production": "reference",
+      "recipe": "dawn-scrap-heap",
+      "model": {
+        "tier": 1
+      },
+      "orthoScale": 2.64,
+      "textures": {},
+      "materialSource": "procedural",
+      "materialVariants": {
+        "standard": {
+          "label": "Weathered matte pigment, machined relief and cavity depth",
+          "textureStrength": 0,
+          "formShadowStrength": 0.83
+        }
+      },
+      "clips": []
+    },
+    {
+      "id": "dawn_scrap_heap_t2",
+      "label": "Dawn scrap heap T2",
+      "category": "construction",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-scrap-t2.png",
+      "targetSize": 64,
+      "sourceSizes": [
+        128
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Broken ribbed hull panel, hollow gear and bent pipes partly buried in moss and fallen leaves.",
+        "colors": "Military olive with yellow-black warning stripes",
+        "anatomy": "Static centered 64 px canvas, 2 x 2 cells."
+      },
+      "requiredClips": [],
+      "production": "reference",
+      "recipe": "dawn-scrap-heap",
+      "model": {
+        "tier": 2
+      },
+      "orthoScale": 2.64,
+      "textures": {},
+      "materialSource": "procedural",
+      "materialVariants": {
+        "standard": {
+          "label": "Weathered matte pigment, machined relief and cavity depth",
+          "textureStrength": 0,
+          "formShadowStrength": 0.83
+        }
+      },
+      "clips": []
+    },
+    {
+      "id": "dawn_scrap_heap_t3",
+      "label": "Dawn scrap heap T3",
+      "category": "construction",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-scrap-t3.png",
+      "targetSize": 64,
+      "sourceSizes": [
+        128
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Broken ribbed hull panel, hollow gear and bent pipes partly buried in moss and fallen leaves.",
+        "colors": "Silver alloy with sparse cyan seams",
+        "anatomy": "Static centered 64 px canvas, 2 x 2 cells."
+      },
+      "requiredClips": [],
+      "production": "reference",
+      "recipe": "dawn-scrap-heap",
+      "model": {
+        "tier": 3
+      },
+      "orthoScale": 2.64,
+      "textures": {},
+      "materialSource": "procedural",
+      "materialVariants": {
+        "standard": {
+          "label": "Weathered matte pigment, machined relief and cavity depth",
+          "textureStrength": 0,
+          "formShadowStrength": 0.83
+        }
+      },
+      "clips": []
+    },
+    {
+      "id": "enemy_dawn_scavenger",
+      "label": "Dawn scrap scavenger",
+      "category": "enemy",
+      "gameIds": [],
+      "reference": "public/assets/sprites/enemies/enemy_rabid_badger.png",
+      "targetSize": 26,
+      "sourceSizes": [
+        52
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Lean quick badger with oversized full salvage sack, projecting gear and metal sheet; no weapon.",
+        "colors": "Charcoal and saturated enemy violet, broad ivory badger mask, crimson harness, contrasting ochre burlap sack and bright steel loot.",
+        "anatomy": "North-facing lean badger and trailing body-sized sack; four exposed running paws. 26 px canvas, approximately 22 px occupied height including sack (1.3-1.4x small enemy silhouette); unchanged framing."
+      },
+      "requiredClips": [
+        "idle",
+        "move"
+      ],
+      "production": "reference",
+      "recipe": "dawn-scavenger",
+      "model": {},
+      "orthoScale": 3.55,
+      "textures": {},
+      "materialSource": "procedural",
+      "materialVariants": {
+        "standard": {
+          "label": "Weathered matte pigment, machined relief and cavity depth",
+          "textureStrength": 0,
+          "formShadowStrength": 0.83
+        }
+      },
+      "clips": [
+        {
+          "name": "idle",
+          "motion": "quadruped",
+          "frameCount": 12,
+          "frameRate": 12,
+          "loop": true,
+          "parameters": {
+            "strideForward": 0,
+            "strideBack": 0,
+            "lift": 0,
+            "footRoll": 0,
+            "footYaw": 0,
+            "bodyYaw": 0.014,
+            "bodyBob": 0.012,
+            "bodySurge": 0.005,
+            "headYaw": -0.008,
+            "tailYaw": 0.018,
+            "loadBob": 0.012
+          }
+        },
+        {
+          "name": "move",
+          "motion": "quadruped",
+          "frameCount": 12,
+          "frameRate": 16,
+          "loop": true,
+          "parameters": {
+            "strideForward": 0.46,
+            "strideBack": 0.35,
+            "lift": 0.16,
+            "footRoll": 0.22,
+            "footYaw": 0.12,
+            "bodyYaw": 0.19,
+            "bodyBob": 0.09,
+            "bodyRoll": 0.085,
+            "bodyShift": 0.055,
+            "bodySurge": 0.075,
+            "headYaw": -0.14,
+            "tailYaw": 0.26,
+            "rearPhase": 0.08,
+            "loadBob": 0.09,
+            "bodyPitch": 0.05
+          }
+        }
+      ],
+      "displayScale": 1
     }
   ]
 }
