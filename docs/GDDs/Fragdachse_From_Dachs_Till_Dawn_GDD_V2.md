@@ -150,6 +150,8 @@ M2-Simulation legt die tatsächlichen Kosten fest.
 | D-20 | 2026-10-13 (M1) | Tag bleibt 3:30: Bei 280 px/s braucht der Weg zum fernen Band etwa 6–9 s; die Tagesphase wird von der Site-Arbeit bestimmt, nicht vom Laufen. Neu bewertet im G1-Spieltest. | ja |
 | D-21 | 2026-10-13 (M1) | Sites aktivieren beim Betreten ihrer Lichtung, laufen gleichzeitig (eigenes Nebenziel-Flag `concurrent`) und schließen in der Dämmerung ohne Belohnung (`expiresAt`). Nachts respawnen Spieler mit 6 s statt 2 s. | ja |
 | D-22 | 2026-10-13 (M1) | Threat eskaliert über Fronten (1 → 4), Spezialgegner, Nacht- und Tagesbudget, Site-Zahl (3 → 7) und Tiers; Itemlevel des Sieg-Angebots = Threat + 1. | ja |
+| D-23 | 2026-10-13 (M1) | Extraktoren (Hold-Sites) lösen beim Betreten eine eigene Angriffswelle am Lichtungsrand aus (Budget je Tier), sonst wäre Halten trivial. Wracks bleiben ohne Begleitwelle. | ja |
+| D-24 | 2026-10-13 (M1) | Schrott: Site-Abschluss = Tier-Belohnung × Threat-Multiplikator (abgerundet); Gegner-Drops nachts 18 %, sonst 4 %, 1–3 Schrott; Niederlage 50 % abgerundet; Expansion kostet laut Economy-Modell v0. | ja |
 
 ## 11. Offene Fragen für Gate G0 (an G0 beantwortet, siehe D-15 … D-19)
 
