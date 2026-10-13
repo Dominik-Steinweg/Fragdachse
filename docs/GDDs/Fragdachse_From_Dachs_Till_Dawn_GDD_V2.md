@@ -153,6 +153,8 @@ M2-Simulation legt die tatsächlichen Kosten fest.
 | D-23 | 2026-10-13 (M1) | Extraktoren (Hold-Sites) lösen beim Betreten eine eigene Angriffswelle am Lichtungsrand aus (Budget je Tier), sonst wäre Halten trivial. Wracks bleiben ohne Begleitwelle. | ja |
 | D-24 | 2026-10-13 (M1) | Schrott: Site-Abschluss = Tier-Belohnung × Threat-Multiplikator (abgerundet); Gegner-Drops nachts 18 %, sonst 4 %, 1–3 Schrott; Niederlage 50 % abgerundet; Expansion kostet laut Economy-Modell v0. | ja |
 | D-25 | 2026-10-13 (M1) | Sites sind schon vor der Aktivierung sichtbar: eigener Präsentations-Owner (`DawnSitePropRenderer`) aus repliziertem World-Plan und Nebenziel-Zustand, Bauwerke 3×3 Zellen (96 px, Sprite statt Basis-Blobfläche, World-Feld `surface: none`). Vor der Aktivierung ohne Kollision, weil die Aktivierung beim Betreten der Lichtung greift, bevor man das Bauwerk erreicht. Asset-Keys: `construction_dawn_wreck_t1..t3`, `construction_dawn_extractor` (+ `_active`-Loop), `dawn_scrap_t1..t3`. | ja |
+| D-26 | 2026-10-13 (M1) | Der Tag läuft 10:00–18:45 statt ab 07:00: 07:00–09:00 liegt im dichtesten Morgennebel-Keyframe und las sich wie Morgengrauen. Dämmerung 18:45–20:45, Nacht und Morgengrauen unverändert; die Uhr bleibt aus dem Phasenplan abgeleitet. | ja |
+| D-27 | 2026-10-13 (M1) | Ansagen nur nachts: Tagesdruck und Site-Angriffe sind still (Encounter-Feld `announce: false`), gezählt werden die vier Nachtwellen als Gruppen (`announce.group`, letzte als „FINALE“). Zeit erscheint als Rundenzeit und Phasenkarte; das Hauptziel nennt nur das Ende („bis 06:15“). Aktive Wracks behalten ihre Farben, Treffer zeigen einen kurzen Flash. | ja |
 
 ## 11. Offene Fragen für Gate G0 (an G0 beantwortet, siehe D-15 … D-19)
 
