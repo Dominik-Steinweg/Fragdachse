@@ -5423,7 +5423,9 @@
       ]
     },
     {
-      "gameIds": [],
+      "gameIds": [
+        "FIRE_CONTROL_PORTAL"
+      ],
       "production": "reference",
       "forward": "north",
       "pivot": [
@@ -5515,7 +5517,9 @@
       }
     },
     {
-      "gameIds": [],
+      "gameIds": [
+        "FIRE_CONTROL_RELAY"
+      ],
       "production": "reference",
       "forward": "north",
       "pivot": [
