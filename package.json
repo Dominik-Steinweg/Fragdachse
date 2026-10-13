@@ -19,6 +19,7 @@
     "kraken:iterate": "node scripts/asset-pipeline/kraken-iterate.mjs",
     "assets:library": "node scripts/asset-pipeline/index-library.mjs",
     "assets:lobby-forest": "node scripts/export-lobby-forest.mjs",
+    "assets:dawn-ui": "node scripts/export-dawn-ui.mjs",
     "assets:hud-frames": "node scripts/export-hud-frames.mjs",
     "audio:convert": "node scripts/convert-audio.mjs",
     "icons:generate": "node scripts/generate-upgrade-icons.mjs",
