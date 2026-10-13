@@ -1461,13 +1461,13 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
    */
   private getHostileBaseAimCandidates(
     source: TurretFireSource, x: number, y: number, range: number,
-  ): readonly { id: string; x: number; y: number }[] {
+  ): readonly { id: string; x: number; y: number; aimRadius: number }[] {
     const o = this.options;
     const bases = o.baseManager;
     if (!bases || !o.isCoopDefense?.()) return [];
     if (source.ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID || source.ownerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID) return [];
     const generation = bases.getObstacleGeneration();
-    const candidates: { id: string; x: number; y: number; distance: number }[] = [];
+    const candidates: { id: string; x: number; y: number; aimRadius: number; distance: number }[] = [];
     for (const base of bases.getBasesByFaction('hostile')) {
       if (!base.isDamageable() || base.getHp() <= 0) continue;
       const faces = this.turretBaseFaces.get(base.id, generation, () => computeExposedBaseFaces({
@@ -1476,7 +1476,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         isCoveredCell: () => false,
       }));
       for (const point of rankBaseAimPoints(faces, x, y, range, BASE_AIM_CANDIDATE_LIMIT, 1, BASE_AIM_FACE_END_INSET)) {
-        candidates.push({ id: base.id, x: point.x, y: point.y, distance: point.distance });
+        // Drehbegrenzte Türme feuern erst, wenn das Rohr diesen Kantenabschnitt tatsächlich trifft.
+        candidates.push({ id: base.id, x: point.x, y: point.y, aimRadius: BASE_AIM_FACE_END_INSET, distance: point.distance });
       }
     }
     if (candidates.length === 0) return [];

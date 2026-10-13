@@ -257,6 +257,19 @@ describe('hostile bases as third target tier', () => {
     expect(f.fire).toHaveBeenCalledTimes(3);
   });
 
+  it('lets limited turrets fire at a base face only once the barrel actually covers it', () => {
+    // Raketenturm-Toleranz 18°: Figuren erreicht Homing, eine ferne Basisfläche nicht.
+    const f = fixture({ weaponId: 'TURRET_MG', rotationSpeedDegPerSec: 90, aimToleranceDeg: 18, targetRange: 700, angle: 0 });
+    f.targets([]);
+    f.system.setBaseTargetCandidateProvider(() => [{ id: 'base', x: 0, y: 600, aimRadius: 12 }]);
+    f.tick(0, 900);
+    expect(f.source.angle).toBeCloseTo(rad(81));
+    expect(f.fire).not.toHaveBeenCalled();
+    f.tick(1, 200);
+    expect(f.source.angle).toBeCloseTo(rad(90));
+    expect(f.fire).toHaveBeenCalledOnce();
+  });
+
   it('respects the turret range for base faces', () => {
     const f = fixture({ weaponId: 'TURRET_MG', targetRange: 150 });
     f.targets([]);

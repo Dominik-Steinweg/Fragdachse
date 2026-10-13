@@ -82,7 +82,14 @@ type FocusedBaseTargetProvider = (targetId: string, turretX: number, turretY: nu
  */
 type BaseTargetCandidateProvider = (
   source: TurretFireSource, turretX: number, turretY: number, range: number,
-) => readonly { id: string; x: number; y: number }[];
+) => readonly TurretTargetPoint[];
+/**
+ * Zielpunkt der Turmwahl. `aimRadius` begrenzt bei drehbegrenzten Türmen die Zieltoleranz auf den Winkel,
+ * unter dem das Ziel tatsächlich getroffen wird; ohne Wert gilt die Toleranz des Turms (Figuren werden
+ * zusätzlich durch Homing erreicht, Basen nicht).
+ */
+interface TurretAimTarget { readonly x: number; readonly y: number; readonly aimRadius?: number }
+interface TurretTargetPoint extends TurretAimTarget { readonly id: string }
 interface PendingTurretBurst {
   /** Eintrag, der die Salve begonnen hat; nur er darf sie fortsetzen. */
   ownerEntryId: AutomatedTurretId;
@@ -94,6 +101,7 @@ interface PendingTurretBurst {
   targetY: number;
   damageMultiplier: number;
   rangeFactor: number;
+  aimRadius?: number;
 }
 type TurretFireHandler = (
   ownerId: string,
@@ -312,7 +320,7 @@ export class TurretSystem {
         if (now < pendingBurst.nextShotAt || !this.fireHandler) continue;
         if (turret.rotationSpeedDegPerSec === undefined
           && !this.hasLineOfFireFromMuzzle(turret, turretX, turretY, pendingBurst.targetX, pendingBurst.targetY, muzzleOffset)) continue;
-        if (!this.canFireAtAngle(turret, burstAngle, pendingBurst.targetX, pendingBurst.targetY, muzzleOffset)) continue;
+        if (!this.canFireAtAngle(turret, burstAngle, pendingBurst.targetX, pendingBurst.targetY, muzzleOffset, pendingBurst.aimRadius)) continue;
         const muzzleX = turretX + Math.cos(burstAngle) * muzzleOffset;
         const muzzleY = turretY + Math.sin(burstAngle) * muzzleOffset;
         this.fireHandler?.(
@@ -341,7 +349,7 @@ export class TurretSystem {
         continue;
       }
 
-      const target = manualTarget ?? this.findNearestTarget(
+      const target: TurretAimTarget | null = manualTarget ?? this.findNearestTarget(
         turret,
         turretX,
         turretY,
@@ -357,7 +365,7 @@ export class TurretSystem {
       if (now < (this.nextFireAt.get(sequenceKey) ?? 0)) continue;
       if (manual && turret.rotationSpeedDegPerSec === undefined
         && !this.hasLineOfFireFromMuzzle(turret, turretX, turretY, target.x, target.y, muzzleOffset)) continue;
-      if (!this.canFireAtAngle(turret, angle, target.x, target.y, muzzleOffset)) continue;
+      if (!this.canFireAtAngle(turret, angle, target.x, target.y, muzzleOffset, target.aimRadius)) continue;
       // Identitätsgebundene Verstärkungen (Injektor, Fernsteuerung) folgen dem Original, auch wenn
       // eine temporäre Quelle an anderem Ort feuert.
       const buff = this.turretDamageBuffProvider?.(identity.x, identity.y) ?? null;
@@ -398,12 +406,13 @@ export class TurretSystem {
           targetY: target.y,
           damageMultiplier,
           rangeFactor,
+          aimRadius: target.aimRadius,
         });
       } else {
         this.nextFireAt.set(sequenceKey, now + cooldownMs);
       }
       if (burstCount <= 1 && (turret.secondProjectileDamageFactor ?? 0) > 0) {
-        const secondTarget = manualTarget ?? this.findNearestTarget(
+        const secondTarget: TurretAimTarget | null = manualTarget ?? this.findNearestTarget(
           turret,
           turretX,
           turretY,
@@ -415,7 +424,7 @@ export class TurretSystem {
         if (secondTarget) {
           const secondAngle = turret.rotationSpeedDegPerSec === undefined
             ? Phaser.Math.Angle.Between(turretX, turretY, secondTarget.x, secondTarget.y) : angle;
-          if (!this.canFireAtAngle(turret, secondAngle, secondTarget.x, secondTarget.y, muzzleOffset)) continue;
+          if (!this.canFireAtAngle(turret, secondAngle, secondTarget.x, secondTarget.y, muzzleOffset, secondTarget.aimRadius)) continue;
           this.fireHandler?.(
             turret.ownerId,
             turret.ownerColor,
@@ -474,10 +483,14 @@ export class TurretSystem {
     return angle;
   }
 
-  private canFireAtAngle(turret: AutomatedTurret, angle: number, targetX: number, targetY: number, muzzleOffset: number): boolean {
+  private canFireAtAngle(
+    turret: AutomatedTurret, angle: number, targetX: number, targetY: number, muzzleOffset: number, aimRadius?: number,
+  ): boolean {
     if (turret.rotationSpeedDegPerSec === undefined) return true;
     const desiredAngle = Math.atan2(targetY - turret.y, targetX - turret.x);
-    const tolerance = (turret.aimToleranceDeg ?? DEFAULT_TURRET_AIM_TOLERANCE_DEG) * Math.PI / 180;
+    const configured = (turret.aimToleranceDeg ?? DEFAULT_TURRET_AIM_TOLERANCE_DEG) * Math.PI / 180;
+    const tolerance = aimRadius === undefined ? configured : Math.min(configured,
+      Math.atan2(aimRadius, Math.max(1, Math.hypot(targetX - turret.x, targetY - turret.y))));
     if (Math.abs(turretAngleDifference(angle, desiredAngle)) > tolerance + 1e-10) return false;
     if (!this.lineOfFireChecker) return true;
     const dx = Math.cos(angle);
@@ -498,15 +511,15 @@ export class TurretSystem {
     lineOfFireStartOffset: number,
     now: number,
     excluded?: { x: number; y: number },
-  ): { x: number; y: number } | null {
-    let bestTarget: { x: number; y: number } | null = null;
+  ): TurretAimTarget | null {
+    let bestTarget: TurretAimTarget | null = null;
     let bestDistance = Number.POSITIVE_INFINITY;
     let bestPriority = Number.POSITIVE_INFINITY;
     let bestScore = Number.NEGATIVE_INFINITY;
     let bestKey = '';
     const focus = this.focusTargetProvider?.(turret.ownerId) ?? null;
 
-    const consider = (candidate: { x: number; y: number }, priority: number, kind: 'player' | 'enemy' | 'base', id: string): boolean => {
+    const consider = (candidate: TurretAimTarget, priority: number, kind: 'player' | 'enemy' | 'base', id: string): boolean => {
       const distance = Phaser.Math.Distance.Between(turretX, turretY, candidate.x, candidate.y);
       if (distance > range) return false;
       if (!this.hasLineOfFireFromMuzzle(turret, turretX, turretY, candidate.x, candidate.y, lineOfFireStartOffset)) return false;
@@ -561,7 +574,7 @@ export class TurretSystem {
       // Kandidaten kommen nach Distanz sortiert: Die erste frei beschießbare Fläche ist die nächste.
       for (const base of this.baseTargetCandidateProvider(turret, turretX, turretY, range)) {
         if (excluded && base.x === excluded.x && base.y === excluded.y) continue;
-        if (consider({ x: base.x, y: base.y }, 2, 'base', base.id)) break;
+        if (consider({ x: base.x, y: base.y, aimRadius: base.aimRadius }, 2, 'base', base.id)) break;
       }
     }
 
