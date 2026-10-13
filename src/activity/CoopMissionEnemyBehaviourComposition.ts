@@ -11,6 +11,7 @@ import { CoopDefenseEnemyCombatPositioningSystem } from '../systems/CoopDefenseE
 import { CoopDefenseEnemyDodgeSystem } from '../systems/CoopDefenseEnemyDodgeSystem';
 import { CoopDefenseEnemyTrainAwarenessSystem } from '../systems/CoopDefenseEnemyTrainAwarenessSystem';
 import { CoopDefenseShieldChargerSystem } from '../systems/CoopDefenseShieldChargerSystem';
+import { CoopDefenseEnergyConeSystem } from '../systems/CoopDefenseEnergyConeSystem';
 import { PLAYER_SIZE } from '../config';
 import { getFirestarterFactionTargets } from '../systems/firestarterAlliedTargeting';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
@@ -202,6 +203,34 @@ export class CoopMissionEnemyBehaviourComposition {
         },
         strike: (targetId, chargerId, damage, x, y, now) => combat.resolveChargeContact?.(targetId, chargerId, damage, x, y, now) ?? false,
         knockback: (targetId, vx, vy, durationMs, sourceId) => this.options.hostPhysics.addRecoil(targetId, vx, vy, durationMs, sourceId),
+      }));
+      runtime.setEnergyCone(new CoopDefenseEnergyConeSystem({
+        enemies: enemyManager,
+        combat,
+        readTarget: enemy => {
+          if (enemy.faction === 'allied') return getFirestarterFactionTargets(enemy, catalog, 0)[0] ?? null;
+          const decoy = decoyTargets?.getTarget(enemy.id);
+          if (decoy) return { x: decoy.x, y: decoy.y };
+          const target = intents.get(enemy.id)?.target;
+          if (!target || target.kind === 'base' || target.kind === 'ally' || target.kind === 'decoy') return null;
+          const resolved = catalog.resolve(target);
+          return resolved ? catalog.getPosition(resolved, enemy.sprite.x, enemy.sprite.y) : null;
+        },
+        impulseTargets: enemy => {
+          // Opposing faction bodies (allies hit hostiles and vice versa), plus players and decoys for hostile casters.
+          const opposing = enemyManager.getAllEnemies().filter(other => other !== enemy && other.faction !== enemy.faction
+            && other.sprite.active && other.getHp() > 0 && !other.isBurrowed())
+            .map(other => ({ id: other.id, x: other.sprite.x, y: other.sprite.y, radius: other.getCollisionRadius() }));
+          if (enemy.faction === 'allied') return opposing;
+          const players = this.options.playerManager.getAllPlayers().filter(player => player.active)
+            .map(player => ({ id: player.id, x: player.x, y: player.y, radius: PLAYER_SIZE / 2 }));
+          const decoys = (this.options.decoySystem?.getHostTargets() ?? []).filter(decoy => decoy.hp > 0)
+            .map(decoy => ({ id: `decoy_${decoy.id}`, x: decoy.x, y: decoy.y, radius: decoy.radius }));
+          return [...players, ...decoys, ...opposing];
+        },
+        measureRay: (x, y, angle, length) => combat.measureConeRay?.(x, y, angle, length) ?? 0,
+        impulse: (targetId, casterId, damage, originX, originY, targetX, targetY, now) =>
+          combat.resolveConeImpulse?.(targetId, casterId, damage, originX, originY, targetX, targetY, now) ?? false,
       }));
     }
 

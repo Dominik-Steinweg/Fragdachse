@@ -16,7 +16,8 @@
 // Kraken spine/regrowth baselines and the appended spine action code require matching peers.
 // Firestarter: appended `fire-lance-charge` action and `firestarter_orb` projectile style.
 // Shield charger: appended enemy snapshot field for the host-fixed charge lane.
-export const PEER_PROTOCOL_VERSION = 29;
+// Alien energy cone: appended enemy snapshot field for the host-fixed cone and cover profile.
+export const PEER_PROTOCOL_VERSION = 30;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

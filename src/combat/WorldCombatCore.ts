@@ -5168,6 +5168,37 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     }, nowMs);
   }
 
+  /** Energy cone cover profile: first shot-blocking obstacle, the arena edge or the train along one ray. */
+  measureConeRay(x: number, y: number, angle: number, length: number): number {
+    const line = new Phaser.Geom.Line(x, y, x + Math.cos(angle) * length, y + Math.sin(angle) * length);
+    const hit = this.findNearestObstacleHit(line, { purpose: 'directFire' });
+    return Math.max(0, Math.min(length, hit?.distance ?? length));
+  }
+
+  /** Energy cone impulse: cover-checked from the origin, energy-shield aware, attributed to the caster. */
+  resolveConeImpulse(targetId: string, casterId: string, damage: number, originX: number, originY: number,
+    targetX: number, targetY: number, nowMs: number): boolean {
+    return this.runHostExecution(() => {
+      if (targetId.startsWith('decoy_')) {
+        // Decoys take damage through their own system (numeric id, owner relationship).
+        const decoyId = Number(targetId.slice('decoy_'.length));
+        const decoy = this.decoySystem?.getHostTargets().find(entry => entry.id === decoyId);
+        if (!decoy || !this.canDamageTarget(casterId, decoy.ownerId)) return false;
+        if (!this.hasClearLineOfFire(originX, originY, targetX, targetY)) return false;
+        const length = Math.hypot(targetX - originX, targetY - originY) || 1;
+        const outcome = this.decoySystem?.applyDamage(decoyId, damage, casterId, 'ALIEN_BADGER_ENERGY_CONE',
+          { sourceX: originX, sourceY: originY, dirX: (targetX - originX) / length, dirY: (targetY - originY) / length });
+        return outcome?.kind === 'damage-applied';
+      }
+      if (!this.isAlive(targetId) || !this.canDamageTarget(casterId, targetId)) return false;
+      if (!this.hasClearLineOfFire(originX, originY, targetX, targetY)) return false;
+      if (this.shouldBlockWithShield(targetId, 'tesla', damage, originX, originY, nowMs)) return false;
+      const outcome = this.applyDamage(targetId, damage, false, casterId, 'ALIEN_BADGER_ENERGY_CONE',
+        { sourceX: originX, sourceY: originY }, { damageKind: 'direct' });
+      return outcome?.kind === 'damage-applied';
+    }, nowMs);
+  }
+
   private resolveCurrentCombatantTarget(id: string): CombatTargetRef | null {
     return this.enemyManager?.getCombatTargetRef(id) ?? this.playerVitals.getTargetRef(id);
   }

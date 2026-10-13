@@ -382,9 +382,37 @@ export interface CoopDefenseEnemyShieldChargerConfig {
   readonly hitKnockbackMs: number;
 }
 
+/**
+ * Energie-Fächer: stationary, telegraphed filled circular sector fired once at `hitAt`. Separate
+ * from the regular weapon priority so ranged weapons stay available outside the windup and recovery.
+ */
+export interface CoopDefenseEnemyEnergyConeConfig {
+  /** A cone may start only with the target inside this distance band (centre to centre). */
+  readonly triggerMinDistancePx: number;
+  readonly triggerMaxDistancePx: number;
+  /** Full opening angle in degrees. */
+  readonly arcDegrees: number;
+  /** Reach of the impulse before cover clipping. */
+  readonly rangePx: number;
+  /** Visible warning; origin, direction and range are fixed at its start. */
+  readonly windupMs: number;
+  /** Stationary pause after the impulse before regular attacks and movement resume. */
+  readonly recoverMs: number;
+  /** Next cone earliest this long after the previous impulse. */
+  readonly cooldownMs: number;
+  /** Retry lock after a cancelled windup (stun, burrow, displacement). */
+  readonly cancelLockoutMs: number;
+  /** Being pushed farther than this during the windup cancels it. */
+  readonly windupDisplacementCancelPx: number;
+  /** Host refresh interval of the replicated cover profile during the windup. */
+  readonly coverRefreshMs: number;
+  readonly damage: number;
+}
+
 export interface CoopDefenseEnemyConfig {
   readonly firestarter?: CoopDefenseEnemyFirestarterConfig;
   readonly shieldCharger?: CoopDefenseEnemyShieldChargerConfig;
+  readonly energyCone?: CoopDefenseEnemyEnergyConeConfig;
   /**
    * Authoritative turn-rate limit in degrees per second. Body, shields and attack direction share
    * this facing, and locomotion slows while the body is turned away from its heading.
@@ -564,6 +592,7 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         mortar: config.mortar ? { ...config.mortar, targetWeights: { ...config.mortar.targetWeights } } : undefined,
         firestarter: config.firestarter ? { ...config.firestarter, charges: { ...config.firestarter.charges }, lance: { ...config.firestarter.lance } } : undefined,
         shieldCharger: config.shieldCharger ? { ...config.shieldCharger } : undefined,
+        energyCone: config.energyCone ? { ...config.energyCone } : undefined,
         turnRateDegPerSec: config.turnRateDegPerSec,
         stinkAura: config.stinkAura,
         deathSpawns: config.deathSpawns,
@@ -691,6 +720,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     mortar: normalizeMortarConfig(enemy.mortar),
     firestarter: normalizeFirestarterConfig(enemy.firestarter),
     shieldCharger: normalizeShieldChargerConfig(enemy.shieldCharger),
+    energyCone: normalizeEnergyConeConfig(enemy.energyCone),
     turnRateDegPerSec: normalizeTurnRate(enemy.turnRateDegPerSec),
     stinkAura: normalizeStinkAuraConfig(enemy.stinkAura, enemy.id),
     deathSpawns: normalizeDeathSpawns(enemy.deathSpawns, enemy.id),
@@ -1168,6 +1198,20 @@ export function normalizeShieldChargerConfig(config: CoopDefenseEnemyShieldCharg
   if (config.shieldArcDegrees > 360 || config.alignToleranceDegrees >= 90
     || config.triggerMinDistancePx >= config.triggerMaxDistancePx || config.maxRunPx < config.triggerMaxDistancePx
     || config.cooldownMs < config.windupMs) throw new Error('Invalid shield charger relation');
+  return { ...config };
+}
+
+/** Reject malformed timing and inconsistent distances at the authored boundary. */
+export function normalizeEnergyConeConfig(config: CoopDefenseEnemyEnergyConeConfig | undefined): CoopDefenseEnemyEnergyConeConfig | undefined {
+  if (!config) return undefined;
+  const positive = [config.triggerMaxDistancePx, config.arcDegrees, config.rangePx, config.windupMs, config.recoverMs,
+    config.cooldownMs, config.windupDisplacementCancelPx, config.coverRefreshMs];
+  const nonNegative = [config.triggerMinDistancePx, config.cancelLockoutMs, config.damage];
+  if (positive.some(v => !Number.isFinite(v) || v <= 0) || nonNegative.some(v => !Number.isFinite(v) || v < 0)) {
+    throw new Error('Invalid energy cone value');
+  }
+  if (config.arcDegrees >= 180 || config.triggerMinDistancePx >= config.triggerMaxDistancePx
+    || config.triggerMaxDistancePx > config.rangePx || config.coverRefreshMs > config.windupMs) throw new Error('Invalid energy cone relation');
   return { ...config };
 }
 

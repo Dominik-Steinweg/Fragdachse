@@ -1298,6 +1298,7 @@ export class EnemyManager {
   private syncClawVisuals(enemy: EnemyEntity, now: number): void {
     enemy.syncClawAnimation(now);
     enemy.syncShieldChargeAnimation(now);
+    enemy.syncEnergyConeAnimation(now);
     enemy.syncCastAnimation();
     this.visualSink?.syncEnemyClaw?.(enemy.id, enemy.getClawAttackState(), enemy.sprite.x, enemy.sprite.y, now,
       enemy.sprite.visible && !enemy.isBurrowed() && enemy.getHp() > 0,
@@ -1417,6 +1418,7 @@ export class EnemyManager {
       delta.areaClaw = current.areaClaw; delta.entityGeneration = current.entityGeneration;
     }
     if (current.shieldCharge?.revision !== previous.shieldCharge?.revision) delta.shieldCharge = current.shieldCharge;
+    if (current.energyCone?.revision !== previous.energyCone?.revision) delta.energyCone = current.energyCone;
     if (current.claw?.revision !== previous.claw?.revision) {
       delta.claw = current.claw;
       delta.entityGeneration = current.entityGeneration;
@@ -1530,7 +1532,9 @@ export class EnemyManager {
       this.registerCombatTarget(remote.id, remote.entityGeneration ?? this.nextEnemyGeneration++);
       if (remote.claw) enemy.applyClawAttackState(remote.claw);
     if (remote.shieldCharge) enemy.applyShieldChargeState(remote.shieldCharge);
+    if (remote.energyCone) enemy.applyEnergyConeState(remote.energyCone);
       if (remote.shieldCharge) enemy.applyShieldChargeState(remote.shieldCharge);
+      if (remote.energyCone) enemy.applyEnergyConeState(remote.energyCone);
       if (remote.areaClaw) enemy.applyAreaClawState(remote.areaClaw);
       const pendingArea = this.pendingAreaClawEvents.get(remote.id);
       if (pendingArea) { this.pendingAreaClawEvents.delete(remote.id); this.applyAreaClawEvent(pendingArea); }

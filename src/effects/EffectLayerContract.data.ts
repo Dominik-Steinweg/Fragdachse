@@ -8142,4 +8142,7 @@ export const SHIELD_CHARGER_LAYER_CONTRACTS: readonly LayerContract[] = [
 export const ENERGY_SHIELD_LAYER_CONTRACTS: readonly LayerContract[] = [
   {id:'energy-shield:membrane',owner:'effects/gpu/EnergyShieldGpuLayer.ts',component:'membrane',height:'body',lighting:'emissive',camera:'world',depths:[16.2],blends:['NORMAL'],profiles:['L'],role:'effect'},
 ];
-export const EFFECT_LAYER_CONTRACTS: readonly LayerContract[] = [...Object.values(GPU_LAYER_CONTRACTS), ...Object.values(GPU_EFFECT_CONTRACTS), ...CPU_LAYER_CONTRACTS, ...METEOR_LAYER_CONTRACTS, ...MORTAR_LAYER_CONTRACTS, ...FIRESTARTER_LAYER_CONTRACTS, ...SHIELD_CHARGER_LAYER_CONTRACTS, ...ENERGY_SHIELD_LAYER_CONTRACTS];
+export const ALIEN_CONE_LAYER_CONTRACTS: readonly LayerContract[] = [
+  {id:'alien-cone:energy',owner:'effects/gpu/AlienConeGpuLayer.ts',component:'energy',height:'body',lighting:'emissive',camera:'world',depths:[19.72],blends:['NORMAL'],profiles:['E'],role:'effect'},
+];
+export const EFFECT_LAYER_CONTRACTS: readonly LayerContract[] = [...Object.values(GPU_LAYER_CONTRACTS), ...Object.values(GPU_EFFECT_CONTRACTS), ...CPU_LAYER_CONTRACTS, ...METEOR_LAYER_CONTRACTS, ...MORTAR_LAYER_CONTRACTS, ...FIRESTARTER_LAYER_CONTRACTS, ...SHIELD_CHARGER_LAYER_CONTRACTS, ...ENERGY_SHIELD_LAYER_CONTRACTS, ...ALIEN_CONE_LAYER_CONTRACTS];

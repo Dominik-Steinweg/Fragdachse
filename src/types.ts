@@ -2037,6 +2037,8 @@ export interface SyncedEnemyState {
   claw?: import('./systems/EnemyClawAttack').EnemyClawState;
   /** Host-fixed shield charge (lane + phase timeline); absent until the first charge. */
   shieldCharge?: import('./systems/ShieldChargeState').ShieldChargeState;
+  /** Host-fixed energy cone (sector, cover profile, phase timeline); absent until the first cone. */
+  energyCone?: import('./systems/EnergyConeState').EnergyConeState;
   entityGeneration?: number;
   positionRevision?: number;
   id:     string;
@@ -2071,6 +2073,8 @@ export interface SyncedEnemyDeltaState {
   claw?: import('./systems/EnemyClawAttack').EnemyClawState;
   /** Host-fixed shield charge (lane + phase timeline); absent until the first charge. */
   shieldCharge?: import('./systems/ShieldChargeState').ShieldChargeState;
+  /** Host-fixed energy cone (sector, cover profile, phase timeline); absent until the first cone. */
+  energyCone?: import('./systems/EnergyConeState').EnergyConeState;
   entityGeneration?: number;
   positionRevision?: number;
   id:     string;

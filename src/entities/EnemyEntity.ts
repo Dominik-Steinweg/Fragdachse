@@ -3,7 +3,9 @@ import { EMPTY_ENEMY_CLAW_STATE, isEnemyClawState, type EnemyClawState } from '.
 import { syncEnemyClawAnimation } from '../animations/EnemyClawAnimation';
 import { stepTurnRateFacing } from './turnRateFacing';
 import { syncEnemyShieldChargeAnimation } from '../animations/EnemyShieldChargeAnimation';
+import { syncEnemyEnergyConeAnimation } from '../animations/EnemyEnergyConeAnimation';
 import { EMPTY_SHIELD_CHARGE_STATE, isShieldChargeState, type ShieldChargeState } from '../systems/ShieldChargeState';
+import { EMPTY_ENERGY_CONE_STATE, isEnergyConeState, type EnergyConeState } from '../systems/EnergyConeState';
 import { EnemyCastPlayback, syncEnemyCastAnimation } from '../animations/EnemyCastAnimation';
 import { getEnemyFootprintVariant } from '../config/movementEffects';
 import type { MovementVisualSample } from '../effects/MovementStepSampler';
@@ -173,6 +175,7 @@ export class EnemyEntity {
   private clawState: EnemyClawState = EMPTY_ENEMY_CLAW_STATE;
   private clawAnimating = false;
   private shieldCharge: ShieldChargeState = EMPTY_SHIELD_CHARGE_STATE;
+  private energyCone: EnergyConeState = EMPTY_ENERGY_CONE_STATE;
   private knockbackImmune = false;
   /** Host clock of the last rate-limited turn step; null until the first step. */
   private turnClockMs: number | null = null;
@@ -185,6 +188,14 @@ export class EnemyEntity {
   applyShieldChargeState(state: ShieldChargeState): void {
     if (!isShieldChargeState(state) || state.revision <= this.shieldCharge.revision) return;
     this.shieldCharge = state;
+  }
+
+  getEnergyConeState(): EnergyConeState { return this.energyCone; }
+
+  /** Host: publish a new cone state (revision must grow). Clients: apply a newer replicated state. */
+  applyEnergyConeState(state: EnergyConeState): void {
+    if (!isEnergyConeState(state) || state.revision <= this.energyCone.revision) return;
+    this.energyCone = state;
   }
 
   /** While set, external impulses (knockback, recoil, stagger scaling) do not move this enemy. */
@@ -233,6 +244,17 @@ export class EnemyEntity {
     this.shieldChargeAnimating = syncEnemyShieldChargeAnimation(this.sprite, this.config.imageKey, this.shieldCharge, now,
       this.clawAnimating || !this.sprite.visible || this.burrowed || this.currentHp <= 0);
     if (wasAnimating && !this.shieldChargeAnimating) this.syncWalkingAnimation();
+  }
+
+  private energyConeAnimating = false;
+
+  /** Cone pose follows the replicated host-fixed cone timeline (wind-up, strike at the impulse). */
+  syncEnergyConeAnimation(now: number): void {
+    if (!this.config.energyCone) return;
+    const wasAnimating = this.energyConeAnimating;
+    this.energyConeAnimating = syncEnemyEnergyConeAnimation(this.sprite, this.config.imageKey, this.energyCone, now,
+      this.clawAnimating || !this.sprite.visible || this.burrowed || this.currentHp <= 0);
+    if (wasAnimating && !this.energyConeAnimating) this.syncWalkingAnimation();
   }
 
   syncCastAnimation(now = this.sprite.scene.time.now): void {
@@ -518,7 +540,7 @@ export class EnemyEntity {
   }
 
   private syncWalkingAnimation(): void {
-    if (this.clawAnimating || this.castAnimating || this.shieldChargeAnimating) return;
+    if (this.clawAnimating || this.castAnimating || this.shieldChargeAnimating || this.energyConeAnimating) return;
     if (!this.walkingSheet) return;
     syncBadgerWalkingAnimation(
       this.sprite,
@@ -898,6 +920,7 @@ export class EnemyEntity {
     return {
       claw: this.clawState,
       ...(this.shieldCharge.revision > 0 ? { shieldCharge: this.shieldCharge } : {}),
+      ...(this.energyCone.revision > 0 ? { energyCone: this.energyCone } : {}),
       positionRevision: this.movementRevision,
       id: this.id,
       kind: this.kind,
