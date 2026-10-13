@@ -87,7 +87,17 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
         key(bone, 'rotation_euler', (0, 0, 0), frame)
     pose('claw_weapon')
     pose('attack_motion')
-    if motion == 'firestarter_cast':
+    if motion == 'relay_deploy':
+        # Deployed rest is also the final one-shot pose. Hinges retain their
+        # nonzero pivots; lens rise follows the initial leg clearance phase.
+        t = 1 if idle else min(1, max(0, phase / .78))
+        opened = t*t*(3-2*t)
+        for i in range(3):
+            pose(f'relay_leg_{i}', rotation=(math.radians(72)*(1-opened), 0, 0))
+        t = 1 if idle else min(1, max(0, (phase-.25)/.75))
+        raised = t*t*(3-2*t)
+        pose('relay_head', location=(0, 0, -.29*(1-raised)))
+    elif motion == 'firestarter_cast':
         apply_cast(asset, phase, frame, idle, p, pose, key)
     elif motion.startswith('kraken_'):
         for prefix, module, function in (
