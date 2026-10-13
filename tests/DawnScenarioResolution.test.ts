@@ -144,11 +144,16 @@ describe('Dawn scenario resolution', () => {
         .toEqual(new Set(['-1:-1', '0:-1', '1:-1', '-1:0', '0:0', '1:0', '-1:1', '0:1', '1:1']));
     }
   });
-  it('localizes the resolved clearing map ID in both player languages', () => {
-    const { plans } = dawnRound();
-    const resolved = resolveDawnScenario({ ...plans.world, templateId: 'clearing' }, plans.activity);
-    expect(getMapName(resolved.mapConfig.mapId, 'de')).toBe('Lichtung');
-    expect(getMapName(resolved.mapConfig.mapId, 'en')).toBe('Clearing');
+  it.each(getDawnArenaTemplates())('localizes the resolved $id map ID in both player languages', template => {
+    let seed = 1;
+    while (composeDawnRoundPlans({ seed, threat: 1, dayNumber: 1 }).world.templateId !== template.id) seed++;
+    const { plans } = dawnRound(1, seed);
+    const resolved = resolveDawnScenario(plans.world, plans.activity);
+    for (const language of ['de', 'en'] as const) {
+      const name = getMapName(resolved.mapConfig.mapId, language);
+      expect(name).not.toBe(`Map ${resolved.mapConfig.mapId}`);
+      expect(name).not.toContain('map.dawn:');
+    }
   });
 
   it('rejects salvage slots in the wrong band or inside the base reservation', () => {
@@ -159,6 +164,18 @@ describe('Dawn scenario resolution', () => {
       .toThrow('distance band');
     expect(() => validateTemplates([{
       ...template, salvageSlots: [{ ...slot, anchor: template.world.persistentBase.anchor }],
+    }])).toThrow('base reservation');
+  });
+
+  it('validates arena-specific distance bands without relaxing base reservations', () => {
+    const template = getDawnArenaTemplates().find(entry => entry.salvageBands)!;
+    expect(validateTemplates([template]).get(template.id)).toEqual(template);
+    expect(() => validateTemplates([{
+      ...template, salvageBands: { ...template.salvageBands!, mid: template.salvageBands!.near },
+    }])).toThrow('ordered, non-overlapping');
+    expect(() => validateTemplates([{
+      ...template, salvageBands: { ...template.salvageBands!, near: { minCells: 0, maxCells: 20 } },
+      salvageSlots: [{ ...template.salvageSlots[0], anchor: template.world.persistentBase.anchor }],
     }])).toThrow('base reservation');
   });
 

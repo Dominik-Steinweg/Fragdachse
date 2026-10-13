@@ -129,7 +129,7 @@ describe('Dawn round composition', () => {
         expect(sites).toHaveLength(Math.min(curve.siteCount, template.salvageSlots.length));
         expect(new Set(sites.map(({ slotId }) => slotId)).size).toBe(sites.length);
         for (const site of sites) {
-          const band = DAWN_SALVAGE_CONFIG.bands[site.slot.band];
+          const band = (template.salvageBands ?? DAWN_SALVAGE_CONFIG.bands)[site.slot.band];
           expect(distance(site)).toBeGreaterThanOrEqual(band.minCells);
           expect(distance(site)).toBeLessThanOrEqual(band.maxCells);
           expect(curve.tierWeights[site.tier - 1]).toBeGreaterThan(0);

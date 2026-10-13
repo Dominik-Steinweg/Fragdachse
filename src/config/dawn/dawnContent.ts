@@ -42,6 +42,7 @@ export type DawnArenaTemplateWorld = Pick<CoopDefenseMapAuthoringConfig,
   | 'arenaHeightCells'
   | 'rockFillRatio'
   | 'treeCount'
+  | 'treeGroves'
   | 'rockField'
   | 'rockWalls'
   | 'water'
@@ -62,6 +63,8 @@ export interface DawnSalvageSlot {
 export interface DawnArenaTemplate {
   readonly id: string;
   readonly world: DawnArenaTemplateWorld;
+  /** Arena-sized distance bands; omitted templates use the shared salvage defaults. */
+  readonly salvageBands?: typeof rawSalvage.bands;
   /** Fronten, aus denen diese Arena angegriffen werden kann. */
   readonly fronts: readonly SpawnFront[];
   readonly salvageSlots: readonly DawnSalvageSlot[];
@@ -338,15 +341,7 @@ function requireEntry<T>(registry: ReadonlyMap<string, T>, id: string, label: st
 
 /** Authored distances are cell-center distances; interval endpoints are inclusive. */
 function validateSalvage(raw: typeof rawSalvage): typeof rawSalvage {
-  let previousMax = -1;
-  for (const band of DISTANCE_BANDS) {
-    const range = raw.bands?.[band];
-    if (!range || !Number.isFinite(range.minCells) || !Number.isFinite(range.maxCells)
-      || range.minCells < 0 || range.minCells <= previousMax || range.maxCells < range.minCells) {
-      throw new Error(`[dawnContent] Salvage band ${band} needs ordered, non-overlapping finite distances`);
-    }
-    previousMax = range.maxCells;
-  }
+  validateSalvageBands(raw.bands);
   for (const key of ['minBaseReservationGapCells', 'minArenaEdgeGapCells',
     'minFrontSpawnBandGapCells', 'minSlotSpacingCells'] as const) {
     if (!Number.isFinite(raw[key]) || raw[key] <= 0) {
@@ -357,6 +352,18 @@ function validateSalvage(raw: typeof rawSalvage): typeof rawSalvage {
     throw new Error('[dawnContent] Salvage frontSpawnBandRatio must be between 0 and 0.5');
   }
   return raw;
+}
+
+function validateSalvageBands(bands: typeof rawSalvage.bands): void {
+  let previousMax = -1;
+  for (const band of DISTANCE_BANDS) {
+    const range = bands?.[band];
+    if (!range || !Number.isFinite(range.minCells) || !Number.isFinite(range.maxCells)
+      || range.minCells < 0 || range.minCells <= previousMax || range.maxCells < range.minCells) {
+      throw new Error(`[dawnContent] Salvage band ${band} needs ordered, non-overlapping finite distances`);
+    }
+    previousMax = range.maxCells;
+  }
 }
 
 /** Lichtungen benachbarter Slots duerfen sich nicht ueberlappen und nicht ins Spawnband reichen. */
@@ -507,6 +514,8 @@ export function validateTemplates(sources: readonly unknown[]): ReadonlyMap<stri
     const slotIds = new Set<string>();
     const previousSlots: DawnSalvageSlot[] = [];
     const salvage = DAWN_SALVAGE_CONFIG;
+    const bands = template.salvageBands ?? salvage.bands;
+    validateSalvageBands(bands);
     // Same inclusive band depth as CoopDefenseSpawnExecutor.getEdgeBand / ArenaGenerator.
     // The ratio is authored here so Dawn spacing participates in the content hash.
     const depthX = Math.min(Math.max(2, Math.floor(width * salvage.frontSpawnBandRatio)), width - 1);
@@ -529,7 +538,7 @@ export function validateTemplates(sources: readonly unknown[]): ReadonlyMap<stri
         || distance <= reservation + MAX_SITE_CLEARING_RADIUS_CELLS) {
         throw new Error(`[dawnContent] ${label} slot ${slot.id} overlaps the base reservation or its gap`);
       }
-      const band = salvage.bands[slot.band];
+      const band = bands[slot.band];
       if (distance < band.minCells || distance > band.maxCells) {
         throw new Error(`[dawnContent] ${label} slot ${slot.id} lies outside its ${slot.band} distance band`);
       }

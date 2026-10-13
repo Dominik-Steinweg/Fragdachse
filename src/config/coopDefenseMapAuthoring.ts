@@ -784,6 +784,13 @@ export interface CoopDefenseMapAuthoringConfig extends CoopDefenseMapConfig {
   readonly waterAreas?: readonly CoopDefenseMapWaterAreaConfig[];
 }
 
+/** Union of circular trunk-placement regions; overlapping regions form irregular groves. */
+export interface CoopDefenseMapTreeGrovesConfig {
+  /** Authored crown margin around bases, sites, rocks and the arena edge, in cells. */
+  readonly canopyClearanceCells: number;
+  readonly areas: readonly { readonly gridX: number; readonly gridY: number; readonly radiusCells: number }[];
+}
+
 export interface CoopDefenseMapConfig {
   readonly krakenHabitat?: KrakenHabitatConfig;
   readonly water?: readonly import('../types').WaterCell[];
@@ -817,6 +824,7 @@ export interface CoopDefenseMapConfig {
   readonly rockFillRatio?: number;
   /** Authored Baumzahl; ohne Angabe gilt der globale Arena-Standard. */
   readonly treeCount?: number;
+  readonly treeGroves?: CoopDefenseMapTreeGrovesConfig;
   /** Authored Gänge durch ein geschlossenes Felsfeld oder organische Felsformationen. */
   readonly rockField?: CoopDefenseMapRockFieldConfig;
   /**
@@ -1293,6 +1301,9 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     tutorialShowControls: mapConfig.tutorialShowControls === true,
     rockFillRatio: normalizeRockFillRatio(mapConfig.rockFillRatio),
     treeCount: normalizeTreeCount(mapConfig.treeCount),
+    ...(mapConfig.treeGroves === undefined ? {} : {
+      treeGroves: normalizeTreeGroves(mapConfig.mapId, mapConfig.treeGroves, arenaWidthCells, arenaHeightCells),
+    }),
     rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),
     rockWalls,
     tutorialAnchor,
@@ -3749,6 +3760,28 @@ function clampCorridorRadius(radiusCells: number): number {
 function normalizeRockFillRatio(rockFillRatio: number | undefined): number {
   if (typeof rockFillRatio !== 'number' || !Number.isFinite(rockFillRatio)) return ROCK_FILL_RATIO;
   return Math.max(0, Math.min(MAX_ROCK_FILL_RATIO, rockFillRatio));
+}
+
+function normalizeTreeGroves(
+  mapId: string,
+  groves: CoopDefenseMapTreeGrovesConfig,
+  width: number,
+  height: number,
+): CoopDefenseMapTreeGrovesConfig {
+  if (!groves || !Number.isInteger(groves.canopyClearanceCells)
+    || groves.canopyClearanceCells < 1 || groves.canopyClearanceCells >= Math.min(width, height) / 2
+    || !Array.isArray(groves.areas) || groves.areas.length === 0) {
+    throw new Error('[coopDefenseMaps] ' + mapId + ': invalid treeGroves');
+  }
+  for (const area of groves.areas) {
+    if (!area || !Number.isInteger(area.gridX) || !Number.isInteger(area.gridY)
+      || area.gridX < 0 || area.gridX >= width || area.gridY < 0 || area.gridY >= height
+      || !Number.isFinite(area.radiusCells) || area.radiusCells <= 0
+      || area.radiusCells > Math.max(width, height)) {
+      throw new Error('[coopDefenseMaps] ' + mapId + ': invalid treeGroves area');
+    }
+  }
+  return { canopyClearanceCells: groves.canopyClearanceCells, areas: groves.areas.map(area => ({ ...area })) };
 }
 
 function normalizeTreeCount(treeCount: number | undefined): number | undefined {

@@ -1,0 +1,219 @@
+{
+  "id": "pondland",
+  "world": {
+    "arenaWidthCells": 150,
+    "arenaHeightCells": 100,
+    "rockFillRatio": 0.055,
+    "treeCount": 24,
+    "timeOfDay": "10:00",
+    "trackMode": "none",
+    "persistentBase": {
+      "baseId": "dawn-core",
+      "maxAreaStage": 11,
+      "anchor": { "gridX": 75, "gridY": 50 }
+    },
+    "waterAreas": [
+      { "gridX": 70, "gridY": 4, "widthCells": 6, "heightCells": 1 },
+      { "gridX": 50, "gridY": 5, "widthCells": 12, "heightCells": 1 },
+      { "gridX": 68, "gridY": 5, "widthCells": 12, "heightCells": 1 },
+      { "gridX": 48, "gridY": 6, "widthCells": 37, "heightCells": 1 },
+      { "gridX": 46, "gridY": 7, "widthCells": 41, "heightCells": 1 },
+      { "gridX": 45, "gridY": 8, "widthCells": 43, "heightCells": 1 },
+      { "gridX": 43, "gridY": 9, "widthCells": 46, "heightCells": 1 },
+      { "gridX": 40, "gridY": 10, "widthCells": 51, "heightCells": 1 },
+      { "gridX": 39, "gridY": 11, "widthCells": 53, "heightCells": 1 },
+      { "gridX": 38, "gridY": 12, "widthCells": 56, "heightCells": 1 },
+      { "gridX": 37, "gridY": 13, "widthCells": 58, "heightCells": 1 },
+      { "gridX": 36, "gridY": 14, "widthCells": 59, "heightCells": 1 },
+      { "gridX": 35, "gridY": 15, "widthCells": 60, "heightCells": 1 },
+      { "gridX": 34, "gridY": 16, "widthCells": 61, "heightCells": 1 },
+      { "gridX": 33, "gridY": 17, "widthCells": 62, "heightCells": 1 },
+      { "gridX": 32, "gridY": 18, "widthCells": 62, "heightCells": 1 },
+      { "gridX": 32, "gridY": 19, "widthCells": 61, "heightCells": 1 },
+      { "gridX": 34, "gridY": 20, "widthCells": 58, "heightCells": 1 },
+      { "gridX": 35, "gridY": 21, "widthCells": 58, "heightCells": 1 },
+      { "gridX": 36, "gridY": 22, "widthCells": 58, "heightCells": 1 },
+      { "gridX": 36, "gridY": 23, "widthCells": 59, "heightCells": 1 },
+      { "gridX": 36, "gridY": 24, "widthCells": 24, "heightCells": 1 },
+      { "gridX": 64, "gridY": 24, "widthCells": 31, "heightCells": 1 },
+      { "gridX": 36, "gridY": 25, "widthCells": 16, "heightCells": 1 },
+      { "gridX": 66, "gridY": 25, "widthCells": 29, "heightCells": 1 },
+      { "gridX": 36, "gridY": 26, "widthCells": 15, "heightCells": 1 },
+      { "gridX": 68, "gridY": 26, "widthCells": 28, "heightCells": 1 },
+      { "gridX": 36, "gridY": 27, "widthCells": 13, "heightCells": 1 },
+      { "gridX": 70, "gridY": 27, "widthCells": 26, "heightCells": 1 },
+      { "gridX": 41, "gridY": 28, "widthCells": 7, "heightCells": 1 },
+      { "gridX": 71, "gridY": 28, "widthCells": 24, "heightCells": 1 },
+      { "gridX": 43, "gridY": 29, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 72, "gridY": 29, "widthCells": 23, "heightCells": 1 },
+      { "gridX": 73, "gridY": 30, "widthCells": 22, "heightCells": 1 },
+      { "gridX": 73, "gridY": 31, "widthCells": 2, "heightCells": 1 },
+      { "gridX": 76, "gridY": 31, "widthCells": 18, "heightCells": 1 },
+      { "gridX": 82, "gridY": 32, "widthCells": 11, "heightCells": 1 },
+      { "gridX": 84, "gridY": 33, "widthCells": 8, "heightCells": 1 },
+      { "gridX": 86, "gridY": 34, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 116, "gridY": 39, "widthCells": 7, "heightCells": 1 },
+      { "gridX": 21, "gridY": 40, "widthCells": 5, "heightCells": 1 },
+      { "gridX": 113, "gridY": 40, "widthCells": 11, "heightCells": 1 },
+      { "gridX": 20, "gridY": 41, "widthCells": 12, "heightCells": 1 },
+      { "gridX": 111, "gridY": 41, "widthCells": 15, "heightCells": 1 },
+      { "gridX": 19, "gridY": 42, "widthCells": 13, "heightCells": 1 },
+      { "gridX": 110, "gridY": 42, "widthCells": 20, "heightCells": 1 },
+      { "gridX": 18, "gridY": 43, "widthCells": 14, "heightCells": 1 },
+      { "gridX": 110, "gridY": 43, "widthCells": 22, "heightCells": 1 },
+      { "gridX": 17, "gridY": 44, "widthCells": 15, "heightCells": 1 },
+      { "gridX": 109, "gridY": 44, "widthCells": 25, "heightCells": 1 },
+      { "gridX": 16, "gridY": 45, "widthCells": 16, "heightCells": 2 },
+      { "gridX": 109, "gridY": 45, "widthCells": 28, "heightCells": 1 },
+      { "gridX": 108, "gridY": 46, "widthCells": 29, "heightCells": 1 },
+      { "gridX": 16, "gridY": 47, "widthCells": 17, "heightCells": 1 },
+      { "gridX": 107, "gridY": 47, "widthCells": 31, "heightCells": 2 },
+      { "gridX": 13, "gridY": 48, "widthCells": 21, "heightCells": 1 },
+      { "gridX": 12, "gridY": 49, "widthCells": 25, "heightCells": 2 },
+      { "gridX": 108, "gridY": 49, "widthCells": 30, "heightCells": 1 },
+      { "gridX": 109, "gridY": 50, "widthCells": 30, "heightCells": 1 },
+      { "gridX": 11, "gridY": 51, "widthCells": 25, "heightCells": 1 },
+      { "gridX": 110, "gridY": 51, "widthCells": 29, "heightCells": 1 },
+      { "gridX": 11, "gridY": 52, "widthCells": 23, "heightCells": 1 },
+      { "gridX": 112, "gridY": 52, "widthCells": 27, "heightCells": 1 },
+      { "gridX": 11, "gridY": 53, "widthCells": 19, "heightCells": 1 },
+      { "gridX": 123, "gridY": 53, "widthCells": 16, "heightCells": 2 },
+      { "gridX": 10, "gridY": 54, "widthCells": 17, "heightCells": 1 },
+      { "gridX": 10, "gridY": 55, "widthCells": 15, "heightCells": 1 },
+      { "gridX": 123, "gridY": 55, "widthCells": 15, "heightCells": 1 },
+      { "gridX": 10, "gridY": 56, "widthCells": 14, "heightCells": 1 },
+      { "gridX": 124, "gridY": 56, "widthCells": 14, "heightCells": 1 },
+      { "gridX": 11, "gridY": 57, "widthCells": 13, "heightCells": 1 },
+      { "gridX": 124, "gridY": 57, "widthCells": 13, "heightCells": 1 },
+      { "gridX": 11, "gridY": 58, "widthCells": 12, "heightCells": 1 },
+      { "gridX": 125, "gridY": 58, "widthCells": 11, "heightCells": 1 },
+      { "gridX": 12, "gridY": 59, "widthCells": 11, "heightCells": 3 },
+      { "gridX": 125, "gridY": 59, "widthCells": 10, "heightCells": 2 },
+      { "gridX": 126, "gridY": 61, "widthCells": 8, "heightCells": 1 },
+      { "gridX": 12, "gridY": 62, "widthCells": 10, "heightCells": 1 },
+      { "gridX": 127, "gridY": 62, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 13, "gridY": 63, "widthCells": 8, "heightCells": 1 },
+      { "gridX": 14, "gridY": 64, "widthCells": 6, "heightCells": 1 },
+      { "gridX": 16, "gridY": 65, "widthCells": 4, "heightCells": 1 },
+      { "gridX": 57, "gridY": 71, "widthCells": 14, "heightCells": 1 },
+      { "gridX": 54, "gridY": 72, "widthCells": 20, "heightCells": 1 },
+      { "gridX": 51, "gridY": 73, "widthCells": 24, "heightCells": 1 },
+      { "gridX": 47, "gridY": 74, "widthCells": 28, "heightCells": 1 },
+      { "gridX": 46, "gridY": 75, "widthCells": 30, "heightCells": 3 },
+      { "gridX": 46, "gridY": 78, "widthCells": 31, "heightCells": 1 },
+      { "gridX": 45, "gridY": 79, "widthCells": 32, "heightCells": 1 },
+      { "gridX": 45, "gridY": 80, "widthCells": 35, "heightCells": 1 },
+      { "gridX": 45, "gridY": 81, "widthCells": 36, "heightCells": 1 },
+      { "gridX": 46, "gridY": 82, "widthCells": 35, "heightCells": 1 },
+      { "gridX": 46, "gridY": 83, "widthCells": 36, "heightCells": 1 },
+      { "gridX": 97, "gridY": 83, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 47, "gridY": 84, "widthCells": 36, "heightCells": 1 },
+      { "gridX": 94, "gridY": 84, "widthCells": 8, "heightCells": 1 },
+      { "gridX": 48, "gridY": 85, "widthCells": 36, "heightCells": 1 },
+      { "gridX": 92, "gridY": 85, "widthCells": 12, "heightCells": 1 },
+      { "gridX": 51, "gridY": 86, "widthCells": 33, "heightCells": 1 },
+      { "gridX": 91, "gridY": 86, "widthCells": 13, "heightCells": 1 },
+      { "gridX": 53, "gridY": 87, "widthCells": 31, "heightCells": 1 },
+      { "gridX": 90, "gridY": 87, "widthCells": 14, "heightCells": 3 },
+      { "gridX": 54, "gridY": 88, "widthCells": 30, "heightCells": 1 },
+      { "gridX": 55, "gridY": 89, "widthCells": 28, "heightCells": 1 },
+      { "gridX": 57, "gridY": 90, "widthCells": 26, "heightCells": 1 },
+      { "gridX": 91, "gridY": 90, "widthCells": 13, "heightCells": 1 },
+      { "gridX": 64, "gridY": 91, "widthCells": 19, "heightCells": 1 },
+      { "gridX": 92, "gridY": 91, "widthCells": 11, "heightCells": 1 },
+      { "gridX": 68, "gridY": 92, "widthCells": 13, "heightCells": 1 },
+      { "gridX": 94, "gridY": 92, "widthCells": 8, "heightCells": 1 },
+      { "gridX": 98, "gridY": 93, "widthCells": 3, "heightCells": 1 },
+      { "gridX": 49, "gridY": 12, "widthCells": 25, "heightCells": 10 },
+      { "gridX": 61, "gridY": 9, "widthCells": 18, "heightCells": 13 },
+      { "gridX": 74, "gridY": 17, "widthCells": 14, "heightCells": 11 },
+      { "gridX": 52, "gridY": 78, "widthCells": 20, "heightCells": 7 },
+      { "gridX": 117, "gridY": 43, "widthCells": 10, "heightCells": 7 }
+    ],
+    "water": [
+      { "gridX": 87, "gridY": 35 }
+    ]
+  },
+  "fronts": [
+    "west",
+    "north",
+    "east",
+    "south"
+  ],
+  "salvageBands": {
+    "near": {
+      "minCells": 24,
+      "maxCells": 32
+    },
+    "mid": {
+      "minCells": 35,
+      "maxCells": 45
+    },
+    "far": {
+      "minCells": 47,
+      "maxCells": 59
+    }
+  },
+  "salvageSlots": [
+    {
+      "id": "nw-near",
+      "anchor": { "gridX": 55, "gridY": 33 },
+      "band": "near"
+    },
+    {
+      "id": "nw-mid",
+      "anchor": { "gridX": 37, "gridY": 43 },
+      "band": "mid"
+    },
+    {
+      "id": "nw-far",
+      "anchor": { "gridX": 30, "gridY": 25 },
+      "band": "far"
+    },
+    {
+      "id": "ne-near",
+      "anchor": { "gridX": 98, "gridY": 40 },
+      "band": "near"
+    },
+    {
+      "id": "ne-mid",
+      "anchor": { "gridX": 100, "gridY": 22 },
+      "band": "mid"
+    },
+    {
+      "id": "ne-far",
+      "anchor": { "gridX": 121, "gridY": 32 },
+      "band": "far"
+    },
+    {
+      "id": "se-near",
+      "anchor": { "gridX": 91, "gridY": 72 },
+      "band": "near"
+    },
+    {
+      "id": "se-mid",
+      "anchor": { "gridX": 112, "gridY": 60 },
+      "band": "mid"
+    },
+    {
+      "id": "se-far",
+      "anchor": { "gridX": 120, "gridY": 78 },
+      "band": "far"
+    },
+    {
+      "id": "sw-near",
+      "anchor": { "gridX": 53, "gridY": 65 },
+      "band": "near"
+    },
+    {
+      "id": "sw-mid",
+      "anchor": { "gridX": 40, "gridY": 75 },
+      "band": "mid"
+    },
+    {
+      "id": "sw-far",
+      "anchor": { "gridX": 28, "gridY": 61 },
+      "band": "far"
+    }
+  ]
+}

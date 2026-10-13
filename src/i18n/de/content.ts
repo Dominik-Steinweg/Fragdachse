@@ -1,4 +1,7 @@
 export const deContent = {
+  "map.dawn:pondland.name": "Teichland",
+  "map.dawn:rockbasin.name": "Felskessel",
+  "map.dawn:oldwood.name": "Altwald",
   "map.dawn:clearing.name": "Lichtung",
   "construction.attack_drone_station.name": "Angriffsdrohnenstation",
   "construction.attack_drone_station.description": "Eine verwundbare Station versorgt eine unverwundbare autonome Kampfdrohne.",

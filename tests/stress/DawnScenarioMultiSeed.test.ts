@@ -8,7 +8,7 @@ import {
   resolveCoopDefenseBases,
   type BaseSpec,
 } from '../../src/arena/BaseRegistry';
-import { DAWN_CONTENT_HASH, getDawnArenaTemplate } from '../../src/config/dawn/dawnContent';
+import { DAWN_CONTENT_HASH, getDawnArenaTemplate, getDawnArenaTemplates } from '../../src/config/dawn/dawnContent';
 import { composeDawnRoundPlans } from '../../src/dawn/composition/DawnRoundComposition';
 import { DAWN_MAX_THREAT, haveSameDawnPlan } from '../../src/dawn/contracts/DawnPlans';
 import { resolveDawnSites } from '../../src/dawn/resolution/DawnScenarioResolution';
@@ -71,6 +71,7 @@ interface TemplateStats {
   readonly heightCells: number;
   readonly generationMs: number[];
   readonly determinismSeeds: number[];
+  readonly seeds: number[];
   readonly threats: Record<number, number>;
   /** Routen je angebotener Front (gemessen); garantiert werden nur die Fronten des Plans. */
   readonly offeredFrontRoutes: Record<string, number>;
@@ -78,92 +79,112 @@ interface TemplateStats {
   readonly slots: Record<string, { occupied: number; coreConnected: number; coreBlockedCells: number }>;
 }
 
-describe('Dawn S1 multi-seed generation', () => {
-  it('generates composed rounds for every threat, keeps fingerprints and connects fronts and sites', async () => {
+describe('Dawn arena multi-seed generation', () => {
+  it.each(getDawnArenaTemplates())('$id: generates every threat and connects fronts and sites', async (targetTemplate) => {
     const suiteStart = performance.now();
     const failures: string[] = [];
     const stats = new Map<string, TemplateStats>();
 
-    for (let seed = 1; seed <= SEED_COUNT; seed++) {
-      // Minutes of synchronous generation would starve the worker RPC; yield periodically.
-      if (seed % 20 === 0) await new Promise<void>((resolve) => setImmediate(resolve));
-      const threat = ((seed - 1) % DAWN_MAX_THREAT) + 1;
-      const dawn = composeDawnRoundPlans({ seed, threat, dayNumber: 1 });
-      const template = getDawnArenaTemplate(dawn.world.templateId);
-      const cols = template.world.arenaWidthCells!, rows = template.world.arenaHeightCells!;
-      const entry = stats.get(template.id) ?? {
-        templateId: template.id, widthCells: cols, heightCells: rows, generationMs: [], determinismSeeds: [],
-        threats: {}, offeredFrontRoutes: Object.fromEntries(template.fronts.map(front => [front, 0])), plannedFronts: {},
-        slots: Object.fromEntries(template.salvageSlots.map(slot => [slot.id, { occupied: 0, coreConnected: 0, coreBlockedCells: 0 }])),
-      };
-      stats.set(template.id, entry);
-      entry.threats[threat] = (entry.threats[threat] ?? 0) + 1;
-      const generate = () => generateRoundWorld({
-        roundRevision: 1, gameMode: 'coop_defense', seed, campaignMapConfig: null, dawn,
-        worldParameters: { persistentBaseUnlocked: true, persistentBaseAreaStage: template.world.persistentBase.maxAreaStage },
-      });
-
-      const generationStart = performance.now();
-      let generated: ReturnType<typeof generate>;
-      try { generated = generate(); }
-      catch (error) { failures.push(`${template.id}/${seed}: ${String(error)}`); continue; }
-      entry.generationMs.push(performance.now() - generationStart);
-      if (seed === 1 || seed % 100 === 0) {
-        entry.determinismSeeds.push(seed);
-        const recomposed = composeDawnRoundPlans({ seed, threat, dayNumber: 1 });
-        expect(haveSameDawnPlan(recomposed.world, dawn.world), `${seed} world plan`).toBe(true);
-        expect(haveSameDawnPlan(recomposed.activity, dawn.activity), `${seed} activity plan`).toBe(true);
-        expect(generate().world.layoutFingerprint, `${template.id}/${seed} fingerprint`)
-          .toBe(generated.world.layoutFingerprint);
-      }
-
-      const { layout, mapConfig } = generated;
-      expect(layout.tracks, `${template.id} has no railway`).toHaveLength(0);
-      const bases = resolveCoopDefenseBases(mapConfig!);
-      // ArenaGenerator blocks rock cells, trunk cells and water cells. Base interiors also
-      // block traversal, as in runtime pathing; canopy, dirt and decals do not block cells.
-      // Use the pathing raster builder, without its dig-through-rock cost semantics.
-      const blocked = buildOccupancyRaster([
-        ...layout.rocks, ...layout.trees, ...(layout.water ?? []), ...bases.flatMap(base => base.cells),
-      ], { cols, rows, cellSize: 1, arenaOffsetX: 0, arenaOffsetY: 0 });
-      const goals = baseGoals(bases, blocked, cols, rows);
-      expect(goals.length, `${template.id}/${seed} base goals`).toBeGreaterThan(0);
-      const reached = flood(goals, blocked, cols, rows);
-      const plannedFronts = new Set(dawn.activity.waves.map(wave => wave.front));
-      for (const front of template.fronts) {
-        const hasRoute = reached.some((value, index) => {
-          if (!value) return false;
-          const x = index % cols, y = Math.floor(index / cols);
-          return inFrontBand(front, x, y, cols, rows)
-            && !isPersistentBaseReservationCell(x, y, bases)
-            && !isCoopDefenseBaseObstacleClearanceCell(x, y, bases);
-        });
-        if (hasRoute) entry.offeredFrontRoutes[front]++;
-        if (!plannedFronts.has(front)) continue;
-        entry.plannedFronts[front] = (entry.plannedFronts[front] ?? 0) + 1;
-        if (!hasRoute) failures.push(`${template.id}/${seed}: no ${front} route`);
-      }
-
-      // Sites must be reachable from the persistent core itself, not via a friendly site structure.
-      const core = bases.filter(base => base.persistentReservationRadiusCells !== undefined);
-      const fromCore = flood(baseGoals(core, blocked, cols, rows), blocked, cols, rows);
-      const structureCells = new Set(bases.flatMap(base => base.cells.map(cell => cell.gridY * cols + cell.gridX)));
-      for (const site of resolveDawnSites(dawn.world)) {
-        const slotStats = entry.slots[site.slotId];
-        slotStats.occupied++;
-        const { gridX, gridY } = site.slot.anchor;
-        let freeCore = 0, blockedCore = 0, disconnected = 0;
-        for (let dy = -SITE_CORE_RADIUS; dy <= SITE_CORE_RADIUS; dy++) for (let dx = -SITE_CORE_RADIUS; dx <= SITE_CORE_RADIUS; dx++) {
-          if (Math.hypot(dx, dy) > SITE_CORE_RADIUS) continue;
-          const index = (gridY + dy) * cols + gridX + dx;
-          if (structureCells.has(index)) continue;
-          if (blocked[index]) { blockedCore++; continue; }
-          freeCore++;
-          if (!fromCore[index]) disconnected++;
+    const templateSeeds = new Map([[targetTemplate.id, [] as number[]]]);
+    // Select real production seeds instead of replacing a composed template after site selection.
+    for (let seed = 1; [...templateSeeds.values()].some(seeds => seeds.length < SEED_COUNT); seed++) {
+      if (seed > SEED_COUNT * templateSeeds.size * 100) throw new Error('Template seed search exhausted');
+      const id = composeDawnRoundPlans({ seed, threat: 1, dayNumber: 1 }).world.templateId;
+      const seeds = templateSeeds.get(id);
+      if (seeds && seeds.length < SEED_COUNT) seeds.push(seed);
+    }
+    for (let seedIndex = 0; seedIndex < SEED_COUNT; seedIndex++) for (const seeds of templateSeeds.values()) {
+      const seed = seeds[seedIndex];
+      for (let threat = 1; threat <= DAWN_MAX_THREAT; threat++) {
+        if (threat === 1 && seedIndex % 10 === 0) {
+          console.info('Dawn progress', composeDawnRoundPlans({ seed, threat, dayNumber: 1 }).world.templateId, seedIndex, '/', SEED_COUNT, 'failures:', failures.length);
+          mkdirSync('build/dawn/M3-arenas', { recursive: true });
+          writeFileSync(`build/dawn/M3-arenas/${targetTemplate.id}-stress-progress.json`, JSON.stringify({
+            elapsedMs: performance.now() - suiteStart, failures,
+            templates: [...stats.values()].map(entry => ({ templateId: entry.templateId, rounds: entry.generationMs.length,
+              meanMs: entry.generationMs.reduce((a, b) => a + b, 0) / entry.generationMs.length })),
+          }, null, 2));
         }
-        slotStats.coreBlockedCells += blockedCore;
-        if (freeCore > 0 && blockedCore === 0 && disconnected === 0) slotStats.coreConnected++;
-        else failures.push(`${template.id}/${seed}: site ${site.slotId} core blocked ${blockedCore}, disconnected ${disconnected}`);
+        // Minutes of synchronous generation would starve the worker RPC; yield periodically.
+        if (threat === 1) await new Promise<void>((resolve) => setImmediate(resolve));
+
+        const dawn = composeDawnRoundPlans({ seed, threat, dayNumber: 1 });
+        const template = getDawnArenaTemplate(dawn.world.templateId);
+        const cols = template.world.arenaWidthCells!, rows = template.world.arenaHeightCells!;
+        const entry = stats.get(template.id) ?? {
+          templateId: template.id, widthCells: cols, heightCells: rows, generationMs: [], determinismSeeds: [], seeds,
+          threats: {}, offeredFrontRoutes: Object.fromEntries(template.fronts.map(front => [front, 0])), plannedFronts: {},
+          slots: Object.fromEntries(template.salvageSlots.map(slot => [slot.id, { occupied: 0, coreConnected: 0, coreBlockedCells: 0 }])),
+        };
+        stats.set(template.id, entry);
+        entry.threats[threat] = (entry.threats[threat] ?? 0) + 1;
+        const generate = () => generateRoundWorld({
+          roundRevision: 1, gameMode: 'coop_defense', seed, campaignMapConfig: null, dawn,
+          worldParameters: { persistentBaseUnlocked: true, persistentBaseAreaStage: template.world.persistentBase.maxAreaStage },
+        });
+
+        const generationStart = performance.now();
+        let generated: ReturnType<typeof generate>;
+        try { generated = generate(); }
+        catch (error) { failures.push(`${template.id}/${seed}/threat-${threat}: ${String(error)}`); continue; }
+        entry.generationMs.push(performance.now() - generationStart);
+        if (threat === 1 && (seedIndex === 0 || seedIndex % 100 === 0)) {
+          entry.determinismSeeds.push(seed);
+          const recomposed = composeDawnRoundPlans({ seed, threat, dayNumber: 1 });
+          expect(haveSameDawnPlan(recomposed.world, dawn.world), `${seed} world plan`).toBe(true);
+          expect(haveSameDawnPlan(recomposed.activity, dawn.activity), `${seed} activity plan`).toBe(true);
+          expect(generate().world.layoutFingerprint, `${template.id}/${seed} fingerprint`)
+            .toBe(generated.world.layoutFingerprint);
+        }
+
+        const { layout, mapConfig } = generated;
+        expect(layout.tracks, `${template.id} has no railway`).toHaveLength(0);
+        const bases = resolveCoopDefenseBases(mapConfig!);
+        // ArenaGenerator blocks rock cells, trunk cells and water cells. Base interiors also
+        // block traversal, as in runtime pathing; canopy, dirt and decals do not block cells.
+        // Use the pathing raster builder, without its dig-through-rock cost semantics.
+        const blocked = buildOccupancyRaster([
+          ...layout.rocks, ...layout.trees, ...(layout.water ?? []), ...bases.flatMap(base => base.cells),
+        ], { cols, rows, cellSize: 1, arenaOffsetX: 0, arenaOffsetY: 0 });
+        const core = bases.filter(base => base.persistentReservationRadiusCells !== undefined);
+        const goals = baseGoals(core, blocked, cols, rows);
+        expect(goals.length, `${template.id}/${seed} base goals`).toBeGreaterThan(0);
+        const reached = flood(goals, blocked, cols, rows);
+        const plannedFronts = new Set(dawn.activity.waves.flatMap(wave => 'front' in wave ? [wave.front] : []));
+        for (const front of template.fronts) {
+          const hasRoute = reached.some((value, index) => {
+            if (!value) return false;
+            const x = index % cols, y = Math.floor(index / cols);
+            return inFrontBand(front, x, y, cols, rows)
+              && !isPersistentBaseReservationCell(x, y, bases)
+              && !isCoopDefenseBaseObstacleClearanceCell(x, y, bases);
+          });
+          if (hasRoute) entry.offeredFrontRoutes[front]++;
+          if (!hasRoute) failures.push(`${template.id}/${seed}/threat-${threat}: no ${front} route`);
+          if (!plannedFronts.has(front)) continue;
+          entry.plannedFronts[front] = (entry.plannedFronts[front] ?? 0) + 1;
+
+        }
+
+        // Flood starts at the persistent core itself, never at a friendly site structure.
+        const structureCells = new Set(bases.flatMap(base => base.cells.map(cell => cell.gridY * cols + cell.gridX)));
+        for (const site of resolveDawnSites(dawn.world)) {
+          const slotStats = entry.slots[site.slotId];
+          slotStats.occupied++;
+          const { gridX, gridY } = site.slot.anchor;
+          let freeCore = 0, blockedCore = 0, disconnected = 0;
+          for (let dy = -SITE_CORE_RADIUS; dy <= SITE_CORE_RADIUS; dy++) for (let dx = -SITE_CORE_RADIUS; dx <= SITE_CORE_RADIUS; dx++) {
+            if (Math.hypot(dx, dy) > SITE_CORE_RADIUS) continue;
+            const index = (gridY + dy) * cols + gridX + dx;
+            if (structureCells.has(index)) continue;
+            if (blocked[index]) { blockedCore++; continue; }
+            freeCore++;
+            if (!reached[index]) disconnected++;
+          }
+          slotStats.coreBlockedCells += blockedCore;
+          if (freeCore > 0 && blockedCore === 0 && disconnected === 0) slotStats.coreConnected++;
+          else failures.push(`${template.id}/${seed}/threat-${threat}: site ${site.slotId} core blocked ${blockedCore}, disconnected ${disconnected}`);
+        }
       }
     }
 
@@ -172,7 +193,7 @@ describe('Dawn S1 multi-seed generation', () => {
       const totalMs = entry.generationMs.reduce((sum, ms) => sum + ms, 0);
       const summary = {
         templateId: entry.templateId, widthCells: entry.widthCells, heightCells: entry.heightCells,
-        generatedSeeds: entry.generationMs.length, determinismSeeds: entry.determinismSeeds, threats: entry.threats,
+        generatedSeeds: entry.seeds.length, generatedRounds: entry.generationMs.length, seeds: entry.seeds, determinismSeeds: entry.determinismSeeds, threats: entry.threats,
         offeredFrontRoutes: entry.offeredFrontRoutes, plannedFronts: entry.plannedFronts,
         generation: {
           totalMs, meanMs: totalMs / entry.generationMs.length,
@@ -180,20 +201,24 @@ describe('Dawn S1 multi-seed generation', () => {
         },
         slots: Object.entries(entry.slots).map(([slotId, slot]) => ({ slotId, ...slot })),
       };
-      console.info(`Dawn S1 ${entry.templateId}: ${summary.generatedSeeds} seeds; `
+      console.info(`Dawn M3 ${entry.templateId}: ${summary.generatedSeeds} seeds x 10 threats; `
         + `${summary.generation.meanMs.toFixed(1)} ms mean, ${summary.generation.p95Ms?.toFixed(1)} ms p95, `
         + `${summary.generation.maxMs?.toFixed(1)} ms max; offered front routes ${JSON.stringify(entry.offeredFrontRoutes)}\n`
         + 'slot | occupied | core connected\n'
         + summary.slots.map(slot => `${slot.slotId} | ${slot.occupied} | ${slot.coreConnected}`).join('\n'));
       return summary;
     });
-    mkdirSync('build/dawn', { recursive: true });
-    writeFileSync('build/dawn/S1-stats.json', JSON.stringify({
+    mkdirSync('build/dawn/M3-arenas', { recursive: true });
+    writeFileSync(`build/dawn/M3-arenas/${targetTemplate.id}-stress-stats.json`, JSON.stringify({
       contentHash: DAWN_CONTENT_HASH, generatorVersion: ARENA_GENERATOR_VERSION,
-      seedRange: [1, SEED_COUNT], threatCycle: [1, DAWN_MAX_THREAT], siteCoreRadiusCells: SITE_CORE_RADIUS,
+      seedsPerTemplate: SEED_COUNT, threatsPerSeed: [1, DAWN_MAX_THREAT], siteCoreRadiusCells: SITE_CORE_RADIUS,
       elapsedMs: performance.now() - suiteStart, templates, failures,
     }, null, 2) + '\n');
-    expect(failures, 'All generations, planned front routes and site cores must succeed; see build/dawn/S1-stats.json')
+    for (const entry of stats.values()) {
+      expect(entry.generationMs, `${entry.templateId} complete seed/threat matrix`).toHaveLength(SEED_COUNT * DAWN_MAX_THREAT);
+      for (const slot of Object.values(entry.slots)) expect(slot.occupied).toBeGreaterThan(0);
+    }
+    expect(failures, `All generations, offered front routes and site cores must succeed; see build/dawn/M3-arenas/${targetTemplate.id}-stress-stats.json`)
       .toEqual([]);
-  }, 600_000);
+  }, 7_200_000);
 });

@@ -11,6 +11,30 @@ import { getDawnSchedule } from '../src/config/dawn/dawnContent';
 import { parseDawnWorldPlan } from '../src/dawn/contracts/DawnPlans';
 import { resolveDawnPhase, toDawnDynamicTimeOfDay } from '../src/dawn/rules/DawnPhase';
 
+describe('authored tree groves', () => {
+  const treeGroves = { canopyClearanceCells: 6, areas: [
+    { gridX: 12, gridY: 14, radiusCells: 9 },
+    { gridX: 19, gridY: 10, radiusCells: 7 },
+  ] };
+
+  it('keeps grove placement on the World through normalization and adapter round trips', () => {
+    const map = normalizeCoopDefenseMapConfig(dawnLikeMap({ treeGroves }));
+    const scenario = toAuthoredScenario(map);
+    expect(scenario.world.terrain.treeGroves).toEqual(treeGroves);
+    expect(toCoopDefenseMapConfig(scenario)).toEqual(map);
+    expect(Object.hasOwn(normalizeCoopDefenseMapConfig(dawnLikeMap()), 'treeGroves')).toBe(false);
+  });
+
+  it.each([
+    { canopyClearanceCells: 0, areas: treeGroves.areas },
+    { ...treeGroves, areas: [] },
+    { ...treeGroves, areas: [{ gridX: 80, gridY: 10, radiusCells: 4 }] },
+    { ...treeGroves, areas: [{ gridX: 12, gridY: 10, radiusCells: NaN }] },
+  ])('rejects malformed groves %j', invalid => {
+    expect(() => normalizeCoopDefenseMapConfig(dawnLikeMap({ treeGroves: invalid }))).toThrow('treeGroves');
+  });
+});
+
 /** Kleinste Map mit den Dawn-Erweiterungen des Coop-Authorings. */
 function dawnLikeMap(overrides: Partial<CoopDefenseMapAuthoringConfig> = {}): CoopDefenseMapAuthoringConfig {
   return {

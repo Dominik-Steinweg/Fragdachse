@@ -39,4 +39,31 @@ describe('ArenaGenerator site clearings', () => {
         .toBe(ArenaGenerator.fingerprint(generate(seed, base)));
     }
   });
+
+  it('places authored groves deterministically and reserves the full crown around sites', () => {
+    const treeGroves = { canopyClearanceCells: 6, areas: [
+      { gridX: 18, gridY: 20, radiusCells: 14 },
+      { gridX: 65, gridY: 20, radiusCells: 16 },
+    ] };
+    const map: CoopDefenseMapConfig = { ...withSites, rockFillRatio: 0, rockField: undefined,
+      treeCount: 30, treeGroves };
+    for (const seed of [3, 17, 4242]) {
+      const layout = generate(seed, map);
+      expect(layout.trees.length).toBeGreaterThan(0);
+      expect(ArenaGenerator.fingerprint(generate(seed, map))).toBe(ArenaGenerator.fingerprint(layout));
+      for (const tree of layout.trees) {
+        expect(treeGroves.areas.some(area => Math.hypot(tree.gridX - area.gridX, tree.gridY - area.gridY)
+          <= area.radiusCells)).toBe(true);
+        for (const clearing of siteClearings) {
+          for (let dy = -clearing.radiusCells; dy <= clearing.radiusCells; dy++) {
+            for (let dx = -clearing.radiusCells; dx <= clearing.radiusCells; dx++) {
+              if (dx * dx + dy * dy > clearing.radiusCells ** 2) continue;
+              expect(Math.hypot(tree.gridX - clearing.gridX - dx, tree.gridY - clearing.gridY - dy))
+                .toBeGreaterThan(treeGroves.canopyClearanceCells);
+            }
+          }
+        }
+      }
+    }
+  });
 });
