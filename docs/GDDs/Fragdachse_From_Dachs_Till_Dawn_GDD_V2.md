@@ -135,7 +135,7 @@ M2-Simulation legt die tatsächlichen Kosten fest.
 | D-08 | 2026-10-13 | Die aufgelöste Dawn-Config trägt `mapId = dawn:<template>` nur als Kompatibilitätsschlüssel; sie wird nie in der Map-Registry gesucht. | ja |
 | D-09 | 2026-10-13 | Nekromantie-Hinweis nur, wenn die Migration tatsächlich Stufen entfernt hat. Unbekannte Zweig-IDs im Progress werden verworfen statt den Fortschritt abzulehnen. | ja |
 | D-10 | 2026-10-13 | Händlerangebot (`shopOffer`) kommt in M2 als optionales Feld ohne Schema-Sprung. | ja |
-| D-11 | 2026-10-13 | Erste Arena „Lichtung“: 112×80 Zellen, Basis mittig (Spike S1 bestätigt oder korrigiert die Maße). | ja |
+| D-11 | 2026-10-13 | Erste Arena „Lichtung“: 112×80 Zellen, Basis mittig, 12 Salvage-Slots in drei Distanzbändern. Spike S1: 500/500 Seeds erzeugbar, alle Fronten mit Route zur Basis; Slots ohne Generator-Lichtung nur zu ~80 % erreichbar, daher Site-Lichtungen im Generator ab M1. | ja |
 | D-12 | 2026-10-13 | Kapazitätsbonus +2 je Stufe über 2; verdrahtet wird er mit der Infrastruktur in M2, solange in M0/M1 niemand über Stufe 2 kommt. | ja |
 | D-13 | 2026-10-13 | Dawn-Runden buchen keinen Kampagnenabschluss (`RoundState.coopDefenseMapId` bleibt leer, `RoundState.dawn` trägt Threat und Tag). | ja |
 | D-14 | 2026-10-13 | Freischaltung ausschließlich über den Sieg auf der letzten Kampagnenkarte. | ja |
