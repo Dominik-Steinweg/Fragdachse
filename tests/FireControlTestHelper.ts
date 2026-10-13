@@ -110,9 +110,7 @@ export function createFireControlWorldFixture(overrides: Partial<Extract<Utility
   const spawnEnemy = (x = 180, y = 50) => { const enemy = enemies.hostSpawnAtWorld(x, y, kind);
     enemy.setHp(100000, 100000, true); return enemy; };
   let hitId = 0;
-  const setPoint = (x: number, y: number) => { player.x = x; player.y = y; };
-  return { ...utility, config, binding, placement, combat, enemies, homing, injector, item, player, stats, add, spawnEnemy, setPoint,
-    isFree: () => free,
+  return { ...utility, config, binding, placement, combat, enemies, homing, injector, item, player, stats, add, spawnEnemy,
     point: (rock: { gridX: number; gridY: number }) => ({ x: metrics.offsetX + rock.gridX * CELL_SIZE + CELL_SIZE / 2,
       y: metrics.offsetY + rock.gridY * CELL_SIZE + CELL_SIZE / 2 }),
     setManned: (id: number | null, playerId = 'ally', inputFresh = false) => { manned = id; pilot = playerId; fresh = inputFresh; }, setFree: (value: boolean) => { free = value; },
@@ -206,14 +204,13 @@ export function createFireControlUtilityFixture(config: UtilityConfig,
   if (portalBase.type !== 'fire_control_portal') throw Error('Expected portal config');
   const portalConfig = { ...portalBase, ...portalOverrides };
   let alive = true, attempt = 0;
-  let actorPosition = { x: 0, y: 0 };
   let equipped = config;
   const projectile = createFireControlProjectileFixture();
   const cooldown = vi.fn(), inventory = vi.fn(), used = vi.fn(), noteUsed = vi.fn();
   const action = new PlayerUtilityActionRuntime({
     captureSmokeDamage: () => ({ sourceDamageMultiplier: 1 }), projectileSpawn: { spawnProjectile: projectile.spawn },
     combatSystem: {} as never,
-    actor: { getPlayer: () => ({ ...actorPosition, color: 0xffffff }), canInteract: () => true,
+    actor: { getPlayer: () => ({ x: 0, y: 0, color: 0xffffff }), canInteract: () => true,
       isAlive: () => alive, isUtilityBlocked: () => false },
     loadout: { getEquippedUtilityConfig: () => equipped, resolveUtilityConfig: (_p, c) => c, noteUtilityUsed: noteUsed },
     heldAction: new HostHeldActionSystem(), translocator: null, decoy: null, stinkCloud: null,
@@ -224,7 +221,6 @@ export function createFireControlUtilityFixture(config: UtilityConfig,
   });
   const portalTool = { kind: 'utility', id: portalConfig.id } as const;
   return { action, projectile, cooldown, inventory, used, noteUsed, portalConfig,
-    setActorPosition(x: number, y: number) { actorPosition = { x, y }; },
     /** Real held throw through the tool path: charge in ms of holding, released at `now`. */
     throwPortal(now: number, angle = 0, chargeMs = portalConfig.activation.type === 'charged_throw' ? portalConfig.activation.fullChargeDuration : 0) {
       const heldActionId = `portal-${++attempt}`;

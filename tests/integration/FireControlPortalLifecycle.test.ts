@@ -26,6 +26,8 @@ const land = (at: number, x?: number): ProjectileGrenadePayloadRequest => {
   handle.body.setVelocity(0, 0);
   const stage = f.projectile.advance(at - f.projectile.now);
   expect(stage.grenadePayloads).toHaveLength(1);
+  // The safety fuse never shows a grenade countdown over the device.
+  expect(stage.countdownEvents).toEqual([]);
   return stage.grenadePayloads[0];
 };
 

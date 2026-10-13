@@ -39,6 +39,7 @@ function makeAimController() {
     syncPlaceableUtilityHint: vi.fn(),
     renderPlacementPreview: vi.fn(),
     renderRemotePlacementPreviews: vi.fn(),
+    syncFireControlPortalLanding: vi.fn(),
     showPlacementError: vi.fn(),
     clearForTeardown: vi.fn(),
   };

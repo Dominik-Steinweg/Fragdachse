@@ -19,9 +19,10 @@ Soll-Verhalten. Was bereits umgesetzt ist, steht im Gate-Bericht `build/fire-con
   Identität (§2.3), **Turmkopien** vollständig mit Upgradebaum, Netz-Slice, Darstellung und HUD (§3), inklusive
   der G1-Entscheidungen E17–E20.
 - Zwischenstand D42: Turmkopien sind für den Inspektor gratis freigeschaltet; HE bleibt bis P3.1 gratis.
-- **Nicht begonnen:** Portale (§4, Meilenstein M2) – im Content gesperrt, Vertragsentwurf
-  `build/fire-control/P2-contract.md`; HE-Kosten und Loadout-Migration (P3.1); Balance-Tuning (E20: erst
-  Spieltests).
+- **Umgesetzt bis G2 (Abnahme offen):** Portale (§4, Meilenstein M2) mit Wurf, Landung bei Ruhe,
+  Portalmodus, Freischaltung für 1 Punkt, Flugsprite und Landepunkt-Vorschau; Vertrag
+  `build/fire-control/P2-contract.md` (D33–D45, Default D46 im G2-Bericht).
+- **Nicht begonnen:** HE-Kosten und Loadout-Migration (P3.1); Balance-Tuning (E20: erst Spieltests).
 - Testanleitung für den User: `build/fire-control/TESTING.md`.
 
 Inspector Gadachs erhält zwei Utilities, mit denen seine gebauten Türme entfernte Kämpfe unterstützen:

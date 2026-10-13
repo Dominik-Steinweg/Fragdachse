@@ -298,6 +298,7 @@ export const DEPTH_LAYER_EXCEPTIONS: readonly LayerException[] = [
   {"id":"cpu:effects/ShockComboExplosionRenderer.ts:image/image/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/HolyGrenadeRenderer.ts:createVisual/glow/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/HolyGrenadeRenderer.ts:createVisual/body/setDepth/0","deviation":"material-outside-sun","finding":"D06"},
+{"id":"cpu:effects/fireControl/FireControlPortalFlightView.ts:module/this.sprite/setDepth/0","deviation":"material-outside-sun","finding":"D06"},
   {"id":"cpu:effects/HolyGrenadeRenderer.ts:createVisual/trim/setDepth/0","deviation":"material-outside-sun","finding":"D06"},
   {"id":"cpu:effects/HolyGrenadeRenderer.ts:createVisual/pin/setDepth/0","deviation":"material-outside-sun","finding":"D06"},
   {"id":"cpu:effects/HolyGrenadeRenderer.ts:createVisual/sparkEmitter/setDepth/0","deviation":"material-outside-sun","finding":"D06"},

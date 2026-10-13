@@ -11,9 +11,14 @@ const steps = ['basic', 'three', 'parallel', 'destroyOriginal', 'manned', 'rejec
   'portal', 'portalLocal', 'portalCombined', 'portalRejected'] as const;
 type ReviewStep = typeof steps[number];
 const projector = { gridX: 44, gridY: 29 };
-/** Portal steps: full-charge throw east from the player; the exit target sits beyond the turret's own range. */
+/**
+ * Portal steps on map 4: full-charge throw east along the free row 33; the exit target sits beyond
+ * the turret's own range, the local target (portalLocal) beyond the exit's reach.
+ */
 const PORTAL_STEPS: readonly ReviewStep[] = ['portal', 'portalLocal', 'portalCombined', 'portalRejected'];
-const portalAim = { gridX: 62, gridY: 31 };
+const portalAim = { gridX: 62, gridY: 33 };
+const portalPlayer = { gridX: 42, gridY: 33 };
+const portalLocalTarget = { gridX: 36, gridY: 22 };
 const portalTool = { kind: 'utility', id: 'FIRE_CONTROL_PORTAL' } as const;
 const fixtures = new WeakMap<DevScenarioController, FireControlReview>();
 
@@ -64,6 +69,7 @@ class FireControlReview {
     // Targets appear only after activation so no pre-existing original salvo obscures the pause.
     if (this.step !== 'rejected') controller.spawn('rabid-badger', true, 1000000, { gridX: 47, gridY: 28 }, false);
   }
+  /** portalCombined: copies on activate; the portal is thrown on resolve, once the copy is materialized. */
   private activatePortal(controller: DevScenarioController): void {
     if (this.step === 'portalCombined') {
       const metrics = this.runtime.getWorldMetrics()!, player = this.runtime.navigationLabPort.getPlayerPosition()!;
@@ -72,17 +78,18 @@ class FireControlReview {
         { kind: 'utility', id: 'FIRE_CONTROL_RELAY' }, Math.atan2(point.y - player.y, point.x - player.x),
         point.x, point.y, bridge.getSynchronizedNow());
       if (!copies.ok) throw Error('Copies rejected: ' + JSON.stringify(copies));
-    }
-    this.result = this.throwPortal(controller);
+      this.result = structuredClone(copies);
+    } else this.result = this.throwPortal(controller);
     this.phase = 'activated';
     // portalLocal: only a target next to the turret (local fire); resolve adds one at the exit.
-    if (this.step === 'portalLocal') controller.spawn('rabid-badger', true, 1000000, { gridX: 38, gridY: 29 }, false);
+    if (this.step === 'portalLocal') controller.spawn('rabid-badger', true, 1000000, portalLocalTarget, false);
     else if (this.step !== 'portalRejected') controller.spawn('rabid-badger', true, 1000000, { gridX: portalAim.gridX + 2, gridY: portalAim.gridY }, false);
   }
   resolve(controller: DevScenarioController): void {
     if (this.phase !== 'activated') throw Error('Activate this review step first');
-    if (this.step === 'portalLocal') {
-      controller.spawn('rabid-badger', true, 1000000, { gridX: portalAim.gridX + 2, gridY: portalAim.gridY }, false);
+    if (this.step === 'portalLocal' || this.step === 'portalCombined') {
+      if (this.step === 'portalLocal') controller.spawn('rabid-badger', true, 1000000, { gridX: portalAim.gridX + 2, gridY: portalAim.gridY }, false);
+      else this.result = this.throwPortal(controller);
       this.phase = 'resolved';
       return;
     }
@@ -101,7 +108,7 @@ class FireControlReview {
       controller.teleport(controller.grid({ x: turret.x, y: turret.y + 64 }), false);
       bridge.sendTurretControlRequest({ action: 'enter', turretId: id });
       if (!this.runtime.getTurretControlState(bridge.getLocalPlayerId())) throw Error('Manning rejected');
-    } else throw Error('resolve is only valid for destroyOriginal, manned or portalLocal');
+    } else throw Error('resolve is only valid for destroyOriginal, manned, portalLocal or portalCombined');
     this.phase = 'resolved';
   }
 }
@@ -139,17 +146,21 @@ export async function runFireControlReview(controller: DevScenarioController, ru
     const scenario: DevScenario = defaultScenario('inspector_gadachs');
     const portal = PORTAL_STEPS.includes(step as ReviewStep);
     Object.assign(scenario, { mapId: '4', timeOfDay: controller.config.timeOfDay,
-      player: { gridX: 42, gridY: 31 }, hideAim: true,
+      player: portal ? portalPlayer : { gridX: 42, gridY: 31 }, hideAim: true,
       tools: [{ kind: 'construction', id: 'rocket_turret' }, { kind: 'construction', id: 'machine_gun_turret' },
-        { kind: 'construction', id: 'flame_turret' }, { kind: 'utility', id: 'FIRE_CONTROL_RELAY' },
-        ...(portal ? [portalTool] : [])],
+        { kind: 'construction', id: 'flame_turret' },
+        // Portal steps equip the portal first, so the local charge preview reads its config.
+        ...(portal ? [portalTool] : []), { kind: 'utility', id: 'FIRE_CONTROL_RELAY' }],
       upgrades: { inspector_construction_slots: COOP_DEFENSE_UPGRADE_DEFINITIONS.inspector_construction_slots.maxLevel,
         ...(portal ? { unlock_fire_control_portal: 1 } : {}),
-        ...(step === 'portalLocal' ? { fire_control_portal_duration: 1, fire_control_portal_local_fire: 1 } : {}),
+        // The boss node requires both portal branches at their maximum level.
+        ...(step === 'portalLocal' ? { fire_control_portal_duration: COOP_DEFENSE_UPGRADE_DEFINITIONS.fire_control_portal_duration.maxLevel,
+          fire_control_portal_damage: COOP_DEFENSE_UPGRADE_DEFINITIONS.fire_control_portal_damage.maxLevel,
+          fire_control_portal_local_fire: 1 } : {}),
         ...(step === 'three' ? { fire_control_relay_connections: COOP_DEFENSE_UPGRADE_DEFINITIONS.fire_control_relay_connections.maxLevel } : {}),
         ...(parallel ? { fire_control_relay_parallel: 1 } : {}) },
       constructions: step === 'rejected' || step === 'portalRejected' ? [] : portal
-        ? [{ id: 'rocket_turret', gridX: 36, gridY: 29 }]
+        ? [{ id: 'rocket_turret', gridX: 40, gridY: 25 }]
         : step === 'three'
         ? [{ id: 'rocket_turret', gridX: 40, gridY: 25 }, { id: 'machine_gun_turret', gridX: 44, gridY: 25 },
           { id: 'flame_turret', gridX: 48, gridY: 25 }]

@@ -183,7 +183,8 @@ export class ProjectileFlightProcessor {
 
   private emitCountdown(projectile: ProjectileRuntimeRecord, realAgeMs: number): void {
     const fuseTimeMs = projectile.spec.flight.fuseTime ?? 0;
-    if (fuseTimeMs < 1500) return;
+    // A portal device's fuse is only a safety limit (it opens at rest), never a visible countdown.
+    if (fuseTimeMs < 1500 || projectile.spec.interaction.grenadeEffect?.type === 'fire_control_portal') return;
     const remainingSeconds = Math.max(0, Math.ceil((fuseTimeMs - realAgeMs) / 1000));
     if (remainingSeconds <= 0 || projectile.lastCountdownEmitted === remainingSeconds) return;
     projectile.lastCountdownEmitted = remainingSeconds;

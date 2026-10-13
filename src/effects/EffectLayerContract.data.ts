@@ -8285,3 +8285,35 @@ const FIRE_CONTROL_PREVIEW_LAYER_CONTRACTS: readonly LayerContract[] = [
 }));
 (CPU_LAYER_CONTRACTS as LayerContract[]).push(...FIRE_CONTROL_PREVIEW_LAYER_CONTRACTS);
 (EFFECT_LAYER_CONTRACTS as LayerContract[]).push(...FIRE_CONTROL_PREVIEW_LAYER_CONTRACTS);
+
+// fire-control portal: the thrown device draws like a grenade body; its landing preview is overlay UI.
+Object.assign(CPU_SOURCE_CONTRACTS, {
+  "effects/fireControl/FireControlPortalFlightView.ts": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      { "key": "module/this.sprite/setDepth/0", "expression": "DEPTH.PROJECTILES", "blends": ["NORMAL"] }
+    ],
+    "bindings": {}
+  },
+  "effects/fireControl/FireControlPortalLandingPreviewVisual.ts": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      { "key": "module/this.layer?.image/setDepth/0", "expression": "DEPTH.OVERLAY - 1.02", "blends": ["NORMAL"] }
+    ],
+    "bindings": {}
+  }
+});
+const FIRE_CONTROL_PORTAL_LAYER_CONTRACTS: readonly LayerContract[] = [
+  { id: 'cpu:effects/fireControl/FireControlPortalFlightView.ts:module/this.sprite/setDepth/0',
+    owner: 'effects/fireControl/FireControlPortalFlightView.ts', component: 'module/this.sprite/setDepth/0',
+    height: 'body', lighting: 'material', camera: 'world', depths: [15], blends: ['NORMAL'], profiles: ['L'],
+    role: 'effect', source: { selector: 'module/this.sprite/setDepth/0', expression: 'DEPTH.PROJECTILES' } },
+  { id: 'cpu:effects/fireControl/FireControlPortalLandingPreviewVisual.ts:module/this.layer?.image/setDepth/0',
+    owner: 'effects/fireControl/FireControlPortalLandingPreviewVisual.ts', component: 'module/this.layer?.image/setDepth/0',
+    height: 'body', lighting: 'emissive', camera: 'world', depths: [98.98], blends: ['NORMAL'], profiles: ['H'],
+    role: 'ui', source: { selector: 'module/this.layer?.image/setDepth/0', expression: 'DEPTH.OVERLAY - 1.02' } },
+];
+(CPU_LAYER_CONTRACTS as LayerContract[]).push(...FIRE_CONTROL_PORTAL_LAYER_CONTRACTS);
+(EFFECT_LAYER_CONTRACTS as LayerContract[]).push(...FIRE_CONTROL_PORTAL_LAYER_CONTRACTS);
