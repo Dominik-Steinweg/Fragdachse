@@ -5913,6 +5913,366 @@
           }
         }
       ]
+    },
+    {
+      "id": "construction_dawn_wreck_tractor_t1",
+      "label": "Dawn tractor wreck T1",
+      "category": "construction",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-wreck-tractor.png",
+      "designReference": "scripts/asset-pipeline/references/dawn-tier-row.png",
+      "targetSize": 96,
+      "sourceSizes": [
+        192
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Overturned agricultural tractor, exposed engine, large rear tires, detached front wheel and scattered scrap.",
+        "colors": "Rust-orange and brown, charcoal steel, old moss and grass.",
+        "anatomy": "Static centered 96 x 96 px prop / 3 x 3 cells. Tier-parametric shared geometry."
+      },
+      "requiredClips": [],
+      "production": "reference",
+      "recipe": "dawn-wreck-tractor",
+      "model": {
+        "tier": 1
+      },
+      "orthoScale": 3.5,
+      "textures": {},
+      "materialSource": "procedural",
+      "materialVariants": {
+        "standard": {
+          "label": "Weathered matte pigment, machined relief and cavity depth",
+          "textureStrength": 0,
+          "formShadowStrength": 0.83
+        }
+      },
+      "clips": [],
+      "elevation": {
+        "min": 0,
+        "max": 1.2,
+        "scale": 0.5
+      },
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      }
+    },
+    {
+      "id": "construction_dawn_wreck_tractor_t2",
+      "label": "Dawn tractor wreck T2",
+      "category": "construction",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-wreck-tractor.png",
+      "designReference": "scripts/asset-pipeline/references/dawn-tier-row.png",
+      "targetSize": 96,
+      "sourceSizes": [
+        192
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Overturned agricultural tractor, exposed engine, large rear tires, detached front wheel and scattered scrap.",
+        "colors": "Dark military olive, contrasting khaki panels, worn bright edges and yellow-black cargo warnings.",
+        "anatomy": "Static centered 96 x 96 px prop / 3 x 3 cells. Tier-parametric shared geometry."
+      },
+      "requiredClips": [],
+      "production": "reference",
+      "recipe": "dawn-wreck-tractor",
+      "model": {
+        "tier": 2
+      },
+      "orthoScale": 3.5,
+      "textures": {},
+      "materialSource": "procedural",
+      "materialVariants": {
+        "standard": {
+          "label": "Weathered matte pigment, machined relief and cavity depth",
+          "textureStrength": 0,
+          "formShadowStrength": 0.83
+        }
+      },
+      "clips": [],
+      "elevation": {
+        "min": 0,
+        "max": 1.2,
+        "scale": 0.5
+      },
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      }
+    },
+    {
+      "id": "construction_dawn_wreck_tractor_t3",
+      "label": "Dawn tractor wreck T3",
+      "category": "construction",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-wreck-tractor.png",
+      "designReference": "scripts/asset-pipeline/references/dawn-tier-row.png",
+      "targetSize": 96,
+      "sourceSizes": [
+        192
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Overturned agricultural tractor, exposed engine, large rear tires, detached front wheel and scattered scrap.",
+        "colors": "White-silver alloy, graphite panels and sparse cyan seams plus a small cargo crystal.",
+        "anatomy": "Static centered 96 x 96 px prop / 3 x 3 cells. Tier-parametric shared geometry."
+      },
+      "requiredClips": [],
+      "production": "reference",
+      "recipe": "dawn-wreck-tractor",
+      "model": {
+        "tier": 3
+      },
+      "orthoScale": 3.5,
+      "textures": {},
+      "materialSource": "procedural",
+      "materialVariants": {
+        "standard": {
+          "label": "Weathered matte pigment, machined relief and cavity depth",
+          "textureStrength": 0,
+          "formShadowStrength": 0.83
+        }
+      },
+      "clips": [],
+      "elevation": {
+        "min": 0,
+        "max": 1.2,
+        "scale": 0.5
+      },
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      }
+    },
+    {
+      "id": "construction_dawn_wreck_minecart_t1",
+      "label": "Dawn minecart wreck T1",
+      "category": "construction",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-wreck-minecart.png",
+      "designReference": "scripts/asset-pipeline/references/dawn-tier-row.png",
+      "targetSize": 96,
+      "sourceSizes": [
+        192
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Two derailed open ore tubs flanking a short broken rail segment, detached wheelsets and spilled scrap.",
+        "colors": "Rust-orange and brown, charcoal steel, old moss and grass.",
+        "anatomy": "Static centered 96 x 96 px prop / 3 x 3 cells. Tier-parametric shared geometry."
+      },
+      "requiredClips": [],
+      "production": "reference",
+      "recipe": "dawn-wreck-minecart",
+      "model": {
+        "tier": 1
+      },
+      "orthoScale": 3.6,
+      "textures": {},
+      "materialSource": "procedural",
+      "materialVariants": {
+        "standard": {
+          "label": "Weathered matte pigment, machined relief and cavity depth",
+          "textureStrength": 0,
+          "formShadowStrength": 0.83
+        }
+      },
+      "clips": [],
+      "elevation": {
+        "min": 0,
+        "max": 1,
+        "scale": 0.5
+      },
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      }
+    },
+    {
+      "id": "construction_dawn_wreck_minecart_t2",
+      "label": "Dawn minecart wreck T2",
+      "category": "construction",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-wreck-minecart.png",
+      "designReference": "scripts/asset-pipeline/references/dawn-tier-row.png",
+      "targetSize": 96,
+      "sourceSizes": [
+        192
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Two derailed open ore tubs flanking a short broken rail segment, detached wheelsets and spilled scrap.",
+        "colors": "Dark military olive, contrasting khaki panels, worn bright edges and yellow-black cargo warnings.",
+        "anatomy": "Static centered 96 x 96 px prop / 3 x 3 cells. Tier-parametric shared geometry."
+      },
+      "requiredClips": [],
+      "production": "reference",
+      "recipe": "dawn-wreck-minecart",
+      "model": {
+        "tier": 2
+      },
+      "orthoScale": 3.6,
+      "textures": {},
+      "materialSource": "procedural",
+      "materialVariants": {
+        "standard": {
+          "label": "Weathered matte pigment, machined relief and cavity depth",
+          "textureStrength": 0,
+          "formShadowStrength": 0.83
+        }
+      },
+      "clips": [],
+      "elevation": {
+        "min": 0,
+        "max": 1,
+        "scale": 0.5
+      },
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      }
+    },
+    {
+      "id": "construction_dawn_wreck_minecart_t3",
+      "label": "Dawn minecart wreck T3",
+      "category": "construction",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-wreck-minecart.png",
+      "designReference": "scripts/asset-pipeline/references/dawn-tier-row.png",
+      "targetSize": 96,
+      "sourceSizes": [
+        192
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Two derailed open ore tubs flanking a short broken rail segment, detached wheelsets and spilled scrap.",
+        "colors": "White-silver alloy, graphite panels and sparse cyan seams plus a small cargo crystal.",
+        "anatomy": "Static centered 96 x 96 px prop / 3 x 3 cells. Tier-parametric shared geometry."
+      },
+      "requiredClips": [],
+      "production": "reference",
+      "recipe": "dawn-wreck-minecart",
+      "model": {
+        "tier": 3
+      },
+      "orthoScale": 3.6,
+      "textures": {},
+      "materialSource": "procedural",
+      "materialVariants": {
+        "standard": {
+          "label": "Weathered matte pigment, machined relief and cavity depth",
+          "textureStrength": 0,
+          "formShadowStrength": 0.83
+        }
+      },
+      "clips": [],
+      "elevation": {
+        "min": 0,
+        "max": 1,
+        "scale": 0.5
+      },
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      }
+    },
+    {
+      "id": "construction_dawn_broodnest",
+      "label": "Dawn hostile broodnest",
+      "category": "construction",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-broodnest.png",
+      "targetSize": 96,
+      "sourceSizes": [
+        192
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Irregular hooked bone spurs around three veined green brood sacs, curled embryo shadows, sagging mucus and engulfed scrap.",
+        "colors": "Deep saturated violet flesh, damp restrained sheen, sickly green thin membranes, aged bone and rusted embedded metal; no glow.",
+        "anatomy": "Three independent egg controls visibly swell in place; 12 frames / 12 fps, closure not exported. Fixed 96 px / 3 x 3 cells."
+      },
+      "requiredClips": [
+        "idle"
+      ],
+      "production": "reference",
+      "recipe": "dawn-broodnest",
+      "model": {},
+      "orthoScale": 3.4,
+      "textures": {},
+      "materialSource": "procedural",
+      "materialVariants": {
+        "standard": {
+          "label": "Weathered matte pigment, machined relief and cavity depth",
+          "textureStrength": 0,
+          "formShadowStrength": 0.83
+        }
+      },
+      "clips": [
+        {
+          "name": "idle",
+          "motion": "dawn_broodnest_idle",
+          "frameCount": 12,
+          "frameRate": 12,
+          "loop": true,
+          "parameters": {
+            "breath": 0.075
+          }
+        }
+      ],
+      "elevation": {
+        "min": 0,
+        "max": 1,
+        "scale": 0.5
+      },
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      }
     }
   ]
 }

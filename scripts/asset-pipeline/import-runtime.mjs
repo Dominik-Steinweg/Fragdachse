@@ -19,6 +19,9 @@ export const BOSS_TEXTURE_KEYS = Object.freeze({
 export const DAWN_TEXTURE_KEYS = Object.freeze(Object.fromEntries([
   'construction_dawn_wreck_t1', 'construction_dawn_wreck_t2', 'construction_dawn_wreck_t3',
   'construction_dawn_extractor', 'construction_dawn_dealer_stall',
+  'construction_dawn_wreck_tractor_t1', 'construction_dawn_wreck_tractor_t2', 'construction_dawn_wreck_tractor_t3',
+  'construction_dawn_wreck_minecart_t1', 'construction_dawn_wreck_minecart_t2', 'construction_dawn_wreck_minecart_t3',
+  'construction_dawn_broodnest',
   'dawn_scrap_t1', 'dawn_scrap_t2', 'dawn_scrap_t3', 'dawn_dealer',
 ].map(id => [id, id])));
 

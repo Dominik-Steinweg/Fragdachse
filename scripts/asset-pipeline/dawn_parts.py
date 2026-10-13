@@ -117,3 +117,76 @@ def hazards(c,center,width,height,yellow,dark):
     for i in range(count):
         px=x-width/2+(i+.25)*width/count
         plate(c,'Black warning diagonal',(px,y,z+.012),[(0,-height/2),(.055,-height/2),(.115,height/2),(.06,height/2)],.006,dark,.002)
+
+
+def salvage_palette(c, tier):
+    """Shared M3 tier pigments, kept independent of the accepted V1 recipes."""
+    return dict(
+        paint=surface(c,'Salvage tier enamel',[(183,88,37),(72,80,42),(211,221,213)][tier-1],.62),
+        trim=surface(c,'Salvage secondary panels',[(110,64,35),(166,155,105),(65,76,79)][tier-1],.43),
+        edge=surface(c,'Salvage exposed alloy',[(171,158,126),(201,199,170),(225,233,226)][tier-1],.3),
+        dark=surface(c,'Salvage oily structural steel',(39,48,50),.18),
+        rubber=surface(c,'Split tire rubber',(41,46,41),.16),
+        tread=surface(c,'Worn rubber tread crowns',(91,95,79),.23),
+        warning=surface(c,'Salvage warning ochre',(228,179,55),.32),
+        cyan=surface(c,'Sparse service seam',(31,177,204),0,.32),
+        moss=surface(c,'Clinging forest moss',(79,103,31),.40),
+        leaf=surface(c,'Young fern leaf',(132,150,54),.22))
+
+
+def group(c, name, objects, center=(0,0,0), rotation=(0,0,0)):
+    """Local geometry becomes an explicit reusable assembly, without name lookup."""
+    ob=bpy.data.objects.new(name,None);c.scene.collection.objects.link(ob)
+    for child in objects: child.parent=ob
+    ob.location=center;ob.rotation_euler=rotation
+    return ob
+
+
+def vegetation(c, x, y, z, p, size=1):
+    for i in range(5):
+        a=i*2.4
+        c.ell('Irregular clinging moss',(x+.10*size*math.cos(a),y+.10*size*math.sin(a),z),(.12*size,.085*size,.045*size),p['moss'])
+    for j in range(3):
+        a=j*2.1+.2
+        for k in range(1,5):
+            t=k/5;u=.34*size*t
+            for side in (-1,1):
+                v=.12*size*(1-t*.7)*side
+                pts=[(u-.07*size,0),(u+.01*size,v),(u+.06*size,0)]
+                pts=[(x+xx*math.cos(a)-yy*math.sin(a),y+xx*math.sin(a)+yy*math.cos(a)) for xx,yy in pts]
+                plate(c,'Fern leaflet',(0,0,z+.05),pts,.012,p['leaf'],.004)
+
+
+def tire(c, center, radius, width, p, rotation=(0,0,0)):
+    before=set(c.scene.objects)
+    annulus(c,'Thick torn rubber tire',(0,0,0),radius,radius*.47,width,p['rubber'],steps=48)
+    c.cylinder('Recessed painted wheel dish',(0,0,width*.30),radius*.46,width*.30,p['paint'],40)
+    annulus(c,'Raised abraded wheel lip',(0,0,width*.45),radius*.46,radius*.37,.045,p['edge'],steps=40)
+    c.cylinder('Axle hub',(0,0,width*.57),radius*.16,.09,p['trim'],12)
+    for i in range(18):
+        a=i*math.tau/18
+        for side in (-1,1):
+            ob=c.box('Chevron agricultural tread',(radius*.92*math.cos(a),radius*.92*math.sin(a),side*width*.25),(.11,radius*.30,width*.49),p['tread'],.02)
+            ob.rotation_euler=(0,side*.34,a)
+    for i in range(5):
+        a=i*math.tau/5
+        bolt(c,radius*.27*math.cos(a),radius*.27*math.sin(a),width*.49,p['dark'],.025)
+    return group(c,'Wheel assembly',set(c.scene.objects)-before,center,rotation)
+
+
+def tapered_tube(c,name,points,radii,mat,sides=12):
+    from mathutils import Vector
+    pts=[Vector(p) for p in points];vs=[]
+    for i,p in enumerate(pts):
+        tangent=(pts[min(i+1,len(pts)-1)]-pts[max(i-1,0)]).normalized()
+        n=tangent.cross(Vector((0,0,1))).normalized();b=tangent.cross(n).normalized()
+        for j in range(sides):
+            a=j*math.tau/sides;vs.append(tuple(p+radii[i]*(n*math.cos(a)+b*math.sin(a))))
+    faces=[tuple(reversed(range(sides))),tuple((len(pts)-1)*sides+j for j in range(sides))]
+    for i in range(len(pts)-1):
+        for j in range(sides):
+            a=i*sides+j;b=i*sides+(j+1)%sides;faces.append((a,b,b+sides,a+sides))
+    mesh=bpy.data.meshes.new(name);mesh.from_pydata(vs,[],faces);mesh.materials.append(mat);mesh.update()
+    ob=bpy.data.objects.new(name,mesh);c.scene.collection.objects.link(ob)
+    for face in mesh.polygons:face.use_smooth=True
+    return ob

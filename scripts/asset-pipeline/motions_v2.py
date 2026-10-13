@@ -87,7 +87,12 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
         key(bone, 'rotation_euler', (0, 0, 0), frame)
     pose('claw_weapon')
     pose('attack_motion')
-    if motion in ('dawn_extractor_idle', 'dawn_extractor_active'):
+    if motion == 'dawn_broodnest_idle':
+        for i in range(3):
+            pulse = 0 if idle else math.sin(angle + i * .65) - math.sin(i * .65)
+            amount = p.get('breath', .035) * pulse
+            pose(f'egg{i}', scale=(1 + amount, 1 + amount * .7, 1 + amount * 1.2))
+    elif motion in ('dawn_extractor_idle', 'dawn_extractor_active'):
         pulse = 0 if idle or motion == 'dawn_extractor_idle' else .5 - .5 * math.cos(angle)
         stroke = p.get('stroke', .10) * pulse
         pose('hose', scale=(1, 1 + stroke, 1))

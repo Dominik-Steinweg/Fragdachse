@@ -140,7 +140,7 @@ describe('asset pipeline catalog contracts', () => {
   });
 
   it('distinguishes executable reference recipes from planned briefs and defines complete motion contracts', () => {
-    const motions = new Set(['dawn_extractor_idle', 'dawn_extractor_active', 'firestarter_cast', 'mechanical_fire', 'energy_fire', 'organic_pulse', 'sustained', 'quadruped', 'biped', 'player_walk', 'player_idle', 'quad_rotors', 'twin_rotors', 'claw_quadruped', 'claw_biped', 'kraken_idle', 'kraken_swim', 'kraken_slam', 'kraken_emerge']);
+    const motions = new Set(['dawn_broodnest_idle', 'dawn_extractor_idle', 'dawn_extractor_active', 'firestarter_cast', 'mechanical_fire', 'energy_fire', 'organic_pulse', 'sustained', 'quadruped', 'biped', 'player_walk', 'player_idle', 'quad_rotors', 'twin_rotors', 'claw_quadruped', 'claw_biped', 'kraken_idle', 'kraken_swim', 'kraken_slam', 'kraken_emerge']);
     for (const motion of ['kraken_intro_rise', 'kraken_call_tentacle', 'kraken_throw_egg', 'kraken_ink_spit', 'kraken_dive', 'kraken_surface', 'kraken_land_ink_spit', 'kraken_volley_spines', 'kraken_spine_idle',
       'kraken_land_idle', 'kraken_land_move', 'kraken_land_ashore', 'kraken_land_slam', 'kraken_land_egg_throw', 'kraken_land_death', 'kraken_land_volley_spines',
       'kraken_tentacle_rise', 'kraken_tentacle_hover', 'kraken_tentacle_slam', 'kraken_tentacle_retract', 'kraken_egg_idle', 'kraken_egg_hatch']) motions.add(motion);
@@ -159,8 +159,8 @@ describe('asset pipeline catalog contracts', () => {
       expect(asset.orthoScale).toBeGreaterThan(0);
       expect(asset.textures).toBeDefined();
       // Original texture pixels and completed renders are local artifacts, not required in a clean checkout.
-      if (['dawn-wreck', 'dawn-extractor', 'dawn-scrap', 'dawn-dealer-stall'].includes(asset.recipe!)) {
-        // These drafts author procedural pigments; no external texture is consumed.
+      if (asset.materialSource === 'procedural') {
+        // Procedural pigments consume no external image, independent of recipe identity.
         expect(asset.textures).toEqual({});
       } else {
         expect(Object.keys(asset.textures!)).toContain(['weapon', 'utility', 'construction', 'companion'].includes(asset.category) || asset.category === 'turret' && asset.id !== 'spore' ? 'technical' : 'organic');
