@@ -16,7 +16,6 @@ import { AdrenalineEssencePresentation } from '../../adrenalineEssence/Adrenalin
 import type { EssenceAccessGroup, EssenceScope } from '../../adrenalineEssence/AdrenalineEssenceTypes';
 import { bridge }            from '../../network/bridge';
 import { ArenaBuilder } from '../../arena/ArenaBuilder';
-import { ArenaGenerator, ARENA_GENERATOR_VERSION, resolveArenaGenerationInput } from '../../arena/ArenaGenerator';
 import { TerrainColorSnapshotBuilder } from '../../arena/TerrainColorSnapshotBuilder';
 import { getVisibleWorldView, type WorldViewRect } from '../../ui/HostileBaseIndicator';
 import { getLocale, t } from '../../i18n';
@@ -36,7 +35,7 @@ import {
 } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, isDiagnosticMapId, resolveCoopDefenseMapPersistentSpawnConfigs, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
-import { ARENA_DURATION_SEC, COOP_DEFENSE_BASE_TURRET_OWNER_ID, applyArenaMetricsForMode, getArenaMetricsProfile } from '../../config';
+import { ARENA_DURATION_SEC, COOP_DEFENSE_BASE_TURRET_OWNER_ID, applyArenaMetricsForMode } from '../../config';
 import type { ArenaContext }          from './ArenaContext';
 import type { RendererBundle }        from './RendererBundle';
 import {
@@ -123,14 +122,17 @@ import type {
   PersistentBaseBuildArea,
 } from '../../persistentBase/PersistentBaseCore';
 import { nextMonotonicRevision } from '../../world/WorldRevision';
+import { generateRoundWorld } from '../../world/RoundWorldGeneration';
+import type { DawnRoundPlans } from '../../dawn/composition/DawnRoundComposition';
 import {
   resolveActiveGameMode,
-  toActivityDefinitionId,
   toActivityKind,
-  toMapId,
-  toWorldDefinitionId,
 } from '../../world/arenaDescriptorAdapter';
-import { getActivityDefinition, getWorldDefinition } from '../../config/authoring/authoredScenarios';
+import {
+  resolveActivityDefinition,
+  resolveCoopDefenseMapConfig,
+  resolveWorldDefinition,
+} from '../../world/WorldDefinitionResolution';
 import { isLobbyWorldDefinitionId, LOBBY_WORLD_DEFINITION_ID } from '../../config/authoring/lobbyWorld';
 import { createAuthoredWorldDescriptor } from '../../world/WorldLayout';
 import { isArenaTransitionReady } from './ArenaTransitionReadiness';
@@ -183,7 +185,6 @@ import {
   WORLD_PRESENTATION_SURFACES,
   type WorldPresentationRequirement,
 } from '../../world/WorldPresentation';
-import { resolveWorldMetrics } from '../../world/WorldMetrics';
 import {
   hasPersistentBaseConfigurationChanged,
   isSameWorldInstance,
@@ -304,14 +305,7 @@ export class ArenaLifecycleCoordinator {
   private roundStartPrepared = false;
   private preparedRoundLayout: { descriptor: WorldDescriptor; layout: ArenaLayout } | null = null;
   private combatPresentationPrepared = false;
-  private pendingHostArenaGeneration: {
-    readonly roundRevision: number;
-    readonly gameMode: GameMode;
-    readonly mapConfig: CoopDefenseMapConfig | null;
-    readonly seed: number;
-    /** World-Parameter dieser Instanz; sie reisen im WorldDescriptor, nicht im RoundState. */
-    readonly worldParameters: WorldParameters | undefined;
-  } | null = null;
+  private pendingHostArenaGeneration: HostArenaGenerationRequest | null = null;
   private runtimeDiagnosticEventSink: RuntimeDiagnosticEventSink | null = null;
   private hostArenaGenerationTimer: Phaser.Time.TimerEvent | null = null;
   private boundRoundStartTime = 0;
@@ -562,7 +556,7 @@ export class ArenaLifecycleCoordinator {
     onDiagnosticEvent: (type, fields) => this.runtimeDiagnosticEventSink?.(type, fields),
     materializeActivityCore: (activity, runtime, layout) => {
       const configuration = activity
-        ? resolveCoopMissionActivityConfiguration(activity, this.worldRuntime?.context.definition ?? null)
+        ? resolveCoopMissionActivityConfiguration(activity, this.worldRuntime?.context ?? null)
         : null;
       this.coopMissionComposition.materializeCore(configuration, runtime, layout);
     },
@@ -681,9 +675,10 @@ export class ArenaLifecycleCoordinator {
       this.coopMissionRuntime?.coopDefenseSecondaryObjectiveSystem?.completeVictoryHolds();
     },
     getCurrentActivity: () => this.worldLifecycle.activity.descriptor,
-    resolveVictoryRewardIds: (definitionId) => (
-      getActivityDefinition(definitionId)?.persistentBaseRewardsOnVictory ?? []
-    ),
+    resolveVictoryRewardIds: (activity) => {
+      const world = this.worldLifecycle.descriptor;
+      return (world ? resolveActivityDefinition(activity, world)?.persistentBaseRewardsOnVictory : undefined) ?? [];
+    },
     grantPersistentBaseRewards: (rewardIds) => {
       this.persistentBase.grantAuthoredPersistentBaseRewards(rewardIds);
     },
@@ -1118,13 +1113,18 @@ export class ArenaLifecycleCoordinator {
     getConfiguredGameMode: () => this.resolveConfiguredGameMode(),
   };
 
+  /** Activity der lokal gefuehrten World-Instanz, unabhaengig vom gerade replizierten Kanal. */
+  getResidentActivityDescriptor(): ActivityDescriptor | null {
+    return this.worldLifecycle.activity.descriptor;
+  }
+
   /** Prueft die PB-Site auch beim Identity-Start vor der lokalen World-Materialisierung. */
   private hasPersistentBaseForCurrentWorld(): boolean {
     const context = this.worldLifecycle.context;
     if (context) return context.persistentBaseSite !== null;
     const descriptor = this.worldLifecycle.descriptor;
     if (!descriptor?.parameters?.persistentBaseUnlocked) return false;
-    return getWorldDefinition(descriptor.definitionId)?.persistentBaseSite !== undefined;
+    return resolveWorldDefinition(descriptor, this.worldLifecycle.activity.descriptor)?.persistentBaseSite !== undefined;
   }
 
   /**
@@ -1277,10 +1277,7 @@ export class ArenaLifecycleCoordinator {
         this.getWorldCombatCore()?.setEnemyManager(null);
       },
     });
-    const activityConfiguration = resolveCoopMissionActivityConfiguration(
-      activity,
-      worldRuntime.context.definition,
-    );
+    const activityConfiguration = resolveCoopMissionActivityConfiguration(activity, worldRuntime.context);
     if (this.getLocalWorldPresentation().required) {
       this.renderers.combatGoreGpu.fragmentTemplateCache.prepare(
         collectDeathFragmentFrames(activityConfiguration.mapConfig),
@@ -1420,7 +1417,7 @@ export class ArenaLifecycleCoordinator {
     const world = this.worldRuntime?.context;
     if (!baseManager || !world) return;
 
-    const activityConfiguration = resolveCoopMissionActivityConfiguration(activity, world.definition);
+    const activityConfiguration = resolveCoopMissionActivityConfiguration(activity, world);
     const humanPlayerCount = Math.max(
       1,
       Math.floor(bridge.getRoundState()?.coopDefenseHumanPlayerCount ?? 1),
@@ -1453,7 +1450,7 @@ export class ArenaLifecycleCoordinator {
     const powerUpSystem = this.worldPowerUpRuntime?.system ?? null;
     const world = this.worldRuntime?.context;
     if (!powerUpSystem || !world) return;
-    const activityConfiguration = resolveCoopMissionActivityConfiguration(activity, world.definition);
+    const activityConfiguration = resolveCoopMissionActivityConfiguration(activity, world);
 
     const humanPlayerCount = Math.max(
       1,
@@ -1510,7 +1507,7 @@ export class ArenaLifecycleCoordinator {
       powerUpRuntime.setCoopDefenseMapXpReference(null);
       return;
     }
-    const configuration = resolveCoopMissionActivityConfiguration(activity, world.definition);
+    const configuration = resolveCoopMissionActivityConfiguration(activity, world);
     const humanPlayerCount = Math.max(
       1,
       Math.floor(bridge.getRoundState()?.coopDefenseHumanPlayerCount ?? 1),
@@ -1782,6 +1779,7 @@ export class ArenaLifecycleCoordinator {
       roundRevision,
       gameMode: bridge.getGameMode(),
       mapConfig: coopDefenseMapConfig,
+      dawn: null,
       seed,
       // Auf einer Kampagnenkarte ist der Basiskern Map-Inhalt: Wer die Karte erreicht, hat die
       // Basis laengst freigeschaltet. Nur die LobbyWorld fragt das Entitlement ab, weil dort
@@ -1952,8 +1950,8 @@ export class ArenaLifecycleCoordinator {
     if (!isCoopDefenseMode(this.resolveConfiguredGameMode())) {
       return arenaStartTime + ARENA_DURATION_SEC * 1000;
     }
-    const mapConfig = getCoopDefenseMapConfig(this.resolveConfiguredCoopDefenseMapId());
-    if (mapConfig?.objective !== 'survive') return 0;
+    const mapConfig = this.resolveConfiguredCoopDefenseMapConfig();
+    if (mapConfig.objective !== 'survive') return 0;
     const surviveDurationSec = mapConfig.surviveDurationSec;
     if (surviveDurationSec === undefined) {
       throw new Error(`[ArenaLifecycleCoordinator] Survival map ${mapConfig.mapId} has no surviveDurationSec`);
@@ -2052,7 +2050,7 @@ export class ArenaLifecycleCoordinator {
     const gameMode = this.resolveConfiguredGameMode();
     const roundState = bridge.getRoundState();
     const mapName = isCoopDefenseMode(gameMode)
-      ? getMapName(this.resolveConfiguredCoopDefenseMapId(), getLocale())
+      ? getMapName(this.resolveConfiguredCoopDefenseMapConfig().mapId, getLocale())
       : 'Zufallsarena';
     const epicGuaranteeCount = isCoopDefenseMode(gameMode) && roundState?.status === 'victory'
       ? this.coopMissionRuntime?.coopDefenseSecondaryObjectiveSystem?.getEpicGuaranteeCount() ?? 0
@@ -2203,8 +2201,7 @@ export class ArenaLifecycleCoordinator {
    */
   hostDiscardRound(): void {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
-    const mapId = this.resolveConfiguredCoopDefenseMapId();
-    if (!isDiagnosticMapId(mapId) && !isDevScenarioMode()) return;
+    if (!isDiagnosticMapId(this.resolveConfiguredCoopDefenseMapConfig().mapId) && !isDevScenarioMode()) return;
     this.persistentBase.rollbackPersistentBaseMissionIfActive();
     bridge.publishCoopDefenseEncounterPresentationState(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);
@@ -2762,7 +2759,7 @@ export class ArenaLifecycleCoordinator {
     // Respawn-Budgets aufbauen, fuer die es keine Runde gibt.
     const missionMapConfig = isCoopMission ? coopDefenseMapConfig : null;
     const activityConfiguration = isCoopMission && activityDescriptor?.kind === 'coop-mission'
-      ? resolveCoopMissionActivityConfiguration(activityDescriptor, world.definition)
+      ? resolveCoopMissionActivityConfiguration(activityDescriptor, world)
       : null;
     // Die lokale Runtime haengt sich an die laufende World-Instanz; der Lifecycle prueft, dass
     // Runtime und Instanz dieselbe World meinen.
@@ -3191,13 +3188,7 @@ export class ArenaLifecycleCoordinator {
     });
   }
 
-  private scheduleHostArenaGeneration(request: {
-    readonly roundRevision: number;
-    readonly gameMode: GameMode;
-    readonly mapConfig: CoopDefenseMapConfig | null;
-    readonly seed: number;
-    readonly worldParameters: WorldParameters | undefined;
-  }): void {
+  private scheduleHostArenaGeneration(request: HostArenaGenerationRequest): void {
     if (this.hostArenaGenerationTimer || this.isArenaEntryProtected()) return;
     const generation = this.arenaTransitionGeneration;
 
@@ -3228,32 +3219,14 @@ export class ArenaLifecycleCoordinator {
           request.mapConfig?.arenaWidthCells,
           request.mapConfig?.arenaHeightCells,
         );
-        const worldMetrics = resolveWorldMetrics(getArenaMetricsProfile(
-          request.gameMode,
-          'ARENA',
-          request.mapConfig?.arenaWidthCells,
-          request.mapConfig?.arenaHeightCells,
-        ));
-        const layout = ArenaGenerator.generate(
-          request.seed,
-          resolveArenaGenerationInput(request.gameMode, worldMetrics),
-          request.mapConfig ?? undefined,
-        );
-        const world: WorldDescriptor = {
-          worldRevision: request.roundRevision,
-          definitionId: toWorldDefinitionId(request.mapConfig?.mapId ?? null),
+        const { world, activity, layout } = generateRoundWorld({
+          roundRevision: request.roundRevision,
+          gameMode: request.gameMode,
           seed: request.seed,
-          generatorVersion: ARENA_GENERATOR_VERSION,
-          layoutFingerprint: ArenaGenerator.fingerprint(layout),
-          ...(request.worldParameters ? { parameters: request.worldParameters } : {}),
-        };
-        const activityKind = toActivityKind(request.gameMode);
-        const activity: ActivityDescriptor = {
-          activityRevision: request.roundRevision,
-          worldRevision: request.roundRevision,
-          kind: activityKind,
-          definitionId: toActivityDefinitionId(activityKind, request.mapConfig?.mapId ?? null),
-        };
+          campaignMapConfig: request.dawn ? null : request.mapConfig,
+          dawn: request.dawn,
+          worldParameters: request.worldParameters,
+        });
         this.preparedRoundLayout = { descriptor: world, layout };
         // Der eine World-Kanal: Weltidentitaet und Activity gehen gemeinsam raus, abgeleitet
         // aus derselben lokal erzeugten Runde.
@@ -3703,19 +3676,19 @@ export class ArenaLifecycleCoordinator {
     });
   }
 
-  /** World-first Map-Aufloesung; der Lobby-Wert ist nur vor der World-Erzeugung zulaessig. */
-  private resolveConfiguredCoopDefenseMapId(): string {
+  /** World-first Config-Aufloesung; die Lobby-Auswahl ist nur vor der World-Erzeugung zulaessig. */
+  private resolveConfiguredCoopDefenseMapConfig(): CoopDefenseMapConfig {
     const descriptor = bridge.getWorldDescriptor();
     // Die LobbyWorld beschreibt keine Runde. Sie traegt deshalb keine Coop-Map, und die
     // Lobby-Auswahl bleibt weiterhin die Quelle - genau wie ohne laufende World.
     if (!descriptor || isLobbyWorldDefinitionId(descriptor.definitionId)) {
-      return bridge.getCoopDefenseMapId();
+      return getCoopDefenseMapConfig(bridge.getCoopDefenseMapId());
     }
-    const mapId = toMapId(descriptor.definitionId);
-    if (mapId === null) {
+    const mapConfig = resolveCoopDefenseMapConfig(descriptor, bridge.getActivityDescriptor());
+    if (mapConfig === null) {
       throw new Error('[ArenaLifecycleCoordinator] Active World has no Coop-Defense map');
     }
-    return mapId;
+    return mapConfig;
   }
 }
 
@@ -3740,6 +3713,18 @@ export class ArenaLifecycleCoordinator {
  * gar keine persistente Basisstelle, und eine Stufe ohne Stelle waere eine Konfiguration fuer
  * etwas, das es in dieser Instanz nicht gibt.
  */
+/** Host-Festlegung einer neuen Runde bis zur Layout-Generierung hinter dem Ladebild. */
+interface HostArenaGenerationRequest {
+  readonly roundRevision: number;
+  readonly gameMode: GameMode;
+  /** Aktive Coop-Config der Runde: Lobby-Kampagnenkarte oder aufgeloester Dawn-Plan. */
+  readonly mapConfig: CoopDefenseMapConfig | null;
+  readonly dawn: DawnRoundPlans | null;
+  readonly seed: number;
+  /** World-Parameter dieser Instanz; sie reisen im WorldDescriptor, nicht im RoundState. */
+  readonly worldParameters: WorldParameters | undefined;
+}
+
 function resolveLobbyWorldParameters(
   persistentBaseUnlocked: boolean,
   areaStage: PersistentBaseAreaStage | null,

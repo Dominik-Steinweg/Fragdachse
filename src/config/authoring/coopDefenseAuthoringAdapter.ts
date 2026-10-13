@@ -114,10 +114,25 @@ export function getCoopMissionDefinitionId(mapId: string): string {
   return `activity:coop-mission:${mapId}`;
 }
 
-export function toWorldDefinition(mapConfig: ArenaGenerationMapConfig): WorldDefinition {
+/**
+ * Explizite Definitions-IDs fuer Szenarien ausserhalb der Kampagnenregistry.
+ *
+ * Ohne Override leiten sich beide IDs wie bisher aus `mapId` ab. Generierte Szenarien (Dawn)
+ * besitzen einen eigenen Namensraum; die `mapId` bleibt dann nur Kompatibilitaetsschluessel der
+ * aufgeloesten Config und ist kein Registry-Eintrag.
+ */
+export interface AuthoredScenarioIds {
+  readonly worldDefinitionId: string;
+  readonly activityDefinitionId: string;
+}
+
+export function toWorldDefinition(
+  mapConfig: ArenaGenerationMapConfig,
+  worldDefinitionId: string = getWorldDefinitionId(mapConfig.mapId),
+): WorldDefinition {
   const resolved = requireNormalizedWorldFields(mapConfig);
   return {
-    id: getWorldDefinitionId(mapConfig.mapId),
+    id: worldDefinitionId,
     sourceMapId: mapConfig.mapId,
     metrics: {
       widthCells: resolved.widthCells,
@@ -169,11 +184,17 @@ export function toWorldGenerationConfig(world: WorldDefinition): ArenaGeneration
   };
 }
 
-export function toCoopMissionDefinition(mapConfig: CoopDefenseMapConfig): CoopMissionDefinition {
+export function toCoopMissionDefinition(
+  mapConfig: CoopDefenseMapConfig,
+  ids: AuthoredScenarioIds = {
+    worldDefinitionId: getWorldDefinitionId(mapConfig.mapId),
+    activityDefinitionId: getCoopMissionDefinitionId(mapConfig.mapId),
+  },
+): CoopMissionDefinition {
   return {
     kind: 'coop-mission',
-    id: getCoopMissionDefinitionId(mapConfig.mapId),
-    worldDefinitionId: getWorldDefinitionId(mapConfig.mapId),
+    id: ids.activityDefinitionId,
+    worldDefinitionId: ids.worldDefinitionId,
     sourceMapId: mapConfig.mapId,
     objective: mapConfig.objective,
     surviveDurationSec: mapConfig.surviveDurationSec,
@@ -201,8 +222,11 @@ export function toCoopMissionDefinition(mapConfig: CoopDefenseMapConfig): CoopMi
   };
 }
 
-export function toAuthoredScenario(mapConfig: CoopDefenseMapConfig): AuthoredScenario {
-  return createAuthoredScenario(toWorldDefinition(mapConfig), toCoopMissionDefinition(mapConfig));
+export function toAuthoredScenario(mapConfig: CoopDefenseMapConfig, ids?: AuthoredScenarioIds): AuthoredScenario {
+  return createAuthoredScenario(
+    toWorldDefinition(mapConfig, ids?.worldDefinitionId),
+    toCoopMissionDefinition(mapConfig, ids),
+  );
 }
 
 /**

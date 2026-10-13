@@ -3,7 +3,7 @@ import {
   type ActivityIdentityLifecycleSink,
   type ActivityLifecycleSink,
 } from './ActivityLifecycle';
-import type { ActivityDescriptor } from './ActivityDescriptor';
+import { isSameActivityInstance as isSameActivity, type ActivityDescriptor } from './ActivityDescriptor';
 import { isSameWorldInstance, type WorldDescriptor } from './WorldDescriptor';
 import type { WorldRuntimeContext } from './WorldRuntimeContext';
 import { ProjectileIdentityScope } from '../projectile/ProjectileIdentityScope';
@@ -273,11 +273,10 @@ function assertActivityBelongsToWorld(
       + `${activity.worldRevision}, not ${world.worldRevision}`,
     );
   }
-}
-
-function isSameActivity(left: ActivityDescriptor, right: ActivityDescriptor): boolean {
-  return left.activityRevision === right.activityRevision
-    && left.worldRevision === right.worldRevision
-    && left.kind === right.kind
-    && left.definitionId === right.definitionId;
+  // Ein Dawn-Szenario besteht aus genau einem World- und einem Activity-Plan derselben Runde.
+  if (activity && (world.parameters?.dawn === undefined) !== (activity.parameters?.dawn === undefined)) {
+    throw new Error(
+      `[WorldLifecycle] Activity ${activity.definitionId} and world ${world.definitionId} disagree on their Dawn plan`,
+    );
+  }
 }

@@ -3,7 +3,7 @@ import { WorldZeusBinding } from '../../world/WorldZeusBinding';
 import { WorldStinkPlagueBinding } from '../../world/WorldStinkPlagueBinding';
 import { WorldSmokeBinding } from '../../world/WorldSmokeBinding';
 import { bridge } from '../../network/bridge';
-import { getActivityDefinition } from '../../config/authoring/authoredScenarios';
+import { resolveActivityDefinition } from '../../world/WorldDefinitionResolution';
 import { CELL_SIZE } from '../../config';
 import { GROUND_FIRE_CELL_SIZE } from '../../effects/FireSystem';
 import type { SyncedBurningGroundSnapshot } from '../../types';
@@ -52,7 +52,7 @@ export function composeWorldGeometry(
   const dangerCells = new Set<string>();
   const progressiveCellDanger = (eventId: string, gridX: number, gridY: number): boolean | null => {
     const mission = flow.getCoopMissionRuntime();
-    const event = mission && getActivityDefinition(mission.descriptor.definitionId)?.mapEvents
+    const event = mission && resolveActivityDefinition(mission.descriptor, world.descriptor)?.mapEvents
       ?.find(candidate => candidate.id === eventId);
     if (!event || event.type !== 'ground-hazard' || !event.spread) return null;
     const ground = bridge.isHost() ? ctx.fireSystem.getGroundState() : bridge.getLatestGameState()?.burningGround;

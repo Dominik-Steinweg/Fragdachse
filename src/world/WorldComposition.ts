@@ -16,15 +16,14 @@ import {
 } from '../config';
 import type { WorldDefinition } from '../config/authoring/WorldDefinition';
 import { toWorldGenerationConfig } from '../config/authoring/coopDefenseAuthoringAdapter';
-import { getWorldDefinition } from '../config/authoring/authoredScenarios';
 import type { CoopDefenseMapConfig } from '../config/coopDefenseMaps';
-import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import type { BaseDestructionHooks } from '../effects/BaseDestructionRenderer';
 import type { LightingSystem } from '../effects/LightingSystem';
 import { BaseManager } from '../entities/BaseManager';
 import type { PlayerManager } from '../entities/PlayerManager';
-import { resolveActiveGameMode, toMapId } from './arenaDescriptorAdapter';
+import { resolveActiveGameMode } from './arenaDescriptorAdapter';
 import type { ActivityDescriptor } from './ActivityDescriptor';
+import { resolveCoopDefenseMapConfig, resolveWorldDefinition } from './WorldDefinitionResolution';
 import { generateWorldLayout } from './WorldLayout';
 import { WorldMaterialization } from './WorldMaterialization';
 import { WorldPresentationBinding } from './WorldPresentationBinding';
@@ -72,9 +71,8 @@ export function resolveWorldCompositionProfile(
   activity: ActivityDescriptor | null,
   roomGameMode: GameMode,
 ): WorldCompositionProfile {
-  const mapId = toMapId(descriptor.definitionId);
-  const mapConfig = mapId !== null ? getCoopDefenseMapConfig(mapId) : null;
-  const definition: WorldDefinition | null = getWorldDefinition(descriptor.definitionId);
+  const mapConfig = resolveCoopDefenseMapConfig(descriptor, activity);
+  const definition: WorldDefinition | null = resolveWorldDefinition(descriptor, activity);
   const mode = resolveActiveGameMode({
     activityKind: activity?.kind ?? null,
     roomGameMode,

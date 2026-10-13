@@ -1,0 +1,16 @@
+{
+  "id": "clearing",
+  "world": {
+    "arenaWidthCells": 112,
+    "arenaHeightCells": 80,
+    "timeOfDay": "07:00",
+    "trackMode": "none",
+    "persistentBase": {
+      "baseId": "dawn-core",
+      "maxAreaStage": 11,
+      "anchor": { "gridX": 56, "gridY": 40 }
+    }
+  },
+  "fronts": ["west", "north", "east", "south"],
+  "salvageSlots": []
+}

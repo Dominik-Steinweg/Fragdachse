@@ -252,7 +252,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     });
     Object.assign(scene, {
       resolveConfiguredGameMode: () => 'coop_defense',
-      resolveConfiguredCoopDefenseMapId: () => DEFAULT_COOP_DEFENSE_MAP_ID,
+      resolveConfiguredCoopDefenseMapConfig: () => getCoopDefenseMapConfig(DEFAULT_COOP_DEFENSE_MAP_ID),
       coopDefenseBalanceTracker: tracker,
       ctx: { getWorldCombatCore: () => ({ getHP: () => 100, getMaxHp: () => 100, getArmor: () => 0 }) },
       meta: { getStoredProgress: () => ({ totalXp: 0 }), getProgress: () => ({ level: 1 }) },
@@ -275,7 +275,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     'only an isolated dev host may discard campaign rounds (dev=%s host=%s)', (dev, host, allowed) => {
       vi.spyOn(devScenarioMode, 'isDevScenarioMode').mockReturnValue(dev);
       const { flow, setPhase } = fixture(host);
-      setPhase('ARENA'); flow.resolveConfiguredCoopDefenseMapId = () => DEFAULT_COOP_DEFENSE_MAP_ID;
+      setPhase('ARENA'); flow.resolveConfiguredCoopDefenseMapConfig = () => getCoopDefenseMapConfig(DEFAULT_COOP_DEFENSE_MAP_ID);
       for (const key of ['publishCoopDefenseEncounterPresentationState', 'publishCoopDefenseMapEventPresentationState',
         'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState',
         'publishRoundState', 'publishRoundResults'] as const) vi.spyOn(bridge, key).mockImplementation(() => {});
@@ -290,7 +290,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     try {
       const { flow, setPhase } = fixture(true);
       setPhase('ARENA');
-      flow.resolveConfiguredCoopDefenseMapId = () => 'performance-exit-test';
+      flow.resolveConfiguredCoopDefenseMapConfig = () => getCoopDefenseMapConfig('performance-exit-test');
       for (const key of ['publishCoopDefenseEncounterPresentationState', 'publishCoopDefenseMapEventPresentationState',
         'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState',
         'publishRoundState', 'publishRoundResults'] as const) vi.spyOn(bridge, key).mockImplementation(() => {});
@@ -424,7 +424,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     vi.spyOn(bridge, 'hostPublishRoomStatistics').mockImplementation(() => {});
     const resultContext = {
       ctx: { voice: { victory } }, resolveConfiguredGameMode: () => mode,
-      resolveConfiguredCoopDefenseMapId: () => DEFAULT_COOP_DEFENSE_MAP_ID,
+      resolveConfiguredCoopDefenseMapConfig: () => getCoopDefenseMapConfig(DEFAULT_COOP_DEFENSE_MAP_ID),
       captureTheBeerActivityRuntime: { system: { getTeamScore: (team: string) => team === 'red' ? 3 : 1 } },
     };
     ArenaLifecycleCoordinator.prototype.hostSaveRoundResults.call(resultContext as any, 1000, true);
@@ -478,7 +478,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     vi.spyOn(bridge, 'hostPublishRoomStatistics').mockImplementation(() => {});
     Object.assign(flow, {
       ctx: {}, resolveConfiguredGameMode: () => 'coop_defense',
-      resolveConfiguredCoopDefenseMapId: () => DEFAULT_COOP_DEFENSE_MAP_ID,
+      resolveConfiguredCoopDefenseMapConfig: () => getCoopDefenseMapConfig(DEFAULT_COOP_DEFENSE_MAP_ID),
       hostSaveRoundResults: ArenaLifecycleCoordinator.prototype.hostSaveRoundResults,
       publishRoundConclusion: (ArenaLifecycleCoordinator.prototype as any).publishRoundConclusion,
     });

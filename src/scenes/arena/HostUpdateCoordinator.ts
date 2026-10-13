@@ -20,7 +20,7 @@ import { dequantizeAngle }   from '../../utils/angle';
 import { computeProjectileExplosionDamage, computeRadialDamage, resolveProjectileExplosionFalloff } from '../../utils/radialDamage';
 import { PICKUP_RADIUS, NUKE_CONFIG } from '../../powerups/PowerUpConfig';
 import { CAPTURE_THE_BEER_MODE, isCoopDefenseMode, isTeamGameMode } from '../../gameModes';
-import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId } from '../../config/coopDefenseMaps';
+import { isWeaponBalanceLabMapId } from '../../config/coopDefenseMaps';
 import { buildCountdownGroundFirePreview } from '../../effects/CountdownGroundFirePreview';
 import type { CoopMissionActivityStep } from '../../activity/CoopMissionRuntime';
 import type { ArenaContext }      from './ArenaContext';
@@ -40,7 +40,7 @@ import { resolveDetonations, type DetonationEffectSink } from '../../systems/Det
 import { resolveEnemyFireExplosion } from '../../systems/AlliedEnemyEffects';
 import { COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID } from '../../systems/CoopDefenseAirstrikeEventHandler';
 import type { RockPhysicsProxy } from '../../arena/rocks/RockPhysicsProxy';
-import { toMapId } from '../../world/arenaDescriptorAdapter';
+import { resolveCoopDefenseMapConfig } from '../../world/WorldDefinitionResolution';
 import type { PlayerCapabilities } from '../../world/PlayerCapabilities';
 import type { WorldRuntime } from '../../world/WorldRuntime';
 import type { WorldProjectileRuntime } from '../../projectile/WorldProjectileRuntime';
@@ -389,9 +389,10 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     // gate via countdownActive.
     const countdownActive = bridge.isArenaCountdownActive();
     if (!countdownActive) this.ctx.getWorldCombatCore()!.advancePlayerLifecycle(now);
-    const worldMapId = this.world ? toMapId(this.world.descriptor.definitionId) : null;
-    const activeMapConfig = worldMapId === null ? null : getCoopDefenseMapConfig(worldMapId);
-    const weaponBalanceLabActive = worldMapId !== null && isWeaponBalanceLabMapId(worldMapId);
+    const activeMapConfig = this.world
+      ? resolveCoopDefenseMapConfig(this.world.descriptor, bridge.getActivityDescriptor())
+      : null;
+    const weaponBalanceLabActive = activeMapConfig !== null && isWeaponBalanceLabMapId(activeMapConfig.mapId);
     // Activity-Systeme werden durch die Activity aktiviert und gruppiert – nicht durch
     // verstreute Nullable-Abfragen. Diese eine Entscheidung traegt beide Activity-Phasen.
     const coopMission = bridge.getActivityDescriptor()?.kind === 'coop-mission';

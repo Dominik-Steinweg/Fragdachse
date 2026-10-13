@@ -216,7 +216,7 @@ describe('World-scoped Runtime – kein Lobby-Fallback nach dem Aufbau', () => {
     expect(buildArena).not.toContain('bridge.getCoopDefenseMapId()');
     expect(buildArena).not.toContain('roundState?.coopDefenseMapId');
     expect(buildArena).not.toMatch(/\b(?:GRID_COLS|GRID_ROWS|ARENA_OFFSET_X|ARENA_OFFSET_Y|ARENA_WIDTH|ARENA_HEIGHT)\b/);
-    expect(buildArena).toContain('const mapId = toMapId(descriptor.definitionId);');
+    expect(buildArena).toContain('resolveCoopDefenseMapConfig(descriptor, activity)');
     expect(buildArena).toContain('worldOriginX: world.metrics.offsetX');
   });
 
@@ -234,7 +234,7 @@ describe('World-scoped Runtime – kein Lobby-Fallback nach dem Aufbau', () => {
     const provider = read('src/scenes/arena/ArenaWorldCombatComposition.ts');
 
     expect(provider).toContain('const worldContext = worldRuntime.context;');
-    expect(provider).toContain('toMapId(worldContext.descriptor.definitionId)');
+    expect(provider).toContain('resolveCoopDefenseMapConfig(worldContext.descriptor');
     expect(provider).not.toContain('getCoopDefenseMapId');
     expect(provider).not.toContain('getRoundState');
   });

@@ -25,6 +25,7 @@ import { createNavigationLabWorldPort, createDevScenarioWorldPort } from './Aren
 import type { WorldPresentationRequirement } from '../../world/WorldPresentation';
 import type { PlayerCapabilities } from '../../world/PlayerCapabilities';
 import type { WorldMetrics } from '../../world/WorldMetrics';
+import type { ActivityDescriptor } from '../../world/ActivityDescriptor';
 import type { WorldDescriptor } from '../../world/WorldDescriptor';
 import type { WorldProjectileRuntime } from '../../projectile/WorldProjectileRuntime';
 import type { EnemyVisualSource } from '../../entities/EnemyVisualSource';
@@ -636,6 +637,11 @@ export class ArenaRuntime {
 
   getWorldDescriptor(): WorldDescriptor | null {
     return this.flow.getWorldRuntime()?.context?.descriptor ?? null;
+  }
+
+  /** Activity der resident gehaltenen World-Instanz; ueberdauert verspaetete Bridge-Wechsel. */
+  getActivityDescriptor(): ActivityDescriptor | null {
+    return this.flow.getResidentActivityDescriptor();
   }
 
   getWorldProjectileRuntime(): WorldProjectileRuntime | null {

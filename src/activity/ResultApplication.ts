@@ -16,7 +16,8 @@ import {
  */
 export interface ResultApplicationPort {
   readonly getCurrentActivity: () => ActivityDescriptor | null;
-  readonly resolveVictoryRewardIds: (definitionId: string) => readonly PersistentBaseRewardId[];
+  /** Belohnungen der abgeschlossenen, noch aktuellen Activity-Instanz. */
+  readonly resolveVictoryRewardIds: (activity: ActivityDescriptor) => readonly PersistentBaseRewardId[];
   readonly grantPersistentBaseRewards: (rewardIds: readonly PersistentBaseRewardId[]) => void;
   readonly completeVictoryHolds?: () => void;
   readonly applyPersistentBaseOutcome: (
@@ -42,7 +43,8 @@ export class ResultApplication {
    * ohne denselben Abschluss dadurch erneut anwendbar zu machen.
    */
   apply(completion: CoopMissionActivityCompletion, endedAt: number): boolean {
-    if (!isCompletionForActivity(completion, this.port.getCurrentActivity())) return false;
+    const activity = this.port.getCurrentActivity();
+    if (!activity || !isCompletionForActivity(completion, activity)) return false;
     const key = completionKey(completion);
     if (this.appliedCompletionKey === key) return false;
     this.appliedCompletionKey = key;
@@ -51,7 +53,7 @@ export class ResultApplication {
     if (conclusion === 'victory') {
       this.port.completeVictoryHolds?.();
       this.port.grantPersistentBaseRewards(
-        this.port.resolveVictoryRewardIds(completion.definitionId),
+        this.port.resolveVictoryRewardIds(activity),
       );
     }
     this.port.applyPersistentBaseOutcome(

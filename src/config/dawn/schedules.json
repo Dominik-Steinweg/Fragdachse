@@ -1,0 +1,15 @@
+{
+  "schedules": [
+    {
+      "id": "standard",
+      "durationMs": 480000,
+      "phases": [
+        { "id": "day", "startMs": 0, "clock": "07:00" },
+        { "id": "dusk", "startMs": 210000, "clock": "18:30" },
+        { "id": "night", "startMs": 255000, "clock": "20:45" },
+        { "id": "dawn", "startMs": 465000, "clock": "04:45" }
+      ],
+      "endClock": "06:15"
+    }
+  ]
+}
