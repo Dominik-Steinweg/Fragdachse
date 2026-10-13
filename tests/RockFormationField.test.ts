@@ -1,22 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { RockFormationField, FORMATION_SIDE, type FormationRock } from '../src/arena/rocks/RockFormationField';
-import { CELL_SIZE } from '../src/config';
 import { formationSurfaceColour } from '../src/arena/rocks/rockFormationShader';
 import { createSunPath, resolveSunPath } from '../src/effects/sunlight/SunPath';
 import { SUN_TUNING_DEFAULTS } from '../src/config/sunlight';
-import { ROCK_BASE_PHASE_CELLS, ROCK_BASE_PHASES, ROCK_BASE_FRAME_MARGIN } from '../src/arena/RockBaseConfig';
-
-function fixture(cells: [number,number][], detail=new Float32Array(256*256), holes:[number,number][]=[]) {
-  const states:FormationRock[]=cells.map(([gridX,gridY],id)=>({id,gridX,gridY,active:true,frame:0}));
-  const source={alpha:new Uint8Array(2176*1870).fill(255),detail};
-  const pitch=CELL_SIZE+ROCK_BASE_FRAME_MARGIN*2;
-  for(const [x,y] of holes) {
-    const phase=(Math.floor(y/CELL_SIZE)%ROCK_BASE_PHASE_CELLS)*ROCK_BASE_PHASE_CELLS+Math.floor(x/CELL_SIZE)%ROCK_BASE_PHASE_CELLS;
-    source.alpha[(ROCK_BASE_FRAME_MARGIN+y%CELL_SIZE)*ROCK_BASE_PHASES*pitch+phase*pitch+ROCK_BASE_FRAME_MARGIN+x%CELL_SIZE]=0;
-  }
-  return {states,field:new RockFormationField(1024,1024,states,source)};
-}
-const height=(data:Float32Array,x:number,y:number):number=>data[(Math.floor(y/2)+1)*FORMATION_SIDE+Math.floor(x/2)+1];
+import { fixture, height } from './RockFormationFieldTestFixture';
+// The costly invariance sweeps live in RockFormationFieldIncremental and RockFormationFieldSolar.
 
 it('keeps the raised lip directional: sun-facing facets stay lit and south-facing lips stay below ground exposure',()=>{
   const cells:[number,number][]=[];for(let y=5;y<10;y++)for(let x=5;x<10;x++)cells.push([x,y]);
@@ -41,31 +29,6 @@ it('keeps the raised lip directional: sun-facing facets stay lit and south-facin
     expect(lit).toBeGreaterThan(1);
   }
 },15000);
-
-it('keeps incremental geometry byte-identical to full builds across explosions, gutters, holes and sun/quality changes',()=>{
-  const cells:[number,number][]=[];for(let y=12;y<21;y++)for(let x=12;x<21;x++)cells.push([x,y]);
-  const detail=Float32Array.from({length:65536},(_,i)=>Math.sin(i%256*.1)*Math.cos(Math.floor(i/256)*.1));
-  const {field,states}=fixture(cells,detail,[[510,510],[511,510],[510,511],[511,511]]);
-  field.setRimGeometry({rockRimWidth:14,rockRimHeight:12,rockRimLip:2});
-  for(let cy=0;cy<2;cy++)for(let cx=0;cx<2;cx++)field.buildCached(cx,cy);
-  for(const [gx,gy,angle,solar] of [[16,16,135,true],[17,15,135,true],[13,14,35,false]] as const) {
-    const ids:number[]=[];
-    for(const s of states)if(s.active&&Math.hypot(s.gridX-gx,s.gridY-gy)<=2.5){s.active=false;ids.push(s.id);}
-    field.invalidate(ids);
-    let shaded=0;
-    for(let cy=0;cy<2;cy++)for(let cx=0;cx<2;cx++) {
-      const actual=field.buildCached(cx,cy,angle,solar);shaded+=field.lastBuild.shadedTexels;
-      const expected=field.build(cx,cy,angle,solar);
-      for(const channel of ['data','occlusion','heights'] as const)
-        expect(Buffer.from(actual[channel].buffer).equals(Buffer.from(expected[channel].buffer)),channel).toBe(true);
-    }
-    if(angle===135)expect(shaded).toBeLessThan(4*FORMATION_SIDE**2);
-  }
-  // An unchanged rebuild reuses every ray result, with identical bytes.
-  const before=field.buildCached(0,0,35,false),again=field.buildCached(0,0,35,false);
-  expect(field.lastBuild.shadedTexels).toBe(0);
-  expect(Buffer.from(before.data).equals(Buffer.from(again.data))).toBe(true);
-},60000);
 
 it('retains worker cache ownership across transferable results and returns one exact repair transaction',async()=>{
   const received:any[]=[];
@@ -220,44 +183,3 @@ it('keeps the geometric shoulder monotone, bounded and its ambient foot compact'
   for(let d=0;d<=30;d+=.5){const v=rockContactVisibility(d);expect(v).toBeGreaterThanOrEqual(previous);expect(v).toBeLessThanOrEqual(1);previous=v;}
   expect(rockContactVisibility(0)).toBe(0);expect(rockContactVisibility(10)).toBe(1);
 });
-it('raises geometric relief without changing coverage, then restores the exact baseline',()=>{
-  const {field,states}=fixture([[3,3],[4,3],[3,4],[4,4]]);
-  const base=field.build(0,0),rim={rockRimWidth:9,rockRimHeight:12,rockRimLip:2};
-  field.setRimGeometry(rim);const raised=field.build(0,0);let strongerHorizon=0;
-  for(let i=0;i<raised.heights.length;i++){
-    expect(raised.data[i*4+3]).toBe(base.data[i*4+3]);
-    expect(raised.heights[i]).toBeGreaterThanOrEqual(base.heights[i]);
-    expect(raised.heights[i]-base.heights[i]).toBeLessThanOrEqual(rim.rockRimHeight+.0001);
-    if(!raised.data[i*4+3]&&raised.data[i*4+2]>base.data[i*4+2])strongerHorizon++;
-  }
-  expect(strongerHorizon).toBeGreaterThan(0);
-  const contact=(x:number)=>raised.occlusion[((128/2+1)*FORMATION_SIDE+Math.floor(x/2)+1)*4+3];
-  expect(contact(160)).toBeLessThan(contact(164));expect(contact(164)).toBeLessThan(contact(168));expect(contact(172)).toBe(255);
-  field.setRimGeometry(null);expect(field.build(0,0)).toEqual(base);
-  field.setRimGeometry(rim);states[0].active=false;field.invalidate([0]);const destroyed=field.build(0,0);
-  expect(height(destroyed.heights,110,110)).toBe(0);expect(field.coverage(110,110)).toBe(0);
-  expect(height(destroyed.heights,134,110)).toBeLessThan(height(raised.heights,134,110));
-},30000); // Multiple full-resolution field rebuilds; preserve gutter/horizon coverage in parallel suites.
-it('keeps rim normals, contact and horizon bytes identical in adjacent chunk gutters',()=>{
-  const cells:[number,number][]=[];for(let y=6;y<12;y++)for(let x=12;x<21;x++)cells.push([x,y]);
-  const {field}=fixture(cells);field.setRimGeometry({rockRimWidth:11,rockRimHeight:14,rockRimLip:3});
-  const a=field.build(0,0),b=field.build(1,0);let differences=0;
-  for(let y=0;y<FORMATION_SIDE;y++)for(let x=0;x<2;x++)for(let c=0;c<4;c++){
-    const i=(y*FORMATION_SIDE+FORMATION_SIDE-2+x)*4+c,j=(y*FORMATION_SIDE+x)*4+c;
-    if(a.data[i]!==b.data[j]||a.occlusion[i]!==b.occlusion[j])differences++;
-  }
-  expect(differences).toBe(0);
-});
-
-it('rotates only solar horizons while retaining normals, coverage, height and ambient cavities',()=>{
-  const {field}=fixture([[5,5],[6,5],[5,6],[6,6]]),east=field.build(0,0,0),west=field.build(0,0,180);
-  expect(east.heights).toEqual(west.heights);
-  let eastX=0,eastWeight=0,westX=0,westWeight=0;
-  for(let i=0;i<east.data.length;i+=4){
-    expect(east.data[i]).toBe(west.data[i]);expect(east.data[i+1]).toBe(west.data[i+1]);expect(east.data[i+3]).toBe(west.data[i+3]);
-    expect(east.occlusion[i]).toBe(west.occlusion[i]);expect(east.occlusion[i+3]).toBe(west.occlusion[i+3]);
-    if(!east.data[i+3]){const x=(i/4)%FORMATION_SIDE;eastX+=x*east.data[i+2];eastWeight+=east.data[i+2];westX+=x*west.data[i+2];westWeight+=west.data[i+2];}
-  }
-  expect(eastWeight).toBeGreaterThan(0);expect(westWeight).toBeGreaterThan(0);expect(eastX/eastWeight).toBeLessThan(westX/westWeight);
-  expect(field.build(0,0).data).toEqual(field.build(0,0,135).data);
-},30000); // Multiple full-resolution field rebuilds; preserve gutter/horizon coverage in parallel suites.
