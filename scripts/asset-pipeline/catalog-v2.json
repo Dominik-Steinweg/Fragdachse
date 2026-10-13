@@ -5402,6 +5402,7 @@
       },
       "orthoScale": 3.6,
       "textures": {},
+      "materialSource": "procedural",
       "materialVariants": {
         "standard": {
           "label": "Weathered matte pigment, machined relief and cavity depth",
@@ -5452,6 +5453,7 @@
       },
       "orthoScale": 3.6,
       "textures": {},
+      "materialSource": "procedural",
       "materialVariants": {
         "standard": {
           "label": "Weathered matte pigment, machined relief and cavity depth",
@@ -5502,6 +5504,7 @@
       },
       "orthoScale": 3.6,
       "textures": {},
+      "materialSource": "procedural",
       "materialVariants": {
         "standard": {
           "label": "Weathered matte pigment, machined relief and cavity depth",
@@ -5552,6 +5555,7 @@
       "model": {},
       "orthoScale": 3.4,
       "textures": {},
+      "materialSource": "procedural",
       "materialVariants": {
         "standard": {
           "label": "Weathered matte pigment, machined relief and cavity depth",
@@ -5630,6 +5634,7 @@
       },
       "orthoScale": 1.76,
       "textures": {},
+      "materialSource": "procedural",
       "materialVariants": {
         "standard": {
           "label": "Weathered matte pigment, machined relief and cavity depth",
@@ -5679,6 +5684,7 @@
       },
       "orthoScale": 1.76,
       "textures": {},
+      "materialSource": "procedural",
       "materialVariants": {
         "standard": {
           "label": "Weathered matte pigment, machined relief and cavity depth",
@@ -5728,6 +5734,7 @@
       },
       "orthoScale": 1.76,
       "textures": {},
+      "materialSource": "procedural",
       "materialVariants": {
         "standard": {
           "label": "Weathered matte pigment, machined relief and cavity depth",
@@ -5776,6 +5783,7 @@
       "model": {},
       "orthoScale": 3.25,
       "textures": {},
+      "materialSource": "procedural",
       "materialVariants": {
         "standard": {
           "label": "Worn matte enamel, oak and canvas",
@@ -5801,8 +5809,8 @@
       "targetSize": 32,
       "displayScale": 1.1875,
       "sourceSizes": [
-        64,
-        128
+        76,
+        152
       ],
       "forward": "north",
       "pivot": [

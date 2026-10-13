@@ -553,6 +553,18 @@
       "visiblePixelSha256": "707ac5f6cb856e6c25e528c0368fdb403215c3565b3284e2dfbf2368f5987da2",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/sprites/pipeline-v2/dawn_dealer/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/dawn_dealer/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/dawn_dealer/sheet.png",
+      "width": 640,
+      "height": 320,
+      "sourceBytes": 143087,
+      "downloadBytes": 70764,
+      "sourceSha256": "d254b9fe2b9752bb9579afdc22dd13e474a36a0767daac4c2715529ff79557fb",
+      "sha256": "92d30a0bd029ec2de3f6ba94771464a872567eb1d70f8654e6ce3774f835d2fc",
+      "visiblePixelSha256": "8e115d698164013726222ef758356aa30b8a8bdafd04cf9812015424e4032a44",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/sprites/pipeline-v2/firestarter-badger/mesh/enemy-mesh-firestarter-b1-v3-r1/albedo-128.png": {
       "file": "assets/sprites/pipeline-v2/firestarter-badger/mesh/enemy-mesh-firestarter-b1-v3-r1/albedo-128.webp",
       "source": "assets/sprites/pipeline-v2/firestarter-badger/mesh/enemy-mesh-firestarter-b1-v3-r1/albedo-128.png",
