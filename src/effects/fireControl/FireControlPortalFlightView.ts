@@ -1,5 +1,6 @@
-import type * as Phaser from 'phaser';
+import * as Phaser from 'phaser';
 import { DEPTH } from '../../config';
+import { BULLET_GLOW_TEXTURE } from '../BulletRenderer';
 import { getPipelineAsset } from '../../config/pipelineAssets';
 import type { ProjectileCustomVisual, ProjectileCustomVisualFactory } from '../../projectile/ProjectileVisualOverrides';
 
@@ -16,21 +17,33 @@ function ensureFlightTexture(scene: Phaser.Scene): boolean {
   return false;
 }
 
+/** Turquoise lens glow (P1); emissive above the lightmap so the device stays readable at night. */
+const LENS_GLOW_COLOR = 0x3dffd0;
+const LENS_GLOW_SIZE = 22;
+
 /** Thrown portal device: faces its flight direction (forward = north) and keeps it once at rest. */
 class FireControlPortalFlightView implements ProjectileCustomVisual {
   private readonly sprite: Phaser.GameObjects.Image;
+  private readonly glow: Phaser.GameObjects.Image | null;
   private rotation: number | null = null;
-  constructor(scene: Phaser.Scene, x: number, y: number) {
+  constructor(private readonly scene: Phaser.Scene, x: number, y: number) {
     this.sprite = scene.add.image(x, y, FIRE_CONTROL_PORTAL_FLIGHT.sheetTextureKey, FIRE_CONTROL_PORTAL_FLIGHT.idleFrame)
       .setOrigin(...FIRE_CONTROL_PORTAL_FLIGHT.pivot)
       .setDisplaySize(FIRE_CONTROL_PORTAL_FLIGHT_SIZE, FIRE_CONTROL_PORTAL_FLIGHT_SIZE)
       .setDepth(DEPTH.PROJECTILES);
+    // The body sits under the lightmap like every projectile; only its small lens glow is
+    // emissive (above the lightmap, below the canopy), so the throw reads in the dark.
+    this.glow = scene.textures.exists(BULLET_GLOW_TEXTURE)
+      ? scene.add.image(x, y, BULLET_GLOW_TEXTURE).setDisplaySize(LENS_GLOW_SIZE, LENS_GLOW_SIZE)
+        .setTint(LENS_GLOW_COLOR).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.CANOPY - 0.3)
+      : null;
   }
   update(x: number, y: number, _size: number, vx: number, vy: number): void {
     if (Math.hypot(vx, vy) > 1) this.rotation = Math.atan2(vy, vx) + Math.PI / 2;
     this.sprite.setPosition(x, y).setRotation(this.rotation ?? 0);
+    this.glow?.setPosition(x, y).setAlpha(.55 + .15 * Math.sin(this.scene.time.now / 90));
   }
-  destroy(): void { this.sprite.destroy(); }
+  destroy(): void { this.sprite.destroy(); this.glow?.destroy(); }
 }
 
 /**

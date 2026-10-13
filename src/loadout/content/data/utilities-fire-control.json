@@ -30,7 +30,7 @@
     "FIRE_CONTROL_PORTAL": {
       "id": "FIRE_CONTROL_PORTAL",
       "type": "fire_control_portal",
-      "cooldown": 20000,
+      "cooldown": 4000,
       "activation": {
         "type": "charged_throw",
         "minThrowSpeed": 50,
@@ -56,7 +56,7 @@
         "burstLockoutMs": 0
       },
       "skipCooldownPublish": true,
-      "durationMs": 5000,
+      "durationMs": 4000,
       "damageBonus": 0,
       "localFireEnabled": 0,
       "exitClearanceRadiusPx": 12

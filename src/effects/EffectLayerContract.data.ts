@@ -8289,10 +8289,11 @@ const FIRE_CONTROL_PREVIEW_LAYER_CONTRACTS: readonly LayerContract[] = [
 // fire-control portal: the thrown device draws like a grenade body; its landing preview is overlay UI.
 Object.assign(CPU_SOURCE_CONTRACTS, {
   "effects/fireControl/FireControlPortalFlightView.ts": {
-    "blends": [],
+    "blends": ["Phaser.BlendModes.ADD"],
     "cameras": [],
     "sites": [
-      { "key": "module/this.sprite/setDepth/0", "expression": "DEPTH.PROJECTILES", "blends": ["NORMAL"] }
+      { "key": "module/this.sprite/setDepth/0", "expression": "DEPTH.PROJECTILES", "blends": ["NORMAL"] },
+      { "key": "module/this.glow/setDepth/0", "expression": "DEPTH.CANOPY - 0.3", "blends": ["ADD"] }
     ],
     "bindings": {}
   },
@@ -8310,6 +8311,11 @@ const FIRE_CONTROL_PORTAL_LAYER_CONTRACTS: readonly LayerContract[] = [
     owner: 'effects/fireControl/FireControlPortalFlightView.ts', component: 'module/this.sprite/setDepth/0',
     height: 'body', lighting: 'material', camera: 'world', depths: [15], blends: ['NORMAL'], profiles: ['L'],
     role: 'effect', source: { selector: 'module/this.sprite/setDepth/0', expression: 'DEPTH.PROJECTILES' } },
+  // Lens glow only: emissive above the lightmap, below the canopy, so the throw reads at night.
+  { id: 'cpu:effects/fireControl/FireControlPortalFlightView.ts:module/this.glow/setDepth/0',
+    owner: 'effects/fireControl/FireControlPortalFlightView.ts', component: 'module/this.glow/setDepth/0',
+    height: 'body', lighting: 'emissive', camera: 'world', depths: [19.7], blends: ['ADD'], profiles: ['E'],
+    role: 'effect', source: { selector: 'module/this.glow/setDepth/0', expression: 'DEPTH.CANOPY - 0.3' } },
   { id: 'cpu:effects/fireControl/FireControlPortalLandingPreviewVisual.ts:module/this.layer?.image/setDepth/0',
     owner: 'effects/fireControl/FireControlPortalLandingPreviewVisual.ts', component: 'module/this.layer?.image/setDepth/0',
     height: 'body', lighting: 'emissive', camera: 'world', depths: [98.98], blends: ['NORMAL'], profiles: ['H'],

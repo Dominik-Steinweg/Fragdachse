@@ -5,8 +5,8 @@ import { FireControlGpuKind as Kind, FireControlPortalGpuStore } from './FireCon
 
 /** Same radius as the live exit, so the preview reads as "the exit opens here". */
 const EXIT_RADIUS = 23;
-/** Dimmed: a preview, not an open portal. */
-const PREVIEW_OPEN = 0.4;
+/** Dimmed: a preview, not an open portal, but bright enough to read at night (G2 review). */
+const PREVIEW_OPEN = 0.55;
 const FADE_IN_MS = 150;
 
 /**
