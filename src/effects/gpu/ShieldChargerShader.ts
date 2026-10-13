@@ -83,12 +83,13 @@ float fbm(vec2 v) {
   return sum;
 }
 float gauss(float x, float w) { float k = x / w; return exp(-k * k); }
-// Hostile warning ramp (ember red → amber → hot white); allied uses the jade family, quietly.
+// Hostile warning ramp (deep red → danger red → hot rose, no amber: red is the telegraph colour);
+// allied uses the jade family, quietly.
 vec3 warn(float h, float allied) {
   vec3 h0 = mix(vec3(0.38, 0.05, 0.02), vec3(0.02, 0.19, 0.12), allied);
   vec3 h1 = mix(vec3(0.95, 0.22, 0.08), vec3(0.12, 0.89, 0.60), allied);
-  vec3 h2 = mix(vec3(1.00, 0.62, 0.26), vec3(0.54, 1.00, 0.81), allied);
-  vec3 h3 = mix(vec3(1.00, 0.93, 0.80), vec3(0.91, 1.00, 0.96), allied);
+  vec3 h2 = mix(vec3(1.00, 0.45, 0.42), vec3(0.54, 1.00, 0.81), allied);
+  vec3 h3 = mix(vec3(1.00, 0.84, 0.86), vec3(0.91, 1.00, 0.96), allied);
   float x = clamp(h, 0.0, 1.0) * 3.0;
   if (x < 1.0) return mix(h0, h1, x);
   if (x < 2.0) return mix(h1, h2, x - 1.0);
@@ -154,8 +155,16 @@ void main() {
     float fade = (1.0 - smoothstep(0.25, 0.6, t)) * smoothstep(0.0, 0.04, t);
     float cosFront = fromBody.x / max(rb, 0.001);
     float wave = gauss(rb - shieldR, 1.3) * smoothstep(0.15, 0.75, cosFront) * (0.8 + 0.2 * sin(uTime * 31.0 + seed));
-    float e = ((lines * 0.6 + core) * k * k * bow + wave * 0.55) * fade * mix(1.0, 0.5, allied);
-    rgb = mix(vec3(1.0, 0.92, 0.82), warn(0.55, allied), 0.35) * e;
+    float quiet = fade * mix(1.0, 0.5, allied);
+    // Hostile: danger red like the telegraph, void purple on the outer lines, hot rose at the
+    // body and bow crest. Allied keeps its jade.
+    vec3 red = vec3(1.0, 0.29, 0.21), voidC = vec3(0.70, 0.28, 1.0), hot = vec3(1.0, 0.80, 0.84);
+    vec3 lineC = mix(mix(red, voidC, smoothstep(0.25 * w, 0.8 * w, abs(v))), hot, 0.35 * k * k);
+    vec3 coreC = mix(red, hot, 0.45 * k * k);
+    vec3 waveC = mix(red, hot, 0.4);
+    vec3 hostile = (lineC * lines * 0.6 + coreC * core) * k * k * bow * 1.25 + waveC * wave * 0.7;
+    vec3 alliedC = warn(0.55, 1.0) * ((lines * 0.6 + core) * k * k * bow + wave * 0.55);
+    rgb = mix(hostile, alliedC, allied) * quiet;
   } else if (kind < 2.5) {
     // Ground scuffs: two dragged-paw streaks along the travelled lane, cooling to dust.
     float life = 1.0 - smoothstep(0.4, ${SHIELD_CHARGER_SKID_LIFE_S.toFixed(1)}, t);

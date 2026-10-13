@@ -133,7 +133,7 @@ export class ShieldChargerRenderer {
       if (!allied && lights.size < lightLimit) {
         lights.add(`lane-${id}`);
         this.lighting?.setLight(this.lightPrefix + `lane-${id}`, 'explosion', lane.originX, lane.originY,
-          { radiusPx: 70 + 50 * progress, color: 0xff5a2c, intensity: 0.1 + 0.25 * progress * progress, occludes: false });
+          { radiusPx: 70 + 50 * progress, color: 0xff4a36, intensity: 0.1 + 0.25 * progress * progress, occludes: false });
       }
     }
     for (const streak of streaks) if (visible(streak.ax, streak.ay, streak.bx, streak.by)) add(streak);
