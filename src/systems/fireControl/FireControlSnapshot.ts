@@ -20,9 +20,11 @@ export type FireControlDeploymentKind = 'copies' | 'portal';
 export type FireControlCopyStatus = 'materializing' | 'active';
 
 /**
- * Feuerweg einer an einen Portaleinsatz angeschlossenen Quelle:
+ * Feuerweg einer an einen Portaleinsatz angeschlossenen Quelle. Host und Darstellung lesen dieselbe
+ * Semantik; ein Eingang bleibt in jedem Modus im Snapshot und damit sichtbar:
  * - `portal`: Ziel am Ausgang vorhanden, der Mündungseingang ist offen und transportiert.
- * - `waiting`: kein geeignetes Ziel am Ausgang; die Quelle schweigt (Grundversion).
+ * - `waiting`: kein geeignetes Ziel am Ausgang; die Quelle schweigt (Grundversion). Der Eingang
+ *   bleibt sichtbar und wird gedimmt dargestellt.
  * - `local`: kein Ziel am Ausgang, die Quelle kämpft lokal (nur mit „Lokale Feuerfreigabe“);
  *   der Eingang wird deaktiviert dargestellt.
  */
@@ -70,6 +72,13 @@ export interface FireControlEntrySnapshot {
   readonly y: number;
   /** Ausrichtung des Eingangs = Rohrwinkel der Quelle. */
   readonly angle: number;
+  /**
+   * Absolute Host-Zeit des letzten über diesen Eingang transportierten Schusses (bei Salven der
+   * letzte). Die Darstellung spielt daraus den Schluck-Effekt am Eingang und den gerichteten
+   * Austrittsflash am festen Ausgang (Richtung = `angle`), ohne Projektile zuordnen zu müssen.
+   * Fehlt, solange der Eingang noch nichts transportiert hat.
+   */
+  readonly lastTransportAt?: number;
 }
 
 interface FireControlDeploymentSnapshotBase {
