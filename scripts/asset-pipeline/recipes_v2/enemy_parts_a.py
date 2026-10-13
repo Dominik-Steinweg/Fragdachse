@@ -167,7 +167,7 @@ def paw(c, name, x, y, coat, dark, claw, width=.19, length=.27, toe_length=.12, 
     return ((x*.74,y-.16,.35),objects)
 
 
-def head(c, pale, dark, coat, eye, y=.57, z=.87, width=.30, length=.43, ears=True):
+def head(c, pale, dark, coat, eye, y=.57, z=.87, width=.30, length=.43, ears=True, register_sockets=False):
     """Species identity: tapered skull, curved masks, recessed small eyes and muzzle."""
     width *= 1.12
     result = [ell(c,'Tapered badger skull',(0,y,z),(width,length,.205),pale,taper=.36)]
@@ -193,7 +193,11 @@ def head(c, pale, dark, coat, eye, y=.57, z=.87, width=.30, length=.43, ears=Tru
         result.append(mask)
         eye_x=side*width*.50; eye_z=surface(eye_x,.135)
         result.append(ell(c,'Inset eye surround',(eye_x,y+.135,eye_z),(.044,.036,.017),dark))
-        result.append(ell(c,'Focused small eye',(eye_x,y+.146,eye_z+.014),(.025,.019,.011),eye))
+        eye_mesh=ell(c,'Focused small eye',(eye_x,y+.146,eye_z+.014),(.025,.019,.011),eye)
+        result.append(eye_mesh)
+        if register_sockets:
+            from eye_anchors import register_eye
+            register_eye(c,side,eye_mesh)
         result.append(ell(c,'Matte slit pupil',(eye_x,y+.149,eye_z+.025),(.007,.014,.004),dark))
         result.append(horn(c,'Low sculpted eyebrow',[(eye_x-side*.04,y+.102,eye_z+.01),
             (eye_x,y+.105,eye_z+.028),(eye_x+side*.043,y+.124,eye_z+.012)],[.017,.022,.008],coat))

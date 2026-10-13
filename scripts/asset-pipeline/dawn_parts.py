@@ -190,3 +190,58 @@ def tapered_tube(c,name,points,radii,mat,sides=12):
     ob=bpy.data.objects.new(name,mesh);c.scene.collection.objects.link(ob)
     for face in mesh.polygons:face.use_smooth=True
     return ob
+
+
+def supply_palette(c):
+    return dict(paint=surface(c,'Player rescue ochre',(224,164,38),.38),
+                brass=surface(c,'Warm worn brass fittings',(185,126,53),.30),
+                dark=surface(c,'Recessed cargo gasket',(35,43,43),.14),
+                canvas=surface(c,'Unbleached parachute canvas',(186,177,137),.28),
+                edge=surface(c,'Cargo handle wear',(223,197,128),.23))
+
+
+def supply_crate(c, center, size, angle, p):
+    """The same carryable assembly occurs loose and beside the supply capsule."""
+    before=set(c.scene.objects)
+    c.box('Cargo dark gasket',(0,0,.18),(.82,.69,.32),p['dark'],.07)
+    crown(c,'Embossed ochre cargo lid',(0,0,.31),.79,.66,.14,p['paint'])
+    for x in (-.29,.29):
+        c.box('Brass cargo reinforcement',(x,0,.465),(.10,.69,.045),p['brass'],.018)
+        for y in (-.26,.26):bolt(c,x,y,.496,p['edge'],.026)
+    c.box('Handle inset',(0,.035,.473),(.40,.27,.035),p['dark'],.035)
+    tube(c,'Raised U carry handle',[(-.16,-.055,.49),(-.16,.11,.60),(.16,.11,.60),(.16,-.055,.49)],.040,p['edge'],12)
+    c.box('Wide front cargo latch',(0,-.29,.48),(.16,.115,.052),p['brass'],.016)
+    ob=group(c,'Portable supply crate',set(c.scene.objects)-before,center,(0,0,angle));ob.scale=(size,size,size)
+    return ob
+
+
+def salvage_gear(c, center, radius, p, teeth=12):
+    x,y,z=center
+    annulus(c,'Hollow salvage gear',center,radius*.84,radius*.40,.10,p['edge'],steps=48)
+    for i in range(teeth):
+        a=math.tau*i/teeth
+        ob=c.box('Gear tooth',(x+radius*.86*math.cos(a),y+radius*.86*math.sin(a),z),
+                 (radius*.31,radius*.25,.105),p['edge'],.012);ob.rotation_euler.z=a
+
+
+def draped_canvas(c,p):
+    """Authored folds over the north rim, gathering into an irregular silk fan."""
+    vs=[];faces=[];nx=40;ny=24
+    for j in range(ny+1):
+        t=j/ny
+        for i in range(nx+1):
+            u=i/nx; x=(u-.5)*(1.0+1.60*t)+.05*t+.13*math.sin(t*5+u*4)*t
+            y=.49+.94*t+.17*math.sin(u*10+1)*t+.10*math.sin(u*21)*t
+            z=.09+.45*(1-t)**2+.09*(.3+.7*t)*(1+math.sin(u*math.tau*5+t*4))+.07*math.sin(u*11+t*5)**2
+            vs.append((x,y,z))
+    for j in range(ny):
+        for i in range(nx):
+            a=j*(nx+1)+i;faces.append((a,a+1,a+nx+2,a+nx+1))
+    mesh=bpy.data.meshes.new('Parachute folded woven mesh');mesh.from_pydata(vs,[],faces);mesh.materials.append(p['canvas']);mesh.update()
+    ob=bpy.data.objects.new('Collapsed draped parachute',mesh);c.scene.collection.objects.link(ob)
+    for face in mesh.polygons:face.use_smooth=True
+    ob.modifiers.new('Canvas thickness','SOLIDIFY').thickness=.009
+    for i in (0,8,16,24,32,40):
+        points=[(vs[j*(nx+1)+i][0],vs[j*(nx+1)+i][1],vs[j*(nx+1)+i][2]+.008) for j in range(ny+1)]
+        tube(c,'Sewn parachute gore',points,.012,p['edge'],8)
+    return ob
