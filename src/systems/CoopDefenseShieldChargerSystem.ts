@@ -1,3 +1,4 @@
+import { VOID_PALETTE } from '../config';
 import { getCoopDefenseEnemyConfig, type CoopDefenseEnemyShieldChargerConfig } from '../config/coopDefenseEnemies';
 import type { CombatActorStatePort, CombatGeometryPort } from '../combat/CombatCapabilities';
 import type { EnemyEntity } from '../entities/EnemyEntity';
@@ -36,8 +37,9 @@ interface ChargerState {
   lastY: number;
 }
 
-// A faint glow hugging the modelled tower shield (reach ~15 px): it says "active", the prop gives the form.
-const HOSTILE_SHIELD_RIM = { color: 0xe0ad66, alpha: 0.14, thickness: 1.4, radius: 17, anchorDistance: 0 } as const;
+// A clear void glow hugging the modelled tower shield (reach ~15 px): blocking is core gameplay, so the
+// raised shield must read at a glance; the prop gives the form.
+const HOSTILE_SHIELD_RIM = { color: VOID_PALETTE.primary, alpha: 0.34, thickness: 2.2, radius: 17, anchorDistance: 0 } as const;
 const ALLIED_SHIELD_RIM = { color: 0x8affcf, alpha: 0.12, thickness: 1.4, radius: 17, anchorDistance: 0 } as const;
 /** Below this residual distance a run counts as having reached its planned end point. */
 const ARRIVAL_EPSILON_PX = 3;

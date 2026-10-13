@@ -135,8 +135,14 @@ void main() {
     alpha = clamp((gauss(railD, 3.0) * 0.28 + filled * 0.1) * span * (1.0 - allied), 0.0, 0.35);
     rgb += vec3(0.05, 0.01, 0.0) * alpha;
   } else if (kind < 1.5) {
-    // Run streak: speed lines behind the body, brightest at the body, broken by noise.
+    // Run streak: speed lines behind the body that end in the shield's curved front instead of
+    // the quad edge, plus a thin bow wave hugging the lowered shield's outline.
     float k = clamp(u / max(len, 1.0), 0.0, 1.0);          // 0 tail → 1 body
+    float shieldR = max(w - 6.0, 6.0);
+    vec2 fromBody = vec2(u - len, v);
+    float rb = length(fromBody);
+    float ahead = step(len, u);
+    float bow = 1.0 - ahead * smoothstep(shieldR - 5.0, shieldR + 1.0, rb);
     float lines = 0.0;
     for (int i = 0; i < 4; i++) {
       float fi = float(i);
@@ -146,7 +152,9 @@ void main() {
     }
     float core = gauss(v, w * 0.55) * 0.35;
     float fade = (1.0 - smoothstep(0.25, 0.6, t)) * smoothstep(0.0, 0.04, t);
-    float e = (lines * 0.6 + core) * k * k * fade * mix(1.0, 0.5, allied);
+    float cosFront = fromBody.x / max(rb, 0.001);
+    float wave = gauss(rb - shieldR, 1.3) * smoothstep(0.15, 0.75, cosFront) * (0.8 + 0.2 * sin(uTime * 31.0 + seed));
+    float e = ((lines * 0.6 + core) * k * k * bow + wave * 0.55) * fade * mix(1.0, 0.5, allied);
     rgb = mix(vec3(1.0, 0.92, 0.82), warn(0.55, allied), 0.35) * e;
   } else if (kind < 2.5) {
     // Ground scuffs: two dragged-paw streaks along the travelled lane, cooling to dust.

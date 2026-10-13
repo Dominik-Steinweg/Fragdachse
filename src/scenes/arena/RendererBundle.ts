@@ -263,7 +263,6 @@ export function* createRendererBundleSteps(
   yield 'renderers/gauss';
 
   const energyShield = new EnergyShieldRenderer(scene);
-  energyShield.generateTextures();
   yield 'renderers/energyShield';
 
   const turretAnimations = new TurretAnimationController();

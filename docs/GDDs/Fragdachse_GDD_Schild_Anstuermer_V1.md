@@ -215,7 +215,7 @@ Dieser Nachtrag beantwortet die offenen Punkte aus Abschnitt 11 und hält den um
 | Thema | Entscheidung |
 | --- | --- |
 | ID / Asset | `shield-charger-badger`; Blender-Asset „Turmschild“ (Form v1: gebogenes Plankenband, von oben ~126°), Clips `move`, `claw`, `windup`, `charge`, `recover`. |
-| Schild | Blockt wie der Spieler-Energieschild im 120°-Frontbogen: Projektile werden verschluckt, Hitscan endet am Schild, Nahkampf, Tesla/Ketten und Explosionen mit Zentrum im Bogen; Schaden über Zeit geht durch. Darstellung: das modellierte Requisit plus ein dünner warm-metallischer Rand, der bei Blocks aufblitzt (kein Void-Lila). |
+| Schild | Blockt wie der Spieler-Energieschild im 120°-Frontbogen: Projektile werden verschluckt, Hitscan endet am Schild, Nahkampf, Tesla/Ketten und Explosionen mit Zentrum im Bogen; Schaden über Zeit geht durch. Darstellung: das modellierte Requisit plus eine deutlich sichtbare Void-lila Energiemembran (gemeinsamer GPU-Energieschild-Shader mit dem Spielerschild), die am Turmschild anliegt und bei Blocks mit Welle und Funkenkranz aufblitzt. |
 | Trefferkategorie Ansturm | Nahkampf: ein Spieler-Energieschild in Ansturmrichtung blockt den Schaden, der Rückstoß wirkt trotzdem. |
 | Rückstoß | Im Lauf immun (keine unsichtbare Umlenkung, kein Treffer-Taumeln); deutliche Verschiebung während der Ankündigung bricht ab (danach Wiederholungssperre). |
 | Nekromantie | Ein verbündeter Anstürmer stürmt gegen feindliche Gegner, nie gegen Spieler; sein Korridor ist nur dezent sichtbar (keine Warnfunktion). |
@@ -236,5 +236,5 @@ Drehrate 105°/s (180° ≈ 1,7 s), Auslösedistanz 120–380 px bei höchstens 
 | §4.3 Ansturm | umgesetzt | Swept-Capsule, höchstens ein Treffer je Ziel und Ansturm, kein Tunneln (Bahn vorab mit Körperbreite gekürzt; unbekanntes Hindernis beendet den Lauf früher) |
 | §4.4 Erholung | umgesetzt | Schild unten, Blick bleibt, keine Warnfläche; Schild hebt sich am Ende |
 | §5 Sonderfälle | umgesetzt | Tod/Entfernung/Teardown räumen auf; Stun/Verschiebung brechen ab; Biss-/Gegnerangriffe während aller Phasen gesperrt |
-| §6 Darstellung | umgesetzt | GPU-Korridor in Körperbreite (Randlinien, Lade-Füllung, Pfeile, Endbalken), Tempo-Schlieren, Staub, Schleifspuren; Clips folgen der replizierten Zeitachse |
+| §6 Darstellung | umgesetzt | GPU-Korridor in Körperbreite (Randlinien, Lade-Füllung, Pfeile, Endbalken), Tempo-Schlieren, die vorne in der Schildform enden, Staub, Schleifspuren; Clips folgen der replizierten Zeitachse |
 | §10 Verifikation | teilweise | Unit-, Integrations- und Stresstests; Browser-Bögen Tag/Nacht auf Karte 4. Host+Client-Test braucht den PeerJS-Broker. Spieltests stehen aus. |

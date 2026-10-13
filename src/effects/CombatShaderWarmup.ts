@@ -8,6 +8,7 @@ import { MeteorGpuLayer } from './gpu/MeteorGpuLayer';
 import { MortarGpuLayer } from './gpu/MortarGpuLayer';
 import { FirestarterGpuLayer } from './gpu/FirestarterGpuLayer';
 import { ShieldChargerGpuLayer } from './gpu/ShieldChargerGpuLayer';
+import { EnergyShieldGpuLayer } from './gpu/EnergyShieldGpuLayer';
 import {
   TESLA_BOLT_FRAGMENT_SOURCE, TESLA_BOLT_SHADER_NAME, TESLA_DOME_FRAGMENT_SOURCE, TESLA_DOME_SHADER_NAME,
   TESLA_NOVA_FRAGMENT_SOURCE, TESLA_NOVA_SHADER_NAME,
@@ -26,6 +27,7 @@ export function createCombatShaderWarmupProbes(scene: Phaser.Scene): ShaderWarmu
   let mortar: MortarGpuLayer | null = null;
   let firestarter: FirestarterGpuLayer | null = null;
   let shieldCharger: ShieldChargerGpuLayer | null = null;
+  let energyShield: EnergyShieldGpuLayer | null = null;
   return [
     {
       name: 'armageddon',
@@ -51,6 +53,12 @@ export function createCombatShaderWarmupProbes(scene: Phaser.Scene): ShaderWarmu
       // Lane telegraph, run streak, dust and scuffs share one program; every pass is primed.
       prepare: context => (shieldCharger ??= new ShieldChargerGpuLayer(scene)).prepare(context),
       destroy: () => { shieldCharger?.destroy(); shieldCharger = null; },
+    },
+    {
+      name: 'energy-shield',
+      // Player arcs, energy domes and enemy frontal shields share one membrane program.
+      prepare: context => (energyShield ??= new EnergyShieldGpuLayer(scene)).prepare(context),
+      destroy: () => { energyShield?.destroy(); energyShield = null; },
     },
     {
       name: 'enemy-contour',
