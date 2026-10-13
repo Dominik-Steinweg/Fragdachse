@@ -45,6 +45,8 @@ export interface FireControlPortalFeedback {
     mode: FireControlEntryMode, x: number, y: number, angle: number): void;
   /** Confirmed shot through the entry (bursts: every shot). */
   noteTransport(deploymentId: number, sourceId: AutomatedTurretId, at: number): void;
+  /** Bound portal bursts end with their deployment (D12), also before `expiresAt`. */
+  isDeploymentActive(deploymentId: number): boolean;
 }
 
 /** World-local deployment facts. Weapon sequences remain exclusively in TurretSystem. */
@@ -207,6 +209,10 @@ export class FireControlRuntime implements FireControlUtilityPort, FireControlPo
     if (entry) Object.assign(entry, { mode, x, y, angle });
     // D36: a bound burst of a meanwhile paused original keeps its entry visible until it ends.
     else portal.entries.set(sourceId, { identityId, mode, x, y, angle });
+  }
+
+  isDeploymentActive(deploymentId: number): boolean {
+    return this.deployments.has(deploymentId);
   }
 
   noteTransport(deploymentId: number, sourceId: AutomatedTurretId, at: number): void {

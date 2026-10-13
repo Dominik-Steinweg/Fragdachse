@@ -1,6 +1,6 @@
 import { FireControlRuntime } from '../systems/fireControl/FireControlRuntime';
 import type { FireControlConstructionFacts } from '../systems/fireControl/FireControlCopyPlan';
-import type { FireControlSnapshot } from '../systems/fireControl/FireControlSnapshot';
+import { fireControlContributionId, type FireControlSnapshot } from '../systems/fireControl/FireControlSnapshot';
 import { isOffensiveConstruction } from '../systems/offensiveConstruction';
 import { PlasmaBurnerTargetCatalog } from './PlasmaBurnerTargetCatalog';
 import { homingTargetKind } from '../projectile/ProjectileOrigin';
@@ -883,6 +883,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       } else o.baseManager?.setTurretAngle(id, angle);
     });
     turret.setFireSourceProvider(() => this.getTurretFireSources());
+    turret.setPortalFeedback(this.fireControl);
     turret.setEnemyTargetProvider(() => (o.getEnemyManager()?.getAllEnemies() ?? []).filter(enemy => enemy.sprite.active).map(enemy => ({ id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y })));
     turret.setFocusTargetProvider((ownerId) => o.getEnergyInjectorSystem()?.getFocusTarget(ownerId) as { targetType: 'enemy' | 'base'; targetId: string } | null);
     turret.setFocusedBaseTargetProvider((targetId, x, y, range) => this.getBaseAimCandidates(x, y, range, targetId));
@@ -909,7 +910,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
             : undefined,
         }
         : weapon.fire;
-      o.automatedWeaponExecution?.fire(
+      const route = context?.route;
+      return o.automatedWeaponExecution?.fire(
         { ...weapon, fire, range: weapon.range * rangeFactor },
         {
           x,
@@ -929,6 +931,9 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
             // Attribution bleibt beim Original; die Schussanimation spielt am Sprite der feuernden Quelle.
             turretVisualId: context && context.source.visualId !== context.source.identityId
               ? String(context.source.visualId) : undefined,
+            // Bonus über den Transferkontext, nie zusätzlich in damageFactor/payloadDamageMultiplier.
+            fireControlRoute: route ? { contributionId: fireControlContributionId(route.deploymentId), ownerId,
+              entry: route.entry, exit: route.exit, damageBonus: route.damageBonus } : undefined,
             personalMgOwnerId: this.isPersonalMg(sourceTurretId) ? ownerId : undefined,
             personalMgScope: this.isPersonalMg(sourceTurretId) ? o.combatSystem.getCombatScope() : undefined,
             directDamageMultiplier: damageFactor,
