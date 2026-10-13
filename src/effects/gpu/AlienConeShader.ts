@@ -273,15 +273,17 @@ void main() {
     float mr = length(m), ma = atan(m.y, m.x);
     float flareT = 1.0 - smoothstep(0.0, 0.18, t);
     float star = gauss(mr, 5.0) * 2.2 + gauss(mr, 22.0) * 0.6
-      + pow(abs(cos(ma * 2.0)), 40.0) * exp(-mr / 30.0) * 1.2;
+      + pow(abs(cos(ma * 2.0)), 60.0) * exp(-mr / 14.0) * 0.9;
     float shockR = 44.0 * smoothstep(0.0, 0.14, t);
-    float shock = gauss(mr - shockR, 2.0 + 10.0 * t) * (1.0 - smoothstep(0.04, 0.16, t)) * 0.55
+    float shock = gauss(mr - shockR, 3.0 + 14.0 * t) * (1.0 - smoothstep(0.03, 0.13, t)) * 0.3
       * (0.7 + 0.3 * noise(vec2(ma * 6.0, seed * 5.0)));
 
     // Cover: where the profile clipped the fan, the shell splashes against the obstacle.
     float clipped = step(reach, range * 0.97);
     float arrived = smoothstep(reach - 14.0, reach, front);
-    float splash = clipped * arrived * gauss(r - reach, 5.0 + 4.0 * u) * (0.6 + 0.8 * noise(vec2(ang * 50.0, t * 25.0 + seed * 9.0))) * shellFade;
+    // Broken, flickering splash instead of a continuous line along the stepped cover profile.
+    float splashNoise = smoothstep(0.35, 0.9, fbm(vec2(ang * 40.0 + seed * 5.0, r * 0.08 - t * 12.0)));
+    float splash = clipped * arrived * gauss(r - reach, 7.0 + 6.0 * u) * splashNoise * shellFade;
 
     float field = (shell * (0.55 + 1.1 * plasma) + crest * 1.2 + echoes + trail * (0.35 * plasma + ridge * 0.9)
       + streams * 0.5 + bolts * 1.15) * env;
