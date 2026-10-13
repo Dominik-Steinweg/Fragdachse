@@ -80,6 +80,7 @@ export interface ArenaInputHotkeyPorts {
 }
 
 export interface ArenaInputPlacementPorts {
+  getConstructionPlacementRange(): number;
   getFireControlConstructions(): readonly FireControlConstructionFacts[];
   isFireControlPointFree(x: number, y: number, radius: number): boolean;
   getUsedCapacity(ownerId: string): number;
@@ -978,6 +979,7 @@ export class ArenaInputBindings {
     if (config.type === 'fire_control_relay') {
       const actions = this.input.actions;
       const constructions = actions.placement.getFireControlConstructions();
+      const buildRangePx = actions.placement.getConstructionPlacementRange();
       // getLocalUtilityConfig already applies the same loadout stat descriptors as the host
       // (maxCopies, durationMs, parallelEnabled). Duration does not affect the copy plan.
       const plan = planFireControlCopies({
@@ -986,7 +988,7 @@ export class ArenaInputBindings {
         slotOrder: actions.getLocalInspectorTools().flatMap(tool => tool.kind === 'construction' ? [tool.id] : []),
         // P1.1 has no replicated deployment/paused-original slice yet. The host still validates it.
         pausedOriginalIds: new Set(),
-        config: { ...config, parallel: config.parallelEnabled > 0 },
+        config: { ...config, buildRangePx, parallel: config.parallelEnabled > 0 },
         isPointFree: (x, y, radius) => actions.placement.isFireControlPointFree(x, y, radius),
       });
       const byId = new Map(constructions.map(source => [source.id, source]));
@@ -994,7 +996,7 @@ export class ArenaInputBindings {
       return {
         kind: 'fire_control_relay', valid: plan.ok, reason: plan.ok ? undefined : plan.reason,
         pointX: pointer.x, pointY: pointer.y, playerX: position.x, playerY: position.y,
-        rangePx: config.placementRangePx,
+        rangePx: buildRangePx,
         originals: selected.map(id => { const source = byId.get(id)!; return { id, x: source.x, y: source.y }; }),
         ghosts: plan.ok ? plan.copies.map(copy => {
           const source = byId.get(copy.originalId)!;

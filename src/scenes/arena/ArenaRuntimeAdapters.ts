@@ -1,3 +1,4 @@
+import { resolveConstructionPlacementRange } from '../../config/coopDefenseConstructions';
 import { KRAKEN_RISE_INTRO, readBossIntroState } from '../../config/bossIntros';
 import type { PlayerManager } from '../../entities/PlayerManager';
 import type { TrainShowcaseState } from '../../dev/scenario/trainShowcase';
@@ -551,6 +552,7 @@ export function createArenaPlacementPorts(flow: ArenaLifecycleCoordinator): Aren
           manned: mannedIds.has(rock.id), x: turret.x, y: turret.y }];
       });
     },
+    getConstructionPlacementRange: () => resolveConstructionPlacementRange(),
     isFireControlPointFree: (x, y, radius) => {
       const point = flow.getWorldGeometryBinding()?.getQueries().resolveSafeGroundPoint(x, y, radius);
       return !!point && point.x === x && point.y === y;

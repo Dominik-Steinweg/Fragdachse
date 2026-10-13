@@ -1,6 +1,6 @@
 export const enUpgrades = {
   "upgrade.unlock_fire_control_relay.name": "Turret Copies",
-  "upgrade.unlock_fire_control_relay.description": "Place copies of your combat-ready turrets within {fireControlRange} px for {fireControlDuration} s. The originals pause. Cooldown: {fireControlCooldown} s after the deployment ends.",
+  "upgrade.unlock_fire_control_relay.description": "Place copies of your combat-ready turrets within your build range for {fireControlDuration} s. The originals pause. Cooldown: {fireControlCooldown} s after the deployment ends.",
   "upgrade.fire_control_relay_connections.name": "More Links",
   "upgrade.fire_control_relay_connections.description": "{value0} maximum turret copy per level.",
   "upgrade.fire_control_relay_duration.name": "Longer Transmission",

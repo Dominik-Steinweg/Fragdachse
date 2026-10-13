@@ -114,7 +114,7 @@ describe('game-wide loadout content validation', () => {
 
 describe('fire-control content contracts', () => {
   const cases = [
-    ['FIRE_CONTROL_RELAY', ['durationMs', 'placementRangePx', 'maxCopies', 'ringRadiusPx', 'materializeMs']],
+    ['FIRE_CONTROL_RELAY', ['durationMs', 'maxCopies', 'ringRadiusPx', 'materializeMs']],
     ['FIRE_CONTROL_PORTAL', ['durationMs', 'projectileSpeed', 'projectileSize', 'stopSpeedThreshold']],
   ] as const;
 

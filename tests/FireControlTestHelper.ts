@@ -45,7 +45,7 @@ export function createFireControlWorldFixture(overrides: Partial<Extract<Utility
   if (base.type !== 'fire_control_relay') throw Error('Expected relay config');
   const config = { ...base, ...overrides };
   const utility = createFireControlUtilityFixture(config);
-  let now = 1000, manned: number | null = null, free = true, combatAllowed = true, remoteBonus = 0;
+  let now = 1000, manned: number | null = null, pilot = 'ally', fresh = false, free = true, combatAllowed = true, remoteBonus = 0;
   const bag = (values: Record<string, unknown> = {}): any => new Proxy(values, {
     get(target, key) { if (!(key in target)) target[key as string] = vi.fn(); return target[key as string]; },
   });
@@ -90,7 +90,7 @@ export function createFireControlWorldFixture(overrides: Partial<Extract<Utility
     }) }), getPersistentBaseId: () => undefined, getConstructionMuzzleOffset: () => 0,
     getTargetFootprint: () => null, resolveObstacleDamage: () => 0, getWorldMutation: () => null,
     updateTurretAngle: vi.fn(), getManualTurretControl: (id: number) => id === manned
-      ? { playerId: 'ally', fresh: false, fireHeld: false, aimAngle: 0 } : null,
+      ? { playerId: pilot, revision: 1, fresh, fireHeld: fresh, targetX: -200, targetY: 0 } : null,
     readConstructionSlotOrder: () => ['rocket_turret', 'machine_gun_turret'],
     getMissionBarrierObstacles: () => null, getRockTargets: () => [], getWorldTrain: () => null,
     getTimebombSystem: () => null, getNecromancySystem: () => null, hostUpdate: bag(), createEnergyShieldSystem: () => bag(),
@@ -110,7 +110,7 @@ export function createFireControlWorldFixture(overrides: Partial<Extract<Utility
   return { ...utility, config, binding, placement, combat, enemies, homing, injector, item, player, stats, add, spawnEnemy,
     point: (rock: { gridX: number; gridY: number }) => ({ x: metrics.offsetX + rock.gridX * CELL_SIZE + CELL_SIZE / 2,
       y: metrics.offsetY + rock.gridY * CELL_SIZE + CELL_SIZE / 2 }),
-    setManned: (id: number | null) => { manned = id; }, setFree: (value: boolean) => { free = value; },
+    setManned: (id: number | null, playerId = 'ally', inputFresh = false) => { manned = id; pilot = playerId; fresh = inputFresh; }, setFree: (value: boolean) => { free = value; },
     setCombatAllowed: (value: boolean) => { combatAllowed = value; }, setRemoteBonus: (value: number) => { remoteBonus = value; },
     tick(time: number, fire = true) {
       now = time; utility.action.update(now); binding.advanceMgTurrets(now); binding.advanceFireControl(now);

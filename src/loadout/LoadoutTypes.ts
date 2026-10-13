@@ -678,7 +678,6 @@ export interface FireControlRelayUtilityConfig extends BaseUtilityConfig {
   readonly type: 'fire_control_relay';
   readonly activation: PlacementModeUtilityActivationConfig;
   readonly durationMs: number;
-  readonly placementRangePx: number;
   readonly maxCopies: number;
   readonly ringRadiusPx: number;
   readonly clearanceRadiusPx: number;

@@ -1,3 +1,4 @@
+import { resolveConstructionPlacementRange } from '../config/coopDefenseConstructions';
 import type { FireControlUtilityPort } from './FireControlUtilityPort';
 import type { FireControlUtilityState } from '../loadout/FireControlUtilityState';
 import type { StinkCloudUtilityState } from '../loadout/StinkCloudUtilityState';
@@ -832,7 +833,8 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
           const result = this.fireControlPort?.activateCopies({ ownerId: playerId, ownerColor: playerColor,
             playerX: x, playerY: y, pointX: targetX, pointY: targetY, nowMs: now,
             config: { durationMs: cfg.durationMs, cooldownMs: cfg.cooldown, maxCopies: cfg.maxCopies,
-              parallel: cfg.parallelEnabled > 0, placementRangePx: cfg.placementRangePx, ringRadiusPx: cfg.ringRadiusPx,
+              parallel: cfg.parallelEnabled > 0, buildRangePx: resolveConstructionPlacementRange(),
+              ringRadiusPx: cfg.ringRadiusPx,
               clearanceRadiusPx: cfg.clearanceRadiusPx, singleCopyOffsetPx: cfg.singleCopyOffsetPx, materializeMs: cfg.materializeMs } });
           if (!result) return { ok: false, reason: 'blocked' };
           if (!result.ok) return result;

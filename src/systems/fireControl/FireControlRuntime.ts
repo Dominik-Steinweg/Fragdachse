@@ -61,7 +61,8 @@ export class FireControlRuntime implements FireControlUtilityPort {
     for (const deployment of this.deployments.values()) {
       deployment.copies = deployment.copies.filter(copy => {
         const source = facts.get(copy.originalId);
-        return source && source.combatReady && !source.baseOwned && source.ownerId === deployment.ownerId && !source.manned;
+        return source && source.combatReady && !source.baseOwned && source.ownerId === deployment.ownerId
+          && (deployment.config.parallel || !source.manned);
       });
       if (!deployment.copies.length) this.end(deployment, nowMs);
     }

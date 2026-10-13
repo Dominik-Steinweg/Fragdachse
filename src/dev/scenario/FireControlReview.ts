@@ -17,7 +17,7 @@ class FireControlReview {
   phase = 'preparing';
   result: unknown = null;
   beforeUse: ReturnType<FireControlReview['resources']> | null = null;
-  constructor(readonly runtime: ArenaRuntime, readonly step: ReviewStep) {}
+  constructor(readonly runtime: ArenaRuntime, readonly step: ReviewStep, readonly parallel: boolean) {}
   resources() {
     const id = bridge.getLocalPlayerId();
     return { cooldownUntil: bridge.getPlayerUtilityCooldownUntil(id, 'FIRE_CONTROL_RELAY'),
@@ -26,7 +26,7 @@ class FireControlReview {
   }
   status() {
     if (this.worldRevision !== this.runtime.getWorldDescriptor()?.worldRevision) return null;
-    return { step: this.step, phase: this.phase, result: this.result, beforeUse: this.beforeUse,
+    return { step: this.step, parallel: this.parallel, phase: this.phase, result: this.result, beforeUse: this.beforeUse,
       resources: this.resources(), ...this.runtime.devScenarioPort.readFireControl(),
       occupancy: this.runtime.getTurretControlState(bridge.getLocalPlayerId()) ?? null };
   }
@@ -81,6 +81,9 @@ export async function runFireControlReview(controller: DevScenarioController, ru
   command: Record<string, unknown>): Promise<void> {
   if (!isDevScenarioMode() || !bridge.isHost()) throw Error('Isolated dev host required');
   const step = command.step ?? 'basic', phase = command.phase;
+  if (command.parallel !== undefined && typeof command.parallel !== 'boolean') throw Error('parallel must be boolean');
+  // manned defaults to D13; parallel=true demonstrates E17 in a separate real Activity.
+  const parallel = step === 'parallel' || (step === 'manned' && command.parallel === true);
   if (!steps.includes(step as ReviewStep)) throw Error('Invalid fireControlReview step');
   if (phase !== undefined && !['prepare', 'activate', 'resolve'].includes(String(phase))) throw Error('Invalid fireControlReview phase');
   if (phase === 'activate' || phase === 'resolve') {
@@ -100,14 +103,14 @@ export async function runFireControlReview(controller: DevScenarioController, ru
         { kind: 'construction', id: 'flame_turret' }, { kind: 'utility', id: 'FIRE_CONTROL_RELAY' }],
       upgrades: { inspector_construction_slots: COOP_DEFENSE_UPGRADE_DEFINITIONS.inspector_construction_slots.maxLevel,
         ...(step === 'three' ? { fire_control_relay_connections: COOP_DEFENSE_UPGRADE_DEFINITIONS.fire_control_relay_connections.maxLevel } : {}),
-        ...(step === 'parallel' || step === 'manned' ? { fire_control_relay_parallel: 1 } : {}) },
+        ...(parallel ? { fire_control_relay_parallel: 1 } : {}) },
       constructions: step === 'rejected' ? [] : step === 'three'
         ? [{ id: 'rocket_turret', gridX: 40, gridY: 25 }, { id: 'machine_gun_turret', gridX: 44, gridY: 25 },
           { id: 'flame_turret', gridX: 48, gridY: 25 }]
         : [{ id: 'rocket_turret', gridX: 40, gridY: 25 }],
     });
     controller.start(scenario);
-    fixture = new FireControlReview(runtime, step as ReviewStep);
+    fixture = new FireControlReview(runtime, step as ReviewStep, parallel);
     fixtures.set(controller, fixture);
     const config = controller.config;
     const ready = await window.devScenario!.whenReady(180000);

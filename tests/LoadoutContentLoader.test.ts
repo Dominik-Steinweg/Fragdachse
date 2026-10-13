@@ -43,6 +43,12 @@ function expectContentError(run: () => unknown, fragment: string): void {
 }
 
 describe('loadout content loader', () => {
+  it('rejects an independent authored fire-control placement range', () => {
+    const sources = clonedSources();
+    documentWith(sources, 'utilities', 'FIRE_CONTROL_RELAY').utilities!.FIRE_CONTROL_RELAY.placementRangePx = 1;
+    expectContentError(() => buildLoadoutRegistries(sources), 'placementRangePx');
+  });
+
   it.each(['constructor', 'toString', '__proto__'])('reports inherited type names as content errors: %s', (type) => {
     for (const [registry, id, nested] of [
       ['weapons', 'GLOCK', 'fire'], ['utilities', 'HE_GRENADE', null],

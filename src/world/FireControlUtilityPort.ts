@@ -3,7 +3,8 @@ export interface ResolvedFireControlRelayConfig {
   readonly cooldownMs: number;
   readonly maxCopies: number;
   readonly parallel: boolean;
-  readonly placementRangePx: number;
+  /** Player construction placement range, resolved once at activation. */
+  readonly buildRangePx: number;
   readonly ringRadiusPx: number;
   readonly clearanceRadiusPx: number;
   readonly singleCopyOffsetPx: number;

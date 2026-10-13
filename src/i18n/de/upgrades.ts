@@ -1,6 +1,6 @@
 export const deUpgrades = {
   "upgrade.unlock_fire_control_relay.name": "Turmkopien",
-  "upgrade.unlock_fire_control_relay.description": "Platziere für {fireControlDuration} s Kopien eigener kampffähiger Türme in {fireControlRange} px Reichweite. Die Originale pausieren. Cooldown: {fireControlCooldown} s ab Einsatzende.",
+  "upgrade.unlock_fire_control_relay.description": "Platziere für {fireControlDuration} s Kopien eigener kampffähiger Türme innerhalb deiner Baureichweite. Die Originale pausieren. Cooldown: {fireControlCooldown} s ab Einsatzende.",
   "upgrade.fire_control_relay_connections.name": "Mehr Verbindungen",
   "upgrade.fire_control_relay_connections.description": "{value0} maximale Turmkopie pro Stufe.",
   "upgrade.fire_control_relay_duration.name": "Längere Übertragung",

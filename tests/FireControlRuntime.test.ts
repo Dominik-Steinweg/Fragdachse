@@ -5,7 +5,7 @@ import type { ResolvedFireControlRelayConfig } from '../src/world/FireControlUti
 import { parseFireControlUtilityState } from '../src/loadout/FireControlUtilityState';
 
 const config: ResolvedFireControlRelayConfig = { durationMs: 1000, cooldownMs: 500, maxCopies: 3, parallel: false,
-  placementRangePx: 200, ringRadiusPx: 36, clearanceRadiusPx: 16, singleCopyOffsetPx: 30, materializeMs: 100 };
+  buildRangePx: 200, ringRadiusPx: 36, clearanceRadiusPx: 16, singleCopyOffsetPx: 30, materializeMs: 100 };
 const fact = (id = 7): FireControlConstructionFacts => ({ id, ownerId: 'owner', baseOwned: false,
   constructionId: 'machine_gun_turret', weaponFireType: 'projectile', weaponId: 'TURRET_MG',
   combatReady: true, manned: false, x: 0, y: 0, angle: .7 });
@@ -64,14 +64,28 @@ describe('host copy deployment facts', () => {
         materializedAt: 200, originalPaused: !parallel, status: 'active', angle: 1.2 }] });
   });
 
-  it.each(['removed', 'unready', 'owner', 'base', 'manned'] as const)('ends when the last source becomes %s', cause => {
+  it.each(['removed', 'unready', 'owner', 'base'] as const)('ends when the last source becomes %s', cause => {
     for (const parallel of [false, true]) {
       const f = fixture(); f.activate({ parallel });
       f.set(cause === 'removed' ? [] : [{ ...fact(), combatReady: cause !== 'unready',
-        ownerId: cause === 'owner' ? 'other' : 'owner', baseOwned: cause === 'base', manned: cause === 'manned' }]);
+        ownerId: cause === 'owner' ? 'other' : 'owner', baseOwned: cause === 'base' }]);
       f.runtime.update(300); f.runtime.update(301);
       expect(f.runtime.getSnapshot(301).deployments).toEqual([]);
       expect(f.ended.mock.calls).toEqual([[1, 'owner', 300]]);
+    }
+  });
+
+  it.each([false, true])('handles unmanned -> manned -> unmanned without recreating copies (parallel=%s)', parallel => {
+    const f = fixture(); f.activate({ parallel });
+    f.set([{ ...fact(), manned: true }]); f.runtime.update(300);
+    expect(f.runtime.getSnapshot(300).deployments).toHaveLength(parallel ? 1 : 0);
+    expect(f.runtime.getPausedOriginalIds().size).toBe(0);
+    expect(f.ended.mock.calls).toEqual(parallel ? [] : [[1, 'owner', 300]]);
+    f.set([fact()]); f.runtime.update(301);
+    expect(f.sources().map(s => s.id)).toEqual(parallel ? [7, 'fc-copy:1:0'] : [7]);
+    if (parallel) {
+      f.runtime.update(100 + config.durationMs);
+      expect(f.ended).toHaveBeenCalledExactlyOnceWith(1, 'owner', 100 + config.durationMs);
     }
   });
 

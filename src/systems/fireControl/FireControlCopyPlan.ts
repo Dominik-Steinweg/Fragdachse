@@ -25,7 +25,7 @@ export interface FireControlCopyPlanInput {
   readonly slotOrder: readonly string[];
   readonly pausedOriginalIds: ReadonlySet<number>;
   readonly config: {
-    readonly placementRangePx: number; readonly maxCopies: number; readonly parallel: boolean;
+    readonly buildRangePx: number; readonly maxCopies: number; readonly parallel: boolean;
     readonly ringRadiusPx: number; readonly clearanceRadiusPx: number; readonly singleCopyOffsetPx: number;
   };
   readonly isPointFree: (x: number, y: number, radius: number) => boolean;
@@ -38,16 +38,16 @@ export type FireControlCopyPlanResult =
 /** Shared host/preview decision, without mutation or source authority from the caller. */
 export function planFireControlCopies(input: FireControlCopyPlanInput): FireControlCopyPlanResult {
   const { config, pointX, pointY, playerX, playerY } = input;
-  if (![pointX, pointY, playerX, playerY, config.placementRangePx, config.maxCopies,
+  if (![pointX, pointY, playerX, playerY, config.buildRangePx, config.maxCopies,
     config.ringRadiusPx, config.clearanceRadiusPx, config.singleCopyOffsetPx].every(Number.isFinite)
-    || config.placementRangePx < 0 || !Number.isSafeInteger(config.maxCopies) || config.maxCopies < 1
+    || config.buildRangePx < 0 || !Number.isSafeInteger(config.maxCopies) || config.maxCopies < 1
     || config.ringRadiusPx < 0 || config.clearanceRadiusPx < 0 || config.singleCopyOffsetPx < 0) {
     return { ok: false, reason: 'invalid', candidates: [] };
   }
-  if (Math.hypot(pointX - playerX, pointY - playerY) > config.placementRangePx) {
+  if (Math.hypot(pointX - playerX, pointY - playerY) > config.buildRangePx) {
     return { ok: false, reason: 'range', candidates: [] };
   }
-  const eligible = input.constructions.filter(source => !source.manned && classifyFireControlSource({
+  const eligible = input.constructions.filter(source => (config.parallel || !source.manned) && classifyFireControlSource({
     ...source, requesterId: input.ownerId, isCopy: false, pausedByCopies: input.pausedOriginalIds.has(source.id),
   }).copyable).map(source => ({ ...source, constructionId: source.constructionId! }));
   if (!eligible.length) return { ok: false, reason: 'no_fire_sources', candidates: [] };

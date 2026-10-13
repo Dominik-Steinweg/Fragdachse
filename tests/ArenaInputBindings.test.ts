@@ -1,3 +1,4 @@
+import { resolveConstructionPlacementRange } from '../src/config/coopDefenseConstructions';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -160,6 +161,7 @@ function makeInput(): {
     getConstructionCapacityForPlayer: vi.fn(() => undefined),
     getTranslocatorActivePuckId: vi.fn(() => undefined),
     placement: {
+      getConstructionPlacementRange: vi.fn(() => resolveConstructionPlacementRange()),
       getFireControlConstructions: vi.fn(() => []),
       isFireControlPointFree: vi.fn(() => true),
       getUsedCapacity: vi.fn(() => 0),
@@ -236,14 +238,14 @@ describe('ArenaInputBindings', () => {
   it.each(['valid', 'range', 'invalid', 'no_fire_sources', 'placement'] as const)(
     'projects the shared copy plan and its %s result without placeable casts', outcome => {
       const f = fireControlFixture();
-      if (outcome === 'range') vi.mocked(f.actions.getPointerWorldPoint).mockReturnValue({ x: f.config.placementRangePx + 1, y: 0 });
+      if (outcome === 'range') vi.mocked(f.actions.getPointerWorldPoint).mockReturnValue({ x: f.actions.placement.getConstructionPlacementRange() + 1, y: 0 });
       if (outcome === 'invalid') vi.mocked(f.actions.getPointerWorldPoint).mockReturnValue({ x: NaN, y: 0 });
-      if (outcome === 'no_fire_sources') vi.mocked(f.actions.placement.getFireControlConstructions).mockReturnValue(f.constructions.slice(3));
+      if (outcome === 'no_fire_sources') vi.mocked(f.actions.placement.getFireControlConstructions).mockReturnValue(f.constructions.slice(3).filter(source => !source.manned));
       if (outcome === 'placement') vi.mocked(f.actions.placement.isFireControlPointFree).mockReturnValue(false);
       const point = f.actions.getPointerWorldPoint();
       const plan = planFireControlCopies({ ownerId: 'local', playerX: 0, playerY: 0, pointX: point.x, pointY: point.y,
         constructions: f.actions.placement.getFireControlConstructions(), slotOrder: ['rocket_turret', 'machine_gun_turret'],
-        pausedOriginalIds: new Set(), config: { ...f.config, parallel: f.config.parallelEnabled > 0 },
+        pausedOriginalIds: new Set(), config: { ...f.config, buildRangePx: f.actions.placement.getConstructionPlacementRange(), parallel: f.config.parallelEnabled > 0 },
         isPointFree: f.actions.placement.isFireControlPointFree });
       const preview = f.binding.getLocalPlacementPreview();
       expect(preview?.kind).toBe('fire_control_relay');
@@ -259,7 +261,7 @@ describe('ArenaInputBindings', () => {
         const source = f.constructions.find(source => source.id === copy.originalId)!;
         return { x: copy.x, y: copy.y, constructionId: source.constructionId, weaponId: source.weaponId };
       }) : []);
-      expect(preview.originals.every(source => [6, 7, 8].includes(source.id))).toBe(true);
+      expect(preview.originals.every(source => [3, 6, 7, 8].includes(source.id))).toBe(true);
       if (plan.ok) expect(preview.originals.map(source => source.id)).toEqual([6, 8, 7]);
       expect(f.actions.placement.getPlacementPreview).not.toHaveBeenCalled();
     },

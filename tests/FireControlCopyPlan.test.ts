@@ -8,7 +8,7 @@ export const copyFacts = (overrides: Partial<FireControlConstructionFacts> = {})
 const input = (overrides: Partial<FireControlCopyPlanInput> = {}): FireControlCopyPlanInput => ({
   ownerId: 'inspector', playerX: 0, playerY: 0, pointX: 100, pointY: 0,
   constructions: [copyFacts()], slotOrder: [], pausedOriginalIds: new Set(),
-  config: { placementRangePx: 200, maxCopies: 3, parallel: false, ringRadiusPx: 36, clearanceRadiusPx: 16, singleCopyOffsetPx: 30 },
+  config: { buildRangePx: 200, maxCopies: 3, parallel: false, ringRadiusPx: 36, clearanceRadiusPx: 16, singleCopyOffsetPx: 30 },
   isPointFree: () => true, ...overrides,
 });
 
@@ -21,9 +21,9 @@ describe('copy placement decision shared by host and preview', () => {
     expect(isPointFree).not.toHaveBeenCalled();
   });
 
-  it.each([false, true])('excludes every occupied original even with parallel=%s', parallel => {
+  it.each([false, true])('selects occupied originals only with parallel=%s', parallel => {
     const args = input({ constructions: [copyFacts({ manned: true })] });
-    expect(planFireControlCopies({ ...args, config: { ...args.config, parallel } })).toMatchObject({ reason: 'no_fire_sources' });
+    expect(planFireControlCopies({ ...args, config: { ...args.config, parallel } })).toMatchObject(parallel ? { ok: true, copies: [{ originalId: 7 }] } : { ok: false, reason: 'no_fire_sources' });
   });
 
   it('retains selected candidate order on placement failure and is independent of enumeration', () => {

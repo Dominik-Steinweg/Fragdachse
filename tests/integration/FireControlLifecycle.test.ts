@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getCoopDefenseConstructionDefinition, resolveConstructionPlacementRange } from '../../src/config/coopDefenseConstructions';
 import { createFireControlWorldFixture } from '../FireControlTestHelper';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig';
 import { resolveMgTurretStats } from '../../src/config/mgTurret';
@@ -254,13 +255,38 @@ describe('host utility → deployment → turret fire → lifecycle', () => {
     expect(f.place(ready, 100).ok).toBe(true); expect(f.used).toHaveBeenCalledTimes(2);
   });
 
-  it.each([0, 1])('ends projections on stale allied occupancy with parallelEnabled=%s', parallel => {
-    const rock = start(parallel); f.setManned(rock.id); f.tick(1100, false);
-    expect(f.binding.getFireControlSnapshot(1100).deployments).toEqual([]);
+  it.each([0, 1].flatMap(parallel => ['inspector', 'ally'].flatMap(pilot =>
+    [false, true].map(fresh => ({ parallel, pilot, fresh })))))('handles occupancy and dismount: %j', ({ parallel, pilot, fresh }) => {
+    const rock = start(parallel); f.setManned(rock.id, pilot, fresh);
+    const at = 1000 + f.config.materializeMs;
+    f.spawnEnemy(); f.tick(at);
+    expect(f.binding.getFireControlSnapshot(at).deployments).toHaveLength(parallel ? 1 : 0);
     expect(f.binding.getTurretFireSources()[0].fireState).toBe('active');
-    expect(f.action.getFireControlState('inspector')).toMatchObject({ cooldownUntil: 1100 + f.config.cooldown });
-    f.setManned(null); f.tick(1101, false); expect(f.binding.getTurretFireSources()).toHaveLength(1);
+    if (parallel) {
+      expect(f.action.getFireControlState('inspector')).toMatchObject({ phase: 'active' });
+      const shots = f.projectile.spawn.mock.calls.map(([r]) => r);
+      expect(shots.some(r => r.origin.x === 100 + f.config.singleCopyOffsetPx)).toBe(true);
+      expect(shots.some(r => r.origin.x === f.point(rock).x)).toBe(fresh);
+    } else {
+      expect(f.action.getFireControlState('inspector')).toMatchObject({ phase: 'cooldown', cooldownUntil: at + f.config.cooldown });
+    }
+    f.setManned(null); f.tick(at + 1, false);
+    expect(f.binding.getTurretFireSources()).toHaveLength(parallel ? 2 : 1);
+    if (parallel) {
+      const end = 1000 + f.config.durationMs;
+      f.tick(end, false);
+      expect(f.action.getFireControlState('inspector')).toMatchObject({ phase: 'cooldown', cooldownUntil: end + f.config.cooldown });
+    }
   });
+
+  it.each([0, 1].flatMap(parallel => ['inspector', 'ally'].map(pilot => ({ parallel, pilot }))))(
+    'selects already occupied originals only in parallel: %j', ({ parallel, pilot }) => {
+      f = createFireControlWorldFixture({ parallelEnabled: parallel });
+      const rock = f.add(); f.setManned(rock.id, pilot);
+      expect(f.place(1000, 100)).toMatchObject(parallel ? { ok: true } : { ok: false, reason: 'no_fire_sources' });
+      f.tick(1000 + f.config.materializeMs, false);
+      expect(f.binding.getFireControlSnapshot(1000 + f.config.materializeMs).deployments).toHaveLength(parallel ? 1 : 0);
+    });
 
   it('keeps death, respawn, equipment changes and live turret upgrades separate from frozen utility config', () => {
     start(1); const end = 1000 + f.config.durationMs;
@@ -304,12 +330,25 @@ describe('host utility → deployment → turret fire → lifecycle', () => {
     f = createFireControlWorldFixture();
     if (reason !== 'no_fire_sources') f.add();
     if (reason === 'placement') f.setFree(false);
-    const x = reason === 'range' ? f.config.placementRangePx + 1 : reason === 'invalid' ? NaN : 100;
+    const x = reason === 'range' ? resolveConstructionPlacementRange() + 1 : reason === 'invalid' ? NaN : 100;
     expect(f.place(1000, x)).toEqual({ ok: false, reason: reason === 'range' ? 'placement' : reason });
     expect(f.used).not.toHaveBeenCalled(); expect(f.noteUsed).not.toHaveBeenCalled();
     expect(f.action.getFireControlState('inspector')).toBeNull();
     expect(f.binding.getFireControlSnapshot(1000).deployments).toEqual([]);
     expect(f.cooldown.mock.calls.filter(([, until]) => until > 0)).toEqual([]);
+  });
+
+  it('accepts the construction placement boundary and rejects a point just beyond it', () => {
+    f = createFireControlWorldFixture(); f.add('rocket_turret');
+    const range = getCoopDefenseConstructionDefinition('rocket_turret').placementRange;
+    expect(resolveConstructionPlacementRange()).toBe(range);
+    expect(f.place(1000, range + .01)).toEqual({ ok: false, reason: 'placement' });
+    expect(f.binding.getFireControlSnapshot(1000).deployments).toEqual([]);
+    expect(f.used).not.toHaveBeenCalled();
+    const activate = vi.spyOn(f.binding.fireControl!, 'activateCopies');
+    expect(f.place(1000, range)).toEqual({ ok: true });
+    expect(activate.mock.calls[0][0].config.buildRangePx).toBe(range);
+    expect(f.binding.getFireControlSnapshot(1000).deployments[0]).toMatchObject({ x: range, y: 0 });
   });
 
   it('revalidates current sources and uses the host position despite a forged client position', () => {

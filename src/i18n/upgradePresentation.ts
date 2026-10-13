@@ -105,7 +105,6 @@ function getUpgradeParams(
   if (fireControl?.type === 'fire_control_relay' || fireControl?.type === 'fire_control_portal') {
     params.fireControlDuration = formatNumber(fireControl.durationMs / 1000, locale);
     params.fireControlCooldown = formatNumber(fireControl.cooldown / 1000, locale);
-    if (fireControl.type === 'fire_control_relay') params.fireControlRange = formatNumber(fireControl.placementRangePx, locale);
   }
   const translocator = UTILITY_CONFIGS.TRANSLOCATOR;
   if (definition.id.startsWith('translocator_') && translocator?.type === 'translocator') {

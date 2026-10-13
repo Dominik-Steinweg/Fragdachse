@@ -3,7 +3,7 @@
     "FIRE_CONTROL_RELAY": {
       "id": "FIRE_CONTROL_RELAY",
       "type": "fire_control_relay",
-      "cooldown": 25000,
+      "cooldown": 10000,
       "activation": {
         "type": "placement_mode"
       },
@@ -19,8 +19,7 @@
         "burstLockoutMs": 0
       },
       "skipCooldownPublish": true,
-      "durationMs": 12000,
-      "placementRangePx": 280,
+      "durationMs": 6000,
       "maxCopies": 1,
       "ringRadiusPx": 36,
       "clearanceRadiusPx": 16,

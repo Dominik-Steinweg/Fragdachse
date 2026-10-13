@@ -12,13 +12,16 @@ vi.mock('../src/effects/fireControl/FireControlPlacementPreviewVisual', () => ({
 vi.mock('../src/network/bridge', () => ({ bridge: {
   isHost: vi.fn(() => false),
   getConnectedPlayerIds: vi.fn(() => ['local', 'ally']),
+  getLocalPlayerId: () => 'local',
   getLatestGameState: vi.fn(() => ({ players: { ally: { turretControl: { turretId: 7, revision: 1 } } } })),
 } }));
 
 import { bridge } from '../src/network/bridge';
 import { createArenaPlacementPorts } from '../src/scenes/arena/ArenaRuntimeAdapters';
 import { PlacementPreviewRenderer } from '../src/scenes/arena/PlacementPreviewRenderer';
-import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { ArenaInputBindings } from '../src/scenes/arena/ArenaInputBindings';
+import { resolveConstructionPlacementRange } from '../src/config/coopDefenseConstructions';
+import { UTILITY_CONFIGS, WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import type { FireControlPlacementPreview } from '../src/types';
 
 describe('fire control preview reads', () => {
@@ -40,6 +43,35 @@ describe('fire control preview reads', () => {
     expect(ports.getFireControlConstructions()[0].combatReady).toBe(false);
     rock.ownership = 'base-owned';
     expect(ports.getFireControlConstructions()[0].baseOwned).toBe(true);
+  });
+
+  it('produces a valid non-host copy preview without a construction runtime', () => {
+    vi.mocked(bridge.isHost).mockReturnValue(false);
+    const range = resolveConstructionPlacementRange();
+    const rock = { id: 8, ownerId: 'local', constructionId: 'machine_gun_turret', hp: 10, ownership: 'player-owned' };
+    const ports = createArenaPlacementPorts({
+      getConstructionWorldRuntime: () => null,
+      getWorldRuntime: () => ({ materialization: { placement: { getRuntimeRock: () => rock } } }),
+      getWorldCombatGameplayBinding: () => ({ getTurretDefinitions: () => [{ id: rock.id, x: 80, y: 90, weaponId: 'TURRET_MG' }] }),
+      getWorldParticipation: () => 'interactive',
+      getPlayerCapabilities: () => ({ canUseCombat: true }),
+      getWorldGeometryBinding: () => ({ getQueries: () => ({ resolveSafeGroundPoint: (x: number, y: number) => ({ x, y }) }) }),
+    } as never);
+    let pointerX = range;
+    const bindings = new ArenaInputBindings({
+      inputSystem: { isUtilityPlacementActive: () => true },
+      actions: {
+        getLocalPlayerId: () => 'local', getLocalPlayerPosition: () => ({ x: 0, y: 0 }),
+        getLocalUtilityConfig: () => UTILITY_CONFIGS.FIRE_CONTROL_RELAY,
+        getPointerWorldPoint: () => ({ x: pointerX, y: 0 }), getLocalInspectorTools: () => [], placement: ports,
+      },
+    } as never);
+    expect(bindings.getLocalPlacementPreview()).toMatchObject({
+      kind: 'fire_control_relay', valid: true, rangePx: range, originals: [{ id: rock.id }],
+      ghosts: [{ constructionId: rock.constructionId }],
+    });
+    pointerX = range + .01;
+    expect(bindings.getLocalPlacementPreview()).toMatchObject({ valid: false, reason: 'range', rangePx: range });
   });
 
   it('rejects missing geometry and any displaced safe point, forwarding clearance', () => {
