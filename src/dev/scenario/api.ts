@@ -66,6 +66,13 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
       controller.arrangeArmageddonReview({count,progress:number(c.progress??.65,0,1),quality:(c.quality??'high') as 'high'|'medium'|'low',
         impacts:c.impacts===undefined?false:boolean(c.impacts),singleImpact:c.singleImpact===undefined?false:boolean(c.singleImpact),variant:(c.variant??'normal') as 'normal'|'void'});break;
     }
+    case 'fireControlVisualReview': {
+      if (c.hologramPreset !== undefined && !['A','B','C'].includes(String(c.hologramPreset))) throw Error('hologramPreset: A, B or C');
+      if (c.step !== undefined && !['start','vanish','expireWarning','portalOpen','portalClose','transport'].includes(String(c.step))) throw Error('Invalid fire-control review step');
+      const timeOfDay = c.timeOfDay === undefined ? undefined : c.timeOfDay === 'day' ? 720 : c.timeOfDay === 'night' ? 1320 : number(c.timeOfDay,0,1439);
+      controller.arrangeFireControlVisualReview({ hologramPreset: c.hologramPreset as 'A'|'B'|'C'|undefined, timeOfDay,
+        step: c.step as import('./FireControlVisualReview').FireControlReviewOptions['step'] }); break;
+    }
     case 'turretMaterialReview': controller.arrangeTurretMaterialReview(); break;
     case 'enemyMeshReview': {
       const count = number(c.count ?? 4, 1, 500), pose = number(c.pose ?? -1, -1, 30);
