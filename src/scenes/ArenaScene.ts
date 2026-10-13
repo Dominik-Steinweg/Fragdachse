@@ -144,7 +144,7 @@ import {
 import type { ConstructionId, GameMode, GamePhase, LoadoutCommitSnapshot, LobbyLoadoutPreviewState, PlayerProfile, RoomQualitySnapshot } from '../types';
 import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { COOP_DEFENSE_MODE, isCoopDefenseMode, isTeamGameMode } from '../gameModes';
-import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, WEAPON_BALANCE_LAB_MAP_ID, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, getCoopMissionTimeLimitSec, isWeaponBalanceLabMapId, WEAPON_BALANCE_LAB_MAP_ID, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { resolveActiveGameMode, toMapId } from '../world/arenaDescriptorAdapter';
 import { isDawnWorld, resolveCoopDefenseMapConfig } from '../world/WorldDefinitionResolution';
 import type { ActivityDescriptor } from '../world/ActivityDescriptor';
@@ -2018,7 +2018,7 @@ export class ArenaScene extends Phaser.Scene {
       const activeMapConfig = configuredCoopDefenseMapConfig;
       this.ctx.centerHUD.updateTimer(
         secs,
-        activeMapConfig === null || activeMapConfig.objective === 'survive',
+        activeMapConfig === null || getCoopMissionTimeLimitSec(activeMapConfig) !== null,
       );
 
       // Train widget: Das Zug-Event selbst entscheidet, ob etwas anzuzeigen ist – Maps mit

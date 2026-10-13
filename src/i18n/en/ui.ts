@@ -510,6 +510,7 @@ export const enUi = {
   "ui.objective.secondaryStatus": "SECONDARY · {status}",
   "ui.objective.secondaryDetail": "{status} · {reward}",
   "ui.mainObjective.survive": "SURVIVE TO THE END",
+  "ui.mainObjective.defendUntilDawn": "HOLD THE BASE UNTIL DAWN",
   "ui.mainObjective.boss": "DEFEAT THE BOSS",
   "ui.mainObjective.bossAppears": "BOSS INCOMING",
   "ui.bossIntro.graveyard.kicker": "THE GROUND TREMBLES",

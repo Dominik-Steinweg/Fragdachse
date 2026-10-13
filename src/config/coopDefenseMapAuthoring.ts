@@ -313,6 +313,12 @@ export interface CoopDefenseMapSecondaryObjectiveConfig {
    */
   readonly expiresAt?: CoopDefenseMapEncounterStart;
   /**
+   * Aktiviert unabhaengig vom Fokus-Slot, sobald `start` erfuellt ist, und laeuft immer als
+   * Hintergrund-Ziel. Fuer gleichzeitig bespielbare Ziele wie Salvage-Sites; schliesst
+   * `focusUntil` aus.
+   */
+  readonly concurrent?: true;
+  /**
    * Nur fuer `hold`: alternativ zu holdDurationMs/holdUntilVictory der Zeitpunkt, bis zu dem die Ziele leben muessen. Hold besitzt
    * keinen Hintergrundzustand – dieses Fenster ist zugleich sein Fokusfenster.
    */
@@ -341,6 +347,7 @@ export interface ResolvedCoopDefenseMapSecondaryObjectiveConfig {
   readonly start: CoopDefenseMapEncounterStart;
   readonly focusUntil?: CoopDefenseMapEncounterStart;
   readonly expiresAt?: CoopDefenseMapEncounterStart;
+  readonly concurrent?: true;
   readonly holdUntil?: CoopDefenseMapEncounterStart;
   readonly holdUntilVictory?: true;
   readonly holdDurationMs?: number;
@@ -1035,6 +1042,7 @@ export function resolveCoopDefenseMapSecondaryObjectives(
     start: objective.start,
     ...(objective.focusUntil ? { focusUntil: objective.focusUntil } : {}),
     ...(objective.expiresAt ? { expiresAt: objective.expiresAt } : {}),
+    ...(objective.concurrent ? { concurrent: objective.concurrent } : {}),
     ...(objective.holdUntil ? { holdUntil: objective.holdUntil } : {}),
     ...(objective.holdUntilVictory ? { holdUntilVictory: objective.holdUntilVictory } : {}),
     ...(objective.holdDurationMs === undefined ? {} : { holdDurationMs: objective.holdDurationMs }),
@@ -1762,6 +1770,7 @@ function normalizeSecondaryObjectiveConfigs(
       ...(objective.expiresAt === undefined
         ? {}
         : { expiresAt: normalizeSecondaryObjectiveTrigger(mapId, id, objective.expiresAt, 'expiresAt', context) }),
+      ...(normalizeConcurrentObjective(mapId, id, objective) ? { concurrent: true as const } : {}),
       ...(objective.holdUntil === undefined
         ? {}
         : { holdUntil: normalizeSecondaryObjectiveTrigger(mapId, id, objective.holdUntil, 'holdUntil', context) }),
@@ -1930,6 +1939,21 @@ function validateDormantMissionStructures(
 
 function isSecondaryObjectiveType(value: unknown): value is CoopDefenseSecondaryObjectiveType {
   return value === 'destroy' || value === 'hold' || value === 'carry';
+}
+
+function normalizeConcurrentObjective(
+  mapId: string,
+  objectiveId: string,
+  objective: CoopDefenseMapSecondaryObjectiveConfig,
+): boolean {
+  if (objective.concurrent === undefined) return false;
+  if (objective.concurrent !== true) {
+    throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} has an invalid concurrent flag`);
+  }
+  if (objective.focusUntil !== undefined) {
+    throw new Error(`[coopDefenseMaps] Concurrent secondary objective ${mapId}:${objectiveId} must not declare focusUntil`);
+  }
+  return true;
 }
 
 function normalizeSecondaryObjectiveTrigger(

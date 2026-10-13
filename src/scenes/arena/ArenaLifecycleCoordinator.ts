@@ -33,7 +33,7 @@ import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import {
   resolveCoopDefenseActivityBaseOverlays,
 } from '../../arena/BaseRegistry';
-import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, isDiagnosticMapId, resolveCoopDefenseMapPersistentSpawnConfigs, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, getCoopMissionTimeLimitSec, isDiagnosticMapId, resolveCoopDefenseMapPersistentSpawnConfigs, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_DURATION_SEC, COOP_DEFENSE_BASE_TURRET_OWNER_ID, applyArenaMetricsForMode } from '../../config';
 import type { ArenaContext }          from './ArenaContext';
@@ -1971,13 +1971,8 @@ export class ArenaLifecycleCoordinator {
     if (!isCoopDefenseMode(this.resolveConfiguredGameMode())) {
       return arenaStartTime + ARENA_DURATION_SEC * 1000;
     }
-    const mapConfig = this.resolveConfiguredCoopDefenseMapConfig();
-    if (mapConfig.objective !== 'survive') return 0;
-    const surviveDurationSec = mapConfig.surviveDurationSec;
-    if (surviveDurationSec === undefined) {
-      throw new Error(`[ArenaLifecycleCoordinator] Survival map ${mapConfig.mapId} has no surviveDurationSec`);
-    }
-    return arenaStartTime + surviveDurationSec * 1000;
+    const timeLimitSec = getCoopMissionTimeLimitSec(this.resolveConfiguredCoopDefenseMapConfig());
+    return timeLimitSec === null ? 0 : arenaStartTime + timeLimitSec * 1000;
   }
 
   spawnReadyPlayers(): void {

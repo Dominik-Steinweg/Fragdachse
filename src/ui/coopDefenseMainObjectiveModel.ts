@@ -55,12 +55,12 @@ function getClearedEncounterCount(state: CoopDefenseEncounterPresentationState |
 /** Phaser-freies Anzeigemodell des dauerhaft sichtbaren Hauptziels. */
 export function buildMainObjectiveViewModel(input: MainObjectiveModelInput): MainObjectiveViewModel {
   const id = `${input.mapId}:${input.objective}`;
-  if (input.objective === 'survive') {
+  if (input.objective === 'survive' || input.objective === 'defend-until-dawn') {
     const totalMs = Math.max(1, Math.round((input.surviveDurationSec ?? 0) * 1000));
     const elapsedMs = Math.max(0, Math.min(totalMs, input.elapsedMs));
     return {
       id,
-      title: t('ui.mainObjective.survive'),
+      title: t(input.objective === 'survive' ? 'ui.mainObjective.survive' : 'ui.mainObjective.defendUntilDawn'),
       progressLabel: `${formatDuration(elapsedMs / 1000, getLocale())} / ${formatDuration(totalMs / 1000, getLocale())}`,
       progress: clamp01(elapsedMs / totalMs),
     };

@@ -2,7 +2,7 @@ import { CombatProjectileQueryAdapter } from '../../combat/CombatProjectileQuery
 import { bridge } from '../../network/bridge';
 import { EnergyShieldSystem } from '../../systems/EnergyShieldSystem';
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE } from '../../config';
-import { resolveCoopDefenseMapMissionProgress } from '../../config/coopDefenseMaps';
+import { resolveCoopDefenseMapMissionProgress, resolveCoopDefenseRespawnDelayMs } from '../../config/coopDefenseMaps';
 import {
   WorldCombatGameplayBinding,
 } from '../../world/WorldCombatGameplayBinding';
@@ -166,6 +166,12 @@ export function composeWorldCombatGameplay(
     isCoopMission: () => flow.isCoopMissionActivity(),
     isCoopDefense: () => bridge.getGameMode() === 'coop_defense',
     isActivityActive: () => flow.isActivityActive(),
+    getRespawnDelayMs: () => {
+      const arenaStartTime = bridge.getArenaStartTime();
+      if (!flow.isCoopMissionActivity() || arenaStartTime <= 0) return null;
+      const mapConfig = resolveCoopDefenseMapConfig(worldRuntime.context.descriptor, bridge.getActivityDescriptor());
+      return resolveCoopDefenseRespawnDelayMs(mapConfig?.respawnDelaySchedule, bridge.getSynchronizedNow() - arenaStartTime);
+    },
     onVoiceDamage: (id, amount) => ctx.voice?.damage(id, amount),
     getSpawnContext: (playerId) => {
       const latestState = bridge.getLatestGameState();

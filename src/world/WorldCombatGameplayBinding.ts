@@ -201,6 +201,8 @@ export interface ProjectileInteractionBinding {
 }
 
 export interface WorldCombatGameplayBindingOptions {
+  /** Respawn-Verzoegerung der laufenden Activity (z. B. nachts laenger); `null` = Standard. */
+  readonly getRespawnDelayMs?: (playerId: string) => number | null;
   readonly getManualTurretControl?: (id: AutomatedTurretId, now: number) => import('../systems/TurretControlSystem').ManualTurretControl | null;
   readonly projectileUtility?: {
     focusProjectilesInCircle(request: import('../projectile/ProjectileExternalInteractionPort').ProjectileFocusRequest): number;
@@ -442,6 +444,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combatSystem.setPlayerMaxHpResolver(null);
     combatSystem.setInitialSpawnAllowedResolver(null);
     combatSystem.setRespawnAllowedResolver(null);
+    combatSystem.setRespawnDelayResolver(null);
     combatSystem.setRespawnCallback(null);
     combatSystem.setRespawnCommittedCallback(null);
     combatSystem.setAuthoritativePositionResetCallback(null);
@@ -565,6 +568,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combat.setRespawnAllowedResolver((playerId) => (
       o.isActivityActive() ? o.network.round.canPlayerRespawn(playerId) : hasWorldFigure(o.getWorldParticipation(playerId))
     ));
+    combat.setRespawnDelayResolver(o.getRespawnDelayMs ?? null);
     combat.setRespawnCallback((playerId) => o.respawnPlayer(playerId));
     combat.setRespawnCommittedCallback((playerId) => o.publishRespawn?.(playerId));
     combat.setAuthoritativePositionResetCallback((playerId, x, y) => o.resetPlayerPosition(playerId, x, y));

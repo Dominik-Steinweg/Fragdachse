@@ -204,4 +204,23 @@ describe('CoopDefenseRoundStateSystem with a hostile base', () => {
       getSecondsLeft: () => 10,
     }).update()).toBe('defeat');
   });
+
+  it('holds defend-until-dawn until the mission time ends and loses only over the own main base', () => {
+    let secondsLeft = 10;
+    const holding = new CoopDefenseRoundStateSystem({
+      baseManager: createBaseManager(friendly(500)),
+      objective: 'defend-until-dawn',
+      getSecondsLeft: () => secondsLeft,
+      isTeamWipedOut: () => true,
+    });
+    expect(holding.update()).toBeNull();
+    secondsLeft = 0;
+    expect(holding.update()).toBe('victory');
+
+    expect(new CoopDefenseRoundStateSystem({
+      baseManager: createBaseManager(friendly(0)),
+      objective: 'defend-until-dawn',
+      getSecondsLeft: () => 0,
+    }).update()).toBe('defeat');
+  });
 });

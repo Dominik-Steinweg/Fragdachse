@@ -510,6 +510,7 @@ export const deUi = {
   "ui.objective.secondaryStatus": "NEBENZIEL · {status}",
   "ui.objective.secondaryDetail": "{status} · {reward}",
   "ui.mainObjective.survive": "BIS ZUM ENDE ÜBERLEBEN",
+  "ui.mainObjective.defendUntilDawn": "BASIS BIS ZUM MORGENGRAUEN HALTEN",
   "ui.mainObjective.boss": "BOSS BESIEGEN",
   "ui.mainObjective.bossAppears": "BOSS ERSCHEINT",
   "ui.bossIntro.graveyard.kicker": "DER BODEN BEBT",

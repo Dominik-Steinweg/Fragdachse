@@ -94,6 +94,8 @@ export class CoopDefenseSecondaryObjectiveSystem {
     // Vor der Fokusprüfung: Ein Hold, der sein Fenster erreicht, gibt den Slot noch in diesem Tick
     // frei, damit die Aktivierungsschleife unten ihn ohne Verzögerung weiterreichen kann.
     this.updateHoldObjectives();
+    this.expireObjectives();
+    this.activateConcurrentObjectives();
 
     // Nur ein belegter Fokus-Slot blockiert die nächste Aktivierung; aktive Hintergrund-Objectives
     // bleiben unabhängig davon zählbar und werden nicht erneut fokussiert.
@@ -121,9 +123,27 @@ export class CoopDefenseSecondaryObjectiveSystem {
 
     for (let index = 0; index < this.objectiveStates.length; index += 1) {
       const state = this.objectiveStates[index];
-      if (state.state !== 'dormant' || !this.isTriggerSatisfied(state.config.start)) continue;
+      if (state.config.concurrent || state.state !== 'dormant' || !this.isTriggerSatisfied(state.config.start)) continue;
       this.activateObjective(index);
       return;
+    }
+  }
+
+  /** Ein noch aktives Ziel mit erfuelltem `expiresAt` scheitert ohne Belohnung. */
+  private expireObjectives(): void {
+    for (const state of this.objectiveStates) {
+      if (state.state !== 'active' || state.config.expiresAt === undefined) continue;
+      if (this.isTriggerSatisfied(state.config.expiresAt)) this.failObjective(state);
+    }
+  }
+
+  /** Gleichzeitige Ziele belegen keinen Fokus-Slot; sie starten allein ueber ihren Trigger. */
+  private activateConcurrentObjectives(): void {
+    for (let index = 0; index < this.objectiveStates.length; index += 1) {
+      const state = this.objectiveStates[index];
+      if (!state.config.concurrent || state.state !== 'dormant') continue;
+      if (state.config.expiresAt !== undefined && this.isTriggerSatisfied(state.config.expiresAt)) continue;
+      if (this.isTriggerSatisfied(state.config.start)) this.activateObjective(index, false);
     }
   }
 
@@ -309,15 +329,15 @@ export class CoopDefenseSecondaryObjectiveSystem {
     return null;
   }
 
-  private activateObjective(index: number): void {
+  private activateObjective(index: number, takeFocus = true): void {
     const state = this.objectiveStates[index];
-    if (!state || state.state !== 'dormant' || this.focusedObjectiveIndex !== null) return;
+    if (!state || state.state !== 'dormant' || (takeFocus && this.focusedObjectiveIndex !== null)) return;
     state.state = 'active';
     state.stateChangedAtMs = this.elapsedMs;
     state.holdEndsAtRoundMs = state.config.type === 'hold' && state.config.holdDurationMs !== undefined
       ? this.elapsedMs + state.config.holdDurationMs
       : null;
-    this.focusedObjectiveIndex = index;
+    if (takeFocus) this.focusedObjectiveIndex = index;
     this.onObjectiveActivated?.(state.config.id);
   }
 
@@ -361,7 +381,7 @@ export class CoopDefenseSecondaryObjectiveSystem {
     if (trigger.type === 'after-encounter') {
       return this.isEncounterCleared?.(trigger.encounterId) === true;
     }
-    if (trigger.type === 'after-checkpoint' || trigger.type === 'after-defense') {
+    if (trigger.type === 'after-checkpoint' || trigger.type === 'after-defense' || trigger.type === 'site-activated') {
       return this.isExternalTriggerSatisfied?.(trigger) === true;
     }
     // Map validation rejects these for Objectives. Keeping the runtime fail-closed prevents a

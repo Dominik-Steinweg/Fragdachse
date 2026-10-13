@@ -1012,4 +1012,49 @@ describe('Coop defense secondary objectives', () => {
     globalState.set('gph', 'LOBBY');
     expect(bridge.getCoopDefenseMissionProgressPresentationState()).toBeNull();
   });
+
+  it('activates concurrent objectives independently of focus and expires unfinished ones', () => {
+    const activatedSites = new Set<string>();
+    const system = new CoopDefenseSecondaryObjectiveSystem([
+      resolvedObjective({ id: 'focused', start: { type: 'time', atMs: 0 } }),
+      resolvedObjective({
+        id: 'site-a', concurrent: true, targets: ['wreck-a'], targetGoal: 1,
+        start: { type: 'site-activated', siteId: 'a' }, expiresAt: { type: 'time', atMs: 1_000 },
+      }),
+      resolvedObjective({
+        id: 'site-b', type: 'hold', concurrent: true, targets: ['extractor-b'], targetGoal: 1, holdDurationMs: 300,
+        start: { type: 'site-activated', siteId: 'b' }, expiresAt: { type: 'time', atMs: 1_000 },
+      }),
+    ], {
+      isExternalTriggerSatisfied: (trigger) => trigger.type === 'site-activated' && activatedSites.has(trigger.siteId),
+    });
+
+    system.hostUpdate(0, false);
+    expect(system.getPresentationState().map(({ objectiveId }) => objectiveId)).toEqual(['focused']);
+
+    activatedSites.add('a');
+    activatedSites.add('b');
+    system.hostUpdate(1, false);
+    const byId = (id: string) => system.getPresentationState().find((entry) => entry.objectiveId === id);
+    expect(byId('focused')).toMatchObject({ state: 'active', focused: true });
+    expect(byId('site-a')).toMatchObject({ state: 'active', focused: false });
+    expect(byId('site-b')).toMatchObject({ state: 'active', focused: false });
+
+    system.hostUpdate(300, false);
+    expect(byId('site-b')).toMatchObject({ state: 'completed' });
+    system.hostUpdate(700, false);
+    expect(byId('site-a')).toMatchObject({ state: 'failed' });
+    expect(byId('site-b')).toMatchObject({ state: 'completed' });
+  });
+
+  it('does not open a concurrent objective whose window has already closed', () => {
+    const system = new CoopDefenseSecondaryObjectiveSystem([
+      resolvedObjective({
+        id: 'late-site', concurrent: true, targets: ['wreck-a'], targetGoal: 1,
+        start: { type: 'site-activated', siteId: 'a' }, expiresAt: { type: 'time', atMs: 100 },
+      }),
+    ], { isExternalTriggerSatisfied: () => true });
+    system.hostUpdate(150, false);
+    expect(system.getPresentationState()).toEqual([]);
+  });
 });

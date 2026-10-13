@@ -32,6 +32,7 @@ function dawnLikeMap(overrides: Partial<CoopDefenseMapAuthoringConfig> = {}): Co
       id: 'site-near-1', type: 'destroy',
       start: { type: 'site-activated', siteId: 'near-1' },
       expiresAt: { type: 'time', atMs: 210_000 },
+      concurrent: true,
       targets: ['wreck-near-1'],
     }],
     ...overrides,
@@ -79,6 +80,14 @@ describe('Dawn extensions of the Coop authoring contract', () => {
     expect(resolveCoopDefenseRespawnDelayMs(undefined, 1)).toBeNull();
     expect(() => normalizeCoopDefenseMapConfig(dawnLikeMap({ respawnDelaySchedule: [{ fromMs: 5, delayMs: 1 }] })))
       .toThrow('respawnDelaySchedule');
+  });
+
+  it('keeps concurrent site objectives free of a focus window', () => {
+    expect(normalizeCoopDefenseMapConfig(dawnLikeMap()).secondaryObjectives?.[0].concurrent).toBe(true);
+    const [objective] = dawnLikeMap().secondaryObjectives!;
+    expect(() => normalizeCoopDefenseMapConfig(dawnLikeMap({
+      secondaryObjectives: [{ ...objective, focusUntil: { type: 'time', atMs: 1 } }],
+    }))).toThrow('must not declare focusUntil');
   });
 
   it('has no time limit for untimed objectives', () => {

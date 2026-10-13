@@ -169,16 +169,19 @@ export class CoopMissionHostUpdate {
     weaponBalanceLabActive: boolean,
   ): void {
     this.runtime.coopDefenseBossSystem?.hostUpdate(deltaMs, countdownActive, nowMs);
+    const playerSamples = this.port.getPlayers().map((player) => ({
+      playerId: player.id,
+      x: player.x,
+      y: player.y,
+      eligible: this.port.canUseMissionActions(player.id) && this.port.isPlayerAlive(player.id),
+    }));
     this.runtime.coopDefenseMissionProgressSystem?.hostUpdate(
       deltaMs,
       countdownActive || weaponBalanceLabActive,
-      this.port.getPlayers().map((player) => ({
-        playerId: player.id,
-        x: player.x,
-        y: player.y,
-        eligible: this.port.canUseMissionActions(player.id) && this.port.isPlayerAlive(player.id),
-      })),
+      playerSamples,
     );
+    // Vor den Nebenzielen: eine betretene Site startet ihr Ziel noch in diesem Host-Frame.
+    this.runtime.coopDefenseSiteActivationSystem?.hostUpdate(countdownActive, playerSamples);
     this.runtime.coopDefenseMapDirector?.hostUpdate(deltaMs, countdownActive);
     this.runtime.coopDefenseMapEventDirector?.hostUpdate(deltaMs, countdownActive);
     this.runtime.coopDefenseSecondaryObjectiveSystem?.hostUpdate(deltaMs, countdownActive);

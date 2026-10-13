@@ -15,6 +15,7 @@ import type { TemporaryUtilityPort } from '../world/PlayerUtilityActionRuntime';
 import { CoopDefenseCarrySystem } from '../systems/CoopDefenseCarrySystem';
 import { CoopDefenseMissionBarrierManager } from '../systems/CoopDefenseMissionBarrierManager';
 import { CoopDefenseMissionProgressSystem } from '../systems/CoopDefenseMissionProgressSystem';
+import { CoopDefenseSiteActivationSystem } from '../systems/CoopDefenseSiteActivationSystem';
 import { CoopDefenseObjectivePlacementRewardSystem } from '../systems/CoopDefenseObjectivePlacementRewardSystem';
 import { CoopDefenseObjectiveRepairSystem } from '../systems/CoopDefenseObjectiveRepairSystem';
 import { CoopDefenseRoundStateSystem } from '../systems/CoopDefenseRoundStateSystem';
@@ -127,6 +128,9 @@ export class CoopMissionObjectiveComposition {
           if (trigger.type === 'after-defense') {
             return runtime.coopDefenseMissionProgressSystem?.isDefenseResolved(trigger.defenseId) ?? false;
           }
+          if (trigger.type === 'site-activated') {
+            return runtime.coopDefenseSiteActivationSystem?.isSiteActivated(trigger.siteId) ?? false;
+          }
           return false;
         },
         onObjectiveActivated: (objectiveId) => {
@@ -198,7 +202,11 @@ export class CoopMissionObjectiveComposition {
       ? this.createRoundState(runtime, baseManager)
       : null;
     const teamBuff = this.options.isHost ? new CoopDefenseTeamBuffSystem() : null;
+    const siteActivation = this.options.isHost && (mapConfig.siteClearings?.length ?? 0) > 0
+      ? new CoopDefenseSiteActivationSystem(mapConfig.siteClearings!, this.options.worldMetrics)
+      : null;
     runtime.setObjectives({
+      siteActivation,
       secondaryObjectives,
       missionProgress,
       barriers,

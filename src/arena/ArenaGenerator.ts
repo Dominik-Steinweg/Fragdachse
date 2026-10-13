@@ -104,7 +104,10 @@ function updateJsonFingerprintHash(value: unknown, hash: number, inArray = false
 }
 
 /** Increment whenever deterministic generation changes in a wire-visible way. */
-export const ARENA_GENERATOR_VERSION = 11;
+export const ARENA_GENERATOR_VERSION = 12;
+
+/** Garantiert freie Kreisflaeche: Missions-Checkpoint oder Salvage-Site-Lichtung. */
+type ProtectedClearing = Pick<CoopDefenseMapMissionCheckpointConfig, 'gridX' | 'gridY' | 'radiusCells'>;
 
 /** Immutable inputs that previously leaked in through mutable config module variables. */
 export interface ArenaGenerationInput {
@@ -183,9 +186,13 @@ export class ArenaGenerator {
         barrier.cells.map((cell) => `${cell.gridX}_${cell.gridY}`)
       )),
     );
-    const missionCheckpointCells = this.collectMissionCheckpointCells(
-      coopMapConfig?.missionProgress?.checkpoints,
-    );
+    // Checkpoints und Salvage-Site-Lichtungen teilen dieselbe Garantie: ihr Kern bleibt frei von
+    // Fels, Felsbaendern und Baeumen. Ohne Sites bleibt die Eingabe (und damit jede RNG-Folge) gleich.
+    const protectedClearings = [
+      ...(coopMapConfig?.missionProgress?.checkpoints ?? []),
+      ...(coopMapConfig?.siteClearings ?? []),
+    ];
+    const missionCheckpointCells = this.collectMissionCheckpointCells(protectedClearings);
     // Authored Felsbaender sind reguläre Felsen, aber keine Generatoreingabe: Sie werden erst
     // nach Konnektivitäts-, Baum- und Routenprüfung gestempelt. Sonst läse `ensureConnected` ein
     // bewusst gesetztes Band als abgeschnürte Tasche und fräste es wieder auf.
@@ -305,7 +312,7 @@ export class ArenaGenerator {
       // künstliches Quadrat um jeden Marker zu erzeugen.
       this.carveOrganicCheckpointClearances(
         map,
-        coopMapConfig?.missionProgress?.checkpoints ?? [],
+        protectedClearings,
         rng,
         tutorialRockCoreCells,
       );
@@ -1077,7 +1084,7 @@ export class ArenaGenerator {
    */
   private carveOrganicCheckpointClearances(
     map: boolean[][],
-    checkpoints: readonly CoopDefenseMapMissionCheckpointConfig[],
+    checkpoints: readonly ProtectedClearing[],
     rng: () => number,
     protectedCells: ReadonlySet<number>,
   ): void {
@@ -1197,7 +1204,7 @@ export class ArenaGenerator {
 
   /** Zellschlüssel aller authored Checkpoint-Kerne, die bei Fels- und Baum-Placement frei bleiben. */
   private collectMissionCheckpointCells(
-    checkpoints: readonly CoopDefenseMapMissionCheckpointConfig[] | undefined,
+    checkpoints: readonly ProtectedClearing[] | undefined,
   ): Set<string> {
     const cells = new Set<string>();
     for (const checkpoint of checkpoints ?? []) {
