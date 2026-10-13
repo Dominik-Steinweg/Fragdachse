@@ -40,7 +40,14 @@ it('offers turret copies only to the Inspector while portals stay locked', () =>
   for (const classId of COOP_DEFENSE_CLASS_IDS.filter(id => id !== 'inspector_gadachs')) {
     expect(isCoopDefenseUpgradeAvailableForClass(relay.id, classId)).toBe(false);
   }
-  expect(isCoopDefenseUpgradeAvailableForClass('unlock_fire_control_portal', 'inspector_gadachs')).toBe(false);
+  // M2: portals cost one upgrade point, without any further requirement (GDD V2 §6, E5).
+  const portal = COOP_DEFENSE_UPGRADE_DEFINITIONS.unlock_fire_control_portal;
+  expect(isCoopDefenseUpgradeAvailableForClass(portal.id, 'inspector_gadachs')).toBe(true);
+  expect(portal).toMatchObject({ startingLevel: 0, costPerLevel: 1 });
+  expect(portal.requires ?? []).toEqual([]);
+  for (const classId of COOP_DEFENSE_CLASS_IDS.filter(id => id !== 'inspector_gadachs')) {
+    expect(isCoopDefenseUpgradeAvailableForClass(portal.id, classId)).toBe(false);
+  }
   const profile = buildScenarioProfile('inspector_gadachs', { fire_control_relay_parallel: 1 },
     [{ kind: 'utility', id: 'FIRE_CONTROL_RELAY' }]);
   expect(profile.toolLoadout).toEqual([{ kind: 'utility', id: 'FIRE_CONTROL_RELAY' }]);
