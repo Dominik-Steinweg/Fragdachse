@@ -136,6 +136,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
           pathEffect: (fireball?.trailEnabled ?? 0) > 0 ? { kind: 'fireball', fireTrail: groundEffect } : undefined,
         },
         presentation: {
+          turretVisualId: params.options?.turretVisualId,
           color: 0xff7417,
           style: 'fireball',
           ownerColor: params.ownerColor,
@@ -193,6 +194,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
         },
       },
       presentation: {
+        turretVisualId: params.options?.turretVisualId,
         color: config.projectileColor ?? params.ownerColor,
         style: 'flame',
         ownerColor: params.ownerColor,
@@ -250,6 +252,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
         },
       },
       presentation: {
+        turretVisualId: params.options?.turretVisualId,
         color: config.projectileColor ?? params.ownerColor,
         style: 'leaf_blower',
         ownerColor: params.ownerColor,
@@ -303,6 +306,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
         },
       },
       presentation: {
+        turretVisualId: params.options?.turretVisualId,
         color: config.projectileColor ?? fireConfig.fieldColor,
         style: config.projectileStyle,
         ownerColor: params.ownerColor,
@@ -346,6 +350,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
         },
       },
       presentation: {
+        turretVisualId: params.options?.turretVisualId,
         color: config.projectileColor ?? fireConfig.injectorColor,
         style: config.projectileStyle,
         ownerColor: params.ownerColor,

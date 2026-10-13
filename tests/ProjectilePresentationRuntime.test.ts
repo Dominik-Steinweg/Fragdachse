@@ -166,7 +166,7 @@ describe('ProjectilePresentationRuntime', () => {
     runtime.releaseWorldPresentation();
     expect(renderer.destroyAll).toHaveBeenCalled();
   });
-  it('animates confirmed turret shots but not baselines, refreshes or suppressed spawns', () => {
+  it.each([undefined, 'fc-copy:1:0'])('animates the firing sprite (%s) with fallback, but not baselines or refreshes', turretVisualId => {
     const runtime = new ProjectilePresentationRuntime({} as never);
     const replica = new ProjectileClientReplica();
     const turretAnimations = { onShot: vi.fn() };
@@ -175,17 +175,17 @@ describe('ProjectilePresentationRuntime', () => {
       'energyBall', 'hydra', 'gauss', 'holyGrenade', 'rocket', 'fireball', 'spore', 'grenade',
       'translocatorPuck', 'teslaBolt', 'tracer'].map(key => [key, renderer])), turretAnimations };
     runtime.bindRenderers(renderers as never, null);
-    const old = projectile({ sourceTurretId: 'base:rocket' });
+    const old = projectile({ sourceTurretId: 'base:rocket', turretVisualId });
     runtime.presentClientFrame(replica.sync([old], 1000));
     expect(turretAnimations.onShot).not.toHaveBeenCalled();
-    const fresh = projectile({ id: 8, sourceTurretId: 'base:rocket' });
+    const fresh = projectile({ id: 8, sourceTurretId: 'base:rocket', turretVisualId });
     const batch = [old, fresh, projectile({ id: 9, sourceTurretId: '7', suppressSpawnFx: true })];
     runtime.presentClientFrame(replica.sync(batch, 1050));
     runtime.presentClientFrame(replica.sync(batch, 1100));
-    expect(turretAnimations.onShot).toHaveBeenCalledExactlyOnceWith('base:rocket');
-    runtime.createSpawnFeedback(10, 0, 0, 0, 0, 0, 'owner', { sourceTurretId: '7', speed: 100 } as never);
-    expect(turretAnimations.onShot).toHaveBeenLastCalledWith('7');
-    runtime.createSpawnFeedback(11, 0, 0, 0, 0, 0, 'owner', { sourceTurretId: '7', suppressSpawnFx: true } as never);
+    expect(turretAnimations.onShot).toHaveBeenCalledExactlyOnceWith(turretVisualId ?? 'base:rocket');
+    runtime.createSpawnFeedback(10, 0, 0, 0, 0, 0, 'owner', { sourceTurretId: '7', turretVisualId, speed: 100 } as never);
+    expect(turretAnimations.onShot).toHaveBeenLastCalledWith(turretVisualId ?? '7');
+    runtime.createSpawnFeedback(11, 0, 0, 0, 0, 0, 'owner', { sourceTurretId: '7', turretVisualId, suppressSpawnFx: true } as never);
     expect(turretAnimations.onShot).toHaveBeenCalledTimes(2);
     runtime.releaseWorldPresentation();
     runtime.bindRenderers(renderers as never, null);

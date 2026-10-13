@@ -440,6 +440,8 @@ export interface ProjectileSupportSpec {
  * opaque: kein Processor, Resolver oder Combat-Pfad verzweigt auf ein Feld dieses Descriptors.
  */
 export interface ProjectilePresentationDescriptor {
+  /** Sprite of the firing source; attribution stays in provenance.sourceTurretId. */
+  readonly turretVisualId?: string;
   readonly flameStreamKey?: string;
   readonly color: number;
   readonly style?: ProjectileStyle;

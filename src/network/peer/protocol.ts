@@ -15,7 +15,9 @@
 // GameState deltas name the full baseline that must be consumed before them.
 // Kraken spine/regrowth baselines and the appended spine action code require matching peers.
 // Firestarter: appended `fire-lance-charge` action and `firestarter_orb` projectile style.
-export const PEER_PROTOCOL_VERSION = 28;
+// Fire control: required fc world slice and optional turretVisualId projectile static bit.
+// Prepared after Shield-Charger (29); verify against the current version when merging.
+export const PEER_PROTOCOL_VERSION = 30;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

@@ -33,6 +33,7 @@ import type {
 
 // ── Statik-Maske ────────────────────────────────────────────────────────────
 const S_WEAPON_SOURCE = 65536;
+const S_TURRET_VISUAL = 131072;
 const S_STYLE = 1;
 const S_COLOR = 2;
 const S_OWNER_COLOR = 4;
@@ -154,6 +155,7 @@ export function encodeProjectileStatic(
   if (entry.tracer !== undefined) mask |= S_TRACER;
   if (entry.sourceTurretId !== undefined) mask |= S_SOURCE_TURRET;
   if (entry.flameStreamKey !== undefined) mask |= S_FLAME_STREAM;
+  if (entry.turretVisualId !== undefined) mask |= S_TURRET_VISUAL;
 
   out.push(entry.id, mask, entry.ownerId);
   if (mask & S_STYLE) out.push(indexIn(PROJECTILE_STYLES, entry.style));
@@ -186,6 +188,7 @@ export function encodeProjectileStatic(
   if (mask & S_SOURCE_TURRET) out.push(entry.sourceTurretId as string);
   if (mask & S_FLAME_STREAM) out.push(entry.flameStreamKey as string);
   if (mask & S_WEAPON_SOURCE) out.push(entry.weaponSourceId as string);
+  if (mask & S_TURRET_VISUAL) out.push(entry.turretVisualId as string);
 }
 
 /** Dekodiert den Statik-Strom zurück in Vollersatz-Einträge. */
@@ -238,6 +241,7 @@ export function decodeProjectileStatics(
     if (mask & S_SOURCE_TURRET) entry.sourceTurretId = stream[i++] as string;
     if (mask & S_FLAME_STREAM) entry.flameStreamKey = stream[i++] as string;
     if (mask & S_WEAPON_SOURCE) entry.weaponSourceId = stream[i++] as string;
+    if (mask & S_TURRET_VISUAL) entry.turretVisualId = stream[i++] as string;
     result.push(entry);
   }
   return result;
@@ -432,6 +436,7 @@ export function applyProjectileSnapshot(
       allowTeamDamage: shared.allowTeamDamage,
       ownerColor: shared.ownerColor,
       sourceTurretId: shared.sourceTurretId,
+      turretVisualId: shared.turretVisualId,
       flameStreamKey: shared.flameStreamKey,
       visualMuzzleOrigin: shared.visualMuzzleOrigin,
       weaponSourceId: shared.weaponSourceId,

@@ -213,6 +213,22 @@ describe('fire-control route: one-way transfer at fire time', () => {
     runtime.destroy();
   });
 
+  it('separates original and copy flame streams, with custom keys and portal contributions', () => {
+    const { runtime } = createHarness();
+    for (const routed of [false, true]) for (const visualId of [undefined, 'turret-1', 'fc-copy:1:0', 'fc-copy:1:1']) {
+      const request = shot({ isFlame: true, route: routed ? route() : undefined });
+      runtime.spawnProjectile({ ...request, presentation: { ...request.presentation,
+        turretVisualId: visualId, flameStreamKey: 'custom' } });
+    }
+    const records = replication(runtime);
+    const keys = records.map(record => record.static.flameStreamKey);
+    expect(new Set(keys).size).toBe(8);
+    expect(keys).toEqual(['custom', 'custom#turret-1', 'custom#fc-copy:1:0', 'custom#fc-copy:1:1',
+      'custom@fc:7', 'custom#turret-1@fc:7', 'custom#fc-copy:1:0@fc:7', 'custom#fc-copy:1:1@fc:7']);
+    for (const record of records) expect(record.static.sourceTurretId).toBe('turret-1');
+    runtime.destroy();
+  });
+
   it('breaks the flight path at the jump; dead-reckoned shots first replicate at the exit', () => {
     const { runtime } = createHarness();
     const traced = runtime.spawnProjectile(shot({ route: route(), tracer: true }))!;
@@ -253,7 +269,7 @@ describe('fire-control route: one-way transfer at fire time', () => {
 });
 
 describe('fire-control route: execution plumbing', () => {
-  const options = { fireControlRoute: route() };
+  const options = { fireControlRoute: route(), sourceTurretId: 'turret-1', turretVisualId: 'fc-copy:1:0' };
   const params = { x: 0, y: 0, angle: 0, targetX: 300, targetY: 0, ownerId: 'owner', ownerColor: 1, options };
 
   function sink(spawned: ProjectileSpawnRequest[] = []): WeaponFireSink {
@@ -271,7 +287,11 @@ describe('fire-control route: execution plumbing', () => {
     specialized.fire({ ...flamethrower, fireballFlameConfig: flamethrower,
       fire: { ...flamethrower.fire, fireball: { ...flamethrower.fire.fireball!, enabled: 1 } } }, params);
     expect(spawned).toHaveLength(3);
-    for (const request of spawned) expect(request.fireControlRoute).toBe(options.fireControlRoute);
+    for (const request of spawned) {
+      expect(request.fireControlRoute).toBe(options.fireControlRoute);
+      expect(request.provenance.sourceTurretId).toBe('turret-1');
+      expect(request.presentation.turretVisualId).toBe('fc-copy:1:0');
+    }
     expect(spawned[2].flameEmission?.flame).not.toHaveProperty('fireControlRoute');
   });
 
@@ -284,6 +304,7 @@ describe('fire-control route: execution plumbing', () => {
       && candidate.fire.type === 'projectile' && (candidate.pelletCount ?? 1) <= 1)!;
     expect(turret.fire(config, params)).toBe(true);
     expect([...physics.handles.values()].map(handle => handle.sprite.x)).toEqual([500]);
+    expect(replication(runtime)[0].static).toMatchObject({ sourceTurretId: 'turret-1', turretVisualId: 'fc-copy:1:0' });
     runtime.destroy();
   });
 
