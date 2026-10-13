@@ -19,28 +19,38 @@ uniform float uTime, uMaterialize, uVanish, uWarning, uPreset;
 varying vec2 outTexCoord;
 #pragma phaserTemplate(fragmentHeader)
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+const vec3 LUMA = vec3(.2126, .7152, .0722);
+const vec3 CORE = vec3(.91, 1.0, .976);
 void main() {
   vec2 uv = outTexCoord;
   float tick = floor(uTime * 22.0);
-  float glitch = step(mix(.989, .78, uWarning), hash(vec2(tick, 9.0)));
-  uv.x += glitch * (hash(vec2(floor(uv.y * 15.0), tick)) - .5) * .028;
+  float glitch = step(mix(.992, .80, uWarning), hash(vec2(tick, 9.0)));
+  uv.x += glitch * (hash(vec2(floor(uv.y * 15.0), tick)) - .5) * .03;
+  vec2 px = 1.0 / resolution;
   vec4 src = boundedSampler(uMainSampler, uv);
   float lo = src.a, hi = src.a, halo = 0.0;
   // Alpha-neighbourhood Fresnel: follows each animated barrel, never a rectangular outline.
   for (int i = 0; i < 8; i++) {
     float a = float(i) * .785398;
-    vec2 d = vec2(cos(a), sin(a)) / resolution;
-    float n = boundedSampler(uMainSampler, uv + d * 3.2).a;
+    vec2 d = vec2(cos(a), sin(a)) * px;
+    float n = boundedSampler(uMainSampler, uv + d * 2.4).a;
     lo = min(lo, n); hi = max(hi, n);
-    halo += boundedSampler(uMainSampler, uv + d * 7.0).a / 8.0;
+    halo += boundedSampler(uMainSampler, uv + d * 6.0).a / 8.0;
   }
-  float rim = hi - lo;
-  float lum = dot(src.rgb / max(src.a, .001), vec3(.2126,.7152,.0722));
-  float scanPitch = uPreset > .5 && uPreset < 1.5 ? .9 : 1.25;
-  float scan = .5 + .5 * sin(uv.y * resolution.y * scanPitch - uTime * 2.0);
-  float scanMix = uPreset > .5 && uPreset < 1.5 ? .42 : .12;
-  float detail = uPreset > .5 && uPreset < 1.5 ? .22 : .40;
-  float body = (.04 + detail * smoothstep(.06, .65, lum)) * mix(1.0, scan, scanMix);
+  float rim = clamp((hi - lo) * 1.35, 0.0, 1.0);
+  float lum = dot(src.rgb / max(src.a, .001), LUMA);
+  // Panel lines: luminance gradient of the real sprite, so pods, barrels and hatches stay legible.
+  float gx = dot(boundedSampler(uMainSampler, uv + vec2(px.x, 0.0)).rgb - boundedSampler(uMainSampler, uv - vec2(px.x, 0.0)).rgb, LUMA);
+  float gy = dot(boundedSampler(uMainSampler, uv + vec2(0.0, px.y)).rgb - boundedSampler(uMainSampler, uv - vec2(0.0, px.y)).rgb, LUMA);
+  float lines = clamp((abs(gx) + abs(gy)) * 2.4, 0.0, 1.0) * src.a;
+  bool scanPreset = uPreset > .5 && uPreset < 1.5;
+  float scanY = uv.y * resolution.y;
+  float scan = mix(1.0, .45 + .55 * smoothstep(.3, .7, fract(scanY / (scanPreset ? 2.5 : 3.0) - uTime * .9)), scanPreset ? .75 : .45);
+  // A soft bright band sweeps over the projection every ~2.4 s.
+  float band = exp(-pow(fract(uTime * .42) * 1.5 - .25 - (1.0 - uv.y), 2.0) / .006);
+  float detail = scanPreset ? .30 : .62;
+  float bodyLight = (.20 + detail * smoothstep(.04, .72, lum)) * scan;
+  float body = bodyLight;
   float grid = 1.0;
   if (uPreset > 1.5) {
     vec2 cell = fract(uv * resolution / 5.0);
@@ -61,9 +71,12 @@ void main() {
     float neighbour = boundedSampler(uMainSampler, uv-pull).a;
     sparks += (1.0-src.a) * neighbour * step(.88,hash(cell)) * (1.0-drift) * .7;
   }
-  vec3 rgb = uColor * (body * src.a * grid + rim * .52 + halo * (1.0-src.a) * .16);
-  rgb += vec3(.91, 1.0, .976) * (rim * .14 + front * hi * .85 + sparks);
-  float alpha = clamp(src.a * .66 + rim * .8 + halo * (1.0-src.a) * .15, 0.0, 1.0);
+  // Premultiplied glass: the body only partly covers the ground (alpha < light), so the
+  // projection reads as emitted light; panel lines and the Fresnel rim carry the silhouette.
+  vec3 rgb = uColor * (body * src.a * grid + band * src.a * .30 + halo * (1.0 - src.a) * .20);
+  rgb += mix(uColor, CORE, .40) * (lines * .85 + rim * 1.05);
+  rgb += CORE * (front * hi * .85 + sparks);
+  float alpha = clamp(src.a * .30 + lines * .35 + rim * .85 + halo * (1.0 - src.a) * .16, 0.0, 1.0);
   float flicker = 1.0 - glitch * (.2 + .25 * uWarning);
   gl_FragColor = vec4(rgb, alpha) * reveal * flicker;
 }`;

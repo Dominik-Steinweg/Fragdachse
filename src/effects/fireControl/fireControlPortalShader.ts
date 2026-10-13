@@ -25,10 +25,23 @@ void main() {
   vec2 p = vLocal;
   float c = cos(angle), s = sin(angle);
   vec2 q = vec2(c*p.x+s*p.y, -s*p.x+c*p.y);
-  // The exit has no facing; only its flash uses the transport angle.
+  // The exit has no facing; per-shot flashes are separate ExitFlash instances.
   if (kind < .5 || (kind > 1.5 && kind < 3.5)) q = p;
   float intensity = 0.0, core = 0.0;
-  if (kind > 3.5) {
+  if (kind > 4.5) {
+    // One directed burst per transported shot. q is aligned with the shot: +x points outward.
+    // The ring segment flares, then a short streak leaves the iris; nothing points back
+    // toward the source turret.
+    float r = length(q), a = atan(q.y, q.x);
+    float R = radius;
+    float wedge = pow(max(0.0, cos(a)), 14.0);
+    intensity = line(r - R, 1.3) * wedge * 2.6 * flash;
+    intensity += exp(-pow((r - R) / 3.5, 2.0)) * pow(max(0.0, cos(a)), 6.0) * .9 * flash;
+    float head = R + (1.0 - flash) * R * .9;
+    float streak = exp(-pow(q.y / 1.1, 2.0)) * step(R * .9, q.x) * exp(-pow((q.x - head) / (5.0 + 6.0 * (1.0 - flash)), 2.0));
+    intensity += streak * 1.4 * flash;
+    core += streak * flash * 1.2 + line(r - R, .5) * wedge * flash;
+  } else if (kind > 3.5) {
     // Local projector thread only. Length is radius; no portal-distance connection exists.
     float wobble = sin(q.x*.7-uTime*15.0+vState.w) * .45;
     intensity = line(q.y-wobble,.15) * step(0.0,q.x) * (1.0-smoothstep(radius*.7,radius,q.x))
@@ -47,15 +60,10 @@ void main() {
       float lens = (1.0-smoothstep(0.0,R,r)) * .024;
       float rest = line(r-R*1.25,.16)*step(fract((a+1.5708)/TAU), remaining)*.20;
       intensity = ring+inner+ticks+cross+lens+rest;
-      float directed = pow(max(0.0,cos(a-(kind<.5?angle:0.0))),20.0);
-      intensity += flash * line(r-R,1.0) * (kind < .5 ? directed*2.5 : 1.5);
-      // Short outward needles in the shot direction, only at the exit.
-      if (kind < .5) {
-        float along = c*p.x+s*p.y, side = -s*p.x+c*p.y;
-        float head = R + (1.0-flash)*radius*.70;
-        core += flash * line(side,.4) * exp(-pow((along-head)/4.0,2.0));
-        intensity += flash * line(side,1.2) * exp(-pow((along-head)/7.0,2.0))*.5;
-      }
+      // Exit: any recent transport makes the whole iris breathe briefly (direction lives in ExitFlash).
+      // Entry: the iris swallows the shot, contracting inward.
+      if (kind < .5) intensity *= 1.0 + flash * .45;
+      else intensity += flash * (line(r - R * (1.0 - .35 * flash), .9) * 1.6 + exp(-r * r / 3.0) * .8);
       if (kind > .5) {
         float strength = mode < .5 ? .92 : mode < 1.5 ? .22+.07*sin(uTime*2.2) : .09;
         intensity *= strength;

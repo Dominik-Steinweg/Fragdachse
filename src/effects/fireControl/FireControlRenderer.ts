@@ -26,6 +26,10 @@ interface CopyVisual {
 }
 interface PortalVisual { snapshot: FireControlPortalView; removedAt?: number; removedOpen?: number }
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
+const EXIT_RADIUS = 23;
+const FLASH_MS = 220;
+/** Projector filaments carry the copies in; afterwards they only flicker faintly. */
+const FILAMENT_SETTLE_MS = 700;
 
 /** Presentation owner only: update receives synchronized host time, never calls gameplay. */
 export class FireControlRenderer {
@@ -82,9 +86,10 @@ export class FireControlRenderer {
         this.animations.syncPose(copy.sourceId, copy.x, copy.y, copy.angle, false);
         const length = Math.hypot(copy.x-deployment.x,copy.y-deployment.y);
         // Projector filaments are strictly local, even if a remote snapshot places a copy far away.
+        const settle = clamp((now - deployment.startedAt) / FILAMENT_SETTLE_MS);
         if (length < 90) this.store.add({ x: deployment.x, y: deployment.y, radius: length, length,
           angle: Math.atan2(copy.y-deployment.y,copy.x-deployment.x), kind: Kind.Filament,
-          open: 1, remaining: 1, flash: 0, seed: copy.originalId });
+          open: 1 - settle * .8, remaining: 1, flash: 0, seed: copy.originalId });
       }
     }
     for (const [id, v] of this.copies) {
@@ -97,7 +102,7 @@ export class FireControlRenderer {
       Object.assign(v.filter.uniforms, { time: this.store.time, preset: this.preset,
         materialize: v.removedMaterialize ?? clamp(1-(v.copy.materializedAt-now)/400), vanish,
         warning: clamp(1-(v.expiresAt-now)/2000) });
-      this.light(`copy:${id}`, v.copy.x, v.copy.y, 64, 3.5 * v.filter.uniforms.materialize * (1-vanish));
+      this.light(`copy:${id}`, v.copy.x, v.copy.y, 44, 3.8 * v.filter.uniforms.materialize * (1-vanish));
     }
     for (const [id, v] of this.portals) {
       if (!livePortals.has(id) && v.removedAt === undefined) {
@@ -107,20 +112,24 @@ export class FireControlRenderer {
       const close = v.removedAt === undefined ? 1 : 1-clamp((now-v.removedAt)/300);
       if (close <= 0) { this.portals.delete(id); continue; }
       const open = (v.removedOpen ?? clamp((now-d.startedAt)/400)) * close;
-      let flash = 0, direction = 0;
+      let flash = 0;
       for (const entry of d.entries) {
         const age = entry.lastTransportAt === undefined ? Infinity : now-entry.lastTransportAt;
-        const f = age >= 0 && entry.mode === 'portal' ? 1-clamp(age/150) : 0;
-        if (f > flash) { flash = f; direction = entry.angle; }
+        const f = age >= 0 && entry.mode === 'portal' ? 1-clamp(age/FLASH_MS) : 0;
+        flash = Math.max(flash, f);
         this.store.add({ x: entry.x, y: entry.y, radius: 6, angle: entry.angle, kind: Kind.Entry,
           open: open * (entry.mode === 'local' ? .18 : 1), remaining: 0, flash: f,
           mode: entry.mode === 'portal' ? 0 : entry.mode === 'waiting' ? 1 : 2 });
+        // Every source gets its own directed exit burst, so simultaneous shots in different
+        // directions all read at the shared exit.
+        if (f > 0) this.store.add({ x: d.x, y: d.y, radius: EXIT_RADIUS, angle: entry.angle,
+          kind: Kind.ExitFlash, open, remaining: 0, flash: f });
         this.light(`entry:${id}:${entry.sourceId}`, entry.x, entry.y, 30,
           open * (entry.mode === 'portal' ? 3.5 : entry.mode === 'waiting' ? 1.4 : .3));
       }
-      this.store.add({ x: d.x, y: d.y, radius: 23, angle: direction, kind: Kind.Exit, open,
+      this.store.add({ x: d.x, y: d.y, radius: EXIT_RADIUS, angle: 0, kind: Kind.Exit, open,
         remaining: clamp((d.expiresAt-now)/Math.max(1,d.expiresAt-d.startedAt)), flash });
-      this.light(`exit:${id}`, d.x, d.y, 84, open * 3.5);
+      this.light(`exit:${id}`, d.x, d.y, 62, open * (3.2 + flash * 1.5));
     }
     const pausedIds = getPausedOriginalIds(snapshot);
     for (const [id, value] of this.paused) {
@@ -151,7 +160,7 @@ export class FireControlRenderer {
     const key = `fc-visual:${id}`;
     this.lightKeys.add(key); this.touchedLights.add(key);
     // Small neutral mint sources protect the hue in the under-player lightmap receiver band.
-    this.lighting.setLight(key, 'electricField', x, y, { color: 0xe8fff9, radiusPx, intensity, occludes: false });
+    this.lighting.setLight(key, 'electricField', x, y, { color: 0x7dffd2, radiusPx, intensity, occludes: false });
   }
   destroy(): void {
     if (this.destroyed) return;
