@@ -1,5 +1,4 @@
 import { normalizeConstructionId } from '../../config/coopDefenseConstructions';
-import { EMPTY_FIRE_CONTROL_SNAPSHOT } from '../../systems/fireControl/FireControlSnapshot';
 import { CombatProjectileQueryAdapter } from '../../combat/CombatProjectileQueryAdapter';
 import { bridge } from '../../network/bridge';
 import { EnergyShieldSystem } from '../../systems/EnergyShieldSystem';
@@ -370,11 +369,13 @@ export function composeWorldCombatGameplay(
   });
   gameplay.combat = combatGameplayBinding;
   worldRuntime.bind(combatGameplayBinding);
+  // Der Host-Owner speist den Slice `fc`; die Darstellung liest auf Host und Client dieselbe Quelle.
+  if (bridge.isHost()) {
+    bridge.setFireControlSnapshotProvider(() => combatGameplayBinding.getFireControlSnapshot(bridge.getSynchronizedNow()));
+    worldRuntime.bind({ destroy: () => bridge.setFireControlSnapshotProvider(null) });
+  }
   worldRuntime.presentationFrame?.bindFireControl(
-    bridge.isHost()
-      ? now => combatGameplayBinding.getFireControlSnapshot(now)
-      // Replication package: replace only this client source with the replicated getter.
-      : () => EMPTY_FIRE_CONTROL_SNAPSHOT,
+    () => bridge.getFireControlSnapshot(),
     id => rockVisualHelper.getTurretOriginalVisual(id),
   );
 }

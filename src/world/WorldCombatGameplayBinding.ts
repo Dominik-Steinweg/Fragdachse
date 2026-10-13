@@ -872,7 +872,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     turret.setBaseTargetCandidateProvider((source, x, y, range) => this.getHostileBaseAimCandidates(source, x, y, range));
     turret.setTargetScoreProvider((source, kind, id, now) => this.isPersonalMg(source.identityId)
       ? this.mgTurret?.score(source.ownerId, String(source.identityId), kind, id, now) ?? 0 : 0);
-    turret.setFireHandler((ownerId, color, weaponId, x, y, angle, targetX, targetY, damageFactor = 1, rangeFactor = 1, sourceTurretId, skipRockIndex, sourceCarrierBaseId) => {
+    turret.setFireHandler((ownerId, color, weaponId, x, y, angle, targetX, targetY, damageFactor = 1, rangeFactor = 1, sourceTurretId, skipRockIndex, sourceCarrierBaseId, context) => {
       const turretCfg = UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig;
       const weapon = WEAPON_CONFIGS[weaponId] ?? WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
       const isFriendlyBaseTurret = ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID;
@@ -909,6 +909,9 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
             // durch denselben ausgehenden Modifier-/Krit-Pfad wie dessen eigene Treffer.
             sourceSlot: isBaseTurret ? undefined : 'utility',
             sourceTurretId: sourceTurretId === undefined ? undefined : String(sourceTurretId),
+            // Attribution bleibt beim Original; die Schussanimation spielt am Sprite der feuernden Quelle.
+            turretVisualId: context && context.source.visualId !== context.source.identityId
+              ? String(context.source.visualId) : undefined,
             personalMgOwnerId: this.isPersonalMg(sourceTurretId) ? ownerId : undefined,
             personalMgScope: this.isPersonalMg(sourceTurretId) ? o.combatSystem.getCombatScope() : undefined,
             directDamageMultiplier: damageFactor,
