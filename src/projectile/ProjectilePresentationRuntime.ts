@@ -1,6 +1,7 @@
 import type { ProjectileCustomVisual, ProjectileVisualOverrides } from './ProjectileVisualOverrides';
 import type { PlasmaBurnerChargeRenderer } from '../effects/PlasmaBurnerChargeRenderer';
 import type { TurretAnimationController } from '../effects/TurretAnimationController';
+import { isFireControlCopySourceId } from '../systems/fireControl/FireControlSnapshot';
 import { ProjectilePathCursor, type ProjectilePathPoint, type ProjectileTrailSegment } from './ProjectileFlightPath';
 import { tracerBounceDebug } from '../effects/TracerBounceDebugSettings';
 import { TracerBounceDebugOverlay } from '../effects/TracerBounceDebugOverlay';
@@ -105,6 +106,11 @@ export interface ProjectilePresentationRenderers {
   readonly visualOverrides?: ProjectileVisualOverrides;
 }
 
+/** World presentation owns the copy-shot subscription and its release. */
+export interface FireControlCopyShotSource {
+  bindFireControlCopyShots(sink: (sourceId: string) => void): () => void;
+}
+
 /**
  * Presentation-Owner für Host- und Client-Projektile.
  *
@@ -112,6 +118,13 @@ export interface ProjectilePresentationRenderers {
  * erzeugt aber selbst keine Gameplay-Entscheidung und schreibt keinen Runtime-State zurück.
  */
 export class ProjectilePresentationRuntime {
+  private fireControlCopyShot: ((sourceId: string) => void) | null = null;
+
+  bindFireControlCopyShots(sink: (sourceId: string) => void): () => void {
+    this.fireControlCopyShot = sink;
+    return () => { if (this.fireControlCopyShot === sink) this.fireControlCopyShot = null; };
+  }
+
   private groundFogSegment: ((segment: ProjectileTrailSegment, size: number, style: string, sourceId: number, weaponSourceId?: string) => void) | null = null;
   private readonly groundFogPoses = new Map<number, ProjectilePathPoint>();
   bindGroundFogSegments(sink: (segment: ProjectileTrailSegment, size: number, style: string, sourceId: number, weaponSourceId?: string) => void): () => void {
@@ -312,7 +325,8 @@ export class ProjectilePresentationRuntime {
     }
     if (cfg.suppressSpawnFx) return;
     const turretVisualId = cfg.turretVisualId ?? cfg.sourceTurretId;
-    if (turretVisualId !== undefined) this.turretAnimations?.onShot(turretVisualId);
+    if (isFireControlCopySourceId(cfg.turretVisualId)) this.fireControlCopyShot?.(cfg.turretVisualId);
+    else if (turretVisualId !== undefined) this.turretAnimations?.onShot(turretVisualId);
     const muzzleOrigin = cfg.visualMuzzleOrigin ?? getTopDownMuzzleOrigin(muzzleX, muzzleY, angle);
     this.muzzleFlashRenderer?.playProjectileFlash(
       muzzleOrigin.x,
@@ -592,6 +606,7 @@ export class ProjectilePresentationRuntime {
   presentClientFrame(frame: ProjectileClientReplicaFrame, localPlayerId?: string): void {
     if (this.clientTurretBaselineReceived) {
       const firingTurrets = new Set<string>();
+      const firingCopies = new Set<string>();
       for (const update of frame.updates) {
         const projectile = update.projectile;
         if (update.isNew && projectile.style === 'firestarter_orb' && !projectile.suppressSpawnFx && !projectile.flightPath?.ended) {
@@ -600,10 +615,12 @@ export class ProjectilePresentationRuntime {
         const turretVisualId = projectile.turretVisualId ?? projectile.sourceTurretId;
         if (update.isNew && !projectile.suppressSpawnFx && !projectile.flightPath?.ended
           && turretVisualId !== undefined) {
-          firingTurrets.add(turretVisualId);
+          if (isFireControlCopySourceId(projectile.turretVisualId)) firingCopies.add(projectile.turretVisualId);
+          else firingTurrets.add(turretVisualId);
         }
       }
       for (const id of firingTurrets) this.turretAnimations?.onShot(id);
+      for (const id of firingCopies) this.fireControlCopyShot?.(id);
     }
     this.clientTurretBaselineReceived = true;
     this.clientPlayerId = localPlayerId;
@@ -882,6 +899,7 @@ export class ProjectilePresentationRuntime {
   }
 
   releaseWorldPresentation(): void {
+    this.fireControlCopyShot = null;
     for (const visual of this.customVisuals.values()) visual.destroy();
     this.customVisuals.clear();
     this.groundFogSegment = null;

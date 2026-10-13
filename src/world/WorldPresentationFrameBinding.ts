@@ -1,6 +1,7 @@
 import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 import { FireControlRenderer, type FireControlOriginalVisual } from '../effects/fireControl/FireControlRenderer';
 import type { FireControlSnapshot } from '../systems/fireControl/FireControlSnapshot';
+import type { FireControlCopyShotSource } from '../projectile/ProjectilePresentationRuntime';
 import type { WorldSunlightPresentation } from '../effects/sunlight/WorldSunlightPresentation';
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import type { GroundFogSystem } from '../effects/groundFog/GroundFogSystem';
@@ -243,6 +244,7 @@ export function resetWorldCameraBase(scene: Phaser.Scene): void {
 
 export class WorldPresentationFrameBinding {
   private fireControl: FireControlRenderer | null = null;
+  private releaseFireControlCopyShots: (() => void) | null = null;
   private fireControlPorts: {
     snapshot: FireControlSnapshotSource;
     original: (id: number) => FireControlOriginalVisual | undefined;
@@ -250,11 +252,13 @@ export class WorldPresentationFrameBinding {
 
   /** Bound once by World composition; the frame owner releases all filters, sprites and lights. */
   bindFireControl(snapshot: FireControlSnapshotSource,
-    original: (id: number) => FireControlOriginalVisual | undefined): void {
+    original: (id: number) => FireControlOriginalVisual | undefined,
+    shots: FireControlCopyShotSource): void {
     if (this.destroyed) return;
     if (this.fireControlPorts) throw new Error('Fire control presentation is already bound');
     this.fireControlPorts = { snapshot, original };
     if (this.input.getLocalWorldPresentation().required) this.createFireControl();
+    this.releaseFireControlCopyShots = shots.bindFireControlCopyShots(id => this.fireControl?.onShot(id));
   }
 
   private createFireControl(): void {
@@ -871,6 +875,7 @@ export class WorldPresentationFrameBinding {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.releaseFireControlCopyShots?.(); this.releaseFireControlCopyShots = null;
     this.fireControl?.destroy(); this.fireControl = null;
     this.fireControlPorts = null;
     this.cancelRenderRelease();

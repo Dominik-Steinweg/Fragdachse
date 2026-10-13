@@ -4,10 +4,11 @@ import { describe, expect, it, vi } from 'vitest';
 import EventEmitter from 'eventemitter3';
 
 vi.mock('../../src/effects/fireControl/FireControlRenderer', () => ({
-  FireControlRenderer: vi.fn(function () { return { update: vi.fn(), destroy: vi.fn() }; }),
+  FireControlRenderer: vi.fn(function () { return { update: vi.fn(), onShot: vi.fn(), destroy: vi.fn() }; }),
 }));
 import { FireControlRenderer } from '../../src/effects/fireControl/FireControlRenderer';
 import { EMPTY_FIRE_CONTROL_SNAPSHOT } from '../../src/systems/fireControl/FireControlSnapshot';
+import { ProjectilePresentationRuntime } from '../../src/projectile/ProjectilePresentationRuntime';
 
 vi.mock('phaser', async () => {
   const { createFakePhaserModule } = await import('../fakeArenaRenderScene');
@@ -196,19 +197,34 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     const snapshot = { deployments: [] };
     const source = vi.fn(() => snapshot);
     const original = vi.fn();
+    const shots = new ProjectilePresentationRuntime(input.scene);
+    const releaseShots = vi.fn();
+    const bindShots = shots.bindFireControlCopyShots.bind(shots);
+    vi.spyOn(shots, 'bindFireControlCopyShots').mockImplementation(sink => {
+      const release = bindShots(sink);
+      return () => { releaseShots(); release(); };
+    });
+    const fire = () => shots.createSpawnFeedback(1, 0, 0, 0, 0, 0, 'owner',
+      { turretVisualId: 'fc-copy:1:0', speed: 100 } as never);
     const first = runtime();
     const frame = new WorldPresentationFrameBinding(input);
     first.bindPresentationFrame(frame);
-    frame.bindFireControl(source, original);
+    frame.bindFireControl(source, original, shots);
     const renderer = vi.mocked(FireControlRenderer).mock.results.at(-1)!.value;
     expect(FireControlRenderer).toHaveBeenLastCalledWith(input.scene, original, 'A', input.lighting);
     first.setPresentation(presentationBinding(() => expect(renderer.destroy).toHaveBeenCalledOnce()));
     frame.syncWorldLighting(true, false); // World without Activity.
     expect(source).toHaveBeenCalledExactlyOnceWith(12345);
     expect(renderer.update).toHaveBeenCalledExactlyOnceWith(snapshot, 12345);
+    fire();
+    expect(renderer.onShot).toHaveBeenCalledExactlyOnceWith('fc-copy:1:0');
+    first.releasePresentation();
+    expect(releaseShots).toHaveBeenCalledOnce();
+    fire();
+    expect(renderer.onShot).toHaveBeenCalledOnce();
     first.destroy();
     frame.syncWorldLighting(true, false);
-    frame.bindFireControl(source, original);
+    frame.bindFireControl(source, original, shots);
     frame.destroy();
     expect(renderer.destroy).toHaveBeenCalledOnce();
     expect(source).toHaveBeenCalledOnce();
@@ -216,12 +232,19 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     const second = runtime();
     const nextFrame = new WorldPresentationFrameBinding(input);
     second.bindPresentationFrame(nextFrame);
-    nextFrame.bindFireControl(() => EMPTY_FIRE_CONTROL_SNAPSHOT, original);
+    nextFrame.bindFireControl(() => EMPTY_FIRE_CONTROL_SNAPSHOT, original, shots);
     const nextRenderer = vi.mocked(FireControlRenderer).mock.results.at(-1)!.value;
     expect(nextRenderer).not.toBe(renderer);
     nextFrame.syncWorldLighting(true, false);
     expect(nextRenderer.update).toHaveBeenCalledExactlyOnceWith(EMPTY_FIRE_CONTROL_SNAPSHOT, 12345);
+    frame.destroy();
+    fire();
+    expect(nextRenderer.onShot).toHaveBeenCalledExactlyOnceWith('fc-copy:1:0');
+    expect(renderer.onShot).toHaveBeenCalledOnce();
     second.destroy();
+    fire();
+    expect(releaseShots).toHaveBeenCalledTimes(2);
+    expect(nextRenderer.onShot).toHaveBeenCalledOnce();
     expect(nextRenderer.destroy).toHaveBeenCalledOnce();
   });
 
@@ -230,15 +253,22 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     Object.assign(input.lighting, { getArtificialLightFactor: () => 0, update: vi.fn() });
     const frame = new WorldPresentationFrameBinding(input);
     const source = vi.fn(() => EMPTY_FIRE_CONTROL_SNAPSHOT);
-    frame.bindFireControl(source, () => undefined);
+    const shots = new ProjectilePresentationRuntime(input.scene);
+    const fire = () => shots.createSpawnFeedback(1, 0, 0, 0, 0, 0, 'owner',
+      { turretVisualId: 'fc-copy:1:0', speed: 100 } as never);
+    frame.bindFireControl(source, () => undefined, shots);
     const renderer = vi.mocked(FireControlRenderer).mock.results.at(-1)!.value;
     frame.syncWorldLighting(false, false);
     expect(renderer.destroy).toHaveBeenCalledOnce();
     expect(source).not.toHaveBeenCalled();
+    fire();
+    expect(renderer.onShot).not.toHaveBeenCalled();
     frame.syncWorldLighting(true, false);
     const resumed = vi.mocked(FireControlRenderer).mock.results.at(-1)!.value;
     expect(resumed).not.toBe(renderer);
     expect(resumed.update).toHaveBeenCalledWith(EMPTY_FIRE_CONTROL_SNAPSHOT, 0);
+    fire();
+    expect(resumed.onShot).toHaveBeenCalledExactlyOnceWith('fc-copy:1:0');
     frame.destroy();
     expect(resumed.destroy).toHaveBeenCalledOnce();
   });

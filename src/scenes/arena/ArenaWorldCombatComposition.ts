@@ -377,6 +377,7 @@ export function composeWorldCombatGameplay(
   worldRuntime.presentationFrame?.bindFireControl(
     () => bridge.getFireControlSnapshot(),
     id => rockVisualHelper.getTurretOriginalVisual(id),
+    projectileRuntime.getPresentationRuntime(),
   );
 }
 

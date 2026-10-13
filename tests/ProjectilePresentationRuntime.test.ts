@@ -166,10 +166,14 @@ describe('ProjectilePresentationRuntime', () => {
     runtime.releaseWorldPresentation();
     expect(renderer.destroyAll).toHaveBeenCalled();
   });
-  it.each([undefined, 'fc-copy:1:0'])('animates the firing sprite (%s) with fallback, but not baselines or refreshes', turretVisualId => {
+  it.each([undefined, 'other-visual', 'fc-copy:1:0'])('routes each new turret shot (%s), excluding baselines and refreshes', turretVisualId => {
     const runtime = new ProjectilePresentationRuntime({} as never);
     const replica = new ProjectileClientReplica();
     const turretAnimations = { onShot: vi.fn() };
+    const copyShot = vi.fn();
+    runtime.bindFireControlCopyShots(copyShot);
+    const onShot = turretVisualId === 'fc-copy:1:0' ? copyShot : turretAnimations.onShot;
+    const unused = turretVisualId === 'fc-copy:1:0' ? turretAnimations.onShot : copyShot;
     const renderer = { ...passiveRenderer(), sync: vi.fn(), retain: vi.fn() };
     const renderers = { ...Object.fromEntries(['bullet', 'projectileBurn', 'flame', 'leafBlower', 'bfg',
       'energyBall', 'hydra', 'gauss', 'holyGrenade', 'rocket', 'fireball', 'spore', 'grenade',
@@ -178,19 +182,46 @@ describe('ProjectilePresentationRuntime', () => {
     const old = projectile({ sourceTurretId: 'base:rocket', turretVisualId });
     runtime.presentClientFrame(replica.sync([old], 1000));
     expect(turretAnimations.onShot).not.toHaveBeenCalled();
+    expect(copyShot).not.toHaveBeenCalled();
     const fresh = projectile({ id: 8, sourceTurretId: 'base:rocket', turretVisualId });
-    const batch = [old, fresh, projectile({ id: 9, sourceTurretId: '7', suppressSpawnFx: true })];
+    const batch = [old, fresh, { ...fresh, id: 12 },
+      { ...fresh, id: 9, suppressSpawnFx: true },
+      { ...fresh, id: 13, flightPath: { timeMs: 0, ended: true, points: [] } }];
     runtime.presentClientFrame(replica.sync(batch, 1050));
     runtime.presentClientFrame(replica.sync(batch, 1100));
-    expect(turretAnimations.onShot).toHaveBeenCalledExactlyOnceWith(turretVisualId ?? 'base:rocket');
+    expect(onShot).toHaveBeenCalledExactlyOnceWith(turretVisualId ?? 'base:rocket');
     runtime.createSpawnFeedback(10, 0, 0, 0, 0, 0, 'owner', { sourceTurretId: '7', turretVisualId, speed: 100 } as never);
-    expect(turretAnimations.onShot).toHaveBeenLastCalledWith(turretVisualId ?? '7');
+    expect(onShot).toHaveBeenLastCalledWith(turretVisualId ?? '7');
     runtime.createSpawnFeedback(11, 0, 0, 0, 0, 0, 'owner', { sourceTurretId: '7', turretVisualId, suppressSpawnFx: true } as never);
-    expect(turretAnimations.onShot).toHaveBeenCalledTimes(2);
+    runtime.syncHostRenderers([fresh], 1150);
+    runtime.syncHostRenderers([fresh], 1200);
+    expect(onShot).toHaveBeenCalledTimes(2);
+    const later = { ...fresh, id: 14 };
+    runtime.presentClientFrame(replica.sync([...batch, later], 1250));
+    expect(onShot).toHaveBeenCalledTimes(3);
+    expect(unused).not.toHaveBeenCalled();
     runtime.releaseWorldPresentation();
     runtime.bindRenderers(renderers as never, null);
+    runtime.bindFireControlCopyShots(copyShot);
     runtime.presentClientFrame(new ProjectileClientReplica().sync([fresh], 2000));
-    expect(turretAnimations.onShot).toHaveBeenCalledTimes(2);
+    expect(onShot).toHaveBeenCalledTimes(3);
+    expect(unused).not.toHaveBeenCalled();
+  });
+
+  it('releases copy-shot subscriptions without detaching a newer binding', () => {
+    const runtime = new ProjectilePresentationRuntime({} as never);
+    const first = vi.fn(), next = vi.fn();
+    const release = runtime.bindFireControlCopyShots(first);
+    runtime.bindFireControlCopyShots(next);
+    release(); release();
+    const fire = () => runtime.createSpawnFeedback(1, 0, 0, 0, 0, 0, 'owner',
+      { turretVisualId: 'fc-copy:1:0', speed: 100 } as never);
+    fire();
+    expect(first).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledExactlyOnceWith('fc-copy:1:0');
+    runtime.releaseWorldPresentation();
+    fire();
+    expect(next).toHaveBeenCalledOnce();
   });
 
   it('buffers heads and trails together and preserves the cursor when terminal history arrives late', () => {
