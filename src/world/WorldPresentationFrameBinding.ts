@@ -1,4 +1,6 @@
 import { loadingTimeline } from '../diagnostics/LoadingTimeline';
+import { FireControlRenderer, type FireControlOriginalVisual } from '../effects/fireControl/FireControlRenderer';
+import type { FireControlSnapshot } from '../systems/fireControl/FireControlSnapshot';
 import type { WorldSunlightPresentation } from '../effects/sunlight/WorldSunlightPresentation';
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import type { GroundFogSystem } from '../effects/groundFog/GroundFogSystem';
@@ -70,6 +72,8 @@ import {
 } from '../persistentBase/PersistentBasePresentation';
 
 const TRAIN_LIGHT_SIDES = [-1, 1] as const;
+
+export type FireControlSnapshotSource = (now: number) => FireControlSnapshot;
 
 export interface WorldPresentationPersistentBaseVisuals {
   sync(site: WorldPersistentBaseSite | null, metrics: WorldMetrics | null, showOverlay: boolean): void;
@@ -238,6 +242,40 @@ export function resetWorldCameraBase(scene: Phaser.Scene): void {
 }
 
 export class WorldPresentationFrameBinding {
+  private fireControl: FireControlRenderer | null = null;
+  private fireControlPorts: {
+    snapshot: FireControlSnapshotSource;
+    original: (id: number) => FireControlOriginalVisual | undefined;
+  } | null = null;
+
+  /** Bound once by World composition; the frame owner releases all filters, sprites and lights. */
+  bindFireControl(snapshot: FireControlSnapshotSource,
+    original: (id: number) => FireControlOriginalVisual | undefined): void {
+    if (this.destroyed) return;
+    if (this.fireControlPorts) throw new Error('Fire control presentation is already bound');
+    this.fireControlPorts = { snapshot, original };
+    if (this.input.getLocalWorldPresentation().required) this.createFireControl();
+  }
+
+  private createFireControl(): void {
+    if (!this.fireControlPorts || this.fireControl) return;
+    this.fireControl = new FireControlRenderer(this.input.scene, this.fireControlPorts.original,
+      'A', this.input.lighting);
+  }
+
+  private syncFireControl(showWorld: boolean): void {
+    if (!showWorld || !this.input.getLocalWorldPresentation().required) {
+      // An empty snapshot fades removed copies; presentation loss must release them immediately.
+      this.fireControl?.destroy();
+      this.fireControl = null;
+      return;
+    }
+    this.createFireControl();
+    if (!this.fireControl || !this.fireControlPorts) return;
+    const now = this.input.getSynchronizedNow();
+    this.fireControl.update(this.fireControlPorts.snapshot(now), now);
+  }
+
   private presentationTimeMs=0;
   private sunlightOwner: WorldSunlightPresentation | null = null;
   get sunlight(): WorldSunlightPresentation | null { return this.sunlightOwner; }
@@ -766,6 +804,7 @@ export class WorldPresentationFrameBinding {
   /** Synchronisiert World-Lichtquellen und komponiert die aktuelle Lightmap. */
   syncWorldLighting(inArena: boolean, inRoundWorld: boolean): void {
     if (this.destroyed) return;
+    this.syncFireControl(inArena);
     const lighting = this.input.lighting;
     const artificialFactor = inArena ? lighting.getArtificialLightFactor() : 0;
     const artificialLights = artificialFactor > 0;
@@ -832,6 +871,8 @@ export class WorldPresentationFrameBinding {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.fireControl?.destroy(); this.fireControl = null;
+    this.fireControlPorts = null;
     this.cancelRenderRelease();
     this.releasedView = null;
     this.sunlightOwner?.destroy();this.sunlightOwner=null;

@@ -3,6 +3,12 @@ import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import EventEmitter from 'eventemitter3';
 
+vi.mock('../../src/effects/fireControl/FireControlRenderer', () => ({
+  FireControlRenderer: vi.fn(function () { return { update: vi.fn(), destroy: vi.fn() }; }),
+}));
+import { FireControlRenderer } from '../../src/effects/fireControl/FireControlRenderer';
+import { EMPTY_FIRE_CONTROL_SNAPSHOT } from '../../src/systems/fireControl/FireControlSnapshot';
+
 vi.mock('phaser', async () => {
   const { createFakePhaserModule } = await import('../fakeArenaRenderScene');
   const fake = createFakePhaserModule();
@@ -184,6 +190,59 @@ function fakeBindingInput(
 }
 
 describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalten (Phase 6A.2/6B)', () => {
+  it('owns one fire-control renderer per World and stops stale frames before handing off presentation', () => {
+    const input = fakeBindingInput(fakeScene(), { getSynchronizedNow: () => 12345 });
+    Object.assign(input.lighting, { getArtificialLightFactor: () => 0, update: vi.fn() });
+    const snapshot = { deployments: [] };
+    const source = vi.fn(() => snapshot);
+    const original = vi.fn();
+    const first = runtime();
+    const frame = new WorldPresentationFrameBinding(input);
+    first.bindPresentationFrame(frame);
+    frame.bindFireControl(source, original);
+    const renderer = vi.mocked(FireControlRenderer).mock.results.at(-1)!.value;
+    expect(FireControlRenderer).toHaveBeenLastCalledWith(input.scene, original, 'A', input.lighting);
+    first.setPresentation(presentationBinding(() => expect(renderer.destroy).toHaveBeenCalledOnce()));
+    frame.syncWorldLighting(true, false); // World without Activity.
+    expect(source).toHaveBeenCalledExactlyOnceWith(12345);
+    expect(renderer.update).toHaveBeenCalledExactlyOnceWith(snapshot, 12345);
+    first.destroy();
+    frame.syncWorldLighting(true, false);
+    frame.bindFireControl(source, original);
+    frame.destroy();
+    expect(renderer.destroy).toHaveBeenCalledOnce();
+    expect(source).toHaveBeenCalledOnce();
+
+    const second = runtime();
+    const nextFrame = new WorldPresentationFrameBinding(input);
+    second.bindPresentationFrame(nextFrame);
+    nextFrame.bindFireControl(() => EMPTY_FIRE_CONTROL_SNAPSHOT, original);
+    const nextRenderer = vi.mocked(FireControlRenderer).mock.results.at(-1)!.value;
+    expect(nextRenderer).not.toBe(renderer);
+    nextFrame.syncWorldLighting(true, false);
+    expect(nextRenderer.update).toHaveBeenCalledExactlyOnceWith(EMPTY_FIRE_CONTROL_SNAPSHOT, 12345);
+    second.destroy();
+    expect(nextRenderer.destroy).toHaveBeenCalledOnce();
+  });
+
+  it('releases fire-control visuals immediately when hidden and resumes with the current snapshot', () => {
+    const input = fakeBindingInput(fakeScene());
+    Object.assign(input.lighting, { getArtificialLightFactor: () => 0, update: vi.fn() });
+    const frame = new WorldPresentationFrameBinding(input);
+    const source = vi.fn(() => EMPTY_FIRE_CONTROL_SNAPSHOT);
+    frame.bindFireControl(source, () => undefined);
+    const renderer = vi.mocked(FireControlRenderer).mock.results.at(-1)!.value;
+    frame.syncWorldLighting(false, false);
+    expect(renderer.destroy).toHaveBeenCalledOnce();
+    expect(source).not.toHaveBeenCalled();
+    frame.syncWorldLighting(true, false);
+    const resumed = vi.mocked(FireControlRenderer).mock.results.at(-1)!.value;
+    expect(resumed).not.toBe(renderer);
+    expect(resumed.update).toHaveBeenCalledWith(EMPTY_FIRE_CONTROL_SNAPSHOT, 0);
+    frame.destroy();
+    expect(resumed.destroy).toHaveBeenCalledOnce();
+  });
+
   it('releases a complete preview only after rendering; cancels new work, view changes and stale owners', () => {
     const camera = fakeCamera(), events = new EventEmitter(), gameEvents = new EventEmitter();
     const scene = Object.assign(fakeScene(camera), { events, game: { events: gameEvents } });

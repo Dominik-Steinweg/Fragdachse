@@ -1,4 +1,5 @@
 import { normalizeConstructionId } from '../../config/coopDefenseConstructions';
+import { EMPTY_FIRE_CONTROL_SNAPSHOT } from '../../systems/fireControl/FireControlSnapshot';
 import { CombatProjectileQueryAdapter } from '../../combat/CombatProjectileQueryAdapter';
 import { bridge } from '../../network/bridge';
 import { EnergyShieldSystem } from '../../systems/EnergyShieldSystem';
@@ -369,6 +370,13 @@ export function composeWorldCombatGameplay(
   });
   gameplay.combat = combatGameplayBinding;
   worldRuntime.bind(combatGameplayBinding);
+  worldRuntime.presentationFrame?.bindFireControl(
+    bridge.isHost()
+      ? now => combatGameplayBinding.getFireControlSnapshot(now)
+      // Replication package: replace only this client source with the replicated getter.
+      : () => EMPTY_FIRE_CONTROL_SNAPSHOT,
+    id => rockVisualHelper.getTurretOriginalVisual(id),
+  );
 }
 
 function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): number {

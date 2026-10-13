@@ -253,12 +253,25 @@ describe('RockVisualHelper client snapshot materialization', () => {
     Object.assign(turret, { kind: 'turret', constructionId: 'spore_turret', turretWeaponId: 'TURRET_SPORES' });
     f.helper.materializePlaceableRock(turret, false);
     expect(f.turretObjects.some(image => image.active && image.key === 'turret_weapon_spore')).toBe(true);
+    const original = f.helper.getTurretOriginalVisual(turret.id)!;
+    expect(original.sprite).toBe(f.turretObjects.find(image => image.key === 'turret_weapon_spore'));
+    expect(original).toMatchObject(f.helper.gridToWorld(turret.gridX, turret.gridY));
+    expect(f.helper.getTurretOriginalVisual(999)).toBeUndefined();
+    turret.gridX += 2;
+    f.helper.createOrUpdateTurretVisual(turret);
+    expect(f.helper.getTurretOriginalVisual(turret.id)).toMatchObject({
+      sprite: original.sprite, ...f.helper.gridToWorld(turret.gridX, turret.gridY),
+    });
 
     // Reproduce an obsolete turret projection attached to a station's runtime ID.
     const station: SyncedPlaceableRock = { ...turret, kind: 'drone_station',
       constructionId: 'attack_drone_station', turretWeaponId: undefined };
     f.helper.removePlaceableRockVisual(station, false);
     expect(f.turretObjects.every(image => !image.active)).toBe(true);
+    expect(f.helper.getTurretOriginalVisual(turret.id)).toBeUndefined();
+    f.helper.createOrUpdateTurretVisual(turret);
+    expect(f.helper.getTurretOriginalVisual(turret.id)!.sprite).not.toBe(original.sprite);
+    f.helper.destroyAllTurretVisuals();
   });
 
   it('sounds only confirmed new placements, never initial snapshots, restoration or repeated materialization', () => {
