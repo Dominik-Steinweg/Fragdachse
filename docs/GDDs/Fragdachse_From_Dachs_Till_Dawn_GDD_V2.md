@@ -167,6 +167,10 @@ Loadout-Commit (`coopDefenseEntitlements`) zum Host. Die Preise sind per Simulat
 | D-27 | 2026-10-13 (M1) | Ansagen nur nachts: Tagesdruck und Site-Angriffe sind still (Encounter-Feld `announce: false`), gezählt werden die vier Nachtwellen als Gruppen (`announce.group`, letzte als „FINALE“). Zeit erscheint als Rundenzeit und Phasenkarte; das Hauptziel nennt nur das Ende („bis 06:15“). Aktive Wracks behalten ihre Farben, Treffer zeigen einen kurzen Flash. | ja |
 | D-28 | 2026-10-13 (M2) | Händlervertrag: Katalog `merchant.json` (vier Bereiche, IDs `repair-drones`, `scrap-magnet`, Zweige aus `upgradeBranches.json`, Boss-Punkt-Preisliste mit Kaufgrenze), Item-Angebot pro Runde persistiert (`dawn.shopOffer`), Gast-Entitlements im Loadout-Commit; Nekromantie-Forschung v0 250 Schrott (früh, D-17). | ja |
 | D-29 | 2026-10-13 (M2) | Kalibrierte Kosten aus der Economy-Simulation: Expansion 80/300/600/1.000/2.650/3.750/6.100/8.800/13.200, Nekromantie-Forschung 100 (statt 250, sonst erst Runde 8), Infrastruktur und Boss-Punkte rund 60 % der v0-Preise, Ausrüstung etwa zwei Drittel. Site-Belohnungen und Threat-Kurven unverändert. | ja |
+| D-30 | 2026-10-13 (G2, User) | Händler-Button und Lobby-Stand bleiben vor Map 20 als Ausblick sichtbar; Käufe erst mit Freischaltung. | ja |
+| D-31 | 2026-10-13 (G2, User) | Der Rekalibrierungskern würfelt alle Affixe eines Items neu (Slot, Seltenheit, Level, Grundwert bleiben). | ja |
+| D-32 | 2026-10-13 (G2, User) | Reparaturdrohnen wirken nur nach einem Sieg. Heilen im Kampf kommt später als eigenes Infrastruktur-Upgrade „Feldreparatur“ (Backlog). | ja |
+| D-33 | 2026-10-13 (G1, User) | G1-Spieltest: Sites sind auffindbar, Nacht-Dunkelheit und Economy passen vorerst. M3 korrigiert: Tag und Nacht deutlich schwerer (Anker Threat 1 ≈ Kampagnen-Maps 18–20, Eskalation über Komposition), Lichtung offener, Wracks/Extraktor nachts beleuchtet, einheitliches GPU-Marker-System für alle Marker inkl. Kampagne. | ja |
 
 ## 11. Offene Fragen für Gate G0 (an G0 beantwortet, siehe D-15 … D-19)
 
