@@ -75,6 +75,18 @@ daraus. Zeitpläne liegen in `src/config/dawn/schedules.json`.
   Elite-Wrack.
 - Sites schließen in der Dämmerung; ein Schrottscanner (M3) zeigt seltene, versteckte Sites.
 
+## 6a. M3-Inhalte (Vertrag)
+
+- **Archetypen** (IDs in `src/dawn/contracts/DawnContentIds.ts`): Wrack (zerstören, Varianten Drohne/Traktor/Lore),
+  Extraktor (halten), Brutnest (feindlicher Spawner, zerstören; spawnt bis zur Zerstörung), Versorgung (Kiste aus der
+  Kapsel zur Basis tragen), Schrotthaufen (verstreute Funde einsammeln), Schrottsammler (fliehender Gegner, Beute beim Abschuss).
+- **Versteckte Sites** (`hidden`) zeigen ohne Schrottscanner (Infrastruktur `scrap-scanner`) keine Navigationsmarker.
+- **Nacht-Modifikatoren** (`nightModifierId` im Activity-Plan): Blutmond, Nebelnacht, Bombernacht, Brandnacht; Chance steigt
+  mit dem Threat, Wirkung über Komposition und Umgebung, Optik nach SELECTION.md.
+- **Elites:** Der Host vergibt beim Spawn Affixe (flink, gepanzert, explosiv, regenerierend, schildend); der Gegner-Snapshot
+  trägt nur die Affix-ID. Lesbarkeit: dezenter Bodenring plus Affix-Glyphe über dem Kopf, Form vor Farbe.
+- **Lobby-Ausbau:** Die LobbyWorld trägt die volle Dawn-Basis bis Radius 15 (Stufe 11).
+
 ## 7. Economy-Modell (in M2 per Simulation kalibriert)
 
 Die Simulation `src/dawn/economy/DawnEconomySimulation.ts` (Balance-Lab-Test `DawnEconomySimulation`, Bericht
@@ -171,6 +183,10 @@ Loadout-Commit (`coopDefenseEntitlements`) zum Host. Die Preise sind per Simulat
 | D-31 | 2026-10-13 (G2, User) | Der Rekalibrierungskern würfelt alle Affixe eines Items neu (Slot, Seltenheit, Level, Grundwert bleiben). | ja |
 | D-32 | 2026-10-13 (G2, User) | Reparaturdrohnen wirken nur nach einem Sieg. Heilen im Kampf kommt später als eigenes Infrastruktur-Upgrade „Feldreparatur“ (Backlog). | ja |
 | D-33 | 2026-10-13 (G1, User) | G1-Spieltest: Sites sind auffindbar, Nacht-Dunkelheit und Economy passen vorerst. M3 korrigiert: Tag und Nacht deutlich schwerer (Anker Threat 1 ≈ Kampagnen-Maps 18–20, Eskalation über Komposition), Lichtung offener, Wracks/Extraktor nachts beleuchtet, einheitliches GPU-Marker-System für alle Marker inkl. Kampagne. | ja |
+| D-34 | 2026-10-13 (M3) | Site-Archetypen M3: Brutnest (Spawner), Versorgung (Carry zur Basis), Schrotthaufen (verstreute Funde), Schrottsammler (fliehender Gegner); Wrack-Varianten Traktor/Lore als Plan-Feld `variant`; versteckte Sites (`hidden`) nur mit Schrottscanner markiert. | ja |
+| D-35 | 2026-10-13 (M3) | Nacht-Modifikatoren Blutmond/Nebel/Bomber/Brand als Activity-Plan-Feld `nightModifierId`; keiner bei niedrigem Threat, Chance steigend. | ja |
+| D-36 | 2026-10-13 (M3) | Elite-System: Host vergibt Affixe beim Spawn (Chance je Threat), Snapshot trägt nur `eliteAffixId`; Lesbarkeit über Bodenring + Affix-Glyphe (SELECTION.md). | ja |
+| D-37 | 2026-10-13 (M3) | Lobby-Ausbau: LobbyWorld trägt die Dawn-Basis bis Stufe 11 (Radius 15); Händlerstand außerhalb der neuen Reservierung. | ja |
 
 ## 11. Offene Fragen für Gate G0 (an G0 beantwortet, siehe D-15 … D-19)
 

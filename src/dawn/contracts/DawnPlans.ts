@@ -40,6 +40,10 @@ export interface DawnSitePlan {
   readonly slotId: string;
   readonly archetypeId: string;
   readonly tier: number;
+  /** Visuelle Variante des Archetyps (z. B. Wrack `tractor`); fehlt = Standardvariante. */
+  readonly variant?: string;
+  /** Versteckte Site: ohne Schrottscanner des Hosts keine Navigationsmarker. */
+  readonly hidden?: true;
 }
 
 /**
@@ -59,6 +63,8 @@ export interface DawnActivityPlan {
   readonly dayNumber: number;
   readonly scheduleId: string;
   readonly waves: readonly DawnWavePlan[];
+  /** Nacht-Modifikator der Runde (z. B. `blood-moon`); fehlt = normale Nacht. */
+  readonly nightModifierId?: string;
 }
 
 export function isDawnContentHash(value: unknown): value is string {
@@ -91,7 +97,13 @@ function parseDawnSitePlan(raw: unknown): DawnSitePlan | null {
   if (!isRecord(raw)) return null;
   if (!isDawnPlanId(raw.slotId) || !isDawnPlanId(raw.archetypeId)) return null;
   if (!isIntegerInRange(raw.tier, 1, DAWN_MAX_SITE_TIER)) return null;
-  return { slotId: raw.slotId, archetypeId: raw.archetypeId, tier: raw.tier };
+  if (raw.variant !== undefined && !isDawnPlanId(raw.variant)) return null;
+  if (raw.hidden !== undefined && raw.hidden !== true) return null;
+  return {
+    slotId: raw.slotId, archetypeId: raw.archetypeId, tier: raw.tier,
+    ...(raw.variant === undefined ? {} : { variant: raw.variant }),
+    ...(raw.hidden === true ? { hidden: true as const } : {}),
+  };
 }
 
 /** Netzwerkgrenze: ungueltige Plaene werden vollstaendig verworfen. */
@@ -103,6 +115,7 @@ export function parseDawnActivityPlan(raw: unknown): DawnActivityPlan | null {
   if (!isIntegerInRange(raw.dayNumber, 1, Number.MAX_SAFE_INTEGER)) return null;
   if (!isDawnPlanId(raw.scheduleId)) return null;
   if (!Array.isArray(raw.waves) || raw.waves.length > MAX_WAVES) return null;
+  if (raw.nightModifierId !== undefined && !isDawnPlanId(raw.nightModifierId)) return null;
   const waves: DawnWavePlan[] = [];
   const waveIds = new Set<string>();
   for (const candidate of raw.waves) {
@@ -118,6 +131,7 @@ export function parseDawnActivityPlan(raw: unknown): DawnActivityPlan | null {
     dayNumber: raw.dayNumber,
     scheduleId: raw.scheduleId,
     waves,
+    ...(raw.nightModifierId === undefined ? {} : { nightModifierId: raw.nightModifierId }),
   };
 }
 
