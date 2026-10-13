@@ -121,6 +121,7 @@ export interface WorldTerrainDefinition {
   readonly water?: readonly import('../../types').WaterCell[];
   readonly rockFillRatio?: number;
   readonly treeCount?: number;
+  readonly treeGroves?: import('../coopDefenseMapAuthoring').CoopDefenseMapTreeGrovesConfig;
   readonly rockField?: CoopDefenseMapRockFieldConfig;
   readonly rockWalls?: readonly CoopDefenseMapRockWallConfig[];
   /** Garantiert freie Lichtungen um Salvage-Sites; ihre ID ist die Site-ID. */

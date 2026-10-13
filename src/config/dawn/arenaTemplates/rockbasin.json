@@ -1,0 +1,293 @@
+{
+  "id": "rockbasin",
+  "world": {
+    "arenaWidthCells": 120,
+    "arenaHeightCells": 84,
+    "rockFillRatio": 0.61,
+    "treeCount": 0,
+    "timeOfDay": "10:00",
+    "trackMode": "none",
+    "persistentBase": {
+      "baseId": "dawn-core",
+      "maxAreaStage": 11,
+      "anchor": { "gridX": 60, "gridY": 42 }
+    },
+    "rockField": {
+      "fillMode": "organic",
+      "corridorRadiusCells": 2.3,
+      "corridorRadiusVarianceCells": 1.05,
+      "corridorWanderCells": 1.6,
+      "waypointJitterCells": 1.2,
+      "corridors": [
+        {
+          "id": "west-ravine",
+          "radiusCells": 2.5,
+          "points": [
+            { "gridX": 0, "gridY": 32 },
+            { "gridX": 9, "gridY": 36 },
+            { "gridX": 16, "gridY": 32 },
+            { "gridX": 22, "gridY": 39 },
+            { "gridX": 29, "gridY": 37 },
+            { "gridX": 25, "gridY": 34 },
+            { "gridX": 28, "gridY": 32 },
+            { "gridX": 33, "gridY": 34 },
+            { "gridX": 34, "gridY": 38 },
+            { "gridX": 30, "gridY": 42 },
+            { "gridX": 25, "gridY": 40 },
+            { "gridX": 25, "gridY": 34 },
+            { "gridX": 29, "gridY": 37 },
+            { "gridX": 35, "gridY": 43 },
+            { "gridX": 44, "gridY": 40 },
+            { "gridX": 60, "gridY": 42 }
+          ]
+        },
+        {
+          "id": "north-fold",
+          "radiusCells": 2.1,
+          "points": [
+            { "gridX": 44, "gridY": 0 },
+            { "gridX": 39, "gridY": 8 },
+            { "gridX": 29, "gridY": 11 },
+            { "gridX": 27, "gridY": 20 },
+            { "gridX": 31, "gridY": 17 },
+            { "gridX": 28, "gridY": 15 },
+            { "gridX": 23, "gridY": 17 },
+            { "gridX": 22, "gridY": 21 },
+            { "gridX": 26, "gridY": 25 },
+            { "gridX": 31, "gridY": 23 },
+            { "gridX": 31, "gridY": 17 },
+            { "gridX": 27, "gridY": 20 },
+            { "gridX": 36, "gridY": 21 },
+            { "gridX": 40, "gridY": 28 },
+            { "gridX": 36, "gridY": 25 },
+            { "gridX": 39, "gridY": 23 },
+            { "gridX": 44, "gridY": 25 },
+            { "gridX": 45, "gridY": 29 },
+            { "gridX": 41, "gridY": 33 },
+            { "gridX": 36, "gridY": 31 },
+            { "gridX": 36, "gridY": 25 },
+            { "gridX": 40, "gridY": 28 },
+            { "gridX": 50, "gridY": 29 },
+            { "gridX": 60, "gridY": 42 }
+          ]
+        },
+        {
+          "id": "east-switchback",
+          "radiusCells": 2.4,
+          "points": [
+            { "gridX": 119, "gridY": 56 },
+            { "gridX": 108, "gridY": 51 },
+            { "gridX": 107, "gridY": 41 },
+            { "gridX": 97, "gridY": 38 },
+            { "gridX": 90, "gridY": 46 },
+            { "gridX": 94, "gridY": 43 },
+            { "gridX": 91, "gridY": 41 },
+            { "gridX": 86, "gridY": 43 },
+            { "gridX": 85, "gridY": 47 },
+            { "gridX": 89, "gridY": 51 },
+            { "gridX": 94, "gridY": 49 },
+            { "gridX": 94, "gridY": 43 },
+            { "gridX": 90, "gridY": 46 },
+            { "gridX": 82, "gridY": 44 },
+            { "gridX": 78, "gridY": 36 },
+            { "gridX": 60, "gridY": 42 }
+          ]
+        },
+        {
+          "id": "south-rift",
+          "radiusCells": 2.2,
+          "points": [
+            { "gridX": 71, "gridY": 83 },
+            { "gridX": 73, "gridY": 75 },
+            { "gridX": 84, "gridY": 71 },
+            { "gridX": 79, "gridY": 59 },
+            { "gridX": 75, "gridY": 56 },
+            { "gridX": 78, "gridY": 54 },
+            { "gridX": 83, "gridY": 56 },
+            { "gridX": 84, "gridY": 60 },
+            { "gridX": 80, "gridY": 64 },
+            { "gridX": 75, "gridY": 62 },
+            { "gridX": 75, "gridY": 56 },
+            { "gridX": 79, "gridY": 59 },
+            { "gridX": 70, "gridY": 62 },
+            { "gridX": 60, "gridY": 42 }
+          ]
+        },
+        {
+          "id": "high-ledge",
+          "radiusCells": 2.6,
+          "points": [
+            { "gridX": 60, "gridY": 42 },
+            { "gridX": 68, "gridY": 27 },
+            { "gridX": 78, "gridY": 23 },
+            { "gridX": 81, "gridY": 30 },
+            { "gridX": 85, "gridY": 27 },
+            { "gridX": 82, "gridY": 25 },
+            { "gridX": 77, "gridY": 27 },
+            { "gridX": 76, "gridY": 31 },
+            { "gridX": 80, "gridY": 35 },
+            { "gridX": 85, "gridY": 33 },
+            { "gridX": 85, "gridY": 27 },
+            { "gridX": 81, "gridY": 30 },
+            { "gridX": 87, "gridY": 29 },
+            { "gridX": 95, "gridY": 25 },
+            { "gridX": 91, "gridY": 22 },
+            { "gridX": 94, "gridY": 20 },
+            { "gridX": 99, "gridY": 22 },
+            { "gridX": 100, "gridY": 26 },
+            { "gridX": 96, "gridY": 30 },
+            { "gridX": 91, "gridY": 28 },
+            { "gridX": 91, "gridY": 22 },
+            { "gridX": 95, "gridY": 25 },
+            { "gridX": 86, "gridY": 20 },
+            { "gridX": 90, "gridY": 17 },
+            { "gridX": 87, "gridY": 15 },
+            { "gridX": 82, "gridY": 17 },
+            { "gridX": 81, "gridY": 21 },
+            { "gridX": 85, "gridY": 25 },
+            { "gridX": 90, "gridY": 23 },
+            { "gridX": 90, "gridY": 17 },
+            { "gridX": 86, "gridY": 20 },
+            { "gridX": 89, "gridY": 12 },
+            { "gridX": 101, "gridY": 10 }
+          ]
+        },
+        {
+          "id": "lower-ledge",
+          "radiusCells": 2.7,
+          "points": [
+            { "gridX": 17, "gridY": 72 },
+            { "gridX": 25, "gridY": 64 },
+            { "gridX": 21, "gridY": 61 },
+            { "gridX": 24, "gridY": 59 },
+            { "gridX": 29, "gridY": 61 },
+            { "gridX": 30, "gridY": 65 },
+            { "gridX": 26, "gridY": 69 },
+            { "gridX": 21, "gridY": 67 },
+            { "gridX": 21, "gridY": 61 },
+            { "gridX": 25, "gridY": 64 },
+            { "gridX": 24, "gridY": 58 },
+            { "gridX": 29, "gridY": 54 },
+            { "gridX": 33, "gridY": 51 },
+            { "gridX": 30, "gridY": 49 },
+            { "gridX": 25, "gridY": 51 },
+            { "gridX": 24, "gridY": 55 },
+            { "gridX": 28, "gridY": 59 },
+            { "gridX": 33, "gridY": 57 },
+            { "gridX": 33, "gridY": 51 },
+            { "gridX": 29, "gridY": 54 },
+            { "gridX": 37, "gridY": 55 },
+            { "gridX": 43, "gridY": 62 },
+            { "gridX": 39, "gridY": 59 },
+            { "gridX": 42, "gridY": 57 },
+            { "gridX": 47, "gridY": 59 },
+            { "gridX": 48, "gridY": 63 },
+            { "gridX": 44, "gridY": 67 },
+            { "gridX": 39, "gridY": 65 },
+            { "gridX": 39, "gridY": 59 },
+            { "gridX": 43, "gridY": 62 },
+            { "gridX": 53, "gridY": 64 },
+            { "gridX": 60, "gridY": 55 },
+            { "gridX": 70, "gridY": 62 },
+            { "gridX": 79, "gridY": 59 },
+            { "gridX": 85, "gridY": 63 },
+            { "gridX": 94, "gridY": 63 },
+            { "gridX": 98, "gridY": 60 },
+            { "gridX": 95, "gridY": 58 },
+            { "gridX": 90, "gridY": 60 },
+            { "gridX": 89, "gridY": 64 },
+            { "gridX": 93, "gridY": 68 },
+            { "gridX": 98, "gridY": 66 },
+            { "gridX": 98, "gridY": 60 },
+            { "gridX": 94, "gridY": 63 },
+            { "gridX": 99, "gridY": 57 },
+            { "gridX": 98, "gridY": 49 },
+            { "gridX": 90, "gridY": 46 }
+          ]
+        }
+      ]
+    }
+  },
+  "fronts": [
+    "west",
+    "north",
+    "east",
+    "south"
+  ],
+  "salvageBands": {
+    "near": {
+      "minCells": 23,
+      "maxCells": 27
+    },
+    "mid": {
+      "minCells": 29,
+      "maxCells": 35
+    },
+    "far": {
+      "minCells": 37,
+      "maxCells": 45
+    }
+  },
+  "salvageSlots": [
+    {
+      "id": "nw-near",
+      "anchor": { "gridX": 40, "gridY": 28 },
+      "band": "near"
+    },
+    {
+      "id": "nw-mid",
+      "anchor": { "gridX": 29, "gridY": 37 },
+      "band": "mid"
+    },
+    {
+      "id": "nw-far",
+      "anchor": { "gridX": 27, "gridY": 20 },
+      "band": "far"
+    },
+    {
+      "id": "ne-near",
+      "anchor": { "gridX": 81, "gridY": 30 },
+      "band": "near"
+    },
+    {
+      "id": "ne-mid",
+      "anchor": { "gridX": 86, "gridY": 20 },
+      "band": "mid"
+    },
+    {
+      "id": "ne-far",
+      "anchor": { "gridX": 95, "gridY": 25 },
+      "band": "far"
+    },
+    {
+      "id": "se-near",
+      "anchor": { "gridX": 79, "gridY": 59 },
+      "band": "near"
+    },
+    {
+      "id": "se-mid",
+      "anchor": { "gridX": 90, "gridY": 46 },
+      "band": "mid"
+    },
+    {
+      "id": "se-far",
+      "anchor": { "gridX": 94, "gridY": 63 },
+      "band": "far"
+    },
+    {
+      "id": "sw-near",
+      "anchor": { "gridX": 43, "gridY": 62 },
+      "band": "near"
+    },
+    {
+      "id": "sw-mid",
+      "anchor": { "gridX": 29, "gridY": 54 },
+      "band": "mid"
+    },
+    {
+      "id": "sw-far",
+      "anchor": { "gridX": 25, "gridY": 64 },
+      "band": "far"
+    }
+  ]
+}
