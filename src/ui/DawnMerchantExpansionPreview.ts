@@ -6,15 +6,18 @@ import type { ExpansionBoundaryEdge } from '../persistentBase/PersistentBaseExpa
 export function createDawnMerchantExpansionPreview(scene: Phaser.Scene, anchor: number, edges: readonly ExpansionBoundaryEdge[]): Phaser.GameObjects.Graphics {
   const outline = scene.add.graphics().setDepth(9999);
   const origin = (anchor + .5) * CELL_SIZE;
-  outline.lineStyle(2, 0xd5c58c, .6);
-  for (const edge of edges) {
-    // Two short strokes per cell keep the contour dashed at corners as well as on long edges.
-    for (const start of [.08, .58]) {
-      const end = start + .3;
-      outline.lineBetween(origin + (edge.x1 + (edge.x2 - edge.x1) * start) * CELL_SIZE,
-        origin + (edge.y1 + (edge.y2 - edge.y1) * start) * CELL_SIZE,
-        origin + (edge.x1 + (edge.x2 - edge.x1) * end) * CELL_SIZE,
-        origin + (edge.y1 + (edge.y2 - edge.y1) * end) * CELL_SIZE);
+  // A dark under-stroke keeps the bright dashes readable over vegetation, gravel and fog.
+  for (const [width, color, alpha] of [[6, 0x14100a, .55], [3, 0xffe7a3, .95]] as const) {
+    outline.lineStyle(width, color, alpha);
+    for (const edge of edges) {
+      // Two short strokes per cell keep the contour dashed at corners as well as on long edges.
+      for (const start of [.08, .58]) {
+        const end = start + .3;
+        outline.lineBetween(origin + (edge.x1 + (edge.x2 - edge.x1) * start) * CELL_SIZE,
+          origin + (edge.y1 + (edge.y2 - edge.y1) * start) * CELL_SIZE,
+          origin + (edge.x1 + (edge.x2 - edge.x1) * end) * CELL_SIZE,
+          origin + (edge.y1 + (edge.y2 - edge.y1) * end) * CELL_SIZE);
+      }
     }
   }
   return outline;

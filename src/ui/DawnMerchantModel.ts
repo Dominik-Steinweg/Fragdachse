@@ -33,6 +33,8 @@ export function buildDawnInfrastructureModel(progress: DawnProgress, unlocked: b
     const cost = resolveDawnInfrastructureCost(progress, entry.id);
     return { id: entry.id, level, maxLevel: entry.levelPrices.length, cost,
       effectKey: `ui.dawn.infrastructure.${entry.id}.effect${Math.min(level + 1, entry.levelPrices.length)}`,
+      // Below the maximum the line describes the purchasable next level, at the maximum the active one.
+      effectIsNextLevel: level < entry.levelPrices.length,
       canBuy: unlocked && cost !== null && progress.scrap >= cost };
   });
 }

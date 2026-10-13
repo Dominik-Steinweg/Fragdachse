@@ -124,7 +124,7 @@ export class DawnMerchantOverlay {
       case 'infrastructure':
         buildDawnInfrastructureModel(stored.dawn, unlocked).forEach((entry, index) => {
           this.purchaseRow(index, t(`ui.dawn.infrastructure.${entry.id}.name`),
-            `${t('ui.dawn.level', { level: entry.level, max: entry.maxLevel })}\n${t(entry.effectKey)}`,
+            `${t('ui.dawn.level', { level: entry.level, max: entry.maxLevel })}\n${t(entry.effectIsNextLevel ? 'ui.dawn.nextLevelEffect' : 'ui.dawn.activeLevelEffect', { effect: t(entry.effectKey) })}`,
             entry.cost, entry.canBuy, entry.cost === null ? t('ui.dawn.maximal') : t('ui.dawn.buy'),
             () => this.purchaseDawn((draft, allowed) => purchaseDawnInfrastructure(draft, entry.id, allowed)));
         });

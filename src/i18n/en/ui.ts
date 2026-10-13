@@ -9,6 +9,8 @@ export const enUi = {
   "ui.dawn.use": "Use",
   "ui.dawn.maximal": "Maximum",
   "ui.dawn.level": "Level {level} / {max}",
+  "ui.dawn.nextLevelEffect": "Next level: {effect}",
+  "ui.dawn.activeLevelEffect": "Active: {effect}",
   "ui.dawn.infrastructure.repair-drones.name": "Repair drones",
   "ui.dawn.infrastructure.repair-drones.effect1": "Preserve up to 3 destroyed constructions after a Dawn victory.",
   "ui.dawn.infrastructure.repair-drones.effect2": "Preserve up to 8 destroyed constructions after a Dawn victory.",
