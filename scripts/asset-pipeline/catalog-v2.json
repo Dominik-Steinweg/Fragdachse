@@ -5747,6 +5747,164 @@
         "normal": "linear-unorm8-z-oct-normal-v1",
         "emission": "linear-rgb-unorm8-scaled-v1"
       }
+    },
+    {
+      "id": "construction_dawn_dealer_stall",
+      "label": "Dawn Schrotthaendler-Stand",
+      "category": "construction",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-dealer-stall.png",
+      "targetSize": 96,
+      "sourceSizes": [
+        192,
+        384
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Oval mining-cart shop with short drawbar, four visible wheels and a partial striped awning.",
+        "colors": "Weathered petrol paint, rusty rolled rim, warm oak, silver iron and copper.",
+        "anatomy": "96 px centered canvas; approximately 3 by 2 cells occupied. Sorted crates, gears, coils, barrels and a lantern. True overhead; no ground.",
+        "animation": "Static rest pose."
+      },
+      "requiredClips": [],
+      "production": "reference",
+      "recipe": "dawn-dealer-stall",
+      "model": {},
+      "orthoScale": 3.25,
+      "textures": {},
+      "materialVariants": {
+        "standard": {
+          "label": "Worn matte enamel, oak and canvas",
+          "textureStrength": 0,
+          "formShadowStrength": 0.86
+        }
+      },
+      "clips": [],
+      "elevation": { "min": 0, "max": 1.4, "scale": 0.5 },
+      "materialPass": {
+        "version": 1,
+        "color": "srgb-albedo-baked-cavity-v1",
+        "normal": "linear-unorm8-z-oct-normal-v1",
+        "emission": "linear-rgb-unorm8-scaled-v1"
+      }
+    },
+    {
+      "id": "dawn_dealer",
+      "label": "Dawn Haendler-Dachs",
+      "category": "character",
+      "gameIds": [],
+      "reference": "scripts/asset-pipeline/references/dawn-dealer-concept.png",
+      "targetSize": 32,
+      "displayScale": 1.1875,
+      "sourceSizes": [
+        64,
+        128
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Player badger sculpt and rig with fully exposed ivory crown, small forehead goggles, narrow red neckerchief and fitted leather apron.",
+        "colors": "Original ivory head and dark fur, brown leather, small brass/glass goggles and narrow red scarf.",
+        "anatomy": "Unchanged player body and head proportions. Existing grips hold a workshop spanner, no weapon. 32 px base, 38 px display.",
+        "animation": "Three-second quiet breathing idle; no move clip, decorative draft with no runtime binding."
+      },
+      "requiredClips": [
+        "idle"
+      ],
+      "production": "reference",
+      "recipe": "dawn-dealer",
+      "model": {
+        "footSouthOffset": 0.04,
+        "footSpacing": 1.24,
+        "clawedPaws": true,
+        "headSouthOffset": 0.04,
+        "earSouthOffset": 0.055,
+        "fierceEyes": true,
+        "combatFace": true,
+        "cursorFace": true,
+        "eyeSouthOffset": 0.025,
+        "furBase": [
+          0.035,
+          0.047,
+          0.057
+        ],
+        "furTones": [
+          [
+            7,
+            11,
+            17
+          ],
+          [
+            23,
+            29,
+            34
+          ],
+          [
+            47,
+            55,
+            59
+          ],
+          [
+            91,
+            90,
+            82
+          ]
+        ],
+        "paintedFur": true,
+        "contactAODistance": 0.65,
+        "contactAOStrength": 0.9,
+        "headColor": [
+          0.99,
+          0.97,
+          0.9
+        ],
+        "tailColor": [
+          0.73,
+          0.71,
+          0.64
+        ],
+        "footColor": [
+          0.055,
+          0.067,
+          0.075
+        ],
+        "upperBodyMotion": "stable-grip"
+      },
+      "orthoScale": 2.2,
+      "textures": {
+        "organic": "art/poc/pipeline-v2/textures/badger-quiet-fur-v2-j.png",
+        "bodyFur": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
+        "headFur": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
+      },
+      "materialVariants": {
+        "standard": {
+          "label": "Ausgearbeitetes Fell",
+          "textureStrength": 0.7,
+          "formShadowStrength": 1
+        }
+      },
+      "clips": [
+        {
+          "name": "idle",
+          "motion": "player_idle",
+          "frameCount": 24,
+          "frameRate": 8,
+          "loop": true,
+          "parameters": {
+            "chestWidth": 0.023,
+            "chestDepth": 0.025,
+            "chestLift": 0.014,
+            "headFollow": 0.018
+          }
+        }
+      ]
     }
   ]
 }

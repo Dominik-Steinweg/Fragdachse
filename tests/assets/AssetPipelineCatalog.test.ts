@@ -14,6 +14,18 @@ const assets = catalog.assets;
 const sorted = (values: string[]) => [...values].sort();
 
 describe('asset pipeline catalog contracts', () => {
+  it('keeps the decorative dealer unbound and reuses the player anatomy with an idle-only contract', () => {
+    const dealer = assets.find(asset => asset.id === 'dawn_dealer')!;
+    const player = assets.find(asset => asset.id === 'badger')!;
+    const stall = assets.find(asset => asset.id === 'construction_dawn_dealer_stall')!;
+    expect(dealer).toMatchObject({ category: 'character', gameIds: [], targetSize: 32, forward: 'north', pivot: [0.5, 0.5] });
+    expect(dealer.model).toEqual(player.model);
+    expect(dealer.textures).toEqual(player.textures);
+    expect(dealer.requiredClips).toEqual(['idle']);
+    expect(dealer.clips).toHaveLength(1);
+    expect(dealer.clips![0]).toMatchObject({ name: 'idle', motion: 'player_idle', loop: true });
+    expect(stall).toMatchObject({ category: 'construction', gameIds: [], targetSize: 96, pivot: [0.5, 0.5], clips: [] });
+  });
   it('keeps Dawn drafts unbound, tier-parametric and independent of external texture files', () => {
     const dawn = assets.filter(asset => ['dawn-wreck', 'dawn-extractor', 'dawn-scrap'].includes(asset.recipe ?? ''));
     expect(dawn).toHaveLength(7);
@@ -103,7 +115,7 @@ describe('asset pipeline catalog contracts', () => {
       expect(asset.reference).toBe(`public/assets/sprites/enemies/${config.imageKey}.png`);
       expect(config.spriteRotationOffsetDegrees ?? 0).toBe(0);
     }
-    const characters = assets.filter((asset) => asset.category === 'character');
+    const characters = assets.filter((asset) => asset.category === 'character' && asset.gameIds.includes('player'));
     expect(characters).toHaveLength(1);
     expect(characters[0]).toMatchObject({ gameIds: ['player'], targetSize: PLAYER_SIZE, forward: 'north' });
     expect(characters[0].requiredClips).toEqual(expect.arrayContaining(['move', 'idle']));
@@ -147,7 +159,7 @@ describe('asset pipeline catalog contracts', () => {
       expect(asset.orthoScale).toBeGreaterThan(0);
       expect(asset.textures).toBeDefined();
       // Original texture pixels and completed renders are local artifacts, not required in a clean checkout.
-      if (['dawn-wreck', 'dawn-extractor', 'dawn-scrap'].includes(asset.recipe!)) {
+      if (['dawn-wreck', 'dawn-extractor', 'dawn-scrap', 'dawn-dealer-stall'].includes(asset.recipe!)) {
         // These drafts author procedural pigments; no external texture is consumed.
         expect(asset.textures).toEqual({});
       } else {
