@@ -65,6 +65,8 @@
   "assets/sounds/rocketlauncher.ogg": "assets/sounds/rocketlauncher.ogg?v=7ebd75762e408e830a61bbd219b93933e416834e8a34abfe047fe74f44e648bd",
   "assets/sounds/sfx_airstrike_countdown.ogg": "assets/sounds/sfx_airstrike_countdown.ogg?v=36fa194d12d64782f1056dc06e8c643d37c515b59e3433ab29b972bfee511626",
   "assets/sounds/sfx_airstrike_explosion.ogg": "assets/sounds/sfx_airstrike_explosion.ogg?v=fc8ef4af405aeb276e8c0a126779ba655873fe6c79ffbce30b7c5ed84d7bb398",
+  "assets/sounds/sfx_alien_cone_charge.ogg": "assets/sounds/sfx_alien_cone_charge.ogg?v=9f4cbeacd5252baea53de0d2bc4957a77c0c77eb1abbd01f09ae8916e76e03cc",
+  "assets/sounds/sfx_alien_cone_pulse.ogg": "assets/sounds/sfx_alien_cone_pulse.ogg?v=6e68f1e271c9c6922fdbf39a9cbd72b837f6f793f90e07c7c7ae6c3d6f8ed64e",
   "assets/sounds/sfx_bfg_charge.ogg": "assets/sounds/sfx_bfg_charge.ogg?v=9f4cbeacd5252baea53de0d2bc4957a77c0c77eb1abbd01f09ae8916e76e03cc",
   "assets/sounds/sfx_bfg_fly.ogg": "assets/sounds/sfx_bfg_fly.ogg?v=40fbca42c605cb6b8770e5ee443f958c988ce6cb81e0f76b3a4cbbb520d0cd90",
   "assets/sounds/sfx_bfg_laser.ogg": "assets/sounds/sfx_bfg_laser.ogg?v=6ebf3137d541579186fd59749145dfa37ae6cd10ff5b9d9c63f2d45502cb9ba6",

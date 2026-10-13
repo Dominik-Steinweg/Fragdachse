@@ -10,6 +10,7 @@ import { AlienConeGpuLayer } from './gpu/AlienConeGpuLayer';
 import { ALIEN_CONE_KIND, ALIEN_CONE_WAVE_LIFE_S } from './gpu/AlienConeShader';
 import type { EnemySectorAttack } from './EnemyClawRenderer';
 import type { EnergyConeAttack } from '../systems/EnergyConeState';
+import type { GameAudioSystem } from '../audio/GameAudioSystem';
 
 /** Shared enemy-attack danger zone (the same red family as claws and the shield charge lane). */
 export type EnergyConeSectorSink = (id: string, attack: EnemySectorAttack | null, now: number, visible: boolean) => void;
@@ -19,6 +20,8 @@ const MUZZLE_PX = 18;
 /** The danger zone hardens shortly before the impulse, like a claw strike. */
 const STRIKE_LEAD_MS = 160;
 const ALLIED_LIGHT = 0x8affcf;
+/** Late observers stay silent instead of playing a charge or pulse that is mostly over. */
+const SOUND_GRACE_MS = 250;
 
 interface Wave { readonly attack: EnergyConeAttack; readonly allied: boolean; readonly seed: number; readonly key: string }
 
@@ -48,6 +51,9 @@ export class AlienConeRenderer {
   private gpuVfx: GpuVfxSystem | null = null;
   private cameraFeedback: CameraFeedbackController | null = null;
   private sectorSink: EnergyConeSectorSink | null = null;
+  private audio: GameAudioSystem | null = null;
+  /** Attack keys whose charge sound already played, with the time after which they can be forgotten. */
+  private readonly charged = new Map<string, number>();
 
   constructor(private readonly scene: Phaser.Scene) {
     this.layer = new AlienConeGpuLayer(scene);
@@ -62,10 +68,12 @@ export class AlienConeRenderer {
   setCameraFeedback(controller: CameraFeedbackController | null): void { this.cameraFeedback = controller; }
   /** Hostile windups are drawn by the shared enemy danger-zone renderer. */
   setSectorSink(sink: EnergyConeSectorSink | null): void { this.sectorSink = sink; }
+  /** Spatial charge and pulse sounds (placeholder recordings under replaceable keys). */
+  setAudioSystem(audio: GameAudioSystem | null): void { this.audio = audio; }
 
   clear(): void {
     for (const id of this.sunk) this.sectorSink?.(id, null, this.clock(), false);
-    this.sunk.clear(); this.waves.clear();
+    this.sunk.clear(); this.waves.clear(); this.charged.clear();
     this.layer.clear(); this.releaseLights(new Set());
   }
 
@@ -105,6 +113,7 @@ export class AlienConeRenderer {
       const impulsed = state.phase === 'recover' || (state.phase === 'windup' && now >= attack.hitAt);
       if (impulsed && now < attack.hitAt + ALIEN_CONE_WAVE_LIFE_S * 1000 && !this.waves.has(key)) {
         this.waves.set(key, { attack, allied, seed: seedOf(key), key });
+        if (now - attack.hitAt < SOUND_GRACE_MS) this.audio?.playSound('sfx_alien_cone_pulse', attack.originX, attack.originY, enemy.id, allied ? 0.6 : 1);
         // A small, local nudge only: regular cone attacks must not disturb aiming.
         if (!allied && visible(attack)) this.cameraFeedback?.request({ channel: 'impact', amplitudePx: 1.2, durationMs: 110,
           priority: 25, decay: 'impulse', sourceX: attack.originX, sourceY: attack.originY, falloffPx: 520 });
@@ -112,6 +121,10 @@ export class AlienConeRenderer {
       if (state.phase !== 'windup' || now >= attack.hitAt) continue;
       const shown = visible(attack) && !suppressed;
       const progress = Phaser.Math.Clamp((now - attack.startedAt) / Math.max(1, attack.hitAt - attack.startedAt), 0, 1);
+      if (!this.charged.has(key)) {
+        this.charged.set(key, attack.recoverUntil);
+        if (now - attack.startedAt < SOUND_GRACE_MS) this.audio?.playSound('sfx_alien_cone_charge', attack.originX, attack.originY, enemy.id, allied ? 0.5 : 1);
+      }
       if (!allied && this.sectorSink) {
         this.sectorSink(enemy.id, { attackId: key, x: attack.originX, y: attack.originY, angle: attack.angle,
           range: attack.range, arcDegrees: attack.arcDegrees, clip: attack.clip, startedAt: attack.startedAt,
@@ -128,6 +141,7 @@ export class AlienConeRenderer {
       light(`charge-${enemy.id}`, mx, my, 40 + 50 * progress, allied ? ALLIED_LIGHT : VOID_PALETTE.primary,
         (allied ? 0.12 : 0.2) + 0.35 * progress * progress);
     }
+    for (const [key, forgetAt] of this.charged) if (now > forgetAt + 1000) this.charged.delete(key);
     // Windups that ended (impulse, cancel, death, removal) release their danger zone.
     for (const id of this.sunk) if (!sunkNow.has(id)) this.sectorSink?.(id, null, now, false);
     this.sunk.clear(); for (const id of sunkNow) this.sunk.add(id);

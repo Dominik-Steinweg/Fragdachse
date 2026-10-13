@@ -81,6 +81,28 @@ describe('AlienConeRenderer', () => {
   });
 });
 
+describe('AlienConeRenderer audio', () => {
+  it('plays the charge once at the start and the pulse at the impulse, but stays silent for late observers', () => {
+    const f = fixture();
+    const audio = { playSound: vi.fn() };
+    f.renderer.setAudioSystem(audio as never);
+    let state: EnergyConeState = { revision: 1, phase: 'windup', attack };
+    f.renderer.setEnemySource(() => [alien(() => state)]);
+    f.render(1050); f.render(1500);
+    expect(audio.playSound.mock.calls.map(call => call[0])).toEqual(['sfx_alien_cone_charge']);
+    state = { revision: 2, phase: 'recover', attack };
+    f.render(2030);
+    expect(audio.playSound).toHaveBeenLastCalledWith('sfx_alien_cone_pulse', 0, 0, 'a1', 1);
+
+    const late = fixture();
+    const quiet = { playSound: vi.fn() };
+    late.renderer.setAudioSystem(quiet as never);
+    late.renderer.setEnemySource(() => [alien(() => ({ revision: 2, phase: 'recover', attack }))]);
+    late.render(2400);
+    expect(quiet.playSound).not.toHaveBeenCalled();
+  });
+});
+
 describe('fan telegraph wedges', () => {
   it('writes one instance per wedge with both ray reaches packed, and removes them together', () => {
     const store = new EnemyClawVfxStore();

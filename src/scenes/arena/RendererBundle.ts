@@ -612,6 +612,7 @@ export function wireRenderersToAudioSystem(bundle: RendererBundle, audioSystem: 
   bundle.bfg.setAudioSystem(audioSystem);
   bundle.teslaDome.setAudioSystem(audioSystem);
   bundle.energyShield.setAudioSystem(audioSystem);
+  bundle.alienCone.setAudioSystem(audioSystem);
   bundle.nuke.setAudioSystem(audioSystem);
   bundle.bossIntro.setAudioSystem(audioSystem);
   bundle.voidRift.setAudioSystem(audioSystem);
