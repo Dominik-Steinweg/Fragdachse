@@ -252,8 +252,9 @@ function collectUpgradeAndDependentIds(rootIds: readonly string[]): Set<string> 
 
 export type CoopDefenseUpgradeEntitlements = ReadonlySet<string>;
 
-export function resolveCoopDefenseUpgradeEntitlements(unlockedBranchIds: readonly string[]): CoopDefenseUpgradeEntitlements {
-  return new Set(DAWN_UPGRADE_BRANCHES.filter(branch => unlockedBranchIds.includes(branch.id)).map(branch => branch.id));
+export function resolveCoopDefenseUpgradeEntitlements(unlockedBranchIds: unknown): CoopDefenseUpgradeEntitlements {
+  const ids: unknown[] = Array.isArray(unlockedBranchIds) ? unlockedBranchIds : [];
+  return new Set(DAWN_UPGRADE_BRANCHES.filter(branch => ids.includes(branch.id)).map(branch => branch.id).sort());
 }
 
 export function getLockedCoopDefenseBranchUpgradeIds(entitlements: CoopDefenseUpgradeEntitlements): ReadonlySet<string> {

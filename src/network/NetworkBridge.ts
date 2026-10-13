@@ -131,7 +131,7 @@ import { COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS, isConstructionId, normalizeConstru
 import { TURRET_VISUALS } from '../config/turretVisuals';
 import { POWERUP_DEFS } from '../powerups/PowerUpConfig';
 import { getCoopDefenseLevelForXp } from '../utils/coopDefenseProgression';
-import { cloneCoopDefenseUpgradeProfile, sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
+import { cloneCoopDefenseUpgradeProfile, constrainCoopDefenseUpgradeProfileToEntitlements, resolveCoopDefenseUpgradeEntitlements, sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
 import { sanitizeCoopDefenseEquippedItems } from '../utils/coopDefenseItems';
 import { DEFAULT_LOBBY_TIME_OF_DAY_MINUTES, normalizeTimeOfDay } from '../effects/TimeOfDay';
 import { isCoopDefenseClassId } from '../config/coopDefenseClasses';
@@ -2012,8 +2012,10 @@ export class NetworkBridge {
     const coopDefenseClassId = isCoopDefenseClassId(raw.coopDefenseClassId)
       ? raw.coopDefenseClassId
       : null;
+    // Each commit carries its owner's trusted research; never use host-local progress here.
+    const entitlements = resolveCoopDefenseUpgradeEntitlements(raw.coopDefenseEntitlements);
     const profile = raw.coopDefenseProfile == null ? null
-      : sanitizeCoopDefenseUpgradeProfile(raw.coopDefenseProfile, coopDefenseClassId ?? undefined);
+      : constrainCoopDefenseUpgradeProfileToEntitlements(raw.coopDefenseProfile, entitlements, coopDefenseClassId ?? undefined);
     return {
       weapon1: raw.weapon1,
       weapon2: raw.weapon2,
@@ -2021,6 +2023,7 @@ export class NetworkBridge {
       ultimate: raw.ultimate,
       coopDefenseClassId,
       coopDefenseProfile: profile,
+      coopDefenseEntitlements: [...entitlements],
       tools: profile?.toolLoadout?.map((tool) => ({ ...tool })),
       // Ausruestung wird an derselben Stelle validiert wie die Utility-Slots: unbekannte Items
       // und Eigenschaften fallen weg, Werte werden auf ihren Wurfbereich geklemmt.

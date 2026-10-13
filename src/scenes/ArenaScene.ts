@@ -2549,7 +2549,8 @@ export class ArenaScene extends Phaser.Scene {
       ultimate: (bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? DEFAULT_LOADOUT.ultimate.id) in ULTIMATE_CONFIGS
         ? ULTIMATE_CONFIGS[(bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? DEFAULT_LOADOUT.ultimate.id) as keyof typeof ULTIMATE_CONFIGS]
         : DEFAULT_LOADOUT.ultimate,
-    }, bridge.getGameMode(), build.coopDefenseProfile, build.coopDefenseClassId);
+    }, bridge.getGameMode(), build.coopDefenseProfile, build.coopDefenseClassId,
+    this.meta!.getStoredProgress().dawn.unlockedBranchIds);
     const equippedItems = build.equippedItems ?? [];
     return equippedItems.length > 0 ? { ...committed, equippedItems } : committed;
   }

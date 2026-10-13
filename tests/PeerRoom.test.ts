@@ -1554,6 +1554,40 @@ describe('host-frozen round loadouts', () => {
     host.setGamePhase('ARENA');
   };
 
+  it.each([undefined, null, 'necromancy', ['unknown'], ['unknown', 'necromancy', 'necromancy', 7]].map(rawEntitlements => ({ rawEntitlements })))(
+    'constrains each player with their own sanitized research: $rawEntitlements', async ({ rawEntitlements }) => {
+      const network = new FakeNetwork(), hostRoom = await createHostRoom(network), clientRoom = await addClientRoom(network);
+      try {
+        const host = activate(hostRoom), client = activate(clientRoom);
+        const guestOwnsBranch = Array.isArray(rawEntitlements) && rawEntitlements.includes('necromancy');
+        const profile = { upgrades: {
+          hp: { unlocked: true, level: 2 },
+          necromancy: { unlocked: true, level: 1 },
+          necromancy_count: { unlocked: true, level: 1 },
+        }, toolLoadout: [] };
+        use(hostRoom); host.setGameMode('coop_defense');
+        host.setLocalReadyWithCommittedLoadout({ ...commit(), coopDefenseProfile: profile,
+          coopDefenseEntitlements: guestOwnsBranch ? [] : ['necromancy'] });
+        use(clientRoom); client.setLocalReadyWithCommittedLoadout({ ...commit(), coopDefenseProfile: profile,
+          coopDefenseEntitlements: rawEntitlements as LoadoutCommitSnapshot['coopDefenseEntitlements'] });
+        use(hostRoom);
+        expect(host.getPlayerCommittedLoadout('p1')?.coopDefenseEntitlements).toEqual(guestOwnsBranch ? ['necromancy'] : []);
+        expect(host.getPlayerCommittedLoadout('p1')?.coopDefenseProfile?.upgrades.necromancy.level).toBe(guestOwnsBranch ? 1 : 0);
+        start(host);
+        for (const [room, bridge] of [[hostRoom, host], [clientRoom, client]] as const) {
+          use(room);
+          for (const [id, owns] of [['p0', !guestOwnsBranch], ['p1', guestOwnsBranch]] as const) {
+            const snapshot = bridge.getPlayerCurrentLoadoutSnapshot(id)!;
+            expect(snapshot.coopDefenseEntitlements).toEqual(owns ? ['necromancy'] : []);
+            expect(snapshot.coopDefenseProfile?.upgrades.necromancy.level).toBe(owns ? 1 : 0);
+            expect(snapshot.coopDefenseProfile?.upgrades.necromancy_count.level).toBe(owns ? 1 : 0);
+            expect(snapshot.coopDefenseProfile?.upgrades.hp.level).toBe(2);
+          }
+        }
+      } finally { clearActiveSession(); clientRoom.room.destroy(); hostRoom.room.destroy(); }
+    },
+  );
+
   it.each(['replace', 'clear'] as const)('keeps the actual modifiers and weapons when a client tries to %s its commit', async action => {
     const network = new FakeNetwork();
     const hostRoom = await createHostRoom(network), clientRoom = await addClientRoom(network), observerRoom = await addClientRoom(network);

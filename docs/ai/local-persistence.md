@@ -34,7 +34,12 @@ Boss-Punkte werden ausschließlich über `resolveEarnedCoopDefenseBossPoints` au
 Boss-Map-Abschlüssen und `dawn.purchasedBossPoints` abgeleitet. Lokale Profile werden zuerst
 gegen die persönlichen Zweig-Entitlements und danach gegen dieses Budget begrenzt.
 Der allgemeine Profil-Sanitizer kennt keine lokale Besitzeridentität und prüft keine
-Entitlements; Remote-Profile benötigen dafür künftig einen eigenen Host-Vertrag.
+Entitlements. Ready-Commits tragen die persönlichen Zweig-IDs in `coopDefenseEntitlements`.
+`NetworkBridge` filtert sie auf bekannte, sortierte, eindeutige IDs (fehlend = keine) und
+begrenzt das jeweilige Commit-Profil damit vor der Runtime-Nutzung und dem Einfrieren der
+Runden-Loadouts. Host und Gäste verwenden jeweils ihre eigenen Commit-Entitlements;
+fremde Punktbudgets werden nicht geprüft. [PeerRoom.test.ts](../../tests/PeerRoom.test.ts)
+schützt diese Grenze.
 
 Der Decoder verkettet V5→V6→V7 unter dem bestehenden Speicher-Key. V6→V7 entfernt die
 Nekromantie-Stufen einschließlich abhängiger Upgrades aus Default- und Klassenprofilen;

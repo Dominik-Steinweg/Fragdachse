@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { getLoadoutSlotItems } from '../src/loadout/LoadoutCatalog';
-import { areLoadoutConfigsEquivalent } from '../src/loadout/LoadoutRules';
+import { areLoadoutConfigsEquivalent, isCommittedLoadoutEqual } from '../src/loadout/LoadoutRules';
 import { resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../src/loadout/LoadoutRules';
 import { DEFAULT_LOADOUT, resolveUtilityIdForMode, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 
 describe('loadout config semantic equality', () => {
+  it('carries personal research through ready creation and mode sanitization', () => {
+    const ids = ['unknown', 'necromancy', 'necromancy'];
+    const commit = resolveLoadoutSelectionIds(DEFAULT_LOADOUT, 'coop_defense', null, null, ids);
+    ids.length = 0;
+    expect(commit.coopDefenseEntitlements).toEqual(['necromancy']);
+    expect(sanitizeCommittedLoadoutForMode(commit, 'coop_defense')?.coopDefenseEntitlements).toEqual(['necromancy']);
+    expect(sanitizeCommittedLoadoutForMode(commit, 'deathmatch')?.coopDefenseEntitlements).toEqual([]);
+    expect(isCommittedLoadoutEqual(commit, { ...commit, coopDefenseEntitlements: [] })).toBe(false);
+    expect(isCommittedLoadoutEqual(commit, { ...commit, coopDefenseEntitlements: ['necromancy', 'necromancy'] })).toBe(true);
+  });
   it('ignores object-key order while preserving array order', () => {
     const left = { id: 'TEST', nested: { alpha: 1, beta: 2 }, values: [1, 2] };
     const reordered = { values: [1, 2], nested: { beta: 2, alpha: 1 }, id: 'TEST' };
