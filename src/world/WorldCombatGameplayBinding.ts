@@ -349,12 +349,22 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       },
       onDeploymentEnded: (id, _ownerId, endedAt) =>
         options.getPlayerCombatIntegration()?.utility.onFireControlDeploymentEnded?.(id, endedAt),
+      discardProjectile: id => options.projectileUtility?.destroyProjectile(id),
     }) : null;
     if (this.fireControl) playerCombat?.utility.setFireControlPort?.({
       activateCopies: request => {
         this.fireControlNowMs = request.nowMs;
         return this.fireControl!.activateCopies(request);
       },
+      hasPortalSources: (ownerId, nowMs) => {
+        this.fireControlNowMs = nowMs;
+        return this.fireControl!.hasPortalSources(ownerId, nowMs);
+      },
+      activatePortal: request => {
+        this.fireControlNowMs = request.nowMs;
+        return this.fireControl!.activatePortal(request);
+      },
+      discardPortalProjectile: id => this.fireControl!.discardPortalProjectile(id),
       removeOwner: ownerId => this.fireControl!.removeOwner(ownerId),
     });
     this.attackDrone = playerCombat && options.network.authority.isHost() ? new WorldAttackDroneBinding({
@@ -1585,7 +1595,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
    * Quelle; temporäre Quellen kommen nur hier hinzu und nie in `getTurretDefinitions()`.
    */
   getTurretFireSources(definitions = this.getTurretDefinitions()): readonly TurretFireSource[] {
-    return this.fireControl?.deriveFireSources(definitions, this.fireControlNowMs) ?? definitions.map(toLocalTurretFireSource);
+    return this.fireControl?.deriveFireSources(definitions, this.fireControlNowMs,
+      () => this.readFireControlConstructions(definitions)) ?? definitions.map(toLocalTurretFireSource);
   }
 
   advanceFireControl(now: number): readonly TurretFireSource[] {

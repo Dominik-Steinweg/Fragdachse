@@ -111,6 +111,7 @@ export interface PlayerCombatUtilityPort {
   onTimeBubbleEnded?(bubbleId: number, endedAt: number): void;
   onUtilityProjectileResolved?(projectileId: number, now: number, grenadePayloadPending?: boolean): void;
   createTimeBubbleFromGrenade?(request: import('../projectile/ProjectileExplosionPort').ProjectileGrenadePayloadRequest, now: number): void;
+  createFireControlPortalFromGrenade?(request: import('../projectile/ProjectileExplosionPort').ProjectileGrenadePayloadRequest, now: number): void;
   refundUtilityCooldown(playerId: string, utilityId: string, amountMs: number, nowMs: number): void;
   beginUtilityCooldown(playerId: string, utilityId: string, nowMs: number): void;
 }

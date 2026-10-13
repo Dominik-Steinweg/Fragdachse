@@ -692,6 +692,8 @@ export interface FireControlPortalUtilityConfig extends BaseUtilityConfig {
   readonly durationMs: number;
   readonly damageBonus: number;
   readonly localFireEnabled: number;
+  /** Landing clearance of the exit (D34), shared by the host landing and the preview. */
+  readonly exitClearanceRadiusPx: number;
 }
 
 export interface TranslocatorUtilityConfig extends BaseUtilityConfig {

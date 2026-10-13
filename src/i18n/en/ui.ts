@@ -210,6 +210,7 @@ export const enUi = {
   "ui.stinkCloud.active": "Active",
   "ui.stinkCloud.cooldown": "Cooldown",
   "ui.fireControl.copiesActive": "Copies active",
+  "ui.fireControl.portalActive": "Portal open",
   "ui.timeBubble.flying": "In flight",
   "ui.translocator.puck": "Puck active · E teleports",
   "ui.translocator.portals": "E closes · Portals",

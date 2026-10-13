@@ -25,7 +25,8 @@ import { COOP_DEFENSE_CONSTRUCTION_CAPACITY, getConstructionIdForUtility, getUti
 import { quantizeAngle } from '../utils/angle';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { RadialActionMenu } from '../ui/RadialActionMenu';
-import { getFireControlCopiesStatus } from './fireControl/FireControlCopiesStatus';
+import { getFireControlCopiesStatus, getFireControlPortalStatus } from './fireControl/FireControlCopiesStatus';
+import { isFireControlUtilityType } from '../loadout/FireControlUtilityState';
 import {
   cloneRadialActionRef,
   getTimeBubbleStatusLabel,
@@ -670,6 +671,8 @@ export class InputSystem {
         fireControlSnapshot,
         this.bridge.getLocalPlayerId(), now,
       ) : null,
+      fireControlPortalStatus: fireControlSnapshot
+        ? getFireControlPortalStatus(fireControlSnapshot, this.bridge.getLocalPlayerId(), now) : null,
       translocatorState: this.bridge.getPlayerTranslocatorUseState?.(this.bridge.getLocalPlayerId()),
       stinkCloudState: this.bridge.getPlayerStinkCloudUtilityState?.(this.bridge.getLocalPlayerId()),
       timeBubbleState: this.bridge.getPlayerTimeBubbleUtilityState?.(this.bridge.getLocalPlayerId()),
@@ -2244,7 +2247,10 @@ export class InputSystem {
       return;
     }
 
-    if (cfg.charges && chargeAction?.kind !== 'temporary-utility') {
+    // Fire-control usage is owned by its host lifetime (flying → active → cooldown after the end).
+    if (isFireControlUtilityType(cfg.type)) {
+      // No local prediction; the host publishes the cooldown at the deployment end.
+    } else if (cfg.charges && chargeAction?.kind !== 'temporary-utility') {
       this.getLocalUtilityChargeState(chargeAction);
       this.utilityChargePrediction.predict(cfg.id, `utility-attempt:${actionId}`, this.getCooldownNow(), cfg.charges.burstLockoutMs);
     } else if (cfg.type !== 'time_bubble' && cfg.type !== 'translocator') {
@@ -2304,7 +2310,8 @@ export class InputSystem {
   private predictCurrentUtilityCooldown(): void {
     const config = this.getLocalUtilityConfig?.();
     // A refund can precede the first active-decoy snapshot; prediction would hide it.
-    if (config?.type === 'stinkcloud' || config?.type === 'decoy' || config?.type === 'time_bubble' || config?.type === 'translocator') return;
+    if (config?.type === 'stinkcloud' || config?.type === 'decoy' || config?.type === 'time_bubble' || config?.type === 'translocator'
+      || (config && isFireControlUtilityType(config.type))) return;
     const cooldown = config?.cooldown ?? 0;
     if (cooldown > 0) this.predictSelectedUtilityCooldown(this.getCooldownNow() + cooldown);
   }

@@ -1610,6 +1610,9 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     } else if (effect.type === 'fire') {
       this.ctx.fireSystem.hostCreateZone(request.x, request.y, effect, ownerId,
         this.ctx.getWorldCombatCore()!.captureWorldDamageSource(ownerId, request.provenance.weaponSourceId ?? 'weapon.grenade', 'ground', request.provenance, request.projectileId));
+    } else if (effect.type === 'fire_control_portal') {
+      // Delegates only: the utility owner validates the flight and opens the deployment.
+      this.playerGameplayRuntime?.getPlayerCombatIntegrationPort().utility.createFireControlPortalFromGrenade?.(request, this.hostFrameNowMs);
     } else if (effect.type === 'time_bubble') {
       if (request.provenance.sourceSlot === 'utility' && request.provenance.weaponSourceId === 'TIME_BUBBLE') {
         this.playerGameplayRuntime?.getPlayerCombatIntegrationPort().utility.createTimeBubbleFromGrenade?.(request, this.hostFrameNowMs);

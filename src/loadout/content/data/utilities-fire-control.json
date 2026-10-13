@@ -38,11 +38,11 @@
       },
       "projectileSpeed": 800,
       "projectileSize": 10,
-      "fuseTime": 1000,
-      "frictionDelayMs": 300,
-      "airFrictionDecayPerSec": 0.3,
+      "fuseTime": 2500,
+      "frictionDelayMs": 400,
+      "airFrictionDecayPerSec": 0.05,
       "bounceFrictionMultiplier": 0.7,
-      "stopSpeedThreshold": 20,
+      "stopSpeedThreshold": 25,
       "shotAudio": {
         "successKey": "shot_throw",
         "failureKey": "shot_dry_trigger"
@@ -58,7 +58,8 @@
       "skipCooldownPublish": true,
       "durationMs": 5000,
       "damageBonus": 0,
-      "localFireEnabled": 0
+      "localFireEnabled": 0,
+      "exitClearanceRadiusPx": 12
     }
   }
 }

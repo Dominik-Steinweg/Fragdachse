@@ -103,9 +103,12 @@ export class ProjectileFlightProcessor {
       const velocity = projectile.physics.body.velocity;
       if (Math.hypot(velocity.x, velocity.y) > 0.001) projectile.grenadeLastDirection = Math.atan2(velocity.y, velocity.x);
       const fuseExpired = realAgeMs >= (projectile.spec.flight.fuseTime ?? Number.POSITIVE_INFINITY);
+      // Portal devices land at rest (friction stop or contact without bounce); the fuse is a safety limit.
+      const landedAtRest = projectile.spec.interaction.grenadeEffect?.type === 'fire_control_portal'
+        && projectile.physics.body.velocity.lengthSq() === 0;
       const bouncedOut = !isGrenadeFragment(projectile.spec.interaction.grenadeEffect)
         && projectile.maxBounces > 0 && projectile.bounceCount >= projectile.maxBounces;
-      if (fuseExpired || bouncedOut) this.grenadeExpiredIds.add(projectile.id);
+      if (fuseExpired || bouncedOut || landedAtRest) this.grenadeExpiredIds.add(projectile.id);
 
       this.emitCountdown(projectile, realAgeMs);
       this.updateDragAndStop(projectile, nextFactor, simulatedAgeMs);

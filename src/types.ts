@@ -1535,8 +1535,18 @@ export interface SpawnEnemyGrenadeEffect {
   allyOwnerId?: string;
 }
 
+/**
+ * Portal device of the fire control (GDD V2 §4.1): lands when it comes to rest and opens the exit
+ * through its own host branch; it never falls through to another payload.
+ */
+export interface FireControlPortalGrenadeEffect {
+  type: 'fire_control_portal';
+  ownerColor: number;
+}
+
 export type GrenadeEffectConfig =
   | import('./systems/KrakenState').KrakenEggLandEffect
+  | FireControlPortalGrenadeEffect
   | DamageGrenadeEffect
   | SmokeGrenadeEffect
   | FireGrenadeEffect
