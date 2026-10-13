@@ -24,14 +24,20 @@ export interface FireControlOriginalVisual { sprite: Phaser.GameObjects.Sprite; 
 interface CopyVisual {
   sprite: Phaser.GameObjects.Sprite; filter: FireControlHologramFilter;
   copy: FireControlCopySnapshot; expiresAt: number; removedAt?: number; removedMaterialize?: number;
+  /** Projector lens of the owning deployment; the projection beam starts here. */
+  projector: { x: number; y: number; startedAt: number };
 }
 interface PortalVisual { snapshot: FireControlPortalView; removedAt?: number; removedOpen?: number }
 interface RelayVisual { sprite: Phaser.GameObjects.Sprite; removedAt?: number }
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 const EXIT_RADIUS = 23;
 const FLASH_MS = 220;
-/** Projector filaments carry the copies in; afterwards they only flicker faintly. */
-const FILAMENT_SETTLE_MS = 700;
+/** The projection beam is brighter while it carries a copy in, then settles to a steady glow. */
+const BEAM_SETTLE_MS = 700;
+/** Beam flare after the copy fires. */
+const BEAM_SHOT_MS = 180;
+/** Projection beams are local by construction; anything longer is not drawn. */
+const BEAM_MAX_LENGTH = 90;
 
 /** Presentation owner only: update receives synchronized host time, never calls gameplay. */
 export class FireControlRenderer {
@@ -42,6 +48,7 @@ export class FireControlRenderer {
   private readonly relays = new Map<number, RelayVisual>();
   private readonly paused = new Map<number, { sprite: Phaser.GameObjects.Sprite; filter: Phaser.Filters.ColorMatrix }>();
   private readonly animations = new TurretAnimationController();
+  private readonly shotAt = new Map<string, number>();
   private previousNow: number | null = null;
   private destroyed = false;
   private readonly lightKeys = new Set<string>();
@@ -54,7 +61,10 @@ export class FireControlRenderer {
     ensureFireControlRelayAssets(scene);
   }
   /** Confirmed shot events can be forwarded independently of snapshot refreshes. */
-  onShot(sourceId: string): void { this.animations.onShot(sourceId); }
+  onShot(sourceId: string): void {
+    this.animations.onShot(sourceId);
+    if (this.copies.has(sourceId) && this.previousNow !== null) this.shotAt.set(sourceId, this.previousNow);
+  }
   prepare(context: Phaser.Renderer.WebGL.DrawingContext): boolean { return this.layer?.prepare(context) ?? true; }
   update(snapshot: FireControlView, now: number): void {
     if (this.destroyed) return;
@@ -83,19 +93,15 @@ export class FireControlRenderer {
             .setDisplaySize(spec.displaySize, spec.displaySize).setDepth(DEPTH.ROCKS + 0.2);
           sprite.name = copy.sourceId;
           this.animations.bind(copy.sourceId, sprite, weapon);
-          visual = { sprite, filter: new FireControlHologramFilter(sprite, this.preset), copy, expiresAt: deployment.expiresAt };
+          visual = { sprite, filter: new FireControlHologramFilter(sprite, this.preset), copy,
+            expiresAt: deployment.expiresAt, projector: { x: deployment.x, y: deployment.y, startedAt: deployment.startedAt } };
           this.copies.set(copy.sourceId, visual);
         }
         if (!visual) continue;
         visual.copy = copy; visual.expiresAt = deployment.expiresAt;
+        visual.projector = { x: deployment.x, y: deployment.y, startedAt: deployment.startedAt };
         visual.removedAt = undefined; visual.removedMaterialize = undefined;
         this.animations.syncPose(copy.sourceId, copy.x, copy.y, copy.angle, false);
-        const length = Math.hypot(copy.x-deployment.x,copy.y-deployment.y);
-        // Projector filaments are strictly local, even if a remote snapshot places a copy far away.
-        const settle = clamp((now - deployment.startedAt) / FILAMENT_SETTLE_MS);
-        if (length < 90) this.store.add({ x: deployment.x, y: deployment.y, radius: length, length,
-          angle: Math.atan2(copy.y-deployment.y,copy.x-deployment.x), kind: Kind.Filament,
-          open: 1 - settle * .8, remaining: 1, flash: 0, seed: copy.originalId });
       }
     }
     for (const [id, relay] of this.relays) {
@@ -113,11 +119,14 @@ export class FireControlRenderer {
         v.removedMaterialize = clamp(1-(v.copy.materializedAt-now)/400);
       }
       const vanish = v.removedAt === undefined ? 0 : clamp((now-v.removedAt)/300);
-      if (vanish >= 1) { v.filter.destroy(); v.sprite.destroy(); this.copies.delete(id); continue; }
+      if (vanish >= 1) {
+        v.filter.destroy(); v.sprite.destroy(); this.copies.delete(id); this.shotAt.delete(id); continue;
+      }
       Object.assign(v.filter.uniforms, { time: this.store.time, preset: this.preset,
         materialize: v.removedMaterialize ?? clamp(1-(v.copy.materializedAt-now)/400), vanish,
         warning: clamp(1-(v.expiresAt-now)/2000) });
-      this.light(`copy:${id}`, v.copy.x, v.copy.y, 44, 3.8 * v.filter.uniforms.materialize * (1-vanish));
+      this.beam(id, v, now, vanish);
+      this.light(`copy:${id}`, v.copy.x, v.copy.y, 40, 3.4 * v.filter.uniforms.materialize * (1-vanish));
     }
     for (const [id, v] of this.portals) {
       if (!livePortals.has(id) && v.removedAt === undefined) {
@@ -170,6 +179,23 @@ export class FireControlRenderer {
       this.lighting?.releaseLight(key, { immediate: true }); this.lightKeys.delete(key);
     }
   }
+  /**
+   * Persistent projection beam from the projector lens to one copy. It is brighter while the
+   * copy materializes, settles to a steady glow, flares when the copy fires and follows the
+   * copy's vanish. Never drawn across map distances.
+   */
+  private beam(id: string, v: CopyVisual, now: number, vanish: number): void {
+    const { x, y, startedAt } = v.projector;
+    const length = Math.hypot(v.copy.x - x, v.copy.y - y);
+    if (length < 4 || length > BEAM_MAX_LENGTH) return;
+    const settle = clamp((now - startedAt) / BEAM_SETTLE_MS);
+    const presence = Math.max(.35, v.filter.uniforms.materialize) * (1 - vanish);
+    const shot = this.shotAt.get(id);
+    const flash = shot === undefined ? 0 : 1 - clamp((now - shot) / BEAM_SHOT_MS);
+    this.store.add({ x, y, radius: length, length, angle: Math.atan2(v.copy.y - y, v.copy.x - x),
+      kind: Kind.Filament, open: presence * (.72 + .28 * (1 - settle)), remaining: 1, flash,
+      seed: v.copy.originalId });
+  }
   private updateRelay(deployment: FireControlCopiesDeploymentSnapshot, now: number): void {
     let relay = this.relays.get(deployment.id);
     if (!relay && this.scene.textures.exists(FIRE_CONTROL_RELAY.sheetTextureKey)) {
@@ -197,7 +223,7 @@ export class FireControlRenderer {
     for (const v of this.copies.values()) { v.filter.destroy(); v.sprite.destroy(); }
     for (const relay of this.relays.values()) relay.sprite.destroy();
     this.relays.clear();
-    this.copies.clear(); this.portals.clear(); this.animations.clear();
+    this.copies.clear(); this.portals.clear(); this.animations.clear(); this.shotAt.clear();
     for (const { sprite, filter } of this.paused.values()) if (!sprite.isDestroyed) sprite.filters?.internal.remove(filter);
     this.paused.clear(); this.store.clear(); this.layer?.destroy();
     for (const key of this.lightKeys) this.lighting?.releaseLight(key, { immediate: true });
