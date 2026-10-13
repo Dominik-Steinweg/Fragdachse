@@ -1,3 +1,5 @@
+import { DAWN_UPGRADE_BRANCHES } from '../config/dawn/upgradeBranches';
+import type { DawnProgress } from '../dawn/economy/DawnProgress';
 import rawCoopDefenseUpgrades from '../config/coopDefenseUpgrades.json';
 import rawCoopDefenseUpgradeIcons from '../config/coopDefenseUpgradeIcons.json';
 import {
@@ -248,10 +250,47 @@ function collectUpgradeAndDependentIds(rootIds: readonly string[]): Set<string> 
   return result;
 }
 
+export type CoopDefenseUpgradeEntitlements = ReadonlySet<string>;
+
+export function resolveCoopDefenseUpgradeEntitlements(unlockedBranchIds: readonly string[]): CoopDefenseUpgradeEntitlements {
+  return new Set(DAWN_UPGRADE_BRANCHES.filter(branch => unlockedBranchIds.includes(branch.id)).map(branch => branch.id));
+}
+
+export function getLockedCoopDefenseBranchUpgradeIds(entitlements: CoopDefenseUpgradeEntitlements): ReadonlySet<string> {
+  return collectUpgradeAndDependentIds(DAWN_UPGRADE_BRANCHES
+    .filter(branch => !entitlements.has(branch.id)).map(branch => branch.rootUpgradeId));
+}
+
+export function constrainCoopDefenseUpgradeProfileToEntitlements(
+  profile: CoopDefenseUpgradeProfile,
+  entitlements: CoopDefenseUpgradeEntitlements,
+  classId: CoopDefenseClassId = DEFAULT_COOP_DEFENSE_CLASS_ID,
+): CoopDefenseUpgradeProfile {
+  const locked = getLockedCoopDefenseBranchUpgradeIds(entitlements);
+  const safe = sanitizeCoopDefenseUpgradeProfile(profile, classId);
+  return { ...safe, upgrades: Object.fromEntries(Object.entries(safe.upgrades).map(([id, state]) => [
+    id, locked.has(id) ? { level: 0, unlocked: false } : { ...state },
+  ])) };
+}
+
+/** Synthetic cheat map IDs intentionally count like any other unique completion. */
+export function resolveEarnedCoopDefenseBossPoints(progress: {
+  completedBossMapIds: readonly string[];
+  dawn: Pick<DawnProgress, 'purchasedBossPoints'>;
+}): number {
+  return new Set(progress.completedBossMapIds).size + progress.dawn.purchasedBossPoints;
+}
+
 const unavailableUpgradeIdsByClass = new Map<CoopDefenseClassId, ReadonlySet<string>>();
 
 /** Class permissions follow unlock dependencies, independently of screen categories. */
-function getUnavailableUpgradeIds(classId: CoopDefenseClassId): ReadonlySet<string> {
+function getUnavailableUpgradeIds(
+  classId: CoopDefenseClassId,
+  entitlements?: CoopDefenseUpgradeEntitlements,
+): ReadonlySet<string> {
+  if (entitlements) return new Set([
+    ...getUnavailableUpgradeIds(classId), ...getLockedCoopDefenseBranchUpgradeIds(entitlements),
+  ]);
   const cached = unavailableUpgradeIdsByClass.get(classId);
   if (cached) return cached;
   const roots = COOP_DEFENSE_UPGRADE_ORDER
@@ -273,8 +312,9 @@ function getUnavailableUpgradeIds(classId: CoopDefenseClassId): ReadonlySet<stri
 export function isCoopDefenseUpgradeAvailableForClass(
   upgradeId: string,
   classId: CoopDefenseClassId = DEFAULT_COOP_DEFENSE_CLASS_ID,
+  entitlements?: CoopDefenseUpgradeEntitlements,
 ): boolean {
-  return !!COOP_DEFENSE_UPGRADE_DEFINITIONS[upgradeId] && !getUnavailableUpgradeIds(classId).has(upgradeId);
+  return !!COOP_DEFENSE_UPGRADE_DEFINITIONS[upgradeId] && !getUnavailableUpgradeIds(classId, entitlements).has(upgradeId);
 }
 
 function getConstructionSlotCapacity(levels: Readonly<Record<string, number>>): number {
@@ -838,10 +878,11 @@ export function canLevelUpCoopDefenseUpgrade(
   playerLevel: number,
   earnedBossPoints = 0,
   classId: CoopDefenseClassId = DEFAULT_COOP_DEFENSE_CLASS_ID,
+  entitlements: CoopDefenseUpgradeEntitlements = resolveCoopDefenseUpgradeEntitlements([]),
 ): boolean {
   const safeProfile = getSanitizedProfile(profile, classId);
   const definition = getCoopDefenseUpgradeDefinition(upgradeId);
-  if (!definition || !isCoopDefenseUpgradeAvailableForClass(upgradeId, classId)) return false;
+  if (!definition || !isCoopDefenseUpgradeAvailableForClass(upgradeId, classId, entitlements)) return false;
 
   const state = safeProfile.upgrades[upgradeId];
   if (!state || !state.unlocked || state.level >= definition.maxLevel) return false;
@@ -856,9 +897,10 @@ export function levelUpCoopDefenseUpgrade(
   playerLevel: number,
   earnedBossPoints = 0,
   classId: CoopDefenseClassId = DEFAULT_COOP_DEFENSE_CLASS_ID,
+  entitlements: CoopDefenseUpgradeEntitlements = resolveCoopDefenseUpgradeEntitlements([]),
 ): CoopDefenseUpgradeProfile | null {
-  const safeProfile = getSanitizedProfile(profile, classId);
-  if (!canLevelUpCoopDefenseUpgrade(safeProfile, upgradeId, playerLevel, earnedBossPoints, classId)) {
+  const safeProfile = constrainCoopDefenseUpgradeProfileToEntitlements(profile, entitlements, classId);
+  if (!canLevelUpCoopDefenseUpgrade(safeProfile, upgradeId, playerLevel, earnedBossPoints, classId, entitlements)) {
     return null;
   }
 

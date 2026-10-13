@@ -1,4 +1,6 @@
 export const deUi = {
+  "ui.lobby.necromancyMovedTitle": "Nekromantie",
+  "ui.lobby.necromancyMovedMessage": "Nekromantie gibt es jetzt beim Schrotthändler – deine Boss-Punkte wurden zurückerstattet.",
   "ui.voice.volume": "SPRACHE",
   "ui.voice.off": "AUS",
   "ui.performance.noSample": "Noch kein Companion-Sample vorhanden.",

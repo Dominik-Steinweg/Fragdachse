@@ -1,3 +1,4 @@
+import { resolveEarnedCoopDefenseBossPoints, resolveCoopDefenseUpgradeEntitlements } from '../../utils/coopDefenseUpgrades';
 import { AfterRoundFlow, type AfterRoundStep } from './AfterRoundFlow';
 import { PERSISTENT_BASE_HEALTH_REWARD_HP, resolvePersistentBaseMaxHp } from '../../persistentBase/PersistentBaseHealth';
 import { getLoadoutUtilityId, loadoutToolFromId } from '../../loadout/LoadoutTools';
@@ -345,10 +346,11 @@ export class ArenaMetaController {
     this.progress = getCoopDefenseProgressSnapshot(
       stored.totalXp,
       activeProfile,
-      stored.completedBossMapIds.length,
+      resolveEarnedCoopDefenseBossPoints(stored),
       activeClassId,
       classesUnlocked,
       stored.unlockedClassIds,
+      resolveCoopDefenseUpgradeEntitlements(stored.dawn.unlockedBranchIds),
     );
     this.input.session.setLocalCoopDefenseTotalXp(this.progress.totalXp);
 
@@ -466,8 +468,9 @@ export class ArenaMetaController {
       activeProfile,
       upgradeId,
       this.progress.level,
-      stored.completedBossMapIds.length,
+      resolveEarnedCoopDefenseBossPoints(stored),
       activeClassId,
+      resolveCoopDefenseUpgradeEntitlements(stored.dawn.unlockedBranchIds),
     );
     if (!nextProfile) return false;
 

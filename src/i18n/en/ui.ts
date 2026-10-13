@@ -1,4 +1,6 @@
 export const enUi = {
+  "ui.lobby.necromancyMovedTitle": "Necromancy",
+  "ui.lobby.necromancyMovedMessage": "Necromancy is now available from the Scrap Merchant – your boss points have been refunded.",
   "ui.voice.volume": "VOICE",
   "ui.voice.off": "OFF",
   "ui.performance.noSample": "No companion sample yet.",

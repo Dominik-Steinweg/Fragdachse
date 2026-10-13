@@ -1,3 +1,10 @@
+import {
+  buildDefaultCoopDefenseUpgradeProfile, constrainCoopDefenseUpgradeProfileToEntitlements,
+  resolveCoopDefenseUpgradeEntitlements, getCoopDefenseNumericStatTotals,
+  getLockedCoopDefenseBranchUpgradeIds, COOP_DEFENSE_UPGRADE_DEFINITIONS,
+  canLevelUpCoopDefenseUpgrade, levelUpCoopDefenseUpgrade,
+} from '../src/utils/coopDefenseUpgrades';
+import { getCoopDefenseProgressSnapshot } from '../src/utils/coopDefenseProgression';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', async () => (await import('./fakeArenaRenderScene')).createFakePhaserModule());
@@ -11,6 +18,13 @@ import { NecromancySystem } from '../src/systems/NecromancySystem';
 import { healthBarTestScene } from './healthBarTestScene';
 
 function fixture(necromancyEnabled = false) {
+  const profile = buildDefaultCoopDefenseUpgradeProfile();
+  for (const id of ['necromancy', 'necromancy_count']) {
+    profile.upgrades[id].level = COOP_DEFENSE_UPGRADE_DEFINITIONS[id].maxLevel;
+  }
+  const totals = getCoopDefenseNumericStatTotals(constrainCoopDefenseUpgradeProfileToEntitlements(
+    profile, resolveCoopDefenseUpgradeEntitlements(necromancyEnabled ? ['necromancy'] : []),
+  ));
   const kind = COOP_DEFENSE_ENEMY_KINDS[0];
   const configs = resolveCoopDefenseEnemyConfigs(1);
   configs[kind] = { ...configs[kind], glow: undefined, deathSpawns: [], imageKey: 'test-enemy' };
@@ -20,10 +34,7 @@ function fixture(necromancyEnabled = false) {
   const system = new NecromancySystem(manager as never, enemies,
     { isAlive: (id: string) => players.has(id) } as never,
     { fire: () => false } as never, new Map(), (_id, stat, base) => {
-      if (!necromancyEnabled) return base;
-      if (stat === 'player.necromancy.enabled') return 1;
-      if (stat === 'player.necromancy.maxAllies') return 10;
-      return base;
+      return base + (totals[stat] ?? 0);
     });
   return { kind, enemies, players, system };
 }
@@ -117,5 +128,37 @@ describe('allied enemy presentation', () => {
     const fire = { visualStyle: 'void', damageTarget: 'players', durationMs: 1 } as const;
     expect(resolveEnemyFireEffect('hostile', fire)).toEqual({ ...fire, visualStyle: 'void', damageTarget: 'players' });
     expect(resolveEnemyFireEffect('allied', fire)).toEqual({ visualStyle: 'allied', damageTarget: 'enemies', durationMs: 1 });
+  });
+});
+
+describe('personal necromancy entitlement', () => {
+  it('removes the entire locked branch without affecting other upgrades or the input profile', () => {
+    const profile = buildDefaultCoopDefenseUpgradeProfile();
+    const locked = getLockedCoopDefenseBranchUpgradeIds(resolveCoopDefenseUpgradeEntitlements([]));
+    for (const id of [...locked, 'hp']) profile.upgrades[id].level = COOP_DEFENSE_UPGRADE_DEFINITIONS[id].maxLevel;
+    const granted = constrainCoopDefenseUpgradeProfileToEntitlements(profile, resolveCoopDefenseUpgradeEntitlements(['necromancy']));
+    const denied = constrainCoopDefenseUpgradeProfileToEntitlements(profile, resolveCoopDefenseUpgradeEntitlements([]));
+    expect(getCoopDefenseNumericStatTotals(granted)['player.necromancy.enabled']).toBeGreaterThan(0);
+    expect(getCoopDefenseNumericStatTotals(denied)['player.necromancy.enabled'] ?? 0).toBe(0);
+    for (const id of locked) {
+      expect(denied.upgrades[id]).toEqual({ level: 0, unlocked: false });
+      expect(granted.upgrades[id].level).toBe(profile.upgrades[id].level);
+    }
+    expect(denied.upgrades.hp.level).toBe(profile.upgrades.hp.level);
+  });
+
+  it('gates purchases and their UI projection with explicitly granted branch ownership', () => {
+    const profile = buildDefaultCoopDefenseUpgradeProfile();
+    const entitlements = resolveCoopDefenseUpgradeEntitlements(['necromancy', 'unknown']);
+    expect([...entitlements]).toEqual(['necromancy']);
+    expect(canLevelUpCoopDefenseUpgrade(profile, 'necromancy', 100, 100)).toBe(false);
+    expect(levelUpCoopDefenseUpgrade(profile, 'necromancy', 100, 100)).toBeNull();
+    const purchased = levelUpCoopDefenseUpgrade(profile, 'necromancy', 100, 100, 'dachs_nukem', entitlements);
+    expect(purchased?.upgrades.necromancy.level).toBeGreaterThan(0);
+    const denied = getCoopDefenseProgressSnapshot(0, profile, 100);
+    const granted = getCoopDefenseProgressSnapshot(0, profile, 100, 'dachs_nukem', true, ['dachs_nukem'], entitlements);
+    const node = (snapshot: typeof denied) => snapshot.upgradeCategories.flatMap(category => category.upgrades).find(upgrade => upgrade.id === 'necromancy')!;
+    expect(node(denied).canLevelUp).toBe(false);
+    expect(node(granted).canLevelUp).toBe(true);
   });
 });

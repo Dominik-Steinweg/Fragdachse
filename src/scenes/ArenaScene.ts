@@ -1,3 +1,4 @@
+import { resolveEarnedCoopDefenseBossPoints } from '../utils/coopDefenseUpgrades';
 import { preloadWatchtowerAssets } from '../effects/watchtower/WatchtowerVisual';
 import { installRuntimeAssetUrls } from '../assets/RuntimeAssetUrls';
 import { preloadPowerUpAssets, assertPowerUpAssetsReady } from '../assets/PowerUpAssets';
@@ -853,7 +854,7 @@ export class ArenaScene extends Phaser.Scene {
         const stored = this.meta!.getStoredProgress();
         return {
           totalXp: stored.totalXp,
-          bossPoints: stored.completedBossMapIds.length,
+          bossPoints: resolveEarnedCoopDefenseBossPoints(stored),
           highestUnlockedMapId: stored.highestUnlockedMapId,
           unlockedClassIds: [...stored.unlockedClassIds],
           itemsUnlocked: stored.itemsUnlocked,
