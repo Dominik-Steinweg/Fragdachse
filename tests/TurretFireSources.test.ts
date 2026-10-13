@@ -61,6 +61,81 @@ function fixture() {
 }
 
 describe('turret fire sources', () => {
+  it.each([false, true])('waits completely for a running seed salvo, independent of order (%s)', copyFirst => {
+    const f = fixture();
+    const turret = construction({ weaponId: 'TURRET_ROCKET_BURST' });
+    const score = vi.fn(() => 0);
+    f.system.setTargetScoreProvider(score);
+    f.set([turret], [original(turret)]);
+    f.tick(0);
+    const sources = [original(turret, 'paused'), copyOf(turret, true)];
+    f.set([turret], copyFirst ? sources.reverse() : sources);
+    f.angles.mockClear(); score.mockClear();
+    f.tick(1);
+    const end = (burst.count - 1) * burst.intervalMs;
+    for (let now = burst.intervalMs; now <= end; now += burst.intervalMs) f.tick(now);
+    expect(f.shooters()).toEqual(Array.from({ length: burst.count }, () => turret.id));
+    expect(f.angles.mock.calls.some(([source]) => source.id === COPY_ID)).toBe(false);
+    expect(score).not.toHaveBeenCalled();
+    f.tick(end + 1);
+    f.tick(end + COOLDOWN - 1);
+    expect(f.fire).toHaveBeenCalledTimes(burst.count);
+    f.tick(end + COOLDOWN);
+    expect(f.shooters().at(-1)).toBe(COPY_ID);
+  });
+
+  it.each([false, true])('seeds only after an aborted salvo has booked cooldown (%s)', copyFirst => {
+    const f = fixture();
+    const turret = construction({ weaponId: 'TURRET_ROCKET_BURST' });
+    f.set([turret], [original(turret)]);
+    f.tick(0);
+    f.system.setManualControlProvider(() => ({ playerId: 'pilot', revision: 1,
+      targetX: 200, targetY: 0, fireHeld: false, fresh: true }));
+    const sources = [original(turret), copyOf(turret, true)];
+    f.set([turret], copyFirst ? sources.reverse() : sources);
+    f.tick(10);
+    f.tick(11);
+    f.tick(10 + COOLDOWN - 1);
+    expect(f.shooters()).toEqual([turret.id]);
+    f.tick(10 + COOLDOWN);
+    expect(f.shooters()).toEqual([turret.id, COPY_ID]);
+  });
+
+  it.each(['legacy cover', 'limited cover', 'limited angle'] as const)(
+    'aborts a paused remainder once and releases the shared sequence after cooldown: %s', reason => {
+      const f = fixture();
+      const turret = construction({ weaponId: 'TURRET_ROCKET_BURST',
+        ...(reason === 'legacy cover' ? {} : { rotationSpeedDegPerSec: 1, aimToleranceDeg: 0,
+          angle: Math.atan2(100, 150) }) });
+      f.set([turret], [original(turret)]);
+      f.tick(0);
+      const paused = { ...original(turret, 'paused'), ...(reason === 'limited angle' ? { angle: -Math.PI / 2 } : {}) };
+      const copy = { ...copyOf(turret), rotationSpeedDegPerSec: undefined };
+      f.set([turret], [paused, copy]);
+      if (reason !== 'limited angle') f.system.setLineOfFireChecker(sx => sx > 200);
+      f.tick(burst.intervalMs - 1);
+      f.tick(burst.intervalMs);
+      for (let now = burst.intervalMs + 1; now < burst.intervalMs + COOLDOWN; now += 100) f.tick(now);
+      expect(f.shooters()).toEqual([turret.id]);
+      f.tick(burst.intervalMs + COOLDOWN);
+      expect(f.shooters()).toEqual([turret.id, COPY_ID]);
+    });
+
+  it.each([false, true])('charges the surviving old sequence once when its owner changes sequence (%s)', copyFirst => {
+    const f = fixture();
+    const turret = construction({ weaponId: 'TURRET_ROCKET_BURST' });
+    f.set([turret], [original(turret, 'paused'), copyOf(turret)]);
+    f.tick(0);
+    const sources = [original(turret), { ...copyOf(turret, true), fireState: 'paused' as const }];
+    f.set([turret], copyFirst ? sources.reverse() : sources);
+    f.tick(10);
+    f.tick(burst.intervalMs);
+    f.tick(10 + COOLDOWN - 1);
+    expect(f.shooters()).toEqual([COPY_ID]);
+    f.tick(10 + COOLDOWN);
+    expect(f.shooters()).toEqual([COPY_ID, turret.id]);
+  });
+
   it('treats every construction as its own source when no fire-source provider is installed', () => {
     const f = fixture();
     const turret = construction();

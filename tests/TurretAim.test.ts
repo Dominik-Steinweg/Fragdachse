@@ -261,7 +261,8 @@ describe('hostile bases as third target tier', () => {
     // Raketenturm-Toleranz 18°: Figuren erreicht Homing, eine ferne Basisfläche nicht.
     const f = fixture({ weaponId: 'TURRET_MG', rotationSpeedDegPerSec: 90, aimToleranceDeg: 18, targetRange: 700, angle: 0 });
     f.targets([]);
-    f.system.setBaseTargetCandidateProvider(() => [{ id: 'base', x: 0, y: 600, aimRadius: 12 }]);
+    f.system.setBaseTargetCandidateProvider(() => [{ id: 'base', x: 0, y: 600,
+      hitSegment: { x1: -12, y1: 600, x2: 12, y2: 600 } }]);
     f.tick(0, 900);
     expect(f.source.angle).toBeCloseTo(rad(81));
     expect(f.fire).not.toHaveBeenCalled();
@@ -276,6 +277,83 @@ describe('hostile bases as third target tier', () => {
     f.system.setBaseTargetCandidateProvider(() => faces);
     f.tick(0);
     expect(f.fire).not.toHaveBeenCalled();
+  });
+
+  it('rejects a grazing ray inside tolerance until further rotation hits the trimmed face', () => {
+    const f = fixture({ weaponId: 'TURRET_MG', rotationSpeedDegPerSec: 90, aimToleranceDeg: 18 });
+    f.targets([]);
+    f.system.setBaseTargetCandidateProvider(() => [{ id: 'base', x: 100, y: 2,
+      hitSegment: { x1: 100, y1: 2, x2: 100, y2: 20 } }]);
+    f.tick(0);
+    expect(f.fire).not.toHaveBeenCalled();
+    f.tick(1, 100);
+    expect(f.fire).toHaveBeenCalledOnce();
+    expect(f.fire.mock.calls[0][5]).toBeCloseTo(Math.atan2(2, 100));
+  });
+
+  it('retains the hit segment for follow-up shots even when the base provider changes', () => {
+    const f = fixture({ weaponId: 'TURRET_ROCKET_BURST', rotationSpeedDegPerSec: 90,
+      aimToleranceDeg: 18, angle: Math.atan2(2, 100) });
+    f.targets([]);
+    f.system.setBaseTargetCandidateProvider(() => [{ id: 'base', x: 100, y: 2,
+      hitSegment: { x1: 100, y1: 2, x2: 100, y2: 20 } }]);
+    f.tick(0);
+    expect(f.fire).toHaveBeenCalledOnce();
+    f.system.setBaseTargetCandidateProvider(() => []);
+    f.source.angle = 0;
+    const interval = WEAPON_CONFIGS.TURRET_ROCKET_BURST.turretBurst!.intervalMs;
+    f.tick(interval);
+    expect(f.fire).toHaveBeenCalledOnce();
+    f.tick(interval + 1, 100);
+    expect(f.fire).toHaveBeenCalledTimes(2);
+  });
+
+  it('checks the second projectile against its own segment along the same barrel ray', () => {
+    const f = fixture({ weaponId: 'TURRET_MG', rotationSpeedDegPerSec: 90, aimToleranceDeg: 18,
+      secondProjectileDamageFactor: 0.5, cooldownMs: 1 });
+    f.targets([{ id: 'figure', x: 80, y: 0 }]);
+    f.system.setBaseTargetCandidateProvider(() => [{ id: 'base', x: 100, y: 2,
+      hitSegment: { x1: 100, y1: 2, x2: 100, y2: 20 } }]);
+    f.tick(0);
+    expect(f.fire).toHaveBeenCalledOnce();
+    f.source.angle = Math.atan2(2, 100);
+    f.tick(1);
+    expect(f.fire).toHaveBeenCalledTimes(3);
+    expect(f.fire.mock.calls[2][5]).toBe(f.fire.mock.calls[1][5]);
+  });
+
+  it.each([
+    { name: 'beyond turret range', x: 100, y: 0, angle: rad(18), range: 102, muzzle: 20,
+      hitSegment: { x1: 100, y1: -50, x2: 100, y2: 50 }, fires: false },
+    { name: 'behind the muzzle', x: 10, y: 0, angle: 0, range: 100, muzzle: 20,
+      hitSegment: { x1: 10, y1: -5, x2: 10, y2: 5 }, fires: false },
+    { name: 'parallel miss', x: 100, y: 2, angle: 0, range: 150, muzzle: 20,
+      hitSegment: { x1: 100, y1: 2, x2: 120, y2: 2 }, fires: false },
+    { name: 'collinear overlap', x: 100, y: 0, angle: 0, range: 150, muzzle: 20,
+      hitSegment: { x1: 100, y1: 0, x2: 120, y2: 0 }, fires: true },
+    { name: 'collapsed midpoint', x: 100, y: 0, angle: 0, range: 100, muzzle: 20,
+      hitSegment: { x1: 100, y1: 0, x2: 100, y2: 0 }, fires: true },
+  ])('handles segment intersection: $name', ({ x, y, angle, range, muzzle, hitSegment, fires }) => {
+    const f = fixture({ weaponId: 'TURRET_MG', rotationSpeedDegPerSec: 90, aimToleranceDeg: 18,
+      angle, targetRange: range, muzzleOffset: muzzle });
+    f.targets([]);
+    f.system.setBaseTargetCandidateProvider(() => [{ id: 'base', x, y, hitSegment }]);
+    f.tick(0);
+    expect(f.fire).toHaveBeenCalledTimes(fires ? 1 : 0);
+  });
+
+  it.each(['figure', 'focused base', 'legacy base'] as const)('preserves early discharge without segment gating: %s', kind => {
+    const f = fixture({ weaponId: 'TURRET_MG', aimToleranceDeg: 18, angle: rad(75),
+      ...(kind === 'legacy base' ? {} : { rotationSpeedDegPerSec: 90 }) });
+    if (kind !== 'figure') f.targets([]);
+    if (kind === 'focused base') {
+      f.system.setFocusTargetProvider(() => ({ targetType: 'base', targetId: 'base' }));
+      f.system.setFocusedBaseTargetProvider(() => ({ id: 'base', x: 0, y: 100 }));
+    }
+    f.system.setBaseTargetCandidateProvider(() => [{ id: 'base', x: 0, y: 100,
+      hitSegment: { x1: -2, y1: 100, x2: 2, y2: 100 } }]);
+    f.tick(0);
+    expect(f.fire).toHaveBeenCalledOnce();
   });
 
   it.each(['TURRET_GRAVITY', 'TURRET_SLOW_BUBBLE'] as const)('never lets the control turret %s shoot at bases, not even in focus', weaponId => {

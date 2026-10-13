@@ -6,7 +6,7 @@ import type { TurretDamageBuff } from '../types';
 import { DEFAULT_TURRET_AIM_TOLERANCE_DEG, type TurretAimConfig } from '../config/turretAim';
 import { stepTurretAngle, turretAngleDifference } from '../utils/turretAngle';
 import type { ManualTurretControl } from './TurretControlSystem';
-import { canWeaponDamageBases } from './TurretBaseTargeting';
+import { canWeaponDamageBases, type TurretHitSegment } from './TurretBaseTargeting';
 
 /**
  * Schusslinienprüfung des Turrets. Bewusst die Schuss- und nicht die Sichtlinie: ein Turret,
@@ -84,11 +84,10 @@ type BaseTargetCandidateProvider = (
   source: TurretFireSource, turretX: number, turretY: number, range: number,
 ) => readonly TurretTargetPoint[];
 /**
- * Zielpunkt der Turmwahl. `aimRadius` begrenzt bei drehbegrenzten Türmen die Zieltoleranz auf den Winkel,
- * unter dem das Ziel tatsächlich getroffen wird; ohne Wert gilt die Toleranz des Turms (Figuren werden
- * zusätzlich durch Homing erreicht, Basen nicht).
+ * Basisziele tragen ihren Trefferabschnitt: Drehbegrenzte Türme müssen ihn mit dem tatsächlichen
+ * Rohrstrahl innerhalb ihrer Reichweite schneiden. Ziele ohne Abschnitt behalten die normale Toleranz.
  */
-interface TurretAimTarget { readonly x: number; readonly y: number; readonly aimRadius?: number }
+interface TurretAimTarget { readonly x: number; readonly y: number; readonly hitSegment?: TurretHitSegment }
 interface TurretTargetPoint extends TurretAimTarget { readonly id: string }
 interface PendingTurretBurst {
   /** Eintrag, der die Salve begonnen hat; nur er darf sie fortsetzen. */
@@ -101,7 +100,7 @@ interface PendingTurretBurst {
   targetY: number;
   damageMultiplier: number;
   rangeFactor: number;
-  aimRadius?: number;
+  hitSegment?: TurretHitSegment;
 }
 type TurretFireHandler = (
   ownerId: string,
@@ -245,10 +244,13 @@ export class TurretSystem {
       return constructions.get(source.identityId) ?? null;
     };
     // Neue eigene Folgen übernehmen den Stand ihres Seeds vom Tick-Beginn, unabhängig davon, ob der
-    // Seed in diesem Tick vor ihnen feuert.
+    // Seed in diesem Tick vor ihnen feuert. Eine laufende Seed-Salve muss erst ihren Cooldown
+    // buchen (auch beim Abbruch); bis zum nächsten Tick bleibt die neue Folge vollständig inaktiv.
+    const seedCooldowns = new Map(this.nextFireAt);
     for (const source of turrets) {
       if (source.sequenceSeedKey === undefined || this.nextFireAt.has(source.sequenceKey)) continue;
-      this.nextFireAt.set(source.sequenceKey, this.nextFireAt.get(source.sequenceSeedKey) ?? 0);
+      if (this.pendingBursts.has(source.sequenceSeedKey)) continue;
+      this.nextFireAt.set(source.sequenceKey, seedCooldowns.get(source.sequenceSeedKey) ?? 0);
     }
 
     for (const turret of turrets) {
@@ -260,6 +262,7 @@ export class TurretSystem {
       entrySequences.set(turret.id, sequenceKey);
       activeSequences.add(sequenceKey);
       activeIdentities.add(turret.identityId);
+      if (turret.sequenceSeedKey !== undefined && !this.nextFireAt.has(sequenceKey)) continue;
 
       const turretX = turret.x;
       const turretY = turret.y;
@@ -318,9 +321,16 @@ export class TurretSystem {
         );
         const burstAngle = this.updateAim(turret, desiredAngle, deltaMs);
         if (now < pendingBurst.nextShotAt || !this.fireHandler) continue;
-        if (turret.rotationSpeedDegPerSec === undefined
-          && !this.hasLineOfFireFromMuzzle(turret, turretX, turretY, pendingBurst.targetX, pendingBurst.targetY, muzzleOffset)) continue;
-        if (!this.canFireAtAngle(turret, burstAngle, pendingBurst.targetX, pendingBurst.targetY, muzzleOffset, pendingBurst.aimRadius)) continue;
+        if ((turret.rotationSpeedDegPerSec === undefined
+          && !this.hasLineOfFireFromMuzzle(turret, turretX, turretY, pendingBurst.targetX, pendingBurst.targetY, muzzleOffset))
+          || !this.canFireAtAngle(turret, burstAngle, pendingBurst.targetX, pendingBurst.targetY, muzzleOffset, targetRange, pendingBurst.hitSegment)) {
+          // Aktive Einträge warten wie bisher; eine pausierte Restsalve darf die geteilte Folge
+          // nicht festhalten. Ohne fälligen Schuss oder Fire-Handler erreichen wir diesen Pfad nicht.
+          if (paused && this.deleteOwnedBurst(turret)) {
+            this.nextFireAt.set(sequenceKey, Math.max(this.nextFireAt.get(sequenceKey) ?? 0, now + pendingBurst.cooldownMs));
+          }
+          continue;
+        }
         const muzzleX = turretX + Math.cos(burstAngle) * muzzleOffset;
         const muzzleY = turretY + Math.sin(burstAngle) * muzzleOffset;
         this.fireHandler?.(
@@ -365,7 +375,7 @@ export class TurretSystem {
       if (now < (this.nextFireAt.get(sequenceKey) ?? 0)) continue;
       if (manual && turret.rotationSpeedDegPerSec === undefined
         && !this.hasLineOfFireFromMuzzle(turret, turretX, turretY, target.x, target.y, muzzleOffset)) continue;
-      if (!this.canFireAtAngle(turret, angle, target.x, target.y, muzzleOffset, target.aimRadius)) continue;
+      if (!this.canFireAtAngle(turret, angle, target.x, target.y, muzzleOffset, targetRange, target.hitSegment)) continue;
       // Identitätsgebundene Verstärkungen (Injektor, Fernsteuerung) folgen dem Original, auch wenn
       // eine temporäre Quelle an anderem Ort feuert.
       const buff = this.turretDamageBuffProvider?.(identity.x, identity.y) ?? null;
@@ -406,7 +416,7 @@ export class TurretSystem {
           targetY: target.y,
           damageMultiplier,
           rangeFactor,
-          aimRadius: target.aimRadius,
+          hitSegment: target.hitSegment,
         });
       } else {
         this.nextFireAt.set(sequenceKey, now + cooldownMs);
@@ -424,7 +434,7 @@ export class TurretSystem {
         if (secondTarget) {
           const secondAngle = turret.rotationSpeedDegPerSec === undefined
             ? Phaser.Math.Angle.Between(turretX, turretY, secondTarget.x, secondTarget.y) : angle;
-          if (!this.canFireAtAngle(turret, secondAngle, secondTarget.x, secondTarget.y, muzzleOffset, secondTarget.aimRadius)) continue;
+          if (!this.canFireAtAngle(turret, secondAngle, secondTarget.x, secondTarget.y, muzzleOffset, targetRange, secondTarget.hitSegment)) continue;
           this.fireHandler?.(
             turret.ownerId,
             turret.ownerColor,
@@ -484,20 +494,41 @@ export class TurretSystem {
   }
 
   private canFireAtAngle(
-    turret: AutomatedTurret, angle: number, targetX: number, targetY: number, muzzleOffset: number, aimRadius?: number,
+    turret: AutomatedTurret, angle: number, targetX: number, targetY: number, muzzleOffset: number,
+    targetRange: number, hitSegment?: TurretHitSegment,
   ): boolean {
     if (turret.rotationSpeedDegPerSec === undefined) return true;
     const desiredAngle = Math.atan2(targetY - turret.y, targetX - turret.x);
-    const configured = (turret.aimToleranceDeg ?? DEFAULT_TURRET_AIM_TOLERANCE_DEG) * Math.PI / 180;
-    const tolerance = aimRadius === undefined ? configured : Math.min(configured,
-      Math.atan2(aimRadius, Math.max(1, Math.hypot(targetX - turret.x, targetY - turret.y))));
+    const tolerance = (turret.aimToleranceDeg ?? DEFAULT_TURRET_AIM_TOLERANCE_DEG) * Math.PI / 180;
     if (Math.abs(turretAngleDifference(angle, desiredAngle)) > tolerance + 1e-10) return false;
-    if (!this.lineOfFireChecker) return true;
     const dx = Math.cos(angle);
     const dy = Math.sin(angle);
-    const distance = Math.max(muzzleOffset, Math.hypot(targetX - turret.x, targetY - turret.y));
+    const muzzleX = turret.x + dx * muzzleOffset, muzzleY = turret.y + dy * muzzleOffset;
+    let distance = Math.max(muzzleOffset, Math.hypot(targetX - turret.x, targetY - turret.y));
+    if (hitSegment) {
+      const sx = hitSegment.x2 - hitSegment.x1, sy = hitSegment.y2 - hitSegment.y1;
+      const qx = hitSegment.x1 - muzzleX, qy = hitSegment.y1 - muzzleY;
+      const cross = dx * sy - dy * sx;
+      const epsilon = 1e-8;
+      let rayDistance: number;
+      if (Math.abs(cross) <= epsilon) {
+        // Parallel: Nur ein kollinearer Abschnitt (auch ein einzelner Punkt) kann getroffen werden.
+        if (Math.abs(qx * dy - qy * dx) > epsilon) return false;
+        const start = qx * dx + qy * dy, end = start + sx * dx + sy * dy;
+        if (Math.max(start, end) < -epsilon) return false;
+        rayDistance = Math.max(0, Math.min(start, end));
+      } else {
+        rayDistance = (qx * sy - qy * sx) / cross;
+        const segmentFraction = (qx * dy - qy * dx) / cross;
+        if (rayDistance < -epsilon || segmentFraction < -epsilon || segmentFraction > 1 + epsilon) return false;
+      }
+      // Zielreichweite wird wie bei der Zielwahl ab Turmmitte gemessen, nicht erneut ab Mündung.
+      distance = muzzleOffset + Math.max(0, rayDistance);
+      if (distance > targetRange + epsilon) return false;
+    }
+    if (!this.lineOfFireChecker) return true;
     return this.lineOfFireChecker(
-      turret.x + dx * muzzleOffset, turret.y + dy * muzzleOffset,
+      muzzleX, muzzleY,
       turret.x + dx * distance, turret.y + dy * distance,
       turret.skipRockIndex, turret.sourceCarrierBaseId,
     );
@@ -574,7 +605,7 @@ export class TurretSystem {
       // Kandidaten kommen nach Distanz sortiert: Die erste frei beschießbare Fläche ist die nächste.
       for (const base of this.baseTargetCandidateProvider(turret, turretX, turretY, range)) {
         if (excluded && base.x === excluded.x && base.y === excluded.y) continue;
-        if (consider({ x: base.x, y: base.y, aimRadius: base.aimRadius }, 2, 'base', base.id)) break;
+        if (consider({ x: base.x, y: base.y, hitSegment: base.hitSegment }, 2, 'base', base.id)) break;
       }
     }
 

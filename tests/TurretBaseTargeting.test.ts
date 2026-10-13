@@ -71,6 +71,23 @@ const facesFor = (cells: readonly BaseCell[], isCoveredCell = (_x: number, _y: n
   computeExposedBaseFaces({ cells, cellSize: 10, offsetX: 0, offsetY: 0, isCoveredCell });
 
 describe('exposed base geometry and aim ranking', () => {
+  it.each([0, 1])('returns the trimmed face segment containing its aim point (offset %s)', offset => {
+    const faces = facesFor([{ gridX: 0, gridY: 0 }]);
+    const points = rankBaseAimPoints(faces, -5, -5, 100, 4, offset, 2);
+    expect(points).toHaveLength(2);
+    expect(points[0]).toMatchObject({ hitSegment: { x1: 0 - offset, y1: 2, x2: 0 - offset, y2: 8 } });
+    expect(points[1]).toMatchObject({ hitSegment: { x1: 2, y1: 0 - offset, x2: 8, y2: 0 - offset } });
+    for (const point of points) {
+      const s = point.hitSegment;
+      expect(point.x).toBeGreaterThanOrEqual(Math.min(s.x1, s.x2));
+      expect(point.x).toBeLessThanOrEqual(Math.max(s.x1, s.x2));
+      expect(point.y).toBeGreaterThanOrEqual(Math.min(s.y1, s.y2));
+      expect(point.y).toBeLessThanOrEqual(Math.max(s.y1, s.y2));
+    }
+    expect(rankBaseAimPoints(faces, -5, -5, 100, 1, offset, 50)[0]).toMatchObject({
+      hitSegment: { x1: 0 - offset, y1: 5, x2: 0 - offset, y2: 5 } });
+  });
+
   it('preserves a U-shaped opening with inward courtyard faces pointing into empty space', () => {
     const cells = [[0, 0], [0, 1], [0, 2], [1, 2], [2, 2], [2, 1], [2, 0]]
       .map(([gridX, gridY]) => ({ gridX, gridY }));
@@ -100,15 +117,15 @@ describe('exposed base geometry and aim ranking', () => {
   it('reaches a nearby outer wall even when the base center is out of range', () => {
     const faces = facesFor(Array.from({ length: 30 }, (_, gridX) => ({ gridX, gridY: 0 })));
     expect(Math.hypot(150 - (-5), 5 - 5)).toBeGreaterThan(5);
-    expect(rankBaseAimPoints(faces, -5, 5, 5, 2)).toEqual([{ x: -1, y: 5, distance: 5 }]);
+    expect(rankBaseAimPoints(faces, -5, 5, 5, 2)).toMatchObject([{ x: -1, y: 5, distance: 5 }]);
     expect(rankBaseAimPoints(faces, -5, 5, 4.99, 2)).toEqual([]);
   });
 
   it('rejects back and tangent faces, clamps to endpoints and stably limits equal distances', () => {
     const faces = facesFor([{ gridX: 0, gridY: 0 }]);
-    expect(rankBaseAimPoints(faces, -5, 5, 100, 10)).toEqual([{ x: -1, y: 5, distance: 5 }]);
+    expect(rankBaseAimPoints(faces, -5, 5, 100, 10)).toMatchObject([{ x: -1, y: 5, distance: 5 }]);
     const tied = rankBaseAimPoints(faces, -5, -5, 100, 2, 2);
-    expect(tied).toEqual([{ x: -2, y: 0, distance: Math.sqrt(50) }, { x: 0, y: -2, distance: Math.sqrt(50) }]);
+    expect(tied).toMatchObject([{ x: -2, y: 0, distance: Math.sqrt(50) }, { x: 0, y: -2, distance: Math.sqrt(50) }]);
     expect(rankBaseAimPoints(faces, -5, -5, 100, 1, 2)).toEqual(tied.slice(0, 1));
     expect(rankBaseAimPoints(faces, -5, -5, 100, 0)).toEqual([]);
     expect(rankBaseAimPoints([], 0, 0, 100, 3)).toEqual([]);
@@ -117,11 +134,11 @@ describe('exposed base geometry and aim ranking', () => {
   it('keeps aim points away from convex corners, at most at the face midpoint', () => {
     const faces = facesFor([{ gridX: 0, gridY: 0 }]);
     const [corner] = rankBaseAimPoints(faces, -5, -5, 100, 1, 1, 2);
-    expect(corner).toEqual({ x: -1, y: 2, distance: Math.hypot(5, 7) });
+    expect(corner).toMatchObject({ x: -1, y: 2, distance: Math.hypot(5, 7) });
     // Ein Inset über die halbe Kantenlänge hinaus zielt auf die Kantenmitte.
     expect(rankBaseAimPoints(faces, -5, -5, 100, 1, 1, 50)[0]).toMatchObject({ x: -1, y: 5 });
     // Frontal bleibt der nächste Punkt unverändert.
-    expect(rankBaseAimPoints(faces, -5, 5, 100, 1, 1, 2)[0]).toEqual({ x: -1, y: 5, distance: 5 });
+    expect(rankBaseAimPoints(faces, -5, 5, 100, 1, 1, 2)[0]).toMatchObject({ x: -1, y: 5, distance: 5 });
   });
 });
 

@@ -42,7 +42,7 @@ import type { FireSystem } from '../src/effects/FireSystem';
 import type { GameAudioSystem } from '../src/audio/GameAudioSystem';
 import type { HostPhysicsSystem } from '../src/systems/HostPhysicsSystem';
 import { PlacementSystem } from '../src/systems/PlacementSystem';
-import { TurretSystem } from '../src/systems/TurretSystem';
+import { TurretSystem, toLocalTurretFireSource } from '../src/systems/TurretSystem';
 import { Ak47StrategicTargetSystem } from '../src/systems/Ak47StrategicTargetSystem';
 import type { TargetStatusSystem, TargetStatusTarget } from '../src/systems/TargetStatusSystem';
 import type { ArenaLayout, PlayerProfile } from '../src/types';
@@ -345,6 +345,66 @@ function createFixture(options: {
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe('hostile base aim candidates', () => {
+  function candidateFixture() {
+    let generation = 1;
+    const bases = Array.from({ length: 6 }, (_, index) => ({
+      id: `base-${index}`, damageable: true, hp: 100,
+      cells: [{ gridX: 14 + index, gridY: 10 }],
+      isDamageable() { return this.damageable; },
+      getHp() { return this.hp; },
+      getSpec() { return { cells: this.cells }; },
+    }));
+    const capture = vi.spyOn(TurretSystem.prototype, 'setBaseTargetCandidateProvider');
+    const baseManager = methodBag({ getBases: () => bases, getBasesByFaction: () => bases,
+      getObstacleGeneration: () => generation, getTurrets: () => [], getBase: () => undefined,
+      getObstacleRectangles: () => [] }) as unknown as BaseManager;
+    const fixture = createFixture({ coop: true, players: [], enemies: [], baseManager,
+      combatSystem: methodBag({ captureWorldDamageSource: () => ({}), canDamageStructure: () => true }) as unknown as CombatSystem });
+    const provider = capture.mock.calls.at(-1)![0]!;
+    const x = fixture.metrics.offsetX + 10 * CELL_SIZE, y = fixture.metrics.offsetY + 10.5 * CELL_SIZE;
+    const source = toLocalTurretFireSource({ id: 1, ownerId: 'builder', ownerColor: 0, x, y, weaponId: 'TURRET_MG' });
+    return { ...fixture, bases, query: () => provider(source, x, y, 1000),
+      nextGeneration: () => { generation += 1; } };
+  }
+
+  it('returns at most four nearest candidates and excludes immune and dead bases immediately', () => {
+    const f = candidateFixture();
+    expect(f.query().map(point => point.id)).toEqual(['base-0', 'base-1', 'base-2', 'base-3']);
+    f.bases[0].damageable = false;
+    f.bases[1].hp = 0;
+    expect(f.query().map(point => point.id)).toEqual(['base-2', 'base-3', 'base-4', 'base-5']);
+    for (const base of f.bases) base.hp = 0;
+    expect(f.query()).toEqual([]);
+    f.binding.destroy();
+  });
+
+  it('invalidates cached candidate geometry on generation changes and activity clear', () => {
+    const f = candidateFixture();
+    const first = f.query();
+    for (const base of f.bases) base.cells = base.cells.map(cell => ({ ...cell, gridX: cell.gridX + 1 }));
+    expect(f.query()).toEqual(first);
+    f.nextGeneration();
+    const second = f.query();
+    expect(second.map(point => point.x)).toEqual(first.map(point => point.x + CELL_SIZE));
+    for (const base of f.bases) base.cells = base.cells.map(cell => ({ ...cell, gridX: cell.gridX + 1 }));
+    expect(f.query()).toEqual(second);
+    f.binding.clearActivityBindings();
+    expect(f.query().map(point => point.x)).toEqual(second.map(point => point.x + CELL_SIZE));
+    f.binding.destroy();
+  });
+
+  it('passes the trimmed face segment through the candidate provider', () => {
+    const f = candidateFixture();
+    const [point] = f.query();
+    expect(point).toMatchObject({ hitSegment: {
+      x1: point.x, y1: point.y - CELL_SIZE / 4,
+      x2: point.x, y2: point.y + CELL_SIZE / 4,
+    } });
+    f.binding.destroy();
+  });
 });
 
 describe('personal MG profile and World lifetime', () => {

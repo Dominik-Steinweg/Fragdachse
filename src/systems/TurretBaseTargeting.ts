@@ -124,13 +124,21 @@ export class ExposedBaseFaceCache {
   }
 }
 
-export interface BaseAimPoint { readonly x: number; readonly y: number; readonly distance: number }
+export interface TurretHitSegment {
+  readonly x1: number; readonly y1: number;
+  readonly x2: number; readonly y2: number;
+}
+export interface BaseAimPoint {
+  readonly x: number; readonly y: number; readonly distance: number;
+  readonly hitSegment: TurretHitSegment;
+}
 
 /**
  * Range and returned distance refer to the actual surface, before the LOS epsilon.
  * The caller checks visibility at the returned (outward-offset) x/y, never the center.
  * `endInset` keeps the point that far from both face ends (at most the midpoint): a shot aimed
  * exactly at a convex corner grazes past it on the slightest aim error.
+ * The hit segment uses the same outward offset as the aim point and trims both face ends.
  */
 export function rankBaseAimPoints(
   faces: readonly ExposedBaseFace[], fromX: number, fromY: number,
@@ -148,8 +156,14 @@ export function rankBaseAimPoints(
     if ((fromX - x) * face.normalX + (fromY - y) * face.normalY <= 0) return;
     const distance = Math.hypot(fromX - x, fromY - y);
     if (distance <= range) points.push({ x: x + outwardOffset * face.normalX,
-      y: y + outwardOffset * face.normalY, distance, index });
+      y: y + outwardOffset * face.normalY, distance, index,
+      hitSegment: {
+        x1: face.x1 + margin * dx + outwardOffset * face.normalX,
+        y1: face.y1 + margin * dy + outwardOffset * face.normalY,
+        x2: face.x1 + (1 - margin) * dx + outwardOffset * face.normalX,
+        y2: face.y1 + (1 - margin) * dy + outwardOffset * face.normalY,
+      } });
   });
   points.sort((a, b) => a.distance - b.distance || a.index - b.index);
-  return points.slice(0, Math.floor(limit)).map(({ x, y, distance }) => ({ x, y, distance }));
+  return points.slice(0, Math.floor(limit)).map(({ x, y, distance, hitSegment }) => ({ x, y, distance, hitSegment }));
 }
