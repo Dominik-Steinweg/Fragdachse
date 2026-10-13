@@ -1,0 +1,131 @@
+{
+  "generator": "Integrated image_gen tool",
+  "date": "2026-10-13",
+  "sourceWorktree": "C:/Fragdachse-worktrees/dawn",
+  "sourceRoot": "art/poc/dawn/",
+  "selectionSource": "art/poc/dawn/SELECTION.md",
+  "promptFidelity": "Prompt cores as documented in candidate READMEs; not reconstructed full tool requests.",
+  "iconCommonPrompt": "Use case: stylized-concept. Create ONE isolated production game asset for Fragdachse, forest scrap technology. Square PNG with actual transparent alpha background. Modern colorful lightly stylized textured 2D painted game icon, soft beveled edges, subtle brushed scuffs, matte olive metal, charcoal steel and warm rust/brass material language. Style reference visually inspected: softly shaded olive/charcoal machine gun with broad clean surfaces, subtle painterly wear, rounded bevels and restrained highlights. Match that material finish. Strong coherent silhouette, large value-separated masses, very sparse detail, legible when reduced to 20-40 pixels. Center asset with 12% transparent padding, fills around 76% canvas. No ground, no pedestal, no backdrop, no drop shadow, no text, numbers, logos, watermarks, pixel grid, hard black outlines, photoreal reflections or miniature lighting.",
+  "iconComposition": "UI: kompakte emblematische Komposition, lesbar ab 20 px.",
+  "portraitCommonPrompt": "Gemeinsamer Prompt: moderner farbenfroher, texturierter, leicht stilisierter 2D-Look; weiche Kanten; europäischer Dachs; rostige, teils moosige Waldtechnik; klare Silhouette/Wertkontraste; matte Materialien. Keine Pixelrasterung, schwarzen Cartoon-Outlines, fotografischen Reflexe, Miniaturbeleuchtung, Schrift, Logos oder Wasserzeichen. Transparenter PNG-Hintergrund. Stände ausdrücklich orthografisch 90° von oben ohne Seitenwände, ungefähr 3×2-Spielzellen; Konzepte/Büsten in Dreiviertelansicht.",
+  "assets": [
+    {
+      "key": "scrap",
+      "original": "scrap.png",
+      "source": "icons/candidates/icon-scrap-01.png",
+      "sha256": "fb34ceee49579cee57e8bde78f370697c1790e56b6b1c83d9a33b608d3a8e49b",
+      "date": "2026-10-13",
+      "promptSource": "icons/candidates/README.md",
+      "promptCore": "One large rusty six-tooth gear behind a small bundle of two pale scrap metal plates tied by a copper band; bold economical diagonal icon.",
+      "selectionReason": "Zahnrad + Blech, klarste Silhouette, liest auch bei 20 px.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "threat",
+      "original": "threat.png",
+      "source": "icons/candidates/icon-threat-04.png",
+      "sha256": "64894b8df26f0b13f7cf09988885c4f4e786a5e632042de1388f9d0fba61524f",
+      "date": "2026-10-13",
+      "promptSource": "icons/candidates/README.md",
+      "promptCore": "Threat emblem: ivory moon above three deep crimson claw cuts in a dark olive round iron medallion, lower central area left plain and empty for a later number overlay. No text or numbers.",
+      "selectionReason": "Mond + Klauenspuren trägt das Nachtthema des Modus; runde Form verträgt eine Zahl. Dachswappen (02) als Alternative, falls das Emblem „fraktionaler\" wirken soll.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "dealer-expansion",
+      "original": "dealer-expansion.png",
+      "source": "icons/candidates/icon-expansion-01.png",
+      "sha256": "bd39608175d08fd836b5ee4a6f0e6032b1e75555262f401ac7e2b67ab54d3499",
+      "date": "2026-10-13",
+      "promptSource": "icons/candidates/README.md",
+      "promptCore": "Base expansion emblem: simple top-down circular palisade ring with four large wooden stakes and two broad bronze arrows pointing outward. Sparse, readable.",
+      "selectionReason": "Palisadenring mit vier Pfeilen nach außen = „Radius wächst\" ohne Erklärung. 02 ist klein zu unruhig.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "dealer-infrastructure",
+      "original": "dealer-infrastructure.png",
+      "source": "icons/candidates/icon-infrastructure-01.png",
+      "sha256": "43503c210c3b487685e7438f6ba105d9a0214a364fbeeb0fae97d1a1ed663636",
+      "date": "2026-10-13",
+      "promptSource": "icons/candidates/README.md",
+      "promptCore": "Infrastructure icon: compact friendly olive repair drone with two small rotor discs and a large pale steel wrench grasped beneath; warm amber sensor.",
+      "selectionReason": "Reparaturdrohne mit Schlüssel bildet das erste Angebot direkt ab.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "dealer-upgrades",
+      "original": "dealer-upgrades.png",
+      "source": "icons/candidates/icon-upgrades-02.png",
+      "sha256": "c332925d2b800527cb1b92f7655f6eaedc858f74e27044c550900edc0e100884",
+      "date": "2026-10-13",
+      "promptSource": "icons/candidates/README.md",
+      "promptCore": "Upgrade icon: stylized ivory badger skull on a bronze medal with two short olive ribbon ends, broad simple eye sockets.",
+      "selectionReason": "Schädel-Medaille = Boss-Punkt; grenzt sich vom generischen Stern ab.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "dealer-equipment",
+      "original": "dealer-equipment.png",
+      "source": "icons/candidates/icon-equipment-02.png",
+      "sha256": "6519125df92bb37122657120a6675b6f46278eb288747144ed05ecea0f15d91b",
+      "date": "2026-10-13",
+      "promptSource": "icons/candidates/README.md",
+      "promptCore": "Equipment icon: chunky dark olive armored glove with three broad pale steel knuckle plates, warm brown wrist cuff.",
+      "selectionReason": "Gepanzerter Handschuh, eigenständig. `icon-equipment-01` verworfen: Helmsilhouette ist historisch belastet.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "recalibration-core",
+      "original": "recalibration-core.png",
+      "source": "icons/candidates/icon-recalibration-core-01.png",
+      "sha256": "8f1c06b76cb61be556b59bb00c68dd6dd45ea6bf245d3efac7af045cc8f35710",
+      "date": "2026-10-13",
+      "promptSource": "icons/candidates/README.md",
+      "promptCore": "Recalibration core: bright cyan faceted crystal held by a chunky brass setting, two broad orbiting gimbal rings at opposing angles imply rotation, no motion streaks.",
+      "selectionReason": "Kardanringe um Cyan-Kristall = „neu auswürfeln\" lesbar; Cyan bleibt der Farbe seltener Technik vorbehalten.",
+      "sizes": [
+        32,
+        64,
+        128
+      ]
+    },
+    {
+      "key": "dealer-portrait",
+      "original": "dealer-portrait.png",
+      "source": "dealer/candidates/dealer-portrait-01.png",
+      "sha256": "476ae5b10f7ec209258353d7ef7657752efd9fabd1ad569e295e8cef3ca1210f",
+      "date": "2026-10-13",
+      "promptSource": "dealer/candidates/README.md",
+      "promptCore": "Gerissener älterer Dachs, gehobene Braue, Schweißerbrille und Orangeschal.",
+      "selectionReason": "Brille auf der Stirn, warmes Halstuch, gerissen-freundlicher Blick; passt zur Figur aus Konzept 02 und zum Holz-/Efeu-Lobbystil. Für die Produktion an Konzept 02 angleichen (Mütze, rotes Halstuch).",
+      "sizes": [
+        256
+      ]
+    }
+  ]
+}

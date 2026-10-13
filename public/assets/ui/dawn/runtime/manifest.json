@@ -1,0 +1,235 @@
+{
+  "paddingFraction": 0.0625,
+  "alphaThreshold": 1,
+  "sourceEdgeGuard": 2,
+  "assets": {
+    "scrap": {
+      "original": "scrap.png",
+      "sha256": "fb34ceee49579cee57e8bde78f370697c1790e56b6b1c83d9a33b608d3a8e49b",
+      "crop": {
+        "left": 108,
+        "top": 102,
+        "width": 1060,
+        "height": 1048
+      },
+      "exports": [
+        {
+          "file": "runtime/scrap-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1700
+        },
+        {
+          "file": "runtime/scrap-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 5606
+        },
+        {
+          "file": "runtime/scrap-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 16350
+        }
+      ]
+    },
+    "threat": {
+      "original": "threat.png",
+      "sha256": "64894b8df26f0b13f7cf09988885c4f4e786a5e632042de1388f9d0fba61524f",
+      "crop": {
+        "left": 45,
+        "top": 26,
+        "width": 1163,
+        "height": 1114
+      },
+      "exports": [
+        {
+          "file": "runtime/threat-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1572
+        },
+        {
+          "file": "runtime/threat-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 5206
+        },
+        {
+          "file": "runtime/threat-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 15214
+        }
+      ]
+    },
+    "dealer-expansion": {
+      "original": "dealer-expansion.png",
+      "sha256": "bd39608175d08fd836b5ee4a6f0e6032b1e75555262f401ac7e2b67ab54d3499",
+      "crop": {
+        "left": 58,
+        "top": 122,
+        "width": 1137,
+        "height": 1001
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-expansion-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1352
+        },
+        {
+          "file": "runtime/dealer-expansion-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4148
+        },
+        {
+          "file": "runtime/dealer-expansion-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 14380
+        }
+      ]
+    },
+    "dealer-infrastructure": {
+      "original": "dealer-infrastructure.png",
+      "sha256": "43503c210c3b487685e7438f6ba105d9a0214a364fbeeb0fae97d1a1ed663636",
+      "crop": {
+        "left": 60,
+        "top": 129,
+        "width": 1166,
+        "height": 998
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-infrastructure-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1438
+        },
+        {
+          "file": "runtime/dealer-infrastructure-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4492
+        },
+        {
+          "file": "runtime/dealer-infrastructure-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 13402
+        }
+      ]
+    },
+    "dealer-upgrades": {
+      "original": "dealer-upgrades.png",
+      "sha256": "c332925d2b800527cb1b92f7655f6eaedc858f74e27044c550900edc0e100884",
+      "crop": {
+        "left": 146,
+        "top": 94,
+        "width": 961,
+        "height": 1051
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-upgrades-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1772
+        },
+        {
+          "file": "runtime/dealer-upgrades-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 5914
+        },
+        {
+          "file": "runtime/dealer-upgrades-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 16206
+        }
+      ]
+    },
+    "dealer-equipment": {
+      "original": "dealer-equipment.png",
+      "sha256": "6519125df92bb37122657120a6675b6f46278eb288747144ed05ecea0f15d91b",
+      "crop": {
+        "left": 106,
+        "top": 104,
+        "width": 1070,
+        "height": 1049
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-equipment-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1650
+        },
+        {
+          "file": "runtime/dealer-equipment-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4866
+        },
+        {
+          "file": "runtime/dealer-equipment-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 15442
+        }
+      ]
+    },
+    "recalibration-core": {
+      "original": "recalibration-core.png",
+      "sha256": "8f1c06b76cb61be556b59bb00c68dd6dd45ea6bf245d3efac7af045cc8f35710",
+      "crop": {
+        "left": 120,
+        "top": 93,
+        "width": 1032,
+        "height": 1067
+      },
+      "exports": [
+        {
+          "file": "runtime/recalibration-core-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1992
+        },
+        {
+          "file": "runtime/recalibration-core-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 5968
+        },
+        {
+          "file": "runtime/recalibration-core-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 18204
+        }
+      ]
+    },
+    "dealer-portrait": {
+      "original": "dealer-portrait.png",
+      "sha256": "476ae5b10f7ec209258353d7ef7657752efd9fabd1ad569e295e8cef3ca1210f",
+      "crop": {
+        "left": 38,
+        "top": 0,
+        "width": 1193,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-portrait-256.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 56770
+        }
+      ]
+    }
+  }
+}
