@@ -9,6 +9,7 @@ import { COOP_DEFENSE_UPGRADE_DEFINITIONS as upgrades, isCoopDefenseUpgradeAvail
 import { sanitizeCoopDefenseEquippedItems } from '../../utils/coopDefenseItems';
 import type { CoopDefenseClassId, ConstructionId, CoopDefenseItem, LoadoutToolRef } from '../../types';
 import { DAWN_MAX_THREAT } from '../../dawn/contracts/DawnPlans';
+import { DAWN_NIGHT_MODIFIER_IDS, type DawnNightModifierId } from '../../dawn/contracts/DawnContentIds';
 
 export interface GridPoint { gridX: number; gridY: number }
 /** Scripted bot badger; shares class, upgrades and items with the scenario player. */
@@ -16,7 +17,7 @@ export interface DevScenarioBot { name: string; weapon1: string; weapon2: string
 export interface DevScenario {
   version: 1;
   mapId?: string;
-  dawn?: { threat: number };
+  dawn?: { threat: number; nightModifier?: DawnNightModifierId | 'none' };
   seed: number;
   classId: CoopDefenseClassId;
   weapon1: string;
@@ -127,10 +128,14 @@ export function parseScenario(value: unknown): DevScenario {
   if ('dawn' in raw) {
     if (raw.mapId !== undefined) throw new Error('dawn und mapId schließen sich aus.');
     const dawn = object(raw.dawn, 'dawn');
-    for (const key of Object.keys(dawn)) if (key !== 'threat') throw new Error(`dawn: unbekanntes Feld ${key}.`);
+    for (const key of Object.keys(dawn)) if (key !== 'threat' && key !== 'nightModifier') throw new Error(`dawn: unbekanntes Feld ${key}.`);
     const threat = number(dawn.threat, 'dawn.threat', 1, DAWN_MAX_THREAT);
     if (!Number.isInteger(threat)) throw new Error('dawn.threat muss ganzzahlig sein.');
-    config.dawn = { threat };
+    const modifier = dawn.nightModifier;
+    if (modifier !== undefined && modifier !== 'none' && !DAWN_NIGHT_MODIFIER_IDS.includes(modifier as DawnNightModifierId)) {
+      throw new Error('dawn.nightModifier: blood-moon, fog, bombers, fire oder none erwartet.');
+    }
+    config.dawn = { threat, ...(modifier !== undefined ? { nightModifier: modifier as DawnNightModifierId | 'none' } : {}) };
     delete config.mapId;
   } else if (!scenarioMaps().some(map => map.mapId === config.mapId)) throw new Error(`Unbekannte Map: ${config.mapId}`);
   number(config.seed, 'seed', 0, 0xffffffff);

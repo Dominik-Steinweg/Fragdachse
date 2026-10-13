@@ -13,13 +13,17 @@ import {
 } from '../contracts/DawnPlans';
 import { createDawnRandom } from './DawnRandom';
 import { composeDawnSites } from './DawnSiteComposition';
-import { assignDawnFronts, composeDawnDayPressure, composeDawnNight, composeDawnSiteAssaults } from './DawnWaveComposition';
+import { assignDawnFronts, composeDawnDayPressure, composeDawnSiteAssaults } from './DawnWaveComposition';
+import { composeDawnModifiedNight } from './DawnNightModifierComposition';
+import type { DawnNightModifierId } from '../contracts/DawnContentIds';
 
 export interface DawnRoundCompositionInput {
   /** Rundenseed des Hosts; gleicher Seed und gleiche Eingaben ergeben dieselben Plaene. */
   readonly seed: number;
   readonly threat: number;
   readonly dayNumber: number;
+  /** Explicit dev recipe override; normal host composition leaves this absent. */
+  readonly nightModifier?: DawnNightModifierId | 'none';
 }
 
 export interface DawnRoundPlans {
@@ -42,9 +46,10 @@ export function composeDawnRoundPlans(input: DawnRoundCompositionInput): DawnRou
   const schedule = getDawnSchedule(curve.scheduleId);
   const sites = composeDawnSites({ random: createDawnRandom(seed, 'sites'), template, curve });
   const fronts = assignDawnFronts(createDawnRandom(seed, 'fronts'), template, curve);
+  const night = composeDawnModifiedNight({ seed, random: createDawnRandom(seed, 'night'), curve, schedule, fronts, nightModifier: input.nightModifier });
   const waves = [
     ...composeDawnDayPressure({ random: createDawnRandom(seed, 'day'), curve, schedule, fronts }),
-    ...composeDawnNight({ random: createDawnRandom(seed, 'night'), curve, schedule, fronts }),
+    ...night.waves,
     ...composeDawnSiteAssaults({ random: createDawnRandom(seed, 'site-assaults'), curve, sites }),
   ].sort((left, right) => left.atMs - right.atMs || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
 
@@ -56,6 +61,7 @@ export function composeDawnRoundPlans(input: DawnRoundCompositionInput): DawnRou
     dayNumber,
     scheduleId: schedule.id,
     waves,
+    ...(night.nightModifierId ? { nightModifierId: night.nightModifierId } : {}),
   };
   // Der Host verschickt nie einen Plan, den die Netzwerkgrenze eines Clients verwerfen wuerde.
   if (!parseDawnWorldPlan(world) || !parseDawnActivityPlan(activity)) {

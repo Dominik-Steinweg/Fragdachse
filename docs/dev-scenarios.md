@@ -39,6 +39,16 @@ Nur Vorwärtssprünge sind erlaubt, nur im isolierten Dev-Host und nach abgeschl
 Die Aktion aktiviert Mission und Encounter und löst eine globale Pause; nach einem `dawnPhase`-Review
 ist zuerst ein neuer Aufbau nötig. Für Gameplay-Threat-Vergleiche dieselbe Ausrüstung und Basis verwenden.
 
+Optional erzwingt `dawn: { threat: 3, nightModifier: 'blood-moon' }` einen Nacht-Modifikator.
+Erlaubt sind `blood-moon`, `fog`, `bombers`, `fire` und `none` (explizit ohne Modifikator).
+Ohne Feld würfelt der Host anhand von Threat und Seed. Der Override gilt auch bei Threat 1–2,
+ändert nur den nächsten komponierten Plan und wird bei einem neuen Rezept ohne Feld entfernt.
+Ab Dämmerung zeigt die Phasenkarte den Namen und, falls geladen, `night-<id>`; beim Nachtbeginn
+folgt die Ansage. `dawnPhase` erlaubt auch den Vergleich von Tag, Nacht und Rückkehr zum Grundnebel.
+Die abschaltbare Randfärbung wird in `src/effects/dawn/NightModifierAtmosphere.ts` über
+`NIGHT_MODIFIER_ATMOSPHERE.enabled` gesteuert; Farben, Stärke und Pulszeiten liegen dort gemeinsam.
+Brandnacht nutzt Pyro-/Brandstifter-Angriffe samt bestehendem Bodenfeuer, Bombernacht endliche Luftangriffe.
+
 Ein Dawn-Rezept verwendet `dawn: { threat: 1…10 }` **statt** `mapId`; Threat muss ganzzahlig sein.
 Der isolierte Dev-Speicher erhält den Abschluss der letzten Kampagnenmap und
 `dawn.expansionLevel = threat - 1`. Danach wählt der Host das Dawn-Programm und startet über

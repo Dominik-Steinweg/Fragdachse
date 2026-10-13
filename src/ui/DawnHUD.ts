@@ -12,6 +12,7 @@ import type { CoopDefenseSecondaryObjectivePresentationState } from '../types';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { registerGraphicsObject } from '../effects/EffectUtils';
 import { t } from '../i18n';
+import { NightModifierAtmosphere } from '../effects/dawn/NightModifierAtmosphere';
 import { HudCard } from './HudCard';
 import type { CoopDefenseObjectiveAnnouncement } from './CoopDefenseObjectiveAnnouncement';
 import { getArrowPointOnScreenViewEdge, getVisibleWorldView, isWorldPointInsideView } from './HostileBaseIndicator';
@@ -22,6 +23,8 @@ const CARD = { x: 270, y: 66, width: 480, scale: 0.62 };
 /** Scene-owned projection of replicated Dawn plans, time and objective state. */
 export class DawnHUD {
   private readonly card: HudCard;
+  private readonly atmosphere: NightModifierAtmosphere;
+  private modifierIcon: Phaser.GameObjects.Image | null = null;
   private announcements: CoopDefenseObjectiveAnnouncement | null = null;
   private key = '';
   private phase = '';
@@ -32,6 +35,7 @@ export class DawnHUD {
   private readonly markers = new Map<string, { world: Phaser.GameObjects.Graphics; edge: Phaser.GameObjects.Graphics }>();
 
   constructor(private readonly scene: Phaser.Scene) {
+    this.atmosphere = new NightModifierAtmosphere(scene);
     this.card = new HudCard(scene, { ...CARD, tone: 'neutral', titleSize: 14, valueSize: 14, kickerSize: 10,
       valueIcon: { key: DAWN_UI_TEXTURES.scrap, size: 18 },
       kickerIcon: { key: DAWN_UI_TEXTURES.threat, size: 18 },
@@ -66,34 +70,40 @@ export class DawnHUD {
     if (!this.world || !this.metrics) return;
     const model = buildDawnHudModel({ schedule: getDawnSchedule(plan.scheduleId), elapsedMs: input.now - input.startTime,
       sharedScrap: input.sharedScrap, threat: plan.threat, dayNumber: plan.dayNumber, sites: this.sites, objectives: input.objectives,
-      clockMinutes: input.clockMinutes });
+      clockMinutes: input.clockMinutes, nightModifierId: plan.nightModifierId });
+    this.atmosphere.sync(model.nightModifier?.id, model.phase, input.now - input.startTime);
+    const modifierLabel = model.nightModifier ? t(model.nightModifier.nameKey) : '';
     const label = t(`ui.dawn.phase.${model.phase}`);
     const kicker = t('ui.dawn.dayThreat', { day: model.dayNumber, threat: model.threat });
     const tone = model.phase === 'night' ? 'purple' : model.phase === 'dawn' ? 'green' : model.phase === 'dusk' ? 'orange' : 'neutral';
     if (this.phase !== model.phase) {
       this.phase = model.phase;
       this.announcements?.enqueue({ id: `dawn:${key}:${model.phase}`, topic: 'dawn-phase', priority: 50,
-        kicker, title: label, tone: model.phase === 'night' ? 'wave' : model.phase === 'dawn' ? 'positive' : 'main',
+        kicker, title: model.phase === 'night' && modifierLabel ? modifierLabel.toLocaleUpperCase() : label,
+        tone: model.phase === 'night' ? 'wave' : model.phase === 'dawn' ? 'positive' : 'main',
         ...(model.returnToBase ? { detail: t('ui.dawn.returnToBase') } : {}),
       });
     }
     const remaining = `${Math.floor(model.remainingSeconds / 60)}:${(model.remainingSeconds % 60).toString().padStart(2, '0')}`;
-    const signature = [label, kicker, model.clock, remaining, model.scrap, model.returnToBase].join('|');
+    const signature = [label, kicker, model.clock, remaining, model.scrap, model.returnToBase, modifierLabel].join('|');
     if (signature !== this.signature) {
       this.signature = signature;
-      this.card.setTone(tone).setKicker(model.returnToBase ? `${kicker} · ${t('ui.dawn.returnToBase')}` : kicker)
+      const phaseKicker = [kicker, model.returnToBase ? t('ui.dawn.returnToBase') : '', modifierLabel].filter(Boolean).join(' · ');
+      this.card.setTone(tone).setKicker(phaseKicker)
         .setValue(t('ui.dawn.scrapCount', { scrap: model.scrap }));
       const title = t('ui.dawn.phaseTime', { phase: label, clock: model.clock, time: remaining });
       this.card.title.setText(title);
       this.card.setWidth(resolveDawnHudWidth({ minimum: CARD.width,
         inset: this.card.width / 2 - this.card.contentRight,
         title: this.card.title.width, value: this.card.value.width, kicker: this.card.kicker.width,
-        valueIcon: this.card.valueIconWidth, kickerIcon: this.card.kickerIconWidth,
+        valueIcon: this.card.valueIconWidth, kickerIcon: this.card.kickerIconWidth
+          + (model.nightModifier && this.scene.textures.exists(model.nightModifier.iconKey) ? 24 : 0),
       })).setTitle(title);
       // Keep the original left edge when long phase names or counters need more room.
       this.card.root.setPosition(CARD.x - CARD.width / 2 + this.card.width / 2, CARD.y);
     }
     this.card.setProgress(model.remainingFraction).root.setVisible(true);
+    this.syncModifierIcon(model.nightModifier?.iconKey);
     const targets = model.sites.map(site => ({ id: site.objectiveId, ...site }));
     const anchor = this.world.persistentBaseSite?.anchor;
     if (model.returnToBase && anchor) targets.push({ id: 'return-base', objectiveId: 'return-base', visualKey: 'return-base', ...anchor });
@@ -151,8 +161,21 @@ export class DawnHUD {
       top: CARD.y - this.card.height / 2, bottom: CARD.y + this.card.height / 2 }] : [];
   }
 
+  private syncModifierIcon(key?: string): void {
+    if (!key || !this.scene.textures.exists(key)) { this.modifierIcon?.setVisible(false); return; }
+    if (!this.modifierIcon) {
+      this.modifierIcon = this.scene.add.image(0, 0, key).setDisplaySize(18, 18);
+      this.card.root.add(this.modifierIcon);
+      promoteToClarityCamera(this.scene, this.modifierIcon);
+    }
+    this.modifierIcon.setTexture(key).setDisplaySize(18, 18).setVisible(true)
+      .setPosition(this.card.contentRight - 9, this.card.kicker.y);
+  }
+
   private clear(): void {
     this.card.root.setVisible(false);
+    this.atmosphere.clear();
+    this.modifierIcon?.setVisible(false);
     if (!this.key) return;
     this.announcements?.clearTopic('dawn-phase');
     this.key = ''; this.phase = ''; this.signature = ''; this.world = null; this.metrics = null; this.sites = [];
@@ -160,5 +183,5 @@ export class DawnHUD {
     this.markers.clear();
   }
 
-  destroy(): void { this.clear(); this.card.destroy(); }
+  destroy(): void { this.clear(); this.atmosphere.destroy(); this.card.destroy(); }
 }

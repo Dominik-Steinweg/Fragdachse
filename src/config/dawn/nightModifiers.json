@@ -1,0 +1,31 @@
+{
+  "modifiers": [
+    {
+      "id": "blood-moon",
+      "chanceByThreat": [0, 0, 0.025, 0.045, 0.065, 0.085, 0.105, 0.12, 0.135, 0.15],
+      "nightBudgetMultiplier": 1.3,
+      "enemyWeightMultipliers": { "zombie-badger": 0.35, "demon-badger": 1.5, "rabid-badger": 1.5, "spore-warden": 2, "plague-medic": 2, "thrower-badger": 2, "alien-badger": 2, "void-stalker": 2, "timebomb-badger": 2, "pyro-badger": 2, "stink-broodmother": 2, "mortar-badger": 2, "firestarter-badger": 2 }
+    },
+    {
+      "id": "fog",
+      "chanceByThreat": [0, 0, 0.025, 0.045, 0.065, 0.085, 0.105, 0.12, 0.135, 0.15],
+      "nightBudgetMultiplier": 1,
+      "enemyWeightMultipliers": {},
+      "fogStrength": 2
+    },
+    {
+      "id": "bombers",
+      "chanceByThreat": [0, 0, 0.025, 0.045, 0.065, 0.085, 0.105, 0.12, 0.135, 0.15],
+      "nightBudgetMultiplier": 1,
+      "enemyWeightMultipliers": {},
+      "airstrikes": { "intervalMs": 30000, "strikeCount": 6, "endClearanceMs": 15000, "radiusCells": 24 }
+    },
+    {
+      "id": "fire",
+      "chanceByThreat": [0, 0, 0.025, 0.045, 0.065, 0.085, 0.105, 0.12, 0.135, 0.15],
+      "nightBudgetMultiplier": 1,
+      "enemyWeightMultipliers": {},
+      "additionalBlocks": ["pyro-assault", "artillery-nest"]
+    }
+  ]
+}

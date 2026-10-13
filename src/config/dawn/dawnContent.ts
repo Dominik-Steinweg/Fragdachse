@@ -23,6 +23,8 @@ import rawSalvage from './salvage.json';
 import rawSiteArchetypes from './siteArchetypes.json';
 import rawThreatCurves from './threatCurves.json';
 import { DAWN_ELITE_CONFIG } from './elites';
+import rawNightModifiers from './nightModifiers.json';
+import { validateDawnNightModifiers } from './dawnNightModifiers';
 
 /**
  * Loader, Validatoren und Content-Hash der Dawn-Registries.
@@ -214,6 +216,7 @@ const ENEMY_THREAT_COSTS = validateEnemyThreatCosts(rawThreatCurves.enemyThreatC
 const WAVE_BLOCKS = validateWaveBlocks(rawWaveBlocks);
 const WAVE_COMPOSITION = validateWaveComposition(rawThreatCurves);
 const THREAT_CURVES = validateThreatCurves(rawThreatCurves.curves);
+const NIGHT_MODIFIERS = validateDawnNightModifiers(rawNightModifiers, [...WAVE_BLOCKS.values()]);
 
 /** Hash ueber alle Dawn-Registries; Teil jedes Dawn-Plans. */
 export const DAWN_CONTENT_HASH = hashCanonicalJson({
@@ -227,6 +230,7 @@ export const DAWN_CONTENT_HASH = hashCanonicalJson({
   enemyThreatCosts: Object.fromEntries(ENEMY_THREAT_COSTS),
   waveComposition: WAVE_COMPOSITION,
   threatCurves: THREAT_CURVES,
+  nightModifiers: NIGHT_MODIFIERS,
   scrapPickups: Object.values(DAWN_SCRAP_DEFS).map(({ id, amount }) => ({ id, amount })),
 });
 
@@ -290,6 +294,14 @@ export function getDawnThreatCurve(threat: number): DawnThreatCurve {
 
 export function getDawnWaveComposition(): DawnWaveCompositionConfig {
   return WAVE_COMPOSITION;
+}
+
+export function getDawnNightModifiers() { return NIGHT_MODIFIERS; }
+
+export function getDawnNightModifier(id: string) {
+  const modifier = NIGHT_MODIFIERS.find(entry => entry.id === id);
+  if (!modifier) throw new Error(`[dawnContent] Unknown night modifier: ${id}`);
+  return modifier;
 }
 
 export function getDawnEnemyThreatCost(enemyKind: string): number {

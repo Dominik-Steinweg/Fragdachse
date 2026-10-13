@@ -13,6 +13,7 @@ import {
   resolveDawnWaveBlockWeight,
 } from '../src/config/dawn/dawnContent';
 import { composeDawnRoundPlans, type DawnRoundPlans } from '../src/dawn/composition/DawnRoundComposition';
+import { resolveDawnNightCurve } from '../src/dawn/composition/DawnNightModifierComposition';
 import {
   DAWN_MAX_THREAT,
   haveSameDawnPlan,
@@ -95,7 +96,7 @@ describe('Dawn round composition', () => {
         const dayWaves = phaseWaves(plans, 'day');
 
         expect(nightWaves.length + dayWaves.length, 'front waves only during day and night').toBe(frontWaves(plans).length);
-        expect(costOf(nightWaves)).toBeLessThanOrEqual(curve.nightBudget + 1e-6);
+        expect(costOf(nightWaves)).toBeLessThanOrEqual(resolveDawnNightCurve(curve, plans.activity.nightModifierId).nightBudget + 1e-6);
         expect(costOf(dayWaves)).toBeLessThanOrEqual(curve.dayPressureBudget + 1e-6);
         // A larger budget must become actual pressure even with a bounded number of wire slots.
         expect(costOf(nightWaves)).toBeGreaterThan(curve.nightBudget * 0.85);

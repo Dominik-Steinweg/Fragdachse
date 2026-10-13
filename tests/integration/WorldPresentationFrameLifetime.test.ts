@@ -270,6 +270,34 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     binding.syncGroundFog(16, true, []);
     expect(pulse).toHaveBeenCalledTimes(3);
   });
+  it('restores World fog after an Activity overlay, replacement, and teardown', () => {
+    const scene = Object.assign(makeFakeGpuVfxScene(), { cameras: { main: fakeCamera() } });
+    const makeFog = (strength: number) => ({ strength, captureMotion: vi.fn(), captureTrain: vi.fn(),
+      setSurfaceImages: vi.fn(), setRockCoverage: vi.fn(), update: vi.fn() });
+    const first = makeFog(0.6), second = makeFog(0.8);
+    let fog = first, strength: number | undefined;
+    const binding = new WorldPresentationFrameBinding(fakeBindingInput(scene as never, {
+      groundFog: { getSystem: () => fog as never, getActivityStrength: () => strength,
+        getBases: () => null, getProjectiles: () => null, effects: {} as never },
+    }));
+    binding.syncGroundFog(16, true, []);
+    expect(first.strength).toBe(0.6);
+    strength = 2;
+    binding.syncGroundFog(16, true, []);
+    binding.syncGroundFog(16, true, []);
+    expect(first.strength).toBe(2);
+    strength = undefined;
+    binding.syncGroundFog(16, true, []);
+    expect(first.strength).toBe(0.6);
+    strength = 2;
+    binding.syncGroundFog(16, true, []);
+    fog = second;
+    binding.syncGroundFog(16, true, []);
+    expect(first.strength).toBe(0.6);
+    expect(second.strength).toBe(2);
+    binding.destroy();
+    expect(second.strength).toBe(0.8);
+  });
   it('feeds ground fog the displayed train pose and disconnects it when hidden or destroyed', () => {
     const gpuScene = makeFakeGpuVfxScene();
     const scene = Object.assign(gpuScene, { cameras: { main: fakeCamera() } });

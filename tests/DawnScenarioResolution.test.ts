@@ -255,7 +255,8 @@ describe('Dawn scenario resolution', () => {
           schedule.phases.map((phase) => ({ fromMs: phase.startMs, delayMs: phase.respawnDelayMs })),
         );
         expect(activity.itemDrop?.itemLevel).toBe(getDawnThreatCurve(threat).itemLevel);
-        expect(mapConfig.encounters?.map(({ id }) => id)).toEqual(plans.activity.waves.map(({ id }) => id));
+        expect(mapConfig.encounters?.slice(0, plans.activity.waves.length).map(({ id }) => id))
+          .toEqual(plans.activity.waves.map(({ id }) => id));
       }
     }
   });

@@ -29,6 +29,7 @@ import {
 import { toDawnActivityDefinitionId, toDawnMapId, toDawnWorldDefinitionId } from '../contracts/DawnIds';
 import type { DawnActivityPlan, DawnWorldPlan } from '../contracts/DawnPlans';
 import { getDawnPhaseStartMs, toDawnDynamicTimeOfDay } from '../rules/DawnPhase';
+import { resolveDawnNightModifierContent } from './DawnNightModifierResolution';
 
 /**
  * Der eine reine Resolver vom replizierten Dawn-Plan zur normalen Coop-Config.
@@ -190,6 +191,7 @@ function composeActivityAuthoring(
   const durationSec = schedule.durationMs / 1000;
   const nightStartMs = getDawnPhaseStartMs(schedule, 'night');
   const nightSlots = getDawnWaveComposition().night.waves;
+  const modifierContent = resolveDawnNightModifierContent(template, activityPlan);
   // Sites schliessen in der Daemmerung: ein noch laufendes Ziel scheitert dann ohne Belohnung.
   const siteClosesAt = { type: 'time', atMs: getDawnPhaseStartMs(schedule, 'dusk') } as const;
   return {
@@ -201,7 +203,8 @@ function composeActivityAuthoring(
     powerUps: [],
     // Sieg-Item-Angebot (D-16) mit dem Itemlevel der Threat-Kurve.
     itemDrop: { itemLevel: curve.itemLevel },
-    encounters: activityPlan.waves.map((wave): CoopDefenseMapEncounterConfig => {
+    mapEvents: modifierContent.mapEvents,
+    encounters: [...activityPlan.waves.map((wave): CoopDefenseMapEncounterConfig => {
       const groups = getDawnWaveBlock(wave.blockId).groups;
       if ('siteId' in wave) {
         const site = sites.find((candidate) => candidate.siteId === wave.siteId);
@@ -227,7 +230,7 @@ function composeActivityAuthoring(
         start: { type: 'time', atMs: wave.atMs },
         groups: groups.map((group) => ({ ...group, front: wave.front })),
       };
-    }),
+    }), ...modifierContent.encounters],
     secondaryObjectives: sites.map((site): CoopDefenseMapSecondaryObjectiveConfig => ({
       id: site.objectiveId,
       type: site.archetype.objectiveType,

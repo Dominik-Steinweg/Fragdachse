@@ -4,6 +4,8 @@ import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { type PersistentBaseHealthReward } from '../../persistentBase/PersistentBaseHealth';
 import { getDeferredAssets } from '../../assets/DeferredAssets';
 import { isDevScenarioMode } from '../../utils/devScenarioMode';
+import { getDevDawnNightModifier } from '../../dev/scenario/dawnNightModifier';
+import { resolveDawnNightEnvironment } from '../../dawn/resolution/DawnNightModifierResolution';
 import { isLocalScenarioBotPeer } from '../../network/peer/LocalScenarioSession';
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
 import { collectDeathFragmentFrames } from '../../effects/gpu/DeathFragmentPreparation';
@@ -412,6 +414,12 @@ export class ArenaLifecycleCoordinator {
         getLobbyMerchant: () => this.worldRuntime?.presentation?.lobbyMerchant ?? null,
         groundFog: {
           getSystem: () => this.worldRuntime?.presentation?.groundFog ?? null,
+          getActivityStrength: () => {
+            const start = bridge.getArenaStartTime();
+            if (start <= 0 || !this.coopMissionRuntime) return undefined;
+            const now = this.coopMissionRuntime.getMissionNow(bridge.getSynchronizedNow());
+            return resolveDawnNightEnvironment(bridge.getActivityDescriptor()?.parameters?.dawn, now - start)?.fogStrength;
+          },
           getBases: () => this.worldRuntime?.materialization?.bases ?? null,
           getProjectiles: () => this.worldGameplay?.projectiles?.getPresentationRuntime() ?? null,
           effects: this.ctx.effectSystem,
@@ -3805,6 +3813,7 @@ function composeHostDawnRoundPlans(seed: number): DawnRoundPlans {
     seed,
     threat: resolveDawnThreat(dawn.expansionLevel),
     dayNumber: dawn.stats.roundsPlayed + 1,
+    nightModifier: isDevScenarioMode() ? getDevDawnNightModifier() : undefined,
   });
 }
 
