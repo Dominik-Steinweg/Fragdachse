@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createDefaultDawnProgress } from '../src/dawn/economy/DawnProgress';
 import { getDawnThreatCurve } from '../src/config/dawn/dawnContent';
-import { updateStoredDawnProgress } from '../src/utils/localPreferences';
+import { invalidateLocalStorageCache, updateStoredDawnProgress } from '../src/utils/localPreferences';
 import {
   ArenaMetaController,
   type ArenaMetaControllerInput,
@@ -521,8 +521,39 @@ describe('ArenaMetaController', () => {
 });
 
 describe('room-scoped round progression', () => {
+  it('does not report or consume a failed Dawn credit and can retry without duplicate XP or items', () => {
+    const f = makeInput();
+    const stored = f.store.getProgress();
+    vi.mocked(f.store.updateDawnProgress).mockImplementationOnce(mutator => {
+      mutator(structuredClone(stored.dawn));
+      return false;
+    }).mockImplementationOnce(mutator => { mutator(stored.dawn); return true; });
+    vi.mocked(f.resultRead.getRoundState).mockReturnValue({ status: 'victory', roundRevision: 1,
+      roundStartTime: 1, endedAt: 100, dawn: { threat: 1, dayNumber: 1 } });
+    vi.mocked(f.resultRead.getRoundResults).mockReturnValue([{ id: 'local', name: 'Local', colorHex: 0xffffff,
+      frags: 0, teamId: null, roundEndedAt: 100, roundRevision: 1, gameMode: 'coop_defense',
+      mapName: 'Dawn', sharedXp: 20, sharedScrap: 100 }]);
+    try {
+      f.controller.beginMatchResults(); f.controller.tryFinalizeMatchResults();
+      expect(f.controller.getLastMatchResultsPresentation()?.progress).toMatchObject({ xpGained: 0, scrapGained: 0 });
+      expect(f.store.addCoopDefenseXp).not.toHaveBeenCalled();
+      expect(f.store.setPendingItemReward).not.toHaveBeenCalled();
+      expect(f.store.markCoopDefenseRoundProcessed).not.toHaveBeenCalled();
+      f.controller.beginMatchResults(); f.controller.tryFinalizeMatchResults();
+      expect(f.controller.getLastMatchResultsPresentation()?.progress).toMatchObject({ xpGained: 20, scrapGained: 100 });
+      expect(f.store.addCoopDefenseXp).toHaveBeenCalledExactlyOnceWith(20);
+      expect(f.store.markCoopDefenseRoundProcessed).toHaveBeenCalledOnce();
+    } finally { f.controller.destroy(); }
+  });
+
   it('credits Dawn once per revision, resets streaks on defeat and offers threat-level items without campaign unlocks', () => {
     const saved = getStoredCoopDefenseProgress();
+    const storage = new Map<string, string>();
+    vi.stubGlobal('window', { localStorage: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+    } });
+    invalidateLocalStorageCache();
     const f = makeInput();
     restoreStoredCoopDefenseProgress({ ...saved, totalXp: 0, dawn: createDefaultDawnProgress(),
       itemsUnlocked: true, pendingItemRewards: [], processedRoundRevisionsByRoom: {}, lastProcessedRoundEndedAt: null });
@@ -565,7 +596,12 @@ describe('room-scoped round progression', () => {
       expect(f.store.unlockPersistentBaseAreaStageAfterVictory).not.toHaveBeenCalled();
       expect(f.store.unlockPersistentBaseHealthAfterVictory).not.toHaveBeenCalled();
       expect(f.store.unlockItemsAfterVictory).not.toHaveBeenCalled();
-    } finally { f.controller.destroy(); restoreStoredCoopDefenseProgress(saved); }
+    } finally {
+      f.controller.destroy();
+      vi.unstubAllGlobals();
+      invalidateLocalStorageCache();
+      restoreStoredCoopDefenseProgress(saved);
+    }
   });
 
   it('does not credit Dawn for an ineligible participant', () => {

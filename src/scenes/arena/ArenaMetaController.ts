@@ -1098,15 +1098,15 @@ export class ArenaMetaController {
           ?? this.input.resultRead.getCoopDefenseRoundXp(),
       ),
     );
-    if (sharedRoundXp > 0) this.input.progressStore.addCoopDefenseXp(sharedRoundXp);
-
     if (roundState.dawn) {
       let scrapGained = 0;
-      this.input.progressStore.updateDawnProgress(draft => {
+      const saved = this.input.progressStore.updateDawnProgress(draft => {
         scrapGained = applyDawnRoundProgress(draft,
           results.find(result => typeof result.sharedScrap === 'number')?.sharedScrap ?? 0,
           roundState.status);
       });
+      if (!saved) return { ...createMatchProgressDelta(before, this.getProgress(), 0, null), scrapGained: 0 };
+      if (sharedRoundXp > 0) this.input.progressStore.addCoopDefenseXp(sharedRoundXp);
       if (roundState.status === 'victory') {
         this.coopDefenseMatchItemReward = this.recordVictoryItemReward({
           roundEndedAt: endedAt,
@@ -1124,6 +1124,7 @@ export class ArenaMetaController {
       return { ...createMatchProgressDelta(before, this.getProgress(), sharedRoundXp, null), scrapGained };
     }
 
+    if (sharedRoundXp > 0) this.input.progressStore.addCoopDefenseXp(sharedRoundXp);
     const completedMapId = roundState.coopDefenseMapId;
     let unlockedNewMap = false;
     let unlockedItems = false;

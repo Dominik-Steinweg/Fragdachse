@@ -124,8 +124,64 @@ import { composeDawnRoundPlans } from '../../src/dawn/composition/DawnRoundCompo
 import { resolveDawnScenario, resolveDawnSites } from '../../src/dawn/resolution/DawnScenarioResolution';
 import { getDawnThreatCurve } from '../../src/config/dawn/dawnContent';
 import { worldCellCenter } from '../../src/world/WorldMetrics';
+import { CoopMissionHostUpdate, type CoopMissionHostUpdatePort } from '../../src/activity/CoopMissionHostUpdate';
+import { CoopDefenseMapDirector } from '../../src/systems/CoopDefenseMapDirector';
+import { resolveCoopDefenseMapEncounterConfigs } from '../../src/config/coopDefenseMaps';
 
 describe('Dawn composition ownership', () => {
+  it.each([-1, 0, 10])('only starts site encounters when entered before closure (offset %s)', offset => {
+    const plans = composeDawnRoundPlans({ seed: 7, threat: 2, dayNumber: 1 });
+    const { mapConfig: authored, activity: definition } = resolveDawnScenario(plans.world, plans.activity);
+    const siteEncounter = authored.encounters!.find(encounter => encounter.start.type === 'site-activated')!;
+    expect(siteEncounter).toBeDefined();
+    if (siteEncounter.start.type !== 'site-activated') throw new Error('Expected site encounter');
+    const siteId = siteEncounter.start.siteId;
+    const siteObjective = authored.secondaryObjectives!.find(objective =>
+      objective.start.type === 'site-activated' && objective.start.siteId === siteId)!;
+    // Two deadlines for one site: the earlier one closes activation, irrespective of objective order.
+    const closesAt = 210_000;
+    const mapConfig = { ...authored, secondaryObjectives: [
+      { ...siteObjective, expiresAt: { type: 'time' as const, atMs: closesAt + 1000 } },
+      { ...siteObjective, id: 'earliest-close', expiresAt: { type: 'time' as const, atMs: closesAt } },
+    ] };
+    const runtime = new CoopMissionRuntime({ kind: 'coop-mission', activityRevision: 1,
+      worldRevision: 1, definitionId: definition.id });
+    const metrics = resolveCoopDefenseWorldMetrics(mapConfig.arenaWidthCells, mapConfig.arenaHeightCells);
+    const clearing = mapConfig.siteClearings!.find(entry => entry.id === siteId)!;
+    const position = worldCellCenter(metrics, clearing.gridX, clearing.gridY);
+    let inside = false;
+    const player = { id: 'player', ...position, active: true };
+    new CoopMissionObjectiveComposition({
+      activity: { definitionId: definition.id, mapConfig }, authoredRocks: [], humanPlayerCount: 1,
+      worldRevision: 1, worldMetrics: metrics, isHost: true, scene: {}, baseManager: null,
+      playerManager: { getAllPlayers: () => [] }, publishMissionProgress: vi.fn(),
+      grantPersistentBaseRewards: vi.fn(),
+    } as unknown as CoopMissionObjectiveCompositionOptions).materialize(runtime);
+    const spawn = vi.fn();
+    const director = new CoopDefenseMapDirector(
+      resolveCoopDefenseMapEncounterConfigs(mapConfig, 1).filter(encounter => encounter.id === siteEncounter.id), spawn,
+      { isEncounterStartSatisfied: trigger => trigger.type === 'site-activated'
+        && runtime.coopDefenseSiteActivationSystem!.isSiteActivated(trigger.siteId) },
+    );
+    runtime.setEncounter({ director, persistentPressure: null, boss: null, spawnExecutor: {} as never });
+    const host = new CoopMissionHostUpdate(runtime, {
+      getPlayers: () => inside ? [player] : [], canUseMissionActions: () => true, isPlayerAlive: () => true,
+      syncDormantBaseStates: vi.fn(), publishEncounterPresentation: vi.fn(),
+      publishMapEventPresentation: vi.fn(), publishSecondaryObjectivePresentation: vi.fn(),
+    } as unknown as CoopMissionHostUpdatePort);
+    try {
+      host.run(10_000, 10_000, true, false);
+      host.run(closesAt - 10, closesAt - 10, false, false);
+      inside = true;
+      host.run(10 + offset, closesAt + offset, false, false);
+      expect(runtime.coopDefenseSiteActivationSystem!.isSiteActivated(siteId)).toBe(offset < 0);
+      host.run(10_000, closesAt + offset + 10_000, false, false);
+      expect(spawn.mock.calls.length > 0).toBe(offset < 0);
+      expect(runtime.coopDefenseSecondaryObjectiveSystem!.getObjectiveState(siteObjective.id))
+        .toBe(offset < 0 ? 'failed' : 'dormant');
+    } finally { runtime.destroy(); }
+  });
+
   it.each(['host', 'client', 'campaign'] as const)('binds scrap only for a Dawn host (%s)', role => {
     const plans = composeDawnRoundPlans({ seed: 7, threat: 2, dayNumber: 1 });
     const { mapConfig, activity: definition } = resolveDawnScenario(plans.world, plans.activity);
@@ -166,7 +222,7 @@ describe('Dawn composition ownership', () => {
       expect(pickups.bindDawnScrap).toHaveBeenCalledOnce();
       const site = resolveDawnSites(plans.world)[0];
       const position = worldCellCenter(metrics, site.slot.anchor.gridX, site.slot.anchor.gridY);
-      mission.coopDefenseSiteActivationSystem!.hostUpdate(false, [{
+      mission.coopDefenseSiteActivationSystem!.hostUpdate(0, false, [{
         playerId: 'player', ...position, eligible: true,
       }]);
       const objectives = mission.coopDefenseSecondaryObjectiveSystem!;

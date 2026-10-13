@@ -2608,19 +2608,23 @@ export function updateStoredDawnEquipmentProgress(mutator: (draft: DawnEquipment
   return true;
 }
 
-/** Mutate a defensive draft; invalid updates leave both storage and cache unchanged. */
+/** Mutate a defensive draft; invalid updates and write failures preserve storage and cache. */
 export function updateStoredDawnProgress(mutator: (draft: DawnProgress) => void): boolean {
   const current = readPreferences();
   const draft = getStoredDawnProgress();
   mutator(draft);
   const dawn = sanitizeDawnProgress(draft);
   if (!dawn) return false;
-  writePreferences({ ...current, progression: { ...current.progression,
+  const next = { ...current, progression: { ...current.progression,
     coopDefense: constrainLocalProgressProfiles({ ...current.progression.coopDefense, dawn }),
-  } });
+  } };
+  const storage = getLocalStorage();
+  if (!safeWrite(storage, LOCAL_PROGRESS_STORAGE_KEY, encodeProgressDocument(next))) return false;
+  preferencesCache = next;
+  cachedStorage = storage;
   return true;
 }
 
-export function acknowledgeStoredDawnNotice(notice: keyof DawnProgress['notices']): void {
-  updateStoredDawnProgress(draft => { draft.notices[notice] = false; });
+export function acknowledgeStoredDawnNotice(notice: keyof DawnProgress['notices']): boolean {
+  return updateStoredDawnProgress(draft => { draft.notices[notice] = false; });
 }

@@ -1,11 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DAWN_ECONOMY, validateDawnEconomy } from '../src/config/dawn/economy';
 import { applyDawnRoundProgress, purchaseDawnExpansion, resolveDawnExpansionCost, resolveDawnRoundScrap } from '../src/dawn/economy/DawnEconomy';
 import { createDefaultDawnProgress, DAWN_MAX_EXPANSION_LEVEL, DAWN_MAX_SCRAP } from '../src/dawn/economy/DawnProgress';
 import { buildDawnMerchantModel } from '../src/ui/DawnMerchantModel';
 import { resolveDawnThreat } from '../src/dawn/rules/DawnThreat';
 import { getStoredCoopDefenseProgress, getStoredDawnProgress, getStoredPersonalPersistentBaseAreaStage,
-  restoreStoredCoopDefenseProgress, updateStoredDawnProgress } from '../src/utils/localPreferences';
+  invalidateLocalStorageCache, restoreStoredCoopDefenseProgress, updateStoredDawnProgress } from '../src/utils/localPreferences';
 import { DAWN_UNLOCK_AFTER_MAP_ID, isDawnUnlocked } from '../src/dawn/rules/DawnUnlock';
 
 describe('Dawn economy', () => {
@@ -64,13 +64,29 @@ describe('Dawn economy', () => {
 
   it('persists an unlocked purchase and exposes the new personal stage without a world mutation', () => {
     const saved = getStoredCoopDefenseProgress();
+    const storage = new Map<string, string>();
+    const setItem = vi.fn((key: string, value: string) => { storage.set(key, value); });
+    vi.stubGlobal('window', { localStorage: { getItem: (key: string) => storage.get(key) ?? null, setItem } });
+    invalidateLocalStorageCache();
     try {
       restoreStoredCoopDefenseProgress({ ...saved, completedMapIds: [DAWN_UNLOCK_AFTER_MAP_ID], persistentBaseAreaStage: 2,
         dawn: { ...createDefaultDawnProgress(), scrap: resolveDawnExpansionCost(0)! } });
       const oldStage = getStoredPersonalPersistentBaseAreaStage();
-      updateStoredDawnProgress(draft => { purchaseDawnExpansion(draft, isDawnUnlocked(getStoredCoopDefenseProgress())); });
+      const buy = () => updateStoredDawnProgress(draft => { purchaseDawnExpansion(draft, isDawnUnlocked(getStoredCoopDefenseProgress())); });
+      const before = getStoredDawnProgress();
+      const storedBefore = new Map(storage);
+      setItem.mockImplementationOnce(() => { throw new Error('quota'); });
+      expect(buy()).toBe(false);
+      expect(getStoredDawnProgress()).toEqual(before);
+      expect(storage).toEqual(storedBefore);
+      expect(buildDawnMerchantModel(getStoredDawnProgress(), 2, true)).toMatchObject({ expansionLevel: 0, canBuy: true });
+      expect(buy()).toBe(true);
       expect(getStoredDawnProgress()).toMatchObject({ scrap: 0, expansionLevel: 1 });
       expect(getStoredPersonalPersistentBaseAreaStage()).toBe(oldStage + 1);
-    } finally { restoreStoredCoopDefenseProgress(saved); }
+    } finally {
+      vi.unstubAllGlobals();
+      invalidateLocalStorageCache();
+      restoreStoredCoopDefenseProgress(saved);
+    }
   });
 });

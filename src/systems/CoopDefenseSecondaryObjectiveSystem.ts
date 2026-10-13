@@ -149,6 +149,7 @@ export class CoopDefenseSecondaryObjectiveSystem {
 
   /** Host mission victory, before reward consumers are torn down. */
   completeVictoryHolds(): void {
+    this.expireObjectives();
     for (const state of this.objectiveStates) {
       if (state.state !== 'active' || state.config.type !== 'hold' || !state.config.holdUntilVictory) continue;
       if (this.getHoldSurvivorCount(state) < this.getRequiredSurvivors(state)) {
@@ -280,6 +281,10 @@ export class CoopDefenseSecondaryObjectiveSystem {
    * auch wenn es nach Fokusverlust als Hintergrund-Objective weiterläuft.
    */
   private resolveTarget(state: SecondaryObjectiveRuntimeState, targetId: string): boolean {
+    if (state.config.expiresAt !== undefined && this.isTriggerSatisfied(state.config.expiresAt)) {
+      this.failObjective(state);
+      return false;
+    }
     if (state.resolvedTargetIds.has(targetId)) return false;
     state.resolvedTargetIds.add(targetId);
     if (state.resolvedTargetIds.size >= state.config.targetGoal) this.completeObjective(state);
@@ -294,12 +299,16 @@ export class CoopDefenseSecondaryObjectiveSystem {
   private updateHoldObjectives(): void {
     for (const state of this.objectiveStates) {
       if (state.state !== 'active' || state.config.type !== 'hold') continue;
-      const reachedAuthoredEnd = state.config.holdUntil !== undefined
-        && this.isTriggerSatisfied(state.config.holdUntil);
-      const reachedRelativeEnd = state.holdEndsAtRoundMs !== null
-        && this.elapsedMs >= state.holdEndsAtRoundMs;
-      if (!reachedAuthoredEnd && !reachedRelativeEnd) continue;
-      if (this.getHoldSurvivorCount(state) < this.getRequiredSurvivors(state)) {
+      const holdEndsAt = Math.min(
+        this.getSatisfiedTriggerTime(state.config.holdUntil) ?? Infinity,
+        state.holdEndsAtRoundMs !== null && this.elapsedMs >= state.holdEndsAtRoundMs
+          ? state.holdEndsAtRoundMs : Infinity,
+      );
+      if (holdEndsAt === Infinity) continue;
+      // A tick may cross both deadlines. Expiry wins ties; an earlier hold still earns its reward.
+      const expiresAt = this.getSatisfiedTriggerTime(state.config.expiresAt);
+      if ((expiresAt !== null && expiresAt <= holdEndsAt)
+        || this.getHoldSurvivorCount(state) < this.getRequiredSurvivors(state)) {
         this.failObjective(state);
       } else {
         this.completeObjective(state);
@@ -374,6 +383,12 @@ export class CoopDefenseSecondaryObjectiveSystem {
     const index = this.objectiveStates.indexOf(state);
     if (this.focusedObjectiveIndex === index) this.focusedObjectiveIndex = null;
     if (terminalState === 'completed') this.onObjectiveCompleted?.(state.config.id);
+  }
+
+  /** External events have no sub-tick timestamp; their first observation is the current tick. */
+  private getSatisfiedTriggerTime(trigger: CoopDefenseMapEncounterStart | undefined): number | null {
+    if (trigger === undefined || !this.isTriggerSatisfied(trigger)) return null;
+    return trigger.type === 'time' ? Math.max(0, Math.floor(trigger.atMs)) : this.elapsedMs;
   }
 
   private isTriggerSatisfied(trigger: CoopDefenseMapEncounterStart): boolean {

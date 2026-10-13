@@ -181,7 +181,7 @@ export class CoopMissionHostUpdate {
       playerSamples,
     );
     // Vor den Nebenzielen: eine betretene Site startet ihr Ziel noch in diesem Host-Frame.
-    this.runtime.coopDefenseSiteActivationSystem?.hostUpdate(countdownActive, playerSamples);
+    this.runtime.coopDefenseSiteActivationSystem?.hostUpdate(deltaMs, countdownActive, playerSamples);
     this.runtime.coopDefenseMapDirector?.hostUpdate(deltaMs, countdownActive);
     this.runtime.coopDefenseMapEventDirector?.hostUpdate(deltaMs, countdownActive);
     this.runtime.coopDefenseSecondaryObjectiveSystem?.hostUpdate(deltaMs, countdownActive);

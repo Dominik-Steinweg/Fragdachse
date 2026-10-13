@@ -275,6 +275,11 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
   });
 
   it('starts the Dawn program only when unlocked and never books it as a campaign map', () => {
+    const storage = new Map<string, string>();
+    vi.stubGlobal('window', { localStorage: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+    } });
     const { flow } = fixture(true);
     let roundState: any = null;
     for (const method of ['publishLobbySync', 'setMatchHostId', 'resetAllFrags', 'resetCoopDefenseRoundXp',
@@ -317,6 +322,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
       roundState = { ...roundState, roundRevision: roundState.roundRevision + 1 };
       expect(flow.getRoundDawnInfrastructure()).toBeNull();
     } finally {
+      vi.unstubAllGlobals();
       invalidateLocalStorageCache();
     }
   });

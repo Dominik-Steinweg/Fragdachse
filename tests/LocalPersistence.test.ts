@@ -149,6 +149,25 @@ describe('local progress generation', () => {
     expect(getStoredDawnProgress()).toEqual(expected);
   });
 
+  it('preserves the entire cached and stored progress when Dawn writes fail, including notice acknowledgement', () => {
+    expect(updateStoredDawnProgress(dawn => {
+      dawn.scrap = 1_000;
+      dawn.notices.necromancyMovedToMerchant = true;
+    })).toBe(true);
+    const before = getStoredCoopDefenseProgress();
+    const storedBefore = new Map(storage.values);
+    storage.throwOnWrite = true;
+    expect(updateStoredDawnProgress(dawn => { dawn.scrap -= 100; dawn.expansionLevel += 1; })).toBe(false);
+    expect(acknowledgeStoredDawnNotice('necromancyMovedToMerchant')).toBe(false);
+    expect(getStoredCoopDefenseProgress()).toEqual(before);
+    expect(storage.values).toEqual(storedBefore);
+    invalidateLocalStorageCache();
+    expect(getStoredDawnProgress()).toEqual(before.dawn);
+    storage.throwOnWrite = false;
+    expect(acknowledgeStoredDawnNotice('necromancyMovedToMerchant')).toBe(true);
+    expect(getStoredDawnProgress().notices.necromancyMovedToMerchant).toBe(false);
+  });
+
   it.each([5, 6, 7])('rejects unknown profile owners atomically in V%s, including prototype keys', version => {
     const envelope = JSON.parse(exportStoredGameProgressJson());
     envelope.formatVersion = version;

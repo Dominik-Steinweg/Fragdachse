@@ -202,8 +202,17 @@ export class CoopMissionObjectiveComposition {
       ? this.createRoundState(runtime, baseManager)
       : null;
     const teamBuff = this.options.isHost ? new CoopDefenseTeamBuffSystem() : null;
+    const closesAtRoundMsBySite = new Map<string, number>();
+    for (const objective of objectives) {
+      if (objective.start.type !== 'site-activated' || objective.expiresAt?.type !== 'time') continue;
+      const siteId = objective.start.siteId;
+      closesAtRoundMsBySite.set(siteId, Math.min(
+        closesAtRoundMsBySite.get(siteId) ?? Infinity,
+        Math.max(0, Math.floor(objective.expiresAt.atMs)),
+      ));
+    }
     const siteActivation = this.options.isHost && (mapConfig.siteClearings?.length ?? 0) > 0
-      ? new CoopDefenseSiteActivationSystem(mapConfig.siteClearings!, this.options.worldMetrics)
+      ? new CoopDefenseSiteActivationSystem(mapConfig.siteClearings!, this.options.worldMetrics, closesAtRoundMsBySite)
       : null;
     runtime.setObjectives({
       siteActivation,
