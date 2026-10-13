@@ -3,8 +3,9 @@ import { plasmaBurnerTargetEffect, type PlasmaBurnerTargetCatalogPort } from '..
 import type { ProjectileSupportImpactPort } from './ProjectileSupportImpactPort';
 import { scalePrimaryHitRewardIntent } from '../combat/PrimaryHitReward';
 import { scalePortalDamagePayload } from '../combat/PortalDamagePayload';
-import { acquirePortalDamage, findPortalCrossing, gatePortalExit, portalCircleEntry, portalDamageMultiplier, releasePortalGates,
-  type PortalQueryPort } from '../systems/PortalTraversal';
+import { acquirePortalDamage, acquirePortalDamageContribution, findPortalCrossing, gatePortalExit, portalCircleEntry,
+  portalDamageMultiplier, releasePortalGates, type PortalDamageContext, type PortalPoint, type PortalQueryPort,
+} from '../systems/PortalTraversal';
 import type { TimeBubbleChargePort } from '../systems/TimeBubbleChargePort';
 import { createGrenadeFragments, isGrenadeFragment } from '../systems/GrenadeFragmentRules';
 import { ProjectilePathRecorder } from './ProjectileFlightPath';
@@ -51,8 +52,10 @@ import type {
 } from '../entities/ProjectileHomingController';
 import type { ProjectileId, ProjectileSpawnPort, ProjectileSpawnResult } from './ProjectileSpawnPort';
 import {
+  assertFireControlRoute,
   createSingleOwnerProvenance,
   type ProjectileAllegianceRef,
+  type ProjectileFireControlRoute,
   type ProjectileProvenance,
   type ProjectileSpawnRequest,
 } from './ProjectileSpawnRequest';
@@ -1438,7 +1441,14 @@ export class WorldProjectileRuntime implements
     if (ownStructure !== undefined) request = { ...request, flight: { ...request.flight,
       collisionFilter: { ...request.flight.collisionFilter, ignoreRockIndex: ownStructure } } };
     if (this.destroyed) return null;
-    const { origin } = request;
+    const { origin, fireControlRoute: route } = request;
+    if (route) {
+      assertFireControlRoute(request);
+      // Renderer chains flames per stream key: a flame at the exit never links to one at the muzzle.
+      if (request.flight.isFlame) request = { ...request, presentation: { ...request.presentation,
+        flameStreamKey: `${request.presentation.flameStreamKey ?? request.provenance.sourceTurretId
+          ?? request.provenance.allegiance.ownerId}@${route.contributionId}` } };
+    }
     const id = this.spawnResolved(
       origin.x,
       origin.y,
@@ -1448,6 +1458,7 @@ export class WorldProjectileRuntime implements
     );
     const record = this.projectiles.getById(id)!;
     record.flameExpiryGround = request.flameExpiryGround;
+    if (route) this.applyFireControlRoute(record, route, origin.angle);
     const emission = request.flameEmission;
     if (emission && emission.intervalMs > 0 && Number.isFinite(emission.intervalMs)) {
       record.flameEmission = { spec: emission, startAngle: origin.angle, nextAtMs: emission.intervalMs };
@@ -1456,11 +1467,25 @@ export class WorldProjectileRuntime implements
     return id;
   }
 
+  /**
+   * Moves a freshly spawned own shot from its muzzle portal to the deployment exit. The route
+   * was fixed at fire time and is consumed here; later portals follow their own rules.
+   */
+  private applyFireControlRoute(record: ProjectileRuntimeRecord, route: ProjectileFireControlRoute, angle: number): void {
+    const dirX = Math.cos(angle), dirY = Math.sin(angle);
+    const prefixLength = Math.max(0, (route.entry.x - record.lastX) * dirX + (route.entry.y - record.lastY) * dirY);
+    const crossing = { x: record.lastX + dirX * prefixLength, y: record.lastY + dirY * prefixLength };
+    const exit = { x: route.exit.x + crossing.x - route.entry.x, y: route.exit.y + crossing.y - route.entry.y };
+    this.transferThroughPortal(record, crossing, exit, crossing, prefixLength, acquirePortalDamageContribution(
+      record.provenance.portalDamage, { pairId: route.contributionId, bonus: route.damageBonus }), record.createdAt);
+  }
+
   private emitFireballFlame(parent: ProjectileRuntimeRecord, ageMs: number, x: number, y: number, provenance = parent.provenance): void {
     const emission = parent.flameEmission!;
     const flame = emission.spec.flame;
     this.spawnProjectile({
       ...flame,
+      fireControlRoute: undefined,
       flameEmission: undefined,
       interaction: scalePortalDamagePayload(flame.interaction, portalDamageMultiplier(provenance.portalDamage)),
       origin: { x, y, angle: emission.startAngle + ageMs / 1000 * emission.spec.angularSpeedRadiansPerSecond },
@@ -2184,38 +2209,49 @@ export class WorldProjectileRuntime implements
         if (record.pendingDestroy || record.bounceProcessedThisStep
           || Math.abs(record.physics.body.velocity.x - velocity.x * distanceRatio) > 0.000001
           || Math.abs(record.physics.body.velocity.y - velocity.y * distanceRatio) > 0.000001) break;
-        advanceProjectileDistance(record, crossing.entry.x, crossing.entry.y);
-        velocity.x = record.physics.body.velocity.x;
-        velocity.y = record.physics.body.velocity.y;
-        if (record.remainingRangePx !== undefined) record.remainingRangePx -= prefixLength;
-        this.flightPaths.redirect(record.id, crossing.entry.x, crossing.entry.y, velocity.x, velocity.y, nowMs, false);
-        this.flightPaths.redirect(record.id, crossing.exit.x, crossing.exit.y, velocity.x, velocity.y, nowMs, true);
-        const context = acquirePortalDamage(record.provenance.portalDamage, crossing.pair,
-          this.portalQuery!.isPortalFriendly(crossing.pair.ownerId, record.provenance.allegiance.ownerId));
-        const ratio = portalDamageMultiplier(context) / portalDamageMultiplier(record.provenance.portalDamage);
-        if (ratio !== 1) {
-          record.damage *= ratio;
-          record.spec = { ...record.spec, interaction: scalePortalDamagePayload(record.spec.interaction, ratio) };
-          record.interaction = { ...record.interaction,
-            explosion: scalePortalDamagePayload(record.interaction.explosion, ratio),
-            burnAugment: record.interaction.burnAugment ? { ...record.interaction.burnAugment,
-              burn: scalePortalDamagePayload(record.interaction.burnAugment.burn, ratio) } : undefined };
-          record.provenance = { ...record.provenance, portalDamage: context };
-        }
+        end = this.transferThroughPortal(record, crossing.entry, crossing.exit, end, prefixLength,
+          acquirePortalDamage(record.provenance.portalDamage, crossing.pair,
+            this.portalQuery!.isPortalFriendly(crossing.pair.ownerId, record.provenance.allegiance.ownerId)), nowMs);
         if (prefixLength > 1e-6) zeroProgress.clear();
         zeroProgress.add(crossing.sourceKey);
         gatePortalExit(gates, crossing);
-        end = { x: crossing.exit.x + end.x - crossing.entry.x, y: crossing.exit.y + end.y - crossing.entry.y };
         from = crossing.exit;
-        record.sourceCarrierBaseId = undefined;
-        record.lastX = from.x; record.lastY = from.y;
-        resetProjectileDistanceAnchor(record, from.x, from.y);
-        record.physics.body.reset(end.x, end.y);
-        record.physics.body.setVelocity(velocity.x, velocity.y);
         record.portalFlightPending = true;
         releasePortalGates(gates, from);
       }
     }
+  }
+
+  /**
+   * One-way transfer shared by Translocator pairs and fire-control routes. The real prefix up to
+   * `entry` counts as flight; the jump to `exit` is free (no range, distance bonus or trail) and
+   * keeps direction and lifetime. `portalDamage` is the already acquired context: each
+   * contribution scales the payload once and children inherit it. Returns the new step end.
+   */
+  private transferThroughPortal(record: ProjectileRuntimeRecord, entry: PortalPoint, exit: PortalPoint,
+    end: PortalPoint, prefixLength: number, portalDamage: PortalDamageContext | undefined, nowMs: number): PortalPoint {
+    advanceProjectileDistance(record, entry.x, entry.y);
+    const velocity = { x: record.physics.body.velocity.x, y: record.physics.body.velocity.y };
+    if (record.remainingRangePx !== undefined) record.remainingRangePx -= prefixLength;
+    this.flightPaths.redirect(record.id, entry.x, entry.y, velocity.x, velocity.y, nowMs, false);
+    this.flightPaths.redirect(record.id, exit.x, exit.y, velocity.x, velocity.y, nowMs, true);
+    const ratio = portalDamageMultiplier(portalDamage) / portalDamageMultiplier(record.provenance.portalDamage);
+    if (ratio !== 1) {
+      record.damage *= ratio;
+      record.spec = { ...record.spec, interaction: scalePortalDamagePayload(record.spec.interaction, ratio) };
+      record.interaction = { ...record.interaction,
+        explosion: scalePortalDamagePayload(record.interaction.explosion, ratio),
+        burnAugment: record.interaction.burnAugment ? { ...record.interaction.burnAugment,
+          burn: scalePortalDamagePayload(record.interaction.burnAugment.burn, ratio) } : undefined };
+      record.provenance = { ...record.provenance, portalDamage };
+    }
+    const next = { x: exit.x + end.x - entry.x, y: exit.y + end.y - entry.y };
+    record.sourceCarrierBaseId = undefined;
+    record.lastX = exit.x; record.lastY = exit.y;
+    resetProjectileDistanceAnchor(record, exit.x, exit.y);
+    record.physics.body.reset(next.x, next.y);
+    record.physics.body.setVelocity(velocity.x, velocity.y);
+    return next;
   }
 
   private bubbleChargePort: Pick<TimeBubbleChargePort, 'observeProjectile'> | null = null;

@@ -3,10 +3,11 @@ import type {
   WeaponConfig,
 } from '../loadout/LoadoutConfig';
 import { calcPelletAngles } from '../loadout/SpreadMath';
-import type {
-  SpecializedWeaponExecutionCapability,
-  WeaponExecutionCapability,
-  WeaponFireOptions,
+import {
+  assertFireControlRouteSupported,
+  type SpecializedWeaponExecutionCapability,
+  type WeaponExecutionCapability,
+  type WeaponFireOptions,
 } from '../loadout/WeaponFireExecutor';
 import type { ProjectileDamageSourceFactor, ProjectileExplosionConfig } from '../types';
 import type { MuzzleOrigin } from '../config';
@@ -59,6 +60,8 @@ export class AutomatedWeaponExecutionAdapter implements AutomatedWeaponExecution
   ) {}
 
   fire(config: WeaponConfig, params: AutomatedWeaponFireParams): boolean {
+    // Also covers fire types that no executor handles; a route must never vanish silently.
+    assertFireControlRouteSupported(config, params.options);
     const resolvedConfig = scaleAutomatedWeaponDamage(
       config,
       params.options?.directDamageMultiplier ?? 1,

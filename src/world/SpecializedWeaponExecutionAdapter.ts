@@ -8,9 +8,10 @@ import type {
   ReinforcementMatrixWeaponFireConfig,
   WeaponConfig,
 } from '../loadout/LoadoutConfig';
-import type {
-  SpecializedWeaponExecutionCapability,
-  WeaponFireParams,
+import {
+  assertFireControlRouteSupported,
+  type SpecializedWeaponExecutionCapability,
+  type WeaponFireParams,
 } from '../loadout/WeaponFireExecutor';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
@@ -27,6 +28,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
   constructor(private readonly projectileSpawn: ProjectileSpawnPort) {}
 
   fire(config: WeaponConfig, params: WeaponFireParams): boolean {
+    assertFireControlRouteSupported(config, params.options);
     switch (config.fire.type) {
       case 'flamethrower':
         return this.fireFlamethrower(config, config.fire, params);
@@ -69,6 +71,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
         : undefined;
       const ground = flameConfig?.fire.type === 'flamethrower' ? flameConfig.fire.burningGround : undefined;
       this.projectileSpawn.spawnProjectile({
+        fireControlRoute: params.options?.fireControlRoute,
         flameEmission: flame && flameConfig ? {
           intervalMs: flameConfig.cooldown,
           angularSpeedRadiansPerSecond: FIREBALL_FLAME_ROTATION_DEGREES_PER_SECOND * Math.PI / 180,
@@ -143,10 +146,12 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
       return true;
     }
 
-    this.projectileSpawn.spawnProjectile(this.createFlame(config, fireConfig, params));
+    this.projectileSpawn.spawnProjectile({ ...this.createFlame(config, fireConfig, params),
+      fireControlRoute: params.options?.fireControlRoute });
     return true;
   }
 
+  /** Also the fireball's child template, so it never carries the shot's route. */
   private createFlame(config: WeaponConfig, fireConfig: FlamethrowerWeaponFireConfig, params: WeaponFireParams): ProjectileSpawnRequest {
     const sourceSlot = resolveSourceSlot(params);
     const lifetime = calculateDecayLifetime(config.range, fireConfig.projectileSpeed, fireConfig.velocityDecay);
