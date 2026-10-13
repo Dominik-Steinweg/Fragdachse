@@ -266,7 +266,7 @@ Die zusätzliche Feuerleistung ist der beabsichtigte Effekt.
 
 | Knoten | Wirkung | Default |
 |---|---|---|
-| Wurzel | 1 Turmkopie, 6 s Laufzeit, Cooldown 10 s ab Einsatzende (E18) | gratis, Standard-Utility des Inspektors |
+| Wurzel | 1 Turmkopie, 6 s Laufzeit, Cooldown 2 s ab Einsatzende (E18, E21) | gratis, Standard-Utility des Inspektors |
 | L1 / L2 „Mehr Verbindungen“ | maximal 2 bzw. 3 Kopien | je 1 Punkt |
 | R1 / R2 „Längere Übertragung“ | +3 s Laufzeit je Stufe | je 1 Punkt |
 | B „Parallelbetrieb“ | Originale kämpfen weiter (§3.5) | Boss-Punkt |
@@ -430,7 +430,7 @@ Das Einstiegsverhalten ist: Raketenturm bauen, einen entfernten Kampf aufsuchen 
 - Je Spieler läuft **höchstens ein Kopien- und ein Portaleinsatz** gleichzeitig. Eine erneute Nutzung
   während eines Einsatzes wird abgelehnt.
 - Es gibt eine Ladung und keine Adrenalinkosten.
-- Der **Cooldown beginnt erst mit dem Einsatzende**: Kopien 10 s (E18), Portale 20 s.
+- Der **Cooldown beginnt erst mit dem Einsatzende**: Kopien 2 s (E21), Portale 4 s bei 4 s Dauer (E21, umgesetzt mit M2).
 - Nutzungszustand in `PlayerUtilityActionRuntime`:
   - Kopien: aktiv → Cooldown
   - Portale: fliegt → aktiv → Cooldown
@@ -533,6 +533,7 @@ Status:
 | E18 | 2026-10-13 | Turmkopien: Dauer 6 s (statt 12 s), Cooldown 10 s ab Einsatzende (statt 25 s); „Längere Übertragung“ bleibt +3 s je Stufe (max. 12 s) (G1-d) | Spielgefühl an G1 | Entschieden (User) |
 | E19 | 2026-10-13 | Platzierungsreichweite der Turmkopien = Baureichweite des Inspektors aus demselben Resolver wie die Konstruktionsplatzierung, inklusive Upgrades; keine eigene Zahl (G1-d) | Eine Regel, ein Owner | Entschieden (User) |
 | E20 | 2026-10-13 | Balance bleibt: Basisschadensfaktor 1, kein Spawn-HP-Tuning; Tuning später über Spieltests. Zwischenstand-Loadout D42 ok (G1-b, G1-f) | Erst spielen, dann tunen | Entschieden (User) |
+| E21 | 2026-10-14 | Takt nach G1/G2-Rückmeldung: Turmkopien 6 s Dauer, Cooldown 2 s ab Einsatzende; Portale 4 s Dauer, Cooldown 4 s ab Einsatzende (beantwortet F11) | Häufiger, kürzer eingesetzte Feuerleitung; Feinabstimmung über Spieltests | Entschieden (User) |
 | D1 | 2026-10-13 | Laufzeit Kopien 12 s (+3 s je Stufe „Längere Übertragung“, 2 Stufen); Portale 5 s (+1,5 s je Stufe „Längere Öffnung“, 2 Stufen) | GDD: Portale kürzer als Kopien; Startwerte für Tuning | Kopien geändert an G1 (E18); Portale offen für G2 (F11) |
 | D2 | 2026-10-13 | Cooldown beginnt erst mit dem Einsatzende (Kopien 25 s, Portale 20 s); eine Ladung; kein Adrenalin | Verhindert Überlappung ohne Sperrlogik; Utilities kosten kein Adrenalin | Kopien-Cooldown geändert an G1 (E18); Portale offen für G2 (F11) |
 | D3 | 2026-10-13 | Je Spieler höchstens ein Kopien- und ein Portaleinsatz; erneute Nutzung während eines Einsatzes wird abgelehnt | Keine unbegrenzte Vervielfachung; einfache V2-Regel | Default, an Gate kippbar |
@@ -609,7 +610,7 @@ heißt: Der Test entsteht im genannten Paket. Der Stand wird im jeweiligen Gate-
 
 | Nr. | Frage | Stand |
 |---|---|---|
-| F11 | Portal-Werte an die neuen Kopien-Werte anpassen? Kopien jetzt 6 s / 10 s, Portale bisher 5 s / 20 s | Unverändert bis G2 |
+| F11 | Portal-Werte an die neuen Kopien-Werte anpassen? | Beantwortet durch E21: Kopien 6 s / 2 s, Portale 4 s / 4 s |
 
 ## 12 Technische Anknüpfungspunkte
 
