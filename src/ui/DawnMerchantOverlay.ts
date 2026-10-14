@@ -60,6 +60,8 @@ export class DawnMerchantOverlay {
     this.scene.input.keyboard?.on('keydown-ESC', this.onEscape);
   }
 
+  isOpen(): boolean { return this.root?.visible ?? false; }
+
   hide(): void {
     this.root?.setVisible(false);
     this.confirming = false;

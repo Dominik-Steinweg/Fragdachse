@@ -172,6 +172,7 @@ export interface WorldClientPresentationRenderers {
  */
 export interface WorldPresentationFrameBindingInput {
   readonly getLobbyMerchant?: () => Pick<import('../arena/LobbyMerchantRenderer').LobbyMerchantRenderer, 'update'> | null;
+  readonly getLobbyInteractionMenu?: () => import('../config/authoring/lobbyBuildings').LobbyMenu | null;
   readonly enemyEyes?: import('../effects/EnemyEyeGlowRenderer').EnemyEyeGlowRenderer;
   readonly groundFog?: {
     readonly getSystem: () => GroundFogSystem | null;
@@ -819,7 +820,8 @@ export class WorldPresentationFrameBinding {
     this.input.setLocalPlayerStatusRingActive(localPlayerVisuals && !spectator);
     this.input.setLocalPlayerWorldBarsVisible(!showWorld);
     const player = showWorld && localPlayerVisuals && !spectator ? this.input.getLocalPlayerSprite() : null;
-    this.input.getLobbyMerchant?.()?.update(player?.active ? player : null);
+    this.input.getLobbyMerchant?.()?.update(player?.active ? player : null,
+      this.input.getLobbyInteractionMenu?.() ?? null, showWorld ? this.input.lighting : null);
   }
 
   /** World-lokale Gravel-/Baustellenprojektion der persistenten Basis. */

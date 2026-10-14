@@ -235,6 +235,7 @@ export class LobbyOverlay {
     private onToggleWorldEntry: (enter: boolean) => void,
     private readonly playerCardParent?: Phaser.GameObjects.Container,
     private readonly onOpenBase: () => void = () => {},
+    private readonly onOpenMerchant: () => void = () => {},
   ) {}
 
   setCoopDefenseProgress(progress: CoopDefenseProgressSnapshot | null): void { this.progress?.setCoopDefenseProgress(progress); }
@@ -249,6 +250,8 @@ export class LobbyOverlay {
     this.replayBtn?.setVisible(available);
     this.statisticsBtn?.setVisible(available);
   }
+  openMerchant(): void { this.progress?.openMerchant(); }
+  isMerchantOpen(): boolean { return this.progress?.isMerchantOpen() ?? false; }
   isHotkeyInputBlocked(): boolean { return (this.settings?.isOpen() ?? false) || (this.playerContextMenu?.isOpen() ?? false); }
 
   /** Erstellt alle GameObjects. Sicher mehrfach aufrufbar. */
@@ -456,7 +459,7 @@ export class LobbyOverlay {
     this.fullscreenUnsubscribe = onFullscreenChange(() => this.updateFullscreenIcon());
 
     this.progress = new LobbyPlayerProgress(this.scene,
-      this.onOpenCoopDefenseUpgrades, this.onOpenCoopDefenseItems, this.onOpenBase);
+      this.onOpenCoopDefenseUpgrades, this.onOpenCoopDefenseItems, this.onOpenBase, this.onOpenMerchant);
     const playerObjects: Phaser.GameObjects.GameObject[] = [];
     this.progress.build(playerObjects);
 

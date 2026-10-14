@@ -1,6 +1,7 @@
 import {
   DEFAULT_ARENA_OFFSET_Y,
   CELL_SIZE,
+  CANOPY_RADIUS,
   DEFAULT_ARENA_HEIGHT,
   FULL_ARENA_WIDTH,
 } from '../config';
@@ -16,6 +17,8 @@ import {
 } from './DecalConfig';
 import type { DecalPlacement } from './DecalConfig';
 import { createOrganicDirtMargin } from './OrganicDirtMargin';
+import { CANOPY_ASSETS } from './trees/CanopyAssets';
+import { LOBBY_BUILDINGS, LOBBY_BUILDING_CLEAR_AREAS } from '../config/authoring/lobbyBuildings';
 import { SHOOTING_RANGE } from '../shootingRange/ShootingRangeLayout';
 
 /**
@@ -510,7 +513,7 @@ const ambientRocks: RockCell[] = excludeWater(excludeRectCells(
       { gridX: GRID_COLS - 1, gridY: GRID_ROWS - 1 },
     ],
   ),
-  [BASE_CLEAR_ZONE, titleRockGapZone, SHOOTING_RANGE.clearArea],
+  [BASE_CLEAR_ZONE, titleRockGapZone, SHOOTING_RANGE.clearArea, ...LOBBY_BUILDING_CLEAR_AREAS],
 )).filter(cell => !ambientRockCutouts.has(cellKey(cell.gridX, cell.gridY)));
 
 const titleTreeClearZone: GridRect = {
@@ -534,8 +537,12 @@ const lobbyRocks: RockCell[] = mergeUnique<RockCell>(titleRocks, ambientRocks);
 
 const lobbyTrees: TreeCell[] = excludeRectCells(
   points<TreeCell>([[1, 4], [12, 18], [1, 23], [15, 31], [57, 4], [44, 13], [44, 27], [59, 24], [51, 31]]),
-  [BASE_CLEAR_ZONE, titleTreeClearZone, SHOOTING_RANGE.clearArea],
-);
+  [BASE_CLEAR_ZONE, titleTreeClearZone, SHOOTING_RANGE.clearArea, ...LOBBY_BUILDING_CLEAR_AREAS],
+).filter(tree => LOBBY_BUILDINGS.every(building => {
+  const dx = Math.max(0, Math.abs(tree.gridX - (building.gridX + 1.5)) * CELL_SIZE - 64);
+  const dy = Math.max(0, Math.abs(tree.gridY - (building.gridY + 1)) * CELL_SIZE - 64);
+  return Math.hypot(dx, dy) > CANOPY_RADIUS * Math.max(...CANOPY_ASSETS.map(asset => asset.displayScale));
+}));
 
 const lobbyDirt: DirtCell[] = excludeWater(mergeUnique<DirtCell>(
   excludeRectCells(

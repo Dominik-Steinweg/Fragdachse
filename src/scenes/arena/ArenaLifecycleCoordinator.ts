@@ -423,6 +423,10 @@ export class ArenaLifecycleCoordinator {
       };
       this.worldRuntime.bindPresentationFrame(new WorldPresentationFrameBinding({
         getLobbyMerchant: () => this.worldRuntime?.presentation?.lobbyMerchant ?? null,
+        getLobbyInteractionMenu: () => {
+          const candidate = this.ctx.inputSystem.getInteractionCandidate();
+          return candidate?.kind === 'lobby-menu' ? candidate.menu : null;
+        },
         getActivityMoonlight: () => dawnNight()?.moonlight,
         groundFog: {
           getSystem: () => this.worldRuntime?.presentation?.groundFog ?? null,

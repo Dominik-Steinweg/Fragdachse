@@ -30,6 +30,7 @@ vi.mock('../src/ui/RadialActionMenu', () => ({ RadialActionMenu: class {
   destroy() {}
 } }));
 import { InputSystem } from '../src/systems/InputSystem';
+import { lobbyBuildingCandidates, lobbyMenuDenial } from '../src/systems/LobbyBuildingInteraction';
 import type { FireControlPlacementPreview } from '../src/types';
 import type { FireControlSnapshot } from '../src/systems/fireControl/FireControlSnapshot';
 import type { RadialActionState } from '../src/systems/RadialActionModel';
@@ -393,6 +394,41 @@ describe('focus loss during charged input', () => {
 });
 
 describe('shared Shift interaction', () => {
+  it.each(['upgrades', 'base', 'items', 'merchant'] as const)('opens only the displayed local %s menu in range and consumes a held Shift once', menu => {
+    const candidates = lobbyBuildingCandidates(resolveActiveArenaWorldMetrics(), 1);
+    const candidate = candidates.find(entry => entry.kind === 'lobby-menu' && entry.menu === menu)!;
+    const position = { x: candidate.x - 40, y: candidate.y };
+    const f = createSystem(position);
+    const open = vi.fn(), network = vi.fn();
+    Object.assign(f.bridge, { getWorldDescriptor: () => ({ worldRevision: 1 }),
+      getLocalWorldParticipation: () => 'interactive', sendBurrowRequest: network,
+      sendShootingRangeRequest: network, sendTurretControlRequest: network });
+    f.system.setupLobbyMenuProvider({ candidates: () => candidates, open });
+    expect(f.system.getInteractionCandidate()).toMatchObject({ kind: 'lobby-menu', menu });
+    f.keys.keyShift.isDown = true; f.keys.keyShift.justDown = true;
+    f.system.update(); f.system.update();
+    expect(open).toHaveBeenCalledExactlyOnceWith(menu);
+    expect(network).not.toHaveBeenCalled();
+    position.x = candidate.x - candidate.radius - 1;
+    expect(f.system.getInteractionCandidate()).toBeNull();
+    position.x = candidate.x - 40;
+    f.system.setInputEnabled(false);
+    expect(f.system.getInteractionCandidate()).toBeNull();
+    f.keys.keyShift.justDown = true; f.system.update();
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps base editing host-only and presents locked menu reasons', () => {
+    const access = { coop: true, ready: false, host: true, baseUnlocked: true, itemsUnlocked: true, dawnUnlocked: true };
+    expect(lobbyMenuDenial('base', access)).toBeNull();
+    expect(lobbyMenuDenial('base', { ...access, host: false })).toBe(t('ui.base.hostOnly'));
+    expect(lobbyMenuDenial('items', { ...access, itemsUnlocked: false })).toBe(t('ui.lobbyBuilding.itemsLocked'));
+    expect(lobbyMenuDenial('merchant', { ...access, dawnUnlocked: false })).toBe(t('ui.dawn.locked'));
+    expect(lobbyMenuDenial('base', { ...access, baseUnlocked: false })).toBeTruthy();
+    expect(lobbyMenuDenial('upgrades', { ...access, ready: true })).toBeTruthy();
+    expect(lobbyMenuDenial('upgrades', { ...access, coop: false })).toBeTruthy();
+  });
+
   function interactions() {
     const metrics = resolveActiveArenaWorldMetrics();
     const power = shootingRangeControlPosition(metrics, 'power');

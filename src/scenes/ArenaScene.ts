@@ -158,6 +158,8 @@ import { isDawnWorld, resolveCoopDefenseMapConfig } from '../world/WorldDefiniti
 import type { ActivityDescriptor } from '../world/ActivityDescriptor';
 import type { WorldDescriptor } from '../world/WorldDescriptor';
 import type { WorldPresentationRequirement } from '../world/WorldPresentation';
+import { lobbyBuildingCandidates, lobbyMenuDenial } from '../systems/LobbyBuildingInteraction';
+import type { LobbyMenu } from '../config/authoring/lobbyBuildings';
 import { isLobbyWorldDefinitionId } from '../config/authoring/lobbyWorld';
 import { toArenaMetricsProfile } from '../world/WorldMetrics';
 import { resolvePresentationPolicy } from '../world/PresentationPolicy';
@@ -1178,13 +1180,14 @@ export class ArenaScene extends Phaser.Scene {
       () => this.diagnostics?.toggleNetDebug(),
       () => leftPanel.showHelpOverlay(),
       () => leftPanel.showOptionsOverlay(),
-      () => this.meta?.openUpgradeOverlay(),
-      () => this.meta?.openItemsOverlay(),
+      () => this.openLobbyMenu('upgrades'),
+      () => this.openLobbyMenu('items'),
       (enter) => enter
         ? this.arenaRuntime.requestLocalWorldParticipation(true)
         : this.requestLocalLobbyWorldLeave(),
       leftPanel.getLobbyContentContainer(),
-      () => this.meta?.openBaseOverlay(),
+      () => this.openLobbyMenu('base'),
+      () => this.openLobbyMenu('merchant'),
     );
     this.lobbyOverlay.build();
     yield 'lobby-overlay';
@@ -1372,6 +1375,17 @@ export class ArenaScene extends Phaser.Scene {
     });
     this.arenaRuntime.initialize();
     inputSystem.setupShootingRangeProvider(() => this.arenaRuntime.getShootingRange());
+    inputSystem.setupLobbyMenuProvider({
+      candidates: () => {
+        const world = this.arenaRuntime.getWorldDescriptor();
+        const metrics = this.arenaRuntime.getWorldMetrics();
+        if (!world || !metrics || !isLobbyWorldDefinitionId(world.definitionId)
+          || bridge.getGamePhase() !== 'LOBBY' || this.isWorldMenuBlocking()
+          || bridge.getLocalWorldParticipation() !== 'interactive') return [];
+        return lobbyBuildingCandidates(metrics, world.worldRevision);
+      },
+      open: menu => this.openLobbyMenu(menu),
+    });
     inputSystem.setupStructureOccupancyProviders({
       getStructures: () => this.arenaRuntime.getStructurePlatforms(),
       getState: id => bridge.isHost() ? this.arenaRuntime.getStructureOccupancyState(id) : bridge.getLatestGameState()?.players[id]?.structureOccupancy,
@@ -1455,7 +1469,7 @@ export class ArenaScene extends Phaser.Scene {
         isCoopDefenseMode: () => isCoopDefenseMode(bridge.getGameMode()),
         canLeaveLocalLobbyWorld: () => this.canLeaveLocalLobbyWorld(),
         requestLocalLobbyWorldLeave: () => this.requestLocalLobbyWorldLeave(),
-        isHotkeyInputBlocked: () => (this.afterRoundTransition?.active || this.ctx.leftPanel.isHotkeyInputBlocked() || this.lobbyOverlay.isHotkeyInputBlocked()),
+        isHotkeyInputBlocked: () => (this.afterRoundTransition?.active || this.ctx.leftPanel.isHotkeyInputBlocked() || this.lobbyOverlay.isHotkeyInputBlocked() || this.lobbyOverlay.isMerchantOpen()),
         isHelpOverlayOpen: () => this.ctx.leftPanel.isHelpOverlayOpen(),
         hideHelpOverlay: () => this.ctx.leftPanel.hideHelpOverlay(),
         isOptionsOverlayOpen: () => this.ctx.leftPanel.isOptionsOverlayOpen(),
@@ -1729,7 +1743,8 @@ export class ArenaScene extends Phaser.Scene {
         return state ? [{ id: String(state.turretId), color: profile.colorHex }] : [];
       }),
     );
-    this.renderers.interactions.sync(this.ctx.inputSystem.getInteractionCandidate());
+    this.renderers.interactions.sync(this.ctx.inputSystem.getInteractionCandidate(),
+      this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject);
 
     const {
       showAim,
@@ -1876,7 +1891,7 @@ export class ArenaScene extends Phaser.Scene {
     if (phase !== 'LOBBY' || terminated || !isCoopDefenseMode(configuredGameMode)) {
       this.closeBaseEditor(false); this.meta?.cancelAfterRoundFlow();
     }
-    const optionsOpen = !!this.baseEditor || !!this.afterRoundTransition?.active || (this.ctx?.leftPanel.isOptionsOverlayOpen() ?? false);
+    const optionsOpen = this.isWorldMenuBlocking();
 
     // Teilnahme haengt an der World, nicht an der Rundenphase - deshalb steht der Abgleich
     // ausdruecklich vor und unabhaengig von der Rundenrolle. Ohne Activity taktet niemand den
@@ -2029,6 +2044,16 @@ export class ArenaScene extends Phaser.Scene {
       this.ctx.leftPanel.updateLobby();
       if (bridge.isHost()) this.arenaRuntime.hostCheckReadyToStart();
       diagnosticsFrame?.end('lobbyUi');
+    } else if (!terminated && phase === 'LOBBY' && !deferArenaExit) {
+      // World participation hides the lobby cards, but personal menus still belong
+      // to this Lobby phase. Keep their progress and readiness current while walking.
+      const localReady = bridge.getPlayerReady(bridge.getLocalPlayerId());
+      if (localReady !== this.arenaRuntime.getIsLocalReady()) {
+        this.arenaRuntime.setIsLocalReady(localReady);
+        this.lobbyOverlay.setReadyButtonState(localReady);
+      }
+      this.meta?.refreshLobbyProjection();
+      this.lastLobbySidebarSignature = null;
     } else {
       this.coopDefenseDebugOverlay?.hide();
       this.coopDefenseUpgradesOverlay?.hide();
@@ -2249,6 +2274,46 @@ export class ArenaScene extends Phaser.Scene {
     bridge.setLocalReady(false);
     this.arenaRuntime.setIsLocalReady(false);
     if (previousMapId && bridge.isHost()) bridge.setCoopDefenseMapId(previousMapId);
+  }
+
+  private isWorldMenuBlocking(): boolean {
+    return !!this.baseEditor || !!this.afterRoundTransition?.active
+      || (this.ctx?.leftPanel.isOptionsOverlayOpen() ?? false)
+      || (this.ctx?.leftPanel.isHelpOverlayOpen() ?? false)
+      || (this.ctx?.leftPanel.isHotkeyInputBlocked() ?? false)
+      || (this.lobbyOverlay?.isHotkeyInputBlocked() ?? false)
+      || (this.lobbyOverlay?.isMerchantOpen() ?? false)
+      || (this.coopDefenseUpgradesOverlay?.isOpen() ?? false)
+      || (this.itemsOverlay?.isOpen() ?? false)
+      || (this.itemRewardOverlay?.isVisible() ?? false)
+      || (this.matchResultsOverlay?.isVisible() ?? false)
+      || (this.roomStatisticsOverlay?.isVisible() ?? false)
+      || (this.coopDefenseDebugOverlay?.isOpen() ?? false)
+      || (this.timeOfDayDebugOverlay?.isOpen() ?? false)
+      || (this.weaponBalanceLabOverlay?.isOpen() ?? false)
+      || (this.diagnostics?.isNetDebugOpen() ?? false)
+      || (this.diagnostics?.isPerformanceOverlayOpen() ?? false);
+  }
+
+  /** Shared by lobby buttons and local World Shift interactions. */
+  private openLobbyMenu(menu: LobbyMenu): void {
+    if (bridge.getGamePhase() !== 'LOBBY' || this.isWorldMenuBlocking()
+      || this.lobbyOverlay.hasTerminalFailure()) return;
+    const progress = getStoredCoopDefenseProgress();
+    const denial = lobbyMenuDenial(menu, {
+      coop: isCoopDefenseMode(bridge.getGameMode()),
+      ready: this.arenaRuntime.getIsLocalReady() || bridge.getPlayerReady(bridge.getLocalPlayerId()),
+      host: bridge.isHost(), itemsUnlocked: progress.itemsUnlocked,
+      baseUnlocked: progress.persistentBaseUnlocked, dawnUnlocked: isDawnUnlocked(progress),
+    });
+    if (denial) { this.aimPresentation?.showPlacementError(denial); return; }
+    if (menu === 'upgrades') this.meta?.openUpgradeOverlay();
+    else if (menu === 'items') this.meta?.openItemsOverlay();
+    else if (menu === 'base') this.meta?.openBaseOverlay();
+    else this.lobbyOverlay.openMerchant();
+    // Cancel movement and any remaining gameplay edges in the same Shift frame.
+    this.ctx.inputSystem.setInputEnabled(false);
+    bridge.cancelLocalInput();
   }
 
   private openBaseEditor(newRewardIds: readonly PersistentBaseRewardId[]): void {

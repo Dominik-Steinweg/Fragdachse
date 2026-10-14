@@ -6,6 +6,7 @@ import {
 import { buildPersistentBaseCoreBaseConfig } from '../../persistentBase/PersistentBaseCore';
 import { DEFAULT_LOBBY_TIME_OF_DAY_MINUTES, formatTimeOfDay } from '../../effects/TimeOfDay';
 import type { WorldDefinition, WorldPersistentBaseSiteDefinition } from './WorldDefinition';
+import { LOBBY_BUILDING_BASES } from './lobbyBuildings';
 import { LOBBY_MERCHANT_BASE } from './lobbyMerchant';
 
 /**
@@ -65,7 +66,7 @@ const LOBBY_WORLD_DEFINITION: WorldDefinition = {
   // Die Geometrie ist vollstaendig authored; es gibt nichts zu generieren.
   terrain: {},
   // Der Haendlerstand bleibt auch ohne freigeschalteten Basiskern World-Inhalt.
-  bases: [buildPersistentBaseCoreBaseConfig(LOBBY_PERSISTENT_BASE_SITE), LOBBY_MERCHANT_BASE],
+  bases: [buildPersistentBaseCoreBaseConfig(LOBBY_PERSISTENT_BASE_SITE), LOBBY_MERCHANT_BASE, ...LOBBY_BUILDING_BASES],
   persistentBaseSite: LOBBY_PERSISTENT_BASE_SITE,
   // Die LobbyWorld folgt dem aktuell gewaehlten Spielmodus. Sie ist damit im Deathmatch
   // frei fuer alle, in Coop kooperativ und in Team-Modi teambezogen – ohne Fake-Activity.
