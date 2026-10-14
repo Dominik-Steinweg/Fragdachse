@@ -6,6 +6,8 @@ import {
   fireControlContributionId, isFireControlCopySourceId, type FireControlPortalDeploymentSnapshot,
 } from '../../src/systems/fireControl/FireControlSnapshot';
 import { decodeFireControlSnapshot, encodeFireControlSnapshot } from '../../src/network/fireControlSnapshotCodec';
+import { ultimateHarness, START, STEP } from '../balance-lab/InspectorUltimateHarness';
+import { HOLO_RAGE, INSPECTORS, inspectorUltimate } from '../balance-lab/InspectorUltimateConfigs';
 
 // Counts come from authored upgrade limits; virtual time and fixed positions, no hardware thresholds.
 const OWNERS = ['inspector', 'p2', 'p3', 'p4'] as const;
@@ -115,3 +117,69 @@ describe('Entfernen von Quellen, Einsatzende, Besitzerentfernung und World-Wechs
 function own(sources: Map<string, number[]>, owner: string): Set<number> {
   return new Set(sources.get(owner) ?? []);
 }
+
+describe('Holo and relay combined combat load', () => {
+  it('keeps every temporary source firing on its own sequence within the full fc budget', () => {
+    const config = inspectorUltimate('HOLO_OFFENSIVE', true);
+    if (config.type !== 'holo_offensive') throw Error('Expected Holo config');
+    const h = ultimateHarness('dense', INSPECTORS);
+    try {
+      h.addArsenal('mixed');
+      // Surround the ring as well as the frontal group so even rear short-range flame copies have targets.
+      for (const p of h.players.values()) for (const dx of [-180, 180]) for (const dy of [-100, 100]) {
+        h.f.spawnEnemy(p.x + dx, p.y + dy).setHp(1e9, 1e9, true);
+      }
+      for (const owner of INSPECTORS) {
+        expect(h.f.combat.isAlive(owner), owner).toBe(true);
+        expect(h.f.binding.getHoloOffensiveCapability()!.tryActivate({ playerId: owner, nowMs: START,
+          config, consumedRage: HOLO_RAGE })).toEqual({ ok: true });
+      }
+      const spawnMs = HOLO_RAGE / config.ragePerSpawnSecond * 1000;
+      const expectedPeak = INSPECTORS.length * Math.min(Math.ceil(spawnMs / config.spawnIntervalMs),
+        Math.ceil(config.copyLifetimeMs / config.spawnIntervalMs));
+      const sequences = new Map<string, string | number>();
+      let peakHolo = 0, peakRelay = 0, maxBytes = 0, simultaneous = false, relayActivated = false;
+      const began = performance.now();
+      for (let at = START; at <= START + spawnMs + config.copyLifetimeMs + 3000; at += STEP) {
+        // Relay lifetime is shorter than Holo's ramp-up; activate when Holo approaches its peak.
+        if (!relayActivated && at >= START + spawnMs / 2) {
+          relayActivated = true;
+          for (const owner of INSPECTORS) {
+            const p = h.players.get(owner)!, relay = h.f.config;
+            expect(h.f.binding.fireControl!.activateCopies({ ownerId: owner, ownerColor: p.color,
+              playerX: p.x, playerY: p.y, pointX: p.x + 220, pointY: p.y, nowMs: at,
+              config: { ...relay, maxCopies, parallel: true, cooldownMs: relay.cooldown,
+                buildRangePx: resolveConstructionPlacementRange() } }).ok).toBe(true);
+          }
+        }
+        h.advance(at);
+        const snapshot = h.f.binding.getFireControlSnapshot(at);
+        const holo = snapshot.deployments.filter(d => d.kind === 'holo').flatMap(d => d.copies);
+        const relay = snapshot.deployments.filter(d => d.kind === 'copies').flatMap(d => d.copies);
+        peakHolo = Math.max(peakHolo, holo.length); peakRelay = Math.max(peakRelay, relay.length);
+        simultaneous ||= holo.length === expectedPeak && relay.length === INSPECTORS.length * maxCopies;
+        const wire = encodeFireControlSnapshot(snapshot);
+        maxBytes = Math.max(maxBytes, new TextEncoder().encode(JSON.stringify(wire)).byteLength);
+        expect(decodeFireControlSnapshot(wire)).not.toBeNull();
+        for (const source of h.f.binding.getTurretFireSources()) if (source.projection || isFireControlCopySourceId(source.id)) {
+          sequences.set(String(source.id), source.sequenceKey);
+          expect(source.sequenceKey).toBe(source.id);
+        }
+      }
+      // Relay damage retains original identity; its visual ID identifies the actual firing copy.
+      const fired = new Set(h.f.projectile.spawn.mock.calls.map(([r]) => r.presentation?.turretVisualId ?? r.provenance.sourceTurretId));
+      expect(peakHolo).toBe(expectedPeak);
+      expect(peakRelay).toBe(INSPECTORS.length * maxCopies);
+      expect(simultaneous).toBe(true);
+      expect(sequences.size).toBe(INSPECTORS.length * (Math.ceil(spawnMs / config.spawnIntervalMs) + maxCopies));
+      expect(new Set(sequences.values()).size).toBe(sequences.size);
+      for (const id of sequences.keys()) expect(fired.has(id), `source ${id} never fired`).toBe(true);
+      expect(h.events.length).toBeGreaterThan(0);
+      // Measured peak ~3.8 KiB; 6 KiB leaves ~59% for longer IDs/timestamps/coordinates.
+      // Same cap as FireControlNetwork: full replacement at 20 Hz <= 120 KiB/s.
+      expect(maxBytes).toBeLessThan(6 * 1024);
+      console.info('HOLO_RELAY_STRESS ' + JSON.stringify({ peakHolo, peakRelay, sources: sequences.size,
+        fcBytes: maxBytes, elapsedMs: Math.round(performance.now() - began) }));
+    } finally { h.destroy(); }
+  }, 20000);
+});
