@@ -5,7 +5,7 @@ import {resolveSkyState,resolveSkyShadowLength} from '../src/effects/TimeOfDay';
 import {updateRockLightingSun} from '../src/arena/rocks/RockLightingState';
 import {createSunTuning,resolveSunAtmosphere} from '../src/effects/sunlight/SunAtmosphere';
 import {validateSunTuning} from '../src/effects/sunlight/SunTuning';
-import {packPreviousHorizons} from '../src/arena/rocks/FormationHorizonTransition';
+import {packHorizonSupport} from '../src/arena/rocks/FormationHorizonTransition';
 it('anchors east, north, west; remains normalized, continuous in daylight and cyclic',()=>{
   const out=createSunPath(),other=createSunPath(),direction=out.direction,sun=out.sun;
   for(const [m,x,y] of [[SUN_PATH.sunrise,1,0],[SUN_PATH.noon,0,-1],[SUN_PATH.sunset,-1,0]]) {
@@ -25,6 +25,20 @@ it('anchors east, north, west; remains normalized, continuous in daylight and cy
   expect(out.direction).toBe(direction);expect(out.sun).toBe(sun);
   for(const m of [0,300,1215,1300,1439])expect(resolveSunPath(m,null,out).strength).toBe(0);
 });
+it('casts along the day arc and continues through a night arc without a jump at midnight or dawn',()=>{
+  const out=createSunPath();
+  let last=resolveSunPath(0,null,out).castAzimuth;
+  for(let m=.5;m<=2880;m+=.5){
+    resolveSunPath(m,null,out);
+    const step=((out.castAzimuth-last)%360+540)%360-180;
+    expect(step).toBeGreaterThanOrEqual(0);expect(step).toBeLessThan(.4);last=out.castAzimuth;
+    const day=normalize(m);
+    if(day>=SUN_PATH.sunrise&&day<=SUN_PATH.sunset)expect(out.castAzimuth).toBe(out.azimuth);
+    else expect(out.castAzimuth===0||out.castAzimuth>=180).toBe(true);
+  }
+  expect(resolveSunPath(480,90,out).castAzimuth).toBe(90);expect(resolveSunPath(60,90,out).castAzimuth).toBe(90);
+});
+const normalize=(m:number)=>((m%1440)+1440)%1440;
 it('validates, persists and resets fixed bearings without affecting the legacy northwest sun',()=>{
   const out=createSunPath(),t=createSunTuning();
   for(const degree of [-360,0,90,180,270,360]){
@@ -52,7 +66,7 @@ it('covers both rectangles with a convex hull and the swept area in every quadra
     expect(area/2).toBeCloseTo(32*48+Math.abs(dx)*48+Math.abs(dy)*32);
   }
 });
-it('retains the visible horizon when a direction transition is interrupted',()=>{
-  const old=new Uint8Array([10,20,30,255]);packPreviousHorizons(new Uint8Array([128,128,110,255]),new Uint8Array([255,120,130,255]),old,.5);
-  expect([...old]).toEqual([60,70,80,255]);
+it('packs exactly the solar horizon angles and contact of a secondary support',()=>{
+  const out=new Uint8Array(4);packHorizonSupport(new Uint8Array([128,128,110,255]),new Uint8Array([255,120,130,77]),out);
+  expect([...out]).toEqual([110,120,130,77]);
 });

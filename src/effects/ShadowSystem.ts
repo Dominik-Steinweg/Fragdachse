@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { getCharacterMeshes, CHARACTER_MESH_MANIFEST } from '../assets/CharacterMeshAssets';
-import type { SunPathState } from './sunlight/SunPath';
+import { quantizeSunAzimuth, type SunPathState } from './sunlight/SunPath';
 import type { SunCloudState } from './sunlight/cloudShadow';
 import { CharacterMeshShadowRenderer } from './CharacterMeshShadowRenderer';
 import { EnemyMeshShadowRenderer } from './EnemyMeshShadowRenderer';
@@ -70,6 +70,8 @@ interface ShadowLayerBucket {
    */
   readonly staticGraphics: Phaser.GameObjects.Graphics;
   readonly dynamicGraphics: Phaser.GameObjects.Graphics;
+  /** Static casters redrawn every frame along the continuous sun (see {@link ShadowSystem.syncContinuousStaticShadows}). */
+  readonly continuousGraphics: Phaser.GameObjects.Graphics;
   group: StaticShadowGroup | null;
 }
 
@@ -291,8 +293,10 @@ export class ShadowSystem {
     this.enemyCasters++;
   };
 
-  /** Dynamic casters follow continuously; static bakes use the existing throttled
-   * profile scheduler. No authority, free clock or production config mutation. */
+  /** Dynamic and long static casters follow the continuous cast bearing every frame;
+   * short contact casters keep the throttled baked steps. The cast arc continues
+   * through the night, so neither jumps from west to east at dawn.
+   * No authority, free clock or production config mutation. */
   setSunPath(path: SunPathState | null, enemies: ShadowSystem['sunEnemies'] = null): void {
     this.sunEnemies = path ? enemies : null;
     if(!path) {
@@ -300,9 +304,100 @@ export class ShadowSystem {
       this.sunDirection=null;this.sunAzimuth=null;
       this.rebuildStaticShadowsForProfileChange();return;
     }
+    const cast=path.castAzimuth*Math.PI/180;
     this.sunDirection??={x:0,y:0};
-    this.sunDirection.x=-path.direction[0];this.sunDirection.y=-path.direction[1];
-    if(path.strength>0||this.sunAzimuth===null)this.sunAzimuth=path.horizonAzimuth;
+    this.sunDirection.x=-Math.cos(cast);this.sunDirection.y=Math.sin(cast);
+    this.sunAzimuth=quantizeSunAzimuth(path.castAzimuth);
+  }
+
+  /**
+   * Long static casters – woodland crowns, trunks and watchtowers – while a sun path is
+   * bound. They are drawn every frame with the current bearing and profile, so their
+   * shadows move geometrically continuously instead of in baked steps and 128-px region
+   * swaps. Only the short contact footprints (bases, walls, turrets: at most a few px per
+   * bake step) remain in the chunk bake. Decided per static rebuild, together with the
+   * layer set of the baked surface, so no caster is ever drawn twice.
+   */
+  private staticContinuous = false;
+  private readonly continuousCanopy: Phaser.GameObjects.Image[] = [];
+  private continuousCanopyUsed = 0;
+  private continuousPrimitives = 0;
+  /** Layer ids present in the current baked surface. */
+  private readonly staticLayerIds = new Set<string>();
+
+  getContinuousShadowStats(): { enabled: boolean; primitives: number; canopyImages: number } {
+    return { enabled: this.staticContinuous, primitives: this.continuousPrimitives, canopyImages: this.continuousCanopyUsed };
+  }
+
+  /** Redraws the continuous static casters for the current view; called once per frame. */
+  syncContinuousStaticShadows(): void {
+    for (const bucket of this.layers.values()) bucket.continuousGraphics.clear();
+    let used = 0, primitives = 0;
+    const layout = this.lastStaticLayout, direction = this.sunDirection;
+    if (this.staticContinuous && this.staticHasLayout && this.shadowsVisible && layout && direction) {
+      const view = this.staticResidencyView ?? this.getStaticFrameRect(), profile = this.profile;
+      const options = this.lastStaticOptions;
+      const offsetX = options.offsetX ?? ARENA_OFFSET_X, offsetY = options.offsetY ?? ARENA_OFFSET_Y;
+      const inView = (x: number, y: number, reach: number): boolean => x + reach >= view.x && x - reach <= view.x + view.width
+        && y + reach >= view.y && y - reach <= view.y + view.height;
+      const trunk = SHADOW_CASTERS.trunk, trunkReach = getStaticShadowReachPx(trunk, profile, direction);
+      const trunks = this.getLayer(trunk.layerDepth, 'trees').continuousGraphics;
+      for (const tree of layout.trees) {
+        const x = offsetX + tree.gridX * CELL_SIZE + CELL_SIZE / 2, y = offsetY + tree.gridY * CELL_SIZE + CELL_SIZE / 2;
+        if (inView(x, y, trunkReach)) primitives += this.drawFootprint(trunks, x, y, trunk, undefined, undefined, profile, direction);
+      }
+      const tower = SHADOW_CASTERS.watchtower, towerReach = getStaticShadowReachPx(tower, profile, direction);
+      const towers = this.getLayer(tower.layerDepth, 'rocks').continuousGraphics;
+      const rockVisible = options.rockVisibilityPredicate ?? (() => true);
+      for (const rock of options.runtimeRocks ?? EMPTY_RUNTIME_ROCKS) {
+        const cell = layout.rocks[rock.id];
+        if (rock.kind !== 'watchtower' || rock.hp <= 0 || !cell || !rockVisible(rock.id)) continue;
+        const x = offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2 + WATCHTOWER_SHADOW_FOOTPRINT.centerOffsetX;
+        const y = offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2 + WATCHTOWER_SHADOW_FOOTPRINT.centerOffsetY;
+        if (inView(x, y, towerReach)) primitives += this.drawFootprint(towers, x, y, tower, undefined, undefined, profile, direction);
+      }
+      used = this.drawContinuousCanopies(inView, profile, direction);
+    }
+    for (let i = used; i < this.continuousCanopyUsed; i++) this.continuousCanopy[i].setVisible(false);
+    this.continuousCanopyUsed = used;
+    this.continuousPrimitives = primitives + used;
+  }
+
+  /** The woodland crown kernel of {@link drawCanopyShadows}, as pooled images on the scene:
+   * MULTIPLY composes the taps exactly like the white bake target did. */
+  private drawContinuousCanopies(inView: (x: number, y: number, reach: number) => boolean,
+    profile: ShadowProfile, direction: { x: number; y: number }): number {
+    const sources = this.canopySources;
+    if (!sources?.length) return 0;
+    const woodland = this.canopyWoodland, tuning = SUN_FOREST_SHADOW;
+    const opacity = woodland ? Math.min(.55, tuning.opacity * profile.opacityMult / tuning.reference.shadowOpacityMult)
+      : Math.min(.45, .7 * profile.opacityMult);
+    const depth = DEPTH.GROUND_FOG - .02, color = woodland ? tuning.color : WORLD_SHADOW_CONFIG.color;
+    let used = 0;
+    for (const source of sources) {
+      const diameter = Math.max(source.gfx.displayWidth, source.gfx.displayHeight);
+      const distance = woodland ? diameter * tuning.offsetDiameter * profile.lengthMult / tuning.reference.shadowLengthMult : 64 * profile.lengthMult;
+      const softness = woodland ? diameter * tuning.softnessDiameter * profile.softnessMult / tuning.reference.shadowSoftnessMult : 9 * profile.softnessMult;
+      const scale = woodland ? tuning.scale : 1;
+      const x = source.worldX + distance * direction.x, y = source.worldY + distance * direction.y;
+      const radius = Math.hypot(source.gfx.displayWidth, source.gfx.displayHeight) * .5 * scale + softness;
+      if (!inView(x, y, radius)) continue;
+      for (const tap of CANOPY_SHADOW_KERNEL) {
+        let image = this.continuousCanopy[used];
+        if (!image) {
+          image = this.scene.add.image(0, 0, source.gfx.texture.key, source.gfx.frame.name);
+          registerGraphicsObject(this.scene, 'dynamicShadows', image);
+          image.setBlendMode(Phaser.BlendModes.MULTIPLY);
+          this.continuousCanopy.push(image);
+        }
+        image.setTexture(source.gfx.texture.key, source.gfx.frame.name).setDepth(depth)
+          .setPosition(x + tap.x * softness, y + tap.y * softness)
+          .setScale(source.gfx.scaleX * scale, source.gfx.scaleY * scale).setRotation(source.gfx.rotation)
+          .setTint(color).setAlpha(1 - Math.pow(1 - opacity, tap.weight)).setVisible(true);
+        used++;
+      }
+    }
+    return used;
   }
 
   /** Dev A/B: use the authored canopy's alpha/rotation instead of a broad circular footprint. */
@@ -556,6 +651,14 @@ export class ShadowSystem {
 
   private syncStaticSurfaceVisibility(): void {
     this.staticSurface?.setVisible(this.shadowsVisible && this.staticHasLayout);
+    // Hidden continuous casters are redrawn on the next frame sync.
+    if (!this.shadowsVisible || !this.staticHasLayout) this.hideContinuousStaticShadows();
+  }
+
+  private hideContinuousStaticShadows(): void {
+    for (const bucket of this.layers.values()) bucket.continuousGraphics.clear();
+    for (let i = 0; i < this.continuousCanopyUsed; i++) this.continuousCanopy[i].setVisible(false);
+    this.continuousCanopyUsed = 0;
   }
 
   rebuildStaticLayoutShadows(
@@ -600,6 +703,7 @@ export class ShadowSystem {
     this.lastStaticOptions = options;
     this.rememberWatchtowerShadowAnchors(options.runtimeRocks ?? EMPTY_RUNTIME_ROCKS);
     this.staticBakeProfile = profile;
+    this.staticContinuous = this.sunDirection !== null && this.canopySources !== null;
     this.bakedAzimuth=this.sunAzimuth;
     if(this.bakedAzimuth===null)this.staticSunDirection=null;
     else {
@@ -714,7 +818,7 @@ export class ShadowSystem {
    */
   private ensureStaticSurface(): { surface: ChunkedRenderSurface; created: boolean } {
     const bounds = this.getStaticWorldBounds();
-    const frameKey = `${bounds.minX}:${bounds.minY}:${bounds.maxX}:${bounds.maxY}:${Number(this.canopySources !== null)}`;
+    const frameKey = `${bounds.minX}:${bounds.minY}:${bounds.maxX}:${bounds.maxY}:${Number(this.canopySources !== null)}:${Number(this.staticContinuous)}`;
     if (this.staticSurface && this.staticSurfaceFrameKey === frameKey) {
       return { surface: this.staticSurface, created: false };
     }
@@ -723,11 +827,14 @@ export class ShadowSystem {
     this.staticSurfaceFrameKey = frameKey;
 
     const layers: ChunkedSurfaceLayerSpec[] = [];
-    const seen = new Set<string>();
+    const seen = this.staticLayerIds;
+    seen.clear();
     for (const preset of STATIC_SHADOW_CASTERS) {
       const id = preset.config.layerDepth.toFixed(3);
       // Zwei Caster koennen dieselbe Tiefe teilen; sie landen dann in derselben Ebene.
       if (seen.has(id)) continue;
+      // Trees are drawn continuously and need no baked layer; their bucket still exists.
+      if (this.staticContinuous && preset.group === 'trees') { this.getLayer(preset.config.layerDepth, preset.group); continue; }
       seen.add(id);
       layers.push({
         id,
@@ -803,7 +910,7 @@ export class ShadowSystem {
     for (const rock of options.runtimeRocks ?? []) runtimeById.set(rock.id, rock);
 
     for (const [key, bucket] of this.layers) {
-      if (!bucket.group) continue;
+      if (!bucket.group || !this.staticLayerIds.has(key)) continue;
       const depth = Number(key);
       bucket.staticGraphics.clear();
 
@@ -823,7 +930,7 @@ export class ShadowSystem {
             const worldY = offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
             const runtime = runtimeById.get(id);
             if (runtime?.kind === 'watchtower') {
-              if (drawsRock && runtime.hp > 0) {
+              if (drawsRock && runtime.hp > 0 && !this.staticContinuous) {
                 this.drawStaticFootprintInRegion(bucket,
                   worldX + WATCHTOWER_SHADOW_FOOTPRINT.centerOffsetX,
                   worldY + WATCHTOWER_SHADOW_FOOTPRINT.centerOffsetY,
@@ -993,6 +1100,7 @@ export class ShadowSystem {
     projectiles: readonly ShadowProjectileSample[],
     train: SyncedTrainState | null,
   ): void {
+    this.syncContinuousStaticShadows();
     this.clearDynamic();
     const characterShadows = this.syncCharacterShadows(players);
     let primitivesBuilt = this.characterShadows?.activeCount ?? 0;
@@ -1106,8 +1214,13 @@ export class ShadowSystem {
     for (const bucket of this.layers.values()) {
       bucket.staticGraphics.destroy();
       bucket.dynamicGraphics.destroy();
+      bucket.continuousGraphics.destroy();
     }
     this.layers.clear();
+    for (const image of this.continuousCanopy) image.destroy();
+    this.continuousCanopy.length = 0;
+    this.continuousCanopyUsed = 0;
+    this.staticContinuous = false;
     this.disposeStaticSurface();
     this.staticScratch.destroy();
     this.unsubscribeQuality?.();
@@ -1129,6 +1242,7 @@ export class ShadowSystem {
     this.seenBaseCells.clear();
     for (const bucket of this.layers.values()) bucket.staticGraphics.clear();
     this.staticHasLayout = false;
+    this.hideContinuousStaticShadows();
     // Verwerfen statt Weisszeichnen: Ohne Layout gibt es nichts zu backen, und die Renderziele
     // waeren nur ein neutraler Vollflaechen-Blendpass pro Frame.
     this.disposeStaticSurface();
@@ -1376,7 +1490,13 @@ export class ShadowSystem {
     dynamicGraphics.setDepth(depth + 0.001);
     dynamicGraphics.setBlendMode(Phaser.BlendModes.MULTIPLY);
 
-    const bucket: ShadowLayerBucket = { staticGraphics, dynamicGraphics, group };
+    // Takes the place of the baked chunk image for continuous casters, at the same depth.
+    const continuousGraphics = this.scene.add.graphics();
+    registerGraphicsObject(this.scene, 'dynamicShadows', continuousGraphics);
+    continuousGraphics.setDepth(depth);
+    continuousGraphics.setBlendMode(Phaser.BlendModes.MULTIPLY);
+
+    const bucket: ShadowLayerBucket = { staticGraphics, dynamicGraphics, continuousGraphics, group };
     this.layers.set(key, bucket);
     return bucket;
   }

@@ -1,9 +1,9 @@
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { WOODLAND_ROCK_COLOUR_KEY, WOODLAND_TRANSMISSION_KEY } from '../../assets/WoodlandAssetManifest';
 import { WOODLAND_ROCK_COVERAGE_KEY, WOODLAND_ROCK_HEIGHT_KEY } from '../../assets/WoodlandAssetManifest';
-import { quantizeSunAzimuth } from '../../effects/sunlight/SunPath';
+import { quantizeSunAzimuth, SUN_PATH } from '../../effects/sunlight/SunPath';
 import type { RockRimGeometry } from './RockRimGeometry';
-import { packPreviousHorizons } from './FormationHorizonTransition';
+import { packHorizonSupport } from './FormationHorizonTransition';
 import { setCloudUniforms } from '../../effects/sunlight/cloudShadow';
 import * as Phaser from 'phaser';
 import { CELL_SIZE, DEPTH } from '../../config';
@@ -57,7 +57,18 @@ class FormationDataTexture {
   destroy(): void { this.scene.textures.remove(this.key); }
   get webGLTexture(): WebGLTexture { return this.wrapper.webGLTexture!; }
 }
-interface Resident { cx: number; cy: number; slot: number; ready: boolean; dirty: boolean; lastUse: number; revision: number; data?: Uint8Array; occlusion?: Uint8Array; previous?: Uint8Array; azimuth?: number; repair?: boolean; gpuRepaired?: boolean; gpuAzimuth?: number }
+/** Two azimuth supports per chunk: the primary in the field/occlusion atlas (`azimuth`),
+ * the secondary in the horizon-history atlas (`secondary`). Shaders interpolate their
+ * horizon angles per texel; `ahead` is a finished support waiting for a weightless slot. */
+interface Resident { cx: number; cy: number; slot: number; ready: boolean; dirty: boolean; lastUse: number; revision: number; data?: Uint8Array; occlusion?: Uint8Array; previous?: Uint8Array; azimuth?: number; secondary?: number; ahead?: FormationWorkerResult; repair?: boolean; gpuRepaired?: boolean; gpuAzimuth?: number }
+/** The shown weight follows the sun exactly. Only the offset left by an out-of-order
+ * support replacement (start, clock jump, step change) decays, at this rate per second. */
+const HORIZON_WEIGHT_RATE = 4;
+const HORIZON_SWAP_EPSILON = 1e-3;
+/** Atlas uploads for support replacements are spread over frames. */
+const HORIZON_SWAPS_PER_FRAME = 2;
+const wrapDegrees = (a: number): number => ((a%360)+360)%360;
+const deltaDegrees = (from: number, to: number): number => { const d=wrapDegrees(to-from); return d>180?d-360:d; };
 const signature=(s: FormationRock): string => `${s.gridX},${s.gridY},${s.active},${s.material},${s.frame}`;
 const snapshot=(s: RockVisualState): FormationRock => ({id:s.id,gridX:s.gridX,gridY:s.gridY,active:s.active,material:s.material,frame:s.frame});
 
@@ -125,10 +136,18 @@ export class RockFormationLighting {
   private receiver: (FormationReceiverBinding & FormationCoverageBinding) | null = null;
   private previous: FormationDataTexture | null = null;
   private qualityHorizons=true;
+  /** Support nearest to the sun: repairs and single-support builds use it. */
   private azimuth = 135;
+  /** Continuous sun azimuth, the two supports bracketing it and the next one in travel direction. */
+  private sunAzimuth = 135;
+  private horizonStep: number = SUN_PATH.stepDegrees;
+  private travel = 1;
+  private readonly pair = [135, 135];
+  private aheadAzimuth = 135;
+  private weightTime: number | null = null;
+  /** Displayed weight of the primary support per atlas slot, and its decaying offset from the target. */
   private readonly horizonBlend = new Float32Array(64).fill(1);
-  private readonly horizonDuration = new Float64Array(64).fill(.6);
-  private readonly horizonSince = new Float64Array(64);
+  private readonly horizonOffset = new Float32Array(64);
   private directionChanges = 0;
   private directionBuildMs = 0;
   private directionBuilds = 0;
@@ -253,7 +272,8 @@ export class RockFormationLighting {
     const repairs=[...this.resident.values()].filter(r=>r.repair&&r.ready);
     if(this.gpuRepair?.repair(repairs,this.azimuth,this.qualityHorizons,this.rim,
       {field:this.field.webGLTexture,occlusion:this.occlusion.webGLTexture})) {
-      for(const r of repairs) {this.horizonBlend[r.slot]=1;r.gpuRepaired=true;r.gpuAzimuth=this.azimuth;}
+      // The other support still holds the old geometry: show the repaired one alone.
+      for(const r of repairs) {this.horizonBlend[r.slot]=1;this.horizonOffset[r.slot]=0;r.gpuRepaired=true;r.gpuAzimuth=this.azimuth;r.secondary=undefined;r.ahead=undefined;}
       this.repairLatencyFrames=0;this.repairLatencyMs=performance.now()-started;this.repairPath='gpu';
     }
     // Capability/parity failures explicitly report the existing worker fallback.
@@ -294,7 +314,7 @@ export class RockFormationLighting {
       }
       if(slot<0)continue;
       const r={cx:w.cx,cy:w.cy,slot,ready:false,dirty:true,lastUse:++this.sequence,revision:this.revision};
-      this.slots[slot]=r;this.resident.set(k,r);
+      this.slots[slot]=r;this.resident.set(k,r);this.horizonBlend[slot]=1;this.horizonOffset[slot]=0;
     }
     // Newly allocated slots are already absent from the lookup. Publish only
     // completed uploads, or remove evicted mappings; cached camera moves write nothing.
@@ -320,17 +340,13 @@ export class RockFormationLighting {
     this.syncSunDirection();
     this.syncRimGeometry();
     const now=this.state.clouds?.timeSec??0;
-    for(let slot=0;slot<64;slot++)if(this.horizonBlend[slot]<1 && !this.slots[slot]?.repair) {
-      const t=Math.max(0,Math.min(1,(now-this.horizonSince[slot])/this.horizonDuration[slot]));
-      this.horizonBlend[slot]=t*t*(3-2*t);
-    }
     const active=this.state.material==='mineral'&&!this.error&&!this.overflow;
     this.surface.setVisible(active&&!this.debugSurfaceSuppressed);
     this.ground.setVisible(active&&!this.debugGroundSuppressed&&(this.state.castShadow!==false||!!this.rim));
     this.surface.setBlendMode(this.state.normals?Phaser.BlendModes.NORMAL:Phaser.BlendModes.MULTIPLY);
     if(this.pending) {
       const result=this.pending;this.pending=null;
-      this.publish(result,false,now);
+      this.publish(result,false);
     }
     if(this.pendingRepair) {
       const batch=this.pendingRepair;this.pendingRepair=null;
@@ -341,7 +357,7 @@ export class RockFormationLighting {
         return !r || r.revision===result.revision;
       })) {
         const started=performance.now();
-        for(const result of batch.results)this.publish(result,true,now);
+        for(const result of batch.results)this.publish(result,true);
         this.lastRepairPublishMs=performance.now()-started;
         this.maxRepairPublishMs=Math.max(this.maxRepairPublishMs,this.lastRepairPublishMs);
         this.repairMainThreadMs+=this.lastRepairPublishMs;
@@ -353,6 +369,8 @@ export class RockFormationLighting {
         this.repairStartedAt=null;
       } else this.discardedBuilds+=batch.results.length;
     }
+    this.syncHorizonWeights(now);
+    if(this.placeSupports())this.syncHorizonWeights(now);
     if(!active||this.busy)return;
     // One worker transaction, one publication, also across resident chunk borders.
     if(this.repairStartedAt!==null) {
@@ -363,29 +381,103 @@ export class RockFormationLighting {
       }
       this.repairStartedAt=null;
     }
-    // Round-robin prevents a moving sun from starving later resident chunks.
-    for(let i=0;i<this.wanted.length;i++) {
+    const job=this.nextHorizonJob();
+    if(job){this.busy=true;this.post({kind:'build',cx:job.resident.cx,cy:job.resident.cy,revision:job.resident.revision,azimuth:job.azimuth,horizons:this.qualityHorizons});}
+  }
+
+  /** Round-robin per tier prevents a moving sun from starving later resident chunks. */
+  private nextHorizonJob():{resident:Resident;azimuth:number}|null {
+    for(let tier=0;tier<3;tier++)for(let i=0;i<this.wanted.length;i++) {
       const index=(this.buildCursor+i)%this.wanted.length;
-      const r=this.resident.get(this.wanted[index]);if(!r?.dirty)continue;
+      const r=this.resident.get(this.wanted[index]);if(!r)continue;
+      const azimuth=this.missingSupport(r,tier);if(azimuth===null)continue;
       this.buildCursor=(index+1)%this.wanted.length;
-      this.busy=true;this.post({kind:'build',cx:r.cx,cy:r.cy,revision:r.revision,azimuth:this.azimuth,horizons:this.qualityHorizons});break;
+      return {resident:r,azimuth};
+    }
+    return null;
+  }
+  /** Tier 0: displayable geometry. 1: the pair bracketing the sun, nearest first.
+   * 2: the next support in travel direction, baked before the sun reaches it.
+   * One finished support at a time waits per chunk, so jobs never ping-pong. */
+  private missingSupport(r:Resident,tier:number):number|null {
+    if(r.repair)return null;
+    if(tier===0)return !r.ready||r.dirty?this.azimuth:null;
+    if(!r.ready||r.dirty||r.ahead||!this.previous||!this.qualityHorizons)return null;
+    const held=(a:number):boolean=>a===r.azimuth||a===r.secondary;
+    if(tier===2)return held(this.aheadAzimuth)?null:this.aheadAzimuth;
+    const [near,far]=Math.abs(deltaDegrees(this.pair[0],this.sunAzimuth))<=Math.abs(deltaDegrees(this.pair[1],this.sunAzimuth))
+      ?this.pair:[this.pair[1],this.pair[0]];
+    return !held(near)?near:!held(far)?far:null;
+  }
+
+  /** Replaces a support only while it carries no displayed weight, so the visible
+   * horizon angle never jumps. A slower worker merely holds the sun at the last support. */
+  private placeSupports():boolean {
+    let budget=HORIZON_SWAPS_PER_FRAME;
+    for(const r of this.resident.values()) {
+      const next=r.ahead;
+      if(!budget)break;
+      if(!next||!r.ready||r.dirty||r.repair||!this.previous)continue;
+      const a=next.azimuth;
+      if(next.revision!==r.revision||a===r.azimuth||a===r.secondary){r.ahead=undefined;continue;}
+      if(!this.pair.includes(a)){if(a!==this.aheadAzimuth)r.ahead=undefined;continue;}
+      const weight=this.horizonBlend[r.slot],adjacent=this.adjacentSupports(r);
+      if(r.secondary===undefined||(!this.pair.includes(r.secondary)&&weight>=1-HORIZON_SWAP_EPSILON))this.writeSecondary(r,next);
+      else if(!this.pair.includes(r.azimuth!)&&weight<=HORIZON_SWAP_EPSILON)this.writePrimary(r,next,false);
+      else continue;
+      // In order, the new pair continues the shown angle exactly. After a single or
+      // non-adjacent support (start, clock jump, step change) the difference decays.
+      this.horizonOffset[r.slot]=adjacent?0:weight-this.targetWeight(r);
+      r.ahead=undefined;budget--;
+    }
+    return budget<HORIZON_SWAPS_PER_FRAME;
+  }
+  private adjacentSupports(r:Resident):boolean {
+    return r.secondary!==undefined&&r.azimuth!==undefined
+      &&Math.abs(Math.abs(deltaDegrees(r.secondary,r.azimuth))-this.horizonStep)<=1e-6;
+  }
+  private writeSecondary(r:Resident,result:FormationWorkerResult):void {
+    r.previous??=new Uint8Array(result.data.length);
+    packHorizonSupport(result.data,result.occlusion,r.previous);
+    this.previous!.upload(r.slot%FORMATION.atlasColumns*FORMATION_SIDE,Math.floor(r.slot/FORMATION.atlasColumns)*FORMATION_SIDE,
+      FORMATION_SIDE,FORMATION_SIDE,r.previous);
+    this.uploadBytes+=r.previous.byteLength;r.secondary=result.azimuth;
+  }
+  /** Weight of the primary support: the actual azimuth between two adjacent supports.
+   * Non-adjacent supports (step change, clock jump) show the nearer one alone. */
+  private targetWeight(r:Resident):number {
+    if(r.secondary===undefined||r.azimuth===undefined||!this.previous)return 1;
+    if(!this.adjacentSupports(r))
+      return Math.abs(deltaDegrees(r.azimuth,this.sunAzimuth))<=Math.abs(deltaDegrees(r.secondary,this.sunAzimuth))?1:0;
+    return Math.max(0,Math.min(1,deltaDegrees(r.secondary,this.sunAzimuth)/deltaDegrees(r.secondary,r.azimuth)));
+  }
+  private syncHorizonWeights(now:number):void {
+    const elapsed=this.weightTime===null||now<this.weightTime?Infinity:now-this.weightTime;
+    this.weightTime=now;
+    const limit=elapsed*HORIZON_WEIGHT_RATE;
+    for(const r of this.resident.values()) {
+      const offset=this.horizonOffset[r.slot],rest=Math.abs(offset)<=limit?0:offset-Math.sign(offset)*limit;
+      this.horizonOffset[r.slot]=rest;
+      this.horizonBlend[r.slot]=Math.max(0,Math.min(1,this.targetWeight(r)+rest));
     }
   }
 
-  private publish(result:FormationWorkerResult,repair:boolean,now:number):void {
+  private publish(result:FormationWorkerResult,repair:boolean):void {
     this.builds++;this.workerMs+=result.buildMs;
     this.maxWorkerBuildMs=Math.max(this.maxWorkerBuildMs,result.buildMs);
     const r=this.resident.get(`${result.cx},${result.cy}`);
     if(!r || result.revision!==r.revision){this.discardedBuilds++;return;}
     this.gpuRepair?.validate(r,result.azimuth,this.qualityHorizons,this.rim,result.data,result.occlusion);
-    if(!repair&&this.previous&&r.ready&&r.data&&r.occlusion&&r.azimuth!==result.azimuth) {
-      r.previous??=new Uint8Array(result.data.length);
-      packPreviousHorizons(r.data,r.occlusion,r.previous,this.horizonBlend[r.slot]);
-      this.previous.upload(r.slot%FORMATION.atlasColumns*FORMATION_SIDE,Math.floor(r.slot/FORMATION.atlasColumns)*FORMATION_SIDE,
-        FORMATION_SIDE,FORMATION_SIDE,r.previous);
-      this.uploadBytes+=r.previous.byteLength;this.horizonBlend[r.slot]=0;this.horizonSince[r.slot]=now;this.horizonDuration[r.slot]=.6;
-    } else this.horizonBlend[r.slot]=1;
-    if(r.azimuth!==undefined&&r.azimuth!==result.azimuth){this.directionBuildMs+=result.buildMs;this.directionBuilds++;}
+    if(!repair&&r.ready&&!r.dirty&&this.previous) {
+      // A further support over unchanged geometry, placed once its slot carries no weight.
+      this.directionBuildMs+=result.buildMs;this.directionBuilds++;
+      r.ahead=result;return;
+    }
+    this.writePrimary(r,result,repair);
+    // New geometry (or the first data) invalidates the other support: show this one alone.
+    r.secondary=undefined;r.ahead=undefined;this.horizonBlend[r.slot]=1;this.horizonOffset[r.slot]=0;
+  }
+  private writePrimary(r:Resident,result:FormationWorkerResult,repair:boolean):void {
     let x0=0,y0=0,x1=FORMATION_SIDE,y1=FORMATION_SIDE;
     if(repair&&r.gpuRepaired&&this.gpuRepair?.available&&r.gpuAzimuth===result.azimuth) {
       // The correctly repaired GPU field is already final within channel precision.
@@ -420,7 +512,7 @@ export class RockFormationLighting {
       upload(this.field,result.data);upload(this.occlusion,result.occlusion);
     }
     r.azimuth=result.azimuth;r.repair=false;r.gpuRepaired=false;
-    r.dirty=this.qualityHorizons&&result.azimuth!==this.azimuth;r.data=result.data;r.occlusion=result.occlusion;
+    r.dirty=false;r.data=result.data;r.occlusion=result.occlusion;
     if(!r.ready){r.ready=true;this.lookupData[(r.cy*this.lookup.width+r.cx)*4]=r.slot+1;this.uploadLookup();}
   }
 
@@ -432,18 +524,26 @@ export class RockFormationLighting {
       this.setHistoryTexture(this.previous.texture);
     } else if(!history&&this.previous) {
       this.setHistoryTexture(this.field.texture);this.previous.destroy();this.previous=null;
-      this.horizonBlend.fill(1);for(const r of this.resident.values())r.previous=undefined;
+      this.horizonBlend.fill(1);this.horizonOffset.fill(0);
+      for(const r of this.resident.values()){r.previous=undefined;r.secondary=undefined;r.ahead=undefined;}
     }
     const quality=this.state.clouds?.quality;
-    const next=path?quantizeSunAzimuth(path.azimuth,quality?.horizonStep):135;
     const horizons=quality?.horizons!==false;
     if(this.qualityHorizons!==horizons){this.qualityHorizons=horizons;this.revision++;for(const r of this.resident.values()){r.dirty=true;r.revision=this.revision;}}
     if(!horizons)return;
-    if(next===this.azimuth || (path&&path.strength===0))return;
-    this.azimuth=next;this.directionChanges++;
-    // Direction changes do not invalidate geometry. Accept the in-flight horizon
-    // as an interim result, then converge to the newest angle without blocking readiness.
-    for(const r of this.resident.values())r.dirty=true;
+    // No hold at night: without direct light the horizons are invisible, so the
+    // sunrise supports are baked in the dark instead of jumping at dawn.
+    const step=quality?.horizonStep??SUN_PATH.stepDegrees,sun=path?wrapDegrees(path.azimuth):135;
+    const moved=deltaDegrees(this.sunAzimuth,sun);
+    if(moved!==0)this.travel=Math.sign(moved);
+    this.sunAzimuth=sun;this.horizonStep=step;
+    const lower=wrapDegrees(Math.floor(sun/step)*step);
+    this.pair[0]=lower;this.pair[1]=wrapDegrees(lower+step);
+    this.aheadAzimuth=wrapDegrees(this.travel>0?lower+2*step:lower-step);
+    const anchor=path?quantizeSunAzimuth(sun,step):135;
+    if(anchor!==this.azimuth){this.azimuth=anchor;this.directionChanges++;}
+    // Without horizon history a single support follows the anchor.
+    if(!this.previous)for(const r of this.resident.values())if(r.ready&&r.azimuth!==anchor)r.dirty=true;
   }
   private setHistoryTexture(texture: Phaser.Textures.Texture): void {
     const textures=[this.field.texture,this.lookup.texture,this.occlusion.texture,
@@ -492,7 +592,8 @@ export class RockFormationLighting {
   getDiagnostics() {
     return {residentChunks:this.resident.size,pendingChunks:this.wanted.filter(key=>this.resident.get(key)?.dirty).length,
       textureBytes:this.field.width*this.field.height*(this.previous?12:8)+this.lookupData.byteLength+(this.gpuRepair?.textureBytes??0),uploadBytes:this.uploadBytes,
-      horizonAzimuth:this.azimuth,directionChanges:this.directionChanges,directionBuildMs:this.directionBuildMs,directionBuilds:this.directionBuilds,
+      horizonAzimuth:this.azimuth,sunAzimuth:this.sunAzimuth,horizonPair:[...this.pair],horizonAhead:this.aheadAzimuth,
+      directionChanges:this.directionChanges,directionBuildMs:this.directionBuildMs,directionBuilds:this.directionBuilds,
       sharedSunTextureBytes:512*512*4,
       light:{strength:this.state.strength,sun:[...this.state.sun]},
       builds:this.builds,workerBuildMs:this.workerMs,maxWorkerBuildMs:this.maxWorkerBuildMs,

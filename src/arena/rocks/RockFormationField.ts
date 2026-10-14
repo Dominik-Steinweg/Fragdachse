@@ -24,7 +24,12 @@ export interface FormationFieldResult { data: Uint8Array; occlusion: Uint8Array;
 interface FormationCache {
   heights: Float32Array; support: Uint8Array; result: FormationFieldResult;
   azimuth: number; solarHorizons: boolean;
+  /** Geometry epoch of `heights`; equal epochs permit a solar-only rebuild. */
+  epoch: number; maxHeight: number;
 }
+/** Bounded worker cache: covers the resident halo of a 1080p view, so the azimuth
+ * supports of every wanted chunk reuse their geometry instead of thrashing. */
+const FORMATION_CACHE_CHUNKS = 20;
 
 /** Visual-only projection of the existing live rock store. Cells are indexed once;
  * destruction updates only dirty cells. No independent gameplay geometry or clock. */
@@ -36,6 +41,8 @@ export class RockFormationField {
   readonly cols: number;
   readonly rows: number;
   revision = 0;
+  /** Bumped by every geometry input (cells or rim), unlike the cell-only revision. */
+  private epoch = 0;
   private rim: RockRimGeometry | null = null;
   // Worker-owned, bounded independently of world size. Never transfer these buffers.
   private readonly cache = new Map<string, FormationCache>();
@@ -45,7 +52,7 @@ export class RockFormationField {
     return this.build(cx, cy, azimuth, solarHorizons, true);
   }
 
-  setRimGeometry(rim: RockRimGeometry | null): void { this.rim = rim; }
+  setRimGeometry(rim: RockRimGeometry | null): void { this.rim = rim; this.epoch++; }
   constructor(width: number, height: number, private readonly states: readonly (FormationRock | undefined)[],
     private readonly source: RockFormationSource) {
     this.cols = Math.ceil(width / CELL_SIZE); this.rows = Math.ceil(height / CELL_SIZE);
@@ -66,7 +73,7 @@ export class RockFormationField {
       this.cells[s.gridY * this.cols + s.gridX] = s.active && s.material !== 'walls' ? id : -1;
       changed.push({ x: s.gridX * CELL_SIZE, y: s.gridY * CELL_SIZE });
     }
-    if (changed.length) this.revision++;
+    if (changed.length) { this.revision++; this.epoch++; }
     return changed;
   }
 
@@ -84,6 +91,10 @@ export class RockFormationField {
   build(cx: number, cy: number, azimuth = 135, solarHorizons = true, incremental = false): FormationFieldResult {
     const key = `${cx},${cy}`, cached = incremental ? this.cache.get(key) : undefined;
     this.lastBuild = { cacheHit: !!cached, shadedTexels: 0, totalTexels: FORMATION_SIDE ** 2 };
+    // A new sun direction over unchanged geometry only re-traces the three solar
+    // horizons. Normals, sky, coverage and contact are direction-independent.
+    if (cached && cached.epoch === this.epoch && cached.solarHorizons === solarHorizons)
+      return this.retraceSolar(key, cached, azimuth);
     const period = Math.sqrt(this.detail.length);
     const step = FORMATION.step, pad = Math.ceil((FORMATION.horizonReach + FORMATION.envelopeReach) / step) + 3;
     const side = FORMATION_SIDE, span = side + pad * 2, count = span * span;
@@ -145,14 +156,7 @@ export class RockFormationField {
     }
     const data = new Uint8Array(side * side * 4), occlusion = new Uint8Array(side * side * 4);
     const surface = new Float32Array(side * side);
-    const rays = Math.floor(FORMATION.horizonReach / (step*Math.SQRT2));
-    // Three azimuth slices of one finite sun. Cached horizons make softness and
-    // time uniform-only changes; the fragment shader never marches the world.
-    const sunRays = [-.045, 0, .045].map(angle => Array.from({length:rays}, (_, r) => {
-      const length=(r+1)*Math.SQRT2, a=(azimuth===135?-Math.PI*.75:-azimuth*Math.PI/180)+angle;
-      const x=Math.round(Math.cos(a)*length), y=Math.round(Math.sin(a)*length);
-      return {offset:y*span+x,distance:Math.hypot(x,y)*step};
-    }));
+    const sunRays = solarRays(azimuth, span);
     // Sub-six-pixel relief belongs to normals and ambient cavity shading, not
     // a binary solar blocker on its own face. Ground keeps the complete rays:
     // a close real silhouette must still cast onto a neighbouring empty cell.
@@ -201,16 +205,8 @@ export class RockFormationField {
       const dx = (heights[i+1]-heights[i-1])/(step*2), dy = (heights[i+span]-heights[i-span])/(step*2);
       const length = Math.hypot(dx,dy,1);
       const receiverRays=support[i]?surfaceSunRays:sunRays;
-      for(let direction=0;direction<(solarHorizons?receiverRays.length:0);direction++) {
-        let slope=0;
-        for(const sample of receiverRays[direction]) {
-          // Rays advance monotonically. Once even the tallest padded sample
-          // cannot exceed the existing horizon, all remaining taps are hidden.
-          if(maxHeight-z-.2<=slope*sample.distance)break;
-          slope=Math.max(slope,(heights[i+sample.offset]-z-.2)/sample.distance);
-        }
-        horizons[direction]=Math.round(Math.atan(slope)/(Math.PI/2)*255);
-      }
+      for(let direction=0;direction<(solarHorizons?receiverRays.length:0);direction++)
+        horizons[direction]=traceHorizon(receiverRays[direction],heights,i,z,maxHeight);
       let blocked=0;
       for(const ray of skyRays) {
         let slope=-1e6;
@@ -236,10 +232,30 @@ export class RockFormationField {
     const result = {data,occlusion,heights:surface};
     if (incremental) {
       this.cache.delete(key);
-      this.cache.set(key, { heights, support, result, azimuth, solarHorizons });
-      while (this.cache.size > 8) this.cache.delete(this.cache.keys().next().value!);
+      this.cache.set(key, { heights, support, result, azimuth, solarHorizons, epoch: this.epoch, maxHeight });
+      while (this.cache.size > FORMATION_CACHE_CHUNKS) this.cache.delete(this.cache.keys().next().value!);
     }
     return result;
+  }
+
+  /** Bit-identical to a full build at `azimuth`: the same rays over the same cached heights. */
+  private retraceSolar(key: string, cached: FormationCache, azimuth: number): FormationFieldResult {
+    this.cache.delete(key); this.cache.set(key, cached);
+    if (cached.azimuth === azimuth || !cached.solarHorizons) return cached.result;
+    const step = FORMATION.step, pad = Math.ceil((FORMATION.horizonReach + FORMATION.envelopeReach) / step) + 3;
+    const side = FORMATION_SIDE, span = side + pad * 2, {heights, support, maxHeight} = cached;
+    const data = cached.result.data.slice(), occlusion = cached.result.occlusion.slice();
+    const sunRays = solarRays(azimuth, span), surfaceSunRays = sunRays.map(ray=>ray.filter(sample=>sample.distance>=6));
+    for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) {
+      const i = (y+pad)*span+x+pad, z = heights[i], p = (y*side+x)*4;
+      const receiverRays = support[i]?surfaceSunRays:sunRays;
+      data[p+2] = traceHorizon(receiverRays[1], heights, i, z, maxHeight);
+      occlusion[p+1] = traceHorizon(receiverRays[0], heights, i, z, maxHeight);
+      occlusion[p+2] = traceHorizon(receiverRays[2], heights, i, z, maxHeight);
+    }
+    this.lastBuild.shadedTexels = side * side;
+    cached.azimuth = azimuth; cached.result = {data, occlusion, heights: cached.result.heights};
+    return cached.result;
   }
 
   /** Chunk samples and cell origins share the two-pixel lattice. Cache each
@@ -346,6 +362,28 @@ function repairSmallHoles(coverage: Float32Array, span: number): Uint8Array {
     }
   }
   return support;
+}
+
+interface SolarTap { offset: number; distance: number }
+/** Three azimuth slices of one finite sun. Cached horizons make softness and
+ * time uniform-only changes; the fragment shader never marches the world. */
+function solarRays(azimuth: number, span: number): SolarTap[][] {
+  const step = FORMATION.step, rays = Math.floor(FORMATION.horizonReach / (step*Math.SQRT2));
+  return [-.045, 0, .045].map(angle => Array.from({length:rays}, (_, r) => {
+    const length=(r+1)*Math.SQRT2, a=(azimuth===135?-Math.PI*.75:-azimuth*Math.PI/180)+angle;
+    const x=Math.round(Math.cos(a)*length), y=Math.round(Math.sin(a)*length);
+    return {offset:y*span+x,distance:Math.hypot(x,y)*step};
+  }));
+}
+/** Horizon angle as a byte of [0, 90°]. Rays advance monotonically: once even the
+ * tallest padded sample cannot exceed the existing horizon, all remaining taps are hidden. */
+function traceHorizon(ray: readonly SolarTap[], heights: Float32Array, i: number, z: number, maxHeight: number): number {
+  let slope=0;
+  for(const sample of ray) {
+    if(maxHeight-z-.2<=slope*sample.distance)break;
+    slope=Math.max(slope,(heights[i+sample.offset]-z-.2)/sample.distance);
+  }
+  return Math.round(Math.atan(slope)/(Math.PI/2)*255);
 }
 
 export function formationNoise(x: number, y: number): number {

@@ -196,6 +196,7 @@ export class PersistentBaseEditorWorld {
     this.arena.rockOverlaySurface?.updateResidency(view);
     this.arena.rockVisualSystem?.updateVisibility(view);
     this.shadows.updateStaticResidency(view);
+    this.shadows.syncContinuousStaticShadows();
     this.bases.syncLights();
     this.animations.update(delta);
     this.powerUps.updatePedestals(now);
