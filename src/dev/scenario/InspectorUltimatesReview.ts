@@ -19,6 +19,7 @@ const upgradeIds = {
 };
 
 interface Options {
+  variant: 'ultimates' | 'drones';
   ultimate: 'holo' | 'bomber';
   arsenal: 'single' | 'mixed';
   motion: 'stand' | 'run' | 'edge';
@@ -43,15 +44,21 @@ function choice<T extends string>(value: unknown, fallback: T, values: readonly 
 
 /** Profiles go through the regular scenario sanitizer, dependency resolver and loadout commit. */
 export function inspectorUltimatesScenario(command: Record<string, unknown>, timeOfDay = 720) {
+  const variant = choice(command.variant, 'ultimates', ['ultimates', 'drones'], 'variant');
   const options: Options = {
-    ultimate: choice(command.ultimate, 'holo', ['holo', 'bomber'], 'ultimate'),
+    variant,
+    ultimate: choice(command.ultimate, variant === 'drones' ? 'bomber' : 'holo', ['holo', 'bomber'], 'ultimate'),
     arsenal: choice(command.arsenal, 'single', ['single', 'mixed'], 'arsenal'),
     motion: choice(command.motion, 'stand', ['stand', 'run', 'edge'], 'motion'),
     upgrades: choice(command.upgrades, 'base', ['base', 'full'], 'upgrades'),
   };
+  if (variant === 'drones' && (options.ultimate !== 'bomber' || options.motion !== 'stand')) {
+    throw Error('drones requires bomber and stand');
+  }
   if (options.ultimate === 'holo' && options.motion === 'edge') throw Error('edge is a bomber variant');
   if (options.ultimate === 'bomber' && options.arsenal !== 'single') throw Error('arsenal is a holo parameter');
-  const originals = options.ultimate === 'holo' ? options.arsenal === 'mixed' ? templates : templates.slice(0, 1) : [];
+  const originals: readonly ConstructionId[] = variant === 'drones' ? ['attack_drone_station']
+    : options.ultimate === 'holo' ? options.arsenal === 'mixed' ? templates : templates.slice(0, 1) : [];
   const scenario: DevScenario = {
     ...defaultScenario('inspector_gadachs'), mapId: MAP, timeOfDay, hideAim: true,
     ultimate: options.ultimate === 'holo' ? 'HOLO_OFFENSIVE' : 'BOMBER_SQUADRON',
@@ -59,10 +66,12 @@ export function inspectorUltimatesScenario(command: Record<string, unknown>, tim
     tools: originals.map(id => ({ kind: 'construction', id })),
     upgrades: {
       inspector_construction_slots: upgrades.inspector_construction_slots.maxLevel,
+      ...(variant === 'drones' ? { inspector_repair_drone: 1 } : {}),
       ...(options.upgrades === 'full'
         ? Object.fromEntries(upgradeIds[options.ultimate].map(id => [id, upgrades[id].maxLevel])) : {}),
     },
-    constructions: originals.map((id, index) => ({ id, gridX: 20 + index * 3, gridY: 18 })),
+    constructions: originals.map((id, index) => ({ id,
+      gridX: variant === 'drones' ? 28 : 20 + index * 3, gridY: variant === 'drones' ? 27 : 18 })),
   };
   const capacityNeeded = originals.reduce((sum, id) => sum + COOP_DEFENSE_CONSTRUCTIONS[id].capacityCost, 0)
     - resolveConstructionCapacity({ gameMode: 'coop_defense', classId: scenario.classId });
@@ -90,6 +99,7 @@ export function inspectorUltimatesStatus(controller: DevScenarioController) {
   if (fixture.phase === 'preparing') return { ...fixture.options, phase: fixture.phase };
   if (fixture.worldRevision !== bridge.getWorldDescriptor()?.worldRevision) return null;
   const now = bridge.getSynchronizedNow(), ownerId = bridge.getLocalPlayerId();
+  const state = bridge.getLatestGameState();
   const holo = bridge.getFireControlSnapshot().deployments
     .filter(d => d.kind === 'holo').filter(d => d.ownerId === ownerId)
     .map(d => ({ ...d, remainingMs: Math.max(0, d.expiresAt - now),
@@ -104,7 +114,9 @@ export function inspectorUltimatesStatus(controller: DevScenarioController) {
       } : null) }));
   return { ...fixture.options, phase: fixture.phase, result: fixture.result, activatedAt: fixture.activatedAt, now,
     // PlayerNetState is published by the host; immediately after pressing Q it may be one tick old.
-    rage: bridge.getLatestGameState()?.players[ownerId]?.rage ?? null,
+    rage: state?.players[ownerId]?.rage ?? null,
+    attackDrones: (state?.attackDrones ?? []).filter(d => d.ownerId === ownerId),
+    repairDrones: (state?.repairDrones ?? []).filter(d => d.ownerId === ownerId),
     holoDeployments: holo.length, copyCount: holo.reduce((n, d) => n + d.copies.length, 0),
     bomberSquadrons: squadrons.length, holo, squadrons };
 }
@@ -136,7 +148,7 @@ function activate(controller: DevScenarioController, fixture: Fixture): void {
   controller.lastAction = { inspectorUltimates: fixture.result };
 }
 
-/** action=inspectorUltimates, phase=prepare|activate (omitted: both), ultimate=holo|bomber,
+/** action=inspectorUltimates, variant=ultimates|drones, phase=prepare|activate (omitted: both), ultimate=holo|bomber,
  * arsenal=single|mixed, motion=stand|run|edge, upgrades=base|full. Capture via fixed scenario steps. */
 export async function runInspectorUltimatesReview(controller: DevScenarioController, command: Record<string, unknown>): Promise<void> {
   if (!isDevScenarioMode() || !bridge.isHost()) throw Error('Isolated dev host required');
@@ -144,7 +156,7 @@ export async function runInspectorUltimatesReview(controller: DevScenarioControl
   if (phase === 'activate') {
     const fixture = fixtures.get(controller);
     if (!fixture) throw Error('Prepare inspectorUltimates first');
-    for (const key of ['ultimate', 'arsenal', 'motion', 'upgrades'] as const) {
+    for (const key of ['variant', 'ultimate', 'arsenal', 'motion', 'upgrades'] as const) {
       if (command[key] !== undefined && command[key] !== fixture.options[key]) throw Error(`Prepared ${key} differs; prepare a new review`);
     }
     activate(controller, fixture);

@@ -436,6 +436,8 @@ export function* createRendererBundleSteps(
   const droneNavLights = new DroneNavLightRenderer(scene, lighting);
   cleanup.push(() => droneNavLights.destroy());
   attackDrone.setNavLights(droneNavLights);
+  repairDrone.setNavLights(droneNavLights);
+  objectiveRepairDrones.setNavLights(droneNavLights);
   cleanup.push(() => enemyEyes.destroy());
   const eliteMarkers = new EliteMarkerRenderer(scene);
   cleanup.push(() => eliteMarkers.destroy());

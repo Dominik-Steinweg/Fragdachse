@@ -22,12 +22,16 @@ import type { BaseManager } from '../entities/BaseManager';
 import { getSecondaryObjectiveTargets } from '../ui/coopDefenseSecondaryObjectiveModel';
 import {
   createRepairDroneBody,
+  createRepairDroneShadow,
+  updateRepairDroneShadow,
   updateRepairDroneRotors,
 } from './repairDroneVisuals';
 import type { ResolvedCoopDefenseMapSecondaryObjectiveConfig } from '../config/coopDefenseMaps';
 import type { CoopDefenseSecondaryObjectivePresentationState } from '../types';
 import { getRepairDroneWorkProbe, RepairDroneEffects } from './RepairDroneEffects';
 import type { LightingSystem } from './LightingSystem';
+import { DRONE_NAV_LIGHT_PROFILES } from './droneNavLights/DroneNavLightModel';
+import type { DroneNavLightRenderer } from './droneNavLights/DroneNavLightRenderer';
 
 /** Höchstens zwei gleichzeitig wiederhergestellte Ziele; die Objekte werden vorab angelegt. */
 const MAX_JOBS = 2;
@@ -40,6 +44,7 @@ const ENTRY_SPREAD_RAD = 0.34;
 
 interface DroneVisual {
   readonly body: Phaser.GameObjects.Image;
+  readonly shadow: Phaser.GameObjects.Image;
   readonly effects: RepairDroneEffects;
 }
 
@@ -59,6 +64,9 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
   private built = false;
   private visible = false;
   private lighting: LightingSystem | null = null;
+  private navLights: Pick<DroneNavLightRenderer, 'submit'> | null = null;
+
+  setNavLights(lights: Pick<DroneNavLightRenderer, 'submit'> | null): void { this.navLights = lights; }
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -73,9 +81,10 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
 
     for (let index = 0; index < MAX_DRONES; index += 1) {
       const body = createRepairDroneBody(this.scene, 0, 0).setVisible(false);
+      const shadow = createRepairDroneShadow(this.scene, 0, 0).setVisible(false);
       const effects = new RepairDroneEffects(this.scene, `repair-drone:mission:${index}`);
       effects.setLightingSystem(this.lighting);
-      this.drones.push({ body, effects });
+      this.drones.push({ body, shadow, effects });
     }
   }
 
@@ -124,6 +133,7 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
   destroy(): void {
     for (const drone of this.drones) {
       drone.body.destroy();
+      drone.shadow.destroy();
       drone.effects.destroy();
     }
     this.drones.length = 0;
@@ -243,6 +253,9 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
       .setPosition(x, y + bob)
       .setRotation(Math.atan2(facingY - y, facingX - x) + Math.PI / 2);
     updateRepairDroneRotors(drone.body, now, slot * 37);
+    updateRepairDroneShadow(drone.shadow, drone.body, x, y);
+    this.navLights?.submit(drone.body.x, drone.body.y, drone.body.rotation - Math.PI / 2,
+      alpha, DRONE_NAV_LIGHT_PROFILES.repairDrone, drone.body);
     const probe = getRepairDroneWorkProbe(drone.body);
     const surface = repairing ? job.surfacePointOf(probe.x, probe.y) : null;
     drone.effects.update(drone.body, surface ? { id: job.targetId, ...surface } : null, now, alpha);
@@ -251,5 +264,6 @@ export class CoopDefenseObjectiveRepairDroneRenderer {
 
 function hideDrone(drone: DroneVisual): void {
   drone.body.setVisible(false);
+  drone.shadow.setVisible(false);
   drone.effects.hide();
 }

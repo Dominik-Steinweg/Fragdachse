@@ -3213,6 +3213,7 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:effects/health/healthBarStyles.ts:module/TURRET_HEALTH_BAR_STYLE/backgroundDepth/0","owner":"effects/health/healthBarStyles.ts","component":"module/TURRET_HEALTH_BAR_STYLE/backgroundDepth/0","height":"ground","lighting":"material","camera":"world","depths":[9.35],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"module/TURRET_HEALTH_BAR_STYLE/backgroundDepth/0","expression":"DEPTH.ROCKS + 0.35"}},
   {"id":"cpu:effects/health/healthBarStyles.ts:module/TURRET_HEALTH_BAR_STYLE/fillDepth/0","owner":"effects/health/healthBarStyles.ts","component":"module/TURRET_HEALTH_BAR_STYLE/fillDepth/0","height":"body","lighting":"material","camera":"world","depths":[9.4],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"module/TURRET_HEALTH_BAR_STYLE/fillDepth/0","expression":"DEPTH.ROCKS + 0.4"}},
   {"id":"cpu:effects/repairDroneVisuals.ts:createRepairDroneBody/scene.add/setDepth/0","owner":"effects/repairDroneVisuals.ts","component":"createRepairDroneBody/scene.add/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[15.4],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"createRepairDroneBody/scene.add/setDepth/0","expression":"REPAIR_DRONE_DEPTH"}},
+  {"id":"cpu:effects/repairDroneVisuals.ts:createRepairDroneShadow/setDepth/setDepth/0","owner":"effects/repairDroneVisuals.ts","component":"createRepairDroneShadow/setDepth/setDepth/0","height":"ground","lighting":"material","camera":"world","depths":[9.92],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"createRepairDroneShadow/setDepth/setDepth/0","expression":"CHARACTER_SHADOW_CONFIG.depth"}},
   {"id":"cpu:entities/BaseEntity.ts:createPresentationRepresentation/image/setDepth/0","owner":"entities/BaseEntity.ts","component":"createPresentationRepresentation/image/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[7],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"createPresentationRepresentation/image/setDepth/0","expression":"DEPTH.BASES + 3"}},
   {"id":"cpu:entities/BaseEntity.ts:createPresentationRepresentation/marker/setDepth/0","owner":"entities/BaseEntity.ts","component":"createPresentationRepresentation/marker/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[6],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"createPresentationRepresentation/marker/setDepth/0","expression":"DEPTH.BASES + 2"}},
   {"id":"cpu:entities/BaseEntity.ts:setVulnerable/marker/setDepth/0","owner":"entities/BaseEntity.ts","component":"setVulnerable/marker/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[9],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"setVulnerable/marker/setDepth/0","expression":"DEPTH.BASES + 5"}},
@@ -6838,7 +6839,8 @@ export const CPU_SOURCE_CONTRACTS = {
         "blends": [
           "NORMAL"
         ]
-      }
+      },
+      { "key": "createRepairDroneShadow/setDepth/setDepth/0", "expression": "CHARACTER_SHADOW_CONFIG.depth", "blends": ["NORMAL"] }
     ],
     "bindings": {}
   },

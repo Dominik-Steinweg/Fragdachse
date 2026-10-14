@@ -3,9 +3,10 @@
  * Drone renderers only submit their displayed pose and a profile of anchors; colours, beacon
  * timing, day/night response and the bounded ground pools belong to this model and its renderer.
  *
- * Colours stay clear of enemy eyes (greens, oranges, purples), allied jade, telegraph red and
- * the fire-control mint: a warm white nose light and a cool sky-blue tail beacon. The nose is
- * steady and the tail flashes slowly, so the flight direction reads even on a dark silhouette.
+ * Colours stay clear of enemy eyes (greens, oranges, cyan, purples), allied jade, telegraph red
+ * and the fire-control mint: a warm white nose light and a cool blue tail beacon (hue ~221°, in
+ * the gap between cyan and violet eyes). The nose is steady and the tail flashes slowly, so the
+ * flight direction reads even on a dark silhouette.
  */
 export type DroneNavLightKind = 'nose' | 'tail' | 'wing';
 /** Low-flying drones are hidden by tree canopies; high-flying bombers draw above them. */
@@ -30,7 +31,7 @@ export interface DroneNavLightProfile {
 
 export const DRONE_NAV_LIGHT_COLORS: Readonly<Record<DroneNavLightKind, number>> = Object.freeze({
   nose: 0xffe6c2,
-  tail: 0x7cc4ff,
+  tail: 0x7aa4ff,
   wing: 0xffe6c2,
 });
 
@@ -49,7 +50,7 @@ export const DRONE_NAV_LIGHT_PROFILES = Object.freeze({
       { kind: 'wing', forward: 0, lateral: -19 }, { kind: 'wing', forward: 0, lateral: 19 },
     ],
   },
-  /** Small repair drones, 24–28 px: one nose light and a small beacon. */
+  /** Repair drone, 32 px: nose between the two tools, beacon on the rear fuselage. */
   repairDrone: {
     band: 'under-canopy', size: 0.7, poolRadiusPx: 34, poolIntensity: 0.45,
     anchors: [{ kind: 'nose', forward: 7, lateral: 0 }, { kind: 'tail', forward: -6, lateral: 0 }],

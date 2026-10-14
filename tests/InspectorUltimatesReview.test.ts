@@ -41,6 +41,21 @@ beforeEach(() => {
 afterEach(() => { releaseInspectorUltimatesReview(controller); vi.unstubAllGlobals(); });
 
 describe('Inspector ultimate review', () => {
+  it('funds all three drone kinds through construction, upgrade and ultimate loadout', async () => {
+    await runInspectorUltimatesReview(controller, { variant: 'drones', phase: 'prepare' });
+    const config = controller.config;
+    expect(config.ultimate).toBe('BOMBER_SQUADRON');
+    expect(config.constructions.map(c => c.id)).toContain('attack_drone_station');
+    expect(config.tools.map(t => t.id)).toContain('attack_drone_station');
+    const profile = buildScenarioProfile(config.classId, config.upgrades, config.tools);
+    expect(profile.upgrades.inspector_repair_drone.level).toBeGreaterThan(0);
+    expect(profile.upgrades.inspector_repair_drone.level).toBeLessThanOrEqual(upgrades.inspector_repair_drone.maxLevel);
+    await runInspectorUltimatesReview(controller, { phase: 'activate' });
+    expect(controller.ultimate).toHaveBeenCalledExactlyOnceWith('press');
+    expect(controller.spawn).toHaveBeenCalled();
+    expect(inspectorUltimatesStatus(controller)).toMatchObject({ variant: 'drones', phase: 'activated' });
+  });
+
   it.each(['single', 'mixed'])('prepares valid %s profiles at both upgrade strengths', async arsenal => {
     for (const level of ['base', 'full']) {
       await runInspectorUltimatesReview(controller, { phase: 'prepare', ultimate: 'holo', arsenal, upgrades: level });

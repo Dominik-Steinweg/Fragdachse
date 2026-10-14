@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import { getPipelineAsset } from '../config/pipelineAssets';
+import { CHARACTER_SHADOW_CONFIG } from './ShadowConfig';
 
 /**
  * Geteilte Optik der Reparaturdrohnen.
@@ -25,6 +26,18 @@ export function createRepairDroneBody(scene: Phaser.Scene, x: number, y: number)
     .setOrigin(ASSET.pivot[0], ASSET.pivot[1])
     .setDisplaySize(32, 32)
     .setDepth(REPAIR_DRONE_DEPTH);
+}
+
+export function createRepairDroneShadow(scene: Phaser.Scene, x: number, y: number): Phaser.GameObjects.Image {
+  return createRepairDroneBody(scene, x, y).setDepth(CHARACTER_SHADOW_CONFIG.depth).setTint(0x05090c);
+}
+
+/** The ground silhouette follows the displayed hull and rotor frame, without its hovering bob. */
+export function updateRepairDroneShadow(
+  shadow: Phaser.GameObjects.Image, body: Phaser.GameObjects.Image, groundX: number, groundY: number,
+): void {
+  shadow.setFrame(body.frame.name).setPosition(groundX + 5, groundY + 10)
+    .setRotation(body.rotation).setAlpha(body.alpha * .5).setVisible(body.visible);
 }
 
 /** Sample the Blender impellers without rotating the hull or creating pooled animation timers. */
