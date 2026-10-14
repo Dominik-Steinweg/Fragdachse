@@ -78423,6 +78423,101 @@
           "idleSha256": "29140fe51a14b6ad18e2a7e1bdacc7cef26188bfaaa91ab35937171127027ff8"
         }
       }
+    },
+    {
+      "id": "bomber-drone-body",
+      "category": "companion",
+      "gameIds": [
+        "bomber_squadron"
+      ],
+      "revision": "u31-bomber-v1",
+      "variant": "standard",
+      "sourceSize": 96,
+      "textureKey": "bomber_drone_body",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "move",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 24,
+          "loop": true,
+          "end": "rest"
+        }
+      ],
+      "sheetTextureKey": "bomber_drone_body_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/bomber-drone-body/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/bomber-drone-body/sheet.png",
+      "layout": {
+        "frameWidth": 96,
+        "frameHeight": 96,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 800,
+        "height": 200
+      },
+      "hashes": {
+        "idle": "f054af3f34a5e48c69bdfe0e9df2cd091af2cf2b3c8916e0858a1df00cd6a349",
+        "sheet": "00951b0ec4c8f0efe671291b7e52ac8e1d7b0771332a4ea50d89232ac4198731"
+      }
+    },
+    {
+      "id": "bomber-drone-bomb",
+      "category": "companion",
+      "gameIds": [
+        "bomber_squadron"
+      ],
+      "revision": "u31-bomber-v1",
+      "variant": "standard",
+      "sourceSize": 48,
+      "textureKey": "bomber_drone_bomb",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "bomber_drone_bomb_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/bomber-drone-bomb/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/bomber-drone-bomb/sheet.png",
+      "layout": {
+        "frameWidth": 48,
+        "frameHeight": 48,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 52,
+        "height": 52
+      },
+      "hashes": {
+        "idle": "de56861258b282e4e95a7d8353dea2530bc10914a08c253413ae0b2cb50543bd",
+        "sheet": "964a9e57395bb00ce177fa8ea7438ec49a903863005f764850dc14c011bc423c"
+      }
     }
   ]
 }
