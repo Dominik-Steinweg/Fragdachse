@@ -770,7 +770,9 @@ export class WorldPlayerGameplayRuntime implements
           const source = landing.source ? { ...landing.source, authoredSourceId: sourceId, origin: 'explosion' as const } : undefined;
           options.combatSystem.applyExplosionDamage(landing.x, landing.y, landing.effect, landing.ownerId,
             slot, sourceId, source);
-          options.network.presentation.broadcastExplosionEffect(landing.x, landing.y, landing.effect.radius, 0xff8a3d, 'rocket', undefined, sourceId);
+          if (!landing.effect.suppressExplosionBroadcast) {
+            options.network.presentation.broadcastExplosionEffect(landing.x, landing.y, landing.effect.radius, 0xff8a3d, 'rocket', undefined, sourceId);
+          }
         },
       },
     );
@@ -1694,6 +1696,10 @@ export class WorldPlayerGameplayRuntime implements
 
   getBurrowPhase(playerId: string): BurrowPhase {
     return this.systems.burrow.getPhase(playerId);
+  }
+
+  getActiveUltimateId(playerId: string): string | null {
+    return this.systems.ultimateBehavior.getActiveUltimateId(playerId);
   }
 
   isUltimateActive(playerId: string): boolean {

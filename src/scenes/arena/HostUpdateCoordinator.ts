@@ -1,3 +1,4 @@
+import { usesRageTint } from '../../entities/playerRageTint';
 import { applyHostileAreaStrikeDamage } from '../../systems/hostileAreaStrikeDamage';
 import type { MortarStrike } from '../../systems/CoopDefenseMortarStrikeSystem';
 import { routeKrakenEggLanding } from '../../projectile/KrakenEggLandingReaction';
@@ -411,6 +412,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     if (!countdownActive) this.plagueBinding?.advance(now);
     if (!countdownActive) this.combatFramePort?.getCombatGameplayBinding()?.advanceMgTurrets(now);
     if (!countdownActive) this.combatFramePort?.getCombatGameplayBinding()?.advanceAttackDrones(now, delta);
+    if (!countdownActive) this.combatFramePort?.getCombatGameplayBinding()?.advanceBomberSquadron(now);
     if (!countdownActive) this.ctx.decoySystem.hostUpdateLifecycle(now);
     if (!countdownActive) this.smokeBinding?.refresh(now);
     // Activity: Missionsfortschritt, Navigation und Gegner. Die Reihenfolge darin gehoert der
@@ -760,7 +762,8 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       player.setVisible(alive);
       player.setTurretMounted(this.playerGameplayRuntime?.isControllingTurret(player.id) ?? false);
       player.setWalking(isVelocityMoving(player.body.velocity.x, player.body.velocity.y) && alive);
-      player.setRageTint(this.playerGameplayRuntime?.isUltimateActive(player.id) ?? false);
+      const runtime = this.playerGameplayRuntime;
+      player.setRageTint(usesRageTint(runtime?.isUltimateActive(player.id) ?? false, runtime?.getActiveUltimateId(player.id)));
       const isStealthed = this.ctx.decoySystem.isStealthed(player.id);
       const wasStealthed = this.prevStealthStates.get(player.id) ?? false;
       if (isStealthed !== wasStealthed) {
@@ -1505,11 +1508,11 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       if (field) this.audio?.playSound('sfx_place_spore_turret', field.x, field.y, ownerId);
     } else if (effect.timeBubble) {
       const now = this.hostFrameNowMs;
-      const injectorEffect = request.provenance.sourceTurretId
-        ? this.targetingSystems?.energyInjector?.getEffect(request.provenance.sourceTurretId, now)
-        : null;
-      const slowMultiplier = injectorEffect?.effect.type === 'slow_bubble'
-        ? Math.max(1, injectorEffect.effect.slowStrengthMultiplier)
+      const injectorEffect = request.provenance.injectorEffect ?? (request.provenance.sourceTurretId
+        ? this.targetingSystems?.energyInjector?.getEffect(request.provenance.sourceTurretId, now)?.effect
+        : null);
+      const slowMultiplier = injectorEffect?.type === 'slow_bubble'
+        ? Math.max(1, injectorEffect.slowStrengthMultiplier)
         : 1;
       const bubble = slowMultiplier > 1
         ? {
@@ -1548,11 +1551,11 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       if ((effect.blackHoleDurationMs ?? 0) > 0) {
         const durationMs = effect.blackHoleDurationMs ?? 0;
         const now = this.hostFrameNowMs;
-        const injectorEffect = request.provenance.sourceTurretId
-          ? this.targetingSystems?.energyInjector?.getEffect(request.provenance.sourceTurretId, now)
-          : null;
-        const pullMultiplier = injectorEffect?.effect.type === 'gravity_pull'
-          ? Math.max(1, injectorEffect.effect.pullStrengthMultiplier)
+        const injectorEffect = request.provenance.injectorEffect ?? (request.provenance.sourceTurretId
+          ? this.targetingSystems?.energyInjector?.getEffect(request.provenance.sourceTurretId, now)?.effect
+          : null);
+        const pullMultiplier = injectorEffect?.type === 'gravity_pull'
+          ? Math.max(1, injectorEffect.pullStrengthMultiplier)
           : 1;
         this.blackHoleSystem.create(request.x, request.y, {
           radius: effect.radius,

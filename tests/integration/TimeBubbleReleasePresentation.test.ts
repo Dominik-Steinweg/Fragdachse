@@ -14,17 +14,22 @@ vi.mock('phaser', () => ({
   } },
 }));
 const composed = vi.hoisted(() => ({ options: null as WorldCombatGameplayBindingOptions | null,
-  getFireControlSnapshot: vi.fn() }));
+  getFireControlSnapshot: vi.fn(), getBomberSquadronSnapshot: vi.fn(),
+  holo: {}, bomber: {} }));
 vi.mock('../../src/world/WorldCombatGameplayBinding', () => ({
   WorldCombatGameplayBinding: class {
     constructor(options: WorldCombatGameplayBindingOptions) { composed.options = options; }
     getFireControlSnapshot = composed.getFireControlSnapshot;
+    getBomberSquadronSnapshot = composed.getBomberSquadronSnapshot;
+    getHoloOffensiveCapability = () => composed.holo;
+    getBomberSquadronCapability = () => composed.bomber;
   },
 }));
 vi.mock('../../src/scenes/arena/RendererBundle', () => ({ wireProjectileRenderers: vi.fn() }));
 const bridgeMock = vi.hoisted(() => ({
   isHost: vi.fn(() => true),
   setFireControlSnapshotProvider: vi.fn(), getFireControlSnapshot: vi.fn(),
+  setBomberSquadronSnapshotProvider: vi.fn(), getBomberSquadronSnapshot: vi.fn(),
   getSynchronizedNow: () => 4567,
   broadcastExplosionEffect: vi.fn(), registerExplosionEffectHandler: vi.fn(),
 }));
@@ -42,14 +47,20 @@ describe('Fire control World composition', () => {
     composed.getFireControlSnapshot.mockReset().mockReturnValue(snapshot);
     bridgeMock.getFireControlSnapshot.mockReset().mockReturnValue(snapshot);
     bridgeMock.setFireControlSnapshotProvider.mockReset();
+    bridgeMock.setBomberSquadronSnapshotProvider.mockReset();
+    const bomberSnapshot = { squadrons: [] };
+    composed.getBomberSquadronSnapshot.mockReset().mockReturnValue(bomberSnapshot);
+    bridgeMock.getBomberSquadronSnapshot.mockReset().mockReturnValue(bomberSnapshot);
     const bindFireControl = vi.fn();
+    const bindBomberSquadron = vi.fn(), bind = vi.fn();
+    const player = { setHoloOffensiveCapability: vi.fn(), setBomberSquadronCapability: vi.fn() };
     const presentation = { bindFireControlCopyShots: vi.fn() };
     const original = { sprite: {}, x: 23, y: 45 };
     const getTurretOriginalVisual = vi.fn(() => original);
     composeWorldCombatGameplay({
-      ctx: {}, worldRuntime: { bind: vi.fn(), presentationFrame: { bindFireControl } }, world: { metrics: {} },
+      ctx: {}, worldRuntime: { bind, presentationFrame: { bindFireControl, bindBomberSquadron } }, world: { metrics: {} },
       rockVisualHelper: { getTurretOriginalVisual },
-    } as never, { projectiles: { getPresentationRuntime: () => presentation },
+    } as never, { player, projectiles: { getPresentationRuntime: () => presentation },
       combatSystem: { setPlayerMountedResolver: vi.fn() } } as never);
     const [source, lookup] = bindFireControl.mock.lastCall! as [FireControlSnapshotSource, (id: number) => unknown];
     expect(source(4567)).toBe(snapshot);
@@ -63,6 +74,14 @@ describe('Fire control World composition', () => {
     } else expect(bridgeMock.setFireControlSnapshotProvider).not.toHaveBeenCalled();
     expect(lookup(9)).toBe(original);
     expect(getTurretOriginalVisual).toHaveBeenCalledExactlyOnceWith(9);
+    expect(bindBomberSquadron.mock.lastCall![0]()).toBe(bomberSnapshot);
+    expect(player.setHoloOffensiveCapability).toHaveBeenCalledWith(composed.holo);
+    expect(player.setBomberSquadronCapability).toHaveBeenCalledWith(composed.bomber);
+    if (host) expect(bridgeMock.setBomberSquadronSnapshotProvider.mock.lastCall![0]()).toBe(bomberSnapshot);
+    else expect(bridgeMock.setBomberSquadronSnapshotProvider).not.toHaveBeenCalled();
+    for (const [binding] of bind.mock.calls) binding.destroy?.();
+    expect(player.setHoloOffensiveCapability).toHaveBeenLastCalledWith(null);
+    expect(player.setBomberSquadronCapability).toHaveBeenLastCalledWith(null);
     bridgeMock.isHost.mockReturnValue(true);
   });
 });

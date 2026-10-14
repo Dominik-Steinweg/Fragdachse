@@ -165,3 +165,10 @@ export function isBomberImpactInWorld(x: number, y: number, bounds: BomberSquadr
   const left = bounds.offsetX ?? 0, top = bounds.offsetY ?? 0;
   return x >= left && x < left + bounds.width && y >= top && y < top + bounds.height;
 }
+
+/** World-Grenzen aus den World-Metriken; Host-Schaden und Darstellung verwenden dieselbe Abbildung. */
+export function bomberWorldBoundsFromMetrics(metrics: {
+  readonly widthPx: number; readonly heightPx: number; readonly offsetX: number; readonly offsetY: number;
+}): BomberSquadronWorldBounds {
+  return { width: metrics.widthPx, height: metrics.heightPx, offsetX: metrics.offsetX, offsetY: metrics.offsetY };
+}
