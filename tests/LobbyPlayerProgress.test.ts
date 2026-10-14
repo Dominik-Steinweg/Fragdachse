@@ -10,7 +10,7 @@ import { getStoredCoopDefenseProgress, restoreStoredCoopDefenseProgress } from '
 import { getCoopDefenseProgressSnapshot } from '../src/utils/coopDefenseProgression';
 
 describe('lobby base menu access', () => {
-  it('allows browsing the merchant before Dawn unlock and closes it when the lobby locks or hides', () => {
+  it('allows browsing the merchant before Dawn unlock and closes it when the lobby locks, not when the panel hides', () => {
     const saved = getStoredCoopDefenseProgress();
     const progress = new LobbyPlayerProgress({} as never, () => {}, () => {});
     const button = { setVisible: vi.fn(), setEnabled: vi.fn(), setPosition: vi.fn() };
@@ -33,8 +33,11 @@ describe('lobby base menu access', () => {
       expect(merchant.hide).toHaveBeenCalled();
       progress.setReady(false);
       expect(button.setEnabled).toHaveBeenLastCalledWith(true);
+      // The lobby stall opens the merchant with Shift while the panel may be hidden.
       merchant.hide.mockClear();
       progress.setVisible(false);
+      expect(merchant.hide).not.toHaveBeenCalled();
+      progress.setCoopDefenseProgress(null);
       expect(merchant.hide).toHaveBeenCalled();
     } finally { restoreStoredCoopDefenseProgress(saved); }
   });

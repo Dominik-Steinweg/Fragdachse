@@ -2829,7 +2829,15 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
     blends: ['NORMAL'], profiles: ['C'], role: 'ui',
     source: { expression: 'MARKER_GPU_DEPTHS.edge + .01', selector: 'sync/text/setDepth/0' } },
   {"id":"cpu:arena/LobbyMerchantRenderer.ts:module/this.stall/setDepth/0","owner":"arena/LobbyMerchantRenderer.ts","component":"module/this.stall/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[4],"blends":["NORMAL"],"profiles":["G"],"role":"effect","source":{"selector":"module/this.stall/setDepth/0","expression":"DEPTH.BASES"}},
-  {"id":"cpu:arena/LobbyMerchantRenderer.ts:module/this.nameplate/setDepth/0","owner":"arena/LobbyMerchantRenderer.ts","component":"module/this.nameplate/setDepth/0","height":"high","lighting":"material","camera":"world","depths":[22],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"module/this.nameplate/setDepth/0","expression":"DEPTH.LOCAL_UI"}},
+  // Dawn lobby buildings share the stall band; their night lantern housings stay lit above the light map.
+  {"id":"cpu:arena/LobbyMerchantRenderer.ts:module/image/setDepth/0","owner":"arena/LobbyMerchantRenderer.ts","component":"module/image/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[4],"blends":["NORMAL"],"profiles":["G"],"role":"effect","source":{"selector":"module/image/setDepth/0","expression":"DEPTH.BASES"}},
+  {"id":"cpu:arena/LobbyMerchantRenderer.ts:addLantern/housing/setDepth/0","owner":"arena/LobbyMerchantRenderer.ts","component":"addLantern/housing/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[19.58],"blends":["NORMAL"],"profiles":["E"],"role":"effect","source":{"selector":"addLantern/housing/setDepth/0","expression":"DEPTH_LIGHTING + 0.08"}},
+  // Lobby building plaques replace the stall nameplate: world UI above light map and fog.
+  {"id":"cpu:ui/LobbyWorldPlaque.ts:module/this.frame/setDepth/0","owner":"ui/LobbyWorldPlaque.ts","component":"module/this.frame/setDepth/0","height":"high","lighting":"material","camera":"world","depths":[22],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"module/this.frame/setDepth/0","expression":"DEPTH.LOCAL_UI"}},
+  {"id":"cpu:ui/LobbyWorldPlaque.ts:module/this.label/setDepth/0","owner":"ui/LobbyWorldPlaque.ts","component":"module/this.label/setDepth/0","height":"high","lighting":"material","camera":"world","depths":[23],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"module/this.label/setDepth/0","expression":"DEPTH.LOCAL_UI + 1"}},
+  {"id":"cpu:ui/LobbyWorldPlaque.ts:module/this.keycap/setDepth/0","owner":"ui/LobbyWorldPlaque.ts","component":"module/this.keycap/setDepth/0","height":"high","lighting":"material","camera":"world","depths":[23],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"module/this.keycap/setDepth/0","expression":"DEPTH.LOCAL_UI + 1"}},
+  // The Dawn sundial clock is screen HUD on the clarity camera, like the Dawn phase card.
+  {"id":"cpu:ui/dawn/DawnSundialClock.ts:module/this.root/setDepth/0","owner":"ui/dawn/DawnSundialClock.ts","component":"module/this.root/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[100],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"module/this.root/setDepth/0","expression":"DEPTH.OVERLAY"}},
   {"id":"cpu:arena/LobbyMerchantRenderer.ts:module/this.dealer/setDepth/0","owner":"arena/LobbyMerchantRenderer.ts","component":"module/this.dealer/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[10],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.dealer/setDepth/0","expression":"DEPTH.PLAYERS"}},
   {"id":"cpu:arena/DawnSiteDecalRenderer.ts:module/scene.add/setDepth/0","owner":"arena/DawnSiteDecalRenderer.ts","component":"module/scene.add/setDepth/0","height":"ground","lighting":"material","camera":"world","depths":[3.95],"blends":["NORMAL"],"profiles":["G"],"role":"effect","source":{"selector":"module/scene.add/setDepth/0","expression":"DEPTH.BASES - 0.05"}},
   {"id":"cpu:arena/DawnSitePropRenderer.ts:sync/sprite/setDepth/0","owner":"arena/DawnSitePropRenderer.ts","component":"sync/sprite/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[4],"blends":["NORMAL"],"profiles":["G"],"role":"effect","source":{"selector":"sync/sprite/setDepth/0","expression":"DEPTH.BASES"}},
@@ -3339,7 +3347,9 @@ export const CPU_SOURCE_CONTRACTS = {
     bindings: { 'MARKER_GPU_DEPTHS[role]': [5.2, 20, 21] },
   },
 
-  "arena/LobbyMerchantRenderer.ts": {"blends":[],"cameras":[],"sites":[{"key":"module/this.stall/setDepth/0","expression":"DEPTH.BASES","blends":["NORMAL"]},{"key":"module/this.dealer/setDepth/0","expression":"DEPTH.PLAYERS","blends":["NORMAL"]},{"key":"module/this.nameplate/setDepth/0","expression":"DEPTH.LOCAL_UI","blends":["NORMAL"]}],"bindings":{}},
+  "arena/LobbyMerchantRenderer.ts": {"blends":[],"cameras":[],"sites":[{"key":"module/image/setDepth/0","expression":"DEPTH.BASES","blends":["NORMAL"]},{"key":"module/this.stall/setDepth/0","expression":"DEPTH.BASES","blends":["NORMAL"]},{"key":"module/this.dealer/setDepth/0","expression":"DEPTH.PLAYERS","blends":["NORMAL"]},{"key":"addLantern/housing/setDepth/0","expression":"DEPTH_LIGHTING + 0.08","blends":["NORMAL"]}],"bindings":{}},
+  "ui/LobbyWorldPlaque.ts": {"blends":[],"cameras":[],"sites":[{"key":"module/this.frame/setDepth/0","expression":"DEPTH.LOCAL_UI","blends":["NORMAL"]},{"key":"module/this.label/setDepth/0","expression":"DEPTH.LOCAL_UI + 1","blends":["NORMAL"]},{"key":"module/this.keycap/setDepth/0","expression":"DEPTH.LOCAL_UI + 1","blends":["NORMAL"]}],"bindings":{}},
+  "ui/dawn/DawnSundialClock.ts": {"blends":[],"cameras":["promoteToClarityCamera(scene, this.root)"],"sites":[{"key":"module/this.root/setDepth/0","expression":"DEPTH.OVERLAY","blends":["NORMAL"]}],"bindings":{}},
   "arena/DawnSiteDecalRenderer.ts": {
     "blends": [], "cameras": [],
     "sites": [
@@ -3364,7 +3374,7 @@ export const CPU_SOURCE_CONTRACTS = {
       { "key": "module/this.card.root/setDepth/0", "expression": "DEPTH.OVERLAY", "blends": ["NORMAL"] }
     ],
     "blends": [],
-    "cameras": ["promoteToClarityCamera(scene, this.card.root)", "promoteToClarityCamera(this.scene, this.modifierIcon)"],
+    "cameras": ["promoteToClarityCamera(scene, this.card.root)"],
     "bindings": {}
   },
   "ui/DawnMerchantOverlay.ts": {
