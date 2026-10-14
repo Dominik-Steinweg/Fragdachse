@@ -65,9 +65,9 @@ function transitivePhaserImports(roots: readonly string[]): string[] {
   return violations;
 }
 
-describe('Feuerleit-Regeln bleiben unabhängig von Phaser, Netzwerk und Szenen', () => {
-  it('Arrange: alle Fire-Control-Module; Act: direkte Modulreferenzen einschließlich Typen lesen; Assert: keine Abhängigkeit auf Phaser, Netzwerk oder Szenen', () => {
-    const modules = files(resolve('src/systems/fireControl'));
+describe('Feuerleit- und Bomber-Regeln bleiben unabhängig von Phaser, Netzwerk und Szenen', () => {
+  it.each(['fireControl', 'bomberSquadron'])('Arrange: alle %s-Module; Act: direkte Modulreferenzen einschließlich Typen lesen; Assert: keine Abhängigkeit auf Phaser, Netzwerk oder Szenen', directory => {
+    const modules = files(resolve('src/systems', directory));
     expect(modules.length).toBeGreaterThan(0);
     const forbidden = modules.flatMap(file => moduleReferences(parse(file)).filter(specifier => {
       const target = modulePath(file, specifier);
