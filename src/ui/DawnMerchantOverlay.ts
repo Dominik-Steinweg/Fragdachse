@@ -1,7 +1,7 @@
 ﻿import * as Phaser from 'phaser';
 import { DEPTH, GAME_HEIGHT, GAME_WIDTH } from '../config';
 import { DAWN_UI_TEXTURES } from '../assets/DawnUiAssets';
-import { addDawnMerchantSlice, DAWN_MERCHANT_UI, dawnMerchantArtTexture, type DawnMerchantUiPart } from '../assets/DawnMerchantUiAssets';
+import { addDawnMerchantSlice, DAWN_MERCHANT_UI, DAWN_MERCHANT_ITEM_TEXTURES, dawnMerchantArtTexture, type DawnMerchantUiPart } from '../assets/DawnMerchantUiAssets';
 import { DAWN_MERCHANT, getDawnMerchantCategories, type DawnMerchantCategory } from '../config/dawn/merchant';
 import { DAWN_MAX_EXPANSION_LEVEL, type DawnProgress } from '../dawn/economy/DawnProgress';
 import { getLocale, t } from '../i18n';
@@ -15,7 +15,6 @@ import { getStoredCoopDefenseProgress, updateStoredDawnProgress, updateStoredDaw
 import type { CoopDefenseItem } from '../types';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { textStyle } from './ForestModal';
-import { resolveCoopDefenseItemIconTexture } from './coopDefenseItemIcons';
 import { DawnMerchantScrollPane } from './DawnMerchantScrollPane';
 import { getOverlayRoot } from './fullscreen';
 import { FONT_DISPLAY } from './uiTheme';
@@ -286,7 +285,7 @@ export class DawnMerchantOverlay {
     const itemData = (item: CoopDefenseItem) => {
       const model = buildDawnMerchantItemModel(item, getLocale());
       return { item, name: `${model.slotLabel} · ${t('ui.items.level')} ${item.itemLevel}`,
-        icon: resolveCoopDefenseItemIconTexture(this.scene, item.slot, item.itemLevel, 128),
+        icon: DAWN_MERCHANT_ITEM_TEXTURES[item.slot],
         effects: model.lines, level: item.itemLevel, max: null };
     };
     for (const entry of equipment.offers) add({ ...itemData(entry.item), id: `item:${entry.item.uid}`,
@@ -393,7 +392,7 @@ export class DawnMerchantOverlay {
       if (entry.item) addDawnMerchantSlice(this.scene, this.grid.content, `card-rarity-${entry.item.rarity}`, x, y, CARD_W, CARD_H);
       addDawnMerchantSlice(this.scene, this.grid.content, `card-frame-${frame}`, x, y, CARD_W, CARD_H);
       const alpha = state === 'blocked' ? 0.5 : 1;
-      this.icon(this.grid.content, x + CARD_W / 2, y + 85, entry.icon, 134).setAlpha(alpha);
+      this.icon(this.grid.content, x + CARD_W / 2, y + 85, entry.icon, 134, 134, entry.item ? 64 : 134).setAlpha(alpha);
       const title = this.label(this.grid.content, x + 15, y + 158, entry.name, CARD_W - 30, 19).setLineSpacing(0).setAlpha(alpha);
       const lines = title.getWrappedText();
       if (lines.length > 2) title.setText(`${lines[0]}\n${lines[1].slice(0, -1)}…`);
@@ -584,8 +583,8 @@ export class DawnMerchantOverlay {
       wordWrap: { width, useAdvancedWrap: true } });
     parent.add(label); return label;
   }
-  private icon(parent: Phaser.GameObjects.Container, x: number, y: number, key: string, w: number, h = w): Phaser.GameObjects.Image {
-    const icon = this.scene.add.image(x, y, dawnMerchantArtTexture(key, Math.max(w, h))).setDisplaySize(w, h); parent.add(icon); return icon;
+  private icon(parent: Phaser.GameObjects.Container, x: number, y: number, key: string, w: number, h = w, sourceSize = Math.max(w, h)): Phaser.GameObjects.Image {
+    const icon = this.scene.add.image(x, y, dawnMerchantArtTexture(key, sourceSize)).setDisplaySize(w, h); parent.add(icon); return icon;
   }
   private button(parent: Phaser.GameObjects.Container, x: number, y: number, width: number, label: string, enabled: boolean, action: () => void): void {
     const part: DawnMerchantUiPart = enabled ? 'button-buy-normal' : 'button-buy-disabled';

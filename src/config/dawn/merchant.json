@@ -80,7 +80,7 @@
     {
       "id": "base",
       "nameKey": "ui.dawn.category.base",
-      "iconKey": "dawn-ui-dealer-expansion",
+      "iconKey": "dawn-ui-dealer-sub-base",
       "order": 1,
       "parentId": "expansion"
     },
@@ -94,7 +94,7 @@
     {
       "id": "drones",
       "nameKey": "ui.dawn.category.drones",
-      "iconKey": "dawn-ui-dealer-infrastructure",
+      "iconKey": "dawn-ui-dealer-sub-drones",
       "order": 11,
       "parentId": "infrastructure"
     },
@@ -122,14 +122,14 @@
     {
       "id": "branches",
       "nameKey": "ui.dawn.category.branches",
-      "iconKey": "dawn-ui-dealer-upgrades",
+      "iconKey": "dawn-ui-dealer-sub-branches",
       "order": 21,
       "parentId": "upgrades"
     },
     {
       "id": "boss-points",
       "nameKey": "ui.dawn.bossPoints",
-      "iconKey": "dawn-ui-dealer-upgrades",
+      "iconKey": "dawn-ui-dealer-sub-boss-points",
       "order": 22,
       "parentId": "upgrades"
     },
@@ -143,14 +143,14 @@
     {
       "id": "round-offers",
       "nameKey": "ui.dawn.category.round",
-      "iconKey": "dawn-ui-dealer-equipment",
+      "iconKey": "dawn-ui-dealer-sub-round-offers",
       "order": 31,
       "parentId": "equipment"
     },
     {
       "id": "crafting",
       "nameKey": "ui.dawn.category.crafting",
-      "iconKey": "dawn-merchant/category-crafting",
+      "iconKey": "dawn-ui-dealer-sub-crafting",
       "order": 32,
       "parentId": "equipment"
     }
