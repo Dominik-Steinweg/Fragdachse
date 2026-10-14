@@ -26,6 +26,8 @@ import {
   type BaseSpec,
 } from '../src/arena/BaseRegistry';
 import { BaseManager } from '../src/entities/BaseManager';
+import { getLobbyWorldDefinition } from '../src/config/authoring/lobbyWorld';
+import { resolveWorldBases } from '../src/arena/BaseRegistry';
 import { resolveDawnSitePropHitFlash } from '../src/arena/DawnSitePropModel';
 import { UTILITY_CONFIGS, type PlaceableTurretUtilityConfig } from '../src/loadout/LoadoutConfig';
 import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
@@ -190,6 +192,19 @@ function makeScene(): { scene: any; groupObjects: any[]; presentationCalls: Reco
 }
 
 describe('Coop-Defense dormant mission structures', () => {
+  it('keeps all four lobby menu structures solid and invulnerable without an Activity', () => {
+    const { scene, groupObjects } = makeScene();
+    const specs = resolveWorldBases(getLobbyWorldDefinition(), TEST_WORLD_METRICS, { includePersistentBaseCore: false });
+    const manager = new BaseManager(scene, specs, TEST_WORLD_METRICS, {}, true, false, null);
+    expect(specs).toHaveLength(4);
+    expect(groupObjects).toHaveLength(specs.reduce((count, base) => count + base.cells.length, 0));
+    for (const spec of specs) {
+      expect(spec.surface).toBe('none');
+      manager.applyDamage(spec.id, 1000);
+      expect(manager.getStructureHp(spec.id)).toBe(spec.hpMax);
+    }
+    manager.destroy();
+  });
   it('exposes the same structure HP and damage flash for host mutations and client snapshots', () => {
     const spec = { ...makeBaseSpec('prop'), surface: 'none' as const };
     const host = new BaseManager(makeScene().scene, [spec], TEST_WORLD_METRICS, {}, true, true);

@@ -65,7 +65,10 @@ export class LobbyPlayerProgress {
   constructor(private readonly scene: Phaser.Scene,
     private readonly onOpenCoopDefenseUpgrades: () => void,
     private readonly onOpenCoopDefenseItems: () => void,
-    private readonly onOpenBase: () => void = () => {}) {}
+    private readonly onOpenBase: () => void = () => {},
+    private readonly onOpenMerchant: () => void = () => {}) {}
+  openMerchant(): void { this.merchant?.show(); }
+  isMerchantOpen(): boolean { return this.merchant?.isOpen() ?? false; }
   setVisible(visible: boolean): void { this.visible = visible; this.syncCoopEffectActivity(); }
   hideTooltip(): void { this.itemsTooltip?.hide(); this.baseTooltip?.hide(); }
   setReady(ready: boolean, ended = false): void {
@@ -82,10 +85,10 @@ export class LobbyPlayerProgress {
   }
   build(objects: Phaser.GameObjects.GameObject[]): void {
     this.merchant = new DawnMerchantOverlay(this.scene,
-      () => this.visible && this.coopProgressAvailable && !this.isReady && !this.connectionEnded);
+      () => this.coopProgressAvailable && !this.isReady && !this.connectionEnded);
     this.merchantBtn = new UiButton(this.scene, { skin: 'forest',
       x: COOP_ITEMS_BTN_X, y: COOP_BTN_Y, w: COOP_BTN_W, h: COOP_BTN_H,
-      label: t('ui.dawn.merchant'), onClick: () => this.merchant?.show(),
+      label: t('ui.dawn.merchant'), onClick: this.onOpenMerchant,
     }).setVisible(false);
     // Das Band gibt es nur bei voller Panelhoehe, deshalb die feste Obergrenze.
     const bandBottom = 966;
@@ -346,7 +349,7 @@ export class LobbyPlayerProgress {
       const buttons = [this.coopUpgradesBtn, this.coopBaseBtn, this.coopItemsBtn, this.merchantBtn];
       buttons.forEach((button, index) => button?.setPosition(CONTENT_L + CONTENT_W * (index + 0.5) / buttons.length, COOP_BTN_Y));
     }
-    if (!visible || this.isReady || this.connectionEnded) this.merchant?.hide();
+    if (!this.coopProgressAvailable || this.isReady || this.connectionEnded) this.merchant?.hide();
     if (!visible) this.hideTooltip();
     if (this.coopBand && this.coopBand.visible !== visible) {
       this.coopBand.setVisible(visible);

@@ -133,6 +133,11 @@ export class InputSystem {
   } | null = null;
   private turretInputEnabled = false;
   private interactionCandidate: WorldInteractionCandidate | null = null;
+  private lobbyMenuProvider: {
+    candidates: () => WorldInteractionCandidate[];
+    open: (menu: import('../config/authoring/lobbyBuildings').LobbyMenu) => void;
+  } | null = null;
+  setupLobbyMenuProvider(provider: NonNullable<InputSystem['lobbyMenuProvider']>): void { this.lobbyMenuProvider = provider; }
   private getShootingRange: (() => ShootingRangeWorldBinding | null) | null = null;
   setupShootingRangeProvider(provider: () => ShootingRangeWorldBinding | null): void { this.getShootingRange = provider; }
   private previousTurretRevision: number | null = null;
@@ -175,6 +180,7 @@ export class InputSystem {
         label: t(structureState ? 'ui.watchtower.exit' : 'ui.watchtower.enter'), worldRevision });
     }
     if (structureState) return candidates.filter(c => c.kind === 'watchtower');
+    candidates.push(...this.lobbyMenuProvider?.candidates() ?? []);
     const range = this.getShootingRange?.();
     if (range) {
       const state = range.snapshot();
@@ -207,6 +213,7 @@ export class InputSystem {
     else if (candidate.kind === 'watchtower') this.bridge.sendStructureOccupancyRequest(candidate.exitRevision === undefined
       ? { action: 'enter', structureId: candidate.structureId }
       : { action: 'exit', structureId: candidate.structureId, revision: candidate.exitRevision });
+    else if (candidate.kind === 'lobby-menu') this.lobbyMenuProvider?.open(candidate.menu);
     else this.bridge.sendShootingRangeRequest(candidate.request);
   }
   private rocketMagazineId: number | null = null;

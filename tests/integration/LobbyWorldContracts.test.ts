@@ -1,3 +1,4 @@
+import { LOBBY_BUILDINGS, LOBBY_BUILDING_BASES } from '../../src/config/authoring/lobbyBuildings';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -88,7 +89,7 @@ describe('LobbyWorld – Authoring', () => {
     // Die Definition beschreibt den Kern nicht
     // selbst, sondern nur seine Stelle - die Form kommt aus der kanonischen Kerngeometrie.
     expect(world.persistentBaseSite?.baseId).toBe(LOBBY_PERSISTENT_BASE_ID);
-    expect(world.bases.map((base) => base.id)).toEqual([LOBBY_PERSISTENT_BASE_ID, LOBBY_MERCHANT_BASE.id]);
+    expect(world.bases.map((base) => base.id)).toEqual([LOBBY_PERSISTENT_BASE_ID, LOBBY_MERCHANT_BASE.id, ...LOBBY_BUILDING_BASES.map(base => base.id)]);
     const core = world.bases[0];
     expect(core?.faction).toBe('friendly');
     expect(core?.role).toBe('main');
@@ -132,6 +133,40 @@ describe('LobbyWorld – Authoring', () => {
 
 describe('LobbyWorld – authored Geometrie', () => {
   const layout = buildLobbyWorldLayout();
+
+  it('materializes all menu buildings with solid footprints, clear crowns and reachable entrances', () => {
+    const world = lobbyWorldContextFor('coop_defense', false);
+    const canopyReach = CANOPY_RADIUS * Math.max(...CANOPY_ASSETS.map(asset => asset.displayScale));
+    const blockers = [...layout.rocks, ...layout.trees, ...(layout.water ?? []), ...world.bases.flatMap(base => base.cells)];
+    const blocked = new Set(blockers.map(cell => `${cell.gridX}:${cell.gridY}`));
+    const queue = [LOBBY_SPAWN_FOCUS_CELL];
+    const visited = new Set<string>();
+    for (let i = 0; i < queue.length; i++) {
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const next = { gridX: queue[i].gridX + dx, gridY: queue[i].gridY + dy };
+        const key = `${next.gridX}:${next.gridY}`;
+        if (next.gridX < 0 || next.gridY < 0 || next.gridX >= world.metrics.gridCols || next.gridY >= world.metrics.gridRows || blocked.has(key) || visited.has(key)) continue;
+        visited.add(key); queue.push(next);
+      }
+    }
+    for (const building of LOBBY_BUILDINGS) {
+      const base = world.bases.find(base => base.id === building.id)!;
+      expect(base.surface).toBe('none');
+      expect(base.cells).toHaveLength(12);
+      for (const cell of base.cells) {
+        expect(isLobbyBaseReservedCell(cell.gridX, cell.gridY)).toBe(false);
+        expect(insideRangeRect(cell.gridX, cell.gridY, SHOOTING_RANGE.clearArea)).toBe(false);
+        expect([...layout.rocks, ...layout.trees, ...(layout.water ?? [])].some(other => other.gridX === cell.gridX && other.gridY === cell.gridY)).toBe(false);
+      }
+      for (const tree of layout.trees) {
+        const dx = Math.max(0, Math.abs(tree.gridX - (building.gridX + 1.5)) * CELL_SIZE - 64);
+        const dy = Math.max(0, Math.abs(tree.gridY - (building.gridY + 1)) * CELL_SIZE - 64);
+        expect(Math.hypot(dx, dy), `${building.id}: canopy ${tree.gridX},${tree.gridY}`).toBeGreaterThan(canopyReach);
+      }
+      expect(visited.has(`${Math.round(building.entrance.gridX)}:${building.entrance.gridY}`)).toBe(true);
+      expect(lobbyWorldContextFor('coop_defense', true).bases.find(other => other.id === base.id)?.cells).toEqual(base.cells);
+    }
+  });
 
   it('haelt die Standkollision ausserhalb der Basisreservierung und den dekorativen Haendler erreichbar', () => {
     const definition = getLobbyWorldDefinition();
@@ -344,7 +379,7 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
       definition,
     });
     expect(world.definition).toBe(definition);
-    expect(world.bases.map(base => base.id)).toEqual([LOBBY_MERCHANT_BASE.id]);
+    expect(world.bases.map(base => base.id)).toEqual([LOBBY_MERCHANT_BASE.id, ...LOBBY_BUILDING_BASES.map(base => base.id)]);
     expect(world.persistentBaseSite).toBeNull();
     expect(world.metrics.gridCols).toBe(LOBBY_WORLD_WIDTH_CELLS);
     expect(world.metrics.gridRows).toBe(LOBBY_WORLD_HEIGHT_CELLS);
@@ -364,7 +399,7 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
       definition,
     });
 
-    expect(world.bases.map((base) => base.id)).toEqual([LOBBY_PERSISTENT_BASE_ID, LOBBY_MERCHANT_BASE.id]);
+    expect(world.bases.map((base) => base.id)).toEqual([LOBBY_PERSISTENT_BASE_ID, LOBBY_MERCHANT_BASE.id, ...LOBBY_BUILDING_BASES.map(base => base.id)]);
     expect(world.persistentBaseSite).toMatchObject({
       baseId: LOBBY_PERSISTENT_BASE_ID,
       areaStage: 0,

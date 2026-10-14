@@ -113,6 +113,7 @@ import {
 import { resolveWorldPresentation } from '../../src/world/WorldPresentation';
 import { FakeNetwork, addClientRoom, createHostRoom, type TestRoom } from '../fakePeerNetwork';
 import { exportStoredGameProgressJson, getStoredCoopDefenseProgress, invalidateLocalStorageCache, setStoredCoopDefenseTotalXp } from '../../src/utils/localPreferences';
+import * as preferences from '../../src/utils/localPreferences';
 
 /**
  * L2: dieselbe LobbyWorld wird betretbar.
@@ -125,6 +126,66 @@ import { exportStoredGameProgressJson, getStoredCoopDefenseProgress, invalidateL
  */
 
 const LOBBY_WORLD = getLobbyWorldDefinition();
+
+describe('Lobby building menu dispatch', () => {
+  it('keeps personal menus alive when lobby cards hide for World participation', () => {
+    const scene = Object.create(ArenaScene.prototype) as any;
+    scene.arenaRuntime = { syncLobbyTimeOfDay: vi.fn(), syncLobbySurface: vi.fn(),
+      canSelfAdmitToWorld: () => true, isLocalWorldParticipant: () => true, getIsLocalReady: () => true, setIsLocalReady: vi.fn() };
+    scene.lobbyOverlay = { setWorldEntryState: vi.fn(), setReadyButtonState: vi.fn() };
+    scene.meta = { refreshLobbyProjection: vi.fn() };
+    scene.coopDefenseUpgradesOverlay = { hide: vi.fn() };
+    scene.buildLocalLobbyLoadoutPreview = () => null;
+    vi.spyOn(bridge, 'setLocalLobbyLoadoutPreview').mockImplementation(() => {});
+    vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('local');
+    vi.spyOn(bridge, 'getPlayerReady').mockReturnValue(false);
+    try {
+      scene.syncArenaLobbyFrame('LOBBY', false, false, { showLobby: false }, false, false, null);
+      expect(scene.meta.refreshLobbyProjection).toHaveBeenCalledExactlyOnceWith();
+      expect(scene.coopDefenseUpgradesOverlay.hide).not.toHaveBeenCalled();
+      expect(scene.lobbyOverlay.setReadyButtonState).toHaveBeenCalledWith(false);
+      scene.syncArenaLobbyFrame('ARENA', false, false, { showLobby: false }, false, false, null);
+      expect(scene.coopDefenseUpgradesOverlay.hide).toHaveBeenCalledOnce();
+      expect(scene.meta.refreshLobbyProjection).toHaveBeenLastCalledWith(false);
+    } finally { vi.restoreAllMocks(); }
+  });
+
+  it('uses existing menu callbacks, blocks guests at the yard and blocks further interaction behind overlays', () => {
+    const stored = getStoredCoopDefenseProgress();
+    vi.spyOn(preferences, 'getStoredCoopDefenseProgress').mockReturnValue({ ...stored,
+      itemsUnlocked: true, persistentBaseUnlocked: true, dawn: { ...stored.dawn, debugUnlocked: true } });
+    vi.spyOn(bridge, 'getGamePhase').mockReturnValue('LOBBY');
+    vi.spyOn(bridge, 'getGameMode').mockReturnValue('coop_defense');
+    vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('local');
+    vi.spyOn(bridge, 'getPlayerReady').mockReturnValue(false);
+    vi.spyOn(bridge, 'cancelLocalInput').mockImplementation(() => {});
+    const host = vi.spyOn(bridge, 'isHost').mockReturnValue(true);
+    const scene = Object.create(ArenaScene.prototype) as any;
+    scene.arenaRuntime = { getIsLocalReady: () => false };
+    scene.lobbyOverlay = { hasTerminalFailure: () => false, isHotkeyInputBlocked: () => false,
+      isMerchantOpen: () => false, openMerchant: vi.fn() };
+    scene.ctx = { inputSystem: { setInputEnabled: vi.fn() }, leftPanel: {
+      isOptionsOverlayOpen: () => false, isHelpOverlayOpen: () => false, isHotkeyInputBlocked: () => false,
+    } };
+    scene.meta = { openUpgradeOverlay: vi.fn(), openItemsOverlay: vi.fn(), openBaseOverlay: vi.fn() };
+    scene.aimPresentation = { showPlacementError: vi.fn() };
+    try {
+      for (const menu of ['upgrades', 'items', 'base', 'merchant']) scene.openLobbyMenu(menu);
+      expect(scene.meta.openUpgradeOverlay).toHaveBeenCalledTimes(1);
+      expect(scene.meta.openItemsOverlay).toHaveBeenCalledTimes(1);
+      expect(scene.meta.openBaseOverlay).toHaveBeenCalledTimes(1);
+      expect(scene.lobbyOverlay.openMerchant).toHaveBeenCalledTimes(1);
+      host.mockReturnValue(false);
+      scene.openLobbyMenu('base');
+      expect(scene.meta.openBaseOverlay).toHaveBeenCalledTimes(1);
+      expect(scene.aimPresentation.showPlacementError).toHaveBeenCalledTimes(1);
+      scene.itemsOverlay = { isOpen: () => true };
+      scene.openLobbyMenu('upgrades');
+      expect(scene.meta.openUpgradeOverlay).toHaveBeenCalledTimes(1);
+      expect(scene.isWorldMenuBlocking()).toBe(true);
+    } finally { vi.restoreAllMocks(); }
+  });
+});
 
 describe('Client full snapshots at the Scene frame boundary', () => {
   it.each(['none', 'train HUD', 'input between frames', 'protected entry'] as const)('delivers the full enemy baseline after an earlier %s read', async reader => {
