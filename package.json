@@ -24,6 +24,7 @@
     "assets:dawn-decals": "node scripts/export-dawn-decals.mjs",
     "assets:dawn-art": "node scripts/export-dawn-art.mjs",
     "assets:dawn-night": "node scripts/export-dawn-night.mjs",
+    "assets:dawn-merchant-ui": "node scripts/export-dawn-merchant-ui.mjs",
     "assets:hud-frames": "node scripts/export-hud-frames.mjs",
     "assets:marker-glyphs": "node scripts/export-marker-glyphs.mjs",
     "audio:convert": "node scripts/convert-audio.mjs",
