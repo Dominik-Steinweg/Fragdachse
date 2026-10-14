@@ -8297,8 +8297,10 @@ Object.assign(CPU_SOURCE_CONTRACTS, {
     "cameras": [],
     "sites": [
       { "key": "drawDrones/marker/setDepth/0", "expression": "DEPTH.CANOPY + 0.61", "blends": ["NORMAL"] },
+      { "key": "drawDrones/portLight/setDepth/0", "expression": "DEPTH.CANOPY + 0.62", "blends": ["NORMAL"] },
+      { "key": "drawDrones/starboardLight/setDepth/0", "expression": "DEPTH.CANOPY + 0.62", "blends": ["NORMAL"] },
       { "key": "drawDrones/v/setDepth/0", "expression": "DEPTH.CANOPY + 0.6", "blends": ["NORMAL"] },
-      { "key": "drawDrones/v/setDepth/1", "expression": "DEPTH.ROCKS - 0.01", "blends": ["NORMAL"] },
+      { "key": "drawDrones/v/setDepth/1", "expression": "CHARACTER_SHADOW_CONFIG.depth", "blends": ["NORMAL"] },
       { "key": "acquireBomb/image/setDepth/0", "expression": "DEPTH.CANOPY + 0.5", "blends": ["NORMAL"] }
     ],
     "bindings": {}
@@ -8315,8 +8317,10 @@ const bomberSquadronLayer = (component: string, expression: string, depth: numbe
 });
 const BOMBER_SQUADRON_LAYER_CONTRACTS: readonly LayerContract[] = [
   bomberSquadronLayer('drawDrones/v/setDepth/0', 'DEPTH.CANOPY + 0.6', 20.6, 'high', 'mixed', 'H'),
-  bomberSquadronLayer('drawDrones/v/setDepth/1', 'DEPTH.ROCKS - 0.01', 8.99, 'ground', 'material', 'M'),
+  bomberSquadronLayer('drawDrones/v/setDepth/1', 'CHARACTER_SHADOW_CONFIG.depth', 9.92, 'ground', 'material', 'M'),
   bomberSquadronLayer('drawDrones/marker/setDepth/0', 'DEPTH.CANOPY + 0.61', 20.61, 'high', 'mixed', 'H'),
+  bomberSquadronLayer('drawDrones/portLight/setDepth/0', 'DEPTH.CANOPY + 0.62', 20.62, 'high', 'mixed', 'H'),
+  bomberSquadronLayer('drawDrones/starboardLight/setDepth/0', 'DEPTH.CANOPY + 0.62', 20.62, 'high', 'mixed', 'H'),
   bomberSquadronLayer('acquireBomb/image/setDepth/0', 'DEPTH.CANOPY + 0.5', 20.5, 'high', 'mixed', 'H'),
 ];
 (CPU_LAYER_CONTRACTS as LayerContract[]).push(...BOMBER_SQUADRON_LAYER_CONTRACTS);
