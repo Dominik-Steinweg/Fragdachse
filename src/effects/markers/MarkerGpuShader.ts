@@ -11,19 +11,21 @@ attribute vec4 inColor;
 attribute vec4 inState;
 attribute vec4 inExtra;
 attribute vec4 inUv;
+attribute vec4 inFeedback;
 varying vec2 vLocal;
 varying vec4 vGeometry;
 varying vec4 vColor;
 varying vec4 vState;
 varying vec4 vExtra;
 varying vec4 vUv;
+varying vec4 vFeedback;
 varying float vAa;
 void main() {
   float radius = inGeometry.x * uRadiusScale;
   float extent = radius + max(12.0, radius * .25 + 3.0);
   vLocal = inCenterCorner.zw * extent;
   vGeometry = vec4(radius, inGeometry.yzw);
-  vColor = inColor; vState = inState; vExtra = inExtra; vUv = inUv;
+  vColor = inColor; vState = inState; vExtra = inExtra; vUv = inUv; vFeedback = inFeedback;
   // Analytic antialiasing width: one framebuffer pixel in local design units. fwidth needs
   // OES_standard_derivatives, which ESSL 1.00 shaders on a WebGL2 context do not expose.
   vAa = 1.2 / max(inGeometry.y * uPixelScale.x, .001);
@@ -44,6 +46,7 @@ varying vec4 vColor;
 varying vec4 vState;
 varying vec4 vExtra;
 varying vec4 vUv;
+varying vec4 vFeedback;
 varying float vAa;
 const float PI = 3.14159265359;
 float cover(float d) { float w = max(vAa, .45); return 1.0 - smoothstep(-w*.5, w*.5, d); }
@@ -103,11 +106,14 @@ void main() {
   vec3 walnut=mix(vec3(.075,.044,.025),vec3(.145,.095,.055),clamp(.5-p.y/(2.0*r),0.0,1.0));
   over(result,walnut,cover(d+brassW));
   vec3 innerTone=tone;
+  if(vFeedback.w>=0.0) innerTone=tone*(.65+.35*vFeedback.w);
   if(vState.z>.5) {
     float pulse=vExtra.w>.5 ? .82+.18*sin(uTime*2.0*PI/1600.0) : 1.0;
     innerTone=vec3(pulse);
   }
   over(result,innerTone,cover(d+brassW)*(1.0-cover(d+innerD)));
+  // Contained danger glow bleeds into the walnut only; no ground or screen flash.
+  if(vFeedback.w>=0.0) over(result,tone,cover(d+innerD)*exp(-abs(d+innerD)/2.0)*vFeedback.w*.45);
   // Thin dark seam keeps the light glyph and the tone rim apart on the walnut disc.
   over(result,vec3(0.0),cover(abs(d+innerD+.3)-.35)*.35);
   if(vColor.w>=0.0) {
@@ -115,7 +121,8 @@ void main() {
     float arc=1.0-smoothstep(vColor.w*2.0*PI-.035,vColor.w*2.0*PI+.035,angle);
     if(vColor.w==0.0) arc=0.0;
     if(vColor.w>=1.0) arc=1.0;
-    over(result,tone,cover(abs(d-2.0)-.85)*arc);
+    if(vFeedback.w>=0.0) over(result,vec3(.025,.018,.012),cover(abs(d-2.0)-1.6)*.9);
+    over(result,vFeedback.rgb,cover(abs(d-2.0)-(vFeedback.w>=0.0?1.35:.85))*arc);
   }
   vec2 glyphP=p-vec2(0.0,vGeometry.z>.5?2.0:0.0);
   // Keep the whole silhouette inside the 22 px lower zoom clamp. At the authored

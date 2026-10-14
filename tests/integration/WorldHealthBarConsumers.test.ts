@@ -42,6 +42,7 @@ import type { PlayerManager } from '../../src/entities/PlayerManager';
 import type { NetworkBridge } from '../../src/network/NetworkBridge';
 import { PlayerEntity } from '../../src/entities/PlayerEntity';
 import { BaseEntity } from '../../src/entities/BaseEntity';
+import { BaseAttackMarkerModel } from '../../src/effects/markers/sources/BaseAttackMarkerModel';
 import { BaseManager } from '../../src/entities/BaseManager';
 import { RockVisualHelper } from '../../src/scenes/arena/RockVisualHelper';
 import { encodeEnemyUpsert } from '../../src/network/enemySnapshotCodec';
@@ -1652,18 +1653,29 @@ describe('World HP consumer boundaries', () => {
   it('applies base snapshots once, preserves start HP, and treats repair/overlay/dormancy correctly', () => {
     const h = harness();
     const bases = new BaseManager(h.scene, [baseSpec], resolveCoopDefenseWorldMetrics(20, 20), {}, true, true, h.renderer);
+    const attacks = new BaseAttackMarkerModel();
+    const observeAttack = (now: number) => {
+      const base = bases.getBase('base')!;
+      return attacks.project([{ id: base.id, hp: base.getHp(), maxHp: base.getMaxHp(),
+        baselineRevision: base.getHpBaselineRevision(), x: 0, y: 0, width: 32, height: 32 }], now);
+    };
+    expect(observeAttack(0)).toEqual([]);
     h.tick();
     const [bg, trail, fill] = h.rectangles.slice(-3);
     expect(fill.width * fill.scaleX / bg.width).toBeCloseTo(0.7);
     bases.applySnapshot([{ id: 'base', hp: 50, maxHp: 100 }]); h.tick();
+    expect(observeAttack(100)).toEqual([]);
     expect(trail.visible).toBe(false);
     bases.applySnapshot([{ id: 'base', hp: 30, maxHp: 100 }]); h.tick();
+    expect(observeAttack(200)[0].progress).toBe(.3);
     expect(trail.visible).toBe(true);
     h.clock(10_000);
     bases.applySnapshot([{ id: 'base', hp: 30, maxHp: 100 }]); h.tick();
+    expect(observeAttack(10_000)).toEqual([]);
     expect(trail.visible).toBe(false);
     const color = fill.fillColor;
     bases.heal('base', 10); h.tick();
+    expect(observeAttack(10_100)).toEqual([]);
     expect(fill.width * fill.scaleX / bg.width).toBeCloseTo(0.4);
     expect(fill.fillColor).not.toBe(color);
     const activity = bases.createActivityBinding([{ baseId: 'base', hpMax: 200, startHp: 100,

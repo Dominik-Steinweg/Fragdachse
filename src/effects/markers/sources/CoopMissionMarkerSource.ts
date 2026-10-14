@@ -4,6 +4,7 @@ import type { CoopDefenseSecondaryObjectivePresentationState, CoopDefenseMission
 import type { WorldMetrics } from '../../../world/WorldMetrics';
 import { isCarryDeliveryZoneMarked } from '../../../ui/coopDefenseSecondaryObjectiveModel';
 import type { MarkerDescriptor, MarkerSource } from '../MarkerTypes';
+import { BaseAttackMarkerModel, type BaseAttackTarget } from './BaseAttackMarkerModel';
 
 export interface MarkerTargetBounds {
   readonly x: number; readonly y: number; readonly width: number; readonly height: number;
@@ -19,10 +20,9 @@ const pose = (b: MarkerTargetBounds) => ({ x: b.x + b.width / 2, y: b.y + b.heig
 const progress = (current: number, total: number) => total > 0 ? Math.max(0, Math.min(1, current / total)) : undefined;
 
 /** Pure projections: all positions/states come from the existing local presentation read models. */
-export function mainObjectiveMarkers(id: string, bounds: MarkerTargetBounds | null, dangerRadiusPx?: number): MarkerDescriptor[] {
+export function mainObjectiveMarkers(id: string, bounds: MarkerTargetBounds | null): MarkerDescriptor[] {
   return bounds && !bounds.destroyed && !bounds.dormant ? [{ key: `main:${id}`, kind: 'main-objective',
-    state: 'active', glyph: 'base', ...pose(bounds), visibility: 'world-and-edge',
-    groundRing: dangerRadiusPx === undefined ? undefined : { radiusPx: dangerRadiusPx } }] : [];
+    state: 'active', glyph: 'base', ...pose(bounds), visibility: 'world-and-edge' }] : [];
 }
 
 export function enemyMarkers(enemies: readonly EnemyMarkerTarget[]): MarkerDescriptor[] {
@@ -111,6 +111,11 @@ export class CoopMissionMarkerSource implements MarkerSource {
   readonly id = 'coop-mission';
   private readonly channels = new Map<string, readonly MarkerDescriptor[]>();
   private readonly history = new Map<string, MarkerDescriptor>();
+  private readonly baseAttacks = new BaseAttackMarkerModel();
+
+  setBaseAttacks(targets: readonly BaseAttackTarget[], nowMs: number): void {
+    this.set('base-attacks', this.baseAttacks.project(targets, nowMs), nowMs);
+  }
 
   setSecondary(descriptors: readonly MarkerDescriptor[], snapshot: CoopDefenseSecondaryObjectivePresentationState | null,
     nowMs: number, elapsedMs = 0): void {
@@ -143,5 +148,5 @@ export class CoopMissionMarkerSource implements MarkerSource {
     for (const key of this.history.keys()) if (!keys.has(key)) this.history.delete(key);
   }
   collect(out: MarkerDescriptor[]): void { for (const markers of this.channels.values()) out.push(...markers); }
-  clear(): void { this.channels.clear(); this.history.clear(); }
+  clear(): void { this.channels.clear(); this.history.clear(); this.baseAttacks.clear(); }
 }

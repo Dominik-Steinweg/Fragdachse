@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { checkpointMarkers, CoopMissionMarkerSource, enemyMarkers, mainObjectiveMarkers, secondaryObjectiveMarkers } from '../src/effects/markers/sources/CoopMissionMarkerSource';
 import { MarkerLayoutModel } from '../src/effects/markers/MarkerLayoutModel';
+import { BASE_ATTACK_TIMING } from '../src/effects/markers/sources/BaseAttackMarkerModel';
 import { ArenaMarkerPresentation } from '../src/scenes/arena/ArenaMarkerPresentation';
 import type { MarkerDescriptor, MarkerFrame } from '../src/effects/markers/MarkerTypes';
 import type { CoopDefenseMissionProgressPresentationState, CoopDefenseSecondaryObjectivePresentationEntry, SyncedCoopDefenseCarryItem } from '../src/types';
@@ -114,5 +115,102 @@ describe('Arena marker leases', () => {
     owner.releaseActivity(); expect(owner.coop).toBeNull();
     owner.bindActivity(5); owner.bindRound(6); owner.releaseWorld();
     expect(owner.coop).toBeNull(); owner.destroy(); expect(destroyed).toBe(1);
+  });
+});
+
+describe('friendly core attack markers', () => {
+  const target = { ...bounds, id: 'core', hp: 100, maxHp: 100 };
+  const frame = (source: CoopMissionMarkerSource, nowMs: number, lowQuality = false) => new MarkerLayoutModel().layout({
+    ...layoutInput, nowMs, lowQuality, descriptors: collect(source),
+  });
+  it('is silent on hydration (including damaged late join), repairs and unchanged snapshots', () => {
+    const source = new CoopMissionMarkerSource();
+    source.setBaseAttacks([{ ...target, hp: 50 }], 0);
+    source.setBaseAttacks([{ ...target, hp: 50 }], 100);
+    source.setBaseAttacks([target], 200);
+    expect(collect(source)).toEqual([]);
+    source.setBaseAttacks([{ ...target, hp: 90 }], 300);
+    expect(frame(source, 300).worldBadges[0]).toMatchObject({ glyph: 'base', tone: 'red', progress: .9 });
+    expect(frame(source, 300).groundRings).toEqual([]);
+  });
+  it('holds after real damage, then fades out without a new hit from refreshes', () => {
+    const source = new CoopMissionMarkerSource();
+    source.setBaseAttacks([target], 0);
+    const hurt = { ...target, hp: 50 };
+    source.setBaseAttacks([hurt], 100);
+    const holdEnd = 100 + BASE_ATTACK_TIMING.holdMs;
+    source.setBaseAttacks([hurt], holdEnd);
+    expect(frame(source, holdEnd).worldBadges[0].alpha).toBe(1);
+    expect(frame(source, holdEnd + BASE_ATTACK_TIMING.fadeMs / 2).worldBadges[0].alpha).toBeCloseTo(.5);
+    source.setBaseAttacks([hurt], holdEnd + BASE_ATTACK_TIMING.fadeMs);
+    expect(frame(source, holdEnd + BASE_ATTACK_TIMING.fadeMs).worldBadges).toEqual([]);
+  });
+  it('does not treat the first network snapshot arriving after presentation as a hit', () => {
+    const source = new CoopMissionMarkerSource();
+    source.setBaseAttacks([{ ...target, baselineRevision: 0 }], 0);
+    source.setBaseAttacks([{ ...target, hp: 50, baselineRevision: 1 }], 100);
+    expect(collect(source)).toEqual([]);
+    source.setBaseAttacks([{ ...target, hp: 40, baselineRevision: 1 }], 200);
+    expect(frame(source, 200).worldBadges[0].progress).toBe(.4);
+  });
+  it('coalesces rapid hits without restarting the strike but extends the attack window', () => {
+    const source = new CoopMissionMarkerSource();
+    source.setBaseAttacks([target], 0);
+    source.setBaseAttacks([{ ...target, hp: 90 }], 100);
+    source.setBaseAttacks([{ ...target, hp: 80 }], 150);
+    expect(collect(source)[0].baseAttack).toEqual({ lastHitAtMs: 150, pulseAtMs: 100 });
+    source.setBaseAttacks([{ ...target, hp: 70 }], 100 + BASE_ATTACK_TIMING.hitPulseMs);
+    expect(collect(source)[0].baseAttack?.pulseAtMs).toBe(100 + BASE_ATTACK_TIMING.hitPulseMs);
+  });
+  it('preserves the HP arc and pulse at the edge and wins the compass budget over every other type', () => {
+    const source = new CoopMissionMarkerSource();
+    const remote = { ...target, x: 1800 };
+    source.setBaseAttacks([remote], 0);
+    source.setBaseAttacks([{ ...remote, hp: 50 }], 100);
+    const attack = collect(source)[0];
+    const others = ['return', 'main-objective', 'boss', 'hazard', 'mission', 'site', 'utility'] as const;
+    source.set('competition', others.map((kind, i) => ({ ...attack, key: `other:${i}`, kind, baseAttack: undefined,
+      x: 2000, y: 100 + i * 200 })), 100);
+    const edge = frame(source, 100).edgeBadges;
+    expect(edge[0]).toMatchObject({ key: 'base-attack:core', tone: 'red', progress: .5, baseAttackGlow: 1 });
+    expect(edge[0].distanceLabel).toBe(`${Math.round(Math.hypot(1848 - 10, 432 - 20) / 32)} m`);
+    expect(edge[0].scale).toBeGreaterThan(1);
+    expect(edge.length).toBeLessThanOrEqual(6);
+  });
+  it('adds a repeating critical pulse only below 25%, with quiet low quality', () => {
+    const source = new CoopMissionMarkerSource();
+    const peak = BASE_ATTACK_TIMING.criticalPeriodMs * 2;
+    source.setBaseAttacks([target], 0);
+    source.setBaseAttacks([{ ...target, hp: 25 }], 10);
+    expect(frame(source, peak).worldBadges[0].scale).toBe(1);
+    source.setBaseAttacks([{ ...target, hp: 24 }], 20);
+    expect(frame(source, peak).worldBadges[0].scale).toBeGreaterThan(1);
+    expect(frame(source, peak + BASE_ATTACK_TIMING.criticalPeriodMs / 2).worldBadges[0].scale).toBe(1);
+    expect(frame(source, peak, true).worldBadges[0]).toMatchObject({ scale: 1, pulse: 'none', progress: .24 });
+  });
+  it('shows one badge during a Dawn return and restores navigation after the attack expires', () => {
+    const source = new CoopMissionMarkerSource();
+    source.set('dawn', [{ key: 'return', kind: 'return', state: 'active', glyph: 'base',
+      x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2,
+      targetHalfHeight: 32, visibility: 'world-and-edge' }], 0);
+    source.setBaseAttacks([target], 0);
+    source.setBaseAttacks([{ ...target, hp: 50 }], 100);
+    expect(frame(source, 100).worldBadges.map(b => b.key)).toEqual(['base-attack:core']);
+    source.setBaseAttacks([{ ...target, hp: 50 }], 10000);
+    expect(frame(source, 10000).worldBadges.map(b => b.key)).toEqual(['return']);
+  });
+  it('drops history on missing/destroyed cores, capacity changes and round teardown', () => {
+    const source = new CoopMissionMarkerSource();
+    source.setBaseAttacks([target], 0);
+    source.setBaseAttacks([{ ...target, hp: 50 }], 100);
+    source.setBaseAttacks([{ ...target, hp: 40, maxHp: 80 }], 150);
+    expect(collect(source)).toEqual([]);
+    source.setBaseAttacks([], 200);
+    source.setBaseAttacks([{ ...target, hp: 30 }], 300);
+    expect(collect(source)).toEqual([]);
+    source.setBaseAttacks([{ ...target, hp: 0 }], 400);
+    expect(collect(source)).toEqual([]);
+    source.clear(); source.setBaseAttacks([{ ...target, hp: 20 }], 500);
+    expect(collect(source)).toEqual([]);
   });
 });

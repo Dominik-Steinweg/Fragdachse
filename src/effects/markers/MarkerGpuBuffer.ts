@@ -2,7 +2,7 @@ import { HUD_TONES, type HudToneStyle } from '../../ui/HudFrameAssets';
 import { MARKER_LIMITS, type MarkerBadgeInstance, type MarkerGroundRingInstance, type MarkerGlyphId } from './MarkerTypes';
 import type { MarkerGlyphUv } from './MarkerGlyphAtlas';
 
-export const MARKER_GPU_WORDS = 24;
+export const MARKER_GPU_WORDS = 28;
 export const MARKER_GPU_VERTICES = 6;
 const CORNERS = [-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1];
 const finite = (n: number, fallback = 0): number => Number.isFinite(n) ? n : fallback;
@@ -30,6 +30,9 @@ export function markerGpuAppearance(badge: MarkerBadgeInstance, lowQuality: bool
   const tone = HUD_TONES[resolved];
   return {
     color: markerRimColor(tone, badge.state === 'dormant'),
+    progressColor: badge.baseAttackGlow === undefined ? markerRimColor(tone, badge.state === 'dormant')
+      : grade(markerRimColor(HUD_TONES.gold, false), markerRimColor(HUD_TONES.red, false),
+        clamp((1 - (badge.progress ?? 1)) / .75, 0, 1), 1, 1),
     status: badge.state === 'completed' ? 1 : badge.state === 'failed' ? 2 : 0,
     vulnerable: badge.vulnerable && badge.state === 'active' ? 1 : 0,
     period: lowQuality || badge.state !== 'active' || badge.pulse === 'none' ? 0
@@ -58,7 +61,9 @@ export class MarkerGpuBuffer {
       clamp(b.tier ?? 0, 0, 3), a.status, a.vulnerable, a.period,
       finite(b.pointerAngle), b.space === 'screen' ? MARKER_LIMITS.edgePointerPx : MARKER_LIMITS.worldPointerPx,
       MARKER_LIMITS.glyphMaxPx, low ? 0 : 1,
-      f.u0, f.v0, f.u1, f.v1]);
+      f.u0, f.v0, f.u1, f.v1,
+      ((a.progressColor >> 16) & 255) / 255, ((a.progressColor >> 8) & 255) / 255, (a.progressColor & 255) / 255,
+      b.baseAttackGlow === undefined ? -1 : low ? .65 : clamp(b.baseAttackGlow, 0, 1)]);
     return this.append();
   }
   ring(r: MarkerGroundRingInstance): boolean {
@@ -66,7 +71,7 @@ export class MarkerGpuBuffer {
     const color = HUD_TONES[r.tone].accent;
     this.scratch.set([r.x, r.y, 0, 0, r.radiusPx, 1, 2, clamp(r.alpha, 0, 1),
       ((color >> 16) & 255) / 255, ((color >> 8) & 255) / 255, (color & 255) / 255, -1,
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1]);
     return this.append();
   }
   private append(): boolean {

@@ -1,4 +1,3 @@
-import { CELL_SIZE } from '../../config';
 import type { WorldPersistentBaseSite } from '../../world/WorldRuntimeContext';
 import { WaterSurfaceModel } from '../../arena/WaterSurfaceModel';
 import { DawnSitePropRenderer } from '../../arena/DawnSitePropRenderer';
@@ -320,13 +319,19 @@ export class CoopMissionPresentationInfrastructure {
           if (this.destroyed) return;
           const source = input.renderers.markers.coop, metrics = input.getWorldMetrics?.();
           if (!source || !metrics) return;
-          const base = mapConfig.mapId.startsWith('dawn:') ? null : input.getBaseManager()?.getActiveMainBase(
-            mapConfig.objective === 'destroy-hostile-bases' ? 'hostile' : 'friendly');
+          const bases = input.getBaseManager();
+          // Enemy objectives retain navigation; friendly cores only request attention after damage.
+          const base = mapConfig.objective === 'destroy-hostile-bases' ? bases?.getActiveMainBase('hostile') : null;
           const site = input.getPersistentBaseSite?.();
-          const area = site?.baseId === base?.spec.id && base && base.getHp() < base.getMaxHp() ? site?.buildArea : undefined;
-          const dangerRadiusPx = area ? (area.kind === 'radius' ? area.radiusCells : area.sizeCells / 2) * CELL_SIZE : undefined;
           source.set('main', mainObjectiveMarkers(base?.spec.id ?? '', base
-            ? getBaseWorldBounds(base.spec.region, metrics) : null, dangerRadiusPx), this.scene.time.now);
+            ? getBaseWorldBounds(base.spec.region, metrics) : null), this.scene.time.now);
+          const friendly = [...(bases?.getMainBasesByFaction('friendly') ?? [])];
+          const core = site ? bases?.getBase(site.baseId) : undefined;
+          if (core?.faction === 'friendly' && !friendly.includes(core)) friendly.push(core);
+          source.setBaseAttacks(friendly.filter(b => b.isDamageable()).map(b => ({
+            id: b.id, hp: b.getHp(), maxHp: b.getMaxHp(), ...getBaseWorldBounds(b.spec.region, metrics),
+            baselineRevision: b.getHpBaselineRevision(),
+          })), this.scene.time.now);
           const manager = input.getEnemyManager();
           source.set('enemies', enemyMarkers((manager?.getAllEnemies() ?? [])
             .filter(e => e.faction === 'hostile' && e.sprite.active && e.getHp() > 0 && !e.isBurrowed())
