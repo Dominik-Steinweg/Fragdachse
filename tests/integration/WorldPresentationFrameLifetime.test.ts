@@ -245,7 +245,7 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     first.bindPresentationFrame(frame);
     frame.bindFireControl(source, original, shots);
     const renderer = vi.mocked(FireControlRenderer).mock.results.at(-1)!.value;
-    expect(FireControlRenderer).toHaveBeenLastCalledWith(input.scene, original, 'A', input.lighting);
+    expect(FireControlRenderer).toHaveBeenLastCalledWith(input.scene, original, 'A', input.lighting, expect.any(Function));
     first.setPresentation(presentationBinding(() => expect(renderer.destroy).toHaveBeenCalledOnce()));
     frame.syncWorldLighting(true, false); // World without Activity.
     expect(source).toHaveBeenCalledExactlyOnceWith(12345);

@@ -8100,7 +8100,7 @@ Object.assign(CPU_SOURCE_CONTRACTS, {
     "cameras": [],
     "sites": [
       {
-        "key": "update/sprite/setDepth/0",
+        "key": "syncCopy/sprite/setDepth/0",
         "expression": "DEPTH.ROCKS + 0.2",
         "blends": [
           "NORMAL"
@@ -8151,9 +8151,9 @@ const FIRE_CONTROL_LAYER_CONTRACTS: readonly LayerContract[] = [
     }
   },
   {
-    "id": "cpu:effects/fireControl/FireControlRenderer.ts:update/sprite/setDepth/0",
+    "id": "cpu:effects/fireControl/FireControlRenderer.ts:syncCopy/sprite/setDepth/0",
     "owner": "effects/fireControl/FireControlRenderer.ts",
-    "component": "update/sprite/setDepth/0",
+    "component": "syncCopy/sprite/setDepth/0",
     "height": "body",
     "lighting": "mixed",
     "camera": "world",
@@ -8168,7 +8168,7 @@ const FIRE_CONTROL_LAYER_CONTRACTS: readonly LayerContract[] = [
     ],
     "role": "effect",
     "source": {
-      "selector": "update/sprite/setDepth/0",
+      "selector": "syncCopy/sprite/setDepth/0",
       "expression": "DEPTH.ROCKS + 0.2"
     }
   },

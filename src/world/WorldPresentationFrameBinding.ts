@@ -282,7 +282,11 @@ export class WorldPresentationFrameBinding {
   private createFireControl(): void {
     if (!this.fireControlPorts || this.fireControl) return;
     this.fireControl = new FireControlRenderer(this.input.scene, this.fireControlPorts.original,
-      'A', this.input.lighting);
+      'A', this.input.lighting, ownerId => {
+        const player = this.input.getPlayers().find(p => p.id === ownerId);
+        const sprite = player?.active ? player.displayObject : undefined;
+        return sprite?.visible ? { x: sprite.x, y: sprite.y } : undefined;
+      });
   }
 
   private syncFireControl(showWorld: boolean): void {

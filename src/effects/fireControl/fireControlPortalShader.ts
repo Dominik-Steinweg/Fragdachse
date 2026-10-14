@@ -19,6 +19,7 @@ varying vec2 vLocal;
 varying vec4 vShape, vState;
 const float TAU = 6.2831853;
 float line(float d, float w) { return 1.0 - smoothstep(w, w + uPixel * .8, abs(d)); }
+float hash1(float n) { return fract(sin(n) * 43758.5453); }
 void main() {
   float radius = vShape.x, angle = vShape.y, kind = vShape.z, opening = vShape.w;
   float remaining = vState.x, flash = vState.y, mode = vState.z;
@@ -28,7 +29,48 @@ void main() {
   // The exit has no facing; per-shot flashes are separate ExitFlash instances.
   if (kind < .5 || (kind > 1.5 && kind < 3.5)) q = p;
   float intensity = 0.0, core = 0.0;
-  if (kind > 4.5) {
+  if (kind > 6.5) {
+    // Holo genesis: the owner (x = 0) sends a short streak to the new copy (x = radius). The
+    // head races out, a thinning tail follows, and a small ring bursts where the copy forms.
+    float L = radius, t = remaining;
+    float head = L * smoothstep(0.0, .5, t);
+    float tail = L * smoothstep(.18, .8, t);
+    float wob = sin(q.x * .23 + vState.w * 1.7 + uTime * 23.0) * 1.3 * (1.0 - t);
+    float y = q.y - wob;
+    float span = step(tail, q.x) * (1.0 - smoothstep(head - .5, head + 1.0, q.x));
+    float along = clamp((q.x - tail) / max(head - tail, 1.0), 0.0, 1.0);
+    float coreLine = exp(-y * y / .7) * span * (.35 + .65 * along);
+    float glow = exp(-y * y / 9.0) * span * (.25 + .5 * along);
+    float fade = 1.0 - smoothstep(.7, 1.0, t);
+    float arrive = smoothstep(.42, .55, t);
+    float rr = length(q - vec2(L, 0.0));
+    float ringR = 3.0 + 15.0 * smoothstep(.45, 1.0, t);
+    float burst = (line(rr - ringR, 1.0) * .9 + exp(-rr * rr / 18.0) * 1.4) * arrive * (1.0 - smoothstep(.55, 1.0, t));
+    float spark = exp(-dot(q, q) / 10.0) * (1.0 - smoothstep(0.0, .3, t));
+    intensity = (glow * .9 + coreLine * 1.6) * fade + burst + spark;
+    core = coreLine * 1.1 * fade + burst * .5;
+  } else if (kind > 5.5) {
+    // Holo plate: a small emitter ring just outside the copy's turret body. Three nodes hold the
+    // projection, a faint fill shines through the glass, a thin outer arc shows the copy's own
+    // remaining life, shots pulse it and the warning phase (mode) makes it flicker.
+    float r = length(q), a = atan(q.y, q.x);
+    float R = radius * (.55 + .45 * opening);
+    float flicker = 1.0 - mode * .55 * step(.55, hash1(floor(uTime * 16.0) + vState.w));
+    float segments = smoothstep(.06, .14, fract((a - uTime * .35) / TAU * 6.0));
+    float rim = line(r - R, .5) * (.55 + .45 * segments);
+    float inner = line(r - R * .78, .2) * .22;
+    float nodes = 0.0;
+    for (int i = 0; i < 3; i++) {
+      float na = float(i) * TAU / 3.0 + uTime * .35 + vState.w;
+      vec2 np = vec2(cos(na), sin(na)) * R;
+      nodes += exp(-dot(q - np, q - np) / 2.2);
+    }
+    float fill = (1.0 - smoothstep(R * .4, R * .95, r)) * .05;
+    float halo = exp(-pow((r - R) / 3.0, 2.0)) * .3;
+    float rest = line(r - R * 1.2, .22) * step(fract((a + 1.5708) / TAU), remaining) * .38;
+    intensity = (rim * .95 + inner + nodes * .9 + fill + halo + rest) * flicker * (1.0 + flash * .8);
+    core = (nodes * .5 + rim * .15) * flicker + flash * line(r - R, .4) * .4;
+  } else if (kind > 4.5) {
     // One directed burst per transported shot. q is aligned with the shot: +x points outward.
     // The ring segment flares, then a short streak leaves the iris; nothing points back
     // toward the source turret.
