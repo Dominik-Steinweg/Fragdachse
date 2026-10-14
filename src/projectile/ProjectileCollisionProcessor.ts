@@ -315,7 +315,8 @@ export class ProjectileCollisionProcessor {
     if (!this.batchingTargets) this.targetsRead = false;
     // Deliberately live iteration: collision interactions can add same-stage projectiles.
     for (const record of records) {
-      if (record.pendingDestroy) continue;
+      // A fire-control shot flying into its own muzzle portal touches nothing on the way (D52).
+      if (record.pendingDestroy || record.fireControlPending) continue;
       if (record.spec.flight.isGrenade) {
         const effect = record.spec.interaction.grenadeEffect;
         if (effect?.type !== 'damage' || effect.role === 'cluster' || effect.role === 'demolition'

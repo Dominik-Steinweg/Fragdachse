@@ -85,7 +85,41 @@ function replication(runtime: WorldProjectileRuntime): ProjectileReplicationReco
 const configOfType = (type: WeaponConfig['fire']['type']): WeaponConfig =>
   Object.values(WEAPON_CONFIGS).find(config => config.fire.type === type)!;
 
-describe('fire-control route: one-way transfer at fire time', () => {
+/**
+ * D52: routed shots first really fly along their fire direction to the muzzle portal; the host
+ * portal stage moves them to the exit once they reached it. Moves each shot to `x` on its line.
+ */
+function flyToEntry(runtime: WorldProjectileRuntime, physics: ReturnType<typeof createTechnicalPhysicsBinding>,
+  ids: readonly number[], x = 40): void {
+  for (const id of ids) physics.handles.get(id)!.sprite.x = x;
+  runtime.runHostPortalStage(1_000);
+}
+
+describe('fire-control route: real flight into the muzzle portal (D52)', () => {
+  it('flies the real stretch untouched and unguided, then jumps on reaching the entry', () => {
+    const { runtime, physics } = createHarness();
+    const impacts = captureImpacts(runtime, 10); // An enemy right in front of the muzzle.
+    const id = runtime.spawnProjectile(shot({ route: route() }))!;
+    const handle = physics.handles.get(id)!;
+    expect(handle.sprite.x).toBe(0);
+    expect(replication(runtime)[0].dynamic).toMatchObject({ x: 0, y: 0 });
+    handle.sprite.x = 12; runtime.runHostPortalStage(1_000); runtime.runHostInteractionStage(1_000);
+    expect(impacts).toHaveLength(0);
+    expect(handle.sprite.x).toBe(12); // Not yet at the entry: still on its own side.
+    handle.sprite.x = 26; runtime.runHostPortalStage(1_016);
+    expect(handle.sprite.x).toBe(506); // 6 px past the entry continue from the exit.
+    runtime.destroy();
+  });
+
+  it('lets flames and flame emitters jump at once', () => {
+    const { runtime, physics } = createHarness();
+    const flame = runtime.spawnProjectile(shot({ isFlame: true, route: route() }))!;
+    expect(physics.handles.get(flame)!.sprite.x).toBe(500);
+    runtime.destroy();
+  });
+});
+
+describe('fire-control route: one-way transfer', () => {
   it('keeps the heading and lifetime, counts only the muzzle prefix against range and spends the route', () => {
     const { runtime, physics } = createHarness();
     const angle = 0.4, dir = { x: Math.cos(angle), y: Math.sin(angle) };
@@ -93,6 +127,7 @@ describe('fire-control route: one-way transfer at fire time', () => {
     const id = runtime.spawnProjectile(shot({ angle, lifetimeMs: 100,
       route: route({ entry: { x: dir.x * 30, y: dir.y * 30 }, exit }) }))!;
     const handle = physics.handles.get(id)!;
+    handle.sprite.x = dir.x * 30; handle.sprite.y = dir.y * 30; runtime.runHostPortalStage(1_000);
     expect(handle.sprite.x).toBeCloseTo(exit.x);
     expect(handle.sprite.y).toBeCloseTo(exit.y);
     expect(Math.atan2(handle.body.velocity.y, handle.body.velocity.x)).toBeCloseTo(angle);
@@ -105,6 +140,7 @@ describe('fire-control route: one-way transfer at fire time', () => {
 
     const ranged = runtime.spawnProjectile(shot({ route: route() }))!;
     const body = physics.handles.get(ranged)!;
+    flyToEntry(runtime, physics, [ranged], 20);
     body.sprite.x = 500 + 379; runtime.runHostProjectileStage(10, 1_110);
     expect(runtime.activeCount).toBe(1);
     body.sprite.x += 1; runtime.runHostProjectileStage(10, 1_120);
@@ -116,6 +152,7 @@ describe('fire-control route: one-way transfer at fire time', () => {
     const { runtime, physics } = createHarness();
     const id = runtime.spawnProjectile({ ...shot({ route: route({ entry: { x: 20, y: -3 } }) }),
       origin: { x: 0, y: 4, angle: 0 } })!;
+    flyToEntry(runtime, physics, [id], 20);
     expect(physics.handles.get(id)!.sprite).toMatchObject({ x: 500, y: 7 });
     runtime.destroy();
   });
@@ -129,6 +166,7 @@ describe('fire-control route: one-way transfer at fire time', () => {
       // Already carries this deployment's contribution, as an inheriting child would.
       runtime.spawnProjectile(shot({ route: route(), damage: 15, portalDamage: [{ pairId: 'fc:7', bonus: 0.5 }] }))!,
     ];
+    flyToEntry(runtime, physics, ids);
     for (const id of ids) physics.handles.get(id)!.sprite.x = 560;
     runtime.runHostInteractionStage(1_000);
     expect(impacts.map(impact => impact.directHit.damage)).toEqual([15, 15, 15]);
@@ -141,6 +179,7 @@ describe('fire-control route: one-way transfer at fire time', () => {
     const impacts = captureImpacts(runtime, 530);
     const explosion = { radius: 24, maxDamage: 20, minDamage: 6, knockback: 300, selfDamageMult: 0 };
     const id = runtime.spawnProjectile(shot({ route: route(), burn: true, explosion }))!;
+    flyToEntry(runtime, physics, [id]);
     physics.handles.get(id)!.sprite.x = 560;
     runtime.runHostInteractionStage(1_000);
     const stage = runtime.runHostProjectileStage(10, 1_010);
@@ -157,6 +196,7 @@ describe('fire-control route: one-way transfer at fire time', () => {
     const impacts = captureImpacts(runtime, 530);
     const explosion = { radius: 24, maxDamage: 0, knockback: 300, selfDamageMult: 0 };
     const id = runtime.spawnProjectile(shot({ route: route(), damage: 0, explosion }))!;
+    flyToEntry(runtime, physics, [id]);
     physics.handles.get(id)!.sprite.x = 560;
     runtime.runHostInteractionStage(1_000);
     const stage = runtime.runHostProjectileStage(10, 1_010);
@@ -190,6 +230,7 @@ describe('fire-control route: one-way transfer at fire time', () => {
     const parent = runtime.spawnProjectile({ ...request,
       flight: { ...request.flight, maxBounces: 2, split: { count: 2, spread: 0, speedFactor: 1 } },
       interaction: { ...request.interaction, burn: { canReceiveFireImbue: true } } })!;
+    flyToEntry(runtime, physics, [parent], 20);
     physics.emit({ projectileId: parent, target: { kind: 'world-boundary' }, x: 550, y: 0,
       velocityX: 100, velocityY: 0, source: 'world-boundary' });
     runtime.runHostInteractionStage(1_000); runtime.runHostInteractionStage(1_016);
@@ -229,10 +270,12 @@ describe('fire-control route: one-way transfer at fire time', () => {
     runtime.destroy();
   });
 
-  it('breaks the flight path at the jump; dead-reckoned shots first replicate at the exit', () => {
-    const { runtime } = createHarness();
+  it('breaks the flight path at the jump; dead-reckoned shots replicate the real stretch, then the exit', () => {
+    const { runtime, physics } = createHarness();
     const traced = runtime.spawnProjectile(shot({ route: route(), tracer: true }))!;
     const plain = runtime.spawnProjectile(shot({ route: route() }))!;
+    expect(replication(runtime).find(record => record.id === plain)!.dynamic).toMatchObject({ x: 0, y: 0 });
+    flyToEntry(runtime, physics, [traced, plain], 20);
     const records = new Map(replication(runtime).map(record => [record.id, record]));
     const points = records.get(traced)!.dynamic.flightPath!.points;
     expect(points.map(point => [point.x, point.breakBefore === true])).toEqual([[0, true], [20, false], [500, true]]);
@@ -247,6 +290,7 @@ describe('fire-control route: one-way transfer at fire time', () => {
       damageBonus: 0.6, createdAt: 0, expiresAt: 5_000 }], isPortalFriendly: () => true });
     const impacts = captureImpacts(runtime, 940);
     const id = runtime.spawnProjectile(shot({ route: route() }))!;
+    flyToEntry(runtime, physics, [id], 20);
     physics.handles.get(id)!.sprite.x = 650;
     runtime.runHostPortalStage(1_000);
     expect(physics.handles.get(id)!.sprite.x).toBe(950);
@@ -303,6 +347,8 @@ describe('fire-control route: execution plumbing', () => {
     const config = Object.values(WEAPON_CONFIGS).find(candidate => candidate.id.startsWith('TURRET_')
       && candidate.fire.type === 'projectile' && (candidate.pelletCount ?? 1) <= 1)!;
     expect(turret.fire(config, params)).toBe(true);
+    expect([...physics.handles.values()].map(handle => handle.sprite.x)).toEqual([0]);
+    flyToEntry(runtime, physics, [...physics.handles.keys()], 20);
     expect([...physics.handles.values()].map(handle => handle.sprite.x)).toEqual([500]);
     expect(replication(runtime)[0].static).toMatchObject({ sourceTurretId: 'turret-1', turretVisualId: 'fc-copy:1:0' });
     runtime.destroy();
