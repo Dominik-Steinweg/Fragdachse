@@ -86,6 +86,8 @@ const BOMBER_SHADOW_LAYERS = [{ scale: 1, alpha: 1 }, { scale: 0.78, alpha: 0.6 
 const BOMBER_RUN_WINDOW = { leadInPx: 2600, leadOutPx: 2200, fadePx: 900 } as const;
 /** Once the run's first bomb is replicated, the estimated approach eases onto its real launch time. */
 const BOMBER_RUN_ANCHOR_BLEND_MS = 600;
+/** A host lags seconds, not minutes: a farther anchor belongs to an earlier round with the same event id. */
+const BOMBER_RUN_ANCHOR_MAX_SKEW_MS = 20_000;
 
 interface AirstrikeVisual {
   id:            number;
@@ -243,15 +245,21 @@ export class AirstrikeRenderer {
    * No own network state. `now` is the strikes' synchronized clock; `textureKey` null removes them.
    */
   syncBomberRuns(runs: readonly ScheduledAirstrikeRun[], roundTimeMs: number, now: number, textureKey: string | null): void {
-    if (runs.length === 0 && this.bomberRuns.size === 0) return;
+    if (runs.length === 0 && this.bomberRuns.size === 0 && this.bomberRunAnchors.size === 0) return;
     const visible = new Set<string>();
     if (textureKey && this.scene.textures.exists(textureKey)) {
+      let bomberStrikes: readonly SyncedAirstrikeStrike[] | null = null;
       for (const run of runs) {
         const estimatedAtMs = now - roundTimeMs + run.launchAtMs;
         let anchor = this.bomberRunAnchors.get(run.eventId);
-        if (!anchor) {
-          const launchAtMs = resolveAirstrikeRunLaunchFromStrikes(run, this.latestStrikes.filter(
-            strike => strike.triggeredBy === COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID));
+        if (anchor && Math.abs(anchor.launchAtMs - estimatedAtMs) > BOMBER_RUN_ANCHOR_MAX_SKEW_MS) {
+          this.bomberRunAnchors.delete(run.eventId);
+          anchor = undefined;
+        }
+        // Bombs exist only from the launch on; until then there is nothing to anchor to.
+        if (!anchor && this.latestStrikes.length > 0 && estimatedAtMs <= now + BOMBER_RUN_ANCHOR_MAX_SKEW_MS) {
+          bomberStrikes ??= this.latestStrikes.filter(strike => strike.triggeredBy === COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID);
+          const launchAtMs = resolveAirstrikeRunLaunchFromStrikes(run, bomberStrikes);
           if (launchAtMs !== null) {
             anchor = { launchAtMs, estimatedAtMs, foundAtMs: now };
             this.bomberRunAnchors.set(run.eventId, anchor);
