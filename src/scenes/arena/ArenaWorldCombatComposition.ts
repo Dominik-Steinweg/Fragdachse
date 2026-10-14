@@ -382,12 +382,22 @@ export function composeWorldCombatGameplay(
   if (bridge.isHost()) {
     bridge.setFireControlSnapshotProvider(() => combatGameplayBinding.getFireControlSnapshot(bridge.getSynchronizedNow()));
     worldRuntime.bind({ destroy: () => bridge.setFireControlSnapshotProvider(null) });
+    bridge.setBomberSquadronSnapshotProvider(() => combatGameplayBinding.getBomberSquadronSnapshot(bridge.getSynchronizedNow()));
+    worldRuntime.bind({ destroy: () => bridge.setBomberSquadronSnapshotProvider(null) });
   }
+  // Inspector-Ultimates: der Combat-Owner besitzt die Einsätze, die Ultimate-Runtime nur Aktivierung und Rage.
+  gameplay.player?.setHoloOffensiveCapability(combatGameplayBinding.getHoloOffensiveCapability());
+  gameplay.player?.setBomberSquadronCapability(combatGameplayBinding.getBomberSquadronCapability());
+  worldRuntime.bind({ destroy: () => {
+    gameplay.player?.setHoloOffensiveCapability(null);
+    gameplay.player?.setBomberSquadronCapability(null);
+  } });
   worldRuntime.presentationFrame?.bindFireControl(
     () => bridge.getFireControlSnapshot(),
     id => rockVisualHelper.getTurretOriginalVisual(id),
     projectileRuntime.getPresentationRuntime(),
   );
+  worldRuntime.presentationFrame?.bindBomberSquadron(() => bridge.getBomberSquadronSnapshot());
 }
 
 function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): number {

@@ -1,5 +1,6 @@
 import type { WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import type { TurretAimConfig } from '../config/turretAim';
+import type { EnergyInjectorConstructionEffect } from '../types';
 
 export type AutomatedTurretId = number | string;
 export type AutomatedTurretTargetMode = 'players' | 'enemies';
@@ -48,6 +49,27 @@ export interface TurretFireSource extends AutomatedTurret {
    * nicht berechtigte Quellen (pausiert, bemannt, Kopie noch nicht materialisiert).
    */
   readonly portal?: TurretPortalAssignment;
+  /**
+   * Nur Holo-Kopien der Ultimate „Holo-Offensive“ (GDD Ultimates V2 §2). Eine Projektion ist eine
+   * eigenständige Quelle (`id === identityId === sequenceKey === visualId`), aber nie eine
+   * Konstruktion: nicht bemannbar, nicht fernsteuerbar, kein Injektor-Lookup über ihre Position,
+   * nie über Portale. Identitätsgebundene Fakten des Originals sind beim Spawn eingefroren.
+   */
+  readonly projection?: TurretProjection;
+}
+/** Beim Spawn eingefrorene Fakten einer Holo-Kopie. */
+export interface TurretProjection {
+  readonly deploymentId: number;
+  /** Konstruktions-ID der Vorlage zum Spawnzeitpunkt; nur Herkunft, keine Identitätswirkung. */
+  readonly templateId: number;
+  /** Vorlage war ein persönliches MG: die Kopie führt einen eigenen MG-Attrition-Stack. */
+  readonly personalMg: boolean;
+  /**
+   * „Injektorprojektion“: Injektor-Effekt des Turmtyps für die gesamte Lebensdauer, sonst `null`.
+   * Schadenstürme multiplizieren ihren Schuss, Gravitation und Verlangsamung tragen ihn über
+   * `ProjectileProvenance.injectorEffect` bis zum (auch verzögerten) Treffer.
+   */
+  readonly injectorEffect: EnergyInjectorConstructionEffect | null;
 }
 /** Fakten des Portaleinsatzes, an dem eine Quelle teilnimmt; Eingang und Modus entstehen im TurretSystem. */
 export interface TurretPortalAssignment {

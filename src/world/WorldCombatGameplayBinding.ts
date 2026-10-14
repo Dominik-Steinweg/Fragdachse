@@ -1,6 +1,10 @@
 import { FireControlRuntime } from '../systems/fireControl/FireControlRuntime';
 import type { FireControlConstructionFacts } from '../systems/fireControl/FireControlCopyPlan';
 import { fireControlContributionId, type FireControlSnapshot } from '../systems/fireControl/FireControlSnapshot';
+import { EMPTY_BOMBER_SQUADRON_SNAPSHOT, type BomberSquadronSnapshot } from '../systems/bomberSquadron/BomberSquadronSnapshot';
+import type {
+  PlayerUltimateBomberSquadronCapability, PlayerUltimateHoloOffensiveCapability,
+} from './PlayerUltimateBehaviorRuntime';
 import { isOffensiveConstruction } from '../systems/offensiveConstruction';
 import { PlasmaBurnerTargetCatalog } from './PlasmaBurnerTargetCatalog';
 import { homingTargetKind } from '../projectile/ProjectileOrigin';
@@ -1618,6 +1622,21 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
 
   getFireControlSnapshot(now: number): FireControlSnapshot {
     return this.fireControl?.getSnapshot(now) ?? { deployments: [] };
+  }
+
+  /** Host-Owner der Holo-Offensive; `null` auf Clients und bis die Runtime verdrahtet ist. */
+  getHoloOffensiveCapability(): PlayerUltimateHoloOffensiveCapability | null {
+    return null;
+  }
+
+  /** Host-Owner des Bombergeschwaders; `null` auf Clients und bis das Binding verdrahtet ist. */
+  getBomberSquadronCapability(): PlayerUltimateBomberSquadronCapability | null {
+    return null;
+  }
+
+  /** Slice `bq` auf dem Host. */
+  getBomberSquadronSnapshot(_now: number): BomberSquadronSnapshot {
+    return EMPTY_BOMBER_SQUADRON_SNAPSHOT;
   }
 
   private readFireControlConstructions(definitions = this.getTurretDefinitions()): readonly FireControlConstructionFacts[] {

@@ -112,6 +112,7 @@ import {
 import { KEY_FAST_PING_PROBE, NetworkPingController } from './NetworkPingController';
 import { EMPTY_FIRE_CONTROL_SNAPSHOT, type FireControlSnapshot } from '../systems/fireControl/FireControlSnapshot';
 import { encodeFireControlSnapshot, decodeFireControlSnapshot } from './fireControlSnapshotCodec';
+import { EMPTY_BOMBER_SQUADRON_SNAPSHOT, type BomberSquadronSnapshot } from '../systems/bomberSquadron/BomberSquadronSnapshot';
 import { isCompleteGameStatePayload } from './FullGameStateBootstrap';
 import type { EssenceSnapshot } from '../adrenalineEssence/AdrenalineEssenceReplication';
 import { decodeEssenceSnapshot, encodeEssenceSnapshot } from '../adrenalineEssence/AdrenalineEssenceWireCodec';
@@ -367,6 +368,8 @@ export interface RoundState {
 
 export interface GameState extends KrakenSnapshotPatch {
   fireControl: FireControlSnapshot;
+  /** Slice `bq` (Bombergeschwader); Codec und Full-Snapshot folgen mit der Netzwerk-Lane. */
+  bomberSquadron?: BomberSquadronSnapshot;
   earthbreak?: readonly import('../systems/BurrowEarthbreakRuntime').SyncedBurrowEarthbreak[];
   shootingRange?: import('../shootingRange/ShootingRangeContracts').ShootingRangeState | null;
   /** Activity-scoped independent delta stream; consumed only by the passive essence replica. */
@@ -3141,6 +3144,20 @@ export class NetworkBridge {
     if (!this.getWorldDescriptor()) return EMPTY_FIRE_CONTROL_SNAPSHOT;
     return isHost() ? this.fireControlSnapshotProvider()
       : this.getLatestGameState()?.fireControl ?? EMPTY_FIRE_CONTROL_SNAPSHOT;
+  }
+
+  private bomberSquadronSnapshotProvider: () => BomberSquadronSnapshot = () => EMPTY_BOMBER_SQUADRON_SNAPSHOT;
+
+  /** World composition binds the host owner (slice `bq`); detach with null before destroying it. */
+  setBomberSquadronSnapshotProvider(provider: (() => BomberSquadronSnapshot) | null): void {
+    this.bomberSquadronSnapshotProvider = provider ?? (() => EMPTY_BOMBER_SQUADRON_SNAPSHOT);
+  }
+
+  /** Confirmed squadrons; flight, drops and impacts are derived from `BomberSquadronPlan`. */
+  getBomberSquadronSnapshot(): BomberSquadronSnapshot {
+    if (!this.getWorldDescriptor()) return EMPTY_BOMBER_SQUADRON_SNAPSHOT;
+    return isHost() ? this.bomberSquadronSnapshotProvider()
+      : this.getLatestGameState()?.bomberSquadron ?? EMPTY_BOMBER_SQUADRON_SNAPSHOT;
   }
 
   private krakenScope = '';

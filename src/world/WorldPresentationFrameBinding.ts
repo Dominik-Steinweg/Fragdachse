@@ -1,6 +1,7 @@
 import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 import { FireControlRenderer, type FireControlOriginalVisual } from '../effects/fireControl/FireControlRenderer';
 import type { FireControlSnapshot } from '../systems/fireControl/FireControlSnapshot';
+import type { BomberSquadronSnapshot } from '../systems/bomberSquadron/BomberSquadronSnapshot';
 import type { FireControlCopyShotSource } from '../projectile/ProjectilePresentationRuntime';
 import type { WorldSunlightPresentation } from '../effects/sunlight/WorldSunlightPresentation';
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
@@ -75,6 +76,8 @@ import {
 const TRAIN_LIGHT_SIDES = [-1, 1] as const;
 
 export type FireControlSnapshotSource = (now: number) => FireControlSnapshot;
+/** Bestätigte Bomberstaffeln (Slice `bq`); Host und Client lesen dieselbe Quelle. */
+export type BomberSquadronSnapshotSource = () => BomberSquadronSnapshot;
 
 export interface WorldPresentationPersistentBaseVisuals {
   sync(site: WorldPersistentBaseSite | null, metrics: WorldMetrics | null, showOverlay: boolean): void;
@@ -262,6 +265,18 @@ export class WorldPresentationFrameBinding {
     this.fireControlPorts = { snapshot, original };
     if (this.input.getLocalWorldPresentation().required) this.createFireControl();
     this.releaseFireControlCopyShots = shots.bindFireControlCopyShots(id => this.fireControl?.onShot(id));
+  }
+
+  private bomberSquadronSnapshot: BomberSquadronSnapshotSource | null = null;
+
+  /**
+   * Bound once by World composition. The frame owner will own the squadron renderer (drone
+   * flight, bomb fall, shadows, bundled explosions) and release it with the World presentation.
+   */
+  bindBomberSquadron(snapshot: BomberSquadronSnapshotSource): void {
+    if (this.destroyed) return;
+    if (this.bomberSquadronSnapshot) throw new Error('Bomber squadron presentation is already bound');
+    this.bomberSquadronSnapshot = snapshot;
   }
 
   private createFireControl(): void {
@@ -903,6 +918,7 @@ export class WorldPresentationFrameBinding {
     this.releaseFireControlCopyShots?.(); this.releaseFireControlCopyShots = null;
     this.fireControl?.destroy(); this.fireControl = null;
     this.fireControlPorts = null;
+    this.bomberSquadronSnapshot = null;
     this.cancelRenderRelease();
     this.releasedView = null;
     this.sunlightOwner?.destroy();this.sunlightOwner=null;

@@ -4,7 +4,7 @@ import { getTurretVisualSpec, TURRET_VISUALS } from '../../config/turretVisuals'
 import type { TurretWeaponId } from '../../types';
 import { getPausedOriginalIds, type FireControlSnapshot, type FireControlEntrySnapshot,
   type FireControlPortalDeploymentSnapshot, type FireControlCopiesDeploymentSnapshot,
-  type FireControlCopySnapshot } from '../../systems/fireControl/FireControlSnapshot';
+  type FireControlCopySnapshot, type FireControlHoloDeploymentSnapshot } from '../../systems/fireControl/FireControlSnapshot';
 import { TurretAnimationController } from '../TurretAnimationController';
 import type { LightingSystem } from '../LightingSystem';
 import { FireControlHologramFilter, type HologramPreset } from './FireControlHologramFilter';
@@ -18,7 +18,7 @@ export interface FireControlPortalView extends Omit<FireControlPortalDeploymentS
   readonly entries: readonly FireControlEntryView[];
 }
 export interface FireControlView extends FireControlSnapshot {
-  readonly deployments: readonly (FireControlCopiesDeploymentSnapshot | FireControlPortalView)[];
+  readonly deployments: readonly (FireControlCopiesDeploymentSnapshot | FireControlPortalView | FireControlHoloDeploymentSnapshot)[];
 }
 export interface FireControlOriginalVisual { sprite: Phaser.GameObjects.Sprite; x: number; y: number }
 interface CopyVisual {
@@ -77,6 +77,8 @@ export class FireControlRenderer {
     this.touchedLights.clear();
     const liveCopies = new Set<string>(), livePortals = new Set<number>(), liveRelays = new Set<number>();
     for (const deployment of snapshot.deployments) {
+      // Holo-Offensive: eigener Darstellungszweig ohne Projektor und Strahl folgt mit E1.
+      if (deployment.kind === 'holo') continue;
       if (deployment.kind === 'portal') {
         livePortals.add(deployment.id);
         this.portals.set(deployment.id, { snapshot: deployment });

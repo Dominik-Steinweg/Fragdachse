@@ -100,7 +100,9 @@ import {
   PlayerUltimateBehaviorRuntime,
   type PlayerUltimateAirstrikeCapability,
   type PlayerUltimateArmageddonCapability,
+  type PlayerUltimateBomberSquadronCapability,
   type PlayerUltimateGaussExecutionCapability,
+  type PlayerUltimateHoloOffensiveCapability,
   type PlayerUltimateTunnelPlacementCapability,
 } from './PlayerUltimateBehaviorRuntime';
 import type { DecoySystem } from '../systems/DecoySystem';
@@ -925,6 +927,14 @@ export class WorldPlayerGameplayRuntime implements
 
   setTunnelPlacementCapability(capability: PlayerUltimateTunnelPlacementCapability | null): void {
     this.systems.ultimateBehavior.setTunnelPlacementCapability(capability);
+  }
+
+  setHoloOffensiveCapability(capability: PlayerUltimateHoloOffensiveCapability | null): void {
+    this.systems.ultimateBehavior.setHoloOffensiveCapability(capability);
+  }
+
+  setBomberSquadronCapability(capability: PlayerUltimateBomberSquadronCapability | null): void {
+    this.systems.ultimateBehavior.setBomberSquadronCapability(capability);
   }
 
   updateEnemyManager(enemyManager: EnemyManager | null): void {

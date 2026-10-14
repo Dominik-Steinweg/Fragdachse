@@ -1,8 +1,10 @@
 import type {
   AirstrikeUltimateConfig,
   ArmageddonMeteorConfig,
+  BomberSquadronUltimateConfig,
   BuffUltimateConfig,
   GaussUltimateConfig,
+  HoloOffensiveUltimateConfig,
   TunnelUltimateConfig,
 } from '../loadout/LoadoutConfig';
 import type { LoadoutUseParams, LoadoutUseResult } from '../types';
@@ -70,6 +72,56 @@ export interface PlayerUltimateGaussExecutionCapability {
   ): boolean;
 }
 
+/** Ergebnis eines Einsatzstarts; nur `ok` verbraucht Rage. */
+export type PlayerUltimateDeploymentResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: 'no_fire_sources' | 'placement' | 'blocked' };
+
+export interface PlayerUltimateHoloOffensiveRequest {
+  readonly playerId: string;
+  readonly config: HoloOffensiveUltimateConfig;
+  /** Gesamte Rage bei Aktivierung (gedeckelt auf das Maximum); bestimmt das Erzeugungsfenster. */
+  readonly consumedRage: number;
+  readonly nowMs: number;
+}
+
+/**
+ * World-owned Holo-Offensive (GDD Ultimates V2 §2), nur auf dem Host. Der Owner besitzt Einsätze,
+ * Spawnplan und Kopien; diese Runtime besitzt nur Aktivierung, Rage und Sperre.
+ */
+export interface PlayerUltimateHoloOffensiveCapability {
+  /**
+   * Startet einen Einsatz und erzeugt die erste Kopie synchron. Ohne gültige Vorlage
+   * (`no_fire_sources`) oder ersten Platz (`placement`) entsteht nichts.
+   */
+  tryActivate(request: PlayerUltimateHoloOffensiveRequest): PlayerUltimateDeploymentResult;
+  /** Solange Termine ausstehen oder eine Kopie des Besitzers lebt (Einsatzsperre). */
+  isActive(playerId: string): boolean;
+  /** Tod: keine weiteren Kopien; bestehende Kopien leben ihre Dauer aus. */
+  stopSpawning(playerId: string, nowMs: number): void;
+  /** Verlassen, Loadout-Reset: alle Einsätze des Besitzers sofort entfernen. */
+  removeOwner(playerId: string): void;
+}
+
+export interface PlayerUltimateBomberSquadronRequest {
+  readonly playerId: string;
+  readonly config: BomberSquadronUltimateConfig;
+  /** Gemeinsame Flugrichtung (Zielwinkel bei Aktivierung). */
+  readonly angle: number;
+  readonly nowMs: number;
+}
+
+/** World-owned Bombergeschwader (GDD Ultimates V2 §3), nur auf dem Host. */
+export interface PlayerUltimateBomberSquadronCapability {
+  tryActivate(request: PlayerUltimateBomberSquadronRequest): PlayerUltimateDeploymentResult;
+  /** Bis zum letzten Bombeneinschlag der Staffel (Einsatzsperre). */
+  isActive(playerId: string): boolean;
+  /** Tod: noch nicht gestartete Drohnen fallen weg; gestartete fliegen inklusive Rückflug zu Ende. */
+  cancelUnlaunched(playerId: string, nowMs: number): void;
+  /** Verlassen, Loadout-Reset: alle Staffeln des Besitzers sofort entfernen. */
+  removeOwner(playerId: string): void;
+}
+
 export interface PlayerUltimateBehaviorRoundStatsPort {
   readonly recordUltimateUsed: (playerId: string) => void;
 }
@@ -124,6 +176,8 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
   private airstrike: PlayerUltimateAirstrikeCapability | null = null;
   private tunnelPlacement: PlayerUltimateTunnelPlacementCapability | null = null;
   private gaussExecution: PlayerUltimateGaussExecutionCapability | null;
+  private holoOffensive: PlayerUltimateHoloOffensiveCapability | null = null;
+  private bomberSquadron: PlayerUltimateBomberSquadronCapability | null = null;
   private destroyed = false;
 
   constructor(private readonly options: PlayerUltimateBehaviorRuntimeOptions) {
@@ -144,6 +198,14 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
 
   setGaussExecutionCapability(capability: PlayerUltimateGaussExecutionCapability | null): void {
     this.gaussExecution = capability;
+  }
+
+  setHoloOffensiveCapability(capability: PlayerUltimateHoloOffensiveCapability | null): void {
+    this.holoOffensive = capability;
+  }
+
+  setBomberSquadronCapability(capability: PlayerUltimateBomberSquadronCapability | null): void {
+    this.bomberSquadron = capability;
   }
 
   execute(request: PlayerUltimateActionRequest): LoadoutUseResult {
@@ -195,6 +257,12 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
         break;
       case 'gauss':
         result = this.executeGauss(request, config, attemptKey);
+        break;
+      case 'holo_offensive':
+        result = this.executeHoloOffensive(request, config, attemptKey);
+        break;
+      case 'bomber_squadron':
+        result = this.executeBomberSquadron(request, config, attemptKey);
         break;
       default:
         return { ok: false, reason: 'invalid' };
@@ -396,6 +464,46 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
     return this.commitRageUltimate(request.playerId, config.rageCost, attemptKey);
   }
 
+  /** Verbraucht die gesamte Rage; neu gewonnene Rage verlängert nichts und wird nicht abgezogen. */
+  private executeHoloOffensive(
+    request: PlayerUltimateActionRequest,
+    config: HoloOffensiveUltimateConfig,
+    attemptKey: string | null,
+  ): LoadoutUseResult {
+    const playerId = request.playerId;
+    if (!this.holoOffensive || this.isDeploymentActive(playerId)) return { ok: false, reason: 'blocked' };
+    const rage = this.options.resourceSystem.getRage(playerId);
+    if (rage < config.rageRequired) return { ok: false, reason: 'resource', resourceKind: 'rage' };
+    const consumedRage = Math.min(rage, this.options.resourceSystem.getMaxRage(playerId));
+    const started = this.holoOffensive.tryActivate({ playerId, config, consumedRage, nowMs: request.hostNowMs });
+    if (!started.ok) return { ok: false, reason: started.reason };
+    return this.commitRageUltimate(playerId, consumedRage, attemptKey);
+  }
+
+  /** Fester Preis; überschüssige Rage bleibt erhalten. */
+  private executeBomberSquadron(
+    request: PlayerUltimateActionRequest,
+    config: BomberSquadronUltimateConfig,
+    attemptKey: string | null,
+  ): LoadoutUseResult {
+    const playerId = request.playerId;
+    if (!this.bomberSquadron || this.isDeploymentActive(playerId)) return { ok: false, reason: 'blocked' };
+    if (!Number.isFinite(request.angle)) return { ok: false, reason: 'invalid' };
+    if (this.options.resourceSystem.getRage(playerId) < Math.max(config.rageRequired, config.rageCost)) {
+      return { ok: false, reason: 'resource', resourceKind: 'rage' };
+    }
+    const started = this.bomberSquadron.tryActivate({
+      playerId, config, angle: request.angle, nowMs: request.hostNowMs,
+    });
+    if (!started.ok) return { ok: false, reason: started.reason };
+    return this.commitRageUltimate(playerId, config.rageCost, attemptKey);
+  }
+
+  /** Laufende Einsätze von Ultimates, deren Ablauf ein World-Owner besitzt. */
+  private isDeploymentActive(playerId: string): boolean {
+    return (this.holoOffensive?.isActive(playerId) ?? false) || (this.bomberSquadron?.isActive(playerId) ?? false);
+  }
+
   private commitRageUltimate(
     playerId: string,
     rageCost: number,
@@ -490,12 +598,17 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
   }
 
   isUltimateActive(playerId: string): boolean {
-    return this.states.get(playerId)?.active ?? false;
+    return (this.states.get(playerId)?.active ?? false) || this.isDeploymentActive(playerId);
   }
 
   getActiveUltimateId(playerId: string): string | null {
     const state = this.states.get(playerId);
-    return state?.active ? state.config.id : null;
+    if (state?.active) return state.config.id;
+    // Ein Loadout-Wechsel räumt laufende Einsätze ab (resetPlayer); aktiv ist damit die ausgerüstete.
+    const config = this.options.loadout.getEquippedUltimateConfig(playerId);
+    if (config?.type === 'holo_offensive' && this.holoOffensive?.isActive(playerId)) return config.id;
+    if (config?.type === 'bomber_squadron' && this.bomberSquadron?.isActive(playerId)) return config.id;
+    return null;
   }
 
   isUltimateCharging(playerId: string): boolean {
@@ -515,6 +628,7 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
     return config?.type === 'gauss' ? config.range : 0;
   }
 
+  /** Bemannen, Struktur betreten, Stun: Holo- und Bombereinsätze laufen bewusst weiter. */
   interruptCombat(playerId: string, nowMs: number): void {
     this.tunnelSelections.delete(playerId);
     const charge = this.gaussCharges.get(playerId);
@@ -534,6 +648,8 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
     this.states.delete(playerId);
     const charge = this.gaussCharges.get(playerId);
     if (charge) this.endGaussCharge(playerId, charge.chargeId, 'reset');
+    this.holoOffensive?.removeOwner(playerId);
+    this.bomberSquadron?.removeOwner(playerId);
     this.clearAttempts(playerId);
   }
 
@@ -559,6 +675,9 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
     this.airstrike = null;
     this.tunnelPlacement = null;
     this.gaussExecution = null;
+    // Die World-Owner räumen ihre Einsätze beim eigenen Teardown selbst ab.
+    this.holoOffensive = null;
+    this.bomberSquadron = null;
   }
 
   private finishState(playerId: string, state: BuffUltimateState, nowMs: number): void {
