@@ -3,9 +3,11 @@ import { cloudShadowAt } from './SunFieldModel';
 import type { SunCloudState } from './cloudShadow';
 import type { LightMapAmbientLayer } from '../LightingSystem';
 
-/** World px per sample: cloud openings span hundreds of px, linear upscaling keeps their soft rims. */
-const SAMPLE_PX = 48;
-const MAX_SAMPLES = 64;
+/** World px per sample: fine enough for recognisable island shapes, linear upscaling keeps rims soft. */
+const SAMPLE_PX = 32;
+const MAX_SAMPLES = 96;
+/** Opening values mapped to light: below the lower edge nothing, above the upper edge full moonlight. */
+const ISLAND_EDGE = [0.45, 0.8] as const;
 let nextTexture = 0;
 
 /**
@@ -41,8 +43,9 @@ export class MoonOpeningLight implements LightMapAmbientLayer {
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         const opening = cloudShadowAt(worldX + col / (cols - 1) * worldWidth, worldY + row / (rows - 1) * worldHeight, this.clouds);
-        // Cubed: openings stay bright islands, the cover between them falls off quickly to dark.
-        const amount = opening * opening * opening, index = (row * MAX_SAMPLES + col) * 4;
+        // A soft but clear rim: distinct islands of full moonlight instead of a wide red veil.
+        const edge = Math.max(0, Math.min(1, (opening - ISLAND_EDGE[0]) / (ISLAND_EDGE[1] - ISLAND_EDGE[0])));
+        const amount = edge * edge * (3 - 2 * edge), index = (row * MAX_SAMPLES + col) * 4;
         data[index] = Math.round(this.light[0] * amount * 255);
         data[index + 1] = Math.round(this.light[1] * amount * 255);
         data[index + 2] = Math.round(this.light[2] * amount * 255);
