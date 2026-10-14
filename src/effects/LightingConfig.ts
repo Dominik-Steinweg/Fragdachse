@@ -659,6 +659,21 @@ export const LIGHT_PRESETS = {
     flickerAmount: 0.14,
     flickerHz: 9,
   },
+  /** Rotating extractor beacon; the Dawn site model supplies colour, reach and the sweep angle. */
+  dawnSiteBeacon: {
+    enabled: true,
+    shape: 'cone',
+    radiusPx: 1,
+    color: 0xffffff,
+    intensity: 1,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 2,
+    flickerAmount: 0,
+    flickerHz: 0,
+    coneAngle: Math.PI * 0.22,
+  },
   /** Quiet site light; the model owns its state-dependent tuning and pulse. */
   dawnSiteGlow: {
     enabled: true,

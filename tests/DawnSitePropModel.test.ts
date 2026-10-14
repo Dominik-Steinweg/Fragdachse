@@ -16,20 +16,25 @@ describe('Dawn site lighting projection', () => {
     }
   });
 
-  it('pulses only the active extractor smoothly and keeps its trough above dormant light', () => {
-    const sample = (state: CoopDefenseSecondaryObjectiveState, time: number) =>
-      resolveDawnSiteLights('extractor', 1, state, false, time)[0];
-    const period = DAWN_SITE_LIGHT.pulsePeriodMs;
-    const trough = sample('active', 0), peak = sample('active', period / 2);
-    expect(trough.intensity).toBeGreaterThan(sample('dormant', 0).intensity);
-    expect(trough.radiusPx).toBeGreaterThan(sample('dormant', 0).radiusPx);
-    expect(peak.intensity).toBeGreaterThan(trough.intensity);
-    expect(peak.emissionAlpha).toBeGreaterThan(trough.emissionAlpha);
-    expect(trough.emissionAlpha).toBeGreaterThan(0);
-    expect(sample('active', period)).toEqual(trough);
-    expect(sample('active', 1).intensity).toBeCloseTo(trough.intensity, 4);
-    expect(sample('completed', 0)).toEqual(sample('completed', period / 2));
-    expect(sample('completed', 0).emissionAlpha).toBeGreaterThan(0);
+  it('sweeps one beacon cone per revolution only while the extractor is active', () => {
+    const lights = (state: CoopDefenseSecondaryObjectiveState, time: number) =>
+      resolveDawnSiteLights('extractor', 1, state, false, time);
+    const period = DAWN_SITE_LIGHT.beaconPeriodMs;
+    const [warm, beacon] = lights('active', 0);
+    expect(lights('active', 0).map(light => light.id)).toEqual(['warm', 'beacon']);
+    expect(warm.radiusPx).toBeGreaterThan(lights('dormant', 0)[0].radiusPx);
+    expect(warm.emissionAlpha).toBeGreaterThan(0);
+    // The steady pool does not pulse against the sweep; only the cone turns, clockwise in screen space.
+    expect(lights('active', period / 3)[0]).toEqual(warm);
+    expect(beacon.angle).toBe(0);
+    expect(lights('active', period / 4)[1].angle).toBeCloseTo(Math.PI / 2, 6);
+    expect(lights('active', period)[1]).toEqual(beacon);
+    expect(lights('active', -period / 4)[1].angle).toBeCloseTo(Math.PI * 1.5, 6);
+    for (const state of ['completed', 'failed', 'dormant'] as const) {
+      expect(lights(state, 0).map(light => light.id)).toEqual(['warm']);
+      expect(lights(state, 0)).toEqual(lights(state, period / 2));
+    }
+    expect(lights('completed', 0)[0].emissionAlpha).toBeGreaterThan(0);
   });
 
   it('adds a smaller cyan source only to rare wrecks, independent of activation', () => {

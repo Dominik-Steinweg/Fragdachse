@@ -102,7 +102,8 @@ export class DawnSitePropRenderer {
   }
 
   private syncLight(key: string, x: number, y: number, light: DawnSiteLight): void {
-    this.lighting!.setLight(key, 'dawnSiteGlow', x + light.offsetX, y + light.offsetY, light);
+    const beacon = light.id === 'beacon';
+    this.lighting!.setLight(key, beacon ? 'dawnSiteBeacon' : 'dawnSiteGlow', x + light.offsetX, y + light.offsetY, light);
     this.lightKeys.add(key);
     let emission = this.emissions.get(key);
     if (!emission) {
@@ -111,8 +112,16 @@ export class DawnSitePropRenderer {
         .setDepth(DEPTH_LIGHTING + 0.08).setBlendMode(Phaser.BlendModes.ADD);
       this.emissions.set(key, emission);
     }
+    const factor = this.lighting!.getArtificialLightFactor();
+    if (beacon) {
+      // Elongated reflector glint turning with the cone; it stays readable by day, where the cone light fades.
+      emission.setOrigin(0.2, 0.5).setRotation(light.angle ?? 0)
+        .setDisplaySize(light.emissionSize * 2.6, light.emissionSize).setTint(light.color)
+        .setAlpha(light.emissionAlpha * Math.max(DAWN_SITE_LIGHT.beaconDayFloor, factor));
+      return;
+    }
     emission.setDisplaySize(light.emissionSize, light.emissionSize).setTint(light.color)
-      .setAlpha(light.emissionAlpha * this.lighting!.getArtificialLightFactor());
+      .setAlpha(light.emissionAlpha * factor);
   }
 
   private syncSparks(baseId: string, x: number, y: number): void {

@@ -20,6 +20,9 @@ export const DAWN_SITE_LIGHT = {
   extractorActiveRadius: 156, extractorActiveIntensity: 0.78,
   extractorCompletedRadius: 132, extractorCompletedIntensity: 0.64,
   pulsePeriodMs: 1400, pulseDepth: 0.28,
+  // Active extractor: steady warm pool plus an orange beacon cone sweeping the ground.
+  extractorBeaconBaseIntensity: 0.5, beacon: 0xff8a2a, beaconRadius: 230, beaconIntensity: 0.95,
+  beaconPeriodMs: 1500, beaconGlintSize: 9, beaconGlintAlpha: 0.95, beaconDayFloor: 0.6,
   lampX: 0, lampY: 1, lampSize: 9, lampAlpha: 0.9,
   wreckRadius: 104, wreckIntensity: 0.48, emberX: -8, emberY: 9,
   emberSize: 7, emberAlpha: 0.48,
@@ -34,7 +37,9 @@ export const DAWN_SITE_SPARKS = {
 } as const;
 
 export interface DawnSiteLight {
-  readonly id: 'warm' | 'tech';
+  readonly id: 'warm' | 'tech' | 'beacon';
+  /** Cone direction in radians (beacon only); the light and its reflector glint point this way. */
+  readonly angle?: number;
   readonly color: number;
   readonly radiusPx: number;
   readonly intensity: number;
@@ -55,12 +60,16 @@ export function resolveDawnSiteLights(
   const c = DAWN_SITE_LIGHT;
   if (archetypeId === 'extractor') {
     const active = objectiveState === 'active', completed = objectiveState === 'completed';
-    const pulse = active ? 1 - c.pulseDepth * (0.5 + 0.5 * Math.cos(nowMs * Math.PI * 2 / c.pulsePeriodMs)) : 1;
-    return [{ id: 'warm', color: c.warm,
+    const warm: DawnSiteLight = { id: 'warm', color: active ? c.beacon : c.warm,
       radiusPx: active ? c.extractorActiveRadius : completed ? c.extractorCompletedRadius : c.extractorIdleRadius,
-      intensity: (active ? c.extractorActiveIntensity : completed ? c.extractorCompletedIntensity : c.extractorIdleIntensity) * pulse,
+      intensity: active ? c.extractorBeaconBaseIntensity : completed ? c.extractorCompletedIntensity : c.extractorIdleIntensity,
       offsetX: c.lampX, offsetY: c.lampY, emissionSize: c.lampSize,
-      emissionAlpha: active || completed ? c.lampAlpha * pulse : 0 }];
+      emissionAlpha: active || completed ? c.lampAlpha : 0 };
+    if (!active) return [warm];
+    // One revolution per beaconPeriodMs, derived from shared time only (no local animation state).
+    const angle = ((nowMs % c.beaconPeriodMs) + c.beaconPeriodMs) % c.beaconPeriodMs / c.beaconPeriodMs * Math.PI * 2;
+    return [warm, { id: 'beacon', color: c.beacon, radiusPx: c.beaconRadius, intensity: c.beaconIntensity, angle,
+      offsetX: c.lampX, offsetY: c.lampY, emissionSize: c.beaconGlintSize, emissionAlpha: c.beaconGlintAlpha }];
   }
   // Tractor chassis and minecart wreckage meet at the center; drone keeps its authored offsets.
   const centered = variant !== undefined && variant !== 'drone';
