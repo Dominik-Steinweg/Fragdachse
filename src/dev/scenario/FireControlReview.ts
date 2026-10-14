@@ -4,11 +4,22 @@ import { bridge } from '../../network/bridge';
 import { CELL_SIZE } from '../../config';
 import { isDevScenarioMode } from '../../utils/devScenarioMode';
 import { COOP_DEFENSE_UPGRADE_DEFINITIONS } from '../../utils/coopDefenseUpgrades';
+import { UTILITY_CONFIGS } from '../../loadout/LoadoutConfig';
 import { defaultScenario, type DevScenario } from './config';
 
-const steps = ['basic', 'three', 'parallel', 'destroyOriginal', 'manned', 'rejected'] as const;
+const steps = ['basic', 'three', 'parallel', 'destroyOriginal', 'manned', 'rejected',
+  'portal', 'portalLocal', 'portalCombined', 'portalRejected'] as const;
 type ReviewStep = typeof steps[number];
 const projector = { gridX: 44, gridY: 29 };
+/**
+ * Portal steps on map 4: full-charge throw east along the free row 33; the exit target sits beyond
+ * the turret's own range, the local target (portalLocal) beyond the exit's reach.
+ */
+const PORTAL_STEPS: readonly ReviewStep[] = ['portal', 'portalLocal', 'portalCombined', 'portalRejected'];
+const portalAim = { gridX: 62, gridY: 33 };
+const portalPlayer = { gridX: 42, gridY: 33 };
+const portalLocalTarget = { gridX: 36, gridY: 22 };
+const portalTool = { kind: 'utility', id: 'FIRE_CONTROL_PORTAL' } as const;
 const fixtures = new WeakMap<DevScenarioController, FireControlReview>();
 
 /** Real host actions only. Rendering is owned by the normal World presentation binding. */
@@ -22,7 +33,20 @@ class FireControlReview {
     const id = bridge.getLocalPlayerId();
     return { cooldownUntil: bridge.getPlayerUtilityCooldownUntil(id, 'FIRE_CONTROL_RELAY'),
       charges: bridge.getPlayerUtilityChargeState(id, 'FIRE_CONTROL_RELAY'),
+      portalCooldownUntil: bridge.getPlayerUtilityCooldownUntil(id, 'FIRE_CONTROL_PORTAL'),
       adrenaline: this.runtime.rpcPorts.playerLoadout.getAdrenaline(id) };
+  }
+  /** Real held throw at full charge through the tool path (same host gates as the input). */
+  throwPortal(controller: DevScenarioController): unknown {
+    const metrics = this.runtime.getWorldMetrics()!, player = this.runtime.navigationLabPort.getPlayerPosition()!;
+    const target = { x: metrics.offsetX + (portalAim.gridX + .5) * CELL_SIZE, y: metrics.offsetY + (portalAim.gridY + .5) * CELL_SIZE };
+    const id = bridge.getLocalPlayerId(), now = bridge.getSynchronizedNow(), heldActionId = `fc-portal:${now}`;
+    const activation = UTILITY_CONFIGS.FIRE_CONTROL_PORTAL.activation;
+    const full = activation.type === 'charged_throw' ? activation.fullChargeDuration : 0;
+    this.runtime.rpcPorts.playerLoadout.startUtilityHeldAction(id, heldActionId, 'charged_throw', now - full, portalTool);
+    controller.lastAction = this.runtime.rpcPorts.construction.useInspectorUtility(id, portalTool,
+      Math.atan2(target.y - player.y, target.x - player.x), target.x, target.y, now, { heldActionId });
+    return structuredClone(controller.lastAction);
   }
   status() {
     if (this.worldRevision !== this.runtime.getWorldDescriptor()?.worldRevision) return null;
@@ -33,6 +57,7 @@ class FireControlReview {
   activate(controller: DevScenarioController): void {
     if (this.phase !== 'prepared') throw Error('Prepare this review step before activation');
     this.beforeUse = structuredClone(this.resources());
+    if (PORTAL_STEPS.includes(this.step)) { this.activatePortal(controller); return; }
     const metrics = this.runtime.getWorldMetrics()!, player = this.runtime.navigationLabPort.getPlayerPosition()!;
     const target = { x: metrics.offsetX + (projector.gridX + .5) * CELL_SIZE,
       y: metrics.offsetY + (projector.gridY + .5) * CELL_SIZE };
@@ -44,8 +69,30 @@ class FireControlReview {
     // Targets appear only after activation so no pre-existing original salvo obscures the pause.
     if (this.step !== 'rejected') controller.spawn('rabid-badger', true, 1000000, { gridX: 47, gridY: 28 }, false);
   }
+  /** portalCombined: copies on activate; the portal is thrown on resolve, once the copy is materialized. */
+  private activatePortal(controller: DevScenarioController): void {
+    if (this.step === 'portalCombined') {
+      const metrics = this.runtime.getWorldMetrics()!, player = this.runtime.navigationLabPort.getPlayerPosition()!;
+      const point = { x: metrics.offsetX + (projector.gridX + .5) * CELL_SIZE, y: metrics.offsetY + (projector.gridY + .5) * CELL_SIZE };
+      const copies = this.runtime.rpcPorts.construction.useInspectorUtility(bridge.getLocalPlayerId(),
+        { kind: 'utility', id: 'FIRE_CONTROL_RELAY' }, Math.atan2(point.y - player.y, point.x - player.x),
+        point.x, point.y, bridge.getSynchronizedNow());
+      if (!copies.ok) throw Error('Copies rejected: ' + JSON.stringify(copies));
+      this.result = structuredClone(copies);
+    } else this.result = this.throwPortal(controller);
+    this.phase = 'activated';
+    // portalLocal: only a target next to the turret (local fire); resolve adds one at the exit.
+    if (this.step === 'portalLocal') controller.spawn('rabid-badger', true, 1000000, portalLocalTarget, false);
+    else if (this.step !== 'portalRejected') controller.spawn('rabid-badger', true, 1000000, { gridX: portalAim.gridX + 2, gridY: portalAim.gridY }, false);
+  }
   resolve(controller: DevScenarioController): void {
     if (this.phase !== 'activated') throw Error('Activate this review step first');
+    if (this.step === 'portalLocal' || this.step === 'portalCombined') {
+      if (this.step === 'portalLocal') controller.spawn('rabid-badger', true, 1000000, { gridX: portalAim.gridX + 2, gridY: portalAim.gridY }, false);
+      else this.result = this.throwPortal(controller);
+      this.phase = 'resolved';
+      return;
+    }
     const deployment = this.runtime.devScenarioPort.readFireControl().snapshot.deployments[0];
     if (deployment?.kind !== 'copies') throw Error('Active copies required');
     const id = deployment.copies[0].originalId;
@@ -61,7 +108,7 @@ class FireControlReview {
       controller.teleport(controller.grid({ x: turret.x, y: turret.y + 64 }), false);
       bridge.sendTurretControlRequest({ action: 'enter', turretId: id });
       if (!this.runtime.getTurretControlState(bridge.getLocalPlayerId())) throw Error('Manning rejected');
-    } else throw Error('resolve is only valid for destroyOriginal or manned');
+    } else throw Error('resolve is only valid for destroyOriginal, manned, portalLocal or portalCombined');
     this.phase = 'resolved';
   }
 }
@@ -97,14 +144,24 @@ export async function runFireControlReview(controller: DevScenarioController, ru
   let fixture: FireControlReview | undefined;
   try {
     const scenario: DevScenario = defaultScenario('inspector_gadachs');
+    const portal = PORTAL_STEPS.includes(step as ReviewStep);
     Object.assign(scenario, { mapId: '4', timeOfDay: controller.config.timeOfDay,
-      player: { gridX: 42, gridY: 31 }, hideAim: true,
+      player: portal ? portalPlayer : { gridX: 42, gridY: 31 }, hideAim: true,
       tools: [{ kind: 'construction', id: 'rocket_turret' }, { kind: 'construction', id: 'machine_gun_turret' },
-        { kind: 'construction', id: 'flame_turret' }, { kind: 'utility', id: 'FIRE_CONTROL_RELAY' }],
+        { kind: 'construction', id: 'flame_turret' },
+        // Portal steps equip the portal first, so the local charge preview reads its config.
+        ...(portal ? [portalTool] : []), { kind: 'utility', id: 'FIRE_CONTROL_RELAY' }],
       upgrades: { inspector_construction_slots: COOP_DEFENSE_UPGRADE_DEFINITIONS.inspector_construction_slots.maxLevel,
+        ...(portal ? { unlock_fire_control_portal: 1 } : {}),
+        // The boss node requires both portal branches at their maximum level.
+        ...(step === 'portalLocal' ? { fire_control_portal_duration: COOP_DEFENSE_UPGRADE_DEFINITIONS.fire_control_portal_duration.maxLevel,
+          fire_control_portal_damage: COOP_DEFENSE_UPGRADE_DEFINITIONS.fire_control_portal_damage.maxLevel,
+          fire_control_portal_local_fire: 1 } : {}),
         ...(step === 'three' ? { fire_control_relay_connections: COOP_DEFENSE_UPGRADE_DEFINITIONS.fire_control_relay_connections.maxLevel } : {}),
         ...(parallel ? { fire_control_relay_parallel: 1 } : {}) },
-      constructions: step === 'rejected' ? [] : step === 'three'
+      constructions: step === 'rejected' || step === 'portalRejected' ? [] : portal
+        ? [{ id: 'rocket_turret', gridX: 40, gridY: 25 }]
+        : step === 'three'
         ? [{ id: 'rocket_turret', gridX: 40, gridY: 25 }, { id: 'machine_gun_turret', gridX: 44, gridY: 25 },
           { id: 'flame_turret', gridX: 48, gridY: 25 }]
         : [{ id: 'rocket_turret', gridX: 40, gridY: 25 }],
@@ -118,12 +175,12 @@ export async function runFireControlReview(controller: DevScenarioController, ru
     if (!ready.ok) throw Error(ready.error);
     fixture.worldRevision = runtime.getWorldDescriptor()?.worldRevision;
     fixture.phase = 'prepared';
-    controller.aim = { gridX: 44, gridY: 27 };
+    controller.aim = portal ? portalAim : { gridX: 44, gridY: 27 };
     controller.cameraAtTarget = true; controller.zoom = 1.6;
     controller.setPanelCollapsed(true);
     if (phase !== 'prepare') {
       fixture.activate(controller);
-      if (step === 'destroyOriginal' || step === 'manned') fixture.resolve(controller);
+      if (step === 'destroyOriginal' || step === 'manned' || step === 'portalLocal') fixture.resolve(controller);
     }
   } catch (error) {
     if (!fixture || fixtures.get(controller) === fixture) {

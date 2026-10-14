@@ -27,6 +27,7 @@ export interface ArenaAimPresentationInputPort {
 export interface ArenaAimPresentationBindingPort {
   readonly getLocalPlacementPreview: () => LocalPlacementPreview | undefined;
   readonly getLocalUltimatePlacementPreview: () => UtilityPlacementPreviewState | undefined;
+  readonly getFireControlPortalLandingPreview?: () => { readonly x: number; readonly y: number } | undefined;
   readonly getAimPresentationState: (
     worldInteractive: boolean,
     spectator: boolean,
@@ -182,6 +183,8 @@ export class ArenaAimPresentationController {
       frame.inArena && !frame.spectator ? this.input.getUtilityChargePreviewState() : undefined,
     );
     this.renderers.ultimateChargeIndicator.update(ultimatePreview);
+    this.renderers.placementPreview.syncFireControlPortalLanding(frame.inArena && !frame.spectator && !frame.optionsOpen
+      ? this.bindings.getFireControlPortalLandingPreview?.() : undefined);
     diagnosticsFrame?.end('aimIndicators');
     diagnosticsFrame?.mark('visualAimEnd');
 

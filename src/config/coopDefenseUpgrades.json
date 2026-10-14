@@ -5155,7 +5155,9 @@
   "costPerLevel": 1,
   "refundable": true,
   "sortOrder": 440,
-  "availableClasses": [],
+  "availableClasses": [
+    "inspector_gadachs"
+  ],
   "loadoutUnlock": {
     "slot": "utility",
     "itemId": "FIRE_CONTROL_PORTAL"

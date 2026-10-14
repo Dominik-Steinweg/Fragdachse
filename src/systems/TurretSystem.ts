@@ -7,7 +7,13 @@ import { DEFAULT_TURRET_AIM_TOLERANCE_DEG } from '../config/turretAim';
 import { stepTurretAngle, turretAngleDifference } from '../utils/turretAngle';
 import type { ManualTurretControl } from './TurretControlSystem';
 import { canWeaponDamageBases, type TurretHitSegment } from './TurretBaseTargeting';
-import { toLocalTurretFireSource, type AutomatedTurretId, type AutomatedTurret, type TurretFireSource, type TurretFireContext } from './TurretFireSource';
+import {
+  toLocalTurretFireSource, type AutomatedTurretId, type AutomatedTurret, type TurretFireSource, type TurretFireContext,
+  type TurretPortalAssignment,
+} from './TurretFireSource';
+import { buildTurretPortalRoute, resolvePortalEntry } from './fireControl/FireControlPortalRoute';
+import type { FireControlPortalFeedback } from './fireControl/FireControlRuntime';
+import type { FireControlEntryMode } from './fireControl/FireControlSnapshot';
 
 export {
   toLocalTurretFireSource, type AutomatedTurretId, type AutomatedTurretTargetMode,
@@ -49,6 +55,24 @@ interface TurretTargetPoint extends TurretAimTarget {
   /** Live eligibility and geometry generation, without rebuilding/ranking surfaces. */
   readonly isValid?: () => boolean;
 }
+/** Distance along the ray (origin, unit direction) to the hit segment, or `null` if it misses. */
+function rayDistanceToSegment(ox: number, oy: number, dx: number, dy: number, segment: TurretHitSegment): number | null {
+  const sx = segment.x2 - segment.x1, sy = segment.y2 - segment.y1;
+  const qx = segment.x1 - ox, qy = segment.y1 - oy;
+  const cross = dx * sy - dy * sx;
+  const epsilon = 1e-8;
+  if (Math.abs(cross) <= epsilon) {
+    // Parallel: Nur ein kollinearer Abschnitt (auch ein einzelner Punkt) kann getroffen werden.
+    if (Math.abs(qx * dy - qy * dx) > epsilon) return null;
+    const start = qx * dx + qy * dy, end = start + sx * dx + sy * dy;
+    if (Math.max(start, end) < -epsilon) return null;
+    return Math.max(0, Math.min(start, end));
+  }
+  const rayDistance = (qx * sy - qy * sx) / cross;
+  const segmentFraction = (qx * dy - qy * dx) / cross;
+  if (rayDistance < -epsilon || segmentFraction < -epsilon || segmentFraction > 1 + epsilon) return null;
+  return Math.max(0, rayDistance);
+}
 const BASE_SEARCH_INTERVAL_MS = 225;
 function baseSearchPhase(id: AutomatedTurretId): number {
   if (typeof id === 'number') return ((id - 1) * 97 % BASE_SEARCH_INTERVAL_MS + BASE_SEARCH_INTERVAL_MS) % BASE_SEARCH_INTERVAL_MS;
@@ -75,6 +99,8 @@ interface PendingTurretBurst {
   damageMultiplier: number;
   rangeFactor: number;
   hitSegment?: TurretHitSegment;
+  /** D35: a burst begun through a portal stays bound to its deployment, exit and bonus. */
+  portal?: TurretPortalAssignment;
 }
 type TurretFireHandler = (
   ownerId: string,
@@ -92,7 +118,7 @@ type TurretFireHandler = (
   skipRockIndex?: number,
   sourceCarrierBaseId?: string,
   context?: TurretFireContext,
-) => void;
+) => boolean | void; // false = no shot left the weapon; only confirmed shots count as transports
 
 export class TurretSystem {
   private manualControlProvider: ((id: AutomatedTurretId, now: number) => ManualTurretControl | null) | null = null;
@@ -120,6 +146,14 @@ export class TurretSystem {
   /** Nach `sequenceKey`; `ownerEntryId` bindet die Salve an ihren Eintrag. */
   private pendingBursts = new Map<AutomatedTurretId, PendingTurretBurst>();
   private targetScore: ((turret: TurretFireSource, kind: 'player' | 'enemy' | 'base', id: string, now: number) => number) | null = null;
+  private portalFeedback: FireControlPortalFeedback | null = null;
+  /** Exit target search per source; separate from the local search state of the same pose. */
+  private readonly portalBaseSearches = new Map<AutomatedTurretId, BaseSearchState>();
+  /** GDD §4.3: line of fire exit → target, per deployment and tick, shared between sources. */
+  private readonly exitLineOfFire = new Map<string, boolean>();
+
+  /** Portal owner: receives mode/entry pose per participant and confirmed transports. */
+  setPortalFeedback(feedback: FireControlPortalFeedback | null): void { this.portalFeedback = feedback; }
 
   setTargetScoreProvider(provider: typeof this.targetScore): void { this.targetScore = provider; }
 
@@ -175,6 +209,7 @@ export class TurretSystem {
       this.pendingBursts.clear();
       this.controlRevisions.clear();
       this.baseSearches.clear();
+      this.portalBaseSearches.clear();
     }
   }
 
@@ -213,6 +248,7 @@ export class TurretSystem {
     sources?: readonly TurretFireSource[],
   ): void {
     const turrets = sources ?? this.fireSourceProvider?.() ?? (this.turretProvider?.() ?? []).map(toLocalTurretFireSource);
+    this.exitLineOfFire.clear();
     const entrySequences = new Map<AutomatedTurretId, AutomatedTurretId>();
     const activeSequences = new Set<AutomatedTurretId>();
     const activeIdentities = new Set<AutomatedTurretId>();
@@ -244,6 +280,11 @@ export class TurretSystem {
       }
       baseSearch.searchDue = now >= baseSearch.nextSearchAt;
       if (baseSearch.searchDue) baseSearch.nextSearchAt = now + BASE_SEARCH_INTERVAL_MS;
+      let portalSearch = turret.portal ? this.portalBaseSearches.get(turret.id) : undefined;
+      if (turret.portal && (!portalSearch || portalSearch.sequenceKey !== sequenceKey)) {
+        portalSearch = { sequenceKey, nextSearchAt: now, searchDue: true, target: null, candidates: [] };
+        this.portalBaseSearches.set(turret.id, portalSearch);
+      } else if (portalSearch) portalSearch.searchDue = baseSearch.searchDue;
       if (turret.sequenceSeedKey !== undefined && !this.nextFireAt.has(sequenceKey)) continue;
 
       const turretX = turret.x;
@@ -288,7 +329,15 @@ export class TurretSystem {
         continue;
       }
 
+      if (pendingBurst?.portal) {
+        this.continuePortalBurst(turret, pendingBurst, pendingBurst.portal, now, deltaMs, paused, muzzleOffset, targetRange,
+          turretWeaponId, turretWeaponConfig);
+        continue;
+      }
+      const portal = manual ? undefined : turret.portal;
       if (pendingBurst) {
+        // A burst begun locally stays local (§4.6), also when an exit target appears meanwhile.
+        if (portal) this.reportPortalEntry(turret, portal, 'local', turret.angle ?? 0, muzzleOffset);
         if (manualTarget) {
           pendingBurst.targetX = manualTarget.x;
           pendingBurst.targetY = manualTarget.y;
@@ -339,6 +388,19 @@ export class TurretSystem {
           this.nextFireAt.set(sequenceKey, now + cooldownMs);
         }
         continue;
+      }
+
+      if (portal) {
+        // §4.6: the mode depends only on a target at the exit, never on readiness or rotation.
+        const exitTarget = this.findNearestTarget(turret, portal.exitX, portal.exitY, targetRange, 0, now, undefined,
+          { deploymentId: portal.deploymentId, state: portalSearch! });
+        if (exitTarget) {
+          this.firePortalShot(turret, identity, constructions, portal, exitTarget, now, deltaMs, muzzleOffset, targetRange,
+            rangeFactor, cooldownMs, turretWeaponId, turretWeaponConfig, portalSearch!);
+          continue;
+        }
+        this.reportPortalEntry(turret, portal, portal.localFireRelease ? 'local' : 'waiting', turret.angle ?? 0, muzzleOffset);
+        if (!portal.localFireRelease) continue;
       }
 
       const target: TurretAimTarget | null = manualTarget ?? this.findNearestTarget(
@@ -455,6 +517,156 @@ export class TurretSystem {
     for (const id of this.baseSearches.keys()) {
       if (!entrySequences.has(id)) this.baseSearches.delete(id);
     }
+    const participants = new Set(turrets.flatMap(source => source.portal ? [source.id] : []));
+    for (const id of this.portalBaseSearches.keys()) {
+      if (!participants.has(id)) this.portalBaseSearches.delete(id);
+    }
+  }
+
+  /**
+   * Portal shot (GDD V2 §4.4): target from the fixed exit, normal barrel rotation towards the exit
+   * direction, entry in front of the real muzzle. The host fires only with a validly built route (E14).
+   */
+  private firePortalShot(
+    turret: TurretFireSource, identity: AutomatedTurret, constructions: readonly AutomatedTurret[],
+    portal: TurretPortalAssignment, target: TurretAimTarget, now: number, deltaMs: number,
+    muzzleOffset: number, targetRange: number, rangeFactor: number, cooldownMs: number,
+    weaponId: keyof typeof WEAPON_CONFIGS, weapon: WeaponConfig, search: BaseSearchState,
+  ): void {
+    const angle = this.updateAim(turret, Math.atan2(target.y - portal.exitY, target.x - portal.exitX), deltaMs);
+    this.reportPortalEntry(turret, portal, 'portal', angle, muzzleOffset);
+    const sequenceKey = turret.sequenceKey;
+    if (now < (this.nextFireAt.get(sequenceKey) ?? 0) || !this.fireHandler) return;
+    if (!this.canFireThroughPortal(turret, angle, portal, target, muzzleOffset, targetRange)) return;
+    const route = this.buildRoute(turret, portal, angle, muzzleOffset, target, weapon, rangeFactor);
+    if (!route) return;
+    const buff = this.turretDamageBuffProvider?.(identity.x, identity.y) ?? null;
+    const damageMultiplier = (buff?.damageMultiplier ?? 1)
+      * (turret.damage === undefined ? 1 : turret.damage / weapon.damage)
+      * Math.max(0, this.turretDamageMultiplierProvider?.(identity, constructions) ?? 1);
+    this.firePortalRoute(turret, portal, weaponId, angle, muzzleOffset, route, damageMultiplier, rangeFactor, now);
+    const burstCount = weapon.turretBurst ? Math.max(1, Math.floor(weapon.turretBurst.count)) : 1;
+    if (burstCount > 1) {
+      this.pendingBursts.set(sequenceKey, { ownerEntryId: turret.id, cooldownMs, shotsRemaining: burstCount - 1,
+        nextShotAt: now + Math.max(1, weapon.turretBurst?.intervalMs ?? 1), targetX: target.x, targetY: target.y,
+        damageMultiplier, rangeFactor, hitSegment: target.hitSegment, portal });
+      return;
+    }
+    this.nextFireAt.set(sequenceKey, now + cooldownMs);
+    if ((turret.secondProjectileDamageFactor ?? 0) <= 0) return;
+    // §4.5: the second projectile uses the same route; its target is searched from the exit too.
+    const second = this.findNearestTarget(turret, portal.exitX, portal.exitY, targetRange, 0, now, target,
+      { deploymentId: portal.deploymentId, state: search });
+    if (!second) return;
+    const secondAngle = turret.rotationSpeedDegPerSec === undefined
+      ? Math.atan2(second.y - portal.exitY, second.x - portal.exitX) : angle;
+    if (!this.canFireThroughPortal(turret, secondAngle, portal, second, muzzleOffset, targetRange)) return;
+    const secondRoute = this.buildRoute(turret, portal, secondAngle, muzzleOffset, second, weapon, rangeFactor);
+    if (secondRoute) this.firePortalRoute(turret, portal, weaponId, secondAngle, muzzleOffset, secondRoute,
+      (turret.secondProjectileDamageFactor ?? 0) * damageMultiplier, rangeFactor, now);
+  }
+
+  /** D35/D36/D12: bound portal bursts keep exit and bonus, follow the barrel and end with the deployment. */
+  private continuePortalBurst(
+    turret: TurretFireSource, burst: PendingTurretBurst, portal: TurretPortalAssignment, now: number, deltaMs: number,
+    paused: boolean, muzzleOffset: number, targetRange: number,
+    weaponId: keyof typeof WEAPON_CONFIGS, weapon: WeaponConfig,
+  ): void {
+    const live = now < portal.expiresAt && (this.portalFeedback?.isDeploymentActive(portal.deploymentId) ?? true)
+      && (paused || turret.portal?.deploymentId === portal.deploymentId);
+    const abort = () => {
+      this.pendingBursts.delete(turret.sequenceKey);
+      this.nextFireAt.set(turret.sequenceKey, Math.max(this.nextFireAt.get(turret.sequenceKey) ?? 0, now + burst.cooldownMs));
+    };
+    if (!live) { abort(); return; }
+    const due = now >= burst.nextShotAt && !!this.fireHandler;
+    const angle = turret.rotationSpeedDegPerSec === undefined && !due ? turret.angle ?? 0
+      : this.updateAim(turret, Math.atan2(burst.targetY - portal.exitY, burst.targetX - portal.exitX), deltaMs);
+    this.reportPortalEntry(turret, portal, 'portal', angle, muzzleOffset);
+    if (!due) return;
+    const target = { x: burst.targetX, y: burst.targetY, hitSegment: burst.hitSegment };
+    const route = this.canFireThroughPortal(turret, angle, portal, target, muzzleOffset, targetRange)
+      ? this.buildRoute(turret, portal, angle, muzzleOffset, target, weapon, burst.rangeFactor) : null;
+    if (!route) {
+      // As for local bursts: active entries wait, a paused remainder must not hold the shared sequence.
+      if (paused) abort();
+      return;
+    }
+    this.firePortalRoute(turret, portal, weaponId, angle, muzzleOffset, route, burst.damageMultiplier, burst.rangeFactor, now);
+    burst.shotsRemaining -= 1;
+    if (burst.shotsRemaining > 0) {
+      burst.nextShotAt = now + Math.max(1, weapon.turretBurst?.intervalMs ?? 1);
+    } else {
+      this.pendingBursts.delete(turret.sequenceKey);
+      this.nextFireAt.set(turret.sequenceKey, now + burst.cooldownMs);
+    }
+  }
+
+  private buildRoute(
+    turret: TurretFireSource, portal: TurretPortalAssignment, angle: number, muzzleOffset: number,
+    target: TurretAimTarget, weapon: WeaponConfig, rangeFactor: number,
+  ) {
+    return buildTurretPortalRoute({ deploymentId: portal.deploymentId, sourceX: turret.x, sourceY: turret.y, angle,
+      muzzleOffset, exitX: portal.exitX, exitY: portal.exitY, targetX: target.x, targetY: target.y,
+      damageBonus: portal.damageBonus, effectiveRangePx: weapon.range * rangeFactor });
+  }
+
+  private firePortalRoute(
+    turret: TurretFireSource, portal: TurretPortalAssignment, weaponId: keyof typeof WEAPON_CONFIGS, angle: number,
+    muzzleOffset: number, route: NonNullable<TurretFireContext['route']>, damageFactor: number, rangeFactor: number, now: number,
+  ): void {
+    const pose = resolvePortalEntry(turret.x, turret.y, angle, muzzleOffset);
+    const fired = this.fireHandler?.(turret.ownerId, turret.ownerColor, weaponId, pose.muzzleX, pose.muzzleY, angle,
+      route.rangeTargetX, route.rangeTargetY, damageFactor, rangeFactor, turret.identityId, turret.skipRockIndex,
+      turret.sourceCarrierBaseId, { source: turret, route });
+    if (fired !== false) this.portalFeedback?.noteTransport(portal.deploymentId, turret.id, now);
+  }
+
+  private reportPortalEntry(
+    turret: TurretFireSource, portal: TurretPortalAssignment, mode: FireControlEntryMode, angle: number, muzzleOffset: number,
+  ): void {
+    const pose = resolvePortalEntry(turret.x, turret.y, angle, muzzleOffset);
+    this.portalFeedback?.reportEntry(portal.deploymentId, turret.id, turret.identityId, mode, pose.entryX, pose.entryY, angle);
+  }
+
+  /**
+   * Both real sections must be free (§4.3): muzzle → entry with the source's own exceptions,
+   * exit → target without any. Base faces require the actual exit ray to cross their hit segment
+   * within the source range measured from the exit. Applies to legacy sources without rotation limit too.
+   */
+  private canFireThroughPortal(
+    turret: AutomatedTurret, angle: number, portal: TurretPortalAssignment, target: TurretAimTarget,
+    muzzleOffset: number, targetRange: number,
+  ): boolean {
+    const desired = Math.atan2(target.y - portal.exitY, target.x - portal.exitX);
+    if (turret.rotationSpeedDegPerSec !== undefined) {
+      const tolerance = (turret.aimToleranceDeg ?? DEFAULT_TURRET_AIM_TOLERANCE_DEG) * Math.PI / 180;
+      if (Math.abs(turretAngleDifference(angle, desired)) > tolerance + 1e-10) return false;
+    }
+    const dx = Math.cos(angle), dy = Math.sin(angle);
+    let distance = Math.hypot(target.x - portal.exitX, target.y - portal.exitY);
+    if (target.hitSegment) {
+      const ray = rayDistanceToSegment(portal.exitX, portal.exitY, dx, dy, target.hitSegment);
+      if (ray === null || ray > targetRange + 1e-8) return false;
+      distance = ray;
+    }
+    if (!this.lineOfFireChecker) return true;
+    const pose = resolvePortalEntry(turret.x, turret.y, angle, muzzleOffset);
+    if (!this.lineOfFireChecker(pose.muzzleX, pose.muzzleY, pose.entryX, pose.entryY,
+      turret.skipRockIndex, turret.sourceCarrierBaseId)) return false;
+    return this.hasExitLineOfFire(portal.deploymentId, portal.exitX, portal.exitY,
+      portal.exitX + dx * distance, portal.exitY + dy * distance);
+  }
+
+  private hasExitLineOfFire(deploymentId: number, exitX: number, exitY: number, x: number, y: number): boolean {
+    if (!this.lineOfFireChecker) return true;
+    const key = `${deploymentId}:${Math.round(x)}:${Math.round(y)}`;
+    let free = this.exitLineOfFire.get(key);
+    if (free === undefined) {
+      free = this.lineOfFireChecker(exitX, exitY, x, y);
+      this.exitLineOfFire.set(key, free);
+    }
+    return free;
   }
 
   /** Entfernt die Salve der Folge nur, wenn dieser Eintrag sie begonnen hat. */
@@ -491,25 +703,11 @@ export class TurretSystem {
     const muzzleX = turret.x + dx * muzzleOffset, muzzleY = turret.y + dy * muzzleOffset;
     let distance = Math.max(muzzleOffset, Math.hypot(targetX - turret.x, targetY - turret.y));
     if (hitSegment) {
-      const sx = hitSegment.x2 - hitSegment.x1, sy = hitSegment.y2 - hitSegment.y1;
-      const qx = hitSegment.x1 - muzzleX, qy = hitSegment.y1 - muzzleY;
-      const cross = dx * sy - dy * sx;
-      const epsilon = 1e-8;
-      let rayDistance: number;
-      if (Math.abs(cross) <= epsilon) {
-        // Parallel: Nur ein kollinearer Abschnitt (auch ein einzelner Punkt) kann getroffen werden.
-        if (Math.abs(qx * dy - qy * dx) > epsilon) return false;
-        const start = qx * dx + qy * dy, end = start + sx * dx + sy * dy;
-        if (Math.max(start, end) < -epsilon) return false;
-        rayDistance = Math.max(0, Math.min(start, end));
-      } else {
-        rayDistance = (qx * sy - qy * sx) / cross;
-        const segmentFraction = (qx * dy - qy * dx) / cross;
-        if (rayDistance < -epsilon || segmentFraction < -epsilon || segmentFraction > 1 + epsilon) return false;
-      }
+      const rayDistance = rayDistanceToSegment(muzzleX, muzzleY, dx, dy, hitSegment);
+      if (rayDistance === null) return false;
       // Zielreichweite wird wie bei der Zielwahl ab Turmmitte gemessen, nicht erneut ab Mündung.
-      distance = muzzleOffset + Math.max(0, rayDistance);
-      if (distance > targetRange + epsilon) return false;
+      distance = muzzleOffset + rayDistance;
+      if (distance > targetRange + 1e-8) return false;
     }
     if (!this.lineOfFireChecker) return true;
     return this.lineOfFireChecker(
@@ -527,6 +725,8 @@ export class TurretSystem {
     lineOfFireStartOffset: number,
     now: number,
     excluded?: { x: number; y: number },
+    /** Search from a portal exit: own line-of-fire context without the source's exceptions (§4.3). */
+    exit?: { readonly deploymentId: number; readonly state: BaseSearchState },
   ): TurretAimTarget | null {
     let bestTarget: TurretAimTarget | null = null;
     let bestDistance = Number.POSITIVE_INFINITY;
@@ -539,7 +739,8 @@ export class TurretSystem {
       if (candidate.isValid?.() === false) return false;
       const distance = Phaser.Math.Distance.Between(turretX, turretY, candidate.x, candidate.y);
       if (distance > range) return false;
-      if (!this.hasLineOfFireFromMuzzle(turret, turretX, turretY, candidate.x, candidate.y, lineOfFireStartOffset)) return false;
+      if (exit ? !this.hasExitLineOfFire(exit.deploymentId, turretX, turretY, candidate.x, candidate.y)
+        : !this.hasLineOfFireFromMuzzle(turret, turretX, turretY, candidate.x, candidate.y, lineOfFireStartOffset)) return false;
       const score = this.targetScore?.(turret, kind, id, now) ?? 0;
       const key = kind + ':' + id;
       if (priority > bestPriority || (priority === bestPriority && (score < bestScore
@@ -589,7 +790,7 @@ export class TurretSystem {
       }
     }
 
-    const state = this.baseSearches.get(turret.id)!;
+    const state = exit?.state ?? this.baseSearches.get(turret.id)!;
     if (bestTarget !== null || !canDamageBases) {
       if (!excluded) state.target = null;
       return bestTarget;

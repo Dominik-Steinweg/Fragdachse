@@ -98,7 +98,7 @@ const FIRE_REQUIRED: Readonly<Record<string, readonly string[]>> = {
 
 const UTILITY_REQUIRED: Readonly<Record<string, readonly string[]>> = {
   fire_control_relay: ['durationMs', 'maxCopies', 'ringRadiusPx', 'clearanceRadiusPx', 'singleCopyOffsetPx', 'materializeMs', 'parallelEnabled', 'charges', 'skipCooldownPublish'],
-  fire_control_portal: ['durationMs', 'damageBonus', 'localFireEnabled', 'charges', 'skipCooldownPublish', 'frictionDelayMs', 'airFrictionDecayPerSec', 'bounceFrictionMultiplier', 'stopSpeedThreshold'],
+  fire_control_portal: ['durationMs', 'damageBonus', 'localFireEnabled', 'exitClearanceRadiusPx', 'charges', 'skipCooldownPublish', 'frictionDelayMs', 'airFrictionDecayPerSec', 'bounceFrictionMultiplier', 'stopSpeedThreshold'],
   explosive: ['aoeRadius', 'aoeDamage'],
   smoke: [
     'smokeRadius', 'smokeExpandDuration', 'smokeLingerDuration', 'smokeDissipateDuration',
@@ -300,7 +300,7 @@ export function validateResolvedUtility(value: unknown): string[] {
     const relay = value.type === 'fire_control_relay';
     const positiveFields = relay
       ? ['cooldown', 'durationMs', 'maxCopies', 'ringRadiusPx', 'clearanceRadiusPx', 'singleCopyOffsetPx', 'materializeMs']
-      : ['cooldown', 'durationMs', 'projectileSpeed', 'projectileSize', 'stopSpeedThreshold'];
+      : ['cooldown', 'durationMs', 'projectileSpeed', 'projectileSize', 'stopSpeedThreshold', 'fuseTime', 'exitClearanceRadiusPx'];
     for (const key of positiveFields) {
       const n = value[key];
       if (typeof n !== 'number' || !Number.isFinite(n) || n <= 0)

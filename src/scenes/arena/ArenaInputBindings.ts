@@ -29,6 +29,9 @@ import type { PersistentBaseRewardId } from '../../persistentBase/PersistentBase
 import type { RadialActionRef } from '../../systems/RadialActionModel';
 import type { InputSystem } from '../../systems/InputSystem';
 import { planFireControlCopies, type FireControlConstructionFacts } from '../../systems/fireControl/FireControlCopyPlan';
+import { predictPortalThrow } from '../../systems/fireControl/FireControlPortalThrow';
+import { PLAYER_SIZE } from '../../config';
+import { getHeldWeaponGameplayMuzzleOrigin } from '../../loadout/HeldItemVisuals';
 import { resolveInputPolicy, type InputPolicyInput } from '../../world/InputPolicy';
 import type { PlayerCapabilities } from '../../world/PlayerCapabilities';
 import type {
@@ -83,6 +86,8 @@ export interface ArenaInputPlacementPorts {
   getConstructionPlacementRange(): number;
   getFireControlConstructions(): readonly FireControlConstructionFacts[];
   isFireControlPointFree(x: number, y: number, radius: number): boolean;
+  /** Static flight contact of a thrown device on one step segment (portal landing preview). */
+  isFireControlFlightBlocked?(x0: number, y0: number, x1: number, y1: number): boolean;
   getUsedCapacity(ownerId: string): number;
   getDismantlePreview(
     ownerId: string,
@@ -967,6 +972,22 @@ export class ArenaInputBindings {
       && !this.input.inputSystem.isRepositionActive()
       && !this.input.inputSystem.isUltimatePlacementActive();
     return { aimVisible, cursorVisible };
+  }
+
+  /** Predicted exit of the charged portal throw with the host's flight and landing rule (D39/D43). */
+  getFireControlPortalLandingPreview(): { readonly x: number; readonly y: number } | undefined {
+    if (this.destroyed) return undefined;
+    const charge = this.input.inputSystem.getFireControlPortalChargePreview?.();
+    const position = this.input.actions.getLocalPlayerPosition();
+    if (!charge || !position || charge.config.activation.type !== 'charged_throw') return undefined;
+    const { config, angle } = charge;
+    const muzzle = getHeldWeaponGameplayMuzzleOrigin(config.id, position.x, position.y, angle, PLAYER_SIZE);
+    const placement = this.input.actions.placement;
+    const prediction = predictPortalThrow({ x: muzzle?.x ?? position.x, y: muzzle?.y ?? position.y, angle,
+      chargeFraction: charge.chargeFraction, config: { ...config, minThrowSpeed: config.activation.minThrowSpeed },
+      blocksFlight: (x0, y0, x1, y1) => placement.isFireControlFlightBlocked?.(x0, y0, x1, y1) ?? false,
+      isLandingFree: (x, y) => placement.isFireControlPointFree(x, y, config.exitClearanceRadiusPx) });
+    return { x: prediction.landingX, y: prediction.landingY };
   }
 
   getLocalPlacementPreview(): LocalPlacementPreview | undefined {

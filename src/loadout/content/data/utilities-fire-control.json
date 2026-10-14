@@ -30,7 +30,7 @@
     "FIRE_CONTROL_PORTAL": {
       "id": "FIRE_CONTROL_PORTAL",
       "type": "fire_control_portal",
-      "cooldown": 20000,
+      "cooldown": 4000,
       "activation": {
         "type": "charged_throw",
         "minThrowSpeed": 50,
@@ -38,11 +38,11 @@
       },
       "projectileSpeed": 800,
       "projectileSize": 10,
-      "fuseTime": 1000,
-      "frictionDelayMs": 300,
-      "airFrictionDecayPerSec": 0.3,
+      "fuseTime": 2500,
+      "frictionDelayMs": 400,
+      "airFrictionDecayPerSec": 0.05,
       "bounceFrictionMultiplier": 0.7,
-      "stopSpeedThreshold": 20,
+      "stopSpeedThreshold": 25,
       "shotAudio": {
         "successKey": "shot_throw",
         "failureKey": "shot_dry_trigger"
@@ -56,9 +56,10 @@
         "burstLockoutMs": 0
       },
       "skipCooldownPublish": true,
-      "durationMs": 5000,
+      "durationMs": 4000,
       "damageBonus": 0,
-      "localFireEnabled": 0
+      "localFireEnabled": 0,
+      "exitClearanceRadiusPx": 12
     }
   }
 }

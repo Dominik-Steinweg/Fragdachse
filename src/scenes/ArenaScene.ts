@@ -1090,6 +1090,7 @@ export class ArenaScene extends Phaser.Scene {
       {
         getLocalPlacementPreview: () => this.inputBindings?.getLocalPlacementPreview(),
         getLocalUltimatePlacementPreview: () => this.inputBindings?.getLocalUltimatePlacementPreview(),
+      getFireControlPortalLandingPreview: () => this.inputBindings?.getFireControlPortalLandingPreview(),
         getAimPresentationState: (worldInteractive, spectator, optionsOpen) => (this.devScenario?.hidesAim()
           ? { aimVisible: false, cursorVisible: false }
           : undefined) ?? this.inputBindings?.getAimPresentationState(

@@ -16,7 +16,7 @@ import { POWERUP_DEFS } from '../powerups/PowerUpConfig';
 import type { ConstructionId, GameMode, LoadoutToolRef, TemporaryUtilityInstanceDescriptor } from '../types';
 import type { TimeBubbleUtilityState } from '../loadout/TimeBubbleUtilityState';
 import type { TranslocatorUseState } from '../loadout/TranslocatorUseState';
-import type { FireControlCopiesStatus } from './fireControl/FireControlCopiesStatus';
+import type { FireControlCopiesStatus, FireControlPortalStatus } from './fireControl/FireControlCopiesStatus';
 
 export type RadialActionCategory =
   | 'utility'
@@ -63,6 +63,7 @@ export interface RadialActionState {
 
 export interface ResolveRadialActionsInput {
   readonly fireControlCopiesStatus?: FireControlCopiesStatus | null;
+  readonly fireControlPortalStatus?: FireControlPortalStatus | null;
   readonly translocatorState?: TranslocatorUseState | null;
   readonly stinkCloudState?: import('../loadout/StinkCloudUtilityState').StinkCloudUtilityState | null;
   readonly timeBubbleState?: TimeBubbleUtilityState | null;
@@ -301,10 +302,12 @@ export function resolveRadialActions(input: ResolveRadialActionsInput): RadialAc
     }
   }
   const projected = entries.map(entry => {
-    const copies = input.fireControlCopiesStatus;
-    if (copies && (entry.ref.kind === 'utility' || entry.ref.kind === 'temporary-utility')
-      && entry.ref.utilityId === 'FIRE_CONTROL_RELAY') {
-      return { ...entry, label: `${entry.label} · ${getFireControlCopiesStatusLabel(copies)}`,
+    const fireControl = entry.ref.kind === 'utility' || entry.ref.kind === 'temporary-utility'
+      ? entry.ref.utilityId === 'FIRE_CONTROL_RELAY' ? input.fireControlCopiesStatus
+        : entry.ref.utilityId === 'FIRE_CONTROL_PORTAL' ? input.fireControlPortalStatus : null
+      : null;
+    if (fireControl) {
+      return { ...entry, label: `${entry.label} · ${getFireControlStatusLabel(fireControl)}`,
         available: false, disabledReason: input.canUseUtility ? 'unavailable' as const : 'player-blocked' as const,
         cooldownUntil: 0 };
     }
@@ -363,8 +366,9 @@ export function getTimeBubbleStatusLabel(state: TimeBubbleUtilityState): string 
     : state.phase === 'active' ? t(state.focusEnabled ? 'ui.timeBubble.focus' : 'ui.timeBubble.active') : '';
 }
 
-export function getFireControlCopiesStatusLabel(state: FireControlCopiesStatus): string {
-  return `${t('ui.fireControl.copiesActive')} ${(state.remainingMs / 1000).toFixed(1)} s`;
+export function getFireControlStatusLabel(state: FireControlCopiesStatus | FireControlPortalStatus): string {
+  const key = state.deployment.kind === 'portal' ? 'ui.fireControl.portalActive' : 'ui.fireControl.copiesActive';
+  return `${t(key)} ${(state.remainingMs / 1000).toFixed(1)} s`;
 }
 
 export function getTranslocatorStatusLabel(state: TranslocatorUseState, now: number): string {

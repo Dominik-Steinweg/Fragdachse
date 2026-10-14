@@ -4,8 +4,8 @@ import type { ArenaHUDData } from './ArenaHUD';
 import type { RadialManagementAction } from '../systems/RadialActionModel';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import type { FireControlSnapshot } from '../systems/fireControl/FireControlSnapshot';
-import { getFireControlCopiesStatus } from '../systems/fireControl/FireControlCopiesStatus';
-import { getFireControlCopiesStatusLabel } from '../systems/RadialActionModel';
+import { getFireControlCopiesStatus, getFireControlPortalStatus } from '../systems/fireControl/FireControlCopiesStatus';
+import { getFireControlStatusLabel } from '../systems/RadialActionModel';
 
 interface FireControlHudSource {
   getFireControlSnapshot(): FireControlSnapshot;
@@ -67,9 +67,12 @@ export function buildLocalArenaHudData(
   params: BuildLocalArenaHudDataParams,
   source?: FireControlHudSource,
 ): LocalArenaHudData {
-  const copies = source && params.utilityId === 'FIRE_CONTROL_RELAY'
-    && !params.utilityAction && !params.persistentBaseRewardId
-    ? getFireControlCopiesStatus(source.getFireControlSnapshot(), source.getLocalPlayerId(), source.getSynchronizedNow())
+  const fireControlStatus = source && !params.utilityAction && !params.persistentBaseRewardId
+    ? params.utilityId === 'FIRE_CONTROL_RELAY' ? getFireControlCopiesStatus : params.utilityId === 'FIRE_CONTROL_PORTAL'
+      ? getFireControlPortalStatus : null
+    : null;
+  const copies = source && fireControlStatus
+    ? fireControlStatus(source.getFireControlSnapshot(), source.getLocalPlayerId(), source.getSynchronizedNow())
     : null;
   return {
     hp: params.hp,
@@ -88,7 +91,7 @@ export function buildLocalArenaHudData(
     weapon2CooldownFrac: params.weapon2CooldownFrac,
     utilityCooldownFrac: copies ? 0 : params.utilityCooldownFrac,
     utilityBlocked: copies ? true : params.utilityBlocked ?? false,
-    utilityStatusLabel: copies ? getFireControlCopiesStatusLabel(copies) : params.utilityStatusLabel,
+    utilityStatusLabel: copies ? getFireControlStatusLabel(copies) : params.utilityStatusLabel,
     utilityChargeState: params.utilityChargeState,
     utilityId: params.utilityId,
     utilityAction: params.utilityAction,

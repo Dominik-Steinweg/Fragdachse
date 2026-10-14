@@ -40,11 +40,12 @@ import { EnergyInjectorSystem } from '../src/systems/EnergyInjectorSystem';
 import { CoopDefenseItemRuntimeSystem } from '../src/systems/CoopDefenseItemRuntimeSystem';
 
 /** Real placement, deployment, weapon execution, damage receipts and MG owner; renderer ports are inert. */
-export function createFireControlWorldFixture(overrides: Partial<Extract<UtilityConfig, { type: 'fire_control_relay' }>> = {}) {
+export function createFireControlWorldFixture(overrides: Partial<Extract<UtilityConfig, { type: 'fire_control_relay' }>> = {},
+  portalOverrides: Partial<Extract<UtilityConfig, { type: 'fire_control_portal' }>> = {}) {
   const base = UTILITY_CONFIGS.FIRE_CONTROL_RELAY;
   if (base.type !== 'fire_control_relay') throw Error('Expected relay config');
   const config = { ...base, ...overrides };
-  const utility = createFireControlUtilityFixture(config);
+  const utility = createFireControlUtilityFixture(config, portalOverrides);
   let now = 1000, manned: number | null = null, pilot = 'ally', fresh = false, free = true, combatAllowed = true, remoteBonus = 0;
   const bag = (values: Record<string, unknown> = {}): any => new Proxy(values, {
     get(target, key) { if (!(key in target)) target[key as string] = vi.fn(); return target[key as string]; },
@@ -80,6 +81,8 @@ export function createFireControlWorldFixture(overrides: Partial<Extract<Utility
   const binding = new WorldCombatGameplayBinding(bag({ playerManager: players, combatSystem: combat, placementSystem: placement, worldMetrics: metrics,
     baseManager: null, hostPhysics: bag(), decoySystem: bag(), fireSystem: bag(), gameAudioSystem: bag(),
     projectileSpawn: { spawnProjectile: utility.projectile.spawn }, projectileEvents: utility.projectile.projectiles,
+    projectileUtility: { focusProjectilesInCircle: () => 0,
+      destroyProjectile: (id: number) => utility.projectile.projectiles.destroyProjectile(id) },
     projectileTimeField: bag(), projectileHoming: homing, projectileWorldImpact: bag(), projectileSwarm: bag(), projectileInteraction: bag(),
     isCoopMission: () => false, isCoopDefense: () => true, isActivityActive: () => true,
     getSpawnContext: () => undefined, getWorldParticipation: () => 'interactive', getPlayerCapabilities: () => ({ canUseCombat: combatAllowed }),
@@ -97,8 +100,8 @@ export function createFireControlWorldFixture(overrides: Partial<Extract<Utility
     network: { authority: { isHost: () => true, isEnemyPair: () => false, getPlayerProfile: () => player, getConnectedPlayers: () => [player] },
       round: bag({ canPlayerReceiveRoundRewards: () => true }), stats: bag(), effects: bag() },
   }) as unknown as WorldCombatGameplayBindingOptions);
-  const add = (id: keyof typeof COOP_DEFENSE_CONSTRUCTIONS = 'machine_gun_turret', owner = 'inspector', gridX = 5) => {
-    const rock = placement.materializePersistentPlaceable(COOP_DEFENSE_CONSTRUCTIONS[id], gridX, 5, 0, owner, 0xffffff)!;
+  const add = (id: keyof typeof COOP_DEFENSE_CONSTRUCTIONS = 'machine_gun_turret', owner = 'inspector', gridX = 5, gridY = 5) => {
+    const rock = placement.materializePersistentPlaceable(COOP_DEFENSE_CONSTRUCTIONS[id], gridX, gridY, 0, owner, 0xffffff)!;
     if (!rock) throw Error('Fixture construction did not fit');
     // Identity/lifecycle tests isolate timing from authored rotation tuning.
     placement.getRuntimeRock(rock.id)!.rotationSpeedDegPerSec = 10000;
@@ -195,7 +198,11 @@ export function createFireControlProjectileFixture() {
 }
 
 /** Existing action/resource harness; M1 supplies the authored config and connects the utility port. */
-export function createFireControlUtilityFixture(config: UtilityConfig) {
+export function createFireControlUtilityFixture(config: UtilityConfig,
+  portalOverrides: Partial<Extract<UtilityConfig, { type: 'fire_control_portal' }>> = {}) {
+  const portalBase = UTILITY_CONFIGS.FIRE_CONTROL_PORTAL;
+  if (portalBase.type !== 'fire_control_portal') throw Error('Expected portal config');
+  const portalConfig = { ...portalBase, ...portalOverrides };
   let alive = true, attempt = 0;
   let equipped = config;
   const projectile = createFireControlProjectileFixture();
@@ -210,9 +217,18 @@ export function createFireControlUtilityFixture(config: UtilityConfig) {
     gameAudioSystem: {} as never, dropBeer() {}, nukeStrike: () => false, placeable: null,
     network: { loadout: { publishUtilityCooldownUntil: cooldown, publishTemporaryUtilityInstances: inventory,
       publishHeldUtilityId() {} }, roundStats: { recordUtilityUsed: used, recordConstructionBuilt() {} } },
-    isToolAuthorized: () => true, resolveToolUtilityConfig: () => config,
+    isToolAuthorized: () => true, resolveToolUtilityConfig: ref => ref.id === portalConfig.id ? portalConfig : config,
   });
-  return { action, projectile, cooldown, inventory, used, noteUsed,
+  const portalTool = { kind: 'utility', id: portalConfig.id } as const;
+  return { action, projectile, cooldown, inventory, used, noteUsed, portalConfig,
+    /** Real held throw through the tool path: charge in ms of holding, released at `now`. */
+    throwPortal(now: number, angle = 0, chargeMs = portalConfig.activation.type === 'charged_throw' ? portalConfig.activation.fullChargeDuration : 0) {
+      const heldActionId = `portal-${++attempt}`;
+      action.startHeldAction('inspector', heldActionId, 'charged_throw', now - chargeMs, portalTool);
+      return action.execute({ category: 'utility', playerId: 'inspector', angle, targetX: Math.cos(angle) * 300,
+        targetY: Math.sin(angle) * 300, hostNowMs: now, attemptId: heldActionId,
+        source: { kind: 'tool', toolRef: portalTool, config: portalConfig }, params: { heldActionId, toolRef: portalTool } });
+    },
     equip(value: UtilityConfig) { equipped = value; action.syncEquippedUtility('inspector'); },
     setAlive(value: boolean) { alive = value; },
     place(now: number, x = 300, y = 0) {
