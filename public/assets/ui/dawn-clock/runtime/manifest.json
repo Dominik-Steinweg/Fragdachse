@@ -1,0 +1,642 @@
+{
+  "schemaVersion": 1,
+  "id": "dawn-clock-semicircle-v1",
+  "designCanvas": {
+    "width": 300,
+    "height": 160
+  },
+  "scales": [
+    1,
+    2
+  ],
+  "pivot": {
+    "x": 150,
+    "y": 140
+  },
+  "normalizedOrigin": {
+    "x": 0.5,
+    "y": 0.875
+  },
+  "arc": {
+    "center": [
+      150,
+      140
+    ],
+    "innerRadius": 86,
+    "outerRadius": 119,
+    "sweepDegrees": 180,
+    "startDegrees": 180,
+    "endDegrees": 360,
+    "coordinateSystem": "screen x right / y down; degrees from +x, increasing clockwise",
+    "direction": "left -> top -> right",
+    "progressFormula": "angleDegrees = 180 + 180 * clamp(progress, 0, 1)"
+  },
+  "hand": {
+    "pivot": [
+      150,
+      140
+    ],
+    "length": 106,
+    "neutralDirection": "up",
+    "rotationFormula": "rotationDegrees = -90 + 180 * clamp(progress, 0, 1)",
+    "tipCenter": [
+      150,
+      37
+    ]
+  },
+  "displaySizes": [
+    {
+      "width": 150,
+      "height": 80
+    },
+    {
+      "width": 120,
+      "height": 64
+    }
+  ],
+  "layerOrder": [
+    "face",
+    "procedural-sectors",
+    "arc-grain",
+    "elapsed-darkening",
+    "frame",
+    "arc-icons",
+    "notches",
+    "hand",
+    "tip",
+    "medallion",
+    "modifier"
+  ],
+  "palette": {
+    "day": "#d9cfb6",
+    "dusk": "#d9822b",
+    "night": "#2f343a",
+    "dawn": "#bdc3c1",
+    "red": "#8f2f24",
+    "bone": "#d9cfb6",
+    "dark": "#1b1a17",
+    "brass": "#9a8560"
+  },
+  "sourceFiles": {
+    "frame": {
+      "path": "../sources/frame-source.png",
+      "sha256": "6f5fc6811249b4ac7035074e084b3353ac0b91697b758cc48fd340af605f749c"
+    },
+    "materials": {
+      "path": "../sources/materials-source.png",
+      "sha256": "57682d8b0984e27a5fbe3bc512ea29a0e7088d170869d8faa9d0550be2d73dba"
+    },
+    "glyphs": {
+      "path": "../sources/glyphs-source.png",
+      "sha256": "8236c2551c2e44e7b2c858df38ec1ba483aecb0030322f1d250d329bc39f69d9"
+    }
+  },
+  "assets": {
+    "frame": {
+      "role": "Fixed wooden arch and brass fittings, transparent opening",
+      "radii": {
+        "inner": 121,
+        "outer": 136
+      },
+      "baseRail": {
+        "x": 6,
+        "y": 138,
+        "width": 288,
+        "height": 16
+      },
+      "canvas": {
+        "width": 300,
+        "height": 160
+      },
+      "origin": [
+        150,
+        140
+      ],
+      "alphaBounds2x": {
+        "left": 12,
+        "top": 8,
+        "width": 576,
+        "height": 300
+      },
+      "files": {
+        "1x": {
+          "path": "frame-1x.webp",
+          "width": 300,
+          "height": 160,
+          "sha256": "611f85dbb79a039fadfc06d8d2e5ea9468f62067d13c1001b32803dbd6810565",
+          "bytes": 24158
+        },
+        "2x": {
+          "path": "frame-2x.webp",
+          "width": 600,
+          "height": 320,
+          "sha256": "90fbc57f1f3e69f43ac101d26d54b665bcf243a7e48882aadfb462db88fd4921",
+          "bytes": 68962
+        }
+      }
+    },
+    "face": {
+      "role": "Dark semicircular paper foundation",
+      "radius": 122,
+      "canvas": {
+        "width": 300,
+        "height": 160
+      },
+      "origin": [
+        150,
+        140
+      ],
+      "alphaBounds2x": {
+        "left": 56,
+        "top": 36,
+        "width": 488,
+        "height": 244
+      },
+      "files": {
+        "1x": {
+          "path": "face-1x.webp",
+          "width": 300,
+          "height": 160,
+          "sha256": "70af00ff73966443bb79b900c28913fcae001eb5cb60ea70ac34194b0da96f2e",
+          "bytes": 8968
+        },
+        "2x": {
+          "path": "face-2x.webp",
+          "width": 600,
+          "height": 320,
+          "sha256": "2ac6064920c0e888631cb5a700b7f1d4b1b2bc6822fb9187bc6caf4e40c758f0",
+          "bytes": 24472
+        }
+      }
+    },
+    "arc-grain": {
+      "role": "Grayscale black grain; normal alpha-over on procedural sectors",
+      "radii": {
+        "inner": 86,
+        "outer": 119
+      },
+      "blend": "normal",
+      "opacity": 1,
+      "canvas": {
+        "width": 300,
+        "height": 160
+      },
+      "origin": [
+        150,
+        140
+      ],
+      "alphaBounds2x": {
+        "left": 62,
+        "top": 42,
+        "width": 476,
+        "height": 238
+      },
+      "files": {
+        "1x": {
+          "path": "arc-grain-1x.webp",
+          "width": 300,
+          "height": 160,
+          "sha256": "1f27e059a7d0eba2f3b42541513c886ba29d736d11f4eeefa1cb6e037d4311c7",
+          "bytes": 5912
+        },
+        "2x": {
+          "path": "arc-grain-2x.webp",
+          "width": 600,
+          "height": 320,
+          "sha256": "00004beb9ec72b995c493482396618871cce7645c9d056ff642a15f1b8886e9f",
+          "bytes": 20184
+        }
+      }
+    },
+    "medallion": {
+      "role": "Brass pivot and neutral hub; modifier covers central plug",
+      "center": [
+        150,
+        140
+      ],
+      "outerRadius": 20,
+      "iconSlot": {
+        "center": [
+          150,
+          140
+        ],
+        "diameter": 32,
+        "recommendedIconSize": [
+          24,
+          32
+        ],
+        "clipRadius": 16
+      },
+      "canvas": {
+        "width": 300,
+        "height": 160
+      },
+      "origin": [
+        150,
+        140
+      ],
+      "alphaBounds2x": {
+        "left": 260,
+        "top": 240,
+        "width": 80,
+        "height": 80
+      },
+      "files": {
+        "1x": {
+          "path": "medallion-1x.webp",
+          "width": 300,
+          "height": 160,
+          "sha256": "9a64b00d7f4106f9bbd2c8aa37bb2d880cebd1c54d0764fca02c7896abefd5f9",
+          "bytes": 3552
+        },
+        "2x": {
+          "path": "medallion-2x.webp",
+          "width": 600,
+          "height": 320,
+          "sha256": "caf7b7f0c283b82822608fcd5100b1bab1a42ec42094152352fe09ab217e283c",
+          "bytes": 8216
+        }
+      }
+    },
+    "hand": {
+      "role": "Bone/wood pointer, points up",
+      "pivot": [
+        150,
+        140
+      ],
+      "length": 106,
+      "silhouetteLength": 109,
+      "tipCenter": [
+        150,
+        37
+      ],
+      "boundsWidth": 16,
+      "rearLength": 6,
+      "canvas": {
+        "width": 300,
+        "height": 160
+      },
+      "origin": [
+        150,
+        140
+      ],
+      "alphaBounds2x": {
+        "left": 284,
+        "top": 62,
+        "width": 32,
+        "height": 230
+      },
+      "files": {
+        "1x": {
+          "path": "hand-1x.webp",
+          "width": 300,
+          "height": 160,
+          "sha256": "782e28164e247e916b1b89351df2fb536f3bee79ee0919315a2e2c83be76a136",
+          "bytes": 3548
+        },
+        "2x": {
+          "path": "hand-2x.webp",
+          "width": 600,
+          "height": 320,
+          "sha256": "63b84b7aa06f50b4f3798149b2ddeb13d174bac758c26ffe85cdf16f42ddbcee",
+          "bytes": 7286
+        }
+      }
+    },
+    "tip-sun": {
+      "role": "Day pointer tip",
+      "center": [
+        150,
+        37
+      ],
+      "size": [
+        19,
+        19
+      ],
+      "glyphSize": [
+        15,
+        15
+      ],
+      "rotatesWithHand": true,
+      "canvas": {
+        "width": 300,
+        "height": 160
+      },
+      "origin": [
+        150,
+        140
+      ],
+      "alphaBounds2x": {
+        "left": 281,
+        "top": 55,
+        "width": 38,
+        "height": 38
+      },
+      "files": {
+        "1x": {
+          "path": "tip-sun-1x.webp",
+          "width": 300,
+          "height": 160,
+          "sha256": "59a2eb5f9fbf310a78a3cfae809a0ed6c1c9330d0976329276e3d533d100896b",
+          "bytes": 864
+        },
+        "2x": {
+          "path": "tip-sun-2x.webp",
+          "width": 600,
+          "height": 320,
+          "sha256": "db57121711ed08609c5a009a149565a7555a0d1b693144db366cd8455167a073",
+          "bytes": 1668
+        }
+      }
+    },
+    "tip-moon": {
+      "role": "Night pointer tip",
+      "center": [
+        150,
+        37
+      ],
+      "size": [
+        19,
+        19
+      ],
+      "glyphSize": [
+        15,
+        15
+      ],
+      "rotatesWithHand": true,
+      "canvas": {
+        "width": 300,
+        "height": 160
+      },
+      "origin": [
+        150,
+        140
+      ],
+      "alphaBounds2x": {
+        "left": 281,
+        "top": 55,
+        "width": 38,
+        "height": 38
+      },
+      "files": {
+        "1x": {
+          "path": "tip-moon-1x.webp",
+          "width": 300,
+          "height": 160,
+          "sha256": "082c261534c032904cd34bed33d205c1195e7019599baf70761aabf0386fd557",
+          "bytes": 876
+        },
+        "2x": {
+          "path": "tip-moon-2x.webp",
+          "width": 600,
+          "height": 320,
+          "sha256": "314146ea615abc7c3a705eb8c5ee7d0452ea4d839ba65c74c5ffeab4dc704a17",
+          "bytes": 1332
+        }
+      }
+    },
+    "icon-sun": {
+      "role": "Upright movable arc symbol",
+      "center": [
+        150,
+        37
+      ],
+      "size": [
+        24,
+        24
+      ],
+      "radialDistance": 103,
+      "keepUpright": true,
+      "canvas": {
+        "width": 300,
+        "height": 160
+      },
+      "origin": [
+        150,
+        140
+      ],
+      "alphaBounds2x": {
+        "left": 276,
+        "top": 50,
+        "width": 48,
+        "height": 48
+      },
+      "files": {
+        "1x": {
+          "path": "icon-sun-1x.webp",
+          "width": 300,
+          "height": 160,
+          "sha256": "f83c857b6a9180ffdbc0db21dcfe5fbb42b759dfb69155d28b82e3e5c39ca06f",
+          "bytes": 1094
+        },
+        "2x": {
+          "path": "icon-sun-2x.webp",
+          "width": 600,
+          "height": 320,
+          "sha256": "13b49541d6786c83dea4a405aca6c1bda0b3728fbbdbd5533bf765b4014f5229",
+          "bytes": 2550
+        }
+      }
+    },
+    "icon-moon": {
+      "role": "Upright movable arc symbol",
+      "center": [
+        150,
+        37
+      ],
+      "size": [
+        24,
+        24
+      ],
+      "radialDistance": 103,
+      "keepUpright": true,
+      "canvas": {
+        "width": 300,
+        "height": 160
+      },
+      "origin": [
+        150,
+        140
+      ],
+      "alphaBounds2x": {
+        "left": 279,
+        "top": 50,
+        "width": 42,
+        "height": 48
+      },
+      "files": {
+        "1x": {
+          "path": "icon-moon-1x.webp",
+          "width": 300,
+          "height": 160,
+          "sha256": "35524fe93eda5ab25ad078f230dd4f546b8de7d868ed6d4df5183099324f100c",
+          "bytes": 900
+        },
+        "2x": {
+          "path": "icon-moon-2x.webp",
+          "width": 600,
+          "height": 320,
+          "sha256": "7bb4ee8d164e2dc2370aebdbb3798590ab3f1097782b765373d33d967109faf5",
+          "bytes": 1752
+        }
+      }
+    },
+    "icon-sunrise": {
+      "role": "Upright movable arc symbol",
+      "center": [
+        150,
+        37
+      ],
+      "size": [
+        24,
+        24
+      ],
+      "radialDistance": 103,
+      "keepUpright": true,
+      "canvas": {
+        "width": 300,
+        "height": 160
+      },
+      "origin": [
+        150,
+        140
+      ],
+      "alphaBounds2x": {
+        "left": 276,
+        "top": 59,
+        "width": 48,
+        "height": 29
+      },
+      "files": {
+        "1x": {
+          "path": "icon-sunrise-1x.webp",
+          "width": 300,
+          "height": 160,
+          "sha256": "950b9316578433996e3fcdd9e427f2c925fb1994811ccf65b092d2fc61b7435c",
+          "bytes": 962
+        },
+        "2x": {
+          "path": "icon-sunrise-2x.webp",
+          "width": 600,
+          "height": 320,
+          "sha256": "083592bbca393679a88c3f321caa420150d412a7b431274cff7487610827e089",
+          "bytes": 1972
+        }
+      }
+    },
+    "notch-wave": {
+      "role": "Single dark-red night-wave notch",
+      "center": [
+        150,
+        16.5
+      ],
+      "size": [
+        7,
+        14.5
+      ],
+      "radialDistance": 123.5,
+      "canvas": {
+        "width": 300,
+        "height": 160
+      },
+      "origin": [
+        150,
+        140
+      ],
+      "alphaBounds2x": {
+        "left": 293,
+        "top": 19,
+        "width": 14,
+        "height": 29
+      },
+      "files": {
+        "1x": {
+          "path": "notch-wave-1x.webp",
+          "width": 300,
+          "height": 160,
+          "sha256": "5c893698aab6cadf22db0e65bfb0cedd362fc6221b60d8a9ba786021977008bb",
+          "bytes": 510
+        },
+        "2x": {
+          "path": "notch-wave-2x.webp",
+          "width": 600,
+          "height": 320,
+          "sha256": "ffe234a20fba53b04585a9b8fced1806979f4b100be8008a07168e862779e6f4",
+          "bytes": 686
+        }
+      }
+    },
+    "notch-final": {
+      "role": "Larger forked dark-red finale notch",
+      "center": [
+        150,
+        16.5
+      ],
+      "size": [
+        13,
+        18.5
+      ],
+      "radialDistance": 123.5,
+      "canvas": {
+        "width": 300,
+        "height": 160
+      },
+      "origin": [
+        150,
+        140
+      ],
+      "alphaBounds2x": {
+        "left": 287,
+        "top": 15,
+        "width": 26,
+        "height": 37
+      },
+      "files": {
+        "1x": {
+          "path": "notch-final-1x.webp",
+          "width": 300,
+          "height": 160,
+          "sha256": "35ed8dae797a34d0cb8e79fd6060208966d83d5dc2a673709d8b6c0e015089c8",
+          "bytes": 814
+        },
+        "2x": {
+          "path": "notch-final-2x.webp",
+          "width": 600,
+          "height": 320,
+          "sha256": "590f460f5fa1b1328db9c908fcf11b60eec2c1bb5e800fe15bf766dd9e210884",
+          "bytes": 1142
+        }
+      }
+    }
+  },
+  "proof": {
+    "examplePhaseFractions": [
+      0.37,
+      0.08,
+      0.5,
+      0.05
+    ],
+    "waveProgress": [
+      0.47,
+      0.585,
+      0.7
+    ],
+    "finaleProgress": 0.81,
+    "states": [
+      {
+        "id": "day",
+        "progress": 0.185
+      },
+      {
+        "id": "night",
+        "progress": 0.625,
+        "modifier": "night-blood-moon"
+      },
+      {
+        "id": "sunrise",
+        "progress": 0.985
+      }
+    ],
+    "note": "Illustrative geometry only; runtime must resolve actual schedule/wave plan, not these sample timings."
+  }
+}

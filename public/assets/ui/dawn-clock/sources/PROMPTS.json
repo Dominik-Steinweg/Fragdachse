@@ -1,0 +1,22 @@
+{
+  "mode": "built-in image_gen",
+  "reference": "../clock-C-sundial-compass.png",
+  "jobs": [
+    {
+      "id": "frame-source",
+      "prompt": "Edit the supplied Dawn semicircular sundial concept into a beautifully crafted EMPTY FRAME asset. Preserve the flat 180-degree semicircle with flat bottom rail, width about twice height, pivot at bottom middle. REMOVE ALL interior content: no hand, medallion, suns, moon, marks, colored segments or face. The entire semicircular opening must be transparent. Refine the wooden arch and bottom rail: hand-carved dark aged walnut, broad printed wood-grain cuts, well-fitted asymmetric brass repair straps around arch at upper-left and right and small brass end-caps on base, restrained engraved tool marks and sturdy dark fasteners. An elegant thin aged brass inner lip traces the semicircle, no filigree. Frontal flat linocut print art, matte bone/umber/dull brass on charcoal, no realistic metallic highlights, no 3D extrusion, no glow, no gradients, no letters or numbers. Serious woodland field instrument. Keep ring thin so most space is free for the scale. Isolated on genuine transparent background, fully inside canvas, crop margin small. Landscape canvas. Only the single empty frame; no other objects.",
+      "ref": "C:/Fragdachse-worktrees/dawn-assets/art/poc/dawn/ui/clock/clock-C-sundial-compass.png",
+      "transparent": true
+    },
+    {
+      "id": "materials-source",
+      "prompt": "Square production MATERIAL SOURCE ATLAS for an illustrated analog sundial HUD. Four equal squares in an exact 2x2 layout, no gaps, borders, objects, lettering or labels. TOP LEFT: deep charcoal brown printed handmade paper #1b1a17, quiet coarse fiber grain. TOP RIGHT: dark warm walnut wood with broad horizontal hand-carved linocut woodgrain strokes, umber #5a4632 and soot brown #2a241d, subtle bone scratches. BOTTOM LEFT: aged pale bone paper #d9cfb6 with a few coarse woodcut gouges, flat ivory printing ink. BOTTOM RIGHT: matte aged dull brass printed texture, muted ochre #9a8560 and dark brown, broad irregular tool marks and darker wear. This is the Druck register of grim woodland survival field-manual art: flat hand-carved woodcut/linocut printed materials, not realistic photographs. Low saturation, sparse texture readable small. Evenly flat lit, no highlights, no gradients, no vignette, no 3D. Each quadrant is a plain full-bleed surface that can be cropped anywhere.",
+      "transparent": false
+    },
+    {
+      "id": "glyphs-source",
+      "prompt": "Production icon source sheet for a serious woodland sundial HUD, hand-carved linocut print style. THREE icons in ONE horizontal row of equal square cells, widely separated, on perfectly solid flat charcoal #1b1a17 background. Left: strong full SUN with round center and EIGHT broad short irregular cut rays. Middle: thick clean crescent MOON opening right, no stars. Right: rising SUN above one strong straight HORIZON line, half disc and FIVE broad rays. One bone ink #d9cfb6, subtle large handcut chips, massive simple silhouettes still legible at 16 pixels. No icon surrounds, no circular badges, no landscape, no extra shapes, no letters, no numeral, no text, no soft edges, no gloss, no shading or gradients. Match the hand-printed Dawn icons. All three symbols centered and fully contained inside their separate cells. Landscape 3:1 canvas.",
+      "transparent": false
+    }
+  ]
+}
