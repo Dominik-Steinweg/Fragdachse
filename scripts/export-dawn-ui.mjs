@@ -8,7 +8,9 @@ const assets = new URL('public/assets/ui/dawn/', root);
 const review = new URL('art/poc/dawn/icons/v2/', root);
 const provenance = JSON.parse(await readFile(new URL('prompts.json', assets), 'utf8'));
 await mkdir(new URL('runtime/', assets), { recursive: true });
+if (!process.argv.includes('--u7')) {
 await mkdir(review, { recursive: true });
+}
 const manifest = { paddingFraction: 0.0625, alphaThreshold: 1, sourceEdgeGuard: 2, assets: {} };
 
 async function sampleSquare(square, size, backgroundMode) {
@@ -81,11 +83,17 @@ for (const spec of provenance.assets) {
     exports.push({ file, width: size, height: size, bytes: encoded.length });
   }
   manifest.assets[spec.key] = { original: spec.original, sha256: hash, backgroundMode: spec.backgroundMode ?? 'transparent', crop, exports };
+  if (spec.reviewGroup === 'icons-u7') Object.assign(manifest.assets[spec.key], {
+    selectedCandidate: spec.selectedCandidate, source: spec.source,
+    selectionReason: spec.selectionReason, minimumDisplaySize: spec.minimumDisplaySize,
+  });
 }
 await writeFile(new URL('runtime/manifest.json', assets), JSON.stringify(manifest, null, 2) + '\n');
 console.log(`Exported ${provenance.assets.length} Dawn originals and runtime/manifest.json`);
 
 // Local review sources are optional; shipping exports only need the tracked originals.
+// Scoped U-7 delivery must not rewrite the historical review artifacts.
+if (!process.argv.includes('--u7')) {
 const icons = provenance.assets.filter(spec => spec.reviewGroup === 'druck-v2');
 let forest, candidates;
 try {
@@ -150,4 +158,15 @@ if (icons.length && forest && candidates) {
   await sharp({ create: { width, height, channels: 4, background: '#191c19' } }).composite(layers)
     .png({ compressionLevel: 9 }).toFile(fileURLToPath(new URL('set-board.png', review)));
   console.log('Wrote art/poc/dawn/icons/v2/set-board.png');
+}
+}
+
+// U-7 review tooling is local/optional; runtime exports depend only on originals.
+const u7Review = new URL('art/poc/dawn/ui/icons-u7/build-board.mjs', root);
+try {
+  await readFile(u7Review);
+  await import(u7Review.href);
+} catch (error) {
+  if (error.code !== 'ENOENT') throw error;
+  console.log('Skipping U-7 board: local review sources unavailable.');
 }
