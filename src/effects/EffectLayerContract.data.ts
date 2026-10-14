@@ -2834,10 +2834,9 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:arena/LobbyMerchantRenderer.ts:module/this.dealer/setDepth/0","owner":"arena/LobbyMerchantRenderer.ts","component":"module/this.dealer/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[10],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.dealer/setDepth/0","expression":"DEPTH.PLAYERS"}},
   {"id":"cpu:arena/DawnSitePropRenderer.ts:sync/sprite/setDepth/0","owner":"arena/DawnSitePropRenderer.ts","component":"sync/sprite/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[4],"blends":["NORMAL"],"profiles":["G"],"role":"effect","source":{"selector":"sync/sprite/setDepth/0","expression":"DEPTH.BASES"}},
   {id:'cpu:arena/DawnSitePropRenderer.ts:syncLight/emission/setDepth/0',owner:'arena/DawnSitePropRenderer.ts',component:'syncLight/emission/setDepth/0',height:'body',lighting:'emissive',camera:'world',depths:[19.58],blends:['ADD'],profiles:['E'],role:'effect',source:{selector:'syncLight/emission/setDepth/0',expression:'DEPTH_LIGHTING + 0.08'}},
+  {"id":"cpu:arena/DawnSitePropRenderer.ts:syncCrates/crate/setDepth/0","owner":"arena/DawnSitePropRenderer.ts","component":"syncCrates/crate/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[5,10.2],"blends":["NORMAL"],"profiles":["G","M"],"role":"effect","source":{"selector":"syncCrates/crate/setDepth/0","expression":"carried ? DEPTH.PLAYERS + 0.2 : DEPTH.BASES + 1"}},
   {id:'cpu:arena/DawnSitePropRenderer.ts:syncSparks/emitter/setDepth/0',owner:'arena/DawnSitePropRenderer.ts',component:'syncSparks/emitter/setDepth/0',height:'body',lighting:'emissive',camera:'world',depths:[19.59],blends:['ADD'],profiles:['E'],role:'effect',source:{selector:'syncSparks/emitter/setDepth/0',expression:'DEPTH_LIGHTING + 0.09'}},
   {id:'cpu:ui/DawnHUD.ts:module/this.card.root/setDepth/0',owner:'ui/DawnHUD.ts',component:'module/this.card.root/setDepth/0',height:'body',lighting:'emissive',camera:'clarity',depths:[100],blends:['NORMAL'],profiles:['C'],role:'ui',source:{selector:'module/this.card.root/setDepth/0',expression:'DEPTH.OVERLAY'}},
-  {id:'cpu:ui/DawnHUD.ts:sync/marker.edge/setDepth/0',owner:'ui/DawnHUD.ts',component:'sync/marker.edge/setDepth/0',height:'body',lighting:'emissive',camera:'clarity',depths:[100],blends:['NORMAL'],profiles:['C'],role:'ui',source:{selector:'sync/marker.edge/setDepth/0',expression:'DEPTH.OVERLAY'}},
-  {id:'cpu:ui/DawnHUD.ts:createMarker/marker/setDepth/0',owner:'ui/DawnHUD.ts',component:'createMarker/marker/setDepth/0',height:'body',lighting:'emissive',camera:'world',depths:[12],blends:['NORMAL'],profiles:['K'],role:'ui',source:{selector:'createMarker/marker/setDepth/0',expression:'DEPTH.BASES + 8'}},
   {id:'cpu:ui/DawnMerchantOverlay.ts:build/this.root/setDepth/0',owner:'ui/DawnMerchantOverlay.ts',component:'build/this.root/setDepth/0',height:'body',lighting:'emissive',camera:'clarity',depths:[103],blends:['NORMAL'],profiles:['C'],role:'ui',source:{selector:'build/this.root/setDepth/0',expression:'DEPTH.OVERLAY + 3'}},
   {"id":"mortar:glow","owner":"effects/MortarStrikeRenderer.ts","component":"glow","height":"body","lighting":"emissive","camera":"world","depths":[19.7],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"createVisual/glow/setDepth/0","expression":"19.7"}},
   {"id":"mortar:core","owner":"effects/MortarStrikeRenderer.ts","component":"core","height":"body","lighting":"emissive","camera":"world","depths":[19.7],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"createVisual/core/setDepth/0","expression":"19.7"}},
@@ -3347,7 +3346,8 @@ export const CPU_SOURCE_CONTRACTS = {
     "sites": [
       { "key": "sync/sprite/setDepth/0", "expression": "DEPTH.BASES", "blends": ["NORMAL"] },
       { "key": "syncLight/emission/setDepth/0", "expression": "DEPTH_LIGHTING + 0.08", "blends": ["ADD"] },
-      { "key": "syncSparks/emitter/setDepth/0", "expression": "DEPTH_LIGHTING + 0.09", "blends": ["ADD"] }
+      { "key": "syncSparks/emitter/setDepth/0", "expression": "DEPTH_LIGHTING + 0.09", "blends": ["ADD"] },
+      { "key": "syncCrates/crate/setDepth/0", "expression": "carried ? DEPTH.PLAYERS + 0.2 : DEPTH.BASES + 1", "blends": ["NORMAL"] }
     ],
     "bindings": {}
   },
@@ -3355,12 +3355,10 @@ export const CPU_SOURCE_CONTRACTS = {
   // HudCard owns counter icons; the merchant owns tabs, cards and recalibration within one modal.
   "ui/DawnHUD.ts": {
     "sites": [
-      { "key": "module/this.card.root/setDepth/0", "expression": "DEPTH.OVERLAY", "blends": ["NORMAL"] },
-      { "key": "sync/marker.edge/setDepth/0", "expression": "DEPTH.OVERLAY", "blends": ["NORMAL"] },
-      { "key": "createMarker/marker/setDepth/0", "expression": "DEPTH.BASES + 8", "blends": ["NORMAL"] }
+      { "key": "module/this.card.root/setDepth/0", "expression": "DEPTH.OVERLAY", "blends": ["NORMAL"] }
     ],
     "blends": [],
-    "cameras": ["promoteToClarityCamera(scene, this.card.root)", "promoteToClarityCamera(this.scene, marker.edge)", "promoteToClarityCamera(this.scene, this.modifierIcon)"],
+    "cameras": ["promoteToClarityCamera(scene, this.card.root)", "promoteToClarityCamera(this.scene, this.modifierIcon)"],
     "bindings": {}
   },
   "ui/DawnMerchantOverlay.ts": {
