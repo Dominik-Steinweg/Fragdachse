@@ -1,14 +1,13 @@
-/** Solar horizons and contact AO packed separately from normals, coverage and ambient
- * cavity. Interrupted transitions start at the currently visible horizon. */
-export function packPreviousHorizons(data: Uint8Array, occlusion: Uint8Array,
-  previous: Uint8Array, mix: number): void {
+/** The secondary azimuth support: its three solar horizon angles and contact AO, packed
+ * apart from the direction-independent normals, coverage and ambient cavity. */
+export function packHorizonSupport(data: Uint8Array, occlusion: Uint8Array, out: Uint8Array): void {
   for(let i=0;i<data.length;i+=4) {
-    previous[i]=Math.round(previous[i]+(data[i+2]-previous[i])*mix);
-    previous[i+1]=Math.round(previous[i+1]+(occlusion[i+1]-previous[i+1])*mix);
-    previous[i+2]=Math.round(previous[i+2]+(occlusion[i+2]-previous[i+2])*mix);
-    previous[i+3]=Math.round(previous[i+3]+(occlusion[i+3]-previous[i+3])*mix);
+    out[i]=data[i+2];out[i+1]=occlusion[i+1];out[i+2]=occlusion[i+2];out[i+3]=occlusion[i+3];
   }
 }
+/** Per-slot weight of the primary support. Both supports store horizon angles, so the mix
+ * is an angle interpolation by azimuth that precedes every visibility test – the shadow
+ * edge moves instead of fading between two finished results. */
 export const HORIZON_BLEND_GLSL = `
 uniform sampler2D uHorizonPrevious;
 uniform vec4 uHorizonBlend[16];

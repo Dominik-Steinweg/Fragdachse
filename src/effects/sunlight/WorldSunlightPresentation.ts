@@ -161,7 +161,7 @@ export class WorldSunlightPresentation {
       this.sunPath.azimuth=r.azimuth;this.sunPath.elevation=e;this.sunPath.strength=r.strength;
       this.sunPath.direction[0]=Math.cos(a);this.sunPath.direction[1]=-Math.sin(a);
       this.sunPath.sun[0]=Math.cos(a)*Math.cos(e);this.sunPath.sun[1]=-Math.sin(a)*Math.cos(e);this.sunPath.sun[2]=Math.sin(e);
-      this.sunPath.horizonAzimuth=r.azimuth;
+      this.sunPath.horizonAzimuth=r.azimuth;this.sunPath.castAzimuth=r.azimuth;
     }
     this.sunState.strength=this.sunPath.strength;
     for(let i=0;i<3;i++)this.sunState.sun[i]=this.sunPath.sun[i];

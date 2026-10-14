@@ -388,15 +388,29 @@ nicht per Source-over zusammengesetzt werden: Sie verlieren an teilgedeckten
 Kanten Alpha und legen einen Saum des Untergrunds frei, auch bei korrektem PMA.
 Vertrag: [RockOverlayStreamer.test.ts](../../tests/RockOverlayStreamer.test.ts).
 
-Fels-Horizonte unterscheiden Geometrie-Revision und Sonnenrichtung. Ein Richtungswechsel entwertet
-keinen geometrisch gültigen laufenden Bake: Sein Ergebnis darf als Zwischenstand erscheinen und
-wird anschließend auf die neueste Richtung nachgeführt. Geometrieänderungen, insbesondere
-Zerstoerung, verwerfen veraltete Ergebnisse. Geometrie-Reparaturen werden als gemeinsame Worker-Transaktion
-ueber betroffene residente Chunks veroeffentlicht; bis dahin bleibt der letzte exakte Feldstand erhalten.
-Die gemeinsamen Empfaenger (Felsoberflaeche, Boden und Felsbewuchs) lesen denselben Stand.
-Nur Sonnenrichtungswechsel verwenden Horizont-Blends auf der pausierbaren Praesentationsuhr,
-Geometrie-Reparaturen schreiben weder Zellraster-Schaetzungen noch einen Reparatur-Fade.
+Fels-Horizonte unterscheiden Geometrie-Revision und Sonnenrichtung. Ein residenter Chunk hält bis zu
+zwei Azimut-Stützstellen derselben Geometrie (Feld-/Okklusionsatlas und Horizont-Historie). Alle
+Empfänger interpolieren deren Horizontwinkel pro Texel nach dem tatsächlichen Azimut und testen erst
+danach gegen die Elevation; zwei fertige Licht- oder Schattenergebnisse werden nie überblendet, sonst
+entstehen Doppelkanten. Eine Stützstelle wird nur ersetzt, solange sie kein Gewicht trägt; die
+nächste entsteht in Laufrichtung vorab. Ein reiner Richtungs-Bake rechnet nur die Sonnenhorizonte über
+der gecachten Geometrie neu. Ohne direktes Licht folgt die Richtung weiter der Sonne, damit der
+Wechsel zum Sonnenaufgang im Dunkeln liegt. Geometrieänderungen, insbesondere Zerstoerung, verwerfen
+veraltete Ergebnisse und die zweite Stützstelle. Geometrie-Reparaturen werden als gemeinsame
+Worker-Transaktion ueber betroffene residente Chunks veroeffentlicht; bis dahin bleibt der letzte exakte
+Feldstand erhalten. Die gemeinsamen Empfaenger (Felsoberflaeche, Boden und Felsbewuchs) lesen denselben
+Stand. Geometrie-Reparaturen schreiben weder Zellraster-Schaetzungen noch einen Reparatur-Fade.
 Uebertragene Worker-Ergebnisse sind Kopien; der begrenzte Geometrie-Cache behaelt seine eigenen Buffer.
+Owner: [RockFormationLighting.ts](../../src/arena/rocks/RockFormationLighting.ts);
+Vertragstest: [RockFormationLighting.test.ts](../../tests/RockFormationLighting.test.ts).
+
+Footprint- und statische Schatten folgen dem kontinuierlichen Wurf-Azimut `castAzimuth` aus
+[SunPath.ts](../../src/effects/sunlight/SunPath.ts): tagsüber der Sonnenbogen, nachts ein Bogen über
+Süden zurück zur Aufgangsrichtung, ohne Sprung um Mitternacht oder im Morgengrauen. Lange Caster
+(Waldkronen, Stämme, Wachtürme) zeichnet `ShadowSystem` bei gebundenem Sonnenpfad jeden Frame mit
+aktueller Richtung und aktuellem Profil; nur kurze Kontakt-Footprints (Basen, Wände, Geschütztürme)
+bleiben im Chunk-Bake. Eine Caster-Art liegt nie zugleich im Bake und im Frame-Pfad.
+Vertragstest: [ShadowStaticBake.test.ts](../../tests/ShadowStaticBake.test.ts).
 
 ## Runtime-Asset-Vertrag
 

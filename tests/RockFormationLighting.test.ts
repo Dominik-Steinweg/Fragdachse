@@ -208,35 +208,82 @@ describe('formation lighting ownership and incremental updates',()=>{
   });
 });
 
-it('rebakes only across azimuth bins, blends on the presentation clock and releases horizon history',async()=>{
+/** Single-chunk fixture driver: advances the presentation clock and answers only open jobs. */
+function sunDriver(f:ReturnType<typeof fixture>) {
+  const lighting=f.lighting as any,resident=()=>[...(lighting.resident as Map<string,any>).values()][0];
+  const frame=(dt=.25)=>{if(f.state.clouds)f.state.clouds.timeSec+=dt;f.lighting.tick();};
+  const waiting=()=>{const held=resident()?.ahead;return !!held&&f.lighting.getDiagnostics().horizonPair.includes(held.azimuth);};
+  const settle=()=>{
+    let guard=200;
+    while((f.lighting.getDiagnostics().pendingChunks||lighting.busy||waiting())&&guard-->0){if(lighting.busy)f.worker.reply();frame();}
+    expect(guard).toBeGreaterThan(0);
+  };
+  const wrap=(a:number)=>((a%360)+360)%360,delta=(a:number,b:number)=>{const d=wrap(b-a);return d>180?d-360:d;};
+  /** Azimuth whose horizon angles the shaders currently show (per-texel angle lerp of both supports). */
+  const shown=()=>{
+    const r=resident(),weight=f.lighting.getReceiverBinding()!.horizonBlend![r.slot];
+    return r.secondary===undefined?r.azimuth:wrap(r.secondary+delta(r.secondary,r.azimuth)*weight);
+  };
+  const builds=(azimuth?:number)=>f.worker.messages.filter(m=>m.kind==='build'&&(azimuth===undefined||m.azimuth===azimuth)).length;
+  return {resident,frame,settle,shown,builds};
+}
+
+it('interpolates horizon angles between bracketing supports, bakes the next one ahead and releases history',async()=>{
   const {createSunPath,resolveSunPath}=await import('../src/effects/sunlight/SunPath');
   const {createSunTuning}=await import('../src/effects/sunlight/SunAtmosphere');
-  const f=fixture(512,512,4,4,undefined,undefined,true),settle=()=>{let guard=100;while(f.lighting.getDiagnostics().pendingChunks&&guard-->0){f.worker.reply();f.lighting.tick();}expect(guard).toBeGreaterThan(0);};settle();
-  const path=resolveSunPath(720,90,createSunPath());f.state.clouds={tuning:createSunTuning(),timeSec:0,strength:1,sunPath:path};
-  f.lighting.tick();settle();const before=f.worker.messages.filter(m=>m.kind==='build').length,bytes=f.lighting.getDiagnostics().uploadBytes;
-  const binding=f.lighting.getReceiverBinding()!;expect(binding.horizonPrevious).toBeDefined();expect(binding.horizonBlend![0]).toBe(0);
+  const f=fixture(512,512,4,4,undefined,undefined,true),sun=sunDriver(f);sun.settle();
+  const path=resolveSunPath(720,90.5,createSunPath());f.state.clouds={tuning:createSunTuning(),timeSec:0,strength:1,sunPath:path};
+  sun.frame();sun.settle();resolveSunPath(720,91,path);sun.frame();sun.settle();
+  expect(f.lighting.getDiagnostics()).toMatchObject({horizonPair:[90,96],horizonAhead:102});
+  const binding=f.lighting.getReceiverBinding()!;expect(binding.horizonPrevious).toBeDefined();
+  expect(sun.shown()).toBeCloseTo(91,6);
+  expect(sun.builds(102)).toBe(1);
   expectRestoredTextures(f);
-  resolveSunPath(720,91,path);for(let i=0;i<20;i++)f.lighting.tick();
-  expect(f.worker.messages.filter(m=>m.kind==='build')).toHaveLength(before);expect(f.lighting.getDiagnostics().uploadBytes).toBe(bytes);
-  f.state.clouds.timeSec=.3;f.lighting.tick();expect(binding.horizonBlend![0]).toBeCloseTo(.5);
-  f.state.clouds.timeSec=.6;f.lighting.tick();expect(binding.horizonBlend![0]).toBe(1);
-  resolveSunPath(720,96,path);f.lighting.tick();resolveSunPath(720,102,path);f.worker.reply();f.lighting.tick();
-  expect(f.lighting.getDiagnostics().discardedBuilds).toBe(0);settle();
-  expect(f.lighting.getDiagnostics().horizonAzimuth).toBe(102);
-  f.state.clouds=undefined;f.lighting.tick();settle();expect(f.lighting.getDiagnostics().horizonAzimuth).toBe(135);
+  // Within one support pair the sun moves without any worker job or atlas upload.
+  const jobs=sun.builds(),bytes=f.lighting.getDiagnostics().uploadBytes;
+  for(const azimuth of [92,93.5,95,95.9]){resolveSunPath(720,azimuth,path);sun.frame(1/60);expect(sun.shown()).toBeCloseTo(azimuth,6);}
+  expect(sun.builds()).toBe(jobs);expect(f.lighting.getDiagnostics().uploadBytes).toBe(bytes);
+  // Crossing a support swaps in the prebaked one while the shown angle keeps following the sun.
+  for(const azimuth of [96.2,96.6,97.5]){resolveSunPath(720,azimuth,path);sun.frame(1/60);expect(sun.shown()).toBeCloseTo(azimuth,6);}
+  expect(sun.builds(102)).toBe(1);expect([sun.resident().azimuth,sun.resident().secondary].sort()).toEqual([102,96]);
+  expect(sun.builds(108)).toBe(1);expect(f.lighting.getDiagnostics().discardedBuilds).toBe(0);
+  f.state.clouds=undefined;sun.frame();sun.settle();expect(f.lighting.getDiagnostics().horizonAzimuth).toBe(135);
   expect(f.lighting.getReceiverBinding()!.horizonPrevious).toBeUndefined();f.lighting.destroy();
+});
+
+it('bakes the sunrise supports in the dark and never shows the obsolete geometry of a repaired support',async()=>{
+  const {createSunPath,resolveSunPath}=await import('../src/effects/sunlight/SunPath');
+  const {createSunTuning}=await import('../src/effects/sunlight/SunAtmosphere');
+  const f=fixture(512,512,4,4,undefined,undefined,true),sun=sunDriver(f);sun.settle();
+  // Evening: strength reaches zero while the sun still sets in the west.
+  const path=resolveSunPath(1230,null,createSunPath());f.state.clouds={tuning:createSunTuning(),timeSec:0,strength:0,sunPath:path};
+  sun.frame();sun.settle();expect(path.strength).toBe(0);expect(sun.shown()).toBeCloseTo(180,6);
+  // Past midnight the eastern sunrise pair is baked while unlit, before the light returns.
+  resolveSunPath(60,null,path);sun.frame();sun.settle();
+  expect(path.strength).toBe(0);expect([sun.resident().azimuth,sun.resident().secondary].sort((a,b)=>a-b)).toEqual([0,6]);
+  resolveSunPath(400,null,path);expect(path.strength).toBeGreaterThan(0);sun.frame(1/60);
+  expect(sun.shown()).toBeCloseTo(path.azimuth,6);
+  // A destruction drops the other support at once; it returns only when rebuilt on the new geometry.
+  const r=sun.resident();f.states[0].active=false;f.lighting.invalidate([0]);
+  expect(r.secondary).toBeDefined();sun.settle();
+  expect(r.revision).toBe((f.lighting as any).revision);
+  const supports=f.worker.messages.filter(m=>m.kind==='build'&&m.revision===r.revision).map(m=>m.azimuth);
+  for(const azimuth of [r.azimuth,r.secondary])expect(supports.includes(azimuth)||f.worker.messages.some(m=>m.kind==='repair'&&m.revision===r.revision&&m.azimuth===azimuth)).toBe(true);
+  f.lighting.destroy();
 });
 
 it('uses quality bins and stops solar horizon jobs on low',async()=>{
   const {SUN_RENDER_QUALITY}=await import('../src/effects/sunlight/SunRenderQuality');
   const {createSunPath,resolveSunPath}=await import('../src/effects/sunlight/SunPath');
   const {createSunTuning}=await import('../src/effects/sunlight/SunAtmosphere');
-  const f=fixture(),settle=()=>{let guard=100;while(f.lighting.getDiagnostics().pendingChunks&&guard-->0){f.worker.reply();f.lighting.tick();}expect(guard).toBeGreaterThan(0);};settle();
-  const path=resolveSunPath(720,96,createSunPath());
+  const f=fixture(),sun=sunDriver(f),settle=sun.settle;settle();
+  const path=resolveSunPath(720,94,createSunPath());
   f.state.clouds={tuning:createSunTuning(),timeSec:0,strength:1,sunPath:path,quality:SUN_RENDER_QUALITY.medium};
-  f.lighting.tick();settle();const jobs=()=>f.worker.messages.filter(m=>m.kind==='build').length,before=jobs();
-  resolveSunPath(720,100,path);f.lighting.tick();expect(jobs()).toBe(before);
-  resolveSunPath(720,103,path);f.lighting.tick();settle();expect(jobs()).toBeGreaterThan(before);
+  sun.frame();settle();resolveSunPath(720,96,path);sun.frame();settle();
+  expect(f.lighting.getDiagnostics()).toMatchObject({horizonPair:[96,108],horizonAhead:120});
+  const jobs=()=>f.worker.messages.filter(m=>m.kind==='build').length,before=jobs();
+  resolveSunPath(720,100,path);sun.frame();expect(jobs()).toBe(before);
+  resolveSunPath(720,109,path);sun.frame();settle();expect(jobs()).toBeGreaterThan(before);
   f.state.clouds.quality=SUN_RENDER_QUALITY.low;f.lighting.tick();settle();const low=jobs();
   expect(f.worker.messages.filter(m=>m.kind==='build').at(-1).horizons).toBe(false);
   resolveSunPath(720,150,path);f.lighting.tick();expect(jobs()).toBe(low);
@@ -292,7 +339,7 @@ it('reaches resident readiness at both ends of every authored world without exha
  }
 });
 
-it('never fades from a fabricated or obsolete geometry repair, even during a sun transition',async()=>{
+it('shows a repaired support alone until the other is rebuilt on the new geometry',async()=>{
  const {createSunPath,resolveSunPath}=await import('../src/effects/sunlight/SunPath');
  const {createSunTuning}=await import('../src/effects/sunlight/SunAtmosphere');
  const settle=(f:ReturnType<typeof fixture>)=>{let guard=100;while(f.lighting.getDiagnostics().pendingChunks&&guard-->0){f.worker.reply();f.lighting.tick();}expect(guard).toBeGreaterThan(0);};

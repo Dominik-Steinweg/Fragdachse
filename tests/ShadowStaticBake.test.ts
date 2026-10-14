@@ -207,9 +207,25 @@ function makeScene() {
     return rt;
   };
 
-  const scene = { add: { graphics: makeGraphics, renderTexture: makeRenderTexture } } as never;
-  return { scene, textures, graphicsLog };
+  const images: ImageEvent[] = [];
+  const makeImage = () => {
+    const state: ImageEvent = { key: '', x: 0, y: 0, depth: 0, alpha: 1, visible: true, blend: 0 };
+    images.push(state);
+    const image: Record<string, unknown> = {};
+    for (const name of ['setScale', 'setRotation', 'setTint', 'destroy']) image[name] = () => image;
+    image.setTexture = (key: string) => { state.key = key; return image; };
+    image.setPosition = (x: number, y: number) => { state.x = x; state.y = y; return image; };
+    image.setDepth = (depth: number) => { state.depth = depth; return image; };
+    image.setAlpha = (alpha: number) => { state.alpha = alpha; return image; };
+    image.setVisible = (visible: boolean) => { state.visible = visible; return image; };
+    image.setBlendMode = (blend: number) => { state.blend = blend; return image; };
+    return image;
+  };
+  const scene = { add: { graphics: makeGraphics, renderTexture: makeRenderTexture, image: makeImage } } as never;
+  return { scene, textures, graphicsLog, images };
 }
+
+interface ImageEvent { key: string; x: number; y: number; depth: number; alpha: number; visible: boolean; blend: number }
 
 function layout(rockCount: number, treeCount: number): ArenaLayout {
   return {
@@ -606,6 +622,48 @@ it('throttles direction rebakes, preserves unchanged bins and restores the produ
   expect(shadows.syncStaticProfile(1600)).toBe(true);drain(scene);
   rock.fillPoints.length=0;shadows.setSunPath(null);drain(scene);expect(rock.fillPoints).toEqual(original);
   expect(shadows.syncStaticProfile(5000)).toBe(false);shadows.destroy();
+});
+it('draws crowns, trunks and watchtowers along the continuous sun every frame instead of baked steps',async()=>{
+  const {createSunPath,resolveSunPath}=await import('../src/effects/sunlight/SunPath');
+  const {scene,textures,graphicsLog,images}=makeScene(),shadows=new ShadowSystem(scene);
+  shadows.setWorldBoundsOverride({minX:0,minY:0,maxX:1536,maxY:1024});shadows.setTimeOfDay(720);
+  const tower={id:0,kind:'watchtower',gridX:2,gridY:2,hp:1};
+  const arenaLayout={rocks:[{gridX:2,gridY:2}],trees:[{gridX:20,gridY:8}]} as unknown as ArenaLayout;
+  const arena={rockPhysicsProxies:[{active:true}]} as never;
+  const source={worldX:660,worldY:280,gfx:{texture:{key:'canopy-proof'},frame:{name:'crown'},
+    displayWidth:200,displayHeight:200,scaleX:.5,scaleY:.5,rotation:0}};
+  shadows.rebuildArenaStaticShadows(arenaLayout,arena,[tower] as never);drain(scene);
+  const path=resolveSunPath(720,60,createSunPath());
+  shadows.setCanopyShadows([source] as never,true);shadows.setSunPath(path);
+  for(const texture of textures)texture.stamps.length=0;
+  const bake=vi.spyOn(shadows as any,'bakeStaticShadowRegion');
+  const draw=vi.spyOn(shadows as any,'drawFootprint');
+  expect(shadows.syncStaticProfile(1000,true)).toBe(true);drain(scene);
+  // Long casters are never baked; their layers are absent from the chunk surface.
+  expect(bake).toHaveBeenCalled();expect(draw).not.toHaveBeenCalled();
+  expect(textures.flatMap(texture=>texture.stamps).filter(stamp=>stamp.key==='canopy-proof')).toHaveLength(0);
+  expect(visibleChunkTargets(textures).some(texture=>texture.depth===SHADOW_CASTERS.trunk.layerDepth
+    ||texture.depth===DEPTH.GROUND_FOG-.02)).toBe(false);
+  const crown=()=>{const live=images.filter(image=>image.visible&&image.key==='canopy-proof');
+    return {count:live.length,x:live.reduce((sum,image)=>sum+image.x,0)/live.length,y:live.reduce((sum,image)=>sum+image.y,0)/live.length};};
+  shadows.syncContinuousStaticShadows();
+  expect(images.every(image=>image.blend===3&&image.depth===DEPTH.GROUND_FOG-.02)).toBe(true);
+  const casters=draw.mock.calls.map(call=>call[3]);
+  expect(casters).toContain(SHADOW_CASTERS.trunk);expect(casters).toContain(SHADOW_CASTERS.watchtower);
+  expect(graphicsLog.some(graphics=>graphics.depth===SHADOW_CASTERS.trunk.layerDepth&&graphics.fillPoints.length>0)).toBe(true);
+  const at60=crown(),reach=Math.hypot(at60.x-source.worldX,at60.y-source.worldY);
+  expect(at60.count).toBeGreaterThan(0);
+  // One degree of sun turns the crown shadow by exactly one degree, without any bake.
+  bake.mockClear();resolveSunPath(720,61,path);shadows.setSunPath(path);
+  expect(shadows.syncStaticProfile(1100)).toBe(false);shadows.syncContinuousStaticShadows();drain(scene);
+  expect(bake).not.toHaveBeenCalled();
+  const at61=crown(),turn=Math.atan2(at61.y-source.worldY,at61.x-source.worldX)-Math.atan2(at60.y-source.worldY,at60.x-source.worldX);
+  expect(at61.count).toBe(at60.count);expect(Math.hypot(at61.x-source.worldX,at61.y-source.worldY)).toBeCloseTo(reach,6);
+  expect(Math.abs(turn)*180/Math.PI).toBeCloseTo(1,6);
+  shadows.setStaticVisible(false);expect(crown().count).toBe(0);shadows.setStaticVisible(true);
+  shadows.setSunPath(null);drain(scene);shadows.syncContinuousStaticShadows();
+  expect(crown().count).toBe(0);expect(textures.flatMap(texture=>texture.stamps).some(stamp=>stamp.key==='canopy-proof')).toBe(true);
+  shadows.destroy();
 });
 it('builds gapless convex stadiums in every shadow direction',async()=>{
   const {createSunPath,resolveSunPath}=await import('../src/effects/sunlight/SunPath');

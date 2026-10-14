@@ -11,6 +11,9 @@ export interface SunPathState {
   direction: [number, number];
   sun: [number, number, number];
   horizonAzimuth: number;
+  /** Continuous bearing of footprint and static shadows: the day arc, then a night arc
+   * through the south back to the sunrise bearing. Unlike `azimuth` it never jumps. */
+  castAzimuth: number;
 }
 const smooth = (t: number): number => { t=Math.max(0,Math.min(1,t));return t*t*(3-2*t); };
 export function quantizeSunAzimuth(degrees: number, step: number = SUN_PATH.stepDegrees): number {
@@ -19,7 +22,7 @@ export function quantizeSunAzimuth(degrees: number, step: number = SUN_PATH.step
   return (Math.round((((degrees%360)+360)%360)/step)*step)%360;
 }
 export function createSunPath(): SunPathState {
-  return {azimuth:0,elevation:0,strength:0,direction:[1,0],sun:[1,0,0],horizonAzimuth:0};
+  return {azimuth:0,elevation:0,strength:0,direction:[1,0],sun:[1,0,0],horizonAzimuth:0,castAzimuth:0};
 }
 /** Deterministic from replicated minute only; writes into caller-owned storage.
  * At unlit midnight the held western direction resets to the eastern sunrise.
@@ -37,5 +40,8 @@ export function resolveSunPath(minutes: number, override: number | null, out: Su
   const horizontal=Math.cos(out.elevation);
   out.sun[0]=out.direction[0]*horizontal;out.sun[1]=out.direction[1]*horizontal;
   out.horizonAzimuth=quantizeSunAzimuth(out.azimuth);
+  const night=m>SUN_PATH.sunset||m<SUN_PATH.sunrise;
+  out.castAzimuth=override!==null&&Number.isFinite(override)||!night?out.azimuth
+    :(180+180*(((m-SUN_PATH.sunset)%1440+1440)%1440)/(1440-SUN_PATH.sunset+SUN_PATH.sunrise))%360;
   return out;
 }
