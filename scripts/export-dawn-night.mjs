@@ -175,13 +175,12 @@ function cloudChecks(fn, data) {
     shiftCorrelations: shifts, seamMean: [sx / 512, sy / 512], interiorStepMean: [ix / (512 * 511), iy / (512 * 511)] };
 }
 async function bomber() {
-  // Direct plan view, nose +X; exactly two engine nacelles, no markings or details.
-  const svg = `<svg width="256" height="128" viewBox="0 0 256 128"><g fill="white">
-    <path d="M35 64 Q54 56 110 55 L190 54 Q216 55 227 64 Q216 73 190 74 L110 73 Q54 72 35 64Z"/>
-    <path d="M133 57 L121 12 Q126 8 138 11 L167 56 L169 72 L138 117 Q126 120 121 116 L133 71Z"/>
-    <path d="M53 59 L47 36 L62 37 L82 60 L82 68 L62 91 L47 92 L53 69Z"/>
-    <ellipse cx="153" cy="36" rx="21" ry="6"/><ellipse cx="153" cy="92" rx="21" ry="6"/>
-    </g></svg>`;
+  // Symmetric flying wing in direct plan view, nose +X, serrated trailing edge.
+  // Keep the span on Y: stretching to fill the wide canvas would distort the aircraft.
+  const svg = `<svg width="256" height="128" viewBox="0 0 256 128">
+    <path fill="white" d="M154 64 L102 10 L110 30 L98 40 L112 50 L100 64
+      L112 78 L98 88 L110 98 L102 118 Z"/>
+    </svg>`;
   const alpha = await sharp(Buffer.from(svg), { density: 288 }).resize(256, 128).blur(2.3).ensureAlpha().extractChannel('alpha').raw().toBuffer();
   const rgba = Buffer.alloc(256 * 128 * 4);
   for (let i = 0; i < alpha.length; i++) rgba[i * 4 + 3] = Math.round(alpha[i] * .58);
@@ -216,6 +215,7 @@ for (const style of styles) {
   luts.push(lut);
 }
 const shadow = await bomber();
+Object.assign(assets.find(asset => asset.key === shadow.key), { silhouette: 'stealth-flying-wing', forward: '+X' });
 await writeIfChanged(path.join(destination, 'manifest.json'), JSON.stringify({ version: 1, assets }, null, 2) + '\n');
 
 const sceneFile = path.join(proof, 'night-scene-source.png');
@@ -237,6 +237,7 @@ for (let i = 0; i < luts.length; i++) {
 }
 const shadowPreview = await sharp(sceneFile).composite([{ input: shadow.encoded, left: 240, top: 266 }]).png().toBuffer();
 await writeIfChanged(path.join(proof, 'night-bomber-preview.png'), shadowPreview);
+await writeIfChanged(path.join(proof, 'bomber-stealth.png'), shadowPreview);
 const tiles = [];
 for (const asset of [cloud, smoke, ember]) {
   const p = await tilePreview(asset);

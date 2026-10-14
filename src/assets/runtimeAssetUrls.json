@@ -2785,5 +2785,13 @@
   "assets/sprites/pipeline-v2/dawn_supply_crate/idle.png": "assets/sprites/pipeline-v2/dawn_supply_crate/idle.png?v=6e0aecfc1416054ed1996bffb6cbc476d51ed3e469564491938bfbb5106a6269",
   "assets/sprites/pipeline-v2/dawn_supply_crate/sheet.png": "assets/sprites/pipeline-v2/dawn_supply_crate/sheet.png?v=b0ef22c0d5014e608a2557bc637e8d1cb2a5123ce106ef2441dc6daa5f42b03b",
   "assets/sprites/pipeline-v2/enemy_dawn_scavenger/idle.png": "assets/sprites/pipeline-v2/enemy_dawn_scavenger/idle.png?v=29140fe51a14b6ad18e2a7e1bdacc7cef26188bfaaa91ab35937171127027ff8",
-  "assets/sprites/pipeline-v2/enemy_dawn_scavenger/sheet.png": "assets/sprites/pipeline-v2/enemy_dawn_scavenger/sheet.png?v=0b117845fcc6a3d558a8d77d8f513ccd4e2a93ffa4205b3f09803c26c0c60a2d"
+  "assets/sprites/pipeline-v2/enemy_dawn_scavenger/sheet.png": "assets/sprites/pipeline-v2/enemy_dawn_scavenger/sheet.png?v=0b117845fcc6a3d558a8d77d8f513ccd4e2a93ffa4205b3f09803c26c0c60a2d",
+  "assets/sprites/pipeline-v2/dawn_scavenger_camp_t1/idle.png": "assets/sprites/pipeline-v2/dawn_scavenger_camp_t1/idle.png?v=8ccbe67cf92fd6d73e77776ab43d51d17e998bd8dee0b304983a579d79c624fd",
+  "assets/sprites/pipeline-v2/dawn_scavenger_camp_t1/sheet.png": "assets/sprites/pipeline-v2/dawn_scavenger_camp_t1/sheet.png?v=185dc2a69685cd7cb52d2dec00b90b58eb82926087eaa9295c9c8e50e86602bf",
+  "assets/sprites/pipeline-v2/dawn_scavenger_camp_t2/idle.png": "assets/sprites/pipeline-v2/dawn_scavenger_camp_t2/idle.png?v=e5b1b26eadb74d58f9fc57a8eab05309ace10013c2c7b44b1593ebfa2c1ac4d2",
+  "assets/sprites/pipeline-v2/dawn_scavenger_camp_t2/sheet.png": "assets/sprites/pipeline-v2/dawn_scavenger_camp_t2/sheet.png?v=1f3a06699a799b8b58be62abd1e54532b71aa7ebb0b88d3f6f23bf7a8e65d56c",
+  "assets/sprites/pipeline-v2/dawn_scavenger_camp_t3/idle.png": "assets/sprites/pipeline-v2/dawn_scavenger_camp_t3/idle.png?v=4db3b0f7829b92eea895bd0d3a7976f034bfbba59f1a0b815655a39b5b997ec1",
+  "assets/sprites/pipeline-v2/dawn_scavenger_camp_t3/sheet.png": "assets/sprites/pipeline-v2/dawn_scavenger_camp_t3/sheet.png?v=4c32807cc372f0dde3cfd06d540fb227e726b02538233104abb41fd40174d732",
+  "assets/sprites/pipeline-v2/dawn_supply_crate_carried/idle.png": "assets/sprites/pipeline-v2/dawn_supply_crate_carried/idle.png?v=36b74123f025f7a853f525c65e26078311eeabe3e67b6009577e020f339e5f6d",
+  "assets/sprites/pipeline-v2/dawn_supply_crate_carried/sheet.png": "assets/sprites/pipeline-v2/dawn_supply_crate_carried/sheet.png?v=e270984bd1a14e4eee1a1d4a8898b2b3f76c1cf516e08a356eb16e3fe3d7b7ea"
 }

@@ -17,7 +17,7 @@ Export: `node scripts/export-dawn-night.mjs` (vom Repository-Root; funktioniert 
 | `dawn-night-lut-fog-256x16` | 256 × 16 | lut: entsättigtes Schieferblau, minimaler Dunst-Schwarzpunkt |
 | `dawn-night-lut-bombers-256x16` | 256 × 16 | lut: leicht entsättigt, kühle Schatten, warme Lichter |
 | `dawn-night-lut-fire-256x16` | 256 × 16 | lut: rußbraune Schatten, Orange-/Ocker-Lichter |
-| `dawn-night-bomber-shadow-256x128` | 256 × 128 | sprite: zweimotoriger Bomber in Draufsicht, Nase +X |
+| `dawn-night-bomber-shadow-256x128` | 256 × 128 | sprite: B-2-artiger Tarnkappen-Nurflügler in Draufsicht, Nase +X |
 
 ## Masken und Wolkenfeld
 
@@ -25,7 +25,7 @@ Die drei Tiles und die Randmaske enthalten ausschließlich gleiche R/G/B-Werte, 
 
 Das neue Wolkenfeld verwendet periodisches Gradientenrauschen mit fünf Oktaven (3, 6, 11, 19, 31 Zellen), unabhängigen Winkel-Seeds und zwei sanften Domain-Warp-Stufen. Es enthält weder gespiegelte Quadranten noch gestempelte Ballen. Vignette: dasselbe Feld und derselbe Seed wie `edge-vignette-02`, direkt pro Zielpixel ausgewertet; keine Skalierung der 1024er Quelle. Alle Außenpixel sind weiß, das Zentrum schwarz.
 
-Bomber: RGB durchgehend 0; ausschließlich Alpha trägt die weich geblurrte Silhouette, Spitzenalpha 148/255. Gerade Draufsicht, zwei Motorgondeln, keine Oberflächendetails, transparente Außenränder. Alpha ist gerade/unpremultipliziert gespeichert; normale Alpha-Komposition. Zentraler Pivot (0.5, 0.5), Flugrichtung +X; spätere Effektstärke kann über globale Alpha zusätzlich reduziert werden.
+Bomber: RGB durchgehend 0; ausschließlich Alpha trägt die weich geblurrte Silhouette, Spitzenalpha 148/255. Symmetrischer B-2-artiger Nurflügler in gerader Draufsicht: gepfeilte Vorderkante, gezackte Hinterkante, kein separater Rumpf, kein Leitwerk, keine Oberflächendetails. Transparente Außenränder. Die Spannweite liegt entlang Y; die Form wird nicht auf die breite Canvas gestreckt. Alpha ist gerade/unpremultipliziert gespeichert; normale Alpha-Komposition. Zentraler Pivot (0.5, 0.5), Flugrichtung +X; spätere Effektstärke kann über globale Alpha zusätzlich reduziert werden. [Prüfbild auf Nacht-Waldboden](../../../../art/poc/dawn/fx/bomber-stealth.png).
 
 ## LUT-Vertrag und Farbabsicht
 

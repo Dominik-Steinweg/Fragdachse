@@ -25,6 +25,8 @@ export const DAWN_TEXTURE_KEYS = Object.freeze(Object.fromEntries([
   'construction_dawn_supply_capsule', 'dawn_supply_crate',
   'dawn_scrap_heap_t1', 'dawn_scrap_heap_t2', 'dawn_scrap_heap_t3',
   'dawn_scrap_t1', 'dawn_scrap_t2', 'dawn_scrap_t3', 'dawn_dealer',
+  'dawn_scavenger_camp_t1', 'dawn_scavenger_camp_t2', 'dawn_scavenger_camp_t3',
+  'dawn_supply_crate_carried',
 ].map(id => [id, id])));
 
 // Dawn's fleeing scavenger uses enemy naming and eye anchors, but has no attack.
