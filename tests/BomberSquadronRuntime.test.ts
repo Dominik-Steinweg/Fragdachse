@@ -4,21 +4,14 @@ import { bomberCorridor, bomberDrops, bomberLaunchAt, isBomberImpactInWorld } fr
 import { BomberSquadronRuntime, type BomberSquadronBombEvent } from '../src/systems/bomberSquadron/BomberSquadronRuntime';
 import { bomberSquadronBombKey, EMPTY_BOMBER_SQUADRON_SNAPSHOT } from '../src/systems/bomberSquadron/BomberSquadronSnapshot';
 
-// Eigenständige Config-Fixture, bis Lane A authored Content integriert; Mengen bleiben abgeleitet.
-const base: BomberSquadronUltimateConfig = {
-  id: 'BOMBER_SQUADRON', type: 'bomber_squadron', cooldown: 0, rageRequired: 300, rageCost: 300,
-  droneCount: 8, bombsPerPass: 6, secondPassEnabled: 0, launchIntervalMs: 250,
-  approachMs: 600, approachDistancePx: 240, runSpeedPxPerSec: 400,
-  corridorLeadPx: 48, corridorLengthPx: 640, corridorWidthPx: 560,
-  turnMs: 1000, departureMs: 600, bombFallMs: 250,
-  explosionRadius: 72, maxDamage: 24, minDamage: 8, fireChunksPerBomb: 0,
-};
+import { ULTIMATE_CONFIGS } from '../src/loadout/LoadoutConfig';
+const base = ULTIMATE_CONFIGS.BOMBER_SQUADRON as BomberSquadronUltimateConfig;
 const full = { ...base, droneCount: 14, bombsPerPass: 9, secondPassEnabled: 1, fireChunksPerBomb: 3 };
 
-function fixture(config = base, bounds = { width: 5000, height: 5000 }) {
+function fixture(config = base, bounds = { width: 5000, height: 5000 }, targets: { x: number; y: number; weight: number }[] = []) {
   const owners = new Map([['inspector', { x: 1000, y: 1000, color: 0x123456 }],
     ['other', { x: 1500, y: 1500, color: 0xabcdef }]]);
-  const runtime = new BomberSquadronRuntime({ readOwner: id => owners.get(id) ?? null, worldBounds: () => bounds });
+  const runtime = new BomberSquadronRuntime({ readOwner: id => owners.get(id) ?? null, readTargets: () => targets, worldBounds: () => bounds });
   const activate = (playerId = 'inspector', nowMs = 100, angle = 0) => runtime.tryActivate({ playerId, nowMs, angle, config });
   return { runtime, owners, activate, bounds };
 }
@@ -28,6 +21,46 @@ function expectOrdered(events: readonly BomberSquadronBombEvent[]) {
 }
 
 describe('BomberSquadronRuntime', () => {
+  it('fixiert die Ausrichtung beim Start und liefert jede ausgerichtete Bombe genau einmal', () => {
+    const targets = [{ x: 1300, y: 1070, weight: 1 }];
+    const f = fixture(full, { width: 5000, height: 5000 }, targets);
+    f.activate();
+    const initial = f.runtime.getSnapshot().squadrons[0];
+    const firstSeen: typeof initial.anchors[number][] = [];
+    let aimed = false;
+    const planned = new Map<string, ReturnType<typeof bomberDrops>[number]>();
+    const collect = () => {
+      const s = f.runtime.getSnapshot().squadrons[0];
+      if (!s) return;
+      s.anchors.forEach((a, drone) => {
+        if (!a) return;
+        // Die Wahl fällt beim Start; der weiterwandernde Gegner ändert einen begonnenen Anflug nicht mehr.
+        firstSeen[drone] ??= a;
+        expect(a).toEqual(firstSeen[drone]);
+        aimed ||= a.aimOffset !== 0 || a.aimAngle !== 0;
+        for (const bomb of bomberDrops(s, drone, a)) planned.set(bomberSquadronBombKey(s.id, drone, bomb.pass, bomb.bomb), bomb);
+      });
+    };
+    collect();
+    const events: BomberSquadronBombEvent[] = [];
+    const frames = [0, 17, 91, 377];
+    let frame = 0;
+    for (let now = initial.startedAt; now < initial.endsAt; now += frames[frame++ % frames.length]) {
+      targets[0].y += 1;
+      events.push(...f.runtime.update(now)); collect();
+      expect(f.runtime.update(now)).toEqual([]);
+    }
+    events.push(...f.runtime.update(initial.endsAt));
+    expect(aimed).toBe(true);
+    const expectedCount = full.droneCount * full.bombsPerPass * (1 + full.secondPassEnabled);
+    expect(planned.size).toBe(expectedCount);
+    for (const kind of ['drop', 'impact'] as const) {
+      const actual = events.filter(e => e.kind === kind);
+      expect(actual).toHaveLength(expectedCount);
+      expect(new Set(actual.map(e => e.bombKey)).size).toBe(expectedCount);
+      for (const e of actual) expect(e).toMatchObject(planned.get(e.bombKey)!);
+    }
+  });
   it('blockiert fehlende Besitzer und zweite Staffeln; friert Fakten und Schadenswerte ein', () => {
     const config = { ...full };
     const f = fixture(config);
@@ -41,7 +74,7 @@ describe('BomberSquadronRuntime', () => {
     expect(s).toMatchObject({ ownerId: 'inspector', ownerColor: f.owners.get('inspector')!.color,
       startedAt: 100, angle: 0, stoppedAt: null });
     expect(s.anchors).toHaveLength(config.droneCount);
-    expect(s.anchors[0]).toEqual({ x: 1000, y: 1000 });
+    expect(s.anchors[0]).toEqual({ x: 1000, y: 1000, aimOffset: 0, aimAngle: 0 });
     expect(s.anchors.slice(1).every(a => a === null)).toBe(true);
     const originalCount = config.droneCount, originalDamage = config.maxDamage;
     config.droneCount += 20;
@@ -70,7 +103,7 @@ describe('BomberSquadronRuntime', () => {
       expect(f.runtime.getSnapshot().squadrons[0].anchors[drone]).toBeNull();
       f.runtime.update(launchAt);
       const current = f.runtime.getSnapshot().squadrons[0];
-      expect(current.anchors[drone]).toEqual({ x: owner.x, y: owner.y });
+      expect(current.anchors[drone]).toEqual({ x: owner.x, y: owner.y, aimOffset: 0, aimAngle: 0 });
       expect(bomberCorridor(current, 0, current.anchors[0]!)).toEqual(first);
     }
     expect(initial.squadrons[0].anchors.slice(1).every(a => a === null)).toBe(true);

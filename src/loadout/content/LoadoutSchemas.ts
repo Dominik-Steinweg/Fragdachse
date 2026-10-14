@@ -1,3 +1,5 @@
+import { isBomberFlightPlanValid } from '../../systems/bomberSquadron/BomberSquadronPlan';
+import type { BomberSquadronPlanParams } from '../../systems/bomberSquadron/BomberSquadronSnapshot';
 import { MAX_FOG_TRAIL_FACTOR } from '../../config/fogTrail';
 import { validateRocketLauncherConfig } from '../RocketLauncherConfig';
 import { validatePlasmaBurnerConfig } from '../PlasmaBurnerConfig';
@@ -145,6 +147,8 @@ const ULTIMATE_REQUIRED: Readonly<Record<string, readonly string[]>> = {
     'spawnRingSlots', 'clearanceRadiusPx', 'minCopySpacingPx', 'injectorProjectionEnabled',
   ],
   bomber_squadron: [
+    'entrySpreadPx', 'entryAngleSpreadDeg', 'swayPx', 'departureSpeedPxPerSec', 'departureTurnDeg',
+    'aimOffsetPx', 'aimAngleDeg', 'aimOffsetSteps', 'aimAngleSteps', 'aimOverlapPenalty',
     'rageCost', 'droneCount', 'launchIntervalMs', 'approachMs', 'approachDistancePx', 'runSpeedPxPerSec',
     'bombsPerPass', 'secondPassEnabled', 'corridorLeadPx', 'corridorLengthPx', 'corridorWidthPx', 'turnMs',
     'departureMs', 'bombFallMs', 'explosionRadius', 'maxDamage', 'minDamage', 'fireChunksPerBomb',
@@ -560,6 +564,9 @@ export function validateResolvedUltimate(value: unknown): string[] {
     !Array.isArray(value.allowedModes) || value.allowedModes.some((mode) => !GAME_MODES.has(mode as GameMode))
   )) {
     issues.push('$.allowedModes: ungültiger Spielmodus');
+  }
+  if (value.type === 'bomber_squadron' && !isBomberFlightPlanValid(value as unknown as BomberSquadronPlanParams)) {
+    issues.push('$: ungültiger Bomber-Flugplan oder zu kurzer Bremsweg');
   }
   if (value.type === 'tunnel' && isRecord(value.activation) && value.activation.type !== 'placement_mode') {
     issues.push('$.activation.type: Tunnel verlangt placement_mode');

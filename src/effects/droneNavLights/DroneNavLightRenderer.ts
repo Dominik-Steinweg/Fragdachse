@@ -65,8 +65,9 @@ export class DroneNavLightRenderer {
   }
 
   /** Called by a drone renderer for each drone it displays this frame. */
-  submit(x: number, y: number, heading: number, alpha: number, profile: DroneNavLightProfile, key: object): void {
-    if (!this.destroyed) this.model.submit(x, y, heading, alpha, profile, key);
+  submit(x: number, y: number, heading: number, alpha: number, profile: DroneNavLightProfile, key: object,
+    lateralScale = 1): void {
+    if (!this.destroyed) this.model.submit(x, y, heading, alpha, profile, key, lateralScale);
   }
 
   private flush(): void {

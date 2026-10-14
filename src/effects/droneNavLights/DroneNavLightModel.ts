@@ -90,8 +90,10 @@ export class DroneNavLightModel {
   /**
    * One drone as displayed this frame. `heading` is the flight direction in Phaser radians
    * (0 = east); `key` is the displayed object and keeps the beacon phase stable for its lifetime.
+   * `lateralScale` follows a banking body that is drawn foreshortened across its wings.
    */
-  submit(x: number, y: number, heading: number, alpha: number, profile: DroneNavLightProfile, key: object): void {
+  submit(x: number, y: number, heading: number, alpha: number, profile: DroneNavLightProfile, key: object,
+    lateralScale = 1): void {
     if (!(alpha > 0.01) || !Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(heading)) return;
     const phase = this.phaseOf(key);
     const fx = Math.cos(heading), fy = Math.sin(heading);
@@ -100,8 +102,9 @@ export class DroneNavLightModel {
         x: 0, y: 0, kind: 'nose', band: 'under-canopy', alpha: 0, size: 1, phase: 0, heading: 0 });
       this.pointCount++;
       // Lateral +1 is the drone's right: the forward vector rotated by +90° in screen space.
-      point.x = x + fx * anchor.forward - fy * anchor.lateral;
-      point.y = y + fy * anchor.forward + fx * anchor.lateral;
+      const lateral = anchor.lateral * lateralScale;
+      point.x = x + fx * anchor.forward - fy * lateral;
+      point.y = y + fy * anchor.forward + fx * lateral;
       point.kind = anchor.kind; point.band = profile.band; point.alpha = alpha;
       point.size = profile.size; point.phase = phase; point.heading = heading;
     }

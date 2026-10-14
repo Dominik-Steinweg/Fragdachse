@@ -1,7 +1,9 @@
+import { bomberPlanParamsFromConfig, bomberDronePose } from '../../src/systems/bomberSquadron/BomberSquadronPlan';
+import { inspectorUltimate } from '../balance-lab/InspectorUltimateConfigs';
 import { describe, expect, it } from 'vitest';
 import { NetworkBridge } from '../../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../../src/network/peer/session';
-import { EMPTY_BOMBER_SQUADRON_SNAPSHOT, type BomberSquadronSnapshot, type BomberSquadronPlanParams } from '../../src/systems/bomberSquadron/BomberSquadronSnapshot';
+import { EMPTY_BOMBER_SQUADRON_SNAPSHOT, type BomberSquadronSnapshot } from '../../src/systems/bomberSquadron/BomberSquadronSnapshot';
 import { encodeBomberSquadronSnapshot, decodeBomberSquadronSnapshot } from '../../src/network/bomberSquadronSnapshotCodec';
 import { FULL_GAME_STATE_SLICE_KEYS, isCompleteGameStatePayload } from '../../src/network/FullGameStateBootstrap';
 import { FakeNetwork, createHostRoom, addClientRoom, type TestRoom } from '../fakePeerNetwork';
@@ -42,18 +44,14 @@ async function fixture() {
   } catch (error) { destroy(); throw error; }
 }
 
-// Frozen full-upgrade GDD plan fixture: authored ultimate content belongs to Lane A.
-// All generated counts derive from this config, independently of current balance tuning.
-const plan: BomberSquadronPlanParams = {
-  droneCount: 14, bombsPerPass: 9, passCount: 2, launchIntervalMs: 250, approachMs: 600,
-  approachDistancePx: 240, runSpeedPxPerSec: 400, corridorLeadPx: 48, corridorLengthPx: 640,
-  corridorWidthPx: 560, turnMs: 1000, departureMs: 600, bombFallMs: 250, explosionRadius: 72,
-};
+const config = inspectorUltimate('BOMBER_SQUADRON', true);
+if (config.type !== 'bomber_squadron') throw Error('Expected bomber config');
+const plan = bomberPlanParamsFromConfig(config);
 const owners = ['inspector', 'p2', 'p3', 'p4'];
 function snapshot(): BomberSquadronSnapshot {
   return { squadrons: [{ id: 1, ownerId: owners[0], ownerColor: 0xffffff,
     startedAt: 1000.125, endsAt: 9300.875, angle: 0.333, params: { ...plan },
-    anchors: Array.from({ length: plan.droneCount }, (_, i) => i === 0 ? { x: -200.1, y: 300.2 } : null),
+    anchors: Array.from({ length: plan.droneCount }, (_, i) => i === 0 ? { x: -200.1, y: 300.2, aimOffset: 20, aimAngle: 0.07 } : null),
     stoppedAt: null }] };
 }
 
@@ -61,12 +59,17 @@ describe('bomber squadron codec', () => {
   it('round-trips frozen plan values, optional stop and unquantized host times', () => {
     const facts = snapshot();
     expect(decodeBomberSquadronSnapshot(encodeBomberSquadronSnapshot(facts))).toEqual(facts);
+    const host = facts.squadrons[0], client = decodeBomberSquadronSnapshot(encodeBomberSquadronSnapshot(facts))!.squadrons[0];
+    for (const dt of [0, plan.approachMs / 2, plan.approachMs, plan.approachMs + plan.bombFallMs]) {
+      expect(bomberDronePose(client, 0, client.anchors[0]!, client.startedAt + dt))
+        .toEqual(bomberDronePose(host, 0, host.anchors[0]!, host.startedAt + dt));
+    }
     const input = { squadrons: [{ ...facts.squadrons[0], angle: -0.123456, stoppedAt: 2000.456,
-      anchors: facts.squadrons[0].anchors.map(a => a && { x: -2.345, y: 12.789 }) }] };
+      anchors: facts.squadrons[0].anchors.map(a => a && { x: -2.345, y: 12.789, aimOffset: -20.12, aimAngle: -0.1234 }) }] };
     const result = decodeBomberSquadronSnapshot(encodeBomberSquadronSnapshot(input))!;
     expect(result.squadrons[0]).toMatchObject({ angle: -0.123, stoppedAt: input.squadrons[0].stoppedAt,
       startedAt: input.squadrons[0].startedAt, endsAt: input.squadrons[0].endsAt, params: plan });
-    expect(result.squadrons[0].anchors[0]).toEqual({ x: -2.3, y: 12.8 });
+    expect(result.squadrons[0].anchors[0]).toEqual({ x: -2.3, y: 12.8, aimOffset: -20.1, aimAngle: -0.123 });
   });
 
   it('rejects any malformed row atomically, including duplicate ids and unsafe plan expansion', () => {
@@ -81,6 +84,11 @@ describe('bomber squadron codec', () => {
       r => { r[0][6][8] = 0; }, r => { r[0][6].pop(); }, r => { r[0][7].pop(); },
       r => { r[0][7][0] = [0, 0.1]; }, r => { r[0][7][0] = [0, Infinity]; },
       r => { r[0][7][0] = [0, 0, 0]; }, r => { r[0][7][0] = null; },
+      r => { r[0][7][0] = [0, 0, Math.floor(plan.aimOffsetPx * 10) + 1, 0]; },
+      r => { r[0][7][0] = [0, 0, 0, Math.floor(plan.aimAngleDeg * Math.PI / 180 * 1000) + 1]; },
+      r => { r[0][7][0] = [0, 0, 0, NaN]; },
+      r => { r[0][6][5] = plan.runSpeedPxPerSec * plan.approachMs / 1000; },
+      r => { r[0][6][21] = 0.5; }, r => { r[0][6][22] = 0; },
       r => { r[0][8] = 0; }, r => { r[0][8] = Infinity; }, r => { r[0][8] = null; },
       r => { r[0].push(2000, 3000); },
     ];
@@ -98,22 +106,22 @@ describe('bomber squadron codec', () => {
     const raw = encodeBomberSquadronSnapshot(snapshot());
     const first = decodeBomberSquadronSnapshot(raw)!;
     expect(decodeBomberSquadronSnapshot(structuredClone(raw), first)).toBe(first);
-    raw[0][7][1] = [1234, 5678];
+    raw[0][7][1] = [1234, 5678, 200, 70];
     const changed = decodeBomberSquadronSnapshot(raw, first)!;
     expect(changed).not.toBe(first);
     expect(first.squadrons[0].anchors[1]).toBeNull();
-    expect(changed.squadrons[0].anchors[1]).toEqual({ x: 123.4, y: 567.8 });
+    expect(changed.squadrons[0].anchors[1]).toEqual({ x: 123.4, y: 567.8, aimOffset: 20, aimAngle: 0.07 });
     expect(decodeBomberSquadronSnapshot([], changed)).toBe(EMPTY_BOMBER_SQUADRON_SNAPSHOT);
   });
 
-  it('keeps four full squadrons below 2 KiB of JSON without per-bomb data', () => {
+  it('keeps four full squadrons below 3 KiB of JSON without per-bomb data', () => {
     const facts = { squadrons: owners.map((ownerId, i) => ({ ...snapshot().squadrons[0], id: i + 1,
       ownerId, startedAt: 1_000_000.125, endsAt: 1_009_000.875, stoppedAt: 1_004_000.5,
-      anchors: Array.from({ length: plan.droneCount }, (_, drone) => ({ x: 4000 + drone * 17.1, y: -3000.2 })) })) };
+      anchors: Array.from({ length: plan.droneCount }, (_, drone) => ({ x: 4000 + drone * 17.1, y: -3000.2, aimOffset: -plan.aimOffsetPx, aimAngle: -plan.aimAngleDeg * Math.PI / 180 })) })) };
     const wire = encodeBomberSquadronSnapshot(facts);
-    // 512 bytes per owner allows frozen parameters and 14 anchors, independent of the
-    // droneCount * bombsPerPass * passCount impacts. At 20 Hz this caps bq at 40 KiB/s.
-    expect(new TextEncoder().encode(JSON.stringify(wire)).byteLength).toBeLessThan(2 * 1024);
+    // 768 bytes per owner include ten new parameters and two aim fields per anchor.
+    // Still independent of bomb count; at 20 Hz this caps four squadrons at 60 KiB/s.
+    expect(new TextEncoder().encode(JSON.stringify(wire)).byteLength).toBeLessThan(3 * 1024);
     expect(decodeBomberSquadronSnapshot(wire)?.squadrons).toHaveLength(owners.length);
   });
 });

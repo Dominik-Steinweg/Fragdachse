@@ -5,11 +5,34 @@ import { ATTACK_DRONE_RULES } from '../../src/config/attackDrone';
 import { COOP_DEFENSE_ENEMY_KINDS } from '../../src/config/coopDefenseEnemies';
 import { WorldPlayerGameplayRuntime } from '../../src/world/WorldPlayerGameplayRuntime';
 import { resolveActiveArenaWorldMetrics } from '../../src/world/WorldMetrics';
+import { readBomberAimTargets } from '../../src/world/WorldBomberSquadronBinding';
+import { ExposedBaseFaceCache } from '../../src/systems/TurretBaseTargeting';
+import { CELL_SIZE } from '../../src/config';
 
 let f: ReturnType<typeof createBomberCombatFixture>;
 afterEach(() => { f?.destroy(); vi.restoreAllMocks(); });
 
 describe('Bomber plan → captured combat', () => {
+  it('reads living hostile enemies and exposed base cells once, including world offsets', () => {
+    f = createBomberCombatFixture();
+    const enemy = f.world.spawnEnemy(f.owner.x, f.owner.y);
+    const dead = f.world.spawnEnemy(f.owner.x + 100, f.owner.y);
+    dead.setHp(0, dead.getHp(), true);
+    const ally = f.world.enemies.hostSpawnAllyAtWorld(f.owner.x, f.owner.y, COOP_DEFENSE_ENEMY_KINDS[0], 'inspector', 1, 1);
+    const cells = Array.from({ length: 9 }, (_, i) => ({ gridX: i % 3, gridY: Math.floor(i / 3) }));
+    let damageable = true;
+    const base = { id: 'hostile', isDamageable: () => damageable, isInert: () => false, getHp: () => 100,
+      getSpec: () => ({ cells }) };
+    const bases = { getBasesByFaction: () => [base], getObstacleGeneration: () => 1 };
+    const cache = new ExposedBaseFaceCache();
+    const targets = readBomberAimTargets([enemy, dead, ally], bases as never, f.metrics, cache);
+    const exposed = cells.filter(c => c.gridX === 0 || c.gridX === 2 || c.gridY === 0 || c.gridY === 2);
+    expect(targets).toEqual([{ x: enemy.sprite.x, y: enemy.sprite.y, weight: 1 },
+      ...exposed.map(c => ({ x: f.metrics.offsetX + (c.gridX + 0.5) * CELL_SIZE,
+        y: f.metrics.offsetY + (c.gridY + 0.5) * CELL_SIZE, weight: 0.5 }))]);
+    damageable = false;
+    expect(readBomberAimTargets([], bases as never, f.metrics, cache)).toEqual([]);
+  });
   it('lands bomber chunks through the player runtime with damage and ground fire but without explosion broadcasts', () => {
     f = createBomberCombatFixture({ fireChunksPerBomb: 3 }); f.activate();
     f.binding.advance(Math.min(...f.plan().map(bomb => bomb.impactAt)));

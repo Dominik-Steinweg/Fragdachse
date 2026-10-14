@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { ultimateHarness, START } from '../balance-lab/InspectorUltimateHarness';
 import { INSPECTORS, inspectorUltimate } from '../balance-lab/InspectorUltimateConfigs';
-import { bomberDrops } from '../../src/systems/bomberSquadron/BomberSquadronPlan';
+import { bomberDrops, bomberDronePose, bomberPlanParamsFromConfig, bomberDroneFlightEndAt,
+  chooseBomberAim, type BomberDronePose } from '../../src/systems/bomberSquadron/BomberSquadronPlan';
 import { bomberSquadronBombKey } from '../../src/systems/bomberSquadron/BomberSquadronSnapshot';
 import { encodeBomberSquadronSnapshot, decodeBomberSquadronSnapshot } from '../../src/network/bomberSquadronSnapshotCodec';
 import { ATTACK_DRONE_RULES } from '../../src/config/attackDrone';
@@ -10,6 +11,32 @@ import { clearActiveSession, setActiveSession } from '../../src/network/peer/ses
 import { FakeNetwork, createHostRoom, addClientRoom } from '../fakePeerNetwork';
 
 describe('four full bomber squadrons during ordinary combat', () => {
+  it('samples all flight phases at 60 Hz with reusable output and filters distant aim targets', () => {
+    const config = inspectorUltimate('BOMBER_SQUADRON', true);
+    if (config.type !== 'bomber_squadron') throw Error('Expected bomber config');
+    const params = bomberPlanParamsFromConfig(config), anchor = { x: 1000, y: 1000, aimOffset: 0, aimAngle: 0 };
+    const squadrons = INSPECTORS.map((_, i) => ({ id: i + 1, angle: i * Math.PI / 2, startedAt: START, params: { ...params } }));
+    const out: BomberDronePose = { x: 0, y: 0, heading: 0, bank: 0, alpha: 0, phase: 'approach' };
+    const end = bomberDroneFlightEndAt(squadrons[0], params.droneCount - 1);
+    let poses = 0, valid = true;
+    const began = performance.now();
+    for (let t = START; t <= end; t += 1000 / 60) for (const s of squadrons) for (let drone = 0; drone < params.droneCount; drone++) {
+      const pose = bomberDronePose(s, drone, anchor, t, out);
+      if (!pose) continue;
+      poses++;
+      valid &&= pose === out && Number.isFinite(pose.x + pose.y + pose.heading + pose.bank) && Math.abs(pose.bank) <= 1;
+    }
+    const elapsedMs = performance.now() - began;
+    expect(valid).toBe(true);
+    expect(poses).toBeGreaterThan(params.droneCount * INSPECTORS.length);
+    const near = [{ x: anchor.x + params.corridorLengthPx / 2, y: anchor.y, weight: 1 }];
+    const far = Array.from({ length: 50000 }, (_, i) => ({ x: 10000 + i, y: 10000, weight: 1 }));
+    const bounds = { width: 5000, height: 5000 };
+    expect(chooseBomberAim(squadrons[0], 0, anchor, [...near, ...far], [], bounds))
+      .toEqual(chooseBomberAim(squadrons[0], 0, anchor, near, [], bounds));
+    console.info('BOMBER_FLIGHT_STRESS ' + JSON.stringify({ drones: params.droneCount * INSPECTORS.length,
+      poses, elapsedMs: Math.round(elapsedMs), microsecondsPerPose: elapsedMs * 1000 / poses }));
+  });
   it('executes every bomb and landing once and batches all chunk FX once per host frame', async () => {
     const config = inspectorUltimate('BOMBER_SQUADRON', true);
     if (config.type !== 'bomber_squadron') throw Error('Expected bomber config');
@@ -28,9 +55,7 @@ describe('four full bomber squadrons during ordinary combat', () => {
       for (const playerId of INSPECTORS) expect(h.bomber.runtime.tryActivate({ playerId,
         nowMs: START, angle: 0, config })).toEqual({ ok: true });
       const squadrons = h.bomber.runtime.getSnapshot().squadrons;
-      const plans = squadrons.flatMap(s => Array.from({ length: config.droneCount }, (_, drone) =>
-        bomberDrops(s, drone, h.players.get(s.ownerId)!).map(b => ({ ...b,
-          key: bomberSquadronBombKey(s.id, drone, b.pass, b.bomb) })))).flat();
+      const plans = new Map<string, ReturnType<typeof bomberDrops>[number]>();
       const expectedBombs = INSPECTORS.length * config.droneCount * config.bombsPerPass * (1 + config.secondPassEnabled);
       const expectedChunks = expectedBombs * config.fireChunksPerBomb;
       const end = Math.max(...squadrons.map(s => s.endsAt)) + ATTACK_DRONE_RULES.chunkFlightMs
@@ -48,20 +73,25 @@ describe('four full bomber squadrons during ordinary combat', () => {
         maxEvents = Math.max(maxEvents, sent);
         expect(sent).toBeLessThanOrEqual(1);
         const snapshot = h.bomber.runtime.getSnapshot(), wire = encodeBomberSquadronSnapshot(snapshot);
+        for (const s of snapshot.squadrons) s.anchors.forEach((anchor, drone) => {
+          if (anchor) for (const bomb of bomberDrops(s, drone, anchor)) {
+            plans.set(bomberSquadronBombKey(s.id, drone, bomb.pass, bomb.bomb), bomb);
+          }
+        });
         maxBytes = Math.max(maxBytes, new TextEncoder().encode(JSON.stringify(wire)).byteLength);
         expect(decodeBomberSquadronSnapshot(wire)?.squadrons.length).toBe(snapshot.squadrons.length);
       }
       const bombs = h.explode.mock.calls.filter(c => c[5] === 'BOMBER_SQUADRON');
       const landings = h.explode.mock.calls.filter(c => c[5] === 'BOMBER_SQUADRON.chunk');
-      expect(plans).toHaveLength(expectedBombs);
+      expect(plans.size).toBe(expectedBombs);
       expect(bombs).toHaveLength(expectedBombs);
       expect(h.chunks).toHaveBeenCalledTimes(expectedBombs);
       expect(landings).toHaveLength(expectedChunks);
       const actualKeys = h.chunks.mock.calls.map(c => c[4]);
       expect(new Set(actualKeys).size).toBe(expectedBombs);
-      expect([...actualKeys].sort()).toEqual(plans.map(b => b.key).sort());
+      expect([...actualKeys].sort()).toEqual([...plans.keys()].sort());
       expect(bombs.map(c => c[6]?.correlation?.executionId).sort()).toEqual([...actualKeys].sort());
-      const planned = new Map(plans.map(b => [b.key, b]));
+      const planned = plans;
       for (const [x, y, , , , , source] of bombs) {
         const bomb = planned.get(source!.correlation!.executionId!)!;
         expect({ x, y }).toEqual({ x: bomb.x, y: bomb.y });
@@ -81,9 +111,9 @@ describe('four full bomber squadrons during ordinary combat', () => {
       expect(h.f.projectile.spawn.mock.calls.length).toBeGreaterThan(0);
       expect(h.events.length).toBeGreaterThan(0);
       expect(h.bomber.runtime.getSnapshot().squadrons).toEqual([]);
-      // Measured 1,110 B; the integration cap leaves ~84% for longer IDs and anchors.
-      // Bomber network integration uses the same 2 KiB cap (40 KiB/s at 20 Hz).
-      expect(maxBytes).toBeLessThan(2 * 1024);
+      // Includes replicated aim and flight parameters, independent of bomb count.
+      // Same 3 KiB cap as network integration (60 KiB/s at 20 Hz).
+      expect(maxBytes).toBeLessThan(3 * 1024);
       expect(maxEvents).toBe(1);
       console.info('BOMBER_SQUADRON_STRESS ' + JSON.stringify({ bombs: bombs.length, chunks: landings.length,
         bqBytes: maxBytes, maxFcfxPerFrame: maxEvents, fcfxEvents: messages().length,

@@ -1,11 +1,13 @@
 import { vi } from 'vitest';
 import { createFireControlWorldFixture } from './FireControlTestHelper';
-import { bomberConfig } from './InspectorUltimatesTestHelper';
+import { ULTIMATE_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { WorldBomberSquadronBinding } from '../src/world/WorldBomberSquadronBinding';
 import type { PlayerCombatIntegrationPort } from '../src/world/PlayerCombatIntegrationPort';
 import type { WorldMetrics } from '../src/world/WorldMetrics';
 import type { BomberSquadronUltimateConfig } from '../src/loadout/LoadoutTypes';
 import { bomberDrops } from '../src/systems/bomberSquadron/BomberSquadronPlan';
+
+export const bomberConfig = ULTIMATE_CONFIGS.BOMBER_SQUADRON as BomberSquadronUltimateConfig;
 
 export function createBomberCombatFixture(overrides: Partial<BomberSquadronUltimateConfig> = {},
   metrics = { widthPx: 5000, heightPx: 5000, offsetX: -500, offsetY: -500 } as WorldMetrics) {
@@ -18,11 +20,11 @@ export function createBomberCombatFixture(overrides: Partial<BomberSquadronUltim
   const explode = vi.spyOn(world.combat, 'applyExplosionDamage');
   const binding = new WorldBomberSquadronBinding({ combat: world.combat, metrics,
     playerCombat: { fireChunks: { hostCreateFireChunkBurst: chunks } } as unknown as PlayerCombatIntegrationPort,
-    readOwner: () => available ? owner : null });
+    readTargets: () => [], readOwner: () => available ? owner : null });
   const activate = (nowMs = 1000) => binding.runtime.tryActivate({ playerId: 'inspector', nowMs, angle: 0, config });
   const plan = () => {
     const squadron = binding.runtime.getSnapshot().squadrons[0];
-    return Array.from({ length: config.droneCount }, (_, drone) => bomberDrops(squadron, drone, owner)).flat();
+    return Array.from({ length: config.droneCount }, (_, drone) => bomberDrops(squadron, drone, { ...owner, aimOffset: 0, aimAngle: 0 })).flat();
   };
   return { world, binding, config, owner, metrics, chunks, power, explode, activate, plan,
     setAvailable: (value: boolean) => { available = value; }, setMultiplier: (value: number) => { multiplier = value; },

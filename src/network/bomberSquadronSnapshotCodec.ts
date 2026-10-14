@@ -1,3 +1,4 @@
+import { isBomberFlightPlanValid } from '../systems/bomberSquadron/BomberSquadronPlan';
 import {
   EMPTY_BOMBER_SQUADRON_SNAPSHOT,
   type BomberSquadronDeploymentSnapshot,
@@ -10,14 +11,16 @@ import {
  * Squadron: [id, owner, color, startedAt, endsAt, angle1000, params, anchors, stoppedAt?].
  * Params follow planKeys below. Only anchor positions (x10/y10) and angles are quantized;
  * frozen plan values and absolute host times retain their precision.
- * An anchor is [x10, y10], or 0 while its drone has no confirmed launch anchor.
+ * An anchor is [x10, y10, offset10, angle1000], or 0 while its drone has no confirmed launch anchor.
  */
 const planKeys = [
   'droneCount', 'bombsPerPass', 'passCount', 'launchIntervalMs', 'approachMs',
   'approachDistancePx', 'runSpeedPxPerSec', 'corridorLeadPx', 'corridorLengthPx',
   'corridorWidthPx', 'turnMs', 'departureMs', 'bombFallMs', 'explosionRadius',
+  'entrySpreadPx', 'entryAngleSpreadDeg', 'swayPx', 'departureSpeedPxPerSec', 'departureTurnDeg',
+  'aimOffsetPx', 'aimAngleDeg', 'aimOffsetSteps', 'aimAngleSteps', 'aimOverlapPenalty',
 ] as const satisfies readonly (keyof BomberSquadronPlanParams)[];
-type WireSquadron = [number, string, number, number, number, number, number[], (0 | [number, number])[], number?];
+type WireSquadron = [number, string, number, number, number, number, number[], (0 | [number, number, number, number])[], number?];
 export type EncodedBomberSquadronSnapshot = WireSquadron[];
 
 const integer = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v);
@@ -29,7 +32,9 @@ const count = (v: unknown): v is number => natural(v) && v > 0 && v <= 64;
 export function encodeBomberSquadronSnapshot(snapshot: BomberSquadronSnapshot): EncodedBomberSquadronSnapshot {
   return snapshot.squadrons.map(d => [d.id, d.ownerId, d.ownerColor, d.startedAt, d.endsAt,
     Math.round(d.angle * 1000), planKeys.map(key => d.params[key]),
-    d.anchors.map(a => a === null ? 0 : [Math.round(a.x * 10), Math.round(a.y * 10)]),
+    d.anchors.map(a => a === null ? 0 : [Math.round(a.x * 10), Math.round(a.y * 10),
+      Math.max(-Math.floor(d.params.aimOffsetPx * 10), Math.min(Math.floor(d.params.aimOffsetPx * 10), Math.round(a.aimOffset * 10))),
+      Math.max(-Math.floor(d.params.aimAngleDeg * Math.PI / 180 * 1000), Math.min(Math.floor(d.params.aimAngleDeg * Math.PI / 180 * 1000), Math.round(a.aimAngle * 1000)))]),
     ...(d.stoppedAt === null ? [] : [d.stoppedAt]),
   ] as WireSquadron);
 }
@@ -65,16 +70,18 @@ export function decodeBomberSquadronSnapshot(
       if (!time(p[i]) || p[i] > (planKeys[i].endsWith('Ms') ? 60_000 : 1_000_000)) return null;
     }
     if (p[6] <= 0 || p[8] <= 0) return null;
+    const params = Object.fromEntries(planKeys.map((key, i) => [key, p[i]])) as unknown as BomberSquadronPlanParams;
+    if (!isBomberFlightPlanValid(params)) return null;
     const anchors: BomberSquadronDeploymentSnapshot['anchors'][number][] = [];
     for (const a of d[7]) {
       if (a === 0) anchors.push(null);
       else {
-        if (!Array.isArray(a) || a.length !== 2 || !integer(a[0]) || !integer(a[1])) return null;
-        anchors.push({ x: a[0] / 10, y: a[1] / 10 });
+        if (!Array.isArray(a) || a.length !== 4 || !a.every(integer)
+          || Math.abs(a[2] / 10) > params.aimOffsetPx || Math.abs(a[3] / 1000) > params.aimAngleDeg * Math.PI / 180) return null;
+        anchors.push({ x: a[0] / 10, y: a[1] / 10, aimOffset: a[2] / 10, aimAngle: a[3] / 1000 });
       }
     }
     ids.add(d[0]);
-    const params = Object.fromEntries(planKeys.map((key, i) => [key, p[i]])) as unknown as BomberSquadronPlanParams;
     squadrons.push({ id: d[0], ownerId: d[1], ownerColor: d[2], startedAt: d[3], endsAt: d[4],
       angle: d[5] / 1000, params, anchors, stoppedAt: d.length === 9 ? d[8] : null });
   }

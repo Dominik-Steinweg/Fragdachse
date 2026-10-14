@@ -22,7 +22,7 @@ import type { PlayerManager } from '../entities/PlayerManager';
 import { WorldMgTurretBinding } from './WorldMgTurretBinding';
 import { resolveMgTurretStats } from '../config/mgTurret';
 import { WorldAttackDroneBinding } from './WorldAttackDroneBinding';
-import { WorldBomberSquadronBinding } from './WorldBomberSquadronBinding';
+import { WorldBomberSquadronBinding, readBomberAimTargets } from './WorldBomberSquadronBinding';
 import type { RemoteControlSource } from '../systems/CoopDefenseItemRuntimeSystem';
 import type { MgOwner } from '../systems/MgAttritionRuntime';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
@@ -381,6 +381,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     }) : null;
     this.bomberSquadron = playerCombat && options.network.authority.isHost() ? new WorldBomberSquadronBinding({
       combat: options.combatSystem, playerCombat, metrics: options.worldMetrics, readOwner,
+      readTargets: () => readBomberAimTargets(options.getEnemyManager()?.getAllEnemies() ?? [],
+        options.baseManager, options.worldMetrics, this.turretBaseFaces),
     }) : null;
     if (this.fireControl) playerCombat?.utility.setFireControlPort?.({
       activateCopies: request => {

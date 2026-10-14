@@ -5,7 +5,7 @@ import { getPipelineAsset } from '../../config/pipelineAssets';
 import { resolveExplosionAudio } from '../../audio/ExplosionAudio';
 import type { AudioAssetKey } from '../../audio/AudioCatalog';
 import {
-  bomberDronePose, bomberDrops, bomberLaunchAt, isBomberImpactInWorld,
+  bomberDroneEntryPoint, bomberDroneFlightEndAt, bomberDronePose, bomberDrops, bomberLaunchAt, isBomberImpactInWorld,
   type BomberDronePose, type BomberSquadronWorldBounds,
 } from '../../systems/bomberSquadron/BomberSquadronPlan';
 import type {
@@ -46,6 +46,14 @@ const MAX_EXPLOSIONS_PER_FRAME = 4;
 const SOUND_INTERVAL_MS = 110;
 const RUMBLE_HOLD_MS = 260;
 const CULL_MARGIN = 96;
+/** Banking foreshortens the body across its flight direction by up to this share (wings tilt away). */
+const BANK_SQUASH = 0.22;
+/**
+ * Fallback only: drones normally enter from beyond the screen edge. If the entry point is already in
+ * view (camera clamped at the World edge, unusual viewport), the drone fades in briefly instead of
+ * popping up. The margin covers half the body plus its shadow offset.
+ */
+const ENTRY_FADE_MS = 250, ENTRY_VIEW_MARGIN = BODY_SIZE / 2 + SHADOW_OFFSET_Y;
 const BOMB_AUDIO = resolveExplosionAudio('ATTACK_DRONE_BOMB');
 
 /** Rotor clip of the two lift rotors while flying (the bomber never docks). */
@@ -62,6 +70,8 @@ interface SquadronVisual {
   /** Impacts before this host time happened before this peer saw the squadron (late join). */
   readonly firstSeenAt: number;
   readonly planned: boolean[];
+  /** Launch time of each drone whose entry point was in view (fade in), otherwise null. */
+  readonly fadeFrom: (number | null)[];
   readonly drones: (DroneVisual | null)[];
   drops: PlannedDrop[];
   /** Set when the snapshot ended naturally; drones keep flying out until this time. */
@@ -73,7 +83,7 @@ interface SquadronVisual {
 }
 
 /**
- * Presentation of the Bomber squadron (assets step 1: attack-drone body). Everything is derived
+ * Presentation of the Bomber squadron (B3 VTOL drones). Everything is derived
  * from the replicated `bq` facts through `BomberSquadronPlan`: flight, bomb fall, shadows and
  * explosions. There is no message per bomb, and late joiners never replay past impacts.
  */
@@ -81,7 +91,7 @@ export class BomberSquadronRenderer {
   private readonly squadrons = new Map<number, SquadronVisual>();
   private readonly bombPool: Phaser.GameObjects.Image[] = [];
   private readonly bombs: Phaser.GameObjects.Image[] = [];
-  private readonly pose: BomberDronePose = { x: 0, y: 0, heading: 0, alpha: 0, phase: 'approach' };
+  private readonly pose: BomberDronePose = { x: 0, y: 0, heading: 0, bank: 0, alpha: 0, phase: 'approach' };
   private readonly view = createVisibleWorldView();
   private previousNow: number | null = null;
   private destroyed = false;
@@ -93,17 +103,18 @@ export class BomberSquadronRenderer {
     const previous = this.previousNow ?? now;
     this.previousNow = now;
     const live = new Set<number>();
+    const view = getVisibleWorldView(this.scene.cameras.main, this.view);
     for (const squadron of snapshot.squadrons) {
       live.add(squadron.id);
       let visual = this.squadrons.get(squadron.id);
       if (!visual) {
-        visual = { snapshot: squadron, firstSeenAt: now, planned: [], drones: [], drops: [], lingerUntil: null,
+        visual = { snapshot: squadron, firstSeenAt: now, planned: [], fadeFrom: [], drones: [], drops: [], lingerUntil: null,
           nextSoundAt: 0, lastImpactAt: -Infinity, lastImpactX: 0, lastImpactY: 0 };
         this.squadrons.set(squadron.id, visual);
       }
       visual.snapshot = squadron;
       visual.lingerUntil = null;
-      this.plan(visual);
+      this.plan(visual, now, view);
     }
     for (const [id, visual] of this.squadrons) {
       if (live.has(id)) continue;
@@ -114,7 +125,6 @@ export class BomberSquadronRenderer {
       if (now >= visual.lingerUntil) { this.release(visual); this.squadrons.delete(id); }
     }
     this.releaseBombs();
-    const view = getVisibleWorldView(this.scene.cameras.main, this.view);
     let explosions = 0;
     for (const visual of this.squadrons.values()) {
       this.drawDrones(visual, now, view);
@@ -137,13 +147,20 @@ export class BomberSquadronRenderer {
     this.bombPool.length = 0;
   }
 
-  /** Expands each newly anchored drone into its drops once; out-of-world impacts never exist. */
-  private plan(visual: SquadronVisual): void {
+  /**
+   * Expands each newly anchored drone into its drops once; out-of-world impacts never exist. The
+   * entry-fade decision is taken once, with the view at the moment this peer first sees the drone.
+   */
+  private plan(visual: SquadronVisual, now: number, view: VisibleWorldView): void {
     const snapshot = visual.snapshot, bounds = this.ports.worldBounds();
     let added = false;
     snapshot.anchors.forEach((anchor, drone) => {
       if (!anchor || visual.planned[drone]) return;
       visual.planned[drone] = true;
+      const launchAt = bomberLaunchAt(snapshot, drone), entry = bomberDroneEntryPoint(snapshot, drone, anchor);
+      visual.fadeFrom[drone] = now < launchAt + ENTRY_FADE_MS
+        && entry.x >= view.x - ENTRY_VIEW_MARGIN && entry.x <= view.right + ENTRY_VIEW_MARGIN
+        && entry.y >= view.y - ENTRY_VIEW_MARGIN && entry.y <= view.bottom + ENTRY_VIEW_MARGIN ? launchAt : null;
       for (const drop of bomberDrops(snapshot, drone, anchor)) {
         if (bounds && !isBomberImpactInWorld(drop.x, drop.y, bounds)) continue;
         visual.drops.push({ x: drop.x, y: drop.y, dropAt: drop.dropAt, impactAt: drop.impactAt,
@@ -158,6 +175,8 @@ export class BomberSquadronRenderer {
     const snapshot = visual.snapshot, body = getPipelineAsset(BOMBER_DRONE_BODY_ASSET_ID), navLights = this.ports.navLights();
     snapshot.anchors.forEach((anchor, drone) => {
       const pose = anchor ? bomberDronePose(snapshot, drone, anchor, now, this.pose) : null;
+      const fadeFrom = visual.fadeFrom[drone];
+      if (pose && fadeFrom != null) pose.alpha *= Math.max(0, Math.min(1, (now - fadeFrom) / ENTRY_FADE_MS));
       const visible = !!pose && pose.alpha > 0.01 && pose.x >= view.x - CULL_MARGIN
         && pose.x <= view.right + CULL_MARGIN && pose.y >= view.y - CULL_MARGIN && pose.y <= view.bottom + CULL_MARGIN;
       let v = visual.drones[drone] ?? null;
@@ -176,14 +195,16 @@ export class BomberSquadronRenderer {
         visual.drones[drone] = v;
       }
       this.setDroneVisible(v, true);
-      const rotation = pose.heading + Math.PI / 2;
-      v.body.setPosition(pose.x, pose.y).setRotation(rotation).setAlpha(pose.alpha).setTint(this.ports.tintAt(pose.x, pose.y));
+      const rotation = pose.heading + Math.PI / 2, span = 1 - BANK_SQUASH * Math.abs(pose.bank ?? 0);
       applyBomberBodyFrame(v.body, now);
       applyBomberBodyFrame(v.shadow, now);
-      v.shadow.setPosition(pose.x + SHADOW_OFFSET_X, pose.y + SHADOW_OFFSET_Y).setRotation(rotation)
-        .setAlpha(SHADOW_ALPHA * pose.alpha);
+      // The texture's nose points up, so its width is the wing span: banking foreshortens it.
+      v.body.setDisplaySize(BODY_SIZE * span, BODY_SIZE).setPosition(pose.x, pose.y).setRotation(rotation)
+        .setAlpha(pose.alpha).setTint(this.ports.tintAt(pose.x, pose.y));
+      v.shadow.setDisplaySize(BODY_SIZE * span, BODY_SIZE).setPosition(pose.x + SHADOW_OFFSET_X, pose.y + SHADOW_OFFSET_Y)
+        .setRotation(rotation).setAlpha(SHADOW_ALPHA * pose.alpha);
       v.marker.setPosition(pose.x, pose.y).setFillStyle(snapshot.ownerColor, 0.75 * pose.alpha);
-      navLights?.submit(pose.x, pose.y, pose.heading, pose.alpha, DRONE_NAV_LIGHT_PROFILES.bomberDrone, v.body);
+      navLights?.submit(pose.x, pose.y, pose.heading, pose.alpha, DRONE_NAV_LIGHT_PROFILES.bomberDrone, v.body, span);
     });
   }
 
@@ -219,12 +240,8 @@ export class BomberSquadronRenderer {
   }
 
   private flightEnd(snapshot: BomberSquadronDeploymentSnapshot): number {
-    const p = snapshot.params, runMs = p.corridorLengthPx / p.runSpeedPxPerSec * 1000;
     let end = snapshot.endsAt;
-    snapshot.anchors.forEach((anchor, drone) => {
-      if (anchor) end = Math.max(end, bomberLaunchAt(snapshot, drone) + p.approachMs
-        + p.passCount * runMs + (p.passCount - 1) * p.turnMs + p.departureMs);
-    });
+    snapshot.anchors.forEach((anchor, drone) => { if (anchor) end = Math.max(end, bomberDroneFlightEndAt(snapshot, drone)); });
     return end;
   }
 
