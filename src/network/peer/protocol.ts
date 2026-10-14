@@ -24,7 +24,8 @@
 // Dawn expansion track: area stages end at 6, core HP bonus world parameter, Dawn plasma turret rewards.
 // Inspector ultimates: holo deployments (fc kind 2), required bq bomber squadron slice and
 // per-frame batched fcfx burst arrays with World revision.
-export const PEER_PROTOCOL_VERSION = 35;
+// Bomber flight: seeded curves, replicated aim offsets/angles and extended bq plan parameters.
+export const PEER_PROTOCOL_VERSION = 36;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

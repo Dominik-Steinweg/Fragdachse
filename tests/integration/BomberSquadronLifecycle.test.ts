@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createBomberCombatFixture } from '../BomberSquadronTestHelper';
-import { bomberConfig, holoConfig } from '../InspectorUltimatesTestHelper';
+import { createBomberCombatFixture, bomberConfig } from '../BomberSquadronTestHelper';
+import { holoConfig } from '../InspectorUltimatesTestHelper';
 import { PlayerUltimateBehaviorRuntime } from '../../src/world/PlayerUltimateBehaviorRuntime';
 
 let f: ReturnType<typeof createBomberCombatFixture>;

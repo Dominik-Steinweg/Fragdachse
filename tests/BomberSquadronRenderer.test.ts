@@ -44,12 +44,12 @@ function fixture(worldBounds = WORLD) {
 }
 
 const allAnchors = (): BomberSquadronDeploymentSnapshot['anchors'] =>
-  Array.from({ length: params.droneCount }, () => ({ x: 1000, y: 2000 }));
+  Array.from({ length: params.droneCount }, () => ({ x: 1000, y: 2000, aimOffset: 0, aimAngle: 0 }));
 
 describe('Bomber squadron presentation', () => {
   it('draws only launched drones and plays every in-world impact exactly once', () => {
     const f = fixture();
-    const first = squadron([{ x: 1000, y: 2000 }, ...Array(params.droneCount - 1).fill(null)]);
+    const first = squadron([{ x: 1000, y: 2000, aimOffset: 0, aimAngle: 0 }, ...Array(params.droneCount - 1).fill(null)]);
     f.renderer.update({ squadrons: [first] }, 1300);
     // One launched drone: body, shadow and marker; unlaunched ones do not exist (lights are shared, not per drone).
     expect(f.created.filter(o => o.texture !== 'bomb')).toHaveLength(3);

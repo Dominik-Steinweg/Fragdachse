@@ -19,6 +19,16 @@ export interface BomberSquadronPlanParams {
   readonly launchIntervalMs: number;
   readonly approachMs: number;
   readonly approachDistancePx: number;
+  readonly entrySpreadPx: number;
+  readonly entryAngleSpreadDeg: number;
+  readonly swayPx: number;
+  readonly departureSpeedPxPerSec: number;
+  readonly departureTurnDeg: number;
+  readonly aimOffsetPx: number;
+  readonly aimAngleDeg: number;
+  readonly aimOffsetSteps: number;
+  readonly aimAngleSteps: number;
+  readonly aimOverlapPenalty: number;
   readonly runSpeedPxPerSec: number;
   readonly corridorLeadPx: number;
   readonly corridorLengthPx: number;
@@ -34,6 +44,9 @@ export interface BomberSquadronPlanParams {
 export interface BomberSquadronAnchor {
   readonly x: number;
   readonly y: number;
+  readonly aimOffset: number;
+  /** Radiant; Drehpunkt ist der Korridorbeginn. */
+  readonly aimAngle: number;
 }
 
 export interface BomberSquadronDeploymentSnapshot {

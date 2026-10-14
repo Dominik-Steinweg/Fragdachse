@@ -2,7 +2,8 @@ import { vi } from 'vitest';
 import { createFireControlWorldFixture } from '../FireControlTestHelper';
 import type { WorldCombatGameplayBindingOptions } from '../../src/world/WorldCombatGameplayBinding';
 import { WorldPlayerGameplayRuntime } from '../../src/world/WorldPlayerGameplayRuntime';
-import { WorldBomberSquadronBinding } from '../../src/world/WorldBomberSquadronBinding';
+import { WorldBomberSquadronBinding, readBomberAimTargets } from '../../src/world/WorldBomberSquadronBinding';
+import { ExposedBaseFaceCache } from '../../src/systems/TurretBaseTargeting';
 import { FireSystem } from '../../src/effects/FireSystem';
 import { BurnStateMachine } from '../../src/combat/rules/BurnStateMachine';
 import { resolveActiveArenaWorldMetrics } from '../../src/world/WorldMetrics';
@@ -132,8 +133,10 @@ export function ultimateHarness(formation: Formation, owners: readonly string[] 
   });
   const chunks = vi.spyOn(runtime, 'hostCreateFireChunkBurst');
   const explode = vi.spyOn(f.combat, 'applyExplosionDamage');
+  const bomberFaces = new ExposedBaseFaceCache();
   const bomber = new WorldBomberSquadronBinding({ combat: f.combat, metrics,
     playerCombat: { ...ports.getPlayerCombatIntegration()!, fireChunks: runtime.getPlayerFireChunkPort() },
+    readTargets: () => readBomberAimTargets(enemies, bases, metrics, bomberFaces),
     readOwner: id => players.get(id) ?? null });
   const addArsenal = (arsenal: Arsenal) => owners.forEach((owner, k) => {
     const types = arsenal === 'single' ? ['machine_gun_turret'] as const

@@ -1,13 +1,42 @@
 import type { CombatSource } from '../combat/CombatScope';
 import type { WorldCombatCore } from '../combat/WorldCombatCore';
 import { BomberSquadronRuntime, type BomberSquadronBombEvent, type BomberSquadronRuntimeDeps } from '../systems/bomberSquadron/BomberSquadronRuntime';
-import { bomberWorldBoundsFromMetrics } from '../systems/bomberSquadron/BomberSquadronPlan';
+import { bomberWorldBoundsFromMetrics, type BomberAimTarget } from '../systems/bomberSquadron/BomberSquadronPlan';
+import { CELL_SIZE } from '../config';
+import type { EnemyEntity } from '../entities/EnemyEntity';
+import type { BaseManager } from '../entities/BaseManager';
+import { computeExposedBaseFaces, type ExposedBaseFaceCache } from '../systems/TurretBaseTargeting';
 import type { ProjectileDamageSourceFactor, ProjectileExplosionConfig } from '../types';
 import { attackDroneFireChunkProfile } from './AttackDroneFireChunkProfile';
 import type { PlayerCombatIntegrationPort } from './PlayerCombatIntegrationPort';
 import type { WorldMetrics } from './WorldMetrics';
 
 const SOURCE = { bomb: 'BOMBER_SQUADRON', fire: 'BOMBER_SQUADRON.fire', chunk: 'BOMBER_SQUADRON.chunk' } as const;
+
+/** Lebende Feinde und jede freiliegende feindliche Basiszelle genau einmal. */
+export function readBomberAimTargets(
+  enemies: readonly EnemyEntity[], bases: BaseManager | null, metrics: WorldMetrics, cache: ExposedBaseFaceCache,
+): readonly BomberAimTarget[] {
+  const targets: BomberAimTarget[] = [];
+  for (const enemy of enemies) if (enemy.sprite.active && enemy.faction === 'hostile' && enemy.getHp() > 0) {
+    targets.push({ x: enemy.sprite.x, y: enemy.sprite.y, weight: 1 });
+  }
+  for (const base of bases?.getBasesByFaction('hostile') ?? []) {
+    if (!base.isDamageable() || base.isInert() || base.getHp() <= 0) continue;
+    const faces = cache.get(base.id, bases!.getObstacleGeneration(), () => computeExposedBaseFaces({
+      cells: base.getSpec().cells, cellSize: CELL_SIZE, offsetX: metrics.offsetX, offsetY: metrics.offsetY,
+      isCoveredCell: () => false,
+    }));
+    const cells = new Set<string>();
+    for (const face of faces) {
+      const x = (face.x1 + face.x2 - face.normalX * CELL_SIZE) / 2;
+      const y = (face.y1 + face.y2 - face.normalY * CELL_SIZE) / 2;
+      const key = `${x},${y}`;
+      if (!cells.has(key)) { cells.add(key); targets.push({ x, y, weight: 0.5 }); }
+    }
+  }
+  return targets;
+}
 interface CapturedBomb {
   readonly source: CombatSource;
   readonly multiplier: number;
@@ -19,6 +48,7 @@ export interface WorldBomberSquadronOptions {
   readonly playerCombat: PlayerCombatIntegrationPort;
   readonly metrics: WorldMetrics;
   readonly readOwner: BomberSquadronRuntimeDeps['readOwner'];
+  readonly readTargets: BomberSquadronRuntimeDeps['readTargets'];
 }
 
 /** World adapter: captures outgoing power at drop time and executes deterministic impacts. */
@@ -28,7 +58,7 @@ export class WorldBomberSquadronBinding {
   private generation = 0;
 
   constructor(private readonly options: WorldBomberSquadronOptions) {
-    this.runtime = new BomberSquadronRuntime({ readOwner: options.readOwner,
+    this.runtime = new BomberSquadronRuntime({ readOwner: options.readOwner, readTargets: options.readTargets,
       worldBounds: () => bomberWorldBoundsFromMetrics(options.metrics) });
   }
 
