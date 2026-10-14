@@ -41,7 +41,7 @@ function fixture(worldBounds = WORLD) {
   };
   const explode = vi.fn();
   const renderer = new BomberSquadronRenderer(scene as any, {
-    explode, playSound: vi.fn(), cameraFeedback: null, worldBounds: () => worldBounds, tintAt: () => 0xffffff,
+    explode, playSound: vi.fn(), cameraFeedback: () => null, worldBounds: () => worldBounds, tintAt: () => 0xffffff,
   });
   return { renderer, created, explode };
 }

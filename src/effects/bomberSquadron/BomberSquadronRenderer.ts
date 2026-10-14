@@ -23,7 +23,7 @@ export interface BomberSquadronPresentationPorts {
   /** Shared combat explosion (fireball, flash, light); purely cosmetic here. */
   explode(x: number, y: number, radius: number): void;
   playSound(key: AudioAssetKey, x: number, y: number, volumeScale: number): void;
-  readonly cameraFeedback: CameraFeedbackController | null;
+  cameraFeedback(): CameraFeedbackController | null;
   /** Same bounds as the host's impact filter; null while the World has no metrics. */
   worldBounds(): BomberSquadronWorldBounds | null;
   /** Night tint for objects drawn above the lightmap (same rule as tree canopies). */
@@ -112,7 +112,7 @@ export class BomberSquadronRenderer {
       this.drawDrones(visual, now, view);
       explosions = this.drawDrops(visual, previous, now, view, explosions);
       if (now - visual.lastImpactAt < RUMBLE_HOLD_MS) {
-        this.ports.cameraFeedback?.request(sustainedRumble(`bomber-squadron:${visual.snapshot.id}`,
+        this.ports.cameraFeedback()?.request(sustainedRumble(`bomber-squadron:${visual.snapshot.id}`,
           legacyShakeAmplitudePx(0.0016), CAMERA_FEEDBACK_PRIORITY.mediumImpact,
           { sourceX: visual.lastImpactX, sourceY: visual.lastImpactY, durationMs: RUMBLE_HOLD_MS }));
       }
