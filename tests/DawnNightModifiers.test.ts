@@ -121,13 +121,13 @@ describe('Dawn night modifiers', () => {
     }
   });
 
-  it('projects modifier name and optional texture key from dusk until dawn', () => {
+  it('projects the modifier name for phase announcements from dusk until dawn', () => {
     const schedule = getDawnSchedule('standard');
     for (const phase of ['day', 'dusk', 'night', 'dawn'] as const) {
       const model = buildDawnHudModel({ schedule, elapsedMs: getDawnPhaseStartMs(schedule, phase),
-        sharedScrap: 0, threat: 3, dayNumber: 1, sites: [], objectives: null, clockMinutes: 0, nightModifierId: 'fog' });
+        sharedScrap: 0, threat: 3, dayNumber: 1, sites: [], objectives: null, nightModifierId: 'fog' });
       expect(model.nightModifier).toEqual(phase === 'dusk' || phase === 'night'
-        ? { id: 'fog', nameKey: 'ui.dawn.nightModifier.fog', iconKey: 'night-fog' } : null);
+        ? { id: 'fog', nameKey: 'ui.dawn.nightModifier.fog' } : null);
     }
   });
 

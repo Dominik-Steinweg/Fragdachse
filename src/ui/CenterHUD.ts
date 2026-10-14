@@ -168,6 +168,8 @@ export class CenterHUD {
 
   // Statusleiste
   private timerSecs: number | null = null;
+  private statusPosition: Phaser.GameObjects.Container | null = null;
+  private dawnClockVisible = false;
   private lifeStatus: CoopDefenseLifeStatusViewModel | null = null;
   private train: TrainState = { mode: 'hidden' };
   private statusSignature = '';
@@ -206,7 +208,8 @@ export class CenterHUD {
     promoteToClarityCamera(this.scene, this.container);
 
     this.statusStrip = new HudStatusStrip(this.scene, CENTER_X, STATUS_STRIP_TOP);
-    this.container.add(this.statusStrip.root);
+    this.statusPosition = this.scene.add.container(0, 0, [this.statusStrip.root]);
+    this.container.add(this.statusPosition);
 
     // Eigene Zwischenebene für die beiden Missionskarten: Ihre Auftritts-Tweens schreiben ihr
     // eigenes Alpha, das Ausweichen vor dem Spielfeld liegt deshalb eine Ebene darüber und
@@ -272,6 +275,7 @@ export class CenterHUD {
    * infrastructure and can immediately serve the next World or Activity.
    */
   resetCoopMissionPresentation(): void {
+    this.setDawnClockVisible(false);
     this.objectiveAnnouncements?.reset();
     this.announcedEncounterStarts.clear();
     this.announcedEncounterResults.clear();
@@ -289,6 +293,12 @@ export class CenterHUD {
   }
 
   // ── Statusleiste ──────────────────────────────────────────────────────────
+
+  /** Leave room for the Dawn dial while preserving life/train status. */
+  setDawnClockVisible(visible: boolean): void {
+    this.dawnClockVisible = visible;
+    this.statusPosition?.setY(visible ? 104 : 0);
+  }
 
   updateTimer(secs: number, visible = true): void {
     const next = visible ? Math.max(0, Math.floor(secs)) : null;
@@ -562,7 +572,7 @@ export class CenterHUD {
     const remainingMs = state.phaseEndsAtMs === null
       ? 0
       : Math.max(0, state.phaseEndsAtMs - elapsed);
-    const hasCountdown = state.phaseEndsAtMs !== null
+    const hasCountdown = !this.dawnClockVisible && state.phaseEndsAtMs !== null
       && (state.phase === 'incoming' || state.phase === 'rest');
     // Während des laufenden Angriffs tritt die Gegnerbilanz an die Stelle der Restzeit: Sie ist
     // hier die einzige Größe, die den Fortschritt der Welle tatsächlich beschreibt.

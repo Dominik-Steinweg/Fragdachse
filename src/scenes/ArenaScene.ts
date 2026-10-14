@@ -2055,10 +2055,10 @@ export class ArenaScene extends Phaser.Scene {
     this.dawnHUD?.sync({
       active: gameplayActive && !terminated,
       world: bridge.getWorldDescriptor(), activity: bridge.getActivityDescriptor(),
-      startTime: bridge.getArenaStartTime(), now: bridge.getSynchronizedNow(),
+      startTime: bridge.getArenaStartTime(), now: this.arenaRuntime.getMissionNow(),
       sharedScrap: bridge.getDawnRoundScrap(),
       objectives: bridge.getCoopDefenseSecondaryObjectivePresentationState(),
-      clockMinutes: this.renderers?.lighting.getTimeOfDayMinutes() ?? DEFAULT_TIME_OF_DAY_MINUTES,
+      encounters: configuredCoopDefenseMapConfig?.encounters,
     });
     this.renderers?.markers?.coop?.set('dawn', this.dawnHUD?.getMarkerDescriptors() ?? [], this.time.now);
     this.syncBomberRuns(gameplayActive && !terminated ? configuredCoopDefenseMapConfig : null);
@@ -2066,9 +2066,11 @@ export class ArenaScene extends Phaser.Scene {
       diagnosticsFrame?.begin('arenaHud');
       const secs = bridge.computeSecondsLeft(this.arenaRuntime.getMissionNow());
       const activeMapConfig = configuredCoopDefenseMapConfig;
+      const dawnClockActive = !!bridge.getActivityDescriptor()?.parameters?.dawn;
+      this.ctx.centerHUD.setDawnClockVisible(dawnClockActive);
       this.ctx.centerHUD.updateTimer(
         secs,
-        activeMapConfig === null || getCoopMissionTimeLimitSec(activeMapConfig) !== null,
+        !dawnClockActive && (activeMapConfig === null || getCoopMissionTimeLimitSec(activeMapConfig) !== null),
       );
 
       // Train widget: Das Zug-Event selbst entscheidet, ob etwas anzuzeigen ist – Maps mit
