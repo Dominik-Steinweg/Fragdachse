@@ -7414,6 +7414,7 @@
                            "upgrades":  [
                                             {
                                                 "id":  "unlock_armageddon",
+                                                "availableClasses": ["dachs_nukem", "dachs_of_steel"],
                                                 "code":  "E-U1",
                                                 "kind":  "unlock",
                                                 "maxLevel":  1,
@@ -7566,6 +7567,7 @@
                                             },
                                             {
                                                 "id":  "unlock_gauss_rifle",
+                                                "availableClasses": ["dachs_nukem", "dachs_of_steel"],
                                                 "code":  "E-U2",
                                                 "kind":  "unlock",
                                                 "maxLevel":  1,
@@ -7626,6 +7628,7 @@
                                             },
                                             {
                                                 "id":  "unlock_airstrike",
+                                                "availableClasses": ["dachs_nukem", "dachs_of_steel"],
                                                 "code":  "E-U3",
                                                 "kind":  "unlock",
                                                 "maxLevel":  1,
@@ -7686,6 +7689,7 @@
                                             },
                                             {
                                                 "id":  "unlock_honey_badger_rage",
+                                                "availableClasses": ["dachs_nukem", "dachs_of_steel"],
                                                 "code":  "E-U4",
                                                 "kind":  "unlock",
                                                 "maxLevel":  1,
@@ -7900,6 +7904,236 @@
                                                                     "value":  500
                                                                 }
                                                             ]
+                                            },
+                                            {
+                                                "id": "unlock_holo_offensive",
+                                                "code": "E-U5",
+                                                "kind": "unlock",
+                                                "maxLevel": 1,
+                                                "startingLevel": 1,
+                                                "costPerLevel": 0,
+                                                "refundable": false,
+                                                "sortOrder": 230,
+                                                "availableClasses": [
+                                                    "inspector_gadachs"
+                                                ],
+                                                "loadoutUnlock": {
+                                                    "slot": "ultimate",
+                                                    "itemId": "HOLO_OFFENSIVE"
+                                                }
+                                            },
+                                            {
+                                                "id": "holo_offensive_duration",
+                                                "code": "E-U5-L1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "refundable": true,
+                                                "sortOrder": 240,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "unlock_holo_offensive",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "ultimate.HOLO_OFFENSIVE.copyLifetimeMs",
+                                                        "mode": "add_per_level",
+                                                        "value": 1000
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "holo_offensive_interval",
+                                                "code": "E-U5-L2",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "refundable": true,
+                                                "sortOrder": 250,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "holo_offensive_duration",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "ultimate.HOLO_OFFENSIVE.spawnIntervalMs",
+                                                        "mode": "add_per_level",
+                                                        "value": -50
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "holo_offensive_rage_required",
+                                                "code": "E-U5-R1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "refundable": true,
+                                                "sortOrder": 260,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "unlock_holo_offensive",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "ultimate.HOLO_OFFENSIVE.rageRequired",
+                                                        "mode": "add_per_level",
+                                                        "value": -50
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "holo_offensive_injector",
+                                                "code": "E-U5-R2",
+                                                "kind": "upgrade",
+                                                "maxLevel": 1,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "refundable": true,
+                                                "sortOrder": 270,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "holo_offensive_rage_required",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "ultimate.HOLO_OFFENSIVE.injectorProjectionEnabled",
+                                                        "mode": "add_per_level",
+                                                        "value": 1
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "unlock_bomber_squadron",
+                                                "code": "E-U6",
+                                                "kind": "unlock",
+                                                "maxLevel": 1,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 280,
+                                                "availableClasses": [
+                                                    "inspector_gadachs"
+                                                ],
+                                                "loadoutUnlock": {
+                                                    "slot": "ultimate",
+                                                    "itemId": "BOMBER_SQUADRON"
+                                                }
+                                            },
+                                            {
+                                                "id": "bomber_squadron_size",
+                                                "code": "E-U6-L1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "refundable": true,
+                                                "sortOrder": 290,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "unlock_bomber_squadron",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "ultimate.BOMBER_SQUADRON.droneCount",
+                                                        "mode": "add_per_level",
+                                                        "value": 2
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "bomber_squadron_bomb_count",
+                                                "code": "E-U6-R1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "refundable": true,
+                                                "sortOrder": 300,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "unlock_bomber_squadron",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "ultimate.BOMBER_SQUADRON.bombsPerPass",
+                                                        "mode": "add_per_level",
+                                                        "value": 1
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "bomber_squadron_fire_chunks",
+                                                "code": "E-U6-R2",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "refundable": true,
+                                                "sortOrder": 310,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "bomber_squadron_bomb_count",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "ultimate.BOMBER_SQUADRON.fireChunksPerBomb",
+                                                        "mode": "add_per_level",
+                                                        "value": 1
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "bomber_squadron_second_pass",
+                                                "code": "E-U6-B",
+                                                "kind": "upgrade",
+                                                "maxLevel": 1,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 0,
+                                                "bossPointCostPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 320,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "bomber_squadron_size",
+                                                        "minLevel": 1
+                                                    },
+                                                    {
+                                                        "upgradeId": "bomber_squadron_fire_chunks",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "ultimate.BOMBER_SQUADRON.secondPassEnabled",
+                                                        "mode": "add_per_level",
+                                                        "value": 1
+                                                    }
+                                                ]
                                             }
                                         ]
                        }

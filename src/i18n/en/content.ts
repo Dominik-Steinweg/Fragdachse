@@ -46,6 +46,8 @@ export const enContent = {
   "loadout.ROCK_BARRIER.name": "Wall",
   "loadout.SPORE_TURRET.name": "Spore Turret",
   "loadout.ARMAGEDDON.name": "Armageddon",
+  "loadout.HOLO_OFFENSIVE.name": "Holo Offensive",
+  "loadout.BOMBER_SQUADRON.name": "Bomber Squadron",
   "loadout.GAUSS_RIFLE.name": "Gauss Rifle",
   "loadout.VOID_HUNTER_GAUSS.name": "Void Gauss",
   "loadout.AIRSTRIKE.name": "Airstrike",

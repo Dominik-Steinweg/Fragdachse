@@ -23,6 +23,7 @@ export function buildPerformanceLoadout(itemId: PresetItem, construction = false
     if (!COOP_DEFENSE_UPGRADE_DEFINITIONS[id] || profile.upgrades[id]?.level !== level) throw new Error(`Illegal frozen upgrade ${id}:${level}`);
   }
   const selection = { ...DEFAULT_LOADOUT,
+    ...(classId === 'inspector_gadachs' ? { ultimate: ULTIMATE_CONFIGS.HOLO_OFFENSIVE } : {}),
     ...(preset.slot === 'weapon1' ? { weapon1: WEAPON_CONFIGS[itemId] } : {}),
     ...(preset.slot === 'weapon2' ? { weapon2: WEAPON_CONFIGS[itemId] } : {}),
     ...(utilityId || preset.slot === 'utility' ? { utility: UTILITY_CONFIGS[utilityId ?? itemId] } : {}),

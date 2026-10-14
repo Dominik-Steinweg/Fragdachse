@@ -343,6 +343,16 @@
     "unlock_xbow",
     "unlock_zeus_taser",
     "unlock_fire_control_relay",
-    "unlock_fire_control_portal"
+    "unlock_fire_control_portal",
+    "unlock_holo_offensive",
+    "holo_offensive_duration",
+    "holo_offensive_interval",
+    "holo_offensive_rage_required",
+    "holo_offensive_injector",
+    "unlock_bomber_squadron",
+    "bomber_squadron_size",
+    "bomber_squadron_bomb_count",
+    "bomber_squadron_fire_chunks",
+    "bomber_squadron_second_pass"
   ]
 }

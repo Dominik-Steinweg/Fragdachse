@@ -1,7 +1,7 @@
 import { getLoadoutUtilityId } from './LoadoutTools';
 import { DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
 import type { CoopDefenseClassId, CoopDefenseItem, CoopDefenseUpgradeProfile, GameMode, LoadoutCommitSnapshot } from '../types';
-import { isCoopDefenseMode } from '../gameModes';
+import { COOP_DEFENSE_MODE, isCoopDefenseMode } from '../gameModes';
 import { getCoopDefenseCommittedEffectTotals } from '../utils/coopDefenseItemEffects';
 import { isCoopDefenseUpgradeProfileEqual, resolveCoopDefenseUpgradeEntitlements, sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
 import { applyCoopDefenseModifiersToLoadoutSelection } from './CoopDefenseLoadoutModifiers';
@@ -106,6 +106,20 @@ export function resolveEffectiveLoadoutSelection(
   );
 }
 
+/**
+ * Klassen- und freischaltungsgebundene Coop-Ultimate eines Commits. Eine veraltete oder
+ * klassenfremde Auswahl fällt auf die erste wählbare Ultimate zurück. Client-Commit und Host-Annahme
+ * verwenden dieselbe Regel.
+ */
+export function resolveCoopDefenseCommittedUltimateId(
+  ultimateId: string,
+  profile: CoopDefenseUpgradeProfile,
+  classId: CoopDefenseClassId | null,
+): string {
+  const selectable = getSelectableLoadoutItems('ultimate', COOP_DEFENSE_MODE, profile, classId ?? DEFAULT_COOP_DEFENSE_CLASS_ID);
+  return (selectable.find((item) => item.id === ultimateId) ?? selectable[0])?.id ?? ultimateId;
+}
+
 export function resolveLoadoutSelectionIds(
   selection: LoadoutSelection | undefined,
   mode: GameMode,
@@ -132,7 +146,9 @@ export function resolveLoadoutSelectionIds(
     weapon1: sanitized.weapon1.id,
     weapon2: committedWeapon2.id,
     utility: committedCoopDefenseProfile ? getLoadoutUtilityId(committedCoopDefenseProfile.toolLoadout ?? []) : sanitized.utility.id,
-    ultimate: sanitized.ultimate.id,
+    ultimate: committedCoopDefenseProfile
+      ? resolveCoopDefenseCommittedUltimateId(sanitized.ultimate.id, committedCoopDefenseProfile, coopDefenseClassId)
+      : sanitized.ultimate.id,
     coopDefenseClassId: isCoopDefenseMode(mode) ? coopDefenseClassId : null,
     coopDefenseProfile: committedCoopDefenseProfile,
     coopDefenseEntitlements: isCoopDefenseMode(mode) ? [...resolveCoopDefenseUpgradeEntitlements(coopDefenseEntitlements)] : [],

@@ -126,7 +126,7 @@ import {
 import { sanitizePlayerName } from '../utils/playerName';
 import { COOP_DEFENSE_MODE, getMinPlayersForMode, hasTeamSelection, isCoopDefenseMode, isTeamGameMode, usesTeamColors } from '../gameModes';
 import { canJoinLobbyTeam, LOBBY_TEAM_CAPACITY, pickAutomaticTeam } from '../lobby/LobbyRosterLayout';
-import { isCommittedLoadoutEqual, isCoopDefenseReadyLoadoutComplete, resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../loadout/LoadoutRules';
+import { isCommittedLoadoutEqual, isCoopDefenseReadyLoadoutComplete, resolveCoopDefenseCommittedUltimateId, resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../loadout/LoadoutRules';
 import { DEFAULT_LOADOUT, getUtilityBaseId, ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import type { HeldItemSlot } from '../loadout/HeldItemSlotTracker';
 import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
@@ -2027,7 +2027,8 @@ export class NetworkBridge {
       weapon1: raw.weapon1,
       weapon2: raw.weapon2,
       utility: profile ? getLoadoutUtilityId(profile.toolLoadout ?? []) : raw.utility,
-      ultimate: raw.ultimate,
+      // Der Host übernimmt keine klassenfremde oder gesperrte Ultimate aus einem veralteten Commit.
+      ultimate: profile ? resolveCoopDefenseCommittedUltimateId(raw.ultimate, profile, coopDefenseClassId) : raw.ultimate,
       coopDefenseClassId,
       coopDefenseProfile: profile,
       coopDefenseEntitlements: [...entitlements],

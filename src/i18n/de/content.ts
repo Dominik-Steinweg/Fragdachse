@@ -46,6 +46,8 @@ export const deContent = {
   "loadout.ROCK_BARRIER.name": "Mauer",
   "loadout.SPORE_TURRET.name": "Sporenturm",
   "loadout.ARMAGEDDON.name": "Armageddon",
+  "loadout.HOLO_OFFENSIVE.name": "Holo-Offensive",
+  "loadout.BOMBER_SQUADRON.name": "Bombergeschwader",
   "loadout.GAUSS_RIFLE.name": "Gauss-Gewehr",
   "loadout.VOID_HUNTER_GAUSS.name": "Leeren-Gauss",
   "loadout.AIRSTRIKE.name": "Luftangriff",

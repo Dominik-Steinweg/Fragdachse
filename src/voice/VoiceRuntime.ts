@@ -95,4 +95,4 @@ export class VoiceRuntime {
 }
 
 // IDs are maintained explicitly and checked against authored Ultimate content by the contract test.
-export const VOICE_ULTIMATES = new Set(['ARMAGEDDON', 'AIRSTRIKE', 'GAUSS_RIFLE', 'VOID_HUNTER_GAUSS', 'HONEY_BADGER_RAGE', 'DACHS_TUNNEL']);
+export const VOICE_ULTIMATES = new Set(['ARMAGEDDON', 'AIRSTRIKE', 'GAUSS_RIFLE', 'VOID_HUNTER_GAUSS', 'HONEY_BADGER_RAGE', 'DACHS_TUNNEL', 'HOLO_OFFENSIVE', 'BOMBER_SQUADRON']);

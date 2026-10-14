@@ -9,6 +9,13 @@ import { buildPerformanceLoadout, presets } from '../src/debug/performanceLab/lo
 import { COOP_DEFENSE_UPGRADE_DEFINITIONS } from '../src/utils/coopDefenseUpgrades';
 
 describe('Performance reference fixtures', () => {
+  it('uses Holo consistently in Inspector commits and effective lab loadouts', () => {
+    const loadout = buildPerformanceLoadout('GLOCK', true);
+    expect(loadout.commit.coopDefenseClassId).toBe('inspector_gadachs');
+    expect(loadout.commit.ultimate).toBe('HOLO_OFFENSIVE');
+    expect(loadout.effective.ultimate.id).toBe(loadout.commit.ultimate);
+  });
+
   it('preserves Map 15 terrain, boss, phase triggers and authored fire expansion in an isolated diagnostic map', () => {
     const campaign = getCoopDefenseMapConfig('15');
     const before = structuredClone(campaign);

@@ -265,6 +265,20 @@
       "slot": "utility",
       "order": 20,
       "iconKey": "FIRE_CONTROL_PORTAL"
+    },
+    {
+      "kind": "ultimate",
+      "id": "HOLO_OFFENSIVE",
+      "slot": "ultimate",
+      "order": 5,
+      "iconKey": null
+    },
+    {
+      "kind": "ultimate",
+      "id": "BOMBER_SQUADRON",
+      "slot": "ultimate",
+      "order": 6,
+      "iconKey": null
     }
   ]
 }
