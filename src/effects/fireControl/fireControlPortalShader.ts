@@ -61,8 +61,26 @@ void main() {
     intensity = (cone * .20 + axis * .17) * shimmer + motes * inside * .85;
     intensity *= 1.0 + flash * 2.4;
     core = motes * inside * .30 + axis * flash * .5;
+  } else if (kind > .5 && kind < 1.5) {
+    // Muzzle portal: its own readable iris, an ellipse across the firing line (q.x = barrel axis).
+    // Bold segmented rim, a swirling throat and a clear halo carry it at game size; modes dim it.
+    float closed = mode > 1.5 ? .6 : 1.0;
+    vec2 e = vec2(q.x * 1.6, q.y);
+    float r = length(e), a = atan(e.y, e.x);
+    float R = radius * max(.02, opening) * closed;
+    float segments = .55 + .45 * smoothstep(.18, .32, fract((a + uTime * 1.4) / TAU * 4.0));
+    float rim = line(r - R, .9) * segments;
+    float outer = line(r - R * 1.18, .35) * .45;
+    float swirl = .5 + .5 * sin(a * 3.0 - uTime * 6.0 + r * .55);
+    float throat = (1.0 - smoothstep(0.0, R * .95, r)) * (.22 + .28 * swirl);
+    float halo = exp(-pow((r - R) / 3.2, 2.0)) * .45;
+    intensity = rim * 1.25 + outer + throat + halo;
+    // Swallow: the rim flares and contracts while the throat flashes.
+    intensity += flash * (line(r - R * (1.0 - .3 * flash), 1.1) * 1.2 + exp(-r * r / 9.0) * .6);
+    core = rim * .35 + flash * exp(-r * r / 6.0) * .45;
+    float strength = mode < .5 ? 1.0 : mode < 1.5 ? .42 + .12 * sin(uTime * 2.4) : .16;
+    intensity *= strength; core *= strength;
   } else {
-    if (kind > .5 && kind < 1.5) q.x *= 2.9;
     float r = length(q), a = atan(q.y,q.x);
     float R = radius * max(.02, opening);
     if (kind < 1.5) {
@@ -75,14 +93,8 @@ void main() {
       float lens = (1.0-smoothstep(0.0,R,r)) * .024;
       float rest = line(r-R*1.25,.16)*step(fract((a+1.5708)/TAU), remaining)*.20;
       intensity = ring+inner+ticks+cross+lens+rest;
-      // Exit: any recent transport makes the whole iris breathe briefly (direction lives in ExitFlash).
-      // Entry: the iris swallows the shot, contracting inward.
-      if (kind < .5) intensity *= 1.0 + flash * .45;
-      else intensity += flash * (line(r - R * (1.0 - .35 * flash), .9) * 1.6 + exp(-r * r / 3.0) * .8);
-      if (kind > .5) {
-        float strength = mode < .5 ? .92 : mode < 1.5 ? .22+.07*sin(uTime*2.2) : .09;
-        intensity *= strength;
-      }
+      // Any recent transport makes the whole exit iris breathe briefly (direction lives in ExitFlash).
+      intensity *= 1.0 + flash * .45;
     } else if (kind < 2.5) {
       float pulse = .5+.5*sin(uTime*TAU/1.2);
       intensity = line(r-R,.28) * (.16+.25*pulse);

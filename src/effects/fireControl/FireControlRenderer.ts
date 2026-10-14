@@ -31,6 +31,8 @@ interface PortalVisual { snapshot: FireControlPortalView; removedAt?: number; re
 interface RelayVisual { sprite: Phaser.GameObjects.Sprite; removedAt?: number }
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 const EXIT_RADIUS = 23;
+/** Muzzle portal half-height across the firing line; large enough to read next to a 40 px turret. */
+const ENTRY_RADIUS = 13;
 const FLASH_MS = 220;
 /** The projection beam is brighter while it carries a copy in, then settles to a steady glow. */
 const BEAM_SETTLE_MS = 700;
@@ -141,15 +143,16 @@ export class FireControlRenderer {
         const age = entry.lastTransportAt === undefined ? Infinity : now-entry.lastTransportAt;
         const f = age >= 0 && entry.mode === 'portal' ? 1-clamp(age/FLASH_MS) : 0;
         flash = Math.max(flash, f);
-        this.store.add({ x: entry.x, y: entry.y, radius: 6, angle: entry.angle, kind: Kind.Entry,
-          open: open * (entry.mode === 'local' ? .18 : 1), remaining: 0, flash: f,
+        // Mode look (dimmed waiting, contracted dark local) lives in the shader; size stays readable.
+        this.store.add({ x: entry.x, y: entry.y, radius: ENTRY_RADIUS, angle: entry.angle, kind: Kind.Entry,
+          open, remaining: 0, flash: f,
           mode: entry.mode === 'portal' ? 0 : entry.mode === 'waiting' ? 1 : 2 });
         // Every source gets its own directed exit burst, so simultaneous shots in different
         // directions all read at the shared exit.
         if (f > 0) this.store.add({ x: d.x, y: d.y, radius: EXIT_RADIUS, angle: entry.angle,
           kind: Kind.ExitFlash, open, remaining: 0, flash: f });
-        this.light(`entry:${id}:${entry.sourceId}`, entry.x, entry.y, 30,
-          open * (entry.mode === 'portal' ? 3.5 : entry.mode === 'waiting' ? 1.4 : .3));
+        this.light(`entry:${id}:${entry.sourceId}`, entry.x, entry.y, 40,
+          open * (entry.mode === 'portal' ? 4.2 + f : entry.mode === 'waiting' ? 1.8 : .4));
       }
       this.store.add({ x: d.x, y: d.y, radius: EXIT_RADIUS, angle: 0, kind: Kind.Exit, open,
         remaining: clamp((d.expiresAt-now)/Math.max(1,d.expiresAt-d.startedAt)), flash });
