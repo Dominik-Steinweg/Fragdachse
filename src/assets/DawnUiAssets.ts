@@ -1,5 +1,6 @@
 import type * as Phaser from 'phaser';
 import { runtimeAssetUrl } from './RuntimeAssetUrls';
+import { preloadDawnMerchantUiAssets } from './DawnMerchantUiAssets';
 import { DAWN_ELITE_AFFIX_IDS, DAWN_M3_ASSET_KEYS, DAWN_NIGHT_MODIFIER_IDS } from '../dawn/contracts/DawnContentIds';
 
 /** Small counters use 32 px sources; category art stays legible at 48–64 px. */
@@ -35,6 +36,7 @@ export const DAWN_UI_ASSETS = [
 
 /** Both UI preload paths can call this: Phaser deduplicates cached and queued keys. */
 export function preloadDawnUiAssets(loader: Phaser.Loader.LoaderPlugin): void {
+  preloadDawnMerchantUiAssets(loader);
   for (const asset of DAWN_UI_ASSETS) {
     loader.image(asset.key, runtimeAssetUrl(`./assets/ui/dawn/${asset.path}`));
   }

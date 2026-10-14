@@ -639,6 +639,356 @@
           "bytes": 56770
         }
       ]
+    },
+    "dealer-sub-base": {
+      "original": "dealer-sub-base.png",
+      "sha256": "d731ebec94c81c0843e2e916b1ea593351f2da2f33fdec5179627d3efd12c448",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-sub-base-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1654
+        },
+        {
+          "file": "runtime/dealer-sub-base-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4984
+        },
+        {
+          "file": "runtime/dealer-sub-base-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 15242
+        }
+      ],
+      "selectedCandidate": 4,
+      "source": "ui/icons-u7/candidates/dealer-sub-base-04.png",
+      "selectionReason": "Der vierte Kandidat ersetzt die feinen Palisadenstäbe durch breite Holzblöcke um einen offenen quadratischen Hof. Zwei große diagonale Außenpfeile bleiben bei 32 px deutlich. Er unterscheidet sich stärker vom bestehenden Icon mit vier hohen Einzelpfählen als 01–03.",
+      "minimumDisplaySize": 32
+    },
+    "dealer-sub-drones": {
+      "original": "dealer-sub-drones.png",
+      "sha256": "573dce11d8206bd510831984748b7d63bda356f8c68bbad7f8e90c21c57d932a",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-sub-drones-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1596
+        },
+        {
+          "file": "runtime/dealer-sub-drones-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 5100
+        },
+        {
+          "file": "runtime/dealer-sub-drones-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 16584
+        }
+      ],
+      "selectedCandidate": 2,
+      "source": "ui/icons-u7/candidates/dealer-sub-drones-02.png",
+      "selectionReason": "Leit-Auswahl: geätzt statt flach, Art Direction. Der geätzte Quadkopter mit rechts aufrechtem Schraubenschlüssel bleibt bei 32 px lesbar. Die mechanische Materialität entspricht dem ernsten Druckregister; Variante 04 wirkt zu flach und comichaft.",
+      "minimumDisplaySize": 32
+    },
+    "dealer-sub-branches": {
+      "original": "dealer-sub-branches.png",
+      "sha256": "dc2ce51b0e5da684327b001149dc7c83c332de11a65493870109cc3c461fa546",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-sub-branches-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1652
+        },
+        {
+          "file": "runtime/dealer-sub-branches-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 5168
+        },
+        {
+          "file": "runtime/dealer-sub-branches-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 17348
+        }
+      ],
+      "selectedCandidate": 2,
+      "source": "ui/icons-u7/candidates/dealer-sub-branches-02.png",
+      "selectionReason": "Die drei quadratischen Knoten sitzen auf ungleichen Höhen an einem nach rechts verzweigten Stamm. Große Abstände halten die Hierarchie bei 32 px offen; die runden Enden von 01 wirken pflanzlicher, die gemischten Knoten von 03 unruhiger.",
+      "minimumDisplaySize": 32
+    },
+    "dealer-sub-boss-points": {
+      "original": "dealer-sub-boss-points.png",
+      "sha256": "9a699ab701722a31d85082d6cadde56973269deaf8fe02beb292fb0f7bc84e79",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-sub-boss-points-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1860
+        },
+        {
+          "file": "runtime/dealer-sub-boss-points-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 6192
+        },
+        {
+          "file": "runtime/dealer-sub-boss-points-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 21042
+        }
+      ],
+      "selectedCandidate": 1,
+      "source": "ui/icons-u7/candidates/dealer-sub-boss-points-01.png",
+      "selectionReason": "Leit-Auswahl: geätzt statt flach, Art Direction. Der geätzte Dachsschädel im Lorbeer passt in seiner Schnittstruktur zu branches 02. Die ernsthafte Trophäenwirkung entspricht der Art Direction; Variante 04 wirkt zu flach.",
+      "minimumDisplaySize": 32
+    },
+    "dealer-sub-round-offers": {
+      "original": "dealer-sub-round-offers.png",
+      "sha256": "a8d356a675ed89c8ca38d41fc88213bdbcdee06ad08000e8f928b0e9d1424a0a",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-sub-round-offers-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1918
+        },
+        {
+          "file": "runtime/dealer-sub-round-offers-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 5338
+        },
+        {
+          "file": "runtime/dealer-sub-round-offers-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 18610
+        }
+      ],
+      "selectedCandidate": 1,
+      "source": "ui/icons-u7/candidates/dealer-sub-round-offers-01.png",
+      "selectionReason": "Die schmale, eingerissene Kartenform mit zwei Ausstanzungen bleibt als Marktzettel erkennbar. Der große rote Sonne/Mond-Stempel ist der einzige motivierte Akzent. 02 benötigt die feine Schnur; 03 wirkt eher wie ein gefaltetes Buch.",
+      "minimumDisplaySize": 32
+    },
+    "dealer-sub-crafting": {
+      "original": "dealer-sub-crafting.png",
+      "sha256": "39e0aba17c2fa1dc1284521005b731f73cb3d5c7a18417bdb1b92ef21543b609",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/dealer-sub-crafting-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1778
+        },
+        {
+          "file": "runtime/dealer-sub-crafting-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 5102
+        },
+        {
+          "file": "runtime/dealer-sub-crafting-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 17374
+        }
+      ],
+      "selectedCandidate": 3,
+      "source": "ui/icons-u7/candidates/dealer-sub-crafting-03.png",
+      "selectionReason": "Zwischen dem vollständigen Zahnrad und dem breiten Amboss bleibt ein dunkler Spalt. Beide Formen sind bei 32 px getrennt erkennbar; 01 und 02 verdecken einen Teil des Zahnrads hinter dem Amboss.",
+      "minimumDisplaySize": 32
+    },
+    "item-helmet": {
+      "original": "item-helmet.png",
+      "sha256": "08bad9cf70156c969aac19d5e78d46ba415a4c0d6d74637a03cd82881f9f06de",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/item-helmet-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1760
+        },
+        {
+          "file": "runtime/item-helmet-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 5614
+        },
+        {
+          "file": "runtime/item-helmet-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 18674
+        }
+      ],
+      "selectedCandidate": 3,
+      "source": "ui/icons-u7/candidates/item-helmet-03.png",
+      "selectionReason": "Leit-Auswahl: geätzt statt flach, Art Direction. Geätzte Metallkappe mit Nietenband und getragenem Ledernackenschutz; ernsthafte Materialwirkung auf Karten ab 64 px. 32 px ist für die Item-Auswahl nicht maßgeblich; die flache 04-Fassung ist als Clip-Art/comichaft verworfen.",
+      "minimumDisplaySize": 64
+    },
+    "item-gloves": {
+      "original": "item-gloves.png",
+      "sha256": "b03fae26086ebe57f3fca2cd513e04bd62b4bf3a54d1ff04aa13fa32bad2cb1d",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/item-gloves-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1874
+        },
+        {
+          "file": "runtime/item-gloves-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 6150
+        },
+        {
+          "file": "runtime/item-gloves-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 18614
+        }
+      ],
+      "selectedCandidate": 3,
+      "source": "ui/icons-u7/candidates/item-gloves-03.png",
+      "selectionReason": "Leit-Auswahl: geätzt statt flach, Art Direction. Geätztes Handschuhpaar mit Stoffflicken, Leder und Knöchelplatte; die getrennten Handschuhe wirken getragen und funktional auf Karten ab 64 px. 32 px ist für die Item-Auswahl nicht maßgeblich; die flache 04-Fassung ist als Clip-Art/comichaft verworfen.",
+      "minimumDisplaySize": 64
+    },
+    "item-armor": {
+      "original": "item-armor.png",
+      "sha256": "23979cc1ffc97fb6e92a779e0aeed4df28d1132ae8d62b3eb24e5ea029c7d621",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/item-armor-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1978
+        },
+        {
+          "file": "runtime/item-armor-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 6666
+        },
+        {
+          "file": "runtime/item-armor-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 19470
+        }
+      ],
+      "selectedCandidate": 1,
+      "source": "ui/icons-u7/candidates/item-armor-01.png",
+      "selectionReason": "Leit-Auswahl: geätzt statt flach, Art Direction. Geätzte Weste mit angenieteter Blechplatte, Ledergurt und geflicktem Stoff; die Materialität trägt den ernsten Söldner-Look auf Karten ab 64 px. 32 px ist für die Item-Auswahl nicht maßgeblich; die flache 04-Fassung ist als Clip-Art/comichaft verworfen.",
+      "minimumDisplaySize": 64
+    },
+    "item-boots": {
+      "original": "item-boots.png",
+      "sha256": "ba4119e10fa44065c8213183cc52a624886e31810d0f0fff018334972b708e1d",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/item-boots-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1934
+        },
+        {
+          "file": "runtime/item-boots-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 6334
+        },
+        {
+          "file": "runtime/item-boots-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 18882
+        }
+      ],
+      "selectedCandidate": 3,
+      "source": "ui/icons-u7/candidates/item-boots-03.png",
+      "selectionReason": "Leit-Auswahl: geätzt statt flach, Art Direction. Geätztes versetztes Stiefelpaar mit breiten Zehen, Ledernähten und Stoffumschlägen; getragene Ausrüstung auf Karten ab 64 px. 32 px ist für die Item-Auswahl nicht maßgeblich; die flache 04-Fassung ist als Clip-Art/comichaft verworfen.",
+      "minimumDisplaySize": 64
     }
   }
 }

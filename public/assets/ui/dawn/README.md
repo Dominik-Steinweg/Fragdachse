@@ -59,3 +59,43 @@ Ausführen: `npm run assets:dawn-ui`. [Exportskript](../../../../scripts/export-
 Runtime-Export funktioniert ohne lokale Kandidaten. Der Prüfbogen wird nur mit vorhandenen Kandidaten und forest-review.png erzeugt; Kandidaten-Hashes werden ebenfalls geprüft. Historische V1-/M3-Prüfbögen werden nicht mehr geschrieben. art/poc/ bleibt Git-ignoriert; lokale Prüfdateien gehören zur Lieferung im Worktree.
 
 Das historische dealer-portrait.png und sein 256-px-Export behalten Bilddaten und Provenienz. Diese Büste gehört nicht zum S-2-Icon-Set. Die separate Art-Lane unter public/assets/ui/dawn/art/ wird vom UI-Export weder gelesen noch geschrieben.
+
+## U-7: Händler-Unterkategorien und Item-Slots
+
+Ergänzung vom 2026-10-14: **10 neue Icons, 37 Kandidaten**, erzeugt mit dem integrierten `image_gen`. Je Motiv drei Erstkandidaten und sieben zusätzliche flache Fassungen. Leit-Auswahl: geätzt statt flach, Art Direction. Die vier Items, Drohne und Boss-Trophäe verwenden die geätzten Kandidaten; deren flache 04-Fassungen sind als Clip-Art/comichaft verworfen. Items erscheinen auf Karten ab 64 px; 32 px ist für ihre Auswahl nicht maßgeblich. Die gewählten PNG-Originale sind bytegleiche Kandidatenkopien. Dunkle opake Druckplatten, Knochen/Papier/Umbra und grob geschnittene Rundrahmen führen das Druckregister fort. Der Marktzettel trägt als einziges neues Motiv einen roten Händlerstempel; die vier Item-Slots enthalten keine Raritätsfarbe. Frontale UI-Druckzeichen, keine World-Sprites.
+
+| Dateistamm / Manifest-Key | Vorgesehener Texture-Key | Wahl | Auswahlgrund |
+| --- | --- | --- | --- |
+| dealer-sub-base | dawn-ui-dealer-sub-base | 04 | Der vierte Kandidat ersetzt die feinen Palisadenstäbe durch breite Holzblöcke um einen offenen quadratischen Hof. Zwei große diagonale Außenpfeile bleiben bei 32 px deutlich. Er unterscheidet sich stärker vom bestehenden Icon mit vier hohen Einzelpfählen als 01–03. |
+| dealer-sub-drones | dawn-ui-dealer-sub-drones | 02 | Leit-Auswahl: geätzt statt flach, Art Direction. Der geätzte Quadkopter mit rechts aufrechtem Schraubenschlüssel bleibt bei 32 px lesbar. Die mechanische Materialität entspricht dem ernsten Druckregister; Variante 04 wirkt zu flach und comichaft. |
+| dealer-sub-branches | dawn-ui-dealer-sub-branches | 02 | Die drei quadratischen Knoten sitzen auf ungleichen Höhen an einem nach rechts verzweigten Stamm. Große Abstände halten die Hierarchie bei 32 px offen; die runden Enden von 01 wirken pflanzlicher, die gemischten Knoten von 03 unruhiger. |
+| dealer-sub-boss-points | dawn-ui-dealer-sub-boss-points | 01 | Leit-Auswahl: geätzt statt flach, Art Direction. Der geätzte Dachsschädel im Lorbeer passt in seiner Schnittstruktur zu branches 02. Die ernsthafte Trophäenwirkung entspricht der Art Direction; Variante 04 wirkt zu flach. |
+| dealer-sub-round-offers | dawn-ui-dealer-sub-round-offers | 01 | Die schmale, eingerissene Kartenform mit zwei Ausstanzungen bleibt als Marktzettel erkennbar. Der große rote Sonne/Mond-Stempel ist der einzige motivierte Akzent. 02 benötigt die feine Schnur; 03 wirkt eher wie ein gefaltetes Buch. |
+| dealer-sub-crafting | dawn-ui-dealer-sub-crafting | 03 | Zwischen dem vollständigen Zahnrad und dem breiten Amboss bleibt ein dunkler Spalt. Beide Formen sind bei 32 px getrennt erkennbar; 01 und 02 verdecken einen Teil des Zahnrads hinter dem Amboss. |
+| item-helmet | dawn-ui-item-helmet | 03 | Leit-Auswahl: geätzt statt flach, Art Direction. Geätzte Metallkappe mit Nietenband und getragenem Ledernackenschutz; ernsthafte Materialwirkung auf Karten ab 64 px. 32 px ist für die Item-Auswahl nicht maßgeblich; die flache 04-Fassung ist als Clip-Art/comichaft verworfen. |
+| item-gloves | dawn-ui-item-gloves | 03 | Leit-Auswahl: geätzt statt flach, Art Direction. Geätztes Handschuhpaar mit Stoffflicken, Leder und Knöchelplatte; die getrennten Handschuhe wirken getragen und funktional auf Karten ab 64 px. 32 px ist für die Item-Auswahl nicht maßgeblich; die flache 04-Fassung ist als Clip-Art/comichaft verworfen. |
+| item-armor | dawn-ui-item-armor | 01 | Leit-Auswahl: geätzt statt flach, Art Direction. Geätzte Weste mit angenieteter Blechplatte, Ledergurt und geflicktem Stoff; die Materialität trägt den ernsten Söldner-Look auf Karten ab 64 px. 32 px ist für die Item-Auswahl nicht maßgeblich; die flache 04-Fassung ist als Clip-Art/comichaft verworfen. |
+| item-boots | dawn-ui-item-boots | 03 | Leit-Auswahl: geätzt statt flach, Art Direction. Geätztes versetztes Stiefelpaar mit breiten Zehen, Ledernähten und Stoffumschlägen; getragene Ausrüstung auf Karten ab 64 px. 32 px ist für die Item-Auswahl nicht maßgeblich; die flache 04-Fassung ist als Clip-Art/comichaft verworfen. |
+
+Die Texture-Keys folgen `src/assets/DawnUiAssets.ts`, sind aber **noch nicht im Loader registriert**. U-7 liefert ausschließlich Assets. `dawn-ui-dealer-sub-crafting` ist der vorgesehene stilistische Ersatz für `dawn-merchant/category-crafting`; die alte Kit-Datei bleibt bestehen. Die Auswahl samt Vergleich zu verworfenen Kandidaten steht vollständig in [prompts.json](prompts.json) und im lokalen [Auswahlprotokoll](../../../../art/poc/dawn/ui/icons-u7/selection.json).
+
+### Dateien und Prüfung
+
+- Zehn Originale: `<Dateistamm>.png` direkt in diesem Ordner.
+- 30 neue verlustfreie WebPs: `runtime/<Dateistamm>-{32,64,128}.webp`.
+- [runtime/manifest.json](runtime/manifest.json): zehn zusätzliche Einträge. Bestand insgesamt 28 Icons plus historisches Porträt, 95 WebPs einschließlich Porträt.
+- [board.png](../../../../art/poc/dawn/ui/icons-u7/board.png): alle 37 Kandidaten mit markierter Wahl, ausgewählte echte 32/64/128-px-Exporte, sechs bestehende Dawn-Icons in denselben Größen und eine Probe mit Seitenleisten-/Karten-Texturen des Händler-Kits bei 1× Designgröße.
+- Lokale Kandidaten: `art/poc/dawn/ui/icons-u7/candidates/<Dateistamm>-{01,02,03[,04]}.png`.
+- [Lokaler Lieferbericht](../../../../art/poc/dawn/ui/icons-u7/README.md), [Dateiliste](../../../../art/poc/dawn/ui/icons-u7/file-list.json) und [Prüfnachweis](../../../../art/poc/dawn/ui/icons-u7/verification.json).
+
+Der Bogen wurde als lokale Rasterdatei visuell geprüft, bei 100 % entsprechen seine Größenproben echten Anzeigepixeln. Unterkategorien werden bei 32 px beurteilt; Item-Slots auf Karten ab 64 px. Die 32-px-Item-Exporte bleiben als Größenvergleich erhalten und sind kein Auswahlmaßstab. Geätzte Materialität und ernsthafte Wirkung haben gemäß Leit-Auswahl Vorrang vor flächiger Vereinfachung. Die Probe ist eine statische Montage, keine Browser- oder Spielaufnahme.
+
+### Reproduzierbarer Export
+
+`npm run assets:dawn-ui -- --u7`
+
+Der additive Schalter exportiert dieselben Runtime-Dateien wie `npm run assets:dawn-ui`, unterdrückt aber den historischen V2-Prüfbogen außerhalb des U-7-Schreibbereichs. Das U-7-Bogenskript wird bei vorhandenen lokalen Quellen zusätzlich geladen. Ohne lokale Prüfquellen funktionieren die Runtime-Exporte weiterhin allein aus den Originalen und `prompts.json`. Bestehende Originale, Runtime-Bilddaten und das Porträt bleiben unverändert.
+
+Original- und Kandidaten-Hashes werden geprüft; Resize direkt aus den Originalen mit Sharp/kubischem Filter, verlustfreie WebPs, keine Schärfung, Farbkorrektur oder zusätzliche Ränder. Bei gleichen Sharp/libvips- und Schriftversionen erzeugt der zweite Lauf identische Bytes einschließlich Manifest und Prüfbogen. [verification.json](../../../../art/poc/dawn/ui/icons-u7/verification.json) hält den Vergleich fest. Die Bildgenerierung selbst wird beim Export nicht erneut ausgeführt.
+
+Lokale Authoring-Helfer: `node art/poc/dawn/ui/icons-u7/select.mjs` kopiert die festgelegte Wahl und aktualisiert die U-7-Provenienz; `node art/poc/dawn/ui/icons-u7/build-board.mjs` baut nur den Prüfbogen. Exakte Erst- und Revisionsprompts liegen in `generation-prompts.json` und `revision-prompts.json`. `art/poc/` bleibt Git-ignoriert; diese lokalen Prüfdateien sind im Worktree vorhanden.

@@ -1,0 +1,292 @@
+{
+  "window-frame": {
+    "key": "dawn-merchant/window-frame",
+    "file": "window-frame@1x.webp",
+    "insets": {
+      "left": 64,
+      "top": 64,
+      "right": 64,
+      "bottom": 64
+    }
+  },
+  "panel-fill": {
+    "key": "dawn-merchant/panel-fill",
+    "file": "panel-fill@1x.webp",
+    "insets": null
+  },
+  "header-panorama": {
+    "key": "dawn-merchant/header-panorama",
+    "file": "header-panorama@1x.webp",
+    "insets": null
+  },
+  "category-row-normal": {
+    "key": "dawn-merchant/category-row-normal",
+    "file": "category-row-normal@1x.webp",
+    "insets": {
+      "left": 16,
+      "top": 12,
+      "right": 16,
+      "bottom": 12
+    }
+  },
+  "category-row-hover": {
+    "key": "dawn-merchant/category-row-hover",
+    "file": "category-row-hover@1x.webp",
+    "insets": {
+      "left": 16,
+      "top": 12,
+      "right": 16,
+      "bottom": 12
+    }
+  },
+  "category-row-active": {
+    "key": "dawn-merchant/category-row-active",
+    "file": "category-row-active@1x.webp",
+    "insets": {
+      "left": 16,
+      "top": 12,
+      "right": 16,
+      "bottom": 12
+    }
+  },
+  "subcategory-row-normal": {
+    "key": "dawn-merchant/subcategory-row-normal",
+    "file": "subcategory-row-normal@1x.webp",
+    "insets": {
+      "left": 32,
+      "top": 12,
+      "right": 16,
+      "bottom": 12
+    }
+  },
+  "subcategory-row-hover": {
+    "key": "dawn-merchant/subcategory-row-hover",
+    "file": "subcategory-row-hover@1x.webp",
+    "insets": {
+      "left": 32,
+      "top": 12,
+      "right": 16,
+      "bottom": 12
+    }
+  },
+  "subcategory-row-active": {
+    "key": "dawn-merchant/subcategory-row-active",
+    "file": "subcategory-row-active@1x.webp",
+    "insets": {
+      "left": 32,
+      "top": 12,
+      "right": 16,
+      "bottom": 12
+    }
+  },
+  "card-frame-normal": {
+    "key": "dawn-merchant/card-frame-normal",
+    "file": "card-frame-normal@1x.webp",
+    "insets": {
+      "left": 28,
+      "top": 28,
+      "right": 28,
+      "bottom": 28
+    }
+  },
+  "card-frame-hover": {
+    "key": "dawn-merchant/card-frame-hover",
+    "file": "card-frame-hover@1x.webp",
+    "insets": {
+      "left": 28,
+      "top": 28,
+      "right": 28,
+      "bottom": 28
+    }
+  },
+  "card-frame-selected": {
+    "key": "dawn-merchant/card-frame-selected",
+    "file": "card-frame-selected@1x.webp",
+    "insets": {
+      "left": 28,
+      "top": 28,
+      "right": 28,
+      "bottom": 28
+    }
+  },
+  "card-frame-locked": {
+    "key": "dawn-merchant/card-frame-locked",
+    "file": "card-frame-locked@1x.webp",
+    "insets": {
+      "left": 28,
+      "top": 28,
+      "right": 28,
+      "bottom": 28
+    }
+  },
+  "card-frame-owned": {
+    "key": "dawn-merchant/card-frame-owned",
+    "file": "card-frame-owned@1x.webp",
+    "insets": {
+      "left": 28,
+      "top": 28,
+      "right": 28,
+      "bottom": 28
+    }
+  },
+  "card-rarity-white": {
+    "key": "dawn-merchant/card-rarity-white",
+    "file": "card-rarity-white@1x.webp",
+    "insets": {
+      "left": 28,
+      "top": 28,
+      "right": 28,
+      "bottom": 28
+    }
+  },
+  "card-rarity-blue": {
+    "key": "dawn-merchant/card-rarity-blue",
+    "file": "card-rarity-blue@1x.webp",
+    "insets": {
+      "left": 28,
+      "top": 28,
+      "right": 28,
+      "bottom": 28
+    }
+  },
+  "card-rarity-yellow": {
+    "key": "dawn-merchant/card-rarity-yellow",
+    "file": "card-rarity-yellow@1x.webp",
+    "insets": {
+      "left": 28,
+      "top": 28,
+      "right": 28,
+      "bottom": 28
+    }
+  },
+  "badge-new": {
+    "key": "dawn-merchant/badge-new",
+    "file": "badge-new@1x.webp",
+    "insets": null
+  },
+  "stamp-purchased": {
+    "key": "dawn-merchant/stamp-purchased",
+    "file": "stamp-purchased@1x.webp",
+    "insets": null
+  },
+  "stamp-purchased-blank": {
+    "key": "dawn-merchant/stamp-purchased-blank",
+    "file": "stamp-purchased-blank@1x.webp",
+    "insets": null
+  },
+  "button-buy-normal": {
+    "key": "dawn-merchant/button-buy-normal",
+    "file": "button-buy-normal@1x.webp",
+    "insets": {
+      "left": 12,
+      "top": 12,
+      "right": 12,
+      "bottom": 12
+    }
+  },
+  "button-buy-hover": {
+    "key": "dawn-merchant/button-buy-hover",
+    "file": "button-buy-hover@1x.webp",
+    "insets": {
+      "left": 12,
+      "top": 12,
+      "right": 12,
+      "bottom": 12
+    }
+  },
+  "button-buy-disabled": {
+    "key": "dawn-merchant/button-buy-disabled",
+    "file": "button-buy-disabled@1x.webp",
+    "insets": {
+      "left": 12,
+      "top": 12,
+      "right": 12,
+      "bottom": 12
+    }
+  },
+  "button-close": {
+    "key": "dawn-merchant/button-close",
+    "file": "button-close@1x.webp",
+    "insets": null
+  },
+  "icon-lock": {
+    "key": "dawn-merchant/icon-lock",
+    "file": "icon-lock@1x.webp",
+    "insets": null
+  },
+  "icon-check": {
+    "key": "dawn-merchant/icon-check",
+    "file": "icon-check@1x.webp",
+    "insets": null
+  },
+  "icon-cart": {
+    "key": "dawn-merchant/icon-cart",
+    "file": "icon-cart@1x.webp",
+    "insets": null
+  },
+  "icon-search": {
+    "key": "dawn-merchant/icon-search",
+    "file": "icon-search@1x.webp",
+    "insets": null
+  },
+  "icon-filter": {
+    "key": "dawn-merchant/icon-filter",
+    "file": "icon-filter@1x.webp",
+    "insets": null
+  },
+  "category-sensors": {
+    "key": "dawn-merchant/category-sensors",
+    "file": "category-sensors@1x.webp",
+    "insets": null
+  },
+  "category-supply": {
+    "key": "dawn-merchant/category-supply",
+    "file": "category-supply@1x.webp",
+    "insets": null
+  },
+  "category-crafting": {
+    "key": "dawn-merchant/category-crafting",
+    "file": "category-crafting@1x.webp",
+    "insets": null
+  },
+  "pip-empty": {
+    "key": "dawn-merchant/pip-empty",
+    "file": "pip-empty@1x.webp",
+    "insets": null
+  },
+  "pip-filled": {
+    "key": "dawn-merchant/pip-filled",
+    "file": "pip-filled@1x.webp",
+    "insets": null
+  },
+  "scrollbar-track": {
+    "key": "dawn-merchant/scrollbar-track",
+    "file": "scrollbar-track@1x.webp",
+    "insets": {
+      "left": 3,
+      "top": 8,
+      "right": 3,
+      "bottom": 8
+    }
+  },
+  "scrollbar-thumb": {
+    "key": "dawn-merchant/scrollbar-thumb",
+    "file": "scrollbar-thumb@1x.webp",
+    "insets": {
+      "left": 2,
+      "top": 18,
+      "right": 2,
+      "bottom": 18
+    }
+  },
+  "field-search": {
+    "key": "dawn-merchant/field-search",
+    "file": "field-search@1x.webp",
+    "insets": {
+      "left": 10,
+      "top": 10,
+      "right": 10,
+      "bottom": 10
+    }
+  }
+}
