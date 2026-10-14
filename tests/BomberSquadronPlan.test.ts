@@ -9,6 +9,7 @@ import {
 import type { BomberSquadronDeploymentSnapshot } from '../src/systems/bomberSquadron/BomberSquadronSnapshot';
 
 import { ULTIMATE_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { GAME_HEIGHT, GAME_WIDTH } from '../src/config';
 const base = ULTIMATE_CONFIGS.BOMBER_SQUADRON as BomberSquadronUltimateConfig;
 const full = { ...base, droneCount: 14, bombsPerPass: 9, secondPassEnabled: 1, fireChunksPerBomb: 3 };
 const anchor = { x: 700, y: 900, aimOffset: 0, aimAngle: 0 };
@@ -43,7 +44,6 @@ describe('BomberSquadronPlan', () => {
       const launch = bomberLaunchAt(s, drone), c = bomberCorridor(s, drone, anchor);
       const entry = bomberDroneEntryPoint(s, drone, anchor);
       expect(Math.hypot(entry.x - c.start.x, entry.y - c.start.y)).toBeGreaterThanOrEqual(p.approachDistancePx - p.entrySpreadPx);
-      expect(Math.abs(entry.x - anchor.x) > 1600 / 2 || Math.abs(entry.y - anchor.y) > 1000 / 2).toBe(true);
       entries.push({ x: entry.x - c.start.x, y: entry.y - c.start.y });
       const arrival = launch + p.approachMs;
       expectPoint(bomberDronePose(s, drone, anchor, arrival)!, c.start);
@@ -59,6 +59,10 @@ describe('BomberSquadronPlan', () => {
           expect(Math.abs(Math.atan2(Math.sin(b.heading - a.heading), Math.cos(b.heading - a.heading))))
             .toBeLessThan(2 * Math.PI / Math.min(p.approachMs, p.turnMs, p.departureMs));
         }
+        // Auch die Drehrate ist stetig: keine Kurve setzt an einer Phasengrenze schlagartig ein oder aus.
+        const early = bomberDronePose(s, drone, anchor, boundary - 20)!.heading;
+        const late = bomberDronePose(s, drone, anchor, boundary + 20)!.heading;
+        expect(Math.abs(Math.atan2(Math.sin(late - early), Math.cos(late - early)))).toBeLessThan(0.01);
       }
       for (const t of [launch, arrival / 2 + launch / 2, arrival, bomberDroneFlightEndAt(s, drone) - 1]) {
         const pose = bomberDronePose(s, drone, anchor, t)!;
@@ -69,6 +73,19 @@ describe('BomberSquadronPlan', () => {
       expect(Math.cos(initial.heading - s.angle)).toBeGreaterThan(Math.cos((p.entryAngleSpreadDeg + 5) * Math.PI / 180));
     }
     expect(new Set(entries.map(e => `${e.x},${e.y}`)).size).toBe(p.droneCount);
+  });
+
+  it.each([0, Math.PI / 2, Math.PI, -Math.PI / 2, Math.PI / 5])('startet bei Richtung %f jede Drohne außerhalb des Standardausschnitts', angle => {
+    // Die Kamera zeigt GAME_WIDTH × GAME_HEIGHT Weltpixel um Gadachs; der halbe Drohnenkörper muss mit hinaus.
+    const margin = 24;
+    for (const config of [base, full]) {
+      const s = squadron(config, angle);
+      for (let drone = 0; drone < s.params.droneCount; drone++) {
+        const entry = bomberDroneEntryPoint(s, drone, anchor);
+        expect(Math.abs(entry.x - anchor.x) > GAME_WIDTH / 2 + margin
+          || Math.abs(entry.y - anchor.y) > GAME_HEIGHT / 2 + margin).toBe(true);
+      }
+    }
   });
 
   it('wählt begrenzt und deterministisch, ohne erreichbare Ziele unverändert, mit Cluster zum Schaden hin', () => {
@@ -205,7 +222,7 @@ describe('BomberSquadronPlan', () => {
     expect(bomberDronePose(s, drone, anchor, departureAt + config.departureMs)).toBeNull();
   });
 
-  it.each([8, 9])('wendet jede der %i Bahnen nach außen, stetig hinter E und zurück auf dieselbe Bahn', droneCount => {
+  it.each([8, 9])('wendet jede der %i Bahnen zuerst nach außen, stetig und gleich schnell hinter E zurück auf dieselbe Bahn', droneCount => {
     const s = squadron({ ...full, droneCount });
     const p = s.params, runMs = p.corridorLengthPx / p.runSpeedPxPerSec * 1000;
     const epsilon = 0.001;
@@ -226,6 +243,8 @@ describe('BomberSquadronPlan', () => {
         expect((at.x - before.x) / epsilon).toBeCloseTo((after.x - at.x) / epsilon, 4);
         expect((at.y - before.y) / epsilon).toBeCloseTo((after.y - at.y) / epsilon, 4);
       }
+      const peel = bomberDronePose(s, drone, anchor, turnAt + p.turnMs * 0.1)!;
+      expect(side * ((peel.x - c.end.x) * c.normal.x + (peel.y - c.end.y) * c.normal.y)).toBeGreaterThan(0);
       expect(bomberDronePose(s, drone, anchor, turnAt)!.phase).toBe('turn');
       expect(bomberDronePose(s, drone, anchor, returnAt)!.phase).toBe('return');
       for (let step = 1; step < 100; step++) {
@@ -236,7 +255,10 @@ describe('BomberSquadronPlan', () => {
         expect(pose.phase).toBe('turn');
         expect(pose.alpha).toBe(1);
         expect((pose.x - c.end.x) * c.dir.x + (pose.y - c.end.y) * c.dir.y).toBeGreaterThan(0);
-        expect(side * ((pose.x - c.end.x) * c.normal.x + (pose.y - c.end.y) * c.normal.y)).toBeGreaterThan(0);
+        const lateral = (pose.x - c.end.x) * c.normal.x + (pose.y - c.end.y) * c.normal.y;
+        expect(Math.abs(lateral)).toBeLessThan(0.15 * p.runSpeedPxPerSec * p.turnMs / 1000);
+        expect(Math.hypot(after.x - before.x, after.y - before.y) / (2 * epsilon) * 1000)
+          .toBeCloseTo(p.runSpeedPxPerSec, -1);
         const tangent = Math.atan2(after.y - before.y, after.x - before.x);
         expect(Math.cos(tangent - pose.heading)).toBeCloseTo(1, 5);
         expect(Math.hypot(after.x - before.x, after.y - before.y)).toBeGreaterThan(0);

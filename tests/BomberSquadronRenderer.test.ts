@@ -21,7 +21,7 @@ function squadron(anchors: BomberSquadronDeploymentSnapshot['anchors'], extra: P
     stoppedAt: null, endsAt: 9000, ...extra };
 }
 
-function fixture(worldBounds = WORLD) {
+function fixture(worldBounds = WORLD, camera: Record<string, number> = {}) {
   const created: any[] = [];
   const factory = (_x?: number, _y?: number, texture?: unknown) => {
     const o: any = { destroy: vi.fn(), visible: true, texture };
@@ -34,7 +34,7 @@ function fixture(worldBounds = WORLD) {
   };
   const scene = {
     add: { image: factory, circle: factory },
-    cameras: { main: { width: 100000, height: 100000, originX: .5, originY: .5, zoom: 1, scrollX: -48000, scrollY: -48000 } },
+    cameras: { main: { width: 100000, height: 100000, originX: .5, originY: .5, zoom: 1, scrollX: -48000, scrollY: -48000, ...camera } },
   };
   const explode = vi.fn();
   const renderer = new BomberSquadronRenderer(scene as any, {
@@ -60,6 +60,22 @@ describe('Bomber squadron presentation', () => {
     }
     f.renderer.update({ squadrons: [first] }, now + 500);
     expect(f.explode).toHaveBeenCalledTimes(expected.length);
+  });
+
+  it('lets drones enter from beyond the screen edge and fades them in only if the entry is already in view', () => {
+    const anchor = { x: 1000, y: 2000, aimOffset: 0, aimAngle: 0 };
+    const s = squadron([anchor, ...Array(params.droneCount - 1).fill(null)]);
+    const edge = fixture(WORLD, { width: 1920, height: 1080, scrollX: anchor.x - 960, scrollY: anchor.y - 540 });
+    let body: any;
+    for (let now = s.startedAt; !body && now < s.startedAt + params.approachMs; now += 1000 / 60) {
+      edge.renderer.update({ squadrons: [s] }, now);
+      body = edge.created.find(o => o.texture === 'body');
+    }
+    expect(body).toMatchObject({ visible: true, alpha: 1 });
+    // The default fixture camera shows the whole World, so the entry point is visible.
+    const inView = fixture();
+    inView.renderer.update({ squadrons: [s] }, s.startedAt + 125);
+    expect(inView.created.find(o => o.texture === 'body').alpha).toBeCloseTo(0.5, 5);
   });
 
   it('never replays impacts that happened before a late joiner first saw the squadron', () => {

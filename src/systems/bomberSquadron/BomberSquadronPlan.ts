@@ -112,6 +112,10 @@ export function bomberDroneFlightEndAt(squadron: Squadron, drone: number): numbe
 }
 
 const RAD = Math.PI / 180;
+/** Drehrate, bei der die Querneigung etwa 76 % (tanh 1) erreicht. */
+const BANK_RATE_RAD_PER_SEC = 5;
+/** Halbe Fensterbreite der Drehrate für die Querneigung: das Umrollen folgt der Kurve mit etwas Trägheit. */
+const BANK_WINDOW_MS = 100;
 const ARC_SAMPLES = 48;
 const ARC_STEPS = ARC_SAMPLES - 1;
 const smoothstep = (x: number): number => x * x * (3 - 2 * x);
@@ -139,12 +143,57 @@ function seededRandom(id: number, drone: number): () => number {
   };
 }
 
+/** Quintische Hermite-Kurve mit Beschleunigung 0 an beiden Enden: Krümmung (und Querneigung) beginnt und endet bei 0. */
 function hermite(c: FlightCurve, s: number, out: Point, tangent = false): void {
-  const h0 = tangent ? 6 * s * s - 6 * s : 2 * s ** 3 - 3 * s * s + 1;
-  const h1 = tangent ? 3 * s * s - 4 * s + 1 : s ** 3 - 2 * s * s + s;
-  const h2 = tangent ? 3 * s * s - 2 * s : s ** 3 - s * s;
+  const s2 = s * s, s3 = s2 * s, s4 = s3 * s, s5 = s4 * s;
+  const h0 = tangent ? -30 * s2 + 60 * s3 - 30 * s4 : 1 - 10 * s3 + 15 * s4 - 6 * s5;
+  const h1 = tangent ? 1 - 18 * s2 + 32 * s3 - 15 * s4 : s - 6 * s3 + 8 * s4 - 3 * s5;
+  const h2 = tangent ? -12 * s2 + 28 * s3 - 15 * s4 : -4 * s3 + 7 * s4 - 3 * s5;
   out.x = h0 * c.x0 + h1 * c.mx + h2 * c.length;
   out.y = h0 * c.y0 + h1 * c.my;
+}
+
+// Ballonwende des zweiten Anflugs: konstante Laufgeschwindigkeit, Drehrate an beiden Enden 0 und eine
+// geschlossene Schleife zurück auf dieselbe Bahn. Erst kurz nach außen (TURN_DIP rad), dann die Hauptkurve
+// mit flachem Drehratenplateau. Einheit: Weglänge der Wende = 1; TURN_DIP schließt die Schleife.
+const TURN_DIP = 0.5093713356289072, TURN_DIP_SHARE = 0.25, TURN_RAMP = 0.2, TURN_SAMPLES = 96;
+
+function turnRate(t: number): number {
+  const dipRate = TURN_DIP / (TURN_DIP_SHARE / 2);
+  if (t < TURN_DIP_SHARE) return -dipRate * Math.sin(Math.PI * t / TURN_DIP_SHARE) ** 2;
+  if (t > 1 - TURN_DIP_SHARE) return -dipRate * Math.sin(Math.PI * (1 - t) / TURN_DIP_SHARE) ** 2;
+  const u = (t - TURN_DIP_SHARE) / (1 - 2 * TURN_DIP_SHARE);
+  const ramp = u < TURN_RAMP ? Math.sin(Math.PI * u / (2 * TURN_RAMP)) ** 2
+    : u > 1 - TURN_RAMP ? Math.sin(Math.PI * (1 - u) / (2 * TURN_RAMP)) ** 2 : 1;
+  return (Math.PI + 2 * TURN_DIP) / ((1 - 2 * TURN_DIP_SHARE) * (1 - TURN_RAMP)) * ramp;
+}
+
+const turnPath = (() => {
+  const path = { x: new Float64Array(TURN_SAMPLES + 1), y: new Float64Array(TURN_SAMPLES + 1),
+    heading: new Float64Array(TURN_SAMPLES + 1) };
+  const sub = 64, n = TURN_SAMPLES * sub;
+  let heading = 0, x = 0, y = 0;
+  for (let i = 0; i < n; i++) {
+    const rate = turnRate((i + 0.5) / n), mid = heading + rate / (2 * n);
+    x += Math.cos(mid) / n; y += Math.sin(mid) / n; heading += rate / n;
+    if ((i + 1) % sub === 0) { const k = (i + 1) / sub; path.x[k] = x; path.y[k] = y; path.heading[k] = heading; }
+  }
+  // Integrationsrest weich verteilen: Ende exakt auf der Bahn, Ableitungen an den Enden unverändert.
+  for (let k = 0; k <= TURN_SAMPLES; k++) {
+    const s = k / TURN_SAMPLES, ease = s ** 3 * (s * (6 * s - 15) + 10);
+    path.x[k] -= x * ease; path.y[k] -= y * ease;
+  }
+  return path;
+})();
+
+/** Ort auf der Ballonwende (Einheitslänge), tangentenstetig zwischen den Stützstellen. */
+function turnPoint(t: number, out: Point): void {
+  const scaled = clamp01(t) * TURN_SAMPLES, i = Math.min(TURN_SAMPLES - 1, Math.floor(scaled)), f = scaled - i;
+  const step = 1 / TURN_SAMPLES, f2 = f * f, f3 = f2 * f;
+  const h00 = 2 * f3 - 3 * f2 + 1, h10 = (f3 - 2 * f2 + f) * step, h01 = 3 * f2 - 2 * f3, h11 = (f3 - f2) * step;
+  const a = turnPath.heading[i], b = turnPath.heading[i + 1];
+  out.x = h00 * turnPath.x[i] + h10 * Math.cos(a) + h01 * turnPath.x[i + 1] + h11 * Math.cos(b);
+  out.y = h00 * turnPath.y[i] + h10 * Math.sin(a) + h01 * turnPath.y[i + 1] + h11 * Math.sin(b);
 }
 
 function flightCurve(squadron: Squadron, drone: number, anchor: BomberSquadronAnchor): FlightCurve {
@@ -205,7 +254,8 @@ function flightPosition(p: BomberSquadronPlanParams, c: FlightCurve, side: numbe
     const distance = p.runSpeedPxPerSec * f * seconds + extraSpeed * seconds / 3 * (1 - (1 - f) ** 3);
     const s = arcParameter(c, distance);
     hermite(c, s, out); hermite(c, s, workB, true);
-    const sway = p.swayPx * Math.sin(3 * Math.PI * f + c.phase) * (1 - f) ** 2;
+    // (1 - f)^3: Wert, Steigung und Krümmung des Schlingerns enden am Korridorbeginn bei 0.
+    const sway = p.swayPx * Math.sin(3 * Math.PI * f + c.phase) * (1 - f) ** 3;
     const speed = Math.hypot(workB.x, workB.y);
     out.x -= workB.y / speed * sway; out.y += workB.x / speed * sway;
     return 'approach';
@@ -213,10 +263,11 @@ function flightPosition(p: BomberSquadronPlanParams, c: FlightCurve, side: numbe
   out.y = 0;
   if (runElapsed < runMs) { out.x = p.runSpeedPxPerSec * runElapsed / 1000; return 'run'; }
   if (p.passCount === 2 && runElapsed < runMs + p.turnMs) {
-    const a = Math.PI * (runElapsed - runMs) / p.turnMs, sin = Math.sin(a), cos = Math.cos(a);
-    const radius = p.runSpeedPxPerSec * p.turnMs / 1000 / Math.PI;
-    out.x = p.corridorLengthPx + radius * sin;
-    out.y = side * radius * sin * sin * (1 + cos / 2);
+    const scale = p.runSpeedPxPerSec * p.turnMs / 1000;
+    turnPoint((runElapsed - runMs) / p.turnMs, out);
+    // Gespiegelt: der erste kurze Ausschlag zeigt von der Formationsmitte weg.
+    out.x = p.corridorLengthPx + out.x * scale;
+    out.y *= -side * scale;
     return 'turn';
   }
   if (p.passCount === 2 && elapsed < flightMs) {
@@ -232,13 +283,15 @@ function flightPosition(p: BomberSquadronPlanParams, c: FlightCurve, side: numbe
     const distance = (p.runSpeedPxPerSec + (p.departureSpeedPxPerSec - p.runSpeedPxPerSec) * ease) * dt * sign;
     out.x += Math.cos(angle) * distance; out.y += Math.sin(angle) * distance;
   }
-  const angle = c.turn * smoothstep(f), sway = p.swayPx * Math.sin(3 * Math.PI * f + c.phase) * f * f * sign;
+  const angle = c.turn * smoothstep(f), sway = p.swayPx * Math.sin(3 * Math.PI * f + c.phase) * f ** 3 * sign;
   out.x -= Math.sin(angle) * sway; out.y += Math.cos(angle) * sway;
   return 'departure';
 }
 
 function flightHeading(p: BomberSquadronPlanParams, c: FlightCurve, side: number, elapsed: number): number {
-  elapsed = Math.max(0, elapsed);
+  // Innerhalb der Flugdauer abtasten: jenseits der Enden steht die Position und ergäbe keine Richtung.
+  const flightMs = p.approachMs + p.passCount * runDurationMs(p) + (p.passCount - 1) * p.turnMs + p.departureMs;
+  elapsed = Math.max(8, Math.min(flightMs - 8, elapsed));
   flightPosition(p, c, side, elapsed - 8, workA);
   const x = workA.x, y = workA.y;
   flightPosition(p, c, side, elapsed + 8, workA);
@@ -262,8 +315,9 @@ export function bomberDronePose(
   pose.x = anchor.x + ux * p.corridorLeadPx - uy * offset + dx * x - dy * y;
   pose.y = anchor.y + uy * p.corridorLeadPx + ux * offset + dy * x + dx * y;
   pose.heading = angle + flightHeading(p, c, side, elapsed);
-  const turn = flightHeading(p, c, side, elapsed + 8) - flightHeading(p, c, side, elapsed - 8);
-  pose.bank = Math.max(-1, Math.min(1, Math.atan2(Math.sin(turn), Math.cos(turn)) / 0.016 / 2.5));
+  const turn = flightHeading(p, c, side, elapsed + BANK_WINDOW_MS) - flightHeading(p, c, side, elapsed - BANK_WINDOW_MS);
+  // Weiche Sättigung: leichte Anflugkurven sind schon ablesbar, enge Wenden laufen ohne Knick in ±1.
+  pose.bank = Math.tanh(Math.atan2(Math.sin(turn), Math.cos(turn)) / (BANK_WINDOW_MS / 500) / BANK_RATE_RAD_PER_SEC);
   pose.alpha = pose.phase === 'departure' ? clamp01((endAt - t) / 300) : 1;
   return pose as BomberDronePose & { bank: number };
 }
