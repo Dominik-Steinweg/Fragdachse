@@ -210,12 +210,15 @@ describe('loadout catalog', () => {
     expect(describeLoadoutItem('weapon2', 'PLASMA_BURNER').displayName).toBe('Plasmabrenner');
   });
 
-  it('uses the dedicated upgrade artwork in the four Ultimate slots', () => {
+  it('uses the dedicated upgrade artwork in Ultimate slots', () => {
     expect(describeLoadoutItem('ultimate', 'ARMAGEDDON').textureKey).toBe('UPGRADE_UNLOCK_ARMAGEDDON');
     expect(describeLoadoutItem('ultimate', 'GAUSS_RIFLE').textureKey).toBe('UPGRADE_UNLOCK_GAUSS_RIFLE');
     expect(describeLoadoutItem('ultimate', 'AIRSTRIKE').textureKey).toBe('UPGRADE_UNLOCK_AIRSTRIKE');
     expect(describeLoadoutItem('ultimate', 'HONEY_BADGER_RAGE').textureKey)
       .toBe('UPGRADE_UNLOCK_HONEY_BADGER_RAGE');
+    expect(describeLoadoutItem('ultimate', 'HOLO_OFFENSIVE').textureKey)
+      .toBe(getCoopDefenseUpgradeTextureKey('unlock_holo_offensive'));
+    expect(hasCoopDefenseDedicatedUpgradeIcon('unlock_holo_offensive')).toBe(true);
   });
 
   it('uses the dedicated upgrade artwork for Inspector weapon 2 slots', () => {

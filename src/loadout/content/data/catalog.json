@@ -271,7 +271,7 @@
       "id": "HOLO_OFFENSIVE",
       "slot": "ultimate",
       "order": 5,
-      "iconKey": null
+      "iconKey": "HOLO_OFFENSIVE"
     },
     {
       "kind": "ultimate",

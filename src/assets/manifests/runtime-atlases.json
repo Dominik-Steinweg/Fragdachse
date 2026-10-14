@@ -3,7 +3,7 @@
   "extrude": 2,
   "groups": {
     "icons": {
-      "sourceHash": "f4ca070c5d0c873933bd7d41654469feedf759cbc482ef98c9bdfc8c04b488a6",
+      "sourceHash": "a594fbaed54f3c479efdf0741122b47e3933bff94ee5a5e5d813d289cdde2b1c",
       "filter": "linear",
       "encoding": "srgb-pma-colour",
       "sources": [
@@ -168,6 +168,15 @@
           "width": 32,
           "height": 32,
           "bytes": 1992
+        },
+        {
+          "id": "HOLO_OFFENSIVE",
+          "source": "assets/sprites/Loadout/HOLO_OFFENSIVE.png",
+          "file": "assets/sprites/Loadout/HOLO_OFFENSIVE.png",
+          "sha256": "a8169eb77573d7881fa3579fe679e76e9a297492b433ee44ecfdecf32f045437",
+          "width": 32,
+          "height": 32,
+          "bytes": 2311
         },
         {
           "id": "HONEY_BADGER_RAGE",
@@ -1446,6 +1455,42 @@
           "width": 32,
           "height": 32,
           "bytes": 1782
+        },
+        {
+          "id": "UPGRADE_HOLO_OFFENSIVE_DURATION",
+          "source": "assets/sprites/Loadout/UPGRADE_HOLO_OFFENSIVE_DURATION.png",
+          "file": "assets/sprites/Loadout/UPGRADE_HOLO_OFFENSIVE_DURATION.png",
+          "sha256": "eb11f51d2f7cabaca13e44e25226c494ddfaf0143bc2097a3773ed8b81b80bef",
+          "width": 32,
+          "height": 32,
+          "bytes": 3179
+        },
+        {
+          "id": "UPGRADE_HOLO_OFFENSIVE_INJECTOR",
+          "source": "assets/sprites/Loadout/UPGRADE_HOLO_OFFENSIVE_INJECTOR.png",
+          "file": "assets/sprites/Loadout/UPGRADE_HOLO_OFFENSIVE_INJECTOR.png",
+          "sha256": "99af5700202afe83662f6574dbda5eaefc14607d9a175d48530c185876567cf5",
+          "width": 32,
+          "height": 32,
+          "bytes": 2832
+        },
+        {
+          "id": "UPGRADE_HOLO_OFFENSIVE_INTERVAL",
+          "source": "assets/sprites/Loadout/UPGRADE_HOLO_OFFENSIVE_INTERVAL.png",
+          "file": "assets/sprites/Loadout/UPGRADE_HOLO_OFFENSIVE_INTERVAL.png",
+          "sha256": "7601aca2564c8f8cea105fe18853492b54b2ee03fcc192a549ccf1e4c58065e0",
+          "width": 32,
+          "height": 32,
+          "bytes": 2980
+        },
+        {
+          "id": "UPGRADE_HOLO_OFFENSIVE_RAGE_REQUIRED",
+          "source": "assets/sprites/Loadout/UPGRADE_HOLO_OFFENSIVE_RAGE_REQUIRED.png",
+          "file": "assets/sprites/Loadout/UPGRADE_HOLO_OFFENSIVE_RAGE_REQUIRED.png",
+          "sha256": "c12d040e538cf2a17500189afe4c347039c6d1a501813e41433cb8f500b787fb",
+          "width": 32,
+          "height": 32,
+          "bytes": 3200
         },
         {
           "id": "UPGRADE_HONEY_BADGER_PACK_RAGE",
@@ -2924,6 +2969,15 @@
           "bytes": 1083
         },
         {
+          "id": "UPGRADE_UNLOCK_HOLO_OFFENSIVE",
+          "source": "assets/sprites/Loadout/UPGRADE_UNLOCK_HOLO_OFFENSIVE.png",
+          "file": "assets/sprites/Loadout/UPGRADE_UNLOCK_HOLO_OFFENSIVE.png",
+          "sha256": "a8169eb77573d7881fa3579fe679e76e9a297492b433ee44ecfdecf32f045437",
+          "width": 32,
+          "height": 32,
+          "bytes": 2311
+        },
+        {
           "id": "UPGRADE_UNLOCK_HONEY_BADGER_RAGE",
           "source": "assets/sprites/Loadout/UPGRADE_UNLOCK_HONEY_BADGER_RAGE.png",
           "file": "assets/sprites/Loadout/UPGRADE_UNLOCK_HONEY_BADGER_RAGE.png",
@@ -3138,10 +3192,10 @@
           "data": "assets/atlases/icons-0.json",
           "width": 1024,
           "height": 1024,
-          "sha256": "8da64043a32dc5e0028d12c933d0b22f8b92cf8e9cb74874660c6e1684bfa384",
-          "dataSha256": "2b741d89cbb55ebebe5ecf86150fcbf6bc8e7fe5e15491753776caccb92c8762",
-          "bytes": 786302,
-          "dataBytes": 62577,
+          "sha256": "85d54b33510e62d3aef9a998913a43c218e6e9832660606070edcf3589982cb4",
+          "dataSha256": "3c4077fd28febac868f0c63e369f15fbc20040524bc15f0730c4385ff4eab8df",
+          "bytes": 800232,
+          "dataBytes": 63666,
           "frames": [
             "ASMD_PRIM",
             "ASMD_SEC",
@@ -3180,6 +3234,7 @@
             "GAUSS_RIFLE",
             "GLOCK",
             "HE_GRENADE",
+            "HOLO_OFFENSIVE",
             "HONEY_BADGER_RAGE",
             "HYDRA",
             "LAUBBLAESER",
@@ -3314,6 +3369,10 @@
             "UPGRADE_HE_GRENADE_DAMAGE",
             "UPGRADE_HE_GRENADE_DEMOLITION_CLUSTER",
             "UPGRADE_HE_GRENADE_IMPACT_FUSE",
+            "UPGRADE_HOLO_OFFENSIVE_DURATION",
+            "UPGRADE_HOLO_OFFENSIVE_INJECTOR",
+            "UPGRADE_HOLO_OFFENSIVE_INTERVAL",
+            "UPGRADE_HOLO_OFFENSIVE_RAGE_REQUIRED",
             "UPGRADE_HONEY_BADGER_PACK_RAGE",
             "UPGRADE_HONEY_BADGER_RAGE_DAMAGE",
             "UPGRADE_HONEY_BADGER_RAGE_RADIUS",
@@ -3468,6 +3527,7 @@
             "UPGRADE_UNLOCK_FLAME_TURRET",
             "UPGRADE_UNLOCK_GAUSS_RIFLE",
             "UPGRADE_UNLOCK_GRAVITY_TURRET",
+            "UPGRADE_UNLOCK_HOLO_OFFENSIVE",
             "UPGRADE_UNLOCK_HONEY_BADGER_RAGE",
             "UPGRADE_UNLOCK_MACHINE_GUN_TURRET",
             "UPGRADE_UNLOCK_MEDIC_PEDESTAL",

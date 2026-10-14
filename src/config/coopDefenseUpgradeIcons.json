@@ -311,7 +311,12 @@
     "fire_control_relay_parallel",
     "fire_control_portal_duration",
     "fire_control_portal_damage",
-    "fire_control_portal_local_fire"
+    "fire_control_portal_local_fire",
+    "unlock_holo_offensive",
+    "holo_offensive_duration",
+    "holo_offensive_interval",
+    "holo_offensive_rage_required",
+    "holo_offensive_injector"
   ],
   "withoutIcon": [
     "burrow_earthbreak",
@@ -344,11 +349,6 @@
     "unlock_zeus_taser",
     "unlock_fire_control_relay",
     "unlock_fire_control_portal",
-    "unlock_holo_offensive",
-    "holo_offensive_duration",
-    "holo_offensive_interval",
-    "holo_offensive_rage_required",
-    "holo_offensive_injector",
     "unlock_bomber_squadron",
     "bomber_squadron_size",
     "bomber_squadron_bomb_count",
