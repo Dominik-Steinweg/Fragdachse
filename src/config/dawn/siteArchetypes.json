@@ -77,7 +77,7 @@
       "objectiveType": "hold",
       "selectionWeight": 2,
       "clearingRadiusCells": 5,
-      "holdDurationMs": 45000,
+      "holdDurationMs": 30000,
       "requiredSurvivors": 1,
       "structure": {
         "role": "outpost",

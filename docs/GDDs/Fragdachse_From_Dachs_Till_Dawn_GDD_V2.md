@@ -8,7 +8,7 @@ Implementierungschronik.
 
 ## 1. Kern-Loop
 
-Endgame-Endlosmodus nach Map 20. Eine Runde dauert 8 Minuten und läuft von Morgen bis
+Endgame-Endlosmodus nach Map 20. Eine Runde dauert 6 Minuten und läuft von Morgen bis
 Morgengrauen: Am Tag bergen die Spieler Schrott an Salvage-Sites, in der Dämmerung kehren sie zur
 Basis zurück, nachts verteidigen sie die persistente Basis, im Morgengrauen ist die Runde
 gewonnen. Mit Schrott kauft man beim Schrotthändler Expansion (größere Basis, höherer Threat),
@@ -41,14 +41,14 @@ Threat 10 ist das Langzeitziel.
 | Händler | – | Lobby-UI-Eintrag „Upgrades \| Basis \| Items \| Händler“, dekorativer Stand in der LobbyWorld (begehbar nach LobbyWorld-L2), optionaler Händler-Schritt nach der Runde | Schneller Zugriff ohne Laufwege |
 | Rundenzähler | „Day-Progression“ verworfen | „Tag N“ und Statistik (beste Serie) ohne Einfluss auf die Schwierigkeit | Erinnerung ja, Schwierigkeit nur über Threat |
 
-## 4. Rundenstruktur (8:00)
+## 4. Rundenstruktur (6:00, D-49)
 
 | Phase | Rundenzeit | Uhrzeit im Spiel | Inhalt |
 |---|---|---|---|
-| Tag | 0:00–3:30 | 10:00 → 18:45 | Salvage-Sites, stiller Tagesdruck |
-| Dämmerung | 3:30–4:15 | → 20:45 | Sites schließen, Rückkehr-Marker |
-| Nacht | 4:15–7:45 | → 04:45 | 3 Wellen und ein Finale |
-| Morgengrauen | 7:45–8:00 | → 06:15 | Sonnenaufgang, Sieg |
+| Tag | 0:00–2:15 | 10:00 → 18:45 | Salvage-Sites, stiller Tagesdruck |
+| Dämmerung | 2:15–2:45 | → 20:45 | Sites schließen, Rückkehr-Marker |
+| Nacht | 2:45–5:45 | → 04:45 | 3 Wellen und ein Finale |
+| Morgengrauen | 5:45–6:00 | → 06:15 | Sonnenaufgang, Sieg |
 
 Eine reine Phasenfunktion leitet aus Zeitplan und Rundenzeit die Phase ab; die Tageszeit folgt
 daraus. Zeitpläne liegen in `src/config/dawn/schedules.json`.
@@ -69,7 +69,7 @@ daraus. Zeitpläne liegen in `src/config/dawn/schedules.json`.
   Salvage-Slots in drei Distanzbändern (nah, mittel, fern), jedes Band in jedem Quadranten. Die Lichtung
   hat 140×96 Zellen und 16 Slots (nah 24–31, mittel 34–43, fern 45–55 Zellen).
 - Eine Site wird aktiviert, sobald ein Spieler ihre Lichtung betritt; ihr Ziel läuft parallel zu
-  anderen Sites und schließt in der Dämmerung. Wracks werden zerstört, Extraktoren 45 s gehalten.
+  anderen Sites und schließt in der Dämmerung. Wracks werden zerstört, Extraktoren 30 s gehalten (D-49).
 - Pro Runde wählt der Host Slots, Archetypen und Tiers. Archetypen M1: Wrack (zerstören),
   Extraktor (halten); M3: Brutnest, Versorgung (tragen), Schrottsammler, verstreute Funde,
   Elite-Wrack.
@@ -171,7 +171,7 @@ Loadout-Commit (`coopDefenseEntitlements`) zum Host. Die Preise sind per Simulat
 | D-17 | 2026-10-13 (G0) | Nekromantie-Forschung ist früh erschwinglich, nach etwa 3–4 Runden (Preis im Economy-Modell, Umsetzung M2). | ja |
 | D-18 | 2026-10-13 (G0) | „Beste Serie“ zählt nur aufeinanderfolgende Siege; eine Niederlage setzt die laufende Serie zurück. | ja |
 | D-19 | 2026-10-13 (G0) | Late Join in laufende Dawn-Runden ist wie in der Kampagne erlaubt. | ja |
-| D-20 | 2026-10-13 (M1) | Tag bleibt 3:30: Bei 280 px/s braucht der Weg zum fernen Band etwa 6–9 s; die Tagesphase wird von der Site-Arbeit bestimmt, nicht vom Laufen. Neu bewertet im G1-Spieltest. | ja |
+| D-20 | 2026-10-13 (M1) | ~~Tag bleibt 3:30: Bei 280 px/s braucht der Weg zum fernen Band etwa 6–9 s; die Tagesphase wird von der Site-Arbeit bestimmt, nicht vom Laufen.~~ Ersetzt durch D-49 (Tag 2:15). | nein |
 | D-21 | 2026-10-13 (M1) | Sites aktivieren beim Betreten ihrer Lichtung, laufen gleichzeitig (eigenes Nebenziel-Flag `concurrent`) und schließen in der Dämmerung ohne Belohnung (`expiresAt`). Nachts respawnen Spieler mit 6 s statt 2 s. | ja |
 | D-22 | 2026-10-13 (M1) | Threat eskaliert über Fronten (1 → 4), Spezialgegner, Nacht- und Tagesbudget, Site-Zahl (3 → 7) und Tiers; Itemlevel des Sieg-Angebots = Threat + 1. | ja |
 | D-23 | 2026-10-13 (M1) | Extraktoren (Hold-Sites) lösen beim Betreten eine eigene Angriffswelle am Lichtungsrand aus (Budget je Tier), sonst wäre Halten trivial. Wracks bleiben ohne Begleitwelle. | ja |
@@ -198,6 +198,7 @@ Loadout-Commit (`coopDefenseEntitlements`) zum Host. Die Preise sind per Simulat
 | D-44 | 2026-10-14 (M3, User) | ~~Ersetzt durch D-47.~~ Bombernacht: Jeder Luftangriff bekommt einen Überflug-Schatten (Tarnkappen-Nurflügler). Er kreuzt das Ziel 350 ms vor dem Einschlag aus einer festen Richtung je Angriff und dunkelt über der Lichtkarte ab (über beleuchtetem Boden lesbar). Kampagnen-Luftangriffe bleiben ohne Schatten. | ja |
 | D-46 | 2026-10-14 (User) | Der Basisradius bleibt dauerhaft bei höchstens 10 (Stufe 6, ersetzt D-37). Damit entfallen Lobby-Ausbau und Lichtkarten-Umbau; `dawn-parked-lobby-60x45` ist obsolet. Expansions-Track (Threat = 1 + Expansion, 1..10): Expansion 1–4 (Threat 2–5) bringen je +1 Radius (7…10). Expansion 5–9 (Threat 6–10) bringen je mehr Kern-HP; die kumulierte Tabelle (+600/1200/1900/2700/3600) steht in `expansion.json` und wird vom Host in die World eingefroren (`persistentBaseHpBonus`). Dazu je Stufe +1 Plasmaturm als **PLATZHALTER** (Rewards `base_plasma_turret_dawn_1..5`, aus der Expansionsstufe abgeleitet, Inhalt wird später ersetzt). Der Kapazitätsbonus hängt weiter an der eingefrorenen Flächenstufe, wächst also bis Threat 5 und danach nicht mehr. Dawn-Templates: maxAreaStage 6, Reservierung 12. | ja |
 | D-47 | 2026-10-14 (M3, User) | Nacht-Modifikatoren vollständig diegetisch, ersetzt den Bildschirm-Pass aus D-43 und D-44: kein Kamerafilter (keine LUT, kein Randton, keine Bildschirm-Glut); die übrigen `dawn-night`-Texturen werden nicht geladen. **Blutmond:** blutrotes Mondlicht über den einzigen Ambient-Schreiber `WorldSunlightPresentation` (4 s Einblendung). Zwischen den Wolken bleibt ein fast schwarz-rotes Ambient (Helligkeit der Nacht × `gain` 0,38). Durch die Lücken des gemeinsamen, weltverankerten Wolkenfelds (Deckung 0,7, Drift wie am Tag) fällt volles, gesättigtes Blutrot als eigener Lichtkarten-Layer direkt nach der Ambient-Füllung, mit weicher, aber klarer Kante: wenige, klar umrissene rot beleuchtete Flächen statt eines Schleiers. Die Nacht wird dadurch nicht heller, nur kontrastreicher. Lampen und Basislicht addieren unverändert und bleiben warm. Boden, Nebel und Pflanzen liegen unter der Lichtkarte und bekommen den Schein ohne eigenen Tint (Abnahmen: −25 %, kein Rot-Tint auf künstlichem Licht, dann rote Inseln durch Wolkenlücken). Eine eigene Schattenfarbe gibt es nicht (Nachtschatten ≈ 15 % Deckung). **Brandnacht:** zusätzlich zu den Pyro-Blöcken entzündet sich der Boden über das bestehende Ground-Hazard-System: `random-patches` wachsen radial vom Zentrum (mit Warnband), drei Zündwellen über die Nacht, alle brennen bis zur Dämmerung aus. Sperrkapseln halten den Basis-Kern (15 Zellen) und je Front eine Gasse vom Arenarand zur Basis (Halbbreite 5) frei, Bauwerke und Sites 4 Zellen. Host-autoritativ, Late Join über den Burning-Ground-Snapshot; Glut und Rauch kommen nur aus den echten Brandflächen. **Bombernacht:** die Luftangriffe fliegen gerade Anflüge aus den Fronten der Nacht (Kurs ± 25°, Versatz aus dem Plan); die Bomben liegen auf der Fluglinie und folgen der Fluggeschwindigkeit (240 px/s). Eine Formation aus drei Tarnkappen-Schatten verschiedener Größe dunkelt weich per Multiply über der Lichtkarte ab und ist Sekunden vor dem ersten Einschlag zu sehen. Alle Peers leiten sie aus demselben Run und der Rundenuhr ab, ohne eigenen Netzwerkzustand. Kein Randpuls. **Nebelnacht:** nur über den Bodennebel (`fogStrength` 2, `fogTint`). Eine Stärke über 1 senkt zusätzlich die Bank-Schwelle und hebt die Deckkraft der Schwaden an: mehr und dichtere Bänke, sichtbar im Licht der Basis, der Lampen und der Taschenlampe. Die Phasenkarte zum Nachtbeginn bleibt. | ja |
+| D-49 | 2026-10-14 (User, Playtest) | Rundendauer 6:00 statt 8:00; Tag 2:15, Dämmerung 0:30, Nacht 3:00, Morgengrauen 0:15. Der Tag schrumpft also anteilig (≈ 37 % statt 44 %), die Nacht wächst (50 % statt 44 %). Die Uhrzeiten bleiben gleich und werden weiter aus dem Phasenplan abgeleitet (ersetzt die Längen aus D-20). Wellen liegen nach Anteil im Phasenfenster. Das Nachtbudget bleibt als Gesamtgefahr in kürzerer Zeit (3 Wellen + Finale). Der Tagesdruck behält seinen Druck pro Minute (Budget × 0,64). Pro Threat eine Site weniger (2…6 statt 3…7), Extraktor-Haltezeit 30 s statt 45 s. Brandnacht-Zündwellen und Bomber-Runs folgen der Nachtlänge. Economy: 8 Runden pro Stunde (6 min + Lobby); die Zielkurve in Spielstunden bleibt (Threat 5 nach 4–5 h, Threat 10 nach 25–30 h, Nekromantie in Runde 4). Angepasst wurde der Rundenertrag über `scrapMultiplier` (früh höher wegen weniger Sites, spät leicht flacher), nicht die Preise. | ja |
 | D-48 | 2026-10-14 (User) | Debug-Menü (L): „Dawn freischalten“ setzt dauerhaft `dawn.debugUnlocked` (überlebt Reload wie die Map-Freischaltung). `isDawnUnlocked` berücksichtigt das Feld. Map 20 gilt dadurch nicht als gewonnen: keine Bosspunkte, keine `completedMapIds`, keine verpassten Belohnungen. Der Decoder behält nur `true`; andere Werte entfallen, ohne den Fortschritt zu verwerfen. | ja |
 | D-45 | 2026-10-14 (User) | Die Basis darf am Tag fallen; der Tagesdruck bleibt (Risiko „zu lange weg"). Die Häufigkeit der Nacht-Modifikatoren bleibt (ab Threat 3, bis 60 %). Bildsprache V1 gilt vorerst nur für Dawn; über die Ausweitung entscheidet der User nach den Dawn-Tests. | ja |
 

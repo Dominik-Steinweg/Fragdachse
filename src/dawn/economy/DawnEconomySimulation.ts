@@ -12,7 +12,7 @@ import { resolveDawnExpansionCost } from './DawnEconomy';
 
 /** Analysis assumptions, not gameplay rules or a persistence document. */
 export interface DawnEconomySimulationParameters {
-  /** Eight minutes of play plus lobby time: six completed rounds per hour. */
+  /** Six minutes of play plus lobby time: eight completed rounds per hour. */
   readonly roundsPerHour: number;
   /** Probability of a victory; defeat keeps the authored defeatScrapShare. */
   readonly victoryRate: number;
@@ -27,7 +27,7 @@ export interface DawnEconomySimulationParameters {
 }
 
 export const DEFAULT_DAWN_ECONOMY_PARAMETERS: DawnEconomySimulationParameters = Object.freeze({
-  roundsPerHour: 6,
+  roundsPerHour: 8,
   victoryRate: 0.85,
   siteSuccessRate: 0.8,
   otherPurchaseShare: 0.4,
