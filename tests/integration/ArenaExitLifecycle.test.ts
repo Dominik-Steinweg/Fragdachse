@@ -318,7 +318,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
       expect(pending.worldParameters.persistentBaseUnlocked).toBe(true);
       vi.mocked(bridge.getRoundState).mockImplementation(() => roundState);
       updateStoredDawnProgress(draft => { draft.infrastructure = {}; });
-      expect(flow.getRoundDawnInfrastructure()).toEqual({ repairDrones: 2, scrapMagnet: 1 });
+      expect(flow.getRoundDawnInfrastructure()).toEqual({ repairDrones: 2, scrapMagnet: 1, scrapScanner: 0 });
       roundState = { ...roundState, roundRevision: roundState.roundRevision + 1 };
       expect(flow.getRoundDawnInfrastructure()).toBeNull();
     } finally {

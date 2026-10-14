@@ -2048,7 +2048,7 @@ export class ArenaScene extends Phaser.Scene {
       objectives: bridge.getCoopDefenseSecondaryObjectivePresentationState(),
       clockMinutes: this.renderers?.lighting.getTimeOfDayMinutes() ?? DEFAULT_TIME_OF_DAY_MINUTES,
     });
-    this.renderers?.markers.coop?.set('dawn', this.dawnHUD?.getMarkerDescriptors() ?? [], this.time.now);
+    this.renderers?.markers?.coop?.set('dawn', this.dawnHUD?.getMarkerDescriptors() ?? [], this.time.now);
     if ((gameplayActive || countdownActive) && !terminated) {
       diagnosticsFrame?.begin('arenaHud');
       const secs = bridge.computeSecondsLeft(this.arenaRuntime.getMissionNow());
