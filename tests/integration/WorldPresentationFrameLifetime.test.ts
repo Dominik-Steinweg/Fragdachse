@@ -362,22 +362,25 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
   it('restores World fog after an Activity overlay, replacement, and teardown', () => {
     const scene = Object.assign(makeFakeGpuVfxScene(), { cameras: { main: fakeCamera() } });
     const makeFog = (strength: number) => ({ strength, captureMotion: vi.fn(), captureTrain: vi.fn(),
-      setSurfaceImages: vi.fn(), setRockCoverage: vi.fn(), update: vi.fn() });
+      setSurfaceImages: vi.fn(), setRockCoverage: vi.fn(), update: vi.fn(), setTint: vi.fn() });
     const first = makeFog(0.6), second = makeFog(0.8);
-    let fog = first, strength: number | undefined;
+    let fog = first, strength: number | undefined, tint: readonly [number, number, number] | undefined;
     const binding = new WorldPresentationFrameBinding(fakeBindingInput(scene as never, {
-      groundFog: { getSystem: () => fog as never, getActivityStrength: () => strength,
+      groundFog: { getSystem: () => fog as never, getActivityStrength: () => strength, getActivityTint: () => tint,
         getBases: () => null, getProjectiles: () => null, effects: {} as never },
     }));
     binding.syncGroundFog(16, true, []);
     expect(first.strength).toBe(0.6);
-    strength = 2;
+    expect(first.setTint).toHaveBeenLastCalledWith(null);
+    strength = 2; tint = [0.8, 0.88, 1];
     binding.syncGroundFog(16, true, []);
     binding.syncGroundFog(16, true, []);
     expect(first.strength).toBe(2);
-    strength = undefined;
+    expect(first.setTint).toHaveBeenLastCalledWith([0.8, 0.88, 1]);
+    strength = undefined; tint = undefined;
     binding.syncGroundFog(16, true, []);
     expect(first.strength).toBe(0.6);
+    expect(first.setTint).toHaveBeenLastCalledWith(null);
     strength = 2;
     binding.syncGroundFog(16, true, []);
     fog = second;
@@ -390,7 +393,7 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
   it('feeds ground fog the displayed train pose and disconnects it when hidden or destroyed', () => {
     const gpuScene = makeFakeGpuVfxScene();
     const scene = Object.assign(gpuScene, { cameras: { main: fakeCamera() } });
-    const fog = { captureMotion: vi.fn(), captureTrain: vi.fn(), setSurfaceImages: vi.fn(), setRockCoverage: vi.fn(), update: vi.fn() };
+    const fog = { captureMotion: vi.fn(), captureTrain: vi.fn(), setSurfaceImages: vi.fn(), setRockCoverage: vi.fn(), update: vi.fn(), setTint: vi.fn() };
     const pose = { alive: true, x: 500, y: 700, dir: 1 as const, hp: 100, maxHp: 100 };
     const visual = { getShadowState: vi.fn(() => pose), computeSegYs: vi.fn(() => [700, 500, 240]) };
     const input = fakeBindingInput(scene as never, {

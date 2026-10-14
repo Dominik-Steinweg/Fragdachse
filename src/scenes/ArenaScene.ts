@@ -2904,9 +2904,9 @@ export class ArenaScene extends Phaser.Scene {
 
   /** Formation shadows of authored bomber runs (Dawn bomber night), on the same round clock as the bombs. */
   private syncBomberRuns(mapConfig: CoopDefenseMapConfig | null): void {
-    const metrics = this.arenaRuntime?.getWorldMetrics();
     const start = bridge.getArenaStartTime();
-    if (!mapConfig?.mapEvents || !metrics || start <= 0) {
+    const metrics = mapConfig?.mapEvents && start > 0 ? this.arenaRuntime?.getWorldMetrics() : null;
+    if (!mapConfig?.mapEvents || !metrics) {
       this.renderers?.airstrike?.syncBomberRuns([], 0, null);
       return;
     }
