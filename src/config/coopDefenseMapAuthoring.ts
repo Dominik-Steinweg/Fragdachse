@@ -618,8 +618,9 @@ export type CoopDefenseMapGroundHazardArea =
     /** Kapseln (Strecke mit Radius), in denen keine Zelle und kein Patch-Zentrum liegen darf. */
     readonly keepClear?: readonly CoopDefenseMapGroundHazardKeepClear[];
     /**
-     * Patches duerfen keinen Weg von einer Spawnfront oder Spawnflaeche zur freundlichen Basis schliessen;
-     * die Zellen zaehlen dafuer als Wand. Gilt ueber alle so markierten Events gemeinsam.
+     * Patches duerfen keinen Weg von einer Spawnfront, Spawnflaeche oder einem Bauwerk (Sites) zur freundlichen
+     * Basis schliessen, der ohne sie offen ist; die Zellen zaehlen dafuer als Wand. Gilt ueber alle so markierten
+     * Events gemeinsam.
      */
     readonly preserveRoutes?: boolean;
   }
