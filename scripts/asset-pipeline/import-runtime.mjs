@@ -22,6 +22,7 @@ export const DAWN_TEXTURE_KEYS = Object.freeze(Object.fromEntries([
   'construction_dawn_wreck_tractor_t1', 'construction_dawn_wreck_tractor_t2', 'construction_dawn_wreck_tractor_t3',
   'construction_dawn_wreck_minecart_t1', 'construction_dawn_wreck_minecart_t2', 'construction_dawn_wreck_minecart_t3',
   'construction_dawn_broodnest',
+  'construction_dawn_lobby_workshop', 'construction_dawn_lobby_yard', 'construction_dawn_lobby_armory',
   'construction_dawn_supply_capsule', 'dawn_supply_crate',
   'dawn_scrap_heap_t1', 'dawn_scrap_heap_t2', 'dawn_scrap_heap_t3',
   'dawn_scrap_t1', 'dawn_scrap_t2', 'dawn_scrap_t3', 'dawn_dealer',
