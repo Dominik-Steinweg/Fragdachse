@@ -93,7 +93,7 @@ export function createWorldRuntimeContext(input: WorldRuntimeContextInput): Worl
   if (includePersistentBaseCore && baseId) {
     const rewards = descriptor.parameters?.persistentBaseHealthRewards;
     if (!rewards) throw new Error('[WorldRuntimeContext] Persistent base requires replicated health rewards');
-    const hpMax = resolvePersistentBaseMaxHp(rewards);
+    const hpMax = resolvePersistentBaseMaxHp(rewards, descriptor.parameters?.persistentBaseHpBonus ?? 0);
     bases = bases.map((base) => base.id === baseId ? { ...base, hpMax, startHp: hpMax } : base);
   }
   return {

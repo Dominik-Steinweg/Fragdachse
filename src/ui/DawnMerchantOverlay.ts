@@ -120,6 +120,14 @@ export class DawnMerchantOverlay {
         const model = buildDawnMerchantModel(stored.dawn, stored.persistentBaseAreaStage, unlocked);
         this.section(LEFT, 380, CONTENT_WIDTH, 402);
         this.label(this.content!, LEFT + 40, 413, t('ui.dawn.expansionStats', { expansionLevel: model.expansionLevel, radius: model.radius }), 920, 27);
+        if (model.coreHpBonus > 0) {
+          this.label(this.content!, LEFT + 40, 486, t('ui.dawn.expansionCoreBonus', { hp: model.coreHpBonus, turrets: model.plasmaTurrets }), 920, 21);
+        }
+        if (model.nextReward) {
+          this.label(this.content!, LEFT + 40, 514, model.nextReward.kind === 'radius'
+            ? t('ui.dawn.nextExpansionRadius', { radius: model.nextReward.radiusCells })
+            : t('ui.dawn.nextExpansionCore', { hp: model.nextReward.coreHpBonus }), 920, 21);
+        }
         this.icon(this.content!, LEFT + 58, 563, DAWN_UI_TEXTURES.threat, 32);
         this.label(this.content!, LEFT + 86, 550, t(model.nextThreat === null ? 'ui.dawn.threat' : 'ui.dawn.threatConsequence',
           { threat: model.threat, nextThreat: model.nextThreat ?? model.threat }), 980, 23);

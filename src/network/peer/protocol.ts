@@ -21,7 +21,8 @@
 // Dawn: coop program and round scrap keys, plan fields, grouped encounter announcements, commit
 // entitlements and the appended elite affix enemy snapshot field.
 // Fire control portals: portal deployments in the fc slice, portal throw payload and route.
-export const PEER_PROTOCOL_VERSION = 33;
+// Dawn expansion track: area stages end at 6, core HP bonus world parameter, Dawn plasma turret rewards.
+export const PEER_PROTOCOL_VERSION = 34;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

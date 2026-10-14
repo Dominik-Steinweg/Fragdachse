@@ -51,6 +51,11 @@ describe('Persistent Base Reward-Katalog', () => {
       'base_rocket_turret',
       'base_holy_hand_grenade_pedestal',
       'base_watchtower',
+      'base_plasma_turret_dawn_1',
+      'base_plasma_turret_dawn_2',
+      'base_plasma_turret_dawn_3',
+      'base_plasma_turret_dawn_4',
+      'base_plasma_turret_dawn_5',
     ]);
     expect(getPersistentBaseRewardDefinition('base_adrenaline_pedestal').gameplaySource).toEqual({
       kind: 'power-up-definition', powerUpDefId: 'ADRENALINE',

@@ -27,6 +27,7 @@ import { attachHoverEffect } from '../ui/uiHover';
 import { t } from '../i18n';
 import { isDawnUnlocked } from '../dawn/rules/DawnUnlock';
 import { buildPersistentBaseExpansionPreview, getPersistentBaseEditorFraming } from '../persistentBase/PersistentBaseExpansionPreview';
+import { createDawnExpansionRewardNote } from '../ui/DawnMerchantExpansionPreview';
 import { createDawnMerchantExpansionPreview, createPersistentBaseEditorBoundary } from '../ui/DawnMerchantExpansionPreview';
 import { resolveWorldDefinition } from '../world/WorldDefinitionResolution';
 import { LOBBY_WORLD_DEFINITION_ID } from '../config/authoring/lobbyWorld';
@@ -159,6 +160,10 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       this.expansionPreview = createDawnMerchantExpansionPreview(this, this.framing, expansion.edges,
         t(expansion.dawnOnly ? 'ui.base.expansionRingLabelDawnOnly' : 'ui.base.expansionRingLabel',
           { radius: expansion.radius, cost: expansion.cost }));
+      this.ui.add(this.expansionPreview);
+    } else if (expansion?.reward?.kind === 'core') {
+      this.expansionPreview = createDawnExpansionRewardNote(this, this.framing,
+        t('ui.base.expansionCoreReward', { hp: expansion.reward.coreHpBonus, cost: expansion.cost }));
       this.ui.add(this.expansionPreview);
     }
     this.grid = this.add.graphics().setDepth(10000);

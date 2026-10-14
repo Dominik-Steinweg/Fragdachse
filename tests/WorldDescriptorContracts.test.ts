@@ -165,7 +165,10 @@ describe('WorldDescriptor – kanonische World-Identitaet', () => {
     expect(parseWorldDescriptor({ ...world, layoutFingerprint: '' })).toBeNull();
     expect(parseWorldDescriptor({ ...world, seed: Number.NaN })).toBeNull();
     // Unbrauchbare Parameter loeschen nicht die World, sie entfallen.
-    expect(parseWorldDescriptor({ ...world, parameters: { persistentBaseAreaStage: 12 } }))
+    // The base radius ends at 10 (stage 6, D-46): former Dawn stages 7..11 are no longer valid.
+    expect(parseWorldDescriptor({ ...world, parameters: { persistentBaseAreaStage: 7 } }))
+      .toEqual({ ...world, parameters: undefined });
+    expect(parseWorldDescriptor({ ...world, parameters: { persistentBaseHpBonus: -1 } }))
       .toEqual({ ...world, parameters: undefined });
     expect(parseWorldDescriptor({ ...world, parameters: { persistentBaseUnlocked: 'yes' } }))
       .toEqual({ ...world, parameters: undefined });
@@ -173,7 +176,8 @@ describe('WorldDescriptor – kanonische World-Identitaet', () => {
     // Jedes Feld reist auch allein: Eine gesperrte Lobby fuehrt keine Area-Stufe, eine
     // freigeschaltete beide Werte.
     for (const parameters of [
-      { persistentBaseAreaStage: 11 },
+      { persistentBaseAreaStage: 6 },
+      { persistentBaseHpBonus: 1900 },
       { persistentBaseUnlocked: true },
       { persistentBaseUnlocked: false },
       { persistentBaseUnlocked: true, persistentBaseHealthRewards: [], persistentBaseAreaStage: 1 },

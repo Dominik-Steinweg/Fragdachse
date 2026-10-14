@@ -1,5 +1,5 @@
 import { haveSameDawnPlan, parseDawnWorldPlan, type DawnWorldPlan } from '../dawn/contracts/DawnPlans';
-import { isPersistentBaseHealthRewards, type PersistentBaseHealthReward } from '../persistentBase/PersistentBaseHealth';
+import { isPersistentBaseHealthRewards, PERSISTENT_BASE_MAX_HP_BONUS, type PersistentBaseHealthReward } from '../persistentBase/PersistentBaseHealth';
 import {
   isPersistentBaseAreaStage,
   type PersistentBaseAreaStage,
@@ -52,6 +52,8 @@ export interface WorldParameters {
   /** Semantische, fuer diese World-Instanz eingefrorene Area-Stufe der persistenten Basis. */
   readonly persistentBaseAreaStage?: PersistentBaseAreaStage;
   readonly persistentBaseHealthRewards?: readonly PersistentBaseHealthReward[];
+  /** Host-frozen extra core HP of this World (Dawn expansion track, D-46); absent = none. */
+  readonly persistentBaseHpBonus?: number;
   /**
    * Host-komponierter World-Plan einer Dawn-Runde. Eine Dawn-World besitzt keine authored
    * Registry-Definition; jeder Peer loest sie aus genau diesem Plan auf.
@@ -78,6 +80,7 @@ export const WORLD_PARAMETER_FIELDS = [
   'persistentBaseUnlocked',
   'persistentBaseAreaStage',
   'persistentBaseHealthRewards',
+  'persistentBaseHpBonus',
   'dawn',
 ] as const satisfies readonly (keyof WorldParameters)[];
 
@@ -158,6 +161,7 @@ export function hasPersistentBaseConfigurationChanged(
   return hasPersistentBaseUnlockStatusChanged(left, right)
     || (left?.parameters?.persistentBaseAreaStage ?? null)
       !== (right?.parameters?.persistentBaseAreaStage ?? null)
+    || (left?.parameters?.persistentBaseHpBonus ?? 0) !== (right?.parameters?.persistentBaseHpBonus ?? 0)
     || !haveSameWorldParameters(
       { persistentBaseHealthRewards: left?.parameters?.persistentBaseHealthRewards },
       { persistentBaseHealthRewards: right?.parameters?.persistentBaseHealthRewards },
@@ -176,6 +180,7 @@ function parseWorldParameters(raw: unknown): WorldParameters | null {
     persistentBaseUnlocked?: boolean;
     persistentBaseAreaStage?: PersistentBaseAreaStage;
     persistentBaseHealthRewards?: PersistentBaseHealthReward[];
+    persistentBaseHpBonus?: number;
     dawn?: DawnWorldPlan;
   } = {};
 
@@ -188,6 +193,12 @@ function parseWorldParameters(raw: unknown): WorldParameters | null {
   if (unlocked !== undefined) {
     if (typeof unlocked !== 'boolean') return null;
     parameters.persistentBaseUnlocked = unlocked;
+  }
+
+  const hpBonus = candidate.persistentBaseHpBonus;
+  if (hpBonus !== undefined) {
+    if (!isSafeInteger(hpBonus) || hpBonus < 0 || hpBonus > PERSISTENT_BASE_MAX_HP_BONUS) return null;
+    parameters.persistentBaseHpBonus = hpBonus;
   }
 
   const areaStage = candidate.persistentBaseAreaStage;

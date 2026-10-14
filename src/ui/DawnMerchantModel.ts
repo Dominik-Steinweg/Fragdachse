@@ -11,6 +11,7 @@ import { canPurchaseDawnRecalibrationCore, canPurchaseDawnShopItem, canRecalibra
 import { describeCoopDefenseItem, formatCoopDefenseItemValue, isCoopDefenseStashFull } from '../utils/coopDefenseItems';
 import type { CoopDefenseItem } from '../types';
 import type { Locale } from '../i18n/types';
+import { resolveDawnExpansionCoreHpBonus, resolveDawnExpansionReward, resolveDawnExpansionRewardUnlocks } from '../dawn/economy/DawnExpansionRewards';
 import { DAWN_UI_TEXTURES } from '../assets/DawnUiAssets';
 
 const INFRASTRUCTURE_ICONS = {
@@ -29,6 +30,9 @@ export function buildDawnMerchantModel(progress: DawnProgress, campaignStage: Ca
     threat: resolveDawnThreat(progress.expansionLevel),
     nextThreat: cost === null ? null : resolveDawnThreat(progress.expansionLevel + 1),
     radius: area.kind === 'radius' ? area.radiusCells : 3,
+    coreHpBonus: resolveDawnExpansionCoreHpBonus(progress.expansionLevel),
+    plasmaTurrets: resolveDawnExpansionRewardUnlocks(progress.expansionLevel).length,
+    nextReward: cost === null ? null : resolveDawnExpansionReward(progress.expansionLevel + 1),
     cost, canBuy: unlocked && cost !== null && progress.scrap >= cost,
   };
 }

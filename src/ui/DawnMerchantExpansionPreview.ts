@@ -18,6 +18,17 @@ export function createPersistentBaseEditorBoundary(scene: Phaser.Scene, area: Pe
   return outline;
 }
 
+/** Reward text for expansions after the radius track (no ring to draw), top-left in the world panel. */
+export function createDawnExpansionRewardNote(scene: Phaser.Scene, frame: EditorFrame, labelText: string): Phaser.GameObjects.Container {
+  const root = scene.add.container(0, 0);
+  root.add(scene.add.text(frame.view.x + 20, frame.view.y + 20, labelText, { ...textStyle('body'),
+    fontSize: 18, color: '#ffe4a3', backgroundColor: '#201a10',
+    stroke: '#100d08', strokeThickness: 2, padding: { x: 9, y: 6 },
+    wordWrap: { width: frame.view.width - 40 },
+  }));
+  return root;
+}
+
 export function createDawnMerchantExpansionPreview(scene: Phaser.Scene, frame: EditorFrame,
   boundary: readonly ExpansionBoundaryEdge[], labelText: string): Phaser.GameObjects.Container {
   const root = scene.add.container(0, 0);

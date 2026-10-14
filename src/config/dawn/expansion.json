@@ -1,4 +1,6 @@
 {
   "maxExpansionLevel": 9,
-  "constructionCapacityBonusPerStageAboveCampaign": 2
+  "constructionCapacityBonusPerStageAboveCampaign": 2,
+  "radiusExpansionLevels": 4,
+  "coreHpBonusByLevel": [600, 1200, 1900, 2700, 3600]
 }
