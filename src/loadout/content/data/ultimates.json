@@ -149,7 +149,7 @@
       "approachMs": 1500,
       "approachDistancePx": 1300,
       "entrySpreadPx": 70,
-      "entryAngleSpreadDeg": 10,
+      "entryAngleSpreadDeg": 6,
       "swayPx": 5,
       "departureSpeedPxPerSec": 1100,
       "departureTurnDeg": 18,

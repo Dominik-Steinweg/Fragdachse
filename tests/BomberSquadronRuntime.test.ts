@@ -25,16 +25,21 @@ describe('BomberSquadronRuntime', () => {
     const targets = [{ x: 1300, y: 1070, weight: 1 }];
     const f = fixture(full, { width: 5000, height: 5000 }, targets);
     f.activate();
-    const initial = f.runtime.getSnapshot().squadrons[0], first = initial.anchors[0]!;
-    expect(Math.abs(first.aimAngle) + Math.abs(first.aimOffset)).toBeGreaterThan(0);
+    const initial = f.runtime.getSnapshot().squadrons[0];
+    const firstSeen: typeof initial.anchors[number][] = [];
+    let aimed = false;
     const planned = new Map<string, ReturnType<typeof bomberDrops>[number]>();
     const collect = () => {
       const s = f.runtime.getSnapshot().squadrons[0];
       if (!s) return;
-      s.anchors.forEach((a, drone) => { if (a) for (const bomb of bomberDrops(s, drone, a)) {
-        planned.set(bomberSquadronBombKey(s.id, drone, bomb.pass, bomb.bomb), bomb);
-      } });
-      expect(s.anchors[0]).toEqual(first);
+      s.anchors.forEach((a, drone) => {
+        if (!a) return;
+        // Die Wahl fällt beim Start; der weiterwandernde Gegner ändert einen begonnenen Anflug nicht mehr.
+        firstSeen[drone] ??= a;
+        expect(a).toEqual(firstSeen[drone]);
+        aimed ||= a.aimOffset !== 0 || a.aimAngle !== 0;
+        for (const bomb of bomberDrops(s, drone, a)) planned.set(bomberSquadronBombKey(s.id, drone, bomb.pass, bomb.bomb), bomb);
+      });
     };
     collect();
     const events: BomberSquadronBombEvent[] = [];
@@ -46,6 +51,7 @@ describe('BomberSquadronRuntime', () => {
       expect(f.runtime.update(now)).toEqual([]);
     }
     events.push(...f.runtime.update(initial.endsAt));
+    expect(aimed).toBe(true);
     const expectedCount = full.droneCount * full.bombsPerPass * (1 + full.secondPassEnabled);
     expect(planned.size).toBe(expectedCount);
     for (const kind of ['drop', 'impact'] as const) {

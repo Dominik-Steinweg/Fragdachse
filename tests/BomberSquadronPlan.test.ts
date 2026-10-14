@@ -29,7 +29,8 @@ describe('BomberSquadronPlan', () => {
   it('validiert den Bremsweg und endliche, begrenzte Flugparameter', () => {
     const p = bomberPlanParamsFromConfig(base);
     expect(isBomberFlightPlanValid(p)).toBe(true);
-    const minimum = 1.1 * p.runSpeedPxPerSec * p.approachMs / 1000;
+    // Auch der kürzeste geseedete Einflug (Längsversatz -entrySpreadPx) muss noch abbremsen können.
+    const minimum = 1.1 * p.runSpeedPxPerSec * p.approachMs / 1000 + p.entrySpreadPx;
     expect(isBomberFlightPlanValid({ ...p, approachDistancePx: minimum })).toBe(true);
     for (const change of [{ approachDistancePx: minimum - 1 }, { approachMs: 0 }, { swayPx: NaN },
       { aimOffsetSteps: 1.5 }, { aimAngleSteps: 0 }, { departureMs: 0 }]) {
@@ -88,22 +89,40 @@ describe('BomberSquadronPlan', () => {
     }
   });
 
+  it.each([base, full])('hält beim Einflug die Formationsreihenfolge und fächert beim Abflug nach außen auf ($droneCount)', config => {
+    const s = squadron(config, 0), p = s.params, order = bomberLaneOrder(p.droneCount);
+    const across = (point: { y: number }) => point.y - anchor.y;
+    // Auch extreme Ausrichtungen drehen nur die Kurve zum Korridor, nicht die Einflugpunkte.
+    const aims = [{ aimOffset: p.aimOffsetPx, aimAngle: p.aimAngleDeg * Math.PI / 180 }, { aimOffset: -p.aimOffsetPx, aimAngle: 0 }];
+    const entries = order.map((lane, drone) => ({ lane, y: across(bomberDroneEntryPoint(s, drone, { ...anchor, ...aims[drone % 2] })) }))
+      .sort((a, b) => a.lane - b.lane);
+    for (let i = 1; i < entries.length; i++) expect(entries[i].y).toBeGreaterThan(entries[i - 1].y);
+    for (let drone = 0; drone < p.droneCount; drone++) {
+      const offset = bomberLaneOffsetPx(p, order[drone]);
+      if (Math.abs(offset) < 1) continue;
+      const end = bomberDronePose(s, drone, anchor, bomberDroneFlightEndAt(s, drone) - 1)!;
+      expect(Math.sign(across(end) - offset)).toBe(Math.sign(offset));
+    }
+  });
+
   it('wählt begrenzt und deterministisch, ohne erreichbare Ziele unverändert, mit Cluster zum Schaden hin', () => {
-    const s = squadron(base, 0), p = s.params, bounds = { width: 5000, height: 5000 };
-    const c = bomberCorridor(s, 0, anchor), planned = { aimOffset: 0, aimAngle: 0 };
-    expect(chooseBomberAim(s, 0, anchor, [], [], bounds)).toEqual(planned);
-    expect(chooseBomberAim(s, 0, anchor, [{ x: 1e6, y: 1e6, weight: 1 }], [], bounds)).toEqual(planned);
-    const target = { x: c.start.x + p.corridorLengthPx / 2, y: c.start.y + p.aimOffsetPx, weight: 1 };
-    const aim = chooseBomberAim(s, 0, anchor, [target], [], bounds);
-    expect(aim).toEqual(chooseBomberAim(structuredClone(s), 0, anchor, [target], [], bounds));
+    // Die zuletzt startende Drohne fliegt außen; neben ihr plant keine spätere Drohne eine Bahn.
+    const s = squadron(base, 0), p = s.params, bounds = { width: 5000, height: 5000 }, last = p.droneCount - 1;
+    const c = bomberCorridor(s, last, anchor), planned = { aimOffset: 0, aimAngle: 0 };
+    const side = Math.sign(bomberLaneOffsetPx(p, bomberLaneOrder(p.droneCount)[last]));
+    expect(chooseBomberAim(s, last, anchor, [], [], bounds)).toEqual(planned);
+    expect(chooseBomberAim(s, last, anchor, [{ x: 1e6, y: 1e6, weight: 1 }], [], bounds)).toEqual(planned);
+    const target = { x: c.start.x + p.corridorLengthPx / 2, y: c.start.y + side * p.aimOffsetPx, weight: 1 };
+    const aim = chooseBomberAim(s, last, anchor, [target], [], bounds);
+    expect(aim).toEqual(chooseBomberAim(structuredClone(s), last, anchor, [target], [], bounds));
     expect(Math.abs(aim.aimOffset)).toBeLessThanOrEqual(p.aimOffsetPx);
     expect(Math.abs(aim.aimAngle)).toBeLessThanOrEqual(p.aimAngleDeg * Math.PI / 180);
-    const score = (a: typeof planned) => bomberDrops(s, 0, { ...anchor, ...a }).filter(b => b.pass === 0)
+    const score = (a: typeof planned) => bomberDrops(s, last, { ...anchor, ...a }).filter(b => b.pass === 0)
       .reduce((sum, b) => sum + Math.max(0, 1 - Math.hypot(b.x - target.x, b.y - target.y) / p.explosionRadius), 0);
     expect(score(aim)).toBeGreaterThan(score(planned));
-    expect(chooseBomberAim(s, 0, anchor, [target], [], { width: 1, height: 1 })).toEqual(planned);
+    expect(chooseBomberAim(s, last, anchor, [target], [], { width: 1, height: 1 })).toEqual(planned);
     // S bleibt der Drehpunkt; der zweite Überflug nutzt exakt dieselben Punkte rückwärts.
-    const aimed = bomberCorridor(s, 0, { ...anchor, ...aim });
+    const aimed = bomberCorridor(s, last, { ...anchor, ...aim });
     expectPoint(aimed.start, { x: c.start.x, y: c.start.y + aim.aimOffset });
   });
 

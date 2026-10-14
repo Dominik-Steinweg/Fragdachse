@@ -99,7 +99,7 @@ export function isBomberFlightPlanValid(p: BomberSquadronPlanParams): boolean {
     p.aimOffsetPx, p.aimAngleDeg, p.aimOffsetSteps, p.aimAngleSteps, p.aimOverlapPenalty];
   return values.every(v => Number.isFinite(v) && v >= 0)
     && p.approachMs > 0 && p.departureMs > 0 && p.runSpeedPxPerSec > 0
-    && p.approachDistancePx >= 1.1 * p.runSpeedPxPerSec * p.approachMs / 1000
+    && p.approachDistancePx - p.entrySpreadPx >= 1.1 * p.runSpeedPxPerSec * p.approachMs / 1000
     && p.departureSpeedPxPerSec >= p.runSpeedPxPerSec
     && p.entryAngleSpreadDeg < 90 && p.aimAngleDeg < 90 && p.departureTurnDeg <= 180
     && [p.aimOffsetSteps, p.aimAngleSteps].every(v => Number.isInteger(v) && v >= 1 && v <= 64);
@@ -122,9 +122,10 @@ const smoothstep = (x: number): number => x * x * (3 - 2 * x);
 const clamp01 = (x: number): number => Math.max(0, Math.min(1, x));
 type Point = { x: number; y: number };
 interface FlightCurve {
-  id: number; angle: number; aimAngle: number;
+  id: number; angle: number; aimAngle: number; aimOffset: number;
   x0: number; y0: number; mx: number; my: number; length: number;
-  phase: number; turn: number; arc: Float64Array; speed: Float64Array; pathLength: number;
+  /** Schlingerphase, Abflugdrehung (Betrag, Richtung nach außen) und Exponent des Abbremsprofils. */
+  phase: number; turn: number; brake: number; arc: Float64Array; speed: Float64Array; pathLength: number;
 }
 // Params leben mit dem eingefrorenen Plan; kein global wachsender Staffel-/Anker-Cache.
 const flightCurves = new WeakMap<BomberSquadronPlanParams, Map<number, FlightCurve>>();
@@ -201,17 +202,28 @@ function flightCurve(squadron: Squadron, drone: number, anchor: BomberSquadronAn
   let curves = flightCurves.get(p);
   if (!curves) { curves = new Map(); flightCurves.set(p, curves); }
   const cached = curves.get(drone);
-  if (cached && cached.id === squadron.id && cached.angle === squadron.angle && cached.aimAngle === anchor.aimAngle) return cached;
+  if (cached && cached.id === squadron.id && cached.angle === squadron.angle && cached.aimAngle === anchor.aimAngle
+    && cached.aimOffset === anchor.aimOffset) return cached;
   const random = seededRandom(squadron.id, drone);
+  // Einflugpunkte bleiben in Formationsreihenfolge auf der ungeschwenkten Grundbahn: frei in Längsrichtung,
+  // seitlich höchstens 30 % des Bahnabstands. Erst die Kurve führt auf den ausgerichteten Korridor.
+  const spacing = p.corridorWidthPx / p.droneCount, halfWidth = p.corridorWidthPx / 2;
   const phi = (random() * 2 - 1) * p.entryAngleSpreadDeg * RAD;
-  const lateral = (random() * 2 - 1) * p.entrySpreadPx;
-  const phase = random() * Math.PI * 2, sign = random() < 0.5 ? -1 : 1;
-  const turn = sign * (0.5 + random() * 0.5) * p.departureTurnDeg * RAD;
-  const x0 = -Math.cos(phi) * p.approachDistancePx, y0 = -Math.sin(phi) * p.approachDistancePx + lateral;
+  const lateral = (random() * 2 - 1) * Math.min(p.entrySpreadPx, 0.3 * spacing);
+  const along = (random() * 2 - 1) * p.entrySpreadPx;
+  const phase = random() * Math.PI * 2, brake = 1.6 + random();
+  // Abflug fächert die Staffel nach außen auf: äußere Bahnen drehen stärker ab als innere.
+  const lane = bomberLaneOffsetPx(p, laneAt(p.droneCount, drone));
+  const turn = (0.5 + random() * 0.5) * (0.35 + 0.65 * (halfWidth > 0 ? Math.abs(lane) / halfWidth : 0))
+    * p.departureTurnDeg * RAD;
+  // Einflugpunkt relativ zu S im gedrehten Korridorrahmen u'/n' (Drehung um aimAngle).
+  const cos = Math.cos(anchor.aimAngle), sin = Math.sin(anchor.aimAngle);
+  const back = p.approachDistancePx + along, side = lateral - anchor.aimOffset;
+  const x0 = -back * cos + side * sin, y0 = back * sin + side * cos;
   const length = Math.hypot(x0, y0);
-  const c: FlightCurve = { id: squadron.id, angle: squadron.angle, aimAngle: anchor.aimAngle,
-    x0, y0, mx: Math.cos(phi) * length, my: Math.sin(phi) * length, length, phase, turn,
-    arc: new Float64Array(ARC_SAMPLES), speed: new Float64Array(ARC_SAMPLES), pathLength: 0 };
+  const c: FlightCurve = { id: squadron.id, angle: squadron.angle, aimAngle: anchor.aimAngle, aimOffset: anchor.aimOffset,
+    x0, y0, mx: Math.cos(phi - anchor.aimAngle) * length, my: Math.sin(phi - anchor.aimAngle) * length, length,
+    phase, turn, brake, arc: new Float64Array(ARC_SAMPLES), speed: new Float64Array(ARC_SAMPLES), pathLength: 0 };
   let lastX = x0, lastY = y0;
   for (let i = 0; i <= ARC_STEPS; i++) {
     hermite(c, i / ARC_STEPS, workA);
@@ -250,8 +262,9 @@ function flightPosition(p: BomberSquadronPlanParams, c: FlightCurve, side: numbe
   const flightMs = p.approachMs + p.passCount * runMs + (p.passCount - 1) * p.turnMs;
   if (elapsed < p.approachMs) {
     const f = clamp01(elapsed / p.approachMs), seconds = p.approachMs / 1000;
-    const extraSpeed = 3 * (c.pathLength - p.runSpeedPxPerSec * seconds) / seconds;
-    const distance = p.runSpeedPxPerSec * f * seconds + extraSpeed * seconds / 3 * (1 - (1 - f) ** 3);
+    // v = v1 + (v0 - v1)(1 - f)^k: weich auf Laufgeschwindigkeit, k je Drohne geseedet (Formation „atmet“).
+    const k = c.brake, extraSpeed = (k + 1) * (c.pathLength - p.runSpeedPxPerSec * seconds) / seconds;
+    const distance = p.runSpeedPxPerSec * f * seconds + extraSpeed * seconds / (k + 1) * (1 - (1 - f) ** (k + 1));
     const s = arcParameter(c, distance);
     hermite(c, s, out); hermite(c, s, workB, true);
     // (1 - f)^3: Wert, Steigung und Krümmung des Schlingerns enden am Korridorbeginn bei 0.
@@ -275,15 +288,16 @@ function flightPosition(p: BomberSquadronPlanParams, c: FlightCurve, side: numbe
     return 'return';
   }
   const f = clamp01((elapsed - flightMs) / p.departureMs), sign = p.passCount === 2 ? -1 : 1;
+  const turn = c.turn * side * sign;
   out.x = sign === 1 ? p.corridorLengthPx : 0;
   // Feste 32 Mittelpunkt-Schritte: gleiche Position unabhängig von Framerate und Aufrufhistorie.
   const dt = f * p.departureMs / 1000 / 32;
   for (let i = 0; i < 32; i++) {
-    const ease = smoothstep(f * (i + 0.5) / 32), angle = c.turn * ease;
+    const ease = smoothstep(f * (i + 0.5) / 32), angle = turn * ease;
     const distance = (p.runSpeedPxPerSec + (p.departureSpeedPxPerSec - p.runSpeedPxPerSec) * ease) * dt * sign;
     out.x += Math.cos(angle) * distance; out.y += Math.sin(angle) * distance;
   }
-  const angle = c.turn * smoothstep(f), sway = p.swayPx * Math.sin(3 * Math.PI * f + c.phase) * f ** 3 * sign;
+  const angle = turn * smoothstep(f), sway = p.swayPx * Math.sin(3 * Math.PI * f + c.phase) * f ** 3 * sign;
   out.x -= Math.sin(angle) * sway; out.y += Math.cos(angle) * sway;
   return 'departure';
 }
@@ -357,7 +371,17 @@ export function chooseBomberAim(
   const top = Math.min(corridor.start.y, corridor.end.y) - margin, bottom = Math.max(corridor.start.y, corridor.end.y) + margin;
   const relevant = targets.filter(t => t.weight > 0 && t.x >= left && t.x <= right && t.y >= top && t.y <= bottom);
   if (!relevant.length) return { aimOffset: 0, aimAngle: 0 };
+  // Auch die Grundbahnen noch nicht gestarteter Drohnen gelten als belegt: eine frühe Drohne soll nicht auf
+  // die Bahn einer späteren ausweichen, die dort ohnehin wirft (sonst stapeln sich zwei Bahnen).
+  const occupied: Point[] = [...launchedImpacts];
+  for (let later = drone + 1; later < p.droneCount; later++) {
+    for (const drop of bomberDrops(squadron, later, planned)) {
+      if (drop.pass === 0 && isBomberImpactInWorld(drop.x, drop.y, bounds)) occupied.push(drop);
+    }
+  }
   const ux = Math.cos(squadron.angle), uy = Math.sin(squadron.angle);
+  // Harte Grenze gegen Stapeln: kein Einschlag näher als den halben Bahnabstand an einem bereits gestarteten.
+  const minGap = 0.5 * p.corridorWidthPx / p.droneCount;
   let bestScore = -Infinity, bestTarget = 0, bestCost = Infinity, aimOffset = 0, aimAngle = 0;
   const candidate = (i: number, steps: number, limit: number, scale: number): number => {
     const raw = steps === 1 ? 0 : -limit + 2 * limit * i / (steps - 1);
@@ -369,15 +393,19 @@ export function chooseBomberAim(
     const offset = candidate(oi, p.aimOffsetSteps, p.aimOffsetPx, 10);
     const angle = candidate(ai, p.aimAngleSteps, maxAngle, 1000);
     const dx = Math.cos(squadron.angle + angle), dy = Math.sin(squadron.angle + angle);
-    let targetScore = 0, overlap = 0;
-    for (let bomb = 0; bomb < p.bombsPerPass; bomb++) {
+    let targetScore = 0, overlap = 0, crowded = false;
+    for (let bomb = 0; bomb < p.bombsPerPass && !crowded; bomb++) {
       const distance = p.corridorLengthPx * (bomb + 0.5) / p.bombsPerPass;
       const x = corridor.start.x - uy * offset + dx * distance;
       const y = corridor.start.y + ux * offset + dy * distance;
       if (!isBomberImpactInWorld(x, y, bounds)) continue;
       for (const target of relevant) targetScore += target.weight * Math.max(0, 1 - Math.hypot(x - target.x, y - target.y) / radius);
-      for (const impact of launchedImpacts) overlap += Math.max(0, 1 - Math.hypot(x - impact.x, y - impact.y) / (2 * radius));
+      for (const impact of launchedImpacts) {
+        if (Math.hypot(x - impact.x, y - impact.y) < minGap) { crowded = true; break; }
+      }
+      for (const impact of occupied) overlap += Math.max(0, 1 - Math.hypot(x - impact.x, y - impact.y) / (2 * radius));
     }
+    if (crowded) continue;
     const score = targetScore - p.aimOverlapPenalty * overlap;
     const cost = (p.aimOffsetPx ? Math.abs(offset) / p.aimOffsetPx : 0) + (maxAngle ? Math.abs(angle) / maxAngle : 0);
     if (score > bestScore || score === bestScore && cost < bestCost) {
