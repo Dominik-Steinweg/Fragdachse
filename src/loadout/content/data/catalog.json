@@ -278,7 +278,7 @@
       "id": "BOMBER_SQUADRON",
       "slot": "ultimate",
       "order": 6,
-      "iconKey": null
+      "iconKey": "BOMBER_SQUADRON"
     }
   ]
 }

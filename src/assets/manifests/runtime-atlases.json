@@ -3,7 +3,7 @@
   "extrude": 2,
   "groups": {
     "icons": {
-      "sourceHash": "a594fbaed54f3c479efdf0741122b47e3933bff94ee5a5e5d813d289cdde2b1c",
+      "sourceHash": "2222b0dd83957284bc44e1a2d915ae21ad3ff4e9a7be6914f59d83e9ec55c43b",
       "filter": "linear",
       "encoding": "srgb-pma-colour",
       "sources": [
@@ -69,6 +69,15 @@
           "width": 32,
           "height": 32,
           "bytes": 2367
+        },
+        {
+          "id": "BOMBER_SQUADRON",
+          "source": "assets/sprites/Loadout/BOMBER_SQUADRON.png",
+          "file": "assets/sprites/Loadout/BOMBER_SQUADRON.png",
+          "sha256": "294531a3a5d2c82164282dd740aab2f53681032699eed650d8f01b5b5c2e7be2",
+          "width": 32,
+          "height": 32,
+          "bytes": 2409
         },
         {
           "id": "DACHS_TUNNEL",
@@ -861,6 +870,42 @@
           "width": 32,
           "height": 32,
           "bytes": 1093
+        },
+        {
+          "id": "UPGRADE_BOMBER_SQUADRON_BOMB_COUNT",
+          "source": "assets/sprites/Loadout/UPGRADE_BOMBER_SQUADRON_BOMB_COUNT.png",
+          "file": "assets/sprites/Loadout/UPGRADE_BOMBER_SQUADRON_BOMB_COUNT.png",
+          "sha256": "4e273c1d1a05be0d270da76c811261d96484b4c0cb282709c9568a05669f4f27",
+          "width": 32,
+          "height": 32,
+          "bytes": 2732
+        },
+        {
+          "id": "UPGRADE_BOMBER_SQUADRON_FIRE_CHUNKS",
+          "source": "assets/sprites/Loadout/UPGRADE_BOMBER_SQUADRON_FIRE_CHUNKS.png",
+          "file": "assets/sprites/Loadout/UPGRADE_BOMBER_SQUADRON_FIRE_CHUNKS.png",
+          "sha256": "2ce9345c3a45e99e43628f9904079c9d5c2e49a6e606fea3b9aa0afe26c99b60",
+          "width": 32,
+          "height": 32,
+          "bytes": 2390
+        },
+        {
+          "id": "UPGRADE_BOMBER_SQUADRON_SECOND_PASS",
+          "source": "assets/sprites/Loadout/UPGRADE_BOMBER_SQUADRON_SECOND_PASS.png",
+          "file": "assets/sprites/Loadout/UPGRADE_BOMBER_SQUADRON_SECOND_PASS.png",
+          "sha256": "5dad051e03734dff29489bbd8961ae320ab82eaac4d3665e8b1d7d59a29bae29",
+          "width": 32,
+          "height": 32,
+          "bytes": 1977
+        },
+        {
+          "id": "UPGRADE_BOMBER_SQUADRON_SIZE",
+          "source": "assets/sprites/Loadout/UPGRADE_BOMBER_SQUADRON_SIZE.png",
+          "file": "assets/sprites/Loadout/UPGRADE_BOMBER_SQUADRON_SIZE.png",
+          "sha256": "e80066fae99d9a9e53cb13c261f5c5fbf65cb83c0d44a39d4cd64ffa8c4bd2bc",
+          "width": 32,
+          "height": 32,
+          "bytes": 2455
         },
         {
           "id": "UPGRADE_BURROW_COST",
@@ -2933,6 +2978,15 @@
           "bytes": 8073
         },
         {
+          "id": "UPGRADE_UNLOCK_BOMBER_SQUADRON",
+          "source": "assets/sprites/Loadout/UPGRADE_UNLOCK_BOMBER_SQUADRON.png",
+          "file": "assets/sprites/Loadout/UPGRADE_UNLOCK_BOMBER_SQUADRON.png",
+          "sha256": "294531a3a5d2c82164282dd740aab2f53681032699eed650d8f01b5b5c2e7be2",
+          "width": 32,
+          "height": 32,
+          "bytes": 2409
+        },
+        {
           "id": "UPGRADE_UNLOCK_ENERGY_INJECTOR",
           "source": "assets/sprites/Loadout/UPGRADE_UNLOCK_ENERGY_INJECTOR.png",
           "file": "assets/sprites/Loadout/UPGRADE_UNLOCK_ENERGY_INJECTOR.png",
@@ -3192,10 +3246,10 @@
           "data": "assets/atlases/icons-0.json",
           "width": 1024,
           "height": 1024,
-          "sha256": "85d54b33510e62d3aef9a998913a43c218e6e9832660606070edcf3589982cb4",
-          "dataSha256": "3c4077fd28febac868f0c63e369f15fbc20040524bc15f0730c4385ff4eab8df",
-          "bytes": 800232,
-          "dataBytes": 63666,
+          "sha256": "bb762a43a22afab59d2264f63c3459ffa6ac1105bed29fda3290a558c2f46b9c",
+          "dataSha256": "2e3559f351dfba702378ba484428af7d8d1f48fe95b9a324abeb72ee631f0edb",
+          "bytes": 811794,
+          "dataBytes": 64761,
           "frames": [
             "ASMD_PRIM",
             "ASMD_SEC",
@@ -3223,6 +3277,7 @@
             "AK47",
             "ARMAGEDDON",
             "BITE",
+            "BOMBER_SQUADRON",
             "DACHS_TUNNEL",
             "DECOY",
             "ENERGY_SHIELD",
@@ -3303,6 +3358,10 @@
             "UPGRADE_BITE_DAMAGE",
             "UPGRADE_BITE_DAMAGE_REDUCTION",
             "UPGRADE_BITE_RANGE",
+            "UPGRADE_BOMBER_SQUADRON_BOMB_COUNT",
+            "UPGRADE_BOMBER_SQUADRON_FIRE_CHUNKS",
+            "UPGRADE_BOMBER_SQUADRON_SECOND_PASS",
+            "UPGRADE_BOMBER_SQUADRON_SIZE",
             "UPGRADE_BURROW_COST",
             "UPGRADE_BURROW_SPEED",
             "UPGRADE_CRITICAL_CHANCE",
@@ -3523,6 +3582,7 @@
             "UPGRADE_UNLOCK_AIRSTRIKE",
             "UPGRADE_UNLOCK_ARMAGEDDON",
             "UPGRADE_UNLOCK_ARMOR_PEDESTAL",
+            "UPGRADE_UNLOCK_BOMBER_SQUADRON",
             "UPGRADE_UNLOCK_ENERGY_INJECTOR",
             "UPGRADE_UNLOCK_FLAME_TURRET",
             "UPGRADE_UNLOCK_GAUSS_RIFLE",

@@ -219,6 +219,9 @@ describe('loadout catalog', () => {
     expect(describeLoadoutItem('ultimate', 'HOLO_OFFENSIVE').textureKey)
       .toBe(getCoopDefenseUpgradeTextureKey('unlock_holo_offensive'));
     expect(hasCoopDefenseDedicatedUpgradeIcon('unlock_holo_offensive')).toBe(true);
+    expect(describeLoadoutItem('ultimate', 'BOMBER_SQUADRON').textureKey)
+      .toBe(getCoopDefenseUpgradeTextureKey('unlock_bomber_squadron'));
+    expect(hasCoopDefenseDedicatedUpgradeIcon('unlock_bomber_squadron')).toBe(true);
   });
 
   it('uses the dedicated upgrade artwork for Inspector weapon 2 slots', () => {
