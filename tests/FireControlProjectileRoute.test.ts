@@ -111,10 +111,28 @@ describe('fire-control route: real flight into the muzzle portal (D52)', () => {
     runtime.destroy();
   });
 
-  it('lets flames and flame emitters jump at once', () => {
+  it('flies flames too; flame emitters jump at once', () => {
     const { runtime, physics } = createHarness();
     const flame = runtime.spawnProjectile(shot({ isFlame: true, route: route() }))!;
+    expect(physics.handles.get(flame)!.sprite.x).toBe(0);
+    flyToEntry(runtime, physics, [flame], 20);
     expect(physics.handles.get(flame)!.sprite.x).toBe(500);
+    const emitter = runtime.spawnProjectile({ ...shot({ route: route(), damage: 0 }),
+      flameEmission: { intervalMs: 100, angularSpeedRadiansPerSecond: 0, flame: shot({ isFlame: true }) } })!;
+    expect(physics.handles.get(emitter)!.sprite.x).toBe(500);
+    runtime.destroy();
+  });
+
+  it('leaves no burning ground when a flame dies on its way into the portal', () => {
+    const { runtime } = createHarness();
+    const expiry = vi.fn();
+    runtime.setNaturalFlameExpiryCallback(expiry);
+    const request = shot({ isFlame: true, route: route(), lifetimeMs: 50 });
+    runtime.spawnProjectile({ ...request, flameExpiryGround: { durationMs: 1234,
+      burn: { durationMs: 1000, damagePerTick: 2 }, baseDamageMult: 1, igniteProjectiles: false } });
+    runtime.runHostProjectileStage(60, 1_060);
+    expect(expiry).toHaveBeenCalledTimes(1);
+    expect(expiry.mock.calls[0][0].flameExpiryGround).toBeUndefined();
     runtime.destroy();
   });
 });

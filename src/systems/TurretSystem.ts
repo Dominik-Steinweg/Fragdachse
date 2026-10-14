@@ -11,7 +11,7 @@ import {
   toLocalTurretFireSource, type AutomatedTurretId, type AutomatedTurret, type TurretFireSource, type TurretFireContext,
   type TurretPortalAssignment,
 } from './TurretFireSource';
-import { buildTurretPortalRoute, fireControlEntryGapPx, resolvePortalEntry } from './fireControl/FireControlPortalRoute';
+import { buildTurretPortalRoute, resolvePortalEntry } from './fireControl/FireControlPortalRoute';
 import type { FireControlPortalFeedback } from './fireControl/FireControlRuntime';
 import type { FireControlEntryMode } from './fireControl/FireControlSnapshot';
 
@@ -608,30 +608,24 @@ export class TurretSystem {
   ) {
     return buildTurretPortalRoute({ deploymentId: portal.deploymentId, sourceX: turret.x, sourceY: turret.y, angle,
       muzzleOffset, exitX: portal.exitX, exitY: portal.exitY, targetX: target.x, targetY: target.y,
-      damageBonus: portal.damageBonus, effectiveRangePx: weapon.range * rangeFactor,
-      entryGapPx: fireControlEntryGapPx(weapon.fire.type) });
+      damageBonus: portal.damageBonus, effectiveRangePx: weapon.range * rangeFactor });
   }
 
   private firePortalRoute(
     turret: TurretFireSource, portal: TurretPortalAssignment, weaponId: keyof typeof WEAPON_CONFIGS, angle: number,
     muzzleOffset: number, route: NonNullable<TurretFireContext['route']>, damageFactor: number, rangeFactor: number, now: number,
   ): void {
-    const pose = resolvePortalEntry(turret.x, turret.y, angle, muzzleOffset, this.portalEntryGap(turret));
+    const pose = resolvePortalEntry(turret.x, turret.y, angle, muzzleOffset);
     const fired = this.fireHandler?.(turret.ownerId, turret.ownerColor, weaponId, pose.muzzleX, pose.muzzleY, angle,
       route.rangeTargetX, route.rangeTargetY, damageFactor, rangeFactor, turret.identityId, turret.skipRockIndex,
       turret.sourceCarrierBaseId, { source: turret, route });
     if (fired !== false) this.portalFeedback?.noteTransport(portal.deploymentId, turret.id, now);
   }
 
-  /** D52: real flight to the muzzle portal for shots; flamethrower streams jump at the muzzle. */
-  private portalEntryGap(turret: AutomatedTurret): number {
-    return fireControlEntryGapPx(WEAPON_CONFIGS[turret.weaponId ?? 'SPORES']?.fire.type);
-  }
-
   private reportPortalEntry(
     turret: TurretFireSource, portal: TurretPortalAssignment, mode: FireControlEntryMode, angle: number, muzzleOffset: number,
   ): void {
-    const pose = resolvePortalEntry(turret.x, turret.y, angle, muzzleOffset, this.portalEntryGap(turret));
+    const pose = resolvePortalEntry(turret.x, turret.y, angle, muzzleOffset);
     this.portalFeedback?.reportEntry(portal.deploymentId, turret.id, turret.identityId, mode, pose.entryX, pose.entryY, angle);
   }
 
@@ -657,7 +651,7 @@ export class TurretSystem {
       distance = ray;
     }
     if (!this.lineOfFireChecker) return true;
-    const pose = resolvePortalEntry(turret.x, turret.y, angle, muzzleOffset, this.portalEntryGap(turret));
+    const pose = resolvePortalEntry(turret.x, turret.y, angle, muzzleOffset);
     if (!this.lineOfFireChecker(pose.muzzleX, pose.muzzleY, pose.entryX, pose.entryY,
       turret.skipRockIndex, turret.sourceCarrierBaseId)) return false;
     return this.hasExitLineOfFire(portal.deploymentId, portal.exitX, portal.exitY,

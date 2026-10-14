@@ -446,7 +446,9 @@ export class WorldProjectileRuntime implements
       sweepRocks: (projectile, rangeBeforeStep) => this.sweepRocks(projectile, rangeBeforeStep),
       updateHoming: (projectile, simulatedAgeMs) => { this.updateProjectileHoming(projectile, simulatedAgeMs); },
       onImpact: (projectile, x, y) => this.projectileImpactEventCallback?.(this.createImpactSource(projectile, x, y)),
-      onNaturalFlameExpiry: (projectile) => this.naturalFlameExpiryCallback?.({ ...this.createImpactSource(projectile), flameExpiryGround: projectile.flameExpiryGround }),
+      // A flame that dies on its way into its muzzle portal leaves no burning ground at the turret (D52).
+      onNaturalFlameExpiry: (projectile) => this.naturalFlameExpiryCallback?.({ ...this.createImpactSource(projectile),
+        flameExpiryGround: projectile.fireControlPending ? undefined : projectile.flameExpiryGround }),
       onProximityPulse: (projectile) => this.proximityPulseCallback?.(this.createImpactSource(projectile)),
       onSpentDestruction: (projectile) => this.miniRocketDestroyedCallback?.(this.createImpactSource(projectile)),
     };
@@ -1469,10 +1471,10 @@ export class WorldProjectileRuntime implements
     const record = this.projectiles.getById(id)!;
     record.flameExpiryGround = request.flameExpiryGround;
     if (route) {
-      // Flames and flame emitters jump at once: stream keys are fixed at spawn, so flames on the
-      // real stretch would chain to their own stream on the far side of the jump. Every other
-      // shot really flies to its muzzle portal and jumps in the host portal stage (D52).
-      if (request.flight.isFlame || request.flameEmission) this.applyFireControlRoute(record, route, origin.angle);
+      // Shots, flames included, really fly to their muzzle portal and jump in the host portal stage
+      // (D52); the flame renderer's link/bridge distance limits already cut the stream at the jump.
+      // Flame emitters jump at once: flames emitted on the real stretch would be real local hits.
+      if (request.flameEmission) this.applyFireControlRoute(record, route, origin.angle);
       else this.beginFireControlFlight(record, route, origin.angle);
     }
     const emission = request.flameEmission;
@@ -1973,6 +1975,8 @@ export class WorldProjectileRuntime implements
     for (const projectileId of this.travelEffectIds) {
       const record = this.projectiles.getById(projectileId);
       if (!record || record.pendingDestroy || !this.projectiles.activeRecords.has(record) || !record.physics.sprite.active) continue;
+      // The muzzle → entry stretch of a fire-control shot has no travel effects (D52).
+      if (record.fireControlPending) continue;
 
       const pathEffect = createTravelPathEffect(record);
       if (record.portalTravel) this.travelSamples.push(...record.portalTravel);
