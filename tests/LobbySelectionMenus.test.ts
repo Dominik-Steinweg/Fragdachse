@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import { getStoredCoopDefenseProgress } from '../src/utils/localPreferences';
 import { DAWN_UNLOCK_AFTER_MAP_ID } from '../src/dawn/rules/DawnUnlock';
+import { DAWN_UI_TEXTURES } from '../src/assets/DawnUiAssets';
 import { UiTooltip } from '../src/ui/UiTooltip';
 import { t } from '../src/i18n';
 import type { CoopProgram } from '../src/dawn/contracts/CoopProgram';
@@ -23,7 +24,7 @@ vi.mock('../src/ui/UiTooltip', () => ({
 }));
 
 vi.mock('phaser', () => ({ Math: { Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)) } }));
-vi.mock('../src/ui/uiTextures', () => ({ ensureFlatPanelTexture: () => 'panel', lerpColor: (color: number) => color }));
+vi.mock('../src/ui/uiTextures', () => ({ ensureFlatPanelTexture: () => 'panel', ensureIconTexture: () => 'lock', lerpColor: (color: number) => color }));
 vi.mock('../src/ui/forestTextures', () => ({ ensureForestPanel: () => 'forest-panel' }));
 vi.mock('../src/ui/LoadoutIconLayout', () => ({ fitLoadoutIcon: (image: unknown) => image, getLoadoutIconTextureKey: (_scene: unknown, key: string) => key }));
 vi.mock('../src/scenes/arena/ClarityCameraRegistry', () => ({ promoteToClarityCamera: vi.fn() }));
@@ -66,6 +67,9 @@ class Display extends EventEmitter {
   visible = true;
   destroyed = false;
   displayHeight = this.height;
+  displayWidth = this.width;
+  tint = 0xffffff;
+  textureKey?: string;
   input: { enabled: boolean } | null = null;
   constructor(public kind: string, public x = 0, public y = 0, public width = 0, public height = 0) { super(); }
   setOrigin() { return this; }
@@ -74,12 +78,15 @@ class Display extends EventEmitter {
   setStrokeStyle() { return this; }
   setFillStyle() { return this; }
   setColor() { return this; }
+  setShadow() { return this; }
+  setFontSize() { return this; }
+  setTint(tint: number) { this.tint = tint; return this; }
   setText() { return this; }
   setX(x: number) { this.x = x; return this; }
   setDepth() { return this; }
   setVisible(visible: boolean) { this.visible = visible; return this; }
   setY(y: number) { this.y = y; return this; }
-  setDisplaySize(_width: number, height: number) { this.displayHeight = height; return this; }
+  setDisplaySize(width: number, height: number) { this.displayWidth = width; this.displayHeight = height; return this; }
   setInteractive() { this.input = { enabled: true }; return this; }
   disableInteractive() { if (this.input) this.input.enabled = false; return this; }
   add(children: Display | Display[]) {
@@ -110,7 +117,11 @@ function fixture(standalone = false, skin: 'default' | 'forest' = 'default') {
     input, scale: { width: 1920 }, textures: { exists: () => false },
     add: {
       rectangle: (x: number, y: number, w: number, h: number) => add('rectangle', x, y, w, h),
-      image: (x: number, y: number) => add('image', x, y),
+      image: (x: number, y: number, key: string) => {
+        const image = add('image', x, y, key === DAWN_UI_TEXTURES.keyart ? 960 : 0, key === DAWN_UI_TEXTURES.keyart ? 540 : 0);
+        image.textureKey = key;
+        return image;
+      },
       circle: (x: number, y: number) => add('circle', x, y),
       text: (x: number, y: number) => add('text', x, y),
       container: (x: number, y: number, children: Display[]) => add('container', x, y).add(children),
@@ -135,6 +146,23 @@ function options(count = 20): LoadoutPickerOptions {
 const click = (object: Display) => object.emit('pointerdown', {}, 0, 0, { stopPropagation: vi.fn() });
 
 describe('Lobby selection menus', () => {
+  it('contains the entire landscape preview and dims only the locked image, with normal picker cleanup', () => {
+    const { scene, picker, created } = fixture();
+    scene.textures.exists = () => true;
+    const config = options(1);
+    const onPick = vi.fn();
+    for (const disabled of [true, false]) {
+      picker.open({ ...config, groups: [{ label: null, fullWidth: true, entries: [{
+        key: 'dawn', displayName: 'From Dachs Till Dawn', textureKey: DAWN_UI_TEXTURES.keyart,
+        preview: { aspectRatio: 16 / 9 }, accentColor: 0xffffff, selected: false, disabled, onPick,
+      }] }] });
+      const image = created.filter(object => object.textureKey === DAWN_UI_TEXTURES.keyart).at(-1)!;
+      expect(image.displayWidth / image.displayHeight).toBe(image.width / image.height);
+      expect(image.tint === 0xffffff).toBe(!disabled);
+      picker.close();
+      expect(image.destroyed).toBe(true);
+    }
+  });
   it('gates Dawn on the host completion and uses the Bridge for selection and guest display', () => {
     const { scene, parent, created } = fixture();
     let host = true;
@@ -151,6 +179,7 @@ describe('Lobby selection menus', () => {
     const dawnEntry = () => open.mock.lastCall![0].groups.at(-1)!.entries[0];
     click(mapButton);
     expect(dawnEntry()).toMatchObject({ disabled: true, selected: false,
+      textureKey: DAWN_UI_TEXTURES.keyart, preview: { aspectRatio: 16 / 9 },
       tooltip: t('ui.lobby.dawn.locked', { map: DAWN_UNLOCK_AFTER_MAP_ID }) });
     const lockedRow = created.filter(object => object.kind === 'rectangle').at(-1)!;
     const tooltip = showTooltip.mock.instances.at(-1)!;
@@ -164,6 +193,7 @@ describe('Lobby selection menus', () => {
     vi.mocked(getStoredCoopDefenseProgress).mockReturnValue({ completedMapIds: [DAWN_UNLOCK_AFTER_MAP_ID] } as any);
     click(mapButton);
     expect(dawnEntry()).toMatchObject({ disabled: false, selected: false });
+    expect(dawnEntry().preview?.subtitle).toBeTruthy();
     expect(dawnEntry().tooltip).toBeUndefined();
     click(created.filter(object => object.kind === 'rectangle').at(-1)!);
     expect(bridge.setCoopProgram).toHaveBeenCalledExactlyOnceWith({ kind: 'dawn' });

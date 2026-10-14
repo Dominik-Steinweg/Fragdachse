@@ -6,7 +6,7 @@ import { activateUi, playUiHover } from './UiAudio';
 import { FOREST, skinTextColor, type UiSkin } from './UiSkin';
 import { ensureForestPanel } from './forestTextures';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH, toCssColor } from '../config';
-import { ensureFlatPanelTexture, lerpColor } from './uiTextures';
+import { ensureFlatPanelTexture, ensureIconTexture, lerpColor } from './uiTextures';
 import { BORDER, RADIUS, SPACE, SURFACE, TEXT, textStyle } from './uiTheme';
 import { fitLoadoutIcon, getLoadoutIconTextureKey } from './LoadoutIconLayout';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
@@ -22,6 +22,8 @@ export interface LoadoutPickerEntry {
   /** Gesperrt oder bereits in einem anderen Slot derselben Gruppe; nicht waehlbar. */
   readonly disabled: boolean;
   readonly tooltip?: string;
+  /** Landscape thumbnail using the same texture lookup as other picker images. */
+  readonly preview?: { readonly aspectRatio: number; readonly subtitle?: string };
   readonly onPick: () => void | boolean;
 }
 
@@ -147,15 +149,17 @@ export class LoadoutSlotPicker {
       const groupColumns = group.fullWidth ? 1 : columns;
       const groupEntryW = group.fullWidth ? bodyW : entryW;
       const groupRows = Math.ceil(group.entries.length / groupColumns);
+      const groupEntryH = Math.max(entryH, ...group.entries.map(entry =>
+        entry.preview ? groupEntryW / entry.preview.aspectRatio : entryH));
       for (let index = 0; index < group.entries.length; index += 1) {
         const entry = group.entries[index];
         const column = index % groupColumns;
         const row = Math.floor(index / groupColumns);
         const x = PADDING + column * (groupEntryW + ENTRY_GAP);
-        const y = cursorY + row * (entryH + ENTRY_GAP);
-        rows.push(() => this.buildEntry(children, entry, x, y, groupEntryW, entryH, options.centeredLabels ?? false));
+        const y = cursorY + row * (groupEntryH + ENTRY_GAP);
+        rows.push(() => this.buildEntry(children, entry, x, y, groupEntryW, groupEntryH, options.centeredLabels ?? false));
       }
-      cursorY += groupRows * (entryH + ENTRY_GAP) + 4;
+      cursorY += groupRows * (groupEntryH + ENTRY_GAP) + 4;
     }
 
     if (options.clearLabel && options.onClear) {
@@ -264,7 +268,13 @@ export class LoadoutSlotPicker {
       .setAlpha(entry.disabled ? 0.45 : 1);
     children.push(background);
 
-    if (entry.textureKey && runtimeTextureExists(this.scene.textures, entry.textureKey)) {
+    if (entry.preview && entry.textureKey && runtimeTextureExists(this.scene.textures, entry.textureKey)) {
+      // Contain the entire plate. Never crop landscape art to the loadout icon box.
+      const image = runtimeImage(this.scene, x + width / 2, y + height / 2, entry.textureKey);
+      const scale = Math.min(width / image.width, height / image.height);
+      children.push(image.setDisplaySize(image.width * scale, image.height * scale)
+        .setScrollFactor(0).setTint(entry.disabled ? 0x62605a : 0xffffff));
+    } else if (!entry.preview && entry.textureKey && runtimeTextureExists(this.scene.textures, entry.textureKey)) {
       const textureKey = getLoadoutIconTextureKey(this.scene, entry.textureKey);
       children.push(fitLoadoutIcon(
         runtimeImage(this.scene, x + 6 + ICON_SIZE / 2, y + height / 2, textureKey),
@@ -275,12 +285,26 @@ export class LoadoutSlotPicker {
         .setAlpha(entry.disabled ? 0.45 : 1));
     }
 
-    const labelX = centered ? width / 2 : SPACE.md + (entry.textureKey ? ICON_SIZE : 0);
+    const labelX = entry.preview ? 10 : centered ? width / 2 : SPACE.md + (entry.textureKey ? ICON_SIZE : 0);
     const label = this.scene.add.text(x + labelX, y + height / 2, entry.displayName, textStyle(
       entry.selected ? 'labelSm' : 'caption',
-      { color: restState.labelColor!, wordWrapWidth: width - (centered ? SPACE.md : labelX + SPACE.sm) },
-    )).setOrigin(centered ? 0.5 : 0, 0.5).setScrollFactor(0);
+      entry.preview ? { color: 0xd9cfb6, wordWrapWidth: width / 3 - 16 }
+        : { color: restState.labelColor!, wordWrapWidth: width - (centered ? SPACE.md : labelX + SPACE.sm) },
+    )).setOrigin(centered && !entry.preview ? 0.5 : 0, 0.5).setScrollFactor(0);
     children.push(label);
+    if (entry.preview) {
+      label.setFontSize(15);
+      label.setShadow(1, 2, '#1b1a17', 3, true, true);
+      if (entry.disabled) children.push(this.scene.add.image(x + width - 18, y + 18,
+        ensureIconTexture(this.scene, 'lock', 18, 0xd9cfb6)).setScrollFactor(0));
+      if (entry.preview.subtitle) {
+        const subtitle = this.scene.add.text(x + 10, y + height / 2 + label.height / 2 + 10,
+          entry.preview.subtitle, textStyle('caption', { color: 0xd9cfb6 })).setFontSize(15).setScrollFactor(0);
+        // At the compact lobby size only the name fits. Never shrink below 15 design px.
+        if (subtitle.width <= width / 3 - 16 && subtitle.y + subtitle.height <= y + height - 10) children.push(subtitle);
+        else subtitle.destroy();
+      }
+    }
 
     if (entry.tooltip) {
       background.setInteractive();

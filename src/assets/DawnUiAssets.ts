@@ -4,6 +4,9 @@ import { DAWN_ELITE_AFFIX_IDS, DAWN_M3_ASSET_KEYS, DAWN_NIGHT_MODIFIER_IDS } fro
 
 /** Small counters use 32 px sources; category art stays legible at 48–64 px. */
 export const DAWN_UI_TEXTURES = {
+  keyart: 'dawn-ui-keyart',
+  victory: 'dawn-ui-victory',
+  defeat: 'dawn-ui-defeat',
   scrap: 'dawn-ui-scrap',
   threat: 'dawn-ui-threat',
   dealerExpansion: 'dawn-ui-dealer-expansion',
@@ -18,6 +21,10 @@ export const DAWN_UI_TEXTURES = {
 
 /** Paths relative to `assets/ui/dawn/`: icons under `runtime/`, woodcut art (dealer portrait) under `art/runtime/`. */
 export const DAWN_UI_ASSETS = [
+  { key: DAWN_UI_TEXTURES.keyart, path: 'art/runtime/dawn-keyart-960.webp' },
+  // Results use the entire 1920×1080 design canvas; the picker only needs 960.
+  { key: DAWN_UI_TEXTURES.victory, path: 'art/runtime/dawn-victory-1920.webp' },
+  { key: DAWN_UI_TEXTURES.defeat, path: 'art/runtime/dawn-defeat-1920.webp' },
   { key: DAWN_UI_TEXTURES.scrap, path: 'runtime/scrap-32.webp' },
   { key: DAWN_UI_TEXTURES.threat, path: 'runtime/threat-32.webp' },
   { key: DAWN_UI_TEXTURES.dealerExpansion, path: 'runtime/dealer-expansion-64.webp' },

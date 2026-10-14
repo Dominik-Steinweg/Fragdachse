@@ -4,7 +4,9 @@ import type { PersistentBaseAreaStage } from '../persistentBase/PersistentBaseCo
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import type { CoopDefenseClassId, CoopDefenseItem, CoopDefenseItemSlot, CoopDefenseRoundIdentity, GameMode, TeamId } from '../types';
 import type { CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
-import { getLocale } from '../i18n';
+import { formatNumber, getLocale, t } from '../i18n';
+import { resolveDawnRoundScrap } from '../dawn/economy/DawnEconomy';
+import { DAWN_ECONOMY } from '../config/dawn/economy';
 import {
   compareCoopDefenseItems,
   getCoopDefenseItemSalvageXp,
@@ -76,6 +78,8 @@ export interface MatchItemRewardPresentation {
 }
 
 export interface MatchResultsPresentation {
+  /** Frozen at result finalization; never read from a new lobby/round during replay. */
+  readonly dawn?: DawnMatchSummary;
   readonly roundIdentity?: CoopDefenseRoundIdentity;
   outcome: MatchResultOutcome;
   mode: GameMode;
@@ -87,6 +91,63 @@ export interface MatchResultsPresentation {
   technicalMessage: string | null;
   /** `null`, wenn die Map keine Items vergibt oder die Belohnung bereits abgeholt wurde. */
   itemReward: MatchItemRewardPresentation | null;
+}
+
+export interface DawnMatchSummary {
+  readonly outcome: 'victory' | 'defeat';
+  readonly dayNumber?: number;
+  readonly threat?: number;
+  readonly sharedScrap?: number;
+  readonly retainedScrap?: number;
+  readonly retainedPercent: number;
+  /** Personal balance after processing, unlike the shared round values above. */
+  readonly balanceAfter?: number;
+  readonly creditedScrap?: number;
+}
+
+const isCounter = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+
+export function createDawnMatchSummary(
+  round: RoundState | null,
+  results: readonly Pick<RoundResult, 'sharedScrap'>[],
+  balanceAfter?: number,
+  creditedScrap?: number,
+): DawnMatchSummary | undefined {
+  if (!round?.dawn || (round.status !== 'victory' && round.status !== 'defeat')) return undefined;
+  const sharedScrap = results.find(result => isCounter(result.sharedScrap))?.sharedScrap;
+  return {
+    outcome: round.status,
+    ...(isCounter(round.dawn.dayNumber) && round.dawn.dayNumber > 0 ? { dayNumber: round.dawn.dayNumber } : {}),
+    ...(isCounter(round.dawn.threat) && round.dawn.threat > 0 ? { threat: round.dawn.threat } : {}),
+    ...(sharedScrap === undefined ? {} : {
+      sharedScrap, retainedScrap: resolveDawnRoundScrap({ sharedScrap, outcome: round.status }),
+    }),
+    retainedPercent: Math.round((round.status === 'defeat' ? DAWN_ECONOMY.defeatScrapShare : 1) * 100),
+    ...(isCounter(balanceAfter) ? { balanceAfter } : {}),
+    ...(isCounter(creditedScrap) ? { creditedScrap } : {}),
+  };
+}
+
+/** Missing legacy fields stay absent; zero is a real value. */
+export function getDawnMatchSummaryRows(summary: DawnMatchSummary): { label: string; value: string; detail?: string }[] {
+  const number = (value: number) => formatNumber(value, getLocale());
+  const rows: { label: string; value: string; detail?: string }[] = [];
+  if (summary.dayNumber !== undefined) rows.push({ label: t('ui.dawn.results.day'), value: number(summary.dayNumber) });
+  if (summary.threat !== undefined) rows.push({ label: t('ui.dawn.results.threat'), value: number(summary.threat) });
+  if (summary.sharedScrap !== undefined && summary.retainedScrap !== undefined) rows.push({
+    label: t('ui.dawn.results.scrap'),
+    value: summary.outcome === 'defeat'
+      ? t('ui.dawn.results.share', { saved: number(summary.retainedScrap), total: number(summary.sharedScrap) })
+      : number(summary.sharedScrap),
+    ...(summary.outcome === 'defeat' ? { detail: t('ui.dawn.results.saved', { percent: summary.retainedPercent }) } : {}),
+  });
+  if (summary.balanceAfter !== undefined) rows.push({ label: t('ui.dawn.results.balance'), value: number(summary.balanceAfter) });
+  if (summary.creditedScrap !== undefined && summary.retainedScrap !== undefined
+    && summary.creditedScrap !== summary.retainedScrap) rows.push({
+    label: t('ui.dawn.results.credited'), value: number(summary.creditedScrap),
+  });
+  return rows;
 }
 
 /** XP alone and rewards from older rounds do not require a restart confirmation. */

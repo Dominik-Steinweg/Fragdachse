@@ -1,4 +1,6 @@
 import { ensureForestActionButton } from './forestTextures';
+import { DAWN_UI_TEXTURES } from '../assets/DawnUiAssets';
+import { getDawnMatchSummaryRows } from './MatchResultsModel';
 import { BUTTON_CURSOR } from './gameCursor';
 import { ensureResultsBanner, ensureResultsPanel, ensureResultsTitle } from './matchResultsTextures';
 import { MATCH_RESULTS_BANNER, MATCH_RESULTS_BACKGROUND, MATCH_RESULTS_TITLE } from './MatchResultsAssets';
@@ -223,6 +225,9 @@ export interface MatchResultsRestartActions {
 }
 
 export class MatchResultsOverlay {
+  private headerGroup: Phaser.GameObjects.Container | null = null;
+  private dawnGroup: Phaser.GameObjects.Container | null = null;
+  private dawnArt: Phaser.GameObjects.Image | null = null;
   private container: Phaser.GameObjects.Container | null = null;
   private builtLocale = getLocale();
   private forestBackground: Phaser.GameObjects.Image | null = null;
@@ -318,7 +323,8 @@ export class MatchResultsOverlay {
     objects.push(this.forestBackground);
     this.refreshBackgroundArt();
 
-    objects.push(this.buildHeader());
+    this.headerGroup = this.buildHeader();
+    objects.push(this.headerGroup);
     this.leaderboardGroup = this.buildLeaderboardPanel();
     objects.push(this.leaderboardGroup);
     this.progressGroup = this.buildProgressPanel();
@@ -327,6 +333,8 @@ export class MatchResultsOverlay {
     objects.push(this.summaryGroup);
     this.syncGroup = this.buildSyncPanel();
     objects.push(this.syncGroup);
+    this.dawnGroup = this.scene.add.container(0, 0).setScrollFactor(0).setVisible(false);
+    objects.push(this.dawnGroup);
     objects.push(this.buildFooter());
 
     // Partikel liegen bewusst am Ende der Liste: Funken und Konfetti sollen ueber Panel,
@@ -364,6 +372,8 @@ export class MatchResultsOverlay {
     this.scene.load.on(`filecomplete-image-${MATCH_RESULTS_BANNER.key}`, this.refreshBannerArt);
     this.scene.load.on(`filecomplete-image-${MATCH_RESULTS_BACKGROUND.key}`, this.refreshBackgroundArt);
     this.scene.load.on(`filecomplete-image-${MATCH_RESULTS_TITLE.key}`, this.refreshTitleArt);
+    this.scene.load.on(`filecomplete-image-${DAWN_UI_TEXTURES.victory}`, this.refreshDawnArt);
+    this.scene.load.on(`filecomplete-image-${DAWN_UI_TEXTURES.defeat}`, this.refreshDawnArt);
     promoteToClarityCamera(this.scene, this.container);
 
     // Der lebendige XP-Balken braucht den Container und entsteht deshalb erst hier.
@@ -389,6 +399,7 @@ export class MatchResultsOverlay {
     this.syncing = true;
     this.sequenceComplete = true;
     this.presentation = null;
+    this.setDawnVisible(false);
     this.resetRestart();
 
     this.applyAccent(OUTCOME_STYLE.syncing.color);
@@ -471,6 +482,15 @@ export class MatchResultsOverlay {
     this.continueLabel?.setText(t(presentation.itemReward ? 'ui.results.chooseItem' : 'ui.results.continueLobby'));
     this.balanceFeedbackButton?.setVisible(this.balanceFeedbackAvailable && !this.syncing);
     this.balanceFeedbackLabel?.setVisible(this.balanceFeedbackAvailable && !this.syncing);
+
+    this.setDawnVisible(!!presentation.dawn);
+    if (presentation.dawn) {
+      this.populateDawn(presentation);
+      this.sequenceComplete = true;
+      this.hintText?.setVisible(false);
+      this.refreshRestartState();
+      return;
+    }
 
     this.populateLeaderboard(presentation);
     this.populateProgress(presentation.progress, presentation.itemReward);
@@ -571,6 +591,11 @@ export class MatchResultsOverlay {
     this.scene.load.off(`filecomplete-image-${MATCH_RESULTS_BANNER.key}`, this.refreshBannerArt);
     this.scene.load.off(`filecomplete-image-${MATCH_RESULTS_BACKGROUND.key}`, this.refreshBackgroundArt);
     this.scene.load.off(`filecomplete-image-${MATCH_RESULTS_TITLE.key}`, this.refreshTitleArt);
+    this.scene.load.off(`filecomplete-image-${DAWN_UI_TEXTURES.victory}`, this.refreshDawnArt);
+    this.scene.load.off(`filecomplete-image-${DAWN_UI_TEXTURES.defeat}`, this.refreshDawnArt);
+    this.headerGroup = null;
+    this.dawnGroup = null;
+    this.dawnArt = null;
     this.titleSigns = [];
     this.forestBackground = null;
     this.modalFrame = null;
@@ -608,6 +633,64 @@ export class MatchResultsOverlay {
   }
 
   // ── Aufbau ─────────────────────────────────────────────────────────────────
+
+  private setDawnVisible(visible: boolean): void {
+    this.dawnGroup?.setVisible(visible);
+    this.headerGroup?.setVisible(!visible);
+    this.modalFrame?.setVisible(!visible);
+    if (visible) {
+      this.leaderboardGroup?.setVisible(false);
+      this.progressGroup?.setVisible(false);
+      this.summaryGroup?.setVisible(false);
+      this.xpBarEffect?.stop();
+    }
+  }
+
+  private readonly refreshDawnArt = (): void => {
+    const summary = this.presentation?.dawn;
+    if (!summary) return;
+    const key = DAWN_UI_TEXTURES[summary.outcome];
+    if (this.scene.textures.exists(key)) this.dawnArt?.setTexture(key)
+      .setDisplaySize(GAME_WIDTH, GAME_HEIGHT).setVisible(true);
+  };
+
+  /** A quiet printed results page inside the existing overlay and AfterRound lifetime. */
+  private populateDawn(presentation: MatchResultsPresentation): void {
+    const summary = presentation.dawn;
+    if (!summary || !this.dawnGroup) return;
+    this.dawnGroup.removeAll(true);
+    this.dawnArt = this.scene.add.image(CX, CY, '__WHITE').setScrollFactor(0).setVisible(false);
+    const objects: Phaser.GameObjects.GameObject[] = [
+      this.scene.add.rectangle(CX, CY, GAME_WIDTH, GAME_HEIGHT, 0x1b1a17).setScrollFactor(0),
+      this.dawnArt,
+      this.scene.add.rectangle(68, 64, 610, 858, 0x1b1a17, 0.94).setOrigin(0).setScrollFactor(0),
+      this.scene.add.rectangle(CX, 998, GAME_WIDTH, 164, 0x1b1a17, 0.92).setScrollFactor(0),
+    ];
+    const text = (x: number, y: number, value: string, size: number, color = '#d9cfb6', wrap = 520) =>
+      this.scene.add.text(x, y, value, { ...textStyle('label', { wordWrapWidth: wrap }),
+        fontSize: size, color,
+      }).setScrollFactor(0);
+    objects.push(text(112, 104, t('ui.lobby.dawn.name').toUpperCase(), 23, '#c8b98f'));
+    objects.push(text(112, 168, t(`ui.dawn.results.${summary.outcome}`), 54));
+    objects.push(this.scene.add.rectangle(112, 306, 518, 2, 0x5a4632).setOrigin(0).setScrollFactor(0));
+    const rows = getDawnMatchSummaryRows(summary);
+    if (presentation.progress) rows.push({
+      label: t('ui.dawn.results.experience'),
+      value: t('ui.dawn.results.progress', {
+        xp: formatNumber(presentation.progress.xpGained, getLocale()), level: presentation.progress.after.level,
+      }),
+    });
+    rows.forEach((row, index) => {
+      const y = 330 + index * Math.min(138, 560 / rows.length);
+      objects.push(text(112, y, row.label, 22, '#c8b98f'));
+      const value = text(112, y + 31, row.value, 38);
+      if (value.width > 518) value.setFontSize(Math.max(24, Math.floor(38 * 518 / value.width)));
+      objects.push(value);
+      if (row.detail) objects.push(text(630, y, row.detail, 22, '#c8b98f', 260).setOrigin(1, 0));
+    });
+    this.dawnGroup.add(objects);
+    this.refreshDawnArt();
+  }
 
   private ensureEffectTextures(): void {
     ensureLivingBarTextures(this.scene);

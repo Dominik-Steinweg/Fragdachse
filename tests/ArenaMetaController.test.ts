@@ -597,6 +597,10 @@ describe('room-scoped round progression', () => {
         f.controller.beginMatchResults(); f.controller.tryFinalizeMatchResults();
         expect(f.controller.getLastMatchResultsPresentation()?.progress?.scrapGained).toBe(status === 'victory' ? 100 : 50);
         const progress = getStoredCoopDefenseProgress();
+        expect(f.controller.getLastMatchResultsPresentation()?.dawn).toMatchObject({
+          outcome: status, dayNumber: roundRevision, threat, sharedScrap: 100,
+          retainedScrap: status === 'victory' ? 100 : 50, balanceAfter: progress.dawn.scrap,
+        });
         f.controller.beginMatchResults(); f.controller.tryFinalizeMatchResults();
         expect(getStoredCoopDefenseProgress()).toEqual(progress);
       }

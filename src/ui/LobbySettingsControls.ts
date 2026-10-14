@@ -9,7 +9,9 @@ import { getLocale, t } from '../i18n';
 import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
 import { getMapName } from '../i18n/contentPresentation';
 import { getUnlockedCoopDefenseMapConfigs } from '../config/coopDefenseMapUnlocks';
-import { getStoredCoopDefenseProgress, getStoredHighestUnlockedCoopDefenseMapId } from '../utils/localPreferences';
+import { getStoredCoopDefenseProgress, getStoredDawnProgress, getStoredHighestUnlockedCoopDefenseMapId } from '../utils/localPreferences';
+import { DAWN_UI_TEXTURES } from '../assets/DawnUiAssets';
+import { resolveDawnThreat } from '../dawn/rules/DawnThreat';
 import { DAWN_UNLOCK_AFTER_MAP_ID, isDawnUnlocked } from '../dawn/rules/DawnUnlock';
 import { areCoopDefenseUnreleasedMapsUnlocked, isCoopDefenseTestMapUnlocked } from '../utils/coopDefenseDebugSession';
 import { formatTimeOfDay, MINUTES_PER_DAY } from '../effects/TimeOfDay';
@@ -143,8 +145,12 @@ export class LobbySettingsControls {
     const groups: LoadoutPickerGroup[] = [{ label: null, entries }];
     if (maps) {
       const unlocked = isDawnUnlocked(getStoredCoopDefenseProgress());
+      const dawn = getStoredDawnProgress();
       groups.push({ label: null, fullWidth: true, entries: [{
-        key: 'dawn', displayName: t('ui.lobby.dawn.name'), textureKey: null, accentColor: FOREST.border,
+        key: 'dawn', displayName: t('ui.lobby.dawn.name'), textureKey: DAWN_UI_TEXTURES.keyart, accentColor: FOREST.border,
+        preview: { aspectRatio: 16 / 9, subtitle: unlocked
+          ? t('ui.dawn.preview', { day: dawn.stats.roundsPlayed + 1, threat: resolveDawnThreat(dawn.expansionLevel) })
+          : undefined },
         selected: this.bridge.getCoopProgram().kind === 'dawn', disabled: !unlocked,
         tooltip: unlocked ? undefined : t('ui.lobby.dawn.locked', { map: DAWN_UNLOCK_AFTER_MAP_ID }),
         onPick: () => {
