@@ -60,13 +60,21 @@ export class DawnSundialClock {
     const graphics = this.scene.add.graphics(); this.dial.add(graphics); return graphics;
   }
 
+  /** Annulus sector as one polygon of two-degree facets (under 0.02 design px from the true
+   * rim) instead of Graphics arcs; only redrawn when the sector visibly changes. */
   private ring(graphics: Phaser.GameObjects.Graphics, start: number, end: number, color: number, alpha = 1): void {
     if (end <= start) return;
-    const from = start * Math.PI / 180, to = end * Math.PI / 180;
-    graphics.fillStyle(color, alpha).beginPath();
-    graphics.arc(0, 0, 119, from, to, false);
-    graphics.arc(0, 0, 86, to, from, true);
-    graphics.closePath().fillPath();
+    const steps = Math.max(1, Math.ceil((end - start) / 2)), points = this.ringPoints;
+    points.length = 0;
+    for (let i = 0; i <= steps; i++) points.push(this.ringPoint(points.length, 119, start + (end - start) * i / steps));
+    for (let i = steps; i >= 0; i--) points.push(this.ringPoint(points.length, 86, start + (end - start) * i / steps));
+    graphics.fillStyle(color, alpha).fillPoints(points, true);
+  }
+  private readonly ringPoints: Phaser.Math.Vector2[] = [];
+  private readonly ringPool: Phaser.Math.Vector2[] = [];
+  private ringPoint(index: number, radius: number, degrees: number): Phaser.Math.Vector2 {
+    const angle = degrees * Math.PI / 180;
+    return (this.ringPool[index] ??= new Phaser.Math.Vector2()).set(Math.cos(angle) * radius, Math.sin(angle) * radius);
   }
 
   setRound(schedule: DawnSchedule, encounters: CoopDefenseMapConfig['encounters']): void {

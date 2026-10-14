@@ -95,7 +95,7 @@ export class LobbyMerchantRenderer {
       .fillStyle(LOBBY_BUILDING_LANTERN.color).fillCircle(0, 0, 2.5)
       .lineStyle(1, HUD_TONES.bronze.muted).lineBetween(-4, 0, 4, 0).lineBetween(0, -4, 0, 4)
       .setAlpha(0);
-    registerGraphicsObject(this.scene, 'weaponTelegraphs', housing);
+    registerGraphicsObject(this.scene, 'lobbyBuildings', housing);
     this.lanterns.push({ key: `lobby-lantern:${menu}`, x, y, housing });
   }
 
