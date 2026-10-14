@@ -2,6 +2,7 @@ import { CELL_SIZE } from '../../config';
 import type { WorldPersistentBaseSite } from '../../world/WorldRuntimeContext';
 import { WaterSurfaceModel } from '../../arena/WaterSurfaceModel';
 import { DawnSitePropRenderer } from '../../arena/DawnSitePropRenderer';
+import { DawnSiteDecalRenderer } from '../../arena/DawnSiteDecalRenderer';
 import type { WorldDescriptor } from '../../world/WorldDescriptor';
 import type { ActivityDescriptor } from '../../world/ActivityDescriptor';
 import { resolveWorldDefinition } from '../../world/WorldDefinitionResolution';
@@ -61,6 +62,7 @@ export class CoopMissionPresentationInfrastructure {
   private readonly mapEventAnnouncementPresenter: CoopDefenseMapEventAnnouncementPresenter;
   private secondaryObjectiveHud: CoopDefenseSecondaryObjectiveHud | null = null;
   private dawnSiteProps: DawnSitePropRenderer | null = null;
+  private dawnSiteDecals: DawnSiteDecalRenderer | null = null;
   private dawnWorldRevision: number | null = null;
   private ui: CoopMissionPresentationUiPort | null = null;
   private uiInput: CoopMissionPresentationInfrastructureInput | null = null;
@@ -105,6 +107,7 @@ export class CoopMissionPresentationInfrastructure {
       this.clearDawnSites();
       const definition = resolveWorldDefinition(world, activity);
       if (!definition) return;
+      this.dawnSiteDecals = new DawnSiteDecalRenderer(this.scene, plan, definition);
       this.dawnSiteProps = new DawnSitePropRenderer(this.scene, plan, definition,
         baseId => this.uiInput?.getBaseManager()?.getBase(baseId)?.isDestroyed() ?? false,
         baseId => this.uiInput?.getBaseManager()?.getStructureHp(baseId) ?? null,
@@ -117,6 +120,8 @@ export class CoopMissionPresentationInfrastructure {
   private clearDawnSites(): void {
     this.dawnSiteProps?.destroy();
     this.dawnSiteProps = null;
+    this.dawnSiteDecals?.destroy();
+    this.dawnSiteDecals = null;
     this.dawnWorldRevision = null;
   }
 

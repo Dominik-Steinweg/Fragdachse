@@ -1,4 +1,6 @@
+import type * as Phaser from 'phaser';
 import { getPipelineAsset } from '../config/pipelineAssets';
+import { runtimeAssetUrl } from './RuntimeAssetUrls';
 import { DAWN_M3_ASSET_KEYS, DAWN_WRECK_VARIANTS } from '../dawn/contracts/DawnContentIds';
 
 export const DAWN_WRECK_KEYS: Readonly<Record<number, string>> = {
@@ -30,6 +32,19 @@ export const DAWN_PIPELINE_ASSETS = [
   DAWN_M3_ASSET_KEYS.broodNest, DAWN_M3_ASSET_KEYS.supplyCapsule, DAWN_M3_ASSET_KEYS.supplyCrate,
   ...[1, 2, 3].map(DAWN_M3_ASSET_KEYS.scrapHeap),
 ].map(getPipelineAsset);
+
+/** Ground decals under the site props (Art Direction V1, lossless 512 px runtime exports). */
+export const DAWN_DECAL_NAMES = [
+  'scorch-01', 'scorch-03', 'oil-stain-02', 'debris-scatter-02', 'debris-scatter-03', 'skid-gouge-02',
+  'drill-disturbance-03', 'organic-stain-01', 'rust-flakes-01', 'drag-marks-01',
+] as const;
+export type DawnDecalName = typeof DAWN_DECAL_NAMES[number];
+export const dawnDecalTextureKey = (name: DawnDecalName): string => `dawn-decal-${name}`;
+export function preloadDawnDecalAssets(loader: Pick<Phaser.Loader.LoaderPlugin, 'image'>): void {
+  for (const name of DAWN_DECAL_NAMES) {
+    loader.image(dawnDecalTextureKey(name), runtimeAssetUrl(`./assets/sprites/dawn-decals/runtime/${name}-512.webp`));
+  }
+}
 
 export function isDawnScrapTexture(key: string | undefined): boolean {
   return key !== undefined && Object.values(DAWN_SCRAP_KEYS).includes(key);

@@ -59,6 +59,7 @@ describe('R0 observed depth contract (diagnostics, never rendering inputs)', () 
     for(const dir of ['effects','entities','projectile','powerups','ui','adrenalineEssence','scenes/arena'])walk(dir);
     owners.push('arena/BaseAccentGlowRenderer.ts');
     owners.push('arena/DawnSitePropRenderer.ts');
+    owners.push('arena/DawnSiteDecalRenderer.ts');
     owners.push('arena/LobbyMerchantRenderer.ts');
     expect(owners.sort()).toEqual(Object.keys(CPU_SOURCE_CONTRACTS).sort());
   }, 30000); // Walks and parses the render source tree.

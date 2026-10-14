@@ -1,7 +1,7 @@
 import {
   DAWN_BROOD_NEST_ANIMATION, DAWN_BROOD_NEST_KEY,
   DAWN_EXTRACTOR_ACTIVE_ANIMATION, DAWN_EXTRACTOR_IDLE_ANIMATION,
-  DAWN_EXTRACTOR_KEY, DAWN_EXTRACTOR_SHEET_KEY, DAWN_HEAP_DISPLAY_SIZE,
+  DAWN_EXTRACTOR_KEY, DAWN_EXTRACTOR_SHEET_KEY, DAWN_HEAP_DISPLAY_SIZE, type DawnDecalName,
 } from '../assets/DawnAssets';
 import { DAWN_M3_ASSET_KEYS, DAWN_WRECK_VARIANTS } from '../dawn/contracts/DawnContentIds';
 import { DAWN_MAX_SITE_TIER } from '../dawn/contracts/DawnPlans';
@@ -12,6 +12,47 @@ export interface DawnSitePropVisual {
   readonly animationKey: string | null;
   /** World pixels; absent = the 3x3 site size. */
   readonly displaySize?: number;
+}
+
+/** One ground decal of a site, in world pixels relative to the site center. */
+export interface DawnSiteDecal {
+  readonly name: DawnDecalName;
+  readonly size: number;
+  readonly offsetX: number;
+  readonly offsetY: number;
+  readonly rotation: number;
+}
+
+const WRECK_PRIMARY_DECALS = ['scorch-01', 'scorch-03'] as const;
+const WRECK_SECONDARY_DECALS = ['oil-stain-02', 'debris-scatter-02', 'debris-scatter-03', 'skid-gouge-02'] as const;
+const slotHash = (slotId: string): number => {
+  let hash = 2166136261;
+  for (const char of slotId) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  return hash >>> 0;
+};
+
+/**
+ * Site ground history under the prop (Art Direction V1): deterministic per slot, so every peer and every
+ * re-materialization lays the same decals. Supply drag marks point from the capsule toward the base.
+ */
+export function resolveDawnSiteDecals(archetypeId: string, slotId: string, towardBase: number): readonly DawnSiteDecal[] {
+  const hash = slotHash(slotId);
+  const turn = (hash % 360) / 180 * Math.PI;
+  switch (archetypeId) {
+    case 'wreck': {
+      const secondary = WRECK_SECONDARY_DECALS[(hash >>> 9) % WRECK_SECONDARY_DECALS.length];
+      return [{ name: WRECK_PRIMARY_DECALS[(hash >>> 3) % 2], size: 184, offsetX: 0, offsetY: 0, rotation: turn },
+        { name: secondary, size: 120, offsetX: Math.cos(turn) * 54, offsetY: Math.sin(turn) * 54, rotation: -turn }];
+    }
+    case 'extractor': return [{ name: 'drill-disturbance-03', size: 176, offsetX: 0, offsetY: 0, rotation: turn }];
+    case 'brood-nest': return [{ name: 'organic-stain-01', size: 184, offsetX: 0, offsetY: 0, rotation: turn }];
+    case 'scrap-heaps': return [{ name: 'rust-flakes-01', size: 150, offsetX: 0, offsetY: 0, rotation: turn }];
+    case 'scavenger': return [{ name: 'rust-flakes-01', size: 130, offsetX: 0, offsetY: 0, rotation: turn },
+      { name: 'debris-scatter-02', size: 110, offsetX: Math.cos(turn) * 40, offsetY: Math.sin(turn) * 40, rotation: turn }];
+    case 'supply': return [{ name: 'drag-marks-01', size: 168, offsetX: Math.cos(towardBase) * 70,
+      offsetY: Math.sin(towardBase) * 70, rotation: towardBase }];
+    default: return [];
+  }
 }
 
 export const DAWN_SITE_HIT_FLASH_MS = 100;

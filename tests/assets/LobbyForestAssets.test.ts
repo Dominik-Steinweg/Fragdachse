@@ -34,12 +34,12 @@ describe('lobby forest artwork', () => {
     preloadForestAssets({ image } as any);
     expect(new Set(DAWN_UI_ASSETS.map(asset => asset.key)).size).toBe(DAWN_UI_ASSETS.length);
     for (const asset of DAWN_UI_ASSETS) {
-      const file = `assets/ui/dawn/runtime/${asset.file}`;
+      const file = `assets/ui/dawn/${asset.path}`;
       const bytes = readFileSync(resolve(__dirname, '../../public', file));
       const metadata = await sharp(bytes).metadata();
       expect(metadata.format).toBe('webp');
       expect(metadata.width).toBe(metadata.height);
-      expect(metadata.hasAlpha).toBe(true);
+      // Woodcut print set (Art Direction V1): icons sit on their own dark square plate, alpha is optional.
       const url = runtimeAssetUrl('./' + file);
       expect(url).toBe(`./${file}?v=${createHash('sha256').update(bytes).digest('hex')}`);
       expect(image).toHaveBeenCalledWith(asset.key, url);

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { DAWN_SITE_HIT_FLASH_COOLDOWN_MS, DAWN_SITE_HIT_FLASH_MS, DAWN_SITE_LIGHT, resolveDawnSiteLights, resolveDawnSitePropHitFlash, resolveDawnSitePropVisual } from '../src/arena/DawnSitePropModel';
+import { DAWN_SITE_HIT_FLASH_COOLDOWN_MS, DAWN_SITE_HIT_FLASH_MS, DAWN_SITE_LIGHT, resolveDawnSiteDecals, resolveDawnSiteLights, resolveDawnSitePropHitFlash, resolveDawnSitePropVisual } from '../src/arena/DawnSitePropModel';
 import type { CoopDefenseSecondaryObjectiveState } from '../src/types';
 import { DAWN_M3_ASSET_KEYS, DAWN_WRECK_VARIANTS } from '../src/dawn/contracts/DawnContentIds';
-import { DAWN_PIPELINE_ASSETS } from '../src/assets/DawnAssets';
+import { DAWN_DECAL_NAMES, DAWN_PIPELINE_ASSETS } from '../src/assets/DawnAssets';
 
 const states: readonly (CoopDefenseSecondaryObjectiveState | undefined)[] = [undefined, 'dormant', 'active', 'completed', 'failed'];
 
@@ -148,5 +148,24 @@ describe('Dawn site prop projection', () => {
     for (const key of [DAWN_M3_ASSET_KEYS.broodNest, DAWN_M3_ASSET_KEYS.supplyCapsule, DAWN_M3_ASSET_KEYS.supplyCrate, DAWN_M3_ASSET_KEYS.scrapHeap(1)]) {
       expect(DAWN_PIPELINE_ASSETS.some(asset => asset.textureKey === key), key).toBe(true);
     }
+  });
+});
+
+describe('Dawn site ground decals', () => {
+  it('lays deterministic, archetype-specific decals and points supply drag marks toward the base', () => {
+    for (const archetype of ['wreck', 'extractor', 'brood-nest', 'supply', 'scrap-heaps', 'scavenger']) {
+      const decals = resolveDawnSiteDecals(archetype, 'nw-far', 0);
+      expect(decals.length, archetype).toBeGreaterThan(0);
+      expect(resolveDawnSiteDecals(archetype, 'nw-far', 0)).toEqual(decals);
+      for (const decal of decals) expect(DAWN_DECAL_NAMES).toContain(decal.name);
+    }
+    expect(resolveDawnSiteDecals('extractor', 'a', 0)[0].name).toBe('drill-disturbance-03');
+    expect(resolveDawnSiteDecals('brood-nest', 'a', 0)[0].name).toBe('organic-stain-01');
+    expect(resolveDawnSiteDecals('scrap-heaps', 'a', 0)[0].name).toBe('rust-flakes-01');
+    const [drag] = resolveDawnSiteDecals('supply', 'a', Math.PI / 2);
+    expect(drag).toMatchObject({ name: 'drag-marks-01', rotation: Math.PI / 2 });
+    expect(drag.offsetY).toBeGreaterThan(0);
+    expect(['scorch-01', 'scorch-03']).toContain(resolveDawnSiteDecals('wreck', 'a', 0)[0].name);
+    expect(resolveDawnSiteDecals('unknown', 'a', 0)).toEqual([]);
   });
 });

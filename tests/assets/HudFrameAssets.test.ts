@@ -16,7 +16,7 @@ describe('HUD frame artwork', () => {
     const image = vi.fn();
     preloadHudFrameAssets({ atlas, image } as never);
     for (const asset of DAWN_UI_ASSETS) {
-      expect(image).toHaveBeenCalledWith(asset.key, runtimeAssetUrl(`./assets/ui/dawn/runtime/${asset.file}`));
+      expect(image).toHaveBeenCalledWith(asset.key, runtimeAssetUrl(`./assets/ui/dawn/${asset.path}`));
     }
     expect(atlas).toHaveBeenCalledExactlyOnceWith(HUD_FRAME_TEXTURE, './assets/ui/hud-frames/' + exportsJson.file, exportsJson.atlas);
     expect(exportsJson.file.startsWith('runtime/')).toBe(true);
