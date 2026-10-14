@@ -1,17 +1,41 @@
 import type * as Phaser from 'phaser';
+import { runtimeAssetUrl } from '../../assets/RuntimeAssetUrls';
 import { MARKER_GLYPH_IDS, type MarkerGlyphId } from './MarkerTypes';
 
-/** Replacement contract: Phaser JSON hash atlas, one untrimmed/unrotated square frame
- * named exactly as every MARKER_GLYPH_IDS entry (32 px), optionally `${id}@16/24/32`.
- * White alpha silhouettes, transparent gutters >= 2 px, one image, no PMA data encoding.
- * Publish marker-glyphs.json + its meta.image next to it at this URL, or preload under
- * MARKER_GLYPH_ATLAS_KEY. No renderer change is needed. Atlas textures are borrowed;
- * only this module's fallback / optional download is reference-counted and removed.
+/** Authored contract: runtime/marker-glyphs-{16,24,32}.{json,webp}, version 2,
+ * frames[id] = {x,y,w,h}, top-left, untrimmed; width/height/size/file describe the image.
+ * Raster alpha is coverage (the optional SDF alpha is NOT coverage).
+ * Pack the three lossless rasters, without resampling, into one GPU texture so mixed
+ * display sizes still share one draw. Runtime frames are id@size, canonical id = 32.
+ * Preloaded complete textures under this key are borrowed, downloads/fallback owned.
  */
 export const MARKER_GLYPH_ATLAS_KEY = 'marker-glyphs';
-export const MARKER_GLYPH_ATLAS_URL = '/assets/ui/markers/marker-glyphs.json';
+export const MARKER_GLYPH_ATLAS_URL = 'assets/ui/markers/runtime/marker-glyphs';
 export const MARKER_GLYPH_FALLBACK_KEY = 'marker-glyphs-placeholder';
 export const MARKER_GLYPH_SIZES = [16, 24, 32] as const;
+export type MarkerGlyphSize = typeof MARKER_GLYPH_SIZES[number];
+export function markerGlyphSize(screenPixels: number): MarkerGlyphSize {
+  return screenPixels > 24 ? 32 : screenPixels > 16 ? 24 : 16;
+}
+
+export interface MarkerGlyphSource {
+  version: number; size: number; width: number; height: number; file: string;
+  frameOrigin: string; trimmed: boolean;
+  frames: Record<string, { x: number; y: number; w: number; h: number }>;
+}
+/** Validate at the asset boundary before any GPU upload or drawImage crop. */
+export function validMarkerGlyphSource(value: unknown, size: MarkerGlyphSize): value is MarkerGlyphSource {
+  if (!value || typeof value !== 'object') return false;
+  const a = value as MarkerGlyphSource;
+  return a.version === 2 && a.size === size && a.file === `marker-glyphs-${size}.webp`
+    && a.frameOrigin === 'top-left' && a.trimmed === false
+    && Number.isInteger(a.width) && Number.isInteger(a.height) && a.width > 0 && a.height > 0
+    && a.width <= 4096 && a.height <= 4096 && !!a.frames && MARKER_GLYPH_IDS.every(id => {
+      const f = a.frames[id];
+      return f && [f.x, f.y, f.w, f.h].every(Number.isInteger) && f.x >= 2 && f.y >= 2
+        && f.w === size && f.h === size && f.x + f.w + 2 <= a.width && f.y + f.h + 2 <= a.height;
+    });
+}
 
 // Deliberately simple filled silhouettes; coordinates use a 16 x 16 design grid.
 export const MARKER_GLYPH_PATHS: Readonly<Record<MarkerGlyphId, string>> = {
@@ -48,9 +72,9 @@ export function markerGlyphAtlasFrames() {
 }
 
 export interface MarkerGlyphUv { readonly u0: number; readonly v0: number; readonly u1: number; readonly v1: number }
-export function markerGlyphUvs(texture: Phaser.Textures.Texture): Record<MarkerGlyphId, MarkerGlyphUv> {
+export function markerGlyphUvs(texture: Phaser.Textures.Texture, size: MarkerGlyphSize = 32): Record<MarkerGlyphId, MarkerGlyphUv> {
   return Object.fromEntries(MARKER_GLYPH_IDS.map(id => {
-    const f = texture.get(id);
+    const f = texture.get(texture.has(`${id}@${size}`) ? `${id}@${size}` : id);
     return [id, { u0: f.u0, v0: f.v0, u1: f.u1, v1: f.v1 }];
   })) as Record<MarkerGlyphId, MarkerGlyphUv>;
 }
@@ -68,7 +92,8 @@ export function acquireMarkerGlyphAtlas(scene: Phaser.Scene): { texture(): Phase
   if (!lease) {
     lease = { refs: 0, owned: new Set(), abort: new AbortController() };
     leases.set(textures, lease);
-    if (!textures.exists(MARKER_GLYPH_FALLBACK_KEY)) {
+    if (!textures.exists(MARKER_GLYPH_FALLBACK_KEY)
+      && !(textures.exists(MARKER_GLYPH_ATLAS_KEY) && complete(textures.get(MARKER_GLYPH_ATLAS_KEY)))) {
       const atlas = markerGlyphAtlasFrames();
       const canvas = document.createElement('canvas');
       canvas.width = atlas.meta.size.w; canvas.height = atlas.meta.size.h;
@@ -108,21 +133,30 @@ export function acquireMarkerGlyphAtlas(scene: Phaser.Scene): { texture(): Phase
 async function loadOptionalAtlas(textures: Phaser.Textures.TextureManager, lease: Lease): Promise<void> {
   const signal = lease.abort.signal;
   try {
-    const url = new URL(MARKER_GLYPH_ATLAS_URL, window.location.href);
-    const response = await fetch(url, { signal });
-    if (!response.ok || !response.headers.get('content-type')?.includes('json')) return;
-    const atlas = await response.json();
-    if (!atlas.frames || !MARKER_GLYPH_IDS.every(id => atlas.frames[id])) return;
-    const imageResponse = await fetch(new URL(atlas.meta?.image ?? 'marker-glyphs.png', url), { signal });
-    if (!imageResponse.ok) return;
-    const objectUrl = URL.createObjectURL(await imageResponse.blob());
-    try {
-      const source = new Image(); source.src = objectUrl; await source.decode();
-      if (signal.aborted || textures.exists(MARKER_GLYPH_ATLAS_KEY)) return;
-      const texture = textures.addAtlas(MARKER_GLYPH_ATLAS_KEY, source, atlas);
-      if (!texture) return;
-      if (!complete(texture)) { textures.remove(MARKER_GLYPH_ATLAS_KEY); return; }
-      lease.owned.add(MARKER_GLYPH_ATLAS_KEY);
-    } finally { URL.revokeObjectURL(objectUrl); }
+    const packed = markerGlyphAtlasFrames(), canvas = document.createElement('canvas');
+    canvas.width = packed.meta.size.w; canvas.height = packed.meta.size.h;
+    const ctx = canvas.getContext('2d')!;
+    for (const size of MARKER_GLYPH_SIZES) {
+      const response = await fetch(runtimeAssetUrl(`${MARKER_GLYPH_ATLAS_URL}-${size}.json`), { signal });
+      if (!response.ok) return;
+      const atlas: unknown = await response.json();
+      if (!validMarkerGlyphSource(atlas, size)) return;
+      const imageResponse = await fetch(runtimeAssetUrl(`${MARKER_GLYPH_ATLAS_URL}-${size}.webp`), { signal });
+      if (!imageResponse.ok) return;
+      const objectUrl = URL.createObjectURL(await imageResponse.blob());
+      try {
+        const source = new Image(); source.src = objectUrl; await source.decode();
+        if (signal.aborted || source.naturalWidth !== atlas.width || source.naturalHeight !== atlas.height) return;
+        for (const id of MARKER_GLYPH_IDS) {
+          const from = atlas.frames[id], to = packed.frames[`${id}@${size}`].frame;
+          ctx.drawImage(source, from.x, from.y, size, size, to.x, to.y, size, size);
+        }
+      } finally { URL.revokeObjectURL(objectUrl); }
+    }
+    if (signal.aborted || textures.exists(MARKER_GLYPH_ATLAS_KEY)) return;
+    const texture = textures.addCanvas(MARKER_GLYPH_ATLAS_KEY, canvas);
+    if (!texture) return;
+    for (const [id, { frame: f }] of Object.entries(packed.frames)) texture.add(id, 0, f.x, f.y, f.w, f.h);
+    lease.owned.add(MARKER_GLYPH_ATLAS_KEY);
   } catch { /* The authored atlas is optional; the complete runtime atlas remains usable. */ }
 }

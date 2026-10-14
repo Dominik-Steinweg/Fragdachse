@@ -1,9 +1,11 @@
 import * as Phaser from 'phaser';
 import { MarkerGpuRenderer } from '../effects/markers/MarkerGpuRenderer';
 import { MARKER_GLYPH_IDS, MARKER_STYLES, type MarkerBadgeInstance, type MarkerFrame, type MarkerKind } from '../effects/markers/MarkerTypes';
-import { MARKER_GLYPH_FALLBACK_KEY } from '../effects/markers/MarkerGlyphAtlas';
+import { MARKER_GLYPH_ATLAS_KEY, MARKER_GLYPH_FALLBACK_KEY } from '../effects/markers/MarkerGlyphAtlas';
 import { ClarityCameraRegistry, promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
-import { setEmissiveScale } from '../effects/EmissiveScale';
+import { LightingSystem } from '../effects/LightingSystem';
+import { GraphicsQualityController } from '../graphics/GraphicsQuality';
+import { createWebGLStartupContext } from '../utils/webglContext';
 
 const WIDTH = 1440, HEIGHT = 860;
 const select = (id: string) => document.getElementById(id) as HTMLSelectElement;
@@ -18,7 +20,9 @@ class MarkerReviewScene extends Phaser.Scene {
   private readonly renderers: MarkerGpuRenderer[] = [];
   private frames: MarkerFrame[] = [];
   private terrain: Phaser.GameObjects.TileSprite[] = [];
-  private light!: Phaser.GameObjects.Rectangle;
+  private light: LightingSystem | null = null;
+  private readonly quality = new GraphicsQualityController('high');
+  private icons: Phaser.GameObjects.Image[] = [];
   private clarityRegistry!: ClarityCameraRegistry;
   private frameLabels: Phaser.GameObjects.Text[] = [];
   preload(): void {
@@ -27,6 +31,7 @@ class MarkerReviewScene extends Phaser.Scene {
     }
   }
   create(): void {
+    this.quality.attach(this);
     this.cameras.main.setOrigin(0, 0);
     const clarity = this.cameras.add(0, 0, WIDTH, HEIGHT).setOrigin(0, 0).setName('clarity');
     this.clarityRegistry = new ClarityCameraRegistry(this, this.cameras.main, clarity); this.clarityRegistry.install();
@@ -37,18 +42,15 @@ class MarkerReviewScene extends Phaser.Scene {
       promoteToClarityCamera(this, title);
       this.renderers.push(new MarkerGpuRenderer(this));
     }
-    // Representative global MULTIPLY pass. The review intentionally does not claim to
-    // reproduce live light occluders, terrain sun materials or the arena's camera grade.
-    this.light = this.add.rectangle(0, 0, WIDTH * 4, HEIGHT * 4, 0xffffff).setOrigin(0).setDepth(19.5)
-      .setBlendMode(Phaser.BlendModes.MULTIPLY);
     const heading = this.add.text(26, 22, 'MESSING / WALNUSS   ·   1:1 DESIGNPIXEL', { fontFamily: 'Chakra Petch', fontSize: '22px', fontStyle: 'bold', color: '#eed8aa' }).setDepth(100);
     promoteToClarityCamera(this, heading);
     const info = this.add.text(1414, 27, '8 Weltbadges + 6 Randmarker je Materialprobe', { fontFamily: 'Chakra Petch', fontSize: '13px', color: '#bcae90' }).setOrigin(1, 0).setDepth(100);
     promoteToClarityCamera(this, info);
-    // All placeholder glyphs at their actual 16 px display size, independent of the fixed frame.
+    // All authored glyphs at their actual 16 px display size (fallback while loading).
     MARKER_GLYPH_IDS.forEach((id, i) => {
       const x = 38 + i * 77;
       const icon = this.add.image(x, 784, MARKER_GLYPH_FALLBACK_KEY, id).setDisplaySize(16, 16).setTint(0xf5ebcc).setDepth(100);
+      this.icons.push(icon);
       promoteToClarityCamera(this, icon);
       const name = this.add.text(x, 803, id.replace('site-', '').replace('mission-', 'm-'), { fontFamily: 'Chakra Petch', fontSize: '10px', color: '#bcae90' }).setOrigin(.5, 0).setDepth(100);
       promoteToClarityCamera(this, name);
@@ -58,7 +60,7 @@ class MarkerReviewScene extends Phaser.Scene {
     this.events.once('shutdown', () => {
       for (const id of ['light', 'zoom', 'low', 'animate']) document.getElementById(id)!.removeEventListener('change', change);
       for (const renderer of this.renderers) renderer.destroy();
-      this.clarityRegistry.destroy(); setEmissiveScale(1);
+      this.light?.destroy(); this.quality.destroy(); this.clarityRegistry.destroy();
       delete (window as MarkerWindow).markerReview;
     });
     (window as MarkerWindow).markerReview = {
@@ -73,8 +75,10 @@ class MarkerReviewScene extends Phaser.Scene {
   private refresh(): void {
     const zoom = Number(select('zoom').value), night = select('light').value === 'night';
     this.cameras.main.setZoom(zoom);
-    this.light.setFillStyle(night ? 0x35445c : 0xffffff);
-    setEmissiveScale(night ? 1 : .25);
+    this.quality.setLevel(checked('low') ? 'low' : 'high');
+    this.light?.destroy();
+    this.light = new LightingSystem(this, { width: WIDTH / zoom, height: HEIGHT / zoom });
+    this.light.setTimeOfDay(night ? 0 : 720); this.light.setActive(true);
     for (const tile of this.terrain) {
       const panel = this.terrain.indexOf(tile);
       tile.setPosition((18 + panel * 474) / zoom, 74 / zoom).setScale(1 / zoom);
@@ -112,11 +116,18 @@ class MarkerReviewScene extends Phaser.Scene {
   update(): void {
     const now = checked('animate') ? this.time.now : 520;
     this.renderers.forEach((renderer, i) => renderer.sync(this.frames[i] ?? { worldBadges: [], edgeBadges: [], groundRings: [] }, now, checked('low')));
+    this.light?.update();
+    if (this.textures.exists(MARKER_GLYPH_ATLAS_KEY)) this.icons.forEach((icon, i) => {
+      if (icon.texture.key !== MARKER_GLYPH_ATLAS_KEY) icon.setTexture(MARKER_GLYPH_ATLAS_KEY, `${MARKER_GLYPH_IDS[i]}@16`).setDisplaySize(16, 16);
+    });
   }
 }
 interface MarkerWindow extends Window { markerReview?: { set(night: boolean, zoom?: number, low?: boolean): void; diagnostics(): unknown } }
 void Promise.all([document.fonts.load('700 16px "Chakra Petch"'), document.fonts.load('500 16px "Chakra Petch"')]).then(() => {
+  // Same context as the game (WebGL2 first), so shader compatibility is reviewed for real.
+  const startup = createWebGLStartupContext();
   new Phaser.Game({ type: Phaser.WEBGL, parent: 'preview', width: WIDTH, height: HEIGHT, backgroundColor: '#141710',
+    ...(startup ? { canvas: startup.canvas, context: startup.context as unknown as CanvasRenderingContext2D } : {}),
     audio: { noAudio: true }, scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
     render: { antialias: true, roundPixels: false }, scene: MarkerReviewScene });
 });

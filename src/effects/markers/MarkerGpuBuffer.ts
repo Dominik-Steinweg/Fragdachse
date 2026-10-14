@@ -1,4 +1,4 @@
-import { HUD_TONES } from '../../ui/HudFrameAssets';
+import { HUD_TONES, type HudToneStyle } from '../../ui/HudFrameAssets';
 import { MARKER_LIMITS, type MarkerBadgeInstance, type MarkerGroundRingInstance, type MarkerGlyphId } from './MarkerTypes';
 import type { MarkerGlyphUv } from './MarkerGlyphAtlas';
 
@@ -8,12 +8,28 @@ const CORNERS = [-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1];
 const finite = (n: number, fallback = 0): number => Number.isFinite(n) ? n : fallback;
 const clamp = (n: number, min: number, max: number): number => Math.max(min, Math.min(max, finite(n)));
 
+const channel = (color: number, shift: number): number => (color >> shift) & 255;
+const rgb = (r: number, g: number, b: number): number =>
+  (Math.round(clamp(r, 0, 255)) << 16) | (Math.round(clamp(g, 0, 255)) << 8) | Math.round(clamp(b, 0, 255));
+/** Mixes `a`→`b` by `t`, then scales chroma around Rec. 601 luma (`saturation` 1 = unchanged) and value. */
+function grade(a: number, b: number, t: number, saturation: number, value: number): number {
+  const c = [16, 8, 0].map(shift => channel(a, shift) + (channel(b, shift) - channel(a, shift)) * t);
+  const luma = c[0] * .299 + c[1] * .587 + c[2] * .114;
+  const [r, g, bl] = c.map(v => (luma + (v - luma) * saturation) * value);
+  return rgb(r, g, bl);
+}
+/** Saturated tone rim from the one HUD tone source: the mid fill carries the chroma, the accent the value.
+ * Dormant badges keep a desaturated, dimmer echo of the same tone. */
+export function markerRimColor(tone: HudToneStyle, dormant: boolean): number {
+  return dormant ? grade(tone.fill.mid, tone.accent, .45, .45, .82) : grade(tone.fill.mid, tone.accent, .45, 1.3, 1.05);
+}
+
 /** Alpha/pop/fade are already resolved by layout; never apply dormant alpha twice. */
 export function markerGpuAppearance(badge: MarkerBadgeInstance, lowQuality: boolean) {
   const resolved = badge.state === 'completed' ? 'green' : badge.state === 'failed' ? 'red' : badge.tone;
   const tone = HUD_TONES[resolved];
   return {
-    color: badge.state === 'dormant' ? tone.muted : tone.accent,
+    color: markerRimColor(tone, badge.state === 'dormant'),
     status: badge.state === 'completed' ? 1 : badge.state === 'failed' ? 2 : 0,
     vulnerable: badge.vulnerable && badge.state === 'active' ? 1 : 0,
     period: lowQuality || badge.state !== 'active' || badge.pulse === 'none' ? 0

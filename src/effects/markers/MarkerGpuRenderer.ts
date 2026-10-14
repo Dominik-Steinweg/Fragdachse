@@ -4,7 +4,7 @@ import { getClarityCameraRegistry, promoteToClarityCamera } from '../../scenes/a
 import { getTextResolution } from '../../graphics/RenderResolution';
 import { getEmissiveScale } from '../EmissiveScale';
 import { MARKER_LIMITS, type MarkerFrame, type MarkerRenderer } from './MarkerTypes';
-import { acquireMarkerGlyphAtlas, markerGlyphUvs } from './MarkerGlyphAtlas';
+import { acquireMarkerGlyphAtlas, markerGlyphUvs, markerGlyphSize, MARKER_GLYPH_SIZES, type MarkerGlyphSize } from './MarkerGlyphAtlas';
 import { MarkerGpuBuffer, MARKER_GPU_VERTICES, MARKER_GPU_WORDS } from './MarkerGpuBuffer';
 import { MARKER_GPU_FRAGMENT, MARKER_GPU_VERTEX } from './MarkerGpuShader';
 import { writeMarkerGpuView } from './MarkerGpuCamera';
@@ -31,7 +31,7 @@ export class MarkerGpuRenderer implements MarkerRenderer {
   private readonly passes: Partial<Record<Role, Pass>> = {};
   private readonly labels: Phaser.GameObjects.Text[] = [];
   private atlas: ReturnType<typeof acquireMarkerGlyphAtlas> | null = null;
-  private uv: ReturnType<typeof markerGlyphUvs> | null = null;
+  private uv: Record<MarkerGlyphSize, ReturnType<typeof markerGlyphUvs>> | null = null;
   private texture: Phaser.Textures.Texture | null = null;
   private destroyed = false;
   private time = 0;
@@ -42,7 +42,7 @@ export class MarkerGpuRenderer implements MarkerRenderer {
     const renderer = scene.sys?.renderer as Phaser.Renderer.WebGL.WebGLRenderer | undefined;
     if (options.presentation === 'none' || !renderer?.gl || !this.worldCamera) return;
     this.atlas = acquireMarkerGlyphAtlas(scene);
-    this.texture = this.atlas.texture(); this.uv = markerGlyphUvs(this.texture);
+    this.setAtlasTexture(this.atlas.texture());
     const capacity = { world: MARKER_LIMITS.worldBadges, edge: MARKER_LIMITS.edgeArrows,
       ground: Math.max(1, Math.min(1024, Math.floor(options.groundCapacity ?? 128))) };
     for (const role of ['ground', 'world', 'edge'] as const) {
@@ -70,11 +70,16 @@ export class MarkerGpuRenderer implements MarkerRenderer {
     if (this.destroyed || !this.atlas) return;
     this.time = Number.isFinite(nowMs) ? nowMs % (MARKER_LIMITS.pulsePeriodMs * 1024) : 0;
     const texture = this.atlas.texture();
-    if (texture !== this.texture) { this.texture = texture; this.uv = markerGlyphUvs(texture); }
+    if (texture !== this.texture) this.setAtlasTexture(texture);
+    const designScale = getClarityCameraRegistry(this.scene)?.getClarityCamera().zoomX ?? 1;
     for (const [role, badges] of [['world', frame.worldBadges], ['edge', frame.edgeBadges]] as const) {
       const { buffer, image } = this.passes[role]!;
       buffer.begin();
-      for (const badge of badges) buffer.badge(badge, this.uv!, lowQuality);
+      for (const badge of badges) {
+        const radius = badge.diameter / 2 * (role === 'edge' ? 1 : this.worldCamera!.zoomX / designScale);
+        const glyph = markerGlyphDisplaySize(radius, badge.shape);
+        buffer.badge(badge, this.uv![markerGlyphSize(glyph * badge.scale * designScale)], lowQuality);
+      }
       buffer.end(); image.setVisible(buffer.count > 0);
     }
     const ground = this.passes.ground!;
@@ -106,6 +111,10 @@ export class MarkerGpuRenderer implements MarkerRenderer {
       world: this.passes.world?.buffer.count ?? 0, edge: this.passes.edge?.buffer.count ?? 0,
       ground: this.passes.ground?.buffer.count ?? 0, labels: this.labels.length, atlas: this.texture?.key ?? null };
   }
+  private setAtlasTexture(texture: Phaser.Textures.Texture): void {
+    this.texture = texture;
+    this.uv = Object.fromEntries(MARKER_GLYPH_SIZES.map(size => [size, markerGlyphUvs(texture, size)])) as NonNullable<typeof this.uv>;
+  }
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
@@ -115,6 +124,12 @@ export class MarkerGpuRenderer implements MarkerRenderer {
     for (const text of this.labels) text.destroy();
     this.labels.length = 0; this.atlas?.release(); this.atlas = null; this.texture = null; this.uv = null;
   }
+}
+
+/** Mirrors the fragment shader: brass and tone rim scale with the radius, the glyph fills the walnut disc. */
+export function markerGlyphDisplaySize(radius: number, shape: 'round' | 'triangle'): number {
+  const inner = Math.min(3.2, Math.max(1.6, radius * .17)) + Math.min(3.6, Math.max(1.8, radius * .2));
+  return Math.min(16, Math.max(7, shape === 'triangle' ? radius * .9 - 3 : 2 * (radius - inner) - 1));
 }
 
 /** Kept lazy: importing the renderer in headless tests never evaluates Phaser GPU classes. */

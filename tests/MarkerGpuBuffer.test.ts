@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({}));
-import { MarkerGpuBuffer, MARKER_GPU_VERTICES, MARKER_GPU_WORDS, markerGpuAppearance } from '../src/effects/markers/MarkerGpuBuffer';
+import { MarkerGpuBuffer, MARKER_GPU_VERTICES, MARKER_GPU_WORDS, markerGpuAppearance, markerRimColor } from '../src/effects/markers/MarkerGpuBuffer';
 import { MARKER_GLYPH_IDS, MARKER_LIMITS, type MarkerBadgeInstance } from '../src/effects/markers/MarkerTypes';
 import { HUD_TONES } from '../src/ui/HudFrameAssets';
 
@@ -53,11 +53,21 @@ describe('marker GPU presentation packing', () => {
     expect([...buffer.data.slice(12, 24)]).toEqual(Array(12).fill(0));
   });
   it('derives status color from HUD tones and suppresses motion without losing semantics', () => {
-    expect(markerGpuAppearance({ ...badge, state: 'dormant' }, false)).toMatchObject({ color: HUD_TONES.blue.muted, period: 0 });
-    expect(markerGpuAppearance({ ...badge, state: 'completed', vulnerable: true }, false)).toMatchObject({ color: HUD_TONES.green.accent, status: 1, vulnerable: 0, period: 0 });
-    expect(markerGpuAppearance({ ...badge, state: 'failed' }, false)).toMatchObject({ color: HUD_TONES.red.accent, status: 2 });
-    expect(markerGpuAppearance({ ...badge, vulnerable: true }, true)).toMatchObject({ color: HUD_TONES.blue.accent, vulnerable: 1, period: 0 });
+    expect(markerGpuAppearance({ ...badge, state: 'dormant' }, false)).toMatchObject({ color: markerRimColor(HUD_TONES.blue, true), period: 0 });
+    expect(markerGpuAppearance({ ...badge, state: 'completed', vulnerable: true }, false)).toMatchObject({ color: markerRimColor(HUD_TONES.green, false), status: 1, vulnerable: 0, period: 0 });
+    expect(markerGpuAppearance({ ...badge, state: 'failed' }, false)).toMatchObject({ color: markerRimColor(HUD_TONES.red, false), status: 2 });
+    expect(markerGpuAppearance({ ...badge, vulnerable: true }, true)).toMatchObject({ color: markerRimColor(HUD_TONES.blue, false), vulnerable: 1, period: 0 });
     expect(markerGpuAppearance(badge, false).period).toBe(MARKER_LIMITS.pulsePeriodMs);
     expect(markerGpuAppearance({ ...badge, pulse: 'urgent' }, false).period).toBe(MARKER_LIMITS.urgentPulsePeriodMs);
+  });
+  it('keeps the dormant tone rim a desaturated, dimmer echo of the active rim', () => {
+    const channels = (c: number) => [(c >> 16) & 255, (c >> 8) & 255, c & 255];
+    const chroma = (c: number) => Math.max(...channels(c)) - Math.min(...channels(c));
+    for (const [name, tone] of Object.entries(HUD_TONES)) {
+      if (name === 'neutral') continue;
+      const active = markerRimColor(tone, false), dormant = markerRimColor(tone, true);
+      expect(chroma(dormant), name).toBeLessThan(chroma(active));
+      expect(Math.max(...channels(dormant)), name).toBeLessThanOrEqual(Math.max(...channels(active)));
+    }
   });
 });
