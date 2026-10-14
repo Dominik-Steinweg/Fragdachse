@@ -21,6 +21,32 @@ export function preloadAttackDroneAssets(loader: Phaser.Loader.LoaderPlugin): vo
     if (asset.clips.length) loader.spritesheet(asset.sheetTextureKey, asset.sheetPath, asset.layout);
   }
 }
+/** Shared drone presentation: the Bomber squadron reuses shadow and bomb textures (assets step 1). */
+export const ATTACK_DRONE_SHADOW_TEXTURE = SHADOW;
+export const ATTACK_DRONE_BOMB_TEXTURE = BOMB;
+export function ensureAttackDroneEffectTextures(scene: Phaser.Scene): void {
+  ensureCanvasTexture(scene.textures, SHADOW, 64, 64, ctx => {
+    const gradient = ctx.createRadialGradient(32, 32, 6, 32, 32, 31);
+    gradient.addColorStop(0, 'rgba(5,12,18,.34)'); gradient.addColorStop(1, 'rgba(5,12,18,0)');
+    ctx.fillStyle = gradient; ctx.fillRect(0, 0, 64, 64);
+  });
+  ensureCanvasTexture(scene.textures, FLASH, 32, 16, ctx => {
+    const gradient = ctx.createRadialGradient(5, 8, 1, 5, 8, 23);
+    gradient.addColorStop(0, '#fffce0'); gradient.addColorStop(.25, '#ffd390'); gradient.addColorStop(1, 'rgba(255,147,50,0)');
+    ctx.fillStyle = gradient; ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(28, 2); ctx.lineTo(20, 8); ctx.lineTo(28, 14); ctx.closePath(); ctx.fill();
+  });
+  ensureCanvasTexture(scene.textures, BOMB, 16, 16, ctx => {
+    ctx.fillStyle = '#bb783d'; ctx.fillRect(4, 2, 8, 4);
+    ctx.fillStyle = '#253e46'; ctx.beginPath(); ctx.ellipse(8, 9, 4, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c1d0ce'; ctx.fillRect(6, 6, 2, 6);
+  });
+}
+/** Drone body with its rotor clip while flying, the idle texture while docked. */
+export function applyAttackDroneBodyFrame(body: Phaser.GameObjects.Image, now: number, flying: boolean): void {
+  const asset = getPipelineAsset('attack-drone-body'), clip = asset.clips[0];
+  if (clip && flying) body.setTexture(asset.sheetTextureKey, clip.frames[Math.floor(now * clip.frameRate / 1000) % clip.frames.length]);
+  else body.setTexture(asset.textureKey);
+}
 /** Snapshot projection only. Sequence numbers never replay old muzzle flashes after loss or late join. */
 export class AttackDroneRenderer {
   private readonly drones = new Map<string, DroneVisual>();
@@ -31,21 +57,7 @@ export class AttackDroneRenderer {
   private nextShotSoundAt = 0;
   setAudio(audio: Pick<GameAudioSystem, 'playSound'>): void { this.audio = audio; }
   constructor(private readonly scene: Phaser.Scene) {
-    ensureCanvasTexture(scene.textures, SHADOW, 64, 64, ctx => {
-      const gradient = ctx.createRadialGradient(32, 32, 6, 32, 32, 31);
-      gradient.addColorStop(0, 'rgba(5,12,18,.34)'); gradient.addColorStop(1, 'rgba(5,12,18,0)');
-      ctx.fillStyle = gradient; ctx.fillRect(0, 0, 64, 64);
-    });
-    ensureCanvasTexture(scene.textures, FLASH, 32, 16, ctx => {
-      const gradient = ctx.createRadialGradient(5, 8, 1, 5, 8, 23);
-      gradient.addColorStop(0, '#fffce0'); gradient.addColorStop(.25, '#ffd390'); gradient.addColorStop(1, 'rgba(255,147,50,0)');
-      ctx.fillStyle = gradient; ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(28, 2); ctx.lineTo(20, 8); ctx.lineTo(28, 14); ctx.closePath(); ctx.fill();
-    });
-    ensureCanvasTexture(scene.textures, BOMB, 16, 16, ctx => {
-      ctx.fillStyle = '#bb783d'; ctx.fillRect(4, 2, 8, 4);
-      ctx.fillStyle = '#253e46'; ctx.beginPath(); ctx.ellipse(8, 9, 4, 6, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#c1d0ce'; ctx.fillRect(6, 6, 2, 6);
-    });
+    ensureAttackDroneEffectTextures(scene);
   }
   syncVisuals(states: readonly SyncedAttackDrone[], bombs: readonly SyncedAttackDroneBomb[], constructions: readonly SyncedPlaceableRock[], now: number): void {
     const present = new Set(states.map(s => s.id));
@@ -85,7 +97,6 @@ export class AttackDroneRenderer {
   }
   update(delta: number, now: number): void {
     const lerp = 1 - Math.exp(-Math.max(0, delta) / 48), view = getVisibleWorldView(this.scene.cameras.main);
-    const bodyAsset = getPipelineAsset('attack-drone-body'), clip = bodyAsset.clips[0];
     for (const v of this.drones.values()) {
       const s = v.state;
       v.x += (s.x - v.x) * lerp; v.y += (s.y - v.y) * lerp;
@@ -97,8 +108,7 @@ export class AttackDroneRenderer {
       v.flash.setVisible(visible && now < v.flashUntil);
       if (!visible) continue;
       v.body.setPosition(v.x, v.y).setRotation(v.flightAngle + Math.PI / 2);
-      if (clip && !docked) v.body.setTexture(bodyAsset.sheetTextureKey, clip.frames[Math.floor(now * clip.frameRate / 1000) % clip.frames.length]);
-      else v.body.setTexture(bodyAsset.textureKey);
+      applyAttackDroneBodyFrame(v.body, now, !docked);
       v.gun.setPosition(v.x, v.y).setRotation(v.gunAngle + Math.PI / 2);
       v.shadow.setPosition(v.x + 2, v.y + (docked ? 1 : 7)).setAlpha(docked ? .55 : 1);
       v.marker.setPosition(v.x, v.y).setFillStyle(s.ownerColor, .75)

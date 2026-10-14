@@ -2,6 +2,8 @@ import { loadingTimeline } from '../diagnostics/LoadingTimeline';
 import { FireControlRenderer, type FireControlOriginalVisual } from '../effects/fireControl/FireControlRenderer';
 import type { FireControlSnapshot } from '../systems/fireControl/FireControlSnapshot';
 import type { BomberSquadronSnapshot } from '../systems/bomberSquadron/BomberSquadronSnapshot';
+import { bomberWorldBoundsFromMetrics } from '../systems/bomberSquadron/BomberSquadronPlan';
+import { BomberSquadronRenderer, type BomberSquadronPresentationPorts } from '../effects/bomberSquadron/BomberSquadronRenderer';
 import type { FireControlCopyShotSource } from '../projectile/ProjectilePresentationRuntime';
 import type { WorldSunlightPresentation } from '../effects/sunlight/WorldSunlightPresentation';
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
@@ -78,6 +80,8 @@ const TRAIN_LIGHT_SIDES = [-1, 1] as const;
 export type FireControlSnapshotSource = (now: number) => FireControlSnapshot;
 /** Bestätigte Bomberstaffeln (Slice `bq`); Host und Client lesen dieselbe Quelle. */
 export type BomberSquadronSnapshotSource = () => BomberSquadronSnapshot;
+/** Explosion, audio and camera ports the squadron presentation borrows from the scene. */
+export type BomberSquadronEffectPorts = Pick<BomberSquadronPresentationPorts, 'explode' | 'playSound' | 'cameraFeedback'>;
 
 export interface WorldPresentationPersistentBaseVisuals {
   sync(site: WorldPersistentBaseSite | null, metrics: WorldMetrics | null, showOverlay: boolean): void;
@@ -268,15 +272,37 @@ export class WorldPresentationFrameBinding {
   }
 
   private bomberSquadronSnapshot: BomberSquadronSnapshotSource | null = null;
+  private bomberSquadronEffects: BomberSquadronEffectPorts | null = null;
+  private bomberSquadron: BomberSquadronRenderer | null = null;
 
   /**
-   * Bound once by World composition. The frame owner will own the squadron renderer (drone
-   * flight, bomb fall, shadows, bundled explosions) and release it with the World presentation.
+   * Bound once by World composition. The frame owner owns the squadron renderer (drone flight,
+   * bomb fall, shadows, bundled explosions) and releases it with the World presentation.
    */
-  bindBomberSquadron(snapshot: BomberSquadronSnapshotSource): void {
+  bindBomberSquadron(snapshot: BomberSquadronSnapshotSource, effects: BomberSquadronEffectPorts): void {
     if (this.destroyed) return;
     if (this.bomberSquadronSnapshot) throw new Error('Bomber squadron presentation is already bound');
     this.bomberSquadronSnapshot = snapshot;
+    this.bomberSquadronEffects = effects;
+  }
+
+  private syncBomberSquadron(showWorld: boolean): void {
+    if (!showWorld || !this.input.getLocalWorldPresentation().required) {
+      this.bomberSquadron?.destroy();
+      this.bomberSquadron = null;
+      return;
+    }
+    const snapshot = this.bomberSquadronSnapshot, effects = this.bomberSquadronEffects;
+    if (!snapshot || !effects) return;
+    this.bomberSquadron ??= new BomberSquadronRenderer(this.input.scene, {
+      ...effects,
+      worldBounds: () => {
+        const metrics = this.input.getWorldMetrics();
+        return metrics ? bomberWorldBoundsFromMetrics(metrics) : null;
+      },
+      tintAt: (x, y) => this.input.lighting.resolveCanopyTint(x, y),
+    });
+    this.bomberSquadron.update(snapshot(), this.input.getSynchronizedNow());
   }
 
   private createFireControl(): void {
@@ -848,6 +874,7 @@ export class WorldPresentationFrameBinding {
   syncWorldLighting(inArena: boolean, inRoundWorld: boolean): void {
     if (this.destroyed) return;
     this.syncFireControl(inArena);
+    this.syncBomberSquadron(inArena);
     const lighting = this.input.lighting;
     const artificialFactor = inArena ? lighting.getArtificialLightFactor() : 0;
     const artificialLights = artificialFactor > 0;
@@ -922,7 +949,8 @@ export class WorldPresentationFrameBinding {
     this.releaseFireControlCopyShots?.(); this.releaseFireControlCopyShots = null;
     this.fireControl?.destroy(); this.fireControl = null;
     this.fireControlPorts = null;
-    this.bomberSquadronSnapshot = null;
+    this.bomberSquadron?.destroy(); this.bomberSquadron = null;
+    this.bomberSquadronSnapshot = null; this.bomberSquadronEffects = null;
     this.cancelRenderRelease();
     this.releasedView = null;
     this.sunlightOwner?.destroy();this.sunlightOwner=null;

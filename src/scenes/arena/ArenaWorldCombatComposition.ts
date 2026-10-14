@@ -397,7 +397,12 @@ export function composeWorldCombatGameplay(
     id => rockVisualHelper.getTurretOriginalVisual(id),
     projectileRuntime.getPresentationRuntime(),
   );
-  worldRuntime.presentationFrame?.bindBomberSquadron(() => bridge.getBomberSquadronSnapshot());
+  worldRuntime.presentationFrame?.bindBomberSquadron(() => bridge.getBomberSquadronSnapshot(), {
+    // Same warm carpet burst as the attack-drone bombs; it is derived locally, never broadcast.
+    explode: (x, y, radius) => ctx.effectSystem.playExplosionEffect(x, y, radius, 0xffae57, 'rocket'),
+    playSound: (key, x, y, volumeScale) => ctx.gameAudioSystem.playSound(key, x, y, undefined, volumeScale),
+    cameraFeedback: ctx.visualFeedback.camera,
+  });
 }
 
 function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): number {

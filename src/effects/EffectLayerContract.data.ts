@@ -8289,3 +8289,35 @@ const FIRE_CONTROL_PORTAL_LAYER_CONTRACTS: readonly LayerContract[] = [
 ];
 (CPU_LAYER_CONTRACTS as LayerContract[]).push(...FIRE_CONTROL_PORTAL_LAYER_CONTRACTS);
 (EFFECT_LAYER_CONTRACTS as LayerContract[]).push(...FIRE_CONTROL_PORTAL_LAYER_CONTRACTS);
+
+// bomber squadron (Inspector ultimate): high-flying drones above canopies, falling bombs, ground shadows.
+Object.assign(CPU_SOURCE_CONTRACTS, {
+  "effects/bomberSquadron/BomberSquadronRenderer.ts": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      { "key": "drawDrones/marker/setDepth/0", "expression": "DEPTH.CANOPY + 0.61", "blends": ["NORMAL"] },
+      { "key": "drawDrones/v/setDepth/0", "expression": "DEPTH.CANOPY + 0.6", "blends": ["NORMAL"] },
+      { "key": "drawDrones/v/setDepth/1", "expression": "DEPTH.ROCKS - 0.01", "blends": ["NORMAL"] },
+      { "key": "acquireBomb/image/setDepth/0", "expression": "DEPTH.CANOPY + 0.5", "blends": ["NORMAL"] }
+    ],
+    "bindings": {}
+  }
+});
+const BOMBER_SQUADRON_OWNER = 'effects/bomberSquadron/BomberSquadronRenderer.ts';
+// Flying drones and their bombs sit above canopies (height high) and take the canopy night tint
+// explicitly (mixed); only the ground shadow is plain material.
+const bomberSquadronLayer = (component: string, expression: string, depth: number, height: LayerContract['height'],
+  lighting: LayerContract['lighting'], profile: LayerContract['profiles'][number]): LayerContract => ({
+  id: `cpu:${BOMBER_SQUADRON_OWNER}:${component}`, owner: BOMBER_SQUADRON_OWNER, component, height,
+  lighting, camera: 'world', depths: [depth], blends: ['NORMAL'], profiles: [profile], role: 'effect',
+  source: { selector: component, expression },
+});
+const BOMBER_SQUADRON_LAYER_CONTRACTS: readonly LayerContract[] = [
+  bomberSquadronLayer('drawDrones/v/setDepth/0', 'DEPTH.CANOPY + 0.6', 20.6, 'high', 'mixed', 'H'),
+  bomberSquadronLayer('drawDrones/v/setDepth/1', 'DEPTH.ROCKS - 0.01', 8.99, 'ground', 'material', 'M'),
+  bomberSquadronLayer('drawDrones/marker/setDepth/0', 'DEPTH.CANOPY + 0.61', 20.61, 'high', 'mixed', 'H'),
+  bomberSquadronLayer('acquireBomb/image/setDepth/0', 'DEPTH.CANOPY + 0.5', 20.5, 'high', 'mixed', 'H'),
+];
+(CPU_LAYER_CONTRACTS as LayerContract[]).push(...BOMBER_SQUADRON_LAYER_CONTRACTS);
+(EFFECT_LAYER_CONTRACTS as LayerContract[]).push(...BOMBER_SQUADRON_LAYER_CONTRACTS);
