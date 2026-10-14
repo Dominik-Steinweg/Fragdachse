@@ -32,6 +32,26 @@ vi.mock('phaser', () => ({
 
 import { FireSystem } from '../src/effects/FireSystem';
 
+describe('FireSystem static hazard cells', () => {
+  it('keeps owner-removed finite cells out of the per-frame update until their owner removes them', () => {
+    const fire = new FireSystem({} as Phaser.Scene);
+    for (let x = 0; x < 40; x++) {
+      fire.hostRefreshGroundCell(200 + x * 16, 300, { sourceKey: 'night-fire', ownerId: 'map', durationMs: 1_000,
+        static: true, burn: { durationMs: 2_000, damagePerTick: 0.5 }, damageTarget: 'players' }, 1_000);
+    }
+    const burning = fire.getGroundState().cells.length;
+    expect(burning).toBeGreaterThan(30);
+    // Past its nominal expiry the static cell is not scanned away; burning contact still ends with it.
+    fire.hostUpdate(5_000);
+    expect(fire.getGroundState().cells).toHaveLength(burning);
+    const cell = fire.getGroundState().cells[0], at = [(cell.gridX + 0.5) * 16, (cell.gridY + 0.5) * 16] as const;
+    expect(fire.collectContacts(at[0], at[1], 4, 5_000)).toEqual([]);
+    expect(fire.collectContacts(at[0], at[1], 4, 1_500)).toHaveLength(1);
+    fire.hostRemoveGroundSourcesBySourceKey('night-fire');
+    expect(fire.getGroundState().cells).toHaveLength(0);
+  });
+});
+
 describe('FireSystem visual styles and damage targets', () => {
   it('publishes stable cell snapshots and replaces them without mutating earlier values', () => {
     const fire = new FireSystem({} as Phaser.Scene);

@@ -80,12 +80,34 @@ export function planAirstrikeRun(
 }
 
 /**
- * Along-chord position (px from the chord start) of the formation lead at round time `nowMs`.
- * It crosses strike `i` at `launchAtMs + launchOffset_i + strikeDelayMs - AIRSTRIKE_RUN_FALL_MS`.
+ * Along-chord position (px from the chord start) of the formation lead at `nowMs`, measured on the
+ * same clock as `launchAtMs`. It crosses strike `i` at `launchAtMs + launchOffset_i + strikeDelayMs
+ * - AIRSTRIKE_RUN_FALL_MS`.
  */
-export function resolveAirstrikeRunLeadPx(run: ScheduledAirstrikeRun, strikeDelayMs: number, nowMs: number): number {
-  const passFirstAtMs = run.launchAtMs + strikeDelayMs - AIRSTRIKE_RUN_FALL_MS;
+export function resolveAirstrikeRunLeadPx(run: ScheduledAirstrikeRun, strikeDelayMs: number, nowMs: number,
+  launchAtMs = run.launchAtMs): number {
+  const passFirstAtMs = launchAtMs + strikeDelayMs - AIRSTRIKE_RUN_FALL_MS;
   return strikeAlongPx(run.geometry, run.strikeCount, 0) + (nowMs - passFirstAtMs) * run.geometry.speedPxPerSec / 1000;
+}
+
+/** Same-px tolerance for replicated strike positions. */
+const RUN_STRIKE_MATCH_PX = 4;
+
+/**
+ * Authoritative launch time of a run on the strikes' clock: a replicated strike of this run, armed at its
+ * planned launch, pins the formation to the host's real bombs even when the host's event clock lagged.
+ */
+export function resolveAirstrikeRunLaunchFromStrikes(
+  run: ScheduledAirstrikeRun,
+  strikes: readonly { readonly x: number; readonly y: number; readonly armedAt: number }[],
+): number | null {
+  if (strikes.length === 0) return null;
+  for (const point of planAirstrikeRun(run.geometry, run.strikeCount)) {
+    const strike = strikes.find(candidate => Math.abs(candidate.x - point.x) <= RUN_STRIKE_MATCH_PX
+      && Math.abs(candidate.y - point.y) <= RUN_STRIKE_MATCH_PX);
+    if (strike) return strike.armedAt - point.launchOffsetMs;
+  }
+  return null;
 }
 
 /** Runs with a time trigger; other triggers have no launch time a peer could know in advance. */

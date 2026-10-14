@@ -189,6 +189,39 @@ describe('Coop Defense C3 configuration', () => {
       spread: { direction: 'left-to-right', durationMs: 20_000, roughnessCells: 1, warningLeadMs: 1_000 } }] }))).toThrow(/spread/);
   });
 
+  it('keeps every spawn-to-base route open across route-preserving fire patches (D-47)', () => {
+    const fire = makeEvent({ id: 'night-fire', delayMs: 0, durationMs: 40_000,
+      area: { type: 'random-patches', randomPatchCount: 7, minPatchRadiusCells: 6, maxPatchRadiusCells: 9, preserveRoutes: true },
+      spread: { direction: 'radial', durationMs: 20_000, warningLeadMs: 2_000 },
+      effect: { visualStyle: 'normal', burnDurationMs: 2_000, burnDamagePerTick: 0.5, sourceId: 'test.night-fire' } });
+    const config = normalizeCoopDefenseMapConfig(makeMap({ mapEvents: [fire],
+      encounters: [{ id: 'west', start: { type: 'time', atMs: 0 }, groups: [{ enemyKind: 'zombie-badger', count: 1, front: 'west' }] }] }));
+    for (const seed of [3, 41, 902, 1234, 7777]) {
+      const layout = generateArenaWithActiveMetrics(seed, config);
+      const { gridCols: cols, gridRows: rows } = resolveActiveArenaWorldMetrics();
+      const wall = new Set([...layout.rocks, ...(layout.water ?? []),
+        ...(layout.groundHazardZones ?? []).flatMap(zone => zone.cells)].map(c => c.gridY * cols + c.gridX));
+      const base = resolveCoopDefenseBases(config).flatMap(b => b.cells).map(c => c.gridY * cols + c.gridX);
+      for (const cell of base) wall.add(cell);
+      const seen = new Set<number>(), queue: number[] = [];
+      for (let y = 0; y < rows; y++) if (!wall.has(y * cols)) { seen.add(y * cols); queue.push(y * cols); }
+      let reached = false;
+      for (let i = 0; i < queue.length && !reached; i++) {
+        const x = queue[i] % cols, y = Math.floor(queue[i] / cols);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy, next = ny * cols + nx;
+          if (nx < 0 || ny < 0 || nx >= cols || ny >= rows || seen.has(next)) continue;
+          if (base.includes(next)) { reached = true; break; }
+          if (wall.has(next)) continue;
+          seen.add(next); queue.push(next);
+        }
+      }
+      expect(reached, `seed ${seed}`).toBe(true);
+    }
+    expect(() => normalizeCoopDefenseMapConfig(makeMap({ mapEvents: [{ ...fire,
+      area: { ...fire.area, preserveRoutes: 'yes' as unknown as boolean } as typeof fire.area }] }))).toThrow(/preserveRoutes/);
+  });
+
   it('accepts finite hazards as after-event sources but rejects persistent hazards', () => {
     const finite = makeEvent({ id: 'finite' });
     expect(() => normalizeCoopDefenseMapConfig(makeMap({
@@ -394,8 +427,9 @@ describe('Coop Defense C3 ground hazard lifecycle', () => {
     harness.setNow(1_000);
     harness.director.hostUpdate(1_000, false);
     expect(harness.refreshes).toHaveLength(4);
+    // Finite cells are static too: the handler removes the whole occurrence when it ends.
     expect(harness.refreshes.every((entry) => (
-      entry.durationMs === 18_000 && entry.permanent === false && entry.static === false
+      entry.durationMs === 18_000 && entry.permanent === false && entry.static === true
     ))).toBe(true);
     expect(harness.director.getPresentationState()?.[0].state).toBe('active');
 
@@ -413,8 +447,7 @@ describe('Coop Defense C3 ground hazard lifecycle', () => {
     harness.director.hostUpdate(0, false);
     expect(harness.refreshes).toHaveLength(8);
     expect(harness.refreshes.filter((entry) => entry.permanent)).toHaveLength(4);
-    expect(harness.refreshes.filter((entry) => entry.static)).toHaveLength(4);
-    expect(harness.refreshes.filter((entry) => entry.static === false)).toHaveLength(4);
+    expect(harness.refreshes.every((entry) => entry.static)).toBe(true);
 
     harness.setNow(10_000);
     harness.director.hostUpdate(10_000, false);

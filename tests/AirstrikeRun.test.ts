@@ -3,6 +3,7 @@ import {
   AIRSTRIKE_RUN_FALL_MS,
   planAirstrikeRun,
   resolveAirstrikeRunGeometry,
+  resolveAirstrikeRunLaunchFromStrikes,
   resolveAirstrikeRunLeadPx,
   resolveScheduledAirstrikeRuns,
 } from '../src/systems/AirstrikeRun';
@@ -45,6 +46,22 @@ describe('airstrike bomber run (D-47)', () => {
     }
     // Seconds ahead of the first impact the formation is still on its way in.
     expect(resolveAirstrikeRunLeadPx(run, strikeDelayMs, run.launchAtMs + strikeDelayMs - 4000)).toBeLessThan(-900);
+  });
+
+  it('pins the formation to the replicated bombs when the host event clock lagged behind the schedule', () => {
+    const [run] = resolveScheduledAirstrikeRuns([event()], metrics);
+    const plan = planAirstrikeRun(run.geometry, run.strikeCount);
+    // The host launched 3.2 s late (e.g. after a hidden tab); its strikes carry the real arm time.
+    const realLaunch = 1_000_000;
+    const strikes = [plan[2], plan[3]].map(point => ({ x: Math.round(point.x), y: Math.round(point.y), armedAt: realLaunch + point.launchOffsetMs }));
+    expect(resolveAirstrikeRunLaunchFromStrikes(run, strikes)).toBe(realLaunch);
+    expect(resolveAirstrikeRunLaunchFromStrikes(run, [{ x: 0, y: 0, armedAt: 5 }])).toBeNull();
+    for (const point of plan) {
+      const passAt = realLaunch + point.launchOffsetMs + 2000 - AIRSTRIKE_RUN_FALL_MS;
+      const lead = resolveAirstrikeRunLeadPx(run, 2000, passAt, realLaunch);
+      expect(Math.hypot(run.geometry.startX + run.geometry.dirX * lead - point.x,
+        run.geometry.startY + run.geometry.dirY * lead - point.y)).toBeLessThan(1);
+    }
   });
 
   it('only schedules runs whose launch time every peer can know', () => {

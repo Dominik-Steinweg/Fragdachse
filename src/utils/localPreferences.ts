@@ -919,15 +919,16 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
   // Der Beitrag gehoert genau diesem Profil. Eine fremde ownerId waere ein Save aus einem anderen
   // Profil; sein Besitz darf nicht still uebernommen werden.
   if (!personalBaseContribution || personalBaseContribution.ownerId !== ownerId) return null;
+  const dawn = sanitizeDawnProgress(coop.dawn);
+  if (!dawn) return null;
+  const effectiveRewardUnlocks = resolveEffectivePersistentBaseRewardUnlocks(persistentBaseRewardUnlocks, dawn);
   if (persistentBaseRewardState.placements.some((placement) => (
-    !persistentBaseRewardUnlocks.includes(placement.rewardId)
+    !effectiveRewardUnlocks.includes(placement.rewardId)
   ))) return null;
   if (coop.selectedClassId !== undefined && !COOP_DEFENSE_CLASS_IDS.includes(coop.selectedClassId as CoopDefenseClassId)) return null;
   const defaultCompact = sanitizeCompactProfile(coop.defaultProfile);
   if (!defaultCompact) return null;
   const completedBossMapIds = sanitizeCompletedBossMapIds(coop.completedBossMapIds);
-  const dawn = sanitizeDawnProgress(coop.dawn);
-  if (!dawn) return null;
   const entitlements = resolveCoopDefenseUpgradeEntitlements(dawn.unlockedBranchIds);
   const bossPoints = resolveEarnedCoopDefenseBossPoints({ completedBossMapIds, dawn });
   const hydrateProfile = (compact: CompactUpgradeProfile, classId: CoopDefenseClassId): CoopDefenseUpgradeProfile => {
@@ -1531,7 +1532,8 @@ export function getStoredCoopDefenseProgress(): CoopDefenseProgressPreferences {
     persistentBaseUnlocked: progress.persistentBaseUnlocked,
     persistentBaseAreaStage: progress.persistentBaseAreaStage,
     persistentBaseHealthRewards: [...progress.persistentBaseHealthRewards],
-    persistentBaseRewardUnlocks: [...progress.persistentBaseRewardUnlocks],
+    persistentBaseRewardUnlocks: resolveEffectivePersistentBaseRewardUnlocks(
+      progress.persistentBaseRewardUnlocks, sanitizeDawnProgress(progress.dawn)),
     unseenItems: progress.unseenItems,
     persistentBase: clonePersistentBaseState(progress.persistentBase),
     personalBaseContribution: clonePersistentPlayerBaseContribution(progress.personalBaseContribution),
@@ -1546,8 +1548,11 @@ export function restoreStoredCoopDefenseProgress(progress: CoopDefenseProgressPr
   const rewardUnlocks = sanitizePersistentBaseRewardIds(progress.persistentBaseRewardUnlocks);
   const rewardState = sanitizePersistentBaseRewardState(progress.persistentBaseRewardState);
   const dawn = sanitizeDawnProgress(progress.dawn);
-  if (!dawn || !processedRoundRevisionsByRoom || !rewardUnlocks || !rewardState
-    || rewardState.placements.some((placement) => !rewardUnlocks.includes(placement.rewardId))) return;
+  if (!dawn || !processedRoundRevisionsByRoom || !rewardUnlocks || !rewardState) return;
+  const effectiveRewardUnlocks = resolveEffectivePersistentBaseRewardUnlocks(rewardUnlocks, dawn);
+  if (rewardState.placements.some((placement) => !effectiveRewardUnlocks.includes(placement.rewardId))) return;
+  const derived = resolveDawnExpansionRewardUnlocks(dawn.expansionLevel);
+  const storedRewardUnlocks = rewardUnlocks.filter((rewardId) => !derived.includes(rewardId));
   progress = constrainLocalProgressProfiles({ ...progress, dawn });
   updatePreferences((current) => ({
     ...current,
@@ -1566,7 +1571,7 @@ export function restoreStoredCoopDefenseProgress(progress: CoopDefenseProgressPr
         profilesByClass: cloneProfilesByClass(progress.profilesByClass),
         persistentBase: clonePersistentBaseState(progress.persistentBase),
         personalBaseContribution: clonePersistentPlayerBaseContribution(progress.personalBaseContribution),
-        persistentBaseRewardUnlocks: rewardUnlocks,
+        persistentBaseRewardUnlocks: storedRewardUnlocks,
         persistentBaseRewardState: rewardState,
         ...cloneCoopDefenseItemState(progress),
       },
@@ -1684,9 +1689,18 @@ export function setStoredPersistentBaseState(state: PersistentBaseState): void {
 /** Personal reward ownership; this is deliberately independent of the host placement document. */
 export function getStoredPersistentBaseRewardUnlocks(): PersistentBaseRewardId[] {
   const coop = readPreferences().progression.coopDefense;
-  // Dawn expansion placeholders are derived from the expansion level, never stored (D-46).
-  const dawn = resolveDawnExpansionRewardUnlocks(sanitizeDawnProgress(coop.dawn)?.expansionLevel ?? 0);
-  return [...new Set([...coop.persistentBaseRewardUnlocks, ...dawn])];
+  return resolveEffectivePersistentBaseRewardUnlocks(coop.persistentBaseRewardUnlocks, sanitizeDawnProgress(coop.dawn));
+}
+
+/**
+ * Stored reward unlocks plus the Dawn expansion placeholders derived from the expansion level
+ * (D-46, never stored). Placement, editor, save validation and restore all use this one set.
+ */
+function resolveEffectivePersistentBaseRewardUnlocks(
+  stored: readonly PersistentBaseRewardId[],
+  dawn: Pick<DawnProgress, 'expansionLevel'> | null,
+): PersistentBaseRewardId[] {
+  return [...new Set([...stored, ...resolveDawnExpansionRewardUnlocks(dawn?.expansionLevel ?? 0)])];
 }
 
 /** Adds only new, known reward IDs and leaves the cumulative unlock set idempotent. */
@@ -1723,9 +1737,8 @@ export function setStoredPersistentBaseRewardState(state: PersistentBaseRewardSt
   if (!sanitized) return false;
   const current = readPreferences();
   const progress = current.progression.coopDefense;
-  if (sanitized.placements.some((placement) => (
-    !progress.persistentBaseRewardUnlocks.includes(placement.rewardId)
-  ))) return false;
+  const unlocks = resolveEffectivePersistentBaseRewardUnlocks(progress.persistentBaseRewardUnlocks, sanitizeDawnProgress(progress.dawn));
+  if (sanitized.placements.some((placement) => !unlocks.includes(placement.rewardId))) return false;
   if (sanitized.revision <= progress.persistentBaseRewardState.revision) return false;
   writePreferences({
     ...current,

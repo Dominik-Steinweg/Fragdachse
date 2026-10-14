@@ -143,8 +143,10 @@ describe('Dawn arena multi-seed generation', () => {
         // ArenaGenerator blocks rock cells, trunk cells and water cells. Base interiors also
         // block traversal, as in runtime pathing; canopy, dirt and decals do not block cells.
         // Use the pathing raster builder, without its dig-through-rock cost semantics.
+        // Night fires count as walls: fronts and sites must stay reachable without walking through them.
         const blocked = buildOccupancyRaster([
           ...layout.rocks, ...layout.trees, ...(layout.water ?? []), ...bases.flatMap(base => base.cells),
+          ...(layout.groundHazardZones ?? []).flatMap(zone => zone.cells),
         ], { cols, rows, cellSize: 1, arenaOffsetX: 0, arenaOffsetY: 0 });
         const core = bases.filter(base => base.persistentReservationRadiusCells !== undefined);
         const goals = baseGoals(core, blocked, cols, rows);

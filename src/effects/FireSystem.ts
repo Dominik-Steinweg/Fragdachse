@@ -90,7 +90,10 @@ export interface GroundFireCellOptions {
   sourceId?: string;
   visualStyle?: GroundFireVisualStyle;
   damageTarget?: GroundFireDamageTarget;
-  /** Statische Map-Hazard-Zelle ohne per-Frame Source-Verarbeitung. */
+  /**
+   * Statische Map-Hazard-Zelle ohne per-Frame Source-Verarbeitung und ohne Ablauf-Scan. Ihr Besitzer
+   * entfernt sie gesammelt ueber `hostRemoveGroundSourcesBySourceKey`, spaetestens zu ihrem Ablauf.
+   */
   static?: boolean;
 }
 
@@ -313,7 +316,7 @@ export class FireSystem {
         sourceId: options.sourceId ?? 'ground_fire.player_fire',
         visualStyle: options.visualStyle ?? 'normal',
         damageTarget: options.damageTarget ?? 'all',
-        staticSource: options.static === true && options.permanent === true,
+        staticSource: options.static === true,
         firewalker: options.firewalker ? structuredClone(options.firewalker) : undefined,
         exposeAsZone: false,
         obstacleRevision,
