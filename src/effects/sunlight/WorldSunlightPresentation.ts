@@ -16,6 +16,7 @@ import { WorldSunComposite } from './WorldSunComposite';
 import { createSunTuning, resolveSunAtmosphere, SunAtmosphereClock } from './SunAtmosphere';
 import { resolveMoonlitAmbient, resolveSunAmbient } from './SunSky';
 import { resolveSkyState } from '../TimeOfDay';
+import { MoonOpeningLight } from './MoonOpeningLight';
 import { validateSunTuning, sunAtmosphereGrade, type SunTuning } from './SunTuning';
 import { createSunPath, resolveSunPath } from './SunPath';
 import type { SunCloudState } from './cloudShadow';
@@ -40,6 +41,12 @@ export interface WorldSunlightTargets {
  worldContext: WorldRuntimeContext;
 }
 type Targets = WorldSunlightTargets;
+/** Activity moonlight (Dawn blood moon): ambient hue and optional light through cloud openings. */
+export interface ActivityMoonlight {
+ readonly tint:readonly number[];
+ readonly gain:number;
+ readonly openings?:{readonly cover:number;readonly light:readonly number[]};
+}
 /** A blood moon rises over a few seconds instead of switching the night colour. */
 const MOONLIGHT_FADE_MS=4000;
 /** Active render resources belong to one displayed World, never its transferable terrain cache. */
@@ -99,11 +106,14 @@ export class WorldSunlightPresentation {
   } catch(error){this.destroy();throw error;} finally {loadingTimeline.end('sunlight/init',measuredAt);}
  }
  /** Activity overlay through this sole ambient writer (Dawn blood moon); null fades back to the World sky. */
- setActivityMoonlight(moon:{readonly tint:readonly number[];readonly gain:number}|null):void {
+ setActivityMoonlight(moon:ActivityMoonlight|null):void {
   if(moon)this.moon=moon;
   this.moonTarget=moon?1:0;
  }
- private moon:{readonly tint:readonly number[];readonly gain:number}|null=null;
+ private moon:ActivityMoonlight|null=null;
+ private moonOpenings:MoonOpeningLight|null=null;
+ /** Own cloud state of the moon openings: same field and drift as the day clouds, night cover. */
+ private readonly moonClouds:SunCloudState={tuning:createSunTuning(),timeSec:0,strength:1};
  private moonTarget=0;
  private moonWeight=0;
  update(minutes:number,presentationTimeMs:number):void {
@@ -143,6 +153,7 @@ export class WorldSunlightPresentation {
       ?resolveMoonlitAmbient(sun??resolveSkyState(minute).ambientColor,this.moon,this.moonWeight):sun);
     this.ambientMinute=minute;this.ambientMoonWeight=this.moonWeight;
   }
+  this.syncMoonOpenings(targets);
   if(minute!==this.sunMinute||this.azimuthOverride!==this.sunTuning.sunAzimuthOverride){
     this.clouds.sunPath=resolveSunPath(minute,this.sunTuning.sunAzimuthOverride,this.sunPath);
     if(this.reviewSun){
@@ -171,6 +182,20 @@ export class WorldSunlightPresentation {
   this.sunFog.baseFogDetail=this.fogBase?.detail;
   targets.fog?.setWoodlandLight(this.sunFog);
   if(changed||!this.gradeBound){targets.postFx.setSunGrade(sunAtmosphereGrade(this.sunTuning,this.gradeUniforms),this.sunTuning.gradeOlive);this.gradeBound=true;}
+ }
+ private syncMoonOpenings(targets:Targets):void {
+  const openings=this.moonWeight>0?this.moon?.openings:undefined;
+  if(!openings){
+    if(this.moonOpenings){targets.lighting.setAmbientLayer(null);this.moonOpenings.destroy();this.moonOpenings=null;}
+    return;
+  }
+  const tuning=this.moonClouds.tuning;
+  for(const key of ['cloudSpeed','cloudScale','cloudEvolution','cloudGust','cloudWarp','cloudSoftness'] as const)tuning[key]=this.sunTuning[key];
+  tuning.cloudCover=openings.cover;tuning.cloudSpotAmount=0;
+  this.moonClouds.timeSec=this.lastSceneTime/1000;
+  this.moonOpenings??=new MoonOpeningLight(this.scene,this.moonClouds);
+  this.moonOpenings.setLight(openings.light,this.moonWeight);
+  targets.lighting.setAmbientLayer(this.moonOpenings);
  }
  private gradeBound=false;
  private ambientMinute=NaN;
@@ -213,5 +238,6 @@ export class WorldSunlightPresentation {
   this.canopyLighting?.destroy();this.canopyLighting=null;this.woodland?.destroy();this.woodland=null;
   this.sunComposite?.destroy();this.sunComposite=null;this.clouds.cache=undefined;this.clouds.sunPath=undefined;
   t.lighting.setSunAmbient(null);t.postFx.setSunGrade(null);
+  if(this.moonOpenings){t.lighting.setAmbientLayer(null);this.moonOpenings.destroy();this.moonOpenings=null;}
  }
 }

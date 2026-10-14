@@ -177,7 +177,7 @@ export interface WorldPresentationFrameBindingInput {
     readonly effects: Pick<EffectSystem, 'bindGroundFogExplosion' | 'bindGroundFogCombat'>;
   };
   /** Activity moonlight for the World's sun owner (Dawn blood moon); undefined = the World sky. */
-  readonly getActivityMoonlight?: () => { readonly tint: readonly number[]; readonly gain: number } | undefined;
+  readonly getActivityMoonlight?: () => import('../effects/sunlight/WorldSunlightPresentation').ActivityMoonlight | undefined;
   readonly constructionOwnership?: {
     readonly motes: Pick<ConstructionOwnershipMoteRenderer, 'openWorld' | 'closeWorld' | 'captureFrame'>;
     readonly getPlacement: () => Pick<PlacementSystem, 'getAllRuntimeRocks' | 'getOwnedConstructions' | 'getRuntimeRock'> | null;
