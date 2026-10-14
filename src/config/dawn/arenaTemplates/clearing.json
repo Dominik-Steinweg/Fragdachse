@@ -219,7 +219,7 @@
     "trackMode": "none",
     "persistentBase": {
       "baseId": "dawn-core",
-      "maxAreaStage": 11,
+      "maxAreaStage": 6,
       "anchor": { "gridX": 70, "gridY": 48 }
     }
   },

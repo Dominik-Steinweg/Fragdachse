@@ -11,7 +11,6 @@ import { resolveCoopDefenseWorldMetrics, type WorldMetrics } from '../world/Worl
 import type { CoopDefenseSecondaryObjectivePresentationState } from '../types';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { t } from '../i18n';
-import { NightModifierAtmosphere } from '../effects/dawn/NightModifierAtmosphere';
 import { HudCard } from './HudCard';
 import type { CoopDefenseObjectiveAnnouncement } from './CoopDefenseObjectiveAnnouncement';
 import { buildDawnHudModel, buildDawnSiteMarkers, resolveDawnHudWidth, type DawnSiteMarker } from './DawnHudModel';
@@ -23,7 +22,6 @@ const CARD = { x: 270, y: 66, width: 480, scale: 0.62 };
 /** Scene-owned projection of replicated Dawn plans, time and objective state. */
 export class DawnHUD {
   private readonly card: HudCard;
-  private readonly atmosphere: NightModifierAtmosphere;
   private modifierIcon: Phaser.GameObjects.Image | null = null;
   private announcements: CoopDefenseObjectiveAnnouncement | null = null;
   private key = '';
@@ -35,7 +33,6 @@ export class DawnHUD {
   private markers: readonly MarkerDescriptor[] = [];
 
   constructor(private readonly scene: Phaser.Scene) {
-    this.atmosphere = new NightModifierAtmosphere(scene);
     this.card = new HudCard(scene, { ...CARD, tone: 'neutral', titleSize: 14, valueSize: 14, kickerSize: 10,
       valueIcon: { key: DAWN_UI_TEXTURES.scrap, size: 18 },
       kickerIcon: { key: DAWN_UI_TEXTURES.threat, size: 18 },
@@ -71,7 +68,6 @@ export class DawnHUD {
     const model = buildDawnHudModel({ schedule: getDawnSchedule(plan.scheduleId), elapsedMs: input.now - input.startTime,
       sharedScrap: input.sharedScrap, threat: plan.threat, dayNumber: plan.dayNumber, sites: this.sites, objectives: input.objectives,
       clockMinutes: input.clockMinutes, nightModifierId: plan.nightModifierId });
-    this.atmosphere.sync(model.nightModifier?.id, model.phase, input.now - input.startTime);
     const modifierLabel = model.nightModifier ? t(model.nightModifier.nameKey) : '';
     const label = t(`ui.dawn.phase.${model.phase}`);
     const kicker = t('ui.dawn.dayThreat', { day: model.dayNumber, threat: model.threat });
@@ -112,6 +108,8 @@ export class DawnHUD {
       clock: { nowMs: this.scene.time.now, elapsedMs: input.now - input.startTime } });
   }
 
+  /** Night modifier shown this phase (dusk/night), null otherwise. */
+
   /** Marker candidates of the last sync; empty outside an active Dawn round. */
   getMarkerDescriptors(): readonly MarkerDescriptor[] { return this.markers; }
 
@@ -134,7 +132,6 @@ export class DawnHUD {
   private clear(): void {
     this.markers = [];
     this.card.root.setVisible(false);
-    this.atmosphere.clear();
     this.modifierIcon?.setVisible(false);
     if (!this.key) return;
     this.announcements?.clearTopic('dawn-phase');
@@ -142,5 +139,5 @@ export class DawnHUD {
     this.markers = [];
   }
 
-  destroy(): void { this.clear(); this.atmosphere.destroy(); this.card.destroy(); }
+  destroy(): void { this.clear(); this.card.destroy(); }
 }

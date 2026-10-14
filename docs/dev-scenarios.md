@@ -45,9 +45,12 @@ Ohne Feld würfelt der Host anhand von Threat und Seed. Der Override gilt auch b
 ändert nur den nächsten komponierten Plan und wird bei einem neuen Rezept ohne Feld entfernt.
 Ab Dämmerung zeigt die Phasenkarte den Namen und, falls geladen, `night-<id>`; beim Nachtbeginn
 folgt die Ansage. `dawnPhase` erlaubt auch den Vergleich von Tag, Nacht und Rückkehr zum Grundnebel.
-Die abschaltbare Randfärbung wird in `src/effects/dawn/NightModifierAtmosphere.ts` über
-`NIGHT_MODIFIER_ATMOSPHERE.enabled` gesteuert; Farben, Stärke und Pulszeiten liegen dort gemeinsam.
-Brandnacht nutzt Pyro-/Brandstifter-Angriffe samt bestehendem Bodenfeuer, Bombernacht endliche Luftangriffe.
+Die Modifikatoren wirken ohne Bildschirmfilter (D-47): Blutmond über das Mondlicht des Sonnen-Owners,
+Nebel über den Bodennebel, Brandnacht über Pyro-/Brandstifter-Angriffe und wachsende Bodenbrände
+(Ground-Hazard-Events), Bombernacht über endliche Luftangriffe mit Formationsschatten.
+Brände und Bomben sind Map-Events: `suppressWaves: true` hält die ganze Missions-Fortschrittsphase an,
+also auch sie, und nach `dawnPhase` starten sie nicht. Für Live-Bilder `dawnSkip` mit
+`suppressWaves: false` und `freezeMission: false` verwenden; Gegner während des Vorspulens bei Bedarf mit `clearEnemies` räumen.
 
 Ein Dawn-Rezept verwendet `dawn: { threat: 1…10 }` **statt** `mapId`; Threat muss ganzzahlig sein.
 Der isolierte Dev-Speicher erhält den Abschluss der letzten Kampagnenmap und

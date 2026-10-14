@@ -1867,7 +1867,7 @@ export interface ArenaGroundHazardZone {
 export interface SyncedBurningGroundSnapshot {
   cells: SyncedBurningGroundCell[];
   /** Host-selected upcoming cells. Presentation only; never used for damage or safe spawning. */
-  warnings?: { gridX: number; gridY: number; activatesAt: number }[];
+  warnings?: { gridX: number; gridY: number; activatesAt: number; /** Absent = void (legacy). */ visualStyle?: 'normal' }[];
 }
 
 /** Zielzelle eines replizierten Schleimblueten-Brockens. */

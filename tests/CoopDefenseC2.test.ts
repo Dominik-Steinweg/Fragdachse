@@ -152,6 +152,19 @@ describe('Coop Defense C2 configuration', () => {
         intervalMs: 1_000,
       }],
     }))).toThrow(/invalid for tutorial-sweep/);
+
+    const run = { headingDeg: 45, offsetRatio: 0.2, speedPxPerSec: 300 };
+    expect(normalizeCoopDefenseMapConfig(makeMap({ mapEvents: [{ ...finiteZoneEvent, run }] })).mapEvents?.[0])
+      .toMatchObject({ run });
+    for (const invalid of [{ ...run, headingDeg: 360 }, { ...run, offsetRatio: 1 }, { ...run, speedPxPerSec: 0 }]) {
+      expect(() => normalizeCoopDefenseMapConfig(makeMap({ mapEvents: [{ ...finiteZoneEvent, run: invalid }] })))
+        .toThrow(/invalid run/);
+    }
+    expect(() => normalizeCoopDefenseMapConfig(makeMap({ mapEvents: [{ ...finiteZoneEvent, orderedSweep: true, run }] })))
+      .toThrow(/invalid run/);
+    expect(() => normalizeCoopDefenseMapConfig(makeMap({ mapEvents: [{
+      id: 'hunt', type: 'airstrike', start: { type: 'time', atMs: 0 }, pattern: 'player-hunt', intervalMs: 5_000, run,
+    }] }))).toThrow(/invalid for player-hunt/);
   });
 
   it('validates unknown references, persistent sources and direct or indirect cycles', () => {

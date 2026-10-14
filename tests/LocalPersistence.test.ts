@@ -4,6 +4,7 @@ import { COOP_DEFENSE_CLASS_IDS } from '../src/config/coopDefenseClasses';
 import { getLockedCoopDefenseBranchUpgradeIds, resolveCoopDefenseUpgradeEntitlements, resolveEarnedCoopDefenseBossPoints, getSpentCoopDefenseBossPoints, COOP_DEFENSE_UPGRADE_DEFINITIONS } from '../src/utils/coopDefenseUpgrades';
 import { getStoredDawnProgress, updateStoredDawnProgress, acknowledgeStoredDawnNotice, restoreStoredCoopDefenseProgress, getStoredPersonalPersistentBaseAreaStage, getStoredPersistentBaseAreaStage } from '../src/utils/localPreferences';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { isDawnUnlocked } from '../src/dawn/rules/DawnUnlock';
 import {
   LEGACY_LOCAL_PREFERENCES_KEY,
   LOCAL_PROGRESS_SCHEMA_VERSION,
@@ -211,6 +212,25 @@ describe('local progress generation', () => {
     expect(sanitizeDawnProgress({ unlockedBranchIds: ['retired-branch', 'necromancy'] })?.unlockedBranchIds)
       .toEqual(['necromancy']);
     expect(sanitizeDawnProgress({ stats: { defeats: NaN } })).toBeNull();
+  });
+
+  it('persists the debug Dawn unlock without a campaign win, boss points or rewards (D-48)', () => {
+    const before = getStoredCoopDefenseProgress();
+    expect(isDawnUnlocked(before)).toBe(false);
+    expect(updateStoredDawnProgress(draft => { draft.debugUnlocked = true; })).toBe(true);
+    invalidateLocalStorageCache();
+    const after = getStoredCoopDefenseProgress();
+    expect(isDawnUnlocked(after)).toBe(true);
+    expect(after.completedMapIds).toEqual(before.completedMapIds);
+    expect(after.completedBossMapIds).toEqual(before.completedBossMapIds);
+    expect(after.persistentBaseRewardUnlocks).toEqual(before.persistentBaseRewardUnlocks);
+    expect(resolveEarnedCoopDefenseBossPoints(after)).toBe(resolveEarnedCoopDefenseBossPoints(before));
+    // Only `true` survives decoding; a malformed debug flag never costs the real progress.
+    expect(sanitizeDawnProgress({ debugUnlocked: true })?.debugUnlocked).toBe(true);
+    for (const debugUnlocked of [false, 1, 'yes', null, {}]) {
+      expect(sanitizeDawnProgress({ scrap: 3, debugUnlocked }), JSON.stringify(debugUnlocked))
+        .toEqual({ ...createDefaultDawnProgress(), scrap: 3 });
+    }
   });
 
   it('counts unique boss completions plus purchased points and preserves the total-point cheat', () => {

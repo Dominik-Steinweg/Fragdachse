@@ -2828,7 +2828,6 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
     height: 'high', lighting: 'emissive', camera: 'clarity', depths: [21.01],
     blends: ['NORMAL'], profiles: ['C'], role: 'ui',
     source: { expression: 'MARKER_GPU_DEPTHS.edge + .01', selector: 'sync/text/setDepth/0' } },
-  {"id":"cpu:effects/dawn/NightModifierAtmosphere.ts:sync/this.graphics/setDepth/0","owner":"effects/dawn/NightModifierAtmosphere.ts","component":"sync/this.graphics/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[97],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"sync/this.graphics/setDepth/0","expression":"DEPTH.OVERLAY - 3"}},
   {"id":"cpu:arena/LobbyMerchantRenderer.ts:module/this.stall/setDepth/0","owner":"arena/LobbyMerchantRenderer.ts","component":"module/this.stall/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[4],"blends":["NORMAL"],"profiles":["G"],"role":"effect","source":{"selector":"module/this.stall/setDepth/0","expression":"DEPTH.BASES"}},
   {"id":"cpu:arena/LobbyMerchantRenderer.ts:module/this.nameplate/setDepth/0","owner":"arena/LobbyMerchantRenderer.ts","component":"module/this.nameplate/setDepth/0","height":"high","lighting":"material","camera":"world","depths":[22],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"module/this.nameplate/setDepth/0","expression":"DEPTH.LOCAL_UI"}},
   {"id":"cpu:arena/LobbyMerchantRenderer.ts:module/this.dealer/setDepth/0","owner":"arena/LobbyMerchantRenderer.ts","component":"module/this.dealer/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[10],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.dealer/setDepth/0","expression":"DEPTH.PLAYERS"}},
@@ -2863,6 +2862,7 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:adrenalineEssence/AdrenalineEssenceGpuRenderer.ts:module/this.glow/setDepth/0","owner":"adrenalineEssence/AdrenalineEssenceGpuRenderer.ts","component":"module/this.glow/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[9.39],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.glow/setDepth/0","expression":"GLOW_DEPTH"}},
   {"id":"cpu:adrenalineEssence/AdrenalineEssenceGpuRenderer.ts:module/this.body/setDepth/0","owner":"adrenalineEssence/AdrenalineEssenceGpuRenderer.ts","component":"module/this.body/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9.4],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.body/setDepth/0","expression":"BODY_DEPTH"}},
   {"id":"cpu:arena/BaseAccentGlowRenderer.ts:module/overlay/setDepth/0","owner":"arena/BaseAccentGlowRenderer.ts","component":"module/overlay/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[4.04,4.05],"blends":["ADD"],"profiles":["G"],"role":"effect","source":{"selector":"module/overlay/setDepth/0","expression":"source.depth + depth"}},
+  {"id":"cpu:effects/AirstrikeRenderer.ts:syncBomberRuns/shadows/setDepth/0","owner":"effects/AirstrikeRenderer.ts","component":"syncBomberRuns/shadows/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[19.55],"blends":["MULTIPLY"],"profiles":["E"],"role":"effect","source":{"selector":"syncBomberRuns/shadows/setDepth/0","expression":"DEPTH_LIGHTING + 0.05"}},
   {"id":"cpu:effects/AirstrikeRenderer.ts:createVisual/warningFill/setDepth/0","owner":"effects/AirstrikeRenderer.ts","component":"createVisual/warningFill/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[19],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/warningFill/setDepth/0","expression":"DEPTH.CANOPY - 1"}},
   {"id":"cpu:effects/AirstrikeRenderer.ts:createVisual/warningRing/setDepth/0","owner":"effects/AirstrikeRenderer.ts","component":"createVisual/warningRing/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[20],"blends":["ADD"],"profiles":["E","H"],"role":"effect","source":{"selector":"createVisual/warningRing/setDepth/0","expression":"DEPTH.CANOPY"}},
   {"id":"cpu:effects/AirstrikeRenderer.ts:createVisual/innerRing/setDepth/0","owner":"effects/AirstrikeRenderer.ts","component":"createVisual/innerRing/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[9],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"createVisual/innerRing/setDepth/0","expression":"DEPTH.PLAYERS - 1"}},
@@ -3338,10 +3338,7 @@ export const CPU_SOURCE_CONTRACTS = {
     ],
     bindings: { 'MARKER_GPU_DEPTHS[role]': [5.2, 20, 21] },
   },
-  "effects/dawn/NightModifierAtmosphere.ts": {
-    "sites": [{ "key": "sync/this.graphics/setDepth/0", "expression": "DEPTH.OVERLAY - 3", "blends": ["NORMAL"] }],
-    "blends": [], "cameras": ["promoteToClarityCamera(this.scene, this.graphics)"], "bindings": {}
-  },
+
   "arena/LobbyMerchantRenderer.ts": {"blends":[],"cameras":[],"sites":[{"key":"module/this.stall/setDepth/0","expression":"DEPTH.BASES","blends":["NORMAL"]},{"key":"module/this.dealer/setDepth/0","expression":"DEPTH.PLAYERS","blends":["NORMAL"]},{"key":"module/this.nameplate/setDepth/0","expression":"DEPTH.LOCAL_UI","blends":["NORMAL"]}],"bindings":{}},
   "arena/DawnSiteDecalRenderer.ts": {
     "blends": [], "cameras": [],
@@ -3516,10 +3513,18 @@ export const CPU_SOURCE_CONTRACTS = {
   },
   "effects/AirstrikeRenderer.ts": {
     "blends": [
-      "Phaser.BlendModes.ADD"
+      "Phaser.BlendModes.ADD",
+      "Phaser.BlendModes.MULTIPLY"
     ],
     "cameras": [],
     "sites": [
+      {
+        "key": "syncBomberRuns/shadows/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.05",
+        "blends": [
+          "MULTIPLY"
+        ]
+      },
       {
         "key": "createVisual/warningFill/setDepth/0",
         "expression": "DEPTH.CANOPY - 1",

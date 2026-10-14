@@ -203,6 +203,7 @@ export const enContent = {
   "source.ground_fire.kamikaze_napalm.name": "Kamikaze Napalm",
   "source.ground_fire.void_hunter.name": "Voidfire",
   "source.ground_fire.timebomb_void.name": "Timebomb Fire",
+  "source.ground_fire.dawn_night_fire.name": "Night Fire",
   "source.enemy.void_hunter.nuke.name": "Void Nuke",
   "source.enemy.inferno_colossus.void_fire.name": "Violet Hellfire",
   "source.enemy.inferno_colossus.void_trail.name": "Violet Helltrail",

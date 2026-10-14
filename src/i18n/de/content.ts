@@ -203,6 +203,7 @@ export const deContent = {
   "source.ground_fire.kamikaze_napalm.name": "Kamikaze-Napalm",
   "source.ground_fire.void_hunter.name": "Leerenbrand",
   "source.ground_fire.timebomb_void.name": "Zeitbomben-Brand",
+  "source.ground_fire.dawn_night_fire.name": "Nachtbrand",
   "source.enemy.void_hunter.nuke.name": "Leeren-Atombombe",
   "source.enemy.inferno_colossus.void_fire.name": "Lila Höllenbrand",
   "source.enemy.inferno_colossus.void_trail.name": "Lila Höllenspur",

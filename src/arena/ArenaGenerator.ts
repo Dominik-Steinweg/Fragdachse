@@ -10,6 +10,7 @@ import type {
   CoopDefenseMapConfig,
   CoopDefenseMapCorridorPoint,
   CoopDefenseMapGroundHazardEventConfig,
+  CoopDefenseMapGroundHazardKeepClear,
   CoopDefenseMapMissionCheckpointConfig,
   CoopDefenseMapPowerUpConfig,
   CoopDefenseMapRockFieldConfig,
@@ -139,6 +140,18 @@ export function resolveArenaGenerationInput(mode: GameMode, metrics: WorldMetric
 // verwenden sie, waehrend ihre eigene Reserveflaechen- und Wachstumslogik getrennt bleibt.
 function clampToUnitRange(value: number): number {
   return Math.max(-1, Math.min(1, value));
+}
+
+/** Whether a grid cell lies inside any authored keep-clear capsule (segment plus radius). */
+function isInsideKeepClear(gridX: number, gridY: number, capsules: readonly CoopDefenseMapGroundHazardKeepClear[]): boolean {
+  for (const { from, to, radiusCells } of capsules) {
+    const sx = to.gridX - from.gridX, sy = to.gridY - from.gridY;
+    const lengthSq = sx * sx + sy * sy;
+    const t = lengthSq > 0 ? Math.max(0, Math.min(1, ((gridX - from.gridX) * sx + (gridY - from.gridY) * sy) / lengthSq)) : 0;
+    const dx = gridX - (from.gridX + sx * t), dy = gridY - (from.gridY + sy * t);
+    if (dx * dx + dy * dy <= radiusCells * radiusCells) return true;
+  }
+  return false;
 }
 
 /**
@@ -1855,6 +1868,9 @@ export class ArenaGenerator {
       let selectedPatchCount = 0;
       const usedInEvent = new Set<number>();
       const avoidVoidTrackCorridor = mapConfig.trackMode === 'void-fire';
+      const keepClear = area.keepClear ?? [];
+      // Radial growth starts at the patch centre; the progress is part of the prepared geometry.
+      const radial = event.spread?.direction === 'radial';
       for (let patchIndex = 0; patchIndex < area.randomPatchCount; patchIndex += 1) {
         let selected: ArenaGroundHazardZone['cells'] | null = null;
         let selectedPatch: ArenaGroundHazardZone['patch'];
@@ -1863,6 +1879,7 @@ export class ArenaGenerator {
             + rng() * (area.maxPatchRadiusCells - area.minPatchRadiusCells);
           const centerX = Math.floor(rng() * this.metrics.gridCols);
           const centerY = Math.floor(rng() * this.metrics.gridRows);
+          if (isInsideKeepClear(centerX, centerY, keepClear)) continue;
           const radiusSq = radius * radius;
           const cells: ArenaGroundHazardZone['cells'] = [];
           for (
@@ -1877,13 +1894,16 @@ export class ArenaGenerator {
             ) {
               const dx = gridX - centerX;
               const dy = gridY - centerY;
-              if (dx * dx + dy * dy > radiusSq) continue;
+              const distanceSq = dx * dx + dy * dy;
+              if (distanceSq > radiusSq) continue;
               const key = this.cellKey(gridX, gridY);
               if (
                 !usedInEvent.has(key)
                 && isValidCell(gridX, gridY, baseClearanceCells, avoidVoidTrackCorridor, event.effect.visualStyle === 'void')
+                && !isInsideKeepClear(gridX, gridY, keepClear)
               ) {
-                cells.push({ gridX, gridY });
+                // Integer grid deltas: Math.sqrt is exact across engines, unlike hypot.
+                cells.push(radial ? { gridX, gridY, expansionProgress: Math.min(1, Math.sqrt(distanceSq) / radius) } : { gridX, gridY });
               }
             }
           }

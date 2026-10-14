@@ -4,7 +4,9 @@ import { createMarkerCameraTransform } from '../effects/markers/MarkerLayoutMode
 import { resolveEarnedCoopDefenseBossPoints } from '../utils/coopDefenseUpgrades';
 import { preloadWatchtowerAssets } from '../effects/watchtower/WatchtowerVisual';
 import { installRuntimeAssetUrls } from '../assets/RuntimeAssetUrls';
-import { DAWN_PIPELINE_ASSETS, preloadDawnDecalAssets } from '../assets/DawnAssets';
+import { DAWN_BOMBER_SHADOW_TEXTURE, DAWN_PIPELINE_ASSETS, preloadDawnDecalAssets, preloadDawnNightAssets } from '../assets/DawnAssets';
+import { resolveScheduledAirstrikeRuns, type ScheduledAirstrikeRun } from '../systems/AirstrikeRun';
+import { isDawnUnlocked } from '../dawn/rules/DawnUnlock';
 import { preloadPowerUpAssets, assertPowerUpAssetsReady } from '../assets/PowerUpAssets';
 import { preloadWoodlandAssets, assertWoodlandAssetsReady } from '../assets/WoodlandAssets';
 import { preloadCharacterMeshAssets, assertCharacterMeshAssetsReady } from '../assets/CharacterMeshAssets';
@@ -275,6 +277,7 @@ export class ArenaScene extends Phaser.Scene {
   // ── Phaser-scoped objects (must stay in scene) ────────────────────────────
   private arenaBuilder!: ArenaBuilder;
   private arenaClipMask: WebGLRectMaskTexture | null = null;
+  private bomberRuns: { events: CoopDefenseMapConfig['mapEvents']; runs: ScheduledAirstrikeRun[] } | null = null;
   private playerStatusRing: PlayerStatusRing | null = null;
   private enemyHoverNameLabel: EnemyHoverNameLabel | null = null;
   private removeReconnectStatusListener: (() => void) | null = null;
@@ -412,6 +415,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadRockVegetationMask(this.load);
     preloadTurretVisualAssets(this.load, DAWN_PIPELINE_ASSETS);
     preloadDawnDecalAssets(this.load);
+    preloadDawnNightAssets(this.load);
     preloadCanopyAssets(this.load);
     preloadTrainMaterialAssets(this.load);
     preloadPowerUpAssets(this);
@@ -873,6 +877,7 @@ export class ArenaScene extends Phaser.Scene {
           persistentBaseUnlocked: stored.persistentBaseUnlocked,
           persistentBaseAreaStage: stored.persistentBaseAreaStage,
           persistentBaseRewardUnlocks: [...stored.persistentBaseRewardUnlocks],
+          dawnUnlocked: isDawnUnlocked(stored),
         };
       },
       (totalXp, bossPoints, highestUnlockedMapId) => {
@@ -906,6 +911,10 @@ export class ArenaScene extends Phaser.Scene {
       () => this.coopDefenseBalanceTracker.isRecordingEnabled(),
       (enabled) => this.coopDefenseBalanceTracker.setRecordingEnabled(enabled),
       () => this.coopDefenseBalanceReportOverlay?.show(),
+      () => {
+        this.meta?.setDebugDawnUnlocked();
+        this.refreshCoopDefenseDebugState();
+      },
     );
     this.timeOfDayDebugOverlay = new TimeOfDayDebugOverlay(
       () => this.arenaRuntime.getCurrentTimeOfDayMinutes(),
@@ -2052,6 +2061,7 @@ export class ArenaScene extends Phaser.Scene {
       clockMinutes: this.renderers?.lighting.getTimeOfDayMinutes() ?? DEFAULT_TIME_OF_DAY_MINUTES,
     });
     this.renderers?.markers?.coop?.set('dawn', this.dawnHUD?.getMarkerDescriptors() ?? [], this.time.now);
+    this.syncBomberRuns(gameplayActive && !terminated ? configuredCoopDefenseMapConfig : null);
     if ((gameplayActive || countdownActive) && !terminated) {
       diagnosticsFrame?.begin('arenaHud');
       const secs = bridge.computeSecondsLeft(this.arenaRuntime.getMissionNow());
@@ -2892,6 +2902,20 @@ export class ArenaScene extends Phaser.Scene {
       roomGameMode: bridge.getGameMode(),
       worldDefinitionId: descriptor?.definitionId ?? null,
     });
+  }
+
+  /** Formation shadows of authored bomber runs (Dawn bomber night), on the same round clock as the bombs. */
+  private syncBomberRuns(mapConfig: CoopDefenseMapConfig | null): void {
+    const start = bridge.getArenaStartTime();
+    const metrics = mapConfig?.mapEvents && start > 0 ? this.arenaRuntime?.getWorldMetrics() : null;
+    if (!mapConfig?.mapEvents || !metrics) {
+      this.renderers?.airstrike?.syncBomberRuns([], 0, null);
+      return;
+    }
+    if (this.bomberRuns?.events !== mapConfig.mapEvents) {
+      this.bomberRuns = { events: mapConfig.mapEvents, runs: resolveScheduledAirstrikeRuns(mapConfig.mapEvents, metrics) };
+    }
+    this.renderers?.airstrike?.syncBomberRuns(this.bomberRuns.runs, this.arenaRuntime.getMissionNow() - start, DAWN_BOMBER_SHADOW_TEXTURE);
   }
 
   /**

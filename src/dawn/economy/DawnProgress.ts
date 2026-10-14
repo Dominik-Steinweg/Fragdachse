@@ -29,6 +29,8 @@ export interface DawnProgress {
   stats: { roundsPlayed: number; victories: number; defeats: number; currentStreak: number; bestStreak: number };
   notices: { necromancyMovedToMerchant: boolean };
   shopOffer: DawnShopOffer | null;
+  /** Debug menu unlock (D-48): opens Dawn without a Map-20 win, boss points or rewards. Absent = not set. */
+  debugUnlocked?: true;
 }
 
 export function createDefaultDawnProgress(): DawnProgress {
@@ -93,6 +95,8 @@ export function sanitizeDawnProgress(raw: unknown): DawnProgress | null {
     if (notice !== undefined && typeof notice !== 'boolean') return null;
     result.notices.necromancyMovedToMerchant = notice ?? false;
   }
+  // Debug-only flag: anything but `true` is dropped and never invalidates the real progress.
+  if (raw.debugUnlocked === true) result.debugUnlocked = true;
   if (raw.shopOffer !== undefined && raw.shopOffer !== null) {
     const offer = sanitizeDawnShopOffer(raw.shopOffer);
     if (!offer) return null;

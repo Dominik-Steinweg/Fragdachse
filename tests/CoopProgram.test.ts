@@ -30,4 +30,10 @@ describe('Dawn unlock', () => {
     expect(isDawnUnlocked(progress)).toBe(false);
     expect(isDawnUnlocked({ completedMapIds: [DAWN_UNLOCK_AFTER_MAP_ID] })).toBe(true);
   });
+
+  it('also opens through the separate debug flag, never through a missing or empty Dawn progress (D-48)', () => {
+    expect(isDawnUnlocked({ completedMapIds: [], dawn: { debugUnlocked: true } })).toBe(true);
+    expect(isDawnUnlocked({ completedMapIds: [], dawn: {} })).toBe(false);
+    expect(isDawnUnlocked({ completedMapIds: [], dawn: null })).toBe(false);
+  });
 });

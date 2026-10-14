@@ -14,6 +14,12 @@ export const PERSISTENT_BASE_REWARD_IDS = [
   'base_rocket_turret',
   'base_holy_hand_grenade_pedestal',
   'base_watchtower',
+  // Dawn expansion placeholders (D-46): one more plasma turret per expansion after the radius track.
+  'base_plasma_turret_dawn_1',
+  'base_plasma_turret_dawn_2',
+  'base_plasma_turret_dawn_3',
+  'base_plasma_turret_dawn_4',
+  'base_plasma_turret_dawn_5',
 ] as const;
 
 export type PersistentBaseRewardId = typeof PERSISTENT_BASE_REWARD_IDS[number];

@@ -918,6 +918,13 @@ export class ArenaMetaController {
     this.refresh();
   }
 
+  /** Persistent like the debug map unlock; touches neither completed maps nor boss points (D-48). */
+  setDebugDawnUnlocked(): void {
+    if (this.destroyed) return;
+    this.input.progressStore.updateDawnProgress((draft) => { draft.debugUnlocked = true; });
+    this.refresh();
+  }
+
   openItemsOverlay(): void {
     if (this.destroyed) return;
     if (this.input.session.getGamePhase() !== 'LOBBY'

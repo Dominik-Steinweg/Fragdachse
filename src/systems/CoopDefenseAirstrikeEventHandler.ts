@@ -17,6 +17,7 @@ import type {
   CoopDefenseMapEventHandler,
 } from './CoopDefenseMapEventDirector';
 import { resolveCoopDefenseWorldMetrics, type WorldMetrics } from '../world/WorldMetrics';
+import { planAirstrikeRun, resolveAirstrikeRunGeometry } from './AirstrikeRun';
 
 export const COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID = 'coop-zombie-bomber';
 
@@ -38,6 +39,8 @@ const MAP_AIRSTRIKE_STRIKE_CONFIG: AirstrikeUltimateConfig = {
   friendlyBaseDamageMult: 1,
   skipEnemyDamage: true,
 };
+/** Warning time of an authored map airstrike; a bomber run's presentation times its pass with it. */
+export const COOP_DEFENSE_MAP_AIRSTRIKE_DELAY_MS = MAP_AIRSTRIKE_STRIKE_CONFIG.delayMs;
 
 const DEFAULT_TUTORIAL_STRIKE_COUNT_MIN = 7;
 const DEFAULT_TUTORIAL_STRIKE_COUNT_MAX = 9;
@@ -231,6 +234,9 @@ export class CoopDefenseAirstrikeEventHandler implements CoopDefenseMapEventHand
         return target ? [{ ...target, launchOffsetMs: 0 }] : [];
       }
       case 'zone-barrage':
+        if (event.run) {
+          return planAirstrikeRun(resolveAirstrikeRunGeometry(event.area!, event.run, this.getWorldMetrics()), event.strikeCount!);
+        }
         return planZoneBarrage(
           event.area!,
           event.strikeCount!,

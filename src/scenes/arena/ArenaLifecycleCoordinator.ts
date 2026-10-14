@@ -3,6 +3,7 @@ import { warmupKrakenShaders } from '../../effects/kraken/KrakenShaderWarmup';
 import { restrictStructureOccupant } from '../../world/PlayerCapabilities';
 import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { type PersistentBaseHealthReward } from '../../persistentBase/PersistentBaseHealth';
+import { resolveDawnExpansionCoreHpBonus } from '../../dawn/economy/DawnExpansionRewards';
 import { getDeferredAssets } from '../../assets/DeferredAssets';
 import { isDevScenarioMode } from '../../utils/devScenarioMode';
 import { getDevDawnNightModifier } from '../../dev/scenario/dawnNightModifier';
@@ -413,16 +414,20 @@ export class ArenaLifecycleCoordinator {
       // Jede World bekommt ihren eigenen Presentation-Frame-Binding - auch eine World ohne
       // Activity (LobbyWorld). Er traegt die aktive World-Display-Verdrahtung und faellt vor dem
       // Handoff dieser World.
+      // Dawn night modifiers stay diegetic (D-47): fog through the fog owner, moonlight through the sun owner.
+      const dawnNight = () => {
+        const start = bridge.getArenaStartTime();
+        if (start <= 0 || !this.coopMissionRuntime) return null;
+        const now = this.coopMissionRuntime.getMissionNow(bridge.getSynchronizedNow());
+        return resolveDawnNightEnvironment(bridge.getActivityDescriptor()?.parameters?.dawn, now - start);
+      };
       this.worldRuntime.bindPresentationFrame(new WorldPresentationFrameBinding({
         getLobbyMerchant: () => this.worldRuntime?.presentation?.lobbyMerchant ?? null,
+        getActivityMoonlight: () => dawnNight()?.moonlight,
         groundFog: {
           getSystem: () => this.worldRuntime?.presentation?.groundFog ?? null,
-          getActivityStrength: () => {
-            const start = bridge.getArenaStartTime();
-            if (start <= 0 || !this.coopMissionRuntime) return undefined;
-            const now = this.coopMissionRuntime.getMissionNow(bridge.getSynchronizedNow());
-            return resolveDawnNightEnvironment(bridge.getActivityDescriptor()?.parameters?.dawn, now - start)?.fogStrength;
-          },
+          getActivityStrength: () => dawnNight()?.fogStrength,
+          getActivityTint: () => dawnNight()?.fogTint,
           getBases: () => this.worldRuntime?.materialization?.bases ?? null,
           getProjectiles: () => this.worldGameplay?.projectiles?.getPresentationRuntime() ?? null,
           effects: this.ctx.effectSystem,
@@ -1863,6 +1868,9 @@ export class ArenaLifecycleCoordinator {
           persistentBaseUnlocked: true,
           persistentBaseAreaStage: resolveHostFrozenPersistentBaseAreaStage(coopDefenseMapConfig.persistentBase.maxAreaStage),
           persistentBaseHealthRewards: getStoredPersistentBaseHealthRewards(),
+          // Dawn expansion track (D-46): the host freezes its core HP bonus into the World; peers only read it.
+          ...(dawnPlans && resolveDawnExpansionCoreHpBonus(getStoredDawnProgress().expansionLevel) > 0
+            ? { persistentBaseHpBonus: resolveDawnExpansionCoreHpBonus(getStoredDawnProgress().expansionLevel) } : {}),
         }
         : undefined,
     };

@@ -1,4 +1,5 @@
 import { createDefaultDawnProgress, sanitizeDawnProgress, type DawnProgress } from '../dawn/economy/DawnProgress';
+import { resolveDawnExpansionRewardUnlocks } from '../dawn/economy/DawnExpansionRewards';
 import type { DawnEquipmentProgressDraft } from '../dawn/economy/DawnMerchantEquipment';
 import { resolvePersonalPersistentBaseAreaStage } from '../persistentBase/PersistentBaseAreaStageResolution';
 import { getPersistentBaseHealthReward, isPersistentBaseHealthRewards, type PersistentBaseHealthReward } from '../persistentBase/PersistentBaseHealth';
@@ -1682,7 +1683,10 @@ export function setStoredPersistentBaseState(state: PersistentBaseState): void {
 
 /** Personal reward ownership; this is deliberately independent of the host placement document. */
 export function getStoredPersistentBaseRewardUnlocks(): PersistentBaseRewardId[] {
-  return [...readPreferences().progression.coopDefense.persistentBaseRewardUnlocks];
+  const coop = readPreferences().progression.coopDefense;
+  // Dawn expansion placeholders are derived from the expansion level, never stored (D-46).
+  const dawn = resolveDawnExpansionRewardUnlocks(sanitizeDawnProgress(coop.dawn)?.expansionLevel ?? 0);
+  return [...new Set([...coop.persistentBaseRewardUnlocks, ...dawn])];
 }
 
 /** Adds only new, known reward IDs and leaves the cumulative unlock set idempotent. */

@@ -9,7 +9,8 @@ export function groundHazardIgnitionDelay(
   const area = event.area;
   if (!spread) return 0;
   if (spread.direction === 'radial') {
-    if (area.type !== 'expanded-patches' || expansionProgress === undefined || !Number.isFinite(expansionProgress)) {
+    if ((area.type !== 'expanded-patches' && area.type !== 'random-patches')
+      || expansionProgress === undefined || !Number.isFinite(expansionProgress)) {
       throw new Error(`Missing radial geometry for ground hazard ${event.id}`);
     }
     return Math.round(spread.warningLeadMs + Math.max(0, Math.min(1, expansionProgress))

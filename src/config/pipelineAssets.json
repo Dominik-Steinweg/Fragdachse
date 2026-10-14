@@ -78425,6 +78425,149 @@
       }
     },
     {
+      "id": "dawn_scavenger_camp_t1",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "dawn-m3c-p02",
+      "variant": "standard",
+      "sourceSize": 128,
+      "textureKey": "dawn_scavenger_camp_t1",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "displayScale": 1.0625,
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "dawn_scavenger_camp_t1_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/dawn_scavenger_camp_t1/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/dawn_scavenger_camp_t1/sheet.png",
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 132,
+        "height": 132
+      },
+      "hashes": {
+        "idle": "8ccbe67cf92fd6d73e77776ab43d51d17e998bd8dee0b304983a579d79c624fd",
+        "sheet": "185dc2a69685cd7cb52d2dec00b90b58eb82926087eaa9295c9c8e50e86602bf"
+      }
+    },
+    {
+      "id": "dawn_scavenger_camp_t2",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "dawn-m3c-p02",
+      "variant": "standard",
+      "sourceSize": 128,
+      "textureKey": "dawn_scavenger_camp_t2",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "displayScale": 1.0625,
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "dawn_scavenger_camp_t2_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/dawn_scavenger_camp_t2/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/dawn_scavenger_camp_t2/sheet.png",
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 132,
+        "height": 132
+      },
+      "hashes": {
+        "idle": "e5b1b26eadb74d58f9fc57a8eab05309ace10013c2c7b44b1593ebfa2c1ac4d2",
+        "sheet": "1f3a06699a799b8b58be62abd1e54532b71aa7ebb0b88d3f6f23bf7a8e65d56c"
+      }
+    },
+    {
+      "id": "dawn_scavenger_camp_t3",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "dawn-m3c-p02",
+      "variant": "standard",
+      "sourceSize": 128,
+      "textureKey": "dawn_scavenger_camp_t3",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "displayScale": 1.0625,
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "dawn_scavenger_camp_t3_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/dawn_scavenger_camp_t3/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/dawn_scavenger_camp_t3/sheet.png",
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 132,
+        "height": 132
+      },
+      "hashes": {
+        "idle": "4db3b0f7829b92eea895bd0d3a7976f034bfbba59f1a0b815655a39b5b997ec1",
+        "sheet": "4c32807cc372f0dde3cfd06d540fb227e726b02538233104abb41fd40174d732"
+      }
+    },
+    {
+      "id": "dawn_supply_crate_carried",
+      "category": "powerup",
+      "gameIds": [],
+      "revision": "dawn-m3c-p02",
+      "variant": "standard",
+      "sourceSize": 56,
+      "textureKey": "dawn_supply_crate_carried",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "dawn_supply_crate_carried_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/dawn_supply_crate_carried/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/dawn_supply_crate_carried/sheet.png",
+      "layout": {
+        "frameWidth": 56,
+        "frameHeight": 56,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 60,
+        "height": 60
+      },
+      "hashes": {
+        "idle": "36b74123f025f7a853f525c65e26078311eeabe3e67b6009577e020f339e5f6d",
+        "sheet": "e270984bd1a14e4eee1a1d4a8898b2b3f76c1cf516e08a356eb16e3fe3d7b7ea"
+      }
+    },
+    {
       "id": "bomber-drone-body",
       "category": "companion",
       "gameIds": [

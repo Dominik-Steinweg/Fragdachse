@@ -37,6 +37,8 @@ export interface CoopDefenseDebugValues {
   persistentBaseUnlocked: boolean;
   persistentBaseAreaStage: PersistentBaseAreaStage;
   persistentBaseRewardUnlocks: readonly PersistentBaseRewardId[];
+  /** From Dachs Till Dawn is open (Map-20 win or debug unlock). */
+  dawnUnlocked?: boolean;
 }
 
 type ButtonIntent = 'neutral' | 'positive' | 'danger';
@@ -61,6 +63,7 @@ export class CoopDefenseDebugOverlay {
     private readonly getBalanceRecordingEnabled: () => boolean = () => false,
     private readonly onBalanceRecordingChanged: (enabled: boolean) => void = () => undefined,
     private readonly onOpenBalanceReport: () => void = () => undefined,
+    private readonly onUnlockDawn: () => void = () => undefined,
   ) {}
 
   show(): void {
@@ -299,6 +302,19 @@ export class CoopDefenseDebugOverlay {
       this.refresh();
     };
     campaignSection.appendChild(unlockUnreleasedMapsButton);
+
+    const unlockDawnButton = createButton(
+      t(currentValues.dawnUnlocked ? 'ui.coopDebug.dawnUnlocked' : 'ui.coopDebug.unlockDawn'),
+      'positive',
+    );
+    unlockDawnButton.style.marginTop = '7px';
+    unlockDawnButton.disabled = currentValues.dawnUnlocked === true;
+    unlockDawnButton.title = t('ui.coopDebug.dawnHint');
+    unlockDawnButton.onclick = () => {
+      this.onUnlockDawn();
+      this.refresh();
+    };
+    campaignSection.appendChild(unlockDawnButton);
 
     const itemSection = createSection(t('ui.coopDebug.items'));
     const itemStatus = createStatusLine(

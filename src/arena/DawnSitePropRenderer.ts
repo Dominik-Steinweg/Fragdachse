@@ -159,14 +159,18 @@ export class DawnSitePropRenderer {
     const seen = new Set<string>();
     for (const item of items) {
       if (!this.scene.textures.exists(DAWN_M3_ASSET_KEYS.supplyCrate)) break;
+      const carried = item.holderId !== null;
+      // Carried variant (strap, slight tilt) when the art exists; otherwise the ground crate rides along.
+      const key = carried && this.scene.textures.exists(DAWN_M3_ASSET_KEYS.supplyCrateCarried)
+        ? DAWN_M3_ASSET_KEYS.supplyCrateCarried : DAWN_M3_ASSET_KEYS.supplyCrate;
       let crate = this.crates.get(item.id);
       if (!crate) {
-        crate = this.scene.add.image(item.x, item.y, DAWN_M3_ASSET_KEYS.supplyCrate)
-          .setDisplaySize(DAWN_SUPPLY_CRATE_DISPLAY_SIZE, DAWN_SUPPLY_CRATE_DISPLAY_SIZE);
+        crate = this.scene.add.image(item.x, item.y, key);
         this.crates.set(item.id, crate);
       }
-      const carried = item.holderId !== null;
-      crate.setPosition(item.x, item.y - (carried ? 10 : 0)).setDepth(carried ? DEPTH.PLAYERS + 0.2 : DEPTH.BASES + 1);
+      if (crate.texture.key !== key) crate.setTexture(key);
+      crate.setDisplaySize(DAWN_SUPPLY_CRATE_DISPLAY_SIZE, DAWN_SUPPLY_CRATE_DISPLAY_SIZE)
+        .setPosition(item.x, item.y - (carried ? 10 : 0)).setDepth(carried ? DEPTH.PLAYERS + 0.2 : DEPTH.BASES + 1);
       seen.add(item.id);
     }
     for (const [id, crate] of this.crates) {

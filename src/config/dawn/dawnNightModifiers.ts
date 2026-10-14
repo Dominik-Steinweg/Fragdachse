@@ -9,8 +9,52 @@ export interface DawnNightModifier {
   readonly nightBudgetMultiplier: number;
   readonly enemyWeightMultipliers: Readonly<Record<string, number>>;
   readonly fogStrength?: number;
+  /** RGB multiplier for the existing ground fog this night (reddish haze, cool slate); absent = neutral. */
+  readonly fogTint?: readonly [number, number, number];
   readonly additionalBlocks?: readonly string[];
-  readonly airstrikes?: { readonly intervalMs: number; readonly strikeCount: number; readonly endClearanceMs: number; readonly radiusCells: number };
+  /** Bomber runs: straight lines across the base zone; the formation flies at `runSpeedPxPerSec` (D-47). */
+  readonly airstrikes?: { readonly intervalMs: number; readonly strikeCount: number; readonly endClearanceMs: number;
+    readonly radiusCells: number; readonly runSpeedPxPerSec: number };
+  /** Blood moon: the night ambient keeps its brightness (times `gain`) but takes this hue (D-47). */
+  readonly moonlight?: DawnMoonlight;
+  /** Fire night: spreading ground fire through the ground-hazard system, never on core or lanes (D-47). */
+  readonly groundFire?: DawnNightGroundFire;
+}
+
+export interface DawnMoonlight {
+  readonly tint: readonly [number, number, number];
+  readonly gain: number;
+}
+
+export interface DawnNightGroundFire {
+  /** Ignition waves across the night; `startRatio` of the night duration, ascending. */
+  readonly ignitions: readonly { readonly startRatio: number; readonly patchCount: number }[];
+  readonly minPatchRadiusCells: number;
+  readonly maxPatchRadiusCells: number;
+  /** Time from ignition at the patch centre to its full radius. */
+  readonly spreadMs: number;
+  readonly warningLeadMs: number;
+  /** Clear disc around the base anchor (beyond the build reservation). */
+  readonly coreClearanceCells: number;
+  /** Clear lane half-width from every front edge to the base. */
+  readonly laneClearanceCells: number;
+  /** Clearance around every structure, sites included. */
+  readonly siteClearanceCells: number;
+  readonly burnDurationMs: number;
+  readonly burnDamagePerTick: number;
+}
+
+function isValidGroundFire(fire: DawnNightGroundFire): boolean {
+  const integer = (n: unknown, min: number, max: number) => Number.isSafeInteger(n) && (n as number) >= min && (n as number) <= max;
+  const ignitions = fire?.ignitions;
+  return Array.isArray(ignitions) && ignitions.length > 0 && ignitions.length <= 6
+    && ignitions.every((wave, index) => wave && Number.isFinite(wave.startRatio) && wave.startRatio >= 0 && wave.startRatio <= 0.8
+      && (index === 0 || wave.startRatio > ignitions[index - 1].startRatio) && integer(wave.patchCount, 1, 8))
+    && Number.isFinite(fire.minPatchRadiusCells) && fire.minPatchRadiusCells >= 1
+    && Number.isFinite(fire.maxPatchRadiusCells) && fire.maxPatchRadiusCells >= fire.minPatchRadiusCells && fire.maxPatchRadiusCells <= 12
+    && integer(fire.warningLeadMs, 0, 10000) && integer(fire.spreadMs, fire.warningLeadMs + 1000, 180000)
+    && integer(fire.coreClearanceCells, 0, 30) && integer(fire.laneClearanceCells, 1, 12) && integer(fire.siteClearanceCells, 0, 12)
+    && integer(fire.burnDurationMs, 1, 10000) && Number.isFinite(fire.burnDamagePerTick) && fire.burnDamagePerTick >= 0;
 }
 
 export function validateDawnNightModifiers(raw: unknown, blocks: readonly DawnWaveBlock[]): readonly DawnNightModifier[] {
@@ -34,15 +78,25 @@ export function validateDawnNightModifiers(raw: unknown, blocks: readonly DawnWa
       return fail(`${entry.id}: invalid enemy weight multipliers`);
     }
     if (entry.fogStrength !== undefined && (!positive(entry.fogStrength) || entry.fogStrength > 2)) return fail('fogStrength must be in (0, 2]');
+    if (entry.fogTint !== undefined && (!Array.isArray(entry.fogTint) || entry.fogTint.length !== 3
+      || entry.fogTint.some(channel => !Number.isFinite(channel) || channel < 0 || channel > 1.25))) return fail(`${entry.id}: fogTint needs three channels in [0, 1.25]`);
     if (entry.additionalBlocks !== undefined && (!Array.isArray(entry.additionalBlocks) || entry.additionalBlocks.length === 0
       || new Set(entry.additionalBlocks).size !== entry.additionalBlocks.length
       || entry.additionalBlocks.some(id => !blocks.some(block => block.id === id)))) return fail('unknown or duplicate additional block');
     const air = entry.airstrikes;
-    if (air && (![air.intervalMs, air.strikeCount, air.endClearanceMs, air.radiusCells].every(n => positive(n) && Number.isSafeInteger(n))
-      || air.intervalMs < 10000 || air.strikeCount > 32 || air.endClearanceMs < 15000)) return fail('invalid bounded airstrike timing/count');
+    if (air && (![air.intervalMs, air.strikeCount, air.endClearanceMs, air.radiusCells, air.runSpeedPxPerSec].every(n => positive(n) && Number.isSafeInteger(n))
+      || air.intervalMs < 10000 || air.strikeCount > 32 || air.endClearanceMs < 15000
+      || air.runSpeedPxPerSec < 200 || air.runSpeedPxPerSec > 2000)) return fail('invalid bounded airstrike timing/count/run speed');
+    const moon = entry.moonlight;
+    if (moon !== undefined && (!moon || !Array.isArray(moon.tint) || moon.tint.length !== 3
+      || moon.tint.some(channel => !Number.isFinite(channel) || channel < 0 || channel > 1) || Math.max(...moon.tint) <= 0
+      || !positive(moon.gain) || moon.gain > 3)) return fail(`${entry.id}: moonlight needs a tint in [0, 1] and a gain in (0, 3]`);
+    if (entry.groundFire !== undefined && !isValidGroundFire(entry.groundFire)) return fail(`${entry.id}: invalid groundFire`);
     if ((entry.id === 'fog') !== (entry.fogStrength !== undefined)
       || (entry.id === 'bombers') !== (air != null)
-      || (entry.id === 'fire') !== (entry.additionalBlocks !== undefined)) return fail(`${entry.id}: missing or misplaced effect parameters`);
+      || (entry.id === 'blood-moon') !== (moon !== undefined)
+      || (entry.id === 'fire') !== (entry.additionalBlocks !== undefined)
+      || (entry.id === 'fire') !== (entry.groundFire !== undefined)) return fail(`${entry.id}: missing or misplaced effect parameters`);
   }
   const modifiers = entries as DawnNightModifier[];
   for (let index = 0; index < 10; index++) {

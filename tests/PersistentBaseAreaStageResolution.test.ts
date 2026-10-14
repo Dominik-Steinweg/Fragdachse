@@ -26,7 +26,15 @@ describe('personal progression and World freeze', () => {
 describe('Dawn expansion config validation', () => {
   it('loads authored tuning and accepts alternative supported tuning', () => {
     expect(() => validateDawnExpansionConfig(DAWN_EXPANSION_CONFIG)).not.toThrow();
-    expect(() => validateDawnExpansionConfig({ maxExpansionLevel: 1, constructionCapacityBonusPerStageAboveCampaign: 7 })).not.toThrow();
+    expect(() => validateDawnExpansionConfig({ maxExpansionLevel: 6, constructionCapacityBonusPerStageAboveCampaign: 7,
+      radiusExpansionLevels: 4, coreHpBonusByLevel: [100, 300] })).not.toThrow();
+  });
+  it('ends the radius at stage 6 and needs a strictly increasing core HP table for the rest (D-46)', () => {
+    const base = { maxExpansionLevel: 6, constructionCapacityBonusPerStageAboveCampaign: 2, radiusExpansionLevels: 4 };
+    for (const coreHpBonusByLevel of [[100], [100, 100], [300, 100], [100, 300, 500]]) {
+      expect(() => validateDawnExpansionConfig({ ...base, coreHpBonusByLevel }), JSON.stringify(coreHpBonusByLevel)).toThrow();
+    }
+    expect(() => validateDawnExpansionConfig({ ...base, radiusExpansionLevels: 5, coreHpBonusByLevel: [100] })).toThrow();
   });
   it.each([null, [], {}, { maxExpansionLevel: 100, constructionCapacityBonusPerStageAboveCampaign: 1 },
     { maxExpansionLevel: -1, constructionCapacityBonusPerStageAboveCampaign: 1 },

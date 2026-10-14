@@ -1,6 +1,7 @@
 import { resolveDawnExpansionCost } from '../dawn/economy/DawnEconomy';
 import type { DawnProgress } from '../dawn/economy/DawnProgress';
 import { CELL_SIZE } from '../config';
+import { resolveDawnExpansionReward } from '../dawn/economy/DawnExpansionRewards';
 import { resolvePersonalPersistentBaseAreaStage } from './PersistentBaseAreaStageResolution';
 import { getPersistentBaseBuildAreaExtentCells, isCellInsidePersistentBaseBuildArea, resolvePersistentBaseBuildAreaForStage,
   PERSISTENT_BASE_CAMPAIGN_MAX_AREA_STAGE,
@@ -64,7 +65,8 @@ export function buildPersistentBaseExpansionPreview(progress: Pick<DawnProgress,
   const stage = resolvePersonalPersistentBaseAreaStage({ campaignStage, dawnExpansionLevel: progress.expansionLevel + 1 });
   const area = resolvePersistentBaseBuildAreaForStage(stage);
   const dawnOnly = stage > siteMaxAreaStage;
-  return { stage, area, radius: getPersistentBaseBuildAreaExtentCells(area), cost, dawnOnly,
-    // Beyond the site ceiling the ring still shows the Dawn-arena size; the label says so.
-    edges: buildPersistentBaseAreaBoundary(area) };
+  const reward = resolveDawnExpansionReward(progress.expansionLevel + 1);
+  return { stage, area, radius: getPersistentBaseBuildAreaExtentCells(area), cost, dawnOnly, reward,
+    // The radius ends at 10 (D-46): later expansions show their reward as text, never a ring.
+    edges: reward?.kind === 'core' ? [] : buildPersistentBaseAreaBoundary(area) };
 }

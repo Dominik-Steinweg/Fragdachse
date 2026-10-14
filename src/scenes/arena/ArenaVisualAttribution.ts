@@ -100,7 +100,7 @@ export const GRAPHICS_FAMILIES = {
   baseMarkers: ['BaseEntity', 'ArenaBuilder', 'WorldHealthBarRenderer'],
   placementPreview: ['PlacementPreviewRenderer', 'PersistentBaseVisuals'],
   rockTools: ['WorldHealthBarRenderer'],
-  gameplayHud: ['ArenaHUD', 'HudCard', 'HudStatusStrip', 'CoopDefenseTutorialPanel', 'CoopDefenseObjectiveAnnouncement', 'RoundStartCountdownView', 'NightModifierAtmosphere'],
+  gameplayHud: ['ArenaHUD', 'HudCard', 'HudStatusStrip', 'CoopDefenseTutorialPanel', 'CoopDefenseObjectiveAnnouncement', 'RoundStartCountdownView'],
 } as const;
 
 export type ClassicParticleFamily = keyof typeof CLASSIC_PARTICLE_FAMILIES;

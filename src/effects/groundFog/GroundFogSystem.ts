@@ -60,6 +60,7 @@ export class GroundFogSystem {
   private nextHitscan = -1;
   private elapsed = 0;
   private density: readonly [number, number] | null = null;
+  private tint: readonly [number, number, number] | null = null;
   private readonly tracks = new Map<MovementVisualSource, Motion>();
   private readonly sample = createMovementVisualSample();
   private motionFrame = 0;
@@ -169,6 +170,7 @@ export class GroundFogSystem {
         const measuredAt = loadingTimeline.start();
         this.gpu = new FogGpuField(this.scene, this.terrain, this.seed, this.tuning, DEPTH.GROUND_FOG_COMPOSITE);
         this.gpu.setWoodlandLight(this.woodlandLight);
+        this.gpu.setTint(this.tint);
         loadingTimeline.end('fog/field-init', measuredAt);
       }
       if (this.measureGpu) { this.timer ??= new FogGpuTimer(renderer.gl); this.timer.begin(); }
@@ -180,6 +182,8 @@ export class GroundFogSystem {
       this.gpu.prepare(view, this.elapsed);
       loadingTimeline.end('fog/prepare-submit', prepareAt);
       const target = fogDensityAt(minutes).map(x => x * this.strength * FOG.densityScale) as [number, number];
+      // Above 1 the strength also adds banks; denser banks alone would only saturate the existing ones.
+      this.gpu.setBankCover(this.strength - 1);
       if (!this.density) this.density = target;
       if (delta > 150) { this.impulses.clear(); this.tracks.clear(); }
       const dt = Math.max(0, Math.min(delta, FOG.stepMs * FOG.maxSteps));
@@ -238,6 +242,8 @@ export class GroundFogSystem {
   setWoodlandLight(binding: FogWoodlandLight | null): void {
     this.woodlandLight=binding;this.gpu?.setWoodlandLight(binding);
   }
+  /** Activity colour overlay of this World's fog (e.g. Dawn night modifiers); null = neutral. */
+  setTint(tint: readonly [number, number, number] | null): void { this.tint = tint; this.gpu?.setTint(tint); }
   prepare(minutes: number, view: FogRect): boolean {
     if (this.stats.status === 'preparing') { this.update(0, minutes, view); this.gpu?.hide(); }
     return this.stats.status !== 'preparing';

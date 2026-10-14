@@ -54,15 +54,16 @@ export type PersistentBaseBuildArea =
 
 /** Semantische Ausbau-Stufe der persistenten Basis. */
 export type CampaignPersistentBaseAreaStage = 0 | 1 | 2;
-export type PersistentBaseAreaStage = CampaignPersistentBaseAreaStage | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
+/** Radius 4 + stage; the base radius stays at most 10 (stage 6, D-46). */
+export type PersistentBaseAreaStage = CampaignPersistentBaseAreaStage | 3 | 4 | 5 | 6;
 
-export const PERSISTENT_BASE_MAX_AREA_STAGE = 11;
+export const PERSISTENT_BASE_MAX_AREA_STAGE = 6;
 export const PERSISTENT_BASE_CAMPAIGN_MAX_AREA_STAGE = 2;
 
 export const DEFAULT_PERSISTENT_BASE_AREA_STAGE: CampaignPersistentBaseAreaStage = 0;
 
 /** Authoritative Stage-Werte an der Persistenz- und Netzwerkgrenze. */
-export const PERSISTENT_BASE_AREA_STAGES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as const satisfies readonly PersistentBaseAreaStage[];
+export const PERSISTENT_BASE_AREA_STAGES = [0, 1, 2, 3, 4, 5, 6] as const satisfies readonly PersistentBaseAreaStage[];
 
 /** Baubereich der ersten Stufe; unabhaengig von den festen Domains des Basiskerns. */
 export const DEFAULT_PERSISTENT_BASE_BUILD_AREA = Object.freeze({

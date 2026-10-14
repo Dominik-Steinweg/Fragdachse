@@ -9,7 +9,7 @@
     "trackMode": "none",
     "persistentBase": {
       "baseId": "dawn-core",
-      "maxAreaStage": 11,
+      "maxAreaStage": 6,
       "anchor": { "gridX": 60, "gridY": 42 }
     },
     "rockField": {

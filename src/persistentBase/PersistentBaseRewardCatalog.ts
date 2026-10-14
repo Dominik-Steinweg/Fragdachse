@@ -112,6 +112,15 @@ export const PERSISTENT_BASE_REWARD_DEFINITIONS: readonly PersistentBaseRewardDe
     placementRule: 'persistent-build-area',
     presentation: { labelKey: 'construction.watchtower.name', iconKey: WATCHTOWER_REWARD_ICON_KEY },
   },
+  // Dawn expansion placeholders (D-46): same plasma turret, unlocked by expansions 5..9.
+  ...([1, 2, 3, 4, 5] as const).map((index): PersistentBaseRewardDefinition => ({
+    id: `base_plasma_turret_dawn_${index}`,
+    category: 'baseTurret',
+    gameplaySource: { kind: 'construction-definition', constructionId: 'spore_turret', weaponId: 'SPORE_TURRET_PLASMA' },
+    initialState: { respawnMs: null, spawnOnArenaStart: true },
+    placementRule: 'base-surface',
+    presentation: { labelKey: 'reward.plasma_turret.name', iconKey: 'reward_plasma_turret' },
+  })),
 ]);
 
 export function getPersistentBaseRewardDefinition(

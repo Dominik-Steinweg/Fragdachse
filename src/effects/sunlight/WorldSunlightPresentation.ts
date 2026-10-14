@@ -14,7 +14,8 @@ import { buildWoodlandEcology, EcologyWaterField } from '../../arena/WoodlandEco
 import { WoodlandEcologyRenderer } from '../../arena/WoodlandEcologyRenderer';
 import { WorldSunComposite } from './WorldSunComposite';
 import { createSunTuning, resolveSunAtmosphere, SunAtmosphereClock } from './SunAtmosphere';
-import { resolveSunAmbient } from './SunSky';
+import { resolveMoonlitAmbient, resolveSunAmbient } from './SunSky';
+import { resolveSkyState } from '../TimeOfDay';
 import { validateSunTuning, sunAtmosphereGrade, type SunTuning } from './SunTuning';
 import { createSunPath, resolveSunPath } from './SunPath';
 import type { SunCloudState } from './cloudShadow';
@@ -39,6 +40,8 @@ export interface WorldSunlightTargets {
  worldContext: WorldRuntimeContext;
 }
 type Targets = WorldSunlightTargets;
+/** A blood moon rises over a few seconds instead of switching the night colour. */
+const MOONLIGHT_FADE_MS=4000;
 /** Active render resources belong to one displayed World, never its transferable terrain cache. */
 export class WorldSunlightPresentation {
  private disposed=false;
@@ -95,9 +98,20 @@ export class WorldSunlightPresentation {
   if(targets.fog)Object.assign(targets.fog.tuning,{opacity:.58,detail:.88});
   } catch(error){this.destroy();throw error;} finally {loadingTimeline.end('sunlight/init',measuredAt);}
  }
+ /** Activity overlay through this sole ambient writer (Dawn blood moon); null fades back to the World sky. */
+ setActivityMoonlight(moon:{readonly tint:readonly number[];readonly gain:number}|null):void {
+  if(moon)this.moon=moon;
+  this.moonTarget=moon?1:0;
+ }
+ private moon:{readonly tint:readonly number[];readonly gain:number}|null=null;
+ private moonTarget=0;
+ private moonWeight=0;
  update(minutes:number,presentationTimeMs:number):void {
   if(this.disposed)return;
-  this.lastSceneTime=Number.isFinite(presentationTimeMs)?presentationTimeMs:0;
+  const time=Number.isFinite(presentationTimeMs)?presentationTimeMs:0;
+  const step=Math.max(0,time-this.lastSceneTime)/MOONLIGHT_FADE_MS;
+  this.moonWeight=this.moonTarget>this.moonWeight?Math.min(this.moonTarget,this.moonWeight+step):Math.max(this.moonTarget,this.moonWeight-step);
+  this.lastSceneTime=time;
   this.lastMinute=this.atmosphereClock.resolve(minutes,this.lastSceneTime);
   this.sync();
  }
@@ -123,7 +137,12 @@ export class WorldSunlightPresentation {
   this.ecologyQuality.rockFloraContact=this.sunTuning.rockFloraContact;
   this.ecologyQuality.rockFloraBlend=this.sunTuning.rockFloraBlend;
   targets.rockOverlays?.setEcologyTuning(this.ecologyQuality);
-  if(minute!==this.ambientMinute){targets.lighting.setSunAmbient(resolveSunAmbient(minute));this.ambientMinute=minute;}
+  if(minute!==this.ambientMinute||this.moonWeight!==this.ambientMoonWeight){
+    const sun=resolveSunAmbient(minute);
+    targets.lighting.setSunAmbient(this.moon&&this.moonWeight>0
+      ?resolveMoonlitAmbient(sun??resolveSkyState(minute).ambientColor,this.moon,this.moonWeight):sun);
+    this.ambientMinute=minute;this.ambientMoonWeight=this.moonWeight;
+  }
   if(minute!==this.sunMinute||this.azimuthOverride!==this.sunTuning.sunAzimuthOverride){
     this.clouds.sunPath=resolveSunPath(minute,this.sunTuning.sunAzimuthOverride,this.sunPath);
     if(this.reviewSun){
@@ -155,6 +174,7 @@ export class WorldSunlightPresentation {
  }
  private gradeBound=false;
  private ambientMinute=NaN;
+ private ambientMoonWeight=0;
  private sunMinute=NaN;
  private azimuthOverride:number|null=null;
   private syncWoodland(targets:Targets):void {
