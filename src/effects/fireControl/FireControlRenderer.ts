@@ -160,7 +160,7 @@ export class FireControlRenderer {
       // dissolves first and the rim goes out last.
       Object.assign(v.filter.uniforms, { time: this.store.time, preset: this.preset,
         materialize: v.holo ? clamp((materialize - HOLO_COPY_DELAY) / (1 - HOLO_COPY_DELAY)) : materialize,
-        vanish: v.holo ? clamp(vanish / HOLO_COPY_VANISH) : vanish, warning });
+        vanish: v.holo ? clamp(vanish / HOLO_COPY_VANISH) : vanish, warning, clarity: v.holo ? 1 : 0 });
       if (v.holo) this.holoPlate(id, v, now, clamp(materialize / HOLO_RIM_CHARGE),
         1 - clamp((vanish - HOLO_RIM_HOLD) / (1 - HOLO_RIM_HOLD)), warning);
       else this.beam(id, v, now, vanish);

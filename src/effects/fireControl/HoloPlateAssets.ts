@@ -7,12 +7,12 @@ import { ensureCanvasTexture } from '../EffectUtils';
  * darüber; die Scheibe selbst bleibt matt, damit der Turm dominant bleibt.
  */
 export const HOLO_PLATE_TEXTURE = '__fire_control_holo_plate';
-/** Dargestellte Kantenlänge der Scheibe; der Turm-Sprite ist 40 px groß. */
-export const HOLO_PLATE_SIZE = 52;
+/** Dargestellte Kantenlänge der Scheibe: etwa 1,25 × Turmfuß (Turm-Sprite 40 px, Fuß rund 33 px). */
+export const HOLO_PLATE_SIZE = 41;
 /** Mittelpunktsabstand der Rand-Ticks in Weltpixeln (knapp innerhalb der Achteckkante). */
-export const HOLO_PLATE_TICK_RADIUS = 21.5;
+export const HOLO_PLATE_TICK_RADIUS = 16.8;
 /** Deckkraft der Scheibe; der Boden bleibt erkennbar. */
-export const HOLO_PLATE_ALPHA = 0.82;
+export const HOLO_PLATE_ALPHA = 0.58;
 
 const TEXTURE_SIZE = 64;
 
@@ -35,12 +35,12 @@ export function ensureHoloPlateTexture(scene: Phaser.Scene): void {
     octagon(30.5);
     ctx.fillStyle = body;
     ctx.fill();
-    ctx.lineWidth = 1.6;
+    ctx.lineWidth = 1.1;
     ctx.strokeStyle = '#2f4746';
     ctx.stroke();
     octagon(27.5);
     ctx.lineWidth = 1;
-    ctx.strokeStyle = 'rgba(8,14,14,0.85)';
+    ctx.strokeStyle = 'rgba(8,14,14,0.55)';
     ctx.stroke();
     // Ruhiger Kern: zwei feine Ringe und ein schwaches Zentrumskreuz.
     ctx.strokeStyle = 'rgba(52,78,76,0.75)';

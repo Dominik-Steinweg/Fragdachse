@@ -59,17 +59,17 @@ void main() {
     float ca = sector * TAU / 8.0;
     vec2 dir = vec2(cos(ca), sin(ca));
     float radial = dot(q, dir) - radius, tangent = dot(q, vec2(-dir.y, dir.x));
-    float bar = (1.0 - smoothstep(.7, .7 + uPixel * .9, abs(radial)))
-      * (1.0 - smoothstep(3.2, 3.2 + uPixel * .9, abs(tangent)));
-    float halo = exp(-radial * radial / 4.0 - tangent * tangent / 18.0);
+    float bar = (1.0 - smoothstep(.42, .42 + uPixel * .9, abs(radial)))
+      * (1.0 - smoothstep(2.3, 2.3 + uPixel * .9, abs(tangent)));
+    float halo = exp(-radial * radial / 2.0 - tangent * tangent / 8.0);
     // Clockwise from the top tick (screen y points down, so the top is sector -2).
     float order = mod(sector + 10.0, 8.0);
     float lit = smoothstep(order / 8.0, (order + 1.0) / 8.0, opening * 1.08);
     float life = mix(.32, 1.0, step(order, remaining * 8.0 - .001));
     float flicker = 1.0 - mode * .5 * step(.6, hash1(floor(uTime * 14.0) + order * 7.0 + vState.w));
     float strength = lit * life * flicker * (1.0 + flash * .5);
-    intensity = (bar * 1.3 + halo * .28) * strength;
-    core = bar * .4 * strength;
+    intensity = (bar * 1.1 + halo * .14) * strength;
+    core = bar * .3 * strength;
   } else if (kind > 4.5) {
     // One directed burst per transported shot. q is aligned with the shot: +x points outward.
     // The ring segment flares, then a short streak leaves the iris; nothing points back
