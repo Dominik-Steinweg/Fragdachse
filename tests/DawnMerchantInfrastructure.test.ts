@@ -53,11 +53,11 @@ describe('Dawn infrastructure purchases', () => {
 
   it('freezes round input independently of later progress changes', () => {
     const progress = createDefaultDawnProgress();
-    progress.infrastructure = { 'repair-drones': 2, 'scrap-magnet': 1 };
+    progress.infrastructure = { 'repair-drones': 2, 'scrap-magnet': 1, 'scrap-scanner': 1 };
     const frozen = freezeDawnInfrastructure(progress);
     progress.infrastructure['repair-drones'] = 3;
     progress.infrastructure['scrap-magnet'] = 0;
-    expect(frozen).toEqual({ repairDrones: 2, scrapMagnet: 1 });
+    expect(frozen).toEqual({ repairDrones: 2, scrapMagnet: 1, scrapScanner: 1 });
     expect(Object.isFrozen(frozen)).toBe(true);
   });
 });

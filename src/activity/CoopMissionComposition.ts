@@ -1,6 +1,8 @@
 import { isDawnActivityDefinitionId } from '../dawn/contracts/DawnIds';
 import { resolveDawnSites } from '../dawn/resolution/DawnScenarioResolution';
-import { getDawnSchedule, getDawnThreatCurve } from '../config/dawn/dawnContent';
+import { getDawnArenaTemplate, getDawnSchedule, getDawnThreatCurve } from '../config/dawn/dawnContent';
+import { createDawnScavengerPort } from '../dawn/runtime/DawnScavengerPort';
+import { CELL_SIZE } from '../config';
 import { DawnActivityRuntime } from '../dawn/runtime/DawnActivityRuntime';
 import { worldCellCenter } from '../world/WorldMetrics';
 import type { BossIntroState } from '../config/bossIntros';
@@ -286,6 +288,18 @@ export class CoopMissionComposition {
         elapsedMs: () => runtime.getMissionNow(network.getSynchronizedNow()) - network.getArenaStartTime(),
         isActive: () => network.isActivityLive(runtime.descriptor),
         pickups: powerUpSystem,
+        scavengers: { spawn: request => runtime.enemyManager
+          ? createDawnScavengerPort(runtime.enemyManager, () => network.isActivityLive(runtime.descriptor)).spawn(request) : [] },
+        escapeTarget: site => {
+          // Away from the base core, to the arena edge two cells inside.
+          const m = world.metrics, from = worldCellCenter(m, site.slot.anchor.gridX, site.slot.anchor.gridY);
+          const anchor = getDawnArenaTemplate(worldPlan.templateId).world.persistentBase.anchor;
+          const core = worldCellCenter(m, anchor.gridX, anchor.gridY);
+          const dx = from.x - core.x, dy = from.y - core.y, length = Math.hypot(dx, dy) || 1;
+          const inset = 2 * CELL_SIZE;
+          return { x: Math.max(m.offsetX + inset, Math.min(m.offsetX + m.widthPx - inset, from.x + dx / length * m.widthPx)),
+            y: Math.max(m.offsetY + inset, Math.min(m.offsetY + m.heightPx - inset, from.y + dy / length * m.heightPx)) };
+        },
       });
       runtime.bind({ attach: () => {}, detach: () => { dawn?.destroy(); dawn = null; } });
     }
@@ -315,6 +329,7 @@ export class CoopMissionComposition {
         dawn?.onObjectiveCompleted(objectiveId);
         this.options.onObjectiveCompleted?.(objectiveId);
       },
+      onObjectiveActivated: objectiveId => dawn?.onObjectiveActivated(objectiveId),
       onCheckpointActivated: this.options.onCheckpointActivated,
       broadcastCarryDeliveredFx: this.options.broadcastCarryDeliveredFx,
       patchBarrierCells: this.options.patchBarrierCells,

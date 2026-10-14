@@ -6,7 +6,7 @@ import type { CoopDefenseItemRarity } from '../../types';
  * Infrastruktur, die der Haendler verkauft. Die Stufe steht persoenlich in
  * `DawnProgress.infrastructure[id]` (0 = nicht gekauft); die Runde nutzt die Stufen des Hosts.
  */
-export const DAWN_INFRASTRUCTURE_IDS = ['repair-drones', 'scrap-magnet'] as const;
+export const DAWN_INFRASTRUCTURE_IDS = ['repair-drones', 'scrap-magnet', 'scrap-scanner'] as const;
 export type DawnInfrastructureId = typeof DAWN_INFRASTRUCTURE_IDS[number];
 
 export const DAWN_MERCHANT_CATEGORIES = ['expansion', 'infrastructure', 'upgrades', 'equipment'] as const;

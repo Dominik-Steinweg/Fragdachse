@@ -12,6 +12,8 @@ export interface DawnSiteCompositionInput {
   readonly random: DawnRandom;
   readonly template: DawnArenaTemplate;
   readonly curve: DawnThreatCurve;
+  /** Host owns the scrap scanner: hidden archetypes keep their navigation markers this round. */
+  readonly scrapScanner?: boolean;
 }
 
 /**
@@ -20,7 +22,7 @@ export interface DawnSiteCompositionInput {
  *
  * Rein und geseedet; das Ergebnis steht in Slot-Reihenfolge des Templates.
  */
-export function composeDawnSites({ random, template, curve }: DawnSiteCompositionInput): DawnSitePlan[] {
+export function composeDawnSites({ random, template, curve, scrapScanner = false }: DawnSiteCompositionInput): DawnSitePlan[] {
   const count = Math.min(curve.siteCount, template.salvageSlots.length);
   const slots = pickSpreadSlots(random, template, count);
   const tiers = Array.from({ length: count }, () => pickTier(random, curve)).sort((left, right) => right - left);
@@ -30,11 +32,16 @@ export function composeDawnSites({ random, template, curve }: DawnSiteCompositio
   const byDistance = [...slots].sort((left, right) => distance(right) - distance(left)
     || template.salvageSlots.indexOf(left) - template.salvageSlots.indexOf(right));
   const tierBySlot = new Map(byDistance.map((slot, index) => [slot.id, tiers[index]]));
-  const archetypes = pickArchetypes(random, count);
+  const archetypes = pickArchetypes(random, count, curve.threat);
   const archetypeBySlot = new Map(slots.map((slot, index) => [slot.id, archetypes[index]]));
   return template.salvageSlots
     .filter((slot) => tierBySlot.has(slot.id))
-    .map((slot) => ({ slotId: slot.id, archetypeId: archetypeBySlot.get(slot.id)!, tier: tierBySlot.get(slot.id)! }));
+    .map((slot) => {
+      const archetypeId = archetypeBySlot.get(slot.id)!;
+      // The plan carries the effective visibility: the host's scanner reveals hidden archetypes.
+      const hidden = !scrapScanner && getDawnSiteArchetypes().find(entry => entry.id === archetypeId)?.hidden === true;
+      return { slotId: slot.id, archetypeId, tier: tierBySlot.get(slot.id)!, ...(hidden ? { hidden: true as const } : {}) };
+    });
 }
 
 /** Bevorzugt jeweils den am wenigsten genutzten Quadranten und das am wenigsten genutzte Band. */
@@ -62,12 +69,21 @@ function pickTier(random: DawnRandom, curve: DawnThreatCurve): number {
   return random.pickWeighted(tiers, (tier) => curve.tierWeights[tier - 1])!;
 }
 
-/** Jeder Archetyp kommt einmal vor, solange Sites reichen; der Rest folgt den Auswahlgewichten. */
-function pickArchetypes(random: DawnRandom, count: number): string[] {
-  const archetypes = getDawnSiteArchetypes();
-  const picks = archetypes.slice(0, count).map(({ id }) => id);
+/**
+ * Verschiedene Archetypen, solange Sites reichen (gewichtet ohne Zuruecklegen); der Rest folgt den
+ * Auswahlgewichten. Archetypen ab einem hoeheren Threat bleiben bis dahin aussen vor.
+ */
+function pickArchetypes(random: DawnRandom, count: number, threat: number): string[] {
+  const eligible = getDawnSiteArchetypes().filter((archetype) => (archetype.minThreat ?? 1) <= threat);
+  const open = [...eligible];
+  const picks: string[] = [];
+  while (picks.length < count && open.length > 0) {
+    const archetype = random.pickWeighted(open, (entry) => entry.selectionWeight)!;
+    open.splice(open.indexOf(archetype), 1);
+    picks.push(archetype.id);
+  }
   while (picks.length < count) {
-    picks.push(random.pickWeighted(archetypes, (archetype) => archetype.selectionWeight)!.id);
+    picks.push(random.pickWeighted(eligible, (archetype) => archetype.selectionWeight)!.id);
   }
   return random.shuffle(picks);
 }

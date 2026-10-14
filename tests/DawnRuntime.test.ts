@@ -103,23 +103,55 @@ describe('Dawn scrap ledger', () => {
 describe('Dawn salvage rewards', () => {
   it('rewards each resolved site exactly once using its tier and the threat multiplier', () => {
     const ledger = new DawnScrapLedger(vi.fn());
-    const feedback = vi.fn();
-    const director = new DawnSalvageDirector(sites, curve, ledger, feedback);
+    const feedback = vi.fn(), scatter = vi.fn();
+    const director = new DawnSalvageDirector(sites, curve, ledger, { feedback, scatter });
     director.onObjectiveCompleted('salvage-unknown');
     director.onObjectiveCompleted('campaign-objective');
     for (const site of sites) {
       director.onObjectiveCompleted(site.objectiveId);
       director.onObjectiveCompleted(site.objectiveId);
     }
-    expect(ledger.total).toBe(sites.reduce((sum, site) => sum + Math.floor(site.tier.scrapReward * curve.scrapMultiplier), 0));
-    expect(feedback).toHaveBeenCalledTimes(sites.length);
+    const direct = sites.filter(site => !site.tier.scatterPickups), scattered = sites.filter(site => site.tier.scatterPickups);
+    expect(ledger.total).toBe(direct.reduce((sum, site) => sum + Math.floor(site.tier.scrapReward * curve.scrapMultiplier), 0));
+    expect(feedback).toHaveBeenCalledTimes(direct.length);
+    // Scrap heaps pay through their scattered finds, once per site.
+    expect(scatter.mock.calls).toEqual(scattered.map(site =>
+      [site, site.tier.scrapReward * curve.scrapMultiplier, site.tier.scatterPickups]));
+  });
+
+  it('scatters a heap reward as finds that credit their share once and releases scavengers on activation', () => {
+    const heap = resolveDawnSites(composeDawnRoundPlans({ seed: 3, threat: 6, dayNumber: 1 }).world)
+      .find(site => site.tier.scatterPickups) ?? { ...sites[0], archetype: { ...sites[0].archetype, id: 'scrap-heaps' },
+        tier: { ...sites[0].tier, scatterPickups: 3, scavengers: 2 } };
+    const spawned: { defId: string; uid: number }[] = [];
+    let collect: ((player: string, pickup: { uid: number; defId: string; x: number; y: number }) => void) | null = null;
+    const publish = vi.fn(), spawn = vi.fn(() => ['s1']);
+    const runtime = new DawnActivityRuntime([{ ...heap, tier: { ...heap.tier, scavengers: 2 } }], curve, schedule, {
+      publishScrap: publish, sitePosition: () => ({ x: 100, y: 100 }), feedback: vi.fn(), elapsedMs: () => 0,
+      isActive: () => true, escapeTarget: () => ({ x: 900, y: 100 }), scavengers: { spawn },
+      pickups: {
+        bindDawnScrap: (port: { onPickupCollected: typeof collect }) => { collect = port.onPickupCollected; return () => {}; },
+        spawnPickup: (defId: string) => { const uid = spawned.length + 1; spawned.push({ defId, uid }); return uid; },
+        removePickup: vi.fn(),
+      } as never,
+    });
+    runtime.onObjectiveActivated(heap.objectiveId);
+    expect(spawn).toHaveBeenCalledExactlyOnceWith({ count: 2, position: { x: 180, y: 100 },
+      escapeTarget: { x: 900, y: 100 }, originId: heap.objectiveId });
+    runtime.onObjectiveCompleted(heap.objectiveId);
+    const count = heap.tier.scatterPickups!;
+    expect(spawned).toHaveLength(count);
+    const share = Math.round(heap.tier.scrapReward * curve.scrapMultiplier / count);
+    for (const pickup of spawned) collect!('p', { ...pickup, x: 0, y: 0 });
+    collect!('p', { ...spawned[0], x: 0, y: 0 });
+    expect(runtime.total).toBe(Math.floor(share) * count);
   });
 
   it('grants nothing for destroyed hold targets or objectives that expire at dusk', () => {
     const { mapConfig } = resolveDawnScenario(plans.world, plans.activity);
     const objectives = resolveCoopDefenseMapSecondaryObjectives(mapConfig, 1);
     const ledger = new DawnScrapLedger(vi.fn());
-    const director = new DawnSalvageDirector(sites, curve, ledger, vi.fn());
+    const director = new DawnSalvageDirector(sites, curve, ledger, { feedback: vi.fn(), scatter: vi.fn() });
     const system = new CoopDefenseSecondaryObjectiveSystem(objectives, {
       isExternalTriggerSatisfied: () => true,
       onObjectiveCompleted: id => director.onObjectiveCompleted(id),

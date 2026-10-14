@@ -31,6 +31,8 @@ export interface CoopMissionObjectiveCompositionOptions {
   readonly authoredRocks: readonly { gridX: number; gridY: number }[];
   readonly isAuthoredRockDestroyed: (id: number) => boolean;
   readonly onObjectiveCompleted?: (objectiveId: string) => void;
+  /** Host: an objective started (e.g. a Dawn site activated). */
+  readonly onObjectiveActivated?: (objectiveId: string) => void;
   readonly onCheckpointActivated?: (checkpointId: string) => void;
   readonly activity: CoopMissionActivityConfiguration;
   readonly humanPlayerCount: number;
@@ -135,6 +137,7 @@ export class CoopMissionObjectiveComposition {
         },
         onObjectiveActivated: (objectiveId) => {
           runtime.coopDefenseCarrySystem?.activateObjective(objectiveId);
+          this.options.onObjectiveActivated?.(objectiveId);
           const config = objectives.find((entry) => entry.id === objectiveId);
           if (config?.rewards?.placeablePedestalOnComplete) {
             runtime.coopDefenseObjectivePlacementRewardSystem?.begin(objectiveId);

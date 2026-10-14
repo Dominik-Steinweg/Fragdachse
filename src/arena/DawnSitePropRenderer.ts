@@ -2,11 +2,12 @@ import * as Phaser from 'phaser';
 import { DEPTH, DEPTH_LIGHTING } from '../config';
 import type { LightingSystem } from '../effects/LightingSystem';
 import { ensureExplosionSparkTexture, TEX_EXPLOSION_SPARK } from '../effects/gpu/GpuVfxSourceTextures';
-import { DAWN_SITE_DISPLAY_SIZE } from '../assets/DawnAssets';
+import { DAWN_SITE_DISPLAY_SIZE, DAWN_SUPPLY_CRATE_DISPLAY_SIZE } from '../assets/DawnAssets';
+import { DAWN_M3_ASSET_KEYS } from '../dawn/contracts/DawnContentIds';
 import type { WorldDefinition } from '../config/authoring/WorldDefinition';
 import type { DawnWorldPlan } from '../dawn/contracts/DawnPlans';
 import { toDawnSiteBaseId, toDawnSiteObjectiveId } from '../dawn/resolution/DawnScenarioResolution';
-import type { CoopDefenseSecondaryObjectivePresentationState } from '../types';
+import type { CoopDefenseSecondaryObjectivePresentationState, SyncedCoopDefenseCarryItem } from '../types';
 import { resolveCoopDefenseWorldMetrics } from '../world/WorldMetrics';
 import { getBaseWorldBounds, resolveWorldBases } from './BaseRegistry';
 import { DAWN_SITE_LIGHT, DAWN_SITE_SPARKS, resolveDawnSiteLights, resolveDawnSitePropHitFlash,
@@ -22,6 +23,7 @@ export class DawnSitePropRenderer {
   private readonly emissions = new Map<string, Phaser.GameObjects.Image>();
   private readonly sparks = new Map<string, Phaser.GameObjects.Particles.ParticleEmitter>();
   private readonly lightKeys = new Set<string>();
+  private readonly crates = new Map<string, Phaser.GameObjects.Image>();
   private destroyed = false;
 
   constructor(
@@ -72,7 +74,8 @@ export class DawnSitePropRenderer {
         sprite.stop();
         sprite.setTexture(visual.textureKey);
       }
-      sprite.setDisplaySize(DAWN_SITE_DISPLAY_SIZE, DAWN_SITE_DISPLAY_SIZE);
+      const size = visual.displaySize ?? DAWN_SITE_DISPLAY_SIZE;
+      sprite.setDisplaySize(size, size);
       const flash = resolveDawnSitePropHitFlash(
         this.hitFlashes.get(site.baseId), this.getStructureHp(site.baseId), this.scene.time.now,
       );
@@ -142,8 +145,38 @@ export class DawnSitePropRenderer {
     emitter.setAlpha(this.lighting!.getArtificialLightFactor());
   }
 
+  /** Objectives of this round's sites; their carry items are supply crates, not campaign bottles. */
+  ownsObjective(objectiveId: string): boolean {
+    return this.sites.some(site => site.objectiveId === objectiveId);
+  }
+
+  /** Replicated supply crates: on the ground below figures, carried above the carrier. */
+  syncCrates(items: readonly SyncedCoopDefenseCarryItem[]): void {
+    if (this.destroyed) return;
+    const seen = new Set<string>();
+    for (const item of items) {
+      if (!this.scene.textures.exists(DAWN_M3_ASSET_KEYS.supplyCrate)) break;
+      let crate = this.crates.get(item.id);
+      if (!crate) {
+        crate = this.scene.add.image(item.x, item.y, DAWN_M3_ASSET_KEYS.supplyCrate)
+          .setDisplaySize(DAWN_SUPPLY_CRATE_DISPLAY_SIZE, DAWN_SUPPLY_CRATE_DISPLAY_SIZE);
+        this.crates.set(item.id, crate);
+      }
+      const carried = item.holderId !== null;
+      crate.setPosition(item.x, item.y - (carried ? 10 : 0)).setDepth(carried ? DEPTH.PLAYERS + 0.2 : DEPTH.BASES + 1);
+      seen.add(item.id);
+    }
+    for (const [id, crate] of this.crates) {
+      if (seen.has(id)) continue;
+      crate.destroy();
+      this.crates.delete(id);
+    }
+  }
+
   destroy(): void {
     this.destroyed = true;
+    for (const crate of this.crates.values()) crate.destroy();
+    this.crates.clear();
     for (const key of this.lightKeys) this.lighting?.releaseLight(key, { immediate: true });
     this.lightKeys.clear();
     for (const emission of this.emissions.values()) emission.destroy();

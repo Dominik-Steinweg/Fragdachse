@@ -45,5 +45,6 @@ export function freezeDawnInfrastructure(progress: Pick<DawnProgress, 'infrastru
   return Object.freeze({
     repairDrones: Math.min(3, getDawnInfrastructureLevel(progress, 'repair-drones')),
     scrapMagnet: Math.min(1, getDawnInfrastructureLevel(progress, 'scrap-magnet')),
+    scrapScanner: Math.min(1, getDawnInfrastructureLevel(progress, 'scrap-scanner')),
   });
 }

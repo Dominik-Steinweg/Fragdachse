@@ -16,6 +16,7 @@ import { DAWN_UI_TEXTURES } from '../assets/DawnUiAssets';
 const INFRASTRUCTURE_ICONS = {
   'repair-drones': DAWN_UI_TEXTURES.dealerInfrastructure,
   'scrap-magnet': DAWN_UI_TEXTURES.scrapMagnet,
+  'scrap-scanner': DAWN_UI_TEXTURES.scrapScanner,
 };
 
 export function buildDawnMerchantModel(progress: DawnProgress, campaignStage: CampaignPersistentBaseAreaStage, unlocked: boolean) {

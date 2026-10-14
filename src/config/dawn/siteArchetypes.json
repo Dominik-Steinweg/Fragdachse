@@ -145,6 +145,271 @@
         }
       ],
       "assaultDelayMs": 1500
+    },
+    {
+      "id": "brood-nest",
+      "objectiveType": "destroy",
+      "selectionWeight": 2,
+      "minThreat": 2,
+      "clearingRadiusCells": 5,
+      "structure": {
+        "role": "spawn-point",
+        "faction": "hostile",
+        "cells": [
+          {
+            "gridX": 0,
+            "gridY": 0
+          },
+          {
+            "gridX": 1,
+            "gridY": 0
+          },
+          {
+            "gridX": 2,
+            "gridY": 0
+          },
+          {
+            "gridX": 0,
+            "gridY": 1
+          },
+          {
+            "gridX": 2,
+            "gridY": 1
+          },
+          {
+            "gridX": 0,
+            "gridY": 2
+          },
+          {
+            "gridX": 1,
+            "gridY": 2
+          },
+          {
+            "gridX": 2,
+            "gridY": 2
+          }
+        ],
+        "spawnCenter": {
+          "gridX": 1,
+          "gridY": 1
+        }
+      },
+      "tiers": [
+        {
+          "tier": 1,
+          "hpMax": 600,
+          "scrapReward": 30,
+          "visualKey": "dawn-site-brood-nest-t1",
+          "nestSpawn": {
+            "enemyKind": "zombie-badger",
+            "intervalMs": 9000,
+            "countPerTick": 1
+          }
+        },
+        {
+          "tier": 2,
+          "hpMax": 1000,
+          "scrapReward": 50,
+          "visualKey": "dawn-site-brood-nest-t2",
+          "nestSpawn": {
+            "enemyKind": "zombie-badger",
+            "intervalMs": 8000,
+            "countPerTick": 2
+          }
+        },
+        {
+          "tier": 3,
+          "hpMax": 1500,
+          "scrapReward": 75,
+          "visualKey": "dawn-site-brood-nest-t3",
+          "nestSpawn": {
+            "enemyKind": "rabid-badger",
+            "intervalMs": 8000,
+            "countPerTick": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "supply",
+      "objectiveType": "carry",
+      "selectionWeight": 2,
+      "minThreat": 2,
+      "clearingRadiusCells": 5,
+      "structure": {
+        "role": "outpost",
+        "faction": "friendly",
+        "cells": [
+          {
+            "gridX": 0,
+            "gridY": 0
+          },
+          {
+            "gridX": 1,
+            "gridY": 0
+          },
+          {
+            "gridX": 2,
+            "gridY": 0
+          },
+          {
+            "gridX": 0,
+            "gridY": 1
+          },
+          {
+            "gridX": 1,
+            "gridY": 1
+          },
+          {
+            "gridX": 2,
+            "gridY": 1
+          },
+          {
+            "gridX": 0,
+            "gridY": 2
+          },
+          {
+            "gridX": 1,
+            "gridY": 2
+          },
+          {
+            "gridX": 2,
+            "gridY": 2
+          }
+        ]
+      },
+      "tiers": [
+        {
+          "tier": 1,
+          "hpMax": 1500,
+          "scrapReward": 30,
+          "visualKey": "dawn-site-supply-t1",
+          "carryItemCount": 1,
+          "assaultBudget": 20
+        },
+        {
+          "tier": 2,
+          "hpMax": 2000,
+          "scrapReward": 55,
+          "visualKey": "dawn-site-supply-t2",
+          "carryItemCount": 2,
+          "assaultBudget": 34
+        },
+        {
+          "tier": 3,
+          "hpMax": 2500,
+          "scrapReward": 80,
+          "visualKey": "dawn-site-supply-t3",
+          "carryItemCount": 3,
+          "assaultBudget": 50
+        }
+      ],
+      "assaultDelayMs": 4000
+    },
+    {
+      "id": "scrap-heaps",
+      "objectiveType": "destroy",
+      "selectionWeight": 2,
+      "minThreat": 2,
+      "hidden": true,
+      "clearingRadiusCells": 5,
+      "structure": {
+        "role": "outpost",
+        "faction": "hostile",
+        "cells": [
+          {
+            "gridX": 0,
+            "gridY": 0
+          },
+          {
+            "gridX": 1,
+            "gridY": 0
+          },
+          {
+            "gridX": 0,
+            "gridY": 1
+          },
+          {
+            "gridX": 1,
+            "gridY": 1
+          }
+        ]
+      },
+      "tiers": [
+        {
+          "tier": 1,
+          "hpMax": 250,
+          "scrapReward": 30,
+          "visualKey": "dawn-site-scrap-heaps-t1",
+          "scatterPickups": 3
+        },
+        {
+          "tier": 2,
+          "hpMax": 400,
+          "scrapReward": 50,
+          "visualKey": "dawn-site-scrap-heaps-t2",
+          "scatterPickups": 4
+        },
+        {
+          "tier": 3,
+          "hpMax": 650,
+          "scrapReward": 75,
+          "visualKey": "dawn-site-scrap-heaps-t3",
+          "scatterPickups": 5
+        }
+      ]
+    },
+    {
+      "id": "scavenger",
+      "objectiveType": "destroy",
+      "selectionWeight": 1,
+      "minThreat": 3,
+      "clearingRadiusCells": 5,
+      "structure": {
+        "role": "outpost",
+        "faction": "hostile",
+        "cells": [
+          {
+            "gridX": 0,
+            "gridY": 0
+          },
+          {
+            "gridX": 1,
+            "gridY": 0
+          },
+          {
+            "gridX": 0,
+            "gridY": 1
+          },
+          {
+            "gridX": 1,
+            "gridY": 1
+          }
+        ]
+      },
+      "tiers": [
+        {
+          "tier": 1,
+          "hpMax": 400,
+          "scrapReward": 20,
+          "visualKey": "dawn-site-scavenger-t1",
+          "scavengers": 1
+        },
+        {
+          "tier": 2,
+          "hpMax": 650,
+          "scrapReward": 35,
+          "visualKey": "dawn-site-scavenger-t2",
+          "scavengers": 2
+        },
+        {
+          "tier": 3,
+          "hpMax": 950,
+          "scrapReward": 55,
+          "visualKey": "dawn-site-scavenger-t3",
+          "scavengers": 3
+        }
+      ]
     }
   ]
 }

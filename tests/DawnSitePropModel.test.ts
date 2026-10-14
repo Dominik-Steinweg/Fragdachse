@@ -132,4 +132,21 @@ describe('Dawn site prop projection', () => {
     expect(resolveDawnSitePropVisual('wreck', 4, undefined, false)).toBeNull();
     expect(resolveDawnSitePropVisual('wreck', 1, undefined, false, 'unknown')).toBeNull();
   });
+
+  it('projects the M3 archetypes from rest to active to resolved, lighting only nest and capsule', () => {
+    expect(resolveDawnSitePropVisual('brood-nest', 2, undefined, false)).toEqual({ textureKey: DAWN_M3_ASSET_KEYS.broodNest, animationKey: null });
+    expect(resolveDawnSitePropVisual('brood-nest', 2, 'active', false)?.animationKey).toBe('construction_dawn_broodnest_sheet_idle');
+    expect(resolveDawnSitePropVisual('brood-nest', 2, 'completed', false)).toBeNull();
+    expect(resolveDawnSitePropVisual('supply', 1, 'completed', false)?.textureKey).toBe(DAWN_M3_ASSET_KEYS.supplyCapsule);
+    for (const archetype of ['scrap-heaps', 'scavenger']) {
+      expect(resolveDawnSitePropVisual(archetype, 3, 'active', false)?.textureKey).toBe(DAWN_M3_ASSET_KEYS.scrapHeap(3));
+      expect(resolveDawnSitePropVisual(archetype, 3, 'completed', false)).toBeNull();
+      expect(resolveDawnSiteLights(archetype, 3, 'active', false, 0)).toEqual([]);
+    }
+    expect(resolveDawnSiteLights('brood-nest', 1, 'active', false, 0)[0].radiusPx)
+      .toBeGreaterThan(resolveDawnSiteLights('brood-nest', 1, undefined, false, 0)[0].radiusPx);
+    for (const key of [DAWN_M3_ASSET_KEYS.broodNest, DAWN_M3_ASSET_KEYS.supplyCapsule, DAWN_M3_ASSET_KEYS.supplyCrate, DAWN_M3_ASSET_KEYS.scrapHeap(1)]) {
+      expect(DAWN_PIPELINE_ASSETS.some(asset => asset.textureKey === key), key).toBe(true);
+    }
+  });
 });

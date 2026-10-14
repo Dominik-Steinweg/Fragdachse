@@ -1,6 +1,7 @@
 import {
+  DAWN_BROOD_NEST_ANIMATION, DAWN_BROOD_NEST_KEY,
   DAWN_EXTRACTOR_ACTIVE_ANIMATION, DAWN_EXTRACTOR_IDLE_ANIMATION,
-  DAWN_EXTRACTOR_KEY, DAWN_EXTRACTOR_SHEET_KEY,
+  DAWN_EXTRACTOR_KEY, DAWN_EXTRACTOR_SHEET_KEY, DAWN_HEAP_DISPLAY_SIZE,
 } from '../assets/DawnAssets';
 import { DAWN_M3_ASSET_KEYS, DAWN_WRECK_VARIANTS } from '../dawn/contracts/DawnContentIds';
 import { DAWN_MAX_SITE_TIER } from '../dawn/contracts/DawnPlans';
@@ -9,6 +10,8 @@ import type { CoopDefenseSecondaryObjectiveState } from '../types';
 export interface DawnSitePropVisual {
   readonly textureKey: string;
   readonly animationKey: string | null;
+  /** World pixels; absent = the 3x3 site size. */
+  readonly displaySize?: number;
 }
 
 export const DAWN_SITE_HIT_FLASH_MS = 100;
@@ -28,6 +31,8 @@ export const DAWN_SITE_LIGHT = {
   emberSize: 7, emberAlpha: 0.48,
   techRadius: 52, techIntensity: 0.28, techX: 15, techY: -10,
   techSize: 5, techAlpha: 0.5,
+  brood: 0x9be05a, broodIdleRadius: 84, broodIdleIntensity: 0.22, broodActiveRadius: 120, broodActiveIntensity: 0.42,
+  supplyRadius: 96, supplyIntensity: 0.34,
 } as const;
 
 export const DAWN_SITE_SPARKS = {
@@ -58,6 +63,17 @@ export function resolveDawnSiteLights(
 ): readonly DawnSiteLight[] {
   if (!resolveDawnSitePropVisual(archetypeId, tier, objectiveState, destroyed, variant)) return [];
   const c = DAWN_SITE_LIGHT;
+  // Brood nest: a sick green glow that wakes with the nest; the capsule keeps a small lamp; heaps stay unlit.
+  if (archetypeId === 'brood-nest') {
+    const active = objectiveState === 'active';
+    return [{ id: 'warm', color: c.brood, radiusPx: active ? c.broodActiveRadius : c.broodIdleRadius,
+      intensity: active ? c.broodActiveIntensity : c.broodIdleIntensity, offsetX: 0, offsetY: 0, emissionSize: 0, emissionAlpha: 0 }];
+  }
+  if (archetypeId === 'supply') {
+    return [{ id: 'warm', color: c.warm, radiusPx: c.supplyRadius, intensity: c.supplyIntensity,
+      offsetX: 0, offsetY: 0, emissionSize: c.lampSize, emissionAlpha: objectiveState === 'active' ? c.lampAlpha : 0 }];
+  }
+  if (archetypeId !== 'wreck' && archetypeId !== 'extractor') return [];
   if (archetypeId === 'extractor') {
     const active = objectiveState === 'active', completed = objectiveState === 'completed';
     const warm: DawnSiteLight = { id: 'warm', color: active ? c.beacon : c.warm,
@@ -113,6 +129,18 @@ export function resolveDawnSitePropVisual(
     if (objectiveState === 'completed' || !wreckVariant
       || !Number.isInteger(tier) || tier < 1 || tier > DAWN_MAX_SITE_TIER) return null;
     return { textureKey: DAWN_M3_ASSET_KEYS.wreckVariant(wreckVariant, tier), animationKey: null };
+  }
+  if (archetypeId === 'brood-nest') {
+    if (objectiveState === 'completed') return null;
+    return objectiveState === 'active'
+      ? { textureKey: `${DAWN_BROOD_NEST_KEY}_sheet`, animationKey: DAWN_BROOD_NEST_ANIMATION }
+      : { textureKey: DAWN_BROOD_NEST_KEY, animationKey: null };
+  }
+  // The capsule stays as scenery after its crates are delivered.
+  if (archetypeId === 'supply') return { textureKey: DAWN_M3_ASSET_KEYS.supplyCapsule, animationKey: null };
+  if (archetypeId === 'scrap-heaps' || archetypeId === 'scavenger') {
+    if (objectiveState === 'completed' || !Number.isInteger(tier) || tier < 1 || tier > DAWN_MAX_SITE_TIER) return null;
+    return { textureKey: DAWN_M3_ASSET_KEYS.scrapHeap(tier), animationKey: null, displaySize: DAWN_HEAP_DISPLAY_SIZE };
   }
   if (archetypeId !== 'extractor') return null;
   if (objectiveState === 'active' || objectiveState === 'completed') {

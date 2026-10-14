@@ -25,6 +25,8 @@ export interface DawnRoundCompositionInput {
   readonly dayNumber: number;
   /** Explicit dev recipe override; normal host composition leaves this absent. */
   readonly nightModifier?: DawnNightModifierId | 'none';
+  /** Host infrastructure: reveals hidden sites (scrap heaps) for this round. */
+  readonly scrapScanner?: boolean;
 }
 
 export interface DawnRoundPlans {
@@ -46,7 +48,7 @@ export function composeDawnRoundPlans(input: DawnRoundCompositionInput): DawnRou
   const template = templates[createDawnRandom(seed, 'template').int(templates.length)];
   const schedule = getDawnSchedule(curve.scheduleId);
   const sites = composeDawnSiteVariants(seed,
-    composeDawnSites({ random: createDawnRandom(seed, 'sites'), template, curve }));
+    composeDawnSites({ random: createDawnRandom(seed, 'sites'), template, curve, scrapScanner: input.scrapScanner }));
   const fronts = assignDawnFronts(createDawnRandom(seed, 'fronts'), template, curve);
   const night = composeDawnModifiedNight({ seed, random: createDawnRandom(seed, 'night'), curve, schedule, fronts, nightModifier: input.nightModifier });
   const waves = [

@@ -12,6 +12,7 @@ export const DAWN_UI_TEXTURES = {
   dealerEquipment: 'dawn-ui-dealer-equipment',
   recalibrationCore: 'dawn-ui-recalibration-core',
   scrapMagnet: 'dawn-ui-scrap-magnet',
+  scrapScanner: 'dawn-ui-scrap-scanner',
   dealerPortrait: 'dawn-ui-dealer-portrait',
 } as const;
 
@@ -24,6 +25,7 @@ export const DAWN_UI_ASSETS = [
   { key: DAWN_UI_TEXTURES.dealerEquipment, file: 'dealer-equipment-64.webp' },
   { key: DAWN_UI_TEXTURES.recalibrationCore, file: 'recalibration-core-64.webp' },
   { key: DAWN_UI_TEXTURES.scrapMagnet, file: 'scrap-magnet-64.webp' },
+  { key: DAWN_UI_TEXTURES.scrapScanner, file: 'scrap-scanner-64.webp' },
   { key: DAWN_UI_TEXTURES.dealerPortrait, file: 'dealer-portrait-256.webp' },
   // Contracted keys (DAWN_M3_ASSET_KEYS): elite head glyphs (22 px) and the phase-card modifier icon (18 px).
   ...DAWN_ELITE_AFFIX_IDS.map(affix => ({ key: DAWN_M3_ASSET_KEYS.eliteAffixIcon(affix), file: `elite-${affix}-32.webp` })),

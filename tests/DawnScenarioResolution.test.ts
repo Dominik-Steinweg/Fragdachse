@@ -144,6 +144,8 @@ describe('Dawn scenario resolution', () => {
     for (const site of resolveDawnSites(plans.world)) {
       const guards = silent.filter(encounter => encounter.start.type === 'site-activated'
         && encounter.start.siteId === site.siteId);
+      // Only archetypes with an assault contract bring guards; nests spawn their own, heaps and camps stay quiet.
+      if (site.archetype.assaultDelayMs === undefined) { expect(guards, site.archetype.id).toEqual([]); continue; }
       expect(guards.length, site.archetype.id).toBeGreaterThan(0);
       for (const guard of guards) {
         expect(guard.groups.every(group => group.spawnArea !== undefined)).toBe(true);
@@ -303,7 +305,9 @@ describe('Dawn scenario resolution', () => {
         hpMax: site.tier.hpMax, faction: site.archetype.structure.faction, role: site.archetype.structure.role,
       });
       expect(structure).not.toHaveProperty('dormant');
-      expect(activity.baseOverlays?.find(({ baseId }) => baseId === site.baseId)?.dormant).toBe(true);
+      const carry = site.archetype.objectiveType === 'carry';
+      // Mission targets wait dormant; the supply capsule is scenery and its crates are the objective.
+      expect(activity.baseOverlays?.find(({ baseId }) => baseId === site.baseId)?.dormant ?? false).toBe(!carry);
 
       const objective = activity.secondaryObjectives?.find(({ id }) => id === site.objectiveId);
       expect(objective).toMatchObject({
@@ -311,8 +315,11 @@ describe('Dawn scenario resolution', () => {
         concurrent: true,
         start: { type: 'site-activated', siteId: site.siteId },
         expiresAt: { type: 'time', atMs: duskMs },
-        targets: [site.baseId],
+        targets: carry ? [] : [site.baseId],
       });
+      if (carry) expect(objective?.carry?.itemCount).toBe(site.tier.carryItemCount);
+      const nest = activity.persistentSpawns?.find(({ id }) => id === `nest-${site.slotId}`);
+      expect(nest?.source, site.archetype.id).toEqual(site.tier.nestSpawn ? { type: 'base', baseId: site.baseId } : undefined);
       expect(objective?.holdDurationMs).toBe(site.archetype.holdDurationMs);
     }
     expect(activity.secondaryObjectives).toHaveLength(sites.length);

@@ -7,7 +7,8 @@
   },
   "infrastructure": [
     { "id": "repair-drones", "levelPrices": [240, 900, 2400] },
-    { "id": "scrap-magnet", "levelPrices": [360] }
+    { "id": "scrap-magnet", "levelPrices": [360] },
+    { "id": "scrap-scanner", "levelPrices": [480] }
   ],
   "equipment": {
     "itemOfferCount": 3,

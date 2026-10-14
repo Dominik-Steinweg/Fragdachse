@@ -18,6 +18,8 @@ export const deUi = {
   "ui.dawn.infrastructure.repair-drones.effect3": "Erhalten nach einem Dawn-Sieg alle zerstörten Bauten.",
   "ui.dawn.infrastructure.scrap-magnet.name": "Schrottmagnet",
   "ui.dawn.infrastructure.scrap-magnet.effect1": "Sammelt Schrott aus 2,5-facher Entfernung.",
+  "ui.dawn.infrastructure.scrap-scanner.name": "Schrottscanner",
+  "ui.dawn.infrastructure.scrap-scanner.effect1": "Markiert versteckte Schrotthaufen auf der Karte.",
   "ui.dawn.branch.necromancy.name": "Nekromantie-Forschung",
   "ui.dawn.branch.necromancy.effect": "Schaltet den Nekromantie-Zweig im Upgrade-Menü frei.",
   "ui.dawn.research": "Erforschen",

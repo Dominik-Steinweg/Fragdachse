@@ -18,6 +18,8 @@ export const enUi = {
   "ui.dawn.infrastructure.repair-drones.effect3": "Preserve all destroyed constructions after a Dawn victory.",
   "ui.dawn.infrastructure.scrap-magnet.name": "Scrap magnet",
   "ui.dawn.infrastructure.scrap-magnet.effect1": "Collects scrap from 2.5 times the distance.",
+  "ui.dawn.infrastructure.scrap-scanner.name": "Scrap scanner",
+  "ui.dawn.infrastructure.scrap-scanner.effect1": "Marks hidden scrap heaps on the map.",
   "ui.dawn.branch.necromancy.name": "Necromancy research",
   "ui.dawn.branch.necromancy.effect": "Unlocks the necromancy branch in the upgrade menu.",
   "ui.dawn.research": "Research",

@@ -47,14 +47,17 @@ export function secondaryObjectiveMarkers(
   for (const entry of snapshot ?? []) {
     if (entry.state === 'dormant') continue;
     const config = configs.find(c => c.id === entry.objectiveId);
+    if (!config) continue;
     // Site-activated objectives belong to a world site; its own source keeps one marker from dormant to resolved.
-    if (!config || config.start.type === 'site-activated') continue;
+    // Carry items and the delivery zone of a site still come from here.
+    const siteOwned = config.start.type === 'site-activated';
+    if (siteOwned && config.type !== 'carry') continue;
     // Focus remains a semantic grouping boundary; different objective types never share a glyph.
     const group = `mission:${config.type}:${entry.focused ? 'focus' : 'background'}`;
     const common = { state: entry.state, focused: entry.focused, progress: progress(entry.progressCurrent, entry.progressTotal),
       visibility: 'world-and-edge' as const };
     if (config.type === 'carry') {
-      if (config.carry) {
+      if (config.carry && !siteOwned) {
         const z = config.carry.spawnZone;
         const bounds = { x: origin.offsetX + z.gridX * CELL_SIZE, y: origin.offsetY + z.gridY * CELL_SIZE,
           width: z.widthCells * CELL_SIZE, height: z.heightCells * CELL_SIZE };

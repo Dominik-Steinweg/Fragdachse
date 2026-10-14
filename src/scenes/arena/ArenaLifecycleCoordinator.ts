@@ -3845,6 +3845,7 @@ function composeHostDawnRoundPlans(seed: number): DawnRoundPlans {
     threat: resolveDawnThreat(dawn.expansionLevel),
     dayNumber: dawn.stats.roundsPlayed + 1,
     nightModifier: isDevScenarioMode() ? getDevDawnNightModifier() : undefined,
+    scrapScanner: freezeDawnInfrastructure(dawn).scrapScanner > 0,
   });
 }
 

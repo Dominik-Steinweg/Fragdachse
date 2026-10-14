@@ -7,6 +7,8 @@ import {
   type CoopDefenseMapAuthoringConfig,
   type CoopDefenseMapConfig,
   type CoopDefenseMapEncounterConfig,
+  type CoopDefenseMapObjectiveZoneConfig,
+  type CoopDefenseMapPersistentSpawnConfig,
   type CoopDefenseMapSecondaryObjectiveConfig,
   type CoopDefenseMapSiteClearingConfig,
 } from '../../config/coopDefenseMapAuthoring';
@@ -157,6 +159,32 @@ export function resolveDawnSites(worldPlan: DawnWorldPlan): readonly ResolvedDaw
 type DawnWorldAuthoring = Pick<CoopDefenseMapAuthoringConfig, 'mapId' | 'bases' | 'siteClearings'>
   & DawnArenaTemplate['world'];
 
+/** Kisten erscheinen unter der Kapsel in der Lichtung; abgegeben wird am Basiskern. */
+export function resolveDawnSupplyCarry(template: DawnArenaTemplate, site: ResolvedDawnSite) {
+  const width = template.world.arenaWidthCells ?? Number.MAX_SAFE_INTEGER;
+  const height = template.world.arenaHeightCells ?? Number.MAX_SAFE_INTEGER;
+  const clampZone = (gridX: number, gridY: number, size: number): CoopDefenseMapObjectiveZoneConfig => ({
+    gridX: Math.max(0, Math.min(width - size, gridX)), gridY: Math.max(0, Math.min(height - size, gridY)),
+    widthCells: size, heightCells: size,
+  });
+  const anchor = site.slot.anchor, base = template.world.persistentBase.anchor;
+  return {
+    spawnZone: clampZone(anchor.gridX - 1, anchor.gridY + 2, 3),
+    deliveryZone: clampZone(base.gridX - DAWN_SUPPLY_DELIVERY_HALF_CELLS, base.gridY - DAWN_SUPPLY_DELIVERY_HALF_CELLS,
+      DAWN_SUPPLY_DELIVERY_HALF_CELLS * 2),
+    itemCount: site.tier.carryItemCount ?? 1,
+  };
+}
+const DAWN_SUPPLY_DELIVERY_HALF_CELLS = 4;
+
+/** Ein aktives Brutnest stoesst bis zu seiner Zerstoerung Gegner aus (persistenter Basis-Spawn). */
+function toNestSpawn(site: ResolvedDawnSite): CoopDefenseMapPersistentSpawnConfig[] {
+  const spawn = site.tier.nestSpawn;
+  return spawn ? [{ id: `nest-${site.slotId}`, enemyKind: spawn.enemyKind as CoopDefenseMapPersistentSpawnConfig['enemyKind'],
+    intervalMs: spawn.intervalMs, countPerTick: spawn.countPerTick, startAtMs: 0,
+    source: { type: 'base', baseId: site.baseId } }] : [];
+}
+
 function composeWorldAuthoring(template: DawnArenaTemplate, sites: readonly ResolvedDawnSite[]): DawnWorldAuthoring {
   return {
     ...template.world,
@@ -181,7 +209,8 @@ function toSiteStructure(site: ResolvedDawnSite): CoopBaseConfig {
     hpMax: site.tier.hpMax,
     faction: structure.faction,
     role: structure.role,
-    dormant: true,
+    // Mission targets wait dormant for their site; the supply capsule is scenery, not a target.
+    ...(site.archetype.objectiveType === 'carry' ? {} : { dormant: true }),
     anchor: { kind: 'grid', gridX: placement.anchor.gridX, gridY: placement.anchor.gridY },
     shape: { kind: 'cells', cells: placement.cells },
     ...(structure.spawnCenter ? { spawnCenter: structure.spawnCenter } : {}),
@@ -213,6 +242,7 @@ function composeActivityAuthoring(
     // Sieg-Item-Angebot (D-16) mit dem Itemlevel der Threat-Kurve.
     itemDrop: { itemLevel: curve.itemLevel },
     mapEvents: modifierContent.mapEvents,
+    persistentSpawns: sites.flatMap(toNestSpawn),
     encounters: [...activityPlan.waves.map((wave): CoopDefenseMapEncounterConfig => {
       const groups = getDawnWaveBlock(wave.blockId).groups;
       if ('siteId' in wave) {
@@ -247,7 +277,10 @@ function composeActivityAuthoring(
       concurrent: true,
       start: { type: 'site-activated', siteId: site.siteId },
       expiresAt: siteClosesAt,
-      targets: [site.baseId],
+      // Versorgung: die Kapsel ist Kulisse, Ziel sind die Kisten (Carry-Zonen statt Basis-Targets).
+      ...(site.archetype.objectiveType === 'carry'
+        ? { targets: [], carry: resolveDawnSupplyCarry(template, site) }
+        : { targets: [site.baseId] }),
       ...(site.archetype.objectiveType === 'hold'
         ? {
           holdDurationMs: site.archetype.holdDurationMs,

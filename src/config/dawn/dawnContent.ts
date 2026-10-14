@@ -109,7 +109,7 @@ export interface DawnSchedule {
   readonly endClock: string;
 }
 
-export type DawnSiteObjectiveType = 'destroy' | 'hold';
+export type DawnSiteObjectiveType = 'destroy' | 'hold' | 'carry';
 
 /**
  * Bauwerk einer Site. `cells` sind nicht-negative Offsets; der Resolver zentriert die Form auf
@@ -132,6 +132,14 @@ export interface DawnSiteArchetypeTier {
   readonly visualKey: string;
   /** Nur `hold`: Budget der Angriffswelle, die bei Aktivierung der Site am Lichtungsrand erscheint. */
   readonly assaultBudget?: number;
+  /** Brutnest: Gegner, die das aktive Nest bis zu seiner Zerstoerung ausstoesst (persistenter Spawn). */
+  readonly nestSpawn?: { readonly enemyKind: string; readonly intervalMs: number; readonly countPerTick: number };
+  /** Versorgung (`carry`): Kisten, die aus der Kapsel zur Basis getragen werden. */
+  readonly carryItemCount?: number;
+  /** Schrotthaufen: Der Lohn faellt beim Abschluss als so viele verstreute Funde statt als Gutschrift. */
+  readonly scatterPickups?: number;
+  /** Schrottsammler-Lager: fliehende Sammler, die bei Aktivierung mit Beute aus dem Lager laufen. */
+  readonly scavengers?: number;
 }
 
 export interface DawnSiteArchetype {
@@ -148,6 +156,10 @@ export interface DawnSiteArchetype {
   /** Nur `hold`: Verzoegerung der Angriffswelle nach der Aktivierung. */
   readonly assaultDelayMs?: number;
   readonly structure: DawnSiteStructureTemplate;
+  /** Erst ab diesem Threat waehlbar (Standard 1). */
+  readonly minThreat?: number;
+  /** Versteckte Site: ohne Schrottscanner des Hosts keine Navigationsmarker (GDD 6a). */
+  readonly hidden?: true;
   /** Genau ein Eintrag je Tier 1..DAWN_MAX_SITE_TIER, aufsteigend. */
   readonly tiers: readonly DawnSiteArchetypeTier[];
 }
@@ -401,9 +413,14 @@ function validateSiteArchetypes(raw: { readonly archetypes: readonly unknown[] }
       throw new Error(`[dawnContent] Invalid or duplicate site archetype ${String(archetype?.id)}`);
     }
     const label = `Site archetype ${archetype.id}`;
-    if (archetype.objectiveType !== 'destroy' && archetype.objectiveType !== 'hold') {
-      throw new Error(`[dawnContent] ${label} needs objectiveType destroy or hold`);
+    if (archetype.objectiveType !== 'destroy' && archetype.objectiveType !== 'hold' && archetype.objectiveType !== 'carry') {
+      throw new Error(`[dawnContent] ${label} needs objectiveType destroy, hold or carry`);
     }
+    if (archetype.minThreat !== undefined && (!isPositiveInteger(archetype.minThreat) || archetype.minThreat > 10)) {
+      throw new Error(`[dawnContent] ${label} needs minThreat 1..10`);
+    }
+    if (archetype.hidden !== undefined && archetype.hidden !== true) throw new Error(`[dawnContent] ${label} has invalid hidden`);
+    validateSiteBehaviour(label, archetype);
     if (!isPositiveFinite(archetype.selectionWeight)) throw new Error(`[dawnContent] ${label} needs a positive selectionWeight`);
     const radius = archetype.clearingRadiusCells;
     if (!Number.isFinite(radius) || radius < 2 || radius > MAX_COOP_DEFENSE_SITE_CLEARING_RADIUS_CELLS) {
@@ -452,12 +469,42 @@ function validateSiteArchetypes(raw: { readonly archetypes: readonly unknown[] }
   return archetypes;
 }
 
+/** Each tier-level behaviour belongs to exactly one objective shape and is complete across all tiers. */
+function validateSiteBehaviour(label: string, archetype: DawnSiteArchetype): void {
+  const tiers = Array.isArray(archetype.tiers) ? archetype.tiers : [];
+  const declared = (key: 'nestSpawn' | 'carryItemCount' | 'scatterPickups' | 'scavengers') =>
+    tiers.some(tier => tier?.[key] !== undefined);
+  const complete = (key: 'carryItemCount' | 'scatterPickups' | 'scavengers', max: number) => {
+    if (declared(key) && tiers.some(tier => !isPositiveInteger(tier?.[key]) || tier[key]! > max)) {
+      throw new Error(`[dawnContent] ${label} needs ${key} 1..${max} on every tier`);
+    }
+  };
+  complete('carryItemCount', 6); complete('scatterPickups', 8); complete('scavengers', 4);
+  if ((archetype.objectiveType === 'carry') !== declared('carryItemCount')) {
+    throw new Error(`[dawnContent] ${label} declares carryItemCount exactly for carry sites`);
+  }
+  if (declared('nestSpawn')) {
+    if (archetype.objectiveType !== 'destroy' || archetype.structure?.role !== 'spawn-point') {
+      throw new Error(`[dawnContent] ${label} nestSpawn needs a destroyable spawn-point structure`);
+    }
+    if (tiers.some(tier => !isDawnPlanId(tier?.nestSpawn?.enemyKind) || !isPositiveInteger(tier.nestSpawn.intervalMs)
+      || !isPositiveInteger(tier.nestSpawn.countPerTick) || tier.nestSpawn.countPerTick > 4)) {
+      throw new Error(`[dawnContent] ${label} needs a complete nestSpawn on every tier`);
+    }
+  } else if (archetype.structure?.role === 'spawn-point') {
+    throw new Error(`[dawnContent] ${label} spawn-point structures need a nestSpawn`);
+  }
+  if ((declared('scatterPickups') || declared('scavengers')) && archetype.objectiveType !== 'destroy') {
+    throw new Error(`[dawnContent] ${label} scatterPickups and scavengers need a destroy site`);
+  }
+}
+
 function validateSiteStructure(label: string, archetype: DawnSiteArchetype): void {
   const structure = archetype.structure;
   if (!structure || (structure.role !== 'outpost' && structure.role !== 'spawn-point')) {
     throw new Error(`[dawnContent] ${label} structure needs role outpost or spawn-point`);
   }
-  // Nur Gegnerstrukturen sind beschaedigbar, und nur eigene Strukturen lassen sich halten.
+  // Nur Gegnerstrukturen sind beschaedigbar; eigene lassen sich halten, die Versorgungskapsel ist Kulisse.
   const expectedFaction: CoopBaseFaction = archetype.objectiveType === 'destroy' ? 'hostile' : 'friendly';
   if (structure.faction !== expectedFaction) {
     throw new Error(`[dawnContent] ${label} structure must be ${expectedFaction} for ${archetype.objectiveType}`);

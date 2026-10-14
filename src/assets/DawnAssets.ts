@@ -15,13 +15,20 @@ export const DAWN_SCRAP_KEYS: Readonly<Record<number, string>> = {
   2: 'dawn_scrap_t2',
   3: 'dawn_scrap_t3',
 };
+export const DAWN_BROOD_NEST_KEY = DAWN_M3_ASSET_KEYS.broodNest;
+export const DAWN_BROOD_NEST_ANIMATION = 'construction_dawn_broodnest_sheet_idle';
 export const DAWN_SITE_DISPLAY_SIZE = 96;
+/** Scrap heaps and scavenger camps stand on 2x2 cells. */
+export const DAWN_HEAP_DISPLAY_SIZE = 68;
+export const DAWN_SUPPLY_CRATE_DISPLAY_SIZE = 30;
 export const DAWN_SCRAP_DISPLAY_SIZE = 24;
 
 /** Uses the existing construction pipeline's sheet loading and clip registration. */
 export const DAWN_PIPELINE_ASSETS = [
   ...DAWN_WRECK_VARIANTS.flatMap(variant => [1, 2, 3].map(tier => DAWN_M3_ASSET_KEYS.wreckVariant(variant, tier))),
   DAWN_EXTRACTOR_KEY, ...Object.values(DAWN_SCRAP_KEYS),
+  DAWN_M3_ASSET_KEYS.broodNest, DAWN_M3_ASSET_KEYS.supplyCapsule, DAWN_M3_ASSET_KEYS.supplyCrate,
+  ...[1, 2, 3].map(DAWN_M3_ASSET_KEYS.scrapHeap),
 ].map(getPipelineAsset);
 
 export function isDawnScrapTexture(key: string | undefined): boolean {

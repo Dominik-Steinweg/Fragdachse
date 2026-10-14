@@ -282,7 +282,11 @@ export class CoopMissionPresentationInfrastructure {
           if (!this.destroyed) input.renderers.mortarStrike.sync(strikes, nowMs);
         },
         syncCoopDefenseCarry: (items) => {
-          if (!this.destroyed) input.renderers.beer.syncCoopDefenseCarry(items);
+          if (this.destroyed) return;
+          // Dawn supply sites carry crates; every other carry objective keeps the campaign bottle.
+          const props = this.dawnSiteProps;
+          input.renderers.beer.syncCoopDefenseCarry(props ? items.filter(item => !props.ownsObjective(item.objectiveId)) : items);
+          props?.syncCrates(items.filter(item => props.ownsObjective(item.objectiveId)));
         },
         syncEnemyDashVisual: (enemy) => {
           if (!this.destroyed) input.clientUpdate.syncEnemyDashVisual(enemy);

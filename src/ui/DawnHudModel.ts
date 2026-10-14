@@ -26,6 +26,7 @@ export interface DawnSiteMarker {
   /** Clearing = activation radius of the site. */
   readonly radiusCells: number;
   readonly holdDurationMs?: number;
+  readonly hidden?: boolean;
 }
 
 export function buildDawnSiteMarkers(plan: DawnWorldPlan, world: WorldDefinition): readonly DawnSiteMarker[] {
@@ -34,7 +35,8 @@ export function buildDawnSiteMarkers(plan: DawnWorldPlan, world: WorldDefinition
     return clearing ? [{ objectiveId: site.objectiveId, visualKey: site.tier.visualKey,
       archetypeId: site.archetype.id, tier: site.tier.tier,
       gridX: clearing.gridX, gridY: clearing.gridY, radiusCells: site.archetype.clearingRadiusCells,
-      ...(site.archetype.holdDurationMs ? { holdDurationMs: site.archetype.holdDurationMs } : {}) }] : [];
+      ...(site.archetype.holdDurationMs ? { holdDurationMs: site.archetype.holdDurationMs } : {}),
+      ...(plan.sites.find(entry => entry.slotId === site.slotId)?.hidden ? { hidden: true } : {}) }] : [];
   });
 }
 

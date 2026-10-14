@@ -196,3 +196,32 @@ describe('Dawn round composition', () => {
     }
   });
 });
+
+describe('Dawn M3 site archetypes in composition', () => {
+  const plansFor = (threat: number, scrapScanner = false) =>
+    Array.from({ length: 24 }, (_, seed) => composeDawnRoundPlans({ seed: seed + 1, threat, dayNumber: 1, scrapScanner }));
+
+  it('offers distinct archetypes per round and keeps later archetypes out below their threat', () => {
+    for (const threat of [1, 2, 6]) {
+      for (const plans of plansFor(threat)) {
+        const ids = plans.world.sites.map(site => site.archetypeId);
+        for (const id of ids) expect(getDawnSiteArchetype(id).minThreat ?? 1).toBeLessThanOrEqual(threat);
+        const eligible = new Set(['wreck', 'extractor', 'brood-nest', 'supply', 'scrap-heaps', 'scavenger']
+          .filter(id => (getDawnSiteArchetype(id).minThreat ?? 1) <= threat));
+        if (ids.length <= eligible.size) expect(new Set(ids).size).toBe(ids.length);
+      }
+    }
+    const seen = new Set(plansFor(6).flatMap(plans => plans.world.sites.map(site => site.archetypeId)));
+    expect([...seen].sort()).toEqual(['brood-nest', 'extractor', 'scavenger', 'scrap-heaps', 'supply', 'wreck']);
+  });
+
+  it('hides scrap heaps from navigation unless the host owns the scrap scanner', () => {
+    const heaps = (scanner: boolean) => plansFor(6, scanner).flatMap(plans => plans.world.sites)
+      .filter(site => site.archetypeId === 'scrap-heaps');
+    expect(heaps(false).length).toBeGreaterThan(0);
+    expect(heaps(false).every(site => site.hidden === true)).toBe(true);
+    expect(heaps(true).every(site => site.hidden === undefined)).toBe(true);
+    expect(plansFor(6).flatMap(plans => plans.world.sites).filter(site => site.archetypeId !== 'scrap-heaps')
+      .every(site => site.hidden === undefined)).toBe(true);
+  });
+});

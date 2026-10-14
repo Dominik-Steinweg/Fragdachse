@@ -16,6 +16,8 @@ export interface DawnSiteMarkerTarget {
   readonly targetHalfHeight: number;
   /** Hold archetypes: the arc follows the hold window from the replicated activation time. */
   readonly holdDurationMs?: number;
+  /** Hidden site (no scrap scanner): no navigation marker until a player finds and activates it. */
+  readonly hidden?: boolean;
 }
 
 export interface DawnMarkerInput {
@@ -48,7 +50,7 @@ export function dawnMarkers(input: DawnMarkerInput): MarkerDescriptor[] {
   for (const site of input.sites) {
     const entry = entries.get(site.objectiveId);
     const activated = entry && entry.state !== 'dormant';
-    if (!activated && input.phase !== 'day') continue;
+    if (!activated && (input.phase !== 'day' || site.hidden)) continue;
     const common = {
       key: `dawn-site:${site.objectiveId}`, kind: 'site' as const, glyph: siteGlyph(site.archetypeId),
       x: input.origin.offsetX + (site.gridX + .5) * CELL_SIZE, y: input.origin.offsetY + (site.gridY + .5) * CELL_SIZE,
