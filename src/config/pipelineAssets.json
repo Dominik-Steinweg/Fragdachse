@@ -78430,7 +78430,7 @@
       "gameIds": [
         "bomber_squadron"
       ],
-      "revision": "u31-bomber-v1",
+      "revision": "u31b-material-v1",
       "variant": "standard",
       "sourceSize": 96,
       "textureKey": "bomber_drone_body",
@@ -78478,8 +78478,8 @@
         "height": 200
       },
       "hashes": {
-        "idle": "f054af3f34a5e48c69bdfe0e9df2cd091af2cf2b3c8916e0858a1df00cd6a349",
-        "sheet": "00951b0ec4c8f0efe671291b7e52ac8e1d7b0771332a4ea50d89232ac4198731"
+        "idle": "c186b81cd971f7f3f6506421378ed364c8846580b3070efc79d1d90f378a7c87",
+        "sheet": "9f898a1ebc20ca1774a62d0048c1b1182b7ad901012abad2b59def50950b2c74"
       }
     },
     {

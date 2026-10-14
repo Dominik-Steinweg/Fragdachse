@@ -6,7 +6,7 @@ from turret_parts import annulus, grille, finish
 from weapon_surface_parts import material, paint_depth
 
 
-def surfaces(c):
+def surfaces(c, weathered=False):
     colors = {
         'shell': ((.26, .275, .26), 'steel'),
         'panel': ((.085, .105, .11), 'steel'),
@@ -16,12 +16,94 @@ def surfaces(c):
         'ochre': ((.52, .32, .095), 'coat'),
         'bomb': ((.18, .20, .13), 'coat'),
     }
+    if weathered:
+        colors.update({
+            'shell': ((.205, .18, .145), 'steel'),
+            'panel': ((.075, .071, .063), 'steel'),
+            'edge': ((.39, .35, .29), 'edge'),
+            'frame': ((.050, .044, .035), 'steel'),
+            'blade': ((.14, .135, .115), 'composite'),
+        })
     palette = {key: material(c, 'Bomber '+key, color, .12, kind)
                for key, (color, kind) in colors.items()}
-    for mat in palette.values():
+    for key, mat in palette.items():
         mat.node_tree.nodes['Uneven material finish'].inputs[0].default_value = .32
         mat.node_tree.nodes['Tactile grain and machining'].inputs['Strength'].default_value = .12
+        if weathered and key != 'bomb':
+            nodes = mat.node_tree.nodes
+            nodes['Uneven material finish'].inputs[0].default_value = .53
+            nodes['Broken edge wear'].inputs['Scale'].default_value = 34
+            nodes['Material edge abrasion'].inputs[1].default_value = .88
+            nodes['Underlying worn material'].inputs[2].default_value = (.43, .38, .30, 1)
+            chips = nodes['Interrupted chips'].color_ramp
+            chips.elements[0].position = .42
+            chips.elements[1].position = .59
+            nodes['Surface-specific scoring'].inputs[1].default_value = .20
+            roughness = nodes['Rubbed versus rough finish'].color_ramp
+            roughness.elements[0].color = (.86, .86, .86, 1)
+            roughness.elements[-1].color = (.96, .96, .96, 1)
+            nodes['Principled BSDF'].inputs['Metallic'].default_value = .08
+            nodes['Principled BSDF'].inputs['Specular IOR Level'].default_value = .08
     return palette
+
+
+def duct_material(c, source, x, y):
+    """Soft intake soot in the stationary duct material, without a painted outline."""
+    mat = source.copy()
+    mat.name = 'Soot-stained umber rotor duct'
+    nodes, links = mat.node_tree.nodes, mat.node_tree.links
+    c.strengths.append(nodes['Surface detail strength'].inputs[0])
+    c.form_strengths.append(nodes['Form shadow strength'].inputs[0])
+    plane = nodes.new('ShaderNodeVectorMath')
+    plane.operation = 'MULTIPLY'
+    plane.inputs[1].default_value = (1, 1, 0)
+    links.new(nodes['True surface normals'].outputs['Position'], plane.inputs[0])
+    radius = nodes.new('ShaderNodeVectorMath')
+    radius.operation = 'DISTANCE'
+    radius.inputs[1].default_value = (x, y, 0)
+    links.new(plane.outputs['Vector'], radius.inputs[0])
+    rim_distance = nodes.new('ShaderNodeMath')
+    rim_distance.operation = 'SUBTRACT'
+    rim_distance.inputs[1].default_value = .544
+    links.new(radius.outputs['Value'], rim_distance.inputs[0])
+    rim_edge = nodes.new('ShaderNodeMath')
+    rim_edge.operation = 'ABSOLUTE'
+    links.new(rim_distance.outputs[0], rim_edge.inputs[0])
+    wear = nodes.new('ShaderNodeMapRange')
+    wear.name = 'Exposed intake lip wear'
+    wear.inputs['From Min'].default_value = .034
+    wear.inputs['From Max'].default_value = .059
+    wear.inputs['To Max'].default_value = .85
+    links.new(rim_edge.outputs[0], wear.inputs['Value'])
+    chipped = nodes.new('ShaderNodeMath')
+    chipped.operation = 'MULTIPLY'
+    links.new(wear.outputs['Result'], chipped.inputs[0])
+    links.new(nodes['Interrupted chips'].outputs['Color'], chipped.inputs[1])
+    exposed = nodes.new('ShaderNodeMixRGB')
+    exposed.name = 'Chipped intake coating'
+    exposed.inputs[2].default_value = (.50, .45, .36, 1)
+    links.new(chipped.outputs[0], exposed.inputs[0])
+    falloff = nodes.new('ShaderNodeMapRange')
+    falloff.name = 'Soft intake soot falloff'
+    falloff.inputs['From Min'].default_value = .475
+    falloff.inputs['From Max'].default_value = .59
+    falloff.inputs['To Min'].default_value = .70
+    falloff.inputs['To Max'].default_value = 0
+    links.new(radius.outputs['Value'], falloff.inputs['Value'])
+    breakup = nodes.new('ShaderNodeMath')
+    breakup.operation = 'MULTIPLY'
+    links.new(falloff.outputs['Result'], breakup.inputs[0])
+    links.new(nodes['Uneven finish and rubbed areas'].outputs['Fac'], breakup.inputs[1])
+    soot = nodes.new('ShaderNodeMixRGB')
+    soot.name = 'Matte interrupted soot deposits'
+    soot.blend_type = 'MULTIPLY'
+    soot.inputs[2].default_value = (.14, .115, .085, 1)
+    bs = nodes['Principled BSDF']
+    links.new(bs.inputs['Base Color'].links[0].from_socket, exposed.inputs[1])
+    links.new(exposed.outputs[0], soot.inputs[1])
+    links.new(breakup.outputs[0], soot.inputs[0])
+    links.new(soot.outputs[0], bs.inputs['Base Color'])
+    return mat
 
 
 def loft(c, name, sections, bottom, mat):
@@ -72,11 +154,12 @@ def bomb(c, p, x=0, y=0, z=0, scale=1):
 
 
 def rotor(c,p,index,x,y):
+    duct = duct_material(c,p['shell'],x,y)
     annulus(c,'Open structural fan duct',(x,y,.30),.60,.465,.18,p['frame'],steps=64)
     annulus(c,'Intake inner chamfer',(x,y,.405),.58,.460,.03,p['panel'],steps=64)
     for j in range(8):
         a=j*math.tau/8
-        annulus(c,'Segmented titanium duct rim',(x,y,.425),.603,.485,.045,p['shell'],start=a+.008,end=a+math.tau/8-.008,steps=8)
+        annulus(c,'Segmented titanium duct rim',(x,y,.425),.603,.485,.045,duct,start=a+.008,end=a+math.tau/8-.008,steps=8)
     for j in range(3):
         a=j*math.tau/3
         spar=c.box('Stationary motor support',(x+.27*math.cos(a),y+.27*math.sin(a),.27),(.49,.031,.04),p['frame'],.008)
@@ -124,7 +207,7 @@ def body(c,p):
 
 
 def build(c,spec):
-    p=surfaces(c)
+    p=surfaces(c, weathered=spec['model']['part']=='body')
     if spec['model']['part']=='body':
         groups,pivots,sockets=body(c,p)
     else:

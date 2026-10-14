@@ -8080,9 +8080,9 @@
       },
       "materialVariants": {
         "standard": {
-          "label": "Matte weathered titanium, graphite and restrained ochre",
-          "textureStrength": 0.16,
-          "formShadowStrength": 0.64
+          "label": "Matte umber gunmetal, chipped coating and restrained intake soot",
+          "textureStrength": 0.26,
+          "formShadowStrength": 0.68
         }
       },
       "id": "bomber-drone-body",
@@ -8095,7 +8095,7 @@
       ],
       "description": {
         "silhouette": "B3_v01 slender north-facing fuselage, two lateral ducted lift rotors, stub wings and swept tailplane",
-        "colors": "Matte worn titanium and graphite, sparse faded ochre markings; no glow or black outlines",
+        "colors": "Warm dark umber gunmetal, restrained exposed alloy chips, matte intake soot and sparse faded ochre; no glow or black outlines",
         "anatomy": "True orthographic top-down geometry. P1: six long north-facing bombs, three side-by-side at each wing root at rotor-axis height, retained by clips. Two independent counter-rotating rotor pivots."
       },
       "requiredClips": [
