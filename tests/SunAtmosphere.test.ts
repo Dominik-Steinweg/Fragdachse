@@ -67,6 +67,22 @@ it('limits the reversible sky to evening and meets production exactly at both bo
   }
 });
 
+it('tints the night ambient with Activity moonlight while keeping its brightness (D-47)',async()=>{
+  const {resolveMoonlitAmbient}=await import('../src/effects/sunlight/SunSky');
+  const {resolveSkyState}=await import('../src/effects/TimeOfDay');
+  const moon={tint:[1,.2,.22],gain:1.45};
+  const luminance=(c:number)=>((c>>>16)&255)*.2126+((c>>>8)&255)*.7152+(c&255)*.0722;
+  for(const minute of [0,60,1290,1380]) {
+    const base=resolveSkyState(minute).ambientColor;
+    expect(resolveMoonlitAmbient(base,moon,0)).toBe(base);
+    const lit=resolveMoonlitAmbient(base,moon,1);
+    expect(Math.abs(luminance(lit)-luminance(base)*moon.gain)).toBeLessThan(2);
+    expect((lit>>>16)&255).toBeGreaterThan(((lit>>>8)&255)*3);
+    const half=resolveMoonlitAmbient(base,moon,.5);
+    for(const shift of [0,8,16])expect(((half>>>shift)&255)).toBeGreaterThanOrEqual(Math.min((base>>>shift)&255,(lit>>>shift)&255));
+  }
+});
+
 it('validates rim tuning and holds geometry constant across all atmospheric keyframes',()=>{
   for(const bad of [{rockRimWidth:NaN},{rockRimWidth:0},{rockRimHeight:-1},{rockRimLip:Infinity},{rockContactAO:1}])expect(()=>validateSunTuning(bad)).toThrow();
   const out=createSunTuning();

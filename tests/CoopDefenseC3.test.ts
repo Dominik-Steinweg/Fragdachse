@@ -162,6 +162,33 @@ describe('Coop Defense C3 configuration', () => {
     expect(normalized.mapEvents?.[1]).not.toHaveProperty('durationMs');
   });
 
+  it('grows normal-fire random patches radially and keeps authored keep-clear capsules free (D-47)', () => {
+    const lane = { from: { gridX: 0, gridY: 17 }, to: { gridX: 59, gridY: 17 }, radiusCells: 4 };
+    const fire = makeEvent({ id: 'night-fire', delayMs: 0, durationMs: 40_000,
+      area: { type: 'random-patches', randomPatchCount: 4, minPatchRadiusCells: 3, maxPatchRadiusCells: 5, keepClear: [lane] },
+      spread: { direction: 'radial', durationMs: 20_000, warningLeadMs: 2_000 },
+      effect: { visualStyle: 'normal', burnDurationMs: 2_000, burnDamagePerTick: 0.5, sourceId: 'test.night-fire' } });
+    const config = normalizeCoopDefenseMapConfig(makeMap({ mapEvents: [fire] }));
+    expect(config.mapEvents?.[0]).toMatchObject({ durationMs: 40_000, spread: fire.spread, area: { keepClear: [lane] } });
+    for (const seed of [3, 41, 902]) {
+      const cells = (generateArenaWithActiveMetrics(seed, config).groundHazardZones ?? []).flatMap(zone => zone.cells);
+      expect(cells.length, `seed ${seed}`).toBeGreaterThan(0);
+      for (const cell of cells) {
+        const along = Math.max(lane.from.gridX, Math.min(lane.to.gridX, cell.gridX));
+        expect(Math.hypot(cell.gridX - along, cell.gridY - lane.from.gridY)).toBeGreaterThan(lane.radiusCells);
+        expect(cell.expansionProgress).toBeGreaterThanOrEqual(0);
+        expect(cell.expansionProgress).toBeLessThanOrEqual(1);
+      }
+    }
+    expect(() => normalizeCoopDefenseMapConfig(makeMap({ mapEvents: [{ ...fire,
+      area: { type: 'random-patches', randomPatchCount: 1, minPatchRadiusCells: 1, maxPatchRadiusCells: 2,
+        keepClear: [{ ...lane, radiusCells: 0 }] } }] }))).toThrow(/keepClear/);
+    // Rectangle fronts keep their void-only, permanent spread rule.
+    expect(() => normalizeCoopDefenseMapConfig(makeMap({ mapEvents: [{ ...fire,
+      area: { type: 'rectangle', gridX: 2, gridY: 2, widthCells: 20, heightCells: 8 },
+      spread: { direction: 'left-to-right', durationMs: 20_000, roughnessCells: 1, warningLeadMs: 1_000 } }] }))).toThrow(/spread/);
+  });
+
   it('accepts finite hazards as after-event sources but rejects persistent hazards', () => {
     const finite = makeEvent({ id: 'finite' });
     expect(() => normalizeCoopDefenseMapConfig(makeMap({

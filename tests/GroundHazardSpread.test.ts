@@ -18,6 +18,11 @@ describe('organic hazard arrival field', () => {
     expect(groundHazardIgnitionDelay(radial, 0, 0, 1, .5)).toBe(6000);
     expect(groundHazardIgnitionDelay(radial, 0, 0, 1, 1)).toBe(10000);
     expect(() => groundHazardIgnitionDelay(radial, 0, 0, 1)).toThrow(/Missing radial geometry/);
+    // Random patches grow the same way from their own centre (Dawn fire night).
+    const patches: CoopDefenseMapGroundHazardEventConfig = { ...radial,
+      area: { type: 'random-patches', randomPatchCount: 2, minPatchRadiusCells: 3, maxPatchRadiusCells: 5 } };
+    expect(groundHazardIgnitionDelay(patches, 0, 0, 1, 0)).toBe(2000);
+    expect(groundHazardIgnitionDelay(patches, 0, 0, 1, 1)).toBe(10000);
   });
   it('keeps each row connected and monotone with a fixed start and end', () => {
     for (const seed of [1, 71, 993]) for (let y = 3; y < 27; y += 0.5) {

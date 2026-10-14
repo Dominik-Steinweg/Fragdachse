@@ -414,22 +414,20 @@ export class ArenaLifecycleCoordinator {
       // Jede World bekommt ihren eigenen Presentation-Frame-Binding - auch eine World ohne
       // Activity (LobbyWorld). Er traegt die aktive World-Display-Verdrahtung und faellt vor dem
       // Handoff dieser World.
+      // Dawn night modifiers stay diegetic (D-47): fog through the fog owner, moonlight through the sun owner.
+      const dawnNight = () => {
+        const start = bridge.getArenaStartTime();
+        if (start <= 0 || !this.coopMissionRuntime) return null;
+        const now = this.coopMissionRuntime.getMissionNow(bridge.getSynchronizedNow());
+        return resolveDawnNightEnvironment(bridge.getActivityDescriptor()?.parameters?.dawn, now - start);
+      };
       this.worldRuntime.bindPresentationFrame(new WorldPresentationFrameBinding({
         getLobbyMerchant: () => this.worldRuntime?.presentation?.lobbyMerchant ?? null,
+        getActivityMoonlight: () => dawnNight()?.moonlight,
         groundFog: {
           getSystem: () => this.worldRuntime?.presentation?.groundFog ?? null,
-          getActivityStrength: () => {
-            const start = bridge.getArenaStartTime();
-            if (start <= 0 || !this.coopMissionRuntime) return undefined;
-            const now = this.coopMissionRuntime.getMissionNow(bridge.getSynchronizedNow());
-            return resolveDawnNightEnvironment(bridge.getActivityDescriptor()?.parameters?.dawn, now - start)?.fogStrength;
-          },
-          getActivityTint: () => {
-            const start = bridge.getArenaStartTime();
-            if (start <= 0 || !this.coopMissionRuntime) return undefined;
-            const now = this.coopMissionRuntime.getMissionNow(bridge.getSynchronizedNow());
-            return resolveDawnNightEnvironment(bridge.getActivityDescriptor()?.parameters?.dawn, now - start)?.fogTint;
-          },
+          getActivityStrength: () => dawnNight()?.fogStrength,
+          getActivityTint: () => dawnNight()?.fogTint,
           getBases: () => this.worldRuntime?.materialization?.bases ?? null,
           getProjectiles: () => this.worldGameplay?.projectiles?.getPresentationRuntime() ?? null,
           effects: this.ctx.effectSystem,

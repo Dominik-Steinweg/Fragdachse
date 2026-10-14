@@ -176,6 +176,8 @@ export interface WorldPresentationFrameBindingInput {
     readonly getProjectiles: () => ProjectilePresentationRuntime | null;
     readonly effects: Pick<EffectSystem, 'bindGroundFogExplosion' | 'bindGroundFogCombat'>;
   };
+  /** Activity moonlight for the World's sun owner (Dawn blood moon); undefined = the World sky. */
+  readonly getActivityMoonlight?: () => { readonly tint: readonly number[]; readonly gain: number } | undefined;
   readonly constructionOwnership?: {
     readonly motes: Pick<ConstructionOwnershipMoteRenderer, 'openWorld' | 'closeWorld' | 'captureFrame'>;
     readonly getPlacement: () => Pick<PlacementSystem, 'getAllRuntimeRocks' | 'getOwnedConstructions' | 'getRuntimeRock'> | null;
@@ -298,6 +300,7 @@ export class WorldPresentationFrameBinding {
     catch(error){owner.destroy();this.sunlightOwner=null;throw error;}
   }
   private syncSunlight():void {
+    this.sunlightOwner?.setActivityMoonlight(this.input.getActivityMoonlight?.() ?? null);
     this.sunlightOwner?.update(this.input.lighting.getTimeOfDayMinutes(),this.presentationTimeMs);
   }
   private fogBinding: WorldGroundFogBinding | null = null;

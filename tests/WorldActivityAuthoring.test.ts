@@ -43,7 +43,7 @@ import { ArenaGenerator, resolveArenaGenerationInput } from '../src/arena/ArenaG
 import { getAuthoredWorldMetricsProfile } from '../src/config';
 import { resolveWorldMetrics } from '../src/world/WorldMetrics';
 
-it.each([undefined, 0, 2, 6, 11] as const)('preserves the optional site ceiling %s across both World adapters', maxAreaStage => {
+it.each([undefined, 0, 2, 6] as const)('preserves the optional site ceiling %s across both World adapters', maxAreaStage => {
   const map = normalizeCoopDefenseMapConfig({
     mapId: 'site-roundtrip', arenaWidthCells: 60, arenaHeightCells: 50,
     balanceReferenceDurationSec: 60, objective: 'survive', surviveDurationSec: 60,

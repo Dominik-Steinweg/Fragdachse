@@ -4,6 +4,8 @@ import { GROUND_FIRE_CELL_SIZE } from './FireSystem';
 import { TEX_VOID_FLAME_GLOW } from './FlameShared';
 import type { SyncedBurningGroundSnapshot } from '../types';
 
+const WARNING_TINT = { void: 0xc992ff, normal: 0xff8a3a } as const;
+
 /** A soft, pulsing preheat band. It only reads the host-selected upcoming cells. */
 export class GroundHazardWarningRenderer {
   private readonly images: Phaser.GameObjects.Image[] = [];
@@ -16,11 +18,12 @@ export class GroundHazardWarningRenderer {
       if (cell.activatesAt <= now) continue;
       let image = this.images[used];
       if (!image) image = this.scene.add.image(0, 0, TEX_VOID_FLAME_GLOW)
-        .setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.FIRE - 0.1).setTint(0xc992ff);
+        .setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.FIRE - 0.1);
       else if (used >= this.activeCount) image.addToDisplayList();
       this.images[used++] = image;
       const urgency = 1 - Math.min(1, (cell.activatesAt - now) / 3000);
-      image.setPosition((cell.gridX + 0.5) * GROUND_FIRE_CELL_SIZE, (cell.gridY + 0.5) * GROUND_FIRE_CELL_SIZE)
+      image.setTint(WARNING_TINT[cell.visualStyle ?? 'void'])
+        .setPosition((cell.gridX + 0.5) * GROUND_FIRE_CELL_SIZE, (cell.gridY + 0.5) * GROUND_FIRE_CELL_SIZE)
         .setDisplaySize(GROUND_FIRE_CELL_SIZE * 2.2, GROUND_FIRE_CELL_SIZE * 2.2)
         .setAlpha((0.12 + urgency * 0.16) * (0.8 + Math.sin(now * 0.007 + cell.gridY * 0.3) * 0.2))
         .setVisible(true);

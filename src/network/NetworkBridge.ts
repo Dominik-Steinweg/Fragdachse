@@ -549,7 +549,9 @@ function sameLiveBurningGroundCells(
 function sanitizeGroundWarnings(value: unknown, now: number): NonNullable<SyncedBurningGroundSnapshot['warnings']> {
   if (!Array.isArray(value)) return [];
   return value.filter(cell => cell && Number.isSafeInteger(cell.gridX) && Number.isSafeInteger(cell.gridY)
-    && Number.isFinite(cell.activatesAt) && cell.activatesAt > now);
+    && Number.isFinite(cell.activatesAt) && cell.activatesAt > now)
+    .map(cell => ({ gridX: cell.gridX, gridY: cell.gridY, activatesAt: cell.activatesAt,
+      ...(cell.visualStyle === 'normal' ? { visualStyle: 'normal' as const } : {}) }));
 }
 
 function encodeBurningGroundCell(cell: SyncedBurningGroundSnapshot['cells'][number]): EncodedBurningGroundCell {

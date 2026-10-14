@@ -23,6 +23,20 @@ export function resolveSunAmbient(minutes:number):number|null {
   return color; // Endpoint colours borrow production once at module initialization.
 }
 
+/**
+ * Activity moonlight (Dawn blood moon, D-47): the ambient keeps its luminance, times `gain`, but takes
+ * the moon's hue. `weight` fades it in and out; 0 returns the base unchanged.
+ */
+export function resolveMoonlitAmbient(base:number,moon:{readonly tint:readonly number[];readonly gain:number},weight:number):number {
+  const w=Math.max(0,Math.min(1,weight));
+  if(w===0)return base;
+  const luminance=(((base>>>16)&255)*.2126+((base>>>8)&255)*.7152+(base&255)*.0722)*moon.gain;
+  const tintLuminance=moon.tint[0]*.2126+moon.tint[1]*.7152+moon.tint[2]*.0722;
+  let lit=0;
+  for(let channel=0;channel<3;channel++)lit|=Math.min(255,Math.round(moon.tint[channel]*luminance/tintLuminance))<<(16-channel*8);
+  return mixColor(base,lit,w);
+}
+
 /** Retain the approved morning curve; extend soft direct light through golden
  * hour, then fade it completely into the unchanged production night. */
 

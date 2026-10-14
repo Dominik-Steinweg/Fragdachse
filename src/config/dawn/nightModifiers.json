@@ -5,6 +5,7 @@
       "chanceByThreat": [0, 0, 0.025, 0.045, 0.065, 0.085, 0.105, 0.12, 0.135, 0.15],
       "nightBudgetMultiplier": 1.3,
       "fogTint": [1.0, 0.55, 0.55],
+      "moonlight": { "tint": [1.0, 0.2, 0.22], "gain": 1.45 },
       "enemyWeightMultipliers": { "zombie-badger": 0.35, "demon-badger": 1.5, "rabid-badger": 1.5, "spore-warden": 2, "plague-medic": 2, "thrower-badger": 2, "alien-badger": 2, "void-stalker": 2, "timebomb-badger": 2, "pyro-badger": 2, "stink-broodmother": 2, "mortar-badger": 2, "firestarter-badger": 2 }
     },
     {
@@ -20,14 +21,20 @@
       "chanceByThreat": [0, 0, 0.025, 0.045, 0.065, 0.085, 0.105, 0.12, 0.135, 0.15],
       "nightBudgetMultiplier": 1,
       "enemyWeightMultipliers": {},
-      "airstrikes": { "intervalMs": 30000, "strikeCount": 6, "endClearanceMs": 15000, "radiusCells": 24 }
+      "airstrikes": { "intervalMs": 30000, "strikeCount": 6, "endClearanceMs": 15000, "radiusCells": 24, "runSpeedPxPerSec": 240 }
     },
     {
       "id": "fire",
       "chanceByThreat": [0, 0, 0.025, 0.045, 0.065, 0.085, 0.105, 0.12, 0.135, 0.15],
       "nightBudgetMultiplier": 1,
       "enemyWeightMultipliers": {},
-      "additionalBlocks": ["pyro-assault", "artillery-nest"]
+      "additionalBlocks": ["pyro-assault", "artillery-nest"],
+      "groundFire": {
+        "ignitions": [{ "startRatio": 0.04, "patchCount": 3 }, { "startRatio": 0.3, "patchCount": 3 }, { "startRatio": 0.55, "patchCount": 3 }],
+        "minPatchRadiusCells": 4, "maxPatchRadiusCells": 7, "spreadMs": 60000, "warningLeadMs": 3000,
+        "coreClearanceCells": 15, "laneClearanceCells": 5, "siteClearanceCells": 4,
+        "burnDurationMs": 2000, "burnDamagePerTick": 0.5
+      }
     }
   ]
 }

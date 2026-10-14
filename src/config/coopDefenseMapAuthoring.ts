@@ -584,6 +584,20 @@ export interface CoopDefenseMapAirstrikeEventConfig extends CoopDefenseMapEventB
   readonly area?: CoopDefenseMapAirstrikeArea;
   /** Geordnete Streuung innerhalb der Zone. Nur fuer `zone-barrage`. */
   readonly orderedSweep?: boolean;
+  /**
+   * Bomberanflug ueber die Zone (nur `zone-barrage`, nicht mit `orderedSweep`): Die Einschlaege liegen auf
+   * einer Geraden und folgen der Fluggeschwindigkeit. Host-Plan und Ueberflug-Darstellung lesen dieselbe
+   * Geometrie (`AirstrikeRun`), es gibt keinen eigenen Netzwerkzustand.
+   */
+  readonly run?: CoopDefenseMapAirstrikeRun;
+}
+
+export interface CoopDefenseMapAirstrikeRun {
+  /** Flugrichtung in Grad, 0 = nach Osten, 90 = nach Sueden (Bildschirm-y). */
+  readonly headingDeg: number;
+  /** Seitlicher Versatz der Linie vom Zonenzentrum, relativ zur halben Zonenbreite quer zur Flugrichtung. */
+  readonly offsetRatio: number;
+  readonly speedPxPerSec: number;
 }
 
 export type ResolvedCoopDefenseMapAirstrikeEventConfig = CoopDefenseMapAirstrikeEventConfig;
@@ -601,6 +615,8 @@ export type CoopDefenseMapGroundHazardArea =
     readonly minPatchRadiusCells: number;
     readonly maxPatchRadiusCells: number;
     readonly baseClearanceCells?: number;
+    /** Kapseln (Strecke mit Radius), in denen keine Zelle und kein Patch-Zentrum liegen darf. */
+    readonly keepClear?: readonly CoopDefenseMapGroundHazardKeepClear[];
   }
   | {
     readonly type: 'rectangle';
@@ -616,6 +632,14 @@ export type CoopDefenseMapGroundHazardArea =
     readonly baseClearanceCells?: number;
   };
 
+export interface CoopDefenseMapGroundHazardKeepClear {
+  readonly from: { readonly gridX: number; readonly gridY: number };
+  readonly to: { readonly gridX: number; readonly gridY: number };
+  readonly radiusCells: number;
+}
+
+const MAX_GROUND_HAZARD_KEEP_CLEAR = 64;
+
 export interface CoopDefenseMapGroundHazardEffectConfig {
   readonly visualStyle: GroundFireVisualStyle;
   readonly burnDurationMs: number;
@@ -629,7 +653,10 @@ export interface CoopDefenseMapGroundHazardEventConfig extends CoopDefenseMapEve
   readonly durationMs?: number;
   readonly area: CoopDefenseMapGroundHazardArea;
   readonly effect: CoopDefenseMapGroundHazardEffectConfig;
-  /** Monotone rectangular or radial expansion; reached cells stay active. */
+  /**
+   * Monotone rectangular or radial expansion; reached cells stay active. Radial growth of
+   * `random-patches` runs from each patch centre and may end with a finite `durationMs`.
+   */
   readonly spread?: {
     readonly direction: 'left-to-right';
     readonly durationMs: number;
@@ -2727,17 +2754,18 @@ function normalizeGroundHazardMapEvent(
   if (area.type === 'expanded-patches' && spread?.direction !== 'radial') {
     throw new Error(`[coopDefenseMaps] Expanded patches require radial spread on ${mapId}:${event.id}`);
   }
+  const radialPatches = spread?.direction === 'radial' && area.type === 'random-patches';
   if (spread !== undefined && (
-    !spread || effect.visualStyle !== 'void'
-    || durationMs !== undefined
+    !spread || (!radialPatches && (effect.visualStyle !== 'void' || durationMs !== undefined))
     || !Number.isFinite(spread.durationMs) || spread.durationMs <= 0
     || !Number.isFinite(spread.warningLeadMs) || spread.warningLeadMs < 0
     || (spread.direction === 'left-to-right'
       ? area.type !== 'rectangle' || !Number.isFinite(spread.roughnessCells) || spread.roughnessCells < 0
         || spread.roughnessCells >= area.widthCells / Math.PI
-      : spread.direction !== 'radial' || area.type !== 'expanded-patches' || spread.warningLeadMs >= spread.durationMs)
+      : spread.direction !== 'radial' || (area.type !== 'expanded-patches' && area.type !== 'random-patches')
+        || spread.warningLeadMs >= spread.durationMs)
   )) {
-    throw new Error(`[coopDefenseMaps] Invalid permanent void spread on ${mapId}:${event.id}`);
+    throw new Error(`[coopDefenseMaps] Invalid ground hazard spread on ${mapId}:${event.id}`);
   }
   return {
     id: event.id,
@@ -2787,6 +2815,7 @@ function normalizeGroundHazardArea(
     ) {
       throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${eventId} needs valid patch radii`);
     }
+    const keepClear = normalizeGroundHazardKeepClear(mapId, eventId, area.keepClear, arenaWidthCells, arenaHeightCells);
     return {
       type: 'random-patches',
       randomPatchCount: normalizePositiveMapEventInteger(
@@ -2798,6 +2827,7 @@ function normalizeGroundHazardArea(
       minPatchRadiusCells: area.minPatchRadiusCells,
       maxPatchRadiusCells: area.maxPatchRadiusCells,
       ...(baseClearanceCells === undefined ? {} : { baseClearanceCells }),
+      ...(keepClear === undefined ? {} : { keepClear }),
     };
   }
   if (area.type === 'rectangle') {
@@ -2859,6 +2889,29 @@ function normalizeGroundHazardArea(
   throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${eventId} has an unknown area type`);
 }
 
+function normalizeGroundHazardKeepClear(
+  mapId: string,
+  eventId: string,
+  value: readonly CoopDefenseMapGroundHazardKeepClear[] | undefined,
+  arenaWidthCells: number,
+  arenaHeightCells: number,
+): CoopDefenseMapGroundHazardKeepClear[] | undefined {
+  if (value === undefined) return undefined;
+  const inside = (point: { gridX: number; gridY: number } | undefined) => !!point
+    && Number.isFinite(point.gridX) && Number.isFinite(point.gridY)
+    && point.gridX >= 0 && point.gridY >= 0 && point.gridX <= arenaWidthCells && point.gridY <= arenaHeightCells;
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_GROUND_HAZARD_KEEP_CLEAR
+    || value.some(capsule => !capsule || !inside(capsule.from) || !inside(capsule.to)
+      || !Number.isFinite(capsule.radiusCells) || capsule.radiusCells <= 0)) {
+    throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${eventId} has an invalid keepClear list`);
+  }
+  return value.map(capsule => ({
+    from: { gridX: capsule.from.gridX, gridY: capsule.from.gridY },
+    to: { gridX: capsule.to.gridX, gridY: capsule.to.gridY },
+    radiusCells: capsule.radiusCells,
+  }));
+}
+
 function normalizeGroundHazardBaseClearance(
   mapId: string,
   eventId: string,
@@ -2883,7 +2936,7 @@ function normalizeAirstrikeMapEvent(
     if (event.intervalMs === undefined) {
       throw new Error(`[coopDefenseMaps] Airstrike event ${mapId}:${event.id} needs intervalMs for player-hunt`);
     }
-    if (event.area !== undefined || event.strikeCount !== undefined || event.orderedSweep !== undefined) {
+    if (event.area !== undefined || event.strikeCount !== undefined || event.orderedSweep !== undefined || event.run !== undefined) {
       throw new Error(`[coopDefenseMaps] Airstrike event ${mapId}:${event.id} has parameters invalid for player-hunt`);
     }
     return {
@@ -2897,7 +2950,7 @@ function normalizeAirstrikeMapEvent(
   }
 
   if (event.pattern === 'tutorial-sweep') {
-    if (event.area !== undefined || event.intervalMs !== undefined || event.orderedSweep !== undefined) {
+    if (event.area !== undefined || event.intervalMs !== undefined || event.orderedSweep !== undefined || event.run !== undefined) {
       throw new Error(`[coopDefenseMaps] Airstrike event ${mapId}:${event.id} has parameters invalid for tutorial-sweep`);
     }
     const strikeCount = event.strikeCount === undefined
@@ -2928,6 +2981,13 @@ function normalizeAirstrikeMapEvent(
     if (typeof orderedSweep !== 'boolean') {
       throw new Error(`[coopDefenseMaps] Airstrike event ${mapId}:${event.id} needs a boolean orderedSweep`);
     }
+    const run = event.run;
+    if (run !== undefined && (!run || orderedSweep
+      || !Number.isFinite(run.headingDeg) || run.headingDeg < 0 || run.headingDeg >= 360
+      || !Number.isFinite(run.offsetRatio) || Math.abs(run.offsetRatio) > 0.9
+      || !Number.isFinite(run.speedPxPerSec) || run.speedPxPerSec < 100 || run.speedPxPerSec > 4000)) {
+      throw new Error(`[coopDefenseMaps] Airstrike event ${mapId}:${event.id} has an invalid run`);
+    }
     return {
       id: event.id,
       type: 'airstrike',
@@ -2937,6 +2997,7 @@ function normalizeAirstrikeMapEvent(
       strikeCount: normalizePositiveMapEventInteger(mapId, event.id, event.strikeCount, 'strikeCount'),
       area,
       orderedSweep,
+      ...(run === undefined ? {} : { run: { headingDeg: run.headingDeg, offsetRatio: run.offsetRatio, speedPxPerSec: run.speedPxPerSec } }),
     };
   }
 

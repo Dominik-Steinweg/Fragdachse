@@ -167,7 +167,9 @@ describe('Dawn arena multi-seed generation', () => {
         }
 
         // Flood starts at the persistent core itself, never at a friendly site structure.
-        const structureCells = new Set(bases.flatMap(base => base.cells.map(cell => cell.gridY * cols + cell.gridX)));
+        // A spawn ring (brood nest, as Map 17) encloses its spawn centre on purpose; it belongs to the structure.
+        const structureCells = new Set(bases.flatMap(base => [...base.cells, ...(base.spawnCenter ? [base.spawnCenter] : [])]
+          .map(cell => cell.gridY * cols + cell.gridX)));
         for (const site of resolveDawnSites(dawn.world)) {
           const slotStats = entry.slots[site.slotId];
           slotStats.occupied++;

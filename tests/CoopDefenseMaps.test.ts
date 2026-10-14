@@ -42,9 +42,10 @@ describe('persistent site stage ceilings', () => {
     persistentBase: { baseId: 'home', anchor: { gridX, gridY }, ...(maxAreaStage === undefined ? {} : { maxAreaStage }) },
   });
 
-  it.each([undefined, 2, 6, 11] as const)('reserves the same site geometry in map and World resolution for ceiling %s', ceiling => {
+  // The radius ends at 10 (stage 6, D-46): every site ceiling keeps the same 12-cell reservation.
+  it.each([undefined, 2, 6] as const)('reserves the same site geometry in map and World resolution for ceiling %s', ceiling => {
     const map = normalizeCoopDefenseMapConfig(rawMap(ceiling));
-    const radius = ceiling === 11 ? 17 : 12;
+    const radius = 12;
     const mapBases = resolveCoopDefenseBases(map);
     const worldBases = resolveWorldBases(toWorldDefinition(map), resolveCoopDefenseWorldMetrics(map.arenaWidthCells, map.arenaHeightCells));
     for (const bases of [mapBases, worldBases]) {
@@ -58,15 +59,14 @@ describe('persistent site stage ceilings', () => {
     }
   });
 
-  it.each([-1, 12, 1.5, NaN, Infinity, '11', null])('rejects malformed site ceiling %s', ceiling => {
+  it.each([-1, 7, 11, 12, 1.5, NaN, Infinity, '11', null])('rejects malformed site ceiling %s', ceiling => {
     expect(() => normalizeCoopDefenseMapConfig(rawMap(ceiling as PersistentBaseAreaStage))).toThrow(/maxAreaStage/);
   });
 
-  it('keeps authored water outside the larger site reservation', () => {
-    const withWater = { ...rawMap(11), water: [{ gridX: 37, gridY: 20 }] };
+  it('keeps authored water outside the site reservation', () => {
+    const withWater = { ...rawMap(6), water: [{ gridX: 32, gridY: 20 }] };
     expect(() => normalizeCoopDefenseMapConfig(withWater)).toThrow(/persistent base reservation/);
-    expect(() => normalizeCoopDefenseMapConfig({ ...withWater, persistentBase: rawMap(2).persistentBase })).not.toThrow();
-    expect(() => normalizeCoopDefenseMapConfig({ ...withWater, water: [{ gridX: 38, gridY: 20 }] })).not.toThrow();
+    expect(() => normalizeCoopDefenseMapConfig({ ...withWater, water: [{ gridX: 33, gridY: 20 }] })).not.toThrow();
   });
 });
 

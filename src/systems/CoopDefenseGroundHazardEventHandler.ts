@@ -183,13 +183,14 @@ export class CoopDefenseGroundHazardEventHandler implements CoopDefenseMapEventH
     if (lead <= 0) return;
     const warnings = [];
     const now = this.deps.getNowMs();
+    const style = occurrence.event.effect.visualStyle === 'normal' ? { visualStyle: 'normal' as const } : {};
     for (let index = occurrence.nextCell; index < occurrence.cells.length; index++) {
       const cell = occurrence.cells[index];
       const remaining = occurrence.actionAtMs + cell.delayMs - roundTimeMs;
       if (remaining > lead) break;
       if (remaining <= 0) continue;
       warnings.push({ gridX: Math.floor(cell.centerX / GROUND_FIRE_CELL_SIZE),
-        gridY: Math.floor(cell.centerY / GROUND_FIRE_CELL_SIZE), activatesAt: Math.round(now + remaining) });
+        gridY: Math.floor(cell.centerY / GROUND_FIRE_CELL_SIZE), activatesAt: Math.round(now + remaining), ...style });
     }
     this.deps.fireSystem.hostSetGroundWarnings?.(occurrence.sourceKey, warnings);
   }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import raw from '../src/config/dawn/nightModifiers.json';
 import { validateDawnNightModifiers } from '../src/config/dawn/dawnNightModifiers';
-import { getDawnNightModifier, getDawnSchedule, getDawnThreatCurve, getDawnWaveBlocks, getDawnWaveBlock } from '../src/config/dawn/dawnContent';
+import { getDawnArenaTemplate, getDawnNightModifier, getDawnSchedule, getDawnThreatCurve, getDawnWaveBlocks, getDawnWaveBlock } from '../src/config/dawn/dawnContent';
 import { DAWN_NIGHT_MODIFIER_IDS } from '../src/dawn/contracts/DawnContentIds';
 import { composeDawnRoundPlans } from '../src/dawn/composition/DawnRoundComposition';
 import { resolveDawnNightCurve, selectDawnNightModifier } from '../src/dawn/composition/DawnNightModifierComposition';
@@ -24,6 +24,12 @@ describe('Dawn night modifiers', () => {
       (v: typeof raw) => { v.modifiers[0].nightBudgetMultiplier = 0; },
       (v: typeof raw) => { v.modifiers[3].additionalBlocks = ['missing']; },
       (v: typeof raw) => { v.modifiers[1].fogStrength = 3; },
+      // Each diegetic effect has exactly one modifier owner (D-47).
+      (v: typeof raw) => { Object.assign(v.modifiers[1], { moonlight: v.modifiers[0].moonlight }); },
+      (v: typeof raw) => { delete (v.modifiers[3] as { groundFire?: unknown }).groundFire; },
+      (v: typeof raw) => { v.modifiers[3].groundFire.ignitions[1].startRatio = 0.01; },
+      (v: typeof raw) => { v.modifiers[0].moonlight.tint = [1, 2, 1]; },
+      (v: typeof raw) => { v.modifiers[2].airstrikes.runSpeedPxPerSec = 50; },
     ]) {
       const value = structuredClone(raw); alter(value);
       expect(() => validate(value)).toThrow('Night modifiers');
@@ -67,6 +73,7 @@ describe('Dawn night modifiers', () => {
     }
     if (id === 'bombers') {
       expect(resolved.activity.mapEvents!.length).toBeGreaterThan(0);
+      const nightFronts = new Set(special.activity.waves.flatMap(w => 'front' in w && w.atMs >= start && w.atMs < end ? [w.front] : []));
       for (const event of resolved.activity.mapEvents!) {
         expect(event.type).toBe('airstrike');
         expect(event.start.type).toBe('time');
@@ -74,9 +81,28 @@ describe('Dawn night modifiers', () => {
           expect(event.start.atMs).toBeGreaterThanOrEqual(start);
           expect(event.start.atMs + getDawnNightModifier(id).airstrikes!.endClearanceMs).toBeLessThan(end);
         }
+        // Bombers come in from a front of this night, so the run crosses the base zone (D-47).
+        if (event.type !== 'airstrike' || !event.run) throw new Error(`${event.id} has no bomber run`);
+        const heading = event.run.headingDeg;
+        expect([...nightFronts].some(front => {
+          const inward = { west: 0, north: 90, east: 180, south: 270 }[front];
+          return Math.abs(((heading - inward + 540) % 360) - 180) <= 25;
+        }), `${event.id} heading ${heading}`).toBe(true);
       }
     }
     if (id === 'fire') {
+      const fires = resolved.activity.mapEvents!;
+      expect(fires.length).toBe(getDawnNightModifier(id).groundFire!.ignitions.length);
+      for (const event of fires) {
+        if (event.type !== 'ground-hazard' || event.start.type !== 'time' || event.area.type !== 'random-patches') {
+          throw new Error(`${event.id} is no timed random-patch fire`);
+        }
+        // Fires start at night, spread radially, burn out at dawn and are ordinary flames.
+        expect(event.start.atMs).toBeGreaterThanOrEqual(start);
+        expect(event.start.atMs + event.durationMs!).toBe(end);
+        expect(event.spread?.direction).toBe('radial');
+        expect(event.effect.visualStyle).toBe('normal');
+      }
       const extra = resolved.activity.encounters!.filter(e => !baseline.activity.encounters!.some(b => b.id === e.id));
       expect(extra.length).toBeGreaterThan(0);
       expect(extra.flatMap(e => e.groups).some(g => g.enemyKind === 'firestarter-badger')).toBe(true);
@@ -116,7 +142,36 @@ describe('Dawn night modifiers', () => {
   });
 });
 
-describe('Dawn night modifier fog (D-43)', () => {
+describe('Dawn night modifiers stay diegetic (D-47)', () => {
+  it('lights the blood moon through the sun owner and only at night', () => {
+    const plans = composeDawnRoundPlans({ seed: 3, threat: 6, dayNumber: 1, nightModifier: 'blood-moon' });
+    const schedule = getDawnSchedule(plans.activity.scheduleId);
+    const night = getDawnPhaseStartMs(schedule, 'night');
+    expect(resolveDawnNightEnvironment(plans.activity, night + 1000)?.moonlight).toEqual(getDawnNightModifier('blood-moon').moonlight);
+    expect(resolveDawnNightEnvironment(plans.activity, night - 1000)).toBeNull();
+    for (const id of ['fog', 'bombers', 'fire'] as const) expect(getDawnNightModifier(id).moonlight).toBeUndefined();
+  });
+
+  it('keeps every fire off the base core and the lanes from all fronts', () => {
+    const plans = composeDawnRoundPlans({ seed: 17, threat: 8, dayNumber: 3, nightModifier: 'fire' });
+    const template = getDawnArenaTemplate(plans.world.templateId);
+    const anchor = template.world.persistentBase.anchor;
+    const fire = getDawnNightModifier('fire').groundFire!;
+    for (const event of resolveDawnScenario(plans.world, plans.activity).activity.mapEvents!) {
+      if (event.type !== 'ground-hazard' || event.area.type !== 'random-patches') throw new Error(event.id);
+      const capsules = event.area.keepClear!;
+      expect(capsules).toContainEqual({ from: anchor, to: anchor, radiusCells: fire.coreClearanceCells });
+      for (const front of new Set(template.fronts)) {
+        // One lane per front runs from that arena edge to the base anchor.
+        const same = (a: { gridX: number; gridY: number }, b: typeof a) => a.gridX === b.gridX && a.gridY === b.gridY;
+        const lane = capsules.find(capsule => same(capsule.to, anchor) && !same(capsule.from, anchor)
+          && ({ west: capsule.from.gridX === 0, east: capsule.from.gridX === template.world.arenaWidthCells! - 1,
+            north: capsule.from.gridY === 0, south: capsule.from.gridY === template.world.arenaHeightCells! - 1 })[front]);
+        expect(lane?.radiusCells, `${template.id} ${front}`).toBe(fire.laneClearanceCells);
+      }
+    }
+  });
+
   it('colours the existing ground fog at night only, never through a screen overlay', () => {
     const plans = composeDawnRoundPlans({ seed: 3, threat: 6, dayNumber: 1, nightModifier: 'blood-moon' });
     const schedule = getDawnSchedule(plans.activity.scheduleId);

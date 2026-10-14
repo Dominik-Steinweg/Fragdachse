@@ -12,6 +12,8 @@ import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
 import { ensureAirstrikeBombTexture, ensureAirstrikeSparkTexture } from './gpu/GpuVfxSourceTextures';
 import { GPU_VFX_NO_SOURCE_HANDLE, type GpuVfxSystem } from './gpu/GpuVfxSystem';
 import { ParticleFlowScheduler } from './gpu/ParticleFlowScheduler';
+import { resolveAirstrikeRunLeadPx, type ScheduledAirstrikeRun } from '../systems/AirstrikeRun';
+import { COOP_DEFENSE_MAP_AIRSTRIKE_DELAY_MS } from '../systems/CoopDefenseAirstrikeEventHandler';
 
 // ── Textur-Schlüssel ────────────────────────────────────────────────────────
 const TEX_AS_TRAIL  = '__airstrike_trail';
@@ -69,8 +71,19 @@ const SPAWN_POINT  = new Phaser.Math.Vector2(0, 0);
 
 // ── Visuelle State pro Strike ────────────────────────────────────────────────
 
-/** Overflight shadow: crosses the target `leadMs` before impact (bombs falling), fades at both ends. */
-const FLYOVER = { leadMs: 350, speedPxPerSec: 950, rangePx: 1600, width: 620, alpha: 1 } as const;
+/**
+ * Stealth bomber formation over a scheduled run (D-47): the lead flies the bomb line, two wingmen of
+ * other sizes trail it. Lateral/trail offsets are px across/behind the heading.
+ */
+const BOMBER_FORMATION = [
+  { lateralPx: 0, trailPx: 0, widthPx: 600, alpha: 1 },
+  { lateralPx: -220, trailPx: 280, widthPx: 500, alpha: 0.85 },
+  { lateralPx: 240, trailPx: 440, widthPx: 430, alpha: 0.75 },
+] as const;
+/** Soft outer silhouette plus a smaller core: dark enough to read over lit ground, soft at the edge. */
+const BOMBER_SHADOW_LAYERS = [{ scale: 1, alpha: 1 }, { scale: 0.78, alpha: 0.6 }] as const;
+/** The formation is drawn from far ahead of the first bomb until it has left the zone; both ends fade. */
+const BOMBER_RUN_WINDOW = { leadInPx: 2600, leadOutPx: 2200, fadePx: 900 } as const;
 
 interface AirstrikeVisual {
   id:            number;
@@ -120,9 +133,8 @@ interface AirstrikeVisual {
  */
 export class AirstrikeRenderer {
   private visuals     = new Map<number, AirstrikeVisual>();
-  /** Opt-in overflight shadow (Dawn bomber night); campaign airstrikes keep none. */
-  private flyoverKey: string | null = null;
-  private readonly flyovers = new Map<number, Phaser.GameObjects.Image>();
+  /** Formation shadows per scheduled run (Dawn bomber night); campaign airstrikes have no run. */
+  private readonly bomberRuns = new Map<string, Phaser.GameObjects.Image[]>();
   /** Parallel zur Map, damit der Partikel-Tick ohne Iterator-Allokation laufen kann. */
   private readonly activeVisuals: AirstrikeVisual[] = [];
   private effectSystem: EffectSystem | null = null;
@@ -207,7 +219,6 @@ export class AirstrikeRenderer {
       }
 
       this.updateVisual(visual, strike, now);
-      this.updateFlyover(strike, now);
     }
 
     // Entfernte Strikes aufräumen
@@ -217,42 +228,54 @@ export class AirstrikeRenderer {
         this.visuals.delete(id);
       }
     }
-    for (const [id, shadow] of this.flyovers) {
-      if (activeIds.has(id)) continue;
-      shadow.destroy();
-      this.flyovers.delete(id);
-    }
   }
 
-  /** Bomber silhouette that crosses each target shortly before impact; null removes them. */
-  setFlyoverShadow(textureKey: string | null): void {
-    if (textureKey === this.flyoverKey) return;
-    this.flyoverKey = textureKey;
-    for (const shadow of this.flyovers.values()) shadow.destroy();
-    this.flyovers.clear();
-  }
-
-  private updateFlyover(strike: SyncedAirstrikeStrike, now: number): void {
-    const key = this.flyoverKey;
-    if (!key || !this.scene.textures.exists(key)) return;
-    // Heading per strike from its id (no randomness): several bombers cross from different sides.
-    const heading = (strike.id * 2.39996) % (Math.PI * 2);
-    const travel = (now - (strike.explodeAt - FLYOVER.leadMs)) * FLYOVER.speedPxPerSec / 1000;
-    const fade = 1 - Phaser.Math.Clamp((Math.abs(travel) - FLYOVER.rangePx * 0.6) / (FLYOVER.rangePx * 0.4), 0, 1);
-    let shadow = this.flyovers.get(strike.id);
-    if (!shadow) {
-      // Darkens what lies under the light map, so it reads over lit ground and stays quiet in the dark.
-      shadow = this.scene.add.image(strike.x, strike.y, key).setDepth(DEPTH_LIGHTING + 0.05)
-        .setDisplaySize(FLYOVER.width, FLYOVER.width / 2).setRotation(heading);
-      this.flyovers.set(strike.id, shadow);
+  /**
+   * Formation shadows of the Activity's scheduled bomber runs. Every peer derives them from the same
+   * authored run and round clock as the host's bombs, so they announce a run seconds before impact
+   * without own network state. `textureKey` null (or missing art) removes them.
+   */
+  syncBomberRuns(runs: readonly ScheduledAirstrikeRun[], roundTimeMs: number, textureKey: string | null): void {
+    if (runs.length === 0 && this.bomberRuns.size === 0) return;
+    const visible = new Set<string>();
+    if (textureKey && this.scene.textures.exists(textureKey)) {
+      for (const run of runs) {
+        const lead = resolveAirstrikeRunLeadPx(run, COOP_DEFENSE_MAP_AIRSTRIKE_DELAY_MS, roundTimeMs);
+        const { leadInPx, leadOutPx, fadePx } = BOMBER_RUN_WINDOW;
+        if (lead < -leadInPx || lead > run.geometry.lengthPx + leadOutPx) continue;
+        visible.add(run.eventId);
+        const fade = Math.min(1, (lead + leadInPx) / fadePx, (run.geometry.lengthPx + leadOutPx - lead) / fadePx);
+        const { startX, startY, dirX, dirY } = run.geometry;
+        let shadows = this.bomberRuns.get(run.eventId);
+        if (!shadows) {
+          shadows = BOMBER_FORMATION.flatMap((bomber) => BOMBER_SHADOW_LAYERS.map((layer) => {
+            // Soft multiply above the light map: clear over lit ground, quiet where it is already dark.
+            const shadow = this.scene.add.image(startX, startY, textureKey).setDepth(DEPTH_LIGHTING + 0.05)
+              .setBlendMode(Phaser.BlendModes.MULTIPLY).setRotation(Math.atan2(dirY, dirX));
+            return shadow.setDisplaySize(bomber.widthPx * layer.scale, bomber.widthPx * layer.scale / 2);
+          }));
+          this.bomberRuns.set(run.eventId, shadows);
+        }
+        BOMBER_FORMATION.forEach((bomber, index) => {
+          const along = lead - bomber.trailPx;
+          BOMBER_SHADOW_LAYERS.forEach((layer, layerIndex) => {
+            shadows![index * BOMBER_SHADOW_LAYERS.length + layerIndex]
+              .setPosition(startX + dirX * along - dirY * bomber.lateralPx, startY + dirY * along + dirX * bomber.lateralPx)
+              .setAlpha(bomber.alpha * layer.alpha * Phaser.Math.Clamp(fade, 0, 1));
+          });
+        });
+      }
     }
-    shadow.setPosition(strike.x + Math.cos(heading) * travel, strike.y + Math.sin(heading) * travel)
-      .setAlpha(FLYOVER.alpha * fade).setVisible(fade > 0);
+    for (const [eventId, shadows] of this.bomberRuns) {
+      if (visible.has(eventId)) continue;
+      for (const shadow of shadows) shadow.destroy();
+      this.bomberRuns.delete(eventId);
+    }
   }
 
   clear(): void {
-    for (const shadow of this.flyovers.values()) shadow.destroy();
-    this.flyovers.clear();
+    for (const shadows of this.bomberRuns.values()) for (const shadow of shadows) shadow.destroy();
+    this.bomberRuns.clear();
     for (const v of this.visuals.values()) this.destroyVisual(v);
     this.visuals.clear();
     this.activeVisuals.length = 0;

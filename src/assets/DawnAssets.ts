@@ -47,12 +47,10 @@ export function preloadDawnDecalAssets(loader: Pick<Phaser.Loader.LoaderPlugin, 
   }
 }
 
-/** Night modifier atmosphere art (keys equal file stems, `public/assets/sprites/dawn-night/manifest.json`). */
-export const DAWN_NIGHT_ASSET_FILES = [
-  'dawn-night-ember-mask-512', 'dawn-night-edge-mask-1920x1080',
-  'dawn-night-lut-identity-256x16', 'dawn-night-lut-blood-moon-256x16', 'dawn-night-lut-fog-256x16',
-  'dawn-night-lut-bombers-256x16', 'dawn-night-lut-fire-256x16', 'dawn-night-bomber-shadow-256x128',
-] as const;
+/** Stealth bomber silhouette of the bomber night (D-47); the other `dawn-night` art stays unloaded. */
+export const DAWN_BOMBER_SHADOW_TEXTURE = 'dawn-night-bomber-shadow-256x128';
+/** Night modifier art (keys equal file stems, `public/assets/sprites/dawn-night/manifest.json`). */
+export const DAWN_NIGHT_ASSET_FILES = [DAWN_BOMBER_SHADOW_TEXTURE] as const;
 export function preloadDawnNightAssets(loader: Pick<Phaser.Loader.LoaderPlugin, 'image'>): void {
   for (const key of DAWN_NIGHT_ASSET_FILES) loader.image(key, runtimeAssetUrl(`./assets/sprites/dawn-night/runtime/${key}.webp`));
 }
