@@ -4,7 +4,7 @@ import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
 import { FOREST_ASSETS, preloadForestAssets } from '../../src/ui/LobbyForestAssets';
 import { createHash } from 'node:crypto';
-import { DAWN_UI_ASSETS } from '../../src/assets/DawnUiAssets';
+import { DAWN_UI_ASSETS, DAWN_UI_TEXTURES } from '../../src/assets/DawnUiAssets';
 import { runtimeAssetUrl } from '../../src/assets/RuntimeAssetUrls';
 
 const root = resolve(__dirname, '../../public/assets/ui/lobby-forest');
@@ -29,7 +29,7 @@ describe('lobby forest artwork', () => {
     expect(image).toHaveBeenCalledTimes(Object.keys(FOREST_ASSETS).length + DAWN_UI_ASSETS.length);
   });
 
-  it('loads square Dawn artwork including future categories through content-versioned URLs', async () => {
+  it('loads Dawn icons and uncropped landscape plates through content-versioned URLs', async () => {
     const image = vi.fn();
     preloadForestAssets({ image } as any);
     expect(new Set(DAWN_UI_ASSETS.map(asset => asset.key)).size).toBe(DAWN_UI_ASSETS.length);
@@ -38,7 +38,12 @@ describe('lobby forest artwork', () => {
       const bytes = readFileSync(resolve(__dirname, '../../public', file));
       const metadata = await sharp(bytes).metadata();
       expect(metadata.format).toBe('webp');
-      expect(metadata.width).toBe(metadata.height);
+      const landscape = [DAWN_UI_TEXTURES.keyart, DAWN_UI_TEXTURES.victory, DAWN_UI_TEXTURES.defeat].some(key => key === asset.key);
+      expect(metadata.width! / metadata.height!).toBe(landscape ? 16 / 9 : 1);
+      if (landscape) {
+        expect(metadata.hasAlpha).toBe(false);
+        expect(metadata.width).toBe(asset.key === DAWN_UI_TEXTURES.keyart ? 960 : 1920);
+      }
       // Woodcut print set (Art Direction V1): icons sit on their own dark square plate, alpha is optional.
       const url = runtimeAssetUrl('./' + file);
       expect(url).toBe(`./${file}?v=${createHash('sha256').update(bytes).digest('hex')}`);

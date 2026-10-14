@@ -3,6 +3,8 @@ import type { RoundResult, RoundState } from '../src/network/NetworkBridge';
 import {
   createMatchItemRewardPresentation,
   createMatchProgressDelta,
+  createDawnMatchSummary,
+  getDawnMatchSummaryRows,
   hasNewMatchRewards,
   type MatchResultsPresentation,
   resolvePersonalMatchOutcome,
@@ -11,6 +13,7 @@ import {
 import { getCoopDefenseProgressSnapshot, getCoopDefenseXpThresholdForLevel } from '../src/utils/coopDefenseProgression';
 import { COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT } from '../src/config/coopDefenseItems';
 import type { CoopDefenseItem } from '../src/types';
+import { t } from '../src/i18n';
 
 function result(
   id: string,
@@ -32,6 +35,40 @@ function result(
 }
 
 describe('MatchResultsModel', () => {
+  it.each(['victory', 'defeat'] as const)('projects the shared Dawn %s snapshot independently of personal progress', outcome => {
+    const round: RoundState = { status: outcome, roundStartTime: 1, dawn: { dayNumber: 8, threat: 3 } };
+    const wire = [{ sharedScrap: 241 }];
+    const host = createDawnMatchSummary(round, wire, 500)!;
+    const client = createDawnMatchSummary(JSON.parse(JSON.stringify(round)), wire, 900)!;
+    const { balanceAfter: _hostBalance, ...hostShared } = host;
+    const { balanceAfter: _clientBalance, ...clientShared } = client;
+    expect(clientShared).toEqual(hostShared);
+    expect(host).toMatchObject({ dayNumber: 8, threat: 3, sharedScrap: 241,
+      retainedScrap: outcome === 'victory' ? 241 : 120, retainedPercent: outcome === 'victory' ? 100 : 50 });
+    const row = getDawnMatchSummaryRows(host).find(row => row.label === t('ui.dawn.results.scrap'))!;
+    expect(row.value).toBe(outcome === 'victory' ? '241' : t('ui.dawn.results.share', { saved: '120', total: '241' }));
+    expect(row.detail).toBe(outcome === 'victory' ? undefined : t('ui.dawn.results.saved', { percent: 50 }));
+  });
+
+  it('omits unavailable Dawn counters instead of inventing zeros or deriving them from personal history', () => {
+    const round: RoundState = { status: 'defeat', roundStartTime: 1, dawn: { dayNumber: NaN, threat: 0 } };
+    const summary = createDawnMatchSummary(round, [{ sharedScrap: NaN }])!;
+    expect(getDawnMatchSummaryRows(summary)).toEqual([]);
+    expect(summary).not.toHaveProperty('sharedScrap');
+    expect(summary).not.toHaveProperty('dayNumber');
+    expect(summary).not.toHaveProperty('threat');
+    expect(getDawnMatchSummaryRows(createDawnMatchSummary(round, [{ sharedScrap: 0 }], 0)!)).toHaveLength(2);
+    expect(createDawnMatchSummary(null, [])).toBeUndefined();
+    expect(createDawnMatchSummary({ status: 'victory', roundStartTime: 1, coopDefenseMapId: '1' }, [])).toBeUndefined();
+    expect(createDawnMatchSummary({ ...round, status: 'aborted' }, [])).toBeUndefined();
+  });
+
+  it('keeps the shared salvage share separate from a capped or failed personal credit', () => {
+    const summary = createDawnMatchSummary({ status: 'defeat', roundStartTime: 1, dawn: { dayNumber: 1, threat: 1 } },
+      [{ sharedScrap: 240 }], 1000, 0)!;
+    expect(summary.retainedScrap).toBe(120);
+    expect(getDawnMatchSummaryRows(summary)).toContainEqual({ label: t('ui.dawn.results.credited'), value: '0' });
+  });
   it('does not use damage to rank players or break a frag tie', () => {
     const a = { ...result('a', 5), damageDealt: 1 };
     const b = { ...result('b', 5), damageDealt: 1000 };

@@ -56,6 +56,7 @@ import {
 } from '../../utils/coopDefenseProgression';
 import type { CoopDefenseProgressPreferences } from '../../utils/localPreferences';
 import {
+  createDawnMatchSummary,
   createMatchItemRewardPresentation,
   createMatchProgressDelta,
   hasNewMatchRewards,
@@ -772,6 +773,9 @@ export class ArenaMetaController {
     if (isCoopDefenseMode(mode) && !progress) return;
 
     const presentation: MatchResultsPresentation = {
+      ...(roundState?.dawn ? { dawn: createDawnMatchSummary(
+        roundState, results, this.getStoredProgress().dawn.scrap, progress?.scrapGained,
+      ) } : {}),
       ...(roundIdentity ? { roundIdentity } : {}),
       outcome,
       mode,
