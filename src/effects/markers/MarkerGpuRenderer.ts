@@ -146,7 +146,7 @@ function createMarkerBatch(renderer: Phaser.Renderer.WebGL.WebGLRenderer, image:
       super(renderer.renderNodes, { name: `BatchHandlerMarkers-${role}`, shaderName: 'MARKER_GPU',
         instancesPerBatch: buffer.capacity, verticesPerInstance: MARKER_GPU_VERTICES, indicesPerInstance: MARKER_GPU_VERTICES,
         topology: renderer.gl.TRIANGLES, vertexSource: MARKER_GPU_VERTEX, fragmentSource: MARKER_GPU_FRAGMENT,
-        vertexBufferLayout: { usage: 'DYNAMIC_DRAW', layout: ['inCenterCorner', 'inGeometry', 'inColor', 'inState', 'inExtra', 'inUv']
+        vertexBufferLayout: { usage: 'DYNAMIC_DRAW', layout: ['inCenterCorner', 'inGeometry', 'inColor', 'inState', 'inExtra', 'inUv', 'inFeedback']
           .map(name => ({ name, size: 4 })) } });
       renderer.on(Phaser.Renderer.Events.RESTORE_WEBGL, this.onRestore);
     }

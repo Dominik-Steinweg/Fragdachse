@@ -2,6 +2,7 @@ import { CELL_SIZE } from '../../config';
 import { getVisibleWorldView, type CameraWorldViewSource, type VisibleWorldView } from '../../graphics/CameraWorldView';
 import type { HudOcclusionRect } from '../../ui/hudOcclusionFade';
 import { getMarkerEdgeBounds, placeMarkerOnEdge, type MarkerPoint, type MarkerViewport } from './MarkerEdgeLayout';
+import { BASE_ATTACK_TIMING } from './sources/BaseAttackMarkerModel';
 import {
   MARKER_LIMITS, MARKER_PRIORITY, MARKER_STYLES,
   type MarkerBadgeInstance, type MarkerDescriptor, type MarkerFrame, type MarkerState,
@@ -170,13 +171,19 @@ export class MarkerLayoutModel {
     const groundRings: MarkerFrame['groundRings'][number][] = [];
     for (const d of input.descriptors) {
       if (![d.x, d.y, d.targetHalfHeight].every(Number.isFinite)) continue;
+      // The attack warning supersedes the dusk navigation badge at the same core.
+      if (d.kind === 'return' && input.descriptors.some(other => other.baseAttack
+        && Math.hypot(other.x - d.x, other.y - d.y) <= CELL_SIZE * 2)) continue;
       const history = this.observe(d, input.nowMs, input.lowQuality);
       const persistent = this.isPersistent(d);
       const age = history.resolvedAt === undefined ? 0 : history.now - history.resolvedAt;
       if (resolved(d.state) && !persistent && age >= MARKER_LIMITS.fadeAfterResolvedMs) continue;
       const fade = resolved(d.state) && !persistent
         ? clamp((MARKER_LIMITS.fadeAfterResolvedMs - age) / MARKER_LIMITS.popMs, 0, 1) : 1;
-      const alpha = (d.state === 'dormant' ? 0.7 : 1) * fade;
+      const attackAge = d.baseAttack ? Math.max(0, input.nowMs - d.baseAttack.lastHitAtMs) : 0;
+      const attackFade = d.baseAttack ? clamp(1 - (attackAge - BASE_ATTACK_TIMING.holdMs) / BASE_ATTACK_TIMING.fadeMs, 0, 1) : 1;
+      const alpha = (d.state === 'dormant' ? 0.7 : 1) * fade * attackFade;
+      if (alpha <= 0) continue;
       const style = MARKER_STYLES[d.kind];
       const tone = d.state === 'completed' ? 'green' : d.state === 'failed' ? 'red' : style.tone;
       const diameterPx = clamp(style.diameter * zoom, MARKER_LIMITS.screenDiameterMin, MARKER_LIMITS.screenDiameterMax);
@@ -193,12 +200,20 @@ export class MarkerLayoutModel {
         && point.y >= viewport.y + margin && point.y <= viewport.y + viewport.height - margin;
       const badge: MarkerBadgeInstance = {
         key: d.key, space: 'world', ...anchor, diameter: diameterPx / zoom,
-        shape: style.shape, tone, glyph: d.glyph, state: d.state, alpha,
+        shape: style.shape, tone: d.baseAttack ? 'red' : tone, glyph: d.glyph, state: d.state, alpha,
         scale: this.popScale(history, input.lowQuality),
         progress: d.progress === undefined || !Number.isFinite(d.progress) ? undefined : clamp(d.progress, 0, 1),
         tier: d.tier, vulnerable: d.vulnerable === true,
         pulse: !input.lowQuality && d.state === 'active' ? 'calm' : 'none', pointerAngle: Math.PI / 2,
       };
+      if (d.baseAttack) {
+        const strikeAge = Math.max(0, input.nowMs - d.baseAttack.pulseAtMs);
+        const strike = input.lowQuality ? 0 : Math.pow(clamp(1 - strikeAge / BASE_ATTACK_TIMING.hitPulseMs, 0, 1), 2);
+        const critical = !input.lowQuality && (badge.progress ?? 1) < .25
+          ? Math.pow((1 + Math.cos(input.nowMs * Math.PI * 2 / BASE_ATTACK_TIMING.criticalPeriodMs)) / 2, 3) : 0;
+        Object.assign(badge, { pulse: 'none', scale: 1 + .14 * strike + .035 * critical,
+          baseAttackGlow: input.lowQuality ? .65 : .3 + .7 * Math.max(strike, critical) });
+      }
       const candidate: Candidate = { descriptor: d, badge, target,
         angle: Math.atan2(target.y - center.y, target.x - center.x),
         distance: Math.hypot(d.x - input.localPlayer.x, d.y - input.localPlayer.y) };
@@ -274,7 +289,8 @@ export class MarkerLayoutModel {
   }
 
   private compare(a: Candidate, b: Candidate, previous: ReadonlyMap<string, number>, aKey = a.descriptor.key, bKey = b.descriptor.key): number {
-    return MARKER_PRIORITY[b.descriptor.kind] - MARKER_PRIORITY[a.descriptor.kind]
+    return Number(!!b.descriptor.baseAttack) - Number(!!a.descriptor.baseAttack)
+      || MARKER_PRIORITY[b.descriptor.kind] - MARKER_PRIORITY[a.descriptor.kind]
       || Number(b.descriptor.focused === true) - Number(a.descriptor.focused === true)
       || Number(b.descriptor.state === 'active') - Number(a.descriptor.state === 'active')
       || (previous.get(aKey) ?? Infinity) - (previous.get(bKey) ?? Infinity)

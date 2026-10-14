@@ -22,7 +22,7 @@ describe('marker GPU presentation packing', () => {
       expect(row[11]).toBeCloseTo(badge.progress!); expect(row[12]).toBe(badge.tier);
       expect(row[20]).toBeCloseTo(uv[badge.glyph].u0); expect(row[23]).toBeCloseTo(uv[badge.glyph].v1);
     }
-    expect(new Set(Array.from({ length: 6 }, (_, i) => `${buffer.data[i * 24 + 2]},${buffer.data[i * 24 + 3]}`)).size).toBe(4);
+    expect(new Set(Array.from({ length: 6 }, (_, i) => `${buffer.data[i * MARKER_GPU_WORDS + 2]},${buffer.data[i * MARKER_GPU_WORDS + 3]}`)).size).toBe(4);
   });
   it('uploads only changed values/counts, including removal and same-count reuse', () => {
     const buffer = new MarkerGpuBuffer(1);
@@ -69,5 +69,17 @@ describe('marker GPU presentation packing', () => {
       expect(chroma(dormant), name).toBeLessThan(chroma(active));
       expect(Math.max(...channels(dormant)), name).toBeLessThanOrEqual(Math.max(...channels(active)));
     }
+  });
+  it('keeps the danger rim red while the core HP arc moves from gold to red', () => {
+    const appearance = (hp: number) => markerGpuAppearance({ ...badge, tone: 'red', progress: hp, baseAttackGlow: 1 }, false);
+    expect(appearance(1).progressColor).toBe(markerRimColor(HUD_TONES.gold, false));
+    expect(appearance(.2).progressColor).toBe(markerRimColor(HUD_TONES.red, false));
+    expect(appearance(.5).progressColor).not.toBe(appearance(1).progressColor);
+    expect(appearance(1).color).toBe(appearance(.2).color);
+    const buffer = new MarkerGpuBuffer(1);
+    buffer.begin(); buffer.badge({ ...badge, tone: 'red', baseAttackGlow: 1 }, uv, false); buffer.end();
+    expect(buffer.data[27]).toBe(1);
+    buffer.begin(); buffer.ring({ key: 'ring', x: 0, y: 0, radiusPx: 10, tone: 'gold', alpha: 1 }); buffer.end();
+    expect(buffer.data[27]).toBe(-1);
   });
 });

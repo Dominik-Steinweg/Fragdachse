@@ -106,6 +106,8 @@ export interface MarkerDescriptor {
   readonly visibility: 'world-and-edge' | 'world-only' | 'edge-only' | 'edge-when-offscreen';
   /** Fortschrittsbogen 0..1 (Halten/Zerstoeren); fehlt = kein Bogen. */
   readonly progress?: number;
+  /** Friendly core under attack: local observations of replicated HP, never a wire timestamp. */
+  readonly baseAttack?: { readonly lastHitAtMs: number; readonly pulseAtMs: number };
   /** Focus wins within the same semantic priority class. */
   readonly focused?: boolean;
   /** Tier-Punkte 1–3 unter dem Badge (Sites). */
@@ -144,6 +146,8 @@ export interface MarkerBadgeInstance {
   /** Animationsskala (Pop 0,8→1,1→1,0), 1 im Ruhezustand. */
   readonly scale: number;
   readonly progress?: number;
+  /** Sampled inner-rim glow, shared by world badge and edge compass. */
+  readonly baseAttackGlow?: number;
   readonly tier?: 1 | 2 | 3;
   readonly vulnerable: boolean;
   readonly pulse: 'none' | 'calm' | 'urgent';

@@ -103,6 +103,7 @@ export class BaseEntity {
   private spawnCenterMarker: Phaser.GameObjects.Graphics | null = null;
   private spawnCenterTween: Phaser.Tweens.Tween | null = null;
   private currentHp: number;
+  private hpBaselineRevision = 0;
   private maxHp: number;
   private dormant: boolean;
   private activityOverlay: BaseActivityOverlay | null;
@@ -336,6 +337,7 @@ export class BaseEntity {
 
   /** Activity-Binding fuer den BaseManager; nicht als World-State gespeichert. */
   applyActivityOverlay(overlay: BaseActivityOverlay): void {
+    this.hpBaselineRevision++;
     this.voidBurning = false;
     this.resetRepresentation();
     this.resetTurretAngles();
@@ -355,6 +357,7 @@ export class BaseEntity {
   clearActivityOverlay(): void {
     this.voidBurning = false;
     if (this.activityOverlay === null) return;
+    this.hpBaselineRevision++;
     this.resetRepresentation();
     this.resetTurretAngles();
     this.activityOverlay = null;
@@ -487,6 +490,7 @@ export class BaseEntity {
   setHp(hp: number, baseline = false): void {
     // Auch ein fremder Snapshot darf eine unverwundbare Struktur nicht fallen lassen.
     if (!this.damageable) return;
+    if (baseline) this.hpBaselineRevision++;
     const clamped = Math.max(0, Math.min(this.maxHp, hp));
     if (clamped === this.currentHp) {
       if (baseline) this.healthBars?.baseline(this.healthBar, clamped, this.maxHp);
@@ -501,6 +505,9 @@ export class BaseEntity {
     }
     if (this.currentHp <= 0) this.handleDestruction();
   }
+
+  /** Local presentation reset signal; the first replicated snapshot is not a damage event. */
+  getHpBaselineRevision(): number { return this.hpBaselineRevision; }
 
   /** Entfernt Gameplay-Bodies sofort; Zellbilder übernimmt die gestaffelte Zerstörung. */
   private handleDestruction(): void {
