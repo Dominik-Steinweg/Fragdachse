@@ -37,6 +37,7 @@ import {
 import { resolveSkyState } from './TimeOfDay';
 import { registerGraphicsObject } from './EffectUtils';
 import { ChunkScratchPool, ChunkedRenderSurface } from '../arena/chunks/ChunkedRenderSurface';
+import { createColorRenderTexture } from '../graphics/createColorRenderTexture';
 import type { ChunkedRenderSurfaceStats, ChunkedRenderWorkingSet } from '../arena/chunks/ChunkedRenderSurface';
 import type { ChunkSamplingMode } from '../arena/chunks/ChunkedRenderSurface';
 import type { ChunkBakeRegion, ChunkBakeSink, ChunkedSurfaceLayerSpec } from '../arena/chunks/ChunkedRenderSurface';
@@ -151,6 +152,17 @@ function getMaxStaticShadowReachPx(profile: ShadowProfile, direction = WORLD_SHA
   }
   return reach;
 }
+
+/**
+ * Crown shadows as pre-blurred masks: the twelve-tap kernel is baked once per crown at half
+ * resolution (the penumbra spans >= ~12 px) and the finished mask is moved every frame. Only a
+ * softness drift or an opacity outside the baked headroom re-bakes it; within the headroom the
+ * mask alpha follows the opacity, which is linear in MULTIPLY darkness. Allocated per layout.
+ */
+const CANOPY_MASK = { resolution: .5, softnessDrift: .04, opacityHeadroom: 1.12, opacityFloor: .8,
+  bakesPerFrame: 6, prefetchPx: 256, softnessCeiling: 2 } as const;
+type CanopySource = ArenaBuilderResult['canopyObjects'][number];
+interface CanopyShadowMask { readonly target: Phaser.GameObjects.RenderTexture; readonly side: number; softness: number; opacity: number }
 
 const STATIC_PROFILE_REBAKE_MIN_INTERVAL_MS = 600;
 const STATIC_PROFILE_OPACITY_DELTA = 0.06;
@@ -319,14 +331,15 @@ export class ShadowSystem {
    * layer set of the baked surface, so no caster is ever drawn twice.
    */
   private staticContinuous = false;
-  private readonly continuousCanopy: Phaser.GameObjects.Image[] = [];
-  private continuousCanopyUsed = 0;
+  private readonly canopyMasks = new Map<CanopySource, CanopyShadowMask>();
+  private continuousCanopyShown = 0;
   private continuousPrimitives = 0;
   /** Layer ids present in the current baked surface. */
   private readonly staticLayerIds = new Set<string>();
 
-  getContinuousShadowStats(): { enabled: boolean; primitives: number; canopyImages: number } {
-    return { enabled: this.staticContinuous, primitives: this.continuousPrimitives, canopyImages: this.continuousCanopyUsed };
+  getContinuousShadowStats(): { enabled: boolean; primitives: number; canopyMasks: number; canopyMasksShown: number } {
+    return { enabled: this.staticContinuous, primitives: this.continuousPrimitives,
+      canopyMasks: this.canopyMasks.size, canopyMasksShown: this.continuousCanopyShown };
   }
 
   /** Redraws the continuous static casters for the current view; called once per frame. */
@@ -357,47 +370,80 @@ export class ShadowSystem {
         if (inView(x, y, towerReach)) primitives += this.drawFootprint(towers, x, y, tower, undefined, undefined, profile, direction);
       }
       used = this.drawContinuousCanopies(inView, profile, direction);
-    }
-    for (let i = used; i < this.continuousCanopyUsed; i++) this.continuousCanopy[i].setVisible(false);
-    this.continuousCanopyUsed = used;
+    } else for (const mask of this.canopyMasks.values()) mask.target.setVisible(false);
+    this.continuousCanopyShown = used;
     this.continuousPrimitives = primitives + used;
   }
 
-  /** The woodland crown kernel of {@link drawCanopyShadows}, as pooled images on the scene:
-   * MULTIPLY composes the taps exactly like the white bake target did. */
+  /** Crown shape of {@link drawCanopyShadows} for the given profile; shared by both paths. */
+  private canopyShadowShape(source: CanopySource, profile: ShadowProfile): { distance: number; softness: number; scale: number; opacity: number } {
+    const woodland = this.canopyWoodland, tuning = SUN_FOREST_SHADOW;
+    const diameter = Math.max(source.gfx.displayWidth, source.gfx.displayHeight);
+    return {
+      distance: woodland ? diameter * tuning.offsetDiameter * profile.lengthMult / tuning.reference.shadowLengthMult : 64 * profile.lengthMult,
+      softness: woodland ? diameter * tuning.softnessDiameter * profile.softnessMult / tuning.reference.shadowSoftnessMult : 9 * profile.softnessMult,
+      scale: woodland ? tuning.scale : 1,
+      opacity: woodland ? Math.min(.55, tuning.opacity * profile.opacityMult / tuning.reference.shadowOpacityMult)
+        : Math.min(.45, .7 * profile.opacityMult),
+    };
+  }
+
+  /** Moves each visible crown's baked mask along the continuous sun; see {@link CANOPY_MASK}. */
   private drawContinuousCanopies(inView: (x: number, y: number, reach: number) => boolean,
     profile: ShadowProfile, direction: { x: number; y: number }): number {
-    const sources = this.canopySources;
-    if (!sources?.length) return 0;
-    const woodland = this.canopyWoodland, tuning = SUN_FOREST_SHADOW;
-    const opacity = woodland ? Math.min(.55, tuning.opacity * profile.opacityMult / tuning.reference.shadowOpacityMult)
-      : Math.min(.45, .7 * profile.opacityMult);
-    const depth = DEPTH.GROUND_FOG - .02, color = woodland ? tuning.color : WORLD_SHADOW_CONFIG.color;
-    let used = 0;
-    for (const source of sources) {
-      const diameter = Math.max(source.gfx.displayWidth, source.gfx.displayHeight);
-      const distance = woodland ? diameter * tuning.offsetDiameter * profile.lengthMult / tuning.reference.shadowLengthMult : 64 * profile.lengthMult;
-      const softness = woodland ? diameter * tuning.softnessDiameter * profile.softnessMult / tuning.reference.shadowSoftnessMult : 9 * profile.softnessMult;
-      const scale = woodland ? tuning.scale : 1;
-      const x = source.worldX + distance * direction.x, y = source.worldY + distance * direction.y;
-      const radius = Math.hypot(source.gfx.displayWidth, source.gfx.displayHeight) * .5 * scale + softness;
-      if (!inView(x, y, radius)) continue;
-      for (const tap of CANOPY_SHADOW_KERNEL) {
-        let image = this.continuousCanopy[used];
-        if (!image) {
-          image = this.scene.add.image(0, 0, source.gfx.texture.key, source.gfx.frame.name);
-          registerGraphicsObject(this.scene, 'dynamicShadows', image);
-          image.setBlendMode(Phaser.BlendModes.MULTIPLY);
-          this.continuousCanopy.push(image);
-        }
-        image.setTexture(source.gfx.texture.key, source.gfx.frame.name).setDepth(depth)
-          .setPosition(x + tap.x * softness, y + tap.y * softness)
-          .setScale(source.gfx.scaleX * scale, source.gfx.scaleY * scale).setRotation(source.gfx.rotation)
-          .setTint(color).setAlpha(1 - Math.pow(1 - opacity, tap.weight)).setVisible(true);
-        used++;
+    let shown = 0, bakes = 0;
+    for (const [source, mask] of this.canopyMasks) {
+      const shape = this.canopyShadowShape(source, profile);
+      const x = source.worldX + shape.distance * direction.x, y = source.worldY + shape.distance * direction.y;
+      const radius = Math.hypot(source.gfx.displayWidth, source.gfx.displayHeight) * .5 * shape.scale + shape.softness;
+      if (shape.opacity <= 0 || !inView(x, y, radius + CANOPY_MASK.prefetchPx)) { mask.target.setVisible(false); continue; }
+      const drift = mask.opacity <= 0 || Math.abs(shape.softness / mask.softness - 1) > CANOPY_MASK.softnessDrift
+        || shape.opacity > mask.opacity || shape.opacity < mask.opacity * CANOPY_MASK.opacityFloor;
+      if (drift && bakes < CANOPY_MASK.bakesPerFrame) {
+        this.bakeCanopyMask(source, mask, shape.softness, shape.scale,
+          Math.min(this.canopyWoodland ? .55 : .45, shape.opacity * CANOPY_MASK.opacityHeadroom));
+        bakes++;
       }
+      if (mask.opacity <= 0 || !inView(x, y, radius)) { mask.target.setVisible(false); continue; }
+      mask.target.setPosition(x, y).setAlpha(Math.min(1, shape.opacity / mask.opacity)).setVisible(true);
+      shown++;
     }
-    return used;
+    return shown;
+  }
+
+  private bakeCanopyMask(source: CanopySource, mask: CanopyShadowMask, softness: number, scale: number, opacity: number): void {
+    const r = CANOPY_MASK.resolution, target = mask.target, centre = mask.side / 2;
+    const tint = this.canopyWoodland ? SUN_FOREST_SHADOW.color : WORLD_SHADOW_CONFIG.color;
+    target.clear();
+    target.fill(0xffffff, 1);
+    for (const tap of CANOPY_SHADOW_KERNEL) {
+      target.stamp(source.gfx.texture.key, source.gfx.frame.name, centre + tap.x * softness * r, centre + tap.y * softness * r, {
+        scaleX: source.gfx.scaleX * scale * r, scaleY: source.gfx.scaleY * scale * r, rotation: source.gfx.rotation,
+        tint, alpha: 1 - Math.pow(1 - opacity, tap.weight), blendMode: Phaser.BlendModes.MULTIPLY,
+      });
+    }
+    target.render();
+    mask.softness = softness; mask.opacity = opacity;
+  }
+
+  /** One mask per crown while continuous, allocated with the layout rather than during play. */
+  private syncCanopyMasks(): void {
+    const sources = this.staticContinuous ? this.canopySources : null;
+    for (const [source, mask] of this.canopyMasks) {
+      if (sources?.includes(source)) continue;
+      mask.target.destroy(); this.canopyMasks.delete(source);
+    }
+    for (const source of sources ?? []) {
+      if (this.canopyMasks.has(source)) continue;
+      const shape = this.canopyShadowShape(source, { opacityMult: 1, lengthMult: 1, softnessMult: CANOPY_MASK.softnessCeiling });
+      const side = Math.ceil((Math.hypot(source.gfx.displayWidth, source.gfx.displayHeight) * shape.scale
+        + 2 * shape.softness + 8) * CANOPY_MASK.resolution);
+      const target = createColorRenderTexture(this.scene, side, side);
+      target.setOrigin(.5).setScale(1 / CANOPY_MASK.resolution).setDepth(DEPTH.GROUND_FOG - .02)
+        .setBlendMode(Phaser.BlendModes.MULTIPLY).setVisible(false);
+      registerGraphicsObject(this.scene, 'dynamicShadows', target);
+      this.canopyMasks.set(source, { target, side, softness: 0, opacity: 0 });
+    }
   }
 
   /** Dev A/B: use the authored canopy's alpha/rotation instead of a broad circular footprint. */
@@ -657,8 +703,8 @@ export class ShadowSystem {
 
   private hideContinuousStaticShadows(): void {
     for (const bucket of this.layers.values()) bucket.continuousGraphics.clear();
-    for (let i = 0; i < this.continuousCanopyUsed; i++) this.continuousCanopy[i].setVisible(false);
-    this.continuousCanopyUsed = 0;
+    for (const mask of this.canopyMasks.values()) mask.target.setVisible(false);
+    this.continuousCanopyShown = 0;
   }
 
   rebuildStaticLayoutShadows(
@@ -704,6 +750,7 @@ export class ShadowSystem {
     this.rememberWatchtowerShadowAnchors(options.runtimeRocks ?? EMPTY_RUNTIME_ROCKS);
     this.staticBakeProfile = profile;
     this.staticContinuous = this.sunDirection !== null && this.canopySources !== null;
+    this.syncCanopyMasks();
     this.bakedAzimuth=this.sunAzimuth;
     if(this.bakedAzimuth===null)this.staticSunDirection=null;
     else {
@@ -1004,29 +1051,21 @@ export class ShadowSystem {
     // Height is an artistic tree-height estimate. This approximation receives on
     // ground only: the baked layer is below ground fog and opaque rock surfaces.
     // It does not cast height-correct canopy shadows onto raised rock receivers.
-    const offset = 64 * profile.lengthMult;
     const woodland = this.canopyWoodland;
     const tuning = SUN_FOREST_SHADOW;
-    const opacity = woodland ? Math.min(.55, tuning.opacity * profile.opacityMult / tuning.reference.shadowOpacityMult)
-      : Math.min(.45, .7 * profile.opacityMult);
-    const blur = 9 * profile.softnessMult;
-    const taps = CANOPY_SHADOW_KERNEL.map(sample => ({ ...sample,
-      alpha: 1 - Math.pow(1 - opacity, sample.weight) }));
+    const direction = woodland ? Math.SQRT1_2 : .75;
     for (const source of sources) {
-      const diameter = Math.max(source.gfx.displayWidth, source.gfx.displayHeight);
-      const distance = woodland ? diameter * tuning.offsetDiameter * profile.lengthMult / tuning.reference.shadowLengthMult : offset;
-      const direction = woodland ? Math.SQRT1_2 : .75;
-      const softness = woodland ? diameter * tuning.softnessDiameter * profile.softnessMult / tuning.reference.shadowSoftnessMult : blur;
-      const scale = woodland ? tuning.scale : 1;
+      const { distance, softness, scale, opacity } = this.canopyShadowShape(source, profile);
       const x = source.worldX + distance * (this.staticSunDirection?.x??direction), y = source.worldY + distance * (this.staticSunDirection?.y??direction);
       const radius = Math.hypot(source.gfx.displayWidth, source.gfx.displayHeight) * .5 * scale + softness;
       if (x + radius < region.minX || y + radius < region.minY || x - radius > region.maxX || y - radius > region.maxY) continue;
-      for (const tap of taps) {
+      for (const tap of CANOPY_SHADOW_KERNEL) {
         // Phaser 4's DynamicTextureHandler renders STAMP through the drawing camera.
         // Keep world coordinates, like the Graphics draw above. Commands snapshot poses.
         scratch.stamp(source.gfx.texture.key, source.gfx.frame.name, x + tap.x * softness, y + tap.y * softness, {
           scaleX: source.gfx.scaleX * scale, scaleY: source.gfx.scaleY * scale, rotation: source.gfx.rotation,
-          tint: woodland ? tuning.color : WORLD_SHADOW_CONFIG.color, alpha: tap.alpha, blendMode: Phaser.BlendModes.MULTIPLY,
+          tint: woodland ? tuning.color : WORLD_SHADOW_CONFIG.color, alpha: 1 - Math.pow(1 - opacity, tap.weight),
+          blendMode: Phaser.BlendModes.MULTIPLY,
         });
       }
     }
@@ -1217,10 +1256,9 @@ export class ShadowSystem {
       bucket.continuousGraphics.destroy();
     }
     this.layers.clear();
-    for (const image of this.continuousCanopy) image.destroy();
-    this.continuousCanopy.length = 0;
-    this.continuousCanopyUsed = 0;
     this.staticContinuous = false;
+    this.syncCanopyMasks();
+    this.continuousCanopyShown = 0;
     this.disposeStaticSurface();
     this.staticScratch.destroy();
     this.unsubscribeQuality?.();

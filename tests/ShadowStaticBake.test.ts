@@ -92,6 +92,7 @@ interface TextureEvent {
   x: number;
   y: number;
   destroyed: boolean;
+  alpha?: number;
   stamps: Array<{ x: number; y: number; originX?: number; originY?: number; key?: string; frame?: unknown;
     rotation?: number; scaleX?: number; scaleY?: number; alpha?: number; tint?: number }>;
   cameraScrolls: Array<{ x: number; y: number }>;
@@ -185,11 +186,12 @@ function makeScene() {
       },
     };
     for (const name of ['setOrigin', 'setBlendMode', 'setMask', 'clearMask', 'setRenderMode',
-      'setFrame', 'clear', 'render']) {
+      'setFrame', 'clear', 'render', 'setScale']) {
       rt[name] = () => rt;
     }
     rt.setPosition = (nextX: number, nextY: number) => { event.x = nextX; event.y = nextY; return rt; };
     rt.setVisible = (visible: boolean) => { event.visible = visible; return rt; };
+    rt.setAlpha = (alpha: number) => { event.alpha = alpha; return rt; };
     rt.setDepth = (d: number) => { event.depth = d; return rt; };
     rt.fill = () => { event.fills += 1; return rt; };
     rt.draw = () => { event.draws += 1; return rt; };
@@ -644,10 +646,12 @@ it('draws crowns, trunks and watchtowers along the continuous sun every frame in
   expect(textures.flatMap(texture=>texture.stamps).filter(stamp=>stamp.key==='canopy-proof')).toHaveLength(0);
   expect(visibleChunkTargets(textures).some(texture=>texture.depth===SHADOW_CASTERS.trunk.layerDepth
     ||texture.depth===DEPTH.GROUND_FOG-.02)).toBe(false);
-  const crown=()=>{const live=images.filter(image=>image.visible&&image.key==='canopy-proof');
-    return {count:live.length,x:live.reduce((sum,image)=>sum+image.x,0)/live.length,y:live.reduce((sum,image)=>sum+image.y,0)/live.length};};
+  // One pre-blurred mask per crown, baked once with the full kernel and then only moved.
+  const masks=()=>textures.filter(texture=>!texture.destroyed&&texture.stamps.some(stamp=>stamp.key==='canopy-proof'));
+  const crown=()=>{const live=masks().filter(mask=>mask.visible);return {count:live.length,x:live[0]?.x??NaN,y:live[0]?.y??NaN};};
   shadows.syncContinuousStaticShadows();
-  expect(images.every(image=>image.blend===3&&image.depth===DEPTH.GROUND_FOG-.02)).toBe(true);
+  expect(masks()).toHaveLength(1);expect(masks()[0].stamps).toHaveLength(12);expect(masks()[0].depth).toBe(DEPTH.GROUND_FOG-.02);
+  expect(images).toHaveLength(0);
   const casters=draw.mock.calls.map(call=>call[3]);
   expect(casters).toContain(SHADOW_CASTERS.trunk);expect(casters).toContain(SHADOW_CASTERS.watchtower);
   expect(graphicsLog.some(graphics=>graphics.depth===SHADOW_CASTERS.trunk.layerDepth&&graphics.fillPoints.length>0)).toBe(true);
@@ -656,13 +660,17 @@ it('draws crowns, trunks and watchtowers along the continuous sun every frame in
   // One degree of sun turns the crown shadow by exactly one degree, without any bake.
   bake.mockClear();resolveSunPath(720,61,path);shadows.setSunPath(path);
   expect(shadows.syncStaticProfile(1100)).toBe(false);shadows.syncContinuousStaticShadows();drain(scene);
-  expect(bake).not.toHaveBeenCalled();
+  expect(bake).not.toHaveBeenCalled();expect(masks()[0].stamps).toHaveLength(12);
   const at61=crown(),turn=Math.atan2(at61.y-source.worldY,at61.x-source.worldX)-Math.atan2(at60.y-source.worldY,at60.x-source.worldX);
   expect(at61.count).toBe(at60.count);expect(Math.hypot(at61.x-source.worldX,at61.y-source.worldY)).toBeCloseTo(reach,6);
   expect(Math.abs(turn)*180/Math.PI).toBeCloseTo(1,6);
   shadows.setStaticVisible(false);expect(crown().count).toBe(0);shadows.setStaticVisible(true);
-  shadows.setSunPath(null);drain(scene);shadows.syncContinuousStaticShadows();
-  expect(crown().count).toBe(0);expect(textures.flatMap(texture=>texture.stamps).some(stamp=>stamp.key==='canopy-proof')).toBe(true);
+  // Evening light only fades the mask; its opacity stays inside the baked headroom or re-bakes once.
+  shadows.setTimeOfDay(1020);shadows.syncContinuousStaticShadows();
+  expect(masks()[0].alpha).toBeGreaterThan(0);expect(masks()[0].alpha).toBeLessThanOrEqual(1);
+  const mask=masks()[0];shadows.setSunPath(null);drain(scene);shadows.syncContinuousStaticShadows();
+  expect(mask.destroyed).toBe(true);
+  expect(textures.some(texture=>texture!==mask&&texture.stamps.some(stamp=>stamp.key==='canopy-proof'))).toBe(true);
   shadows.destroy();
 });
 it('builds gapless convex stadiums in every shadow direction',async()=>{

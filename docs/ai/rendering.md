@@ -408,8 +408,10 @@ Footprint- und statische Schatten folgen dem kontinuierlichen Wurf-Azimut `castA
 [SunPath.ts](../../src/effects/sunlight/SunPath.ts): tagsüber der Sonnenbogen, nachts ein Bogen über
 Süden zurück zur Aufgangsrichtung, ohne Sprung um Mitternacht oder im Morgengrauen. Lange Caster
 (Waldkronen, Stämme, Wachtürme) zeichnet `ShadowSystem` bei gebundenem Sonnenpfad jeden Frame mit
-aktueller Richtung und aktuellem Profil; nur kurze Kontakt-Footprints (Basen, Wände, Geschütztürme)
-bleiben im Chunk-Bake. Eine Caster-Art liegt nie zugleich im Bake und im Frame-Pfad.
+aktueller Richtung und aktuellem Profil. Kronen sind dabei je Baum einmal weich gebackene Masken,
+die nur verschoben werden; ihre Deckkraft folgt über Alpha, die Weichheit backt erst bei spürbarer
+Drift neu. Nur kurze Kontakt-Footprints (Basen, Wände, Geschütztürme) bleiben im Chunk-Bake. Eine
+Caster-Art liegt nie zugleich im Bake und im Frame-Pfad.
 Vertragstest: [ShadowStaticBake.test.ts](../../tests/ShadowStaticBake.test.ts).
 
 ## Runtime-Asset-Vertrag
