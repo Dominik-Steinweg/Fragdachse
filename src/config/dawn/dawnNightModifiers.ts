@@ -24,6 +24,8 @@ export interface DawnNightModifier {
 export interface DawnMoonlight {
   readonly tint: readonly [number, number, number];
   readonly gain: number;
+  /** Moonlight through drifting cloud openings: `cover` of the shared cloud field, `light` added in a gap. */
+  readonly openings?: { readonly cover: number; readonly light: readonly [number, number, number] };
 }
 
 export interface DawnNightGroundFire {
@@ -90,7 +92,11 @@ export function validateDawnNightModifiers(raw: unknown, blocks: readonly DawnWa
     const moon = entry.moonlight;
     if (moon !== undefined && (!moon || !Array.isArray(moon.tint) || moon.tint.length !== 3
       || moon.tint.some(channel => !Number.isFinite(channel) || channel < 0 || channel > 1) || Math.max(...moon.tint) <= 0
-      || !positive(moon.gain) || moon.gain > 3)) return fail(`${entry.id}: moonlight needs a tint in [0, 1] and a gain in (0, 3]`);
+      || !positive(moon.gain) || moon.gain > 3
+      || (moon.openings !== undefined && (!moon.openings || !Number.isFinite(moon.openings.cover)
+        || moon.openings.cover <= 0 || moon.openings.cover >= 1 || !Array.isArray(moon.openings.light)
+        || moon.openings.light.length !== 3 || moon.openings.light.some(channel => !Number.isFinite(channel) || channel < 0 || channel > 1)))))
+      return fail(`${entry.id}: moonlight needs a tint in [0, 1], a gain in (0, 3] and valid openings`);
     if (entry.groundFire !== undefined && !isValidGroundFire(entry.groundFire)) return fail(`${entry.id}: invalid groundFire`);
     if ((entry.id === 'fog') !== (entry.fogStrength !== undefined)
       || (entry.id === 'bombers') !== (air != null)

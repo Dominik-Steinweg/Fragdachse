@@ -10,6 +10,8 @@ import {
 /** Existing secondary-objective convention: one grid cell is one metre. */
 export const MARKER_WORLD_PIXELS_PER_METRE = CELL_SIZE;
 export const MARKER_VISIBILITY_HYSTERESIS_PX = 4;
+/** Centre distance of fanned-out world badges, in badge diameters (a small gap between rims). */
+const MARKER_FAN_SPACING = 1.12;
 
 export interface MarkerCameraTransform {
   readonly worldView: Pick<VisibleWorldView, 'centerX' | 'centerY'>;
@@ -71,6 +73,35 @@ interface Candidate {
   distance: number;
 }
 interface Group { key: string; representative: Candidate; members: Candidate[] }
+
+/**
+ * Overlapping world badges of one kind (several carry crates on one spot) sit side by side above their
+ * cluster, each pointer aimed at its own target, so their number stays readable. Priority order is kept.
+ */
+function fanOutWorldBadges(candidates: readonly Candidate[]): MarkerBadgeInstance[] {
+  const clusters: Candidate[][] = [];
+  for (const candidate of candidates) {
+    const b = candidate.badge;
+    const cluster = clusters.find((group) => group[0].descriptor.kind === candidate.descriptor.kind
+      && group.some((member) => Math.hypot(member.badge.x - b.x, member.badge.y - b.y) < (member.badge.diameter + b.diameter) / 2));
+    if (cluster) cluster.push(candidate);
+    else clusters.push([candidate]);
+  }
+  const placed = new Map<string, MarkerBadgeInstance>();
+  for (const cluster of clusters) {
+    if (cluster.length === 1) continue;
+    cluster.sort((a, b) => a.descriptor.x - b.descriptor.x || compareKey(a.descriptor.key, b.descriptor.key));
+    const step = Math.max(...cluster.map((c) => c.badge.diameter)) * MARKER_FAN_SPACING;
+    const centreX = cluster.reduce((sum, c) => sum + c.badge.x, 0) / cluster.length;
+    const top = Math.min(...cluster.map((c) => c.badge.y));
+    cluster.forEach((c, index) => {
+      const x = centreX + (index - (cluster.length - 1) / 2) * step;
+      placed.set(c.descriptor.key, { ...c.badge, x, y: top,
+        pointerAngle: Math.atan2(c.descriptor.y - top, c.descriptor.x - x) });
+    });
+  }
+  return candidates.map((c) => placed.get(c.descriptor.key) ?? c.badge);
+}
 
 const compareKey = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 const resolved = (state: MarkerState) => state === 'completed' || state === 'failed';
@@ -179,7 +210,7 @@ export class MarkerLayoutModel {
       }
     }
     world.sort((a, b) => this.compare(a, b, this.worldOrder));
-    const worldBadges = world.slice(0, MARKER_LIMITS.worldBadges).map((c) => c.badge);
+    const worldBadges = fanOutWorldBadges(world.slice(0, MARKER_LIMITS.worldBadges));
     const groups = this.bundle(edge);
     groups.sort((a, b) => this.compare(a.representative, b.representative, this.edgeOrder, a.key, b.key));
     const edgeBadges: MarkerBadgeInstance[] = [], occupied: HudOcclusionRect[] = [];

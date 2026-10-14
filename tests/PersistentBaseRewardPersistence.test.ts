@@ -10,6 +10,9 @@ import {
   invalidateLocalStorageCache,
   resetStoredCoopDefenseCharacter,
   setStoredPersistentBaseRewardState,
+  getStoredCoopDefenseProgress,
+  restoreStoredCoopDefenseProgress,
+  updateStoredDawnProgress,
 } from '../src/utils/localPreferences';
 import { DEFAULT_PERSISTENT_BASE_REWARD_STATE } from '../src/persistentBase/PersistentBaseRewardTypes';
 import { getPersistentBaseRewardIds } from '../src/persistentBase/PersistentBaseRewardCatalog';
@@ -84,6 +87,29 @@ describe('Persistent-Base-Rewards – V5-Persistenz', () => {
     expect(importStoredGameProgressJson(JSON.stringify(exported)).ok).toBe(true);
     expect(getStoredPersistentBaseRewardUnlocks()).toEqual(['base_health_pedestal']);
     expect(getStoredPersistentBaseRewardState().revision).toBe(1);
+  });
+
+  it('saves, reloads and restores placements of expansion-derived Dawn rewards without storing them (D-46)', () => {
+    const rewardId = 'base_plasma_turret_dawn_1';
+    const state = { schemaVersion: 1 as const, revision: 1,
+      placements: [{ rewardId, relativeGridX: 3, relativeGridY: 1, angle: 0 }] };
+    expect(setStoredPersistentBaseRewardState(state)).toBe(false);
+    expect(updateStoredDawnProgress(draft => { draft.expansionLevel = 5; })).toBe(true);
+    expect(getStoredPersistentBaseRewardUnlocks()).toContain(rewardId);
+    expect(getStoredCoopDefenseProgress().persistentBaseRewardUnlocks).toContain(rewardId);
+    expect(setStoredPersistentBaseRewardState(state)).toBe(true);
+    // Further placements stay saveable, and the document survives a reload.
+    expect(setStoredPersistentBaseRewardState({ ...state, revision: 2 })).toBe(true);
+    invalidateLocalStorageCache();
+    expect(getStoredPersistentBaseRewardState().placements.map(p => p.rewardId)).toEqual([rewardId]);
+    // A restored snapshot keeps the placement but never turns the derived unlock into a stored one.
+    restoreStoredCoopDefenseProgress(getStoredCoopDefenseProgress());
+    const exported = JSON.parse(exportStoredGameProgressJson());
+    expect(exported.progress.coopDefense.persistentBaseRewardUnlocks).not.toContain(rewardId);
+    expect(exported.progress.coopDefense.persistentBaseRewardState.placements).toHaveLength(1);
+    resetStoredCoopDefenseCharacter();
+    expect(importStoredGameProgressJson(JSON.stringify(exported)).ok).toBe(true);
+    expect(getStoredPersistentBaseRewardState().revision).toBe(2);
   });
 
   it('round-trips a watchtower placement with its fixed orientation', () => {

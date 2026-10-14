@@ -228,7 +228,9 @@ export class CoopDefenseGroundHazardEventHandler implements CoopDefenseMapEventH
         sourceId: event.effect.sourceId,
         visualStyle: event.effect.visualStyle,
         damageTarget: 'players',
-        static: permanent,
+        // The handler removes a finite occurrence as a whole when it ends, so no cell needs the
+        // per-frame dynamic update or expiry scan (large Dawn night fires).
+        static: true,
       },
       this.deps.getNowMs(),
     );

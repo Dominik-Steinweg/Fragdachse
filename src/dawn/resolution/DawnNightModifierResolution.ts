@@ -86,7 +86,9 @@ export function resolveDawnNightModifierContent(template: DawnArenaTemplate, pla
       mapEvents.push({ id: `night-fire-${index}`, type: 'ground-hazard', announcement: 'none', start: { type: 'time', atMs },
         durationMs: end - atMs,
         area: { type: 'random-patches', randomPatchCount: ignition.patchCount, minPatchRadiusCells: fire.minPatchRadiusCells,
-          maxPatchRadiusCells: fire.maxPatchRadiusCells, baseClearanceCells: fire.siteClearanceCells, keepClear },
+          maxPatchRadiusCells: fire.maxPatchRadiusCells, baseClearanceCells: fire.siteClearanceCells, keepClear,
+          // Straight lanes are only a cheap pre-filter; winding corridors are kept open by the route check.
+          preserveRoutes: true },
         spread: { direction: 'radial', durationMs: fire.spreadMs, warningLeadMs: fire.warningLeadMs },
         effect: { visualStyle: 'normal', burnDurationMs: fire.burnDurationMs, burnDamagePerTick: fire.burnDamagePerTick,
           sourceId: 'ground_fire.dawn_night_fire' } });

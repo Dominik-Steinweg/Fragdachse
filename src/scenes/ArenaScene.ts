@@ -2909,13 +2909,15 @@ export class ArenaScene extends Phaser.Scene {
     const start = bridge.getArenaStartTime();
     const metrics = mapConfig?.mapEvents && start > 0 ? this.arenaRuntime?.getWorldMetrics() : null;
     if (!mapConfig?.mapEvents || !metrics) {
-      this.renderers?.airstrike?.syncBomberRuns([], 0, null);
+      this.renderers?.airstrike?.syncBomberRuns([], 0, 0, null);
       return;
     }
     if (this.bomberRuns?.events !== mapConfig.mapEvents) {
       this.bomberRuns = { events: mapConfig.mapEvents, runs: resolveScheduledAirstrikeRuns(mapConfig.mapEvents, metrics) };
     }
-    this.renderers?.airstrike?.syncBomberRuns(this.bomberRuns.runs, this.arenaRuntime.getMissionNow() - start, DAWN_BOMBER_SHADOW_TEXTURE);
+    const now = bridge.getSynchronizedNow();
+    this.renderers?.airstrike?.syncBomberRuns(this.bomberRuns.runs, this.arenaRuntime.getMissionNow(now) - start, now,
+      DAWN_BOMBER_SHADOW_TEXTURE);
   }
 
   /**

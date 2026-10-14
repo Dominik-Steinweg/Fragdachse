@@ -12,7 +12,7 @@ import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
 import { ensureAirstrikeBombTexture, ensureAirstrikeSparkTexture } from './gpu/GpuVfxSourceTextures';
 import { GPU_VFX_NO_SOURCE_HANDLE, type GpuVfxSystem } from './gpu/GpuVfxSystem';
 import { ParticleFlowScheduler } from './gpu/ParticleFlowScheduler';
-import { resolveAirstrikeRunLeadPx, type ScheduledAirstrikeRun } from '../systems/AirstrikeRun';
+import { resolveAirstrikeRunLaunchFromStrikes, resolveAirstrikeRunLeadPx, type ScheduledAirstrikeRun } from '../systems/AirstrikeRun';
 import { COOP_DEFENSE_MAP_AIRSTRIKE_DELAY_MS } from '../systems/CoopDefenseAirstrikeEventHandler';
 
 // ── Textur-Schlüssel ────────────────────────────────────────────────────────
@@ -84,6 +84,10 @@ const BOMBER_FORMATION = [
 const BOMBER_SHADOW_LAYERS = [{ scale: 1, alpha: 1 }, { scale: 0.78, alpha: 0.6 }] as const;
 /** The formation is drawn from far ahead of the first bomb until it has left the zone; both ends fade. */
 const BOMBER_RUN_WINDOW = { leadInPx: 2600, leadOutPx: 2200, fadePx: 900 } as const;
+/** Once the run's first bomb is replicated, the estimated approach eases onto its real launch time. */
+const BOMBER_RUN_ANCHOR_BLEND_MS = 600;
+/** A host lags seconds, not minutes: a farther anchor belongs to an earlier round with the same event id. */
+const BOMBER_RUN_ANCHOR_MAX_SKEW_MS = 20_000;
 
 interface AirstrikeVisual {
   id:            number;
@@ -135,6 +139,9 @@ export class AirstrikeRenderer {
   private visuals     = new Map<number, AirstrikeVisual>();
   /** Formation shadows per scheduled run (Dawn bomber night); campaign airstrikes have no run. */
   private readonly bomberRuns = new Map<string, Phaser.GameObjects.Image[]>();
+  /** Real launch time (strike clock) per run, taken from its first replicated bomb, and when it was found. */
+  private readonly bomberRunAnchors = new Map<string, { launchAtMs: number; estimatedAtMs: number; foundAtMs: number }>();
+  private latestStrikes: readonly SyncedAirstrikeStrike[] = [];
   /** Parallel zur Map, damit der Partikel-Tick ohne Iterator-Allokation laufen kann. */
   private readonly activeVisuals: AirstrikeVisual[] = [];
   private effectSystem: EffectSystem | null = null;
@@ -206,6 +213,7 @@ export class AirstrikeRenderer {
 
   /** `now` must be host-synchronized time: armedAt/explodeAt are host timestamps. */
   sync(strikes: SyncedAirstrikeStrike[], now: number): void {
+    this.latestStrikes = strikes;
     const activeIds = new Set<number>();
 
     for (const strike of strikes) {
@@ -231,16 +239,35 @@ export class AirstrikeRenderer {
   }
 
   /**
-   * Formation shadows of the Activity's scheduled bomber runs. Every peer derives them from the same
-   * authored run and round clock as the host's bombs, so they announce a run seconds before impact
-   * without own network state. `textureKey` null (or missing art) removes them.
+   * Formation shadows of the Activity's scheduled bomber runs. Before the run launches, its timing is
+   * estimated from the authored run and the round clock; from the first replicated bomb on it follows the
+   * host's real launch, so shadows and bombs stay together even when the host's event clock lagged.
+   * No own network state. `now` is the strikes' synchronized clock; `textureKey` null removes them.
    */
-  syncBomberRuns(runs: readonly ScheduledAirstrikeRun[], roundTimeMs: number, textureKey: string | null): void {
-    if (runs.length === 0 && this.bomberRuns.size === 0) return;
+  syncBomberRuns(runs: readonly ScheduledAirstrikeRun[], roundTimeMs: number, now: number, textureKey: string | null): void {
+    if (runs.length === 0 && this.bomberRuns.size === 0 && this.bomberRunAnchors.size === 0) return;
     const visible = new Set<string>();
     if (textureKey && this.scene.textures.exists(textureKey)) {
+      let bomberStrikes: readonly SyncedAirstrikeStrike[] | null = null;
       for (const run of runs) {
-        const lead = resolveAirstrikeRunLeadPx(run, COOP_DEFENSE_MAP_AIRSTRIKE_DELAY_MS, roundTimeMs);
+        const estimatedAtMs = now - roundTimeMs + run.launchAtMs;
+        let anchor = this.bomberRunAnchors.get(run.eventId);
+        if (anchor && Math.abs(anchor.launchAtMs - estimatedAtMs) > BOMBER_RUN_ANCHOR_MAX_SKEW_MS) {
+          this.bomberRunAnchors.delete(run.eventId);
+          anchor = undefined;
+        }
+        // Bombs exist only from the launch on; until then there is nothing to anchor to.
+        if (!anchor && this.latestStrikes.length > 0 && estimatedAtMs <= now + BOMBER_RUN_ANCHOR_MAX_SKEW_MS) {
+          bomberStrikes ??= this.latestStrikes.filter(strike => strike.triggeredBy === COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID);
+          const launchAtMs = resolveAirstrikeRunLaunchFromStrikes(run, bomberStrikes);
+          if (launchAtMs !== null) {
+            anchor = { launchAtMs, estimatedAtMs, foundAtMs: now };
+            this.bomberRunAnchors.set(run.eventId, anchor);
+          }
+        }
+        const blend = anchor ? Math.max(0, 1 - (now - anchor.foundAtMs) / BOMBER_RUN_ANCHOR_BLEND_MS) : 1;
+        const launchAtMs = anchor ? anchor.launchAtMs + (anchor.estimatedAtMs - anchor.launchAtMs) * blend : estimatedAtMs;
+        const lead = resolveAirstrikeRunLeadPx(run, COOP_DEFENSE_MAP_AIRSTRIKE_DELAY_MS, now, launchAtMs);
         const { leadInPx, leadOutPx, fadePx } = BOMBER_RUN_WINDOW;
         if (lead < -leadInPx || lead > run.geometry.lengthPx + leadOutPx) continue;
         visible.add(run.eventId);
@@ -271,11 +298,16 @@ export class AirstrikeRenderer {
       for (const shadow of shadows) shadow.destroy();
       this.bomberRuns.delete(eventId);
     }
+    for (const eventId of this.bomberRunAnchors.keys()) {
+      if (!runs.some(run => run.eventId === eventId)) this.bomberRunAnchors.delete(eventId);
+    }
   }
 
   clear(): void {
     for (const shadows of this.bomberRuns.values()) for (const shadow of shadows) shadow.destroy();
     this.bomberRuns.clear();
+    this.bomberRunAnchors.clear();
+    this.latestStrikes = [];
     for (const v of this.visuals.values()) this.destroyVisual(v);
     this.visuals.clear();
     this.activeVisuals.length = 0;

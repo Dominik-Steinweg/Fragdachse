@@ -782,8 +782,22 @@ export class ArenaGenerator {
     mapConfig: ArenaGenerationMapConfig,
     bases: readonly BaseSpec[],
   ): boolean {
+    return this.resolveSpawnToBaseRoutes(blocked, tracks, mapConfig, bases).every(Boolean);
+  }
+
+  /**
+   * Reachability of the friendly base per authored spawn source, in a stable order; empty without
+   * targets. `includeStructures` also asks it of every structure (sites players must still reach).
+   */
+  private resolveSpawnToBaseRoutes(
+    blocked: boolean[][],
+    tracks: readonly TrackCell[],
+    mapConfig: ArenaGenerationMapConfig,
+    bases: readonly BaseSpec[],
+    includeStructures = false,
+  ): boolean[] {
     const targetCells = this.getFriendlyBaseGoalCells(blocked, bases);
-    if (targetCells.size === 0) return true;
+    if (targetCells.size === 0) return [];
 
     const trackCells = new Set<number>();
     for (const track of tracks) {
@@ -823,12 +837,20 @@ export class ArenaGenerator {
     for (const front of fronts) {
       sourceGroups.push(this.getSpawnFrontCells(front, blocked, baseCells, bases));
     }
-
-    for (const sources of sourceGroups) {
-      if (sources.length === 0) return false;
-      if (!this.canReachTrackSafeGoal(sources, targetCells, blocked, trackCells)) return false;
+    if (includeStructures) {
+      for (const base of bases) {
+        const neighbours: { gridX: number; gridY: number }[] = [];
+        for (const cell of base.cells) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          const gridX = cell.gridX + dx, gridY = cell.gridY + dy;
+          if (gridX >= 0 && gridX < this.metrics.gridCols && gridY >= 0 && gridY < this.metrics.gridRows
+            && !blocked[gridY][gridX] && !baseCells.has(this.cellKey(gridX, gridY))) neighbours.push({ gridX, gridY });
+        }
+        sourceGroups.push(neighbours);
+      }
     }
-    return true;
+
+    return sourceGroups.map((sources) => sources.length > 0
+      && this.canReachTrackSafeGoal(sources, targetCells, blocked, trackCells));
   }
 
   private getFriendlyBaseGoalCells(
@@ -1805,6 +1827,14 @@ export class ArenaGenerator {
     ): ArenaGroundHazardZone => ({ eventId: event.id, id, cells });
 
     const zones: ArenaGroundHazardZone[] = [];
+    // Hazard cells of route-preserving events count as walls for the spawn-to-base route check;
+    // a patch may not close any route that is open without them.
+    const routeBlocked = blocked.map(row => [...row]);
+    let routeBaseline: boolean[] | null = null;
+    const keepsRoutesOpen = (cells: ArenaGroundHazardZone['cells']): boolean => {
+      routeBaseline ??= this.resolveSpawnToBaseRoutes(routeBlocked, tracks, mapConfig, coopBaseSpecs, true);
+      return this.keepsSpawnRoutesOpen(routeBlocked, cells, routeBaseline, tracks, mapConfig, coopBaseSpecs);
+    };
     // Resolve source patches before their extensions, independently of authored event order.
     const orderedEvents = [...events.filter(event => event.area.type !== 'expanded-patches'),
       ...events.filter(event => event.area.type === 'expanded-patches')];
@@ -1907,7 +1937,7 @@ export class ArenaGenerator {
               }
             }
           }
-          if (cells.length >= 4) {
+          if (cells.length >= 4 && (!area.preserveRoutes || keepsRoutesOpen(cells))) {
             selected = cells;
             selectedPatch = { centerX, centerY, radiusCells: radius };
           }
@@ -1924,6 +1954,22 @@ export class ArenaGenerator {
       if (selectedPatchCount === 0) return null;
     }
     return zones;
+  }
+
+  /** Marks a candidate patch as blocked if no previously open spawn or structure route closes; otherwise leaves it out. */
+  private keepsSpawnRoutesOpen(
+    routeBlocked: boolean[][],
+    cells: ArenaGroundHazardZone['cells'],
+    baseline: readonly boolean[],
+    tracks: readonly TrackCell[],
+    mapConfig: ArenaGenerationMapConfig,
+    bases: readonly BaseSpec[],
+  ): boolean {
+    for (const cell of cells) routeBlocked[cell.gridY][cell.gridX] = true;
+    const routes = this.resolveSpawnToBaseRoutes(routeBlocked, tracks, mapConfig, bases, true);
+    if (baseline.every((open, index) => !open || routes[index])) return true;
+    for (const cell of cells) routeBlocked[cell.gridY][cell.gridX] = false;
+    return false;
   }
 
   private pickDistributedPedestalCells(

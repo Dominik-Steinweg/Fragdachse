@@ -37,6 +37,22 @@ describe('MarkerLayoutModel projection', () => {
     expect(badge.pointerAngle).toBe(Math.PI / 2);
   });
 
+  it('fans out overlapping world badges of one kind, each pointing at its own target (Map 17 crates)', () => {
+    const crate = (key: string, x: number) => descriptor(key, { kind: 'carry', glyph: 'carry-crate', state: 'active', x });
+    const badges = new MarkerLayoutModel().layout(input([crate('a', 400), crate('b', 406), crate('c', 403)])).worldBadges;
+    expect(badges).toHaveLength(3);
+    for (let i = 0; i < badges.length; i++) for (let j = i + 1; j < badges.length; j++) {
+      expect(Math.hypot(badges[i].x - badges[j].x, badges[i].y - badges[j].y)).toBeGreaterThanOrEqual(badges[i].diameter);
+    }
+    for (const badge of badges) {
+      const target = { a: 400, b: 406, c: 403 }[badge.key as 'a' | 'b' | 'c'];
+      expect(badge.pointerAngle).toBeCloseTo(Math.atan2(300 - badge.y, target - badge.x));
+    }
+    // Different kinds and distant badges keep their own place and a straight pointer.
+    const apart = new MarkerLayoutModel().layout(input([crate('a', 300), crate('b', 500), descriptor('site', { x: 300 })])).worldBadges;
+    expect(apart.filter((badge) => badge.key !== 'site').every((badge) => badge.pointerAngle === Math.PI / 2)).toBe(true);
+  });
+
   it('uses the raised badge bounds, not the target midpoint, at the top edge', () => {
     const frame = new MarkerLayoutModel().layout(input([descriptor('a', { y: 35 })]));
     expect(frame.worldBadges).toHaveLength(0);

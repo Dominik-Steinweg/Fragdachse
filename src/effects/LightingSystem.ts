@@ -116,6 +116,13 @@ interface ActiveLight {
   occlusionCache: OcclusionCache | null;
 }
 
+/** Light drawn additively into the light map right after the ambient fill, in light-map pixels. */
+export interface LightMapAmbientLayer {
+  /** Visible world rectangle of the light map and its pixel size; null draws nothing this frame. */
+  update(worldX: number, worldY: number, worldWidth: number, worldHeight: number, width: number, height: number):
+    Phaser.GameObjects.GameObject | null;
+}
+
 /** Ausgeliehener Frame kleiner farbiger Bodenleuchten (siehe {@link LightingSystem.setGroundGlowLights}). */
 export interface GroundGlowLightFrame {
   readonly lights: readonly { x: number; y: number; radiusPx: number; intensity: number; color: number }[];
@@ -281,6 +288,7 @@ export class LightingSystem {
    * `DynamicTexture.render()` steigt bei leerem Command-Buffer sofort aus.
    */
   private lightMapHoldsAmbientOnly = false;
+  private ambientLayer: LightMapAmbientLayer | null = null;
   private readonly onContextRestored = (): void => {
     this.lightMapHoldsAmbientOnly = false;
     for (const light of this.lights) if (light.occlusionCache) light.occlusionCache.valid = false;
@@ -343,6 +351,16 @@ export class LightingSystem {
     // Das gemerkte Ambient in der Lightmap ist damit veraltet.
     this.lightMapHoldsAmbientOnly = false;
     this.syncOverlayVisibility();
+  }
+
+  /**
+   * World-anchored light added right after the ambient fill (Dawn blood moon through cloud openings).
+   * Its owner is the same as the ambient's; lights are stamped on top unchanged. Null removes it.
+   */
+  setAmbientLayer(layer: LightMapAmbientLayer | null): void {
+    if (this.ambientLayer === layer) return;
+    this.ambientLayer = layer;
+    this.lightMapHoldsAmbientOnly = false;
   }
 
   /** Reversible dev presentation override; lamps retain their production sky factors. */
@@ -828,7 +846,9 @@ export class LightingSystem {
 
     const ambientColor = this.getAmbientColor();
     const ambientIsNeutral = ambientColor === NEUTRAL_AMBIENT_COLOR;
-    const queueEmpty = this.renderQueue.length === 0 && eyeLights === 0 && essenceLights === 0 && groundGlowLights === 0;
+    // A world-anchored ambient layer drifts with the camera and the clouds: never reuse last frame's map.
+    const queueEmpty = this.renderQueue.length === 0 && eyeLights === 0 && essenceLights === 0 && groundGlowLights === 0
+      && this.ambientLayer === null;
     this.syncLightBleed(overlay, !queueEmpty);
 
     // Reihenfolge ist tragend: erst Sichtbarkeit entscheiden, dann erst Befehle erzeugen.
@@ -888,6 +908,9 @@ export class LightingSystem {
     // Nebenbei: `lightMap.setAlpha(k)` wäre ein exakter Lerp des gesamten Composites
     // Richtung No-Op – der kostenlose Weg zu einer globalen Lichtstärke.
     overlay.fill(ambientColor, 1);
+    const ambientLayer = this.ambientLayer?.update(scrollX - overscanX, scrollY - overscanY,
+      this.viewport.width + overscanX * 2, this.viewport.height + overscanY * 2, overlay.width, overlay.height) ?? null;
+    if (ambientLayer) overlay.draw(ambientLayer);
     // One instanced draw for every visible eye light, independent of the ranked light budget.
     if (eyeLights > 0) overlay.draw(this.enemyEyeBatch!.layer);
     if (essenceLights > 0) overlay.draw(this.essenceBatch!.layer);

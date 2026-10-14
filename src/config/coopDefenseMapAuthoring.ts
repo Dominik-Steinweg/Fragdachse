@@ -617,6 +617,12 @@ export type CoopDefenseMapGroundHazardArea =
     readonly baseClearanceCells?: number;
     /** Kapseln (Strecke mit Radius), in denen keine Zelle und kein Patch-Zentrum liegen darf. */
     readonly keepClear?: readonly CoopDefenseMapGroundHazardKeepClear[];
+    /**
+     * Patches duerfen keinen Weg von einer Spawnfront, Spawnflaeche oder einem Bauwerk (Sites) zur freundlichen
+     * Basis schliessen, der ohne sie offen ist; die Zellen zaehlen dafuer als Wand. Gilt ueber alle so markierten
+     * Events gemeinsam.
+     */
+    readonly preserveRoutes?: boolean;
   }
   | {
     readonly type: 'rectangle';
@@ -2816,6 +2822,9 @@ function normalizeGroundHazardArea(
       throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${eventId} needs valid patch radii`);
     }
     const keepClear = normalizeGroundHazardKeepClear(mapId, eventId, area.keepClear, arenaWidthCells, arenaHeightCells);
+    if (area.preserveRoutes !== undefined && typeof area.preserveRoutes !== 'boolean') {
+      throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${eventId} needs a boolean preserveRoutes`);
+    }
     return {
       type: 'random-patches',
       randomPatchCount: normalizePositiveMapEventInteger(
@@ -2828,6 +2837,7 @@ function normalizeGroundHazardArea(
       maxPatchRadiusCells: area.maxPatchRadiusCells,
       ...(baseClearanceCells === undefined ? {} : { baseClearanceCells }),
       ...(keepClear === undefined ? {} : { keepClear }),
+      ...(area.preserveRoutes ? { preserveRoutes: true } : {}),
     };
   }
   if (area.type === 'rectangle') {
