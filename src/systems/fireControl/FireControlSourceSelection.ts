@@ -16,6 +16,12 @@ export interface FireControlCopySelectionInput {
   readonly maxCopies: number;
 }
 
+/** Equipped types first, then still-built unequipped types in locale-independent order. */
+export function orderFireControlTypes(slotOrder: readonly string[], builtTypes: Iterable<string>): string[] {
+  const slotTypes = new Set(slotOrder);
+  return [...slotTypes, ...[...new Set(builtTypes)].filter(type => !slotTypes.has(type)).sort()];
+}
+
 /** Round-robin by construction type; distance and ID rank originals within each type. */
 export function selectFireControlCopySources(
   input: FireControlCopySelectionInput,
@@ -39,12 +45,7 @@ export function selectFireControlCopySources(
     group.sort((a, b) => distanceSquared(a) - distanceSquared(b) || a.id - b.id);
   }
 
-  const slotTypes = new Set(input.slotOrder);
-  const order = [
-    ...slotTypes,
-    // Default string sort is locale-independent for construction IDs.
-    ...[...byType.keys()].filter(type => !slotTypes.has(type)).sort(),
-  ];
+  const order = orderFireControlTypes(input.slotOrder, byType.keys());
   const result: FireControlCopyCandidate[] = [];
   for (let round = 0; result.length < limit; round++) {
     const previousLength = result.length;
