@@ -27,13 +27,12 @@ describe('asset pipeline catalog contracts', () => {
     expect(dealer.clips![0]).toMatchObject({ name: 'idle', motion: 'player_idle', loop: true });
     expect(stall).toMatchObject({ category: 'construction', gameIds: [], targetSize: 96, pivot: [0.5, 0.5], clips: [] });
   });
-  it('keeps Dawn drafts unbound, tier-parametric and independent of external texture files', () => {
+  it('keeps Dawn constructions unbound, tier-parametric and explicit about their clips', () => {
     const dawn = assets.filter(asset => ['dawn-wreck', 'dawn-extractor', 'dawn-scrap'].includes(asset.recipe ?? ''));
     expect(dawn).toHaveLength(7);
     for (const asset of dawn) {
       expect(asset.gameIds).toEqual([]);
       expect(asset.pivot).toEqual([0.5, 0.5]);
-      expect(asset.textures).toEqual({});
       expect(existsSync(path.join(root, asset.reference))).toBe(true);
       expect(() => validateClipContracts(asset.clips!, false)).not.toThrow();
       if (asset.recipe !== 'dawn-extractor') {
@@ -199,7 +198,17 @@ describe('asset pipeline catalog contracts', () => {
         // Procedural pigments consume no external image, independent of recipe identity.
         expect(asset.textures).toEqual({});
       } else {
-        expect(Object.keys(asset.textures!)).toContain(['weapon', 'utility', 'construction', 'companion'].includes(asset.category) || asset.category === 'turret' && asset.id !== 'spore' ? 'technical' : 'organic');
+        const library = (asset.model as { librarySurfaces?: Record<string, { family: string; moss?: number }> }).librarySurfaces;
+        if (library) {
+          // Every authored shader input must participate in the texture provenance map.
+          for (const surface of Object.values(library)) {
+            for (const family of [surface.family, 'grime', 'edgewear', ...(surface.moss ? ['moss'] : [])]) {
+              expect(Object.keys(asset.textures!), `${asset.id}: ${family}`).toContain(family);
+            }
+          }
+        } else {
+          expect(Object.keys(asset.textures!)).toContain(['weapon', 'utility', 'construction', 'companion'].includes(asset.category) || asset.category === 'turret' && asset.id !== 'spore' ? 'technical' : 'organic');
+        }
       }
       expect(Object.keys(asset.materialVariants!)).toHaveLength(1);
       for (const variant of Object.values(asset.materialVariants!)) {

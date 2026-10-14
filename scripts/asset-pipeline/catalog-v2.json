@@ -5748,8 +5748,7 @@
       "designReference": "scripts/asset-pipeline/references/dawn-tier-row.png",
       "targetSize": 96,
       "sourceSizes": [
-        192,
-        384
+        192
       ],
       "forward": "north",
       "pivot": [
@@ -5758,22 +5757,114 @@
       ],
       "description": {
         "silhouette": "Crashed cargo quadcopter with three intact ducts, split fourth rotor and scattered opened cargo.",
-        "colors": "Rust-orange and brown, charcoal steel, old moss and grass.",
+        "colors": "Dark rust steel, moss and dirty ochre cargo bands.",
         "anatomy": "One tier-parametric static model. Open cargo, severed wires and damaged spar; 96 px / three 32 px cells."
       },
       "requiredClips": [],
       "production": "reference",
       "recipe": "dawn-wreck",
       "model": {
-        "tier": 1
+        "tier": 1,
+        "librarySurfaces": {
+          "Chipped tier enamel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.16,
+            "moss": 0.2,
+            "value": 1.08
+          },
+          "Secondary panel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.35
+          },
+          "Cargo paint": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.08
+          },
+          "Exposed alloy edges": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Oily structural steel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Damaged rotor composite": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Copper cable braid": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Worn warning ochre": {
+            "family": "yellow",
+            "scale": 0.42,
+            "grime": 0.12,
+            "edgewear": 0.12,
+            "saturation": 0.64,
+            "value": 0.94,
+            "tint": 0.28
+          },
+          "Old moss cushions": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.92,
+            "moss": 0.35
+          },
+          "Dry grass blades": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.92,
+            "moss": 0.35
+          },
+          "Battered rotor rim": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.33,
+            "edgewear": 0.32,
+            "tint": 0.25,
+            "value": 1,
+            "moss": 0.2
+          }
+        }
       },
       "orthoScale": 3.6,
-      "textures": {},
-      "materialSource": "procedural",
+      "textures": {
+        "dawnPaint": "art/poc/dawn/textures/library/steel-rust-bare-02.png",
+        "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+        "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png",
+        "moss": "art/poc/dawn/textures/library/mask-moss-01.png",
+        "yellow": "art/poc/dawn/textures/library/paint-industrial-yellow-01.png"
+      },
       "materialVariants": {
         "standard": {
-          "label": "Weathered matte pigment, machined relief and cavity depth",
-          "textureStrength": 0,
+          "label": "Dawn Material V1 / matte weathered library",
+          "textureStrength": 1,
           "formShadowStrength": 0.83
         }
       },
@@ -5799,8 +5890,7 @@
       "designReference": "scripts/asset-pipeline/references/dawn-tier-row.png",
       "targetSize": 96,
       "sourceSizes": [
-        192,
-        384
+        192
       ],
       "forward": "north",
       "pivot": [
@@ -5809,22 +5899,94 @@
       ],
       "description": {
         "silhouette": "Crashed cargo quadcopter with three intact ducts, split fourth rotor and scattered opened cargo.",
-        "colors": "Dark military olive, contrasting khaki panels, worn bright edges and yellow-black cargo warnings.",
+        "colors": "Worn olive paint, exposed muted alloy and dirty ochre cargo bands.",
         "anatomy": "One tier-parametric static model. Open cargo, severed wires and damaged spar; 96 px / three 32 px cells."
       },
       "requiredClips": [],
       "production": "reference",
       "recipe": "dawn-wreck",
       "model": {
-        "tier": 2
+        "tier": 2,
+        "librarySurfaces": {
+          "Chipped tier enamel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.18,
+            "tint": 0.48
+          },
+          "Secondary panel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.35
+          },
+          "Cargo paint": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.48
+          },
+          "Exposed alloy edges": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Oily structural steel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Damaged rotor composite": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Copper cable braid": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Worn warning ochre": {
+            "family": "yellow",
+            "scale": 0.42,
+            "grime": 0.12,
+            "edgewear": 0.12,
+            "saturation": 0.64,
+            "value": 0.94,
+            "tint": 0.28
+          },
+          "Battered rotor rim": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.33,
+            "edgewear": 0.32,
+            "tint": 0.25,
+            "value": 1
+          }
+        }
       },
       "orthoScale": 3.6,
-      "textures": {},
-      "materialSource": "procedural",
+      "textures": {
+        "dawnPaint": "art/poc/dawn/textures/library/steel-paint-olive-02.png",
+        "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+        "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png",
+        "yellow": "art/poc/dawn/textures/library/paint-industrial-yellow-01.png"
+      },
       "materialVariants": {
         "standard": {
-          "label": "Weathered matte pigment, machined relief and cavity depth",
-          "textureStrength": 0,
+          "label": "Dawn Material V1 / matte weathered library",
+          "textureStrength": 1,
           "formShadowStrength": 0.83
         }
       },
@@ -5850,8 +6012,7 @@
       "designReference": "scripts/asset-pipeline/references/dawn-tier-row.png",
       "targetSize": 96,
       "sourceSizes": [
-        192,
-        384
+        192
       ],
       "forward": "north",
       "pivot": [
@@ -5860,22 +6021,95 @@
       ],
       "description": {
         "silhouette": "Crashed cargo quadcopter with three intact ducts, split fourth rotor and scattered opened cargo.",
-        "colors": "White-silver alloy, graphite panels and sparse cyan seams plus a small cargo crystal.",
+        "colors": "Dirty offwhite alloy, graphite panels and cyan limited to service seams.",
         "anatomy": "One tier-parametric static model. Open cargo, severed wires and damaged spar; 96 px / three 32 px cells."
       },
       "requiredClips": [],
       "production": "reference",
       "recipe": "dawn-wreck",
       "model": {
-        "tier": 3
+        "tier": 3,
+        "librarySurfaces": {
+          "Chipped tier enamel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.36,
+            "edgewear": 0.12,
+            "tint": 0.08,
+            "value": 0.88
+          },
+          "Secondary panel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.35
+          },
+          "Cargo paint": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.28,
+            "edgewear": 0.12,
+            "tint": 0.08
+          },
+          "Exposed alloy edges": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Oily structural steel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Damaged rotor composite": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Copper cable braid": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Worn warning ochre": {
+            "family": "yellow",
+            "scale": 0.42,
+            "grime": 0.12,
+            "edgewear": 0.12,
+            "saturation": 0.64,
+            "value": 0.94,
+            "tint": 0.28
+          },
+          "Battered rotor rim": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.33,
+            "edgewear": 0.32,
+            "tint": 0.25,
+            "value": 0.82
+          }
+        }
       },
       "orthoScale": 3.6,
-      "textures": {},
-      "materialSource": "procedural",
+      "textures": {
+        "dawnPaint": "art/poc/dawn/textures/library/alloy-offwhite-02.png",
+        "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+        "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png",
+        "yellow": "art/poc/dawn/textures/library/paint-industrial-yellow-01.png"
+      },
       "materialVariants": {
         "standard": {
-          "label": "Weathered matte pigment, machined relief and cavity depth",
-          "textureStrength": 0,
+          "label": "Dawn Material V1 / matte weathered library",
+          "textureStrength": 1,
           "formShadowStrength": 0.83
         }
       },
@@ -5900,8 +6134,7 @@
       "reference": "scripts/asset-pipeline/references/dawn-extractor.png",
       "targetSize": 96,
       "sourceSizes": [
-        192,
-        384
+        192
       ],
       "forward": "north",
       "pivot": [
@@ -5910,7 +6143,7 @@
       ],
       "description": {
         "silhouette": "Twin round tanks, tracked chassis and a curved flexible vacuum hose with separate suction head.",
-        "colors": "Dark steel frame and tracks, selective worn yellow panels, copper-brass tanks and an amber beacon.",
+        "colors": "Desaturated ochre panels, matte weathered copper tanks, dusty rubber tracks and amber beacon.",
         "anatomy": "Rest plus additive in-plane hose pumping and warning lamp pulse; stable 96 px canvas, centered pivot."
       },
       "requiredClips": [
@@ -5919,14 +6152,74 @@
       ],
       "production": "reference",
       "recipe": "dawn-extractor",
-      "model": {},
+      "model": {
+        "librarySurfaces": {
+          "Chipped industrial yellow": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.12,
+            "edgewear": 0.12,
+            "saturation": 0.64,
+            "value": 0.94,
+            "tint": 0.28
+          },
+          "Aged copper brass tanks": {
+            "family": "copper",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "saturation": 0.78,
+            "tint": 0.12
+          },
+          "Rubber tread and hose": {
+            "family": "rubber",
+            "scale": 0.42,
+            "grime": 0.08,
+            "edgewear": 0.06,
+            "tint": 0.1
+          },
+          "Worn rubber rib crowns": {
+            "family": "rubber",
+            "scale": 0.42,
+            "grime": 0.08,
+            "edgewear": 0.06,
+            "tint": 0.3
+          },
+          "Rubbed matte steel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.9
+          },
+          "Dark structural steel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.9
+          },
+          "Deep oiled recess": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.9
+          }
+        }
+      },
       "orthoScale": 3.4,
-      "textures": {},
-      "materialSource": "procedural",
+      "textures": {
+        "dawnPaint": "art/poc/dawn/textures/library/paint-industrial-yellow-01.png",
+        "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+        "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png",
+        "copper": "art/poc/dawn/textures/library/brass-copper-weathered-01.png",
+        "rubber": "art/poc/dawn/textures/library/rubber-tread-worn-01.png"
+      },
       "materialVariants": {
         "standard": {
-          "label": "Weathered matte pigment, machined relief and cavity depth",
-          "textureStrength": 0,
+          "label": "Dawn Material V1 / matte weathered library",
+          "textureStrength": 1,
           "formShadowStrength": 0.83
         }
       },
@@ -6130,8 +6423,7 @@
       "reference": "scripts/asset-pipeline/references/dawn-dealer-stall.png",
       "targetSize": 96,
       "sourceSizes": [
-        192,
-        384
+        192
       ],
       "forward": "north",
       "pivot": [
@@ -6147,14 +6439,110 @@
       "requiredClips": [],
       "production": "reference",
       "recipe": "dawn-dealer-stall",
-      "model": {},
+      "model": {
+        "librarySurfaces": {
+          "Weathered petrol enamel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.23,
+            "edgewear": 0.22,
+            "saturation": 0.5,
+            "tint": 0.65,
+            "tintColor": [
+              48,
+              82,
+              81
+            ]
+          },
+          "Rolled rusty lip": {
+            "family": "rust",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.15
+          },
+          "Worn silver iron": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.18,
+            "tint": 0.84
+          },
+          "Recessed iron chassis": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.9
+          },
+          "Warm copper wire": {
+            "family": "copper",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.25,
+            "saturation": 0.75
+          },
+          "Faded ochre sailcloth": {
+            "family": "canvas",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "tint": 0.2,
+            "value": 1.3
+          },
+          "Petrol canvas stripe": {
+            "family": "canvas",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "tint": 0.55,
+            "tintColor": [
+              65,
+              85,
+              78
+            ]
+          },
+          "Oak plank 0": {
+            "family": "wood",
+            "scale": 0.7,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.12,
+            "value": 1.1
+          },
+          "Oak plank 1": {
+            "family": "wood",
+            "scale": 0.7,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.12,
+            "value": 1.1
+          },
+          "Oak plank 2": {
+            "family": "wood",
+            "scale": 0.7,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.12,
+            "value": 1.1
+          }
+        }
+      },
       "orthoScale": 3.25,
-      "textures": {},
-      "materialSource": "procedural",
+      "textures": {
+        "dawnPaint": "art/poc/dawn/textures/library/steel-paint-olive-02.png",
+        "rust": "art/poc/dawn/textures/library/steel-rust-bare-02.png",
+        "wood": "art/poc/dawn/textures/library/wood-planks-weathered-01.png",
+        "canvas": "art/poc/dawn/textures/library/canvas-tarp-stained-01.png",
+        "copper": "art/poc/dawn/textures/library/brass-copper-weathered-01.png",
+        "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+        "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png"
+      },
       "materialVariants": {
         "standard": {
-          "label": "Worn matte enamel, oak and canvas",
-          "textureStrength": 0,
+          "label": "Dawn Material V1 / matte weathered library",
+          "textureStrength": 1,
           "formShadowStrength": 0.86
         }
       },
@@ -6310,15 +6698,82 @@
       "production": "reference",
       "recipe": "dawn-wreck-tractor",
       "model": {
-        "tier": 1
+        "tier": 1,
+        "librarySurfaces": {
+          "Salvage tier enamel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.16,
+            "value": 1.08,
+            "moss": 0.2
+          },
+          "Salvage secondary panels": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.35
+          },
+          "Salvage exposed alloy": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.22,
+            "edgewear": 0.25,
+            "tint": 0.66
+          },
+          "Salvage oily structural steel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Split tire rubber": {
+            "family": "rubber",
+            "scale": 0.42,
+            "grime": 0.08,
+            "edgewear": 0.06,
+            "tint": 0.1
+          },
+          "Worn rubber tread crowns": {
+            "family": "rubber",
+            "scale": 0.42,
+            "grime": 0.08,
+            "edgewear": 0.06,
+            "tint": 0.3
+          },
+          "Clinging forest moss": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "tint": 0.94,
+            "moss": 0.25
+          },
+          "Young fern leaf": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "tint": 0.94,
+            "moss": 0.15
+          }
+        }
       },
       "orthoScale": 3.5,
-      "textures": {},
-      "materialSource": "procedural",
+      "textures": {
+        "dawnPaint": "art/poc/dawn/textures/library/steel-rust-bare-02.png",
+        "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+        "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png",
+        "moss": "art/poc/dawn/textures/library/mask-moss-01.png",
+        "rubber": "art/poc/dawn/textures/library/rubber-tread-worn-01.png"
+      },
       "materialVariants": {
         "standard": {
-          "label": "Weathered matte pigment, machined relief and cavity depth",
-          "textureStrength": 0,
+          "label": "Dawn Material V1 / matte weathered library",
+          "textureStrength": 1,
           "formShadowStrength": 0.83
         }
       },
@@ -6360,15 +6815,88 @@
       "production": "reference",
       "recipe": "dawn-wreck-tractor",
       "model": {
-        "tier": 2
+        "tier": 2,
+        "librarySurfaces": {
+          "Salvage tier enamel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.48,
+            "value": 1.08
+          },
+          "Salvage secondary panels": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.35
+          },
+          "Salvage exposed alloy": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.22,
+            "edgewear": 0.25,
+            "tint": 0.66
+          },
+          "Salvage oily structural steel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Split tire rubber": {
+            "family": "rubber",
+            "scale": 0.42,
+            "grime": 0.08,
+            "edgewear": 0.06,
+            "tint": 0.1
+          },
+          "Worn rubber tread crowns": {
+            "family": "rubber",
+            "scale": 0.42,
+            "grime": 0.08,
+            "edgewear": 0.06,
+            "tint": 0.3
+          },
+          "Salvage warning ochre": {
+            "family": "yellow",
+            "scale": 0.42,
+            "grime": 0.12,
+            "edgewear": 0.12,
+            "saturation": 0.64,
+            "value": 0.94,
+            "tint": 0.28
+          },
+          "Clinging forest moss": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "tint": 0.94
+          },
+          "Young fern leaf": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "tint": 0.94
+          }
+        }
       },
       "orthoScale": 3.5,
-      "textures": {},
-      "materialSource": "procedural",
+      "textures": {
+        "dawnPaint": "art/poc/dawn/textures/library/steel-paint-olive-02.png",
+        "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+        "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png",
+        "yellow": "art/poc/dawn/textures/library/paint-industrial-yellow-01.png",
+        "rubber": "art/poc/dawn/textures/library/rubber-tread-worn-01.png"
+      },
       "materialVariants": {
         "standard": {
-          "label": "Weathered matte pigment, machined relief and cavity depth",
-          "textureStrength": 0,
+          "label": "Dawn Material V1 / matte weathered library",
+          "textureStrength": 1,
           "formShadowStrength": 0.83
         }
       },
@@ -6410,15 +6938,78 @@
       "production": "reference",
       "recipe": "dawn-wreck-tractor",
       "model": {
-        "tier": 3
+        "tier": 3,
+        "librarySurfaces": {
+          "Salvage tier enamel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.36,
+            "edgewear": 0.12,
+            "tint": 0.08,
+            "value": 0.88
+          },
+          "Salvage secondary panels": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.35
+          },
+          "Salvage exposed alloy": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.22,
+            "edgewear": 0.25,
+            "tint": 0.66
+          },
+          "Salvage oily structural steel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Split tire rubber": {
+            "family": "rubber",
+            "scale": 0.42,
+            "grime": 0.08,
+            "edgewear": 0.06,
+            "tint": 0.1
+          },
+          "Worn rubber tread crowns": {
+            "family": "rubber",
+            "scale": 0.42,
+            "grime": 0.08,
+            "edgewear": 0.06,
+            "tint": 0.3
+          },
+          "Clinging forest moss": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "tint": 0.94
+          },
+          "Young fern leaf": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "tint": 0.94
+          }
+        }
       },
       "orthoScale": 3.5,
-      "textures": {},
-      "materialSource": "procedural",
+      "textures": {
+        "dawnPaint": "art/poc/dawn/textures/library/alloy-offwhite-02.png",
+        "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+        "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png",
+        "rubber": "art/poc/dawn/textures/library/rubber-tread-worn-01.png"
+      },
       "materialVariants": {
         "standard": {
-          "label": "Weathered matte pigment, machined relief and cavity depth",
-          "textureStrength": 0,
+          "label": "Dawn Material V1 / matte weathered library",
+          "textureStrength": 1,
           "formShadowStrength": 0.83
         }
       },
@@ -6460,15 +7051,75 @@
       "production": "reference",
       "recipe": "dawn-wreck-minecart",
       "model": {
-        "tier": 1
+        "tier": 1,
+        "librarySurfaces": {
+          "Salvage tier enamel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.16,
+            "value": 1.08,
+            "moss": 0.2
+          },
+          "Salvage secondary panels": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.35
+          },
+          "Salvage exposed alloy": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.22,
+            "edgewear": 0.25,
+            "tint": 0.66
+          },
+          "Salvage oily structural steel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Clinging forest moss": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "tint": 0.94,
+            "moss": 0.25
+          },
+          "Young fern leaf": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "tint": 0.94,
+            "moss": 0.15
+          },
+          "Weathered railway sleeper": {
+            "family": "wood",
+            "scale": 0.6,
+            "grime": 0.18,
+            "edgewear": 0.12,
+            "tint": 0.12
+          }
+        }
       },
       "orthoScale": 3.6,
-      "textures": {},
-      "materialSource": "procedural",
+      "textures": {
+        "dawnPaint": "art/poc/dawn/textures/library/steel-rust-bare-02.png",
+        "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+        "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png",
+        "moss": "art/poc/dawn/textures/library/mask-moss-01.png",
+        "wood": "art/poc/dawn/textures/library/wood-planks-weathered-01.png"
+      },
       "materialVariants": {
         "standard": {
-          "label": "Weathered matte pigment, machined relief and cavity depth",
-          "textureStrength": 0,
+          "label": "Dawn Material V1 / matte weathered library",
+          "textureStrength": 1,
           "formShadowStrength": 0.83
         }
       },
@@ -6510,15 +7161,81 @@
       "production": "reference",
       "recipe": "dawn-wreck-minecart",
       "model": {
-        "tier": 2
+        "tier": 2,
+        "librarySurfaces": {
+          "Salvage tier enamel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.48,
+            "value": 1.08
+          },
+          "Salvage secondary panels": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.35
+          },
+          "Salvage exposed alloy": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.22,
+            "edgewear": 0.25,
+            "tint": 0.66
+          },
+          "Salvage oily structural steel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Salvage warning ochre": {
+            "family": "yellow",
+            "scale": 0.42,
+            "grime": 0.12,
+            "edgewear": 0.12,
+            "saturation": 0.64,
+            "value": 0.94,
+            "tint": 0.28
+          },
+          "Clinging forest moss": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "tint": 0.94
+          },
+          "Young fern leaf": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "tint": 0.94
+          },
+          "Weathered railway sleeper": {
+            "family": "wood",
+            "scale": 0.6,
+            "grime": 0.18,
+            "edgewear": 0.12,
+            "tint": 0.12
+          }
+        }
       },
       "orthoScale": 3.6,
-      "textures": {},
-      "materialSource": "procedural",
+      "textures": {
+        "dawnPaint": "art/poc/dawn/textures/library/steel-paint-olive-02.png",
+        "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+        "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png",
+        "yellow": "art/poc/dawn/textures/library/paint-industrial-yellow-01.png",
+        "wood": "art/poc/dawn/textures/library/wood-planks-weathered-01.png"
+      },
       "materialVariants": {
         "standard": {
-          "label": "Weathered matte pigment, machined relief and cavity depth",
-          "textureStrength": 0,
+          "label": "Dawn Material V1 / matte weathered library",
+          "textureStrength": 1,
           "formShadowStrength": 0.83
         }
       },
@@ -6560,15 +7277,71 @@
       "production": "reference",
       "recipe": "dawn-wreck-minecart",
       "model": {
-        "tier": 3
+        "tier": 3,
+        "librarySurfaces": {
+          "Salvage tier enamel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.36,
+            "edgewear": 0.12,
+            "tint": 0.08,
+            "value": 0.88
+          },
+          "Salvage secondary panels": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.35
+          },
+          "Salvage exposed alloy": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.22,
+            "edgewear": 0.25,
+            "tint": 0.66
+          },
+          "Salvage oily structural steel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Clinging forest moss": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "tint": 0.94
+          },
+          "Young fern leaf": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "tint": 0.94
+          },
+          "Weathered railway sleeper": {
+            "family": "wood",
+            "scale": 0.6,
+            "grime": 0.18,
+            "edgewear": 0.12,
+            "tint": 0.12
+          }
+        }
       },
       "orthoScale": 3.6,
-      "textures": {},
-      "materialSource": "procedural",
+      "textures": {
+        "dawnPaint": "art/poc/dawn/textures/library/alloy-offwhite-02.png",
+        "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+        "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png",
+        "wood": "art/poc/dawn/textures/library/wood-planks-weathered-01.png"
+      },
       "materialVariants": {
         "standard": {
-          "label": "Weathered matte pigment, machined relief and cavity depth",
-          "textureStrength": 0,
+          "label": "Dawn Material V1 / matte weathered library",
+          "textureStrength": 1,
           "formShadowStrength": 0.83
         }
       },
@@ -6602,7 +7375,7 @@
       ],
       "description": {
         "silhouette": "Irregular hooked bone spurs around three veined green brood sacs, curled embryo shadows, sagging mucus and engulfed scrap.",
-        "colors": "Deep saturated violet flesh, damp restrained sheen, sickly green thin membranes, aged bone and rusted embedded metal; no glow.",
+        "colors": "Matte bruised aubergine membranes, weathered bone spurs and rusted embedded scrap; no glossy green sacs.",
         "anatomy": "Three independent egg controls visibly swell in place; 12 frames / 12 fps, closure not exported. Fixed 96 px / 3 x 3 cells."
       },
       "requiredClips": [
@@ -6610,14 +7383,119 @@
       ],
       "production": "reference",
       "recipe": "dawn-broodnest",
-      "model": {},
+      "model": {
+        "librarySurfaces": {
+          "Deep saturated bruised violet": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.08,
+            "edgewear": 0.02,
+            "saturation": 0.75
+          },
+          "Wet purple sinew": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.06,
+            "edgewear": 0.02,
+            "saturation": 0.7,
+            "value": 1.3
+          },
+          "Opaque brood throat": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.01,
+            "tint": 0.92
+          },
+          "Splintered aged bone": {
+            "family": "bone",
+            "scale": 0.42,
+            "grime": 0.12,
+            "edgewear": 0.06,
+            "saturation": 0.8,
+            "tint": 0.12
+          },
+          "Sinew binding on bone": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.02,
+            "saturation": 0.7,
+            "tint": 0.25
+          },
+          "Thin translucent green membrane": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.07,
+            "edgewear": 0.02,
+            "saturation": 0.65,
+            "value": 1.2,
+            "tint": 0.32,
+            "tintColor": [
+              137,
+              119,
+              137
+            ]
+          },
+          "Blood-filled branching veins": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.04,
+            "edgewear": 0.01,
+            "tint": 0.7,
+            "tintColor": [
+              60,
+              40,
+              53
+            ]
+          },
+          "Stretched pale green mucus": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.04,
+            "edgewear": 0.01,
+            "tint": 0.7,
+            "tintColor": [
+              142,
+              121,
+              139
+            ]
+          },
+          "Curled larva inside sac": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0,
+            "tint": 0.95
+          },
+          "Engulfed corroded metal": {
+            "family": "rust",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.25
+          },
+          "Old rust trapped in flesh": {
+            "family": "rust",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.15
+          }
+        }
+      },
       "orthoScale": 3.4,
-      "textures": {},
-      "materialSource": "procedural",
+      "textures": {
+        "dawnPaint": "art/poc/dawn/textures/library/organic-membrane-violet-02.png",
+        "bone": "art/poc/dawn/textures/library/bone-weathered-02.png",
+        "rust": "art/poc/dawn/textures/library/steel-rust-bare-02.png",
+        "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+        "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png"
+      },
       "materialVariants": {
         "standard": {
-          "label": "Weathered matte pigment, machined relief and cavity depth",
-          "textureStrength": 0,
+          "label": "Dawn Material V1 / matte weathered library",
+          "textureStrength": 1,
           "formShadowStrength": 0.83
         }
       },
@@ -6668,14 +7546,71 @@
       "requiredClips": [],
       "production": "reference",
       "recipe": "dawn-supply-capsule",
-      "model": {},
+      "model": {
+        "librarySurfaces": {
+          "Player rescue ochre": {
+            "family": "yellow",
+            "scale": 0.42,
+            "grime": 0.12,
+            "edgewear": 0.12,
+            "saturation": 0.64,
+            "value": 0.94,
+            "tint": 0.28
+          },
+          "Warm worn brass fittings": {
+            "family": "copper",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.35,
+            "saturation": 0.75
+          },
+          "Recessed cargo gasket": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.92
+          },
+          "Unbleached parachute canvas": {
+            "family": "canvas",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "value": 1.25,
+            "tint": 0.15
+          },
+          "Cargo handle wear": {
+            "family": "copper",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.18,
+            "tint": 0.48
+          },
+          "Weathered delivery crate wood": {
+            "family": "wood",
+            "scale": 0.8,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.1,
+            "value": 1.15
+          }
+        }
+      },
       "orthoScale": 3.8,
-      "textures": {},
-      "materialSource": "procedural",
+      "textures": {
+        "dawnPaint": "art/poc/dawn/textures/library/paint-industrial-yellow-01.png",
+        "yellow": "art/poc/dawn/textures/library/paint-industrial-yellow-01.png",
+        "copper": "art/poc/dawn/textures/library/brass-copper-weathered-01.png",
+        "wood": "art/poc/dawn/textures/library/wood-planks-weathered-01.png",
+        "canvas": "art/poc/dawn/textures/library/canvas-tarp-stained-01.png",
+        "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+        "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png"
+      },
       "materialVariants": {
         "standard": {
-          "label": "Weathered matte pigment, machined relief and cavity depth",
-          "textureStrength": 0,
+          "label": "Dawn Material V1 / matte weathered library",
+          "textureStrength": 1,
           "formShadowStrength": 0.83
         }
       },
@@ -6704,14 +7639,62 @@
       "requiredClips": [],
       "production": "reference",
       "recipe": "dawn-supply-crate",
-      "model": {},
+      "model": {
+        "librarySurfaces": {
+          "Player rescue ochre": {
+            "family": "yellow",
+            "scale": 0.42,
+            "grime": 0.12,
+            "edgewear": 0.12,
+            "saturation": 0.64,
+            "value": 0.94,
+            "tint": 0.28
+          },
+          "Warm worn brass fittings": {
+            "family": "copper",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.48,
+            "saturation": 0.75
+          },
+          "Recessed cargo gasket": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.92
+          },
+          "Cargo handle wear": {
+            "family": "copper",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.18,
+            "tint": 0.62
+          },
+          "Weathered delivery crate wood": {
+            "family": "wood",
+            "scale": 0.8,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.1,
+            "value": 1.3
+          }
+        }
+      },
       "orthoScale": 0.94,
-      "textures": {},
-      "materialSource": "procedural",
+      "textures": {
+        "dawnPaint": "art/poc/dawn/textures/library/paint-industrial-yellow-01.png",
+        "yellow": "art/poc/dawn/textures/library/paint-industrial-yellow-01.png",
+        "copper": "art/poc/dawn/textures/library/brass-copper-weathered-01.png",
+        "wood": "art/poc/dawn/textures/library/wood-planks-weathered-01.png",
+        "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+        "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png"
+      },
       "materialVariants": {
         "standard": {
-          "label": "Weathered matte pigment, machined relief and cavity depth",
-          "textureStrength": 0,
+          "label": "Dawn Material V1 / matte weathered library",
+          "textureStrength": 1,
           "formShadowStrength": 0.83
         }
       },
@@ -6741,15 +7724,67 @@
       "production": "reference",
       "recipe": "dawn-scrap-heap",
       "model": {
-        "tier": 1
+        "tier": 1,
+        "librarySurfaces": {
+          "Salvage tier enamel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.16,
+            "value": 1.08,
+            "moss": 0.2
+          },
+          "Salvage secondary panels": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.35
+          },
+          "Salvage exposed alloy": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.22,
+            "edgewear": 0.25,
+            "tint": 0.66
+          },
+          "Salvage oily structural steel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Clinging forest moss": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "tint": 0.94,
+            "moss": 0.25
+          },
+          "Young fern leaf": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "tint": 0.94,
+            "moss": 0.15
+          }
+        }
       },
       "orthoScale": 2.64,
-      "textures": {},
-      "materialSource": "procedural",
+      "textures": {
+        "dawnPaint": "art/poc/dawn/textures/library/steel-rust-bare-02.png",
+        "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+        "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png",
+        "moss": "art/poc/dawn/textures/library/mask-moss-01.png"
+      },
       "materialVariants": {
         "standard": {
-          "label": "Weathered matte pigment, machined relief and cavity depth",
-          "textureStrength": 0,
+          "label": "Dawn Material V1 / matte weathered library",
+          "textureStrength": 1,
           "formShadowStrength": 0.83
         }
       },
@@ -6779,15 +7814,76 @@
       "production": "reference",
       "recipe": "dawn-scrap-heap",
       "model": {
-        "tier": 2
+        "tier": 2,
+        "librarySurfaces": {
+          "Salvage tier enamel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.48,
+            "value": 1.08
+          },
+          "Salvage secondary panels": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.35
+          },
+          "Salvage exposed alloy": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.22,
+            "edgewear": 0.25,
+            "tint": 0.66
+          },
+          "Salvage oily structural steel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Salvage warning ochre": {
+            "family": "yellow",
+            "scale": 0.42,
+            "grime": 0.12,
+            "edgewear": 0.12,
+            "saturation": 0.64,
+            "value": 0.94,
+            "tint": 0.28
+          },
+          "Clinging forest moss": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "tint": 0.94,
+            "moss": 0.25
+          },
+          "Young fern leaf": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "tint": 0.94,
+            "moss": 0.15
+          }
+        }
       },
       "orthoScale": 2.64,
-      "textures": {},
-      "materialSource": "procedural",
+      "textures": {
+        "dawnPaint": "art/poc/dawn/textures/library/steel-paint-olive-02.png",
+        "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+        "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png",
+        "moss": "art/poc/dawn/textures/library/mask-moss-01.png",
+        "yellow": "art/poc/dawn/textures/library/paint-industrial-yellow-01.png"
+      },
       "materialVariants": {
         "standard": {
-          "label": "Weathered matte pigment, machined relief and cavity depth",
-          "textureStrength": 0,
+          "label": "Dawn Material V1 / matte weathered library",
+          "textureStrength": 1,
           "formShadowStrength": 0.83
         }
       },
@@ -6817,15 +7913,66 @@
       "production": "reference",
       "recipe": "dawn-scrap-heap",
       "model": {
-        "tier": 3
+        "tier": 3,
+        "librarySurfaces": {
+          "Salvage tier enamel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.36,
+            "edgewear": 0.12,
+            "tint": 0.08,
+            "value": 0.88
+          },
+          "Salvage secondary panels": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.35
+          },
+          "Salvage exposed alloy": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.22,
+            "edgewear": 0.25,
+            "tint": 0.66
+          },
+          "Salvage oily structural steel": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.12,
+            "tint": 0.85
+          },
+          "Clinging forest moss": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "tint": 0.94,
+            "moss": 0.25
+          },
+          "Young fern leaf": {
+            "family": "dawnPaint",
+            "scale": 0.42,
+            "grime": 0.16,
+            "edgewear": 0.04,
+            "tint": 0.94,
+            "moss": 0.15
+          }
+        }
       },
       "orthoScale": 2.64,
-      "textures": {},
-      "materialSource": "procedural",
+      "textures": {
+        "dawnPaint": "art/poc/dawn/textures/library/alloy-offwhite-02.png",
+        "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+        "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png",
+        "moss": "art/poc/dawn/textures/library/mask-moss-01.png"
+      },
       "materialVariants": {
         "standard": {
-          "label": "Weathered matte pigment, machined relief and cavity depth",
-          "textureStrength": 0,
+          "label": "Dawn Material V1 / matte weathered library",
+          "textureStrength": 1,
           "formShadowStrength": 0.83
         }
       },

@@ -9,7 +9,9 @@ def linear(rgb):
     return tuple((v / 255 / 12.92 if v / 255 <= .04045 else ((v / 255 + .055) / 1.055) ** 2.4) for v in rgb)
 
 
-def surface(c, name, rgb, wear=.3, emission=0):
+def surface(c, name, rgb, wear=.3, emission=0, *, family=None, scale=.65,
+            saturation=1, value=1, tint=0, grime=.16, edgewear=.12, moss=0,
+            tintColor=None):
     """Pigment wear, interrupted abrasion and broad normal/mask shading.
 
     All texture is evaluated on geometry, in physical coordinates. No light,
@@ -56,6 +58,33 @@ def surface(c, name, rgb, wear=.3, emission=0):
     # Corrosion drips are irregular and strongly directional on the actual panels.
     streak=ramp(noise(23,(4,.24,1)),[(.4,0),(.61,0),(.75,.7)])
     pigment=mix(pigment,(*linear((78,51,30)),1),calc('MULTIPLY',streak,wear*.42))
+    if family:
+        mat['dawnLibrary'] = True
+        # Library pixels replace pigment only. Preserve the existing normal,
+        # FD_FormMask, cavity, bump, BSDF and emission branches below.
+        uv=n.new('ShaderNodeUVMap');uv.uv_map='FD_DawnMaterial'
+        mapping=n.new('ShaderNodeVectorMath');mapping.operation='SCALE'
+        mapping.inputs['Scale'].default_value=scale
+        l.new(uv.outputs['UV'],mapping.inputs[0])
+        def sample(key, mask=False):
+            image=c.images[key]
+            image.colorspace_settings.name='Non-Color' if mask else 'sRGB'
+            tex=n.new('ShaderNodeTexImage');tex.image=image
+            tex.name='Dawn library '+key;tex.extension='REPEAT';tex.interpolation='Linear'
+            l.new(mapping.outputs[0],tex.inputs['Vector'])
+            return tex.outputs['Color']
+        pigment=sample(family)
+        hsv=n.new('ShaderNodeHueSaturation');hsv.inputs['Saturation'].default_value=saturation
+        hsv.inputs['Value'].default_value=value;l.new(pigment,hsv.inputs['Color'])
+        pigment=mix(hsv.outputs['Color'],(*(linear(tintColor) if tintColor else color),1),tint)
+        pigment=mix(pigment,(*linear((37,33,26)),1),calc('MULTIPLY',sample('grime',True),grime))
+        # Distribution is texture-authored, not a claimed curvature bake.
+        pigment=mix(pigment,(*linear((132,127,108)),1),calc('MULTIPLY',sample('edgewear',True),edgewear))
+        if moss:
+            pigment=mix(pigment,(*linear((63,73,39)),1),calc('MULTIPLY',sample('moss',True),moss))
+        strength=n.new('ShaderNodeMixRGB');strength.name='Dawn library strength'
+        strength.inputs[1].default_value=(*color,1);l.new(pigment,strength.inputs[2])
+        c.strengths.append(strength.inputs[0]);pigment=strength.outputs[0]
     dot=n.new('ShaderNodeVectorMath');dot.operation='DOT_PRODUCT';dot.inputs[1].default_value=(-.58,.38,.72)
     l.new(geo.outputs['Normal'],dot.inputs[0])
     normal=ramp(dot.outputs['Value'],[(0,.20),(.4,.45),(.72,1.08),(.95,1.72)])
@@ -72,6 +101,14 @@ def surface(c, name, rgb, wear=.3, emission=0):
     return mat
 
 
+def material_factory(c, spec):
+    """Resolve explicit named material roles from the catalog, including shared palettes."""
+    def material(name, rgb, wear=.3, emission=0):
+        return surface(c, name, rgb, wear, emission,
+                       **spec['model'].get('librarySurfaces', {}).get(name, {}))
+    return material
+
+
 def root(c):
     ob = bpy.data.objects.new('Dawn fixed center pivot', None)
     c.scene.collection.objects.link(ob)
@@ -80,7 +117,15 @@ def root(c):
 
 def finish(c, pivot, parts=None):
     meshes = [ob for ob in c.scene.objects if ob.type == 'MESH']
+    c.scene.view_layers[0].update()
     for ob in meshes:
+        if c.images.get('dawnPaint'):
+            # Rest-space top projection in Blender units: one coarse scale across
+            # large panels and tiny fasteners, attached to vertices during motion.
+            uv=ob.data.uv_layers.new(name='FD_DawnMaterial')
+            for loop in ob.data.loops:
+                point=ob.matrix_world @ ob.data.vertices[loop.vertex_index].co
+                uv.data[loop.index].uv=(point.x+.31,point.y+.17)
         if ob.parent is None: ob.parent = pivot
         from weapon_surface_parts import paint_depth
         paint_depth(c,ob)
@@ -119,19 +164,20 @@ def hazards(c,center,width,height,yellow,dark):
         plate(c,'Black warning diagonal',(px,y,z+.012),[(0,-height/2),(.055,-height/2),(.115,height/2),(.06,height/2)],.006,dark,.002)
 
 
-def salvage_palette(c, tier):
+def salvage_palette(c, tier, spec=None):
     """Shared M3 tier pigments, kept independent of the accepted V1 recipes."""
+    material=material_factory(c, spec or {'model': {}})
     return dict(
-        paint=surface(c,'Salvage tier enamel',[(183,88,37),(72,80,42),(211,221,213)][tier-1],.62),
-        trim=surface(c,'Salvage secondary panels',[(110,64,35),(166,155,105),(65,76,79)][tier-1],.43),
-        edge=surface(c,'Salvage exposed alloy',[(171,158,126),(201,199,170),(225,233,226)][tier-1],.3),
-        dark=surface(c,'Salvage oily structural steel',(39,48,50),.18),
-        rubber=surface(c,'Split tire rubber',(41,46,41),.16),
-        tread=surface(c,'Worn rubber tread crowns',(91,95,79),.23),
-        warning=surface(c,'Salvage warning ochre',(228,179,55),.32),
-        cyan=surface(c,'Sparse service seam',(31,177,204),0,.32),
-        moss=surface(c,'Clinging forest moss',(79,103,31),.40),
-        leaf=surface(c,'Young fern leaf',(132,150,54),.22))
+        paint=material('Salvage tier enamel',[(183,88,37),(72,80,42),(211,221,213)][tier-1],.62),
+        trim=material('Salvage secondary panels',[(110,64,35),(166,155,105),(65,76,79)][tier-1],.43),
+        edge=material('Salvage exposed alloy',[(171,158,126),(201,199,170),(225,233,226)][tier-1],.3),
+        dark=material('Salvage oily structural steel',(39,48,50),.18),
+        rubber=material('Split tire rubber',(41,46,41),.16),
+        tread=material('Worn rubber tread crowns',(91,95,79),.23),
+        warning=material('Salvage warning ochre',(228,179,55),.32),
+        cyan=material('Sparse service seam',(31,177,204),0,.32),
+        moss=material('Clinging forest moss',(79,103,31),.40),
+        leaf=material('Young fern leaf',(132,150,54),.22))
 
 
 def group(c, name, objects, center=(0,0,0), rotation=(0,0,0)):
@@ -192,19 +238,21 @@ def tapered_tube(c,name,points,radii,mat,sides=12):
     return ob
 
 
-def supply_palette(c):
-    return dict(paint=surface(c,'Player rescue ochre',(224,164,38),.38),
-                brass=surface(c,'Warm worn brass fittings',(185,126,53),.30),
-                dark=surface(c,'Recessed cargo gasket',(35,43,43),.14),
-                canvas=surface(c,'Unbleached parachute canvas',(186,177,137),.28),
-                edge=surface(c,'Cargo handle wear',(223,197,128),.23))
+def supply_palette(c, spec=None):
+    material=material_factory(c, spec or {'model': {}})
+    return dict(paint=material('Player rescue ochre',(224,164,38),.38),
+                brass=material('Warm worn brass fittings',(185,126,53),.30),
+                dark=material('Recessed cargo gasket',(35,43,43),.14),
+                canvas=material('Unbleached parachute canvas',(186,177,137),.28),
+                edge=material('Cargo handle wear',(223,197,128),.23),
+                wood=material('Weathered delivery crate wood',(122,98,64),.35))
 
 
 def supply_crate(c, center, size, angle, p):
     """The same carryable assembly occurs loose and beside the supply capsule."""
     before=set(c.scene.objects)
     c.box('Cargo dark gasket',(0,0,.18),(.82,.69,.32),p['dark'],.07)
-    crown(c,'Embossed ochre cargo lid',(0,0,.31),.79,.66,.14,p['paint'])
+    crown(c,'Embossed ochre cargo lid',(0,0,.31),.79,.66,.14,p.get('wood',p['paint']))
     for x in (-.29,.29):
         c.box('Brass cargo reinforcement',(x,0,.465),(.10,.69,.045),p['brass'],.018)
         for y in (-.26,.26):bolt(c,x,y,.496,p['edge'],.026)

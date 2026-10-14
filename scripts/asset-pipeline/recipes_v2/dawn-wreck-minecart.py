@@ -1,13 +1,14 @@
 """Two separately derailed tubs straddling a short broken rail segment."""
 import math
 import random
-from dawn_parts import surface,root,finish,beam,bolt,plate,tube,annulus,crown,hazards,salvage_palette,vegetation,group
+from dawn_parts import material_factory,surface,root,finish,beam,bolt,plate,tube,annulus,crown,hazards,salvage_palette,vegetation,group
 
 
 def build(c,spec):
-    tier=int(spec['model']['tier']);p=salvage_palette(c,tier);pivot=root(c);rng=random.Random(830)
-    timber=surface(c,'Weathered railway sleeper',(92,73,48),.6)
-    ore=surface(c,'Dark angular ore',(74,80,77),.38)
+    material=material_factory(c,spec)
+    tier=int(spec['model']['tier']);p=salvage_palette(c,tier,spec);pivot=root(c);rng=random.Random(830)
+    timber=material('Weathered railway sleeper',(92,73,48),.6)
+    ore=material('Dark angular ore',(74,80,77),.38)
     for i in range(7):
         y=-1.35+i*.44
         ob=c.box('Splintered sleeper',(.07,y,.06),(1.04,.16,.13),timber,.025);ob.rotation_euler.z=.05*math.sin(i*2)

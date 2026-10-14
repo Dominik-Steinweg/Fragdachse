@@ -978,11 +978,11 @@
       "source": "assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.png",
       "width": 1568,
       "height": 392,
-      "sourceBytes": 439704,
-      "downloadBytes": 410302,
-      "sourceSha256": "b3c7ea5413a5dc16096f8c1f5be6aa92cd23c8c2b09bda63e33ff126434c012f",
-      "sha256": "c0ca8544c30f4e6a91b8f4f31d7433c2df183155f346f36846a09a76a377c09d",
-      "visiblePixelSha256": "a2be847dcd5e1380b9043aec07cb1cda053a8868510825b815a0a2e7bc09ce41",
+      "sourceBytes": 401240,
+      "downloadBytes": 340956,
+      "sourceSha256": "d3304af613430f636c37ffebec5a0578309366ed840c3c20bf0f9f63a4be276e",
+      "sha256": "0c32eddef8a3f0f08311d393912639b269f762d195788f2296f676a32d93e1f9",
+      "visiblePixelSha256": "a98a00c31c0bf3a60123aafd3c1f91d3ddf0c3775f9367ed79f8beb337620542",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     }
   }

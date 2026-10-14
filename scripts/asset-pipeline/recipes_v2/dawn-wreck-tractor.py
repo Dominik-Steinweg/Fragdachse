@@ -4,7 +4,7 @@ from dawn_parts import surface,root,finish,beam,bolt,plate,tube,annulus,crown,ha
 
 
 def build(c,spec):
-    tier=int(spec['model']['tier']);p=salvage_palette(c,tier);pivot=root(c)
+    tier=int(spec['model']['tier']);p=salvage_palette(c,tier,spec);pivot=root(c)
     # The farm machine lies on its flank: rear axle face visible, one front wheel gone.
     c.box('Bent central chassis',(-.05,.10,.28),(2.20,.73,.28),p['dark'],.09)
     beam(c,'Exposed rear axle',(.76,-.80),(.76,.85),.17,.39,p['dark'])

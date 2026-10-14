@@ -2,11 +2,12 @@
 import math
 import random
 import bpy
-from dawn_parts import surface,linear,root,finish,tube,annulus,tapered_tube,group,plate,bolt
+from dawn_parts import material_factory,surface,linear,root,finish,tube,annulus,tapered_tube,group,plate,bolt
 
 
 def damp(mat, roughness=.52):
     """Broken damp sheen under the shared soft lights, never hard plastic glints."""
+    if mat.get('dawnLibrary'): return mat
     n,l=mat.node_tree.nodes,mat.node_tree.links;bs=n['Principled BSDF']
     bs.inputs['Specular IOR Level'].default_value=.24
     bs.inputs['Coat Weight'].default_value=.12
@@ -31,18 +32,19 @@ def embryo_membrane(mat):
 
 
 def build(c,spec):
+    material=material_factory(c,spec)
     pivot=root(c);rng=random.Random(291)
-    purple=damp(surface(c,'Deep saturated bruised violet',(69,22,76),.19),.53)
-    fold=damp(surface(c,'Wet purple sinew',(113,38,94),.17),.49)
-    dark=surface(c,'Opaque brood throat',(20,11,27),.04)
-    bone=surface(c,'Splintered aged bone',(176,170,119),.37)
-    scar=surface(c,'Sinew binding on bone',(71,29,53),.20)
-    egg=embryo_membrane(damp(surface(c,'Thin translucent green membrane',(138,163,58),.16),.49))
-    vein=damp(surface(c,'Blood-filled branching veins',(68,64,31),.12),.53)
-    slime=damp(surface(c,'Stretched pale green mucus',(155,170,96),.08),.40)
-    embryo=surface(c,'Curled larva inside sac',(30,44,18),.05)
-    steel=surface(c,'Engulfed corroded metal',(103,91,71),.55)
-    rust=surface(c,'Old rust trapped in flesh',(137,67,33),.60)
+    purple=damp(material('Deep saturated bruised violet',(69,22,76),.19),.53)
+    fold=damp(material('Wet purple sinew',(113,38,94),.17),.49)
+    dark=material('Opaque brood throat',(20,11,27),.04)
+    bone=material('Splintered aged bone',(176,170,119),.37)
+    scar=material('Sinew binding on bone',(71,29,53),.20)
+    egg=embryo_membrane(damp(material('Thin translucent green membrane',(138,163,58),.16),.49))
+    vein=damp(material('Blood-filled branching veins',(68,64,31),.12),.53)
+    slime=damp(material('Stretched pale green mucus',(155,170,96),.08),.40)
+    embryo=material('Curled larva inside sac',(30,44,18),.05)
+    steel=material('Engulfed corroded metal',(103,91,71),.55)
+    rust=material('Old rust trapped in flesh',(137,67,33),.60)
     # Real irregular organic mass with open dark central throat, never a ground disc.
     for i in range(15):
         a=i*math.tau/15;r=1.01+rng.uniform(-.08,.08)
