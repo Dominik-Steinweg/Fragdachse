@@ -20,7 +20,8 @@
 // Fire control: required fc world slice and optional turretVisualId projectile static bit.
 // Dawn: coop program and round scrap keys, plan fields, grouped encounter announcements, commit
 // entitlements and the appended elite affix enemy snapshot field.
-export const PEER_PROTOCOL_VERSION = 32;
+// Fire control portals: portal deployments in the fc slice, portal throw payload and route.
+export const PEER_PROTOCOL_VERSION = 33;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';
