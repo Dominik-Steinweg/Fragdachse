@@ -1,13 +1,17 @@
 import type { TurretFireRoute } from '../TurretFireSource';
 
-/** Small positive gap between the real muzzle and the muzzle portal on the firing line. */
-export const FIRE_CONTROL_ENTRY_GAP_PX = 6;
+/**
+ * Real flight between the muzzle and its muzzle portal (D52): every turret shot, flames included,
+ * visibly flies this stretch into the portal and only then jumps to the exit.
+ */
+export const FIRE_CONTROL_ENTRY_GAP_PX = 48;
 
-/** Muzzle portal pose: directly in front of the real muzzle, following the barrel (§4.4). */
+/** Muzzle portal pose in front of the real muzzle, following the barrel (§4.4). */
 export function resolvePortalEntry(sourceX: number, sourceY: number, angle: number, muzzleOffset: number) {
   const dx = Math.cos(angle), dy = Math.sin(angle);
   const muzzleX = sourceX + dx * muzzleOffset, muzzleY = sourceY + dy * muzzleOffset;
-  return { muzzleX, muzzleY, entryX: muzzleX + dx * FIRE_CONTROL_ENTRY_GAP_PX, entryY: muzzleY + dy * FIRE_CONTROL_ENTRY_GAP_PX };
+  return { muzzleX, muzzleY,
+    entryX: muzzleX + dx * FIRE_CONTROL_ENTRY_GAP_PX, entryY: muzzleY + dy * FIRE_CONTROL_ENTRY_GAP_PX };
 }
 
 /**

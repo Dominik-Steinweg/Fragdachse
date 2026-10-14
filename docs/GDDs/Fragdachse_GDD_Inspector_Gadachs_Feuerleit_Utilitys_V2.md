@@ -324,7 +324,7 @@ Der Ort des Ausgangs bleibt fest. Pro Quelle läuft der Schuss so ab:
 2. Richtung Ausgang → Ziel berechnen.
 3. Das Rohr mit der normalen Drehgeschwindigkeit in diese Richtung führen. Es gibt keinen sofortigen,
    kostenlosen Richtungswechsel.
-4. Den Eingang unmittelbar vor der Mündung platzieren; er folgt dem Rohr.
+4. Den Eingang 48 px vor der Mündung platzieren; er folgt dem Rohr. Das Geschoss (auch Flammen) fliegt diese Strecke real, berührt dabei nichts, lenkt nicht und springt beim Erreichen des Eingangs zum Ausgang (D52).
 5. Bei erfüllter Zielausrichtung und Feuerbereitschaft schießen.
 6. Das Geschoss tritt am Ausgang mit derselben Flugrichtung aus, ohne Drehung oder Spiegelung.
 
@@ -568,6 +568,7 @@ Status:
 | D31 | 2026-10-13 | Bei Aktivierung eingefroren werden nur Utility-Werte (Dauer, Kopienzahl, Parallelbetrieb, Reichweite, Ring, Materialisierung, Cooldown); Turmwerte folgen live dem Original | Kopie ist eine Projektion; Turm-Upgrades wirken sofort | Default, an Gate kippbar |
 | D32 | 2026-10-13 | Activity-Ende, World-Wechsel und Besitzerentfernung räumen Einsätze und Nutzungszustand still (kein Ende-Callback, kein Cooldown); Tod, Respawn und Umrüstung beenden nichts | Kein Cooldown-Übertrag in die nächste Activity | Default, an Gate kippbar |
 | D42 | 2026-10-13 | Zwischenstand M1 bis P3.1: Turmkopien sind für den Inspektor gratis freigeschaltet und werden wie jede neue Freischaltung bis zur Werkzeugkapazität angehängt; HE bleibt bis P3.1 gratis im Standard-Loadout. Portale bleiben bis M2 gesperrt | Spielbar für G1 ohne vorgezogene Persistenz-Migration (Dawn-Abstimmung) | Entschieden an G1 (E20) |
+| D52 | 2026-10-14 | Echter Flug in das Mündungsportal: Eingang 48 px vor der Mündung, für alle Türme einschließlich Flammen; das Geschoss fliegt diese Strecke wirklich (auf Host und Clients sichtbar), ist dabei kollisions-, lenk- und reiseeffektfrei, hinterlässt keinen Brandboden und springt beim Erreichen des Eingangs; die Strecke zählt als Flug. Die Distanzgrenzen des Flammen-Renderers trennen den Strom am Sprung. Nur Flammen-Emitter (Feuerbälle) springen sofort, weil unterwegs ausgestoßene Flammen echte lokale Treffer wären. Zeitpunkt des Schluck-/Austritts-Flashs bleibt die Schussabgabe | Mechanik sichtbar statt Illusion (User-Wunsch); Strecke vorab per Sichtlinie geprüft | Entschieden (User) |
 
 ## 10 Abnahmeszenarien und Testzuordnung
 

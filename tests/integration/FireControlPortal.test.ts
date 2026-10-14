@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createFireControlProjectileFixture, createFireControlWorldFixture } from '../FireControlTestHelper';
 import { WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig';
+import { FIRE_CONTROL_ENTRY_GAP_PX } from '../../src/systems/fireControl/FireControlPortalRoute';
 import {
   fireControlContributionId, isFireControlCopySourceId, type FireControlPortalDeploymentSnapshot,
 } from '../../src/systems/fireControl/FireControlSnapshot';
@@ -25,6 +26,8 @@ describe('Ausführbarer Fixture-Baustein: automatische Waffe → Projektil-Route
       expect(f.spawn).toHaveBeenCalled();
       for (const [request] of f.spawn.mock.calls) expect(request.provenance.sourceTurretId).toBe('7');
       expect(f.projectiles.activeCount).toBe(f.spawn.mock.calls.length);
+      // D52: the shot reaches its entry (here at the muzzle) and jumps in the next portal stage.
+      f.projectiles.runHostPortalStage(f.now);
       for (const handle of f.physics.handles.values()) expect(handle.sprite).toMatchObject({ x: 500, y: 0 });
     } finally { f.destroy(); }
   });
@@ -72,11 +75,13 @@ describe('Ein Portal bleibt über mehrere Feuerzyklen offen; ein Turm trifft am 
         ownerId: 'inspector', exit });
       expect(shot.provenance.sourceTurretId).toBe(String(f.placement.getAllRuntimeRocks()[0].id));
     }
-    // Every transported shot starts at the exit (the jump itself is free), none at the source.
+    // D52: every transported shot really flies its muzzle stretch, then continues from the exit
+    // (the jump itself is free); none crosses the skipped distance.
+    f.projectile.advance(50);
     f.projectile.spawn.mock.calls.forEach(([request], index) => {
       if (!request.fireControlRoute) return;
       const sprite = f.projectile.physics.handles.get(f.projectile.spawn.mock.results[index].value as number)!.sprite;
-      expect(Math.hypot(sprite.x - exit.x, sprite.y - exit.y)).toBeLessThan(20);
+      expect(Math.hypot(sprite.x - exit.x, sprite.y - exit.y)).toBeLessThan(40);
     });
     expect(portalAt(4100)!.entries[0]).toMatchObject({ mode: 'portal', lastTransportAt: 4100 });
     expect(enemy.sprite.active).toBe(true);
@@ -100,10 +105,9 @@ describe('Ziele in verschiedenen Richtungen um den Ausgang führen zu passender 
     expect(last.origin.angle).toBeCloseTo(-Math.PI / 2, 1);
     const entry = portalAt(2000)!.entries[0];
     expect(entry.angle).toBeCloseTo(last.origin.angle, 6);
-    // Entry directly ahead of the real muzzle, on the shot's heading.
+    // Entry on the shot's heading, one real flight gap ahead of the muzzle (D52).
     const ahead = (entry.x - last.origin.x) * Math.cos(entry.angle) + (entry.y - last.origin.y) * Math.sin(entry.angle);
-    expect(ahead).toBeGreaterThan(0);
-    expect(ahead).toBeLessThan(12);
+    expect(ahead).toBeCloseTo(FIRE_CONTROL_ENTRY_GAP_PX, 5);
     expect(north.sprite.active).toBe(true);
   });
 });

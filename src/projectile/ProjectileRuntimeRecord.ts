@@ -36,6 +36,17 @@ export interface ProjectileRuntimeRecord {
   sourceCarrierBaseId?: string;
   portalGates?: PortalGates;
   portalFlightPending?: boolean;
+  /**
+   * Fire-control shot still flying from its muzzle to its muzzle portal. Fixed at fire time; the
+   * shot is intangible and unguided on this real stretch and jumps to the exit on reaching the
+   * entry. `entryDistance` is measured from the spawn point along the fire direction.
+   */
+  fireControlPending?: {
+    readonly route: import('./ProjectileSpawnRequest').ProjectileFireControlRoute;
+    readonly originX: number; readonly originY: number;
+    readonly dirX: number; readonly dirY: number;
+    readonly entryDistance: number;
+  };
   /** Confirmed pre-transfer segments, retained until the flight stage completes. */
   portalTravel?: ProjectileTravelSample[];
   /** Gameplay direction survives drag stopping the body; unrelated to visual spin. */

@@ -191,6 +191,8 @@ export function createFireControlProjectileFixture() {
         const x = handle.sprite.x + vx * deltaMs / 1000, y = handle.sprite.y + vy * deltaMs / 1000;
         handle.body.reset(x, y); physics.observe(id, x, y, vx, vy);
       }
+      // Host frame order: physics → portal stage (fire-control flights reach their entry) → flight.
+      projectiles.runHostPortalStage(now);
       return projectiles.runHostProjectileStage(deltaMs, now);
     },
     destroy() { projectiles.destroy(); execution.destroy(); },

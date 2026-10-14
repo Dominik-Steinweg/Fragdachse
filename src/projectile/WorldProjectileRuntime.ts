@@ -446,7 +446,9 @@ export class WorldProjectileRuntime implements
       sweepRocks: (projectile, rangeBeforeStep) => this.sweepRocks(projectile, rangeBeforeStep),
       updateHoming: (projectile, simulatedAgeMs) => { this.updateProjectileHoming(projectile, simulatedAgeMs); },
       onImpact: (projectile, x, y) => this.projectileImpactEventCallback?.(this.createImpactSource(projectile, x, y)),
-      onNaturalFlameExpiry: (projectile) => this.naturalFlameExpiryCallback?.({ ...this.createImpactSource(projectile), flameExpiryGround: projectile.flameExpiryGround }),
+      // A flame that dies on its way into its muzzle portal leaves no burning ground at the turret (D52).
+      onNaturalFlameExpiry: (projectile) => this.naturalFlameExpiryCallback?.({ ...this.createImpactSource(projectile),
+        flameExpiryGround: projectile.fireControlPending ? undefined : projectile.flameExpiryGround }),
       onProximityPulse: (projectile) => this.proximityPulseCallback?.(this.createImpactSource(projectile)),
       onSpentDestruction: (projectile) => this.miniRocketDestroyedCallback?.(this.createImpactSource(projectile)),
     };
@@ -931,7 +933,9 @@ export class WorldProjectileRuntime implements
   private shouldSweepRocks(projectile: ProjectileRuntimeRecord): boolean {
     return usesRockSweep(projectile.spec.flight)
       && !projectile.pendingDestroy
-      && !projectile.bounceProcessedThisStep;
+      && !projectile.bounceProcessedThisStep
+      // The muzzle → entry stretch was checked for line of fire at fire time (D52).
+      && !projectile.fireControlPending;
   }
 
   private sweepRocks(projectile: ProjectileRuntimeRecord, rangeBeforeStep?: number): void {
@@ -1466,7 +1470,13 @@ export class WorldProjectileRuntime implements
     );
     const record = this.projectiles.getById(id)!;
     record.flameExpiryGround = request.flameExpiryGround;
-    if (route) this.applyFireControlRoute(record, route, origin.angle);
+    if (route) {
+      // Shots, flames included, really fly to their muzzle portal and jump in the host portal stage
+      // (D52); the flame renderer's link/bridge distance limits already cut the stream at the jump.
+      // Flame emitters jump at once: flames emitted on the real stretch would be real local hits.
+      if (request.flameEmission) this.applyFireControlRoute(record, route, origin.angle);
+      else this.beginFireControlFlight(record, route, origin.angle);
+    }
     const emission = request.flameEmission;
     if (emission && emission.intervalMs > 0 && Number.isFinite(emission.intervalMs)) {
       record.flameEmission = { spec: emission, startAngle: origin.angle, nextAtMs: emission.intervalMs };
@@ -1486,6 +1496,34 @@ export class WorldProjectileRuntime implements
     const exit = { x: route.exit.x + crossing.x - route.entry.x, y: route.exit.y + crossing.y - route.entry.y };
     this.transferThroughPortal(record, crossing, exit, crossing, prefixLength, acquirePortalDamageContribution(
       record.provenance.portalDamage, { pairId: route.contributionId, bonus: route.damageBonus }), record.createdAt);
+  }
+
+  private beginFireControlFlight(record: ProjectileRuntimeRecord, route: ProjectileFireControlRoute, angle: number): void {
+    const dirX = Math.cos(angle), dirY = Math.sin(angle);
+    const entryDistance = Math.max(0, (route.entry.x - record.lastX) * dirX + (route.entry.y - record.lastY) * dirY);
+    record.fireControlPending = { route, originX: record.lastX, originY: record.lastY, dirX, dirY, entryDistance };
+  }
+
+  /**
+   * Completes fire-control flights whose shot reached its muzzle portal this step: the real
+   * stretch up to the entry counts as flight, the rest of the step continues from the exit.
+   * Runs before Translocator portals and every interaction, so the shot never touches anything
+   * on its way into its own portal.
+   */
+  private resolveFireControlFlights(nowMs: number): void {
+    for (const record of this.projectiles.activeRecords) {
+      const pending = record.fireControlPending;
+      if (!pending || record.pendingDestroy) continue;
+      const end = { x: record.physics.sprite.x, y: record.physics.sprite.y };
+      const along = (end.x - pending.originX) * pending.dirX + (end.y - pending.originY) * pending.dirY;
+      if (along < pending.entryDistance) continue;
+      record.fireControlPending = undefined;
+      const lastAlong = (record.lastX - pending.originX) * pending.dirX + (record.lastY - pending.originY) * pending.dirY;
+      const prefixLength = Math.max(0, pending.entryDistance - lastAlong);
+      const { route } = pending;
+      this.transferThroughPortal(record, route.entry, route.exit, end, prefixLength, acquirePortalDamageContribution(
+        record.provenance.portalDamage, { pairId: route.contributionId, bonus: route.damageBonus }), nowMs);
+    }
   }
 
   private emitFireballFlame(parent: ProjectileRuntimeRecord, ageMs: number, x: number, y: number, provenance = parent.provenance): void {
@@ -1937,6 +1975,8 @@ export class WorldProjectileRuntime implements
     for (const projectileId of this.travelEffectIds) {
       const record = this.projectiles.getById(projectileId);
       if (!record || record.pendingDestroy || !this.projectiles.activeRecords.has(record) || !record.physics.sprite.active) continue;
+      // The muzzle → entry stretch of a fire-control shot has no travel effects (D52).
+      if (record.fireControlPending) continue;
 
       const pathEffect = createTravelPathEffect(record);
       if (record.portalTravel) this.travelSamples.push(...record.portalTravel);
@@ -2111,9 +2151,13 @@ export class WorldProjectileRuntime implements
 
   setPortalQueryPort(port: PortalQueryPort | null): void {
     this.portalQuery = port;
-    this.physicsBinding.setContactFilter?.(port ? (id, x, y) => {
+    // Installed with and without Translocator pairs: fire-control shots on their real muzzle →
+    // entry stretch never make physical contact (D52).
+    this.physicsBinding.setContactFilter?.((id, x, y) => {
       const record = this.projectiles.getById(id);
       if (!record || record.pendingDestroy) return true;
+      if (record.fireControlPending) return false;
+      if (!port) return true;
       const from = { x: record.lastX, y: record.lastY };
       const crossing = findPortalCrossing(port.getPortalPairs(), from, { x, y }, { gates: record.portalGates });
       if (!crossing) return true;
@@ -2129,7 +2173,7 @@ export class WorldProjectileRuntime implements
       return this.physicsBinding.findNearestPortalWorldSweep?.(from.x, from.y,
         crossing.entry.x, crossing.entry.y, record.physics.body.halfWidth, record.physics.body.halfHeight,
         shouldPassThroughWorldTarget(record)) != null;
-    } : null);
+    });
   }
 
   private resolvePortalWorldContact(record: ProjectileRuntimeRecord,
@@ -2157,6 +2201,7 @@ export class WorldProjectileRuntime implements
 
   /** Resolve real prefixes before any travel consumer sees the post-Physics movement. */
   runHostPortalStage(nowMs: number, prepareTravel?: (sample: ProjectileTravelSample) => void): void {
+    if (!this.destroyed) this.resolveFireControlFlights(nowMs);
     this.collisionProcessor.withTargetSnapshot(() => this.resolveHostPortals(nowMs, prepareTravel));
   }
 
@@ -2166,7 +2211,8 @@ export class WorldProjectileRuntime implements
     if (!pairs?.length) return;
     this.setHostFrameTime(nowMs);
     for (const record of this.projectiles.activeRecords) {
-      if (record.pendingDestroy || record.pendingExplosion || record.miniRocket.deferredExplosion) continue;
+      if (record.pendingDestroy || record.pendingExplosion || record.miniRocket.deferredExplosion
+        || record.fireControlPending) continue;
       clipProjectileDistanceStep(record);
       const gates = record.portalGates ??= new Map();
       let from = { x: record.lastX, y: record.lastY };
@@ -2364,7 +2410,7 @@ export class WorldProjectileRuntime implements
     this.captureDebugFlightSteps('before-interaction');
     try {
       if (this.bubbleChargePort) for (const record of this.projectiles.activeRecords) {
-        if (record.pendingDestroy) continue;
+        if (record.pendingDestroy || record.fireControlPending) continue;
         const { x, y } = record.physics.sprite;
         this.bubbleChargePort.observeProjectile(record.id, x, y, record.damage, nowMs);
       }
@@ -2374,7 +2420,7 @@ export class WorldProjectileRuntime implements
       // receive the same physical contact before overlaps can hit a figure behind a gate.
       for (const record of this.projectiles.activeRecords) {
         if (record.pendingDestroy || record.bounceProcessedThisStep || this.shouldSweepRocks(record)
-          || shouldPassThroughWorldTarget(record)) continue;
+          || shouldPassThroughWorldTarget(record) || record.fireControlPending) continue;
         const hit = this.physicsBinding.findNearestRockSweep(record.lastX, record.lastY,
           record.physics.sprite.x, record.physics.sprite.y, undefined,
           record.physics.body.width / 2, record.physics.body.height / 2, record.id, false,
@@ -2477,7 +2523,7 @@ export class WorldProjectileRuntime implements
     const port = this.barrierPort;
     if (!port) return;
     for (const record of records) {
-      if (record.pendingDestroy) continue;
+      if (record.pendingDestroy || record.fireControlPending) continue;
       // Geworfene Utilities passieren; nur übernehmbare Wurfgeschosse hält die Barriere auf.
       const capturable = record.spec.interaction.grenadeEffect?.type === 'spawn_enemy';
       if (record.spec.flight.isGrenade && !capturable) continue;
@@ -2554,7 +2600,7 @@ export class WorldProjectileRuntime implements
   private runDeflectionStage(nowMs: number): void {
     if (this.deflectorIds.size === 0) return;
     for (const target of this.projectiles.activeRecords) {
-      if (target.pendingDestroy) continue;
+      if (target.pendingDestroy || target.fireControlPending) continue;
       if (target.spec.interaction.impulse.leafBlowerDeflectsProjectiles === true) continue;
       // Geworfene Utilities fliegen weiter; nur echte Geschosse werden umgelenkt.
       if (target.spec.flight.isGrenade) continue;
@@ -2764,6 +2810,8 @@ export class WorldProjectileRuntime implements
     simulatedAgeMs: number,
     forceSearch = false,
   ): boolean {
+    // A shot flying into its muzzle portal keeps its fired heading; homing starts after the exit.
+    if (projectile.fireControlPending) return false;
     const foundTarget = this.homingController.update(
       this.createHomingRequest(projectile),
       simulatedAgeMs,
