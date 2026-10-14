@@ -2862,6 +2862,7 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:adrenalineEssence/AdrenalineEssenceGpuRenderer.ts:module/this.glow/setDepth/0","owner":"adrenalineEssence/AdrenalineEssenceGpuRenderer.ts","component":"module/this.glow/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[9.39],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.glow/setDepth/0","expression":"GLOW_DEPTH"}},
   {"id":"cpu:adrenalineEssence/AdrenalineEssenceGpuRenderer.ts:module/this.body/setDepth/0","owner":"adrenalineEssence/AdrenalineEssenceGpuRenderer.ts","component":"module/this.body/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9.4],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.body/setDepth/0","expression":"BODY_DEPTH"}},
   {"id":"cpu:arena/BaseAccentGlowRenderer.ts:module/overlay/setDepth/0","owner":"arena/BaseAccentGlowRenderer.ts","component":"module/overlay/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[4.04,4.05],"blends":["ADD"],"profiles":["G"],"role":"effect","source":{"selector":"module/overlay/setDepth/0","expression":"source.depth + depth"}},
+  {"id":"cpu:effects/AirstrikeRenderer.ts:updateFlyover/shadow/setDepth/0","owner":"effects/AirstrikeRenderer.ts","component":"updateFlyover/shadow/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[19.55],"blends":["NORMAL"],"profiles":["E"],"role":"effect","source":{"selector":"updateFlyover/shadow/setDepth/0","expression":"DEPTH_LIGHTING + 0.05"}},
   {"id":"cpu:effects/AirstrikeRenderer.ts:createVisual/warningFill/setDepth/0","owner":"effects/AirstrikeRenderer.ts","component":"createVisual/warningFill/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[19],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/warningFill/setDepth/0","expression":"DEPTH.CANOPY - 1"}},
   {"id":"cpu:effects/AirstrikeRenderer.ts:createVisual/warningRing/setDepth/0","owner":"effects/AirstrikeRenderer.ts","component":"createVisual/warningRing/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[20],"blends":["ADD"],"profiles":["E","H"],"role":"effect","source":{"selector":"createVisual/warningRing/setDepth/0","expression":"DEPTH.CANOPY"}},
   {"id":"cpu:effects/AirstrikeRenderer.ts:createVisual/innerRing/setDepth/0","owner":"effects/AirstrikeRenderer.ts","component":"createVisual/innerRing/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[9],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"createVisual/innerRing/setDepth/0","expression":"DEPTH.PLAYERS - 1"}},
@@ -3515,6 +3516,13 @@ export const CPU_SOURCE_CONTRACTS = {
     ],
     "cameras": [],
     "sites": [
+      {
+        "key": "updateFlyover/shadow/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.05",
+        "blends": [
+          "NORMAL"
+        ]
+      },
       {
         "key": "createVisual/warningFill/setDepth/0",
         "expression": "DEPTH.CANOPY - 1",

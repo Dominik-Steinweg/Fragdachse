@@ -9,6 +9,8 @@ export interface DawnNightModifier {
   readonly nightBudgetMultiplier: number;
   readonly enemyWeightMultipliers: Readonly<Record<string, number>>;
   readonly fogStrength?: number;
+  /** RGB multiplier for the existing ground fog this night (reddish haze, cool slate); absent = neutral. */
+  readonly fogTint?: readonly [number, number, number];
   readonly additionalBlocks?: readonly string[];
   readonly airstrikes?: { readonly intervalMs: number; readonly strikeCount: number; readonly endClearanceMs: number; readonly radiusCells: number };
 }
@@ -34,6 +36,8 @@ export function validateDawnNightModifiers(raw: unknown, blocks: readonly DawnWa
       return fail(`${entry.id}: invalid enemy weight multipliers`);
     }
     if (entry.fogStrength !== undefined && (!positive(entry.fogStrength) || entry.fogStrength > 2)) return fail('fogStrength must be in (0, 2]');
+    if (entry.fogTint !== undefined && (!Array.isArray(entry.fogTint) || entry.fogTint.length !== 3
+      || entry.fogTint.some(channel => !Number.isFinite(channel) || channel < 0 || channel > 1.25))) return fail(`${entry.id}: fogTint needs three channels in [0, 1.25]`);
     if (entry.additionalBlocks !== undefined && (!Array.isArray(entry.additionalBlocks) || entry.additionalBlocks.length === 0
       || new Set(entry.additionalBlocks).size !== entry.additionalBlocks.length
       || entry.additionalBlocks.some(id => !blocks.some(block => block.id === id)))) return fail('unknown or duplicate additional block');

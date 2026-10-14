@@ -214,6 +214,7 @@ uniform vec3 uCompositeShade,uCompositeDaylight,uCompositeSun;
 uniform vec3 uSunFogShade,uSunFogLit;
 uniform float uSunFogOpacity,uSunFogShadeOpacity;
 uniform float uFogBankMetadata;
+uniform vec3 uFogTint;
 ${FOG_VISIBILITY_BUDGET_GLSL}
 uniform float uSceneSun;
 ${SUN_VISIBILITY_GLSL}
@@ -285,6 +286,8 @@ vec4 lightFog(vec4 fog,vec2 world) {
    radiance*=min(1.0,ceiling/max(.0001,peak));
    fog.rgb=clamp(radiance+grain,vec3(0),vec3(ceiling))/fogComposite;
  }
+ // Activity tint (Dawn night modifiers): colour of the same fog, never its coverage.
+ fog.rgb*=uFogTint;
  return fog;
 }
 `;

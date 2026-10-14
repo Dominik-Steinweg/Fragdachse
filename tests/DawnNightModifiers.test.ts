@@ -115,3 +115,25 @@ describe('Dawn night modifiers', () => {
     expect(() => parseScenario({ ...recipe, dawn: { threat: 3, nightModifier: 'typo' } })).toThrow('nightModifier');
   });
 });
+
+describe('Dawn night modifier fog (D-43)', () => {
+  it('colours the existing ground fog at night only, never through a screen overlay', () => {
+    const plans = composeDawnRoundPlans({ seed: 3, threat: 6, dayNumber: 1, nightModifier: 'blood-moon' });
+    const schedule = getDawnSchedule(plans.activity.scheduleId);
+    const night = getDawnPhaseStartMs(schedule, 'night') + 1000;
+    expect(resolveDawnNightEnvironment(plans.activity, night)?.fogTint).toEqual(getDawnNightModifier('blood-moon').fogTint);
+    expect(resolveDawnNightEnvironment(plans.activity, getDawnPhaseStartMs(schedule, 'night') - 1000)).toBeNull();
+    const fog = getDawnNightModifier('fog');
+    expect(fog.fogStrength).toBeGreaterThan(1);
+    for (const tint of [getDawnNightModifier('blood-moon').fogTint!, fog.fogTint!]) {
+      expect(tint.every(channel => channel >= 0 && channel <= 1.25)).toBe(true);
+    }
+  });
+
+  it('rejects malformed fog tints', () => {
+    const blocks = getDawnWaveBlocks();
+    const broken = structuredClone(raw) as { modifiers: { fogTint?: unknown }[] };
+    broken.modifiers[0].fogTint = [1, 2, 1];
+    expect(() => validateDawnNightModifiers(broken, blocks)).toThrow(/fogTint/);
+  });
+});

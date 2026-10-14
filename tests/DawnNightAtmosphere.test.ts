@@ -10,11 +10,10 @@ describe('Dawn night modifier atmosphere', () => {
       const style = NIGHT_MODIFIER_ATMOSPHERE.styles[id];
       expect(style.lut, id).toBe(id);
       expect(preloaded.has(DAWN_NIGHT_TEXTURES.lut(style.lut)), id).toBe(true);
-      // Haze tiles span several screens so the periodic field never reads as a pattern.
-      expect(style.haze[1], id).toBeGreaterThanOrEqual(2400);
-      expect(style.lutAmount, id).toBeLessThanOrEqual(1);
+      // Subtle mood only (D-43): the LUT never fully replaces the lit image.
+      expect(style.lutAmount, id).toBeLessThanOrEqual(0.7);
     }
-    for (const key of [DAWN_NIGHT_TEXTURES.cloud, DAWN_NIGHT_TEXTURES.smoke, DAWN_NIGHT_TEXTURES.ember, DAWN_NIGHT_TEXTURES.edge]) {
+    for (const key of [DAWN_NIGHT_TEXTURES.ember, DAWN_NIGHT_TEXTURES.edge]) {
       expect(preloaded.has(key), key).toBe(true);
     }
   });

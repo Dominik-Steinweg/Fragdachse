@@ -4,27 +4,21 @@ import { DAWN_NIGHT_TEXTURES, type DawnNightFilterParams } from './DawnNightAtmo
 const NODE = 'FilterDawnNight';
 
 /**
- * One screen pass over the lit world (camera output, below the clarity HUD):
- * LUT grade (sRGB codes, 16 slices of 16x16), a slowly drifting haze sampled in WORLD space
- * so it stays put under the camera, optional smoke darkening and rising embers, and an
- * organic screen-edge tint. Black stays black: the haze only lifts where its density is.
+ * One grade pass over the finished world image (camera output, below the clarity HUD): subtle LUT
+ * (sRGB codes, 16 slices of 16x16), organic screen-edge tint and, for fire, embers rising in world
+ * space. It adds no fog: the ground fog is composited once by its owner and only graded here.
  */
 const FRAGMENT = /* glsl */ `
 #pragma phaserTemplate(shaderName)
 precision mediump float;
 uniform sampler2D uMainSampler;
 uniform sampler2D uLut;
-uniform sampler2D uCloud;
-uniform sampler2D uSmoke;
 uniform sampler2D uEmber;
 uniform sampler2D uEdge;
 uniform vec4 uView;
 uniform float uTime;
 uniform float uStrength;
 uniform float uLutAmount;
-uniform vec4 uHaze;
-uniform vec3 uHazeColor;
-uniform float uSmokeAmount;
 uniform vec4 uEmbers;
 uniform vec3 uEmberColor;
 uniform vec4 uEdgeColor;
@@ -46,18 +40,6 @@ void main() {
   vec3 c = base.rgb;
   vec2 world = vec2(uView.x + outTexCoord.x * uView.z, uView.y + (1.0 - outTexCoord.y) * uView.w);
   vec3 result = mix(c, grade(c), uLutAmount);
-  if (uHaze.x > 0.0) {
-    // Two scales of the same periodic field, drifting apart: large soft banks, no visible tile.
-    vec2 drift = vec2(1.0, 0.35) * uHaze.w * uTime;
-    float a = texture2D(uCloud, (world + drift) / uHaze.y).r;
-    float b = texture2D(uCloud, (world - drift * 0.6) / (uHaze.y * 0.43) + vec2(0.37, 0.11)).r;
-    float density = smoothstep(uHaze.z, uHaze.z + 0.55, a * 0.65 + b * 0.35);
-    result = mix(result, uHazeColor, density * uHaze.x);
-  }
-  if (uSmokeAmount > 0.0) {
-    float s = texture2D(uSmoke, (world + vec2(18.0, -6.0) * uTime) / 900.0).r;
-    result *= 1.0 - s * uSmokeAmount;
-  }
   float edge = texture2D(uEdge, outTexCoord).r;
   if (uEmbers.x > 0.0) {
     vec2 at = (world + vec2(6.0 * sin(uTime * 0.7), uEmbers.z * uTime)) / uEmbers.y;
@@ -79,10 +61,8 @@ export function createDawnNightFilter(camera: Phaser.Cameras.Scene2D.Camera) {
   const renderer = scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
   ensureNode(renderer);
   const glTexture = (key: string) => scene.textures.exists(key) ? scene.textures.get(key).source[0].glTexture : null;
-  for (const key of [DAWN_NIGHT_TEXTURES.cloud, DAWN_NIGHT_TEXTURES.smoke, DAWN_NIGHT_TEXTURES.ember]) {
-    if (scene.textures.exists(key)) {
-      scene.textures.get(key).source[0].setWrap(Phaser.Textures.WrapMode.REPEAT, Phaser.Textures.WrapMode.REPEAT);
-    }
+  if (scene.textures.exists(DAWN_NIGHT_TEXTURES.ember)) {
+    scene.textures.get(DAWN_NIGHT_TEXTURES.ember).source[0].setWrap(Phaser.Textures.WrapMode.REPEAT, Phaser.Textures.WrapMode.REPEAT);
   }
   class DawnNightFilter extends Phaser.Filters.Controller {
     params: DawnNightFilterParams | null = null;
@@ -90,8 +70,8 @@ export function createDawnNightFilter(camera: Phaser.Cameras.Scene2D.Camera) {
     time = 0;
     constructor() { super(camera, NODE); }
     textures(): (Phaser.Renderer.WebGL.Wrappers.WebGLTextureWrapper | null)[] {
-      return [glTexture(DAWN_NIGHT_TEXTURES.lut(this.params?.lut ?? 'identity')), glTexture(DAWN_NIGHT_TEXTURES.cloud),
-        glTexture(DAWN_NIGHT_TEXTURES.smoke), glTexture(DAWN_NIGHT_TEXTURES.ember), glTexture(DAWN_NIGHT_TEXTURES.edge)];
+      return [glTexture(DAWN_NIGHT_TEXTURES.lut(this.params?.lut ?? 'identity')), glTexture(DAWN_NIGHT_TEXTURES.ember),
+        glTexture(DAWN_NIGHT_TEXTURES.edge)];
     }
     /** All art present: missing art keeps the pass off instead of sampling an unbound unit. */
     ready(): boolean { return this.textures().every(Boolean); }
@@ -111,14 +91,11 @@ function ensureNode(renderer: Phaser.Renderer.WebGL.WebGLRenderer): void {
     override setupUniforms(controller: Phaser.Filters.Controller): void {
       const filter = controller as DawnNightFilter, p = filter.params!, program = this.programManager;
       const view = filter.camera.worldView;
-      ['uLut', 'uCloud', 'uSmoke', 'uEmber', 'uEdge'].forEach((name, index) => program.setUniform(name, index + 1));
+      ['uLut', 'uEmber', 'uEdge'].forEach((name, index) => program.setUniform(name, index + 1));
       program.setUniform('uView', [view.x, view.y, view.width, view.height]);
       program.setUniform('uTime', filter.time);
       program.setUniform('uStrength', filter.strength);
       program.setUniform('uLutAmount', p.lutAmount);
-      program.setUniform('uHaze', [...p.haze]);
-      program.setUniform('uHazeColor', rgb(p.hazeColor));
-      program.setUniform('uSmokeAmount', p.smoke);
       program.setUniform('uEmbers', [...p.embers]);
       program.setUniform('uEmberColor', rgb(p.emberColor));
       program.setUniform('uEdgeColor', [...rgb(p.edgeColor), p.edgeAmount]);

@@ -8,7 +8,7 @@ export function resolveDawnNightEnvironment(plan: DawnActivityPlan | undefined, 
   if (!plan?.nightModifierId || elapsedMs < 0 || !Number.isFinite(elapsedMs)) return null;
   if (resolveDawnPhase(getDawnSchedule(plan.scheduleId), elapsedMs).phase !== 'night') return null;
   const modifier = getDawnNightModifier(plan.nightModifierId);
-  return { modifierId: modifier.id, fogStrength: modifier.fogStrength };
+  return { modifierId: modifier.id, fogStrength: modifier.fogStrength, fogTint: modifier.fogTint };
 }
 
 /** Existing timed airstrikes and enemy blocks: no new damage, HP or snapshot rules. */

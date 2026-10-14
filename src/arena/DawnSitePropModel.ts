@@ -184,7 +184,8 @@ export function resolveDawnSitePropVisual(
   if (archetypeId === 'supply') return { textureKey: DAWN_M3_ASSET_KEYS.supplyCapsule, animationKey: null };
   if (archetypeId === 'scrap-heaps' || archetypeId === 'scavenger') {
     if (objectiveState === 'completed' || !Number.isInteger(tier) || tier < 1 || tier > DAWN_MAX_SITE_TIER) return null;
-    return { textureKey: DAWN_M3_ASSET_KEYS.scrapHeap(tier), animationKey: null, displaySize: DAWN_HEAP_DISPLAY_SIZE };
+    const textureKey = archetypeId === 'scavenger' ? DAWN_M3_ASSET_KEYS.scavengerCamp(tier) : DAWN_M3_ASSET_KEYS.scrapHeap(tier);
+    return { textureKey, animationKey: null, displaySize: DAWN_HEAP_DISPLAY_SIZE };
   }
   if (archetypeId !== 'extractor') return null;
   if (objectiveState === 'active' || objectiveState === 'completed') {

@@ -22,7 +22,7 @@ export const DAWN_BROOD_NEST_ANIMATION = 'construction_dawn_broodnest_sheet_idle
 export const DAWN_SITE_DISPLAY_SIZE = 96;
 /** Scrap heaps and scavenger camps stand on 2x2 cells. */
 export const DAWN_HEAP_DISPLAY_SIZE = 68;
-export const DAWN_SUPPLY_CRATE_DISPLAY_SIZE = 30;
+export const DAWN_SUPPLY_CRATE_DISPLAY_SIZE = 28;
 export const DAWN_SCRAP_DISPLAY_SIZE = 24;
 
 /** Uses the existing construction pipeline's sheet loading and clip registration. */
@@ -30,7 +30,8 @@ export const DAWN_PIPELINE_ASSETS = [
   ...DAWN_WRECK_VARIANTS.flatMap(variant => [1, 2, 3].map(tier => DAWN_M3_ASSET_KEYS.wreckVariant(variant, tier))),
   DAWN_EXTRACTOR_KEY, ...Object.values(DAWN_SCRAP_KEYS),
   DAWN_M3_ASSET_KEYS.broodNest, DAWN_M3_ASSET_KEYS.supplyCapsule, DAWN_M3_ASSET_KEYS.supplyCrate,
-  ...[1, 2, 3].map(DAWN_M3_ASSET_KEYS.scrapHeap),
+  DAWN_M3_ASSET_KEYS.supplyCrateCarried,
+  ...[1, 2, 3].map(DAWN_M3_ASSET_KEYS.scrapHeap), ...[1, 2, 3].map(DAWN_M3_ASSET_KEYS.scavengerCamp),
 ].map(getPipelineAsset);
 
 /** Ground decals under the site props (Art Direction V1, lossless 512 px runtime exports). */
@@ -48,7 +49,7 @@ export function preloadDawnDecalAssets(loader: Pick<Phaser.Loader.LoaderPlugin, 
 
 /** Night modifier atmosphere art (keys equal file stems, `public/assets/sprites/dawn-night/manifest.json`). */
 export const DAWN_NIGHT_ASSET_FILES = [
-  'dawn-night-noise-cloud-512', 'dawn-night-noise-smoke-512', 'dawn-night-ember-mask-512', 'dawn-night-edge-mask-1920x1080',
+  'dawn-night-ember-mask-512', 'dawn-night-edge-mask-1920x1080',
   'dawn-night-lut-identity-256x16', 'dawn-night-lut-blood-moon-256x16', 'dawn-night-lut-fog-256x16',
   'dawn-night-lut-bombers-256x16', 'dawn-night-lut-fire-256x16', 'dawn-night-bomber-shadow-256x128',
 ] as const;

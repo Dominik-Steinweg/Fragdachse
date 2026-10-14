@@ -33,6 +33,7 @@ export class DawnHUD {
   private metrics: WorldMetrics | null = null;
   private sites: readonly DawnSiteMarker[] = [];
   private markers: readonly MarkerDescriptor[] = [];
+  private activeModifier: string | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.atmosphere = new NightModifierAtmosphere(scene);
@@ -72,6 +73,7 @@ export class DawnHUD {
       sharedScrap: input.sharedScrap, threat: plan.threat, dayNumber: plan.dayNumber, sites: this.sites, objectives: input.objectives,
       clockMinutes: input.clockMinutes, nightModifierId: plan.nightModifierId });
     this.atmosphere.sync(model.nightModifier?.id, model.phase, input.now - input.startTime);
+    this.activeModifier = model.nightModifier?.id ?? null;
     const modifierLabel = model.nightModifier ? t(model.nightModifier.nameKey) : '';
     const label = t(`ui.dawn.phase.${model.phase}`);
     const kicker = t('ui.dawn.dayThreat', { day: model.dayNumber, threat: model.threat });
@@ -112,6 +114,9 @@ export class DawnHUD {
       clock: { nowMs: this.scene.time.now, elapsedMs: input.now - input.startTime } });
   }
 
+  /** Night modifier shown this phase (dusk/night), null otherwise. */
+  getActiveNightModifier(): string | null { return this.activeModifier; }
+
   /** Marker candidates of the last sync; empty outside an active Dawn round. */
   getMarkerDescriptors(): readonly MarkerDescriptor[] { return this.markers; }
 
@@ -133,6 +138,7 @@ export class DawnHUD {
 
   private clear(): void {
     this.markers = [];
+    this.activeModifier = null;
     this.card.root.setVisible(false);
     this.atmosphere.clear();
     this.modifierIcon?.setVisible(false);

@@ -170,6 +170,8 @@ export interface WorldPresentationFrameBindingInput {
     readonly getSystem: () => GroundFogSystem | null;
     /** Activity overlay; undefined restores the borrowed World strength. */
     readonly getActivityStrength?: () => number | undefined;
+    /** Activity colour of the same fog; undefined = neutral. */
+    readonly getActivityTint?: () => readonly [number, number, number] | undefined;
     readonly getBases: () => BaseManager | null;
     readonly getProjectiles: () => ProjectilePresentationRuntime | null;
     readonly effects: Pick<EffectSystem, 'bindGroundFogExplosion' | 'bindGroundFogCombat'>;
@@ -571,6 +573,7 @@ export class WorldPresentationFrameBinding {
   private activityFogBaseline: { fog: GroundFogSystem; strength: number } | null = null;
 
   private syncActivityFogStrength(fog: GroundFogSystem): void {
+    fog.setTint(this.input.groundFog?.getActivityTint?.() ?? null);
     const strength = this.input.groundFog?.getActivityStrength?.();
     if (this.activityFogBaseline && (strength === undefined || this.activityFogBaseline.fog !== fog)) {
       this.activityFogBaseline.fog.strength = this.activityFogBaseline.strength;

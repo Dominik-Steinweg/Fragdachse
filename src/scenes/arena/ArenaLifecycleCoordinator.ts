@@ -423,6 +423,12 @@ export class ArenaLifecycleCoordinator {
             const now = this.coopMissionRuntime.getMissionNow(bridge.getSynchronizedNow());
             return resolveDawnNightEnvironment(bridge.getActivityDescriptor()?.parameters?.dawn, now - start)?.fogStrength;
           },
+          getActivityTint: () => {
+            const start = bridge.getArenaStartTime();
+            if (start <= 0 || !this.coopMissionRuntime) return undefined;
+            const now = this.coopMissionRuntime.getMissionNow(bridge.getSynchronizedNow());
+            return resolveDawnNightEnvironment(bridge.getActivityDescriptor()?.parameters?.dawn, now - start)?.fogTint;
+          },
           getBases: () => this.worldRuntime?.materialization?.bases ?? null,
           getProjectiles: () => this.worldGameplay?.projectiles?.getPresentationRuntime() ?? null,
           effects: this.ctx.effectSystem,

@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import type { SyncedAirstrikeStrike } from '../types';
-import { COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, DEPTH, VOID_PALETTE } from '../config';
+import { COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, DEPTH, DEPTH_LIGHTING, VOID_PALETTE } from '../config';
 import type { EffectSystem }          from './EffectSystem';
 import type { CameraFeedbackController } from './camera/CameraFeedbackController';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx, sustainedRumble } from './camera/cameraFeedbackPresets';
@@ -69,6 +69,9 @@ const SPAWN_POINT  = new Phaser.Math.Vector2(0, 0);
 
 // ── Visuelle State pro Strike ────────────────────────────────────────────────
 
+/** Overflight shadow: crosses the target `leadMs` before impact (bombs falling), fades at both ends. */
+const FLYOVER = { leadMs: 350, speedPxPerSec: 950, rangePx: 1600, width: 620, alpha: 1 } as const;
+
 interface AirstrikeVisual {
   id:            number;
   // Boden-Warnkreis
@@ -117,6 +120,9 @@ interface AirstrikeVisual {
  */
 export class AirstrikeRenderer {
   private visuals     = new Map<number, AirstrikeVisual>();
+  /** Opt-in overflight shadow (Dawn bomber night); campaign airstrikes keep none. */
+  private flyoverKey: string | null = null;
+  private readonly flyovers = new Map<number, Phaser.GameObjects.Image>();
   /** Parallel zur Map, damit der Partikel-Tick ohne Iterator-Allokation laufen kann. */
   private readonly activeVisuals: AirstrikeVisual[] = [];
   private effectSystem: EffectSystem | null = null;
@@ -201,6 +207,7 @@ export class AirstrikeRenderer {
       }
 
       this.updateVisual(visual, strike, now);
+      this.updateFlyover(strike, now);
     }
 
     // Entfernte Strikes aufräumen
@@ -210,9 +217,42 @@ export class AirstrikeRenderer {
         this.visuals.delete(id);
       }
     }
+    for (const [id, shadow] of this.flyovers) {
+      if (activeIds.has(id)) continue;
+      shadow.destroy();
+      this.flyovers.delete(id);
+    }
+  }
+
+  /** Bomber silhouette that crosses each target shortly before impact; null removes them. */
+  setFlyoverShadow(textureKey: string | null): void {
+    if (textureKey === this.flyoverKey) return;
+    this.flyoverKey = textureKey;
+    for (const shadow of this.flyovers.values()) shadow.destroy();
+    this.flyovers.clear();
+  }
+
+  private updateFlyover(strike: SyncedAirstrikeStrike, now: number): void {
+    const key = this.flyoverKey;
+    if (!key || !this.scene.textures.exists(key)) return;
+    // Heading per strike from its id (no randomness): several bombers cross from different sides.
+    const heading = (strike.id * 2.39996) % (Math.PI * 2);
+    const travel = (now - (strike.explodeAt - FLYOVER.leadMs)) * FLYOVER.speedPxPerSec / 1000;
+    const fade = 1 - Phaser.Math.Clamp((Math.abs(travel) - FLYOVER.rangePx * 0.6) / (FLYOVER.rangePx * 0.4), 0, 1);
+    let shadow = this.flyovers.get(strike.id);
+    if (!shadow) {
+      // Darkens what lies under the light map, so it reads over lit ground and stays quiet in the dark.
+      shadow = this.scene.add.image(strike.x, strike.y, key).setDepth(DEPTH_LIGHTING + 0.05)
+        .setDisplaySize(FLYOVER.width, FLYOVER.width / 2).setRotation(heading);
+      this.flyovers.set(strike.id, shadow);
+    }
+    shadow.setPosition(strike.x + Math.cos(heading) * travel, strike.y + Math.sin(heading) * travel)
+      .setAlpha(FLYOVER.alpha * fade).setVisible(fade > 0);
   }
 
   clear(): void {
+    for (const shadow of this.flyovers.values()) shadow.destroy();
+    this.flyovers.clear();
     for (const v of this.visuals.values()) this.destroyVisual(v);
     this.visuals.clear();
     this.activeVisuals.length = 0;

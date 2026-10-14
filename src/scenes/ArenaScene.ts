@@ -5,6 +5,7 @@ import { resolveEarnedCoopDefenseBossPoints } from '../utils/coopDefenseUpgrades
 import { preloadWatchtowerAssets } from '../effects/watchtower/WatchtowerVisual';
 import { installRuntimeAssetUrls } from '../assets/RuntimeAssetUrls';
 import { DAWN_PIPELINE_ASSETS, preloadDawnDecalAssets, preloadDawnNightAssets } from '../assets/DawnAssets';
+import { DAWN_NIGHT_TEXTURES } from '../effects/dawn/DawnNightAtmosphereConfig';
 import { preloadPowerUpAssets, assertPowerUpAssetsReady } from '../assets/PowerUpAssets';
 import { preloadWoodlandAssets, assertWoodlandAssetsReady } from '../assets/WoodlandAssets';
 import { preloadCharacterMeshAssets, assertCharacterMeshAssetsReady } from '../assets/CharacterMeshAssets';
@@ -2051,6 +2052,7 @@ export class ArenaScene extends Phaser.Scene {
       clockMinutes: this.renderers?.lighting.getTimeOfDayMinutes() ?? DEFAULT_TIME_OF_DAY_MINUTES,
     });
     this.renderers?.markers?.coop?.set('dawn', this.dawnHUD?.getMarkerDescriptors() ?? [], this.time.now);
+    this.renderers?.airstrike?.setFlyoverShadow(this.dawnHUD?.getActiveNightModifier() === 'bombers' ? DAWN_NIGHT_TEXTURES.bomberShadow : null);
     if ((gameplayActive || countdownActive) && !terminated) {
       diagnosticsFrame?.begin('arenaHud');
       const secs = bridge.computeSecondsLeft(this.arenaRuntime.getMissionNow());

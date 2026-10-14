@@ -33,6 +33,8 @@ export const DAWN_M3_ASSET_KEYS = {
   broodNest: 'construction_dawn_broodnest',
   supplyCapsule: 'construction_dawn_supply_capsule',
   supplyCrate: 'dawn_supply_crate',
+  supplyCrateCarried: 'dawn_supply_crate_carried',
+  scavengerCamp: (tier: number) => `dawn_scavenger_camp_t${tier}`,
   scrapHeap: (tier: number) => `dawn_scrap_heap_t${tier}`,
   scavenger: 'enemy_dawn_scavenger',
   /** UI-Icons unter `public/assets/ui/dawn/runtime/<name>-{32,64,128}.webp`. */
