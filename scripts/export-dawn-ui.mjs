@@ -5,13 +5,16 @@ import sharp from 'sharp';
 
 const root = new URL('../', import.meta.url);
 const assets = new URL('public/assets/ui/dawn/', root);
-const review = new URL('art/poc/dawn/v1-review/', root);
+const review = new URL('art/poc/dawn/icons/v2/', root);
 const provenance = JSON.parse(await readFile(new URL('prompts.json', assets), 'utf8'));
 await mkdir(new URL('runtime/', assets), { recursive: true });
 await mkdir(review, { recursive: true });
 const manifest = { paddingFraction: 0.0625, alphaThreshold: 1, sourceEdgeGuard: 2, assets: {} };
 
-async function sampleSquare(square, size) {
+async function sampleSquare(square, size, backgroundMode) {
+  if (backgroundMode === 'dark-print-plate') {
+    return sharp(square).resize(size, size, { kernel: 'cubic' }).png().toBuffer();
+  }
   // Round to whole pixels: 24px receives 2px per side, all older sizes are unchanged.
   const margin = Math.round(size * manifest.paddingFraction);
   return sharp(square).resize(size - 2 * margin, size - 2 * margin, { kernel: 'cubic' })
@@ -19,8 +22,16 @@ async function sampleSquare(square, size) {
       background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
 }
 
-async function prepareSquare(original, key) {
+async function prepareSquare(original, key, backgroundMode) {
   const metadata = await sharp(original).metadata();
+  if (backgroundMode === 'dark-print-plate') {
+    if (metadata.width !== metadata.height) throw new Error(key + ': printing plate must be square');
+    if (metadata.hasAlpha) {
+      const stats = await sharp(original).stats();
+      if (stats.channels.at(-1).min !== 255) throw new Error(key + ': printing plate must be opaque');
+    }
+    return { square: original, crop: { left: 0, top: 0, width: metadata.width, height: metadata.height }, side: metadata.width };
+  }
   if (!metadata.hasAlpha) throw new Error(`${key}: source needs real transparency`);
   const { data, info } = await sharp(original).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   let left = info.width, top = info.height, right = -1, bottom = -1;
@@ -54,175 +65,89 @@ for (const spec of provenance.assets) {
   const original = await readFile(new URL(spec.original, assets));
   const hash = createHash('sha256').update(original).digest('hex');
   if (hash !== spec.sha256) throw new Error(`${spec.key}: original changed; review provenance first`);
-  const { square, crop, side } = await prepareSquare(original, spec.key);
+  const { square, crop, side } = await prepareSquare(original, spec.key, spec.backgroundMode);
   const exports = [];
   for (const size of spec.sizes) {
-    const margin = Math.round(size * manifest.paddingFraction);
-    const inner = size - 2 * margin;
-    if (!Number.isInteger(margin) || inner > side) throw new Error(`${spec.key}: invalid export size`);
-    // Cubic filtering keeps antialiased edges soft; no sharpening, tint or alpha thresholding.
-    const pixels = await sharp(square).resize(inner, inner, { kernel: 'cubic' }).extend({
-      left: margin, right: margin, top: margin, bottom: margin,
-      background: { r: 0, g: 0, b: 0, alpha: 0 },
-    }).raw().toBuffer({ resolveWithObject: true });
+    if (!Number.isInteger(size) || size < 1 || size > side) throw new Error(spec.key + ': invalid export size');
+    // Opaque plates already contain their authored margin; do not add a second border.
+    const margin = spec.backgroundMode === 'dark-print-plate' ? 0 : Math.round(size * manifest.paddingFraction);
+    let sampled = sharp(square).resize(size - margin * 2, size - margin * 2, { kernel: 'cubic' });
+    if (margin) sampled = sampled.extend({ left: margin, right: margin, top: margin, bottom: margin,
+      background: { r: 0, g: 0, b: 0, alpha: 0 } });
+    const pixels = await sampled.raw().toBuffer({ resolveWithObject: true });
     const encoded = await sharp(pixels.data, { raw: pixels.info }).webp({ lossless: true, effort: 6 }).toBuffer();
     const file = `runtime/${spec.key}-${size}.webp`;
     await writeFile(new URL(file, assets), encoded);
     exports.push({ file, width: size, height: size, bytes: encoded.length });
   }
-  manifest.assets[spec.key] = { original: spec.original, sha256: hash, crop, exports };
+  manifest.assets[spec.key] = { original: spec.original, sha256: hash, backgroundMode: spec.backgroundMode ?? 'transparent', crop, exports };
 }
 await writeFile(new URL('runtime/manifest.json', assets), JSON.stringify(manifest, null, 2) + '\n');
 console.log(`Exported ${provenance.assets.length} Dawn originals and runtime/manifest.json`);
 
-// Candidate comparison is local-only. No generated source is needed for runtime exports.
-const m3 = provenance.assets.filter(spec => spec.reviewGroup === 'm3');
-if (m3.length) {
-  const candidateRoot = new URL('art/poc/dawn/icons/candidates/', root);
-  const conceptPath = new URL('art/poc/dawn/m3-concepts/night-mod-fog-02.png', root);
-  let forest, candidates;
-  try {
-    forest = await sharp(await readFile(conceptPath))
-      .extract({ left: 820, top: 390, width: 660, height: 340 }).png().toBuffer();
-    candidates = await Promise.all(m3.map(async spec => Promise.all(spec.candidatePrompts.map(async candidate => ({
-      ...candidate, ...await prepareSquare(await readFile(new URL(candidate.file, candidateRoot)), candidate.file),
-    })))));
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
-    console.log('Skipping M3 review: local candidates or forest concept unavailable.');
-  }
-  if (forest && candidates) {
-    const width = 1320, height = 100 + m3.length * 340;
-    const layers = [], text = [];
-    const label = (x, y, value, size = 13, color = '#eee6d6') => text.push(
-      `<text x="${x}" y="${y}" font-family="DejaVu Sans, sans-serif" font-size="${size}" fill="${color}">${value}</text>`);
-    label(20, 28, 'DAWN M3 - Kandidaten und gewaehlte Runtime / 1:1 Pixel', 20);
-    label(20, 53, 'Links HUD #24282b | rechts Waldboden aus night-mod-fog-02 (Konzept, kein Spieltest)');
-    label(20, 76, '16 / 24 / 32 / 48 px inkl. Rand; 72 px Detail. Elite 16/24 direkt; sonst aus 32. 48 aus 64.');
-    for (const [group, spec] of m3.entries()) {
-      const base = 100 + group * 340;
-      for (let panel = 0; panel < 2; panel++) {
-        const x = panel * 660;
-        if (panel) layers.push({ input: forest, left: x, top: base });
-        label(x + 16, base + 20, spec.key, 16);
-        const centers = [300, 365, 430, 505, 595];
-        const sizes = [16, 24, 32, 48, 72];
-        sizes.forEach((size, i) => label(x + centers[i] - 12, base + 20, String(size), 12));
-        for (let row = 0; row < 4; row++) {
-          const y = base + 62 + row * 76;
-          const candidate = candidates[group][row];
-          const selected = row < 3 && spec.source.endsWith(candidate.file);
-          label(x + 16, y + 5, row === 3 ? 'WAHL / Runtime' : `Kandidat 0${row + 1}${selected ? ' - WAHL' : ''}`, 13, selected || row === 3 ? '#ffd99a' : '#eee6d6');
-          for (const [column, size] of sizes.entries()) {
-            const runtimeSize = size < 32 && spec.sizes.includes(size) ? size : size <= 32 ? 32 : size <= 48 ? 64 : 128;
-            const source = row === 3
-              ? await readFile(new URL(`runtime/${spec.key}-${runtimeSize}.webp`, assets))
-              : await sampleSquare(candidate.square, runtimeSize);
-            const input = await sharp(source).resize(size, size, { kernel: 'cubic' }).png().toBuffer();
-            layers.push({ input, left: x + centers[column] - size / 2, top: y - size / 2 });
-          }
-        }
-      }
+// Local review sources are optional; shipping exports only need the tracked originals.
+const icons = provenance.assets.filter(spec => spec.reviewGroup === 'druck-v2');
+let forest, candidates;
+try {
+  forest = await readFile(new URL('forest-review.png', review));
+  candidates = await Promise.all(icons.map(spec => Promise.all(spec.candidatePrompts.map(async candidate => {
+    const original = await readFile(new URL(candidate.file, review));
+    if (createHash('sha256').update(original).digest('hex') !== candidate.sha256) {
+      throw new Error(`${candidate.file}: candidate changed since selection`);
     }
-    layers.push({ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${text.join('')}</svg>`), left: 0, top: 0 });
-    await sharp({ create: { width, height, channels: 4, background: '#24282b' } }).composite(layers)
-      .png({ compressionLevel: 9 }).toFile(fileURLToPath(new URL('ui-m3-icons.png', review)));
-    console.log('Wrote art/poc/dawn/v1-review/ui-m3-icons.png');
-  }
+    return original;
+  }))));
+} catch (error) {
+  if (error.code !== 'ENOENT') throw error;
+  console.log('Skipping V2 board: local candidates or forest-review.png unavailable.');
 }
-
-// Historical review sheets are opt-in; the M3 task only writes its own review file.
-if (process.argv.includes('--legacy-review')) {
-// Actual runtime samples, shown at 1 output pixel per labelled display pixel.
-// FOREST.wood: lerpColor(BROWN_6=0x4d2b32, GOLD_4=0x884b2b, .38).
-const backgrounds = ['#63372f', '#f2eee5'];
-const icons = provenance.assets.filter(spec => spec.key !== 'dealer-portrait');
-const portraitLabelY = 151 + icons.length * 67;
-const width = 1120, height = portraitLabelY + 390, panelWidth = width / 2;
-const layers = [];
-const labels = [];
-function label(x, y, text, color, size = 15) {
-  labels.push(`<text x="${x}" y="${y}" fill="${color}" font-family="DejaVu Sans, sans-serif" font-size="${size}">${text}</text>`);
-}
-for (let panel = 0; panel < 2; panel++) {
-  const offset = panel * panelWidth;
-  const color = panel ? '#302820' : '#f2eee5';
-  layers.push({ input: await sharp({ create: { width: panelWidth, height, channels: 4, background: backgrounds[panel] } }).png().toBuffer(), left: offset, top: 0 });
-  label(offset + 20, 32, panel ? 'HELL #f2eee5' : 'HOLZ / FOREST.wood #63372f', color, 19);
-  label(offset + 20, 58, 'Dawn UI · Runtime-Exporte · 1:1 Pixel', color);
-  const sizes = [20, 24, 32, 48];
-  const centers = [282, 354, 426, 510];
-  sizes.forEach((size, i) => label(offset + centers[i] - 17, 91, `${size}px`, color));
-  for (const [row, spec] of icons.entries()) {
-    const y = 130 + row * 67;
-    label(offset + 20, y + 5, spec.key, color);
-    for (const [column, size] of sizes.entries()) {
-      const runtimeSize = size <= 32 ? 32 : 64;
-      const input = await sharp(fileURLToPath(new URL(`runtime/${spec.key}-${runtimeSize}.webp`, assets)))
+if (icons.length && forest && candidates) {
+  const width = 1440, cardWidth = 480, cardHeight = 270;
+  const top = 110, gridBottom = top + Math.ceil(icons.length / 3) * cardHeight;
+  const height = gridBottom + 150;
+  const layers = [], labels = [];
+  const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  const label = (x, y, value, size = 13, fill = '#d9cfb6') => labels.push(
+    `<text x="${x}" y="${y}" font-family="Arial, sans-serif" font-size="${size}" fill="${fill}">${escape(value)}</text>`);
+  const solid = (w, h, color) => sharp({ create: { width: w, height: h, channels: 4, background: color } }).png().toBuffer();
+  label(20, 32, 'FROM DACHS TILL DAWN / S-2 / DRUCKREGISTER', 25);
+  label(20, 58, 'Wahl: echte Runtime bei 16 / 24 / 32 / 48 px. Darunter alle drei Kandidaten bei 64 px.', 16);
+  label(20, 82, 'HUD: dunkle Walnuss #2a241d | Wald: Nacht-Konzeptausschnitt | 100 % = 1 Bildpixel pro Anzeigepixel.');
+  const forestStrip = await sharp(forest).resize(456, 58, { fit: 'cover' }).png().toBuffer();
+  for (const [index, spec] of icons.entries()) {
+    const x = (index % 3) * cardWidth + 12, y = top + Math.floor(index / 3) * cardHeight;
+    label(x + 8, y + 20, `${spec.key} / WAHL ${String(spec.selectedCandidate).padStart(2, '0')}`, 16);
+    layers.push({ input: await solid(456, 58, '#2a241d'), left: x, top: y + 38 });
+    layers.push({ input: forestStrip, left: x, top: y + 102 });
+    label(x + 8, y + 72, 'HUD');
+    label(x + 8, y + 136, 'WALD');
+    for (const [column, size] of [16, 24, 32, 48].entries()) {
+      const cx = x + 155 + column * 80;
+      label(cx - 9, y + 34, size, 10);
+      const runtimeSize = spec.sizes.includes(size) ? size : size <= 32 ? 32 : 64;
+      const input = await sharp(await readFile(new URL(`runtime/${spec.key}-${runtimeSize}.webp`, assets)))
         .resize(size, size, { kernel: 'cubic' }).png().toBuffer();
-      layers.push({ input, left: offset + centers[column] - size / 2, top: y - size / 2 });
+      for (const cy of [y + 67, y + 131]) layers.push({ input, left: cx - size / 2, top: cy - size / 2 });
+    }
+    label(x + 8, y + 204, 'KANDIDATEN', 11);
+    for (let candidate = 0; candidate < 3; candidate++) {
+      const cx = x + 155 + candidate * 96;
+      layers.push({ input: await sampleSquare(candidates[index][candidate], 64, spec.backgroundMode), left: cx - 32, top: y + 175 });
+      label(cx - 16, y + 255, `0${candidate + 1}${candidate + 1 === spec.selectedCandidate ? ' *' : ''}`, 12);
     }
   }
-  label(offset + 20, portraitLabelY, 'dealer-portrait · 128px / 256px', color, 18);
-  const portrait = await readFile(new URL('runtime/dealer-portrait-256.webp', assets));
-  for (const [size, x] of [[128, 30], [256, 245]]) {
-    layers.push({ input: await sharp(portrait).resize(size, size, { kernel: 'cubic' }).png().toBuffer(), left: offset + x, top: portraitLabelY + 30 });
-  }
-  label(offset + 20, height - 55, 'Icons: 20/24/32 aus 32px; 48 aus 64px.', color);
-  label(offset + 20, height - 29, 'Portraet: beide Ansichten aus 256px.', color);
-}
-layers.push({ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${labels.join('')}</svg>`), left: 0, top: 0 });
-await sharp({ create: { width, height, channels: 4, background: '#ffffff' } }).composite(layers)
-  .png({ compressionLevel: 9 }).toFile(fileURLToPath(new URL('ui-icons.png', review)));
-console.log(`Exported ${provenance.assets.length} Dawn assets, runtime/manifest.json and art/poc/dawn/v1-review/ui-icons.png`);
-
-// Local candidate sources live in git-ignored art/poc; runtime export also works without them.
-const candidateRoot = new URL('art/poc/dawn/icons/candidates/', root);
-const candidateSources = [];
-for (let i = 1; i <= 4; i++) {
-  const file = `icon-scrap-magnet-0${i}.png`;
-  try {
-    candidateSources.push({ file, original: await readFile(new URL(file, candidateRoot)) });
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
-  }
-}
-if (candidateSources.length === 4) {
-  const sheetWidth = 720, sheetHeight = 600;
-  const samples = [], captions = [];
-  const caption = (x, y, text, size = 15) => captions.push(`<text x="${x}" y="${y}" fill="#f2eee5" font-family="DejaVu Sans, sans-serif" font-size="${size}">${text}</text>`);
-  caption(24, 32, 'Schrottmagnet - Kandidaten / Auswahl', 22);
-  caption(24, 58, 'Dunkler HUD-Ton #24282b | Anzeige 1:1 Pixel');
-  const columns = [310, 410, 530, 650];
-  [72, 24, 32, 48].forEach((size, i) => caption(columns[i] - 22, 89, `${size}px`));
-  for (const [row, candidate] of candidateSources.entries()) {
-    const { square } = await prepareSquare(candidate.original, candidate.file);
-    const centerY = 144 + row * 88;
-    const selected = provenance.assets.find(spec => spec.key === 'scrap-magnet');
-    const isSelected = selected?.source.endsWith(candidate.file);
-    caption(24, centerY, `Kandidat 0${row + 1}${isSelected ? ' - WAHL' : ''}`);
-    // 128px detail preview is reduced to 72px to keep this review sheet compact.
-    for (const [column, size] of [72, 24, 32, 48].entries()) {
-      const runtimeSize = size <= 32 ? 32 : size <= 48 ? 64 : 128;
-      const margin = runtimeSize * manifest.paddingFraction;
-      const input = await sharp(square).resize(runtimeSize - margin * 2, runtimeSize - margin * 2, { kernel: 'cubic' })
-        .extend({ left: margin, right: margin, top: margin, bottom: margin, background: { r: 0, g: 0, b: 0, alpha: 0 } })
-        .png().toBuffer();
-      samples.push({ input: await sharp(input).resize(size, size, { kernel: 'cubic' }).png().toBuffer(), left: columns[column] - size / 2, top: centerY - size / 2 });
+  label(20, gridBottom + 25, 'ELITES / GRAUSTUFEN / 16 + 24 px: Formvergleich ohne Farbsignal', 17);
+  for (const [i, spec] of icons.filter(spec => spec.key.startsWith('elite-')).entries()) {
+    const x = 20 + i * 280;
+    label(x, gridBottom + 51, spec.key, 14);
+    for (const [j, size] of [16, 24].entries()) {
+      const input = await sharp(await readFile(new URL(`runtime/${spec.key}-${size}.webp`, assets))).greyscale().png().toBuffer();
+      layers.push({ input, left: x + j * 50, top: gridBottom + 65 });
     }
   }
-  caption(24, 500, 'Wahl / Runtime');
-  for (const [column, size] of [24, 32, 48].entries()) {
-    const input = await sharp(fileURLToPath(new URL(`runtime/scrap-magnet-${size <= 32 ? 32 : 64}.webp`, assets)))
-      .resize(size, size, { kernel: 'cubic' }).png().toBuffer();
-    samples.push({ input, left: columns[column + 1] - size / 2, top: 495 - size / 2 });
-  }
-  caption(24, 548, '02: klare U-Form, helle Pole, passende Metalltextur.');
-  caption(24, 575, '24px: Magnet lesbar; einzelne Schrottteile nur eingeschraenkt.');
-  samples.push({ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${sheetWidth}" height="${sheetHeight}">${captions.join('')}</svg>`), left: 0, top: 0 });
-  await sharp({ create: { width: sheetWidth, height: sheetHeight, channels: 4, background: '#24282b' } }).composite(samples)
-    .png({ compressionLevel: 9 }).toFile(fileURLToPath(new URL('ui-scrap-magnet.png', review)));
-} else {
-  console.log('Skipping magnet candidate sheet: local art/poc candidates are unavailable.');
-}
+  label(20, height - 18, '24 px: Nicht-Elites aus 32; 48 px aus 64. Keine Browser-/Spielabnahme. Kandidaten: integriertes image_gen, 2026-10-14.', 12);
+  layers.push({ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${labels.join('')}</svg>`), left: 0, top: 0 });
+  await sharp({ create: { width, height, channels: 4, background: '#191c19' } }).composite(layers)
+    .png({ compressionLevel: 9 }).toFile(fileURLToPath(new URL('set-board.png', review)));
+  console.log('Wrote art/poc/dawn/icons/v2/set-board.png');
 }
