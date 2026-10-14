@@ -130,8 +130,12 @@ import { resolveCoopDefenseMapEncounterConfigs } from '../../src/config/coopDefe
 
 describe('Dawn composition ownership', () => {
   it.each([-1, 0, 10])('only starts site encounters when entered before closure (offset %s)', offset => {
-    const plans = composeDawnRoundPlans({ seed: 7, threat: 2, dayNumber: 1 });
-    const { mapConfig: authored, activity: definition } = resolveDawnScenario(plans.world, plans.activity);
+    // The first threat-2 round whose sites bring an assault (not every composition does).
+    const resolved = Array.from({ length: 64 }, (_, seed) => {
+      const plans = composeDawnRoundPlans({ seed, threat: 2, dayNumber: 1 });
+      return resolveDawnScenario(plans.world, plans.activity);
+    }).find(scenario => scenario.mapConfig.encounters!.some(encounter => encounter.start.type === 'site-activated'))!;
+    const { mapConfig: authored, activity: definition } = resolved;
     const siteEncounter = authored.encounters!.find(encounter => encounter.start.type === 'site-activated')!;
     expect(siteEncounter).toBeDefined();
     if (siteEncounter.start.type !== 'site-activated') throw new Error('Expected site encounter');
