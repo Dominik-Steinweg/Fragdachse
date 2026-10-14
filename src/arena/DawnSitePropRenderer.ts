@@ -15,6 +15,8 @@ import { DAWN_SITE_LIGHT, DAWN_SITE_SPARKS, resolveDawnSiteLights, resolveDawnSi
 
 export type DawnSiteLightingPort = Pick<LightingSystem, 'setLight' | 'releaseLight' | 'getArtificialLightFactor'>;
 
+const DAWN_SITE_HIT_FLASH_TINT = 0x6a6a6a;
+
 /** World material on the main camera, independent of the base's dormant representation. */
 export class DawnSitePropRenderer {
   private readonly sites;
@@ -80,7 +82,8 @@ export class DawnSitePropRenderer {
         this.hitFlashes.get(site.baseId), this.getStructureHp(site.baseId), this.scene.time.now,
       );
       this.hitFlashes.set(site.baseId, flash);
-      if (flash.active) sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+      // Brighten, keep the texture: a flat fill read as an untextured square under dusk/night light.
+      if (flash.active) sprite.setTint(DAWN_SITE_HIT_FLASH_TINT).setTintMode(Phaser.TintModes.ADD);
       else sprite.clearTint();
       if (this.lighting) {
         const lights = resolveDawnSiteLights(site.archetypeId, site.tier, state, destroyed, this.scene.time.now, site.variant);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DAWN_SITE_HIT_FLASH_MS, DAWN_SITE_LIGHT, resolveDawnSiteLights, resolveDawnSitePropHitFlash, resolveDawnSitePropVisual } from '../src/arena/DawnSitePropModel';
+import { DAWN_SITE_HIT_FLASH_COOLDOWN_MS, DAWN_SITE_HIT_FLASH_MS, DAWN_SITE_LIGHT, resolveDawnSiteLights, resolveDawnSitePropHitFlash, resolveDawnSitePropVisual } from '../src/arena/DawnSitePropModel';
 import type { CoopDefenseSecondaryObjectiveState } from '../src/types';
 import { DAWN_M3_ASSET_KEYS, DAWN_WRECK_VARIANTS } from '../src/dawn/contracts/DawnContentIds';
 import { DAWN_PIPELINE_ASSETS } from '../src/assets/DawnAssets';
@@ -69,18 +69,18 @@ describe('Dawn site damage flash', () => {
     expect(resolveDawnSitePropHitFlash(repaired, 70, 1030).active).toBe(true);
   });
 
-  it('flashes on damage, renews from the latest hit and expires without stacking', () => {
+  it('flashes on damage and pulses under sustained damage instead of holding the flash', () => {
     const first = resolveDawnSitePropHitFlash(undefined, 100, 1000);
     const hit = resolveDawnSitePropHitFlash(first, 90, 1010);
-    const nextHitAt = 1010 + DAWN_SITE_HIT_FLASH_MS / 2;
-    const repeated = resolveDawnSitePropHitFlash(hit, 80, nextHitAt);
-    expect(hit.active).toBe(true);
-    expect(repeated.active).toBe(true);
-    expect(repeated.untilMs).toBe(nextHitAt + DAWN_SITE_HIT_FLASH_MS);
-    const unchanged = resolveDawnSitePropHitFlash(repeated, 80, repeated.untilMs - 1);
-    expect(unchanged.active).toBe(true);
-    expect(unchanged.untilMs).toBe(repeated.untilMs);
-    expect(resolveDawnSitePropHitFlash(unchanged, 80, repeated.untilMs).active).toBe(false);
+    expect(hit).toMatchObject({ active: true, untilMs: 1010 + DAWN_SITE_HIT_FLASH_MS });
+    // A hit during the flash does not extend it; the flash ends on time.
+    const during = resolveDawnSitePropHitFlash(hit, 80, 1010 + DAWN_SITE_HIT_FLASH_MS / 2);
+    expect(during.untilMs).toBe(hit.untilMs);
+    const off = resolveDawnSitePropHitFlash(during, 80, hit.untilMs);
+    expect(off.active).toBe(false);
+    // Hits inside the quiet time stay dark; the next flash comes after it.
+    expect(resolveDawnSitePropHitFlash(off, 70, hit.untilMs + DAWN_SITE_HIT_FLASH_COOLDOWN_MS - 1).active).toBe(false);
+    expect(resolveDawnSitePropHitFlash(off, 70, hit.untilMs + DAWN_SITE_HIT_FLASH_COOLDOWN_MS).active).toBe(true);
   });
 
   it('clears missing state and baselines the next available structure', () => {

@@ -15,6 +15,8 @@ export interface DawnSitePropVisual {
 }
 
 export const DAWN_SITE_HIT_FLASH_MS = 100;
+/** Sustained damage pulses instead of holding the flash: quiet time after each flash. */
+export const DAWN_SITE_HIT_FLASH_COOLDOWN_MS = 260;
 
 /** Local presentation tuning in world pixels; never changes the night's ambient light. */
 export const DAWN_SITE_LIGHT = {
@@ -111,7 +113,8 @@ export function resolveDawnSitePropHitFlash(
 ): DawnSitePropHitFlash {
   if (hp === null) return { hp, untilMs: 0, active: false };
   const damaged = previous?.hp != null && hp < previous.hp;
-  const untilMs = damaged ? nowMs + DAWN_SITE_HIT_FLASH_MS : previous?.untilMs ?? 0;
+  const ready = !previous?.untilMs || nowMs >= previous.untilMs + DAWN_SITE_HIT_FLASH_COOLDOWN_MS;
+  const untilMs = damaged && ready ? nowMs + DAWN_SITE_HIT_FLASH_MS : previous?.untilMs ?? 0;
   return { hp, untilMs, active: nowMs < untilMs };
 }
 
