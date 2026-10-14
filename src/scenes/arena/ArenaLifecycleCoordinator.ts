@@ -406,6 +406,7 @@ export class ArenaLifecycleCoordinator {
     attach: (context) => {
       this.worldRuntime = new WorldRuntime(context, this.worldLifecycle.getProjectileIdentityScope());
       this.renderers.healthBars.openWorld(this.worldRuntime);
+      this.renderers.markers.bindWorld(this.worldRuntime.descriptor.worldRevision);
       // Wer in dieser World steht, gehoert ihr: Die Player-Runtime entsteht mit der Instanz und
       // ueberlebt darin jeden Activity-Wechsel.
       this.worldRuntime.setPlayers(this.composePlayerRuntime());
@@ -515,6 +516,7 @@ export class ArenaLifecycleCoordinator {
       }));
     },
     detach: () => {
+      this.renderers.markers.releaseWorld();
       const runtime = this.worldRuntime;
       const measured = loadingTimeline.get('world'), descriptor = runtime?.context?.descriptor;
       if (descriptor && measured?.id === String(descriptor.worldRevision) + ':' + descriptor.definitionId) measured.finish('detached');
@@ -753,6 +755,7 @@ export class ArenaLifecycleCoordinator {
     private readonly getSpectatorCameraInput: () => ArenaSpectatorCameraInput | undefined,
   ) {
     this.coopMissionPresentationUi = coopMissionPresentation?.createUiPort({
+      getPersistentBaseSite: () => this.worldRuntime?.context.persistentBaseSite ?? null,
       cameraFeedback: ctx.visualFeedback.camera,
       getWorldLayout: () => this.worldRuntime?.presentation?.layout ?? null,
       getWorldMetrics: () => this.worldRuntime?.context.metrics ?? null,
@@ -1250,6 +1253,8 @@ export class ArenaLifecycleCoordinator {
 
   /** Taktet die screen-space Coop-Presentation fuer die laufende Activity. */
   syncCoopMissionPresentation(deltaMs: number, active: boolean): void {
+    if (active) this.renderers.markers.bindRound(bridge.getRoundState()?.roundRevision ?? 0);
+    else this.renderers.markers.releaseRound();
     this.coopMissionPresentationBinding?.sync(deltaMs, active);
   }
 
@@ -1318,6 +1323,7 @@ export class ArenaLifecycleCoordinator {
         this.getWorldCombatCore()?.setEnemyManager(null);
       },
     });
+    this.renderers.markers.bindActivity(activity.activityRevision);
     const activityConfiguration = resolveCoopMissionActivityConfiguration(activity, worldRuntime.context);
     if (this.getLocalWorldPresentation().required) {
       this.renderers.combatGoreGpu.fragmentTemplateCache.prepare(
@@ -1515,6 +1521,7 @@ export class ArenaLifecycleCoordinator {
 
   /** Loest ausschliesslich die lokale Activity; World-Identitaet und World-Runtime bleiben stehen. */
   private detachActivityRuntime(): void {
+    this.renderers.markers.releaseActivity();
     this.missingCommittedLoadoutWarnings = undefined;
     this.ctx.effectSystem.clearXpTexts();
     this.worldGameplay?.support?.plague?.clearTargets();

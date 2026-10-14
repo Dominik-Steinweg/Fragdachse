@@ -57,7 +57,6 @@ const ARENA_RUNTIME_SOURCE_NAMES = new Set([
   'src/ui/HudCard.ts',
   'src/ui/HudResourceRow.ts',
   'src/ui/HudStatusStrip.ts',
-  'src/ui/HostileBaseIndicator.ts',
   'src/ui/PlayerStatusRing.ts',
 ]);
 
@@ -479,14 +478,12 @@ const GRAPHICS_ARC_LEGACY_SOURCES: Readonly<Record<string, string>> = {
   'src/effects/Ak47StrategicTargetRenderer.ts': 'Zielmarkierung, noch nicht auf gebackene Ringe umgestellt.',
   'src/effects/BfgRenderer.ts': 'Strahlendpunkte, noch nicht auf gebackene Glowquads umgestellt.',
   'src/effects/CaptureTheBeerRenderer.ts': 'Flaschensymbol, noch nicht auf eine gebackene Textur umgestellt.',
-  'src/effects/CoopDefenseSecondaryObjectiveMarkerRenderer.ts': 'Markerringe, noch nicht auf gebackene Ringe umgestellt.',
   'src/effects/EffectSystem.ts': 'Explosions- und Kegelgeometrie, noch nicht umgestellt.',
   'src/effects/ShadowSystem.ts': 'Einmaliger Bake in eine RenderTexture, kein Pro-Frame-Pfad.',
   'src/effects/ZeusTaserRenderer.ts': 'Kegeltelegraph, noch nicht umgestellt.',
   'src/entities/BaseEntity.ts': 'Einmalig gezeichnete Basismarkierung, kein Pro-Frame-Pfad.',
   'src/scenes/arena/GaussWarningRenderer.ts': 'Emitterglow der Fremdspieler, noch nicht umgestellt.',
   'src/scenes/arena/PlacementPreviewRenderer.ts': 'Platzierungsvorschau, noch nicht umgestellt.',
-  'src/ui/HostileBaseIndicator.ts': 'Pfeilspitze, noch nicht umgestellt.',
 };
 
 /** `ctx`/`context` sind der Canvas-2D-Kontext beim Backen und damit ausdruecklich erlaubt. */

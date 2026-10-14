@@ -2945,8 +2945,6 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:effects/CaptureTheBeerRenderer.ts:spawnAfterglow/afterglow/configureAdditiveImage/0","owner":"effects/CaptureTheBeerRenderer.ts","component":"spawnAfterglow/afterglow/configureAdditiveImage/0","height":"body","lighting":"emissive","camera":"world","depths":[25.3],"blends":["ADD"],"profiles":["H"],"role":"effect","source":{"selector":"spawnAfterglow/afterglow/configureAdditiveImage/0","expression":"DEPTH_FX + 0.3"}},
   {"id":"cpu:effects/ConstructionOwnershipGpuSystem.ts:module/this.passiveLayer/setDepth/0","owner":"effects/ConstructionOwnershipGpuSystem.ts","component":"module/this.passiveLayer/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[8.9],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.passiveLayer/setDepth/0","expression":"DEPTH.ROCKS - 0.1"}},
   {"id":"cpu:effects/ConstructionOwnershipGpuSystem.ts:module/this.activeLayer/setDepth/0","owner":"effects/ConstructionOwnershipGpuSystem.ts","component":"module/this.activeLayer/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[9.3],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.activeLayer/setDepth/0","expression":"DEPTH.ROCKS + 0.3"}},
-  {"id":"cpu:effects/CoopDefenseCarryZoneRenderer.ts:createVisual/spawn/setDepth/0","owner":"effects/CoopDefenseCarryZoneRenderer.ts","component":"createVisual/spawn/setDepth/0","height":"ground","lighting":"material","camera":"world","depths":[5.35],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"createVisual/spawn/setDepth/0","expression":"DEPTH.GROUND_FOG + 0.05"}},
-  {"id":"cpu:effects/CoopDefenseCarryZoneRenderer.ts:createVisual/delivery/setDepth/0","owner":"effects/CoopDefenseCarryZoneRenderer.ts","component":"createVisual/delivery/setDepth/0","height":"ground","lighting":"material","camera":"world","depths":[5.4],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"createVisual/delivery/setDepth/0","expression":"DEPTH.GROUND_FOG + 0.1"}},
   {"id":"cpu:effects/CoopDefenseEncounterTelegraphRenderer.ts:module/this.graphics/setDepth/0","owner":"effects/CoopDefenseEncounterTelegraphRenderer.ts","component":"module/this.graphics/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[25],"blends":["ADD"],"profiles":["H"],"role":"ui","source":{"selector":"module/this.graphics/setDepth/0","expression":"DEPTH_FX"}},
   {"id":"cpu:effects/CoopDefenseEncounterTelegraphRenderer.ts:generateTextures/edge/setDepth/0","owner":"effects/CoopDefenseEncounterTelegraphRenderer.ts","component":"generateTextures/edge/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[24.9],"blends":["ADD"],"profiles":["H"],"role":"ui","source":{"selector":"generateTextures/edge/setDepth/0","expression":"DEPTH_FX - 0.1"}},
   {"id":"cpu:effects/CoopDefenseEncounterTelegraphRenderer.ts:generateTextures/haze/setDepth/0","owner":"effects/CoopDefenseEncounterTelegraphRenderer.ts","component":"generateTextures/haze/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[24.8],"blends":["ADD"],"profiles":["H"],"role":"ui","source":{"selector":"generateTextures/haze/setDepth/0","expression":"DEPTH_FX - 0.2"}},
@@ -2966,11 +2964,7 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:effects/VoidRiftIntroRenderer.ts:module/this.riftNebula/setDepth/0","owner":"effects/VoidRiftIntroRenderer.ts","component":"module/this.riftNebula/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[19.575],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"module/this.riftNebula/setDepth/0","expression":"DEPTH_RIFT_BODY + 0.005"}},
   {"id":"cpu:effects/VoidRiftIntroRenderer.ts:module/this.riftRim/setDepth/0","owner":"effects/VoidRiftIntroRenderer.ts","component":"module/this.riftRim/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[19.59],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"module/this.riftRim/setDepth/0","expression":"DEPTH_RIFT_RIM"}},
   {"id":"cpu:effects/VoidRiftIntroRenderer.ts:module/this.shockRing/setDepth/0","owner":"effects/VoidRiftIntroRenderer.ts","component":"module/this.shockRing/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[19.61],"blends":["ADD"],"profiles":["E"],"role":"effect","source":{"selector":"module/this.shockRing/setDepth/0","expression":"DEPTH_SHOCK_RING"}},
-  {"id":"cpu:effects/CoopDefenseMissionProgressRenderer.ts:createCheckpoints/quad/setDepth/0","owner":"effects/CoopDefenseMissionProgressRenderer.ts","component":"createCheckpoints/quad/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[8.5],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"createCheckpoints/quad/setDepth/0","expression":"DEPTH.ROCKS - 0.5"}},
   {"id":"cpu:effects/CoopDefenseMissionProgressRenderer.ts:syncBarriers/image/setDepth/0","owner":"effects/CoopDefenseMissionProgressRenderer.ts","component":"syncBarriers/image/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"syncBarriers/image/setDepth/0","expression":"DEPTH.ROCKS"}},
-  {"id":"cpu:effects/CoopDefenseSecondaryObjectiveMarkerRenderer.ts:build/container/setDepth/0","owner":"effects/CoopDefenseSecondaryObjectiveMarkerRenderer.ts","component":"build/container/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[12],"blends":["NORMAL"],"profiles":["K"],"role":"ui","source":{"selector":"build/container/setDepth/0","expression":"DEPTH.BASES + 8"}},
-  {"id":"cpu:effects/CoopDefenseSecondaryObjectiveMarkerRenderer.ts:build/arrow/setDepth/0","owner":"effects/CoopDefenseSecondaryObjectiveMarkerRenderer.ts","component":"build/arrow/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[100],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"build/arrow/setDepth/0","expression":"DEPTH.OVERLAY"}},
-  {"id":"cpu:effects/CoopDefenseSecondaryObjectiveMarkerRenderer.ts:build/label/setDepth/0","owner":"effects/CoopDefenseSecondaryObjectiveMarkerRenderer.ts","component":"build/label/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[100],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"build/label/setDepth/0","expression":"DEPTH.OVERLAY"}},
   {"id":"cpu:effects/CoopXpTextRenderer.ts:createPopup/outline/setDepth/0","owner":"effects/CoopXpTextRenderer.ts","component":"createPopup/outline/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[95],"blends":["NORMAL"],"profiles":["H"],"role":"effect","source":{"selector":"createPopup/outline/setDepth/0","expression":"DEPTH.OVERLAY - 5"}},
   {"id":"cpu:effects/CoopXpTextRenderer.ts:createPopup/label/setDepth/0","owner":"effects/CoopXpTextRenderer.ts","component":"createPopup/label/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[95],"blends":["NORMAL"],"profiles":["H"],"role":"effect","source":{"selector":"createPopup/label/setDepth/0","expression":"DEPTH.OVERLAY - 5"}},
   {"id":"cpu:effects/CorpseMarkerRenderer.ts:show/shadow/setDepth/0","owner":"effects/CorpseMarkerRenderer.ts","component":"show/shadow/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[5.39],"blends":["NORMAL"],"profiles":["M"],"role":"ui","source":{"selector":"show/shadow/setDepth/0","expression":"DEPTH_CORPSE_CROSS_SHADOW"}},
@@ -3181,9 +3175,6 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:effects/TimeBubbleRenderer.ts:updatePrismCenter/visual.prismCore/setDepth/0","owner":"effects/TimeBubbleRenderer.ts","component":"updatePrismCenter/visual.prismCore/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[14.9],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"updatePrismCenter/visual.prismCore/setDepth/0","expression":"DEPTH.PROJECTILES - 0.1"}},
   {"id":"cpu:effects/TimeBubbleRenderer.ts:updateResonance/this.scene.add/setDepth/0","owner":"effects/TimeBubbleRenderer.ts","component":"updateResonance/this.scene.add/setDepth/0","height":"body","lighting":"mixed","camera":"world","depths":[16.52,16.53,16.54],"blends":["ADD","NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"updateResonance/this.scene.add/setDepth/0","expression":"DEPTH.FIRE + 0.52 + i * 0.01"}},
   {"id":"cpu:effects/TimeBubbleRenderer.ts:updateResonance/visual.chargeSparks/createEmitter/0","owner":"effects/TimeBubbleRenderer.ts","component":"updateResonance/visual.chargeSparks/createEmitter/0","height":"body","lighting":"emissive","camera":"world","depths":[16.56],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"updateResonance/visual.chargeSparks/createEmitter/0","expression":"DEPTH.FIRE + 0.56"}},
-  {"id":"cpu:effects/TimebombFuseRenderer.ts:module/this.ring/setDepth/0","owner":"effects/TimebombFuseRenderer.ts","component":"module/this.ring/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[9.96],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.ring/setDepth/0","expression":"DEPTH.PLAYERS - 0.04"}},
-  {"id":"cpu:effects/TimebombFuseRenderer.ts:module/this.sparks/setDepth/0","owner":"effects/TimebombFuseRenderer.ts","component":"module/this.sparks/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[10.08],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.sparks/setDepth/0","expression":"DEPTH.PLAYERS + 0.08"}},
-  {"id":"cpu:effects/TimebombFuseRenderer.ts:emitCountdownText/label/setDepth/0","owner":"effects/TimebombFuseRenderer.ts","component":"emitCountdownText/label/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[12],"blends":["NORMAL"],"profiles":["K"],"role":"effect","source":{"selector":"emitCountdownText/label/setDepth/0","expression":"DEPTH.PLAYERS + 2"}},
   {"id":"cpu:effects/TracerBounceDebugOverlay.ts:draw/this.graphics/setDepth/0","owner":"effects/TracerBounceDebugOverlay.ts","component":"draw/this.graphics/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[99],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"draw/this.graphics/setDepth/0","expression":"DEPTH.OVERLAY - 1"}},
   {"id":"cpu:effects/TranslocatorPuckRenderer.ts:createVisual/baseImage/setDepth/0","owner":"effects/TranslocatorPuckRenderer.ts","component":"createVisual/baseImage/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[15],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/baseImage/setDepth/0","expression":"DEPTH.PROJECTILES"}},
   {"id":"cpu:effects/TranslocatorPuckRenderer.ts:createVisual/glowImage/configureAdditiveImage/0","owner":"effects/TranslocatorPuckRenderer.ts","component":"createVisual/glowImage/configureAdditiveImage/0","height":"body","lighting":"emissive","camera":"world","depths":[15.1],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/glowImage/configureAdditiveImage/0","expression":"DEPTH.PROJECTILES + 0.1"}},
@@ -3315,8 +3306,6 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:ui/CoopDefenseUpgradesOverlay.ts:build/this.container/setDepth/0","owner":"ui/CoopDefenseUpgradesOverlay.ts","component":"build/this.container/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[101],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"build/this.container/setDepth/0","expression":"DEPTH.OVERLAY + 1"}},
   {"id":"cpu:ui/EnemyHoverNameLabel.ts:module/this.text/setDepth/0","owner":"ui/EnemyHoverNameLabel.ts","component":"module/this.text/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[22],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"module/this.text/setDepth/0","expression":"DEPTH.LOCAL_UI"}},
   {"id":"cpu:ui/HelpOverlay.ts:build/this.container/setDepth/0","owner":"ui/HelpOverlay.ts","component":"build/this.container/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[101],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"build/this.container/setDepth/0","expression":"DEPTH.OVERLAY + 1"}},
-  {"id":"cpu:ui/HostileBaseIndicator.ts:module/this.worldArrow/setDepth/0","owner":"ui/HostileBaseIndicator.ts","component":"module/this.worldArrow/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[12],"blends":["NORMAL"],"profiles":["K"],"role":"ui","source":{"selector":"module/this.worldArrow/setDepth/0","expression":"DEPTH.BASES + 8"}},
-  {"id":"cpu:ui/HostileBaseIndicator.ts:module/this.edgeArrow/setDepth/0","owner":"ui/HostileBaseIndicator.ts","component":"module/this.edgeArrow/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[100],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"module/this.edgeArrow/setDepth/0","expression":"DEPTH.OVERLAY"}},
   {"id":"cpu:ui/LeftSidePanel.ts:build/this.gameContainer/setDepth/0","owner":"ui/LeftSidePanel.ts","component":"build/this.gameContainer/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[99],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"build/this.gameContainer/setDepth/0","expression":"DEPTH.OVERLAY - 1"}},
   {"id":"cpu:ui/LeftSidePanel.ts:build/this.lobbyContainer/setDepth/0","owner":"ui/LeftSidePanel.ts","component":"build/this.lobbyContainer/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[99],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"build/this.lobbyContainer/setDepth/0","expression":"DEPTH.OVERLAY - 1"}},
   {"id":"cpu:ui/LeftSidePanel.ts:build/this.badgerPreview/setDepth/0","owner":"ui/LeftSidePanel.ts","component":"build/this.badgerPreview/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[100],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"build/this.badgerPreview/setDepth/0","expression":"DEPTH.OVERLAY"}},
@@ -4200,27 +4189,7 @@ export const CPU_SOURCE_CONTRACTS = {
     ],
     "bindings": {}
   },
-  "effects/CoopDefenseCarryZoneRenderer.ts": {
-    "blends": [],
-    "cameras": [],
-    "sites": [
-      {
-        "key": "createVisual/spawn/setDepth/0",
-        "expression": "DEPTH.GROUND_FOG + 0.05",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "createVisual/delivery/setDepth/0",
-        "expression": "DEPTH.GROUND_FOG + 0.1",
-        "blends": [
-          "NORMAL"
-        ]
-      }
-    ],
-    "bindings": {}
-  },
+
   "effects/BossIntroGraveyardRenderer.ts": {
     "blends": [
       "Phaser.BlendModes.ADD"
@@ -4382,61 +4351,20 @@ export const CPU_SOURCE_CONTRACTS = {
     "bindings": {}
   },
   "effects/CoopDefenseMissionProgressRenderer.ts": {
-    "blends": [
-      "Phaser.BlendModes.NORMAL"
-    ],
-    "cameras": [],
-    "sites": [
-      {
-        "key": "createCheckpoints/quad/setDepth/0",
-        "expression": "DEPTH.ROCKS - 0.5",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "syncBarriers/image/setDepth/0",
-        "expression": "DEPTH.ROCKS",
-        "blends": [
-          "NORMAL"
-        ]
-      }
-    ],
-    "bindings": {}
-  },
-  "effects/CoopDefenseSecondaryObjectiveMarkerRenderer.ts": {
-    "blends": [
-      "Phaser.BlendModes.ADD"
-    ],
-    "cameras": [
-      "promoteToClarityCamera(this.scene, arrow)",
-      "promoteToClarityCamera(this.scene, label)"
-    ],
-    "sites": [
-      {
-        "key": "build/container/setDepth/0",
-        "expression": "DEPTH.BASES + 8",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "build/arrow/setDepth/0",
-        "expression": "DEPTH.OVERLAY",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "build/label/setDepth/0",
-        "expression": "DEPTH.OVERLAY",
-        "blends": [
-          "NORMAL"
-        ]
-      }
-    ],
-    "bindings": {}
-  },
+  "blends": [],
+  "cameras": [],
+  "sites": [
+    {
+      "key": "syncBarriers/image/setDepth/0",
+      "expression": "DEPTH.ROCKS",
+      "blends": [
+        "NORMAL"
+      ]
+    }
+  ],
+  "bindings": {}
+},
+
   "effects/CoopXpTextRenderer.ts": {
     "blends": [],
     "cameras": [],
@@ -6516,36 +6444,7 @@ export const CPU_SOURCE_CONTRACTS = {
       ]
     }
   },
-  "effects/TimebombFuseRenderer.ts": {
-    "blends": [
-      "Phaser.BlendModes.ADD"
-    ],
-    "cameras": [],
-    "sites": [
-      {
-        "key": "module/this.ring/setDepth/0",
-        "expression": "DEPTH.PLAYERS - 0.04",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "module/this.sparks/setDepth/0",
-        "expression": "DEPTH.PLAYERS + 0.08",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "emitCountdownText/label/setDepth/0",
-        "expression": "DEPTH.PLAYERS + 2",
-        "blends": [
-          "NORMAL"
-        ]
-      }
-    ],
-    "bindings": {}
-  },
+
   "effects/TracerBounceDebugOverlay.ts": {
     "blends": [],
     "cameras": [],
@@ -7880,29 +7779,7 @@ export const CPU_SOURCE_CONTRACTS = {
     ],
     "bindings": {}
   },
-  "ui/HostileBaseIndicator.ts": {
-    "blends": [],
-    "cameras": [
-      "promoteToClarityCamera(scene, this.edgeArrow)"
-    ],
-    "sites": [
-      {
-        "key": "module/this.worldArrow/setDepth/0",
-        "expression": "DEPTH.BASES + 8",
-        "blends": [
-          "NORMAL"
-        ]
-      },
-      {
-        "key": "module/this.edgeArrow/setDepth/0",
-        "expression": "DEPTH.OVERLAY",
-        "blends": [
-          "NORMAL"
-        ]
-      }
-    ],
-    "bindings": {}
-  },
+
   "ui/LeftSidePanel.ts": {
     "blends": [],
     "cameras": [

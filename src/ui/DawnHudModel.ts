@@ -19,15 +19,22 @@ export function resolveDawnHudWidth(input: {
 export interface DawnSiteMarker {
   readonly objectiveId: string;
   readonly visualKey: string;
+  readonly archetypeId: string;
+  readonly tier: number;
   readonly gridX: number;
   readonly gridY: number;
+  /** Clearing = activation radius of the site. */
+  readonly radiusCells: number;
+  readonly holdDurationMs?: number;
 }
 
 export function buildDawnSiteMarkers(plan: DawnWorldPlan, world: WorldDefinition): readonly DawnSiteMarker[] {
   return resolveDawnSites(plan).flatMap(site => {
     const clearing = world.terrain.siteClearings?.find(entry => entry.id === site.siteId);
     return clearing ? [{ objectiveId: site.objectiveId, visualKey: site.tier.visualKey,
-      gridX: clearing.gridX, gridY: clearing.gridY }] : [];
+      archetypeId: site.archetype.id, tier: site.tier.tier,
+      gridX: clearing.gridX, gridY: clearing.gridY, radiusCells: site.archetype.clearingRadiusCells,
+      ...(site.archetype.holdDurationMs ? { holdDurationMs: site.archetype.holdDurationMs } : {}) }] : [];
   });
 }
 

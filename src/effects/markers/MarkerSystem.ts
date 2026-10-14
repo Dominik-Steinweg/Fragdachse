@@ -25,7 +25,7 @@ export class NullMarkerRenderer implements MarkerRenderer {
   destroy(): void {}
 }
 
-/** Scene-lifetime owner; no scene hooks until MK3. Composition explicitly binds revisions and
+/** Scene-lifetime owner. Composition explicitly binds revisions and
  * releases them before tearing down their read ports. Only this owner calls the injected renderer. */
 export class MarkerSystem {
   private readonly scopes = new Map<MarkerScope, ScopeRecord>();

@@ -71,9 +71,8 @@ function createHarness(mapConfig = getCoopDefenseMapConfig('1') as CoopDefenseMa
         calls.push('world:progress');
         progressTimes.push(elapsedMs);
       },
-      syncCarryZones: () => calls.push('world:carry'),
       syncObjectiveRepairDrones: () => calls.push('world:repair'),
-      syncHostileBaseIndicator: () => calls.push('world:hostile-base'),
+      syncMainObjectiveMarkers: () => calls.push('world:hostile-base'),
       syncBossIntro: () => {},
       syncBossPresence: sources => bossSnapshots.push([...sources]),
       bossIntroOwnsSpawn: () => false,
@@ -193,7 +192,6 @@ describe('CoopMissionPresentationBinding', () => {
     expect(calls).toContain('world:secondary');
     expect(calls).toContain('world:carry-items');
     expect(calls).toContain('world:progress');
-    expect(calls).toContain('world:carry');
     expect(calls).toContain('world:repair');
     expect(calls).toContain('world:hostile-base');
 

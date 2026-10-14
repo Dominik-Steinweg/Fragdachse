@@ -105,6 +105,7 @@ export interface CoopMissionPresentationUiPort {
       snapshot: CoopDefenseSecondaryObjectivePresentationState | null,
       configs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[],
       carryItems: readonly SyncedCoopDefenseCarryItem[],
+      elapsedMs: number,
     ) => void;
     readonly syncMortarStrikes: (strikes: readonly import('../types').SyncedMortarStrike[], nowMs: number) => void;
     readonly syncCoopDefenseCarry: (items: readonly SyncedCoopDefenseCarryItem[]) => void;
@@ -115,16 +116,12 @@ export interface CoopMissionPresentationUiPort {
       state: CoopDefenseMissionProgressPresentationState | null,
       elapsedMs: number,
     ) => void;
-    readonly syncCarryZones: (
-      snapshot: CoopDefenseSecondaryObjectivePresentationState | null,
-      configs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[],
-    ) => void;
     readonly syncObjectiveRepairDrones: (
       snapshot: CoopDefenseSecondaryObjectivePresentationState | null,
       configs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[],
       elapsedMs: number,
     ) => void;
-    readonly syncHostileBaseIndicator: (mapConfig: CoopDefenseMapConfig) => void;
+    readonly syncMainObjectiveMarkers: (mapConfig: CoopDefenseMapConfig) => void;
     readonly syncBossIntro: (state: BossIntroState | null, now: number) => void;
     readonly syncBossPresence: (sources: readonly BossPresenceSource[], now: number) => void;
     /** Ob das Intro gerade das Erscheinen des Bosses inszeniert (ersetzt den Spawnblitz). */
@@ -261,6 +258,7 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
       secondaryObjectivePresentation,
       this.runtime.secondaryObjectiveConfigs,
       carryItems,
+      elapsedMs,
     );
     this.ui.worldSpace.syncCoopDefenseCarry(carryItems);
     this.ui.worldSpace.syncMissionProgress(
@@ -268,16 +266,12 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
       missionProgress,
       elapsedMs,
     );
-    this.ui.worldSpace.syncCarryZones(
-      secondaryObjectivePresentation,
-      this.runtime.secondaryObjectiveConfigs,
-    );
     this.ui.worldSpace.syncObjectiveRepairDrones(
       secondaryObjectivePresentation,
       this.runtime.secondaryObjectiveConfigs,
       elapsedMs,
     );
-    this.ui.worldSpace.syncHostileBaseIndicator(this.mapConfig);
+    this.ui.worldSpace.syncMainObjectiveMarkers(this.mapConfig);
     this.ui.worldSpace.syncBossIntro(this.reads.getBossIntroState(), this.reads.getSynchronizedNow());
     this.syncKraken();
     this.syncBossPresence();

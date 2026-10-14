@@ -70,9 +70,9 @@ import { MeteorRenderer }      from '../../effects/MeteorRenderer';
 import { AirstrikeRenderer }   from '../../effects/AirstrikeRenderer';
 import { CoopDefenseEncounterTelegraphRenderer } from '../../effects/CoopDefenseEncounterTelegraphRenderer';
 import { CoopDefenseObjectiveRepairDroneRenderer } from '../../effects/CoopDefenseObjectiveRepairDroneRenderer';
-import { CoopDefenseSecondaryObjectiveMarkerRenderer } from '../../effects/CoopDefenseSecondaryObjectiveMarkerRenderer';
+import { ArenaMarkerPresentation } from './ArenaMarkerPresentation';
+import { MarkerGpuRenderer } from '../../effects/markers/MarkerGpuRenderer';
 import { CoopDefenseMissionProgressRenderer } from '../../effects/CoopDefenseMissionProgressRenderer';
-import { CoopDefenseCarryZoneRenderer } from '../../effects/CoopDefenseCarryZoneRenderer';
 import { Ak47StrategicTargetRenderer } from '../../effects/Ak47StrategicTargetRenderer';
 import { RockDestructionRenderer } from '../../effects/RockDestructionRenderer';
 import { ExplosionGpuRenderer } from '../../effects/ExplosionGpuRenderer';
@@ -156,9 +156,8 @@ export interface RendererBundle {
   nuke:                NukeRenderer;
   airstrike:           AirstrikeRenderer;
   encounterTelegraph:  CoopDefenseEncounterTelegraphRenderer;
-  secondaryObjectiveMarkers: CoopDefenseSecondaryObjectiveMarkerRenderer;
+  markers: ArenaMarkerPresentation;
   missionProgress: CoopDefenseMissionProgressRenderer;
-  carryZones:          CoopDefenseCarryZoneRenderer;
   ak47StrategicTargets: Ak47StrategicTargetRenderer;
   objectiveRepairDrones: CoopDefenseObjectiveRepairDroneRenderer;
   meteor:              MeteorRenderer;
@@ -374,11 +373,10 @@ export function* createRendererBundleSteps(
   encounterTelegraph.generateTextures();
   yield 'renderers/encounterTelegraph';
 
-  const secondaryObjectiveMarkers = new CoopDefenseSecondaryObjectiveMarkerRenderer(scene);
-  secondaryObjectiveMarkers.build();
-  yield 'renderers/secondaryObjectiveMarkers';
+  const markers = new ArenaMarkerPresentation(new MarkerGpuRenderer(scene));
+  cleanup.push(() => markers.destroy());
+  yield 'renderers/markers';
   const missionProgress = new CoopDefenseMissionProgressRenderer(scene);
-  const carryZones = new CoopDefenseCarryZoneRenderer(scene);
   const ak47StrategicTargets = new Ak47StrategicTargetRenderer(scene);
   ak47StrategicTargets.build();
   yield 'renderers/ak47StrategicTargets';
@@ -483,7 +481,7 @@ export function* createRendererBundleSteps(
     interactions,
     turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, plasmaBurnerCharge, healingAura, guardianSpirit, repairDrone, attackDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
     rocket, fireball, spore, grenade, projectileVisualOverrides, muzzleFlash, tracer, translocatorPuck, beer,
-    nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, missionProgress, carryZones, ak47StrategicTargets, objectiveRepairDrones, meteor, rockDestruction, watchtowerDestruction, powerUp, shadow, lighting,
+    nuke, airstrike, encounterTelegraph, markers, missionProgress, ak47StrategicTargets, objectiveRepairDrones, meteor, rockDestruction, watchtowerDestruction, powerUp, shadow, lighting,
     remoteControl,
     healthBars,
     enemyEyes,

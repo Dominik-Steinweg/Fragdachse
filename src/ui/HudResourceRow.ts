@@ -61,6 +61,12 @@ interface EntryVisual {
 }
 
 export class HudResourceRow {
+  getReservedHudRects(): readonly import('./hudOcclusionFade').HudOcclusionRect[] {
+    if (!this.parent.visible) return [];
+    return [...this.entries.values()].filter(v => v.card.root.visible && v.card.root.alpha > 0)
+      .map(v => { const b = v.card.root.getBounds(); return { left: b.left, right: b.right, top: b.top, bottom: b.bottom }; });
+  }
+
   private readonly entries = new Map<string, EntryVisual>();
   private presentationActive = true;
 

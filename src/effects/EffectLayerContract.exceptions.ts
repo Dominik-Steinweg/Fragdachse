@@ -197,7 +197,6 @@ export const DEPTH_LAYER_EXCEPTIONS: readonly LayerException[] = [
   {"id":"cpu:effects/CaptureTheBeerRenderer.ts:spawnAfterglow/afterglow/configureAdditiveImage/0","deviation":"body-over-canopy","finding":"D03"},
   {"id":"cpu:effects/ConstructionOwnershipGpuSystem.ts:module/this.passiveLayer/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/ConstructionOwnershipGpuSystem.ts:module/this.activeLayer/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
-  {"id":"cpu:effects/CoopDefenseSecondaryObjectiveMarkerRenderer.ts:build/container/setDepth/0","deviation":"emission-under-lightmap","finding":"D11"},
   {"id":"cpu:ui/DawnHUD.ts:createMarker/marker/setDepth/0","deviation":"emission-under-lightmap","finding":"D11"},
   {"id":"cpu:effects/CoopXpTextRenderer.ts:createPopup/outline/setDepth/0","deviation":"body-over-canopy","finding":"D03"},
   {"id":"cpu:effects/CoopXpTextRenderer.ts:createPopup/outline/setDepth/0","deviation":"material-outside-sun","finding":"D06"},
@@ -401,8 +400,6 @@ export const DEPTH_LAYER_EXCEPTIONS: readonly LayerException[] = [
   {"id":"cpu:effects/TimeBubbleRenderer.ts:updatePrismCenter/visual.prismHalo/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/TimeBubbleRenderer.ts:updatePrismCenter/visual.prismCore/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/TimeBubbleRenderer.ts:updateResonance/visual.chargeSparks/createEmitter/0","deviation":"emission-under-lightmap","finding":"D10"},
-  {"id":"cpu:effects/TimebombFuseRenderer.ts:module/this.ring/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
-  {"id":"cpu:effects/TimebombFuseRenderer.ts:module/this.sparks/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/TranslocatorPuckRenderer.ts:createVisual/baseImage/setDepth/0","deviation":"material-outside-sun","finding":"D06"},
   {"id":"cpu:effects/TranslocatorPuckRenderer.ts:createVisual/glowImage/configureAdditiveImage/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/TranslocatorTeleportRenderer.ts:syncPortals/graphics/setDepth/0","deviation":"body-over-canopy","finding":"D03"},
@@ -456,5 +453,4 @@ export const DEPTH_LAYER_EXCEPTIONS: readonly LayerException[] = [
   {"id":"cpu:scenes/arena/TunnelEndpointVisual.ts:module/this.moteEmitter/createEmitter/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:scenes/arena/TunnelEndpointVisual.ts:module/this.emberEmitter/createEmitter/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:ui/BadgerPreview.ts:module/this.heldItem/HeldItemVisual/0","deviation":"emission-under-lightmap","finding":"D11"},
-  {"id":"cpu:ui/HostileBaseIndicator.ts:module/this.worldArrow/setDepth/0","deviation":"emission-under-lightmap","finding":"D11"},
 ];

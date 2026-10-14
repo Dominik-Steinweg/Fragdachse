@@ -1,3 +1,6 @@
+import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
+import { getRenderScale } from '../graphics/RenderResolution';
+import { createMarkerCameraTransform } from '../effects/markers/MarkerLayoutModel';
 import { resolveEarnedCoopDefenseBossPoints } from '../utils/coopDefenseUpgrades';
 import { preloadWatchtowerAssets } from '../effects/watchtower/WatchtowerVisual';
 import { installRuntimeAssetUrls } from '../assets/RuntimeAssetUrls';
@@ -1744,14 +1747,22 @@ export class ArenaScene extends Phaser.Scene {
     this.applyCameraFeedback(delta);
     // Das Tutorial ist ein Weltobjekt: Seine Occlusion-Probe braucht deshalb den finalen
     // Scroll-/Shake-Versatz, den auch der anschließende Render-Schritt verwendet.
-    this.ctx.centerHUD.updateTutorialOcclusion(
-      delta,
-      [
-        ...this.ctx.centerHUD.getReservedHudRects(),
-        ...(this.dawnHUD?.getReservedHudRects() ?? []),
-        ...this.coopMissionPresentation.getReservedHudRects(),
-      ],
-    );
+    const reservedHudRects = [
+      ...this.ctx.leftPanel.getReservedHudRects(),
+      ...this.ctx.rightPanel.getReservedHudRects(),
+      ...this.ctx.centerHUD.getReservedHudRects(true),
+      ...(this.dawnHUD?.getReservedHudRects() ?? []),
+      ...this.coopMissionPresentation.getReservedHudRects(),
+    ];
+    this.ctx.centerHUD.updateTutorialOcclusion(delta, [
+      ...this.ctx.centerHUD.getReservedHudRects(), ...(this.dawnHUD?.getReservedHudRects() ?? []),
+      ...this.coopMissionPresentation.getReservedHudRects(),
+    ]);
+    const markerCamera = createMarkerCameraTransform(this.cameras.main, getRenderScale(this.scale));
+    const markerPlayer = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId());
+    this.renderers.markers.update({ camera: markerCamera,
+      localPlayer: markerPlayer ? { x: markerPlayer.x, y: markerPlayer.y } : { x: markerCamera.worldView.centerX, y: markerCamera.worldView.centerY },
+      reservedHudRects, nowMs: this.time.now, lowQuality: getGraphicsQualityProfile(this).level === 'low' });
     // Der Fokus wird erst nach dem finalen Scroll-/Shake-Versatz in Bildschirmkoordinaten
     // übersetzt, damit Radialfilter und Low-Fallback denselben Frame wie die Welt sehen.
     this.ctx.arenaCountdown?.syncAfterCameraFeedback();
@@ -2037,6 +2048,7 @@ export class ArenaScene extends Phaser.Scene {
       objectives: bridge.getCoopDefenseSecondaryObjectivePresentationState(),
       clockMinutes: this.renderers?.lighting.getTimeOfDayMinutes() ?? DEFAULT_TIME_OF_DAY_MINUTES,
     });
+    this.renderers?.markers.coop?.set('dawn', this.dawnHUD?.getMarkerDescriptors() ?? [], this.time.now);
     if ((gameplayActive || countdownActive) && !terminated) {
       diagnosticsFrame?.begin('arenaHud');
       const secs = bridge.computeSecondsLeft(this.arenaRuntime.getMissionNow());

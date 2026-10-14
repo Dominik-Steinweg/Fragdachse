@@ -66,7 +66,6 @@ export function resetRenderersForWorldPresentationTeardown(
   bundle.meteor.clear();
   bundle.rockDestruction.clear();
   bundle.watchtowerDestruction.clear();
-  bundle.carryZones.clear();
   bundle.beer.syncCoopDefenseCarry([]);
   if (!preserveAuthoredPresentation) bundle.leafBlower.setTerrainColorSnapshot(null);
   if (!preserveAuthoredPresentation) bundle.movement.setTerrainColorSnapshot(null);

@@ -172,6 +172,12 @@ interface SwatchEntry {
 }
 
 export class LeftSidePanel {
+  getReservedHudRects(): readonly import('./hudOcclusionFade').HudOcclusionRect[] {
+    if (!this.gameContainer?.visible || this.gameContainer.alpha <= 0) return [];
+    const b = this.gameContainer.getBounds();
+    return [{ left: b.left, right: b.right, top: b.top, bottom: b.bottom }];
+  }
+
   private lobbyContainer!: Phaser.GameObjects.Container;
   private lobbyContent!: Phaser.GameObjects.Container;
   private gameContainer!:  Phaser.GameObjects.Container;

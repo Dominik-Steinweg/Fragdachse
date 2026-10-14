@@ -98,6 +98,12 @@ interface TeamHeaderRow {
 }
 
 export class RightSidePanel {
+  getReservedHudRects(): readonly import('./hudOcclusionFade').HudOcclusionRect[] {
+    if (!this.gameContainer?.visible || this.gameContainer.alpha <= 0) return [];
+    const b = this.gameContainer.getBounds();
+    return [{ left: b.left, right: b.right, top: b.top, bottom: b.bottom }];
+  }
+
   private gameContainer!:  Phaser.GameObjects.Container;
 
   private arenaOverlayVisible = false;

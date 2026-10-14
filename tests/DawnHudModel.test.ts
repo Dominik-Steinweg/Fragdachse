@@ -26,7 +26,9 @@ describe('Dawn HUD projection', () => {
     for (const site of resolveDawnSites(plans.world)) {
       const clearing = world.terrain.siteClearings!.find(entry => entry.id === site.siteId)!;
       expect(sites.find(entry => entry.objectiveId === site.objectiveId)).toEqual({
-        objectiveId: site.objectiveId, visualKey: site.tier.visualKey, gridX: clearing.gridX, gridY: clearing.gridY,
+        objectiveId: site.objectiveId, visualKey: site.tier.visualKey, archetypeId: site.archetype.id, tier: site.tier.tier,
+        gridX: clearing.gridX, gridY: clearing.gridY, radiusCells: site.archetype.clearingRadiusCells,
+        ...(site.archetype.holdDurationMs ? { holdDurationMs: site.archetype.holdDurationMs } : {}),
       });
     }
   });

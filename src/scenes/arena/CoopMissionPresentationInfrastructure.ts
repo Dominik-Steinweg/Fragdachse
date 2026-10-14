@@ -1,3 +1,5 @@
+import { CELL_SIZE } from '../../config';
+import type { WorldPersistentBaseSite } from '../../world/WorldRuntimeContext';
 import { WaterSurfaceModel } from '../../arena/WaterSurfaceModel';
 import { DawnSitePropRenderer } from '../../arena/DawnSitePropRenderer';
 import type { WorldDescriptor } from '../../world/WorldDescriptor';
@@ -19,7 +21,8 @@ import type { DawnHUD } from '../../ui/DawnHUD';
 import { CoopDefenseObjectiveAnnouncement } from '../../ui/CoopDefenseObjectiveAnnouncement';
 import { CoopDefenseMapEventAnnouncementPresenter } from '../../ui/CoopDefenseMapEventAnnouncementPresenter';
 import { CoopDefenseSecondaryObjectiveHud } from '../../ui/CoopDefenseSecondaryObjectiveHud';
-import { HostileBaseIndicator } from '../../ui/HostileBaseIndicator';
+import { getBaseWorldBounds } from '../../arena/BaseRegistry';
+import { mainObjectiveMarkers, enemyMarkers, secondaryObjectiveMarkers, checkpointMarkers } from '../../effects/markers/sources/CoopMissionMarkerSource';
 import type { BaseManager } from '../../entities/BaseManager';
 import type { EnemyManager } from '../../entities/EnemyManager';
 import type { PlayerManager } from '../../entities/PlayerManager';
@@ -36,6 +39,7 @@ export interface CoopMissionPresentationInfrastructureInput {
   readonly krakenAssets?: KrakenPresentationAssets | null;
   readonly getWorldLayout?: () => ArenaLayout | null;
   readonly getWorldMetrics?: () => WorldMetrics | null;
+  readonly getPersistentBaseSite?: () => WorldPersistentBaseSite | null;
   readonly krakenWaterAt?: (x: number, y: number) => number;
   readonly centerHUD: CenterHUD;
   readonly playerManager: PlayerManager;
@@ -58,7 +62,6 @@ export class CoopMissionPresentationInfrastructure {
   private secondaryObjectiveHud: CoopDefenseSecondaryObjectiveHud | null = null;
   private dawnSiteProps: DawnSitePropRenderer | null = null;
   private dawnWorldRevision: number | null = null;
-  private hostileBaseIndicator: HostileBaseIndicator | null = null;
   private ui: CoopMissionPresentationUiPort | null = null;
   private uiInput: CoopMissionPresentationInfrastructureInput | null = null;
   private worldSpaceDestroyed = false;
@@ -188,7 +191,6 @@ export class CoopMissionPresentationInfrastructure {
       this.objectiveAnnouncements,
     );
     this.secondaryObjectiveHud.build();
-    this.hostileBaseIndicator = new HostileBaseIndicator(this.scene);
 
     this.ui = {
       centerHud: {
@@ -265,15 +267,15 @@ export class CoopMissionPresentationInfrastructure {
         syncEncounterTelegraph: (state, elapsedMs) => {
           if (!this.destroyed) input.renderers.encounterTelegraph.sync(state, elapsedMs, true);
         },
-        syncSecondaryObjectiveMarkers: (snapshot, configs, carryItems) => {
+        syncSecondaryObjectiveMarkers: (snapshot, configs, carryItems, elapsedMs) => {
           if (!this.destroyed) {
-            input.renderers.secondaryObjectiveMarkers.sync(
-              snapshot,
-              configs,
-              input.getBaseManager(),
-              carryItems,
-              true,
-            );
+            const metrics = input.getWorldMetrics?.();
+            if (metrics) input.renderers.markers.coop?.setSecondary(secondaryObjectiveMarkers(
+              snapshot, configs, carryItems, metrics, id => {
+                const base = input.getBaseManager()?.getBase(id);
+                return base ? { ...getBaseWorldBounds(base.spec.region, metrics),
+                  dormant: base.isDormant(), destroyed: base.isDestroyed() } : null;
+              }), snapshot, this.scene.time.now, elapsedMs);
           }
         },
         syncMortarStrikes: (strikes, nowMs) => {
@@ -289,10 +291,10 @@ export class CoopMissionPresentationInfrastructure {
           if (!this.destroyed) input.clientUpdate.resetEnemyDashVisuals();
         },
         syncMissionProgress: (config, state, elapsedMs) => {
-          if (!this.destroyed) input.renderers.missionProgress.sync(config, state, elapsedMs, true);
-        },
-        syncCarryZones: (snapshot, configs) => {
-          if (!this.destroyed) input.renderers.carryZones.sync(snapshot, configs, true);
+          if (this.destroyed) return;
+          input.renderers.missionProgress.sync(config, state, elapsedMs, true);
+          const metrics = input.getWorldMetrics?.();
+          if (metrics) input.renderers.markers.coop?.set('checkpoints', checkpointMarkers(config, state, metrics, { nowMs: this.scene.time.now, elapsedMs }), this.scene.time.now);
         },
         syncObjectiveRepairDrones: (snapshot, configs, elapsedMs) => {
           if (!this.destroyed) {
@@ -305,15 +307,26 @@ export class CoopMissionPresentationInfrastructure {
             );
           }
         },
-        syncHostileBaseIndicator: (mapConfig) => {
-          if (!this.destroyed) {
-            this.hostileBaseIndicator?.sync(
-              input.getBaseManager(),
-              input.getEnemyManager(),
-              mapConfig,
-              true,
-            );
-          }
+        syncMainObjectiveMarkers: (mapConfig) => {
+          if (this.destroyed) return;
+          const source = input.renderers.markers.coop, metrics = input.getWorldMetrics?.();
+          if (!source || !metrics) return;
+          const base = mapConfig.mapId.startsWith('dawn:') ? null : input.getBaseManager()?.getActiveMainBase(
+            mapConfig.objective === 'destroy-hostile-bases' ? 'hostile' : 'friendly');
+          const site = input.getPersistentBaseSite?.();
+          const area = site?.baseId === base?.spec.id && base && base.getHp() < base.getMaxHp() ? site?.buildArea : undefined;
+          const dangerRadiusPx = area ? (area.kind === 'radius' ? area.radiusCells : area.sizeCells / 2) * CELL_SIZE : undefined;
+          source.set('main', mainObjectiveMarkers(base?.spec.id ?? '', base
+            ? getBaseWorldBounds(base.spec.region, metrics) : null, dangerRadiusPx), this.scene.time.now);
+          const manager = input.getEnemyManager();
+          source.set('enemies', enemyMarkers((manager?.getAllEnemies() ?? [])
+            .filter(e => e.faction === 'hostile' && e.sprite.active && e.getHp() > 0 && !e.isBurrowed())
+            .map(e => ({ id: e.id, generation: manager?.getCombatTargetRef(e.id)?.instance.entityGeneration ?? 0,
+              x: e.sprite.x, y: e.sprite.y, size: e.getSize(), vulnerable: e.isVulnerable(),
+              boss: e.kind === mapConfig.boss?.enemyKind || !!e.getBossPresence(),
+              timebomb: e.getSpecialAction() === 'timebomb-fuse' || e.getSpecialAction() === 'timebomb-chase',
+              fuseProgress: e.getSpecialAction() === 'timebomb-fuse' ? e.getTimebombFuseProgress() : undefined,
+            }))), this.scene.time.now);
         },
         syncBossIntro: (state, now) => {
           if (this.destroyed) return;
@@ -410,17 +423,13 @@ export class CoopMissionPresentationInfrastructure {
     this.krakenResidency?.destroy(); this.krakenResidency = null;
     input.renderers.beer.syncCoopDefenseCarry([]);
     input.clientUpdate.resetEnemyDashVisuals();
-    this.hostileBaseIndicator?.destroy();
-    this.hostileBaseIndicator = null;
     input.renderers.encounterTelegraph.destroy();
     input.renderers.bossIntro.clear();
     input.renderers.bossPresence.clear();
     input.renderers.voidHunterSparks.clear();
     input.renderers.voidRift.clear();
     input.renderers.voidMeteorIntro.clear();
-    input.renderers.secondaryObjectiveMarkers.destroy();
     input.renderers.missionProgress.destroy();
-    input.renderers.carryZones.clear();
     input.renderers.objectiveRepairDrones.destroy();
   }
 
@@ -437,10 +446,8 @@ export class CoopMissionPresentationInfrastructure {
     this.kraken?.clear(); this.krakenIntro?.clear(); this.krakenResidency?.setPhase('dead');
     input.renderers.voidMeteorIntro.clear();
     this.announcedBossIntroKey = null;
-    input.renderers.secondaryObjectiveMarkers.clear();
+    input.renderers.markers.releaseRound();
     input.renderers.missionProgress.clear();
-    input.renderers.carryZones.clear();
     input.renderers.objectiveRepairDrones.clear();
-    this.hostileBaseIndicator?.clear();
   }
 }

@@ -244,6 +244,7 @@ export class MarkerLayoutModel {
 
   private compare(a: Candidate, b: Candidate, previous: ReadonlyMap<string, number>, aKey = a.descriptor.key, bKey = b.descriptor.key): number {
     return MARKER_PRIORITY[b.descriptor.kind] - MARKER_PRIORITY[a.descriptor.kind]
+      || Number(b.descriptor.focused === true) - Number(a.descriptor.focused === true)
       || Number(b.descriptor.state === 'active') - Number(a.descriptor.state === 'active')
       || (previous.get(aKey) ?? Infinity) - (previous.get(bKey) ?? Infinity)
       || compareKey(aKey, bKey);

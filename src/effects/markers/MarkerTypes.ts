@@ -93,6 +93,8 @@ export interface MarkerDescriptor {
   readonly visibility: 'world-and-edge' | 'world-only' | 'edge-only' | 'edge-when-offscreen';
   /** Fortschrittsbogen 0..1 (Halten/Zerstoeren); fehlt = kein Bogen. */
   readonly progress?: number;
+  /** Focus wins within the same semantic priority class. */
+  readonly focused?: boolean;
   /** Tier-Punkte 1–3 unter dem Badge (Sites). */
   readonly tier?: 1 | 2 | 3;
   readonly groundRing?: MarkerGroundRing;

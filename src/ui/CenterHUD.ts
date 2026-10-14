@@ -494,7 +494,7 @@ export class CenterHUD {
   }
 
   /** Screen-Space-Flächen, die das World-Space-Tutorial nicht überdecken darf. */
-  getReservedHudRects(): readonly HudOcclusionRect[] {
+  getReservedHudRects(includeFlatCards = false): readonly HudOcclusionRect[] {
     const rects: HudOcclusionRect[] = [];
     const announcementRect = this.objectiveAnnouncements?.getReservedHudRect();
     if (announcementRect) rects.push(announcementRect);
@@ -510,6 +510,14 @@ export class CenterHUD {
     };
     // Statusleiste und untere Zeile bleiben bewusst frei: Sie sind flach und dauerhaft sichtbar;
     // eine Reservierung würde die Tafel schon bei einer Randberührung verschwinden lassen.
+    if (includeFlatCards && this.container.visible) {
+      rects.push(...this.resourceRow.getReservedHudRects());
+      for (const root of [this.statusStrip.root, this.toast]) {
+        if (!root.visible || root.alpha <= 0) continue;
+        const b = root.getBounds();
+        rects.push({ left: b.left, right: b.right, top: b.top, bottom: b.bottom });
+      }
+    }
     addCardRect(this.mainCard);
     addCardRect(this.encounterCard);
     return rects;

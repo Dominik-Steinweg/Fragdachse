@@ -46,7 +46,6 @@ import { PlasmaChargeRenderer, MAX_PLASMA_CHARGE_STACKS } from '../effects/Plasm
 import type { LightingSystem } from '../effects/LightingSystem';
 import { fillRadialGradientTexture, makeAdditive, registerGraphicsObject } from '../effects/EffectUtils';
 import { emissiveAlpha } from '../effects/EmissiveScale';
-import { TimebombFuseRenderer } from '../effects/TimebombFuseRenderer';
 import { getEnemyName } from '../i18n/contentPresentation';
 import { getLocale } from '../i18n';
 import { DAWN_M3_ASSET_KEYS } from '../dawn/contracts/DawnContentIds';
@@ -136,7 +135,6 @@ export class EnemyEntity {
   private healthBars: WorldHealthBarRenderer | null = null;
   private healthBar: HealthBarHandle | null = null;
   private glowHalo: Phaser.GameObjects.Image | null = null;
-  private timebombFuseRenderer: TimebombFuseRenderer | null = null;
   private voidMolotovWindupRing: Phaser.GameObjects.Arc | null = null;
   private maxHp = 1;
   private currentHp = 0;
@@ -978,7 +976,6 @@ export class EnemyEntity {
       this.glowHalo.destroy();
       this.glowHalo = null;
     }
-    this.destroyTimebombFuseVisuals();
     this.destroyVoidMolotovWindupVisuals();
     this.lighting?.releaseLight(this.glowLightKey());
     this.sprite.destroy();
@@ -1110,18 +1107,9 @@ export class EnemyEntity {
       && this.currentHp > 0
       && this.sprite.visible;
     if (!active) {
-      this.destroyTimebombFuseVisuals();
       this.sprite.setRotation(this.visualAimAngle + this.getSpriteRotationOffset());
       return;
     }
-
-    this.timebombFuseRenderer ??= new TimebombFuseRenderer(this.sprite.scene, this.config.size);
-    this.timebombFuseRenderer.sync(
-      this.sprite.x,
-      this.sprite.y,
-      this.gaussChargeProgress,
-      this.config.timebomb.fuseDurationMs,
-    );
 
     // Das zunehmend hektische Taumeln bleibt ein visueller Offset. Aim- und Netzwerkwinkel
     // bleiben unveraendert, damit der Telegraph keine Gameplay- oder Snapshotdaten beeinflusst.
@@ -1132,10 +1120,8 @@ export class EnemyEntity {
     this.sprite.setRotation(this.visualAimAngle + this.getSpriteRotationOffset() + wobble);
   }
 
-  private destroyTimebombFuseVisuals(): void {
-    this.timebombFuseRenderer?.destroy();
-    this.timebombFuseRenderer = null;
-  }
+  /** Existing replicated charge fraction; presentation does not advance the fuse. */
+  getTimebombFuseProgress(): number { return this.gaussChargeProgress; }
 
   /**
    * Telegraph des Void-Brandsatzes: ein heller lila Ring, der sich waehrend der Ausholzeit

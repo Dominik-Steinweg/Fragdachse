@@ -46,7 +46,6 @@ vi.mock('../src/effects/EffectUtils', () => ({
   ensureCanvasTexture() {}, fillRadialGradientTexture() {},
 }));
 
-import { CoopDefenseMissionProgressRenderer } from '../src/effects/CoopDefenseMissionProgressRenderer';
 import { TeslaNovaRenderer } from '../src/effects/TeslaNovaRenderer';
 import { TeslaFieldVisual } from '../src/effects/TeslaFieldVisual';
 import { WaterSurfaceRenderer } from '../src/arena/WaterSurfaceRenderer';
@@ -110,22 +109,10 @@ function fixture() {
   return { scene, buffers, vaos, quads, containers, programs, sharedIndex };
 }
 
-function mission(scene: any) {
-  const renderer = new CoopDefenseMissionProgressRenderer(scene);
-  renderer.sync({ checkpoints: [{ id: 'entry', gridX: 1, gridY: 1, radiusCells: 2, setRespawn: true }],
-    barriers: [], mandatoryDefenses: [] }, {
-    roundRevision: 1, missionRevision: 0, activatedCheckpoints: [], completedCheckpoints: [],
-    nextCheckpointId: 'entry', respawnCheckpointId: null, routeLockDefenseId: null,
-    resolvedDefenses: [], barriers: [], routeComplete: false,
-  }, 0, true);
-  return () => renderer.destroy();
-}
-
 describe('Shader owners release private Phaser GPU resources', () => {
-  it.each(['mission', 'nova-expiry', 'nova-teardown', 'tesla-field', 'stink', 'stink-probe', 'flame-expiry', 'flame-teardown'] as const)('releases %s without retiring another owner or shared programs', kind => {
+  it.each(['nova-expiry', 'nova-teardown', 'tesla-field', 'stink', 'stink-probe', 'flame-expiry', 'flame-teardown'] as const)('releases %s without retiring another owner or shared programs', kind => {
     const f = fixture();
     const create = () => {
-      if (kind === 'mission') return mission(f.scene);
       if (kind.startsWith('stink')) {
         const owner = new StinkCloudBody(f.scene as never, f.quads.length, 'stink');
         return () => kind === 'stink-probe' ? owner.destroyShaderProbe() : owner.destroy();

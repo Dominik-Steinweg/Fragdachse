@@ -59,7 +59,7 @@ function fixture() {
   const beer = new CaptureTheBeerRenderer(scene as never);
   const unused = { clear() {}, clearDynamicShadows() {}, setTerrainColorSnapshot() {}, setActive() {} };
   const bundle = Object.fromEntries([
-    'powerUp', 'nuke', 'airstrike', 'encounterTelegraph', 'bossIntro', 'bossPresence', 'voidHunterSparks', 'voidRift', 'voidMeteorIntro', 'meteor', 'rockDestruction', 'watchtowerDestruction', 'carryZones',
+    'powerUp', 'nuke', 'airstrike', 'encounterTelegraph', 'bossIntro', 'bossPresence', 'voidHunterSparks', 'voidRift', 'voidMeteorIntro', 'meteor', 'rockDestruction', 'watchtowerDestruction',
     'mortarStrike', 'firestarter', 'shieldCharger', 'alienCone', 'leafBlower', 'movement', 'burrowGpu', 'shadow', 'lighting',
   ].map(key => [key, unused]));
   Object.assign(bundle, { beer });
