@@ -24,6 +24,7 @@ interface Options {
   arsenal: 'single' | 'mixed';
   motion: 'stand' | 'run' | 'edge';
   upgrades: 'base' | 'full';
+  targets: 'spread' | 'cluster';
 }
 interface Fixture {
   unregister: () => void;
@@ -51,12 +52,14 @@ export function inspectorUltimatesScenario(command: Record<string, unknown>, tim
     arsenal: choice(command.arsenal, 'single', ['single', 'mixed'], 'arsenal'),
     motion: choice(command.motion, 'stand', ['stand', 'run', 'edge'], 'motion'),
     upgrades: choice(command.upgrades, 'base', ['base', 'full'], 'upgrades'),
+    targets: choice(command.targets, 'spread', ['spread', 'cluster'], 'targets'),
   };
   if (variant === 'drones' && (options.ultimate !== 'bomber' || options.motion !== 'stand')) {
     throw Error('drones requires bomber and stand');
   }
   if (options.ultimate === 'holo' && options.motion === 'edge') throw Error('edge is a bomber variant');
   if (options.ultimate === 'bomber' && options.arsenal !== 'single') throw Error('arsenal is a holo parameter');
+  if (options.ultimate !== 'bomber' && command.targets !== undefined) throw Error('targets is a bomber parameter');
   const originals: readonly ConstructionId[] = variant === 'drones' ? ['attack_drone_station']
     : options.ultimate === 'holo' ? options.arsenal === 'mixed' ? templates : templates.slice(0, 1) : [];
   const scenario: DevScenario = {
@@ -110,7 +113,8 @@ export function inspectorUltimatesStatus(controller: DevScenarioController) {
   const squadrons = bridge.getBomberSquadronSnapshot().squadrons.filter(s => s.ownerId === ownerId)
     .map(s => ({ ...s, remainingMs: Math.max(0, s.endsAt - now),
       drones: s.anchors.map((anchor, index) => anchor ? {
-        index, pose: bomberDronePose(s, index, anchor, now), drops: bomberDrops(s, index, anchor),
+        index, aimOffset: anchor.aimOffset, aimAngle: anchor.aimAngle,
+        pose: bomberDronePose(s, index, anchor, now), drops: bomberDrops(s, index, anchor),
       } : null) }));
   return { ...fixture.options, phase: fixture.phase, result: fixture.result, activatedAt: fixture.activatedAt, now,
     // PlayerNetState is published by the host; immediately after pressing Q it may be one tick old.
@@ -127,6 +131,13 @@ function activate(controller: DevScenarioController, fixture: Fixture): void {
   const player = fixture.config.player!;
   // East is fixed at activation, independently of the capture camera/aim point.
   controller.aim = { gridX: player.gridX + 1, gridY: player.gridY };
+  if (fixture.options.targets === 'cluster') {
+    // Present before Q: the first launch must already see the same off-axis targets as later drones.
+    for (const dx of [-0.75, 0, 0.75]) for (const dy of [-0.5, 0.5]) {
+      controller.spawn('zombie-badger', true, 10000000,
+        { gridX: player.gridX + 12 + dx, gridY: player.gridY + 180 / 32 + dy }, false);
+    }
+  }
   controller.ultimate('press');
   fixture.result = structuredClone(controller.lastAction) as LoadoutUseResult;
   if (!fixture.result.ok) {
@@ -135,11 +146,11 @@ function activate(controller: DevScenarioController, fixture: Fixture): void {
   }
   fixture.activatedAt = bridge.getSynchronizedNow();
   fixture.phase = 'activated';
-  // Spawn only after Q, keeping activation free of earlier original-turret salvos.
+  // Spread targets stay after Q, keeping holo activation free of earlier original-turret salvos.
   const edge = fixture.options.motion === 'edge';
   const xs = fixture.options.ultimate === 'holo' ? [25, 35] : edge ? [85, 88] : [35, 41, 47];
   const ys = edge ? [2, 6, 10] : fixture.options.motion === 'run' ? [28, 34, 40, 46, 52] : [26, 30, 34];
-  for (const gridX of xs) for (const gridY of ys) {
+  for (const gridX of fixture.options.targets === 'spread' ? xs : []) for (const gridY of ys) {
     controller.spawn('zombie-badger', true, 10000000, { gridX, gridY }, false);
   }
   if (fixture.options.motion === 'run') controller.move(0, 1, 2400);
@@ -149,14 +160,15 @@ function activate(controller: DevScenarioController, fixture: Fixture): void {
 }
 
 /** action=inspectorUltimates, variant=ultimates|drones, phase=prepare|activate (omitted: both), ultimate=holo|bomber,
- * arsenal=single|mixed, motion=stand|run|edge, upgrades=base|full. Capture via fixed scenario steps. */
+ * arsenal=single|mixed, motion=stand|run|edge, upgrades=base|full, targets=spread|cluster (bomber only). */
 export async function runInspectorUltimatesReview(controller: DevScenarioController, command: Record<string, unknown>): Promise<void> {
   if (!isDevScenarioMode() || !bridge.isHost()) throw Error('Isolated dev host required');
   const phase = choice(command.phase, 'start', ['start', 'prepare', 'activate'], 'phase');
   if (phase === 'activate') {
     const fixture = fixtures.get(controller);
     if (!fixture) throw Error('Prepare inspectorUltimates first');
-    for (const key of ['variant', 'ultimate', 'arsenal', 'motion', 'upgrades'] as const) {
+    if (command.targets !== undefined && fixture.options.ultimate !== 'bomber') throw Error('targets is a bomber parameter');
+    for (const key of ['variant', 'ultimate', 'arsenal', 'motion', 'upgrades', 'targets'] as const) {
       if (command[key] !== undefined && command[key] !== fixture.options[key]) throw Error(`Prepared ${key} differs; prepare a new review`);
     }
     activate(controller, fixture);

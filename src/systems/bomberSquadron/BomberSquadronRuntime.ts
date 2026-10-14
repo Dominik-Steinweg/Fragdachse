@@ -4,7 +4,7 @@ import type {
 } from '../../world/PlayerUltimateBehaviorRuntime';
 import {
   bomberDrops, bomberLaunchAt, bomberPlanParamsFromConfig, bomberSquadronEndsAt, isBomberImpactInWorld,
-  type BomberSquadronDrop, type BomberSquadronWorldBounds,
+  chooseBomberAim, isBomberFlightPlanValid, type BomberAimTarget, type BomberSquadronDrop, type BomberSquadronWorldBounds,
 } from './BomberSquadronPlan';
 import {
   bomberSquadronBombKey, EMPTY_BOMBER_SQUADRON_SNAPSHOT,
@@ -25,6 +25,7 @@ export interface BomberSquadronBombEvent extends BomberSquadronDrop {
 
 export interface BomberSquadronRuntimeDeps {
   readOwner(ownerId: string): { readonly x: number; readonly y: number; readonly color: number } | null;
+  readTargets(): readonly BomberAimTarget[];
   worldBounds(): BomberSquadronWorldBounds;
 }
 
@@ -32,6 +33,7 @@ interface SquadronState {
   snapshot: BomberSquadronDeploymentSnapshot;
   readonly config: BombConfig;
   pending: BomberSquadronBombEvent[];
+  readonly launchedImpacts: BomberSquadronDrop[];
 }
 
 function compareEvents(a: BomberSquadronBombEvent, b: BomberSquadronBombEvent): number {
@@ -55,7 +57,7 @@ export class BomberSquadronRuntime implements PlayerUltimateBomberSquadronCapabi
     if (!owner || ![nowMs, angle, owner.x, owner.y, ...Object.values(params)].every(Number.isFinite)
       || nowMs < 0 || !Number.isInteger(params.droneCount) || params.droneCount < 1
       || !Number.isInteger(params.bombsPerPass) || params.bombsPerPass < 1
-      || params.runSpeedPxPerSec <= 0 || params.corridorLengthPx <= 0
+      || !isBomberFlightPlanValid(params) || params.runSpeedPxPerSec <= 0 || params.corridorLengthPx <= 0
       || Object.values(params).some(value => value < 0)) return { ok: false, reason: 'blocked' };
     const facts = {
       id: this.nextId++, ownerId: playerId, ownerColor: owner.color, startedAt: nowMs, angle, params,
@@ -65,22 +67,24 @@ export class BomberSquadronRuntime implements PlayerUltimateBomberSquadronCapabi
       snapshot: Object.freeze({ ...facts, endsAt: bomberSquadronEndsAt(facts) }),
       config: Object.freeze({ explosionRadius: config.explosionRadius, maxDamage: config.maxDamage,
         minDamage: config.minDamage, fireChunksPerBomb: config.fireChunksPerBomb }),
-      pending: [],
+      pending: [], launchedImpacts: [],
     };
     this.squadrons.set(playerId, state);
     this.launch(state, 0, owner);
     return { ok: true };
   }
 
-  private launch(state: SquadronState, drone: number, owner: BomberSquadronAnchor): void {
-    const anchor = Object.freeze({ x: owner.x, y: owner.y });
+  private launch(state: SquadronState, drone: number, owner: Pick<BomberSquadronAnchor, 'x' | 'y'>): void {
+    const bounds = this.deps.worldBounds();
+    const aim = chooseBomberAim(state.snapshot, drone, owner, this.deps.readTargets(), state.launchedImpacts, bounds);
+    const anchor = Object.freeze({ x: owner.x, y: owner.y, ...aim });
     const anchors = [...state.snapshot.anchors];
     anchors[drone] = anchor;
     state.snapshot = Object.freeze({ ...state.snapshot, anchors: Object.freeze(anchors) });
     this.snapshot = null;
-    const bounds = this.deps.worldBounds();
     for (const drop of bomberDrops(state.snapshot, drone, anchor)) {
       if (!isBomberImpactInWorld(drop.x, drop.y, bounds)) continue;
+      state.launchedImpacts.push(drop);
       const facts = { ...drop, squadronId: state.snapshot.id, ownerId: state.snapshot.ownerId,
         bombKey: bomberSquadronBombKey(state.snapshot.id, drone, drop.pass, drop.bomb), config: state.config };
       state.pending.push({ ...facts, kind: 'drop', at: drop.dropAt }, { ...facts, kind: 'impact', at: drop.impactAt });

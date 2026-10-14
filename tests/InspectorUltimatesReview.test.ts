@@ -113,7 +113,7 @@ describe('Inspector ultimate review', () => {
     host.fireControl = { deployments: [deployment, { ...deployment, id: 2, ownerId: 'other' }] };
     const squadron = { id: 1, ownerId: 'owner', ownerColor: 0, startedAt: host.now, angle: 0,
       params: bomberPlanParamsFromConfig(bomber), stoppedAt: null,
-      anchors: Array.from({ length: bomber.droneCount }, () => ({ x: 0, y: 0 })), endsAt: 0 };
+      anchors: Array.from({ length: bomber.droneCount }, () => ({ x: 0, y: 0, aimOffset: 40, aimAngle: 0.1 })), endsAt: 0 };
     squadron.endsAt = bomberSquadronEndsAt(squadron);
     host.bomber = { squadrons: [squadron] };
     host.now += holo.materializeMs;
@@ -123,6 +123,7 @@ describe('Inspector ultimate review', () => {
         copies: [{ materialized: true, remainingMs: holo.copyLifetimeMs - holo.materializeMs }] }] });
     if (!('squadrons' in status)) throw Error('Review not prepared');
     expect(status.squadrons[0].drones).toHaveLength(bomber.droneCount);
+    expect(status.squadrons[0].drones[0]).toMatchObject({ aimOffset: 40, aimAngle: 0.1 });
     expect(status.squadrons[0].drones[0]!.drops).toHaveLength(bomber.bombsPerPass * squadron.params.passCount);
     expect(host.fireControl.deployments[0]).toEqual(deployment);
     host.revision++;
@@ -152,7 +153,8 @@ describe('Inspector ultimate review', () => {
   });
 
   it('rejects invalid variants and non-isolated/non-host use before starting', async () => {
-    for (const command of [{ ultimate: 'typo' }, { motion: 'edge' }, { arsenal: 'all' }, { upgrades: 3 }, { phase: 'typo' }]) {
+    for (const command of [{ ultimate: 'typo' }, { motion: 'edge' }, { arsenal: 'all' }, { upgrades: 3 }, { phase: 'typo' },
+      { ultimate: 'bomber', targets: 'typo' }, { targets: 'cluster' }, { targets: 'spread' }]) {
       await expect(runInspectorUltimatesReview(controller, command)).rejects.toThrow();
     }
     host.isolated = false;
@@ -160,5 +162,28 @@ describe('Inspector ultimate review', () => {
     host.isolated = true; host.authority = false;
     await expect(runInspectorUltimatesReview(controller, {})).rejects.toThrow('Isolated');
     expect(controller.start).not.toHaveBeenCalled();
+  });
+
+  it('places pinned off-axis cluster targets before activation and guards prepared targets', async () => {
+    await runInspectorUltimatesReview(controller, { phase: 'prepare', ultimate: 'holo' });
+    await expect(runInspectorUltimatesReview(controller, { phase: 'activate', targets: 'spread' }))
+      .rejects.toThrow('targets is a bomber parameter');
+    await runInspectorUltimatesReview(controller, { phase: 'prepare', ultimate: 'bomber', targets: 'cluster' });
+    await expect(runInspectorUltimatesReview(controller, { phase: 'activate', targets: 'spread' }))
+      .rejects.toThrow('Prepared targets differs');
+    vi.mocked(controller.ultimate).mockImplementation(() => {
+      const spawns = vi.mocked(controller.spawn).mock.calls;
+      expect(spawns.length).toBeGreaterThan(1);
+      for (const [kind, pinned, hp, point] of spawns) {
+        expect(kind).toBe('zombie-badger');
+        expect(pinned).toBe(true);
+        expect(hp).toBeGreaterThan(0);
+        expect(point!.gridY).toBeGreaterThan(controller.config.player!.gridY);
+      }
+      controller.lastAction = { ok: true };
+    });
+    await runInspectorUltimatesReview(controller, { phase: 'activate' });
+    expect(inspectorUltimatesStatus(controller)).toMatchObject({ targets: 'cluster', phase: 'activated' });
+    expect(inspectorUltimatesScenario({ ultimate: 'bomber' }).options.targets).toBe('spread');
   });
 });

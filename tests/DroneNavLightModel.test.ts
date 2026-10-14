@@ -29,15 +29,15 @@ describe('drone navigation light model', () => {
   });
 
   it.each(Object.entries(DRONE_NAV_LIGHT_PROFILES))('rotates %s anchors in the flight frame and preserves its band', (_name, profile) => {
-    // East, south, west, north: forward and right in Phaser screen coordinates.
-    for (const [heading, fx, fy, rx, ry] of [[0, 1, 0, 0, 1], [Math.PI / 2, 0, 1, -1, 0],
-      [Math.PI, -1, 0, 0, -1], [-Math.PI / 2, 0, -1, 1, 0]]) {
+    // East, south, west, north: forward and right in Phaser screen coordinates; a banking body narrows only laterally.
+    for (const [heading, fx, fy, rx, ry, lateralScale] of [[0, 1, 0, 0, 1, 1], [Math.PI / 2, 0, 1, -1, 0, .8],
+      [Math.PI, -1, 0, 0, -1, 1], [-Math.PI / 2, 0, -1, 1, 0, .8]]) {
       const model = new DroneNavLightModel();
-      model.submit(100, 200, heading, 1, profile, {});
+      model.submit(100, 200, heading, 1, profile, {}, lateralScale);
       expect(model.pointCount).toBe(profile.anchors.length);
       for (const [i, anchor] of profile.anchors.entries()) {
-        expect(model.points[i].x).toBeCloseTo(100 + fx * anchor.forward + rx * anchor.lateral);
-        expect(model.points[i].y).toBeCloseTo(200 + fy * anchor.forward + ry * anchor.lateral);
+        expect(model.points[i].x).toBeCloseTo(100 + fx * anchor.forward + rx * anchor.lateral * lateralScale);
+        expect(model.points[i].y).toBeCloseTo(200 + fy * anchor.forward + ry * anchor.lateral * lateralScale);
         expect(model.points[i]).toMatchObject({ kind: anchor.kind, band: profile.band, heading });
       }
       expect(profile.anchors.find(a => a.kind === 'nose')!.forward).toBeGreaterThan(0);

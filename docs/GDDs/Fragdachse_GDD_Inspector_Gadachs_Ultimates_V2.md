@@ -230,13 +230,29 @@ entstandenes Bodenfeuer verlängert diese Sperre nicht. Das HUD zeigt während d
 
 **Jede Drohne erfasst Gadachs' Position zu Beginn ihres eigenen Anflugs.** Daraus legt sie einen
 festen Korridor fest. Er beginnt **48 px vor Gadachs** (`corridorLeadPx`) und erstreckt sich
-**640 px in die beim Aktivieren festgelegte Richtung**, mit dem jeweiligen seitlichen Bahnoffset.
+**640 px entlang der beim Anflugstart gewählten Laufrichtung**, mit dem jeweiligen seitlichen Bahnoffset.
 Nachfolgende Spielerbewegungen verändern diesen begonnenen Anflug nicht mehr.
 
-Der Anflug beginnt **240 px vor dem Korridorbeginn** entlang der Bahn und dauert **0,6 s**.
-Während dieses Anflugs wird die Drohne eingeblendet.
+Der Anflug beginnt **1300 px vor dem Korridorbeginn** und dauert **1,5 s**. Eine quintische
+Hermite-Kurve (Krümmung an beiden Enden null) mit Bogenlängentabelle (48 Samples) bremst stetig auf
+die **400 px/s** des Bombenlaufs ab. Beim Standardausschnitt (1920 × 1080 Welt-px um Gadachs) liegt
+jeder Eintrittspunkt für alle Richtungen, Bahnen und Ausrichtungen außerhalb des Bildes; die Drohnen
+fliegen über den Bildschirmrand ein. Nur wenn der Eintritt dennoch im Bild liegt (Kamera am
+World-Rand), blendet der Renderer als Notlösung 250 ms ein. Die feste Dauer verlängert sich dabei nicht.
 
-Bei stillstehendem Gadachs entstehen parallele Bahnen über einer gemeinsamen Fläche:
+Die Einflugpunkte liegen in Formationsreihenfolge auf den ungeschwenkten Grundbahnen; erst die Kurve
+führt auf den ausgerichteten Korridor. Je Drohne bestimmen Staffel-ID und Drohnenindex reproduzierbar
+eine Anfangsrichtung von höchstens **±6°**, einen Eintrittsversatz von **±70 px** längs und höchstens
+30 % des Bahnabstands quer, das Abbremsprofil (Exponent 1,6–2,6), die Schlingerphase und den Abflug. Das Schlingern mit **5 px** Amplitude klingt bis zum Korridor mit Wert, Steigung und Krümmung
+null ab. Der Korridor bleibt gerade und frei von Schlingern; die Wende (§3.6) nutzt dessen gewählte Richtung.
+Nach dem letzten Überflug beschleunigt die Drohne über **2,2 s** weich bis **1100 px/s**, biegt
+nach außen ab (äußere Bahnen bis **18°**, innere weniger, geseedet 50–100 %) und schlingert zunehmend:
+die Staffel fächert auf, statt sich zu kreuzen. Erst die letzten
+**300 ms** blenden aus. An keiner Phasengrenze springt die Drehrate. Die Pose liefert außerdem eine
+Querneigung aus der über ±100 ms gemittelten, weich gesättigten Drehrate; der Renderer verkürzt den
+Körper damit quer zur Flugrichtung um bis zu 22 %, die Flügellichter rücken mit.
+
+Die geplanten Grundbahnen verteilen sich bei stillstehendem Gadachs über eine gemeinsame Fläche:
 
 - Korridorlänge: **640 px**.
 - Seitliche Verteilung der Bahnen: gleichmäßig über **560 px Gesamtbreite**.
@@ -252,9 +268,23 @@ Richtung behält.
 Zusätzliche Drohnen verdichten die Bahnen innerhalb derselben Breite. Zusätzliche Bomben verdichten
 die Einschläge innerhalb derselben Länge.
 
-Die Staffel führt ihre Abwürfe auch ohne vorhandene Gegner aus. Sie sucht keine Einzelziele und
-verfolgt keine fliehenden Gegner. Einschlagpunkte außerhalb der World entfallen, statt am Kartenrand
-auf einen Punkt zusammengedrückt zu werden.
+**User-Abweichung von V1 „sucht keine Einzelziele“ (D37):** Beim eigenen Anflugstart richtet der
+Host jede Drohne einmalig auf möglichst hohen Flächenschaden aus. Er prüft **9 seitliche Offsets
+in ±80 px** und **7 Winkel in ±12°** gegen lebende Gegner (Gewicht 1) und freiliegende feindliche
+Basiszellen (Gewicht 0,5). Drehpunkt ist der Korridorbeginn, der weiterhin knapp vor Gadachs liegt.
+Der Score summiert die linearen Zielbeiträge innerhalb des Explosionsradius über die Einschläge
+des ersten Überflugs in der World. Überlappung kostet **0,6 je Überlappungseinheit** (linear bis zum
+doppelten Radius), gemessen an den gewählten Einschlägen bereits gestarteter Drohnen und an den
+Grundbahnen noch nicht gestarteter. Kein Einschlag darf näher als den halben Bahnabstand an einen
+Einschlag einer bereits gestarteten Drohne rücken. So holt die Staffel Schaden heraus, ohne Bahnen
+zu stapeln.
+Bei Gleichstand gewinnt die kleinste normierte Abweichung, danach der erste Kandidat.
+Ohne Zielbeitrag der besten Wahl bleibt die Grundbahn unverändert. Offset und Winkel werden in
+Wire-Präzision eingefroren und repliziert; Clients treffen keine eigene Zielentscheidung.
+
+Die Staffel führt ihre Abwürfe auch ohne vorhandene Gegner aus und verfolgt nach dem Start keine
+fliehenden Gegner. Einschlagpunkte außerhalb der World entfallen, statt am Kartenrand auf einen
+Punkt zusammengedrückt zu werden. Der Rückflug nutzt exakt dieselbe gewählte Bahn.
 
 ### 3.3 Bombenwirkung
 
@@ -271,7 +301,7 @@ Bomben treffen Gegner und feindliche Basen. Sie beschädigen weder Gadachs noch 
 freundliche Konstruktionen, Felsen oder den Zug.
 
 Die Basisstaffel wirft **48 Bomben** ab. Ihr letzter Einschlag erfolgt bei vollständigem Ablauf
-innerhalb von ungefähr **4,2 Sekunden nach Aktivierung**. Die Summe aller Bombenschäden ist kein
+innerhalb von ungefähr **5,0 Sekunden nach Aktivierung**. Die Summe aller Bombenschäden ist kein
 Einzelschadenswert: Die Einschläge verteilen sich über eine große Fläche.
 
 ### 3.4 Upgradebaum
@@ -310,8 +340,10 @@ Ultimate nicht.
 
 ### 3.6 Bossupgrade Zweiter Anflug
 
-Nach dem ersten Überflug wendet jede Drohne sichtbar in einem **U-Bogen von 1 s hinter dem
-Korridorende** und bombardiert **dieselbe Bahn in Gegenrichtung**. Sie erhält dafür erneut ihre
+Nach dem ersten Überflug wendet jede Drohne sichtbar in einer **Ballonschleife von 1,3 s hinter dem
+Korridorende** und bombardiert **dieselbe Bahn in Gegenrichtung**. Die Schleife hält die
+Laufgeschwindigkeit, schert kurz nach außen aus und dreht dann mit gleichmäßiger Rate zurück; Ein- und
+Ausgang beginnen ohne Drehratensprung. Sie erhält dafür erneut ihre
 vollständige Bombenanzahl. Die Bahn wird nicht auf Gadachs' inzwischen neue Position verschoben.
 
 Voll ausgebaut entstehen **252 Bomben und bis zu 756 Feuerbrocken pro Einsatz**, verteilt auf
@@ -539,6 +571,12 @@ folgen sämtliche dort unter „Design-Defaults“ festgelegten Regeln.
 | D33 | 2026-10-14 | Nachtlicht-Inventar: Angriffsdrohne, Bomber und beide Reparaturdrohnen sind angebunden. Der Dawn-Bombernacht-Überflug bleibt ohne Lichter (nur Formationsschatten feindlicher Tarnkappenbomber, kein sichtbares Fluggerät). Heck-Beacon auf ≈ 221° gesetzt, in die Lücke zwischen cyan- und violettfarbenen Gegneraugen; ein Test sichert den Farbabstand. | Positionslichter widersprächen Tarnung und Feindrolle; Farbtrennung bleibt prüfbar. | Entscheidung Lead-Session |
 | D34 | 2026-10-14 | main gemergt (Dawn-Nachtmodifikatoren, Protokoll 34); Peer-Protokoll auf 35 für `fc`-Art 2, Pflicht-Slice `bq` und gebündelte `fcfx`. | Wire-Änderungen erfordern passende Peers. | Umgesetzt in U3.5 |
 | D31 | 2026-10-14 | Holo-Sockel kleiner und zurückhaltender: etwa 1,2–1,25 × Turmfuß, schmalerer Rand, feinere Ticks, transparentere Scheibe; Turmtyp der Kopie (vor allem MG und Rakete) in Spielgröße klar lesbar. | Der Turm bleibt dominant; der Sockel darf nicht als UI-Plakette wirken. | Befund Leit-Session an GU1, Umsetzung U3.3 |
+| D35 | 2026-10-14 | Einflug aus 1300 px Entfernung in festen 1,5 s; Hermite-Anflug bremst weich auf Laufgeschwindigkeit. Alpha im Plan 1, Einblenden (250 ms) nur als Renderer-Notlösung bei sichtbarem Eintritt. Ersetzt D10. | User-Auftrag: vom Bildschirmrand statt sichtbarem Einblenden. 1300 px decken auch die Bildecken des 1920 × 1080-Ausschnitts samt Ausrichtung ab (1000 px reichten diagonal nicht); erster Einschlag 900 ms später ohne variable Wartezeit. | User-Auftrag U4, Flugmathematik Lead-Session |
+| D36 | 2026-10-14 | Quintische Hermite-Kurve (Krümmung an den Enden null) mit Bogenlängentabelle (48 Samples) und stetiger inverser Interpolation; Schlingern endet am Korridor mit Wert, Steigung und Krümmung null. Abflug integriert 32 feste Schritte, beschleunigt über 2,2 s auf 1100 px/s und dreht weich um 9–18°. Heading aus Positionsdifferenzen bei ±8 ms; Querneigung tanh(Drehrate / 5 rad/s) über ±100 ms. Ersetzt den Abflugteil von D20. | Natürliche Phasenübergänge; deterministische, framerateunabhängige Darstellung. | User-Auftrag U4, Flugmathematik Lead-Session |
+| D37 | 2026-10-14 | Einmalige Host-Ausrichtung beim Drohnenstart mit ±80 px/±12°, 9×7 Kandidaten, Gegnergewicht 1, freiliegenden Basiszellen 0,5 und Überlappungsstrafe 0,6 gegen gestartete Bahnen und die Grundbahnen späterer Drohnen; harter Mindestabstand ½ Bahnabstand zu gestarteten Einschlägen. Ohne Zielbeitrag Grundbahn; kein Tracking nach dem Start. | Explizite User-Abweichung von V1 „sucht keine Einzelziele“: Schaden erhöhen und Geschwaderstreuung bewahren. | User-Auftrag U4 |
+| D38 | 2026-10-14 | FNV-1a über Staffel-ID und Drohnenindex, anschließend Mulberry32: Anfangsrichtung (±6°), Eintrittsversatz (längs ±70 px, quer ≤ 30 % Bahnabstand), Abbremsprofil, Schlingerphase und Abflugstärke variieren je Drohne. Einflugpunkte in Formationsreihenfolge auf den Grundbahnen, Abflug nach außen aufgefächert. | Organisches Geschwader statt identischer Flugkurven; Host und Client rekonstruieren identisch. | User-Auftrag U4 |
+| D39 | 2026-10-14 | Peer-Protokoll 36: `bq` repliziert zehn zusätzliche Flug-/Ausrichtungsparameter und Anker `[x10,y10,offset10,angle1000]`. Host bewertet bereits quantisierte Kandidaten innerhalb der Fenstergrenzen. Budget vier voller Staffeln 3 KiB statt D23: 2 KiB. | Identische Ausrichtung ohne Client-Zielsuche; Zusatzfelder bleiben unabhängig von der Bombenzahl, Budget höchstens 60 KiB/s bei 20 Hz. | Umsetzung U4 |
+| D40 | 2026-10-14 | Ballonwende statt Tropfenwende für den zweiten Anflug: konstante Laufgeschwindigkeit, kurzer Ausschlag nach außen (≈ 29°), Hauptkurve mit flachem Drehratenplateau (≈ 8 rad/s), Drehrate an Ein- und Ausgang null, geschlossen auf dieselbe Bahn; Wendedauer 1,0 → 1,3 s. Ersetzt D14/D21; die Schleife darf Nachbarbahnen zeitversetzt kreuzen. | Die bisherige Tropfenkurve schwankte zwischen 80 und 565 px/s und drehte bis 40 rad/s mit Sprung am Eingang („abgehakt“). Eine geschlossene Wende auf dieselbe Bahn braucht Weg; 1,3 s halten die Spitzenrate niedrig. | User-Auftrag U4, Flugmathematik Lead-Session |
 
 ## 8. Abnahme → Test
 

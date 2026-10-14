@@ -906,10 +906,20 @@ export interface BomberSquadronUltimateConfig extends BaseUltimateConfig {
   readonly droneCount: number;
   /** Abstand zwischen den Anflugstarts zweier Drohnen. */
   readonly launchIntervalMs: number;
-  /** Anflug bis zum Korridorbeginn; währenddessen wird die Drohne eingeblendet. */
+  /** Feste Anflugdauer mit weichem Abbremsen auf Laufgeschwindigkeit. */
   readonly approachMs: number;
   /** Strecke des Anflugs vor dem Korridorbeginn. */
   readonly approachDistancePx: number;
+  readonly entrySpreadPx: number;
+  readonly entryAngleSpreadDeg: number;
+  readonly swayPx: number;
+  readonly departureSpeedPxPerSec: number;
+  readonly departureTurnDeg: number;
+  readonly aimOffsetPx: number;
+  readonly aimAngleDeg: number;
+  readonly aimOffsetSteps: number;
+  readonly aimAngleSteps: number;
+  readonly aimOverlapPenalty: number;
   /** Geschwindigkeit im Bombenlauf. */
   readonly runSpeedPxPerSec: number;
   /** Bomben je Drohne und Überflug („Erweiterter Bombenschacht“). */
