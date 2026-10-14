@@ -25,6 +25,7 @@ export interface MainObjectiveModelInput {
   readonly mapId: string;
   readonly objective: CoopDefenseMapObjective;
   readonly elapsedMs: number;
+  readonly dawnClockActive?: boolean;
   readonly surviveDurationSec?: number;
   readonly dynamicTimeOfDay?: CoopDefenseDynamicTimeOfDayConfig;
   readonly encounterCount: number;
@@ -65,7 +66,7 @@ export function buildMainObjectiveViewModel(input: MainObjectiveModelInput): Mai
       id,
       title: t(input.objective === 'survive' ? 'ui.mainObjective.survive' : 'ui.mainObjective.defendUntilDawn'),
       progressLabel: input.objective === 'defend-until-dawn'
-        ? (endTime ? t('ui.mainObjective.untilTime', { time: endTime }) : '')
+        ? (!input.dawnClockActive && endTime ? t('ui.mainObjective.untilTime', { time: endTime }) : '')
         : `${formatDuration(elapsedMs / 1000, getLocale())} / ${formatDuration(totalMs / 1000, getLocale())}`,
       progress: clamp01(elapsedMs / totalMs),
     };

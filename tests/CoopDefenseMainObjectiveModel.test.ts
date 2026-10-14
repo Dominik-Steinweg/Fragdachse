@@ -32,6 +32,7 @@ describe('buildMainObjectiveViewModel', () => {
     try {
       setLocale('de');
       expect(buildMainObjectiveViewModel(input).progressLabel).toBe('bis 06:15');
+      expect(buildMainObjectiveViewModel({ ...input, dawnClockActive: true }).progressLabel).toBe('');
       setLocale('en');
       expect(buildMainObjectiveViewModel({ ...input, elapsedMs: 470000 }).progressLabel).toBe('until 06:15');
       expect(buildMainObjectiveViewModel({ ...input, dynamicTimeOfDay: undefined }).progressLabel).toBe('');

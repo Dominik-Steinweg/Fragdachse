@@ -19,7 +19,7 @@ describe('Dawn HUD projection', () => {
   const schedule = getDawnSchedule(plans.activity.scheduleId);
   const world = resolveDawnScenario(plans.world, plans.activity).world;
   const sites = buildDawnSiteMarkers(plans.world, world);
-  const input = { schedule, sites, sharedScrap: 72, threat: 1, dayNumber: 3, objectives: null, clockMinutes: 420 };
+  const input = { schedule, sites, sharedScrap: 72, threat: 1, dayNumber: 3, objectives: null };
 
   it('takes positions from world clearings and icons from the planned archetype tier', () => {
     expect(sites.length).toBeGreaterThan(0);
@@ -33,20 +33,16 @@ describe('Dawn HUD projection', () => {
     }
   });
 
-  it('follows each schedule boundary and clamps the end clock and countdown', () => {
-    for (const [index, phase] of schedule.phases.entries()) {
-      const [hours, minutes] = phase.clock.split(':').map(Number);
-      const model = buildDawnHudModel({ ...input, elapsedMs: phase.startMs, clockMinutes: hours * 60 + minutes });
+  it('follows schedule boundaries while the resource card carries no second clock', () => {
+    for (const phase of schedule.phases) {
+      const model = buildDawnHudModel({ ...input, elapsedMs: phase.startMs });
       expect(model.phase).toBe(phase.id);
-      expect(model.clock).toBe(phase.clock);
-      expect(model.remainingSeconds).toBe(((schedule.phases[index + 1]?.startMs ?? schedule.durationMs) - phase.startMs) / 1000);
       expect(model.returnToBase).toBe(phase.id === 'dusk');
       expect(model.sites).toEqual(phase.id === 'day' ? sites : []);
       expect(model).toMatchObject({ scrap: input.sharedScrap, threat: input.threat, dayNumber: input.dayNumber });
     }
     expect(buildDawnHudModel({ ...input, elapsedMs: schedule.durationMs + 1000 }))
-      .toMatchObject({ remainingSeconds: 0, remainingFraction: 0, sites: [] });
-    expect(buildDawnHudModel({ ...input, elapsedMs: 0, clockMinutes: 1439.6 }).clock).toBe('23:59');
+      .toMatchObject({ sites: [] });
   });
 
   it('hands activated sites to secondary objective markers, including completed and failed sites', () => {

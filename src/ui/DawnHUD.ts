@@ -1,4 +1,6 @@
 import * as Phaser from 'phaser';
+import { DawnSundialClock } from './dawn/DawnSundialClock';
+import type { CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { DEPTH } from '../config';
 import { DAWN_SITE_DISPLAY_SIZE } from '../assets/DawnAssets';
 import { DAWN_UI_TEXTURES } from '../assets/DawnUiAssets';
@@ -22,7 +24,7 @@ const CARD = { x: 270, y: 66, width: 480, scale: 0.62 };
 /** Scene-owned projection of replicated Dawn plans, time and objective state. */
 export class DawnHUD {
   private readonly card: HudCard;
-  private modifierIcon: Phaser.GameObjects.Image | null = null;
+  private readonly clock: DawnSundialClock;
   private announcements: CoopDefenseObjectiveAnnouncement | null = null;
   private key = '';
   private phase = '';
@@ -33,6 +35,7 @@ export class DawnHUD {
   private markers: readonly MarkerDescriptor[] = [];
 
   constructor(private readonly scene: Phaser.Scene) {
+    this.clock = new DawnSundialClock(scene);
     this.card = new HudCard(scene, { ...CARD, tone: 'neutral', titleSize: 14, valueSize: 14, kickerSize: 10,
       valueIcon: { key: DAWN_UI_TEXTURES.scrap, size: 18 },
       kickerIcon: { key: DAWN_UI_TEXTURES.threat, size: 18 },
@@ -47,27 +50,28 @@ export class DawnHUD {
     active: boolean; world: WorldDescriptor | null; activity: ActivityDescriptor | null;
     startTime: number; now: number; sharedScrap: number;
     objectives: CoopDefenseSecondaryObjectivePresentationState | null;
-    /** Dargestellte Tageszeit des Lichtsystems. */
-    clockMinutes: number;
+    encounters: CoopDefenseMapConfig['encounters'];
   }): void {
     const plan = input.activity?.parameters?.dawn;
     if (!input.active || !plan || !input.world?.parameters?.dawn || input.startTime <= 0) {
       this.clear();
       return;
     }
-    const key = `${input.world.worldRevision}:${input.startTime}`;
+    const key = `${input.world.worldRevision}:${input.activity?.activityRevision}:${input.startTime}`;
     if (key !== this.key) {
       this.clear();
       this.key = key;
+      this.clock.setRound(getDawnSchedule(plan.scheduleId), input.encounters);
       this.world = resolveWorldDefinition(input.world, input.activity);
       if (!this.world) return;
       this.metrics = resolveCoopDefenseWorldMetrics(this.world.metrics.widthCells, this.world.metrics.heightCells);
       this.sites = buildDawnSiteMarkers(input.world.parameters.dawn, this.world);
     }
     if (!this.world || !this.metrics) return;
+    this.clock.sync(getDawnSchedule(plan.scheduleId), plan, input.now - input.startTime, this.scene.time.now);
     const model = buildDawnHudModel({ schedule: getDawnSchedule(plan.scheduleId), elapsedMs: input.now - input.startTime,
       sharedScrap: input.sharedScrap, threat: plan.threat, dayNumber: plan.dayNumber, sites: this.sites, objectives: input.objectives,
-      clockMinutes: input.clockMinutes, nightModifierId: plan.nightModifierId });
+      nightModifierId: plan.nightModifierId });
     const modifierLabel = model.nightModifier ? t(model.nightModifier.nameKey) : '';
     const label = t(`ui.dawn.phase.${model.phase}`);
     const kicker = t('ui.dawn.dayThreat', { day: model.dayNumber, threat: model.threat });
@@ -80,26 +84,21 @@ export class DawnHUD {
         ...(model.returnToBase ? { detail: t('ui.dawn.returnToBase') } : {}),
       });
     }
-    const remaining = `${Math.floor(model.remainingSeconds / 60)}:${(model.remainingSeconds % 60).toString().padStart(2, '0')}`;
-    const signature = [label, kicker, model.clock, remaining, model.scrap, model.returnToBase, modifierLabel].join('|');
+    const title = t('ui.dawn.clock.day', { day: model.dayNumber });
+    const threat = t('ui.dawn.threat', { threat: model.threat });
+    const signature = [title, threat, model.scrap, tone].join('|');
     if (signature !== this.signature) {
       this.signature = signature;
-      const phaseKicker = [kicker, model.returnToBase ? t('ui.dawn.returnToBase') : '', modifierLabel].filter(Boolean).join(' · ');
-      this.card.setTone(tone).setKicker(phaseKicker)
-        .setValue(t('ui.dawn.scrapCount', { scrap: model.scrap }));
-      const title = t('ui.dawn.phaseTime', { phase: label, clock: model.clock, time: remaining });
+      this.card.setTone(tone).setKicker(threat).setValue(t('ui.dawn.scrapCount', { scrap: model.scrap }));
       this.card.title.setText(title);
       this.card.setWidth(resolveDawnHudWidth({ minimum: CARD.width,
         inset: this.card.width / 2 - this.card.contentRight,
         title: this.card.title.width, value: this.card.value.width, kicker: this.card.kicker.width,
-        valueIcon: this.card.valueIconWidth, kickerIcon: this.card.kickerIconWidth
-          + (model.nightModifier && this.scene.textures.exists(model.nightModifier.iconKey) ? 24 : 0),
+        valueIcon: this.card.valueIconWidth, kickerIcon: this.card.kickerIconWidth,
       })).setTitle(title);
-      // Keep the original left edge when long phase names or counters need more room.
       this.card.root.setPosition(CARD.x - CARD.width / 2 + this.card.width / 2, CARD.y);
     }
-    this.card.setProgress(model.remainingFraction).root.setVisible(true);
-    this.syncModifierIcon(model.nightModifier?.iconKey);
+    this.card.root.setVisible(true);
     const anchor = this.world.persistentBaseSite?.anchor;
     // Sites and the dusk return are projected onto the shared marker system (one key per site).
     this.markers = dawnMarkers({ phase: model.phase, returnToBase: model.returnToBase, objectives: input.objectives,
@@ -108,36 +107,23 @@ export class DawnHUD {
       clock: { nowMs: this.scene.time.now, elapsedMs: input.now - input.startTime } });
   }
 
-  /** Night modifier shown this phase (dusk/night), null otherwise. */
-
   /** Marker candidates of the last sync; empty outside an active Dawn round. */
   getMarkerDescriptors(): readonly MarkerDescriptor[] { return this.markers; }
 
   getReservedHudRects() {
-    return this.card.root.visible ? [{ left: this.card.root.x - this.card.width / 2, right: this.card.root.x + this.card.width / 2,
+    return this.card.root.visible ? [...this.clock.getReservedHudRects(), { left: this.card.root.x - this.card.width / 2, right: this.card.root.x + this.card.width / 2,
       top: CARD.y - this.card.height / 2, bottom: CARD.y + this.card.height / 2 }] : [];
-  }
-
-  private syncModifierIcon(key?: string): void {
-    if (!key || !this.scene.textures.exists(key)) { this.modifierIcon?.setVisible(false); return; }
-    if (!this.modifierIcon) {
-      this.modifierIcon = this.scene.add.image(0, 0, key).setDisplaySize(18, 18);
-      this.card.root.add(this.modifierIcon);
-      promoteToClarityCamera(this.scene, this.modifierIcon);
-    }
-    this.modifierIcon.setTexture(key).setDisplaySize(18, 18).setVisible(true)
-      .setPosition(this.card.contentRight - 9, this.card.kicker.y);
   }
 
   private clear(): void {
     this.markers = [];
     this.card.root.setVisible(false);
-    this.modifierIcon?.setVisible(false);
+    this.clock.clear();
     if (!this.key) return;
     this.announcements?.clearTopic('dawn-phase');
     this.key = ''; this.phase = ''; this.signature = ''; this.world = null; this.metrics = null; this.sites = [];
     this.markers = [];
   }
 
-  destroy(): void { this.clear(); this.card.destroy(); }
+  destroy(): void { this.clear(); this.card.destroy(); this.clock.destroy(); }
 }

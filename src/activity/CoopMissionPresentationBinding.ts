@@ -219,6 +219,7 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     const mainObjective = buildMainObjectiveViewModel({
       mapId: this.mapConfig.mapId,
       objective: this.mapConfig.objective,
+      dawnClockActive: !!this.runtime.descriptor.parameters?.dawn,
       elapsedMs,
       surviveDurationSec: this.mapConfig.surviveDurationSec,
       dynamicTimeOfDay: this.mapConfig.dynamicTimeOfDay,

@@ -5,16 +5,33 @@ import { describe, expect, it, vi } from 'vitest';
 import exportsJson from '../../src/ui/hudFrameExports.json';
 import { HUD_FRAME_TEXTURE, HUD_TONES, preloadHudFrameAssets } from '../../src/ui/HudFrameAssets';
 import { DAWN_UI_ASSETS } from '../../src/assets/DawnUiAssets';
+import { DAWN_CLOCK_PARTS, dawnClockTexture, preloadDawnClockAssets } from '../../src/assets/DawnClockAssets';
+import { GAME_WIDTH } from '../../src/config';
+import clockManifest from '../../public/assets/ui/dawn-clock/runtime/manifest.json';
 import { runtimeAssetUrl } from '../../src/assets/RuntimeAssetUrls';
 
 const root = resolve(__dirname, '../../public/assets/ui/hud-frames');
 const frames = exportsJson.atlas.frames as Record<string, { frame: { x: number; y: number; w: number; h: number } }>;
 
 describe('HUD frame artwork', () => {
+  it.each([1, 2])('registers all sundial layers at %ix with their common canvas', async scale => {
+    const image = vi.fn();
+    preloadDawnClockAssets({ image, scene: { scale: { width: GAME_WIDTH * scale } } } as never);
+    expect(image).toHaveBeenCalledTimes(DAWN_CLOCK_PARTS.length);
+    for (const part of DAWN_CLOCK_PARTS) {
+      const relative = `assets/ui/dawn-clock/runtime/${part}-${scale}x.webp`;
+      expect(image).toHaveBeenCalledWith(dawnClockTexture(part), runtimeAssetUrl(`./${relative}`));
+      const metadata = await sharp(resolve(__dirname, '../../public', relative)).metadata();
+      expect(metadata.format).toBe('webp');
+      expect([metadata.width, metadata.height]).toEqual([clockManifest.designCanvas.width * scale, clockManifest.designCanvas.height * scale]);
+      expect(clockManifest.assets[part].origin).toEqual([clockManifest.pivot.x, clockManifest.pivot.y]);
+    }
+  });
+
   it('preloads the exported atlas and Dawn icons and retains its original and generation prompt', async () => {
     const atlas = vi.fn();
     const image = vi.fn();
-    preloadHudFrameAssets({ atlas, image } as never);
+    preloadHudFrameAssets({ atlas, image, scene: { scale: { width: GAME_WIDTH } } } as never);
     for (const asset of DAWN_UI_ASSETS) {
       expect(image).toHaveBeenCalledWith(asset.key, runtimeAssetUrl(`./assets/ui/dawn/${asset.path}`));
     }
