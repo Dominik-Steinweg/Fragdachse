@@ -1,6 +1,12 @@
 import type * as Phaser from 'phaser';
 import manifest from './manifests/dawn-merchant-ui.json';
 import { runtimeAssetUrl } from './RuntimeAssetUrls';
+import type { CoopDefenseItemSlot } from '../types';
+
+export const DAWN_MERCHANT_ITEM_TEXTURES = {
+  helmet: 'dawn-ui-item-helmet', gloves: 'dawn-ui-item-gloves',
+  armor: 'dawn-ui-item-armor', boots: 'dawn-ui-item-boots',
+} as const satisfies Record<CoopDefenseItemSlot, string>;
 
 export const DAWN_MERCHANT_UI = manifest;
 export type DawnMerchantUiPart = keyof typeof DAWN_MERCHANT_UI;
@@ -8,6 +14,7 @@ const LARGE_ART = ['dealer-expansion', 'dealer-infrastructure', 'dealer-upgrades
   'scrap-magnet', 'scrap-scanner', 'recalibration-core'];
 
 export function dawnMerchantArtTexture(key: string, size: number): string {
+  if (size > 64 && Object.values(DAWN_MERCHANT_ITEM_TEXTURES).some(item => item === key)) return `${key}-128`;
   return size > 64 && LARGE_ART.some(id => key === `dawn-ui-${id}`) ? `${key}-merchant` : key;
 }
 
