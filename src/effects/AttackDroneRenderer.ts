@@ -6,9 +6,12 @@ import type { SyncedAttackDrone, SyncedAttackDroneBomb, SyncedPlaceableRock } fr
 import { ensureCanvasTexture, registerGraphicsObject } from './EffectUtils';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { getVisibleWorldView } from '../ui/HostileBaseIndicator';
+import { CHARACTER_SHADOW_CONFIG } from './ShadowConfig';
+import { DRONE_NAV_LIGHT_PROFILES } from './droneNavLights/DroneNavLightModel';
+import type { DroneNavLightRenderer } from './droneNavLights/DroneNavLightRenderer';
 
 const ASSETS = ['attack-drone-station', 'attack-drone-body', 'attack-drone-gun'] as const;
-const SHADOW = '__attack_drone_shadow', FLASH = '__attack_drone_flash', BOMB = '__attack_drone_bomb';
+const FLASH = '__attack_drone_flash', BOMB = '__attack_drone_bomb';
 interface DroneVisual {
   body: Phaser.GameObjects.Image; gun: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image;
   marker: Phaser.GameObjects.Arc; flash: Phaser.GameObjects.Image;
@@ -21,15 +24,8 @@ export function preloadAttackDroneAssets(loader: Phaser.Loader.LoaderPlugin): vo
     if (asset.clips.length) loader.spritesheet(asset.sheetTextureKey, asset.sheetPath, asset.layout);
   }
 }
-/** Shared drone presentation: the Bomber squadron reuses shadow and bomb textures (assets step 1). */
-export const ATTACK_DRONE_SHADOW_TEXTURE = SHADOW;
-export const ATTACK_DRONE_BOMB_TEXTURE = BOMB;
-export function ensureAttackDroneEffectTextures(scene: Phaser.Scene): void {
-  ensureCanvasTexture(scene.textures, SHADOW, 64, 64, ctx => {
-    const gradient = ctx.createRadialGradient(32, 32, 6, 32, 32, 31);
-    gradient.addColorStop(0, 'rgba(5,12,18,.34)'); gradient.addColorStop(1, 'rgba(5,12,18,0)');
-    ctx.fillStyle = gradient; ctx.fillRect(0, 0, 64, 64);
-  });
+
+function ensureAttackDroneEffectTextures(scene: Phaser.Scene): void {
   ensureCanvasTexture(scene.textures, FLASH, 32, 16, ctx => {
     const gradient = ctx.createRadialGradient(5, 8, 1, 5, 8, 23);
     gradient.addColorStop(0, '#fffce0'); gradient.addColorStop(.25, '#ffd390'); gradient.addColorStop(1, 'rgba(255,147,50,0)');
@@ -42,7 +38,7 @@ export function ensureAttackDroneEffectTextures(scene: Phaser.Scene): void {
   });
 }
 /** Drone body with its rotor clip while flying, the idle texture while docked. */
-export function applyAttackDroneBodyFrame(body: Phaser.GameObjects.Image, now: number, flying: boolean): void {
+function applyAttackDroneBodyFrame(body: Phaser.GameObjects.Image, now: number, flying: boolean): void {
   const asset = getPipelineAsset('attack-drone-body'), clip = asset.clips[0];
   if (clip && flying) body.setTexture(asset.sheetTextureKey, clip.frames[Math.floor(now * clip.frameRate / 1000) % clip.frames.length]);
   else body.setTexture(asset.textureKey);
@@ -56,6 +52,9 @@ export class AttackDroneRenderer {
   private audio: Pick<GameAudioSystem, 'playSound'> | null = null;
   private nextShotSoundAt = 0;
   setAudio(audio: Pick<GameAudioSystem, 'playSound'>): void { this.audio = audio; }
+  private navLights: Pick<DroneNavLightRenderer, 'submit'> | null = null;
+  /** Shared night lights of all flying drones; only flying drones submit their anchors. */
+  setNavLights(lights: Pick<DroneNavLightRenderer, 'submit'> | null): void { this.navLights = lights; }
   constructor(private readonly scene: Phaser.Scene) {
     ensureAttackDroneEffectTextures(scene);
   }
@@ -110,7 +109,11 @@ export class AttackDroneRenderer {
       v.body.setPosition(v.x, v.y).setRotation(v.flightAngle + Math.PI / 2);
       applyAttackDroneBodyFrame(v.body, now, !docked);
       v.gun.setPosition(v.x, v.y).setRotation(v.gunAngle + Math.PI / 2);
-      v.shadow.setPosition(v.x + 2, v.y + (docked ? 1 : 7)).setAlpha(docked ? .55 : 1);
+      // Silhouette shadow in the character shadow band: the drone's own shape, offset by its altitude.
+      applyAttackDroneBodyFrame(v.shadow, now, !docked);
+      v.shadow.setPosition(v.x + (docked ? 1 : 5), v.y + (docked ? 1 : 10)).setRotation(v.flightAngle + Math.PI / 2)
+        .setAlpha(docked ? .3 : .5);
+      if (!docked) this.navLights?.submit(v.x, v.y, v.flightAngle, 1, DRONE_NAV_LIGHT_PROFILES.attackDrone, v.body);
       v.marker.setPosition(v.x, v.y).setFillStyle(s.ownerColor, .75)
         .setRadius(s.phase === 'servicing' ? 3 + Math.sin((now - s.phaseStartedAt) / 100) * .7 : 1.8);
       v.flash.setPosition(v.x + Math.cos(v.gunAngle) * R.muzzleOffset, v.y + Math.sin(v.gunAngle) * R.muzzleOffset).setRotation(v.gunAngle);
@@ -135,7 +138,7 @@ export class AttackDroneRenderer {
     return { state, x: state.x, y: state.y, flightAngle: state.flightAngle, gunAngle: state.gunAngle, flashUntil: -1,
       body: this.scene.add.image(state.x, state.y, 'attack_drone_body').setDisplaySize(40, 40).setDepth(depth),
       gun: this.scene.add.image(state.x, state.y, 'attack_drone_gun').setDisplaySize(40, 40).setDepth(depth + .01),
-      shadow: this.scene.add.image(state.x, state.y, SHADOW).setDisplaySize(45, 37).setDepth(DEPTH.ROCKS - .01),
+      shadow: this.scene.add.image(state.x, state.y, 'attack_drone_body').setDisplaySize(40, 40).setDepth(CHARACTER_SHADOW_CONFIG.depth).setTint(0x05090c),
       marker,
       flash: this.scene.add.image(state.x, state.y, FLASH).setDisplaySize(15, 8).setOrigin(0, .5).setDepth(depth + .03).setVisible(false),
     };

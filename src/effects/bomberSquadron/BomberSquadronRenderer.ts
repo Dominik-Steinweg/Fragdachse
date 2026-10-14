@@ -12,12 +12,12 @@ import type {
   BomberSquadronDeploymentSnapshot, BomberSquadronSnapshot,
 } from '../../systems/bomberSquadron/BomberSquadronSnapshot';
 import { createVisibleWorldView, getVisibleWorldView, type VisibleWorldView } from '../../graphics/CameraWorldView';
-import {
-  applyAttackDroneBodyFrame, ATTACK_DRONE_BOMB_TEXTURE, ensureAttackDroneEffectTextures,
-} from '../AttackDroneRenderer';
 import type { CameraFeedbackController } from '../camera/CameraFeedbackController';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx, sustainedRumble } from '../camera/cameraFeedbackPresets';
 import { registerGraphicsObject } from '../EffectUtils';
+import { DRONE_NAV_LIGHT_PROFILES } from '../droneNavLights/DroneNavLightModel';
+import type { DroneNavLightRenderer } from '../droneNavLights/DroneNavLightRenderer';
+import { BOMBER_DRONE_BODY_ASSET_ID, BOMBER_DRONE_BOMB_ASSET_ID } from './BomberSquadronAssets';
 
 /** Presentation side effects the squadron borrows from the World presentation. */
 export interface BomberSquadronPresentationPorts {
@@ -25,6 +25,8 @@ export interface BomberSquadronPresentationPorts {
   explode(x: number, y: number, radius: number): void;
   playSound(key: AudioAssetKey, x: number, y: number, volumeScale: number): void;
   cameraFeedback(): CameraFeedbackController | null;
+  /** Shared night lights of all flying drones; null where no scene renderer exists. */
+  navLights(): Pick<DroneNavLightRenderer, 'submit'> | null;
   /** Same bounds as the host's impact filter; null while the World has no metrics. */
   worldBounds(): BomberSquadronWorldBounds | null;
   /** Night tint for objects drawn above the lightmap (same rule as tree canopies). */
@@ -33,16 +35,12 @@ export interface BomberSquadronPresentationPorts {
 
 // Bombers fly high: body above canopies and ground effects but below local UI (DEPTH.CANOPY + 0.6),
 // falling bombs just below it, silhouette shadows in the character shadow receiver band.
-/** Slightly larger than the attack drone: closer to the camera. */
-const BODY_SIZE = 44;
+/** Display size of the VTOL bomber (asset bomber-drone-body). */
+const BODY_SIZE = 48;
 /** Altitude read: the silhouette shadow sits clearly offset on the ground. */
 const SHADOW_OFFSET_X = 9, SHADOW_OFFSET_Y = 17, SHADOW_ALPHA = 0.55;
-/** Wingtip position lights: lateral offset from the body centre, small and damped (no glow). */
-const WINGTIP_OFFSET = 18, POSITION_LIGHT_RADIUS = 1.3;
-const PORT_LIGHT_COLOR = 0xc0503f, STARBOARD_LIGHT_COLOR = 0x5aa86a;
-const tintLuminance = (tint: number) => ((tint >> 16 & 255) * .2126 + (tint >> 8 & 255) * .7152 + (tint & 255) * .0722) / 255;
 /** A bomb leaves the bay this far above its impact point and shrinks while it falls. */
-const BOMB_DROP_HEIGHT = 16;
+const BOMB_DROP_HEIGHT = 16, BOMB_SIZE = 12;
 /** Cosmetics are thinned, hits never: at most this many full explosions start per frame. */
 const MAX_EXPLOSIONS_PER_FRAME = 4;
 const SOUND_INTERVAL_MS = 110;
@@ -50,11 +48,15 @@ const RUMBLE_HOLD_MS = 260;
 const CULL_MARGIN = 96;
 const BOMB_AUDIO = resolveExplosionAudio('ATTACK_DRONE_BOMB');
 
-interface PlannedDrop { readonly x: number; readonly y: number; readonly dropAt: number; readonly impactAt: number; done: boolean }
-interface DroneVisual {
-  body: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; marker: Phaser.GameObjects.Arc;
-  portLight: Phaser.GameObjects.Arc; starboardLight: Phaser.GameObjects.Arc;
+/** Rotor clip of the two lift rotors while flying (the bomber never docks). */
+function applyBomberBodyFrame(image: Phaser.GameObjects.Image, now: number): void {
+  const asset = getPipelineAsset(BOMBER_DRONE_BODY_ASSET_ID), clip = asset.clips[0];
+  if (clip) image.setTexture(asset.sheetTextureKey, clip.frames[Math.floor(now * clip.frameRate / 1000) % clip.frames.length]);
+  else image.setTexture(asset.textureKey);
 }
+
+interface PlannedDrop { readonly x: number; readonly y: number; readonly dropAt: number; readonly impactAt: number; done: boolean }
+interface DroneVisual { body: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; marker: Phaser.GameObjects.Arc }
 interface SquadronVisual {
   snapshot: BomberSquadronDeploymentSnapshot;
   /** Impacts before this host time happened before this peer saw the squadron (late join). */
@@ -84,9 +86,7 @@ export class BomberSquadronRenderer {
   private previousNow: number | null = null;
   private destroyed = false;
 
-  constructor(private readonly scene: Phaser.Scene, private readonly ports: BomberSquadronPresentationPorts) {
-    ensureAttackDroneEffectTextures(scene);
-  }
+  constructor(private readonly scene: Phaser.Scene, private readonly ports: BomberSquadronPresentationPorts) {}
 
   update(snapshot: BomberSquadronSnapshot, now: number): void {
     if (this.destroyed) return;
@@ -155,7 +155,7 @@ export class BomberSquadronRenderer {
   }
 
   private drawDrones(visual: SquadronVisual, now: number, view: VisibleWorldView): void {
-    const snapshot = visual.snapshot, body = getPipelineAsset('attack-drone-body');
+    const snapshot = visual.snapshot, body = getPipelineAsset(BOMBER_DRONE_BODY_ASSET_ID), navLights = this.ports.navLights();
     snapshot.anchors.forEach((anchor, drone) => {
       const pose = anchor ? bomberDronePose(snapshot, drone, anchor, now, this.pose) : null;
       const visible = !!pose && pose.alpha > 0.01 && pose.x >= view.x - CULL_MARGIN
@@ -165,35 +165,25 @@ export class BomberSquadronRenderer {
       if (!v) {
         const marker = this.scene.add.circle(pose.x, pose.y, 1.8, snapshot.ownerColor).setDepth(DEPTH.CANOPY + 0.61);
         registerGraphicsObject(this.scene, 'objectiveMarkers', marker);
-        const portLight = this.scene.add.circle(pose.x, pose.y, POSITION_LIGHT_RADIUS, PORT_LIGHT_COLOR).setDepth(DEPTH.CANOPY + 0.62);
-        registerGraphicsObject(this.scene, 'objectiveMarkers', portLight);
-        const starboardLight = this.scene.add.circle(pose.x, pose.y, POSITION_LIGHT_RADIUS, STARBOARD_LIGHT_COLOR).setDepth(DEPTH.CANOPY + 0.62);
-        registerGraphicsObject(this.scene, 'objectiveMarkers', starboardLight);
         v = {
           body: this.scene.add.image(pose.x, pose.y, body.textureKey).setDisplaySize(BODY_SIZE, BODY_SIZE).setDepth(DEPTH.CANOPY + 0.6),
           // Silhouette shadow: the body's own shape, darkened and offset, reads the altitude clearly.
           shadow: this.scene.add.image(pose.x, pose.y, body.textureKey).setDisplaySize(BODY_SIZE, BODY_SIZE).setDepth(CHARACTER_SHADOW_CONFIG.depth),
-          marker, portLight, starboardLight,
+          marker,
         };
         v.shadow.setTint(0x05090c);
         v.body.name = `bomber-squadron:${snapshot.id}:${drone}`;
         visual.drones[drone] = v;
       }
       this.setDroneVisible(v, true);
-      const tint = this.ports.tintAt(pose.x, pose.y);
       const rotation = pose.heading + Math.PI / 2;
-      v.body.setPosition(pose.x, pose.y).setRotation(rotation).setAlpha(pose.alpha).setTint(tint);
-      applyAttackDroneBodyFrame(v.body, now, true);
-      applyAttackDroneBodyFrame(v.shadow, now, true);
+      v.body.setPosition(pose.x, pose.y).setRotation(rotation).setAlpha(pose.alpha).setTint(this.ports.tintAt(pose.x, pose.y));
+      applyBomberBodyFrame(v.body, now);
+      applyBomberBodyFrame(v.shadow, now);
       v.shadow.setPosition(pose.x + SHADOW_OFFSET_X, pose.y + SHADOW_OFFSET_Y).setRotation(rotation)
         .setAlpha(SHADOW_ALPHA * pose.alpha);
       v.marker.setPosition(pose.x, pose.y).setFillStyle(snapshot.ownerColor, 0.75 * pose.alpha);
-      // Damped wingtip lights (no glow): barely there by day, they carry the silhouette at night.
-      const darkness = 1 - tintLuminance(tint);
-      const lightAlpha = (0.25 + 0.6 * darkness) * pose.alpha;
-      const sideX = Math.cos(pose.heading + Math.PI / 2) * WINGTIP_OFFSET, sideY = Math.sin(pose.heading + Math.PI / 2) * WINGTIP_OFFSET;
-      v.portLight.setPosition(pose.x - sideX, pose.y - sideY).setFillStyle(PORT_LIGHT_COLOR, lightAlpha);
-      v.starboardLight.setPosition(pose.x + sideX, pose.y + sideY).setFillStyle(STARBOARD_LIGHT_COLOR, lightAlpha);
+      navLights?.submit(pose.x, pose.y, pose.heading, pose.alpha, DRONE_NAV_LIGHT_PROFILES.bomberDrone, v.body);
     });
   }
 
@@ -211,7 +201,7 @@ export class BomberSquadronRenderer {
         const progress = Math.max(0, Math.min(1, (now - drop.dropAt) / Math.max(1, drop.impactAt - drop.dropAt)));
         const bomb = this.acquireBomb();
         bomb.setPosition(drop.x, drop.y - BOMB_DROP_HEIGHT * (1 - progress))
-          .setDisplaySize(8 - progress * 3, 10 - progress * 3).setTint(this.ports.tintAt(drop.x, drop.y));
+          .setDisplaySize(BOMB_SIZE * (1 - progress * .35), BOMB_SIZE * (1 - progress * .35)).setTint(this.ports.tintAt(drop.x, drop.y));
         continue;
       }
       drop.done = true;
@@ -239,16 +229,16 @@ export class BomberSquadronRenderer {
   }
 
   private setDroneVisible(v: DroneVisual, visible: boolean): void {
-    for (const object of [v.body, v.shadow, v.marker, v.portLight, v.starboardLight]) object.setVisible(visible);
+    for (const object of [v.body, v.shadow, v.marker]) object.setVisible(visible);
   }
 
   private release(visual: SquadronVisual): void {
-    for (const v of visual.drones) if (v) for (const object of [v.body, v.shadow, v.marker, v.portLight, v.starboardLight]) object.destroy();
+    for (const v of visual.drones) if (v) for (const object of [v.body, v.shadow, v.marker]) object.destroy();
     visual.drones.length = 0;
   }
 
   private acquireBomb(): Phaser.GameObjects.Image {
-    const image = (this.bombPool.pop() ?? this.scene.add.image(0, 0, ATTACK_DRONE_BOMB_TEXTURE).setDepth(DEPTH.CANOPY + 0.5))
+    const image = (this.bombPool.pop() ?? this.scene.add.image(0, 0, getPipelineAsset(BOMBER_DRONE_BOMB_ASSET_ID).textureKey).setDepth(DEPTH.CANOPY + 0.5))
       .setActive(true).setVisible(true);
     this.bombs.push(image);
     return image;

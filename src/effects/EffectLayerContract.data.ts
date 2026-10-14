@@ -2886,7 +2886,7 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:effects/AttackDroneRenderer.ts:createDrone/marker/setDepth/0","owner":"effects/AttackDroneRenderer.ts","component":"createDrone/marker/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[15.42],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"createDrone/marker/setDepth/0","expression":"depth + .02"}},
   {"id":"cpu:effects/AttackDroneRenderer.ts:createDrone/this.scene.add/setDepth/0","owner":"effects/AttackDroneRenderer.ts","component":"createDrone/this.scene.add/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[15.4],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"createDrone/this.scene.add/setDepth/0","expression":"depth"}},
   {"id":"cpu:effects/AttackDroneRenderer.ts:createDrone/this.scene.add/setDepth/1","owner":"effects/AttackDroneRenderer.ts","component":"createDrone/this.scene.add/setDepth/1","height":"body","lighting":"material","camera":"world","depths":[15.41],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"createDrone/this.scene.add/setDepth/1","expression":"depth + .01"}},
-  {"id":"cpu:effects/AttackDroneRenderer.ts:createDrone/this.scene.add/setDepth/2","owner":"effects/AttackDroneRenderer.ts","component":"createDrone/this.scene.add/setDepth/2","height":"body","lighting":"material","camera":"world","depths":[8.99],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"createDrone/this.scene.add/setDepth/2","expression":"DEPTH.ROCKS - .01"}},
+  {"id":"cpu:effects/AttackDroneRenderer.ts:createDrone/this.scene.add/setDepth/2","owner":"effects/AttackDroneRenderer.ts","component":"createDrone/this.scene.add/setDepth/2","height":"ground","lighting":"material","camera":"world","depths":[9.92],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"createDrone/this.scene.add/setDepth/2","expression":"CHARACTER_SHADOW_CONFIG.depth"}},
   {"id":"cpu:effects/AttackDroneRenderer.ts:createDrone/this.scene.add/setDepth/3","owner":"effects/AttackDroneRenderer.ts","component":"createDrone/this.scene.add/setDepth/3","height":"body","lighting":"material","camera":"world","depths":[15.43],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"createDrone/this.scene.add/setDepth/3","expression":"depth + .03"}},
   {"id":"cpu:effects/BfgRenderer.ts:createVisual/coreEmitter/createEmitter/0","owner":"effects/BfgRenderer.ts","component":"createVisual/coreEmitter/createEmitter/0","height":"body","lighting":"emissive","camera":"world","depths":[16.05],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/coreEmitter/createEmitter/0","expression":"DEPTH_BFG + 0.05"}},
   {"id":"cpu:effects/BfgRenderer.ts:createVisual/outerEmitter/createEmitter/0","owner":"effects/BfgRenderer.ts","component":"createVisual/outerEmitter/createEmitter/0","height":"body","lighting":"emissive","camera":"world","depths":[16],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/outerEmitter/createEmitter/0","expression":"DEPTH_BFG"}},
@@ -3711,7 +3711,7 @@ export const CPU_SOURCE_CONTRACTS = {
       },
       {
         "key": "createDrone/this.scene.add/setDepth/2",
-        "expression": "DEPTH.ROCKS - .01",
+        "expression": "CHARACTER_SHADOW_CONFIG.depth",
         "blends": [
           "NORMAL"
         ]
@@ -8297,8 +8297,6 @@ Object.assign(CPU_SOURCE_CONTRACTS, {
     "cameras": [],
     "sites": [
       { "key": "drawDrones/marker/setDepth/0", "expression": "DEPTH.CANOPY + 0.61", "blends": ["NORMAL"] },
-      { "key": "drawDrones/portLight/setDepth/0", "expression": "DEPTH.CANOPY + 0.62", "blends": ["NORMAL"] },
-      { "key": "drawDrones/starboardLight/setDepth/0", "expression": "DEPTH.CANOPY + 0.62", "blends": ["NORMAL"] },
       { "key": "drawDrones/v/setDepth/0", "expression": "DEPTH.CANOPY + 0.6", "blends": ["NORMAL"] },
       { "key": "drawDrones/v/setDepth/1", "expression": "CHARACTER_SHADOW_CONFIG.depth", "blends": ["NORMAL"] },
       { "key": "acquireBomb/image/setDepth/0", "expression": "DEPTH.CANOPY + 0.5", "blends": ["NORMAL"] }
@@ -8319,9 +8317,42 @@ const BOMBER_SQUADRON_LAYER_CONTRACTS: readonly LayerContract[] = [
   bomberSquadronLayer('drawDrones/v/setDepth/0', 'DEPTH.CANOPY + 0.6', 20.6, 'high', 'mixed', 'H'),
   bomberSquadronLayer('drawDrones/v/setDepth/1', 'CHARACTER_SHADOW_CONFIG.depth', 9.92, 'ground', 'material', 'M'),
   bomberSquadronLayer('drawDrones/marker/setDepth/0', 'DEPTH.CANOPY + 0.61', 20.61, 'high', 'mixed', 'H'),
-  bomberSquadronLayer('drawDrones/portLight/setDepth/0', 'DEPTH.CANOPY + 0.62', 20.62, 'high', 'mixed', 'H'),
-  bomberSquadronLayer('drawDrones/starboardLight/setDepth/0', 'DEPTH.CANOPY + 0.62', 20.62, 'high', 'mixed', 'H'),
   bomberSquadronLayer('acquireBomb/image/setDepth/0', 'DEPTH.CANOPY + 0.5', 20.5, 'high', 'mixed', 'H'),
 ];
 (CPU_LAYER_CONTRACTS as LayerContract[]).push(...BOMBER_SQUADRON_LAYER_CONTRACTS);
 (EFFECT_LAYER_CONTRACTS as LayerContract[]).push(...BOMBER_SQUADRON_LAYER_CONTRACTS);
+
+// drone night lights: shared light quads of all flying drones, above the night overlay. The
+// under-canopy band stays below tree crowns; the over-canopy band sits above high-flying bombers.
+Object.assign(CPU_SOURCE_CONTRACTS, {
+  "effects/droneNavLights/DroneNavLightRenderer.ts": {
+    "blends": ["Phaser.BlendModes.ADD"],
+    "cameras": [],
+    "sites": [
+      { "key": "module/underBloom/EnemyEyeBatch/0", "expression": "DEPTH_LIGHTING + .13", "blends": ["ADD"] },
+      { "key": "module/underHalo/EnemyEyeBatch/0", "expression": "DEPTH_LIGHTING + .135", "blends": ["NORMAL"] },
+      { "key": "module/underCore/EnemyEyeBatch/0", "expression": "DEPTH_LIGHTING + .14", "blends": ["NORMAL"] },
+      { "key": "module/overBloom/EnemyEyeBatch/0", "expression": "DEPTH.CANOPY + .65", "blends": ["ADD"] },
+      { "key": "module/overHalo/EnemyEyeBatch/0", "expression": "DEPTH.CANOPY + .66", "blends": ["NORMAL"] },
+      { "key": "module/overCore/EnemyEyeBatch/0", "expression": "DEPTH.CANOPY + .67", "blends": ["NORMAL"] }
+    ],
+    "bindings": {}
+  },
+});
+const DRONE_NAV_LIGHT_OWNER = 'effects/droneNavLights/DroneNavLightRenderer.ts';
+const droneNavLightLayer = (component: string, expression: string, depth: number, height: LayerContract['height'],
+  blend: LayerContract['blends'][number], profile: LayerContract['profiles'][number]): LayerContract => ({
+  id: `cpu:${DRONE_NAV_LIGHT_OWNER}:${component}`, owner: DRONE_NAV_LIGHT_OWNER, component, height,
+  lighting: 'emissive', camera: 'world', depths: [depth], blends: [blend], profiles: [profile], role: 'effect',
+  source: { selector: component, expression },
+});
+const DRONE_NAV_LIGHT_LAYER_CONTRACTS: readonly LayerContract[] = [
+  droneNavLightLayer('module/underBloom/EnemyEyeBatch/0', 'DEPTH_LIGHTING + .13', 19.63, 'body', 'ADD', 'E'),
+  droneNavLightLayer('module/underHalo/EnemyEyeBatch/0', 'DEPTH_LIGHTING + .135', 19.635, 'body', 'NORMAL', 'E'),
+  droneNavLightLayer('module/underCore/EnemyEyeBatch/0', 'DEPTH_LIGHTING + .14', 19.64, 'body', 'NORMAL', 'E'),
+  droneNavLightLayer('module/overBloom/EnemyEyeBatch/0', 'DEPTH.CANOPY + .65', 20.65, 'high', 'ADD', 'H'),
+  droneNavLightLayer('module/overHalo/EnemyEyeBatch/0', 'DEPTH.CANOPY + .66', 20.66, 'high', 'NORMAL', 'H'),
+  droneNavLightLayer('module/overCore/EnemyEyeBatch/0', 'DEPTH.CANOPY + .67', 20.67, 'high', 'NORMAL', 'H'),
+];
+(CPU_LAYER_CONTRACTS as LayerContract[]).push(...DRONE_NAV_LIGHT_LAYER_CONTRACTS);
+(EFFECT_LAYER_CONTRACTS as LayerContract[]).push(...DRONE_NAV_LIGHT_LAYER_CONTRACTS);

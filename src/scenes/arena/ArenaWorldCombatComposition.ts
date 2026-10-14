@@ -402,6 +402,7 @@ export function composeWorldCombatGameplay(
     explode: (x, y, radius) => ctx.effectSystem.playExplosionEffect(x, y, radius, 0xffae57, 'rocket'),
     playSound: (key, x, y, volumeScale) => ctx.gameAudioSystem.playSound(key, x, y, undefined, volumeScale),
     cameraFeedback: () => ctx.visualFeedback.camera,
+    navLights: () => input.renderers?.droneNavLights ?? null,
   });
 }
 

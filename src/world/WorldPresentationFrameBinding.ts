@@ -81,7 +81,7 @@ export type FireControlSnapshotSource = (now: number) => FireControlSnapshot;
 /** Bestätigte Bomberstaffeln (Slice `bq`); Host und Client lesen dieselbe Quelle. */
 export type BomberSquadronSnapshotSource = () => BomberSquadronSnapshot;
 /** Explosion, audio and camera ports the squadron presentation borrows from the scene. */
-export type BomberSquadronEffectPorts = Pick<BomberSquadronPresentationPorts, 'explode' | 'playSound' | 'cameraFeedback'>;
+export type BomberSquadronEffectPorts = Pick<BomberSquadronPresentationPorts, 'explode' | 'playSound' | 'cameraFeedback' | 'navLights'>;
 
 export interface WorldPresentationPersistentBaseVisuals {
   sync(site: WorldPersistentBaseSite | null, metrics: WorldMetrics | null, showOverlay: boolean): void;

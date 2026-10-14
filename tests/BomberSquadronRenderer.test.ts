@@ -1,11 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({}));
 vi.mock('../src/config/pipelineAssets', () => ({
-  getPipelineAsset: () => ({ textureKey: 'body', sheetTextureKey: 'body-sheet', clips: [{ frames: [0, 1], frameRate: 10 }] }),
-}));
-vi.mock('../src/effects/AttackDroneRenderer', () => ({
-  ensureAttackDroneEffectTextures: () => {}, applyAttackDroneBodyFrame: () => {},
-  ATTACK_DRONE_SHADOW_TEXTURE: 'shadow', ATTACK_DRONE_BOMB_TEXTURE: 'bomb',
+  getPipelineAsset: (id: string) => id === 'bomber-drone-bomb' ? { textureKey: 'bomb', sheetTextureKey: 'bomb', clips: [] }
+    : { textureKey: 'body', sheetTextureKey: 'body-sheet', clips: [{ frames: [0, 1], frameRate: 10 }] },
 }));
 vi.mock('../src/effects/EffectUtils', () => ({ registerGraphicsObject: () => {} }));
 import { BomberSquadronRenderer } from '../src/effects/bomberSquadron/BomberSquadronRenderer';
@@ -28,7 +25,7 @@ function fixture(worldBounds = WORLD) {
   const created: any[] = [];
   const factory = (_x?: number, _y?: number, texture?: unknown) => {
     const o: any = { destroy: vi.fn(), visible: true, texture };
-    for (const name of ['setDisplaySize', 'setDepth', 'setRotation', 'setTint', 'setFillStyle', 'setActive'])
+    for (const name of ['setDisplaySize', 'setDepth', 'setRotation', 'setTint', 'setFillStyle', 'setActive', 'setTexture'])
       o[name] = vi.fn(() => o);
     o.setPosition = (x: number, y: number) => { o.x = x; o.y = y; return o; };
     o.setAlpha = (alpha: number) => { o.alpha = alpha; return o; };
@@ -41,7 +38,7 @@ function fixture(worldBounds = WORLD) {
   };
   const explode = vi.fn();
   const renderer = new BomberSquadronRenderer(scene as any, {
-    explode, playSound: vi.fn(), cameraFeedback: () => null, worldBounds: () => worldBounds, tintAt: () => 0xffffff,
+    explode, playSound: vi.fn(), cameraFeedback: () => null, navLights: () => null, worldBounds: () => worldBounds, tintAt: () => 0xffffff,
   });
   return { renderer, created, explode };
 }
@@ -54,8 +51,8 @@ describe('Bomber squadron presentation', () => {
     const f = fixture();
     const first = squadron([{ x: 1000, y: 2000 }, ...Array(params.droneCount - 1).fill(null)]);
     f.renderer.update({ squadrons: [first] }, 1300);
-    // One launched drone: body, shadow, marker and two position lights; unlaunched ones do not exist.
-    expect(f.created.filter(o => o.texture !== 'bomb')).toHaveLength(5);
+    // One launched drone: body, shadow and marker; unlaunched ones do not exist (lights are shared, not per drone).
+    expect(f.created.filter(o => o.texture !== 'bomb')).toHaveLength(3);
     const expected = bomberDrops(first, 0, first.anchors[0]!);
     let now = 1300;
     for (const impactAt of [...expected.map(drop => drop.impactAt)].sort((a, b) => a - b)) {
