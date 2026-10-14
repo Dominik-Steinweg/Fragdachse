@@ -782,8 +782,18 @@ export class ArenaGenerator {
     mapConfig: ArenaGenerationMapConfig,
     bases: readonly BaseSpec[],
   ): boolean {
+    return this.resolveSpawnToBaseRoutes(blocked, tracks, mapConfig, bases).every(Boolean);
+  }
+
+  /** Reachability of the friendly base per authored spawn source, in a stable order; empty without targets. */
+  private resolveSpawnToBaseRoutes(
+    blocked: boolean[][],
+    tracks: readonly TrackCell[],
+    mapConfig: ArenaGenerationMapConfig,
+    bases: readonly BaseSpec[],
+  ): boolean[] {
     const targetCells = this.getFriendlyBaseGoalCells(blocked, bases);
-    if (targetCells.size === 0) return true;
+    if (targetCells.size === 0) return [];
 
     const trackCells = new Set<number>();
     for (const track of tracks) {
@@ -824,11 +834,8 @@ export class ArenaGenerator {
       sourceGroups.push(this.getSpawnFrontCells(front, blocked, baseCells, bases));
     }
 
-    for (const sources of sourceGroups) {
-      if (sources.length === 0) return false;
-      if (!this.canReachTrackSafeGoal(sources, targetCells, blocked, trackCells)) return false;
-    }
-    return true;
+    return sourceGroups.map((sources) => sources.length > 0
+      && this.canReachTrackSafeGoal(sources, targetCells, blocked, trackCells));
   }
 
   private getFriendlyBaseGoalCells(
@@ -1805,8 +1812,14 @@ export class ArenaGenerator {
     ): ArenaGroundHazardZone => ({ eventId: event.id, id, cells });
 
     const zones: ArenaGroundHazardZone[] = [];
-    // Hazard cells of route-preserving events count as walls for the spawn-to-base route check.
+    // Hazard cells of route-preserving events count as walls for the spawn-to-base route check;
+    // a patch may not close any route that is open without them.
     const routeBlocked = blocked.map(row => [...row]);
+    let routeBaseline: boolean[] | null = null;
+    const keepsRoutesOpen = (cells: ArenaGroundHazardZone['cells']): boolean => {
+      routeBaseline ??= this.resolveSpawnToBaseRoutes(routeBlocked, tracks, mapConfig, coopBaseSpecs);
+      return this.keepsSpawnRoutesOpen(routeBlocked, cells, routeBaseline, tracks, mapConfig, coopBaseSpecs);
+    };
     // Resolve source patches before their extensions, independently of authored event order.
     const orderedEvents = [...events.filter(event => event.area.type !== 'expanded-patches'),
       ...events.filter(event => event.area.type === 'expanded-patches')];
@@ -1909,7 +1922,7 @@ export class ArenaGenerator {
               }
             }
           }
-          if (cells.length >= 4 && (!area.preserveRoutes || this.keepsSpawnRoutesOpen(routeBlocked, cells, tracks, mapConfig, coopBaseSpecs))) {
+          if (cells.length >= 4 && (!area.preserveRoutes || keepsRoutesOpen(cells))) {
             selected = cells;
             selectedPatch = { centerX, centerY, radiusCells: radius };
           }
@@ -1928,16 +1941,18 @@ export class ArenaGenerator {
     return zones;
   }
 
-  /** Marks a candidate patch as blocked if every authored spawn still reaches the base; otherwise leaves it out. */
+  /** Marks a candidate patch as blocked if no previously open spawn route closes; otherwise leaves it out. */
   private keepsSpawnRoutesOpen(
     routeBlocked: boolean[][],
     cells: ArenaGroundHazardZone['cells'],
+    baseline: readonly boolean[],
     tracks: readonly TrackCell[],
     mapConfig: ArenaGenerationMapConfig,
     bases: readonly BaseSpec[],
   ): boolean {
     for (const cell of cells) routeBlocked[cell.gridY][cell.gridX] = true;
-    if (this.hasAcceptableSpawnToBaseRoutes(routeBlocked, tracks, mapConfig, bases)) return true;
+    const routes = this.resolveSpawnToBaseRoutes(routeBlocked, tracks, mapConfig, bases);
+    if (baseline.every((open, index) => !open || routes[index])) return true;
     for (const cell of cells) routeBlocked[cell.gridY][cell.gridX] = false;
     return false;
   }
