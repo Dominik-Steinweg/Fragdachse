@@ -87,7 +87,7 @@ void main() {
   vec2 direction=vec2(cos(vExtra.x),sin(vExtra.x));
   vec2 q=vec2(dot(p,direction),dot(p,vec2(-direction.y,direction.x)));
   float anchor=vGeometry.z>.5 && vExtra.y<7.0 ? r*.85 : r;
-  float pointer=triangle(q,vec2(anchor-2.0,-3.5),vec2(anchor+vExtra.y,0.0),vec2(anchor-2.0,3.5));
+  float pointer=triangle(q,vec2(anchor-2.0,-3.5*vExtra.y/6.0),vec2(anchor+vExtra.y,0.0),vec2(anchor-2.0,3.5*vExtra.y/6.0));
   float silhouette=min(d,pointer);
   over(result,vec3(0.0),cover(silhouette-1.0)*.4);
   vec3 brass=mix(vec3(.44,.28,.12),vec3(.88,.69,.36),clamp(.55-p.y/(r*2.2)-p.x/(r*6.0),0.0,1.0));
@@ -97,7 +97,9 @@ void main() {
   over(result,vec3(.94,.78,.46),cover(abs(d+1.0)-.28)*.42);
   // Brass and tone rim scale with the badge (30 px: 2.6 + 3), so the clamped 22 px
   // badge still keeps a readable walnut disc and glyph.
-  float brassW=clamp(r*.17,1.6,3.2), rimW=clamp(r*.2,1.8,3.6), innerD=brassW+rimW;
+  float brassW=clamp(r*.17,1.6,4.2), rimW=clamp(r*.2,1.8,4.7), innerD=brassW+rimW;
+  // Detail size follows the badge (authored at a 30 px badge), so dots and marks grow with it.
+  float k=max(r/15.0,.8);
   vec3 walnut=mix(vec3(.075,.044,.025),vec3(.145,.095,.055),clamp(.5-p.y/(2.0*r),0.0,1.0));
   over(result,walnut,cover(d+brassW));
   vec3 innerTone=tone;
@@ -127,19 +129,19 @@ void main() {
     vec3 tierColor=vState.x<1.5?vec3(.73,.35,.19):vState.x<2.5?vec3(.59,.62,.29):vec3(.36,.79,.81);
     for(int i=0;i<3;i++) {
       if(float(i)>=vState.x) break;
-      vec2 dotP=p-vec2((float(i)-(vState.x-1.0)*.5)*6.0,r+9.0);
-      over(result,vec3(0.0),cover(length(dotP)-2.8)*.4);
-      over(result,tierColor,cover(length(dotP)-2.0));
+      vec2 dotP=p-vec2((float(i)-(vState.x-1.0)*.5)*6.0*k,r+9.0*k);
+      over(result,vec3(0.0),cover(length(dotP)-2.8*k)*.4);
+      over(result,tierColor,cover(length(dotP)-2.0*k));
     }
   }
   if(vState.y>.5) {
-    vec2 mark=p-vec2(r*.72,r*.68);
-    over(result,walnut,cover(length(mark)-5.7));
-    over(result,tone,cover(abs(length(mark)-5.0)-.7));
+    vec2 mark=(p-vec2(r*.72,r*.68))/k;
+    over(result,walnut,cover((length(mark)-5.7)*k));
+    over(result,tone,cover((abs(length(mark)-5.0)-.7)*k));
     float symbol=vState.y<1.5
       ? min(line(mark,vec2(-2.7,0.0),vec2(-.7,2.0)),line(mark,vec2(-.7,2.0),vec2(3.0,-2.5)))
       : min(line(mark,vec2(-2.2),vec2(2.2)),line(mark,vec2(-2.2,2.2),vec2(2.2,-2.2)));
-    over(result,vec3(.96,.92,.80),cover(symbol-.9));
+    over(result,vec3(.96,.92,.80),cover((symbol-.9)*k));
   }
   gl_FragColor=result*vGeometry.w;
 }`;

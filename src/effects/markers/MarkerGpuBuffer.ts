@@ -56,7 +56,8 @@ export class MarkerGpuBuffer {
       ((a.color >> 16) & 255) / 255, ((a.color >> 8) & 255) / 255, (a.color & 255) / 255,
       b.progress === undefined ? -1 : clamp(b.progress, 0, 1),
       clamp(b.tier ?? 0, 0, 3), a.status, a.vulnerable, a.period,
-      finite(b.pointerAngle), b.space === 'screen' ? 8 : 6, 16, low ? 0 : 1,
+      finite(b.pointerAngle), b.space === 'screen' ? MARKER_LIMITS.edgePointerPx : MARKER_LIMITS.worldPointerPx,
+      MARKER_LIMITS.glyphMaxPx, low ? 0 : 1,
       f.u0, f.v0, f.u1, f.v1]);
     return this.append();
   }

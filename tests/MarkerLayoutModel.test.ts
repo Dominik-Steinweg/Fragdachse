@@ -5,7 +5,7 @@ import {
   type MarkerLayoutInput,
 } from '../src/effects/markers/MarkerLayoutModel';
 import { getMarkerEdgeBounds } from '../src/effects/markers/MarkerEdgeLayout';
-import { MARKER_LIMITS, MARKER_STYLES, type MarkerDescriptor } from '../src/effects/markers/MarkerTypes';
+import { MARKER_LIMITS, MARKER_SCALE, MARKER_STYLES, type MarkerDescriptor } from '../src/effects/markers/MarkerTypes';
 
 const descriptor = (key: string, overrides: Partial<MarkerDescriptor> = {}): MarkerDescriptor => ({
   key, kind: 'site', state: 'dormant', glyph: 'site-wreck', x: 400, y: 300,
@@ -151,7 +151,7 @@ describe('MarkerLayoutModel compass layout and grouping', () => {
 
   it('drops distance text before dropping a marker in a narrow gap', () => {
     const frame = new MarkerLayoutModel().layout(input([atAngle('a', 0, { x: 32000000 })], {
-      camera: { ...input([]).camera, viewport: { x: 0, y: 0, width: 60, height: 60 } },
+      camera: { ...input([]).camera, viewport: { x: 0, y: 0, width: Math.round(60 * MARKER_SCALE), height: Math.round(60 * MARKER_SCALE) } },
     }));
     expect(frame.edgeBadges).toHaveLength(1);
     expect(frame.edgeBadges[0].distanceLabel).toBeUndefined();

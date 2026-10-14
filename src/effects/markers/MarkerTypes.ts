@@ -37,18 +37,25 @@ export interface MarkerStyle {
   readonly diameter: number;
 }
 
+/**
+ * Globaler Groessenfaktor (Leit-Abnahme 2026-10-14): Weltbadges, Randpfeile, Zeiger, Abstaende und
+ * Entfernungstext wachsen gemeinsam; die Stilvorgabe nennt die Basiswerte (30/34/36, Clamp 22–40).
+ */
+export const MARKER_SCALE = 1.3;
+const scaled = (designPx: number): number => Math.round(designPx * MARKER_SCALE);
+
 /** Eine Quelle fuer Form, Ton und Groesse je Typ (Tabelle „Typen“ der Stilvorgabe). */
 export const MARKER_STYLES: Readonly<Record<MarkerKind, MarkerStyle>> = {
-  'main-objective': { shape: 'round', tone: 'gold', diameter: 36 },
-  return: { shape: 'round', tone: 'gold', diameter: 36 },
-  boss: { shape: 'round', tone: 'purple', diameter: 34 },
-  site: { shape: 'round', tone: 'blue', diameter: 30 },
-  mission: { shape: 'round', tone: 'blue', diameter: 30 },
-  carry: { shape: 'round', tone: 'blue', diameter: 30 },
-  delivery: { shape: 'round', tone: 'green', diameter: 30 },
-  checkpoint: { shape: 'round', tone: 'gold', diameter: 30 },
-  hazard: { shape: 'triangle', tone: 'red', diameter: 32 },
-  utility: { shape: 'round', tone: 'orange', diameter: 24 },
+  'main-objective': { shape: 'round', tone: 'gold', diameter: scaled(36) },
+  return: { shape: 'round', tone: 'gold', diameter: scaled(36) },
+  boss: { shape: 'round', tone: 'purple', diameter: scaled(34) },
+  site: { shape: 'round', tone: 'blue', diameter: scaled(30) },
+  mission: { shape: 'round', tone: 'blue', diameter: scaled(30) },
+  carry: { shape: 'round', tone: 'blue', diameter: scaled(30) },
+  delivery: { shape: 'round', tone: 'green', diameter: scaled(30) },
+  checkpoint: { shape: 'round', tone: 'gold', diameter: scaled(30) },
+  hazard: { shape: 'triangle', tone: 'red', diameter: scaled(32) },
+  utility: { shape: 'round', tone: 'orange', diameter: scaled(24) },
 };
 
 export const MARKER_LIMITS = {
@@ -56,13 +63,19 @@ export const MARKER_LIMITS = {
   edgeArrows: 6,
   /** Gleichartige Randziele innerhalb dieses Winkels werden zu einem Badge „n×“ gebuendelt. */
   edgeBundleDegrees: 18,
-  edgeInsetPx: 24,
-  edgeMinSpacingPx: 8,
-  edgeBadgeDiameter: 28,
-  screenDiameterMin: 22,
-  screenDiameterMax: 40,
+  edgeInsetPx: scaled(24),
+  edgeMinSpacingPx: scaled(8),
+  edgeBadgeDiameter: scaled(28),
+  screenDiameterMin: scaled(22),
+  screenDiameterMax: scaled(40),
   /** Abstand Badge-Unterkante zur Ziel-Oberkante (Spielgeometrie), Designpixel. */
-  anchorGapPx: 10,
+  anchorGapPx: scaled(10),
+  /** Zeigerlaenge Randpfeil / Weltbadge und Entfernungstext, Designpixel. */
+  edgePointerPx: scaled(8),
+  worldPointerPx: scaled(6),
+  labelFontPx: scaled(11),
+  /** Groesste Glyphe (Atlas waehlt 16/24/32 px). */
+  glyphMaxPx: scaled(16),
   fadeAfterResolvedMs: 2500,
   pulsePeriodMs: 1600,
   urgentPulsePeriodMs: 800,

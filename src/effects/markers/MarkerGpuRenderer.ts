@@ -93,12 +93,12 @@ export class MarkerGpuRenderer implements MarkerRenderer {
       if (!label) continue;
       let text = this.labels[index];
       if (!text) {
-        text = this.scene.add.text(0, 0, '', { fontFamily: 'Chakra Petch', fontSize: '11px', fontStyle: 'bold',
-          color: '#f5ebcc', stroke: '#20150e', strokeThickness: 3, padding: { x: 2, y: 1 } })
+        text = this.scene.add.text(0, 0, '', { fontFamily: 'Chakra Petch', fontSize: `${MARKER_LIMITS.labelFontPx}px`, fontStyle: 'bold',
+          color: '#f5ebcc', stroke: '#20150e', strokeThickness: Math.round(MARKER_LIMITS.labelFontPx / 3.5), padding: { x: 2, y: 1 } })
           .setOrigin(.5, 0).setScrollFactor(0).setDepth(MARKER_GPU_DEPTHS.edge + .01);
         promoteToClarityCamera(this.scene, text); this.labels.push(text);
       }
-      const belowPointer = Math.max(0, Math.sin(badge.pointerAngle)) * 8;
+      const belowPointer = Math.max(0, Math.sin(badge.pointerAngle)) * MARKER_LIMITS.edgePointerPx;
       text.setText(label).setPosition(badge.x, badge.y + (badge.diameter / 2 + belowPointer + 3) * badge.scale)
         .setAlpha(badge.alpha).setScale(badge.scale).setResolution(getTextResolution(this.scene.scale)).setVisible(true);
       index++;
@@ -128,8 +128,8 @@ export class MarkerGpuRenderer implements MarkerRenderer {
 
 /** Mirrors the fragment shader: brass and tone rim scale with the radius, the glyph fills the walnut disc. */
 export function markerGlyphDisplaySize(radius: number, shape: 'round' | 'triangle'): number {
-  const inner = Math.min(3.2, Math.max(1.6, radius * .17)) + Math.min(3.6, Math.max(1.8, radius * .2));
-  return Math.min(16, Math.max(7, shape === 'triangle' ? radius * .9 - 3 : 2 * (radius - inner) - 1));
+  const inner = Math.min(4.2, Math.max(1.6, radius * .17)) + Math.min(4.7, Math.max(1.8, radius * .2));
+  return Math.min(MARKER_LIMITS.glyphMaxPx, Math.max(7, shape === 'triangle' ? radius * .9 - 3 : 2 * (radius - inner) - 1));
 }
 
 /** Kept lazy: importing the renderer in headless tests never evaluates Phaser GPU classes. */

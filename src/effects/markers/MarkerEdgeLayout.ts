@@ -10,12 +10,14 @@ export interface MarkerViewport extends MarkerPoint { readonly width: number; re
 export function getMarkerEdgeBounds(
   point: MarkerPoint, distanceLabel?: string, countLabel?: string,
 ): HudOcclusionRect {
-  const radius = MARKER_LIMITS.edgeBadgeDiameter * 1.1 / 2 + 8;
+  const radius = MARKER_LIMITS.edgeBadgeDiameter * 1.1 / 2 + MARKER_LIMITS.edgePointerPx;
   const label = [countLabel, distanceLabel].filter(Boolean).join(' · ');
-  const halfWidth = Math.max(radius, Array.from(label).length * 8 / 2 + 2);
+  // Label metrics were measured at 11 px (8 px per glyph, 17 px line) and scale with the font.
+  const font = MARKER_LIMITS.labelFontPx / 11;
+  const halfWidth = Math.max(radius, Array.from(label).length * 8 * font / 2 + 2);
   return {
     left: point.x - halfWidth, right: point.x + halfWidth,
-    top: point.y - radius, bottom: point.y + radius + (label ? 17 : 0),
+    top: point.y - radius, bottom: point.y + radius + (label ? 17 * font : 0),
   };
 }
 

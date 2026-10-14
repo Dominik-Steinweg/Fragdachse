@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { MarkerGpuRenderer } from '../effects/markers/MarkerGpuRenderer';
-import { MARKER_GLYPH_IDS, MARKER_STYLES, type MarkerBadgeInstance, type MarkerFrame, type MarkerKind } from '../effects/markers/MarkerTypes';
+import { MARKER_GLYPH_IDS, MARKER_LIMITS, MARKER_STYLES, type MarkerBadgeInstance, type MarkerFrame, type MarkerKind } from '../effects/markers/MarkerTypes';
 import { MARKER_GLYPH_ATLAS_KEY, MARKER_GLYPH_FALLBACK_KEY } from '../effects/markers/MarkerGlyphAtlas';
 import { ClarityCameraRegistry, promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { LightingSystem } from '../effects/LightingSystem';
@@ -87,7 +87,7 @@ class MarkerReviewScene extends Phaser.Scene {
     this.frames = this.renderers.map((_, panel) => {
       const left = 18 + panel * 474;
       const world = (key: string, kind: MarkerKind, glyph: MarkerBadgeInstance['glyph'], x: number, y: number, text: string, extra: Partial<MarkerBadgeInstance> = {}) => {
-        const size = Math.max(22, Math.min(40, MARKER_STYLES[kind].diameter * zoom));
+        const size = Math.max(MARKER_LIMITS.screenDiameterMin, Math.min(MARKER_LIMITS.screenDiameterMax, MARKER_STYLES[kind].diameter * zoom));
         const label = this.add.text(left + x, y + 49, text, { fontFamily: 'Chakra Petch', fontSize: '12px', color: '#ebdfc7', stroke: '#1e190f', strokeThickness: 3 }).setOrigin(.5, 0).setDepth(100);
         promoteToClarityCamera(this, label); this.frameLabels.push(label);
         return makeBadge(key, kind, glyph, (left + x) / zoom, y / zoom, { ...extra, diameter: size / zoom });
@@ -104,7 +104,7 @@ class MarkerReviewScene extends Phaser.Scene {
       ];
       const edgeBadges = ([['return', 'base'], ['mission', 'mission-hold'], ['carry', 'crate'], ['delivery', 'flag'], ['checkpoint', 'flag'], ['utility', 'tool']] as const)
         .map(([kind, glyph], i) => makeBadge(`edge-${kind}`, kind, glyph, left + 66 + (i % 3) * 162, 573 + Math.floor(i / 3) * 103,
-          { space: 'screen', diameter: 28, pointerAngle: [-Math.PI / 2, .4, Math.PI, 1.5, -2.4, 0][i],
+          { space: 'screen', diameter: MARKER_LIMITS.edgeBadgeDiameter, pointerAngle: [-Math.PI / 2, .4, Math.PI, 1.5, -2.4, 0][i],
             distanceLabel: `${[85, 42, 12, 24, 105, 18][i]} m`, count: i === 1 ? 3 : undefined, pulse: i === 0 ? 'urgent' : 'none' }));
       const groundRings = [0, 1, 2].map(i => ({ key: `ground-${i}`, x: (left + 100 + i * 132) / zoom,
         y: 184 / zoom, radiusPx: 43 / zoom, tone: (['gold', 'purple', 'red'] as const)[i], alpha: .8 }));
