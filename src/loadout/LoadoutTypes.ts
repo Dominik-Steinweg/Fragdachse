@@ -867,4 +867,76 @@ export interface TunnelUltimateConfig extends BaseUltimateConfig {
   readonly buildLabel: string;
 }
 
-export type UltimateConfigShape = BuffUltimateConfig | GaussUltimateConfig | AirstrikeUltimateConfig | TunnelUltimateConfig;
+/**
+ * Holo-Offensive (GDD Inspector Gadachs Ultimates V2 §2): rage-skalierte, zeitversetzte und
+ * eigenständige Holo-Kopien eigener Türme um den Besitzer. `rageRequired` ist die
+ * Aktivierungsschwelle („Frühstart“); verbraucht wird die gesamte Rage bei Aktivierung.
+ * Ein/Aus-Schalter sind 0/1-Werte, damit Upgrades sie per `add_per_level` setzen.
+ */
+export interface HoloOffensiveUltimateConfig extends BaseUltimateConfig {
+  readonly type: 'holo_offensive';
+  /** Erzeugungsdauer = eingesetzte Rage ÷ diesem Wert (Sekunden); unabhängig von `rageRequired`. */
+  readonly ragePerSpawnSecond: number;
+  /** Abstand zwischen zwei Spawnterminen; der erste Termin liegt bei der Aktivierung. */
+  readonly spawnIntervalMs: number;
+  /** Lebensdauer jeder Kopie ab ihrer Entstehung. */
+  readonly copyLifetimeMs: number;
+  /** Erster Teil der Lebensdauer, in dem die Kopie sichtbar entsteht und noch nicht feuert. */
+  readonly materializeMs: number;
+  /** Ringradien in Prüfreihenfolge (bevorzugter Ring zuerst). */
+  readonly spawnRingRadiiPx: readonly number[];
+  /** Winkelpositionen je Ring; sie werden reihum verwendet. */
+  readonly spawnRingSlots: number;
+  /** Freiraum über begehbarem Boden (`isPointFree`). */
+  readonly clearanceRadiusPx: number;
+  /** Mindestabstand zu allen temporären Kopien, auch zu Relais-Kopien der Turmkopien-Utility. */
+  readonly minCopySpacingPx: number;
+  /** 0/1: „Injektorprojektion“ – jede Kopie trägt den Injektor-Effekt ihres Turmtyps. */
+  readonly injectorProjectionEnabled: number;
+}
+
+/**
+ * Bombergeschwader (GDD Inspector Gadachs Ultimates V2 §3): Drohnenstaffel in fester Richtung,
+ * deren Korridore beim Anflugstart jeder Drohne an der Position des Besitzers verankert werden.
+ * Der Feuerbrocken-Ablauf (Streuung, Landung, Bodenfeuer) kommt aus dem Angriffsdrohnenprofil.
+ */
+export interface BomberSquadronUltimateConfig extends BaseUltimateConfig {
+  readonly type: 'bomber_squadron';
+  readonly rageCost: number;
+  readonly droneCount: number;
+  /** Abstand zwischen den Anflugstarts zweier Drohnen. */
+  readonly launchIntervalMs: number;
+  /** Anflug bis zum Korridorbeginn; währenddessen wird die Drohne eingeblendet. */
+  readonly approachMs: number;
+  /** Strecke des Anflugs vor dem Korridorbeginn. */
+  readonly approachDistancePx: number;
+  /** Geschwindigkeit im Bombenlauf. */
+  readonly runSpeedPxPerSec: number;
+  /** Bomben je Drohne und Überflug („Erweiterter Bombenschacht“). */
+  readonly bombsPerPass: number;
+  /** 0/1: „Zweiter Anflug“ – Wende hinter dem Korridor, dieselbe Bahn rückwärts. */
+  readonly secondPassEnabled: number;
+  /** Korridorbeginn vor dem Besitzer in Flugrichtung. */
+  readonly corridorLeadPx: number;
+  readonly corridorLengthPx: number;
+  /** Gesamtbreite, über die die Bahnen gleichmäßig verteilt werden. */
+  readonly corridorWidthPx: number;
+  /** Dauer des U-Bogens hinter dem Korridorende vor dem zweiten Überflug. */
+  readonly turnMs: number;
+  /** Abflug nach dem letzten Überflug, bis die Drohne verschwunden ist (nur Darstellung). */
+  readonly departureMs: number;
+  readonly bombFallMs: number;
+  readonly explosionRadius: number;
+  readonly maxDamage: number;
+  readonly minDamage: number;
+  /** Feuerbrocken je Bombe („Brandladung“); 0 = keine. */
+  readonly fireChunksPerBomb: number;
+}
+
+export type UltimateConfigShape =
+  | BuffUltimateConfig
+  | GaussUltimateConfig
+  | AirstrikeUltimateConfig
+  | TunnelUltimateConfig
+  | HoloOffensiveUltimateConfig
+  | BomberSquadronUltimateConfig;

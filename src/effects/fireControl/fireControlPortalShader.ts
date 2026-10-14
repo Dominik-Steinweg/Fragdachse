@@ -19,6 +19,7 @@ varying vec2 vLocal;
 varying vec4 vShape, vState;
 const float TAU = 6.2831853;
 float line(float d, float w) { return 1.0 - smoothstep(w, w + uPixel * .8, abs(d)); }
+float hash1(float n) { return fract(sin(n) * 43758.5453); }
 void main() {
   float radius = vShape.x, angle = vShape.y, kind = vShape.z, opening = vShape.w;
   float remaining = vState.x, flash = vState.y, mode = vState.z;
@@ -28,7 +29,48 @@ void main() {
   // The exit has no facing; per-shot flashes are separate ExitFlash instances.
   if (kind < .5 || (kind > 1.5 && kind < 3.5)) q = p;
   float intensity = 0.0, core = 0.0;
-  if (kind > 4.5) {
+  if (kind > 6.5) {
+    // Holo genesis: a short, narrow streak from the owner (x = 0) to the new copy (x = radius).
+    // The head races out, a thin tail follows and a small ring marks where the copy forms.
+    float L = radius, t = remaining;
+    float head = L * smoothstep(0.0, .5, t);
+    float tail = L * smoothstep(.15, .75, t);
+    float wob = sin(q.x * .23 + vState.w * 1.7 + uTime * 23.0) * .6 * (1.0 - t);
+    float y = q.y - wob;
+    float span = step(tail, q.x) * (1.0 - smoothstep(head - .5, head + 1.0, q.x));
+    float along = clamp((q.x - tail) / max(head - tail, 1.0), 0.0, 1.0);
+    float coreLine = exp(-y * y / .35) * span * (.35 + .65 * along);
+    float glow = exp(-y * y / 3.2) * span * (.2 + .45 * along);
+    float fade = 1.0 - smoothstep(.65, 1.0, t);
+    float arrive = smoothstep(.42, .55, t);
+    float rr = length(q - vec2(L, 0.0));
+    float ringR = 3.0 + 8.0 * smoothstep(.45, 1.0, t);
+    float burst = (line(rr - ringR, .6) * .8 + exp(-rr * rr / 8.0) * .9) * arrive * (1.0 - smoothstep(.55, 1.0, t));
+    intensity = (glow * .7 + coreLine * 1.5) * fade + burst;
+    core = coreLine * 1.0 * fade + burst * .4;
+  } else if (kind > 5.5) {
+    // Holo plate rim (PLATE_v06): eight short tangential ticks just inside the dark octagon,
+    // one per flat edge. The dark plate itself is a sprite below the copy; this layer adds only
+    // the ticks and a tight halo, so the turret stays dominant. Ticks charge one after another
+    // (opening), elapsed eighths of the copy's life dim quietly (remaining), shots pulse them
+    // and the warning phase (mode) makes them flicker.
+    float a = atan(q.y, q.x);
+    float sector = floor(a / (TAU / 8.0) + .5);
+    float ca = sector * TAU / 8.0;
+    vec2 dir = vec2(cos(ca), sin(ca));
+    float radial = dot(q, dir) - radius, tangent = dot(q, vec2(-dir.y, dir.x));
+    float bar = (1.0 - smoothstep(.42, .42 + uPixel * .9, abs(radial)))
+      * (1.0 - smoothstep(2.3, 2.3 + uPixel * .9, abs(tangent)));
+    float halo = exp(-radial * radial / 2.0 - tangent * tangent / 8.0);
+    // Clockwise from the top tick (screen y points down, so the top is sector -2).
+    float order = mod(sector + 10.0, 8.0);
+    float lit = smoothstep(order / 8.0, (order + 1.0) / 8.0, opening * 1.08);
+    float life = mix(.32, 1.0, step(order, remaining * 8.0 - .001));
+    float flicker = 1.0 - mode * .5 * step(.6, hash1(floor(uTime * 14.0) + order * 7.0 + vState.w));
+    float strength = lit * life * flicker * (1.0 + flash * .5);
+    intensity = (bar * 1.1 + halo * .14) * strength;
+    core = bar * .3 * strength;
+  } else if (kind > 4.5) {
     // One directed burst per transported shot. q is aligned with the shot: +x points outward.
     // The ring segment flares, then a short streak leaves the iris; nothing points back
     // toward the source turret.

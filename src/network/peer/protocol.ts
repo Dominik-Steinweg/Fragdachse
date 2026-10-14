@@ -22,7 +22,9 @@
 // entitlements and the appended elite affix enemy snapshot field.
 // Fire control portals: portal deployments in the fc slice, portal throw payload and route.
 // Dawn expansion track: area stages end at 6, core HP bonus world parameter, Dawn plasma turret rewards.
-export const PEER_PROTOCOL_VERSION = 34;
+// Inspector ultimates: holo deployments (fc kind 2), required bq bomber squadron slice and
+// per-frame batched fcfx burst arrays with World revision.
+export const PEER_PROTOCOL_VERSION = 35;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

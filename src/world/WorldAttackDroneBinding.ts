@@ -1,4 +1,5 @@
 import { CELL_SIZE } from '../config';
+import { attackDroneFireChunkProfile } from './AttackDroneFireChunkProfile';
 import { ATTACK_DRONE_RULES as R, ATTACK_DRONE_SOURCE as SOURCE, resolveAttackDroneStats } from '../config/attackDrone';
 import { combatTargetInstanceKey, isSameCombatTargetInstance, type CombatSource, type CombatTargetRef } from '../combat/CombatScope';
 import type { WorldCombatCore } from '../combat/WorldCombatCore';
@@ -182,17 +183,9 @@ export class WorldAttackDroneBinding {
     o.combat.applyExplosionDamage(a.x, a.y, effect, a.ownerId, 'utility', SOURCE.bomb, b.source);
     o.explosionFx(a.x, a.y, effect.radius, SOURCE.bomb);
     if (a.stats.chunksPerBomb <= 0) return;
-    let randomSeed = 2166136261;
-    for (const char of a.attackId) randomSeed = Math.imul(randomSeed ^ char.charCodeAt(0), 16777619);
-    o.playerCombat.fireChunks?.hostCreateFireChunkBurst(a.ownerId, a.x, a.y, {
-      randomSeed,
-      count: a.stats.chunksPerBomb, searchRadius: R.chunkRadius, flightMs: R.chunkFlightMs,
-      requireLineOfSight: true, igniteCenter: false, durationMs: R.groundDurationMs,
-      burnDurationMs: R.burnDurationMs, burnDamagePerTick: R.burnDamagePerTick * b.multiplier,
-      sourceId: SOURCE.fire, damageTarget: 'enemies', baseDamageMult: 0,
-      landingExplosion: { ...effect, radius: R.chunkExplosionRadius, maxDamage: R.chunkMaxDamage * b.multiplier,
-        minDamage: R.chunkMinDamage * b.multiplier, audioSourceId: SOURCE.chunk, visualStyle: 'rocket' },
-    }, a.attackId, b.snapshot.landsAt, { ...b.source, authoredSourceId: SOURCE.fire, origin: 'ground',
+    o.playerCombat.fireChunks?.hostCreateFireChunkBurst(a.ownerId, a.x, a.y,
+      attackDroneFireChunkProfile(a.attackId, a.stats.chunksPerBomb, b.multiplier, effect, SOURCE),
+      a.attackId, b.snapshot.landsAt, { ...b.source, authoredSourceId: SOURCE.fire, origin: 'ground',
       lineage: { ...b.source.lineage, parentEffectId: a.attackId } });
   }
 }

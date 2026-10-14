@@ -1,11 +1,14 @@
 ﻿import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({}));
 vi.mock('../src/effects/fireControl/FireControlPortalGpuLayer', () => ({ createFireControlPortalGpuLayer: () => null }));
-vi.mock('../src/effects/fireControl/FireControlHologramFilter', () => ({ FireControlHologramFilter: class {} }));
-vi.mock('../src/effects/TurretAnimationController', () => ({ TurretAnimationController: class { update() {} clear() {} } }));
+vi.mock('../src/effects/fireControl/FireControlHologramFilter', () => ({ FireControlHologramFilter: class { uniforms = { materialize: 0 }; destroy = vi.fn(); } }));
+vi.mock('../src/effects/fireControl/HoloPlateAssets', () => ({ ensureHoloPlateTexture: () => {}, HOLO_PLATE_TEXTURE: 'plate',
+  HOLO_PLATE_SIZE: 52, HOLO_PLATE_TICK_RADIUS: 21.5, HOLO_PLATE_ALPHA: .82 }));
+vi.mock('../src/effects/TurretAnimationController', () => ({ TurretAnimationController: class { update() {} clear() {} bind() {} syncPose() {} onShot() {} } }));
 import { FireControlRenderer } from '../src/effects/fireControl/FireControlRenderer';
 import { FIRE_CONTROL_RELAY as asset, fireControlRelayFrame } from '../src/effects/fireControl/FireControlRelayAssets';
-import type { FireControlCopiesDeploymentSnapshot } from '../src/systems/fireControl/FireControlSnapshot';
+import { FireControlGpuKind, FIRE_CONTROL_VERTICES, FIRE_CONTROL_WORDS } from '../src/effects/fireControl/FireControlPortalGpuStore';
+import { fireControlHoloSourceId, type FireControlCopiesDeploymentSnapshot, type FireControlHoloDeploymentSnapshot } from '../src/systems/fireControl/FireControlSnapshot';
 
 const deploy = asset.clips.find(c => c.name === 'deploy')!;
 const duration = deploy.frames.length / deploy.frameRate * 1000;
@@ -14,7 +17,7 @@ const deployment: FireControlCopiesDeploymentSnapshot = {
   startedAt: 1000, expiresAt: 16000, parallel: false, copies: [],
 };
 function fixture(loaded = true) {
-  const sprites: any[] = [];
+  const sprites: any[] = [], plates: any[] = [];
   const scene = {
     textures: { exists: () => loaded },
     load: { spritesheet: vi.fn(), isLoading: () => false, start: vi.fn() },
@@ -25,6 +28,12 @@ function fixture(loaded = true) {
       s.setFrame = (frame: number) => { s.frame = frame; return s; };
       s.setAlpha = (alpha: number) => { s.alpha = alpha; return s; };
       sprites.push(s); return s;
+    }, image: (x: number, y: number, texture: string) => {
+      const s: any = { x, y, texture, destroy: vi.fn() };
+      for (const name of ['setDisplaySize', 'setDepth']) s[name] = vi.fn(() => s);
+      s.setPosition = (x: number, y: number) => { Object.assign(s, { x, y }); return s; };
+      s.setAlpha = (alpha: number) => { s.alpha = alpha; return s; };
+      plates.push(s); return s;
     } },
   };
   const lights = new Set<string>();
@@ -32,7 +41,7 @@ function fixture(loaded = true) {
     releaseLight: (key: string) => { lights.delete(key); } };
   const renderer = new FireControlRenderer(scene as any, () => undefined, 'A', lighting as any);
   const update = (now: number, deployments = [deployment]) => renderer.update({ deployments }, now);
-  return { renderer, sprites, lights, update, scene, loaded: () => { loaded = true; } };
+  return { renderer, sprites, plates, lights, update, scene, loaded: () => { loaded = true; } };
 }
 
 describe('fire-control relay presentation', () => {
@@ -80,5 +89,35 @@ describe('fire-control relay presentation', () => {
     f.update(1000); f.update(1200, []); f.loaded(); f.update(1500, []);
     expect(f.sprites).toHaveLength(0);
     f.renderer.destroy();
+  });
+  it('draws holo copies on their own plate without relay or beam and retires each on its own clock', () => {
+    const f = fixture();
+    const copy = (seq: number, spawnedAt: number) => ({ seq, sourceId: fireControlHoloSourceId(7, seq),
+      weaponId: 'TURRET_MG' as const, x: 100 + seq * 40, y: 50, angle: 0, spawnedAt });
+    const holo = (copies: ReturnType<typeof copy>[]): FireControlHoloDeploymentSnapshot => ({ id: 7, ownerId: 'p1',
+      ownerColor: 0x3dffd0, kind: 'holo', x: 0, y: 0, startedAt: 1000, expiresAt: 7750, copyLifetimeMs: 6000,
+      materializeMs: 400, spawnUntil: 7000, copies });
+    const kinds = () => Array.from({ length: f.renderer.store.count },
+      (_, i) => f.renderer.store.data[i * FIRE_CONTROL_VERTICES * FIRE_CONTROL_WORDS + 6]);
+    f.update(1000, [holo([copy(0, 1000)])]);
+    // The plate's rim charges before the hologram forms.
+    f.update(1100, [holo([copy(0, 1000)])]);
+    expect(f.plates[0].alpha).toBeGreaterThan(0);
+    expect((f.renderer as any).copies.get(copy(0, 1000).sourceId).filter.uniforms.materialize).toBe(0);
+    f.update(1750, [holo([copy(0, 1000), copy(1, 1750)])]);
+    expect(f.sprites).toHaveLength(2);
+    expect(f.plates).toHaveLength(2);
+    expect(kinds().filter(kind => kind === FireControlGpuKind.HoloPlate)).toHaveLength(2);
+    expect(kinds()).not.toContain(FireControlGpuKind.Projector);
+    expect(kinds()).not.toContain(FireControlGpuKind.Filament);
+    // The first copy expires while its sibling lives on; its plate goes with it.
+    f.update(7000, [holo([copy(1, 1750)])]);
+    f.update(7400, [holo([copy(1, 1750)])]);
+    expect(f.sprites[0].destroy).toHaveBeenCalledOnce();
+    expect(f.plates[0].destroy).toHaveBeenCalledOnce();
+    expect(f.sprites[1].destroy).not.toHaveBeenCalled();
+    f.renderer.destroy();
+    expect(f.sprites[1].destroy).toHaveBeenCalledOnce();
+    expect(f.plates[1].destroy).toHaveBeenCalledOnce();
   });
 });

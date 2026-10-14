@@ -114,6 +114,7 @@ export interface WeaponFireOptions {
   /** Sprite of the firing source; omitted = sourceTurretId. Never attribution. */
   turretVisualId?: string;
   personalMgOwnerId?: string;
+  readonly injectorEffect?: import('../types').EnergyInjectorConstructionEffect;
   readonly personalMgScope?: import('../combat/CombatScope').CombatScope;
   /** Orts-/konstruktspezifischer Faktor fuer den unmittelbaren Treffer. */
   directDamageMultiplier?: number;
@@ -347,6 +348,7 @@ export class WeaponFireExecutor implements WeaponExecutionCapability {
         sourceSlot,
         sourceTurretId: options?.sourceTurretId,
         personalMgOwnerId: options?.personalMgOwnerId,
+        injectorEffect: options?.injectorEffect,
         personalMgScope: options?.personalMgScope,
         correlation: { ak47ShotId: config.ak47ShotId },
       }),

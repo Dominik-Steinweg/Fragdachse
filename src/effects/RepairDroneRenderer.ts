@@ -4,13 +4,18 @@ import type { SyncedPlaceableRock, SyncedRepairDrone } from '../types';
 import {
   REPAIR_DRONE_SMOOTH_TIME_MS as SMOOTH_TIME_MS,
   createRepairDroneBody,
+  createRepairDroneShadow,
+  updateRepairDroneShadow,
   updateRepairDroneRotors,
 } from './repairDroneVisuals';
 import { getRepairDroneWorkProbe, RepairDroneEffects } from './RepairDroneEffects';
 import type { LightingSystem } from './LightingSystem';
+import { DRONE_NAV_LIGHT_PROFILES } from './droneNavLights/DroneNavLightModel';
+import type { DroneNavLightRenderer } from './droneNavLights/DroneNavLightRenderer';
 
 interface RepairDroneVisual {
   body: Phaser.GameObjects.Image;
+  shadow: Phaser.GameObjects.Image;
   effects: RepairDroneEffects;
   ownerColor: number;
   currentX: number;
@@ -24,6 +29,9 @@ interface RepairDroneVisual {
 export class RepairDroneRenderer {
   private readonly visuals = new Map<string, RepairDroneVisual>();
   private lighting: LightingSystem | null = null;
+  private navLights: Pick<DroneNavLightRenderer, 'submit'> | null = null;
+
+  setNavLights(lights: Pick<DroneNavLightRenderer, 'submit'> | null): void { this.navLights = lights; }
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -82,6 +90,9 @@ export class RepairDroneRenderer {
       const dx = aim.x - visual.currentX, dy = aim.y - visual.currentY;
       if (Math.hypot(dx, dy) > 0.5) visual.body.setRotation(Math.atan2(dy, dx) + Math.PI / 2);
       updateRepairDroneRotors(visual.body, now);
+      updateRepairDroneShadow(visual.shadow, visual.body, visual.currentX, visual.currentY);
+      if (visual.body.visible) this.navLights?.submit(visual.body.x, visual.body.y,
+        visual.body.rotation - Math.PI / 2, visual.body.alpha, DRONE_NAV_LIGHT_PROFILES.repairDrone, visual.body);
       const target = visual.repairTarget;
       // Constructions occupy one grid cell. Land the work at its facing edge,
       // rather than drawing through the turret into the center of its tile.
@@ -107,6 +118,7 @@ export class RepairDroneRenderer {
 
     return {
       body: createRepairDroneBody(this.scene, snapshot.x, snapshot.y),
+      shadow: createRepairDroneShadow(this.scene, snapshot.x, snapshot.y),
       effects,
       ownerColor: snapshot.ownerColor,
       currentX: snapshot.x,
@@ -118,6 +130,7 @@ export class RepairDroneRenderer {
 
   private destroyVisual(visual: RepairDroneVisual): void {
     visual.body.destroy();
+    visual.shadow.destroy();
     visual.effects.destroy();
   }
 }

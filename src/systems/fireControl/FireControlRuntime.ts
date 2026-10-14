@@ -6,7 +6,8 @@ import { planFireControlCopies, type FireControlConstructionFacts } from './Fire
 import { classifyFireControlSource } from './FireControlEligibility';
 import { resolvePortalLandingPoint } from './FireControlPortalThrow';
 import {
-  fireControlCopySourceId, type FireControlEntryMode, type FireControlEntrySnapshot, type FireControlSnapshot,
+  createFireControlDeploymentIdSource, fireControlCopySourceId, type FireControlDeploymentIdSource,
+  type FireControlEntryMode, type FireControlEntrySnapshot, type FireControlSnapshot,
 } from './FireControlSnapshot';
 
 interface Copy {
@@ -51,16 +52,17 @@ export interface FireControlPortalFeedback {
 
 /** World-local deployment facts. Weapon sequences remain exclusively in TurretSystem. */
 export class FireControlRuntime implements FireControlUtilityPort, FireControlPortalFeedback {
-  private nextId = 1;
+  private readonly ids: FireControlDeploymentIdSource;
   private readonly deployments = new Map<number, Deployment>();
 
   constructor(private readonly deps: {
+    readonly ids?: FireControlDeploymentIdSource;
     readConstructions(): readonly FireControlConstructionFacts[];
     readSlotOrder(ownerId: string): readonly string[];
     isPointFree(x: number, y: number, radius: number): boolean;
     onDeploymentEnded(deploymentId: number, ownerId: string, endedAt: number): void;
     discardProjectile?(projectileId: number): void;
-  }) {}
+  }) { this.ids = deps.ids ?? createFireControlDeploymentIdSource(); }
 
   activateCopies(request: Parameters<FireControlUtilityPort['activateCopies']>[0]): FireControlActivation {
     if (this.find('copies', request.ownerId)) return { ok: false, reason: 'blocked' };
@@ -75,7 +77,7 @@ export class FireControlRuntime implements FireControlUtilityPort, FireControlPo
       slotOrder: this.deps.readSlotOrder(request.ownerId), pausedOriginalIds: this.getPausedOriginalIds(),
       isPointFree: this.deps.isPointFree });
     if (!plan.ok) return { ok: false, reason: plan.reason === 'range' ? 'placement' : plan.reason };
-    const id = this.nextId++;
+    const id = this.ids.next();
     const expiresAt = nowMs + config.durationMs;
     this.deployments.set(id, { kind: 'copies', id, ownerId: request.ownerId, ownerColor: request.ownerColor,
       x: request.pointX, y: request.pointY, startedAt: nowMs, expiresAt, config: { ...config },
@@ -111,7 +113,7 @@ export class FireControlRuntime implements FireControlUtilityPort, FireControlPo
     }
     const exit = resolvePortalLandingPoint(request.originX, request.originY, request.restX, request.restY,
       (x, y) => this.deps.isPointFree(x, y, config.exitClearanceRadiusPx));
-    const id = this.nextId++;
+    const id = this.ids.next();
     const expiresAt = nowMs + config.durationMs;
     this.deployments.set(id, { kind: 'portal', id, ownerId: request.ownerId, ownerColor: request.ownerColor,
       x: exit.x, y: exit.y, startedAt: nowMs, expiresAt, config: { ...config }, entries: new Map() });

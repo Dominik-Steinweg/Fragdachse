@@ -449,6 +449,7 @@ export const deUi = {
   "ui.combat.critical": "KRIT!",
   "ui.hud.ultimateShort": "Ultimate",
   "ui.hud.ready": "BEREIT",
+  "ui.hud.ultimateActiveRemaining": "Aktiv · {seconds} s",
   "ui.match.spectate": "RUNDE VERLASSEN & ZUSCHAUEN",
   "ui.match.spectateConfirm": "WIRKLICH ZUSCHAUEN?",
   "ui.match.spectateHint": "Du bleibst bis zur nächsten Lobby Zuschauer",

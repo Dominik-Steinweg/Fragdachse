@@ -684,6 +684,11 @@ export class ArenaInputBindings {
 
       if (slot === 'ultimate') {
         inputSystem.cancelLocalUltimateChargePreview();
+        const ultimate = actions.getLocalUltimateConfig();
+        if ((ultimate?.type === 'holo_offensive' || ultimate?.type === 'bomber_squadron')
+          && (result.reason === 'no_fire_sources' || result.reason === 'placement')) {
+          actions.feedback.showPlacementError(getConstructionFailureMessage(result.reason));
+        }
       }
 
       if ((slot === 'weapon1' || slot === 'weapon2') && predictionId !== undefined) {

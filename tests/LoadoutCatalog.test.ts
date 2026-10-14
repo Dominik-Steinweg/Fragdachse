@@ -13,6 +13,8 @@ import {
   hasCoopDefenseDedicatedUpgradeIcon,
   isCoopDefenseLoadoutItemSelectable,
   levelUpCoopDefenseUpgrade,
+  COOP_DEFENSE_UPGRADE_DEFINITIONS,
+  sanitizeCoopDefenseUpgradeProfile,
 } from '../src/utils/coopDefenseUpgrades';
 import { getCoopDefenseProgressSnapshot } from '../src/utils/coopDefenseProgression';
 import { getLocale } from '../src/i18n';
@@ -23,6 +25,33 @@ const SLOTS: readonly LoadoutSlot[] = ['weapon1', 'weapon2', 'utility', 'ultimat
 const CLASSES: readonly CoopDefenseClassId[] = ['dachs_nukem', 'dachs_of_steel', 'inspector_gadachs'];
 
 describe('loadout catalog', () => {
+  it('keeps the Inspector ultimate choice class-bound, ordered and purchase-gated', () => {
+    const classId = 'inspector_gadachs';
+    const base = buildDefaultCoopDefenseUpgradeProfile(classId);
+    const ids = (profile: typeof base) => getSelectableLoadoutItems('ultimate', COOP_DEFENSE, profile, classId).map(item => item.id);
+    expect(ids(base)).toEqual(['HOLO_OFFENSIVE']);
+    const unlock = COOP_DEFENSE_UPGRADE_DEFINITIONS.unlock_bomber_squadron;
+    expect(levelUpCoopDefenseUpgrade(base, unlock.id, 1, 0, classId)).toBeNull();
+    const purchased = levelUpCoopDefenseUpgrade(base, unlock.id, 1 + unlock.costPerLevel, 0, classId)!;
+    expect(ids(purchased)).toEqual(['HOLO_OFFENSIVE', 'BOMBER_SQUADRON']);
+
+    const allLevels = { upgrades: Object.fromEntries(Object.values(COOP_DEFENSE_UPGRADE_DEFINITIONS)
+      .map(definition => [definition.id, { level: definition.maxLevel, unlocked: true }])) };
+    expect(ids(sanitizeCoopDefenseUpgradeProfile(allLevels, classId))).toEqual(['HOLO_OFFENSIVE', 'BOMBER_SQUADRON']);
+    for (const other of ['dachs_nukem', 'dachs_of_steel'] as const) {
+      expect(getSelectableLoadoutItems('ultimate', COOP_DEFENSE, buildDefaultCoopDefenseUpgradeProfile(other), other)
+        .map(item => item.id)).toEqual(['ARMAGEDDON']);
+      expect(getSelectableLoadoutItems('ultimate', COOP_DEFENSE, sanitizeCoopDefenseUpgradeProfile(allLevels, other), other)
+        .map(item => item.id)).toEqual(['ARMAGEDDON', 'GAUSS_RIFLE', 'AIRSTRIKE', 'HONEY_BADGER_RAGE']);
+    }
+  });
+
+  it.each(['deathmatch', 'team_deathmatch', 'capture_the_beer'] as const)('keeps Inspector ultimates out of %s', mode => {
+    const ids = getLoadoutSlotItems('ultimate', mode).map(item => item.id);
+    expect(ids).not.toContain('HOLO_OFFENSIVE');
+    expect(ids).not.toContain('BOMBER_SQUADRON');
+  });
+
   it.each(['deathmatch', 'team_deathmatch', 'capture_the_beer'] as const)('excludes fire-control utilities from %s', mode => {
     const ids = getLoadoutSlotItems('utility', mode).map(item => item.id);
     expect(ids).not.toContain('FIRE_CONTROL_RELAY');
@@ -181,12 +210,18 @@ describe('loadout catalog', () => {
     expect(describeLoadoutItem('weapon2', 'PLASMA_BURNER').displayName).toBe('Plasmabrenner');
   });
 
-  it('uses the dedicated upgrade artwork in the four Ultimate slots', () => {
+  it('uses the dedicated upgrade artwork in Ultimate slots', () => {
     expect(describeLoadoutItem('ultimate', 'ARMAGEDDON').textureKey).toBe('UPGRADE_UNLOCK_ARMAGEDDON');
     expect(describeLoadoutItem('ultimate', 'GAUSS_RIFLE').textureKey).toBe('UPGRADE_UNLOCK_GAUSS_RIFLE');
     expect(describeLoadoutItem('ultimate', 'AIRSTRIKE').textureKey).toBe('UPGRADE_UNLOCK_AIRSTRIKE');
     expect(describeLoadoutItem('ultimate', 'HONEY_BADGER_RAGE').textureKey)
       .toBe('UPGRADE_UNLOCK_HONEY_BADGER_RAGE');
+    expect(describeLoadoutItem('ultimate', 'HOLO_OFFENSIVE').textureKey)
+      .toBe(getCoopDefenseUpgradeTextureKey('unlock_holo_offensive'));
+    expect(hasCoopDefenseDedicatedUpgradeIcon('unlock_holo_offensive')).toBe(true);
+    expect(describeLoadoutItem('ultimate', 'BOMBER_SQUADRON').textureKey)
+      .toBe(getCoopDefenseUpgradeTextureKey('unlock_bomber_squadron'));
+    expect(hasCoopDefenseDedicatedUpgradeIcon('unlock_bomber_squadron')).toBe(true);
   });
 
   it('uses the dedicated upgrade artwork for Inspector weapon 2 slots', () => {

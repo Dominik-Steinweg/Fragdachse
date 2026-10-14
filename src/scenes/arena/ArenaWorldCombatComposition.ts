@@ -382,12 +382,28 @@ export function composeWorldCombatGameplay(
   if (bridge.isHost()) {
     bridge.setFireControlSnapshotProvider(() => combatGameplayBinding.getFireControlSnapshot(bridge.getSynchronizedNow()));
     worldRuntime.bind({ destroy: () => bridge.setFireControlSnapshotProvider(null) });
+    bridge.setBomberSquadronSnapshotProvider(() => combatGameplayBinding.getBomberSquadronSnapshot(bridge.getSynchronizedNow()));
+    worldRuntime.bind({ destroy: () => bridge.setBomberSquadronSnapshotProvider(null) });
   }
+  // Inspector-Ultimates: der Combat-Owner besitzt die Einsätze, die Ultimate-Runtime nur Aktivierung und Rage.
+  gameplay.player?.setHoloOffensiveCapability(combatGameplayBinding.getHoloOffensiveCapability());
+  gameplay.player?.setBomberSquadronCapability(combatGameplayBinding.getBomberSquadronCapability());
+  worldRuntime.bind({ destroy: () => {
+    gameplay.player?.setHoloOffensiveCapability(null);
+    gameplay.player?.setBomberSquadronCapability(null);
+  } });
   worldRuntime.presentationFrame?.bindFireControl(
     () => bridge.getFireControlSnapshot(),
     id => rockVisualHelper.getTurretOriginalVisual(id),
     projectileRuntime.getPresentationRuntime(),
   );
+  worldRuntime.presentationFrame?.bindBomberSquadron(() => bridge.getBomberSquadronSnapshot(), {
+    // Same warm carpet burst as the attack-drone bombs; it is derived locally, never broadcast.
+    explode: (x, y, radius) => ctx.effectSystem.playExplosionEffect(x, y, radius, 0xffae57, 'rocket'),
+    playSound: (key, x, y, volumeScale) => ctx.gameAudioSystem.playSound(key, x, y, undefined, volumeScale),
+    cameraFeedback: () => ctx.visualFeedback.camera,
+    navLights: () => input.renderers?.droneNavLights ?? null,
+  });
 }
 
 function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): number {

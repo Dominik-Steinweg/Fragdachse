@@ -19,6 +19,10 @@ import {
 import {
   COOP_DEFENSE_UPGRADE_DEFINITIONS,
   isCoopDefenseUpgradeAvailableForClass,
+  buildDefaultCoopDefenseUpgradeProfile,
+  getCoopDefenseResolvedEffectTotals,
+  getCoopDefenseUpgradeLoadoutSelection,
+  levelUpCoopDefenseUpgrade,
 } from '../src/utils/coopDefenseUpgrades';
 
 interface ReachableTotals {
@@ -99,6 +103,35 @@ function enumerateReachableTotals(stat: string, classId: CoopDefenseClassId): re
 }
 
 describe('coop-defense loadout modifier reachability', () => {
+  it.each(['HOLO_OFFENSIVE', 'BOMBER_SQUADRON'])('reaches every %s modifier through purchases and applies its numeric config path', itemId => {
+    const classId = 'inspector_gadachs';
+    const definitions = Object.values(COOP_DEFENSE_UPGRADE_DEFINITIONS)
+      .filter(definition => getCoopDefenseUpgradeLoadoutSelection(definition.id)?.itemId === itemId)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+    const playerLevel = 1 + definitions.reduce((sum, definition) => sum + definition.costPerLevel * (definition.maxLevel - definition.startingLevel), 0);
+    const bossPoints = definitions.reduce((sum, definition) => sum + definition.bossPointCostPerLevel * (definition.maxLevel - definition.startingLevel), 0);
+    let profile = buildDefaultCoopDefenseUpgradeProfile(classId);
+    const base = ULTIMATE_CONFIGS[itemId];
+    const unchangedBase = structuredClone(base);
+    const expected = { ...base } as unknown as Record<string, unknown>;
+    for (const definition of definitions) {
+      for (let level = definition.startingLevel; level < definition.maxLevel; level += 1) {
+        const purchased = levelUpCoopDefenseUpgrade(profile, definition.id, playerLevel, bossPoints, classId);
+        expect(purchased, `${definition.id}:${level + 1}`).not.toBeNull();
+        profile = purchased!;
+        for (const effect of definition.effects) {
+          const field = effect.stat.split('.')[2];
+          expect(effect.mode).toBe('add_per_level');
+          expect(typeof expected[field]).toBe('number');
+          expected[field] = Number(expected[field]) + effect.value;
+        }
+        const effective = applyCoopDefenseModifiersToUltimateConfig(base, getCoopDefenseResolvedEffectTotals(profile, classId));
+        expect(effective).toEqual(expected);
+      }
+    }
+    expect(base).toEqual(unchangedBase);
+  });
+
   it('keeps every discrete shipped upgrade level combination schema-valid', () => {
     for (const [stat, descriptor] of Object.entries(CONFIG_STAT_DESCRIPTORS)) {
       if (!isConfigStat(stat)) continue;

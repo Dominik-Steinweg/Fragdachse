@@ -100,7 +100,9 @@ import {
   PlayerUltimateBehaviorRuntime,
   type PlayerUltimateAirstrikeCapability,
   type PlayerUltimateArmageddonCapability,
+  type PlayerUltimateBomberSquadronCapability,
   type PlayerUltimateGaussExecutionCapability,
+  type PlayerUltimateHoloOffensiveCapability,
   type PlayerUltimateTunnelPlacementCapability,
 } from './PlayerUltimateBehaviorRuntime';
 import type { DecoySystem } from '../systems/DecoySystem';
@@ -768,7 +770,9 @@ export class WorldPlayerGameplayRuntime implements
           const source = landing.source ? { ...landing.source, authoredSourceId: sourceId, origin: 'explosion' as const } : undefined;
           options.combatSystem.applyExplosionDamage(landing.x, landing.y, landing.effect, landing.ownerId,
             slot, sourceId, source);
-          options.network.presentation.broadcastExplosionEffect(landing.x, landing.y, landing.effect.radius, 0xff8a3d, 'rocket', undefined, sourceId);
+          if (!landing.effect.suppressExplosionBroadcast) {
+            options.network.presentation.broadcastExplosionEffect(landing.x, landing.y, landing.effect.radius, 0xff8a3d, 'rocket', undefined, sourceId);
+          }
         },
       },
     );
@@ -925,6 +929,14 @@ export class WorldPlayerGameplayRuntime implements
 
   setTunnelPlacementCapability(capability: PlayerUltimateTunnelPlacementCapability | null): void {
     this.systems.ultimateBehavior.setTunnelPlacementCapability(capability);
+  }
+
+  setHoloOffensiveCapability(capability: PlayerUltimateHoloOffensiveCapability | null): void {
+    this.systems.ultimateBehavior.setHoloOffensiveCapability(capability);
+  }
+
+  setBomberSquadronCapability(capability: PlayerUltimateBomberSquadronCapability | null): void {
+    this.systems.ultimateBehavior.setBomberSquadronCapability(capability);
   }
 
   updateEnemyManager(enemyManager: EnemyManager | null): void {
@@ -1684,6 +1696,10 @@ export class WorldPlayerGameplayRuntime implements
 
   getBurrowPhase(playerId: string): BurrowPhase {
     return this.systems.burrow.getPhase(playerId);
+  }
+
+  getActiveUltimateId(playerId: string): string | null {
+    return this.systems.ultimateBehavior.getActiveUltimateId(playerId);
   }
 
   isUltimateActive(playerId: string): boolean {

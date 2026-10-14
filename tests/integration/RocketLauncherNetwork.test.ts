@@ -36,6 +36,7 @@ describe('Rocket network state', () => {
       expect(late.getLatestGameState()!.players.p.rocketMagazine).toEqual(player.rocketMagazine);
       const targets = [{ x: 10, y: 20, landsAt: 1001 }, { x: 40, y: 50, landsAt: 1270 }];
       use(hostRoom); host.broadcastFireChunkEffect(0, 0, targets, 1000);
+      host.flushEffects();
       expect(chunks).toHaveBeenCalledExactlyOnceWith(0, 0, targets, 1000, 'normal');
       publish({ ...base, players: { p: { ...player, alive: false, rocketMagazine: undefined, pressureShieldUntil: 0, rocketHealSequence: 0 } } });
       expect(client.getLatestGameState()!.players.p.rocketMagazine).toBeUndefined();

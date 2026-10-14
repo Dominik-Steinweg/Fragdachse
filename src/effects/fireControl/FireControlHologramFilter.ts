@@ -4,6 +4,8 @@ import { addInternalGlowLegacy, removeInternalFx, type GlowHandle } from '../../
 export type HologramPreset = 'A' | 'B' | 'C';
 export interface HologramUniforms {
   color: number; time: number; materialize: number; vanish: number; warning: number;
+  /** 0 = relay look (accepted at G1); 1 = Holo-Offensive: darker panels, stronger lines for type readability. */
+  clarity: number;
   preset: HologramPreset;
 }
 const NODE = 'FireControlHologram';
@@ -15,7 +17,7 @@ precision highp float;
 uniform sampler2D uMainSampler;
 uniform vec2 resolution;
 uniform vec3 uColor;
-uniform float uTime, uMaterialize, uVanish, uWarning, uPreset;
+uniform float uTime, uMaterialize, uVanish, uWarning, uPreset, uClarity;
 varying vec2 outTexCoord;
 #pragma phaserTemplate(fragmentHeader)
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -48,9 +50,11 @@ void main() {
   float scan = mix(1.0, .45 + .55 * smoothstep(.3, .7, fract(scanY / (scanPreset ? 2.5 : 3.0) - uTime * .9)), scanPreset ? .75 : .45);
   // A soft bright band sweeps over the projection every ~2.4 s.
   float band = exp(-pow(fract(uTime * .42) * 1.5 - .25 - (1.0 - uv.y), 2.0) / .006);
-  float detail = scanPreset ? .30 : .52;
+  float detail = (scanPreset ? .30 : .52) + .2 * uClarity;
   // Contrast curve: dark panels stay dark so pods, hatches and barrels read as detail, not as glow.
-  float bodyLight = (.07 + detail * pow(smoothstep(.04, .80, lum), 1.35)) * scan;
+  // Clarity steepens the luminance ramp: dark bases recede, bright weapon bodies and barrels lead.
+  float lumRamp = mix(smoothstep(.04, .80, lum), smoothstep(.2, .7, lum), uClarity);
+  float bodyLight = (mix(.07, .025, uClarity) + detail * pow(lumRamp, mix(1.35, 1.7, uClarity))) * scan;
   float body = bodyLight;
   float grid = 1.0;
   if (uPreset > 1.5) {
@@ -75,9 +79,11 @@ void main() {
   // Premultiplied glass: the body only partly covers the ground (alpha < light), so the
   // projection reads as emitted light; panel lines and the Fresnel rim carry the silhouette.
   vec3 rgb = uColor * (body * src.a * grid + band * src.a * .16 + halo * (1.0 - src.a) * .14);
-  rgb += uColor * lines * .55 + mix(uColor, CORE, .25) * rim * .80;
+  rgb += uColor * lines * mix(.55, .85, uClarity) + mix(uColor, CORE, .25) * rim * .80;
   rgb += CORE * (front * hi * .85 + sparks);
-  float alpha = clamp(src.a * .46 + lines * .25 + rim * .75 + halo * (1.0 - src.a) * .12, 0.0, 1.0);
+  // Clarity lets dark panels fall back towards the ground, so barrels and pods read as shape, not a disc.
+  float coverage = mix(.46, .12 + .5 * lumRamp, uClarity);
+  float alpha = clamp(src.a * coverage + lines * mix(.25, .42, uClarity) + rim * .75 + halo * (1.0 - src.a) * .12, 0.0, 1.0);
   float flicker = 1.0 - glitch * (.2 + .25 * uWarning);
   gl_FragColor = vec4(rgb, alpha) * reveal * flicker;
 }`;
@@ -93,6 +99,7 @@ function nodeConstructor() {
       u.setUniform('uTime', p.time); u.setUniform('uMaterialize', p.materialize);
       u.setUniform('uVanish', p.vanish); u.setUniform('uWarning', p.warning);
       u.setUniform('uPreset', p.preset === 'A' ? 0 : p.preset === 'B' ? 1 : 2);
+      u.setUniform('uClarity', p.clarity);
     }
   };
 }
@@ -102,7 +109,7 @@ export class FireControlHologramFilter {
   readonly uniforms: HologramUniforms;
   private handle: GlowHandle | null = null;
   constructor(private readonly sprite: Phaser.GameObjects.Sprite, preset: HologramPreset) {
-    this.uniforms = { color: 0x3dffd0, time: 0, materialize: 0, vanish: 0, warning: 0, preset };
+    this.uniforms = { color: 0x3dffd0, time: 0, materialize: 0, vanish: 0, warning: 0, preset, clarity: 0 };
     const renderer = sprite.scene.sys?.renderer;
     if (!renderer || !('gl' in renderer)) return;
     const manager = renderer.renderNodes;

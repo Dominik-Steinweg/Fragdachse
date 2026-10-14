@@ -215,6 +215,8 @@ export interface ArenaHUDData {
   rage:                     number;
   maxRage:                  number;
   isUltimateActive:         boolean;
+  /** null/undefined: kein Holo-/Bombereinsatz; 0 beendet nicht den aktiven Spielerzustand. */
+  ultimateDeploymentRemainingMs?: number | null;
   ultimateRequiredRage:     number;
   ultimateThresholds:       number[];
   ultimateId?:              string;
@@ -359,7 +361,8 @@ export class ArenaHUD {
     this.hp   = this.createBar(HP_LBL_Y,  HP_BAR_Y,  t('ui.hud.hp'),        PAL_HP,   '_hud_hp',   { trail: true, value: true });
     this.armor = this.createBar(ARM_LBL_Y, ARM_BAR_Y, t('ui.hud.armor'), PAL_ARM,  '_hud_arm',  { trail: true, value: true, trailColor: ARMOR_COLOR });
     this.adr  = this.createBar(ADR_LBL_Y, ADR_BAR_Y, t('ui.hud.adrenaline'), PAL_ADR,  '_hud_adr');
-    this.ult  = this.createBar(ULT_LBL_Y, ULT_BAR_Y, t('ui.loadout.ultimate'), PAL_ULT,  '_hud_ult');
+    this.ult  = this.createBar(ULT_LBL_Y, ULT_BAR_Y, t('ui.loadout.ultimate'), PAL_ULT,  '_hud_ult', { value: true });
+    this.ult.valueText!.setY(ULT_BAR_Y + BAR_H / 2).setOrigin(1, 0.5).setFontSize(12).setStroke('#000000', 2);
     this.w1   = this.createBar(W1_LBL_Y,  W1_BAR_Y,  t('ui.loadout.weapon1'), PAL_WPN,  '_hud_wpn',  { highlight: true });
     this.w2   = this.createBar(W2_LBL_Y,  W2_BAR_Y,  t('ui.loadout.weapon2'), PAL_WPN,  '_hud_wpn',  { highlight: true });
     this.util = this.createBar(UT_LBL_Y,  UT_BAR_Y,  t('ui.loadout.utility'), PAL_UTIL, '_hud_util', { highlight: true });
@@ -549,7 +552,7 @@ export class ArenaHUD {
     this.updateHP(data.hp, data.maxHp);
     this.updateArmor(data.armor, this.currentMaxArmor);
     this.updateAdrenaline(data.adrenaline, this.currentMaxAdrenaline, data.adrenalineSyringeActive ?? false);
-    this.updateUltimate(data.rage, this.currentMaxRage, data.ultimateRequiredRage, data.ultimateThresholds, data.isUltimateActive);
+    this.updateUltimate(data.rage, this.currentMaxRage, data.ultimateRequiredRage, data.ultimateThresholds, data.isUltimateActive, data.ultimateDeploymentRemainingMs);
     this.updateCooldownBar(this.w1, data.weapon1CooldownFrac);
     this.updateCooldownBar(this.w2, data.weapon2CooldownFrac);
     this.updateCooldownBar(this.util, data.utilityCooldownFrac);
@@ -870,7 +873,7 @@ export class ArenaHUD {
 
   // ── Ultimate ──────────────────────────────────────────────────────────────
 
-  private updateUltimate(rage: number, maxRage: number, requiredRage: number, thresholds: number[], isActive: boolean): void {
+  private updateUltimate(rage: number, maxRage: number, requiredRage: number, thresholds: number[], isActive: boolean, remainingMs?: number | null): void {
     const safeMaxRage = Math.max(1, maxRage);
     const frac = Math.max(0, Math.min(1, rage / safeMaxRage));
     const prev = this.ult.prevFrac;
@@ -882,7 +885,10 @@ export class ArenaHUD {
 
     const requiredFrac = Math.max(0, Math.min(1, requiredRage / safeMaxRage));
     void requiredFrac;
-    const isReady = rage >= requiredRage || isActive;
+    const deploymentActive = isActive && remainingMs != null;
+    this.ult.valueText?.setText(deploymentActive
+      ? t('ui.hud.ultimateActiveRemaining', { seconds: Math.ceil(remainingMs / 1000) }) : '');
+    const isReady = !deploymentActive && (rage >= requiredRage || isActive);
     this.setBarEnergized(this.ult, isReady);
     if (isReady && !this.wasUltReady) this.addUltGlow();
     else if (!isReady && this.wasUltReady) this.removeUltGlow();

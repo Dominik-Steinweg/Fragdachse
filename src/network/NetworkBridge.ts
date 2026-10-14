@@ -112,6 +112,8 @@ import {
 import { KEY_FAST_PING_PROBE, NetworkPingController } from './NetworkPingController';
 import { EMPTY_FIRE_CONTROL_SNAPSHOT, type FireControlSnapshot } from '../systems/fireControl/FireControlSnapshot';
 import { encodeFireControlSnapshot, decodeFireControlSnapshot } from './fireControlSnapshotCodec';
+import { EMPTY_BOMBER_SQUADRON_SNAPSHOT, type BomberSquadronSnapshot } from '../systems/bomberSquadron/BomberSquadronSnapshot';
+import { encodeBomberSquadronSnapshot, decodeBomberSquadronSnapshot } from './bomberSquadronSnapshotCodec';
 import { isCompleteGameStatePayload } from './FullGameStateBootstrap';
 import type { EssenceSnapshot } from '../adrenalineEssence/AdrenalineEssenceReplication';
 import { decodeEssenceSnapshot, encodeEssenceSnapshot } from '../adrenalineEssence/AdrenalineEssenceWireCodec';
@@ -124,7 +126,7 @@ import {
 import { sanitizePlayerName } from '../utils/playerName';
 import { COOP_DEFENSE_MODE, getMinPlayersForMode, hasTeamSelection, isCoopDefenseMode, isTeamGameMode, usesTeamColors } from '../gameModes';
 import { canJoinLobbyTeam, LOBBY_TEAM_CAPACITY, pickAutomaticTeam } from '../lobby/LobbyRosterLayout';
-import { isCommittedLoadoutEqual, isCoopDefenseReadyLoadoutComplete, resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../loadout/LoadoutRules';
+import { isCommittedLoadoutEqual, isCoopDefenseReadyLoadoutComplete, resolveCoopDefenseCommittedUltimateId, resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../loadout/LoadoutRules';
 import { DEFAULT_LOADOUT, getUtilityBaseId, ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import type { HeldItemSlot } from '../loadout/HeldItemSlotTracker';
 import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
@@ -367,6 +369,7 @@ export interface RoundState {
 
 export interface GameState extends KrakenSnapshotPatch {
   fireControl: FireControlSnapshot;
+  bomberSquadron: BomberSquadronSnapshot;
   earthbreak?: readonly import('../systems/BurrowEarthbreakRuntime').SyncedBurrowEarthbreak[];
   shootingRange?: import('../shootingRange/ShootingRangeContracts').ShootingRangeState | null;
   /** Activity-scoped independent delta stream; consumed only by the passive essence replica. */
@@ -917,6 +920,7 @@ export class NetworkBridge {
   private effectHandler: EffectHandler | null = null;
   // Pro Frame gesammelte Treffer-/Todes-Effekte und XP-Popups (Host), gebündelt via flushEffects().
   private pendingEffects: SyncedCombatEffect[] = [];
+  private pendingFireChunkEffects: { wr: number; x: number; y: number; t: number; p: number[]; v?: number }[] = [];
   private pendingAudioFeedback: GameplayAudioEvent[] = [];
   private audioFeedbackSequence = 0;
   private audioFeedbackFlushScheduled = false;
@@ -2025,7 +2029,8 @@ export class NetworkBridge {
       weapon1: raw.weapon1,
       weapon2: raw.weapon2,
       utility: profile ? getLoadoutUtilityId(profile.toolLoadout ?? []) : raw.utility,
-      ultimate: raw.ultimate,
+      // Der Host übernimmt keine klassenfremde oder gesperrte Ultimate aus einem veralteten Commit.
+      ultimate: profile ? resolveCoopDefenseCommittedUltimateId(raw.ultimate, profile, coopDefenseClassId) : raw.ultimate,
       coopDefenseClassId,
       coopDefenseProfile: profile,
       coopDefenseEntitlements: [...entitlements],
@@ -2706,6 +2711,7 @@ export class NetworkBridge {
       );
     }
     const previous = this.getWorldDescriptor();
+    if (previous?.worldRevision !== world.worldRevision) this.flushFireChunkEffects();
     setState(KEY_WORLD_DESCRIPTOR, world, true);
     setState(KEY_ACTIVITY_DESCRIPTOR, activity, true);
     // Eine neue World-Instanz startet ohne Teilnehmer. Wer teilnimmt, entscheidet der Host
@@ -2737,6 +2743,7 @@ export class NetworkBridge {
   /** Beendet die replizierte World-Instanz; danach existiert weltweit keine mehr. */
   clearWorldAndActivity(): void {
     if (!isHost()) return;
+    this.flushFireChunkEffects();
     this.pendingEffects = [];
     this.pendingXpPopups = [];
     setState(KEY_ACTIVITY_DESCRIPTOR, null, true);
@@ -3145,6 +3152,20 @@ export class NetworkBridge {
       : this.getLatestGameState()?.fireControl ?? EMPTY_FIRE_CONTROL_SNAPSHOT;
   }
 
+  private bomberSquadronSnapshotProvider: () => BomberSquadronSnapshot = () => EMPTY_BOMBER_SQUADRON_SNAPSHOT;
+
+  /** World composition binds the host owner (slice `bq`); detach with null before destroying it. */
+  setBomberSquadronSnapshotProvider(provider: (() => BomberSquadronSnapshot) | null): void {
+    this.bomberSquadronSnapshotProvider = provider ?? (() => EMPTY_BOMBER_SQUADRON_SNAPSHOT);
+  }
+
+  /** Confirmed squadrons; flight, drops and impacts are derived from `BomberSquadronPlan`. */
+  getBomberSquadronSnapshot(): BomberSquadronSnapshot {
+    if (!this.getWorldDescriptor()) return EMPTY_BOMBER_SQUADRON_SNAPSHOT;
+    return isHost() ? this.bomberSquadronSnapshotProvider()
+      : this.getLatestGameState()?.bomberSquadron ?? EMPTY_BOMBER_SQUADRON_SNAPSHOT;
+  }
+
   private krakenScope = '';
   private krakenPublishSequence = 0;
   private publishedKraken: KrakenSnapshotPacket | undefined;
@@ -3273,6 +3294,8 @@ export class NetworkBridge {
         ? this.publishedGameStateBaseline.sequence : 0,
     };
     payload.fc = encodeFireControlSnapshot(this.fireControlSnapshotProvider());
+    // Wiederholter Vollzustand heilt verlorene Fast-Pakete, auch beim Aufraeumen mit [].
+    payload.bq = encodeBomberSquadronSnapshot(this.bomberSquadronSnapshotProvider());
     payload.rt = state.roundStartTime;
     payload.kr = this.getKrakenPacket();
     payload.sr = encodeShootingRange(state.shootingRange);
@@ -3414,6 +3437,7 @@ export class NetworkBridge {
       sc: state.stinkClouds,
       tb: state.timeBubbles,
       fc: encodeFireControlSnapshot(this.fireControlSnapshotProvider()),
+      bq: encodeBomberSquadronSnapshot(this.bomberSquadronSnapshotProvider()),
       td: state.teslaDomes,
       es: state.energyShields,
       g: state.guardianSpirits,
@@ -3529,6 +3553,8 @@ export class NetworkBridge {
     const state: GameState = {
       fireControl: decodeFireControlSnapshot(raw.fc === undefined ? [] : raw.fc, this.cachedGameState?.fireControl)
         ?? this.cachedGameState?.fireControl ?? EMPTY_FIRE_CONTROL_SNAPSHOT,
+      bomberSquadron: decodeBomberSquadronSnapshot(raw.bq, this.cachedGameState?.bomberSquadron)
+        ?? this.cachedGameState?.bomberSquadron ?? EMPTY_BOMBER_SQUADRON_SNAPSHOT,
       kraken: this.krakenReceiver.getState(),
       adrenalineEssence: raw.ae === undefined
         ? this.cachedGameState?.adrenalineEssence ?? null
@@ -4119,7 +4145,10 @@ export class NetworkBridge {
     startedAt: number,
     visualStyle: GroundFireVisualStyle = 'normal',
   ): void {
-    this.broadcastGameplayEvent('fcfx', {
+    const wr = this.getCurrentWorldRevision();
+    if (!isHost() || wr === null) return;
+    this.pendingFireChunkEffects.push({
+      wr,
       x,
       y,
       t: startedAt,
@@ -4132,15 +4161,19 @@ export class NetworkBridge {
     this.fireChunkEffectHandler = handler;
     this.registerAllRpcHandler('fcfx', async (data: unknown): Promise<unknown> => {
       const fireChunkEffectHandler = this.fireChunkEffectHandler;
-      if (!fireChunkEffectHandler || !data || typeof data !== 'object') return undefined;
-      const { x, y, t, p, v } = data as { x: number; y: number; t: number; p: number[]; v?: number };
-      if (![x, y, t].every(Number.isFinite) || !Array.isArray(p) || p.length % 3 !== 0 || !p.every(Number.isFinite)) return;
-      const targets: FireChunkFlight[] = [];
-      for (let index = 0; index < p.length; index += 3) {
-        if (p[index + 2] < t) return;
-        targets.push({ x: p[index], y: p[index + 1], landsAt: p[index + 2] });
+      if (!fireChunkEffectHandler || !Array.isArray(data)) return undefined;
+      for (const burst of data) {
+        if (!this.acceptsWorldRpc(burst)) continue;
+        const { x, y, t, p, v } = burst as { x: number; y: number; t: number; p: number[]; v?: number };
+        if (![x, y, t].every(Number.isFinite) || !Array.isArray(p) || p.length % 3 !== 0 || !p.every(Number.isFinite)) continue;
+        const targets: FireChunkFlight[] = [];
+        for (let index = 0; index < p.length; index += 3) {
+          if (p[index + 2] < t) break;
+          targets.push({ x: p[index], y: p[index + 1], landsAt: p[index + 2] });
+        }
+        if (targets.length * 3 !== p.length) continue;
+        fireChunkEffectHandler(x, y, targets, t, decodeGroundFireVisualStyle(v));
       }
-      fireChunkEffectHandler(x, y, targets, t, decodeGroundFireVisualStyle(v));
       return undefined;
     });
   }
@@ -4193,6 +4226,7 @@ export class NetworkBridge {
    * Host-seitig einmal pro Frame aufrufen.
    */
   flushEffects(): void {
+    this.flushFireChunkEffects();
     if (this.pendingEffects.length > 0) {
       const batch = this.pendingEffects;
       this.pendingEffects = [];
@@ -4203,6 +4237,13 @@ export class NetworkBridge {
       this.pendingXpPopups = [];
       this.broadcastGameplayEvent('cdxpb', popups);
     }
+  }
+
+  private flushFireChunkEffects(): void {
+    if (this.pendingFireChunkEffects.length === 0) return;
+    const batch = this.pendingFireChunkEffects;
+    this.pendingFireChunkEffects = [];
+    this.broadcastGameplayEvent('fcfx', batch);
   }
 
   registerEffectHandler(cb: (effect: SyncedCombatEffect) => void): void {

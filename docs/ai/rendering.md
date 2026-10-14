@@ -133,6 +133,15 @@ dessen separater GPU-Batch zeichnet schattenlose Bodenlichter ohne das normale
 Lichtbudget zu belegen, auch bei niedriger Qualität. Die World-Frame-Bindung besitzt
 die Freigabe; Presentation-Verlust, World-Wechsel und Teardown leeren die Daten.
 
+Fliegende Drohnen besitzen keinen eigenen Lichtcode. Ihr Renderer reicht je angezeigter
+Drohne Pose und ein Profil aus Lichtankern bei
+[DroneNavLightRenderer.ts](../../src/effects/droneNavLights/DroneNavLightRenderer.ts) ein;
+Farben, Beacon-Takt, Tag/Nacht-Verhalten, Kronenband und die begrenzten Bodenlicht-Pools
+gehören dem gemeinsamen Modell. Der szenenweite Layer schreibt nur die im aktuellen Frame
+eingereichten Lichter, sodass entfernte Drohnen nie Lichter zurücklassen. Die Lichtfarben
+bleiben im Farbton von Gegneraugen, verbündeten Effekten, Telegraph-Rot und Feuerleit-Mint
+getrennt ([DroneNavLightModel.test.ts](../../tests/DroneNavLightModel.test.ts)).
+
 Wasser besitzt getrennte World-Geometrie: [WaterGeometry.ts](../../src/arena/WaterGeometry.ts) sperrt Bodenabfragen, Platzierung und gesweepte Koerperbewegung auch bei deaktivierten Buddel-Collidern. Es hat keine HP und nimmt nicht an Schuss-, Sicht- oder Projektil-Hindernisabfragen teil; die Navigation fuehrt Wasser als ausdruecklich unpassierbar. [WaterSurfaceRenderer.ts](../../src/arena/WaterSurfaceRenderer.ts) gehoert ausschliesslich zur World-Praesentation: Maskentextur und Shader entstehen pro residentem Chunk, Uferdaten bleiben statisch, Animation verwendet gemeinsame Weltkoordinaten und lokale Zeit. Renderer-Teardown veraendert keine Wasser-Spielregel.
 
 Wasser-CPU-Masken werden fuer die gesamte dargestellte World einschliesslich Ufer-Rand-Chunks
