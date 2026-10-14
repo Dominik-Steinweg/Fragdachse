@@ -162,6 +162,11 @@ function getMaxStaticShadowReachPx(profile: ShadowProfile, direction = WORLD_SHA
 const CANOPY_MASK = { resolution: .5, softnessDrift: .04, opacityHeadroom: 1.12, opacityFloor: .8,
   bakesPerFrame: 6, prefetchPx: 256, softnessCeiling: 2 } as const;
 type CanopySource = ArenaBuilderResult['canopyObjects'][number];
+interface CanopyShadowShape { distance: number; softness: number; scale: number; opacity: number }
+/** Below these changes a frame alters nothing visible (0.05° moves a 140 px shadow tip by
+ * ~0.1 px), so the continuous casters keep last frame's drawing. Culling keeps a margin
+ * larger than the view tolerance, so camera motion never uncovers an undrawn caster. */
+const CONTINUOUS_REDRAW = { directionSin: Math.sin(.05 * Math.PI / 180), profile: .002, viewPx: 32, marginPx: 64 } as const;
 interface CanopyShadowMask { readonly target: Phaser.GameObjects.RenderTexture; readonly side: number; softness: number; opacity: number }
 
 const STATIC_PROFILE_REBAKE_MIN_INTERVAL_MS = 600;
@@ -336,23 +341,43 @@ export class ShadowSystem {
   private continuousPrimitives = 0;
   /** Layer ids present in the current baked surface. */
   private readonly staticLayerIds = new Set<string>();
+  /** Inputs of the last continuous drawing; `continuousDirty` forces the next one. */
+  private readonly continuousDrawn = { x: 0, y: 0, length: 0, softness: 0, opacity: 0, viewX: 0, viewY: 0, viewW: 0, viewH: 0 };
+  private continuousDirty = true;
+  private canopyBakesPending = false;
+  private readonly canopyShapeScratch: CanopyShadowShape = { distance: 0, softness: 0, scale: 1, opacity: 0 };
 
   getContinuousShadowStats(): { enabled: boolean; primitives: number; canopyMasks: number; canopyMasksShown: number } {
     return { enabled: this.staticContinuous, primitives: this.continuousPrimitives,
       canopyMasks: this.canopyMasks.size, canopyMasksShown: this.continuousCanopyShown };
   }
 
-  /** Redraws the continuous static casters for the current view; called once per frame. */
+  /** Redraws the continuous static casters for the current view; called once per frame,
+   * but only rebuilt when the sun, the profile, the view or the casters visibly changed. */
   syncContinuousStaticShadows(): void {
+    const layout = this.lastStaticLayout, direction = this.sunDirection;
+    if (!(this.staticContinuous && this.staticHasLayout && this.shadowsVisible && layout && direction)) {
+      if (this.continuousDirty && this.continuousCanopyShown === 0 && this.continuousPrimitives === 0) return;
+      this.hideContinuousStaticShadows();
+      this.continuousPrimitives = 0;
+      return;
+    }
+    const view = this.staticResidencyView ?? this.getStaticFrameRect(), profile = this.profile, drawn = this.continuousDrawn;
+    if (!this.continuousDirty && direction.x * drawn.x + direction.y * drawn.y > 0
+      && Math.abs(direction.x * drawn.y - direction.y * drawn.x) < CONTINUOUS_REDRAW.directionSin
+      && Math.abs(profile.lengthMult - drawn.length) < CONTINUOUS_REDRAW.profile
+      && Math.abs(profile.softnessMult - drawn.softness) < CONTINUOUS_REDRAW.profile
+      && Math.abs(profile.opacityMult - drawn.opacity) < CONTINUOUS_REDRAW.profile
+      && Math.abs(view.x - drawn.viewX) < CONTINUOUS_REDRAW.viewPx && Math.abs(view.y - drawn.viewY) < CONTINUOUS_REDRAW.viewPx
+      && view.width === drawn.viewW && view.height === drawn.viewH) return;
     for (const bucket of this.layers.values()) bucket.continuousGraphics.clear();
     let used = 0, primitives = 0;
-    const layout = this.lastStaticLayout, direction = this.sunDirection;
-    if (this.staticContinuous && this.staticHasLayout && this.shadowsVisible && layout && direction) {
-      const view = this.staticResidencyView ?? this.getStaticFrameRect(), profile = this.profile;
-      const options = this.lastStaticOptions;
+    {
+      const options = this.lastStaticOptions, margin = CONTINUOUS_REDRAW.marginPx;
       const offsetX = options.offsetX ?? ARENA_OFFSET_X, offsetY = options.offsetY ?? ARENA_OFFSET_Y;
-      const inView = (x: number, y: number, reach: number): boolean => x + reach >= view.x && x - reach <= view.x + view.width
-        && y + reach >= view.y && y - reach <= view.y + view.height;
+      const inView = (x: number, y: number, reach: number): boolean => x + reach + margin >= view.x
+        && x - reach - margin <= view.x + view.width
+        && y + reach + margin >= view.y && y - reach - margin <= view.y + view.height;
       const trunk = SHADOW_CASTERS.trunk, trunkReach = getStaticShadowReachPx(trunk, profile, direction);
       const trunks = this.getLayer(trunk.layerDepth, 'trees').continuousGraphics;
       for (const tree of layout.trees) {
@@ -370,28 +395,32 @@ export class ShadowSystem {
         if (inView(x, y, towerReach)) primitives += this.drawFootprint(towers, x, y, tower, undefined, undefined, profile, direction);
       }
       used = this.drawContinuousCanopies(inView, profile, direction);
-    } else for (const mask of this.canopyMasks.values()) mask.target.setVisible(false);
+    }
     this.continuousCanopyShown = used;
     this.continuousPrimitives = primitives + used;
+    Object.assign(drawn, { x: direction.x, y: direction.y, length: profile.lengthMult, softness: profile.softnessMult,
+      opacity: profile.opacityMult, viewX: view.x, viewY: view.y, viewW: view.width, viewH: view.height });
+    // Crowns beyond this frame's bake budget still owe a bake.
+    this.continuousDirty = this.canopyBakesPending;
   }
 
   /** Crown shape of {@link drawCanopyShadows} for the given profile; shared by both paths. */
-  private canopyShadowShape(source: CanopySource, profile: ShadowProfile): { distance: number; softness: number; scale: number; opacity: number } {
+  private canopyShadowShape(source: CanopySource, profile: ShadowProfile, out: CanopyShadowShape = this.canopyShapeScratch): CanopyShadowShape {
     const woodland = this.canopyWoodland, tuning = SUN_FOREST_SHADOW;
     const diameter = Math.max(source.gfx.displayWidth, source.gfx.displayHeight);
-    return {
-      distance: woodland ? diameter * tuning.offsetDiameter * profile.lengthMult / tuning.reference.shadowLengthMult : 64 * profile.lengthMult,
-      softness: woodland ? diameter * tuning.softnessDiameter * profile.softnessMult / tuning.reference.shadowSoftnessMult : 9 * profile.softnessMult,
-      scale: woodland ? tuning.scale : 1,
-      opacity: woodland ? Math.min(.55, tuning.opacity * profile.opacityMult / tuning.reference.shadowOpacityMult)
-        : Math.min(.45, .7 * profile.opacityMult),
-    };
+    out.distance = woodland ? diameter * tuning.offsetDiameter * profile.lengthMult / tuning.reference.shadowLengthMult : 64 * profile.lengthMult;
+    out.softness = woodland ? diameter * tuning.softnessDiameter * profile.softnessMult / tuning.reference.shadowSoftnessMult : 9 * profile.softnessMult;
+    out.scale = woodland ? tuning.scale : 1;
+    out.opacity = woodland ? Math.min(.55, tuning.opacity * profile.opacityMult / tuning.reference.shadowOpacityMult)
+      : Math.min(.45, .7 * profile.opacityMult);
+    return out;
   }
 
   /** Moves each visible crown's baked mask along the continuous sun; see {@link CANOPY_MASK}. */
   private drawContinuousCanopies(inView: (x: number, y: number, reach: number) => boolean,
     profile: ShadowProfile, direction: { x: number; y: number }): number {
     let shown = 0, bakes = 0;
+    this.canopyBakesPending = false;
     for (const [source, mask] of this.canopyMasks) {
       const shape = this.canopyShadowShape(source, profile);
       const x = source.worldX + shape.distance * direction.x, y = source.worldY + shape.distance * direction.y;
@@ -403,7 +432,7 @@ export class ShadowSystem {
         this.bakeCanopyMask(source, mask, shape.softness, shape.scale,
           Math.min(this.canopyWoodland ? .55 : .45, shape.opacity * CANOPY_MASK.opacityHeadroom));
         bakes++;
-      }
+      } else if (drift) this.canopyBakesPending = true;
       if (mask.opacity <= 0 || !inView(x, y, radius)) { mask.target.setVisible(false); continue; }
       mask.target.setPosition(x, y).setAlpha(Math.min(1, shape.opacity / mask.opacity)).setVisible(true);
       shown++;
@@ -702,6 +731,7 @@ export class ShadowSystem {
   }
 
   private hideContinuousStaticShadows(): void {
+    this.continuousDirty = true;
     for (const bucket of this.layers.values()) bucket.continuousGraphics.clear();
     for (const mask of this.canopyMasks.values()) mask.target.setVisible(false);
     this.continuousCanopyShown = 0;
@@ -750,6 +780,7 @@ export class ShadowSystem {
     this.rememberWatchtowerShadowAnchors(options.runtimeRocks ?? EMPTY_RUNTIME_ROCKS);
     this.staticBakeProfile = profile;
     this.staticContinuous = this.sunDirection !== null && this.canopySources !== null;
+    this.continuousDirty = true;
     this.syncCanopyMasks();
     this.bakedAzimuth=this.sunAzimuth;
     if(this.bakedAzimuth===null)this.staticSunDirection=null;
@@ -815,6 +846,7 @@ export class ShadowSystem {
     runtimeRocks: readonly SyncedPlaceableRock[] = [],
   ): void {
     this.characterReceiverDirty = true;
+    this.continuousDirty = true;
     if (!layout || !arenaResult || dirtyRockIds.size === 0) return;
     if (this.lastStaticLayout !== layout || !this.staticSurface) {
       this.rebuildArenaStaticShadows(layout, arenaResult, runtimeRocks);

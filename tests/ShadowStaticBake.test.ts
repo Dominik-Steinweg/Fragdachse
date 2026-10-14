@@ -664,6 +664,10 @@ it('draws crowns, trunks and watchtowers along the continuous sun every frame in
   const at61=crown(),turn=Math.atan2(at61.y-source.worldY,at61.x-source.worldX)-Math.atan2(at60.y-source.worldY,at60.x-source.worldX);
   expect(at61.count).toBe(at60.count);expect(Math.hypot(at61.x-source.worldX,at61.y-source.worldY)).toBeCloseTo(reach,6);
   expect(Math.abs(turn)*180/Math.PI).toBeCloseTo(1,6);
+  // A practically standing sun keeps last frame's drawing instead of rebuilding it.
+  const clears=()=>graphicsLog.filter(graphics=>graphics.depth===SHADOW_CASTERS.trunk.layerDepth).reduce((sum,graphics)=>sum+graphics.clears,0);
+  const before=clears();resolveSunPath(720,61.01,path);shadows.setSunPath(path);shadows.syncContinuousStaticShadows();
+  expect(clears()).toBe(before);expect(crown().x).toBe(at61.x);
   shadows.setStaticVisible(false);expect(crown().count).toBe(0);shadows.setStaticVisible(true);
   // Evening light only fades the mask; its opacity stays inside the baked headroom or re-bakes once.
   shadows.setTimeOfDay(1020);shadows.syncContinuousStaticShadows();
