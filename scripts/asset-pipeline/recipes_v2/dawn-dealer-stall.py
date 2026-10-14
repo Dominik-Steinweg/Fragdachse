@@ -1,7 +1,7 @@
 """Oval salvage shop: real overhead wagon, separate wares and a partial canvas roof."""
 import math
 import bpy
-from dawn_parts import surface, root, finish, plate, beam, bolt, annulus, tube
+from dawn_parts import material_factory,surface, root, finish, plate, beam, bolt, annulus, tube
 
 
 def gear(c, x, y, z, r, metal):
@@ -13,16 +13,17 @@ def gear(c, x, y, z, r, metal):
 
 
 def build(c, spec):
+    material=material_factory(c,spec)
     pivot=root(c)
-    petrol=surface(c,'Weathered petrol enamel',(43,132,137),.43)
-    rust=surface(c,'Rolled rusty lip',(163,89,53),.58)
-    steel=surface(c,'Worn silver iron',(171,181,176),.23)
-    dark=surface(c,'Recessed iron chassis',(44,53,54),.20)
-    copper=surface(c,'Warm copper wire',(205,132,76),.22)
-    wood=[surface(c,'Oak plank '+str(i),rgb,.28) for i,rgb in enumerate([(149,103,63),(184,134,81),(124,85,52)])]
-    canvas=surface(c,'Faded ochre sailcloth',(204,186,137),.12)
-    cloth=surface(c,'Petrol canvas stripe',(50,106,108),.20)
-    amber=surface(c,'Separate warm lantern emission',(255,164,55),.02,2.5)
+    petrol=material('Weathered petrol enamel',(43,132,137),.43)
+    rust=material('Rolled rusty lip',(163,89,53),.58)
+    steel=material('Worn silver iron',(171,181,176),.23)
+    dark=material('Recessed iron chassis',(44,53,54),.20)
+    copper=material('Warm copper wire',(205,132,76),.22)
+    wood=[material('Oak plank '+str(i),rgb,.28) for i,rgb in enumerate([(149,103,63),(184,134,81),(124,85,52)])]
+    canvas=material('Faded ochre sailcloth',(204,186,137),.12)
+    cloth=material('Petrol canvas stripe',(50,106,108),.20)
+    amber=material('Separate warm lantern emission',(255,164,55),.02,2.5)
     # Broad rounded ends, with the long axis east/west and no support ground.
     outline=[(1.20*math.cos(i*math.tau/64)-.13,.65*math.sin(i*math.tau/64)) for i in range(64)]
     plate(c,'Oval riveted wagon tub',(0,0,.33),outline,.39,petrol,.055)

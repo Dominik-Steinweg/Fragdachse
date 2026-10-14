@@ -4,7 +4,7 @@ from dawn_parts import root,finish,salvage_palette,salvage_gear,vegetation,plate
 
 
 def build(c,spec):
-    pivot=root(c);tier=int(spec['model']['tier']);p=salvage_palette(c,tier)
+    pivot=root(c);tier=int(spec['model']['tier']);p=salvage_palette(c,tier,spec)
     plate(c,'Broken hull panel',(-.23,.12,.15),[(-.69,-.44),(.32,-.55),(.71,-.15),(.46,.54),(.05,.48),(-.12,.68),(-.61,.49)],.12,p['paint'],.035)
     for i in range(4):
         ob=crown(c,'Bent stamped panel rib',(-.56+i*.22,.17,.28),.10,.70,.08,p['trim']);ob.rotation_euler.z=-.18

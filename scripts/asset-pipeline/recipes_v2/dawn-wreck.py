@@ -5,16 +5,31 @@ from dawn_parts import surface,root,finish,beam,bolt,plate,tube,annulus,crown,ha
 
 
 def build(c,spec):
+    def material(name, rgb, wear=.3, emission=0):
+        return surface(c, name, rgb, wear, emission,
+                       **spec['model'].get('librarySurfaces', {}).get(name, {}))
     tier=int(spec['model']['tier']); pivot=root(c); rng=random.Random(711)
-    paint=surface(c,'Chipped tier enamel',[(183,88,37),(72,80,42),(211,221,213)][tier-1],.62)
-    trim=surface(c,'Secondary panel',[(101,60,33),(166,155,105),(65,76,79)][tier-1],.43)
-    edge=surface(c,'Exposed alloy edges',[(171,158,126),(201,199,170),(225,233,226)][tier-1],.3)
-    dark=surface(c,'Oily structural steel',(39,48,50),.15)
-    blade=surface(c,'Damaged rotor composite',(70,83,82),.25)
-    copper=surface(c,'Copper cable braid',(187,114,63),.28)
-    cargo=surface(c,'Cargo paint',[(169,116,51),(165,153,91),(167,174,159)][tier-1],.56)
-    warning=surface(c,'Worn warning ochre',(228,179,55),.32)
-    charge=surface(c,'Local cyan contact',(31,177,204),0,.42)
+    paint=material('Chipped tier enamel',[(183,88,37),(72,80,42),(211,221,213)][tier-1],.62)
+    trim=material('Secondary panel',[(101,60,33),(166,155,105),(65,76,79)][tier-1],.43)
+    edge=material('Exposed alloy edges',[(171,158,126),(201,199,170),(225,233,226)][tier-1],.3)
+    dark=material('Oily structural steel',(39,48,50),.15)
+    blade=material('Damaged rotor composite',(70,83,82),.25)
+    copper=material('Copper cable braid',(187,114,63),.28)
+    cargo=material('Cargo paint',[(169,116,51),(165,153,91),(167,174,159)][tier-1],.56)
+    warning=material('Worn warning ochre',(228,179,55),.32)
+    charge=material('Local cyan contact',(31,177,204),0,.42)
+    rim=material('Battered rotor rim',[(116,88,57),(122,124,91),(167,174,162)][tier-1],.6) if spec['model'].get('librarySurfaces') else edge
+    def dent(ob,x,y,phase):
+        if not spec['model'].get('librarySurfaces'): return ob
+        for v in ob.data.vertices:
+            dx,dy=v.co.x-x,v.co.y-y
+            radius=math.hypot(dx,dy)
+            if radius<1e-6: continue
+            a=math.atan2(dy,dx)
+            inset=sum(depth*math.exp(-((math.atan2(math.sin(a-angle),math.cos(a-angle)))/width)**2)
+                      for angle,depth,width in [(phase,.043,.18),(phase+2.35,.027,.24)])
+            v.co.x=x+dx*(radius-inset)/radius;v.co.y=y+dy*(radius-inset)/radius
+        return ob
     # Stout attached arms terminate under large cast ducts.
     for i,(x,y) in enumerate([(-.99,.95),(.91,1.00),(-1.0,-.96),(1.09,-1.08)]):
         broken=i==3
@@ -27,12 +42,13 @@ def build(c,spec):
             plate(c,'Exposed jagged arm fracture',(0,0,.24),[(.84,-.77),(.87,-.88),(.93,-.83),(.92,-.96),(1.03,-.91),(.98,-.72)],.08,edge,.007)
         start,end=(.42,5.15) if broken else (0,math.tau)
         ring=annulus(c,'Fractured rotor guard' if broken else 'Cast rotor guard',(x,y,.25),.52,.365,.23,paint,start=start,end=end)
+        dent(ring,x,y,.35+i*1.3)
         if broken:
             for v in ring.data.vertices:
                 v.co.x=x+(v.co.x-x)*.83
                 v.co.z+=.09*math.sin((v.co.y-y)*5)
-        annulus(c,'Inner duct bevel',(x,y,.285),.390,.355,.065,dark,start=start,end=end)
-        annulus(c,'Interrupted rubbed rim',(x,y,.365),.51,.467,.035,edge,start=start,end=end)
+        dent(annulus(c,'Inner duct bevel',(x,y,.285),.390,.355,.065,dark,start=start,end=end),x,y,.35+i*1.3)
+        dent(annulus(c,'Interrupted rubbed rim',(x,y,.365),.51,.467,.035,rim,start=start,end=end),x,y,.35+i*1.3)
         for j in range(3 if broken else 4):
             a=j*math.pi/2+.37+i*.28
             outline=[(.085,-.04),(.29,-.10),(.365,-.027),(.31,.085),(.13,.066)]
@@ -40,7 +56,7 @@ def build(c,spec):
             plate(c,'Swept stopped blade',(0,0,.31),pts,.055,blade,.014)
         c.cylinder('Motor hub gasket',(x,y,.347),.117,.055,dark,32)
         c.ell('Raised motor crown',(x,y,.375),(.09,.09,.042),edge)
-        if tier==3 and i<2: c.cylinder('Small isolated hub emitter',(x,y,.418),.033,.01,charge,20)
+        if tier==3 and i<2: c.cylinder('Small isolated hub emitter',(x,y,.418),.033,.01,edge if spec['model'].get('librarySurfaces') else charge,20)
     # A diagonal body is split into asymmetric plates, revealing a deep cavity.
     before=set(c.scene.objects)
     plate(c,'Crushed belly',(0,0,.25),[(-.48,-.85),(.36,-.80),(.50,-.22),(.45,.65),(.20,.91),(-.34,.83),(-.52,.30)],.29,dark,.07)
@@ -83,8 +99,8 @@ def build(c,spec):
     tube(c,'Severed copper cable',[(.34,-.22,.36),(.57,-.33,.20),(.67,-.56,.16),(.83,-.68,.10)],.036,copper)
     tube(c,'Loose cable loop',[(1.04,-.31,.17),(1.30,-.20,.16),(1.40,-.29,.15),(1.29,-.42,.14),(1.14,-.40,.14)],.032,dark)
     if tier==1:
-        moss=surface(c,'Old moss cushions',(84,106,36),.5)
-        tips=surface(c,'Dry grass blades',(152,158,66),.28)
+        moss=material('Old moss cushions',(84,106,36),.5)
+        tips=material('Dry grass blades',(152,158,66),.28)
         for x,y in [(-1.30,.88),(-.63,.73),(-1.24,-.99),(-.36,-.69)]:
             for k in range(4):
                 c.ell('Clinging moss tuft',(x+rng.uniform(-.08,.08),y+rng.uniform(-.08,.08),.38),(.095,.075,.047),moss)
@@ -92,6 +108,6 @@ def build(c,spec):
                 a=k*2.1;dx,dy=.14*math.cos(a),.14*math.sin(a)
                 plate(c,'Grass blade cluster',(x,y,.43),[(-.035,0),(dx,dy),(.035,.035)],.01,tips,.002)
     if tier==3:
-        crystal=c.cylinder('Cyan crystal in open cargo',(.90,-.01,.36),.105,.21,charge,5)
+        crystal=c.cylinder('Cyan crystal in open cargo',(.90,-.01,.36),.105,.21,edge if spec['model'].get('librarySurfaces') else charge,5)
         crystal.rotation_euler.y=.25
     return finish(c,pivot)

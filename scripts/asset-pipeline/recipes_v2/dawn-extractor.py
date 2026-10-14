@@ -6,15 +6,18 @@ from dawn_parts import surface,root,finish,bolt,plate,tube,annulus,crown,hazards
 
 
 def build(c,spec):
+    def material(name, rgb, wear=.3, emission=0):
+        return surface(c, name, rgb, wear, emission,
+                       **spec['model'].get('librarySurfaces', {}).get(name, {}))
     pivot=root(c)
-    yellow=surface(c,'Chipped industrial yellow',(227,171,37),.48)
-    brass=surface(c,'Aged copper brass tanks',(170,111,48),.45)
-    steel=surface(c,'Rubbed matte steel',(188,198,188),.28)
-    dark=surface(c,'Dark structural steel',(43,53,55),.18)
-    rubber=surface(c,'Rubber tread and hose',(41,47,43),.09)
-    rib=surface(c,'Worn rubber rib crowns',(82,88,76),.16)
-    recess=surface(c,'Deep oiled recess',(18,25,27),0)
-    lamp=surface(c,'Amber safety beacon',(240,95,9),0,.02)
+    yellow=material('Chipped industrial yellow',(227,171,37),.48)
+    brass=material('Aged copper brass tanks',(170,111,48),.45)
+    steel=material('Rubbed matte steel',(188,198,188),.28)
+    dark=material('Dark structural steel',(43,53,55),.18)
+    rubber=material('Rubber tread and hose',(41,47,43),.09)
+    rib=material('Worn rubber rib crowns',(82,88,76),.16)
+    recess=material('Deep oiled recess',(18,25,27),0)
+    lamp=material('Amber safety beacon',(240,95,9),0,.02)
     cx=-.23
     c.box('Heavy dark chassis',(cx,.16,.20),(2.0,2.13,.32),dark,.12)
     for side in (-1,1):

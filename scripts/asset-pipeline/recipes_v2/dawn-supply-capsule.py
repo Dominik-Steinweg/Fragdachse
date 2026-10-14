@@ -3,7 +3,7 @@ from dawn_parts import root,finish,supply_palette,supply_crate,draped_canvas,cro
 
 
 def build(c,spec):
-    pivot=root(c);p=supply_palette(c)
+    pivot=root(c);p=supply_palette(c,spec)
     c.box('Crushed capsule keel',(0,-.12,.17),(1.64,1.79,.29),p['dark'],.25)
     crown(c,'Capsule raised hull',(0,-.11,.27),1.57,1.69,.23,p['brass'])
     c.box('Burst dark cargo cavity',(0,-.12,.54),(1.18,1.27,.14),p['dark'],.16)
