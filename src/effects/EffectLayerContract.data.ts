@@ -2828,7 +2828,6 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
     height: 'high', lighting: 'emissive', camera: 'clarity', depths: [21.01],
     blends: ['NORMAL'], profiles: ['C'], role: 'ui',
     source: { expression: 'MARKER_GPU_DEPTHS.edge + .01', selector: 'sync/text/setDepth/0' } },
-  {"id":"cpu:effects/dawn/NightModifierAtmosphere.ts:sync/this.graphics/setDepth/0","owner":"effects/dawn/NightModifierAtmosphere.ts","component":"sync/this.graphics/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[97],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"sync/this.graphics/setDepth/0","expression":"DEPTH.OVERLAY - 3"}},
   {"id":"cpu:arena/LobbyMerchantRenderer.ts:module/this.stall/setDepth/0","owner":"arena/LobbyMerchantRenderer.ts","component":"module/this.stall/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[4],"blends":["NORMAL"],"profiles":["G"],"role":"effect","source":{"selector":"module/this.stall/setDepth/0","expression":"DEPTH.BASES"}},
   {"id":"cpu:arena/LobbyMerchantRenderer.ts:module/this.nameplate/setDepth/0","owner":"arena/LobbyMerchantRenderer.ts","component":"module/this.nameplate/setDepth/0","height":"high","lighting":"material","camera":"world","depths":[22],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"module/this.nameplate/setDepth/0","expression":"DEPTH.LOCAL_UI"}},
   {"id":"cpu:arena/LobbyMerchantRenderer.ts:module/this.dealer/setDepth/0","owner":"arena/LobbyMerchantRenderer.ts","component":"module/this.dealer/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[10],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.dealer/setDepth/0","expression":"DEPTH.PLAYERS"}},
@@ -3337,10 +3336,7 @@ export const CPU_SOURCE_CONTRACTS = {
     ],
     bindings: { 'MARKER_GPU_DEPTHS[role]': [5.2, 20, 21] },
   },
-  "effects/dawn/NightModifierAtmosphere.ts": {
-    "sites": [{ "key": "sync/this.graphics/setDepth/0", "expression": "DEPTH.OVERLAY - 3", "blends": ["NORMAL"] }],
-    "blends": [], "cameras": ["promoteToClarityCamera(this.scene, this.graphics)"], "bindings": {}
-  },
+
   "arena/LobbyMerchantRenderer.ts": {"blends":[],"cameras":[],"sites":[{"key":"module/this.stall/setDepth/0","expression":"DEPTH.BASES","blends":["NORMAL"]},{"key":"module/this.dealer/setDepth/0","expression":"DEPTH.PLAYERS","blends":["NORMAL"]},{"key":"module/this.nameplate/setDepth/0","expression":"DEPTH.LOCAL_UI","blends":["NORMAL"]}],"bindings":{}},
   "arena/DawnSiteDecalRenderer.ts": {
     "blends": [], "cameras": [],

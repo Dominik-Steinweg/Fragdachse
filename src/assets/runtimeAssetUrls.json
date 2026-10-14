@@ -2914,5 +2914,15 @@
   "assets/ui/dawn/scrap-magnet.png": "assets/ui/dawn/scrap-magnet.png?v=3a73ba2ebcd30540d3f89ecf1ff9a07166476f15157e42294c32d604502980f5",
   "assets/ui/dawn/scrap-scanner.png": "assets/ui/dawn/scrap-scanner.png?v=911ce297d21b94b5f6359e0e32d7ba912f6787fea864eeed88ffbc25cd9a056a",
   "assets/ui/dawn/scrap.png": "assets/ui/dawn/scrap.png?v=dd721f10a9c7a186782a35a3ad25210e4a8740b5f30ef8c5fc9e3f44d7d47a09",
-  "assets/ui/dawn/threat.png": "assets/ui/dawn/threat.png?v=ddba0a8d507d883542d95dee2553aeb2b7047f261f5b7c698e3a6a9eacd8142d"
+  "assets/ui/dawn/threat.png": "assets/ui/dawn/threat.png?v=ddba0a8d507d883542d95dee2553aeb2b7047f261f5b7c698e3a6a9eacd8142d",
+  "assets/sprites/dawn-night/runtime/dawn-night-bomber-shadow-256x128.webp": "assets/sprites/dawn-night/runtime/dawn-night-bomber-shadow-256x128.webp?v=3d575b96a59ef2be1421b0e6dbb6847ee2573384788fc97a385ba5d3193deafe",
+  "assets/sprites/dawn-night/runtime/dawn-night-edge-mask-1920x1080.webp": "assets/sprites/dawn-night/runtime/dawn-night-edge-mask-1920x1080.webp?v=6cf42146db9cd3c15cea06e471b15b0b3581145226a55bdad5bb7ba6df99399c",
+  "assets/sprites/dawn-night/runtime/dawn-night-ember-mask-512.webp": "assets/sprites/dawn-night/runtime/dawn-night-ember-mask-512.webp?v=7c991198da00653b2fa6d387be9cd2b83d91bcb96a3745280c70e50e1917acc4",
+  "assets/sprites/dawn-night/runtime/dawn-night-lut-blood-moon-256x16.webp": "assets/sprites/dawn-night/runtime/dawn-night-lut-blood-moon-256x16.webp?v=2d74dc5de92d48f9ee94a18dcd74640368faad47b5c7aea11ab4ca2fe0dc2255",
+  "assets/sprites/dawn-night/runtime/dawn-night-lut-bombers-256x16.webp": "assets/sprites/dawn-night/runtime/dawn-night-lut-bombers-256x16.webp?v=c7303b98d9db13af17a03ab579643489ede2249b0258abf68f6bfb558eaaf4c2",
+  "assets/sprites/dawn-night/runtime/dawn-night-lut-fire-256x16.webp": "assets/sprites/dawn-night/runtime/dawn-night-lut-fire-256x16.webp?v=f39733a3e7d0fb580f433504b4f7e93a3f27110586611171b588cd4c4491d33e",
+  "assets/sprites/dawn-night/runtime/dawn-night-lut-fog-256x16.webp": "assets/sprites/dawn-night/runtime/dawn-night-lut-fog-256x16.webp?v=c080f349e7ff1b621bdefb6940000394b6203579f3ab6505f3796d24eec0207c",
+  "assets/sprites/dawn-night/runtime/dawn-night-lut-identity-256x16.webp": "assets/sprites/dawn-night/runtime/dawn-night-lut-identity-256x16.webp?v=5b40418d4a975b646338ee73a9668364f51756ddf1f4330a4cc1dc0a4b1149a9",
+  "assets/sprites/dawn-night/runtime/dawn-night-noise-cloud-512.webp": "assets/sprites/dawn-night/runtime/dawn-night-noise-cloud-512.webp?v=ec82e8e9f87206e18c92d4cf114e38cb956a747d94919d000d93a1166c746c49",
+  "assets/sprites/dawn-night/runtime/dawn-night-noise-smoke-512.webp": "assets/sprites/dawn-night/runtime/dawn-night-noise-smoke-512.webp?v=ea853aad4c8988c9a8857dceaf9b18baf6331e3e6e6b7bfa224e6dbe900d140c"
 }

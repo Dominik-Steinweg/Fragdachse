@@ -46,6 +46,16 @@ export function preloadDawnDecalAssets(loader: Pick<Phaser.Loader.LoaderPlugin, 
   }
 }
 
+/** Night modifier atmosphere art (keys equal file stems, `public/assets/sprites/dawn-night/manifest.json`). */
+export const DAWN_NIGHT_ASSET_FILES = [
+  'dawn-night-noise-cloud-512', 'dawn-night-noise-smoke-512', 'dawn-night-ember-mask-512', 'dawn-night-edge-mask-1920x1080',
+  'dawn-night-lut-identity-256x16', 'dawn-night-lut-blood-moon-256x16', 'dawn-night-lut-fog-256x16',
+  'dawn-night-lut-bombers-256x16', 'dawn-night-lut-fire-256x16', 'dawn-night-bomber-shadow-256x128',
+] as const;
+export function preloadDawnNightAssets(loader: Pick<Phaser.Loader.LoaderPlugin, 'image'>): void {
+  for (const key of DAWN_NIGHT_ASSET_FILES) loader.image(key, runtimeAssetUrl(`./assets/sprites/dawn-night/runtime/${key}.webp`));
+}
+
 export function isDawnScrapTexture(key: string | undefined): boolean {
   return key !== undefined && Object.values(DAWN_SCRAP_KEYS).includes(key);
 }

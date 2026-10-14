@@ -4,7 +4,7 @@ import { createMarkerCameraTransform } from '../effects/markers/MarkerLayoutMode
 import { resolveEarnedCoopDefenseBossPoints } from '../utils/coopDefenseUpgrades';
 import { preloadWatchtowerAssets } from '../effects/watchtower/WatchtowerVisual';
 import { installRuntimeAssetUrls } from '../assets/RuntimeAssetUrls';
-import { DAWN_PIPELINE_ASSETS, preloadDawnDecalAssets } from '../assets/DawnAssets';
+import { DAWN_PIPELINE_ASSETS, preloadDawnDecalAssets, preloadDawnNightAssets } from '../assets/DawnAssets';
 import { preloadPowerUpAssets, assertPowerUpAssetsReady } from '../assets/PowerUpAssets';
 import { preloadWoodlandAssets, assertWoodlandAssetsReady } from '../assets/WoodlandAssets';
 import { preloadCharacterMeshAssets, assertCharacterMeshAssetsReady } from '../assets/CharacterMeshAssets';
@@ -411,6 +411,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadRockVegetationMask(this.load);
     preloadTurretVisualAssets(this.load, DAWN_PIPELINE_ASSETS);
     preloadDawnDecalAssets(this.load);
+    preloadDawnNightAssets(this.load);
     preloadCanopyAssets(this.load);
     preloadTrainMaterialAssets(this.load);
     preloadPowerUpAssets(this);
