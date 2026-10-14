@@ -429,7 +429,8 @@ export class PlayerStatusRing {
     this.armorFrac = nextArmorFrac;
     this.adrenalineBoostActive = data.adrenalineSyringeActive ?? false;
     this.ultimateActive = data.isUltimateActive;
-    this.rageReady = data.rage >= data.ultimateRequiredRage || data.isUltimateActive;
+    const deploymentActive = data.isUltimateActive && data.ultimateDeploymentRemainingMs != null;
+    this.rageReady = !deploymentActive && (data.rage >= data.ultimateRequiredRage || data.isUltimateActive);
 
     this.prevHpFrac = nextHpFrac;
     this.prevAdrFrac = nextAdrFrac;

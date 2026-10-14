@@ -442,6 +442,7 @@ export const enUi = {
   "ui.combat.critical": "CRIT!",
   "ui.hud.ultimateShort": "Ultimate",
   "ui.hud.ready": "READY",
+  "ui.hud.ultimateActiveRemaining": "Active · {seconds} s",
   "ui.match.spectate": "LEAVE ROUND & SPECTATE",
   "ui.match.spectateConfirm": "REALLY SPECTATE?",
   "ui.match.spectateHint": "You will spectate until the next lobby",

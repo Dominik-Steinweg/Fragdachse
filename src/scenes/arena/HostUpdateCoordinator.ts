@@ -950,6 +950,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         rage:                    playerFrame?.rage ?? 0,
         maxRage:                 playerFrame?.maxRage ?? 600,
         isUltimateActive:        playerFrame?.isUltimateActive ?? false,
+        activeUltimateId:        playerFrame?.activeUltimateId,
         ultimateRequiredRage:    ultCfg?.rageRequired ?? 300,
       ultimateThresholds: [...ultimateThresholds],
         ultimateId:              ultCfg?.id,

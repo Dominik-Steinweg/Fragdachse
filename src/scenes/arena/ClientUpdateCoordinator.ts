@@ -724,6 +724,7 @@ export class ClientUpdateCoordinator {
         rage:                    localState.rage,
         maxRage:                 this.getLocalMaxRage(),
         isUltimateActive:        localState.isRaging,
+        activeUltimateId:        localState.activeUltimateId,
         ultimateRequiredRage:    localUltimateConfig.rageRequired,
         ultimateThresholds,
         ultimateId:              localUltimateConfig.id,

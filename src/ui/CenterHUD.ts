@@ -774,8 +774,9 @@ export class CenterHUD {
       || Boolean(data.utilityStatusLabel)
       || now < this.utilityRevealUntil
       || (data.isTemporaryUtilitySelected ?? false);
-    const isUltimateReady = data.isUltimateActive || data.rage >= data.ultimateRequiredRage;
-    const showUltimate = isUltimateReady || now < this.ultimateRevealUntil;
+    const deploymentActive = data.isUltimateActive && data.ultimateDeploymentRemainingMs != null;
+    const isUltimateReady = !deploymentActive && (data.isUltimateActive || data.rage >= data.ultimateRequiredRage);
+    const showUltimate = deploymentActive || isUltimateReady || now < this.ultimateRevealUntil;
 
     const entries: HudResourceEntry[] = [];
     if (showUtility) {
@@ -810,8 +811,10 @@ export class CenterHUD {
         side: 'right',
         tone: 'red',
         title: data.ultimateId ? getContentDisplayName(data.ultimateId, getLocale()) : t('ui.hud.ultimateShort'),
-        value: isUltimateReady ? t('ui.hud.ready') : '',
-        valueColor: isUltimateReady ? HUD_TONES.red.accent : undefined,
+        value: deploymentActive
+          ? t('ui.hud.ultimateActiveRemaining', { seconds: Math.ceil(data.ultimateDeploymentRemainingMs! / 1000) })
+          : isUltimateReady ? t('ui.hud.ready') : '',
+        valueColor: deploymentActive || isUltimateReady ? HUD_TONES.red.accent : undefined,
         frac: Phaser.Math.Clamp(data.rage / Math.max(1, data.maxRage), 0, 1),
         energy: isUltimateReady ? 1 : 0,
         attention: isUltimateReady,
