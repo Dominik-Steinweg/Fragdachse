@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { DAWN_MERCHANT } from '../src/config/dawn/merchant';
 import { COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT } from '../src/config/coopDefenseItems';
-import { createDefaultDawnProgress, DAWN_MAX_SCRAP } from '../src/dawn/economy/DawnProgress';
+import { createDefaultDawnProgress, DAWN_MAX_SCRAP, DAWN_MAX_EXPANSION_LEVEL } from '../src/dawn/economy/DawnProgress';
 import { ensureDawnShopOffer, purchaseDawnShopItem, recalibrateDawnItem, type DawnEquipmentProgressDraft } from '../src/dawn/economy/DawnMerchantEquipment';
 import { purchaseDawnInfrastructure } from '../src/dawn/economy/DawnMerchantInfrastructure';
 import { purchaseDawnBossPoint, purchaseDawnBranch } from '../src/dawn/economy/DawnMerchantUpgrades';
-import { buildDawnEquipmentModel, buildDawnInfrastructureModel, buildDawnMerchantItemModel, buildDawnUpgradesModel } from '../src/ui/DawnMerchantModel';
+import { buildDawnEquipmentModel, buildDawnInfrastructureModel, buildDawnMerchantItemModel, buildDawnUpgradesModel,
+  filterDawnMerchantOffers, summarizeDawnMerchantCategory, buildDawnMerchantLevelSegments } from '../src/ui/DawnMerchantModel';
 import { describeCoopDefenseItem, rollCoopDefenseItem } from '../src/utils/coopDefenseItems';
 import { translate } from '../src/i18n/catalog';
 import { DAWN_UI_TEXTURES } from '../src/assets/DawnUiAssets';
@@ -15,6 +16,51 @@ function equipment(): DawnEquipmentProgressDraft {
   ensureDawnShopOffer(dawn, true, () => .8);
   return { dawn, items: [], equippedItemIds: {}, unseenItems: false };
 }
+
+describe('merchant browsing', () => {
+  const itemCategory = DAWN_MERCHANT.equipment.itemCategoryId;
+  const craftCategory = DAWN_MERCHANT.equipment.coreCategoryId;
+  const rootCategory = DAWN_MERCHANT.categories.find(entry => entry.id === itemCategory)!.parentId!;
+  const offers = [
+    { name: 'Rüstung', categoryId: itemCategory, canBuy: true, owned: false, requirements: [] },
+    { name: 'RÜSTUNG schwer', categoryId: itemCategory, canBuy: false, owned: false, requirements: [{ met: false }] },
+    { name: 'Rüstung alt', categoryId: itemCategory, canBuy: false, owned: true, requirements: [{ met: false, locked: true }] },
+    { name: 'Rüstung neu', categoryId: craftCategory, canBuy: false, owned: false, fresh: true, requirements: [{ met: false, locked: true }] },
+    { name: 'Rüstung außerhalb', categoryId: DAWN_MERCHANT.expansion.categoryId, canBuy: true, owned: false, requirements: [] },
+  ];
+
+  it('intersects category, normalized name and status without changing the catalog', () => {
+    const before = structuredClone(offers);
+    for (const query of ['RÜSTUNG', 'ru\u0308stung', 'rustung', '  Rüstung  ']) {
+      expect(filterDawnMerchantOffers(offers, rootCategory, query, 'all', 'de')).toEqual(offers.slice(0, 4));
+    }
+    expect(filterDawnMerchantOffers(offers, rootCategory, 'rüstung', 'available', 'de')).toEqual([offers[0]]);
+    expect(filterDawnMerchantOffers(offers, rootCategory, 'rüstung', 'blocked', 'de')).toEqual([offers[3]]);
+    expect(filterDawnMerchantOffers(offers, rootCategory, 'rüstung', 'owned', 'de')).toEqual([offers[2]]);
+    expect(filterDawnMerchantOffers(offers, itemCategory, '', 'all', 'de')).toEqual(offers.slice(0, 3));
+    expect(filterDawnMerchantOffers(offers, rootCategory, 'unbekannt', 'all', 'de')).toEqual([]);
+    expect(filterDawnMerchantOffers(offers, rootCategory, 'schwer', 'available', 'de')).toEqual([]);
+    expect(offers).toEqual(before);
+  });
+
+  it('counts every offer in a branch and separates the availability/new indicator', () => {
+    expect(summarizeDawnMerchantCategory(offers, rootCategory)).toEqual({ count: 4, attention: true });
+    expect(summarizeDawnMerchantCategory(offers, itemCategory)).toEqual({ count: 3, attention: true });
+    const unavailable = offers.map(entry => ({ ...entry, canBuy: false }));
+    expect(summarizeDawnMerchantCategory(unavailable, rootCategory)).toEqual({ count: 4, attention: true });
+    const seen = unavailable.map(entry => ({ ...entry, fresh: false }));
+    expect(summarizeDawnMerchantCategory(seen, rootCategory)).toEqual({ count: 4, attention: false });
+    expect(summarizeDawnMerchantCategory(offers, 'missing')).toEqual({ count: 0, attention: false });
+  });
+
+  it('represents every expansion level, including the maximum', () => {
+    for (const level of [0, DAWN_MAX_EXPANSION_LEVEL - 1, DAWN_MAX_EXPANSION_LEVEL]) {
+      const segments = buildDawnMerchantLevelSegments(level, DAWN_MAX_EXPANSION_LEVEL);
+      expect(segments).toHaveLength(DAWN_MAX_EXPANSION_LEVEL);
+      expect(segments.filter(Boolean)).toHaveLength(level);
+    }
+  });
+});
 
 describe('merchant tab projections', () => {
   it('distinguishes infrastructure with its own drone and magnet artwork', () => {

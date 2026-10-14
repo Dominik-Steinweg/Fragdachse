@@ -3,7 +3,7 @@ import type { DawnProgress } from '../dawn/economy/DawnProgress';
 import { resolveDawnThreat } from '../dawn/rules/DawnThreat';
 import { resolvePersonalPersistentBaseAreaStage } from '../persistentBase/PersistentBaseAreaStageResolution';
 import { resolvePersistentBaseBuildAreaForStage, type CampaignPersistentBaseAreaStage } from '../persistentBase/PersistentBaseCore';
-import { DAWN_MERCHANT } from '../config/dawn/merchant';
+import { DAWN_MERCHANT, isDawnMerchantCategoryWithin } from '../config/dawn/merchant';
 import { getDawnInfrastructureLevel, resolveDawnInfrastructureCost } from '../dawn/economy/DawnMerchantInfrastructure';
 import { canPurchaseDawnBossPoint, canPurchaseDawnBranch, isDawnBranchResearched, resolveDawnBossPointCost } from '../dawn/economy/DawnMerchantUpgrades';
 import { canPurchaseDawnRecalibrationCore, canPurchaseDawnShopItem, canRecalibrateDawnItem,
@@ -19,6 +19,43 @@ const INFRASTRUCTURE_ICONS = {
   'scrap-magnet': DAWN_UI_TEXTURES.scrapMagnet,
   'scrap-scanner': DAWN_UI_TEXTURES.scrapScanner,
 };
+
+export const DAWN_MERCHANT_FILTERS = ['all', 'available', 'blocked', 'owned'] as const;
+export type DawnMerchantFilter = typeof DAWN_MERCHANT_FILTERS[number];
+
+interface DawnMerchantBrowseOffer {
+  name: string;
+  categoryId: string;
+  canBuy: boolean;
+  owned: boolean;
+  fresh?: boolean;
+  requirements: readonly { met: boolean; locked?: boolean }[];
+}
+
+export function getDawnMerchantOfferStatus(entry: DawnMerchantBrowseOffer): 'owned' | 'blocked' | 'expensive' | 'available' {
+  return entry.owned ? 'owned' : entry.requirements.some(row => !row.met && row.locked) ? 'blocked' : entry.canBuy ? 'available' : 'expensive';
+}
+
+/** Search, status and category intersect. Canonical/decomposed umlauts behave alike;
+ * an unaccented query also finds the corresponding accented name. */
+export function filterDawnMerchantOffers<T extends DawnMerchantBrowseOffer>(offers: readonly T[], categoryId: string,
+  query: string, filter: DawnMerchantFilter, locale: Locale): T[] {
+  const normalize = (value: string) => value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase(locale);
+  const needle = normalize(query.trim());
+  return offers.filter(entry => isDawnMerchantCategoryWithin(entry.categoryId, categoryId)
+    && normalize(entry.name).includes(needle)
+    && (filter === 'all' || getDawnMerchantOfferStatus(entry) === filter));
+}
+
+/** Sidebar inventory totals do not depend on search, filters or purchasing state. */
+export function summarizeDawnMerchantCategory(offers: readonly DawnMerchantBrowseOffer[], categoryId: string) {
+  const branch = offers.filter(entry => isDawnMerchantCategoryWithin(entry.categoryId, categoryId));
+  return { count: branch.length, attention: branch.some(entry => entry.canBuy || entry.fresh) };
+}
+
+export function buildDawnMerchantLevelSegments(level: number, max: number): boolean[] {
+  return Array.from({ length: max }, (_, index) => index < level);
+}
 
 export function buildDawnMerchantModel(progress: DawnProgress, campaignStage: CampaignPersistentBaseAreaStage, unlocked: boolean) {
   const cost = resolveDawnExpansionCost(progress.expansionLevel);

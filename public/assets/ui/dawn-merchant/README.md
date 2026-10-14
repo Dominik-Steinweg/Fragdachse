@@ -1,6 +1,6 @@
 # Dawn Merchant UI-Kit
 
-37 Teile für die Gestaltungsvorgabe Händler-UI V1. Imagegen liefert Materialität, Wald, Eckornament und Glyphen; sharp bereinigt Alpha, schneidet zu und montiert pixelgenaue Zustände. Kein Runtime-Code ist integriert.
+37 Teile für die Gestaltungsvorgabe Händler-UI V1. Imagegen liefert Materialität, Wald, Eckornament und Glyphen; sharp bereinigt Alpha, schneidet zu und montiert pixelgenaue Zustände. DawnMerchantOverlay nutzt das Kit; der Export erzeugt dazu importierbare 1x-Metadaten in src/assets/manifests/dawn-merchant-ui.json.
 
 ## Export
 

@@ -1,19 +1,161 @@
 {
   "upgrades": {
     "branches": [
-      { "branchId": "necromancy", "price": 100 }
+      {
+        "branchId": "necromancy",
+        "price": 100,
+        "categoryId": "branches"
+      }
     ],
-    "bossPointPrices": [90, 120, 150, 180, 210, 240, 270, 300, 330, 360, 390, 420, 450, 480, 510, 540, 570, 600, 630, 660]
+    "bossPointPrices": [
+      90,
+      120,
+      150,
+      180,
+      210,
+      240,
+      270,
+      300,
+      330,
+      360,
+      390,
+      420,
+      450,
+      480,
+      510,
+      540,
+      570,
+      600,
+      630,
+      660
+    ],
+    "bossPointCategoryId": "boss-points"
   },
   "infrastructure": [
-    { "id": "repair-drones", "levelPrices": [240, 900, 2400] },
-    { "id": "scrap-magnet", "levelPrices": [360] },
-    { "id": "scrap-scanner", "levelPrices": [480] }
+    {
+      "id": "repair-drones",
+      "levelPrices": [
+        240,
+        900,
+        2400
+      ],
+      "categoryId": "drones"
+    },
+    {
+      "id": "scrap-magnet",
+      "levelPrices": [
+        360
+      ],
+      "categoryId": "supply"
+    },
+    {
+      "id": "scrap-scanner",
+      "levelPrices": [
+        480
+      ],
+      "categoryId": "sensors"
+    }
   ],
   "equipment": {
     "itemOfferCount": 3,
-    "itemPriceByRarity": { "white": 40, "blue": 90, "yellow": 200 },
+    "itemPriceByRarity": {
+      "white": 40,
+      "blue": 90,
+      "yellow": 200
+    },
     "itemPriceGrowthPerThreat": 0.2,
-    "recalibrationCorePrice": 120
+    "recalibrationCorePrice": 120,
+    "itemCategoryId": "round-offers",
+    "coreCategoryId": "crafting",
+    "recalibrationCategoryId": "crafting"
+  },
+  "categories": [
+    {
+      "id": "expansion",
+      "nameKey": "ui.dawn.tab.expansion",
+      "iconKey": "dawn-ui-dealer-expansion",
+      "order": 0,
+      "parentId": null
+    },
+    {
+      "id": "base",
+      "nameKey": "ui.dawn.category.base",
+      "iconKey": "dawn-ui-dealer-expansion",
+      "order": 1,
+      "parentId": "expansion"
+    },
+    {
+      "id": "infrastructure",
+      "nameKey": "ui.dawn.tab.infrastructure",
+      "iconKey": "dawn-ui-dealer-infrastructure",
+      "order": 10,
+      "parentId": null
+    },
+    {
+      "id": "drones",
+      "nameKey": "ui.dawn.category.drones",
+      "iconKey": "dawn-ui-dealer-infrastructure",
+      "order": 11,
+      "parentId": "infrastructure"
+    },
+    {
+      "id": "sensors",
+      "nameKey": "ui.dawn.category.sensors",
+      "iconKey": "dawn-merchant/category-sensors",
+      "order": 12,
+      "parentId": "infrastructure"
+    },
+    {
+      "id": "supply",
+      "nameKey": "ui.dawn.category.supply",
+      "iconKey": "dawn-merchant/category-supply",
+      "order": 13,
+      "parentId": "infrastructure"
+    },
+    {
+      "id": "upgrades",
+      "nameKey": "ui.dawn.category.research",
+      "iconKey": "dawn-ui-dealer-upgrades",
+      "order": 20,
+      "parentId": null
+    },
+    {
+      "id": "branches",
+      "nameKey": "ui.dawn.category.branches",
+      "iconKey": "dawn-ui-dealer-upgrades",
+      "order": 21,
+      "parentId": "upgrades"
+    },
+    {
+      "id": "boss-points",
+      "nameKey": "ui.dawn.bossPoints",
+      "iconKey": "dawn-ui-dealer-upgrades",
+      "order": 22,
+      "parentId": "upgrades"
+    },
+    {
+      "id": "equipment",
+      "nameKey": "ui.dawn.tab.equipment",
+      "iconKey": "dawn-ui-dealer-equipment",
+      "order": 30,
+      "parentId": null
+    },
+    {
+      "id": "round-offers",
+      "nameKey": "ui.dawn.category.round",
+      "iconKey": "dawn-ui-dealer-equipment",
+      "order": 31,
+      "parentId": "equipment"
+    },
+    {
+      "id": "crafting",
+      "nameKey": "ui.dawn.category.crafting",
+      "iconKey": "dawn-merchant/category-crafting",
+      "order": 32,
+      "parentId": "equipment"
+    }
+  ],
+  "expansion": {
+    "categoryId": "base"
   }
 }
