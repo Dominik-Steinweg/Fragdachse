@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "key": "dawn-night-noise-cloud-512",
+      "file": "runtime/dawn-night-noise-cloud-512.webp",
+      "width": 512,
+      "height": 512,
+      "type": "tile"
+    },
+    {
+      "key": "dawn-night-noise-smoke-512",
+      "file": "runtime/dawn-night-noise-smoke-512.webp",
+      "width": 512,
+      "height": 512,
+      "type": "tile"
+    },
+    {
+      "key": "dawn-night-ember-mask-512",
+      "file": "runtime/dawn-night-ember-mask-512.webp",
+      "width": 512,
+      "height": 512,
+      "type": "tile"
+    },
+    {
+      "key": "dawn-night-edge-mask-1920x1080",
+      "file": "runtime/dawn-night-edge-mask-1920x1080.webp",
+      "width": 1920,
+      "height": 1080,
+      "type": "mask"
+    },
+    {
+      "key": "dawn-night-lut-identity-256x16",
+      "file": "runtime/dawn-night-lut-identity-256x16.webp",
+      "width": 256,
+      "height": 16,
+      "type": "lut"
+    },
+    {
+      "key": "dawn-night-lut-blood-moon-256x16",
+      "file": "runtime/dawn-night-lut-blood-moon-256x16.webp",
+      "width": 256,
+      "height": 16,
+      "type": "lut"
+    },
+    {
+      "key": "dawn-night-lut-fog-256x16",
+      "file": "runtime/dawn-night-lut-fog-256x16.webp",
+      "width": 256,
+      "height": 16,
+      "type": "lut"
+    },
+    {
+      "key": "dawn-night-lut-bombers-256x16",
+      "file": "runtime/dawn-night-lut-bombers-256x16.webp",
+      "width": 256,
+      "height": 16,
+      "type": "lut"
+    },
+    {
+      "key": "dawn-night-lut-fire-256x16",
+      "file": "runtime/dawn-night-lut-fire-256x16.webp",
+      "width": 256,
+      "height": 16,
+      "type": "lut"
+    },
+    {
+      "key": "dawn-night-bomber-shadow-256x128",
+      "file": "runtime/dawn-night-bomber-shadow-256x128.webp",
+      "width": 256,
+      "height": 128,
+      "type": "sprite"
+    }
+  ]
+}
