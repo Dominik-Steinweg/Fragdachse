@@ -69,7 +69,9 @@
       "file": "runtime/dawn-night-bomber-shadow-256x128.webp",
       "width": 256,
       "height": 128,
-      "type": "sprite"
+      "type": "sprite",
+      "silhouette": "stealth-flying-wing",
+      "forward": "+X"
     }
   ]
 }
