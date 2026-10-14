@@ -5,7 +5,7 @@ vi.mock('../../src/effects/postfx/CameraPostFxController', () => ({ CameraPostFx
 
 import { PersistentBaseEditorWorld, getPersistentBaseEditorSize } from '../../src/persistentBase/PersistentBaseEditorWorld';
 import { GroundSurfaceStreamer, GROUND_PERSISTENT_BASE_GRAVEL_LAYER_ID } from '../../src/arena/chunks/GroundSurfaceStreamer';
-import { resolvePersistentBaseBuildAreaForStage } from '../../src/persistentBase/PersistentBaseCore';
+import { isCellInsidePersistentBaseBuildArea, resolvePersistentBaseBuildAreaForStage } from '../../src/persistentBase/PersistentBaseCore';
 import { CELL_SIZE } from '../../src/config';
 import { createFakeArenaScene, type FakeRenderTexture } from '../fakeArenaRenderScene';
 import { PersistentBaseEditorModel } from '../../src/persistentBase/PersistentBaseEditorModel';
@@ -69,7 +69,7 @@ describe('base editor World terrain', () => {
     expect(shadows.rebuildStaticLayoutShadows.mock.calls.every(call => call[2] === true)).toBe(true);
   });
 
-  it.each([0, 1, 2] as const)('finishes real gravel bakes through normal editor frames at base stage %s', stage => {
+  it.each([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as const)('finishes real gravel bakes through normal editor frames at base stage %s', stage => {
     const scene = createFakeArenaScene();
     const area = resolvePersistentBaseBuildAreaForStage(stage);
     const size = getPersistentBaseEditorSize(area);
@@ -83,19 +83,33 @@ describe('base editor World terrain', () => {
     });
     // Unrelated animated renderers are ports here; terrain and its scene-local queue are real.
     const world = Object.assign(Object.create(PersistentBaseEditorWorld.prototype), {
-      scene, arena: { groundSurface: ground }, shadows: { updateStaticResidency() {} },
+      scene, arena: { groundSurface: ground, rockOverlaySurface: { updateResidency() {}, isReadyForView: () => true } },
+      shadows: { updateStaticResidency() {}, isStaticReadyForView: () => true },
       bases: { syncLights() {} }, animations: { update() {} }, powerUps: { updatePedestals() {}, updatePresentation() {} },
       presentationTimeMs:0,sunlight:{update:vi.fn()},
       gpu: { update() {} }, fog: { update() {} }, lighting: { update() {} }, fx: { update() {} },
     }) as PersistentBaseEditorWorld;
     ground.updateResidency(view);
-    expect(ground.isReadyForView(view)).toBe(false);
-    for (let frame = 0; frame < 100 && !ground.isReadyForView(view); frame++) world.update(frame * 16, 16, view);
-    expect(ground.isReadyForView(view)).toBe(true);
-    const gravel = ground.getChunkTexture(GROUND_PERSISTENT_BASE_GRAVEL_LAYER_ID, 0, 0) as unknown as FakeRenderTexture;
-    expect(gravel).not.toBeNull();
-    expect(gravel.content.length).toBeGreaterThan(0);
+    expect(world.isReadyForView(view)).toBe(false);
+    for (let frame = 0; frame < 100 && !world.isReadyForView(view); frame++) world.update(frame * 16, 16, view);
+    expect(world.isReadyForView(view)).toBe(true);
+    const textures: FakeRenderTexture[] = [];
+    for (let y = 0; y < size; y += ground.grid.chunkSize) for (let x = 0; x < size; x += ground.grid.chunkSize) {
+      const gravel = ground.getChunkTexture(GROUND_PERSISTENT_BASE_GRAVEL_LAYER_ID,
+        x / ground.grid.chunkSize, y / ground.grid.chunkSize) as unknown as FakeRenderTexture;
+      expect(gravel).not.toBeNull();
+      expect(gravel.visible).toBe(true);
+      // Corner chunks outside the circular build area legitimately contain only grass.
+      let containsBuildCell = false;
+      for (let gy = y / CELL_SIZE; gy < Math.min(size, y + ground.grid.chunkSize) / CELL_SIZE; gy++) {
+        for (let gx = x / CELL_SIZE; gx < Math.min(size, x + ground.grid.chunkSize) / CELL_SIZE; gx++) {
+          containsBuildCell ||= isCellInsidePersistentBaseBuildArea(gx - anchor, gy - anchor, area);
+        }
+      }
+      if (containsBuildCell) expect(gravel.content.length).toBeGreaterThan(0);
+      textures.push(gravel);
+    }
     ground.destroy();
-    expect(gravel.active).toBe(false);
+    expect(textures.every(texture => !texture.active)).toBe(true);
   });
 });

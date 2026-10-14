@@ -1,4 +1,8 @@
 export const deContent = {
+  "map.dawn:pondland.name": "Teichland",
+  "map.dawn:rockbasin.name": "Felskessel",
+  "map.dawn:oldwood.name": "Altwald",
+  "map.dawn:clearing.name": "Lichtung",
   "loadout.FIRE_CONTROL_RELAY.name": "Turmkopien",
   "loadout.FIRE_CONTROL_PORTAL.name": "Portale",
   "construction.attack_drone_station.name": "Angriffsdrohnenstation",

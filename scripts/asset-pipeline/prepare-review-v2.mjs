@@ -49,20 +49,20 @@ async function destinationFile(assetRoot, file) {
 }
 
 /** Prepare review-only archive inputs without changing the completed render revision. */
-export async function prepareReviewV2(assetFolder, reviewJsonFile, workspace = repoRoot) {
+export async function prepareReviewV2(assetFolder, reviewJsonFile, workspace = repoRoot, options = {}) {
   const root = await realpath(workspace);
-  const asset = await realpath(await sourceFile(root, assetFolder));
-  const runRoot = path.join(root, 'art/poc/pipeline-v2/runs');
+  const runRoot = await realpath(options.runRoot ?? path.join(root, 'art/poc/pipeline-v2/runs'));
+  const asset = await realpath(await sourceFile(runRoot, path.resolve(root, assetFolder)));
   contained(runRoot, asset);
   const parts = path.relative(runRoot, asset).split(path.sep);
-  if (parts.length !== 2 || parts.some(part => !/^[a-z0-9][a-z0-9-]*$/.test(part))) throw new Error('Expected a V2 revision asset folder');
+  if (parts.length !== 2 || !/^[a-z0-9][a-z0-9-]*$/.test(parts[0]) || !/^[a-z0-9][a-z0-9_-]*$/.test(parts[1])) throw new Error('Expected a V2 revision asset folder');
   const selectionFile = path.join(asset, 'selection.json');
   if (await exists(selectionFile)) throw new Error('Selection already exists; review inputs are immutable');
-  const build = await json(await sourceFile(root, path.join(asset, 'build.json')));
+  const build = await json(await sourceFile(asset, path.join(asset, 'build.json')));
   if (build.status !== 'complete' || !/^[a-f0-9]{64}$/.test(build.inputHash)) throw new Error('Completed V2 build required before review');
   const variants = Object.keys(build.variants ?? {});
   if (!variants.length) variants.push('calm', 'rich');
-  const manifests = await Promise.all(variants.map(async variant => json(await sourceFile(root, path.join(asset, referencePath(variant), 'render.json')))));
+  const manifests = await Promise.all(variants.map(async variant => json(await sourceFile(asset, path.join(asset, referencePath(variant), 'render.json')))));
   for (const m of manifests) {
     if (m.pipelineVersion !== 2 || m.id !== parts[1] || m.revision !== parts[0]) throw new Error('Review manifest disagrees with asset folder');
   }
@@ -75,6 +75,12 @@ export async function prepareReviewV2(assetFolder, reviewJsonFile, workspace = r
   const review = JSON.parse(reviewBytes.toString('utf8'));
   if (!review || typeof review !== 'object' || Array.isArray(review)) throw new Error('Review JSON must contain an object');
   const inputs = new Map([[reviewRelative, reviewBytes], [helperRelative, await readFile(helperFile)]]);
+  if (review.archiveInputs !== undefined && !Array.isArray(review.archiveInputs)) throw new Error('archiveInputs must be repository-relative source paths');
+  for (const relative of review.archiveInputs ?? []) {
+    referencePath(relative);
+    if (relative === 'review-inputs.json') throw new Error('Review input collides with reserved archive metadata');
+    inputs.set(relative, await readFile(await sourceFile(root, relative)));
+  }
   const references = [];
   for (const [role, relative] of [['reference', manifest.reference], ['previousReference', manifest.previousReference?.path], ['designReference', manifest.designReference]]) {
     if (role !== 'reference' && relative === undefined) continue;
@@ -113,7 +119,7 @@ export async function prepareReviewV2(assetFolder, reviewJsonFile, workspace = r
 if (process.argv[1] && path.resolve(process.argv[1]) === helperFile) {
   const [assetFolder, reviewFile, ...extra] = process.argv.slice(2);
   try {
-    if (!assetFolder || !reviewFile || extra.length) throw new Error('Usage: node scripts/asset-pipeline/prepare-review-v2.mjs <asset-folder> <review.json>');
-    console.log(JSON.stringify(await prepareReviewV2(assetFolder, reviewFile), null, 2));
+    if (!assetFolder || !reviewFile || (extra.length && (extra.length !== 2 || extra[0] !== '--run-root' || !extra[1]))) throw new Error('Usage: node scripts/asset-pipeline/prepare-review-v2.mjs <asset-folder> <review.json> [--run-root <runs-directory>]');
+    console.log(JSON.stringify(await prepareReviewV2(assetFolder, reviewFile, repoRoot, extra.length ? { runRoot: path.resolve(extra[1]) } : {}), null, 2));
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

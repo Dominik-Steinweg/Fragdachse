@@ -31,6 +31,8 @@ def validate_clips(clips, sampled=False):
 
 
 def validate_extensions(spec):
+    if 'materialSource' in spec and (spec['materialSource'] != 'procedural' or spec.get('textures') != {}):
+        raise ValueError('Procedural materials must declare an empty texture map')
     if 'runtimeAtlas' in spec and type(spec['runtimeAtlas']) is not bool:
         raise ValueError('runtimeAtlas must be boolean')
     if 'elevation' in spec:

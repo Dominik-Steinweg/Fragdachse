@@ -38,7 +38,7 @@ function buildScenarios(): readonly AuthoredScenario[] {
     // dieselbe getrennte Authoring-Sicht.
     ...getDiagnosticMapConfigs(),
   ];
-  return mapConfigs.map(toAuthoredScenario);
+  return mapConfigs.map((mapConfig) => toAuthoredScenario(mapConfig));
 }
 
 export function getAuthoredScenarios(): readonly AuthoredScenario[] {

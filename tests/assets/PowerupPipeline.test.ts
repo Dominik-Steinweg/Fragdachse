@@ -9,7 +9,8 @@ import {validateManifestV2} from '../../scripts/asset-pipeline/export-v2.mjs';
 import {compositePowerup} from '../../scripts/asset-pipeline/review-powerups.mjs';
 import {createHash} from 'node:crypto';
 import runtimeManifest from '../../src/assets/manifests/powerups-powerups-r02.json';
-import {POWERUP_DEFS, POWERUP_RENDER_SIZE} from '../../src/powerups/PowerUpConfig';
+import {POWERUP_DEFS, POWERUP_RENDER_SIZE, DAWN_SCRAP_DEFS} from '../../src/powerups/PowerUpConfig';
+import {DAWN_PIPELINE_ASSETS, DAWN_SCRAP_KEYS} from '../../src/assets/DawnAssets';
 import {runtimeAssetUrl} from '../../src/assets/RuntimeAssetUrls';
 const spec=JSON.parse(await readFile('scripts/asset-pipeline/powerups-v2.json','utf8'));
 
@@ -17,7 +18,7 @@ test('published pickup layers retain hashes, shared full canvases and exact stat
   const m = runtimeManifest;
   assert.equal(m.displaySize, POWERUP_RENDER_SIZE);
   assert.deepEqual(m.pivot, [.5, .5]);
-  assert.deepEqual(new Set(m.symbols.map(s => s.gameId)), new Set(Object.values(POWERUP_DEFS).filter(d => d.spriteKey).map(d => d.id)));
+  assert.deepEqual(new Set(m.symbols.map(s => s.gameId)), new Set(Object.values(POWERUP_DEFS).filter(d => d.spriteKey && d.type !== 'dawn_scrap').map(d => d.id)));
   for (const asset of [m.base, ...m.symbols.flatMap(s => [s.image, s.composite])]) {
     const bytes = await readFile('public/' + asset.file);
     assert.equal(createHash('sha256').update(bytes).digest('hex'), asset.sha256);
@@ -31,6 +32,18 @@ test('published pickup layers retain hashes, shared full canvases and exact stat
     assert.equal(POWERUP_DEFS[symbol.gameId].spriteKey, symbol.spriteKey);
     const expected = await sharp('public/' + m.base.file).composite([{ input: 'public/' + symbol.image.file }]).raw().toBuffer();
     assert.deepEqual(await sharp('public/' + symbol.composite.file).raw().toBuffer(), expected);
+  }
+});
+test('Dawn scrap tiers use their published standalone pipeline art', async () => {
+  for (const def of Object.values(DAWN_SCRAP_DEFS)) {
+    assert.equal(def.spriteKey, DAWN_SCRAP_KEYS[def.amount]);
+    const asset = DAWN_PIPELINE_ASSETS.find(entry => entry.textureKey === def.spriteKey)!;
+    assert.ok(asset);
+    assert.equal(asset.clips.length, 0);
+    const meta = await sharp(asset.idlePath.replace(/^\.\//, 'public/')).metadata();
+    assert.equal(meta.width, asset.layout.frameWidth);
+    assert.equal(meta.height, asset.layout.frameHeight);
+    assert.match(runtimeAssetUrl(asset.idlePath), /\?v=[a-f0-9]{64}$/);
   }
 });
 test('exactly one base, eight semantic symbols and a shared projection',()=>{

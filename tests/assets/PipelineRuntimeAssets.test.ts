@@ -7,7 +7,7 @@ import { validateEyeAnchors } from '../../scripts/asset-pipeline/eye-anchors.mjs
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../../src/config/coopDefenseEnemies';
 import { getCoopDefenseUpgradeTextureKey } from '../../src/utils/coopDefenseUpgrades';
 import { AutoTiler, MISSION_BARRIER_AUTOTILE } from '../../src/arena/AutoTiler';
-import { getPipelineSpriteScale, PIPELINE_ASSETS, PIPELINE_RUNTIME_ASSETS } from '../../src/config/pipelineAssets';
+import { getPipelineSpriteScale, pipelineAnimationKey, PIPELINE_ASSETS, PIPELINE_RUNTIME_ASSETS } from '../../src/config/pipelineAssets';
 import { isBossRuntime, verifyBossRuntime } from '../../scripts/asset-pipeline/runtime-contract-v2.mjs';
 import { packAtlas } from '../../scripts/asset-pipeline/atlas-v2.mjs';
 
@@ -44,8 +44,17 @@ async function bossFixture() {
 }
 
 describe('selected runtime asset package', () => {
+  it('publishes the Dawn scavenger as a fleeing enemy with standard animation names', () => {
+    const asset = PIPELINE_ASSETS.find(a => a.id === 'enemy_dawn_scavenger')!;
+    expect(asset).toMatchObject({ category: 'enemy', gameIds: [], textureKey: 'enemy_dawn_scavenger', sheetTextureKey: 'enemy_dawn_scavenger_walking' });
+    expect(asset.clips.map(c => c.name).sort()).toEqual(['idle', 'move']);
+    expect(asset.clips.every(c => c.loop)).toBe(true);
+    expect(asset.clips.map(c => pipelineAnimationKey(asset, c))).toEqual(['enemy_dawn_scavenger_walking_idle', 'enemy_dawn_scavenger_walk']);
+  });
+
   it('ships a marked one-shot pounce beyond the body circle, with anchors for all poses', async () => {
-    for (const asset of PIPELINE_ASSETS.filter(a => a.category === 'enemy')) {
+    for (const asset of PIPELINE_ASSETS.filter(a => a.category === 'enemy'
+      && catalog.assets.find(c => c.id === a.id)!.requiredClips.includes('claw'))) {
       const clip = asset.clips.find(c => c.name === 'claw')!;
       expect(clip, asset.id).toBeDefined();
       expect(clip.loop).toBe(false);
@@ -81,7 +90,9 @@ describe('selected runtime asset package', () => {
   it('binds complete eye poses to every enemy image revision', () => {
     for (const asset of PIPELINE_ASSETS.filter(a => a.category === 'enemy')) {
       expect(() => validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount, asset)).not.toThrow();
-      if (!isBossRuntime(catalog.assets.find(c => c.id === asset.id)!)) expect(COOP_DEFENSE_ENEMY_CONFIGS[asset.id].eyeGlow).toBeDefined();
+      if (!isBossRuntime(catalog.assets.find(c => c.id === asset.id)!)) {
+        for (const id of asset.gameIds) expect(COOP_DEFENSE_ENEMY_CONFIGS[id].eyeGlow).toBeDefined();
+      }
       expect(() => validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount + 1, asset)).toThrow();
       expect(() => validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount, { ...asset, revision: 'foreign' })).toThrow();
       expect(() => validateEyeAnchors(asset.eyeAnchors, asset.layout.frameCount,

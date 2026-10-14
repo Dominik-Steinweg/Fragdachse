@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts/asset-pipeline'))
 from contracts_v2 import validate_clips, validate_extensions
-from pose_validation_v2 import assert_clip_boundary
+from pose_validation_v2 import assert_clip_boundary, required_moving_rigged
 from pose_validation_v2 import validate_animation
 import motions_v2
 from socket_anchors import sample_sockets, validate_socket_frames
@@ -22,6 +22,30 @@ def state(value):
 
 
 class PipelineContracts(unittest.TestCase):
+    def test_inactive_hold_checks_rest_and_does_not_accept_a_stuck_active_loop(self):
+        clip = dict(name='idle', motion='dawn_extractor_idle', loop=True, timelineStart=1, frames=[1, 2], frameRate=12)
+        assert_clip_boundary(clip, [clip], state(0), state(0), state(0), lambda frame: state(0))
+        with self.assertRaises(AssertionError):
+            assert_clip_boundary(clip, [clip], state(0), state(1), state(1), lambda frame: state(1))
+        active = dict(clip, name='active', motion='dawn_extractor_active')
+        with self.assertRaises(AssertionError):
+            assert_clip_boundary(active, [active], state(0), state(0), state(0), lambda frame: state(0))
+
+    def test_only_idle_breathing_exempts_explicit_planted_feet(self):
+        class Mesh(dict):
+            def __init__(self, name, role):
+                super().__init__(motionRole=role); self.name=name
+        meshes = [Mesh('foot', 'left_leg'), Mesh('mantle', 'arms')]
+        weighted = {'foot', 'mantle'}
+        self.assertEqual(required_moving_rigged(meshes, weighted, [dict(motion='player_idle')]), {'mantle'})
+        self.assertEqual(required_moving_rigged(meshes, weighted, [dict(motion='player_idle'), dict(motion='player_walk')]), weighted)
+        with self.assertRaises(AssertionError):
+            required_moving_rigged(meshes[1:], weighted, [dict(motion='player_idle')])
+
+    def test_procedural_material_source_cannot_hide_image_dependencies(self):
+        validate_extensions(dict(materialSource='procedural', textures={}))
+        for value in (dict(materialSource='procedural', textures={'organic':'source.png'}), dict(materialSource='other', textures={})):
+            with self.assertRaises(ValueError): validate_extensions(value)
 
     def test_relay_deploy_opens_hinges_and_returns_to_deployed_rest(self):
         parts = {name: types.SimpleNamespace() for name in

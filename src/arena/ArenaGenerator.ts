@@ -104,7 +104,10 @@ function updateJsonFingerprintHash(value: unknown, hash: number, inArray = false
 }
 
 /** Increment whenever deterministic generation changes in a wire-visible way. */
-export const ARENA_GENERATOR_VERSION = 11;
+export const ARENA_GENERATOR_VERSION = 13;
+
+/** Garantiert freie Kreisflaeche: Missions-Checkpoint oder Salvage-Site-Lichtung. */
+type ProtectedClearing = Pick<CoopDefenseMapMissionCheckpointConfig, 'gridX' | 'gridY' | 'radiusCells'>;
 
 /** Immutable inputs that previously leaked in through mutable config module variables. */
 export interface ArenaGenerationInput {
@@ -183,9 +186,13 @@ export class ArenaGenerator {
         barrier.cells.map((cell) => `${cell.gridX}_${cell.gridY}`)
       )),
     );
-    const missionCheckpointCells = this.collectMissionCheckpointCells(
-      coopMapConfig?.missionProgress?.checkpoints,
-    );
+    // Checkpoints und Salvage-Site-Lichtungen teilen dieselbe Garantie: ihr Kern bleibt frei von
+    // Fels, Felsbaendern und Baeumen. Ohne Sites bleibt die Eingabe (und damit jede RNG-Folge) gleich.
+    const protectedClearings = [
+      ...(coopMapConfig?.missionProgress?.checkpoints ?? []),
+      ...(coopMapConfig?.siteClearings ?? []),
+    ];
+    const missionCheckpointCells = this.collectMissionCheckpointCells(protectedClearings);
     // Authored Felsbaender sind reguläre Felsen, aber keine Generatoreingabe: Sie werden erst
     // nach Konnektivitäts-, Baum- und Routenprüfung gestempelt. Sonst läse `ensureConnected` ein
     // bewusst gesetztes Band als abgeschnürte Tasche und fräste es wieder auf.
@@ -305,7 +312,7 @@ export class ArenaGenerator {
       // künstliches Quadrat um jeden Marker zu erzeugen.
       this.carveOrganicCheckpointClearances(
         map,
-        coopMapConfig?.missionProgress?.checkpoints ?? [],
+        protectedClearings,
         rng,
         tutorialRockCoreCells,
       );
@@ -352,13 +359,19 @@ export class ArenaGenerator {
       // Bäume auf verbleibenden freien Zellen platzieren.
       // Mindestabstand zum Arena-Rand: ceil(CANOPY_RADIUS / CELL_SIZE) Zellen,
       // damit die Baumkrone nie über die Arena-Grenze hinausragt.
-      const treeMargin = Math.ceil(CANOPY_RADIUS / CELL_SIZE);
+      const treeGroves = coopMapConfig?.treeGroves;
+      const treeMargin = Math.max(Math.ceil(CANOPY_RADIUS / CELL_SIZE), treeGroves?.canopyClearanceCells ?? 0);
       const trees: TreeCell[] = [];
       const organicRockField = coopMapConfig?.rockField?.fillMode === 'organic';
       const startArea = coopMapConfig?.missionProgress?.startArea;
       const treeClearanceReservations = new Set([
         ...missionBarrierCells, ...authoredRockWallCells, ...missionCheckpointCells,
       ]);
+      // Grove crowns inspect a larger neighborhood. Resolve expensive base/reservation
+      // predicates once per cell, preserving exactly the same candidate order and RNG.
+      const groveCanopyBlocked = treeGroves ? blocked.map((row, gy) => row.map((cell, gx) =>
+        cell || treeClearanceReservations.has(`${gx}_${gy}`) || trackCols.has(gx)
+        || this.isReservedBaseObstacleCell(gx, gy, coopBaseSpecs))) : undefined;
       // Geschlossene Felsfelder bleiben baumfrei. Organische Felder reservieren die ganze
       // Baumkrone, damit Brücken, schmale Gänge und Missionsflächen lesbar und begehbar bleiben.
       const shuffledForTrees = coopMapConfig?.rockField && !organicRockField ? [] : allCells.filter(
@@ -371,9 +384,11 @@ export class ArenaGenerator {
           !missionCheckpointCells.has(`${gx}_${gy}`) &&
           gx >= treeMargin && gx < this.metrics.gridCols - treeMargin &&
           gy >= treeMargin && gy < this.metrics.gridRows - treeMargin &&
-          (!organicRockField || (
+          (!treeGroves || treeGroves.areas.some(area =>
+            Math.hypot(gx - area.gridX, gy - area.gridY) <= area.radiusCells)) &&
+          (!(organicRockField || treeGroves) || (
             (!startArea || Math.hypot(gx - startArea.gridX, gy - startArea.gridY) > (startArea.radiusCells ?? 4) + treeMargin)
-            && this.isOpenTreeClearing(gx, gy, treeMargin, blocked, treeClearanceReservations, trackCols, coopBaseSpecs)
+            && this.isOpenTreeClearing(gx, gy, treeMargin, blocked, treeClearanceReservations, trackCols, coopBaseSpecs, groveCanopyBlocked)
           )),
       );
       // Nochmals shuffeln für unabhängige Baumpositionierung
@@ -938,14 +953,15 @@ export class ArenaGenerator {
     reservations: ReadonlySet<string>,
     trackCols: ReadonlySet<number>,
     bases?: readonly BaseSpec[],
+    canopyBlocked?: readonly (readonly boolean[])[],
   ): boolean {
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {
         if (dx * dx + dy * dy > radius * radius) continue;
         const x = gridX + dx;
         const y = gridY + dy;
-        if (blocked[y][x] || reservations.has(`${x}_${y}`) || trackCols.has(x)
-          || this.isReservedBaseObstacleCell(x, y, bases)) return false;
+        if (canopyBlocked ? canopyBlocked[y][x] : (blocked[y][x] || reservations.has(`${x}_${y}`) || trackCols.has(x)
+          || this.isReservedBaseObstacleCell(x, y, bases))) return false;
       }
     }
     return true;
@@ -1077,7 +1093,7 @@ export class ArenaGenerator {
    */
   private carveOrganicCheckpointClearances(
     map: boolean[][],
-    checkpoints: readonly CoopDefenseMapMissionCheckpointConfig[],
+    checkpoints: readonly ProtectedClearing[],
     rng: () => number,
     protectedCells: ReadonlySet<number>,
   ): void {
@@ -1197,7 +1213,7 @@ export class ArenaGenerator {
 
   /** Zellschlüssel aller authored Checkpoint-Kerne, die bei Fels- und Baum-Placement frei bleiben. */
   private collectMissionCheckpointCells(
-    checkpoints: readonly CoopDefenseMapMissionCheckpointConfig[] | undefined,
+    checkpoints: readonly ProtectedClearing[] | undefined,
   ): Set<string> {
     const cells = new Set<string>();
     for (const checkpoint of checkpoints ?? []) {

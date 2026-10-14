@@ -16,18 +16,19 @@ import {
 } from '../config';
 import type { WorldDefinition } from '../config/authoring/WorldDefinition';
 import { toWorldGenerationConfig } from '../config/authoring/coopDefenseAuthoringAdapter';
-import { getWorldDefinition } from '../config/authoring/authoredScenarios';
 import type { CoopDefenseMapConfig } from '../config/coopDefenseMaps';
-import { getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import type { BaseDestructionHooks } from '../effects/BaseDestructionRenderer';
 import type { LightingSystem } from '../effects/LightingSystem';
 import { BaseManager } from '../entities/BaseManager';
 import type { PlayerManager } from '../entities/PlayerManager';
-import { resolveActiveGameMode, toMapId } from './arenaDescriptorAdapter';
+import { resolveActiveGameMode } from './arenaDescriptorAdapter';
 import type { ActivityDescriptor } from './ActivityDescriptor';
+import { resolveCoopDefenseMapConfig, resolveWorldDefinition } from './WorldDefinitionResolution';
 import { generateWorldLayout } from './WorldLayout';
 import { WorldMaterialization } from './WorldMaterialization';
 import { WorldPresentationBinding } from './WorldPresentationBinding';
+import { LobbyMerchantRenderer } from '../arena/LobbyMerchantRenderer';
+import { isLobbyWorldDefinitionId } from '../config/authoring/lobbyWorld';
 import type { WorldPresentationHandoff } from './WorldPresentationHandoff';
 import { PersistentBaseWorldBinding, type PersistentBaseWorldBindingSink } from './PersistentBaseWorldBinding';
 import { createWorldRuntimeContext, type WorldRuntimeContext } from './WorldRuntimeContext';
@@ -72,9 +73,8 @@ export function resolveWorldCompositionProfile(
   activity: ActivityDescriptor | null,
   roomGameMode: GameMode,
 ): WorldCompositionProfile {
-  const mapId = toMapId(descriptor.definitionId);
-  const mapConfig = mapId !== null ? getCoopDefenseMapConfig(mapId) : null;
-  const definition: WorldDefinition | null = getWorldDefinition(descriptor.definitionId);
+  const mapConfig = resolveCoopDefenseMapConfig(descriptor, activity);
+  const definition: WorldDefinition | null = resolveWorldDefinition(descriptor, activity);
   const mode = resolveActiveGameMode({
     activityKind: activity?.kind ?? null,
     roomGameMode,
@@ -245,6 +245,9 @@ export function materializeWorldComposition(
       destroyPresentation: (shown) => { ArenaBuilder.destroyPresentation(shown); },
     });
   input.runtime.setPresentation(presentation);
+  if (presentationRequired && isLobbyWorldDefinitionId(world.descriptor.definitionId) && !presentation.lobbyMerchant) {
+    presentation.lobbyMerchant = new LobbyMerchantRenderer(input.scene, world.metrics);
+  }
   materialization.setArena(arena, (built) => { ArenaBuilder.destroyGameplay(built); });
   arena.groundSurface?.setPersistentBaseGravel(input.persistentBaseGravel);
   ArenaBuilder.updateSurfaceResidency(arena, getVisibleWorldView(input.scene.cameras.main));

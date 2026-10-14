@@ -18,7 +18,9 @@
 // Shield charger: appended enemy snapshot field for the host-fixed charge lane.
 // Alien energy cone: appended enemy snapshot field for the host-fixed cone and cover profile.
 // Fire control: required fc world slice and optional turretVisualId projectile static bit.
-export const PEER_PROTOCOL_VERSION = 31;
+// Dawn: coop program and round scrap keys, plan fields, grouped encounter announcements, commit
+// entitlements and the appended elite affix enemy snapshot field.
+export const PEER_PROTOCOL_VERSION = 32;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

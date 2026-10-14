@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { preloadLobbyMerchantAssets } from './LobbyMerchantAssets';
 import { PIPELINE_ASSETS, pipelineAnimationKey, getPipelineSpriteScale, isPipelineBossTexture } from '../config/pipelineAssets';
 
 /**
@@ -47,10 +48,12 @@ export const WALKING_IDLE_FRAME = 0;
 
 const WALKING_SHEETS: readonly WalkingSheet[] = PIPELINE_ASSETS
   .filter((asset) => asset.runtimeContract === 'sheet' && (asset.category === 'character' || asset.category === 'enemy'))
-  .map((asset) => {
-    const clip = asset.clips.find((candidate) => candidate.name === 'move')!;
+  // Laufende Figuren brauchen einen move-Clip; reine Idle-Figuren (z. B. der Dawn-Haendler) laufen nie.
+  .flatMap((asset) => {
+    const clip = asset.clips.find((candidate) => candidate.name === 'move');
+    if (!clip) return [];
     const idle = asset.clips.find((candidate) => candidate.name === 'idle');
-    return {
+    return [{
       textureKey: asset.sheetTextureKey,
       animationKey: pipelineAnimationKey(asset, clip),
       assetPath: asset.sheetPath,
@@ -64,7 +67,7 @@ const WALKING_SHEETS: readonly WalkingSheet[] = PIPELINE_ASSETS
       displayScale: getPipelineSpriteScale(asset.textureKey),
       idle: idle ? { animationKey: pipelineAnimationKey(asset, idle), frames: idle.frames, frameRate: idle.frameRate } : undefined,
       staticTextureKey: asset.textureKey,
-    };
+    }];
   });
 
 export const BADGER_WALKING_SHEET = WALKING_SHEETS.find((sheet) => sheet.staticTextureKey === 'badger')!;
@@ -87,8 +90,9 @@ export function getWalkingSheetForStaticTexture(staticTextureKey: string): Walki
   return WALKING_SHEETS.find((sheet) => sheet.staticTextureKey === staticTextureKey) ?? null;
 }
 
-/** Queue every registered walking spritesheet before an animated figure is created. */
+/** Queue walking sheets and the separate idle-only lobby decoration before scene creation. */
 export function preloadBadgerAnimationAssets(loader: Phaser.Loader.LoaderPlugin): void {
+  preloadLobbyMerchantAssets(loader);
   for (const sheet of WALKING_SHEETS) {
     loader.spritesheet(sheet.textureKey, sheet.assetPath, {
       frameWidth: sheet.frameWidth,

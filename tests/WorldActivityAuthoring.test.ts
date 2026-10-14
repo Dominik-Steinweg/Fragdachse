@@ -43,6 +43,20 @@ import { ArenaGenerator, resolveArenaGenerationInput } from '../src/arena/ArenaG
 import { getAuthoredWorldMetricsProfile } from '../src/config';
 import { resolveWorldMetrics } from '../src/world/WorldMetrics';
 
+it.each([undefined, 0, 2, 6, 11] as const)('preserves the optional site ceiling %s across both World adapters', maxAreaStage => {
+  const map = normalizeCoopDefenseMapConfig({
+    mapId: 'site-roundtrip', arenaWidthCells: 60, arenaHeightCells: 50,
+    balanceReferenceDurationSec: 60, objective: 'survive', surviveDurationSec: 60,
+    respawnsPerPlayer: 0, bases: [], powerUps: [],
+    persistentBase: { baseId: 'home', anchor: { gridX: 30, gridY: 25 },
+      ...(maxAreaStage === undefined ? {} : { maxAreaStage }) },
+  });
+  const scenario = toAuthoredScenario(map);
+  expect(scenario.world.persistentBaseSite).toEqual(map.persistentBase);
+  expect(toWorldGenerationConfig(scenario.world).persistentBase).toEqual(map.persistentBase);
+  expect(toCoopDefenseMapConfig(scenario).persistentBase).toEqual(map.persistentBase);
+});
+
 it('refreshes cached authoring for late diagnostic maps without changing the campaign', () => {
   const map = { ...getCoopDefenseMapConfig(WEAPON_BALANCE_LAB_MAP_ID), mapId: 'late-diagnostic' };
   const worldId = getWorldDefinitionId(map.mapId);

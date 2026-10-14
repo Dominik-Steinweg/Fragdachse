@@ -191,6 +191,40 @@ function fakeBindingInput(
 }
 
 describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalten (Phase 6A.2/6B)', () => {
+  it('updates the lobby label from the local displayed pose and suppresses it outside participation', () => {
+    const merchant = { update: vi.fn() };
+    const player = { active: true, x: 200, y: 300 };
+    let attached = true;
+    const binding = new WorldPresentationFrameBinding(fakeBindingInput(fakeScene(), {
+      getLobbyMerchant: () => merchant,
+      getLocalPlayerSprite: () => player as never,
+      isLocalPlayerAttachedToWorld: () => attached,
+    }));
+    binding.syncLocalPlayerPresentation(true, false);
+    expect(merchant.update).toHaveBeenLastCalledWith(player);
+    player.x += 100;
+    binding.syncLocalPlayerPresentation(true, false);
+    expect(merchant.update).toHaveBeenLastCalledWith(expect.objectContaining({ x: 300 }));
+    for (const [showWorld, spectator] of [[false, false], [true, true]]) {
+      binding.syncLocalPlayerPresentation(showWorld, spectator);
+      expect(merchant.update).toHaveBeenLastCalledWith(null);
+    }
+    attached = false;
+    binding.syncLocalPlayerPresentation(true, false);
+    expect(merchant.update).toHaveBeenLastCalledWith(null);
+    attached = true;
+    player.active = false;
+    binding.syncLocalPlayerPresentation(true, false);
+    expect(merchant.update).toHaveBeenLastCalledWith(null);
+    player.active = true;
+    binding.syncLocalPlayerPresentation(true, false);
+    expect(merchant.update).toHaveBeenLastCalledWith(player);
+    binding.destroy();
+    expect(merchant.update).toHaveBeenLastCalledWith(null);
+    merchant.update.mockClear();
+    binding.syncLocalPlayerPresentation(true, false);
+    expect(merchant.update).not.toHaveBeenCalled();
+  });
   it('owns one fire-control renderer per World and stops stale frames before handing off presentation', () => {
     const input = fakeBindingInput(fakeScene(), { getSynchronizedNow: () => 12345 });
     Object.assign(input.lighting, { getArtificialLightFactor: () => 0, update: vi.fn() });
@@ -324,6 +358,34 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     binding.destroy();
     binding.syncGroundFog(16, true, []);
     expect(pulse).toHaveBeenCalledTimes(3);
+  });
+  it('restores World fog after an Activity overlay, replacement, and teardown', () => {
+    const scene = Object.assign(makeFakeGpuVfxScene(), { cameras: { main: fakeCamera() } });
+    const makeFog = (strength: number) => ({ strength, captureMotion: vi.fn(), captureTrain: vi.fn(),
+      setSurfaceImages: vi.fn(), setRockCoverage: vi.fn(), update: vi.fn() });
+    const first = makeFog(0.6), second = makeFog(0.8);
+    let fog = first, strength: number | undefined;
+    const binding = new WorldPresentationFrameBinding(fakeBindingInput(scene as never, {
+      groundFog: { getSystem: () => fog as never, getActivityStrength: () => strength,
+        getBases: () => null, getProjectiles: () => null, effects: {} as never },
+    }));
+    binding.syncGroundFog(16, true, []);
+    expect(first.strength).toBe(0.6);
+    strength = 2;
+    binding.syncGroundFog(16, true, []);
+    binding.syncGroundFog(16, true, []);
+    expect(first.strength).toBe(2);
+    strength = undefined;
+    binding.syncGroundFog(16, true, []);
+    expect(first.strength).toBe(0.6);
+    strength = 2;
+    binding.syncGroundFog(16, true, []);
+    fog = second;
+    binding.syncGroundFog(16, true, []);
+    expect(first.strength).toBe(0.6);
+    expect(second.strength).toBe(2);
+    binding.destroy();
+    expect(second.strength).toBe(0.8);
   });
   it('feeds ground fog the displayed train pose and disconnects it when hidden or destroyed', () => {
     const gpuScene = makeFakeGpuVfxScene();

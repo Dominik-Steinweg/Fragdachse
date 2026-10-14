@@ -664,6 +664,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   private plasmaBurnerStructures: PlasmaBurnerStructurePort | null = null;
   /** Host-authoritative gate for actual post-death respawns. */
   private respawnAllowedResolver: ((playerId: string) => boolean) | null = null;
+  /** Activity-abhaengige Respawn-Verzoegerung; `null` bzw. ohne Resolver gilt RESPAWN_DELAY_MS. */
+  private respawnDelayResolver: ((playerId: string) => number | null) | null = null;
   /** Initialspawn has intentionally different semantics from a post-death respawn. */
   private initialSpawnAllowedResolver: ((playerId: string) => boolean) | null = null;
   /** Called exactly once after the respawn gate passes and a real respawn is committed. */
@@ -1162,6 +1164,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     return Math.max(0, this.targetIncomingDamageMultiplierResolver?.(target, this.hostFrameNowMs) ?? 1);
   }
   setRespawnAllowedResolver(resolver: ((playerId: string) => boolean) | null): void { this.respawnAllowedResolver = resolver; }
+  setRespawnDelayResolver(resolver: ((playerId: string) => number | null) | null): void { this.respawnDelayResolver = resolver; }
   setInitialSpawnAllowedResolver(resolver: ((playerId: string) => boolean) | null): void {
     this.initialSpawnAllowedResolver = resolver;
   }
@@ -4796,7 +4799,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
     if (this.respawnAllowedResolver && !this.respawnAllowedResolver(playerId)) return;
     const life = this.playerVitals.getTargetRef(playerId);
-    if (life) this.playerLife.schedule(life, this.hostFrameNowMs + RESPAWN_DELAY_MS);
+    if (life) this.playerLife.schedule(life, this.hostFrameNowMs + (this.respawnDelayResolver?.(playerId) ?? RESPAWN_DELAY_MS));
   }
 
   /** Heilt den Spieler vollständig auf HP_MAX (nur wenn lebendig). */

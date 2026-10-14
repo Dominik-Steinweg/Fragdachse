@@ -1,4 +1,4 @@
-import { readFile, writeFile, readdir, copyFile, access } from 'node:fs/promises';
+import { readFile, writeFile, readdir, copyFile, access, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -21,7 +21,7 @@ export function inside(root, relative) {
 }
 
 export function validateManifest(m) {
-  if (m.pipelineVersion !== 1 || !/^[a-z0-9][a-z0-9-]*$/.test(m.id)) throw new Error('Invalid asset manifest');
+  if (m.pipelineVersion !== 1 || !/^[a-z0-9][a-z0-9_-]*$/.test(m.id)) throw new Error('Invalid asset manifest');
   if (!/^[a-z0-9][a-z0-9-]*$/.test(m.variant) || !['north', 'east'].includes(m.forward)) throw new Error('Invalid variant/orientation');
   if (!['character', 'enemy', 'boss-part', 'turret', 'weapon', 'utility', 'construction', 'companion', 'powerup'].includes(m.category)) throw new Error('Invalid category');
   if (m.forward !== (m.category === 'turret' ? 'east' : 'north')) throw new Error('Orientation disagrees with asset category');
@@ -35,7 +35,9 @@ export function validateManifest(m) {
     if (Math.abs(c.location[0] - (.5 - p[0]) * c.orthoScale) > 1e-6 || Math.abs(c.location[1] - (p[1] - .5) * c.orthoScale) > 1e-6) throw new Error('Camera placement shifts declared pivot');
   }
   if (!Number.isInteger(m.masterSize) || m.masterSize < m.targetSize) throw new Error('Invalid master size');
-  if (!m.textures || !Object.keys(m.textures).length) throw new Error('Texture provenance missing');
+  if (!m.textures || typeof m.textures !== 'object' || Array.isArray(m.textures)
+    || (!Object.keys(m.textures).length && m.materialSource !== 'procedural')) throw new Error('Texture provenance missing');
+  if (m.materialSource !== undefined && (m.materialSource !== 'procedural' || Object.keys(m.textures).length)) throw new Error('Procedural materials must declare an empty texture map');
   if (m.collisionDiameter !== undefined && (!Number.isFinite(m.collisionDiameter) || m.collisionDiameter <= 0)) throw new Error('Invalid collision diameter');
   if (m.variantLabel !== undefined && (typeof m.variantLabel !== 'string' || !m.variantLabel.trim())) throw new Error('Invalid variant label');
   if (m.materialParameters) for (const key of ['textureStrength', 'formShadowStrength']) {
@@ -215,9 +217,23 @@ export async function selectVariant(assetFolder, variant, size, reason) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const [command, folder, variant, size, ...reason] = process.argv.slice(2);
   try {
-    const v2Root = path.join(repoRoot, 'art/poc/pipeline-v2/runs');
+    const args = process.argv.slice(2), rootIndex = args.indexOf('--run-root');
+    let explicitRoot;
+    if (rootIndex !== -1) {
+      if (!args[rootIndex + 1] || args[rootIndex + 1].startsWith('--')) throw new Error('Supply --run-root <runs-directory>');
+      explicitRoot = await realpath(args[rootIndex + 1]);
+      args.splice(rootIndex, 2);
+    }
+    const [command, folder, variant, size, ...reason] = args;
+    if (explicitRoot && !['select', 'archive'].includes(command)) throw new Error('--run-root is supported for V2 select/archive');
+    const v2Root = explicitRoot ?? path.join(repoRoot, 'art/poc/pipeline-v2/runs');
+    if (explicitRoot) {
+      const relative = path.relative(v2Root, await realpath(folder));
+      inside(v2Root, relative);
+      const parts = relative.split(path.sep);
+      if (parts.length !== 2 || !/^[a-z0-9][a-z0-9-]*$/.test(parts[0]) || !/^[a-z0-9][a-z0-9_-]*$/.test(parts[1])) throw new Error('Expected a V2 revision asset folder');
+    }
     const v2Relative = folder ? path.relative(v2Root, path.resolve(folder)) : '..';
     const v2 = folder && v2Relative !== '..' && !v2Relative.startsWith('..' + path.sep) && !path.isAbsolute(v2Relative);
     if (command === 'export' && folder) console.log(await (v2 ? exportRunV2(folder) : exportRun(folder)));

@@ -9,6 +9,7 @@ import { MgAttritionRenderer } from '../../effects/MgAttritionRenderer';
 import { TurretAnimationController } from '../../effects/TurretAnimationController';
 import { WorldHealthBarRenderer } from '../../effects/health/WorldHealthBarRenderer';
 import { EnemyEyeGlowRenderer } from '../../effects/EnemyEyeGlowRenderer';
+import { EliteMarkerRenderer } from '../../effects/dawn/EliteMarkerRenderer';
 import { EnemyVulnerabilityRenderer } from '../../effects/EnemyVulnerabilityRenderer';
 import { EnemyReadabilityRenderer } from '../../effects/EnemyReadabilityRenderer';
 import { createCombatShaderWarmupProbes } from '../../effects/CombatShaderWarmup';
@@ -95,6 +96,7 @@ export interface RendererBundle {
   healthBars: WorldHealthBarRenderer;
   enemyEyes: EnemyEyeGlowRenderer;
   enemyVulnerability: EnemyVulnerabilityRenderer;
+  eliteMarkers: EliteMarkerRenderer;
   enemyReadability: EnemyReadabilityRenderer;
   bullet:              BulletRenderer;
   asmdPrimary:         AsmdPrimaryRenderer;
@@ -431,6 +433,8 @@ export function* createRendererBundleSteps(
   const healthBars = new WorldHealthBarRenderer(scene);
   const enemyEyes = new EnemyEyeGlowRenderer(scene, lighting);
   cleanup.push(() => enemyEyes.destroy());
+  const eliteMarkers = new EliteMarkerRenderer(scene);
+  cleanup.push(() => eliteMarkers.destroy());
   const enemyVulnerability = new EnemyVulnerabilityRenderer(scene);
   cleanup.push(() => enemyVulnerability.destroy());
   const enemyReadability = new EnemyReadabilityRenderer(scene);
@@ -484,6 +488,7 @@ export function* createRendererBundleSteps(
     healthBars,
     enemyEyes,
     enemyVulnerability,
+    eliteMarkers,
     enemyReadability,
     gpuVfx,
     constructionOwnershipMotes,

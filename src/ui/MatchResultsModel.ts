@@ -23,6 +23,8 @@ export interface MatchProgressDelta {
   before: CoopDefenseProgressSnapshot;
   after: CoopDefenseProgressSnapshot;
   xpGained: number;
+  /** Personal scrap actually credited for a Dawn round (including defeat share/storage cap). */
+  scrapGained?: number;
   newSkillPoints: number;
   newBossPoints: number;
   unlockedMapName: string | null;

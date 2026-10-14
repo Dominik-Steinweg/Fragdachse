@@ -26,6 +26,28 @@ Settings werden an der Speichergrenze sanitisiert. Ein ausdrücklich unterstütz
 
 Import ist atomar: Erst nach vollständiger Validierung darf der bestehende Save ersetzt werden. Ein ungültiger Import verändert den gültigen Bestand nicht. Legacy-Migrationen gehören in den Decoder und werden nicht von Gameplay, UI oder einer World-Runtime nachgebaut.
 
+Persönlicher Dawn-Fortschritt liegt in `progression.coopDefense.dawn`; sein Subdokumentvertrag
+steht in [DawnProgress.ts](../../src/dawn/economy/DawnProgress.ts). Ein aktuelles Dokument benötigt
+dieses Subdokument; fehlende optionale Felder darin erhalten Defaults, ungültige Werte werden
+abgelehnt. Nicht mehr registrierte Zweig-IDs entfallen, statt den Fortschritt ungültig zu machen. Charakter-Reset setzt auch Dawn zurück; ein reiner Upgrade-Reset erhält Dawn.
+Boss-Punkte werden ausschließlich über `resolveEarnedCoopDefenseBossPoints` aus eindeutigen
+Boss-Map-Abschlüssen und `dawn.purchasedBossPoints` abgeleitet. Lokale Profile werden zuerst
+gegen die persönlichen Zweig-Entitlements und danach gegen dieses Budget begrenzt.
+Der allgemeine Profil-Sanitizer kennt keine lokale Besitzeridentität und prüft keine
+Entitlements. Ready-Commits tragen die persönlichen Zweig-IDs in `coopDefenseEntitlements`.
+`NetworkBridge` filtert sie auf bekannte, sortierte, eindeutige IDs (fehlend = keine) und
+begrenzt das jeweilige Commit-Profil damit vor der Runtime-Nutzung und dem Einfrieren der
+Runden-Loadouts. Host und Gäste verwenden jeweils ihre eigenen Commit-Entitlements;
+fremde Punktbudgets werden nicht geprüft. [PeerRoom.test.ts](../../tests/PeerRoom.test.ts)
+schützt diese Grenze.
+
+Der Decoder verkettet V5→V6→V7 unter dem bestehenden Speicher-Key. V6→V7 entfernt die
+Nekromantie-Stufen einschließlich abhängiger Upgrades aus Default- und Klassenprofilen;
+Boss-Punkte werden dadurch wieder verfügbar, nicht zusätzlich gutgeschrieben. Nur tatsächlich
+entfernte Stufen setzen den quittierbaren Lobby-Hinweis. Aktuelle Saves bewahren freigeschaltete
+Zweige beim Import und Reload. [LocalPersistence.test.ts](../../tests/LocalPersistence.test.ts)
+und [NecromancyLifecycle.test.ts](../../tests/NecromancyLifecycle.test.ts) prüfen diese Grenzen.
+
 Coop-Runden werden anhand des Room-Codes und der monotonen `roundRevision` genau einmal
 gutgeschrieben. Der Progress speichert je Room die höchste verarbeitete Revision; Host-Uhren
 dürfen zwischen Rooms voneinander abweichen. Import, Export und Reset führen diesen Stand mit.

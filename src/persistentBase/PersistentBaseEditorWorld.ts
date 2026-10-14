@@ -2,7 +2,6 @@ import { WatchtowerVisual, ensureWatchtowerTexture } from '../effects/watchtower
 import { WorldSunlightPresentation } from '../effects/sunlight/WorldSunlightPresentation';
 import * as Phaser from 'phaser';
 import { CELL_SIZE } from '../config';
-import { getStoredGroundFogEnabled } from '../utils/localPreferences';
 import type { WorldDefinition } from '../config/authoring/WorldDefinition';
 import { createWorldRuntimeContext, type WorldRuntimeContext } from '../world/WorldRuntimeContext';
 import { ArenaBuilder, type ArenaBuilderResult } from '../arena/ArenaBuilder';
@@ -14,21 +13,17 @@ import { TurretAnimationController } from '../effects/TurretAnimationController'
 import { LightingSystem } from '../effects/LightingSystem';
 import { LightOccluderIndex } from '../effects/LightOccluderIndex';
 import { ShadowSystem } from '../effects/ShadowSystem';
-import { GroundFogSystem } from '../effects/groundFog/GroundFogSystem';
 import { CameraPostFxController } from '../effects/postfx/CameraPostFxController';
 import { resolveBaseGrade } from '../effects/postfx/worldGrade';
 import { DEFAULT_LOBBY_TIME_OF_DAY_MINUTES, resolveSkyState } from '../effects/TimeOfDay';
 import { GpuVfxSystem } from '../effects/gpu/GpuVfxSystem';
 import { PowerUpRenderer } from '../powerups/PowerUpRenderer';
 import type { ArenaLayout, SyncedPlaceableRock, SyncedPowerUpPedestal, TurretWeaponId } from '../types';
-import { buildPersistentBaseCoreBaseConfig, getPersistentBaseBuildAreaExtentCells, type PersistentBaseBuildArea } from './PersistentBaseCore';
+import { buildPersistentBaseCoreBaseConfig, type PersistentBaseBuildArea } from './PersistentBaseCore';
 import type { BaseEditorObject, PersistentBaseEditorModel } from './PersistentBaseEditorModel';
 import { baseEditorObjectKey, getBaseEditorAppearance } from './PersistentBaseEditorAppearance';
-
-/** Two ground cells leave room for gravel edges, shadows and vegetation around the build area. */
-export function getPersistentBaseEditorSize(area: PersistentBaseBuildArea): number {
-  return (2 * (getPersistentBaseBuildAreaExtentCells(area) + 2) + 1) * CELL_SIZE;
-}
+import { getPersistentBaseEditorSize } from './PersistentBaseExpansionPreview';
+export { getPersistentBaseEditorSize } from './PersistentBaseExpansionPreview';
 
 /** A local, non-participating World. It never creates an Activity, player or network identity. */
 export class PersistentBaseEditorWorld {
@@ -42,7 +37,6 @@ export class PersistentBaseEditorWorld {
   private readonly shadows: ShadowSystem;
   private presentationTimeMs=0;
   private readonly sunlight: WorldSunlightPresentation;
-  private readonly fog: GroundFogSystem;
   private readonly fx: CameraPostFxController;
   private readonly powerUps: PowerUpRenderer;
   private readonly gpu: GpuVfxSystem;
@@ -56,19 +50,21 @@ export class PersistentBaseEditorWorld {
   private shadowsInitialized = false;
   private readonly timeOfDay = DEFAULT_LOBBY_TIME_OF_DAY_MINUTES;
 
-  constructor(private readonly scene: Phaser.Scene, private readonly model: PersistentBaseEditorModel, private readonly color: number) {
+  constructor(private readonly scene: Phaser.Scene, private readonly model: PersistentBaseEditorModel, private readonly color: number,
+    previewArea?: PersistentBaseBuildArea) {
     ensureWatchtowerTexture(scene);
-    this.size = getPersistentBaseEditorSize(model.area);
+    this.size = getPersistentBaseEditorSize(model.area, previewArea);
     this.anchor = (this.size / CELL_SIZE - 1) / 2;
     const cells = this.anchor * 2 + 1;
     const viewport = { width: this.size, height: this.size };
-    const site = { baseId: 'personal-base', anchor: { gridX: this.anchor, gridY: this.anchor } };
+    const site = { baseId: 'personal-base', anchor: { gridX: this.anchor, gridY: this.anchor },
+      maxAreaStage: model.areaStage };
     const definition: WorldDefinition = { id: 'world:base-editor', metrics: { widthCells: cells, heightCells: cells },
       bases: [buildPersistentBaseCoreBaseConfig(site)], persistentBaseSite: site, terrain: {}, initialTimeOfDay: '08:00',
       actionPolicy: { combat: false }, participationPolicy: { selfAdmit: false }, presentationPolicy: { previewWithoutParticipation: true } };
     this.world = createWorldRuntimeContext({ definition, descriptor: {
       worldRevision: 1, definitionId: definition.id, seed: 20260524, generatorVersion: 1, layoutFingerprint: 'personal-editor',
-      parameters: { persistentBaseUnlocked: true, persistentBaseAreaStage: model.baseline.persistentBaseAreaStage,
+      parameters: { persistentBaseUnlocked: true, persistentBaseAreaStage: model.areaStage,
         persistentBaseHealthRewards: model.baseline.persistentBaseHealthRewards } },
       metricsProfile: { arenaWidth: this.size, arenaHeight: this.size, arenaOffsetX: 0, arenaOffsetY: 0,
         arenaViewportWidth: viewport.width, arenaViewportHeight: viewport.height, usesDynamicCamera: true, showStaticArenaFrames: false } });
@@ -94,21 +90,18 @@ export class PersistentBaseEditorWorld {
     this.shadows.setTimeOfDay(this.timeOfDay);
     const surfaces = this.bases.getBases().flatMap(base => [...base.getSurfaceImages()]);
     this.shadows.syncBaseShadows(surfaces);
-    this.fog = new GroundFogSystem(scene, { offsetX: 0, offsetY: 0, width: this.size, height: this.size }, layout.seed, []);
-    this.fog.enabled = getStoredGroundFogEnabled();
-    this.fog.terrain.setObstacle('base', this.bases.getObstacleRectangles().map(body => ({ gridX: Math.floor(body.x / CELL_SIZE), gridY: Math.floor(body.y / CELL_SIZE) })), true);
-    this.fog.setSurfaceImages(surfaces);
+    // Editing needs an unobscured build surface, regardless of the gameplay fog preference.
     this.fx = new CameraPostFxController(scene, scene.cameras.main);
     this.fx.setBaseGrade(resolveBaseGrade({ skyState: resolveSkyState(this.timeOfDay), isVoidMap: false, bossPhase: 0, localHpFraction: 1, gamePhase: 'ARENA' }));
     this.sunlight=new WorldSunlightPresentation(scene,{
       ground:this.arena.groundSurface,rocks:this.arena.rockVisualSystem,rockOverlays:this.arena.rockOverlaySurface,
       canopies:this.arena.canopyObjects,water:this.arena.waterSurface,wildlife:this.arena.wildlife,
-      shadow:this.shadows,lighting:this.lighting,fog:this.fog,postFx:this.fx,layout,worldContext:this.world,
+      shadow:this.shadows,lighting:this.lighting,fog:null,postFx:this.fx,layout,worldContext:this.world,
     });
     this.sunlight.update(this.timeOfDay,0);
     this.syncObjects();
   }
-  /** Update object identities in place; terrain, fog, lighting and camera resources stay alive. */
+  /** Update object identities in place; terrain, lighting and camera resources stay alive. */
   syncObjects(): void {
     const objects: BaseEditorObject[] = [
       ...this.model.rewards.map(p => ({ kind: 'reward' as const, id: p.rewardId })),
@@ -192,7 +185,11 @@ export class PersistentBaseEditorWorld {
         rockVisibilityPredicate: id => !!this.arena.rockPhysicsProxies[id]?.active }, true);
       this.shadowsInitialized = true;
     }
-    this.fog.terrain.setObstacle('constructions', [...walls.values()], true);
+  }
+  /** The editor reveals the entire World at once, after its asynchronous bakes finish. */
+  isReadyForView(view: { x: number; y: number; width: number; height: number }): boolean {
+    return ArenaBuilder.isSurfaceWorkingSetReady(this.arena, view)
+      && this.shadows.isStaticReadyForView(view);
   }
   update(now: number, delta: number, view: { x: number; y: number; width: number; height: number }): void {
     this.arena.groundSurface?.updateResidency(view);
@@ -206,7 +203,6 @@ export class PersistentBaseEditorWorld {
     this.presentationTimeMs+=Math.max(0,delta);
     this.powerUps.updatePresentation(this.presentationTimeMs);
     this.sunlight.update(this.timeOfDay,this.presentationTimeMs);
-    this.fog.update(delta, this.timeOfDay, view);
     this.lighting.update();
     this.fx.update(delta);
     // Residency enqueues the same grass, gravel, detail and shadow bakes used by a map.
@@ -217,7 +213,7 @@ export class PersistentBaseEditorWorld {
     for (const visual of this.watchtowers.values()) visual.destroy();
     this.watchtowers.clear();
     this.sunlight.destroy();
-    this.fx.destroy(); this.fog.destroy(); this.powerUps.destroy(); this.gpu.destroy();
+    this.fx.destroy(); this.powerUps.destroy(); this.gpu.destroy();
     this.animations.clear();
     for (const visual of this.turrets.values()) { visual.image.destroy(); visual.aura.destroy(); }
     this.bases.destroy(); this.shadows.destroy(); this.lighting.destroy();

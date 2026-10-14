@@ -57,7 +57,10 @@ export type CoopDefenseEncounterPresentationPhase =
   | 'complete';
 
 export interface CoopDefenseEncounterPresentationState {
+  /** Stable presentation identity; grouped waves use their first authored encounter ID. */
   encounterId: string;
+  /** Host-resolved finale marker of the announced group. */
+  finale?: true;
   /** 1-basierter Index innerhalb der endlichen Encounter-Sequenz. */
   sequenceIndex: number;
   sequenceCount: number;
@@ -884,7 +887,15 @@ export interface SyncedDeathEffect {
   dirY?: number;
 }
 
-export type SyncedCombatEffect = SyncedHitEffect | SyncedDeathEffect;
+/** Presentation receipt only; the authoritative balance travels separately via dsc. */
+export interface SyncedDawnScrapEffect {
+  type: 'dawn-scrap';
+  x: number;
+  y: number;
+  amount: number;
+}
+
+export type SyncedCombatEffect = SyncedHitEffect | SyncedDeathEffect | SyncedDawnScrapEffect;
 
 /** Kurzlebiger Melee-Swing für VFX-Replikation über den zuverlässigen Gameplay-Kanal. */
 export interface SyncedMeleeSwing {
@@ -1117,6 +1128,12 @@ export interface LoadoutCommitSnapshot {
    * damit Items im laufenden Match unveraenderlich sind und der Host die finalen Werte kennt.
    */
   equippedItems?: readonly CoopDefenseItem[];
+  /**
+   * Persoenliche Dawn-Entitlements des committenden Spielers (freigeschaltete Upgrade-Zweig-IDs).
+   * Der Host beschraenkt das Upgrade-Profil dieses Spielers damit, vertrauensbasiert wie Boss-Punkte;
+   * unbekannte IDs verwirft er. Fehlt das Feld, gelten keine Zweige als freigeschaltet.
+   */
+  coopDefenseEntitlements?: readonly string[];
 }
 
 /** Zusätzliche Parameter für eine konkrete Loadout-Aktion. */
@@ -2065,6 +2082,7 @@ export interface SyncedBaseTurretState {
 
 /** Per-Frame Zustand eines Coop-Defense-Gegners (Host → Clients, unreliable). */
 export interface SyncedEnemyState {
+  eliteAffixId?: import('./dawn/contracts/DawnContentIds').DawnEliteAffixId;
   areaClaw?: import('./systems/EnemyClawAttack').EnemyAreaClawState;
   claw?: import('./systems/EnemyClawAttack').EnemyClawState;
   /** Host-fixed shield charge (lane + phase timeline); absent until the first charge. */
@@ -2101,6 +2119,7 @@ export interface SyncedEnemyState {
 
 /** Delta-Update eines Coop-Defense-Gegners; fehlende Felder bleiben clientseitig unverändert. */
 export interface SyncedEnemyDeltaState {
+  eliteAffixId?: import('./dawn/contracts/DawnContentIds').DawnEliteAffixId;
   areaClaw?: import('./systems/EnemyClawAttack').EnemyAreaClawState;
   claw?: import('./systems/EnemyClawAttack').EnemyClawState;
   /** Host-fixed shield charge (lane + phase timeline); absent until the first charge. */

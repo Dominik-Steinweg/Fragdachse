@@ -1,8 +1,9 @@
 // ── Power-Up-Definitionen ──────────────────────────────────────────────────
 
 import { ARMOR_COLOR, COLORS } from '../config';
+import { DAWN_SCRAP_KEYS } from '../assets/DawnAssets';
 
-export type PowerUpType = 'instant_heal' | 'instant_armor' | 'instant_rage' | 'buff_regen' | 'buff_damage' | 'weapon_buff' | 'shield_overcharge' | 'global_nuke' | 'holy_hand_grenade' | 'bfg' | 'decoy_stealth';
+export type PowerUpType = 'dawn_scrap' | 'instant_heal' | 'instant_armor' | 'instant_rage' | 'buff_regen' | 'buff_damage' | 'weapon_buff' | 'shield_overcharge' | 'global_nuke' | 'holy_hand_grenade' | 'bfg' | 'decoy_stealth';
 
 export interface PowerUpDef {
   readonly id:          string;
@@ -34,7 +35,16 @@ export function shouldDelayFirstPedestalSpawn(defId: string): boolean {
   return DELAYED_FIRST_PEDESTAL_POWER_UPS.has(defId);
 }
 
+/** Replacement point for the temporary scrap visual; absent from normal drop tables. */
+export const DAWN_SCRAP_DEFS: Record<string, PowerUpDef> = Object.fromEntries(
+  [1, 2, 3].map(amount => {
+    const id = 'dawn_scrap_' + amount;
+    return [id, { id, type: 'dawn_scrap', amount, color: 0xc69762, spriteKey: DAWN_SCRAP_KEYS[amount] }];
+  }),
+);
+
 export const POWERUP_DEFS: Record<string, PowerUpDef> = {
+  ...DAWN_SCRAP_DEFS,
   RAGE: { id: 'RAGE', type: 'instant_rage', amount: 400, color: COLORS.RED_2, spriteKey: 'powerup_rage' },
   HEALTH_PACK:   { id: 'HEALTH_PACK',   type: 'instant_heal',  amount: 999,                        color: COLORS.GREEN_2,  spriteKey: 'powerup_hp'  },
   ARMOR:         { id: 'ARMOR',         type: 'instant_armor', amount: 50,                         color: ARMOR_COLOR,     spriteKey: 'powerup_arm' },
@@ -166,6 +176,11 @@ export const TRAIN_DROP_COUNT = 1;
 
 /** Maximaler Abstand Spieler–PowerUp-Mittelpunkt, um einzusammeln */
 export const PICKUP_RADIUS = 16;
+
+/** Ordinary pickup paths use twice PICKUP_RADIUS as their effective collection radius. */
+export function resolvePowerUpPickupRadius(type: PowerUpType, dawnScrapMagnetLevel = 0): number {
+  return PICKUP_RADIUS * 2 * (type === 'dawn_scrap' && dawnScrapMagnetLevel >= 1 ? 2.5 : 1);
+}
 
 /** Kantenlänge der Power-Up-Symbole in Spieleinheiten, unabhängig von der Texturauflösung. */
 export const POWERUP_RENDER_SIZE = 22;

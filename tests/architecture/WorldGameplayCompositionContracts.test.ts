@@ -6,6 +6,7 @@ import { WorldTargetingRuntime } from '../../src/world/WorldTargetingRuntime';
 /** Dauerhafte Layer-Grenzen; die Legacy-Ausnahme bleibt bewusst schrumpfbar. */
 const DOMAIN_ROOTS = [
   'src/activity',
+  'src/dawn/runtime',
   'src/combat',
   'src/effects',
   'src/entities',

@@ -1,4 +1,8 @@
 export const enContent = {
+  "map.dawn:pondland.name": "Pondland",
+  "map.dawn:rockbasin.name": "Rock Basin",
+  "map.dawn:oldwood.name": "Oldwood",
+  "map.dawn:clearing.name": "Clearing",
   "loadout.FIRE_CONTROL_RELAY.name": "Turret Copies",
   "loadout.FIRE_CONTROL_PORTAL.name": "Turret Portals",
   "construction.attack_drone_station.name": "Attack Drone Station",

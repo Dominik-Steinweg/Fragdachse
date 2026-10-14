@@ -8,13 +8,16 @@ import { resolveLoadoutSelectionIds } from '../../loadout/LoadoutRules';
 import { COOP_DEFENSE_UPGRADE_DEFINITIONS as upgrades, isCoopDefenseUpgradeAvailableForClass, sanitizeCoopDefenseUpgradeProfile } from '../../utils/coopDefenseUpgrades';
 import { sanitizeCoopDefenseEquippedItems } from '../../utils/coopDefenseItems';
 import type { CoopDefenseClassId, ConstructionId, CoopDefenseItem, LoadoutToolRef } from '../../types';
+import { DAWN_MAX_THREAT } from '../../dawn/contracts/DawnPlans';
+import { DAWN_NIGHT_MODIFIER_IDS, type DawnNightModifierId } from '../../dawn/contracts/DawnContentIds';
 
 export interface GridPoint { gridX: number; gridY: number }
 /** Scripted bot badger; shares class, upgrades and items with the scenario player. */
 export interface DevScenarioBot { name: string; weapon1: string; weapon2: string; player: GridPoint | null }
 export interface DevScenario {
   version: 1;
-  mapId: string;
+  mapId?: string;
+  dawn?: { threat: number; nightModifier?: DawnNightModifierId | 'none' };
   seed: number;
   classId: CoopDefenseClassId;
   weapon1: string;
@@ -121,8 +124,20 @@ export function parseScenario(value: unknown): DevScenario {
   if (raw.version !== 1) throw new Error('Unbekannte Szenario-Version.');
   if (!COOP_DEFENSE_CLASS_IDS.includes(raw.classId as CoopDefenseClassId)) throw new Error('Unbekannte Klasse.');
   const config = { ...defaultScenario(raw.classId as CoopDefenseClassId), ...raw } as DevScenario;
-  for (const key of Object.keys(raw)) if (!(key in defaultScenario(config.classId))) throw new Error(`Unbekanntes oder entferntes Feld: ${key}. Alte Lichtvergleichs-Optionen werden nicht importiert; Sonnenwald ist der Standard.`);
-  if (!scenarioMaps().some(map => map.mapId === config.mapId)) throw new Error(`Unbekannte Map: ${config.mapId}`);
+  for (const key of Object.keys(raw)) if (key !== 'dawn' && !(key in defaultScenario(config.classId))) throw new Error(`Unbekanntes oder entferntes Feld: ${key}. Alte Lichtvergleichs-Optionen werden nicht importiert; Sonnenwald ist der Standard.`);
+  if ('dawn' in raw) {
+    if (raw.mapId !== undefined) throw new Error('dawn und mapId schließen sich aus.');
+    const dawn = object(raw.dawn, 'dawn');
+    for (const key of Object.keys(dawn)) if (key !== 'threat' && key !== 'nightModifier') throw new Error(`dawn: unbekanntes Feld ${key}.`);
+    const threat = number(dawn.threat, 'dawn.threat', 1, DAWN_MAX_THREAT);
+    if (!Number.isInteger(threat)) throw new Error('dawn.threat muss ganzzahlig sein.');
+    const modifier = dawn.nightModifier;
+    if (modifier !== undefined && modifier !== 'none' && !DAWN_NIGHT_MODIFIER_IDS.includes(modifier as DawnNightModifierId)) {
+      throw new Error('dawn.nightModifier: blood-moon, fog, bombers, fire oder none erwartet.');
+    }
+    config.dawn = { threat, ...(modifier !== undefined ? { nightModifier: modifier as DawnNightModifierId | 'none' } : {}) };
+    delete config.mapId;
+  } else if (!scenarioMaps().some(map => map.mapId === config.mapId)) throw new Error(`Unbekannte Map: ${config.mapId}`);
   number(config.seed, 'seed', 0, 0xffffffff);
   if (!Number.isInteger(config.seed)) throw new Error('seed muss ganzzahlig sein.');
   number(config.timeOfDay, 'timeOfDay', 0, 1439);

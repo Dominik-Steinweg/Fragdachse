@@ -4,7 +4,7 @@ import {
   type PersistentBaseCompositeMergeInput,
   type PersistentCompositeTool,
 } from '../src/persistentBase/PersistentBaseComposite';
-import { DEFAULT_PERSISTENT_BASE_BUILD_AREA } from '../src/persistentBase/PersistentBaseCore';
+import { DEFAULT_PERSISTENT_BASE_BUILD_AREA, resolvePersistentBaseBuildAreaForStage } from '../src/persistentBase/PersistentBaseCore';
 import { PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION } from '../src/config/persistentBase';
 import type {
   PersistentConstruction,
@@ -117,6 +117,16 @@ describe('PersistentBaseComposite – Prioritaet und Determinismus', () => {
   });
 });
 describe('PersistentBaseComposite – Baubereich ist die einzige Geometriequelle', () => {
+  it('restores the largest stage at its edges and retains blueprints when a smaller site freezes it', () => {
+    const saved = contribution('owner-host', [blueprint('edge', 15, 0), blueprint('outside', 16, 0)]);
+    const expanded = merge({ buildArea: resolvePersistentBaseBuildAreaForStage(11), hostContribution: saved });
+    expect(expanded.active.map(entry => entry.blueprint.persistentId)).toEqual(['edge']);
+    expect(expanded.conflicts.map(entry => entry.persistentId)).toEqual(['outside']);
+    const campaign = merge({ buildArea: resolvePersistentBaseBuildAreaForStage(2), hostContribution: saved });
+    expect(campaign.active).toEqual([]);
+    expect(campaign.conflicts.every(entry => entry.reason === 'outside-build-area')).toBe(true);
+    expect(saved.constructions.map(entry => entry.relativeGridX)).toEqual([15, 16]);
+  });
   it('weist alles ausserhalb des Innenhofs ab', () => {
     const result = merge({
       hostContribution: contribution('owner-host', [

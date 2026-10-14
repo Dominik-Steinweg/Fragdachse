@@ -198,6 +198,7 @@ export const DEPTH_LAYER_EXCEPTIONS: readonly LayerException[] = [
   {"id":"cpu:effects/ConstructionOwnershipGpuSystem.ts:module/this.passiveLayer/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/ConstructionOwnershipGpuSystem.ts:module/this.activeLayer/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/CoopDefenseSecondaryObjectiveMarkerRenderer.ts:build/container/setDepth/0","deviation":"emission-under-lightmap","finding":"D11"},
+  {"id":"cpu:ui/DawnHUD.ts:createMarker/marker/setDepth/0","deviation":"emission-under-lightmap","finding":"D11"},
   {"id":"cpu:effects/CoopXpTextRenderer.ts:createPopup/outline/setDepth/0","deviation":"body-over-canopy","finding":"D03"},
   {"id":"cpu:effects/CoopXpTextRenderer.ts:createPopup/outline/setDepth/0","deviation":"material-outside-sun","finding":"D06"},
   {"id":"cpu:effects/CoopXpTextRenderer.ts:createPopup/label/setDepth/0","deviation":"body-over-canopy","finding":"D03"},

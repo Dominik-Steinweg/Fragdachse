@@ -3,7 +3,7 @@ import { DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
 import type { CoopDefenseClassId, CoopDefenseItem, CoopDefenseUpgradeProfile, GameMode, LoadoutCommitSnapshot } from '../types';
 import { isCoopDefenseMode } from '../gameModes';
 import { getCoopDefenseCommittedEffectTotals } from '../utils/coopDefenseItemEffects';
-import { isCoopDefenseUpgradeProfileEqual, sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
+import { isCoopDefenseUpgradeProfileEqual, resolveCoopDefenseUpgradeEntitlements, sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
 import { applyCoopDefenseModifiersToLoadoutSelection } from './CoopDefenseLoadoutModifiers';
 import { getSelectableLoadoutItems } from './LoadoutCatalog';
 import {
@@ -111,6 +111,7 @@ export function resolveLoadoutSelectionIds(
   mode: GameMode,
   coopDefenseProfile: CoopDefenseUpgradeProfile | null = null,
   coopDefenseClassId: CoopDefenseClassId | null = null,
+  coopDefenseEntitlements: readonly string[] = [],
 ): LoadoutCommitSnapshot {
   const sanitized = sanitizeLoadoutSelectionForMode(selection, mode);
   const committedCoopDefenseProfile = isCoopDefenseMode(mode) && coopDefenseProfile
@@ -134,6 +135,7 @@ export function resolveLoadoutSelectionIds(
     ultimate: sanitized.ultimate.id,
     coopDefenseClassId: isCoopDefenseMode(mode) ? coopDefenseClassId : null,
     coopDefenseProfile: committedCoopDefenseProfile,
+    coopDefenseEntitlements: isCoopDefenseMode(mode) ? [...resolveCoopDefenseUpgradeEntitlements(coopDefenseEntitlements)] : [],
     tools: committedCoopDefenseProfile?.toolLoadout?.map((tool) => ({ ...tool })),
   };
 }
@@ -173,6 +175,7 @@ export function sanitizeCommittedLoadoutForMode(
     mode,
     snapshot.coopDefenseProfile,
     snapshot.coopDefenseClassId,
+    snapshot.coopDefenseEntitlements,
   );
 }
 
@@ -187,6 +190,10 @@ export function isCommittedLoadoutEqual(
     && left.utility === right.utility
     && left.ultimate === right.ultimate
     && left.coopDefenseClassId === right.coopDefenseClassId
+    && areSemanticValuesEqual(
+      [...resolveCoopDefenseUpgradeEntitlements(left.coopDefenseEntitlements)],
+      [...resolveCoopDefenseUpgradeEntitlements(right.coopDefenseEntitlements)],
+    )
     && (left.tools ?? []).length === (right.tools ?? []).length
     && (left.tools ?? []).every((tool, index) => {
       const other = (right.tools ?? [])[index];

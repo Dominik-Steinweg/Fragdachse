@@ -124,6 +124,7 @@ export function composeWorldConstruction(
       flow.getPersistentBaseConstructionContext()
     ),
     persistentBaseBinding,
+    persistentBaseAreaStage: world.descriptor.parameters?.persistentBaseAreaStage,
     resolveOwnerId: (playerId) => flow.resolveOwnerId(playerId),
     getLocalPlayerId: () => bridge.getLocalPlayerId(),
     isHost: () => bridge.isHost(),

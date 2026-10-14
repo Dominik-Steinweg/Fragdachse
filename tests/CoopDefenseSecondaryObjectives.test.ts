@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   normalizeCoopDefenseMapConfig,
   resolveCoopDefenseMapSecondaryObjectives,
@@ -1011,5 +1011,92 @@ describe('Coop defense secondary objectives', () => {
     });
     globalState.set('gph', 'LOBBY');
     expect(bridge.getCoopDefenseMissionProgressPresentationState()).toBeNull();
+  });
+
+  it('activates concurrent objectives independently of focus and expires unfinished ones', () => {
+    const activatedSites = new Set<string>();
+    const system = new CoopDefenseSecondaryObjectiveSystem([
+      resolvedObjective({ id: 'focused', start: { type: 'time', atMs: 0 } }),
+      resolvedObjective({
+        id: 'site-a', concurrent: true, targets: ['wreck-a'], targetGoal: 1,
+        start: { type: 'site-activated', siteId: 'a' }, expiresAt: { type: 'time', atMs: 1_000 },
+      }),
+      resolvedObjective({
+        id: 'site-b', type: 'hold', concurrent: true, targets: ['extractor-b'], targetGoal: 1, holdDurationMs: 300,
+        start: { type: 'site-activated', siteId: 'b' }, expiresAt: { type: 'time', atMs: 1_000 },
+      }),
+    ], {
+      isExternalTriggerSatisfied: (trigger) => trigger.type === 'site-activated' && activatedSites.has(trigger.siteId),
+    });
+
+    system.hostUpdate(0, false);
+    expect(system.getPresentationState().map(({ objectiveId }) => objectiveId)).toEqual(['focused']);
+
+    activatedSites.add('a');
+    activatedSites.add('b');
+    system.hostUpdate(1, false);
+    const byId = (id: string) => system.getPresentationState().find((entry) => entry.objectiveId === id);
+    expect(byId('focused')).toMatchObject({ state: 'active', focused: true });
+    expect(byId('site-a')).toMatchObject({ state: 'active', focused: false });
+    expect(byId('site-b')).toMatchObject({ state: 'active', focused: false });
+
+    system.hostUpdate(300, false);
+    expect(byId('site-b')).toMatchObject({ state: 'completed' });
+    system.hostUpdate(700, false);
+    expect(byId('site-a')).toMatchObject({ state: 'failed' });
+    expect(byId('site-b')).toMatchObject({ state: 'completed' });
+  });
+
+  it.each(['relative', 'authored'] as const)('orders %s hold completion and expiry within a tick', endKind => {
+    for (const holdEndsAt of [209_995, 210_000, 210_005]) {
+      const completed = vi.fn(), holdCompleted = vi.fn(), failed = vi.fn();
+      const system = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective({
+        id: 'extractor', type: 'hold', concurrent: true, targets: ['base'], targetGoal: 1,
+        start: { type: 'time', atMs: 165_000 }, expiresAt: { type: 'time', atMs: 210_000 },
+        ...(endKind === 'relative' ? { holdDurationMs: holdEndsAt - 165_000 }
+          : { holdUntil: { type: 'time' as const, atMs: holdEndsAt } }),
+      })], { onObjectiveCompleted: completed, onHoldCompleted: holdCompleted, onHoldFailed: failed });
+      system.hostUpdate(10_000, true);
+      system.hostUpdate(165_000, false);
+      system.hostUpdate(44_990, false);
+      expect(system.getObjectiveState('extractor')).toBe('active');
+      system.hostUpdate(20, false);
+      const succeeds = holdEndsAt < 210_000;
+      expect(system.getObjectiveState('extractor')).toBe(succeeds ? 'completed' : 'failed');
+      expect(completed).toHaveBeenCalledTimes(succeeds ? 1 : 0);
+      expect(holdCompleted).toHaveBeenCalledTimes(succeeds ? 1 : 0);
+      expect(failed).toHaveBeenCalledTimes(succeeds ? 0 : 1);
+      system.hostUpdate(1, false);
+      expect(completed).toHaveBeenCalledTimes(succeeds ? 1 : 0);
+    }
+  });
+
+  it.each(['destroy', 'carry'] as const)('rejects %s completion after the closing tick without rewards', type => {
+    const completed = vi.fn();
+    const system = new CoopDefenseSecondaryObjectiveSystem([resolvedObjective({
+      id: 'site', type, targets: ['target'], targetGoal: 1,
+      start: { type: 'time', atMs: 0 }, expiresAt: { type: 'time', atMs: 210_000 },
+      rewards: { xpPerTarget: 100, itemMetaRewardOnComplete: true },
+    })], { onObjectiveCompleted: completed });
+    system.hostUpdate(0, false);
+    system.reportTargetContribution('site', 'target');
+    system.hostUpdate(209_990, false);
+    system.hostUpdate(20, false);
+    expect(system.reportTargetDestroyed('site', 'target')).toBe(0);
+    expect(system.reportCarryDelivered('site', 'target')).toBe(false);
+    expect(system.getObjectiveState('site')).toBe('failed');
+    expect(system.getEpicGuaranteeCount()).toBe(0);
+    expect(completed).not.toHaveBeenCalled();
+  });
+
+  it('does not open a concurrent objective whose window has already closed', () => {
+    const system = new CoopDefenseSecondaryObjectiveSystem([
+      resolvedObjective({
+        id: 'late-site', concurrent: true, targets: ['wreck-a'], targetGoal: 1,
+        start: { type: 'site-activated', siteId: 'a' }, expiresAt: { type: 'time', atMs: 100 },
+      }),
+    ], { isExternalTriggerSatisfied: () => true });
+    system.hostUpdate(150, false);
+    expect(system.getPresentationState()).toEqual([]);
   });
 });

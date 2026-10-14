@@ -5,6 +5,9 @@ import { loadingTimeline } from '../../diagnostics/LoadingTimeline';
 import { type PersistentBaseHealthReward } from '../../persistentBase/PersistentBaseHealth';
 import { getDeferredAssets } from '../../assets/DeferredAssets';
 import { isDevScenarioMode } from '../../utils/devScenarioMode';
+import { getDevDawnNightModifier } from '../../dev/scenario/dawnNightModifier';
+import { resolveDawnNightEnvironment } from '../../dawn/resolution/DawnNightModifierResolution';
+import { isLocalScenarioBotPeer } from '../../network/peer/LocalScenarioSession';
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
 import { collectDeathFragmentFrames } from '../../effects/gpu/DeathFragmentPreparation';
 import * as Phaser from 'phaser';
@@ -17,7 +20,6 @@ import { AdrenalineEssencePresentation } from '../../adrenalineEssence/Adrenalin
 import type { EssenceAccessGroup, EssenceScope } from '../../adrenalineEssence/AdrenalineEssenceTypes';
 import { bridge }            from '../../network/bridge';
 import { ArenaBuilder } from '../../arena/ArenaBuilder';
-import { ArenaGenerator, ARENA_GENERATOR_VERSION, resolveArenaGenerationInput } from '../../arena/ArenaGenerator';
 import { TerrainColorSnapshotBuilder } from '../../arena/TerrainColorSnapshotBuilder';
 import { getVisibleWorldView, type WorldViewRect } from '../../ui/HostileBaseIndicator';
 import { getLocale, t } from '../../i18n';
@@ -35,9 +37,9 @@ import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import {
   resolveCoopDefenseActivityBaseOverlays,
 } from '../../arena/BaseRegistry';
-import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, isDiagnosticMapId, resolveCoopDefenseMapPersistentSpawnConfigs, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, getCoopMissionTimeLimitSec, isDiagnosticMapId, resolveCoopDefenseMapPersistentSpawnConfigs, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
-import { ARENA_DURATION_SEC, COOP_DEFENSE_BASE_TURRET_OWNER_ID, applyArenaMetricsForMode, getArenaMetricsProfile } from '../../config';
+import { ARENA_DURATION_SEC, COOP_DEFENSE_BASE_TURRET_OWNER_ID, applyArenaMetricsForMode } from '../../config';
 import type { ArenaContext }          from './ArenaContext';
 import type { RendererBundle }        from './RendererBundle';
 import {
@@ -111,11 +113,15 @@ import { resolveWorldLoadProgress } from '../../world/WorldLoadReady';
 import { getActiveRoundParticipantIds } from './RoundParticipationPolicy';
 import { resolveArenaStartTime } from './ArenaStartTiming';
 import {
-  getStoredPersistentBaseAreaStage,
+  getStoredCoopDefenseProgress,
+  getStoredDawnProgress,
+  getStoredPersonalPersistentBaseAreaStage,
   getStoredPersistentBaseHealthRewards,
   getStoredPersistentBaseUnlocked,
   getStoredPersistentBaseRewardState,
 } from '../../utils/localPreferences';
+import { resolveFrozenPersistentBaseAreaStage } from '../../persistentBase/PersistentBaseAreaStageResolution';
+import { PERSISTENT_BASE_CAMPAIGN_MAX_AREA_STAGE } from '../../persistentBase/PersistentBaseCore';
 import type { PersistentBaseContributionStore } from '../../persistentBase/PersistentBaseContributionStore';
 import type { PersistentBaseRewardStore } from '../../persistentBase/PersistentBaseRewardStore';
 import type { PersistentBaseTransactionIdentity } from '../../persistentBase/PersistentBaseTransaction';
@@ -124,15 +130,23 @@ import type {
   PersistentBaseBuildArea,
 } from '../../persistentBase/PersistentBaseCore';
 import { nextMonotonicRevision } from '../../world/WorldRevision';
+import { generateRoundWorld } from '../../world/RoundWorldGeneration';
+import { composeDawnRoundPlans, type DawnRoundPlans } from '../../dawn/composition/DawnRoundComposition';
+import { DEFAULT_COOP_PROGRAM } from '../../dawn/contracts/CoopProgram';
+import { resolveDawnScenario } from '../../dawn/resolution/DawnScenarioResolution';
+import { isDawnUnlocked } from '../../dawn/rules/DawnUnlock';
+import { resolveDawnThreat } from '../../dawn/rules/DawnThreat';
+import { freezeDawnInfrastructure } from '../../dawn/economy/DawnMerchantInfrastructure';
 import {
   resolveActiveGameMode,
-  toActivityDefinitionId,
   toActivityKind,
-  toMapId,
-  toWorldDefinitionId,
 } from '../../world/arenaDescriptorAdapter';
-import { getActivityDefinition, getWorldDefinition } from '../../config/authoring/authoredScenarios';
-import { isLobbyWorldDefinitionId, LOBBY_WORLD_DEFINITION_ID } from '../../config/authoring/lobbyWorld';
+import {
+  resolveActivityDefinition,
+  resolveCoopDefenseMapConfig,
+  resolveWorldDefinition,
+} from '../../world/WorldDefinitionResolution';
+import { getLobbyWorldDefinition, isLobbyWorldDefinitionId, LOBBY_WORLD_DEFINITION_ID } from '../../config/authoring/lobbyWorld';
 import { createAuthoredWorldDescriptor } from '../../world/WorldLayout';
 import { isArenaTransitionReady } from './ArenaTransitionReadiness';
 import { isValidPersistentBaseSite } from '../../world/WorldRuntimeContext';
@@ -184,7 +198,6 @@ import {
   WORLD_PRESENTATION_SURFACES,
   type WorldPresentationRequirement,
 } from '../../world/WorldPresentation';
-import { resolveWorldMetrics } from '../../world/WorldMetrics';
 import {
   hasPersistentBaseConfigurationChanged,
   isSameWorldInstance,
@@ -306,14 +319,7 @@ export class ArenaLifecycleCoordinator {
   private preparedRoundLayout: { descriptor: WorldDescriptor; layout: ArenaLayout } | null = null;
   private combatPresentationPrepared = false;
   private finishKrakenShaderWarmup: ReturnType<typeof warmupKrakenShaders> | null = null;
-  private pendingHostArenaGeneration: {
-    readonly roundRevision: number;
-    readonly gameMode: GameMode;
-    readonly mapConfig: CoopDefenseMapConfig | null;
-    readonly seed: number;
-    /** World-Parameter dieser Instanz; sie reisen im WorldDescriptor, nicht im RoundState. */
-    readonly worldParameters: WorldParameters | undefined;
-  } | null = null;
+  private pendingHostArenaGeneration: HostArenaGenerationRequest | null = null;
   private runtimeDiagnosticEventSink: RuntimeDiagnosticEventSink | null = null;
   private hostArenaGenerationTimer: Phaser.Time.TimerEvent | null = null;
   private boundRoundStartTime = 0;
@@ -407,8 +413,15 @@ export class ArenaLifecycleCoordinator {
       // Activity (LobbyWorld). Er traegt die aktive World-Display-Verdrahtung und faellt vor dem
       // Handoff dieser World.
       this.worldRuntime.bindPresentationFrame(new WorldPresentationFrameBinding({
+        getLobbyMerchant: () => this.worldRuntime?.presentation?.lobbyMerchant ?? null,
         groundFog: {
           getSystem: () => this.worldRuntime?.presentation?.groundFog ?? null,
+          getActivityStrength: () => {
+            const start = bridge.getArenaStartTime();
+            if (start <= 0 || !this.coopMissionRuntime) return undefined;
+            const now = this.coopMissionRuntime.getMissionNow(bridge.getSynchronizedNow());
+            return resolveDawnNightEnvironment(bridge.getActivityDescriptor()?.parameters?.dawn, now - start)?.fogStrength;
+          },
           getBases: () => this.worldRuntime?.materialization?.bases ?? null,
           getProjectiles: () => this.worldGameplay?.projectiles?.getPresentationRuntime() ?? null,
           effects: this.ctx.effectSystem,
@@ -564,7 +577,7 @@ export class ArenaLifecycleCoordinator {
     onDiagnosticEvent: (type, fields) => this.runtimeDiagnosticEventSink?.(type, fields),
     materializeActivityCore: (activity, runtime, layout) => {
       const configuration = activity
-        ? resolveCoopMissionActivityConfiguration(activity, this.worldRuntime?.context.definition ?? null)
+        ? resolveCoopMissionActivityConfiguration(activity, this.worldRuntime?.context ?? null)
         : null;
       this.coopMissionComposition.materializeCore(configuration, runtime, layout);
     },
@@ -683,14 +696,15 @@ export class ArenaLifecycleCoordinator {
       this.coopMissionRuntime?.coopDefenseSecondaryObjectiveSystem?.completeVictoryHolds();
     },
     getCurrentActivity: () => this.worldLifecycle.activity.descriptor,
-    resolveVictoryRewardIds: (definitionId) => (
-      getActivityDefinition(definitionId)?.persistentBaseRewardsOnVictory ?? []
-    ),
+    resolveVictoryRewardIds: (activity) => {
+      const world = this.worldLifecycle.descriptor;
+      return (world ? resolveActivityDefinition(activity, world)?.persistentBaseRewardsOnVictory : undefined) ?? [];
+    },
     grantPersistentBaseRewards: (rewardIds) => {
       this.persistentBase.grantAuthoredPersistentBaseRewards(rewardIds);
     },
     applyPersistentBaseOutcome: (outcome, identity) => {
-      this.persistentBase.applyRoundOutcome(outcome, identity);
+      this.persistentBase.applyRoundOutcome(outcome, identity, this.getRoundDawnInfrastructure()?.repairDrones ?? 0);
     },
     publishCompletion: (completion, endedAt) => {
       this.publishCoopMissionCompletion(completion, endedAt);
@@ -770,6 +784,20 @@ export class ArenaLifecycleCoordinator {
       ) ?? false,
     });
     this.coopMissionComposition = new CoopMissionComposition({
+      dawnNetwork: {
+        getRoundScrap: () => bridge.getDawnRoundScrap(),
+        publishRoundScrap: (total) => bridge.hostPublishDawnRoundScrap(total),
+        broadcastScrapFeedback: (x, y, amount) => bridge.broadcastEffect({ type: 'dawn-scrap', x, y, amount }),
+        getSynchronizedNow: () => bridge.getSynchronizedNow(),
+        getArenaStartTime: () => bridge.getArenaStartTime(),
+        isActivityLive: (activity) => {
+          const current = bridge.getActivityDescriptor();
+          return bridge.isHost() && !bridge.isArenaCountdownActive()
+            && current?.worldRevision === activity.worldRevision
+            && current.activityRevision === activity.activityRevision
+            && bridge.getRoundState()?.status === 'active';
+        },
+      },
       getCombatScope: () => this.combatSystem.getCombatScope(),
       getKrakenPorts: () => ({
         resolveIntentTarget: candidate => candidate.kind === 'decoy'
@@ -963,6 +991,9 @@ export class ArenaLifecycleCoordinator {
   syncRuntimeTimeOfDay(synchronizedNowMs: number, signals: ArenaTimeOfDaySignals = {}): boolean {
     const controller = this.timeOfDayController;
     if (!controller) return false;
+    if (isDevScenarioMode() && bridge.getActivityDescriptor()?.parameters?.dawn) {
+      synchronizedNowMs = this.coopMissionRuntime?.getMissionNow(synchronizedNowMs) ?? synchronizedNowMs;
+    }
     const sample = controller.sample(synchronizedNowMs, signals);
     if (sample.minutes !== this.appliedRuntimeTimeOfDayMinutes) {
       this.applyRuntimeTimeOfDay(sample.minutes);
@@ -1120,13 +1151,18 @@ export class ArenaLifecycleCoordinator {
     getConfiguredGameMode: () => this.resolveConfiguredGameMode(),
   };
 
+  /** Activity der lokal gefuehrten World-Instanz, unabhaengig vom gerade replizierten Kanal. */
+  getResidentActivityDescriptor(): ActivityDescriptor | null {
+    return this.worldLifecycle.activity.descriptor;
+  }
+
   /** Prueft die PB-Site auch beim Identity-Start vor der lokalen World-Materialisierung. */
   private hasPersistentBaseForCurrentWorld(): boolean {
     const context = this.worldLifecycle.context;
     if (context) return context.persistentBaseSite !== null;
     const descriptor = this.worldLifecycle.descriptor;
     if (!descriptor?.parameters?.persistentBaseUnlocked) return false;
-    return getWorldDefinition(descriptor.definitionId)?.persistentBaseSite !== undefined;
+    return resolveWorldDefinition(descriptor, this.worldLifecycle.activity.descriptor)?.persistentBaseSite !== undefined;
   }
 
   /**
@@ -1282,10 +1318,7 @@ export class ArenaLifecycleCoordinator {
         this.getWorldCombatCore()?.setEnemyManager(null);
       },
     });
-    const activityConfiguration = resolveCoopMissionActivityConfiguration(
-      activity,
-      worldRuntime.context.definition,
-    );
+    const activityConfiguration = resolveCoopMissionActivityConfiguration(activity, worldRuntime.context);
     if (this.getLocalWorldPresentation().required) {
       this.renderers.combatGoreGpu.fragmentTemplateCache.prepare(
         collectDeathFragmentFrames(activityConfiguration.mapConfig),
@@ -1425,7 +1458,7 @@ export class ArenaLifecycleCoordinator {
     const world = this.worldRuntime?.context;
     if (!baseManager || !world) return;
 
-    const activityConfiguration = resolveCoopMissionActivityConfiguration(activity, world.definition);
+    const activityConfiguration = resolveCoopMissionActivityConfiguration(activity, world);
     const humanPlayerCount = Math.max(
       1,
       Math.floor(bridge.getRoundState()?.coopDefenseHumanPlayerCount ?? 1),
@@ -1458,7 +1491,7 @@ export class ArenaLifecycleCoordinator {
     const powerUpSystem = this.worldPowerUpRuntime?.system ?? null;
     const world = this.worldRuntime?.context;
     if (!powerUpSystem || !world) return;
-    const activityConfiguration = resolveCoopMissionActivityConfiguration(activity, world.definition);
+    const activityConfiguration = resolveCoopMissionActivityConfiguration(activity, world);
 
     const humanPlayerCount = Math.max(
       1,
@@ -1515,7 +1548,7 @@ export class ArenaLifecycleCoordinator {
       powerUpRuntime.setCoopDefenseMapXpReference(null);
       return;
     }
-    const configuration = resolveCoopMissionActivityConfiguration(activity, world.definition);
+    const configuration = resolveCoopMissionActivityConfiguration(activity, world);
     const humanPlayerCount = Math.max(
       1,
       Math.floor(bridge.getRoundState()?.coopDefenseHumanPlayerCount ?? 1),
@@ -1629,7 +1662,7 @@ export class ArenaLifecycleCoordinator {
     const persistentBaseHealthRewards = getStoredPersistentBaseHealthRewards();
     const healthRewardsKey = [...persistentBaseHealthRewards].sort().join(',');
     const persistentBaseAreaStage = isCoopDefenseMode(currentMode)
-      ? getStoredPersistentBaseAreaStage()
+      ? resolveHostFrozenPersistentBaseAreaStage(getLobbyWorldDefinition().persistentBaseSite?.maxAreaStage)
       : null;
     const currentWorld = this.worldLifecycle.descriptor;
     if (currentWorld !== null) {
@@ -1731,7 +1764,19 @@ export class ArenaLifecycleCoordinator {
     this.nextScenarioSeed = seed;
   }
 
+  private dawnInfrastructure: {
+    readonly roundRevision: number;
+    readonly levels: ReturnType<typeof freezeDawnInfrastructure>;
+  } | null = null;
+
+  private getRoundDawnInfrastructure(): ReturnType<typeof freezeDawnInfrastructure> | null {
+    const frozen = this.dawnInfrastructure;
+    const round = bridge.getRoundState();
+    return frozen && round?.dawn && round.roundRevision === frozen.roundRevision ? frozen.levels : null;
+  }
+
   hostCheckReadyToStart(): void {
+    if (!bridge.isHost()) return;
     // Defensiv: eine Runde darf ausschließlich aus einer sauberen LOBBY-Phase heraus starten.
     if (bridge.getGamePhase() !== 'LOBBY') return;
     if (this.roundStartPending) return;
@@ -1741,6 +1786,14 @@ export class ArenaLifecycleCoordinator {
     // Stand aus der Vorrunde durchschlagen.
     if (!bridge.areAllPlayersReady()) return;
     if (this.roomQualityMonitor.shouldBlockStart()) return;
+    const coopMode = isCoopDefenseMode(bridge.getGameMode());
+    const dawnSelected = coopMode && bridge.getCoopProgram().kind === 'dawn';
+    if (dawnSelected && !isDawnUnlocked(getStoredCoopDefenseProgress())) {
+      // Gewaehlt werden kann Dawn nur freigeschaltet. Ging die Freischaltung danach verloren
+      // (Reset, Import), kehrt der Raum zur Kampagne zurueck; Ready wird dabei invalidiert.
+      bridge.setCoopProgram(DEFAULT_COOP_PROGRAM);
+      return;
+    }
     this.roundStartPending = true;
     this.lobbyOverlay.lockButton();
     // Autoritativen Lobby-Snapshot final aktualisieren, damit der Stand, mit dem gestartet wird,
@@ -1749,6 +1802,7 @@ export class ArenaLifecycleCoordinator {
     bridge.setMatchHostId();
     bridge.resetAllFrags();
     bridge.resetCoopDefenseRoundXp();
+    bridge.hostPublishDawnRoundScrap(0);
     // Der Endstand der Vorrunde bleibt in der Lobby sichtbar, wird aber beim Start atomar
     // geleert. So kann ein Client beim naechsten Phasenwechsel keine veraltete Auswertung zeigen.
     bridge.publishRoundResults([]);
@@ -1756,9 +1810,13 @@ export class ArenaLifecycleCoordinator {
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     bridge.publishCoopDefenseMissionProgressPresentationState(null);
-    const coopDefenseMapConfig = isCoopDefenseMode(bridge.getGameMode())
-      ? getCoopDefenseMapConfig(bridge.getCoopDefenseMapId())
-      : null;
+    // Der Seed steht vor der Komposition fest: Dawn-Plaene und Layout derselben Runde teilen ihn.
+    const seed = this.nextScenarioSeed ?? Date.now();
+    this.nextScenarioSeed = null;
+    const dawnPlans = dawnSelected ? composeHostDawnRoundPlans(seed) : null;
+    const coopDefenseMapConfig = dawnPlans
+      ? resolveDawnScenario(dawnPlans.world, dawnPlans.activity).mapConfig
+      : coopMode ? getCoopDefenseMapConfig(bridge.getCoopDefenseMapId()) : null;
     // Enter ARENA with no gameplay timestamp yet. The round revision is the identity used by
     // the separate local arena-load barrier; it must not be confused with Lobby Ready or with
     // the later authoritative gameplay start timestamp.
@@ -1773,13 +1831,14 @@ export class ArenaLifecycleCoordinator {
     this.pendingLobbyWorldPresentationRebuild = false;
     const roundRevision = nextMonotonicRevision(this.lastRoundRevision, Date.now());
     this.lastRoundRevision = roundRevision;
+    this.dawnInfrastructure = dawnSelected
+      ? { roundRevision, levels: freezeDawnInfrastructure(getStoredDawnProgress()) }
+      : null;
     bridge.hostStartRoundParticipants(bridge.getConnectedPlayerIds(), 0, roundRevision);
     bridge.setArenaStartTime(0);
     bridge.setRoundEndTime(0);
     bridge.requestFullGameState();
     const timeOfDayMinutes = resolveRoundTimeOfDayMinutes(coopDefenseMapConfig, bridge.getLobbyTimeOfDayMinutes());
-    const seed = this.nextScenarioSeed ?? Date.now();
-    this.nextScenarioSeed = null;
     // The phase and participation state deliberately become visible before the expensive
     // generator/fingerprint step. The next scene tick installs the loading veil and schedules
     // generation, so a host never blocks the lobby while still reporting LOBBY.
@@ -1787,6 +1846,7 @@ export class ArenaLifecycleCoordinator {
       roundRevision,
       gameMode: bridge.getGameMode(),
       mapConfig: coopDefenseMapConfig,
+      dawn: dawnPlans,
       seed,
       // Auf einer Kampagnenkarte ist der Basiskern Map-Inhalt: Wer die Karte erreicht, hat die
       // Basis laengst freigeschaltet. Nur die LobbyWorld fragt das Entitlement ab, weil dort
@@ -1794,7 +1854,7 @@ export class ArenaLifecycleCoordinator {
       worldParameters: coopDefenseMapConfig?.persistentBase
         ? {
           persistentBaseUnlocked: true,
-          persistentBaseAreaStage: getStoredPersistentBaseAreaStage(),
+          persistentBaseAreaStage: resolveHostFrozenPersistentBaseAreaStage(coopDefenseMapConfig.persistentBase.maxAreaStage),
           persistentBaseHealthRewards: getStoredPersistentBaseHealthRewards(),
         }
         : undefined,
@@ -1807,8 +1867,9 @@ export class ArenaLifecycleCoordinator {
       coopDefenseHumanPlayerCount: isCoopDefenseMode(bridge.getGameMode())
         ? Math.max(1, bridge.getConnectedPlayers().length)
         : undefined,
-      coopDefenseMapId: isCoopDefenseMode(bridge.getGameMode())
-        ? bridge.getCoopDefenseMapId()
+      coopDefenseMapId: coopMode && !dawnPlans ? bridge.getCoopDefenseMapId() : undefined,
+      dawn: dawnPlans
+        ? { threat: dawnPlans.activity.threat, dayNumber: dawnPlans.activity.dayNumber }
         : undefined,
     };
     bridge.publishRoundState(roundState);
@@ -1953,17 +2014,34 @@ export class ArenaLifecycleCoordinator {
     this.worldPowerUpRuntime?.system.setArenaStartTime(roundStartTime);
   }
 
+  /** Isolated review only: move mission anchors without aging combat or replaying skipped waves. */
+  seekDevScenarioDawnTime(elapsedMs: number): void {
+    if (!isDevScenarioMode() || !bridge.isHost() || !bridge.getConnectedPlayers()
+      .every(player => player.id === bridge.getLocalPlayerId() || isLocalScenarioBotPeer(player.id))) {
+      throw new Error('Isolated dev host required');
+    }
+    const mission = this.coopMissionRuntime;
+    const round = bridge.getRoundState();
+    if (!mission || !bridge.isArenaStarted() || round?.status !== 'active'
+      || !bridge.getActivityDescriptor()?.parameters?.dawn) throw new Error('Active Dawn mission required');
+    if (!Number.isSafeInteger(elapsedMs) || elapsedMs < 0) throw new Error('Invalid mission time');
+    mission.analysisScenarioActive = true;
+    mission.setScenarioOptions(true, mission.scenarioHideTutorial, bridge.getSynchronizedNow());
+    const start = mission.getMissionNow(bridge.getSynchronizedNow()) - elapsedMs;
+    bridge.setArenaStartTime(start);
+    bridge.setRoundEndTime(this.resolveRoundEndTime(start));
+    bridge.publishRoundState({ ...round, roundStartTime: start });
+    this.syncAuthoritativeRoundStartAnchors();
+    this.clearTimeOfDayDebugOverride();
+    this.syncRuntimeTimeOfDay(bridge.getSynchronizedNow());
+  }
+
   private resolveRoundEndTime(arenaStartTime: number): number {
     if (!isCoopDefenseMode(this.resolveConfiguredGameMode())) {
       return arenaStartTime + ARENA_DURATION_SEC * 1000;
     }
-    const mapConfig = getCoopDefenseMapConfig(this.resolveConfiguredCoopDefenseMapId());
-    if (mapConfig?.objective !== 'survive') return 0;
-    const surviveDurationSec = mapConfig.surviveDurationSec;
-    if (surviveDurationSec === undefined) {
-      throw new Error(`[ArenaLifecycleCoordinator] Survival map ${mapConfig.mapId} has no surviveDurationSec`);
-    }
-    return arenaStartTime + surviveDurationSec * 1000;
+    const timeLimitSec = getCoopMissionTimeLimitSec(this.resolveConfiguredCoopDefenseMapConfig());
+    return timeLimitSec === null ? 0 : arenaStartTime + timeLimitSec * 1000;
   }
 
   spawnReadyPlayers(): void {
@@ -2057,7 +2135,7 @@ export class ArenaLifecycleCoordinator {
     const gameMode = this.resolveConfiguredGameMode();
     const roundState = bridge.getRoundState();
     const mapName = isCoopDefenseMode(gameMode)
-      ? getMapName(this.resolveConfiguredCoopDefenseMapId(), getLocale())
+      ? getMapName(this.resolveConfiguredCoopDefenseMapConfig().mapId, getLocale())
       : 'Zufallsarena';
     const epicGuaranteeCount = isCoopDefenseMode(gameMode) && roundState?.status === 'victory'
       ? this.coopMissionRuntime?.coopDefenseSecondaryObjectiveSystem?.getEpicGuaranteeCount() ?? 0
@@ -2085,6 +2163,7 @@ export class ArenaLifecycleCoordinator {
           teamScore: teamId ? teamScores?.[teamId] : undefined,
           teamScores,
           sharedXp: isCoopDefenseMode(gameMode) ? bridge.getCoopDefenseRoundXp() : undefined,
+          sharedScrap: roundState?.dawn ? bridge.getDawnRoundScrap() : undefined,
           epicGuaranteeCount: isCoopDefenseMode(gameMode) ? epicGuaranteeCount : undefined,
         };
       });
@@ -2136,6 +2215,7 @@ export class ArenaLifecycleCoordinator {
         coopDefenseBossSpawnedAtMs: currentRoundState?.coopDefenseBossSpawnedAtMs,
         coopDefenseHumanPlayerCount: currentRoundState?.coopDefenseHumanPlayerCount,
         coopDefenseMapId: currentRoundState?.coopDefenseMapId,
+        dawn: currentRoundState?.dawn,
         resultEligiblePlayerIds: bridge.getRoundResultEligiblePlayerIds(),
         endedAt: roundEndedAt,
       });
@@ -2178,6 +2258,7 @@ export class ArenaLifecycleCoordinator {
     bridge.hostResetRoundParticipation();
     bridge.publishCoopDefenseRespawnBudgetState(null);
     this.clearCoopMissionPresentationState();
+    this.dawnInfrastructure = null;
   }
 
   private broadcastMissionAudio(
@@ -2208,8 +2289,7 @@ export class ArenaLifecycleCoordinator {
    */
   hostDiscardRound(): void {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
-    const mapId = this.resolveConfiguredCoopDefenseMapId();
-    if (!isDiagnosticMapId(mapId) && !isDevScenarioMode()) return;
+    if (!isDiagnosticMapId(this.resolveConfiguredCoopDefenseMapConfig().mapId) && !isDevScenarioMode()) return;
     this.persistentBase.rollbackPersistentBaseMissionIfActive();
     bridge.publishCoopDefenseEncounterPresentationState(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);
@@ -2767,7 +2847,7 @@ export class ArenaLifecycleCoordinator {
     // Respawn-Budgets aufbauen, fuer die es keine Runde gibt.
     const missionMapConfig = isCoopMission ? coopDefenseMapConfig : null;
     const activityConfiguration = isCoopMission && activityDescriptor?.kind === 'coop-mission'
-      ? resolveCoopMissionActivityConfiguration(activityDescriptor, world.definition)
+      ? resolveCoopMissionActivityConfiguration(activityDescriptor, world)
       : null;
     // Die lokale Runtime haengt sich an die laufende World-Instanz; der Lifecycle prueft, dass
     // Runtime und Instanz dieselbe World meinen.
@@ -2930,6 +3010,13 @@ export class ArenaLifecycleCoordinator {
       coopMissionRuntime,
       activityDescriptor,
     }, buildingGameplay);
+    if (bridge.isHost()) {
+      this.worldPowerUpRuntime?.system.setDawnScrapMagnet(
+        this.getRoundDawnInfrastructure()?.scrapMagnet ?? 0,
+        playerId => bridge.getRoundState()?.status === 'active'
+          && this.getPlayerCapabilities(playerId).canInteract,
+      );
+    }
     if (!bridge.isHost() && this.worldGameplay.geometry) {
       const prediction = new LocalPlayerPrediction(worldDescriptor.worldRevision, {
         getInput: () => bridge.getLocalMovementInput(),
@@ -3215,13 +3302,7 @@ export class ArenaLifecycleCoordinator {
     });
   }
 
-  private scheduleHostArenaGeneration(request: {
-    readonly roundRevision: number;
-    readonly gameMode: GameMode;
-    readonly mapConfig: CoopDefenseMapConfig | null;
-    readonly seed: number;
-    readonly worldParameters: WorldParameters | undefined;
-  }): void {
+  private scheduleHostArenaGeneration(request: HostArenaGenerationRequest): void {
     if (this.hostArenaGenerationTimer || this.isArenaEntryProtected()) return;
     const generation = this.arenaTransitionGeneration;
 
@@ -3252,32 +3333,14 @@ export class ArenaLifecycleCoordinator {
           request.mapConfig?.arenaWidthCells,
           request.mapConfig?.arenaHeightCells,
         );
-        const worldMetrics = resolveWorldMetrics(getArenaMetricsProfile(
-          request.gameMode,
-          'ARENA',
-          request.mapConfig?.arenaWidthCells,
-          request.mapConfig?.arenaHeightCells,
-        ));
-        const layout = ArenaGenerator.generate(
-          request.seed,
-          resolveArenaGenerationInput(request.gameMode, worldMetrics),
-          request.mapConfig ?? undefined,
-        );
-        const world: WorldDescriptor = {
-          worldRevision: request.roundRevision,
-          definitionId: toWorldDefinitionId(request.mapConfig?.mapId ?? null),
+        const { world, activity, layout } = generateRoundWorld({
+          roundRevision: request.roundRevision,
+          gameMode: request.gameMode,
           seed: request.seed,
-          generatorVersion: ARENA_GENERATOR_VERSION,
-          layoutFingerprint: ArenaGenerator.fingerprint(layout),
-          ...(request.worldParameters ? { parameters: request.worldParameters } : {}),
-        };
-        const activityKind = toActivityKind(request.gameMode);
-        const activity: ActivityDescriptor = {
-          activityRevision: request.roundRevision,
-          worldRevision: request.roundRevision,
-          kind: activityKind,
-          definitionId: toActivityDefinitionId(activityKind, request.mapConfig?.mapId ?? null),
-        };
+          campaignMapConfig: request.dawn ? null : request.mapConfig,
+          dawn: request.dawn,
+          worldParameters: request.worldParameters,
+        });
         this.preparedRoundLayout = { descriptor: world, layout };
         // Der eine World-Kanal: Weltidentitaet und Activity gehen gemeinsam raus, abgeleitet
         // aus derselben lokal erzeugten Runde.
@@ -3727,19 +3790,19 @@ export class ArenaLifecycleCoordinator {
     });
   }
 
-  /** World-first Map-Aufloesung; der Lobby-Wert ist nur vor der World-Erzeugung zulaessig. */
-  private resolveConfiguredCoopDefenseMapId(): string {
+  /** World-first Config-Aufloesung; die Lobby-Auswahl ist nur vor der World-Erzeugung zulaessig. */
+  private resolveConfiguredCoopDefenseMapConfig(): CoopDefenseMapConfig {
     const descriptor = bridge.getWorldDescriptor();
     // Die LobbyWorld beschreibt keine Runde. Sie traegt deshalb keine Coop-Map, und die
     // Lobby-Auswahl bleibt weiterhin die Quelle - genau wie ohne laufende World.
     if (!descriptor || isLobbyWorldDefinitionId(descriptor.definitionId)) {
-      return bridge.getCoopDefenseMapId();
+      return getCoopDefenseMapConfig(bridge.getCoopDefenseMapId());
     }
-    const mapId = toMapId(descriptor.definitionId);
-    if (mapId === null) {
+    const mapConfig = resolveCoopDefenseMapConfig(descriptor, bridge.getActivityDescriptor());
+    if (mapConfig === null) {
       throw new Error('[ArenaLifecycleCoordinator] Active World has no Coop-Defense map');
     }
-    return mapId;
+    return mapConfig;
   }
 }
 
@@ -3764,6 +3827,45 @@ export class ArenaLifecycleCoordinator {
  * gar keine persistente Basisstelle, und eine Stufe ohne Stelle waere eine Konfiguration fuer
  * etwas, das es in dieser Instanz nicht gibt.
  */
+/**
+ * Host: komponiert die Dawn-Runde aus dem eigenen Fortschritt. Threat und Tag folgen dem Host
+ * (User-Entscheidung); Clients erhalten nur die fertigen Plaene.
+ */
+function composeHostDawnRoundPlans(seed: number): DawnRoundPlans {
+  const dawn = getStoredDawnProgress();
+  return composeDawnRoundPlans({
+    seed,
+    threat: resolveDawnThreat(dawn.expansionLevel),
+    dayNumber: dawn.stats.roundsPlayed + 1,
+    nightModifier: isDevScenarioMode() ? getDevDawnNightModifier() : undefined,
+  });
+}
+
+/**
+ * Area-Stufe, die der Host fuer eine neue World einfriert: sein persoenlicher Ausbau aus Kampagne
+ * und Dawn-Expansion, begrenzt durch die Obergrenze der Site dieser World.
+ */
+function resolveHostFrozenPersistentBaseAreaStage(
+  siteMaxAreaStage: PersistentBaseAreaStage | undefined,
+): PersistentBaseAreaStage {
+  return resolveFrozenPersistentBaseAreaStage({
+    personalStage: getStoredPersonalPersistentBaseAreaStage(),
+    siteMaxAreaStage: siteMaxAreaStage ?? PERSISTENT_BASE_CAMPAIGN_MAX_AREA_STAGE,
+  });
+}
+
+/** Host-Festlegung einer neuen Runde bis zur Layout-Generierung hinter dem Ladebild. */
+interface HostArenaGenerationRequest {
+  readonly roundRevision: number;
+  readonly gameMode: GameMode;
+  /** Aktive Coop-Config der Runde: Lobby-Kampagnenkarte oder aufgeloester Dawn-Plan. */
+  readonly mapConfig: CoopDefenseMapConfig | null;
+  readonly dawn: DawnRoundPlans | null;
+  readonly seed: number;
+  /** World-Parameter dieser Instanz; sie reisen im WorldDescriptor, nicht im RoundState. */
+  readonly worldParameters: WorldParameters | undefined;
+}
+
 function resolveLobbyWorldParameters(
   persistentBaseUnlocked: boolean,
   areaStage: PersistentBaseAreaStage | null,

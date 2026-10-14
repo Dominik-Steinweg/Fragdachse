@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
+it('spawns the scavenger through the existing isolated scenario command', () => {
+  const spawn = vi.fn(), controller = { spawn, syncPanel() {} } as never;
+  runScenarioCommand(controller, { action: 'spawn', kind: 'dawn-scavenger', gridX: 20, gridY: 21 });
+  expect(spawn).toHaveBeenCalledWith('dawn-scavenger', false, null, { gridX: 20, gridY: 21 });
+});
+
 it('validates fog-rock optical controls and lobby time before renderDebug dispatch',()=>{
   const setRenderDebug=vi.fn(),controller={setRenderDebug,syncPanel(){}} as never;
   for(const key of ['fogRockContactStrength','fogRockSunShadowStrength','rockAerialPerspectiveStrength'])for(const value of [-1,1,NaN,Infinity,'0.2',null])
@@ -31,6 +37,21 @@ import { COOP_DEFENSE_UPGRADE_DEFINITIONS, isCoopDefenseUpgradeAvailableForClass
 import { buildScenarioProfile, defaultScenario, parseScenario, scenarioLoadout, encodeScenario, decodeScenario } from '../src/dev/scenario/config';
 import { createMemoryStorage } from '../src/dev/scenario/memoryStorage';
 import { ScenarioClock } from '../src/dev/scenario/clock';
+it.each(['pause', 'cancel', 'destroy'] as const)('cancels accelerated simulation on %s without leaving pending work', async action => {
+  const loop = { callback: vi.fn() };
+  const clock = new ScenarioClock(loop);
+  try {
+    const result = clock.fastForward(() => 10000 - clock.now);
+    const rejected = expect(result).rejects.toThrow('cancelled');
+    loop.callback(100, 16);
+    expect(clock.now).toBeGreaterThan(0);
+    if (action === 'pause') clock.paused = true;
+    else if (action === 'destroy') clock.destroy();
+    else clock.cancelFastForward();
+    await rejected;
+    expect(clock.fastForwarding).toBe(false);
+  } finally { clock.destroy(); }
+});
 import { visualTest, bindVisualTestBootClock, bindVisualTestTextureKeys } from '../src/dev/scenario/visualTest';
 
 it('offers turret copies only to the Inspector while portals stay locked', () => {
@@ -75,6 +96,35 @@ it('keeps render texture identities unique when a deterministic frame repeats it
 });
 
 describe('Dev scenario contract', () => {
+  it('round-trips Dawn recipes instead of campaign maps and validates threat strictly', () => {
+    const recipe = { version: 1, classId: 'dachs_nukem', dawn: { threat: 1 }, seed: 42 };
+    for (const threat of [1, 10]) {
+      const config = parseScenario({ ...recipe, dawn: { threat } });
+      expect(config.mapId).toBeUndefined();
+      expect(config.dawn).toEqual({ threat });
+      expect(decodeScenario(encodeScenario(config))).toEqual(config);
+    }
+    for (const dawn of [null, [], {}, { threat: 0 }, { threat: 11 }, { threat: 1.5 }, { threat: '2' },
+      { threat: NaN }, { threat: Infinity }, { threat: 1, typo: true }]) {
+      expect(() => parseScenario({ ...recipe, dawn })).toThrow();
+    }
+    expect(() => parseScenario({ ...recipe, mapId: '1' })).toThrow();
+  });
+  it.each(['dawnPhase', 'dawnSkip'])('validates %s before invoking the host port', action => {
+    const jumpDawnPhase = vi.fn();
+    const controller = { jumpDawnPhase, skipDawnPhase: jumpDawnPhase, syncPanel() {} } as never;
+    for (const phase of ['day', 'dusk', 'night', 'dawn']) {
+      runScenarioCommand(controller, { action, phase });
+      expect(jumpDawnPhase).toHaveBeenLastCalledWith(phase, 0);
+    }
+    for (const phase of [undefined, null, 'Night', 'missing', 1]) {
+      expect(() => runScenarioCommand(controller, { action, phase })).toThrow();
+    }
+    for (const offsetMs of [null, -1, 1.5, NaN, Infinity, '5', Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() => runScenarioCommand(controller, { action, phase: 'night', offsetMs })).toThrow();
+    }
+    expect(jumpDawnPhase).toHaveBeenCalledTimes(4);
+  });
   it('loads old recipes with visual-review defaults and validates explicit overrides', () => {
     const old = { version: 1, classId: 'dachs_nukem', mapId: '1' };
     expect(parseScenario(old)).toMatchObject({ freezeMission: true, hideTutorial: true });

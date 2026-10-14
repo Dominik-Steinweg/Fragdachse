@@ -1,8 +1,15 @@
 import type { CoopDefenseMapConfig } from '../config/coopDefenseMaps';
-import { getActivityDefinition } from '../config/authoring/authoredScenarios';
 import { toCoopDefenseMapConfig } from '../config/authoring/coopDefenseAuthoringAdapter';
 import type { WorldDefinition } from '../config/authoring/WorldDefinition';
 import type { ActivityDescriptor } from '../world/ActivityDescriptor';
+import type { WorldDescriptor } from '../world/WorldDescriptor';
+import { resolveActivityDefinition } from '../world/WorldDefinitionResolution';
+
+/** Die aktuelle World-Instanz, gegen die eine Activity aufgeloest wird. */
+export interface CoopMissionActivityWorld {
+  readonly descriptor: Pick<WorldDescriptor, 'definitionId' | 'parameters'>;
+  readonly definition: WorldDefinition | null;
+}
 
 /**
  * Die eine, validierte Activity-Sicht, die Coop-Compositions aus dem Authoring erhalten.
@@ -14,7 +21,7 @@ export interface CoopMissionActivityConfiguration {
 }
 
 /**
- * Loest die laufende Coop-Activity gegen die aktuelle WorldDefinition auf.
+ * Loest die laufende Coop-Activity gegen die aktuelle World-Instanz auf.
  *
  * Ein World-`sourceMapId` ist hier absichtlich keine Fallback-Quelle: Zwei Activities koennen
  * dieselbe World teilen, aber unterschiedliche Activity-Inhalte besitzen. Der Adapter baut aus
@@ -22,14 +29,20 @@ export interface CoopMissionActivityConfiguration {
  */
 export function resolveCoopMissionActivityConfiguration(
   activity: ActivityDescriptor,
-  worldDefinition: WorldDefinition | null,
+  world: CoopMissionActivityWorld | null,
 ): CoopMissionActivityConfiguration {
   if (activity.kind !== 'coop-mission') {
     throw new Error(
       `[CoopMissionActivityConfig] Activity ${activity.definitionId} is ${activity.kind}, not coop-mission`,
     );
   }
-  const definition = getActivityDefinition(activity.definitionId);
+  const worldDefinition = world?.definition ?? null;
+  if (!world || !worldDefinition) {
+    throw new Error(
+      `[CoopMissionActivityConfig] Coop activity ${activity.definitionId} has no current WorldDefinition`,
+    );
+  }
+  const definition = resolveActivityDefinition(activity, world.descriptor);
   if (!definition) {
     throw new Error(
       `[CoopMissionActivityConfig] Unknown ActivityDefinition ${activity.definitionId}`,
@@ -38,11 +51,6 @@ export function resolveCoopMissionActivityConfiguration(
   if (definition.kind !== 'coop-mission') {
     throw new Error(
       `[CoopMissionActivityConfig] ActivityDefinition ${definition.id} is ${definition.kind}, not coop-mission`,
-    );
-  }
-  if (!worldDefinition) {
-    throw new Error(
-      `[CoopMissionActivityConfig] Coop activity ${activity.definitionId} has no current WorldDefinition`,
     );
   }
   if (definition.worldDefinitionId !== worldDefinition.id) {

@@ -20,6 +20,7 @@ export interface WorldPresentationSink {
 }
 
 export class WorldPresentationBinding {
+  lobbyMerchant: import('../arena/LobbyMerchantRenderer').LobbyMerchantRenderer | null = null;
   groundFog: GroundFogSystem | null = null;
   private destroyed = false;
 
@@ -39,6 +40,7 @@ export class WorldPresentationBinding {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.lobbyMerchant?.destroy(); this.lobbyMerchant = null;
     this.groundFog?.destroy(); this.groundFog = null;
     this.sink.destroyPresentation(this.arena);
   }

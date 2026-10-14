@@ -37,6 +37,7 @@ export const WORLD_SOURCE_FIELDS = [
   'arenaHeightCells',
   'rockFillRatio',
   'treeCount',
+  'treeGroves',
   'rockField',
   'rockWalls',
   'water',
@@ -46,6 +47,7 @@ export const WORLD_SOURCE_FIELDS = [
   'timeOfDay',
   'fogStrength',
   'persistentBase',
+  'siteClearings',
 ] as const satisfies readonly (keyof CoopDefenseMapConfig)[];
 
 /**
@@ -59,6 +61,7 @@ export const SPLIT_SOURCE_FIELDS = ['bases'] as const satisfies readonly (keyof 
 
 /** Felder einer Basis, die das Bauwerk selbst beschreiben. */
 export const WORLD_BASE_FIELDS = [
+  'surface',
   'hpMax',
   'faction',
   'role',
@@ -101,6 +104,7 @@ export const COOP_MISSION_SOURCE_FIELDS = [
   'tutorialAnchor',
   'tutorialSteps',
   'persistentBasePreview',
+  'respawnDelaySchedule',
 ] as const satisfies readonly (keyof CoopDefenseMapConfig)[];
 
 /** Gemeinsamer Schluessel beider Seiten; er ist Identitaet, nicht Inhalt. */
@@ -114,10 +118,25 @@ export function getCoopMissionDefinitionId(mapId: string): string {
   return `activity:coop-mission:${mapId}`;
 }
 
-export function toWorldDefinition(mapConfig: ArenaGenerationMapConfig): WorldDefinition {
+/**
+ * Explizite Definitions-IDs fuer Szenarien ausserhalb der Kampagnenregistry.
+ *
+ * Ohne Override leiten sich beide IDs wie bisher aus `mapId` ab. Generierte Szenarien (Dawn)
+ * besitzen einen eigenen Namensraum; die `mapId` bleibt dann nur Kompatibilitaetsschluessel der
+ * aufgeloesten Config und ist kein Registry-Eintrag.
+ */
+export interface AuthoredScenarioIds {
+  readonly worldDefinitionId: string;
+  readonly activityDefinitionId: string;
+}
+
+export function toWorldDefinition(
+  mapConfig: ArenaGenerationMapConfig,
+  worldDefinitionId: string = getWorldDefinitionId(mapConfig.mapId),
+): WorldDefinition {
   const resolved = requireNormalizedWorldFields(mapConfig);
   return {
-    id: getWorldDefinitionId(mapConfig.mapId),
+    id: worldDefinitionId,
     sourceMapId: mapConfig.mapId,
     metrics: {
       widthCells: resolved.widthCells,
@@ -127,9 +146,11 @@ export function toWorldDefinition(mapConfig: ArenaGenerationMapConfig): WorldDef
     terrain: {
       rockFillRatio: mapConfig.rockFillRatio,
       treeCount: mapConfig.treeCount,
+      ...(mapConfig.treeGroves ? { treeGroves: mapConfig.treeGroves } : {}),
       rockField: mapConfig.rockField,
       rockWalls: mapConfig.rockWalls,
       water: mapConfig.water,
+      ...(mapConfig.siteClearings === undefined ? {} : { siteClearings: mapConfig.siteClearings }),
     },
     bases: mapConfig.bases.map(toWorldBaseDefinition),
     tracks: {
@@ -155,9 +176,11 @@ export function toWorldGenerationConfig(world: WorldDefinition): ArenaGeneration
     arenaHeightCells: world.metrics.heightCells,
     rockFillRatio: world.terrain.rockFillRatio,
     treeCount: world.terrain.treeCount,
+    ...(world.terrain.treeGroves ? { treeGroves: world.terrain.treeGroves } : {}),
     rockField: world.terrain.rockField,
     rockWalls: world.terrain.rockWalls,
     water: world.terrain.water,
+    siteClearings: world.terrain.siteClearings,
     krakenHabitat: world.krakenHabitat,
     trackMode: world.tracks?.mode,
     trackPosition: world.tracks?.position,
@@ -169,11 +192,17 @@ export function toWorldGenerationConfig(world: WorldDefinition): ArenaGeneration
   };
 }
 
-export function toCoopMissionDefinition(mapConfig: CoopDefenseMapConfig): CoopMissionDefinition {
+export function toCoopMissionDefinition(
+  mapConfig: CoopDefenseMapConfig,
+  ids: AuthoredScenarioIds = {
+    worldDefinitionId: getWorldDefinitionId(mapConfig.mapId),
+    activityDefinitionId: getCoopMissionDefinitionId(mapConfig.mapId),
+  },
+): CoopMissionDefinition {
   return {
     kind: 'coop-mission',
-    id: getCoopMissionDefinitionId(mapConfig.mapId),
-    worldDefinitionId: getWorldDefinitionId(mapConfig.mapId),
+    id: ids.activityDefinitionId,
+    worldDefinitionId: ids.worldDefinitionId,
     sourceMapId: mapConfig.mapId,
     objective: mapConfig.objective,
     surviveDurationSec: mapConfig.surviveDurationSec,
@@ -190,6 +219,7 @@ export function toCoopMissionDefinition(mapConfig: CoopDefenseMapConfig): CoopMi
     powerUps: mapConfig.powerUps,
     itemDrop: mapConfig.itemDrop,
     persistentBasePreview: mapConfig.persistentBasePreview,
+    ...(mapConfig.respawnDelaySchedule === undefined ? {} : { respawnDelaySchedule: mapConfig.respawnDelaySchedule }),
     dynamicTimeOfDay: mapConfig.dynamicTimeOfDay,
     tutorial: {
       durationMs: mapConfig.tutorialDurationMs,
@@ -201,8 +231,11 @@ export function toCoopMissionDefinition(mapConfig: CoopDefenseMapConfig): CoopMi
   };
 }
 
-export function toAuthoredScenario(mapConfig: CoopDefenseMapConfig): AuthoredScenario {
-  return createAuthoredScenario(toWorldDefinition(mapConfig), toCoopMissionDefinition(mapConfig));
+export function toAuthoredScenario(mapConfig: CoopDefenseMapConfig, ids?: AuthoredScenarioIds): AuthoredScenario {
+  return createAuthoredScenario(
+    toWorldDefinition(mapConfig, ids?.worldDefinitionId),
+    toCoopMissionDefinition(mapConfig, ids),
+  );
 }
 
 /**
@@ -236,6 +269,7 @@ export function toCoopDefenseMapConfig(scenario: AuthoredScenario): CoopDefenseM
     tutorialShowControls: tutorial?.showControls === true,
     rockFillRatio: world.terrain.rockFillRatio,
     treeCount: world.terrain.treeCount,
+    ...(world.terrain.treeGroves ? { treeGroves: world.terrain.treeGroves } : {}),
     rockField: world.terrain.rockField,
     rockWalls: world.terrain.rockWalls,
     water: world.terrain.water,
@@ -263,12 +297,15 @@ export function toCoopDefenseMapConfig(scenario: AuthoredScenario): CoopDefenseM
     respawnsPerPlayer: activity.respawnsPerPlayer,
     itemDrop: activity.itemDrop,
     persistentBasePreview: activity.persistentBasePreview,
+    ...(activity.respawnDelaySchedule === undefined ? {} : { respawnDelaySchedule: activity.respawnDelaySchedule }),
     persistentBase: world.persistentBaseSite,
+    ...(world.terrain.siteClearings === undefined ? {} : { siteClearings: world.terrain.siteClearings }),
   };
 }
 
 function toWorldBaseDefinition(base: CoopBaseConfig): WorldBaseDefinition {
   return {
+    ...(base.surface === undefined ? {} : { surface: base.surface }),
     id: base.id,
     hpMax: base.hpMax,
     faction: base.faction,
@@ -297,6 +334,7 @@ function toCoopBaseConfig(
   overlay: CoopMissionBaseOverlay | undefined,
 ): CoopBaseConfig {
   const restored: CoopBaseConfig = {
+    ...(base.surface === undefined ? {} : { surface: base.surface }),
     id: base.id,
     hpMax: base.hpMax,
     playerScaling: overlay?.playerScaling,

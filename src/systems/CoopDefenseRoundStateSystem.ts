@@ -31,8 +31,9 @@ export interface CoopDefenseRoundStateSystemOptions {
  * `survive` und `advance` verlieren ausschliesslich ueber den endgueltigen Team-Wipe, alle
  * anderen Ziele ueber die eigenen Basen. Gewonnen wird je nach Map ueber das vollstaendige
  * Abwehren des Assaults (`repel-assault`), das Zeitlimit (`survive`), den Boss (`defeat-boss`),
- * die Zerstoerung aller feindlichen Basen (`destroy-hostile-bases`) oder die vollstaendig
- * durchquerte Route bis zur Extraktion (`advance`).
+ * die Zerstoerung aller feindlichen Basen (`destroy-hostile-bases`), die vollstaendig
+ * durchquerte Route bis zur Extraktion (`advance`) oder das Halten bis zum Ablauf der
+ * Missionszeit (`defend-until-dawn`).
  */
 export class CoopDefenseRoundStateSystem {
   private concluded = false;
@@ -90,6 +91,15 @@ export class CoopDefenseRoundStateSystem {
 
     if (this.objective === 'repel-assault') {
       if (this.isAssaultRepelled()) {
+        this.concluded = true;
+        return 'victory';
+      }
+      return null;
+    }
+
+    // Bis zum Morgengrauen: verloren nur ueber die eigene Hauptbasis (oben), gewonnen mit der Zeit.
+    if (this.objective === 'defend-until-dawn') {
+      if (this.getSecondsLeft() <= 0) {
         this.concluded = true;
         return 'victory';
       }

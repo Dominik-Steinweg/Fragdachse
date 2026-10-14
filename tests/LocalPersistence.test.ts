@@ -1,3 +1,8 @@
+import { createDefaultDawnProgress, sanitizeDawnProgress, DAWN_MAX_SCRAP, DAWN_MAX_EXPANSION_LEVEL, DAWN_MAX_PURCHASED_BOSS_POINTS } from '../src/dawn/economy/DawnProgress';
+import { DAWN_UPGRADE_BRANCHES, validateDawnUpgradeBranches } from '../src/config/dawn/upgradeBranches';
+import { COOP_DEFENSE_CLASS_IDS } from '../src/config/coopDefenseClasses';
+import { getLockedCoopDefenseBranchUpgradeIds, resolveCoopDefenseUpgradeEntitlements, resolveEarnedCoopDefenseBossPoints, getSpentCoopDefenseBossPoints, COOP_DEFENSE_UPGRADE_DEFINITIONS } from '../src/utils/coopDefenseUpgrades';
+import { getStoredDawnProgress, updateStoredDawnProgress, acknowledgeStoredDawnNotice, restoreStoredCoopDefenseProgress, getStoredPersonalPersistentBaseAreaStage, getStoredPersistentBaseAreaStage } from '../src/utils/localPreferences';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   LEGACY_LOCAL_PREFERENCES_KEY,
@@ -76,6 +81,186 @@ class MemoryStorage implements Storage {
 
 describe('local progress generation', () => {
   let storage: MemoryStorage;
+
+  it.each([5, 6])('migrates V%s profiles and only flags actually removed branch levels', version => {
+    const original = JSON.parse(exportStoredGameProgressJson());
+    original.formatVersion = version;
+    original.progress.schemaVersion = version;
+    delete original.progress.coopDefense.dawn;
+    if (version === 5) delete original.progress.coopDefense.persistentBaseHealthRewards;
+    const locked = getLockedCoopDefenseBranchUpgradeIds(resolveCoopDefenseUpgradeEntitlements([]));
+    const levels = Object.fromEntries([...locked].map(id => [id, COOP_DEFENSE_UPGRADE_DEFINITIONS[id].maxLevel]));
+    for (const target of ['none', 'default', ...COOP_DEFENSE_CLASS_IDS]) {
+      const envelope = structuredClone(original);
+      const coop = envelope.progress.coopDefense;
+      coop.completedBossMapIds = ['boss-a', 'boss-b'];
+      coop.unlockedClassIds = [...COOP_DEFENSE_CLASS_IDS];
+      coop.classesUnlocked = true;
+      if (target === 'default') coop.defaultProfile = { levels };
+      else if (target !== 'none') coop.profilesByClass = { [target]: { levels } };
+      expect(importStoredGameProgressJson(JSON.stringify(envelope)).ok).toBe(true);
+      let progress = getStoredCoopDefenseProgress();
+      expect(progress.dawn.notices.necromancyMovedToMerchant).toBe(target !== 'none');
+      for (const profile of [progress.defaultProfile, ...Object.values(progress.profilesByClass)]) {
+        for (const id of locked) expect(profile.upgrades[id].level).toBe(0);
+        expect(getSpentCoopDefenseBossPoints(profile)).toBe(0);
+      }
+      expect(resolveEarnedCoopDefenseBossPoints(progress)).toBe(2);
+      // Local reads use the same migration, even for profiles not currently selected.
+      storage.setItem(LOCAL_PROGRESS_STORAGE_KEY, JSON.stringify(envelope.progress));
+      invalidateLocalStorageCache();
+      progress = getStoredCoopDefenseProgress();
+      expect(progress.dawn.notices.necromancyMovedToMerchant).toBe(target !== 'none');
+      expect(JSON.parse(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)!).schemaVersion).toBe(7);
+      acknowledgeStoredDawnNotice('necromancyMovedToMerchant');
+      invalidateLocalStorageCache();
+      expect(getStoredDawnProgress().notices.necromancyMovedToMerchant).toBe(false);
+    }
+  });
+
+  it('roundtrips and restores personal Dawn progress defensively and resets it with the character', () => {
+    expect(updateStoredDawnProgress(dawn => {
+      dawn.scrap = 123;
+      dawn.expansionLevel = 2;
+      dawn.purchasedBossPoints = 3;
+      dawn.unlockedBranchIds = ['necromancy', 'necromancy'];
+      dawn.infrastructure = { 'work-bench': 2 };
+      dawn.crafting.recalibrationCores = 4;
+      dawn.stats = { roundsPlayed: 5, victories: 3, defeats: 2, currentStreak: 1, bestStreak: 2 };
+      dawn.notices.necromancyMovedToMerchant = true;
+    })).toBe(true);
+    const expected = getStoredDawnProgress();
+    expect(expected.unlockedBranchIds).toEqual(['necromancy']);
+    const snapshot = getStoredCoopDefenseProgress();
+    const exported = exportStoredGameProgressJson();
+    expect(JSON.parse(exported).formatVersion).toBe(7);
+    getStoredDawnProgress().infrastructure['work-bench'] = 9;
+    expect(getStoredDawnProgress()).toEqual(expected);
+    resetStoredCoopDefenseCharacter();
+    expect(getStoredDawnProgress()).toEqual(createDefaultDawnProgress());
+    restoreStoredCoopDefenseProgress(snapshot);
+    snapshot.dawn.crafting.recalibrationCores = 99;
+    expect(getStoredDawnProgress()).toEqual(expected);
+    resetStoredCoopDefenseCharacter();
+    expect(importStoredGameProgressJson(exported).ok).toBe(true);
+    invalidateLocalStorageCache();
+    expect(getStoredDawnProgress()).toEqual(expected);
+    expect(updateStoredDawnProgress(dawn => { dawn.scrap = -1; })).toBe(false);
+    expect(getStoredDawnProgress()).toEqual(expected);
+  });
+
+  it('preserves the entire cached and stored progress when Dawn writes fail, including notice acknowledgement', () => {
+    expect(updateStoredDawnProgress(dawn => {
+      dawn.scrap = 1_000;
+      dawn.notices.necromancyMovedToMerchant = true;
+    })).toBe(true);
+    const before = getStoredCoopDefenseProgress();
+    const storedBefore = new Map(storage.values);
+    storage.throwOnWrite = true;
+    expect(updateStoredDawnProgress(dawn => { dawn.scrap -= 100; dawn.expansionLevel += 1; })).toBe(false);
+    expect(acknowledgeStoredDawnNotice('necromancyMovedToMerchant')).toBe(false);
+    expect(getStoredCoopDefenseProgress()).toEqual(before);
+    expect(storage.values).toEqual(storedBefore);
+    invalidateLocalStorageCache();
+    expect(getStoredDawnProgress()).toEqual(before.dawn);
+    storage.throwOnWrite = false;
+    expect(acknowledgeStoredDawnNotice('necromancyMovedToMerchant')).toBe(true);
+    expect(getStoredDawnProgress().notices.necromancyMovedToMerchant).toBe(false);
+  });
+
+  it.each([5, 6, 7])('rejects unknown profile owners atomically in V%s, including prototype keys', version => {
+    const envelope = JSON.parse(exportStoredGameProgressJson());
+    envelope.formatVersion = version;
+    envelope.progress.schemaVersion = version;
+    const before = storage.getItem(LOCAL_PROGRESS_STORAGE_KEY);
+    for (const id of ['unknown-class', '__proto__', 'constructor']) {
+      envelope.progress.coopDefense.profilesByClass = Object.fromEntries([[id, { levels: {} }]]);
+      expect(importStoredGameProgressJson(JSON.stringify(envelope)).ok).toBe(false);
+      expect(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)).toBe(before);
+    }
+  });
+
+  it('derives the personal base stage from campaign stage and Dawn expansion', () => {
+    expect(getStoredPersonalPersistentBaseAreaStage()).toBe(getStoredPersistentBaseAreaStage());
+    expect(updateStoredDawnProgress(dawn => { dawn.expansionLevel = 3; })).toBe(true);
+    expect(getStoredPersonalPersistentBaseAreaStage()).toBeGreaterThan(getStoredPersistentBaseAreaStage());
+    expect(getStoredPersistentBaseAreaStage()).toBeLessThanOrEqual(2);
+  });
+
+  it('rejects malformed current Dawn documents atomically and defaults omitted optional fields', () => {
+    const valid = JSON.parse(exportStoredGameProgressJson());
+    const before = storage.getItem(LOCAL_PROGRESS_STORAGE_KEY);
+    const invalid = [undefined, null, [], 1, { scrap: -1 }, { scrap: 0.5 }, { scrap: DAWN_MAX_SCRAP + 1 },
+      { expansionLevel: DAWN_MAX_EXPANSION_LEVEL + 1 }, { expansionLevel: '1' },
+      { purchasedBossPoints: DAWN_MAX_PURCHASED_BOSS_POINTS + 1 }, { unlockedBranchIds: [1] },
+      { unlockedBranchIds: null }, { infrastructure: [] }, { infrastructure: { 'Bad-ID': 1 } },
+      { infrastructure: { bench: 11 } }, { infrastructure: { bench: 0.5 } },
+      { crafting: null }, { crafting: { recalibrationCores: -1 } }, { stats: { bestStreak: 0.5 } },
+      { stats: { roundsPlayed: Number.MAX_SAFE_INTEGER + 1 } }, { notices: { necromancyMovedToMerchant: 1 } }];
+    for (const dawn of invalid) {
+      const corrupt = structuredClone(valid);
+      corrupt.progress.coopDefense.dawn = dawn;
+      expect(importStoredGameProgressJson(JSON.stringify(corrupt)).ok, JSON.stringify(dawn)).toBe(false);
+      expect(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)).toBe(before);
+    }
+    valid.progress.coopDefense.dawn = {};
+    expect(importStoredGameProgressJson(JSON.stringify(valid)).ok).toBe(true);
+    expect(getStoredDawnProgress()).toEqual(createDefaultDawnProgress());
+    expect(sanitizeDawnProgress({ scrap: Infinity })).toBeNull();
+    // A retired branch id is dropped instead of invalidating the personal progress.
+    expect(sanitizeDawnProgress({ unlockedBranchIds: ['retired-branch', 'necromancy'] })?.unlockedBranchIds)
+      .toEqual(['necromancy']);
+    expect(sanitizeDawnProgress({ stats: { defeats: NaN } })).toBeNull();
+  });
+
+  it('counts unique boss completions plus purchased points and preserves the total-point cheat', () => {
+    const dawn = { ...createDefaultDawnProgress(), purchasedBossPoints: 3 };
+    expect(resolveEarnedCoopDefenseBossPoints({ completedBossMapIds: ['boss', 'boss', '__cheat_boss_point_1'], dawn })).toBe(5);
+    updateStoredDawnProgress(draft => { draft.purchasedBossPoints = 3; });
+    setStoredCoopDefenseCheatProgress(0, 7, '1');
+    expect(resolveEarnedCoopDefenseBossPoints(getStoredCoopDefenseProgress())).toBe(7);
+    expect(getStoredDawnProgress().purchasedBossPoints).toBe(3);
+    setStoredCoopDefenseCheatProgress(0, 1, '1');
+    expect(resolveEarnedCoopDefenseBossPoints(getStoredCoopDefenseProgress())).toBe(1);
+  });
+
+  it('applies branch ownership before budgets and preserves granted levels through storage and import', () => {
+    const profile = buildDefaultCoopDefenseUpgradeProfile();
+    const locked = getLockedCoopDefenseBranchUpgradeIds(resolveCoopDefenseUpgradeEntitlements([]));
+    for (const id of locked) profile.upgrades[id].level = COOP_DEFENSE_UPGRADE_DEFINITIONS[id].maxLevel;
+    const unrelated = Object.values(COOP_DEFENSE_UPGRADE_DEFINITIONS).find(definition =>
+      definition.bossPointCostPerLevel > 0 && !locked.has(definition.id)
+      && definition.requires.length === 0 && !definition.availableClasses)!;
+    expect(unrelated).toBeDefined();
+    profile.upgrades[unrelated.id].level = unrelated.maxLevel;
+    updateStoredDawnProgress(dawn => { dawn.purchasedBossPoints = unrelated.maxLevel * unrelated.bossPointCostPerLevel; });
+    setStoredCoopDefenseUpgradeProfile(profile);
+    expect(getStoredCoopDefenseProgress().defaultProfile.upgrades[unrelated.id].level).toBe(unrelated.maxLevel);
+    expect(getStoredCoopDefenseProgress().defaultProfile.upgrades.necromancy.level).toBe(0);
+
+    updateStoredDawnProgress(dawn => {
+      dawn.unlockedBranchIds = ['necromancy'];
+      dawn.purchasedBossPoints = getSpentCoopDefenseBossPoints(profile);
+    });
+    setStoredCoopDefenseUpgradeProfile(profile);
+    const exported = exportStoredGameProgressJson();
+    invalidateLocalStorageCache();
+    expect(getStoredCoopDefenseProgress().defaultProfile.upgrades.necromancy.level).toBeGreaterThan(0);
+    resetStoredCoopDefenseCharacter();
+    expect(importStoredGameProgressJson(exported).ok).toBe(true);
+    expect(getStoredCoopDefenseProgress().defaultProfile.upgrades.necromancy.level).toBeGreaterThan(0);
+    expect(getStoredDawnProgress().notices.necromancyMovedToMerchant).toBe(false);
+    updateStoredDawnProgress(dawn => { dawn.unlockedBranchIds = []; });
+    for (const saved of [getStoredCoopDefenseProgress().defaultProfile, ...Object.values(getStoredCoopDefenseProgress().profilesByClass)]) {
+      for (const id of locked) expect(saved.upgrades[id].level).toBe(0);
+    }
+  });
+
+  it('validates authored branch references and rejects duplicate or missing IDs', () => {
+    expect(validateDawnUpgradeBranches({ branches: DAWN_UPGRADE_BRANCHES })).toEqual(DAWN_UPGRADE_BRANCHES);
+    expect(() => validateDawnUpgradeBranches({ branches: [DAWN_UPGRADE_BRANCHES[0], DAWN_UPGRADE_BRANCHES[0]] })).toThrow();
+    expect(() => validateDawnUpgradeBranches({ branches: [{ id: 'missing', rootUpgradeId: 'missing' }] })).toThrow();
+  });
 
   it('preserves identified rewards and a legacy reward with the same time across export, reload and import', () => {
     const legacy = { roundEndedAt: 42, offers: rollCoopDefenseItemOffer(2, null) };

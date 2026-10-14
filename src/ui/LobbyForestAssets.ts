@@ -1,4 +1,5 @@
 import type * as Phaser from 'phaser';
+import { preloadDawnUiAssets } from '../assets/DawnUiAssets';
 import exports from './lobbyForestExports.json';
 
 /** Generated runtime files; sourceWidth/sourceHeight retain the authored trim's coordinate system. */
@@ -14,5 +15,6 @@ export const FOREST_ASSETS = {
 } as const;
 
 export function preloadForestAssets(loader: Phaser.Loader.LoaderPlugin): void {
+  preloadDawnUiAssets(loader);
   for (const asset of Object.values(FOREST_ASSETS)) loader.image(asset.key, './assets/ui/lobby-forest/' + asset.file);
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CoopDefenseEncounterPresentationState } from '../src/types';
 import { buildMainObjectiveViewModel } from '../src/ui/coopDefenseMainObjectiveModel';
+import { getLocale, setLocale } from '../src/i18n';
 
 function encounter(
   sequenceIndex: number,
@@ -20,6 +21,23 @@ function encounter(
 }
 
 describe('buildMainObjectiveViewModel', () => {
+  it('shows the final authored clock time for defend-until-dawn in both languages, or no value without it', () => {
+    const input = { mapId: 'dawn', objective: 'defend-until-dawn' as const, elapsedMs: 3000,
+      surviveDurationSec: 480, encounterCount: 4, encounter: null, boss: null, hostileBases: null,
+      dynamicTimeOfDay: { transitions: [
+        { start: { type: 'time' as const, atMs: 0 }, targetTimeOfDay: '22:00', durationMs: 2000 },
+        { start: { type: 'time' as const, atMs: 2000 }, targetTimeOfDay: '06:15', durationMs: 478000 },
+      ] } };
+    const locale = getLocale();
+    try {
+      setLocale('de');
+      expect(buildMainObjectiveViewModel(input).progressLabel).toBe('bis 06:15');
+      setLocale('en');
+      expect(buildMainObjectiveViewModel({ ...input, elapsedMs: 470000 }).progressLabel).toBe('until 06:15');
+      expect(buildMainObjectiveViewModel({ ...input, dynamicTimeOfDay: undefined }).progressLabel).toBe('');
+    } finally { setLocale(locale); }
+  });
+
   it('shows elapsed survival time and fills toward the duration', () => {
     const model = buildMainObjectiveViewModel({
       mapId: 'survival',

@@ -20,6 +20,7 @@ export function validateClipContracts(clips, sampled = true) {
 }
 
 export function validateExtensions(spec) {
+  if (spec.materialSource !== undefined && (spec.materialSource !== 'procedural' || !spec.textures || Array.isArray(spec.textures) || Object.keys(spec.textures).length)) throw new Error('Procedural materials must declare an empty texture map');
   if (spec.runtimeAtlas !== undefined && typeof spec.runtimeAtlas !== 'boolean') throw new Error('runtimeAtlas must be boolean');
   if (spec.elevation !== undefined) {
     const e = spec.elevation, scale = e?.scale ?? .5;

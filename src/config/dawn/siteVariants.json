@@ -1,0 +1,7 @@
+{
+  "wreck": {
+    "drone": 40,
+    "tractor": 30,
+    "minecart": 30
+  }
+}

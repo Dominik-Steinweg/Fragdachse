@@ -29,7 +29,7 @@ function createHarness(activity: ActivityDescriptor | null = ACTIVITY_A): {
   const port: ResultApplicationPort = {
     completeVictoryHolds: () => { calls.push('complete-victory-holds'); },
     getCurrentActivity: () => currentActivity,
-    resolveVictoryRewardIds: (definitionId) => {
+    resolveVictoryRewardIds: ({ definitionId }) => {
       calls.push(`resolve-rewards:${definitionId}`);
       return rewards;
     },

@@ -165,7 +165,7 @@ describe('WorldDescriptor – kanonische World-Identitaet', () => {
     expect(parseWorldDescriptor({ ...world, layoutFingerprint: '' })).toBeNull();
     expect(parseWorldDescriptor({ ...world, seed: Number.NaN })).toBeNull();
     // Unbrauchbare Parameter loeschen nicht die World, sie entfallen.
-    expect(parseWorldDescriptor({ ...world, parameters: { persistentBaseAreaStage: 3 } }))
+    expect(parseWorldDescriptor({ ...world, parameters: { persistentBaseAreaStage: 12 } }))
       .toEqual({ ...world, parameters: undefined });
     expect(parseWorldDescriptor({ ...world, parameters: { persistentBaseUnlocked: 'yes' } }))
       .toEqual({ ...world, parameters: undefined });
@@ -173,6 +173,7 @@ describe('WorldDescriptor – kanonische World-Identitaet', () => {
     // Jedes Feld reist auch allein: Eine gesperrte Lobby fuehrt keine Area-Stufe, eine
     // freigeschaltete beide Werte.
     for (const parameters of [
+      { persistentBaseAreaStage: 11 },
       { persistentBaseUnlocked: true },
       { persistentBaseUnlocked: false },
       { persistentBaseUnlocked: true, persistentBaseHealthRewards: [], persistentBaseAreaStage: 1 },

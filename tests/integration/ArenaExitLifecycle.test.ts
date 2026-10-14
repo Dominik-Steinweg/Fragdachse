@@ -54,7 +54,8 @@ import * as devScenarioMode from '../../src/utils/devScenarioMode';
 import { DEFAULT_COOP_DEFENSE_MAP_ID } from '../../src/config/coopDefenseMaps';
 import { registerDiagnosticMap, getCoopDefenseMapConfig, WEAPON_BALANCE_LAB_MAP_ID } from '../../src/config/coopDefenseMaps';
 import { CoopDefenseBalanceTracker } from '../../src/debug/coopDefenseBalance/tracker';
-import { invalidateLocalStorageCache } from '../../src/utils/localPreferences';
+import { invalidateLocalStorageCache, markStoredCoopDefenseMapCompleted, updateStoredDawnProgress } from '../../src/utils/localPreferences';
+import { DAWN_UNLOCK_AFTER_MAP_ID } from '../../src/dawn/rules/DawnUnlock';
 
 function fixture(host: boolean, outcome = 'victory') {
   let phase = 'LOBBY';
@@ -222,12 +223,13 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     for (const method of ['publishLobbySync', 'setMatchHostId', 'resetAllFrags', 'resetCoopDefenseRoundXp',
       'publishRoundResults', 'publishCoopDefenseEncounterPresentationState', 'publishCoopDefenseMapEventPresentationState',
       'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState',
-      'setArenaStartTime', 'setRoundEndTime', 'requestFullGameState'] as const) {
+      'setArenaStartTime', 'setRoundEndTime', 'requestFullGameState', 'hostPublishDawnRoundScrap'] as const) {
       vi.spyOn(bridge, method).mockImplementation(() => {});
     }
     vi.spyOn(bridge, 'areAllPlayersReady').mockReturnValue(true);
     vi.spyOn(bridge, 'getLobbyTimeOfDayMinutes').mockReturnValue(720);
     vi.spyOn(bridge, 'getCoopDefenseMapId').mockReturnValue(DEFAULT_COOP_DEFENSE_MAP_ID);
+    vi.spyOn(bridge, 'getCoopProgram').mockReturnValue({ kind: 'campaign' });
     vi.spyOn(bridge, 'getConnectedPlayerIds').mockReturnValue(['local']);
     vi.spyOn(bridge, 'getConnectedPlayers').mockReturnValue([{ id: 'local', name: 'Local', colorHex: 0xffffff }]);
     vi.spyOn(bridge, 'hostStartRoundParticipants').mockImplementation((_ids, _time, revision) => { roundRevision = revision!; });
@@ -252,7 +254,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     });
     Object.assign(scene, {
       resolveConfiguredGameMode: () => 'coop_defense',
-      resolveConfiguredCoopDefenseMapId: () => DEFAULT_COOP_DEFENSE_MAP_ID,
+      resolveConfiguredCoopDefenseMapConfig: () => getCoopDefenseMapConfig(DEFAULT_COOP_DEFENSE_MAP_ID),
       coopDefenseBalanceTracker: tracker,
       ctx: { getWorldCombatCore: () => ({ getHP: () => 100, getMaxHp: () => 100, getArmor: () => 0 }) },
       meta: { getStoredProgress: () => ({ totalXp: 0 }), getProgress: () => ({ level: 1 }) },
@@ -271,11 +273,64 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
       invalidateLocalStorageCache();
     }
   });
+
+  it('starts the Dawn program only when unlocked and never books it as a campaign map', () => {
+    const storage = new Map<string, string>();
+    vi.stubGlobal('window', { localStorage: {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+    } });
+    const { flow } = fixture(true);
+    let roundState: any = null;
+    for (const method of ['publishLobbySync', 'setMatchHostId', 'resetAllFrags', 'resetCoopDefenseRoundXp',
+      'publishRoundResults', 'publishCoopDefenseEncounterPresentationState', 'publishCoopDefenseMapEventPresentationState',
+      'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState',
+      'setArenaStartTime', 'setRoundEndTime', 'requestFullGameState', 'hostPublishDawnRoundScrap', 'hostStartRoundParticipants'] as const) {
+      vi.spyOn(bridge, method).mockImplementation(() => {});
+    }
+    vi.spyOn(bridge, 'areAllPlayersReady').mockReturnValue(true);
+    vi.spyOn(bridge, 'getLobbyTimeOfDayMinutes').mockReturnValue(720);
+    vi.spyOn(bridge, 'getCoopDefenseMapId').mockReturnValue(DEFAULT_COOP_DEFENSE_MAP_ID);
+    vi.spyOn(bridge, 'getCoopProgram').mockReturnValue({ kind: 'dawn' });
+    const setProgram = vi.spyOn(bridge, 'setCoopProgram').mockImplementation(() => {});
+    vi.spyOn(bridge, 'getConnectedPlayerIds').mockReturnValue(['local']);
+    vi.spyOn(bridge, 'getConnectedPlayers').mockReturnValue([{ id: 'local', name: 'Local', colorHex: 0xffffff }]);
+    vi.spyOn(bridge, 'publishRoundState').mockImplementation(value => { roundState = value; });
+    Object.assign(flow, {
+      lastRoundRevision: 10, roundStartPending: false,
+      roomQualityMonitor: { shouldBlockStart: () => false },
+      lobbyOverlay: { lockButton: vi.fn() }, onTransitionToArena: vi.fn(),
+    });
+    invalidateLocalStorageCache();
+    try {
+      flow.hostCheckReadyToStart();
+      expect(setProgram).toHaveBeenCalledWith({ kind: 'campaign' });
+      expect(roundState).toBeNull();
+
+      markStoredCoopDefenseMapCompleted(DAWN_UNLOCK_AFTER_MAP_ID);
+      updateStoredDawnProgress(draft => { draft.infrastructure = { 'repair-drones': 2, 'scrap-magnet': 1 }; });
+      flow.hostCheckReadyToStart();
+      expect(roundState.coopDefenseMapId).toBeUndefined();
+      expect(roundState.dawn).toEqual({ threat: 1, dayNumber: 1 });
+      const pending = (flow as any).pendingHostArenaGeneration;
+      expect(pending.dawn.world.templateId).toBeTruthy();
+      expect(pending.mapConfig.persistentBase).toBeDefined();
+      expect(pending.worldParameters.persistentBaseUnlocked).toBe(true);
+      vi.mocked(bridge.getRoundState).mockImplementation(() => roundState);
+      updateStoredDawnProgress(draft => { draft.infrastructure = {}; });
+      expect(flow.getRoundDawnInfrastructure()).toEqual({ repairDrones: 2, scrapMagnet: 1 });
+      roundState = { ...roundState, roundRevision: roundState.roundRevision + 1 };
+      expect(flow.getRoundDawnInfrastructure()).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+      invalidateLocalStorageCache();
+    }
+  });
   it.each([[false, true, false], [true, false, false], [true, true, true]])(
     'only an isolated dev host may discard campaign rounds (dev=%s host=%s)', (dev, host, allowed) => {
       vi.spyOn(devScenarioMode, 'isDevScenarioMode').mockReturnValue(dev);
       const { flow, setPhase } = fixture(host);
-      setPhase('ARENA'); flow.resolveConfiguredCoopDefenseMapId = () => DEFAULT_COOP_DEFENSE_MAP_ID;
+      setPhase('ARENA'); flow.resolveConfiguredCoopDefenseMapConfig = () => getCoopDefenseMapConfig(DEFAULT_COOP_DEFENSE_MAP_ID);
       for (const key of ['publishCoopDefenseEncounterPresentationState', 'publishCoopDefenseMapEventPresentationState',
         'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState',
         'publishRoundState', 'publishRoundResults'] as const) vi.spyOn(bridge, key).mockImplementation(() => {});
@@ -290,7 +345,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     try {
       const { flow, setPhase } = fixture(true);
       setPhase('ARENA');
-      flow.resolveConfiguredCoopDefenseMapId = () => 'performance-exit-test';
+      flow.resolveConfiguredCoopDefenseMapConfig = () => getCoopDefenseMapConfig('performance-exit-test');
       for (const key of ['publishCoopDefenseEncounterPresentationState', 'publishCoopDefenseMapEventPresentationState',
         'publishCoopDefenseSecondaryObjectivePresentationState', 'publishCoopDefenseMissionProgressPresentationState',
         'publishRoundState', 'publishRoundResults'] as const) vi.spyOn(bridge, key).mockImplementation(() => {});
@@ -424,7 +479,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     vi.spyOn(bridge, 'hostPublishRoomStatistics').mockImplementation(() => {});
     const resultContext = {
       ctx: { voice: { victory } }, resolveConfiguredGameMode: () => mode,
-      resolveConfiguredCoopDefenseMapId: () => DEFAULT_COOP_DEFENSE_MAP_ID,
+      resolveConfiguredCoopDefenseMapConfig: () => getCoopDefenseMapConfig(DEFAULT_COOP_DEFENSE_MAP_ID),
       captureTheBeerActivityRuntime: { system: { getTeamScore: (team: string) => team === 'red' ? 3 : 1 } },
     };
     ArenaLifecycleCoordinator.prototype.hostSaveRoundResults.call(resultContext as any, 1000, true);
@@ -478,7 +533,7 @@ describe('Rundenende: Arena bis nach Fade und Ergebnis-Render erhalten', () => {
     vi.spyOn(bridge, 'hostPublishRoomStatistics').mockImplementation(() => {});
     Object.assign(flow, {
       ctx: {}, resolveConfiguredGameMode: () => 'coop_defense',
-      resolveConfiguredCoopDefenseMapId: () => DEFAULT_COOP_DEFENSE_MAP_ID,
+      resolveConfiguredCoopDefenseMapConfig: () => getCoopDefenseMapConfig(DEFAULT_COOP_DEFENSE_MAP_ID),
       hostSaveRoundResults: ArenaLifecycleCoordinator.prototype.hostSaveRoundResults,
       publishRoundConclusion: (ArenaLifecycleCoordinator.prototype as any).publishRoundConclusion,
     });

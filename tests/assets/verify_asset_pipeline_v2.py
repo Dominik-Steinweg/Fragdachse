@@ -20,7 +20,8 @@ import bpy
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts/asset-pipeline'))
 from pose_validation_v2 import (EPSILON, require, near, matrix_values, set_frame, action_curves,
     animation_owners, snapshot, different_meshes, assert_same_pose, hierarchy_root,
-    fixed_presentation, assert_fixed_presentation, assert_geometry_bounds, assert_clip_boundary)
+    fixed_presentation, assert_fixed_presentation, assert_geometry_bounds, assert_clip_boundary,
+    rest_hold, required_moving_rigged)
 from contracts_v2 import validate_clips, validate_extensions
 from socket_anchors import sample_sockets, validate_socket_frames
 
@@ -67,7 +68,10 @@ def verify(scene, manifest, report, source_folder):
     images = {node.image for ob in scene.objects for slot in ob.material_slots
               if slot.material and slot.material.node_tree for node in slot.material.node_tree.nodes
               if node.type == 'TEX_IMAGE' and node.image is not None}
-    require(bool(images), 'No material texture sources found')
+    if spec.get('materialSource') == 'procedural':
+        require(not images and manifest['textures'] == {}, 'Procedural material unexpectedly consumes image textures')
+    else:
+        require(bool(images), 'No material texture sources found')
     require(all(image.packed_file is not None for image in images), 'A used texture is not packed into the Blend')
     packed_hashes = {digest(bytes(image.packed_file.data)) for image in images}
     require({texture['sha256'] for texture in manifest['textures'].values()}.issubset(packed_hashes),
@@ -130,7 +134,7 @@ def verify(scene, manifest, report, source_folder):
     rigs = [ob for ob in scene.objects if ob.type == 'ARMATURE']
     owners = animation_owners(scene)
     if not manifest['clips']:
-        require(spec['category'] in ('weapon', 'utility', 'construction', 'companion') and len(frames) == 1 and not owners,
+        require(spec['category'] in ('weapon', 'utility', 'construction', 'companion', 'powerup') and len(frames) == 1 and not owners,
                 'Only explicitly static assets may omit Actions and clips')
         if spec['category'] in ('weapon', 'utility'):
             require(spec['heldItem'] == manifest['heldItem'], 'Saved held-item anchors differ')
@@ -177,6 +181,8 @@ def verify(scene, manifest, report, source_folder):
             set_frame(scene, frame)
             assert_fixed_presentation(scene, root, presentation, frame)
             state = snapshot(scene, meshes, rigs, owners)
+            if rest_hold(clip):
+                assert_same_pose(idle, state, 'Inactive hold must preserve geometry and emission')
             first = state if first is None else first
             last = state
             movement.update(different_meshes(first, state))
@@ -200,7 +206,8 @@ def verify(scene, manifest, report, source_folder):
                 diameter = 2 * radius * spec['targetSize'] / presentation['orthoScale']
                 require(diameter <= spec['mount']['maxBaseDiameter'] + EPSILON, 'Turret support exceeds its rotational mount footprint')
                 require(abs(diameter - frames[index]['baseDiameter']) < 1e-4, 'Recorded support footprint differs from evaluated source')
-        require(bool(movement), f'Clip {clip["name"]} contains no visible geometric movement')
+        if not rest_hold(clip):
+            require(bool(movement), f'Clip {clip["name"]} contains no visible geometric movement')
         if clip['motion'] == 'player_idle':
             require(bool(moved.intersection(roles['body'])) and bool(moved.intersection(roles['arms'])),
                     'Breathing must visibly move chest and shoulders')
@@ -228,15 +235,17 @@ def verify(scene, manifest, report, source_folder):
         per_clip.append({'name': clip['name'], 'loop': clip['loop'], 'movingMeshes': len(moved),
                          'samples': len(clip['frames'])})
     if rigged:
-        require(rigged.issubset(moved_all), f'Saved limb meshes do not move: {sorted(rigged - moved_all)}')
+        required = required_moving_rigged(meshes, rigged, manifest['clips'])
+        require(required.issubset(moved_all), f'Saved limb meshes do not move: {sorted(required - moved_all)}')
     checks.append({'name': 'fixed_presentation_and_unclipped_evaluated_poses', 'passed': True})
     checks.append({'name': 'clip_motion_and_closure', 'passed': True, 'clips': per_clip})
     if rigged:
-        checks.append({'name': 'rigged_limbs_change', 'passed': True, 'meshes': len(rigged)})
+        checks.append({'name': 'rigged_limbs_change', 'passed': True, 'meshes': len(required), 'planted': len(rigged - required)})
     if stable_upper:
         checks.append({'name': 'player_weapon_grips_stay_fixed' if stable_grip else 'player_upper_body_stays_fixed', 'passed': True, 'meshes': len(stable_upper)})
     if balanced_player:
-        require(all(names.issubset(moved_all) for names in roles.values()), 'Balanced player contains unanimated body/head/arm/leg geometry')
+        required_roles = ('head', 'arms', 'body') if all(c['motion'] == 'player_idle' for c in manifest['clips']) else tuple(roles)
+        require(all(roles[role].issubset(moved_all) for role in required_roles), 'Balanced player contains unanimated required geometry roles')
         checks.append({'name': 'balanced_player_whole_body_motion', 'passed': True, 'roles': {role: len(names) for role, names in roles.items()}})
     if bases:
         checks.append({'name': 'turret_support_fits_32px_rock_at_all_angles', 'passed': True, 'baseMeshes': len(bases), 'maximumDiameter': spec['mount']['maxBaseDiameter']})

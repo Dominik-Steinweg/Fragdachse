@@ -11,6 +11,7 @@ import { navigationAttackPoint } from './NavigationAttackPoint';
 import { BreachPlanner } from './BreachPlanner';
 import { AttackPositionReservations } from './AttackPositionReservations';
 import { NavigationDensity } from './NavigationDensity';
+import { EnemyFleeNavigation } from './EnemyFleeNavigation';
 
 type Target = NonNullable<EnemyIntent['target']> & NavigationPoint & { radius?: number; objectId?: string };
 interface SharedField { readonly id: string; readonly field: EnemyFlowFieldService; signature: string; usedAt: number;
@@ -41,7 +42,10 @@ export class EnemyIntentSystem {
   private density: NavigationDensity | null = null;
   private decoys: DecoyTargetPort | null = null;
   private obstacleHp: ((enemy: EnemyEntity, id: string) => number | null) | null = null;
-  constructor(private readonly coordinator: FlowFieldCoordinator, private readonly catalog: EnemyAiTargetCatalog) {}
+  private readonly flee: EnemyFleeNavigation;
+  constructor(private readonly coordinator: FlowFieldCoordinator, private readonly catalog: EnemyAiTargetCatalog) {
+    this.flee = new EnemyFleeNavigation(coordinator, catalog);
+  }
   setDecoys(decoys: DecoyTargetPort | null): void { this.decoys = decoys; }
   setDensityEnabled(enabled: boolean): void {
     if (enabled === !!this.density) return;
@@ -123,6 +127,19 @@ export class EnemyIntentSystem {
       active.add(enemy.id);
       if (enemy.faction !== 'hostile') continue;
       const config = getCoopDefenseEnemyConfig(enemy.kind), decoy = this.decoys?.getTarget(enemy.id);
+      if (config.flee) {
+        const escape = this.flee.resolve(enemy, config.flee, geometry, now, point => {
+          const field = this.fieldFor({ kind: 'ally', id: `escape:${enemy.id}`, ...point }, enemy.getSize() / 2,
+            config.flee!.arrivalRadiusPx, geometry);
+          return { field, navigation: this.continueMovement(field.queryNavigation(enemy.sprite.x, enemy.sprite.y), field,
+            enemy.sprite.x, enemy.sprite.y, point, enemy.getSize() / 2, config.flee!.arrivalRadiusPx, geometry) };
+        });
+        if (escape) this.decisions.set(enemy.id, { ...escape, enemy, breach: null,
+          target: { kind: 'ally', id: `escape:${enemy.id}`, ...escape.intent.point! },
+          queryX: enemy.sprite.x, queryY: enemy.sprite.y, querySnapshot: escape.field.getNavigationSnapshot() });
+        else this.decisions.delete(enemy.id);
+        continue;
+      }
       let reason: EnemyIntent['reason'] = decoy ? 'decoy' : config.movementTarget === 'bases' ? 'siege'
         : config.movementTarget === 'players' ? 'player' : 'strategic';
       const prior = this.decisions.get(enemy.id);
@@ -411,6 +428,7 @@ export class EnemyIntentSystem {
   }
 
   clear(): void {
+    this.flee.clear();
     this.scanCursor = 0;
     for (const entry of this.fields.values()) { entry.field.destroy(); this.coordinator.unregisterField(entry.id); }
     this.fields.clear(); this.decisions.clear(); this.nextDecisionAt.clear(); this.lastSeen.clear(); this.planner.clear(); this.positions.clear(); this.baseGeometry = null; this.baseTargets = [];

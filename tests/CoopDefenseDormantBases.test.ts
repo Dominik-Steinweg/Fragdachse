@@ -26,6 +26,7 @@ import {
   type BaseSpec,
 } from '../src/arena/BaseRegistry';
 import { BaseManager } from '../src/entities/BaseManager';
+import { resolveDawnSitePropHitFlash } from '../src/arena/DawnSitePropModel';
 import { UTILITY_CONFIGS, type PlaceableTurretUtilityConfig } from '../src/loadout/LoadoutConfig';
 import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
 import type { LightingSystem } from '../src/effects/LightingSystem';
@@ -189,6 +190,22 @@ function makeScene(): { scene: any; groupObjects: any[]; presentationCalls: Reco
 }
 
 describe('Coop-Defense dormant mission structures', () => {
+  it('exposes the same structure HP and damage flash for host mutations and client snapshots', () => {
+    const spec = { ...makeBaseSpec('prop'), surface: 'none' as const };
+    const host = new BaseManager(makeScene().scene, [spec], TEST_WORLD_METRICS, {}, true, true);
+    const client = new BaseManager(makeScene().scene, [spec], TEST_WORLD_METRICS, {}, true, true);
+    expect(host.getStructureHp('missing')).toBeNull();
+    const initial = resolveDawnSitePropHitFlash(undefined, host.getStructureHp(spec.id), 1000);
+    host.applyDamage(spec.id, 10);
+    client.applySnapshot(host.getNetSnapshot());
+    const hostFlash = resolveDawnSitePropHitFlash(initial, host.getStructureHp(spec.id), 1010);
+    const clientFlash = resolveDawnSitePropHitFlash(initial, client.getStructureHp(spec.id), 1010);
+    expect(host.getStructureHp(spec.id)).toBe(spec.hpMax - 10);
+    expect(clientFlash).toEqual(hostFlash);
+    expect(hostFlash.active).toBe(true);
+    host.destroy(); client.destroy();
+  });
+
   it('keeps base aim configuration and authoritative angles independent of presentation', () => {
     const { scene } = makeScene();
     const original = makeBaseSpec('aim-base', { turret: true });
@@ -530,14 +547,16 @@ describe('Coop-Defense dormant mission structures', () => {
     expect(manager.isMovementBlockedCell(11, 10)).toBe(true);
   });
 
-  it('activates exactly once, restores turrets and increments obstacles', () => {
-    const { scene, groupObjects } = makeScene();
-    const dormant = makeBaseSpec('dormant-outpost', {
+  it.each([undefined, 'cells', 'none'] as const)('activates exactly once with surface %s, restoring turrets and obstacles', surface => {
+    const { scene, groupObjects, presentationCalls } = makeScene();
+    const dormant = { ...makeBaseSpec('dormant-outpost', {
       dormant: true,
       dormantObjectiveId: 'reveal-outpost',
       turret: true,
-    });
+    }), surface };
     const manager = new BaseManager(scene, [dormant], TEST_WORLD_METRICS, {}, true, true);
+    expect(manager.getBase(dormant.id)!.getCellBodies()).toHaveLength(0);
+    expect(presentationCalls.image).toBe(0);
     const activated = vi.fn();
     manager.setOnBaseActivated(activated);
     const state: CoopDefenseSecondaryObjectiveState = 'active';
@@ -554,12 +573,24 @@ describe('Coop-Defense dormant mission structures', () => {
     expect(manager.getTurrets()[0]?.targetRange)
       .toBe((UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig).placeable.targetRange);
     expect(groupObjects).toHaveLength(1);
+    expect(manager.getBase(dormant.id)!.getSurfaceImages()).toHaveLength(surface === 'none' ? 0 : dormant.cells.length);
+    const spots = manager.getBase(dormant.id)!.getLightSpots();
+    if (surface === 'none') expect(spots).toEqual([]);
+    else expect(spots.length).toBeGreaterThan(0);
+    const lighting = { setLight: vi.fn(), releaseLight: vi.fn() };
+    manager.setLightingSystem(lighting as unknown as LightingSystem);
+    manager.syncLights();
+    expect(lighting.setLight.mock.calls.filter(call => call[1] === 'baseGlow')).toHaveLength(spots.length);
+    expect(lighting.setLight.mock.calls.filter(call => call[1] === 'spore_turret')).toHaveLength(dormant.turrets.length);
+    if (surface === 'none') expect(presentationCalls.image).toBe(dormant.turrets.length);
+    const imageCount = presentationCalls.image;
 
     manager.setTurretAngle('dormant-outpost-turret', 1.25);
     expect(manager.getTurrets()[0]?.angle).toBe(1.25);
     manager.syncDormantStates();
     expect(activated).toHaveBeenCalledTimes(1);
     expect(manager.getObstacleGeneration()).toBe(1);
+    expect(presentationCalls.image).toBe(imageCount);
   });
 
   it('suppresses linked pedestal registration until its base is active', () => {

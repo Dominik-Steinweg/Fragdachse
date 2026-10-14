@@ -52,6 +52,12 @@ erzeugt und darf nicht zusätzlich authored sein; die maximale Reservierungsflä
 Arena-Grenzen werden durch den Validator geprüft. Konkrete Base-IDs gehören in authored Daten und
 Tests, nicht in diese Übersicht.
 
+Die optionale Site-Obergrenze `maxAreaStage` begrenzt die unterstützte Ausbaufläche; ohne Angabe
+gilt `PERSISTENT_BASE_CAMPAIGN_MAX_AREA_STAGE`. Die Reservierung wird allein aus dieser Obergrenze
+über `resolvePersistentBaseReservationRadiusCells()` bestimmt, unabhängig von der aktiven World-Stufe.
+Map-Validierung, Wasser-Ausschluss und Generator-Basen verwenden dieselbe Regel. World-Adapter
+reichen das optionale Feld unverändert durch und materialisieren dabei keinen Default.
+
 Ob eine World-Instanz ihren Basiskern tatsächlich trägt, ist keine Aussage der Definition, sondern ein host-autoritativ gebundener World-Parameter. Die dauerhaften Blueprint-Konstruktionen gehören zum persönlichen Progress beziehungsweise Contribution des jeweiligen Besitzers. Eine Runtime oder Working Copy materialisiert und bearbeitet diesen Zustand nur für ihren aktuellen Lebenszyklus; ein Activity-/Round-Ausgang kann den Arbeitsstand committen oder verwerfen. Host-Authority über Materialisierung und Validierung ist kein fachlicher Besitz. Eine World ohne Activity kann den Basiskern und persönliche Konstruktionen daher weiterhin materialisieren oder bearbeiten, sofern ihr aktueller World-Runtime-Vertrag diese Aktion erlaubt.
 
 ## Erweiterungsregeln

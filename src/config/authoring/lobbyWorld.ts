@@ -6,6 +6,7 @@ import {
 import { buildPersistentBaseCoreBaseConfig } from '../../persistentBase/PersistentBaseCore';
 import { DEFAULT_LOBBY_TIME_OF_DAY_MINUTES, formatTimeOfDay } from '../../effects/TimeOfDay';
 import type { WorldDefinition, WorldPersistentBaseSiteDefinition } from './WorldDefinition';
+import { LOBBY_MERCHANT_BASE } from './lobbyMerchant';
 
 /**
  * Die LobbyWorld als regulaere authored World.
@@ -48,6 +49,7 @@ export const LOBBY_PERSISTENT_BASE_ID = 'lobby-persistent-base';
  * `persistentBaseUnlocked` – eine Definition ist keine Progression.
  */
 const LOBBY_PERSISTENT_BASE_SITE: WorldPersistentBaseSiteDefinition = {
+  maxAreaStage: 6,
   baseId: LOBBY_PERSISTENT_BASE_ID,
   anchor: { gridX: LOBBY_SPAWN_FOCUS_CELL.gridX, gridY: LOBBY_SPAWN_FOCUS_CELL.gridY },
   // Ohne Activity nimmt der Kern ohnehin keinen Schaden; der Wert ist die Grunddauerhaftigkeit
@@ -62,9 +64,8 @@ const LOBBY_WORLD_DEFINITION: WorldDefinition = {
   },
   // Die Geometrie ist vollstaendig authored; es gibt nichts zu generieren.
   terrain: {},
-  // Die einzige Struktur der Lobby ist der persistente Basiskern; seine Form kommt aus der
-  // kanonischen Kerngeometrie, nicht aus dieser Datei.
-  bases: [buildPersistentBaseCoreBaseConfig(LOBBY_PERSISTENT_BASE_SITE)],
+  // Der Haendlerstand bleibt auch ohne freigeschalteten Basiskern World-Inhalt.
+  bases: [buildPersistentBaseCoreBaseConfig(LOBBY_PERSISTENT_BASE_SITE), LOBBY_MERCHANT_BASE],
   persistentBaseSite: LOBBY_PERSISTENT_BASE_SITE,
   // Die LobbyWorld folgt dem aktuell gewaehlten Spielmodus. Sie ist damit im Deathmatch
   // frei fuer alle, in Coop kooperativ und in Team-Modi teambezogen – ohne Fake-Activity.

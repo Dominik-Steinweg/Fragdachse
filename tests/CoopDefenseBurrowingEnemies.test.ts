@@ -27,7 +27,7 @@ describe('enemy claw contracts', () => {
 
   it('gives every authored enemy melee weapon a target-independent anticipation and recovery', () => {
     // Kraken boss and egg fight through the kraken system (body claw, tentacles), not authored melee weapons.
-    for (const config of Object.values(COOP_DEFENSE_ENEMY_CONFIGS).filter(c => !c.krakenBoss && !c.krakenEgg)) {
+    for (const config of Object.values(COOP_DEFENSE_ENEMY_CONFIGS).filter(c => !c.krakenBoss && !c.krakenEgg && !c.flee)) {
       const melee = config.weapons.filter(w => WEAPON_CONFIGS[w.weaponId].fire.type === 'melee');
       expect(melee.length).toBeGreaterThan(0);
       for (const weapon of melee) {

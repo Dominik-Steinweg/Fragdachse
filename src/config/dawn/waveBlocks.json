@@ -1,0 +1,160 @@
+{
+  "blocks": [
+    {
+      "id": "zombie-horde",
+      "cost": 10,
+      "roles": ["primary","secondary"],
+      "groups": [
+        {"enemyKind":"zombie-badger","count":10,"spawnStaggerMs":4000}
+      ]
+    },
+    {
+      "id": "zombie-stragglers",
+      "cost": 5,
+      "roles": ["secondary","flank"],
+      "groups": [
+        {"enemyKind":"zombie-badger","count":5,"spawnStaggerMs":3000}
+      ]
+    },
+    {
+      "id": "rabid-pack",
+      "cost": 10,
+      "roles": ["secondary","flank"],
+      "groups": [
+        {"enemyKind":"rabid-badger","count":5,"spawnStaggerMs":2000}
+      ]
+    },
+    {
+      "id": "demon-vanguard",
+      "cost": 18,
+      "roles": ["primary","secondary"],
+      "groups": [
+        {"enemyKind":"demon-badger","count":6,"spawnStaggerMs":2500},
+        {"enemyKind":"zombie-badger","count":6,"delayMs":1500,"spawnStaggerMs":3500}
+      ]
+    },
+    {
+      "id": "spore-escort",
+      "cost": 18,
+      "roles": ["primary"],
+      "groups": [
+        {"enemyKind":"spore-warden","count":2,"spawnStaggerMs":2000},
+        {"enemyKind":"zombie-badger","count":8,"spawnStaggerMs":4000}
+      ]
+    },
+    {
+      "id": "plague-column",
+      "cost": 20,
+      "roles": ["primary","secondary"],
+      "groups": [
+        {"enemyKind":"plague-medic","count":1},
+        {"enemyKind":"demon-badger","count":6,"delayMs":1000,"spawnStaggerMs":3000}
+      ]
+    },
+    {
+      "id": "thrower-line",
+      "cost": 22,
+      "roles": ["primary","secondary"],
+      "groups": [
+        {"enemyKind":"zombie-badger","count":6,"spawnStaggerMs":3000},
+        {"enemyKind":"thrower-badger","count":2,"delayMs":3000,"spawnStaggerMs":2000}
+      ]
+    },
+    {
+      "id": "alien-raid",
+      "cost": 21,
+      "roles": ["flank"],
+      "groups": [
+        {"enemyKind":"alien-badger","count":1},
+        {"enemyKind":"void-stalker","count":1,"delayMs":1000},
+        {"enemyKind":"rabid-badger","count":3,"spawnStaggerMs":1500}
+      ]
+    },
+    {
+      "id": "timebomb-rush",
+      "cost": 19,
+      "roles": ["secondary","flank"],
+      "groups": [
+        {"enemyKind":"timebomb-badger","count":3,"spawnStaggerMs":2500},
+        {"enemyKind":"rabid-badger","count":2,"spawnStaggerMs":1500}
+      ]
+    },
+    {
+      "id": "pyro-assault",
+      "cost": 24,
+      "roles": ["primary","secondary"],
+      "groups": [
+        {"enemyKind":"pyro-badger","count":2,"spawnStaggerMs":2000},
+        {"enemyKind":"demon-badger","count":4,"delayMs":1000,"spawnStaggerMs":2500}
+      ]
+    },
+    {
+      "id": "brood-siege",
+      "cost": 28,
+      "roles": ["primary"],
+      "groups": [
+        {"enemyKind":"stink-broodmother","count":1},
+        {"enemyKind":"zombie-badger","count":8,"spawnStaggerMs":4000},
+        {"enemyKind":"demon-badger","count":4,"delayMs":2000,"spawnStaggerMs":3000}
+      ]
+    },
+    {
+      "id": "artillery-nest",
+      "cost": 32,
+      "roles": ["secondary"],
+      "groups": [
+        {"enemyKind":"zombie-badger","count":6,"spawnStaggerMs":3000},
+        {"enemyKind":"mortar-badger","count":2,"delayMs":2000,"spawnStaggerMs":2500},
+        {"enemyKind":"firestarter-badger","count":1,"delayMs":3000}
+      ]
+    },
+    {
+      "id": "siege-patrol",
+      "cost": 40,
+      "roles": ["primary","secondary","flank"],
+      "groups": [
+        {"enemyKind":"zombie-badger","count":8,"delayMs":0,"spawnStaggerMs":900},
+        {"enemyKind":"demon-badger","count":4,"delayMs":500,"spawnStaggerMs":900},
+        {"enemyKind":"mortar-badger","count":3,"delayMs":1000,"spawnStaggerMs":2000}
+      ]
+    },
+    {
+      "id": "siege-column",
+      "cost": 72,
+      "roles": ["primary","secondary","flank"],
+      "groups": [
+        {"enemyKind":"zombie-badger","count":12,"delayMs":0,"spawnStaggerMs":900},
+        {"enemyKind":"demon-badger","count":6,"delayMs":500,"spawnStaggerMs":900},
+        {"enemyKind":"mortar-badger","count":3,"delayMs":1000,"spawnStaggerMs":2000},
+        {"enemyKind":"firestarter-badger","count":2,"delayMs":1500,"spawnStaggerMs":2000},
+        {"enemyKind":"plague-medic","count":1,"delayMs":2500,"spawnStaggerMs":2000}
+      ]
+    },
+    {
+      "id": "siege-company",
+      "cost": 128,
+      "roles": ["primary","secondary","flank"],
+      "groups": [
+        {"enemyKind":"zombie-badger","count":16,"delayMs":0,"spawnStaggerMs":900},
+        {"enemyKind":"demon-badger","count":8,"delayMs":500,"spawnStaggerMs":900},
+        {"enemyKind":"mortar-badger","count":4,"delayMs":1000,"spawnStaggerMs":2000},
+        {"enemyKind":"firestarter-badger","count":4,"delayMs":1500,"spawnStaggerMs":2000},
+        {"enemyKind":"pyro-badger","count":2,"delayMs":2000,"spawnStaggerMs":2000},
+        {"enemyKind":"plague-medic","count":2,"delayMs":2500,"spawnStaggerMs":2000}
+      ]
+    },
+    {
+      "id": "siege-battalion",
+      "cost": 228,
+      "roles": ["primary","secondary","flank"],
+      "groups": [
+        {"enemyKind":"zombie-badger","count":24,"delayMs":0,"spawnStaggerMs":900},
+        {"enemyKind":"demon-badger","count":12,"delayMs":500,"spawnStaggerMs":900},
+        {"enemyKind":"mortar-badger","count":8,"delayMs":1000,"spawnStaggerMs":2000},
+        {"enemyKind":"firestarter-badger","count":8,"delayMs":1500,"spawnStaggerMs":2000},
+        {"enemyKind":"pyro-badger","count":4,"delayMs":2000,"spawnStaggerMs":2000},
+        {"enemyKind":"plague-medic","count":2,"delayMs":2500,"spawnStaggerMs":2000}
+      ]
+    }
+  ]
+}

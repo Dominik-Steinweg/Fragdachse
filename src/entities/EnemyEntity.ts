@@ -13,6 +13,9 @@ import { alliedEnemyHealthBarStyle, enemyHealthBarStyle } from '../effects/healt
 import { addPlayerGlow } from '../effects/PlayerGlow';
 import { removeInternalFx, type GlowHandle } from '../utils/phaserFx';
 import { resolveAlliedEnemyWeaponConfig } from '../systems/AlliedEnemyEffects';
+import type { DawnEliteAffixId } from '../dawn/contracts/DawnContentIds';
+import { dawnEliteSpeedMultiplier } from '../systems/DawnEliteRules';
+import { ELITE_VISUAL_SCALE } from '../effects/dawn/EliteMarkerModel';
 import * as Phaser from 'phaser';
 import { GenericWeapon } from '../loadout/GenericWeapon';
 import { WEAPON_CONFIGS, type WeaponConfig } from '../loadout/LoadoutConfig';
@@ -46,6 +49,8 @@ import { emissiveAlpha } from '../effects/EmissiveScale';
 import { TimebombFuseRenderer } from '../effects/TimebombFuseRenderer';
 import { getEnemyName } from '../i18n/contentPresentation';
 import { getLocale } from '../i18n';
+import { DAWN_M3_ASSET_KEYS } from '../dawn/contracts/DawnContentIds';
+import { DAWN_SCAVENGER_KIND } from '../dawn/runtime/DawnScavengerPort';
 import {
   getWalkingSheetForStaticTexture,
   syncBadgerWalkingAnimation,
@@ -301,6 +306,7 @@ export class EnemyEntity {
     ownerId?: string,
     ownerColor?: number,
     originId?: string,
+    readonly eliteAffixId?: DawnEliteAffixId,
   ) {
     this.id = id;
     this.kind = kind;
@@ -318,10 +324,15 @@ export class EnemyEntity {
 
     // Animierte Gegnerarten zeigen im Stand Frame 0 ihres Walking-Sheets; er ist deckungsgleich
     // mit der statischen Einzeltextur, die Darstellung aendert sich dadurch nicht.
-    this.walkingSheet = getWalkingSheetForStaticTexture(this.config.imageKey);
+    const authoredSheet = getWalkingSheetForStaticTexture(DAWN_M3_ASSET_KEYS.scavenger);
+    const scavengerArtLoaded = kind === DAWN_SCAVENGER_KIND
+      && scene.textures.exists(authoredSheet?.textureKey ?? DAWN_M3_ASSET_KEYS.scavenger);
+    const scavengerFallback = kind === DAWN_SCAVENGER_KIND && !scavengerArtLoaded;
+    const imageKey = scavengerArtLoaded ? DAWN_M3_ASSET_KEYS.scavenger : this.config.imageKey;
+    this.walkingSheet = getWalkingSheetForStaticTexture(imageKey);
     this.sprite = this.walkingSheet
       ? scene.add.sprite(x, y, this.walkingSheet.textureKey, WALKING_IDLE_FRAME)
-      : scene.add.sprite(x, y, this.config.imageKey);
+      : scene.add.sprite(x, y, imageKey);
     this.sprite.setDisplaySize(this.getVisualSize(), this.getVisualSize());
     this.sprite.setDepth(DEPTH.PLAYERS - 0.05);
     if (faction === 'allied') {
@@ -337,6 +348,8 @@ export class EnemyEntity {
       registerGraphicsObject(scene, 'enemyStatus', this.ownerRing);
     } else if (this.config.color !== undefined) {
       this.sprite.setTint(this.config.color);
+    } else if (scavengerFallback) {
+      this.sprite.setTint(0xffbd59);
     }
     if (faction === 'hostile') {
       this.createGlowHalo(scene);
@@ -359,6 +372,9 @@ export class EnemyEntity {
   get body(): Phaser.Physics.Arcade.Body {
     return this.sprite.body as Phaser.Physics.Arcade.Body;
   }
+
+  /** Host navigation only; clients render the ordinary enemy position snapshots. */
+  escapeTarget: { readonly x: number; readonly y: number } | null = null;
 
   setPosition(x: number, y: number): void {
     if (this.stationary) return;
@@ -669,7 +685,7 @@ export class EnemyEntity {
   }
 
   getMoveSpeed(): number {
-    return (this.config.krakenBoss?.landMoveSpeedPxPerSec ?? this.config.moveSpeed) * this.moveSpeedMultiplier;
+    return (this.config.krakenBoss?.landMoveSpeedPxPerSec ?? this.config.moveSpeed) * this.moveSpeedMultiplier * dawnEliteSpeedMultiplier(this.eliteAffixId);
   }
 
   setMoveSpeedMultiplier(multiplier: number): void {
@@ -700,7 +716,7 @@ export class EnemyEntity {
 
   /** Canvas includes the pounce's transparent margin; the physical size stays authored. */
   getVisualSize(): number {
-    return this.config.size * (this.walkingSheet?.displayScale ?? 1);
+    return this.config.size * (this.walkingSheet?.displayScale ?? 1) * (this.eliteAffixId ? ELITE_VISUAL_SCALE : 1);
   }
 
   private syncCollisionCircle(): void {
@@ -924,6 +940,7 @@ export class EnemyEntity {
       positionRevision: this.movementRevision,
       id: this.id,
       kind: this.kind,
+      ...(this.eliteAffixId ? { eliteAffixId: this.eliteAffixId } : {}),
       x: this.sprite.x,
       y: this.sprite.y,
       rot: this.currentAimAngle,

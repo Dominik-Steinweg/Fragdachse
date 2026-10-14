@@ -5,7 +5,7 @@ import type {
   CoopBaseConfig,
   CoopBaseShape,
 } from '../config/coopDefenseMaps';
-import { DEFAULT_PERSISTENT_BASE_RADIUS_CELLS, EXPANDED_PERSISTENT_BASE_RADIUS_CELLS } from '../config/persistentBase';
+import { MAX_PERSISTENT_BASE_RADIUS_CELLS, PERSISTENT_BASE_CLEARANCE_CELLS } from '../config/persistentBase';
 import type { PersistentBaseAnchor } from './PersistentBaseTypes';
 
 /**
@@ -45,7 +45,7 @@ export type PersistentBaseCellDomain =
  * Regel, die den bebaubaren Bereich relativ zum persistenten Basisanker beschreibt.
  *
  * Die aktive Regel wird ausschliesslich aus der semantischen Area-Stufe aufgeloest: Stage 0 nutzt
- * das feste 7x7-Quadrat, Stage 1 Radius 5 und Stage 2 Radius 6. Platzierung, Restore und Darstellung
+ * das feste 7x7-Quadrat, danach Radius 4 + Stage. Platzierung, Restore und Darstellung
  * erhalten danach dieselbe aufgeloeste Geometrie.
  */
 export type PersistentBaseBuildArea =
@@ -53,12 +53,16 @@ export type PersistentBaseBuildArea =
   | { readonly kind: 'radius'; readonly radiusCells: number };
 
 /** Semantische Ausbau-Stufe der persistenten Basis. */
-export type PersistentBaseAreaStage = 0 | 1 | 2;
+export type CampaignPersistentBaseAreaStage = 0 | 1 | 2;
+export type PersistentBaseAreaStage = CampaignPersistentBaseAreaStage | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 
-export const DEFAULT_PERSISTENT_BASE_AREA_STAGE: PersistentBaseAreaStage = 0;
+export const PERSISTENT_BASE_MAX_AREA_STAGE = 11;
+export const PERSISTENT_BASE_CAMPAIGN_MAX_AREA_STAGE = 2;
+
+export const DEFAULT_PERSISTENT_BASE_AREA_STAGE: CampaignPersistentBaseAreaStage = 0;
 
 /** Authoritative Stage-Werte an der Persistenz- und Netzwerkgrenze. */
-export const PERSISTENT_BASE_AREA_STAGES = [0, 1, 2] as const satisfies readonly PersistentBaseAreaStage[];
+export const PERSISTENT_BASE_AREA_STAGES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as const satisfies readonly PersistentBaseAreaStage[];
 
 /** Baubereich der ersten Stufe; unabhaengig von den festen Domains des Basiskerns. */
 export const DEFAULT_PERSISTENT_BASE_BUILD_AREA = Object.freeze({
@@ -68,21 +72,31 @@ export const DEFAULT_PERSISTENT_BASE_BUILD_AREA = Object.freeze({
 
 /** Authoring-/Wire-Grenze fuer die semantische Area-Stufe. */
 export function isPersistentBaseAreaStage(value: unknown): value is PersistentBaseAreaStage {
-  return value === 0 || value === 1 || value === 2;
+  return typeof value === 'number' && Number.isInteger(value)
+    && value >= 0 && value <= PERSISTENT_BASE_MAX_AREA_STAGE;
+}
+
+/** Separate storage boundary for campaign progression. */
+export function isCampaignPersistentBaseAreaStage(value: unknown): value is CampaignPersistentBaseAreaStage {
+  return isPersistentBaseAreaStage(value) && value <= PERSISTENT_BASE_CAMPAIGN_MAX_AREA_STAGE;
 }
 
 /** Leitet die aktive Build-Area genau einmal aus der persistenten Area-Stufe ab. */
 export function resolvePersistentBaseBuildAreaForStage(
   areaStage: PersistentBaseAreaStage,
 ): PersistentBaseBuildArea {
-  switch (areaStage) {
-    case 0:
-      return DEFAULT_PERSISTENT_BASE_BUILD_AREA;
-    case 1:
-      return { kind: 'radius', radiusCells: DEFAULT_PERSISTENT_BASE_RADIUS_CELLS };
-    case 2:
-      return { kind: 'radius', radiusCells: EXPANDED_PERSISTENT_BASE_RADIUS_CELLS };
-  }
+  return areaStage === 0
+    ? DEFAULT_PERSISTENT_BASE_BUILD_AREA
+    : { kind: 'radius', radiusCells: 4 + areaStage };
+}
+
+/** Site reservation is independent of the active stage; omitted ceilings retain campaign geometry. */
+export function resolvePersistentBaseReservationRadiusCells(
+  maxAreaStage: PersistentBaseAreaStage = PERSISTENT_BASE_CAMPAIGN_MAX_AREA_STAGE,
+): number {
+  return Math.max(MAX_PERSISTENT_BASE_RADIUS_CELLS,
+    getPersistentBaseBuildAreaExtentCells(resolvePersistentBaseBuildAreaForStage(maxAreaStage)))
+    + PERSISTENT_BASE_CLEARANCE_CELLS;
 }
 
 /** Validierungsgrenze fuer aufgeloeste Baubereiche; unbekannte Formen werden nicht still ersetzt. */

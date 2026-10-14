@@ -1,3 +1,7 @@
+import { resolveEarnedCoopDefenseBossPoints, resolveCoopDefenseUpgradeEntitlements } from '../../utils/coopDefenseUpgrades';
+import { getDawnThreatCurve } from '../../config/dawn/dawnContent';
+import { applyDawnRoundProgress } from '../../dawn/economy/DawnEconomy';
+import type { DawnProgress } from '../../dawn/economy/DawnProgress';
 import { AfterRoundFlow, type AfterRoundStep } from './AfterRoundFlow';
 import { PERSISTENT_BASE_HEALTH_REWARD_HP, resolvePersistentBaseMaxHp } from '../../persistentBase/PersistentBaseHealth';
 import { getLoadoutUtilityId, loadoutToolFromId } from '../../loadout/LoadoutTools';
@@ -62,7 +66,7 @@ import {
   type MatchItemRewardPresentation,
   type MatchResultsPresentation,
 } from '../../ui/MatchResultsModel';
-import { getLocale } from '../../i18n';
+import { getLocale, t } from '../../i18n';
 import { getLocalizedGameModeLabel } from '../../i18n/gameModePresentation';
 import { getMapName } from '../../i18n/contentPresentation';
 
@@ -86,6 +90,7 @@ export interface ArenaMetaProgressStore {
   setDebugProgress(totalXp: number, bossPoints: number, highestUnlockedMapId: string): void;
   resetCharacter(): void;
   addCoopDefenseXp(amount: number): number;
+  updateDawnProgress(mutator: (draft: DawnProgress) => void): boolean;
   markCoopDefenseRoundProcessed(endedAt: number | null, identity?: { roomCode: string; roundRevision: number }): void;
   markCoopDefenseMapCompleted(mapId: string): boolean;
   markCoopDefenseBossMapCompleted(mapId: string): boolean;
@@ -179,7 +184,8 @@ export interface ArenaMetaItemRewardClaim {
 }
 
 export interface ArenaMetaVictoryItemRewardInput {
-  readonly completedMapId: string;
+  /** Absent for Dawn: offer an item without running campaign unlock rules. */
+  readonly completedMapId?: string;
   readonly roundEndedAt: number;
   readonly roundIdentity?: CoopDefenseRoundIdentity;
   readonly itemLevel: number | null;
@@ -345,10 +351,11 @@ export class ArenaMetaController {
     this.progress = getCoopDefenseProgressSnapshot(
       stored.totalXp,
       activeProfile,
-      stored.completedBossMapIds.length,
+      resolveEarnedCoopDefenseBossPoints(stored),
       activeClassId,
       classesUnlocked,
       stored.unlockedClassIds,
+      resolveCoopDefenseUpgradeEntitlements(stored.dawn.unlockedBranchIds),
     );
     this.input.session.setLocalCoopDefenseTotalXp(this.progress.totalXp);
 
@@ -466,8 +473,9 @@ export class ArenaMetaController {
       activeProfile,
       upgradeId,
       this.progress.level,
-      stored.completedBossMapIds.length,
+      resolveEarnedCoopDefenseBossPoints(stored),
       activeClassId,
+      resolveCoopDefenseUpgradeEntitlements(stored.dawn.unlockedBranchIds),
     );
     if (!nextProfile) return false;
 
@@ -708,12 +716,12 @@ export class ArenaMetaController {
 
     const mode = this.input.session.getGameMode();
     const roundState = this.input.resultRead.getRoundState();
-    const mapLabel = isCoopDefenseMode(mode)
-      ? getMapName(
-        roundState?.coopDefenseMapId ?? this.input.session.getCoopDefenseMapId(),
-        getLocale(),
-      )
-      : 'Zufallsarena';
+    // Dawn-Runden tragen keine Kampagnenkarte; sie duerfen nicht auf die Lobby-Auswahl fallen.
+    const mapLabel = !isCoopDefenseMode(mode)
+      ? 'Zufallsarena'
+      : roundState?.dawn
+        ? t('ui.lobby.dawn.name')
+        : getMapName(roundState?.coopDefenseMapId ?? this.input.session.getCoopDefenseMapId(), getLocale());
 
     this.matchResultsPending = true;
     this.matchResultsProgressBefore = isCoopDefenseMode(mode) ? this.getProgress() : null;
@@ -1023,17 +1031,17 @@ export class ArenaMetaController {
       && !stored.itemsUnlocked
       && input.itemLevel !== null;
     let itemsUnlocked = false;
-    if (!shouldAtomicallyUnlockItems) {
+    if (!shouldAtomicallyUnlockItems && input.completedMapId) {
       itemsUnlocked = this.input.progressStore.unlockItemsAfterVictory(input.completedMapId);
     }
 
     let reward: CoopDefensePendingItemReward | undefined;
-    if (input.itemLevel !== null && (stored.itemsUnlocked || shouldAtomicallyUnlockItems)) {
+    if (input.itemLevel !== null && (stored.itemsUnlocked || shouldAtomicallyUnlockItems || !input.completedMapId)) {
       const offers = rollCoopDefenseItemOffer(input.itemLevel, input.playedClassId);
       reward = {
         roundEndedAt: input.roundEndedAt,
         ...(input.roundIdentity ? { roundIdentity: { ...input.roundIdentity } } : {}),
-        mapId: input.completedMapId,
+        ...(input.completedMapId ? { mapId: input.completedMapId } : {}),
         epicGuaranteeCount: input.epicGuaranteeCount,
         offers: applyCoopDefenseEpicGuarantee(
           offers,
@@ -1043,7 +1051,7 @@ export class ArenaMetaController {
       };
       if (shouldAtomicallyUnlockItems) {
         itemsUnlocked = this.input.progressStore.unlockItemsAfterVictory(
-          input.completedMapId,
+          input.completedMapId!,
           reward,
         );
       } else {
@@ -1090,8 +1098,33 @@ export class ArenaMetaController {
           ?? this.input.resultRead.getCoopDefenseRoundXp(),
       ),
     );
-    if (sharedRoundXp > 0) this.input.progressStore.addCoopDefenseXp(sharedRoundXp);
+    if (roundState.dawn) {
+      let scrapGained = 0;
+      const saved = this.input.progressStore.updateDawnProgress(draft => {
+        scrapGained = applyDawnRoundProgress(draft,
+          results.find(result => typeof result.sharedScrap === 'number')?.sharedScrap ?? 0,
+          roundState.status);
+      });
+      if (!saved) return { ...createMatchProgressDelta(before, this.getProgress(), 0, null), scrapGained: 0 };
+      if (sharedRoundXp > 0) this.input.progressStore.addCoopDefenseXp(sharedRoundXp);
+      if (roundState.status === 'victory') {
+        this.coopDefenseMatchItemReward = this.recordVictoryItemReward({
+          roundEndedAt: endedAt,
+          ...(roundState.roundRevision === undefined ? {} : {
+            roundIdentity: { roomCode: this.input.session.getRoomCode(), roundRevision: roundState.roundRevision },
+          }),
+          itemLevel: getDawnThreatCurve(roundState.dawn.threat).itemLevel,
+          playedClassId: this.input.resultRead.getLocalCommittedLoadout()?.coopDefenseClassId ?? null,
+          epicGuaranteeCount: resolveCoopDefenseEpicGuaranteeCount(results, roundState),
+        }).reward;
+      }
+      this.input.progressStore.markCoopDefenseRoundProcessed(endedAt, roundState.roundRevision === undefined
+        ? undefined : { roomCode: this.input.session.getRoomCode(), roundRevision: roundState.roundRevision });
+      this.refresh();
+      return { ...createMatchProgressDelta(before, this.getProgress(), sharedRoundXp, null), scrapGained };
+    }
 
+    if (sharedRoundXp > 0) this.input.progressStore.addCoopDefenseXp(sharedRoundXp);
     const completedMapId = roundState.coopDefenseMapId;
     let unlockedNewMap = false;
     let unlockedItems = false;

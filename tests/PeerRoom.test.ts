@@ -11,7 +11,7 @@ import { NetworkBridge } from '../src/network/NetworkBridge';
 import { createPeerNetworkError } from '../src/network/peer/PeerSignaling';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 import { PEER_PROTOCOL_VERSION, type PeerChannelKind, type PeerMessage } from '../src/network/peer/protocol';
-import type { LoadoutCommitSnapshot } from '../src/types';
+import type { CoopDefenseEncounterPresentationState, LoadoutCommitSnapshot } from '../src/types';
 import { DEFAULT_LOADOUT } from '../src/loadout/LoadoutConfig';
 import { CoopDefensePlayerModifierSystem } from '../src/systems/CoopDefensePlayerModifierSystem';
 
@@ -37,6 +37,49 @@ function connectUnadmittedClient(network: FakeNetwork) {
 }
 
 describe('PeerRoom handshake and roster', () => {
+  it('replicates the host wave identity, sequence and finale to clients and late joiners', async () => {
+    const network = new FakeNetwork();
+    const host = await createHostRoom(network);
+    let client: Awaited<ReturnType<typeof addClientRoom>> | undefined;
+    const use = (room: typeof host) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    const state: CoopDefenseEncounterPresentationState = {
+      encounterId: 'finale-west-1', sequenceIndex: 4, sequenceCount: 4, finale: true,
+      phase: 'active', phaseStartedAtMs: 12000, phaseEndsAtMs: null,
+      encounterFronts: ['west', 'east'], fronts: ['east'], spawnComplete: false,
+      enemiesDefeated: 3, enemiesTotal: 9,
+    };
+    try {
+      use(host);
+      const hostBridge = new NetworkBridge(); hostBridge.activate();
+      hostBridge.publishCoopDefenseEncounterPresentationState(state);
+      client = await addClientRoom(network);
+      use(client);
+      const clientBridge = new NetworkBridge(); clientBridge.activate();
+      expect(clientBridge.getCoopDefenseEncounterPresentationState()).toEqual(state);
+      clientBridge.publishCoopDefenseEncounterPresentationState({ ...state, sequenceCount: 99 });
+      expect(clientBridge.getCoopDefenseEncounterPresentationState()).toEqual(state);
+      use(host);
+      hostBridge.publishCoopDefenseEncounterPresentationState({ ...state, phase: 'cleared' });
+      use(client);
+      expect(clientBridge.getCoopDefenseEncounterPresentationState()).toEqual({ ...state, phase: 'cleared' });
+      for (const finale of [false, 'true', null]) {
+        use(host);
+        host.room.setGlobal('cep', { ...state, finale }, true);
+        use(client);
+        expect(clientBridge.getCoopDefenseEncounterPresentationState()).toBeNull();
+      }
+      use(host);
+      const { finale: _finale, ...legacy } = state;
+      hostBridge.publishCoopDefenseEncounterPresentationState(legacy);
+      use(client);
+      expect(clientBridge.getCoopDefenseEncounterPresentationState()).toEqual(legacy);
+      use(host);
+      hostBridge.publishCoopDefenseEncounterPresentationState(null);
+      use(client);
+      expect(clientBridge.getCoopDefenseEncounterPresentationState()).toBeNull();
+    } finally { clearActiveSession(); client?.room.destroy(); host.room.destroy(); }
+  });
+
   it.each(['team_deathmatch', 'capture_the_beer'] as const)('keeps the team fixed during %s even if its client clears ready', async mode => {
     const network = new FakeNetwork();
     const host = await createHostRoom(network);
@@ -240,6 +283,79 @@ describe('PeerRoom handshake and roster', () => {
       expect(host.room.getPlayerIds().sort()).toEqual(['p0', replacement.room.getLocalPlayerId()]);
     } finally {
       vi.useRealTimers();
+    }
+  });
+});
+
+describe('Coop program lobby state', () => {
+  it('restricts writes to the host, resets Ready once per change and detects divergent program state', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const clientRoom = await addClientRoom(network);
+    const useHost = () => setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'ABC123' });
+    const useClient = () => setActiveSession({ room: clientRoom.room, transport: clientRoom.transport, roomCode: 'ABC123' });
+    try {
+      useHost();
+      const host = new NetworkBridge();
+      host.activate();
+      expect(host.getCoopProgram()).toEqual({ kind: 'campaign' });
+      hostRoom.room.setGlobal('cpg', { kind: 'invalid' }, true);
+      expect(host.getCoopProgram()).toEqual({ kind: 'campaign' });
+      useClient();
+      const client = new NetworkBridge();
+      client.activate();
+      client.setCoopProgram({ kind: 'dawn' });
+      expect(client.getCoopProgram()).toEqual({ kind: 'campaign' });
+
+      useHost();
+      host.hostSetPlayerReady('p0', true);
+      host.hostSetPlayerReady('p1', true);
+      const revision = () => (hostRoom.room.getGlobal('lsy') as { r: number }).r;
+      const before = revision();
+      host.setCoopProgram({ kind: 'dawn' });
+      expect(host.getCoopProgram()).toEqual({ kind: 'dawn' });
+      expect(hostRoom.room.getGlobal('lsy')).toMatchObject({ cpg: { kind: 'dawn' } });
+      expect(revision()).toBe(before + 1);
+      expect(host.getPlayerReady('p0')).toBe(false);
+      expect(host.getPlayerReady('p1')).toBe(false);
+      host.hostSetPlayerReady('p0', true);
+      host.setCoopProgram({ kind: 'dawn' });
+      expect(revision()).toBe(before + 1);
+      expect(host.getPlayerReady('p0')).toBe(true);
+
+      useClient();
+      expect(client.getCoopProgram()).toEqual({ kind: 'dawn' });
+      expect(client.getLobbySyncConsistency().consistent).toBe(true);
+      client.setCoopProgram({ kind: 'campaign' });
+      client.setCoopDefenseMapId('2');
+      expect(client.getCoopProgram()).toEqual({ kind: 'dawn' });
+      useHost();
+      // Simulate the reliable key arriving before the separately published sync snapshot.
+      hostRoom.room.setGlobal('cpg', { kind: 'campaign' }, true);
+      useClient();
+      expect(client.getLobbySyncConsistency()).toMatchObject({
+        consistent: false, issues: [expect.stringContaining('Coop-Programm')],
+      });
+      useHost();
+      hostRoom.room.setGlobal('cpg', { kind: 'dawn' }, true);
+      for (const mapId of [host.getCoopDefenseMapId(), '2']) {
+        host.setCoopProgram({ kind: 'dawn' });
+        host.hostSetPlayerReady('p0', true);
+        host.hostSetPlayerReady('p1', true);
+        const mapRevision = revision();
+        host.setCoopDefenseMapId(mapId);
+        expect(host.getCoopProgram()).toEqual({ kind: 'campaign' });
+        expect(host.getCoopDefenseMapId()).toBe(mapId);
+        expect(revision()).toBe(mapRevision + 1);
+        expect(host.getPlayerReady('p0')).toBe(false);
+        expect(host.getPlayerReady('p1')).toBe(false);
+        host.setCoopDefenseMapId(mapId);
+        expect(revision()).toBe(mapRevision + 1);
+      }
+    } finally {
+      clearActiveSession();
+      clientRoom.room.destroy();
+      hostRoom.room.destroy();
     }
   });
 });
@@ -1437,6 +1553,40 @@ describe('host-frozen round loadouts', () => {
     });
     host.setGamePhase('ARENA');
   };
+
+  it.each([undefined, null, 'necromancy', ['unknown'], ['unknown', 'necromancy', 'necromancy', 7]].map(rawEntitlements => ({ rawEntitlements })))(
+    'constrains each player with their own sanitized research: $rawEntitlements', async ({ rawEntitlements }) => {
+      const network = new FakeNetwork(), hostRoom = await createHostRoom(network), clientRoom = await addClientRoom(network);
+      try {
+        const host = activate(hostRoom), client = activate(clientRoom);
+        const guestOwnsBranch = Array.isArray(rawEntitlements) && rawEntitlements.includes('necromancy');
+        const profile = { upgrades: {
+          hp: { unlocked: true, level: 2 },
+          necromancy: { unlocked: true, level: 1 },
+          necromancy_count: { unlocked: true, level: 1 },
+        }, toolLoadout: [] };
+        use(hostRoom); host.setGameMode('coop_defense');
+        host.setLocalReadyWithCommittedLoadout({ ...commit(), coopDefenseProfile: profile,
+          coopDefenseEntitlements: guestOwnsBranch ? [] : ['necromancy'] });
+        use(clientRoom); client.setLocalReadyWithCommittedLoadout({ ...commit(), coopDefenseProfile: profile,
+          coopDefenseEntitlements: rawEntitlements as LoadoutCommitSnapshot['coopDefenseEntitlements'] });
+        use(hostRoom);
+        expect(host.getPlayerCommittedLoadout('p1')?.coopDefenseEntitlements).toEqual(guestOwnsBranch ? ['necromancy'] : []);
+        expect(host.getPlayerCommittedLoadout('p1')?.coopDefenseProfile?.upgrades.necromancy.level).toBe(guestOwnsBranch ? 1 : 0);
+        start(host);
+        for (const [room, bridge] of [[hostRoom, host], [clientRoom, client]] as const) {
+          use(room);
+          for (const [id, owns] of [['p0', !guestOwnsBranch], ['p1', guestOwnsBranch]] as const) {
+            const snapshot = bridge.getPlayerCurrentLoadoutSnapshot(id)!;
+            expect(snapshot.coopDefenseEntitlements).toEqual(owns ? ['necromancy'] : []);
+            expect(snapshot.coopDefenseProfile?.upgrades.necromancy.level).toBe(owns ? 1 : 0);
+            expect(snapshot.coopDefenseProfile?.upgrades.necromancy_count.level).toBe(owns ? 1 : 0);
+            expect(snapshot.coopDefenseProfile?.upgrades.hp.level).toBe(2);
+          }
+        }
+      } finally { clearActiveSession(); clientRoom.room.destroy(); hostRoom.room.destroy(); }
+    },
+  );
 
   it.each(['replace', 'clear'] as const)('keeps the actual modifiers and weapons when a client tries to %s its commit', async action => {
     const network = new FakeNetwork();

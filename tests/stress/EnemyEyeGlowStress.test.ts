@@ -2,11 +2,14 @@ import { expect, it } from 'vitest';
 import { EnemyEyeGlowModel, type EnemyEyeSource } from '../../src/effects/EnemyEyeGlowModel';
 import { PIPELINE_ASSETS } from '../../src/config/pipelineAssets';
 
+// The Dawn scavenger sprite is bound by its own asset key, not by catalog gameIds.
+const ENEMY_KIND_BY_ASSET: Readonly<Record<string, string>> = { enemy_dawn_scavenger: 'dawn-scavenger' };
+
 it('keeps every eye/light in mixed crowds and reuses storage across despawns', () => {
   const assets = PIPELINE_ASSETS.filter(a => a.category === 'enemy');
   const enemies: EnemyEyeSource[] = Array.from({ length: 240 }, (_, i) => {
     const a = assets[i % assets.length], size = a.sourceSize;
-    return { kind: a.id, faction: 'hostile', getHp: () => 10,
+    return { kind: ENEMY_KIND_BY_ASSET[a.id] ?? a.gameIds[0] ?? a.id, faction: 'hostile', getHp: () => 10,
       sprite: { x: 100 + i % 20 * 30, y: 100 + Math.floor(i / 20) * 30, rotation: i,
         scaleX: 30 / size, scaleY: 30 / size, displayOriginX: size / 2, displayOriginY: size / 2,
         flipX: false, flipY: false, alpha: 1, visible: true, active: true,

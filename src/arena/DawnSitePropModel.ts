@@ -1,0 +1,114 @@
+import {
+  DAWN_EXTRACTOR_ACTIVE_ANIMATION, DAWN_EXTRACTOR_IDLE_ANIMATION,
+  DAWN_EXTRACTOR_KEY, DAWN_EXTRACTOR_SHEET_KEY,
+} from '../assets/DawnAssets';
+import { DAWN_M3_ASSET_KEYS, DAWN_WRECK_VARIANTS } from '../dawn/contracts/DawnContentIds';
+import { DAWN_MAX_SITE_TIER } from '../dawn/contracts/DawnPlans';
+import type { CoopDefenseSecondaryObjectiveState } from '../types';
+
+export interface DawnSitePropVisual {
+  readonly textureKey: string;
+  readonly animationKey: string | null;
+}
+
+export const DAWN_SITE_HIT_FLASH_MS = 100;
+
+/** Local presentation tuning in world pixels; never changes the night's ambient light. */
+export const DAWN_SITE_LIGHT = {
+  warm: 0xffba70, ember: 0xff9850, cyan: 0x65e4f2,
+  extractorIdleRadius: 112, extractorIdleIntensity: 0.42,
+  extractorActiveRadius: 156, extractorActiveIntensity: 0.78,
+  extractorCompletedRadius: 132, extractorCompletedIntensity: 0.64,
+  pulsePeriodMs: 1400, pulseDepth: 0.28,
+  lampX: 0, lampY: 1, lampSize: 9, lampAlpha: 0.9,
+  wreckRadius: 104, wreckIntensity: 0.48, emberX: -8, emberY: 9,
+  emberSize: 7, emberAlpha: 0.48,
+  techRadius: 52, techIntensity: 0.28, techX: 15, techY: -10,
+  techSize: 5, techAlpha: 0.5,
+} as const;
+
+export const DAWN_SITE_SPARKS = {
+  intervalMs: 450, lifespanMinMs: 220, lifespanMaxMs: 480,
+  speedMin: 7, speedMax: 20, scaleStart: 0.5, scaleEnd: 0.08,
+  spreadPx: 9, maxParticles: 3,
+} as const;
+
+export interface DawnSiteLight {
+  readonly id: 'warm' | 'tech';
+  readonly color: number;
+  readonly radiusPx: number;
+  readonly intensity: number;
+  readonly offsetX: number;
+  readonly offsetY: number;
+  readonly emissionSize: number;
+  readonly emissionAlpha: number;
+}
+
+/** Same replicated inputs as the prop; time animates presentation only, without local state. */
+export function resolveDawnSiteLights(
+  archetypeId: string, tier: number,
+  objectiveState: CoopDefenseSecondaryObjectiveState | undefined,
+  destroyed: boolean, nowMs: number,
+  variant?: string,
+): readonly DawnSiteLight[] {
+  if (!resolveDawnSitePropVisual(archetypeId, tier, objectiveState, destroyed, variant)) return [];
+  const c = DAWN_SITE_LIGHT;
+  if (archetypeId === 'extractor') {
+    const active = objectiveState === 'active', completed = objectiveState === 'completed';
+    const pulse = active ? 1 - c.pulseDepth * (0.5 + 0.5 * Math.cos(nowMs * Math.PI * 2 / c.pulsePeriodMs)) : 1;
+    return [{ id: 'warm', color: c.warm,
+      radiusPx: active ? c.extractorActiveRadius : completed ? c.extractorCompletedRadius : c.extractorIdleRadius,
+      intensity: (active ? c.extractorActiveIntensity : completed ? c.extractorCompletedIntensity : c.extractorIdleIntensity) * pulse,
+      offsetX: c.lampX, offsetY: c.lampY, emissionSize: c.lampSize,
+      emissionAlpha: active || completed ? c.lampAlpha * pulse : 0 }];
+  }
+  // Tractor chassis and minecart wreckage meet at the center; drone keeps its authored offsets.
+  const centered = variant !== undefined && variant !== 'drone';
+  const warm: DawnSiteLight = { id: 'warm', color: c.ember, radiusPx: c.wreckRadius,
+    intensity: c.wreckIntensity, offsetX: centered ? 0 : c.emberX, offsetY: centered ? 0 : c.emberY,
+    emissionSize: c.emberSize, emissionAlpha: c.emberAlpha };
+  return tier === 3 ? [warm, { id: 'tech', color: c.cyan, radiusPx: c.techRadius,
+    intensity: c.techIntensity, offsetX: centered ? 0 : c.techX, offsetY: centered ? 0 : c.techY,
+    emissionSize: c.techSize, emissionAlpha: c.techAlpha }] : [warm];
+}
+
+export interface DawnSitePropHitFlash {
+  readonly hp: number | null;
+  readonly untilMs: number;
+  readonly active: boolean;
+}
+
+/** First observation is a baseline; only an observed HP decrease renews the flash. */
+export function resolveDawnSitePropHitFlash(
+  previous: DawnSitePropHitFlash | undefined,
+  hp: number | null,
+  nowMs: number,
+): DawnSitePropHitFlash {
+  if (hp === null) return { hp, untilMs: 0, active: false };
+  const damaged = previous?.hp != null && hp < previous.hp;
+  const untilMs = damaged ? nowMs + DAWN_SITE_HIT_FLASH_MS : previous?.untilMs ?? 0;
+  return { hp, untilMs, active: nowMs < untilMs };
+}
+
+/** Pure projection of replicated state; absent objective entries are dormant. */
+export function resolveDawnSitePropVisual(
+  archetypeId: string,
+  tier: number,
+  objectiveState: CoopDefenseSecondaryObjectiveState | undefined,
+  destroyed: boolean,
+  variant?: string,
+): DawnSitePropVisual | null {
+  if (destroyed) return null;
+  if (archetypeId === 'wreck') {
+    const wreckVariant = DAWN_WRECK_VARIANTS.find(key => key === (variant ?? 'drone'));
+    if (objectiveState === 'completed' || !wreckVariant
+      || !Number.isInteger(tier) || tier < 1 || tier > DAWN_MAX_SITE_TIER) return null;
+    return { textureKey: DAWN_M3_ASSET_KEYS.wreckVariant(wreckVariant, tier), animationKey: null };
+  }
+  if (archetypeId !== 'extractor') return null;
+  if (objectiveState === 'active' || objectiveState === 'completed') {
+    return { textureKey: DAWN_EXTRACTOR_SHEET_KEY, animationKey: objectiveState === 'active'
+      ? DAWN_EXTRACTOR_ACTIVE_ANIMATION : DAWN_EXTRACTOR_IDLE_ANIMATION };
+  }
+  return { textureKey: DAWN_EXTRACTOR_KEY, animationKey: null };
+}

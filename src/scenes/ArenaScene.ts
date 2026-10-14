@@ -1,5 +1,7 @@
+import { resolveEarnedCoopDefenseBossPoints } from '../utils/coopDefenseUpgrades';
 import { preloadWatchtowerAssets } from '../effects/watchtower/WatchtowerVisual';
 import { installRuntimeAssetUrls } from '../assets/RuntimeAssetUrls';
+import { DAWN_PIPELINE_ASSETS } from '../assets/DawnAssets';
 import { preloadPowerUpAssets, assertPowerUpAssetsReady } from '../assets/PowerUpAssets';
 import { preloadWoodlandAssets, assertWoodlandAssetsReady } from '../assets/WoodlandAssets';
 import { preloadCharacterMeshAssets, assertCharacterMeshAssetsReady } from '../assets/CharacterMeshAssets';
@@ -8,7 +10,7 @@ import { preloadRockBase } from '../arena/RockBaseConfig';
 import { PersistentBaseEditorScene } from './PersistentBaseEditorScene';
 import { PersistentBaseEditorModel } from '../persistentBase/PersistentBaseEditorModel';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
-import { getStoredCoopDefenseProgress, getStoredPersistentBaseUnlocked, getStoredPersistentBaseRewardState, getStoredPersistentBaseRewardUnlocks, getStoredPersonalBaseContribution, setStoredPersonalBaseContribution, setStoredPersistentBaseRewardState } from '../utils/localPreferences';
+import { getStoredCoopDefenseProgress, getStoredPersistentBaseUnlocked, getStoredPersistentBaseRewardState, getStoredPersistentBaseRewardUnlocks, getStoredPersonalBaseContribution, getStoredPersonalPersistentBaseAreaStage, setStoredPersonalBaseContribution, setStoredPersistentBaseRewardState } from '../utils/localPreferences';
 import { getDeferredAssets, preloadDeferredImages } from '../assets/DeferredAssets';
 import { SHOOTING_RANGE_CONTROLS } from '../shootingRange/ShootingRangeLayout';
 import { getPipelineAssetForTexture } from '../config/pipelineAssets';
@@ -90,6 +92,7 @@ import {
 import { LeftSidePanel }         from '../ui/LeftSidePanel';
 import { RightSidePanel }        from '../ui/RightSidePanel';
 import { CenterHUD }             from '../ui/CenterHUD';
+import { DawnHUD } from '../ui/DawnHUD';
 import { LobbyOverlay }          from './LobbyOverlay';
 import { BootScreen, BOOT_ERROR_EVENT } from '../ui/BootScreen';
 import { BootPreparation, onBootSceneTeardown } from '../ui/BootPreparation';
@@ -143,8 +146,10 @@ import {
 import type { ConstructionId, GameMode, GamePhase, LoadoutCommitSnapshot, LobbyLoadoutPreviewState, PlayerProfile, RoomQualitySnapshot } from '../types';
 import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { COOP_DEFENSE_MODE, isCoopDefenseMode, isTeamGameMode } from '../gameModes';
-import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, WEAPON_BALANCE_LAB_MAP_ID } from '../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, getCoopMissionTimeLimitSec, isWeaponBalanceLabMapId, WEAPON_BALANCE_LAB_MAP_ID, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { resolveActiveGameMode, toMapId } from '../world/arenaDescriptorAdapter';
+import { isDawnWorld, resolveCoopDefenseMapConfig } from '../world/WorldDefinitionResolution';
+import type { ActivityDescriptor } from '../world/ActivityDescriptor';
 import type { WorldDescriptor } from '../world/WorldDescriptor';
 import type { WorldPresentationRequirement } from '../world/WorldPresentation';
 import { isLobbyWorldDefinitionId } from '../config/authoring/lobbyWorld';
@@ -200,7 +205,7 @@ import {
  */
 type ArenaFrameSignals = Readonly<{
   configuredGameMode: GameMode;
-  configuredCoopDefenseMapId: string | null;
+  configuredCoopDefenseMapConfig: CoopDefenseMapConfig | null;
   enteredLobbyFromArena: boolean;
   returningFromWeaponBalanceLab: boolean;
   inGame: boolean;
@@ -270,6 +275,7 @@ export class ArenaScene extends Phaser.Scene {
   private enemyHoverNameLabel: EnemyHoverNameLabel | null = null;
   private removeReconnectStatusListener: (() => void) | null = null;
   private coopMissionPresentation!: CoopMissionPresentationInfrastructure;
+  private dawnHUD: DawnHUD | null = null;
   private captureTheBeerPresentation!: CaptureTheBeerPresentationBinding;
   private aimPresentation: ArenaAimPresentationController | null = null;
   private combatPresentation: ArenaCombatPresentationController | null = null;
@@ -400,7 +406,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadPersistentBaseGravelAssets(this.load);
     preloadRockMossAssets(this.load);
     preloadRockVegetationMask(this.load);
-    preloadTurretVisualAssets(this.load);
+    preloadTurretVisualAssets(this.load, DAWN_PIPELINE_ASSETS);
     preloadCanopyAssets(this.load);
     preloadTrainMaterialAssets(this.load);
     preloadPowerUpAssets(this);
@@ -652,7 +658,7 @@ export class ArenaScene extends Phaser.Scene {
       });
     }
     registerBadgerAnimations(this.anims);
-    registerTurretAnimations(this.anims);
+    registerTurretAnimations(this.anims, DAWN_PIPELINE_ASSETS);
 
     yield 'cameras-and-diagnostics';
     if (__PERFORMANCE_LAB__ && this.diagnostics) startPerformanceCapture(this.diagnostics);
@@ -750,6 +756,9 @@ export class ArenaScene extends Phaser.Scene {
     const rightPanel = new RightSidePanel(this);
     rightPanel.build();
     this.coopMissionPresentation = new CoopMissionPresentationInfrastructure(this);
+    this.dawnHUD = new DawnHUD(this);
+    this.coopMissionPresentation.bindDawnHud(this.dawnHUD);
+    onBootSceneTeardown(this.events, () => { this.dawnHUD?.destroy(); this.dawnHUD = null; });
     const centerHUD  = new CenterHUD(this);
     centerHUD.build();
     this.coopMissionPresentation.bindCenterHud(centerHUD);
@@ -851,7 +860,7 @@ export class ArenaScene extends Phaser.Scene {
         const stored = this.meta!.getStoredProgress();
         return {
           totalXp: stored.totalXp,
-          bossPoints: stored.completedBossMapIds.length,
+          bossPoints: resolveEarnedCoopDefenseBossPoints(stored),
           highestUnlockedMapId: stored.highestUnlockedMapId,
           unlockedClassIds: [...stored.unlockedClassIds],
           itemsUnlocked: stored.itemsUnlocked,
@@ -1541,7 +1550,7 @@ export class ArenaScene extends Phaser.Scene {
     const frame = this.resolveArenaFrameSignals(phase, deferArenaExit);
     const {
       configuredGameMode,
-      configuredCoopDefenseMapId,
+      configuredCoopDefenseMapConfig,
       enteredLobbyFromArena,
       returningFromWeaponBalanceLab,
       inGame,
@@ -1624,7 +1633,7 @@ export class ArenaScene extends Phaser.Scene {
       delta,
       phase,
       configuredGameMode,
-      configuredCoopDefenseMapId,
+      configuredCoopDefenseMapConfig,
       gameplayActive,
       countdownActive,
       terminated,
@@ -1739,6 +1748,7 @@ export class ArenaScene extends Phaser.Scene {
       delta,
       [
         ...this.ctx.centerHUD.getReservedHudRects(),
+        ...(this.dawnHUD?.getReservedHudRects() ?? []),
         ...this.coopMissionPresentation.getReservedHudRects(),
       ],
     );
@@ -1778,9 +1788,9 @@ export class ArenaScene extends Phaser.Scene {
         ? configuredGameMode
         : this.resolveConfiguredGameMode(phase === 'ARENA' ? 'ARENA' : 'LOBBY');
       const diagnosticMapId = diagnosticsFrame
-        ? configuredCoopDefenseMapId
+        ? configuredCoopDefenseMapConfig?.mapId ?? null
         : isCoopDefenseMode(diagnosticMode)
-          ? this.resolveConfiguredCoopDefenseMapId(phase)
+          ? this.resolveConfiguredCoopDefenseMapConfig(phase)?.mapId ?? null
           : null;
       const diagnosticsInput: ArenaDiagnosticsFrameInput = {
         phase: runtimePhase,
@@ -1821,8 +1831,8 @@ export class ArenaScene extends Phaser.Scene {
   ): ArenaFrameSignals {
     const configuredPhase = deferArenaExit ? 'ARENA' : phase;
     const configuredGameMode = this.resolveConfiguredGameMode(configuredPhase);
-    const configuredCoopDefenseMapId = isCoopDefenseMode(configuredGameMode)
-      ? this.resolveConfiguredCoopDefenseMapId(configuredPhase)
+    const configuredCoopDefenseMapConfig = isCoopDefenseMode(configuredGameMode)
+      ? this.resolveConfiguredCoopDefenseMapConfig(configuredPhase)
       : null;
     const enteredLobbyFromArena = !deferArenaExit
       && this.lastObservedGamePhase === 'ARENA'
@@ -1838,8 +1848,8 @@ export class ArenaScene extends Phaser.Scene {
     const terminated = this.arenaRuntime.isMatchTerminated();
     const gameplayActive = inGame && bridge.isArenaStarted() && !terminated;
     const weaponBalanceLabArena = inGame
-      && configuredCoopDefenseMapId !== null
-      && isWeaponBalanceLabMapId(configuredCoopDefenseMapId);
+      && configuredCoopDefenseMapConfig !== null
+      && isWeaponBalanceLabMapId(configuredCoopDefenseMapConfig.mapId);
     if (phase !== 'LOBBY' || terminated || !isCoopDefenseMode(configuredGameMode)) {
       this.closeBaseEditor(false); this.meta?.cancelAfterRoundFlow();
     }
@@ -1895,7 +1905,7 @@ export class ArenaScene extends Phaser.Scene {
 
     return {
       configuredGameMode,
-      configuredCoopDefenseMapId,
+      configuredCoopDefenseMapConfig,
       enteredLobbyFromArena,
       returningFromWeaponBalanceLab,
       inGame,
@@ -2008,21 +2018,32 @@ export class ArenaScene extends Phaser.Scene {
     delta: number,
     phase: GamePhase,
     configuredGameMode: GameMode,
-    configuredCoopDefenseMapId: string | null,
+    configuredCoopDefenseMapConfig: CoopDefenseMapConfig | null,
     gameplayActive: boolean,
     countdownActive: boolean,
     terminated: boolean,
     diagnosticsFrame: ArenaDiagnosticsFrame | null,
   ): void {
+    this.coopMissionPresentation?.syncDawnSites(
+      this.arenaRuntime?.getWorldDescriptor() ?? null,
+      this.arenaRuntime?.getActivityDescriptor() ?? null,
+      bridge.getCoopDefenseSecondaryObjectivePresentationState(),
+    );
+    this.dawnHUD?.sync({
+      active: gameplayActive && !terminated,
+      world: bridge.getWorldDescriptor(), activity: bridge.getActivityDescriptor(),
+      startTime: bridge.getArenaStartTime(), now: bridge.getSynchronizedNow(),
+      sharedScrap: bridge.getDawnRoundScrap(),
+      objectives: bridge.getCoopDefenseSecondaryObjectivePresentationState(),
+      clockMinutes: this.renderers?.lighting.getTimeOfDayMinutes() ?? DEFAULT_TIME_OF_DAY_MINUTES,
+    });
     if ((gameplayActive || countdownActive) && !terminated) {
       diagnosticsFrame?.begin('arenaHud');
       const secs = bridge.computeSecondsLeft(this.arenaRuntime.getMissionNow());
-      const activeMapConfig = configuredCoopDefenseMapId !== null
-        ? getCoopDefenseMapConfig(configuredCoopDefenseMapId)
-        : null;
+      const activeMapConfig = configuredCoopDefenseMapConfig;
       this.ctx.centerHUD.updateTimer(
         secs,
-        activeMapConfig === null || activeMapConfig.objective === 'survive',
+        activeMapConfig === null || getCoopMissionTimeLimitSec(activeMapConfig) !== null,
       );
 
       // Train widget: Das Zug-Event selbst entscheidet, ob etwas anzuzeigen ist – Maps mit
@@ -2208,7 +2229,11 @@ export class ArenaScene extends Phaser.Scene {
   private openBaseEditor(newRewardIds: readonly PersistentBaseRewardId[]): void {
     if (this.baseEditor || !bridge.isHost() || bridge.getGamePhase() !== 'LOBBY') return;
     const baseline = getStoredCoopDefenseProgress();
-    const model = new PersistentBaseEditorModel({ ...baseline, personalBaseContribution: getStoredPersonalBaseContribution() });
+    const personalAreaStage = getStoredPersonalPersistentBaseAreaStage();
+    const model = new PersistentBaseEditorModel(
+      { ...baseline, personalBaseContribution: getStoredPersonalBaseContribution() },
+      personalAreaStage,
+    );
     const revision = bridge.getCurrentWorldRevision();
     if (revision === null) {
       if (this.afterRoundTransition?.active) this.meta?.finishAfterRoundStep('base');
@@ -2231,9 +2256,9 @@ export class ArenaScene extends Phaser.Scene {
         if (current.persistentBaseRewardState.revision !== baseline.persistentBaseRewardState.revision) return false;
         const changedConstructions = JSON.stringify(model.constructions) !== JSON.stringify(model.baseline.personalBaseContribution.constructions);
         if (changedConstructions) {
-          bridge.offerPersonalBaseAreaStage(baseline.persistentBaseAreaStage);
+          bridge.offerPersonalBaseAreaStage(personalAreaStage);
           const result = await bridge.sendPersistentBaseLayoutEdit({ worldRevision: revision,
-            expectedRevision: model.baseline.personalBaseContribution.revision, areaStage: baseline.persistentBaseAreaStage,
+            expectedRevision: model.baseline.personalBaseContribution.revision, areaStage: personalAreaStage,
             constructions: model.constructions });
           if (!result.ok) return false;
           setStoredPersonalBaseContribution(result.contribution);
@@ -2529,7 +2554,8 @@ export class ArenaScene extends Phaser.Scene {
       ultimate: (bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? DEFAULT_LOADOUT.ultimate.id) in ULTIMATE_CONFIGS
         ? ULTIMATE_CONFIGS[(bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? DEFAULT_LOADOUT.ultimate.id) as keyof typeof ULTIMATE_CONFIGS]
         : DEFAULT_LOADOUT.ultimate,
-    }, bridge.getGameMode(), build.coopDefenseProfile, build.coopDefenseClassId);
+    }, bridge.getGameMode(), build.coopDefenseProfile, build.coopDefenseClassId,
+    this.meta!.getStoredProgress().dawn.unlockedBranchIds);
     const equippedItems = build.equippedItems ?? [];
     return equippedItems.length > 0 ? { ...committed, equippedItems } : committed;
   }
@@ -2785,8 +2811,8 @@ export class ArenaScene extends Phaser.Scene {
         && (!this.arenaExitFadeComplete || !this.arenaExitResultsRendered)
       );
     const worldMode = inArena ? this.resolveConfiguredGameMode('ARENA') : bridge.getGameMode();
-    const mapId = inArena && isCoopDefenseMode(worldMode)
-      ? this.resolveConfiguredCoopDefenseMapId('ARENA')
+    const mapConfig = inArena && isCoopDefenseMode(worldMode)
+      ? this.resolveConfiguredCoopDefenseMapConfig('ARENA')
       : null;
     const localId = bridge.getLocalPlayerId();
     const localPlayer = this.ctx?.playerManager.getPlayer(localId);
@@ -2800,8 +2826,8 @@ export class ArenaScene extends Phaser.Scene {
 
     return {
       skyState: resolveSkyState(minutes),
-      isVoidMap: mapId !== null && (mapId === '15' || getCoopDefenseMapConfig(mapId).trackMode === 'void-fire'),
-      bossVisualProfile: inArena && mapId === '15' ? 'void-hunter' : undefined,
+      isVoidMap: mapConfig !== null && (mapConfig.mapId === '15' || mapConfig.trackMode === 'void-fire'),
+      bossVisualProfile: inArena && mapConfig?.mapId === '15' ? 'void-hunter' : undefined,
       bossPhase: inArena ? (this.arenaRuntime?.getMaxBossPhase() ?? 0) : 0,
       localHpFraction: localWounded ? (localPlayer?.getHpFraction() ?? 1) : 1,
       gamePhase: inArena ? 'ARENA' : 'LOBBY',
@@ -2818,14 +2844,14 @@ export class ArenaScene extends Phaser.Scene {
     if (!isCoopDefenseMode(this.resolveConfiguredGameMode(phase))) return undefined;
     const metrics = this.arenaRuntime?.getWorldMetrics();
     if (metrics) return metrics.gridCols;
-    return getCoopDefenseMapConfig(this.resolveConfiguredCoopDefenseMapId(phase)).arenaWidthCells;
+    return this.resolveConfiguredCoopDefenseMapConfig(phase)?.arenaWidthCells;
   }
 
   private resolveCoopDefenseArenaHeightCells(phase = bridge.getGamePhase()): number | undefined {
     if (!isCoopDefenseMode(this.resolveConfiguredGameMode(phase))) return undefined;
     const metrics = this.arenaRuntime?.getWorldMetrics();
     if (metrics) return metrics.gridRows;
-    return getCoopDefenseMapConfig(this.resolveConfiguredCoopDefenseMapId(phase)).arenaHeightCells;
+    return this.resolveConfiguredCoopDefenseMapConfig(phase)?.arenaHeightCells;
   }
 
   /** Active Activities use their immutable descriptor; the Lobby value is pre-World only. */
@@ -2853,15 +2879,25 @@ export class ArenaScene extends Phaser.Scene {
     });
   }
 
-  /** Active Worlds use their definition id; the Lobby map is only a creation input. */
-  private resolveConfiguredCoopDefenseMapId(phase = bridge.getGamePhase()): string {
+  /**
+   * Active Worlds resolve their own Coop config; the Lobby map is only a creation input.
+   *
+   * A Dawn World resolves only together with its Activity. Once that Activity is gone (exit fade
+   * after the round), presentation treats the World like one without a Coop map.
+   */
+  private resolveConfiguredCoopDefenseMapConfig(phase = bridge.getGamePhase()): CoopDefenseMapConfig | null {
     const descriptor = this.resolveRoundWorldDescriptor(phase);
-    if (descriptor) {
-      const mapId = toMapId(descriptor.definitionId);
-      if (mapId === null) throw new Error('[ArenaScene] Active World has no Coop-Defense map');
-      return mapId;
-    }
-    return bridge.getCoopDefenseMapId();
+    if (!descriptor) return getCoopDefenseMapConfig(bridge.getCoopDefenseMapId());
+    const activity = this.resolveRoundActivityDescriptor(descriptor);
+    if (isDawnWorld(descriptor) && activity === null) return null;
+    const mapConfig = resolveCoopDefenseMapConfig(descriptor, activity);
+    if (mapConfig === null) throw new Error('[ArenaScene] Active World has no Coop-Defense map');
+    return mapConfig;
+  }
+
+  private resolveRoundActivityDescriptor(world: WorldDescriptor): ActivityDescriptor | null {
+    const activity = this.arenaRuntime?.getActivityDescriptor() ?? bridge.getActivityDescriptor();
+    return activity?.worldRevision === world.worldRevision ? activity : null;
   }
 
   private getPointerWorldPoint(): Phaser.Math.Vector2 {
@@ -3026,6 +3062,8 @@ export class ArenaScene extends Phaser.Scene {
     if (!isCoopDefenseMode(gameMode)) return;
     const roundState = bridge.getRoundState();
     if (!roundState || roundState.coopDefenseHumanPlayerCount !== 1) return;
+    const mapConfig = this.resolveConfiguredCoopDefenseMapConfig('ARENA');
+    if (!mapConfig) return;
     const localPlayerId = bridge.getLocalPlayerId();
     const localPlayerState = this.ctx.getWorldCombatCore()!;
     const baseSummary = this.arenaRuntime?.getCoopDefenseBaseHpSummary() ?? {
@@ -3042,7 +3080,7 @@ export class ArenaScene extends Phaser.Scene {
       ...(roundState.roundRevision === undefined ? {} : {
         roundIdentity: { roomCode: bridge.getRoomCode(), roundRevision: roundState.roundRevision },
       }),
-      mapConfig: getCoopDefenseMapConfig(this.resolveConfiguredCoopDefenseMapId('ARENA')),
+      mapConfig,
       outcome,
       sharedXp: bridge.getCoopDefenseRoundXp(),
       frags: bridge.getPlayerFrags(localPlayerId),

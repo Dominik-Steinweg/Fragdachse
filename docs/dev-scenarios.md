@@ -8,6 +8,87 @@ Der Einstieg und die Bedienoberfläche werden vom normalen Produktionsbuild nich
 
 ## Bedienung
 
+### Dawn: Threat x durchspielen und Phasen-Review
+
+Zum Durchspielen einen frischen Dawn-Aufbau mit aktiver Mission und aktiven Encountern starten:
+Das Beispiel setzt den Threat; für den Endgame-Vergleich das gewünschte Loadout und die Basis
+über `upgrades`, `items` und `constructions` ergänzen. Der isolierte Speicher kopiert keinen echten Fortschritt.
+
+```js
+const dev = window.devScenario;
+dev.run({ action: 'start', scenario: {
+  version: 1, classId: 'dachs_nukem', dawn: { threat: 5 }, seed: 12345,
+  suppressWaves: false, freezeMission: false, hideTutorial: true,
+  refillHp: false, refillAdrenaline: false
+} });
+await dev.whenReady();
+// Tagsüber Sites testen und die Basis vorbereiten, dann bis zur Nacht vorspulen:
+await dev.run({ action: 'dawnSkip', phase: 'night' });
+// Die Nacht normal spielen; optional später bis zum Morgengrauen vorspulen:
+await dev.run({ action: 'dawnSkip', phase: 'dawn' });
+```
+
+`dawnSkip` spielt die laufende Simulation in beschleunigten, normalen Frames bis zum Ziel weiter
+(bis zu 30 Simulationsframes pro Browserframe). Director, Nebenziele, Site-Aktivierung mit eigener
+Uhr, Spawns, Kampf und Missionszeit laufen gemeinsam weiter. Es vergibt keine automatischen Siege
+und entfernt keine Gegner: Auch während des Vorspulens kann die Basis fallen. Bei Rundenende wird
+abgebrochen. `status().dawnSkipping` zeigt einen laufenden Sprung; `await` wartet auf das Ergebnis.
+Danach läuft das Spiel mit der zuvor gewählten Geschwindigkeit weiter. `pause`, `stop` oder ein
+neues Szenario brechen das Vorspulen ab. `offsetMs` funktioniert wie unten bei `dawnPhase`.
+Nur Vorwärtssprünge sind erlaubt, nur im isolierten Dev-Host und nach abgeschlossenem Aufbau.
+Die Aktion aktiviert Mission und Encounter und löst eine globale Pause; nach einem `dawnPhase`-Review
+ist zuerst ein neuer Aufbau nötig. Für Gameplay-Threat-Vergleiche dieselbe Ausrüstung und Basis verwenden.
+
+Optional erzwingt `dawn: { threat: 3, nightModifier: 'blood-moon' }` einen Nacht-Modifikator.
+Erlaubt sind `blood-moon`, `fog`, `bombers`, `fire` und `none` (explizit ohne Modifikator).
+Ohne Feld würfelt der Host anhand von Threat und Seed. Der Override gilt auch bei Threat 1–2,
+ändert nur den nächsten komponierten Plan und wird bei einem neuen Rezept ohne Feld entfernt.
+Ab Dämmerung zeigt die Phasenkarte den Namen und, falls geladen, `night-<id>`; beim Nachtbeginn
+folgt die Ansage. `dawnPhase` erlaubt auch den Vergleich von Tag, Nacht und Rückkehr zum Grundnebel.
+Die abschaltbare Randfärbung wird in `src/effects/dawn/NightModifierAtmosphere.ts` über
+`NIGHT_MODIFIER_ATMOSPHERE.enabled` gesteuert; Farben, Stärke und Pulszeiten liegen dort gemeinsam.
+Brandnacht nutzt Pyro-/Brandstifter-Angriffe samt bestehendem Bodenfeuer, Bombernacht endliche Luftangriffe.
+
+Ein Dawn-Rezept verwendet `dawn: { threat: 1…10 }` **statt** `mapId`; Threat muss ganzzahlig sein.
+Der isolierte Dev-Speicher erhält den Abschluss der letzten Kampagnenmap und
+`dawn.expansionLevel = threat - 1`. Danach wählt der Host das Dawn-Programm und startet über
+den normalen Seed-/Ready-/Ladeweg. Der echte Spielstand bleibt unberührt. Ein späterer Start
+mit `mapId` wählt wieder das Kampagnenprogramm. Dawn verwendet seine automatische Tageszeit;
+das Rezeptfeld und die Live-Option `timeOfDay` werden dabei nicht als Licht-Override angewendet.
+
+```js
+const dev = window.devScenario;
+dev.run({ action: 'start', scenario: {
+  version: 1, classId: 'dachs_nukem', dawn: { threat: 3 }, seed: 12345,
+  suppressWaves: true, freezeMission: true, hideTutorial: true, hideAim: true
+} });
+await dev.whenReady();
+dev.run({ action: 'pause' });
+dev.run({ action: 'dawnPhase', phase: 'day' });
+// Nach Bedarf separat: await dev.capture();
+dev.run({ action: 'dawnPhase', phase: 'dusk' });
+dev.run({ action: 'dawnPhase', phase: 'night', offsetMs: 1000 });
+dev.run({ action: 'dawnPhase', phase: 'dawn' });
+```
+
+`dawnPhase` setzt den gemeinsamen Host-Missionszeitanker auf den Phasenbeginn des **aktiven**
+Dawn-Zeitplans plus `offsetMs` (Standard 0). Der Offset muss eine nichtnegative ganze
+Millisekundenzahl sein und innerhalb der gewählten Phase liegen. Rückwärtssprünge sind erlaubt.
+Der Aufbau muss fertig sein; ausstehende `step`-/`settle`-Frames zuerst abwarten.
+`status().mission.elapsedMs` und die letzte Aktionsantwort melden den Zielzeitpunkt.
+Tageszeit und HUD verwenden dieselbe eingefrorene Missionszeit; bei globaler Pause aktualisiert
+der nächste Schritt oder die nächste Aufnahme die Darstellung. Kampf- und Effektzeit werden
+durch den Sprung nicht vor- oder zurückgespult.
+
+Jeder Sprung aktiviert dauerhaft `freezeMission` und `suppressWaves` für diesen Aufbau
+(`status().dawnPhaseReview: true`). Encounter, Nebenziel-Abläufe, Missionsabschluss und
+Respawn-Verbrauch bleiben angehalten: Übersprungene Wellen werden weder nachgespawnt noch als
+besiegt verbucht, Ziele weder automatisch abgeschlossen noch zurückgesetzt. Vorhandene Gegner
+und Bauten bleiben erhalten; Kampf läuft bei `resume` weiter. Das ist ein Phasen-/Licht-Review,
+kein Replay einer bis dahin gespielten Mission. Ausschalten der beiden Schutzoptionen wird
+nach einem Sprung abgelehnt. Für Gameplay das Rezept mit beiden Optionen `false` neu starten;
+für unabhängige Kontaktbogenbilder ebenfalls jeweils frisch starten und dann springen.
+
 ### Mörser-Dachs: Gate 1
 
 Map `0` (`00-test`) enthält einen Mörser-Encounter. Für isolierte Versuche im bestehenden
@@ -356,6 +437,7 @@ Aufnahme ab. Nach Scene-Teardown wird die globale API entfernt und wartende Aufr
 | Aktion | Zusätzliche Felder |
 |---|---|
 | `start` | `scenario`: vollständiges oder um Standardwerte ergänzbares Rezept |
+| `dawnPhase` | `phase`: `day`, `dusk`, `night`, `dawn`; optional `offsetMs` innerhalb der Phase; friert Missionsabläufe und Encounter bis zum Neustart ein |
 | `status`, `findFree`, `stop`, `utility`, `clearEnemies`, `pause`, `resume` | keine |
 | `target`, `teleport` | `gridX`, `gridY`; Teleport ohne Koordinaten verwendet das Ziel |
 | `move` | `dx`, `dy` (−1…1), `durationMs` (0…10000) |

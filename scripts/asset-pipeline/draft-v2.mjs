@@ -191,7 +191,7 @@ export async function draft(argv, root = repoRoot) {
   const started = Date.now();
   const { values: args, positionals } = parseArgs({ args: argv, allowPositionals: true, options: {
     clips: { type: 'string' }, label: { type: 'string' }, full: { type: 'boolean' }, blender: { type: 'string' },
-    samples: { type: 'string', default: '8' }, device: { type: 'string', default: 'OPTIX' },
+    samples: { type: 'string', default: '8' }, device: { type: 'string', default: 'OPTIX' }, output: { type: 'string' },
     'mesh-triangles': { type: 'string', default: '512' }, 'no-denoise': { type: 'boolean' }, help: { type: 'boolean' },
     'border-ratio': { type: 'string', default: '0.02' }, 'continuity-tolerance': { type: 'string', default: '0.06' },
   } });
@@ -203,7 +203,7 @@ export async function draft(argv, root = repoRoot) {
     || !['OPTIX', 'CUDA', 'CPU'].includes(settings.device) || !Number.isFinite(settings.borderRatio) || settings.borderRatio < 0 || settings.borderRatio > .25
     || !Number.isFinite(settings.continuityTolerance) || settings.continuityTolerance < 0 || settings.continuityTolerance > 1) throw Error('Invalid render settings');
   const label = identifier(args.label ?? `draft-${Date.now()}-${randomUUID().slice(0, 8)}`);
-  const base = path.join(root, 'art/poc/pipeline-v2/drafts'); await mkdir(base, { recursive: true });
+  const base = args.output ? path.resolve(root, args.output) : path.join(root, 'art/poc/pipeline-v2/drafts'); await mkdir(base, { recursive: true });
   // Serialize publication across assets and prevent competing draft GPU jobs.
   const lock = await open(path.join(base, '.lock'), 'wx');
   try {
@@ -211,7 +211,8 @@ export async function draft(argv, root = repoRoot) {
     const jobs = [], results = [];
     const selected = args.clips?.split(',').map(identifier);
     if (selected?.some(name => !positionals.some(id => catalog.assets.find(a => a.id === id)?.clips.some(c => c.name === name)))) throw Error('Unknown clip selection');
-    for (const id of [...new Set(positionals.map(identifier))]) {
+    for (const id of [...new Set(positionals)]) {
+      if (!/^[a-z][a-z0-9_-]*$/.test(id)) throw Error(`Invalid asset identifier: ${id}`);
       const spec = catalog.assets.find(a => a.id === id);
       if (!spec?.recipe || spec.production === 'planned') throw Error(`No recipe: ${id}`);
       const hashes = await fingerprints(root, spec, settings);

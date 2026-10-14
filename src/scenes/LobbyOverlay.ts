@@ -1,3 +1,4 @@
+import { acknowledgeStoredDawnNotice, getStoredDawnProgress } from '../utils/localPreferences';
 import { BUTTON_CURSOR } from '../ui/gameCursor';
 import { getDeferredAssets } from '../assets/DeferredAssets';
 import { DeferredAssetIndicator } from '../ui/DeferredAssetIndicator';
@@ -604,6 +605,20 @@ export class LobbyOverlay {
     else if (!wasVisible) this.playEntrance();
     this.updateReadyGlow();
     this.progress?.setVisible(this.visible);
+    this.showDawnNotice();
+  }
+
+  private showDawnNotice(): void {
+    if (!this.bootPreparing && this.playerContextMenu && !this.playerContextMenu.isOpen()
+      && getStoredDawnProgress().notices.necromancyMovedToMerchant) {
+      this.playerContextMenu.open({
+        x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2,
+        title: t('ui.lobby.necromancyMovedTitle'), titleColor: COLORS.GOLD_1,
+        description: t('ui.lobby.necromancyMovedMessage'),
+        entries: [{ label: t('ui.common.close'), color: COLORS.GREY_1, onPick: () => undefined }],
+        onClose: () => acknowledgeStoredDawnNotice('necromancyMovedToMerchant'),
+      });
+    }
   }
 
   /**
@@ -708,6 +723,7 @@ export class LobbyOverlay {
   completeBootReveal(): void {
     this.bootPreparing = false;
     if (this.visible) getDeferredAssets(this.scene).start();
+    if (this.visible) this.showDawnNotice();
   }
 
   /**

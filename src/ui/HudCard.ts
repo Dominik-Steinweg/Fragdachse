@@ -48,6 +48,8 @@ export interface HudCardConfig {
   readonly titleSize?: number;
   readonly valueSize?: number;
   readonly kickerSize?: number;
+  readonly kickerIcon?: { readonly key: string; readonly size: number };
+  readonly valueIcon?: { readonly key: string; readonly size: number };
   /** Deckkraft der Glasfläche; die Welt bleibt dahinter lesbar. */
   readonly backingAlpha?: number;
   /** Titel mittig statt links (Ankündigungen). */
@@ -140,6 +142,8 @@ export class HudCard {
   readonly title: Phaser.GameObjects.Text;
   readonly value: Phaser.GameObjects.Text;
   readonly fill: Phaser.GameObjects.Image;
+  private readonly kickerIcon: Phaser.GameObjects.Image | null;
+  private readonly valueIcon: Phaser.GameObjects.Image | null;
 
   private readonly backing: Phaser.GameObjects.NineSlice;
   private readonly frame: Phaser.GameObjects.NineSlice;
@@ -188,11 +192,21 @@ export class HudCard {
     this.value = scene.add.text(0, 0, '', hudTextStyle(config.valueSize ?? 14, HUD_TEXT_PRIMARY, true))
       .setOrigin(1, 0.5);
     this.root.add([this.head, this.decor, this.kicker, this.title, this.value]);
+    const icon = (spec: HudCardConfig['valueIcon']): Phaser.GameObjects.Image | null => {
+      if (!spec || !scene.textures.exists(spec.key)) return null;
+      const image = scene.add.image(0, 0, spec.key).setDisplaySize(spec.size, spec.size);
+      this.root.add(image);
+      return image;
+    };
+    this.kickerIcon = icon(config.kickerIcon);
+    this.valueIcon = icon(config.valueIcon);
     this.layout();
   }
 
   get tone(): HudTone { return this.toneId; }
   get width(): number { return this.widthValue; }
+  get valueIconWidth(): number { return this.valueIcon ? this.valueIcon.displayWidth + 4 : 0; }
+  get kickerIconWidth(): number { return this.kickerIcon ? this.kickerIcon.displayWidth + 4 : 0; }
 
   /** Kartenoberkante relativ zur Mitte. */
   get top(): number { return -this.height / 2; }
@@ -270,7 +284,7 @@ export class HudCard {
   setTitle(text: string, color: number = HUD_TEXT_PRIMARY): this {
     const maxWidth = this.centered
       ? this.widthValue - 150 * this.scale
-      : this.contentRight - this.contentLeft - (this.value.text ? this.value.width + 12 : 0);
+      : this.contentRight - this.contentLeft - (this.value.text ? this.value.width + this.valueIconWidth + 12 : 0);
     fitHudText(this.title, text, Math.max(20, maxWidth));
     this.title.setColor(toCssColor(color));
     return this;
@@ -279,6 +293,7 @@ export class HudCard {
   setValue(text: string, color: number = HUD_TEXT_PRIMARY): this {
     if (this.value.text !== text) this.value.setText(text);
     this.value.setColor(toCssColor(color)).setVisible(text.length > 0);
+    this.layoutValueIcon();
     return this;
   }
 
@@ -312,6 +327,8 @@ export class HudCard {
     for (const object of [this.fill, this.head, this.decor, this.kicker, this.title, this.value]) {
       object.setAlpha(alpha);
     }
+    this.kickerIcon?.setAlpha(alpha);
+    this.valueIcon?.setAlpha(alpha);
     return this;
   }
 
@@ -358,6 +375,7 @@ export class HudCard {
     const y = this.interiorCenterY;
     this.title.setPosition(this.centered ? 0 : this.contentLeft, y);
     this.value.setPosition(this.contentRight, y);
+    this.layoutValueIcon();
     this.syncFill();
     this.drawDecor();
   }
@@ -369,7 +387,7 @@ export class HudCard {
     g.clear();
     const railY = this.railY;
     // Schilder sind nur wenig höher als die Schiene: sie liegen auf ihr, statt sie zu verdecken.
-    const plateH = this.kickerSize + 5;
+    const plateH = Math.max(this.kickerSize + 5, (this.kickerIcon?.displayHeight ?? 0) + 2);
     const plate = (x: number, w: number): void => {
       g.fillStyle(0x0a0e0d, 0.92);
       g.fillRoundedRect(x, railY - plateH / 2, w, plateH, plateH / 2);
@@ -378,13 +396,15 @@ export class HudCard {
     };
 
     if (this.kickerText) {
-      const plateW = Math.round(this.kicker.width) + 12;
+      const plateW = Math.ceil(this.kicker.width) + this.kickerIconWidth + 12;
       // Die Schriftkante des Schilds fluchtet mit Titel und Füllband.
       const plateX = this.centered ? -plateW / 2 : -this.widthValue / 2 + SRC.contentInset * s - 6;
       plate(plateX, plateW);
-      this.kicker.setVisible(true).setPosition(plateX + plateW / 2, railY);
+      this.kicker.setVisible(true).setPosition(plateX + (plateW + this.kickerIconWidth) / 2, railY);
+      this.kickerIcon?.setVisible(true).setPosition(plateX + 6 + this.kickerIcon.displayWidth / 2, railY);
     } else {
       this.kicker.setVisible(false);
+      this.kickerIcon?.setVisible(false);
     }
 
     if (this.pips) {
@@ -416,5 +436,10 @@ export class HudCard {
         new Phaser.Math.Vector2(gx, gy + r), new Phaser.Math.Vector2(gx - r, gy),
       ], true);
     }
+  }
+
+  private layoutValueIcon(): void {
+    this.valueIcon?.setVisible(this.value.text.length > 0)
+      .setPosition(this.value.x - this.value.width - 4 - this.valueIcon.displayWidth / 2, this.value.y);
   }
 }

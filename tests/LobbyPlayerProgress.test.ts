@@ -5,8 +5,40 @@ vi.mock('phaser', async () => (await import('./fakeArenaRenderScene')).createFak
 
 import { LobbyPlayerProgress } from '../src/ui/LobbyPlayerProgress';
 import { t } from '../src/i18n';
+import { DAWN_UNLOCK_AFTER_MAP_ID } from '../src/dawn/rules/DawnUnlock';
+import { getStoredCoopDefenseProgress, restoreStoredCoopDefenseProgress } from '../src/utils/localPreferences';
+import { getCoopDefenseProgressSnapshot } from '../src/utils/coopDefenseProgression';
 
 describe('lobby base menu access', () => {
+  it('allows browsing the merchant before Dawn unlock and closes it when the lobby locks or hides', () => {
+    const saved = getStoredCoopDefenseProgress();
+    const progress = new LobbyPlayerProgress({} as never, () => {}, () => {});
+    const button = { setVisible: vi.fn(), setEnabled: vi.fn(), setPosition: vi.fn() };
+    const merchant = { hide: vi.fn() };
+    Object.assign(progress, { coopBand: { visible: false, setVisible: vi.fn() },
+      coopProgressLevelText: { setText: vi.fn() }, merchantBtn: button, merchant });
+    try {
+      restoreStoredCoopDefenseProgress({ ...saved, completedMapIds: [] });
+      progress.setVisible(true);
+      merchant.hide.mockClear();
+      progress.setCoopDefenseProgress(getCoopDefenseProgressSnapshot(0));
+      expect(button.setVisible).toHaveBeenLastCalledWith(true);
+      expect(merchant.hide).not.toHaveBeenCalled();
+      restoreStoredCoopDefenseProgress({ ...saved, completedMapIds: [DAWN_UNLOCK_AFTER_MAP_ID] });
+      progress.setCoopDefenseProgress(getCoopDefenseProgressSnapshot(0));
+      expect(button.setVisible).toHaveBeenLastCalledWith(true);
+      merchant.hide.mockClear();
+      progress.setReady(true);
+      expect(button.setEnabled).toHaveBeenLastCalledWith(false);
+      expect(merchant.hide).toHaveBeenCalled();
+      progress.setReady(false);
+      expect(button.setEnabled).toHaveBeenLastCalledWith(true);
+      merchant.hide.mockClear();
+      progress.setVisible(false);
+      expect(merchant.hide).toHaveBeenCalled();
+    } finally { restoreStoredCoopDefenseProgress(saved); }
+  });
+
   it.each([false, true])('locks clients and explains the restriction on hover (unlocked=%s)', unlocked => {
     const progress = new LobbyPlayerProgress({} as never, () => {}, () => {});
     // Rendering ports: keep the actual state projection and pointer handlers under test.

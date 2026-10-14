@@ -553,6 +553,18 @@
       "visiblePixelSha256": "707ac5f6cb856e6c25e528c0368fdb403215c3565b3284e2dfbf2368f5987da2",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/sprites/pipeline-v2/dawn_dealer/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/dawn_dealer/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/dawn_dealer/sheet.png",
+      "width": 640,
+      "height": 320,
+      "sourceBytes": 143087,
+      "downloadBytes": 70764,
+      "sourceSha256": "d254b9fe2b9752bb9579afdc22dd13e474a36a0767daac4c2715529ff79557fb",
+      "sha256": "92d30a0bd029ec2de3f6ba94771464a872567eb1d70f8654e6ce3774f835d2fc",
+      "visiblePixelSha256": "8e115d698164013726222ef758356aa30b8a8bdafd04cf9812015424e4032a44",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/sprites/pipeline-v2/firestarter-badger/mesh/enemy-mesh-firestarter-b1-v3-r1/albedo-128.png": {
       "file": "assets/sprites/pipeline-v2/firestarter-badger/mesh/enemy-mesh-firestarter-b1-v3-r1/albedo-128.webp",
       "source": "assets/sprites/pipeline-v2/firestarter-badger/mesh/enemy-mesh-firestarter-b1-v3-r1/albedo-128.png",
@@ -959,6 +971,18 @@
       "sourceSha256": "10230f4852a6d48487bce77b7f609e8e2f5938d1ced9cab8c100101e3e52d2cc",
       "sha256": "985eeafeb68f21f9bb5a3b6da0e0fad11252a111441bcbd480699cc163b58331",
       "visiblePixelSha256": "3ab206ca105636cea3b90c93039e95e3a5c8cd0bf220297e8294dcae935611d4",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
+    "assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.png",
+      "width": 1568,
+      "height": 392,
+      "sourceBytes": 439704,
+      "downloadBytes": 410302,
+      "sourceSha256": "b3c7ea5413a5dc16096f8c1f5be6aa92cd23c8c2b09bda63e33ff126434c012f",
+      "sha256": "c0ca8544c30f4e6a91b8f4f31d7433c2df183155f346f36846a09a76a377c09d",
+      "visiblePixelSha256": "a2be847dcd5e1380b9043aec07cb1cda053a8868510825b815a0a2e7bc09ce41",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     }
   }

@@ -7,7 +7,8 @@ import { getWalkingSheetForStaticTexture, preloadBadgerAnimationAssets, register
 
 describe('selected figure animations', () => {
   it('samples every enemy claw at its host markers and releases the walk animation', () => {
-    for (const asset of PIPELINE_ASSETS.filter(a => a.category === 'enemy')) {
+    // Enemies without a melee clip (e.g. the fleeing Dawn scavenger) never play a claw.
+    for (const asset of PIPELINE_ASSETS.filter(a => a.category === 'enemy' && a.clips.some(c => c.name === 'claw'))) {
       const clip = asset.clips.find(c => c.name === 'claw')!;
       const attack = { attackId: 'test', weaponId: 'bite', angle: 0, range: 40, arcDegrees: 100,
         startedAt: 1000, strikeAt: 1270, hitAt: 1350, endsAt: 1570 };
@@ -26,7 +27,7 @@ describe('selected figure animations', () => {
   });
   it('loads every figure with gutters and registers authored move and idle frames once', () => {
     const spritesheet = vi.fn();
-    preloadBadgerAnimationAssets({ spritesheet } as unknown as Phaser.Loader.LoaderPlugin);
+    preloadBadgerAnimationAssets({ spritesheet, image: vi.fn() } as unknown as Phaser.Loader.LoaderPlugin);
     const create = vi.fn(), generateFrameNumbers = vi.fn((_key, config) => config.frames);
     const keys = new Set<string>();
     const anims = { exists: (key: string) => keys.has(key), generateFrameNumbers,
@@ -44,9 +45,10 @@ describe('selected figure animations', () => {
         frameWidth: asset.sourceSize, frameHeight: asset.sourceSize,
         margin: asset.layout.margin, spacing: asset.layout.spacing, endFrame: asset.layout.frameCount - 1,
       });
-      expect(generateFrameNumbers).toHaveBeenCalledWith(sheet.textureKey, { frames: asset.clips[0].frames });
+      const move = asset.clips.find(c => c.name === 'move')!;
+      expect(generateFrameNumbers).toHaveBeenCalledWith(sheet.textureKey, { frames: move.frames });
       expect(create).toHaveBeenCalledWith(expect.objectContaining({
-        key: sheet.animationKey, frameRate: asset.clips[0].frameRate, repeat: -1,
+        key: sheet.animationKey, frameRate: move.frameRate, repeat: -1,
       }));
       expect(sheet.frames).not.toContain(asset.idleFrame);
       if (sheet.idle) {

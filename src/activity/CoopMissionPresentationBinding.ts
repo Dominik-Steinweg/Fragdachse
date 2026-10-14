@@ -224,6 +224,7 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
       objective: this.mapConfig.objective,
       elapsedMs,
       surviveDurationSec: this.mapConfig.surviveDurationSec,
+      dynamicTimeOfDay: this.mapConfig.dynamicTimeOfDay,
       encounterCount: this.mapConfig.encounters?.length ?? 0,
       encounter,
       boss: bossEnemyKind ? this.reads.getBossProgress(bossEnemyKind) : null,

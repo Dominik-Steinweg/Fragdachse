@@ -1,5 +1,5 @@
 import type { ActivityKind } from '../config/authoring/ActivityDefinition';
-import type { ActivityDescriptor } from './ActivityDescriptor';
+import { isSameActivityInstance as isSameActivity, type ActivityDescriptor } from './ActivityDescriptor';
 
 /**
  * Lebenszyklus der Activity innerhalb einer World.
@@ -148,11 +148,4 @@ export class ActivityLifecycle {
 function normalizeStartAnchor(value: number | null): number | null {
   if (value === null || !Number.isFinite(value) || value <= 0) return null;
   return Math.floor(value);
-}
-
-function isSameActivity(left: ActivityDescriptor, right: ActivityDescriptor): boolean {
-  return left.activityRevision === right.activityRevision
-    && left.worldRevision === right.worldRevision
-    && left.kind === right.kind
-    && left.definitionId === right.definitionId;
 }

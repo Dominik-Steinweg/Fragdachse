@@ -1,3 +1,6 @@
+import { createDefaultDawnProgress, sanitizeDawnProgress, type DawnProgress } from '../dawn/economy/DawnProgress';
+import type { DawnEquipmentProgressDraft } from '../dawn/economy/DawnMerchantEquipment';
+import { resolvePersonalPersistentBaseAreaStage } from '../persistentBase/PersistentBaseAreaStageResolution';
 import { getPersistentBaseHealthReward, isPersistentBaseHealthRewards, type PersistentBaseHealthReward } from '../persistentBase/PersistentBaseHealth';
 import { getLoadoutUtilityId, loadoutToolFromId } from '../loadout/LoadoutTools';
 import { setLoadoutToolSlots } from './coopDefenseUpgrades';
@@ -43,8 +46,12 @@ import {
   buildDefaultCoopDefenseUpgradeProfile,
   cloneCoopDefenseUpgradeProfile,
   constrainCoopDefenseUpgradeProfileToBossPoints,
+  constrainCoopDefenseUpgradeProfileToEntitlements,
+  resolveCoopDefenseUpgradeEntitlements,
+  resolveEarnedCoopDefenseBossPoints,
+  getLockedCoopDefenseBranchUpgradeIds,
+  type CoopDefenseUpgradeEntitlements,
   COOP_DEFENSE_UPGRADE_DEFINITIONS,
-  sanitizeCoopDefenseUpgradeProfile,
 } from './coopDefenseUpgrades';
 import {
   getCoopDefenseMapUnlockedByVictoryOn,
@@ -98,7 +105,8 @@ import {
 } from '../persistentBase/PersistentBaseRewardTypes';
 import {
   DEFAULT_PERSISTENT_BASE_AREA_STAGE,
-  isPersistentBaseAreaStage,
+  isCampaignPersistentBaseAreaStage,
+  type CampaignPersistentBaseAreaStage,
   type PersistentBaseAreaStage,
 } from '../persistentBase/PersistentBaseCore';
 
@@ -108,9 +116,9 @@ export const LOCAL_SETTINGS_STORAGE_KEY = 'fragdachse_settings_v1';
 // Stable key retained so the decoder can migrate existing V5 documents in place.
 export const LOCAL_PROGRESS_STORAGE_KEY = 'fragdachse_progress_v5';
 export const LOCAL_SETTINGS_SCHEMA_VERSION = 2;
-export const LOCAL_PROGRESS_SCHEMA_VERSION = 6;
+export const LOCAL_PROGRESS_SCHEMA_VERSION = 7;
 export const LOCAL_PROGRESS_EXPORT_FORMAT = 'fragdachse-progress';
-export const LOCAL_PROGRESS_EXPORT_VERSION = 6;
+export const LOCAL_PROGRESS_EXPORT_VERSION = 7;
 const CHEAT_BOSS_MAP_ID_PREFIX = '__cheat_boss_point_';
 
 export interface CoopDefenseProgressPreferences {
@@ -120,6 +128,7 @@ export interface CoopDefenseProgressPreferences {
   processedRoundRevisionsByRoom: Record<string, number>;
   completedMapIds: string[];
   completedBossMapIds: string[];
+  dawn: DawnProgress;
   /** Hoechste freigeschaltete Map der linearen Kampagne; alles davor ist ebenfalls offen. */
   highestUnlockedMapId: string;
   /** Bis Map 5 fuehrt die unsichtbare, bonuslose Default-Klasse den gemeinsamen Fortschritt. */
@@ -140,7 +149,7 @@ export interface CoopDefenseProgressPreferences {
    */
   persistentBaseUnlocked: boolean;
   /** Semantische Ausbau-Stufe; niemals aus der aktuellen oder hoechsten Map rekonstruiert. */
-  persistentBaseAreaStage: PersistentBaseAreaStage;
+  persistentBaseAreaStage: CampaignPersistentBaseAreaStage;
   persistentBaseHealthRewards: PersistentBaseHealthReward[];
   /** Personal reward ownership; never used as host placement authority. */
   persistentBaseRewardUnlocks: PersistentBaseRewardId[];
@@ -227,7 +236,7 @@ interface LocalSettingsDocumentV2 {
 }
 
 export interface LocalProgressDocument {
-  schemaVersion: 6;
+  schemaVersion: 7;
   profile: LocalPreferences['profile'];
   loadout: LocalPreferences['loadout'];
   coopDefense: {
@@ -235,7 +244,8 @@ export interface LocalProgressDocument {
     lastProcessedRoundEndedAt: number | null;
     processedRoundRevisionsByRoom?: Record<string, number>;
     completedMapIds: string[];
-  completedBossMapIds: string[];
+    completedBossMapIds: string[];
+    dawn: DawnProgress;
     highestUnlockedMapId: string;
     classesUnlocked: boolean;
     unlockedClassIds: CoopDefenseClassId[];
@@ -245,7 +255,7 @@ export interface LocalProgressDocument {
     loadoutsByClass?: LocalPreferences['loadoutByClass'];
     itemsUnlocked: boolean;
     persistentBaseUnlocked: boolean;
-    persistentBaseAreaStage: PersistentBaseAreaStage;
+    persistentBaseAreaStage: CampaignPersistentBaseAreaStage;
     persistentBaseHealthRewards: PersistentBaseHealthReward[];
     persistentBaseRewardUnlocks: PersistentBaseRewardId[];
     items: CoopDefenseItem[];
@@ -291,6 +301,7 @@ const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
   processedRoundRevisionsByRoom: {},
   completedMapIds: [],
   completedBossMapIds: [],
+  dawn: createDefaultDawnProgress(),
   highestUnlockedMapId: INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID,
   classesUnlocked: false,
   unlockedClassIds: [],
@@ -354,6 +365,7 @@ const DEFAULT_PREFERENCES: LocalPreferences = {
       ...DEFAULT_COOP_DEFENSE_PROGRESS,
       completedMapIds: [],
       completedBossMapIds: [],
+      dawn: createDefaultDawnProgress(),
       defaultProfile: cloneCoopDefenseUpgradeProfile(
         DEFAULT_COOP_DEFENSE_PROGRESS.defaultProfile,
         DEFAULT_COOP_DEFENSE_CLASS_ID,
@@ -376,14 +388,16 @@ function cloneProfilesByClass(
 function mirrorDefaultProfileToClasses(
   defaultProfile: CoopDefenseUpgradeProfile,
   earnedBossPoints: number,
+  entitlements: CoopDefenseUpgradeEntitlements,
 ): Record<CoopDefenseClassId, CoopDefenseUpgradeProfile> {
   return Object.fromEntries(
     COOP_DEFENSE_CLASS_IDS.map((classId) => [
       classId,
-      constrainCoopDefenseUpgradeProfileToBossPoints(
-        sanitizeCoopDefenseUpgradeProfile(classId === 'inspector_gadachs' ? { ...defaultProfile, toolLoadout: undefined } : defaultProfile, classId),
+      constrainLocalUpgradeProfile(
+        classId === 'inspector_gadachs' ? { ...defaultProfile, toolLoadout: undefined } : defaultProfile,
         earnedBossPoints,
         classId,
+        entitlements,
       ),
     ]),
   ) as Record<CoopDefenseClassId, CoopDefenseUpgradeProfile>;
@@ -470,6 +484,7 @@ function buildDefaultPreferences(): LocalPreferences {
         ...DEFAULT_COOP_DEFENSE_PROGRESS,
         completedMapIds: [],
         completedBossMapIds: [],
+        dawn: createDefaultDawnProgress(),
         defaultProfile: cloneCoopDefenseUpgradeProfile(
           DEFAULT_COOP_DEFENSE_PROGRESS.defaultProfile,
           DEFAULT_COOP_DEFENSE_CLASS_ID,
@@ -828,6 +843,32 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     }
     raw = { ...raw, schemaVersion: 6, coopDefense: { ...raw.coopDefense, persistentBaseHealthRewards: rewards } };
   }
+  if (isRecord(raw) && raw.schemaVersion === 6 && isRecord(raw.coopDefense)) {
+    const dawn = createDefaultDawnProgress();
+    const locked = getLockedCoopDefenseBranchUpgradeIds(resolveCoopDefenseUpgradeEntitlements([]));
+    const migrateProfile = (value: unknown): CompactUpgradeProfile | null => {
+      const compact = sanitizeCompactProfile(value);
+      if (!compact) return null;
+      const levels = { ...compact.levels };
+      for (const id of locked) {
+        if ((levels[id] ?? 0) > 0) dawn.notices.necromancyMovedToMerchant = true;
+        delete levels[id];
+      }
+      return { ...compact, levels };
+    };
+    const defaultProfile = migrateProfile(raw.coopDefense.defaultProfile);
+    if (!defaultProfile) return null;
+    const profiles = raw.coopDefense.profilesByClass;
+    if (profiles !== undefined && (!isRecord(profiles)
+      || Object.keys(profiles).some(id => !COOP_DEFENSE_CLASS_IDS.includes(id as CoopDefenseClassId)))) return null;
+    const profilesByClass: Record<string, CompactUpgradeProfile> = {};
+    for (const [id, value] of Object.entries(profiles ?? {})) {
+      const profile = migrateProfile(value);
+      if (!profile) return null;
+      profilesByClass[id] = profile;
+    }
+    raw = { ...raw, schemaVersion: 7, coopDefense: { ...raw.coopDefense, dawn, defaultProfile, profilesByClass } };
+  }
   if (!isRecord(raw) || raw.schemaVersion !== LOCAL_PROGRESS_SCHEMA_VERSION) return null;
   const document = raw as unknown as LocalProgressDocument;
   if (!document || !isRecord(document.profile) || !isValidLoadoutRecord(document.loadout)
@@ -847,7 +888,8 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     || typeof coop.itemsUnlocked !== 'boolean'
     || typeof coop.persistentBaseUnlocked !== 'boolean'
     || !isPersistentBaseHealthRewards(coop.persistentBaseHealthRewards)
-    || !isPersistentBaseAreaStage(coop.persistentBaseAreaStage)
+    // Gespeichert wird nur die Kampagnenstufe; Dawn-Ausbau steht getrennt in `dawn.expansionLevel`.
+    || !isCampaignPersistentBaseAreaStage(coop.persistentBaseAreaStage)
     || !Array.isArray(coop.persistentBaseRewardUnlocks)
     || !Array.isArray(coop.items)
     || !isRecord(coop.equippedItemIds)
@@ -883,7 +925,10 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
   const defaultCompact = sanitizeCompactProfile(coop.defaultProfile);
   if (!defaultCompact) return null;
   const completedBossMapIds = sanitizeCompletedBossMapIds(coop.completedBossMapIds);
-  const bossPoints = completedBossMapIds.length;
+  const dawn = sanitizeDawnProgress(coop.dawn);
+  if (!dawn) return null;
+  const entitlements = resolveCoopDefenseUpgradeEntitlements(dawn.unlockedBranchIds);
+  const bossPoints = resolveEarnedCoopDefenseBossPoints({ completedBossMapIds, dawn });
   const hydrateProfile = (compact: CompactUpgradeProfile, classId: CoopDefenseClassId): CoopDefenseUpgradeProfile => {
     const rawProfile = {
       upgrades: Object.fromEntries(Object.entries(compact.levels ?? {}).map(([id, level]) => [
@@ -893,8 +938,11 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
         ? [loadoutToolFromId(sanitizeStoredLoadout(isRecord(coop.loadoutsByClass) ? coop.loadoutsByClass[classId] : undefined).utility ?? loadout.utility ?? 'HE_GRENADE')]
         : undefined),
     };
-    return constrainCoopDefenseUpgradeProfileToBossPoints(
-      sanitizeCoopDefenseUpgradeProfile(rawProfile, classId), bossPoints, classId,
+    return constrainLocalUpgradeProfile(
+      rawProfile,
+      bossPoints,
+      classId,
+      entitlements,
     );
   };
   const defaultProfile = hydrateProfile(defaultCompact, DEFAULT_COOP_DEFENSE_CLASS_ID);
@@ -914,8 +962,11 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     if (!compact) return null;
     profilesByClass[classId] = classesUnlocked
       ? hydrateProfile(compact, classId)
-      : constrainCoopDefenseUpgradeProfileToBossPoints(
-        sanitizeCoopDefenseUpgradeProfile(classId === 'inspector_gadachs' ? { ...defaultProfile, toolLoadout: undefined } : defaultProfile, classId), bossPoints, classId,
+      : constrainLocalUpgradeProfile(
+        classId === 'inspector_gadachs' ? { ...defaultProfile, toolLoadout: undefined } : defaultProfile,
+        bossPoints,
+        classId,
+        entitlements,
       );
   }
   if (isRecord(coop.loadoutsByClass) && Object.entries(coop.loadoutsByClass).some(([classId, classLoadout]) => (
@@ -962,6 +1013,7 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
         processedRoundRevisionsByRoom,
         completedMapIds: [...new Set((coop.completedMapIds ?? []) as string[])],
         completedBossMapIds,
+        dawn,
         highestUnlockedMapId,
         classesUnlocked,
         unlockedClassIds: [...unlockedClassIds],
@@ -988,8 +1040,10 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
   };
 }
 
-function compactProfile(profile: CoopDefenseUpgradeProfile, classId: CoopDefenseClassId): CompactUpgradeProfile | undefined {
-  const safe = sanitizeCoopDefenseUpgradeProfile(profile, classId);
+function compactProfile(
+  profile: CoopDefenseUpgradeProfile, classId: CoopDefenseClassId, entitlements: CoopDefenseUpgradeEntitlements,
+): CompactUpgradeProfile | undefined {
+  const safe = constrainCoopDefenseUpgradeProfileToEntitlements(profile, entitlements, classId);
   const defaults = buildDefaultCoopDefenseUpgradeProfile(classId);
   const levels: Record<string, number> = {};
   for (const [upgradeId, state] of Object.entries(safe.upgrades)) {
@@ -1005,10 +1059,11 @@ function compactProfile(profile: CoopDefenseUpgradeProfile, classId: CoopDefense
 
 function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDocument {
   const progress = preferences.progression.coopDefense;
+  const entitlements = resolveCoopDefenseUpgradeEntitlements(progress.dawn.unlockedBranchIds);
   const profilesByClass: Partial<Record<CoopDefenseClassId, CompactUpgradeProfile>> = {};
   if (progress.unlockedClassIds.length > 0) {
     for (const classId of COOP_DEFENSE_CLASS_IDS) {
-      const compact = compactProfile(progress.profilesByClass[classId], classId);
+      const compact = compactProfile(progress.profilesByClass[classId], classId, entitlements);
       if (compact) profilesByClass[classId] = compact;
     }
   }
@@ -1022,10 +1077,11 @@ function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDoc
       processedRoundRevisionsByRoom: { ...progress.processedRoundRevisionsByRoom },
       completedMapIds: [...progress.completedMapIds],
       completedBossMapIds: [...progress.completedBossMapIds],
+      dawn: sanitizeDawnProgress(progress.dawn)!,
       highestUnlockedMapId: progress.highestUnlockedMapId,
       classesUnlocked: progress.classesUnlocked,
       unlockedClassIds: [...progress.unlockedClassIds],
-      defaultProfile: compactProfile(progress.defaultProfile, DEFAULT_COOP_DEFENSE_CLASS_ID),
+      defaultProfile: compactProfile(progress.defaultProfile, DEFAULT_COOP_DEFENSE_CLASS_ID, entitlements),
       selectedClassId: progress.unlockedClassIds.length > 0 ? progress.selectedClassId : undefined,
       profilesByClass: progress.unlockedClassIds.length > 0 && Object.keys(profilesByClass).length > 0
         ? profilesByClass : undefined,
@@ -1227,7 +1283,7 @@ export function importStoredGameProgressJson(json: string): LocalProgressTransfe
     return { ok: false, messageKey: 'ui.lobby.saveInvalidJson' };
   }
   if (!isRecord(parsed) || parsed.format !== LOCAL_PROGRESS_EXPORT_FORMAT
-    || (parsed.formatVersion !== LOCAL_PROGRESS_EXPORT_VERSION && parsed.formatVersion !== 5)
+    || ![5, 6, LOCAL_PROGRESS_EXPORT_VERSION].includes(parsed.formatVersion as number)
     || typeof parsed.exportedAt !== 'string' || !Number.isFinite(Date.parse(parsed.exportedAt))
     || !('progress' in parsed)) {
     return { ok: false, messageKey: 'ui.lobby.saveIncompatible' };
@@ -1460,6 +1516,7 @@ export function getStoredCoopDefenseProgress(): CoopDefenseProgressPreferences {
     processedRoundRevisionsByRoom: { ...progress.processedRoundRevisionsByRoom },
     completedMapIds: [...progress.completedMapIds],
     completedBossMapIds: [...progress.completedBossMapIds],
+    dawn: sanitizeDawnProgress(progress.dawn)!,
     highestUnlockedMapId: progress.highestUnlockedMapId,
     classesUnlocked: progress.classesUnlocked,
     unlockedClassIds: [...progress.unlockedClassIds],
@@ -1487,8 +1544,10 @@ export function restoreStoredCoopDefenseProgress(progress: CoopDefenseProgressPr
   const processedRoundRevisionsByRoom = sanitizeProcessedRoundRevisionsByRoom(progress.processedRoundRevisionsByRoom);
   const rewardUnlocks = sanitizePersistentBaseRewardIds(progress.persistentBaseRewardUnlocks);
   const rewardState = sanitizePersistentBaseRewardState(progress.persistentBaseRewardState);
-  if (!processedRoundRevisionsByRoom || !rewardUnlocks || !rewardState
+  const dawn = sanitizeDawnProgress(progress.dawn);
+  if (!dawn || !processedRoundRevisionsByRoom || !rewardUnlocks || !rewardState
     || rewardState.placements.some((placement) => !rewardUnlocks.includes(placement.rewardId))) return;
+  progress = constrainLocalProgressProfiles({ ...progress, dawn });
   updatePreferences((current) => ({
     ...current,
     progression: {
@@ -1498,6 +1557,7 @@ export function restoreStoredCoopDefenseProgress(progress: CoopDefenseProgressPr
         processedRoundRevisionsByRoom,
         completedMapIds: [...progress.completedMapIds],
         completedBossMapIds: [...progress.completedBossMapIds],
+        dawn: sanitizeDawnProgress(progress.dawn)!,
         defaultProfile: cloneCoopDefenseUpgradeProfile(
           progress.defaultProfile,
           DEFAULT_COOP_DEFENSE_CLASS_ID,
@@ -1563,7 +1623,19 @@ export function setStoredPersonalBaseContribution(contribution: PersistentPlayer
 }
 
 /** Die semantische, persoenliche Ausbau-Stufe der persistenten Basis. */
-export function getStoredPersistentBaseAreaStage(): PersistentBaseAreaStage {
+/**
+ * Persoenliche Ausbaustufe aus Kampagne und Dawn-Expansion. Sie ist die Stufe, die der Spieler
+ * jedem Host anbietet und im Basis-Editor bearbeitet; jede World begrenzt sie nach ihrer Site.
+ */
+export function getStoredPersonalPersistentBaseAreaStage(): PersistentBaseAreaStage {
+  const coop = readPreferences().progression.coopDefense;
+  return resolvePersonalPersistentBaseAreaStage({
+    campaignStage: coop.persistentBaseAreaStage,
+    dawnExpansionLevel: sanitizeDawnProgress(coop.dawn)?.expansionLevel ?? 0,
+  });
+}
+
+export function getStoredPersistentBaseAreaStage(): CampaignPersistentBaseAreaStage {
   return readPreferences().progression.coopDefense.persistentBaseAreaStage;
 }
 
@@ -1573,7 +1645,7 @@ export function getStoredPersistentBaseAreaStage(): PersistentBaseAreaStage {
  * verkleinern.
  */
 export function setStoredPersistentBaseAreaStage(areaStage: PersistentBaseAreaStage): boolean {
-  if (!isPersistentBaseAreaStage(areaStage)) return false;
+  if (!isCampaignPersistentBaseAreaStage(areaStage)) return false;
   const current = readPreferences();
   const progress = current.progression.coopDefense;
   if (areaStage <= progress.persistentBaseAreaStage) return false;
@@ -1676,6 +1748,7 @@ export function resetStoredCoopDefenseCharacter(): void {
         ...DEFAULT_COOP_DEFENSE_PROGRESS,
         completedMapIds: [],
         completedBossMapIds: [],
+        dawn: createDefaultDawnProgress(),
         defaultProfile: cloneCoopDefenseUpgradeProfile(
           DEFAULT_COOP_DEFENSE_PROGRESS.defaultProfile,
           DEFAULT_COOP_DEFENSE_CLASS_ID,
@@ -1743,15 +1816,13 @@ export function setStoredCoopDefenseClassesUnlocked(unlocked: boolean): boolean 
   const storedProgress = current.progression.coopDefense;
   if (storedProgress.classesUnlocked === unlocked) return false;
 
-  const defaultProfile = constrainCoopDefenseUpgradeProfileToBossPoints(
-    sanitizeCoopDefenseUpgradeProfile(
-      unlocked
-        ? storedProgress.defaultProfile
-        : storedProgress.profilesByClass[storedProgress.selectedClassId],
-      DEFAULT_COOP_DEFENSE_CLASS_ID,
-    ),
-    storedProgress.completedBossMapIds.length,
+  const defaultProfile = constrainLocalUpgradeProfile(
+    unlocked
+      ? storedProgress.defaultProfile
+      : storedProgress.profilesByClass[storedProgress.selectedClassId],
+    resolveEarnedCoopDefenseBossPoints(storedProgress),
     DEFAULT_COOP_DEFENSE_CLASS_ID,
+    resolveCoopDefenseUpgradeEntitlements(storedProgress.dawn.unlockedBranchIds),
   );
   const loadoutByClass = unlocked && !current.loadoutByClass[DEFAULT_COOP_DEFENSE_CLASS_ID]
     ? {
@@ -1774,7 +1845,8 @@ export function setStoredCoopDefenseClassesUnlocked(unlocked: boolean): boolean 
         selectedClassId: DEFAULT_COOP_DEFENSE_CLASS_ID,
         profilesByClass: mirrorDefaultProfileToClasses(
           defaultProfile,
-          storedProgress.completedBossMapIds.length,
+          resolveEarnedCoopDefenseBossPoints(storedProgress),
+          resolveCoopDefenseUpgradeEntitlements(storedProgress.dawn.unlockedBranchIds),
         ),
       },
     },
@@ -1793,16 +1865,18 @@ export function unlockStoredCoopDefenseClassesAfterVictory(completedMapId: strin
   const profilesByClass = storedProgress.unlockedClassIds.length === 0
     ? mirrorDefaultProfileToClasses(
       storedProgress.defaultProfile,
-      storedProgress.completedBossMapIds.length,
+      resolveEarnedCoopDefenseBossPoints(storedProgress),
+      resolveCoopDefenseUpgradeEntitlements(storedProgress.dawn.unlockedBranchIds),
     )
     : { ...storedProgress.profilesByClass };
   if (storedProgress.unlockedClassIds.length > 0) {
     for (const classId of targetClassIds) {
       if (storedProgress.unlockedClassIds.includes(classId)) continue;
-      profilesByClass[classId] = constrainCoopDefenseUpgradeProfileToBossPoints(
+      profilesByClass[classId] = constrainLocalUpgradeProfile(
         buildDefaultCoopDefenseUpgradeProfile(classId),
-        storedProgress.completedBossMapIds.length,
+        resolveEarnedCoopDefenseBossPoints(storedProgress),
         classId,
+        resolveCoopDefenseUpgradeEntitlements(storedProgress.dawn.unlockedBranchIds),
       );
     }
   }
@@ -1843,10 +1917,11 @@ export function setStoredCoopDefenseUpgradeProfile(
   updatePreferences((current) => {
     const storedProgress = current.progression.coopDefense;
     if (storedProgress.unlockedClassIds.length === 0) {
-      const defaultProfile = constrainCoopDefenseUpgradeProfileToBossPoints(
-        sanitizeCoopDefenseUpgradeProfile(profile, DEFAULT_COOP_DEFENSE_CLASS_ID),
-        storedProgress.completedBossMapIds.length,
+      const defaultProfile = constrainLocalUpgradeProfile(
+        profile,
+        resolveEarnedCoopDefenseBossPoints(storedProgress),
         DEFAULT_COOP_DEFENSE_CLASS_ID,
+        resolveCoopDefenseUpgradeEntitlements(storedProgress.dawn.unlockedBranchIds),
       );
       return {
         ...current,
@@ -1857,7 +1932,8 @@ export function setStoredCoopDefenseUpgradeProfile(
             defaultProfile,
             profilesByClass: mirrorDefaultProfileToClasses(
               defaultProfile,
-              storedProgress.completedBossMapIds.length,
+              resolveEarnedCoopDefenseBossPoints(storedProgress),
+              resolveCoopDefenseUpgradeEntitlements(storedProgress.dawn.unlockedBranchIds),
             ),
           },
         },
@@ -1874,10 +1950,11 @@ export function setStoredCoopDefenseUpgradeProfile(
           ...storedProgress,
           profilesByClass: {
             ...storedProgress.profilesByClass,
-            [resolvedClassId]: constrainCoopDefenseUpgradeProfileToBossPoints(
-              sanitizeCoopDefenseUpgradeProfile(profile, resolvedClassId),
-              storedProgress.completedBossMapIds.length,
+            [resolvedClassId]: constrainLocalUpgradeProfile(
+              profile,
+              resolveEarnedCoopDefenseBossPoints(storedProgress),
               resolvedClassId,
+              resolveCoopDefenseUpgradeEntitlements(storedProgress.dawn.unlockedBranchIds),
             ),
           },
         },
@@ -1890,10 +1967,11 @@ export function setStoredCoopDefenseUpgradeProfile(
 export function resetStoredCoopDefenseUpgradeProfiles(): void {
   updatePreferences((current) => {
     const storedProgress = current.progression.coopDefense;
-    const defaultProfile = constrainCoopDefenseUpgradeProfileToBossPoints(
+    const defaultProfile = constrainLocalUpgradeProfile(
       buildDefaultCoopDefenseUpgradeProfile(DEFAULT_COOP_DEFENSE_CLASS_ID),
-      storedProgress.completedBossMapIds.length,
+      resolveEarnedCoopDefenseBossPoints(storedProgress),
       DEFAULT_COOP_DEFENSE_CLASS_ID,
+      resolveCoopDefenseUpgradeEntitlements(storedProgress.dawn.unlockedBranchIds),
     );
 
     return {
@@ -1905,7 +1983,8 @@ export function resetStoredCoopDefenseUpgradeProfiles(): void {
           defaultProfile,
           profilesByClass: mirrorDefaultProfileToClasses(
             defaultProfile,
-            storedProgress.completedBossMapIds.length,
+            resolveEarnedCoopDefenseBossPoints(storedProgress),
+            resolveCoopDefenseUpgradeEntitlements(storedProgress.dawn.unlockedBranchIds),
           ),
         },
       },
@@ -2368,30 +2447,37 @@ export function setStoredCoopDefenseCheatProgress(
 
   updatePreferences((current) => {
     const storedProgress = current.progression.coopDefense;
+    const dawn = { ...storedProgress.dawn, purchasedBossPoints: Math.min(storedProgress.dawn.purchasedBossPoints, nextBossPointCount) };
+    const mapPointCount = nextBossPointCount - dawn.purchasedBossPoints;
     const completedBossMapIds = storedProgress.completedBossMapIds
       .filter((mapId) => !mapId.startsWith(CHEAT_BOSS_MAP_ID_PREFIX))
-      .slice(0, nextBossPointCount);
+      .slice(0, mapPointCount);
 
-    while (completedBossMapIds.length < nextBossPointCount) {
+    while (completedBossMapIds.length < mapPointCount) {
       completedBossMapIds.push(`${CHEAT_BOSS_MAP_ID_PREFIX}${completedBossMapIds.length + 1}`);
     }
-    const defaultProfile = constrainCoopDefenseUpgradeProfileToBossPoints(
+    const defaultProfile = constrainLocalUpgradeProfile(
       storedProgress.defaultProfile,
       nextBossPointCount,
       DEFAULT_COOP_DEFENSE_CLASS_ID,
+      resolveCoopDefenseUpgradeEntitlements(storedProgress.dawn.unlockedBranchIds),
     );
     const profilesByClass = storedProgress.classesUnlocked
       ? Object.fromEntries(
         COOP_DEFENSE_CLASS_IDS.map((classId) => [
           classId,
-          constrainCoopDefenseUpgradeProfileToBossPoints(
+          constrainLocalUpgradeProfile(
             storedProgress.profilesByClass[classId],
             nextBossPointCount,
             classId,
+            resolveCoopDefenseUpgradeEntitlements(storedProgress.dawn.unlockedBranchIds),
           ),
         ]),
       ) as Record<CoopDefenseClassId, CoopDefenseUpgradeProfile>
-      : mirrorDefaultProfileToClasses(defaultProfile, nextBossPointCount);
+      : mirrorDefaultProfileToClasses(
+        defaultProfile, nextBossPointCount,
+        resolveCoopDefenseUpgradeEntitlements(storedProgress.dawn.unlockedBranchIds),
+      );
 
     return {
       ...current,
@@ -2401,6 +2487,7 @@ export function setStoredCoopDefenseCheatProgress(
           ...storedProgress,
           totalXp: nextTotalXp,
           completedBossMapIds,
+          dawn,
           highestUnlockedMapId: nextHighestUnlockedMapId,
           unlockedClassIds: [...getUnlockedCoopDefenseClassIds(nextHighestUnlockedMapId)],
           classesUnlocked: getUnlockedCoopDefenseClassIds(nextHighestUnlockedMapId).length > 0,
@@ -2460,4 +2547,84 @@ export function unlockStoredPersistentBaseHealthAfterVictory(mapId: string): boo
 
 export function getStoredPersistentBaseHealthRewards(): PersistentBaseHealthReward[] {
   return [...readPreferences().progression.coopDefense.persistentBaseHealthRewards];
+}
+
+/** Local profiles lose locked branches before their remaining boss-point budget is applied. */
+function constrainLocalUpgradeProfile(
+  profile: CoopDefenseUpgradeProfile,
+  bossPoints: number,
+  classId: CoopDefenseClassId,
+  entitlements: CoopDefenseUpgradeEntitlements,
+): CoopDefenseUpgradeProfile {
+  return constrainCoopDefenseUpgradeProfileToBossPoints(
+    constrainCoopDefenseUpgradeProfileToEntitlements(profile, entitlements, classId), bossPoints, classId,
+  );
+}
+
+function constrainLocalProgressProfiles(progress: CoopDefenseProgressPreferences): CoopDefenseProgressPreferences {
+  const entitlements = resolveCoopDefenseUpgradeEntitlements(progress.dawn.unlockedBranchIds);
+  const points = resolveEarnedCoopDefenseBossPoints(progress);
+  const constrain = (profile: CoopDefenseUpgradeProfile, classId: CoopDefenseClassId) =>
+    constrainLocalUpgradeProfile(
+      profile,
+      points,
+      classId,
+      entitlements,
+    );
+  return { ...progress,
+    defaultProfile: constrain(progress.defaultProfile, DEFAULT_COOP_DEFENSE_CLASS_ID),
+    profilesByClass: Object.fromEntries(COOP_DEFENSE_CLASS_IDS.map(classId => [
+      classId, constrain(progress.profilesByClass[classId], classId),
+    ])) as Record<CoopDefenseClassId, CoopDefenseUpgradeProfile>,
+  };
+}
+
+export function getStoredDawnProgress(): DawnProgress {
+  return sanitizeDawnProgress(readPreferences().progression.coopDefense.dawn)!;
+}
+
+/** One durable write for currency and items. A rejection or write failure also preserves the cache. */
+export function updateStoredDawnEquipmentProgress(mutator: (draft: DawnEquipmentProgressDraft) => boolean): boolean {
+  const current = readPreferences();
+  const progress = current.progression.coopDefense;
+  const draft: DawnEquipmentProgressDraft = structuredClone({
+    dawn: progress.dawn, items: progress.items,
+    equippedItemIds: progress.equippedItemIds, unseenItems: progress.unseenItems,
+  });
+  if (!mutator(draft)) return false;
+  const dawn = sanitizeDawnProgress(draft.dawn);
+  const items = sanitizeCoopDefenseItems(draft.items, draft.equippedItemIds);
+  const equippedItemIds = sanitizeCoopDefenseEquippedItemIds(draft.equippedItemIds, items);
+  // Never charge for an item that the storage limits or validator would discard.
+  if (!dawn || items.length !== draft.items.length || typeof draft.unseenItems !== 'boolean'
+    || Object.entries(draft.equippedItemIds).some(([slot, uid]) => equippedItemIds[slot as CoopDefenseItemSlot] !== uid)) return false;
+  const next = { ...current, progression: { ...current.progression,
+    coopDefense: constrainLocalProgressProfiles({ ...progress, dawn, items, equippedItemIds, unseenItems: draft.unseenItems }),
+  } };
+  const storage = getLocalStorage();
+  if (!safeWrite(storage, LOCAL_PROGRESS_STORAGE_KEY, encodeProgressDocument(next))) return false;
+  preferencesCache = next;
+  cachedStorage = storage;
+  return true;
+}
+
+/** Mutate a defensive draft; invalid updates and write failures preserve storage and cache. */
+export function updateStoredDawnProgress(mutator: (draft: DawnProgress) => void): boolean {
+  const current = readPreferences();
+  const draft = getStoredDawnProgress();
+  mutator(draft);
+  const dawn = sanitizeDawnProgress(draft);
+  if (!dawn) return false;
+  const next = { ...current, progression: { ...current.progression,
+    coopDefense: constrainLocalProgressProfiles({ ...current.progression.coopDefense, dawn }),
+  } };
+  const storage = getLocalStorage();
+  if (!safeWrite(storage, LOCAL_PROGRESS_STORAGE_KEY, encodeProgressDocument(next))) return false;
+  preferencesCache = next;
+  cachedStorage = storage;
+  return true;
+}
+
+export function acknowledgeStoredDawnNotice(notice: keyof DawnProgress['notices']): boolean {
+  return updateStoredDawnProgress(draft => { draft.notices[notice] = false; });
 }

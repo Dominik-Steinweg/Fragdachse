@@ -19,6 +19,7 @@ import type { CoopDefenseMapDirector } from '../systems/CoopDefenseMapDirector';
 import type { CoopDefenseMapEventDirector } from '../systems/CoopDefenseMapEventDirector';
 import type { CoopDefenseMissionBarrierManager } from '../systems/CoopDefenseMissionBarrierManager';
 import type { CoopDefenseMissionProgressSystem } from '../systems/CoopDefenseMissionProgressSystem';
+import type { CoopDefenseSiteActivationSystem } from '../systems/CoopDefenseSiteActivationSystem';
 import type { CoopDefenseObjectivePlacementRewardSystem } from '../systems/CoopDefenseObjectivePlacementRewardSystem';
 import type { CoopDefenseObjectiveRepairSystem } from '../systems/CoopDefenseObjectiveRepairSystem';
 import type { CoopDefenseRoundStateSystem } from '../systems/CoopDefenseRoundStateSystem';
@@ -110,6 +111,8 @@ export interface CoopMissionObjectiveRuntime {
   readonly roundState: CoopDefenseRoundStateSystem | null;
   /** Round-local team reward buff; it must not survive an Activity change. */
   readonly teamBuff: CoopDefenseTeamBuffSystem | null;
+  /** Host-autoritative Aktivierung der Salvage-Sites dieser Mission. */
+  readonly siteActivation?: CoopDefenseSiteActivationSystem | null;
 }
 
 /** Was dieser Peer aus dem replizierten Missionsstand lokal darstellt. */
@@ -340,6 +343,9 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   }
   get coopDefenseMissionProgressSystem(): CoopDefenseMissionProgressSystem | null {
     return this.objectiveOwner?.missionProgress ?? null;
+  }
+  get coopDefenseSiteActivationSystem(): CoopDefenseSiteActivationSystem | null {
+    return this.objectiveOwner?.siteActivation ?? null;
   }
   get coopDefenseMissionBarrierManager(): CoopDefenseMissionBarrierManager | null {
     return this.objectiveOwner?.barriers ?? null;

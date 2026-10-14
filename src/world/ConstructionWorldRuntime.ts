@@ -25,7 +25,7 @@ import type { PersistentBaseAnchor, PersistentToolRef } from '../persistentBase/
 import type { PersistentBaseContributionStore } from '../persistentBase/PersistentBaseContributionStore';
 import type { PersistentBaseRewardStore } from '../persistentBase/PersistentBaseRewardStore';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
-import type { PersistentBaseBuildArea } from '../persistentBase/PersistentBaseCore';
+import type { PersistentBaseAreaStage, PersistentBaseBuildArea } from '../persistentBase/PersistentBaseCore';
 import type { PersistentRestoreCandidate, PersistentRestoreToolDefinition } from '../persistentBase/PersistentBaseTools';
 import {
   ConstructionReadinessRuntime,
@@ -79,6 +79,8 @@ export interface ConstructionWorldRuntimeOptions {
   readonly getCurrentLoadout: (playerId: string) => import('../types').LoadoutCommitSnapshot | null | undefined;
   readonly getPersistentBaseContext: () => ConstructionPersistentBaseContext | null;
   readonly persistentBaseBinding: PersistentBaseWorldBinding | null;
+  /** Frozen with this World, shared by placement validation and persistent restore. */
+  readonly persistentBaseAreaStage?: PersistentBaseAreaStage;
   readonly resolveOwnerId: (playerId: string) => string | null;
   readonly getLocalPlayerId: () => string;
   readonly isHost: () => boolean;
@@ -136,6 +138,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
       gameMode: this.options.getGameMode(),
       classId: this.options.getCurrentLoadout(playerId)?.coopDefenseClassId,
       modifiers: this.options.modifierReadPort?.getNumericStat(playerId, COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT) ?? 0,
+      persistentBaseAreaStage: this.options.persistentBaseAreaStage,
     });
   }
 

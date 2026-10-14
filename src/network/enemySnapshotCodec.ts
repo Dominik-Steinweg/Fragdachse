@@ -1,3 +1,4 @@
+import { DAWN_ELITE_AFFIX_IDS } from '../dawn/contracts/DawnContentIds';
 import { isEnemyClawState } from '../systems/EnemyClawAttack';
 import { readAreaClawState } from './krakenSnapshotCodec';
 import { isShieldChargeState, SHIELD_CHARGE_PHASES } from '../systems/ShieldChargeState';
@@ -31,6 +32,8 @@ const FIELD_SHIELD_CHARGE = 16384;
 const FIELD_ENERGY_CONE = 32768;
 /** Lane angles need more precision than body rotation: a 0.01 rad error is 8 px at 800 px. */
 const LANE_ANGLE_QUANT = 10000;
+/** Dawn elite affix id (validated against DAWN_ELITE_AFFIX_IDS on decode). */
+const FIELD_ELITE_AFFIX = 65536;
 // Codes 0–6 are deployed legacy values; append new actions without renumbering them.
 const SPECIAL_ACTIONS = ['none', 'gauss-charge', 'phase-nuke', 'armageddon', 'timebomb-chase',
   'timebomb-fuse', 'void-molotov-windup', 'kraken-ink', 'kraken-eggs', 'kraken-dive',
@@ -67,6 +70,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
     throw new Error('Enemy snapshots carry only validated body area-claw slots');
   }
   let mask = 0;
+  if (entry.eliteAffixId !== undefined) mask |= FIELD_ELITE_AFFIX;
   if (entry.areaClaw !== undefined) mask |= FIELD_AREA_CLAW;
   if (entry.shieldCharge !== undefined) mask |= FIELD_SHIELD_CHARGE;
   if (entry.energyCone !== undefined) mask |= FIELD_ENERGY_CONE;
@@ -132,6 +136,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
       for (const reach of attack.clip) out.push(Math.round(reach * ENERGY_CONE_CLIP_QUANT));
     }
   }
+  if (mask & FIELD_ELITE_AFFIX) out.push(entry.eliteAffixId!);
 }
 
 /** Dekodiert den flachen Zahlenstrom zurück in Delta-Objekte für die clientseitige Anwendung. */
@@ -218,6 +223,10 @@ export function decodeEnemyUpserts(stream: readonly (number | string)[]): Synced
       }
       const state = { revision, phase, attack };
       if (isEnergyConeState(state)) entry.energyCone = state;
+    }
+    if (mask & FIELD_ELITE_AFFIX) {
+      const affix = stream[i++];
+      if (DAWN_ELITE_AFFIX_IDS.some(id => id === affix)) entry.eliteAffixId = affix as SyncedEnemyDeltaState['eliteAffixId'];
     }
     result.push(entry);
   }

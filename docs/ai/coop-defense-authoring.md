@@ -60,6 +60,36 @@ Fachliche Zeit folgt der Activity-/Round-Simulation und den replizierten Zustän
 
 `after-defense` bedeutet, dass die referenzierte Defense terminal aufgelöst ist: `completed` oder `failed`. Es bedeutet nicht „nach erfolgreicher Defense“. Ob ein fehlgeschlagenes Hold die gesamte Mission beendet, entscheidet separat das authored Flag `failureEndsMission`.
 
+## Generierte Szenarien (Dawn)
+
+Generierte Coop-Szenarien besitzen keinen Registry-Eintrag. Der Host komponiert pro Runde einen
+World-Plan (`WorldParameters.dawn`) und einen Activity-Plan (`ActivityDescriptor.parameters.dawn`);
+beide reisen mit den Descriptoren, auch per Welcome zu Late Joinern. Jeder Peer löst sie mit
+demselben reinen Resolver
+([DawnScenarioResolution.ts](../../src/dawn/resolution/DawnScenarioResolution.ts)) zu einer normalen
+Coop-Config auf: Plan → Authoring-Config → genau eine Normalisierung → `toAuthoredScenario` mit
+`world:dawn:*`/`activity:dawn:*`. Ein Content-Hash über die Dawn-Registries bricht bei abweichendem
+Stand ab; nichts wird in die Kampagnenregistry injiziert. Die World-Seite hängt nur vom World-Plan ab,
+eine Dawn-World ist aber nur gepaart mit ihrer Dawn-Activity gültig.
+
+Definitionen und die aktive Coop-Config werden über
+[WorldDefinitionResolution.ts](../../src/world/WorldDefinitionResolution.ts) aufgelöst, nicht über
+`getWorldDefinition(definitionId)` oder `toMapId → getCoopDefenseMapConfig` (stiller Default-Fallback).
+[WorldDefinitionResolutionBoundary.test.ts](../../tests/architecture/WorldDefinitionResolutionBoundary.test.ts)
+hält die verbleibenden direkten Lookups als schrumpfende Allowlist fest.
+
+Salvage-Sites sind World-Inhalt: ruhende Bauwerke plus `siteClearings`, deren Kern der Generator
+wie Checkpoint-Lichtungen garantiert freihält; die Lichtung ist zugleich Aktivierungsradius. Ihre Ziele
+sind `concurrent` (aktivieren ohne Fokus-Slot), starten mit `site-activated` und scheitern über
+`expiresAt`. Das Zeitlimit zeitgesteuerter Ziele (`survive`, `defend-until-dawn`) kommt ausschließlich
+aus `getCoopMissionTimeLimitSec`.
+
+Bauwerke mit `surface: 'none'` (World-Feld) zeichnen weder Blobfläche noch Basisleuchten; ihre Darstellung besitzt ein
+eigener Präsentations-Owner (Dawn: `DawnSitePropRenderer`, auch im ruhenden Zustand). Encounter-Ansagen steuert
+`announce`: fehlt es, ist jeder Encounter eine eigene Welle; `false` hält ihn aus Wellenkarte, -ansage und -zählung;
+`{ group, finale? }` fasst Encounter zu einer angesagten Welle zusammen. Index, Anzahl und Finale bestimmt der Host im
+`CoopDefenseMapDirector`; Clients zeigen nur den replizierten Zustand.
+
 ## Checkpoint-Fortschritt
 
 Checkpoint-Aktivierung und -Abschluss sind getrennte host-autoritative Zustände des

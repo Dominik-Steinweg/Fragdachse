@@ -1,3 +1,4 @@
+import { haveSameDawnPlan, parseDawnWorldPlan, type DawnWorldPlan } from '../dawn/contracts/DawnPlans';
 import { isPersistentBaseHealthRewards, type PersistentBaseHealthReward } from '../persistentBase/PersistentBaseHealth';
 import {
   isPersistentBaseAreaStage,
@@ -51,6 +52,11 @@ export interface WorldParameters {
   /** Semantische, fuer diese World-Instanz eingefrorene Area-Stufe der persistenten Basis. */
   readonly persistentBaseAreaStage?: PersistentBaseAreaStage;
   readonly persistentBaseHealthRewards?: readonly PersistentBaseHealthReward[];
+  /**
+   * Host-komponierter World-Plan einer Dawn-Runde. Eine Dawn-World besitzt keine authored
+   * Registry-Definition; jeder Peer loest sie aus genau diesem Plan auf.
+   */
+  readonly dawn?: DawnWorldPlan;
 }
 
 /**
@@ -72,6 +78,7 @@ export const WORLD_PARAMETER_FIELDS = [
   'persistentBaseUnlocked',
   'persistentBaseAreaStage',
   'persistentBaseHealthRewards',
+  'dawn',
 ] as const satisfies readonly (keyof WorldParameters)[];
 
 /**
@@ -89,6 +96,8 @@ export function parseWorldDescriptor(raw: unknown): WorldDescriptor | null {
   const parameters = parseWorldParameters(candidate.parameters);
   if (candidate.parameters?.persistentBaseHealthRewards !== undefined
     && !isPersistentBaseHealthRewards(candidate.parameters.persistentBaseHealthRewards)) return null;
+  // Ein unlesbarer Dawn-Plan darf nicht zu einer World ohne Plan werden.
+  if (candidate.parameters?.dawn !== undefined && !parameters?.dawn) return null;
   const descriptor: WorldDescriptor = {
     worldRevision: candidate.worldRevision,
     definitionId: candidate.definitionId,
@@ -118,6 +127,7 @@ export function haveSameWorldParameters(
   right: WorldParameters | undefined,
 ): boolean {
   return WORLD_PARAMETER_FIELDS.every((field) => {
+    if (field === 'dawn') return haveSameDawnPlan(left?.dawn, right?.dawn);
     if (field !== 'persistentBaseHealthRewards') return (left?.[field] ?? null) === (right?.[field] ?? null);
     const a = left?.[field];
     const b = right?.[field];
@@ -166,6 +176,7 @@ function parseWorldParameters(raw: unknown): WorldParameters | null {
     persistentBaseUnlocked?: boolean;
     persistentBaseAreaStage?: PersistentBaseAreaStage;
     persistentBaseHealthRewards?: PersistentBaseHealthReward[];
+    dawn?: DawnWorldPlan;
   } = {};
 
   const healthRewards = candidate.persistentBaseHealthRewards;
@@ -183,6 +194,12 @@ function parseWorldParameters(raw: unknown): WorldParameters | null {
   if (areaStage !== undefined) {
     if (!isPersistentBaseAreaStage(areaStage)) return null;
     parameters.persistentBaseAreaStage = areaStage;
+  }
+
+  if (candidate.dawn !== undefined) {
+    const dawn = parseDawnWorldPlan(candidate.dawn);
+    if (!dawn) return null;
+    parameters.dawn = dawn;
   }
 
   return Object.keys(parameters).length > 0 ? parameters : null;

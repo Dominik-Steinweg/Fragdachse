@@ -1,5 +1,26 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
+import { getStoredCoopDefenseProgress } from '../src/utils/localPreferences';
+import { DAWN_UNLOCK_AFTER_MAP_ID } from '../src/dawn/rules/DawnUnlock';
+import { UiTooltip } from '../src/ui/UiTooltip';
+import { t } from '../src/i18n';
+import type { CoopProgram } from '../src/dawn/contracts/CoopProgram';
+
+vi.mock('../src/utils/localPreferences', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/utils/localPreferences')>(),
+  getStoredCoopDefenseProgress: vi.fn(() => ({ completedMapIds: [] })),
+}));
+vi.mock('../src/ui/UiTooltip', () => ({
+  UiTooltip: class {
+    root: any;
+    constructor(private scene: any) {}
+    build() { return this.root = this.scene.add.container(0, 0, []); }
+    showText = vi.fn();
+    move = vi.fn();
+    hide = vi.fn();
+    destroy() { this.root?.destroy(); }
+  },
+}));
 
 vi.mock('phaser', () => ({ Math: { Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)) } }));
 vi.mock('../src/ui/uiTextures', () => ({ ensureFlatPanelTexture: () => 'panel', lerpColor: (color: number) => color }));
@@ -18,7 +39,7 @@ vi.mock('../src/ui/UiButton', () => ({
     }
     getRoot() { return this.root; }
     getBackground() { return this.background; }
-    setLabel() { return this; }
+    setLabel(label: string) { this.background.label = label; return this; }
     setIcon() { return this; }
     setEnabled(enabled: boolean) {
       if (this.enabled === enabled) return this;
@@ -39,6 +60,7 @@ import { promoteToClarityCamera } from '../src/scenes/arena/ClarityCameraRegistr
 
 /** Minimal display objects for selection/scroll input contracts; no rendering emulation. */
 class Display extends EventEmitter {
+  label = '';
   children: Display[] = [];
   parentContainer: Display | null = null;
   visible = true;
@@ -113,11 +135,61 @@ function options(count = 20): LoadoutPickerOptions {
 const click = (object: Display) => object.emit('pointerdown', {}, 0, 0, { stopPropagation: vi.fn() });
 
 describe('Lobby selection menus', () => {
+  it('gates Dawn on the host completion and uses the Bridge for selection and guest display', () => {
+    const { scene, parent, created } = fixture();
+    let host = true;
+    let program: CoopProgram = { kind: 'campaign' };
+    const bridge = {
+      isHost: () => host, getGameMode: () => 'coop_defense', getCoopDefenseMapId: () => '1',
+      getCoopProgram: () => program, getLobbyTimeOfDayMinutes: () => 720,
+      setCoopProgram: vi.fn((next: CoopProgram) => { program = next; }), setCoopDefenseMapId: vi.fn(),
+    };
+    const open = vi.spyOn(LoadoutSlotPicker.prototype, 'open');
+    const showTooltip = vi.spyOn(UiTooltip.prototype, 'build');
+    const settings = new LobbySettingsControls(scene as any, bridge as any, parent as any);
+    const mapButton = created.filter(object => object.kind === 'rectangle')[1];
+    const dawnEntry = () => open.mock.lastCall![0].groups.at(-1)!.entries[0];
+    click(mapButton);
+    expect(dawnEntry()).toMatchObject({ disabled: true, selected: false,
+      tooltip: t('ui.lobby.dawn.locked', { map: DAWN_UNLOCK_AFTER_MAP_ID }) });
+    const lockedRow = created.filter(object => object.kind === 'rectangle').at(-1)!;
+    const tooltip = showTooltip.mock.instances.at(-1)!;
+    lockedRow.emit('pointerover', { x: 10, y: 10 });
+    expect(tooltip.showText).toHaveBeenCalledWith(t('ui.lobby.dawn.name'), dawnEntry().tooltip, { x: 10, y: 10 });
+    click(lockedRow);
+    expect(bridge.setCoopProgram).not.toHaveBeenCalled();
+    expect(settings.isOpen()).toBe(true);
+    settings.close();
+
+    vi.mocked(getStoredCoopDefenseProgress).mockReturnValue({ completedMapIds: [DAWN_UNLOCK_AFTER_MAP_ID] } as any);
+    click(mapButton);
+    expect(dawnEntry()).toMatchObject({ disabled: false, selected: false });
+    expect(dawnEntry().tooltip).toBeUndefined();
+    click(created.filter(object => object.kind === 'rectangle').at(-1)!);
+    expect(bridge.setCoopProgram).toHaveBeenCalledExactlyOnceWith({ kind: 'dawn' });
+    expect(mapButton.label).toBe(t('ui.lobby.dawn.name'));
+    click(mapButton);
+    expect(dawnEntry().selected).toBe(true);
+    expect(open.mock.lastCall![0].groups[0].entries.every(entry => !entry.selected)).toBe(true);
+    settings.close();
+    host = false;
+    settings.refresh();
+    expect(mapButton.label).toBe(t('ui.lobby.dawn.name'));
+    expect(mapButton.input?.enabled).toBe(false);
+    program = { kind: 'campaign' };
+    settings.refresh();
+    expect(mapButton.label).not.toBe(t('ui.lobby.dawn.name'));
+    settings.destroy();
+    vi.mocked(getStoredCoopDefenseProgress).mockReturnValue({ completedMapIds: [] } as any);
+    open.mockRestore();
+    showTooltip.mockRestore();
+  });
+
   it('keeps dragging the time across value refreshes and stops on release or a readiness lock', () => {
     const { scene, parent, input } = fixture();
     let minutes = 720;
     const bridge = {
-      isHost: () => true, getGameMode: () => 'deathmatch', getCoopDefenseMapId: () => '1',
+      isHost: () => true, getGameMode: () => 'deathmatch', getCoopDefenseMapId: () => '1', getCoopProgram: () => ({ kind: 'campaign' }),
       getLobbyTimeOfDayMinutes: () => minutes,
       setLobbyTimeOfDayMinutes: vi.fn((next: number) => { minutes = next; }),
     };
@@ -150,7 +222,7 @@ describe('Lobby selection menus', () => {
     let host = false;
     let mode = 'deathmatch';
     const bridge = {
-      isHost: () => host, getGameMode: () => mode, getCoopDefenseMapId: () => '1',
+      isHost: () => host, getGameMode: () => mode, getCoopDefenseMapId: () => '1', getCoopProgram: () => ({ kind: 'campaign' }),
       getLobbyTimeOfDayMinutes: () => 720,
       setGameMode: vi.fn(next => { mode = next; }), setCoopDefenseMapId: vi.fn(),
     };
@@ -185,7 +257,7 @@ describe('Lobby selection menus', () => {
     const { scene, parent, created } = fixture();
     let host = true;
     const bridge = {
-      isHost: () => host, getGameMode: () => 'coop_defense', getCoopDefenseMapId: () => '1',
+      isHost: () => host, getGameMode: () => 'coop_defense', getCoopDefenseMapId: () => '1', getCoopProgram: () => ({ kind: 'campaign' }),
       getLobbyTimeOfDayMinutes: () => 720,
     };
     const settings = new LobbySettingsControls(scene as any, bridge as any, parent as any);

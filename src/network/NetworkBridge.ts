@@ -1,3 +1,4 @@
+import { DEFAULT_COOP_PROGRAM, isSameCoopProgram, parseCoopProgram, type CoopProgram } from '../dawn/contracts/CoopProgram';
 import { isEnemyClawEvent } from '../systems/EnemyClawAttack';
 import { readEnemyAreaClawEvent, type EnemyAreaClawEvent } from '../systems/EnemyClawAttack';
 import { readKrakenState, type KrakenState, type KrakenSnapshotPatch } from '../systems/KrakenState';
@@ -127,12 +128,12 @@ import { isCommittedLoadoutEqual, isCoopDefenseReadyLoadoutComplete, resolveLoad
 import { DEFAULT_LOADOUT, getUtilityBaseId, ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import type { HeldItemSlot } from '../loadout/HeldItemSlotTracker';
 import { DEFAULT_COOP_DEFENSE_MAP_ID, getCoopDefenseMapConfig } from '../config/coopDefenseMaps';
-import { getWorldDefinition } from '../config/authoring/authoredScenarios';
+import { resolveWorldDefinition } from '../world/WorldDefinitionResolution';
 import { COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS, isConstructionId, normalizeConstructionId } from '../config/coopDefenseConstructions';
 import { TURRET_VISUALS } from '../config/turretVisuals';
 import { POWERUP_DEFS } from '../powerups/PowerUpConfig';
 import { getCoopDefenseLevelForXp } from '../utils/coopDefenseProgression';
-import { cloneCoopDefenseUpgradeProfile, sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
+import { cloneCoopDefenseUpgradeProfile, constrainCoopDefenseUpgradeProfileToEntitlements, resolveCoopDefenseUpgradeEntitlements, sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades';
 import { sanitizeCoopDefenseEquippedItems } from '../utils/coopDefenseItems';
 import { DEFAULT_LOBBY_TIME_OF_DAY_MINUTES, normalizeTimeOfDay } from '../effects/TimeOfDay';
 import { isCoopDefenseClassId } from '../config/coopDefenseClasses';
@@ -208,6 +209,7 @@ const KEY_NAME         = 'pnm';   // per-player string: selbst gesetzter Anzeige
 const KEY_GAME_PHASE   = 'gph';   // global: 'LOBBY' | 'ARENA'
 const KEY_GAME_MODE    = 'gmd';   // global: 'deathmatch' | 'team_deathmatch' | 'capture_the_beer'
 const KEY_COOP_MAP_ID  = 'cmd';   // global: string (ausgewaehlte Coop-Defense-Map)
+const KEY_COOP_PROGRAM = 'cpg';   // global: CoopProgram (host-authoritative, reliable)
 const KEY_TIME_OF_DAY  = 'tod';   // global reliable: number (Lobby-Uhrzeit in Minuten seit Mitternacht)
 const KEY_ARENA_START  = 'ast';   // global: number (timestamp ms ab dem Input/Game freigegeben wird)
 const KEY_ROUND_END    = 'ret';   // global: number (timestamp ms)
@@ -239,6 +241,7 @@ const KEY_SHIELD_BUFF  = 'sbf';   // per-player: ShieldBuffHudState (HUD-State d
 const KEY_FRAGS        = 'frg';   // per-player: number (Frag-Zähler)
 const KEY_ROOM_STATS   = 'rst';   // global reliable: kompakter, kumulierter Raum-Statistik-Snapshot
 const KEY_COOP_ROUND_XP = 'crx';  // global: number (gemeinsame, matchweite Coop-Defense-XP)
+const KEY_DAWN_ROUND_SCRAP = 'dsc'; // global reliable: number (gemeinsamer Schrott der laufenden Dawn-Runde)
 const KEY_COOP_XP      = 'cxp';   // per-player: number (lokal persistierte Coop-Defense-XP fuer Lobby-Anzeige)
 const KEY_ROUND_RESULTS = 'rrs'; // global reliable: RoundResult[] (Rundenabschluss-Snapshot)
 const KEY_ROUND_STATE  = 'rds';   // global reliable: RoundState | null (aktueller/finaler Rundenstatus)
@@ -263,7 +266,7 @@ const KEY_PING           = 'png'; // per-player: number (Roundtrip-Zeit in ms, u
 const KEY_GAME_STATE     = 'gs';  // global: komprimierter Game State (unreliable, single setState)
 const KEY_GAME_STATE_INITIAL = 'gsi'; // global reliable: vollstaendiger Bootstrap-Snapshot der laufenden Runde
 const KEY_ROOM_QUALITY   = 'rql'; // global reliable: aktuelle Lobby-Raumqualitaet fuer Startschutz/Retry-UX
-const KEY_LOBBY_SYNC     = 'lsy'; // global reliable: host-autoritativer Lobby-Snapshot {r:readyRevision, m:mode, c:mapId, t:time, p:playerIds}
+const KEY_LOBBY_SYNC     = 'lsy'; // global reliable: host-autoritativer Lobby-Snapshot {r:readyRevision, m:mode, c:mapId, cpg:CoopProgram, t:time, p:playerIds}
 const KEY_PB_CONTRIBUTION = 'pbo'; // per-player reliable: angebotener PersistentPlayerBaseContribution
 const KEY_PB_CONFIRMED   = 'pbk'; // per-player reliable: host-bestaetigter Beitrag nach einem Sieg
 const KEY_PB_REWARD_GRANT = 'pbr'; // per-player reliable: host-bestaetigte kumulative Reward-IDs
@@ -328,8 +331,15 @@ export interface RoundResult {
   /** Beide CTB-Endstände, auch wenn ein Team keine berechtigte Spielerzeile mehr hat. */
   teamScores?: Readonly<Record<TeamId, number>>;
   sharedXp?: number;
+  /** Dawn: gemeinsamer Rundenschrott; die persoenliche Gutschrift (inkl. Niederlagenquote) folgt im Meta-Fortschritt. */
+  sharedScrap?: number;
   /** Gemeinsame, autoritative B8-Epic-Garantie; pro berechtigter Zeile wiederholt. */
   epicGuaranteeCount?: number;
+}
+
+export interface RoundDawnState {
+  readonly threat: number;
+  readonly dayNumber: number;
 }
 
 export interface RoundState {
@@ -346,7 +356,10 @@ export interface RoundState {
   coopDefenseHumanPlayerCount?: number;
   // Historischer Ergebnis-/Round-Snapshot. Der aktive World-Aufbau liest die Map aus dem
   // WorldDescriptor; dieses Feld bleibt nur fuer Ergebnisdarstellung und Unlock-Auswertung.
+  // Dawn-Runden sind keine Kampagnenkarte und lassen es leer.
   coopDefenseMapId?: string;
+  /** Gesetzt genau fuer Dawn-Runden: Threat und Tag des Hosts beim Rundenstart. */
+  dawn?: RoundDawnState;
   /** Spieler, die beim Abschluss fuer Ergebnisse/Belohnungen qualifiziert waren. */
   resultEligiblePlayerIds?: string[];
   endedAt?: number;
@@ -1260,10 +1273,10 @@ export class NetworkBridge {
 
   /**
    * Host-only: Veröffentlicht einen autoritativen Lobby-Snapshot (reliable, ein Objekt):
-   * verbundene Spieler-IDs, aktueller Game-Mode, Coop-Map und Lobby-Uhrzeit.
+   * verbundene Spieler-IDs, aktueller Game-Mode, Coop-Map, Coop-Programm und Lobby-Uhrzeit.
    *
    * Clients vergleichen beim "Bereit"-Klick ihren *separat* propagierten Stand gegen diesen
-   * gebündelten Snapshot. Da die Einzel-Keys (Roster via Join-Callbacks, KEY_GAME_MODE, KEY_COOP_MAP_ID)
+   * gebündelten Snapshot. Da die Einzel-Keys (Roster via Join-Callbacks, Modus, Map, Programm)
    * unabhängig voneinander ankommen, deckt der Vergleich genau die Fälle auf, in denen ein Client
    * noch nicht aufgeschlossen hat – z. B. einen Mitspieler nicht kennt (Bug A/B) oder mit veraltetem
    * Modus bereit würde (und so ein für den Modus ungültiges Loadout committen könnte).
@@ -1279,6 +1292,7 @@ export class NetworkBridge {
       r: this.getLobbyReadyRevision() + (advanceReadyRevision ? 1 : 0),
       m: this.getGameMode(),
       c: this.getCoopDefenseMapId(),
+      cpg: this.getCoopProgram(),
       t: this.getLobbyTimeOfDayMinutes(),
       p: [...this.connectedPlayers.keys()].sort(),
     }, true);
@@ -1306,7 +1320,7 @@ export class NetworkBridge {
    * kein Snapshot angekommen ist (dann keine Blockade, um Fehlalarme zu vermeiden).
    */
   getLobbySyncConsistency(): { consistent: boolean; hostStatePresent: boolean; issues: string[] } {
-    const snapshot = getState(KEY_LOBBY_SYNC) as { m?: GameMode; c?: string; t?: number; p?: string[] } | undefined;
+    const snapshot = getState(KEY_LOBBY_SYNC) as { m?: GameMode; c?: string; cpg?: unknown; t?: number; p?: string[] } | undefined;
     if (!snapshot || !Array.isArray(snapshot.p)) {
       return { consistent: true, hostStatePresent: false, issues: [] };
     }
@@ -1326,6 +1340,12 @@ export class NetworkBridge {
     if (isCoopDefenseMode(snapshot.m ?? this.getGameMode())
       && snapshot.c !== undefined && snapshot.c !== this.getCoopDefenseMapId()) {
       issues.push(`Coop-Map: lokal=${this.getCoopDefenseMapId()} host=${snapshot.c}`);
+    }
+
+    const hostProgram = parseCoopProgram(snapshot.cpg) ?? DEFAULT_COOP_PROGRAM;
+    if (isCoopDefenseMode(snapshot.m ?? this.getGameMode())
+      && !isSameCoopProgram(hostProgram, this.getCoopProgram())) {
+      issues.push(`Coop-Programm: lokal=${this.getCoopProgram().kind} host=${hostProgram.kind}`);
     }
 
     if (!isCoopDefenseMode(snapshot.m ?? this.getGameMode())
@@ -1449,11 +1469,26 @@ export class NetworkBridge {
     this.hostPublishLobbySync();
   }
 
+  getCoopProgram(): CoopProgram {
+    return parseCoopProgram(getState(KEY_COOP_PROGRAM)) ?? DEFAULT_COOP_PROGRAM;
+  }
+
+  setCoopProgram(program: CoopProgram): void {
+    if (!isHost()) return;
+    const parsed = parseCoopProgram(program);
+    if (!parsed || isSameCoopProgram(this.getCoopProgram(), parsed)) return;
+    setState(KEY_COOP_PROGRAM, parsed, true);
+    this.hostInvalidateLobbyReadyStateForAllPlayers();
+    this.hostPublishLobbySync();
+  }
+
   setCoopDefenseMapId(mapId: string): void {
     if (!isHost()) return;
     const normalizedMapId = getCoopDefenseMapConfig(mapId).mapId;
-    if (this.getCoopDefenseMapId() === normalizedMapId) return;
+    if (this.getCoopDefenseMapId() === normalizedMapId
+      && isSameCoopProgram(this.getCoopProgram(), DEFAULT_COOP_PROGRAM)) return;
     setState(KEY_COOP_MAP_ID, normalizedMapId, true);
+    setState(KEY_COOP_PROGRAM, DEFAULT_COOP_PROGRAM, true);
     this.hostInvalidateLobbyReadyStateForAllPlayers();
     this.hostPublishLobbySync();
   }
@@ -1562,9 +1597,9 @@ export class NetworkBridge {
   private usesFreeForAllWorldRelationships(): boolean {
     if (import.meta.env.DEV && this.devScenarioPlayerFreeForAll) return true;
     if (this.getActivityDescriptor() !== null) return false;
-    const definitionId = this.getWorldDescriptor()?.definitionId;
-    if (!definitionId) return false;
-    return getWorldDefinition(definitionId)?.actionPolicy?.playerRelationships === 'free-for-all';
+    const world = this.getWorldDescriptor();
+    if (!world) return false;
+    return resolveWorldDefinition(world, null)?.actionPolicy?.playerRelationships === 'free-for-all';
   }
 
   areTeammates(firstPlayerId: string, secondPlayerId: string): boolean {
@@ -1980,8 +2015,10 @@ export class NetworkBridge {
     const coopDefenseClassId = isCoopDefenseClassId(raw.coopDefenseClassId)
       ? raw.coopDefenseClassId
       : null;
+    // Each commit carries its owner's trusted research; never use host-local progress here.
+    const entitlements = resolveCoopDefenseUpgradeEntitlements(raw.coopDefenseEntitlements);
     const profile = raw.coopDefenseProfile == null ? null
-      : sanitizeCoopDefenseUpgradeProfile(raw.coopDefenseProfile, coopDefenseClassId ?? undefined);
+      : constrainCoopDefenseUpgradeProfileToEntitlements(raw.coopDefenseProfile, entitlements, coopDefenseClassId ?? undefined);
     return {
       weapon1: raw.weapon1,
       weapon2: raw.weapon2,
@@ -1989,6 +2026,7 @@ export class NetworkBridge {
       ultimate: raw.ultimate,
       coopDefenseClassId,
       coopDefenseProfile: profile,
+      coopDefenseEntitlements: [...entitlements],
       tools: profile?.toolLoadout?.map((tool) => ({ ...tool })),
       // Ausruestung wird an derselben Stelle validiert wie die Utility-Slots: unbekannte Items
       // und Eigenschaften fallen weg, Werte werden auf ihren Wurfbereich geklemmt.
@@ -2308,6 +2346,7 @@ export class NetworkBridge {
     const raw = getState(KEY_COOP_ENCOUNTER_PRESENTATION) as Partial<CoopDefenseEncounterPresentationState> | null | undefined;
     if (!raw || typeof raw !== 'object' || typeof raw.encounterId !== 'string' || raw.encounterId.length === 0) return null;
     const sequenceIndex = raw.sequenceIndex;
+    if (raw.finale !== undefined && raw.finale !== true) return null;
     const sequenceCount = raw.sequenceCount;
     const phaseStartedAtMs = raw.phaseStartedAtMs;
     const phase = raw.phase;
@@ -2348,6 +2387,7 @@ export class NetworkBridge {
       && enemiesDefeated >= 0 && enemiesDefeated <= enemiesTotal;
     return {
       encounterId: raw.encounterId,
+      ...(raw.finale === true ? { finale: true } : {}),
       sequenceIndex,
       sequenceCount,
       phase: phase as CoopDefenseEncounterPresentationState['phase'],
@@ -3480,6 +3520,7 @@ export class NetworkBridge {
     );
 
     this.krakenReceiver.applySnapshot(raw.kr);
+    // The compact slice includes optional eliteAffixId; enemySnapshotCodec validates its ID on decode.
     const enemySnapshot = (raw.e as SyncedEnemySnapshot | undefined) ?? null;
     const enemies = raw.ar === (this.getActivityDescriptor()?.activityRevision ?? null)
       ? this.krakenReceiver.applyEnemies(enemySnapshot) : enemySnapshot;
@@ -5316,6 +5357,19 @@ export class NetworkBridge {
 
   resetCoopDefenseRoundXp(): void {
     this.setCoopDefenseRoundXp(0);
+  }
+
+  /** Gemeinsamer Schrott der laufenden Dawn-Runde; Late Join erhaelt ihn mit dem Welcome. */
+  getDawnRoundScrap(): number {
+    const raw = getState(KEY_DAWN_ROUND_SCRAP) as number | undefined;
+    if (typeof raw !== 'number' || !Number.isFinite(raw)) return 0;
+    return Math.max(0, Math.floor(raw));
+  }
+
+  /** Host-only: veroeffentlicht den vom Dawn-Ledger gefuehrten Rundenschrott. */
+  hostPublishDawnRoundScrap(total: number): void {
+    if (!isHost()) return;
+    setState(KEY_DAWN_ROUND_SCRAP, Math.max(0, Math.floor(Number.isFinite(total) ? total : 0)), true);
   }
 
   setLocalCoopDefenseTotalXp(totalXp: number): void {

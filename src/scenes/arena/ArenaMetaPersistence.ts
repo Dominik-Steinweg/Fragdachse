@@ -1,4 +1,5 @@
 import {
+  updateStoredDawnProgress,
   getStoredCoopDefenseLoadout,
   getStoredCoopDefenseProgress,
   addStoredCoopDefenseXp,
@@ -49,6 +50,7 @@ export function createArenaMetaProgressStore(): ArenaMetaProgressStore {
     setDebugProgress: setStoredCoopDefenseCheatProgress,
     resetCharacter: resetStoredCoopDefenseCharacter,
     addCoopDefenseXp: addStoredCoopDefenseXp,
+    updateDawnProgress: updateStoredDawnProgress,
     markCoopDefenseRoundProcessed: markStoredCoopDefenseRoundProcessed,
     markCoopDefenseMapCompleted: markStoredCoopDefenseMapCompleted,
     markCoopDefenseBossMapCompleted: markStoredCoopDefenseBossMapCompleted,

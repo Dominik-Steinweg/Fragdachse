@@ -3,7 +3,7 @@ import { CombatProjectileQueryAdapter } from '../../combat/CombatProjectileQuery
 import { bridge } from '../../network/bridge';
 import { EnergyShieldSystem } from '../../systems/EnergyShieldSystem';
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE } from '../../config';
-import { getCoopDefenseMapConfig, resolveCoopDefenseMapMissionProgress } from '../../config/coopDefenseMaps';
+import { resolveCoopDefenseMapMissionProgress, resolveCoopDefenseRespawnDelayMs } from '../../config/coopDefenseMaps';
 import {
   WorldCombatGameplayBinding,
 } from '../../world/WorldCombatGameplayBinding';
@@ -16,7 +16,7 @@ import type { ArenaContext } from './ArenaContext';
 import type { SyncedProjectile } from '../../types';
 import type { ProjectileImpactSource } from '../../projectile/ProjectileGameplayPort';
 import { UTILITY_CONFIGS, type PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
-import { toMapId } from '../../world/arenaDescriptorAdapter';
+import { resolveCoopDefenseMapConfig } from '../../world/WorldDefinitionResolution';
 import type {
   ArenaWorldGameplay,
   ArenaWorldGameplayCompositionInput,
@@ -170,15 +170,19 @@ export function composeWorldCombatGameplay(
     isCoopMission: () => flow.isCoopMissionActivity(),
     isCoopDefense: () => bridge.getGameMode() === 'coop_defense',
     isActivityActive: () => flow.isActivityActive(),
+    getRespawnDelayMs: () => {
+      const arenaStartTime = bridge.getArenaStartTime();
+      if (!flow.isCoopMissionActivity() || arenaStartTime <= 0) return null;
+      const mapConfig = resolveCoopDefenseMapConfig(worldRuntime.context.descriptor, bridge.getActivityDescriptor());
+      return resolveCoopDefenseRespawnDelayMs(mapConfig?.respawnDelaySchedule, bridge.getSynchronizedNow() - arenaStartTime);
+    },
     onVoiceDamage: (id, amount) => ctx.voice?.damage(id, amount),
     getSpawnContext: (playerId) => {
       const latestState = bridge.getLatestGameState();
       const missionState = bridge.getCoopDefenseMissionProgressPresentationState();
       const worldContext = worldRuntime.context;
-      const worldMapId = toMapId(worldContext.descriptor.definitionId);
-      const missionConfig = worldMapId === null
-        ? null
-        : resolveCoopDefenseMapMissionProgress(getCoopDefenseMapConfig(worldMapId));
+      const activeMapConfig = resolveCoopDefenseMapConfig(worldContext.descriptor, bridge.getActivityDescriptor());
+      const missionConfig = activeMapConfig === null ? null : resolveCoopDefenseMapMissionProgress(activeMapConfig);
       const respawnCheckpoint = missionConfig?.checkpoints.find(
         ({ id }) => id === missionState?.respawnCheckpointId,
       );

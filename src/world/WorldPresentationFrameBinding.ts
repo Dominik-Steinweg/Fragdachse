@@ -164,9 +164,12 @@ export interface WorldClientPresentationRenderers {
  * schmalen, benannten Ports dieses Inputs. Activity-Presentation bleibt ausserhalb dieses Owners.
  */
 export interface WorldPresentationFrameBindingInput {
+  readonly getLobbyMerchant?: () => Pick<import('../arena/LobbyMerchantRenderer').LobbyMerchantRenderer, 'update'> | null;
   readonly enemyEyes?: import('../effects/EnemyEyeGlowRenderer').EnemyEyeGlowRenderer;
   readonly groundFog?: {
     readonly getSystem: () => GroundFogSystem | null;
+    /** Activity overlay; undefined restores the borrowed World strength. */
+    readonly getActivityStrength?: () => number | undefined;
     readonly getBases: () => BaseManager | null;
     readonly getProjectiles: () => ProjectilePresentationRuntime | null;
     readonly effects: Pick<EffectSystem, 'bindGroundFogExplosion' | 'bindGroundFogCombat'>;
@@ -550,6 +553,7 @@ export class WorldPresentationFrameBinding {
     this.input.clientWorldPresentation.powerUp.updatePresentation(this.presentationTimeMs);
     this.syncSunlight();
     const fog = this.prepareGroundFog(); if (!fog) return;
+    this.syncActivityFogStrength(fog);
     const quality = getGraphicsQualityController(this.input.scene);
     fog.enabled = quality?.getGroundFogEnabled() ?? true; fog.quality = quality?.getLevel() ?? 'high';
     const view = getVisibleWorldView(this.input.scene.cameras.main);
@@ -562,6 +566,20 @@ export class WorldPresentationFrameBinding {
     // Publish dirty geometry/GPU repair before the fog samples the borrowed field.
     this.input.getArenaResult()?.rockVisualSystem?.flush();
     fog.update(deltaMs, this.input.lighting.getTimeOfDayMinutes(), view, showWorld);
+  }
+
+  private activityFogBaseline: { fog: GroundFogSystem; strength: number } | null = null;
+
+  private syncActivityFogStrength(fog: GroundFogSystem): void {
+    const strength = this.input.groundFog?.getActivityStrength?.();
+    if (this.activityFogBaseline && (strength === undefined || this.activityFogBaseline.fog !== fog)) {
+      this.activityFogBaseline.fog.strength = this.activityFogBaseline.strength;
+      this.activityFogBaseline = null;
+    }
+    if (strength !== undefined) {
+      this.activityFogBaseline ??= { fog, strength: fog.strength };
+      fog.strength = strength;
+    }
   }
 
   /** Shot feedback observes only this World's displayed players and ends before handoff. */
@@ -749,6 +767,8 @@ export class WorldPresentationFrameBinding {
     ) && this.input.isLocalPlayerAttachedToWorld();
     this.input.setLocalPlayerStatusRingActive(localPlayerVisuals && !spectator);
     this.input.setLocalPlayerWorldBarsVisible(!showWorld);
+    const player = showWorld && localPlayerVisuals && !spectator ? this.input.getLocalPlayerSprite() : null;
+    this.input.getLobbyMerchant?.()?.update(player?.active ? player : null);
   }
 
   /** World-lokale Gravel-/Baustellenprojektion der persistenten Basis. */
@@ -875,6 +895,11 @@ export class WorldPresentationFrameBinding {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    if (this.activityFogBaseline) {
+      this.activityFogBaseline.fog.strength = this.activityFogBaseline.strength;
+      this.activityFogBaseline = null;
+    }
+    this.input.getLobbyMerchant?.()?.update(null);
     this.releaseFireControlCopyShots?.(); this.releaseFireControlCopyShots = null;
     this.fireControl?.destroy(); this.fireControl = null;
     this.fireControlPorts = null;

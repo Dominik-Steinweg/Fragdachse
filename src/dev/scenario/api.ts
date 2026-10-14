@@ -49,6 +49,15 @@ function slot(value: unknown): WeaponSlot {
 export function runScenarioCommand(controller: DevScenarioController, value: unknown): void | Promise<void> {
   const c = object(value);
   switch (c.action) {
+    case 'dawnSkip':
+    case 'dawnPhase': {
+      if (!['day', 'dusk', 'night', 'dawn'].includes(c.phase as string)) throw new Error('phase: day, dusk, night oder dawn erwartet.');
+      const offsetMs = c.offsetMs === undefined ? 0 : number(c.offsetMs, 0, Number.MAX_SAFE_INTEGER);
+      if (!Number.isSafeInteger(offsetMs)) throw new Error('offsetMs muss ganzzahlig sein.');
+      const phase = c.phase as import('../../config/dawn/dawnContent').DawnPhaseId;
+      if (c.action === 'dawnSkip') return controller.skipDawnPhase(phase, offsetMs);
+      controller.jumpDawnPhase(phase, offsetMs); break;
+    }
     case 'shapeSpawn':
       if (typeof c.asset !== 'string') throw Error('shapeSpawn.asset required');
       return controller.arrangeShapeDraft(c.asset, c.gridX === undefined && c.gridY === undefined ? undefined : point(c));
@@ -233,6 +242,7 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
     }
     case 'options': {
       const options = object(c.values);
+      controller.validateLiveOptions(options);
       for (const key of Object.keys(options)) if (!['timeOfDay', 'freezeMission', 'hideTutorial', 'suppressWaves', 'refillHp', 'refillAdrenaline', 'playerFreeForAll', 'hideAim'].includes(key)) throw new Error(`Keine Live-Option: ${key}`);
       controller.config = parseScenario({ ...controller.config, ...options }); controller.saveLink(); break;
     }

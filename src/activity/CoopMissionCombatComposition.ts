@@ -306,6 +306,8 @@ export class CoopMissionCombatComposition {
                 const sinceSpawn = runtime.coopDefenseBossSystem?.getMsSinceSpawn() ?? null;
                 return sinceSpawn !== null && sinceSpawn >= start.delayMs;
               }
+              case 'site-activated':
+                return runtime.coopDefenseSiteActivationSystem?.isSiteActivated(start.siteId) ?? false;
               case 'time':
               case 'after-previous':
                 return false;

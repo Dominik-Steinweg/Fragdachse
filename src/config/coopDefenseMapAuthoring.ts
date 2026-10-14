@@ -26,12 +26,14 @@ import { DEFAULT_TIME_OF_DAY_MINUTES, formatTimeOfDay, parseTimeOfDay } from '..
 import { normalizeCoopDefensePlayerScalingFactor } from './coopDefenseScaling';
 import type { GroundFireVisualStyle, SpawnFront } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
-import { MAX_PERSISTENT_BASE_RADIUS_CELLS, PERSISTENT_BASE_CLEARANCE_CELLS } from './persistentBase';
 import {
   buildPersistentBaseCoreBaseConfig,
   DEFAULT_PERSISTENT_BASE_BUILD_AREA,
   DEFAULT_PERSISTENT_BASE_ORIENTATION,
   isPersistentBaseOrientation,
+  isPersistentBaseAreaStage,
+  resolvePersistentBaseReservationRadiusCells,
+  type PersistentBaseAreaStage,
   type PersistentBaseBuildArea,
   type PersistentBaseOrientation,
 } from '../persistentBase/PersistentBaseCore';
@@ -113,6 +115,8 @@ export type CoopBaseFaction = 'friendly' | 'hostile';
 export type CoopBaseRole = 'main' | 'outpost' | 'spawn-point';
 
 export interface CoopBaseConfig {
+  /** World surface presentation; omitted means the usual cell surface. */
+  readonly surface?: 'cells' | 'none';
   readonly id: string;
   readonly hpMax: number;
   /**
@@ -198,11 +202,17 @@ export type CoopDefenseMapEncounterStart =
   | { readonly type: 'boss-phase'; readonly phase: number }
   /** Startet `delayMs` nach dem tatsaechlichen Boss-Spawn (also nach einem Boss-Intro). */
   | { readonly type: 'after-boss-spawn'; readonly delayMs: number }
-  | { readonly type: 'base-destroyed'; readonly baseId: string };
+  | { readonly type: 'base-destroyed'; readonly baseId: string }
+  /** Die Salvage-Site mit dieser ID wurde aktiviert (betreten); fuer Nebenziele und Encounter. */
+  | { readonly type: 'site-activated'; readonly siteId: string };
+
+/** Missing: one announced wave per encounter. False: silent. Objects combine a named wave. */
+export type CoopDefenseMapEncounterAnnouncement = false | { readonly group: string; readonly finale?: true };
 
 /** Endlicher Encounter; `repel-assault` verwendet die Reihenfolge als Clear-/Rest-Kette. */
 export interface CoopDefenseMapEncounterConfig {
   readonly id: string;
+  readonly announce?: CoopDefenseMapEncounterAnnouncement;
   readonly start: CoopDefenseMapEncounterStart;
   /** Authored pause after this encounter is cleared; ignored after the final encounter. */
   readonly restAfterMs?: number;
@@ -221,6 +231,7 @@ export interface ResolvedCoopDefenseMapEncounterGroupConfig {
 
 export interface ResolvedCoopDefenseMapEncounterConfig {
   readonly id: string;
+  readonly announce?: CoopDefenseMapEncounterAnnouncement;
   readonly start: CoopDefenseMapEncounterStart;
   readonly restAfterMs: number;
   readonly groups: readonly ResolvedCoopDefenseMapEncounterGroupConfig[];
@@ -304,6 +315,17 @@ export interface CoopDefenseMapSecondaryObjectiveConfig {
   readonly start: CoopDefenseMapEncounterStart;
   readonly focusUntil?: CoopDefenseMapEncounterStart;
   /**
+   * Ein noch aktives Ziel scheitert ohne Belohnung, sobald dieser Trigger erfuellt ist - etwa
+   * wenn eine Salvage-Site in der Daemmerung schliesst. Abgeschlossene Ziele bleiben abgeschlossen.
+   */
+  readonly expiresAt?: CoopDefenseMapEncounterStart;
+  /**
+   * Aktiviert unabhaengig vom Fokus-Slot, sobald `start` erfuellt ist, und laeuft immer als
+   * Hintergrund-Ziel. Fuer gleichzeitig bespielbare Ziele wie Salvage-Sites; schliesst
+   * `focusUntil` aus.
+   */
+  readonly concurrent?: true;
+  /**
    * Nur fuer `hold`: alternativ zu holdDurationMs/holdUntilVictory der Zeitpunkt, bis zu dem die Ziele leben muessen. Hold besitzt
    * keinen Hintergrundzustand – dieses Fenster ist zugleich sein Fokusfenster.
    */
@@ -331,6 +353,8 @@ export interface ResolvedCoopDefenseMapSecondaryObjectiveConfig {
   readonly type: CoopDefenseSecondaryObjectiveType;
   readonly start: CoopDefenseMapEncounterStart;
   readonly focusUntil?: CoopDefenseMapEncounterStart;
+  readonly expiresAt?: CoopDefenseMapEncounterStart;
+  readonly concurrent?: true;
   readonly holdUntil?: CoopDefenseMapEncounterStart;
   readonly holdUntilVictory?: true;
   readonly holdDurationMs?: number;
@@ -473,7 +497,12 @@ export type CoopDefenseMapObjective =
   | 'survive'
   | 'defeat-boss'
   | 'destroy-hostile-bases'
-  | 'advance';
+  | 'advance'
+  /**
+   * Bis zum Ablauf der Missionszeit (`surviveDurationSec`) durchhalten. Verloren wird wie bei den
+   * Basiszielen ueber die eigene Hauptbasis, nicht ueber den Team-Wipe; Spieler respawnen.
+   */
+  | 'defend-until-dawn';
 
 /**
  * Belohnt einen Sieg auf dieser Map mit einem Item-Angebot. Bewusst pro Map konfigurierbar und
@@ -710,6 +739,8 @@ export interface CoopDefenseMapTutorialStepConfig {
  */
 export interface CoopDefenseMapPersistentBaseConfig {
   readonly baseId: string;
+  /** Maximum frozen stage supported by this site; omitted = campaign maximum. */
+  readonly maxAreaStage?: PersistentBaseAreaStage;
   /** Kanonischer Bezugspunkt des Kerns: die Mittelzelle seiner 7x7-Grundflaeche. */
   readonly anchor: PersistentBaseAnchor;
   /** Ohne Angabe die kanonische Ausrichtung. */
@@ -753,6 +784,13 @@ export interface CoopDefenseMapAuthoringConfig extends CoopDefenseMapConfig {
   readonly waterAreas?: readonly CoopDefenseMapWaterAreaConfig[];
 }
 
+/** Union of circular trunk-placement regions; overlapping regions form irregular groves. */
+export interface CoopDefenseMapTreeGrovesConfig {
+  /** Authored crown margin around bases, sites, rocks and the arena edge, in cells. */
+  readonly canopyClearanceCells: number;
+  readonly areas: readonly { readonly gridX: number; readonly gridY: number; readonly radiusCells: number }[];
+}
+
 export interface CoopDefenseMapConfig {
   readonly krakenHabitat?: KrakenHabitatConfig;
   readonly water?: readonly import('../types').WaterCell[];
@@ -786,6 +824,7 @@ export interface CoopDefenseMapConfig {
   readonly rockFillRatio?: number;
   /** Authored Baumzahl; ohne Angabe gilt der globale Arena-Standard. */
   readonly treeCount?: number;
+  readonly treeGroves?: CoopDefenseMapTreeGrovesConfig;
   /** Authored Gänge durch ein geschlossenes Felsfeld oder organische Felsformationen. */
   readonly rockField?: CoopDefenseMapRockFieldConfig;
   /**
@@ -851,11 +890,50 @@ export interface CoopDefenseMapConfig {
   readonly respawnsPerPlayer?: number;
   /** Gesetzt: Ein Sieg auf dieser Map bietet dem Spieler drei Items zur Auswahl an. */
   readonly itemDrop?: CoopDefenseMapItemDropConfig;
+  /**
+   * Optionale Respawn-Verzoegerung nach Missionszeit, aufsteigend nach `fromMs`; der erste
+   * Eintrag beginnt bei 0. Ohne Angabe gilt die globale Verzoegerung.
+   */
+  readonly respawnDelaySchedule?: readonly CoopDefenseMapRespawnDelayStep[];
   /** Rein visuelle kanonische Persistent-Base-Vorschau; erzeugt keine World-Struktur. */
   readonly persistentBasePreview?: CoopDefenseMapPersistentBasePreviewConfig;
   /** Reuses the authored friendly main base as the persistent anchor. */
   readonly persistentBase?: CoopDefenseMapPersistentBaseConfig;
+  /**
+   * World-Geometrie: garantiert freie, organisch umrandete Lichtungen um Salvage-Sites. Ihre ID
+   * ist die Site-ID, auf die `site-activated` verweist; der Generator fraest den Kern frei.
+   */
+  readonly siteClearings?: readonly CoopDefenseMapSiteClearingConfig[];
 }
+
+export interface CoopDefenseMapRespawnDelayStep {
+  readonly fromMs: number;
+  readonly delayMs: number;
+}
+
+/** Respawn-Verzoegerung zur Missionszeit `elapsedMs`; `null` ohne authored Plan. */
+export function resolveCoopDefenseRespawnDelayMs(
+  schedule: readonly CoopDefenseMapRespawnDelayStep[] | undefined,
+  elapsedMs: number,
+): number | null {
+  if (!schedule || schedule.length === 0) return null;
+  let delayMs = schedule[0].delayMs;
+  for (const step of schedule) {
+    if (step.fromMs > elapsedMs) break;
+    delayMs = step.delayMs;
+  }
+  return delayMs;
+}
+
+export interface CoopDefenseMapSiteClearingConfig {
+  readonly id: string;
+  readonly gridX: number;
+  readonly gridY: number;
+  readonly radiusCells: number;
+}
+
+/** Groesster erlaubter Lichtungsradius; groessere Flaechen gehoeren in eigenes Terrain-Authoring. */
+export const MAX_COOP_DEFENSE_SITE_CLEARING_RADIUS_CELLS = 12;
 
 /** Maschinenlesbarer Kampagnen-Audit fuer das GDD-Review und Balancing-Tools. */
 export interface CoopDefenseCampaignAuditEntry {
@@ -949,6 +1027,7 @@ export function resolveCoopDefenseMapEncounterConfigs(
 ): readonly ResolvedCoopDefenseMapEncounterConfig[] {
   return (mapConfig.encounters ?? []).map((encounter) => ({
     id: encounter.id,
+    ...(encounter.announce === undefined ? {} : { announce: encounter.announce }),
     start: encounter.start,
     restAfterMs: Math.max(0, Math.floor(encounter.restAfterMs ?? 0)),
     groups: encounter.groups.map((group) => {
@@ -978,6 +1057,8 @@ export function resolveCoopDefenseMapSecondaryObjectives(
     type: objective.type,
     start: objective.start,
     ...(objective.focusUntil ? { focusUntil: objective.focusUntil } : {}),
+    ...(objective.expiresAt ? { expiresAt: objective.expiresAt } : {}),
+    ...(objective.concurrent ? { concurrent: objective.concurrent } : {}),
     ...(objective.holdUntil ? { holdUntil: objective.holdUntil } : {}),
     ...(objective.holdUntilVictory ? { holdUntilVictory: objective.holdUntilVictory } : {}),
     ...(objective.holdDurationMs === undefined ? {} : { holdDurationMs: objective.holdDurationMs }),
@@ -1111,11 +1192,14 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     mapConfig.mapId,
     mapConfig.balanceReferenceDurationSec,
   );
+  const siteClearings = normalizeSiteClearings(mapConfig.mapId, mapConfig.siteClearings, arenaWidthCells, arenaHeightCells);
+  const siteIds = new Set((siteClearings ?? []).map(({ id }) => id));
   const encounters = normalizeEncounterConfigs(mapConfig.mapId, mapConfig.encounters, {
     bases,
     boss,
     arenaWidthCells,
     arenaHeightCells,
+    siteIds,
   });
   const trackMode: CoopDefenseMapTrackMode = mapConfig.trackMode === 'none' ? 'none' : mapConfig.trackMode === 'void-fire' ? 'void-fire' : 'rails';
   const trackPosition = normalizeTrackPosition(
@@ -1142,6 +1226,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     itemDrop,
     arenaWidthCells,
     arenaHeightCells,
+    siteIds,
   });
   const persistentBaseRewardsOnVictory = normalizePersistentBaseRewardIds(
     mapConfig.mapId,
@@ -1216,6 +1301,9 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     tutorialShowControls: mapConfig.tutorialShowControls === true,
     rockFillRatio: normalizeRockFillRatio(mapConfig.rockFillRatio),
     treeCount: normalizeTreeCount(mapConfig.treeCount),
+    ...(mapConfig.treeGroves === undefined ? {} : {
+      treeGroves: normalizeTreeGroves(mapConfig.mapId, mapConfig.treeGroves, arenaWidthCells, arenaHeightCells),
+    }),
     rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),
     rockWalls,
     tutorialAnchor,
@@ -1247,7 +1335,60 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     itemDrop,
     persistentBasePreview,
     persistentBase,
+    ...(siteClearings === undefined ? {} : { siteClearings }),
+    ...(mapConfig.respawnDelaySchedule === undefined
+      ? {}
+      : { respawnDelaySchedule: normalizeRespawnDelaySchedule(mapConfig.mapId, mapConfig.respawnDelaySchedule) }),
   };
+}
+
+function normalizeRespawnDelaySchedule(
+  mapId: string,
+  schedule: readonly CoopDefenseMapRespawnDelayStep[],
+): readonly CoopDefenseMapRespawnDelayStep[] {
+  if (!Array.isArray(schedule) || schedule.length === 0) {
+    throw new Error(`[coopDefenseMaps] Map ${mapId} respawnDelaySchedule needs at least one step`);
+  }
+  let previousFromMs = -1;
+  return schedule.map((step, index) => {
+    const { fromMs, delayMs } = step ?? {};
+    if (!Number.isSafeInteger(fromMs) || fromMs <= previousFromMs || (index === 0 && fromMs !== 0)) {
+      throw new Error(`[coopDefenseMaps] Map ${mapId} respawnDelaySchedule must start at 0 and ascend`);
+    }
+    if (!Number.isSafeInteger(delayMs) || delayMs <= 0) {
+      throw new Error(`[coopDefenseMaps] Map ${mapId} respawnDelaySchedule needs positive integer delays`);
+    }
+    previousFromMs = fromMs;
+    return { fromMs, delayMs };
+  });
+}
+
+function normalizeSiteClearings(
+  mapId: string,
+  clearings: readonly CoopDefenseMapSiteClearingConfig[] | undefined,
+  arenaWidthCells: number,
+  arenaHeightCells: number,
+): readonly CoopDefenseMapSiteClearingConfig[] | undefined {
+  if (clearings === undefined) return undefined;
+  if (!Array.isArray(clearings)) throw new Error(`[coopDefenseMaps] Map ${mapId} siteClearings must be an array`);
+  const ids = new Set<string>();
+  return clearings.map((clearing) => {
+    const id = normalizeRequiredId(clearing?.id, `[coopDefenseMaps] Map ${mapId} has a site clearing without id`);
+    if (ids.has(id)) throw new Error(`[coopDefenseMaps] Map ${mapId} has duplicate site clearing ${id}`);
+    ids.add(id);
+    const { gridX, gridY, radiusCells } = clearing;
+    if (!Number.isSafeInteger(gridX) || !Number.isSafeInteger(gridY)
+      || gridX < 0 || gridY < 0 || gridX >= arenaWidthCells || gridY >= arenaHeightCells) {
+      throw new Error(`[coopDefenseMaps] Site clearing ${mapId}:${id} lies outside the arena`);
+    }
+    if (typeof radiusCells !== 'number' || !Number.isFinite(radiusCells)
+      || radiusCells < 1 || radiusCells > MAX_COOP_DEFENSE_SITE_CLEARING_RADIUS_CELLS) {
+      throw new Error(
+        `[coopDefenseMaps] Site clearing ${mapId}:${id} needs a radius between 1 and ${MAX_COOP_DEFENSE_SITE_CLEARING_RADIUS_CELLS}`,
+      );
+    }
+    return { id, gridX, gridY, radiusCells };
+  });
 }
 
 function validateMapSpawnModel(
@@ -1320,7 +1461,10 @@ function normalizePersistentBaseConfig(
     throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} cannot author hpMax`);
   }
 
-  const reservationRadius = MAX_PERSISTENT_BASE_RADIUS_CELLS + PERSISTENT_BASE_CLEARANCE_CELLS;
+  if (config.maxAreaStage !== undefined && !isPersistentBaseAreaStage(config.maxAreaStage)) {
+    throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} has an invalid maxAreaStage`);
+  }
+  const reservationRadius = resolvePersistentBaseReservationRadiusCells(config.maxAreaStage);
   if (
     anchor.gridX - reservationRadius < 0
     || anchor.gridX + reservationRadius >= arenaWidthCells
@@ -1333,6 +1477,7 @@ function normalizePersistentBaseConfig(
   }
   const site: CoopDefenseMapPersistentBaseConfig = {
     baseId,
+    ...(config.maxAreaStage === undefined ? {} : { maxAreaStage: config.maxAreaStage }),
     anchor: { gridX: anchor.gridX, gridY: anchor.gridY },
     ...(config.orientation === undefined ? {} : { orientation: config.orientation }),
   };
@@ -1368,9 +1513,9 @@ function normalizeSurviveDurationSec(
   objective: CoopDefenseMapObjective,
   value: number | undefined,
 ): number | undefined {
-  if (objective !== 'survive') {
+  if (!isTimedCoopDefenseObjective(objective)) {
     if (value !== undefined) {
-      throw new Error(`[coopDefenseMaps] Only survive maps may declare surviveDurationSec: ${mapId}`);
+      throw new Error(`[coopDefenseMaps] Only timed objectives may declare surviveDurationSec: ${mapId}`);
     }
     return undefined;
   }
@@ -1393,6 +1538,25 @@ function normalizeBalanceReferenceDurationSec(mapId: string, value: number): num
     throw new Error(`[coopDefenseMaps] Map ${mapId} needs a positive balanceReferenceDurationSec`);
   }
   return normalized;
+}
+
+/** Ziele, die ueber den Ablauf ihrer Missionszeit gewonnen werden. */
+export function isTimedCoopDefenseObjective(objective: CoopDefenseMapObjective): boolean {
+  return objective === 'survive' || objective === 'defend-until-dawn';
+}
+
+/**
+ * Die eine Quelle fuer das Zeitlimit einer Coop-Mission in Sekunden; `null` ohne Zeitlimit.
+ * Rundenende, HUD-Timer und Hauptziel-Anzeige lesen es hier, statt das Ziel selbst zu pruefen.
+ */
+export function getCoopMissionTimeLimitSec(
+  mapConfig: Pick<CoopDefenseMapConfig, 'objective' | 'surviveDurationSec'>,
+): number | null {
+  if (!isTimedCoopDefenseObjective(mapConfig.objective)) return null;
+  if (mapConfig.surviveDurationSec === undefined) {
+    throw new Error(`[coopDefenseMaps] Timed objective ${mapConfig.objective} has no surviveDurationSec`);
+  }
+  return mapConfig.surviveDurationSec;
 }
 
 /**
@@ -1434,6 +1598,7 @@ function normalizeObjective(
     && objective !== 'defeat-boss'
     && objective !== 'destroy-hostile-bases'
     && objective !== 'advance'
+    && objective !== 'defend-until-dawn'
   ) {
     throw new Error(`[coopDefenseMaps] Map ${mapId} needs a valid explicit objective`);
   }
@@ -1450,6 +1615,8 @@ function normalizeObjective(
   }
   if (normalizedObjective === 'repel-assault') return normalizedObjective;
   if (normalizedObjective === 'survive') return normalizedObjective;
+  // Die eigene Hauptbasis prueft validateFriendlyMainBase; gewonnen wird ueber die Zeit.
+  if (normalizedObjective === 'defend-until-dawn') return normalizedObjective;
   // Der Vorstoss gewinnt ueber die Route und verliert ueber den Team-Wipe: keine Basispflicht.
   if (normalizedObjective === 'advance') return normalizedObjective;
   // Ohne feindliche Basis waere das Ziel sofort erfuellt und die Map in der ersten Sekunde gewonnen.
@@ -1470,6 +1637,7 @@ function normalizeEncounterConfigs(
   if (encounters === undefined) return undefined;
 
   const uniqueEncounterIds = new Set<string>();
+  let announcementMode: 'grouped' | 'individual' | undefined;
   return encounters.map((encounter, encounterIndex) => {
     if (typeof encounter.id !== 'string' || encounter.id.trim().length === 0) {
       throw new Error(`[coopDefenseMaps] Encounter on map ${mapId} needs a non-empty id`);
@@ -1479,17 +1647,40 @@ function normalizeEncounterConfigs(
       throw new Error(`[coopDefenseMaps] Duplicate encounter id on map ${mapId}: ${id}`);
     }
     uniqueEncounterIds.add(id);
+    const announce = normalizeEncounterAnnouncement(mapId, id, encounter.announce);
+    if (announce !== false) {
+      const mode = announce === undefined ? 'individual' : 'grouped';
+      if (announcementMode !== undefined && announcementMode !== mode) {
+        throw new Error(`[coopDefenseMaps] Map ${mapId} must not mix grouped and ungrouped announce encounters`);
+      }
+      announcementMode = mode;
+    }
     if (!Array.isArray(encounter.groups) || encounter.groups.length === 0) {
       throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${id} needs at least one group`);
     }
 
     return {
       id,
+      ...(announce === undefined ? {} : { announce }),
       start: normalizeEncounterStart(mapId, id, encounter.start, encounterIndex, context),
       restAfterMs: normalizeNonNegativeMilliseconds(encounter.restAfterMs),
       groups: encounter.groups.map((group) => normalizeEncounterGroup(mapId, id, group, context)),
     };
   });
+}
+
+function normalizeEncounterAnnouncement(
+  mapId: string,
+  encounterId: string,
+  announce: CoopDefenseMapEncounterAnnouncement | undefined,
+): CoopDefenseMapEncounterAnnouncement | undefined {
+  if (announce === undefined || announce === false) return announce;
+  if (!announce || typeof announce !== 'object' || Array.isArray(announce)
+    || typeof announce.group !== 'string' || announce.group.trim().length === 0
+    || (announce.finale !== undefined && announce.finale !== true)) {
+    throw new Error(`[coopDefenseMaps] Invalid announce on encounter ${mapId}:${encounterId}: needs group ID and optional finale: true`);
+  }
+  return { group: announce.group.trim(), ...(announce.finale === true ? { finale: true as const } : {}) };
 }
 
 interface SecondaryObjectiveNormalizationContext {
@@ -1499,6 +1690,8 @@ interface SecondaryObjectiveNormalizationContext {
   readonly itemDrop: CoopDefenseMapItemDropConfig | undefined;
   readonly arenaWidthCells: number;
   readonly arenaHeightCells: number;
+  /** Bekannte Salvage-Sites (aus `siteClearings`) fuer `site-activated`. */
+  readonly siteIds: ReadonlySet<string>;
 }
 
 function normalizeSecondaryObjectiveConfigs(
@@ -1619,6 +1812,10 @@ function normalizeSecondaryObjectiveConfigs(
       ...(objective.focusUntil === undefined
         ? {}
         : { focusUntil: normalizeSecondaryObjectiveTrigger(mapId, id, objective.focusUntil, 'focusUntil', context) }),
+      ...(objective.expiresAt === undefined
+        ? {}
+        : { expiresAt: normalizeSecondaryObjectiveTrigger(mapId, id, objective.expiresAt, 'expiresAt', context) }),
+      ...(normalizeConcurrentObjective(mapId, id, objective) ? { concurrent: true as const } : {}),
       ...(objective.holdUntil === undefined
         ? {}
         : { holdUntil: normalizeSecondaryObjectiveTrigger(mapId, id, objective.holdUntil, 'holdUntil', context) }),
@@ -1789,11 +1986,26 @@ function isSecondaryObjectiveType(value: unknown): value is CoopDefenseSecondary
   return value === 'destroy' || value === 'hold' || value === 'carry';
 }
 
+function normalizeConcurrentObjective(
+  mapId: string,
+  objectiveId: string,
+  objective: CoopDefenseMapSecondaryObjectiveConfig,
+): boolean {
+  if (objective.concurrent === undefined) return false;
+  if (objective.concurrent !== true) {
+    throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} has an invalid concurrent flag`);
+  }
+  if (objective.focusUntil !== undefined) {
+    throw new Error(`[coopDefenseMaps] Concurrent secondary objective ${mapId}:${objectiveId} must not declare focusUntil`);
+  }
+  return true;
+}
+
 function normalizeSecondaryObjectiveTrigger(
   mapId: string,
   objectiveId: string,
   trigger: CoopDefenseMapEncounterStart | undefined,
-  fieldName: 'start' | 'focusUntil' | 'holdUntil',
+  fieldName: 'start' | 'focusUntil' | 'holdUntil' | 'expiresAt',
   context: SecondaryObjectiveNormalizationContext,
 ): CoopDefenseMapEncounterStart {
   if (!trigger || typeof trigger.type !== 'string') {
@@ -1834,6 +2046,16 @@ function normalizeSecondaryObjectiveTrigger(
         `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} needs a defense id for ${fieldName}`,
       );
       return { type: 'after-defense', defenseId };
+    }
+    case 'site-activated': {
+      const siteId = normalizeRequiredId(
+        trigger.siteId,
+        `[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} needs a site id for ${fieldName}`,
+      );
+      if (!context.siteIds.has(siteId)) {
+        throw new Error(`[coopDefenseMaps] Secondary objective ${mapId}:${objectiveId} references unknown site: ${siteId}`);
+      }
+      return { type: 'site-activated', siteId };
     }
     default:
       throw new Error(
@@ -2167,6 +2389,8 @@ interface EncounterTriggerNormalizationContext {
   readonly arenaWidthCells: number;
   readonly arenaHeightCells: number;
   readonly checkpointIds?: ReadonlySet<string>;
+  /** Bekannte Salvage-Sites (aus `siteClearings`) fuer `site-activated`. */
+  readonly siteIds?: ReadonlySet<string>;
 }
 
 function normalizeEncounterStart(
@@ -2212,6 +2436,16 @@ function normalizeEncounterStart(
           `[coopDefenseMaps] Encounter ${mapId}:${encounterId} needs a defense id`,
         ),
       };
+    case 'site-activated': {
+      const siteId = normalizeRequiredId(
+        start.siteId,
+        `[coopDefenseMaps] Encounter ${mapId}:${encounterId} needs a site id`,
+      );
+      if (!context.siteIds?.has(siteId)) {
+        throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} references unknown site: ${siteId}`);
+      }
+      return { type: 'site-activated', siteId };
+    }
     case 'after-event':
       if (typeof start.eventId !== 'string' || start.eventId.trim().length === 0) {
         throw new Error(`[coopDefenseMaps] Encounter ${mapId}:${encounterId} needs an event id`);
@@ -3528,6 +3762,28 @@ function normalizeRockFillRatio(rockFillRatio: number | undefined): number {
   return Math.max(0, Math.min(MAX_ROCK_FILL_RATIO, rockFillRatio));
 }
 
+function normalizeTreeGroves(
+  mapId: string,
+  groves: CoopDefenseMapTreeGrovesConfig,
+  width: number,
+  height: number,
+): CoopDefenseMapTreeGrovesConfig {
+  if (!groves || !Number.isInteger(groves.canopyClearanceCells)
+    || groves.canopyClearanceCells < 1 || groves.canopyClearanceCells >= Math.min(width, height) / 2
+    || !Array.isArray(groves.areas) || groves.areas.length === 0) {
+    throw new Error('[coopDefenseMaps] ' + mapId + ': invalid treeGroves');
+  }
+  for (const area of groves.areas) {
+    if (!area || !Number.isInteger(area.gridX) || !Number.isInteger(area.gridY)
+      || area.gridX < 0 || area.gridX >= width || area.gridY < 0 || area.gridY >= height
+      || !Number.isFinite(area.radiusCells) || area.radiusCells <= 0
+      || area.radiusCells > Math.max(width, height)) {
+      throw new Error('[coopDefenseMaps] ' + mapId + ': invalid treeGroves area');
+    }
+  }
+  return { canopyClearanceCells: groves.canopyClearanceCells, areas: groves.areas.map(area => ({ ...area })) };
+}
+
 function normalizeTreeCount(treeCount: number | undefined): number | undefined {
   if (treeCount === undefined || !Number.isFinite(treeCount)) return undefined;
   return Math.max(0, Math.floor(treeCount));
@@ -3613,6 +3869,9 @@ function normalizeBossConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapBos
 }
 
 function normalizeBaseConfig(baseConfig: CoopBaseConfig): CoopBaseConfig {
+  if (baseConfig.surface !== undefined && baseConfig.surface !== 'cells' && baseConfig.surface !== 'none') {
+    throw new Error(`[coopDefenseMaps] Base ${baseConfig.id} has an invalid surface`);
+  }
   const uniqueTurretIds = new Set<string>();
   const turrets = (baseConfig.turrets ?? []).map((turret) => {
     if (uniqueTurretIds.has(turret.id)) {
@@ -3672,6 +3931,7 @@ function normalizeBaseConfig(baseConfig: CoopBaseConfig): CoopBaseConfig {
 
   return {
     id: baseConfig.id,
+    ...(baseConfig.surface === 'none' ? { surface: 'none' as const } : {}),
     hpMax: Math.max(1, Math.floor(baseConfig.hpMax)),
     ...(baseConfig.startHpFactor === undefined ? {} : { startHpFactor: baseConfig.startHpFactor }),
     playerScaling: normalizeBasePlayerScaling(baseConfig.playerScaling),

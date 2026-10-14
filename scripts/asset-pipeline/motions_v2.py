@@ -99,6 +99,21 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
         t = 1 if idle else min(1, max(0, (phase-.25)/.75))
         raised = t*t*(3-2*t)
         pose('relay_head', location=(0, 0, -.29*(1-raised)))
+    elif motion == 'dawn_broodnest_idle':
+        for i in range(3):
+            pulse = 0 if idle else math.sin(angle + i * .65) - math.sin(i * .65)
+            amount = p.get('breath', .035) * pulse
+            pose(f'egg{i}', scale=(1 + amount, 1 + amount * .7, 1 + amount * 1.2))
+    elif motion in ('dawn_extractor_idle', 'dawn_extractor_active'):
+        pulse = 0 if idle or motion == 'dawn_extractor_idle' else .5 - .5 * math.cos(angle)
+        stroke = p.get('stroke', .10) * pulse
+        pose('hose', scale=(1, 1 + stroke, 1))
+        pose('nozzle', location=(0, -p.get('hoseReach', .89) * stroke, 0))
+        if 'drill' in parts:
+            pose('drill', rotation=(0, 0, 0 if idle or motion == 'dawn_extractor_idle' else angle))
+        socket = parts['warning_emission']
+        socket.default_value = p.get('idleEmission', .08) + p.get('activeEmission', .9) * pulse ** p.get('blinkPower', 1)
+        socket.keyframe_insert(data_path='default_value', frame=frame)
     elif motion == 'firestarter_cast':
         apply_cast(asset, phase, frame, idle, p, pose, key)
     elif motion.startswith('kraken_'):

@@ -105,6 +105,18 @@ function createHarness(mapConfig = getCoopDefenseMapConfig('1') as CoopDefenseMa
 }
 
 describe('CoopMissionPresentationBinding', () => {
+  it('passes the map clock endpoint to the main objective on the client presentation path', () => {
+    const harness = createHarness({ ...getCoopDefenseMapConfig('1'), objective: 'defend-until-dawn',
+      surviveDurationSec: 480, dynamicTimeOfDay: { transitions: [
+        { start: { type: 'time', atMs: 0 }, targetTimeOfDay: '06:15', durationMs: 480000 },
+      ] } });
+    const present = vi.spyOn(harness.ui.centerHud, 'updateMainObjectivePresentation');
+    harness.runtime.bind(harness.binding);
+    harness.binding.sync(16, true);
+    expect(present.mock.calls.at(-1)?.[0]?.progressLabel).toContain('06:15');
+    harness.runtime.destroy();
+  });
+
   it('presents the mortar slice and clears scene-owned markers on Activity detach', () => {
     const harness = createHarness();
     harness.runtime.bind(harness.binding);

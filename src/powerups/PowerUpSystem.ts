@@ -10,7 +10,7 @@ import type { PlayerManager } from '../entities/PlayerManager';
 import type { CombatDamageEffectPort, CombatPlayerSupportPort } from '../combat/CombatCapabilities';
 import {
   POWERUP_DEFS, DROP_TABLES, TIMED_POWERUP_PEDESTAL_CONFIGS,
-  PICKUP_RADIUS, NUKE_CONFIG,
+  resolvePowerUpPickupRadius, NUKE_CONFIG,
   type PowerUpDef, type DropTable,
 } from './PowerUpConfig';
 import { getAdrenalineSyringeDropChance } from '../utils/adrenalineDrops';
@@ -104,6 +104,12 @@ export interface PowerUpSystemOptions {
   includeActivityLinkedPedestals?: boolean;
 }
 
+export interface DawnScrapPickupBinding {
+  readonly onEnemyKilled: (x: number, y: number, enemyKind?: string) => void;
+  readonly canCollect: (uid: number) => boolean;
+  readonly onPickupCollected: NonNullable<PowerUpSystemOptions['onPickupCollected']>;
+}
+
 export interface PowerUpActivityPedestalBinding {
   readonly attach: () => void;
   readonly detach: () => void;
@@ -134,6 +140,9 @@ type PowerUpSystemDeps = CombatPlayerSupportPort & CombatDamageEffectPort;
  * Pickup-Validierung, Buff-Vergabe und -Ablauf laufen ausschließlich auf dem Host.
  */
 export class PowerUpSystem {
+  private dawnScrap: DawnScrapPickupBinding | null = null;
+  private dawnScrapMagnetLevel = 0;
+  private canMagnetCollect: ((playerId: string) => boolean) | null = null;
   private worldItems  = new Map<number, WorldItem>();
   private readonly netSnapshotCache = new Map<number, SyncedPowerUp>();
   private readonly pendingRemovalUids = new Set<number>();
@@ -214,6 +223,9 @@ export class PowerUpSystem {
 
   /** Komplett zurücksetzen (Rundenende / Teardown). */
   reset(): void {
+    this.dawnScrap = null;
+    this.dawnScrapMagnetLevel = 0;
+    this.canMagnetCollect = null;
     this.worldItems.clear();
     this.netSnapshotCache.clear();
     this.pendingRemovalUids.clear();
@@ -451,6 +463,16 @@ export class PowerUpSystem {
 
   update(_delta: number): void {
     const now = Date.now();
+    // Host simulation collects for every eligible participant, including remote players whose
+    // local pickup trigger still uses the ordinary radius. Consumption stays in tryPickup.
+    if (this.dawnScrap && this.dawnScrapMagnetLevel >= 1) {
+      for (const player of this.playerManager.getAllPlayers()) {
+        if (!player.active || !this.canMagnetCollect?.(player.id)) continue;
+        for (const item of this.worldItems.values()) {
+          if (item.def.type === 'dawn_scrap') this.tryPickup(player.id, item.uid, player.x, player.y);
+        }
+      }
+    }
 
     // 1) Abgelaufene Buffs entfernen
     for (const [pid, buffs] of this.activeBuffs) {
@@ -548,9 +570,28 @@ export class PowerUpSystem {
     this.spawnPowerUpDef(def, x, y);
   }
 
+  /** One Activity lease; stale detach cannot clear its successor. */
+  bindDawnScrap(binding: DawnScrapPickupBinding): () => void {
+    if (this.dawnScrap) throw new Error('[PowerUpSystem] Dawn scrap is already bound');
+    this.dawnScrap = binding;
+    return () => { if (this.dawnScrap === binding) this.dawnScrap = null; };
+  }
+
+  /** Frozen host round input. Reset with the World; an active Dawn binding gates its effect. */
+  setDawnScrapMagnet(level: number, canCollectPlayer: (playerId: string) => boolean): void {
+    this.dawnScrapMagnetLevel = level;
+    this.canMagnetCollect = canCollectPlayer;
+  }
+
+  /** Activity cleanup of its unclaimed pickups, including replicated removal. */
+  removePickup(uid: number): void {
+    this.removeObjectiveWorldItem(uid);
+  }
+
   /** Deterministic authored drop; callers retain host authority. */
   spawnPickup(defId: string, x: number, y: number): number | null {
     const def = POWERUP_DEFS[defId];
+    if (def?.type === 'dawn_scrap' && !this.dawnScrap) return null;
     if (!def?.spriteKey || !Number.isFinite(x) || !Number.isFinite(y)) return null;
     return this.spawnPowerUpDef(def, x, y);
   }
@@ -560,7 +601,8 @@ export class PowerUpSystem {
     this.spawnFromTable('ENEMY_KILL', x, y);
   }
 
-  onCoopDefenseEnemyKilled(killerId: string, enemyXp: number, x: number, y: number): void {
+  onCoopDefenseEnemyKilled(killerId: string, enemyXp: number, x: number, y: number, enemyKind?: string): void {
+    this.dawnScrap?.onEnemyKilled(x, y, enemyKind);
     if (!this.options.isAdrenalineDropEnabled?.(killerId)) return;
     const multiplier = Math.max(0, this.options.getAdrenalineDropChanceMultiplier?.(killerId) ?? 1);
     const chance = getAdrenalineSyringeDropChance(
@@ -641,7 +683,9 @@ export class PowerUpSystem {
     if (this.combat.isBurrowed(playerId)) return false; // Eingebuddelte Spieler dürfen nichts einsammeln
 
     const dist = Phaser.Math.Distance.Between(playerX, playerY, item.x, item.y);
-    if (dist > PICKUP_RADIUS * 2) return false; // Zu weit weg → ignorieren (großzügiger Check)
+    if (dist > resolvePowerUpPickupRadius(item.def.type, this.dawnScrap ? this.dawnScrapMagnetLevel : 0)) return false;
+
+    if (item.def.type === 'dawn_scrap' && !this.dawnScrap?.canCollect(uid)) return false;
 
     const consumed = item.pickupKind === 'objective-placement'
       ? Boolean(item.objectiveId && this.options.onObjectiveRewardPickup?.(item.objectiveId, playerId))
@@ -668,6 +712,9 @@ export class PowerUpSystem {
         this.objectiveRewardUids.delete(item.objectiveId);
       }
     }
+    if (item.def.type === 'dawn_scrap') {
+      this.dawnScrap?.onPickupCollected(playerId, { uid, defId: item.def.id, x: item.x, y: item.y });
+    }
     this.options.onPickupCollected?.(playerId, { uid, defId: item.def.id, x: item.x, y: item.y });
     return true;
   }
@@ -676,6 +723,8 @@ export class PowerUpSystem {
 
   private applyEffect(playerId: string, def: PowerUpDef): boolean {
     switch (def.type) {
+      case 'dawn_scrap':
+        return this.dawnScrap !== null;
       case 'instant_heal':
         this.combat.healToFull(playerId);
         break;

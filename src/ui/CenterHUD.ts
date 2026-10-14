@@ -644,7 +644,7 @@ export class CenterHUD {
         ? state.sequenceIndex
         : state.sequenceIndex - 1;
     const currentIndex = isDone ? -1 : state.sequenceIndex - 1;
-    this.encounterCard.setKicker(formatEncounterLabel(state.sequenceIndex, count, state.encounterFronts));
+    this.encounterCard.setKicker(state.finale ? t('ui.encounter.finaleKicker') : formatEncounterLabel(state.sequenceIndex, count, state.encounterFronts));
     if (count > ENCOUNTER_PIP_MAX || count < 2) this.encounterCard.setPips(0, 0, -1);
     else this.encounterCard.setPips(count, clearedCount, currentIndex);
   }
@@ -659,7 +659,7 @@ export class CenterHUD {
         id: `wave:start:${targetId}`,
         topic: 'wave',
         priority: ENCOUNTER_ANNOUNCEMENT_PRIORITY,
-        kicker: t('ui.encounter.waveKicker', { index: state.sequenceIndex, count: state.sequenceCount }),
+        kicker: state.finale ? t('ui.encounter.finaleKicker') : t('ui.encounter.waveKicker', { index: state.sequenceIndex, count: state.sequenceCount }),
         title: t('ui.encounter.attackFrom', { fronts: formatEncounterFronts(state.encounterFronts) }),
         detail: t('ui.encounter.prepare'),
         tone: 'wave',
@@ -694,7 +694,7 @@ export class CenterHUD {
         priority: ENCOUNTER_ANNOUNCEMENT_PRIORITY,
         kicker: state.phase === 'complete'
           ? t('ui.encounter.series')
-          : t('ui.encounter.waveKicker', { index: state.sequenceIndex, count: state.sequenceCount }),
+          : state.finale ? t('ui.encounter.finaleKicker') : t('ui.encounter.waveKicker', { index: state.sequenceIndex, count: state.sequenceCount }),
         title: state.phase === 'complete' ? t('ui.encounter.allWavesCleared') : t('ui.encounter.waveCleared'),
         tone: 'positive',
         holdMs: ENCOUNTER_RESULT_ANNOUNCEMENT_HOLD_MS,

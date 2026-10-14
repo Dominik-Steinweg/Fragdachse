@@ -60,6 +60,16 @@ autoritative Invalidierung aller Ready-Zustände erhöht diese Revision, auch be
 Konfiguration. Erneute Snapshot-Publikation, Join und Resume erhalten sie. Damit kann ein vor
 dem Reset gesendetes Ready den Reset nach verspäteter Zustellung nicht rückgängig machen.
 
+Das Coop-Programm (`campaign` oder `dawn`) bleibt eine Host-Auswahl unter `coop_defense`,
+kein eigener GameMode oder ActivityKind. `NetworkBridge.getCoopProgram`/`setCoopProgram`
+kapseln den globalen Reliable-Key `cpg`; fehlende oder ungültige Werte bedeuten Kampagne.
+Der Lobby-Sync vergleicht das Programm zusätzlich zur Karte. Programmwechsel invalidieren
+Ready; eine Kampagnenkartenwahl setzt das Programm mit genau einer Invalidierung zurück.
+Late Join übernimmt die Auswahl aus dem bestehenden Welcome-Snapshot. Der Host-Picker
+liest für Dawn ausschließlich abgeschlossene Karten seines lokalen Fortschritts über
+`isDawnUnlocked` in [DawnUnlock.ts](../../src/dawn/rules/DawnUnlock.ts); eine freigeschaltete
+letzte Karte allein genügt nicht.
+
 CTB-Ergebnisse tragen beide autoritativen Team-Endstände als `RoundResult.teamScores` in jeder
 berechtigten Ergebniszeile. Sie werden vor dem Activity-Abbau aus dem Regelsystem kopiert und
 atomar mit den übrigen Ergebnisdaten repliziert. Ein Team ohne verbliebene Spielerzeile verliert

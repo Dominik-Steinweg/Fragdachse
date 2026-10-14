@@ -5,7 +5,7 @@ import { GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { getStoredGraphicsQuality } from '../utils/localPreferences';
 import { getRenderScale } from '../graphics/RenderResolution';
 import { ClarityCameraRegistry } from './arena/ClarityCameraRegistry';
-import { PersistentBaseEditorWorld, getPersistentBaseEditorSize } from '../persistentBase/PersistentBaseEditorWorld';
+import { PersistentBaseEditorWorld } from '../persistentBase/PersistentBaseEditorWorld';
 import { getMissedBaseRewards, type BaseEditorObject, type PersistentBaseEditorModel } from '../persistentBase/PersistentBaseEditorModel';
 import { baseEditorObjectKey, getBaseEditorAppearance } from '../persistentBase/PersistentBaseEditorAppearance';
 import { getPersistentConstructionFootprint } from '../persistentBase/PersistentBasePlacementRules';
@@ -25,6 +25,11 @@ import { BUTTON_CURSOR } from '../ui/gameCursor';
 import { activateUi } from '../ui/UiAudio';
 import { attachHoverEffect } from '../ui/uiHover';
 import { t } from '../i18n';
+import { isDawnUnlocked } from '../dawn/rules/DawnUnlock';
+import { buildPersistentBaseExpansionPreview, getPersistentBaseEditorFraming } from '../persistentBase/PersistentBaseExpansionPreview';
+import { createDawnMerchantExpansionPreview, createPersistentBaseEditorBoundary } from '../ui/DawnMerchantExpansionPreview';
+import { resolveWorldDefinition } from '../world/WorldDefinitionResolution';
+import { LOBBY_WORLD_DEFINITION_ID } from '../config/authoring/lobbyWorld';
 
 const WORLD_PANEL = { x: 88, y: 236, width: 648, height: 680 };
 const TABLE = { x: 800, y: 248, width: 1038, height: 608 };
@@ -56,6 +61,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private grid!: Phaser.GameObjects.Graphics;
   private preview!: Phaser.GameObjects.Graphics;
   private selection!: Phaser.GameObjects.Graphics;
+  private expansionPreview: Phaser.GameObjects.Container | null = null;
   private dragPreview: Phaser.GameObjects.Container | null = null;
   private tableOutline!: Phaser.GameObjects.Rectangle;
   private error!: Phaser.GameObjects.Text;
@@ -69,19 +75,30 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private saving = false;
   private closed = false;
   private disposed = false;
+  private presentationReady = false;
   private page = 0;
+  private readonly worldZoom: number;
+  private readonly framing: ReturnType<typeof getPersistentBaseEditorFraming>;
+  private readonly expansion: ReturnType<typeof buildPersistentBaseExpansionPreview>;
   private readonly view: { x: number; y: number; width: number; height: number };
   constructor(private readonly options: PersistentBaseEditorOptions) {
     super(PersistentBaseEditorScene.KEY);
-    const size = getPersistentBaseEditorSize(options.model.area);
-    this.view = { x: WORLD_PANEL.x + (WORLD_PANEL.width - size) / 2,
-      y: WORLD_PANEL.y + (WORLD_PANEL.height - size) / 2, width: size, height: size };
+    // The local menu uses the lobby ceiling but can edit a personal area larger than that site.
+    const site = resolveWorldDefinition({ definitionId: LOBBY_WORLD_DEFINITION_ID }, null)?.persistentBaseSite;
+    const baseline = options.model.baseline;
+    this.expansion = site ? buildPersistentBaseExpansionPreview(baseline.dawn,
+      baseline.persistentBaseAreaStage, isDawnUnlocked(baseline), site.maxAreaStage) : null;
+    this.framing = getPersistentBaseEditorFraming(WORLD_PANEL, options.model.area, this.expansion?.area);
+    this.worldZoom = this.framing.zoom;
+    this.view = this.framing.view;
   }
 
   create(): void {
     this.quality = new GraphicsQualityController(getStoredGraphicsQuality());
     this.quality.attach(this);
     this.clarity = this.cameras.add(0, 0, this.scale.width, this.scale.height, false, 'base-ui');
+    // Keep the previous menu visible while this standalone World's worker/chunk queue warms up.
+    this.getTransitionView().setAlpha(0);
     this.cameraRegistry = new ClarityCameraRegistry(this, this.cameras.main, this.clarity);
     this.cameraRegistry.install();
     this.ui = this.add.container(0, 0);
@@ -116,7 +133,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     const model = this.options.model;
     this.label(WORLD_PANEL.x + WORLD_PANEL.width / 2, 216,
       t(model.area.kind === 'radius' ? 'ui.base.statsRadius' : 'ui.base.stats', {
-        stage: model.baseline.persistentBaseAreaStage, hp: resolvePersistentBaseMaxHp(model.baseline.persistentBaseHealthRewards),
+        stage: model.areaStage, hp: resolvePersistentBaseMaxHp(model.baseline.persistentBaseHealthRewards),
         radius: model.area.kind === 'radius' ? model.area.radiusCells : 0,
       }), 'section', .5, WORLD_PANEL.width);
     const frameSize = this.view.width + 40;
@@ -135,7 +152,15 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.error = this.label(chrome.centerX, 192, '', 'caption', .5, 1600).setColor('#ffc2a9').setVisible(false);
     this.actionButton('cancel', chrome.centerX - (chrome.buttonGap + chrome.buttonWidth) / 2, () => this.finish());
     this.actionButton('apply', chrome.centerX + (chrome.buttonGap + chrome.buttonWidth) / 2, () => { void this.save(); });
-    this.world = new PersistentBaseEditorWorld(this, model, this.options.color);
+    const expansion = this.expansion;
+    this.world = new PersistentBaseEditorWorld(this, model, this.options.color, expansion?.area);
+    this.ui.add(createPersistentBaseEditorBoundary(this, model.area, this.framing));
+    if (expansion?.edges.length) {
+      this.expansionPreview = createDawnMerchantExpansionPreview(this, this.framing, expansion.edges,
+        t(expansion.dawnOnly ? 'ui.base.expansionRingLabelDawnOnly' : 'ui.base.expansionRingLabel',
+          { radius: expansion.radius, cost: expansion.cost }));
+      this.ui.add(this.expansionPreview);
+    }
     this.grid = this.add.graphics().setDepth(10000);
     this.selection = this.add.graphics().setDepth(10001);
     this.preview = this.add.graphics().setDepth(10002);
@@ -179,10 +204,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       }
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.dispose());
-    if (this.options.presented) {
-      this.setTransitionInputBlocked(true);
-      this.options.presented(this.getTransitionView());
-    }
+    this.setTransitionInputBlocked(true);
   }
 
   getTransitionView(): AfterRoundView {
@@ -196,8 +218,9 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   }
 
   setTransitionInputBlocked(blocked: boolean): void {
-    this.input.enabled = !blocked;
-    if (this.input.keyboard) { this.input.keyboard.resetKeys(); this.input.keyboard.enabled = !blocked; }
+    const enabled = !blocked && this.presentationReady;
+    this.input.enabled = enabled;
+    if (this.input.keyboard) { this.input.keyboard.resetKeys(); this.input.keyboard.enabled = enabled; }
   }
   dispose(): void {
     if (this.disposed) return;
@@ -205,6 +228,7 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     this.input.enabled = false;
     this.scale.off('resize', this.resize, this);
     this.dragPreview?.destroy(true);
+    this.expansionPreview?.destroy(true); this.expansionPreview = null;
     this.world?.destroy(); this.cameraRegistry?.destroy(); this.quality?.destroy();
     for (const button of this.buttons) button.destroy();
     this.buttons = [];
@@ -250,13 +274,13 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
     const scale = getRenderScale(this.scale);
     this.clarity.setViewport(0, 0, this.scale.width, this.scale.height).setOrigin(0, 0).setZoom(scale);
     this.cameras.main.setViewport(this.view.x * scale, this.view.y * scale, this.view.width * scale, this.view.height * scale)
-      .setOrigin(0, 0).setZoom(scale).setScroll(0, 0);
+      .setOrigin(0, 0).setZoom(scale * this.worldZoom).setScroll(0, 0);
   }
   private cellAt(pointer: Phaser.Input.Pointer): { x: number; y: number } | null {
     const scale = getRenderScale(this.scale), x = pointer.x / scale, y = pointer.y / scale;
     if (x < this.view.x || y < this.view.y || x >= this.view.x + this.view.width || y >= this.view.y + this.view.height) return null;
-    return { x: Math.floor((x - this.view.x) / CELL_SIZE) - this.world.anchor,
-      y: Math.floor((y - this.view.y) / CELL_SIZE) - this.world.anchor };
+    return { x: Math.floor((x - this.view.x) / (CELL_SIZE * this.worldZoom)) - this.world.anchor,
+      y: Math.floor((y - this.view.y) / (CELL_SIZE * this.worldZoom)) - this.world.anchor };
   }
   private isOverTable(pointer: Phaser.Input.Pointer): boolean {
     const scale = getRenderScale(this.scale), x = pointer.x / scale, y = pointer.y / scale;
@@ -284,9 +308,10 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
       cell.x -= drag.offsetX; cell.y -= drag.offsetY;
       const valid = !this.options.model.validate(this.selected, cell.x, cell.y);
       this.drawFootprint(this.preview, cell.x, cell.y, valid ? 0xb1ed94 : 0xff9991, .2);
-      this.dragPreview?.setPosition(this.view.x + (this.world.anchor + cell.x + .5) * CELL_SIZE,
-        this.view.y + (this.world.anchor + cell.y + .5) * CELL_SIZE);
-    } else this.dragPreview?.setPosition(pointer.x / scale - drag.offsetX * CELL_SIZE, pointer.y / scale - drag.offsetY * CELL_SIZE);
+      this.dragPreview?.setScale(this.worldZoom).setPosition(
+        this.view.x + (this.world.anchor + cell.x + .5) * CELL_SIZE * this.worldZoom,
+        this.view.y + (this.world.anchor + cell.y + .5) * CELL_SIZE * this.worldZoom);
+    } else this.dragPreview?.setScale(1).setPosition(pointer.x / scale - drag.offsetX * CELL_SIZE, pointer.y / scale - drag.offsetY * CELL_SIZE);
     const removing = this.isOverTable(pointer) && !!this.options.model.getPosition(this.selected);
     this.tableOutline.setStrokeStyle(removing ? 2 : 1, removing ? 0xb1ed94 : 0x718160, removing ? 1 : .5);
   }
@@ -395,6 +420,16 @@ export class PersistentBaseEditorScene extends Phaser.Scene {
   private finish(): void { if (!this.closed) { this.closed = true; this.options.close(); } }
   update(now: number, delta: number): void {
     if (!this.world || this.closed) return;
-    this.world.update(now, delta, { x: 0, y: 0, width: this.view.width, height: this.view.height });
+    const view = { x: 0, y: 0, width: this.world.size, height: this.world.size };
+    this.world.update(now, delta, view);
+    if (!this.presentationReady && this.world.isReadyForView(view)) {
+      this.presentationReady = true;
+      const transition = this.getTransitionView();
+      if (this.options.presented) this.options.presented(transition);
+      else {
+        transition.setAlpha(1);
+        this.setTransitionInputBlocked(false);
+      }
+    }
   }
 }

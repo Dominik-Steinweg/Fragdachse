@@ -149,6 +149,21 @@ def assert_geometry_bounds(scene, meshes, state, frame):
             require(abs(wx) <= limit and abs(wy) <= limit, f'Clipped evaluated mesh {ob.name} at frame {frame}')
 
 
+def rest_hold(clip):
+    """The inactive extractor explicitly holds rest, including its lamp value."""
+    return clip.get('motion') == 'dawn_extractor_idle' and clip['name'] == 'idle' and clip['loop']
+
+
+def required_moving_rigged(meshes, rigged, clips):
+    # An idle-only breathing actor must keep its feet planted. Full locomotion
+    # still requires every weighted limb to move, as before.
+    if clips and all(clip.get('motion') == 'player_idle' for clip in clips):
+        planted = {ob.name for ob in meshes if ob.get('motionRole') in ('left_leg', 'right_leg')}
+        require(bool(planted), 'Breathing actor needs explicit planted leg roles')
+        return rigged - planted
+    return rigged
+
+
 def assert_clip_boundary(clip, clips, rest, first, last, sample):
     """sample(timeline frame) returns the same evaluated snapshot as first/last.
 
@@ -160,7 +175,11 @@ def assert_clip_boundary(clip, clips, rest, first, last, sample):
     if clip['loop']:
         closure = clip['timelineStart'] + len(clip['frames']) * 24 / clip['frameRate']
         assert_same_pose(first, sample(closure), clip['name'] + ' loop closure')
-        require(bool(different_meshes(first, last)), 'Last loop sample duplicates its first pose')
+        if rest_hold(clip):
+            assert_same_pose(rest, first, 'Inactive hold starts at rest')
+            assert_same_pose(rest, last, 'Inactive hold ends at rest')
+        else:
+            require(bool(different_meshes(first, last)), 'Last loop sample duplicates its first pose')
     elif clip.get('end', 'rest') == 'rest':
         assert_same_pose(rest, last, clip['name'] + ' return to rest')
     elif clip.get('end') == 'free' and 'next' in clip:
@@ -192,12 +211,19 @@ def validate_animation(scene, asset, spec, clips, frames):
         moved = set()
         for index in clip['frames'][1:]:
             last = sample(frames[index]['blenderFrame'])
+            if rest_hold(clip):
+                assert_same_pose(rest, last, 'Inactive hold must preserve geometry and emission')
+            if clip.get('motion') == 'player_idle':
+                planted = {ob.name for ob in meshes if ob.get('motionRole') in ('left_leg', 'right_leg')}
+                require(not different_meshes(rest, last).intersection(planted), 'Breathing moves planted feet')
             moved.update(different_meshes(first, last))
-        require(bool(moved), f'Clip {clip["name"]} contains no visible geometric movement')
+        if not rest_hold(clip):
+            require(bool(moved), f'Clip {clip["name"]} contains no visible geometric movement')
         moved_all.update(moved)
         assert_clip_boundary(clip, clips, rest, first, last, sample)
     if rigged:
-        require(rigged.issubset(moved_all), f'Saved limb meshes do not move: {sorted(rigged - moved_all)}')
+        required = required_moving_rigged(meshes, rigged, clips)
+        require(required.issubset(moved_all), f'Saved limb meshes do not move: {sorted(required - moved_all)}')
     set_frame(scene, 0)
 
 

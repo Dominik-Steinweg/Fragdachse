@@ -13,7 +13,10 @@ import {
   getCoopDefenseUpgradeState,
   getSpentCoopDefenseUpgradePoints,
   getSpentCoopDefenseBossPoints,
-  sanitizeCoopDefenseUpgradeProfile,
+  constrainCoopDefenseUpgradeProfileToEntitlements,
+  resolveCoopDefenseUpgradeEntitlements,
+  isCoopDefenseUpgradeAvailableForClass,
+  type CoopDefenseUpgradeEntitlements,
   getCoopDefenseToolCapacity,
   getLoadoutToolRefForUpgrade,
   type CoopDefenseLoadoutUnlockDefinition,
@@ -104,9 +107,10 @@ export function getCoopDefenseProgressSnapshot(
   classId: CoopDefenseClassId = DEFAULT_COOP_DEFENSE_CLASS_ID,
   classesUnlocked = true,
   unlockedClassIds: readonly CoopDefenseClassId[] = classesUnlocked ? COOP_DEFENSE_CLASS_IDS : [],
+  entitlements: CoopDefenseUpgradeEntitlements = resolveCoopDefenseUpgradeEntitlements([]),
 ): CoopDefenseProgressSnapshot {
   const safeXp = sanitizeXp(totalXp);
-  const safeProfile = sanitizeCoopDefenseUpgradeProfile(profile, classId);
+  const safeProfile = constrainCoopDefenseUpgradeProfileToEntitlements(profile, entitlements, classId);
   const level = getCoopDefenseLevelForXp(safeXp);
   const currentLevelStartXp = getCoopDefenseXpThresholdForLevel(level);
   const nextLevelXp = getCoopDefenseXpThresholdForLevel(level + 1);
@@ -118,7 +122,7 @@ export function getCoopDefenseProgressSnapshot(
   const availableBossPoints = getAvailableCoopDefenseBossPoints(safeEarnedBossPoints, safeProfile, classId);
   const hpUpgradeState = getCoopDefenseUpgradeState(safeProfile, COOP_DEFENSE_HP_UPGRADE_ID, classId);
   const hpUpgradeMaxLevel = getCoopDefenseUpgradeDefinition(COOP_DEFENSE_HP_UPGRADE_ID)?.maxLevel ?? hpUpgradeState.level;
-  const upgradeCategories = buildUpgradeCategorySnapshots(safeProfile, level, safeEarnedBossPoints, classId);
+  const upgradeCategories = buildUpgradeCategorySnapshots(safeProfile, level, safeEarnedBossPoints, classId, entitlements);
 
   return {
     classId,
@@ -166,13 +170,14 @@ function buildUpgradeCategorySnapshots(
   playerLevel: number,
   earnedBossPoints: number,
   classId: CoopDefenseClassId,
+  entitlements: CoopDefenseUpgradeEntitlements,
 ): readonly CoopDefenseUpgradeCategorySnapshot[] {
   return getCoopDefenseUpgradeCategories(classId).map((category) => ({
     id: category.id,
     label: getUpgradeCategoryName(category.id, getLocale()),
     description: getUpgradeCategoryDescription(category.id, getLocale()),
     upgrades: category.upgrades.map((definition) => (
-      buildUpgradeNodeSnapshot(profile, playerLevel, earnedBossPoints, classId, category, definition)
+      buildUpgradeNodeSnapshot(profile, playerLevel, earnedBossPoints, classId, category, definition, entitlements)
     )),
   }));
 }
@@ -184,6 +189,7 @@ function buildUpgradeNodeSnapshot(
   classId: CoopDefenseClassId,
   category: CoopDefenseUpgradeCategoryDefinition,
   definition: CoopDefenseUpgradeDefinition,
+  entitlements: CoopDefenseUpgradeEntitlements,
 ): CoopDefenseUpgradeNodeSnapshot {
   const state = getCoopDefenseUpgradeState(profile, definition.id, classId);
   const availableBossPoints = getAvailableCoopDefenseBossPoints(earnedBossPoints, profile, classId);
@@ -195,7 +201,7 @@ function buildUpgradeNodeSnapshot(
     description: getUpgradeDescription(definition.id, getLocale()),
     categoryId: category.id,
     kind: definition.kind,
-    unlocked: state.unlocked,
+    unlocked: state.unlocked && isCoopDefenseUpgradeAvailableForClass(definition.id, classId, entitlements),
     level: state.level,
     startingLevel: definition.startingLevel,
     maxLevel: definition.maxLevel,
@@ -203,7 +209,7 @@ function buildUpgradeNodeSnapshot(
     costPerLevel: definition.costPerLevel,
     bossPointCostPerLevel: definition.bossPointCostPerLevel,
     bossPointRequirementMet: availableBossPoints >= definition.bossPointCostPerLevel,
-    canLevelUp: canLevelUpCoopDefenseUpgrade(profile, definition.id, playerLevel, earnedBossPoints, classId),
+    canLevelUp: canLevelUpCoopDefenseUpgrade(profile, definition.id, playerLevel, earnedBossPoints, classId, entitlements),
     canLevelDown: canLevelDownCoopDefenseUpgrade(profile, definition.id, classId),
     requires: definition.requires.map((requirement) => buildRequirementSnapshot(profile, classId, requirement)),
     loadoutUnlock: definition.loadoutUnlock ?? null,

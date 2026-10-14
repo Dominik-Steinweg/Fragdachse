@@ -15,6 +15,21 @@ export const BOSS_TEXTURE_KEYS = Object.freeze({
   'abyssal-kraken-spine': 'kraken_spine',
 });
 
+// Published data identities only; gameplay bindings are authored separately.
+export const DAWN_TEXTURE_KEYS = Object.freeze(Object.fromEntries([
+  'construction_dawn_wreck_t1', 'construction_dawn_wreck_t2', 'construction_dawn_wreck_t3',
+  'construction_dawn_extractor', 'construction_dawn_dealer_stall',
+  'construction_dawn_wreck_tractor_t1', 'construction_dawn_wreck_tractor_t2', 'construction_dawn_wreck_tractor_t3',
+  'construction_dawn_wreck_minecart_t1', 'construction_dawn_wreck_minecart_t2', 'construction_dawn_wreck_minecart_t3',
+  'construction_dawn_broodnest',
+  'construction_dawn_supply_capsule', 'dawn_supply_crate',
+  'dawn_scrap_heap_t1', 'dawn_scrap_heap_t2', 'dawn_scrap_heap_t3',
+  'dawn_scrap_t1', 'dawn_scrap_t2', 'dawn_scrap_t3', 'dawn_dealer',
+].map(id => [id, id])));
+
+// Dawn's fleeing scavenger uses enemy naming and eye anchors, but has no attack.
+export const DAWN_ENEMY_TEXTURE_KEYS = Object.freeze({ enemy_dawn_scavenger: 'enemy_dawn_scavenger' });
+
 export async function importRuntime({ revision, requestedIds = [], root = process.cwd(),
   runRoot = path.join(root, 'art/poc/pipeline-v2/runs', revision), outputRoot } = {}) {
   // Use the same revision identifiers as the V2 builder/exporter; the manifest
@@ -48,7 +63,12 @@ export async function importRuntime({ revision, requestedIds = [], root = proces
     if (entry.targetSize !== rendered.targetSize || (entry.displayScale ?? 1) !== (rendered.displayScale ?? 1)) throw new Error(`Selected canvas scale differs from catalog: ${entry.id}`);
     if (entry.runtimeContract !== rendered.runtimeContract) throw new Error(`Selected runtime contract differs from catalog: ${entry.id}`);
     validateClipContracts(selected.clips);
-    if (entry.category === 'enemy' && !isBossRuntime(entry) && !selected.clips.some(c => c.name === 'claw')) throw new Error(`Enemy claw clip missing: ${entry.id}`);
+    const dawnFleeingEnemy = entry.category === 'enemy' && Object.hasOwn(DAWN_ENEMY_TEXTURE_KEYS, entry.id);
+    if (dawnFleeingEnemy && (entry.gameIds.length || selected.clips.length !== 2
+        || !['idle', 'move'].every(name => selected.clips.some(c => c.name === name && c.loop)))) {
+      throw new Error(`Dawn scavenger requires unbound idle + move loops: ${entry.id}`);
+    }
+    if (entry.category === 'enemy' && !isBossRuntime(entry) && !dawnFleeingEnemy && !selected.clips.some(c => c.name === 'claw')) throw new Error(`Enemy claw clip missing: ${entry.id}`);
     const folder = `assets/sprites/pipeline-v2/${entry.id}`;
     const hashes = {};
     for (const [field, name] of isBossRuntime(entry) ? [] : [['idle', 'idle.png'], ['sheet', 'sheet.png']]) {
@@ -60,14 +80,14 @@ export async function importRuntime({ revision, requestedIds = [], root = proces
       copies.push({ file, destination: `public/${folder}/${name}` });
       hashes[field] = hash;
     }
-    const textureKey = isBossRuntime(entry) ? (entry.textureKey ?? BOSS_TEXTURE_KEYS[entry.id])
+    const textureKey = DAWN_ENEMY_TEXTURE_KEYS[entry.id] ?? DAWN_TEXTURE_KEYS[entry.id] ?? (isBossRuntime(entry) ? (entry.textureKey ?? BOSS_TEXTURE_KEYS[entry.id])
       : entry.category === 'boss-part' ? entry.id.replaceAll('-', '_')
       : entry.category === 'construction' ? `construction_${entry.gameIds[0]}`
       : entry.category === 'companion' ? entry.id.replaceAll('-', '_')
       : entry.category === 'turret'
       ? `turret_weapon_${entry.id.replaceAll('-', '_')}`
       : ['weapon', 'utility'].includes(entry.category) ? `held_${entry.gameIds[0]}`
-      : entry.id === 'badger' ? 'badger' : enemies.find((enemy) => entry.gameIds.includes(enemy.id))?.imageKey;
+      : entry.id === 'badger' ? 'badger' : enemies.find((enemy) => entry.gameIds.includes(enemy.id))?.imageKey);
     if (!textureKey) throw new Error(`Missing game mapping: ${entry.id}`);
     const asset = {
       id: entry.id, category: entry.category, gameIds: entry.gameIds, revision,
@@ -80,7 +100,7 @@ export async function importRuntime({ revision, requestedIds = [], root = proces
       clips: selected.clips.map(({ name, frames, frameRate, loop, markers, start, end, next }) => ({ name, frames, frameRate, loop,
         ...(markers ? { markers } : {}), ...(start !== undefined ? { start } : {}), ...(end !== undefined ? { end } : {}), ...(next !== undefined ? { next } : {}) })),
       ...(!isBossRuntime(entry) ? {
-        sheetTextureKey: `${textureKey}_${['weapon', 'utility'].includes(entry.category) ? 'static' : entry.category === 'turret' ? 'animated' : 'walking'}`,
+        sheetTextureKey: `${textureKey}_${DAWN_TEXTURE_KEYS[entry.id] ? 'sheet' : ['weapon', 'utility'].includes(entry.category) ? 'static' : entry.category === 'turret' ? 'animated' : 'walking'}`,
         idlePath: `./${folder}/idle.png`, sheetPath: `./${folder}/sheet.png`, layout: selected.layout, hashes,
       } : {}),
     };

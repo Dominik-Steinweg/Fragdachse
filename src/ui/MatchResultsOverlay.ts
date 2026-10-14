@@ -1619,6 +1619,9 @@ function describeRewards(
   itemReward: MatchItemRewardPresentation | null,
 ): RewardDescriptor[] {
   const descriptors: RewardDescriptor[] = [];
+  if (progress.scrapGained !== undefined) {
+    descriptors.push({ glyph: '+', label: t('ui.dawn.roundGain', { scrap: progress.scrapGained }), color: COLORS.GOLD_1 });
+  }
   for (const rewardId of progress.newlyUnlockedBaseRewardIds) {
     const definition = getPersistentBaseRewardDefinition(rewardId);
     descriptors.push({

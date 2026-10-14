@@ -16,7 +16,7 @@ import {
   DEFAULT_COOP_DEFENSE_STRUCTURE_HP_FACTOR_PER_ADDITIONAL_PLAYER,
 } from '../config/coopDefenseMapAuthoring';
 import { resolveCoopDefensePositiveInteger } from '../config/coopDefenseScaling';
-import { MAX_PERSISTENT_BASE_RADIUS_CELLS, PERSISTENT_BASE_CLEARANCE_CELLS } from '../config/persistentBase';
+import { resolvePersistentBaseReservationRadiusCells, type PersistentBaseAreaStage } from '../persistentBase/PersistentBaseCore';
 import { isCellInsidePersistentBaseReservation } from '../persistentBase/PersistentBaseZone';
 import {
   resolveCoopDefenseWorldMetrics,
@@ -60,6 +60,7 @@ export interface BasePowerUpPedestalSpec {
  *             spielerzahlabhaengiges Overlay aufloesen.
  */
 export interface BaseSpec {
+  readonly surface?: 'cells' | 'none';
   readonly id: string;
   readonly cells: readonly { gridX: number; gridY: number }[];
   readonly region: ArenaGridRegion;
@@ -274,6 +275,7 @@ function resolveBaseSpec(
 
   return {
     id: config.id,
+    ...(config.surface === undefined ? {} : { surface: config.surface }),
     cells: absoluteCells,
     region,
     hpMax,
@@ -390,7 +392,7 @@ export function resolveWorldBases(
     : worldDefinition.bases;
   const resolved = baseConfigs.map((baseConfig) => resolveWorldBaseSpec(baseConfig, worldMetrics));
   if (!persistentBaseId || !includeCore) return resolved;
-  return addPersistentBaseReservation(resolved, persistentBaseId);
+  return addPersistentBaseReservation(resolved, persistentBaseId, worldDefinition.persistentBaseSite?.maxAreaStage);
 }
 
 /**
@@ -419,7 +421,7 @@ export function resolveCoopDefenseActivityBases(
   ));
   const persistentBaseId = mapConfig.persistentBase?.baseId;
   if (!persistentBaseId) return resolved;
-  return addPersistentBaseReservation(resolved, persistentBaseId);
+  return addPersistentBaseReservation(resolved, persistentBaseId, mapConfig.persistentBase?.maxAreaStage);
 }
 
 /** Loest ausschliesslich den Activity-Anteil der Coop-Basen auf. */
@@ -445,6 +447,7 @@ function resolveWorldBaseSpec(config: WorldBaseDefinition, metrics: WorldMetrics
   const resolved = resolveBaseSpec(config as CoopBaseConfig, 1, metrics);
   return {
     id: resolved.id,
+    ...(resolved.surface === undefined ? {} : { surface: resolved.surface }),
     cells: resolved.cells,
     region: resolved.region,
     hpMax: config.hpMax,
@@ -459,13 +462,15 @@ function resolveWorldBaseSpec(config: WorldBaseDefinition, metrics: WorldMetrics
 function addPersistentBaseReservation(
   bases: readonly BaseSpec[],
   persistentBaseId: string,
+  maxAreaStage: PersistentBaseAreaStage | undefined,
 ): readonly BaseSpec[] {
+  const reservationRadiusCells = resolvePersistentBaseReservationRadiusCells(maxAreaStage);
   return bases.map((base) => base.id === persistentBaseId
     ? {
       ...base,
       anchorGridX: Math.floor((base.region.minGridX + base.region.maxGridX) / 2),
       anchorGridY: Math.floor((base.region.minGridY + base.region.maxGridY) / 2),
-      persistentReservationRadiusCells: MAX_PERSISTENT_BASE_RADIUS_CELLS + PERSISTENT_BASE_CLEARANCE_CELLS,
+      persistentReservationRadiusCells: reservationRadiusCells,
     }
     : base);
 }
@@ -611,6 +616,7 @@ export function isPersistentBaseReservationCell(
         gridX: base.anchorGridX ?? Math.floor((base.region.minGridX + base.region.maxGridX) / 2),
         gridY: base.anchorGridY ?? Math.floor((base.region.minGridY + base.region.maxGridY) / 2),
       },
+      base.persistentReservationRadiusCells,
     )
   ));
 }

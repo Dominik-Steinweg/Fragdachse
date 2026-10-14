@@ -77113,6 +77113,1316 @@
           "idleSha256": "0423eefa50462faae2ffc0dafbe02910e609a3dcfd3269f0fe1c224a58584fd3"
         }
       }
+    },
+    {
+      "id": "construction_dawn_wreck_t1",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "dawn-v1-p01",
+      "variant": "standard",
+      "sourceSize": 192,
+      "textureKey": "construction_dawn_wreck_t1",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "construction_dawn_wreck_t1_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_t1/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_t1/sheet.png",
+      "layout": {
+        "frameWidth": 192,
+        "frameHeight": 192,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 196,
+        "height": 196
+      },
+      "hashes": {
+        "idle": "3a758cf597919bb32f26577e00dbf235e4871ae49f2e74b4256ecca87c1ec316",
+        "sheet": "3abc5fa89af7357cc006a3ae8ee66386850031992d5931653545d2c4cd46676b"
+      }
+    },
+    {
+      "id": "construction_dawn_wreck_t2",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "dawn-v1-p01",
+      "variant": "standard",
+      "sourceSize": 192,
+      "textureKey": "construction_dawn_wreck_t2",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "construction_dawn_wreck_t2_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_t2/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_t2/sheet.png",
+      "layout": {
+        "frameWidth": 192,
+        "frameHeight": 192,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 196,
+        "height": 196
+      },
+      "hashes": {
+        "idle": "152eb59a8431f002efdf087abf1bcb2aae590c58166aa287b07b5013aa3ce6c0",
+        "sheet": "20e98afbc1c9dfd088b94ce5cd9708d72fbad481917bfa45a506837053db738b"
+      }
+    },
+    {
+      "id": "construction_dawn_wreck_t3",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "dawn-v1-p01",
+      "variant": "standard",
+      "sourceSize": 192,
+      "textureKey": "construction_dawn_wreck_t3",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "construction_dawn_wreck_t3_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_t3/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_t3/sheet.png",
+      "layout": {
+        "frameWidth": 192,
+        "frameHeight": 192,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 196,
+        "height": 196
+      },
+      "hashes": {
+        "idle": "0211ff238d63e96d98c533e6f5a04f8a325dde6d41805a214f00e5b5bb16c15b",
+        "sheet": "d897abea0038b9fd55b7a9e37b495d1f5597530ab768464b715cba955a667c92"
+      }
+    },
+    {
+      "id": "construction_dawn_extractor",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "dawn-v1-p01",
+      "variant": "standard",
+      "sourceSize": 192,
+      "textureKey": "construction_dawn_extractor",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "idle",
+          "frames": [
+            1,
+            2
+          ],
+          "frameRate": 12,
+          "loop": true,
+          "end": "rest"
+        },
+        {
+          "name": "active",
+          "frames": [
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14
+          ],
+          "frameRate": 12,
+          "loop": true,
+          "end": "rest"
+        }
+      ],
+      "sheetTextureKey": "construction_dawn_extractor_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/construction_dawn_extractor/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/construction_dawn_extractor/sheet.png",
+      "layout": {
+        "frameWidth": 192,
+        "frameHeight": 192,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 15,
+        "width": 1568,
+        "height": 392
+      },
+      "hashes": {
+        "idle": "0d375050cf1fb6bbe92b41470a4580d7851e6bf43dc9ce45de36e266ee08c2be",
+        "sheet": "176431ae0850e156ae454ae5d8382b6c55bb1b9084856a57fdc7f4e3ea087864"
+      }
+    },
+    {
+      "id": "dawn_scrap_t1",
+      "category": "powerup",
+      "gameIds": [],
+      "revision": "dawn-v1-p01",
+      "variant": "standard",
+      "sourceSize": 48,
+      "textureKey": "dawn_scrap_t1",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "dawn_scrap_t1_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/dawn_scrap_t1/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/dawn_scrap_t1/sheet.png",
+      "layout": {
+        "frameWidth": 48,
+        "frameHeight": 48,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 52,
+        "height": 52
+      },
+      "hashes": {
+        "idle": "575d3458b758d89976e99aa4c0427387792958a474e125b104945991aaf22759",
+        "sheet": "2c73be99b787a44cacb345e8ad91c71d2265b9eedd3c6f13436e7543d25b98e7"
+      }
+    },
+    {
+      "id": "dawn_scrap_t2",
+      "category": "powerup",
+      "gameIds": [],
+      "revision": "dawn-v1-p01",
+      "variant": "standard",
+      "sourceSize": 48,
+      "textureKey": "dawn_scrap_t2",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "dawn_scrap_t2_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/dawn_scrap_t2/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/dawn_scrap_t2/sheet.png",
+      "layout": {
+        "frameWidth": 48,
+        "frameHeight": 48,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 52,
+        "height": 52
+      },
+      "hashes": {
+        "idle": "8f1b5117c763ea8fb520be341f4b3253e97a4a1dbd5a24098c2376c6cbc6d514",
+        "sheet": "7ec72c5ce0e2a363d96fc0e51216706aab6e6817aebe7b90873b3b1256c2827b"
+      }
+    },
+    {
+      "id": "dawn_scrap_t3",
+      "category": "powerup",
+      "gameIds": [],
+      "revision": "dawn-v1-p01",
+      "variant": "standard",
+      "sourceSize": 48,
+      "textureKey": "dawn_scrap_t3",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "dawn_scrap_t3_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/dawn_scrap_t3/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/dawn_scrap_t3/sheet.png",
+      "layout": {
+        "frameWidth": 48,
+        "frameHeight": 48,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 52,
+        "height": 52
+      },
+      "hashes": {
+        "idle": "d50376f6141ca89e6f7650753791394320739c9c990659b829fbc6ceee91bd2f",
+        "sheet": "dc76933cc4165d802dca5b0772c77d72096ae90e750e4138454b93fb7f04e62f"
+      }
+    },
+    {
+      "id": "construction_dawn_dealer_stall",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "dawn-v1-p01",
+      "variant": "standard",
+      "sourceSize": 192,
+      "textureKey": "construction_dawn_dealer_stall",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "construction_dawn_dealer_stall_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/construction_dawn_dealer_stall/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/construction_dawn_dealer_stall/sheet.png",
+      "layout": {
+        "frameWidth": 192,
+        "frameHeight": 192,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 196,
+        "height": 196
+      },
+      "hashes": {
+        "idle": "996f2a9541ebe12fbb2d409ff905bcbeb0a58bd2cf4ca22399c26692692155d3",
+        "sheet": "799bb26d9e0f13fb48562b9f8532fc8fadfa90116bdf89cf22ed8df86448cc45"
+      }
+    },
+    {
+      "id": "dawn_dealer",
+      "category": "character",
+      "gameIds": [],
+      "revision": "dawn-v1-p02",
+      "variant": "standard",
+      "sourceSize": 76,
+      "textureKey": "dawn_dealer",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "displayScale": 1.1875,
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "idle",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24
+          ],
+          "frameRate": 8,
+          "loop": true,
+          "end": "rest"
+        }
+      ],
+      "sheetTextureKey": "dawn_dealer_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/dawn_dealer/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/dawn_dealer/sheet.png",
+      "layout": {
+        "frameWidth": 76,
+        "frameHeight": 76,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 4,
+        "frameCount": 25,
+        "width": 640,
+        "height": 320
+      },
+      "hashes": {
+        "idle": "36f4f1fb087075b381bc4256207042436940eb96104ee8e1da7b2d57292c1f7e",
+        "sheet": "d254b9fe2b9752bb9579afdc22dd13e474a36a0767daac4c2715529ff79557fb"
+      }
+    },
+    {
+      "id": "construction_dawn_wreck_tractor_t1",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "dawn-m3-p01",
+      "variant": "standard",
+      "sourceSize": 192,
+      "textureKey": "construction_dawn_wreck_tractor_t1",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "construction_dawn_wreck_tractor_t1_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_tractor_t1/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_tractor_t1/sheet.png",
+      "layout": {
+        "frameWidth": 192,
+        "frameHeight": 192,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 196,
+        "height": 196
+      },
+      "hashes": {
+        "idle": "6b7440d85e45a8a36bdca78aa26396ed08b5292729d20e026b6587c4983462e0",
+        "sheet": "8df68f70cedf9928472680601b79c05da3299640a6db8aca6e6a853493c477fe"
+      }
+    },
+    {
+      "id": "construction_dawn_wreck_tractor_t2",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "dawn-m3-p01",
+      "variant": "standard",
+      "sourceSize": 192,
+      "textureKey": "construction_dawn_wreck_tractor_t2",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "construction_dawn_wreck_tractor_t2_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_tractor_t2/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_tractor_t2/sheet.png",
+      "layout": {
+        "frameWidth": 192,
+        "frameHeight": 192,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 196,
+        "height": 196
+      },
+      "hashes": {
+        "idle": "0b5c0236deb14edc49ca027bd06970947beba835db7eaa8ae82af8701631f15c",
+        "sheet": "1f39005e5811f4f0927e098f422f9ca4acae1e9fb6a51e2199e6cae4c39da63e"
+      }
+    },
+    {
+      "id": "construction_dawn_wreck_tractor_t3",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "dawn-m3-p01",
+      "variant": "standard",
+      "sourceSize": 192,
+      "textureKey": "construction_dawn_wreck_tractor_t3",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "construction_dawn_wreck_tractor_t3_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_tractor_t3/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_tractor_t3/sheet.png",
+      "layout": {
+        "frameWidth": 192,
+        "frameHeight": 192,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 196,
+        "height": 196
+      },
+      "hashes": {
+        "idle": "833d932f39e68d13e4551c5e7c012c67b4e2bbede354d13bbd8b629b92e35ec7",
+        "sheet": "b90684a6052fe67f8ecab07d0d9da7562eb35b2de3e55ce873d4e0f9e241d127"
+      }
+    },
+    {
+      "id": "construction_dawn_wreck_minecart_t1",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "dawn-m3-p01",
+      "variant": "standard",
+      "sourceSize": 192,
+      "textureKey": "construction_dawn_wreck_minecart_t1",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "construction_dawn_wreck_minecart_t1_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_minecart_t1/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_minecart_t1/sheet.png",
+      "layout": {
+        "frameWidth": 192,
+        "frameHeight": 192,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 196,
+        "height": 196
+      },
+      "hashes": {
+        "idle": "50edd5abe1d745e9340d412d4f630078f1b03ab2f484c0cf5ea8b8775c566d7c",
+        "sheet": "162b304642abd78c0cd53df47ac9b3d1b155d942d1bfd07ce85d9afe880c685e"
+      }
+    },
+    {
+      "id": "construction_dawn_wreck_minecart_t2",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "dawn-m3-p01",
+      "variant": "standard",
+      "sourceSize": 192,
+      "textureKey": "construction_dawn_wreck_minecart_t2",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "construction_dawn_wreck_minecart_t2_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_minecart_t2/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_minecart_t2/sheet.png",
+      "layout": {
+        "frameWidth": 192,
+        "frameHeight": 192,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 196,
+        "height": 196
+      },
+      "hashes": {
+        "idle": "490e510481d2bd3eaf447c2594f0a23dbbe0e3592f52d685b932598a65c31191",
+        "sheet": "2d9a0f05968c4d5a615069314e37dc74948d3f4830f4d1b47d660235fc88295b"
+      }
+    },
+    {
+      "id": "construction_dawn_wreck_minecart_t3",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "dawn-m3-p01",
+      "variant": "standard",
+      "sourceSize": 192,
+      "textureKey": "construction_dawn_wreck_minecart_t3",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "construction_dawn_wreck_minecart_t3_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_minecart_t3/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_minecart_t3/sheet.png",
+      "layout": {
+        "frameWidth": 192,
+        "frameHeight": 192,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 196,
+        "height": 196
+      },
+      "hashes": {
+        "idle": "13270d04401d35d1b9da96386c55201e167591e3856268115ea9b2e56215d62f",
+        "sheet": "d358d7b7655de9c35b298aee1a03294a47cfa204b7a88089fe33cbbbdaae7abf"
+      }
+    },
+    {
+      "id": "construction_dawn_broodnest",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "dawn-m3-p02",
+      "variant": "standard",
+      "sourceSize": 192,
+      "textureKey": "construction_dawn_broodnest",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "idle",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 12,
+          "loop": true,
+          "end": "rest"
+        }
+      ],
+      "sheetTextureKey": "construction_dawn_broodnest_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/construction_dawn_broodnest/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.png",
+      "layout": {
+        "frameWidth": 192,
+        "frameHeight": 192,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 1568,
+        "height": 392
+      },
+      "hashes": {
+        "idle": "7345f1c5b7fad3fa85456afa82cacd09b2ba78d3a2fbdabfd0326090166e9810",
+        "sheet": "b3c7ea5413a5dc16096f8c1f5be6aa92cd23c8c2b09bda63e33ff126434c012f"
+      }
+    },
+    {
+      "id": "construction_dawn_supply_capsule",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "dawn-m3b-p01",
+      "variant": "standard",
+      "sourceSize": 192,
+      "textureKey": "construction_dawn_supply_capsule",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "construction_dawn_supply_capsule_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/construction_dawn_supply_capsule/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/construction_dawn_supply_capsule/sheet.png",
+      "layout": {
+        "frameWidth": 192,
+        "frameHeight": 192,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 196,
+        "height": 196
+      },
+      "hashes": {
+        "idle": "e20d313a55de32c00ad61d7e1e35ce4951857d55742298175305cf1fedfb278b",
+        "sheet": "9ab027fef837d261282b027ce7dc0861353fbd28750cbad45a7d54aceaead387"
+      }
+    },
+    {
+      "id": "dawn_supply_crate",
+      "category": "powerup",
+      "gameIds": [],
+      "revision": "dawn-m3b-p01",
+      "variant": "standard",
+      "sourceSize": 56,
+      "textureKey": "dawn_supply_crate",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "dawn_supply_crate_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/dawn_supply_crate/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/dawn_supply_crate/sheet.png",
+      "layout": {
+        "frameWidth": 56,
+        "frameHeight": 56,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 60,
+        "height": 60
+      },
+      "hashes": {
+        "idle": "6e0d50a034818391a3ccb8e6f268c41fde2a43d372e72d4096b0bf164fc5ce06",
+        "sheet": "c723f7912820412ebd5805e60282781abbe6fb3e5b972bd672a922cdafca29ca"
+      }
+    },
+    {
+      "id": "dawn_scrap_heap_t1",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "dawn-m3b-p01",
+      "variant": "standard",
+      "sourceSize": 128,
+      "textureKey": "dawn_scrap_heap_t1",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "dawn_scrap_heap_t1_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/dawn_scrap_heap_t1/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/dawn_scrap_heap_t1/sheet.png",
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 132,
+        "height": 132
+      },
+      "hashes": {
+        "idle": "d6758bdcf81ff25648b88742a496938571ce65371e0e9a5e7fe8e2a841fadf34",
+        "sheet": "0639d010ed00447604a36ab890605f21bc6a820c037454b8782ccb8731db1d01"
+      }
+    },
+    {
+      "id": "dawn_scrap_heap_t2",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "dawn-m3b-p01",
+      "variant": "standard",
+      "sourceSize": 128,
+      "textureKey": "dawn_scrap_heap_t2",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "dawn_scrap_heap_t2_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/dawn_scrap_heap_t2/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/dawn_scrap_heap_t2/sheet.png",
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 132,
+        "height": 132
+      },
+      "hashes": {
+        "idle": "3ba03fce136162d17b685269e70a91559413f527ba3716efc781bbf37bfd4041",
+        "sheet": "94542b8bf9b82cd48a17de506702d8e601794c30fc5abf5bb5f37b1a2cdd1c24"
+      }
+    },
+    {
+      "id": "dawn_scrap_heap_t3",
+      "category": "construction",
+      "gameIds": [],
+      "revision": "dawn-m3b-p01",
+      "variant": "standard",
+      "sourceSize": 128,
+      "textureKey": "dawn_scrap_heap_t3",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "idleFrame": 0,
+      "clips": [],
+      "sheetTextureKey": "dawn_scrap_heap_t3_sheet",
+      "idlePath": "./assets/sprites/pipeline-v2/dawn_scrap_heap_t3/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/dawn_scrap_heap_t3/sheet.png",
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 1,
+        "rows": 1,
+        "frameCount": 1,
+        "width": 132,
+        "height": 132
+      },
+      "hashes": {
+        "idle": "10dcd8140df1bf9a70d94f4d7a73a31ab346e5df4fd2f508fec55bb8df550428",
+        "sheet": "d083c57037950fd6c66630027c88729f591e1db267dd7f81b6d9381c6ae2f8bd"
+      }
+    },
+    {
+      "id": "enemy_dawn_scavenger",
+      "category": "enemy",
+      "gameIds": [],
+      "revision": "dawn-m3b-p03",
+      "variant": "standard",
+      "sourceSize": 52,
+      "textureKey": "enemy_dawn_scavenger",
+      "runtimeContract": "sheet",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "displayScale": 1,
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "idle",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 12,
+          "loop": true,
+          "end": "rest"
+        },
+        {
+          "name": "move",
+          "frames": [
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24
+          ],
+          "frameRate": 16,
+          "loop": true,
+          "end": "rest"
+        }
+      ],
+      "sheetTextureKey": "enemy_dawn_scavenger_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/enemy_dawn_scavenger/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/enemy_dawn_scavenger/sheet.png",
+      "layout": {
+        "frameWidth": 52,
+        "frameHeight": 52,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 4,
+        "frameCount": 25,
+        "width": 448,
+        "height": 224
+      },
+      "hashes": {
+        "idle": "29140fe51a14b6ad18e2a7e1bdacc7cef26188bfaaa91ab35937171127027ff8",
+        "sheet": "0b117845fcc6a3d558a8d77d8f513ccd4e2a93ffa4205b3f09803c26c0c60a2d"
+      },
+      "eyeAnchors": {
+        "version": 1,
+        "frames": [
+          {
+            "left": {
+              "x": 0.44636619,
+              "y": 0.18845071,
+              "width": 0.01408452,
+              "height": 0.01070422,
+              "rotation": 5e-8
+            },
+            "right": {
+              "x": 0.5536338,
+              "y": 0.18845071,
+              "width": 0.01408452,
+              "height": 0.01070422,
+              "rotation": 3.6e-7
+            }
+          },
+          {
+            "left": {
+              "x": 0.44636619,
+              "y": 0.18845071,
+              "width": 0.01408452,
+              "height": 0.01070422,
+              "rotation": 5e-8
+            },
+            "right": {
+              "x": 0.5536338,
+              "y": 0.18845071,
+              "width": 0.01408452,
+              "height": 0.01070422,
+              "rotation": 3.6e-7
+            }
+          },
+          {
+            "left": {
+              "x": 0.44543179,
+              "y": 0.18826089,
+              "width": 0.01408452,
+              "height": 0.01070427,
+              "rotation": -0.00299926
+            },
+            "right": {
+              "x": 0.55269892,
+              "y": 0.18793906,
+              "width": 0.01408452,
+              "height": 0.01070421,
+              "rotation": -0.00299947
+            }
+          },
+          {
+            "left": {
+              "x": 0.44474807,
+              "y": 0.1876773,
+              "width": 0.01408453,
+              "height": 0.01070424,
+              "rotation": -0.005196
+            },
+            "right": {
+              "x": 0.55201423,
+              "y": 0.18711994,
+              "width": 0.01408453,
+              "height": 0.01070424,
+              "rotation": -0.00519573
+            }
+          },
+          {
+            "left": {
+              "x": 0.44449787,
+              "y": 0.18736967,
+              "width": 0.0140845,
+              "height": 0.01070429,
+              "rotation": -0.00600014
+            },
+            "right": {
+              "x": 0.55176355,
+              "y": 0.18672607,
+              "width": 0.01408453,
+              "height": 0.01070423,
+              "rotation": -0.00600026
+            }
+          },
+          {
+            "left": {
+              "x": 0.44474807,
+              "y": 0.1876773,
+              "width": 0.01408453,
+              "height": 0.01070424,
+              "rotation": -0.005196
+            },
+            "right": {
+              "x": 0.55201423,
+              "y": 0.18711994,
+              "width": 0.01408453,
+              "height": 0.01070424,
+              "rotation": -0.00519573
+            }
+          },
+          {
+            "left": {
+              "x": 0.44543179,
+              "y": 0.18826089,
+              "width": 0.01408452,
+              "height": 0.01070427,
+              "rotation": -0.00299926
+            },
+            "right": {
+              "x": 0.55269892,
+              "y": 0.18793906,
+              "width": 0.01408452,
+              "height": 0.01070421,
+              "rotation": -0.00299947
+            }
+          },
+          {
+            "left": {
+              "x": 0.44636619,
+              "y": 0.18845071,
+              "width": 0.01408452,
+              "height": 0.01070422,
+              "rotation": 5e-8
+            },
+            "right": {
+              "x": 0.5536338,
+              "y": 0.18845071,
+              "width": 0.01408452,
+              "height": 0.01070422,
+              "rotation": 3.6e-7
+            }
+          },
+          {
+            "left": {
+              "x": 0.44730108,
+              "y": 0.18793905,
+              "width": 0.01408452,
+              "height": 0.01070421,
+              "rotation": 0.00300035
+            },
+            "right": {
+              "x": 0.55456821,
+              "y": 0.18826089,
+              "width": 0.01408452,
+              "height": 0.01070427,
+              "rotation": 0.00300068
+            }
+          },
+          {
+            "left": {
+              "x": 0.44798577,
+              "y": 0.18711994,
+              "width": 0.01408453,
+              "height": 0.01070424,
+              "rotation": 0.00519673
+            },
+            "right": {
+              "x": 0.55525193,
+              "y": 0.1876773,
+              "width": 0.01408447,
+              "height": 0.01070424,
+              "rotation": 0.00519626
+            }
+          },
+          {
+            "left": {
+              "x": 0.44823644,
+              "y": 0.18672607,
+              "width": 0.0140845,
+              "height": 0.01070423,
+              "rotation": 0.00600077
+            },
+            "right": {
+              "x": 0.55550212,
+              "y": 0.18736967,
+              "width": 0.01408447,
+              "height": 0.01070429,
+              "rotation": 0.00600066
+            }
+          },
+          {
+            "left": {
+              "x": 0.44798577,
+              "y": 0.18711994,
+              "width": 0.01408453,
+              "height": 0.01070424,
+              "rotation": 0.00519673
+            },
+            "right": {
+              "x": 0.55525193,
+              "y": 0.1876773,
+              "width": 0.01408447,
+              "height": 0.01070424,
+              "rotation": 0.00519626
+            }
+          },
+          {
+            "left": {
+              "x": 0.44730108,
+              "y": 0.18793905,
+              "width": 0.01408452,
+              "height": 0.01070421,
+              "rotation": 0.00300035
+            },
+            "right": {
+              "x": 0.55456821,
+              "y": 0.18826089,
+              "width": 0.01408452,
+              "height": 0.01070427,
+              "rotation": 0.00300068
+            }
+          },
+          {
+            "left": {
+              "x": 0.44636619,
+              "y": 0.18845071,
+              "width": 0.01408452,
+              "height": 0.01070422,
+              "rotation": 5e-8
+            },
+            "right": {
+              "x": 0.5536338,
+              "y": 0.18845071,
+              "width": 0.01408452,
+              "height": 0.01070422,
+              "rotation": 3.6e-7
+            }
+          },
+          {
+            "left": {
+              "x": 0.45838751,
+              "y": 0.18690586,
+              "width": 0.01407134,
+              "height": 0.01070374,
+              "rotation": -0.02514825
+            },
+            "right": {
+              "x": 0.56552138,
+              "y": 0.18423343,
+              "width": 0.01407137,
+              "height": 0.01070374,
+              "rotation": -0.02514824
+            }
+          },
+          {
+            "left": {
+              "x": 0.46871637,
+              "y": 0.18208736,
+              "width": 0.0140421,
+              "height": 0.0106999,
+              "rotation": -0.04413804
+            },
+            "right": {
+              "x": 0.57556218,
+              "y": 0.17748809,
+              "width": 0.01404213,
+              "height": 0.0106999,
+              "rotation": -0.04413883
+            }
+          },
+          {
+            "left": {
+              "x": 0.47304497,
+              "y": 0.17953326,
+              "width": 0.01402604,
+              "height": 0.01069658,
+              "rotation": -0.05134038
+            },
+            "right": {
+              "x": 0.57973603,
+              "y": 0.17423815,
+              "width": 0.01402604,
+              "height": 0.01069658,
+              "rotation": -0.05133994
+            }
+          },
+          {
+            "left": {
+              "x": 0.46871637,
+              "y": 0.18208736,
+              "width": 0.0140421,
+              "height": 0.0106999,
+              "rotation": -0.04413804
+            },
+            "right": {
+              "x": 0.57556218,
+              "y": 0.17748809,
+              "width": 0.01404213,
+              "height": 0.0106999,
+              "rotation": -0.04413883
+            }
+          },
+          {
+            "left": {
+              "x": 0.45838751,
+              "y": 0.18690586,
+              "width": 0.01407134,
+              "height": 0.01070374,
+              "rotation": -0.02514825
+            },
+            "right": {
+              "x": 0.56552138,
+              "y": 0.18423343,
+              "width": 0.01407137,
+              "height": 0.01070374,
+              "rotation": -0.02514824
+            }
+          },
+          {
+            "left": {
+              "x": 0.44636619,
+              "y": 0.18845071,
+              "width": 0.01408452,
+              "height": 0.01070422,
+              "rotation": 5e-8
+            },
+            "right": {
+              "x": 0.5536338,
+              "y": 0.18845071,
+              "width": 0.01408452,
+              "height": 0.01070422,
+              "rotation": 3.6e-7
+            }
+          },
+          {
+            "left": {
+              "x": 0.43447861,
+              "y": 0.18423343,
+              "width": 0.01407134,
+              "height": 0.01070374,
+              "rotation": 0.02514901
+            },
+            "right": {
+              "x": 0.54161249,
+              "y": 0.18690586,
+              "width": 0.01407131,
+              "height": 0.01070374,
+              "rotation": 0.025149
+            }
+          },
+          {
+            "left": {
+              "x": 0.42443781,
+              "y": 0.17748809,
+              "width": 0.0140421,
+              "height": 0.0106999,
+              "rotation": 0.04413917
+            },
+            "right": {
+              "x": 0.53128362,
+              "y": 0.18208736,
+              "width": 0.01404213,
+              "height": 0.0106999,
+              "rotation": 0.04413914
+            }
+          },
+          {
+            "left": {
+              "x": 0.42026397,
+              "y": 0.17423815,
+              "width": 0.01402604,
+              "height": 0.01069658,
+              "rotation": 0.05134094
+            },
+            "right": {
+              "x": 0.52695503,
+              "y": 0.17953326,
+              "width": 0.01402604,
+              "height": 0.01069658,
+              "rotation": 0.05134065
+            }
+          },
+          {
+            "left": {
+              "x": 0.42443781,
+              "y": 0.17748809,
+              "width": 0.0140421,
+              "height": 0.0106999,
+              "rotation": 0.04413917
+            },
+            "right": {
+              "x": 0.53128362,
+              "y": 0.18208736,
+              "width": 0.01404213,
+              "height": 0.0106999,
+              "rotation": 0.04413914
+            }
+          },
+          {
+            "left": {
+              "x": 0.43447861,
+              "y": 0.18423343,
+              "width": 0.01407134,
+              "height": 0.01070374,
+              "rotation": 0.02514901
+            },
+            "right": {
+              "x": 0.54161249,
+              "y": 0.18690586,
+              "width": 0.01407131,
+              "height": 0.01070374,
+              "rotation": 0.025149
+            }
+          }
+        ],
+        "source": {
+          "revision": "dawn-m3b-p03",
+          "variant": "standard",
+          "blendSha256": "f2175886f5325f1850987903730f460eafdd8387db40260895c4f72c91e6d552",
+          "sheetSha256": "0b117845fcc6a3d558a8d77d8f513ccd4e2a93ffa4205b3f09803c26c0c60a2d",
+          "idleSha256": "29140fe51a14b6ad18e2a7e1bdacc7cef26188bfaaa91ab35937171127027ff8"
+        }
+      }
     }
   ]
 }
