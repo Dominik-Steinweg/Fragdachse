@@ -172,17 +172,17 @@ describe('Dawn night modifiers stay diegetic (D-47)', () => {
     }
   });
 
-  it('colours the existing ground fog at night only, never through a screen overlay', () => {
-    const plans = composeDawnRoundPlans({ seed: 3, threat: 6, dayNumber: 1, nightModifier: 'blood-moon' });
+  it('colours and thickens the existing ground fog at night only, never through a screen overlay', () => {
+    const plans = composeDawnRoundPlans({ seed: 3, threat: 6, dayNumber: 1, nightModifier: 'fog' });
     const schedule = getDawnSchedule(plans.activity.scheduleId);
     const night = getDawnPhaseStartMs(schedule, 'night') + 1000;
-    expect(resolveDawnNightEnvironment(plans.activity, night)?.fogTint).toEqual(getDawnNightModifier('blood-moon').fogTint);
-    expect(resolveDawnNightEnvironment(plans.activity, getDawnPhaseStartMs(schedule, 'night') - 1000)).toBeNull();
     const fog = getDawnNightModifier('fog');
+    expect(resolveDawnNightEnvironment(plans.activity, night)?.fogTint).toEqual(fog.fogTint);
+    expect(resolveDawnNightEnvironment(plans.activity, getDawnPhaseStartMs(schedule, 'night') - 1000)).toBeNull();
     expect(fog.fogStrength).toBeGreaterThan(1);
-    for (const tint of [getDawnNightModifier('blood-moon').fogTint!, fog.fogTint!]) {
-      expect(tint.every(channel => channel >= 0 && channel <= 1.25)).toBe(true);
-    }
+    expect(fog.fogTint!.every(channel => channel >= 0 && channel <= 1.25)).toBe(true);
+    // The blood moon reddens the fog only through its moonlight; lamp-lit fog keeps the lamp colour.
+    expect(getDawnNightModifier('blood-moon').fogTint).toBeUndefined();
   });
 
   it('rejects malformed fog tints', () => {

@@ -16,7 +16,7 @@ precision highp float;
 varying vec2 outTexCoord;
 uniform sampler2D uState, uVelocity, uTerrain, uMeta, uCommands, uBins, uImpulse;
 uniform vec2 uWorldSize, uWind, uDensity;
-uniform float uTime, uSeed, uReaction, uInitialize, uMeander;
+uniform float uTime, uSeed, uReaction, uInitialize, uMeander, uBankCover;
 const vec2 atlasSize = vec2(${FOG.atlasCols * cells}.0, ${FOG.atlasRows * cells}.0);
 const float SIDE = ${cells}.0;
 const float SLOTS = ${FOG.atlasCols * FOG.atlasRows}.0;
@@ -69,9 +69,10 @@ float targetDensity(float slot,vec2 p,float water) {
   float field=noise(s+warp*.45)*.68+noise(s*2.3+vec2(21.0,7.0)+warp*.8)*.32
     // Water favours banks a little instead of adding a hard, shore-shaped sheet.
     +water*${f(FOG.waterBankBias)};
-  float cover=smoothstep(${f(FOG.bankLow)},${f(FOG.bankHigh)},field);
+  // A denser Activity fog (strength above 1) lowers the bank threshold: more banks, same shapes.
+  float cover=smoothstep(${f(FOG.bankLow)}-uBankCover*${f(FOG.extraBankLow)},${f(FOG.bankHigh)}-uBankCover*${f(FOG.extraBankHigh)},field);
   // Thin residual haze keeps edge inflow alive; open water keeps slightly more of it.
-  float haze=mix(${f(FOG.clearHaze)},${f(FOG.waterHaze)},water);
+  float haze=mix(${f(FOG.clearHaze)},${f(FOG.waterHaze)},water)+uBankCover*${f(FOG.extraHaze)};
   return clamp(mix(uDensity.x,uDensity.y,water)*(haze+(1.0-haze)*cover),0.0,.95);
 }
 vec4 state(float slot,vec2 p) {
@@ -472,7 +473,9 @@ void main() {
    structure=mix(structure,layered,day);
  }
  // Weapon wakes are cut in FOG_DISPLAY_FRAGMENT at mask resolution, never at material texels.
- float alpha=${f(FOG.materialMaxAlpha)}*(1.0-exp(-${f(FOG.materialGain)}*uOpacity*mix(1.0,uFogOpticalOpacity,day)*thickness));
+ // A denser Activity fog also thickens its banks optically, so they read in lamp light.
+ float alpha=(${f(FOG.materialMaxAlpha)}+uBankCover*${f(FOG.extraMaxAlpha)})
+   *(1.0-exp(-${f(FOG.materialGain)}*uOpacity*(1.0+uBankCover)*mix(1.0,uFogOpticalOpacity,day)*thickness));
  if(day>0.0)alpha=mix(alpha,fogPatchEdgeAlpha(alpha,patchDistance,patchActivity),day);
  if(day>0.0)alpha=max(0.0,alpha+atmosphereDither(world+vec2(uWorldOffsetX,uWorldOffsetY))/255.0*day*min(1.0,alpha*255.0));
  gl_FragColor=vec4(mix(vec3(.72,.79,.81),vec3(.84,.88,.88),structure)*alpha,alpha);

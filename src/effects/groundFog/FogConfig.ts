@@ -22,6 +22,8 @@ export const FOG = {
   // A high, narrow threshold keeps banks dense but leaves most of the ground clear; a low one
   // spreads thin fog over the whole view and greys out the ground colours.
   bankLength: 580, bankWidth: 330, bankLow: .56, bankHigh: .74, clearHaze: .035, waterHaze: .09, waterBankBias: .06,
+  // A denser Activity fog (Dawn fog night) lowers the threshold by these amounts at full extra cover.
+  extraBankLow: .17, extraBankHigh: .11, extraHaze: .04, extraMaxAlpha: .23,
   // World px over which the water weight ramps on both sides of the shoreline.
   waterRamp: 160,
   // Bounded sway in world px and its quasi-periodic cycles in seconds.

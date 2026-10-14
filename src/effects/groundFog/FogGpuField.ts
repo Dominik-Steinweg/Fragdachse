@@ -119,6 +119,7 @@ export class FogGpuField {
   private current = 0;
   private elapsed = 0;
   private density: readonly number[] = [0, 0];
+  private bankCover = 0;
   private tuning: FogTuning;
   private view: FogRect = { x: 0, y: 0, width: 1, height: 1 };
   private debug: FogDebug = 'normal';
@@ -168,7 +169,7 @@ export class FogGpuField {
         for (const [i, uniform] of ['uState', 'uVelocity', 'uTerrain', 'uMeta', 'uCommands', 'uBins', 'uImpulse', 'uLookup'].entries()) set(uniform, i);
         set('uWorldSize', [this.terrain.frame.width, this.terrain.frame.height]);
         set('uWind', [this.tuning.windX, this.tuning.windY]); set('uTime', this.elapsed / 1000);
-        set('uSeed', (this.seed >>> 0) % 997); set('uDensity', this.density); set('uReaction', this.tuning.reaction);
+        set('uSeed', (this.seed >>> 0) % 997); set('uDensity', this.density); set('uBankCover', this.bankCover); set('uReaction', this.tuning.reaction);
         set('uMeander', this.tuning.meander);
         set('uInitialize', this.initializeOnly ? 1 : 0);
         set('uLookupSize', [this.lookup.width, this.lookup.height]);
@@ -488,6 +489,8 @@ export class FogGpuField {
   }
   hide(): void { this.display?.setVisible(false);this.rockAerial?.setVisible(false); }
   setRockLighting(strength: [number, number]): void { this.rockFogStrength=strength; }
+  /** Extra bank coverage 0..1 of a denser Activity fog; 0 keeps the authored banks. */
+  setBankCover(cover: number): void { this.bankCover = Math.max(0, Math.min(1, cover)); }
   /** RGB multiplier of the fog colour; coverage, wakes and density are unchanged. */
   setTint(tint: readonly [number, number, number] | null): void { this.tint = tint ? [...tint] : [1, 1, 1]; }
   setRockAerialStrength(strength: number): void {

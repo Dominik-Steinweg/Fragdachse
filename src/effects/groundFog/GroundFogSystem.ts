@@ -182,6 +182,8 @@ export class GroundFogSystem {
       this.gpu.prepare(view, this.elapsed);
       loadingTimeline.end('fog/prepare-submit', prepareAt);
       const target = fogDensityAt(minutes).map(x => x * this.strength * FOG.densityScale) as [number, number];
+      // Above 1 the strength also adds banks; denser banks alone would only saturate the existing ones.
+      this.gpu.setBankCover(this.strength - 1);
       if (!this.density) this.density = target;
       if (delta > 150) { this.impulses.clear(); this.tracks.clear(); }
       const dt = Math.max(0, Math.min(delta, FOG.stepMs * FOG.maxSteps));

@@ -4,8 +4,7 @@
       "id": "blood-moon",
       "chanceByThreat": [0, 0, 0.025, 0.045, 0.065, 0.085, 0.105, 0.12, 0.135, 0.15],
       "nightBudgetMultiplier": 1.3,
-      "fogTint": [1.0, 0.55, 0.55],
-      "moonlight": { "tint": [1.0, 0.2, 0.22], "gain": 1.45 },
+      "moonlight": { "tint": [1.0, 0.2, 0.22], "gain": 1.09 },
       "enemyWeightMultipliers": { "zombie-badger": 0.35, "demon-badger": 1.5, "rabid-badger": 1.5, "spore-warden": 2, "plague-medic": 2, "thrower-badger": 2, "alien-badger": 2, "void-stalker": 2, "timebomb-badger": 2, "pyro-badger": 2, "stink-broodmother": 2, "mortar-badger": 2, "firestarter-badger": 2 }
     },
     {
