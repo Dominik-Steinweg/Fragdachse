@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "generator": "image_gen",
+  "sourceDirectory": "art/poc/dawn/decals",
+  "commonPromptCore": "Single isolated production ground decal. Direct orthographic 90-degree overhead view, no perspective. Grounded muted painterly realism, low saturation, dark soil, charcoal and umber. Diffuse flat lighting, no cast shadow. True transparent PNG alpha, square canvas, centered motif approximately 80 percent of canvas width. Soft irregular ragged porous edges, no round stamp, backing tile, text, UI, glow, cartoon outlines or repeated patterns. Readable at 96-160 pixels on dark forest grass, moss, soil and leaf litter.",
+  "assets": [
+    {
+      "name": "scorch-01",
+      "usage": "Wrack",
+      "date": "2026-10-14",
+      "promptCore": "Drei ungleich verbundene Russflaechen, dunkler ruhiger Kern, verkohltes Gras und wenig Asche.",
+      "selectionReason": "Auswahl der Leit-Session: geerdet, fuegt sich in Waldboden ein, lesbar bei Spielgroesse.",
+      "sha256": "bc19339d7afece6caa863fdb48137ed612c5664a7d36648d7759fdd8b5d8bc87"
+    },
+    {
+      "name": "scorch-03",
+      "usage": "Wrack",
+      "date": "2026-10-14",
+      "promptCore": "Kompakter hakenfoermiger Brandfleck mit Luecken, Kohlesplittern und Grasresten an zwei Seiten.",
+      "selectionReason": "Auswahl der Leit-Session: geerdet, fuegt sich in Waldboden ein, lesbar bei Spielgroesse.",
+      "sha256": "769bc210f6ef2dc4daae082d80a09b2be35177ff8dff74aac5afebc571f20d59"
+    },
+    {
+      "name": "oil-stain-02",
+      "usage": "Wrack",
+      "date": "2026-10-14",
+      "promptCore": "Zwei verbundene matte schwarzbraune Oel-/Treibstofflachen mit unterbrochener schmaler Leckspur. Finale Bildkorrektur: Erdklumpen, Steine, Risse und Relief entfernen; ruhige dunkle Flaechen, kapillare Versickerung und abgetrennte Tropfen. Kein Regenbogenglanz, keine Spiegelreflexe, echter Alpha-Kanal.",
+      "selectionReason": "Auswahl der Leit-Session: geerdet, fuegt sich in Waldboden ein, lesbar bei Spielgroesse.",
+      "sha256": "903303482d121ec74901e58da65a7c4ca05edd3ddd46fa6deeec74471328c589"
+    },
+    {
+      "name": "debris-scatter-03",
+      "usage": "Wrack",
+      "date": "2026-10-14",
+      "promptCore": "Breiter Kleinteile-Faecher nach links, dichter Ursprung rechts; Bolzen, matte Glassplitter und Eisengries. Transparente Zwischenraeume.",
+      "selectionReason": "Auswahl der Leit-Session: geerdet, fuegt sich in Waldboden ein, lesbar bei Spielgroesse.",
+      "sha256": "e5b65e5eeb5d3c53b2f39dc78751bbb625ab4470b6b4e0f60b4b000371651051"
+    },
+    {
+      "name": "debris-scatter-02",
+      "usage": "Wrack",
+      "date": "2026-10-14",
+      "promptCore": "Diagonaler Kleinteile-Faecher nach rechts oben, transparente Zwischenraeume, duenne Metallflocken, kleine Stifte und matte Glasscherben.",
+      "selectionReason": "Auswahl der Leit-Session: geerdet, fuegt sich in Waldboden ein, lesbar bei Spielgroesse.",
+      "sha256": "0cfe80e928044535dd0aac3582f4625e1d0a3a83c9b627f87ca205f017438030"
+    },
+    {
+      "name": "skid-gouge-02",
+      "usage": "Wrack",
+      "date": "2026-10-14",
+      "promptCore": "Horizontales 2:1-Motiv auf quadratischer Canvas; breite flache Absturzrinne, dunkler Aushub links, zerfaserte Schleifauslaeufer rechts.",
+      "selectionReason": "Auswahl der Leit-Session: geerdet, fuegt sich in Waldboden ein, lesbar bei Spielgroesse.",
+      "sha256": "bcde032b177ed05766b7d4938f5b3192017363f130baed4321cca26dce7f099b"
+    },
+    {
+      "name": "drill-disturbance-03",
+      "usage": "Extraktor",
+      "date": "2026-10-14",
+      "promptCore": "Teilweise verdeckte kleine Bohr?ffnung, gebrochener Bohrlochrand, schraeg verteilter Aushub und lose Erdbr?ckchen. Keine kreisrunde aeussere Kontur.",
+      "selectionReason": "Auswahl der Leit-Session: geerdet, fuegt sich in Waldboden ein, lesbar bei Spielgroesse.",
+      "sha256": "f51441bd34c87e10f25f5765f70781c2b3bcf27c5cfa985b7f467832e93d56a5"
+    },
+    {
+      "name": "organic-stain-01",
+      "usage": "Brutnest",
+      "date": "2026-10-14",
+      "promptCore": "Dunkles Aubergine-Violett, erdschwarzer feuchter Bewuchskern, duennes verzweigtes Adernetz, matt. Keine leuchtenden oder glaenzenden Bereiche.",
+      "selectionReason": "Auswahl der Leit-Session: geerdet, fuegt sich in Waldboden ein, lesbar bei Spielgroesse.",
+      "sha256": "1bd66758848b27e8908c54419d8d930a6b48d6bbddc339fbec183e70f4229611"
+    },
+    {
+      "name": "rust-flakes-01",
+      "usage": "Schrotthaufen",
+      "date": "2026-10-14",
+      "promptCore": "Feiner dunkler Roststaub, kleine duenne oxidierte Blechflocken und ungleich transparent auslaufender Staub. Gedaempftes Umbra statt grellem Orange.",
+      "selectionReason": "Auswahl der Leit-Session: geerdet, fuegt sich in Waldboden ein, lesbar bei Spielgroesse.",
+      "sha256": "4b8c372abfbb57828f5200eb07bd35e1838911720244e68af91af7c5b58d0f0f"
+    },
+    {
+      "name": "drag-marks-01",
+      "usage": "Versorgung",
+      "date": "2026-10-14",
+      "promptCore": "Zwei breite unterbrochene horizontale Schleifstreifen schwerer Kisten, verdichtete Erde, zerdruecktes Gras, unregelmaessige Enden, kein Reifenprofil.",
+      "selectionReason": "Auswahl der Leit-Session: geerdet, fuegt sich in Waldboden ein, lesbar bei Spielgroesse.",
+      "sha256": "ccd2ce0f14774cb03d2aa98799dd7a6a8a5a1f0169cbc90797ca9be9fa7b0391"
+    }
+  ]
+}

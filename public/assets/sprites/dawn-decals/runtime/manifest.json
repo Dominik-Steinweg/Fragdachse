@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "assets": [
+    {
+      "name": "scorch-01",
+      "sizes": [
+        {
+          "width": 256,
+          "height": 256,
+          "file": "scorch-01-256.webp"
+        },
+        {
+          "width": 512,
+          "height": 512,
+          "file": "scorch-01-512.webp"
+        }
+      ]
+    },
+    {
+      "name": "scorch-03",
+      "sizes": [
+        {
+          "width": 256,
+          "height": 256,
+          "file": "scorch-03-256.webp"
+        },
+        {
+          "width": 512,
+          "height": 512,
+          "file": "scorch-03-512.webp"
+        }
+      ]
+    },
+    {
+      "name": "oil-stain-02",
+      "sizes": [
+        {
+          "width": 256,
+          "height": 256,
+          "file": "oil-stain-02-256.webp"
+        },
+        {
+          "width": 512,
+          "height": 512,
+          "file": "oil-stain-02-512.webp"
+        }
+      ]
+    },
+    {
+      "name": "debris-scatter-03",
+      "sizes": [
+        {
+          "width": 256,
+          "height": 256,
+          "file": "debris-scatter-03-256.webp"
+        },
+        {
+          "width": 512,
+          "height": 512,
+          "file": "debris-scatter-03-512.webp"
+        }
+      ]
+    },
+    {
+      "name": "debris-scatter-02",
+      "sizes": [
+        {
+          "width": 256,
+          "height": 256,
+          "file": "debris-scatter-02-256.webp"
+        },
+        {
+          "width": 512,
+          "height": 512,
+          "file": "debris-scatter-02-512.webp"
+        }
+      ]
+    },
+    {
+      "name": "skid-gouge-02",
+      "sizes": [
+        {
+          "width": 256,
+          "height": 256,
+          "file": "skid-gouge-02-256.webp"
+        },
+        {
+          "width": 512,
+          "height": 512,
+          "file": "skid-gouge-02-512.webp"
+        }
+      ]
+    },
+    {
+      "name": "drill-disturbance-03",
+      "sizes": [
+        {
+          "width": 256,
+          "height": 256,
+          "file": "drill-disturbance-03-256.webp"
+        },
+        {
+          "width": 512,
+          "height": 512,
+          "file": "drill-disturbance-03-512.webp"
+        }
+      ]
+    },
+    {
+      "name": "organic-stain-01",
+      "sizes": [
+        {
+          "width": 256,
+          "height": 256,
+          "file": "organic-stain-01-256.webp"
+        },
+        {
+          "width": 512,
+          "height": 512,
+          "file": "organic-stain-01-512.webp"
+        }
+      ]
+    },
+    {
+      "name": "rust-flakes-01",
+      "sizes": [
+        {
+          "width": 256,
+          "height": 256,
+          "file": "rust-flakes-01-256.webp"
+        },
+        {
+          "width": 512,
+          "height": 512,
+          "file": "rust-flakes-01-512.webp"
+        }
+      ]
+    },
+    {
+      "name": "drag-marks-01",
+      "sizes": [
+        {
+          "width": 256,
+          "height": 256,
+          "file": "drag-marks-01-256.webp"
+        },
+        {
+          "width": 512,
+          "height": 512,
+          "file": "drag-marks-01-512.webp"
+        }
+      ]
+    }
+  ]
+}

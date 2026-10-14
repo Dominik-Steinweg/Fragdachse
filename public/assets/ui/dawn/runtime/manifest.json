@@ -5,247 +5,626 @@
   "assets": {
     "scrap": {
       "original": "scrap.png",
-      "sha256": "fb34ceee49579cee57e8bde78f370697c1790e56b6b1c83d9a33b608d3a8e49b",
+      "sha256": "dd721f10a9c7a186782a35a3ad25210e4a8740b5f30ef8c5fc9e3f44d7d47a09",
+      "backgroundMode": "dark-print-plate",
       "crop": {
-        "left": 108,
-        "top": 102,
-        "width": 1060,
-        "height": 1048
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
       },
       "exports": [
         {
           "file": "runtime/scrap-32.webp",
           "width": 32,
           "height": 32,
-          "bytes": 1700
+          "bytes": 1510
         },
         {
           "file": "runtime/scrap-64.webp",
           "width": 64,
           "height": 64,
-          "bytes": 5606
+          "bytes": 4446
         },
         {
           "file": "runtime/scrap-128.webp",
           "width": 128,
           "height": 128,
-          "bytes": 16350
+          "bytes": 13286
         }
       ]
     },
     "threat": {
       "original": "threat.png",
-      "sha256": "64894b8df26f0b13f7cf09988885c4f4e786a5e632042de1388f9d0fba61524f",
+      "sha256": "ddba0a8d507d883542d95dee2553aeb2b7047f261f5b7c698e3a6a9eacd8142d",
+      "backgroundMode": "dark-print-plate",
       "crop": {
-        "left": 45,
-        "top": 26,
-        "width": 1163,
-        "height": 1114
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
       },
       "exports": [
         {
           "file": "runtime/threat-32.webp",
           "width": 32,
           "height": 32,
-          "bytes": 1572
+          "bytes": 1200
         },
         {
           "file": "runtime/threat-64.webp",
           "width": 64,
           "height": 64,
-          "bytes": 5206
+          "bytes": 3476
         },
         {
           "file": "runtime/threat-128.webp",
           "width": 128,
           "height": 128,
-          "bytes": 15214
+          "bytes": 9708
         }
       ]
     },
     "dealer-expansion": {
       "original": "dealer-expansion.png",
-      "sha256": "bd39608175d08fd836b5ee4a6f0e6032b1e75555262f401ac7e2b67ab54d3499",
+      "sha256": "d527f21b4ec6320b392d1891901e09afb9e147a0b17ab4fe41edd9009e8df01c",
+      "backgroundMode": "dark-print-plate",
       "crop": {
-        "left": 58,
-        "top": 122,
-        "width": 1137,
-        "height": 1001
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
       },
       "exports": [
         {
           "file": "runtime/dealer-expansion-32.webp",
           "width": 32,
           "height": 32,
-          "bytes": 1352
+          "bytes": 1712
         },
         {
           "file": "runtime/dealer-expansion-64.webp",
           "width": 64,
           "height": 64,
-          "bytes": 4148
+          "bytes": 5478
         },
         {
           "file": "runtime/dealer-expansion-128.webp",
           "width": 128,
           "height": 128,
-          "bytes": 14380
+          "bytes": 18112
         }
       ]
     },
     "dealer-infrastructure": {
       "original": "dealer-infrastructure.png",
-      "sha256": "43503c210c3b487685e7438f6ba105d9a0214a364fbeeb0fae97d1a1ed663636",
+      "sha256": "e9edc743610db461789901ddbc761953b890b8606ec849b0e0c600c0916801ea",
+      "backgroundMode": "dark-print-plate",
       "crop": {
-        "left": 60,
-        "top": 129,
-        "width": 1166,
-        "height": 998
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
       },
       "exports": [
         {
           "file": "runtime/dealer-infrastructure-32.webp",
           "width": 32,
           "height": 32,
-          "bytes": 1438
+          "bytes": 1806
         },
         {
           "file": "runtime/dealer-infrastructure-64.webp",
           "width": 64,
           "height": 64,
-          "bytes": 4492
+          "bytes": 5598
         },
         {
           "file": "runtime/dealer-infrastructure-128.webp",
           "width": 128,
           "height": 128,
-          "bytes": 13402
+          "bytes": 17630
         }
       ]
     },
     "dealer-upgrades": {
       "original": "dealer-upgrades.png",
-      "sha256": "c332925d2b800527cb1b92f7655f6eaedc858f74e27044c550900edc0e100884",
+      "sha256": "adf049f493cd7aaade1fc57dd15785b30e284646d81495e613d7c1103e93cd0f",
+      "backgroundMode": "dark-print-plate",
       "crop": {
-        "left": 146,
-        "top": 94,
-        "width": 961,
-        "height": 1051
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
       },
       "exports": [
         {
           "file": "runtime/dealer-upgrades-32.webp",
           "width": 32,
           "height": 32,
-          "bytes": 1772
+          "bytes": 1754
         },
         {
           "file": "runtime/dealer-upgrades-64.webp",
           "width": 64,
           "height": 64,
-          "bytes": 5914
+          "bytes": 5394
         },
         {
           "file": "runtime/dealer-upgrades-128.webp",
           "width": 128,
           "height": 128,
-          "bytes": 16206
+          "bytes": 15738
         }
       ]
     },
     "dealer-equipment": {
       "original": "dealer-equipment.png",
-      "sha256": "6519125df92bb37122657120a6675b6f46278eb288747144ed05ecea0f15d91b",
+      "sha256": "daef666c87f89e8a27a88dd1559e2db7b9740f07820e2ae47de4f32d0de5dec3",
+      "backgroundMode": "dark-print-plate",
       "crop": {
-        "left": 106,
-        "top": 104,
-        "width": 1070,
-        "height": 1049
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
       },
       "exports": [
         {
           "file": "runtime/dealer-equipment-32.webp",
           "width": 32,
           "height": 32,
-          "bytes": 1650
+          "bytes": 1814
         },
         {
           "file": "runtime/dealer-equipment-64.webp",
           "width": 64,
           "height": 64,
-          "bytes": 4866
+          "bytes": 5788
         },
         {
           "file": "runtime/dealer-equipment-128.webp",
           "width": 128,
           "height": 128,
-          "bytes": 15442
+          "bytes": 18794
         }
       ]
     },
     "recalibration-core": {
       "original": "recalibration-core.png",
-      "sha256": "8f1c06b76cb61be556b59bb00c68dd6dd45ea6bf245d3efac7af045cc8f35710",
+      "sha256": "aef121ba942b3f9cbe7e273e27da9d8202c25ffb4b0c8fd4891c2d56b25bf284",
+      "backgroundMode": "dark-print-plate",
       "crop": {
-        "left": 120,
-        "top": 93,
-        "width": 1032,
-        "height": 1067
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
       },
       "exports": [
         {
           "file": "runtime/recalibration-core-32.webp",
           "width": 32,
           "height": 32,
-          "bytes": 1992
+          "bytes": 1548
         },
         {
           "file": "runtime/recalibration-core-64.webp",
           "width": 64,
           "height": 64,
-          "bytes": 5968
+          "bytes": 4844
         },
         {
           "file": "runtime/recalibration-core-128.webp",
           "width": 128,
           "height": 128,
-          "bytes": 18204
+          "bytes": 15774
         }
       ]
     },
     "scrap-magnet": {
       "original": "scrap-magnet.png",
-      "sha256": "e5c83c49e5673fb2c7fc07d28f120c6e5fdb3b8059eb105765114c96ca3f8241",
+      "sha256": "3a73ba2ebcd30540d3f89ecf1ff9a07166476f15157e42294c32d604502980f5",
+      "backgroundMode": "dark-print-plate",
       "crop": {
-        "left": 221,
-        "top": 67,
-        "width": 811,
-        "height": 1076
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
       },
       "exports": [
         {
           "file": "runtime/scrap-magnet-32.webp",
           "width": 32,
           "height": 32,
-          "bytes": 1702
+          "bytes": 1494
         },
         {
           "file": "runtime/scrap-magnet-64.webp",
           "width": 64,
           "height": 64,
-          "bytes": 5200
+          "bytes": 4530
         },
         {
           "file": "runtime/scrap-magnet-128.webp",
           "width": 128,
           "height": 128,
-          "bytes": 14820
+          "bytes": 14240
+        }
+      ]
+    },
+    "scrap-scanner": {
+      "original": "scrap-scanner.png",
+      "sha256": "911ce297d21b94b5f6359e0e32d7ba912f6787fea864eeed88ffbc25cd9a056a",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/scrap-scanner-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1400
+        },
+        {
+          "file": "runtime/scrap-scanner-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4296
+        },
+        {
+          "file": "runtime/scrap-scanner-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 13942
+        }
+      ]
+    },
+    "elite-swift": {
+      "original": "elite-swift.png",
+      "sha256": "9cc0fc9deadcd2b8c5e988e7095d3d51cac04d42249d0a765f18ca7e9c59e68f",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/elite-swift-16.webp",
+          "width": 16,
+          "height": 16,
+          "bytes": 574
+        },
+        {
+          "file": "runtime/elite-swift-24.webp",
+          "width": 24,
+          "height": 24,
+          "bytes": 1128
+        },
+        {
+          "file": "runtime/elite-swift-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1482
+        },
+        {
+          "file": "runtime/elite-swift-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4610
+        },
+        {
+          "file": "runtime/elite-swift-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 15496
+        }
+      ]
+    },
+    "elite-armored": {
+      "original": "elite-armored.png",
+      "sha256": "4cfaffa7d7f3c40af5054c0ec7c74f33d8baa0cbc55e965e698284897827f053",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/elite-armored-16.webp",
+          "width": 16,
+          "height": 16,
+          "bytes": 528
+        },
+        {
+          "file": "runtime/elite-armored-24.webp",
+          "width": 24,
+          "height": 24,
+          "bytes": 850
+        },
+        {
+          "file": "runtime/elite-armored-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1300
+        },
+        {
+          "file": "runtime/elite-armored-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4138
+        },
+        {
+          "file": "runtime/elite-armored-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 14680
+        }
+      ]
+    },
+    "elite-volatile": {
+      "original": "elite-volatile.png",
+      "sha256": "b371d725e91fe7970a6a47ca8850d089bcdf392c0f301ff927493aa52ce3a3b7",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/elite-volatile-16.webp",
+          "width": 16,
+          "height": 16,
+          "bytes": 512
+        },
+        {
+          "file": "runtime/elite-volatile-24.webp",
+          "width": 24,
+          "height": 24,
+          "bytes": 868
+        },
+        {
+          "file": "runtime/elite-volatile-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1552
+        },
+        {
+          "file": "runtime/elite-volatile-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 3936
+        },
+        {
+          "file": "runtime/elite-volatile-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 11522
+        }
+      ]
+    },
+    "elite-regenerating": {
+      "original": "elite-regenerating.png",
+      "sha256": "f8c9b4e73b8f5b682cafcda2b1837e7ea109ef910a5dce21f9dcf16719ac4571",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/elite-regenerating-16.webp",
+          "width": 16,
+          "height": 16,
+          "bytes": 618
+        },
+        {
+          "file": "runtime/elite-regenerating-24.webp",
+          "width": 24,
+          "height": 24,
+          "bytes": 966
+        },
+        {
+          "file": "runtime/elite-regenerating-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1512
+        },
+        {
+          "file": "runtime/elite-regenerating-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4800
+        },
+        {
+          "file": "runtime/elite-regenerating-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 15190
+        }
+      ]
+    },
+    "elite-shielding": {
+      "original": "elite-shielding.png",
+      "sha256": "f40b852acc83fd579de7eb4d7d847e593fceba87ac6004d3deb4ced8a849f9c4",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/elite-shielding-16.webp",
+          "width": 16,
+          "height": 16,
+          "bytes": 548
+        },
+        {
+          "file": "runtime/elite-shielding-24.webp",
+          "width": 24,
+          "height": 24,
+          "bytes": 1046
+        },
+        {
+          "file": "runtime/elite-shielding-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1632
+        },
+        {
+          "file": "runtime/elite-shielding-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4016
+        },
+        {
+          "file": "runtime/elite-shielding-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 13580
+        }
+      ]
+    },
+    "night-blood-moon": {
+      "original": "night-blood-moon.png",
+      "sha256": "36e07fa8da041fd86a9f77ea0e16a684e0a80372d68e7c2ceb3fc711137357a8",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/night-blood-moon-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1618
+        },
+        {
+          "file": "runtime/night-blood-moon-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4794
+        },
+        {
+          "file": "runtime/night-blood-moon-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 15228
+        }
+      ]
+    },
+    "night-fog": {
+      "original": "night-fog.png",
+      "sha256": "65ab6640186acb009f0480653e605269a253e4c44f6387c07ae31bd47fc4613c",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/night-fog-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1500
+        },
+        {
+          "file": "runtime/night-fog-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4736
+        },
+        {
+          "file": "runtime/night-fog-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 15126
+        }
+      ]
+    },
+    "night-bombers": {
+      "original": "night-bombers.png",
+      "sha256": "9ed9897d6d78f6df419975d23b2ecf708049db3072c64ca3252f01801785d2b0",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/night-bombers-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1484
+        },
+        {
+          "file": "runtime/night-bombers-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 4262
+        },
+        {
+          "file": "runtime/night-bombers-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 13754
+        }
+      ]
+    },
+    "night-fire": {
+      "original": "night-fire.png",
+      "sha256": "75f256e4c9e5f41159123c1bfef9b6e71651e8aaf36b75b31df199063a49ef22",
+      "backgroundMode": "dark-print-plate",
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 1254,
+        "height": 1254
+      },
+      "exports": [
+        {
+          "file": "runtime/night-fire-32.webp",
+          "width": 32,
+          "height": 32,
+          "bytes": 1864
+        },
+        {
+          "file": "runtime/night-fire-64.webp",
+          "width": 64,
+          "height": 64,
+          "bytes": 5742
+        },
+        {
+          "file": "runtime/night-fire-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 18230
         }
       ]
     },
     "dealer-portrait": {
       "original": "dealer-portrait.png",
       "sha256": "476ae5b10f7ec209258353d7ef7657752efd9fabd1ad569e295e8cef3ca1210f",
+      "backgroundMode": "transparent",
       "crop": {
         "left": 38,
         "top": 0,
@@ -258,366 +637,6 @@
           "width": 256,
           "height": 256,
           "bytes": 56770
-        }
-      ]
-    },
-    "elite-armored": {
-      "original": "elite-armored.png",
-      "sha256": "770ae805cc7bf2a29258e78a2ace05d4cf5fa860557c839277719b9358005745",
-      "crop": {
-        "left": 90,
-        "top": 92,
-        "width": 1073,
-        "height": 1070
-      },
-      "exports": [
-        {
-          "file": "runtime/elite-armored-16.webp",
-          "width": 16,
-          "height": 16,
-          "bytes": 704
-        },
-        {
-          "file": "runtime/elite-armored-24.webp",
-          "width": 24,
-          "height": 24,
-          "bytes": 1066
-        },
-        {
-          "file": "runtime/elite-armored-32.webp",
-          "width": 32,
-          "height": 32,
-          "bytes": 1790
-        },
-        {
-          "file": "runtime/elite-armored-64.webp",
-          "width": 64,
-          "height": 64,
-          "bytes": 5780
-        },
-        {
-          "file": "runtime/elite-armored-128.webp",
-          "width": 128,
-          "height": 128,
-          "bytes": 19776
-        }
-      ]
-    },
-    "elite-swift": {
-      "original": "elite-swift.png",
-      "sha256": "c791d9145d3f5e8860cdd625031783fd6dc054078a887cd3f79db6c0a4db7787",
-      "crop": {
-        "left": 130,
-        "top": 139,
-        "width": 995,
-        "height": 974
-      },
-      "exports": [
-        {
-          "file": "runtime/elite-swift-16.webp",
-          "width": 16,
-          "height": 16,
-          "bytes": 660
-        },
-        {
-          "file": "runtime/elite-swift-24.webp",
-          "width": 24,
-          "height": 24,
-          "bytes": 1072
-        },
-        {
-          "file": "runtime/elite-swift-32.webp",
-          "width": 32,
-          "height": 32,
-          "bytes": 1684
-        },
-        {
-          "file": "runtime/elite-swift-64.webp",
-          "width": 64,
-          "height": 64,
-          "bytes": 5268
-        },
-        {
-          "file": "runtime/elite-swift-128.webp",
-          "width": 128,
-          "height": 128,
-          "bytes": 17582
-        }
-      ]
-    },
-    "elite-volatile": {
-      "original": "elite-volatile.png",
-      "sha256": "cbb97b4291a78bb63724fc6e71c735d95fade601176b6f7c3bc68f44c5f841d6",
-      "crop": {
-        "left": 125,
-        "top": 130,
-        "width": 1003,
-        "height": 983
-      },
-      "exports": [
-        {
-          "file": "runtime/elite-volatile-16.webp",
-          "width": 16,
-          "height": 16,
-          "bytes": 664
-        },
-        {
-          "file": "runtime/elite-volatile-24.webp",
-          "width": 24,
-          "height": 24,
-          "bytes": 1066
-        },
-        {
-          "file": "runtime/elite-volatile-32.webp",
-          "width": 32,
-          "height": 32,
-          "bytes": 1752
-        },
-        {
-          "file": "runtime/elite-volatile-64.webp",
-          "width": 64,
-          "height": 64,
-          "bytes": 5342
-        },
-        {
-          "file": "runtime/elite-volatile-128.webp",
-          "width": 128,
-          "height": 128,
-          "bytes": 17940
-        }
-      ]
-    },
-    "elite-regenerating": {
-      "original": "elite-regenerating.png",
-      "sha256": "1cc2c6331eb116c0cae9d967cdd2ad983ed80b031187f3dded11fb2d8e0d6532",
-      "crop": {
-        "left": 173,
-        "top": 176,
-        "width": 906,
-        "height": 901
-      },
-      "exports": [
-        {
-          "file": "runtime/elite-regenerating-16.webp",
-          "width": 16,
-          "height": 16,
-          "bytes": 698
-        },
-        {
-          "file": "runtime/elite-regenerating-24.webp",
-          "width": 24,
-          "height": 24,
-          "bytes": 1004
-        },
-        {
-          "file": "runtime/elite-regenerating-32.webp",
-          "width": 32,
-          "height": 32,
-          "bytes": 1708
-        },
-        {
-          "file": "runtime/elite-regenerating-64.webp",
-          "width": 64,
-          "height": 64,
-          "bytes": 5304
-        },
-        {
-          "file": "runtime/elite-regenerating-128.webp",
-          "width": 128,
-          "height": 128,
-          "bytes": 17720
-        }
-      ]
-    },
-    "elite-shielding": {
-      "original": "elite-shielding.png",
-      "sha256": "c1c79e79236e12b338b261976b3b94593a0403671cd44ee1162e3d01036df92e",
-      "crop": {
-        "left": 132,
-        "top": 135,
-        "width": 993,
-        "height": 972
-      },
-      "exports": [
-        {
-          "file": "runtime/elite-shielding-16.webp",
-          "width": 16,
-          "height": 16,
-          "bytes": 656
-        },
-        {
-          "file": "runtime/elite-shielding-24.webp",
-          "width": 24,
-          "height": 24,
-          "bytes": 1078
-        },
-        {
-          "file": "runtime/elite-shielding-32.webp",
-          "width": 32,
-          "height": 32,
-          "bytes": 1708
-        },
-        {
-          "file": "runtime/elite-shielding-64.webp",
-          "width": 64,
-          "height": 64,
-          "bytes": 5192
-        },
-        {
-          "file": "runtime/elite-shielding-128.webp",
-          "width": 128,
-          "height": 128,
-          "bytes": 17242
-        }
-      ]
-    },
-    "night-blood-moon": {
-      "original": "night-blood-moon.png",
-      "sha256": "75b8f970ce910ed4d4ab3b010dc31d76ef6a176af912c2e24a7ccc25d803b018",
-      "crop": {
-        "left": 96,
-        "top": 85,
-        "width": 1061,
-        "height": 1077
-      },
-      "exports": [
-        {
-          "file": "runtime/night-blood-moon-32.webp",
-          "width": 32,
-          "height": 32,
-          "bytes": 2008
-        },
-        {
-          "file": "runtime/night-blood-moon-64.webp",
-          "width": 64,
-          "height": 64,
-          "bytes": 5426
-        },
-        {
-          "file": "runtime/night-blood-moon-128.webp",
-          "width": 128,
-          "height": 128,
-          "bytes": 17812
-        }
-      ]
-    },
-    "night-fog": {
-      "original": "night-fog.png",
-      "sha256": "7eb422244f3b86ff6e6fbef3515b3498e106b7f44c0c4248a869ee69c35f6fbe",
-      "crop": {
-        "left": 65,
-        "top": 68,
-        "width": 1125,
-        "height": 1113
-      },
-      "exports": [
-        {
-          "file": "runtime/night-fog-32.webp",
-          "width": 32,
-          "height": 32,
-          "bytes": 1844
-        },
-        {
-          "file": "runtime/night-fog-64.webp",
-          "width": 64,
-          "height": 64,
-          "bytes": 5540
-        },
-        {
-          "file": "runtime/night-fog-128.webp",
-          "width": 128,
-          "height": 128,
-          "bytes": 17882
-        }
-      ]
-    },
-    "night-bombers": {
-      "original": "night-bombers.png",
-      "sha256": "2eff548c80bbc5c96ab09d4843c7f52680d136265ad1891502c84c06f4400b45",
-      "crop": {
-        "left": 98,
-        "top": 98,
-        "width": 1051,
-        "height": 1043
-      },
-      "exports": [
-        {
-          "file": "runtime/night-bombers-32.webp",
-          "width": 32,
-          "height": 32,
-          "bytes": 1936
-        },
-        {
-          "file": "runtime/night-bombers-64.webp",
-          "width": 64,
-          "height": 64,
-          "bytes": 5526
-        },
-        {
-          "file": "runtime/night-bombers-128.webp",
-          "width": 128,
-          "height": 128,
-          "bytes": 18194
-        }
-      ]
-    },
-    "night-fire": {
-      "original": "night-fire.png",
-      "sha256": "ad131673e1001bdefd8259a2d6135f6e25fe1a2e7a79b2541e1b235746358755",
-      "crop": {
-        "left": 65,
-        "top": 63,
-        "width": 1125,
-        "height": 1113
-      },
-      "exports": [
-        {
-          "file": "runtime/night-fire-32.webp",
-          "width": 32,
-          "height": 32,
-          "bytes": 2174
-        },
-        {
-          "file": "runtime/night-fire-64.webp",
-          "width": 64,
-          "height": 64,
-          "bytes": 6012
-        },
-        {
-          "file": "runtime/night-fire-128.webp",
-          "width": 128,
-          "height": 128,
-          "bytes": 19480
-        }
-      ]
-    },
-    "scrap-scanner": {
-      "original": "scrap-scanner.png",
-      "sha256": "2ce34e2dc45c0da4adf1fc616bb53df904efb17da42327162ba8b08d23dc9b20",
-      "crop": {
-        "left": 151,
-        "top": 61,
-        "width": 958,
-        "height": 1064
-      },
-      "exports": [
-        {
-          "file": "runtime/scrap-scanner-32.webp",
-          "width": 32,
-          "height": 32,
-          "bytes": 2046
-        },
-        {
-          "file": "runtime/scrap-scanner-64.webp",
-          "width": 64,
-          "height": 64,
-          "bytes": 5660
-        },
-        {
-          "file": "runtime/scrap-scanner-128.webp",
-          "width": 128,
-          "height": 128,
-          "bytes": 17848
         }
       ]
     }
