@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { NetworkBridge } from '../../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../../src/network/peer/session';
-import { EMPTY_FIRE_CONTROL_SNAPSHOT, type FireControlSnapshot } from '../../src/systems/fireControl/FireControlSnapshot';
+import { EMPTY_FIRE_CONTROL_SNAPSHOT, fireControlHoloSourceId, type FireControlHoloDeploymentSnapshot, type FireControlSnapshot } from '../../src/systems/fireControl/FireControlSnapshot';
+import { COOP_DEFENSE_UPGRADE_DEFINITIONS } from '../../src/utils/coopDefenseUpgrades';
 import { encodeFireControlSnapshot, decodeFireControlSnapshot } from '../../src/network/fireControlSnapshotCodec';
 import { FULL_GAME_STATE_SLICE_KEYS, isCompleteGameStatePayload } from '../../src/network/FullGameStateBootstrap';
 import { encodeProjectileStatic, encodeProjectileDynamic } from '../../src/network/projectileSnapshotCodec';
@@ -58,7 +59,18 @@ function snapshot(): FireControlSnapshot {
       startedAt: 1100, expiresAt: 6000, localFireRelease: true, entries: [
         { sourceId: 8, identityId: 8, mode: 'portal', x: 20, y: 0, angle: 0.3, lastTransportAt: 1200 },
       ] },
+    holo(),
   ] };
+}
+
+// Synthetic full-upgrade GDD config; authored ultimate content is supplied separately by Lane A.
+const holoConfig = { copyLifetimeMs: 9000, materializeMs: 400, spawnIntervalMs: 600 };
+function holo(id = 3): FireControlHoloDeploymentSnapshot {
+  return { id, kind: 'holo', ownerId: 'inspector', ownerColor: 0xffffff, x: 300, y: 100,
+    startedAt: 1000.125, expiresAt: 19000.125, spawnUntil: 11000.125,
+    copyLifetimeMs: holoConfig.copyLifetimeMs, materializeMs: holoConfig.materializeMs,
+    copies: [{ seq: 0, sourceId: fireControlHoloSourceId(id, 0), weaponId: 'TURRET_MG',
+      x: -300.1, y: 100.2, angle: -0.123, spawnedAt: 1000.125 }] };
 }
 
 describe('Ausführbarer Netzwerk-Fixture-Baustein', () => {
@@ -79,6 +91,58 @@ describe('Ausführbarer Netzwerk-Fixture-Baustein', () => {
 
 
 describe('fire-control world replication', () => {
+  it('round-trips kind 2 alone and alongside relays and portals without changing identities or host times', () => {
+    for (const input of [{ deployments: [holo()] }, snapshot()]) {
+      const raw = encodeFireControlSnapshot(input);
+      const decoded = decodeFireControlSnapshot(raw)!;
+      expect(decoded).toEqual(input);
+      expect(decodeFireControlSnapshot(structuredClone(raw), decoded)).toBe(decoded);
+      const deployment = decoded.deployments.find(d => d.kind === 'holo')!;
+      expect(deployment.copies[0].sourceId).toBe(fireControlHoloSourceId(deployment.id, deployment.copies[0].seq));
+    }
+    const input = holo();
+    const quantized = decodeFireControlSnapshot(encodeFireControlSnapshot({ deployments: [{ ...input,
+      copies: input.copies.map(c => ({ ...c, x: -2.345, y: 12.789, angle: -0.123456 })) }] }))!;
+    expect(quantized.deployments[0]).toMatchObject({ copies: [{ x: -2.3, y: 12.8, angle: -0.123,
+      spawnedAt: input.copies[0].spawnedAt }] });
+  });
+
+  it('rejects invalid Holo rows atomically within a mixed slice', () => {
+    const corruptions: ((d: any[]) => void)[] = [
+      d => { d[8] = 1; }, d => { d[10] = -1; }, d => { d[11] = NaN; },
+      d => { d[12] = d[6] - 1; }, d => { d[12] = Infinity; }, d => { d.pop(); },
+      d => { d[9][0][0] = -1; }, d => { d[9][0][0] = 0.5; }, d => { d[9][0][1] = ''; },
+      d => { d[9][0][2] = Infinity; }, d => { d[9][0][3] = 0.1; },
+      d => { d[9][0][4] = NaN; }, d => { d[9][0][5] = -1; },
+      d => { d[9][0].push(0); }, d => { d[9].push(d[9][0]); },
+    ];
+    for (const corrupt of corruptions) {
+      const raw = encodeFireControlSnapshot(snapshot());
+      corrupt(raw.find(d => d[0] === 2)!);
+      expect(decodeFireControlSnapshot(raw)).toBeNull();
+    }
+  });
+
+  it('budgets 60 Holo and 12 relay copies below 6 KiB per full fc slice', () => {
+    const owners = ['inspector', 'p2', 'p3', 'p4'];
+    const relay = snapshot().deployments[0];
+    if (relay.kind !== 'copies') throw Error('Expected relay');
+    const relayCount = 1 + COOP_DEFENSE_UPGRADE_DEFINITIONS.fire_control_relay_connections.maxLevel;
+    const holoCount = Math.ceil(holoConfig.copyLifetimeMs / holoConfig.spawnIntervalMs);
+    const facts: FireControlSnapshot = { deployments: owners.flatMap((ownerId, i) => {
+      const h = holo(i * 2 + 1);
+      return [{ ...h, ownerId, copies: Array.from({ length: holoCount }, (_, seq) => ({ ...h.copies[0], seq,
+        sourceId: fireControlHoloSourceId(h.id, seq), spawnedAt: h.startedAt + seq * holoConfig.spawnIntervalMs })) },
+      { ...relay, id: i * 2 + 2, ownerId, copies: Array.from({ length: relayCount }, (_, seq) => ({ ...relay.copies[0],
+        sourceId: `fc-copy:${i * 2 + 2}:${seq}`, originalId: seq })) }];
+    }) };
+    const wire = encodeFireControlSnapshot(facts);
+    // 6 KiB bounds the every-tick slice (120 KiB/s at 20 Hz), with headroom for IDs and
+    // fractional host timestamps. Compact Holo rows must not repeat deployment metadata.
+    expect(new TextEncoder().encode(JSON.stringify(wire)).byteLength).toBeLessThan(6 * 1024);
+    expect(decodeFireControlSnapshot(wire)).toEqual(facts);
+  });
+
   it('round-trips both deployment kinds and all modes with exact host times and quantized poses', () => {
     const facts = snapshot();
     const portal = facts.deployments[1];
