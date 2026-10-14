@@ -9,7 +9,7 @@ import {
 import { addStoredCoopDefenseXp, claimStoredPendingCoopDefenseItemReward, getStoredCoopDefenseProgress, markStoredCoopDefenseRoundProcessed,
   restoreStoredCoopDefenseProgress, setStoredPendingCoopDefenseItemReward } from '../src/utils/localPreferences';
 import { COOP_DEFENSE_MAP_CONFIGS } from '../src/config/coopDefenseMaps';
-import { levelUpCoopDefenseUpgrade } from '../src/utils/coopDefenseUpgrades';
+import { COOP_DEFENSE_UPGRADE_DEFINITIONS, levelUpCoopDefenseUpgrade } from '../src/utils/coopDefenseUpgrades';
 import { getCoopDefenseXpThresholdForLevel } from '../src/utils/coopDefenseProgression';
 
 function makeInput(): {
@@ -114,6 +114,28 @@ function makeInput(): {
 }
 
 describe('ArenaMetaController', () => {
+  it('keeps Holo selected when Inspector purchases Bomber Squadron', () => {
+    const { controller, store, session } = makeInput();
+    const stored = structuredClone(store.getProgress());
+    stored.classesUnlocked = true;
+    stored.unlockedClassIds = ['dachs_nukem', 'dachs_of_steel', 'inspector_gadachs'];
+    stored.selectedClassId = 'inspector_gadachs';
+    const unlock = COOP_DEFENSE_UPGRADE_DEFINITIONS.unlock_bomber_squadron;
+    stored.totalXp = getCoopDefenseXpThresholdForLevel(1 + unlock.costPerLevel);
+    vi.mocked(store.getProgress).mockReturnValue(stored);
+    vi.mocked(store.getClassLoadout).mockReturnValue({ ultimate: 'HOLO_OFFENSIVE' });
+    controller.refresh();
+    expect(session.getPlayerLoadoutSlot('local', 'ultimate')).toBe('HOLO_OFFENSIVE');
+    vi.mocked(session.setLocalLoadoutSlot).mockClear();
+    expect(controller.levelUpUpgrade(unlock.id)).toBe(true);
+    expect(store.setUpgradeProfile).toHaveBeenCalledWith(expect.objectContaining({
+      upgrades: expect.objectContaining({ [unlock.id]: { level: unlock.maxLevel, unlocked: true } }),
+    }), 'inspector_gadachs');
+    expect(session.setLocalLoadoutSlot).not.toHaveBeenCalledWith('ultimate', 'BOMBER_SQUADRON');
+    expect(store.setClassLoadoutSlot).not.toHaveBeenCalledWith('inspector_gadachs', 'ultimate', 'BOMBER_SQUADRON');
+    expect(session.getPlayerLoadoutSlot('local', 'ultimate')).toBe('HOLO_OFFENSIVE');
+  });
+
   it.each(['16', '17'])('selects the imported map %s as default without lowering the save', highest => {
     const { controller, store, session } = makeInput();
     store.getProgress().highestUnlockedMapId = highest;

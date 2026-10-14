@@ -115,7 +115,7 @@ describe('configuration-driven shared utility slots', () => {
     clientRoom.room.update();
     const snapshot = (bridge: NetworkBridge): LoadoutCommitSnapshot => {
       const preview = bridge.getPlayerLobbyLoadoutPreview(playerId)!;
-      return { weapon1: 'GLOCK', weapon2: 'P90', utility: 'ROCK_BARRIER', ultimate: 'ARMAGEDDON',
+      return { weapon1: 'GLOCK', weapon2: 'P90', utility: 'ROCK_BARRIER', ultimate: 'HOLO_OFFENSIVE',
         coopDefenseClassId: preview.coopDefenseClassId, coopDefenseProfile: preview.coopDefenseProfile!, tools: preview.tools };
     };
     const clientSnapshot = snapshot(client);

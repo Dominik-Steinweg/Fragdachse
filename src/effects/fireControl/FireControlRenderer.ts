@@ -4,13 +4,14 @@ import { getTurretVisualSpec, TURRET_VISUALS } from '../../config/turretVisuals'
 import type { TurretWeaponId } from '../../types';
 import { getPausedOriginalIds, type FireControlSnapshot, type FireControlEntrySnapshot,
   type FireControlPortalDeploymentSnapshot, type FireControlCopiesDeploymentSnapshot,
-  type FireControlCopySnapshot } from '../../systems/fireControl/FireControlSnapshot';
+  type FireControlHoloDeploymentSnapshot } from '../../systems/fireControl/FireControlSnapshot';
 import { TurretAnimationController } from '../TurretAnimationController';
 import type { LightingSystem } from '../LightingSystem';
 import { FireControlHologramFilter, type HologramPreset } from './FireControlHologramFilter';
 import { createFireControlPortalGpuLayer } from './FireControlPortalGpuLayer';
 import { FireControlGpuKind as Kind, FireControlPortalGpuStore } from './FireControlPortalGpuStore';
 import { FIRE_CONTROL_RELAY, FIRE_CONTROL_RELAY_SIZE, ensureFireControlRelayAssets, fireControlRelayFrame } from './FireControlRelayAssets';
+import { ensureHoloPlateTexture, HOLO_PLATE_ALPHA, HOLO_PLATE_SIZE, HOLO_PLATE_TEXTURE, HOLO_PLATE_TICK_RADIUS } from './HoloPlateAssets';
 
 /** Optional presentation extension; never changes the replicated/domain contract. */
 export interface FireControlEntryView extends FireControlEntrySnapshot { readonly lastTransportAt?: number }
@@ -18,14 +19,26 @@ export interface FireControlPortalView extends Omit<FireControlPortalDeploymentS
   readonly entries: readonly FireControlEntryView[];
 }
 export interface FireControlView extends FireControlSnapshot {
-  readonly deployments: readonly (FireControlCopiesDeploymentSnapshot | FireControlPortalView)[];
+  readonly deployments: readonly (FireControlCopiesDeploymentSnapshot | FireControlPortalView | FireControlHoloDeploymentSnapshot)[];
 }
 export interface FireControlOriginalVisual { sprite: Phaser.GameObjects.Sprite; x: number; y: number }
+/** Displayed position of a deployment owner; the holo genesis streak starts there. */
+export type FireControlOwnerPosition = (ownerId: string) => { readonly x: number; readonly y: number } | undefined;
 interface CopyVisual {
   sprite: Phaser.GameObjects.Sprite; filter: FireControlHologramFilter;
-  copy: FireControlCopySnapshot; expiresAt: number; removedAt?: number; removedMaterialize?: number;
-  /** Projector lens of the owning deployment; the projection beam starts here. */
-  projector: { x: number; y: number; startedAt: number };
+  x: number; y: number;
+  /** Per-copy timeline: materialize, warning flicker and expiry are never shared with siblings. */
+  materializedAt: number; materializeMs: number; expiresAt: number;
+  seed: number;
+  removedAt?: number; removedMaterialize?: number;
+  /** Relay copies: projector lens of the owning deployment; the projection beam starts here. */
+  projector: { x: number; y: number; startedAt: number } | null;
+  /** Holo copies stand on their own emitter plate instead of a projector beam. */
+  holo: boolean;
+  /** Holo copies: dark emitter plate under the turret (NORMAL blend; the rim ticks are GPU). */
+  plate: Phaser.GameObjects.Image | null;
+  /** Holo genesis streak from the owner to the new copy; fixed at first sight. */
+  genesis: { x: number; y: number; at: number } | null;
 }
 interface PortalVisual { snapshot: FireControlPortalView; removedAt?: number; removedOpen?: number }
 interface RelayVisual { sprite: Phaser.GameObjects.Sprite; removedAt?: number }
@@ -40,6 +53,22 @@ const BEAM_SETTLE_MS = 700;
 const BEAM_SHOT_MS = 180;
 /** Projection beams are local by construction; anything longer is not drawn. */
 const BEAM_MAX_LENGTH = 90;
+/** Relay copies materialize in a fixed 400 ms; holo copies carry their own duration. */
+const RELAY_MATERIALIZE_MS = 400;
+/** Last part of a copy's life in which the hologram flickers and the plate dims. */
+const WARNING_MS = 2000;
+/** Four fully upgraded Holo-Offensives (60) plus relay copies (12) with headroom. */
+const MAX_COPY_SPRITES = 96;
+/** Holo timeline: the rim charges in the first half, the copy forms from 35 % on (fractions of materialize). */
+const HOLO_RIM_CHARGE = 0.5, HOLO_COPY_DELAY = 0.35;
+/** On vanish the copy dissolves in the first 60 %, the rim holds until 45 % and goes out last. */
+const HOLO_COPY_VANISH = 0.6, HOLO_RIM_HOLD = 0.45;
+/** Genesis streak from the owner to a new holo copy. */
+const GENESIS_MS = 260;
+/** A copy first seen later than this (late join, long hitch) appears without a streak. */
+const GENESIS_MAX_AGE_MS = 450;
+/** Streaks across map distances are never drawn. */
+const GENESIS_MAX_LENGTH = 180;
 
 /** Presentation owner only: update receives synchronized host time, never calls gameplay. */
 export class FireControlRenderer {
@@ -58,9 +87,11 @@ export class FireControlRenderer {
   constructor(private readonly scene: Phaser.Scene,
     private readonly original: (id: number) => FireControlOriginalVisual | undefined,
     public preset: HologramPreset = 'A',
-    private readonly lighting?: Pick<LightingSystem, 'setLight' | 'releaseLight'>) {
+    private readonly lighting?: Pick<LightingSystem, 'setLight' | 'releaseLight'>,
+    private readonly owner?: FireControlOwnerPosition) {
     this.layer = createFireControlPortalGpuLayer(scene, this.store);
     ensureFireControlRelayAssets(scene);
+    ensureHoloPlateTexture(scene);
   }
   /** Confirmed shot events can be forwarded independently of snapshot refreshes. */
   onShot(sourceId: string): void {
@@ -82,28 +113,26 @@ export class FireControlRenderer {
         this.portals.set(deployment.id, { snapshot: deployment });
         continue;
       }
+      if (deployment.kind === 'holo') {
+        // Holo-Offensive: same glass hologram, no projector or beam; every copy has its own clock.
+        for (const copy of deployment.copies) {
+          liveCopies.add(copy.sourceId);
+          this.syncCopy(copy.sourceId, copy.weaponId, copy.x, copy.y, copy.angle,
+            copy.spawnedAt + deployment.materializeMs, deployment.materializeMs,
+            copy.spawnedAt + deployment.copyLifetimeMs, (deployment.id * 31 + copy.seq) % 251, null,
+            { ownerId: deployment.ownerId, spawnedAt: copy.spawnedAt, now });
+        }
+        continue;
+      }
       liveRelays.add(deployment.id);
       this.updateRelay(deployment, now);
       this.store.add({ x: deployment.x, y: deployment.y, radius: 12, angle: 0, kind: Kind.Projector,
         open: clamp((now-deployment.startedAt)/400), remaining: 1, flash: 0 });
+      const projector = { x: deployment.x, y: deployment.y, startedAt: deployment.startedAt };
       for (const copy of deployment.copies) {
         liveCopies.add(copy.sourceId);
-        let visual = this.copies.get(copy.sourceId);
-        if (!visual && copy.weaponId in TURRET_VISUALS && this.copies.size < 64) {
-          const weapon = copy.weaponId as TurretWeaponId, spec = getTurretVisualSpec(weapon);
-          const sprite = this.scene.add.sprite(copy.x, copy.y, spec.asset.sheetTextureKey, spec.asset.idleFrame)
-            .setDisplaySize(spec.displaySize, spec.displaySize).setDepth(DEPTH.ROCKS + 0.2);
-          sprite.name = copy.sourceId;
-          this.animations.bind(copy.sourceId, sprite, weapon);
-          visual = { sprite, filter: new FireControlHologramFilter(sprite, this.preset), copy,
-            expiresAt: deployment.expiresAt, projector: { x: deployment.x, y: deployment.y, startedAt: deployment.startedAt } };
-          this.copies.set(copy.sourceId, visual);
-        }
-        if (!visual) continue;
-        visual.copy = copy; visual.expiresAt = deployment.expiresAt;
-        visual.projector = { x: deployment.x, y: deployment.y, startedAt: deployment.startedAt };
-        visual.removedAt = undefined; visual.removedMaterialize = undefined;
-        this.animations.syncPose(copy.sourceId, copy.x, copy.y, copy.angle, false);
+        this.syncCopy(copy.sourceId, copy.weaponId, copy.x, copy.y, copy.angle, copy.materializedAt,
+          RELAY_MATERIALIZE_MS, deployment.expiresAt, copy.originalId, projector, null);
       }
     }
     for (const [id, relay] of this.relays) {
@@ -118,17 +147,25 @@ export class FireControlRenderer {
     for (const [id, v] of this.copies) {
       if (!liveCopies.has(id) && v.removedAt === undefined) {
         v.removedAt = now;
-        v.removedMaterialize = clamp(1-(v.copy.materializedAt-now)/400);
+        v.removedMaterialize = clamp(1-(v.materializedAt-now)/v.materializeMs);
       }
       const vanish = v.removedAt === undefined ? 0 : clamp((now-v.removedAt)/300);
       if (vanish >= 1) {
-        v.filter.destroy(); v.sprite.destroy(); this.copies.delete(id); this.shotAt.delete(id); continue;
+        v.filter.destroy(); v.sprite.destroy(); v.plate?.destroy();
+        this.copies.delete(id); this.shotAt.delete(id); continue;
       }
+      const warning = clamp(1-(v.expiresAt-now)/WARNING_MS);
+      const materialize = v.removedMaterialize ?? clamp(1-(v.materializedAt-now)/v.materializeMs);
+      // Holo: the plate's rim charges first and the copy forms afterwards; on vanish the copy
+      // dissolves first and the rim goes out last.
       Object.assign(v.filter.uniforms, { time: this.store.time, preset: this.preset,
-        materialize: v.removedMaterialize ?? clamp(1-(v.copy.materializedAt-now)/400), vanish,
-        warning: clamp(1-(v.expiresAt-now)/2000) });
-      this.beam(id, v, now, vanish);
-      this.light(`copy:${id}`, v.copy.x, v.copy.y, 40, 2.4 * v.filter.uniforms.materialize * (1-vanish));
+        materialize: v.holo ? clamp((materialize - HOLO_COPY_DELAY) / (1 - HOLO_COPY_DELAY)) : materialize,
+        vanish: v.holo ? clamp(vanish / HOLO_COPY_VANISH) : vanish, warning, clarity: v.holo ? 1 : 0 });
+      if (v.holo) this.holoPlate(id, v, now, clamp(materialize / HOLO_RIM_CHARGE),
+        1 - clamp((vanish - HOLO_RIM_HOLD) / (1 - HOLO_RIM_HOLD)), warning);
+      else this.beam(id, v, now, vanish);
+      this.light(`copy:${id}`, v.x, v.y, v.holo ? 34 : 40,
+        (v.holo ? 1.8 : 2.4) * v.filter.uniforms.materialize * (1-vanish));
     }
     for (const [id, v] of this.portals) {
       if (!livePortals.has(id) && v.removedAt === undefined) {
@@ -182,22 +219,73 @@ export class FireControlRenderer {
       this.lighting?.releaseLight(key, { immediate: true }); this.lightKeys.delete(key);
     }
   }
+  /** Creates or refreshes one copy sprite; relay and holo copies share the glass hologram. */
+  private syncCopy(sourceId: string, weaponId: string, x: number, y: number, angle: number,
+    materializedAt: number, materializeMs: number, expiresAt: number, seed: number,
+    projector: CopyVisual['projector'], holo: { ownerId: string; spawnedAt: number; now: number } | null): void {
+    let visual = this.copies.get(sourceId);
+    if (!visual && weaponId in TURRET_VISUALS && this.copies.size < MAX_COPY_SPRITES) {
+      const weapon = weaponId as TurretWeaponId, spec = getTurretVisualSpec(weapon);
+      const sprite = this.scene.add.sprite(x, y, spec.asset.sheetTextureKey, spec.asset.idleFrame)
+        .setDisplaySize(spec.displaySize, spec.displaySize).setDepth(DEPTH.ROCKS + 0.2);
+      sprite.name = sourceId;
+      this.animations.bind(sourceId, sprite, weapon);
+      // The streak starts at the owner's displayed position the moment the copy is first seen.
+      const origin = holo && holo.now - holo.spawnedAt <= GENESIS_MAX_AGE_MS ? this.owner?.(holo.ownerId) : undefined;
+      const plate = holo ? this.scene.add.image(x, y, HOLO_PLATE_TEXTURE)
+        .setDisplaySize(HOLO_PLATE_SIZE, HOLO_PLATE_SIZE).setDepth(DEPTH.ROCKS + 0.15).setAlpha(0) : null;
+      if (plate) plate.name = `${sourceId}:plate`;
+      visual = { sprite, filter: new FireControlHologramFilter(sprite, this.preset), x, y,
+        materializedAt, materializeMs, expiresAt, seed, projector, holo: holo !== null, plate,
+        genesis: origin && holo ? { x: origin.x, y: origin.y, at: holo.now } : null };
+      this.copies.set(sourceId, visual);
+    }
+    if (!visual) return;
+    visual.x = x; visual.y = y; visual.projector = projector;
+    visual.materializedAt = materializedAt; visual.materializeMs = Math.max(1, materializeMs);
+    visual.expiresAt = expiresAt;
+    visual.removedAt = undefined; visual.removedMaterialize = undefined;
+    this.animations.syncPose(sourceId, x, y, angle, false);
+  }
   /**
    * Persistent projection beam from the projector lens to one copy. It is brighter while the
    * copy materializes, settles to a steady glow, flares when the copy fires and follows the
    * copy's vanish. Never drawn across map distances.
    */
   private beam(id: string, v: CopyVisual, now: number, vanish: number): void {
+    if (!v.projector) return;
     const { x, y, startedAt } = v.projector;
-    const length = Math.hypot(v.copy.x - x, v.copy.y - y);
+    const length = Math.hypot(v.x - x, v.y - y);
     if (length < 4 || length > BEAM_MAX_LENGTH) return;
     const settle = clamp((now - startedAt) / BEAM_SETTLE_MS);
     const presence = Math.max(.35, v.filter.uniforms.materialize) * (1 - vanish);
     const shot = this.shotAt.get(id);
     const flash = shot === undefined ? 0 : 1 - clamp((now - shot) / BEAM_SHOT_MS);
-    this.store.add({ x, y, radius: length, length, angle: Math.atan2(v.copy.y - y, v.copy.x - x),
+    this.store.add({ x, y, radius: length, length, angle: Math.atan2(v.y - y, v.x - x),
       kind: Kind.Filament, open: presence * (.72 + .28 * (1 - settle)), remaining: 1, flash,
-      seed: v.copy.originalId });
+      seed: v.seed });
+  }
+  /**
+   * Holo-Offensive copy: a dark emitter plate under the turret whose eight rim ticks charge one
+   * after another before the copy forms, quietly dim per elapsed eighth of the copy's life,
+   * pulse on shots, flicker in the warning phase and go out last. A new copy additionally gets a
+   * short, narrow genesis streak from the owner.
+   */
+  private holoPlate(id: string, v: CopyVisual, now: number, charge: number, presence: number, warning: number): void {
+    const shot = this.shotAt.get(id);
+    const flash = shot === undefined ? 0 : 1 - clamp((now - shot) / BEAM_SHOT_MS);
+    const life = Math.max(1, v.expiresAt - v.materializedAt + v.materializeMs);
+    v.plate?.setPosition(v.x, v.y).setAlpha(HOLO_PLATE_ALPHA * Math.min(1, charge * 1.6) * presence);
+    this.store.add({ x: v.x, y: v.y, radius: HOLO_PLATE_TICK_RADIUS, angle: 0, kind: Kind.HoloPlate,
+      open: charge * presence, remaining: clamp((v.expiresAt - now) / life),
+      flash, mode: warning, seed: v.seed });
+    const g = v.genesis;
+    if (!g) return;
+    const progress = (now - g.at) / GENESIS_MS;
+    const length = Math.hypot(v.x - g.x, v.y - g.y);
+    if (progress >= 1 || length < 6 || length > GENESIS_MAX_LENGTH) { v.genesis = null; return; }
+    this.store.add({ x: g.x, y: g.y, radius: length, length, angle: Math.atan2(v.y - g.y, v.x - g.x),
+      kind: Kind.HoloGenesis, open: 1, remaining: clamp(progress), flash: 0, seed: v.seed });
   }
   private updateRelay(deployment: FireControlCopiesDeploymentSnapshot, now: number): void {
     let relay = this.relays.get(deployment.id);
@@ -223,7 +311,7 @@ export class FireControlRenderer {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    for (const v of this.copies.values()) { v.filter.destroy(); v.sprite.destroy(); }
+    for (const v of this.copies.values()) { v.filter.destroy(); v.sprite.destroy(); v.plate?.destroy(); }
     for (const relay of this.relays.values()) relay.sprite.destroy();
     this.relays.clear();
     this.copies.clear(); this.portals.clear(); this.animations.clear(); this.shotAt.clear();

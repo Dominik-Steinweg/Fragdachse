@@ -203,6 +203,7 @@ export interface ProjectileMiniRocketFlightSpec {
  * Zurechnung und Zugehörigkeit ändern kann, ohne Herkunft oder Abstammung zu verlieren.
  */
 export interface ProjectileProvenance {
+  readonly injectorEffect?: import('../types').EnergyInjectorConstructionEffect;
   readonly personalMgOwnerId?: string;
   readonly personalMgScope?: import('../combat/CombatScope').CombatScope;
   /** Contributions already included in this attack's damage payload; inherited by children. */
@@ -264,6 +265,7 @@ export interface ProjectileCorrelation {
 
 /** Quelle, bei der Gameplay-Source, Attribution und Allegiance dieselbe Entität sind. */
 export interface SingleOwnerProvenanceDetails {
+  readonly injectorEffect?: import('../types').EnergyInjectorConstructionEffect;
   readonly personalMgOwnerId?: string;
   readonly personalMgScope?: import('../combat/CombatScope').CombatScope;
   readonly primaryHitReward?: PrimaryHitAdrenalineRewardIntent;
@@ -295,6 +297,7 @@ export function createSingleOwnerProvenance(
     sourceSlot: details.sourceSlot,
     sourceTurretId: details.sourceTurretId,
     personalMgOwnerId: details.personalMgOwnerId,
+    injectorEffect: details.injectorEffect,
     personalMgScope: details.personalMgScope ? { ...details.personalMgScope } : undefined,
     lineage: details.lineage,
     correlation: details.correlation,

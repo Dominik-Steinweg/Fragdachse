@@ -140,6 +140,15 @@ const ULTIMATE_REQUIRED: Readonly<Record<string, readonly string[]>> = {
     'activation', 'rageCost', 'placement', 'travelSpeed', 'travelMinDurationMs',
     'travelMaxDurationMs', 'buildLabel',
   ],
+  holo_offensive: [
+    'ragePerSpawnSecond', 'spawnIntervalMs', 'copyLifetimeMs', 'materializeMs', 'spawnRingRadiiPx',
+    'spawnRingSlots', 'clearanceRadiusPx', 'minCopySpacingPx', 'injectorProjectionEnabled',
+  ],
+  bomber_squadron: [
+    'rageCost', 'droneCount', 'launchIntervalMs', 'approachMs', 'approachDistancePx', 'runSpeedPxPerSec',
+    'bombsPerPass', 'secondPassEnabled', 'corridorLeadPx', 'corridorLengthPx', 'corridorWidthPx', 'turnMs',
+    'departureMs', 'bombFallMs', 'explosionRadius', 'maxDamage', 'minDamage', 'fireChunksPerBomb',
+  ],
 };
 
 const ACTIVATION_REQUIRED: Readonly<Record<string, readonly string[]>> = {

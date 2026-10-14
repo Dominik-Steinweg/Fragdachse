@@ -1,3 +1,4 @@
+import { usesRageTint } from '../../entities/playerRageTint';
 import { scaleWeaponRange } from '../../loadout/scaleWeaponRange';
 import { WATCHTOWER_OCCUPANCY_RULES } from '../../config/watchtower';
 import { mgTargetVisual } from '../../effects/MgAttritionVisualTarget';
@@ -444,7 +445,7 @@ export class ClientUpdateCoordinator {
         player.setVisible(ps.alive);
         player.setTurretMounted(!!ps.turretControl);
         player.setWalking(ps.aim.isMoving && ps.alive && !ps.isBurrowed);
-        player.setRageTint(ps.isRaging && ps.activeUltimateId === 'HONEY_BADGER_RAGE');
+        player.setRageTint(usesRageTint(ps.isRaging, ps.activeUltimateId));
         const isStealthed = ps.isDecoyStealthed ?? false;
         const wasStealthed = this.prevStealthStates.get(id) ?? false;
         if (isStealthed !== wasStealthed) {
@@ -723,6 +724,7 @@ export class ClientUpdateCoordinator {
         rage:                    localState.rage,
         maxRage:                 this.getLocalMaxRage(),
         isUltimateActive:        localState.isRaging,
+        activeUltimateId:        localState.activeUltimateId,
         ultimateRequiredRage:    localUltimateConfig.rageRequired,
         ultimateThresholds,
         ultimateId:              localUltimateConfig.id,

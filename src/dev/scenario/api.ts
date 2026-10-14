@@ -1,4 +1,5 @@
 import { runWatchtowerReview, releaseWatchtowerReview } from './WatchtowerReview';
+import { runInspectorUltimatesReview, inspectorUltimatesStatus, releaseInspectorUltimatesReview } from './InspectorUltimatesReview';
 import type { DevScenarioController } from './controller';
 import { parseScenario, type GridPoint } from './config';
 import { COOP_DEFENSE_ENEMY_KINDS, type CoopDefenseEnemyKind } from '../../config/coopDefenseEnemies';
@@ -66,6 +67,7 @@ export function runScenarioCommand(controller: DevScenarioController, value: unk
       return reloadKrakenDraftAssets(c.source);
     case 'krakenReloadAssets': return reloadKrakenDraftAssets();
     case 'watchtowerReview': return runWatchtowerReview(controller, c);
+    case 'inspectorUltimates': return runInspectorUltimatesReview(controller, c);
     case 'krakenReview': return controller.arrangeKrakenReview(c);
     case 'armageddonReview': {
       const count=number(c.count??1,1,256);
@@ -263,7 +265,7 @@ export function installScenarioApi(controller: DevScenarioController) {
   let active = true;
   const waiters = new Set<() => void>();
   // Phaser's Scene plugins can already be shut down when this API is detached.
-  const status = (): Record<string, unknown> => active ? { ...controller.cloneSnapshot(), krakenAssets: krakenDraftStatus() }
+  const status = (): Record<string, unknown> => active ? { ...controller.cloneSnapshot(), krakenAssets: krakenDraftStatus(), inspectorUltimates: inspectorUltimatesStatus(controller) }
     : { state: 'error', ready: false, message: 'Dev-Szenario wurde beendet.', isolated: true, network: 'local-only' };
   const failure = (error: unknown): ScenarioResult => ({ ok: false, error: error instanceof Error ? error.message : String(error), status: status() });
   const api: DevScenarioApi = {
@@ -316,6 +318,7 @@ export function installScenarioApi(controller: DevScenarioController) {
     stopDraftPolling();
     active = false;
     releaseWatchtowerReview(controller);
+    releaseInspectorUltimatesReview(controller);
     for (const check of waiters) check();
     if (window.devScenario === api) delete window.devScenario;
   } };

@@ -18,6 +18,8 @@ import {
   WEAPON_CONFIGS,
 } from '../src/loadout/content/LoadoutRegistry';
 import { COOP_DEFENSE_UPGRADE_DEFINITIONS } from '../src/utils/coopDefenseUpgrades';
+import { getUpgradeDescription, getUpgradeName } from '../src/i18n/upgradePresentation';
+import { getLoadoutItemName } from '../src/i18n/contentPresentation';
 
 function isConfigStat(stat: string): boolean {
   return stat.startsWith('weapon1.')
@@ -27,6 +29,21 @@ function isConfigStat(stat: string): boolean {
 }
 
 describe('game-wide loadout content validation', () => {
+  it.each(['de', 'en'] as const)('resolves all Inspector ultimate text and config-derived values in %s', locale => {
+    for (const id of ['HOLO_OFFENSIVE', 'BOMBER_SQUADRON']) {
+      expect(getLoadoutItemName(id, locale)).not.toBe(id.replaceAll('_', ' '));
+    }
+    const nodes = Object.values(COOP_DEFENSE_UPGRADE_DEFINITIONS)
+      .filter(definition => /^(unlock_)?(holo_offensive|bomber_squadron)/.test(definition.id));
+    expect(nodes.length).toBeGreaterThan(0);
+    for (const { id } of nodes) {
+      expect(getUpgradeName(id, locale), id).not.toMatch(/[⟦⟧{}]/);
+      const description = getUpgradeDescription(id, locale);
+      expect(description.length, id).toBeGreaterThan(0);
+      expect(description, id).not.toMatch(/[⟦⟧{}]/);
+    }
+  });
+
   it.each(['constructor', 'toString', '__proto__'])('rejects inherited audio-catalog references: %s', successKey => {
     const weapons = { ...WEAPON_CONFIGS, GLOCK: { ...WEAPON_CONFIGS.GLOCK, shotAudio: { successKey } } };
     expect(() => validateGameContentReferences({

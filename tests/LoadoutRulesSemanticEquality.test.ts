@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { getLoadoutSlotItems } from '../src/loadout/LoadoutCatalog';
 import { areLoadoutConfigsEquivalent, isCommittedLoadoutEqual } from '../src/loadout/LoadoutRules';
 import { resolveLoadoutSelectionIds, sanitizeCommittedLoadoutForMode } from '../src/loadout/LoadoutRules';
-import { DEFAULT_LOADOUT, resolveUtilityIdForMode, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { DEFAULT_LOADOUT, resolveUtilityIdForMode, ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { buildDefaultCoopDefenseUpgradeProfile } from '../src/utils/coopDefenseUpgrades';
 
 describe('loadout config semantic equality', () => {
   it('carries personal research through ready creation and mode sanitization', () => {
@@ -25,6 +26,27 @@ describe('loadout config semantic equality', () => {
 });
 
 describe('mode-specific weapon availability', () => {
+  it.each(['ARMAGEDDON', 'GAUSS_RIFLE', 'AIRSTRIKE', 'HONEY_BADGER_RAGE', 'BOMBER_SQUADRON'])(
+    'sanitizes stale or locked Inspector ultimate %s at commit creation and host acceptance', id => {
+      const profile = buildDefaultCoopDefenseUpgradeProfile('inspector_gadachs');
+      const commit = resolveLoadoutSelectionIds({ ultimate: ULTIMATE_CONFIGS[id] }, 'coop_defense', profile, 'inspector_gadachs');
+      expect(commit.ultimate).toBe('HOLO_OFFENSIVE');
+      const hostAccepted = sanitizeCommittedLoadoutForMode({ ...commit, ultimate: id }, 'coop_defense');
+      expect(hostAccepted?.ultimate).toBe('HOLO_OFFENSIVE');
+      expect(sanitizeCommittedLoadoutForMode(hostAccepted, 'coop_defense')).toEqual(hostAccepted);
+    },
+  );
+
+  it.each(['HOLO_OFFENSIVE', 'BOMBER_SQUADRON'])('rejects Inspector ultimate %s for other classes and PvP', id => {
+    for (const classId of ['dachs_nukem', 'dachs_of_steel'] as const) {
+      const commit = resolveLoadoutSelectionIds({ ultimate: ULTIMATE_CONFIGS[id] }, 'coop_defense', buildDefaultCoopDefenseUpgradeProfile(classId), classId);
+      expect(commit.ultimate).toBe('ARMAGEDDON');
+    }
+    for (const mode of ['deathmatch', 'team_deathmatch', 'capture_the_beer'] as const) {
+      expect(resolveLoadoutSelectionIds({ ultimate: ULTIMATE_CONFIGS[id] }, mode).ultimate).toBe(DEFAULT_LOADOUT.ultimate.id);
+    }
+  });
+
   it.each(['constructor', 'toString', '__proto__'])('sanitizes inherited registry keys in committed loadouts: %s', (id) => {
     const snapshot = sanitizeCommittedLoadoutForMode({
       weapon1: id, weapon2: id, utility: id, ultimate: id,

@@ -3,12 +3,26 @@ import {
   getStoredCoopDefenseLoadout,
   getStoredCoopDefenseLoadoutSlot,
   getStoredCoopDefenseProgress,
+  exportStoredGameProgressJson,
+  invalidateLocalStorageCache,
+  LOCAL_PROGRESS_STORAGE_KEY,
   resetStoredCoopDefenseCharacter,
   setStoredCoopDefenseClassesUnlocked,
   setStoredCoopDefenseLoadoutSlot,
   setStoredLoadoutSlot,
   switchStoredCoopDefenseClassLoadout,
 } from '../src/utils/localPreferences';
+import {
+  COOP_DEFENSE_UPGRADE_DEFINITIONS,
+  getAvailableCoopDefenseBossPoints,
+  getAvailableCoopDefenseUpgradePoints,
+  getCoopDefenseUpgradeLoadoutSelection,
+  getSpentCoopDefenseBossPoints,
+  getSpentCoopDefenseUpgradePoints,
+} from '../src/utils/coopDefenseUpgrades';
+import { getCoopDefenseXpThresholdForLevel } from '../src/utils/coopDefenseProgression';
+import { resolveLoadoutSelectionIds } from '../src/loadout/LoadoutRules';
+import { ULTIMATE_CONFIGS } from '../src/loadout/LoadoutConfig';
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -35,6 +49,56 @@ describe('coop-defense class loadout persistence', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('releases old Inspector ultimate investments on reload without changing other class profiles', () => {
+    setStoredCoopDefenseClassesUnlocked(true);
+    const oldUltimates = ['ARMAGEDDON', 'GAUSS_RIFLE', 'AIRSTRIKE', 'HONEY_BADGER_RAGE'];
+    const oldBranches = Object.values(COOP_DEFENSE_UPGRADE_DEFINITIONS)
+      .filter(definition => oldUltimates.includes(getCoopDefenseUpgradeLoadoutSelection(definition.id)?.itemId ?? ''));
+    const normalCost = oldBranches.reduce((sum, definition) => sum + (definition.maxLevel - definition.startingLevel) * definition.costPerLevel, 0);
+    const bossCost = oldBranches.reduce((sum, definition) => sum + (definition.maxLevel - definition.startingLevel) * definition.bossPointCostPerLevel, 0);
+    expect(normalCost).toBeGreaterThan(0);
+    expect(bossCost).toBeGreaterThan(0);
+    const level = normalCost + 1;
+    const raw = JSON.parse(exportStoredGameProgressJson()).progress;
+    raw.coopDefense.totalXp = getCoopDefenseXpThresholdForLevel(level);
+    raw.coopDefense.dawn.purchasedBossPoints = bossCost;
+    raw.coopDefense.loadoutsByClass = {};
+    for (const classId of ['inspector_gadachs', 'dachs_nukem', 'dachs_of_steel'] as const) {
+      raw.coopDefense.profilesByClass[classId] = {
+        ...raw.coopDefense.profilesByClass[classId],
+        levels: Object.fromEntries(oldBranches.map(definition => [definition.id, definition.maxLevel])),
+      };
+      raw.coopDefense.loadoutsByClass[classId] = { ultimate: 'GAUSS_RIFLE' };
+    }
+    storage.setItem(LOCAL_PROGRESS_STORAGE_KEY, JSON.stringify(raw));
+    invalidateLocalStorageCache();
+    const once = getStoredCoopDefenseProgress();
+    const inspector = once.profilesByClass.inspector_gadachs;
+    for (const definition of oldBranches) {
+      expect(inspector.upgrades[definition.id], definition.id).toEqual({ level: 0, unlocked: false });
+    }
+    expect(getAvailableCoopDefenseUpgradePoints(level, inspector, 'inspector_gadachs')).toBe(normalCost);
+    expect(getAvailableCoopDefenseBossPoints(bossCost, inspector, 'inspector_gadachs')).toBe(bossCost);
+    const resolveStoredUltimate = () => resolveLoadoutSelectionIds({
+      ultimate: ULTIMATE_CONFIGS[getStoredCoopDefenseLoadoutSlot('inspector_gadachs', 'ultimate')!],
+    }, 'coop_defense', getStoredCoopDefenseProgress().profilesByClass.inspector_gadachs, 'inspector_gadachs').ultimate;
+    expect(resolveStoredUltimate()).toBe('HOLO_OFFENSIVE');
+    for (const classId of ['dachs_nukem', 'dachs_of_steel'] as const) {
+      const profile = once.profilesByClass[classId];
+      for (const definition of oldBranches) expect(profile.upgrades[definition.id].level, `${classId}:${definition.id}`).toBe(definition.maxLevel);
+      expect(getSpentCoopDefenseUpgradePoints(profile, classId)).toBe(normalCost);
+      expect(getSpentCoopDefenseBossPoints(profile, classId)).toBe(bossCost);
+      expect(getStoredCoopDefenseLoadoutSlot(classId, 'ultimate')).toBe('GAUSS_RIFLE');
+    }
+    invalidateLocalStorageCache();
+    expect(getStoredCoopDefenseProgress()).toEqual(once);
+    expect(resolveStoredUltimate()).toBe('HOLO_OFFENSIVE');
+    // Re-encoding drops the old investments rather than crediting points a second time.
+    storage.setItem(LOCAL_PROGRESS_STORAGE_KEY, JSON.stringify(JSON.parse(exportStoredGameProgressJson()).progress));
+    invalidateLocalStorageCache();
+    expect(getStoredCoopDefenseProgress()).toEqual(once);
   });
 
   it('keeps each class loadout independent', () => {

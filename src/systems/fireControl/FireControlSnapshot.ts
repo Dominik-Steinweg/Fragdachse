@@ -10,8 +10,11 @@ import type { AutomatedTurret, AutomatedTurretId } from '../TurretSystem';
  * Winkel Radiant im Phaser-Koordinatensystem (0 = Osten, positiv im Uhrzeigersinn).
  */
 
-/** `copies` = Turmkopien (GDD V1: Feuerleit-Relais), `portal` = Portale (GDD V1: Feuerleitgranate). */
-export type FireControlDeploymentKind = 'copies' | 'portal';
+/**
+ * `copies` = Turmkopien (GDD V1: Feuerleit-Relais), `portal` = Portale (GDD V1: Feuerleitgranate),
+ * `holo` = Holo-Kopien der Ultimate „Holo-Offensive“ (GDD Inspector Gadachs Ultimates V2 §2).
+ */
+export type FireControlDeploymentKind = 'copies' | 'portal' | 'holo';
 
 /**
  * Lebensphase einer Turmkopie. Eine vorzeitig endende Kopie verschwindet aus dem Snapshot; ihr
@@ -112,9 +115,51 @@ export interface FireControlPortalDeploymentSnapshot extends FireControlDeployme
   readonly entries: readonly FireControlEntrySnapshot[];
 }
 
+/**
+ * Eine Holo-Kopie. Sie ist eine eigenständige Feuerquelle (eigene Identität, Folge und Lebensdauer)
+ * und überlebt ihre Vorlage. Status und Ablauf leiten sich aus `spawnedAt` und den einmal je Einsatz
+ * eingefrorenen Zeiten ab: materialisiert ab `spawnedAt + materializeMs`, Ablauf bei
+ * `spawnedAt + copyLifetimeMs`. Abgelaufene Kopien verschwinden aus dem Snapshot.
+ */
+export interface FireControlHoloCopySnapshot {
+  /** Laufende Nummer im Einsatz, beginnend bei 0; nie wiederverwendet. */
+  readonly seq: number;
+  /** Laufzeit-ID, immer {@link fireControlHoloSourceId}(Einsatz-ID, `seq`). */
+  readonly sourceId: string;
+  /** Turmwaffe der Vorlage zum Spawnzeitpunkt; bestimmt Sprite und Animation. */
+  readonly weaponId: FireControlWeaponId;
+  readonly x: number;
+  readonly y: number;
+  /** Aktueller Rohrwinkel der Kopie. */
+  readonly angle: number;
+  /** Absolute Host-Zeit der Entstehung (Spawntermin). */
+  readonly spawnedAt: number;
+}
+
+/**
+ * Holo-Offensive eines Besitzers. `x`/`y` sind die Besitzerposition bei Aktivierung (nur
+ * Darstellung). `expiresAt` ist das voraussichtliche Ende des letzten Kopienablaufs: solange
+ * Spawntermine ausstehen, der letzte planmäßige Termin vor `spawnUntil` plus Lebensdauer; danach
+ * der späteste Ablauf einer bestehenden Kopie. Der Einsatz endet und verschwindet, sobald keine
+ * Kopie mehr lebt und kein Termin mehr aussteht.
+ */
+export interface FireControlHoloDeploymentSnapshot extends FireControlDeploymentSnapshotBase {
+  readonly kind: 'holo';
+  /** Bei Aktivierung eingefroren („Stabile Projektion“). */
+  readonly copyLifetimeMs: number;
+  readonly materializeMs: number;
+  /**
+   * Exklusives Ende des Erzeugungsfensters (`startedAt` + eingesetzte Rage ÷ Rage je Sekunde). Beim
+   * Tod des Besitzers auf den Todeszeitpunkt gekürzt; danach entstehen keine Kopien mehr.
+   */
+  readonly spawnUntil: number;
+  readonly copies: readonly FireControlHoloCopySnapshot[];
+}
+
 export type FireControlDeploymentSnapshot =
   | FireControlCopiesDeploymentSnapshot
-  | FireControlPortalDeploymentSnapshot;
+  | FireControlPortalDeploymentSnapshot
+  | FireControlHoloDeploymentSnapshot;
 
 /** World-Slice der Feuerleitung (geplanter Netzwerkschlüssel `fc`). */
 export interface FireControlSnapshot {
@@ -135,6 +180,38 @@ export function fireControlCopySourceId(deploymentId: number, slot: number): str
 
 export function isFireControlCopySourceId(id: FireControlSourceId | undefined): id is string {
   return typeof id === 'string' && id.startsWith(COPY_SOURCE_ID_PREFIX);
+}
+
+const HOLO_SOURCE_ID_PREFIX = 'fc-holo:';
+
+/** Quell-ID der Holo-Kopie `seq` eines Holo-Einsatzes; kollidiert mit keiner anderen Turm-ID. */
+export function fireControlHoloSourceId(deploymentId: number, seq: number): string {
+  return `${HOLO_SOURCE_ID_PREFIX}${deploymentId}:${seq}`;
+}
+
+export function isFireControlHoloSourceId(id: FireControlSourceId | undefined): id is string {
+  return typeof id === 'string' && id.startsWith(HOLO_SOURCE_ID_PREFIX);
+}
+
+/**
+ * Temporäre Feuerquelle der Feuerleitung: Relais-Kopie oder Holo-Kopie. Gemeinsames Prädikat für
+ * Darstellung und Projektilzuordnung; Identitätsfragen beantwortet dagegen `TurretFireSource`.
+ */
+export function isFireControlTemporarySourceId(id: FireControlSourceId | undefined): id is string {
+  return isFireControlCopySourceId(id) || isFireControlHoloSourceId(id);
+}
+
+/**
+ * Gemeinsamer World-lokaler Zähler der Einsatz-IDs aller `fc`-Einsatzarten. Utility- und
+ * Ultimate-Owner ziehen aus derselben Quelle, damit IDs im Slice eindeutig bleiben.
+ */
+export interface FireControlDeploymentIdSource {
+  next(): number;
+}
+
+export function createFireControlDeploymentIdSource(): FireControlDeploymentIdSource {
+  let nextId = 1;
+  return { next: () => nextId++ };
 }
 
 /** Contribution-ID des Portal-Schadensbonus: höchstens einmal je Einsatz und Projektil. */

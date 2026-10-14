@@ -252,8 +252,8 @@ export class TurretSystem {
     const entrySequences = new Map<AutomatedTurretId, AutomatedTurretId>();
     const activeSequences = new Set<AutomatedTurretId>();
     const activeIdentities = new Set<AutomatedTurretId>();
-    const constructions = turrets.filter(source => source.id === source.identityId);
-    const identities = new Map(constructions.map(source => [source.id, source]));
+    const identities = new Map(turrets.filter(source => source.id === source.identityId).map(source => [source.id, source]));
+    const constructions = [...identities.values()].filter(source => !source.projection);
     const identityOf = (source: TurretFireSource): AutomatedTurret | null => identities.get(source.identityId) ?? null;
     // Neue eigene Folgen übernehmen den Stand ihres Seeds vom Tick-Beginn, unabhängig davon, ob der
     // Seed in diesem Tick vor ihnen feuert. Eine laufende Seed-Salve muss erst ihren Cooldown
@@ -297,7 +297,7 @@ export class TurretSystem {
       const turretWeaponConfig = WEAPON_CONFIGS[turretWeaponId] ?? _weaponConfig;
       const cooldownMs = Math.max(1, turret.cooldownMs ?? turretWeaponConfig.cooldown);
       // Bemannbar ist nur die Konstruktion selbst, nie eine temporäre Projektion.
-      const construction = turret.id === turret.identityId;
+      const construction = !turret.projection && turret.id === turret.identityId;
       const manned = construction ? this.manualControlProvider?.(turret.identityId, now) ?? null : null;
       if (construction) {
         const revision = manned?.revision ?? 0;
@@ -420,12 +420,14 @@ export class TurretSystem {
       if (manual && turret.rotationSpeedDegPerSec === undefined
         && !this.hasLineOfFireFromMuzzle(turret, turretX, turretY, target.x, target.y, muzzleOffset)) continue;
       if (!this.canFireAtAngle(turret, angle, target.x, target.y, muzzleOffset, targetRange, target.hitSegment)) continue;
-      // Identitätsgebundene Verstärkungen (Injektor, Fernsteuerung) folgen dem Original, auch wenn
-      // eine temporäre Quelle an anderem Ort feuert.
-      const buff = this.turretDamageBuffProvider?.(identity.x, identity.y) ?? null;
+      // Relais übernehmen identitätsgebundene Boni des Originals; Holo-Projektionen nur ihren
+      // eingefrorenen Injektoreffekt, unabhängig von Standort und Fernsteuerung.
+      const buff = turret.projection
+        ? turret.projection.injectorEffect?.type === 'damage_turret' ? turret.projection.injectorEffect : null
+        : this.turretDamageBuffProvider?.(identity.x, identity.y) ?? null;
       const damageMultiplier = (buff?.damageMultiplier ?? 1)
         * (turret.damage === undefined ? 1 : turret.damage / turretWeaponConfig.damage)
-        * Math.max(0, this.turretDamageMultiplierProvider?.(identity, constructions) ?? 1);
+        * (turret.projection ? 1 : Math.max(0, this.turretDamageMultiplierProvider?.(identity, constructions) ?? 1));
 
       const muzzleDistance = muzzleOffset;
       const muzzleX = turretX + Math.cos(angle) * muzzleDistance;
@@ -540,10 +542,12 @@ export class TurretSystem {
     if (!this.canFireThroughPortal(turret, angle, portal, target, muzzleOffset, targetRange)) return;
     const route = this.buildRoute(turret, portal, angle, muzzleOffset, target, weapon, rangeFactor);
     if (!route) return;
-    const buff = this.turretDamageBuffProvider?.(identity.x, identity.y) ?? null;
+    const buff = turret.projection
+      ? turret.projection.injectorEffect?.type === 'damage_turret' ? turret.projection.injectorEffect : null
+      : this.turretDamageBuffProvider?.(identity.x, identity.y) ?? null;
     const damageMultiplier = (buff?.damageMultiplier ?? 1)
       * (turret.damage === undefined ? 1 : turret.damage / weapon.damage)
-      * Math.max(0, this.turretDamageMultiplierProvider?.(identity, constructions) ?? 1);
+      * (turret.projection ? 1 : Math.max(0, this.turretDamageMultiplierProvider?.(identity, constructions) ?? 1));
     this.firePortalRoute(turret, portal, weaponId, angle, muzzleOffset, route, damageMultiplier, rangeFactor, now);
     const burstCount = weapon.turretBurst ? Math.max(1, Math.floor(weapon.turretBurst.count)) : 1;
     if (burstCount > 1) {

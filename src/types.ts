@@ -514,7 +514,13 @@ export interface RocketMagazineState {
 export type FireChunkLandingExplosion = Pick<ProjectileExplosionConfig,
   'radius' | 'maxDamage' | 'minDamage' | 'knockback' | 'selfDamageMult' | 'excludeFriendlyPlayers' |
   'rocketSupport' | 'visualStyle' | 'appliedSourceDamageFactors' | 'audioSourceId' | 'damageTarget' |
-  'baseDamageMult' | 'rockDamageMult' | 'trainDamageMult' | 'useTargetSurfaceDistance'>;
+  'baseDamageMult' | 'rockDamageMult' | 'trainDamageMult' | 'useTargetSurfaceDistance'> & {
+    /**
+     * Schaden bleibt, aber ohne Explosions-Broadcast: Clients zeigen die Brockenlandung bereits aus
+     * dem replizierten Flug. Für Massenquellen wie das Bombergeschwader (bis zu 756 Brocken je Staffel).
+     */
+    readonly suppressExplosionBroadcast?: boolean;
+  };
 
 export interface RocketExplosionSupport {
   /** Source-only outgoing bonus captured at the main impact, before recipient defenses. */

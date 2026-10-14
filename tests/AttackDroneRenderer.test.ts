@@ -8,7 +8,7 @@ function fixture(){
   const objects:Record<string,any>[]=[];
   const object=(x:number,y:number,texture?:string)=>{
     const item:Record<string,any>={x,y,texture,visible:true,active:true,destroyed:false};
-    for(const method of ['setDepth','setDisplaySize','setRotation','setAlpha','setFillStyle','setRadius','setOrigin'])item[method]=()=>item;
+    for(const method of ['setDepth','setDisplaySize','setRotation','setAlpha','setFillStyle','setRadius','setOrigin','setTint'])item[method]=()=>item;
     item.setFillStyle=(color:number)=>{item.color=color;return item;};
     item.setRadius=(radius:number)=>{item.radius=radius;return item;};
     item.setPosition=(x:number,y:number)=>{Object.assign(item,{x,y});return item;};

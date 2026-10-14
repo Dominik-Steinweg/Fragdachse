@@ -9,6 +9,7 @@ import { MgAttritionRenderer } from '../../effects/MgAttritionRenderer';
 import { TurretAnimationController } from '../../effects/TurretAnimationController';
 import { WorldHealthBarRenderer } from '../../effects/health/WorldHealthBarRenderer';
 import { EnemyEyeGlowRenderer } from '../../effects/EnemyEyeGlowRenderer';
+import { DroneNavLightRenderer } from '../../effects/droneNavLights/DroneNavLightRenderer';
 import { EliteMarkerRenderer } from '../../effects/dawn/EliteMarkerRenderer';
 import { EnemyVulnerabilityRenderer } from '../../effects/EnemyVulnerabilityRenderer';
 import { EnemyReadabilityRenderer } from '../../effects/EnemyReadabilityRenderer';
@@ -95,6 +96,7 @@ export interface RendererBundle {
   interactions: WorldInteractionRenderer;
   healthBars: WorldHealthBarRenderer;
   enemyEyes: EnemyEyeGlowRenderer;
+  droneNavLights: DroneNavLightRenderer;
   enemyVulnerability: EnemyVulnerabilityRenderer;
   eliteMarkers: EliteMarkerRenderer;
   enemyReadability: EnemyReadabilityRenderer;
@@ -430,6 +432,12 @@ export function* createRendererBundleSteps(
 
   const healthBars = new WorldHealthBarRenderer(scene);
   const enemyEyes = new EnemyEyeGlowRenderer(scene, lighting);
+  // Shared night lights of every flying drone; drone renderers only submit anchors.
+  const droneNavLights = new DroneNavLightRenderer(scene, lighting);
+  cleanup.push(() => droneNavLights.destroy());
+  attackDrone.setNavLights(droneNavLights);
+  repairDrone.setNavLights(droneNavLights);
+  objectiveRepairDrones.setNavLights(droneNavLights);
   cleanup.push(() => enemyEyes.destroy());
   const eliteMarkers = new EliteMarkerRenderer(scene);
   cleanup.push(() => eliteMarkers.destroy());
@@ -485,6 +493,7 @@ export function* createRendererBundleSteps(
     remoteControl,
     healthBars,
     enemyEyes,
+    droneNavLights,
     enemyVulnerability,
     eliteMarkers,
     enemyReadability,

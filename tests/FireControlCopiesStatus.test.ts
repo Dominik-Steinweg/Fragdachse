@@ -41,6 +41,7 @@ describe('copies utility HUD projection', () => {
   };
   const source = (now: number, state = snapshot, ownerId = 'local') => ({
     getFireControlSnapshot: () => state,
+    getBomberSquadronSnapshot: () => ({ squadrons: [] }),
     getLocalPlayerId: () => ownerId,
     getSynchronizedNow: () => now,
   });

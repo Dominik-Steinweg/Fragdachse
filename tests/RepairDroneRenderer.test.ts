@@ -18,31 +18,35 @@ import { CoopDefenseObjectiveRepairDroneRenderer } from '../src/effects/CoopDefe
 import { createRepairDroneBody, preloadRepairDroneAssets, updateRepairDroneRotors } from '../src/effects/repairDroneVisuals';
 import { RepairDroneEffects } from '../src/effects/RepairDroneEffects';
 import { setEmissiveScale } from '../src/effects/EmissiveScale';
+import { CHARACTER_SHADOW_CONFIG } from '../src/effects/ShadowConfig';
+import { DRONE_NAV_LIGHT_PROFILES } from '../src/effects/droneNavLights/DroneNavLightModel';
 import type { SyncedRepairDrone } from '../src/types';
 
 function fixture() {
   const objects: Record<string, any>[] = [];
   const object = (x = 0, y = 0, texture?: string, frame?: number) => {
-    const item: Record<string, any> = { x, y, texture, frame, rotation: 0, visible: true, destroyed: false, commands: [] };
-    for (const method of ['setDepth', 'setOrigin', 'setScale']) item[method] = () => item;
+    const item: Record<string, any> = { x, y, texture, frame: { name: frame }, alpha: 1, rotation: 0, visible: true, destroyed: false, commands: [] };
+    for (const method of ['setOrigin', 'setScale']) item[method] = () => item;
     for (const method of ['lineStyle', 'lineBetween', 'beginPath', 'moveTo', 'lineTo', 'strokePath', 'arc', 'fillStyle', 'fillCircle']) {
       item[method] = (...args: number[]) => { item.commands.push({ op: method, args }); return item; };
     }
     item.clear = () => { item.commands = []; return item; };
+    item.setDepth = (depth: number) => { item.depth = depth; return item; };
     item.setAlpha = (alpha: number) => { item.alpha = alpha; return item; };
     item.setBlendMode = (blendMode: number) => { item.blendMode = blendMode; return item; };
     item.setPosition = (x: number, y: number) => { Object.assign(item, { x, y }); return item; };
     item.setDisplaySize = (width: number, height: number) => { Object.assign(item, { width, height }); return item; };
     item.setRotation = (rotation: number) => { item.rotation = rotation; return item; };
     item.setVisible = (visible: boolean) => { item.visible = visible; return item; };
-    item.setFrame = (frame: number) => { item.frame = frame; return item; };
+    item.setFrame = (frame: number) => { item.frame = { name: frame }; return item; };
     item.setTint = vi.fn(() => item);
     item.destroy = () => { item.destroyed = true; };
     objects.push(item);
     return item;
   };
   const scene = { time: { now: 0 }, add: { image: object, graphics: object } };
-  return { scene, objects, bodies: () => objects.filter(o => typeof o.texture === 'string') };
+  return { scene, objects, bodies: () => objects.filter(o => typeof o.texture === 'string' && o.depth !== CHARACTER_SHADOW_CONFIG.depth),
+    shadows: () => objects.filter(o => o.depth === CHARACTER_SHADOW_CONFIG.depth) };
 }
 
 function lightingFixture() {
@@ -66,7 +70,7 @@ describe('Blender repair drone presentation', () => {
     const seen: number[] = [];
     for (let i = 0; i <= clip.frames.length; i++) {
       updateRepairDroneRotors(body, (i + 0.1) * 1000 / clip.frameRate);
-      seen.push(f.bodies()[0].frame);
+      seen.push(f.bodies()[0].frame.name);
     }
     expect(seen).toEqual([...clip.frames, clip.frames[0]]);
     expect(seen).not.toContain(asset.idleFrame);
@@ -75,25 +79,37 @@ describe('Blender repair drone presentation', () => {
 
   it('keeps authored colors and a stable hovering hull, and removes every player visual on an empty snapshot', () => {
     const f = fixture(), renderer = new RepairDroneRenderer(f.scene as never);
+    const nav = { submit: vi.fn() };
+    renderer.setNavLights(nav);
     const state: SyncedRepairDrone = { ownerId: 'p', ownerColor: 0x4488ff, x: 100, y: 200, phase: 'orbiting' };
     renderer.syncVisuals([state], []);
     renderer.update(16);
-    const body = f.bodies()[0], first = body.frame;
+    const body = f.bodies()[0], first = body.frame.name;
     f.scene.time.now = 25;
     renderer.update(25);
-    expect(body.frame).not.toBe(first);
+    expect(body.frame.name).not.toBe(first);
     expect(body.rotation).toBe(0);
     expect(body.setTint).not.toHaveBeenCalled();
     expect(f.objects.some(o => o.commands.some((c: any) => c.op === 'lineStyle' && c.args[1] === state.ownerColor))).toBe(true);
     renderer.syncVisuals([{ ...state, x: 200 }], []);
     renderer.update(16);
     expect(body.rotation).toBeCloseTo(Math.PI / 2);
+    expect(nav.submit).toHaveBeenLastCalledWith(body.x, body.y, 0, body.alpha, DRONE_NAV_LIGHT_PROFILES.repairDrone, body);
+    expect(f.shadows()[0]).toMatchObject({ frame: body.frame, rotation: body.rotation, visible: body.visible });
+    expect(f.shadows()[0].alpha).toBeGreaterThan(0);
+    expect(f.shadows()[0].alpha).toBeLessThanOrEqual(body.alpha);
+    expect(f.shadows()[0].x).toBeGreaterThan(body.x);
+    nav.submit.mockClear();
     renderer.syncVisuals([], []);
+    renderer.update(16);
+    expect(nav.submit).not.toHaveBeenCalled();
     expect(f.objects.every(o => o.destroyed)).toBe(true);
   });
 
   it('animates mission drones through the repair window, hides the complete pool and reuses it for a later mission', () => {
     const f = fixture(), renderer = new CoopDefenseObjectiveRepairDroneRenderer(f.scene as never);
+    const nav = { submit: vi.fn() };
+    renderer.setNavLights(nav);
     const lighting = lightingFixture();
     renderer.build();
     renderer.setLightingSystem(lighting as never);
@@ -106,22 +122,31 @@ describe('Blender repair drone presentation', () => {
     const bases = { getBase: () => base, getBasesByFaction: () => [] };
     const sync = (elapsed: number) => renderer.sync(snapshot as never, configs as never, bases as never, elapsed, true);
     sync(TIMING.approachMs / 2);
+    expect(nav.submit).toHaveBeenCalledTimes(TIMING.droneCount);
+    for (const [x, y, heading, alpha, profile, body] of nav.submit.mock.calls) {
+      expect([x, y, heading, alpha]).toEqual([body.x, body.y, body.rotation - Math.PI / 2, body.alpha]);
+      expect(profile).toBe(DRONE_NAV_LIGHT_PROFILES.repairDrone);
+    }
+    expect(f.shadows().filter(b => b.visible)).toHaveLength(TIMING.droneCount);
     expect(lighting.active.size).toBe(0);
     sync(TIMING.approachMs + 100);
     expect(lighting.active.size).toBe(TIMING.droneCount);
     const [, , contactX, contactY] = lighting.setLight.mock.calls[0];
     expect(Math.hypot(contactX - f.bodies()[0].x, contactY - f.bodies()[0].y)).toBeGreaterThan(16);
     expect(f.bodies().filter(b => b.visible)).toHaveLength(TIMING.droneCount);
-    const first = f.bodies()[0].frame;
+    const first = f.bodies()[0].frame.name;
     f.scene.time.now = 25;
     sync(TIMING.approachMs + 125);
-    expect(f.bodies()[0].frame).not.toBe(first);
+    expect(f.bodies()[0].frame.name).not.toBe(first);
     expect(f.bodies().every(b => b.width === 32 && b.height === 32)).toBe(true);
     sync(TIMING.approachMs + TIMING.repairMs + 1);
     expect(lighting.active.size).toBe(0);
     expect(f.objects.filter(o => !o.texture).every(o => !o.visible && o.commands.length === 0)).toBe(true);
     sync(COOP_DEFENSE_OBJECTIVE_REPAIR_TOTAL_MS + 1);
     expect(f.objects.every(o => !o.visible)).toBe(true);
+    nav.submit.mockClear();
+    sync(COOP_DEFENSE_OBJECTIVE_REPAIR_TOTAL_MS + 2);
+    expect(nav.submit).not.toHaveBeenCalled();
     sync(TIMING.approachMs + 150);
     expect(f.objects).toHaveLength(count);
     expect(f.bodies().filter(b => b.visible)).toHaveLength(TIMING.droneCount);

@@ -82,6 +82,8 @@ export const GRAPHICS_FAMILIES = {
     'CoopDefenseMissionProgressRenderer',
     'RepairDroneEffects',
     'AttackDroneRenderer',
+    'BomberSquadronRenderer',
+    'DroneNavLightRenderer',
   ],
   encounterTelegraphs: ['CoopDefenseEncounterTelegraphRenderer'],
   bossIntro: ['BossIntroGraveyardRenderer', 'GraveFireflySwarm', 'VoidRiftIntroRenderer', 'VoidMeteorIntroRenderer'],

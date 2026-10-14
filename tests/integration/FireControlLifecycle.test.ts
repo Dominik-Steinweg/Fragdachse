@@ -109,7 +109,7 @@ describe('host utility → deployment → turret fire → lifecycle', () => {
     const advance = vi.spyOn(f.binding, 'advanceFireControl');
     const turret = f.binding.systems!.turret;
     host.setCombatFramePort({ getTargetingRuntime: () => null, getSupportGameplayRuntime: () => null,
-      getCombatGameplayBinding: () => ({ systems: { turret }, advanceMgTurrets() {}, advanceAttackDrones() {},
+      getCombatGameplayBinding: () => ({ systems: { turret }, advanceMgTurrets() {}, advanceAttackDrones() {}, advanceBomberSquadron() {},
         advanceFireControl: (now: number) => f.binding.advanceFireControl(now) }),
     } as never);
     const fire = vi.spyOn(turret, 'hostUpdate');

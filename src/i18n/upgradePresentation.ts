@@ -7,7 +7,7 @@ import { getDomainCatalog, getDomainKeys, translate, translateSegments, type Tra
 import { formatNumber, formatUpgradeEffectValue } from './format';
 import type { Locale } from './types';
 import { VULNERABILITY_INCOMING_DAMAGE_BONUS } from '../systems/TargetStatusSystem';
-import { UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
+import { ULTIMATE_CONFIGS, UTILITY_CONFIGS, WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import { getCoopDefenseUpgradeDefinition, type CoopDefenseUpgradeDefinition } from '../utils/coopDefenseUpgrades';
 import {
   COOP_DEFENSE_CONSTRUCTION_BASE_SLOTS,
@@ -56,6 +56,36 @@ function getUpgradeParams(
       'unsigned',
     );
   });
+
+  const holo = ULTIMATE_CONFIGS.HOLO_OFFENSIVE;
+  const bomber = ULTIMATE_CONFIGS.BOMBER_SQUADRON;
+  if (holo.type === 'holo_offensive' && definition.id.includes('holo_offensive')) {
+    params.holoRage = formatNumber(holo.rageRequired, locale);
+    params.holoRagePerSecond = formatNumber(holo.ragePerSpawnSecond, locale);
+    params.holoInterval = formatNumber(holo.spawnIntervalMs / 1000, locale);
+    params.holoLifetime = formatNumber(holo.copyLifetimeMs / 1000, locale);
+    params.holoMaterialize = formatNumber(holo.materializeMs / 1000, locale);
+  }
+  if (bomber.type === 'bomber_squadron' && definition.id.includes('bomber_squadron')) {
+    params.bomberRage = formatNumber(bomber.rageCost, locale);
+    params.bomberDrones = formatNumber(bomber.droneCount, locale);
+    params.bomberInterval = formatNumber(bomber.launchIntervalMs / 1000, locale);
+    params.bomberBombs = formatNumber(bomber.bombsPerPass, locale);
+    params.bomberMaxDamage = formatNumber(bomber.maxDamage, locale);
+    params.bomberMinDamage = formatNumber(bomber.minDamage, locale);
+    params.bomberRadius = formatNumber(bomber.explosionRadius, locale);
+    params.bomberTurn = formatNumber(bomber.turnMs / 1000, locale);
+  }
+  const ultimateEffect = definition.effects[0];
+  if (ultimateEffect && (definition.id.startsWith('holo_offensive_') || definition.id.startsWith('bomber_squadron_'))) {
+    const [, itemId, field] = ultimateEffect.stat.split('.');
+    const base = ULTIMATE_CONFIGS[itemId] as unknown as Record<string, unknown>;
+    const value = base[field];
+    if (typeof value === 'number') {
+      params.ultimateStages = Array.from({ length: definition.maxLevel }, (_, index) =>
+        formatNumber((value + ultimateEffect.value * (index + 1)) / (field.endsWith('Ms') ? 1000 : 1), locale)).join(' / ');
+    }
+  }
 
   if (definition.id === 'asmd_secondary_arc_damage') {
     params.comboRangeMultiplier = formatNumber(COMBO_LIGHTNING_RANGE_MULTIPLIER, locale);

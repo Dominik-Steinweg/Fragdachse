@@ -57,12 +57,14 @@ export const LOADOUT_SLOT_LABELS: Record<LoadoutSlot, string> = {
   ultimate: 'Ultimate',
 };
 
-/** Die vier Coop-Ultimates haben im Upgrade-Baum eigene Symbole, die auch im Slot gelten. */
+/** Dedizierte Symbole der Coop-Ultimate-Wurzeln gelten auch im Slot. */
 const COOP_DEFENSE_ULTIMATE_UNLOCK_BY_ITEM_ID: Readonly<Record<string, string>> = Object.freeze({
   ARMAGEDDON: 'unlock_armageddon',
   GAUSS_RIFLE: 'unlock_gauss_rifle',
   AIRSTRIKE: 'unlock_airstrike',
   HONEY_BADGER_RAGE: 'unlock_honey_badger_rage',
+  HOLO_OFFENSIVE: 'unlock_holo_offensive',
+  BOMBER_SQUADRON: 'unlock_bomber_squadron',
 });
 
 /** Die drei Inspector-Supportwaffen verwenden im Waffe-2-Slot ebenfalls ihre Upgrade-Symbole. */

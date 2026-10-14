@@ -2,6 +2,14 @@ import type { ConfigStatDescriptor } from './CoopDefenseLoadoutModifiers';
 
 /** Explicit contracts for formerly convention-resolved upgrade paths. */
 export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
+  'ultimate.HOLO_OFFENSIVE.copyLifetimeMs': { kind: 'ultimate', itemId: 'HOLO_OFFENSIVE', targets: [{ path: ['copyLifetimeMs'], formula: 'add' }] },
+  'ultimate.HOLO_OFFENSIVE.spawnIntervalMs': { kind: 'ultimate', itemId: 'HOLO_OFFENSIVE', targets: [{ path: ['spawnIntervalMs'], formula: 'add' }] },
+  'ultimate.HOLO_OFFENSIVE.rageRequired': { kind: 'ultimate', itemId: 'HOLO_OFFENSIVE', targets: [{ path: ['rageRequired'], formula: 'add' }] },
+  'ultimate.HOLO_OFFENSIVE.injectorProjectionEnabled': { kind: 'ultimate', itemId: 'HOLO_OFFENSIVE', targets: [{ path: ['injectorProjectionEnabled'], formula: 'add' }] },
+  'ultimate.BOMBER_SQUADRON.droneCount': { kind: 'ultimate', itemId: 'BOMBER_SQUADRON', targets: [{ path: ['droneCount'], formula: 'add' }] },
+  'ultimate.BOMBER_SQUADRON.bombsPerPass': { kind: 'ultimate', itemId: 'BOMBER_SQUADRON', targets: [{ path: ['bombsPerPass'], formula: 'add' }] },
+  'ultimate.BOMBER_SQUADRON.fireChunksPerBomb': { kind: 'ultimate', itemId: 'BOMBER_SQUADRON', targets: [{ path: ['fireChunksPerBomb'], formula: 'add' }] },
+  'ultimate.BOMBER_SQUADRON.secondPassEnabled': { kind: 'ultimate', itemId: 'BOMBER_SQUADRON', targets: [{ path: ['secondPassEnabled'], formula: 'add' }] },
   'utility.FIRE_CONTROL_RELAY.maxCopies': { kind: 'utility', itemId: 'FIRE_CONTROL_RELAY', targets: [{ path: ['maxCopies'], formula: 'add' }] },
   'utility.FIRE_CONTROL_RELAY.durationMs': { kind: 'utility', itemId: 'FIRE_CONTROL_RELAY', targets: [{ path: ['durationMs'], formula: 'add' }] },
   'utility.FIRE_CONTROL_RELAY.parallelEnabled': { kind: 'utility', itemId: 'FIRE_CONTROL_RELAY', targets: [{ path: ['parallelEnabled'], formula: 'add' }] },

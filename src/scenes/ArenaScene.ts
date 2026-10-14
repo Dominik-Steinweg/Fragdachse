@@ -20,6 +20,7 @@ import { getDeferredAssets, preloadDeferredImages } from '../assets/DeferredAsse
 import { SHOOTING_RANGE_CONTROLS } from '../shootingRange/ShootingRangeLayout';
 import { getPipelineAssetForTexture } from '../config/pipelineAssets';
 import { preloadAttackDroneAssets } from '../effects/AttackDroneRenderer';
+import { preloadBomberSquadronAssets } from '../effects/bomberSquadron/BomberSquadronAssets';
 import { preloadRepairDroneAssets } from '../effects/repairDroneVisuals';
 import * as Phaser from 'phaser';
 import { AfterRoundTransition, type AfterRoundView } from '../ui/AfterRoundTransition';
@@ -430,6 +431,7 @@ export class ArenaScene extends Phaser.Scene {
     preloadBadgerAnimationAssets(this.load);
     preloadHeldItemAssets(this.load);
     preloadAttackDroneAssets(this.load);
+    preloadBomberSquadronAssets(this.load);
     preloadWatchtowerAssets(this.load);
     preloadRepairDroneAssets(this.load);
     // Mehrere Gegner-Arten duerfen sich dasselbe Sprite teilen (Varianten unterscheiden sich nur

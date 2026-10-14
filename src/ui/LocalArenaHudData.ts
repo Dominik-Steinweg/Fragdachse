@@ -6,9 +6,12 @@ import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRew
 import type { FireControlSnapshot } from '../systems/fireControl/FireControlSnapshot';
 import { getFireControlCopiesStatus, getFireControlPortalStatus } from '../systems/fireControl/FireControlCopiesStatus';
 import { getFireControlStatusLabel } from '../systems/RadialActionModel';
+import type { BomberSquadronSnapshot } from '../systems/bomberSquadron/BomberSquadronSnapshot';
+import { getUltimateDeploymentKind, getUltimateDeploymentRemainingMs } from './UltimateDeploymentStatus';
 
-interface FireControlHudSource {
+interface LocalArenaHudSource {
   getFireControlSnapshot(): FireControlSnapshot;
+  getBomberSquadronSnapshot(): BomberSquadronSnapshot;
   getLocalPlayerId(): string;
   getSynchronizedNow(): number;
 }
@@ -27,6 +30,7 @@ interface BuildLocalArenaHudDataParams {
   rage: number;
   maxRage: number;
   isUltimateActive: boolean;
+  activeUltimateId?: string | null;
   ultimateRequiredRage: number;
   ultimateThresholds: number[];
   ultimateId?: string;
@@ -65,8 +69,9 @@ interface BuildInitialLocalArenaHudDataParams {
 
 export function buildLocalArenaHudData(
   params: BuildLocalArenaHudDataParams,
-  source?: FireControlHudSource,
+  source?: LocalArenaHudSource,
 ): LocalArenaHudData {
+  const deploymentKind = params.isUltimateActive ? getUltimateDeploymentKind(params.activeUltimateId) : null;
   const fireControlStatus = source && !params.utilityAction && !params.persistentBaseRewardId
     ? params.utilityId === 'FIRE_CONTROL_RELAY' ? getFireControlCopiesStatus : params.utilityId === 'FIRE_CONTROL_PORTAL'
       ? getFireControlPortalStatus : null
@@ -84,6 +89,14 @@ export function buildLocalArenaHudData(
     rage: params.rage,
     maxRage: params.maxRage,
     isUltimateActive: params.isUltimateActive,
+    ultimateDeploymentRemainingMs: getUltimateDeploymentRemainingMs(
+      params.isUltimateActive,
+      deploymentKind,
+      source?.getLocalPlayerId() ?? '',
+      source?.getSynchronizedNow() ?? 0,
+      deploymentKind === 'holo_offensive' ? source?.getFireControlSnapshot() : undefined,
+      deploymentKind === 'bomber_squadron' ? source?.getBomberSquadronSnapshot() : undefined,
+    ),
     ultimateRequiredRage: params.ultimateRequiredRage,
     ultimateThresholds: params.ultimateThresholds,
     ultimateId: params.ultimateId,

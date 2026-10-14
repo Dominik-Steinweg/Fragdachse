@@ -13,6 +13,9 @@ import { clearActiveSession, setActiveSession } from '../src/network/peer/sessio
 import { PEER_PROTOCOL_VERSION, type PeerChannelKind, type PeerMessage } from '../src/network/peer/protocol';
 import type { CoopDefenseEncounterPresentationState, LoadoutCommitSnapshot } from '../src/types';
 import { DEFAULT_LOADOUT } from '../src/loadout/LoadoutConfig';
+import { buildDefaultCoopDefenseUpgradeProfile, COOP_DEFENSE_UPGRADE_DEFINITIONS } from '../src/utils/coopDefenseUpgrades';
+import { resolveLoadoutSelectionIds } from '../src/loadout/LoadoutRules';
+import { ULTIMATE_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { CoopDefensePlayerModifierSystem } from '../src/systems/CoopDefensePlayerModifierSystem';
 
 import {
@@ -1553,6 +1556,36 @@ describe('host-frozen round loadouts', () => {
     });
     host.setGamePhase('ARENA');
   };
+
+  it.each([
+    { ultimate: 'ARMAGEDDON', purchased: false, expected: 'HOLO_OFFENSIVE' },
+    { ultimate: 'BOMBER_SQUADRON', purchased: false, expected: 'HOLO_OFFENSIVE' },
+    { ultimate: 'BOMBER_SQUADRON', purchased: true, expected: 'BOMBER_SQUADRON' },
+  ])('sanitizes a foreign or locked Inspector ultimate $ultimate in every host-read commit (purchased=$purchased)', async ({ ultimate, purchased, expected }) => {
+    const network = new FakeNetwork(), hostRoom = await createHostRoom(network), clientRoom = await addClientRoom(network);
+    try {
+      const host = activate(hostRoom), client = activate(clientRoom);
+      use(hostRoom); host.setGameMode('coop_defense');
+      const profile = buildDefaultCoopDefenseUpgradeProfile('inspector_gadachs');
+      profile.toolLoadout = [{ kind: 'utility', id: 'HE_GRENADE' }];
+      if (purchased) profile.upgrades.unlock_bomber_squadron.level = COOP_DEFENSE_UPGRADE_DEFINITIONS.unlock_bomber_squadron.maxLevel;
+      const valid = resolveLoadoutSelectionIds({ ultimate: ULTIMATE_CONFIGS[ultimate] }, 'coop_defense', profile, 'inspector_gadachs');
+      const raw = { ...valid, ultimate };
+      for (const slot of ['weapon1', 'weapon2', 'utility', 'ultimate'] as const) host.hostSetPlayerLoadoutSlot('p1', slot, raw[slot]!);
+      use(clientRoom);
+      client.setLocalReadyWithCommittedLoadout(raw);
+      use(hostRoom);
+      host.hostReconcileLoadoutsForMode('coop_defense');
+      expect(host.getPlayerCommittedLoadout('p1')?.ultimate).toBe(expected);
+      use(clientRoom); client.setLocalReadyWithCommittedLoadout(valid);
+      use(hostRoom);
+      start(host);
+      for (const [room, bridge] of [[hostRoom, host], [clientRoom, client]] as const) {
+        use(room);
+        expect(bridge.getPlayerCurrentLoadoutSnapshot('p1')?.ultimate).toBe(expected);
+      }
+    } finally { clearActiveSession(); clientRoom.room.destroy(); hostRoom.room.destroy(); }
+  });
 
   it.each([undefined, null, 'necromancy', ['unknown'], ['unknown', 'necromancy', 'necromancy', 7]].map(rawEntitlements => ({ rawEntitlements })))(
     'constrains each player with their own sanitized research: $rawEntitlements', async ({ rawEntitlements }) => {

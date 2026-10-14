@@ -1,13 +1,18 @@
 import { FireControlRuntime } from '../systems/fireControl/FireControlRuntime';
+import { HoloOffensiveRuntime } from '../systems/fireControl/HoloOffensiveRuntime';
 import type { FireControlConstructionFacts } from '../systems/fireControl/FireControlCopyPlan';
-import { fireControlContributionId, type FireControlSnapshot } from '../systems/fireControl/FireControlSnapshot';
+import { createFireControlDeploymentIdSource, fireControlContributionId, type FireControlSnapshot } from '../systems/fireControl/FireControlSnapshot';
+import { EMPTY_BOMBER_SQUADRON_SNAPSHOT, type BomberSquadronSnapshot } from '../systems/bomberSquadron/BomberSquadronSnapshot';
+import type {
+  PlayerUltimateBomberSquadronCapability, PlayerUltimateHoloOffensiveCapability,
+} from './PlayerUltimateBehaviorRuntime';
 import { isOffensiveConstruction } from '../systems/offensiveConstruction';
 import { PlasmaBurnerTargetCatalog } from './PlasmaBurnerTargetCatalog';
 import { homingTargetKind } from '../projectile/ProjectileOrigin';
 import { plasmaBurnerTargetEffect } from '../combat/plasmaBurner/PlasmaBurnerTargetPolicy';
 import { OBSTACLE_ROCK } from '../systems/ArenaObstacleIndex';
 import { turretAimConfig } from '../config/turretAim';
-import { getCoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
+import { getCoopDefenseConstructionDefinition, isConstructionId } from '../config/coopDefenseConstructions';
 import { COOP_DEFENSE_TURRET_RULES } from '../config/coopDefenseTurrets';
 import type { BaseManager } from '../entities/BaseManager';
 import type { TimeBubbleChargePort } from '../systems/TimeBubbleChargePort';
@@ -17,6 +22,7 @@ import type { PlayerManager } from '../entities/PlayerManager';
 import { WorldMgTurretBinding } from './WorldMgTurretBinding';
 import { resolveMgTurretStats } from '../config/mgTurret';
 import { WorldAttackDroneBinding } from './WorldAttackDroneBinding';
+import { WorldBomberSquadronBinding } from './WorldBomberSquadronBinding';
 import type { RemoteControlSource } from '../systems/CoopDefenseItemRuntimeSystem';
 import type { MgOwner } from '../systems/MgAttritionRuntime';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
@@ -323,6 +329,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
   readonly mgTurret: WorldMgTurretBinding | null;
   readonly systems: WorldCombatGameplaySystems | null;
   readonly fireControl: FireControlRuntime | null;
+  readonly holoOffensive: HoloOffensiveRuntime | null;
+  readonly bomberSquadron: WorldBomberSquadronBinding | null;
   private fireControlNowMs = 0;
   private plasmaCatalog: PlasmaBurnerTargetCatalog | null = null;
   private destroyed = false;
@@ -342,16 +350,37 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
 
   constructor(private readonly options: WorldCombatGameplayBindingOptions) {
     const playerCombat = options.getPlayerCombatIntegration();
+    const ids = createFireControlDeploymentIdSource();
+    const isPointFree = (x: number, y: number, radius: number) => {
+      const point = options.getWorldGeometryBinding()?.getQueries().resolveSafeGroundPoint(x, y, radius);
+      return !!point && point.x === x && point.y === y;
+    };
+    const readOwner = (id: string) => {
+      const player = options.playerManager.getPlayer(id);
+      return player && options.getWorldParticipation(id) === 'interactive' && options.combatSystem.isAlive(id)
+        ? { x: player.x, y: player.y, color: player.color } : null;
+    };
     this.fireControl = options.network.authority.isHost() ? new FireControlRuntime({
+      ids,
       readConstructions: () => this.readFireControlConstructions(),
       readSlotOrder: ownerId => options.readConstructionSlotOrder?.(ownerId) ?? [],
-      isPointFree: (x, y, radius) => {
-        const point = options.getWorldGeometryBinding()?.getQueries().resolveSafeGroundPoint(x, y, radius);
-        return !!point && point.x === x && point.y === y;
-      },
+      isPointFree,
       onDeploymentEnded: (id, _ownerId, endedAt) =>
         options.getPlayerCombatIntegration()?.utility.onFireControlDeploymentEnded?.(id, endedAt),
       discardProjectile: id => options.projectileUtility?.destroyProjectile(id),
+    }) : null;
+    this.holoOffensive = playerCombat && options.network.authority.isHost() ? new HoloOffensiveRuntime({
+      ids, readOwner, isPointFree,
+      readConstructions: () => this.readFireControlConstructions(),
+      readSlotOrder: ownerId => options.readConstructionSlotOrder?.(ownerId) ?? [],
+      readTurretDefinition: id => this.getTurretDefinitions().find(turret => turret.id === id) ?? null,
+      readForeignCopyPositions: () => (this.fireControl?.getSnapshot(this.fireControlNowMs).deployments ?? [])
+        .flatMap(deployment => deployment.kind === 'copies' ? deployment.copies : []),
+      isPersonalMg: id => this.isPersonalMg(id),
+      resolveInjectorEffect: id => isConstructionId(id) ? getCoopDefenseConstructionDefinition(id)?.energyInjectorEffect ?? null : null,
+    }) : null;
+    this.bomberSquadron = playerCombat && options.network.authority.isHost() ? new WorldBomberSquadronBinding({
+      combat: options.combatSystem, playerCombat, metrics: options.worldMetrics, readOwner,
     }) : null;
     if (this.fireControl) playerCombat?.utility.setFireControlPort?.({
       activateCopies: request => {
@@ -443,6 +472,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
   clearActivityBindings(): void {
     if (this.destroyed) return;
     this.fireControl?.clear();
+    this.holoOffensive?.clear();
+    this.bomberSquadron?.clear();
     this.options.getPlayerCombatIntegration()?.utility.clearFireControlUses?.();
     this.activityGeneration += 1;
     this.options.combatSystem.invalidatePlayerLifecyclePolicy();
@@ -468,6 +499,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.destroyed = true;
     this.mgTurret?.destroy();
     this.attackDrone?.destroy();
+    this.bomberSquadron?.destroy();
     this.projectileBaseGeometry.length = 0;
     this.projectileBaseGeometryGeneration = -1;
     this.options.bindPlayerShieldBuffPort?.(null);
@@ -834,6 +866,9 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       this.requireWorldMutation().applyResolvedDamage('train', 'main', resolvedDamage, attackerId, 'combat.train');
     });
     combat.setDeathCallback((playerId, x, y) => {
+      const now = combat.getHostTime();
+      this.holoOffensive?.stopSpawning(playerId, now);
+      this.bomberSquadron?.runtime.cancelUnlaunched(playerId, now);
       const generation = this.activityGeneration;
       const current = () => !this.destroyed && generation === this.activityGeneration;
       o.handlePlayerUnavailable(playerId);
@@ -875,6 +910,10 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       o.combatSystem.hasLineOfSight(sx, sy, ex, ey, skipRockIndex, sourceCarrierBaseId, 0, 'directFire'));
     turret.setLineOfFireChecker((sx, sy, ex, ey, skipRockIndex, sourceCarrierBaseId) => o.combatSystem.hasClearLineOfFire(sx, sy, ex, ey, { skipRockIndex, sourceCarrierBaseId }));
     turret.setTurretProvider(() => this.getTurretDefinitions(), (source, angle) => {
+      if (source.projection) {
+        this.holoOffensive?.setCopyAngle(String(source.id), angle);
+        return;
+      }
       // Nur die Konstruktion selbst besitzt ihren Rohrwinkel; temporäre Quellen gehören ihrem Einsatz.
       if (source.id !== source.identityId) {
         if (typeof source.id === 'string') this.fireControl?.setCopyAngle(source.id, angle);
@@ -892,7 +931,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     turret.setFocusTargetProvider((ownerId) => o.getEnergyInjectorSystem()?.getFocusTarget(ownerId) as { targetType: 'enemy' | 'base'; targetId: string } | null);
     turret.setFocusedBaseTargetProvider((targetId, x, y, range) => this.getBaseAimCandidates(x, y, range, targetId));
     turret.setBaseTargetCandidateProvider((source, x, y, range) => this.getHostileBaseAimCandidates(source, x, y, range));
-    turret.setTargetScoreProvider((source, kind, id, now) => this.isPersonalMg(source.identityId)
+    turret.setTargetScoreProvider((source, kind, id, now) => (source.projection?.personalMg ?? this.isPersonalMg(source.identityId))
       ? this.mgTurret?.score(source.ownerId, String(source.identityId), kind, id, now) ?? 0 : 0);
     turret.setFireHandler((ownerId, color, weaponId, x, y, angle, targetX, targetY, damageFactor = 1, rangeFactor = 1, sourceTurretId, skipRockIndex, sourceCarrierBaseId, context) => {
       const turretCfg = UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig;
@@ -915,6 +954,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         }
         : weapon.fire;
       const route = context?.route;
+      const personalMg = context?.source.projection?.personalMg ?? this.isPersonalMg(sourceTurretId);
       return o.automatedWeaponExecution?.fire(
         { ...weapon, fire, range: weapon.range * rangeFactor },
         {
@@ -932,14 +972,15 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
             // durch denselben ausgehenden Modifier-/Krit-Pfad wie dessen eigene Treffer.
             sourceSlot: isBaseTurret ? undefined : 'utility',
             sourceTurretId: sourceTurretId === undefined ? undefined : String(sourceTurretId),
-            // Attribution bleibt beim Original; die Schussanimation spielt am Sprite der feuernden Quelle.
-            turretVisualId: context && context.source.visualId !== context.source.identityId
+            // Die Schussanimation spielt am Sprite der feuernden Quelle, unabhängig von ihrer Identität.
+            turretVisualId: context && (context.source.projection || context.source.visualId !== context.source.identityId)
               ? String(context.source.visualId) : undefined,
             // Bonus über den Transferkontext, nie zusätzlich in damageFactor/payloadDamageMultiplier.
             fireControlRoute: route ? { contributionId: fireControlContributionId(route.deploymentId), ownerId,
               entry: route.entry, exit: route.exit, damageBonus: route.damageBonus } : undefined,
-            personalMgOwnerId: this.isPersonalMg(sourceTurretId) ? ownerId : undefined,
-            personalMgScope: this.isPersonalMg(sourceTurretId) ? o.combatSystem.getCombatScope() : undefined,
+            personalMgOwnerId: personalMg ? ownerId : undefined,
+            personalMgScope: personalMg ? o.combatSystem.getCombatScope() : undefined,
+            injectorEffect: context?.source.projection?.injectorEffect ?? undefined,
             directDamageMultiplier: damageFactor,
             automatedBaseDamageFactor: o.isCoopDefense?.() && !isHostileBaseTurret
               ? COOP_DEFENSE_TURRET_RULES.baseDamageMultiplier : undefined,
@@ -1562,6 +1603,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
   }
 
   advanceAttackDrones(now: number, deltaMs: number): void { this.attackDrone?.advance(now, deltaMs); }
+  advanceBomberSquadron(now: number): void { this.bomberSquadron?.advance(now); }
 
   advanceMgTurrets(now: number): void {
     if (this.destroyed) return;
@@ -1604,8 +1646,9 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
    * Quelle; temporäre Quellen kommen nur hier hinzu und nie in `getTurretDefinitions()`.
    */
   getTurretFireSources(definitions = this.getTurretDefinitions()): readonly TurretFireSource[] {
-    return this.fireControl?.deriveFireSources(definitions, this.fireControlNowMs,
+    const sources = this.fireControl?.deriveFireSources(definitions, this.fireControlNowMs,
       () => this.readFireControlConstructions(definitions)) ?? definitions.map(toLocalTurretFireSource);
+    return [...sources, ...(this.holoOffensive?.deriveFireSources(this.fireControlNowMs) ?? [])];
   }
 
   advanceFireControl(now: number): readonly TurretFireSource[] {
@@ -1613,11 +1656,28 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     // Explicit tick-local input: other construction consumers always read live definitions.
     const definitions = this.getTurretDefinitions();
     this.fireControl?.update(now, () => this.readFireControlConstructions(definitions));
+    this.holoOffensive?.update(now);
     return this.getTurretFireSources(definitions);
   }
 
   getFireControlSnapshot(now: number): FireControlSnapshot {
-    return this.fireControl?.getSnapshot(now) ?? { deployments: [] };
+    return { deployments: [...(this.fireControl?.getSnapshot(now).deployments ?? []),
+      ...(this.holoOffensive?.getSnapshotDeployments(now) ?? [])] };
+  }
+
+  /** Host-Owner der Holo-Offensive; `null` ohne Host-Player-Combat. */
+  getHoloOffensiveCapability(): PlayerUltimateHoloOffensiveCapability | null {
+    return this.holoOffensive;
+  }
+
+  /** Host-Owner des Bombergeschwaders; `null` ohne Host-Player-Combat. */
+  getBomberSquadronCapability(): PlayerUltimateBomberSquadronCapability | null {
+    return this.bomberSquadron?.runtime ?? null;
+  }
+
+  /** Slice `bq` auf dem Host. */
+  getBomberSquadronSnapshot(_now: number): BomberSquadronSnapshot {
+    return this.bomberSquadron?.runtime.getSnapshot() ?? EMPTY_BOMBER_SQUADRON_SNAPSHOT;
   }
 
   private readFireControlConstructions(definitions = this.getTurretDefinitions()): readonly FireControlConstructionFacts[] {

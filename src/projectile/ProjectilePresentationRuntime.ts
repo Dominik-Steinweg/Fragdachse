@@ -1,7 +1,7 @@
 import type { ProjectileCustomVisual, ProjectileVisualOverrides } from './ProjectileVisualOverrides';
 import type { PlasmaBurnerChargeRenderer } from '../effects/PlasmaBurnerChargeRenderer';
 import type { TurretAnimationController } from '../effects/TurretAnimationController';
-import { isFireControlCopySourceId } from '../systems/fireControl/FireControlSnapshot';
+import { isFireControlTemporarySourceId } from '../systems/fireControl/FireControlSnapshot';
 import { ProjectilePathCursor, type ProjectilePathPoint, type ProjectileTrailSegment } from './ProjectileFlightPath';
 import { tracerBounceDebug } from '../effects/TracerBounceDebugSettings';
 import { TracerBounceDebugOverlay } from '../effects/TracerBounceDebugOverlay';
@@ -325,7 +325,7 @@ export class ProjectilePresentationRuntime {
     }
     if (cfg.suppressSpawnFx) return;
     const turretVisualId = cfg.turretVisualId ?? cfg.sourceTurretId;
-    if (isFireControlCopySourceId(cfg.turretVisualId)) this.fireControlCopyShot?.(cfg.turretVisualId);
+    if (isFireControlTemporarySourceId(cfg.turretVisualId)) this.fireControlCopyShot?.(cfg.turretVisualId);
     else if (turretVisualId !== undefined) this.turretAnimations?.onShot(turretVisualId);
     const muzzleOrigin = cfg.visualMuzzleOrigin ?? getTopDownMuzzleOrigin(muzzleX, muzzleY, angle);
     this.muzzleFlashRenderer?.playProjectileFlash(
@@ -615,7 +615,7 @@ export class ProjectilePresentationRuntime {
         const turretVisualId = projectile.turretVisualId ?? projectile.sourceTurretId;
         if (update.isNew && !projectile.suppressSpawnFx && !projectile.flightPath?.ended
           && turretVisualId !== undefined) {
-          if (isFireControlCopySourceId(projectile.turretVisualId)) firingCopies.add(projectile.turretVisualId);
+          if (isFireControlTemporarySourceId(projectile.turretVisualId)) firingCopies.add(projectile.turretVisualId);
           else firingTurrets.add(turretVisualId);
         }
       }

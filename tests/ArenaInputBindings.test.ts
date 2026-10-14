@@ -209,6 +209,21 @@ function makeInput(): {
 }
 
 describe('ArenaInputBindings', () => {
+  it.each(['no_fire_sources', 'placement'] as const)('shows ultimate rejection feedback for %s', async reason => {
+    const { binding, actions, inputSystem } = makeInput();
+    vi.mocked(actions.getPlayerCapabilities).mockReturnValue({ canInteract: true, canUseCombat: true } as never);
+    vi.mocked(actions.getLocalUltimateConfig).mockReturnValue({ type: 'holo_offensive' } as never);
+    vi.mocked(actions.isLocalPlayerAlive).mockReturnValue(true);
+    vi.mocked(actions.sendLoadoutUse).mockResolvedValue({ ok: false, reason });
+    binding.setup();
+    const use = inputSystem.setupLoadoutListener.mock.calls[0][0];
+    use('ultimate', 0, 100, 0, { inputStarted: true });
+    await Promise.resolve();
+    expect(actions.feedback.showPlacementError).toHaveBeenCalledExactlyOnceWith(t(`ui.errors.${reason}`));
+    expect(inputSystem.cancelLocalUltimateChargePreview).toHaveBeenCalledOnce();
+    binding.destroy();
+  });
+
   function fireControlFixture() {
     const f = makeInput();
     const config = applyCoopDefenseModifiersToUtilityConfig(UTILITY_CONFIGS.FIRE_CONTROL_RELAY, {

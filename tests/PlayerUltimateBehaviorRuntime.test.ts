@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { PlayerUltimateBehaviorRuntime } from '../src/world/PlayerUltimateBehaviorRuntime';
+import { PlayerUltimateBehaviorRuntime, type PlayerUltimateDeploymentResult,
+  type PlayerUltimateHoloOffensiveRequest, type PlayerUltimateBomberSquadronRequest,
+} from '../src/world/PlayerUltimateBehaviorRuntime';
 import { ULTIMATE_CONFIGS } from '../src/loadout/LoadoutConfig';
+import type { HoloOffensiveUltimateConfig, BomberSquadronUltimateConfig } from '../src/loadout/LoadoutTypes';
 
 function makeHarness() {
   const players = [
@@ -161,6 +164,131 @@ function makeActivationHarness(config: any, initialRage = 400) {
   behavior.setTunnelPlacementCapability({ placeTunnel, canStartTunnel });
   return { behavior, reveal, rage, scheduleStrike, placeTunnel, canStartTunnel, fireGauss, canInteract, recordUltimateUsed };
 }
+
+// Independent capability fixtures: these tests protect resource/lifecycle rules, not authored tuning.
+const holoConfig: HoloOffensiveUltimateConfig = {
+  id: 'HOLO_OFFENSIVE', type: 'holo_offensive', cooldown: 0, rageRequired: 300,
+  ragePerSpawnSecond: 50, spawnIntervalMs: 750, copyLifetimeMs: 6000, materializeMs: 400,
+  spawnRingRadiiPx: [120, 80, 160], spawnRingSlots: 12, clearanceRadiusPx: 16,
+  minCopySpacingPx: 32, injectorProjectionEnabled: 0,
+};
+const bomberConfig: BomberSquadronUltimateConfig = {
+  id: 'BOMBER_SQUADRON', type: 'bomber_squadron', cooldown: 0, rageRequired: 300, rageCost: 300,
+  droneCount: 3, launchIntervalMs: 250, approachMs: 600, approachDistancePx: 240,
+  runSpeedPxPerSec: 240, bombsPerPass: 6, secondPassEnabled: 0, corridorLeadPx: 48,
+  corridorLengthPx: 640, corridorWidthPx: 560, turnMs: 1000, departureMs: 600,
+  bombFallMs: 400, explosionRadius: 64, maxDamage: 100, minDamage: 20, fireChunksPerBomb: 0,
+};
+
+function makeDeploymentHarness(config: HoloOffensiveUltimateConfig | BomberSquadronUltimateConfig, rage = 600) {
+  const f = makeActivationHarness(config, rage);
+  const fake = () => {
+    const owners = new Set<string>();
+    return {
+      owners,
+      tryActivate: vi.fn((request: PlayerUltimateHoloOffensiveRequest | PlayerUltimateBomberSquadronRequest): PlayerUltimateDeploymentResult => {
+        owners.add(request.playerId);
+        return { ok: true };
+      }),
+      isActive: vi.fn((ownerId: string) => owners.has(ownerId)),
+      removeOwner: vi.fn((ownerId: string) => { owners.delete(ownerId); }),
+    };
+  };
+  const holo = { ...fake(), stopSpawning: vi.fn() };
+  const bomber = { ...fake(), cancelUnlaunched: vi.fn() };
+  f.behavior.setHoloOffensiveCapability(holo);
+  f.behavior.setBomberSquadronCapability(bomber);
+  const capability = config.type === 'holo_offensive' ? holo : bomber;
+  const request = { category: 'ultimate' as const, playerId: 'p1', angle: .7,
+    targetX: 100, targetY: 200, hostNowMs: 1000, attemptId: 'deployment-1' };
+  return { ...f, holo, bomber, capability, request };
+}
+
+describe('PlayerUltimateBehaviorRuntime – Holo/Bomber deployment capabilities', () => {
+  it.each([holoConfig, bomberConfig])('commits $id once, retains new rage, and locks until its capability ends', config => {
+    const f = makeDeploymentHarness(config);
+    expect(f.behavior.isUltimateActive('p1')).toBe(false);
+    expect(f.behavior.getActiveUltimateId('p1')).toBeNull();
+    expect(f.behavior.execute(f.request)).toEqual({ ok: true });
+    const consumed = config.type === 'holo_offensive' ? 600 : config.rageCost;
+    expect(f.rage.get('p1')).toBe(600 - consumed);
+    expect(f.capability.tryActivate).toHaveBeenCalledExactlyOnceWith(config.type === 'holo_offensive'
+      ? { playerId: 'p1', config, consumedRage: consumed, nowMs: f.request.hostNowMs }
+      : { playerId: 'p1', config, angle: f.request.angle, nowMs: f.request.hostNowMs });
+    expect(f.behavior.isUltimateActive('p1')).toBe(true);
+    expect(f.behavior.getActiveUltimateId('p1')).toBe(config.id);
+    f.rage.set('p1', 600);
+    f.behavior.update(10_000, 11_000);
+    expect(f.rage.get('p1')).toBe(600);
+    expect(f.behavior.execute({ ...f.request, hostNowMs: 12_000 })).toEqual({ ok: true });
+    expect(f.behavior.execute({ ...f.request, attemptId: 'deployment-2' })).toEqual({ ok: false, reason: 'blocked' });
+    expect(f.rage.get('p1')).toBe(600);
+    expect(f.capability.tryActivate).toHaveBeenCalledOnce();
+    expect(f.recordUltimateUsed).toHaveBeenCalledOnce();
+    f.behavior.interruptCombat('p1', 12_000);
+    expect(f.behavior.isUltimateActive('p1')).toBe(true);
+    expect(f.behavior.getActiveUltimateId('p1')).toBe(config.id);
+    expect(f.holo.stopSpawning).not.toHaveBeenCalled();
+    expect(f.bomber.cancelUnlaunched).not.toHaveBeenCalled();
+    expect(f.holo.removeOwner).not.toHaveBeenCalled();
+    expect(f.bomber.removeOwner).not.toHaveBeenCalled();
+    f.capability.owners.clear();
+    expect(f.behavior.isUltimateActive('p1')).toBe(false);
+    expect(f.behavior.getActiveUltimateId('p1')).toBeNull();
+    // A late retry must not resurrect a completed deployment either.
+    expect(f.behavior.execute(f.request)).toEqual({ ok: true });
+    expect(f.capability.tryActivate).toHaveBeenCalledOnce();
+    expect(f.behavior.execute({ ...f.request, attemptId: 'deployment-2' })).toEqual({ ok: true });
+    expect(f.capability.tryActivate).toHaveBeenCalledTimes(2);
+    expect(f.rage.get('p1')).toBe(600 - consumed);
+  });
+
+  it('caps consumed Holo rage at the resource maximum', () => {
+    const f = makeDeploymentHarness(holoConfig, 700);
+    expect(f.behavior.execute(f.request)).toEqual({ ok: true });
+    expect(f.holo.tryActivate).toHaveBeenCalledWith(expect.objectContaining({ consumedRage: 600 }));
+    expect(f.rage.get('p1')).toBe(100);
+  });
+
+  it.each([holoConfig, bomberConfig])('forwards $id failures without spending rage or committing the attempt', config => {
+    for (const reason of ['no_fire_sources', 'placement', 'blocked'] as const) {
+      const f = makeDeploymentHarness(config);
+      f.capability.tryActivate.mockReturnValueOnce({ ok: false, reason });
+      expect(f.behavior.execute(f.request)).toEqual({ ok: false, reason });
+      expect(f.rage.get('p1')).toBe(600);
+      expect(f.behavior.isUltimateActive('p1')).toBe(false);
+      expect(f.recordUltimateUsed).not.toHaveBeenCalled();
+      expect(f.reveal).not.toHaveBeenCalled();
+      expect(f.behavior.execute(f.request)).toEqual({ ok: true });
+      expect(f.capability.tryActivate).toHaveBeenCalledTimes(2);
+      expect(f.recordUltimateUsed).toHaveBeenCalledOnce();
+    }
+  });
+
+  it.each([holoConfig, bomberConfig])('rejects $id below the required rage and while the other deployment is active', config => {
+    const f = makeDeploymentHarness(config, config.rageRequired - 1);
+    expect(f.behavior.execute(f.request)).toEqual({ ok: false, reason: 'resource', resourceKind: 'rage' });
+    expect(f.capability.tryActivate).not.toHaveBeenCalled();
+    f.rage.set('p1', 600);
+    const other = config.type === 'holo_offensive' ? f.bomber : f.holo;
+    other.owners.add('p1');
+    expect(f.behavior.execute(f.request)).toEqual({ ok: false, reason: 'blocked' });
+    expect(f.capability.tryActivate).not.toHaveBeenCalled();
+    expect(f.rage.get('p1')).toBe(600);
+  });
+
+  it.each(['resetPlayer', 'removePlayer'] as const)('%s forwards cleanup to both capabilities and isolates other owners', method => {
+    const f = makeDeploymentHarness(holoConfig);
+    f.holo.owners.add('p1'); f.holo.owners.add('p2');
+    f.bomber.owners.add('p1'); f.bomber.owners.add('p2');
+    f.behavior[method]('p1');
+    expect(f.holo.removeOwner).toHaveBeenCalledExactlyOnceWith('p1');
+    expect(f.bomber.removeOwner).toHaveBeenCalledExactlyOnceWith('p1');
+    expect(f.behavior.isUltimateActive('p1')).toBe(false);
+    expect(f.behavior.getActiveUltimateId('p1')).toBeNull();
+    expect(f.behavior.isUltimateActive('p2')).toBe(true);
+  });
+});
 
 describe('PlayerUltimateBehaviorRuntime – Airstrike/Tunnel/Gauss-Commit', () => {
   it('does not turn a delayed tunnel selection into a newly equipped ultimate', () => {
