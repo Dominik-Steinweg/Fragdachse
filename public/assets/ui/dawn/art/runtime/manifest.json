@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "generator": "scripts/export-dawn-art.mjs",
+  "urlBase": "/assets/ui/dawn/art/",
+  "encoder": {
+    "sharp": "0.33.5",
+    "vips": "8.15.3",
+    "webp": "1.4.0"
+  },
+  "resize": {
+    "kernel": "lanczos3",
+    "colourspace": "srgb"
+  },
+  "encoding": {
+    "lossless": true,
+    "effort": 6
+  },
+  "assets": {
+    "dealer-portrait": {
+      "original": "dealer-portrait.png",
+      "selectedCandidate": "art/poc/dawn/art/dealer-portrait-01.png",
+      "sha256": "636e6bc0fe8c9e1e4ba746a689c8aac6a6ea65cebd3e094344c0ca419afa9adc",
+      "width": 1254,
+      "height": 1254,
+      "exports": [
+        {
+          "file": "runtime/dealer-portrait-128.webp",
+          "width": 128,
+          "height": 128,
+          "bytes": 22950,
+          "sha256": "3866a988dc6632d8a1e0878c933d555030bc587f949ed6c0c111e6fc4a6688f9",
+          "upscaled": false
+        },
+        {
+          "file": "runtime/dealer-portrait-256.webp",
+          "width": 256,
+          "height": 256,
+          "bytes": 89266,
+          "sha256": "d81eae9efcd81051f76c484a7133fde7840fbab457e5f11af3ba1a1a914cdecc",
+          "upscaled": false
+        },
+        {
+          "file": "runtime/dealer-portrait-512.webp",
+          "width": 512,
+          "height": 512,
+          "bytes": 369038,
+          "sha256": "52adb47bf52dea76e80c7ff022c078078b5a08a899bc044c2fccd4d847610f7b",
+          "upscaled": false
+        }
+      ]
+    },
+    "dawn-keyart": {
+      "original": "dawn-keyart.png",
+      "selectedCandidate": "art/poc/dawn/art/dawn-keyart-03.png",
+      "sha256": "4230cd97390041bf5cd6a66a754674a103dccb100b67d75a6057edccda7b6a85",
+      "width": 1664,
+      "height": 936,
+      "exports": [
+        {
+          "file": "runtime/dawn-keyart-960.webp",
+          "width": 960,
+          "height": 540,
+          "bytes": 694362,
+          "sha256": "b7f1cdb22f03723730a99ca72d2057292c32161fe725ce0ffc3daa7b1a3efcb8",
+          "upscaled": false
+        },
+        {
+          "file": "runtime/dawn-keyart-1920.webp",
+          "width": 1920,
+          "height": 1080,
+          "bytes": 2446898,
+          "sha256": "4f6901ce72f8a9e71608326b7a0952755761dfff2150621ff29bbd2d6159f478",
+          "upscaled": true
+        }
+      ]
+    },
+    "dawn-victory": {
+      "original": "dawn-victory.png",
+      "selectedCandidate": "art/poc/dawn/art/dawn-victory-02.png",
+      "sha256": "276ed3ebc8cedae05dfb3179b7666b76396d4e38b19c054afa81cae69136cdc3",
+      "width": 1664,
+      "height": 936,
+      "exports": [
+        {
+          "file": "runtime/dawn-victory-960.webp",
+          "width": 960,
+          "height": 540,
+          "bytes": 826432,
+          "sha256": "591c69c005d90472e316e14188225e021ae1463f7494e279424261b0dcaa838f",
+          "upscaled": false
+        },
+        {
+          "file": "runtime/dawn-victory-1920.webp",
+          "width": 1920,
+          "height": 1080,
+          "bytes": 2931122,
+          "sha256": "21c3d2428daee7371ef9faa2b46357fc1500fcc825e0f3b2b20d759c128e4881",
+          "upscaled": true
+        }
+      ]
+    },
+    "dawn-defeat": {
+      "original": "dawn-defeat.png",
+      "selectedCandidate": "art/poc/dawn/art/dawn-defeat-03.png",
+      "sha256": "383f3552f8eaab176052edb999259bcc44b27747ff504e54776e248dfd4ccf47",
+      "width": 1664,
+      "height": 936,
+      "exports": [
+        {
+          "file": "runtime/dawn-defeat-960.webp",
+          "width": 960,
+          "height": 540,
+          "bytes": 762218,
+          "sha256": "3c98b5a656a981804f67e9d62f3081363c4dd7c6a958ebfc8921eee4d908676a",
+          "upscaled": false
+        },
+        {
+          "file": "runtime/dawn-defeat-1920.webp",
+          "width": 1920,
+          "height": 1080,
+          "bytes": 2691502,
+          "sha256": "a0b45f6218c09b2292ebe34f1ea9c0bce22b73610cb98be84023d2c4f3373a47",
+          "upscaled": true
+        }
+      ]
+    }
+  }
+}

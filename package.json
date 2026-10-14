@@ -22,6 +22,7 @@
     "assets:lobby-forest": "node scripts/export-lobby-forest.mjs",
     "assets:dawn-ui": "node scripts/export-dawn-ui.mjs",
     "assets:dawn-decals": "node scripts/export-dawn-decals.mjs",
+    "assets:dawn-art": "node scripts/export-dawn-art.mjs",
     "assets:hud-frames": "node scripts/export-hud-frames.mjs",
     "assets:marker-glyphs": "node scripts/export-marker-glyphs.mjs",
     "audio:convert": "node scripts/convert-audio.mjs",
