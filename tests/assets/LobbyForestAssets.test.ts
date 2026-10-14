@@ -6,13 +6,18 @@ import { FOREST_ASSETS, preloadForestAssets } from '../../src/ui/LobbyForestAsse
 import { createHash } from 'node:crypto';
 import { DAWN_UI_ASSETS, DAWN_UI_TEXTURES } from '../../src/assets/DawnUiAssets';
 import { runtimeAssetUrl } from '../../src/assets/RuntimeAssetUrls';
+import { preloadDawnMerchantUiAssets } from '../../src/assets/DawnMerchantUiAssets';
+import { DAWN_CLOCK_PARTS } from '../../src/assets/DawnClockAssets';
+
+/** The clock picks its 1x/2x set from the backing store, like RenderResolution. */
+const loader = (image: ReturnType<typeof vi.fn>) => ({ image, scene: { scale: { width: 1920 } } }) as any;
 
 const root = resolve(__dirname, '../../public/assets/ui/lobby-forest');
 
 describe('lobby forest artwork', () => {
   it('preloads only exported artwork and retains its original and generation prompt', async () => {
     const image = vi.fn();
-    preloadForestAssets({ image } as any);
+    preloadForestAssets(loader(image));
     const prompts = JSON.parse(readFileSync(resolve(root, 'prompts.json'), 'utf8'));
     for (const [name, asset] of Object.entries(FOREST_ASSETS)) {
       const metadata = await sharp(resolve(root, asset.file)).metadata();
@@ -26,12 +31,14 @@ describe('lobby forest artwork', () => {
       expect(image).toHaveBeenCalledWith(asset.key, './assets/ui/lobby-forest/' + asset.file);
       expect(prompts.assets.some((entry: { key: string; prompt: string }) => entry.key === name && entry.prompt.length > 0)).toBe(true);
     }
-    expect(image).toHaveBeenCalledTimes(Object.keys(FOREST_ASSETS).length + DAWN_UI_ASSETS.length);
+    const merchant = vi.fn();preloadDawnMerchantUiAssets({ image: merchant } as any);
+    expect(image).toHaveBeenCalledTimes(Object.keys(FOREST_ASSETS).length + DAWN_UI_ASSETS.length
+      + merchant.mock.calls.length + DAWN_CLOCK_PARTS.length);
   });
 
   it('loads Dawn icons and uncropped landscape plates through content-versioned URLs', async () => {
     const image = vi.fn();
-    preloadForestAssets({ image } as any);
+    preloadForestAssets(loader(image));
     expect(new Set(DAWN_UI_ASSETS.map(asset => asset.key)).size).toBe(DAWN_UI_ASSETS.length);
     for (const asset of DAWN_UI_ASSETS) {
       const file = `assets/ui/dawn/${asset.path}`;

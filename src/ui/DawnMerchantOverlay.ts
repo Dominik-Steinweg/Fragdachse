@@ -91,6 +91,8 @@ export class DawnMerchantOverlay {
   }
 
   hide(): void {
+    // Listeners, tweens and the search field exist only while the overlay is open.
+    if (!this.isOpen()) return;
     this.root?.setVisible(false);
     this.blurSearch();
     this.confirming = null;
@@ -152,8 +154,9 @@ export class DawnMerchantOverlay {
   };
 
   private blurSearch(): void {
+    // The resize listener exists only while the search field is focused.
+    if (this.searchFocused) this.scene.scale.off(Phaser.Scale.Events.RESIZE, this.positionSearch);
     this.searchFocused = false;
-    this.scene.scale.off(Phaser.Scale.Events.RESIZE, this.positionSearch);
     if (this.searchInput) {
       this.searchInput.style.display = 'none';
       if (document.activeElement === this.searchInput) this.searchInput.blur();

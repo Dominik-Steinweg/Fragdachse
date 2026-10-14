@@ -234,7 +234,7 @@ describe('Client full snapshots at the Scene frame boundary', () => {
       vi.spyOn(bridge, 'computeSecondsLeft').mockReturnValue(10);
       const noop = () => {};
       const scene = Object.create(ArenaScene.prototype) as any;
-      scene.ctx = { centerHUD: { updateTimer: noop, hideTrainWidget: noop, updateTrainHP: noop, setTrainArrival: noop } };
+      scene.ctx = { centerHUD: { updateTimer: noop, hideTrainWidget: noop, updateTrainHP: noop, setTrainArrival: noop, setDawnClockVisible: noop } };
       scene.captureTheBeerPresentation = { syncClient: noop };
       scene.resolveArenaTimeOfDaySignals = () => ({});
       scene.arenaRuntime = {

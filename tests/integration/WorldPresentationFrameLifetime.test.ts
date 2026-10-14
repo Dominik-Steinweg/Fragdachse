@@ -193,6 +193,8 @@ function fakeBindingInput(
 describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalten (Phase 6A.2/6B)', () => {
   it('updates the lobby label from the local displayed pose and suppresses it outside participation', () => {
     const merchant = { update: vi.fn() };
+    // The pose is the first argument; the active menu and light map follow it.
+    const pose = () => merchant.update.mock.lastCall?.[0];
     const player = { active: true, x: 200, y: 300 };
     let attached = true;
     const binding = new WorldPresentationFrameBinding(fakeBindingInput(fakeScene(), {
@@ -201,24 +203,24 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
       isLocalPlayerAttachedToWorld: () => attached,
     }));
     binding.syncLocalPlayerPresentation(true, false);
-    expect(merchant.update).toHaveBeenLastCalledWith(player);
+    expect(pose()).toBe(player);
     player.x += 100;
     binding.syncLocalPlayerPresentation(true, false);
-    expect(merchant.update).toHaveBeenLastCalledWith(expect.objectContaining({ x: 300 }));
+    expect(pose()).toMatchObject({ x: 300 });
     for (const [showWorld, spectator] of [[false, false], [true, true]]) {
       binding.syncLocalPlayerPresentation(showWorld, spectator);
-      expect(merchant.update).toHaveBeenLastCalledWith(null);
+      expect(pose()).toBe(null);
     }
     attached = false;
     binding.syncLocalPlayerPresentation(true, false);
-    expect(merchant.update).toHaveBeenLastCalledWith(null);
+    expect(pose()).toBe(null);
     attached = true;
     player.active = false;
     binding.syncLocalPlayerPresentation(true, false);
-    expect(merchant.update).toHaveBeenLastCalledWith(null);
+    expect(pose()).toBe(null);
     player.active = true;
     binding.syncLocalPlayerPresentation(true, false);
-    expect(merchant.update).toHaveBeenLastCalledWith(player);
+    expect(pose()).toBe(player);
     binding.destroy();
     expect(merchant.update).toHaveBeenLastCalledWith(null);
     merchant.update.mockClear();
