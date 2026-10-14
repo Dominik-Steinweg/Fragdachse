@@ -12,7 +12,12 @@ import { getArenaMetricsProfile } from '../../src/config';
 import { resolveWorldMetrics, worldCellCenter } from '../../src/world/WorldMetrics';
 
 it('fast-forwards all Dawn clocks, expires objectives, closes unvisited sites and keeps future waves live', async () => {
-  const plans = composeDawnRoundPlans({ seed: 42, threat: 1, dayNumber: 1 });
+  // A round with a wreck, an extractor and a third site that nobody visits.
+  const plans = Array.from({ length: 128 }, (_, seed) => composeDawnRoundPlans({ seed, threat: 3, dayNumber: 1 }))
+    .find(candidate => {
+      const ids = resolveDawnSites(candidate.world).map(site => site.archetype.id);
+      return ids.includes('wreck') && ids.includes('extractor') && ids.length >= 3;
+    })!;
   const { mapConfig } = resolveDawnScenario(plans.world, plans.activity);
   const sites = resolveDawnSites(plans.world);
   const wreck = sites.find(site => site.archetype.id === 'wreck')!;
