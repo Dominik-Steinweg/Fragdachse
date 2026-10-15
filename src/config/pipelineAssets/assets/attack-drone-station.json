@@ -1,0 +1,36 @@
+{
+  "id": "attack-drone-station",
+  "category": "construction",
+  "gameIds": [
+    "attack_drone_station"
+  ],
+  "revision": "v2-attack-drone-b",
+  "variant": "standard",
+  "sourceSize": 128,
+  "textureKey": "construction_attack_drone_station",
+  "sheetTextureKey": "construction_attack_drone_station_walking",
+  "idlePath": "./assets/sprites/pipeline-v2/attack-drone-station/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/attack-drone-station/sheet.png",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 128,
+    "frameHeight": 128,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 132,
+    "height": 132
+  },
+  "idleFrame": 0,
+  "clips": [],
+  "hashes": {
+    "idle": "d3da0e2f7a632612f95330bd7cb6213fd583db0c97733cd5c5608cc333db516d",
+    "sheet": "3b26d10e9fa9c3e768b869f0a23a6f2c87d5be994d9e4663fd4b10ecc9f1b2f2"
+  }
+}

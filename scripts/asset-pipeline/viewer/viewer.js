@@ -3,7 +3,8 @@ const krakenClouds = { tuning: SUN_TUNING_DEFAULTS, timeSec: 0, strength: 0, sun
 import * as Phaser from 'phaser';
 import { createWebGLStartupContext } from '../../../src/utils/webglContext';
 import { getHeldItemAnchor, PLAYER_VISUAL_SIZE } from '../../../src/config';
-import runtime from '../../../src/config/pipelineAssets.json';
+// One registry entry per file (scripts/asset-pipeline/pipeline-registry.mjs).
+const runtime = { assets: Object.values(import.meta.glob('../../../src/config/pipelineAssets/assets/*.json', { eager: true, import: 'default' })) };
 import { categoryLabels, models, constructionsFor, resolveSource, samplePose, supportsHeldView, assetFromExport, advanceViewerPlayback, resolveSpine, spineGrowth, spineTransform, reviewDefaults, readReviewSettings, writeReviewSettings } from './library.mjs';
 
 import { addSubmersionFilter, krakenMaterialGrade } from '../../../src/effects/kraken/submersionShader';

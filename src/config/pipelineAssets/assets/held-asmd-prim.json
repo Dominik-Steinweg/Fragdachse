@@ -1,0 +1,51 @@
+{
+  "id": "held-asmd-prim",
+  "category": "weapon",
+  "gameIds": [
+    "ASMD_PRIM"
+  ],
+  "revision": "v2-aj",
+  "variant": "standard",
+  "sourceSize": 256,
+  "textureKey": "held_ASMD_PRIM",
+  "sheetTextureKey": "held_ASMD_PRIM_static",
+  "idlePath": "./assets/sprites/pipeline-v2/held-asmd-prim/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/held-asmd-prim/sheet.png",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 256,
+    "frameHeight": 256,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 260,
+    "height": 260
+  },
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      9.5
+    ],
+    "referenceGrip": [
+      4.5,
+      14.5
+    ]
+  },
+  "idleFrame": 0,
+  "clips": [],
+  "hashes": {
+    "idle": "ef6ee21df720ea35eb1d014e477e9db2e8d20a0b368397f80647145a1a6421d2",
+    "sheet": "8efc6c3b1d3d1d6f2d4c1bef6a814a4235e84fb41db8ffe0766f08855f094cca"
+  }
+}

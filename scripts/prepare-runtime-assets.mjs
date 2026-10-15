@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { realpathSync } from 'node:fs';
 import { publishColour, sha256 } from './lib/runtime-colours.mjs';
 import { prepareRuntimeAtlases } from './lib/runtime-atlases.mjs';
+import { readPipelineRegistry } from './asset-pipeline/pipeline-registry.mjs';
 
 // Explicit colour-only families. Never infer data semantics from size or alpha.
 const materials = ['rock_base', 'gras_bg_tile', 'ground_macro', 'gravel_material', 'gravel_material_alt',
@@ -17,7 +18,7 @@ export async function colourSources() {
   const published = JSON.parse(await readFile('src/assets/manifests/runtime-colours.json', 'utf8')).assets;
   // The boss residency loader verifies selected PNG bytes itself. Keep its complete
   // atlas publication, including color, independently of generic colour substitutions.
-  const boundImages = bossAtlasImages(JSON.parse(await readFile('src/config/pipelineAssets.json', 'utf8')).assets);
+  const boundImages = bossAtlasImages((await readPipelineRegistry()).assets);
   const root = 'public/assets/environment/woodland';
   const files = ['rock/mineral-colour.png', 'rock/mineral-colour-2x.png', 'canopy/albedo.png',
     'ecology/rock-colonies-atlas.png', 'ecology/ground-litter-atlas.png', 'ecology/lilies-atlas.png',

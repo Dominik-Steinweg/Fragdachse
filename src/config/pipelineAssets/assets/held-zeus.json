@@ -1,0 +1,47 @@
+{
+  "id": "held-zeus",
+  "category": "utility",
+  "gameIds": [
+    "ZEUS_TASER"
+  ],
+  "revision": "v2-ak",
+  "variant": "standard",
+  "sourceSize": 256,
+  "textureKey": "held_ZEUS_TASER",
+  "sheetTextureKey": "held_ZEUS_TASER_static",
+  "idlePath": "./assets/sprites/pipeline-v2/held-zeus/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/held-zeus/sheet.png",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 256,
+    "frameHeight": 256,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 260,
+    "height": 260
+  },
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      15
+    ]
+  },
+  "idleFrame": 0,
+  "clips": [],
+  "hashes": {
+    "idle": "ac4ca0ec7a83e0ac17bf71217bfa2970c4130f4b852bbbdc706941fa44cd7874",
+    "sheet": "329d98d18ae12ad1b55107de25dc3e826837728449f8355e9d0fe9d97a0f14b5"
+  }
+}

@@ -7,8 +7,9 @@ import { ENEMY_MESH_MANIFEST, EnemyMeshAssets, type EnemyMeshData } from '../../
 import { enemyMeshMatrix, enemyMeshPose, enemyShadowBounds, ENEMY_SHADOW_PAD } from '../../src/effects/EnemyMeshShadowModel';
 import { projectMeshPoint, extendMeshBounds } from '../../src/effects/CharacterMeshModel';
 import { registerEnemyMeshWarmup, subscribeEnemyMeshWarmup, prepareEnemyMeshWarmups } from '../../src/effects/EnemyMeshWarmup';
-import registry from '../../src/config/pipelineAssets.json';
+import { readPipelineRegistry } from '../../scripts/asset-pipeline/pipeline-registry.mjs';
 import { enemyPoses, validateEnemyMeshManifest, decodeEnemyMesh } from '../../scripts/asset-pipeline/enemy-mesh-contract.mjs';
+const registry = await readPipelineRegistry();
 const asset = ENEMY_MESH_MANIFEST.assets[0];
 const mesh: EnemyMeshData = { asset, positions: new Float32Array(), indices: new Uint16Array() };
 it('extends projected bounds exactly like the reference corners, including below-ground vertices and low sun', () => {

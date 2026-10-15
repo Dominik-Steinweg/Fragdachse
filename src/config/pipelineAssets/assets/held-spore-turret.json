@@ -1,0 +1,47 @@
+{
+  "id": "held-spore-turret",
+  "category": "utility",
+  "gameIds": [
+    "SPORE_TURRET"
+  ],
+  "revision": "v2-ak",
+  "variant": "standard",
+  "sourceSize": 256,
+  "textureKey": "held_SPORE_TURRET",
+  "sheetTextureKey": "held_SPORE_TURRET_static",
+  "idlePath": "./assets/sprites/pipeline-v2/held-spore-turret/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/held-spore-turret/sheet.png",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 256,
+    "frameHeight": 256,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 260,
+    "height": 260
+  },
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      18.4
+    ]
+  },
+  "idleFrame": 0,
+  "clips": [],
+  "hashes": {
+    "idle": "56f07cb31f4605b4f885e9d063350035c955e402e7e4841a671bcee193129f3e",
+    "sheet": "ad9c29db047170d81f53f5ff7090d50c08672741e1e080c2235088494354617a"
+  }
+}

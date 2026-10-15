@@ -7,6 +7,7 @@ import { verifySelectionV2 } from './export-v2.mjs';
 import { validateEyeAnchors } from './eye-anchors.mjs';
 import { isBossRuntime, verifyBossRuntime } from './runtime-contract-v2.mjs';
 import { validateClipContracts } from './contracts-v2.mjs';
+import { PIPELINE_REGISTRY_DIR, pipelineRegistryText, readPipelineRegistry, writePipelineRegistry } from './pipeline-registry.mjs';
 
 /** Explicit identities: both bodies belong to one enemy; parts need no enemy-registry mapping. */
 export const BOSS_TEXTURE_KEYS = Object.freeze({
@@ -45,7 +46,7 @@ export async function importRuntime({ revision, requestedIds = [], root = proces
       || requestedIds.some(id => !catalog.assets.some(entry => entry.id === id))) {
     throw new Error('Specify distinct catalog asset IDs for a partial import');
   }
-  const existingRuntime = await readJson(path.join(root, 'src/config/pipelineAssets.json'));
+  const existingRuntime = await readPipelineRegistry(root);
   const previous = requestedIds.length ? existingRuntime : null;
   if (previous && previous.version !== 2) {
     throw new Error('Partial import requires an existing V2 runtime package');
@@ -166,10 +167,12 @@ export async function importRuntime({ revision, requestedIds = [], root = proces
     await mkdir(path.dirname(target), { recursive: true });
     await copyFile(file, target);
   }
-  const manifestPath = path.join(destinationRoot, outputRoot ? 'pipelineAssets.json' : 'src/config/pipelineAssets.json');
-  // Isolated runs contain only the imported assets, so every referenced file is present.
+  const manifestPath = path.join(destinationRoot, outputRoot ? 'pipelineAssets.json' : PIPELINE_REGISTRY_DIR);
+  // Isolated runs contain only the imported assets, so every referenced file is present; they keep the
+  // single-document form. The live registry is stored as one file per asset.
   const published = outputRoot ? { version: 2, revision, assets } : manifest;
-  await writeFile(manifestPath, JSON.stringify(published, null, 2) + '\n');
+  if (outputRoot) await writeFile(manifestPath, pipelineRegistryText(published));
+  else await writePipelineRegistry(root, published);
   return { manifest: published, manifestPath, copiedFiles: copies.length };
 }
 

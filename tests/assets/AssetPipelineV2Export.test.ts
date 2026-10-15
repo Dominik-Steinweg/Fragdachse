@@ -13,6 +13,7 @@ import { requiredSockets, restSockets, validateSocketFrames } from '../../script
 import { KRAKEN_ASSET_REQUIREMENTS } from '../../src/config/krakenBoss';
 import { normalizePipelineAsset } from '../../src/config/pipelineAssetContracts';
 import { importRuntime, BOSS_TEXTURE_KEYS } from '../../scripts/asset-pipeline/import-runtime.mjs';
+import { readPipelineRegistry, writePipelineRegistry } from '../../scripts/asset-pipeline/pipeline-registry.mjs';
 
 const roots: string[] = [];
 const hash = (data: Buffer | string) => createHash('sha256').update(data).digest('hex');
@@ -86,7 +87,7 @@ describe('V2 animated asset export contracts', () => {
     await mkdir(path.join(f.root, 'src/config'), { recursive: true });
     await save(path.join(f.root, 'scripts/asset-pipeline/catalog-v2.json'), { assets: [m] });
     await save(path.join(f.root, 'src/config/coopDefenseEnemies.json'), { enemies: [] });
-    await save(path.join(f.root, 'src/config/pipelineAssets.json'), { version: 2, assets: [] });
+    await writePipelineRegistry(f.root, { version: 2, assets: [] });
     const result = await importRuntime({ root: f.root, revision: m.revision, requestedIds: [id], outputRoot: path.join(f.root, 'published') });
     expect(result.manifest.assets[0]).toMatchObject({ textureKey: id, sheetTextureKey: `${id}_sheet`, gameIds: [], clips: [{ name: 'idle' }] });
     expect(result.copiedFiles).toBe(2);
@@ -108,7 +109,7 @@ describe('V2 animated asset export contracts', () => {
     await mkdir(path.join(f.root, 'src/config'), { recursive: true });
     await save(path.join(f.root, 'scripts/asset-pipeline/catalog-v2.json'), { assets: [m] });
     await save(path.join(f.root, 'src/config/coopDefenseEnemies.json'), { enemies: [] });
-    await save(path.join(f.root, 'src/config/pipelineAssets.json'), { version: 2, assets: [] });
+    await writePipelineRegistry(f.root, { version: 2, assets: [] });
     const result = await importRuntime({ root: f.root, revision: m.revision, requestedIds: [id], outputRoot: path.join(f.root, 'published') });
     const imported = result.manifest.assets[0];
     expect(imported).toMatchObject({ category: 'enemy', textureKey: id, sheetTextureKey: `${id}_walking`, gameIds: [], clips: [{ name: 'idle' }, { name: 'move' }] });
@@ -268,7 +269,7 @@ describe('V2 animated asset export contracts', () => {
     await mkdir(path.join(f.root, 'src/config'), { recursive: true });
     await save(path.join(f.root, 'scripts/asset-pipeline/catalog-v2.json'), { assets: [{ ...entry, textureKey: 'fixture_boss' }] });
     await save(path.join(f.root, 'src/config/coopDefenseEnemies.json'), { enemies: [] });
-    await save(path.join(f.root, 'src/config/pipelineAssets.json'), { version: 2, revision: 'original', assets: [] });
+    await writePipelineRegistry(f.root, { version: 2, revision: 'original', assets: [] });
     const outputRoot = path.join(f.root, 'isolated-import');
     const imported = await importRuntime({ root: f.root, revision: m.revision, requestedIds: [m.id], outputRoot });
     const publishedAsset = normalizePipelineAsset(imported.manifest.assets[0]);
@@ -281,10 +282,10 @@ describe('V2 animated asset export contracts', () => {
     const fileCount = Object.values(runtime.atlases).flatMap((pass: any) => Object.values(pass).flatMap((clip: any) => clip.pages)).length * 2;
     expect(imported.copiedFiles).toBe(fileCount);
     await expect(readFile(path.join(outputRoot, 'public/assets/sprites/pipeline-v2/fixture/idle.png'))).rejects.toThrow();
-    expect(JSON.parse(await readFile(path.join(f.root, 'src/config/pipelineAssets.json'), 'utf8')).assets).toEqual([]);
+    expect((await readPipelineRegistry(f.root)).assets).toEqual([]);
     await verifyBossRuntime(entry, publishedAsset, name => readFile(path.join(outputRoot, 'public', name)));
     // Collision detection happens before writing destination files.
-    await save(path.join(f.root, 'src/config/pipelineAssets.json'), { version: 2, assets: [{ id: 'other', textureKey: 'fixture_boss' }] });
+    await writePipelineRegistry(f.root, { version: 2, assets: [{ id: 'other', textureKey: 'fixture_boss' }] });
     await expect(importRuntime({ root: f.root, revision: m.revision, requestedIds: [m.id], outputRoot: path.join(f.root, 'collision') })).rejects.toThrow(/Duplicate runtime texture/);
     await expect(readFile(path.join(f.root, 'collision/pipelineAssets.json'))).rejects.toThrow();
     await save(path.join(f.asset, 'selection.json'), { ...selected, socketFrames: socketFrames.slice(1) });

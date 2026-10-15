@@ -1,0 +1,495 @@
+{
+  "id": "abyssal-kraken-spine",
+  "category": "boss-part",
+  "gameIds": [],
+  "revision": "kraken-v14",
+  "variant": "standard",
+  "sourceSize": 64,
+  "textureKey": "kraken_spine",
+  "runtimeContract": "boss",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [
+    {
+      "name": "idle",
+      "frames": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "frameRate": 8,
+      "loop": true,
+      "end": "rest"
+    }
+  ],
+  "targetSize": 64,
+  "runtimeBudgetMB": 2,
+  "sockets": {
+    "base": [
+      0.5,
+      0.4375
+    ],
+    "tip": [
+      0.5,
+      0.86249998
+    ]
+  },
+  "socketFrames": [
+    {
+      "base": {
+        "x": 0.5,
+        "y": 0.4375,
+        "z": 0.02
+      },
+      "tip": {
+        "x": 0.5,
+        "y": 0.86249998,
+        "z": 0.47999999
+      }
+    },
+    {
+      "base": {
+        "x": 0.5,
+        "y": 0.4375,
+        "z": 0.02
+      },
+      "tip": {
+        "x": 0.5,
+        "y": 0.86249998,
+        "z": 0.47999999
+      }
+    },
+    {
+      "base": {
+        "x": 0.5,
+        "y": 0.4375,
+        "z": 0.02
+      },
+      "tip": {
+        "x": 0.5,
+        "y": 0.86249998,
+        "z": 0.47999999
+      }
+    },
+    {
+      "base": {
+        "x": 0.5,
+        "y": 0.4375,
+        "z": 0.02
+      },
+      "tip": {
+        "x": 0.5,
+        "y": 0.86249998,
+        "z": 0.47999999
+      }
+    },
+    {
+      "base": {
+        "x": 0.5,
+        "y": 0.4375,
+        "z": 0.02
+      },
+      "tip": {
+        "x": 0.5,
+        "y": 0.86249998,
+        "z": 0.47999999
+      }
+    }
+  ],
+  "elevation": {
+    "min": -0.3,
+    "max": 0.7,
+    "scale": 0.5
+  },
+  "elevationPass": {
+    "encoding": "linear-unorm8-z-oct-normal-v1",
+    "min": -0.3,
+    "max": 0.7,
+    "scale": 0.5,
+    "waterline": 0,
+    "alpha": "beauty-coverage",
+    "colorSpace": "non-color",
+    "premultiplied": false
+  },
+  "atlases": {
+    "color": {
+      "__rest": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/atlas/64/color-__rest-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/atlas/64/color-__rest-0.json",
+            "width": 32,
+            "height": 42,
+            "frameNames": [
+              "__rest/0000"
+            ],
+            "gpuBytesRGBA8": 5376,
+            "sha256": "00bf8525d738422b54c8448942f1e1eb229932bc8b9ac6471d90b1998747840e",
+            "jsonSha256": "b93e85b6a62539725e305da8db68c0c172032b4057ae478236fba6ae5ee5a5e5"
+          }
+        ],
+        "frameNames": [
+          "__rest/0000"
+        ],
+        "sourceFrames": [
+          0
+        ],
+        "sourceSize": 64,
+        "logicalSourceSize": 64,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "idle": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/atlas/64/color-idle-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/atlas/64/color-idle-0.json",
+            "width": 128,
+            "height": 42,
+            "frameNames": [
+              "idle/0000",
+              "idle/0001",
+              "idle/0002",
+              "idle/0003"
+            ],
+            "gpuBytesRGBA8": 21504,
+            "sha256": "a1f9e48c6eeffebc27bd43df44c6abce357f760a7634dedc01c1f80a1d5b0a31",
+            "jsonSha256": "fa626247d23c066dfa9310aaa3886996468a0dc0c55cea7640b3cf17cd947bb3"
+          }
+        ],
+        "frameNames": [
+          "idle/0000",
+          "idle/0001",
+          "idle/0002",
+          "idle/0003"
+        ],
+        "sourceFrames": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "sourceSize": 64,
+        "logicalSourceSize": 64,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      }
+    },
+    "elevation": {
+      "__rest": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/atlas/64/elevation-__rest-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/atlas/64/elevation-__rest-0.json",
+            "width": 20,
+            "height": 25,
+            "frameNames": [
+              "__rest/0000"
+            ],
+            "gpuBytesRGBA8": 2000,
+            "sha256": "9187c9493b3a5feb449618da29d76900a6818017d28098294202d030d5be7d84",
+            "jsonSha256": "f9380645448c8d79254a15431ac43e5dfacedc4958ea880c7e9c635ff0725d12"
+          }
+        ],
+        "frameNames": [
+          "__rest/0000"
+        ],
+        "sourceFrames": [
+          0
+        ],
+        "sourceSize": 32,
+        "logicalSourceSize": 64,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "idle": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/atlas/64/elevation-idle-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/atlas/64/elevation-idle-0.json",
+            "width": 80,
+            "height": 25,
+            "frameNames": [
+              "idle/0000",
+              "idle/0001",
+              "idle/0002",
+              "idle/0003"
+            ],
+            "gpuBytesRGBA8": 8000,
+            "sha256": "cc61e61b7d63d280bea671d770900b313cbe39e0c4c94d086e0e1c1b789caaad",
+            "jsonSha256": "e39563f68351cdf8865aebfdf7b3a09394eaf66a45c2df19390227122c2421b8"
+          }
+        ],
+        "frameNames": [
+          "idle/0000",
+          "idle/0001",
+          "idle/0002",
+          "idle/0003"
+        ],
+        "sourceFrames": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "sourceSize": 32,
+        "logicalSourceSize": 64,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      }
+    },
+    "emission": {
+      "__rest": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/atlas/64/emission-__rest-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/atlas/64/emission-__rest-0.json",
+            "width": 5,
+            "height": 5,
+            "frameNames": [
+              "__rest/0000"
+            ],
+            "gpuBytesRGBA8": 100,
+            "sha256": "6a707c85c8c9ccf1ec6d4cef85ff4f32e4698d102c28e768078313328f8346ba",
+            "jsonSha256": "aaefd5906b7362de0caa7b577ce3812338641b8ca78a9fcdaadebe453341243e"
+          }
+        ],
+        "frameNames": [
+          "__rest/0000"
+        ],
+        "sourceFrames": [
+          0
+        ],
+        "sourceSize": 64,
+        "logicalSourceSize": 64,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "idle": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/atlas/64/emission-idle-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/atlas/64/emission-idle-0.json",
+            "width": 20,
+            "height": 5,
+            "frameNames": [
+              "idle/0000",
+              "idle/0001",
+              "idle/0002",
+              "idle/0003"
+            ],
+            "gpuBytesRGBA8": 400,
+            "sha256": "79746e501d042c32044199f14b48b9ab6ef1275332195c1a6838bb77589cd6d7",
+            "jsonSha256": "a7bb5b27a76e6f5ed1fe767ae5c3f23a2e52f43ac72a55f209a1ce62787267c4"
+          }
+        ],
+        "frameNames": [
+          "idle/0000",
+          "idle/0001",
+          "idle/0002",
+          "idle/0003"
+        ],
+        "sourceFrames": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "sourceSize": 64,
+        "logicalSourceSize": 64,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      }
+    }
+  },
+  "budget": {
+    "clips": {
+      "__rest": {
+        "color": 5376,
+        "elevation": 2000,
+        "emission": 100,
+        "total": 7476
+      },
+      "idle": {
+        "color": 21504,
+        "elevation": 8000,
+        "emission": 400,
+        "total": 29904
+      }
+    },
+    "totals": {
+      "color": 26880,
+      "elevation": 10000,
+      "emission": 500,
+      "total": 37380
+    }
+  },
+  "materialPass": {
+    "version": 1,
+    "color": "srgb-albedo-baked-cavity-v1",
+    "normal": "linear-unorm8-z-oct-normal-v1",
+    "emission": "linear-rgb-unorm8-scaled-v1",
+    "worldPxPerBU": 40,
+    "emissionRange": 8,
+    "exposure": 1.155975341796875,
+    "tint": [
+      1.003448486328125,
+      1,
+      1
+    ],
+    "saturation": 0.783416748046875
+  },
+  "shadowMesh": {
+    "version": 1,
+    "encoding": "u16-world-xyz-per-pose-v1",
+    "frames": [
+      {
+        "vertexCount": 828,
+        "triangleCount": 1648,
+        "bounds": {
+          "min": [
+            -11.32841944694519,
+            -9.200000166893005,
+            -4.1313424706459045
+          ],
+          "max": [
+            11.32841944694519,
+            23.2017183303833,
+            19.78718638420105
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/material/masters/frame-0000-positions.bin",
+          "sha256": "f4472936fe9e9de314cb1747a3d87023b834e68b86a840de2734f621e318311c",
+          "bytes": 4968
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/material/masters/frame-0000-indices.bin",
+          "sha256": "2fadca430579e25cf3dcaaaac01bf7da435409d54c14693c43166d49007647ad",
+          "bytes": 9888
+        }
+      },
+      {
+        "vertexCount": 828,
+        "triangleCount": 1648,
+        "bounds": {
+          "min": [
+            -11.32841944694519,
+            -9.200000166893005,
+            -4.1313424706459045
+          ],
+          "max": [
+            11.32841944694519,
+            23.2017183303833,
+            19.78718638420105
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/material/masters/frame-0001-positions.bin",
+          "sha256": "f4472936fe9e9de314cb1747a3d87023b834e68b86a840de2734f621e318311c",
+          "bytes": 4968
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/material/masters/frame-0001-indices.bin",
+          "sha256": "2fadca430579e25cf3dcaaaac01bf7da435409d54c14693c43166d49007647ad",
+          "bytes": 9888
+        }
+      },
+      {
+        "vertexCount": 828,
+        "triangleCount": 1648,
+        "bounds": {
+          "min": [
+            -11.288354396820068,
+            -9.404079914093018,
+            -4.414989650249481
+          ],
+          "max": [
+            11.35828971862793,
+            24.245576858520508,
+            18.495815992355347
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/material/masters/frame-0002-positions.bin",
+          "sha256": "a335013d0e421c045929e783b56dcc140812727148d4e94beb56598709699b4b",
+          "bytes": 4968
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/material/masters/frame-0002-indices.bin",
+          "sha256": "2fadca430579e25cf3dcaaaac01bf7da435409d54c14693c43166d49007647ad",
+          "bytes": 9888
+        }
+      },
+      {
+        "vertexCount": 828,
+        "triangleCount": 1648,
+        "bounds": {
+          "min": [
+            -11.32841944694519,
+            -9.200000166893005,
+            -4.1313424706459045
+          ],
+          "max": [
+            11.32841944694519,
+            23.2017183303833,
+            19.78718638420105
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/material/masters/frame-0003-positions.bin",
+          "sha256": "f4472936fe9e9de314cb1747a3d87023b834e68b86a840de2734f621e318311c",
+          "bytes": 4968
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/material/masters/frame-0003-indices.bin",
+          "sha256": "2fadca430579e25cf3dcaaaac01bf7da435409d54c14693c43166d49007647ad",
+          "bytes": 9888
+        }
+      },
+      {
+        "vertexCount": 828,
+        "triangleCount": 1648,
+        "bounds": {
+          "min": [
+            -11.36620283126831,
+            -9.140357971191406,
+            -3.8299477100372314
+          ],
+          "max": [
+            11.280441284179688,
+            22.042927742004395,
+            21.09172821044922
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/material/masters/frame-0004-positions.bin",
+          "sha256": "323a80d8c349c74c3d527ce3b4c2d4dd2c09412fa1300b96cf5a5d22c0a39833",
+          "bytes": 4968
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-spine/material/masters/frame-0004-indices.bin",
+          "sha256": "2fadca430579e25cf3dcaaaac01bf7da435409d54c14693c43166d49007647ad",
+          "bytes": 9888
+        }
+      }
+    ]
+  }
+}

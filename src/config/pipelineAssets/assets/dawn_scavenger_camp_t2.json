@@ -1,0 +1,36 @@
+{
+  "id": "dawn_scavenger_camp_t2",
+  "category": "construction",
+  "gameIds": [],
+  "revision": "dawn-m3c-p02",
+  "variant": "standard",
+  "sourceSize": 128,
+  "textureKey": "dawn_scavenger_camp_t2",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "displayScale": 1.0625,
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "dawn_scavenger_camp_t2_sheet",
+  "idlePath": "./assets/sprites/pipeline-v2/dawn_scavenger_camp_t2/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/dawn_scavenger_camp_t2/sheet.png",
+  "layout": {
+    "frameWidth": 128,
+    "frameHeight": 128,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 132,
+    "height": 132
+  },
+  "hashes": {
+    "idle": "e5b1b26eadb74d58f9fc57a8eab05309ace10013c2c7b44b1593ebfa2c1ac4d2",
+    "sheet": "1f3a06699a799b8b58be62abd1e54532b71aa7ebb0b88d3f6f23bf7a8e65d56c"
+  }
+}

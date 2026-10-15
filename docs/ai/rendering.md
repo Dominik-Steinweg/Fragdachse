@@ -202,7 +202,8 @@ Komposition liegt ueber Bodenbewuchs und unter Figuren sowie deren gemeinsamem N
 Basen/Hindernisse aus und reduziert die Wasserantwort; PMA-Multiply erhaelt Ziel-Alpha.
 Low verwendet die Spielerellipse; die gebackenen D-Masken werden nicht geladen.
 
-Die versionierte [Runtime-Assetauswahl](../../src/config/pipelineAssets.json) und ihre PNGs unter
+Die versionierte [Runtime-Assetauswahl](../../src/config/pipelineAssets/assets/) (ein Eintrag je Datei,
+Zugriff in Skripten nur über `scripts/asset-pipeline/pipeline-registry.mjs`) und ihre PNGs unter
 `public/assets/sprites/pipeline-v2/` sind unabhängig von lokalen Blender-Quellen. Statische Bilder
 und animierte Sheets besitzen getrennte Texturschlüssel. Sheet-Geometrie und explizite Clipframes
 stammen aus der Auswahl; der Ruheframe ist kein Teil des Bewegungsloops. Anzeigegrößen werden

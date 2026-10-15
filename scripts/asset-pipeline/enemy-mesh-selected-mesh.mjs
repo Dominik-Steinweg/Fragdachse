@@ -9,6 +9,7 @@ import {verifySelectionV2} from './export-v2.mjs';
 import {enemyCoordinates,enemyPoses,validateEnemyMeshManifest,decodeEnemyMesh,ENEMY_MESH_VIEWS,relativeMember} from './enemy-mesh-contract.mjs';
 import {project,extents,raster,compare} from './enemy-mesh-raster.mjs';
 import {rgba,inspectPasses} from './pass-quality.mjs';
+import {readPipelineRegistry} from './pipeline-registry.mjs';
 
 const repo=path.resolve(process.cwd());
 const read=async p=>JSON.parse(await readFile(p,'utf8'));
@@ -114,7 +115,7 @@ if(mode==='prepare'){
   const receipt=await read(path.join(root,'archive-receipt.json'));
   if(m.status!=='reviewed-not-imported'||!receipt.verified||await fileHash(path.join(root,relativeMember(receipt.file)))!==receipt.sha256)throw Error('Verified archive required');
   for(const [file,entry] of Object.entries(receipt.files))if(await fileHash(path.join(root,relativeMember(file)))!==entry.sha256)throw Error('Changed archive input '+file);
-  const registry=await read(path.join(repo,'src/config/pipelineAssets.json')),live=registry.assets.find(a=>a.id===id);
+  const registry=await readPipelineRegistry(repo),live=registry.assets.find(a=>a.id===id);
   if(live?.revision!==m.sourceRevision||live.layout.frameCount!==m.poses.length)throw Error('Live selection mismatch');
   const folder=`assets/sprites/pipeline-v2/${id}/mesh/${revision}`,mesh={...m.mesh},images={},copies=[];
   delete mesh.audit;

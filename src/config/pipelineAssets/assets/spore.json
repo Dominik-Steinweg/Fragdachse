@@ -1,0 +1,54 @@
+{
+  "id": "spore",
+  "category": "turret",
+  "gameIds": [
+    "SPORES",
+    "BASE_SPORES",
+    "TURRET_SPORES"
+  ],
+  "revision": "towers-r03",
+  "variant": "standard",
+  "sourceSize": 128,
+  "textureKey": "turret_weapon_spore",
+  "sheetTextureKey": "turret_weapon_spore_animated",
+  "idlePath": "./assets/sprites/pipeline-v2/spore/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/spore/sheet.png",
+  "forward": "east",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 128,
+    "frameHeight": 128,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 2,
+    "frameCount": 9,
+    "width": 1056,
+    "height": 264
+  },
+  "idleFrame": 0,
+  "clips": [
+    {
+      "name": "fire",
+      "frames": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "frameRate": 24,
+      "loop": false
+    }
+  ],
+  "hashes": {
+    "idle": "0fb1c83e3be229c123b96594d5bdd7c68c13eb8646e5b22ef76baaed8b29534e",
+    "sheet": "c61ef25b3843eb7b07db913ff61d7b2ff14323eb198372a93811bf504a2738c8"
+  }
+}

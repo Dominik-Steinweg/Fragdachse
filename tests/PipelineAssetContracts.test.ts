@@ -36,6 +36,13 @@ it('normalizes the existing sheet manifest and distinguishes boss atlases withou
   expect(() => normalizePipelineAsset({ ...bossAsset(), sheetPath: './assets/redundant.png' })).toThrow();
 });
 
+it('loads exactly the per-asset registry files the pipeline scripts read and write', async () => {
+  const { readPipelineRegistry } = await import('../scripts/asset-pipeline/pipeline-registry.mjs');
+  const registry = await readPipelineRegistry();
+  expect(registry.version).toBe(2);
+  expect(PIPELINE_RUNTIME_ASSETS.map(a => a.id)).toEqual(registry.assets.map((a: { id: string }) => a.id));
+});
+
 it('binds each kraken role to required clips, semantic markers and full-canvas sockets', () => {
   const assets = (Object.keys(KRAKEN_ASSET_REQUIREMENTS) as (keyof typeof KRAKEN_ASSET_REQUIREMENTS)[]).map(role => {
     const required = KRAKEN_ASSET_REQUIREMENTS[role];

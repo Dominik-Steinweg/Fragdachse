@@ -10,6 +10,7 @@ import { reviewMeshShadow } from './review-mesh-shadow.mjs';
 import { selectedHeldSources } from './mesh-shadow-sources.mjs';
 import { writeRepairedProduction } from './mesh-shadow-repair.mjs';
 import { mirrorWeaponDiagnostics } from './mesh-shadow-batch.mjs';
+import { pipelineRegistrySnapshot } from './pipeline-registry.mjs';
 
 const repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const {values}=parseArgs({options:{
@@ -92,7 +93,7 @@ if(values['review-only']) {
   for(const name of tools)await stage('source-tools/'+name,path.join(repo,'scripts/asset-pipeline',name));
   await stage('source-package.json',path.join(repo,'package.json'));
   await stage('source-package-lock.json',path.join(repo,'package-lock.json'));
-  if(values.production){await stage('source-held-registry.json',path.join(repo,'src/config/pipelineAssets.json'));await stage('source-catalog.json',path.join(repo,'scripts/asset-pipeline/catalog-v2.json'));}
+  if(values.production){await stage('source-held-registry.json',await pipelineRegistrySnapshot(repo));await stage('source-catalog.json',path.join(repo,'scripts/asset-pipeline/catalog-v2.json'));}
   const job={revision:values.revision,production:values.production,outputRoot,coordinates:MESH_COORDINATES,poses,sourceFiles,beauties,references,
     body:{render:body.render},weapon,weapons};
   if(values.plan) {

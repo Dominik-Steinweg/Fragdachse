@@ -4,6 +4,7 @@ import { mkdir, writeFile, readFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { runKrakenV13 } from './kraken-v13.mjs';
 import { runKrakenDraftLive } from './kraken-draft-live.mjs';
+import { readPipelineRegistry } from '../asset-pipeline/pipeline-registry.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, '').split('=')));
 const origin = args.origin ?? 'http://127.0.0.1:8090';
@@ -19,7 +20,7 @@ await page.routeWebSocket(url => url.host === new URL(origin).host && url.search
 page.setDefaultTimeout(180000);
 const report = { mode: args.mode ?? 'probe', revision: args.run ?? (args.mode === 'v13' ? 'kraken-v13' : 'kraken-v12'), quality: args.quality ?? 'high',
   sun: {azimuth:135,elevation:Number(args.elevation??28)}, errors: [], diagnostics: [], samples: [], captures: [], phasePeaks: {}, phaseResidentPeaks:{}, phaseAtlasPeaks:{} };
-report.selection = JSON.parse(await readFile('src/config/pipelineAssets.json','utf8')).assets.filter(a=>a.id.startsWith('abyssal-kraken'))
+report.selection = (await readPipelineRegistry()).assets.filter(a=>a.id.startsWith('abyssal-kraken'))
   .map(a=>({id:a.id,revision:a.revision,sourceSize:a.sourceSize,material:a.materialPass}));
 report.bossRequests=[];
 report.draftRequests=[];

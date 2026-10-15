@@ -1,0 +1,35 @@
+{
+  "id": "construction_dawn_lobby_yard",
+  "category": "construction",
+  "gameIds": [],
+  "revision": "u4-lobby-v3",
+  "variant": "standard",
+  "sourceSize": 256,
+  "textureKey": "construction_dawn_lobby_yard",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "construction_dawn_lobby_yard_sheet",
+  "idlePath": "./assets/sprites/pipeline-v2/construction_dawn_lobby_yard/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/construction_dawn_lobby_yard/sheet.png",
+  "layout": {
+    "frameWidth": 256,
+    "frameHeight": 256,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 260,
+    "height": 260
+  },
+  "hashes": {
+    "idle": "f13ee4c867c586391052c4085e85c21641ff715fbf32ed5914445b95e67fcd82",
+    "sheet": "0808248620d4d2d7a9b0a124741efe6b5b48a0742e36bea0bdd2ff9459658337"
+  }
+}

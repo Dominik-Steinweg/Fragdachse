@@ -574,8 +574,9 @@ lässt PNGs und abgeschlossene Archive unverändert. Beim erneuten Import bleibe
 migrierten Anker nur für dieselbe Revision, Variante und identische Quellen erhalten.
 
 `node scripts/asset-pipeline/import-runtime.mjs v2-g` übernimmt die ausgewählten Ruhebilder und
-Sheets unverändert nach `public/assets/sprites/pipeline-v2/` und erzeugt die versionierte
-`src/config/pipelineAssets.json`. Der Import prüft die Dateien gegen die SHA-256-Werte der
+Sheets unverändert nach `public/assets/sprites/pipeline-v2/` und schreibt das versionierte
+Runtime-Register `src/config/pipelineAssets/` (`registry.json` mit Paketversion und -revision,
+`assets/<id>.json` je Eintrag; Lesen und Schreiben nur über `pipeline-registry.mjs`). Der Import prüft die Dateien gegen die SHA-256-Werte der
 jeweiligen `selection.json`. Er rendert nichts und verändert keine Produktionsquelle.
 Für einen gezielten Austausch `node scripts/asset-pipeline/import-runtime.mjs v2-h badger`
 verwenden; weitere Asset-IDs können folgen. Ein Einzelimport erhält die übrigen Runtime-Einträge

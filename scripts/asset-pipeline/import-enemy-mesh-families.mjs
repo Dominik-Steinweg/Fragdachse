@@ -5,12 +5,12 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import sharp from 'sharp';
 import { validateEnemyMeshManifest, relativeMember } from './enemy-mesh-contract.mjs';
+import { readPipelineRegistry, writePipelineRegistry } from './pipeline-registry.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 export async function importEnemyMeshes(root, apply = false) {
   const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-  const registryPath = path.join(repo, 'src/config/pipelineAssets.json');
-  const registry = JSON.parse(await readFile(registryPath));
+  const registry = await readPipelineRegistry(repo);
   const receipt = JSON.parse(await readFile(path.join(root, 'archive-receipt.json')));
   if (!receipt.verified || hash(await readFile(path.join(root, relativeMember(receipt.file)))) !== receipt.sha256)
     throw Error('Enemy archive hash mismatch');
@@ -74,7 +74,7 @@ export async function importEnemyMeshes(root, apply = false) {
     for (const c of copies) { const target = path.join(repo, 'public', c.file); await mkdir(path.dirname(target), { recursive: true }); await writeFile(target, c.bytes); }
     await writeFile(path.join(repo, 'src/assets/manifests/enemy-mesh-families.json'), JSON.stringify(manifest, null, 2) + '\n');
     await writeFile(active,text.replace("'./manifests/enemy-mesh-pilot.json'","'./manifests/enemy-mesh-families.json'"));
-    await writeFile(registryPath, JSON.stringify(registry, null, 2) + '\n');
+    await writePipelineRegistry(repo, registry);
     for (const c of copies) if (hash(await readFile(path.join(repo, 'public', c.file))) !== hash(c.bytes)) throw Error('Import readback failed');
   }
   return { applied: apply, revision: manifest.revision, files: copies.length, bytes: copies.reduce((n, c) => n + c.bytes.length, 0) };

@@ -6,6 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { metric } from './metrics.mjs';
 import { compareImages } from '../visual/compare.mjs';
+import { PIPELINE_REGISTRY_DIR, pipelineRegistryText, readPipelineRegistry } from '../asset-pipeline/pipeline-registry.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, '').split('=')));
 const origin = args.origin ?? 'http://127.0.0.1:8090';
@@ -21,8 +22,9 @@ const repeats=Number(args.runs??1);
 if(!Number.isInteger(repeats)||repeats<1)throw Error('runs must be a positive integer');
 const config = JSON.parse(await readFile('src/config/krakenBoss.json', 'utf8'));
 const hashes = {};
-for (const file of ['src/config/coopDefenseMaps/20-abgrundteich.json','src/config/krakenBoss.json','src/config/pipelineAssets.json'])
+for (const file of ['src/config/coopDefenseMaps/20-abgrundteich.json','src/config/krakenBoss.json'])
   hashes[file] = createHash('sha256').update(await readFile(file)).digest('hex');
+hashes[PIPELINE_REGISTRY_DIR] = createHash('sha256').update(pipelineRegistryText(await readPipelineRegistry())).digest('hex');
 const report = { version: 5, seed: 12345, hashes, origin, viewport: { width: 1920, height: 1080 }, runs: [],
   environment: { platform:os.platform(), release:os.release(), cpu:os.cpus()[0]?.model, logicalCpus:os.cpus().length, memoryGiB:os.totalmem()/2**30 },
   scope: 'Fixed 60 Hz host steps. CPU: whole game callback, excluding recorder bookkeeping; GPU: asynchronous elapsed query over all callback submissions, including submission gaps (not pure GPU busy time). RAF intervals omit command pauses. Heap increases/drops are proxies, not allocation or GC pause measurements; --profile records sampled allocations and GC traces separately. Diagnostic map copies Map 20, bypasses its opening-wave boss gate and uses the existing unarmed diagnostic outpost.' };

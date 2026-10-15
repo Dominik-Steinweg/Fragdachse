@@ -1,0 +1,51 @@
+{
+  "id": "held-plasma",
+  "category": "weapon",
+  "gameIds": [
+    "PLASMA"
+  ],
+  "revision": "v2-aj",
+  "variant": "standard",
+  "sourceSize": 256,
+  "textureKey": "held_PLASMA",
+  "sheetTextureKey": "held_PLASMA_static",
+  "idlePath": "./assets/sprites/pipeline-v2/held-plasma/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/held-plasma/sheet.png",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 256,
+    "frameHeight": 256,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 260,
+    "height": 260
+  },
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      12.5
+    ],
+    "referenceGrip": [
+      3.5,
+      11.5
+    ]
+  },
+  "idleFrame": 0,
+  "clips": [],
+  "hashes": {
+    "idle": "b0609bab7bf805d5f40b78c96ca76c3c9e1d0541fc8a8fc7ccb39506a135867f",
+    "sheet": "832e1e5435496cee36f199159fdd065d7045501e31b5dcef0c80bd4b3df171f0"
+  }
+}

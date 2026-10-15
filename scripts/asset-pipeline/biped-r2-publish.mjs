@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import sharp from 'sharp';
+import {readPipelineRegistry,writePipelineRegistry} from './pipeline-registry.mjs';
 const root=path.resolve(process.argv[2]),apply=process.argv.includes('--apply');
 if(!/^D:\\Fragdachse-render\\player-r2-\d+\\badger$/i.test(root))throw Error('Expected isolated badger revision');
 const json=async file=>JSON.parse(await fs.readFile(file,'utf8')),hash=b=>createHash('sha256').update(b).digest('hex');
@@ -19,7 +20,7 @@ if(receipt.sourceBlendSha256!==g.repairedBlendSha256){
  if(proof.beforeBlendSha256!==receipt.sourceBlendSha256||proof.afterBlendSha256!==g.repairedBlendSha256||proof.receiptSha256!==await fileHash(path.join(root,'renders/receipt.json')))throw Error('Invalid render inheritance');
 }
 if(await fileHash(path.join(root,'source.blend'))!==g.repairedBlendSha256)throw Error('Source Blend changed');
-const registry=await json('src/config/pipelineAssets.json'),live=registry.assets.find(a=>a.id==='badger');
+const registry=await readPipelineRegistry(),live=registry.assets.find(a=>a.id==='badger');
 const oldMeshPath='src/assets/manifests/character-mesh-badger-player-mesh-22-production-r3.json',oldMatPath='src/assets/manifests/character-material-badger-player-material-21e4.json';
 if(!apply){
  const oldMesh=await json(oldMeshPath),oldMaterial=await json(oldMatPath),folder=`assets/sprites/pipeline-v2/badger/mesh/${revision}`,materialFolder=`assets/sprites/pipeline-v2/badger/passes/${materialRevision}`;
@@ -76,7 +77,7 @@ if(!apply){
  for(const file of [meshPath,materialPath])if(await fs.access(file).then(()=>true,()=>false))throw Error('Immutable destination exists');
  for(const c of copies){await fs.mkdir(path.dirname(c.file),{recursive:true});await fs.writeFile(c.file,c.bytes);if(await fileHash(c.file)!==hash(c.bytes))throw Error('Publication readback mismatch');}
  await fs.writeFile(meshPath,JSON.stringify(p.meshManifest,null,2)+'\n',{flag:'wx'});await fs.writeFile(materialPath,JSON.stringify(p.materialManifest,null,2)+'\n',{flag:'wx'});
- live.hashes=p.registry.hashes;live.revision=revision;await fs.writeFile('src/config/pipelineAssets.json',JSON.stringify(registry,null,2)+'\n');
+ live.hashes=p.registry.hashes;live.revision=revision;await writePipelineRegistry(process.cwd(),registry);
  for(const [file,oldName,newName]of [['src/assets/CharacterMeshAssets.ts',path.basename(oldMeshPath),path.basename(meshPath)],['src/assets/CharacterMaterialAssetManifest.ts',path.basename(oldMatPath),path.basename(materialPath)]]){
   const text=await fs.readFile(file,'utf8');if(!text.includes(oldName))throw Error('Active manifest changed');await fs.writeFile(file,text.replace(oldName,newName));
  }

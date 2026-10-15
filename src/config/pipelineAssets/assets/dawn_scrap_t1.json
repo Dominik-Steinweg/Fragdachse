@@ -1,0 +1,35 @@
+{
+  "id": "dawn_scrap_t1",
+  "category": "powerup",
+  "gameIds": [],
+  "revision": "dawn-v1-p01",
+  "variant": "standard",
+  "sourceSize": 48,
+  "textureKey": "dawn_scrap_t1",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "dawn_scrap_t1_sheet",
+  "idlePath": "./assets/sprites/pipeline-v2/dawn_scrap_t1/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/dawn_scrap_t1/sheet.png",
+  "layout": {
+    "frameWidth": 48,
+    "frameHeight": 48,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 52,
+    "height": 52
+  },
+  "hashes": {
+    "idle": "575d3458b758d89976e99aa4c0427387792958a474e125b104945991aaf22759",
+    "sheet": "2c73be99b787a44cacb345e8ad91c71d2265b9eedd3c6f13436e7543d25b98e7"
+  }
+}

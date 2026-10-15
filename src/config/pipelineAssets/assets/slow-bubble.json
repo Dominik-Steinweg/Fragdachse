@@ -1,0 +1,52 @@
+{
+  "id": "slow-bubble",
+  "category": "turret",
+  "gameIds": [
+    "TURRET_SLOW_BUBBLE"
+  ],
+  "revision": "towers-r03",
+  "variant": "standard",
+  "sourceSize": 160,
+  "textureKey": "turret_weapon_slow_bubble",
+  "sheetTextureKey": "turret_weapon_slow_bubble_animated",
+  "idlePath": "./assets/sprites/pipeline-v2/slow-bubble/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/slow-bubble/sheet.png",
+  "forward": "east",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 160,
+    "frameHeight": 160,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 2,
+    "frameCount": 9,
+    "width": 1312,
+    "height": 328
+  },
+  "idleFrame": 0,
+  "clips": [
+    {
+      "name": "fire",
+      "frames": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "frameRate": 24,
+      "loop": false
+    }
+  ],
+  "hashes": {
+    "idle": "848418f9e7152170e0b641ce7f4b9f6fd702bd55331707c0dcbe80509388bc1a",
+    "sheet": "feec721d8f3cd0f53a783cbf11d7e603cb06c524b646f174d4a0d78746ef3d5e"
+  }
+}

@@ -19,7 +19,7 @@ const codeSources = import.meta.glob([
   '../../config.ts', '../../graphics/GraphicsQuality.ts', '../../effects/postfx/*.ts',
   '../../graphics/PhaserAlphaZero.ts', '../../utils/webglContext.ts',
   '../../config/pipelineAssets.ts', '../../config/coopDefenseEnemies.ts', '../../animations/BadgerAnimations.ts',
-  '../../config/pipelineAssets.json', '../../config/coopDefenseEnemies.json',
+  '../../config/pipelineAssets/assets/*.json', '../../config/coopDefenseEnemies.json',
 ], { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 
 export const LAB_WIDTH = 800, LAB_HEIGHT = 600;
