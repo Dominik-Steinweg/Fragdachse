@@ -1,0 +1,308 @@
+{
+  "name": "firestarter",
+  "description": "Brandstifter: lance telegraph -> commit -> shot and orb volley at ~16 cells; then the close shooter is removed (its orbs keep flying) and a pinned shooter at ~976 px on the same side lances the leftover orb next to the player: combo (125 px explosion).",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "board": {
+    "columns": 4,
+    "tileWidth": 560
+  },
+  "hud": false,
+  "scenario": {
+    "classId": "inspector_gadachs",
+    "seed": 12345,
+    "player": "$player"
+  },
+  "times": [
+    {
+      "id": "day",
+      "timeOfDay": 720,
+      "label": "12:00"
+    },
+    {
+      "id": "night",
+      "timeOfDay": 1320,
+      "label": "22:00"
+    }
+  ],
+  "layouts": [
+    {
+      "id": "map00",
+      "scenario": {
+        "mapId": "0"
+      },
+      "vars": {
+        "player": {
+          "gridX": 12,
+          "gridY": 50
+        },
+        "enemy": {
+          "gridX": 28,
+          "gridY": 54
+        },
+        "view": {
+          "gridX": 20,
+          "gridY": 52
+        },
+        "zoom": 1.4,
+        "comboEnemy": {
+          "gridX": 42,
+          "gridY": 55
+        },
+        "comboView": {
+          "gridX": 27,
+          "gridY": 53
+        },
+        "comboZoom": 1.1
+      }
+    },
+    {
+      "id": "map04",
+      "scenario": {
+        "mapId": "4"
+      },
+      "vars": {
+        "player": {
+          "gridX": 38,
+          "gridY": 27
+        },
+        "enemy": {
+          "gridX": 54,
+          "gridY": 28
+        },
+        "view": {
+          "gridX": 46,
+          "gridY": 25.5
+        },
+        "zoom": 1.4,
+        "comboEnemy": {
+          "gridX": 68.5,
+          "gridY": 27
+        },
+        "comboView": {
+          "gridX": 53,
+          "gridY": 25
+        },
+        "comboZoom": 1.1
+      }
+    }
+  ],
+  "setup": [
+    {
+      "op": "camera",
+      "at": "$view",
+      "zoom": "$zoom"
+    },
+    {
+      "op": "settle"
+    },
+    {
+      "op": "spawn",
+      "kind": "firestarter-badger",
+      "at": "$enemy",
+      "pinned": false,
+      "name": "fs"
+    },
+    {
+      "op": "mark"
+    }
+  ],
+  "shots": [
+    {
+      "id": "spawned",
+      "label": "spawned +33 ms",
+      "do": [
+        {
+          "op": "step",
+          "frames": 2
+        }
+      ]
+    },
+    {
+      "id": "telegraph",
+      "label": "lance telegraph (+150 ms)",
+      "do": [
+        {
+          "op": "until",
+          "expr": "e.fs.specialAction === 'fire-lance-charge'",
+          "maxFrames": 600
+        },
+        {
+          "op": "mark"
+        },
+        {
+          "op": "step",
+          "frames": 9
+        }
+      ],
+      "crops": [
+        {
+          "of": "fs",
+          "size": [
+            200,
+            140
+          ],
+          "scale": 3
+        }
+      ]
+    },
+    {
+      "id": "commit",
+      "label": "lance commit",
+      "do": [
+        {
+          "op": "until",
+          "expr": "e.fs.firestarter && e.fs.firestarter.lance && host.now >= e.fs.firestarter.lance.commitAt",
+          "maxFrames": 60
+        }
+      ],
+      "crops": [
+        {
+          "of": "fs",
+          "size": [
+            200,
+            140
+          ],
+          "scale": 3
+        }
+      ]
+    },
+    {
+      "id": "shot",
+      "label": "lance shot",
+      "do": [
+        {
+          "op": "until",
+          "expr": "e.fs.firestarter && e.fs.firestarter.lastAttack === 'lance'",
+          "maxFrames": 60
+        },
+        {
+          "op": "step",
+          "frames": 1
+        }
+      ]
+    },
+    {
+      "id": "shot-150",
+      "label": "lance shot +150 ms",
+      "do": [
+        {
+          "op": "ms",
+          "ms": 150
+        }
+      ]
+    },
+    {
+      "id": "orbs",
+      "label": "orb volley in flight",
+      "do": [
+        {
+          "op": "until",
+          "expr": "e.fs.firestarter && e.fs.firestarter.lastAttack === 'ball' && e.fs.firestarter.charges && e.fs.firestarter.charges.availableCharges <= 1",
+          "maxFrames": 600,
+          "optional": true
+        },
+        {
+          "op": "ms",
+          "ms": 200
+        }
+      ]
+    },
+    {
+      "id": "combo-telegraph",
+      "label": "combo telegraph: far shooter lances leftover orb (+200 ms)",
+      "do": [
+        {
+          "action": "clearEnemies"
+        },
+        {
+          "op": "camera",
+          "at": "$comboView",
+          "zoom": "$comboZoom"
+        },
+        {
+          "op": "spawn",
+          "kind": "firestarter-badger",
+          "at": "$comboEnemy",
+          "pinned": true,
+          "name": "fs2"
+        },
+        {
+          "op": "mark"
+        },
+        {
+          "op": "until",
+          "expr": "e.fs2.specialAction === 'fire-lance-charge'",
+          "maxFrames": 300
+        },
+        {
+          "op": "step",
+          "frames": 12
+        }
+      ],
+      "crops": [
+        {
+          "of": "player",
+          "size": [
+            320,
+            200
+          ],
+          "scale": 2
+        }
+      ]
+    },
+    {
+      "id": "combo-impact",
+      "label": "combo impact",
+      "do": [
+        {
+          "op": "until",
+          "expr": "host.explosionsSinceMark.some(x => x.style === 'firestarter_combo' && x.radius > 100)",
+          "maxFrames": 120
+        },
+        {
+          "op": "mark"
+        },
+        {
+          "op": "step",
+          "frames": 2
+        }
+      ],
+      "crops": [
+        {
+          "of": "player",
+          "size": [
+            320,
+            200
+          ],
+          "scale": 2
+        }
+      ]
+    },
+    {
+      "id": "combo-300",
+      "label": "combo +300 ms (shooter removed)",
+      "do": [
+        {
+          "action": "clearEnemies"
+        },
+        {
+          "op": "ms",
+          "ms": 300
+        }
+      ]
+    },
+    {
+      "id": "combo-1200",
+      "label": "combo +1200 ms",
+      "do": [
+        {
+          "op": "ms",
+          "ms": 900
+        }
+      ]
+    }
+  ]
+}

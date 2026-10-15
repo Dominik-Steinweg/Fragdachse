@@ -55,6 +55,8 @@
     "check:quick": "node scripts/check/quick.mjs",
     "check:release": "node scripts/check/release.mjs",
     "check:fingerprints": "node scripts/check/fingerprints.mjs",
+    "worktree:new": "node scripts/worktree-new.mjs",
+    "worktree:remove": "node scripts/worktree-remove.mjs",
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "node scripts/deploy-pages.mjs -d dist",

@@ -1,0 +1,261 @@
+{
+  "name": "alien-cone-cover",
+  "description": "Map 12 seed 12345; positions from --probe 12. Rock beside the clear target line clips the upper cone; clip < 0.9 is required. hitAt is retained only for shots after the 400 ms recovery clears attack. Shifted three cells west after preview to keep the wave away from the arena boundary.",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "board": {
+    "columns": 4,
+    "tileWidth": 560
+  },
+  "hud": false,
+  "scenario": {
+    "classId": "inspector_gadachs",
+    "seed": 12345,
+    "player": "$player",
+    "refillHp": true
+  },
+  "times": [
+    {
+      "id": "day",
+      "timeOfDay": 720,
+      "label": "12:00"
+    },
+    {
+      "id": "night",
+      "timeOfDay": 1320,
+      "label": "22:00"
+    }
+  ],
+  "layouts": [
+    {
+      "id": "map12",
+      "scenario": {
+        "mapId": "12"
+      },
+      "vars": {
+        "player": {
+          "gridX": 103,
+          "gridY": 11
+        },
+        "enemy": {
+          "gridX": 96,
+          "gridY": 11
+        },
+        "target": {
+          "gridX": 103,
+          "gridY": 11
+        },
+        "view": {
+          "gridX": 101,
+          "gridY": 11
+        },
+        "zoom": 1.3
+      }
+    }
+  ],
+  "setup": [
+    {
+      "op": "camera",
+      "at": "$view",
+      "zoom": "$zoom"
+    },
+    {
+      "op": "settle"
+    },
+    {
+      "op": "spawn",
+      "kind": "alien-badger",
+      "at": "$enemy",
+      "pinned": false,
+      "allied": false,
+      "name": "a"
+    },
+    {
+      "op": "mark"
+    }
+  ],
+  "shots": [
+    {
+      "id": "windup-early",
+      "label": "windup 15%",
+      "do": [
+        {
+          "op": "until",
+          "expr": "e.a.energyCone?.phase === 'windup' && host.now >= e.a.energyCone.attack.startedAt + 0.15 * (e.a.energyCone.attack.hitAt - e.a.energyCone.attack.startedAt) && e.a.energyCone.attack.clip.some(c => c < 0.9)",
+          "maxFrames": 600
+        }
+      ],
+      "crops": [
+        {
+          "of": "$view",
+          "size": [
+            640,
+            600
+          ],
+          "scale": 2,
+          "label": "alien + full cone x2"
+        }
+      ]
+    },
+    {
+      "id": "windup-mid",
+      "label": "windup 60%",
+      "do": [
+        {
+          "op": "until",
+          "expr": "e.a.energyCone?.phase === 'windup' && host.now >= e.a.energyCone.attack.startedAt + 0.6 * (e.a.energyCone.attack.hitAt - e.a.energyCone.attack.startedAt) && e.a.energyCone.attack.clip.some(c => c < 0.9)",
+          "maxFrames": 180
+        }
+      ],
+      "crops": [
+        {
+          "of": "$view",
+          "size": [
+            640,
+            600
+          ],
+          "scale": 2,
+          "label": "alien + full cone x2"
+        }
+      ]
+    },
+    {
+      "id": "windup-late",
+      "label": "windup 90%",
+      "do": [
+        {
+          "op": "until",
+          "expr": "e.a.energyCone?.phase === 'windup' && host.now >= e.a.energyCone.attack.startedAt + 0.9 * (e.a.energyCone.attack.hitAt - e.a.energyCone.attack.startedAt) && e.a.energyCone.attack.clip.some(c => c < 0.9)",
+          "maxFrames": 180
+        },
+        {
+          "op": "js",
+          "code": "ck.coneAttack = structuredClone(host.named.a.energyCone.attack);"
+        }
+      ],
+      "crops": [
+        {
+          "of": "$view",
+          "size": [
+            640,
+            600
+          ],
+          "scale": 2,
+          "label": "alien + full cone x2"
+        }
+      ]
+    },
+    {
+      "id": "impulse-40",
+      "label": "impulse +40 ms (60 Hz ceiling)",
+      "do": [
+        {
+          "op": "until",
+          "expr": "e.a.energyCone?.phase === 'recover' && host.now >= e.a.energyCone.attack.hitAt + 40",
+          "maxFrames": 180
+        }
+      ],
+      "crops": [
+        {
+          "of": "$view",
+          "size": [
+            640,
+            600
+          ],
+          "scale": 2,
+          "label": "alien + full cone x2"
+        }
+      ]
+    },
+    {
+      "id": "impulse-120",
+      "label": "impulse +120 ms (60 Hz ceiling)",
+      "do": [
+        {
+          "op": "until",
+          "expr": "e.a.energyCone?.phase === 'recover' && host.now >= e.a.energyCone.attack.hitAt + 120",
+          "maxFrames": 180
+        }
+      ],
+      "crops": [
+        {
+          "of": "$view",
+          "size": [
+            640,
+            600
+          ],
+          "scale": 2,
+          "label": "alien + full cone x2"
+        }
+      ]
+    },
+    {
+      "id": "impulse-250",
+      "label": "impulse +250 ms (60 Hz ceiling)",
+      "do": [
+        {
+          "op": "until",
+          "expr": "e.a.energyCone?.phase === 'recover' && host.now >= e.a.energyCone.attack.hitAt + 250",
+          "maxFrames": 180
+        }
+      ],
+      "crops": [
+        {
+          "of": "$view",
+          "size": [
+            640,
+            600
+          ],
+          "scale": 2,
+          "label": "alien + full cone x2"
+        }
+      ]
+    },
+    {
+      "id": "impulse-450",
+      "label": "impulse +450 ms (60 Hz ceiling)",
+      "do": [
+        {
+          "op": "until",
+          "expr": "e.a.energyCone?.phase === 'none' && host.now >= window.__ck.coneAttack.hitAt + 450",
+          "maxFrames": 180
+        }
+      ],
+      "crops": [
+        {
+          "of": "$view",
+          "size": [
+            640,
+            600
+          ],
+          "scale": 2,
+          "label": "alien + full cone x2"
+        }
+      ]
+    },
+    {
+      "id": "after",
+      "label": "after +1000 ms (plasma resumed)",
+      "do": [
+        {
+          "op": "until",
+          "expr": "e.a.alive && e.a.energyCone?.phase === 'none' && host.now >= window.__ck.coneAttack.hitAt + 1000",
+          "maxFrames": 180
+        }
+      ],
+      "crops": [
+        {
+          "of": "$view",
+          "size": [
+            640,
+            600
+          ],
+          "scale": 2,
+          "label": "alien + full cone x2"
+        }
+      ]
+    }
+  ]
+}

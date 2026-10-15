@@ -1,0 +1,52 @@
+{
+  "name": "shield-charger",
+  "description": "Schild-Anstürmer gate 1: approach with raised frontal shield and slow turn, frontal block, lane windup early/late, run past the player, recovery with scuffs.",
+  "viewport": { "width": 1280, "height": 720 },
+  "board": { "columns": 4, "tileWidth": 560 },
+  "hud": false,
+  "scenario": { "classId": "inspector_gadachs", "seed": 12345, "player": "$player" },
+  "times": [
+    { "id": "day", "timeOfDay": 720, "label": "12:00" },
+    { "id": "night", "timeOfDay": 1320, "label": "22:00" }
+  ],
+  "layouts": [
+    {
+      "id": "map04",
+      "scenario": { "mapId": "4" },
+      "vars": {
+        "player": { "gridX": 38, "gridY": 27 },
+        "enemy": { "gridX": 49, "gridY": 27 },
+        "view": { "gridX": 44, "gridY": 26.5 },
+        "zoom": 1.5
+      }
+    }
+  ],
+  "setup": [
+    { "op": "camera", "at": "$view", "zoom": "$zoom" },
+    { "op": "settle" },
+    { "op": "spawn", "kind": "shield-charger-badger", "at": "$enemy", "pinned": false, "name": "sc" },
+    { "op": "mark" }
+  ],
+  "shots": [
+    { "id": "approach", "label": "approach: shield raised, turning", "do": [{ "op": "step", "frames": 20 }],
+      "crops": [{ "of": "sc", "size": 220, "scale": 3, "label": "shield x3" }] },
+    { "id": "turned", "label": "approach +0.6 s", "do": [{ "op": "step", "frames": 36 }],
+      "crops": [{ "of": "sc", "size": 220, "scale": 3, "label": "shield x3" }] },
+    { "id": "windup-early", "label": "windup start (shield down)",
+      "do": [{ "op": "until", "expr": "e.sc.shieldCharge && e.sc.shieldCharge.phase === 'windup'", "maxFrames": 900 }, { "op": "step", "frames": 6 }],
+      "crops": [{ "of": "sc", "size": 260, "scale": 3, "label": "lane x3" }] },
+    { "id": "windup-late", "label": "windup ~85 %",
+      "do": [{ "op": "until", "expr": "e.sc.shieldCharge && e.sc.shieldCharge.phase === 'windup' && host.now >= e.sc.shieldCharge.lane.startedAt + 0.85 * (e.sc.shieldCharge.lane.runAt - e.sc.shieldCharge.lane.startedAt)", "maxFrames": 120 }],
+      "crops": [{ "of": "sc", "size": 260, "scale": 3, "label": "lane x3" }] },
+    { "id": "run", "label": "run +100 ms",
+      "do": [{ "op": "until", "expr": "e.sc.shieldCharge && e.sc.shieldCharge.phase === 'run'", "maxFrames": 120 }, { "op": "step", "frames": 6 }],
+      "crops": [{ "of": "sc", "size": 260, "scale": 3, "label": "streak x3" }] },
+    { "id": "recover", "label": "recover start (past the player)",
+      "do": [{ "op": "until", "expr": "e.sc.shieldCharge && e.sc.shieldCharge.phase === 'recover'", "maxFrames": 180 }, { "op": "step", "frames": 4 }],
+      "crops": [{ "of": "sc", "size": 260, "scale": 3, "label": "recover x3" }] },
+    { "id": "recover-late", "label": "recover +0.5 s (scuffs, dust)", "do": [{ "op": "ms", "ms": 500 }],
+      "crops": [{ "of": "sc", "size": 260, "scale": 3, "label": "recover x3" }] },
+    { "id": "after", "label": "shield up again +1.0 s", "do": [{ "op": "ms", "ms": 1000 }],
+      "crops": [{ "of": "sc", "size": 220, "scale": 3, "label": "shield x3" }] }
+  ]
+}
