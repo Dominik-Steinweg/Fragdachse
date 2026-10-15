@@ -1,0 +1,50 @@
+{
+  "gameIds": [],
+  "production": "reference",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "HQ4: lifted petrol panels, readable gunmetal and thin bare-steel bevels",
+      "textureStrength": 0.12,
+      "formShadowStrength": 0.65
+    }
+  },
+  "id": "fire-control-relay",
+  "label": "Feuerleit-Relais-Projektor (HQ)",
+  "category": "construction",
+  "reference": "scripts/asset-pipeline/references/fire-control-relay-concept.png",
+  "targetSize": 24,
+  "sourceSizes": [
+    48,
+    96
+  ],
+  "recipe": "fire-control-relay",
+  "orthoScale": 3,
+  "model": {},
+  "description": {
+    "silhouette": "Three broad folding feet around a telescoping concentric lens head, following RELAY_v01.",
+    "materials": "HQ4 value groups: chipped #637e86 petrol panels (L*51), rough #484e52 gunmetal (L*33), #b5bfc2 bare-steel bevels (L*77), restrained cool contact dust and dark seams; unchanged #3dffd0 optics and #e8fff9 core.",
+    "anatomy": "Three real hinged legs, raised lens head, fixed centre pivot and strictly orthographic top-down camera."
+  },
+  "requiredClips": [
+    "deploy"
+  ],
+  "clips": [
+    {
+      "name": "deploy",
+      "motion": "relay_deploy",
+      "frameCount": 8,
+      "frameRate": 24,
+      "loop": false,
+      "start": "free",
+      "end": "rest"
+    }
+  ]
+}

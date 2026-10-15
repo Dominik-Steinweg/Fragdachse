@@ -1,0 +1,102 @@
+{
+  "id": "abyssal-kraken-tentacle",
+  "label": "Abgrundkrake — Schlagtentakel",
+  "category": "boss-part",
+  "gameIds": [],
+  "reference": "scripts/asset-pipeline/references/abyssal-kraken-v2.png",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "production": "reference",
+  "recipe": "abyssal-kraken",
+  "materialVariants": {
+    "standard": {
+      "label": "Organische Tiefseehaut mit Pigmentierung und Faltentiefe",
+      "textureStrength": 0.93,
+      "formShadowStrength": 0.91
+    }
+  },
+  "runtimeAtlas": true,
+  "runtimeContract": "boss",
+  "targetSize": 448,
+  "sourceSizes": [
+    448,
+    512,
+    1024
+  ],
+  "description": {
+    "silhouette": "Riesiger einzelner Schlagtentakel, dessen Ansatz tief unter Wasser liegt; bäumt sich am Ufer auf und schlägt entlang einer 320 px langen Bahn nieder.",
+    "colors": "Dunkles Indigo-Violett mit violetten Flanken, Pigmentmarmorierung und karminroten ventralen Saugnäpfen.",
+    "anatomy": "Eine 24-gliedrige Kette; Ruhepose ist das lauernde Aufbäumen. Wasserlinie z=0; Runtime verankert am Socket waterEntry und dreht in Bahnrichtung."
+  },
+  "requiredClips": [
+    "hover",
+    "rise",
+    "slam",
+    "retract"
+  ],
+  "model": {
+    "part": "tentacle"
+  },
+  "orthoScale": 11.2,
+  "textures": {
+    "organic": "art/poc/kraken-v8/textures/kraken-scales-v8.png"
+  },
+  "elevation": {
+    "min": -5.2,
+    "max": 8.5,
+    "scale": 0.5,
+    "previewWaterLevel": 0
+  },
+  "runtimeBudgetMB": 48,
+  "clips": [
+    {
+      "name": "hover",
+      "motion": "kraken_tentacle_hover",
+      "frameCount": 16,
+      "frameRate": 12,
+      "loop": true
+    },
+    {
+      "name": "rise",
+      "motion": "kraken_tentacle_rise",
+      "frameCount": 16,
+      "frameRate": 24,
+      "loop": false,
+      "start": "free"
+    },
+    {
+      "name": "slam",
+      "motion": "kraken_tentacle_slam",
+      "frameCount": 20,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 7,
+        "impact": 11
+      },
+      "end": "free",
+      "next": "retract"
+    },
+    {
+      "name": "retract",
+      "motion": "kraken_tentacle_retract",
+      "frameCount": 16,
+      "frameRate": 24,
+      "loop": false,
+      "end": "free"
+    }
+  ],
+  "materialPass": {
+    "version": 1,
+    "color": "srgb-albedo-baked-cavity-v1",
+    "normal": "linear-unorm8-z-oct-normal-v1",
+    "emission": "linear-rgb-unorm8-scaled-v1"
+  },
+  "shadowMesh": {
+    "version": 1,
+    "encoding": "u16-world-xyz-per-pose-v1"
+  }
+}

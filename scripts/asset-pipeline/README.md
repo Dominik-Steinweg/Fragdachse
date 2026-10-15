@@ -40,7 +40,7 @@ Codex steuert Blender über den vorhandenen MCP. Die Pipeline erzeugt orthografi
 
 ## V2-Katalog und Produktionsstand
 
-[catalog-v2.json](catalog-v2.json) ist der Bedarfskatalog: neun Turmgrafiken für elf Waffen-IDs, 14 Gegner, die Spielfigur, 18 gehaltene Waffen und zehn Utilities einschließlich Zeus. Slotlose Nahkampf-/Schild-/Tesla-Fähigkeiten behalten ihre vorhandene Darstellung ohne getragenes Objekt. `gameIds`, `reference`, `targetSize` und optionale `referenceTransform` beziehen sich auf die bestehenden Spielverträge. Silhouette, Farbgruppen und Anatomie beziehungsweise Mechanik stehen in `description`; `requiredClips` nennt die Produktionsaufgabe. Assettests gleichen Abdeckung, gemeinsame Turmgrafiken, Anzeigegrößen und Referenzkorrekturen mit den aktuellen Spielregistries ab.
+[catalog-v2/](catalog-v2/) ist der Bedarfskatalog. Er liegt im Layout des Runtime-Registers: `registry.json` enthält die Katalogversion, `assets/<id>.json` je einen Eintrag. Ein neues Asset ist eine neue Datei, eine Änderung betrifft nur die Datei des Assets. Skripte lesen ihn über `readDemandCatalog` aus [pipeline-registry.mjs](pipeline-registry.mjs), Blender-Python über [demand_catalog.py](demand_catalog.py); beide setzen `{ version, assets }` nach Asset-ID geordnet zusammen. Inhaltlich umfasst er neun Turmgrafiken für elf Waffen-IDs, 14 Gegner, die Spielfigur, 18 gehaltene Waffen und zehn Utilities einschließlich Zeus. Slotlose Nahkampf-/Schild-/Tesla-Fähigkeiten behalten ihre vorhandene Darstellung ohne getragenes Objekt. `gameIds`, `reference`, `targetSize` und optionale `referenceTransform` beziehen sich auf die bestehenden Spielverträge. Silhouette, Farbgruppen und Anatomie beziehungsweise Mechanik stehen in `description`; `requiredClips` nennt die Produktionsaufgabe. Assettests gleichen Abdeckung, gemeinsame Turmgrafiken, Anzeigegrößen und Referenzkorrekturen mit den aktuellen Spielregistries ab.
 
 - `production: "planned"` bedeutet ein vollständiges Briefing ohne ausführbare Rezeptur.
 - `production: "reference"` bedeutet eine unterstützte Referenzrezeptur. Erst ein vollständiger Build, Sichtprüfung, `selection.json` und Quellenarchiv belegen die tatsächlich produzierte Auswahl. Der Katalog allein behauptet keine Freigabe.
@@ -183,9 +183,12 @@ Die ausgewählte Auflösung muss mit Farbe plus Elevation höchstens
 `enemy` verlangt; der Bossvertrag setzt kein gewöhnliches `eyeGlow`-Configfeld
 voraus. Der Import bleibt ein eigener, ausdrücklich ausgelöster Schritt.
 
-Für isolierte Rauchtests akzeptiert der Builder `--catalog <temporäre-Kopie>`
-(Python: `catalog_path=...`). Der aufgelöste Eintrag wird im Input-Fingerprint
-und als `archive-source/resolved-spec.json` erhalten. Echte Katalogeinträge und
+Ein Build bindet den gesamten Katalog (`catalog-v2/registry.json` und alle
+`catalog-v2/assets/*.json`) als Quellen, weil Rezepturen auch fremde Einträge lesen
+(Gegnerwaffen nutzen die Specs gehaltener Waffen). Für isolierte Rauchtests
+akzeptiert der Builder `--catalog <temporäre-Kopie>` als Einzeldokument
+`{ version, assets }` (Python: `catalog_path=...`). Der aufgelöste Eintrag wird im
+Input-Fingerprint und als `archive-source/resolved-spec.json` erhalten. Echte Katalogeinträge und
 abgeschlossene Runs werden dabei nicht geändert; neue Revision wählen und
 `--max-frames` für kleine, identisch fortsetzbare Renderportionen nutzen.
 

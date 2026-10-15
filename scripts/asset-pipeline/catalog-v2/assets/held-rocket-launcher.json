@@ -1,0 +1,95 @@
+{
+  "id": "held-rocket-launcher",
+  "label": "ROCKET LAUNCHER",
+  "category": "weapon",
+  "gameIds": [
+    "ROCKET_LAUNCHER"
+  ],
+  "production": "reference",
+  "reference": "public/assets/sprites/held/ROCKET_LAUNCHER.png",
+  "designReference": "public/assets/sprites/Loadout/ROCKET_LAUNCHER.png",
+  "targetSize": 32,
+  "sourceSizes": [
+    128,
+    256
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Langes olivfarbenes Startrohr mit Spannbändern, Schulterpolster und seitlicher Zieloptik.",
+    "materials": "Moosgrünes Startrohr mit warmen bronzenen Spannringen. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+    "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+  },
+  "requiredClips": [],
+  "recipe": "held-weapon",
+  "model": {
+    "construction": "rocket",
+    "accent": [
+      0.43,
+      0.24,
+      0.065
+    ],
+    "palette": {
+      "steel": [
+        0.07,
+        0.1,
+        0.025
+      ],
+      "edge": [
+        0.35,
+        0.3,
+        0.12
+      ],
+      "body": [
+        0.11,
+        0.18,
+        0.03
+      ],
+      "trim": [
+        0.23,
+        0.3,
+        0.065
+      ],
+      "olive": [
+        0.2,
+        0.31,
+        0.038
+      ],
+      "brass": [
+        0.49,
+        0.28,
+        0.06
+      ]
+    }
+  },
+  "orthoScale": 3.2,
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Gebrauchte Materialien und kräftige Formschatten",
+      "textureStrength": 0.85,
+      "formShadowStrength": 1
+    }
+  },
+  "clips": [],
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      4.5
+    ],
+    "referenceGrip": [
+      6.5,
+      19.5
+    ]
+  }
+}

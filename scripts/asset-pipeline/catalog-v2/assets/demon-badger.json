@@ -1,0 +1,87 @@
+{
+  "id": "demon-badger",
+  "label": "Dämonen-Dachs",
+  "category": "enemy",
+  "gameIds": [
+    "demon-badger"
+  ],
+  "reference": "public/assets/sprites/enemies/enemy_demon_badger.png",
+  "targetSize": 24,
+  "sourceSizes": [
+    64,
+    128
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Schmaler spitz zulaufender Rücken, kräftige Vorderpfoten und hornartige Kopfkontur.",
+    "colors": "Schwarzbraun und kräftiges Dunkelrot mit wenigen orangefarbenen Rissen.",
+    "anatomy": "Vierbeiner mit klauenartigen Pfoten und aggressiv gebeugter Haltung; bewegte Gliedmaßen statt skalierter Zombieform.",
+    "materials": "Kurzes gerichtetes rostrotes Fell, gewachsene Keratinkerben auf karminroten Hautplatten, geriefte schwarze Hörner und schmale Glutadern."
+  },
+  "requiredClips": [
+    "move",
+    "claw"
+  ],
+  "production": "reference",
+  "recipe": "demon-badger",
+  "model": {
+    "hornSweep": 1
+  },
+  "orthoScale": 7.152,
+  "textures": {
+    "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Ausgearbeitete Oberflächen und organisches Fell",
+      "textureStrength": 0.84,
+      "formShadowStrength": 0
+    }
+  },
+  "clips": [
+    {
+      "name": "move",
+      "motion": "quadruped",
+      "frameCount": 12,
+      "frameRate": 16,
+      "loop": true,
+      "parameters": {
+        "strideForward": 0.25,
+        "strideBack": 0.2,
+        "lift": 0.09,
+        "footRoll": 0.16,
+        "footYaw": 0.065,
+        "bodyYaw": 0.036,
+        "bodyBob": 0.039,
+        "bodyRoll": 0.028,
+        "bodyPitch": 0.048,
+        "bodyShift": 0.018,
+        "headYaw": -0.022,
+        "headBob": 0.017,
+        "tailYaw": 0.14,
+        "rearPhase": 0.08,
+        "bodySurge": 0.012
+      }
+    },
+    {
+      "name": "claw",
+      "motion": "claw_quadruped",
+      "frameCount": 18,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 8,
+        "impact": 11
+      },
+      "parameters": {
+        "strength": 1,
+        "leapDistance": 1.192
+      }
+    }
+  ],
+  "displayScale": 2.4
+}

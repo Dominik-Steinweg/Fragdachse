@@ -2,7 +2,6 @@ import { readFile, access } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
 import sharp from 'sharp';
-import catalog from '../../scripts/asset-pipeline/catalog-v2.json';
 import { validateEyeAnchors } from '../../scripts/asset-pipeline/eye-anchors.mjs';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../../src/config/coopDefenseEnemies';
 import { getCoopDefenseUpgradeTextureKey } from '../../src/utils/coopDefenseUpgrades';
@@ -10,6 +9,9 @@ import { AutoTiler, MISSION_BARRIER_AUTOTILE } from '../../src/arena/AutoTiler';
 import { getPipelineSpriteScale, pipelineAnimationKey, PIPELINE_ASSETS, PIPELINE_RUNTIME_ASSETS } from '../../src/config/pipelineAssets';
 import { isBossRuntime, verifyBossRuntime } from '../../scripts/asset-pipeline/runtime-contract-v2.mjs';
 import { packAtlas } from '../../scripts/asset-pipeline/atlas-v2.mjs';
+import { readDemandCatalog } from '../../scripts/asset-pipeline/pipeline-registry.mjs';
+
+const catalog = await readDemandCatalog();
 
 async function bossFixture() {
   const entry = { category: 'boss-part', runtimeContract: 'boss', runtimeAtlas: true, runtimeBudgetMB: 1,

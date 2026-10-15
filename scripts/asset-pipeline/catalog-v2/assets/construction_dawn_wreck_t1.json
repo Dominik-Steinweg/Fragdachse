@@ -1,0 +1,142 @@
+{
+  "id": "construction_dawn_wreck_t1",
+  "label": "Dawn wreck T1",
+  "category": "construction",
+  "gameIds": [],
+  "reference": "scripts/asset-pipeline/references/dawn-wreck.png",
+  "designReference": "scripts/asset-pipeline/references/dawn-tier-row.png",
+  "targetSize": 96,
+  "sourceSizes": [
+    192
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Crashed cargo quadcopter with three intact ducts, split fourth rotor and scattered opened cargo.",
+    "colors": "Dark rust steel, moss and dirty ochre cargo bands.",
+    "anatomy": "One tier-parametric static model. Open cargo, severed wires and damaged spar; 96 px / three 32 px cells."
+  },
+  "requiredClips": [],
+  "production": "reference",
+  "recipe": "dawn-wreck",
+  "model": {
+    "tier": 1,
+    "librarySurfaces": {
+      "Chipped tier enamel": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.16,
+        "moss": 0.2,
+        "value": 1.08
+      },
+      "Secondary panel": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.35
+      },
+      "Cargo paint": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.08
+      },
+      "Exposed alloy edges": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.85
+      },
+      "Oily structural steel": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.85
+      },
+      "Damaged rotor composite": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.85
+      },
+      "Copper cable braid": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.85
+      },
+      "Worn warning ochre": {
+        "family": "yellow",
+        "scale": 0.42,
+        "grime": 0.12,
+        "edgewear": 0.12,
+        "saturation": 0.64,
+        "value": 0.94,
+        "tint": 0.28
+      },
+      "Old moss cushions": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.92,
+        "moss": 0.35
+      },
+      "Dry grass blades": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.92,
+        "moss": 0.35
+      },
+      "Battered rotor rim": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.33,
+        "edgewear": 0.32,
+        "tint": 0.25,
+        "value": 1,
+        "moss": 0.2
+      }
+    }
+  },
+  "orthoScale": 3.6,
+  "textures": {
+    "dawnPaint": "art/poc/dawn/textures/library/steel-rust-bare-02.png",
+    "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+    "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png",
+    "moss": "art/poc/dawn/textures/library/mask-moss-01.png",
+    "yellow": "art/poc/dawn/textures/library/paint-industrial-yellow-01.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Dawn Material V1 / matte weathered library",
+      "textureStrength": 1,
+      "formShadowStrength": 0.83
+    }
+  },
+  "clips": [],
+  "elevation": {
+    "min": 0,
+    "max": 1,
+    "scale": 0.5
+  },
+  "materialPass": {
+    "version": 1,
+    "color": "srgb-albedo-baked-cavity-v1",
+    "normal": "linear-unorm8-z-oct-normal-v1",
+    "emission": "linear-rgb-unorm8-scaled-v1"
+  }
+}

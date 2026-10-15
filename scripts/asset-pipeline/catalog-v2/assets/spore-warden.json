@@ -1,0 +1,87 @@
+{
+  "id": "spore-warden",
+  "label": "Sporenwächter",
+  "category": "enemy",
+  "gameIds": [
+    "spore-warden"
+  ],
+  "reference": "public/assets/sprites/enemies/enemy_spore_warden.png",
+  "targetSize": 30,
+  "sourceSizes": [
+    64,
+    128
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Breiter ovaler Panzerkörper mit zwei auffälligen seitlichen Sporenkammern.",
+    "colors": "Moosgrün, Ockerbraun, dunkle Plattenfugen und helle Schnauzenzeichnung.",
+    "anatomy": "Vierbeiner; organische Kammern folgen dem Körper leicht verzögert, die Pfoten bleiben separat lesbar.",
+    "materials": "Warmorange Pilzkappen mit radialer Maserung, feinen gewachsenen Poren und Lamellen; grüne keratinartige Rückenplatten über weichem Fell."
+  },
+  "requiredClips": [
+    "move",
+    "claw"
+  ],
+  "production": "reference",
+  "recipe": "spore-warden",
+  "model": {
+    "capRadius": 0.31
+  },
+  "orthoScale": 7.008,
+  "textures": {
+    "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Ausgearbeitete Oberflächen und organisches Fell",
+      "textureStrength": 0.84,
+      "formShadowStrength": 0
+    }
+  },
+  "clips": [
+    {
+      "name": "move",
+      "motion": "quadruped",
+      "frameCount": 12,
+      "frameRate": 11,
+      "loop": true,
+      "parameters": {
+        "strideForward": 0.19,
+        "strideBack": 0.145,
+        "lift": 0.072,
+        "footRoll": 0.1,
+        "footYaw": 0.045,
+        "bodyYaw": 0.042,
+        "bodyBob": 0.032,
+        "bodyRoll": 0.045,
+        "bodyPitch": 0.02,
+        "bodyShift": 0.027,
+        "headYaw": -0.025,
+        "headBob": 0.012,
+        "tailYaw": 0.12,
+        "rearPhase": 0.18,
+        "bodySurge": 0.012
+      }
+    },
+    {
+      "name": "claw",
+      "motion": "claw_quadruped",
+      "frameCount": 18,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 8,
+        "impact": 11
+      },
+      "parameters": {
+        "strength": 1,
+        "leapDistance": 1.168
+      }
+    }
+  ],
+  "displayScale": 2.4
+}

@@ -7,7 +7,6 @@ import sys
 sys.dont_write_bytecode = True
 from pathlib import Path
 import importlib.util
-import json
 import hashlib
 
 root = Path(__file__).resolve().parents[2]
@@ -16,7 +15,8 @@ definition = importlib.util.spec_from_file_location('shape', root / 'scripts/ass
 shape = importlib.util.module_from_spec(definition)
 definition.loader.exec_module(shape)
 original = Path(sys.argv[sys.argv.index('--') + 1]).resolve()
-catalog = json.loads((root / 'scripts/asset-pipeline/catalog-v2.json').read_text(encoding='utf8'))
+from demand_catalog import read_catalog
+catalog = read_catalog(root)
 spec = next(a for a in catalog['assets'] if a['id'] == 'abyssal-kraken')
 folder = root / 'art/poc/pipeline-v2/shapes/production-proof'
 folder.mkdir(parents=True, exist_ok=True)

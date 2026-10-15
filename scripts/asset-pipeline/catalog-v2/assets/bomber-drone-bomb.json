@@ -1,0 +1,43 @@
+{
+  "category": "companion",
+  "gameIds": [
+    "bomber_squadron"
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "production": "reference",
+  "recipe": "bomber-drone",
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Matte weathered titanium, graphite and restrained ochre",
+      "textureStrength": 0.16,
+      "formShadowStrength": 0.64
+    }
+  },
+  "id": "bomber-drone-bomb",
+  "label": "Drohnenbomber-Bombe",
+  "reference": "scripts/asset-pipeline/references/bomber-drone-bomb-v2-a.png",
+  "targetSize": 12,
+  "sourceSizes": [
+    48,
+    96
+  ],
+  "description": {
+    "silhouette": "Long bomb casing with tapered north-facing nose and southern tail fins",
+    "colors": "Worn muted olive graphite casing and a narrow faded ochre nose band",
+    "anatomy": "Static 3D ordnance shared with the six P1 wing-root bombs; centered pivot and no falling or release motion baked in."
+  },
+  "requiredClips": [],
+  "model": {
+    "part": "bomb",
+    "widthScale": 1.4
+  },
+  "orthoScale": 1.25,
+  "clips": []
+}

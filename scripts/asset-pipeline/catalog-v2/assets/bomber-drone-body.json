@@ -1,0 +1,53 @@
+{
+  "category": "companion",
+  "gameIds": [
+    "bomber_squadron"
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "production": "reference",
+  "recipe": "bomber-drone",
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Matte umber gunmetal, chipped coating and restrained intake soot",
+      "textureStrength": 0.26,
+      "formShadowStrength": 0.68
+    }
+  },
+  "id": "bomber-drone-body",
+  "label": "VTOL-Drohnenbomber",
+  "reference": "scripts/asset-pipeline/references/bomber-drone-body-v2-a.png",
+  "targetSize": 48,
+  "sourceSizes": [
+    96,
+    192
+  ],
+  "description": {
+    "silhouette": "B3_v01 slender north-facing fuselage, two lateral ducted lift rotors, stub wings and swept tailplane",
+    "colors": "Warm dark umber gunmetal, restrained exposed alloy chips, matte intake soot and sparse faded ochre; no glow or black outlines",
+    "anatomy": "True orthographic top-down geometry. P1: six long north-facing bombs, three side-by-side at each wing root at rotor-axis height, retained by clips. Two independent counter-rotating rotor pivots."
+  },
+  "requiredClips": [
+    "move"
+  ],
+  "model": {
+    "part": "body"
+  },
+  "orthoScale": 4,
+  "clips": [
+    {
+      "name": "move",
+      "motion": "twin_rotors",
+      "frameCount": 12,
+      "frameRate": 24,
+      "loop": true,
+      "parameters": {}
+    }
+  ]
+}

@@ -1,0 +1,167 @@
+{
+  "id": "abyssal-kraken",
+  "label": "Abgrundkrake — Wasserkörper",
+  "category": "enemy",
+  "gameIds": [],
+  "reference": "scripts/asset-pipeline/references/abyssal-kraken-v2.png",
+  "targetSize": 320,
+  "sourceSizes": [
+    384,
+    512,
+    1024
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Riesiger Endboss im Teich: gestreckter Speermantel mit segmentiertem Kiel, Hakenstacheln und gezackten Flossenmembranen, acht lange über Schwimmhäute verbundene Arme und eine Krone aus Mundtentakeln.",
+    "colors": "Bedrohliches dunkles Indigo-Violett mit violetten Flanken, Pigmentmarmorierung und Lavendel-Säumen; karminrote Saugnäpfe und Mundtentakel; nach vorn blickende Glutaugen mit Schlitzpupille als hellster Akzent.",
+    "anatomy": "Wasserlinie z=0 für den Elevation-Pass. Augen unter schweren Lidern auf eigenen Pivots (Blinzeln, Öffnen im Intro). Sechs getragene Eier an Armspitzen, in Ruhe verborgen. Aufgetaucht: Tintenkegel (ink-spit) und Eierwurf; Abtauchen (dive → surface) macht den Körper unsichtbar, dann greifen separate Schlagtentakel an. Schlagtentakel und Eier sind eigene Boss-Teile."
+  },
+  "requiredClips": [
+    "idle",
+    "move",
+    "intro-rise",
+    "ink-spit",
+    "egg-throw",
+    "dive",
+    "surface",
+    "spine-volley"
+  ],
+  "production": "reference",
+  "recipe": "abyssal-kraken",
+  "model": {},
+  "orthoScale": 9.6,
+  "displayScale": 1.2,
+  "textures": {
+    "organic": "art/poc/kraken-v8/textures/kraken-scales-v8.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Organische Tiefseehaut mit Pigmentierung und Faltentiefe",
+      "textureStrength": 0.93,
+      "formShadowStrength": 0.91
+    }
+  },
+  "clips": [
+    {
+      "name": "idle",
+      "motion": "kraken_idle",
+      "frameCount": 16,
+      "frameRate": 10,
+      "loop": true,
+      "parameters": {
+        "wave": 0.016
+      }
+    },
+    {
+      "name": "move",
+      "motion": "kraken_swim",
+      "frameCount": 16,
+      "frameRate": 12,
+      "loop": true,
+      "parameters": {
+        "wave": 0.028
+      }
+    },
+    {
+      "name": "intro-rise",
+      "motion": "kraken_intro_rise",
+      "frameCount": 48,
+      "frameRate": 16,
+      "loop": false,
+      "start": "free",
+      "markers": {
+        "arms-break": 14,
+        "eyes-open": 33,
+        "roar": 40
+      }
+    },
+    {
+      "name": "ink-spit",
+      "motion": "kraken_ink_spit",
+      "frameCount": 22,
+      "frameRate": 20,
+      "loop": false,
+      "markers": {
+        "charge": 9,
+        "spit": 12
+      }
+    },
+    {
+      "name": "egg-throw",
+      "motion": "kraken_throw_egg",
+      "frameCount": 36,
+      "frameRate": 20,
+      "loop": false,
+      "markers": {
+        "release-1": 10,
+        "release-2": 14,
+        "release-3": 17,
+        "release-4": 21,
+        "release-5": 25,
+        "release-6": 29
+      }
+    },
+    {
+      "name": "dive",
+      "motion": "kraken_dive",
+      "frameCount": 24,
+      "frameRate": 20,
+      "loop": false,
+      "markers": {
+        "submerged": 19
+      },
+      "end": "free",
+      "next": "surface"
+    },
+    {
+      "name": "surface",
+      "motion": "kraken_surface",
+      "frameCount": 28,
+      "frameRate": 20,
+      "loop": false,
+      "start": "free",
+      "markers": {
+        "eyes-open": 18
+      }
+    },
+    {
+      "name": "spine-volley",
+      "motion": "kraken_volley_spines",
+      "frameCount": 36,
+      "frameRate": 20,
+      "loop": false,
+      "markers": {
+        "raise": 8,
+        "release-1": 15,
+        "release-2": 17,
+        "release-3": 20,
+        "release-4": 22,
+        "release-5": 24,
+        "release-6": 26
+      }
+    }
+  ],
+  "elevation": {
+    "min": -2.5,
+    "max": 2.5,
+    "scale": 0.5,
+    "previewWaterLevel": 0.38
+  },
+  "runtimeAtlas": true,
+  "runtimeContract": "boss",
+  "runtimeBudgetMB": 104,
+  "materialPass": {
+    "version": 1,
+    "color": "srgb-albedo-baked-cavity-v1",
+    "normal": "linear-unorm8-z-oct-normal-v1",
+    "emission": "linear-rgb-unorm8-scaled-v1"
+  },
+  "shadowMesh": {
+    "version": 1,
+    "encoding": "u16-world-xyz-per-pose-v1"
+  }
+}

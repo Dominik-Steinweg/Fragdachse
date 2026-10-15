@@ -9,7 +9,7 @@ Stand: 25.09.2026. Ausgewählte Produktionsrevision: `v2-repair-drone-b`.
 - Zwei gegenläufige Blender-Actions: 16 Flugphasen bei 48 fps und eine zusätzliche Ruhepose. Rumpf, Rotorgehäuse und Werkzeuge bleiben innerhalb des Clips fest.
 - Orthografische 90°-Draufsicht, Nordausrichtung, zentrierter Drehpunkt, transparente 1024-px-Master. Quellen 64/128 px, ausgewählte Quelle 128 px; Anzeige im Spiel weiterhin 32 px.
 
-[Rezept](../../scripts/asset-pipeline/recipes_v2/repair-drone.py), [Katalog](../../scripts/asset-pipeline/catalog-v2.json) und [importierte Laufzeitmetadaten](../../src/config/pipelineAssets.json) sind versioniert. Die Vergleichsreferenz `repair-drone-legacy.png` rekonstruiert Geometrie und Farben der bisherigen Canvas-Zeichnung; sie ist kein Browser-Screenshot.
+[Rezept](../../scripts/asset-pipeline/recipes_v2/repair-drone.py), [Katalog](../../scripts/asset-pipeline/catalog-v2/assets/repair-drone.json) und [importierte Laufzeitmetadaten](../../src/config/pipelineAssets/assets/repair-drone.json) sind versioniert. Die Vergleichsreferenz `repair-drone-legacy.png` rekonstruiert Geometrie und Farben der bisherigen Canvas-Zeichnung; sie ist kein Browser-Screenshot.
 
 ## Spielintegration
 

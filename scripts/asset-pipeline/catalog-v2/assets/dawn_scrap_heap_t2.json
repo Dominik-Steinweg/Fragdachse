@@ -1,0 +1,99 @@
+{
+  "id": "dawn_scrap_heap_t2",
+  "label": "Dawn scrap heap T2",
+  "category": "construction",
+  "gameIds": [],
+  "reference": "scripts/asset-pipeline/references/dawn-scrap-t2.png",
+  "targetSize": 64,
+  "sourceSizes": [
+    128
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Broken ribbed hull panel, hollow gear and bent pipes partly buried in moss and fallen leaves.",
+    "colors": "Military olive with yellow-black warning stripes",
+    "anatomy": "Static centered 64 px canvas, 2 x 2 cells."
+  },
+  "requiredClips": [],
+  "production": "reference",
+  "recipe": "dawn-scrap-heap",
+  "model": {
+    "tier": 2,
+    "librarySurfaces": {
+      "Salvage tier enamel": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.48,
+        "value": 1.08
+      },
+      "Salvage secondary panels": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.35
+      },
+      "Salvage exposed alloy": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.22,
+        "edgewear": 0.25,
+        "tint": 0.66
+      },
+      "Salvage oily structural steel": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.85
+      },
+      "Salvage warning ochre": {
+        "family": "yellow",
+        "scale": 0.42,
+        "grime": 0.12,
+        "edgewear": 0.12,
+        "saturation": 0.64,
+        "value": 0.94,
+        "tint": 0.28
+      },
+      "Clinging forest moss": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.04,
+        "tint": 0.94,
+        "moss": 0.25
+      },
+      "Young fern leaf": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.04,
+        "tint": 0.94,
+        "moss": 0.15
+      }
+    }
+  },
+  "orthoScale": 2.64,
+  "textures": {
+    "dawnPaint": "art/poc/dawn/textures/library/steel-paint-olive-02.png",
+    "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+    "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png",
+    "moss": "art/poc/dawn/textures/library/mask-moss-01.png",
+    "yellow": "art/poc/dawn/textures/library/paint-industrial-yellow-01.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Dawn Material V1 / matte weathered library",
+      "textureStrength": 1,
+      "formShadowStrength": 0.83
+    }
+  },
+  "clips": []
+}

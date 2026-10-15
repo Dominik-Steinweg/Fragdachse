@@ -1,0 +1,85 @@
+{
+  "id": "held-asmd-sec",
+  "label": "ASMD SEC",
+  "category": "weapon",
+  "gameIds": [
+    "ASMD_SEC"
+  ],
+  "production": "reference",
+  "reference": "public/assets/sprites/held/ASMD_SEC.png",
+  "designReference": "public/assets/sprites/Loadout/ASMD_SEC.png",
+  "targetSize": 32,
+  "sourceSizes": [
+    128,
+    256
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Gemeinsames ASMD-Modell mit Induktionslauf, symmetrischen Kondensatoren, gefasster Energiekammer und identischer Fokussierhülse.",
+    "materials": "Identisches ASMD-Gehäuse und identische Bauteile; violette statt blaue Energieakzente. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+    "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+  },
+  "requiredClips": [],
+  "recipe": "held-weapon",
+  "model": {
+    "construction": "asmd",
+    "accent": [
+      0.38,
+      0.035,
+      0.62
+    ],
+    "palette": {
+      "steel": [
+        0.06,
+        0.075,
+        0.11
+      ],
+      "edge": [
+        0.35,
+        0.38,
+        0.43
+      ],
+      "body": [
+        0.025,
+        0.032,
+        0.06
+      ],
+      "trim": [
+        0.2,
+        0.225,
+        0.27
+      ]
+    }
+  },
+  "orthoScale": 3.2,
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Gebrauchte Materialien und kräftige Formschatten",
+      "textureStrength": 0.85,
+      "formShadowStrength": 1
+    }
+  },
+  "clips": [],
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      9.5
+    ],
+    "referenceGrip": [
+      4.5,
+      14.5
+    ]
+  }
+}

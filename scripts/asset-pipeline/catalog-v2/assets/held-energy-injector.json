@@ -1,0 +1,90 @@
+{
+  "id": "held-energy-injector",
+  "label": "ENERGY INJECTOR",
+  "category": "weapon",
+  "gameIds": [
+    "ENERGY_INJECTOR"
+  ],
+  "production": "reference",
+  "reference": "public/assets/sprites/held/ENERGIEINJEKTOR.png",
+  "designReference": "public/assets/sprites/Loadout/UPGRADE_UNLOCK_ENERGY_INJECTOR.png",
+  "targetSize": 32,
+  "sourceSizes": [
+    128,
+    256
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Schmaler Injektor mit ablesbarer Dosierkartusche, Haltehülsen, Nadelfutter und Daumenhebel.",
+    "materials": "Helles silbrig-türkises Instrument mit cyanfarbener Dosierkartusche. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+    "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+  },
+  "requiredClips": [],
+  "recipe": "held-weapon",
+  "model": {
+    "construction": "injector",
+    "accent": [
+      0.035,
+      0.62,
+      0.78
+    ],
+    "palette": {
+      "steel": [
+        0.1,
+        0.23,
+        0.28
+      ],
+      "edge": [
+        0.53,
+        0.64,
+        0.6
+      ],
+      "body": [
+        0.38,
+        0.5,
+        0.52
+      ],
+      "trim": [
+        0.04,
+        0.32,
+        0.41
+      ],
+      "brass": [
+        0.55,
+        0.38,
+        0.08
+      ]
+    }
+  },
+  "orthoScale": 3.2,
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Gebrauchte Materialien und kräftige Formschatten",
+      "textureStrength": 0.85,
+      "formShadowStrength": 1
+    }
+  },
+  "clips": [],
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      14.5
+    ],
+    "referenceGrip": [
+      2.5,
+      9.5
+    ]
+  }
+}

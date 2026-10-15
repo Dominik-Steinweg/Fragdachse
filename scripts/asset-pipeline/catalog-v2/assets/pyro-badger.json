@@ -1,0 +1,142 @@
+{
+  "id": "pyro-badger",
+  "label": "Pyro-Dachs",
+  "category": "enemy",
+  "gameIds": [
+    "pyro-badger"
+  ],
+  "reference": "public/assets/sprites/enemies/enemy_pyro_badger.png",
+  "targetSize": 30,
+  "sourceSizes": [
+    64,
+    128
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Feuerroter Schutzhelm über einer schwarzen Atemmaske mit getrennten Sichtgläsern und seitlichen Filtern; Glock-artige Pistole in den Pfoten.",
+    "colors": "Feuerrote Schutzkleidung und Helm, dunkel verkohltes Fell, schwarze Atemmaske und sparsame bernsteinfarbene Gläser.",
+    "anatomy": "Zweibeiner mit spielerverwandter Körperhaltung, eigenständigem Kopf, stabil gehaltenem Waffenmodell und separat ausschwingenden Beinen.",
+    "materials": "Runde ausgearbeitete Formen, ruhige matte Oberflächen, klare Formschatten, feine technische Gebrauchsspuren und kräftige Identitätsfarben."
+  },
+  "requiredClips": [
+    "move",
+    "claw"
+  ],
+  "production": "reference",
+  "recipe": "pyro-badger",
+  "model": {
+    "footSouthOffset": 0.04,
+    "footSpacing": 1.24,
+    "clawedPaws": true,
+    "headSouthOffset": 0.04,
+    "earSouthOffset": 0.055,
+    "fierceEyes": true,
+    "combatFace": true,
+    "cursorFace": true,
+    "eyeSouthOffset": 0.025,
+    "furBase": [
+      0.19,
+      0.029,
+      0.017
+    ],
+    "furTones": [
+      [
+        23,
+        12,
+        10
+      ],
+      [
+        64,
+        22,
+        16
+      ],
+      [
+        129,
+        42,
+        26
+      ],
+      [
+        185,
+        81,
+        48
+      ]
+    ],
+    "paintedFur": true,
+    "contactAODistance": 0.65,
+    "contactAOStrength": 0.9,
+    "headColor": [
+      0.44,
+      0.021,
+      0.013
+    ],
+    "tailColor": [
+      0.14,
+      0.033,
+      0.023
+    ],
+    "footColor": [
+      0.055,
+      0.067,
+      0.075
+    ],
+    "upperBodyMotion": "stable-grip"
+  },
+  "orthoScale": 6.288,
+  "textures": {
+    "organic": "art/poc/pipeline-v2/textures/badger-quiet-fur-v2-j.png",
+    "bodyFur": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
+    "headFur": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Eigenständiger Kopf und bewaffnete Haltung",
+      "textureStrength": 0.62,
+      "formShadowStrength": 1
+    }
+  },
+  "clips": [
+    {
+      "name": "move",
+      "motion": "biped",
+      "frameCount": 12,
+      "frameRate": 15,
+      "loop": true,
+      "parameters": {
+        "strideForward": 0.29,
+        "strideBack": 0.13,
+        "lift": 0.12,
+        "footRoll": 0.2,
+        "footYaw": 0.025,
+        "bodyYaw": 0.025,
+        "bodyRoll": 0.024,
+        "bodyPitch": 0.038,
+        "bodyBob": 0.075,
+        "bodySurge": -0.025,
+        "bodyShift": 0.018,
+        "headYaw": -0.022,
+        "headBob": -0.02
+      }
+    },
+    {
+      "name": "claw",
+      "motion": "claw_biped",
+      "frameCount": 18,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 8,
+        "impact": 11
+      },
+      "parameters": {
+        "strength": 1,
+        "leapDistance": 1.048
+      }
+    }
+  ],
+  "displayScale": 2.4
+}

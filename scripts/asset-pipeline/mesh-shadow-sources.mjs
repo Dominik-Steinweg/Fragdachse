@@ -1,10 +1,10 @@
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { readPipelineRegistry } from './pipeline-registry.mjs';
+import { readDemandCatalog, readPipelineRegistry } from './pipeline-registry.mjs';
 /** Resolve the exact imported idle+sheet hashes; never silently pick the newest authoring run. */
 export async function selectedHeldSources(repo) {
   const registry=await readPipelineRegistry(repo);
-  const catalog=JSON.parse(await readFile(path.join(repo,'scripts/asset-pipeline/catalog-v2.json')));
+  const catalog=await readDemandCatalog(repo);
   const expected=catalog.assets.filter(a=>['held-weapon','held-utility'].includes(a.recipe));
   const held=registry.assets.filter(a=>a.id.startsWith('held-'));
   if(expected.length!==held.length||expected.some(a=>!held.some(h=>h.id===a.id)))throw Error('Catalog/registry held coverage mismatch');

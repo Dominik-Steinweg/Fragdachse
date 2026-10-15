@@ -1,0 +1,117 @@
+{
+  "id": "construction_dawn_wreck_tractor_t1",
+  "label": "Dawn tractor wreck T1",
+  "category": "construction",
+  "gameIds": [],
+  "reference": "scripts/asset-pipeline/references/dawn-wreck-tractor.png",
+  "designReference": "scripts/asset-pipeline/references/dawn-tier-row.png",
+  "targetSize": 96,
+  "sourceSizes": [
+    192
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Overturned agricultural tractor, exposed engine, large rear tires, detached front wheel and scattered scrap.",
+    "colors": "Rust-orange and brown, charcoal steel, old moss and grass.",
+    "anatomy": "Static centered 96 x 96 px prop / 3 x 3 cells. Tier-parametric shared geometry."
+  },
+  "requiredClips": [],
+  "production": "reference",
+  "recipe": "dawn-wreck-tractor",
+  "model": {
+    "tier": 1,
+    "librarySurfaces": {
+      "Salvage tier enamel": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.16,
+        "value": 1.08,
+        "moss": 0.2
+      },
+      "Salvage secondary panels": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.35
+      },
+      "Salvage exposed alloy": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.22,
+        "edgewear": 0.25,
+        "tint": 0.66
+      },
+      "Salvage oily structural steel": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.85
+      },
+      "Split tire rubber": {
+        "family": "rubber",
+        "scale": 0.42,
+        "grime": 0.08,
+        "edgewear": 0.06,
+        "tint": 0.1
+      },
+      "Worn rubber tread crowns": {
+        "family": "rubber",
+        "scale": 0.42,
+        "grime": 0.08,
+        "edgewear": 0.06,
+        "tint": 0.3
+      },
+      "Clinging forest moss": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.04,
+        "tint": 0.94,
+        "moss": 0.25
+      },
+      "Young fern leaf": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.04,
+        "tint": 0.94,
+        "moss": 0.15
+      }
+    }
+  },
+  "orthoScale": 3.5,
+  "textures": {
+    "dawnPaint": "art/poc/dawn/textures/library/steel-rust-bare-02.png",
+    "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+    "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png",
+    "moss": "art/poc/dawn/textures/library/mask-moss-01.png",
+    "rubber": "art/poc/dawn/textures/library/rubber-tread-worn-01.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Dawn Material V1 / matte weathered library",
+      "textureStrength": 1,
+      "formShadowStrength": 0.83
+    }
+  },
+  "clips": [],
+  "elevation": {
+    "min": 0,
+    "max": 1.2,
+    "scale": 0.5
+  },
+  "materialPass": {
+    "version": 1,
+    "color": "srgb-albedo-baked-cavity-v1",
+    "normal": "linear-unorm8-z-oct-normal-v1",
+    "emission": "linear-rgb-unorm8-scaled-v1"
+  }
+}

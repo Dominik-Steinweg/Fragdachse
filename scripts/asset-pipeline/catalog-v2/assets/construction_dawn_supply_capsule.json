@@ -1,0 +1,93 @@
+{
+  "id": "construction_dawn_supply_capsule",
+  "label": "Dawn supply capsule",
+  "category": "construction",
+  "gameIds": [],
+  "reference": "scripts/asset-pipeline/references/dawn-extractor.png",
+  "targetSize": 96,
+  "sourceSizes": [
+    192
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Burst cargo capsule, peeled hatch, collapsed parachute and three portable crates.",
+    "colors": "Player faction warm ochre and brass, unbleached canvas and dark recesses.",
+    "anatomy": "Static centered 96 px canvas, 3 x 3 cells."
+  },
+  "requiredClips": [],
+  "production": "reference",
+  "recipe": "dawn-supply-capsule",
+  "model": {
+    "librarySurfaces": {
+      "Player rescue ochre": {
+        "family": "yellow",
+        "scale": 0.42,
+        "grime": 0.12,
+        "edgewear": 0.12,
+        "saturation": 0.64,
+        "value": 0.94,
+        "tint": 0.28
+      },
+      "Warm worn brass fittings": {
+        "family": "copper",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.35,
+        "saturation": 0.75
+      },
+      "Recessed cargo gasket": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.92
+      },
+      "Unbleached parachute canvas": {
+        "family": "canvas",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.04,
+        "value": 1.25,
+        "tint": 0.15
+      },
+      "Cargo handle wear": {
+        "family": "copper",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.18,
+        "tint": 0.48
+      },
+      "Weathered delivery crate wood": {
+        "family": "wood",
+        "scale": 0.8,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.1,
+        "value": 1.15
+      }
+    }
+  },
+  "orthoScale": 3.8,
+  "textures": {
+    "dawnPaint": "art/poc/dawn/textures/library/paint-industrial-yellow-01.png",
+    "yellow": "art/poc/dawn/textures/library/paint-industrial-yellow-01.png",
+    "copper": "art/poc/dawn/textures/library/brass-copper-weathered-01.png",
+    "wood": "art/poc/dawn/textures/library/wood-planks-weathered-01.png",
+    "canvas": "art/poc/dawn/textures/library/canvas-tarp-stained-01.png",
+    "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+    "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Dawn Material V1 / matte weathered library",
+      "textureStrength": 1,
+      "formShadowStrength": 0.83
+    }
+  },
+  "clips": []
+}

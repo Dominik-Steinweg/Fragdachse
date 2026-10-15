@@ -1,0 +1,54 @@
+{
+  "gameIds": [
+    "FIRE_CONTROL_PORTAL"
+  ],
+  "production": "reference",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "HQ4: lifted petrol panels, readable gunmetal and thin bare-steel bevels",
+      "textureStrength": 0.12,
+      "formShadowStrength": 0.65
+    }
+  },
+  "reference": "scripts/asset-pipeline/references/fire-control-portal-concept.png",
+  "recipe": "fire-control-portal",
+  "description": {
+    "silhouette": "Spherical segmented steel casing, target-grid lens, north striker and bent side spoon.",
+    "materials": "HQ4 value groups: chipped #637e86 petrol panels (L*51), rough #484e52 gunmetal (L*33), #b5bfc2 bare-steel bevels (L*77), restrained cool contact dust and dark seams; unchanged #3dffd0 optics and #e8fff9 core.",
+    "anatomy": "Real spherical shell and upward optical stack; strict orthographic top-down, no baked halo."
+  },
+  "requiredClips": [],
+  "clips": [],
+  "id": "held-fire-control-portal",
+  "label": "Feuerleitgranate getragen (HQ)",
+  "category": "utility",
+  "designReference": "scripts/asset-pipeline/references/fire-control-portal-concept.png",
+  "targetSize": 32,
+  "sourceSizes": [
+    128,
+    256
+  ],
+  "orthoScale": 3.2,
+  "model": {
+    "part": "held"
+  },
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      18
+    ]
+  }
+}

@@ -28,7 +28,7 @@ def main():
     asset_id, label = pipeline.identifier(args.asset), pipeline.identifier(args.label)
     output = root / 'art/poc/pipeline-v2/previews' / label / asset_id
     if output.exists(): raise FileExistsError('Preview already exists; use a new label')
-    catalog = json.loads((root / 'scripts/asset-pipeline/catalog-v2.json').read_text(encoding='utf-8'))
+    catalog = pipeline.demand_catalog.read_catalog(root)
     spec = next(asset for asset in catalog['assets'] if asset['id'] == asset_id)
     if args.patch:
         patch = json.loads(Path(args.patch).read_text(encoding='utf-8-sig'))

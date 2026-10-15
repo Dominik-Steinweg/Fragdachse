@@ -7,6 +7,7 @@ import { parseArgs } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { reviewPreview, safePath } from './review-preview-v2.mjs';
 import { waterOptions } from './water-preview-v2.mjs';
+import { readDemandCatalog } from './pipeline-registry.mjs';
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const identifier = value => {
@@ -69,7 +70,7 @@ export async function preview(argv, root = repoRoot) {
   }
   if (positionals.length !== 1) throw new Error('Eine Asset-ID angeben; siehe --help.');
   const id = identifier(positionals[0]);
-  const catalog = JSON.parse(await readFile(path.join(root, 'scripts/asset-pipeline/catalog-v2.json'), 'utf8'));
+  const catalog = await readDemandCatalog(root);
   let spec = catalog.assets.find(a => a.id === id);
   if (!spec || spec.production === 'planned') throw new Error(`Keine ausführbare Rezeptur: ${id}`);
   let patch;

@@ -9,13 +9,14 @@ import { repoRoot, json, fileHash, verifyHash, auditEnemy, atlasRect } from './v
 import { rgba, tile, inspectPasses, validatePoseMapping, mapLimit } from './pass-quality.mjs';
 import { relativeMember } from './enemy-mesh-contract.mjs';
 import { validateAlbedoRepair, replaceTile } from './material-repair.mjs';
+import { readDemandCatalog } from './pipeline-registry.mjs';
 
 export async function prepareEnemies({sources='D:/Fragdachse-render',output,repairs,jobs=2,repo=repoRoot}) {
   const root=path.resolve(output);
   if(!/^D:[\\/]/i.test(root)||!root.toLowerCase().startsWith(path.resolve(sources).toLowerCase()+path.sep))throw Error('Output must be a new revision below the D: source root');
   await mkdir(root); // Exclusive revision; existing evidence is immutable.
   const started=performance.now(),runtime=await json(path.join(repo,'src/assets/manifests/enemy-mesh-families.json'));
-  const catalog=(await json(path.join(repo,'scripts/asset-pipeline/catalog-v2.json'))).assets.filter(a=>a.category==='enemy').map(a=>a.id).sort();
+  const catalog=(await readDemandCatalog(repo)).assets.filter(a=>a.category==='enemy').map(a=>a.id).sort();
   if(JSON.stringify(runtime.assets.map(a=>a.id).sort())!==JSON.stringify(catalog))throw Error('Incomplete enemy catalog coverage');
   const toolHashes={};for(const name of ['prepare-enemy-materials.mjs','verify-published-assets.mjs','pass-quality.mjs','material-repair.mjs'])toolHashes[name]=await fileHash(path.join(repo,'scripts/asset-pipeline',name));
   await mkdir(path.join(root,'source-tools'));
@@ -94,7 +95,7 @@ export async function prepareEnemies({sources='D:/Fragdachse-render',output,repa
 }
 export async function verifyPrepared(root) {
   const batch=await json(path.join(root,'manifest.json'));
-  const expected=(await json(path.join(repoRoot,'scripts/asset-pipeline/catalog-v2.json'))).assets.filter(a=>a.category==='enemy').map(a=>a.id).sort();
+  const expected=(await readDemandCatalog(repoRoot)).assets.filter(a=>a.category==='enemy').map(a=>a.id).sort();
   if(batch.runtimeActivated!==false||batch.results.some(r=>r.error)
     ||JSON.stringify(batch.results.map(r=>r.value.id).sort())!==JSON.stringify(expected))throw Error('Incomplete prepared batch');
   for(const [name,hash]of Object.entries(batch.tools))await verifyHash(path.join(root,'source-tools',relativeMember(name)),hash);

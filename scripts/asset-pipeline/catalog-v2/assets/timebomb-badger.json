@@ -1,0 +1,87 @@
+{
+  "id": "timebomb-badger",
+  "label": "Zeitbomben-Dachs",
+  "category": "enemy",
+  "gameIds": [
+    "timebomb-badger"
+  ],
+  "reference": "public/assets/sprites/enemies/enemy_timebomb_badger.png",
+  "targetSize": 24,
+  "sourceSizes": [
+    64,
+    128
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Kompakter runder Körper mit vorderem hellem Kopfstreifen und gut erkennbarem Bombengeschirr.",
+    "colors": "Dunkles Graubraun, schwach türkise Flanken und kleine rote Timeranzeige.",
+    "anatomy": "Vierbeiner mit schnellen kurzen Schritten; Geschirr bleibt befestigt, Zündung ist kein Teil des Laufclips.",
+    "materials": "Dichtes graubraunes Fell, verwittertes ockerfarbenes rundes Sprenggehäuse, eingelassene Schrauben, Messinghalter und geschützte Zündsicherungen."
+  },
+  "requiredClips": [
+    "move",
+    "claw"
+  ],
+  "production": "reference",
+  "recipe": "timebomb-badger",
+  "model": {},
+  "orthoScale": 5.904,
+  "textures": {
+    "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Ausgearbeitete Oberflächen und organisches Fell",
+      "textureStrength": 0.84,
+      "formShadowStrength": 0.82
+    }
+  },
+  "clips": [
+    {
+      "name": "move",
+      "motion": "quadruped",
+      "frameCount": 12,
+      "frameRate": 17,
+      "loop": true,
+      "parameters": {
+        "strideForward": 0.19,
+        "strideBack": 0.14,
+        "lift": 0.07,
+        "footRoll": 0.12,
+        "footYaw": 0.03,
+        "bodyYaw": 0.032,
+        "bodyBob": 0.033,
+        "bodyRoll": 0.018,
+        "bodyPitch": 0.015,
+        "bodyShift": 0.018,
+        "headYaw": 0.023,
+        "headBob": 0.016,
+        "tailYaw": 0.09,
+        "loadBob": 0.009,
+        "rearPhase": 0.08,
+        "bodySurge": 0.012
+      }
+    },
+    {
+      "name": "claw",
+      "motion": "claw_quadruped",
+      "frameCount": 18,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 8,
+        "impact": 11
+      },
+      "parameters": {
+        "strength": 1,
+        "leapDistance": 0.984
+      }
+    }
+  ],
+  "displayScale": 2.4
+}

@@ -1,0 +1,85 @@
+{
+  "id": "enemy_dawn_scavenger",
+  "label": "Dawn scrap scavenger",
+  "category": "enemy",
+  "gameIds": [],
+  "reference": "public/assets/sprites/enemies/enemy_rabid_badger.png",
+  "targetSize": 26,
+  "sourceSizes": [
+    52
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Lean quick badger with oversized full salvage sack, projecting gear and metal sheet; no weapon.",
+    "colors": "Charcoal and saturated enemy violet, broad ivory badger mask, crimson harness, contrasting ochre burlap sack and bright steel loot.",
+    "anatomy": "North-facing lean badger and trailing body-sized sack; four exposed running paws. 26 px canvas, approximately 22 px occupied height including sack (1.3-1.4x small enemy silhouette); unchanged framing."
+  },
+  "requiredClips": [
+    "idle",
+    "move"
+  ],
+  "production": "reference",
+  "recipe": "dawn-scavenger",
+  "model": {},
+  "orthoScale": 3.55,
+  "textures": {},
+  "materialSource": "procedural",
+  "materialVariants": {
+    "standard": {
+      "label": "Weathered matte pigment, machined relief and cavity depth",
+      "textureStrength": 0,
+      "formShadowStrength": 0.83
+    }
+  },
+  "clips": [
+    {
+      "name": "idle",
+      "motion": "quadruped",
+      "frameCount": 12,
+      "frameRate": 12,
+      "loop": true,
+      "parameters": {
+        "strideForward": 0,
+        "strideBack": 0,
+        "lift": 0,
+        "footRoll": 0,
+        "footYaw": 0,
+        "bodyYaw": 0.014,
+        "bodyBob": 0.012,
+        "bodySurge": 0.005,
+        "headYaw": -0.008,
+        "tailYaw": 0.018,
+        "loadBob": 0.012
+      }
+    },
+    {
+      "name": "move",
+      "motion": "quadruped",
+      "frameCount": 12,
+      "frameRate": 16,
+      "loop": true,
+      "parameters": {
+        "strideForward": 0.46,
+        "strideBack": 0.35,
+        "lift": 0.16,
+        "footRoll": 0.22,
+        "footYaw": 0.12,
+        "bodyYaw": 0.19,
+        "bodyBob": 0.09,
+        "bodyRoll": 0.085,
+        "bodyShift": 0.055,
+        "bodySurge": 0.075,
+        "headYaw": -0.14,
+        "tailYaw": 0.26,
+        "rearPhase": 0.08,
+        "loadBob": 0.09,
+        "bodyPitch": 0.05
+      }
+    }
+  ],
+  "displayScale": 1
+}

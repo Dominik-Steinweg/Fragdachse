@@ -25,6 +25,7 @@ import blender_pipeline as shared
 import motions_v2
 import eye_anchors
 import socket_anchors
+import demand_catalog
 from contracts_v2 import validate_clips, validate_extensions
 
 _sessions = {}
@@ -45,7 +46,7 @@ def identifier(value, asset=False):
 
 
 def resolve_spec(root, asset_id, catalog_path=None):
-    catalog = json.loads((Path(catalog_path) if catalog_path else root / 'scripts/asset-pipeline/catalog-v2.json').read_text(encoding='utf-8'))
+    catalog = json.loads(Path(catalog_path).read_text(encoding='utf-8')) if catalog_path else demand_catalog.read_catalog(root)
     if catalog.get('version') != 2:
         raise ValueError('Expected V2 demand catalog')
     matches = [a for a in catalog['assets'] if a['id'] == asset_id]
@@ -85,13 +86,15 @@ def resolve_spec(root, asset_id, catalog_path=None):
 
 def inputs(root, spec, device='CPU'):
     names = ['blender_pipeline.py', 'blender_pipeline_v2.py', 'rigs_v2.py', 'motions_v2.py',
-             f'recipes_v2/{spec["recipe"]}.py', 'catalog-v2.json',
+             f'recipes_v2/{spec["recipe"]}.py',
              'export.mjs', 'export-v2.mjs', 'kraken-material-v2.mjs', 'export-provenance.mjs', 'contracts-v2.mjs', 'atlas-v2.mjs', 'elevation-v2.mjs', 'runtime-contract-v2.mjs', 'eye-anchors.mjs', 'socket-anchors.mjs', 'index-library.mjs', 'archive-v2.py', 'publish-v2.ps1', 'texture-prompts.json']
     if spec['recipe'] in ('rocket', 'badger'):
         names.append(f'recipes/{spec["recipe"]}.py')
     # The production library includes shared anatomy/weapon helpers. Snapshot the
     # complete small Python authoring library so transitive imports stay portable.
-    names += [str(path.relative_to(BASE)).replace('\\', '/') for pattern in ('*.py', 'recipes/*.py', 'recipes_v2/*.py') for path in BASE.glob(pattern)]
+    # Recipes may read other catalog entries too (enemy weapons reuse held-weapon specs), so the
+    # whole per-asset demand catalog is bound as well.
+    names += [str(path.relative_to(BASE)).replace('\\', '/') for pattern in ('*.py', 'recipes/*.py', 'recipes_v2/*.py', 'catalog-v2/registry.json', 'catalog-v2/assets/*.json') for path in BASE.glob(pattern)]
     sources = {f'scripts/asset-pipeline/{name}': shared.digest(BASE / name) for name in names}
     for relative in ('package.json', 'package-lock.json'):
         sources[relative] = shared.digest(root / relative)
@@ -444,6 +447,7 @@ if __name__ == '__main__':
     parser.add_argument('--output-root', help='Dedicated absolute render directory, or repository-contained relative root')
     parser.add_argument('--device', choices=['CPU', 'CUDA', 'OPTIX'], default='CPU')
     args = parser.parse_args(sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else [])
-    targets = [a['id'] for a in json.loads((Path(args.catalog) if args.catalog else Path(args.repo)/'scripts/asset-pipeline/catalog-v2.json').read_text(encoding='utf-8'))['assets'] if a.get('production') == 'reference'] if args.asset == 'references' else [args.asset]
+    catalog = json.loads(Path(args.catalog).read_text(encoding='utf-8')) if args.catalog else demand_catalog.read_catalog(Path(args.repo))
+    targets = [a['id'] for a in catalog['assets'] if a.get('production') == 'reference'] if args.asset == 'references' else [args.asset]
     for target in targets:
         print(json.dumps(build(args.repo, target, args.revision, args.max_frames, args.device, args.catalog, args.output_root)), flush=True)

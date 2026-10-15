@@ -1,12 +1,14 @@
 import type * as Phaser from 'phaser';
 import { describe, expect, it, vi } from 'vitest';
-import catalog from '../../scripts/asset-pipeline/catalog-v2.json';
 import { getPipelineAsset } from '../../src/config/pipelineAssets';
 import {
   BOMBER_DRONE_BODY_ASSET_ID,
   BOMBER_DRONE_BOMB_ASSET_ID,
   preloadBomberSquadronAssets,
 } from '../../src/effects/bomberSquadron/BomberSquadronAssets';
+import { readDemandCatalog } from '../../scripts/asset-pipeline/pipeline-registry.mjs';
+
+const catalog = await readDemandCatalog();
 
 describe('bomber squadron asset loading', () => {
   it('loads its own selected body and ordnance, including only authored animation sheets', () => {

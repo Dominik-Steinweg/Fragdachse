@@ -1,0 +1,90 @@
+{
+  "id": "held-plasma-burner",
+  "label": "PLASMA BURNER",
+  "category": "weapon",
+  "gameIds": [
+    "PLASMA_BURNER"
+  ],
+  "production": "reference",
+  "reference": "public/assets/sprites/held/REPARATURSTRAHL.png",
+  "designReference": "public/assets/sprites/Loadout/UPGRADE_UNLOCK_PLASMA_BURNER.png",
+  "targetSize": 32,
+  "sourceSizes": [
+    128,
+    256
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Kompaktes Schweißgerät mit Gaskartusche, Stromkabel, Kupferschaft und keramischem Brennerkopf.",
+    "materials": "Kobaltblaues Schweißgerät mit cyanfarbener Keramik und kupfernem Brennerschaft. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+    "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+  },
+  "requiredClips": [],
+  "recipe": "held-weapon",
+  "model": {
+    "construction": "repair",
+    "accent": [
+      0.025,
+      0.46,
+      0.7
+    ],
+    "palette": {
+      "steel": [
+        0.05,
+        0.12,
+        0.2
+      ],
+      "edge": [
+        0.23,
+        0.37,
+        0.44
+      ],
+      "body": [
+        0.025,
+        0.055,
+        0.16
+      ],
+      "trim": [
+        0.045,
+        0.16,
+        0.37
+      ],
+      "brass": [
+        0.3,
+        0.2,
+        0.09
+      ]
+    }
+  },
+  "orthoScale": 3.2,
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Gebrauchte Materialien und kräftige Formschatten",
+      "textureStrength": 0.85,
+      "formShadowStrength": 1
+    }
+  },
+  "clips": [],
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      13.5
+    ],
+    "referenceGrip": [
+      4.5,
+      10.5
+    ]
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "id": "void-stalker",
+  "label": "Leerenschleicher",
+  "category": "enemy",
+  "gameIds": [
+    "void-stalker"
+  ],
+  "reference": "public/assets/sprites/enemies/enemy_void_stalker.png",
+  "targetSize": 30,
+  "sourceSizes": [
+    64,
+    128
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Runder gepanzerter Rumpf mit ringförmigem Rückenmotiv und vier markierten Gliedmaßen.",
+    "colors": "Tiefblau und Violett, cyanblaue Gelenke und helle Dachskopfzeichnung.",
+    "anatomy": "Vierbeiner mit niedriger schleichender Haltung; Gelenke und Rückenpanzer bleiben getrennte Formen.",
+    "materials": "Verwitterte kobaltblaue Panzerung mit vertieften Nähten und Kontakten, gerippter violetter Energiekammer und dunklem Indigofell."
+  },
+  "requiredClips": [
+    "move",
+    "claw"
+  ],
+  "production": "reference",
+  "recipe": "void-stalker",
+  "model": {
+    "coreRadius": 0.24
+  },
+  "orthoScale": 7.056,
+  "textures": {
+    "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Ausgearbeitete Oberflächen und organisches Fell",
+      "textureStrength": 0.84,
+      "formShadowStrength": 0.82
+    }
+  },
+  "clips": [
+    {
+      "name": "move",
+      "motion": "quadruped",
+      "frameCount": 12,
+      "frameRate": 14,
+      "loop": true,
+      "parameters": {
+        "strideForward": 0.245,
+        "strideBack": 0.185,
+        "lift": 0.045,
+        "footRoll": 0.13,
+        "footYaw": 0.075,
+        "bodyYaw": 0.043,
+        "bodyBob": 0.013,
+        "bodyRoll": 0.029,
+        "bodyPitch": 0.015,
+        "bodyShift": 0.023,
+        "headYaw": -0.027,
+        "headBob": 0.006,
+        "tailYaw": 0.08,
+        "rearPhase": 0.08,
+        "bodySurge": 0.012
+      }
+    },
+    {
+      "name": "claw",
+      "motion": "claw_quadruped",
+      "frameCount": 18,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 8,
+        "impact": 11
+      },
+      "parameters": {
+        "strength": 1,
+        "leapDistance": 1.176
+      }
+    }
+  ],
+  "displayScale": 2.4
+}

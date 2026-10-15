@@ -1,0 +1,116 @@
+{
+  "id": "construction_dawn_wreck_minecart_t2",
+  "label": "Dawn minecart wreck T2",
+  "category": "construction",
+  "gameIds": [],
+  "reference": "scripts/asset-pipeline/references/dawn-wreck-minecart.png",
+  "designReference": "scripts/asset-pipeline/references/dawn-tier-row.png",
+  "targetSize": 96,
+  "sourceSizes": [
+    192
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Two derailed open ore tubs flanking a short broken rail segment, detached wheelsets and spilled scrap.",
+    "colors": "Dark military olive, contrasting khaki panels, worn bright edges and yellow-black cargo warnings.",
+    "anatomy": "Static centered 96 x 96 px prop / 3 x 3 cells. Tier-parametric shared geometry."
+  },
+  "requiredClips": [],
+  "production": "reference",
+  "recipe": "dawn-wreck-minecart",
+  "model": {
+    "tier": 2,
+    "librarySurfaces": {
+      "Salvage tier enamel": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.48,
+        "value": 1.08
+      },
+      "Salvage secondary panels": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.35
+      },
+      "Salvage exposed alloy": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.22,
+        "edgewear": 0.25,
+        "tint": 0.66
+      },
+      "Salvage oily structural steel": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.85
+      },
+      "Salvage warning ochre": {
+        "family": "yellow",
+        "scale": 0.42,
+        "grime": 0.12,
+        "edgewear": 0.12,
+        "saturation": 0.64,
+        "value": 0.94,
+        "tint": 0.28
+      },
+      "Clinging forest moss": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.04,
+        "tint": 0.94
+      },
+      "Young fern leaf": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.04,
+        "tint": 0.94
+      },
+      "Weathered railway sleeper": {
+        "family": "wood",
+        "scale": 0.6,
+        "grime": 0.18,
+        "edgewear": 0.12,
+        "tint": 0.12
+      }
+    }
+  },
+  "orthoScale": 3.6,
+  "textures": {
+    "dawnPaint": "art/poc/dawn/textures/library/steel-paint-olive-02.png",
+    "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+    "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png",
+    "yellow": "art/poc/dawn/textures/library/paint-industrial-yellow-01.png",
+    "wood": "art/poc/dawn/textures/library/wood-planks-weathered-01.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Dawn Material V1 / matte weathered library",
+      "textureStrength": 1,
+      "formShadowStrength": 0.83
+    }
+  },
+  "clips": [],
+  "elevation": {
+    "min": 0,
+    "max": 1,
+    "scale": 0.5
+  },
+  "materialPass": {
+    "version": 1,
+    "color": "srgb-albedo-baked-cavity-v1",
+    "normal": "linear-unorm8-z-oct-normal-v1",
+    "emission": "linear-rgb-unorm8-scaled-v1"
+  }
+}

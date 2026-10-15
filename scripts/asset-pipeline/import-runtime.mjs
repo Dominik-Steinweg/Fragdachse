@@ -7,7 +7,7 @@ import { verifySelectionV2 } from './export-v2.mjs';
 import { validateEyeAnchors } from './eye-anchors.mjs';
 import { isBossRuntime, verifyBossRuntime } from './runtime-contract-v2.mjs';
 import { validateClipContracts } from './contracts-v2.mjs';
-import { PIPELINE_REGISTRY_DIR, pipelineRegistryText, readPipelineRegistry, writePipelineRegistry } from './pipeline-registry.mjs';
+import { PIPELINE_REGISTRY_DIR, pipelineRegistryText, readDemandCatalog, readPipelineRegistry, writePipelineRegistry } from './pipeline-registry.mjs';
 
 /** Explicit identities: both bodies belong to one enemy; parts need no enemy-registry mapping. */
 export const BOSS_TEXTURE_KEYS = Object.freeze({
@@ -40,7 +40,7 @@ export async function importRuntime({ revision, requestedIds = [], root = proces
   // carries the pipeline version independently of the human-readable run name.
   if (!/^[a-z0-9][a-z0-9-]*$/.test(revision)) throw new Error('Invalid revision');
   const readJson = async (file) => JSON.parse(await readFile(file, 'utf8'));
-  const catalog = await readJson(path.join(root, 'scripts/asset-pipeline/catalog-v2.json'));
+  const catalog = await readDemandCatalog(root);
   const enemies = (await readJson(path.join(root, 'src/config/coopDefenseEnemies.json'))).enemies;
   if (new Set(requestedIds).size !== requestedIds.length
       || requestedIds.some(id => !catalog.assets.some(entry => entry.id === id))) {

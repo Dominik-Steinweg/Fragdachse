@@ -1,0 +1,87 @@
+{
+  "id": "rabid-badger",
+  "label": "Tollwütiger Dachs",
+  "category": "enemy",
+  "gameIds": [
+    "rabid-badger"
+  ],
+  "reference": "public/assets/sprites/enemies/enemy_rabid_badger.png",
+  "targetSize": 22,
+  "sourceSizes": [
+    64,
+    128
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Schlanker länglicher Rücken, seitlich vorgestreckte Krallen und kleine spitze Schnauze.",
+    "colors": "Gesättigtes Violett, schwarze Flanken und durchgehende helle Rückenzeichnung.",
+    "anatomy": "Kleiner flinker Vierbeiner mit starkem diagonalen Pfotenwechsel und leichtem Rückenbogen.",
+    "materials": "Dichtes violettes Fell auf schlanker Muskulatur, einzelne geschwungene Fellspitzen, verwitterte helle Rückendornen und gelbe Schlitzaugen."
+  },
+  "requiredClips": [
+    "move",
+    "claw"
+  ],
+  "production": "reference",
+  "recipe": "rabid-badger",
+  "model": {
+    "spineLength": 0.84
+  },
+  "orthoScale": 7.296,
+  "textures": {
+    "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Ausgearbeitete Oberflächen und organisches Fell",
+      "textureStrength": 0.84,
+      "formShadowStrength": 0
+    }
+  },
+  "clips": [
+    {
+      "name": "move",
+      "motion": "quadruped",
+      "frameCount": 12,
+      "frameRate": 18,
+      "loop": true,
+      "parameters": {
+        "strideForward": 0.29,
+        "strideBack": 0.23,
+        "lift": 0.12,
+        "footRoll": 0.22,
+        "footYaw": 0.08,
+        "bodyYaw": 0.07,
+        "bodyBob": 0.045,
+        "bodyRoll": 0.048,
+        "bodyPitch": 0.06,
+        "bodyShift": 0.028,
+        "headYaw": -0.04,
+        "headBob": 0.02,
+        "tailYaw": 0.24,
+        "rearPhase": 0.08,
+        "bodySurge": 0.035
+      }
+    },
+    {
+      "name": "claw",
+      "motion": "claw_quadruped",
+      "frameCount": 18,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 8,
+        "impact": 11
+      },
+      "parameters": {
+        "strength": 1,
+        "leapDistance": 1.216
+      }
+    }
+  ],
+  "displayScale": 2.4
+}

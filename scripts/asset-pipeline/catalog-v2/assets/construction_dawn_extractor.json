@@ -1,0 +1,139 @@
+{
+  "id": "construction_dawn_extractor",
+  "label": "Dawn extractor",
+  "category": "construction",
+  "gameIds": [],
+  "reference": "scripts/asset-pipeline/references/dawn-extractor.png",
+  "targetSize": 96,
+  "sourceSizes": [
+    192
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Twin round tanks, tracked chassis and a curved flexible vacuum hose with separate suction head.",
+    "colors": "Desaturated ochre panels, matte weathered copper tanks, dusty rubber tracks and amber beacon.",
+    "anatomy": "Rest plus additive in-plane hose pumping and warning lamp pulse; stable 96 px canvas, centered pivot."
+  },
+  "requiredClips": [
+    "idle",
+    "active"
+  ],
+  "production": "reference",
+  "recipe": "dawn-extractor",
+  "model": {
+    "librarySurfaces": {
+      "Chipped industrial yellow": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.12,
+        "edgewear": 0.12,
+        "saturation": 0.64,
+        "value": 0.94,
+        "tint": 0.28
+      },
+      "Aged copper brass tanks": {
+        "family": "copper",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "saturation": 0.78,
+        "tint": 0.12
+      },
+      "Rubber tread and hose": {
+        "family": "rubber",
+        "scale": 0.42,
+        "grime": 0.08,
+        "edgewear": 0.06,
+        "tint": 0.1
+      },
+      "Worn rubber rib crowns": {
+        "family": "rubber",
+        "scale": 0.42,
+        "grime": 0.08,
+        "edgewear": 0.06,
+        "tint": 0.3
+      },
+      "Rubbed matte steel": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.9
+      },
+      "Dark structural steel": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.9
+      },
+      "Deep oiled recess": {
+        "family": "dawnPaint",
+        "scale": 0.42,
+        "grime": 0.16,
+        "edgewear": 0.12,
+        "tint": 0.9
+      }
+    }
+  },
+  "orthoScale": 3.4,
+  "textures": {
+    "dawnPaint": "art/poc/dawn/textures/library/paint-industrial-yellow-01.png",
+    "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+    "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png",
+    "copper": "art/poc/dawn/textures/library/brass-copper-weathered-01.png",
+    "rubber": "art/poc/dawn/textures/library/rubber-tread-worn-01.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Dawn Material V1 / matte weathered library",
+      "textureStrength": 1,
+      "formShadowStrength": 0.83
+    }
+  },
+  "clips": [
+    {
+      "name": "idle",
+      "motion": "dawn_extractor_idle",
+      "frameCount": 2,
+      "frameRate": 12,
+      "loop": true,
+      "parameters": {
+        "stroke": 0.32,
+        "hoseReach": 0.54,
+        "idleEmission": 0.02,
+        "activeEmission": 4.5,
+        "blinkPower": 2
+      }
+    },
+    {
+      "name": "active",
+      "motion": "dawn_extractor_active",
+      "frameCount": 12,
+      "frameRate": 12,
+      "loop": true,
+      "parameters": {
+        "stroke": 0.32,
+        "hoseReach": 0.54,
+        "idleEmission": 0.02,
+        "activeEmission": 4.5,
+        "blinkPower": 2
+      }
+    }
+  ],
+  "elevation": {
+    "min": 0,
+    "max": 1,
+    "scale": 0.5
+  },
+  "materialPass": {
+    "version": 1,
+    "color": "srgb-albedo-baked-cavity-v1",
+    "normal": "linear-unorm8-z-oct-normal-v1",
+    "emission": "linear-rgb-unorm8-scaled-v1"
+  }
+}

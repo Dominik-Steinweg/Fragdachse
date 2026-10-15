@@ -1,0 +1,90 @@
+{
+  "id": "held-flamethrower",
+  "label": "FLAMETHROWER",
+  "category": "weapon",
+  "gameIds": [
+    "FLAMETHROWER"
+  ],
+  "production": "reference",
+  "reference": "public/assets/sprites/held/FLAMETHROWER.png",
+  "designReference": "public/assets/sprites/Loadout/FLAMETHROWER.png",
+  "targetSize": 32,
+  "sourceSizes": [
+    128,
+    256
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Zwei Druckbehälter mit Armaturen und Schlauch; langer Brenner mit perforiertem Hitzeschild und Pilotleitung.",
+    "materials": "Kupferbrauner Regulator, orange Behälter und bronzener Hitzeschild. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+    "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+  },
+  "requiredClips": [],
+  "recipe": "held-weapon",
+  "model": {
+    "construction": "flame",
+    "accent": [
+      0.55,
+      0.16,
+      0.015
+    ],
+    "palette": {
+      "steel": [
+        0.045,
+        0.039,
+        0.032
+      ],
+      "edge": [
+        0.26,
+        0.2,
+        0.12
+      ],
+      "body": [
+        0.115,
+        0.055,
+        0.025
+      ],
+      "trim": [
+        0.21,
+        0.095,
+        0.036
+      ],
+      "brass": [
+        0.52,
+        0.23,
+        0.035
+      ]
+    }
+  },
+  "orthoScale": 3.2,
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Gebrauchte Materialien und kräftige Formschatten",
+      "textureStrength": 0.85,
+      "formShadowStrength": 1
+    }
+  },
+  "clips": [],
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      8.5
+    ],
+    "referenceGrip": [
+      5.5,
+      15.5
+    ]
+  }
+}
