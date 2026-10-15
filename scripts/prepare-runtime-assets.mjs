@@ -55,23 +55,7 @@ export async function prepareRuntimeAssets() {
   const text = JSON.stringify({ version: 1, assets: manifest }, null, 2) + '\n';
   if (await readFile(output, 'utf8').catch(() => '') !== text) await writeFile(output, text);
   await prepareRuntimeAtlases(manifest);
-  const urls = {};
-  const visit = async directory => {
-    for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
-      const file = `${directory}/${entry.name}`;
-      if (entry.isDirectory()) await visit(file);
-      else {
-        const key = file.slice('public/'.length);
-        const runtime = manifest[key];
-        const target = runtime?.file ?? key;
-        const digest = runtime?.sha256 ?? sha256(await readFile(file));
-        urls[key] = `${target}?v=${digest}`;
-      }
-    }
-  };
-  await visit('public/assets');
-  const urlFile = 'src/assets/runtimeAssetUrls.json', urlText = JSON.stringify(urls, null, 2) + '\n';
-  if (await readFile(urlFile, 'utf8').catch(() => '') !== urlText) await writeFile(urlFile, urlText);
+  // URL versions are derived from these bytes per build/dev/test run (scripts/asset-cache.ts), not written here.
   console.log(`Runtime colours: ${Object.keys(manifest).length} files, ${before} -> ${after} bytes; data PNG formats/channels retained (${sha256(text).slice(0, 12)}).`);
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) await prepareRuntimeAssets();

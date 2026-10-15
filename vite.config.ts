@@ -107,6 +107,7 @@ export default defineConfig(({ mode }) => {
   // Rollups Default für Worker ist IIFE und würde dessen Imports brechen.
   worker: {
     format: 'es' as const,
+    plugins: () => [runtimeAssetCache()],
   },
   build: {
     copyPublicDir: false,
