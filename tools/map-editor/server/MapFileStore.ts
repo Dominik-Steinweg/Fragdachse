@@ -1,11 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile, realpath, open, rename, unlink } from 'node:fs/promises';
 import { dirname, resolve, relative, isAbsolute, join } from 'node:path';
-import { updateJsonText } from './jsonText';
-import { assertSupportedMapEdit } from '../shared/editPolicy';
-import { stable, type JsonObject } from '../shared/json';
-import type { LoadedMap } from '../client/document/MapDocumentSession';
-import type { Validation } from '../shared/validation';
+import { updateJsonText } from './jsonText.ts';
+import { assertSupportedMapEdit } from '../shared/editPolicy.ts';
+import { stable, type JsonObject } from '../shared/json.ts';
+import type { LoadedMap } from '../client/document/MapDocumentSession.ts';
+import type { Validation } from '../shared/validation.ts';
 
 export class FileConflict extends Error { readonly status = 409; }
 export class MapFileStore {

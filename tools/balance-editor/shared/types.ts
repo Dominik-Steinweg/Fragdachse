@@ -1,4 +1,4 @@
-import type { Json, JsonObject, Path } from '../../map-editor/shared/json';
+import type { Json, JsonObject, Path } from '../../map-editor/shared/json.ts';
 
 export interface BalanceFile { key: string; document: JsonObject; revision: string }
 export interface Field {

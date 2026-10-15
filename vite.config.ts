@@ -1,8 +1,8 @@
 /// <reference types="vitest/config" />
-import { runtimeAssetCache } from './scripts/asset-cache';
+import { runtimeAssetCache } from './scripts/asset-cache.ts';
 import { publicDeployment } from './scripts/lib/public-deployment.mjs';
-import gameVersion from './game-version.json';
-import { devScenarioArtifacts } from './scripts/dev-scenario-artifacts';
+import gameVersion from './game-version.json' with { type: 'json' };
+import { devScenarioArtifacts } from './scripts/dev-scenario-artifacts.ts';
 import { defineConfig } from 'vite';
 import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';

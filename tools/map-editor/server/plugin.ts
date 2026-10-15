@@ -1,8 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { resolve } from 'node:path';
 import type { Plugin } from 'vite';
-import sources from '../../../src/config/coopDefenseMapSources.json';
-import { MapFileStore, FileConflict } from './MapFileStore';
+import sources from '../../../src/config/coopDefenseMapSources.json' with { type: 'json' };
+import { MapFileStore, FileConflict } from './MapFileStore.ts';
 
 export function mapEditorApi(projectRoot: string): Plugin {
   return {

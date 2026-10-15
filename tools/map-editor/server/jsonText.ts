@@ -1,5 +1,5 @@
 import ts from 'typescript';
-import { stable, type JsonObject } from '../shared/json';
+import { stable, type JsonObject } from '../shared/json.ts';
 
 /** Preserve original tokens outside changed values, including mixed compact/multiline JSON. */
 export function updateJsonText(text: string, next: JsonObject): string {

@@ -1,10 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readdir, readFile, realpath, open, rename, unlink } from 'node:fs/promises';
 import { dirname, resolve, join } from 'node:path';
-import { updateJsonText } from '../../map-editor/server/jsonText';
-import { stable, type JsonObject } from '../../map-editor/shared/json';
-import { LOADOUT_DIRECTORY, RULE_FILES, UPGRADE_FILE, type BalanceFile, type Workspace } from '../shared/types';
-import type * as Content from '../shared/content';
+import { updateJsonText } from '../../map-editor/server/jsonText.ts';
+import { stable, type JsonObject } from '../../map-editor/shared/json.ts';
+import { LOADOUT_DIRECTORY, RULE_FILES, UPGRADE_FILE, type BalanceFile, type Workspace } from '../shared/types.ts';
+import type * as Content from '../shared/content.ts';
 
 export class BalanceConflict extends Error {}
 type Rules = Pick<typeof Content, 'buildWorkspace' | 'assertSupportedEdit'>;

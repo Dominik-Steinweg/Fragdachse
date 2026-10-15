@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { balanceEditorApi } from './server/plugin';
+import { balanceEditorApi } from './server/plugin.ts';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 export default defineConfig({

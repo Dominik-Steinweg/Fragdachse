@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { resolve } from 'node:path';
 import type { Plugin } from 'vite';
-import { BalanceConflict, BalanceFileStore } from './BalanceFileStore';
+import { BalanceConflict, BalanceFileStore } from './BalanceFileStore.ts';
 
 export function balanceEditorApi(root: string): Plugin {
   return {

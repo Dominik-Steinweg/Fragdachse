@@ -1,4 +1,4 @@
-import { object, stable, type JsonObject } from './json';
+import { object, stable, type JsonObject } from './json.ts';
 
 type ResolvedRule = true | { [key: string]: Rule } | { $items: Rule; $mutable: boolean; $id?: string };
 type Rule = ResolvedRule | ((value: unknown) => ResolvedRule | undefined);
