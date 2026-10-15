@@ -42,7 +42,6 @@ vi.mock('../src/effects/EffectUtils',()=>({registerGraphicsObject:vi.fn()}));
 import {CharacterShadowRenderer} from '../src/effects/CharacterShadowRenderer';
 import {CharacterShadowReceiver} from '../src/effects/CharacterShadowReceiver';
 import {COOP_DEFENSE_CONSTRUCTIONS} from '../src/config/coopDefenseConstructions';
-import {CELL_SIZE} from '../src/config';
 import {CHARACTER_SHADOW_CONFIG as config} from '../src/effects/ShadowConfig';
 import {CHARACTER_SHADOW_MANIFEST as manifest} from '../src/assets/CharacterShadowAssetManifest';
 import {createSunTuning} from '../src/effects/sunlight/SunAtmosphere';

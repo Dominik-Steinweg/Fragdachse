@@ -27,7 +27,6 @@ import type { ProjectileAk47HitContext } from '../src/projectile/ProjectileComba
 import { Ak47BehaviorRuntime } from '../src/world/Ak47BehaviorRuntime';
 import { Ak47StrategicTargetSystem } from '../src/systems/Ak47StrategicTargetSystem';
 import { Ak47StrategicTargetRenderer } from '../src/effects/Ak47StrategicTargetRenderer';
-import type { ProjectileAk47HitContext } from '../src/projectile/ProjectileCombatPort';
 import { createSingleOwnerProvenance } from '../src/projectile/ProjectileSpawnRequest';
 import type { ProjectileLifecycleOutcome } from '../src/projectile/ProjectileGameplayPort';
 

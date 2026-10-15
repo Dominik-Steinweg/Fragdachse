@@ -3,13 +3,17 @@ import { runtimeAssetCache } from './scripts/asset-cache';
 import { publicDeployment } from './scripts/lib/public-deployment.mjs';
 import gameVersion from './game-version.json';
 import { devScenarioArtifacts } from './scripts/dev-scenario-artifacts';
-import { defineConfig, normalizePath } from 'vite';
+import { defineConfig } from 'vite';
 import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve, relative } from 'node:path';
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { cpus, platform, release, totalmem } from 'node:os';
+
+/** Projektverzeichnisse, deren Änderungen der Dev-Server beobachtet (siehe server.watch.ignored). */
+const WATCHED_DIRECTORIES = new Set(['src', 'public', 'scripts']);
+const watchRoot = resolve('.');
 
 export default defineConfig(({ mode }) => {
   const buildTimestamp = new Date().toISOString();
@@ -96,11 +100,18 @@ export default defineConfig(({ mode }) => {
       clientFiles: ['./src/main.ts', './src/scenes/ArenaScene.ts'],
     },
     watch: {
-      // Offline-Art, Lab-Ergebnisse und lokale Caches gehören nicht zum HMR-Graphen.
-      // Vite beachtet .gitignore hier nicht; sonst überwacht es auch diese Bäume.
-      // Root-relative Auswahl: src/ und public/ bleiben vollständig überwacht.
-      ignored: ['art', 'build', '.cache', 'tmp', '.tmp', 'fragdachse_drive', 'uv-cache-audio']
-        .map(directory => `${normalizePath(resolve(directory))}/**`),
+      // Nur Spielquellen, Public-Assets und die von der Config importierten Skripte gehören zum
+      // HMR-Graphen; Dateien direkt im Projektroot (HTML, Configs) bleiben ebenfalls überwacht.
+      // Vite beachtet .gitignore nicht: Ohne diese Allowlist registriert es auch tools/, art/,
+      // .claude/-Worktrees und Build-Ausgaben (zehntausende Dateien) und blockiert damit den
+      // ersten Seitenaufruf auf Windows für viele Sekunden.
+      ignored: (path: string, stats?: { isDirectory(): boolean }) => {
+        const relativePath = relative(watchRoot, path).replaceAll('\\', '/');
+        if (!relativePath || relativePath.startsWith('..')) return false;
+        const [topLevel] = relativePath.split('/');
+        if (WATCHED_DIRECTORIES.has(topLevel)) return false;
+        return relativePath.includes('/') || stats?.isDirectory() === true;
+      },
     },
   },
   // Der Flowfield-Worker wird als ES-Modul geladen (`new Worker(..., { type: 'module' })`).
@@ -122,17 +133,17 @@ export default defineConfig(({ mode }) => {
     // Funktionsname) und sind damit für die Ursachensuche wertlos. Die .map-Dateien werden
     // nur bei Bedarf nachgeladen und kosten zur Laufzeit nichts.
     sourcemap: true,
-    rollupOptions: {
+    rolldownOptions: {
       ...(navigationBuild ? { input: 'navigation-lab.html' } : {}),
       ...(fogBuild ? { input: 'fog-lab.html' } : {}),
       ...(groundBuild ? { input: 'ground-lab.html' } : {}),
       ...(deathBuild ? { input: 'death-lab.html' } : {}),
       output: {
-        manualChunks: {
-          // Packt Phaser und PeerJS in eine eigene Datei namens "vendor"
-          vendor: ['phaser', 'peerjs']
-        }
-      }
+        codeSplitting: {
+          // Packt die npm-Abhängigkeiten (Phaser, PeerJS, Valibot) in eine eigene Datei namens "vendor"
+          groups: [{ name: 'vendor', test: /[\\/]node_modules[\\/]/ }],
+        },
+      },
     }
   },
   define: {

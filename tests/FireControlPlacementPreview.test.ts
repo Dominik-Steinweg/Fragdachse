@@ -7,7 +7,7 @@ vi.mock('../src/scenes/arena/TunnelEndpointVisual', () => ({
 }));
 const previewVisual = vi.hoisted(() => ({ update: vi.fn(), hide: vi.fn(), destroy: vi.fn() }));
 vi.mock('../src/effects/fireControl/FireControlPlacementPreviewVisual', () => ({
-  FireControlPlacementPreviewVisual: vi.fn(() => previewVisual),
+  FireControlPlacementPreviewVisual: vi.fn(function () { return previewVisual; }),
 }));
 vi.mock('../src/network/bridge', () => ({ bridge: {
   isHost: vi.fn(() => false),

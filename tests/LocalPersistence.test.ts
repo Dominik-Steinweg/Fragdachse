@@ -2,7 +2,7 @@ import { createDefaultDawnProgress, sanitizeDawnProgress, DAWN_MAX_SCRAP, DAWN_M
 import { DAWN_UPGRADE_BRANCHES, validateDawnUpgradeBranches } from '../src/config/dawn/upgradeBranches';
 import { COOP_DEFENSE_CLASS_IDS } from '../src/config/coopDefenseClasses';
 import { getLockedCoopDefenseBranchUpgradeIds, resolveCoopDefenseUpgradeEntitlements, resolveEarnedCoopDefenseBossPoints, getSpentCoopDefenseBossPoints, COOP_DEFENSE_UPGRADE_DEFINITIONS } from '../src/utils/coopDefenseUpgrades';
-import { getStoredDawnProgress, updateStoredDawnProgress, acknowledgeStoredDawnNotice, restoreStoredCoopDefenseProgress, getStoredPersonalPersistentBaseAreaStage, getStoredPersistentBaseAreaStage } from '../src/utils/localPreferences';
+import { getStoredDawnProgress, updateStoredDawnProgress, acknowledgeStoredDawnNotice, restoreStoredCoopDefenseProgress, getStoredPersonalPersistentBaseAreaStage } from '../src/utils/localPreferences';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isDawnUnlocked } from '../src/dawn/rules/DawnUnlock';
 import {
