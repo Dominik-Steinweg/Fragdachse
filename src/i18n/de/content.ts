@@ -70,6 +70,7 @@ export const deContent = {
   "class.inspector_gadachs.tooltip.1": "Konstrukte belegen Baukapazität (100 Punkte) statt Adrenalin.",
   "class.inspector_gadachs.tooltip.2": "R hält das Utility-Rad offen, E setzt die Auswahl ein.",
   "class.inspector_gadachs.tooltip.3": "Stärke: stellt bleibende Verteidigung auf und verstärkt sie im Ernstfall.",
+  "construction.spore_turret.name": "Fliegenpilz",
   "construction.rocket_turret.name": "Raketenturm",
   "construction.machine_gun_turret.name": "Maschinengewehrturm",
   "construction.flame_turret.name": "Flammenwerferturm",

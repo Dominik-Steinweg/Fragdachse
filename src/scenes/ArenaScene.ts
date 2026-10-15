@@ -158,7 +158,7 @@ import { isDawnWorld, resolveCoopDefenseMapConfig } from '../world/WorldDefiniti
 import type { ActivityDescriptor } from '../world/ActivityDescriptor';
 import type { WorldDescriptor } from '../world/WorldDescriptor';
 import type { WorldPresentationRequirement } from '../world/WorldPresentation';
-import { lobbyBuildingCandidates, lobbyMenuDenial } from '../systems/LobbyBuildingInteraction';
+import { lobbyBuildingCandidates, lobbyMenuBlockedLabel, lobbyMenuDenial, type LobbyMenuAccessState } from '../systems/LobbyBuildingInteraction';
 import type { LobbyMenu } from '../config/authoring/lobbyBuildings';
 import { isLobbyWorldDefinitionId } from '../config/authoring/lobbyWorld';
 import { toArenaMetricsProfile } from '../world/WorldMetrics';
@@ -1382,7 +1382,8 @@ export class ArenaScene extends Phaser.Scene {
         if (!world || !metrics || !isLobbyWorldDefinitionId(world.definitionId)
           || bridge.getGamePhase() !== 'LOBBY' || this.isWorldMenuBlocking()
           || bridge.getLocalWorldParticipation() !== 'interactive') return [];
-        return lobbyBuildingCandidates(metrics, world.worldRevision);
+        const access = this.lobbyMenuAccessState();
+        return lobbyBuildingCandidates(metrics, world.worldRevision, menu => lobbyMenuBlockedLabel(menu, access));
       },
       open: menu => this.openLobbyMenu(menu),
     });
@@ -1743,7 +1744,7 @@ export class ArenaScene extends Phaser.Scene {
         return state ? [{ id: String(state.turretId), color: profile.colorHex }] : [];
       }),
     );
-    this.renderers.interactions.sync(this.ctx.inputSystem.getInteractionCandidate(),
+    this.renderers.interactions.sync(this.ctx.inputSystem.getInteractionView(),
       this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject);
 
     const {
@@ -2297,17 +2298,21 @@ export class ArenaScene extends Phaser.Scene {
       || (this.diagnostics?.isPerformanceOverlayOpen() ?? false);
   }
 
-  /** Shared by lobby buttons and local World Shift interactions. */
-  private openLobbyMenu(menu: LobbyMenu): void {
-    if (bridge.getGamePhase() !== 'LOBBY' || this.isWorldMenuBlocking()
-      || this.lobbyOverlay.hasTerminalFailure()) return;
+  private lobbyMenuAccessState(): LobbyMenuAccessState {
     const progress = getStoredCoopDefenseProgress();
-    const denial = lobbyMenuDenial(menu, {
+    return {
       coop: isCoopDefenseMode(bridge.getGameMode()),
       ready: this.arenaRuntime.getIsLocalReady() || bridge.getPlayerReady(bridge.getLocalPlayerId()),
       host: bridge.isHost(), itemsUnlocked: progress.itemsUnlocked,
       baseUnlocked: progress.persistentBaseUnlocked, dawnUnlocked: isDawnUnlocked(progress),
-    });
+    };
+  }
+
+  /** Shared by lobby buttons and local World Shift interactions. */
+  private openLobbyMenu(menu: LobbyMenu): void {
+    if (bridge.getGamePhase() !== 'LOBBY' || this.isWorldMenuBlocking()
+      || this.lobbyOverlay.hasTerminalFailure()) return;
+    const denial = lobbyMenuDenial(menu, this.lobbyMenuAccessState());
     if (denial) { this.aimPresentation?.showPlacementError(denial); return; }
     if (menu === 'upgrades') this.meta?.openUpgradeOverlay();
     else if (menu === 'items') this.meta?.openItemsOverlay();

@@ -434,7 +434,7 @@ describe('LobbyWorld – Eintritt und Austritt', () => {
     );
 
     for (const locale of ['de', 'en']) {
-      const ui = read(`src/i18n/${locale}/ui.ts`);
+      const ui = read(`src/i18n/${locale}/ui.ts`) + read(`src/i18n/${locale}/lobby.ts`);
       expect(ui).toContain('"ui.lobby.testArea"');
       expect(ui).toContain('"ui.lobby.returnToLobby"');
       expect(ui).toContain('"ui.options.returnToLobbyHint"');

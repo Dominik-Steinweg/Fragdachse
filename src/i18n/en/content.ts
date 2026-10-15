@@ -70,6 +70,7 @@ export const enContent = {
   "class.inspector_gadachs.tooltip.1": "Structures use build capacity (100 points) instead of adrenaline.",
   "class.inspector_gadachs.tooltip.2": "Hold R to open the Utility wheel, press E to place the selection.",
   "class.inspector_gadachs.tooltip.3": "Strength: builds lasting defenses and reinforces them under pressure.",
+  "construction.spore_turret.name": "Spore Turret",
   "construction.rocket_turret.name": "Rocket Turret",
   "construction.machine_gun_turret.name": "Machine-Gun Turret",
   "construction.flame_turret.name": "Flamethrower Turret",

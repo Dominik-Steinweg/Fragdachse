@@ -4,11 +4,13 @@ import { UtilityChargePrediction } from '../loadout/UtilityChargePrediction';
 import { isDevScenarioMode } from '../utils/devScenarioMode';
 import { isFriendlyTurret, TURRET_CONTROL_RULES } from './TurretControlSystem';
 import { selectInteractionCandidate, interactionCandidateScore, WORLD_INTERACTION_RULES } from './WorldInteractionSelection';
-import type { WorldInteractionCandidate } from './WorldInteractionCandidate';
+import { cellFootprint, EMPTY_WORLD_INTERACTION_VIEW, type WorldInteractionCandidate, type WorldInteractionFootprint,
+  type WorldInteractionView } from './WorldInteractionCandidate';
+import { getConstructionName } from '../i18n/contentPresentation';
 import type { ShootingRangeWorldBinding } from '../shootingRange/ShootingRangeWorldBinding';
 import { SHOOTING_RANGE, SHOOTING_RANGE_CONTROLS, shootingRangeControlPosition } from '../shootingRange/ShootingRangeLayout';
 import { shootingRangeAction } from '../shootingRange/ShootingRangeContracts';
-import { t } from '../i18n';
+import { getLocale, t } from '../i18n';
 import type { AutomatedTurret } from './TurretSystem';
 import type { ScopeInput, TurretControlState } from '../types';
 import { getUtilityChargeReadyAt, parseUtilityChargeState, type UtilityChargeState } from '../loadout/UtilityChargeState';
@@ -17,11 +19,12 @@ import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, ConstructionId, LoadoutToolRef, LoadoutUseResult, PlacementPreviewNetState, PlayerInput, LoadoutSlot, LoadoutUseParams, TemporaryUtilityInstanceDescriptor, UltimateChargePreviewState, UtilityChargePreviewState, UtilityPlacementPreviewState, UtilityTargetingPreviewState } from '../types';
 import type { FireControlPlacementPreview, LocalPlacementPreview } from '../types';
 import {
+  CELL_SIZE,
   DASH_T1_S, DASH_T2_S,
   clampPointToArena,
   COLORS,
 } from '../config';
-import { COOP_DEFENSE_CONSTRUCTION_CAPACITY, getConstructionIdForUtility, getUtilityIdForConstruction, normalizeConstructionId } from '../config/coopDefenseConstructions';
+import { COOP_DEFENSE_CONSTRUCTIONS, COOP_DEFENSE_CONSTRUCTION_CAPACITY, getConstructionIdForUtility, getUtilityIdForConstruction, normalizeConstructionId } from '../config/coopDefenseConstructions';
 import { quantizeAngle } from '../utils/angle';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { RadialActionMenu } from '../ui/RadialActionMenu';
@@ -119,6 +122,22 @@ interface RadialActionProviders {
   readonly utilityUsesToolRef?: (utilityId: string) => boolean;
 }
 
+const TURRET_NAME_BY_WEAPON = new Map<string, string>();
+for (const definition of Object.values(COOP_DEFENSE_CONSTRUCTIONS)) {
+  if (definition.kind === 'turret' && !TURRET_NAME_BY_WEAPON.has(definition.weaponId)) TURRET_NAME_BY_WEAPON.set(definition.weaponId, definition.id);
+}
+function turretName(turret: AutomatedTurret): string {
+  const constructionId = turret.weaponId ? TURRET_NAME_BY_WEAPON.get(turret.weaponId) : undefined;
+  return constructionId ? getConstructionName(constructionId, getLocale()) : t('ui.turretControl.fallbackName');
+}
+/** The carrier contour when known; otherwise the single build cell the turret stands on. */
+function turretFootprint(turret: AutomatedTurret): WorldInteractionFootprint {
+  return turret.footprint ?? cellFootprint(turret.x, turret.y, CELL_SIZE);
+}
+function sameFootprint(a: WorldInteractionFootprint, b: WorldInteractionFootprint): boolean {
+  return a.left === b.left && a.top === b.top && a.right === b.right && a.bottom === b.bottom;
+}
+
 export class InputSystem {
   private structureProviders: {
     getStructures: () => readonly import('./StructureOccupancySystem').StructurePlatform[];
@@ -133,6 +152,7 @@ export class InputSystem {
   } | null = null;
   private turretInputEnabled = false;
   private interactionCandidate: WorldInteractionCandidate | null = null;
+  private interactionAlternatives: readonly WorldInteractionFootprint[] = [];
   private lobbyMenuProvider: {
     candidates: () => WorldInteractionCandidate[];
     open: (menu: import('../config/authoring/lobbyBuildings').LobbyMenu) => void;
@@ -168,7 +188,8 @@ export class InputSystem {
     const candidates: WorldInteractionCandidate[] = providers?.isEnabled() ? providers.getTurrets()
       .filter(turret => !occupied.has(turret.id) && isFriendlyTurret(id, turret, (a, b) => this.bridge.isEnemyPair(a, b)))
       .map(turret => ({ kind: 'turret', key: `turret:${typeof turret.id}:${turret.id}`, x: turret.x, y: turret.y,
-        radius: TURRET_CONTROL_RULES.range, turret, label: t('ui.turretControl.enter'), worldRevision })) : [];
+        radius: TURRET_CONTROL_RULES.range, turret, label: t('ui.turretControl.enter'), subject: turretName(turret),
+        footprint: turretFootprint(turret), worldRevision })) : [];
     const structureState = this.getStructureOccupancyState();
     for (const platform of this.structureProviders?.getStructures() ?? []) {
       if (structureState && structureState.structureId !== platform.id) continue;
@@ -177,7 +198,8 @@ export class InputSystem {
       const point = nearestConstructionPoint(platform.footprint, sprite.x, sprite.y);
       candidates.push({ kind: 'watchtower', structureId: platform.id, exitRevision: structureState?.revision,
         key: 'watchtower:' + platform.id, x: point.x, y: point.y, radius: WATCHTOWER_OCCUPANCY_RULES.enterRangePx,
-        label: t(structureState ? 'ui.watchtower.exit' : 'ui.watchtower.enter'), worldRevision });
+        label: t(structureState ? 'ui.watchtower.exit' : 'ui.watchtower.enter'), subject: t('ui.watchtower.name'),
+        footprint: platform.footprint, worldRevision });
     }
     if (structureState) return candidates.filter(c => c.kind === 'watchtower');
     candidates.push(...this.lobbyMenuProvider?.candidates() ?? []);
@@ -187,9 +209,11 @@ export class InputSystem {
       for (const control of SHOOTING_RANGE_CONTROLS) {
         const action = shootingRangeAction(state, control);
         if (!action) continue;
+        const position = shootingRangeControlPosition(range.metrics, control);
         candidates.push({ kind: 'shooting-range', key: `range:${state.session}:${control}:${action}`,
-          ...shootingRangeControlPosition(range.metrics, control), radius: SHOOTING_RANGE.interactionRadius,
-          label: t(`ui.shootingRange.${action}`), request: { control, action, session: state.session }, worldRevision });
+          ...position, radius: SHOOTING_RANGE.interactionRadius, footprint: cellFootprint(position.x, position.y, CELL_SIZE),
+          label: t(`ui.shootingRange.${action}`), subject: control === 'power' ? t('ui.shootingRange.control.power') : undefined,
+          request: { control, action, session: state.session }, worldRevision });
       }
     }
     return candidates;
@@ -197,10 +221,30 @@ export class InputSystem {
   /** Called by presentation after input; the next key edge consumes exactly this displayed choice. */
   getInteractionCandidate(): WorldInteractionCandidate | null {
     const sprite = this.getLocalSprite();
+    const candidates = sprite ? this.getInteractionCandidates() : [];
     this.interactionCandidate = sprite ? selectInteractionCandidate(
-      { x: sprite.x, y: sprite.y, angle: this.currentAimAngle }, this.getInteractionCandidates(), this.interactionCandidate?.key ?? null,
+      { x: sprite.x, y: sprite.y, angle: this.currentAimAngle }, candidates, this.interactionCandidate?.key ?? null,
     ) : null;
-    return this.interactionCandidate;
+    const selected = this.interactionCandidate;
+    this.interactionAlternatives = sprite && selected ? candidates
+      .map(candidate => ({ candidate, distance: Math.hypot(candidate.x - sprite.x, candidate.y - sprite.y) }))
+      .filter(entry => entry.candidate.key !== selected.key && entry.distance <= entry.candidate.radius
+        && !sameFootprint(entry.candidate.footprint, selected.footprint))
+      .sort((a, b) => a.distance - b.distance)
+      .map(entry => entry.candidate.footprint) : [];
+    return selected;
+  }
+  /** Presentation of the next Shift edge: the selected candidate, or the exit of a manned turret. */
+  getInteractionView(): WorldInteractionView {
+    const turretState = this.getTurretControlState();
+    if (turretState) {
+      const turret = this.turretInputEnabled
+        ? this.turretProviders?.getTurrets().find(entry => String(entry.id) === String(turretState.turretId)) : undefined;
+      return turret ? { focus: { key: `turret-exit:${turret.id}`, label: t('ui.turretControl.exit'),
+        subject: turretName(turret), footprint: turretFootprint(turret) }, alternatives: [] } : EMPTY_WORLD_INTERACTION_VIEW;
+    }
+    const candidate = this.getInteractionCandidate();
+    return candidate ? { focus: candidate, alternatives: this.interactionAlternatives } : EMPTY_WORLD_INTERACTION_VIEW;
   }
   private executeDisplayedInteraction(candidate: WorldInteractionCandidate): void {
     const current = this.getInteractionCandidates().find(entry => entry.key === candidate.key && entry.worldRevision === candidate.worldRevision);
