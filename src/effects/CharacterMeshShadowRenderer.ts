@@ -12,6 +12,8 @@ import { ownSunShader, SunRenderTarget, sunShaderName } from './sunlight/SunRend
 import { cloudDirectFactor, setCloudUniforms, type SunCloudState } from './sunlight/cloudShadow';
 import { cloudShadowAt } from './sunlight/SunFieldModel';
 import { registerGraphicsObject } from './EffectUtils';
+import { registerEnemyMeshWarmup } from './EnemyMeshWarmup';
+import { compileShaderPrograms } from '../graphics/compileShaderPrograms';
 
 /** Three reusable RGBA8 targets per visible player, no per-frame target allocation. */
 class MeshSlot {
@@ -137,8 +139,23 @@ class MeshSlot {
     }
     return changed;
   }
+  /** Loading-time rehearsal of every pass with a solid, untransformed body: links the mask, mesh,
+   * blur and composite programs before the first local player appears. Leaves the cache invalid. */
+  warm(step: number): void {
+    const renderer = this.shader.scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
+    if (step === 0) {
+      this.model.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+      const solid = this.solid; this.solid = true;
+      try { this.raw.draw(this.size, this.size); } finally { this.solid = solid; }
+    } else if (step === 1) this.horizontal.draw(this.size, this.size);
+    else if (step === 2) this.blurred.draw(this.size, this.size);
+    else compileShaderPrograms(renderer, [this.shader.renderNode.programManager]);
+    this.maskValid = false;
+  }
   destroy(): void { this.shader.destroy(); this.blurred.destroy(); this.horizontal.destroy(); this.raw.destroy(); }
 }
+
+const WARMUP_STEPS = 4;
 
 export class CharacterMeshShadowRenderer {
   private readonly assignments = new Map<PlayerEntity, MeshSlot>();
@@ -148,9 +165,27 @@ export class CharacterMeshShadowRenderer {
   private solid = false;
   private cpuMs = 0;
   private targetPasses = 0;
+  private warmupStep = 0;
+  private warmupFrame = -1;
+  private destroyed = false;
+  private readonly releaseWarmup: () => void;
   constructor(private readonly scene: Phaser.Scene, private readonly clouds: SunCloudState,
     readonly receiver: CharacterShadowReceiver, private readonly meshes: ReadonlyMap<string, CharacterMeshData>,
-    private readonly targetSize: number) { this.projector = new CharacterMeshProjector(scene); }
+    private readonly targetSize: number) {
+    this.projector = new CharacterMeshProjector(scene);
+    // The first local player otherwise links five programs in the frame it appears.
+    this.releaseWarmup = registerEnemyMeshWarmup(scene, () => this.preparePrograms());
+  }
+  private preparePrograms(): boolean {
+    if (this.destroyed || this.warmupStep >= WARMUP_STEPS || !this.meshes.has('badger')) return true;
+    if (this.warmupFrame === this.scene.game.loop.frame) return false;
+    this.warmupFrame = this.scene.game.loop.frame;
+    if (!this.pool.length) {
+      this.pool.push(new MeshSlot(this.scene, 0, this.targetSize, this.meshes, this.projector, this.clouds, this.receiver));
+    }
+    this.pool[0].warm(this.warmupStep++);
+    return this.warmupStep >= WARMUP_STEPS;
+  }
   get count(): number { return this.pool.length; }
   get activeCount(): number { return this.pool.filter(slot => slot.shader.visible).length; }
   sync(players: readonly PlayerEntity[], visible: boolean): void {
@@ -197,6 +232,7 @@ export class CharacterMeshShadowRenderer {
       }) };
   }
   destroy(): void {
+    this.destroyed = true; this.releaseWarmup();
     for (const slot of this.pool) slot.destroy(); this.pool.length = 0; this.assignments.clear();
     this.projector.destroy(); // Receiver is borrowed from ShadowSystem.
   }

@@ -98,6 +98,18 @@ describe('PlayerManager ground hazard spawns', () => {
     }
   });
 
+  it('never spawns on cells occupied by a construction footprint such as a 2x2 watchtower', () => {
+    const watchtower = [{ gridX: 20, gridY: 20 }, { gridX: 21, gridY: 20 }, { gridX: 20, gridY: 21 }, { gridX: 21, gridY: 21 }];
+    const manager = createSpawnManager([...watchtower, { gridX: 24, gridY: 20 }]);
+    manager.setSpawnContextProvider(() => ({
+      fires: [], stinkClouds: [], teslaDomes: [], nukes: [], meteors: [], turrets: [], projectiles: [],
+      occupiedCells: watchtower,
+    }));
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      expect(manager.getSpawnPoint('p1')).toEqual({ x: 24.5 * CELL_SIZE, y: 20.5 * CELL_SIZE });
+    }
+  });
+
   it('keeps respawns near a threatened base while preferring open ground, then ordinary enemies over the boss', () => {
     const bossCell = { gridX: 14, gridY: 10 };
     const ordinaryCell = { gridX: 20, gridY: 10 };

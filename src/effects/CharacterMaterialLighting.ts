@@ -48,6 +48,14 @@ export function syncCharacterMaterialCopy(source: Image | null, copy: Image): vo
   if (owner && source) owner.attach(copy,owner.bindings.get(source)!.lighting,false);
 }
 
+/** The one material addition shared by the live batch and the loading-time program warmup. */
+export function addCharacterMaterialAddition(programManager: Phaser.Renderer.WebGL.ProgramManager): void {
+  const config=programManager.currentConfig as {additions: Phaser.Types.Renderer.WebGL.ShaderAdditionConfig[]};
+  programManager.addAddition({name:'CharacterMaterial21eV2',additions:{
+    fragmentHeader:CHARACTER_MATERIAL_HEADER,fragmentProcess:CHARACTER_MATERIAL_PROCESS,
+  }},characterMaterialInsertionIndex(config.additions));
+}
+
 let serial=0;
 /** One shared material/program per Scene, drawn on the existing Sprite. Its
  * original Beauty texture/frame stays intact for animation, glow and snapshots. */
@@ -71,10 +79,7 @@ class CharacterMaterialLighting {
     const renderer=scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer, manager=renderer.renderNodes;
     const name=`CharacterMaterial${serial++}`;
     const batch=this.batch=new Phaser.Renderer.WebGL.RenderNodes.BatchHandlerQuadSingle(manager,{name});
-    const config=batch.programManager.currentConfig as {additions: Phaser.Types.Renderer.WebGL.ShaderAdditionConfig[]};
-    batch.programManager.addAddition({name:'CharacterMaterial21eV2',additions:{
-      fragmentHeader:CHARACTER_MATERIAL_HEADER,fragmentProcess:CHARACTER_MATERIAL_PROCESS,
-    }},characterMaterialInsertionIndex(config.additions));
+    addCharacterMaterialAddition(batch.programManager);
     const setup=batch.setupUniforms;
     const set=(name:string,value:unknown):void=>batch.programManager.setUniform(name,value);
     batch.setupUniforms=(context):void=>{

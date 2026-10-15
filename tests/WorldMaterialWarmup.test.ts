@@ -5,7 +5,7 @@ vi.mock('phaser',()=>({Filters:{Controller:class{}},Renderer:{Events:{SET_PARALL
  ProgramManager:class{ name='';setBaseShader(name:string){this.name=name;} },RenderNodes:{
  BaseFilterShader:class{programManager:any;constructor(name:string){this.programManager={name};}},
  BatchHandlerQuadSingle:class{
-  programManager={programs:{},name:'',addAddition(addition:any){this.name=addition.name;}};
+  programManager={programs:{},name:'',currentConfig:{additions:[{additions:{fragmentProcess:'fragColor = applyTint(fragColor);'}}] as any[]},addAddition(addition:any){this.name=addition.name;}};
   vertexBufferLayout={buffer:{}};indexBuffer={};updateTextureCount(){}resize(){}
   finalizeTextureCount(n:number){expect(n).toBe(1);}constructor(public manager:any){}
  }
@@ -16,14 +16,15 @@ vi.mock('phaser',()=>({Filters:{Controller:class{}},Renderer:{Events:{SET_PARALL
  destroy(){state.shaderDestroyed();}
 }}}));
 import { warmupWorldMaterials } from '../src/graphics/WorldMaterialWarmup';
-it('primes the real material keys, releases private probe resources and keeps completion behind the Boot barrier',()=>{
+it('primes the real material and first-player keys, releases private probe resources and keeps completion behind the Boot barrier',()=>{
  state.finish.mockClear();state.shaderDestroyed.mockClear();
  const renderer:any={gl:{},game:{config:{smoothPixelArt:false}},maxTextures:16,off:vi.fn(),deleteBuffer:vi.fn(),glVAOWrappers:[]};
  renderer.renderNodes={renderer,off:vi.fn()};const scene={sys:{renderer}};
  const finish=warmupWorldMaterials(scene as never);
- expect(state.managers.map(m=>m.name)).toEqual(['CanopySunlightMaterialV9Batched','VegetationVolumeR18','RockFoliageSingleCoverage','FragdachseWaterSurfaceSunlight']);
- expect(renderer.deleteBuffer).toHaveBeenCalledTimes(7);expect(state.shaderDestroyed).toHaveBeenCalledOnce();
- expect(renderer.off).toHaveBeenCalledTimes(3);expect(renderer.renderNodes.off).toHaveBeenCalledTimes(3);
+ expect(state.managers.map(m=>m.name)).toEqual(['CanopySunlightMaterialV9Batched','VegetationVolumeR18','RockFoliageSingleCoverage',
+  'CharacterMaterial21eV2','FragdachseWaterSurfaceSunlight','FragdachseStatusRing','FragdachseStatusRingFill']);
+ expect(renderer.deleteBuffer).toHaveBeenCalledTimes(11);expect(state.shaderDestroyed).toHaveBeenCalledTimes(3);
+ expect(renderer.off).toHaveBeenCalledTimes(4);expect(renderer.renderNodes.off).toHaveBeenCalledTimes(4);
  expect(state.finish).not.toHaveBeenCalled();finish();expect(state.finish).toHaveBeenCalledOnce();
 });
 it('keeps the WebGL1 smooth-pixel fallback on its existing material preparation path',()=>{
