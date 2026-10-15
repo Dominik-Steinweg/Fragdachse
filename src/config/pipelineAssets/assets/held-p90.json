@@ -1,0 +1,51 @@
+{
+  "id": "held-p90",
+  "category": "weapon",
+  "gameIds": [
+    "P90"
+  ],
+  "revision": "v2-aj",
+  "variant": "standard",
+  "sourceSize": 256,
+  "textureKey": "held_P90",
+  "sheetTextureKey": "held_P90_static",
+  "idlePath": "./assets/sprites/pipeline-v2/held-p90/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/held-p90/sheet.png",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 256,
+    "frameHeight": 256,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 260,
+    "height": 260
+  },
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      12.5
+    ],
+    "referenceGrip": [
+      4.5,
+      11.5
+    ]
+  },
+  "idleFrame": 0,
+  "clips": [],
+  "hashes": {
+    "idle": "e76734b1ef9e7d1ce2ece9f1951ffa5d230435e3900ae73e6e55bbbb707b0653",
+    "sheet": "f3d788c043123505e732b4c23d11ea1c9876d495b242d30f40317daf503a0893"
+  }
+}

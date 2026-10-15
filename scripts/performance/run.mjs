@@ -82,7 +82,7 @@ async function hashSources() {
     if (info.isDirectory()) for (const entry of (await readdir(path)).sort()) await visit(join(path, entry));
     else { hash.update(relative(root, path).replaceAll('\\', '/')); hash.update(await readFile(path)); }
   }
-  for (const path of ['src', 'scripts/performance', 'scripts/asset-cache.ts', 'scripts/prepare-runtime-assets.mjs', 'scripts/lib/runtime-colours.mjs', 'scripts/lib/runtime-atlases.mjs', 'scripts/lib/public-deployment.mjs', 'public', 'index.html', 'package.json', 'package-lock.json', 'vite.config.ts', 'tsconfig.json', 'game-version.json']) await visit(resolve(path));
+  for (const path of ['src', 'scripts/performance', 'scripts/asset-cache.ts', 'scripts/prepare-runtime-assets.mjs', 'scripts/lib/runtime-colours.mjs', 'scripts/lib/runtime-atlases.mjs', 'scripts/lib/runtime-asset-urls.mjs', 'scripts/asset-pipeline/pipeline-registry.mjs', 'scripts/lib/public-deployment.mjs', 'public', 'index.html', 'package.json', 'package-lock.json', 'vite.config.ts', 'tsconfig.json', 'game-version.json']) await visit(resolve(path));
   return hash.digest('hex');
 }
 
@@ -106,7 +106,7 @@ async function run() {
     const storage = createBuildStorage(resolve('build/performance-objects'), buildDirectory, checkSpace, abortController.signal);
     await storage.deduplicateTree(site);
     for (const file of await publicDeploymentFiles()) await storage.archiveTree(resolve('public', file), join(site, file));
-    for (const path of ['src', 'scripts/performance', 'scripts/asset-cache.ts', 'scripts/prepare-runtime-assets.mjs', 'scripts/lib/runtime-colours.mjs', 'scripts/lib/runtime-atlases.mjs', 'scripts/lib/public-deployment.mjs', 'index.html', 'package.json', 'package-lock.json', 'vite.config.ts', 'tsconfig.json', 'game-version.json']) {
+    for (const path of ['src', 'scripts/performance', 'scripts/asset-cache.ts', 'scripts/prepare-runtime-assets.mjs', 'scripts/lib/runtime-colours.mjs', 'scripts/lib/runtime-atlases.mjs', 'scripts/lib/runtime-asset-urls.mjs', 'scripts/asset-pipeline/pipeline-registry.mjs', 'scripts/lib/public-deployment.mjs', 'index.html', 'package.json', 'package-lock.json', 'vite.config.ts', 'tsconfig.json', 'game-version.json']) {
       abortController.signal.throwIfAborted();
       await storage.archiveTree(resolve(path), join(buildDirectory, 'source', path));
     }

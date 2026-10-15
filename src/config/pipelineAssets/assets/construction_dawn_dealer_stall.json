@@ -1,0 +1,35 @@
+{
+  "id": "construction_dawn_dealer_stall",
+  "category": "construction",
+  "gameIds": [],
+  "revision": "dawn-retex-p01",
+  "variant": "standard",
+  "sourceSize": 192,
+  "textureKey": "construction_dawn_dealer_stall",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "construction_dawn_dealer_stall_sheet",
+  "idlePath": "./assets/sprites/pipeline-v2/construction_dawn_dealer_stall/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/construction_dawn_dealer_stall/sheet.png",
+  "layout": {
+    "frameWidth": 192,
+    "frameHeight": 192,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 196,
+    "height": 196
+  },
+  "hashes": {
+    "idle": "98deaae5deb4369759d1532cea6e0f347ecf20a3b656d9ec44e25778a7cd771a",
+    "sheet": "186a4e0be6e66bf0ba7f32d4db7fe05e3f35d5c2486a0eb6bb14c97180ab0dd9"
+  }
+}

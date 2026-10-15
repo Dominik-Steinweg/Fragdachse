@@ -70,6 +70,24 @@ Die Spezial-Suites liegen unter `tests/architecture/`, `tests/integration/`, `te
 schneller Architecture-Suite, Spiel-Build, Map-Editor-Build und Balance-Editor-Build; die übrigen Spezial-Suites werden gezielt für ihre
 Änderung ausgeführt. Browser, Dev-Server und Sichtprüfung gehören nicht zum normalen Test-Gate.
 
+## Gestufte Gates
+
+Die Basis ist `main` (`--base <ref>` oder `CHECK_BASE`); verglichen wird ab der Merge-Base mit
+`HEAD`, einschließlich ungestageter und unversionierter Dateien.
+
+| Stufe | Wann | Inhalt |
+|---|---|---|
+| `npm run check:quick` | während einer Lane, vor jedem Zwischen-Commit | Typecheck parallel zu einem Vitest-Lauf: Core-Tests, die über den Importgraphen mit dem Diff verbunden sind (`vitest related`) oder einen geänderten Pfad per Dateisystem lesen, die ganze Architecture-Suite und die Core-Tests, die `src/` selbst durchlaufen (Depth-Katalog). Geänderte Tests aus Integration/Stress/Balance-Lab laufen direkt mit. Bei geänderter Build-Infrastruktur (`package-lock.json`, Abhängigkeiten, `vite.config.ts`, `tsconfig`) die ganze Core-Suite. Keine Builds. |
+| `npm run check` | Abschluss einer Änderung über mehrere Module, Netzwerk, Lifecycle oder Build-Konfiguration | unverändert: Core, Architecture, drei Builds |
+| `npm run check:release` | vor einem Fast-Forward nach `main` oder einer Lane-Integration | `check`, `test:integration`, `test:assets`; `test:stress`, `test:balance-lab` und `check:fingerprints` nur, wenn der Diff Generator-, Map- oder Balance-Pfade, deren eigene Tests oder Build-Infrastruktur berührt (Pfadfamilien in [`scripts/check/changes.mjs`](../../scripts/check/changes.mjs)). Alle Schritte laufen; die Zusammenfassung nennt jeden roten Schritt mit Laufzeit. `--all` erzwingt alle Suiten, `--bail` stoppt beim ersten Fehler. |
+
+`check:quick` ersetzt `check` nicht: Builds, Map-/Balance-Editor-Typen und nicht importierte
+Seiteneffekte prüft erst `check`. `check:fingerprints` vergleicht die Kampagnen-Fingerprints aller
+Maps (zwei Seeds) zwischen Merge-Base und Arbeitsstand aus Quell-Snapshots unter `build/check/`; eine
+beabsichtigte Generatoränderung wird mit `--allow-fingerprint-changes` bestätigt. Nach einem grünen
+`check:release` schiebt `npm run ff-main -- <branch> --expect <main-hash>` `main` nur dann vor, wenn
+`main` seitdem unverändert und Vorfahre des Branches ist; das Script pusht nie.
+
 ## Visuelle Regression
 
 `npm run test:visual` vergleicht die festen Ansichten im Szenenkatalog über `window.devScenario` mit den

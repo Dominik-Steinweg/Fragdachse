@@ -1,0 +1,35 @@
+{
+  "id": "construction_dawn_lobby_armory",
+  "category": "construction",
+  "gameIds": [],
+  "revision": "u4-lobby-v3",
+  "variant": "standard",
+  "sourceSize": 256,
+  "textureKey": "construction_dawn_lobby_armory",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "construction_dawn_lobby_armory_sheet",
+  "idlePath": "./assets/sprites/pipeline-v2/construction_dawn_lobby_armory/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/construction_dawn_lobby_armory/sheet.png",
+  "layout": {
+    "frameWidth": 256,
+    "frameHeight": 256,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 260,
+    "height": 260
+  },
+  "hashes": {
+    "idle": "9acc71d94a01e6248294813474f2b7f8aa3167aba8ab104584defc1480854d58",
+    "sheet": "18da1ea285430e56479c455a67e20e513d87adde5e6c09b56281d34c9f12fe37"
+  }
+}

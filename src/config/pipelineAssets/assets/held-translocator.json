@@ -1,0 +1,47 @@
+{
+  "id": "held-translocator",
+  "category": "utility",
+  "gameIds": [
+    "TRANSLOCATOR"
+  ],
+  "revision": "v2-al",
+  "variant": "standard",
+  "sourceSize": 256,
+  "textureKey": "held_TRANSLOCATOR",
+  "sheetTextureKey": "held_TRANSLOCATOR_static",
+  "idlePath": "./assets/sprites/pipeline-v2/held-translocator/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/held-translocator/sheet.png",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 256,
+    "frameHeight": 256,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 260,
+    "height": 260
+  },
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      10.2
+    ]
+  },
+  "idleFrame": 0,
+  "clips": [],
+  "hashes": {
+    "idle": "a8cee663f3caab5bd39951c7239ccab61b48772d1fddaf05feddb26f7d6107d4",
+    "sheet": "0f87fbec74cec31317ff669fc114cfe5b67625b07e93b05a8b575b740844386c"
+  }
+}

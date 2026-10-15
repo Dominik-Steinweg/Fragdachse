@@ -1,0 +1,52 @@
+{
+  "id": "plasma",
+  "category": "turret",
+  "gameIds": [
+    "SPORE_TURRET_PLASMA"
+  ],
+  "revision": "towers-r03",
+  "variant": "standard",
+  "sourceSize": 160,
+  "textureKey": "turret_weapon_plasma",
+  "sheetTextureKey": "turret_weapon_plasma_animated",
+  "idlePath": "./assets/sprites/pipeline-v2/plasma/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/plasma/sheet.png",
+  "forward": "east",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 160,
+    "frameHeight": 160,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 2,
+    "frameCount": 9,
+    "width": 1312,
+    "height": 328
+  },
+  "idleFrame": 0,
+  "clips": [
+    {
+      "name": "fire",
+      "frames": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "frameRate": 24,
+      "loop": false
+    }
+  ],
+  "hashes": {
+    "idle": "a6b640edb343e675030b3a014e4fb6b8ccf7a366d550bcde0eb40defe082e950",
+    "sheet": "c6a9f0cad8496d74df2e86a0dec58275e2245f9e655ca4cdd15ad31b8d992984"
+  }
+}

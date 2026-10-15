@@ -1,0 +1,54 @@
+{
+  "id": "gravity",
+  "category": "turret",
+  "gameIds": [
+    "TURRET_GRAVITY"
+  ],
+  "revision": "towers-r03",
+  "variant": "standard",
+  "sourceSize": 160,
+  "textureKey": "turret_weapon_gravity",
+  "sheetTextureKey": "turret_weapon_gravity_animated",
+  "idlePath": "./assets/sprites/pipeline-v2/gravity/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/gravity/sheet.png",
+  "forward": "east",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 160,
+    "frameHeight": 160,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 2,
+    "frameCount": 11,
+    "width": 1312,
+    "height": 328
+  },
+  "idleFrame": 0,
+  "clips": [
+    {
+      "name": "fire",
+      "frames": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "frameRate": 20,
+      "loop": false
+    }
+  ],
+  "hashes": {
+    "idle": "6a229e27621bee541c671774ca2c3d0d766e55edf17771a6acae0f9a3374a362",
+    "sheet": "791ec22a2c21684c386fb7e1106e8f43a3fcbc36c8b3e008d9c77d33acd63700"
+  }
+}

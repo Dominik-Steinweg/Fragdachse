@@ -1,0 +1,1411 @@
+{
+  "id": "abyssal-kraken-egg",
+  "category": "boss-part",
+  "gameIds": [],
+  "revision": "kraken-v14",
+  "variant": "standard",
+  "sourceSize": 64,
+  "textureKey": "kraken_egg",
+  "runtimeContract": "boss",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [
+    {
+      "name": "idle",
+      "frames": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "frameRate": 12,
+      "loop": true,
+      "end": "rest"
+    },
+    {
+      "name": "hatch",
+      "frames": [
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28
+      ],
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "spawn": 8
+      },
+      "end": "terminal"
+    }
+  ],
+  "targetSize": 64,
+  "runtimeBudgetMB": 4,
+  "sockets": {},
+  "socketFrames": [
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {},
+    {}
+  ],
+  "elevation": {
+    "min": -0.4,
+    "max": 0.8,
+    "scale": 0.5
+  },
+  "elevationPass": {
+    "encoding": "linear-unorm8-z-oct-normal-v1",
+    "min": -0.4,
+    "max": 0.8,
+    "scale": 0.5,
+    "waterline": 0,
+    "alpha": "beauty-coverage",
+    "colorSpace": "non-color",
+    "premultiplied": false
+  },
+  "atlases": {
+    "color": {
+      "__rest": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/atlas/64/color-__rest-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/atlas/64/color-__rest-0.json",
+            "width": 30,
+            "height": 29,
+            "frameNames": [
+              "__rest/0000"
+            ],
+            "gpuBytesRGBA8": 3480,
+            "sha256": "b41df27c0b15bedcc89f092d116d835cbdc96568be4f7385f6df0afbe9355065",
+            "jsonSha256": "34222e26bbc1384cb77de2f3aba775dbb11e48a03e07d35b1c7564d384f86783"
+          }
+        ],
+        "frameNames": [
+          "__rest/0000"
+        ],
+        "sourceFrames": [
+          0
+        ],
+        "sourceSize": 64,
+        "logicalSourceSize": 64,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "idle": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/atlas/64/color-idle-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/atlas/64/color-idle-0.json",
+            "width": 360,
+            "height": 29,
+            "frameNames": [
+              "idle/0000",
+              "idle/0001",
+              "idle/0002",
+              "idle/0003",
+              "idle/0004",
+              "idle/0005",
+              "idle/0006",
+              "idle/0007",
+              "idle/0008",
+              "idle/0009",
+              "idle/0010",
+              "idle/0011"
+            ],
+            "gpuBytesRGBA8": 41760,
+            "sha256": "39a8bc1ab1ad0d8c8ffca73050ca71703926021e7789ec2cf93ff0448e9f3566",
+            "jsonSha256": "0b1b29c18ab482f4c1c4ba20fb6969db7afc8944935a5faca2e1f619852ecb1e"
+          }
+        ],
+        "frameNames": [
+          "idle/0000",
+          "idle/0001",
+          "idle/0002",
+          "idle/0003",
+          "idle/0004",
+          "idle/0005",
+          "idle/0006",
+          "idle/0007",
+          "idle/0008",
+          "idle/0009",
+          "idle/0010",
+          "idle/0011"
+        ],
+        "sourceFrames": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "sourceSize": 64,
+        "logicalSourceSize": 64,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "hatch": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/atlas/64/color-hatch-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/atlas/64/color-hatch-0.json",
+            "width": 767,
+            "height": 60,
+            "frameNames": [
+              "hatch/0000",
+              "hatch/0001",
+              "hatch/0002",
+              "hatch/0003",
+              "hatch/0004",
+              "hatch/0005",
+              "hatch/0006",
+              "hatch/0007",
+              "hatch/0008",
+              "hatch/0009",
+              "hatch/0010",
+              "hatch/0011",
+              "hatch/0012",
+              "hatch/0013",
+              "hatch/0014",
+              "hatch/0015"
+            ],
+            "gpuBytesRGBA8": 184080,
+            "sha256": "b0194832370dd817d3d059f40b27c8ba80a6f37576a98d5b02e8e6b5dd03521f",
+            "jsonSha256": "a456dec99040673e27b697cec99f418e32f111f8497ab93a1704f8445cce7054"
+          }
+        ],
+        "frameNames": [
+          "hatch/0000",
+          "hatch/0001",
+          "hatch/0002",
+          "hatch/0003",
+          "hatch/0004",
+          "hatch/0005",
+          "hatch/0006",
+          "hatch/0007",
+          "hatch/0008",
+          "hatch/0009",
+          "hatch/0010",
+          "hatch/0011",
+          "hatch/0012",
+          "hatch/0013",
+          "hatch/0014",
+          "hatch/0015"
+        ],
+        "sourceFrames": [
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28
+        ],
+        "sourceSize": 64,
+        "logicalSourceSize": 64,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      }
+    },
+    "elevation": {
+      "__rest": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/atlas/64/elevation-__rest-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/atlas/64/elevation-__rest-0.json",
+            "width": 20,
+            "height": 19,
+            "frameNames": [
+              "__rest/0000"
+            ],
+            "gpuBytesRGBA8": 1520,
+            "sha256": "11fd52466bf16a1aa1f30bab6154ef5b4e8a1d06598cf0c67bb8b3455c0d55f8",
+            "jsonSha256": "f7bb5dfd202d745cb8d057d488ec39e53a62291cef2dea4cb57207540d03bf2c"
+          }
+        ],
+        "frameNames": [
+          "__rest/0000"
+        ],
+        "sourceFrames": [
+          0
+        ],
+        "sourceSize": 32,
+        "logicalSourceSize": 64,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "idle": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/atlas/64/elevation-idle-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/atlas/64/elevation-idle-0.json",
+            "width": 240,
+            "height": 19,
+            "frameNames": [
+              "idle/0000",
+              "idle/0001",
+              "idle/0002",
+              "idle/0003",
+              "idle/0004",
+              "idle/0005",
+              "idle/0006",
+              "idle/0007",
+              "idle/0008",
+              "idle/0009",
+              "idle/0010",
+              "idle/0011"
+            ],
+            "gpuBytesRGBA8": 18240,
+            "sha256": "5d89d27af10ee9e4b0948361a765b3e1b6c8f1684e03782bf5413fd8b4675dc6",
+            "jsonSha256": "91cbfa5fd0755c5f8314b6a384f26d7b24dcb03843f30b576bf9b8080ba33476"
+          }
+        ],
+        "frameNames": [
+          "idle/0000",
+          "idle/0001",
+          "idle/0002",
+          "idle/0003",
+          "idle/0004",
+          "idle/0005",
+          "idle/0006",
+          "idle/0007",
+          "idle/0008",
+          "idle/0009",
+          "idle/0010",
+          "idle/0011"
+        ],
+        "sourceFrames": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "sourceSize": 32,
+        "logicalSourceSize": 64,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "hatch": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/atlas/64/elevation-hatch-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/atlas/64/elevation-hatch-0.json",
+            "width": 457,
+            "height": 34,
+            "frameNames": [
+              "hatch/0000",
+              "hatch/0001",
+              "hatch/0002",
+              "hatch/0003",
+              "hatch/0004",
+              "hatch/0005",
+              "hatch/0006",
+              "hatch/0007",
+              "hatch/0008",
+              "hatch/0009",
+              "hatch/0010",
+              "hatch/0011",
+              "hatch/0012",
+              "hatch/0013",
+              "hatch/0014",
+              "hatch/0015"
+            ],
+            "gpuBytesRGBA8": 62152,
+            "sha256": "7673d9edcde25776b33f73bcd4cdcbd7290a3fe6d3fae841325af01fa2ca0825",
+            "jsonSha256": "93f63e8b15c32fecb31ab9a9ab0a1fbd8f6986dd9307a951ca361fe376758fb3"
+          }
+        ],
+        "frameNames": [
+          "hatch/0000",
+          "hatch/0001",
+          "hatch/0002",
+          "hatch/0003",
+          "hatch/0004",
+          "hatch/0005",
+          "hatch/0006",
+          "hatch/0007",
+          "hatch/0008",
+          "hatch/0009",
+          "hatch/0010",
+          "hatch/0011",
+          "hatch/0012",
+          "hatch/0013",
+          "hatch/0014",
+          "hatch/0015"
+        ],
+        "sourceFrames": [
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28
+        ],
+        "sourceSize": 32,
+        "logicalSourceSize": 64,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      }
+    },
+    "emission": {
+      "__rest": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/atlas/64/emission-__rest-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/atlas/64/emission-__rest-0.json",
+            "width": 5,
+            "height": 5,
+            "frameNames": [
+              "__rest/0000"
+            ],
+            "gpuBytesRGBA8": 100,
+            "sha256": "6a707c85c8c9ccf1ec6d4cef85ff4f32e4698d102c28e768078313328f8346ba",
+            "jsonSha256": "13b0c44395d2d96c6815a7fb386bd23123ebab0f0c6fcaf005c36c1554dfcfce"
+          }
+        ],
+        "frameNames": [
+          "__rest/0000"
+        ],
+        "sourceFrames": [
+          0
+        ],
+        "sourceSize": 64,
+        "logicalSourceSize": 64,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "idle": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/atlas/64/emission-idle-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/atlas/64/emission-idle-0.json",
+            "width": 60,
+            "height": 5,
+            "frameNames": [
+              "idle/0000",
+              "idle/0001",
+              "idle/0002",
+              "idle/0003",
+              "idle/0004",
+              "idle/0005",
+              "idle/0006",
+              "idle/0007",
+              "idle/0008",
+              "idle/0009",
+              "idle/0010",
+              "idle/0011"
+            ],
+            "gpuBytesRGBA8": 1200,
+            "sha256": "039f851caf42b584ef5b11981b43c879529eec98180441e54d3f18c31b311e34",
+            "jsonSha256": "9042f3d1043d79aed694ac132d1f11a4b1f739f7bed79fde4476870ecec5521d"
+          }
+        ],
+        "frameNames": [
+          "idle/0000",
+          "idle/0001",
+          "idle/0002",
+          "idle/0003",
+          "idle/0004",
+          "idle/0005",
+          "idle/0006",
+          "idle/0007",
+          "idle/0008",
+          "idle/0009",
+          "idle/0010",
+          "idle/0011"
+        ],
+        "sourceFrames": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "sourceSize": 64,
+        "logicalSourceSize": 64,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "hatch": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/atlas/64/emission-hatch-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/atlas/64/emission-hatch-0.json",
+            "width": 130,
+            "height": 18,
+            "frameNames": [
+              "hatch/0000",
+              "hatch/0001",
+              "hatch/0002",
+              "hatch/0003",
+              "hatch/0004",
+              "hatch/0005",
+              "hatch/0006",
+              "hatch/0007",
+              "hatch/0008",
+              "hatch/0009",
+              "hatch/0010",
+              "hatch/0011",
+              "hatch/0012",
+              "hatch/0013",
+              "hatch/0014",
+              "hatch/0015"
+            ],
+            "gpuBytesRGBA8": 9360,
+            "sha256": "cc2c0025ad0cd1b8a09aac755da411d8bd3f28b3ecfc7256b73b62813b86351e",
+            "jsonSha256": "0c6d7f4a31b10d88c5adb4e1acd5df4267bab8d1c966dc849ecd1608edce9d82"
+          }
+        ],
+        "frameNames": [
+          "hatch/0000",
+          "hatch/0001",
+          "hatch/0002",
+          "hatch/0003",
+          "hatch/0004",
+          "hatch/0005",
+          "hatch/0006",
+          "hatch/0007",
+          "hatch/0008",
+          "hatch/0009",
+          "hatch/0010",
+          "hatch/0011",
+          "hatch/0012",
+          "hatch/0013",
+          "hatch/0014",
+          "hatch/0015"
+        ],
+        "sourceFrames": [
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28
+        ],
+        "sourceSize": 64,
+        "logicalSourceSize": 64,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      }
+    }
+  },
+  "budget": {
+    "clips": {
+      "__rest": {
+        "color": 3480,
+        "elevation": 1520,
+        "emission": 100,
+        "total": 5100
+      },
+      "idle": {
+        "color": 41760,
+        "elevation": 18240,
+        "emission": 1200,
+        "total": 61200
+      },
+      "hatch": {
+        "color": 184080,
+        "elevation": 62152,
+        "emission": 9360,
+        "total": 255592
+      }
+    },
+    "totals": {
+      "color": 229320,
+      "elevation": 81912,
+      "emission": 10660,
+      "total": 321892
+    }
+  },
+  "materialPass": {
+    "version": 1,
+    "color": "srgb-albedo-baked-cavity-v1",
+    "normal": "linear-unorm8-z-oct-normal-v1",
+    "emission": "linear-rgb-unorm8-scaled-v1",
+    "worldPxPerBU": 40,
+    "emissionRange": 8,
+    "exposure": 1.018829345703125,
+    "tint": [
+      1.999786376953125,
+      1,
+      1
+    ],
+    "saturation": 0.830841064453125
+  },
+  "shadowMesh": {
+    "version": 1,
+    "encoding": "u16-world-xyz-per-pose-v1",
+    "frames": [
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -10.201396942138672,
+            -9.53781247138977,
+            0
+          ],
+          "max": [
+            10.201396942138672,
+            10.485732555389404,
+            24.800000190734863
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0000-positions.bin",
+          "sha256": "bf65484965a1cd76ea5578c4fd08802aca2ddeb5a6121738672cdfc310d7146b",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0000-indices.bin",
+          "sha256": "927edc0462ac266744f89317b73bdc6005202f719bf02ff878fd2a61c9626db2",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -10.201396942138672,
+            -9.53781247138977,
+            0
+          ],
+          "max": [
+            10.201396942138672,
+            10.485732555389404,
+            24.800000190734863
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0001-positions.bin",
+          "sha256": "49ec3ab8333b0cf153dbf443f837892cc985ba2ce830e9149d4c62a57700651f",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0001-indices.bin",
+          "sha256": "ce473a1ea155ae568190cc153d334c5fc7aa9e445fe7c281a43ce7562e0632f0",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -10.201396942138672,
+            -9.53781247138977,
+            0
+          ],
+          "max": [
+            10.201396942138672,
+            10.485732555389404,
+            24.800000190734863
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0002-positions.bin",
+          "sha256": "d421c81769748c9a4cf8d8a40f3fe8ea16aa8d17bb345e7c485a0271d305c11e",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0002-indices.bin",
+          "sha256": "4528e8ca3b5a8045c498e3bda9ac06f7c2d05a63a23843575f1ee8e602585f3a",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -10.201396942138672,
+            -9.53781247138977,
+            0
+          ],
+          "max": [
+            10.201396942138672,
+            10.485732555389404,
+            24.800000190734863
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0003-positions.bin",
+          "sha256": "86f73a55661de0286768f4f3b212cc170059d22d50579932737551c077eafee2",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0003-indices.bin",
+          "sha256": "40370e273a64147b5ea372483b81f3e31b03db3f1dfad2ef6e13bf4657944f47",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -10.201396942138672,
+            -9.53781247138977,
+            0
+          ],
+          "max": [
+            10.201396942138672,
+            10.485732555389404,
+            24.800000190734863
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0004-positions.bin",
+          "sha256": "f4571f7d30eb80140f891882d8fb34bf340dbf0ace632db1ee4c94dbd8c83f26",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0004-indices.bin",
+          "sha256": "18e274eba071c5ccafee8691e8dad739b7dc2676e9a34dbb4a2ad429bed342e4",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -10.201396942138672,
+            -9.53781247138977,
+            0
+          ],
+          "max": [
+            10.201396942138672,
+            10.485732555389404,
+            24.800000190734863
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0005-positions.bin",
+          "sha256": "fa7af0c304190a3654093cb2d8c7be771e217d38997bff3d3bba80dd9f6c8dd5",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0005-indices.bin",
+          "sha256": "77446193225cd22f0aa9307b81cfcdd2ab34ba4d086710dea90aacfad76f66e0",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -10.201396942138672,
+            -9.53781247138977,
+            0
+          ],
+          "max": [
+            10.201396942138672,
+            10.485732555389404,
+            24.800000190734863
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0006-positions.bin",
+          "sha256": "22787cc04dd1887c2ff4e976c952055a650c12f1a2dac3744e6838bcb2d3a25f",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0006-indices.bin",
+          "sha256": "00ef8e67ef3c247412ecd67280f78a32b9035834f04c2acec110e5ed1a500413",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -10.201396942138672,
+            -9.53781247138977,
+            0
+          ],
+          "max": [
+            10.201396942138672,
+            10.485732555389404,
+            24.800000190734863
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0007-positions.bin",
+          "sha256": "7ab04eed0d538e7f7510accb752d0fc0b6dbcdfc477f73ca2302db6af79ab0ff",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0007-indices.bin",
+          "sha256": "aab92e810aca40cda0e861e27bfa02deba4c4b8e221711f4acd44ccf5267bdf4",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -10.201396942138672,
+            -9.53781247138977,
+            0
+          ],
+          "max": [
+            10.201396942138672,
+            10.485732555389404,
+            24.800000190734863
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0008-positions.bin",
+          "sha256": "e81ba4da60797b829c4a69659b31217d1ceb4bf6805912f27cc5e661c6180a6a",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0008-indices.bin",
+          "sha256": "9ef4397b5458351fd6d291d3053aa0d37359709a7c655fd0733384db844943aa",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -10.201396942138672,
+            -9.53781247138977,
+            0
+          ],
+          "max": [
+            10.201396942138672,
+            10.485732555389404,
+            24.800000190734863
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0009-positions.bin",
+          "sha256": "bf65484965a1cd76ea5578c4fd08802aca2ddeb5a6121738672cdfc310d7146b",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0009-indices.bin",
+          "sha256": "927edc0462ac266744f89317b73bdc6005202f719bf02ff878fd2a61c9626db2",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -10.201396942138672,
+            -9.53781247138977,
+            0
+          ],
+          "max": [
+            10.201396942138672,
+            10.485732555389404,
+            24.800000190734863
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0010-positions.bin",
+          "sha256": "bf65484965a1cd76ea5578c4fd08802aca2ddeb5a6121738672cdfc310d7146b",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0010-indices.bin",
+          "sha256": "927edc0462ac266744f89317b73bdc6005202f719bf02ff878fd2a61c9626db2",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -10.201396942138672,
+            -9.53781247138977,
+            0
+          ],
+          "max": [
+            10.201396942138672,
+            10.485732555389404,
+            24.800000190734863
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0011-positions.bin",
+          "sha256": "bf65484965a1cd76ea5578c4fd08802aca2ddeb5a6121738672cdfc310d7146b",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0011-indices.bin",
+          "sha256": "927edc0462ac266744f89317b73bdc6005202f719bf02ff878fd2a61c9626db2",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -10.201396942138672,
+            -9.53781247138977,
+            0
+          ],
+          "max": [
+            10.201396942138672,
+            10.485732555389404,
+            24.800000190734863
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0012-positions.bin",
+          "sha256": "bf65484965a1cd76ea5578c4fd08802aca2ddeb5a6121738672cdfc310d7146b",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0012-indices.bin",
+          "sha256": "927edc0462ac266744f89317b73bdc6005202f719bf02ff878fd2a61c9626db2",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -10.201396942138672,
+            -9.53781247138977,
+            0
+          ],
+          "max": [
+            10.201396942138672,
+            10.485732555389404,
+            24.800000190734863
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0013-positions.bin",
+          "sha256": "bf65484965a1cd76ea5578c4fd08802aca2ddeb5a6121738672cdfc310d7146b",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0013-indices.bin",
+          "sha256": "927edc0462ac266744f89317b73bdc6005202f719bf02ff878fd2a61c9626db2",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -10.14524221420288,
+            -9.480730891227722,
+            -0.0739912036806345
+          ],
+          "max": [
+            10.124907493591309,
+            10.425715446472168,
+            24.734947681427002
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0014-positions.bin",
+          "sha256": "454d043f7416f3039c59138b4c95e0ce242edb8dda5efced74d5cac4d82b5ce3",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0014-indices.bin",
+          "sha256": "3155f68285581ed63813f652d90f99d369ade12f6cd8588f642588d0b59a06bd",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -10.444647073745728,
+            -9.879448413848877,
+            0.2785887010395527
+          ],
+          "max": [
+            10.532381534576416,
+            10.765271186828613,
+            25.10383367538452
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0015-positions.bin",
+          "sha256": "1aa85f436bb615972adbae7184a89b2930dc0a557d006f73605277eef4c647ac",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0015-indices.bin",
+          "sha256": "08392b99a4f0b1e5a9755b587a9309d8bede8af92737f6ce87866038f87b7744",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -9.968175292015076,
+            -9.30742859840393,
+            -0.30748147517442703
+          ],
+          "max": [
+            9.88351285457611,
+            10.236276388168335,
+            24.520864486694336
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0016-positions.bin",
+          "sha256": "7eca66a55947ab231b89dc6d6c2c8931578ac943aebfc4c898f8a363e77e32f8",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0016-indices.bin",
+          "sha256": "fa5df8352cafd0e10413d00b47ec0795c950c578509e16bb1c54bcc90322a521",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -10.599178075790405,
+            -10.103572607040405,
+            0.45531999319791794
+          ],
+          "max": [
+            10.7423734664917,
+            10.94261646270752,
+            25.279695987701416
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0017-positions.bin",
+          "sha256": "4584a3ccb6052f31a86d0875bb5afb604d93e9d22086dc95da506a76e397a2c7",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0017-indices.bin",
+          "sha256": "8fba795dd7e2cc57daab0c1ffbd850619c07ef6565ca1b034a2f9c3ec2753325",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -14.4791841506958,
+            -15.080267190933228,
+            2.096922993659973
+          ],
+          "max": [
+            14.97154951095581,
+            14.614958763122559,
+            26.282529830932617
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0018-positions.bin",
+          "sha256": "bf51cf13b8dbd7ebd43b82b097e7134fb35e92aa78e55af2934595b8a9b58688",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0018-indices.bin",
+          "sha256": "a511733a178383a4bf62c91ad7eb88480aa40805a582b9d150e275427cff5d70",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -19.140337705612183,
+            -19.53850746154785,
+            3.7570297718048096
+          ],
+          "max": [
+            18.865774869918823,
+            18.36083173751831,
+            24.105243682861328
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0019-positions.bin",
+          "sha256": "72b4e94708d85961b2e2f3b2d04d3813bb3998124247a681b518ec001aa32440",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0019-indices.bin",
+          "sha256": "ad24dde071441de11d24d0e05247183a50fdac3262da277fc517b6191872ee90",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -24.15226459503174,
+            -24.098739624023438,
+            0.2201545238494873
+          ],
+          "max": [
+            23.428704738616943,
+            23.462705612182617,
+            15.82460880279541
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0020-positions.bin",
+          "sha256": "8534e678cb838c94986b379752ad042924ff32dded4dd96d82be62989599cc7c",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0020-indices.bin",
+          "sha256": "2a3bb0ac52a2666e548d6ba507558a0d66f0b8bea1327f44b3b168fb89c43c58",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -24.837517738342285,
+            -24.881725311279297,
+            -5.865046977996826
+          ],
+          "max": [
+            24.827136993408203,
+            24.90299940109253,
+            12.149908542633057
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0021-positions.bin",
+          "sha256": "99547c1b9acd421c604d57f69227e77f5370d942d5e9cb8d90be3be42fad8540",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0021-indices.bin",
+          "sha256": "e52af71d87c2d6a6e77b691d84ac9043cc7d529cae0aaa70cedf0c2f3010b67b",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -24.899191856384277,
+            -24.51303720474243,
+            -9.495292901992798
+          ],
+          "max": [
+            24.475667476654053,
+            24.851181507110596,
+            12.008000612258911
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0022-positions.bin",
+          "sha256": "103cd0b65b7398aed9e047c60d1f9b39ee7df00c40f0c2dd30f296d40a69aef5",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0022-indices.bin",
+          "sha256": "4d6c30184f0d201095a5f058ad7fe882d2410831758152e3e741d263fe83db34",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -24.879813194274902,
+            -24.456117153167725,
+            -9.75888967514038
+          ],
+          "max": [
+            24.41986083984375,
+            24.832909107208252,
+            12.008000612258911
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0023-positions.bin",
+          "sha256": "c62d21099e07e5128057ba3a3f0906dc90500cff7825b3bb796105c0b2f2c6bd",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0023-indices.bin",
+          "sha256": "4d6c30184f0d201095a5f058ad7fe882d2410831758152e3e741d263fe83db34",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -24.879813194274902,
+            -24.456117153167725,
+            -9.75888967514038
+          ],
+          "max": [
+            24.41986083984375,
+            24.832909107208252,
+            12.008000612258911
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0024-positions.bin",
+          "sha256": "c62d21099e07e5128057ba3a3f0906dc90500cff7825b3bb796105c0b2f2c6bd",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0024-indices.bin",
+          "sha256": "4d6c30184f0d201095a5f058ad7fe882d2410831758152e3e741d263fe83db34",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -24.879813194274902,
+            -24.456117153167725,
+            -9.75888967514038
+          ],
+          "max": [
+            24.41986083984375,
+            24.832909107208252,
+            12.008000612258911
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0025-positions.bin",
+          "sha256": "c62d21099e07e5128057ba3a3f0906dc90500cff7825b3bb796105c0b2f2c6bd",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0025-indices.bin",
+          "sha256": "4d6c30184f0d201095a5f058ad7fe882d2410831758152e3e741d263fe83db34",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -24.879813194274902,
+            -24.456117153167725,
+            -9.75888967514038
+          ],
+          "max": [
+            24.41986083984375,
+            24.832909107208252,
+            12.008000612258911
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0026-positions.bin",
+          "sha256": "c62d21099e07e5128057ba3a3f0906dc90500cff7825b3bb796105c0b2f2c6bd",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0026-indices.bin",
+          "sha256": "4d6c30184f0d201095a5f058ad7fe882d2410831758152e3e741d263fe83db34",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -24.879813194274902,
+            -24.456117153167725,
+            -9.75888967514038
+          ],
+          "max": [
+            24.41986083984375,
+            24.832909107208252,
+            12.008000612258911
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0027-positions.bin",
+          "sha256": "c62d21099e07e5128057ba3a3f0906dc90500cff7825b3bb796105c0b2f2c6bd",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0027-indices.bin",
+          "sha256": "4d6c30184f0d201095a5f058ad7fe882d2410831758152e3e741d263fe83db34",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2012,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -24.879813194274902,
+            -24.456117153167725,
+            -9.75888967514038
+          ],
+          "max": [
+            24.41986083984375,
+            24.832909107208252,
+            12.008000612258911
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0028-positions.bin",
+          "sha256": "c62d21099e07e5128057ba3a3f0906dc90500cff7825b3bb796105c0b2f2c6bd",
+          "bytes": 12072
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-egg/material/masters/frame-0028-indices.bin",
+          "sha256": "4d6c30184f0d201095a5f058ad7fe882d2410831758152e3e741d263fe83db34",
+          "bytes": 24000
+        }
+      }
+    ]
+  }
+}

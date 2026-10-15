@@ -1,0 +1,205 @@
+{
+  "name": "shield-charger-allied",
+  "description": "Allied (necromancy) shield charger charges a pinned hostile zombie: quiet jade lane, strike, recovery.",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "board": {
+    "columns": 4,
+    "tileWidth": 560
+  },
+  "hud": false,
+  "scenario": {
+    "classId": "inspector_gadachs",
+    "seed": 12345,
+    "player": "$player"
+  },
+  "times": [
+    {
+      "id": "day",
+      "timeOfDay": 720,
+      "label": "12:00"
+    }
+  ],
+  "layouts": [
+    {
+      "id": "map04",
+      "scenario": {
+        "mapId": "4"
+      },
+      "vars": {
+        "player": {
+          "gridX": 38,
+          "gridY": 27
+        },
+        "enemy": {
+          "gridX": 49,
+          "gridY": 27
+        },
+        "view": {
+          "gridX": 53,
+          "gridY": 26.5
+        },
+        "zoom": 1.5
+      }
+    }
+  ],
+  "setup": [
+    {
+      "op": "camera",
+      "at": "$view",
+      "zoom": "$zoom"
+    },
+    {
+      "op": "settle"
+    },
+    {
+      "op": "spawn",
+      "kind": "zombie-badger",
+      "at": {
+        "gridX": 59,
+        "gridY": 27
+      },
+      "pinned": true,
+      "name": "z"
+    },
+    {
+      "op": "spawn",
+      "kind": "shield-charger-badger",
+      "at": "$enemy",
+      "pinned": false,
+      "allied": true,
+      "name": "sc"
+    },
+    {
+      "op": "mark"
+    }
+  ],
+  "shots": [
+    {
+      "id": "approach",
+      "label": "approach: shield raised, turning",
+      "do": [
+        {
+          "op": "step",
+          "frames": 20
+        }
+      ],
+      "crops": [
+        {
+          "of": "sc",
+          "size": 220,
+          "scale": 3,
+          "label": "shield x3"
+        }
+      ]
+    },
+    {
+      "id": "windup-early",
+      "label": "windup start (shield down)",
+      "do": [
+        {
+          "op": "until",
+          "expr": "e.sc.shieldCharge && e.sc.shieldCharge.phase === 'windup'",
+          "maxFrames": 900
+        },
+        {
+          "op": "step",
+          "frames": 6
+        }
+      ],
+      "crops": [
+        {
+          "of": "sc",
+          "size": 260,
+          "scale": 3,
+          "label": "lane x3"
+        }
+      ]
+    },
+    {
+      "id": "windup-late",
+      "label": "windup ~85 %",
+      "do": [
+        {
+          "op": "until",
+          "expr": "e.sc.shieldCharge && e.sc.shieldCharge.phase === 'windup' && host.now >= e.sc.shieldCharge.lane.startedAt + 0.85 * (e.sc.shieldCharge.lane.runAt - e.sc.shieldCharge.lane.startedAt)",
+          "maxFrames": 120
+        }
+      ],
+      "crops": [
+        {
+          "of": "sc",
+          "size": 260,
+          "scale": 3,
+          "label": "lane x3"
+        }
+      ]
+    },
+    {
+      "id": "run",
+      "label": "run +100 ms",
+      "do": [
+        {
+          "op": "until",
+          "expr": "e.sc.shieldCharge && e.sc.shieldCharge.phase === 'run'",
+          "maxFrames": 120
+        },
+        {
+          "op": "step",
+          "frames": 6
+        }
+      ],
+      "crops": [
+        {
+          "of": "sc",
+          "size": 260,
+          "scale": 3,
+          "label": "streak x3"
+        }
+      ]
+    },
+    {
+      "id": "recover",
+      "label": "recover start (past the player)",
+      "do": [
+        {
+          "op": "until",
+          "expr": "e.sc.shieldCharge && e.sc.shieldCharge.phase === 'recover'",
+          "maxFrames": 180
+        },
+        {
+          "op": "step",
+          "frames": 4
+        }
+      ],
+      "crops": [
+        {
+          "of": "sc",
+          "size": 260,
+          "scale": 3,
+          "label": "recover x3"
+        }
+      ]
+    },
+    {
+      "id": "recover-late",
+      "label": "recover +0.5 s (scuffs, dust)",
+      "do": [
+        {
+          "op": "ms",
+          "ms": 500
+        }
+      ],
+      "crops": [
+        {
+          "of": "sc",
+          "size": 260,
+          "scale": 3,
+          "label": "recover x3"
+        }
+      ]
+    }
+  ]
+}

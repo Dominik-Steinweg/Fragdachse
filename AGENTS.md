@@ -34,7 +34,9 @@ oder zufällige Implementierungsdetails. Bestehende passende Tests bevorzugt erw
 | Markdown, Instruktionen oder Kommentare | Pfade, Links, Symbolnamen und `git diff --check` prüfen |
 | Kleine isolierte TypeScript-Änderung | `npm run typecheck` |
 | Getestetes Modul | passender existierender Test, z. B. `npm test -- tests/PeerRoom.test.ts` |
+| Zwischenstand einer Lane über mehrere Module | `npm run check:quick` (Typecheck, betroffene Core-Tests, Architecture, Quelltext-Guardrails; keine Builds) |
 | Mehrere Module, Netzwerk, Lifecycle oder Build-Konfiguration | `npm run check` |
+| Vor einem Fast-Forward nach `main` oder einer Lane-Integration | `npm run check:release`, danach `npm run ff-main -- <branch> --expect <main-hash>` |
 | Architecture-, World-, Activity-, Asset-, Stress- oder Balance-Lab-relevante Änderung | passende Spezialsuite gemäß [`docs/ai/testing.md`](docs/ai/testing.md) |
 | Sichtbare Phaser-/UI-Änderung | `npm run build` |
 

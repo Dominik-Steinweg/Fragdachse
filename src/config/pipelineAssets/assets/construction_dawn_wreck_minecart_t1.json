@@ -1,0 +1,35 @@
+{
+  "id": "construction_dawn_wreck_minecart_t1",
+  "category": "construction",
+  "gameIds": [],
+  "revision": "dawn-retex-p01",
+  "variant": "standard",
+  "sourceSize": 192,
+  "textureKey": "construction_dawn_wreck_minecart_t1",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "construction_dawn_wreck_minecart_t1_sheet",
+  "idlePath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_minecart_t1/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_minecart_t1/sheet.png",
+  "layout": {
+    "frameWidth": 192,
+    "frameHeight": 192,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 196,
+    "height": 196
+  },
+  "hashes": {
+    "idle": "3e731088bf9aba1ba3ee2d574371f238ccdf6bdcbff8f3c81aa7539843ff998e",
+    "sheet": "266c53bff82ddf76d54d3d14e986a7abf38e5c196f39e30e5ecef4b39556bbcf"
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "id": "badger",
+  "category": "character",
+  "gameIds": [
+    "player"
+  ],
+  "revision": "player-mesh-r2-005",
+  "variant": "standard",
+  "sourceSize": 128,
+  "textureKey": "badger",
+  "sheetTextureKey": "badger_walking",
+  "idlePath": "./assets/sprites/pipeline-v2/badger/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/badger/sheet.png",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 128,
+    "frameHeight": 128,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 5,
+    "frameCount": 37,
+    "width": 1056,
+    "height": 660
+  },
+  "idleFrame": 0,
+  "clips": [
+    {
+      "name": "move",
+      "frames": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "frameRate": 24,
+      "loop": true
+    },
+    {
+      "name": "idle",
+      "frames": [
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36
+      ],
+      "frameRate": 8,
+      "loop": true
+    }
+  ],
+  "hashes": {
+    "idle": "9b9277328bb0045c4e0f416500b8f2536f3d1c52f2f66979b1ebc077bbcc1747",
+    "sheet": "77576535eb7d595134fb0899a3ba69fae9b052dee074a102916e700fdfed6bc2"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "id": "held-negev",
+  "category": "weapon",
+  "gameIds": [
+    "NEGEV"
+  ],
+  "revision": "v2-aj",
+  "variant": "standard",
+  "sourceSize": 256,
+  "textureKey": "held_NEGEV",
+  "sheetTextureKey": "held_NEGEV_static",
+  "idlePath": "./assets/sprites/pipeline-v2/held-negev/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/held-negev/sheet.png",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 256,
+    "frameHeight": 256,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 260,
+    "height": 260
+  },
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      3.5
+    ],
+    "referenceGrip": [
+      6.5,
+      20.5
+    ]
+  },
+  "idleFrame": 0,
+  "clips": [],
+  "hashes": {
+    "idle": "b12bcf389a8d7315a27d290d22232ac6e721deea99e2e2600b0a5ff01e7a378d",
+    "sheet": "d874c6e7a386560e4550ceb76c5b41025b13ebd9dc1a4032f80e612aa358e6f1"
+  }
+}

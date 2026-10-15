@@ -1,0 +1,35 @@
+{
+  "id": "construction_dawn_supply_capsule",
+  "category": "construction",
+  "gameIds": [],
+  "revision": "dawn-retex-p01",
+  "variant": "standard",
+  "sourceSize": 192,
+  "textureKey": "construction_dawn_supply_capsule",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "construction_dawn_supply_capsule_sheet",
+  "idlePath": "./assets/sprites/pipeline-v2/construction_dawn_supply_capsule/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/construction_dawn_supply_capsule/sheet.png",
+  "layout": {
+    "frameWidth": 192,
+    "frameHeight": 192,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 196,
+    "height": 196
+  },
+  "hashes": {
+    "idle": "cdbbb805323341298e8c51b468f1e33b88d4bf921ca19dbbf78b987a7f095d3e",
+    "sheet": "967083037ae97c90bf07196ca143553ae229b1003719983ced78dc35bb47d692"
+  }
+}

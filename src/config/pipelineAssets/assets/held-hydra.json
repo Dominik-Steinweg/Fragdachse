@@ -1,0 +1,51 @@
+{
+  "id": "held-hydra",
+  "category": "weapon",
+  "gameIds": [
+    "HYDRA"
+  ],
+  "revision": "v2-aj",
+  "variant": "standard",
+  "sourceSize": 256,
+  "textureKey": "held_HYDRA",
+  "sheetTextureKey": "held_HYDRA_static",
+  "idlePath": "./assets/sprites/pipeline-v2/held-hydra/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/held-hydra/sheet.png",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 256,
+    "frameHeight": 256,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 260,
+    "height": 260
+  },
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      10.5
+    ],
+    "referenceGrip": [
+      4.5,
+      13.5
+    ]
+  },
+  "idleFrame": 0,
+  "clips": [],
+  "hashes": {
+    "idle": "30d4bc0c2c667e36e85c0eeea4eea676c095e4fb5b5a4b19b8d58216dcb8d308",
+    "sheet": "ac43cecd7d2f9def7d629a1f47eaf47c123c9c4204fde3949059bec9d222c6aa"
+  }
+}

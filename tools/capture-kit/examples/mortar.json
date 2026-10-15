@@ -1,0 +1,45 @@
+{
+  "name": "mortar",
+  "description": "Mörser-Dachs: windup 10/50/90 %, launch (THUMP), flight, impact and aftermath. Times come from host mortarStrikes.",
+  "viewport": { "width": 1280, "height": 720 },
+  "board": { "columns": 4, "tileWidth": 560 },
+  "hud": false,
+  "scenario": { "classId": "inspector_gadachs", "seed": 12345, "player": "$player" },
+  "times": [
+    { "id": "day", "timeOfDay": 720, "label": "12:00" },
+    { "id": "night", "timeOfDay": 1320, "label": "22:00" }
+  ],
+  "layouts": [
+    { "id": "map00", "scenario": { "mapId": "0" },
+      "vars": { "player": { "gridX": 12, "gridY": 50 }, "enemy": { "gridX": 24, "gridY": 51 }, "pinned": false,
+                "view": { "gridX": 24, "gridY": 45 }, "zoom": 1.2 } },
+    { "id": "map04", "scenario": { "mapId": "4" },
+      "vars": { "player": { "gridX": 36, "gridY": 24 }, "enemy": { "gridX": 52, "gridY": 27 }, "pinned": false,
+                "view": { "gridX": 62, "gridY": 23 }, "zoom": 1.1 } }
+  ],
+  "setup": [
+    { "op": "camera", "at": "$view", "zoom": "$zoom" },
+    { "op": "settle" },
+    { "op": "spawn", "kind": "mortar-badger", "at": "$enemy", "pinned": "$pinned", "name": "m" }
+  ],
+  "shots": [
+    { "id": "windup-10", "label": "windup 10 %",
+      "do": [{ "op": "until", "expr": "host.mortarStrikes.length > 0", "maxFrames": 900 }, { "op": "mark" },
+             { "op": "until", "expr": "host.now >= host.mortarStrikes[0].armedAt + (host.mortarStrikes[0].launchAt - host.mortarStrikes[0].armedAt) * 0.1", "maxFrames": 300 }],
+      "crops": [{ "of": "m", "size": [180, 120], "scale": 3 }] },
+    { "id": "windup-50", "label": "windup 50 %",
+      "do": [{ "op": "until", "expr": "host.now >= host.mortarStrikes[0].armedAt + (host.mortarStrikes[0].launchAt - host.mortarStrikes[0].armedAt) * 0.5", "maxFrames": 300 }] },
+    { "id": "windup-90", "label": "windup 90 %",
+      "do": [{ "op": "until", "expr": "host.now >= host.mortarStrikes[0].armedAt + (host.mortarStrikes[0].launchAt - host.mortarStrikes[0].armedAt) * 0.9", "maxFrames": 300 }],
+      "crops": [{ "of": "m", "size": [180, 120], "scale": 3 }] },
+    { "id": "launch", "label": "launch (THUMP)",
+      "do": [{ "op": "until", "expr": "host.now >= host.mortarStrikes[0].launchAt", "maxFrames": 300 }, { "op": "step", "frames": 1 }],
+      "crops": [{ "of": "m", "size": [180, 120], "scale": 3 }] },
+    { "id": "flight", "label": "flight 50 %",
+      "do": [{ "op": "until", "expr": "host.now >= (host.mortarStrikes[0].launchAt + host.mortarStrikes[0].impactAt) / 2", "maxFrames": 300 }] },
+    { "id": "impact", "label": "impact",
+      "do": [{ "op": "until", "expr": "host.explosionsSinceMark.some(x => x.style === 'mortar')", "maxFrames": 300 }, { "op": "step", "frames": 1 }] },
+    { "id": "impact-250", "label": "impact +250 ms", "do": [{ "op": "ms", "ms": 250 }] },
+    { "id": "impact-700", "label": "impact +700 ms", "do": [{ "op": "ms", "ms": 450 }] }
+  ]
+}

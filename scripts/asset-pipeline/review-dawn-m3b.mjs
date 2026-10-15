@@ -4,6 +4,7 @@ import path from 'node:path';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {parseArgs} from 'node:util';
+import {readPipelineRegistry} from './pipeline-registry.mjs';
 const {values:v}=parseArgs({options:{'draft-root':{type:'string'},run:{type:'string'},label:{type:'string'},output:{type:'string'},family:{type:'string'}}});
 if(!v.output||!v.label||!!v.run===!!v['draft-root'])throw Error('Use output, label and either run or draft-root');
 const out=path.resolve(v.output),prod=!!v.run,sources={},cache=new Map(),proposals=[];
@@ -34,7 +35,7 @@ async function frame(item){
 }
 const text=(s,x,y,size=13,color='#eef0e6')=>`<text x="${x}" y="${y}" fill="${color}" font-family="Arial" font-size="${size}">${s}</text>`;
 const catalog=JSON.parse(await bytes('scripts/asset-pipeline/catalog-v2.json'));
-const runtime=JSON.parse(await bytes('src/config/pipelineAssets.json'));
+const runtime=await readPipelineRegistry();
 const display=id=>{const a=catalog.assets.find(a=>a.id===id);return Math.round(a.targetSize*(a.displayScale??1));};
 const scavSize=display('enemy_dawn_scavenger');
 const families={capsule:[{id:'construction_dawn_supply_capsule',label:'VERSORGUNG / 96 px',size:96}],crate:[{id:'dawn_supply_crate',label:'TRAGEKISTE / 28 px',size:28}],heap:[1,2,3].map(t=>({id:`dawn_scrap_heap_t${t}`,label:`T${t} / 64 px`,size:64})),scavenger:[{id:'enemy_dawn_scavenger',label:`RUHE / ${scavSize} px`,size:scavSize},...[0,3,6,9].map(index=>({id:'enemy_dawn_scavenger',clip:'move',index,label:`MOVE ${index}/12 / ${scavSize} px`,size:scavSize})),...['rabid-badger','demon-badger','zombie-badger'].map(id=>({reference:'public/'+runtime.assets.find(a=>a.id===id).idlePath.replace(/^\.\//,''),label:`${id} / ${display(id)} px`,size:display(id)}))]};

@@ -4,6 +4,7 @@ import { readFile, writeFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { submersionDefaults, waterOptions, waterTile } from './water-preview-v2.mjs';
+import { PIPELINE_REGISTRY_DIR, readPipelineRegistry } from './pipeline-registry.mjs';
 
 const defaultRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const exists = async file => { try { return (await stat(file)).isFile(); } catch (e) { if (e.code === 'ENOENT') return false; throw e; } };
@@ -31,8 +32,7 @@ export async function comparisonSource(root, spec, override) {
     return { path: path.relative(root, file).replaceAll('\\', '/'), kind, label, width, height, ...(transform ? { transform } : {}) };
   };
   if (override) return describe(path.resolve(root, override), 'explicit', 'Eigener Vergleich');
-  const runtimePath = path.join(root, 'src/config/pipelineAssets.json');
-  const runtime = await exists(runtimePath) ? await json(runtimePath) : null;
+  const runtime = await exists(path.join(root, PIPELINE_REGISTRY_DIR, 'registry.json')) ? await readPipelineRegistry(root) : null;
   const imported = runtime?.assets.find(a => a.id === spec.id);
   if (imported) {
     const revision = imported.revision ?? runtime.revision;

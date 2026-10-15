@@ -4,11 +4,12 @@ import path from 'node:path';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { parseArgs } from 'node:util';
+import { readPipelineRegistry } from './pipeline-registry.mjs';
 const { values: args } = parseArgs({ options: {
   'draft-root': { type: 'string' }, label: { type: 'string' }, output: { type: 'string' }, 'detail-root': { type: 'string' },
 } });
 if (!args['draft-root'] || !/^[a-z0-9-]+$/.test(args.label ?? '') || !args.output) throw Error('Required: --draft-root --label --output');
-const runtime = JSON.parse(await readFile('src/config/pipelineAssets.json', 'utf8'));
+const runtime = await readPipelineRegistry();
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const sources = {}, measurements = [];
 async function source(file, expected) {

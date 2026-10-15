@@ -1,0 +1,35 @@
+{
+  "id": "dawn_scrap_heap_t1",
+  "category": "construction",
+  "gameIds": [],
+  "revision": "dawn-retex-p01",
+  "variant": "standard",
+  "sourceSize": 128,
+  "textureKey": "dawn_scrap_heap_t1",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "dawn_scrap_heap_t1_sheet",
+  "idlePath": "./assets/sprites/pipeline-v2/dawn_scrap_heap_t1/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/dawn_scrap_heap_t1/sheet.png",
+  "layout": {
+    "frameWidth": 128,
+    "frameHeight": 128,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 132,
+    "height": 132
+  },
+  "hashes": {
+    "idle": "83f1d024ec4ca329fc38a541598a870f25fdbba5d047ba34ab46a1bce3d7e16a",
+    "sheet": "5c15bf25b7b33db2c51c60140c48b8d6742425ec3c03a07bef466f75d0b0b6e0"
+  }
+}

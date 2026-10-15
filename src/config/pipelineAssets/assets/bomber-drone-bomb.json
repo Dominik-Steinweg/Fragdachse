@@ -1,0 +1,37 @@
+{
+  "id": "bomber-drone-bomb",
+  "category": "companion",
+  "gameIds": [
+    "bomber_squadron"
+  ],
+  "revision": "u31-bomber-v1",
+  "variant": "standard",
+  "sourceSize": 48,
+  "textureKey": "bomber_drone_bomb",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "bomber_drone_bomb_walking",
+  "idlePath": "./assets/sprites/pipeline-v2/bomber-drone-bomb/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/bomber-drone-bomb/sheet.png",
+  "layout": {
+    "frameWidth": 48,
+    "frameHeight": 48,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 52,
+    "height": 52
+  },
+  "hashes": {
+    "idle": "de56861258b282e4e95a7d8353dea2530bc10914a08c253413ae0b2cb50543bd",
+    "sheet": "964a9e57395bb00ce177fa8ea7438ec49a903863005f764850dc14c011bc423c"
+  }
+}

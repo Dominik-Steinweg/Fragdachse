@@ -1,0 +1,51 @@
+{
+  "id": "held-flamethrower",
+  "category": "weapon",
+  "gameIds": [
+    "FLAMETHROWER"
+  ],
+  "revision": "v2-aj",
+  "variant": "standard",
+  "sourceSize": 256,
+  "textureKey": "held_FLAMETHROWER",
+  "sheetTextureKey": "held_FLAMETHROWER_static",
+  "idlePath": "./assets/sprites/pipeline-v2/held-flamethrower/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/held-flamethrower/sheet.png",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 256,
+    "frameHeight": 256,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 260,
+    "height": 260
+  },
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      8.5
+    ],
+    "referenceGrip": [
+      5.5,
+      15.5
+    ]
+  },
+  "idleFrame": 0,
+  "clips": [],
+  "hashes": {
+    "idle": "d0e7bd273b330eb547e5813a3e93a0f32d682df43653676005a09f4433402adf",
+    "sheet": "428885a2e0966d75e5759f24a4f852dbf4b4757833e54914dd2729197971a86f"
+  }
+}

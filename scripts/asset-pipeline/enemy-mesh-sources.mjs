@@ -2,13 +2,14 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { enemyCoordinates, enemyPoses, enemyReviewSamples, relativeMember } from './enemy-mesh-contract.mjs';
+import { pipelineRegistrySnapshot, readPipelineRegistry } from './pipeline-registry.mjs';
 
 export const enemyFileHash = async file => createHash('sha256').update(await readFile(file)).digest('hex');
 const json = async file => JSON.parse(await readFile(file, 'utf8'));
 
 /** Read-only preflight: bind selected source, atlas and masters, never select the newest run. */
 export async function selectedEnemySource(repo, pilot) {
-  const registry = await json(path.join(repo, 'src/config/pipelineAssets.json'));
+  const registry = await readPipelineRegistry(repo);
   const asset = registry.assets.find(a => a.id === pilot.id && a.category === 'enemy');
   if (!asset || asset.revision !== pilot.sourceRevision) throw Error('Enemy selection revision changed: ' + pilot.id);
   const folder = path.join(repo, 'art/poc/pipeline-v2/runs', relativeMember(asset.revision), relativeMember(asset.id));
@@ -48,7 +49,8 @@ export async function selectedEnemySource(repo, pilot) {
     if (selection.files[variant + '/' + frame.file] !== frame.sha256) throw Error('Unselected enemy master');
     await selected('source-beauty/' + path.posix.basename(frame.file), variant + '/' + frame.file);
   }
-  await bind('source-registry.json', path.join(repo, 'src/config/pipelineAssets.json'));
+  // Frozen single-document copy of the per-asset registry; import-enemy-mesh-families reads it back.
+  await bind('source-registry.json', await pipelineRegistrySnapshot(repo));
   await bind('source-pilot.json', path.join(repo, 'scripts/asset-pipeline', relativeMember(pilot.sourceContract ?? 'enemy-mesh-pilot.json')));
   return { id: pilot.id, pilot, render, layout: asset.layout, coordinates: enemyCoordinates(render),
     poses, reviewSamples: enemyReviewSamples(render), sourceFiles, files };

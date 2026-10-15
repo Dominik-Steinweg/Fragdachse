@@ -1,0 +1,51 @@
+{
+  "id": "held-mini-rocket-launcher",
+  "category": "weapon",
+  "gameIds": [
+    "MINI_ROCKET_LAUNCHER"
+  ],
+  "revision": "v2-aj",
+  "variant": "standard",
+  "sourceSize": 256,
+  "textureKey": "held_MINI_ROCKET_LAUNCHER",
+  "sheetTextureKey": "held_MINI_ROCKET_LAUNCHER_static",
+  "idlePath": "./assets/sprites/pipeline-v2/held-mini-rocket-launcher/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/held-mini-rocket-launcher/sheet.png",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 256,
+    "frameHeight": 256,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 260,
+    "height": 260
+  },
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      11.5
+    ],
+    "referenceGrip": [
+      4.5,
+      12.5
+    ]
+  },
+  "idleFrame": 0,
+  "clips": [],
+  "hashes": {
+    "idle": "0b471215701e75e26037bb9648069714f241d422c4a61d489e5d9a2fd585edde",
+    "sheet": "9ca4f313b13f40d672f0b1772c286c61fa26cb691b5d6cc03504f3a4ce6abdf1"
+  }
+}

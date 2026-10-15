@@ -1,0 +1,51 @@
+{
+  "id": "held-he-grenade",
+  "category": "utility",
+  "gameIds": [
+    "HE_GRENADE"
+  ],
+  "revision": "v2-ak",
+  "variant": "standard",
+  "sourceSize": 256,
+  "textureKey": "held_HE_GRENADE",
+  "sheetTextureKey": "held_HE_GRENADE_static",
+  "idlePath": "./assets/sprites/pipeline-v2/held-he-grenade/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/held-he-grenade/sheet.png",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 256,
+    "frameHeight": 256,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 260,
+    "height": 260
+  },
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      18
+    ],
+    "referenceGrip": [
+      3,
+      6
+    ]
+  },
+  "idleFrame": 0,
+  "clips": [],
+  "hashes": {
+    "idle": "91d5225b4fbc76027eac324f7916c5252e168693599edcf37d4f424a84f48cdf",
+    "sheet": "ecc2d5f28d7f12c62169d33537228235e2fd7e6236c27975660e0c1976a571bb"
+  }
+}
