@@ -1,0 +1,258 @@
+{
+  "name": "energy-shield-impact",
+  "description": "Bot fire into the player shield, then into the shield charger's frontal shield.",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "board": {
+    "columns": 4,
+    "tileWidth": 560
+  },
+  "hud": false,
+  "scenario": {
+    "classId": "dachs_nukem",
+    "seed": 12345,
+    "player": "$player",
+    "weapon2": "ENERGY_SHIELD",
+    "upgrades": {
+      "unlock_energy_shield": 1
+    },
+    "bots": [
+      {
+        "name": "bot"
+      }
+    ],
+    "playerFreeForAll": true
+  },
+  "times": [
+    {
+      "id": "day",
+      "timeOfDay": 720,
+      "label": "12:00"
+    },
+    {
+      "id": "night",
+      "timeOfDay": 1320,
+      "label": "22:00"
+    }
+  ],
+  "layouts": [
+    {
+      "id": "map04",
+      "scenario": {
+        "mapId": "4"
+      },
+      "vars": {
+        "player": {
+          "gridX": 12,
+          "gridY": 9
+        },
+        "enemy": {
+          "gridX": 16,
+          "gridY": 9
+        },
+        "view": {
+          "gridX": 15,
+          "gridY": 8
+        },
+        "zoom": 2.2
+      }
+    }
+  ],
+  "setup": [
+    {
+      "op": "camera",
+      "at": "$view",
+      "zoom": "$zoom"
+    },
+    {
+      "op": "settle"
+    },
+    {
+      "op": "spawn",
+      "kind": "shield-charger-badger",
+      "at": "$enemy",
+      "pinned": true,
+      "name": "sc"
+    },
+    {
+      "action": "bot",
+      "index": 0,
+      "place": true,
+      "gridX": 17,
+      "gridY": 6
+    },
+    {
+      "action": "bot",
+      "index": 0,
+      "aim": {
+        "gridX": 12,
+        "gridY": 9
+      },
+      "fire": "weapon1"
+    },
+    {
+      "action": "holdWeapon",
+      "slot": "weapon2"
+    },
+    {
+      "op": "mark"
+    }
+  ],
+  "shots": [
+    {
+      "id": "p0",
+      "label": "bot fires at player shield +0.6 s",
+      "do": [
+        {
+          "op": "ms",
+          "ms": 600
+        }
+      ],
+      "crops": [
+        {
+          "of": "player",
+          "size": 140,
+          "scale": 3,
+          "label": "player x3"
+        },
+        {
+          "of": "sc",
+          "size": 140,
+          "scale": 3,
+          "label": "enemy x3"
+        }
+      ]
+    },
+    {
+      "id": "p1",
+      "label": "+80 ms",
+      "do": [
+        {
+          "op": "ms",
+          "ms": 80
+        }
+      ],
+      "crops": [
+        {
+          "of": "player",
+          "size": 140,
+          "scale": 3,
+          "label": "player x3"
+        },
+        {
+          "of": "sc",
+          "size": 140,
+          "scale": 3,
+          "label": "enemy x3"
+        }
+      ]
+    },
+    {
+      "id": "p2",
+      "label": "+160 ms",
+      "do": [
+        {
+          "op": "ms",
+          "ms": 80
+        }
+      ],
+      "crops": [
+        {
+          "of": "player",
+          "size": 140,
+          "scale": 3,
+          "label": "player x3"
+        },
+        {
+          "of": "sc",
+          "size": 140,
+          "scale": 3,
+          "label": "enemy x3"
+        }
+      ]
+    },
+    {
+      "id": "e0",
+      "label": "bot fires at enemy shield +0.6 s",
+      "do": [
+        {
+          "action": "bot",
+          "index": 0,
+          "aim": {
+            "gridX": 16,
+            "gridY": 9
+          },
+          "fire": "weapon1"
+        },
+        {
+          "op": "ms",
+          "ms": 600
+        }
+      ],
+      "crops": [
+        {
+          "of": "player",
+          "size": 140,
+          "scale": 3,
+          "label": "player x3"
+        },
+        {
+          "of": "sc",
+          "size": 140,
+          "scale": 3,
+          "label": "enemy x3"
+        }
+      ]
+    },
+    {
+      "id": "e1",
+      "label": "+80 ms",
+      "do": [
+        {
+          "op": "ms",
+          "ms": 80
+        }
+      ],
+      "crops": [
+        {
+          "of": "player",
+          "size": 140,
+          "scale": 3,
+          "label": "player x3"
+        },
+        {
+          "of": "sc",
+          "size": 140,
+          "scale": 3,
+          "label": "enemy x3"
+        }
+      ]
+    },
+    {
+      "id": "e2",
+      "label": "+160 ms",
+      "do": [
+        {
+          "op": "ms",
+          "ms": 80
+        }
+      ],
+      "crops": [
+        {
+          "of": "player",
+          "size": 140,
+          "scale": 3,
+          "label": "player x3"
+        },
+        {
+          "of": "sc",
+          "size": 140,
+          "scale": 3,
+          "label": "enemy x3"
+        }
+      ]
+    }
+  ]
+}
