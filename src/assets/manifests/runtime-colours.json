@@ -553,6 +553,18 @@
       "visiblePixelSha256": "707ac5f6cb856e6c25e528c0368fdb403215c3565b3284e2dfbf2368f5987da2",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.png",
+      "width": 1568,
+      "height": 392,
+      "sourceBytes": 401240,
+      "downloadBytes": 340956,
+      "sourceSha256": "d3304af613430f636c37ffebec5a0578309366ed840c3c20bf0f9f63a4be276e",
+      "sha256": "0c32eddef8a3f0f08311d393912639b269f762d195788f2296f676a32d93e1f9",
+      "visiblePixelSha256": "a98a00c31c0bf3a60123aafd3c1f91d3ddf0c3775f9367ed79f8beb337620542",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/sprites/pipeline-v2/dawn_dealer/sheet.png": {
       "file": "assets/sprites/pipeline-v2/dawn_dealer/sheet.webp",
       "source": "assets/sprites/pipeline-v2/dawn_dealer/sheet.png",
@@ -971,18 +983,6 @@
       "sourceSha256": "10230f4852a6d48487bce77b7f609e8e2f5938d1ced9cab8c100101e3e52d2cc",
       "sha256": "985eeafeb68f21f9bb5a3b6da0e0fad11252a111441bcbd480699cc163b58331",
       "visiblePixelSha256": "3ab206ca105636cea3b90c93039e95e3a5c8cd0bf220297e8294dcae935611d4",
-      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
-    },
-    "assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.png": {
-      "file": "assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.webp",
-      "source": "assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.png",
-      "width": 1568,
-      "height": 392,
-      "sourceBytes": 401240,
-      "downloadBytes": 340956,
-      "sourceSha256": "d3304af613430f636c37ffebec5a0578309366ed840c3c20bf0f9f63a4be276e",
-      "sha256": "0c32eddef8a3f0f08311d393912639b269f762d195788f2296f676a32d93e1f9",
-      "visiblePixelSha256": "a98a00c31c0bf3a60123aafd3c1f91d3ddf0c3775f9367ed79f8beb337620542",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     }
   }

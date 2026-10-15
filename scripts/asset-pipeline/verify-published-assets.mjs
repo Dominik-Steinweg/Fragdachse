@@ -8,6 +8,7 @@ import { parseArgs } from 'node:util';
 import sharp from 'sharp';
 import { rgba, tile, inspectPasses, validatePoseMapping, mapLimit } from './pass-quality.mjs';
 import { decodeEnemyMesh, relativeMember } from './enemy-mesh-contract.mjs';
+import { readPipelineRegistry } from './pipeline-registry.mjs';
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export const json = async file => JSON.parse(await readFile(file, 'utf8'));
@@ -27,7 +28,7 @@ export async function auditEnemy(asset, { repo=repoRoot, sources }={}) {
     const size = Number(key.match(/\d+$/)[0]);
     if (images[key].width !== (size+4)*8 || images[key].height !== (size+4)*4) throw Error('Atlas canvas mismatch');
   }
-  const registry = (await json(path.join(repo,'src/config/pipelineAssets.json'))).assets.find(a=>a.id===asset.id);
+  const registry = (await readPipelineRegistry(repo)).assets.find(a=>a.id===asset.id);
   if (registry.revision === asset.revision) {
     if (registry.hashes.sheet !== asset.images['beauty'+registry.sourceSize].sha256
       || JSON.stringify(registry.pivot)!==JSON.stringify(asset.coordinates.pivot)
@@ -130,7 +131,7 @@ async function auditPlayer(manifest, repo, sources) {
 
 export async function auditPublished({repo=repoRoot,sources,jobs=2}={}) {
   const started=performance.now(),directory=path.join(repo,'src/assets/manifests');
-  const registry=(await json(path.join(repo,'src/config/pipelineAssets.json'))).assets.filter(a=>['character','enemy'].includes(a.category));
+  const registry=(await readPipelineRegistry(repo)).assets.filter(a=>['character','enemy'].includes(a.category));
   for(const asset of registry)for(const kind of ['idle','sheet'])await verifyHash(path.join(repo,'public',asset[kind+'Path'].replace(/^\.\//,'')),asset.hashes[kind]);
   const names=(await readdir(directory)).filter(n=>/^(enemy-mesh-|character-(material-|mesh-|badger-))/.test(n));
   const enemies=new Map(),players=[];let meshes=0;

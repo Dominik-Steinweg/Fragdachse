@@ -1,0 +1,35 @@
+{
+  "id": "construction_dawn_wreck_tractor_t1",
+  "category": "construction",
+  "gameIds": [],
+  "revision": "dawn-retex-p01",
+  "variant": "standard",
+  "sourceSize": 192,
+  "textureKey": "construction_dawn_wreck_tractor_t1",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "construction_dawn_wreck_tractor_t1_sheet",
+  "idlePath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_tractor_t1/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/construction_dawn_wreck_tractor_t1/sheet.png",
+  "layout": {
+    "frameWidth": 192,
+    "frameHeight": 192,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 196,
+    "height": 196
+  },
+  "hashes": {
+    "idle": "f98c97533ed90a4a201df8ce05cf103ba99eaf0d3c360b027fdeee3d4342f3fd",
+    "sheet": "f4518cee151082ffe0780de3f24a7e7addd8fc9ccee8829f459c9008eb76fd1c"
+  }
+}

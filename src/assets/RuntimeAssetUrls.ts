@@ -1,5 +1,5 @@
 import type * as Phaser from 'phaser';
-import urls from './runtimeAssetUrls.json';
+import urls from 'virtual:runtime-asset-urls';
 
 const manifest: Readonly<Record<string, string>> = urls;
 /** Authored logical paths stay stable; published bytes own the cache version. */

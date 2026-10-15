@@ -1,0 +1,51 @@
+{
+  "id": "held-decoy",
+  "category": "utility",
+  "gameIds": [
+    "DECOY"
+  ],
+  "revision": "v2-ak",
+  "variant": "standard",
+  "sourceSize": 256,
+  "textureKey": "held_DECOY",
+  "sheetTextureKey": "held_DECOY_static",
+  "idlePath": "./assets/sprites/pipeline-v2/held-decoy/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/held-decoy/sheet.png",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 256,
+    "frameHeight": 256,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 260,
+    "height": 260
+  },
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      17.6
+    ],
+    "referenceGrip": [
+      3,
+      8
+    ]
+  },
+  "idleFrame": 0,
+  "clips": [],
+  "hashes": {
+    "idle": "7f67a643e7994d81780211c33c570f79217c034759441db025795f8f5883b8c3",
+    "sheet": "ea799bd8083e12af4e1ff611a03907ceba97e02bee67df6d6e74de65c83f1155"
+  }
+}

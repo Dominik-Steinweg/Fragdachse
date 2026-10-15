@@ -6,6 +6,7 @@ import sharp from 'sharp';
 import { preview, previewIndices, renderProcess, resolveBlender } from '../../scripts/asset-pipeline/preview-v2.mjs';
 import { comparisonSource, safePath } from '../../scripts/asset-pipeline/review-preview-v2.mjs';
 import { submersionDefaults, waterOptions, waterTile } from '../../scripts/asset-pipeline/water-preview-v2.mjs';
+import { PIPELINE_REGISTRY_DIR, writePipelineRegistry } from '../../scripts/asset-pipeline/pipeline-registry.mjs';
 
 const roots: string[] = [];
 const save = async (file: string, data: unknown) => {
@@ -48,7 +49,7 @@ describe('Disposable V2 authoring previews', () => {
     const spec = { id: 'example', reference: 'reference.png' };
     await image(spec.reference);
     const config = { revision: 'old', assets: [{ id: spec.id, revision: 'new', variant: 'calm', idlePath: './assets/idle.png' }] };
-    await save(path.join(root, 'src/config/pipelineAssets.json'), config);
+    await writePipelineRegistry(root, config);
     await image('public/assets/idle.png');
     expect((await comparisonSource(root, spec)).kind).toBe('imported-runtime');
     const base = 'art/poc/pipeline-v2/runs/new/example/calm';
@@ -75,8 +76,8 @@ describe('Disposable V2 authoring previews', () => {
     for (const index of manifest.indices) await image(`${folder}/frame-${String(index).padStart(4, '0')}.png`);
     await image('public/assets/sprites/gras_bg_tile.png');
     await image('public/assets/sprites/train/train_material_dark_top.png');
-    const sentinel = path.join(root, 'src/config/pipelineAssets.json');
-    await save(sentinel, { revision: 'keep', assets: [] });
+    await writePipelineRegistry(root, { revision: 'keep', assets: [] });
+    const sentinel = path.join(root, PIPELINE_REGISTRY_DIR, 'registry.json');
     const before = await readFile(sentinel);
     // No catalog or Blender exists in this fixture: --review must bypass both.
     expect(await preview(['--review', folder], root)).not.toHaveProperty('waterFile');

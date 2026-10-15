@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import sharp from 'sharp';
 import {runtimeAssetUrl} from '../../src/assets/RuntimeAssetUrls';
-import urls from '../../src/assets/runtimeAssetUrls.json';
+import urls from 'virtual:runtime-asset-urls';
 import publication from '../../src/assets/manifests/runtime-colours.json';
 import atlases from '../../src/assets/manifests/runtime-atlases.json';
 import runtimeFrames from '../../src/assets/manifests/runtime-atlas-frames.json';

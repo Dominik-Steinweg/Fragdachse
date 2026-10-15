@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getCatalog, getTranslationParityIssues, t, translate } from '../src/i18n';
-import { getDomainCatalog, getTranslationKeySources, getTranslationSourceCollisions } from '../src/i18n/catalog';
+import { getDomainCatalog, getTranslationKeySources, getTranslationSourceCollisions, TRANSLATION_DOMAINS } from '../src/i18n/catalog';
 import { getContentDisplayName, getContentTranslationKeys, getSourceName } from '../src/i18n/contentPresentation';
 import { getUpgradePresentationKeys } from '../src/i18n/upgradePresentation';
 
@@ -11,7 +11,7 @@ describe('player locale catalogs', () => {
   });
   it('keeps German and English catalogs structurally identical', () => {
     expect(getTranslationParityIssues()).toEqual([]);
-    for (const domain of ['ui', 'content', 'upgrades'] as const) {
+    for (const domain of TRANSLATION_DOMAINS) {
       const de = getDomainCatalog('de', domain);
       const en = getDomainCatalog('en', domain);
       expect(Object.keys(en).sort(), domain).toEqual(Object.keys(de).sort());

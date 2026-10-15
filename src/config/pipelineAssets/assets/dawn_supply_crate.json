@@ -1,0 +1,35 @@
+{
+  "id": "dawn_supply_crate",
+  "category": "powerup",
+  "gameIds": [],
+  "revision": "dawn-retex-p01",
+  "variant": "standard",
+  "sourceSize": 56,
+  "textureKey": "dawn_supply_crate",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "dawn_supply_crate_sheet",
+  "idlePath": "./assets/sprites/pipeline-v2/dawn_supply_crate/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/dawn_supply_crate/sheet.png",
+  "layout": {
+    "frameWidth": 56,
+    "frameHeight": 56,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 60,
+    "height": 60
+  },
+  "hashes": {
+    "idle": "6e0aecfc1416054ed1996bffb6cbc476d51ed3e469564491938bfbb5106a6269",
+    "sheet": "b0ef22c0d5014e608a2557bc637e8d1cb2a5123ce106ef2441dc6daa5f42b03b"
+  }
+}

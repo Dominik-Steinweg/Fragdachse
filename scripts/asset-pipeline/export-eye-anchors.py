@@ -20,8 +20,9 @@ def digest(path):
 
 
 def migrate(root):
-    runtime_path = root / 'src/config/pipelineAssets.json'
-    runtime = json.loads(runtime_path.read_text(encoding='utf-8'))
+    # One registry entry per file, as written by scripts/asset-pipeline/pipeline-registry.mjs.
+    registry_dir = root / 'src/config/pipelineAssets/assets'
+    runtime = {'assets': [json.loads(path.read_text(encoding='utf-8')) for path in sorted(registry_dir.glob('*.json'))]}
     # Exact, audited names are ONLY an adapter for immutable historical revisions.
     # New builds carry direct eyeLeft/eyeRight mesh sockets from their recipes.
     special = {
@@ -84,7 +85,9 @@ def migrate(root):
         }
         print(f'Eye anchors: {asset["id"]}, {len(frames)} selected poses')
     # Commit only after every selected source has passed validation.
-    runtime_path.write_text(json.dumps(runtime, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+    for asset in runtime['assets']:
+        if asset['category'] == 'enemy':
+            (registry_dir / f'{asset["id"]}.json').write_text(json.dumps(asset, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
 
 
 if __name__ == '__main__':

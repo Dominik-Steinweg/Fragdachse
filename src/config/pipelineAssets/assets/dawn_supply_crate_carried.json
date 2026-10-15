@@ -1,0 +1,35 @@
+{
+  "id": "dawn_supply_crate_carried",
+  "category": "powerup",
+  "gameIds": [],
+  "revision": "dawn-m3c-p02",
+  "variant": "standard",
+  "sourceSize": 56,
+  "textureKey": "dawn_supply_crate_carried",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "dawn_supply_crate_carried_sheet",
+  "idlePath": "./assets/sprites/pipeline-v2/dawn_supply_crate_carried/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/dawn_supply_crate_carried/sheet.png",
+  "layout": {
+    "frameWidth": 56,
+    "frameHeight": 56,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 60,
+    "height": 60
+  },
+  "hashes": {
+    "idle": "36b74123f025f7a853f525c65e26078311eeabe3e67b6009577e020f339e5f6d",
+    "sheet": "e270984bd1a14e4eee1a1d4a8898b2b3f76c1cf516e08a356eb16e3fe3d7b7ea"
+  }
+}

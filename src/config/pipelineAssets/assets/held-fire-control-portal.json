@@ -1,0 +1,48 @@
+{
+  "id": "held-fire-control-portal",
+  "category": "utility",
+  "gameIds": [
+    "FIRE_CONTROL_PORTAL"
+  ],
+  "revision": "fc-hq-4",
+  "variant": "standard",
+  "sourceSize": 128,
+  "textureKey": "held_FIRE_CONTROL_PORTAL",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      18
+    ]
+  },
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "held_FIRE_CONTROL_PORTAL_static",
+  "idlePath": "./assets/sprites/pipeline-v2/held-fire-control-portal/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/held-fire-control-portal/sheet.png",
+  "layout": {
+    "frameWidth": 128,
+    "frameHeight": 128,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 132,
+    "height": 132
+  },
+  "hashes": {
+    "idle": "30faedfb6ed522c2554bc638c60606a88f3228ac428d2a754fab8a63ed944209",
+    "sheet": "602dd90a9459135c2663796a9741a478ef9667ba8e3d5ff7b50250318968dd98"
+  }
+}

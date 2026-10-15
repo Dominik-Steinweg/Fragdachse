@@ -1,0 +1,48 @@
+{
+  "id": "held-fire-control-relay",
+  "category": "utility",
+  "gameIds": [
+    "FIRE_CONTROL_RELAY"
+  ],
+  "revision": "fc-hq-4",
+  "variant": "standard",
+  "sourceSize": 128,
+  "textureKey": "held_FIRE_CONTROL_RELAY",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      18.4
+    ]
+  },
+  "idleFrame": 0,
+  "clips": [],
+  "sheetTextureKey": "held_FIRE_CONTROL_RELAY_static",
+  "idlePath": "./assets/sprites/pipeline-v2/held-fire-control-relay/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/held-fire-control-relay/sheet.png",
+  "layout": {
+    "frameWidth": 128,
+    "frameHeight": 128,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 132,
+    "height": 132
+  },
+  "hashes": {
+    "idle": "cb2dcaf2a09fcc81711ab42e2e5801463ffeda7ace0d32ee06f21a644c4e5d4e",
+    "sheet": "9862bfb51f5a127a32ae1e7b320d94263769b539fd8692c2d0ab41cda77eb445"
+  }
+}

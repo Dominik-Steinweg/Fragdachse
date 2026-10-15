@@ -1,0 +1,51 @@
+{
+  "id": "held-time-bubble",
+  "category": "utility",
+  "gameIds": [
+    "TIME_BUBBLE"
+  ],
+  "revision": "v2-ak",
+  "variant": "standard",
+  "sourceSize": 256,
+  "textureKey": "held_TIME_BUBBLE",
+  "sheetTextureKey": "held_TIME_BUBBLE_static",
+  "idlePath": "./assets/sprites/pipeline-v2/held-time-bubble/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/held-time-bubble/sheet.png",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 256,
+    "frameHeight": 256,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 260,
+    "height": 260
+  },
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      19
+    ],
+    "referenceGrip": [
+      3,
+      6.5
+    ]
+  },
+  "idleFrame": 0,
+  "clips": [],
+  "hashes": {
+    "idle": "3fbc7ff0ae540d8d5ce8417318751277321a88b84c8f689a12d946204c8db2ca",
+    "sheet": "e18a953dace0e6a9a4602e0db01e31dc3ff90a7660b9ecb8392a8ca5c6dcddb3"
+  }
+}

@@ -6,6 +6,7 @@ import { parseArgs } from 'node:util';
 import { loadMeshBundle, hash, safeFile } from './mesh-shadow-contract.mjs';
 import { assertGapAcceptance } from './mesh-shadow-gap-metric.mjs';
 import { runTool } from './character-pass-bundle.mjs';
+import { readPipelineRegistry } from './pipeline-registry.mjs';
 export function runtimeMeshManifest(m,selection,receipt) {
   if(m.status!=='production-unreviewed'||selection.status!==m.status||selection.schema!=='fd-character-mesh-selection'
     ||selection.id!=='badger'||m.revision!==selection.revision||!/^player-mesh-[a-z0-9-]+$/.test(m.revision)||!m.shadowRepair)throw Error('Expected complete repaired production');
@@ -29,7 +30,7 @@ export async function importCharacterMesh(root,{apply=false,python='D:/Blender F
   for(const [file,sha] of Object.entries(selection.files))if(hash(await readFile(path.join(root,safeFile(file))))!==sha)throw Error('Changed selected mesh member '+file);
   for(const file of ['mesh-manifest.json','completion.json','review/gap-metric.json','review/review.json','job.json'])if(!selection.files[file])throw Error('Unselected required production member '+file);
   const {manifest:m}=await loadMeshBundle(root);
-  const current=JSON.parse(await readFile(path.join(repo,'src/config/pipelineAssets.json')));
+  const current=await readPipelineRegistry(repo);
   const frozen=JSON.parse(await readFile(path.join(root,'source-held-registry.json')));
   for(const asset of frozen.assets.filter(a=>a.id.startsWith('held-'))){const live=current.assets.find(a=>a.id===asset.id);
     if(!live||JSON.stringify(live.hashes)!==JSON.stringify(asset.hashes)||JSON.stringify(live.heldItem)!==JSON.stringify(asset.heldItem)||JSON.stringify(live.gameIds)!==JSON.stringify(asset.gameIds))throw Error('Runtime held assets changed since export: '+asset.id);}

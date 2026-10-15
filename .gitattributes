@@ -1,5 +1,9 @@
-# Runtime assets are served byte for byte and versioned by content hash (src/assets/runtimeAssetUrls.json;
-# the kraken residency loader also verifies exact bytes), so never convert their line endings per checkout.
+# Text files are stored and checked out with LF in every checkout, independent of core.autocrlf.
+# Binary files are still detected by content (text=auto). Later rules override this default.
+* text=auto eol=lf
+
+# Runtime assets are served byte for byte and versioned by content hash (scripts/asset-cache.ts hashes them
+# per build; the kraken residency loader also verifies exact bytes), so never convert their line endings per checkout.
 public/** -text
 
 # Generated manifests (scripts/prepare-runtime-assets.mjs and the asset pipeline) are written with LF;

@@ -1,4 +1,3 @@
-import manifest from './pipelineAssets.json';
 import { normalizePipelineAssets, type PipelineNormalAsset, type PipelineBossAsset } from './pipelineAssetContracts';
 export { normalizePipelineAsset, normalizePipelineAssets, pipelineMarkerSocket, pipelineEggReleaseSocket } from './pipelineAssetContracts';
 export type { PipelineBossAsset, PipelineNormalAsset, PipelineRuntimeAsset, PipelineAtlasPage, PipelineClip, PipelineSocketPoint } from './pipelineAssetContracts';
@@ -14,8 +13,11 @@ export interface EyeAnchor {
 }
 export interface EyeAnchorFrame { readonly left: EyeAnchor; readonly right: EyeAnchor }
 
+// One registry entry per file (scripts/asset-pipeline/pipeline-registry.mjs), ordered by asset id.
+const registryEntries = Object.values(import.meta.glob<{ id: string }>('./pipelineAssets/assets/*.json', { eager: true, import: 'default' }))
+  .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 /** Runtime-only projection of the selected Blender exports, committed with their PNGs. */
-export const PIPELINE_RUNTIME_ASSETS = normalizePipelineAssets(manifest.assets);
+export const PIPELINE_RUNTIME_ASSETS = normalizePipelineAssets(registryEntries);
 /** Existing sheet consumers remain explicit: boss atlases have no idle/sheet fallback path. */
 export const PIPELINE_ASSETS = PIPELINE_RUNTIME_ASSETS.filter((a): a is PipelineNormalAsset => a.runtimeContract === 'sheet');
 export type PipelineAsset = PipelineNormalAsset;

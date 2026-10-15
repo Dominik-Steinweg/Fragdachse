@@ -1,8 +1,9 @@
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
+import { readPipelineRegistry } from './pipeline-registry.mjs';
 /** Resolve the exact imported idle+sheet hashes; never silently pick the newest authoring run. */
 export async function selectedHeldSources(repo) {
-  const registry=JSON.parse(await readFile(path.join(repo,'src/config/pipelineAssets.json')));
+  const registry=await readPipelineRegistry(repo);
   const catalog=JSON.parse(await readFile(path.join(repo,'scripts/asset-pipeline/catalog-v2.json')));
   const expected=catalog.assets.filter(a=>['held-weapon','held-utility'].includes(a.recipe));
   const held=registry.assets.filter(a=>a.id.startsWith('held-'));

@@ -1,0 +1,3492 @@
+{
+  "id": "abyssal-kraken-tentacle",
+  "category": "boss-part",
+  "gameIds": [],
+  "revision": "kraken-v14",
+  "variant": "standard",
+  "sourceSize": 448,
+  "textureKey": "kraken_tentacle",
+  "runtimeContract": "boss",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [
+    {
+      "name": "hover",
+      "frames": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ],
+      "frameRate": 12,
+      "loop": true,
+      "end": "rest"
+    },
+    {
+      "name": "rise",
+      "frames": [
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32
+      ],
+      "frameRate": 24,
+      "loop": false,
+      "start": "free",
+      "end": "rest"
+    },
+    {
+      "name": "slam",
+      "frames": [
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52
+      ],
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 7,
+        "impact": 11
+      },
+      "end": "free",
+      "next": "retract"
+    },
+    {
+      "name": "retract",
+      "frames": [
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68
+      ],
+      "frameRate": 24,
+      "loop": false,
+      "end": "free"
+    }
+  ],
+  "targetSize": 448,
+  "runtimeBudgetMB": 48,
+  "sockets": {
+    "waterEntry": [
+      0.5,
+      0.80803572
+    ]
+  },
+  "socketFrames": [
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    },
+    {
+      "waterEntry": {
+        "x": 0.5,
+        "y": 0.80803572,
+        "z": 0
+      }
+    }
+  ],
+  "elevation": {
+    "min": -10.8,
+    "max": 7.8,
+    "scale": 0.5,
+    "previewWaterLevel": 0
+  },
+  "elevationPass": {
+    "encoding": "linear-unorm8-z-oct-normal-v1",
+    "min": -10.8,
+    "max": 7.8,
+    "scale": 0.5,
+    "waterline": 0,
+    "alpha": "beauty-coverage",
+    "colorSpace": "non-color",
+    "premultiplied": false
+  },
+  "atlases": {
+    "color": {
+      "__rest": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/color-__rest-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/color-__rest-0.json",
+            "width": 84,
+            "height": 128,
+            "frameNames": [
+              "__rest/0000"
+            ],
+            "gpuBytesRGBA8": 43008,
+            "sha256": "39b7a0052a9f45bf7dfb1d673262f1da9d52064341ac56ebf1179579f94a88a5",
+            "jsonSha256": "b215799eec23fd6cd66e4e7cbc71c257f3b224808a11dad00b3aa770facac9dd"
+          }
+        ],
+        "frameNames": [
+          "__rest/0000"
+        ],
+        "sourceFrames": [
+          0
+        ],
+        "sourceSize": 448,
+        "logicalSourceSize": 448,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "hover": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/color-hover-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/color-hover-0.json",
+            "width": 1733,
+            "height": 128,
+            "frameNames": [
+              "hover/0000",
+              "hover/0001",
+              "hover/0002",
+              "hover/0003",
+              "hover/0004",
+              "hover/0005",
+              "hover/0006",
+              "hover/0007",
+              "hover/0008",
+              "hover/0009",
+              "hover/0010",
+              "hover/0011",
+              "hover/0012",
+              "hover/0013",
+              "hover/0014",
+              "hover/0015"
+            ],
+            "gpuBytesRGBA8": 887296,
+            "sha256": "83a650c9b959741fc1de152cfca87cc4730306aae9b35b45f3e0a8f19627841b",
+            "jsonSha256": "4c262e0e535fdb942e7291f306603676e9a2dc3c8cd9033e339a7b4ea29f66dc"
+          }
+        ],
+        "frameNames": [
+          "hover/0000",
+          "hover/0001",
+          "hover/0002",
+          "hover/0003",
+          "hover/0004",
+          "hover/0005",
+          "hover/0006",
+          "hover/0007",
+          "hover/0008",
+          "hover/0009",
+          "hover/0010",
+          "hover/0011",
+          "hover/0012",
+          "hover/0013",
+          "hover/0014",
+          "hover/0015"
+        ],
+        "sourceFrames": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16
+        ],
+        "sourceSize": 448,
+        "logicalSourceSize": 448,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "rise": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/color-rise-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/color-rise-0.json",
+            "width": 1418,
+            "height": 362,
+            "frameNames": [
+              "rise/0000",
+              "rise/0001",
+              "rise/0002",
+              "rise/0003",
+              "rise/0004",
+              "rise/0005",
+              "rise/0006",
+              "rise/0007",
+              "rise/0008",
+              "rise/0009",
+              "rise/0010",
+              "rise/0011",
+              "rise/0012",
+              "rise/0013",
+              "rise/0014",
+              "rise/0015"
+            ],
+            "gpuBytesRGBA8": 2053264,
+            "sha256": "ab95f238c6032c7306bf3584330dc21873201b724986f85fe5aa61eba2746044",
+            "jsonSha256": "66c3ebdd42d8922ead36b42d2e4845fb73da6a788ccfe7670d475bb717babba0"
+          }
+        ],
+        "frameNames": [
+          "rise/0000",
+          "rise/0001",
+          "rise/0002",
+          "rise/0003",
+          "rise/0004",
+          "rise/0005",
+          "rise/0006",
+          "rise/0007",
+          "rise/0008",
+          "rise/0009",
+          "rise/0010",
+          "rise/0011",
+          "rise/0012",
+          "rise/0013",
+          "rise/0014",
+          "rise/0015"
+        ],
+        "sourceFrames": [
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32
+        ],
+        "sourceSize": 448,
+        "logicalSourceSize": 448,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "slam": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/color-slam-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/color-slam-0.json",
+            "width": 1501,
+            "height": 401,
+            "frameNames": [
+              "slam/0000",
+              "slam/0001",
+              "slam/0002",
+              "slam/0003",
+              "slam/0004",
+              "slam/0005",
+              "slam/0006",
+              "slam/0007",
+              "slam/0008",
+              "slam/0009",
+              "slam/0010",
+              "slam/0011",
+              "slam/0012",
+              "slam/0013",
+              "slam/0014",
+              "slam/0015",
+              "slam/0016",
+              "slam/0017",
+              "slam/0018",
+              "slam/0019"
+            ],
+            "gpuBytesRGBA8": 2407604,
+            "sha256": "55a912a0d0b8c847495afde6c661fed7167d65cc9876255ddcb2752777fd622f",
+            "jsonSha256": "f99754a9535efbcf1247c02bb7f82324300ce725deac88245a32ac2a55516a4e"
+          }
+        ],
+        "frameNames": [
+          "slam/0000",
+          "slam/0001",
+          "slam/0002",
+          "slam/0003",
+          "slam/0004",
+          "slam/0005",
+          "slam/0006",
+          "slam/0007",
+          "slam/0008",
+          "slam/0009",
+          "slam/0010",
+          "slam/0011",
+          "slam/0012",
+          "slam/0013",
+          "slam/0014",
+          "slam/0015",
+          "slam/0016",
+          "slam/0017",
+          "slam/0018",
+          "slam/0019"
+        ],
+        "sourceFrames": [
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52
+        ],
+        "sourceSize": 448,
+        "logicalSourceSize": 448,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "retract": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/color-retract-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/color-retract-0.json",
+            "width": 1215,
+            "height": 403,
+            "frameNames": [
+              "retract/0000",
+              "retract/0001",
+              "retract/0002",
+              "retract/0003",
+              "retract/0004",
+              "retract/0005",
+              "retract/0006",
+              "retract/0007",
+              "retract/0008",
+              "retract/0009",
+              "retract/0010",
+              "retract/0011",
+              "retract/0012",
+              "retract/0013",
+              "retract/0014",
+              "retract/0015"
+            ],
+            "gpuBytesRGBA8": 1958580,
+            "sha256": "f220cf7e9a081e6b52f784f3897f0c5e8c262f7cdc830d63475c9810644ba892",
+            "jsonSha256": "628ccc45c01d4870a340b0cbb7ee8957d655ce9c81ad071acb484121186b8f68"
+          }
+        ],
+        "frameNames": [
+          "retract/0000",
+          "retract/0001",
+          "retract/0002",
+          "retract/0003",
+          "retract/0004",
+          "retract/0005",
+          "retract/0006",
+          "retract/0007",
+          "retract/0008",
+          "retract/0009",
+          "retract/0010",
+          "retract/0011",
+          "retract/0012",
+          "retract/0013",
+          "retract/0014",
+          "retract/0015"
+        ],
+        "sourceFrames": [
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68
+        ],
+        "sourceSize": 448,
+        "logicalSourceSize": 448,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      }
+    },
+    "elevation": {
+      "__rest": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/elevation-__rest-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/elevation-__rest-0.json",
+            "width": 47,
+            "height": 69,
+            "frameNames": [
+              "__rest/0000"
+            ],
+            "gpuBytesRGBA8": 12972,
+            "sha256": "f59252072c8d470409290d92ab5afbcc8e92bb63fca5c3a4ff2255982c1dd8cd",
+            "jsonSha256": "429172d18e8a00c556f11a3c6b620ac9c7e7686f5d0f3d2982946a6ab0744cf9"
+          }
+        ],
+        "frameNames": [
+          "__rest/0000"
+        ],
+        "sourceFrames": [
+          0
+        ],
+        "sourceSize": 224,
+        "logicalSourceSize": 448,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "hover": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/elevation-hover-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/elevation-hover-0.json",
+            "width": 942,
+            "height": 69,
+            "frameNames": [
+              "hover/0000",
+              "hover/0001",
+              "hover/0002",
+              "hover/0003",
+              "hover/0004",
+              "hover/0005",
+              "hover/0006",
+              "hover/0007",
+              "hover/0008",
+              "hover/0009",
+              "hover/0010",
+              "hover/0011",
+              "hover/0012",
+              "hover/0013",
+              "hover/0014",
+              "hover/0015"
+            ],
+            "gpuBytesRGBA8": 259992,
+            "sha256": "6b802f181101f72863b93491fccbec6e385979044836f0c60ed41db8d80654ef",
+            "jsonSha256": "d8c35f3ed7cb5d3ca2e296a37bdccde5052dde9f04f85da8e96ea6fdeb981c31"
+          }
+        ],
+        "frameNames": [
+          "hover/0000",
+          "hover/0001",
+          "hover/0002",
+          "hover/0003",
+          "hover/0004",
+          "hover/0005",
+          "hover/0006",
+          "hover/0007",
+          "hover/0008",
+          "hover/0009",
+          "hover/0010",
+          "hover/0011",
+          "hover/0012",
+          "hover/0013",
+          "hover/0014",
+          "hover/0015"
+        ],
+        "sourceFrames": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16
+        ],
+        "sourceSize": 224,
+        "logicalSourceSize": 448,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "rise": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/elevation-rise-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/elevation-rise-0.json",
+            "width": 785,
+            "height": 186,
+            "frameNames": [
+              "rise/0000",
+              "rise/0001",
+              "rise/0002",
+              "rise/0003",
+              "rise/0004",
+              "rise/0005",
+              "rise/0006",
+              "rise/0007",
+              "rise/0008",
+              "rise/0009",
+              "rise/0010",
+              "rise/0011",
+              "rise/0012",
+              "rise/0013",
+              "rise/0014",
+              "rise/0015"
+            ],
+            "gpuBytesRGBA8": 584040,
+            "sha256": "f3ed6bf2fbcd4c54c215b7c4c776f02bf7415c899ac4e7fe8f959bcf99b8d306",
+            "jsonSha256": "9f96f96ec451f180e2c90f837bf1f0e5420e9fffe46394a45a226503af92ffaf"
+          }
+        ],
+        "frameNames": [
+          "rise/0000",
+          "rise/0001",
+          "rise/0002",
+          "rise/0003",
+          "rise/0004",
+          "rise/0005",
+          "rise/0006",
+          "rise/0007",
+          "rise/0008",
+          "rise/0009",
+          "rise/0010",
+          "rise/0011",
+          "rise/0012",
+          "rise/0013",
+          "rise/0014",
+          "rise/0015"
+        ],
+        "sourceFrames": [
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32
+        ],
+        "sourceSize": 224,
+        "logicalSourceSize": 448,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "slam": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/elevation-slam-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/elevation-slam-0.json",
+            "width": 847,
+            "height": 206,
+            "frameNames": [
+              "slam/0000",
+              "slam/0001",
+              "slam/0002",
+              "slam/0003",
+              "slam/0004",
+              "slam/0005",
+              "slam/0006",
+              "slam/0007",
+              "slam/0008",
+              "slam/0009",
+              "slam/0010",
+              "slam/0011",
+              "slam/0012",
+              "slam/0013",
+              "slam/0014",
+              "slam/0015",
+              "slam/0016",
+              "slam/0017",
+              "slam/0018",
+              "slam/0019"
+            ],
+            "gpuBytesRGBA8": 697928,
+            "sha256": "976226fcf6aa9e5a0b17881048fbe1167e09de9ee8090e55072b563bb3ad6641",
+            "jsonSha256": "b410c392f66f2e95a378ff285f0cd2223abd4f098829cbb4676a33353e409447"
+          }
+        ],
+        "frameNames": [
+          "slam/0000",
+          "slam/0001",
+          "slam/0002",
+          "slam/0003",
+          "slam/0004",
+          "slam/0005",
+          "slam/0006",
+          "slam/0007",
+          "slam/0008",
+          "slam/0009",
+          "slam/0010",
+          "slam/0011",
+          "slam/0012",
+          "slam/0013",
+          "slam/0014",
+          "slam/0015",
+          "slam/0016",
+          "slam/0017",
+          "slam/0018",
+          "slam/0019"
+        ],
+        "sourceFrames": [
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52
+        ],
+        "sourceSize": 224,
+        "logicalSourceSize": 448,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "retract": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/elevation-retract-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/elevation-retract-0.json",
+            "width": 684,
+            "height": 206,
+            "frameNames": [
+              "retract/0000",
+              "retract/0001",
+              "retract/0002",
+              "retract/0003",
+              "retract/0004",
+              "retract/0005",
+              "retract/0006",
+              "retract/0007",
+              "retract/0008",
+              "retract/0009",
+              "retract/0010",
+              "retract/0011",
+              "retract/0012",
+              "retract/0013",
+              "retract/0014",
+              "retract/0015"
+            ],
+            "gpuBytesRGBA8": 563616,
+            "sha256": "017c2612c33acebc60a70258fd966df2d9ccb4ec78d7aba540b8e9689fe50c82",
+            "jsonSha256": "911d8926458277e6bb36871a7505915e7cc552fc8d73627a7e8b155db1b48472"
+          }
+        ],
+        "frameNames": [
+          "retract/0000",
+          "retract/0001",
+          "retract/0002",
+          "retract/0003",
+          "retract/0004",
+          "retract/0005",
+          "retract/0006",
+          "retract/0007",
+          "retract/0008",
+          "retract/0009",
+          "retract/0010",
+          "retract/0011",
+          "retract/0012",
+          "retract/0013",
+          "retract/0014",
+          "retract/0015"
+        ],
+        "sourceFrames": [
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68
+        ],
+        "sourceSize": 224,
+        "logicalSourceSize": 448,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      }
+    },
+    "emission": {
+      "__rest": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/emission-__rest-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/emission-__rest-0.json",
+            "width": 5,
+            "height": 5,
+            "frameNames": [
+              "__rest/0000"
+            ],
+            "gpuBytesRGBA8": 100,
+            "sha256": "6a707c85c8c9ccf1ec6d4cef85ff4f32e4698d102c28e768078313328f8346ba",
+            "jsonSha256": "c1ad972f788db60b3835df345ef72280959939caf8a941faf7800998ae49818f"
+          }
+        ],
+        "frameNames": [
+          "__rest/0000"
+        ],
+        "sourceFrames": [
+          0
+        ],
+        "sourceSize": 448,
+        "logicalSourceSize": 448,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "hover": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/emission-hover-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/emission-hover-0.json",
+            "width": 80,
+            "height": 5,
+            "frameNames": [
+              "hover/0000",
+              "hover/0001",
+              "hover/0002",
+              "hover/0003",
+              "hover/0004",
+              "hover/0005",
+              "hover/0006",
+              "hover/0007",
+              "hover/0008",
+              "hover/0009",
+              "hover/0010",
+              "hover/0011",
+              "hover/0012",
+              "hover/0013",
+              "hover/0014",
+              "hover/0015"
+            ],
+            "gpuBytesRGBA8": 1600,
+            "sha256": "1921c68de30d0bfa97d39b51ebf0d991a051d0afc780bd6c9be17f2f82a674b9",
+            "jsonSha256": "16caae73bb29e043aff017c3299e6b24c4cbe84a842dfcd90500e12c4c109d73"
+          }
+        ],
+        "frameNames": [
+          "hover/0000",
+          "hover/0001",
+          "hover/0002",
+          "hover/0003",
+          "hover/0004",
+          "hover/0005",
+          "hover/0006",
+          "hover/0007",
+          "hover/0008",
+          "hover/0009",
+          "hover/0010",
+          "hover/0011",
+          "hover/0012",
+          "hover/0013",
+          "hover/0014",
+          "hover/0015"
+        ],
+        "sourceFrames": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16
+        ],
+        "sourceSize": 448,
+        "logicalSourceSize": 448,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "rise": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/emission-rise-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/emission-rise-0.json",
+            "width": 80,
+            "height": 5,
+            "frameNames": [
+              "rise/0000",
+              "rise/0001",
+              "rise/0002",
+              "rise/0003",
+              "rise/0004",
+              "rise/0005",
+              "rise/0006",
+              "rise/0007",
+              "rise/0008",
+              "rise/0009",
+              "rise/0010",
+              "rise/0011",
+              "rise/0012",
+              "rise/0013",
+              "rise/0014",
+              "rise/0015"
+            ],
+            "gpuBytesRGBA8": 1600,
+            "sha256": "1921c68de30d0bfa97d39b51ebf0d991a051d0afc780bd6c9be17f2f82a674b9",
+            "jsonSha256": "fdeff5349fd0fb0400e8f63b65d0a67bd4a9c8ab7fb800ead13e2b41f35c2978"
+          }
+        ],
+        "frameNames": [
+          "rise/0000",
+          "rise/0001",
+          "rise/0002",
+          "rise/0003",
+          "rise/0004",
+          "rise/0005",
+          "rise/0006",
+          "rise/0007",
+          "rise/0008",
+          "rise/0009",
+          "rise/0010",
+          "rise/0011",
+          "rise/0012",
+          "rise/0013",
+          "rise/0014",
+          "rise/0015"
+        ],
+        "sourceFrames": [
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32
+        ],
+        "sourceSize": 448,
+        "logicalSourceSize": 448,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "slam": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/emission-slam-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/emission-slam-0.json",
+            "width": 100,
+            "height": 5,
+            "frameNames": [
+              "slam/0000",
+              "slam/0001",
+              "slam/0002",
+              "slam/0003",
+              "slam/0004",
+              "slam/0005",
+              "slam/0006",
+              "slam/0007",
+              "slam/0008",
+              "slam/0009",
+              "slam/0010",
+              "slam/0011",
+              "slam/0012",
+              "slam/0013",
+              "slam/0014",
+              "slam/0015",
+              "slam/0016",
+              "slam/0017",
+              "slam/0018",
+              "slam/0019"
+            ],
+            "gpuBytesRGBA8": 2000,
+            "sha256": "f9f2172cc295c0bba383f12d96df7f21d3f535a88bcb8d03fde1b0104bb9f1de",
+            "jsonSha256": "ab3207877918c3a817504322673fcc96f31e1d96ba91f43c5927a4c5d55727ce"
+          }
+        ],
+        "frameNames": [
+          "slam/0000",
+          "slam/0001",
+          "slam/0002",
+          "slam/0003",
+          "slam/0004",
+          "slam/0005",
+          "slam/0006",
+          "slam/0007",
+          "slam/0008",
+          "slam/0009",
+          "slam/0010",
+          "slam/0011",
+          "slam/0012",
+          "slam/0013",
+          "slam/0014",
+          "slam/0015",
+          "slam/0016",
+          "slam/0017",
+          "slam/0018",
+          "slam/0019"
+        ],
+        "sourceFrames": [
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52
+        ],
+        "sourceSize": 448,
+        "logicalSourceSize": 448,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      },
+      "retract": {
+        "pages": [
+          {
+            "image": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/emission-retract-0.png",
+            "json": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/atlas/448/emission-retract-0.json",
+            "width": 80,
+            "height": 5,
+            "frameNames": [
+              "retract/0000",
+              "retract/0001",
+              "retract/0002",
+              "retract/0003",
+              "retract/0004",
+              "retract/0005",
+              "retract/0006",
+              "retract/0007",
+              "retract/0008",
+              "retract/0009",
+              "retract/0010",
+              "retract/0011",
+              "retract/0012",
+              "retract/0013",
+              "retract/0014",
+              "retract/0015"
+            ],
+            "gpuBytesRGBA8": 1600,
+            "sha256": "1921c68de30d0bfa97d39b51ebf0d991a051d0afc780bd6c9be17f2f82a674b9",
+            "jsonSha256": "6f780d2979560577c169432e84f6214f3d309f415ba080d5c9062a9226716dba"
+          }
+        ],
+        "frameNames": [
+          "retract/0000",
+          "retract/0001",
+          "retract/0002",
+          "retract/0003",
+          "retract/0004",
+          "retract/0005",
+          "retract/0006",
+          "retract/0007",
+          "retract/0008",
+          "retract/0009",
+          "retract/0010",
+          "retract/0011",
+          "retract/0012",
+          "retract/0013",
+          "retract/0014",
+          "retract/0015"
+        ],
+        "sourceFrames": [
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68
+        ],
+        "sourceSize": 448,
+        "logicalSourceSize": 448,
+        "pivot": [
+          0.5,
+          0.5
+        ]
+      }
+    }
+  },
+  "budget": {
+    "clips": {
+      "__rest": {
+        "color": 43008,
+        "elevation": 12972,
+        "emission": 100,
+        "total": 56080
+      },
+      "hover": {
+        "color": 887296,
+        "elevation": 259992,
+        "emission": 1600,
+        "total": 1148888
+      },
+      "rise": {
+        "color": 2053264,
+        "elevation": 584040,
+        "emission": 1600,
+        "total": 2638904
+      },
+      "slam": {
+        "color": 2407604,
+        "elevation": 697928,
+        "emission": 2000,
+        "total": 3107532
+      },
+      "retract": {
+        "color": 1958580,
+        "elevation": 563616,
+        "emission": 1600,
+        "total": 2523796
+      }
+    },
+    "totals": {
+      "color": 7349752,
+      "elevation": 2118548,
+      "emission": 6900,
+      "total": 9475200
+    }
+  },
+  "materialPass": {
+    "version": 1,
+    "color": "srgb-albedo-baked-cavity-v1",
+    "normal": "linear-unorm8-z-oct-normal-v1",
+    "emission": "linear-rgb-unorm8-scaled-v1",
+    "worldPxPerBU": 40,
+    "emissionRange": 8,
+    "exposure": 0.988922119140625,
+    "tint": [
+      0.856903076171875,
+      1,
+      1
+    ],
+    "saturation": 0.424102783203125
+  },
+  "shadowMesh": {
+    "version": 1,
+    "encoding": "u16-world-xyz-per-pose-v1",
+    "frames": [
+      {
+        "vertexCount": 2417,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -48.13578128814697,
+            83.1749153137207,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            303.8285827636719
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0000-positions.bin",
+          "sha256": "f09f6ff92f43ddc49294273e95564936054e33867285812a6bf30de604bd114b",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0000-indices.bin",
+          "sha256": "57e9064fdf570cfc8e34525a6dd1b05bcd880f8309f8d76595be4be09ef6b2ed",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -48.13578128814697,
+            83.1749153137207,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            303.8285827636719
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0001-positions.bin",
+          "sha256": "f09f6ff92f43ddc49294273e95564936054e33867285812a6bf30de604bd114b",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0001-indices.bin",
+          "sha256": "57e9064fdf570cfc8e34525a6dd1b05bcd880f8309f8d76595be4be09ef6b2ed",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2415,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -51.36928081512451,
+            84.42819595336914,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            303.2099723815918
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0002-positions.bin",
+          "sha256": "4186e630fccb561cdc70de62ac56bb1061502f5b685dfdb635c7cae64a4be58d",
+          "bytes": 14490
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0002-indices.bin",
+          "sha256": "de264de34602596a6cf1553d5440fad9daca69d678e272c1bc6ff68a26df69e8",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2415,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -56.31833553314209,
+            86.88867568969727,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            302.06268310546875
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0003-positions.bin",
+          "sha256": "3d6105b88d7a4d1f4ccaf8337df504cf513cd3dc9af41c6eb9fde6a340fe64cf",
+          "bytes": 14490
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0003-indices.bin",
+          "sha256": "71591986614be6a4f94acdefc6f540581e9031f9d8751db2ab65b18852eb4ab4",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2416,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -71.71399116516113,
+            90.60751914978027,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            299.87064361572266
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0004-positions.bin",
+          "sha256": "8374dc0b6cf835509625d21c71be537586bf3d5a6bfc10dd76b8e364026a0229",
+          "bytes": 14496
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0004-indices.bin",
+          "sha256": "f36f12e9e1545740aafb072aefb80d5ba8270caefb6d6b72509972e593f4b701",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2415,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -89.12477493286133,
+            95.5561637878418,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            297.10607528686523
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0005-positions.bin",
+          "sha256": "7de45663406f586af55f8666b8a04cbd18143620c352d6b09a7232b00481879b",
+          "bytes": 14490
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0005-indices.bin",
+          "sha256": "048c32269384eb1b8b652efa69885858833f8651d1d9eb4fd4dfcbefd7df940e",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2416,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -103.56874465942383,
+            100.89485168457031,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            293.41259002685547
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0006-positions.bin",
+          "sha256": "d2c5812a64c44b10bb55ba46a4e6a07515bf664d7318f9e9d7e064f981040779",
+          "bytes": 14496
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0006-indices.bin",
+          "sha256": "2bf3c4e832105374f72c988310b6a2e52646738167214ddaefbb36604c36393f",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2416,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -111.31770133972168,
+            105.30485153198242,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            290.1308250427246
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0007-positions.bin",
+          "sha256": "aa9f00cbbe57adf95aafc75aa303499a15efa13837c3377bc1fa121713b9b4cd",
+          "bytes": 14496
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0007-indices.bin",
+          "sha256": "1ce7e382de42c6dc92f825b4506f502e647c29d86b72aa13556b41c33d86629b",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2416,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -111.29589080810547,
+            108.28915596008301,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            290.3033638000488
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0008-positions.bin",
+          "sha256": "d3055897885c7b0ce348a18e975f26238b6954db9e50f540074097cbbca3db4a",
+          "bytes": 14496
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0008-indices.bin",
+          "sha256": "d02f6cf4e8fa74b31c88fc474d568eccea7b51b7d8af1ce5898093820de9d622",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2416,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -103.95052909851074,
+            109.11011695861816,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            293.1012153625488
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0009-positions.bin",
+          "sha256": "981030abce3b543cb516ce7c315ade83896332a3b791c62b3a8419dbaa9e2993",
+          "bytes": 14496
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0009-indices.bin",
+          "sha256": "6c3f0cf95d340579529ae33d515a231c29e86f72b8a00e138084637d31a6ba9b",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2415,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -91.11783981323242,
+            107.4421501159668,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            297.5955581665039
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0010-positions.bin",
+          "sha256": "7f7dcef7a893808b2153b465792902daa912f655908c609528690a0804a34789",
+          "bytes": 14490
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0010-indices.bin",
+          "sha256": "50c356971bac0fd0e6d718e9ee67eb416a3ac19b83eb64378a457950b5d095ed",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2415,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -76.36817455291748,
+            103.95036697387695,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            301.8385887145996
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0011-positions.bin",
+          "sha256": "bb67288b8f157a0ed96a912339f497042b22ba2d3942102953918ec700a3582c",
+          "bytes": 14490
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0011-indices.bin",
+          "sha256": "49c3079379a8c852137847921f3d3cd5437c97579a18ba5e5328f32d6937be5e",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2415,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -62.6692533493042,
+            98.86863708496094,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            304.0134811401367
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0012-positions.bin",
+          "sha256": "ed4fdf7f431faa58b7d6dbd87be6f97a8ba506cfbe1b3fc5d54eab43bfdb5c61",
+          "bytes": 14490
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0012-indices.bin",
+          "sha256": "64faecdec1ed9ca9cf90f349b21edae904ad086b5caba7b2d8e32e8dd6886abe",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -51.94685459136963,
+            93.18093299865723,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            304.83598709106445
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0013-positions.bin",
+          "sha256": "cea20115e752e87aa3b866c0c895e6bc2e8abfe96dce358cb6d28da5747123f6",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0013-indices.bin",
+          "sha256": "bb57c418dcf413aabc09a28b1f935c1f2e9a16fbd35f1a2c6eb7604c0f4502f6",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2414,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -44.83900547027588,
+            88.31327438354492,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            304.597225189209
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0014-positions.bin",
+          "sha256": "a99408aea8fd599b6650b5aa7205c3ddfbb6bbbdb337546460ab35add842ba25",
+          "bytes": 14484
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0014-indices.bin",
+          "sha256": "c81d2883e4ca8701aecad0b283d81f2950b0c5ca57b02cec541908e4a5f9c97e",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2415,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -44.006171226501465,
+            84.83230590820312,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            304.2228889465332
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0015-positions.bin",
+          "sha256": "96be6fd75da70bcf76bdd06b64584446efb6b846938d5f2edd095e7b1fb71f0c",
+          "bytes": 14490
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0015-indices.bin",
+          "sha256": "175f4979f69ea2712273aa305b70e9187256ac68ba1925483c481fc6ef09331c",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2416,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -45.59493541717529,
+            83.33760261535645,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            304.16316986083984
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0016-positions.bin",
+          "sha256": "f451cd92e8b9786cc5129271429dda7e635c81176687626cb550887a66641225",
+          "bytes": 14496
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0016-indices.bin",
+          "sha256": "62de830c355ba466eb23432de243b84acf633d21a76c1f080b344bc93f7e072b",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2414,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -69.28576469421387,
+            -148.61929893493652,
+            -191.67224884033203
+          ],
+          "max": [
+            26.117138862609863,
+            202.58304595947266,
+            -89.54503059387207
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0017-positions.bin",
+          "sha256": "c00770a827af2b6347739b537c5553a7ea1e3c6d92581c00bbda0bea79c8ebb2",
+          "bytes": 14484
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0017-indices.bin",
+          "sha256": "f2c610b0eb26ea32ace966dbbc7c994e357d6009bdea853acc77799bedcb49b5",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2415,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -68.86557102203369,
+            -148.70611190795898,
+            -183.83955001831055
+          ],
+          "max": [
+            26.117360591888428,
+            202.5830078125,
+            -81.34390830993652
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0018-positions.bin",
+          "sha256": "df8461b62fb3409817e6cb62dd4d610e8a48f5d216ad0d198042091e368a55c3",
+          "bytes": 14490
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0018-indices.bin",
+          "sha256": "41897fcfb6d020dcaf5bc867f00dadc69d5007584fa8bef9141a305825f3ebb8",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2415,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -67.469162940979,
+            -150.1909351348877,
+            -163.65541458129883
+          ],
+          "max": [
+            26.340820789337158,
+            202.6306915283203,
+            -48.92338275909424
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0019-positions.bin",
+          "sha256": "3b3c0bc0abfb352f6d551c951cc2987f98805ed6d0addc46e3e14253645757c9",
+          "bytes": 14490
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0019-indices.bin",
+          "sha256": "4effedaeaa81ba66fdf2e934ab85867e34de52b783a53f950cd1b03dc23df4b4",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2413,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -64.3610668182373,
+            -150.1663112640381,
+            -136.52972221374512
+          ],
+          "max": [
+            26.29631280899048,
+            202.61016845703125,
+            5.233133435249329
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0020-positions.bin",
+          "sha256": "81cb58d660f30f801bf6557af516fce56045605c60684e10fbbc8ed58f3f588b",
+          "bytes": 14478
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0020-indices.bin",
+          "sha256": "46031d465f9753d13d12476066eb2b58eb8cd60e314bfb0eaa3853fde392eda3",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2414,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -59.6685791015625,
+            -141.87860488891602,
+            -107.53355026245117
+          ],
+          "max": [
+            26.272242069244385,
+            202.6073455810547,
+            75.27626037597656
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0021-positions.bin",
+          "sha256": "917b96a9b21a2e86f6eafaca5a45ba284d6381c230d139dcf3e542819b02f6ab",
+          "bytes": 14484
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0021-indices.bin",
+          "sha256": "af9ba5a3472e74fe7d2028852d319ff1f3b2660f04fdc9b41b82df9db564114a",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2416,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -53.195343017578125,
+            -119.19864654541016,
+            -81.55471801757812
+          ],
+          "max": [
+            26.273574829101562,
+            202.6344871520996,
+            151.87769889831543
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0022-positions.bin",
+          "sha256": "b38552cd11e953b72e1e9ab74f144b2c8836dee8963c8eabddc632e249435529",
+          "bytes": 14496
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0022-indices.bin",
+          "sha256": "e3679e7813492c85e3524efd3630a4d0ef2bb634a2304515e02155b77dd2d5bc",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2416,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -45.35865306854248,
+            -80.39875030517578,
+            -64.24683570861816
+          ],
+          "max": [
+            26.320624351501465,
+            202.58325576782227,
+            220.33578872680664
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0023-positions.bin",
+          "sha256": "cdbeac7029d639d1c8d2ac05c5d0435cd74adfb351cde832aa0d6a5f08ac7031",
+          "bytes": 14496
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0023-indices.bin",
+          "sha256": "2fce87d6a9a08f703644e69c7f14d49c35f2993fb7032e05314d3bdffe044a2a",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2416,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -42.01995849609375,
+            -33.09069871902466,
+            -59.73642349243164
+          ],
+          "max": [
+            26.27952814102173,
+            202.63139724731445,
+            262.2174072265625
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0024-positions.bin",
+          "sha256": "a1f2d2316ae27b456943dd208af522fce60d8a10df6fba665e09be4b73c02235",
+          "bytes": 14496
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0024-indices.bin",
+          "sha256": "6b3282bba7b7650d3adbb45b7969cd972e14fcb3ceea86242efad2828801db13",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2415,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -42.295899391174316,
+            11.948474645614624,
+            -59.71859931945801
+          ],
+          "max": [
+            26.336288452148438,
+            202.63343811035156,
+            282.9730796813965
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0025-positions.bin",
+          "sha256": "3ddca9dffd61a0e8356efe69377a22dfb5181a52cbf38a54c85ef8e54a5bc2f2",
+          "bytes": 14490
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0025-indices.bin",
+          "sha256": "a1b22881638c0899d60783683ffb5b4eb92d283d7c4f554ba7596190fa55d57c",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2416,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -45.19136428833008,
+            46.50346279144287,
+            -59.61047649383545
+          ],
+          "max": [
+            26.35167360305786,
+            202.63469696044922,
+            290.87860107421875
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0026-positions.bin",
+          "sha256": "512af2051bac3c295b9bd8ff8373ddbbcf096478d8cdc88f7a766e9e6589fe61",
+          "bytes": 14496
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0026-indices.bin",
+          "sha256": "fe5db6e888a219e044695d2c7cdce982d05aa7c617dd2b977e1c30cc699011f4",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2415,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -47.75233268737793,
+            65.36393165588379,
+            -59.620981216430664
+          ],
+          "max": [
+            26.316230297088623,
+            202.63561248779297,
+            292.75089263916016
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0027-positions.bin",
+          "sha256": "01ea1ac0c9527df0edbd3834da314cf444335f895bf1322d221eb35762aa6862",
+          "bytes": 14490
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0027-indices.bin",
+          "sha256": "55c97d30df829f56d97c75334b0af6788219e103d0f00d2a3fe0781b02f0cee8",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2415,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -48.13578128814697,
+            69.14527416229248,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            294.14804458618164
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0028-positions.bin",
+          "sha256": "db7f01383e2f470524b21c4492ac9d25867decba852af5a1f2630b1f89a79fb4",
+          "bytes": 14490
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0028-indices.bin",
+          "sha256": "aa0ee3b1a70b3b15abbb085cbb69e42103191839ab5c2e181933db975e7bbe78",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2416,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -48.13578128814697,
+            72.82166957855225,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            297.2549247741699
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0029-positions.bin",
+          "sha256": "d755e1e7d3dcb3334cb7da6fcddf0344552e33beba4a233ee830209938fb0525",
+          "bytes": 14496
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0029-indices.bin",
+          "sha256": "1d8cde1edeedc11eb343ae7d23b8e085e5758118a8cce308590e28b4fabfbd61",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2418,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -48.13578128814697,
+            78.14764022827148,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            300.5839538574219
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0030-positions.bin",
+          "sha256": "2aafb9b862a2aaf1217daa46d2d6f7dd703dffd2d8689110b4908e06431af239",
+          "bytes": 14508
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0030-indices.bin",
+          "sha256": "4c7dd85a1d478ff3ffbed9e1a5f2aa4de30db0dc47a40c41175bb38609aba4dd",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2415,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -48.13578128814697,
+            82.67642021179199,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            303.4836006164551
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0031-positions.bin",
+          "sha256": "9d545f733208d4ee38aa2bb396db30661235f34ac2cf973a46f187715546cdac",
+          "bytes": 14490
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0031-indices.bin",
+          "sha256": "1085d4420caaf125365e5230680faab38e2ad84f5fb947419f42e5fbf0f7d2b8",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -48.13578128814697,
+            83.1749153137207,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            303.8285827636719
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0032-positions.bin",
+          "sha256": "f09f6ff92f43ddc49294273e95564936054e33867285812a6bf30de604bd114b",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0032-indices.bin",
+          "sha256": "57e9064fdf570cfc8e34525a6dd1b05bcd880f8309f8d76595be4be09ef6b2ed",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -48.13578128814697,
+            83.1749153137207,
+            -59.6227502822876
+          ],
+          "max": [
+            26.3158917427063,
+            202.6357078552246,
+            303.8285827636719
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0033-positions.bin",
+          "sha256": "f09f6ff92f43ddc49294273e95564936054e33867285812a6bf30de604bd114b",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0033-indices.bin",
+          "sha256": "57e9064fdf570cfc8e34525a6dd1b05bcd880f8309f8d76595be4be09ef6b2ed",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2416,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -48.10073375701904,
+            85.88953971862793,
+            -59.6227502822876
+          ],
+          "max": [
+            26.315877437591553,
+            202.63368606567383,
+            303.8688087463379
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0034-positions.bin",
+          "sha256": "1366071b93231ec6f431d6f6d0e98197625d5934bab59212f670ba6f3d1556ff",
+          "bytes": 14496
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0034-indices.bin",
+          "sha256": "2e27bd2833cbf8bebc0afa68490d5c97f97d0dbaa472aa4fd7d01c02062aeb27",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -48.01165580749512,
+            92.41172790527344,
+            -59.839558601379395
+          ],
+          "max": [
+            26.31584405899048,
+            202.63368606567383,
+            304.601993560791
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0035-positions.bin",
+          "sha256": "5629a891251b4d21ee885e1da598a56743592eb80fc6fa670ebea01894023bee",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0035-indices.bin",
+          "sha256": "10bdd1e1a98aee51cedc262d7cef9c20b9bdac08ac35ee18ebe5388be342d0ed",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -47.895474433898926,
+            101.07657432556152,
+            -59.62275981903076
+          ],
+          "max": [
+            26.315796375274658,
+            202.63568878173828,
+            305.1350975036621
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0036-positions.bin",
+          "sha256": "fcf24dc1d09ec3e166cd084647309285166602acf347832e2d1cfcfd982d52bb",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0036-indices.bin",
+          "sha256": "8f4f083b5b507ddc4e1de4ce0273e136b1ce49e6d70aa84db2cffe38715c3a88",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2418,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -47.78950214385986,
+            110.8100414276123,
+            -59.62226867675781
+          ],
+          "max": [
+            26.315743923187256,
+            202.63568878173828,
+            305.5215072631836
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0037-positions.bin",
+          "sha256": "1bca08cd6d2a801c02a1f29e3934393f506964414243aba625f9691b8e09eead",
+          "bytes": 14508
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0037-indices.bin",
+          "sha256": "6b3aa251662a38228282774badd4c68a8e526aa00fd610d1455e344bcb45142d",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2415,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -47.69754886627197,
+            117.37174987792969,
+            -59.83961582183838
+          ],
+          "max": [
+            26.315698623657227,
+            202.63566970825195,
+            305.8681106567383
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0038-positions.bin",
+          "sha256": "bf8893859daaadba7ea87874a2325b634d1b510ab1faf69a1d6d1d4841f9010a",
+          "bytes": 14490
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0038-indices.bin",
+          "sha256": "a6e4ce4e2f6b143685c6282444536c57ec85ac6a4dcd86da2c977d8d2a7e58e1",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2414,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -47.63380527496338,
+            117.73246765136719,
+            -59.83962535858154
+          ],
+          "max": [
+            26.315665245056152,
+            202.63566970825195,
+            305.9126091003418
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0039-positions.bin",
+          "sha256": "155f446069d9608d6fb48944b3a2772613b8d8c07448b6d7e8b5604ccea48400",
+          "bytes": 14484
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0039-indices.bin",
+          "sha256": "9ca576af12456482c6fc1a888e794238201e4615cf3ad8a5b5325a580ccb1974",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -47.43070125579834,
+            117.23513603210449,
+            -59.62227821350098
+          ],
+          "max": [
+            26.263585090637207,
+            202.63565063476562,
+            306.2987518310547
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0040-positions.bin",
+          "sha256": "d1533b473fc6537ad4bdfecdeb81bab6b7e390a32167d7a3eb27a29c51a9af45",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0040-indices.bin",
+          "sha256": "1420d66925f94eb11a1c6a7b893c3fbc97334cdb636873392a69019e9c5f9bfc",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -44.09672260284424,
+            42.69675254821777,
+            -59.62230205535889
+          ],
+          "max": [
+            26.189181804656982,
+            202.63559341430664,
+            297.4489402770996
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0041-positions.bin",
+          "sha256": "244fd338247395665bf777bcaf69518b5c57b47789826bbbe39c1e6032d692f9",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0041-indices.bin",
+          "sha256": "7a93c0d374cb6f7e49e1316541e3bf6ec6deb82ea8b34a4490b525fcd9bb3d20",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -37.92945384979248,
+            -83.2429313659668,
+            -59.6157169342041
+          ],
+          "max": [
+            26.264750957489014,
+            202.6352882385254,
+            232.08406448364258
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0042-positions.bin",
+          "sha256": "5039aa4a168a99f2ff5aafb3f0d18fb7cd630ab1119c6938c56e8dc49d81cf01",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0042-indices.bin",
+          "sha256": "498f4920063120adba09e23f1d9b0c04c68da45bf326805bc3cf16682b6fe29b",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -32.321269512176514,
+            -169.19715881347656,
+            -59.61585998535156
+          ],
+          "max": [
+            27.684168815612793,
+            202.6352310180664,
+            115.8688735961914
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0043-positions.bin",
+          "sha256": "2f7b8ee4ffa568984f18195a0e9d9417c3d32d96de347f7cb8583c1473a3c596",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0043-indices.bin",
+          "sha256": "649e10effcbacb09d1af0b712c285b7a3e31666c480d71e0a7346e0262b28f19",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2418,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -30.246591567993164,
+            -189.7477149963379,
+            -59.61592674255371
+          ],
+          "max": [
+            28.51133108139038,
+            202.63519287109375,
+            35.39795398712158
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0044-positions.bin",
+          "sha256": "4936dc482810a1f7f9cb23a0e61bd90f466c07652547e72c899073cf96d4f091",
+          "bytes": 14508
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0044-indices.bin",
+          "sha256": "f3cec36356d8da72dd374c6c950199c1fbdd14731fab1b18aa3b1691c13dc9f0",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -27.913987636566162,
+            -189.63123321533203,
+            -59.61592674255371
+          ],
+          "max": [
+            29.60993766784668,
+            202.63519287109375,
+            33.51587533950806
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0045-positions.bin",
+          "sha256": "411f861a851632d65b54b040c991367326ece79149b80a709348917afe9b9f16",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0045-indices.bin",
+          "sha256": "7c9dfd429e74538e9a26720864288990b8fedc8b15f7bfbaf4aacbee68f40fe0",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2419,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -33.20730686187744,
+            -189.2325782775879,
+            -59.61592674255371
+          ],
+          "max": [
+            27.43391513824463,
+            202.63519287109375,
+            33.07684898376465
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0046-positions.bin",
+          "sha256": "89cc518eccfbd50e1d3ee8c822251aebbfa6848e11fb9739a838d7f3d7f3457a",
+          "bytes": 14514
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0046-indices.bin",
+          "sha256": "5256edb15b30f8908a2237f766dab99acc657eb2b88b90a7502030cafa306781",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -30.688931941986084,
+            -189.3732452392578,
+            -59.61592674255371
+          ],
+          "max": [
+            29.279446601867676,
+            202.63519287109375,
+            33.50567817687988
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0047-positions.bin",
+          "sha256": "9e4e6930f1de0fc553db21977866022aa08eb9ee5466b53d168ff5b903702924",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0047-indices.bin",
+          "sha256": "9620f28decff794abdd17f59dc1f913f82d066d2d76f3a66ce5e48106341dcd5",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -28.629555702209473,
+            -189.98573303222656,
+            -59.61592674255371
+          ],
+          "max": [
+            28.74354839324951,
+            202.63519287109375,
+            33.30525875091553
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0048-positions.bin",
+          "sha256": "67769a94729eb08fc7dc602b00a7c6bea78df11adb95b25bd9ac47fc335e50ce",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0048-indices.bin",
+          "sha256": "9355ffd8106c1fef3ec3c3c344615598184296ad0354855a798806c80d19e630",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -31.028263568878174,
+            -189.71609115600586,
+            -59.61592674255371
+          ],
+          "max": [
+            28.303425312042236,
+            202.63519287109375,
+            33.23019981384277
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0049-positions.bin",
+          "sha256": "2e69312ca2c44932a32e9bbf61ee8fe137d05b9104f26b0d2264046074ff35ad",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0049-indices.bin",
+          "sha256": "8097b3619a53312f30769dc844af211a0c8d41154646f92b1e562f3de819d82a",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2418,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -30.174777507781982,
+            -189.99889373779297,
+            -59.61592674255371
+          ],
+          "max": [
+            28.609929084777832,
+            202.63519287109375,
+            33.31793785095215
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0050-positions.bin",
+          "sha256": "039aabf9d7fd1585ffaa05309c9c78fa87c7afb1260e6c5665f1ead16de9f59b",
+          "bytes": 14508
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0050-indices.bin",
+          "sha256": "e965608ff1bd0d763cc3899c12f600f560197b662504c7f6cf871ed16aa75523",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2418,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -30.211186408996582,
+            -190.00320434570312,
+            -59.61592674255371
+          ],
+          "max": [
+            28.537957668304443,
+            202.63519287109375,
+            33.295602798461914
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0051-positions.bin",
+          "sha256": "4e38d73fd33d6d61efb30e4f52c5383a8583490351e21512b72cf3d9ff20f6a4",
+          "bytes": 14508
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0051-indices.bin",
+          "sha256": "e314f3411aa6167e0e69ebcffe78a7ba771d2020968d819be5b83ebd6194dde6",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -30.224921703338623,
+            -190.00896453857422,
+            -59.61592674255371
+          ],
+          "max": [
+            28.53903293609619,
+            202.63519287109375,
+            33.296101093292236
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0052-positions.bin",
+          "sha256": "b1d69e0d7f132c5cbaf19fe15139f6d1248779dfa648fe6ca804d6378554e6f8",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0052-indices.bin",
+          "sha256": "75a7cd453ae39e9394d28129204c5b9ada35172cc51f7160064a71f3f089ab89",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -30.224921703338623,
+            -190.00896453857422,
+            -59.61592674255371
+          ],
+          "max": [
+            28.53903293609619,
+            202.63519287109375,
+            33.296101093292236
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0053-positions.bin",
+          "sha256": "b1d69e0d7f132c5cbaf19fe15139f6d1248779dfa648fe6ca804d6378554e6f8",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0053-indices.bin",
+          "sha256": "75a7cd453ae39e9394d28129204c5b9ada35172cc51f7160064a71f3f089ab89",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -30.224921703338623,
+            -188.29471588134766,
+            -59.61592674255371
+          ],
+          "max": [
+            28.53903293609619,
+            202.63519287109375,
+            33.296101093292236
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0054-positions.bin",
+          "sha256": "9f33dc7c3fc0ea4047eabb0c97aff558a0d9796d1e12c9b97203322d23d80b60",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0054-indices.bin",
+          "sha256": "a19db644f46334c6e4fde8cdd566d9db21ee422cbd596a627e2ada67a5c5811b",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -30.475187301635742,
+            -181.38397216796875,
+            -59.733285903930664
+          ],
+          "max": [
+            28.40489387512207,
+            202.63490676879883,
+            38.809406757354736
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0055-positions.bin",
+          "sha256": "766ad38d95e2bb20254d5288a0de4051e0ccb06f53a05f5b91cf3122207e8a99",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0055-indices.bin",
+          "sha256": "cf8d4496e5fd5bf5e9a585fbbbf86393fdd3f5ea02979d91711053b694bdb246",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2418,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -31.40524387359619,
+            -184.81510162353516,
+            -59.668898582458496
+          ],
+          "max": [
+            27.90299654006958,
+            202.6340675354004,
+            26.439878940582275
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0056-positions.bin",
+          "sha256": "faf83964ae6511a60d4fb39e1278c92177d6026a3dd44adbda02f8f93cd4cfeb",
+          "bytes": 14508
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0056-indices.bin",
+          "sha256": "99a680adf0c072dc7189add826bd7a6c6c7e7a3e830b600d93d25c3c9218c8b3",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2418,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -32.85120725631714,
+            -191.63074493408203,
+            -59.628357887268066
+          ],
+          "max": [
+            27.111105918884277,
+            202.618408203125,
+            19.184372425079346
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0057-positions.bin",
+          "sha256": "5b775ed386d8dcdc695e102577bd8f864ba4ec18d386afa18203c78b91bf2bd5",
+          "bytes": 14508
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0057-indices.bin",
+          "sha256": "498d972f91230d998b5b246cd3668c809a16103228d3a4add677cc1946d7e89c",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2418,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -34.612109661102295,
+            -189.45348739624023,
+            -77.05590724945068
+          ],
+          "max": [
+            26.310622692108154,
+            202.62662887573242,
+            12.541353702545166
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0058-positions.bin",
+          "sha256": "2ff97714ada8ea164dab3f9018e57a73c1e605a333860defb83bf7c5b42ec0c5",
+          "bytes": 14508
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0058-indices.bin",
+          "sha256": "55417749b46ddc9227295a50a4448f5037ae95132c6e4c717310237b972b1958",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2418,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -36.48272752761841,
+            -182.40278244018555,
+            -116.12972259521484
+          ],
+          "max": [
+            26.25988245010376,
+            202.6434326171875,
+            4.459223449230194
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0059-positions.bin",
+          "sha256": "c6f3d7f7d5ca87d26b349ef4e58d548fc75aba36d11dc6f93b7b02637389fe16",
+          "bytes": 14508
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0059-indices.bin",
+          "sha256": "96d19f21fea101096138c4807254508fda637f65d06dc5cf74fba7255d9d5758",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2418,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -38.27434778213501,
+            -170.34822463989258,
+            -162.70147323608398
+          ],
+          "max": [
+            26.311581134796143,
+            202.60034561157227,
+            -9.123425483703613
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0060-positions.bin",
+          "sha256": "37913a4d7e8eefe32a50a641d022dde13a62c6c09d10825a6df36647c5daec6f",
+          "bytes": 14508
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0060-indices.bin",
+          "sha256": "b36bfd7a2759a6d02f3f4ae808051755c55d2fae06732dacd570d82316b40506",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -39.84664440155029,
+            -153.33991050720215,
+            -213.88517379760742
+          ],
+          "max": [
+            26.242473125457764,
+            202.6095199584961,
+            -27.847070693969727
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0061-positions.bin",
+          "sha256": "6d689eb81468713c3d01391b2dba0fbf3928db5873aab6a4f0cb32b9972de55d",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0061-indices.bin",
+          "sha256": "387ad41b0ade8a305ba0b325f81322c1c03fa9b6e1c892a72e8b7f2a493d323b",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2419,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -41.17438793182373,
+            -133.0116081237793,
+            -264.8641586303711
+          ],
+          "max": [
+            26.313283443450928,
+            202.66109466552734,
+            -48.9129638671875
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0062-positions.bin",
+          "sha256": "9770bca72d0dd0a6400e6145118cadc44eb07baa256c562de114bc427f6123a5",
+          "bytes": 14514
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0062-indices.bin",
+          "sha256": "794a8ed4b70b155759542a5bdb210e95b7e2b19e7d85a8d063bd8e8416100637",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2416,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -42.146477699279785,
+            -111.04928016662598,
+            -312.8253173828125
+          ],
+          "max": [
+            26.5205979347229,
+            202.5971794128418,
+            -70.74626445770264
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0063-positions.bin",
+          "sha256": "99886894179b1020b1f234d8efddf0c98d7bd32e4d230afb280bfff914ddace7",
+          "bytes": 14496
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0063-indices.bin",
+          "sha256": "d7a5fd336218d9ca4254dfd0fda64a475e2ed7b4208d571b24fc25b731069443",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 4000,
+        "bounds": {
+          "min": [
+            -42.78545379638672,
+            -90.8504867553711,
+            -354.2872619628906
+          ],
+          "max": [
+            29.63613271713257,
+            202.64471054077148,
+            -91.99249267578125
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0064-positions.bin",
+          "sha256": "ee05a467312dbd6eefc40c898350c5479345b91be77d82143bcd0bd833a7a55e",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0064-indices.bin",
+          "sha256": "d04b9a4a772007d6b7ed7471d7246f2341cb6ed6bf3a78dea9539c68656e9bea",
+          "bytes": 24000
+        }
+      },
+      {
+        "vertexCount": 2415,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -43.151822090148926,
+            -74.75617408752441,
+            -387.30552673339844
+          ],
+          "max": [
+            32.56751298904419,
+            202.63423919677734,
+            -111.70476913452148
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0065-positions.bin",
+          "sha256": "b4d2cc8674f1bff09d8fb3c96a62096711c89cc0987cccd9a63a0f7cf6aa9e43",
+          "bytes": 14490
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0065-indices.bin",
+          "sha256": "dfc0cb5c430329d15afca2983bf778504775a0fa0debf99872ec2c6eb8513363",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2417,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -43.314433097839355,
+            -65.30476093292236,
+            -410.1216506958008
+          ],
+          "max": [
+            34.086267948150635,
+            202.63395309448242,
+            -127.23937034606934
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0066-positions.bin",
+          "sha256": "5ebd37b8bd163b5a9d13e722d1a1c7f83fcf1ccdbf2180507f59b6c739d5ff98",
+          "bytes": 14502
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0066-indices.bin",
+          "sha256": "1bf3d2c693b52a50e4d8fe200ec79948102cfc2ea66f6eda343ea329b8b04493",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2415,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -43.334107398986816,
+            -63.999061584472656,
+            -421.59461975097656
+          ],
+          "max": [
+            34.42359447479248,
+            202.63391494750977,
+            -137.79982566833496
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0067-positions.bin",
+          "sha256": "04978be5d07a60c21033ed3c78e53c48b394524c5786efa0a3ff7e316dba352d",
+          "bytes": 14490
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0067-indices.bin",
+          "sha256": "f217deb3cc3f4ecd0dd35bccb3593ffff86bf4d3c8f3bf389ac0cd4d94960951",
+          "bytes": 23994
+        }
+      },
+      {
+        "vertexCount": 2416,
+        "triangleCount": 3999,
+        "bounds": {
+          "min": [
+            -43.334107398986816,
+            -64.11434173583984,
+            -425.4754638671875
+          ],
+          "max": [
+            34.42359447479248,
+            202.63391494750977,
+            -141.6806697845459
+          ]
+        },
+        "positions": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0068-positions.bin",
+          "sha256": "a9da6febb04af08d088d2bf6c187420817021c456aa572ee537acc1c54fdb739",
+          "bytes": 14496
+        },
+        "indices": {
+          "file": "./assets/sprites/pipeline-v2/abyssal-kraken-tentacle/material/masters/frame-0068-indices.bin",
+          "sha256": "2aaf6a47b6100defcd793f1903f5d2783bcdd506b20aa76be570bd2621b55abb",
+          "bytes": 23994
+        }
+      }
+    ]
+  }
+}

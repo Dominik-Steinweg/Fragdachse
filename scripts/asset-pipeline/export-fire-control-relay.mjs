@@ -4,6 +4,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 import { packSheet } from './export-v2.mjs';
+import { readPipelineRegistry, writePipelineRegistry } from './pipeline-registry.mjs';
 
 const source = path.resolve(process.argv[2] ?? 'D:/Fragdachse-render/fire-control/fire-control-relay/preview');
 const preview = JSON.parse(await readFile(path.join(source, 'preview.json'), 'utf8'));
@@ -36,10 +37,9 @@ const runtime = {
     { name: 'idle', frames: [0], frameRate: 1, loop: true, start: 'rest', end: 'rest' }],
   hashes: { idle: hash(frames[0]), sheet: hash(sheet.buffer) },
 };
-const file = 'src/config/pipelineAssets.json';
-const registry = JSON.parse(await readFile(file, 'utf8'));
+const registry = await readPipelineRegistry();
 registry.assets = [...registry.assets.filter(a => a.id !== spec.id), runtime];
-await writeFile(file, JSON.stringify(registry, null, 2) + '\n');
+await writePipelineRegistry(process.cwd(), registry);
 await writeFile(path.join(directory, 'draft-source.json'), JSON.stringify({
   quality: 'accepted-authoring-draft', previewInputHash: preview.inputHash, targetSize: spec.targetSize,
   masters: masters.map((data, i) => ({ frame: indices[i], sha256: hash(data) })),

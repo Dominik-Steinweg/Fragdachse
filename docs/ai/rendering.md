@@ -202,7 +202,8 @@ Komposition liegt ueber Bodenbewuchs und unter Figuren sowie deren gemeinsamem N
 Basen/Hindernisse aus und reduziert die Wasserantwort; PMA-Multiply erhaelt Ziel-Alpha.
 Low verwendet die Spielerellipse; die gebackenen D-Masken werden nicht geladen.
 
-Die versionierte [Runtime-Assetauswahl](../../src/config/pipelineAssets.json) und ihre PNGs unter
+Die versionierte [Runtime-Assetauswahl](../../src/config/pipelineAssets/assets/) (ein Eintrag je Datei,
+Zugriff in Skripten nur über `scripts/asset-pipeline/pipeline-registry.mjs`) und ihre PNGs unter
 `public/assets/sprites/pipeline-v2/` sind unabhängig von lokalen Blender-Quellen. Statische Bilder
 und animierte Sheets besitzen getrennte Texturschlüssel. Sheet-Geometrie und explizite Clipframes
 stammen aus der Auswahl; der Ruheframe ist kein Teil des Bewegungsloops. Anzeigegrößen werden
@@ -423,8 +424,10 @@ Die PNG-Exportzwischenprodukte bleiben fuer Offline-Paritaetspruefungen vorhande
 Bei premultipliziert hochgeladenen Farbtexturen sind Alpha und RGB bei Alpha > 0 exakt;
 unsichtbares RGB darf nur dort entfallen. Datenatlanten behalten alle Kanaele, auch RGB
 unter Alpha 0, und ihren bisherigen non-PMA-Upload. Farbkompression darf nicht auf Daten
-uebertragen werden. Nach einem Export aktualisiert `npm run assets:runtime` die Runtime-Dateien
-und URL-Versionen; die Build-Scripts fuehren diesen Schritt automatisch aus.
+uebertragen werden. Nach einem Export aktualisiert `npm run assets:runtime` die Runtime-Dateien;
+die Build-Scripts fuehren diesen Schritt automatisch aus. Die URL-Versionen sind nicht committet:
+`scripts/asset-cache.ts` leitet sie bei jedem Build-, Dev- und Testlauf aus den Bytes unter
+`public/assets` ab und stellt sie als `virtual:runtime-asset-urls` bereit.
 
 Culling und Residency verwenden das sichtbare Weltrechteck aus `src/graphics/CameraWorldView.ts`: Die Berechnung berücksichtigt Kamera-Ursprung, Zoom und Rotation aus dem aktuellen Zustand. `camera.worldView` kann vor `preRender` veraltet sein und bildet den Arena-Ursprung nicht korrekt ab. Frame-Consumer reichen wiederverwendbaren Ausgabespeicher ein.
 

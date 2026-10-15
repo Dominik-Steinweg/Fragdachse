@@ -1,0 +1,36 @@
+{
+  "id": "attack-drone-gun",
+  "category": "companion",
+  "gameIds": [
+    "attack_drone_gun"
+  ],
+  "revision": "v2-attack-drone-b",
+  "variant": "standard",
+  "sourceSize": 160,
+  "textureKey": "attack_drone_gun",
+  "sheetTextureKey": "attack_drone_gun_walking",
+  "idlePath": "./assets/sprites/pipeline-v2/attack-drone-gun/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/attack-drone-gun/sheet.png",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 160,
+    "frameHeight": 160,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 164,
+    "height": 164
+  },
+  "idleFrame": 0,
+  "clips": [],
+  "hashes": {
+    "idle": "d493244a70b577d221a0ea9e0528a8dec1a087eb0b15dbbd9abd11cb3f154a3c",
+    "sheet": "7bb1e918416aaa2e3130c427faf9d6ebd9fc1c4b1cf8d36eb0f8b1d2173f1df8"
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "id": "construction_dawn_broodnest",
+  "category": "construction",
+  "gameIds": [],
+  "revision": "dawn-retex-p01",
+  "variant": "standard",
+  "sourceSize": 192,
+  "textureKey": "construction_dawn_broodnest",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "idleFrame": 0,
+  "clips": [
+    {
+      "name": "idle",
+      "frames": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "frameRate": 12,
+      "loop": true,
+      "end": "rest"
+    }
+  ],
+  "sheetTextureKey": "construction_dawn_broodnest_sheet",
+  "idlePath": "./assets/sprites/pipeline-v2/construction_dawn_broodnest/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/construction_dawn_broodnest/sheet.png",
+  "layout": {
+    "frameWidth": 192,
+    "frameHeight": 192,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 2,
+    "frameCount": 13,
+    "width": 1568,
+    "height": 392
+  },
+  "hashes": {
+    "idle": "e6a7c68e773266765c21af79232d8a9c38b91e459d28bf36d41b698f77507088",
+    "sheet": "d3304af613430f636c37ffebec5a0578309366ed840c3c20bf0f9f63a4be276e"
+  }
+}

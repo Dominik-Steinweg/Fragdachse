@@ -1,0 +1,52 @@
+{
+  "id": "rocket",
+  "category": "turret",
+  "gameIds": [
+    "TURRET_ROCKET_BURST"
+  ],
+  "revision": "towers-r03",
+  "variant": "standard",
+  "sourceSize": 160,
+  "textureKey": "turret_weapon_rocket",
+  "sheetTextureKey": "turret_weapon_rocket_animated",
+  "idlePath": "./assets/sprites/pipeline-v2/rocket/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/rocket/sheet.png",
+  "forward": "east",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 160,
+    "frameHeight": 160,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 2,
+    "frameCount": 9,
+    "width": 1312,
+    "height": 328
+  },
+  "idleFrame": 0,
+  "clips": [
+    {
+      "name": "fire",
+      "frames": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "frameRate": 24,
+      "loop": false
+    }
+  ],
+  "hashes": {
+    "idle": "b7928ed2860706c48c00fadc0e6cd38a34307f2467dffee129032b02fe87fce9",
+    "sheet": "38fc22a10d10fd150e31b575b3a2e3ea03531c78833a2e1b93b1a48ad3b234e6"
+  }
+}

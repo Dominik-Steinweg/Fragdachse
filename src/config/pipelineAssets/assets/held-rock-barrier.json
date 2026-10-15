@@ -1,0 +1,47 @@
+{
+  "id": "held-rock-barrier",
+  "category": "utility",
+  "gameIds": [
+    "ROCK_BARRIER"
+  ],
+  "revision": "v2-ak",
+  "variant": "standard",
+  "sourceSize": 256,
+  "textureKey": "held_ROCK_BARRIER",
+  "sheetTextureKey": "held_ROCK_BARRIER_static",
+  "idlePath": "./assets/sprites/pipeline-v2/held-rock-barrier/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/held-rock-barrier/sheet.png",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "layout": {
+    "frameWidth": 256,
+    "frameHeight": 256,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 1,
+    "rows": 1,
+    "frameCount": 1,
+    "width": 260,
+    "height": 260
+  },
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      19.2
+    ]
+  },
+  "idleFrame": 0,
+  "clips": [],
+  "hashes": {
+    "idle": "de749f4818f9f0c7190df23b010db37303bd518746981261e847d8135e37aa47",
+    "sheet": "20df979ebf16a98ea67a7e67707508b64b585b72dd633ef7c2d71eaf3196f45e"
+  }
+}
