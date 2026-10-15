@@ -1,17 +1,22 @@
 import { deContent } from './de/content';
+import { deDawn } from './de/dawn';
+import { deLobby } from './de/lobby';
 import { deUi } from './de/ui';
 import { deUpgrades } from './de/upgrades';
 import { enContent } from './en/content';
+import { enDawn } from './en/dawn';
+import { enLobby } from './en/lobby';
 import { enUi } from './en/ui';
 import { enUpgrades } from './en/upgrades';
 import type { Locale } from './types';
 
-export type TranslationDomain = 'ui' | 'content' | 'upgrades';
+/** One source file per domain and locale; feature domains keep busy features out of the shared ui file. */
+export type TranslationDomain = 'ui' | 'dawn' | 'lobby' | 'content' | 'upgrades';
 
-const DOMAIN_ORDER: readonly TranslationDomain[] = ['ui', 'content', 'upgrades'];
+export const TRANSLATION_DOMAINS: readonly TranslationDomain[] = ['ui', 'dawn', 'lobby', 'content', 'upgrades'];
 const sourceCatalogs: Record<Locale, Record<TranslationDomain, Readonly<Record<string, string>>>> = {
-  de: { ui: deUi, content: deContent, upgrades: deUpgrades },
-  en: { ui: enUi, content: enContent, upgrades: enUpgrades },
+  de: { ui: deUi, dawn: deDawn, lobby: deLobby, content: deContent, upgrades: deUpgrades },
+  en: { ui: enUi, dawn: enDawn, lobby: enLobby, content: enContent, upgrades: enUpgrades },
 };
 
 interface BuiltCatalog {
@@ -28,7 +33,7 @@ export interface TranslationSegment {
 function buildCatalog(locale: Locale): BuiltCatalog {
   const values: Record<string, string> = {};
   const owners: Record<string, TranslationDomain[]> = {};
-  for (const domain of DOMAIN_ORDER) {
+  for (const domain of TRANSLATION_DOMAINS) {
     for (const [key, value] of Object.entries(sourceCatalogs[locale][domain])) {
       (owners[key] ??= []).push(domain);
       if (values[key] === undefined) values[key] = value;
