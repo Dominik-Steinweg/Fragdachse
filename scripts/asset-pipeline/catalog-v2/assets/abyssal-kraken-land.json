@@ -1,0 +1,157 @@
+{
+  "id": "abyssal-kraken-land",
+  "label": "Abgrundkrake — an Land (Phase 2)",
+  "category": "enemy",
+  "gameIds": [],
+  "reference": "scripts/asset-pipeline/references/abyssal-kraken-v2.png",
+  "targetSize": 360,
+  "sourceSizes": [
+    432,
+    512,
+    1024
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Riesiger Endboss im Teich: gestreckter Speermantel mit segmentiertem Kiel, Hakenstacheln und gezackten Flossenmembranen, acht lange über Schwimmhäute verbundene Arme und eine Krone aus Mundtentakeln.",
+    "colors": "Bedrohliches dunkles Indigo-Violett mit violetten Flanken, Pigmentmarmorierung und Lavendel-Säumen; karminrote Saugnäpfe und Mundtentakel; nach vorn blickende Glutaugen mit Schlitzpupille als hellster Akzent.",
+    "anatomy": "Ruhepose an Land: Arme breit auf dem Boden abgestützt. Ashore beginnt im Wasser (Elevation-Pass zeigt den Uferübertritt), endet in dieser Ruhepose. Gleiche Anatomie wie der Wasserkörper."
+  },
+  "requiredClips": [
+    "idle",
+    "move",
+    "ashore",
+    "slam",
+    "ink-spit",
+    "egg-throw",
+    "spine-volley",
+    "death"
+  ],
+  "production": "reference",
+  "recipe": "abyssal-kraken",
+  "model": {
+    "part": "land"
+  },
+  "orthoScale": 10.8,
+  "displayScale": 1.2,
+  "textures": {
+    "organic": "art/poc/kraken-v8/textures/kraken-scales-v8.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Organische Tiefseehaut mit Pigmentierung und Faltentiefe",
+      "textureStrength": 0.93,
+      "formShadowStrength": 0.91
+    }
+  },
+  "clips": [
+    {
+      "name": "idle",
+      "motion": "kraken_land_idle",
+      "frameCount": 12,
+      "frameRate": 10,
+      "loop": true
+    },
+    {
+      "name": "move",
+      "motion": "kraken_land_move",
+      "frameCount": 12,
+      "frameRate": 24,
+      "loop": true
+    },
+    {
+      "name": "ashore",
+      "motion": "kraken_land_ashore",
+      "frameCount": 28,
+      "frameRate": 16,
+      "loop": false,
+      "start": "free",
+      "markers": {
+        "grip": 9,
+        "heave": 18
+      }
+    },
+    {
+      "name": "slam",
+      "motion": "kraken_land_slam",
+      "frameCount": 32,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 13,
+        "impact": 20
+      }
+    },
+    {
+      "name": "ink-spit",
+      "motion": "kraken_land_ink_spit",
+      "frameCount": 22,
+      "frameRate": 20,
+      "loop": false,
+      "markers": {
+        "charge": 9,
+        "spit": 12
+      }
+    },
+    {
+      "name": "egg-throw",
+      "motion": "kraken_land_egg_throw",
+      "frameCount": 32,
+      "frameRate": 20,
+      "loop": false,
+      "markers": {
+        "release-1": 9,
+        "release-2": 12,
+        "release-3": 15,
+        "release-4": 19,
+        "release-5": 22,
+        "release-6": 26
+      }
+    },
+    {
+      "name": "spine-volley",
+      "motion": "kraken_land_volley_spines",
+      "frameCount": 36,
+      "frameRate": 20,
+      "loop": false,
+      "markers": {
+        "raise": 8,
+        "release-1": 15,
+        "release-2": 17,
+        "release-3": 20,
+        "release-4": 22,
+        "release-5": 24,
+        "release-6": 26
+      }
+    },
+    {
+      "name": "death",
+      "motion": "kraken_land_death",
+      "frameCount": 24,
+      "frameRate": 16,
+      "loop": false,
+      "end": "terminal"
+    }
+  ],
+  "elevation": {
+    "min": -2.5,
+    "max": 2.5,
+    "scale": 0.5
+  },
+  "runtimeAtlas": true,
+  "runtimeContract": "boss",
+  "runtimeBudgetMB": 100,
+  "materialPass": {
+    "version": 1,
+    "color": "srgb-albedo-baked-cavity-v1",
+    "normal": "linear-unorm8-z-oct-normal-v1",
+    "emission": "linear-rgb-unorm8-scaled-v1"
+  },
+  "shadowMesh": {
+    "version": 1,
+    "encoding": "u16-world-xyz-per-pose-v1"
+  }
+}

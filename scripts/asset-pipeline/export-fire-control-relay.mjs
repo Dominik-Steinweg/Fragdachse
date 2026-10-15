@@ -4,11 +4,11 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 import { packSheet } from './export-v2.mjs';
-import { readPipelineRegistry, writePipelineRegistry } from './pipeline-registry.mjs';
+import { readDemandCatalog, readPipelineRegistry, writePipelineRegistry } from './pipeline-registry.mjs';
 
 const source = path.resolve(process.argv[2] ?? 'D:/Fragdachse-render/fire-control/fire-control-relay/preview');
 const preview = JSON.parse(await readFile(path.join(source, 'preview.json'), 'utf8'));
-const catalog = JSON.parse(await readFile('scripts/asset-pipeline/catalog-v2.json', 'utf8'));
+const catalog = await readDemandCatalog();
 const spec = catalog.assets.find(a => a.id === 'fire-control-relay');
 if (preview.id !== spec.id || preview.spec.orthoScale !== spec.orthoScale
   || preview.spec.targetSize !== spec.targetSize) throw Error('Unexpected relay draft');

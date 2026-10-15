@@ -13,7 +13,7 @@ import { requiredSockets, restSockets, validateSocketFrames } from '../../script
 import { KRAKEN_ASSET_REQUIREMENTS } from '../../src/config/krakenBoss';
 import { normalizePipelineAsset } from '../../src/config/pipelineAssetContracts';
 import { importRuntime, BOSS_TEXTURE_KEYS } from '../../scripts/asset-pipeline/import-runtime.mjs';
-import { readPipelineRegistry, writePipelineRegistry } from '../../scripts/asset-pipeline/pipeline-registry.mjs';
+import { readPipelineRegistry, writeDemandCatalog, writePipelineRegistry } from '../../scripts/asset-pipeline/pipeline-registry.mjs';
 
 const roots: string[] = [];
 const hash = (data: Buffer | string) => createHash('sha256').update(data).digest('hex');
@@ -85,7 +85,7 @@ describe('V2 animated asset export contracts', () => {
     await selectVariantV2(asset, 'calm', 32, 'Reviewed unbound identity.');
     await mkdir(path.join(f.root, 'scripts/asset-pipeline'), { recursive: true });
     await mkdir(path.join(f.root, 'src/config'), { recursive: true });
-    await save(path.join(f.root, 'scripts/asset-pipeline/catalog-v2.json'), { assets: [m] });
+    await writeDemandCatalog(f.root, { version: 2, assets: [m] });
     await save(path.join(f.root, 'src/config/coopDefenseEnemies.json'), { enemies: [] });
     await writePipelineRegistry(f.root, { version: 2, assets: [] });
     const result = await importRuntime({ root: f.root, revision: m.revision, requestedIds: [id], outputRoot: path.join(f.root, 'published') });
@@ -107,7 +107,7 @@ describe('V2 animated asset export contracts', () => {
     await selectVariantV2(asset, 'calm', 32, 'Approved fleeing enemy.');
     await mkdir(path.join(f.root, 'scripts/asset-pipeline'), { recursive: true });
     await mkdir(path.join(f.root, 'src/config'), { recursive: true });
-    await save(path.join(f.root, 'scripts/asset-pipeline/catalog-v2.json'), { assets: [m] });
+    await writeDemandCatalog(f.root, { version: 2, assets: [m] });
     await save(path.join(f.root, 'src/config/coopDefenseEnemies.json'), { enemies: [] });
     await writePipelineRegistry(f.root, { version: 2, assets: [] });
     const result = await importRuntime({ root: f.root, revision: m.revision, requestedIds: [id], outputRoot: path.join(f.root, 'published') });
@@ -267,7 +267,7 @@ describe('V2 animated asset export contracts', () => {
     // Import the complete selected fixture into a NEW isolated destination, never public/ in the repo.
     await mkdir(path.join(f.root, 'scripts/asset-pipeline'), { recursive: true });
     await mkdir(path.join(f.root, 'src/config'), { recursive: true });
-    await save(path.join(f.root, 'scripts/asset-pipeline/catalog-v2.json'), { assets: [{ ...entry, textureKey: 'fixture_boss' }] });
+    await writeDemandCatalog(f.root, { version: 2, assets: [{ ...entry, textureKey: 'fixture_boss' }] });
     await save(path.join(f.root, 'src/config/coopDefenseEnemies.json'), { enemies: [] });
     await writePipelineRegistry(f.root, { version: 2, revision: 'original', assets: [] });
     const outputRoot = path.join(f.root, 'isolated-import');

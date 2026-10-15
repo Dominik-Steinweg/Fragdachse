@@ -1,0 +1,81 @@
+{
+  "id": "held-translocator",
+  "label": "Translocator",
+  "category": "utility",
+  "gameIds": [
+    "TRANSLOCATOR"
+  ],
+  "production": "reference",
+  "reference": "public/assets/sprites/Loadout/TRANSLOCATOR.png",
+  "designReference": "scripts/asset-pipeline/references/translocator-concept.png",
+  "targetSize": 32,
+  "sourceSizes": [
+    128,
+    256
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Längliches Puck-Abschussgerät mit erhöhtem Gehäuse, Griff, seitlichen Führungsgabeln und sichtbar darunter eingesetzter silberner Scheibe.",
+    "materials": "Dunkelroter abgenutzter Lack, graphitfarbene Mechanik, breite gebürstete Silberränder und sparsame bernsteinorange Induktionsanzeigen nach der beigefügten Konzeptzeichnung.",
+    "anatomy": "Echte orthografische Draufsicht; der breite Puck sitzt unter dem länglichen Gerät. Griff und Abschussrichtung liegen auf der Mittelachse. Die Handform bleibt zur Spielfigur maßhaltig."
+  },
+  "requiredClips": [],
+  "recipe": "held-utility",
+  "model": {
+    "construction": "translocator",
+    "accent": [
+      0.7,
+      0.14,
+      0.015
+    ],
+    "palette": {
+      "steel": [
+        0.065,
+        0.07,
+        0.07
+      ],
+      "edge": [
+        0.34,
+        0.37,
+        0.365
+      ],
+      "body": [
+        0.105,
+        0.012,
+        0.018
+      ],
+      "trim": [
+        0.235,
+        0.026,
+        0.025
+      ]
+    }
+  },
+  "orthoScale": 3.2,
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Gebrauchte Materialien und kräftige Formschatten",
+      "textureStrength": 0.85,
+      "formShadowStrength": 1
+    }
+  },
+  "clips": [],
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      10.2
+    ]
+  }
+}

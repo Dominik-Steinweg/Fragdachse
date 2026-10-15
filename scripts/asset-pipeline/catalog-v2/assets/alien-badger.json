@@ -1,0 +1,142 @@
+{
+  "id": "alien-badger",
+  "label": "Alien-Dachs",
+  "category": "enemy",
+  "gameIds": [
+    "alien-badger"
+  ],
+  "reference": "public/assets/sprites/enemies/enemy_alien_badger.png",
+  "targetSize": 30,
+  "sourceSizes": [
+    64,
+    128
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Breiter glatter Alien-Schädel mit verjüngtem Kiefer, großen mandelförmigen Augen, angedeuteter Dachszeichnung und gehaltener Plasma-Waffe.",
+    "colors": "Blasses Graugrün am Kopf, kühles Indigo und Petrol an Körper und Panzerung, wenige mintfarbene Energieakzente.",
+    "anatomy": "Zweibeiner mit spielerverwandter Körperhaltung, eigenständigem Kopf, stabil gehaltenem Waffenmodell und separat ausschwingenden Beinen.",
+    "materials": "Runde ausgearbeitete Formen, ruhige matte Oberflächen, klare Formschatten, feine technische Gebrauchsspuren und kräftige Identitätsfarben."
+  },
+  "requiredClips": [
+    "move",
+    "claw"
+  ],
+  "production": "reference",
+  "recipe": "alien-badger",
+  "model": {
+    "footSouthOffset": 0.04,
+    "footSpacing": 1.24,
+    "clawedPaws": true,
+    "headSouthOffset": 0.04,
+    "earSouthOffset": 0.055,
+    "fierceEyes": true,
+    "combatFace": true,
+    "cursorFace": true,
+    "eyeSouthOffset": 0.025,
+    "furBase": [
+      0.044,
+      0.1,
+      0.14
+    ],
+    "furTones": [
+      [
+        10,
+        21,
+        28
+      ],
+      [
+        24,
+        43,
+        64
+      ],
+      [
+        46,
+        76,
+        106
+      ],
+      [
+        97,
+        136,
+        157
+      ]
+    ],
+    "paintedFur": true,
+    "contactAODistance": 0.65,
+    "contactAOStrength": 0.9,
+    "headColor": [
+      0.3,
+      0.53,
+      0.43
+    ],
+    "tailColor": [
+      0.12,
+      0.2,
+      0.2
+    ],
+    "footColor": [
+      0.055,
+      0.067,
+      0.075
+    ],
+    "upperBodyMotion": "stable-grip"
+  },
+  "orthoScale": 6.288,
+  "textures": {
+    "organic": "art/poc/pipeline-v2/textures/badger-quiet-fur-v2-j.png",
+    "bodyFur": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
+    "headFur": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Eigenständiger Kopf und bewaffnete Haltung",
+      "textureStrength": 0.62,
+      "formShadowStrength": 1
+    }
+  },
+  "clips": [
+    {
+      "name": "move",
+      "motion": "biped",
+      "frameCount": 12,
+      "frameRate": 14,
+      "loop": true,
+      "parameters": {
+        "strideForward": 0.29,
+        "strideBack": 0.13,
+        "lift": 0.12,
+        "footRoll": 0.2,
+        "footYaw": 0.025,
+        "bodyYaw": 0.025,
+        "bodyRoll": 0.024,
+        "bodyPitch": 0.038,
+        "bodyBob": 0.075,
+        "bodySurge": -0.025,
+        "bodyShift": 0.018,
+        "headYaw": -0.022,
+        "headBob": -0.02
+      }
+    },
+    {
+      "name": "claw",
+      "motion": "claw_biped",
+      "frameCount": 18,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 8,
+        "impact": 11
+      },
+      "parameters": {
+        "strength": 1,
+        "leapDistance": 1.048
+      }
+    }
+  ],
+  "displayScale": 2.4
+}

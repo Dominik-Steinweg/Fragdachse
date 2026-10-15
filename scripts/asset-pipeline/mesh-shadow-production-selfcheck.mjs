@@ -10,7 +10,7 @@ import { gapMetric, assertGapAcceptance, repairFootprintMetric } from './mesh-sh
 import { selectedHeldSources } from './mesh-shadow-sources.mjs';
 import { runtimeMeshManifest } from './import-character-mesh.mjs';
 import { reviewMeshShadow } from './review-mesh-shadow.mjs';
-import { readPipelineRegistry } from './pipeline-registry.mjs';
+import { readDemandCatalog, readPipelineRegistry } from './pipeline-registry.mjs';
 const {values}=parseArgs({options:{pilot:{type:'string',default:'D:/Fragdachse-render/player-mesh-22b-pilot2'},review:{type:'boolean',default:false}}});
 const repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),root=path.resolve(values.pilot);
 const {manifest,meshes}=await loadMeshBundle(root),body=meshes.get('badger'),fixed=repairLegConnections(body);
@@ -44,8 +44,8 @@ const fixture=path.join(destination,'fixture');await mkdir(fixture);const source
 for(const file of ['source-body-render.json','source-body-selection.json','source-weapon.blend','source-weapon-render.json','source-weapon-selection.json','source-weapon-bundle.zip']){
   const bytes=await readFile(path.join(root,file));await writeFile(path.join(fixture,file),bytes);sourceFiles[file]=hash(bytes);
 }
-for(const [name,source] of [['source-held-registry.json',null],['source-catalog.json','scripts/asset-pipeline/catalog-v2.json']]){
-  const data=source?JSON.parse(await readFile(path.join(repo,source))):await readPipelineRegistry(repo);data.assets=data.assets.filter(a=>a.id==='held-glock');
+for(const [name,read] of [['source-held-registry.json',readPipelineRegistry],['source-catalog.json',readDemandCatalog]]){
+  const data=await read(repo);data.assets=data.assets.filter(a=>a.id==='held-glock');
   const bytes=Buffer.from(JSON.stringify(data));await writeFile(path.join(fixture,name),bytes);sourceFiles[name]=hash(bytes);
 }
 const baseManifest={...manifest,sourceFiles,meshes:manifest.meshes.map(m=>m.id==='badger'?m:{...m,gameIds:['GLOCK'],sourceRole:'weapon'})};

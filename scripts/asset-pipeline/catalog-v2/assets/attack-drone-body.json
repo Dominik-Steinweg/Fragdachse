@@ -1,0 +1,54 @@
+{
+  "id": "attack-drone-body",
+  "label": "Schwerer Quadrocopter",
+  "category": "companion",
+  "gameIds": [
+    "attack_drone"
+  ],
+  "reference": "scripts/asset-pipeline/references/attack-drone-body-v2-a.png",
+  "targetSize": 40,
+  "sourceSizes": [
+    80,
+    160
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Tapered armored fuselage and four segmented fan ducts with five swept impeller blades each",
+    "colors": "Weathered warm titanium and cool phosphate panels, graphite mechanics, small amber lamps and faded ochre markings",
+    "anatomy": "Strict orthographic top-down. Real faceted alloy shells, machined joints, tactile grain, recessed vents and restrained wear. Broad values remain readable at nominal game size."
+  },
+  "requiredClips": [
+    "move"
+  ],
+  "production": "reference",
+  "recipe": "attack-drone",
+  "model": {
+    "part": "body"
+  },
+  "orthoScale": 3.2,
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Weathered titanium, graphite and amber",
+      "textureStrength": 0.16,
+      "formShadowStrength": 0.64
+    }
+  },
+  "clips": [
+    {
+      "name": "move",
+      "motion": "quad_rotors",
+      "frameCount": 16,
+      "frameRate": 48,
+      "loop": true,
+      "parameters": {}
+    }
+  ],
+  "designReference": "art/poc/pipeline-v2/references/attack-drone-b/design-reference.png"
+}

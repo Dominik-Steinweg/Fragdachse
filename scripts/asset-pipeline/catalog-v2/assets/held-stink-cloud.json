@@ -1,0 +1,85 @@
+{
+  "id": "held-stink-cloud",
+  "label": "Stinkdrüsen",
+  "category": "utility",
+  "gameIds": [
+    "STINK_CLOUD"
+  ],
+  "production": "reference",
+  "reference": "public/assets/sprites/held/STINKDRUESEN.png",
+  "designReference": "public/assets/sprites/Loadout/STINKDRUESEN.png",
+  "targetSize": 32,
+  "sourceSizes": [
+    128,
+    256
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Violetter Atomisator zwischen zwei gelbgrünen Druckkartuschen mit Haltebändern und zentralem Auslass.",
+    "materials": "Referenzfarben des Spielbilds; gebrauchte matte Oberflächen, feine Kratzer, Kantenabrieb, kräftige Formschatten und dunkle Kontaktfugen wie bei den Waffen.",
+    "anatomy": "Vollständiges dreidimensionales Handmodell mit maßhaltigem Griffpunkt für die 32-Pixel-Spielfigur."
+  },
+  "requiredClips": [],
+  "recipe": "held-utility",
+  "model": {
+    "construction": "stink",
+    "accent": [
+      0.29,
+      0.43,
+      0.025
+    ],
+    "palette": {
+      "steel": [
+        0.055,
+        0.072,
+        0.085
+      ],
+      "edge": [
+        0.21,
+        0.255,
+        0.275
+      ],
+      "body": [
+        0.067,
+        0.023,
+        0.1
+      ],
+      "trim": [
+        0.16,
+        0.07,
+        0.23
+      ]
+    }
+  },
+  "orthoScale": 3.2,
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Gebrauchte Materialien und kräftige Formschatten",
+      "textureStrength": 0.85,
+      "formShadowStrength": 1
+    }
+  },
+  "clips": [],
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      18.6
+    ],
+    "referenceGrip": [
+      3.5,
+      6.5
+    ]
+  }
+}

@@ -4,10 +4,11 @@ import {readFile,writeFile,mkdir,copyFile,access} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {parseArgs} from 'node:util';
+import {readDemandCatalog} from './pipeline-registry.mjs';
 const {values:a}=parseArgs({options:{input:{type:'string'},label:{type:'string'},production:{type:'boolean'}}});
 if(!a.input||!a.label)throw Error('--input and --label required');
 const out='art/poc/dawn/v1-review',local=out+'/m3c';
-const catalog=JSON.parse(await readFile('scripts/asset-pipeline/catalog-v2.json'));
+const catalog=await readDemandCatalog();
 const refs=['dawn_scrap_heap_t1','dawn_scrap_heap_t2','dawn_scrap_heap_t3','enemy_dawn_scavenger','dawn_supply_crate'];
 const sources={},hash=b=>createHash('sha256').update(b).digest('hex');
 async function bytes(file){const b=await readFile(file);sources[file.replaceAll('\\','/')]=hash(b);return b;}

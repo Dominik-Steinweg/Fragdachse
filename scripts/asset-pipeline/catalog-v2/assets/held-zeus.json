@@ -1,0 +1,81 @@
+{
+  "id": "held-zeus",
+  "label": "Zeus",
+  "category": "utility",
+  "gameIds": [
+    "ZEUS_TASER"
+  ],
+  "production": "reference",
+  "reference": "public/assets/sprites/Loadout/ZEUS_TASER.png",
+  "designReference": "public/assets/sprites/Loadout/ZEUS_TASER.png",
+  "targetSize": 32,
+  "sourceSizes": [
+    128,
+    256
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Gelb-schwarzes isoliertes Zeus-Gehäuse mit zwei metallischen Kontakten, Gummigriff und eingelassener Serviceplatte.",
+    "materials": "Referenzfarben des Spielbilds; gebrauchte matte Oberflächen, feine Kratzer, Kantenabrieb, kräftige Formschatten und dunkle Kontaktfugen wie bei den Waffen.",
+    "anatomy": "Vollständiges dreidimensionales Handmodell mit maßhaltigem Griffpunkt für die 32-Pixel-Spielfigur."
+  },
+  "requiredClips": [],
+  "recipe": "held-utility",
+  "model": {
+    "construction": "zeus",
+    "accent": [
+      0.65,
+      0.47,
+      0.035
+    ],
+    "palette": {
+      "steel": [
+        0.055,
+        0.072,
+        0.085
+      ],
+      "edge": [
+        0.21,
+        0.255,
+        0.275
+      ],
+      "body": [
+        0.065,
+        0.065,
+        0.038
+      ],
+      "trim": [
+        0.52,
+        0.34,
+        0.022
+      ]
+    }
+  },
+  "orthoScale": 3.2,
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Gebrauchte Materialien und kräftige Formschatten",
+      "textureStrength": 0.85,
+      "formShadowStrength": 1
+    }
+  },
+  "clips": [],
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      15
+    ]
+  }
+}

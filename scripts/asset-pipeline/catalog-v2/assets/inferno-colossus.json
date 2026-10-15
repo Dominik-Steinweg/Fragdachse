@@ -1,0 +1,86 @@
+{
+  "id": "inferno-colossus",
+  "label": "Inferno-Koloss",
+  "category": "enemy",
+  "gameIds": [
+    "inferno-colossus"
+  ],
+  "reference": "public/assets/sprites/enemies/enemy_inferno_colossus.png",
+  "targetSize": 68,
+  "sourceSizes": [
+    128,
+    256
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Langer breiter Rücken mit gezackten Panzersegmenten und vier massigen gepanzerten Pfoten.",
+    "colors": "Schwarzes Basaltbraun, kupferorange Risse und kleine glühende Vertiefungen.",
+    "anatomy": "Vierbeiniger Boss mit schweren versetzten Schritten und gegliederter Rückenpanzerung; Weltfeuer separat.",
+    "materials": "Poröser dunkler Basalt, hitzeverfärbte Kupferpanzerung, feine Abnutzung und Kontaktverschattung, Kühlschlitze und zurückhaltende Glutspalten."
+  },
+  "requiredClips": [
+    "move",
+    "claw"
+  ],
+  "production": "reference",
+  "recipe": "inferno-colossus",
+  "model": {},
+  "orthoScale": 9.456,
+  "textures": {
+    "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Ausgearbeitete Oberflächen und organisches Fell",
+      "textureStrength": 0.84,
+      "formShadowStrength": 0.82
+    }
+  },
+  "clips": [
+    {
+      "name": "move",
+      "motion": "quadruped",
+      "frameCount": 12,
+      "frameRate": 12,
+      "loop": true,
+      "parameters": {
+        "strideForward": 0.22,
+        "strideBack": 0.17,
+        "lift": 0.1,
+        "footRoll": 0.12,
+        "footYaw": 0.018,
+        "bodyYaw": 0.02,
+        "bodyBob": 0.042,
+        "bodyRoll": 0.021,
+        "bodyPitch": 0.018,
+        "bodyShift": 0.023,
+        "headYaw": 0.012,
+        "headBob": 0.018,
+        "tailYaw": 0.035,
+        "rearPhase": 0.08,
+        "bodySurge": 0.012
+      }
+    },
+    {
+      "name": "claw",
+      "motion": "claw_quadruped",
+      "frameCount": 18,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 8,
+        "impact": 11
+      },
+      "parameters": {
+        "strength": 1,
+        "leapDistance": 1.576
+      }
+    }
+  ],
+  "displayScale": 2.4
+}

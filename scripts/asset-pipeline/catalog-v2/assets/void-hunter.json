@@ -1,0 +1,91 @@
+{
+  "id": "void-hunter",
+  "label": "Leerenjäger",
+  "category": "enemy",
+  "gameIds": [
+    "void-hunter"
+  ],
+  "reference": "public/assets/sprites/enemies/enemy_void_hunter.png",
+  "targetSize": 78,
+  "sourceSizes": [
+    128,
+    256
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Langer schmaler symmetrischer Jägerkörper mit spitzen Panzerenden und seitlichen Waffen-/Gliedmaßenformen.",
+    "colors": "Anthrazit, dunkles Violett und schmale leuchtend purpurfarbene Panzerlinien.",
+    "anatomy": "Vierbeiniger Boss mit langen kontrollierten Schritten; längliche Silhouette erhalten, Referenz zeigt abweichend nach Süden.",
+    "materials": "Abgenutzte eisblaue Keramikpanzerung, fein bearbeitete Metallkanten und Gauss-Kühlrippen, dunkles Fell und schmale magentafarbene Einlagen."
+  },
+  "requiredClips": [
+    "move",
+    "claw"
+  ],
+  "production": "reference",
+  "referenceTransform": {
+    "centerCorrectionX": 0,
+    "centerCorrectionY": 0,
+    "rotationOffset": 3.141592653589793
+  },
+  "recipe": "void-hunter",
+  "model": {},
+  "orthoScale": 8.904,
+  "textures": {
+    "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Ausgearbeitete Oberflächen und organisches Fell",
+      "textureStrength": 0.84,
+      "formShadowStrength": 0.82
+    }
+  },
+  "clips": [
+    {
+      "name": "move",
+      "motion": "quadruped",
+      "frameCount": 12,
+      "frameRate": 11,
+      "loop": true,
+      "parameters": {
+        "strideForward": 0.26,
+        "strideBack": 0.215,
+        "lift": 0.065,
+        "footRoll": 0.1,
+        "footYaw": 0.018,
+        "bodyYaw": 0.016,
+        "bodyBob": 0.016,
+        "bodyRoll": 0.008,
+        "bodyPitch": 0.008,
+        "bodyShift": 0.012,
+        "headYaw": 0.01,
+        "headBob": 0.006,
+        "tailYaw": 0.033,
+        "rearPhase": 0.08,
+        "bodySurge": 0.012
+      }
+    },
+    {
+      "name": "claw",
+      "motion": "claw_quadruped",
+      "frameCount": 18,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 8,
+        "impact": 11
+      },
+      "parameters": {
+        "strength": 1,
+        "leapDistance": 1.484
+      }
+    }
+  ],
+  "displayScale": 2.4
+}

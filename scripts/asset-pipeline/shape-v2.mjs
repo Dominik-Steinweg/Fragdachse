@@ -8,6 +8,7 @@ import { repoRoot, resolveBlender, renderProcess } from './preview-v2.mjs';
 import { digest, pythonSources, assertProductionFinished, exportDraft } from './draft-v2.mjs';
 import { safePath } from './review-preview-v2.mjs';
 import { shapeBoard } from './shape-board-v2.mjs';
+import { readDemandCatalog } from './pipeline-registry.mjs';
 
 const json = async file => JSON.parse((await readFile(file, 'utf8')).replace(/^\uFEFF/, ''));
 const save = async (file, value) => { await mkdir(path.dirname(file), { recursive: true }); await writeFile(file, JSON.stringify(value, null, 2) + '\n'); };
@@ -38,7 +39,7 @@ export function shapeOptions(argv) {
 
 /** Model edits invalidate the scene; animation sources and clip edits do not enter this key. */
 export async function shapeInputs(root, id, modelSettings) {
-  const catalog = await json(path.join(root, 'scripts/asset-pipeline/catalog-v2.json'));
+  const catalog = await readDemandCatalog(root);
   const original = catalog.assets.find(a => a.id === id);
   if (!original || original.production === 'planned') throw Error(`Keine ausführbare Rezeptur: ${id}`);
   const { clips, requiredClips, ...spec } = original;

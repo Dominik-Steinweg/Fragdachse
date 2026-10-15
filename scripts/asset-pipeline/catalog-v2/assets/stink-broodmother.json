@@ -1,0 +1,86 @@
+{
+  "id": "stink-broodmother",
+  "label": "Stinkbrutmutter",
+  "category": "enemy",
+  "gameIds": [
+    "stink-broodmother"
+  ],
+  "reference": "public/assets/sprites/enemies/enemy_stink_broodmother.png",
+  "targetSize": 30,
+  "sourceSizes": [
+    64,
+    128
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Breiter segmentierter Hinterkörper mit großen seitlichen gelbgrünen Brutsäcken.",
+    "colors": "Braun, gedecktes Olivgelb, dunkle Segmentfugen und heller Kopfstreifen.",
+    "anatomy": "Vierbeiner mit wogendem Hinterleib und belasteten Pfoten; Säcke bewegen sich nur körpergebunden.",
+    "materials": "Olivgrünes geschichtetes Fell, fein geäderte lederartige Brutkammern, körnige Haut und trockene gewachsene Rückenplatten."
+  },
+  "requiredClips": [
+    "move",
+    "claw"
+  ],
+  "production": "reference",
+  "recipe": "stink-broodmother",
+  "model": {},
+  "orthoScale": 7.632,
+  "textures": {
+    "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Ausgearbeitete Oberflächen und organisches Fell",
+      "textureStrength": 0.84,
+      "formShadowStrength": 0
+    }
+  },
+  "clips": [
+    {
+      "name": "move",
+      "motion": "quadruped",
+      "frameCount": 12,
+      "frameRate": 10,
+      "loop": true,
+      "parameters": {
+        "strideForward": 0.14,
+        "strideBack": 0.1,
+        "lift": 0.05,
+        "footRoll": 0.09,
+        "footYaw": 0.028,
+        "bodyYaw": 0.028,
+        "bodyBob": 0.021,
+        "bodyRoll": 0.023,
+        "bodyPitch": 0.013,
+        "bodyShift": 0.016,
+        "headYaw": 0.016,
+        "headBob": 0.012,
+        "tailYaw": 0.07,
+        "loadBob": 0.035,
+        "rearPhase": 0.18,
+        "bodySurge": 0.012
+      }
+    },
+    {
+      "name": "claw",
+      "motion": "claw_quadruped",
+      "frameCount": 18,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 8,
+        "impact": 11
+      },
+      "parameters": {
+        "strength": 1,
+        "leapDistance": 1.272
+      }
+    }
+  ],
+  "displayScale": 2.4
+}

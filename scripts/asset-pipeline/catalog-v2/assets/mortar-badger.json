@@ -1,0 +1,87 @@
+{
+  "id": "mortar-badger",
+  "label": "Mörser-Dachs",
+  "category": "enemy",
+  "gameIds": [
+    "mortar-badger"
+  ],
+  "reference": "public/assets/sprites/enemies/enemy_mortar_badger.png",
+  "targetSize": 30,
+  "sourceSizes": [
+    64,
+    128
+  ],
+  "displayScale": 2.4,
+  "collisionDiameter": 30,
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Kräftiger ovaler Dachs mit Schultern, leichter Taille, Hüften, vier sichtbaren Pfoten und abgesetztem Hals/Kopf; Rumpf etwa 1,35:1, Gesamtumkreis bis 36 px bei 30 px Kollision.",
+    "colors": "Dunkles anthrazitgraues Fell, kräftige helle Dachszeichnung, warmes Kupfer und lokale Void-Lila-Kerne (#b347ff / #d98cff).",
+    "anatomy": "Schwer beladener Vierbeiner nach Norden; kurzes dickes hohles Mörserrohr 45 Grad aus der Vertikalen nach Norden geneigt, hintere Bodenplatte und Zweibein zum Gestell, starr am Rumpf. Expliziter Mündungs-Socket aus der Blender-Geometrie im 32-px-Referenzcanvas.",
+    "materials": "Gerichtetes dunkles Bildtextur-Fell mit hellen Spitzen; gemasertes rußschwarzes Holz, warmes Kupfer mit Abrieb/Patina, verkratzter Stahl mit heller elliptischer Mündung. Gemeinsame enemy_craft-Oberflächen und FD_FormMask, lokale Void-Kerne und feine Glutadern. A3a bleibt Modell- und Farbreferenz."
+  },
+  "requiredClips": [
+    "move",
+    "claw"
+  ],
+  "production": "reference",
+  "recipe": "mortar-badger",
+  "model": {},
+  "orthoScale": 5.68,
+  "textures": {
+    "organic": "art/poc/pipeline-v2/textures/mortar-badger-fur-v1.png",
+    "technical": "art/poc/pipeline-v2/textures/mortar-badger-technical-v1.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "A3a: dunkles Fell, mattes Kupfer und lokale Void-Emission",
+      "textureStrength": 0.84,
+      "formShadowStrength": 0.84
+    }
+  },
+  "clips": [
+    {
+      "name": "move",
+      "motion": "quadruped",
+      "frameCount": 12,
+      "frameRate": 9,
+      "loop": true,
+      "parameters": {
+        "strideForward": 0.18,
+        "strideBack": 0.12,
+        "lift": 0.065,
+        "footRoll": 0.11,
+        "footYaw": 0.012,
+        "bodyYaw": 0,
+        "bodyBob": 0.018,
+        "bodyRoll": 0,
+        "bodyPitch": 0,
+        "bodyShift": 0,
+        "bodySurge": 0,
+        "headYaw": 0.009,
+        "headBob": 0.006,
+        "tailYaw": 0.025,
+        "rearPhase": 0.14
+      }
+    },
+    {
+      "name": "claw",
+      "motion": "claw_quadruped",
+      "frameCount": 18,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 8,
+        "impact": 11
+      },
+      "parameters": {
+        "strength": 1,
+        "leapDistance": 0.76
+      }
+    }
+  ]
+}

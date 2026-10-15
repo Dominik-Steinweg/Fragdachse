@@ -1,0 +1,122 @@
+{
+  "id": "construction_dawn_lobby_armory",
+  "label": "Dawn Lobby Ausruestungskammer",
+  "category": "construction",
+  "gameIds": [],
+  "reference": "scripts/asset-pipeline/references/dawn-lobby-armory.png",
+  "targetSize": 128,
+  "sourceSizes": [
+    256
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "U-shaped open shelter, rear helmet stands, side shelves and chests.",
+    "colors": "Muted charcoal, weathered oak, matte iron and stained canvas; Material V1.",
+    "anatomy": "128 px centered canvas, approximately 4 by 3 occupied cells. Open interior and south entrance. Real structural floors, no environment ground.",
+    "animation": "Static rest pose; workshop coals use a separate weak emission pass."
+  },
+  "requiredClips": [],
+  "production": "reference",
+  "recipe": "dawn-lobby-building",
+  "model": {
+    "building": "armory",
+    "librarySurfaces": {
+      "Old oak": {
+        "family": "wood",
+        "scale": 0.6,
+        "tint": 0.08,
+        "value": 0.85,
+        "grime": 0.25,
+        "edgewear": 0.18
+      },
+      "Exposed timber": {
+        "family": "wood",
+        "scale": 0.6,
+        "tint": 0.12,
+        "value": 1.08,
+        "grime": 0.13,
+        "edgewear": 0.21
+      },
+      "Forged iron": {
+        "family": "rust",
+        "scale": 0.7,
+        "tint": 0.58,
+        "value": 0.9,
+        "grime": 0.2,
+        "edgewear": 0.23
+      },
+      "Soot iron": {
+        "family": "dawnPaint",
+        "scale": 0.55,
+        "tint": 0.76,
+        "grime": 0.3,
+        "edgewear": 0.07
+      },
+      "Weathered canvas": {
+        "family": "canvas",
+        "scale": 0.8,
+        "tint": 0.1,
+        "value": 1.15,
+        "grime": 0.19,
+        "edgewear": 0.08
+      },
+      "Rust seams": {
+        "family": "rust",
+        "scale": 0.8,
+        "tint": 0.15,
+        "value": 0.75,
+        "grime": 0.2,
+        "edgewear": 0.18
+      },
+      "Worn brass fittings": {
+        "family": "copper",
+        "scale": 0.8,
+        "tint": 0.18,
+        "value": 0.85,
+        "grime": 0.24,
+        "edgewear": 0.2
+      },
+      "Hemp cord": {
+        "family": "canvas",
+        "scale": 1.5,
+        "tint": 0.32,
+        "value": 0.85,
+        "grime": 0.12
+      }
+    }
+  },
+  "orthoScale": 4.15,
+  "textures": {
+    "dawnPaint": "art/poc/dawn/textures/library/steel-paint-olive-02.png",
+    "wood": "art/poc/dawn/textures/library/wood-planks-weathered-01.png",
+    "canvas": "art/poc/dawn/textures/library/canvas-tarp-stained-01.png",
+    "rust": "art/poc/dawn/textures/library/steel-rust-bare-02.png",
+    "copper": "art/poc/dawn/textures/library/brass-copper-weathered-01.png",
+    "grime": "art/poc/dawn/textures/library/mask-grime-01.png",
+    "edgewear": "art/poc/dawn/textures/library/mask-edgewear-02.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Dawn Material V1 / matte weathered library",
+      "textureStrength": 1,
+      "formShadowStrength": 1
+    }
+  },
+  "clips": [],
+  "elevation": {
+    "min": 0,
+    "max": 1.6,
+    "scale": 0.5
+  },
+  "materialPass": {
+    "version": 1,
+    "color": "srgb-albedo-baked-cavity-v1",
+    "normal": "linear-unorm8-z-oct-normal-v1",
+    "emission": "linear-rgb-unorm8-scaled-v1"
+  },
+  "designReference": "art/poc/dawn/lobby-buildings/ausruestungskammer-topdown-01.png"
+}

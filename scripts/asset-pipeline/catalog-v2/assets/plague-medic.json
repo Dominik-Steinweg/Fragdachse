@@ -1,0 +1,88 @@
+{
+  "id": "plague-medic",
+  "label": "Seuchenmedikus",
+  "category": "enemy",
+  "gameIds": [
+    "plague-medic"
+  ],
+  "reference": "public/assets/sprites/enemies/enemy_plague_medic.png",
+  "targetSize": 30,
+  "sourceSizes": [
+    64,
+    128
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Runder geschichteter Körper mit deutlich abgesetzter Maske und hellem zentralem Rückensymbol.",
+    "colors": "Dunkle Braun- und Olivtöne mit blassgrünem Kreuz-/Heilakzent.",
+    "anatomy": "Vierbeiner mit ruhigem tragendem Gang und fest angebrachtem medizinischem Rückengeschirr.",
+    "materials": "Fein gewebte und vernähte helle Sanitätstasche, abgenutzte Messingbeschläge, grüne Emblemfläche, Ledergurte und dichtes salbeigrünes Fell."
+  },
+  "requiredClips": [
+    "move",
+    "claw"
+  ],
+  "production": "reference",
+  "recipe": "plague-medic",
+  "model": {
+    "kitWidth": 0.83
+  },
+  "orthoScale": 7.2,
+  "textures": {
+    "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png",
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Ausgearbeitete Oberflächen und organisches Fell",
+      "textureStrength": 0.84,
+      "formShadowStrength": 0.82
+    }
+  },
+  "clips": [
+    {
+      "name": "move",
+      "motion": "quadruped",
+      "frameCount": 12,
+      "frameRate": 10,
+      "loop": true,
+      "parameters": {
+        "strideForward": 0.18,
+        "strideBack": 0.13,
+        "lift": 0.06,
+        "footRoll": 0.09,
+        "footYaw": 0.037,
+        "bodyYaw": 0.035,
+        "bodyBob": 0.018,
+        "bodyRoll": 0.022,
+        "bodyPitch": 0.018,
+        "bodyShift": 0.015,
+        "headYaw": -0.017,
+        "headBob": 0.008,
+        "tailYaw": 0.09,
+        "rearPhase": 0.18,
+        "bodySurge": 0.012
+      }
+    },
+    {
+      "name": "claw",
+      "motion": "claw_quadruped",
+      "frameCount": 18,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 8,
+        "impact": 11
+      },
+      "parameters": {
+        "strength": 1,
+        "leapDistance": 1.2
+      }
+    }
+  ],
+  "displayScale": 2.4
+}

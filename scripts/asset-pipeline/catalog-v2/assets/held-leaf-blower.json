@@ -1,0 +1,85 @@
+{
+  "id": "held-leaf-blower",
+  "label": "LEAF BLOWER",
+  "category": "weapon",
+  "gameIds": [
+    "LEAF_BLOWER"
+  ],
+  "production": "reference",
+  "reference": "public/assets/sprites/held/LAUBBLAESER.png",
+  "designReference": "public/assets/sprites/Loadout/LAUBBLAESER.png",
+  "targetSize": 32,
+  "sourceSizes": [
+    128,
+    256
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Grünes rundes Lüftergehäuse mit Einlassgitter, seitlichem Tragegriff und verjüngtem Luftkanal.",
+    "materials": "Leuchtend grünes Lüftergehäuse mit blauem Luftkanal. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+    "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+  },
+  "requiredClips": [],
+  "recipe": "held-weapon",
+  "model": {
+    "construction": "blower",
+    "accent": [
+      0.19,
+      0.55,
+      0.028
+    ],
+    "palette": {
+      "steel": [
+        0.06,
+        0.17,
+        0.23
+      ],
+      "edge": [
+        0.18,
+        0.33,
+        0.41
+      ],
+      "body": [
+        0.08,
+        0.22,
+        0.025
+      ],
+      "trim": [
+        0.11,
+        0.28,
+        0.05
+      ]
+    }
+  },
+  "orthoScale": 3.2,
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Gebrauchte Materialien und kräftige Formschatten",
+      "textureStrength": 0.85,
+      "formShadowStrength": 1
+    }
+  },
+  "clips": [],
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      10.5
+    ],
+    "referenceGrip": [
+      5.5,
+      13.5
+    ]
+  }
+}

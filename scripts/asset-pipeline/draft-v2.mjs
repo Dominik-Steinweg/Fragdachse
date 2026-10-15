@@ -9,6 +9,7 @@ import { packAtlas } from './atlas-v2.mjs';
 import { packSheet } from './export-v2.mjs';
 import { calibrateKrakenMaterial, resizeKrakenElevation } from './kraken-material-v2.mjs';
 import { requiredSockets } from './socket-anchors.mjs';
+import { readDemandCatalog } from './pipeline-registry.mjs';
 import sharp from 'sharp';
 
 export const krakenAssets = ['abyssal-kraken', 'abyssal-kraken-land', 'abyssal-kraken-tentacle', 'abyssal-kraken-egg', 'abyssal-kraken-spine'];
@@ -207,7 +208,7 @@ export async function draft(argv, root = repoRoot) {
   // Serialize publication across assets and prevent competing draft GPU jobs.
   const lock = await open(path.join(base, '.lock'), 'wx');
   try {
-    const catalog = await json(path.join(root, 'scripts/asset-pipeline/catalog-v2.json'));
+    const catalog = await readDemandCatalog(root);
     const jobs = [], results = [];
     const selected = args.clips?.split(',').map(identifier);
     if (selected?.some(name => !positionals.some(id => catalog.assets.find(a => a.id === id)?.clips.some(c => c.name === name)))) throw Error('Unknown clip selection');
@@ -245,7 +246,7 @@ export async function draft(argv, root = repoRoot) {
     }
     // Do not publish a cache built against changing sources (another author may be editing).
     for (const [i, job] of jobs.entries()) {
-      const currentSpec = (await json(path.join(root, 'scripts/asset-pipeline/catalog-v2.json'))).assets.find(a => a.id === job.spec.id);
+      const currentSpec = (await readDemandCatalog(root)).assets.find(a => a.id === job.spec.id);
       const current = await fingerprints(root, currentSpec, settings);
       if (current.modelHash !== job.modelHash || job.render.some(n => current.clipHashes[n] !== job.clipHashes[n])) throw Error('Sources changed during rendering; draft was not published. Retry.');
       const result = results[i];

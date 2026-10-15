@@ -1,0 +1,85 @@
+{
+  "id": "held-glock",
+  "label": "GLOCK",
+  "category": "weapon",
+  "gameIds": [
+    "GLOCK"
+  ],
+  "production": "reference",
+  "reference": "public/assets/sprites/held/GLOCK.png",
+  "designReference": "public/assets/sprites/Loadout/GLOCK.png",
+  "targetSize": 32,
+  "sourceSizes": [
+    128,
+    256
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Schmaler facettierter Pistolenschlitten, Kammerfenster, geschütztes Visier und separater Polymergriff.",
+    "materials": "Eisblauer Stahlverschluss auf dunkelblauem Polymergriff. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+    "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+  },
+  "requiredClips": [],
+  "recipe": "held-weapon",
+  "model": {
+    "construction": "pistol",
+    "accent": [
+      0.13,
+      0.24,
+      0.32
+    ],
+    "palette": {
+      "steel": [
+        0.065,
+        0.105,
+        0.16
+      ],
+      "edge": [
+        0.24,
+        0.34,
+        0.43
+      ],
+      "body": [
+        0.018,
+        0.042,
+        0.085
+      ],
+      "trim": [
+        0.105,
+        0.19,
+        0.27
+      ]
+    }
+  },
+  "orthoScale": 3.2,
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Gebrauchte Materialien und kräftige Formschatten",
+      "textureStrength": 0.85,
+      "formShadowStrength": 1
+    }
+  },
+  "clips": [],
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      14.5
+    ],
+    "referenceGrip": [
+      4.5,
+      9.5
+    ]
+  }
+}

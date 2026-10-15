@@ -1,0 +1,90 @@
+{
+  "id": "held-hydra",
+  "label": "HYDRA",
+  "category": "weapon",
+  "gameIds": [
+    "HYDRA"
+  ],
+  "production": "reference",
+  "reference": "public/assets/sprites/held/HYDRA.png",
+  "designReference": "public/assets/sprites/Loadout/HYDRA.png",
+  "targetSize": 32,
+  "sourceSizes": [
+    128,
+    256
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Drei getrennte Kupferwicklungen und cyanfarbene Emitter auf einer mechanischen Verteilerbrücke.",
+    "materials": "Petrolfarbener Verteiler, kupferne Wicklungen und drei cyanfarbene Emitter. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+    "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+  },
+  "requiredClips": [],
+  "recipe": "held-weapon",
+  "model": {
+    "construction": "hydra",
+    "accent": [
+      0.015,
+      0.5,
+      0.6
+    ],
+    "palette": {
+      "steel": [
+        0.095,
+        0.18,
+        0.19
+      ],
+      "edge": [
+        0.23,
+        0.37,
+        0.37
+      ],
+      "body": [
+        0.016,
+        0.095,
+        0.105
+      ],
+      "trim": [
+        0.04,
+        0.23,
+        0.26
+      ],
+      "brass": [
+        0.44,
+        0.215,
+        0.07
+      ]
+    }
+  },
+  "orthoScale": 3.2,
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Gebrauchte Materialien und kräftige Formschatten",
+      "textureStrength": 0.85,
+      "formShadowStrength": 1
+    }
+  },
+  "clips": [],
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      10.5
+    ],
+    "referenceGrip": [
+      4.5,
+      13.5
+    ]
+  }
+}

@@ -2,7 +2,6 @@
 import sys
 sys.dont_write_bytecode = True
 import importlib.util
-import json
 from pathlib import Path
 import bpy
 
@@ -10,7 +9,8 @@ root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(root / 'scripts/asset-pipeline'))
 definition = importlib.util.spec_from_file_location('draft', root / 'scripts/asset-pipeline/draft-v2.py')
 draft = importlib.util.module_from_spec(definition); definition.loader.exec_module(draft)
-catalog = json.loads((root / 'scripts/asset-pipeline/catalog-v2.json').read_text(encoding='utf8'))
+from demand_catalog import read_catalog
+catalog = read_catalog(root)
 args = sys.argv[sys.argv.index('--') + 1:]
 for asset_id in args:
     spec = next(a for a in catalog['assets'] if a['id'] == asset_id)

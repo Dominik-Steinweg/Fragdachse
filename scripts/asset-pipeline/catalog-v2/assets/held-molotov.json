@@ -1,0 +1,85 @@
+{
+  "id": "held-molotov",
+  "label": "Molotow",
+  "category": "utility",
+  "gameIds": [
+    "MOLOTOV_GRENADE"
+  ],
+  "production": "reference",
+  "reference": "public/assets/sprites/held/MOLOTOV_GRENADE.png",
+  "designReference": "public/assets/sprites/Loadout/MOLOTOV_GRENADE.png",
+  "targetSize": 32,
+  "sourceSizes": [
+    128,
+    256
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Blaugrüne Glasflasche mit bernsteinfarbenem Inhalt, schmutzigem Papieretikett und gedrehtem Stoffdocht.",
+    "materials": "Referenzfarben des Spielbilds; gebrauchte matte Oberflächen, feine Kratzer, Kantenabrieb, kräftige Formschatten und dunkle Kontaktfugen wie bei den Waffen.",
+    "anatomy": "Vollständiges dreidimensionales Handmodell mit maßhaltigem Griffpunkt für die 32-Pixel-Spielfigur."
+  },
+  "requiredClips": [],
+  "recipe": "held-utility",
+  "model": {
+    "construction": "molotov",
+    "accent": [
+      0.42,
+      0.24,
+      0.07
+    ],
+    "palette": {
+      "steel": [
+        0.055,
+        0.072,
+        0.085
+      ],
+      "edge": [
+        0.21,
+        0.255,
+        0.275
+      ],
+      "body": [
+        0.027,
+        0.08,
+        0.085
+      ],
+      "trim": [
+        0.4,
+        0.14,
+        0.025
+      ]
+    }
+  },
+  "orthoScale": 3.2,
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Gebrauchte Materialien und kräftige Formschatten",
+      "textureStrength": 0.85,
+      "formShadowStrength": 1
+    }
+  },
+  "clips": [],
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      15.1
+    ],
+    "referenceGrip": [
+      3,
+      7
+    ]
+  }
+}

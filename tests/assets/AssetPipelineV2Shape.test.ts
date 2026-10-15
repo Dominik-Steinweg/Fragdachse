@@ -7,6 +7,7 @@ import { shapeInputs, shapeOptions, restRecords, watchShapes, publishShapeDraft 
 import { silhouetteMetrics, differenceOverlay } from '../../scripts/asset-pipeline/shape-board-v2.mjs';
 import { exportDraft } from '../../scripts/asset-pipeline/draft-v2.mjs';
 import { normalizePipelineAsset } from '../../src/config/pipelineAssetContracts';
+import { writeDemandCatalog } from '../../scripts/asset-pipeline/pipeline-registry.mjs';
 
 const folders: string[] = [];
 async function fixture() { const root = await mkdtemp(path.join(tmpdir(), 'fd-shape-')); folders.push(root); return root; }
@@ -28,12 +29,12 @@ it('tracks transitive model and texture edits, excluding motion and catalog clip
   await save(root, base + 'recipes_v2/test.py', 'from parts import build\nimport motions_v2');
   await save(root, 'texture.png', 'pixels');
   const spec = { id: 'test', recipe: 'test', clips: [{ name: 'move', frameCount: 12 }], requiredClips: ['move'], textures: { organic: 'texture.png' }, model: { length: 1 } };
-  await save(root, base + 'catalog-v2.json', { assets: [spec] });
+  await writeDemandCatalog(root, { version: 2, assets: [spec] });
   const before = await shapeInputs(root, 'test', {});
   expect(before.modelSpec.clips).toEqual([]);
   await save(root, base + 'motions_v2.py', '# edit motion');
   spec.clips[0].frameCount++;
-  await save(root, base + 'catalog-v2.json', { assets: [spec] });
+  await writeDemandCatalog(root, { version: 2, assets: [spec] });
   expect((await shapeInputs(root, 'test', {})).modelHash).toBe(before.modelHash);
   await save(root, base + 'parts.py', '# edit model');
   expect((await shapeInputs(root, 'test', {})).modelHash).not.toBe(before.modelHash);

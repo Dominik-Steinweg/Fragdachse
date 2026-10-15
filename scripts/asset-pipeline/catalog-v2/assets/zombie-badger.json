@@ -1,0 +1,88 @@
+{
+  "id": "zombie-badger",
+  "label": "Zombie-Dachs",
+  "category": "enemy",
+  "gameIds": [
+    "zombie-badger"
+  ],
+  "reference": "public/assets/sprites/enemies/enemy_zombie_badger.png",
+  "targetSize": 28,
+  "sourceSizes": [
+    64,
+    128
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Breiter schwerer Vierbeiner mit organisch verfilztem Fell, langem keilförmigem Dachskopf und vier klar getrennten Krallenpfoten.",
+    "colors": "Fahles Salbei-/Graugrün, warme schmutzige Elfenbeinzeichnung, schwarze Gesichtsbänder, milchige Augen und sparsame dunkelrote Verletzungen.",
+    "anatomy": "Gedrungener Dachsrumpf mit lebendigem Schulter-/Kopfvolumen und schleppendem versetztem Vierbeinergang. Referenzdetails folgen der gekrümmten Anatomie.",
+    "materials": "Gerichtete geschichtete Fellbüschel, blinde milchige Augen in vertieften Lidern, freiliegende gealterte Rippen, verschmutzte Stoffwickel, genähte Narben und raues Reparaturleder."
+  },
+  "requiredClips": [
+    "move",
+    "claw"
+  ],
+  "production": "reference",
+  "recipe": "zombie-badger",
+  "model": {
+    "exposedRibs": 3
+  },
+  "orthoScale": 6.72,
+  "textures": {
+    "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Verfilztes Salbeifell und verwitterte Details",
+      "textureStrength": 0.84,
+      "formShadowStrength": 0
+    }
+  },
+  "clips": [
+    {
+      "name": "move",
+      "motion": "quadruped",
+      "frameCount": 12,
+      "frameRate": 10,
+      "loop": true,
+      "parameters": {
+        "strideForward": 0.19,
+        "strideBack": 0.13,
+        "lift": 0.065,
+        "footRoll": 0.1,
+        "footYaw": 0.055,
+        "bodyYaw": 0.058,
+        "bodyBob": 0.025,
+        "bodyRoll": 0.035,
+        "bodyPitch": 0.025,
+        "bodyShift": 0.025,
+        "headYaw": -0.022,
+        "headBob": 0.012,
+        "tailYaw": 0.1,
+        "rearPhase": 0.18,
+        "bodySurge": 0.012
+      }
+    },
+    {
+      "name": "claw",
+      "motion": "claw_quadruped",
+      "frameCount": 18,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 8,
+        "impact": 11
+      },
+      "parameters": {
+        "strength": 1,
+        "leapDistance": 1.12
+      }
+    }
+  ],
+  "designReference": "scripts/asset-pipeline/references/zombie-badger-concept.png",
+  "displayScale": 2.4
+}

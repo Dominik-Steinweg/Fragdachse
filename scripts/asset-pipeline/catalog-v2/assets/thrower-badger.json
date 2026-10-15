@@ -1,0 +1,86 @@
+{
+  "id": "thrower-badger",
+  "label": "Werfer-Dachs",
+  "category": "enemy",
+  "gameIds": [
+    "thrower-badger"
+  ],
+  "reference": "public/assets/sprites/enemies/enemy_thrower_badger.png",
+  "targetSize": 30,
+  "sourceSizes": [
+    64,
+    128
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Segmentierter kräftiger Rücken und große seitliche organische Tragekammern.",
+    "colors": "Gedämpftes Braun und Olivgelb mit hellem Kopfstreifen und dunklen Gelenkfugen.",
+    "anatomy": "Vierbeiner mit tragender Haltung; Kammern und Schulterapparat unterscheiden ihn anatomisch von einer bloßen Farbvariante.",
+    "materials": "Rostbraunes gerichtetes Fell, genähte raue Trageschlinge, geriefte Sehnen, Hornschuppen und dichtes Fell des getragenen Nachwuchses."
+  },
+  "requiredClips": [
+    "move",
+    "claw"
+  ],
+  "production": "reference",
+  "recipe": "thrower-badger",
+  "model": {},
+  "orthoScale": 6.528,
+  "textures": {
+    "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Ausgearbeitete Oberflächen und organisches Fell",
+      "textureStrength": 0.84,
+      "formShadowStrength": 0
+    }
+  },
+  "clips": [
+    {
+      "name": "move",
+      "motion": "quadruped",
+      "frameCount": 12,
+      "frameRate": 12,
+      "loop": true,
+      "parameters": {
+        "strideForward": 0.18,
+        "strideBack": 0.12,
+        "lift": 0.065,
+        "footRoll": 0.11,
+        "footYaw": 0.022,
+        "bodyYaw": 0.032,
+        "bodyBob": 0.024,
+        "bodyRoll": 0.017,
+        "bodyPitch": 0.013,
+        "bodyShift": 0.018,
+        "headYaw": 0.018,
+        "headBob": 0.013,
+        "tailYaw": 0.06,
+        "loadBob": 0.032,
+        "rearPhase": 0.08,
+        "bodySurge": 0.012
+      }
+    },
+    {
+      "name": "claw",
+      "motion": "claw_quadruped",
+      "frameCount": 18,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 8,
+        "impact": 11
+      },
+      "parameters": {
+        "strength": 1,
+        "leapDistance": 1.088
+      }
+    }
+  ],
+  "displayScale": 2.4
+}

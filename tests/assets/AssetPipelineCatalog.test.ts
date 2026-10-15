@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import catalog from '../../scripts/asset-pipeline/catalog-v2.json';
 import { PLAYER_SIZE } from '../../src/config';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../../src/config/coopDefenseEnemies';
 import { TURRET_VISUALS } from '../../src/config/turretVisuals';
@@ -9,8 +8,10 @@ import { WATCHTOWER_DISPLAY_SIZE } from '../../src/config/watchtower';
 import { LOADOUT_CATALOG_ENTRIES, findWeaponConfig, findUtilityConfig } from '../../src/loadout/LoadoutConfig';
 import { EQUIPABLE_LOADOUT_CATALOG_ENTRIES } from '../equipableLoadoutEntries';
 import { validateClipContracts, validateExtensions } from '../../scripts/asset-pipeline/contracts-v2.mjs';
+import { readDemandCatalog } from '../../scripts/asset-pipeline/pipeline-registry.mjs';
 
 const root = process.cwd();
+const catalog = await readDemandCatalog();
 const assets = catalog.assets;
 const sorted = (values: string[]) => [...values].sort();
 

@@ -1,0 +1,90 @@
+{
+  "id": "held-ak47",
+  "label": "AK47",
+  "category": "weapon",
+  "gameIds": [
+    "AK47"
+  ],
+  "production": "reference",
+  "reference": "public/assets/sprites/held/AK47.png",
+  "designReference": "public/assets/sprites/Loadout/AK47.png",
+  "targetSize": 32,
+  "sourceSizes": [
+    128,
+    256
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "AK-Stahlgehäuse mit Walnussschaft, gerundetem Staubdeckel, Gasrohr und abgesetztem Kornblock.",
+    "materials": "Rostorange Walnussflächen und dunkler blauer Stahl. Farbgruppen aus Held- und Freischaltbildern, gebrauchte matte Oberflächen mit gerichtetem Abrieb, unterbrochenen Kantenabnutzungen, tiefen Kontaktfugen und kräftig schattierten Rundungen.",
+    "anatomy": "Vollständiger dreidimensionaler Körper; Oberansicht in den Händen des Spielers."
+  },
+  "requiredClips": [],
+  "recipe": "held-weapon",
+  "model": {
+    "construction": "rifle",
+    "accent": [
+      0.36,
+      0.14,
+      0.045
+    ],
+    "palette": {
+      "steel": [
+        0.03,
+        0.06,
+        0.095
+      ],
+      "edge": [
+        0.17,
+        0.24,
+        0.28
+      ],
+      "body": [
+        0.02,
+        0.04,
+        0.065
+      ],
+      "trim": [
+        0.055,
+        0.095,
+        0.125
+      ],
+      "wood": [
+        0.46,
+        0.115,
+        0.023
+      ]
+    }
+  },
+  "orthoScale": 3.2,
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Gebrauchte Materialien und kräftige Formschatten",
+      "textureStrength": 0.85,
+      "formShadowStrength": 1
+    }
+  },
+  "clips": [],
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      3.5
+    ],
+    "referenceGrip": [
+      4.5,
+      20.5
+    ]
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "id": "held-smoke-grenade",
+  "label": "Rauchgranate",
+  "category": "utility",
+  "gameIds": [
+    "SMOKE_GRENADE"
+  ],
+  "production": "reference",
+  "reference": "public/assets/sprites/held/SMOKE_GRENADE.png",
+  "designReference": "public/assets/sprites/Loadout/SMOKE_GRENADE.png",
+  "targetSize": 32,
+  "sourceSizes": [
+    128,
+    256
+  ],
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Gerollte Stahlhülse mit olivgrünem Kennband, Entlüftungslöchern, Sicherungsbügel und Zugring.",
+    "materials": "Referenzfarben des Spielbilds; gebrauchte matte Oberflächen, feine Kratzer, Kantenabrieb, kräftige Formschatten und dunkle Kontaktfugen wie bei den Waffen.",
+    "anatomy": "Vollständiges dreidimensionales Handmodell mit maßhaltigem Griffpunkt für die 32-Pixel-Spielfigur."
+  },
+  "requiredClips": [],
+  "recipe": "held-utility",
+  "model": {
+    "construction": "smoke",
+    "accent": [
+      0.22,
+      0.32,
+      0.055
+    ],
+    "palette": {
+      "steel": [
+        0.055,
+        0.072,
+        0.085
+      ],
+      "edge": [
+        0.21,
+        0.255,
+        0.275
+      ],
+      "body": [
+        0.115,
+        0.14,
+        0.155
+      ],
+      "trim": [
+        0.1,
+        0.16,
+        0.048
+      ]
+    }
+  },
+  "orthoScale": 3.2,
+  "textures": {
+    "technical": "art/poc/pipeline-v1/textures/technical.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Gebrauchte Materialien und kräftige Formschatten",
+      "textureStrength": 0.85,
+      "formShadowStrength": 1
+    }
+  },
+  "clips": [],
+  "heldItem": {
+    "referenceSize": 32,
+    "grip": [
+      16,
+      24
+    ],
+    "muzzle": [
+      16,
+      17.5
+    ],
+    "referenceGrip": [
+      3,
+      6.5
+    ]
+  }
+}
