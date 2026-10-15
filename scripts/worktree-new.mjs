@@ -15,6 +15,8 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assignPort } from './lib/worktree-ports.mjs';
 
+// Expected refusals print one line; DEBUG=1 shows the stack.
+process.on('uncaughtException', error => { console.error(`✗ ${process.env.DEBUG ? error.stack : error.message}`); process.exit(1); });
 const here = fileURLToPath(new URL('..', import.meta.url));
 const argv = process.argv.slice(2);
 const VALUED = ['--from', '--branch', '--path', '--merge', '--deps'];
