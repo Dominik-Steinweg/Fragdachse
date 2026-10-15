@@ -2833,9 +2833,10 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:arena/LobbyMerchantRenderer.ts:module/image/setDepth/0","owner":"arena/LobbyMerchantRenderer.ts","component":"module/image/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[4],"blends":["NORMAL"],"profiles":["G"],"role":"effect","source":{"selector":"module/image/setDepth/0","expression":"DEPTH.BASES"}},
   {"id":"cpu:arena/LobbyMerchantRenderer.ts:addLantern/housing/setDepth/0","owner":"arena/LobbyMerchantRenderer.ts","component":"addLantern/housing/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[19.58],"blends":["NORMAL"],"profiles":["E"],"role":"effect","source":{"selector":"addLantern/housing/setDepth/0","expression":"DEPTH_LIGHTING + 0.08"}},
   // Lobby building plaques replace the stall nameplate: world UI above light map and fog.
-  {"id":"cpu:ui/LobbyWorldPlaque.ts:module/this.frame/setDepth/0","owner":"ui/LobbyWorldPlaque.ts","component":"module/this.frame/setDepth/0","height":"high","lighting":"material","camera":"world","depths":[22],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"module/this.frame/setDepth/0","expression":"DEPTH.LOCAL_UI"}},
-  {"id":"cpu:ui/LobbyWorldPlaque.ts:module/this.label/setDepth/0","owner":"ui/LobbyWorldPlaque.ts","component":"module/this.label/setDepth/0","height":"high","lighting":"material","camera":"world","depths":[23],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"module/this.label/setDepth/0","expression":"DEPTH.LOCAL_UI + 1"}},
-  {"id":"cpu:ui/LobbyWorldPlaque.ts:module/this.keycap/setDepth/0","owner":"ui/LobbyWorldPlaque.ts","component":"module/this.keycap/setDepth/0","height":"high","lighting":"material","camera":"world","depths":[23],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"module/this.keycap/setDepth/0","expression":"DEPTH.LOCAL_UI + 1"}},
+  {"id":"cpu:ui/WorldPlaque.ts:module/this.frame/setDepth/0","owner":"ui/WorldPlaque.ts","component":"module/this.frame/setDepth/0","height":"high","lighting":"material","camera":"world","depths":[22],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"module/this.frame/setDepth/0","expression":"DEPTH.LOCAL_UI"}},
+  {"id":"cpu:ui/WorldPlaque.ts:module/this.primary/setDepth/0","owner":"ui/WorldPlaque.ts","component":"module/this.primary/setDepth/0","height":"high","lighting":"material","camera":"world","depths":[23],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"module/this.primary/setDepth/0","expression":"DEPTH.LOCAL_UI + 1"}},
+  {"id":"cpu:ui/WorldPlaque.ts:module/this.secondary/setDepth/0","owner":"ui/WorldPlaque.ts","component":"module/this.secondary/setDepth/0","height":"high","lighting":"material","camera":"world","depths":[23],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"module/this.secondary/setDepth/0","expression":"DEPTH.LOCAL_UI + 1"}},
+  {"id":"cpu:ui/WorldPlaque.ts:module/this.keycap/setDepth/0","owner":"ui/WorldPlaque.ts","component":"module/this.keycap/setDepth/0","height":"high","lighting":"material","camera":"world","depths":[23],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"module/this.keycap/setDepth/0","expression":"DEPTH.LOCAL_UI + 1"}},
   // The Dawn sundial clock is screen HUD on the clarity camera, like the Dawn phase card.
   {"id":"cpu:ui/dawn/DawnSundialClock.ts:module/this.root/setDepth/0","owner":"ui/dawn/DawnSundialClock.ts","component":"module/this.root/setDepth/0","height":"body","lighting":"emissive","camera":"clarity","depths":[100],"blends":["NORMAL"],"profiles":["C"],"role":"ui","source":{"selector":"module/this.root/setDepth/0","expression":"DEPTH.OVERLAY"}},
   {"id":"cpu:arena/LobbyMerchantRenderer.ts:module/this.dealer/setDepth/0","owner":"arena/LobbyMerchantRenderer.ts","component":"module/this.dealer/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[10],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.dealer/setDepth/0","expression":"DEPTH.PLAYERS"}},
@@ -3188,8 +3189,8 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:effects/TranslocatorPuckRenderer.ts:createVisual/glowImage/configureAdditiveImage/0","owner":"effects/TranslocatorPuckRenderer.ts","component":"createVisual/glowImage/configureAdditiveImage/0","height":"body","lighting":"emissive","camera":"world","depths":[15.1],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/glowImage/configureAdditiveImage/0","expression":"DEPTH.PROJECTILES + 0.1"}},
   {"id":"cpu:effects/TranslocatorTeleportRenderer.ts:syncPortals/graphics/setDepth/0","owner":"effects/TranslocatorTeleportRenderer.ts","component":"syncPortals/graphics/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[24.8],"blends":["NORMAL"],"profiles":["H"],"role":"effect","source":{"selector":"syncPortals/graphics/setDepth/0","expression":"DEPTH_FX - 0.2"}},
   {"id":"cpu:effects/TranslocatorTeleportRenderer.ts:animate/g/setDepth/0","owner":"effects/TranslocatorTeleportRenderer.ts","component":"animate/g/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[25],"blends":["ADD"],"profiles":["H"],"role":"effect","source":{"selector":"animate/g/setDepth/0","expression":"DEPTH_FX"}},
-  {"id":"cpu:effects/WorldInteractionRenderer.ts:sync/this.marker/setDepth/0","owner":"effects/WorldInteractionRenderer.ts","component":"sync/this.marker/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[22],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"sync/this.marker/setDepth/0","expression":"DEPTH.LOCAL_UI"}},
-  {"id":"cpu:effects/WorldInteractionRenderer.ts:sync/this.label/setDepth/0","owner":"effects/WorldInteractionRenderer.ts","component":"sync/this.label/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[23],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"sync/this.label/setDepth/0","expression":"DEPTH.LOCAL_UI + 1"}},
+  {"id":"cpu:effects/WorldInteractionRenderer.ts:ensureObjects/this.alternativeGraphics/setDepth/0","owner":"effects/WorldInteractionRenderer.ts","component":"ensureObjects/this.alternativeGraphics/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[22],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"ensureObjects/this.alternativeGraphics/setDepth/0","expression":"DEPTH.LOCAL_UI"}},
+  {"id":"cpu:effects/WorldInteractionRenderer.ts:ensureObjects/this.focusGraphics/setDepth/0","owner":"effects/WorldInteractionRenderer.ts","component":"ensureObjects/this.focusGraphics/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[22],"blends":["NORMAL"],"profiles":["H"],"role":"ui","source":{"selector":"ensureObjects/this.focusGraphics/setDepth/0","expression":"DEPTH.LOCAL_UI"}},
   {"id":"cpu:effects/ZeusTaserRenderer.ts:syncUpgrades/this.statusLayer/setDepth/0","owner":"effects/ZeusTaserRenderer.ts","component":"syncUpgrades/this.statusLayer/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[16.3],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"syncUpgrades/this.statusLayer/setDepth/0","expression":"DEPTH_TRACE + 0.3"}},
   {"id":"cpu:effects/ZeusTaserRenderer.ts:playSwing/sector/setDepth/0","owner":"effects/ZeusTaserRenderer.ts","component":"playSwing/sector/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[16.04],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"playSwing/sector/setDepth/0","expression":"DEPTH_TRACE + 0.04"}},
   {"id":"cpu:effects/ZeusTaserRenderer.ts:playOriginBurst/halo/setDepth/0","owner":"effects/ZeusTaserRenderer.ts","component":"playOriginBurst/halo/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[16.08],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"playOriginBurst/halo/setDepth/0","expression":"DEPTH_TRACE + 0.08"}},
@@ -3348,7 +3349,7 @@ export const CPU_SOURCE_CONTRACTS = {
   },
 
   "arena/LobbyMerchantRenderer.ts": {"blends":[],"cameras":[],"sites":[{"key":"module/image/setDepth/0","expression":"DEPTH.BASES","blends":["NORMAL"]},{"key":"module/this.stall/setDepth/0","expression":"DEPTH.BASES","blends":["NORMAL"]},{"key":"module/this.dealer/setDepth/0","expression":"DEPTH.PLAYERS","blends":["NORMAL"]},{"key":"addLantern/housing/setDepth/0","expression":"DEPTH_LIGHTING + 0.08","blends":["NORMAL"]}],"bindings":{}},
-  "ui/LobbyWorldPlaque.ts": {"blends":[],"cameras":[],"sites":[{"key":"module/this.frame/setDepth/0","expression":"DEPTH.LOCAL_UI","blends":["NORMAL"]},{"key":"module/this.label/setDepth/0","expression":"DEPTH.LOCAL_UI + 1","blends":["NORMAL"]},{"key":"module/this.keycap/setDepth/0","expression":"DEPTH.LOCAL_UI + 1","blends":["NORMAL"]}],"bindings":{}},
+  "ui/WorldPlaque.ts": {"blends":[],"cameras":[],"sites":[{"key":"module/this.frame/setDepth/0","expression":"DEPTH.LOCAL_UI","blends":["NORMAL"]},{"key":"module/this.primary/setDepth/0","expression":"DEPTH.LOCAL_UI + 1","blends":["NORMAL"]},{"key":"module/this.secondary/setDepth/0","expression":"DEPTH.LOCAL_UI + 1","blends":["NORMAL"]},{"key":"module/this.keycap/setDepth/0","expression":"DEPTH.LOCAL_UI + 1","blends":["NORMAL"]}],"bindings":{}},
   "ui/dawn/DawnSundialClock.ts": {"blends":[],"cameras":["promoteToClarityCamera(scene, this.root)"],"sites":[{"key":"module/this.root/setDepth/0","expression":"DEPTH.OVERLAY","blends":["NORMAL"]}],"bindings":{}},
   "arena/DawnSiteDecalRenderer.ts": {
     "blends": [], "cameras": [],
@@ -6530,15 +6531,15 @@ export const CPU_SOURCE_CONTRACTS = {
     "cameras": [],
     "sites": [
       {
-        "key": "sync/this.marker/setDepth/0",
+        "key": "ensureObjects/this.alternativeGraphics/setDepth/0",
         "expression": "DEPTH.LOCAL_UI",
         "blends": [
           "NORMAL"
         ]
       },
       {
-        "key": "sync/this.label/setDepth/0",
-        "expression": "DEPTH.LOCAL_UI + 1",
+        "key": "ensureObjects/this.focusGraphics/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI",
         "blends": [
           "NORMAL"
         ]

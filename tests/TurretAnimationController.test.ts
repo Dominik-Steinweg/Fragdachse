@@ -43,32 +43,34 @@ describe('turret animation lifecycle', () => {
     glowFx.add.mockClear(); glowFx.remove.mockClear();
     const element = () => {
       const view: any = { visible: true, destroy: vi.fn() };
-      for (const method of ['setDepth', 'setOrigin', 'clear', 'setPosition', 'lineStyle', 'strokePoints', 'setText']) view[method] = vi.fn(() => view);
+      for (const method of ['setDepth', 'setOrigin', 'clear', 'setPosition', 'lineStyle', 'strokePoints', 'setText', 'setAlpha', 'setScale', 'setColor',
+        'fillStyle', 'fillRoundedRect', 'strokeRoundedRect', 'fillCircle', 'fillTriangle']) view[method] = vi.fn(() => view);
       view.setVisible = (visible: boolean) => { view.visible = visible; return view; };
       return view;
     };
-    const marker = element(), label = element();
-    const scene = { add: { graphics: () => marker, text: () => label } };
+    const graphics: any[] = [], texts: any[] = [];
+    const scene = { add: { graphics: () => { const g = element(); graphics.push(g); return g; }, text: () => { const x = element(); texts.push(x); return x; } } };
     const turret = sprite(); Object.assign(turret.view, { scene, displayWidth: 48, displayHeight: 48 });
     const controller = new TurretAnimationController(); controller.bind('7', turret.phaser, 'TURRET_TESLA');
     const selection = new WorldInteractionRenderer(scene as never);
-    selection.sync({ kind: 'turret', key: 'turret:7', x: 20, y: 30, radius: 100,
-      label: 'Shift: Bemannen', worldRevision: 1, turret: { id: 7, x: 20, y: 30, ownerId: 'p1', ownerColor: 1 } });
+    selection.sync({ focus: { key: 'turret:7', label: 'Bemannen', subject: 'Raketenturm',
+      footprint: { left: 4, top: 14, right: 36, bottom: 46 } }, alternatives: [] });
+    const [, brackets] = graphics;
     controller.syncControl([]);
-    expect(marker.visible).toBe(true); expect(label.setText).toHaveBeenCalledWith('Shift: Bemannen');
-    controller.syncControl([{ id: '7', color: 0x22ddff }]); selection.sync(null);
-    expect(marker.visible).toBe(false); expect(label.visible).toBe(false);
+    expect(brackets.visible).toBe(true); expect(texts.some(text => text.setText.mock.calls.some(([value]: [string]) => value === 'Bemannen'))).toBe(true);
+    controller.syncControl([{ id: '7', color: 0x22ddff }]); selection.sync({ focus: null, alternatives: [] });
+    expect(brackets.visible).toBe(false);
     expect(glowFx.add).toHaveBeenCalledWith(turret.phaser, 0x22ddff, expect.any(Number), expect.any(Number), { rim: 0 });
     const [, , scale, strength] = glowFx.add.mock.calls[0]; expect(scale).toBeGreaterThan(1); expect(strength).toBeGreaterThan(4);
     controller.syncControl([{ id: '7', color: 0x22ddff }]); expect(glowFx.add).toHaveBeenCalledOnce();
     controller.syncControl([]); expect(glowFx.remove).toHaveBeenCalledOnce();
     controller.syncControl([{ id: '7', color: 1 }]);
-    controller.unbind('7'); expect(marker.visible).toBe(false); expect(glowFx.remove).toHaveBeenCalledTimes(2);
+    controller.unbind('7'); expect(brackets.visible).toBe(false); expect(glowFx.remove).toHaveBeenCalledTimes(2);
     controller.bind('7', turret.phaser, 'TURRET_TESLA');
     controller.syncControl([{ id: '7', color: 1 }]);
     controller.clear(); expect(glowFx.remove).toHaveBeenCalledTimes(3);
     selection.clear(); selection.clear();
-    expect(marker.destroy).toHaveBeenCalledOnce(); expect(label.destroy).toHaveBeenCalledOnce();
+    for (const object of [...graphics, ...texts]) expect(object.destroy).toHaveBeenCalledOnce();
   });
   it.each(['7', 'base:turret'])('interpolates confirmed poses across wrap and holds on packet loss (%s)', id => {
     const controller = new TurretAnimationController();

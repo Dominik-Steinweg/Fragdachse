@@ -11,7 +11,6 @@ import { LOBBY_BUILDINGS } from '../src/config/authoring/lobbyBuildings';
 import { t } from '../src/i18n';
 import { WorldPresentationBinding } from '../src/world/WorldPresentationBinding';
 import type { WorldMetrics } from '../src/world/WorldMetrics';
-import { WorldInteractionRenderer } from '../src/effects/WorldInteractionRenderer';
 
 vi.mock('phaser', () => ({ Math: { Vector2: class { constructor(public x: number, public y: number) {} } } }));
 vi.mock('../src/effects/EffectUtils', () => ({ registerGraphicsObject: vi.fn() }));
@@ -26,6 +25,7 @@ function fixture(missing: readonly string[] = []) {
       fillStyle: vi.fn().mockReturnThis(), lineStyle: vi.fn().mockReturnThis(),
       fillRoundedRect: vi.fn().mockReturnThis(), strokeRoundedRect: vi.fn().mockReturnThis(),
       fillCircle: vi.fn().mockReturnThis(), strokeCircle: vi.fn().mockReturnThis(),
+      fillTriangle: vi.fn().mockReturnThis(), setColor: vi.fn().mockReturnThis(), setScale: vi.fn().mockReturnThis(),
       lineBetween: vi.fn().mockReturnThis(), strokePoints: vi.fn().mockReturnThis(),
       setDepth: vi.fn().mockReturnThis(), setAlpha: vi.fn().mockReturnThis(), setRotation: vi.fn().mockReturnThis(), play: vi.fn(), destroy: vi.fn() };
     objects.push(object); return object;
@@ -156,23 +156,6 @@ describe('Lobby merchant presentation', () => {
     lighting.releaseLight.mockClear();
     renderer.destroy();
     expect(lighting.releaseLight).toHaveBeenCalledTimes(4);
-    for (const object of f.objects) expect(object.destroy).toHaveBeenCalledTimes(1);
-  });
-
-  it('uses a keycap plaque without a target square for lobby menus, retaining other Shift markers', () => {
-    const f = fixture(), renderer = new WorldInteractionRenderer(f.scene as unknown as Phaser.Scene);
-    const candidate = { kind: 'lobby-menu' as const, menu: 'base' as const, key: 'base',
-      x: 200, y: 300, radius: 80, label: '[Shift] Bauhof öffnen', worldRevision: 1 };
-    renderer.sync(candidate, { x: 180, y: 350 });
-    expect(f.objects.some(object => object.texture === 'Shift')).toBe(true);
-    const label = f.objects.find(object => object.texture === 'Bauhof öffnen');
-    expect(label.y).toBeGreaterThan(350 + 30);
-    expect(f.objects.every(object => object.strokePoints.mock.calls.length === 0)).toBe(true);
-    renderer.sync(null);
-    expect(label.setAlpha).toHaveBeenLastCalledWith(0);
-    renderer.sync({ ...candidate, kind: 'turret', turretId: 1 } as never);
-    expect(f.objects.some(object => object.strokePoints.mock.calls.length > 0)).toBe(true);
-    renderer.clear();
     for (const object of f.objects) expect(object.destroy).toHaveBeenCalledTimes(1);
   });
 

@@ -6,7 +6,7 @@ import { LOBBY_SPAWN_FOCUS_CELL } from './LobbyWorldLayout';
 import { LOBBY_DEALER_ASSET, registerLobbyDealerIdle } from '../animations/LobbyMerchantAssets';
 import { worldCellCenter, type WorldMetrics } from '../world/WorldMetrics';
 import { t } from '../i18n';
-import { LobbyWorldPlaque } from '../ui/LobbyWorldPlaque';
+import { WorldPlaque } from '../ui/WorldPlaque';
 import { HUD_TONES } from '../ui/HudFrameAssets';
 import type { LightingSystem } from '../effects/LightingSystem';
 import { registerGraphicsObject } from '../effects/EffectUtils';
@@ -24,12 +24,12 @@ export function resolveLobbyMerchantNameplateAlpha(distanceCells: number): numbe
 
 /** World material on the main camera. No interaction, physics, progress or Activity dependency. */
 export class LobbyMerchantRenderer {
-  private readonly buildings: { menu: LobbyMenu; image: Phaser.GameObjects.Image; label: LobbyWorldPlaque }[] = [];
+  private readonly buildings: { menu: LobbyMenu; image: Phaser.GameObjects.Image; label: WorldPlaque }[] = [];
   private readonly lanterns: { key: string; x: number; y: number; housing: Phaser.GameObjects.Graphics }[] = [];
   private lighting: LobbyLighting | null = null;
   private stall: Phaser.GameObjects.Image | null = null;
   private dealer: Phaser.GameObjects.Sprite | null = null;
-  private nameplate: LobbyWorldPlaque | null = null;
+  private nameplate: WorldPlaque | null = null;
   private readonly dealerPosition: { x: number; y: number };
 
   constructor(private readonly scene: Phaser.Scene, metrics: WorldMetrics) {
@@ -39,7 +39,7 @@ export class LobbyMerchantRenderer {
       const image = scene.add.image(center.x, center.y, building.textureKey)
         .setOrigin(0.5).setDisplaySize(128, 128).setDepth(DEPTH.BASES);
       // The 4x4 canvas has a transparent half-cell below the occupied 4x3 building.
-      const label = new LobbyWorldPlaque(scene).setText(t(building.nameKey))
+      const label = new WorldPlaque(scene).setText(t(building.nameKey))
         .setPosition(center.x, center.y + 1.5 * CELL_SIZE + 8);
       this.buildings.push({ menu: building.menu, image, label });
       this.addLantern(building.menu, center.x, center.y);
@@ -63,7 +63,7 @@ export class LobbyMerchantRenderer {
       if (idle) this.dealer.play(idle);
     }
     if (this.stall || this.dealer) {
-      this.nameplate = new LobbyWorldPlaque(scene).setText(t('ui.dawn.dealerName'))
+      this.nameplate = new WorldPlaque(scene).setText(t('ui.dawn.dealerName'))
         .setPosition(standPosition.x, standPosition.y + stall.sizeCells * CELL_SIZE / 2 + 8);
     }
   }

@@ -30,11 +30,14 @@ vi.mock('../src/ui/RadialActionMenu', () => ({ RadialActionMenu: class {
   destroy() {}
 } }));
 import { InputSystem } from '../src/systems/InputSystem';
-import { lobbyBuildingCandidates, lobbyMenuDenial } from '../src/systems/LobbyBuildingInteraction';
+import { lobbyBuildingCandidates, lobbyMenuBlockedLabel, lobbyMenuDenial } from '../src/systems/LobbyBuildingInteraction';
+import { LOBBY_BUILDINGS } from '../src/config/authoring/lobbyBuildings';
+import { CELL_SIZE } from '../src/config';
 import type { FireControlPlacementPreview } from '../src/types';
 import type { FireControlSnapshot } from '../src/systems/fireControl/FireControlSnapshot';
 import type { RadialActionState } from '../src/systems/RadialActionModel';
-import { t } from '../src/i18n';
+import { getLocale, t } from '../src/i18n';
+import { getConstructionName } from '../src/i18n/contentPresentation';
 import { NetworkBridge } from '../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 import { addClientRoom, createHostRoom, FakeNetwork, type TestRoom } from './fakePeerNetwork';
@@ -429,6 +432,21 @@ describe('shared Shift interaction', () => {
     expect(lobbyMenuDenial('upgrades', { ...access, coop: false })).toBeTruthy();
   });
 
+  it('frames whole lobby buildings and shows a short personal denial before pressing', () => {
+    const metrics = resolveActiveArenaWorldMetrics();
+    const access = { coop: true, ready: false, host: false, baseUnlocked: true, itemsUnlocked: true, dawnUnlocked: true };
+    const candidates = lobbyBuildingCandidates(metrics, 1, menu => lobbyMenuBlockedLabel(menu, access));
+    for (const building of LOBBY_BUILDINGS) {
+      const candidate = candidates.find(entry => entry.kind === 'lobby-menu' && entry.menu === building.menu)!;
+      const left = metrics.offsetX + building.gridX * CELL_SIZE, top = metrics.offsetY + building.gridY * CELL_SIZE;
+      expect(candidate.footprint).toEqual({ left, top, right: left + 4 * CELL_SIZE, bottom: top + 3 * CELL_SIZE });
+      expect(candidate).toMatchObject({ label: t('ui.lobbyBuilding.open'), subject: t(building.nameKey) });
+    }
+    expect(candidates.find(entry => entry.kind === 'lobby-menu' && entry.menu === 'base')!.blocked).toBe(t('ui.lobbyBuilding.blocked.host'));
+    expect(candidates.find(entry => entry.kind === 'lobby-menu' && entry.menu === 'upgrades')!.blocked).toBeUndefined();
+    expect(lobbyMenuBlockedLabel('upgrades', { ...access, ready: true })).toBe(t('ui.lobbyBuilding.blocked.ready'));
+  });
+
   function interactions() {
     const metrics = resolveActiveArenaWorldMetrics();
     const power = shootingRangeControlPosition(metrics, 'power');
@@ -460,6 +478,24 @@ describe('shared Shift interaction', () => {
     turrets = [];
     f.keys.keyShift.justDown = true; f.system.update();
     expect(f.sendTurret).not.toHaveBeenCalled(); expect(f.sendRange).not.toHaveBeenCalled(); expect(f.burrow).not.toHaveBeenCalled();
+  });
+
+  it('presents the focused footprint, other reachable targets and the exit of a manned turret', () => {
+    const f = interactions();
+    const near = { id: 1, x: f.power.x - 20, y: f.power.y, ownerId: 'p1', ownerColor: 1, weaponId: 'TURRET_ROCKET_BURST' as const };
+    const other = { id: 2, x: f.power.x - 50, y: f.power.y + 40, ownerId: 'p1', ownerColor: 1 };
+    let manned: { turretId: number; revision: number } | undefined;
+    f.system.setupTurretControlProviders({ getTurrets: () => [near, other], getState: () => manned as never, isEnabled: () => true });
+    const view = f.system.getInteractionView();
+    expect(view.focus).toMatchObject({ key: 'turret:number:1', label: t('ui.turretControl.enter'), subject: getConstructionName('rocket_turret', getLocale()),
+      footprint: { left: near.x - CELL_SIZE / 2, top: near.y - CELL_SIZE / 2, right: near.x + CELL_SIZE / 2, bottom: near.y + CELL_SIZE / 2 } });
+    expect(view.alternatives).toContainEqual({ left: other.x - CELL_SIZE / 2, top: other.y - CELL_SIZE / 2,
+      right: other.x + CELL_SIZE / 2, bottom: other.y + CELL_SIZE / 2 });
+    expect(view.alternatives).not.toContainEqual(view.focus!.footprint);
+    manned = { turretId: 1, revision: 3 };
+    expect(f.system.getInteractionView().focus).toBeNull();
+    f.system.setTurretInputEnabled(true);
+    expect(f.system.getInteractionView()).toMatchObject({ focus: { label: t('ui.turretControl.exit'), subject: getConstructionName('rocket_turret', getLocale()) }, alternatives: [] });
   });
 
   it('retains a complete short Shift tap between frames, drops locked presses and unbinds on shutdown', () => {
