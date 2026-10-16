@@ -191,6 +191,10 @@ Spielern und Qualitaetsstufe. Weitere Figuren-Caster leihen sie ueber `borrowFig
 bei World-/Qualitaetswechsel werden ihre Borrower vor der Maske entkoppelt.
 Sonnenzustand und pausierbare Praesentationszeit kommen von `WorldSunlightPresentation`;
 World-Unbind und Qualitaetswechsel geben Masken-Slots, Geometriebuffer und Empfaengermaske frei.
+Ein Gegner-Meshschatten gehoert zur Sheet-Revision, aus der er gebacken wurde, und wird ueber das
+dargestellte Runtime-Asset (`imageKey`) gefunden, nicht ueber die Gegnerart; ein Sheet anderer
+Revision (etwa ein Animationsentwurf) behaelt den Ellipsenschatten
+([EnemyMeshRenderer.test.ts](../../tests/EnemyMeshRenderer.test.ts)).
 Die binaeren, hashgebundenen Meshdaten bleiben im game-owned Loader-Cache. Schatten lesen den
 tatsaechlich dargestellten Sprite-Frame und dessen Rotation, nicht Netzwerk-Facing oder eine
 eigene Animationsuhr. Meshpositionen sind X rechts, Y Sued, Z oben; Projektion erfolgt erst nach

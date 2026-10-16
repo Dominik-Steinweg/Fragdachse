@@ -46,6 +46,12 @@ heben eine gültige Standposition nicht auf; die Abfrage verbraucht keine Waffen
 Gewollter Rückzug, bewegliche Angriffe und exklusive Aktionen behalten ihre Bewegungsverträge.
 Gefechtsausrichtung und Angriffspausen verwenden die fachliche Host-Zeit.
 
+Fähigkeitsbewegung läuft über die geordnete `EnemySpecialMovementSource` der Coop-Runtime und
+ersetzt pro Frame die gewöhnliche Bewegung. Ein Override ist standardmäßig exklusiv: Auch ein
+Nekromantie-Verbündeter routet und greift dann nicht an. `keepsRouting` markiert einen Owner, der
+den Körper nur hält (ruhende Hüpfer): Verbündete routen weiter, melden ihren Steuerpunkt und greifen
+an, laufen aber nicht. Dies sichert [NecromancyLifecycle.test.ts](../../tests/NecromancyLifecycle.test.ts).
+
 Verfolgungsgedächtnis gehört dem `EnemyIntentSystem`. Der Zielkatalog trennt dafür die Erlaubnis,
 eine beobachtete Spielerposition zu behalten, vom Zugriff auf ein aktuelles Angriffsziel.
 Einbuddeln erhält nur die Erinnerung; unterirdische Positionen aktualisieren sie nicht.
