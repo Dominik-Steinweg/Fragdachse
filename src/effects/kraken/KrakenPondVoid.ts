@@ -23,7 +23,11 @@ export const KRAKEN_POND_VOID = {
   /** Pond-shaped glow: one ground light every few water cells, lit once the bloom has passed it. */
   glowStrideCells: 3,
   glowRadiusPx: 150,
-  glowIntensity: 3.4,
+  glowIntensity: 2,
+  /** Share of the glow that stays once the pond has settled; the spreading front and the roar add the rest. */
+  glowRest: 0.55,
+  /** Glows on the bank keep this share, so the light stays in the water instead of haloing the shore. */
+  glowShoreShare: 0.4,
   /** Water cells farther than this from the anchor belong to another body. */
   pondReachPx: 1600,
 } as const;
@@ -62,7 +66,11 @@ export function krakenPondVoidState(elapsedMs: number, reachPx: number, sinceRel
   return { frontPx, grade, pulse };
 }
 
-interface PondGlow { x: number; y: number; radiusPx: number; intensity: number; color: number; distance: number }
+interface PondGlow {
+  x: number; y: number; radiusPx: number; intensity: number; color: number; distance: number;
+  /** Share of the eight neighbouring cells that are water: 1 in open water, lower along the bank. */
+  interior: number;
+}
 
 /**
  * The abyss pond on the kraken map turns void with the intro and keeps glowing through the fight:
@@ -89,11 +97,14 @@ export class KrakenPondVoid {
     const bloom = krakenPondVoidState(now - state.startedAtMs, this.reachPx, releaseAt === null ? null : now - releaseAt);
     if (bloom.grade <= 0) { this.release(); return; }
     WaterSurfaceRenderer.for(this.scene)?.setVoidBloom({ x: state.x, y: state.y, ...bloom });
-    const { glowIntensity } = KRAKEN_POND_VOID;
+    const { glowIntensity, glowRest, glowShoreShare } = KRAKEN_POND_VOID;
     let lit = 0;
     for (const glow of this.glows) {
       const reached = 1 - smooth(bloom.frontPx - 140, bloom.frontPx, glow.distance);
-      glow.intensity = glowIntensity * bloom.grade * reached * (0.6 + 0.4 * bloom.pulse);
+      // Freshly reached water flares, then settles to the calm rest glow.
+      const fresh = Math.exp(-(((bloom.frontPx - glow.distance) / 260) ** 2));
+      glow.intensity = glowIntensity * bloom.grade * reached * Math.min(1, glowRest + 0.5 * fresh + 0.6 * bloom.pulse)
+        * (glowShoreShare + (1 - glowShoreShare) * glow.interior);
       glow.color = bloom.pulse > 0.5 ? VOID_PALETTE.bright : VOID_PALETTE.primary;
       if (glow.intensity > 0.01) lit++;
     }
@@ -117,13 +128,18 @@ export class KrakenPondVoid {
     this.anchorKey = key;
     this.glows.length = 0; this.reachPx = 0;
     const { glowStrideCells: stride, glowRadiusPx, pondReachPx } = KRAKEN_POND_VOID;
+    const water = new Set((layout.water ?? []).map(cell => `${cell.gridX},${cell.gridY}`));
     for (const cell of layout.water ?? []) {
       const x = metrics.offsetX + (cell.gridX + 0.5) * CELL_SIZE, y = metrics.offsetY + (cell.gridY + 0.5) * CELL_SIZE;
       const distance = Math.hypot(x - state.x, y - state.y);
       if (distance > pondReachPx) continue;
       this.reachPx = Math.max(this.reachPx, distance);
       if (cell.gridX % stride === 0 && cell.gridY % stride === 0) {
-        this.glows.push({ x, y, radiusPx: glowRadiusPx, intensity: 0, color: VOID_PALETTE.primary, distance });
+        let neighbours = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          if ((dx || dy) && water.has(`${cell.gridX + dx},${cell.gridY + dy}`)) neighbours++;
+        }
+        this.glows.push({ x, y, radiusPx: glowRadiusPx, intensity: 0, color: VOID_PALETTE.primary, distance, interior: neighbours / 8 });
       }
     }
   }

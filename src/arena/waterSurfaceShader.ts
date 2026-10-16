@@ -172,25 +172,44 @@ void main() {
       alpha=max(alpha,foam*.55*smoothstep(.35,.45,mask.b));
     }
   }
-  // Void bloom: behind a bright advancing front the water turns to ink-dark violet, deeper with depth,
-  // and slow luminous veins and motes drift through the basin. The light map above lifts it at dusk.
+  // Void bloom: behind a soft luminous front the water turns to deep violet ink, darker with depth.
+  // Faint swell lines, caustic pools and motes keep it reading as water. The light map lifts it at dusk.
   if(uVoid.w>0.0) {
     // Ink spreads unevenly: the front is pushed ahead and held back by the pond's own noise.
     float voidDistance=length(p-uVoid.xy)+(pondNoise(p*.0085+vec2(uSeed,17.3))-.5)*130.0+(pondNoise(p*.031+11.0)-.5)*34.0;
     float reached=1.0-smoothstep(uVoid.z-70.0,uVoid.z,voidDistance);
     float grade=uVoid.w*reached;
-    vec3 voidBody=mix(vec3(.30,.10,.47),vec3(.10,.022,.19),colorDepth)*(.92+broad*.16);
-    float veinField=pondField(p*.0105+vec2(t*.045,-t*.037)+eddyA*.09);
-    float veins=1.0-smoothstep(0.0,.042,abs(veinField-.5));
-    float fineVeins=1.0-smoothstep(0.0,.04,abs(pondField(p*.024+vec2(-t*.06,t*.05)+eddyB*.06)-.5));
-    float motes=smoothstep(.84,.97,pondNoise(p*.085+vec2(t*.28,t*.19)));
-    float inBasin=smoothstep(6.0,34.0,depthDistance);
-    color=mix(color,voidBody,grade*.92);
-    color+=vec3(.70,.36,1.0)*(veins*.40+fineVeins*.10)*inBasin*grade*(.75+.25*sin(t*.9+veinField*6.2831))
-      +vec3(.92,.70,1.0)*motes*.28*grade+vec3(.62,.30,.95)*uVoidPulse*grade*(.35+.65*inBasin)*.5;
-    // The advancing front: a thin bright seam that only exists while the bloom is still spreading.
-    float front=exp(-pow((voidDistance-uVoid.z)/16.0,2.0));
-    color+=vec3(.82,.52,1.0)*front*uVoid.w*.75;
+    // Deep, saturated void: almost black in the basin, a richer violet over the shelf.
+    vec3 voidBody=mix(vec3(.17,.05,.29),vec3(.042,.008,.095),colorDepth)*(.9+broad*.2);
+    color=mix(color,voidBody,grade*.94);
+    // The surface keeps reading as water: its own ripple, sky and shore wavelet fields catch
+    // faint violet light instead of the natural teal.
+    color+=vec3(.11,.045,.19)*reflectedSky*surfaceMotion*depthReflection*grade;
+    color+=vec3(.05,.02,.085)*(a-.5)*surfaceMotion*grade;
+    color+=vec3(.18,.09,.30)*wave*fringe*broken*.10*grade;
+    // Light from below: broad caustic pools drift slowly through the basin.
+    float glowDepth=smoothstep(10.0,52.0,depthDistance);
+    float caustic=smoothstep(.56,.96,pondField(p*.0058+vec2(t*.018,-t*.014)+eddyA*.12));
+    float breathe=.75+.25*sin(t*.55+caustic*3.5);
+    color+=vec3(.34,.12,.56)*caustic*glowDepth*grade*.28*breathe;
+    // Waves: slow swell lines catch a soft violet light. Each line is a faint halo around a fine core,
+    // broken along its length and gathered into drifting patches, so the surface never reads as a net.
+    float swellOffset=abs(pondField(p*.0085+eddyA*.16+vec2(t*.021,-t*.016))-.5);
+    float swellLine=(1.0-smoothstep(0.0,.018,swellOffset))*.65+(1.0-smoothstep(0.0,.075,swellOffset))*.35;
+    float swellPatch=smoothstep(.34,.74,pondField(p*.0036+vec2(-t*.012,t*.009)+uSeed));
+    float swellGlint=.45+.55*smoothstep(.30,.80,pondNoise(p*.021+vec2(t*.09,t*.06)));
+    color+=vec3(.46,.26,.80)*swellLine*swellPatch*swellGlint*smoothstep(4.0,30.0,depthDistance)*grade*.16;
+    // A finer set of ripples rides on top, much fainter.
+    float rippleOffset=abs(pondField(p*.019+eddyB*.1+vec2(-t*.034,t*.028))-.5);
+    color+=vec3(.40,.24,.70)*(1.0-smoothstep(0.0,.022,rippleOffset))*swellPatch*glowDepth*grade*.045;
+    float motes=smoothstep(.90,.985,pondNoise(p*.085+vec2(t*.22,t*.15)));
+    color+=vec3(.80,.62,1.0)*motes*glowDepth*.10*grade;
+    color+=vec3(.50,.22,.80)*uVoidPulse*grade*(.25+.75*glowDepth)*.32;
+    // The advancing front: a soft luminous edge with a short afterglow, only while the bloom spreads.
+    float frontOffset=voidDistance-uVoid.z;
+    float front=exp(-pow(frontOffset/22.0,2.0));
+    float afterglow=exp(min(frontOffset,0.0)/60.0)*(1.0-smoothstep(-8.0,4.0,frontOffset));
+    color+=vec3(.62,.38,.95)*front*uVoid.w*.45+vec3(.40,.18,.66)*afterglow*grade*.14;
   }
   gl_FragColor=vec4(color*alpha,alpha);
 }
