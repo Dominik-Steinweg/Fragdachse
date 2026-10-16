@@ -150,6 +150,30 @@ describe('V2 animated asset export contracts', () => {
       frames: imported.eyeAnchors.frames.map(() => ({ ...frame, extra: [eye] })) } })).toThrow();
   });
 
+  it.each([
+    ['binds a design rendered without game IDs at the cutover import', [] as string[], true],
+    ['never moves a selection rendered for other game IDs', ['zombie-badger'], false],
+  ] as const)('%s', async (_label, renderedGameIds, accepted) => {
+    const f = await fixture(), id = 'plague-toad', asset = path.join(f.run, id);
+    await rename(f.asset, asset);
+    const folder = path.join(asset, 'calm');
+    const claw = { name: 'claw', motion: 'toad_tongue', frameRate: 24, loop: false, frames: [0, 1, 2, 3], markers: { strike: 1, impact: 2 } };
+    const eye = { x: .45, y: .3, width: .03, height: .02, rotation: 0 };
+    const rendered = { ...f.manifest, id, category: 'enemy', gameIds: [...renderedGameIds], requiredClips: ['move', 'claw'],
+      clips: [...f.manifest.clips, claw], eyeAnchors: { version: 1, frames: f.frames.map(() => ({ left: eye, right: { ...eye, x: .55 } })) } };
+    await save(path.join(folder, 'render.json'), rendered);
+    await exportVariantV2(folder, f.root);
+    await selectVariantV2(asset, 'calm', 32, 'Approved design.');
+    await mkdir(path.join(f.root, 'scripts/asset-pipeline'), { recursive: true });
+    await mkdir(path.join(f.root, 'src/config'), { recursive: true });
+    await save(path.join(f.root, 'src/config/coopDefenseEnemies.json'), { enemies: [{ id: 'plague-medic', imageKey: 'enemy_plague_toad' }] });
+    await writePipelineRegistry(f.root, { version: 2, assets: [] });
+    await writeDemandCatalog(f.root, { version: 2, assets: [{ ...rendered, gameIds: ['plague-medic'] }] });
+    const run = importRuntime({ root: f.root, revision: rendered.revision, requestedIds: [id], outputRoot: path.join(f.root, 'published') });
+    if (accepted) expect((await run).manifest.assets[0]).toMatchObject({ gameIds: ['plague-medic'], textureKey: 'enemy_plague_toad' });
+    else await expect(run).rejects.toThrow(/no longer matches the runtime catalog/);
+  });
+
   it('permits idle-only unbound characters but keeps movement mandatory for the player', async () => {
     const { manifest } = await fixture();
     const npc = { ...manifest, category: 'character', gameIds: [], requiredClips: ['idle'],

@@ -147,7 +147,7 @@ export class EnemyMeshShadowRenderer {
     if (this.destroyed) return;
     const start = performance.now(); this.active.clear(); this.count = this.draws = this.triangles = 0;
     this.display.setVisible(false); for (const group of this.groups.values()) group.count = 0;
-    const types = new Set(enemies.filter(e => e.getHp() > 0).map(e => e.kind));
+    const types = new Set(enemies.filter(e => e.getHp() > 0).map(meshIdOf));
     this.assets.prefetch(types); this.assets.pump(this.scene.game.loop.frame);
     if (!this.preparePrograms()) { this.releaseUnseen(); return; }
     this.prepare(types);
@@ -163,7 +163,8 @@ export class EnemyMeshShadowRenderer {
     }
     for (const enemy of enemies) {
       if (!this.eligible(enemy)) continue;
-      const mesh = this.assets.ready.get(enemy.kind); if (!mesh || this.prepared.get(enemy.kind) !== mesh.asset.poses.length) continue;
+      const meshId = meshIdOf(enemy);
+      const mesh = this.assets.ready.get(meshId); if (!mesh || this.prepared.get(meshId) !== mesh.asset.poses.length) continue;
       // A mesh belongs to the sheet revision it was baked from; a newer sheet (draft) keeps the ellipse.
       if (getPipelineAssetForTexture(enemy.getImageKey())?.revision !== mesh.asset.revision) continue;
       const s = enemy.sprite, pose = enemyMeshPose(s.frame.name, mesh); if (pose < 0) continue;
@@ -248,4 +249,9 @@ export class EnemyMeshShadowRenderer {
     }
     // Receiver lifetime belongs exclusively to ShadowSystem.
   }
+}
+
+/** Mesh families are keyed by their runtime asset; an enemy kind resolves through the image it shows. */
+function meshIdOf(enemy: EnemyEntity): string {
+  return getPipelineAssetForTexture(enemy.getImageKey())?.id ?? enemy.kind;
 }

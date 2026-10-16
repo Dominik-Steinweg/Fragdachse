@@ -2,7 +2,9 @@
   "id": "plague-toad",
   "label": "Quacksalber",
   "category": "enemy",
-  "gameIds": [],
+  "gameIds": [
+    "plague-medic"
+  ],
   "reference": "scripts/asset-pipeline/references/plague-toad.png",
   "targetSize": 30,
   "sourceSizes": [

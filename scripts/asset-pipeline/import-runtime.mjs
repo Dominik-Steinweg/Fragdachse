@@ -59,8 +59,11 @@ export async function importRuntime({ revision, requestedIds = [], root = proces
     if (selected.id !== entry.id || selected.revision !== revision) throw new Error(`Selection mismatch: ${entry.id}`);
     if (!/^[a-z0-9][a-z0-9-]*$/.test(selected.variant)) throw new Error('Invalid selected variant');
     const rendered = await readJson(`${source}/${selected.variant}/render.json`);
+    // A design rendered unbound (no game IDs) may be bound to its game IDs at the cutover import;
+    // a selection rendered for other game IDs stays a mismatch.
+    const boundAtImport = rendered.gameIds.length === 0 && entry.gameIds.length > 0;
     if (entry.category !== rendered.category || entry.forward !== rendered.forward
-        || JSON.stringify(entry.gameIds) !== JSON.stringify(rendered.gameIds)
+        || (!boundAtImport && JSON.stringify(entry.gameIds) !== JSON.stringify(rendered.gameIds))
         || JSON.stringify(entry.pivot) !== JSON.stringify(rendered.pivot)) {
       throw new Error(`Selected model no longer matches the runtime catalog: ${entry.id}`);
     }

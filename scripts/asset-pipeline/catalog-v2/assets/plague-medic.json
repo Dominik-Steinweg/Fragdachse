@@ -2,9 +2,7 @@
   "id": "plague-medic",
   "label": "Seuchenmedikus",
   "category": "enemy",
-  "gameIds": [
-    "plague-medic"
-  ],
+  "gameIds": [],
   "reference": "public/assets/sprites/enemies/enemy_plague_medic.png",
   "targetSize": 30,
   "sourceSizes": [

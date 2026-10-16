@@ -4,6 +4,7 @@ import { describe, it, expect } from 'vitest';
 import sharp from 'sharp';
 import { validateEyeAnchors } from '../../scripts/asset-pipeline/eye-anchors.mjs';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../../src/config/coopDefenseEnemies';
+import { WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig';
 import { getCoopDefenseUpgradeTextureKey } from '../../src/utils/coopDefenseUpgrades';
 import { AutoTiler, MISSION_BARRIER_AUTOTILE } from '../../src/arena/AutoTiler';
 import { getPipelineSpriteScale, pipelineAnimationKey, PIPELINE_ASSETS, PIPELINE_RUNTIME_ASSETS } from '../../src/config/pipelineAssets';
@@ -82,9 +83,15 @@ describe('selected runtime asset package', () => {
         return { center: sum / count, top };
       };
       const idle = pose(asset.idleFrame), impact = pose(clip.frames[markers.impact]);
-      expect(pose(clip.frames[markers.strike]).center, asset.id).toBeGreaterThan(idle.center);
+      // A claw pounce crouches back before the strike and follows through after the impact; a tongue
+      // lash announces itself with the open mouth and holds the lunge while the runtime tongue is out.
+      const tongue = asset.gameIds.some(id => COOP_DEFENSE_ENEMY_CONFIGS[id]?.weapons.some(w => {
+        const fire = WEAPON_CONFIGS[w.weaponId]?.fire;
+        return fire?.type === 'melee' && fire.visualPreset === 'enemy_tongue';
+      }));
+      if (!tongue) expect(pose(clip.frames[markers.strike]).center, asset.id).toBeGreaterThan(idle.center);
       expect(impact.center, asset.id).toBeLessThan(idle.center);
-      expect(pose(clip.frames[markers.impact + 1]).center, asset.id).toBeLessThan(impact.center);
+      if (!tongue) expect(pose(clip.frames[markers.impact + 1]).center, asset.id).toBeLessThan(impact.center);
       expect(impact.top, asset.id).toBeLessThan(asset.sourceSize * (0.5 - 0.5 / getPipelineSpriteScale(asset.textureKey)));
       expect(pose(clip.frames.at(-1)!).center, asset.id).toBeCloseTo(idle.center, 1);
     }
