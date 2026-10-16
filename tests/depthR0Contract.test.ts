@@ -75,7 +75,7 @@ describe('R0 observed depth contract (diagnostics, never rendering inputs)', () 
   it('reports exactly the known findings, rejecting new AND stale exceptions', () => {
     expect(auditLayerContract(EFFECT_LAYER_CONTRACTS,DEPTH_LAYER_EXCEPTIONS)).toEqual([]);
     expect(DEPTH_LAYER_EXCEPTIONS.filter(e=>e.finding==='D07')).toHaveLength(1);
-    expect(DEPTH_LAYER_EXCEPTIONS.filter(e=>e.finding==='D08')).toHaveLength(3);
+    expect(DEPTH_LAYER_EXCEPTIONS.filter(e=>e.finding==='D08')).toHaveLength(2);
     const bad: LayerContract = {id:'unreviewed',owner:'test',component:'blood',height:'body',lighting:'material',
       depths:[25],blends:['NORMAL'],camera:'world',profiles:['H'],role:'effect'};
     expect(auditLayerContract([bad],[])).toContain('Unlisted: unreviewed:body-over-canopy');

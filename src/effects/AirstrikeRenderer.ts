@@ -1,12 +1,11 @@
 import * as Phaser from 'phaser';
 import type { SyncedAirstrikeStrike } from '../types';
-import { COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, DEPTH, DEPTH_LIGHTING, VOID_PALETTE } from '../config';
+import { COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, DEPTH_LIGHTING, VOID_PALETTE } from '../config';
 import type { EffectSystem }          from './EffectSystem';
 import type { CameraFeedbackController } from './camera/CameraFeedbackController';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx, sustainedRumble } from './camera/cameraFeedbackPresets';
 import { GpuVfxEase } from './gpu/GpuVfxEase';
 import { GpuVfxEffectId } from './gpu/GpuVfxEffects';
-import { registerGraphicsObject } from './EffectUtils';
 import { pickGpuVfxTint } from './gpu/GpuVfxMember';
 import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
 import { ensureAirstrikeBombTexture, ensureAirstrikeSparkTexture } from './gpu/GpuVfxSourceTextures';
@@ -14,6 +13,8 @@ import { GPU_VFX_NO_SOURCE_HANDLE, type GpuVfxSystem } from './gpu/GpuVfxSystem'
 import { ParticleFlowScheduler } from './gpu/ParticleFlowScheduler';
 import { resolveAirstrikeRunLaunchFromStrikes, resolveAirstrikeRunLeadPx, type ScheduledAirstrikeRun } from '../systems/AirstrikeRun';
 import { COOP_DEFENSE_MAP_AIRSTRIKE_DELAY_MS } from '../systems/CoopDefenseAirstrikeEventHandler';
+import { MortarGpuLayer, STRIKE_PALETTE, type StrikePalette } from './gpu/MortarGpuLayer';
+import { registerGraphicsObject } from './EffectUtils';
 
 // ── Textur-Schlüssel ────────────────────────────────────────────────────────
 const TEX_AS_TRAIL  = '__airstrike_trail';
@@ -84,6 +85,10 @@ const BOMBER_FORMATION = [
 const BOMBER_SHADOW_LAYERS = [{ scale: 1, alpha: 1 }, { scale: 0.78, alpha: 0.6 }] as const;
 /** The formation is drawn from far ahead of the first bomb until it has left the zone; both ends fade. */
 const BOMBER_RUN_WINDOW = { leadInPx: 2600, leadOutPx: 2200, fadePx: 900 } as const;
+/** The last stretch before impact shows the falling bomb and its shadow (the shared committed phase). */
+const AIRSTRIKE_DROP_MS = 1100;
+/** Carpet strikes are laid out west to east and fall in that order: the bombers come from the west. */
+const PLAYER_APPROACH_DIR = Math.PI;
 /** Once the run's first bomb is replicated, the estimated approach eases onto its real launch time. */
 const BOMBER_RUN_ANCHOR_BLEND_MS = 600;
 /** A host lags seconds, not minutes: a farther anchor belongs to an earlier round with the same event id. */
@@ -91,15 +96,12 @@ const BOMBER_RUN_ANCHOR_MAX_SKEW_MS = 20_000;
 
 interface AirstrikeVisual {
   id:            number;
-  // Boden-Warnkreis
-  warningFill:   Phaser.GameObjects.Arc;
-  warningRing:   Phaser.GameObjects.Arc;
-  innerRing:     Phaser.GameObjects.Arc;
-  // Fadenkreuz-Linien (4 Arme)
-  crossH:        Phaser.GameObjects.Rectangle;
-  crossV:        Phaser.GameObjects.Rectangle;
-  // Zentral-Glow
-  coreGlow:      Phaser.GameObjects.Arc;
+  /** Telegraph family and stable noise seed in the shared strike telegraph layer. */
+  telegraph:     StrikePalette;
+  seed:          number;
+  /** World angle the bombers approach from; resolved from the run for map strikes. */
+  dir:           number;
+  dirResolved:   boolean;
   // Emissionssteuerung der GPU-Partikel
   x:             number;
   y:             number;
@@ -109,16 +111,15 @@ interface AirstrikeVisual {
   sparkFlow:     ParticleFlowScheduler;
   /** Numerischer Source-Handle des Backends; alle Partikel dieses Strikes haengen daran. */
   source:        number;
-  lastCountdown: number | null;
 }
 
 /**
  * AirstrikeRenderer – Client-seitige Darstellung laufender Luftangriff-Strikes.
  *
  * Warnphase (armedAt → explodeAt):
- *   - Pulsierender Warnkreis + Fadenkreuz am Boden
- *   - Von oben fallende Streifen als einkommende Bomben
- *   - Countdown-Text (1, 2, …)
+ *   - Der gemeinsame Strike-Telegraph der Mörser-Dachse (MortarGpuLayer): segmentierte Zeitspur,
+ *     Anflugrichtung, am Ende die fallende Bombe mit Schatten auf dem Zielpunkt
+ *   - Von oben fallende Streifen als einkommende Bomben, Funken im Zielgebiet
  *
  * Explosion: wird vom EffectSystem via broadcastExplosionEffect('nuke') behandelt.
  *
@@ -150,8 +151,12 @@ export class AirstrikeRenderer {
   private gpuVfx: GpuVfxSystem | null = null;
   private bombSpec:  GpuVfxSpawnSpec | null = null;
   private sparkSpec: GpuVfxSpawnSpec | null = null;
+  private readonly telegraph: MortarGpuLayer;
+  private latestRuns: readonly ScheduledAirstrikeRun[] = [];
 
-  constructor(private readonly scene: Phaser.Scene) {}
+  constructor(private readonly scene: Phaser.Scene) {
+    this.telegraph = new MortarGpuLayer(scene, image => registerGraphicsObject(scene, 'airstrikeWarning', image));
+  }
 
   setEffectSystem(es: EffectSystem): void {
     this.effectSystem = es;
@@ -215,6 +220,7 @@ export class AirstrikeRenderer {
   sync(strikes: SyncedAirstrikeStrike[], now: number): void {
     this.latestStrikes = strikes;
     const activeIds = new Set<number>();
+    this.telegraph.begin(this.scene.time?.now ?? 0);
 
     for (const strike of strikes) {
       activeIds.add(strike.id);
@@ -228,6 +234,7 @@ export class AirstrikeRenderer {
 
       this.updateVisual(visual, strike, now);
     }
+    this.telegraph.flush();
 
     // Entfernte Strikes aufräumen
     for (const [id, visual] of this.visuals) {
@@ -245,6 +252,7 @@ export class AirstrikeRenderer {
    * No own network state. `now` is the strikes' synchronized clock; `textureKey` null removes them.
    */
   syncBomberRuns(runs: readonly ScheduledAirstrikeRun[], roundTimeMs: number, now: number, textureKey: string | null): void {
+    this.latestRuns = runs;
     if (runs.length === 0 && this.bomberRuns.size === 0 && this.bomberRunAnchors.size === 0) return;
     const visible = new Set<string>();
     if (textureKey && this.scene.textures.exists(textureKey)) {
@@ -308,6 +316,8 @@ export class AirstrikeRenderer {
     this.bomberRuns.clear();
     this.bomberRunAnchors.clear();
     this.latestStrikes = [];
+    this.latestRuns = [];
+    this.telegraph.clear();
     for (const v of this.visuals.values()) this.destroyVisual(v);
     this.visuals.clear();
     this.activeVisuals.length = 0;
@@ -390,14 +400,6 @@ export class AirstrikeRenderer {
     now:    number,
   ): void {
     const { x, y } = strike;
-
-    // Positionen aktualisieren
-    v.warningFill.setPosition(x, y);
-    v.warningRing.setPosition(x, y);
-    v.innerRing.setPosition(x, y);
-    v.coreGlow.setPosition(x, y);
-    v.crossH.setPosition(x, y);
-    v.crossV.setPosition(x, y);
     v.x = x;
     v.y = y;
 
@@ -405,20 +407,15 @@ export class AirstrikeRenderer {
     const total    = strike.explodeAt - strike.armedAt;
     const progress = Phaser.Math.Clamp(1 - (strike.explodeAt - now) / total, 0, 1);
 
-    // Pulsierende Ringe
-    const pulse    = 1 + 0.07 * Math.sin(now / 80);
-    const ringPulse = 1 + 0.1 * Math.sin(now / 110 + 1.2);
-    v.warningFill.setAlpha((0.08 + progress * 0.14) * (0.85 + 0.15 * Math.sin(now / 180)));
-    v.warningRing.setAlpha(0.5 + 0.3 * Math.sin(now / 130));
-    v.innerRing.setScale(ringPulse);
-    v.innerRing.setAlpha(0.5 + progress * 0.4);
-    v.coreGlow.setAlpha(0.15 + progress * 0.55);
-    v.coreGlow.setScale(pulse);
-
-    // Fadenkreuz pulsiert
-    const crossAlpha = 0.6 + 0.4 * progress;
-    v.crossH.setAlpha(crossAlpha);
-    v.crossV.setAlpha(crossAlpha);
+    // Shared telegraph: the segmented track counts down to the drop, then the committed ring
+    // contracts while the bomb falls onto its shadow, exactly like a mortar shell.
+    if (!v.dirResolved) this.resolveApproach(v, strike);
+    const dropMs = Math.min(AIRSTRIKE_DROP_MS, Math.max(1, total) * 0.45);
+    const dropAt = strike.explodeAt - dropMs;
+    const timeline = now < dropAt
+      ? Phaser.Math.Clamp((now - strike.armedAt) / Math.max(1, dropAt - strike.armedAt), 0, 1)
+      : 1 + Phaser.Math.Clamp((now - dropAt) / dropMs, 0, 1);
+    this.telegraph.add({ x, y, radius: strike.radius, timeline, seed: v.seed, palette: v.telegraph, age: -1, dir: v.dir });
 
     // Partikelfrequenz nimmt mit Fortschritt zu. Der Wechsel setzt den laufenden Flow-Countdown
     // bewusst nicht zurueck – genau so verhielt sich der direkte Schreibzugriff auf
@@ -445,109 +442,41 @@ export class AirstrikeRenderer {
         { sourceX: x, sourceY: y },
       ));
     }
+  }
 
-    // Countdown-Text (1, 2, …)
-    const remaining = Math.max(0, Math.ceil((strike.explodeAt - now) / 1000));
-    if (remaining > 0 && v.lastCountdown !== remaining) {
-      v.lastCountdown = remaining;
-      this.effectSystem?.playCountdownText(x, y, remaining);
+  /** Map strikes come along their run's heading; without a known run the bombers come from the west. */
+  private resolveApproach(v: AirstrikeVisual, strike: SyncedAirstrikeStrike): void {
+    if (v.telegraph !== STRIKE_PALETTE.hostile) { v.dir = PLAYER_APPROACH_DIR; v.dirResolved = true; return; }
+    let best = Infinity;
+    for (const run of this.latestRuns) {
+      const { startX, startY, dirX, dirY, lengthPx } = run.geometry;
+      const along = Phaser.Math.Clamp((strike.x - startX) * dirX + (strike.y - startY) * dirY, 0, lengthPx);
+      const distance = Math.hypot(strike.x - startX - dirX * along, strike.y - startY - dirY * along);
+      if (distance < best) { best = distance; v.dir = Math.atan2(-dirY, -dirX); v.dirResolved = true; }
     }
   }
 
   private createVisual(strike: SyncedAirstrikeStrike): AirstrikeVisual {
     const { x, y, radius } = strike;
-    const palette = strike.triggeredBy === COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID
-      ? ENEMY_AIRSTRIKE_PALETTE
-      : PLAYER_AIRSTRIKE_PALETTE;
-
-    // Die Marker der Gefahrenzone bleiben bewusst ungedämpft (`setBlendMode` statt
-    // `makeAdditive`): sie sind ein Telegraph, keine Impact-Grafik, und müssen zu jeder
-    // Tageszeit voll lesbar bleiben. Der Einschlag weiter unten wird dagegen gedämpft.
-
-    // Großer Warnkreis (gefüllt)
-    const warningFill = this.scene.add.circle(x, y, radius, palette.warning, 0.08);
-    registerGraphicsObject(this.scene, 'airstrikeWarning', warningFill);
-    warningFill.setDepth(DEPTH.CANOPY - 1);
-    warningFill.setBlendMode(Phaser.BlendModes.ADD);
-
-    // Äußerer Warnring (Stroke)
-    const warningRing = this.scene.add.circle(x, y, radius);
-    registerGraphicsObject(this.scene, 'airstrikeWarning', warningRing);
-    warningRing.setStrokeStyle(3, palette.ring, 0.65);
-    warningRing.setDepth(DEPTH.CANOPY);
-    warningRing.setBlendMode(Phaser.BlendModes.ADD);
-
-    // Innerer pulsierender Ring
-    const innerRing = this.scene.add.circle(x, y, radius * 0.22);
-    registerGraphicsObject(this.scene, 'airstrikeWarning', innerRing);
-    innerRing.setStrokeStyle(2, palette.core, 0.75);
-    innerRing.setDepth(DEPTH.PLAYERS - 1);
-    innerRing.setBlendMode(Phaser.BlendModes.ADD);
-
-    // Zentrum-Glow
-    const coreGlow = this.scene.add.circle(x, y, 18, palette.glow, 0.28);
-    registerGraphicsObject(this.scene, 'airstrikeWarning', coreGlow);
-    coreGlow.setDepth(DEPTH.PLAYERS - 1);
-    coreGlow.setBlendMode(Phaser.BlendModes.ADD);
-
-    // Fadenkreuz – horizontal
-    const crossH = this.scene.add.rectangle(x, y, radius * 1.2, 2, palette.ring, 0.7);
-    registerGraphicsObject(this.scene, 'airstrikeWarning', crossH);
-    crossH.setDepth(DEPTH.PLAYERS - 1);
-    crossH.setBlendMode(Phaser.BlendModes.ADD);
-
-    // Fadenkreuz – vertikal
-    const crossV = this.scene.add.rectangle(x, y, 2, radius * 1.2, palette.ring, 0.7);
-    registerGraphicsObject(this.scene, 'airstrikeWarning', crossV);
-    crossV.setDepth(DEPTH.PLAYERS - 1);
-    crossV.setBlendMode(Phaser.BlendModes.ADD);
-
-    // Atem-Tween für Warnkreis
-    this.scene.tweens.add({
-      targets:  warningFill,
-      alpha:    { from: 0.06, to: 0.2 },
-      duration: 350,
-      yoyo:     true,
-      repeat:   -1,
-      ease:     'Sine.easeInOut',
-    });
-
-    // Spin-Tween für inneren Ring
-    this.scene.tweens.add({
-      targets:  innerRing,
-      angle:    360,
-      duration: 1800,
-      repeat:   -1,
-      ease:     'Linear',
-    });
-
+    const enemy = strike.triggeredBy === COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID;
     return {
       id: strike.id,
-      warningFill,
-      warningRing,
-      innerRing,
-      crossH,
-      crossV,
-      coreGlow,
+      telegraph: enemy ? STRIKE_PALETTE.hostile : STRIKE_PALETTE.player,
+      seed: (Math.imul(strike.id + 1, 2654435761) >>> 0) % 997,
+      dir: PLAYER_APPROACH_DIR,
+      dirResolved: false,
       x,
       y,
       radius,
-      palette,
+      palette: enemy ? ENEMY_AIRSTRIKE_PALETTE : PLAYER_AIRSTRIKE_PALETTE,
       bombFlow:  new ParticleFlowScheduler(BOMB_FLOW_START_MS),
       sparkFlow: new ParticleFlowScheduler(SPARK_FLOW_START_MS),
       // Bomben und Funken teilen sich die Quelle: sie verschwinden gemeinsam mit dem Strike.
       source: this.gpuVfx?.createSource(GpuVfxEffectId.AirstrikeBomb) ?? GPU_VFX_NO_SOURCE_HANDLE,
-      lastCountdown: null,
     };
   }
 
   private destroyVisual(v: AirstrikeVisual): void {
-    v.warningFill.destroy();
-    v.warningRing.destroy();
-    v.innerRing.destroy();
-    v.coreGlow.destroy();
-    v.crossH.destroy();
-    v.crossV.destroy();
     // Noch sichtbare Partikel dieses Strikes sofort ausblenden – wie bisher `emitter.destroy()`.
     this.gpuVfx?.releaseSource(v.source);
     const index = this.activeVisuals.indexOf(v);

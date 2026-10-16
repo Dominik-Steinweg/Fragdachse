@@ -3,16 +3,23 @@ import { getGraphicsQualityProfile } from '../../graphics/GraphicsQuality';
 import { MORTAR_FRAGMENT, MORTAR_VERTEX } from './MortarShader';
 import { registerGraphicsObject } from '../EffectUtils';
 
-/** Fixed bounded batch: four draws regardless of strike count. No per-strike GameObjects. */
+/** Fixed bounded batch: five draws regardless of strike count. No per-strike GameObjects.
+ * Shared by mortar and airstrike telegraphs; each owner keeps its own instance of this layer. */
 export const MORTAR_BATCH_CAPACITY = 128;
-const WORDS = 10, VERTICES = 6;
+const WORDS = 11, VERTICES = 6;
 const CORNERS = [-1,-1, 1,-1, 1,1, -1,-1, 1,1, -1,1];
-/** Ground material, emissive telegraph/embers, airborne shell, lit smoke. */
-export const MORTAR_PASS_DEPTHS = [5.12, 19.7, 20.6, 13.38] as const;
-/** timeline: 0..1 windup, 1..2 committed flight; age < 0 incoming, else seconds since impact. */
-export interface MortarGpuItem { x: number; y: number; radius: number; timeline: number; seed: number; allied: boolean; age: number;
+/** Ground material, emissive telegraph/embers, airborne shell, lit smoke, shooter thread. */
+export const MORTAR_PASS_DEPTHS = [5.12, 19.7, 20.6, 13.38, 19.65] as const;
+/** Colour family of a telegraph: hostile void, allied, or the warm player-ordnance family. */
+export const STRIKE_PALETTE = { hostile: 0, allied: 1, player: 2 } as const;
+export type StrikePalette = typeof STRIKE_PALETTE[keyof typeof STRIKE_PALETTE];
+/** timeline: 0..1 windup, 1..2 committed flight, -(1..2) cancelled windup;
+ * age < 0 incoming, else seconds since impact (for a cancelled windup: the windup it reached). */
+export interface MortarGpuItem { x: number; y: number; radius: number; timeline: number; seed: number; palette: StrikePalette; age: number;
   /** World angle from the aim point toward the shooter; drives the direction-of-fire chevrons. */
-  dir: number }
+  dir: number;
+  /** World distance from the aim point to the shooter; 0 draws no shooter thread. */
+  tracePx?: number }
 
 export class MortarGpuLayer {
   private readonly data = new Float32Array(MORTAR_BATCH_CAPACITY * VERTICES * WORDS);
@@ -21,13 +28,15 @@ export class MortarGpuLayer {
   private timeSeconds = 0;
   private readonly passes: { image: Phaser.GameObjects.Image; batch: MortarBatchPort }[] = [];
 
-  constructor(private readonly scene: Phaser.Scene) {
+  /** `register` attributes the pass images to the owner's profiler family (mortar by default). */
+  constructor(private readonly scene: Phaser.Scene,
+    register: (image: Phaser.GameObjects.Image) => void = image => registerGraphicsObject(scene, 'mortarEffects', image)) {
     const renderer = scene.sys?.renderer as Phaser.Renderer.WebGL.WebGLRenderer | undefined;
     if (!renderer?.gl) return;
     for (const [pass, depth] of MORTAR_PASS_DEPTHS.entries()) {
       const image = scene.add.image(0, 0, '__WHITE').setDepth(depth).setVisible(false);
-      image.name = `mortar-${['ground', 'telegraph', 'shell', 'smoke'][pass]}`;
-      registerGraphicsObject(scene, 'mortarEffects', image);
+      image.name = `mortar-${['ground', 'telegraph', 'shell', 'smoke', 'trace'][pass]}`;
+      register(image);
       const batch = createMortarBatch(renderer, image, pass, this);
       const manager = renderer.renderNodes;
       class Submitter extends Phaser.Renderer.WebGL.RenderNodes.RenderNode {
@@ -50,8 +59,8 @@ export class MortarGpuLayer {
       this.data[offset++] = item.x; this.data[offset++] = item.y;
       this.data[offset++] = CORNERS[i * 2]; this.data[offset++] = CORNERS[i * 2 + 1];
       this.data[offset++] = item.radius; this.data[offset++] = item.timeline;
-      this.data[offset++] = item.seed; this.data[offset++] = item.allied ? 1 : 0; this.data[offset++] = item.age;
-      this.data[offset++] = item.dir;
+      this.data[offset++] = item.seed; this.data[offset++] = item.palette; this.data[offset++] = item.age;
+      this.data[offset++] = item.dir; this.data[offset++] = item.tracePx ? item.tracePx / Math.max(1, item.radius) : 0;
     }
     return true;
   }
@@ -85,7 +94,7 @@ function createMortarBatch(renderer: Phaser.Renderer.WebGL.WebGLRenderer, image:
         instancesPerBatch: MORTAR_BATCH_CAPACITY, verticesPerInstance: VERTICES, indicesPerInstance: VERTICES,
         topology: renderer.gl.TRIANGLES, vertexSource: MORTAR_VERTEX, fragmentSource: MORTAR_FRAGMENT,
         vertexBufferLayout: { usage: 'DYNAMIC_DRAW', layout: [{ name: 'inCenter', size: 2 }, { name: 'inCorner', size: 2 },
-          { name: 'inState', size: 4 }, { name: 'inAge', size: 1 }, { name: 'inDir', size: 1 }] },
+          { name: 'inState', size: 4 }, { name: 'inAge', size: 1 }, { name: 'inDir', size: 1 }, { name: 'inTrace', size: 1 }] },
       });
     }
     _generateElementIndices(instances: number): ArrayBuffer {

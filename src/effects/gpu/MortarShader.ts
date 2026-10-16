@@ -1,8 +1,11 @@
 /**
- * Mortar strike passes. Lengths are in units of the damage radius R; the instance carries
- * (centre, corner, [R, timeline, seed, allied], age).
- * timeline: 0..1 windup progress (interruptible), 1..2 = 1 + flight progress (committed).
+ * Shared strike telegraph passes (mortar and airstrike). Lengths are in units of the damage
+ * radius R; the instance carries (centre, corner, [R, timeline, seed, palette], age, dir, trace).
+ * timeline: 0..1 windup progress (interruptible), 1..2 = 1 + flight progress (committed),
+ *           -1..-2 = -(1 + progress) of a cancelled windup, then age is the windup it reached.
  * age < 0: incoming strike, else seconds since the replicated impact.
+ * palette: 0 void (hostile), 1 allied, 2 warm player ordnance.
+ * trace: distance from the aim point to the shooter in R (0 = no shooter to point at).
  *
  * Pass 0 (5.12, ground material): telegraph groove and area shade, the descending shell's drop
  *        shadow (sliding in against the sun as the shell loses height), then scorch, a small
@@ -12,11 +15,16 @@
  * Pass 2 (20.6, airborne): the shell seen from above, tail first, losing height until it meets
  *        its shadow. Never a horizontal projectile path across the map.
  * Pass 3 (13.38, lit material): smoke rising from the crater.
+ * Pass 4 (19.65, emissive): a fine thread with drifting motes from the ring to the shooter, so
+ *        the source of fire stays findable even off the telegraph; it retracts when cancelled.
  * Emissive light is written premultiplied with zero alpha (additive) so scene alpha stays intact.
  */
 const SHARED = /* glsl */ `
 const vec2 SHADOW_DIR = vec2(0.6, 0.8); // Shared top-left sun: shadows fall to the lower right.
-float passSize(float pass) { return pass < 0.5 ? 2.05 : (pass < 1.5 ? 2.05 : (pass < 2.5 ? 0.5 : 2.1)); }`;
+float passSize(float pass) { return pass < 0.5 ? 2.05 : (pass < 1.5 ? 2.05 : (pass < 2.5 ? 0.5 : 2.1)); }
+// Half width of the shooter thread in R; the quad runs from just outside the ring to the shooter.
+const float TRACE_HALF_WIDTH = 0.16;
+const float TRACE_START = 1.02;`;
 
 export const MORTAR_VERTEX = `
 #pragma phaserTemplate(shaderName)
@@ -29,15 +37,27 @@ attribute vec2 inCorner;
 attribute vec4 inState;
 attribute float inAge;
 attribute float inDir;
+attribute float inTrace;
 varying vec2 vLocal;
 varying vec4 vState;
 varying float vAge;
 varying float vDir;
+varying float vTrace;
 ${SHARED}
 void main() {
-  vState = inState; vAge = inAge; vDir = inDir;
-  vLocal = inCorner * passSize(uPass);
-  vec2 world = inCenter + vLocal * inState.x;
+  vState = inState; vAge = inAge; vDir = inDir; vTrace = inTrace;
+  vec2 world;
+  if (uPass > 3.5) {
+    // Shot frame: x from the aim point toward the shooter, y across. Without a shooter the quad
+    // collapses onto the ring edge and rasterizes nothing.
+    vec2 d = vec2(cos(inDir), sin(inDir)), n = vec2(-d.y, d.x);
+    float far = max(TRACE_START, inTrace);
+    vLocal = vec2(mix(TRACE_START, far, inCorner.x * 0.5 + 0.5), inCorner.y * TRACE_HALF_WIDTH);
+    world = inCenter + (d * vLocal.x + n * vLocal.y) * inState.x;
+  } else {
+    vLocal = inCorner * passSize(uPass);
+    world = inCenter + vLocal * inState.x;
+  }
   gl_Position = uProjectionMatrix * vec4((uViewMatrix * vec3(world, 1.0)).xy, 0.0, 1.0);
 }`;
 
@@ -52,6 +72,7 @@ varying vec2 vLocal;
 varying vec4 vState;
 varying float vAge;
 varying float vDir;
+varying float vTrace;
 ${SHARED}
 const float TAU = 6.2831853;
 const float SEGMENTS = 24.0;
@@ -101,13 +122,52 @@ float ringNotch(vec2 s, float r) {
   float a = atan(s.y, s.x);
   return exp(-a * a / 0.018) * band(r, 0.958, 0.04);
 }
-// Faction palette: void (hostile) or allied. Index 0 deep .. 3 core.
+// Palette family: 0 void (hostile), 1 allied, 2 warm player ordnance. Index 0 deep .. 3 core.
 vec3 palette(float k, float allied) {
-  vec3 v = k < 0.5 ? vec3(0.435, 0.086, 0.659) : (k < 1.5 ? vec3(0.702, 0.278, 1.0)
-    : (k < 2.5 ? vec3(0.851, 0.549, 1.0) : vec3(0.976, 0.910, 1.0)));
-  vec3 a = k < 0.5 ? vec3(0.04, 0.42, 0.28) : (k < 1.5 ? vec3(0.122, 0.890, 0.604)
+  if (allied > 1.5) return k < 0.5 ? vec3(0.42, 0.13, 0.03) : (k < 1.5 ? vec3(0.96, 0.43, 0.09)
+    : (k < 2.5 ? vec3(1.0, 0.69, 0.3) : vec3(1.0, 0.94, 0.78)));
+  if (allied > 0.5) return k < 0.5 ? vec3(0.04, 0.42, 0.28) : (k < 1.5 ? vec3(0.122, 0.890, 0.604)
     : (k < 2.5 ? vec3(0.541, 1.0, 0.812) : vec3(0.910, 1.0, 0.961)));
-  return mix(v, a, allied);
+  return k < 0.5 ? vec3(0.435, 0.086, 0.659) : (k < 1.5 ? vec3(0.702, 0.278, 1.0)
+    : (k < 2.5 ? vec3(0.851, 0.549, 1.0) : vec3(0.976, 0.910, 1.0)));
+}
+// Near-black tint of the area shade and under-strokes for the same family.
+vec3 shadeTint(float allied) {
+  return allied > 1.5 ? vec3(0.03, 0.016, 0.006) : (allied > 0.5 ? vec3(0.0, 0.025, 0.018) : vec3(0.02, 0.012, 0.03));
+}
+// Outward fragments of the windup track that a cancelled strike reached; c is the cancel progress.
+// The track pops outward at once (ease-out), each segment tumbling a little, while a release ring and
+// radial sparks fly off: the interrupted shot reads as broken, not merely faded.
+vec3 cancelledTrack(float u, float r, float reached, float c, float seed, float allied) {
+  float pop = 1.0 - pow(1.0 - c, 3.0);
+  float seg = floor(u * SEGMENTS);
+  float rnd = hash(vec2(seg, seed));
+  float tumble = (rnd - 0.5) * 0.035 * pop;
+  float local = fract((u + tumble) * SEGMENTS);
+  float shrink = 1.0 - 0.6 * c;
+  float body = smoothstep(0.0, 0.05, local) * (1.0 - smoothstep(0.66 * shrink, 0.72 * shrink, local));
+  float lit = clamp(reached * SEGMENTS - seg, 0.0, 1.0);
+  float rr = r - pop * (0.2 + 0.24 * rnd) - c * c * 0.08;
+  float piece = band(rr, RING - 0.012, 0.018 + 0.012 * c) * body;
+  float snap = exp(-c / 0.07);
+  float fade = 1.0 - smoothstep(0.3 + 0.3 * rnd, 1.0, c);
+  vec3 hot = mix(palette(3.0, allied), mix(palette(2.0, allied), palette(1.0, allied), 0.45), smoothstep(0.0, 0.16, c));
+  vec3 rgb = (hot * mix(0.4, 1.0, lit) * (1.1 + 2.2 * snap) + palette(1.0, allied) * band(rr, RING - 0.012, 0.06) * 0.35 * lit)
+    * piece * fade;
+  rgb += mix(palette(3.0, allied), palette(2.0, allied), smoothstep(0.0, 0.25, c))
+    * band(r, RING + pop * 0.55, 0.024) * exp(-c / 0.16) * 1.1;
+  vec2 q = vec2(sin(u * TAU), -cos(u * TAU)) * r;
+  for (int k = 0; k < 12; k++) {
+    float h = hash(vec2(float(k) * 7.13, seed));
+    float a = (float(k) + 0.6 * h) / 12.0 * TAU;
+    vec2 dir = vec2(sin(a), -cos(a));
+    float head = RING + pop * (0.3 + 0.55 * hash(vec2(seed, float(k) * 3.7)));
+    // A short radial streak trailing its head back toward the ring.
+    float along = dot(q, dir), across = dot(q, vec2(-dir.y, dir.x));
+    float streak = smoothstep(head - 0.12 * (1.0 - c), head, along) * (1.0 - smoothstep(head, head + 0.01, along));
+    rgb += palette(3.0, allied) * streak * exp(-across * across / 0.00012) * (1.0 - smoothstep(0.4, 0.95, c)) * 1.3;
+  }
+  return rgb;
 }
 vec3 ramp(float t, float allied) {
   vec3 c = mix(palette(0.0, allied), palette(1.0, allied), smoothstep(0.0, 0.4, t));
@@ -117,10 +177,51 @@ vec3 ramp(float t, float allied) {
 
 void main() {
   float R = vState.x, timeline = vState.y, seed = vState.z, allied = vState.w, age = vAge;
-  bool incoming = age < 0.0;
+  // A cancelled windup keeps its last frame for a short break-up; age then holds the reached windup.
+  bool cancelled = timeline < -0.5;
+  float cancel = clamp(-timeline - 1.0, 0.0, 1.0);
+  float reached = cancelled ? clamp(age, 0.0, 1.0) : 0.0;
+  bool incoming = age < 0.0 && !cancelled;
   bool committed = incoming && timeline >= 1.0;
   float windup = clamp(timeline, 0.0, 1.0);
   float flight = clamp(timeline - 1.0, 0.0, 1.0);
+  if (uPass > 3.5) {
+    if ((!incoming && !cancelled) || vTrace <= TRACE_START + 0.05) discard;
+    float along = (vLocal.x - TRACE_START) * R, total = (vTrace - TRACE_START) * R, across = vLocal.y * R;
+    float envelope = smoothstep(0.0, 0.35 * R, along) * (1.0 - smoothstep(total - 0.5 * R, total, along))
+      * (1.0 - smoothstep(900.0, 1500.0, along));
+    float tWindup = clamp(timeline, 0.0, 1.0), tFlight = clamp(timeline - 1.0, 0.0, 1.0);
+    bool tCommitted = incoming && timeline >= 1.0;
+    // Calm while charging, one bright pulse toward the target when fired, fading in flight.
+    float strength = cancelled ? 1.0 - smoothstep(0.0, 0.85, cancel)
+      : (tCommitted ? 1.3 * (1.0 - smoothstep(0.0, 0.4, tFlight)) : 0.3 + 0.55 * tWindup * tWindup);
+    float tip = 0.0;
+    if (cancelled) {
+      // The thread retracts from the aim point back to the shooter behind a bright tip.
+      float front = cancel * 1.15 * total;
+      envelope *= smoothstep(front - 6.0, front + 18.0, along);
+      tip = exp(-pow((along - front) / 10.0, 2.0)) * exp(-across * across / 10.0) * (1.0 - cancel);
+    }
+    float speed = tCommitted ? 640.0 : mix(70.0, 240.0, tWindup);
+    float thread = exp(-across * across / 1.4);
+    float dashF = fract((along + uTime * speed) / 30.0);
+    float dash = smoothstep(0.0, 0.12, dashF) * (1.0 - smoothstep(0.42, 0.55, dashF));
+    // Motes drift along the thread toward the target, each with its own offset and twinkle.
+    float motes = 0.0;
+    for (int k = 0; k < 2; k++) {
+      float spacing = 52.0;
+      float phase = (along + uTime * speed * (0.75 + 0.2 * float(k)) + float(k) * 26.0) / spacing;
+      float id = floor(phase), f = fract(phase);
+      float h = hash(vec2(id, seed + float(k) * 13.1));
+      float twinkle = 0.5 + 0.5 * sin(uTime * (7.0 + 5.0 * h) + h * TAU);
+      float dx = (f - 0.5) * spacing, dy = across - (h - 0.5) * 10.0;
+      motes += exp(-(dx * dx + dy * dy) / 4.5) * (0.35 + 0.65 * twinkle) * step(0.3, hash(vec2(id * 1.7, seed + float(k))));
+    }
+    vec3 trace = palette(2.0, allied) * thread * (0.18 + 0.22 * dash) + palette(3.0, allied) * motes * 0.85
+      + palette(1.0, allied) * exp(-across * across / 60.0) * 0.05 + palette(3.0, allied) * tip * 1.4;
+    gl_FragColor = vec4(trace * strength * envelope * uAlpha, 0.0);
+    return;
+  }
   vec2 q = vLocal;
   float r = length(q);
   // Clockwise from noon in screen space (y grows downwards).
@@ -134,14 +235,19 @@ void main() {
   float dirStrength = committed ? 1.0 : 0.35 + 0.65 * windup;
 
   if (uPass < 0.5) {
-    if (incoming) {
+    if (cancelled) {
+      float inside = 1.0 - smoothstep(0.86, RING, r);
+      alpha = clamp(inside * (0.07 + 0.08 * reached) + band(r, RING - 0.012, 0.04) * 0.4, 0.0, 0.6)
+        * (1.0 - smoothstep(0.0, 0.4, cancel));
+      rgb = shadeTint(allied) * alpha;
+    } else if (incoming) {
       // Area shade: a slightly mottled darkening that deepens once the shot is committed.
       float mottle = fbm(q * 3.4 + seed);
       float inside = 1.0 - smoothstep(0.86, RING, r);
       float shadeA = inside * (committed ? 0.16 + 0.12 * flight : 0.07 + 0.08 * windup) * (0.75 + 0.5 * mottle);
       // Dark groove under the emissive ring keeps the boundary readable on bright ground.
       float grooveA = band(r, RING - 0.012, committed ? 0.05 : 0.04) * (committed ? 0.55 : 0.4);
-      vec3 shadeC = mix(vec3(0.02, 0.012, 0.03), vec3(0.0, 0.025, 0.018), allied);
+      vec3 shadeC = shadeTint(allied);
       alpha = clamp(shadeA + grooveA, 0.0, 0.75);
       rgb = shadeC * alpha;
       // Dark under-stroke for the direction chevrons and lane, so they read on bright ground too.
@@ -200,7 +306,12 @@ void main() {
       rgb = ground * groundA + dust * dustA * (1.0 - groundA);
     }
   } else if (uPass < 1.5) {
-    if (incoming && !committed) {
+    if (cancelled) {
+      rgb = cancelledTrack(u, r, reached, cancel, seed, allied);
+      // The chevrons turn back outward and fade: the shot will not come.
+      vec2 chev = incomingChevrons(shot, -cancel * 1.4, 0.014);
+      rgb += palette(1.0, allied) * (chev.x * 0.7 + chev.y * 0.25) * (1.0 - smoothstep(0.0, 0.3, cancel));
+    } else if (incoming && !committed) {
       // Windup: one open segmented track. Segments fill clockwise from noon; permanent gaps keep
       // it visibly unfinished, so it can never be mistaken for the committed ring.
       float pulse = 0.5 + 0.5 * sin(TAU * (windup * 2.0 + windup * windup * windup * 2.0));
@@ -313,7 +424,7 @@ void main() {
     alpha = clamp(a + wake * appear * (1.0 - a), 0.0, 1.0);
     rgb = shellC * a + vec3(0.16, 0.15, 0.17) * wake * appear * (1.0 - a);
   } else {
-    if (incoming || age < 0.12) discard;
+    if (incoming || cancelled || age < 0.12) discard;
     // Lit smoke leaving the crater, drifting with a per-strike breeze.
     float drift = (fract(seed * 0.381) - 0.5) * 1.2 + 0.6;
     vec2 wind = vec2(cos(drift), sin(drift));

@@ -8,7 +8,7 @@ import { CAMERA_FEEDBACK_PRIORITY } from './camera/cameraFeedbackPresets';
 import type { ExplosionGpuRenderer } from './ExplosionGpuRenderer';
 import type { LightingSystem } from './LightingSystem';
 import type { GpuVfxSystem } from './gpu/GpuVfxSystem';
-import { MortarGpuLayer } from './gpu/MortarGpuLayer';
+import { MortarGpuLayer, STRIKE_PALETTE } from './gpu/MortarGpuLayer';
 import { MortarMuzzleVfx } from './MortarMuzzleVfx';
 import { MortarStrikePresentationTimeline, mortarFireDirection } from './mortarStrikeVisualModel';
 import { ensureMortarStrikeTextures, MORTAR_TEXTURE, MORTAR_FRAME } from './mortarStrikeTextures';
@@ -89,7 +89,8 @@ export class MortarStrikeRenderer {
       const impact = this.impacts[i], age = (this.scene.time.now - impact.born) / 1000;
       if (age >= IMPACT_LIFETIME_S) { this.impacts.splice(i, 1); continue; }
       if (suppressed || !visible(impact.x, impact.y, impact.radius * 2.1)) continue;
-      this.layer.add({ x: impact.x, y: impact.y, radius: impact.radius, timeline: 2, seed: impact.seed, allied: impact.allied, age, dir: 0 });
+      this.layer.add({ x: impact.x, y: impact.y, radius: impact.radius, timeline: 2, seed: impact.seed,
+        palette: impact.allied ? STRIKE_PALETTE.allied : STRIKE_PALETTE.hostile, age, dir: 0 });
       if (age < 2.4 && nextLights.size < lightLimit) {
         const key = `${this.lightPrefix}impact-${impact.seed}`;
         nextLights.add(key);
@@ -106,8 +107,9 @@ export class MortarStrikeRenderer {
       active.add(strike.id);
       if (!suppressed && visible(strike.targetX, strike.targetY, strike.radius * 1.8)) {
         this.layer.add({ x: strike.targetX, y: strike.targetY, radius: strike.radius,
-          timeline: loading ? windup : 1 + flight, seed: strikeSeed(strike.id), allied, age: -1,
-          dir: mortarFireDirection(strike) });
+          timeline: loading ? windup : 1 + flight, seed: strikeSeed(strike.id),
+          palette: allied ? STRIKE_PALETTE.allied : STRIKE_PALETTE.hostile, age: -1,
+          dir: mortarFireDirection(strike), tracePx: Math.hypot(strike.sourceX - strike.targetX, strike.sourceY - strike.targetY) });
         if (!loading && nextLights.size < lightLimit) {
           const key = `${this.lightPrefix}strike-${strike.id}`;
           nextLights.add(key);
@@ -140,6 +142,28 @@ export class MortarStrikeRenderer {
           this.cameraFeedback?.request({ channel: 'impact', amplitudePx: 2.2, durationMs: 140, priority: 40,
             sourceX: sx, sourceY: sy, falloffPx: 550, decay: 'impulse' });
       }
+    }
+    for (const { strike, cancel, reached } of this.timeline.cancelled) {
+      const allied = strike.faction === 'allied';
+      const palette = allied ? ALLIED_PALETTE : VOID_PALETTE;
+      active.add(strike.id);
+      if (!suppressed && visible(strike.targetX, strike.targetY, strike.radius * 1.8)) {
+        this.layer.add({ x: strike.targetX, y: strike.targetY, radius: strike.radius, timeline: -(1 + cancel),
+          seed: strikeSeed(strike.id), palette: allied ? STRIKE_PALETTE.allied : STRIKE_PALETTE.hostile, age: reached,
+          dir: mortarFireDirection(strike), tracePx: Math.hypot(strike.sourceX - strike.targetX, strike.sourceY - strike.targetY) });
+      }
+      const visual = this.visuals.get(strike.id);
+      if (!visual) continue;
+      if (visual.chargeSource >= 0) { this.muzzle?.release(visual.chargeSource); visual.chargeSource = -1; }
+      // The gathered charge collapses into the barrel with one bright pinch and a small dying ring.
+      const collapse = 1 - Math.min(1, cancel / 0.45);
+      const pinch = Math.exp(-cancel / 0.06);
+      visual.glow.setPosition(strike.sourceX, strike.sourceY).setTint(palette.primary)
+        .setScale((24 + 20 * reached) * collapse / 80).setAlpha((0.15 + reached * 0.6) * collapse + pinch * 0.4);
+      visual.core.setPosition(strike.sourceX, strike.sourceY).setTint(palette.core)
+        .setScale((4 + reached * 8) * (0.4 + 0.6 * collapse) / 80).setAlpha(Math.min(1, reached * 0.6 * collapse + pinch));
+      visual.wave.setPosition(strike.sourceX, strike.sourceY).setTint(palette.bright).setVisible(cancel < 0.5)
+        .setScale((10 + cancel * 70) / 80).setAlpha(0.55 * Math.max(0, 1 - cancel / 0.5));
     }
     this.layer.flush();
     for (const key of this.lightKeys) if (!nextLights.has(key)) this.lighting?.releaseLight(key, { immediate: true });
