@@ -67,7 +67,7 @@ LEGS = [
 ]
 LEG_RADII = dict(femur=(.118, .130, .108), knee=.110, tibia=(.104, .090), tarsus=(.084, .064, .044))
 # Coarse setae per BU of segment length; spike length and base radius in BU.
-SETAE = dict(density=80, length=.085, radius=.011)
+SETAE = dict(density=150, length=.10, radius=.012)
 PALP = dict(root=(.24, .92, .30), knee=(.38, 1.16, .44), tip=(.40, 1.44, .06))
 CHELICERA = dict(centre=(.115, 1.05, .33), scale=(.12, .20, .13))
 # Eye cluster on the ocular tubercle: pair -> (x, y, radius, look yaw, look pitch), right side.
@@ -79,13 +79,15 @@ EYES = {
     3: (.108, -.040, .030, 112, 34), # posterior lateral
 }
 # Black-violet palettes: no red (telegraphs only) and no yellow. dark/light/rim are the setae
-# value plan; `band` brightens the joint rings, `fringe` the pale hair rim; `skin` is the abdomen.
+# value plan; `band` brightens the joint rings, `fringe` the pale hair rim, `tips` the lilac setae
+# tips and `edge` the carapace margin (light edges that keep the legs readable on dark ground);
+# `skin` is the abdomen, which stays the brightest part through its vessel glow.
 PALETTES = {
-    'void': dict(dark='#0c0910', light='#2d2338', rim='#8a76a0', band=.55, fringe=.45, chitin='#433653',
+    'void': dict(dark='#0c0910', light='#2d2338', rim='#a08bbf', band=.55, fringe=.80, tips=.90, edge=.80, chitin='#433653',
                  skin_dark='#0d0812', skin_light='#2a1d36', skin_rim='#6f5a86'),
-    'cobalt': dict(dark='#090a12', light='#222a46', rim='#6f7cb0', band=.25, fringe=.55, chitin='#36406a',
+    'cobalt': dict(dark='#090a12', light='#222a46', rim='#6f7cb0', band=.25, fringe=.55, tips=.8, edge=.7, chitin='#36406a',
                    skin_dark='#0b0a16', skin_light='#211d3c', skin_rim='#5b5f92'),
-    'bone': dict(dark='#0b0a0d', light='#28232c', rim='#cfc4d9', band=.95, fringe=.30, chitin='#3e3743',
+    'bone': dict(dark='#0b0a0d', light='#28232c', rim='#cfc4d9', band=.95, fringe=.30, tips=.6, edge=.5, chitin='#3e3743',
                  skin_dark='#0c090e', skin_light='#261d2c', skin_rim='#6c5f78'),
 }
 VOID = linear('#b347ff')
@@ -155,8 +157,12 @@ def abdomen_rows(scale):
     return profile_rows(rows)
 
 
-def setae(c, name, dark, light, rim, density, softness=.6, roughness=(.62, .80)):
-    """Dense matte setae over chitin: the dermis plan retuned to short black-violet hair."""
+def setae(c, name, dark, light, rim, density, softness=.6, roughness=(.62, .80), exposed=False):
+    """Dense matte setae over chitin: the dermis plan retuned to short black-violet hair.
+
+    `exposed` is for the free-standing setae spikes: their contact occlusion stays local, so
+    the lilac tips are not buried in the shadow of the leg they grow from.
+    """
     material = skin(c, name, linear(dark), linear(light), rim=linear(rim), softness=softness, roughness=roughness)
     nodes = material.node_tree.nodes
     bs = nodes['Principled BSDF']
@@ -168,6 +174,9 @@ def setae(c, name, dark, light, rim, density, softness=.6, roughness=(.62, .80))
     nodes['MS pigment tint strength'].inputs[1].default_value = .40
     nodes['MS cell strength'].inputs[1].default_value = .20
     nodes['Iridescent violet-teal sheen'].inputs[7].default_value = (*linear('#5a4a78'), 1)
+    if exposed:
+        nodes['Contact depth'].inputs['Distance'].default_value = .015
+        nodes['MS local cavity'].inputs['Distance'].default_value = .010
     return material
 
 
@@ -379,11 +388,14 @@ def fringe(c, name, points, radii, material, seed, density=None, length=None, le
     mesh.materials.append(material)
     ob = bpy.data.objects.new(name, mesh)
     c.scene.collection.objects.link(ob)
+    ob['setae'] = True
+    # Sub-pixel hair: Beauty only. The shadow proxy follows the leg volumes, not the fuzz.
+    ob['meshShadowDetail'] = True
     return ob
 
 
 def paint_limb(ob, joints, palette):
-    """Dark setae with pale joint rings (patella, metatarsus) and a soft pale hair fringe."""
+    """Dark setae with pale joint rings (patella, metatarsus), a pale hair fringe and lilac setae tips."""
     lengths, total = [], 0
     for a, b in zip(joints, joints[1:]):
         lengths.append(total)
@@ -403,12 +415,22 @@ def paint_limb(ob, joints, palette):
     def sample(p, n):
         s = along(p)
         band = max(math.exp(-((s - r - .05) / .055) ** 2) for r in rings)
-        fringe = smoothstep(.55, .05, n.z)
+        fringe = smoothstep(.32, .02, n.z)  # only the outline seen from above: a light rim, dark leg body
         return .30 + .25 * smoothstep(.2, .9, n.z), max(palette['band'] * band, palette['fringe'] * fringe), .55
     paint_pattern(ob, sample)
 
 
-def build_leg(c, name, points, radii, material, palette):
+def paint_setae(ob, palette):
+    """Setae spikes from `fringe`: lilac hair, lightest at the tip (every fourth vertex is a spike tip)."""
+    mesh = ob.data
+    attr = mesh.color_attributes.new(name='FD_Pattern', type='FLOAT_COLOR', domain='POINT')
+    colours = []
+    for i in range(len(mesh.vertices)):
+        colours.extend((.45, palette['tips'] * (1 if i % 4 == 3 else .65), .55, 1))
+    attr.data.foreach_set('color', colours)
+
+
+def build_leg(c, name, points, radii, material, spikes, palette):
     """Femur (with coxa), tibia (with patella) and tarsus (with metatarsus): rigid segments."""
     root, knee, ankle, tip = points
     seed = sum(ord(ch) for ch in name)
@@ -422,16 +444,20 @@ def build_leg(c, name, points, radii, material, palette):
     tarsus = horn(c, f'{name} tarsus', tarsus_path, tarsus_radii, material, sides=14)
     end = radii['tarsus'][-1]
     pad = ell(c, f'{name} scopula', tuple(tip + Vector((0, 0, .004))), (end * 1.05, end * 1.25, end * .85), material)
-    parts = dict(femur=[femur, fringe(c, f'{name} femur setae', femur_path, femur_radii, material, seed)],
-                 tibia=[kneecap, tibia, fringe(c, f'{name} tibia setae', tibia_path, tibia_radii, material, seed + 1)],
-                 tarsus=[ankle_ball, tarsus, pad, fringe(c, f'{name} tarsus setae', tarsus_path, tarsus_radii, material,
-                                                         seed + 2, length=SETAE['length'] * .75)])
-    for objects in parts.values():
+    parts = dict(femur=[femur], tibia=[kneecap, tibia], tarsus=[ankle_ball, tarsus, pad])
+    setae = dict(femur=fringe(c, f'{name} femur setae', femur_path, femur_radii, spikes, seed),
+                 tibia=fringe(c, f'{name} tibia setae', tibia_path, tibia_radii, spikes, seed + 1),
+                 tarsus=fringe(c, f'{name} tarsus setae', tarsus_path, tarsus_radii, spikes, seed + 2,
+                               length=SETAE['length'] * .75))
+    for objects in [*parts.values(), list(setae.values())]:
         for ob in objects:
-            paint_limb(ob, points, palette)
+            if ob.get('setae'):
+                paint_setae(ob, palette)
+            else:
+                paint_limb(ob, points, palette)
             write_rest(ob)
             c.paint_form_mask(ob, lambda p: .60 + .40 * max(0, min(1, p.z / .6)))
-    return parts
+    return dict(parts, setae=setae)
 
 
 def join(objects, name):
@@ -487,6 +513,7 @@ def build(c, spec):
     chitin = setae(c, 'Kabummtula velvet carapace', palette['dark'], palette['chitin'], palette['rim'], 1.6,
                    softness=.45, roughness=(.56, .72))
     limb_hair = setae(c, 'Kabummtula banded leg setae', palette['dark'], palette['light'], palette['rim'], 1.35)
+    spikes = setae(c, 'Kabummtula lilac-tipped setae spikes', palette['dark'], palette['light'], palette['rim'], 1.35, exposed=True)
     hide = skin(c, 'Kabummtula taut bomb abdomen', linear(palette['skin_dark']), linear(palette['skin_light']),
                 rim=linear(palette['skin_rim']), softness=.4, roughness=(.46, .60))
     mats = {
@@ -520,7 +547,7 @@ def build(c, spec):
         margin = smoothstep(.70, .97, across)
         head = smoothstep(.55, .80, p.y) * (1 - margin)
         flank = (.50 + .25 * margin - .38 * striae - .12 * head) * (1 - .70 * fovea)
-        return flank, palette['fringe'] * margin * 1.2, .75
+        return flank, palette['edge'] * margin, .75
     paint_pattern(carapace, paint_carapace)
     write_rest(carapace)
     c.paint_form_mask(carapace, lambda p: .58 + .42 * max(0, min(1, (p.z - .25) / .3)))
@@ -575,10 +602,13 @@ def build(c, spec):
         tibia = horn(c, f'Kabummtula {key} palp tibia', tibia_path, tibia_radii, hair, sides=12)
         club = ell(c, f'Kabummtula {key} palp tarsus', tuple(tip_p + Vector((0, 0, .01))), (.062 * thickness, .080 * thickness, .048), hair)
         seed = 900 + side
-        femur_setae = fringe(c, f'Kabummtula {key} palp femur setae', femur_path, femur_radii, hair, seed, length=SETAE['length'] * .8)
-        tibia_setae = fringe(c, f'Kabummtula {key} palp tibia setae', tibia_path, tibia_radii, hair, seed + 1, length=SETAE['length'] * .8)
+        femur_setae = fringe(c, f'Kabummtula {key} palp femur setae', femur_path, femur_radii, spikes, seed, length=SETAE['length'] * .8)
+        tibia_setae = fringe(c, f'Kabummtula {key} palp tibia setae', tibia_path, tibia_radii, spikes, seed + 1, length=SETAE['length'] * .8)
         for ob in (femur, joint, tibia, club, femur_setae, tibia_setae):
-            paint_limb(ob, [root_p, knee_p, tip_p], palette)
+            if ob.get('setae'):
+                paint_setae(ob, palette)
+            else:
+                paint_limb(ob, [root_p, knee_p, tip_p], palette)
             write_rest(ob)
             c.paint_form_mask(ob, lambda p: .65)
         palps[key] = dict(points=(root_p, knee_p, tip_p), femur=[femur, femur_setae], tibia=[joint, tibia, club, tibia_setae])
@@ -588,7 +618,7 @@ def build(c, spec):
     for key, side in SIDES:
         for n, leg in enumerate(LEGS, 1):
             points = leg_points(leg, side, reach, knee_height)
-            legs[f'{key}{n}'] = dict(points=points, **build_leg(c, f'Kabummtula leg {key}{n}', points, radii, limb_hair, palette))
+            legs[f'{key}{n}'] = dict(points=points, **build_leg(c, f'Kabummtula leg {key}{n}', points, radii, limb_hair, spikes, palette))
 
     # Armature: every bone rolls its Z axis up, so Euler Z is a yaw seen from the camera.
     data = bpy.data.armatures.new('Kabummtula tarantula rig')
@@ -648,6 +678,8 @@ def build(c, spec):
             for segment in ('femur', 'tibia'):
                 for ob in legs[f'{key}{n}'][segment]:
                     rigid(ob, f'leg_{key}{n}_{segment}', f'leg-{key}{n}-{segment}')
+            for segment, ob in legs[f'{key}{n}']['setae'].items():
+                rigid(ob, f'leg_{key}{n}_{segment}')
     # Corner contacts: one authored paw mesh per corner joins the tarsi of two legs; every
     # tarsus keeps its own rigid bone through its vertex range.
     for corner, key, (a, b) in CORNERS:

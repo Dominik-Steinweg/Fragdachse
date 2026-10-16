@@ -30,6 +30,9 @@ charger's shield and arms) carry `ob['meshUnionGroup']` in the recipe. Each grou
 gets its own rest union, and its proxy vertices bind only to that group's source
 triangles (group vote per connected proxy component), so no shadow triangle
 bridges parts that separate later. Untagged recipes keep the single union.
+Render-only sub-pixel detail (the Kabummtula's setae spikes) carries
+`ob['meshShadowDetail']`: it stays in Beauty and the material passes but is
+excluded from the proxy, its silhouette reference and the contacts.
 
 Pose counts and sheet rows follow the selected clips, including optional `cast`
 poses. `move` and `claw` remain required; clip blocks must cover every non-rest

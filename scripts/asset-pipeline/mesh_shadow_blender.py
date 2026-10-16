@@ -86,6 +86,10 @@ def candidates(scene, minimum_diagonal):
     for ob in sorted(scene.objects, key=lambda o: o.name):
         if ob.type != 'MESH' or ob.hide_render:
             continue
+        if ob.get('meshShadowDetail'):
+            # Recipe-tagged render-only detail (e.g. sub-pixel setae) stays out of the proxy.
+            excluded.append(dict(object=ob.name, reason='recipe render-only detail'))
+            continue
         points, tris, signature = evaluated(ob)
         if not len(tris):
             continue
