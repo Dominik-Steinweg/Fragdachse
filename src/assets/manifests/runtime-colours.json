@@ -733,6 +733,18 @@
       "visiblePixelSha256": "8e03ac9d623196458a75b4893c382c034b761a7962a8e7f7f62299911f782fbb",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/sprites/pipeline-v2/plague-toad/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/plague-toad/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/plague-toad/sheet.png",
+      "width": 608,
+      "height": 760,
+      "sourceBytes": 172743,
+      "downloadBytes": 124620,
+      "sourceSha256": "dfc78cb6beee45805d9d62d95dc091de51afd0532ee05f3a5a3db639a500d543",
+      "sha256": "4ad59ef0f4be9a10d6b5aea50f8db77222938519c797a5a8b2968720df0ec0fe",
+      "visiblePixelSha256": "62fca3512850502df6c97adc9f8712747569d2fb2d29bd92a6e3da9071728b9d",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/sprites/pipeline-v2/plasma/sheet.png": {
       "file": "assets/sprites/pipeline-v2/plasma/sheet.webp",
       "source": "assets/sprites/pipeline-v2/plasma/sheet.png",

@@ -259,7 +259,7 @@
       "attackScanIntervalMs": 180,
       "attackStopDurationMs": 220,
       "obstacleAttackDelayMs": 500,
-      "imageKey": "enemy_plague_medic",
+      "imageKey": "enemy_plague_toad",
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.8
       }

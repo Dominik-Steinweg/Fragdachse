@@ -14,6 +14,7 @@ import { SunRenderTarget, sunShaderName, ownSunShader } from './sunlight/SunRend
 import { setCloudUniforms, type SunCloudState } from './sunlight/cloudShadow';
 import { registerGraphicsObject } from './EffectUtils';
 import { registerEnemyMeshWarmup } from './EnemyMeshWarmup';
+import { getPipelineAssetForTexture } from '../config/pipelineAssets';
 
 const MASK_WORDS = 13, DISPLAY_WORDS = 24;
 const MASK_ATTRIBUTES = [{ name: 'inMatrix', size: 4 }, { name: 'inTranslation', size: 3 }, { name: 'inBounds', size: 4 }, { name: 'inTile', size: 2 }];
@@ -163,6 +164,8 @@ export class EnemyMeshShadowRenderer {
     for (const enemy of enemies) {
       if (!this.eligible(enemy)) continue;
       const mesh = this.assets.ready.get(enemy.kind); if (!mesh || this.prepared.get(enemy.kind) !== mesh.asset.poses.length) continue;
+      // A mesh belongs to the sheet revision it was baked from; a newer sheet (draft) keeps the ellipse.
+      if (getPipelineAssetForTexture(enemy.getImageKey())?.revision !== mesh.asset.revision) continue;
       const s = enemy.sprite, pose = enemyMeshPose(s.frame.name, mesh); if (pose < 0) continue;
       enemyMeshMatrix(s, mesh.asset.coordinates.canvasWorldPx, this.matrix, enemy.getHopLiftScale());
       enemyShadowBounds(mesh, this.matrix, this.sun, this.tileSize, this.bounds);

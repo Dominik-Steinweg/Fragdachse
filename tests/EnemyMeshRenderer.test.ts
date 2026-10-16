@@ -27,7 +27,7 @@ function fixture(){
   const scene:any={sys:{renderer:{shaderProgramFactory:{programs:{}}}},game:{loop:{get frame(){return state.frame}}},cameras:{main:{}},add:{existing(){}}};
   const receiver:any={destroy:vi.fn(),world:[0,0,1000,1000],texture:{}};
   const renderer=new EnemyMeshShadowRenderer(scene,{sunPath:{sun:[-1,0,.5],strength:1,elevation:.6}} as any,receiver,64);
-  const enemy=(x=500):any=>({kind:'zombie-badger',getHp:()=>1,isBurrowed:()=>false,getHopLiftScale:()=>1,sprite:{active:true,visible:true,alpha:.7,x,y:500,
+  const enemy=(x=500):any=>({kind:'zombie-badger',getHp:()=>1,isBurrowed:()=>false,getHopLiftScale:()=>1,getImageKey:()=>'enemy_zombie_badger',sprite:{active:true,visible:true,alpha:.7,x,y:500,
     rotation:0,scaleX:67.2/128,scaleY:67.2/128,displayWidth:67.2,displayHeight:67.2,originX:.5,originY:.5,flipX:false,flipY:false,frame:{name:19,realWidth:128,realHeight:128}}});
   const sync=(enemies:any[],visible=true)=>{state.frame++;renderer.sync(enemies,visible)};
   return {renderer,receiver,enemy,sync};
@@ -100,4 +100,9 @@ it('clears quadruped contacts when a pooled display entry becomes bipedal',()=>{
   mesh.asset={...old,contacts:old.contacts.map((c:any)=>({...c,feet:c.feet.slice(0,2)}))};
   f.sync([e]);expect(Array.from(runtime.displayData.slice(16,24))).toEqual([0,0,0,0,0,0,0,0]);
   expect(runtime.activeCount).toBe(1);f.renderer.destroy();
+});
+it('keeps the ellipse for a sheet whose revision differs from the baked mesh (an animation draft)',()=>{
+  const f=fixture(),baked=f.enemy(),draft=f.enemy(600);draft.getImageKey=()=>'enemy_unbaked_draft';
+  for(let i=0;i<70;i++)f.sync([baked,draft]);
+  expect(f.renderer.handles(baked)).toBe(true);expect(f.renderer.handles(draft)).toBe(false);f.renderer.destroy();
 });

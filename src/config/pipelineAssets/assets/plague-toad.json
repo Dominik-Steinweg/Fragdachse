@@ -1,0 +1,158 @@
+{
+  "id": "plague-toad",
+  "category": "enemy",
+  "gameIds": [],
+  "revision": "draft-d",
+  "variant": "standard",
+  "sourceSize": 72,
+  "textureKey": "enemy_plague_toad",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "displayScale": 2.4,
+  "idleFrame": 0,
+  "clips": [
+    {
+      "name": "move",
+      "frames": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "frameRate": 12,
+      "loop": true
+    },
+    {
+      "name": "claw",
+      "frames": [
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 5,
+        "impact": 8
+      }
+    },
+    {
+      "name": "hop",
+      "frames": [
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46
+      ],
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "launch": 6,
+        "land": 14
+      }
+    },
+    {
+      "name": "channel",
+      "frames": [
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62
+      ],
+      "frameRate": 12,
+      "loop": true
+    },
+    {
+      "name": "idle",
+      "frames": [
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78
+      ],
+      "frameRate": 12,
+      "loop": true
+    }
+  ],
+  "sheetTextureKey": "enemy_plague_toad_walking",
+  "idlePath": "./assets/sprites/pipeline-v2/plague-toad/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/plague-toad/sheet.png",
+  "layout": {
+    "frameWidth": 72,
+    "frameHeight": 72,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 10,
+    "frameCount": 79,
+    "width": 608,
+    "height": 760
+  },
+  "hashes": {
+    "idle": "a37df1c13a28259adef826179de7f222f9e85166b259039e66b2ee45736b628f",
+    "sheet": "dfc78cb6beee45805d9d62d95dc091de51afd0532ee05f3a5a3db639a500d543"
+  }
+}
