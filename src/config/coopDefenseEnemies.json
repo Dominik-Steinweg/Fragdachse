@@ -206,15 +206,21 @@
       "movementTarget": "bases",
       "weapons": [
         {
-          "weaponId": "PLAGUE_MEDIC_BITE",
+          "weaponId": "PLAGUE_TOAD_TONGUE",
           "targetMode": "all",
           "meleeTiming": {
-            "hitDelayMs": 350,
-            "strikeMs": 80,
-            "recoveryMs": 220
+            "hitDelayMs": 300,
+            "strikeMs": 70,
+            "recoveryMs": 240
           }
         }
       ],
+      "deathBurst": {
+        "radiusPx": 64,
+        "damage": 14,
+        "structureDamageMult": 0.5,
+        "presentation": "plague"
+      },
       "hop": {
         "minHopPx": 60,
         "maxHopPx": 104,

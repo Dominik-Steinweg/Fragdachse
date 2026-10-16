@@ -204,6 +204,13 @@ describe('hop config validation', () => {
     expect(() => enemyConfig.normalizeEnemyRegistry({ enemies: [{ ...toad, id: 'toad', shieldCharger: charger.shieldCharger }] } as never))
       .toThrow(/second locomotion owner/);
   });
+
+  it('arms the toad with a long tongue only and a plague death splash', () => {
+    const toad = enemyConfig.getCoopDefenseEnemyConfig('plague-medic');
+    expect(toad.weapons.map(weapon => weapon.weaponId)).toEqual(['PLAGUE_TOAD_TONGUE']);
+    expect(toad.deathBurst?.presentation).toBe('plague');
+    expect(() => enemyConfig.normalizeDeathBurstConfig({ ...toad.deathBurst!, presentation: 'goo' as never })).toThrow();
+  });
 });
 
 describe('hop replication and presentation', () => {

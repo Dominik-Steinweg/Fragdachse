@@ -34,6 +34,8 @@ import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 /** Host damage of enemy abilities that outlive or sweep past their source. */
 export interface EnemyAreaEffectsPort {
   deathBurst(enemyId: string, x: number, y: number, burst: import('../config/coopDefenseEnemies').CoopDefenseEnemyDeathBurstConfig, nowMs: number): void;
+  /** Damage, player push and splash of an armed hop landing. */
+  landingShock(enemyId: string, x: number, y: number, shock: import('../config/coopDefenseEnemies').CoopDefenseEnemyLandingShockConfig, nowMs: number): void;
   sweepBases(enemyId: string, ax: number, ay: number, bx: number, by: number, radius: number, damage: number, nowMs: number): void;
 }
 
@@ -242,6 +244,7 @@ export class CoopMissionEnemyBehaviourComposition {
         combatIntent: (enemy, now) => enemy.faction === 'hostile' ? attack.getCombatMovement(enemy, now) : null,
         shockTargets: () => this.options.playerManager.getAllPlayers().filter(player => player.active)
           .map(player => ({ x: player.x, y: player.y })),
+        landingShock: (enemy, x, y, shock, now) => this.options.enemyAreaEffects?.landingShock(enemy.id, x, y, shock, now),
       }));
       runtime.setEnergyCone(new CoopDefenseEnergyConeSystem({
         enemies: enemyManager,

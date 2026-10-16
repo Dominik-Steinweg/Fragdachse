@@ -12,6 +12,7 @@ import { EnemyEyeGlowRenderer } from '../../effects/EnemyEyeGlowRenderer';
 import { DroneNavLightRenderer } from '../../effects/droneNavLights/DroneNavLightRenderer';
 import { EliteMarkerRenderer } from '../../effects/dawn/EliteMarkerRenderer';
 import { EnemyVulnerabilityRenderer } from '../../effects/EnemyVulnerabilityRenderer';
+import { EnemyHopPresentation } from '../../effects/EnemyHopPresentation';
 import { AmphibiousEnemyPresentation } from '../../effects/AmphibiousEnemyPresentation';
 import { EnemyReadabilityRenderer } from '../../effects/EnemyReadabilityRenderer';
 import { createCombatShaderWarmupProbes } from '../../effects/CombatShaderWarmup';
@@ -100,6 +101,7 @@ export interface RendererBundle {
   droneNavLights: DroneNavLightRenderer;
   enemyVulnerability: EnemyVulnerabilityRenderer;
   amphibiousEnemies: AmphibiousEnemyPresentation;
+  enemyHops: EnemyHopPresentation;
   eliteMarkers: EliteMarkerRenderer;
   enemyReadability: EnemyReadabilityRenderer;
   bullet:              BulletRenderer;
@@ -446,6 +448,8 @@ export function* createRendererBundleSteps(
   cleanup.push(() => enemyVulnerability.destroy());
   const amphibiousEnemies = new AmphibiousEnemyPresentation(scene);
   cleanup.push(() => amphibiousEnemies.destroy());
+  const enemyHops = new EnemyHopPresentation(scene);
+  cleanup.push(() => enemyHops.destroy());
   const enemyReadability = new EnemyReadabilityRenderer(scene);
   cleanup.push(() => enemyReadability.destroy());
   const interactions = new WorldInteractionRenderer(scene);
@@ -499,6 +503,7 @@ export function* createRendererBundleSteps(
     droneNavLights,
     enemyVulnerability,
     amphibiousEnemies,
+    enemyHops,
     eliteMarkers,
     enemyReadability,
     gpuVfx,
@@ -588,6 +593,7 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   effectSystem.setFirestarterRenderer(bundle.firestarter);
   bundle.shieldCharger.setLaneSink((id, attack, now, visible) => effectSystem.syncEnemyLane(`shield-charge:${id}`, attack, now, visible));
   bundle.alienCone.setSectorSink((id, attack, now, visible) => effectSystem.syncEnemySector(`energy-cone:${id}`, attack, now, visible));
+  bundle.enemyHops.setZoneSink((id, attack, now, visible) => effectSystem.syncEnemyZone(`hop-landing:${id}`, attack, now, visible));
 }
 
 /**

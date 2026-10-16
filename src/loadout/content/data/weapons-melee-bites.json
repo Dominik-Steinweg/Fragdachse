@@ -82,11 +82,17 @@
       "baseId": "ZOMBIE_BADGER_BITE",
       "_notes": "Bewusst gekoppelte Variante der bereits zuvor gemeinsam erzeugten Gegnerbiss-Familie."
     },
-    "PLAGUE_MEDIC_BITE": {
-      "id": "PLAGUE_MEDIC_BITE",
-      "damage": 25,
+    "PLAGUE_TOAD_TONGUE": {
+      "id": "PLAGUE_TOAD_TONGUE",
+      "cooldown": 1000,
+      "damage": 20,
+      "range": 180,
+      "fire": {
+        "hitArcDegrees": 14,
+        "visualPreset": "enemy_tongue"
+      },
       "baseId": "ZOMBIE_BADGER_BITE",
-      "_notes": "Bewusst gekoppelte Variante der bereits zuvor gemeinsam erzeugten Gegnerbiss-Familie."
+      "_notes": "Zungenschlag des Quacksalbers: lange, schmale Reichweite aus dem Stand; erbt Fels- und Zugschaden der Gegnerbiss-Familie."
     },
     "VOID_STALKER_BITE": {
       "id": "VOID_STALKER_BITE",

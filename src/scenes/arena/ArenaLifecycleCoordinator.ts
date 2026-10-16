@@ -1,3 +1,4 @@
+import { ENEMY_BURST_PRESETS } from '../../config/enemyBurstPresets';
 import { VOID_PALETTE } from '../../config';
 import { warmupKrakenShaders } from '../../effects/kraken/KrakenShaderWarmup';
 import { restrictStructureOccupant } from '../../world/PlayerCapabilities';
@@ -938,6 +939,11 @@ export class ArenaLifecycleCoordinator {
       mortarImpact: { impact: (strike, nowMs) => this.hostUpdate.applyMortarStrikeDamage(strike, nowMs) },
       enemyAreaEffects: {
         deathBurst: (enemyId, x, y, burst, nowMs) => this.hostUpdate.applyEnemyDeathBurst(enemyId, x, y, burst, nowMs),
+        landingShock: (enemyId, x, y, shock, nowMs) => {
+          this.hostUpdate.applyEnemyLandingShock(enemyId, x, y, shock, nowMs);
+          const splash = ENEMY_BURST_PRESETS.mud;
+          bridge.broadcastExplosionEffect(x, y, shock.radiusPx, splash.color, splash.style, undefined, 'brood_hatch');
+        },
         sweepBases: (enemyId, ax, ay, bx, by, radius, damage, nowMs) => this.hostUpdate.applyEnemySweepBaseDamage(enemyId, ax, ay, bx, by, radius, damage, nowMs),
       },
       broadcastExplosion: (x, y, radius, style, color) => bridge.broadcastExplosionEffect(x, y, radius, color ?? (style === 'mortar' ? VOID_PALETTE.primary : 0xb82fff), style, undefined, style === 'timebomb_pop' ? 'silent' : style === 'mortar' ? 'generic' : style === 'brood_hatch' ? 'brood_hatch' : 'enemy.timebomb'),

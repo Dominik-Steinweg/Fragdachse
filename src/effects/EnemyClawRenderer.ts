@@ -29,6 +29,13 @@ export interface EnemySectorAttack {
   readonly startedAt: number; readonly strikeAt: number; readonly hitAt: number; readonly endsAt: number;
 }
 
+/** A round danger zone announced by the host (a hop landing), on the synchronised clock. */
+export interface EnemyZoneAttack {
+  readonly attackId: string;
+  readonly x: number; readonly y: number; readonly radius: number;
+  readonly startedAt: number; readonly strikeAt: number; readonly hitAt: number; readonly endsAt: number;
+}
+
 /** Bounded warmup: a pass that never renders must not hold the world-load barrier. */
 const MAX_PREPARE_CALLS = 30;
 const IDENTITY_TTL_MS = 4000;
@@ -104,7 +111,7 @@ export class EnemyClawRenderer {
    * the local presentation clock, so a late or missing sync never freezes a running rake.
    */
   sync(id: string, state: EnemyClawState, x: number, y: number, now: number, visible: boolean,
-    color = ENEMY_CLAW_HOSTILE_COLOR): void {
+    color = ENEMY_CLAW_HOSTILE_COLOR, telegraphOnly = false): void {
     const clock = this.clock();
     this.retire(clock);
     const attack = state.attack;
@@ -120,7 +127,7 @@ export class EnemyClawRenderer {
     const offset = clock - now;
     const added = this.store.addAttack(attack.attackId, {
       x, y, angle: attack.angle, range: attack.range, halfArc: attack.arcDegrees * Math.PI / 360,
-      startedAt: attack.startedAt + offset, strikeAt: attack.strikeAt + offset, hitAt: attack.hitAt + offset, color,
+      startedAt: attack.startedAt + offset, strikeAt: attack.strikeAt + offset, hitAt: attack.hitAt + offset, color, telegraphOnly,
     }, clock);
     if (added) this.active.set(id, { attackId: attack.attackId, hitClock: attack.hitAt + offset });
   }
@@ -140,6 +147,26 @@ export class EnemyClawRenderer {
     const offset = clock - now;
     if (this.store.addAttack(attack.attackId, { x: attack.x, y: attack.y, angle: attack.angle, shape: 'lane',
       length: attack.length, width: attack.width, startedAt: attack.startedAt + offset, strikeAt: attack.strikeAt + offset,
+      hitAt: attack.hitAt + offset, color }, clock)) {
+      this.active.set(id, { attackId: attack.attackId, hitClock: attack.hitAt + offset });
+    }
+  }
+
+  /**
+   * Host-fixed round zone (an armed hop landing): the same red danger family as a claw, drawn as
+   * a full-circle sector around the landing point without rakes. `null` releases it.
+   */
+  syncZone(id: string, attack: EnemyZoneAttack | null, now: number, visible: boolean,
+    color = ENEMY_CLAW_HOSTILE_COLOR): void {
+    const clock = this.clock();
+    this.retire(clock);
+    if (!attack || !visible || now >= attack.endsAt) { this.release(id); return; }
+    if (this.active.get(id)?.attackId === attack.attackId) return;
+    this.release(id);
+    if (now >= attack.hitAt) { this.remember(this.struck, attack.attackId, clock); return; }
+    const offset = clock - now;
+    if (this.store.addAttack(attack.attackId, { x: attack.x, y: attack.y, angle: 0, range: attack.radius, halfArc: Math.PI,
+      telegraphOnly: true, startedAt: attack.startedAt + offset, strikeAt: attack.strikeAt + offset,
       hitAt: attack.hitAt + offset, color }, clock)) {
       this.active.set(id, { attackId: attack.attackId, hitClock: attack.hitAt + offset });
     }

@@ -1,3 +1,4 @@
+import { ENEMY_BURST_PRESETS } from '../config/enemyBurstPresets';
 import { isDawnActivityDefinitionId } from '../dawn/contracts/DawnIds';
 import { resolveDawnSites } from '../dawn/resolution/DawnScenarioResolution';
 import { getDawnArenaTemplate, getDawnSchedule, getDawnThreatCurve } from '../config/dawn/dawnContent';
@@ -238,8 +239,8 @@ export class CoopMissionComposition {
     const areaEffects = this.options.enemyAreaEffects;
     if (this.options.isHost() && areaEffects) runtime.enemyManager!.bindDeathBurst((id, x, y, burst) => {
       areaEffects.deathBurst(id, x, y, burst, this.options.getNowMs());
-      // Ink burst: the goo splash in the brood's dark violet, no vision-blocking cloud.
-      this.options.broadcastExplosion(x, y, burst.radiusPx, 'brood_hatch', 0x3c1160);
+      const preset = ENEMY_BURST_PRESETS[burst.presentation ?? 'ink'];
+      this.options.broadcastExplosion(x, y, burst.radiusPx, preset.style, preset.color);
     });
     if (this.options.getNavigationObstacleIntegrity) runtime.enemyIntents?.setObstacleIntegrityResolver(this.options.getNavigationObstacleIntegrity);
   }

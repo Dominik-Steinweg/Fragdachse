@@ -21,7 +21,7 @@ Die Tabelle beschreibt die integrierte Migration, keine zweite Balancekonfigurat
 | `rabid-badger` | Spieler | Basis → letzte Position → warten | Angekündigter Nahkampf | `RABID_BADGER_BITE` |
 | `grave-titan` | Basis | Spieler, falls keine aktive Basis | Explizite Anti-Spieler-Plasmasalve, Zugreaktion | `GRAVE_TITAN_BITE` |
 | `spore-warden` | Basis | Spieler, falls keine aktive Basis | Explizite Anti-Spieler-Sporen | `SPORE_WARDEN_BITE` |
-| `plague-medic` | Basis | Spieler, falls keine aktive Basis | Heilung bleibt Aura-Eigentum | `PLAGUE_MEDIC_BITE` |
+| `plague-medic` | Basis | Spieler, falls keine aktive Basis | Hüpfen und Heilen in der Rast gehören dem Hop-Owner | `PLAGUE_TOAD_TONGUE` |
 | `void-stalker` | Spieler | Basis → letzte Position → warten | Translocator, Mini-Tesla | `VOID_STALKER_BITE` |
 | `stink-broodmother` | Spieler | Basis → letzte Position → warten | Gestank und Todes-Spawns | `STINK_BROODMOTHER_BITE` |
 | `alien-badger` | Spieler | Basis → letzte Position → warten | Eingraben, Fernkampfposition, Zugreaktion | `ALIEN_BADGER_BITE` |

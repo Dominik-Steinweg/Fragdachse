@@ -1090,6 +1090,8 @@ export class ArenaScene extends Phaser.Scene {
     this.renderers.shieldCharger.setClock(() => bridge.getSynchronizedNow());
     this.renderers.alienCone.setEnemySource(() => this.arenaRuntime?.getCombatEnemyVisuals() ?? []);
     this.renderers.alienCone.setClock(() => bridge.getSynchronizedNow());
+    this.renderers.enemyHops.setEnemySource(() => this.arenaRuntime?.getCombatEnemyVisuals() ?? []);
+    this.renderers.enemyHops.setClock(() => bridge.getSynchronizedNow());
 
     this.aimPresentation = new ArenaAimPresentationController(
       {

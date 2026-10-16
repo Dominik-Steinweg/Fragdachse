@@ -1,3 +1,5 @@
+import type { TongueLashRenderer } from './TongueLashRenderer';
+import { WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import { getCombatExplosionProfile } from './ExplosionVisualProfiles';
 import type { MgAttritionRenderer } from './MgAttritionRenderer';
 import { CoopXpTextRenderer } from './CoopXpTextRenderer';
@@ -109,6 +111,14 @@ export interface GroundFogCombatSink {
  * Die Buddel-Effekte werden nicht nur für Spieler, sondern auch für eingebuddelte Coop-Defense-
  * Gegner genutzt; `implements` hält die dafür erwartete Signatur kompilierzeit-fest.
  */
+/** Body radius used to place a tongue's mouth when the swing does not name its body. */
+const DEFAULT_TONGUE_BODY_RADIUS = 15;
+
+function isTongueWeapon(weaponId: string | undefined): boolean {
+  const fire = weaponId ? WEAPON_CONFIGS[weaponId]?.fire : undefined;
+  return fire?.type === 'melee' && fire.visualPreset === 'enemy_tongue';
+}
+
 export class EffectSystem implements EnemyVisualSink {
   private groundFogCombat: GroundFogCombatSink | null = null;
   bindGroundFogCombat(sink: GroundFogCombatSink): () => void {
@@ -152,10 +162,27 @@ export class EffectSystem implements EnemyVisualSink {
   private enemyClawRenderer: EnemyClawRenderer | null = null;
   private miniKrakenInk: MiniKrakenInkRenderer | null = null;
   private miniKrakenInkState: 'idle' | 'loading' | 'destroyed' = 'idle';
+  private tongueLash: TongueLashRenderer | null = null;
+  private tongueLashState: 'idle' | 'loading' | 'destroyed' = 'idle';
 
-  syncEnemyClaw(id: string, state: import('../systems/EnemyClawAttack').EnemyClawState, x: number, y: number, now: number, visible: boolean, alliedColor?: number): void {
+  syncEnemyClaw(id: string, state: import('../systems/EnemyClawAttack').EnemyClawState, x: number, y: number, now: number, visible: boolean, alliedColor?: number, bodyRadius = DEFAULT_TONGUE_BODY_RADIUS): void {
     if (state.attack) this.enemyClawRenderer ??= new EnemyClawRenderer(this.scene);
-    this.enemyClawRenderer?.sync(id, state, x, y, now, visible, alliedColor);
+    const tongue = isTongueWeapon(state.attack?.weaponId);
+    this.enemyClawRenderer?.sync(id, state, x, y, now, visible, alliedColor, tongue);
+    if (tongue) this.withTongueLash(renderer => renderer.sync(id, state.attack, x, y, bodyRadius, now, visible));
+    else this.tongueLash?.sync(id, null, x, y, bodyRadius, now, visible);
+  }
+
+  /** The tongue renderer loads with the first tongue windup; maps without the toad never touch it. */
+  private withTongueLash(use: (renderer: TongueLashRenderer) => void): void {
+    if (this.tongueLash) { use(this.tongueLash); return; }
+    if (this.tongueLashState !== 'idle') return;
+    this.tongueLashState = 'loading';
+    void import('./TongueLashRenderer').then(({ TongueLashRenderer }) => {
+      if (this.tongueLashState !== 'loading') return;
+      this.tongueLash = new TongueLashRenderer(this.scene);
+      use(this.tongueLash);
+    });
   }
   /** Links the claw shader passes during world preparation instead of on the first strike. */
   prepareEnemyClawEffects(): boolean {
@@ -172,8 +199,13 @@ export class EffectSystem implements EnemyVisualSink {
     if (attack) this.enemyClawRenderer ??= new EnemyClawRenderer(this.scene);
     this.enemyClawRenderer?.syncSector(id, attack, now, visible, color);
   }
+  /** Round danger zone in the shared enemy-attack family (armed hop landing). */
+  syncEnemyZone(id: string, attack: import('./EnemyClawRenderer').EnemyZoneAttack | null, now: number, visible: boolean, color?: number): void {
+    if (attack) this.enemyClawRenderer ??= new EnemyClawRenderer(this.scene);
+    this.enemyClawRenderer?.syncZone(id, attack, now, visible, color);
+  }
   clearEnemyClaw(id: string): void { this.enemyClawRenderer?.release(id); }
-  clearEnemyClawEffects(): void { this.enemyClawRenderer?.clear(); }
+  clearEnemyClawEffects(): void { this.enemyClawRenderer?.clear(); this.tongueLash?.clear(); }
   private zeusTaserRenderer: ZeusTaserRenderer | null = null;
   private lighting: LightingSystem | null = null;
   private hitFeedbackRenderer: HitFeedbackRenderer | null = null;
@@ -319,6 +351,7 @@ export class EffectSystem implements EnemyVisualSink {
     this.spawnEffectRenderer = null;
     this.enemyClawRenderer?.destroy(); this.enemyClawRenderer = null;
     this.miniKrakenInk?.destroy(); this.miniKrakenInk = null; this.miniKrakenInkState = 'destroyed';
+    this.tongueLash?.destroy(); this.tongueLash = null; this.tongueLashState = 'destroyed';
     this.xpTextRenderer?.destroy();
     this.xpTextRenderer = null;
     this.clearHolyExplosions();
@@ -1713,6 +1746,11 @@ export class EffectSystem implements EnemyVisualSink {
     if (swing.visualPreset === 'enemy_claw' && swing.weaponSourceId === 'MINI_KRAKEN_INK') {
       // A melee ink spit: a small version of the boss ink cloud instead of claw slashes.
       this.spitMiniKrakenInk(swing.x, swing.y, swing.angle, swing.range * 1.35, swing.arcDegrees);
+      this.groundFogCombat?.melee(swing.x, swing.y, swing.angle, swing.arcDegrees, swing.range, swing.weaponSourceId);
+      return;
+    }
+    if (swing.visualPreset === 'enemy_tongue') {
+      this.withTongueLash(renderer => renderer.confirm(swing, DEFAULT_TONGUE_BODY_RADIUS));
       this.groundFogCombat?.melee(swing.x, swing.y, swing.angle, swing.arcDegrees, swing.range, swing.weaponSourceId);
       return;
     }

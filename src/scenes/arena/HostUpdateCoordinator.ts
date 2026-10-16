@@ -1749,12 +1749,26 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   /** Area burst at an enemy death: full damage to players, allies and decoys, structureDamageMult to bases,
    * constructions, rocks and the train. Shares the mortar resolver. */
   applyEnemyDeathBurst(enemyId: string, x: number, y: number, burst: import('../../config/coopDefenseEnemies').CoopDefenseEnemyDeathBurstConfig, nowMs: number): void {
+    this.applyEnemyAbilityBurst(enemyId, x, y, burst, 'enemy.death-burst', nowMs);
+  }
+
+  /** Heavy landing next to players: the same hostile area burst without structure damage, plus a push for players only. */
+  applyEnemyLandingShock(enemyId: string, x: number, y: number, shock: import('../../config/coopDefenseEnemies').CoopDefenseEnemyLandingShockConfig, nowMs: number): void {
+    this.applyEnemyAbilityBurst(enemyId, x, y, { radiusPx: shock.radiusPx, damage: shock.damage, structureDamageMult: 0 },
+      'enemy.landing-shock', nowMs);
+    if (shock.knockbackSpeed > 0) this.ctx.hostPhysics.applyRadialImpulse(x, y, shock.radiusPx, shock.knockbackSpeed, enemyId, 0,
+      shock.knockbackMs, targetId => !!this.ctx.playerManager.getPlayer(targetId));
+  }
+
+  private applyEnemyAbilityBurst(enemyId: string, x: number, y: number,
+    burst: { readonly radiusPx: number; readonly damage: number; readonly structureDamageMult: number },
+    sourceId: 'enemy.death-burst' | 'enemy.landing-shock', nowMs: number): void {
     const combat = this.ctx.getWorldCombatCore();
     if (!combat) return;
-    const source = this.enemyAbilitySource(enemyId, 'enemy.death-burst'), mult = burst.structureDamageMult;
+    const source = this.enemyAbilitySource(enemyId, sourceId), mult = burst.structureDamageMult;
     applyHostileAreaStrikeDamage({
       x, y, radius: burst.radiusPx, maxDamage: burst.damage, minDamage: burst.damage * .5,
-      attackerId: enemyId, sourceId: 'enemy.death-burst', source, includeSelf: false,
+      attackerId: enemyId, sourceId, source, includeSelf: false,
       aoe: { source, baseDamageMult: 0 }, friendlyBaseDamageMult: mult,
       rockDamageMult: mult, constructionDamageMult: mult, trainDamageMult: mult,
     }, {
@@ -1763,12 +1777,12 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       environment: this.arenaResult ? this.environmentRockSinkFor(source) : null,
       isConstruction: id => !!this.placementSystem?.getRuntimeRock(id),
       trainSegments: this.trainManager?.getNetSnapshot()?.alive ? this.trainManager.getSegmentPositions() : [],
-      damageTrain: damage => { this.worldMutation?.applyResolvedDamage('train', 'main', damage, enemyId, 'enemy.death-burst', 'explosion', undefined, source); },
+      damageTrain: damage => { this.worldMutation?.applyResolvedDamage('train', 'main', damage, enemyId, sourceId, 'explosion', undefined, source); },
       damageDecoys: (bx, by, radius, damageAt) => {
         for (const decoy of this.ctx.decoySystem.getHostTargets()) {
           const distance = Math.hypot(decoy.x - bx, decoy.y - by);
           if (distance <= radius) this.ctx.decoySystem.applyDamage(decoy.id, Math.round(damageAt(distance)), enemyId,
-            'enemy.death-burst', { sourceX: bx, sourceY: by }, source);
+            sourceId, { sourceX: bx, sourceY: by }, source);
         }
       },
     });

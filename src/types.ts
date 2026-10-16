@@ -418,7 +418,8 @@ export interface HitscanSupportEffect {
 }
 
 /** Visuelles Preset fuer Melee-Swings. */
-export type MeleeVisualPreset = 'default' | 'zeus_taser' | 'bite' | 'enemy_claw';
+/** `enemy_tongue`: the claw windup telegraph without rakes; a runtime tongue carries the strike. */
+export type MeleeVisualPreset = 'default' | 'zeus_taser' | 'bite' | 'enemy_claw' | 'enemy_tongue';
 export type MeleeDamageTarget = 'players' | 'enemies' | 'decoys' | 'bases' | 'rocks' | 'train';
 
 /** Variant-Preset fuer Energy-Ball-Projektile. */

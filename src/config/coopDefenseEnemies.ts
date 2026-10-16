@@ -440,6 +440,8 @@ export interface CoopDefenseEnemyDeathBurstConfig {
   readonly radiusPx: number;
   readonly damage: number;
   readonly structureDamageMult: number;
+  /** Splash look; ink (default) is the brood's goo, plague the toad's rot. */
+  readonly presentation?: 'ink' | 'plague';
 }
 
 /** Upper bound of replicated heal links per hopping healer (wire cap). */
@@ -1380,7 +1382,8 @@ export function normalizeHopConfig(config: CoopDefenseEnemyHopConfig | undefined
 
 export function normalizeDeathBurstConfig(config: CoopDefenseEnemyDeathBurstConfig | undefined): CoopDefenseEnemyDeathBurstConfig | undefined {
   if (!config) return undefined;
-  if (!Number.isFinite(config.radiusPx) || config.radiusPx <= 0 || [config.damage, config.structureDamageMult].some(v => !Number.isFinite(v) || v < 0)) {
+  if (!Number.isFinite(config.radiusPx) || config.radiusPx <= 0 || [config.damage, config.structureDamageMult].some(v => !Number.isFinite(v) || v < 0)
+    || (config.presentation !== undefined && config.presentation !== 'ink' && config.presentation !== 'plague')) {
     throw new Error('Invalid death burst config');
   }
   return { ...config };

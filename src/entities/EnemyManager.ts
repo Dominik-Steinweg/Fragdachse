@@ -158,7 +158,7 @@ export interface EnemySpecialMovementSource {
  */
 export interface EnemyVisualSink {
   /** `alliedColor` recolors claws of allied figures; hostile claws keep the shared danger color. */
-  syncEnemyClaw?(id: string, state: import('../systems/EnemyClawAttack').EnemyClawState, x: number, y: number, now: number, visible: boolean, alliedColor?: number): void;
+  syncEnemyClaw?(id: string, state: import('../systems/EnemyClawAttack').EnemyClawState, x: number, y: number, now: number, visible: boolean, alliedColor?: number, bodyRadius?: number): void;
   clearEnemyClaw?(id: string): void;
   clearEnemyClawEffects?(): void;
   syncBurrowState(id: string, phase: BurrowPhase, sprite?: Phaser.GameObjects.Image): void;
@@ -1397,7 +1397,7 @@ export class EnemyManager {
     enemy.syncCastAnimation();
     this.visualSink?.syncEnemyClaw?.(enemy.id, enemy.getClawAttackState(), enemy.sprite.x, enemy.sprite.y, now,
       enemy.sprite.visible && !enemy.isBurrowed() && enemy.getHp() > 0,
-      enemy.faction === 'allied' ? enemy.getSpawnEffectColor() : undefined);
+      enemy.faction === 'allied' ? enemy.getSpawnEffectColor() : undefined, enemy.getSize() / 2);
   }
 
   applySnapshot(snapshot: SyncedEnemySnapshot | null): void {

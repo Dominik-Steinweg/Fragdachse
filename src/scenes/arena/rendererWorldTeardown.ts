@@ -79,4 +79,5 @@ export function resetRenderersForWorldPresentationTeardown(
   bundle.firestarter.clear();
   bundle.shieldCharger.clear();
   bundle.alienCone.clear();
+  bundle.enemyHops.clear();
 }

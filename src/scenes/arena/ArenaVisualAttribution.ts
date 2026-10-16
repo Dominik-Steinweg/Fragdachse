@@ -91,6 +91,7 @@ export const GRAPHICS_FAMILIES = {
   projectileShapes: ['ProjectilePresentationRuntime', 'TracerBounceDebugOverlay'],
   captureObjectiveEffects: ['CaptureTheBeerRenderer'],
   teleportEffects: ['TranslocatorTeleportRenderer'],
+  tongueLash: ['TongueLashRenderer'],
   rocketLifecycleGraphics: ['RocketRenderer'],
   stinkCloudGraphics: ['StinkCloudSystem', 'StinkCloudBody'],
   flameRingEffects: ['FlamethrowerUpgradeRenderer'],

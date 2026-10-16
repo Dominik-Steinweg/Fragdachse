@@ -1,0 +1,41 @@
+{
+  "owner": "effects/TongueLashRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.gfx/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.06",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/TongueLashRenderer.ts:module/this.gfx/setDepth/0",
+      "owner": "effects/TongueLashRenderer.ts",
+      "component": "module/this.gfx/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.94
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.gfx/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.06"
+      }
+    }
+  ]
+}

@@ -60,6 +60,25 @@ describe('enemy claw presentation lifetime', () => {
     f.renderer.clear();
     expect(f.store.count).toBe(0);
   });
+
+  it('draws a tongue windup as a rake-free sector warning', () => {
+    const f = fixture();
+    f.renderer.sync('e', f.state, 100, 100, 1000, true, undefined, true);
+    expect(f.store.data[10]).toBe(ClawVfxKind.TelegraphSector);
+  });
+
+  it('announces an armed landing as a round, rake-free zone and releases it', () => {
+    const f = fixture();
+    const zone = { attackId: 'hop:e:1', x: 300, y: 200, radius: 46, startedAt: 1000, strikeAt: 1480, hitAt: 1600, endsAt: 1680 };
+    f.renderer.syncZone('hop', zone, 1000, true);
+    f.renderer.syncZone('hop', zone, 1100, true);
+    expect(f.store.count).toBe(1);
+    expect(f.store.data[10]).toBe(ClawVfxKind.TelegraphSector);
+    f.renderer.syncZone('hop', null, 1200, true);
+    expect(f.store.count).toBe(0);
+    f.renderer.syncZone('late', { ...zone, attackId: 'hop:e:2' }, 1650, true);
+    expect(f.store.count).toBe(0);
+  });
 });
 
 describe('enemy claw instance store', () => {
