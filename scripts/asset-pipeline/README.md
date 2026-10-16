@@ -121,8 +121,10 @@ Der Dispatch prüft zuerst `kraken_land_` → `kraken_motion_land_v2.apply_krake
 `kraken_tentacle_` → `kraken_tentacle_motion_v2.apply_kraken_tentacle`,
 `kraken_egg_` → `kraken_egg_motion_v2.apply_kraken_egg` und
 `kraken_brood_` → `kraken_brood_motion_v2.apply_kraken_brood` (normaler Gegner Mini-Kraken),
-danach `kraken_`.
-Alle Module werden erst beim jeweiligen Aufruf importiert. Land und Ei enthalten
+danach `kraken_`. `toad_` → `plague_toad_motion_v2.apply_plague_toad` (Quacksalber).
+Alle Module werden erst beim jeweiligen Aufruf importiert; neue Präfixe brauchen
+zusätzlich ihren Eintrag in `motionModule` (`draft-v2.mjs`), sonst invalidieren
+Motion-Änderungen den Entwurfs-Cache nicht. Land und Ei enthalten
 zunächst ausdrücklich fehlschlagende Platzhalter; das Tentakelmodul liefert die
 Modellierungs-Lane. Der Wasser-Dispatcher akzeptiert die vier bestehenden Motions;
 neue Wasser-Motions müssen im Modul durch `SUPPORTED_MOTIONS` bekannt gemacht
@@ -359,6 +361,10 @@ Labels sind unveränderlich; ohne `--label` entsteht ein neues. Kein Import,
 Archiv, ZIP, vollständiges Audit oder Kontaktbogen wird erzeugt. Andere ausführbare
 Katalogrezepte benutzen denselben Runner; normale Sheet-Assets erhalten zusätzlich
 ihr Sheet-/Idle-Format. Die direkte Spielumschaltung ist zunächst für Kraken implementiert.
+Sheet-Gegner lassen sich vorübergehend im Spiel prüfen:
+`node scripts/asset-pipeline/import-draft-sheet.mjs <asset> --into <checkout> [--label x] [--texture-key k] [--game-ids a]`
+kopiert Idle/Sheet nach `public/assets/sprites/pipeline-v2/<asset>/` und schreibt den Registry-Eintrag
+wie `import-runtime` (ohne Augenanker und Mesh-Schatten). Der Produktionsimport überschreibt dieselben Dateien.
 
 Optionen: `--samples 8`, `--device OPTIX|CUDA|CPU`, `--mesh-triangles 512`
 (Zielkomplexität der Cluster, keine exakt garantierte Dreieckszahl), `--no-denoise`

@@ -139,6 +139,8 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
                 raise ValueError(f'Unknown kraken brood motion: {motion}')
             getattr(implementation, function)(asset, motion, phase, frame, idle, p, pose, key)
             break
+    elif motion.startswith('toad_'):
+        importlib.import_module('plague_toad_motion_v2').apply_plague_toad(asset, motion, phase, frame, idle, p, pose, key)
     elif motion.startswith('shield_'):
         pose('left_arm')
         pose('right_arm')

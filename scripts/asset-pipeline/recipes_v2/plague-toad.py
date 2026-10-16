@@ -437,7 +437,7 @@ def build(c, spec):
         'wound': c.material('Quacksalber deep rot', linear('#22090f'), 'organic'),
         'flesh': c.material('Quacksalber plum rotten flesh', linear('#552033'), 'organic'),
         'wound_rim': c.material('Quacksalber torn hide lip', linear('#3d4234'), 'organic'),
-        'tongue': c.material('Quacksalber sticky mauve tongue', linear('#8d506b'), 'organic'),
+        'tongue': c.material('Quacksalber sticky mauve tongue', linear('#b8738f'), 'organic'),
         'mouth': c.material('Quacksalber dark mouth floor', linear('#3a1426'), 'organic'),
         'lip': c.material('Quacksalber pale jaw lip', linear('#8e9383'), 'organic'),
     }
