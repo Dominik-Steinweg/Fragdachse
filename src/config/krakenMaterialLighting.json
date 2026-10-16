@@ -5,7 +5,7 @@
   "tentacleExposureScale": 1.089,
   "grades": {
     "abyssal-kraken-spine": { "exposure": 0.85, "tint": [0.78, 0.86, 1.22], "saturation": 0.7 },
-    "abyssal-kraken-egg": { "exposure": 0.56, "tint": [0.9, 0.8, 1.2], "saturation": 0.75 }
+    "abyssal-kraken-egg": { "exposure": 0.44, "tint": [0.82, 0.74, 1.15], "saturation": 0.6 }
   },
   "brood": {
     "radiusPx": 14,
@@ -15,7 +15,7 @@
     "arcShadowMaxSlope": 1.4,
     "pulse": 0.1,
     "albedoMatch": [0.45, 0.52, 0.57],
-    "glowColor": [1.0, 0.1, 0.05],
+    "glowColor": [0.2, 0.03, 0.48],
     "glowFalloff": 7,
     "glow": 0.26,
     "glowPulse": 0.08,
@@ -23,5 +23,18 @@
     "incubatedGlow": 0.6,
     "incubatedPulse": 0.22,
     "hatchGlow": 0.8
+  },
+  "emission": {
+    "eyeColor": [1.0, 0.16, 0.05],
+    "eyeHot": [1.0, 0.62, 0.34],
+    "eyeGain": 2.6,
+    "haloPx": 7,
+    "halo": 0.6,
+    "haloTaps": { "low": 0, "medium": 6, "high": 12 },
+    "glowColor": [0.5, 0.12, 1.0],
+    "broodHot": [0.86, 0.62, 1.0],
+    "glowGain": 1.8,
+    "fadeEnd": 1.6,
+    "marginPx": 3
   }
 }

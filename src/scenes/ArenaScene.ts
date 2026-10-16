@@ -2924,7 +2924,9 @@ export class ArenaScene extends Phaser.Scene {
     return {
       skyState: resolveSkyState(minutes),
       isVoidMap: mapConfig !== null && (mapConfig.mapId === '15' || mapConfig.trackMode === 'void-fire'),
-      bossVisualProfile: inArena && mapConfig?.mapId === '15' ? 'void-hunter' : undefined,
+      bossVisualProfile: inArena && mapConfig?.mapId === '15' ? 'void-hunter'
+        : inArena && mapConfig?.boss?.enemyKind === 'abyssal-kraken' ? 'abyssal-kraken' : undefined,
+      bossVisualStage: inArena ? (this.arenaRuntime?.getBossVisualStage() ?? 0) : 0,
       bossPhase: inArena ? (this.arenaRuntime?.getMaxBossPhase() ?? 0) : 0,
       localHpFraction: localWounded ? (localPlayer?.getHpFraction() ?? 1) : 1,
       gamePhase: inArena ? 'ARENA' : 'LOBBY',

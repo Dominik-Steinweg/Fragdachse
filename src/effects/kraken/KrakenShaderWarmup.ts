@@ -4,6 +4,7 @@ import { disposeShaderWarmupNode } from '../../graphics/disposeShaderWarmupNode'
 import { WATER_DISTURBANCE_FRAGMENT, WATER_DISTURBANCE_PROGRAM } from '../../arena/WaterDisturbanceField';
 import { CHARACTER_MESH_BLUR, CHARACTER_MESH_MASK } from '../characterMeshShaders';
 import { KRAKEN_REVIEW_FX_SHADER } from './reviewEffectShader';
+import { KRAKEN_EMISSION_FRAGMENT, KRAKEN_EMISSION_PROGRAM } from './krakenEmissionShader';
 import { KRAKEN_SHADOW_BLUR, KRAKEN_SHADOW_TARGET, KRAKEN_SHADOW_COMPOSITE, KRAKEN_SHADOW_PROJECTION,
   KRAKEN_SHADOW_COMPOSITE_FRAGMENT, KRAKEN_SHADOW_VERTEX, KRAKEN_SHADOW_MASK } from './KrakenShadowRenderer';
 import { getSubmersionNode } from './submersionShader';
@@ -26,6 +27,7 @@ export function warmupKrakenShaders(scene: Phaser.Scene): ShaderProgramBarrier {
       [KRAKEN_SHADOW_BLUR, CHARACTER_MESH_BLUR],
       [KRAKEN_SHADOW_COMPOSITE, KRAKEN_SHADOW_COMPOSITE_FRAGMENT],
       ['KrakenReviewFX', KRAKEN_REVIEW_FX_SHADER],
+      [KRAKEN_EMISSION_PROGRAM, KRAKEN_EMISSION_FRAGMENT],
       [WATER_DISTURBANCE_PROGRAM, WATER_DISTURBANCE_FRAGMENT],
     ]) probes.push(new Phaser.GameObjects.Shader(scene, { name, shaderName: name, fragmentSource }, 0, 0, 1, 1));
     // No VAO/buffer is needed to link the mesh program. Real casters own layouts.

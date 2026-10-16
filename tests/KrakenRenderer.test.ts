@@ -12,6 +12,10 @@ vi.mock('../src/effects/kraken/KrakenTentacleShadow', () => ({ KrakenTentacleSha
   image = { setVisible: vi.fn() }; update = vi.fn(); destroy = vi.fn();
 } }));
 vi.mock('../src/effects/kraken/KrakenReviewDrainFilter', () => ({ addReviewDrain: () => ({ active: false }) }));
+// Glow pools/cups are instanced SpriteGPULayers; their projection is covered by the glow timeline tests.
+vi.mock('../src/effects/kraken/KrakenGlowLayer', () => ({ KrakenGlowLayer: class {
+  begin() {} pool() {} sucker() {} flush() {} clear() {} destroy() {}
+} }));
 import { KrakenRenderer, KrakenSpriteView, KrakenEffects, KrakenEggFlightView, krakenSocket, sampleKrakenBody,
   sampleKrakenTentacle, krakenTentacleSink, sampleKrakenEgg, krakenRiseTiming, krakenDeathAlpha, krakenBroodDiscs, type KrakenPresentationAsset, type KrakenPresentationAssets } from '../src/effects/kraken/KrakenRenderer';
 import { KrakenIntroRenderer } from '../src/effects/kraken/KrakenIntroRenderer';

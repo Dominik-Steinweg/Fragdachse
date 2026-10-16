@@ -190,6 +190,19 @@ describe('resolveBaseGrade', () => {
     expect(voidBoss.tint).not.toBe(genericBoss.tint);
   });
 
+  it('gibt dem Kraken einen kuehlen Boss-Look ohne Verdunkelung, der an Land per Praesentationsstufe eskaliert', () => {
+    const generic = resolveBaseGrade(inputs({ skyState: DUSK, bossPhase: 1, bossVisualIntensity: 1 }));
+    const pond = resolveBaseGrade(inputs({ skyState: DUSK, bossVisualProfile: 'abyssal-kraken', bossPhase: 1, bossVisualIntensity: 1 }));
+    const ashore = resolveBaseGrade(inputs({ skyState: DUSK, bossVisualProfile: 'abyssal-kraken', bossVisualStage: 2,
+      bossPhase: 1, bossVisualIntensity: 1 }));
+    expect(pond.tint).not.toBe(generic.tint);
+    expect(pond.temperature).toBeLessThan(generic.temperature);
+    expect(pond.brightness).toBeGreaterThanOrEqual(generic.brightness);
+    expect(ashore.tintStrength).toBeGreaterThan(pond.tintStrength);
+    expectWithinClamps(pond);
+    expectWithinClamps(ashore);
+  });
+
   it('blendet den Boss-Look aus dem Nacht-Look ein statt ihn hart zu ersetzen', () => {
     const normal = resolveBaseGrade(inputs({ skyState: MIDNIGHT }));
     const start = resolveBaseGrade(inputs({
