@@ -557,6 +557,75 @@
       }
     }
   ],
+  "abyssCameo": { "atMs": 113500, "durationMs": 6000, "from": { "gridX": 42, "gridY": 38 }, "to": { "gridX": 66, "gridY": 37 } },
+  "encounters": [
+    {
+      "id": "kraken-heralds-1",
+      "start": {
+        "type": "time",
+        "atMs": 120000
+      },
+      "groups": [
+        {
+          "enemyKind": "mini-kraken",
+          "count": 4,
+          "spawnStaggerMs": 700,
+          "spawnArea": {
+            "gridX": 56,
+            "gridY": 35,
+            "widthCells": 12,
+            "heightCells": 6,
+            "medium": "water",
+            "cluster": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "kraken-heralds-2",
+      "start": {
+        "type": "time",
+        "atMs": 240000
+      },
+      "groups": [
+        {
+          "enemyKind": "mini-kraken",
+          "count": 4,
+          "spawnStaggerMs": 700,
+          "spawnArea": {
+            "gridX": 56,
+            "gridY": 35,
+            "widthCells": 12,
+            "heightCells": 6,
+            "medium": "water",
+            "cluster": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "kraken-heralds-3",
+      "start": {
+        "type": "time",
+        "atMs": 360000
+      },
+      "groups": [
+        {
+          "enemyKind": "mini-kraken",
+          "count": 5,
+          "spawnStaggerMs": 700,
+          "spawnArea": {
+            "gridX": 56,
+            "gridY": 35,
+            "widthCells": 12,
+            "heightCells": 6,
+            "medium": "water",
+            "cluster": true
+          }
+        }
+      ]
+    }
+  ],
   "secondaryObjectives": [
     {
       "id": "destroy-brutbomben-front",

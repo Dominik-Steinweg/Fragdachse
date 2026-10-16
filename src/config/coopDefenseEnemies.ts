@@ -363,8 +363,12 @@ export interface CoopDefenseEnemyFirestarterConfig {
 
 /** Schild-Anstürmer: frontal shield while approaching, telegraphed straight charge, recovery window. */
 export interface CoopDefenseEnemyShieldChargerConfig {
-  /** Full blocking arc of the raised shield in degrees (player energy shield: 120). */
+  /** Full blocking arc of the raised shield in degrees (player energy shield: 120); 0 = no shield (a leap). */
   readonly shieldArcDegrees: number;
+  /** Presentation of the run: a shielded charge or a leap through the air (same lane, timing and path damage). */
+  readonly style?: 'shield' | 'leap';
+  /** Share of hitDamage dealt to friendly bases and constructions the run passes through (default 0). */
+  readonly structureDamageMult?: number;
   /** A charge may start only with the target inside this distance band (centre to centre). */
   readonly triggerMinDistancePx: number;
   readonly triggerMaxDistancePx: number;
@@ -417,8 +421,32 @@ export interface CoopDefenseEnemyEnergyConeConfig {
   readonly damage: number;
 }
 
+/** Swims through water when that route is faster: submerged (untargetable, no attacks) until it surfaces at a shore. */
+export interface CoopDefenseEnemyAmphibiousConfig {
+  /** Speed multiplier while submerged; the swim route is costed with the same ratio. */
+  readonly swimSpeedFactor: number;
+}
+
+/** A siege enemy turns on a nearby player and returns to the base once the player is gone (mortar-style hysteresis). */
+export interface CoopDefenseEnemyEngageConfig {
+  readonly enterPx: number;
+  readonly exitPx: number;
+  /** An engaged player is kept at least this long, even beyond exitPx. */
+  readonly minDwellMs: number;
+}
+
+/** Area burst at the death position: full damage to players and allies, structureDamageMult to bases and constructions. */
+export interface CoopDefenseEnemyDeathBurstConfig {
+  readonly radiusPx: number;
+  readonly damage: number;
+  readonly structureDamageMult: number;
+}
+
 export interface CoopDefenseEnemyConfig {
   readonly flee?: CoopDefenseEnemyFleeConfig;
+  readonly amphibious?: CoopDefenseEnemyAmphibiousConfig;
+  readonly engage?: CoopDefenseEnemyEngageConfig;
+  readonly deathBurst?: CoopDefenseEnemyDeathBurstConfig;
   readonly firestarter?: CoopDefenseEnemyFirestarterConfig;
   readonly shieldCharger?: CoopDefenseEnemyShieldChargerConfig;
   readonly energyCone?: CoopDefenseEnemyEnergyConeConfig;
@@ -502,7 +530,9 @@ export const COOP_DEFENSE_ENEMY_KINDS: readonly CoopDefenseEnemyKind[] = Object.
 export function registerKrakenEnemies(config: import('./krakenBoss').KrakenBossConfig): () => void {
   const bossKind = 'abyssal-kraken', eggKind = config.eggs.enemyKind;
   if (COOP_DEFENSE_ENEMY_CONFIGS[bossKind] || COOP_DEFENSE_ENEMY_CONFIGS[eggKind]) return () => {};
-  const base = COOP_DEFENSE_ENEMY_CONFIGS[config.eggs.broodTable.entries[0].enemyKind];
+  // Boss and egg are explicit entities; they must not inherit abilities of whatever the eggs hatch.
+  const base = { pawCount: 4 as const, xp: 3, moveSpeed: 180, movementTarget: 'players' as const,
+    attackScanIntervalMs: 200, attackStopDurationMs: 100, obstacleAttackDelayMs: 500 };
   const registry = normalizeEnemyRegistry({ enemies: [
     ...Object.entries(COOP_DEFENSE_ENEMY_CONFIGS).map(([id, value]) => ({ id, ...value })),
     { ...base, id: bossKind, imageKey: '__WHITE', maxHp: 12000, size: config.bodyRadiusPx * 2,
@@ -603,6 +633,9 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         firestarter: config.firestarter ? { ...config.firestarter, charges: { ...config.firestarter.charges }, lance: { ...config.firestarter.lance } } : undefined,
         shieldCharger: config.shieldCharger ? { ...config.shieldCharger } : undefined,
         energyCone: config.energyCone ? { ...config.energyCone } : undefined,
+        amphibious: config.amphibious ? { ...config.amphibious } : undefined,
+        engage: config.engage ? { ...config.engage } : undefined,
+        deathBurst: config.deathBurst ? { ...config.deathBurst } : undefined,
         turnRateDegPerSec: config.turnRateDegPerSec,
         stinkAura: config.stinkAura,
         deathSpawns: config.deathSpawns,
@@ -740,6 +773,9 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     firestarter: normalizeFirestarterConfig(enemy.firestarter),
     shieldCharger: normalizeShieldChargerConfig(enemy.shieldCharger),
     energyCone: normalizeEnergyConeConfig(enemy.energyCone),
+    amphibious: normalizeAmphibiousConfig(enemy.amphibious),
+    engage: normalizeEngageConfig(enemy.engage),
+    deathBurst: normalizeDeathBurstConfig(enemy.deathBurst),
     turnRateDegPerSec: normalizeTurnRate(enemy.turnRateDegPerSec),
     stinkAura: normalizeStinkAuraConfig(enemy.stinkAura, enemy.id),
     deathSpawns: normalizeDeathSpawns(enemy.deathSpawns, enemy.id),
@@ -1218,15 +1254,39 @@ export function normalizeTurnRate(value: number | undefined): number | undefined
 /** Reject malformed timing and inconsistent distances at the authored boundary. */
 export function normalizeShieldChargerConfig(config: CoopDefenseEnemyShieldChargerConfig | undefined): CoopDefenseEnemyShieldChargerConfig | undefined {
   if (!config) return undefined;
-  const positive = [config.shieldArcDegrees, config.triggerMaxDistancePx, config.alignToleranceDegrees, config.windupMs,
+  const positive = [config.triggerMaxDistancePx, config.alignToleranceDegrees, config.windupMs,
     config.runSpeedPx, config.maxRunPx, config.recoverMs, config.cooldownMs, config.windupDisplacementCancelPx, config.hitKnockbackMs];
-  const nonNegative = [config.triggerMinDistancePx, config.overshootPx, config.cancelLockoutMs, config.hitDamage, config.hitKnockbackSpeed];
+  const nonNegative = [config.shieldArcDegrees, config.triggerMinDistancePx, config.overshootPx, config.cancelLockoutMs, config.hitDamage,
+    config.hitKnockbackSpeed, config.structureDamageMult ?? 0];
   if (positive.some(v => !Number.isFinite(v) || v <= 0) || nonNegative.some(v => !Number.isFinite(v) || v < 0)) {
     throw new Error('Invalid shield charger value');
   }
+  if (config.style !== undefined && config.style !== 'shield' && config.style !== 'leap') throw new Error('Invalid shield charger style');
+  if ((config.style === 'leap') !== (config.shieldArcDegrees === 0)) throw new Error('A leap has no shield; a shielded charge needs one');
   if (config.shieldArcDegrees > 360 || config.alignToleranceDegrees >= 90
     || config.triggerMinDistancePx >= config.triggerMaxDistancePx || config.maxRunPx < config.triggerMaxDistancePx
     || config.cooldownMs < config.windupMs) throw new Error('Invalid shield charger relation');
+  return { ...config };
+}
+
+export function normalizeAmphibiousConfig(config: CoopDefenseEnemyAmphibiousConfig | undefined): CoopDefenseEnemyAmphibiousConfig | undefined {
+  if (!config) return undefined;
+  if (!Number.isFinite(config.swimSpeedFactor) || config.swimSpeedFactor < .25 || config.swimSpeedFactor > 4) throw new Error('Invalid amphibious swim speed');
+  return { swimSpeedFactor: config.swimSpeedFactor };
+}
+
+export function normalizeEngageConfig(config: CoopDefenseEnemyEngageConfig | undefined): CoopDefenseEnemyEngageConfig | undefined {
+  if (!config) return undefined;
+  if ([config.enterPx, config.exitPx].some(v => !Number.isFinite(v) || v <= 0) || !Number.isFinite(config.minDwellMs) || config.minDwellMs < 0
+    || config.enterPx >= config.exitPx) throw new Error('Invalid engage config');
+  return { ...config };
+}
+
+export function normalizeDeathBurstConfig(config: CoopDefenseEnemyDeathBurstConfig | undefined): CoopDefenseEnemyDeathBurstConfig | undefined {
+  if (!config) return undefined;
+  if (!Number.isFinite(config.radiusPx) || config.radiusPx <= 0 || [config.damage, config.structureDamageMult].some(v => !Number.isFinite(v) || v < 0)) {
+    throw new Error('Invalid death burst config');
+  }
   return { ...config };
 }
 

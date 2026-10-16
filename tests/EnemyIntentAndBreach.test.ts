@@ -68,7 +68,8 @@ describe('Shared strategic intent and demolition permission', () => {
     world.catalog.updateTargets([{ kind: 'player', id: 'player', x: 64, y: 48 }]);
     settle(world, [unit]);
     const intent = world.intents.get(unit.id);
-    const siege = config.movementTarget === 'bases';
+    // The player stands 80 px away: an engaging siege enemy hunts it instead of walking to the base.
+    const siege = config.movementTarget === 'bases' && !config.engage;
     expect(intent?.target).toEqual(config.flee ? null : siege ? { kind: 'base', id: 'main' } : { kind: 'player', id: 'player' });
     if (config.flee) expect(intent).toMatchObject({ reason: 'flee', attackContext: 'none' });
     expect(intent?.navigation.status).toBe('ready');

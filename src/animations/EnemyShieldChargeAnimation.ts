@@ -17,6 +17,17 @@ const CHARGE_FRAME_MS = 45;
 export function shieldChargeClipFrame(state: ShieldChargeState | undefined, now: number, clip: ClipSource): number | null {
   const lane = state?.lane;
   if (!state || !lane || state.phase === 'none') return null;
+  // A leap is one clip: crouch until `launch`, airborne until `land`, then the recovery tail.
+  const leap = clip('leap');
+  if (leap?.frames.length) {
+    const last = leap.frames.length - 1;
+    const launch = Math.min(last, Math.max(0, leap.markers?.launch ?? Math.round(last / 3)));
+    const land = Math.min(last, Math.max(launch, leap.markers?.land ?? Math.round(last * 2 / 3)));
+    const span = state.phase === 'windup' ? [0, launch, lane.startedAt, lane.runAt]
+      : state.phase === 'run' ? [launch, land, lane.runAt, lane.runEndsAt] : [land, last, lane.runEndsAt, lane.recoverUntil];
+    const progress = clamp01((now - span[2]!) / Math.max(1, span[3]! - span[2]!));
+    return leap.frames[Math.round(span[0]! + (span[1]! - span[0]!) * progress)]!;
+  }
   if (state.phase === 'windup') {
     const windup = clip('windup');
     if (!windup?.frames.length) return null;

@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { KRAKEN_REVIEW_FX_SHADER } from './kraken/reviewEffectShader';
 import type { ShaderWarmupProbe } from '../graphics/ShaderWarmupProbe';
 import { disposeShaderWarmupNode } from '../graphics/disposeShaderWarmupNode';
 import { DistortionFilter } from './distortion/DistortionFilter';
@@ -106,6 +107,8 @@ export function createCombatShaderWarmupProbes(scene: Phaser.Scene): ShaderWarmu
     shaderQuadProbe(scene, TESLA_NOVA_SHADER_NAME, TESLA_NOVA_FRAGMENT_SOURCE),
     // The plasma burner beam linked on the first trigger pull, a visible hitch on the training ground.
     shaderQuadProbe(scene, PLASMA_BURNER_BEAM_SHADER_NAME, PLASMA_BURNER_BEAM_FRAGMENT_SOURCE),
+    // Mini-Kraken melee ink reuses the kraken FX shader on ordinary maps.
+    shaderQuadProbe(scene, 'KrakenReviewFX', KRAKEN_REVIEW_FX_SHADER),
     createTeslaStormShaderProbe(scene),
     createEnergyBallShaderProbe(scene),
     createFireControlPortalShaderProbe(scene),

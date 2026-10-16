@@ -40,6 +40,15 @@ export class WaterGeometry {
     });
   }
 
+  /** Share of a body over water (0..1): the centre and four samples at 70 % of the radius. */
+  wetShare(x: number, y: number, radius: number): number {
+    if (!this.cells.size) return 0;
+    const r = radius * .7;
+    let wet = 0;
+    for (const [dx, dy] of [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]] as const) if (this.isCircleBlocked(x + dx, y + dy, 0)) wet++;
+    return wet / 5;
+  }
+
   /** Deterministic dry landing for spawns originating on water (e.g. death-spawn offsets). */
   resolveDryPoint(x: number, y: number, radius: number): { x: number; y: number } | null {
     if (!this.isCircleBlocked(x, y, radius)) return { x, y };

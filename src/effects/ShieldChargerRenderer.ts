@@ -10,6 +10,7 @@ import {
   SHIELD_CHARGER_DUST_LIFE_S, SHIELD_CHARGER_KIND, SHIELD_CHARGER_LANE_MARGIN_PX, SHIELD_CHARGER_SKID_LIFE_S,
 } from './gpu/ShieldChargerShader';
 import type { ShieldChargeLane } from '../systems/ShieldChargeState';
+import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
 import type { EnemyLaneAttack } from './EnemyClawRenderer';
 
 /** Shared enemy-attack danger zone (the same red family as claws and Kraken slams). */
@@ -107,7 +108,9 @@ export class ShieldChargerRenderer {
         if (announced) this.sunkLanes.add(enemy.id); else this.sunkLanes.delete(enemy.id);
       }
       if (state.phase === 'windup' && lane && (allied || !this.laneSink)) lanes.push({ lane, allied, seed: seedOf(enemy.id), id: enemy.id });
-      if (state.phase === 'run' && lane) {
+      // A leap flies: no ground streak or dust trail while airborne, only kick-off and landing puffs.
+      const leap = getCoopDefenseEnemyConfig(enemy.kind).shieldCharger?.style === 'leap';
+      if (state.phase === 'run' && lane && !leap) {
         const bx = enemy.sprite.x, by = enemy.sprite.y;
         const along = (bx - lane.originX) * Math.cos(lane.angle) + (by - lane.originY) * Math.sin(lane.angle);
         const tail = Math.max(0, Math.min(STREAK_PX, along));
@@ -165,7 +168,7 @@ export class ShieldChargerRenderer {
     if (phase === 'recover' && track.phase === 'run' && lane) {
       const ex = lane.originX + Math.cos(lane.angle) * lane.length, ey = lane.originY + Math.sin(lane.angle) * lane.length;
       if (this.skids.length >= 32) this.skids.shift();
-      this.skids.push({ ax: lane.originX, ay: lane.originY, bx: ex, by: ey, halfWidth: lane.halfWidth + 4, endedAt: local,
+      if (getCoopDefenseEnemyConfig(enemy.kind).shieldCharger?.style !== 'leap') this.skids.push({ ax: lane.originX, ay: lane.originY, bx: ex, by: ey, halfWidth: lane.halfWidth + 4, endedAt: local,
         seed: seedOf(++this.sequence) });
       this.pushDust(enemy.sprite.x, enemy.sprite.y, lane.halfWidth * 1.7, local);
     }

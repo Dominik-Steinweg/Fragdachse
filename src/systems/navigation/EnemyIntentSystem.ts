@@ -31,6 +31,8 @@ export class EnemyIntentSystem {
   private readonly goalRegions = new WeakMap<readonly number[], string>();
   private readonly positions = new AttackPositionReservations();
   private readonly lastSeen = new Map<string, Target>();
+  /** Siege enemies with an engage block: the player they currently hunt and since when (hysteresis). */
+  private readonly engaged = new Map<string, { target: Target; since: number }>();
   private perception: ((enemy: EnemyEntity, x: number, y: number, range: number) => boolean) | null = null;
   setPerception(perception: (enemy: EnemyEntity, x: number, y: number, range: number) => boolean): void { this.perception = perception; }
   private baseGeometry: NavigationGeometry | null = null;
@@ -142,6 +144,10 @@ export class EnemyIntentSystem {
       }
       let reason: EnemyIntent['reason'] = decoy ? 'decoy' : config.movementTarget === 'bases' ? 'siege'
         : config.movementTarget === 'players' ? 'player' : 'strategic';
+      // A siege enemy with an engage block hunts a nearby player instead of walking to the base.
+      const engagedTarget = !decoy && config.engage && config.movementTarget === 'bases'
+        ? this.resolveEngage(enemy, config.engage, visibilityRange, now) : null;
+      if (engagedTarget) reason = 'player';
       const prior = this.decisions.get(enemy.id);
       // Cheap live validation precedes candidate construction. Blocked/pending routes still
       // refresh their bound target each frame without rescanning every strategic alternative.
@@ -165,7 +171,7 @@ export class EnemyIntentSystem {
         if (entry) entry.usedAt = this.frame;
         continue;
       }
-      const candidates: Target[] = !scan && bound ? [bound] : decoy ? [decoy]
+      const candidates: Target[] = !scan && bound ? [bound] : decoy ? [decoy] : engagedTarget ? [engagedTarget]
         : config.movementTarget === 'bases' && baseTargets.length ? baseTargets
         : this.catalog.getCandidates(config.movementTarget === 'players-and-armed-constructs' ? 'players-and-armed-constructs' : 'player-threats')
           .filter(target => !this.perception || this.perception(enemy, target.x, target.y, visibilityRange))
@@ -191,9 +197,9 @@ export class EnemyIntentSystem {
         if (memory?.kind === 'player' && this.catalog.canRetainMemory(memory)
           && Math.hypot(enemy.sprite.x - memory.x, enemy.sprite.y - memory.y) > Math.max(24, enemy.getSize() / 2 + 1)) {
           const target: Target = { ...memory, id: `memory:${memory.id}:${Math.round(memory.x / 8)}:${Math.round(memory.y / 8)}` };
-          const field = this.fieldFor(target, enemy.getSize() / 2, 16, geometry);
+          const field = this.fieldFor(target, enemy.getSize() / 2, 16, geometry, this.swimRatio(enemy));
           const navigation = this.continueMovement(field.queryNavigation(enemy.sprite.x, enemy.sprite.y), field,
-            enemy.sprite.x, enemy.sprite.y, target, enemy.getSize() / 2, 16, geometry);
+            enemy.sprite.x, enemy.sprite.y, target, enemy.getSize() / 2, 16, this.moveGeometry(enemy, geometry));
           chosen = { target, field, navigation }; reason = 'memory';
         } else this.lastSeen.delete(enemy.id);
       }
@@ -219,11 +225,45 @@ export class EnemyIntentSystem {
     this.planner.advance();
     for (const id of this.decisions.keys()) if (!active.has(id)) { this.decisions.delete(id); this.nextDecisionAt.delete(id); this.lastSeen.delete(id); }
     for (const id of this.lastSeen.keys()) if (!active.has(id)) this.lastSeen.delete(id);
+    for (const id of this.engaged.keys()) if (!active.has(id)) this.engaged.delete(id);
     for (const id of this.nextDecisionAt.keys()) if (!active.has(id)) this.nextDecisionAt.delete(id);
     this.positions.retain(active, now);
     for (const [key, entry] of this.fields) if (entry.usedAt < this.frame - 120) {
       entry.field.destroy(); this.coordinator.unregisterField(entry.id); this.fields.delete(key);
     }
+  }
+
+  /** Amphibious enemies route through water (costed by their swim speed); everyone else is land-bound. */
+  private swimRatio(enemy: EnemyEntity): number | undefined {
+    return getCoopDefenseEnemyConfig(enemy.kind).amphibious?.swimSpeedFactor;
+  }
+  /** The geometry a body moves through: an amphibious body ignores water, goals stay on land. */
+  private moveGeometry(enemy: EnemyEntity, geometry: NavigationGeometry): NavigationGeometry {
+    return this.swimRatio(enemy) ? this.coordinator.getSwimGeometry() ?? geometry : geometry;
+  }
+  /** Mortar-style hysteresis: enter within enterPx, keep within exitPx or for minDwellMs, then return to the base. */
+  private resolveEngage(enemy: EnemyEntity, engage: { enterPx: number; exitPx: number; minDwellMs: number },
+    visibilityRange: number, now: number): Target | null {
+    const x = enemy.sprite.x, y = enemy.sprite.y, visible = (t: { x: number; y: number }) =>
+      !this.perception || this.perception(enemy, t.x, t.y, visibilityRange);
+    const prior = this.engaged.get(enemy.id);
+    if (prior) {
+      const live = prior.target.kind !== 'base' && prior.target.kind !== 'ally' ? this.catalog.resolve(prior.target) : null;
+      if (live && visible(live) && (Math.hypot(live.x - x, live.y - y) <= engage.exitPx || now - prior.since < engage.minDwellMs)) {
+        prior.target = this.catalogTarget(live);
+        return prior.target;
+      }
+      this.engaged.delete(enemy.id);
+    }
+    let best: EnemyAiTargetCandidate | null = null, bestDistance = engage.enterPx;
+    for (const candidate of this.catalog.getCandidates('player-threats')) {
+      const distance = Math.hypot(candidate.x - x, candidate.y - y);
+      if (distance <= bestDistance && visible(candidate)) { best = candidate; bestDistance = distance; }
+    }
+    if (!best) return null;
+    const target = this.catalogTarget(best);
+    this.engaged.set(enemy.id, { target, since: now });
+    return target;
   }
 
   private catalogTarget(target: EnemyAiTargetCandidate): Target {
@@ -247,8 +287,9 @@ export class EnemyIntentSystem {
   private choose(enemy: EnemyEntity, candidates: readonly Target[], geometry: NavigationGeometry,
     now: number, prior?: Decision): { target: Target; field: EnemyFlowFieldService; navigation: NavigationResult } | null {
     let best: { target: Target; field: EnemyFlowFieldService; navigation: NavigationResult; score: number } | null = null;
+    const swim = this.swimRatio(enemy), moveGeometry = this.moveGeometry(enemy, geometry);
     for (const target of candidates) {
-      const field = this.fieldFor(target, enemy.getSize() / 2, this.range(enemy, target), geometry);
+      const field = this.fieldFor(target, enemy.getSize() / 2, this.range(enemy, target), geometry, swim);
       const unchanged = prior?.field === field && prior.intent.navigation.status === 'ready'
         && prior.intent.navigation.topology === this.coordinator.getTopologyVersion()
         && prior.querySnapshot === field.getNavigationSnapshot()
@@ -256,7 +297,7 @@ export class EnemyIntentSystem {
         && prior.target.x === target.x && prior.target.y === target.y;
       const navigation = unchanged ? prior.intent.navigation
         : this.continueMovement(field.queryNavigation(enemy.sprite.x, enemy.sprite.y), field,
-          enemy.sprite.x, enemy.sprite.y, target, enemy.getSize() / 2, this.range(enemy, target), geometry);
+          enemy.sprite.x, enemy.sprite.y, target, enemy.getSize() / 2, this.range(enemy, target), moveGeometry);
       const cost = navigation.status === 'ready' ? navigation.cost
         : (this.hasFreeApproach(navigation) ? 0 : 1e12) + Math.hypot(enemy.sprite.x - target.x, enemy.sprite.y - target.y);
       const retained = prior?.target.kind === target.kind && prior.target.id === target.id;
@@ -290,13 +331,14 @@ export class EnemyIntentSystem {
   }
 
   /** Goal regions represent valid attack positions; a blocked center is not evidence for demolition. */
-  private fieldFor(target: Target, radius: number, range: number, geometry: NavigationGeometry): EnemyFlowFieldService {
-    const key = `${target.kind}:${target.id}:r${radius}:a${range}`;
+  /** Goals (attack positions) always lie on land; an amphibious field only routes through water. */
+  private fieldFor(target: Target, radius: number, range: number, geometry: NavigationGeometry, swim?: number): EnemyFlowFieldService {
+    const key = `${target.kind}:${target.id}:r${radius}:a${range}${swim ? `:s${swim}` : ''}`;
     let entry = this.fields.get(key);
     if (!entry) {
       const id = `intent:${key}`;
       entry = { id, field: EnemyFlowFieldService.fromView(this.coordinator.registerField(id,
-        { goalMode: 'dynamic', bodyRadius: radius })), signature: '', usedAt: this.frame, sealedGoals: [], acceptsOpenedGoal: undefined };
+        { goalMode: 'dynamic', bodyRadius: radius, swimCostRatio: swim })), signature: '', usedAt: this.frame, sealedGoals: [], acceptsOpenedGoal: undefined };
       this.fields.set(key, entry); this.fieldEntries.set(entry.field, entry);
     }
     entry.usedAt = this.frame;
@@ -431,6 +473,6 @@ export class EnemyIntentSystem {
     this.flee.clear();
     this.scanCursor = 0;
     for (const entry of this.fields.values()) { entry.field.destroy(); this.coordinator.unregisterField(entry.id); }
-    this.fields.clear(); this.decisions.clear(); this.nextDecisionAt.clear(); this.lastSeen.clear(); this.planner.clear(); this.positions.clear(); this.baseGeometry = null; this.baseTargets = [];
+    this.fields.clear(); this.decisions.clear(); this.nextDecisionAt.clear(); this.lastSeen.clear(); this.engaged.clear(); this.planner.clear(); this.positions.clear(); this.baseGeometry = null; this.baseTargets = [];
   }
 }

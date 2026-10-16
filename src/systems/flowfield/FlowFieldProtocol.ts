@@ -11,7 +11,7 @@ import type {
 } from './FlowFieldKernel';
 import type { NavigationGeometrySnapshot } from '../navigation/NavigationGeometry';
 
-export const FLOW_FIELD_PROTOCOL_VERSION = 3;
+export const FLOW_FIELD_PROTOCOL_VERSION = 4;
 
 export type FlowFieldGoalMode = 'bases' | 'dynamic' | 'dynamic-fallback-bases';
 
@@ -19,7 +19,12 @@ export interface FlowFieldProfileDescriptor {
   readonly profileId: string;
   readonly clearanceCells: number;
   readonly bodyRadius?: number;
+  /** Amphibious body: water is traversable and costs land/ratio (all costs scaled by SWIM_COST_SCALE). */
+  readonly swimCostRatio?: number;
 }
+
+/** Integer cost scale of amphibious profiles, so water can be cheaper than the unit ground cost. */
+export const SWIM_COST_SCALE = 8;
 
 export interface FlowFieldFieldDescriptor {
   readonly fieldId: string;

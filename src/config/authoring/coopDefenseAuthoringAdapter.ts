@@ -102,6 +102,7 @@ export const COOP_MISSION_SOURCE_FIELDS = [
   'tutorialPersistent',
   'tutorialShowControls',
   'tutorialAnchor',
+  'abyssCameo',
   'tutorialSteps',
   'persistentBasePreview',
   'respawnDelaySchedule',
@@ -219,6 +220,7 @@ export function toCoopMissionDefinition(
     powerUps: mapConfig.powerUps,
     itemDrop: mapConfig.itemDrop,
     persistentBasePreview: mapConfig.persistentBasePreview,
+    ...(mapConfig.abyssCameo === undefined ? {} : { abyssCameo: mapConfig.abyssCameo }),
     ...(mapConfig.respawnDelaySchedule === undefined ? {} : { respawnDelaySchedule: mapConfig.respawnDelaySchedule }),
     dynamicTimeOfDay: mapConfig.dynamicTimeOfDay,
     tutorial: {
@@ -297,6 +299,7 @@ export function toCoopDefenseMapConfig(scenario: AuthoredScenario): CoopDefenseM
     respawnsPerPlayer: activity.respawnsPerPlayer,
     itemDrop: activity.itemDrop,
     persistentBasePreview: activity.persistentBasePreview,
+    ...(activity.abyssCameo === undefined ? {} : { abyssCameo: activity.abyssCameo }),
     ...(activity.respawnDelaySchedule === undefined ? {} : { respawnDelaySchedule: activity.respawnDelaySchedule }),
     persistentBase: world.persistentBaseSite,
     ...(world.terrain.siteClearings === undefined ? {} : { siteClearings: world.terrain.siteClearings }),

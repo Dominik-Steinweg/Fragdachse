@@ -34,6 +34,8 @@ const FIELD_ENERGY_CONE = 32768;
 const LANE_ANGLE_QUANT = 10000;
 /** Dawn elite affix id (validated against DAWN_ELITE_AFFIX_IDS on decode). */
 const FIELD_ELITE_AFFIX = 65536;
+/** Amphibious enemy under water (0/1); absent in full states means surfaced. */
+const FIELD_SUBMERGED = 131072;
 // Codes 0–6 are deployed legacy values; append new actions without renumbering them.
 const SPECIAL_ACTIONS = ['none', 'gauss-charge', 'phase-nuke', 'armageddon', 'timebomb-chase',
   'timebomb-fuse', 'void-molotov-windup', 'kraken-ink', 'kraken-eggs', 'kraken-dive',
@@ -87,6 +89,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
   if (entry.dashPhase !== undefined) mask |= FIELD_DASH;
   if (entry.specialAction !== undefined) mask |= FIELD_SPECIAL;
   if (entry.plasmaChargeStacks !== undefined) mask |= FIELD_PLASMA_CHARGE;
+  if (entry.submerged !== undefined) mask |= FIELD_SUBMERGED;
 
   out.push(enemyIdToNum(entry.id), mask);
   if (mask & FIELD_POS) out.push(entry.x as number, entry.y as number);
@@ -137,6 +140,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
     }
   }
   if (mask & FIELD_ELITE_AFFIX) out.push(entry.eliteAffixId!);
+  if (mask & FIELD_SUBMERGED) out.push(entry.submerged ? 1 : 0);
 }
 
 /** Dekodiert den flachen Zahlenstrom zurück in Delta-Objekte für die clientseitige Anwendung. */
@@ -228,6 +232,7 @@ export function decodeEnemyUpserts(stream: readonly (number | string)[]): Synced
       const affix = stream[i++];
       if (DAWN_ELITE_AFFIX_IDS.some(id => id === affix)) entry.eliteAffixId = affix as SyncedEnemyDeltaState['eliteAffixId'];
     }
+    if (mask & FIELD_SUBMERGED) entry.submerged = (stream[i++] as number) === 1;
     result.push(entry);
   }
   return result;

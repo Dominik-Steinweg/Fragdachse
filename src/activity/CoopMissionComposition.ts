@@ -141,7 +141,9 @@ export interface CoopMissionCompositionOptions {
   readonly grantPersistentBaseRewards: (rewardIds: readonly PersistentBaseRewardId[] | undefined) => void;
   readonly removeEnemyFromPlayerItems: (enemyId: string) => void;
   readonly mortarImpact: import('../systems/CoopDefenseMortarStrikeSystem').CoopDefenseMortarImpactPort;
-  readonly broadcastExplosion: (x: number, y: number, radius: number, style: 'timebomb' | 'timebomb_pop' | 'mortar', color?: number) => void;
+  /** Host damage of enemy abilities that outlive or sweep past their source (death burst, leap path). */
+  readonly enemyAreaEffects?: import('./CoopMissionEnemyBehaviourComposition').EnemyAreaEffectsPort;
+  readonly broadcastExplosion: (x: number, y: number, radius: number, style: 'timebomb' | 'timebomb_pop' | 'mortar' | 'brood_hatch', color?: number) => void;
   readonly broadcastCorpseMarker: (corpseId: number, x: number, y: number, enemySize: number, lifetimeMs: number) => void;
   readonly removeCorpseMarker: (corpseId: number) => void;
   readonly getNowMs: () => number;
@@ -233,6 +235,12 @@ export class CoopMissionComposition {
         this.options.broadcastExplosion(x, y, effect.radius, 'timebomb_pop');
       });
     }
+    const areaEffects = this.options.enemyAreaEffects;
+    if (this.options.isHost() && areaEffects) runtime.enemyManager!.bindDeathBurst((id, x, y, burst) => {
+      areaEffects.deathBurst(id, x, y, burst, this.options.getNowMs());
+      // Ink burst: the goo splash in the brood's dark violet, no vision-blocking cloud.
+      this.options.broadcastExplosion(x, y, burst.radiusPx, 'brood_hatch', 0x3c1160);
+    });
     if (this.options.getNavigationObstacleIntegrity) runtime.enemyIntents?.setObstacleIntegrityResolver(this.options.getNavigationObstacleIntegrity);
   }
 
@@ -351,6 +359,8 @@ export class CoopMissionComposition {
       || !projectileThreatReadPort || !translocatorProjectilePort) return;
     new CoopMissionEnemyBehaviourComposition({
       playerManager,
+      enemyAreaEffects: this.options.enemyAreaEffects,
+      getNowMs: this.options.getNowMs,
       projectileSpawn: projectileSpawnPort,
       projectileThreatReadPort,
       translocatorProjectilePort,

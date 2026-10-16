@@ -12,6 +12,7 @@ import { EnemyEyeGlowRenderer } from '../../effects/EnemyEyeGlowRenderer';
 import { DroneNavLightRenderer } from '../../effects/droneNavLights/DroneNavLightRenderer';
 import { EliteMarkerRenderer } from '../../effects/dawn/EliteMarkerRenderer';
 import { EnemyVulnerabilityRenderer } from '../../effects/EnemyVulnerabilityRenderer';
+import { AmphibiousEnemyPresentation } from '../../effects/AmphibiousEnemyPresentation';
 import { EnemyReadabilityRenderer } from '../../effects/EnemyReadabilityRenderer';
 import { createCombatShaderWarmupProbes } from '../../effects/CombatShaderWarmup';
 import { MovementEffectsRenderer } from '../../effects/MovementEffectsRenderer';
@@ -98,6 +99,7 @@ export interface RendererBundle {
   enemyEyes: EnemyEyeGlowRenderer;
   droneNavLights: DroneNavLightRenderer;
   enemyVulnerability: EnemyVulnerabilityRenderer;
+  amphibiousEnemies: AmphibiousEnemyPresentation;
   eliteMarkers: EliteMarkerRenderer;
   enemyReadability: EnemyReadabilityRenderer;
   bullet:              BulletRenderer;
@@ -443,6 +445,8 @@ export function* createRendererBundleSteps(
   cleanup.push(() => eliteMarkers.destroy());
   const enemyVulnerability = new EnemyVulnerabilityRenderer(scene);
   cleanup.push(() => enemyVulnerability.destroy());
+  const amphibiousEnemies = new AmphibiousEnemyPresentation(scene);
+  cleanup.push(() => amphibiousEnemies.destroy());
   const enemyReadability = new EnemyReadabilityRenderer(scene);
   cleanup.push(() => enemyReadability.destroy());
   const interactions = new WorldInteractionRenderer(scene);
@@ -495,6 +499,7 @@ export function* createRendererBundleSteps(
     enemyEyes,
     droneNavLights,
     enemyVulnerability,
+    amphibiousEnemies,
     eliteMarkers,
     enemyReadability,
     gpuVfx,

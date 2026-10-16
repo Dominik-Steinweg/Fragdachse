@@ -936,7 +936,11 @@ export class ArenaLifecycleCoordinator {
       grantPersistentBaseRewards: (rewardIds) => this.persistentBase.grantAuthoredPersistentBaseRewards(rewardIds),
       removeEnemyFromPlayerItems: (enemyId) => this.worldPlayerGameplayRuntime?.getPlayerCombatIntegrationPort().reactions.removeEnemy(enemyId),
       mortarImpact: { impact: (strike, nowMs) => this.hostUpdate.applyMortarStrikeDamage(strike, nowMs) },
-      broadcastExplosion: (x, y, radius, style, color) => bridge.broadcastExplosionEffect(x, y, radius, color ?? (style === 'mortar' ? VOID_PALETTE.primary : 0xb82fff), style, undefined, style === 'timebomb_pop' ? 'silent' : style === 'mortar' ? 'generic' : 'enemy.timebomb'),
+      enemyAreaEffects: {
+        deathBurst: (enemyId, x, y, burst, nowMs) => this.hostUpdate.applyEnemyDeathBurst(enemyId, x, y, burst, nowMs),
+        sweepBases: (enemyId, ax, ay, bx, by, radius, damage, nowMs) => this.hostUpdate.applyEnemySweepBaseDamage(enemyId, ax, ay, bx, by, radius, damage, nowMs),
+      },
+      broadcastExplosion: (x, y, radius, style, color) => bridge.broadcastExplosionEffect(x, y, radius, color ?? (style === 'mortar' ? VOID_PALETTE.primary : 0xb82fff), style, undefined, style === 'timebomb_pop' ? 'silent' : style === 'mortar' ? 'generic' : style === 'brood_hatch' ? 'brood_hatch' : 'enemy.timebomb'),
       broadcastCorpseMarker: (corpseId, x, y, enemySize, lifetimeMs) => (
         bridge.broadcastCorpseMarker(corpseId, x, y, enemySize, lifetimeMs)
       ),

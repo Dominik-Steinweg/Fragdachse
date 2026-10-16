@@ -1740,6 +1740,61 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     });
   }
 
+  /** Combat source of a hostile enemy ability; it outlives the enemy (a death burst fires after removal). */
+  private enemyAbilitySource(enemyId: string, authoredSourceId: string): import('../../combat/CombatScope').CombatSource {
+    return { gameplaySource: { kind: 'enemy', id: enemyId }, actor: { kind: 'enemy', id: enemyId }, attribution: { kind: 'enemy', id: enemyId },
+      allegiance: { ownerId: enemyId, factionId: 'hostile' }, authoredSourceId, origin: 'explosion' };
+  }
+
+  /** Area burst at an enemy death: full damage to players, allies and decoys, structureDamageMult to bases,
+   * constructions, rocks and the train. Shares the mortar resolver. */
+  applyEnemyDeathBurst(enemyId: string, x: number, y: number, burst: import('../../config/coopDefenseEnemies').CoopDefenseEnemyDeathBurstConfig, nowMs: number): void {
+    const combat = this.ctx.getWorldCombatCore();
+    if (!combat) return;
+    const source = this.enemyAbilitySource(enemyId, 'enemy.death-burst'), mult = burst.structureDamageMult;
+    applyHostileAreaStrikeDamage({
+      x, y, radius: burst.radiusPx, maxDamage: burst.damage, minDamage: burst.damage * .5,
+      attackerId: enemyId, sourceId: 'enemy.death-burst', source, includeSelf: false,
+      aoe: { source, baseDamageMult: 0 }, friendlyBaseDamageMult: mult,
+      rockDamageMult: mult, constructionDamageMult: mult, trainDamageMult: mult,
+    }, {
+      combat, bases: this.baseManager,
+      damageBase: (id, damage, multiplier) => combat.applyBaseStatusDamage(id, damage * multiplier, source, nowMs),
+      environment: this.arenaResult ? this.environmentRockSinkFor(source) : null,
+      isConstruction: id => !!this.placementSystem?.getRuntimeRock(id),
+      trainSegments: this.trainManager?.getNetSnapshot()?.alive ? this.trainManager.getSegmentPositions() : [],
+      damageTrain: damage => { this.worldMutation?.applyResolvedDamage('train', 'main', damage, enemyId, 'enemy.death-burst', 'explosion', undefined, source); },
+      damageDecoys: (bx, by, radius, damageAt) => {
+        for (const decoy of this.ctx.decoySystem.getHostTargets()) {
+          const distance = Math.hypot(decoy.x - bx, decoy.y - by);
+          if (distance <= radius) this.ctx.decoySystem.applyDamage(decoy.id, Math.round(damageAt(distance)), enemyId,
+            'enemy.death-burst', { sourceX: bx, sourceY: by }, source);
+        }
+      },
+    });
+  }
+
+  /** A leap/charge sweeps once through friendly bases on its whole path (each base at most once). */
+  applyEnemySweepBaseDamage(enemyId: string, ax: number, ay: number, bx: number, by: number, radius: number, damage: number, nowMs: number): void {
+    const combat = this.ctx.getWorldCombatCore();
+    if (!combat || damage <= 0) return;
+    const source = this.enemyAbilitySource(enemyId, 'enemy.leap');
+    for (const base of this.baseManager?.getBasesByFaction('friendly') ?? []) {
+      if (base.isInert?.() === true) continue;
+      const touched = base.getCellBodies().some(cell => {
+        const b = cell.getBounds();
+        // Closest distance between the swept segment and the cell rectangle (sampled along the segment).
+        for (let i = 0; i <= 8; i++) {
+          const x = ax + (bx - ax) * i / 8, y = ay + (by - ay) * i / 8;
+          const dx = Math.max(b.left - x, 0, x - b.right), dy = Math.max(b.top - y, 0, y - b.bottom);
+          if (dx * dx + dy * dy <= radius * radius) return true;
+        }
+        return false;
+      });
+      if (touched) combat.applyBaseStatusDamage(base.id, damage, source, nowMs);
+    }
+  }
+
   applyMortarStrikeDamage(strike: MortarStrike, nowMs: number): void {
     const { snapshot: shot, damage: cfg, source } = strike;
     const ownerId = source.allegiance.ownerId;
