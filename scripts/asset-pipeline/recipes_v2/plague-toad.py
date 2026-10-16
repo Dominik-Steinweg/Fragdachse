@@ -471,16 +471,10 @@ def build(c, spec):
     paint_pattern(throat, lambda p, n: (.9, .55 + .4 * smoothstep(.6, .0, n.z), .2))
     write_rest(throat)
     c.paint_form_mask(throat, lambda p: .8)
-    lip_line = []
-    for y in (.80, .96, 1.12, 1.24, 1.33):
-        w, z, _ = section(y)
-        lip_line.append((w - .09, y, .07))
-    lip_line = [(-x, y, z) for x, y, z in lip_line] + [(0, 1.36, .07)] + [(x, y, z) for x, y, z in reversed(lip_line)]
-    lower_lip = horn(c, 'Quacksalber lower jaw lip', lip_line, [.045] * len(lip_line), mats['lip'], sides=10)
-    floor_outline = [(x * .92, y - .02, .055) for x, y, _ in lip_line]
-    floor = mesh_object(c, 'Quacksalber mouth floor', [(0, .98, .05)] + floor_outline + [(.0, .70, .05)],
-                        [(0, i, i + 1) for i in range(1, len(floor_outline))] + [(0, len(floor_outline), len(floor_outline) + 1),
-                                                                                (0, len(floor_outline) + 1, 1)], [mats['mouth']])
+    # Solid lower jaw and mouth floor, hidden under the snout at rest; the tongue lash thrusts
+    # them forward so a pale chin and the dark mouth show in front of the head.
+    lower_lip = ell(c, 'Quacksalber lower jaw lip', (0, 1.00, .07), (.62, .38, .06), mats['lip'])
+    floor = ell(c, 'Quacksalber mouth floor', (0, .98, .105), (.52, .33, .025), mats['mouth'])
     tongue = horn(c, 'Quacksalber sticky tongue', [(0, .80, .17), (0, .95, .17), (0, 1.08, .17)], [.11, .10, .09], mats['tongue'], sides=14)
     tongue_tip = ell(c, 'Quacksalber sticky tongue tip', (0, 1.15, .17), (.13, .10, .075), mats['tongue'])
 
@@ -558,11 +552,18 @@ def build(c, spec):
             arc.append(arc[-1] + (Vector(b) - Vector(a)).length)
         steps = (len(sampled) - 1) // (len(joints) - 1)
         knee, last = arc[steps], arc[-1]
-        ring, _ = ring_weights(sampled, [.16, knee, last], ['body', f'{leg}_upper', f'{leg}_lower', f'{leg}_foot'], [.10, .08, .06])
+        # The hip/shoulder root sits deep in the body, so the upper segment turns rigidly about it.
+        ring, _ = ring_weights(sampled, [knee, last], [f'{leg}_upper', f'{leg}_lower', f'{leg}_foot'], [.08, .06])
         sides = len(tube.data.vertices) // len(sampled)
         tube.parent = carriage
         bind(tube, rig, [ring[i // sides] for i in range(len(tube.data.vertices))])
         rigid(paw_mesh, f'{leg}_foot')
+    # Parts that hide inside the head at rest or swing clear of the body (the hop's kicked-back
+    # legs) get their own shadow rest volumes, so the mesh proxy never bridges or loses them.
+    for group, objects in (('tongue', (tongue, tongue_tip)), ('throat', (throat,)), ('jaw', (lower_lip, floor)),
+                           *((leg, (legs[leg][0], legs[leg][2])) for leg in LEGS)):
+        for ob in objects:
+            ob['meshUnionGroup'] = group
 
     # Sockets ride on their bones (object origins are sampled per frame).
     bpy.context.view_layer.update()
