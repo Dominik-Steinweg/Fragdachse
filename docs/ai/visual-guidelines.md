@@ -18,6 +18,15 @@ Ein Gameplay-Effekt folgt einer lesbaren Ursache-Wirkungs-Kette: Ursprung, Beweg
 
 Telegraphen machen bevorstehende Gefahr, Interaktionsmöglichkeit und Wirkungsbereich vor dem Ergebnis lesbar.
 
+Flächenangriffe mit Vorwarnzeit, etwa Mörser oder Luftangriff, nutzen den gemeinsamen Strike-Telegraphen [MortarGpuLayer.ts](../../src/effects/gpu/MortarGpuLayer.ts). Jeder Owner hält eine eigene Instanz dieses Layers.
+
+- Die Zeitspur zeigt die Vorwarnzeit, der festgelegte Ring die Phase kurz vor dem Einschlag.
+- Chevrons markieren die Herkunft des Feuers, optional zeigt ein Faden den Weg zum Schützen.
+- Ein abgebrochener Windup zerfällt sichtbar.
+- Die Farbfamilie (`STRIKE_PALETTE`) trennt feindlich, verbündet und Spieler-Ordnance.
+
+Neue Angriffe dieser Art bauen keine eigenen Warnkreise.
+
 Häufige Effekte dürfen nicht dauerhaft die Szene verstopfen. Partikel, Blitze, Dekals und temporäre Overlays besitzen eine begrenzte Lebensdauer, werden bei wiederholten Ereignissen gebündelt und lösen ihre Ressourcen beim Ende der World oder Scene.
 
 ## Kameraführung und Presentation
