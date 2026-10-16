@@ -101,7 +101,8 @@ export class RestHealTendrilRenderer {
       const reach = track.retractAt === null
         ? Math.min(1, (local - track.bornAt) / GROW_MS)
         : 1 - (local - track.retractAt) / RETRACT_MS;
-      if (reach <= 0) { this.tracks.delete(key); continue; }
+      // A link born this frame has reach 0 and starts growing next frame; only a withdrawn one is dropped.
+      if (reach <= 0) { if (track.retractAt !== null) this.tracks.delete(key); continue; }
       this.drawTendril(surface, light, track, easeOut(Math.min(1, reach)), local, strands, droplets, glowAlpha);
     }
 
@@ -159,20 +160,24 @@ export class RestHealTendrilRenderer {
       const last = Math.max(1, Math.round(segments * reach));
       for (let i = 1; i <= last; i++) {
         const t = Math.min(reach, i / segments), next = point(t);
-        const width = (strand === 0 ? 4.2 : 2.6) * (1 - 0.45 * t);
-        surface.lineStyle(width + 1.6, palette.backing, 0.45).lineBetween(previous.x, previous.y, next.x, next.y);
-        light.lineStyle(width * 2.4, palette.glow, 0.16 * glowAlpha).lineBetween(previous.x, previous.y, next.x, next.y);
-        light.lineStyle(Math.max(1, width * 0.55), palette.core, 0.8 * glowAlpha).lineBetween(previous.x, previous.y, next.x, next.y);
+        const width = (strand === 0 ? 6.4 : 3.8) * (1 - 0.4 * t);
+        surface.lineStyle(width + 2.4, palette.backing, 0.6).lineBetween(previous.x, previous.y, next.x, next.y);
+        // A lit core on the surface keeps the link readable in daylight, where the emissive layer is faint.
+        surface.lineStyle(Math.max(1.4, width * 0.5), palette.glow, 0.75).lineBetween(previous.x, previous.y, next.x, next.y);
+        light.lineStyle(width * 2.8, palette.glow, 0.3 * glowAlpha).lineBetween(previous.x, previous.y, next.x, next.y);
+        light.lineStyle(Math.max(1.4, width * 0.6), palette.core, glowAlpha).lineBetween(previous.x, previous.y, next.x, next.y);
         previous = next;
       }
       if (strand === 0 && reach >= 1) {
         for (let d = 0; d < droplets; d++) {
           const t = ((local / DROPLET_CYCLE_MS) + d / droplets + (track.seed % 97) / 97) % 1;
           const p = point(t);
-          light.fillStyle(palette.core, 0.85 * glowAlpha).fillCircle(p.x, p.y, 2.2 + Math.sin(Math.PI * t) * 1.2);
+          light.fillStyle(palette.core, glowAlpha).fillCircle(p.x, p.y, 3.2 + Math.sin(Math.PI * t) * 1.6);
         }
-        light.fillStyle(palette.glow, 0.22 * glowAlpha).fillCircle(to.x, to.y, 9);
-        light.fillStyle(palette.core, 0.35 * glowAlpha).fillCircle(to.x, to.y, 4);
+        // A modest bloom at the healed ally: it marks the receiver without covering its body.
+        surface.fillStyle(palette.glow, 0.16).fillCircle(to.x, to.y, 7);
+        light.fillStyle(palette.glow, 0.2 * glowAlpha).fillCircle(to.x, to.y, 10);
+        light.fillStyle(palette.core, 0.4 * glowAlpha).fillCircle(to.x, to.y, 4);
       }
     }
   }
