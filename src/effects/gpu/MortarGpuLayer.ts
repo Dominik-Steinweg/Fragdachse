@@ -19,7 +19,9 @@ export interface MortarGpuItem { x: number; y: number; radius: number; timeline:
   /** World angle from the aim point toward the shooter; drives the direction-of-fire chevrons. */
   dir: number;
   /** World distance from the aim point to the shooter; 0 draws no shooter thread. */
-  tracePx?: number }
+  tracePx?: number;
+  /** False hides every origin cue (chevrons, lane, notch, thread): the strike shows no source. */
+  showOrigin?: boolean }
 
 export class MortarGpuLayer {
   private readonly data = new Float32Array(MORTAR_BATCH_CAPACITY * VERTICES * WORDS);
@@ -60,7 +62,8 @@ export class MortarGpuLayer {
       this.data[offset++] = CORNERS[i * 2]; this.data[offset++] = CORNERS[i * 2 + 1];
       this.data[offset++] = item.radius; this.data[offset++] = item.timeline;
       this.data[offset++] = item.seed; this.data[offset++] = item.palette; this.data[offset++] = item.age;
-      this.data[offset++] = item.dir; this.data[offset++] = item.tracePx ? item.tracePx / Math.max(1, item.radius) : 0;
+      this.data[offset++] = item.dir;
+      this.data[offset++] = item.showOrigin === false ? -1 : item.tracePx ? item.tracePx / Math.max(1, item.radius) : 0;
     }
     return true;
   }

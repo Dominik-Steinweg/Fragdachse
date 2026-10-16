@@ -237,6 +237,15 @@ describe('airstrike gpu particles', () => {
     expect(low.bomb.edited.length).toBeLessThan(highSpawns);
   });
 
+  it('draws its telegraph on the shared strike layer without any origin cue', () => {
+    const { renderer } = setup();
+    renderer.sync([strike(1)], Date.now());
+    const layer = (renderer as unknown as { telegraph: { size: number; data: Float32Array } }).telegraph;
+    expect(layer.size).toBe(1);
+    // Word 10 of every vertex is the trace; negative hides chevrons, lane, notch and thread.
+    expect(layer.data[10]).toBe(-1);
+  });
+
   it('stops emitting entirely at quality factor zero', () => {
     qualityFactors.standard = 0;
     const { scene, system, renderer, bomb, spark } = setup();

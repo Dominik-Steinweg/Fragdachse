@@ -87,8 +87,6 @@ const BOMBER_SHADOW_LAYERS = [{ scale: 1, alpha: 1 }, { scale: 0.78, alpha: 0.6 
 const BOMBER_RUN_WINDOW = { leadInPx: 2600, leadOutPx: 2200, fadePx: 900 } as const;
 /** The last stretch before impact shows the falling bomb and its shadow (the shared committed phase). */
 const AIRSTRIKE_DROP_MS = 1100;
-/** Carpet strikes are laid out west to east and fall in that order: the bombers come from the west. */
-const PLAYER_APPROACH_DIR = Math.PI;
 /** Once the run's first bomb is replicated, the estimated approach eases onto its real launch time. */
 const BOMBER_RUN_ANCHOR_BLEND_MS = 600;
 /** A host lags seconds, not minutes: a farther anchor belongs to an earlier round with the same event id. */
@@ -99,9 +97,6 @@ interface AirstrikeVisual {
   /** Telegraph family and stable noise seed in the shared strike telegraph layer. */
   telegraph:     StrikePalette;
   seed:          number;
-  /** World angle the bombers approach from; resolved from the run for map strikes. */
-  dir:           number;
-  dirResolved:   boolean;
   // Emissionssteuerung der GPU-Partikel
   x:             number;
   y:             number;
@@ -118,7 +113,8 @@ interface AirstrikeVisual {
  *
  * Warnphase (armedAt → explodeAt):
  *   - Der gemeinsame Strike-Telegraph der Mörser-Dachse (MortarGpuLayer): segmentierte Zeitspur,
- *     Anflugrichtung, am Ende die fallende Bombe mit Schatten auf dem Zielpunkt
+ *     am Ende die fallende Bombe mit Schatten auf dem Zielpunkt. Bewusst ohne Herkunftsanzeige:
+ *     anders als beim Mörser verrät ein Luftangriff nicht, woher er stammt.
  *   - Von oben fallende Streifen als einkommende Bomben, Funken im Zielgebiet
  *
  * Explosion: wird vom EffectSystem via broadcastExplosionEffect('nuke') behandelt.
@@ -152,7 +148,6 @@ export class AirstrikeRenderer {
   private bombSpec:  GpuVfxSpawnSpec | null = null;
   private sparkSpec: GpuVfxSpawnSpec | null = null;
   private readonly telegraph: MortarGpuLayer;
-  private latestRuns: readonly ScheduledAirstrikeRun[] = [];
 
   constructor(private readonly scene: Phaser.Scene) {
     this.telegraph = new MortarGpuLayer(scene, image => registerGraphicsObject(scene, 'airstrikeWarning', image));
@@ -252,7 +247,6 @@ export class AirstrikeRenderer {
    * No own network state. `now` is the strikes' synchronized clock; `textureKey` null removes them.
    */
   syncBomberRuns(runs: readonly ScheduledAirstrikeRun[], roundTimeMs: number, now: number, textureKey: string | null): void {
-    this.latestRuns = runs;
     if (runs.length === 0 && this.bomberRuns.size === 0 && this.bomberRunAnchors.size === 0) return;
     const visible = new Set<string>();
     if (textureKey && this.scene.textures.exists(textureKey)) {
@@ -316,7 +310,6 @@ export class AirstrikeRenderer {
     this.bomberRuns.clear();
     this.bomberRunAnchors.clear();
     this.latestStrikes = [];
-    this.latestRuns = [];
     this.telegraph.clear();
     for (const v of this.visuals.values()) this.destroyVisual(v);
     this.visuals.clear();
@@ -409,13 +402,13 @@ export class AirstrikeRenderer {
 
     // Shared telegraph: the segmented track counts down to the drop, then the committed ring
     // contracts while the bomb falls onto its shadow, exactly like a mortar shell.
-    if (!v.dirResolved) this.resolveApproach(v, strike);
     const dropMs = Math.min(AIRSTRIKE_DROP_MS, Math.max(1, total) * 0.45);
     const dropAt = strike.explodeAt - dropMs;
     const timeline = now < dropAt
       ? Phaser.Math.Clamp((now - strike.armedAt) / Math.max(1, dropAt - strike.armedAt), 0, 1)
       : 1 + Phaser.Math.Clamp((now - dropAt) / dropMs, 0, 1);
-    this.telegraph.add({ x, y, radius: strike.radius, timeline, seed: v.seed, palette: v.telegraph, age: -1, dir: v.dir });
+    this.telegraph.add({ x, y, radius: strike.radius, timeline, seed: v.seed, palette: v.telegraph, age: -1, dir: 0,
+      showOrigin: false });
 
     // Partikelfrequenz nimmt mit Fortschritt zu. Der Wechsel setzt den laufenden Flow-Countdown
     // bewusst nicht zurueck – genau so verhielt sich der direkte Schreibzugriff auf
@@ -444,18 +437,6 @@ export class AirstrikeRenderer {
     }
   }
 
-  /** Map strikes come along their run's heading; without a known run the bombers come from the west. */
-  private resolveApproach(v: AirstrikeVisual, strike: SyncedAirstrikeStrike): void {
-    if (v.telegraph !== STRIKE_PALETTE.hostile) { v.dir = PLAYER_APPROACH_DIR; v.dirResolved = true; return; }
-    let best = Infinity;
-    for (const run of this.latestRuns) {
-      const { startX, startY, dirX, dirY, lengthPx } = run.geometry;
-      const along = Phaser.Math.Clamp((strike.x - startX) * dirX + (strike.y - startY) * dirY, 0, lengthPx);
-      const distance = Math.hypot(strike.x - startX - dirX * along, strike.y - startY - dirY * along);
-      if (distance < best) { best = distance; v.dir = Math.atan2(-dirY, -dirX); v.dirResolved = true; }
-    }
-  }
-
   private createVisual(strike: SyncedAirstrikeStrike): AirstrikeVisual {
     const { x, y, radius } = strike;
     const enemy = strike.triggeredBy === COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID;
@@ -463,8 +444,6 @@ export class AirstrikeRenderer {
       id: strike.id,
       telegraph: enemy ? STRIKE_PALETTE.hostile : STRIKE_PALETTE.player,
       seed: (Math.imul(strike.id + 1, 2654435761) >>> 0) % 997,
-      dir: PLAYER_APPROACH_DIR,
-      dirResolved: false,
       x,
       y,
       radius,

@@ -5,7 +5,8 @@
  *           -1..-2 = -(1 + progress) of a cancelled windup, then age is the windup it reached.
  * age < 0: incoming strike, else seconds since the replicated impact.
  * palette: 0 void (hostile), 1 allied, 2 warm player ordnance.
- * trace: distance from the aim point to the shooter in R (0 = no shooter to point at).
+ * trace: distance from the aim point to the shooter in R (0 = no shooter to point at);
+ *        negative hides every origin cue (chevrons, lane, notch): the strike shows no source.
  *
  * Pass 0 (5.12, ground material): telegraph groove and area shade, the descending shell's drop
  *        shadow (sliding in against the sun as the shell loses height), then scorch, a small
@@ -232,7 +233,9 @@ void main() {
   // Direction of fire, shown at the aim point: calm while interruptible, fast once committed.
   vec2 shot = shotFrame(q, vDir);
   float flow = uTime * (committed ? 1.7 : 0.55);
-  float dirStrength = committed ? 1.0 : 0.35 + 0.65 * windup;
+  // Origin cues exist only for a strike with a shooter to point at (mortar, not airstrike).
+  float showOrigin = vTrace < -0.5 ? 0.0 : 1.0;
+  float dirStrength = (committed ? 1.0 : 0.35 + 0.65 * windup) * showOrigin;
 
   if (uPass < 0.5) {
     if (cancelled) {
@@ -359,10 +362,10 @@ void main() {
       rgb += palette(2.0, allied) * contraction + palette(1.0, allied) * wake * (0.6 + crawl * 0.8);
       // Direction of fire: bright, fast chevrons; a flash when the shot is fired.
       vec2 chev = incomingChevrons(shot, flow, 0.016);
-      rgb += mix(palette(2.0, allied), palette(3.0, allied), 0.2) * chev.x * (1.0 + launchFlash)
+      rgb += (mix(palette(2.0, allied), palette(3.0, allied), 0.2) * chev.x * (1.0 + launchFlash)
         + palette(1.0, allied) * chev.y * (0.5 + 0.4 * launchFlash)
         + palette(1.0, allied) * shotLane(shot) * (0.32 + 0.4 * launchFlash)
-        + palette(3.0, allied) * ringNotch(shot, r) * (0.75 + launchFlash);
+        + palette(3.0, allied) * ringNotch(shot, r) * (0.75 + launchFlash)) * showOrigin;
       // Approach heat on the aim point.
       // Broad and faint, so it lights the ground without haloing the shell into a ring.
       float pool = exp(-r * r / mix(0.35, 0.18, flight));
