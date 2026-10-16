@@ -144,7 +144,7 @@ dem vorhergehenden Objekt gleicher Tiefe. Die Stichproben ergeben dort 1,22 bzw.
 Depth-Getter verursachen zusätzliche Kosten. Profilierte Framezeiten werden nicht
 als Vergleichsmessung verwendet.
 
-[BloodStainBatch.ts](../src/effects/BloodStainBatch.ts) sammelt neue Flecken jetzt
+[BloodStainBatch.ts](../../src/effects/BloodStainBatch.ts) sammelt neue Flecken jetzt
 bis zum Post-Update und ermittelt ihre Gruppen mit einem gemeinsamen Durchlauf.
 Neue GPU-Layer ersetzen den jeweiligen Lauf an seiner ursprünglichen Position.
 Gegner gleicher Tiefe unterbrechen weiterhin einen Lauf; unterschiedliche Tiefen

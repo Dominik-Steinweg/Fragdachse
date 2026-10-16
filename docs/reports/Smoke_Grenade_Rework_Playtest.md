@@ -15,9 +15,9 @@ werden durch Renderer- oder automatisierte Prüfungen nicht automatisch abgenomm
 - Sichtprüfung bei hoher und niedriger Grafikqualität, unterschiedlichen Fenstergrößen und
   verfügbarem Kamera-Zoom durchführen. Keine zusätzliche Browser-Infrastruktur erforderlich.
 
-Aktuelles Tuning steht in [utilities-grenades.json](../src/loadout/content/data/utilities-grenades.json)
-und im [Upgradebaum](../src/config/coopDefenseUpgrades.json). Die gemeinsame Verwundbarkeit wird
-weiterhin von [TargetStatusSystem.ts](../src/systems/TargetStatusSystem.ts) aufgelöst.
+Aktuelles Tuning steht in [utilities-grenades.json](../../src/loadout/content/data/utilities-grenades.json)
+und im [Upgradebaum](../../src/config/coopDefenseUpgrades.json). Die gemeinsame Verwundbarkeit wird
+weiterhin von [TargetStatusSystem.ts](../../src/systems/TargetStatusSystem.ts) aufgelöst.
 
 ## 1. Baseline und Lesbarkeit
 

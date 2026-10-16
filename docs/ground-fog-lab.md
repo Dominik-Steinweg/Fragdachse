@@ -185,5 +185,5 @@ Disjoint-Abfragen werden verworfen. Ohne Extension steht ausdrücklich „GPU-Ze
 Bei ausgeschaltetem Nebel werden keine Nebelpässe ausgeführt und keine GPU-Zeit abgefragt.
 
 Aktuelle Lastmesswerte und Prüfstatus stehen in
-[ground-fog-load-validation.md](ground-fog-load-validation.md), frühere Abnahmen in
-[ground-fog-validation.md](ground-fog-validation.md).
+[ground-fog-load-validation.md](reports/ground-fog-load-validation.md), frühere Abnahmen in
+[ground-fog-validation.md](reports/ground-fog-validation.md).

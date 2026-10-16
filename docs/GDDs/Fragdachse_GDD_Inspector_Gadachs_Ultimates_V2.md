@@ -8,7 +8,7 @@
 
 **Geltungsbereich:** Gameplay, Progression, Mehrspieler und Darstellung für Coop-Defense
 
-**Status:** In Umsetzung (Gate GU1)
+**Status:** Umgesetzt und auf `main` (GU2: 2e86e464, Bomberflug GU3: a9d18779). Das Entscheidungslog unten hält Abweichungen von V1 fest.
 
 V2 ersetzt [V1](Fragdachse_GDD_Inspector_Gadachs_Ultimates_V1.md) als verbindliche
 Umsetzungsgrundlage. Sie übernimmt deren Regeln und ergänzt die User-Entscheidungen vom

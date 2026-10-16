@@ -49,7 +49,7 @@ Zwei unmittelbar aufeinanderfolgende 30-Sekunden-Paare verwenden den erweiterten
 
 Beide Paare zeigen **3,3–6,7 % mehr FPS**, **16–21 % weniger visuellen CPU-Aufwand** und **5–8 % weniger gemessene GPU-Zeit**. Die p95-Verbesserung streut dagegen von knapp 1 % bis 16 %; ein entsprechend gleichmäßiger Gewinn bei langsamen Frames ist nicht belegt. Das sind beobachtete Unterschiede aus wiederholten Aufnahmen, kein Signifikanztest.
 
-[Vergleichspaar 1 mit Nebel](../build/performance-results/comparison-1790451388956/comparison.md), [Vergleichspaar 2 mit Nebel](../build/performance-results/comparison-1790451596237/comparison.md).
+[Vergleichspaar 1 mit Nebel](../../build/performance-results/comparison-1790451388956/comparison.md), [Vergleichspaar 2 mit Nebel](../../build/performance-results/comparison-1790451596237/comparison.md).
 
 ## Frühere gezielte Gegenmessung mit JS-Sampling
 
@@ -64,21 +64,21 @@ Ryzen 7 5800X, RTX 3080, 32 GB RAM, Chrome 153, 1920 × 1080, DPR 1, hohe Grafik
 
 Das entspricht hier **rund 5 % mehr FPS und 23 % weniger GPU-Zeit**. Ein weiteres Paar zeigte ebenfalls etwa 23 % weniger GPU-Zeit. Das sind beobachtete Unterschiede; insbesondere einzelne Maximalframes, schwankende Projektilbestände und der Bildschirmtakt dürfen nicht als gesicherter allgemeiner Gewinn interpretiert werden. Die hohe Gegnerlast bleibt auch CPU-seitig teuer.
 
-- [Gezielte Baseline](../build/performance-results/2026-09-26T17-53-31.014Z-04c250ed/summary.md)
-- [Gezielter optimierter Lauf](../build/performance-results/2026-09-26T17-55-48.790Z-74abe8ad/summary.md)
-- [Direkter Vergleich](../build/performance-results/comparison-1790449949779/comparison.md)
-- [Exakte Gegenprüfung der Offline-Auswertung](../build/performance-results/offline-optimization-check.json)
+- [Gezielte Baseline](../../build/performance-results/2026-09-26T17-53-31.014Z-04c250ed/summary.md)
+- [Gezielter optimierter Lauf](../../build/performance-results/2026-09-26T17-55-48.790Z-74abe8ad/summary.md)
+- [Direkter Vergleich](../../build/performance-results/comparison-1790449949779/comparison.md)
+- [Exakte Gegenprüfung der Offline-Auswertung](../../build/performance-results/offline-optimization-check.json)
 
 ## Gesamtabgleich und Grenzen
 
 Die vollständige ursprüngliche Aufnahme ohne Nebel ist erhalten:
-[26-Fälle-Baseline](../build/performance-results/2026-09-26T17-16-42.857Z-783180f0/summary.md).
+[26-Fälle-Baseline](../../build/performance-results/2026-09-26T17-16-42.857Z-783180f0/summary.md).
 
-Zwei erweiterte Standardläufe mit JS-Sampling durchliefen die Spieltests, stürzten aber beim abschließenden Lobby-Rückweg im Chrome-Renderer ab: einmal mit ursprünglichen und einmal mit optimierten Renderern. Sie sind ausdrücklich **keine vollständigen Ergebnisse**. Festplatte und gemessener JavaScript-Heap waren nicht ausgeschöpft; diese Werte erklären die Absturzursache nicht. [Fehlerbeleg Ausgangsstand](../build/performance-results/2026-09-26T18-24-49.011Z-80c43db3/manifest.json), [Fehlerbeleg Optimierung](../build/performance-results/2026-09-26T19-40-04.314Z-0fe48db9/manifest.json).
+Zwei erweiterte Standardläufe mit JS-Sampling durchliefen die Spieltests, stürzten aber beim abschließenden Lobby-Rückweg im Chrome-Renderer ab: einmal mit ursprünglichen und einmal mit optimierten Renderern. Sie sind ausdrücklich **keine vollständigen Ergebnisse**. Festplatte und gemessener JavaScript-Heap waren nicht ausgeschöpft; diese Werte erklären die Absturzursache nicht. [Fehlerbeleg Ausgangsstand](../../build/performance-results/2026-09-26T18-24-49.011Z-80c43db3/manifest.json), [Fehlerbeleg Optimierung](../../build/performance-results/2026-09-26T19-40-04.314Z-0fe48db9/manifest.json).
 
 Deshalb verwendet der vollständige Parcours jetzt standardmäßig `reduced`; gezielte Tests behalten das Standardprofil mit JS-Sampling. Explizite Profilangaben bleiben möglich. Spielumfang, Qualität und Spielprofiler bleiben gleich. Das ist eine begrenzte Umgehung des beobachteten Problems, keine behauptete Reparatur des ungeklärten Renderer-Absturzes.
 
-Der abschließende Zeitfeld-Einzeltest mit dem endgültigen Build und automatischer Profilauswahl wurde im Standardprofil vollständig aufgenommen und exportiert: [Abschlussprüfung des Einzeltest-Ablaufs](../build/performance-results/2026-09-26T19-57-39.203Z-6b9dc828/summary.md).
+Der abschließende Zeitfeld-Einzeltest mit dem endgültigen Build und automatischer Profilauswahl wurde im Standardprofil vollständig aufgenommen und exportiert: [Abschlussprüfung des Einzeltest-Ablaufs](../../build/performance-results/2026-09-26T19-57-39.203Z-6b9dc828/summary.md).
 
 Der erweiterte Gesamtabgleich wurde deshalb auf beiden Seiten mit demselben vorhandenen reduzierten Aufnahmeprofil ausgeführt. Beide Aufnahmen sind vollständig, alle 29 Fälle haben ihre Funktionsprüfungen bestanden. Dieses Profil erhält Spiel-, Frame-, CPU-Abschnitts- und GPU-Messungen; JavaScript-Sampling von Chrome fehlt. Die ursprünglichen Renderer stammen aus Commit `e0b19af82f1c021e150adce73a6fd4ac1bce716d`, die Lab-Fälle und aktivierter Nebel sind auf beiden Seiten gleich. Die optimierten Arbeitsdateien wurden nach Archivierung der Vergleichsversion unverändert wiederhergestellt.
 
@@ -86,9 +86,9 @@ Der erweiterte Gesamtabgleich wurde deshalb auf beiden Seiten mit demselben vorh
 
 Der Median der gemessenen Arena-Ladephasen beträgt 7,07 bzw. 7,25 Sekunden. Einzelne spätere Übergänge dauern deutlich länger und bleiben im Bericht sichtbar. Ein allgemeines Verschwinden aller Nachladeruckler ist durch diese Messungen nicht belegt.
 
-- [Erweiterte vollständige Baseline](../build/performance-results/2026-09-26T18-42-18.953Z-3ab92a2c/summary.md)
-- [Erweiterter vollständiger optimierter Lauf](../build/performance-results/2026-09-26T19-17-45.436Z-cfa869fd/summary.md)
-- [Gesamtvergleich mit Bedingungswarnung](../build/performance-results/comparison-1790451178234/comparison.md)
+- [Erweiterte vollständige Baseline](../../build/performance-results/2026-09-26T18-42-18.953Z-3ab92a2c/summary.md)
+- [Erweiterter vollständiger optimierter Lauf](../../build/performance-results/2026-09-26T19-17-45.436Z-cfa869fd/summary.md)
+- [Gesamtvergleich mit Bedingungswarnung](../../build/performance-results/comparison-1790451178234/comparison.md)
 
 Ein vorheriger optimierter Durchlauf wurde nach beendeter Aufnahme während eines zu langsamen Berichtsexports abgebrochen. Die Ursache im Transferpfad wurde korrigiert: Der JSON-Text verbleibt jetzt in einem Browser-Objekt, statt als primitiver String bei Protokollaufrufen erneut vollständig übertragen zu werden. Der anschließende Gesamtlauf hat den rund 70 MB großen Spielbericht erfolgreich exportiert.
 
@@ -103,4 +103,4 @@ Die Renderprüfungen sichern Byte-Parität zum installierten Phaser-Packer, voll
 
 Die Arbeit endete nach rund 2 Stunden 50 Minuten innerhalb des vereinbarten Limits. Abschließend waren noch rund **19,1 GiB frei**; die vorgegebene Reserve von mindestens 1 GB wurde eingehalten. Ältere Ergebnisarchive wurden nicht gelöscht.
 
-Bedienung und Messverträge: [Performance-Lab](performance-lab.md).
+Bedienung und Messverträge: [Performance-Lab](../performance-lab.md).

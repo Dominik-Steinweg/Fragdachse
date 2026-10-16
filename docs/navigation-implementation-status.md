@@ -12,7 +12,7 @@ Commit `0179efb622b7c0d048d269b38527529636ba90e9` erhalten.
 Die produktive Navigation einschließlich Worker und Inline-Fallback sowie die
 gezielten Verhaltenstests bleiben bestehen.
 
-Das [Fehler- und Performance-Review vom 16. September 2026](navigation-review.md)
+Das [Fehler- und Performance-Review vom 16. September 2026](reports/navigation-review.md)
 ergänzt Korrekturen für vollständig eingeschlossene Ziele, entfernte
 Weltänderungen, Durchbruchssuche, Nachbarschaft und Entscheidungsbudget.
 
@@ -35,7 +35,7 @@ Weltänderungen, Durchbruchssuche, Nachbarschaft und Entscheidungsbudget.
   Recovery. Exklusive Fähigkeiten behalten Vorrang. Es gibt keinen neuen
   allgemeinen Teleport.
 - Navigation und Suchzustände bleiben hostlokal und enden mit der Activity.
-  Die [Gegnerprofile](navigation-enemy-migration.md) dokumentieren Zielrollen,
+  Die [Gegnerprofile](reports/navigation-enemy-migration.md) dokumentieren Zielrollen,
   Fallbacks, Nebenaktionen und Durchbruchsrechte aller bestehenden Arten.
 - Globale Dichtekosten bleiben standardmäßig aus. Neue Schwarmgegner gehören
   zu einem späteren Ausbau.

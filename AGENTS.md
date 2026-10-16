@@ -7,6 +7,7 @@ Fragdachse ist ein browserbasierter 2D-Arena-Shooter mit Phaser 4 und direkten W
 - Mit `rg` nach Symbolen, Imports und Tests suchen und nur die betroffenen Ausschnitte lesen.
 - Einstiegspunkte: `src/main.ts` → `src/scenes/ArenaScene.ts`; Netzwerkgrenze `src/network/NetworkBridge.ts`; gemeinsame Verträge `src/types.ts` und `src/config.ts`.
 - Fachliche Wissensseiten stehen im [AI-Router](docs/ai/index.md). Nur die für die Aufgabe relevanten Seiten laden.
+- Feature-Konzepte: In der [GDD-Übersicht](docs/GDDs/README.md) stehen die aktuelle Version und der Umsetzungsstand je Thema. Bei neuen oder ersetzten GDDs die Zeile dort pflegen. Datierte Mess- und Prüfberichte gehören nach [`docs/reports/`](docs/reports/README.md).
 
 ## Architekturregeln
 
