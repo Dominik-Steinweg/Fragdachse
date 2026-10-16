@@ -16,8 +16,27 @@ let nextWaterSurfaceId = 0;
 interface WaterChunk { x: number; y: number; quad: Phaser.GameObjects.Shader; key: string }
 
 /** World-lifetime CPU masks; only camera-resident chunks own textures and shaders. */
+/** World-space state of the void bloom spreading through a water body (see waterSurfaceShader). */
+export interface WaterVoidBloom {
+  /** Origin of the bloom in world space. */
+  readonly x: number; readonly y: number;
+  /** Radius the bloom has reached; water beyond it stays natural. */
+  readonly frontPx: number;
+  /** 0..1 overall strength (fades the whole effect in and out). */
+  readonly grade: number;
+  /** 0..1 extra luminance, e.g. the boss's roar. */
+  readonly pulse: number;
+}
+
+const instances = new WeakMap<Phaser.Scene, WaterSurfaceRenderer>();
+
 export class WaterSurfaceRenderer {
+  /** The scene's current water surface; presentation owners borrow it for transient grading. */
+  static for(scene: Phaser.Scene): WaterSurfaceRenderer | null { return instances.get(scene) ?? null; }
   private readonly id = nextWaterSurfaceId++;
+  /** Local bloom centre x/y, front radius and grade; pulse separately. All zero leaves the water untouched. */
+  private readonly voidBloom = new Float32Array(4);
+  private voidPulse = 0;
   private preparation: Generator<void, void> | null = null;
   private readonly masks = new Map<string, WaterMask>();
   private readonly totalMasks: number;
@@ -43,6 +62,7 @@ export class WaterSurfaceRenderer {
       this.disturbRect.set([left, top, width, height]);
     } else this.disturbBounds = null;
     this.releaseDisturbance = WaterDisturbanceField.provide(scene, () => this.ensureDisturbance());
+    instances.set(scene, this);
     const model = new WaterSurfaceModel(water, frame);
     const origins = model.getChunkOrigins(ARENA_RENDER_CHUNK_SIZE, frame.width, frame.height);
     this.totalMasks = origins.length;
@@ -156,6 +176,7 @@ export class WaterSurfaceRenderer {
           set('uTime', this.getPresentationTime()); set('uSeed', (this.seed >>> 0) % 997);
           set('uDisturb', 1); set('uDisturbOn', Number(!!this.disturbance?.active));
           set('uDisturbRect', this.disturbRect); set('uDisturbTexel', this.disturbTexel);
+          set('uVoid', this.voidBloom); set('uVoidPulse', this.voidPulse);
           if(sun) { set('uWorldOffset',this.worldOffset);setWaterSunUniforms(set,this.sunlight); }
         },
       }, x + size / 2, y + size / 2, size, size, [key, this.disturbance?.textureKey ?? '__DEFAULT']);
@@ -166,9 +187,18 @@ export class WaterSurfaceRenderer {
       return quad;
   }
 
+  /** Pure presentation grade, re-set every frame by its owner; null restores natural water. */
+  setVoidBloom(bloom: WaterVoidBloom | null): void {
+    if (!bloom || bloom.grade <= 0) { this.voidBloom.fill(0); this.voidPulse = 0; return; }
+    this.voidBloom[0] = bloom.x - this.frame.offsetX; this.voidBloom[1] = bloom.y - this.frame.offsetY;
+    this.voidBloom[2] = Math.max(0, bloom.frontPx); this.voidBloom[3] = Math.min(1, bloom.grade);
+    this.voidPulse = Math.max(0, Math.min(1, bloom.pulse));
+  }
+
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    if (instances.get(this.scene) === this) instances.delete(this.scene);
     this.releaseDisturbance(); this.disturbance?.destroy(); this.disturbance = null;
     this.preparation?.return();
     this.preparation = null;

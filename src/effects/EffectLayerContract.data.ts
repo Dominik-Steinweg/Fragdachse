@@ -2872,12 +2872,6 @@ export const CPU_LAYER_CONTRACTS: readonly LayerContract[] = [
   {"id":"cpu:adrenalineEssence/AdrenalineEssenceGpuRenderer.ts:module/this.body/setDepth/0","owner":"adrenalineEssence/AdrenalineEssenceGpuRenderer.ts","component":"module/this.body/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[9.4],"blends":["NORMAL"],"profiles":["M"],"role":"effect","source":{"selector":"module/this.body/setDepth/0","expression":"BODY_DEPTH"}},
   {"id":"cpu:arena/BaseAccentGlowRenderer.ts:module/overlay/setDepth/0","owner":"arena/BaseAccentGlowRenderer.ts","component":"module/overlay/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[4.04,4.05],"blends":["ADD"],"profiles":["G"],"role":"effect","source":{"selector":"module/overlay/setDepth/0","expression":"source.depth + depth"}},
   {"id":"cpu:effects/AirstrikeRenderer.ts:syncBomberRuns/shadows/setDepth/0","owner":"effects/AirstrikeRenderer.ts","component":"syncBomberRuns/shadows/setDepth/0","height":"high","lighting":"emissive","camera":"world","depths":[19.55],"blends":["MULTIPLY"],"profiles":["E"],"role":"effect","source":{"selector":"syncBomberRuns/shadows/setDepth/0","expression":"DEPTH_LIGHTING + 0.05"}},
-  {"id":"cpu:effects/AirstrikeRenderer.ts:createVisual/warningFill/setDepth/0","owner":"effects/AirstrikeRenderer.ts","component":"createVisual/warningFill/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[19],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"createVisual/warningFill/setDepth/0","expression":"DEPTH.CANOPY - 1"}},
-  {"id":"cpu:effects/AirstrikeRenderer.ts:createVisual/warningRing/setDepth/0","owner":"effects/AirstrikeRenderer.ts","component":"createVisual/warningRing/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[20],"blends":["ADD"],"profiles":["E","H"],"role":"effect","source":{"selector":"createVisual/warningRing/setDepth/0","expression":"DEPTH.CANOPY"}},
-  {"id":"cpu:effects/AirstrikeRenderer.ts:createVisual/innerRing/setDepth/0","owner":"effects/AirstrikeRenderer.ts","component":"createVisual/innerRing/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[9],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"createVisual/innerRing/setDepth/0","expression":"DEPTH.PLAYERS - 1"}},
-  {"id":"cpu:effects/AirstrikeRenderer.ts:createVisual/coreGlow/setDepth/0","owner":"effects/AirstrikeRenderer.ts","component":"createVisual/coreGlow/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[9],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"createVisual/coreGlow/setDepth/0","expression":"DEPTH.PLAYERS - 1"}},
-  {"id":"cpu:effects/AirstrikeRenderer.ts:createVisual/crossH/setDepth/0","owner":"effects/AirstrikeRenderer.ts","component":"createVisual/crossH/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[9],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"createVisual/crossH/setDepth/0","expression":"DEPTH.PLAYERS - 1"}},
-  {"id":"cpu:effects/AirstrikeRenderer.ts:createVisual/crossV/setDepth/0","owner":"effects/AirstrikeRenderer.ts","component":"createVisual/crossV/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[9],"blends":["ADD"],"profiles":["M"],"role":"effect","source":{"selector":"createVisual/crossV/setDepth/0","expression":"DEPTH.PLAYERS - 1"}},
   {"id":"cpu:effects/Ak47StrategicTargetRenderer.ts:build/container/setDepth/0","owner":"effects/Ak47StrategicTargetRenderer.ts","component":"build/container/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[17],"blends":["NORMAL"],"profiles":["L"],"role":"ui","source":{"selector":"build/container/setDepth/0","expression":"DEPTH.PROJECTILES + 2"}},
   {"id":"cpu:effects/AsmdPrimaryRenderer.ts:playTracer/segment/setDepth/0","owner":"effects/AsmdPrimaryRenderer.ts","component":"playTracer/segment/setDepth/0","height":"body","lighting":"material","camera":"world","depths":[16.02,16.07],"blends":["NORMAL"],"profiles":["L"],"role":"effect","source":{"selector":"playTracer/segment/setDepth/0","expression":"DEPTH_TRACE + 0.02 + centerT * 0.05"}},
   {"id":"cpu:effects/AsmdPrimaryRenderer.ts:playImpact/halo/setDepth/0","owner":"effects/AsmdPrimaryRenderer.ts","component":"playImpact/halo/setDepth/0","height":"body","lighting":"emissive","camera":"world","depths":[16.1],"blends":["ADD"],"profiles":["L"],"role":"effect","source":{"selector":"playImpact/halo/setDepth/0","expression":"DEPTH_TRACE + 0.1"}},
@@ -3524,7 +3518,6 @@ export const CPU_SOURCE_CONTRACTS = {
   },
   "effects/AirstrikeRenderer.ts": {
     "blends": [
-      "Phaser.BlendModes.ADD",
       "Phaser.BlendModes.MULTIPLY"
     ],
     "cameras": [],
@@ -3534,48 +3527,6 @@ export const CPU_SOURCE_CONTRACTS = {
         "expression": "DEPTH_LIGHTING + 0.05",
         "blends": [
           "MULTIPLY"
-        ]
-      },
-      {
-        "key": "createVisual/warningFill/setDepth/0",
-        "expression": "DEPTH.CANOPY - 1",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "createVisual/warningRing/setDepth/0",
-        "expression": "DEPTH.CANOPY",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "createVisual/innerRing/setDepth/0",
-        "expression": "DEPTH.PLAYERS - 1",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "createVisual/coreGlow/setDepth/0",
-        "expression": "DEPTH.PLAYERS - 1",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "createVisual/crossH/setDepth/0",
-        "expression": "DEPTH.PLAYERS - 1",
-        "blends": [
-          "ADD"
-        ]
-      },
-      {
-        "key": "createVisual/crossV/setDepth/0",
-        "expression": "DEPTH.PLAYERS - 1",
-        "blends": [
-          "ADD"
         ]
       }
     ],
@@ -8091,6 +8042,7 @@ export const MORTAR_LAYER_CONTRACTS: readonly LayerContract[] = [
   {id:'mortar:telegraph',owner:'effects/gpu/MortarGpuLayer.ts',component:'telegraph',height:'body',lighting:'emissive',camera:'world',depths:[19.7],blends:['NORMAL'],profiles:['E'],role:'ui'},
   {id:'mortar:shell',owner:'effects/gpu/MortarGpuLayer.ts',component:'shell',height:'high',lighting:'emissive',camera:'world',depths:[20.6],blends:['NORMAL'],profiles:['H'],role:'effect'},
   {id:'mortar:smoke',owner:'effects/gpu/MortarGpuLayer.ts',component:'smoke',height:'body',lighting:'material',camera:'world',depths:[13.38],blends:['NORMAL'],profiles:['K'],role:'effect'},
+  {id:'mortar:trace',owner:'effects/gpu/MortarGpuLayer.ts',component:'trace',height:'body',lighting:'emissive',camera:'world',depths:[19.65],blends:['NORMAL'],profiles:['E'],role:'ui'},
 ];
 export const FIRESTARTER_LAYER_CONTRACTS: readonly LayerContract[] = [
   {id:'firestarter:ground',owner:'effects/gpu/FirestarterGpuLayer.ts',component:'ground',height:'ground',lighting:'material',camera:'world',depths:[5.12],blends:['NORMAL'],profiles:['G'],role:'effect'},

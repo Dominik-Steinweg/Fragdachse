@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
 import type { SyncedMortarStrike } from '../src/types';
 import { mortarFireDirection, mortarStrikePhase, MortarStrikePresentationTimeline,
-  MORTAR_THUMP_JOIN_WINDOW_MS } from '../src/effects/mortarStrikeVisualModel';
+  MORTAR_CANCEL_PRESENTATION_MS, MORTAR_THUMP_JOIN_WINDOW_MS } from '../src/effects/mortarStrikeVisualModel';
 
 const config = getCoopDefenseEnemyConfig('mortar-badger').mortar!;
 const strike: SyncedMortarStrike = { id: 7, sourceEnemyId: 'mortar', sourceX: 800, sourceY: 50,
@@ -43,6 +43,27 @@ describe('mortar presentation timeline', () => {
     expect(timeline.sample([strike], strike.launchAt)).toEqual([]);
     timeline.clear();
     expect(timeline.sample([strike], strike.launchAt)[0].thump).toBe(true);
+  });
+});
+
+describe('mortar cancel presentation', () => {
+  it('breaks a vanished windup up once, from the windup it reached, and never after launch', () => {
+    const timeline = new MortarStrikePresentationTimeline();
+    const at = strike.armedAt + config.windupMs * 0.6;
+    timeline.sample([strike], at);
+    expect(timeline.cancelled).toEqual([]);
+    timeline.sample([], at + 10);
+    expect(timeline.cancelled).toEqual([expect.objectContaining({ cancel: 0, started: true, reached: 0.6 })]);
+    timeline.sample([], at + 10 + MORTAR_CANCEL_PRESENTATION_MS / 2);
+    expect(timeline.cancelled).toEqual([expect.objectContaining({ cancel: 0.5, started: false })]);
+    timeline.sample([strike], at + 10 + MORTAR_CANCEL_PRESENTATION_MS);
+    expect(timeline.cancelled).toEqual([]);
+
+    const launched = new MortarStrikePresentationTimeline();
+    launched.sample([strike], strike.armedAt + 1);
+    launched.sample([strike], strike.launchAt + 1);
+    launched.sample([], strike.launchAt + 20);
+    expect(launched.cancelled).toEqual([]);
   });
 });
 

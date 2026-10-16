@@ -245,8 +245,8 @@ describe('airstrike gpu particles', () => {
 
     expect(bomb.edited.length).toBe(0);
     expect(spark.edited.length).toBe(0);
-    // Der Telegraph selbst bleibt unberuehrt – Warnkreis und Fadenkreuz sind Shapes.
-    expect(scene.objects.length).toBeGreaterThan(0);
+    // Der Telegraph selbst bleibt unberuehrt: er ist eine Instanz im gemeinsamen Strike-Layer.
+    expect((renderer as unknown as { telegraph: { size: number } }).telegraph.size).toBe(1);
     expect(scene.objects.some((object) => object.destroyed)).toBe(false);
   });
 });
