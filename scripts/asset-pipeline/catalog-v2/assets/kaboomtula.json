@@ -21,7 +21,7 @@
     "colors": "Schwarzviolette Behaarung mit fahlen Lila-Säumen und hellen Gelenkringen, matter Chitinpanzer mit dunklen Radialfurchen; das Abdomen dunkel mit leerenviolett glühenden Adern und Herzlinie als lebende Bombe; acht violett glimmende Augen; kein Rot (bleibt den Telegraphen), kein Gelb.",
     "anatomy": "Cephalothorax (Bone body) mit Fovea, Augenhügel und acht Augen (eyeLeft/eyeRight = vordere Mittelaugen, drei Extra-Paare), Cheliceren mit Giftklauen (chelicera_l/r, fang_l/r), Pedipalpen (palp_<s>_femur/tibia), acht Beine mit je drei starren Segmenten (leg_<s><1..4>_femur/tibia/tarsus), Abdomen (Bone abdomen) mit Spinnwarzen und carriage-Control für echte Sprunghöhe; vier Eck-Kontaktmeshes `<corner> broad paw` verbinden die Tarsen der Beinpaare 1+2 bzw. 3+4; Socket mouth für das Netzspucken.",
     "materials": "Matte Setae auf Basis der Kraken-Hautschicht (Wertplan, gerichtete Haar-Textur, gedämpfter violetter Streifglanz), straffe Abdomenhaut mit eingebrannter Adern-Emission (vein_glow), glänzend schwarze Klauen mit violetten Giftperlen, glänzende Augenkuppeln mit violetten Linsen; keine Kameraneigung, kein Comic-Look.",
-    "stage": "GA1 Form: Blockout-Varianten form-a/b/c mit Paletten void/cobalt/bone und Adern web/rivers/glow zur Abnahme. gameIds bleiben bis zum Cutover leer."
+    "stage": "GA1 abgenommen als Form form-b-r2 (Bombenbauch, Palette void, Adern web); GA2 Animationsentwurf in Arbeit. gameIds bleiben bis zum Cutover leer."
   },
   "requiredClips": [
     "move",
@@ -43,7 +43,8 @@
   },
   "orthoScale": 6.24,
   "textures": {
-    "organic": "art/poc/pipeline-v2/textures/badger-head-fur-v2-s.png"
+    "organic": "art/poc/pipeline-v2/textures/kaboomtula-setae-v1.jpg",
+    "veins": "art/poc/pipeline-v2/textures/kaboomtula-abdomen-v1.jpg"
   },
   "materialVariants": {
     "standard": {
@@ -57,7 +58,7 @@
       "name": "move",
       "motion": "kaboomtula_skitter",
       "frameCount": 12,
-      "frameRate": 24,
+      "frameRate": 36,
       "loop": true
     },
     {

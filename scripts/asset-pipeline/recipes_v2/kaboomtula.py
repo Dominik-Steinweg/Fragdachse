@@ -6,7 +6,7 @@ segmented legs arching from the carapace margin with their knees high, and behin
 a taut, swollen abdomen whose void-violet veins and dorsal heart line glow like a lit fuse.
 
 z = 0 is the ground; the tarsi rest on it. Parts for kaboomtula_motion_v2: `carriage` (whole
-animal, real leap height), the `vein_glow` emission socket and the rig: `body` (cephalothorax),
+animal, real leap height), the `vein_glow` emission socket (rest strength `vein_glow_rest`) and the rig: `body` (cephalothorax),
 `abdomen`, `chelicera_l/r` with `fang_l/r`, `palp_l/r_femur/tibia` and per leg
 `leg_<l|r><1..4>_femur/tibia/tarsus` (1 = front .. 4 = rear). Every bone rolls its Z axis up, so
 Euler Z is a yaw seen from the camera and Euler X lifts the bone's tip.
@@ -90,15 +90,11 @@ PALETTES = {
 }
 VOID = linear('#b347ff')
 VOID_HOT = linear('#e2a8ff')
-# Abdomen veins: Voronoi edge networks on rest coordinates (main vessels + capillaries),
-# stretched along the abdomen so the big vessels run from the pedicel to the spinnerets.
+# Abdomen veins: the authored vessel map (texture family `veins`) or, without it, noise isolines on
+# rest coordinates (main vessels + capillaries), stretched so the big vessels run lengthwise.
 VEINS = {
     'web': dict(scale=2.0, stretch=.75, width=.028, fine=2.3, fineWidth=.013, finePeak=.45, distortion=.3, warp=.15,
-                heart=.8, strength=2.2),
-    'rivers': dict(scale=1.4, stretch=.45, width=.034, fine=2.4, fineWidth=.010, finePeak=.30, distortion=.2, warp=.25,
-                   heart=1.0, strength=2.6),
-    'glow': dict(scale=2.0, stretch=.75, width=.026, fine=2.3, fineWidth=.012, finePeak=.40, distortion=.3, warp=.15,
-                 heart=.9, strength=2.0, inner=.30),
+                heart=.55, strength=2.2, textureScale=.55, textureLow=.035, textureHigh=.14),
 }
 
 
@@ -219,29 +215,54 @@ def veins(c, material, style, centre_y):
 
     centred = vector('SUBTRACT', rest, (0, centre_y, .30), 'Abdomen-centred rest coordinates')
     stretched = vector('MULTIPLY', centred, (1, style['stretch'], 1), 'Vessels run along the abdomen')
-    warp = node('ShaderNodeTexNoise', 'Vessel meander')
-    warp.inputs['Scale'].default_value = 2.2
-    warp.inputs['Detail'].default_value = 2
-    links.new(stretched, warp.inputs['Vector'])
-    bent = vector('SUBTRACT', warp.outputs['Color'], (.5, .5, .5), 'Centred meander')
-    amplitude = node('ShaderNodeVectorMath', 'Meander amplitude')
-    amplitude.operation = 'SCALE'
-    amplitude.inputs['Scale'].default_value = style['warp']
-    links.new(bent, amplitude.inputs[0])
-    coords = vector('ADD', stretched, amplitude.outputs[0], 'Meandering vessel coordinates')
-    # Vessels are noise isolines: continuous, meandering and joining like real vessels
-    # (Voronoi edges would close into cells and read as cracks).
-    vessels = []
-    for label, scale, width, peak in (('Main vessels', style['scale'], style['width'], 1),
-                                      ('Capillaries', style['scale'] * style['fine'], style['fineWidth'], style['finePeak'])):
-        field = node('ShaderNodeTexNoise', label + ' field')
-        field.inputs['Scale'].default_value = scale
-        field.inputs['Detail'].default_value = 2
-        field.inputs['Distortion'].default_value = style['distortion']
-        links.new(coords, field.inputs['Vector'])
-        contour = value('ABSOLUTE', value('SUBTRACT', field.outputs['Fac'], .5, label + ' centred'), 0, label + ' contour distance')
-        vessels.append(line(contour, width, peak, label + ' line'))
-    glow = value('MAXIMUM', vessels[0], vessels[1], 'Vessel glow')
+    texture = c.images.get('veins')
+    if texture:
+        # The authored vessel skin: its own folds for the hide, its bright vessels as the glow mask.
+        nodes['Authored dermis folds'].image = texture
+        nodes['Dermis density on rest pose'].inputs['Scale'].default_value = style['textureScale']
+        sample = node('ShaderNodeTexImage', 'Authored vessel map')
+        sample.image = texture
+        sample.extension = 'REPEAT'
+        sample.projection = 'BOX'
+        sample.projection_blend = .35
+        density = node('ShaderNodeVectorMath', 'Vessel map density')
+        density.operation = 'SCALE'
+        density.inputs['Scale'].default_value = style['textureScale']
+        links.new(stretched, density.inputs[0])
+        links.new(density.outputs[0], sample.inputs['Vector'])
+        grey = node('ShaderNodeRGBToBW', 'Vessel brightness')
+        links.new(sample.outputs['Color'], grey.inputs[0])
+        mask = node('ShaderNodeMapRange', 'Vessel glow mask')
+        mask.interpolation_type = 'SMOOTHSTEP'
+        mask.clamp = True
+        mask.inputs['From Min'].default_value = style['textureLow']
+        mask.inputs['From Max'].default_value = style['textureHigh']
+        links.new(grey.outputs[0], mask.inputs['Value'])
+        glow = mask.outputs[0]
+    else:
+        warp = node('ShaderNodeTexNoise', 'Vessel meander')
+        warp.inputs['Scale'].default_value = 2.2
+        warp.inputs['Detail'].default_value = 2
+        links.new(stretched, warp.inputs['Vector'])
+        bent = vector('SUBTRACT', warp.outputs['Color'], (.5, .5, .5), 'Centred meander')
+        amplitude = node('ShaderNodeVectorMath', 'Meander amplitude')
+        amplitude.operation = 'SCALE'
+        amplitude.inputs['Scale'].default_value = style['warp']
+        links.new(bent, amplitude.inputs[0])
+        coords = vector('ADD', stretched, amplitude.outputs[0], 'Meandering vessel coordinates')
+        # Vessels are noise isolines: continuous, meandering and joining like real vessels
+        # (Voronoi edges would close into cells and read as cracks).
+        vessels = []
+        for label, scale, width, peak in (('Main vessels', style['scale'], style['width'], 1),
+                                          ('Capillaries', style['scale'] * style['fine'], style['fineWidth'], style['finePeak'])):
+            field = node('ShaderNodeTexNoise', label + ' field')
+            field.inputs['Scale'].default_value = scale
+            field.inputs['Detail'].default_value = 2
+            field.inputs['Distortion'].default_value = style['distortion']
+            links.new(coords, field.inputs['Vector'])
+            contour = value('ABSOLUTE', value('SUBTRACT', field.outputs['Fac'], .5, label + ' centred'), 0, label + ' contour distance')
+            vessels.append(line(contour, width, peak, label + ' line'))
+        glow = value('MAXIMUM', vessels[0], vessels[1], 'Vessel glow')
     # Dorsal heart line: the real cardiac mark of a spider abdomen, here the fuse.
     split = node('ShaderNodeSeparateXYZ', 'Heart line axes')
     links.new(centred, split.inputs[0])
@@ -268,8 +289,6 @@ def veins(c, material, style, centre_y):
     links.new(rest, axes.inputs[0])
     links.new(axes.outputs['Y'], waist.inputs['Value'])
     glow = value('MULTIPLY', glow, waist.outputs[0], 'Vessel glow without the pedicel')
-    if style.get('inner'):
-        glow = value('ADD', value('MULTIPLY', glow, 1 - style['inner'], 'Vessel share'), style['inner'] * .5, 'Inner glow through the skin')
     hot = node('ShaderNodeMix', 'Void vessel colour')
     hot.data_type = 'RGBA'
     hot.inputs[6].default_value = (*VOID, 1)
@@ -474,7 +493,7 @@ def build(c, spec):
         'eyeball': glossy_material(c, 'Kabummtula glossy eye domes', linear('#0e0716'), roughness=.14),
         'lens': c.material('Kabummtula void eye lenses', linear('#8a3cf0'), emission=1.1),
         'fang': glossy_material(c, 'Kabummtula glossy black fangs', linear('#0b0710'), roughness=.30),
-        'venom': c.material('Kabummtula void venom beads', VOID_HOT, emission=2.0),
+        'venom': c.material('Kabummtula void venom beads', VOID, emission=.8),
     }
 
     root = control(c.scene, 'Kabummtula fixed export pivot')
@@ -540,7 +559,7 @@ def build(c, spec):
         base = Vector((side * .12, 1.19, .22))
         fang_points = [tuple(base), tuple(base + Vector((-side * .05, .06, -.04))), tuple(base + Vector((-side * .12, .05, -.09)))]
         fang = horn(c, f'Kabummtula {key} fang', fang_points, [.040, .030, .012], mats['fang'], sides=12)
-        venom = c.ell(f'Kabummtula {key} venom bead', fang_points[-1], (.022, .022, .022), mats['venom'])
+        venom = c.ell(f'Kabummtula {key} venom bead', fang_points[-1], (.018, .018, .018), mats['venom'])
         for ob in (chelicera,):
             paint_pattern(ob, lambda p, n: (.42, palette['fringe'] * .8 * smoothstep(.6, .1, n.z), .5))
             write_rest(ob)
@@ -647,6 +666,6 @@ def build(c, spec):
     mouth.matrix_parent_inverse = (rest.matrix_local @ Matrix.Translation((0, rest.length, 0))).inverted()
     mouth.location = (0, 1.30, .20)
     sockets['mouth'] = mouth
-    return {'root': root, 'parts': {'carriage': carriage, 'vein_glow': vein_glow,
+    return {'root': root, 'parts': {'carriage': carriage, 'vein_glow': vein_glow, 'vein_glow_rest': style['strength'],
                                     'spider_legs': [f'{key}{n}' for key, _ in SIDES for n in range(1, 5)]},
             'rig': rig, 'sockets': sockets}
