@@ -13,6 +13,7 @@ import { KrakenPresentationResidency } from '../../effects/kraken/KrakenPresenta
 import type { CameraFeedbackController } from '../../effects/camera/CameraFeedbackController';
 import { KrakenEggFlightView, KrakenRenderer, KrakenSpineFlightView, type KrakenPresentationAssets } from '../../effects/kraken/KrakenRenderer';
 import { KrakenIntroRenderer } from '../../effects/kraken/KrakenIntroRenderer';
+import { KrakenPondVoid } from '../../effects/kraken/KrakenPondVoid';
 import { KRAKEN_RISE_INTRO } from '../../config/bossIntros';
 import { KRAKEN_BOSS_DEFAULTS } from '../../config/krakenBoss';
 import * as Phaser from 'phaser';
@@ -73,6 +74,8 @@ export class CoopMissionPresentationInfrastructure {
   private releaseKrakenProjectiles: (() => void) | null = null;
   private krakenResidency: KrakenPresentationResidency | null = null;
   private krakenIntro: KrakenIntroRenderer | null = null;
+  /** Abyss pond grade and glow driven by the kraken intro; transient presentation only. */
+  private krakenPondVoid: KrakenPondVoid | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.objectiveAnnouncements = new CoopDefenseObjectiveAnnouncement(scene);
@@ -189,6 +192,8 @@ export class CoopMissionPresentationInfrastructure {
     });
     this.krakenIntro = new KrakenIntroRenderer(this.scene, assets?.water ?? null, waterAt, diagnostic, 0, input.renderers.shadow, assets?.spine);
     this.krakenIntro.setCameraFeedback(input.cameraFeedback ?? null);
+    this.krakenPondVoid = new KrakenPondVoid(this.scene, input.renderers.lighting ?? null,
+      () => ({ layout: input.getWorldLayout?.() ?? null, metrics: input.getWorldMetrics?.() ?? null }));
 
     this.secondaryObjectiveHud = new CoopDefenseSecondaryObjectiveHud(
       this.scene,
@@ -264,6 +269,7 @@ export class CoopMissionPresentationInfrastructure {
               waterMove: state.movement === 'water-approach',
               waterBody: state.phase.kind !== 'ashore' || now < state.phase.gripAt,
             });
+          this.krakenPondVoid?.setKrakenPhase(state?.phase ?? null);
           this.kraken?.sync(state, body, now);
         },
         applyKrakenClaw: (event, now) => { if (!this.destroyed) this.kraken?.applyAreaClaw(event, now); },
@@ -351,6 +357,7 @@ export class CoopMissionPresentationInfrastructure {
           input.renderers.voidRift.sync(state, now);
           this.krakenIntro?.sync(state?.preset === 'kraken-rise' && state.habitatId && state.waterAnchorId
             ? { ...state, preset: 'kraken-rise', habitatId: state.habitatId, waterAnchorId: state.waterAnchorId } : null, now);
+          this.krakenPondVoid?.sync(state, now);
           input.renderers.voidMeteorIntro.sync(state, now);
           this.announceBossIntro(state, now);
         },
@@ -434,6 +441,7 @@ export class CoopMissionPresentationInfrastructure {
     this.worldSpaceDestroyed = true;
     this.releaseKrakenProjectiles?.(); this.releaseKrakenProjectiles = null;
     this.kraken?.destroy(); this.kraken = null; this.krakenIntro?.destroy(); this.krakenIntro = null;
+    this.krakenPondVoid?.destroy(); this.krakenPondVoid = null;
     this.krakenResidency?.destroy(); this.krakenResidency = null;
     input.renderers.beer.syncCoopDefenseCarry([]);
     input.clientUpdate.resetEnemyDashVisuals();
@@ -457,7 +465,7 @@ export class CoopMissionPresentationInfrastructure {
     input.renderers.bossPresence.clear();
     input.renderers.voidHunterSparks.clear();
     input.renderers.voidRift.clear();
-    this.kraken?.clear(); this.krakenIntro?.clear(); this.krakenResidency?.setPhase('dead');
+    this.kraken?.clear(); this.krakenIntro?.clear(); this.krakenPondVoid?.clear(); this.krakenResidency?.setPhase('dead');
     input.renderers.voidMeteorIntro.clear();
     this.announcedBossIntroKey = null;
     input.renderers.markers.releaseRound();

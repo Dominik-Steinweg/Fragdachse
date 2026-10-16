@@ -16,6 +16,9 @@ uniform sampler2D uDisturb;
 uniform vec4 uDisturbRect;
 uniform vec2 uDisturbTexel;
 uniform float uDisturbOn;
+// Void bloom: local centre xy, reached radius z, strength w; plus a luminance pulse.
+uniform vec4 uVoid;
+uniform float uVoidPulse;
 
 float hash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7))) * 43758.5453); }
 float noise(vec2 p) {
@@ -168,6 +171,26 @@ void main() {
       // Foam rides up onto the thin shore film as well.
       alpha=max(alpha,foam*.55*smoothstep(.35,.45,mask.b));
     }
+  }
+  // Void bloom: behind a bright advancing front the water turns to ink-dark violet, deeper with depth,
+  // and slow luminous veins and motes drift through the basin. The light map above lifts it at dusk.
+  if(uVoid.w>0.0) {
+    // Ink spreads unevenly: the front is pushed ahead and held back by the pond's own noise.
+    float voidDistance=length(p-uVoid.xy)+(pondNoise(p*.0085+vec2(uSeed,17.3))-.5)*130.0+(pondNoise(p*.031+11.0)-.5)*34.0;
+    float reached=1.0-smoothstep(uVoid.z-70.0,uVoid.z,voidDistance);
+    float grade=uVoid.w*reached;
+    vec3 voidBody=mix(vec3(.30,.10,.47),vec3(.10,.022,.19),colorDepth)*(.92+broad*.16);
+    float veinField=pondField(p*.0105+vec2(t*.045,-t*.037)+eddyA*.09);
+    float veins=1.0-smoothstep(0.0,.042,abs(veinField-.5));
+    float fineVeins=1.0-smoothstep(0.0,.04,abs(pondField(p*.024+vec2(-t*.06,t*.05)+eddyB*.06)-.5));
+    float motes=smoothstep(.84,.97,pondNoise(p*.085+vec2(t*.28,t*.19)));
+    float inBasin=smoothstep(6.0,34.0,depthDistance);
+    color=mix(color,voidBody,grade*.92);
+    color+=vec3(.70,.36,1.0)*(veins*.40+fineVeins*.10)*inBasin*grade*(.75+.25*sin(t*.9+veinField*6.2831))
+      +vec3(.92,.70,1.0)*motes*.28*grade+vec3(.62,.30,.95)*uVoidPulse*grade*(.35+.65*inBasin)*.5;
+    // The advancing front: a thin bright seam that only exists while the bloom is still spreading.
+    float front=exp(-pow((voidDistance-uVoid.z)/16.0,2.0));
+    color+=vec3(.82,.52,1.0)*front*uVoid.w*.75;
   }
   gl_FragColor=vec4(color*alpha,alpha);
 }
