@@ -247,8 +247,8 @@ void main() {
       sparks=max(sparks,exp(-pow(line(p,pos,pos-d*4.0)/1.2,2.0)));
     }
     alpha=max(flash,sparks*(1.0-smoothstep(.05,.5,t))*.65);
-    // The ember core bursting out of the shell: crimson sparks around a hot centre.
-    color=mix(vec3(.30,.04,.10),vec3(1.0,.24,.10),clamp(flash+exp(-t*14.0),0.0,1.0));
+    // The brood's void light bursting out of the shell: violet sparks around a pale, hot centre.
+    color=mix(vec3(.16,.03,.28),vec3(.78,.46,1.0),clamp(flash+exp(-t*14.0),0.0,1.0));
   } else {
     p.x+=uShape.x*.3;
     float lengthPx=uShape.z, width=uTiming.w, along=clamp(p.x/lengthPx,0.0,1.0);

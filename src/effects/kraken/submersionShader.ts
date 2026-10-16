@@ -284,6 +284,9 @@ export class KrakenSubmersion {
     this.filter.params.exposure = exposure;
   }
 
+  /** The 128² world-water mask in logical sprite space (red = water), borrowed by the view's emissive companion. */
+  get maskKey(): string { return this.mask.key; }
+
   update(elevation: Phaser.Textures.Frame, level: number, timeSeconds: number, waterRevision = 0): void {
     if (this.destroyed) return;
     this.filter.elevationFrame = elevation;

@@ -6,6 +6,7 @@ import { PIPELINE_RUNTIME_ASSETS } from '../../config/pipelineAssets';
 import type { PipelineBossAsset } from '../../config/pipelineAssetContracts';
 import { createKrakenResidencyPort, KrakenAssetResidency } from './KrakenAssetResidency';
 import { KrakenMeshCache } from './KrakenMeshCache';
+import { loadKrakenGlowPoints, type KrakenGlowPointSet } from './KrakenGlowPoints';
 import type { KrakenAssetRole, KrakenResidencyPhase, KrakenPhaseOptions } from './KrakenResidencyPlan';
 import type { KrakenPresentationAssets, KrakenPresentationAsset } from './KrakenRenderer';
 
@@ -28,6 +29,9 @@ export class KrakenPresentationResidency {
   private readonly phaseResidentPeaks: Partial<Record<KrakenResidencyPhase, number>> = {};
   private readonly phaseAtlasPeaks: Partial<Record<KrakenResidencyPhase, number>> = {};
   private readonly gpuBudget: KrakenGpuBudget;
+  /** CPU-only sucker points of the selected revision (no GPU residency); loaded once per Activity. */
+  private readonly glowSets = new Map<string, KrakenGlowPointSet>();
+  private readonly glowAbort = new AbortController();
   constructor(private readonly scene: Phaser.Scene, private readonly diagnostic: (message: string) => void, private readonly additionalGpuBytes: () => number) {
     this.meshes = new KrakenMeshCache(diagnostic);
     this.gpuBudget = new KrakenGpuBudget(scene);
@@ -40,8 +44,14 @@ export class KrakenPresentationResidency {
     this.metadata = metadata;
     this.residency = this.createResidency(metadata);
     const owner = this;
+    for (const role of ['water', 'land', 'tentacle'] as const) {
+      const asset = metadata[role]!;
+      void loadKrakenGlowPoints(asset, this.glowAbort.signal).then(set => { if (set && !this.destroyed) this.glowSets.set(asset.id + ':' + asset.revision, set); })
+        .catch(error => { if (!this.glowAbort.signal.aborted) diagnostic(String(error)); });
+    }
     const adapter = (role: KrakenAssetRole): KrakenPresentationAsset => ({
       get metadata() { return owner.metadata[role]!; }, frame: () => null,
+      glowPoints: () => { const a = owner.metadata[role]; return a ? owner.glowSets.get(a.id + ':' + a.revision) ?? null : null; },
       acquire: (clip, index) => {
         const lease = this.residency!.acquirePose(role, clip, index, () => {});
         if (lease) {
@@ -132,7 +142,7 @@ export class KrakenPresentationResidency {
     reservedBytes: this.residency?.reservedBytes ?? 0, rendererBytes: this.renderBytes(), retainedFilterBytes: this.gpuBudget.retainedFilterBytes, cpuMeshBytes: this.meshes.bytes, peakBytes: this.peak,
     phasePeaks: { ...this.phasePeaks }, phaseResidentPeaks: { ...this.phaseResidentPeaks }, phaseAtlasPeaks: { ...this.phaseAtlasPeaks } }; }
   destroy(): void {
-    this.destroyed = true; this.removeDevHook?.(); this.pending?.detach(); this.finishDevRender?.();
+    this.destroyed = true; this.glowAbort.abort(); this.glowSets.clear(); this.removeDevHook?.(); this.pending?.detach(); this.finishDevRender?.();
     for (const old of this.retired) old.detach(); this.retired.clear();
     if (this.residency) this.scene.game.events.off('postrender', this.measure, this); this.residency?.detach(); this.meshes.destroy();
   }

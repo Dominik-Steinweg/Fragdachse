@@ -15,6 +15,14 @@ import { KRAKEN_BROOD, KRAKEN_DRY_SAMPLER, KRAKEN_LAND_EXPOSURE, KRAKEN_WORLD_EX
   type KrakenBroodMaterial } from './submersionShader';
 import { addReviewDrain, type KrakenReviewDrainFilter } from './KrakenReviewDrainFilter';
 import { KrakenShadowRenderer } from './KrakenShadowRenderer';
+import { KrakenEmissionQuad } from './KrakenEmissionQuad';
+import { krakenBodySuckers, krakenDeepEmber, krakenEggGlowState, krakenEyeDrive, krakenTentacleSuckers, KRAKEN_GLOW } from './KrakenGlowTimeline';
+import { KrakenGlowLayer } from './KrakenGlowLayer';
+import { KrakenLightRig } from './KrakenLightRig';
+import { KRAKEN_GLOW_LOOK, lightKrakenArm, paintKrakenEgg, paintKrakenEyes, paintKrakenRoar, paintKrakenSuckers } from './KrakenGlowPresentation';
+import { getGraphicsQualityProfile } from '../../graphics/GraphicsQuality';
+import type { LightingSystem } from '../LightingSystem';
+import type { KrakenGlowPoint, KrakenGlowPointSet } from './KrakenGlowPoints';
 import type { ShadowSystem } from '../ShadowSystem';
 import { WaterDisturbanceField, type WaterDisturbance } from '../../arena/WaterDisturbanceField';
 import type { KrakenPoseLease } from './KrakenAssetResidency';
@@ -39,6 +47,8 @@ export interface KrakenPresentationAsset {
   readonly metadata: PipelineBossAsset;
   acquire?(clip: string, index: number): KrakenPoseLease | null;
   frame(clip: string, index: number): KrakenAtlasPose | null;
+  /** Visible sucker cups per master pose, once loaded (selected revision only). */
+  glowPoints?(): KrakenGlowPointSet | null;
 }
 export interface KrakenPresentationAssets {
   readonly water: KrakenPresentationAsset; readonly land: KrakenPresentationAsset;
@@ -60,7 +70,11 @@ export interface KrakenRendererOptions {
   readonly diagnostic: (message: string) => void;
   readonly config?: KrakenBossConfig;
   readonly feedback?: CameraFeedbackController;
+  /** Global post-FX accent for the roar onto land (whitelisted event). */
+  readonly postFx?: (event: 'krakenRoar') => void;
   readonly shadows?: ShadowSystem;
+  /** The boss lights the scene through borrowed ground-glow frames (eyes, cups, brood, roar). */
+  readonly lighting?: LightingSystem | null;
   readonly announceExit?: () => void;
   /** Optional existing combat contact-FX adapter. Called once with the physical hit position. */
   readonly partContact?: (receipt: CombatPartHitReceipt) => void;
@@ -251,11 +265,38 @@ export class KrakenSpriteView {
   private submersion: KrakenSubmersion | null = null;
   private drain: KrakenReviewDrainFilter | null = null;
   private shadow: KrakenShadowRenderer | null = null;
+  /** Self-lit eyes/brood above the light map; only the bodies and the egg have emission to show. */
+  private companion: KrakenEmissionQuad | null = null;
+  private readonly emissive: boolean;
   private lease: KrakenPoseLease | null = null;
   private environment: ReturnType<ShadowSystem['borrowFigureEnvironment']> = null;
   private missing = new Set<string>();
   private destroyed = false;
   private framedSockets: Readonly<Record<string, PipelineSocketPoint>> | null = null;
+  /** Master pose, water level and emission frame of the frame on screen (-1/null while hidden). */
+  private shownSource = -1;
+  private shownLevel = 0;
+  private shownEmission: Phaser.Textures.Frame | null = null;
+  /** World point of a full-canvas logical position in the frame on screen. */
+  worldAt(x: number, y: number): KrakenPoint {
+    const s = this.sprite, dx = (x - s.originX) * s.displayWidth, dy = (y - s.originY) * s.displayHeight;
+    const c = Math.cos(s.rotation), sn = Math.sin(s.rotation);
+    return { x: s.x + dx * c - dy * sn, y: s.y + dx * sn + dy * c };
+  }
+  /** Centre and world span of the open eyes in the frame on screen (the emission trim); null while closed. */
+  eyeAnchor(): { x: number; y: number; spanPx: number; rotation: number } | null {
+    const e = this.shownEmission;
+    if (!this.sprite.visible || !e || e.width <= 2 || e.height <= 2) return null;
+    const centre = this.worldAt((e.x + e.width / 2) / e.realWidth, (e.y + e.height / 2) / e.realHeight);
+    return { ...centre, spanPx: e.width / e.realWidth * this.sprite.displayWidth, rotation: this.sprite.rotation };
+  }
+  /** Sucker cups visible from above in the frame on screen. */
+  glowPoints(): readonly KrakenGlowPoint[] {
+    return this.sprite.visible && this.shownSource >= 0 ? this.asset.glowPoints?.()?.points(this.shownSource) ?? [] : [];
+  }
+  /** Display pixels per full-canvas source pixel. */
+  get canvasScale(): number { return this.sprite.displayWidth / Math.max(1, this.asset.metadata.sourceSize); }
+  get waterLevel(): number { return this.shownLevel; }
   /** World position and model height (BU) of a socket in the frame currently on screen. */
   socketWorld(name: string): { x: number; y: number; z: number } | null {
     const point = this.sprite.visible ? this.framedSockets?.[name] : undefined;
@@ -271,6 +312,7 @@ export class KrakenSpriteView {
     private readonly waterAt: (x: number, y: number) => number,
     private readonly diagnostic: (message: string) => void, tentacle = false, depth: number = DEPTH.PLAYERS,
     private readonly exposure = KRAKEN_WORLD_EXPOSURE, private readonly shadows?: ShadowSystem, castShadow = true) {
+    this.emissive = ['abyssal-kraken', 'abyssal-kraken-land', 'abyssal-kraken-egg'].includes(asset.metadata.id);
     this.sprite = scene.add.sprite(0, 0, '__WHITE').setVisible(false).setDepth(depth);
     registerGraphicsObject(scene, 'bossIntro', this.sprite);
     // The shadow system also supplies sun/cloud lighting; projectiles draw their own ground marker instead.
@@ -280,6 +322,8 @@ export class KrakenSpriteView {
     socket?: string; scale?: number; alpha?: number; shadowContact?: number; drain?: number; waterLevel?: number; requireClip?: boolean;
     /** Ember strength of an egg view (default: carried pulse); body views derive their brood glow themselves. */
     glow?: number;
+    /** Drive of the self-lit eyes (bodies) or hatching core (egg) above the light map; default 1. */
+    eye?: number;
   } = {}): boolean {
     if (this.destroyed) return false;
     const a = this.asset.metadata;
@@ -314,6 +358,7 @@ export class KrakenSpriteView {
     const level = options.waterLevel ?? a.elevation.previewWaterLevel ?? 0;
     const clipFrames = a.clips.find(c => c.name === sample.clip)?.frames;
     const sockets = lease?.pose.sockets ?? (clipFrames ? a.socketFrames?.[clipFrames[sample.frame] ?? -1] : undefined) ?? null;
+    let emissive: { glow: { strength: number; whole: boolean } | null; brood: KrakenBroodMaterial | null } | null = null;
     if (a.materialPass && a.elevationPass.encoding === 'linear-unorm8-z-oct-normal-v1' && frame.emissionKey) {
       this.environment ??= this.shadows?.borrowFigureEnvironment(() => {
         this.environment = null; if (this.submersion) this.submersion.filter.material = null;
@@ -326,8 +371,14 @@ export class KrakenSpriteView {
         emission: this.scene.textures.getFrame(frame.emissionKey, frame.emissionFrame), emissionRange: a.materialPass.emissionRange, tint: grade.tint, saturation: grade.saturation,
         highlightRollOff: !egg, highlightRole: a.id === 'abyssal-kraken-tentacle' ? 'tentacle' : 'body', glow, brood };
       this.submersion.filter.params.exposure = grade.exposure;
+      emissive = { glow: glow ? { strength: glow.strength, whole: egg } : null, brood };
     }
     this.submersion.update(elevation, level, now / 1000);
+    if (this.emissive && emissive && frame.emissionKey) (this.companion ??= new KrakenEmissionQuad(this.scene)).sync({ sprite: s,
+      emission: this.scene.textures.getFrame(frame.emissionKey, frame.emissionFrame), elevation, maskKey: this.submersion.maskKey,
+      encoding: a.elevation, waterLevel: level }, { eye: options.eye ?? 1, ...emissive, alpha: options.alpha ?? 1,
+      tone: a.id === 'abyssal-kraken-egg' ? 'brood' : 'eye' });
+    else this.companion?.hide();
     if (options.drain && !this.drain) this.drain = addReviewDrain(s, elevation, a.elevation);
     if (this.drain) {
       this.drain.elevation = elevation; this.drain.level = level; this.drain.time = now / 1000;
@@ -338,13 +389,17 @@ export class KrakenSpriteView {
         : a.id.endsWith('-spine') ? 'spine' : 'water');
     else this.shadow?.hide();
     this.framedSockets = sockets;
+    this.shownSource = lease?.pose.sourceFrame ?? clipFrames?.[sample.frame] ?? -1;
+    this.shownLevel = level;
+    this.shownEmission = frame.emissionKey ? this.scene.textures.getFrame(frame.emissionKey, frame.emissionFrame) : null;
     this.lease?.release(); this.lease = lease;
     return true;
   }
-  hide(): void { this.sprite.setVisible(false); this.shadow?.hide(); this.lease?.release(); this.lease = null; this.framedSockets = null; }
+  hide(): void { this.shownSource = -1; this.shownEmission = null; this.sprite.setVisible(false); this.companion?.hide(); this.shadow?.hide(); this.lease?.release(); this.lease = null; this.framedSockets = null; }
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.companion?.destroy(); this.companion = null;
     this.shadow?.destroy(); this.environment?.release(); this.environment = null; this.submersion?.destroy(); this.sprite.destroy(); this.lease?.release(); this.lease = null;
   }
 }
@@ -580,6 +635,8 @@ interface PartView {
 export class KrakenRenderer {
   private readonly claw: EnemyClawRenderer;
   private readonly effects: KrakenEffects;
+  private readonly glow: KrakenGlowLayer;
+  private readonly lights: KrakenLightRig;
   private body: KrakenSpriteView | null = null;
   private readonly parts = new Map<string, PartView>();
   private readonly fallbackSlots = new Map<string, EnemyAreaClawEvent>();
@@ -609,6 +666,8 @@ export class KrakenRenderer {
   constructor(private readonly scene: Phaser.Scene, private readonly options: KrakenRendererOptions) {
     this.claw = new EnemyClawRenderer(scene, () => this.now);
     this.effects = new KrakenEffects(scene, options.waterAt);
+    this.glow = new KrakenGlowLayer(scene);
+    this.lights = new KrakenLightRig(options.lighting);
     this.spines = new KrakenSpineOverlay(scene, options.assets?.spine, options.waterAt, options.diagnostic, options.shadows);
   }
   sync(state: KrakenState | null, body: KrakenBodyPose | null, now: number): void {
@@ -618,7 +677,11 @@ export class KrakenRenderer {
     if (key !== this.bossKey) { this.clear(); this.bossKey = key; }
     if (state.revision < this.revision) return;
     this.revision = state.revision; this.now = now;
-    this.effects.begin();
+    this.effects.begin(); this.glow.begin(); this.lights.begin();
+    try { this.syncViews(state, body, now); } finally { this.glow.flush(); this.lights.commit(); }
+  }
+  private syncViews(state: KrakenState, body: KrakenBodyPose | null, now: number): void {
+    const key = this.bossKey, quality = getGraphicsQualityProfile(this.scene).level, seconds = (now / 1000) % 600;
     const cuePhase = state.phase, cueConfig = this.options.config ?? KRAKEN_BOSS_DEFAULTS;
     if (body) {
       if (cuePhase.kind === 'ashore') {
@@ -701,13 +764,29 @@ export class KrakenRenderer {
       const bodyAlpha = phase.kind !== 'dying' ? 1 : phase.asset === 'water'
         ? 1 - krakenClamp((now - phase.startedAt) / (phase.endsAt - phase.startedAt))
         : krakenDeathAlpha(render.asset.metadata, phase, now);
+      const eye = krakenEyeDrive(state, now, config);
       if (render.visible) this.body.show(render.sample, render.pose, now, {
         drain: phase.kind === 'ashore' && now >= phase.gripAt
           ? 1 - krakenClamp((now - phase.heaveAt) / 1100)
           : this.waterMotion?.rise ? krakenDrain(this.waterMotion.rise, now, false) : 0,
-        alpha: bodyAlpha,
+        alpha: bodyAlpha, eye,
       });
       else this.body.hide();
+      if (render.visible) {
+        paintKrakenEyes(this.body, eye, this.glow, this.lights, bodyAlpha);
+        const cups = krakenBodySuckers(state, now, config);
+        paintKrakenSuckers(this.body, cups, seconds, this.glow, quality, false, bodyAlpha);
+        const b = KRAKEN_GLOW_LOOK.body;
+        if (cups.level > 0) this.lights.add(render.pose.x, render.pose.y, b.radius, (b.base + b.perLevel * cups.level) * bodyAlpha, b.color);
+        if (phase.kind === 'ashore') paintKrakenRoar(render.pose.x, render.pose.y,
+          Math.exp(-(((now - krakenExitRoarAt(phase, config.exit)) / KRAKEN_GLOW.sucker.roarWidthMs) ** 2)), this.glow, this.lights);
+      }
+      // Before a surfacing body opens its eyes, an ember glow rises through the water where it comes up.
+      const deep = krakenDeepEmber(state, now), d = KRAKEN_GLOW_LOOK.deep;
+      if (deep > 0) {
+        this.glow.pool(render.pose.x, render.pose.y, d.pool, d.pool * .8, render.pose.angle, d.color, d.poolAlpha * deep);
+        this.lights.add(render.pose.x, render.pose.y, d.lightRadius, d.lightIntensity * deep, d.color);
+      }
       const volley = state.bodyAction?.kind === 'spines' ? state.bodyAction : null;
       // Bodies exported with detachable spines carry their sockets; older land selections keep them baked in.
       if (render.visible) this.spines.sync(this.body, state.spines, volley, now, bodyAlpha);
@@ -752,6 +831,9 @@ export class KrakenRenderer {
       entry.view.show(sample, { x: part.contact.x, y: part.contact.y, angle: entry.angle }, now, { socket: 'waterEntry', shadowContact: contact,
         waterLevel: base + sink * (meta.elevation.max - base + .5) });
       entry.view.sprite.clearTint();
+      const cups = krakenTentacleSuckers(part, now, entry.previous);
+      paintKrakenSuckers(entry.view, cups, seconds, this.glow, quality, true);
+      lightKrakenArm(part.contact, cups, this.lights);
       this.claw.syncArea(event, now);
       const retract = part.phase === 'retract' || now >= part.retractAt;
       this.effects.erupt(part.contact, part.contact.angle, (now - (retract ? part.retractAt : part.startedAt)) / 1000, retract, identity.partGeneration);
@@ -778,14 +860,10 @@ export class KrakenRenderer {
       // A landed egg's contact shadow is its brood pool; it needs light, not a shadow renderer.
       if (!view) { view = this.idleEggs.pop() ?? this.view(this.options.assets.egg, false, false); this.eggs.set(key, view); }
       const landingAge = (now - egg.landedAt) / 1000, hatchAge = (now - egg.hatchStartedAt) / 1000;
-      const incubation = krakenClamp((now - egg.landedAt) / (egg.hatchStartedAt - egg.landedAt));
-      const beat = Math.sin(landingAge * (5 + incubation * 7));
-      const pulse = hatchAge < 0 ? beat * KRAKEN_BROOD.pulse * incubation : 0;
       // The ember swells with the heartbeat, flares while the shell splits and dies with the spawn.
-      const glow = hatchAge < 0 ? krakenBroodGlow(beat, incubation) : now < egg.spawnAt
-        ? KRAKEN_BROOD.incubatedGlow + (KRAKEN_BROOD.hatchGlow - KRAKEN_BROOD.incubatedGlow) * krakenClamp((now - egg.hatchStartedAt) / Math.max(1, egg.spawnAt - egg.hatchStartedAt))
-        : KRAKEN_BROOD.hatchGlow * (1 - krakenClamp((now - egg.spawnAt) / 250));
-      view.show(sampleKrakenEgg(egg, view.asset.metadata, now), pose, now, { scale: 1 + pulse, glow });
+      const eggGlow = krakenEggGlowState(egg, now);
+      view.show(sampleKrakenEgg(egg, view.asset.metadata, now), pose, now, { scale: 1 + eggGlow.pulse, glow: eggGlow.glow });
+      paintKrakenEgg(pose.x, pose.y, eggGlow, this.glow, this.lights);
       this.effects.egg(pose, 0, landingAge, hatchAge, 1, egg.entityGeneration);
     }
     for (const [key, view] of this.eggs) if (!eggKeys.has(key)) { view.hide(); this.idleEggs.push(view); this.eggs.delete(key); }
@@ -825,16 +903,17 @@ export class KrakenRenderer {
     this.idleTentacles.length = 0; this.idleEggs.length = 0;
     this.spines.clear();
     this.parts.clear(); this.fallbackSlots.clear(); this.eggs.clear(); this.contacts.clear(); this.contactSeen.clear(); this.impacts.clear();
-    this.claw.clear(); this.effects.clear(); this.waterMotion = null; this.bossKey = ''; this.revision = -1;
+    this.claw.clear(); this.effects.clear(); this.glow.clear(); this.lights.clear(); this.waterMotion = null; this.bossKey = ''; this.revision = -1;
   }
   private impulse(id: string, at: number, pose: KrakenPose, now: number): void {
     if (!this.lastBody || now - this.lastBody.now >= 150 || this.lastBody.now >= at || now < at || now - at >= 150) return;
     const impulse = impactLight({ sourceX: pose.x, sourceY: pose.y });
     this.options.feedback?.request({ ...impulse, id: `kraken-${id}`, amplitudePx: impulse.amplitudePx * .45 });
+    if (id === 'roar') this.options.postFx?.('krakenRoar');
   }
   destroy(): void {
     if (this.destroyed) return;
-    this.clear(); this.destroyed = true; this.claw.destroy(); this.effects.destroy();
+    this.clear(); this.destroyed = true; this.claw.destroy(); this.effects.destroy(); this.glow.destroy();
   }
   get gpuBytes(): number { return (this.body?.gpuBytes ?? 0) + this.effects.gpuBytes
     + [...this.parts.values()].reduce((sum, p) => sum + p.view.gpuBytes, 0)

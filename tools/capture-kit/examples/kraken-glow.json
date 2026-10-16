@@ -1,0 +1,299 @@
+{
+ "name": "kraken-glow",
+ "description": "Kraken glow pass: eyes, eggs, suckers and boss light at 18:30.",
+ "viewport": {
+  "width": 1280,
+  "height": 720
+ },
+ "board": {
+  "columns": 4,
+  "tileWidth": 520
+ },
+ "hud": false,
+ "scenario": {
+  "classId": "inspector_gadachs",
+  "seed": 12345,
+  "mapId": "4"
+ },
+ "times": [
+  {
+   "id": "dusk",
+   "timeOfDay": 1110,
+   "label": "18:30"
+  }
+ ],
+ "layouts": [
+  {
+   "id": "map20"
+  }
+ ],
+ "warmupFrames": 30,
+ "setup": [
+  {
+   "op": "js",
+   "code": "const r = await dev.run({ action: \"krakenMission\", performance: true }); if (r && r.ok === false) throw Error(r.error); const w = await dev.whenReady(170000); if (!w.ok) throw Error(w.error);"
+  },
+  {
+   "action": "options",
+   "values": {
+    "timeOfDay": 1110
+   }
+  },
+  {
+   "op": "mark"
+  }
+ ],
+ "shots": [
+  {
+   "id": "i1",
+   "label": "Intro +2.45 s: Augen zünden",
+   "do": [
+    {
+     "op": "ms",
+     "ms": 2450
+    }
+   ]
+  },
+  {
+   "id": "i2",
+   "label": "Intro +2.65 s: Brüllen",
+   "do": [
+    {
+     "op": "ms",
+     "ms": 200
+    }
+   ]
+  },
+  {
+   "id": "i3",
+   "label": "Intro +3.1 s",
+   "do": [
+    {
+     "op": "ms",
+     "ms": 450
+    }
+   ]
+  },
+  {
+   "id": "f1",
+   "label": "Kampf: Augen (Zoom 1.8)",
+   "do": [
+    {
+     "op": "ms",
+     "ms": 3000
+    },
+    {
+     "op": "camera",
+     "at": {
+      "gridX": 35,
+      "gridY": 22
+     },
+     "zoom": 1.8
+    },
+    {
+     "op": "step",
+     "frames": 20
+    }
+   ]
+  },
+  {
+   "id": "ink1",
+   "label": "Tinte lädt (+0.8 s)",
+   "do": [
+    {
+     "action": "krakenTarget",
+     "gridX": 36,
+     "gridY": 34
+    },
+    {
+     "op": "ms",
+     "ms": 400
+    },
+    {
+     "action": "krakenAct",
+     "act": "ink"
+    },
+    {
+     "op": "ms",
+     "ms": 800
+    }
+   ]
+  },
+  {
+   "id": "ink2",
+   "label": "Tinte gespuckt (+1.3 s)",
+   "do": [
+    {
+     "op": "ms",
+     "ms": 500
+    }
+   ]
+  },
+  {
+   "id": "egg1",
+   "label": "Eier gelandet (+2.3 s)",
+   "do": [
+    {
+     "op": "ms",
+     "ms": 2500
+    },
+    {
+     "action": "krakenAct",
+     "act": "eggs"
+    },
+    {
+     "op": "camera",
+     "at": {
+      "gridX": 36,
+      "gridY": 31
+     },
+     "zoom": 1.7
+    },
+    {
+     "op": "ms",
+     "ms": 2300
+    }
+   ]
+  },
+  {
+   "id": "egg2",
+   "label": "Eier spät (+4.5 s)",
+   "do": [
+    {
+     "op": "ms",
+     "ms": 2200
+    }
+   ]
+  },
+  {
+   "id": "egg3",
+   "label": "Schlupf (+5.25 s)",
+   "do": [
+    {
+     "op": "ms",
+     "ms": 750
+    }
+   ]
+  },
+  {
+   "id": "t1",
+   "label": "Abgetaucht +2.6 s",
+   "do": [
+    {
+     "action": "krakenAct",
+     "act": "dive"
+    },
+    {
+     "op": "camera",
+     "at": {
+      "gridX": 36,
+      "gridY": 31
+     },
+     "zoom": 1.4
+    },
+    {
+     "op": "ms",
+     "ms": 2600
+    }
+   ]
+  },
+  {
+   "id": "t2",
+   "label": "Tentakel +3.6 s",
+   "do": [
+    {
+     "op": "ms",
+     "ms": 1000
+    }
+   ]
+  },
+  {
+   "id": "t3",
+   "label": "Tentakel +4.4 s",
+   "do": [
+    {
+     "op": "ms",
+     "ms": 800
+    }
+   ]
+  },
+  {
+   "id": "t4",
+   "label": "Tentakel +5.2 s",
+   "do": [
+    {
+     "op": "ms",
+     "ms": 800
+    }
+   ]
+  },
+  {
+   "id": "s1",
+   "label": "Auftauchen: Glut aus der Tiefe",
+   "do": [
+    {
+     "op": "camera",
+     "at": {
+      "gridX": 35,
+      "gridY": 22
+     },
+     "zoom": 1.4
+    },
+    {
+     "op": "ms",
+     "ms": 5750
+    }
+   ]
+  },
+  {
+   "id": "s2",
+   "label": "Auftauchen: Augen zünden",
+   "do": [
+    {
+     "op": "ms",
+     "ms": 650
+    }
+   ]
+  },
+  {
+   "id": "a1",
+   "label": "Ufer: Brüllen (Stufe 2)",
+   "do": [
+    {
+     "op": "ms",
+     "ms": 2500
+    },
+    {
+     "action": "krakenHp",
+     "hp": 200
+    },
+    {
+     "action": "krakenAct",
+     "act": "ashore"
+    },
+    {
+     "op": "camera",
+     "at": {
+      "gridX": 35,
+      "gridY": 26
+     },
+     "zoom": 1.1
+    },
+    {
+     "op": "ms",
+     "ms": 470
+    }
+   ]
+  },
+  {
+   "id": "a2",
+   "label": "An Land",
+   "do": [
+    {
+     "op": "ms",
+     "ms": 2600
+    }
+   ]
+  }
+ ]
+}

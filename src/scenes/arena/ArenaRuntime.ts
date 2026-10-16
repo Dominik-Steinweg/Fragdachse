@@ -809,6 +809,11 @@ export class ArenaRuntime {
     return this.flow.getWorldEnemyManager()?.getMaxBossPhase() ?? 0;
   }
 
+  /** Presentation-only boss look stage (the kraken ashore); never a gameplay or HP phase. */
+  getBossVisualStage(): number {
+    return this.krakenPresentation?.krakenVisualStage() ?? 0;
+  }
+
   getConstructionCapacityForPlayer(playerId: string): number | undefined {
     return this.flow.getConstructionCapacityForPlayer(playerId);
   }

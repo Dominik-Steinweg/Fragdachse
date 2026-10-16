@@ -28,8 +28,10 @@ export interface WorldGrade {
 export interface WorldGradeInputs {
   readonly skyState: SkyState;
   readonly isVoidMap: boolean;
-  /** Optional authored boss presentation profile; currently only Map 15 uses one. */
+  /** Optional authored boss presentation profile (Map 15 void hunter, the kraken). */
   readonly bossVisualProfile?: WorldGradeBossVisualProfile;
+  /** Presentation stage of a profile whose boss changes look without an HP phase (the kraken ashore = 2). */
+  readonly bossVisualStage?: number;
   /** 0 = keine Bossphase. */
   readonly bossPhase: number;
   /** 0 … 1, rein visuell weich eingeblendet; fehlt bei direkter Auflösung = voll aktiv. */
@@ -86,7 +88,7 @@ export const POST_FX_PULSE_CLAMPS = {
   bloomAmount: [0, 1.2],
 } as const;
 
-export type WorldGradeBossVisualProfile = 'void-hunter';
+export type WorldGradeBossVisualProfile = 'void-hunter' | 'abyssal-kraken';
 
 /**
  * Map-15-spezifischer Boss-Look. Die Zielwerte ziehen die Welt deutlich in ein dunkles,
@@ -112,6 +114,34 @@ export const VOID_HUNTER_BOSS_VISUAL_PROFILE = {
     saturationDelta: 0.10,
     bloomBoost: 0.20,
     vignetteBoost: 0.03,
+  },
+} as const;
+
+/**
+ * Abyssal kraken (Map 20 at a fixed dusk): a cool plum grade under the void pond instead of the warm generic
+ * boss tint, which muddied both the violet water and the ember eyes. No darkening: the dusk stays readable
+ * and the glow carries the menace. Stage two (ashore) leans further into the void.
+ */
+export const ABYSSAL_KRAKEN_BOSS_VISUAL_PROFILE = {
+  phaseOne: {
+    tint: 0x4a1f6e,
+    tintStrength: 0.26,
+    contrastBoost: 0.05,
+    brightnessDelta: 0,
+    temperature: -0.25,
+    saturationDelta: 0,
+    bloomBoost: 0.06,
+    vignetteBoost: 0.04,
+  },
+  phaseTwo: {
+    tint: 0x5a1a7a,
+    tintStrength: 0.32,
+    contrastBoost: 0.08,
+    brightnessDelta: -0.01,
+    temperature: -0.30,
+    saturationDelta: 0.02,
+    bloomBoost: 0.10,
+    vignetteBoost: 0.06,
   },
 } as const;
 
@@ -245,10 +275,9 @@ export function resolveBaseGrade(inputs: WorldGradeInputs, atmosphere: Partial<W
     contrast += 0.04;
   }
 
-  if (bossActive && inputs.bossVisualProfile === 'void-hunter') {
-    const profile = inputs.bossPhase >= 2
-      ? VOID_HUNTER_BOSS_VISUAL_PROFILE.phaseTwo
-      : VOID_HUNTER_BOSS_VISUAL_PROFILE.phaseOne;
+  if (bossActive && (inputs.bossVisualProfile === 'void-hunter' || inputs.bossVisualProfile === 'abyssal-kraken')) {
+    const profiles = inputs.bossVisualProfile === 'void-hunter' ? VOID_HUNTER_BOSS_VISUAL_PROFILE : ABYSSAL_KRAKEN_BOSS_VISUAL_PROFILE;
+    const profile = Math.max(inputs.bossPhase, inputs.bossVisualStage ?? 0) >= 2 ? profiles.phaseTwo : profiles.phaseOne;
     tint = interpolateTint(tint, profile.tint, bossVisualIntensity);
     tintStrength += (profile.tintStrength - tintStrength) * bossVisualIntensity;
     contrast += profile.contrastBoost * bossVisualIntensity;

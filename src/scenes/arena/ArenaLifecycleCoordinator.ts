@@ -766,6 +766,7 @@ export class ArenaLifecycleCoordinator {
     this.coopMissionPresentationUi = coopMissionPresentation?.createUiPort({
       getPersistentBaseSite: () => this.worldRuntime?.context.persistentBaseSite ?? null,
       cameraFeedback: ctx.visualFeedback.camera,
+      postFxPulse: event => ctx.visualFeedback.pulsePostFx(event),
       getWorldLayout: () => this.worldRuntime?.presentation?.layout ?? null,
       getWorldMetrics: () => this.worldRuntime?.context.metrics ?? null,
       centerHUD: ctx.centerHUD,

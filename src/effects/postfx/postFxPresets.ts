@@ -9,12 +9,13 @@
  * Die Liste steht an einer Stelle, damit im Review nachvollziehbar bleibt, was global wirkt.
  */
 
-import { VOID_FIRE_COLOR } from '../../config';
+import { VOID_FIRE_COLOR, VOID_PALETTE } from '../../config';
 import type { PostFxPulse } from './PostFxComposer';
 
 export const POST_FX_EVENTS = [
   'heavyLocalHit',
   'bossPhaseChange',
+  'krakenRoar',
   'nukeDetonation',
   'voidNukeDetonation',
   'holyDetonation',
@@ -58,6 +59,14 @@ const PRESETS: Readonly<Record<PostFxEvent, PostFxPulse>> = {
     ease: 'bossPhase',
     // Der kurze Akzent bleibt lesbar, übernimmt aber nicht mehr den dauerhaften Boss-Look.
     grade: { saturation: -0.1, contrast: 0.08, tintStrength: 0.13, vignetteStrength: 0.12 },
+  },
+
+  /** Brüllen des Kraken (Auftauchen im Intro, Gang an Land): violetter Lichtstoß mit Bloom, kein Weißblitz. */
+  krakenRoar: {
+    priority: POST_FX_PRIORITY.bossPhase,
+    durationMs: 900,
+    ease: 'impulse',
+    grade: { bloomAmount: 0.45, tint: VOID_PALETTE.primary, tintStrength: 0.18, contrast: 0.06, vignetteStrength: 0.08 },
   },
 
   /** Normale Nuke: warmer Belichtungsstoß mit kurzer Bloom-Spitze. */
