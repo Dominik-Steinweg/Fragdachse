@@ -64,6 +64,15 @@ Hindernis und die Rechte der Einheit; der Schaden läuft weiterhin durch Combat.
 [EnemyIntentAndBreach.test.ts](../../tests/EnemyIntentAndBreach.test.ts) und
 [NavigationBodyGraph.test.ts](../../tests/NavigationBodyGraph.test.ts).
 
+Amphibische Gegner (`amphibious`) navigieren über ein eigenes Körperprofil, dessen Graph Wasser nicht
+als Hindernis führt und Wasser nach dem Schwimmtempo gewichtet; ihre Angriffsplätze bleiben an Land.
+Getaucht gelten sie über `EnemyEntity.isBurrowed()` als nicht treffbar und nicht angriffsfähig. Neue
+Ziel-, Treffer- und Angriffsprüfungen verwenden deshalb `isBurrowed()` und nie das Feld `burrowed`
+direkt. Der Zustand wird als `submerged` repliziert und erzeugt keine Grabeffekte. Ein Wasser-Spawn
+(`spawnArea.medium: 'water'`) ist nur für amphibische Arten zulässig. Dies sichern
+[MiniKraken.test.ts](../../tests/MiniKraken.test.ts) und
+[EnemyIntentAndBreach.test.ts](../../tests/EnemyIntentAndBreach.test.ts).
+
 Authored Spawn-Bereiche und Konstrukte bleiben im 32-px-Weltraster. Navigationsindizes gehören
 zum separaten Punktraster und dürfen nicht als World-Zellen materialisiert werden. Der Spawn-Executor
 prüft den vollständigen Körper an genau der Position, die er erzeugt; ungeprüfter Jitter ist dort unzulässig.
