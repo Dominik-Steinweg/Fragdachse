@@ -389,15 +389,19 @@ def ring_weights(points, cuts, names, blend):
 
 
 def build_leg(c, leg, spec, side, material, rest=None):
+    """Thigh, shin with knee, and paw as separate meshes. The folded rest pose packs them tightly,
+    so each keeps its own shadow rest volume and unfolds cleanly in the hop."""
     joints = leg_points(spec, side)
-    tube = horn(c, f'{leg} warty limb', joints, spec['radii'], material, sides=14)
-    sampled, _ = smooth_path(joints, spec['radii'])
+    upper = horn(c, f'{leg} warty thigh', joints[:2], spec['radii'][:2], material, sides=14)
+    lower = horn(c, f'{leg} warty shin', joints[1:], spec['radii'][1:], material, sides=14)
+    knee = ell(c, f'{leg} rounded knee', joints[1], (spec['radii'][1],) * 3, material)
+    sampled, _ = smooth_path(joints[1:], spec['radii'][1:])
     paw_mesh, end = paw(c, leg, spec, side, material, webbed=leg.startswith('rear'), stump=rest)
-    for ob in (tube, paw_mesh):
+    for ob in (upper, lower, knee, paw_mesh):
         paint_limb(ob, joints + [end], tip=end if ob is paw_mesh else None)
         write_rest(ob)
         c.paint_form_mask(ob, lambda p: .62 + .38 * max(0, min(1, p.z / .3)))
-    return tube, sampled, paw_mesh, joints, end
+    return dict(upper=upper, lower=lower, knee=knee, sampled=sampled, paw=paw_mesh, joints=joints, end=end)
 
 
 def details(c, surface, mats):
@@ -512,7 +516,8 @@ def build(c, spec):
     bone('cross', (CROSS[0], CROSS[1], cz), (CROSS[0], CROSS[1] + .5, cz), 'body')
     for side, eye in eyes.items():
         bone('lid_l' if side < 0 else 'lid_r', eye['centre'], eye['centre'] + eye['axis'] * .2, 'head', up=eye['up'])
-    for leg, (_, _, _, joints, end) in legs.items():
+    for leg, parts in legs.items():
+        joints, end = parts['joints'], parts['end']
         bone(f'{leg}_upper', joints[0], joints[1], 'body')
         bone(f'{leg}_lower', joints[1], joints[2], f'{leg}_upper', connect=True)
         bone(f'{leg}_foot', joints[2], end, f'{leg}_lower', connect=True)
@@ -546,22 +551,24 @@ def build(c, spec):
     rigid(throat, 'throat')
     rigid(lower_lip, 'jaw'); rigid(floor, 'jaw')
     rigid(tongue, 'tongue'); rigid(tongue_tip, 'tongue_tip')
-    for leg, (tube, sampled, paw_mesh, joints, end) in legs.items():
-        arc = [0]
-        for a, b in zip(sampled, sampled[1:]):
-            arc.append(arc[-1] + (Vector(b) - Vector(a)).length)
-        steps = (len(sampled) - 1) // (len(joints) - 1)
-        knee, last = arc[steps], arc[-1]
-        # The hip/shoulder root sits deep in the body, so the upper segment turns rigidly about it.
-        ring, _ = ring_weights(sampled, [knee, last], [f'{leg}_upper', f'{leg}_lower', f'{leg}_foot'], [.08, .06])
-        sides = len(tube.data.vertices) // len(sampled)
-        tube.parent = carriage
-        bind(tube, rig, [ring[i // sides] for i in range(len(tube.data.vertices))])
-        rigid(paw_mesh, f'{leg}_foot')
+    for leg, parts in legs.items():
+        # The hip/shoulder root sits deep in the body, so the thigh turns rigidly about it; the
+        # knee ball sits on the shin's pivot and the shin blends into the paw at the ankle.
+        rigid(parts['upper'], f'{leg}_upper')
+        rigid(parts['knee'], f'{leg}_lower')
+        sampled, shin = parts['sampled'], parts['lower']
+        length = sum((Vector(q) - Vector(p)).length for p, q in zip(sampled, sampled[1:]))
+        ring, _ = ring_weights(sampled, [length], [f'{leg}_lower', f'{leg}_foot'], [.06])
+        sides = len(shin.data.vertices) // len(sampled)
+        shin.parent = carriage
+        bind(shin, rig, [ring[i // sides] for i in range(len(shin.data.vertices))])
+        rigid(parts['paw'], f'{leg}_foot')
     # Parts that hide inside the head at rest or swing clear of the body (the hop's kicked-back
     # legs) get their own shadow rest volumes, so the mesh proxy never bridges or loses them.
     for group, objects in (('tongue', (tongue, tongue_tip)), ('throat', (throat,)), ('jaw', (lower_lip, floor)),
-                           *((leg, (legs[leg][0], legs[leg][2])) for leg in LEGS)):
+                           *((f'{leg}-{name}', group) for leg in LEGS for name, group in (
+                               ('upper', (legs[leg]['upper'],)), ('lower', (legs[leg]['lower'], legs[leg]['knee'])),
+                               ('paw', (legs[leg]['paw'],))))):
         for ob in objects:
             ob['meshUnionGroup'] = group
 
