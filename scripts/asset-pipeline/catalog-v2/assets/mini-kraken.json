@@ -19,11 +19,11 @@
     0.5
   ],
   "description": {
-    "silhouette": "Jungtier des Abgrundkraken in Draufsicht: großer, weicher, nach Süden gerundeter Mantelsack hinter einem kurzen Kopf, acht kurze dicke Arme (vier je Seite) mit eingerollten Spitzen und Schwimmhäuten; vorn ein kleiner Mundkranz.",
+    "silhouette": "Jungtier des Abgrundkraken in Draufsicht: großer, weicher, nach Süden gerundeter Mantelsack hinter einem kurzen Kopf, acht kurze dicke Arme (vier je Seite) mit eingerollten Spitzen und Schwimmhäuten; zwei kleine zurückgefegte Flossen an der Mantelspitze wie beim Boss.",
     "colors": "Dunkles Indigo-Violett des Bosses mit kühlen, blassen und leicht durchscheinenden Mantelrändern, dunkler Tintensack im Mantel, vier glutrote Augen und violett leuchtende Saugnapfreihen an den eingerollten Spitzen.",
     "anatomy": "Eigener kurzer Mantel mit Kopf, vier übergroße nach vorn blickende Augen wie beim Boss (Hauptaugen eyeLeft/eyeRight, Nebenaugen als zusätzliches Augenpaar), Kranz aus acht Armketten mit Schwimmhäuten, Mantel-Knochen für Pumpen und Tintenstoß; claw = Tintenspucken, leap = Ansprung mit Marker launch/land.",
     "materials": "Kraken-V8-Haut und -Augen (kraken_skin_v8, kraken_eye_parts) mit erhöhter Transluzenz, eingebrannte violette Emission der Saugnäpfe; keine Kameraneigung, kein Comic-Look.",
-    "stage": "Form- und Entwurfsphase (Gate GA ausstehend)."
+    "stage": "Produktion: V2-Quelle mk-v1-r1 (standard, 128 px ausgewählt, archiviert), abgenommen an Gate GA als Form form-f und Entwurf draft-b; 63 Posen mit vier Augenankern je Frame."
   },
   "requiredClips": [
     "move",

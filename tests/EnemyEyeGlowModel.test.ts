@@ -60,6 +60,25 @@ describe('frame-bound enemy eyes', () => {
     expect(model.eyeCount).toBe(0); expect(model.lightCount).toBe(0);
   });
 
+  it('draws every extra eye pair of a many-eyed enemy, kept apart by the nearest eye', () => {
+    // The kraken brood carries a second eye pair as `extra`; the style comes from the enemy kind.
+    const many = PIPELINE_ASSETS.find(a => a.eyeAnchors?.frames[0].extra?.length)!;
+    expect(many).toBeDefined();
+    const model = new EnemyEyeGlowModel(), source = enemy();
+    model.update([{ ...source, sprite: { ...source.sprite, texture: { key: many.sheetTextureKey } } }], view);
+    const anchors = many.eyeAnchors!.frames[0];
+    expect(model.eyeCount).toBe(2 + anchors.extra!.length);
+    expect(model.lightCount).toBe(1);
+    expect(model.eyes[2].x).toBeCloseTo(100 + (anchors.extra![0].x * 128 - 64) * .25);
+    const eyes = model.eyes.slice(0, model.eyeCount);
+    for (const eye of eyes) {
+      const nearest = Math.min(...eyes.filter(other => other !== eye).map(other => Math.hypot(eye.x - other.x, eye.y - other.y)));
+      expect(eye.spacing).toBeCloseTo(nearest);
+    }
+    const mean = eyes.reduce((sum, eye) => sum + eye.x, 0) / eyes.length;
+    expect(model.lights[0].x).toBeCloseTo(mean + (100 - mean) * .35);
+  });
+
   it('keeps edge lights and follows sprite opacity', () => {
     const model = new EnemyEyeGlowModel(), source = enemy();
     model.update([{ ...source, sprite: { ...source.sprite, x: -5, alpha: .5 } }], view);

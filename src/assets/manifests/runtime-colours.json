@@ -697,6 +697,18 @@
       "visiblePixelSha256": "9b3a3d741347ae6f5f2e84d67c8b46e38ebdb23beab2469f701a8bc67ccb59b4",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/sprites/pipeline-v2/mini-kraken/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/mini-kraken/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/mini-kraken/sheet.png",
+      "width": 1056,
+      "height": 1056,
+      "sourceBytes": 655733,
+      "downloadBytes": 533010,
+      "sourceSha256": "b8cace9c3651daff114970f6ca41fe2571b91988c4d55ca90eb732c312823450",
+      "sha256": "23f89077be305063c0b926f0db6afe5aeb6b974cd5f8c4e29017062ccf245e7c",
+      "visiblePixelSha256": "8e64828d3946a52304e5f7d29dc2a2a6963361cbf422b5d698b8f3176db76d3c",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/sprites/pipeline-v2/mortar-badger/mesh/enemy-mesh-mortar-a3a-14-claw/beauty-128.png": {
       "file": "assets/sprites/pipeline-v2/mortar-badger/mesh/enemy-mesh-mortar-a3a-14-claw/beauty-128.webp",
       "source": "assets/sprites/pipeline-v2/mortar-badger/mesh/enemy-mesh-mortar-a3a-14-claw/beauty-128.png",
