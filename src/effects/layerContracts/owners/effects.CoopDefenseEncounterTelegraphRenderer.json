@@ -1,0 +1,159 @@
+{
+  "owner": "effects/CoopDefenseEncounterTelegraphRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.graphics/setDepth/0",
+        "expression": "DEPTH_FX",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "generateTextures/edge/setDepth/0",
+        "expression": "DEPTH_FX - 0.1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "generateTextures/haze/setDepth/0",
+        "expression": "DEPTH_FX - 0.2",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "generateTextures/drift/setDepth/0",
+        "expression": "DEPTH_FX + 0.1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "generateTextures/crest/setDepth/0",
+        "expression": "DEPTH_FX + 0.15",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/CoopDefenseEncounterTelegraphRenderer.ts:module/this.graphics/setDepth/0",
+      "owner": "effects/CoopDefenseEncounterTelegraphRenderer.ts",
+      "component": "module/this.graphics/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.graphics/setDepth/0",
+        "expression": "DEPTH_FX"
+      }
+    },
+    {
+      "id": "cpu:effects/CoopDefenseEncounterTelegraphRenderer.ts:generateTextures/edge/setDepth/0",
+      "owner": "effects/CoopDefenseEncounterTelegraphRenderer.ts",
+      "component": "generateTextures/edge/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        24.9
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "generateTextures/edge/setDepth/0",
+        "expression": "DEPTH_FX - 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/CoopDefenseEncounterTelegraphRenderer.ts:generateTextures/haze/setDepth/0",
+      "owner": "effects/CoopDefenseEncounterTelegraphRenderer.ts",
+      "component": "generateTextures/haze/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        24.8
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "generateTextures/haze/setDepth/0",
+        "expression": "DEPTH_FX - 0.2"
+      }
+    },
+    {
+      "id": "cpu:effects/CoopDefenseEncounterTelegraphRenderer.ts:generateTextures/drift/setDepth/0",
+      "owner": "effects/CoopDefenseEncounterTelegraphRenderer.ts",
+      "component": "generateTextures/drift/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.1
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "generateTextures/drift/setDepth/0",
+        "expression": "DEPTH_FX + 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/CoopDefenseEncounterTelegraphRenderer.ts:generateTextures/crest/setDepth/0",
+      "owner": "effects/CoopDefenseEncounterTelegraphRenderer.ts",
+      "component": "generateTextures/crest/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.15
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "generateTextures/crest/setDepth/0",
+        "expression": "DEPTH_FX + 0.15"
+      }
+    }
+  ]
+}

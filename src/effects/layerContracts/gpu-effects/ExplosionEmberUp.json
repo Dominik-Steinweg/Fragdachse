@@ -1,0 +1,24 @@
+{
+  "name": "ExplosionEmberUp",
+  "contract": {
+    "id": "gpu:ExplosionEmberUp",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ExplosionEmberUp",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      25
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionEmberUp"
+    ]
+  }
+}

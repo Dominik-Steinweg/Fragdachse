@@ -1,0 +1,37 @@
+{
+  "owner": "effects/kraken/KrakenReviewEffectRenderer.ts",
+  "source": {
+    "sites": [
+      {
+        "key": "quad/q.object/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "blends": [],
+    "cameras": [],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/kraken/KrakenReviewEffectRenderer.ts:quad/q.object/setDepth/0",
+      "owner": "effects/kraken/KrakenReviewEffectRenderer.ts",
+      "component": "quad/q.object/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "quad/q.object/setDepth/0",
+        "expression": "depth"
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "ProjectileBurn",
+  "contract": {
+    "id": "lane:ProjectileBurn",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "ProjectileBurn",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      15.34
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "L"
+    ],
+    "role": "effect"
+  }
+}

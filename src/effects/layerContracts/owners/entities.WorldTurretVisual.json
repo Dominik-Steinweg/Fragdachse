@@ -1,0 +1,72 @@
+{
+  "owner": "entities/WorldTurretVisual.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createWorldTurretVisual/scene.add/setDepth/0",
+        "expression": "DEPTH.ROCKS + 0.1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createWorldTurretVisual/scene.add/setDepth/1",
+        "expression": "DEPTH.ROCKS + 0.2",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:entities/WorldTurretVisual.ts:createWorldTurretVisual/scene.add/setDepth/0",
+      "owner": "entities/WorldTurretVisual.ts",
+      "component": "createWorldTurretVisual/scene.add/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.1
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createWorldTurretVisual/scene.add/setDepth/0",
+        "expression": "DEPTH.ROCKS + 0.1"
+      }
+    },
+    {
+      "id": "cpu:entities/WorldTurretVisual.ts:createWorldTurretVisual/scene.add/setDepth/1",
+      "owner": "entities/WorldTurretVisual.ts",
+      "component": "createWorldTurretVisual/scene.add/setDepth/1",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.2
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createWorldTurretVisual/scene.add/setDepth/1",
+        "expression": "DEPTH.ROCKS + 0.2"
+      }
+    }
+  ]
+}

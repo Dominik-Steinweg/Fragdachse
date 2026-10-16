@@ -1,0 +1,47 @@
+{
+  "owner": "ui/DawnHUD.ts",
+  "notes": [
+    "Dawn UI images inherit the existing card/modal container depth and clarity camera.",
+    "HudCard owns counter icons; the merchant owns tabs, cards and recalibration within one modal."
+  ],
+  "source": {
+    "sites": [
+      {
+        "key": "module/this.card.root/setDepth/0",
+        "expression": "DEPTH.OVERLAY",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "blends": [],
+    "cameras": [
+      "promoteToClarityCamera(scene, this.card.root)"
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/DawnHUD.ts:module/this.card.root/setDepth/0",
+      "owner": "ui/DawnHUD.ts",
+      "component": "module/this.card.root/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        100
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.card.root/setDepth/0",
+        "expression": "DEPTH.OVERLAY"
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "PowerUpPedestalSpark",
+  "contract": {
+    "id": "gpu:PowerUpPedestalSpark",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "PowerUpPedestalSpark",
+    "height": "ground",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      7.95
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "M"
+    ],
+    "role": "effect",
+    "lanes": [
+      "PowerUpPedestal"
+    ]
+  }
+}

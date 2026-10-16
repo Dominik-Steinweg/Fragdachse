@@ -1,0 +1,23 @@
+{
+  "owner": "effects/gpu/EnergyShieldGpuLayer.ts",
+  "gpuLayers": [
+    {
+      "id": "energy-shield:membrane",
+      "owner": "effects/gpu/EnergyShieldGpuLayer.ts",
+      "component": "membrane",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.2
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect"
+    }
+  ]
+}

@@ -1,0 +1,306 @@
+{
+  "owner": "effects/BiteRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "Phaser.BlendModes.NORMAL",
+      "makeAdditive"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "playSwing/slash/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.04",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playClawWake/wake/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.08",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playVolumeParticles/blood/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playVolumeParticles/flecks/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.11",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playImpactBurst/mark/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.14",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playImpactBurst/gore/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.145",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playImpactBurst/mist/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.146",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playImpactBurst/blood/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.16",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playImpactBurst/chips/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.17",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playAirSnap/snap/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.12",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/BiteRenderer.ts:playSwing/slash/setDepth/0",
+      "owner": "effects/BiteRenderer.ts",
+      "component": "playSwing/slash/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        16.04
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playSwing/slash/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.04"
+      }
+    },
+    {
+      "id": "cpu:effects/BiteRenderer.ts:playClawWake/wake/setDepth/0",
+      "owner": "effects/BiteRenderer.ts",
+      "component": "playClawWake/wake/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        16.08
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playClawWake/wake/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.08"
+      }
+    },
+    {
+      "id": "cpu:effects/BiteRenderer.ts:playVolumeParticles/blood/createEmitter/0",
+      "owner": "effects/BiteRenderer.ts",
+      "component": "playVolumeParticles/blood/createEmitter/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        16.1
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playVolumeParticles/blood/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/BiteRenderer.ts:playVolumeParticles/flecks/createEmitter/0",
+      "owner": "effects/BiteRenderer.ts",
+      "component": "playVolumeParticles/flecks/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.11
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playVolumeParticles/flecks/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.11"
+      }
+    },
+    {
+      "id": "cpu:effects/BiteRenderer.ts:playImpactBurst/mark/setDepth/0",
+      "owner": "effects/BiteRenderer.ts",
+      "component": "playImpactBurst/mark/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        16.14
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpactBurst/mark/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.14"
+      }
+    },
+    {
+      "id": "cpu:effects/BiteRenderer.ts:playImpactBurst/gore/setDepth/0",
+      "owner": "effects/BiteRenderer.ts",
+      "component": "playImpactBurst/gore/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        16.145
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpactBurst/gore/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.145"
+      }
+    },
+    {
+      "id": "cpu:effects/BiteRenderer.ts:playImpactBurst/mist/setDepth/0",
+      "owner": "effects/BiteRenderer.ts",
+      "component": "playImpactBurst/mist/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.146
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpactBurst/mist/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.146"
+      }
+    },
+    {
+      "id": "cpu:effects/BiteRenderer.ts:playImpactBurst/blood/createEmitter/0",
+      "owner": "effects/BiteRenderer.ts",
+      "component": "playImpactBurst/blood/createEmitter/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        16.16
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpactBurst/blood/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.16"
+      }
+    },
+    {
+      "id": "cpu:effects/BiteRenderer.ts:playImpactBurst/chips/createEmitter/0",
+      "owner": "effects/BiteRenderer.ts",
+      "component": "playImpactBurst/chips/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.17
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpactBurst/chips/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.17"
+      }
+    },
+    {
+      "id": "cpu:effects/BiteRenderer.ts:playAirSnap/snap/setDepth/0",
+      "owner": "effects/BiteRenderer.ts",
+      "component": "playAirSnap/snap/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        16.12
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playAirSnap/snap/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.12"
+      }
+    }
+  ]
+}

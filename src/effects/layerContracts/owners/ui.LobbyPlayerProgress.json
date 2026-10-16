@@ -1,0 +1,73 @@
+{
+  "owner": "ui/LobbyPlayerProgress.ts",
+  "source": {
+    "blends": [],
+    "cameras": [
+      "promoteToClarityCamera(this.scene, baseTooltipRoot)",
+      "promoteToClarityCamera(this.scene, tooltipRoot)"
+    ],
+    "sites": [
+      {
+        "key": "build/tooltipRoot/setDepth/0",
+        "expression": "DEPTH.OVERLAY + 2",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "build/baseTooltipRoot/setDepth/0",
+        "expression": "DEPTH.OVERLAY + 2",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/LobbyPlayerProgress.ts:build/tooltipRoot/setDepth/0",
+      "owner": "ui/LobbyPlayerProgress.ts",
+      "component": "build/tooltipRoot/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        102
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "build/tooltipRoot/setDepth/0",
+        "expression": "DEPTH.OVERLAY + 2"
+      }
+    },
+    {
+      "id": "cpu:ui/LobbyPlayerProgress.ts:build/baseTooltipRoot/setDepth/0",
+      "owner": "ui/LobbyPlayerProgress.ts",
+      "component": "build/baseTooltipRoot/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        102
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "build/baseTooltipRoot/setDepth/0",
+        "expression": "DEPTH.OVERLAY + 2"
+      }
+    }
+  ]
+}

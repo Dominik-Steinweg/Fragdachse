@@ -1,0 +1,24 @@
+{
+  "name": "LeafBlowerDust",
+  "contract": {
+    "id": "gpu:LeafBlowerDust",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "LeafBlowerDust",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      16.075
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "L"
+    ],
+    "role": "effect",
+    "lanes": [
+      "WorldDebris"
+    ]
+  }
+}

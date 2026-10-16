@@ -1,0 +1,21 @@
+{
+  "name": "PowerUpPedestal",
+  "contract": {
+    "id": "lane:PowerUpPedestal",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "PowerUpPedestal",
+    "height": "ground",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      7.95
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "M"
+    ],
+    "role": "effect"
+  }
+}

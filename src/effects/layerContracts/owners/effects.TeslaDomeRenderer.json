@@ -1,0 +1,70 @@
+{
+  "owner": "effects/TeslaDomeRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createVisual/depth/depth/0",
+        "expression": "DEPTH.FIRE + 0.05",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createVisual/boltDepth/boltDepth/0",
+        "expression": "DEPTH.FIRE + 0.2",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/TeslaDomeRenderer.ts:createVisual/depth/depth/0",
+      "owner": "effects/TeslaDomeRenderer.ts",
+      "component": "createVisual/depth/depth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.05
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/depth/depth/0",
+        "expression": "DEPTH.FIRE + 0.05"
+      }
+    },
+    {
+      "id": "cpu:effects/TeslaDomeRenderer.ts:createVisual/boltDepth/boltDepth/0",
+      "owner": "effects/TeslaDomeRenderer.ts",
+      "component": "createVisual/boltDepth/boltDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.2
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/boltDepth/boltDepth/0",
+        "expression": "DEPTH.FIRE + 0.2"
+      }
+    }
+  ]
+}

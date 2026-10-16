@@ -1,0 +1,24 @@
+{
+  "name": "ExplosionLowCascade",
+  "contract": {
+    "id": "gpu:ExplosionLowCascade",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ExplosionLowCascade",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      19.6
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "E"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionLowGlow"
+    ]
+  }
+}

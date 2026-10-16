@@ -1,0 +1,130 @@
+{
+  "owner": "effects/RockDestructionRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.NORMAL"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "activateFragment/image/setDepth/0",
+        "expression": "DEPTH_TRACE - 0.15",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "ensureSharedEmitters/this.sharedDustEmitter/createEmitter/0",
+        "expression": "DEPTH_TRACE - 0.3",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "ensureSharedEmitters/this.sharedDebrisEmitter/createEmitter/0",
+        "expression": "DEPTH_TRACE - 0.25",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "prewarmFragmentPool/image/setDepth/0",
+        "expression": "DEPTH_TRACE - 0.15",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/RockDestructionRenderer.ts:activateFragment/image/setDepth/0",
+      "owner": "effects/RockDestructionRenderer.ts",
+      "component": "activateFragment/image/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15.85
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "activateFragment/image/setDepth/0",
+        "expression": "DEPTH_TRACE - 0.15"
+      }
+    },
+    {
+      "id": "cpu:effects/RockDestructionRenderer.ts:ensureSharedEmitters/this.sharedDustEmitter/createEmitter/0",
+      "owner": "effects/RockDestructionRenderer.ts",
+      "component": "ensureSharedEmitters/this.sharedDustEmitter/createEmitter/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15.7
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "ensureSharedEmitters/this.sharedDustEmitter/createEmitter/0",
+        "expression": "DEPTH_TRACE - 0.3"
+      }
+    },
+    {
+      "id": "cpu:effects/RockDestructionRenderer.ts:ensureSharedEmitters/this.sharedDebrisEmitter/createEmitter/0",
+      "owner": "effects/RockDestructionRenderer.ts",
+      "component": "ensureSharedEmitters/this.sharedDebrisEmitter/createEmitter/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15.75
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "ensureSharedEmitters/this.sharedDebrisEmitter/createEmitter/0",
+        "expression": "DEPTH_TRACE - 0.25"
+      }
+    },
+    {
+      "id": "cpu:effects/RockDestructionRenderer.ts:prewarmFragmentPool/image/setDepth/0",
+      "owner": "effects/RockDestructionRenderer.ts",
+      "component": "prewarmFragmentPool/image/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15.85
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "prewarmFragmentPool/image/setDepth/0",
+        "expression": "DEPTH_TRACE - 0.15"
+      }
+    }
+  ]
+}

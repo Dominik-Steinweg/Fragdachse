@@ -1,0 +1,24 @@
+{
+  "name": "BurrowClod",
+  "contract": {
+    "id": "gpu:BurrowClod",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "BurrowClod",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      16.075
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "L"
+    ],
+    "role": "effect",
+    "lanes": [
+      "WorldDebris"
+    ]
+  }
+}

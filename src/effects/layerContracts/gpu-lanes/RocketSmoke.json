@@ -1,0 +1,21 @@
+{
+  "name": "RocketSmoke",
+  "contract": {
+    "id": "lane:RocketSmoke",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "RocketSmoke",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      16
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "L"
+    ],
+    "role": "effect"
+  }
+}

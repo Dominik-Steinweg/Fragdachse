@@ -1,0 +1,304 @@
+{
+  "owner": "entities/PlayerEntity.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.sprite/setDepth/0",
+        "expression": "DEPTH.PLAYERS",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.heldItem/HeldItemVisual/0",
+        "expression": "DEPTH.PLAYERS + 0.02",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.spawnShine/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 0.05",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.stealthShell/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 0.03",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.stealthScan/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 0.04",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.stealthAmbientParticles/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 0.01",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.stealthTrailParticles/setDepth/0",
+        "expression": "DEPTH.PLAYERS",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.armorBarBg/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.armorBarFg/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 2",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.nameLabel/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 3",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:entities/PlayerEntity.ts:module/this.sprite/setDepth/0",
+      "owner": "entities/PlayerEntity.ts",
+      "component": "module/this.sprite/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        10
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.sprite/setDepth/0",
+        "expression": "DEPTH.PLAYERS"
+      }
+    },
+    {
+      "id": "cpu:entities/PlayerEntity.ts:module/this.heldItem/HeldItemVisual/0",
+      "owner": "entities/PlayerEntity.ts",
+      "component": "module/this.heldItem/HeldItemVisual/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        10.02
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.heldItem/HeldItemVisual/0",
+        "expression": "DEPTH.PLAYERS + 0.02"
+      }
+    },
+    {
+      "id": "cpu:entities/PlayerEntity.ts:module/this.spawnShine/setDepth/0",
+      "owner": "entities/PlayerEntity.ts",
+      "component": "module/this.spawnShine/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        10.05
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.spawnShine/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 0.05"
+      }
+    },
+    {
+      "id": "cpu:entities/PlayerEntity.ts:module/this.stealthShell/setDepth/0",
+      "owner": "entities/PlayerEntity.ts",
+      "component": "module/this.stealthShell/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        10.03
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.stealthShell/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 0.03"
+      }
+    },
+    {
+      "id": "cpu:entities/PlayerEntity.ts:module/this.stealthScan/setDepth/0",
+      "owner": "entities/PlayerEntity.ts",
+      "component": "module/this.stealthScan/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        10.04
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.stealthScan/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 0.04"
+      }
+    },
+    {
+      "id": "cpu:entities/PlayerEntity.ts:module/this.stealthAmbientParticles/setDepth/0",
+      "owner": "entities/PlayerEntity.ts",
+      "component": "module/this.stealthAmbientParticles/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        10.01
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.stealthAmbientParticles/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 0.01"
+      }
+    },
+    {
+      "id": "cpu:entities/PlayerEntity.ts:module/this.stealthTrailParticles/setDepth/0",
+      "owner": "entities/PlayerEntity.ts",
+      "component": "module/this.stealthTrailParticles/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        10
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.stealthTrailParticles/setDepth/0",
+        "expression": "DEPTH.PLAYERS"
+      }
+    },
+    {
+      "id": "cpu:entities/PlayerEntity.ts:module/this.armorBarBg/setDepth/0",
+      "owner": "entities/PlayerEntity.ts",
+      "component": "module/this.armorBarBg/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        11
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.armorBarBg/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 1"
+      }
+    },
+    {
+      "id": "cpu:entities/PlayerEntity.ts:module/this.armorBarFg/setDepth/0",
+      "owner": "entities/PlayerEntity.ts",
+      "component": "module/this.armorBarFg/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        12
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.armorBarFg/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 2"
+      }
+    },
+    {
+      "id": "cpu:entities/PlayerEntity.ts:module/this.nameLabel/setDepth/0",
+      "owner": "entities/PlayerEntity.ts",
+      "component": "module/this.nameLabel/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        13
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.nameLabel/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 3"
+      }
+    }
+  ]
+}

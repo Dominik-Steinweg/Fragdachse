@@ -1,0 +1,43 @@
+{
+  "owner": "ui/CoopDefenseSecondaryObjectiveHud.ts",
+  "source": {
+    "blends": [],
+    "cameras": [
+      "promoteToClarityCamera(this.scene, this.root)"
+    ],
+    "sites": [
+      {
+        "key": "build/this.root/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/CoopDefenseSecondaryObjectiveHud.ts:build/this.root/setDepth/0",
+      "owner": "ui/CoopDefenseSecondaryObjectiveHud.ts",
+      "component": "build/this.root/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        99
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "build/this.root/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1"
+      }
+    }
+  ]
+}

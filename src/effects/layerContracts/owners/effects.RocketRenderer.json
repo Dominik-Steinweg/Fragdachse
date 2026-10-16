@@ -1,0 +1,188 @@
+{
+  "owner": "effects/RocketRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createVisual/body/setDepth/0",
+        "expression": "DEPTH.PROJECTILES",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createVisual/accent/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createVisual/glow/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/engine/setDepth/0",
+        "expression": "DEPTH.PROJECTILES",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playCollection/ring/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playCollection/burst/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 1",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/RocketRenderer.ts:createVisual/body/setDepth/0",
+      "owner": "effects/RocketRenderer.ts",
+      "component": "createVisual/body/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/body/setDepth/0",
+        "expression": "DEPTH.PROJECTILES"
+      }
+    },
+    {
+      "id": "cpu:effects/RocketRenderer.ts:createVisual/accent/setDepth/0",
+      "owner": "effects/RocketRenderer.ts",
+      "component": "createVisual/accent/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        16
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/accent/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 1"
+      }
+    },
+    {
+      "id": "cpu:effects/RocketRenderer.ts:createVisual/glow/setDepth/0",
+      "owner": "effects/RocketRenderer.ts",
+      "component": "createVisual/glow/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        14
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/glow/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 1"
+      }
+    },
+    {
+      "id": "cpu:effects/RocketRenderer.ts:createVisual/engine/setDepth/0",
+      "owner": "effects/RocketRenderer.ts",
+      "component": "createVisual/engine/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/engine/setDepth/0",
+        "expression": "DEPTH.PROJECTILES"
+      }
+    },
+    {
+      "id": "cpu:effects/RocketRenderer.ts:playCollection/ring/setDepth/0",
+      "owner": "effects/RocketRenderer.ts",
+      "component": "playCollection/ring/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playCollection/ring/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 1"
+      }
+    },
+    {
+      "id": "cpu:effects/RocketRenderer.ts:playCollection/burst/setDepth/0",
+      "owner": "effects/RocketRenderer.ts",
+      "component": "playCollection/burst/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playCollection/burst/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 1"
+      }
+    }
+  ]
+}

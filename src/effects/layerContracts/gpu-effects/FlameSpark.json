@@ -1,0 +1,24 @@
+{
+  "name": "FlameSpark",
+  "contract": {
+    "id": "gpu:FlameSpark",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "FlameSpark",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      16.1
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "L"
+    ],
+    "role": "effect",
+    "lanes": [
+      "FlameSpark"
+    ]
+  }
+}

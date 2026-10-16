@@ -1,0 +1,101 @@
+{
+  "owner": "effects/EnergyInjectorRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createVisual/halo/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 0.2",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/ring/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 0.1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/sparks/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 0.15",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/EnergyInjectorRenderer.ts:createVisual/halo/setDepth/0",
+      "owner": "effects/EnergyInjectorRenderer.ts",
+      "component": "createVisual/halo/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        14.8
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/halo/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 0.2"
+      }
+    },
+    {
+      "id": "cpu:effects/EnergyInjectorRenderer.ts:createVisual/ring/setDepth/0",
+      "owner": "effects/EnergyInjectorRenderer.ts",
+      "component": "createVisual/ring/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        14.9
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/ring/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/EnergyInjectorRenderer.ts:createVisual/sparks/setDepth/0",
+      "owner": "effects/EnergyInjectorRenderer.ts",
+      "component": "createVisual/sparks/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        14.85
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/sparks/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 0.15"
+      }
+    }
+  ]
+}

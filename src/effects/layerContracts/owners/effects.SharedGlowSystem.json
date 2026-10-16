@@ -1,0 +1,48 @@
+{
+  "owner": "effects/SharedGlowSystem.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createBandBuffer/image/setDepth/0",
+        "expression": "cameraMode === 'world' ? DEPTH.CANOPY - 0.01 : DEPTH.OVERLAY - 0.5",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/SharedGlowSystem.ts:createBandBuffer/image/setDepth/0",
+      "owner": "effects/SharedGlowSystem.ts",
+      "component": "createBandBuffer/image/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "clarityDepths": [
+        99.5
+      ],
+      "depths": [
+        19.99,
+        99.5
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "C",
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createBandBuffer/image/setDepth/0",
+        "expression": "cameraMode === 'world' ? DEPTH.CANOPY - 0.01 : DEPTH.OVERLAY - 0.5"
+      }
+    }
+  ]
+}

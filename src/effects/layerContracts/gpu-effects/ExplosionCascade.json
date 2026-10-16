@@ -1,0 +1,24 @@
+{
+  "name": "ExplosionCascade",
+  "contract": {
+    "id": "gpu:ExplosionCascade",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ExplosionCascade",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      25.12
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionCascade"
+    ]
+  }
+}

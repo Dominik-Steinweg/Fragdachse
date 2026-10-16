@@ -1,0 +1,106 @@
+{
+  "owner": "effects/StinkPlagueRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "update/body.image/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "update/wisp/setDepth/0",
+        "expression": "depth + .01",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "update/image/setDepth/0",
+        "expression": "DEPTH.SMOKE - .11",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "sprite.depth": [
+        9.95,
+        10
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/StinkPlagueRenderer.ts:update/body.image/setDepth/0",
+      "owner": "effects/StinkPlagueRenderer.ts",
+      "component": "update/body.image/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        10.17,
+        10.22
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "update/body.image/setDepth/0",
+        "expression": "depth"
+      }
+    },
+    {
+      "id": "cpu:effects/StinkPlagueRenderer.ts:update/wisp/setDepth/0",
+      "owner": "effects/StinkPlagueRenderer.ts",
+      "component": "update/wisp/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        10.18,
+        10.23
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "update/wisp/setDepth/0",
+        "expression": "depth + .01"
+      }
+    },
+    {
+      "id": "cpu:effects/StinkPlagueRenderer.ts:update/image/setDepth/0",
+      "owner": "effects/StinkPlagueRenderer.ts",
+      "component": "update/image/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        17.89
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "update/image/setDepth/0",
+        "expression": "DEPTH.SMOKE - .11"
+      }
+    }
+  ]
+}

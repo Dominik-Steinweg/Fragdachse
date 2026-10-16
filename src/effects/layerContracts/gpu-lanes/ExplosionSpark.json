@@ -1,0 +1,21 @@
+{
+  "name": "ExplosionSpark",
+  "contract": {
+    "id": "lane:ExplosionSpark",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "ExplosionSpark",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      25
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect"
+  }
+}

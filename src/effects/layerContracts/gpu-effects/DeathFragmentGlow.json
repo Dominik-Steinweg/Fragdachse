@@ -1,0 +1,24 @@
+{
+  "name": "DeathFragmentGlow",
+  "contract": {
+    "id": "gpu:DeathFragmentGlow",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "DeathFragmentGlow",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      19.65
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "E"
+    ],
+    "role": "effect",
+    "lanes": [
+      "GoreAdd"
+    ]
+  }
+}

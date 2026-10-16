@@ -1,0 +1,73 @@
+{
+  "owner": "adrenalineEssence/AdrenalineEssenceGpuRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "Phaser.BlendModes.NORMAL"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.glow/setDepth/0",
+        "expression": "GLOW_DEPTH",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.body/setDepth/0",
+        "expression": "BODY_DEPTH",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:adrenalineEssence/AdrenalineEssenceGpuRenderer.ts:module/this.glow/setDepth/0",
+      "owner": "adrenalineEssence/AdrenalineEssenceGpuRenderer.ts",
+      "component": "module/this.glow/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.39
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.glow/setDepth/0",
+        "expression": "GLOW_DEPTH"
+      }
+    },
+    {
+      "id": "cpu:adrenalineEssence/AdrenalineEssenceGpuRenderer.ts:module/this.body/setDepth/0",
+      "owner": "adrenalineEssence/AdrenalineEssenceGpuRenderer.ts",
+      "component": "module/this.body/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.4
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.body/setDepth/0",
+        "expression": "BODY_DEPTH"
+      }
+    }
+  ]
+}

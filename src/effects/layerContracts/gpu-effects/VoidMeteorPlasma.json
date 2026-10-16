@@ -1,0 +1,24 @@
+{
+  "name": "VoidMeteorPlasma",
+  "contract": {
+    "id": "gpu:VoidMeteorPlasma",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "VoidMeteorPlasma",
+    "height": "high",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      20.64
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect",
+    "lanes": [
+      "VoidMeteorEmission"
+    ]
+  }
+}

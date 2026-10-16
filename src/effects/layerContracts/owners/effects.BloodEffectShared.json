@@ -1,0 +1,41 @@
+{
+  "owner": "effects/BloodEffectShared.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "spawnBloodStain/stain/setDepth/0",
+        "expression": "config.depth",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "config.depth": [
+        9.95
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/BloodEffectShared.ts:spawnBloodStain/stain/setDepth/0",
+      "owner": "effects/BloodEffectShared.ts",
+      "component": "spawnBloodStain/stain/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "spawnBloodStain/stain/setDepth/0",
+        "expression": "config.depth"
+      }
+    }
+  ]
+}

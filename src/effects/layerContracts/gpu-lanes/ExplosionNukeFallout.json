@@ -1,0 +1,21 @@
+{
+  "name": "ExplosionNukeFallout",
+  "contract": {
+    "id": "lane:ExplosionNukeFallout",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "ExplosionNukeFallout",
+    "height": "high",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      25.35
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect"
+  }
+}

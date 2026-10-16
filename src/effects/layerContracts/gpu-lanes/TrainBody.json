@@ -1,0 +1,21 @@
+{
+  "name": "TrainBody",
+  "contract": {
+    "id": "lane:TrainBody",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "TrainBody",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      11.1
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect"
+  }
+}

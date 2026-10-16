@@ -1,0 +1,59 @@
+{
+  "owner": "effects/gpu/ShieldChargerGpuLayer.ts",
+  "gpuLayers": [
+    {
+      "id": "shield-charger:ground",
+      "owner": "effects/gpu/ShieldChargerGpuLayer.ts",
+      "component": "ground",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        5.12
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect"
+    },
+    {
+      "id": "shield-charger:dust",
+      "owner": "effects/gpu/ShieldChargerGpuLayer.ts",
+      "component": "dust",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        13.38
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect"
+    },
+    {
+      "id": "shield-charger:overlay",
+      "owner": "effects/gpu/ShieldChargerGpuLayer.ts",
+      "component": "overlay",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.7
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "ui"
+    }
+  ]
+}

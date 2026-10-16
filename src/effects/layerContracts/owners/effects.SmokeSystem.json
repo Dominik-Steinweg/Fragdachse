@@ -1,0 +1,70 @@
+{
+  "owner": "effects/SmokeSystem.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "renderFrame/this.surface/setDepth/0",
+        "expression": "DEPTH.SMOKE",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "updateStatusEffects/ring/setDepth/0",
+        "expression": "DEPTH.SMOKE + 0.3",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/SmokeSystem.ts:renderFrame/this.surface/setDepth/0",
+      "owner": "effects/SmokeSystem.ts",
+      "component": "renderFrame/this.surface/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        18
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "renderFrame/this.surface/setDepth/0",
+        "expression": "DEPTH.SMOKE"
+      }
+    },
+    {
+      "id": "cpu:effects/SmokeSystem.ts:updateStatusEffects/ring/setDepth/0",
+      "owner": "effects/SmokeSystem.ts",
+      "component": "updateStatusEffects/ring/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        18.3
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "updateStatusEffects/ring/setDepth/0",
+        "expression": "DEPTH.SMOKE + 0.3"
+      }
+    }
+  ]
+}

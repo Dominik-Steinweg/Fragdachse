@@ -1,0 +1,21 @@
+{
+  "name": "TrainAftermathSmoke",
+  "contract": {
+    "id": "lane:TrainAftermathSmoke",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "TrainAftermathSmoke",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      13.2
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect"
+  }
+}

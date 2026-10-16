@@ -1,0 +1,70 @@
+{
+  "owner": "effects/CorpseMarkerRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "show/shadow/setDepth/0",
+        "expression": "DEPTH_CORPSE_CROSS_SHADOW",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "show/cross/setDepth/0",
+        "expression": "DEPTH_CORPSE_CROSS",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/CorpseMarkerRenderer.ts:show/shadow/setDepth/0",
+      "owner": "effects/CorpseMarkerRenderer.ts",
+      "component": "show/shadow/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        5.39
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "show/shadow/setDepth/0",
+        "expression": "DEPTH_CORPSE_CROSS_SHADOW"
+      }
+    },
+    {
+      "id": "cpu:effects/CorpseMarkerRenderer.ts:show/cross/setDepth/0",
+      "owner": "effects/CorpseMarkerRenderer.ts",
+      "component": "show/cross/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        5.4
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "show/cross/setDepth/0",
+        "expression": "DEPTH_CORPSE_CROSS"
+      }
+    }
+  ]
+}

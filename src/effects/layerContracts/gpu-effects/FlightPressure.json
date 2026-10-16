@@ -1,0 +1,24 @@
+{
+  "name": "FlightPressure",
+  "contract": {
+    "id": "gpu:FlightPressure",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "FlightPressure",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      13.2
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect",
+    "lanes": [
+      "FlightSignature"
+    ]
+  }
+}

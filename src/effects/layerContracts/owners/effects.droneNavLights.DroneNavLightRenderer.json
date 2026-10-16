@@ -1,0 +1,192 @@
+{
+  "owner": "effects/droneNavLights/DroneNavLightRenderer.ts",
+  "notes": [
+    "drone night lights: shared light quads of all flying drones, above the night overlay.",
+    "The under-canopy band stays below tree crowns; the over-canopy band sits above high-flying bombers."
+  ],
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/underBloom/EnemyEyeBatch/0",
+        "expression": "DEPTH_LIGHTING + .13",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/underHalo/EnemyEyeBatch/0",
+        "expression": "DEPTH_LIGHTING + .135",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/underCore/EnemyEyeBatch/0",
+        "expression": "DEPTH_LIGHTING + .14",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/overBloom/EnemyEyeBatch/0",
+        "expression": "DEPTH.CANOPY + .65",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/overHalo/EnemyEyeBatch/0",
+        "expression": "DEPTH.CANOPY + .66",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/overCore/EnemyEyeBatch/0",
+        "expression": "DEPTH.CANOPY + .67",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/droneNavLights/DroneNavLightRenderer.ts:module/underBloom/EnemyEyeBatch/0",
+      "owner": "effects/droneNavLights/DroneNavLightRenderer.ts",
+      "component": "module/underBloom/EnemyEyeBatch/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.63
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/underBloom/EnemyEyeBatch/0",
+        "expression": "DEPTH_LIGHTING + .13"
+      }
+    },
+    {
+      "id": "cpu:effects/droneNavLights/DroneNavLightRenderer.ts:module/underHalo/EnemyEyeBatch/0",
+      "owner": "effects/droneNavLights/DroneNavLightRenderer.ts",
+      "component": "module/underHalo/EnemyEyeBatch/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.635
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/underHalo/EnemyEyeBatch/0",
+        "expression": "DEPTH_LIGHTING + .135"
+      }
+    },
+    {
+      "id": "cpu:effects/droneNavLights/DroneNavLightRenderer.ts:module/underCore/EnemyEyeBatch/0",
+      "owner": "effects/droneNavLights/DroneNavLightRenderer.ts",
+      "component": "module/underCore/EnemyEyeBatch/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.64
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/underCore/EnemyEyeBatch/0",
+        "expression": "DEPTH_LIGHTING + .14"
+      }
+    },
+    {
+      "id": "cpu:effects/droneNavLights/DroneNavLightRenderer.ts:module/overBloom/EnemyEyeBatch/0",
+      "owner": "effects/droneNavLights/DroneNavLightRenderer.ts",
+      "component": "module/overBloom/EnemyEyeBatch/0",
+      "height": "high",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        20.65
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/overBloom/EnemyEyeBatch/0",
+        "expression": "DEPTH.CANOPY + .65"
+      }
+    },
+    {
+      "id": "cpu:effects/droneNavLights/DroneNavLightRenderer.ts:module/overHalo/EnemyEyeBatch/0",
+      "owner": "effects/droneNavLights/DroneNavLightRenderer.ts",
+      "component": "module/overHalo/EnemyEyeBatch/0",
+      "height": "high",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        20.66
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/overHalo/EnemyEyeBatch/0",
+        "expression": "DEPTH.CANOPY + .66"
+      }
+    },
+    {
+      "id": "cpu:effects/droneNavLights/DroneNavLightRenderer.ts:module/overCore/EnemyEyeBatch/0",
+      "owner": "effects/droneNavLights/DroneNavLightRenderer.ts",
+      "component": "module/overCore/EnemyEyeBatch/0",
+      "height": "high",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        20.67
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/overCore/EnemyEyeBatch/0",
+        "expression": "DEPTH.CANOPY + .67"
+      }
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "owner": "effects/teslaStorm/TeslaStormBoltGpuLayer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createTeslaStormBoltGpuLayer/layer?.image/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "depth": [
+        15.2
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/teslaStorm/TeslaStormBoltGpuLayer.ts:createTeslaStormBoltGpuLayer/layer?.image/setDepth/0",
+      "owner": "effects/teslaStorm/TeslaStormBoltGpuLayer.ts",
+      "component": "createTeslaStormBoltGpuLayer/layer?.image/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "createTeslaStormBoltGpuLayer/layer?.image/setDepth/0",
+        "expression": "depth"
+      }
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "owner": "effects/energyBall/EnergyBallGpuLayer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createEnergyBallGpuLayer/layer?.image/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "depth": [
+        15.5
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/energyBall/EnergyBallGpuLayer.ts:createEnergyBallGpuLayer/layer?.image/setDepth/0",
+      "owner": "effects/energyBall/EnergyBallGpuLayer.ts",
+      "component": "createEnergyBallGpuLayer/layer?.image/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "createEnergyBallGpuLayer/layer?.image/setDepth/0",
+        "expression": "depth"
+      }
+    }
+  ]
+}

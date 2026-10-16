@@ -1,0 +1,72 @@
+{
+  "owner": "scenes/arena/RockVisualHelper.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "playRockDustBurst/emitter/createEmitter/0",
+        "expression": "DEPTH.ROCKS + 1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playTurretSpawnBurst/emitter/createEmitter/0",
+        "expression": "DEPTH.ROCKS + 1",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:scenes/arena/RockVisualHelper.ts:playRockDustBurst/emitter/createEmitter/0",
+      "owner": "scenes/arena/RockVisualHelper.ts",
+      "component": "playRockDustBurst/emitter/createEmitter/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        10
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playRockDustBurst/emitter/createEmitter/0",
+        "expression": "DEPTH.ROCKS + 1"
+      }
+    },
+    {
+      "id": "cpu:scenes/arena/RockVisualHelper.ts:playTurretSpawnBurst/emitter/createEmitter/0",
+      "owner": "scenes/arena/RockVisualHelper.ts",
+      "component": "playTurretSpawnBurst/emitter/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        10
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playTurretSpawnBurst/emitter/createEmitter/0",
+        "expression": "DEPTH.ROCKS + 1"
+      }
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "owner": "effects/CoopDefenseMissionProgressRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "syncBarriers/image/setDepth/0",
+        "expression": "DEPTH.ROCKS",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/CoopDefenseMissionProgressRenderer.ts:syncBarriers/image/setDepth/0",
+      "owner": "effects/CoopDefenseMissionProgressRenderer.ts",
+      "component": "syncBarriers/image/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncBarriers/image/setDepth/0",
+        "expression": "DEPTH.ROCKS"
+      }
+    }
+  ]
+}

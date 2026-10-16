@@ -1,0 +1,43 @@
+{
+  "owner": "ui/CenterHUD.ts",
+  "source": {
+    "blends": [],
+    "cameras": [
+      "promoteToClarityCamera(this.scene, this.container)"
+    ],
+    "sites": [
+      {
+        "key": "build/this.container/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/CenterHUD.ts:build/this.container/setDepth/0",
+      "owner": "ui/CenterHUD.ts",
+      "component": "build/this.container/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        99
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "build/this.container/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1"
+      }
+    }
+  ]
+}

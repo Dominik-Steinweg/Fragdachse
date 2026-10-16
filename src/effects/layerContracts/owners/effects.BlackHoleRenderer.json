@@ -1,0 +1,189 @@
+{
+  "owner": "effects/BlackHoleRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "Phaser.BlendModes.NORMAL"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "play/core/setDepth/0",
+        "expression": "DEPTH.FIRE - 0.1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "play/horizon/setDepth/0",
+        "expression": "DEPTH.FIRE - 0.07",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "play/collapseRipple/setDepth/0",
+        "expression": "DEPTH.FIRE - 0.035",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "play/outerOrbitEmitter/createEmitter/0",
+        "expression": "DEPTH.FIRE - 0.055",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "play/wispEmitter/createEmitter/0",
+        "expression": "DEPTH.FIRE - 0.052",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "play/innerOrbitEmitter/createEmitter/0",
+        "expression": "DEPTH.FIRE - 0.05",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/BlackHoleRenderer.ts:play/core/setDepth/0",
+      "owner": "effects/BlackHoleRenderer.ts",
+      "component": "play/core/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15.9
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "play/core/setDepth/0",
+        "expression": "DEPTH.FIRE - 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/BlackHoleRenderer.ts:play/horizon/setDepth/0",
+      "owner": "effects/BlackHoleRenderer.ts",
+      "component": "play/horizon/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15.93
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "play/horizon/setDepth/0",
+        "expression": "DEPTH.FIRE - 0.07"
+      }
+    },
+    {
+      "id": "cpu:effects/BlackHoleRenderer.ts:play/collapseRipple/setDepth/0",
+      "owner": "effects/BlackHoleRenderer.ts",
+      "component": "play/collapseRipple/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.965
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "play/collapseRipple/setDepth/0",
+        "expression": "DEPTH.FIRE - 0.035"
+      }
+    },
+    {
+      "id": "cpu:effects/BlackHoleRenderer.ts:play/outerOrbitEmitter/createEmitter/0",
+      "owner": "effects/BlackHoleRenderer.ts",
+      "component": "play/outerOrbitEmitter/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.945
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "play/outerOrbitEmitter/createEmitter/0",
+        "expression": "DEPTH.FIRE - 0.055"
+      }
+    },
+    {
+      "id": "cpu:effects/BlackHoleRenderer.ts:play/wispEmitter/createEmitter/0",
+      "owner": "effects/BlackHoleRenderer.ts",
+      "component": "play/wispEmitter/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.948
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "play/wispEmitter/createEmitter/0",
+        "expression": "DEPTH.FIRE - 0.052"
+      }
+    },
+    {
+      "id": "cpu:effects/BlackHoleRenderer.ts:play/innerOrbitEmitter/createEmitter/0",
+      "owner": "effects/BlackHoleRenderer.ts",
+      "component": "play/innerOrbitEmitter/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.95
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "play/innerOrbitEmitter/createEmitter/0",
+        "expression": "DEPTH.FIRE - 0.05"
+      }
+    }
+  ]
+}

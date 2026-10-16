@@ -1,0 +1,24 @@
+{
+  "name": "FlightMote",
+  "contract": {
+    "id": "gpu:FlightMote",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "FlightMote",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      13.2
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect",
+    "lanes": [
+      "FlightSignature"
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "StinkPlume",
+  "contract": {
+    "id": "gpu:StinkPlume",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "StinkPlume",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      17.02,
+      17.04
+    ],
+    "blends": [
+      "ADD",
+      "NORMAL"
+    ],
+    "profiles": [
+      "L"
+    ],
+    "role": "effect",
+    "lanes": [
+      "StinkNormal",
+      "StinkAdd"
+    ]
+  }
+}

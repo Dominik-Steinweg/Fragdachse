@@ -1,0 +1,21 @@
+{
+  "name": "StinkAdd",
+  "contract": {
+    "id": "lane:StinkAdd",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "StinkAdd",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      17.04
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "L"
+    ],
+    "role": "effect"
+  }
+}

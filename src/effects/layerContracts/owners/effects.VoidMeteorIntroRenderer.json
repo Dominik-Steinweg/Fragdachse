@@ -1,0 +1,130 @@
+{
+  "owner": "effects/VoidMeteorIntroRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.warningGlow/setDepth/0",
+        "expression": "DEPTH.DECALS + 0.14",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.warningRing/setDepth/0",
+        "expression": "DEPTH.DECALS + 0.15",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.flightShadow/setDepth/0",
+        "expression": "DEPTH.DECALS + 0.16",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createFlame/setDepth/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.15",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/VoidMeteorIntroRenderer.ts:module/this.warningGlow/setDepth/0",
+      "owner": "effects/VoidMeteorIntroRenderer.ts",
+      "component": "module/this.warningGlow/setDepth/0",
+      "height": "ground",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        5.14
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.warningGlow/setDepth/0",
+        "expression": "DEPTH.DECALS + 0.14"
+      }
+    },
+    {
+      "id": "cpu:effects/VoidMeteorIntroRenderer.ts:module/this.warningRing/setDepth/0",
+      "owner": "effects/VoidMeteorIntroRenderer.ts",
+      "component": "module/this.warningRing/setDepth/0",
+      "height": "ground",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        5.15
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.warningRing/setDepth/0",
+        "expression": "DEPTH.DECALS + 0.15"
+      }
+    },
+    {
+      "id": "cpu:effects/VoidMeteorIntroRenderer.ts:module/this.flightShadow/setDepth/0",
+      "owner": "effects/VoidMeteorIntroRenderer.ts",
+      "component": "module/this.flightShadow/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        5.16
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.flightShadow/setDepth/0",
+        "expression": "DEPTH.DECALS + 0.16"
+      }
+    },
+    {
+      "id": "cpu:effects/VoidMeteorIntroRenderer.ts:createFlame/setDepth/setDepth/0",
+      "owner": "effects/VoidMeteorIntroRenderer.ts",
+      "component": "createFlame/setDepth/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.65
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createFlame/setDepth/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.15"
+      }
+    }
+  ]
+}

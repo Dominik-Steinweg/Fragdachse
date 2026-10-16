@@ -1,0 +1,72 @@
+{
+  "owner": "effects/watchtower/WatchtowerDestructionFx.ts",
+  "source": {
+    "sites": [
+      {
+        "key": "module/scene.add/setDepth/0",
+        "expression": "DEPTH.ROCKS + .15",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "play/piece.image/setDepth/0",
+        "expression": "DEPTH.ROCKS + (p.material === 'impact' ? .02 : p.material === 'dust' ? .1 : .15)",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "blends": [],
+    "cameras": [],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/watchtower/WatchtowerDestructionFx.ts:module/scene.add/setDepth/0",
+      "owner": "effects/watchtower/WatchtowerDestructionFx.ts",
+      "component": "module/scene.add/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.15
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/scene.add/setDepth/0",
+        "expression": "DEPTH.ROCKS + .15"
+      }
+    },
+    {
+      "id": "cpu:effects/watchtower/WatchtowerDestructionFx.ts:play/piece.image/setDepth/0",
+      "owner": "effects/watchtower/WatchtowerDestructionFx.ts",
+      "component": "play/piece.image/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.02,
+        9.1,
+        9.15
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "play/piece.image/setDepth/0",
+        "expression": "DEPTH.ROCKS + (p.material === 'impact' ? .02 : p.material === 'dust' ? .1 : .15)"
+      }
+    }
+  ]
+}

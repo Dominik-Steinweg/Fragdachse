@@ -1,0 +1,41 @@
+{
+  "owner": "ui/RocketMagazineIndicator.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.root/setDepth/0",
+        "expression": "DEPTH_AIM + 0.01",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/RocketMagazineIndicator.ts:module/this.root/setDepth/0",
+      "owner": "ui/RocketMagazineIndicator.ts",
+      "component": "module/this.root/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.61
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.root/setDepth/0",
+        "expression": "DEPTH_AIM + 0.01"
+      }
+    }
+  ]
+}

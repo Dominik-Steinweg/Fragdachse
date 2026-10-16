@@ -1,0 +1,24 @@
+{
+  "name": "RocketSmoke",
+  "contract": {
+    "id": "gpu:RocketSmoke",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "RocketSmoke",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      16
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "L"
+    ],
+    "role": "effect",
+    "lanes": [
+      "RocketSmoke"
+    ]
+  }
+}

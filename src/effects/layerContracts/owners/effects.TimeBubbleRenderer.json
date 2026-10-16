@@ -1,0 +1,229 @@
+{
+  "owner": "effects/TimeBubbleRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "Phaser.BlendModes.SCREEN",
+      "i ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createVisual/membrane/setDepth/0",
+        "expression": "DEPTH.FIRE + 0.42",
+        "blends": [
+          "SCREEN"
+        ]
+      },
+      {
+        "key": "createVisual/interferenceA/setDepth/0",
+        "expression": "DEPTH.FIRE + 0.48",
+        "blends": [
+          "SCREEN"
+        ]
+      },
+      {
+        "key": "createVisual/interferenceB/setDepth/0",
+        "expression": "DEPTH.FIRE + 0.5",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "updatePrismCenter/visual.prismHalo/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 0.3",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "updatePrismCenter/visual.prismCore/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 0.1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "updateResonance/this.scene.add/setDepth/0",
+        "expression": "DEPTH.FIRE + 0.52 + i * 0.01",
+        "blends": [
+          "ADD",
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "updateResonance/visual.chargeSparks/createEmitter/0",
+        "expression": "DEPTH.FIRE + 0.56",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {
+      "i": [
+        0,
+        1,
+        2
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/TimeBubbleRenderer.ts:createVisual/membrane/setDepth/0",
+      "owner": "effects/TimeBubbleRenderer.ts",
+      "component": "createVisual/membrane/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.42
+      ],
+      "blends": [
+        "SCREEN"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/membrane/setDepth/0",
+        "expression": "DEPTH.FIRE + 0.42"
+      }
+    },
+    {
+      "id": "cpu:effects/TimeBubbleRenderer.ts:createVisual/interferenceA/setDepth/0",
+      "owner": "effects/TimeBubbleRenderer.ts",
+      "component": "createVisual/interferenceA/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.48
+      ],
+      "blends": [
+        "SCREEN"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/interferenceA/setDepth/0",
+        "expression": "DEPTH.FIRE + 0.48"
+      }
+    },
+    {
+      "id": "cpu:effects/TimeBubbleRenderer.ts:createVisual/interferenceB/setDepth/0",
+      "owner": "effects/TimeBubbleRenderer.ts",
+      "component": "createVisual/interferenceB/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.5
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/interferenceB/setDepth/0",
+        "expression": "DEPTH.FIRE + 0.5"
+      }
+    },
+    {
+      "id": "cpu:effects/TimeBubbleRenderer.ts:updatePrismCenter/visual.prismHalo/setDepth/0",
+      "owner": "effects/TimeBubbleRenderer.ts",
+      "component": "updatePrismCenter/visual.prismHalo/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        14.7
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "updatePrismCenter/visual.prismHalo/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 0.3"
+      }
+    },
+    {
+      "id": "cpu:effects/TimeBubbleRenderer.ts:updatePrismCenter/visual.prismCore/setDepth/0",
+      "owner": "effects/TimeBubbleRenderer.ts",
+      "component": "updatePrismCenter/visual.prismCore/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        14.9
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "updatePrismCenter/visual.prismCore/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/TimeBubbleRenderer.ts:updateResonance/this.scene.add/setDepth/0",
+      "owner": "effects/TimeBubbleRenderer.ts",
+      "component": "updateResonance/this.scene.add/setDepth/0",
+      "height": "body",
+      "lighting": "mixed",
+      "camera": "world",
+      "depths": [
+        16.52,
+        16.53,
+        16.54
+      ],
+      "blends": [
+        "ADD",
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "updateResonance/this.scene.add/setDepth/0",
+        "expression": "DEPTH.FIRE + 0.52 + i * 0.01"
+      }
+    },
+    {
+      "id": "cpu:effects/TimeBubbleRenderer.ts:updateResonance/visual.chargeSparks/createEmitter/0",
+      "owner": "effects/TimeBubbleRenderer.ts",
+      "component": "updateResonance/visual.chargeSparks/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.56
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "updateResonance/visual.chargeSparks/createEmitter/0",
+        "expression": "DEPTH.FIRE + 0.56"
+      }
+    }
+  ]
+}

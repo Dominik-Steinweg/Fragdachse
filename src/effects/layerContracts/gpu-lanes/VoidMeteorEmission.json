@@ -1,0 +1,21 @@
+{
+  "name": "VoidMeteorEmission",
+  "contract": {
+    "id": "lane:VoidMeteorEmission",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "VoidMeteorEmission",
+    "height": "high",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      20.64
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect"
+  }
+}

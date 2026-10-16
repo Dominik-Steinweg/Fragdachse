@@ -1,0 +1,41 @@
+{
+  "owner": "entities/BaseVisuals.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createBaseSurfaceImages/scene.add/setDepth/0",
+        "expression": "DEPTH.BASES",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:entities/BaseVisuals.ts:createBaseSurfaceImages/scene.add/setDepth/0",
+      "owner": "entities/BaseVisuals.ts",
+      "component": "createBaseSurfaceImages/scene.add/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        4
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createBaseSurfaceImages/scene.add/setDepth/0",
+        "expression": "DEPTH.BASES"
+      }
+    }
+  ]
+}

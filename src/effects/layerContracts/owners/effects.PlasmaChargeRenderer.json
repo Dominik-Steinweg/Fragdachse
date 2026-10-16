@@ -1,0 +1,102 @@
+{
+  "owner": "effects/PlasmaChargeRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "makeAdditive"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.coreEmitter/setDepth/0",
+        "expression": "CHARGE_CORE_DEPTH",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.sparkEmitter/setDepth/0",
+        "expression": "CHARGE_SPARK_DEPTH",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.glowImage/setDepth/0",
+        "expression": "CHARGE_GLOW_DEPTH",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/PlasmaChargeRenderer.ts:module/this.coreEmitter/setDepth/0",
+      "owner": "effects/PlasmaChargeRenderer.ts",
+      "component": "module/this.coreEmitter/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        10.24
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.coreEmitter/setDepth/0",
+        "expression": "CHARGE_CORE_DEPTH"
+      }
+    },
+    {
+      "id": "cpu:effects/PlasmaChargeRenderer.ts:module/this.sparkEmitter/setDepth/0",
+      "owner": "effects/PlasmaChargeRenderer.ts",
+      "component": "module/this.sparkEmitter/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        10.3
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.sparkEmitter/setDepth/0",
+        "expression": "CHARGE_SPARK_DEPTH"
+      }
+    },
+    {
+      "id": "cpu:effects/PlasmaChargeRenderer.ts:module/this.glowImage/setDepth/0",
+      "owner": "effects/PlasmaChargeRenderer.ts",
+      "component": "module/this.glowImage/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        10.16
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.glowImage/setDepth/0",
+        "expression": "CHARGE_GLOW_DEPTH"
+      }
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "owner": "effects/gpu/AlienConeGpuLayer.ts",
+  "gpuLayers": [
+    {
+      "id": "alien-cone:energy",
+      "owner": "effects/gpu/AlienConeGpuLayer.ts",
+      "component": "energy",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.72
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect"
+    }
+  ]
+}

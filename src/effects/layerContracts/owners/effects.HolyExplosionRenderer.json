@@ -1,0 +1,142 @@
+{
+  "owner": "effects/HolyExplosionRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "spawnEmblem/layers/depth/0",
+        "expression": "DEPTH_FX + 0.42",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "spawnEmblem/layers/depth/1",
+        "expression": "DEPTH_FX + 0.44",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "spawnEmblem/layers/depth/2",
+        "expression": "DEPTH_FX + 0.46",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "image/image/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {
+      "depth": [
+        25.2,
+        25.42,
+        25.44,
+        25.46,
+        25.5
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/HolyExplosionRenderer.ts:spawnEmblem/layers/depth/0",
+      "owner": "effects/HolyExplosionRenderer.ts",
+      "component": "spawnEmblem/layers/depth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        25.42
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "spawnEmblem/layers/depth/0",
+        "expression": "DEPTH_FX + 0.42"
+      }
+    },
+    {
+      "id": "cpu:effects/HolyExplosionRenderer.ts:spawnEmblem/layers/depth/1",
+      "owner": "effects/HolyExplosionRenderer.ts",
+      "component": "spawnEmblem/layers/depth/1",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        25.44
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "spawnEmblem/layers/depth/1",
+        "expression": "DEPTH_FX + 0.44"
+      }
+    },
+    {
+      "id": "cpu:effects/HolyExplosionRenderer.ts:spawnEmblem/layers/depth/2",
+      "owner": "effects/HolyExplosionRenderer.ts",
+      "component": "spawnEmblem/layers/depth/2",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        25.46
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "spawnEmblem/layers/depth/2",
+        "expression": "DEPTH_FX + 0.46"
+      }
+    },
+    {
+      "id": "cpu:effects/HolyExplosionRenderer.ts:image/image/setDepth/0",
+      "owner": "effects/HolyExplosionRenderer.ts",
+      "component": "image/image/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.2,
+        25.42,
+        25.44,
+        25.46,
+        25.5
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "image/image/setDepth/0",
+        "expression": "depth"
+      }
+    }
+  ]
+}

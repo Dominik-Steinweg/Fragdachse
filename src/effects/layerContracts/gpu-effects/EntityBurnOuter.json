@@ -1,0 +1,24 @@
+{
+  "name": "EntityBurnOuter",
+  "contract": {
+    "id": "gpu:EntityBurnOuter",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "EntityBurnOuter",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      10.23
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "M"
+    ],
+    "role": "effect",
+    "lanes": [
+      "EntityBurn"
+    ]
+  }
+}

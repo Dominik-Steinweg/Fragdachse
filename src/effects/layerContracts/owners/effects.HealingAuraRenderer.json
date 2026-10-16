@@ -1,0 +1,99 @@
+{
+  "owner": "effects/HealingAuraRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "syncAura/field/configureAdditiveImage/0",
+        "expression": "DEPTH.PLAYERS - 0.18",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "syncAura/ring/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.17",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "spawnHealingBurst/particle/configureAdditiveImage/0",
+        "expression": "DEPTH.PLAYERS + 0.3",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/HealingAuraRenderer.ts:syncAura/field/configureAdditiveImage/0",
+      "owner": "effects/HealingAuraRenderer.ts",
+      "component": "syncAura/field/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.82
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncAura/field/configureAdditiveImage/0",
+        "expression": "DEPTH.PLAYERS - 0.18"
+      }
+    },
+    {
+      "id": "cpu:effects/HealingAuraRenderer.ts:syncAura/ring/setDepth/0",
+      "owner": "effects/HealingAuraRenderer.ts",
+      "component": "syncAura/ring/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.83
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncAura/ring/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.17"
+      }
+    },
+    {
+      "id": "cpu:effects/HealingAuraRenderer.ts:spawnHealingBurst/particle/configureAdditiveImage/0",
+      "owner": "effects/HealingAuraRenderer.ts",
+      "component": "spawnHealingBurst/particle/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        10.3
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "spawnHealingBurst/particle/configureAdditiveImage/0",
+        "expression": "DEPTH.PLAYERS + 0.3"
+      }
+    }
+  ]
+}

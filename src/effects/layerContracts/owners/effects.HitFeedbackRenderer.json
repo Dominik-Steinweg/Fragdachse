@@ -1,0 +1,49 @@
+{
+  "owner": "effects/HitFeedbackRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.NORMAL"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "syncSlot/slot.image/setDepth/0",
+        "expression": "sprite.depth + DEPTH_OFFSET",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "sprite.depth": [
+        9.95,
+        10
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/HitFeedbackRenderer.ts:syncSlot/slot.image/setDepth/0",
+      "owner": "effects/HitFeedbackRenderer.ts",
+      "component": "syncSlot/slot.image/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.97,
+        10.02
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncSlot/slot.image/setDepth/0",
+        "expression": "sprite.depth + DEPTH_OFFSET"
+      }
+    }
+  ]
+}

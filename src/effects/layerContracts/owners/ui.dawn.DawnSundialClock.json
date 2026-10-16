@@ -1,0 +1,46 @@
+{
+  "owner": "ui/dawn/DawnSundialClock.ts",
+  "notes": [
+    "The Dawn sundial clock is screen HUD on the clarity camera, like the Dawn phase card."
+  ],
+  "source": {
+    "blends": [],
+    "cameras": [
+      "promoteToClarityCamera(scene, this.root)"
+    ],
+    "sites": [
+      {
+        "key": "module/this.root/setDepth/0",
+        "expression": "DEPTH.OVERLAY",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/dawn/DawnSundialClock.ts:module/this.root/setDepth/0",
+      "owner": "ui/dawn/DawnSundialClock.ts",
+      "component": "module/this.root/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        100
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.root/setDepth/0",
+        "expression": "DEPTH.OVERLAY"
+      }
+    }
+  ]
+}

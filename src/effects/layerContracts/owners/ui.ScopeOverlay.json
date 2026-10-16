@@ -1,0 +1,43 @@
+{
+  "owner": "ui/ScopeOverlay.ts",
+  "source": {
+    "blends": [],
+    "cameras": [
+      "promoteToClarityCamera(scene, this.image)"
+    ],
+    "sites": [
+      {
+        "key": "module/this.image/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 0.5",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/ScopeOverlay.ts:module/this.image/setDepth/0",
+      "owner": "ui/ScopeOverlay.ts",
+      "component": "module/this.image/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        99.5
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.image/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 0.5"
+      }
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "owner": "effects/ReinforcementMatrixRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createVisual/carpet/setDepth/0",
+        "expression": "DEPTH.DECALS + 0.4",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/ring/setDepth/0",
+        "expression": "DEPTH.DECALS + 0.45",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/sparks/setDepth/0",
+        "expression": "DEPTH.DECALS + 0.5",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/ReinforcementMatrixRenderer.ts:createVisual/carpet/setDepth/0",
+      "owner": "effects/ReinforcementMatrixRenderer.ts",
+      "component": "createVisual/carpet/setDepth/0",
+      "height": "ground",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        5.4
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/carpet/setDepth/0",
+        "expression": "DEPTH.DECALS + 0.4"
+      }
+    },
+    {
+      "id": "cpu:effects/ReinforcementMatrixRenderer.ts:createVisual/ring/setDepth/0",
+      "owner": "effects/ReinforcementMatrixRenderer.ts",
+      "component": "createVisual/ring/setDepth/0",
+      "height": "ground",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        5.45
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/ring/setDepth/0",
+        "expression": "DEPTH.DECALS + 0.45"
+      }
+    },
+    {
+      "id": "cpu:effects/ReinforcementMatrixRenderer.ts:createVisual/sparks/setDepth/0",
+      "owner": "effects/ReinforcementMatrixRenderer.ts",
+      "component": "createVisual/sparks/setDepth/0",
+      "height": "ground",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        5.5
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/sparks/setDepth/0",
+        "expression": "DEPTH.DECALS + 0.5"
+      }
+    }
+  ]
+}

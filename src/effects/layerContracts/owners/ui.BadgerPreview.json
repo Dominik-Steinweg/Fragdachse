@@ -1,0 +1,95 @@
+{
+  "owner": "ui/BadgerPreview.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.heldItem/HeldItemVisual/0",
+        "expression": "0",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "setDepth/this.sprite/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "setDepth/this.heldItem/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "depth": [
+        100
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/BadgerPreview.ts:module/this.heldItem/HeldItemVisual/0",
+      "owner": "ui/BadgerPreview.ts",
+      "component": "module/this.heldItem/HeldItemVisual/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        0
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.heldItem/HeldItemVisual/0",
+        "expression": "0"
+      }
+    },
+    {
+      "id": "cpu:ui/BadgerPreview.ts:setDepth/this.sprite/setDepth/0",
+      "owner": "ui/BadgerPreview.ts",
+      "component": "setDepth/this.sprite/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "setDepth/this.sprite/setDepth/0",
+        "expression": "depth"
+      }
+    },
+    {
+      "id": "cpu:ui/BadgerPreview.ts:setDepth/this.heldItem/setDepth/0",
+      "owner": "ui/BadgerPreview.ts",
+      "component": "setDepth/this.heldItem/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "setDepth/this.heldItem/setDepth/0",
+        "expression": "depth"
+      }
+    }
+  ]
+}

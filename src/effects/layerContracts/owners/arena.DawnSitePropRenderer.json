@@ -1,0 +1,132 @@
+{
+  "owner": "arena/DawnSitePropRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "sync/sprite/setDepth/0",
+        "expression": "DEPTH.BASES",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "syncLight/emission/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.08",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "syncSparks/emitter/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.09",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "syncCrates/crate/setDepth/0",
+        "expression": "carried ? DEPTH.PLAYERS + 0.2 : DEPTH.BASES + 1",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:arena/DawnSitePropRenderer.ts:sync/sprite/setDepth/0",
+      "owner": "arena/DawnSitePropRenderer.ts",
+      "component": "sync/sprite/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        4
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "sync/sprite/setDepth/0",
+        "expression": "DEPTH.BASES"
+      }
+    },
+    {
+      "id": "cpu:arena/DawnSitePropRenderer.ts:syncLight/emission/setDepth/0",
+      "owner": "arena/DawnSitePropRenderer.ts",
+      "component": "syncLight/emission/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.58
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncLight/emission/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.08"
+      }
+    },
+    {
+      "id": "cpu:arena/DawnSitePropRenderer.ts:syncCrates/crate/setDepth/0",
+      "owner": "arena/DawnSitePropRenderer.ts",
+      "component": "syncCrates/crate/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        5,
+        10.2
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G",
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncCrates/crate/setDepth/0",
+        "expression": "carried ? DEPTH.PLAYERS + 0.2 : DEPTH.BASES + 1"
+      }
+    },
+    {
+      "id": "cpu:arena/DawnSitePropRenderer.ts:syncSparks/emitter/setDepth/0",
+      "owner": "arena/DawnSitePropRenderer.ts",
+      "component": "syncSparks/emitter/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.59
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncSparks/emitter/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.09"
+      }
+    }
+  ]
+}

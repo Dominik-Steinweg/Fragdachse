@@ -1,0 +1,24 @@
+{
+  "name": "DeathFragment",
+  "contract": {
+    "id": "gpu:DeathFragment",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "DeathFragment",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      13.2
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect",
+    "lanes": [
+      "GoreNormal"
+    ]
+  }
+}

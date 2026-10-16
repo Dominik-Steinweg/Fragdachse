@@ -1,0 +1,44 @@
+{
+  "owner": "effects/EnemyEyeBatch.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.layer/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "depth": [
+        5,
+        10,
+        16,
+        25
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/EnemyEyeBatch.ts:module/this.layer/setDepth/0",
+      "owner": "effects/EnemyEyeBatch.ts",
+      "component": "module/this.layer/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "module/this.layer/setDepth/0",
+        "expression": "depth"
+      }
+    }
+  ]
+}

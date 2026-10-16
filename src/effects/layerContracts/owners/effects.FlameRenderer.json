@@ -1,0 +1,43 @@
+{
+  "owner": "effects/FlameRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createVisual/glowImage/setDepth/0",
+        "expression": "DEPTH_FLAME - 0.1",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/FlameRenderer.ts:createVisual/glowImage/setDepth/0",
+      "owner": "effects/FlameRenderer.ts",
+      "component": "createVisual/glowImage/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.9
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/glowImage/setDepth/0",
+        "expression": "DEPTH_FLAME - 0.1"
+      }
+    }
+  ]
+}

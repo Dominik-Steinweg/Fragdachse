@@ -1,0 +1,21 @@
+{
+  "name": "ElectricBody",
+  "contract": {
+    "id": "lane:ElectricBody",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "ElectricBody",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      10.3
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "M"
+    ],
+    "role": "effect"
+  }
+}

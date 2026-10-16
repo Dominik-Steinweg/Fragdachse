@@ -1,0 +1,275 @@
+{
+  "owner": "effects/SporeRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createVisual/glow/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES - 0.2",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/cluster/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 0.5",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/coreEmitter/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES + 1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/wakeEmitter/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES + 0.2",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playImpact/glow/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 1.3",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playImpact/cluster/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 1.5",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playImpact/burst/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES + 1.7",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playImpact/haze/createEmitter/0",
+        "expression": "DEPTH.FIRE + 0.2",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "spawnTrailPuff/puff/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 0.3",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/SporeRenderer.ts:createVisual/glow/configureAdditiveImage/0",
+      "owner": "effects/SporeRenderer.ts",
+      "component": "createVisual/glow/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        14.8
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/glow/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES - 0.2"
+      }
+    },
+    {
+      "id": "cpu:effects/SporeRenderer.ts:createVisual/cluster/configureAdditiveImage/0",
+      "owner": "effects/SporeRenderer.ts",
+      "component": "createVisual/cluster/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.5
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/cluster/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 0.5"
+      }
+    },
+    {
+      "id": "cpu:effects/SporeRenderer.ts:createVisual/coreEmitter/createEmitter/0",
+      "owner": "effects/SporeRenderer.ts",
+      "component": "createVisual/coreEmitter/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/coreEmitter/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES + 1"
+      }
+    },
+    {
+      "id": "cpu:effects/SporeRenderer.ts:createVisual/wakeEmitter/createEmitter/0",
+      "owner": "effects/SporeRenderer.ts",
+      "component": "createVisual/wakeEmitter/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.2
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/wakeEmitter/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES + 0.2"
+      }
+    },
+    {
+      "id": "cpu:effects/SporeRenderer.ts:playImpact/glow/configureAdditiveImage/0",
+      "owner": "effects/SporeRenderer.ts",
+      "component": "playImpact/glow/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.3
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpact/glow/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 1.3"
+      }
+    },
+    {
+      "id": "cpu:effects/SporeRenderer.ts:playImpact/cluster/configureAdditiveImage/0",
+      "owner": "effects/SporeRenderer.ts",
+      "component": "playImpact/cluster/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.5
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpact/cluster/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 1.5"
+      }
+    },
+    {
+      "id": "cpu:effects/SporeRenderer.ts:playImpact/burst/createEmitter/0",
+      "owner": "effects/SporeRenderer.ts",
+      "component": "playImpact/burst/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.7
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpact/burst/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES + 1.7"
+      }
+    },
+    {
+      "id": "cpu:effects/SporeRenderer.ts:playImpact/haze/createEmitter/0",
+      "owner": "effects/SporeRenderer.ts",
+      "component": "playImpact/haze/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.2
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpact/haze/createEmitter/0",
+        "expression": "DEPTH.FIRE + 0.2"
+      }
+    },
+    {
+      "id": "cpu:effects/SporeRenderer.ts:spawnTrailPuff/puff/setDepth/0",
+      "owner": "effects/SporeRenderer.ts",
+      "component": "spawnTrailPuff/puff/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        14.7
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "spawnTrailPuff/puff/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 0.3"
+      }
+    }
+  ]
+}

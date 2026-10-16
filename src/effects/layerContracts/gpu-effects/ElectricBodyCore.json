@@ -1,0 +1,24 @@
+{
+  "name": "ElectricBodyCore",
+  "contract": {
+    "id": "gpu:ElectricBodyCore",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ElectricBodyCore",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      10.3
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "M"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ElectricBody"
+    ]
+  }
+}

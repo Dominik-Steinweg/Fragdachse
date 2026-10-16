@@ -1,0 +1,21 @@
+{
+  "name": "VoidMeteorMaterial",
+  "contract": {
+    "id": "lane:VoidMeteorMaterial",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "VoidMeteorMaterial",
+    "height": "high",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      20.55
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect"
+  }
+}

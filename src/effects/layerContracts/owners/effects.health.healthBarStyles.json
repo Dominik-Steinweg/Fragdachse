@@ -1,0 +1,244 @@
+{
+  "owner": "effects/health/healthBarStyles.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "enemyHealthBarStyle/backgroundDepth/backgroundDepth/0",
+        "expression": "DEPTH.SMOKE + 0.5",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "enemyHealthBarStyle/fillDepth/fillDepth/0",
+        "expression": "DEPTH.SMOKE + 0.6",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playerHealthBarStyle/backgroundDepth/backgroundDepth/0",
+        "expression": "DEPTH.PLAYERS + 1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playerHealthBarStyle/fillDepth/fillDepth/0",
+        "expression": "DEPTH.PLAYERS + 2",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "baseHealthBarStyle/backgroundDepth/backgroundDepth/0",
+        "expression": "DEPTH.GROUND_FOG + .5",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "baseHealthBarStyle/fillDepth/fillDepth/0",
+        "expression": "DEPTH.GROUND_FOG + .7",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/TURRET_HEALTH_BAR_STYLE/backgroundDepth/0",
+        "expression": "DEPTH.ROCKS + 0.35",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/TURRET_HEALTH_BAR_STYLE/fillDepth/0",
+        "expression": "DEPTH.ROCKS + 0.4",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/health/healthBarStyles.ts:enemyHealthBarStyle/backgroundDepth/backgroundDepth/0",
+      "owner": "effects/health/healthBarStyles.ts",
+      "component": "enemyHealthBarStyle/backgroundDepth/backgroundDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        18.5
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "enemyHealthBarStyle/backgroundDepth/backgroundDepth/0",
+        "expression": "DEPTH.SMOKE + 0.5"
+      }
+    },
+    {
+      "id": "cpu:effects/health/healthBarStyles.ts:enemyHealthBarStyle/fillDepth/fillDepth/0",
+      "owner": "effects/health/healthBarStyles.ts",
+      "component": "enemyHealthBarStyle/fillDepth/fillDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        18.6
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "enemyHealthBarStyle/fillDepth/fillDepth/0",
+        "expression": "DEPTH.SMOKE + 0.6"
+      }
+    },
+    {
+      "id": "cpu:effects/health/healthBarStyles.ts:playerHealthBarStyle/backgroundDepth/backgroundDepth/0",
+      "owner": "effects/health/healthBarStyles.ts",
+      "component": "playerHealthBarStyle/backgroundDepth/backgroundDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        11
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playerHealthBarStyle/backgroundDepth/backgroundDepth/0",
+        "expression": "DEPTH.PLAYERS + 1"
+      }
+    },
+    {
+      "id": "cpu:effects/health/healthBarStyles.ts:playerHealthBarStyle/fillDepth/fillDepth/0",
+      "owner": "effects/health/healthBarStyles.ts",
+      "component": "playerHealthBarStyle/fillDepth/fillDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        12
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playerHealthBarStyle/fillDepth/fillDepth/0",
+        "expression": "DEPTH.PLAYERS + 2"
+      }
+    },
+    {
+      "id": "cpu:effects/health/healthBarStyles.ts:baseHealthBarStyle/backgroundDepth/backgroundDepth/0",
+      "owner": "effects/health/healthBarStyles.ts",
+      "component": "baseHealthBarStyle/backgroundDepth/backgroundDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        5.8
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "baseHealthBarStyle/backgroundDepth/backgroundDepth/0",
+        "expression": "DEPTH.GROUND_FOG + .5"
+      }
+    },
+    {
+      "id": "cpu:effects/health/healthBarStyles.ts:baseHealthBarStyle/fillDepth/fillDepth/0",
+      "owner": "effects/health/healthBarStyles.ts",
+      "component": "baseHealthBarStyle/fillDepth/fillDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        6
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "baseHealthBarStyle/fillDepth/fillDepth/0",
+        "expression": "DEPTH.GROUND_FOG + .7"
+      }
+    },
+    {
+      "id": "cpu:effects/health/healthBarStyles.ts:module/TURRET_HEALTH_BAR_STYLE/backgroundDepth/0",
+      "owner": "effects/health/healthBarStyles.ts",
+      "component": "module/TURRET_HEALTH_BAR_STYLE/backgroundDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.35
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/TURRET_HEALTH_BAR_STYLE/backgroundDepth/0",
+        "expression": "DEPTH.ROCKS + 0.35"
+      }
+    },
+    {
+      "id": "cpu:effects/health/healthBarStyles.ts:module/TURRET_HEALTH_BAR_STYLE/fillDepth/0",
+      "owner": "effects/health/healthBarStyles.ts",
+      "component": "module/TURRET_HEALTH_BAR_STYLE/fillDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.4
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/TURRET_HEALTH_BAR_STYLE/fillDepth/0",
+        "expression": "DEPTH.ROCKS + 0.4"
+      }
+    }
+  ]
+}

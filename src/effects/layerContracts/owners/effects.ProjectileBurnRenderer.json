@@ -1,0 +1,43 @@
+{
+  "owner": "effects/ProjectileBurnRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "sync/glow/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 0.28",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/ProjectileBurnRenderer.ts:sync/glow/setDepth/0",
+      "owner": "effects/ProjectileBurnRenderer.ts",
+      "component": "sync/glow/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.28
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "sync/glow/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 0.28"
+      }
+    }
+  ]
+}

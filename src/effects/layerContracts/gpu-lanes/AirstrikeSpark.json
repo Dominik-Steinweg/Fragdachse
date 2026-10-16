@@ -1,0 +1,21 @@
+{
+  "name": "AirstrikeSpark",
+  "contract": {
+    "id": "lane:AirstrikeSpark",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "AirstrikeSpark",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      9.001
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "M"
+    ],
+    "role": "effect"
+  }
+}

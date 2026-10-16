@@ -1,0 +1,215 @@
+{
+  "owner": "effects/AttackDroneRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "syncVisuals/image/setDepth/0",
+        "expression": "DEPTH.ROCKS + .1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "syncVisuals/setDepth/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + .5",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createDrone/marker/setDepth/0",
+        "expression": "depth + .02",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createDrone/this.scene.add/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createDrone/this.scene.add/setDepth/1",
+        "expression": "depth + .01",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createDrone/this.scene.add/setDepth/2",
+        "expression": "CHARACTER_SHADOW_CONFIG.depth",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createDrone/this.scene.add/setDepth/3",
+        "expression": "depth + .03",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/AttackDroneRenderer.ts:syncVisuals/image/setDepth/0",
+      "owner": "effects/AttackDroneRenderer.ts",
+      "component": "syncVisuals/image/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.1
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncVisuals/image/setDepth/0",
+        "expression": "DEPTH.ROCKS + .1"
+      }
+    },
+    {
+      "id": "cpu:effects/AttackDroneRenderer.ts:syncVisuals/setDepth/setDepth/0",
+      "owner": "effects/AttackDroneRenderer.ts",
+      "component": "syncVisuals/setDepth/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15.5
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncVisuals/setDepth/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + .5"
+      }
+    },
+    {
+      "id": "cpu:effects/AttackDroneRenderer.ts:createDrone/marker/setDepth/0",
+      "owner": "effects/AttackDroneRenderer.ts",
+      "component": "createDrone/marker/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15.42
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createDrone/marker/setDepth/0",
+        "expression": "depth + .02"
+      }
+    },
+    {
+      "id": "cpu:effects/AttackDroneRenderer.ts:createDrone/this.scene.add/setDepth/0",
+      "owner": "effects/AttackDroneRenderer.ts",
+      "component": "createDrone/this.scene.add/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15.4
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createDrone/this.scene.add/setDepth/0",
+        "expression": "depth"
+      }
+    },
+    {
+      "id": "cpu:effects/AttackDroneRenderer.ts:createDrone/this.scene.add/setDepth/1",
+      "owner": "effects/AttackDroneRenderer.ts",
+      "component": "createDrone/this.scene.add/setDepth/1",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15.41
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createDrone/this.scene.add/setDepth/1",
+        "expression": "depth + .01"
+      }
+    },
+    {
+      "id": "cpu:effects/AttackDroneRenderer.ts:createDrone/this.scene.add/setDepth/2",
+      "owner": "effects/AttackDroneRenderer.ts",
+      "component": "createDrone/this.scene.add/setDepth/2",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.92
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createDrone/this.scene.add/setDepth/2",
+        "expression": "CHARACTER_SHADOW_CONFIG.depth"
+      }
+    },
+    {
+      "id": "cpu:effects/AttackDroneRenderer.ts:createDrone/this.scene.add/setDepth/3",
+      "owner": "effects/AttackDroneRenderer.ts",
+      "component": "createDrone/this.scene.add/setDepth/3",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15.43
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createDrone/this.scene.add/setDepth/3",
+        "expression": "depth + .03"
+      }
+    }
+  ]
+}

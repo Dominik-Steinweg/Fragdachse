@@ -1,0 +1,21 @@
+{
+  "name": "GoreNormal",
+  "contract": {
+    "id": "lane:GoreNormal",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "GoreNormal",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      13.2
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect"
+  }
+}

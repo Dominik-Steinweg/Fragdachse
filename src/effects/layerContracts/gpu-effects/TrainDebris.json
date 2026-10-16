@@ -1,0 +1,24 @@
+{
+  "name": "TrainDebris",
+  "contract": {
+    "id": "gpu:TrainDebris",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "TrainDebris",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      11.1
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect",
+    "lanes": [
+      "TrainBody"
+    ]
+  }
+}

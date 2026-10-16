@@ -1,0 +1,72 @@
+{
+  "owner": "effects/ConstructionOwnershipGpuSystem.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.passiveLayer/setDepth/0",
+        "expression": "DEPTH.ROCKS - 0.1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.activeLayer/setDepth/0",
+        "expression": "DEPTH.ROCKS + 0.3",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/ConstructionOwnershipGpuSystem.ts:module/this.passiveLayer/setDepth/0",
+      "owner": "effects/ConstructionOwnershipGpuSystem.ts",
+      "component": "module/this.passiveLayer/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        8.9
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.passiveLayer/setDepth/0",
+        "expression": "DEPTH.ROCKS - 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/ConstructionOwnershipGpuSystem.ts:module/this.activeLayer/setDepth/0",
+      "owner": "effects/ConstructionOwnershipGpuSystem.ts",
+      "component": "module/this.activeLayer/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.3
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.activeLayer/setDepth/0",
+        "expression": "DEPTH.ROCKS + 0.3"
+      }
+    }
+  ]
+}

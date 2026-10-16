@@ -1,0 +1,21 @@
+{
+  "name": "GoreAdd",
+  "contract": {
+    "id": "lane:GoreAdd",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "GoreAdd",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      19.65
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "E"
+    ],
+    "role": "effect"
+  }
+}

@@ -1,0 +1,161 @@
+{
+  "owner": "effects/ShootingRangeRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.controlIcons/setDepth/0",
+        "expression": "DEPTH.ROCKS + 0.1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.targetGlows/setDepth/0",
+        "expression": "DEPTH.DECALS + 0.2",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.supplyGlows/setDepth/0",
+        "expression": "DEPTH.DECALS + 0.1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.panel/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "graphics/graphics/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "depth": [
+        5.1
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/ShootingRangeRenderer.ts:module/this.controlIcons/setDepth/0",
+      "owner": "effects/ShootingRangeRenderer.ts",
+      "component": "module/this.controlIcons/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.1
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.controlIcons/setDepth/0",
+        "expression": "DEPTH.ROCKS + 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/ShootingRangeRenderer.ts:module/this.targetGlows/setDepth/0",
+      "owner": "effects/ShootingRangeRenderer.ts",
+      "component": "module/this.targetGlows/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        5.2
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.targetGlows/setDepth/0",
+        "expression": "DEPTH.DECALS + 0.2"
+      }
+    },
+    {
+      "id": "cpu:effects/ShootingRangeRenderer.ts:module/this.supplyGlows/setDepth/0",
+      "owner": "effects/ShootingRangeRenderer.ts",
+      "component": "module/this.supplyGlows/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        5.1
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.supplyGlows/setDepth/0",
+        "expression": "DEPTH.DECALS + 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/ShootingRangeRenderer.ts:module/this.panel/setDepth/0",
+      "owner": "effects/ShootingRangeRenderer.ts",
+      "component": "module/this.panel/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        22
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.panel/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI"
+      }
+    },
+    {
+      "id": "cpu:effects/ShootingRangeRenderer.ts:graphics/graphics/setDepth/0",
+      "owner": "effects/ShootingRangeRenderer.ts",
+      "component": "graphics/graphics/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        5.1
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "graphics/graphics/setDepth/0",
+        "expression": "depth"
+      }
+    }
+  ]
+}

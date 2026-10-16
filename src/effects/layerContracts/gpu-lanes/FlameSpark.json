@@ -1,0 +1,21 @@
+{
+  "name": "FlameSpark",
+  "contract": {
+    "id": "lane:FlameSpark",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "FlameSpark",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      16.1
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "L"
+    ],
+    "role": "effect"
+  }
+}

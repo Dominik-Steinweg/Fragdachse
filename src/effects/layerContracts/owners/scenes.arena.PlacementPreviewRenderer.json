@@ -1,0 +1,389 @@
+{
+  "owner": "scenes/arena/PlacementPreviewRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.rangeGraphics/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 2",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.turretRangeGraphics/setDepth/0",
+        "expression": "DEPTH.ROCKS - 0.2",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.invalidGraphics/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.remoteMissionPedestalPreviewGraphics/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 3",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.errorText/setDepth/0",
+        "expression": "DEPTH.OVERLAY",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "ensurePlacementPreviewImage/this.localPlacementPreviewImage/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 2",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "ensurePlacementPreviewImage/created/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 3",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "ensureTurretPreviewImage/this.localTurretPreviewImage/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "ensureTurretPreviewImage/image/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 2",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createTunnelPreviewState/line/setDepth/0",
+        "expression": "TUNNEL_VISUAL_DEPTH + 0.025",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createUtilityTargetingHint/container/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createAirstrikeTargetingHint/container/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createPlaceableUtilityHint/container/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:scenes/arena/PlacementPreviewRenderer.ts:module/this.rangeGraphics/setDepth/0",
+      "owner": "scenes/arena/PlacementPreviewRenderer.ts",
+      "component": "module/this.rangeGraphics/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        98
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.rangeGraphics/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 2"
+      }
+    },
+    {
+      "id": "cpu:scenes/arena/PlacementPreviewRenderer.ts:module/this.turretRangeGraphics/setDepth/0",
+      "owner": "scenes/arena/PlacementPreviewRenderer.ts",
+      "component": "module/this.turretRangeGraphics/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        8.8
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.turretRangeGraphics/setDepth/0",
+        "expression": "DEPTH.ROCKS - 0.2"
+      }
+    },
+    {
+      "id": "cpu:scenes/arena/PlacementPreviewRenderer.ts:module/this.invalidGraphics/setDepth/0",
+      "owner": "scenes/arena/PlacementPreviewRenderer.ts",
+      "component": "module/this.invalidGraphics/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        99
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.invalidGraphics/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1"
+      }
+    },
+    {
+      "id": "cpu:scenes/arena/PlacementPreviewRenderer.ts:module/this.remoteMissionPedestalPreviewGraphics/setDepth/0",
+      "owner": "scenes/arena/PlacementPreviewRenderer.ts",
+      "component": "module/this.remoteMissionPedestalPreviewGraphics/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        97
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.remoteMissionPedestalPreviewGraphics/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 3"
+      }
+    },
+    {
+      "id": "cpu:scenes/arena/PlacementPreviewRenderer.ts:module/this.errorText/setDepth/0",
+      "owner": "scenes/arena/PlacementPreviewRenderer.ts",
+      "component": "module/this.errorText/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        100
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.errorText/setDepth/0",
+        "expression": "DEPTH.OVERLAY"
+      }
+    },
+    {
+      "id": "cpu:scenes/arena/PlacementPreviewRenderer.ts:ensurePlacementPreviewImage/this.localPlacementPreviewImage/setDepth/0",
+      "owner": "scenes/arena/PlacementPreviewRenderer.ts",
+      "component": "ensurePlacementPreviewImage/this.localPlacementPreviewImage/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        98
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "ensurePlacementPreviewImage/this.localPlacementPreviewImage/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 2"
+      }
+    },
+    {
+      "id": "cpu:scenes/arena/PlacementPreviewRenderer.ts:ensurePlacementPreviewImage/created/setDepth/0",
+      "owner": "scenes/arena/PlacementPreviewRenderer.ts",
+      "component": "ensurePlacementPreviewImage/created/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        97
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "ensurePlacementPreviewImage/created/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 3"
+      }
+    },
+    {
+      "id": "cpu:scenes/arena/PlacementPreviewRenderer.ts:ensureTurretPreviewImage/this.localTurretPreviewImage/setDepth/0",
+      "owner": "scenes/arena/PlacementPreviewRenderer.ts",
+      "component": "ensureTurretPreviewImage/this.localTurretPreviewImage/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        99
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "ensureTurretPreviewImage/this.localTurretPreviewImage/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1"
+      }
+    },
+    {
+      "id": "cpu:scenes/arena/PlacementPreviewRenderer.ts:ensureTurretPreviewImage/image/setDepth/0",
+      "owner": "scenes/arena/PlacementPreviewRenderer.ts",
+      "component": "ensureTurretPreviewImage/image/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        98
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "ensureTurretPreviewImage/image/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 2"
+      }
+    },
+    {
+      "id": "cpu:scenes/arena/PlacementPreviewRenderer.ts:createTunnelPreviewState/line/setDepth/0",
+      "owner": "scenes/arena/PlacementPreviewRenderer.ts",
+      "component": "createTunnelPreviewState/line/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.685
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "createTunnelPreviewState/line/setDepth/0",
+        "expression": "TUNNEL_VISUAL_DEPTH + 0.025"
+      }
+    },
+    {
+      "id": "cpu:scenes/arena/PlacementPreviewRenderer.ts:createUtilityTargetingHint/container/setDepth/0",
+      "owner": "scenes/arena/PlacementPreviewRenderer.ts",
+      "component": "createUtilityTargetingHint/container/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        99
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "createUtilityTargetingHint/container/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1"
+      }
+    },
+    {
+      "id": "cpu:scenes/arena/PlacementPreviewRenderer.ts:createAirstrikeTargetingHint/container/setDepth/0",
+      "owner": "scenes/arena/PlacementPreviewRenderer.ts",
+      "component": "createAirstrikeTargetingHint/container/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        99
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "createAirstrikeTargetingHint/container/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1"
+      }
+    },
+    {
+      "id": "cpu:scenes/arena/PlacementPreviewRenderer.ts:createPlaceableUtilityHint/container/setDepth/0",
+      "owner": "scenes/arena/PlacementPreviewRenderer.ts",
+      "component": "createPlaceableUtilityHint/container/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        99
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "createPlaceableUtilityHint/container/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1"
+      }
+    }
+  ]
+}

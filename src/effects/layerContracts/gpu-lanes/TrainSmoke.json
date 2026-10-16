@@ -1,0 +1,21 @@
+{
+  "name": "TrainSmoke",
+  "contract": {
+    "id": "lane:TrainSmoke",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "TrainSmoke",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      18.1
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "L"
+    ],
+    "role": "effect"
+  }
+}

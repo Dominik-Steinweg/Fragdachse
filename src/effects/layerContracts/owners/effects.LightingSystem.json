@@ -1,0 +1,115 @@
+{
+  "owner": "effects/LightingSystem.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "Phaser.BlendModes.MULTIPLY",
+      "Phaser.BlendModes.SCREEN"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "syncLightBleed/quad/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.001",
+        "blends": [
+          "SCREEN"
+        ]
+      },
+      {
+        "key": "ensureLightMap/lightMap/setDepth/0",
+        "expression": "DEPTH_LIGHTING",
+        "blends": [
+          "MULTIPLY"
+        ]
+      },
+      {
+        "key": "createOccluderSlot/renderTexture/setDepth/0",
+        "expression": "DEPTH_LIGHTING - 0.01 + slotIndex * 0.001",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "slotIndex": [
+        0,
+        1,
+        2,
+        3
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/LightingSystem.ts:syncLightBleed/quad/setDepth/0",
+      "owner": "effects/LightingSystem.ts",
+      "component": "syncLightBleed/quad/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.501
+      ],
+      "blends": [
+        "SCREEN"
+      ],
+      "profiles": [
+        "E",
+        "L"
+      ],
+      "role": "pass",
+      "source": {
+        "selector": "syncLightBleed/quad/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.001"
+      }
+    },
+    {
+      "id": "cpu:effects/LightingSystem.ts:ensureLightMap/lightMap/setDepth/0",
+      "owner": "effects/LightingSystem.ts",
+      "component": "ensureLightMap/lightMap/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        19.5
+      ],
+      "blends": [
+        "MULTIPLY"
+      ],
+      "profiles": [
+        "E",
+        "L"
+      ],
+      "role": "pass",
+      "source": {
+        "selector": "ensureLightMap/lightMap/setDepth/0",
+        "expression": "DEPTH_LIGHTING"
+      }
+    },
+    {
+      "id": "cpu:effects/LightingSystem.ts:createOccluderSlot/renderTexture/setDepth/0",
+      "owner": "effects/LightingSystem.ts",
+      "component": "createOccluderSlot/renderTexture/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        19.49,
+        19.491,
+        19.492,
+        19.493
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "pass",
+      "source": {
+        "selector": "createOccluderSlot/renderTexture/setDepth/0",
+        "expression": "DEPTH_LIGHTING - 0.01 + slotIndex * 0.001"
+      }
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "owner": "entities/HeldItemVisual.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "setDepth/this.image/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "setItem/this.image/setDepth/0",
+        "expression": "this.depth",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "depth": [
+        5,
+        10,
+        16,
+        25
+      ],
+      "this.depth": [
+        9.985,
+        10.02
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:entities/HeldItemVisual.ts:setDepth/this.image/setDepth/0",
+      "owner": "entities/HeldItemVisual.ts",
+      "component": "setDepth/this.image/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "setDepth/this.image/setDepth/0",
+        "expression": "depth"
+      }
+    },
+    {
+      "id": "cpu:entities/HeldItemVisual.ts:setItem/this.image/setDepth/0",
+      "owner": "entities/HeldItemVisual.ts",
+      "component": "setItem/this.image/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "setItem/this.image/setDepth/0",
+        "expression": "this.depth"
+      }
+    }
+  ]
+}

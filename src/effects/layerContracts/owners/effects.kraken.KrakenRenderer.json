@@ -1,0 +1,62 @@
+{
+  "owner": "effects/kraken/KrakenRenderer.ts",
+  "source": {
+    "sites": [
+      {
+        "key": "module/this.sprite/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "take/q.object/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "blends": [],
+    "cameras": [],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/kraken/KrakenRenderer.ts:module/this.sprite/setDepth/0",
+      "owner": "effects/kraken/KrakenRenderer.ts",
+      "component": "module/this.sprite/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "module/this.sprite/setDepth/0",
+        "expression": "depth"
+      }
+    },
+    {
+      "id": "cpu:effects/kraken/KrakenRenderer.ts:take/q.object/setDepth/0",
+      "owner": "effects/kraken/KrakenRenderer.ts",
+      "component": "take/q.object/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "take/q.object/setDepth/0",
+        "expression": "depth"
+      }
+    }
+  ]
+}

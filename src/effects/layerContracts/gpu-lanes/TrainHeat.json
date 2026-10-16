@@ -1,0 +1,21 @@
+{
+  "name": "TrainHeat",
+  "contract": {
+    "id": "lane:TrainHeat",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "TrainHeat",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      19.7
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "E"
+    ],
+    "role": "effect"
+  }
+}

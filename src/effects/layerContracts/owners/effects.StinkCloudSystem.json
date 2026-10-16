@@ -1,0 +1,133 @@
+{
+  "owner": "effects/StinkCloudSystem.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "isElectric || isVoidSpore ? Phaser.BlendModes.ADD : Phaser.BlendModes.MULTIPLY"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createVisual/groundGlow/setDepth/0",
+        "expression": "9.3",
+        "blends": [
+          "ADD",
+          "MULTIPLY"
+        ]
+      },
+      {
+        "key": "createVisual/damageAura/setDepth/0",
+        "expression": "STINK_DEPTH - 0.08",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/reactionPulse/setDepth/0",
+        "expression": "STINK_DEPTH - 0.04",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/electricArcs/setDepth/0",
+        "expression": "STINK_DEPTH + 0.1",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/StinkCloudSystem.ts:createVisual/groundGlow/setDepth/0",
+      "owner": "effects/StinkCloudSystem.ts",
+      "component": "createVisual/groundGlow/setDepth/0",
+      "height": "ground",
+      "lighting": "mixed",
+      "camera": "world",
+      "depths": [
+        9.3
+      ],
+      "blends": [
+        "ADD",
+        "MULTIPLY"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/groundGlow/setDepth/0",
+        "expression": "9.3"
+      }
+    },
+    {
+      "id": "cpu:effects/StinkCloudSystem.ts:createVisual/damageAura/setDepth/0",
+      "owner": "effects/StinkCloudSystem.ts",
+      "component": "createVisual/damageAura/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.92
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/damageAura/setDepth/0",
+        "expression": "STINK_DEPTH - 0.08"
+      }
+    },
+    {
+      "id": "cpu:effects/StinkCloudSystem.ts:createVisual/reactionPulse/setDepth/0",
+      "owner": "effects/StinkCloudSystem.ts",
+      "component": "createVisual/reactionPulse/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.96
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/reactionPulse/setDepth/0",
+        "expression": "STINK_DEPTH - 0.04"
+      }
+    },
+    {
+      "id": "cpu:effects/StinkCloudSystem.ts:createVisual/electricArcs/setDepth/0",
+      "owner": "effects/StinkCloudSystem.ts",
+      "component": "createVisual/electricArcs/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        17.1
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/electricArcs/setDepth/0",
+        "expression": "STINK_DEPTH + 0.1"
+      }
+    }
+  ]
+}

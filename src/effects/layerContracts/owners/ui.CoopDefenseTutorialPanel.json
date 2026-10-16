@@ -1,0 +1,70 @@
+{
+  "owner": "ui/CoopDefenseTutorialPanel.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "buildTutorialPanel/this.tutorialContainer/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "buildTutorialStepPanel/this.tutorialStepContainer/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/CoopDefenseTutorialPanel.ts:buildTutorialPanel/this.tutorialContainer/setDepth/0",
+      "owner": "ui/CoopDefenseTutorialPanel.ts",
+      "component": "buildTutorialPanel/this.tutorialContainer/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        99
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "buildTutorialPanel/this.tutorialContainer/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1"
+      }
+    },
+    {
+      "id": "cpu:ui/CoopDefenseTutorialPanel.ts:buildTutorialStepPanel/this.tutorialStepContainer/setDepth/0",
+      "owner": "ui/CoopDefenseTutorialPanel.ts",
+      "component": "buildTutorialStepPanel/this.tutorialStepContainer/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        99
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "buildTutorialStepPanel/this.tutorialStepContainer/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1"
+      }
+    }
+  ]
+}

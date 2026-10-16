@@ -1,0 +1,37 @@
+{
+  "owner": "effects/BloodStainBatch.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "flushPendingRun/batch/EnemyEyeBatch/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/BloodStainBatch.ts:flushPendingRun/batch/EnemyEyeBatch/0",
+      "owner": "effects/BloodStainBatch.ts",
+      "component": "flushPendingRun/batch/EnemyEyeBatch/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "flushPendingRun/batch/EnemyEyeBatch/0",
+        "expression": "depth"
+      }
+    }
+  ]
+}

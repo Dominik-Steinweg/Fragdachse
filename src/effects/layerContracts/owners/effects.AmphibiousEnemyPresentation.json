@@ -1,0 +1,43 @@
+{
+  "owner": "effects/AmphibiousEnemyPresentation.ts",
+  "source": {
+    "sites": [
+      {
+        "key": "module/this.eyes/EnemyEyeBatch/0",
+        "expression": "DEPTH_LIGHTING + .085",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/AmphibiousEnemyPresentation.ts:module/this.eyes/EnemyEyeBatch/0",
+      "owner": "effects/AmphibiousEnemyPresentation.ts",
+      "component": "module/this.eyes/EnemyEyeBatch/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.585
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.eyes/EnemyEyeBatch/0",
+        "expression": "DEPTH_LIGHTING + .085"
+      }
+    }
+  ]
+}

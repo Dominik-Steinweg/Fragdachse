@@ -1,0 +1,21 @@
+{
+  "name": "EntityBurn",
+  "contract": {
+    "id": "lane:EntityBurn",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "EntityBurn",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      10.23
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "M"
+    ],
+    "role": "effect"
+  }
+}

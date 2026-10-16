@@ -1,0 +1,21 @@
+{
+  "name": "RocketExhaust",
+  "contract": {
+    "id": "lane:RocketExhaust",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "RocketExhaust",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      15.001
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "L"
+    ],
+    "role": "effect"
+  }
+}

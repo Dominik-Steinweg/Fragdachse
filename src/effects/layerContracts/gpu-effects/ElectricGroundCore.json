@@ -1,0 +1,24 @@
+{
+  "name": "ElectricGroundCore",
+  "contract": {
+    "id": "gpu:ElectricGroundCore",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ElectricGroundCore",
+    "height": "ground",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      5.45
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "M"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ElectricGround"
+    ]
+  }
+}

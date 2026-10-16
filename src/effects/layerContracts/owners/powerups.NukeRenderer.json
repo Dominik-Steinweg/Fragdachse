@@ -1,0 +1,248 @@
+{
+  "owner": "powerups/NukeRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createVisual/radius/setDepth/0",
+        "expression": "DEPTH.CANOPY - 1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/ring/setDepth/0",
+        "expression": "DEPTH.CANOPY",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/outerRing/setDepth/0",
+        "expression": "DEPTH.CANOPY",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/coreGlow/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 2",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/targetRing/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/shadow/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 2",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createVisual/icon/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createVisual/sparks/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 1",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:powerups/NukeRenderer.ts:createVisual/radius/setDepth/0",
+      "owner": "powerups/NukeRenderer.ts",
+      "component": "createVisual/radius/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/radius/setDepth/0",
+        "expression": "DEPTH.CANOPY - 1"
+      }
+    },
+    {
+      "id": "cpu:powerups/NukeRenderer.ts:createVisual/ring/setDepth/0",
+      "owner": "powerups/NukeRenderer.ts",
+      "component": "createVisual/ring/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        20
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E",
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/ring/setDepth/0",
+        "expression": "DEPTH.CANOPY"
+      }
+    },
+    {
+      "id": "cpu:powerups/NukeRenderer.ts:createVisual/outerRing/setDepth/0",
+      "owner": "powerups/NukeRenderer.ts",
+      "component": "createVisual/outerRing/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        20
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E",
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/outerRing/setDepth/0",
+        "expression": "DEPTH.CANOPY"
+      }
+    },
+    {
+      "id": "cpu:powerups/NukeRenderer.ts:createVisual/coreGlow/setDepth/0",
+      "owner": "powerups/NukeRenderer.ts",
+      "component": "createVisual/coreGlow/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        8
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/coreGlow/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 2"
+      }
+    },
+    {
+      "id": "cpu:powerups/NukeRenderer.ts:createVisual/targetRing/setDepth/0",
+      "owner": "powerups/NukeRenderer.ts",
+      "component": "createVisual/targetRing/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/targetRing/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 1"
+      }
+    },
+    {
+      "id": "cpu:powerups/NukeRenderer.ts:createVisual/shadow/setDepth/0",
+      "owner": "powerups/NukeRenderer.ts",
+      "component": "createVisual/shadow/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        8
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/shadow/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 2"
+      }
+    },
+    {
+      "id": "cpu:powerups/NukeRenderer.ts:createVisual/icon/setDepth/0",
+      "owner": "powerups/NukeRenderer.ts",
+      "component": "createVisual/icon/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/icon/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 1"
+      }
+    },
+    {
+      "id": "cpu:powerups/NukeRenderer.ts:createVisual/sparks/setDepth/0",
+      "owner": "powerups/NukeRenderer.ts",
+      "component": "createVisual/sparks/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/sparks/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 1"
+      }
+    }
+  ]
+}

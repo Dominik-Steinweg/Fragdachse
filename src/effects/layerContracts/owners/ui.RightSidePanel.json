@@ -1,0 +1,43 @@
+{
+  "owner": "ui/RightSidePanel.ts",
+  "source": {
+    "blends": [],
+    "cameras": [
+      "promoteToClarityCamera(this.scene, this.gameContainer)"
+    ],
+    "sites": [
+      {
+        "key": "buildGameContainer/this.gameContainer/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/RightSidePanel.ts:buildGameContainer/this.gameContainer/setDepth/0",
+      "owner": "ui/RightSidePanel.ts",
+      "component": "buildGameContainer/this.gameContainer/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        99
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "buildGameContainer/this.gameContainer/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1"
+      }
+    }
+  ]
+}

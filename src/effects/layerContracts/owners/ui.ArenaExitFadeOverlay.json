@@ -1,0 +1,43 @@
+{
+  "owner": "ui/ArenaExitFadeOverlay.ts",
+  "source": {
+    "blends": [],
+    "cameras": [
+      "promoteToClarityCamera(this.scene, this.wash)"
+    ],
+    "sites": [
+      {
+        "key": "build/this.wash/setDepth/0",
+        "expression": "DEPTH.OVERLAY + 3",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/ArenaExitFadeOverlay.ts:build/this.wash/setDepth/0",
+      "owner": "ui/ArenaExitFadeOverlay.ts",
+      "component": "build/this.wash/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        103
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "build/this.wash/setDepth/0",
+        "expression": "DEPTH.OVERLAY + 3"
+      }
+    }
+  ]
+}

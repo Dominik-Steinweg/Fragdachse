@@ -1,0 +1,24 @@
+{
+  "name": "GroundFireHeatBody",
+  "contract": {
+    "id": "gpu:GroundFireHeatBody",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "GroundFireHeatBody",
+    "height": "ground",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      9.2
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "M"
+    ],
+    "role": "effect",
+    "lanes": [
+      "GroundFire"
+    ]
+  }
+}

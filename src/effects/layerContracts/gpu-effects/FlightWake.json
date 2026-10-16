@@ -1,0 +1,24 @@
+{
+  "name": "FlightWake",
+  "contract": {
+    "id": "gpu:FlightWake",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "FlightWake",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      13.2
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect",
+    "lanes": [
+      "FlightSignature"
+    ]
+  }
+}

@@ -1,0 +1,219 @@
+{
+  "owner": "effects/BulletRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "makeAdditive"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createVisual/bullet/setDepth/0",
+        "expression": "DEPTH_BULLET",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createVisual/accent/configureAdditiveImage/0",
+        "expression": "DEPTH_ACCENT",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/trail/setDepth/0",
+        "expression": "DEPTH_TRAIL",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/glow/configureAdditiveImage/0",
+        "expression": "DEPTH_GLOW",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createChargeFx/aura/configureAdditiveImage/0",
+        "expression": "DEPTH_AURA",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playImpactSparks/emitter/setDepth/0",
+        "expression": "DEPTH_SPARK",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playImpactSparks/impactFlash/configureAdditiveImage/0",
+        "expression": "DEPTH_SPARK",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/BulletRenderer.ts:createVisual/bullet/setDepth/0",
+      "owner": "effects/BulletRenderer.ts",
+      "component": "createVisual/bullet/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/bullet/setDepth/0",
+        "expression": "DEPTH_BULLET"
+      }
+    },
+    {
+      "id": "cpu:effects/BulletRenderer.ts:createVisual/accent/configureAdditiveImage/0",
+      "owner": "effects/BulletRenderer.ts",
+      "component": "createVisual/accent/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/accent/configureAdditiveImage/0",
+        "expression": "DEPTH_ACCENT"
+      }
+    },
+    {
+      "id": "cpu:effects/BulletRenderer.ts:createVisual/trail/setDepth/0",
+      "owner": "effects/BulletRenderer.ts",
+      "component": "createVisual/trail/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        14
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/trail/setDepth/0",
+        "expression": "DEPTH_TRAIL"
+      }
+    },
+    {
+      "id": "cpu:effects/BulletRenderer.ts:createVisual/glow/configureAdditiveImage/0",
+      "owner": "effects/BulletRenderer.ts",
+      "component": "createVisual/glow/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        14
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/glow/configureAdditiveImage/0",
+        "expression": "DEPTH_GLOW"
+      }
+    },
+    {
+      "id": "cpu:effects/BulletRenderer.ts:createChargeFx/aura/configureAdditiveImage/0",
+      "owner": "effects/BulletRenderer.ts",
+      "component": "createChargeFx/aura/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        14.5
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "K",
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createChargeFx/aura/configureAdditiveImage/0",
+        "expression": "DEPTH_AURA"
+      }
+    },
+    {
+      "id": "cpu:effects/BulletRenderer.ts:playImpactSparks/emitter/setDepth/0",
+      "owner": "effects/BulletRenderer.ts",
+      "component": "playImpactSparks/emitter/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        16
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpactSparks/emitter/setDepth/0",
+        "expression": "DEPTH_SPARK"
+      }
+    },
+    {
+      "id": "cpu:effects/BulletRenderer.ts:playImpactSparks/impactFlash/configureAdditiveImage/0",
+      "owner": "effects/BulletRenderer.ts",
+      "component": "playImpactSparks/impactFlash/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpactSparks/impactFlash/configureAdditiveImage/0",
+        "expression": "DEPTH_SPARK"
+      }
+    }
+  ]
+}

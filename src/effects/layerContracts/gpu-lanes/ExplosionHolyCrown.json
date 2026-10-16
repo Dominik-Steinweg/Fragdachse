@@ -1,0 +1,21 @@
+{
+  "name": "ExplosionHolyCrown",
+  "contract": {
+    "id": "lane:ExplosionHolyCrown",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "ExplosionHolyCrown",
+    "height": "high",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      25.32
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect"
+  }
+}

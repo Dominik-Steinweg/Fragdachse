@@ -1,0 +1,21 @@
+{
+  "name": "ExplosionLowBody",
+  "contract": {
+    "id": "lane:ExplosionLowBody",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "ExplosionLowBody",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      13.4
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect"
+  }
+}

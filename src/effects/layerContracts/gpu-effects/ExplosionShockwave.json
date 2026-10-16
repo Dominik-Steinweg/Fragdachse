@@ -1,0 +1,24 @@
+{
+  "name": "ExplosionShockwave",
+  "contract": {
+    "id": "gpu:ExplosionShockwave",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ExplosionShockwave",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      25.1
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionAccent"
+    ]
+  }
+}

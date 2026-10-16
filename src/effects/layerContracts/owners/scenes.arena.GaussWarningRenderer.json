@@ -1,0 +1,41 @@
+{
+  "owner": "scenes/arena/GaussWarningRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.gfx/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 2",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:scenes/arena/GaussWarningRenderer.ts:module/this.gfx/setDepth/0",
+      "owner": "scenes/arena/GaussWarningRenderer.ts",
+      "component": "module/this.gfx/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        98
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.gfx/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 2"
+      }
+    }
+  ]
+}

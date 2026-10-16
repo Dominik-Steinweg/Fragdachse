@@ -1,0 +1,43 @@
+{
+  "owner": "effects/kraken/KrakenEmissionQuad.ts",
+  "source": {
+    "sites": [
+      {
+        "key": "module/this.object/setDepth/0",
+        "expression": "DEPTH_LIGHTING + .1",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/kraken/KrakenEmissionQuad.ts:module/this.object/setDepth/0",
+      "owner": "effects/kraken/KrakenEmissionQuad.ts",
+      "component": "module/this.object/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.6
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.object/setDepth/0",
+        "expression": "DEPTH_LIGHTING + .1"
+      }
+    }
+  ]
+}

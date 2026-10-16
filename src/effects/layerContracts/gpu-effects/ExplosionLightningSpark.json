@@ -1,0 +1,24 @@
+{
+  "name": "ExplosionLightningSpark",
+  "contract": {
+    "id": "gpu:ExplosionLightningSpark",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ExplosionLightningSpark",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      25.3
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionTrainSpark"
+    ]
+  }
+}

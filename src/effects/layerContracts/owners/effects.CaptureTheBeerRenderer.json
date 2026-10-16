@@ -1,0 +1,741 @@
+{
+  "owner": "effects/CaptureTheBeerRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "makeAdditive"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "update/visual.container/setDepth/0",
+        "expression": "isCarried ? BEER_DEPTH + 0.35 : BEER_DEPTH + 0.12",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createVisual/container/setDepth/0",
+        "expression": "BEER_DEPTH",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createVisual/outerGlow/configureAdditiveImage/0",
+        "expression": "BEER_DEPTH - 0.2",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/innerGlow/configureAdditiveImage/0",
+        "expression": "BEER_DEPTH - 0.1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/aura/configureAdditiveImage/0",
+        "expression": "BEER_DEPTH - 0.05",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/idleEmitter/createEmitter/0",
+        "expression": "BEER_DEPTH + 0.26",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/bubbleEmitter/createEmitter/0",
+        "expression": "BEER_DEPTH + 0.22",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "spawnTrailPuff/foam/configureAdditiveImage/0",
+        "expression": "BEER_DEPTH + 0.04",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "spawnTrailPuff/bubble/configureAdditiveImage/0",
+        "expression": "BEER_DEPTH + 0.08",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playResetTeleport/halo/configureAdditiveImage/0",
+        "expression": "DEPTH_FX + 0.9",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "spawnTeleportSwirl/bubble/configureAdditiveImage/0",
+        "expression": "DEPTH_FX + 0.82",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playFoamBurst/foamEmitter/createEmitter/0",
+        "expression": "DEPTH_FX + 0.66",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playFoamBurst/bubbleEmitter/createEmitter/0",
+        "expression": "DEPTH_FX + 0.7",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playPulseHalo/halo/configureAdditiveImage/0",
+        "expression": "DEPTH_FX + 0.52",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playScoreScreenFlash/colorWash/setDepth/0",
+        "expression": "DEPTH_FX + 1.75",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playScoreScreenFlash/whiteWash/setDepth/0",
+        "expression": "DEPTH_FX + 1.8",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playScoreScreenFlash/centerHalo/configureAdditiveImage/0",
+        "expression": "DEPTH_FX + 1.82",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playScoreScreenFlash/centerCore/configureAdditiveImage/0",
+        "expression": "DEPTH_FX + 1.84",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playScoreLightBurst/beam/setDepth/0",
+        "expression": "DEPTH_FX + 0.95",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playScoreLightBurst/core/configureAdditiveImage/0",
+        "expression": "DEPTH_FX + 1.02",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playScoreLightBurst/corona/configureAdditiveImage/0",
+        "expression": "DEPTH_FX + 1.01",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playScoreFoamShell/shell/createEmitter/0",
+        "expression": "DEPTH_FX + 0.86",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playScoreFoamShell/plume/createEmitter/0",
+        "expression": "DEPTH_FX + 0.88",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playRing/ring/setDepth/0",
+        "expression": "DEPTH_FX + 0.6",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "spawnAfterglow/afterglow/configureAdditiveImage/0",
+        "expression": "DEPTH_FX + 0.3",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:update/visual.container/setDepth/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "update/visual.container/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        24.32,
+        24.55
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "update/visual.container/setDepth/0",
+        "expression": "isCarried ? BEER_DEPTH + 0.35 : BEER_DEPTH + 0.12"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:createVisual/container/setDepth/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "createVisual/container/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        24.2
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/container/setDepth/0",
+        "expression": "BEER_DEPTH"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:createVisual/outerGlow/configureAdditiveImage/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "createVisual/outerGlow/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        24
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/outerGlow/configureAdditiveImage/0",
+        "expression": "BEER_DEPTH - 0.2"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:createVisual/innerGlow/configureAdditiveImage/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "createVisual/innerGlow/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        24.1
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/innerGlow/configureAdditiveImage/0",
+        "expression": "BEER_DEPTH - 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:createVisual/aura/configureAdditiveImage/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "createVisual/aura/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        24.15
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/aura/configureAdditiveImage/0",
+        "expression": "BEER_DEPTH - 0.05"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:createVisual/idleEmitter/createEmitter/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "createVisual/idleEmitter/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        24.46
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/idleEmitter/createEmitter/0",
+        "expression": "BEER_DEPTH + 0.26"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:createVisual/bubbleEmitter/createEmitter/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "createVisual/bubbleEmitter/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        24.42
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/bubbleEmitter/createEmitter/0",
+        "expression": "BEER_DEPTH + 0.22"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:spawnTrailPuff/foam/configureAdditiveImage/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "spawnTrailPuff/foam/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        24.24
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "spawnTrailPuff/foam/configureAdditiveImage/0",
+        "expression": "BEER_DEPTH + 0.04"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:spawnTrailPuff/bubble/configureAdditiveImage/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "spawnTrailPuff/bubble/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        24.28
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "spawnTrailPuff/bubble/configureAdditiveImage/0",
+        "expression": "BEER_DEPTH + 0.08"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:playResetTeleport/halo/configureAdditiveImage/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "playResetTeleport/halo/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.9
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playResetTeleport/halo/configureAdditiveImage/0",
+        "expression": "DEPTH_FX + 0.9"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:spawnTeleportSwirl/bubble/configureAdditiveImage/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "spawnTeleportSwirl/bubble/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.82
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "spawnTeleportSwirl/bubble/configureAdditiveImage/0",
+        "expression": "DEPTH_FX + 0.82"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:playFoamBurst/foamEmitter/createEmitter/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "playFoamBurst/foamEmitter/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.66
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playFoamBurst/foamEmitter/createEmitter/0",
+        "expression": "DEPTH_FX + 0.66"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:playFoamBurst/bubbleEmitter/createEmitter/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "playFoamBurst/bubbleEmitter/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.7
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playFoamBurst/bubbleEmitter/createEmitter/0",
+        "expression": "DEPTH_FX + 0.7"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:playPulseHalo/halo/configureAdditiveImage/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "playPulseHalo/halo/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.52
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playPulseHalo/halo/configureAdditiveImage/0",
+        "expression": "DEPTH_FX + 0.52"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:playScoreScreenFlash/colorWash/setDepth/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "playScoreScreenFlash/colorWash/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        26.75
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playScoreScreenFlash/colorWash/setDepth/0",
+        "expression": "DEPTH_FX + 1.75"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:playScoreScreenFlash/whiteWash/setDepth/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "playScoreScreenFlash/whiteWash/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        26.8
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playScoreScreenFlash/whiteWash/setDepth/0",
+        "expression": "DEPTH_FX + 1.8"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:playScoreScreenFlash/centerHalo/configureAdditiveImage/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "playScoreScreenFlash/centerHalo/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        26.82
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playScoreScreenFlash/centerHalo/configureAdditiveImage/0",
+        "expression": "DEPTH_FX + 1.82"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:playScoreScreenFlash/centerCore/configureAdditiveImage/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "playScoreScreenFlash/centerCore/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        26.84
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playScoreScreenFlash/centerCore/configureAdditiveImage/0",
+        "expression": "DEPTH_FX + 1.84"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:playScoreLightBurst/beam/setDepth/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "playScoreLightBurst/beam/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.95
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playScoreLightBurst/beam/setDepth/0",
+        "expression": "DEPTH_FX + 0.95"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:playScoreLightBurst/core/configureAdditiveImage/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "playScoreLightBurst/core/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        26.02
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playScoreLightBurst/core/configureAdditiveImage/0",
+        "expression": "DEPTH_FX + 1.02"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:playScoreLightBurst/corona/configureAdditiveImage/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "playScoreLightBurst/corona/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        26.01
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playScoreLightBurst/corona/configureAdditiveImage/0",
+        "expression": "DEPTH_FX + 1.01"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:playScoreFoamShell/shell/createEmitter/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "playScoreFoamShell/shell/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.86
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playScoreFoamShell/shell/createEmitter/0",
+        "expression": "DEPTH_FX + 0.86"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:playScoreFoamShell/plume/createEmitter/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "playScoreFoamShell/plume/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.88
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playScoreFoamShell/plume/createEmitter/0",
+        "expression": "DEPTH_FX + 0.88"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:playRing/ring/setDepth/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "playRing/ring/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.6
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playRing/ring/setDepth/0",
+        "expression": "DEPTH_FX + 0.6"
+      }
+    },
+    {
+      "id": "cpu:effects/CaptureTheBeerRenderer.ts:spawnAfterglow/afterglow/configureAdditiveImage/0",
+      "owner": "effects/CaptureTheBeerRenderer.ts",
+      "component": "spawnAfterglow/afterglow/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.3
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "spawnAfterglow/afterglow/configureAdditiveImage/0",
+        "expression": "DEPTH_FX + 0.3"
+      }
+    }
+  ]
+}

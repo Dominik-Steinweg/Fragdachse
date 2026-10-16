@@ -1,0 +1,24 @@
+{
+  "name": "GroundFireSmoke",
+  "contract": {
+    "id": "gpu:GroundFireSmoke",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "GroundFireSmoke",
+    "height": "ground",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      9.12
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "M"
+    ],
+    "role": "effect",
+    "lanes": [
+      "GroundFireSmoke"
+    ]
+  }
+}

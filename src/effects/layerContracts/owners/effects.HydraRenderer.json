@@ -1,0 +1,391 @@
+{
+  "owner": "effects/HydraRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createVisual/glow/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES - 0.25",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/membrane/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 0.7",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/cluster/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 0.55",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/coreEmitter/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES + 1.1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/shellEmitter/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES + 0.85",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/moteEmitter/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES + 0.95",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playImpact/glow/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 1.4",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playImpact/cluster/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 1.52",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playImpact/membrane/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 1.6",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playImpact/burst/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES + 1.75",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playSplitImpact/pulse/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 1.5",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playSplitImpact/emitter/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES + 1.85",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playSplitImpact/wisp/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 0.9",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/HydraRenderer.ts:createVisual/glow/configureAdditiveImage/0",
+      "owner": "effects/HydraRenderer.ts",
+      "component": "createVisual/glow/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        14.75
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/glow/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES - 0.25"
+      }
+    },
+    {
+      "id": "cpu:effects/HydraRenderer.ts:createVisual/membrane/configureAdditiveImage/0",
+      "owner": "effects/HydraRenderer.ts",
+      "component": "createVisual/membrane/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.7
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/membrane/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 0.7"
+      }
+    },
+    {
+      "id": "cpu:effects/HydraRenderer.ts:createVisual/cluster/configureAdditiveImage/0",
+      "owner": "effects/HydraRenderer.ts",
+      "component": "createVisual/cluster/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.55
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/cluster/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 0.55"
+      }
+    },
+    {
+      "id": "cpu:effects/HydraRenderer.ts:createVisual/coreEmitter/createEmitter/0",
+      "owner": "effects/HydraRenderer.ts",
+      "component": "createVisual/coreEmitter/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.1
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/coreEmitter/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES + 1.1"
+      }
+    },
+    {
+      "id": "cpu:effects/HydraRenderer.ts:createVisual/shellEmitter/createEmitter/0",
+      "owner": "effects/HydraRenderer.ts",
+      "component": "createVisual/shellEmitter/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.85
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/shellEmitter/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES + 0.85"
+      }
+    },
+    {
+      "id": "cpu:effects/HydraRenderer.ts:createVisual/moteEmitter/createEmitter/0",
+      "owner": "effects/HydraRenderer.ts",
+      "component": "createVisual/moteEmitter/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.95
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/moteEmitter/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES + 0.95"
+      }
+    },
+    {
+      "id": "cpu:effects/HydraRenderer.ts:playImpact/glow/configureAdditiveImage/0",
+      "owner": "effects/HydraRenderer.ts",
+      "component": "playImpact/glow/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.4
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpact/glow/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 1.4"
+      }
+    },
+    {
+      "id": "cpu:effects/HydraRenderer.ts:playImpact/cluster/configureAdditiveImage/0",
+      "owner": "effects/HydraRenderer.ts",
+      "component": "playImpact/cluster/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.52
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpact/cluster/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 1.52"
+      }
+    },
+    {
+      "id": "cpu:effects/HydraRenderer.ts:playImpact/membrane/configureAdditiveImage/0",
+      "owner": "effects/HydraRenderer.ts",
+      "component": "playImpact/membrane/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.6
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpact/membrane/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 1.6"
+      }
+    },
+    {
+      "id": "cpu:effects/HydraRenderer.ts:playImpact/burst/createEmitter/0",
+      "owner": "effects/HydraRenderer.ts",
+      "component": "playImpact/burst/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.75
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpact/burst/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES + 1.75"
+      }
+    },
+    {
+      "id": "cpu:effects/HydraRenderer.ts:playSplitImpact/pulse/configureAdditiveImage/0",
+      "owner": "effects/HydraRenderer.ts",
+      "component": "playSplitImpact/pulse/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.5
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playSplitImpact/pulse/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 1.5"
+      }
+    },
+    {
+      "id": "cpu:effects/HydraRenderer.ts:playSplitImpact/emitter/createEmitter/0",
+      "owner": "effects/HydraRenderer.ts",
+      "component": "playSplitImpact/emitter/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.85
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playSplitImpact/emitter/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES + 1.85"
+      }
+    },
+    {
+      "id": "cpu:effects/HydraRenderer.ts:playSplitImpact/wisp/setDepth/0",
+      "owner": "effects/HydraRenderer.ts",
+      "component": "playSplitImpact/wisp/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.9
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playSplitImpact/wisp/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 0.9"
+      }
+    }
+  ]
+}

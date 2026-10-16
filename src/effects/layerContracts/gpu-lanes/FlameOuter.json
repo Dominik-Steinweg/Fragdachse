@@ -1,0 +1,21 @@
+{
+  "name": "FlameOuter",
+  "contract": {
+    "id": "lane:FlameOuter",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "FlameOuter",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      16
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "L"
+    ],
+    "role": "effect"
+  }
+}

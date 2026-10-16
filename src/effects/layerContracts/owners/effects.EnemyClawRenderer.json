@@ -1,0 +1,99 @@
+{
+  "owner": "effects/EnemyClawRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/ground/createEnemyClawGpuLayer/0",
+        "expression": "DEPTH.PLAYERS - 0.1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/top/createEnemyClawGpuLayer/0",
+        "expression": "DEPTH_TRACE",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/night/createEnemyClawGpuLayer/0",
+        "expression": "DEPTH_LIGHTING + 0.08",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/EnemyClawRenderer.ts:module/ground/createEnemyClawGpuLayer/0",
+      "owner": "effects/EnemyClawRenderer.ts",
+      "component": "module/ground/createEnemyClawGpuLayer/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.9
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/ground/createEnemyClawGpuLayer/0",
+        "expression": "DEPTH.PLAYERS - 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/EnemyClawRenderer.ts:module/top/createEnemyClawGpuLayer/0",
+      "owner": "effects/EnemyClawRenderer.ts",
+      "component": "module/top/createEnemyClawGpuLayer/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        16
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/top/createEnemyClawGpuLayer/0",
+        "expression": "DEPTH_TRACE"
+      }
+    },
+    {
+      "id": "cpu:effects/EnemyClawRenderer.ts:module/night/createEnemyClawGpuLayer/0",
+      "owner": "effects/EnemyClawRenderer.ts",
+      "component": "module/night/createEnemyClawGpuLayer/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        19.58
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/night/createEnemyClawGpuLayer/0",
+        "expression": "DEPTH_LIGHTING + 0.08"
+      }
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "owner": "effects/PlasmaBurnerChargeRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createVisual/make/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 0.1",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/PlasmaBurnerChargeRenderer.ts:createVisual/make/configureAdditiveImage/0",
+      "owner": "effects/PlasmaBurnerChargeRenderer.ts",
+      "component": "createVisual/make/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.1
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/make/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 0.1"
+      }
+    }
+  ]
+}

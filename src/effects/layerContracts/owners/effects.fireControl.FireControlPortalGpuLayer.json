@@ -1,0 +1,43 @@
+{
+  "owner": "effects/fireControl/FireControlPortalGpuLayer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createFireControlPortalGpuLayer/layer?.image/setDepth/0",
+        "expression": "DEPTH.ROCKS + 0.3",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/fireControl/FireControlPortalGpuLayer.ts:createFireControlPortalGpuLayer/layer?.image/setDepth/0",
+      "owner": "effects/fireControl/FireControlPortalGpuLayer.ts",
+      "component": "createFireControlPortalGpuLayer/layer?.image/setDepth/0",
+      "height": "ground",
+      "lighting": "mixed",
+      "camera": "world",
+      "depths": [
+        9.3
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createFireControlPortalGpuLayer/layer?.image/setDepth/0",
+        "expression": "DEPTH.ROCKS + 0.3"
+      }
+    }
+  ]
+}

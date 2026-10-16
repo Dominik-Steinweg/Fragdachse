@@ -1,0 +1,421 @@
+{
+  "owner": "effects/ZeusTaserRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "makeAdditive"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "syncUpgrades/this.statusLayer/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.3",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playSwing/sector/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.04",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playOriginBurst/halo/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.08",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playOriginBurst/streak/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.09",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playOriginBurst/sparks/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playVolumeParticles/volume/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.07",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playVolumeParticles/rim/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.11",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playImpactBurst/chain/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.13",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playImpactBurst/halo/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.14",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playImpactBurst/flash/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.15",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playImpactBurst/sparks/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.16",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playImpactBurst/branches/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.15",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playTerminusPulse/pulse/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.12",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playTerminusPulse/core/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.13",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/ZeusTaserRenderer.ts:syncUpgrades/this.statusLayer/setDepth/0",
+      "owner": "effects/ZeusTaserRenderer.ts",
+      "component": "syncUpgrades/this.statusLayer/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.3
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncUpgrades/this.statusLayer/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.3"
+      }
+    },
+    {
+      "id": "cpu:effects/ZeusTaserRenderer.ts:playSwing/sector/setDepth/0",
+      "owner": "effects/ZeusTaserRenderer.ts",
+      "component": "playSwing/sector/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        16.04
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playSwing/sector/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.04"
+      }
+    },
+    {
+      "id": "cpu:effects/ZeusTaserRenderer.ts:playOriginBurst/halo/setDepth/0",
+      "owner": "effects/ZeusTaserRenderer.ts",
+      "component": "playOriginBurst/halo/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.08
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playOriginBurst/halo/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.08"
+      }
+    },
+    {
+      "id": "cpu:effects/ZeusTaserRenderer.ts:playOriginBurst/streak/setDepth/0",
+      "owner": "effects/ZeusTaserRenderer.ts",
+      "component": "playOriginBurst/streak/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.09
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playOriginBurst/streak/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.09"
+      }
+    },
+    {
+      "id": "cpu:effects/ZeusTaserRenderer.ts:playOriginBurst/sparks/createEmitter/0",
+      "owner": "effects/ZeusTaserRenderer.ts",
+      "component": "playOriginBurst/sparks/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.1
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playOriginBurst/sparks/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/ZeusTaserRenderer.ts:playVolumeParticles/volume/createEmitter/0",
+      "owner": "effects/ZeusTaserRenderer.ts",
+      "component": "playVolumeParticles/volume/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.07
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playVolumeParticles/volume/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.07"
+      }
+    },
+    {
+      "id": "cpu:effects/ZeusTaserRenderer.ts:playVolumeParticles/rim/createEmitter/0",
+      "owner": "effects/ZeusTaserRenderer.ts",
+      "component": "playVolumeParticles/rim/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.11
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playVolumeParticles/rim/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.11"
+      }
+    },
+    {
+      "id": "cpu:effects/ZeusTaserRenderer.ts:playImpactBurst/chain/setDepth/0",
+      "owner": "effects/ZeusTaserRenderer.ts",
+      "component": "playImpactBurst/chain/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.13
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpactBurst/chain/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.13"
+      }
+    },
+    {
+      "id": "cpu:effects/ZeusTaserRenderer.ts:playImpactBurst/halo/setDepth/0",
+      "owner": "effects/ZeusTaserRenderer.ts",
+      "component": "playImpactBurst/halo/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.14
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpactBurst/halo/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.14"
+      }
+    },
+    {
+      "id": "cpu:effects/ZeusTaserRenderer.ts:playImpactBurst/flash/setDepth/0",
+      "owner": "effects/ZeusTaserRenderer.ts",
+      "component": "playImpactBurst/flash/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.15
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpactBurst/flash/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.15"
+      }
+    },
+    {
+      "id": "cpu:effects/ZeusTaserRenderer.ts:playImpactBurst/sparks/createEmitter/0",
+      "owner": "effects/ZeusTaserRenderer.ts",
+      "component": "playImpactBurst/sparks/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.16
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpactBurst/sparks/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.16"
+      }
+    },
+    {
+      "id": "cpu:effects/ZeusTaserRenderer.ts:playImpactBurst/branches/setDepth/0",
+      "owner": "effects/ZeusTaserRenderer.ts",
+      "component": "playImpactBurst/branches/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.15
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpactBurst/branches/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.15"
+      }
+    },
+    {
+      "id": "cpu:effects/ZeusTaserRenderer.ts:playTerminusPulse/pulse/setDepth/0",
+      "owner": "effects/ZeusTaserRenderer.ts",
+      "component": "playTerminusPulse/pulse/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.12
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playTerminusPulse/pulse/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.12"
+      }
+    },
+    {
+      "id": "cpu:effects/ZeusTaserRenderer.ts:playTerminusPulse/core/setDepth/0",
+      "owner": "effects/ZeusTaserRenderer.ts",
+      "component": "playTerminusPulse/core/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.13
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playTerminusPulse/core/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.13"
+      }
+    }
+  ]
+}

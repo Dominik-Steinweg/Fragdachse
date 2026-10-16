@@ -1,0 +1,21 @@
+{
+  "name": "ExplosionNukePlume",
+  "contract": {
+    "id": "lane:ExplosionNukePlume",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "ExplosionNukePlume",
+    "height": "high",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      25.4
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect"
+  }
+}

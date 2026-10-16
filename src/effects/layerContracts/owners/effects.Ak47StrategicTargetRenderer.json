@@ -1,0 +1,41 @@
+{
+  "owner": "effects/Ak47StrategicTargetRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "build/container/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 2",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/Ak47StrategicTargetRenderer.ts:build/container/setDepth/0",
+      "owner": "effects/Ak47StrategicTargetRenderer.ts",
+      "component": "build/container/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        17
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "build/container/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 2"
+      }
+    }
+  ]
+}

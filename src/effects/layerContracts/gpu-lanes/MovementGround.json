@@ -1,0 +1,21 @@
+{
+  "name": "MovementGround",
+  "contract": {
+    "id": "lane:MovementGround",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "MovementGround",
+    "height": "ground",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      5.1
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "G"
+    ],
+    "role": "effect"
+  }
+}

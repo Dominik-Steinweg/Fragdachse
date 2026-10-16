@@ -1,0 +1,24 @@
+{
+  "name": "MovementWalkDust",
+  "contract": {
+    "id": "gpu:MovementWalkDust",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "MovementWalkDust",
+    "height": "ground",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      5.1
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "G"
+    ],
+    "role": "effect",
+    "lanes": [
+      "MovementGround"
+    ]
+  }
+}

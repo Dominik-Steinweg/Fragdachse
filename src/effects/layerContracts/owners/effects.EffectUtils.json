@@ -1,0 +1,71 @@
+{
+  "owner": "effects/EffectUtils.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createEmitter/emitter/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "configureAdditiveImage/image/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {
+      "depth": [
+        5,
+        10,
+        16,
+        25
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/EffectUtils.ts:createEmitter/emitter/setDepth/0",
+      "owner": "effects/EffectUtils.ts",
+      "component": "createEmitter/emitter/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "createEmitter/emitter/setDepth/0",
+        "expression": "depth"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectUtils.ts:configureAdditiveImage/image/setDepth/0",
+      "owner": "effects/EffectUtils.ts",
+      "component": "configureAdditiveImage/image/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "configureAdditiveImage/image/setDepth/0",
+        "expression": "depth"
+      }
+    }
+  ]
+}

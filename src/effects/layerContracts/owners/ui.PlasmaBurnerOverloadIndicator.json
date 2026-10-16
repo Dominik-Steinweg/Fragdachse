@@ -1,0 +1,70 @@
+{
+  "owner": "ui/PlasmaBurnerOverloadIndicator.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.empty/setDepth/0",
+        "expression": "DEPTH_AIM",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.fill/setDepth/0",
+        "expression": "DEPTH_AIM + 0.01",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/PlasmaBurnerOverloadIndicator.ts:module/this.empty/setDepth/0",
+      "owner": "ui/PlasmaBurnerOverloadIndicator.ts",
+      "component": "module/this.empty/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.6
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.empty/setDepth/0",
+        "expression": "DEPTH_AIM"
+      }
+    },
+    {
+      "id": "cpu:ui/PlasmaBurnerOverloadIndicator.ts:module/this.fill/setDepth/0",
+      "owner": "ui/PlasmaBurnerOverloadIndicator.ts",
+      "component": "module/this.fill/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.61
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.fill/setDepth/0",
+        "expression": "DEPTH_AIM + 0.01"
+      }
+    }
+  ]
+}

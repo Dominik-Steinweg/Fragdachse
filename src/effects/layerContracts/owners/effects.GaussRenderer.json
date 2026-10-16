@@ -1,0 +1,101 @@
+{
+  "owner": "effects/GaussRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createVisual/halo/configureAdditiveImage/0",
+        "expression": "DEPTH_GAUSS_HALO",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/core/configureAdditiveImage/0",
+        "expression": "DEPTH_GAUSS_CORE",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/arcEmitter/createEmitter/0",
+        "expression": "DEPTH_GAUSS_ARC",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/GaussRenderer.ts:createVisual/halo/configureAdditiveImage/0",
+      "owner": "effects/GaussRenderer.ts",
+      "component": "createVisual/halo/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        14.8
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/halo/configureAdditiveImage/0",
+        "expression": "DEPTH_GAUSS_HALO"
+      }
+    },
+    {
+      "id": "cpu:effects/GaussRenderer.ts:createVisual/core/configureAdditiveImage/0",
+      "owner": "effects/GaussRenderer.ts",
+      "component": "createVisual/core/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.2
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/core/configureAdditiveImage/0",
+        "expression": "DEPTH_GAUSS_CORE"
+      }
+    },
+    {
+      "id": "cpu:effects/GaussRenderer.ts:createVisual/arcEmitter/createEmitter/0",
+      "owner": "effects/GaussRenderer.ts",
+      "component": "createVisual/arcEmitter/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.3
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/arcEmitter/createEmitter/0",
+        "expression": "DEPTH_GAUSS_ARC"
+      }
+    }
+  ]
+}

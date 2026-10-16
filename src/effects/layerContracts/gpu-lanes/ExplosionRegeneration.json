@@ -1,0 +1,21 @@
+{
+  "name": "ExplosionRegeneration",
+  "contract": {
+    "id": "lane:ExplosionRegeneration",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "ExplosionRegeneration",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      25.35
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect"
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "owner": "effects/fireControl/FireControlRenderer.ts",
+  "notes": [
+    "fire-control: mixed sprite/glass and additive ground light intentionally share the turret receiver band."
+  ],
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "syncCopy/sprite/setDepth/0",
+        "expression": "DEPTH.ROCKS + 0.2",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "syncCopy/plate/setDepth/0",
+        "expression": "DEPTH.ROCKS + 0.15",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "updateRelay/sprite/setDepth/0",
+        "expression": "DEPTH.ROCKS + 0.1",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/fireControl/FireControlRenderer.ts:syncCopy/plate/setDepth/0",
+      "owner": "effects/fireControl/FireControlRenderer.ts",
+      "component": "syncCopy/plate/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.15
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncCopy/plate/setDepth/0",
+        "expression": "DEPTH.ROCKS + 0.15"
+      }
+    },
+    {
+      "id": "cpu:effects/fireControl/FireControlRenderer.ts:updateRelay/sprite/setDepth/0",
+      "owner": "effects/fireControl/FireControlRenderer.ts",
+      "component": "updateRelay/sprite/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.1
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "updateRelay/sprite/setDepth/0",
+        "expression": "DEPTH.ROCKS + 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/fireControl/FireControlRenderer.ts:syncCopy/sprite/setDepth/0",
+      "owner": "effects/fireControl/FireControlRenderer.ts",
+      "component": "syncCopy/sprite/setDepth/0",
+      "height": "body",
+      "lighting": "mixed",
+      "camera": "world",
+      "depths": [
+        9.2
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncCopy/sprite/setDepth/0",
+        "expression": "DEPTH.ROCKS + 0.2"
+      }
+    }
+  ]
+}

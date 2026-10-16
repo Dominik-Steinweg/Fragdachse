@@ -1,0 +1,24 @@
+{
+  "name": "MuzzleFlashSpark",
+  "contract": {
+    "id": "gpu:MuzzleFlashSpark",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "MuzzleFlashSpark",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      17.001
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "L"
+    ],
+    "role": "effect",
+    "lanes": [
+      "MuzzleFlash"
+    ]
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "owner": "arena/LobbyMerchantRenderer.ts",
+  "notes": [
+    "Dawn lobby buildings share the stall band; their night lantern housings stay lit above the light map."
+  ],
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/image/setDepth/0",
+        "expression": "DEPTH.BASES",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.stall/setDepth/0",
+        "expression": "DEPTH.BASES",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.dealer/setDepth/0",
+        "expression": "DEPTH.PLAYERS",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "addLantern/housing/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.08",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:arena/LobbyMerchantRenderer.ts:module/this.stall/setDepth/0",
+      "owner": "arena/LobbyMerchantRenderer.ts",
+      "component": "module/this.stall/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        4
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.stall/setDepth/0",
+        "expression": "DEPTH.BASES"
+      }
+    },
+    {
+      "id": "cpu:arena/LobbyMerchantRenderer.ts:module/image/setDepth/0",
+      "owner": "arena/LobbyMerchantRenderer.ts",
+      "component": "module/image/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        4
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/image/setDepth/0",
+        "expression": "DEPTH.BASES"
+      }
+    },
+    {
+      "id": "cpu:arena/LobbyMerchantRenderer.ts:addLantern/housing/setDepth/0",
+      "owner": "arena/LobbyMerchantRenderer.ts",
+      "component": "addLantern/housing/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.58
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "addLantern/housing/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.08"
+      }
+    },
+    {
+      "id": "cpu:arena/LobbyMerchantRenderer.ts:module/this.dealer/setDepth/0",
+      "owner": "arena/LobbyMerchantRenderer.ts",
+      "component": "module/this.dealer/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        10
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.dealer/setDepth/0",
+        "expression": "DEPTH.PLAYERS"
+      }
+    }
+  ]
+}

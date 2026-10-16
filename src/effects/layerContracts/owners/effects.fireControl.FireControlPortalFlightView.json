@@ -1,0 +1,76 @@
+{
+  "owner": "effects/fireControl/FireControlPortalFlightView.ts",
+  "notes": [
+    "fire-control portal: the thrown device draws like a grenade body.",
+    "Lens glow only: emissive above the lightmap, below the canopy, so the throw reads at night."
+  ],
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.sprite/setDepth/0",
+        "expression": "DEPTH.PROJECTILES",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.glow/setDepth/0",
+        "expression": "DEPTH.CANOPY - 0.3",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/fireControl/FireControlPortalFlightView.ts:module/this.sprite/setDepth/0",
+      "owner": "effects/fireControl/FireControlPortalFlightView.ts",
+      "component": "module/this.sprite/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.sprite/setDepth/0",
+        "expression": "DEPTH.PROJECTILES"
+      }
+    },
+    {
+      "id": "cpu:effects/fireControl/FireControlPortalFlightView.ts:module/this.glow/setDepth/0",
+      "owner": "effects/fireControl/FireControlPortalFlightView.ts",
+      "component": "module/this.glow/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.7
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.glow/setDepth/0",
+        "expression": "DEPTH.CANOPY - 0.3"
+      }
+    }
+  ]
+}

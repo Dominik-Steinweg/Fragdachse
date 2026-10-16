@@ -1,0 +1,24 @@
+{
+  "name": "DeathGlow",
+  "contract": {
+    "id": "gpu:DeathGlow",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "DeathGlow",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      19.65
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "E"
+    ],
+    "role": "effect",
+    "lanes": [
+      "GoreAdd"
+    ]
+  }
+}

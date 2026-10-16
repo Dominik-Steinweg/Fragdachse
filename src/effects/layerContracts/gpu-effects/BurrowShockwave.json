@@ -1,0 +1,24 @@
+{
+  "name": "BurrowShockwave",
+  "contract": {
+    "id": "gpu:BurrowShockwave",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "BurrowShockwave",
+    "height": "ground",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      25.1
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionAccent"
+    ]
+  }
+}

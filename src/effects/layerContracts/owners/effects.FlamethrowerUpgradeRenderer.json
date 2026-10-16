@@ -1,0 +1,73 @@
+{
+  "owner": "effects/FlamethrowerUpgradeRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "Phaser.BlendModes.NORMAL"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "playFireChunkBurst/chunk/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 0.4",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createRingVisual/quad/setDepth/0",
+        "expression": "RING_DEPTH",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/FlamethrowerUpgradeRenderer.ts:playFireChunkBurst/chunk/setDepth/0",
+      "owner": "effects/FlamethrowerUpgradeRenderer.ts",
+      "component": "playFireChunkBurst/chunk/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.4
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playFireChunkBurst/chunk/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 0.4"
+      }
+    },
+    {
+      "id": "cpu:effects/FlamethrowerUpgradeRenderer.ts:createRingVisual/quad/setDepth/0",
+      "owner": "effects/FlamethrowerUpgradeRenderer.ts",
+      "component": "createRingVisual/quad/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        16.12
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createRingVisual/quad/setDepth/0",
+        "expression": "RING_DEPTH"
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "WorldDebris",
+  "contract": {
+    "id": "lane:WorldDebris",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "WorldDebris",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      16.075
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "L"
+    ],
+    "role": "effect"
+  }
+}

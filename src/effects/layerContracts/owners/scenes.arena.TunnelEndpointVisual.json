@@ -1,0 +1,250 @@
+{
+  "owner": "scenes/arena/TunnelEndpointVisual.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.shadow/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.aura/configureAdditiveImage/0",
+        "expression": "depth + 0.01",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.soil/setDepth/0",
+        "expression": "depth + 0.02",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.rim/setDepth/0",
+        "expression": "depth + 0.03",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.core/setDepth/0",
+        "expression": "depth + 0.04",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.dustEmitter/createEmitter/0",
+        "expression": "depth + 0.05",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.moteEmitter/createEmitter/0",
+        "expression": "depth + 0.06",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.emberEmitter/createEmitter/0",
+        "expression": "depth + 0.07",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {
+      "depth": [
+        9.66
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:scenes/arena/TunnelEndpointVisual.ts:module/this.shadow/setDepth/0",
+      "owner": "scenes/arena/TunnelEndpointVisual.ts",
+      "component": "module/this.shadow/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.66
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.shadow/setDepth/0",
+        "expression": "depth"
+      }
+    },
+    {
+      "id": "cpu:scenes/arena/TunnelEndpointVisual.ts:module/this.aura/configureAdditiveImage/0",
+      "owner": "scenes/arena/TunnelEndpointVisual.ts",
+      "component": "module/this.aura/configureAdditiveImage/0",
+      "height": "ground",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.67
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.aura/configureAdditiveImage/0",
+        "expression": "depth + 0.01"
+      }
+    },
+    {
+      "id": "cpu:scenes/arena/TunnelEndpointVisual.ts:module/this.soil/setDepth/0",
+      "owner": "scenes/arena/TunnelEndpointVisual.ts",
+      "component": "module/this.soil/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.68
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.soil/setDepth/0",
+        "expression": "depth + 0.02"
+      }
+    },
+    {
+      "id": "cpu:scenes/arena/TunnelEndpointVisual.ts:module/this.rim/setDepth/0",
+      "owner": "scenes/arena/TunnelEndpointVisual.ts",
+      "component": "module/this.rim/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.69
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.rim/setDepth/0",
+        "expression": "depth + 0.03"
+      }
+    },
+    {
+      "id": "cpu:scenes/arena/TunnelEndpointVisual.ts:module/this.core/setDepth/0",
+      "owner": "scenes/arena/TunnelEndpointVisual.ts",
+      "component": "module/this.core/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.7
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.core/setDepth/0",
+        "expression": "depth + 0.04"
+      }
+    },
+    {
+      "id": "cpu:scenes/arena/TunnelEndpointVisual.ts:module/this.dustEmitter/createEmitter/0",
+      "owner": "scenes/arena/TunnelEndpointVisual.ts",
+      "component": "module/this.dustEmitter/createEmitter/0",
+      "height": "ground",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.71
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.dustEmitter/createEmitter/0",
+        "expression": "depth + 0.05"
+      }
+    },
+    {
+      "id": "cpu:scenes/arena/TunnelEndpointVisual.ts:module/this.moteEmitter/createEmitter/0",
+      "owner": "scenes/arena/TunnelEndpointVisual.ts",
+      "component": "module/this.moteEmitter/createEmitter/0",
+      "height": "ground",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.72
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.moteEmitter/createEmitter/0",
+        "expression": "depth + 0.06"
+      }
+    },
+    {
+      "id": "cpu:scenes/arena/TunnelEndpointVisual.ts:module/this.emberEmitter/createEmitter/0",
+      "owner": "scenes/arena/TunnelEndpointVisual.ts",
+      "component": "module/this.emberEmitter/createEmitter/0",
+      "height": "ground",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.73
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.emberEmitter/createEmitter/0",
+        "expression": "depth + 0.07"
+      }
+    }
+  ]
+}

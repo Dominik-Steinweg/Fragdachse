@@ -1,0 +1,24 @@
+{
+  "name": "BloodDroplet",
+  "contract": {
+    "id": "gpu:BloodDroplet",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "BloodDroplet",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      13.2
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect",
+    "lanes": [
+      "GoreNormal"
+    ]
+  }
+}

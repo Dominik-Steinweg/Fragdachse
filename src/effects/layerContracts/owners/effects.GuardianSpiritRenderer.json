@@ -1,0 +1,246 @@
+{
+  "owner": "effects/GuardianSpiritRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createVisual/halo/configureAdditiveImage/0",
+        "expression": "SPIRIT_DEPTH - 0.03",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/core/configureAdditiveImage/0",
+        "expression": "SPIRIT_DEPTH + 0.03",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/wingLeft/configureAdditiveImage/0",
+        "expression": "SPIRIT_DEPTH",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/wingRight/configureAdditiveImage/0",
+        "expression": "SPIRIT_DEPTH",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/trail/createEmitter/0",
+        "expression": "SPIRIT_DEPTH - 0.08",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/motes/createEmitter/0",
+        "expression": "SPIRIT_DEPTH - 0.05",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playImpact/ring/configureAdditiveImage/0",
+        "expression": "SPIRIT_DEPTH + 0.1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playBurst/emitter/createEmitter/0",
+        "expression": "SPIRIT_DEPTH + 0.12",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/GuardianSpiritRenderer.ts:createVisual/halo/configureAdditiveImage/0",
+      "owner": "effects/GuardianSpiritRenderer.ts",
+      "component": "createVisual/halo/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.32
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/halo/configureAdditiveImage/0",
+        "expression": "SPIRIT_DEPTH - 0.03"
+      }
+    },
+    {
+      "id": "cpu:effects/GuardianSpiritRenderer.ts:createVisual/core/configureAdditiveImage/0",
+      "owner": "effects/GuardianSpiritRenderer.ts",
+      "component": "createVisual/core/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.38
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/core/configureAdditiveImage/0",
+        "expression": "SPIRIT_DEPTH + 0.03"
+      }
+    },
+    {
+      "id": "cpu:effects/GuardianSpiritRenderer.ts:createVisual/wingLeft/configureAdditiveImage/0",
+      "owner": "effects/GuardianSpiritRenderer.ts",
+      "component": "createVisual/wingLeft/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.35
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/wingLeft/configureAdditiveImage/0",
+        "expression": "SPIRIT_DEPTH"
+      }
+    },
+    {
+      "id": "cpu:effects/GuardianSpiritRenderer.ts:createVisual/wingRight/configureAdditiveImage/0",
+      "owner": "effects/GuardianSpiritRenderer.ts",
+      "component": "createVisual/wingRight/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.35
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/wingRight/configureAdditiveImage/0",
+        "expression": "SPIRIT_DEPTH"
+      }
+    },
+    {
+      "id": "cpu:effects/GuardianSpiritRenderer.ts:createVisual/trail/createEmitter/0",
+      "owner": "effects/GuardianSpiritRenderer.ts",
+      "component": "createVisual/trail/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.27
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/trail/createEmitter/0",
+        "expression": "SPIRIT_DEPTH - 0.08"
+      }
+    },
+    {
+      "id": "cpu:effects/GuardianSpiritRenderer.ts:createVisual/motes/createEmitter/0",
+      "owner": "effects/GuardianSpiritRenderer.ts",
+      "component": "createVisual/motes/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.3
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/motes/createEmitter/0",
+        "expression": "SPIRIT_DEPTH - 0.05"
+      }
+    },
+    {
+      "id": "cpu:effects/GuardianSpiritRenderer.ts:playImpact/ring/configureAdditiveImage/0",
+      "owner": "effects/GuardianSpiritRenderer.ts",
+      "component": "playImpact/ring/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.45
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpact/ring/configureAdditiveImage/0",
+        "expression": "SPIRIT_DEPTH + 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/GuardianSpiritRenderer.ts:playBurst/emitter/createEmitter/0",
+      "owner": "effects/GuardianSpiritRenderer.ts",
+      "component": "playBurst/emitter/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.47
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playBurst/emitter/createEmitter/0",
+        "expression": "SPIRIT_DEPTH + 0.12"
+      }
+    }
+  ]
+}

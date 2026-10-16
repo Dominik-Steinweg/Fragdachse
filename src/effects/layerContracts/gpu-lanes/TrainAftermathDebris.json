@@ -1,0 +1,24 @@
+{
+  "name": "TrainAftermathDebris",
+  "notes": [
+    "train8: rising fragments only; they break before landing. Small landed chips use TrainResidue/TrainGround (5.35)."
+  ],
+  "contract": {
+    "id": "lane:TrainAftermathDebris",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "TrainAftermathDebris",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      11.2
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect"
+  }
+}

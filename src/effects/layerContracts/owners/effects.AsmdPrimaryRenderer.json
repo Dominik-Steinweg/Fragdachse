@@ -1,0 +1,340 @@
+{
+  "owner": "effects/AsmdPrimaryRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "makeAdditive"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "playTracer/segment/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.02 + centerT * 0.05",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playImpact/halo/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playImpact/flash/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.13",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playImpact/sparks/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.12",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playMuzzleBurst/bloom/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playMuzzleBurst/flare/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.11",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playMuzzleBurst/core/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.12",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playMuzzleBurst/sparks/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.13",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playBeamParticles/flow/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.08",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playBeamParticles/front/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playImpactArcs/gfx/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.14",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {
+      "centerT": [
+        0,
+        1
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/AsmdPrimaryRenderer.ts:playTracer/segment/setDepth/0",
+      "owner": "effects/AsmdPrimaryRenderer.ts",
+      "component": "playTracer/segment/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        16.02,
+        16.07
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playTracer/segment/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.02 + centerT * 0.05"
+      }
+    },
+    {
+      "id": "cpu:effects/AsmdPrimaryRenderer.ts:playImpact/halo/setDepth/0",
+      "owner": "effects/AsmdPrimaryRenderer.ts",
+      "component": "playImpact/halo/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.1
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpact/halo/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/AsmdPrimaryRenderer.ts:playImpact/flash/setDepth/0",
+      "owner": "effects/AsmdPrimaryRenderer.ts",
+      "component": "playImpact/flash/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.13
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpact/flash/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.13"
+      }
+    },
+    {
+      "id": "cpu:effects/AsmdPrimaryRenderer.ts:playImpact/sparks/createEmitter/0",
+      "owner": "effects/AsmdPrimaryRenderer.ts",
+      "component": "playImpact/sparks/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.12
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpact/sparks/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.12"
+      }
+    },
+    {
+      "id": "cpu:effects/AsmdPrimaryRenderer.ts:playMuzzleBurst/bloom/setDepth/0",
+      "owner": "effects/AsmdPrimaryRenderer.ts",
+      "component": "playMuzzleBurst/bloom/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.1
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playMuzzleBurst/bloom/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/AsmdPrimaryRenderer.ts:playMuzzleBurst/flare/setDepth/0",
+      "owner": "effects/AsmdPrimaryRenderer.ts",
+      "component": "playMuzzleBurst/flare/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.11
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playMuzzleBurst/flare/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.11"
+      }
+    },
+    {
+      "id": "cpu:effects/AsmdPrimaryRenderer.ts:playMuzzleBurst/core/setDepth/0",
+      "owner": "effects/AsmdPrimaryRenderer.ts",
+      "component": "playMuzzleBurst/core/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.12
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playMuzzleBurst/core/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.12"
+      }
+    },
+    {
+      "id": "cpu:effects/AsmdPrimaryRenderer.ts:playMuzzleBurst/sparks/createEmitter/0",
+      "owner": "effects/AsmdPrimaryRenderer.ts",
+      "component": "playMuzzleBurst/sparks/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.13
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playMuzzleBurst/sparks/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.13"
+      }
+    },
+    {
+      "id": "cpu:effects/AsmdPrimaryRenderer.ts:playBeamParticles/flow/createEmitter/0",
+      "owner": "effects/AsmdPrimaryRenderer.ts",
+      "component": "playBeamParticles/flow/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.08
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playBeamParticles/flow/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.08"
+      }
+    },
+    {
+      "id": "cpu:effects/AsmdPrimaryRenderer.ts:playBeamParticles/front/createEmitter/0",
+      "owner": "effects/AsmdPrimaryRenderer.ts",
+      "component": "playBeamParticles/front/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.1
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playBeamParticles/front/createEmitter/0",
+        "expression": "DEPTH_TRACE + 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/AsmdPrimaryRenderer.ts:playImpactArcs/gfx/setDepth/0",
+      "owner": "effects/AsmdPrimaryRenderer.ts",
+      "component": "playImpactArcs/gfx/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.14
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpactArcs/gfx/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.14"
+      }
+    }
+  ]
+}

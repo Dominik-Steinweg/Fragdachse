@@ -1,0 +1,21 @@
+{
+  "name": "ExplosionLowGlow",
+  "contract": {
+    "id": "lane:ExplosionLowGlow",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "ExplosionLowGlow",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      19.6
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "E"
+    ],
+    "role": "effect"
+  }
+}

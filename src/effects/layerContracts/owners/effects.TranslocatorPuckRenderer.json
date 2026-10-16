@@ -1,0 +1,70 @@
+{
+  "owner": "effects/TranslocatorPuckRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createVisual/baseImage/setDepth/0",
+        "expression": "DEPTH.PROJECTILES",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createVisual/glowImage/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 0.1",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/TranslocatorPuckRenderer.ts:createVisual/baseImage/setDepth/0",
+      "owner": "effects/TranslocatorPuckRenderer.ts",
+      "component": "createVisual/baseImage/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/baseImage/setDepth/0",
+        "expression": "DEPTH.PROJECTILES"
+      }
+    },
+    {
+      "id": "cpu:effects/TranslocatorPuckRenderer.ts:createVisual/glowImage/configureAdditiveImage/0",
+      "owner": "effects/TranslocatorPuckRenderer.ts",
+      "component": "createVisual/glowImage/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.1
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/glowImage/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 0.1"
+      }
+    }
+  ]
+}

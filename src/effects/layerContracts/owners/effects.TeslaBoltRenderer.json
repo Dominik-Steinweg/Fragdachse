@@ -1,0 +1,101 @@
+{
+  "owner": "effects/TeslaBoltRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "playImpact/flash/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 0.3",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "ensureLayer/this.layer/createTeslaStormBoltGpuLayer/0",
+        "expression": "DEPTH.PROJECTILES + 0.2",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "ensureImpactEmitter/this.impactEmitter/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES + 0.31",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/TeslaBoltRenderer.ts:ensureLayer/this.layer/createTeslaStormBoltGpuLayer/0",
+      "owner": "effects/TeslaBoltRenderer.ts",
+      "component": "ensureLayer/this.layer/createTeslaStormBoltGpuLayer/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.2
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "ensureLayer/this.layer/createTeslaStormBoltGpuLayer/0",
+        "expression": "DEPTH.PROJECTILES + 0.2"
+      }
+    },
+    {
+      "id": "cpu:effects/TeslaBoltRenderer.ts:playImpact/flash/configureAdditiveImage/0",
+      "owner": "effects/TeslaBoltRenderer.ts",
+      "component": "playImpact/flash/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.3
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playImpact/flash/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES + 0.3"
+      }
+    },
+    {
+      "id": "cpu:effects/TeslaBoltRenderer.ts:ensureImpactEmitter/this.impactEmitter/createEmitter/0",
+      "owner": "effects/TeslaBoltRenderer.ts",
+      "component": "ensureImpactEmitter/this.impactEmitter/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.31
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "ensureImpactEmitter/this.impactEmitter/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES + 0.31"
+      }
+    }
+  ]
+}

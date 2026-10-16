@@ -1,0 +1,159 @@
+{
+  "owner": "effects/EnemyEyeGlowRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.aura/EnemyEyeBatch/0",
+        "expression": "DEPTH_LIGHTING + .09",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.socket/EnemyEyeBatch/0",
+        "expression": "DEPTH_LIGHTING + .095",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.bloom/EnemyEyeBatch/0",
+        "expression": "DEPTH_LIGHTING + .1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.halo/EnemyEyeBatch/0",
+        "expression": "DEPTH_LIGHTING + .11",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.core/EnemyEyeBatch/0",
+        "expression": "DEPTH_LIGHTING + .12",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/EnemyEyeGlowRenderer.ts:module/this.aura/EnemyEyeBatch/0",
+      "owner": "effects/EnemyEyeGlowRenderer.ts",
+      "component": "module/this.aura/EnemyEyeBatch/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.59
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.aura/EnemyEyeBatch/0",
+        "expression": "DEPTH_LIGHTING + .09"
+      }
+    },
+    {
+      "id": "cpu:effects/EnemyEyeGlowRenderer.ts:module/this.socket/EnemyEyeBatch/0",
+      "owner": "effects/EnemyEyeGlowRenderer.ts",
+      "component": "module/this.socket/EnemyEyeBatch/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.595
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.socket/EnemyEyeBatch/0",
+        "expression": "DEPTH_LIGHTING + .095"
+      }
+    },
+    {
+      "id": "cpu:effects/EnemyEyeGlowRenderer.ts:module/this.bloom/EnemyEyeBatch/0",
+      "owner": "effects/EnemyEyeGlowRenderer.ts",
+      "component": "module/this.bloom/EnemyEyeBatch/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.6
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.bloom/EnemyEyeBatch/0",
+        "expression": "DEPTH_LIGHTING + .1"
+      }
+    },
+    {
+      "id": "cpu:effects/EnemyEyeGlowRenderer.ts:module/this.halo/EnemyEyeBatch/0",
+      "owner": "effects/EnemyEyeGlowRenderer.ts",
+      "component": "module/this.halo/EnemyEyeBatch/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.61
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.halo/EnemyEyeBatch/0",
+        "expression": "DEPTH_LIGHTING + .11"
+      }
+    },
+    {
+      "id": "cpu:effects/EnemyEyeGlowRenderer.ts:module/this.core/EnemyEyeBatch/0",
+      "owner": "effects/EnemyEyeGlowRenderer.ts",
+      "component": "module/this.core/EnemyEyeBatch/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.62
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.core/EnemyEyeBatch/0",
+        "expression": "DEPTH_LIGHTING + .12"
+      }
+    }
+  ]
+}

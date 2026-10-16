@@ -1,0 +1,21 @@
+{
+  "name": "ExplosionLowSmoke",
+  "contract": {
+    "id": "lane:ExplosionLowSmoke",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "ExplosionLowSmoke",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      13.36
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect"
+  }
+}

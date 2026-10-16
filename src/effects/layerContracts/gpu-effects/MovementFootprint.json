@@ -1,0 +1,24 @@
+{
+  "name": "MovementFootprint",
+  "contract": {
+    "id": "gpu:MovementFootprint",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "MovementFootprint",
+    "height": "ground",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      5.1
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "G"
+    ],
+    "role": "effect",
+    "lanes": [
+      "MovementGround"
+    ]
+  }
+}

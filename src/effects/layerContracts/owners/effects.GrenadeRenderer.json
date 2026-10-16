@@ -1,0 +1,163 @@
+{
+  "owner": "effects/GrenadeRenderer.ts",
+  "source": {
+    "blends": [
+      "(cfg.trailAdditive ?? true) ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL",
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createVisual/glow/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES - 1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/body/setDepth/0",
+        "expression": "DEPTH.PROJECTILES",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createVisual/detail/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 0.2",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createVisual/trail/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES - 0.2",
+        "blends": [
+          "ADD",
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "spawnFirePuff/puff/setDepth/0",
+        "expression": "isVoid ? DEPTH.PROJECTILES - 0.3 : DEPTH.FIRE",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/GrenadeRenderer.ts:createVisual/glow/configureAdditiveImage/0",
+      "owner": "effects/GrenadeRenderer.ts",
+      "component": "createVisual/glow/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        14
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/glow/configureAdditiveImage/0",
+        "expression": "DEPTH.PROJECTILES - 1"
+      }
+    },
+    {
+      "id": "cpu:effects/GrenadeRenderer.ts:createVisual/body/setDepth/0",
+      "owner": "effects/GrenadeRenderer.ts",
+      "component": "createVisual/body/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/body/setDepth/0",
+        "expression": "DEPTH.PROJECTILES"
+      }
+    },
+    {
+      "id": "cpu:effects/GrenadeRenderer.ts:createVisual/detail/setDepth/0",
+      "owner": "effects/GrenadeRenderer.ts",
+      "component": "createVisual/detail/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15.2
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/detail/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 0.2"
+      }
+    },
+    {
+      "id": "cpu:effects/GrenadeRenderer.ts:createVisual/trail/createEmitter/0",
+      "owner": "effects/GrenadeRenderer.ts",
+      "component": "createVisual/trail/createEmitter/0",
+      "height": "body",
+      "lighting": "mixed",
+      "camera": "world",
+      "depths": [
+        14.8
+      ],
+      "blends": [
+        "ADD",
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/trail/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES - 0.2"
+      }
+    },
+    {
+      "id": "cpu:effects/GrenadeRenderer.ts:spawnFirePuff/puff/setDepth/0",
+      "owner": "effects/GrenadeRenderer.ts",
+      "component": "spawnFirePuff/puff/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        14.7,
+        16
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "spawnFirePuff/puff/setDepth/0",
+        "expression": "isVoid ? DEPTH.PROJECTILES - 0.3 : DEPTH.FIRE"
+      }
+    }
+  ]
+}

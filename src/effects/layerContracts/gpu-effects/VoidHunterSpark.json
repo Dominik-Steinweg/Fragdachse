@@ -1,0 +1,24 @@
+{
+  "name": "VoidHunterSpark",
+  "contract": {
+    "id": "gpu:VoidHunterSpark",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "VoidHunterSpark",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      19.6
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "E"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionLowGlow"
+    ]
+  }
+}

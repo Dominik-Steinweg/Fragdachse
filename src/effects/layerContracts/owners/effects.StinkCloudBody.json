@@ -1,0 +1,41 @@
+{
+  "owner": "effects/StinkCloudBody.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.quad/setDepth/0",
+        "expression": "DEPTH.STINK",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/StinkCloudBody.ts:module/this.quad/setDepth/0",
+      "owner": "effects/StinkCloudBody.ts",
+      "component": "module/this.quad/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        17
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.quad/setDepth/0",
+        "expression": "DEPTH.STINK"
+      }
+    }
+  ]
+}

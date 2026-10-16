@@ -1,0 +1,24 @@
+{
+  "name": "ExplosionSmoke",
+  "contract": {
+    "id": "gpu:ExplosionSmoke",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ExplosionSmoke",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      24.96
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionSmoke"
+    ]
+  }
+}

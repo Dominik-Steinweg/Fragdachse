@@ -1,0 +1,186 @@
+{
+  "owner": "entities/DecoyEntity.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.sprite/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.02",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.heldItem/HeldItemVisual/0",
+        "expression": "DEPTH.PLAYERS - 0.015",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.hpBarBg/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.hpBarFg/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 2",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.armorBarBg/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.armorBarFg/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 2",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:entities/DecoyEntity.ts:module/this.sprite/setDepth/0",
+      "owner": "entities/DecoyEntity.ts",
+      "component": "module/this.sprite/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.98
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.sprite/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.02"
+      }
+    },
+    {
+      "id": "cpu:entities/DecoyEntity.ts:module/this.heldItem/HeldItemVisual/0",
+      "owner": "entities/DecoyEntity.ts",
+      "component": "module/this.heldItem/HeldItemVisual/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.985
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.heldItem/HeldItemVisual/0",
+        "expression": "DEPTH.PLAYERS - 0.015"
+      }
+    },
+    {
+      "id": "cpu:entities/DecoyEntity.ts:module/this.hpBarBg/setDepth/0",
+      "owner": "entities/DecoyEntity.ts",
+      "component": "module/this.hpBarBg/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        11
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.hpBarBg/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 1"
+      }
+    },
+    {
+      "id": "cpu:entities/DecoyEntity.ts:module/this.hpBarFg/setDepth/0",
+      "owner": "entities/DecoyEntity.ts",
+      "component": "module/this.hpBarFg/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        12
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.hpBarFg/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 2"
+      }
+    },
+    {
+      "id": "cpu:entities/DecoyEntity.ts:module/this.armorBarBg/setDepth/0",
+      "owner": "entities/DecoyEntity.ts",
+      "component": "module/this.armorBarBg/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        11
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.armorBarBg/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 1"
+      }
+    },
+    {
+      "id": "cpu:entities/DecoyEntity.ts:module/this.armorBarFg/setDepth/0",
+      "owner": "entities/DecoyEntity.ts",
+      "component": "module/this.armorBarFg/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        12
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.armorBarFg/setDepth/0",
+        "expression": "DEPTH.PLAYERS + 2"
+      }
+    }
+  ]
+}

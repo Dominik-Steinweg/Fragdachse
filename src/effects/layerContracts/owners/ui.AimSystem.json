@@ -1,0 +1,41 @@
+{
+  "owner": "ui/AimSystem.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.container/setDepth/0",
+        "expression": "DEPTH_AIM",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/AimSystem.ts:module/this.container/setDepth/0",
+      "owner": "ui/AimSystem.ts",
+      "component": "module/this.container/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.6
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.container/setDepth/0",
+        "expression": "DEPTH_AIM"
+      }
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "owner": "effects/kraken/KrakenShadowRenderer.ts",
+  "source": {
+    "sites": [
+      {
+        "key": "bind/this.display/setDepth/0",
+        "expression": "CHARACTER_SHADOW_CONFIG.depth",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "blends": [],
+    "cameras": [],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/kraken/KrakenShadowRenderer.ts:bind/this.display/setDepth/0",
+      "owner": "effects/kraken/KrakenShadowRenderer.ts",
+      "component": "bind/this.display/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.92
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "bind/this.display/setDepth/0",
+        "expression": "CHARACTER_SHADOW_CONFIG.depth"
+      }
+    }
+  ]
+}

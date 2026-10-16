@@ -1,0 +1,101 @@
+{
+  "owner": "effects/MortarStrikeRenderer.ts",
+  "source": {
+    "bindings": {},
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createVisual/glow/setDepth/0",
+        "expression": "19.7",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/core/setDepth/0",
+        "expression": "19.7",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/wave/setDepth/0",
+        "expression": "19.7",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ]
+  },
+  "cpuLayers": [
+    {
+      "id": "mortar:glow",
+      "owner": "effects/MortarStrikeRenderer.ts",
+      "component": "glow",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.7
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/glow/setDepth/0",
+        "expression": "19.7"
+      }
+    },
+    {
+      "id": "mortar:core",
+      "owner": "effects/MortarStrikeRenderer.ts",
+      "component": "core",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.7
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/core/setDepth/0",
+        "expression": "19.7"
+      }
+    },
+    {
+      "id": "mortar:wave",
+      "owner": "effects/MortarStrikeRenderer.ts",
+      "component": "wave",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.7
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/wave/setDepth/0",
+        "expression": "19.7"
+      }
+    }
+  ]
+}

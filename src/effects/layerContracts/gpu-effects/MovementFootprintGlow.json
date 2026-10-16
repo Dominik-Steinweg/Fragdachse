@@ -1,0 +1,24 @@
+{
+  "name": "MovementFootprintGlow",
+  "contract": {
+    "id": "gpu:MovementFootprintGlow",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "MovementFootprintGlow",
+    "height": "ground",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      5.11
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "G"
+    ],
+    "role": "effect",
+    "lanes": [
+      "MovementGlow"
+    ]
+  }
+}

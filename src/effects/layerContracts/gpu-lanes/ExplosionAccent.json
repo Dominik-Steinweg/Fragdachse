@@ -1,0 +1,21 @@
+{
+  "name": "ExplosionAccent",
+  "contract": {
+    "id": "lane:ExplosionAccent",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "ExplosionAccent",
+    "height": "body",
+    "lighting": "mixed",
+    "camera": "world",
+    "depths": [
+      25.1
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect"
+  }
+}

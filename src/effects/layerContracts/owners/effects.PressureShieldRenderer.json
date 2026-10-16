@@ -1,0 +1,70 @@
+{
+  "owner": "effects/PressureShieldRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.shell/configureAdditiveImage/0",
+        "expression": "DEPTH.PLAYERS + 0.18",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.echo/configureAdditiveImage/0",
+        "expression": "DEPTH.PLAYERS + 0.19",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/PressureShieldRenderer.ts:module/this.shell/configureAdditiveImage/0",
+      "owner": "effects/PressureShieldRenderer.ts",
+      "component": "module/this.shell/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        10.18
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.shell/configureAdditiveImage/0",
+        "expression": "DEPTH.PLAYERS + 0.18"
+      }
+    },
+    {
+      "id": "cpu:effects/PressureShieldRenderer.ts:module/this.echo/configureAdditiveImage/0",
+      "owner": "effects/PressureShieldRenderer.ts",
+      "component": "module/this.echo/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        10.19
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.echo/configureAdditiveImage/0",
+        "expression": "DEPTH.PLAYERS + 0.19"
+      }
+    }
+  ]
+}

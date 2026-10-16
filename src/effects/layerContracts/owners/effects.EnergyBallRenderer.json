@@ -1,0 +1,41 @@
+{
+  "owner": "effects/EnergyBallRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "ensureLayer/this.layer/createEnergyBallGpuLayer/0",
+        "expression": "DEPTH.PROJECTILES + 0.5",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/EnergyBallRenderer.ts:ensureLayer/this.layer/createEnergyBallGpuLayer/0",
+      "owner": "effects/EnergyBallRenderer.ts",
+      "component": "ensureLayer/this.layer/createEnergyBallGpuLayer/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.5
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "ensureLayer/this.layer/createEnergyBallGpuLayer/0",
+        "expression": "DEPTH.PROJECTILES + 0.5"
+      }
+    }
+  ]
+}

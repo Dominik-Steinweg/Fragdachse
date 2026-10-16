@@ -1,0 +1,43 @@
+{
+  "owner": "effects/AirstrikeRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.MULTIPLY"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "syncBomberRuns/shadows/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.05",
+        "blends": [
+          "MULTIPLY"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/AirstrikeRenderer.ts:syncBomberRuns/shadows/setDepth/0",
+      "owner": "effects/AirstrikeRenderer.ts",
+      "component": "syncBomberRuns/shadows/setDepth/0",
+      "height": "high",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.55
+      ],
+      "blends": [
+        "MULTIPLY"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncBomberRuns/shadows/setDepth/0",
+        "expression": "DEPTH_LIGHTING + 0.05"
+      }
+    }
+  ]
+}

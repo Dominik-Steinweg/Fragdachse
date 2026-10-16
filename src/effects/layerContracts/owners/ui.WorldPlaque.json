@@ -1,0 +1,131 @@
+{
+  "owner": "ui/WorldPlaque.ts",
+  "notes": [
+    "Lobby building plaques replace the stall nameplate: world UI above light map and fog."
+  ],
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.frame/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.primary/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI + 1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.secondary/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI + 1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.keycap/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI + 1",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/WorldPlaque.ts:module/this.frame/setDepth/0",
+      "owner": "ui/WorldPlaque.ts",
+      "component": "module/this.frame/setDepth/0",
+      "height": "high",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        22
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.frame/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI"
+      }
+    },
+    {
+      "id": "cpu:ui/WorldPlaque.ts:module/this.primary/setDepth/0",
+      "owner": "ui/WorldPlaque.ts",
+      "component": "module/this.primary/setDepth/0",
+      "height": "high",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        23
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.primary/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI + 1"
+      }
+    },
+    {
+      "id": "cpu:ui/WorldPlaque.ts:module/this.secondary/setDepth/0",
+      "owner": "ui/WorldPlaque.ts",
+      "component": "module/this.secondary/setDepth/0",
+      "height": "high",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        23
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.secondary/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI + 1"
+      }
+    },
+    {
+      "id": "cpu:ui/WorldPlaque.ts:module/this.keycap/setDepth/0",
+      "owner": "ui/WorldPlaque.ts",
+      "component": "module/this.keycap/setDepth/0",
+      "height": "high",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        23
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.keycap/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI + 1"
+      }
+    }
+  ]
+}

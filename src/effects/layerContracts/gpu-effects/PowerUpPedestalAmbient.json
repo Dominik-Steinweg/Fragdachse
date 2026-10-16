@@ -1,0 +1,24 @@
+{
+  "name": "PowerUpPedestalAmbient",
+  "contract": {
+    "id": "gpu:PowerUpPedestalAmbient",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "PowerUpPedestalAmbient",
+    "height": "ground",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      7.95
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "M"
+    ],
+    "role": "effect",
+    "lanes": [
+      "PowerUpPedestal"
+    ]
+  }
+}

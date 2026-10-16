@@ -1,0 +1,41 @@
+{
+  "owner": "effects/kraken/KrakenTentacleShadow.ts",
+  "source": {
+    "sites": [
+      {
+        "key": "module/this.image/setDepth/0",
+        "expression": "DEPTH.PLAYERS - .3",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "blends": [],
+    "cameras": [],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/kraken/KrakenTentacleShadow.ts:module/this.image/setDepth/0",
+      "owner": "effects/kraken/KrakenTentacleShadow.ts",
+      "component": "module/this.image/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.7
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.image/setDepth/0",
+        "expression": "DEPTH.PLAYERS - .3"
+      }
+    }
+  ]
+}

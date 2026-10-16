@@ -1,0 +1,21 @@
+{
+  "name": "FlameCore",
+  "contract": {
+    "id": "lane:FlameCore",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "FlameCore",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      16.05
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "L"
+    ],
+    "role": "effect"
+  }
+}

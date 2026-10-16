@@ -1,0 +1,21 @@
+{
+  "name": "MuzzleFlash",
+  "contract": {
+    "id": "lane:MuzzleFlash",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "MuzzleFlash",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      17.001
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "L"
+    ],
+    "role": "effect"
+  }
+}

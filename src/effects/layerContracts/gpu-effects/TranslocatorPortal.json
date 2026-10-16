@@ -1,0 +1,24 @@
+{
+  "name": "TranslocatorPortal",
+  "contract": {
+    "id": "gpu:TranslocatorPortal",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "TranslocatorPortal",
+    "height": "ground",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      25.1
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionAccent"
+    ]
+  }
+}

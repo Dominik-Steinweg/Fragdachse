@@ -1,0 +1,43 @@
+{
+  "owner": "ui/CoopDefenseObjectiveAnnouncement.ts",
+  "source": {
+    "blends": [],
+    "cameras": [
+      "promoteToClarityCamera(this.scene, this.root)"
+    ],
+    "sites": [
+      {
+        "key": "build/this.root/setDepth/0",
+        "expression": "DEPTH.OVERLAY",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/CoopDefenseObjectiveAnnouncement.ts:build/this.root/setDepth/0",
+      "owner": "ui/CoopDefenseObjectiveAnnouncement.ts",
+      "component": "build/this.root/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        100
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "build/this.root/setDepth/0",
+        "expression": "DEPTH.OVERLAY"
+      }
+    }
+  ]
+}

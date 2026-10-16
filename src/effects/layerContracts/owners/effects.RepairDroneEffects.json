@@ -1,0 +1,72 @@
+{
+  "owner": "effects/RepairDroneEffects.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.surface/setDepth/0",
+        "expression": "REPAIR_DRONE_DEPTH - 0.012",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.light/setDepth/0",
+        "expression": "REPAIR_DRONE_DEPTH + 0.012",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/RepairDroneEffects.ts:module/this.surface/setDepth/0",
+      "owner": "effects/RepairDroneEffects.ts",
+      "component": "module/this.surface/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15.388
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.surface/setDepth/0",
+        "expression": "REPAIR_DRONE_DEPTH - 0.012"
+      }
+    },
+    {
+      "id": "cpu:effects/RepairDroneEffects.ts:module/this.light/setDepth/0",
+      "owner": "effects/RepairDroneEffects.ts",
+      "component": "module/this.light/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.412
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.light/setDepth/0",
+        "expression": "REPAIR_DRONE_DEPTH + 0.012"
+      }
+    }
+  ]
+}

@@ -1,0 +1,983 @@
+{
+  "owner": "effects/EffectSystem.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "makeAdditive"
+    ],
+    "cameras": [
+      "promoteToClarityCamera(this.scene, edge)"
+    ],
+    "sites": [
+      {
+        "key": "playTrainExplosionEffect/flash/setDepth/0",
+        "expression": "DEPTH_FX + 1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playTrainExplosionEffect/skyFlash/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 2",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playHitEffect/criticalRing/setDepth/0",
+        "expression": "DEPTH_FX + 0.35",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playHitEffect/criticalLabel/setDepth/0",
+        "expression": "DEPTH_FX + 0.4",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playDashTrailGhost/ghost/setDepth/0",
+        "expression": "DEPTH_FX - 1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playTrainBurrowSparks/sparks/setDepth/0",
+        "expression": "DEPTH_FX + 0.35",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playStealthTransitionEffect/core/setDepth/0",
+        "expression": "DEPTH_FX + 0.2",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playStealthTransitionEffect/ring/setDepth/0",
+        "expression": "DEPTH_FX + 0.16",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playStealthTransitionEffect/outerRing/setDepth/0",
+        "expression": "DEPTH_FX + 0.12",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playStealthTransitionEffect/pixel/setDepth/0",
+        "expression": "DEPTH_FX + 0.1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playStealthTransitionEffect/dust/setDepth/0",
+        "expression": "DEPTH_FX + 0.05",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playStealthTransitionEffect/spark/setDepth/0",
+        "expression": "DEPTH_FX + 0.22",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "ensureBurrowVisual/dirt/setDepth/0",
+        "expression": "DEPTH_FX - 0.2",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "ensureBurrowVisual/dust/setDepth/0",
+        "expression": "DEPTH_FX - 0.25",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playBurrowPhaseEffect/ring/setDepth/0",
+        "expression": "DEPTH_FX + 0.05",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playBurrowPhaseEffect/dirtBurst/setDepth/0",
+        "expression": "DEPTH_FX + 0.08",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playBurrowPhaseEffect/plume/setDepth/0",
+        "expression": "DEPTH_FX + 0.1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playExplosionEffect/core/setDepth/0",
+        "expression": "DEPTH_FX + 0.4",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playExplosionEffect/skyFlash/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 2",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playExplosionEffect/flash/setDepth/0",
+        "expression": "getCombatExplosionProfile(visualStyle)?.layering === 'ordinary' ? 20.25 : DEPTH_FX + 1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playExplosionEffect/skyFlash/setDepth/1",
+        "expression": "DEPTH.OVERLAY - 2",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playLightningExplosionEffect/flash/setDepth/0",
+        "expression": "DEPTH_FX + 0.45",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playLightningExplosionEffect/arcs/setDepth/0",
+        "expression": "DEPTH_FX + 0.35",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playBroodHatchEffect/lobe/setDepth/0",
+        "expression": "DEPTH_FX + 0.12",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playRegenerationEffect/core/setDepth/0",
+        "expression": "DEPTH_FX + 0.4",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playRegenerationEffect/ring/setDepth/0",
+        "expression": "DEPTH_FX + 0.3 - ringIndex * 0.02",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playCountdownText/label/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 5",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playHitscanTracer/gfx/setDepth/0",
+        "expression": "DEPTH_TRACE",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playHitscanImpact/halo/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playMeleeSwingEffect/gfx/setDepth/0",
+        "expression": "DEPTH_FX",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "spawnBloodStain/depth/depth/0",
+        "expression": "DEPTH_BLOOD_STAIN",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "ensureDamageVignette/createEdge/setDepth/0",
+        "expression": "DEPTH_DAMAGE_VIGNETTE",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playPlayerDeathAnimation/sprite/setDepth/0",
+        "expression": "DEPTH_FX + 0.1",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "ringIndex": [
+        0,
+        1,
+        2
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/EffectSystem.ts:playTrainExplosionEffect/flash/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playTrainExplosionEffect/flash/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        26
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playTrainExplosionEffect/flash/setDepth/0",
+        "expression": "DEPTH_FX + 1"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playTrainExplosionEffect/skyFlash/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playTrainExplosionEffect/skyFlash/setDepth/0",
+      "height": "high",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        98
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playTrainExplosionEffect/skyFlash/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 2"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playHitEffect/criticalRing/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playHitEffect/criticalRing/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.35
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playHitEffect/criticalRing/setDepth/0",
+        "expression": "DEPTH_FX + 0.35"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playHitEffect/criticalLabel/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playHitEffect/criticalLabel/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        25.4
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playHitEffect/criticalLabel/setDepth/0",
+        "expression": "DEPTH_FX + 0.4"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playDashTrailGhost/ghost/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playDashTrailGhost/ghost/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        24
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playDashTrailGhost/ghost/setDepth/0",
+        "expression": "DEPTH_FX - 1"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playTrainBurrowSparks/sparks/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playTrainBurrowSparks/sparks/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        25.35
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playTrainBurrowSparks/sparks/setDepth/0",
+        "expression": "DEPTH_FX + 0.35"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playStealthTransitionEffect/core/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playStealthTransitionEffect/core/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.2
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playStealthTransitionEffect/core/setDepth/0",
+        "expression": "DEPTH_FX + 0.2"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playStealthTransitionEffect/ring/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playStealthTransitionEffect/ring/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.16
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playStealthTransitionEffect/ring/setDepth/0",
+        "expression": "DEPTH_FX + 0.16"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playStealthTransitionEffect/outerRing/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playStealthTransitionEffect/outerRing/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        25.12
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playStealthTransitionEffect/outerRing/setDepth/0",
+        "expression": "DEPTH_FX + 0.12"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playStealthTransitionEffect/pixel/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playStealthTransitionEffect/pixel/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.1
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playStealthTransitionEffect/pixel/setDepth/0",
+        "expression": "DEPTH_FX + 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playStealthTransitionEffect/dust/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playStealthTransitionEffect/dust/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        25.05
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playStealthTransitionEffect/dust/setDepth/0",
+        "expression": "DEPTH_FX + 0.05"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playStealthTransitionEffect/spark/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playStealthTransitionEffect/spark/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        25.22
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playStealthTransitionEffect/spark/setDepth/0",
+        "expression": "DEPTH_FX + 0.22"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:ensureBurrowVisual/dirt/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "ensureBurrowVisual/dirt/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        24.8
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "ensureBurrowVisual/dirt/setDepth/0",
+        "expression": "DEPTH_FX - 0.2"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:ensureBurrowVisual/dust/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "ensureBurrowVisual/dust/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        24.75
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "ensureBurrowVisual/dust/setDepth/0",
+        "expression": "DEPTH_FX - 0.25"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playBurrowPhaseEffect/ring/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playBurrowPhaseEffect/ring/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        25.05
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playBurrowPhaseEffect/ring/setDepth/0",
+        "expression": "DEPTH_FX + 0.05"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playBurrowPhaseEffect/dirtBurst/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playBurrowPhaseEffect/dirtBurst/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        25.08
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playBurrowPhaseEffect/dirtBurst/setDepth/0",
+        "expression": "DEPTH_FX + 0.08"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playBurrowPhaseEffect/plume/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playBurrowPhaseEffect/plume/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        25.1
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playBurrowPhaseEffect/plume/setDepth/0",
+        "expression": "DEPTH_FX + 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playExplosionEffect/core/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playExplosionEffect/core/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.4
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playExplosionEffect/core/setDepth/0",
+        "expression": "DEPTH_FX + 0.4"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playExplosionEffect/skyFlash/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playExplosionEffect/skyFlash/setDepth/0",
+      "height": "high",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        98
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playExplosionEffect/skyFlash/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 2"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playExplosionEffect/flash/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playExplosionEffect/flash/setDepth/0",
+      "height": "high",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        20.25,
+        26
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playExplosionEffect/flash/setDepth/0",
+        "expression": "getCombatExplosionProfile(visualStyle)?.layering === 'ordinary' ? 20.25 : DEPTH_FX + 1"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playExplosionEffect/skyFlash/setDepth/1",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playExplosionEffect/skyFlash/setDepth/1",
+      "height": "high",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        98
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playExplosionEffect/skyFlash/setDepth/1",
+        "expression": "DEPTH.OVERLAY - 2"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playLightningExplosionEffect/flash/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playLightningExplosionEffect/flash/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.45
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playLightningExplosionEffect/flash/setDepth/0",
+        "expression": "DEPTH_FX + 0.45"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playLightningExplosionEffect/arcs/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playLightningExplosionEffect/arcs/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.35
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playLightningExplosionEffect/arcs/setDepth/0",
+        "expression": "DEPTH_FX + 0.35"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playBroodHatchEffect/lobe/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playBroodHatchEffect/lobe/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        25.12
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playBroodHatchEffect/lobe/setDepth/0",
+        "expression": "DEPTH_FX + 0.12"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playRegenerationEffect/core/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playRegenerationEffect/core/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.4
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playRegenerationEffect/core/setDepth/0",
+        "expression": "DEPTH_FX + 0.4"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playRegenerationEffect/ring/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playRegenerationEffect/ring/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.26,
+        25.28,
+        25.3
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playRegenerationEffect/ring/setDepth/0",
+        "expression": "DEPTH_FX + 0.3 - ringIndex * 0.02"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playCountdownText/label/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playCountdownText/label/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        95
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playCountdownText/label/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 5"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playHitscanTracer/gfx/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playHitscanTracer/gfx/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        16
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playHitscanTracer/gfx/setDepth/0",
+        "expression": "DEPTH_TRACE"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playHitscanImpact/halo/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playHitscanImpact/halo/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.1
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playHitscanImpact/halo/setDepth/0",
+        "expression": "DEPTH_TRACE + 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playMeleeSwingEffect/gfx/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playMeleeSwingEffect/gfx/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        25
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playMeleeSwingEffect/gfx/setDepth/0",
+        "expression": "DEPTH_FX"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:spawnBloodStain/depth/depth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "spawnBloodStain/depth/depth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.95
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "spawnBloodStain/depth/depth/0",
+        "expression": "DEPTH_BLOOD_STAIN"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:ensureDamageVignette/createEdge/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "ensureDamageVignette/createEdge/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "clarity",
+      "depths": [
+        99
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "ensureDamageVignette/createEdge/setDepth/0",
+        "expression": "DEPTH_DAMAGE_VIGNETTE"
+      }
+    },
+    {
+      "id": "cpu:effects/EffectSystem.ts:playPlayerDeathAnimation/sprite/setDepth/0",
+      "owner": "effects/EffectSystem.ts",
+      "component": "playPlayerDeathAnimation/sprite/setDepth/0",
+      "height": "high",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25.1
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playPlayerDeathAnimation/sprite/setDepth/0",
+        "expression": "DEPTH_FX + 0.1"
+      }
+    }
+  ]
+}

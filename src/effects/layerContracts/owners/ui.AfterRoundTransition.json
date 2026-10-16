@@ -1,0 +1,112 @@
+{
+  "owner": "ui/AfterRoundTransition.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "overlayTransitionView/root/setDepth/0",
+        "expression": "value",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "overlayTransitionView/root/setDepth/1",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "opening/view/setDepth/0",
+        "expression": "Math.max(view.depth, (this.source?.depth ?? view.depth) + 1)",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "opening/view/setDepth/1",
+        "expression": "view.depth",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/AfterRoundTransition.ts:overlayTransitionView/root/setDepth/0",
+      "owner": "ui/AfterRoundTransition.ts",
+      "component": "overlayTransitionView/root/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "clarity",
+      "depths": [],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "overlayTransitionView/root/setDepth/0",
+        "expression": "value"
+      }
+    },
+    {
+      "id": "cpu:ui/AfterRoundTransition.ts:overlayTransitionView/root/setDepth/1",
+      "owner": "ui/AfterRoundTransition.ts",
+      "component": "overlayTransitionView/root/setDepth/1",
+      "height": "body",
+      "lighting": "material",
+      "camera": "clarity",
+      "depths": [],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "overlayTransitionView/root/setDepth/1",
+        "expression": "depth"
+      }
+    },
+    {
+      "id": "cpu:ui/AfterRoundTransition.ts:opening/view/setDepth/0",
+      "owner": "ui/AfterRoundTransition.ts",
+      "component": "opening/view/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "clarity",
+      "depths": [],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "opening/view/setDepth/0",
+        "expression": "Math.max(view.depth, (this.source?.depth ?? view.depth) + 1)"
+      }
+    },
+    {
+      "id": "cpu:ui/AfterRoundTransition.ts:opening/view/setDepth/1",
+      "owner": "ui/AfterRoundTransition.ts",
+      "component": "opening/view/setDepth/1",
+      "height": "body",
+      "lighting": "material",
+      "camera": "clarity",
+      "depths": [],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "opening/view/setDepth/1",
+        "expression": "view.depth"
+      }
+    }
+  ]
+}

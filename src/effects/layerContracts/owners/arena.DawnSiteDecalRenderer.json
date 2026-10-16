@@ -1,0 +1,41 @@
+{
+  "owner": "arena/DawnSiteDecalRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/scene.add/setDepth/0",
+        "expression": "DEPTH.BASES - 0.05",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:arena/DawnSiteDecalRenderer.ts:module/scene.add/setDepth/0",
+      "owner": "arena/DawnSiteDecalRenderer.ts",
+      "component": "module/scene.add/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        3.95
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/scene.add/setDepth/0",
+        "expression": "DEPTH.BASES - 0.05"
+      }
+    }
+  ]
+}

@@ -1,0 +1,160 @@
+{
+  "owner": "effects/BfgRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "makeAdditive"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createVisual/coreEmitter/createEmitter/0",
+        "expression": "DEPTH_BFG + 0.05",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/outerEmitter/createEmitter/0",
+        "expression": "DEPTH_BFG",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/sparkEmitter/createEmitter/0",
+        "expression": "DEPTH_SPARK",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/glowImage/configureAdditiveImage/0",
+        "expression": "DEPTH_BFG - 0.1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createBeamVisual/root/setDepth/0",
+        "expression": "BFG_BEAM_DEPTH",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/BfgRenderer.ts:createVisual/coreEmitter/createEmitter/0",
+      "owner": "effects/BfgRenderer.ts",
+      "component": "createVisual/coreEmitter/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.05
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/coreEmitter/createEmitter/0",
+        "expression": "DEPTH_BFG + 0.05"
+      }
+    },
+    {
+      "id": "cpu:effects/BfgRenderer.ts:createVisual/outerEmitter/createEmitter/0",
+      "owner": "effects/BfgRenderer.ts",
+      "component": "createVisual/outerEmitter/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/outerEmitter/createEmitter/0",
+        "expression": "DEPTH_BFG"
+      }
+    },
+    {
+      "id": "cpu:effects/BfgRenderer.ts:createVisual/sparkEmitter/createEmitter/0",
+      "owner": "effects/BfgRenderer.ts",
+      "component": "createVisual/sparkEmitter/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.1
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/sparkEmitter/createEmitter/0",
+        "expression": "DEPTH_SPARK"
+      }
+    },
+    {
+      "id": "cpu:effects/BfgRenderer.ts:createVisual/glowImage/configureAdditiveImage/0",
+      "owner": "effects/BfgRenderer.ts",
+      "component": "createVisual/glowImage/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.9
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/glowImage/configureAdditiveImage/0",
+        "expression": "DEPTH_BFG - 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/BfgRenderer.ts:createBeamVisual/root/setDepth/0",
+      "owner": "effects/BfgRenderer.ts",
+      "component": "createBeamVisual/root/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        16.18
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createBeamVisual/root/setDepth/0",
+        "expression": "BFG_BEAM_DEPTH"
+      }
+    }
+  ]
+}

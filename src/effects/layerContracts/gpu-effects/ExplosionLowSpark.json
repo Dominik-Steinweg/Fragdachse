@@ -1,0 +1,24 @@
+{
+  "name": "ExplosionLowSpark",
+  "contract": {
+    "id": "gpu:ExplosionLowSpark",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ExplosionLowSpark",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      19.6
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "E"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionLowGlow"
+    ]
+  }
+}

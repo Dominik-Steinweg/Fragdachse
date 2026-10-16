@@ -1,0 +1,43 @@
+{
+  "owner": "ui/DawnMerchantOverlay.ts",
+  "source": {
+    "sites": [
+      {
+        "key": "build/this.root/setDepth/0",
+        "expression": "DEPTH.OVERLAY + 3",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "blends": [],
+    "cameras": [
+      "promoteToClarityCamera(this.scene, this.root)"
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/DawnMerchantOverlay.ts:build/this.root/setDepth/0",
+      "owner": "ui/DawnMerchantOverlay.ts",
+      "component": "build/this.root/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        103
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "build/this.root/setDepth/0",
+        "expression": "DEPTH.OVERLAY + 3"
+      }
+    }
+  ]
+}

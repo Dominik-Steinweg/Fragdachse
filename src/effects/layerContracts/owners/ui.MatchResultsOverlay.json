@@ -1,0 +1,45 @@
+{
+  "owner": "ui/MatchResultsOverlay.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [
+      "promoteToClarityCamera(this.scene, this.container)"
+    ],
+    "sites": [
+      {
+        "key": "build/this.container/setDepth/0",
+        "expression": "DEPTH.OVERLAY + 4",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/MatchResultsOverlay.ts:build/this.container/setDepth/0",
+      "owner": "ui/MatchResultsOverlay.ts",
+      "component": "build/this.container/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        104
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "build/this.container/setDepth/0",
+        "expression": "DEPTH.OVERLAY + 4"
+      }
+    }
+  ]
+}

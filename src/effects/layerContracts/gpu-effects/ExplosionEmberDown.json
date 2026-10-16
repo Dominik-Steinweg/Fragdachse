@@ -1,0 +1,24 @@
+{
+  "name": "ExplosionEmberDown",
+  "contract": {
+    "id": "gpu:ExplosionEmberDown",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ExplosionEmberDown",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      25
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionEmberDown"
+    ]
+  }
+}

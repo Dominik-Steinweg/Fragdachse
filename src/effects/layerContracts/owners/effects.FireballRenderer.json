@@ -1,0 +1,130 @@
+{
+  "owner": "effects/FireballRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.tail/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES - 0.2",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "module/this.sparks/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES + 0.2",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/glow/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 0.1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/core/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 0.1",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/FireballRenderer.ts:module/this.tail/createEmitter/0",
+      "owner": "effects/FireballRenderer.ts",
+      "component": "module/this.tail/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        14.8
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.tail/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES - 0.2"
+      }
+    },
+    {
+      "id": "cpu:effects/FireballRenderer.ts:module/this.sparks/createEmitter/0",
+      "owner": "effects/FireballRenderer.ts",
+      "component": "module/this.sparks/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.2
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.sparks/createEmitter/0",
+        "expression": "DEPTH.PROJECTILES + 0.2"
+      }
+    },
+    {
+      "id": "cpu:effects/FireballRenderer.ts:createVisual/glow/setDepth/0",
+      "owner": "effects/FireballRenderer.ts",
+      "component": "createVisual/glow/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        14.9
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/glow/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 0.1"
+      }
+    },
+    {
+      "id": "cpu:effects/FireballRenderer.ts:createVisual/core/setDepth/0",
+      "owner": "effects/FireballRenderer.ts",
+      "component": "createVisual/core/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        15.1
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/core/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 0.1"
+      }
+    }
+  ]
+}

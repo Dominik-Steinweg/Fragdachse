@@ -1,0 +1,24 @@
+{
+  "name": "TrainDust",
+  "contract": {
+    "id": "gpu:TrainDust",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "TrainDust",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      11.1
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect",
+    "lanes": [
+      "TrainBody"
+    ]
+  }
+}

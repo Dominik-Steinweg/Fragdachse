@@ -1,0 +1,134 @@
+{
+  "owner": "ui/LeftSidePanel.ts",
+  "source": {
+    "blends": [],
+    "cameras": [
+      "promoteToClarityCamera(this.scene, image)",
+      "promoteToClarityCamera(this.scene, this.badgerPreview.sprite)",
+      "promoteToClarityCamera(this.scene, this.gameContainer)",
+      "promoteToClarityCamera(this.scene, this.lobbyContainer)",
+      "promoteToClarityCamera(this.scene, this.pickerContainer)"
+    ],
+    "sites": [
+      {
+        "key": "build/this.gameContainer/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "build/this.lobbyContainer/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "build/this.badgerPreview/setDepth/0",
+        "expression": "DEPTH.OVERLAY",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "buildPickerContainer/container/setDepth/0",
+        "expression": "DEPTH.OVERLAY + 2",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/LeftSidePanel.ts:build/this.gameContainer/setDepth/0",
+      "owner": "ui/LeftSidePanel.ts",
+      "component": "build/this.gameContainer/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        99
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "build/this.gameContainer/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1"
+      }
+    },
+    {
+      "id": "cpu:ui/LeftSidePanel.ts:build/this.lobbyContainer/setDepth/0",
+      "owner": "ui/LeftSidePanel.ts",
+      "component": "build/this.lobbyContainer/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        99
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "build/this.lobbyContainer/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1"
+      }
+    },
+    {
+      "id": "cpu:ui/LeftSidePanel.ts:build/this.badgerPreview/setDepth/0",
+      "owner": "ui/LeftSidePanel.ts",
+      "component": "build/this.badgerPreview/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        100
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "build/this.badgerPreview/setDepth/0",
+        "expression": "DEPTH.OVERLAY"
+      }
+    },
+    {
+      "id": "cpu:ui/LeftSidePanel.ts:buildPickerContainer/container/setDepth/0",
+      "owner": "ui/LeftSidePanel.ts",
+      "component": "buildPickerContainer/container/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        102
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "buildPickerContainer/container/setDepth/0",
+        "expression": "DEPTH.OVERLAY + 2"
+      }
+    }
+  ]
+}

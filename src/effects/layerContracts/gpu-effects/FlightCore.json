@@ -1,0 +1,24 @@
+{
+  "name": "FlightCore",
+  "contract": {
+    "id": "gpu:FlightCore",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "FlightCore",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      13.2
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect",
+    "lanes": [
+      "FlightSignature"
+    ]
+  }
+}

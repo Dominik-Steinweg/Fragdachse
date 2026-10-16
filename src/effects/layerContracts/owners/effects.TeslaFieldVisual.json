@@ -1,0 +1,85 @@
+{
+  "owner": "effects/TeslaFieldVisual.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.NORMAL"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createDomeQuad/quad/setDepth/0",
+        "expression": "this.options.depth",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createBoltSlot/quad/setDepth/0",
+        "expression": "this.options.boltDepth",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "this.options.depth": [
+        9.86,
+        16.05
+      ],
+      "this.options.boltDepth": [
+        10.12,
+        16.2
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/TeslaFieldVisual.ts:createDomeQuad/quad/setDepth/0",
+      "owner": "effects/TeslaFieldVisual.ts",
+      "component": "createDomeQuad/quad/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.86,
+        16.05
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L",
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createDomeQuad/quad/setDepth/0",
+        "expression": "this.options.depth"
+      }
+    },
+    {
+      "id": "cpu:effects/TeslaFieldVisual.ts:createBoltSlot/quad/setDepth/0",
+      "owner": "effects/TeslaFieldVisual.ts",
+      "component": "createBoltSlot/quad/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        10.12,
+        16.2
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L",
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createBoltSlot/quad/setDepth/0",
+        "expression": "this.options.boltDepth"
+      }
+    }
+  ]
+}

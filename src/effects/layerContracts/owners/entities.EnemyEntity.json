@@ -1,0 +1,134 @@
+{
+  "owner": "entities/EnemyEntity.ts",
+  "source": {
+    "blends": [
+      "makeAdditive"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.sprite/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.05",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.ownerRing/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.075",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createGlowHalo/this.glowHalo/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.09",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "syncVoidMolotovWindupVisuals/this.voidMolotovWindupRing/setDepth/0",
+        "expression": "this.sprite.depth + 0.01",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "this.sprite.depth": [
+        9.95
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:entities/EnemyEntity.ts:module/this.sprite/setDepth/0",
+      "owner": "entities/EnemyEntity.ts",
+      "component": "module/this.sprite/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.95
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.sprite/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.05"
+      }
+    },
+    {
+      "id": "cpu:entities/EnemyEntity.ts:module/this.ownerRing/setDepth/0",
+      "owner": "entities/EnemyEntity.ts",
+      "component": "module/this.ownerRing/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.925
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.ownerRing/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.075"
+      }
+    },
+    {
+      "id": "cpu:entities/EnemyEntity.ts:createGlowHalo/this.glowHalo/setDepth/0",
+      "owner": "entities/EnemyEntity.ts",
+      "component": "createGlowHalo/this.glowHalo/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.91
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createGlowHalo/this.glowHalo/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.09"
+      }
+    },
+    {
+      "id": "cpu:entities/EnemyEntity.ts:syncVoidMolotovWindupVisuals/this.voidMolotovWindupRing/setDepth/0",
+      "owner": "entities/EnemyEntity.ts",
+      "component": "syncVoidMolotovWindupVisuals/this.voidMolotovWindupRing/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.96
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncVoidMolotovWindupVisuals/this.voidMolotovWindupRing/setDepth/0",
+        "expression": "this.sprite.depth + 0.01"
+      }
+    }
+  ]
+}

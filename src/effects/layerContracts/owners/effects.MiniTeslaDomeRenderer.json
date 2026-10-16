@@ -1,0 +1,70 @@
+{
+  "owner": "effects/MiniTeslaDomeRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "syncDome/visual/depth/0",
+        "expression": "DEPTH.PLAYERS - 0.14",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "syncDome/visual/boltDepth/0",
+        "expression": "DEPTH.PLAYERS + 0.12",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/MiniTeslaDomeRenderer.ts:syncDome/visual/depth/0",
+      "owner": "effects/MiniTeslaDomeRenderer.ts",
+      "component": "syncDome/visual/depth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.86
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncDome/visual/depth/0",
+        "expression": "DEPTH.PLAYERS - 0.14"
+      }
+    },
+    {
+      "id": "cpu:effects/MiniTeslaDomeRenderer.ts:syncDome/visual/boltDepth/0",
+      "owner": "effects/MiniTeslaDomeRenderer.ts",
+      "component": "syncDome/visual/boltDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        10.12
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncDome/visual/boltDepth/0",
+        "expression": "DEPTH.PLAYERS + 0.12"
+      }
+    }
+  ]
+}

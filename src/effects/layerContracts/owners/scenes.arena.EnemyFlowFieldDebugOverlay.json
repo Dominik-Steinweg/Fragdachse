@@ -1,0 +1,41 @@
+{
+  "owner": "scenes/arena/EnemyFlowFieldDebugOverlay.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "show/this.graphics/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:scenes/arena/EnemyFlowFieldDebugOverlay.ts:show/this.graphics/setDepth/0",
+      "owner": "scenes/arena/EnemyFlowFieldDebugOverlay.ts",
+      "component": "show/this.graphics/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        99
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "show/this.graphics/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 1"
+      }
+    }
+  ]
+}

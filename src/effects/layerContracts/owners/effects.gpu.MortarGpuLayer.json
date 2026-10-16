@@ -1,0 +1,95 @@
+{
+  "owner": "effects/gpu/MortarGpuLayer.ts",
+  "gpuLayers": [
+    {
+      "id": "mortar:ground",
+      "owner": "effects/gpu/MortarGpuLayer.ts",
+      "component": "ground",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        5.12
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect"
+    },
+    {
+      "id": "mortar:telegraph",
+      "owner": "effects/gpu/MortarGpuLayer.ts",
+      "component": "telegraph",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.7
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "ui"
+    },
+    {
+      "id": "mortar:shell",
+      "owner": "effects/gpu/MortarGpuLayer.ts",
+      "component": "shell",
+      "height": "high",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        20.6
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect"
+    },
+    {
+      "id": "mortar:smoke",
+      "owner": "effects/gpu/MortarGpuLayer.ts",
+      "component": "smoke",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        13.38
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect"
+    },
+    {
+      "id": "mortar:trace",
+      "owner": "effects/gpu/MortarGpuLayer.ts",
+      "component": "trace",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.65
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "ui"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "ConstructionOwnershipMote",
+  "contract": {
+    "id": "gpu:ConstructionOwnershipMote",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ConstructionOwnershipMote",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      25.1
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionAccent"
+    ]
+  }
+}

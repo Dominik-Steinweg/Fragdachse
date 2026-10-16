@@ -1,0 +1,21 @@
+{
+  "name": "ExplosionTrainChunk",
+  "contract": {
+    "id": "lane:ExplosionTrainChunk",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "ExplosionTrainChunk",
+    "height": "body",
+    "lighting": "mixed",
+    "camera": "world",
+    "depths": [
+      25.24
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect"
+  }
+}

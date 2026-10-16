@@ -1,0 +1,24 @@
+{
+  "name": "ExplosionNukePlume",
+  "contract": {
+    "id": "gpu:ExplosionNukePlume",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ExplosionNukePlume",
+    "height": "high",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      25.4
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionNukePlume"
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "GroundFireSpark",
+  "contract": {
+    "id": "gpu:GroundFireSpark",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "GroundFireSpark",
+    "height": "ground",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      9.2
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "M"
+    ],
+    "role": "effect",
+    "lanes": [
+      "GroundFire"
+    ]
+  }
+}

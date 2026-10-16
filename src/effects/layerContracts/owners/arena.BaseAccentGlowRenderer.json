@@ -1,0 +1,52 @@
+{
+  "owner": "arena/BaseAccentGlowRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/overlay/setDepth/0",
+        "expression": "source.depth + depth",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {
+      "source.depth": [
+        4
+      ],
+      "depth": [
+        0.04,
+        0.05
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:arena/BaseAccentGlowRenderer.ts:module/overlay/setDepth/0",
+      "owner": "arena/BaseAccentGlowRenderer.ts",
+      "component": "module/overlay/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        4.04,
+        4.05
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/overlay/setDepth/0",
+        "expression": "source.depth + depth"
+      }
+    }
+  ]
+}

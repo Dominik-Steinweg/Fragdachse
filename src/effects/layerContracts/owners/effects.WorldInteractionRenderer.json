@@ -1,0 +1,70 @@
+{
+  "owner": "effects/WorldInteractionRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "ensureObjects/this.alternativeGraphics/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "ensureObjects/this.focusGraphics/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/WorldInteractionRenderer.ts:ensureObjects/this.alternativeGraphics/setDepth/0",
+      "owner": "effects/WorldInteractionRenderer.ts",
+      "component": "ensureObjects/this.alternativeGraphics/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        22
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "ensureObjects/this.alternativeGraphics/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI"
+      }
+    },
+    {
+      "id": "cpu:effects/WorldInteractionRenderer.ts:ensureObjects/this.focusGraphics/setDepth/0",
+      "owner": "effects/WorldInteractionRenderer.ts",
+      "component": "ensureObjects/this.focusGraphics/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        22
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "ensureObjects/this.focusGraphics/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI"
+      }
+    }
+  ]
+}

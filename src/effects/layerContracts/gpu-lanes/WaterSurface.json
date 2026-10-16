@@ -1,0 +1,21 @@
+{
+  "name": "WaterSurface",
+  "contract": {
+    "id": "lane:WaterSurface",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "WaterSurface",
+    "height": "ground",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      5.25
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "G"
+    ],
+    "role": "effect"
+  }
+}

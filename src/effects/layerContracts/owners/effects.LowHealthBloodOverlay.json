@@ -1,0 +1,43 @@
+{
+  "owner": "effects/LowHealthBloodOverlay.ts",
+  "source": {
+    "blends": [],
+    "cameras": [
+      "promoteToClarityCamera(this.scene, image)"
+    ],
+    "sites": [
+      {
+        "key": "ensureObjects/createLayer/setDepth/0",
+        "expression": "DEPTH_LOW_HEALTH_BLOOD",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/LowHealthBloodOverlay.ts:ensureObjects/createLayer/setDepth/0",
+      "owner": "effects/LowHealthBloodOverlay.ts",
+      "component": "ensureObjects/createLayer/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        98
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "ensureObjects/createLayer/setDepth/0",
+        "expression": "DEPTH_LOW_HEALTH_BLOOD"
+      }
+    }
+  ]
+}

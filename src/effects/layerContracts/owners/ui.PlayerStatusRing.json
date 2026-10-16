@@ -1,0 +1,44 @@
+{
+  "owner": "ui/PlayerStatusRing.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "Phaser.BlendModes.NORMAL"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.container/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/PlayerStatusRing.ts:module/this.container/setDepth/0",
+      "owner": "ui/PlayerStatusRing.ts",
+      "component": "module/this.container/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        22
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.container/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI"
+      }
+    }
+  ]
+}

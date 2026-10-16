@@ -1,0 +1,41 @@
+{
+  "owner": "effects/PlayerGlowPresence.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.lift/setDepth/0",
+        "expression": "DEPTH.GROUND_FOG_COMPOSITE + 0.05",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/PlayerGlowPresence.ts:module/this.lift/setDepth/0",
+      "owner": "effects/PlayerGlowPresence.ts",
+      "component": "module/this.lift/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        10.55
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.lift/setDepth/0",
+        "expression": "DEPTH.GROUND_FOG_COMPOSITE + 0.05"
+      }
+    }
+  ]
+}

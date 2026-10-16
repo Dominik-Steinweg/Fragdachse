@@ -1,0 +1,132 @@
+{
+  "owner": "ui/AimVisuals.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.chargeGfx/setDepth/0",
+        "expression": "DEPTH_AIM",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "setHighVisibility/image/setDepth/0",
+        "expression": "enabled ? DEPTH_AIM_HIGH_VISIBILITY : DEPTH_AIM",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "setHighVisibility/this.chargeGfx/setDepth/0",
+        "expression": "enabled ? DEPTH_AIM_HIGH_VISIBILITY : DEPTH_AIM",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "addImage/image/setDepth/0",
+        "expression": "DEPTH_AIM",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/AimVisuals.ts:module/this.chargeGfx/setDepth/0",
+      "owner": "ui/AimVisuals.ts",
+      "component": "module/this.chargeGfx/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.6
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.chargeGfx/setDepth/0",
+        "expression": "DEPTH_AIM"
+      }
+    },
+    {
+      "id": "cpu:ui/AimVisuals.ts:setHighVisibility/image/setDepth/0",
+      "owner": "ui/AimVisuals.ts",
+      "component": "setHighVisibility/image/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.6,
+        99
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E",
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "setHighVisibility/image/setDepth/0",
+        "expression": "enabled ? DEPTH_AIM_HIGH_VISIBILITY : DEPTH_AIM"
+      }
+    },
+    {
+      "id": "cpu:ui/AimVisuals.ts:setHighVisibility/this.chargeGfx/setDepth/0",
+      "owner": "ui/AimVisuals.ts",
+      "component": "setHighVisibility/this.chargeGfx/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.6,
+        99
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E",
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "setHighVisibility/this.chargeGfx/setDepth/0",
+        "expression": "enabled ? DEPTH_AIM_HIGH_VISIBILITY : DEPTH_AIM"
+      }
+    },
+    {
+      "id": "cpu:ui/AimVisuals.ts:addImage/image/setDepth/0",
+      "owner": "ui/AimVisuals.ts",
+      "component": "addImage/image/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.6
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "addImage/image/setDepth/0",
+        "expression": "DEPTH_AIM"
+      }
+    }
+  ]
+}

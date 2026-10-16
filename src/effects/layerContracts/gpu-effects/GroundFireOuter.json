@@ -1,0 +1,24 @@
+{
+  "name": "GroundFireOuter",
+  "contract": {
+    "id": "gpu:GroundFireOuter",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "GroundFireOuter",
+    "height": "ground",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      9.2
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "M"
+    ],
+    "role": "effect",
+    "lanes": [
+      "GroundFire"
+    ]
+  }
+}

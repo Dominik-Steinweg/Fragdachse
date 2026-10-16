@@ -1,0 +1,43 @@
+{
+  "owner": "effects/EntityBurnRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.glowImage/setDepth/0",
+        "expression": "DEPTH_BURN_GLOW",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/EntityBurnRenderer.ts:module/this.glowImage/setDepth/0",
+      "owner": "effects/EntityBurnRenderer.ts",
+      "component": "module/this.glowImage/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        10.18
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.glowImage/setDepth/0",
+        "expression": "DEPTH_BURN_GLOW"
+      }
+    }
+  ]
+}

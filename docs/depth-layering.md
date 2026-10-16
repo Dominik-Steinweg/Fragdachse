@@ -7,16 +7,30 @@ benötigen eine eigene Freigabe.
 ## Daten und Vertrag
 
 [EffectLayerContract.ts](../src/effects/EffectLayerContract.ts) enthält Typen, Profilgrenzen und
-Befund-IDs; [EffectLayerContract.data.ts](../src/effects/EffectLayerContract.data.ts) die eingefrorenen
-Definitionen; [EffectLayerContract.exceptions.ts](../src/effects/EffectLayerContract.exceptions.ts)
-die explizite Allowlist. Tests: `tests/depthR0Contract.test.ts`, `tests/depthR0Reference.test.ts`,
-AST-Lesehilfe `tests/depthSource.cjs`.
+Befund-IDs. [EffectLayerContract.data.ts](../src/effects/EffectLayerContract.data.ts) sammelt die
+eingefrorenen Definitionen aus [`src/effects/layerContracts/`](../src/effects/layerContracts/), mit genau
+einer JSON-Datei je Eintrag:
+
+| Ordner | Inhalt | Datei |
+|---|---|---|
+| `gpu-lanes/` | eine GPU-Lane | `<Lane>.json` |
+| `gpu-effects/` | eine GPU-Effektdefinition | `<Effekt>.json` |
+| `owners/` | ein Render-Owner | `<Pfad mit Punkten>.json`, z. B. `effects.fireControl.FireControlRenderer.json` |
+
+Eine Owner-Datei enthält die beobachteten Aufrufstellen (`source`), die CPU-Layer (`cpuLayers`)
+bzw. Layer einer eigenen GPU-Schicht (`gpuLayers`) sowie Begründungen (`notes`). Ein neuer Renderer
+bekommt eine neue Owner-Datei, statt eine gemeinsame Liste zu ändern. Der Vertragstest nennt fehlende
+oder abweichende Owner.
+
+[EffectLayerContract.exceptions.ts](../src/effects/EffectLayerContract.exceptions.ts) ist die explizite
+Allowlist. Tests: `tests/depthR0Contract.test.ts`, `tests/depthR0Reference.test.ts`, AST-Lesehilfe
+`tests/depthSource.cjs`.
 
 `height: ground | body | high` und `lighting: material | emissive | mixed` beschreiben die
 beabsichtigte Kategorie, ausschließlich als Metadaten an Definitionen. Kein Spawn liest sie;
 ein Test verbietet Produktionsimports. Ist-Depth/Blend/Kamera/Profile stehen separat daneben.
-Der Katalog erfasst 44 GPU-Lanes, 94 GPU-Effektdefinitionen und 482 CPU-Depth-Selektoren aus
-131 Ownern. GPU-Definitionen referenzieren ihre Lanes einschließlich additiver Varianten.
+Der Katalog erfasst alle GPU-Lanes, GPU-Effektdefinitionen und CPU-Depth-Selektoren aus
+allen CPU-Render-Ownern. GPU-Definitionen referenzieren ihre Lanes einschließlich additiver Varianten.
 CPU-Ausdrücke werden gegen aktuelle Konstanten aufgelöst; `CPU_SOURCE_CONTRACTS.bindings`
 nennt explizite Eingabedomänen, keine vollständige Simulation beliebiger Laufzeitargumente.
 Generische Helfer (`role: delegate`) haben keine unabhängige globale Depth; ihre Aufrufer zählen.

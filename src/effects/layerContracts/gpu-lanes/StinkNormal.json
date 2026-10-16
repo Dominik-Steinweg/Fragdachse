@@ -1,0 +1,21 @@
+{
+  "name": "StinkNormal",
+  "contract": {
+    "id": "lane:StinkNormal",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "StinkNormal",
+    "height": "body",
+    "lighting": "mixed",
+    "camera": "world",
+    "depths": [
+      17.02
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "L"
+    ],
+    "role": "effect"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "owner": "effects/watchtower/WatchtowerVisual.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.image/setDepth/0",
+        "expression": "DEPTH.ROCKS + .15",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/watchtower/WatchtowerVisual.ts:module/this.image/setDepth/0",
+      "owner": "effects/watchtower/WatchtowerVisual.ts",
+      "component": "module/this.image/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.15
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "surface",
+      "source": {
+        "selector": "module/this.image/setDepth/0",
+        "expression": "DEPTH.ROCKS + .15"
+      }
+    }
+  ]
+}

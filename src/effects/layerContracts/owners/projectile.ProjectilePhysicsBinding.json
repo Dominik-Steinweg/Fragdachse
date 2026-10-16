@@ -1,0 +1,41 @@
+{
+  "owner": "projectile/ProjectilePhysicsBinding.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createPhysicsHandle/sprite/setDepth/0",
+        "expression": "DEPTH.PROJECTILES",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:projectile/ProjectilePhysicsBinding.ts:createPhysicsHandle/sprite/setDepth/0",
+      "owner": "projectile/ProjectilePhysicsBinding.ts",
+      "component": "createPhysicsHandle/sprite/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createPhysicsHandle/sprite/setDepth/0",
+        "expression": "DEPTH.PROJECTILES"
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "ExplosionLowCore",
+  "contract": {
+    "id": "lane:ExplosionLowCore",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "ExplosionLowCore",
+    "height": "high",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      20.2
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect"
+  }
+}

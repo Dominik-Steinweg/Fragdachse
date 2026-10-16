@@ -1,0 +1,21 @@
+{
+  "name": "FlightSignature",
+  "contract": {
+    "id": "lane:FlightSignature",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "FlightSignature",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      13.2
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect"
+  }
+}

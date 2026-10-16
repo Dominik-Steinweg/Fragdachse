@@ -1,0 +1,159 @@
+{
+  "owner": "effects/HolyGrenadeRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createVisual/glow/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createVisual/body/setDepth/0",
+        "expression": "DEPTH.PROJECTILES",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createVisual/trim/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 0.2",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createVisual/pin/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 0.3",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createVisual/sparkEmitter/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 0.4",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/HolyGrenadeRenderer.ts:createVisual/glow/setDepth/0",
+      "owner": "effects/HolyGrenadeRenderer.ts",
+      "component": "createVisual/glow/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        14
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/glow/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 1"
+      }
+    },
+    {
+      "id": "cpu:effects/HolyGrenadeRenderer.ts:createVisual/body/setDepth/0",
+      "owner": "effects/HolyGrenadeRenderer.ts",
+      "component": "createVisual/body/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/body/setDepth/0",
+        "expression": "DEPTH.PROJECTILES"
+      }
+    },
+    {
+      "id": "cpu:effects/HolyGrenadeRenderer.ts:createVisual/trim/setDepth/0",
+      "owner": "effects/HolyGrenadeRenderer.ts",
+      "component": "createVisual/trim/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15.2
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/trim/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 0.2"
+      }
+    },
+    {
+      "id": "cpu:effects/HolyGrenadeRenderer.ts:createVisual/pin/setDepth/0",
+      "owner": "effects/HolyGrenadeRenderer.ts",
+      "component": "createVisual/pin/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15.3
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/pin/setDepth/0",
+        "expression": "DEPTH.PROJECTILES + 0.3"
+      }
+    },
+    {
+      "id": "cpu:effects/HolyGrenadeRenderer.ts:createVisual/sparkEmitter/setDepth/0",
+      "owner": "effects/HolyGrenadeRenderer.ts",
+      "component": "createVisual/sparkEmitter/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        14.6
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createVisual/sparkEmitter/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 0.4"
+      }
+    }
+  ]
+}

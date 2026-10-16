@@ -1,0 +1,76 @@
+{
+  "owner": "effects/EnemyReadabilityRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.NORMAL"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "prepareShader/this.warmupLayer/depth/0",
+        "expression": "0",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createLayer/layer/setDepth/0",
+        "expression": "s.depth - 0.001",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "s.depth": [
+        9.95
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/EnemyReadabilityRenderer.ts:prepareShader/this.warmupLayer/depth/0",
+      "owner": "effects/EnemyReadabilityRenderer.ts",
+      "component": "prepareShader/this.warmupLayer/depth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        0
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "pass",
+      "source": {
+        "selector": "prepareShader/this.warmupLayer/depth/0",
+        "expression": "0"
+      }
+    },
+    {
+      "id": "cpu:effects/EnemyReadabilityRenderer.ts:createLayer/layer/setDepth/0",
+      "owner": "effects/EnemyReadabilityRenderer.ts",
+      "component": "createLayer/layer/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.949
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createLayer/layer/setDepth/0",
+        "expression": "s.depth - 0.001"
+      }
+    }
+  ]
+}

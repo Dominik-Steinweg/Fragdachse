@@ -1,0 +1,24 @@
+{
+  "name": "MortarSmoke",
+  "contract": {
+    "id": "gpu:MortarSmoke",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "MortarSmoke",
+    "height": "body",
+    "lighting": "material",
+    "camera": "world",
+    "depths": [
+      13.36
+    ],
+    "blends": [
+      "NORMAL"
+    ],
+    "profiles": [
+      "K"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionLowSmoke"
+    ]
+  }
+}

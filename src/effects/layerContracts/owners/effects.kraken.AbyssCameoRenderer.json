@@ -1,0 +1,72 @@
+{
+  "owner": "effects/kraken/AbyssCameoRenderer.ts",
+  "source": {
+    "sites": [
+      {
+        "key": "module/part/setDepth/0",
+        "expression": "DEPTH.WATER + .03",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.eyes/EnemyEyeBatch/0",
+        "expression": "DEPTH_LIGHTING + .085",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/kraken/AbyssCameoRenderer.ts:module/part/setDepth/0",
+      "owner": "effects/kraken/AbyssCameoRenderer.ts",
+      "component": "module/part/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        5.23
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/part/setDepth/0",
+        "expression": "DEPTH.WATER + .03"
+      }
+    },
+    {
+      "id": "cpu:effects/kraken/AbyssCameoRenderer.ts:module/this.eyes/EnemyEyeBatch/0",
+      "owner": "effects/kraken/AbyssCameoRenderer.ts",
+      "component": "module/this.eyes/EnemyEyeBatch/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.585
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.eyes/EnemyEyeBatch/0",
+        "expression": "DEPTH_LIGHTING + .085"
+      }
+    }
+  ]
+}

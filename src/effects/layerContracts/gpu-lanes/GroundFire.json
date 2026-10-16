@@ -1,0 +1,21 @@
+{
+  "name": "GroundFire",
+  "contract": {
+    "id": "lane:GroundFire",
+    "owner": "effects/gpu/GpuVfxRenderLanes.ts",
+    "component": "GroundFire",
+    "height": "ground",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      9.2
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "M"
+    ],
+    "role": "effect"
+  }
+}

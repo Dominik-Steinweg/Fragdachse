@@ -1,0 +1,104 @@
+{
+  "owner": "effects/earthbreak/EarthbreakFissureGpuLayer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createEarthbreakFissureGpuLayer/image/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "createEarthbreakFissureLayers/layers/createEarthbreakFissureGpuLayer/0",
+        "expression": "DEPTH.DECALS + 0.05",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createEarthbreakFissureLayers/layers/createEarthbreakFissureGpuLayer/1",
+        "expression": "DEPTH_LIGHTING + 0.07",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "depth": [
+        5,
+        10,
+        16,
+        25
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/earthbreak/EarthbreakFissureGpuLayer.ts:createEarthbreakFissureGpuLayer/image/setDepth/0",
+      "owner": "effects/earthbreak/EarthbreakFissureGpuLayer.ts",
+      "component": "createEarthbreakFissureGpuLayer/image/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [],
+      "role": "delegate",
+      "source": {
+        "selector": "createEarthbreakFissureGpuLayer/image/setDepth/0",
+        "expression": "depth"
+      }
+    },
+    {
+      "id": "cpu:effects/earthbreak/EarthbreakFissureGpuLayer.ts:createEarthbreakFissureLayers/layers/createEarthbreakFissureGpuLayer/0",
+      "owner": "effects/earthbreak/EarthbreakFissureGpuLayer.ts",
+      "component": "createEarthbreakFissureLayers/layers/createEarthbreakFissureGpuLayer/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        5.05
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "G"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createEarthbreakFissureLayers/layers/createEarthbreakFissureGpuLayer/0",
+        "expression": "DEPTH.DECALS + 0.05"
+      }
+    },
+    {
+      "id": "cpu:effects/earthbreak/EarthbreakFissureGpuLayer.ts:createEarthbreakFissureLayers/layers/createEarthbreakFissureGpuLayer/1",
+      "owner": "effects/earthbreak/EarthbreakFissureGpuLayer.ts",
+      "component": "createEarthbreakFissureLayers/layers/createEarthbreakFissureGpuLayer/1",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        19.57
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createEarthbreakFissureLayers/layers/createEarthbreakFissureGpuLayer/1",
+        "expression": "DEPTH_LIGHTING + 0.07"
+      }
+    }
+  ]
+}

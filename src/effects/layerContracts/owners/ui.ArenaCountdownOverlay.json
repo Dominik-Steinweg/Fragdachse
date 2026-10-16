@@ -1,0 +1,102 @@
+{
+  "owner": "ui/ArenaCountdownOverlay.ts",
+  "source": {
+    "blends": [],
+    "cameras": [
+      "promoteToClarityCamera(scene, this.loadingBackdrop)",
+      "promoteToClarityCamera(scene, this.loadingRoot)"
+    ],
+    "sites": [
+      {
+        "key": "module/this.focusFallback/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 2",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.loadingBackdrop/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 4",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "module/this.loadingRoot/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 3",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/ArenaCountdownOverlay.ts:module/this.focusFallback/setDepth/0",
+      "owner": "ui/ArenaCountdownOverlay.ts",
+      "component": "module/this.focusFallback/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        98
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.focusFallback/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 2"
+      }
+    },
+    {
+      "id": "cpu:ui/ArenaCountdownOverlay.ts:module/this.loadingBackdrop/setDepth/0",
+      "owner": "ui/ArenaCountdownOverlay.ts",
+      "component": "module/this.loadingBackdrop/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        96
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.loadingBackdrop/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 4"
+      }
+    },
+    {
+      "id": "cpu:ui/ArenaCountdownOverlay.ts:module/this.loadingRoot/setDepth/0",
+      "owner": "ui/ArenaCountdownOverlay.ts",
+      "component": "module/this.loadingRoot/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        97
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.loadingRoot/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 3"
+      }
+    }
+  ]
+}

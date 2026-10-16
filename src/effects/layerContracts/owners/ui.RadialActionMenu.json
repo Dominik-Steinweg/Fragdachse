@@ -1,0 +1,45 @@
+{
+  "owner": "ui/RadialActionMenu.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [
+      "promoteToClarityCamera(scene, container)"
+    ],
+    "sites": [
+      {
+        "key": "build/container/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI + 20",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/RadialActionMenu.ts:build/container/setDepth/0",
+      "owner": "ui/RadialActionMenu.ts",
+      "component": "build/container/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        42
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "build/container/setDepth/0",
+        "expression": "DEPTH.LOCAL_UI + 20"
+      }
+    }
+  ]
+}

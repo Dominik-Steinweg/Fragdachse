@@ -1,0 +1,24 @@
+{
+  "name": "RocketReturnBurst",
+  "contract": {
+    "id": "gpu:RocketReturnBurst",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "RocketReturnBurst",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      25.1
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionAccent"
+    ]
+  }
+}

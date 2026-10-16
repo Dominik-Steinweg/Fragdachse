@@ -1,0 +1,132 @@
+{
+  "owner": "effects/bomberSquadron/BomberSquadronRenderer.ts",
+  "notes": [
+    "bomber squadron (Inspector ultimate): high-flying drones above canopies, falling bombs, ground shadows.",
+    "Flying drones and their bombs sit above canopies (height high) and take the canopy night tint explicitly (mixed); only the ground shadow is plain material."
+  ],
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "drawDrones/marker/setDepth/0",
+        "expression": "DEPTH.CANOPY + 0.61",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "drawDrones/v/setDepth/0",
+        "expression": "DEPTH.CANOPY + 0.6",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "drawDrones/v/setDepth/1",
+        "expression": "CHARACTER_SHADOW_CONFIG.depth",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "acquireBomb/image/setDepth/0",
+        "expression": "DEPTH.CANOPY + 0.5",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/bomberSquadron/BomberSquadronRenderer.ts:drawDrones/v/setDepth/0",
+      "owner": "effects/bomberSquadron/BomberSquadronRenderer.ts",
+      "component": "drawDrones/v/setDepth/0",
+      "height": "high",
+      "lighting": "mixed",
+      "camera": "world",
+      "depths": [
+        20.6
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "drawDrones/v/setDepth/0",
+        "expression": "DEPTH.CANOPY + 0.6"
+      }
+    },
+    {
+      "id": "cpu:effects/bomberSquadron/BomberSquadronRenderer.ts:drawDrones/v/setDepth/1",
+      "owner": "effects/bomberSquadron/BomberSquadronRenderer.ts",
+      "component": "drawDrones/v/setDepth/1",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.92
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "drawDrones/v/setDepth/1",
+        "expression": "CHARACTER_SHADOW_CONFIG.depth"
+      }
+    },
+    {
+      "id": "cpu:effects/bomberSquadron/BomberSquadronRenderer.ts:drawDrones/marker/setDepth/0",
+      "owner": "effects/bomberSquadron/BomberSquadronRenderer.ts",
+      "component": "drawDrones/marker/setDepth/0",
+      "height": "high",
+      "lighting": "mixed",
+      "camera": "world",
+      "depths": [
+        20.61
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "drawDrones/marker/setDepth/0",
+        "expression": "DEPTH.CANOPY + 0.61"
+      }
+    },
+    {
+      "id": "cpu:effects/bomberSquadron/BomberSquadronRenderer.ts:acquireBomb/image/setDepth/0",
+      "owner": "effects/bomberSquadron/BomberSquadronRenderer.ts",
+      "component": "acquireBomb/image/setDepth/0",
+      "height": "high",
+      "lighting": "mixed",
+      "camera": "world",
+      "depths": [
+        20.5
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "acquireBomb/image/setDepth/0",
+        "expression": "DEPTH.CANOPY + 0.5"
+      }
+    }
+  ]
+}

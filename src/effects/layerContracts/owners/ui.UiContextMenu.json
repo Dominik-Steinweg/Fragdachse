@@ -1,0 +1,47 @@
+{
+  "owner": "ui/UiContextMenu.ts",
+  "source": {
+    "blends": [],
+    "cameras": [
+      "promoteToClarityCamera(this.scene, this.container)"
+    ],
+    "sites": [
+      {
+        "key": "open/this.container/setDepth/0",
+        "expression": "this.standaloneDepth",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "this.standaloneDepth": [
+        103
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/UiContextMenu.ts:open/this.container/setDepth/0",
+      "owner": "ui/UiContextMenu.ts",
+      "component": "open/this.container/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        103
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "open/this.container/setDepth/0",
+        "expression": "this.standaloneDepth"
+      }
+    }
+  ]
+}

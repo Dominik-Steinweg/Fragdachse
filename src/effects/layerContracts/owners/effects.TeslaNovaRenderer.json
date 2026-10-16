@@ -1,0 +1,43 @@
+{
+  "owner": "effects/TeslaNovaRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.NORMAL"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createQuad/quad/setDepth/0",
+        "expression": "DEPTH.FIRE + 0.26",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/TeslaNovaRenderer.ts:createQuad/quad/setDepth/0",
+      "owner": "effects/TeslaNovaRenderer.ts",
+      "component": "createQuad/quad/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        16.26
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createQuad/quad/setDepth/0",
+        "expression": "DEPTH.FIRE + 0.26"
+      }
+    }
+  ]
+}

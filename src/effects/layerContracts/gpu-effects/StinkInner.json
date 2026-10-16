@@ -1,0 +1,27 @@
+{
+  "name": "StinkInner",
+  "contract": {
+    "id": "gpu:StinkInner",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "StinkInner",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      17.02,
+      17.04
+    ],
+    "blends": [
+      "ADD",
+      "NORMAL"
+    ],
+    "profiles": [
+      "L"
+    ],
+    "role": "effect",
+    "lanes": [
+      "StinkNormal",
+      "StinkAdd"
+    ]
+  }
+}

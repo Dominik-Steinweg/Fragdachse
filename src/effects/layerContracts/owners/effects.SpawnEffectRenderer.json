@@ -1,0 +1,276 @@
+{
+  "owner": "effects/SpawnEffectRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD",
+      "makeAdditive"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "playAfterglow/glow/setDepth/0",
+        "expression": "DEPTH_FX - 0.7",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playEnemyCoreBurst/core/setDepth/0",
+        "expression": "DEPTH_FX + 1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playEnemyParticleBurst/emitter/setDepth/0",
+        "expression": "DEPTH_FX + 0.5",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "playCoreBurst/core/setDepth/0",
+        "expression": "DEPTH_FX + 1.5",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playCoreBurst/halo/setDepth/0",
+        "expression": "DEPTH_FX + 1",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "spawnRing/ring/setDepth/0",
+        "expression": "DEPTH_FX",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playBeam/beam/setDepth/0",
+        "expression": "DEPTH_FX - 0.5",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playBeam/beamGlow/setDepth/0",
+        "expression": "DEPTH_FX - 0.6",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playParticleBurst/emitter/setDepth/0",
+        "expression": "DEPTH_FX + 0.5",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/SpawnEffectRenderer.ts:playAfterglow/glow/setDepth/0",
+      "owner": "effects/SpawnEffectRenderer.ts",
+      "component": "playAfterglow/glow/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        24.3
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playAfterglow/glow/setDepth/0",
+        "expression": "DEPTH_FX - 0.7"
+      }
+    },
+    {
+      "id": "cpu:effects/SpawnEffectRenderer.ts:playEnemyCoreBurst/core/setDepth/0",
+      "owner": "effects/SpawnEffectRenderer.ts",
+      "component": "playEnemyCoreBurst/core/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        26
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playEnemyCoreBurst/core/setDepth/0",
+        "expression": "DEPTH_FX + 1"
+      }
+    },
+    {
+      "id": "cpu:effects/SpawnEffectRenderer.ts:playEnemyParticleBurst/emitter/setDepth/0",
+      "owner": "effects/SpawnEffectRenderer.ts",
+      "component": "playEnemyParticleBurst/emitter/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        25.5
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playEnemyParticleBurst/emitter/setDepth/0",
+        "expression": "DEPTH_FX + 0.5"
+      }
+    },
+    {
+      "id": "cpu:effects/SpawnEffectRenderer.ts:playCoreBurst/core/setDepth/0",
+      "owner": "effects/SpawnEffectRenderer.ts",
+      "component": "playCoreBurst/core/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        26.5
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playCoreBurst/core/setDepth/0",
+        "expression": "DEPTH_FX + 1.5"
+      }
+    },
+    {
+      "id": "cpu:effects/SpawnEffectRenderer.ts:playCoreBurst/halo/setDepth/0",
+      "owner": "effects/SpawnEffectRenderer.ts",
+      "component": "playCoreBurst/halo/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        26
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playCoreBurst/halo/setDepth/0",
+        "expression": "DEPTH_FX + 1"
+      }
+    },
+    {
+      "id": "cpu:effects/SpawnEffectRenderer.ts:spawnRing/ring/setDepth/0",
+      "owner": "effects/SpawnEffectRenderer.ts",
+      "component": "spawnRing/ring/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        25
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "spawnRing/ring/setDepth/0",
+        "expression": "DEPTH_FX"
+      }
+    },
+    {
+      "id": "cpu:effects/SpawnEffectRenderer.ts:playBeam/beam/setDepth/0",
+      "owner": "effects/SpawnEffectRenderer.ts",
+      "component": "playBeam/beam/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        24.5
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playBeam/beam/setDepth/0",
+        "expression": "DEPTH_FX - 0.5"
+      }
+    },
+    {
+      "id": "cpu:effects/SpawnEffectRenderer.ts:playBeam/beamGlow/setDepth/0",
+      "owner": "effects/SpawnEffectRenderer.ts",
+      "component": "playBeam/beamGlow/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        24.4
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playBeam/beamGlow/setDepth/0",
+        "expression": "DEPTH_FX - 0.6"
+      }
+    },
+    {
+      "id": "cpu:effects/SpawnEffectRenderer.ts:playParticleBurst/emitter/setDepth/0",
+      "owner": "effects/SpawnEffectRenderer.ts",
+      "component": "playParticleBurst/emitter/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        25.5
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playParticleBurst/emitter/setDepth/0",
+        "expression": "DEPTH_FX + 0.5"
+      }
+    }
+  ]
+}

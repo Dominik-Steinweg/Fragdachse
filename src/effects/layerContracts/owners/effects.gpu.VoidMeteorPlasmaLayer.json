@@ -1,0 +1,23 @@
+{
+  "owner": "effects/gpu/VoidMeteorPlasmaLayer.ts",
+  "gpuLayers": [
+    {
+      "id": "meteor:plasma",
+      "owner": "effects/gpu/VoidMeteorPlasmaLayer.ts",
+      "component": "plasma",
+      "height": "high",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        20.66
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect"
+    }
+  ]
+}

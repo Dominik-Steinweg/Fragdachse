@@ -1,0 +1,24 @@
+{
+  "name": "ProjectileBurnOuter",
+  "contract": {
+    "id": "gpu:ProjectileBurnOuter",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ProjectileBurnOuter",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      15.34
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "L"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ProjectileBurn"
+    ]
+  }
+}

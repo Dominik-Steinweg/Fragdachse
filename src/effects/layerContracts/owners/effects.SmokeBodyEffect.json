@@ -1,0 +1,108 @@
+{
+  "owner": "effects/SmokeBodyEffect.ts",
+  "source": {
+    "blends": [
+      "makeAdditive"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.scatter/setDepth/0",
+        "expression": "DEPTH.SMOKE + .05",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "update/wisp/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "update/this.arcs/setDepth/0",
+        "expression": "depth + .01",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "sprite.depth": [
+        9.95,
+        10
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/SmokeBodyEffect.ts:module/this.scatter/setDepth/0",
+      "owner": "effects/SmokeBodyEffect.ts",
+      "component": "module/this.scatter/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        18.05
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.scatter/setDepth/0",
+        "expression": "DEPTH.SMOKE + .05"
+      }
+    },
+    {
+      "id": "cpu:effects/SmokeBodyEffect.ts:update/wisp/setDepth/0",
+      "owner": "effects/SmokeBodyEffect.ts",
+      "component": "update/wisp/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        10.22,
+        10.27
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "update/wisp/setDepth/0",
+        "expression": "depth"
+      }
+    },
+    {
+      "id": "cpu:effects/SmokeBodyEffect.ts:update/this.arcs/setDepth/0",
+      "owner": "effects/SmokeBodyEffect.ts",
+      "component": "update/this.arcs/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        10.23,
+        10.28
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "update/this.arcs/setDepth/0",
+        "expression": "depth + .01"
+      }
+    }
+  ]
+}

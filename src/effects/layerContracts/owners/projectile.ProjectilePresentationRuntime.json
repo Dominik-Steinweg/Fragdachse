@@ -1,0 +1,41 @@
+{
+  "owner": "projectile/ProjectilePresentationRuntime.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "drawClientFrame/sprite/setDepth/0",
+        "expression": "DEPTH.PROJECTILES",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:projectile/ProjectilePresentationRuntime.ts:drawClientFrame/sprite/setDepth/0",
+      "owner": "projectile/ProjectilePresentationRuntime.ts",
+      "component": "drawClientFrame/sprite/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "drawClientFrame/sprite/setDepth/0",
+        "expression": "DEPTH.PROJECTILES"
+      }
+    }
+  ]
+}

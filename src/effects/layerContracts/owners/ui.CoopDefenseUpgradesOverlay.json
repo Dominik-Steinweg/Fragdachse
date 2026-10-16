@@ -1,0 +1,74 @@
+{
+  "owner": "ui/CoopDefenseUpgradesOverlay.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [
+      "promoteToClarityCamera(this.scene, this.container)"
+    ],
+    "sites": [
+      {
+        "key": "build/tooltipRoot/setDepth/0",
+        "expression": "DEPTH.OVERLAY + 3",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "build/this.container/setDepth/0",
+        "expression": "DEPTH.OVERLAY + 1",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/CoopDefenseUpgradesOverlay.ts:build/tooltipRoot/setDepth/0",
+      "owner": "ui/CoopDefenseUpgradesOverlay.ts",
+      "component": "build/tooltipRoot/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        103
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "build/tooltipRoot/setDepth/0",
+        "expression": "DEPTH.OVERLAY + 3"
+      }
+    },
+    {
+      "id": "cpu:ui/CoopDefenseUpgradesOverlay.ts:build/this.container/setDepth/0",
+      "owner": "ui/CoopDefenseUpgradesOverlay.ts",
+      "component": "build/this.container/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        101
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "build/this.container/setDepth/0",
+        "expression": "DEPTH.OVERLAY + 1"
+      }
+    }
+  ]
+}

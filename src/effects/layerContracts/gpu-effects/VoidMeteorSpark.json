@@ -1,0 +1,24 @@
+{
+  "name": "VoidMeteorSpark",
+  "contract": {
+    "id": "gpu:VoidMeteorSpark",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "VoidMeteorSpark",
+    "height": "high",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      20.64
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect",
+    "lanes": [
+      "VoidMeteorEmission"
+    ]
+  }
+}

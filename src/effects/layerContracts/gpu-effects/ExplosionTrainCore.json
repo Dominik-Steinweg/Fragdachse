@@ -1,0 +1,24 @@
+{
+  "name": "ExplosionTrainCore",
+  "contract": {
+    "id": "gpu:ExplosionTrainCore",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "ExplosionTrainCore",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      25.34
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "H"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionTrainCore"
+    ]
+  }
+}

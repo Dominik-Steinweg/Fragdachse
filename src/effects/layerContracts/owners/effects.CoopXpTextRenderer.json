@@ -1,0 +1,70 @@
+{
+  "owner": "effects/CoopXpTextRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createPopup/outline/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 5",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createPopup/label/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 5",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/CoopXpTextRenderer.ts:createPopup/outline/setDepth/0",
+      "owner": "effects/CoopXpTextRenderer.ts",
+      "component": "createPopup/outline/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        95
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createPopup/outline/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 5"
+      }
+    },
+    {
+      "id": "cpu:effects/CoopXpTextRenderer.ts:createPopup/label/setDepth/0",
+      "owner": "effects/CoopXpTextRenderer.ts",
+      "component": "createPopup/label/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        95
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createPopup/label/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 5"
+      }
+    }
+  ]
+}

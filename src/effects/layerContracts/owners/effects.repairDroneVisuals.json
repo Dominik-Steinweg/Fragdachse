@@ -1,0 +1,70 @@
+{
+  "owner": "effects/repairDroneVisuals.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createRepairDroneBody/scene.add/setDepth/0",
+        "expression": "REPAIR_DRONE_DEPTH",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "createRepairDroneShadow/setDepth/setDepth/0",
+        "expression": "CHARACTER_SHADOW_CONFIG.depth",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/repairDroneVisuals.ts:createRepairDroneBody/scene.add/setDepth/0",
+      "owner": "effects/repairDroneVisuals.ts",
+      "component": "createRepairDroneBody/scene.add/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        15.4
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "L"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createRepairDroneBody/scene.add/setDepth/0",
+        "expression": "REPAIR_DRONE_DEPTH"
+      }
+    },
+    {
+      "id": "cpu:effects/repairDroneVisuals.ts:createRepairDroneShadow/setDepth/setDepth/0",
+      "owner": "effects/repairDroneVisuals.ts",
+      "component": "createRepairDroneShadow/setDepth/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.92
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createRepairDroneShadow/setDepth/setDepth/0",
+        "expression": "CHARACTER_SHADOW_CONFIG.depth"
+      }
+    }
+  ]
+}

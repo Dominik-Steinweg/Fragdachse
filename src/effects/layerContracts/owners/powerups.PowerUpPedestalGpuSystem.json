@@ -1,0 +1,51 @@
+{
+  "owner": "powerups/PowerUpPedestalGpuSystem.ts",
+  "source": {
+    "blends": [
+      "blendMode"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "configureLayer/layer/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "depth": [
+        7.9,
+        8,
+        8.001
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:powerups/PowerUpPedestalGpuSystem.ts:configureLayer/layer/setDepth/0",
+      "owner": "powerups/PowerUpPedestalGpuSystem.ts",
+      "component": "configureLayer/layer/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        7.9,
+        8,
+        8.001
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "configureLayer/layer/setDepth/0",
+        "expression": "depth"
+      }
+    }
+  ]
+}

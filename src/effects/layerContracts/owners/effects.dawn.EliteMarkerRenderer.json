@@ -1,0 +1,48 @@
+{
+  "owner": "effects/dawn/EliteMarkerRenderer.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "createLayer/layer/setDepth/0",
+        "expression": "depth",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {
+      "depth": [
+        9.93,
+        19.63
+      ]
+    }
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/dawn/EliteMarkerRenderer.ts:createLayer/layer/setDepth/0",
+      "owner": "effects/dawn/EliteMarkerRenderer.ts",
+      "component": "createLayer/layer/setDepth/0",
+      "height": "body",
+      "lighting": "mixed",
+      "camera": "world",
+      "depths": [
+        9.93,
+        19.63
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E",
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "createLayer/layer/setDepth/0",
+        "expression": "depth"
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "AirstrikeSpark",
+  "contract": {
+    "id": "gpu:AirstrikeSpark",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "AirstrikeSpark",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      9.001
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "M"
+    ],
+    "role": "effect",
+    "lanes": [
+      "AirstrikeSpark"
+    ]
+  }
+}

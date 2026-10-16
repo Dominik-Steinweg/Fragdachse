@@ -1,0 +1,159 @@
+{
+  "owner": "powerups/PowerUpRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.ADD"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "sync/container/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 1",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "sync/itemAura/configureAdditiveImage/0",
+        "expression": "DEPTH.PLAYERS - 1.2",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playMaterializeEffect/flash/configureAdditiveImage/0",
+        "expression": "DEPTH.PLAYERS - 0.9",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playMaterializeEffect/pixelBurst/createEmitter/0",
+        "expression": "DEPTH.PLAYERS - 0.85",
+        "blends": [
+          "ADD"
+        ]
+      },
+      {
+        "key": "playMaterializeEffect/embers/createEmitter/0",
+        "expression": "DEPTH.PLAYERS - 0.83",
+        "blends": [
+          "ADD"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:powerups/PowerUpRenderer.ts:sync/container/setDepth/0",
+      "owner": "powerups/PowerUpRenderer.ts",
+      "component": "sync/container/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "sync/container/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 1"
+      }
+    },
+    {
+      "id": "cpu:powerups/PowerUpRenderer.ts:sync/itemAura/configureAdditiveImage/0",
+      "owner": "powerups/PowerUpRenderer.ts",
+      "component": "sync/itemAura/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        8.8
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "sync/itemAura/configureAdditiveImage/0",
+        "expression": "DEPTH.PLAYERS - 1.2"
+      }
+    },
+    {
+      "id": "cpu:powerups/PowerUpRenderer.ts:playMaterializeEffect/flash/configureAdditiveImage/0",
+      "owner": "powerups/PowerUpRenderer.ts",
+      "component": "playMaterializeEffect/flash/configureAdditiveImage/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.1
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playMaterializeEffect/flash/configureAdditiveImage/0",
+        "expression": "DEPTH.PLAYERS - 0.9"
+      }
+    },
+    {
+      "id": "cpu:powerups/PowerUpRenderer.ts:playMaterializeEffect/pixelBurst/createEmitter/0",
+      "owner": "powerups/PowerUpRenderer.ts",
+      "component": "playMaterializeEffect/pixelBurst/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.15
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playMaterializeEffect/pixelBurst/createEmitter/0",
+        "expression": "DEPTH.PLAYERS - 0.85"
+      }
+    },
+    {
+      "id": "cpu:powerups/PowerUpRenderer.ts:playMaterializeEffect/embers/createEmitter/0",
+      "owner": "powerups/PowerUpRenderer.ts",
+      "component": "playMaterializeEffect/embers/createEmitter/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        9.17
+      ],
+      "blends": [
+        "ADD"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "playMaterializeEffect/embers/createEmitter/0",
+        "expression": "DEPTH.PLAYERS - 0.83"
+      }
+    }
+  ]
+}

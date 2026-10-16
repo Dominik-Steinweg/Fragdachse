@@ -1,0 +1,43 @@
+{
+  "owner": "ui/RoundStartCountdownView.ts",
+  "source": {
+    "blends": [],
+    "cameras": [
+      "promoteToClarityCamera(scene, this.root)"
+    ],
+    "sites": [
+      {
+        "key": "module/this.root/setDepth/0",
+        "expression": "DEPTH.OVERLAY",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:ui/RoundStartCountdownView.ts:module/this.root/setDepth/0",
+      "owner": "ui/RoundStartCountdownView.ts",
+      "component": "module/this.root/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "clarity",
+      "depths": [
+        100
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "C"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.root/setDepth/0",
+        "expression": "DEPTH.OVERLAY"
+      }
+    }
+  ]
+}

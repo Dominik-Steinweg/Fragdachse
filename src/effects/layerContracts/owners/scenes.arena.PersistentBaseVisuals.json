@@ -1,0 +1,41 @@
+{
+  "owner": "scenes/arena/PersistentBaseVisuals.ts",
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.overlay/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 4",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:scenes/arena/PersistentBaseVisuals.ts:module/this.overlay/setDepth/0",
+      "owner": "scenes/arena/PersistentBaseVisuals.ts",
+      "component": "module/this.overlay/setDepth/0",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        96
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "H"
+      ],
+      "role": "ui",
+      "source": {
+        "selector": "module/this.overlay/setDepth/0",
+        "expression": "DEPTH.OVERLAY - 4"
+      }
+    }
+  ]
+}

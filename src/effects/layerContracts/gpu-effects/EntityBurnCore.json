@@ -1,0 +1,24 @@
+{
+  "name": "EntityBurnCore",
+  "contract": {
+    "id": "gpu:EntityBurnCore",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "EntityBurnCore",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      10.23
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "M"
+    ],
+    "role": "effect",
+    "lanes": [
+      "EntityBurn"
+    ]
+  }
+}

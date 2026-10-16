@@ -1,0 +1,24 @@
+{
+  "name": "AirstrikeBomb",
+  "contract": {
+    "id": "gpu:AirstrikeBomb",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "AirstrikeBomb",
+    "height": "high",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      10.001
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "M"
+    ],
+    "role": "effect",
+    "lanes": [
+      "AirstrikeBomb"
+    ]
+  }
+}

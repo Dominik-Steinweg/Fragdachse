@@ -1,0 +1,43 @@
+{
+  "owner": "effects/EnemyMeshShadowRenderer.ts",
+  "source": {
+    "blends": [
+      "Phaser.BlendModes.MULTIPLY"
+    ],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "module/this.display/setDepth/0",
+        "expression": "ENEMY_SHADOW_DEPTH",
+        "blends": [
+          "MULTIPLY"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/EnemyMeshShadowRenderer.ts:module/this.display/setDepth/0",
+      "owner": "effects/EnemyMeshShadowRenderer.ts",
+      "component": "module/this.display/setDepth/0",
+      "height": "ground",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.92
+      ],
+      "blends": [
+        "MULTIPLY"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "module/this.display/setDepth/0",
+        "expression": "ENEMY_SHADOW_DEPTH"
+      }
+    }
+  ]
+}
