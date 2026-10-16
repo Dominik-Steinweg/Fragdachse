@@ -204,6 +204,11 @@
       "moveSpeed": 70,
       "knockbackFactor": 1,
       "movementTarget": "bases",
+      "engage": {
+        "enterPx": 200,
+        "exitPx": 300,
+        "minDwellMs": 1200
+      },
       "weapons": [
         {
           "weaponId": "PLAGUE_TOAD_TONGUE",

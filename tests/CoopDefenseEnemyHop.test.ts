@@ -8,6 +8,7 @@ import { healthBarTestScene } from './healthBarTestScene';
 import { CoopDefenseEnemyHopSystem, type EnemyHopCombatIntent } from '../src/systems/CoopDefenseEnemyHopSystem';
 import { EMPTY_ENEMY_HOP_STATE, enemyHopPhaseAt, isEnemyHopState, type EnemyHopState } from '../src/systems/EnemyHopState';
 import type { EnemyEntity } from '../src/entities/EnemyEntity';
+import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 
 const config = enemyConfig.getCoopDefenseEnemyConfig('plague-medic').hop!;
 const heal = config.heal!;
@@ -210,6 +211,13 @@ describe('hop config validation', () => {
     expect(toad.weapons.map(weapon => weapon.weaponId)).toEqual(['PLAGUE_TOAD_TONGUE']);
     expect(toad.deathBurst?.presentation).toBe('plague');
     expect(() => enemyConfig.normalizeDeathBurstConfig({ ...toad.deathBurst!, presentation: 'goo' as never })).toThrow();
+  });
+
+  it('engages players inside tongue reach, so the tongue is not reserved for bases', () => {
+    const toad = enemyConfig.getCoopDefenseEnemyConfig('plague-medic');
+    expect(toad.movementTarget).toBe('bases');
+    expect(toad.engage!.enterPx).toBeGreaterThanOrEqual(WEAPON_CONFIGS.PLAGUE_TOAD_TONGUE!.range);
+    expect(toad.engage!.enterPx).toBeLessThan(toad.engage!.exitPx);
   });
 });
 
