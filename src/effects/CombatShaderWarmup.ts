@@ -11,6 +11,7 @@ import { FirestarterGpuLayer } from './gpu/FirestarterGpuLayer';
 import { ShieldChargerGpuLayer } from './gpu/ShieldChargerGpuLayer';
 import { AlienConeGpuLayer } from './gpu/AlienConeGpuLayer';
 import { EnergyShieldGpuLayer } from './gpu/EnergyShieldGpuLayer';
+import { TurretWebGpuLayer } from './gpu/TurretWebGpuLayer';
 import {
   TESLA_BOLT_FRAGMENT_SOURCE, TESLA_BOLT_SHADER_NAME, TESLA_DOME_FRAGMENT_SOURCE, TESLA_DOME_SHADER_NAME,
   TESLA_NOVA_FRAGMENT_SOURCE, TESLA_NOVA_SHADER_NAME,
@@ -33,6 +34,7 @@ export function createCombatShaderWarmupProbes(scene: Phaser.Scene): ShaderWarmu
   let shieldCharger: ShieldChargerGpuLayer | null = null;
   let alienCone: AlienConeGpuLayer | null = null;
   let energyShield: EnergyShieldGpuLayer | null = null;
+  let turretWeb: TurretWebGpuLayer | null = null;
   return [
     {
       name: 'armageddon',
@@ -70,6 +72,12 @@ export function createCombatShaderWarmupProbes(scene: Phaser.Scene): ShaderWarmu
       // Player arcs, energy domes and enemy frontal shields share one membrane program.
       prepare: context => (energyShield ??= new EnergyShieldGpuLayer(scene)).prepare(context),
       destroy: () => { energyShield?.destroy(); energyShield = null; },
+    },
+    {
+      name: 'turret-web',
+      // Kabummtula web, glob and void glints share one program; every pass is primed.
+      prepare: context => (turretWeb ??= new TurretWebGpuLayer(scene)).prepare(context),
+      destroy: () => { turretWeb?.destroy(); turretWeb = null; },
     },
     {
       name: 'enemy-contour',

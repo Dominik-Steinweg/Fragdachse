@@ -1,0 +1,62 @@
+{
+  "owner": "effects/gpu/TurretWebGpuLayer.ts",
+  "notes": [
+    "Kabummtula web: orb web over its turret below actors, glob in flight below the sun composite, void glints in the emissive band."
+  ],
+  "gpuLayers": [
+    {
+      "id": "turret-web:silk",
+      "owner": "effects/gpu/TurretWebGpuLayer.ts",
+      "component": "silk",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.7
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect"
+    },
+    {
+      "id": "turret-web:glob",
+      "owner": "effects/gpu/TurretWebGpuLayer.ts",
+      "component": "glob",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        14.35
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect"
+    },
+    {
+      "id": "turret-web:glint",
+      "owner": "effects/gpu/TurretWebGpuLayer.ts",
+      "component": "glint",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.7
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect"
+    }
+  ]
+}
