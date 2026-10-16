@@ -30,7 +30,7 @@ export interface KrakenGlowPointEntry {
 interface KrakenGlowIndex { readonly version: 1; readonly assets: Readonly<Record<string, KrakenGlowPointEntry>> }
 
 /** The entry for exactly this selected asset; another revision or variant (a draft) has no glow points. */
-export function krakenGlowPointEntry(asset: PipelineBossAsset, index: KrakenGlowIndex = glowIndex as KrakenGlowIndex): KrakenGlowPointEntry | null {
+export function krakenGlowPointEntry(asset: PipelineBossAsset, index: KrakenGlowIndex = glowIndex as unknown as KrakenGlowIndex): KrakenGlowPointEntry | null {
   const entry = index.assets[asset.id];
   return entry && entry.revision === asset.revision && entry.variant === asset.variant ? entry : null;
 }

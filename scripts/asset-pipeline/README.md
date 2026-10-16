@@ -673,6 +673,46 @@ deren Cleanup vor Phasenfreigabe oder Detach läuft.
 Renderer-Filter/Masken/FX sind Pflichtparameter; `reservedBytes` zählt auch laufende Downloads.
 Die Phasenbudgets ersetzen keine Messung des Übergangs-Peaks auf echter GPU.
 
+### Kraken-Saugnapf-Glühpunkte
+
+Die violett glühenden Saugnäpfe bilden keinen eigenen Rasterkanal, denn das GPU-Budget der
+Kraken-Residency bleibt unverändert. Sie liegen als CPU-Punkte pro Masterpose vor
+(`src/effects/kraken/KrakenGlowPoints.ts`, 10-Byte-Records, Index `src/config/krakenGlowPoints.json`).
+`kraken_glow_points.py` liest sie im Hintergrund-Blender aus den hash-gebundenen Szenen der
+ausgewählten Revision und speichert dabei weder Blend noch Bild. Je Saugnapf
+(`ventralSuckerSurface`-Materialinsel) gilt:
+
+- `t` ist die Bogenlänge auf der `FD_Rest`-Mittellinie. Bei den Körperarmen liegt `t = 0` an der
+  Armwurzel, beim Schlagtentakel an der Wasserlinie der Idle-Pose.
+- `vis` ist der Anteil von fünf senkrechten Strahlen über dem Saugnapf-Fußabdruck, deren erster
+  gerenderter Treffer derselbe Saugnapf ist.
+- `x/y/z` ist der Mittelwert dieser Treffer, projiziert wie `socketFrames`. Jede Pose leitet zur
+  Kontrolle alle Sockets neu ab.
+
+Die Ausgabe behält Punkte mit `vis >= .2`, verschmilzt Punkte unter 1,25 Quellpixeln Abstand und
+hält höchstens 512 pro Pose. In v14 zeigen die Körperarme ihre Saugnäpfe fast nur als
+herausgerollte Lippen am äußeren Armrand.
+
+```powershell
+node scripts/asset-pipeline/kraken-glow-points.mjs --revision kraken-v14-glow-<n> --preview   # GM1-Posen
+node scripts/asset-pipeline/kraken-glow-boards.mjs --revision kraken-v14-glow-<n> --preview
+node scripts/asset-pipeline/kraken-glow-points.mjs --revision kraken-v14-glow-<n>             # alle Masterposen
+node scripts/asset-pipeline/kraken-glow-boards.mjs --revision kraken-v14-glow-<n>
+node scripts/asset-pipeline/kraken-glow-publish.mjs --revision kraken-v14-glow-<n>
+```
+
+`--runs <Pfad>` zeigt auf die Runs der Hauptarbeitskopie, weil `art/poc` in Worktrees fehlt.
+Blender kommt aus `--blender`, `BLENDER_PATH` oder `PATH`. `--resume` setzt nur einen
+identischen Job fort. Der Board-Lauf prüft:
+
+- Quell- und Werkzeug-Hashes;
+- Länge der Frame-Tabelle gleich Zahl der Masterposen;
+- mindestens 98 % der Punkte liegen auf Farb-Alpha > .5.
+
+Er schreibt außerdem das Board unter `build/boards/`. Die Veröffentlichung verlangt einen
+bestandenen vollständigen Lauf. Sie lehnt ab, wenn Registry-Revision oder Variante abweichen,
+und ändert weder Registry-Assets noch Atlanten.
+
 ## V1-Kompatibilität und vorhandene statische Referenzen
 
 Die folgenden V1-Befehle, Verzeichnisse und Materialhinweise bleiben gültig. Der Viewer listet V1 neben V2 in der gemeinsamen Bibliothek. Die gemeinsame Stil-/Materialbasis gilt auch für V2.
