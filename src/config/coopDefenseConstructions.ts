@@ -298,6 +298,9 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       id: 'flame_turret',
       buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.flame_turret,
       weaponId: 'TURRET_FLAME',
+      // Turns like the rocket turret, so the stream visibly sweeps onto its target instead of snapping.
+      rotationSpeedDegPerSec: 90,
+      aimToleranceDeg: 15,
       iconKey: null,
       unlockUpgradeId: 'unlock_flame_turret',
       allowedModes: ['coop_defense'],
