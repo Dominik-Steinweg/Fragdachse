@@ -3,6 +3,7 @@ import { EMPTY_ENEMY_CLAW_STATE, isEnemyClawState, type EnemyClawState } from '.
 import { syncEnemyClawAnimation } from '../animations/EnemyClawAnimation';
 import { stepTurnRateFacing } from './turnRateFacing';
 import { syncEnemyShieldChargeAnimation } from '../animations/EnemyShieldChargeAnimation';
+import { airborneLift } from '../animations/leapPresentation';
 import { syncEnemyEnergyConeAnimation } from '../animations/EnemyEnergyConeAnimation';
 import { EMPTY_SHIELD_CHARGE_STATE, isShieldChargeState, type ShieldChargeState } from '../systems/ShieldChargeState';
 import { EMPTY_ENERGY_CONE_STATE, isEnergyConeState, type EnergyConeState } from '../systems/EnergyConeState';
@@ -65,6 +66,8 @@ const TEX_ENEMY_GLOW = '_enemy_glow';
  * Groessenordnungen darueber, waehrend er im Stand gegen null faellt.
  */
 const WALKING_INTERPOLATION_EPSILON_PX = 0.5;
+/** Apex growth of a charger leap towards the camera. */
+const LEAP_LIFT_AMPLITUDE = 0.32;
 
 export type EnemyFaction = 'hostile' | 'allied';
 
@@ -250,18 +253,15 @@ export class EnemyEntity {
 
   private shieldChargeAnimating = false;
 
-  /** Charge clips follow the replicated host-fixed charge timeline (windup, run, recover). */
   /** A leaping body rises towards the camera mid-run (pure presentation of the replicated lane). */
-  private leapLifted = false;
   private syncLeapLift(now: number): void {
     const lane = this.shieldCharge.lane;
     const lift = this.config.shieldCharger?.style === 'leap' && this.shieldCharge.phase === 'run' && lane
-      ? Math.sin(Math.PI * Phaser.Math.Clamp((now - lane.runAt) / Math.max(1, lane.runEndsAt - lane.runAt), 0, 1)) : 0;
-    if (lift <= 0 && !this.leapLifted) return;
-    this.leapLifted = lift > 0;
-    this.sprite.setDisplaySize(this.getVisualSize() * (1 + .32 * lift), this.getVisualSize() * (1 + .32 * lift));
+      ? airborneLift((now - lane.runAt) / Math.max(1, lane.runEndsAt - lane.runAt)) : 0;
+    this.setAirLiftScale(1 + LEAP_LIFT_AMPLITUDE * lift);
   }
 
+  /** Charge clips follow the replicated host-fixed charge timeline (windup, run, recover). */
   syncShieldChargeAnimation(now: number): void {
     if (!this.config.shieldCharger) return;
     this.syncLeapLift(now);
@@ -768,6 +768,24 @@ export class EnemyEntity {
     return this.dashPhase;
   }
 
+  private dashScale = 1;
+  private airLiftScale = 1;
+
+  /** Display growth of an airborne body (1 on the ground); shadows divide it back out. */
+  getAirLiftScale(): number { return this.airLiftScale; }
+
+  private setAirLiftScale(scale: number): void {
+    if (scale === this.airLiftScale) return;
+    this.airLiftScale = scale;
+    this.applyDisplayScale();
+  }
+
+  /** Single writer of the sprite display size: dodge shrink and airborne lift combine here. */
+  private applyDisplayScale(): void {
+    const size = this.getVisualSize() * this.dashScale * this.airLiftScale;
+    this.sprite.setDisplaySize(size, size);
+  }
+
   setDashPhase(phase: 0 | 1 | 2): void {
     this.dashPhase = phase;
   }
@@ -777,8 +795,8 @@ export class EnemyEntity {
    * Ausweichschritt genutzt und entspricht der Hitbox-Verkleinerung des Spieler-Dashs.
    */
   setDashScale(scale: number): void {
-    const clamped = Phaser.Math.Clamp(scale, 0.1, 1);
-    this.sprite.setDisplaySize(this.getVisualSize() * clamped, this.getVisualSize() * clamped);
+    this.dashScale = Phaser.Math.Clamp(scale, 0.1, 1);
+    this.applyDisplayScale();
     if (this.authoritative && this.sprite.body) {
       this.syncCollisionCircle();
     }

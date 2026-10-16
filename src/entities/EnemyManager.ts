@@ -136,9 +136,19 @@ export interface EnemyCombatMovementSource {
   getCombatMovement(enemy: EnemyEntity, now: number): { aimAngle: number; holdPosition: boolean; committed?: boolean } | null;
 }
 
-/** Exklusive Spezialbewegung, die normale KI-Zweige fuer diesen Frame ersetzt. */
+/**
+ * Spezialbewegung, deren Geschwindigkeit die normalen KI-Zweige fuer diesen Frame ersetzt.
+ * `keepsRouting` markiert einen Owner, der den Koerper nur haelt: Verbuendete routen, merken ihren
+ * Steuerpunkt und greifen weiter an, laufen aber nicht. Ohne Flag ist der Override exklusiv.
+ */
+export interface EnemyMovementOverride {
+  readonly vx: number;
+  readonly vy: number;
+  readonly keepsRouting?: boolean;
+}
+
 export interface EnemySpecialMovementSource {
-  getMovementOverride(enemy: EnemyEntity, now: number): { vx: number; vy: number } | null;
+  getMovementOverride(enemy: EnemyEntity, now: number): EnemyMovementOverride | null;
 }
 
 /**

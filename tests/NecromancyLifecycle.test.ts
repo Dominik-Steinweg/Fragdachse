@@ -96,6 +96,26 @@ describe('captured ally ownership', () => {
       expect(f.enemies.getAlliedEnemies('owner')).toHaveLength(3);
     } finally { f.system.clear(); f.enemies.destroy(); }
   });
+
+  it('keeps routing a held ally under a routing-keeping override but not under an exclusive one', () => {
+    const f = fixture();
+    try {
+      const ally = f.system.captureAlly('owner', 520, 100, f.kind)!;
+      let override: { vx: number; vy: number; keepsRouting?: boolean } = { vx: 0, vy: 0, keepsRouting: true };
+      f.system.setSpecialMovementSource(() => ({ getMovementOverride: () => override }));
+      f.system.hostUpdate(1_000, 16);
+      expect(ally.getDesiredVelocity()).toMatchObject({ vx: 0, vy: 0 });
+      expect(f.system.getAllySteeringPoint(ally.id)).not.toBeNull();
+      override = { vx: 3, vy: 4 };
+      f.system.hostUpdate(1_016, 16);
+      expect(ally.getDesiredVelocity()).toMatchObject({ vx: 3, vy: 4 });
+      override = { vx: 0, vy: 0, keepsRouting: true };
+      f.system.hostUpdate(1_032, 16);
+      expect(f.system.getAllySteeringPoint(ally.id)).not.toBeNull();
+      f.system.clear();
+      expect(f.system.getAllySteeringPoint(ally.id)).toBeNull();
+    } finally { f.system.clear(); f.enemies.destroy(); }
+  });
 });
 
 describe('allied enemy presentation', () => {

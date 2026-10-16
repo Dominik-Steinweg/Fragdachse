@@ -1,6 +1,7 @@
 import type * as Phaser from 'phaser';
 import { getPipelineAssetForTexture, type PipelineClip } from '../config/pipelineAssets';
 import type { ShieldChargeState } from '../systems/ShieldChargeState';
+import { leapClipFrame } from './leapPresentation';
 
 type ClipSource = (name: string) => Pick<PipelineClip, 'frames' | 'markers'> | undefined;
 
@@ -20,13 +21,9 @@ export function shieldChargeClipFrame(state: ShieldChargeState | undefined, now:
   // A leap is one clip: crouch until `launch`, airborne until `land`, then the recovery tail.
   const leap = clip('leap');
   if (leap?.frames.length) {
-    const last = leap.frames.length - 1;
-    const launch = Math.min(last, Math.max(0, leap.markers?.launch ?? Math.round(last / 3)));
-    const land = Math.min(last, Math.max(launch, leap.markers?.land ?? Math.round(last * 2 / 3)));
-    const span = state.phase === 'windup' ? [0, launch, lane.startedAt, lane.runAt]
-      : state.phase === 'run' ? [launch, land, lane.runAt, lane.runEndsAt] : [land, last, lane.runEndsAt, lane.recoverUntil];
-    const progress = clamp01((now - span[2]!) / Math.max(1, span[3]! - span[2]!));
-    return leap.frames[Math.round(span[0]! + (span[1]! - span[0]!) * progress)]!;
+    return state.phase === 'windup' ? leapClipFrame(leap, 'crouch', lane.startedAt, lane.runAt, now)
+      : state.phase === 'run' ? leapClipFrame(leap, 'air', lane.runAt, lane.runEndsAt, now)
+        : leapClipFrame(leap, 'land', lane.runEndsAt, lane.recoverUntil, now);
   }
   if (state.phase === 'windup') {
     const windup = clip('windup');

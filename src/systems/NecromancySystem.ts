@@ -84,6 +84,8 @@ export class NecromancySystem {
   private readonly owners = new Map<string, OwnerState>();
   /** Feste Ringplätze der Wiederbelebten, damit ihre Position nicht bei jedem Frame springt. */
   private readonly followSlots = new Map<string, number>();
+  /** Steering point of allies whose locomotion owner keeps routing (hopping toads). */
+  private readonly allySteering = new Map<string, { readonly x: number; readonly y: number }>();
   private readonly undyingAllyIds = new Set<string>();
   private corpseSink: NecromancyCorpseSink | null = null;
   private nextCorpseId = 1;
@@ -101,7 +103,8 @@ export class NecromancySystem {
   private specialMovement: (() => import('../entities/EnemyManager').EnemySpecialMovementSource | null) | null = null;
   /**
    * Ability-owned movement (e.g. a committed shield charge) wins over following and attacking:
-   * while a source returns an override for an ally, this system neither steers nor attacks with it.
+   * while a source returns an exclusive override for an ally, this system neither steers nor
+   * attacks with it. A `keepsRouting` override (a resting toad) only replaces the walking.
    */
   setSpecialMovementSource(source: (() => import('../entities/EnemyManager').EnemySpecialMovementSource | null) | null): void {
     this.specialMovement = source;
@@ -228,6 +231,14 @@ export class NecromancySystem {
     for (const allyId of [...this.followSlots.keys()]) {
       if (!knownAllyIds.has(allyId)) this.followSlots.delete(allyId);
     }
+    for (const allyId of [...this.allySteering.keys()]) {
+      if (!knownAllyIds.has(allyId)) this.allySteering.delete(allyId);
+    }
+  }
+
+  /** Where a routing-keeping ally would steer this frame, or null when it should hold its place. */
+  getAllySteeringPoint(allyId: string): { readonly x: number; readonly y: number } | null {
+    return this.allySteering.get(allyId) ?? null;
   }
 
   clear(): void {
@@ -236,6 +247,7 @@ export class NecromancySystem {
     for (const ownerId of [...this.owners.keys()]) this.clearOwner(ownerId);
     this.owners.clear();
     this.followSlots.clear();
+    this.allySteering.clear();
     this.undyingAllyIds.clear();
   }
 
@@ -266,6 +278,7 @@ export class NecromancySystem {
       if (!weakest || this.corpses[corpseIndex].xp <= getCoopDefenseEnemyXp(weakest.kind)) return false;
       this.enemyManager.hostRemoveEnemy(weakest.id);
       this.followSlots.delete(weakest.id);
+      this.allySteering.delete(weakest.id);
       this.undyingAllyIds.delete(weakest.id);
     }
 
@@ -348,7 +361,10 @@ export class NecromancySystem {
     deltaMs: number,
   ): void {
     const override = this.specialMovement?.()?.getMovementOverride(ally, now);
-    if (override) { ally.setDesiredVelocity(override.vx, override.vy, now); return; }
+    if (override && !override.keepsRouting) { ally.setDesiredVelocity(override.vx, override.vy, now); return; }
+    // A routing-keeping owner moves the body itself; the ally still routes, records where it would
+    // steer and attacks, but never walks.
+    if (override) this.allySteering.delete(ally.id);
     const route = this.enemyManager.routeAlly(ally, `ally:${ownerId}:${destination.target?.id ?? 'follow'}`,
       destination, destination.target ? Math.max(16, ...ally.getAttackWeapons().map(attack => attack.weapon.config.range)) : 32);
     if (!ally.isAttackMovementPaused(now)) {
@@ -365,7 +381,7 @@ export class NecromancySystem {
           ? { x: waypoint.x - ally.sprite.x, y: waypoint.y - ally.sprite.y } : null
           : this.getFlowDirection(ownerId, ally);
         if (flowDirection === null) {
-          ally.stopMovement();
+          if (!override) ally.stopMovement();
         } else {
           // Das Flowfield kennt nur das gemeinsame Ziel; die letzten Meter zum eigenen Platz
           // laufen deshalb direkt – aber nur, wenn die Luftlinie frei ist. Liegt eine Basisecke
@@ -375,12 +391,14 @@ export class NecromancySystem {
             || (length <= FOLLOW_DIRECT_STEER_PX && this.hasClearPathToAnchor(ownerId, ally, anchor));
           const waypoint = steerDirectly ? anchor : route?.status === 'ready' ? route.waypoint
             : { x: ally.sprite.x + flowDirection.x * 48, y: ally.sprite.y + flowDirection.y * 48 };
-          this.enemyManager.moveNormally(ally, waypoint, ally.getMoveSpeed());
+          if (override) this.allySteering.set(ally.id, waypoint);
+          else this.enemyManager.moveNormally(ally, waypoint, ally.getMoveSpeed());
         }
-      } else {
+      } else if (!override) {
         ally.stopMovement();
       }
     }
+    if (override) ally.setDesiredVelocity(override.vx, override.vy, now);
 
     const breach = this.enemyManager.getBreachAttackPoint(ally.id);
     if (breach && ally.canScanForAttack(now)) {
@@ -567,6 +585,7 @@ export class NecromancySystem {
     for (const ally of this.enemyManager.getAlliedEnemies(ownerId)) {
       this.enemyManager.hostRemoveEnemy(ally.id);
       this.followSlots.delete(ally.id);
+      this.allySteering.delete(ally.id);
       this.undyingAllyIds.delete(ally.id);
     }
     this.owners.delete(ownerId);
