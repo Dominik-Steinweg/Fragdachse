@@ -1237,8 +1237,9 @@ export class EnemyEntity {
     const progress = kaboomtulaPhaseProgress(state, now);
     const pulseAt = (periodMs: number) => 0.5 + 0.5 * Math.sin(now * Math.PI * 2 / periodMs);
     // Shared glow alpha is 0.18 per strength unit: a hunting spider wears an opaque void rim.
-    const calm = (pulse: number) => ({ size: 1 + pulse * 0.06, alpha: baseAlpha * (0.78 + pulse * 0.22), light: 1,
-      aura: 1 + pulse * 0.4 });
+    // Calm stays a quiet breath (smaller halo) so the hunting swell reads as the danger signal.
+    const calm = (pulse: number) => ({ size: 0.82 + pulse * 0.06, alpha: baseAlpha * (0.78 + pulse * 0.22), light: 1,
+      aura: 0.8 + pulse * 0.3 });
     const hunting = (pulse: number, heat: number) => ({ size: 1.22 + heat * 0.1 + pulse * 0.18,
       alpha: 0.56 + heat * 0.14 + pulse * 0.3, light: 3.2 + heat * 1.4, aura: 4.2 + heat * 1.3 + pulse * 1.1 });
     switch (state.phase) {
