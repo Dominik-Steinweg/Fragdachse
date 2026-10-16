@@ -1,0 +1,12 @@
+masters/
+review/
+titles/
+music/
+audio_cache/
+comfy/
+mix.f32
+mix.wav
+*.mp4
+*.log
+masters-draft/
+titles-anim/
