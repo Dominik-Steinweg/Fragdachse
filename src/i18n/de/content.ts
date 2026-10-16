@@ -170,7 +170,7 @@ export const deContent = {
   "map.secondaryObjective.carry-beer-to-rear-base.reward": "TEAMBUFF UND ITEM-CHANCE",
   "enemy.grave-titan.name": "Grufttitan",
   "enemy.spore-warden.name": "Sporenpanzer",
-  "enemy.plague-medic.name": "Seuchenheiler",
+  "enemy.plague-medic.name": "Quacksalber",
   "enemy.void-stalker.name": "Leerenpirscher",
   "enemy.stink-broodmother.name": "Faulnisbrüterin",
   "enemy.alien-badger.name": "Alien-Dachs",

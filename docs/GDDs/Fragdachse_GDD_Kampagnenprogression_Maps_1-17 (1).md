@@ -100,7 +100,7 @@ Nicht jede Map benötigt einen permanenten Unlock. Reine Zahlensteigerung bei Ge
 - Route mit mehreren Gesundheits-/Versorgungspunkten strukturieren.
 - Relativ viele HP-Podeste entlang der Route verteilen.
 - Normale Respawns auf **0** setzen.
-- Plague Medic als zentralen Gegner der Map beibehalten.
+- Plague Medic als zentralen Gegner der Map beibehalten. Seit 2026-10 ist er der „Quacksalber“ (Zombie-Kröte, ID weiterhin `plague-medic`): Er hüpft, heilt nur im Stillstand über sichtbare Schlieren bis zu vier Verletzte und greift mit einem 180-px-Zungenschlag an.
 - Vier Kampf-/Versorgungsabschnitte von der rechten persistenten Basis nach Westen, danach Extraktion.
 - Keine zusätzliche Checkpoint-Wiederbelebung. Die Checkpoints dieser Map setzen keinen Respawnpunkt.
 

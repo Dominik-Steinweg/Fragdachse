@@ -938,13 +938,17 @@ Headless-Nachweise: `tests/CoopDefenseShieldCharger.test.ts`, `tests/ShieldCharg
 
 Map `0` (`00-test`) enthält den Encounter `plague-toad-gate-1` (sechs Zombie-Dachse und eine Kröte).
 Für einen isolierten Versuch dasselbe Dev-Szenario mit festem Seed, `suppressWaves: true` und
-`freezeMission: true` verwenden, über `target` eine Gruppe angeschlagener, festgehaltener Dachse etwa
-300 px vor die Kröte setzen und dann die Kröte spawnen:
+`freezeMission: true` verwenden. Über `target` (oder das Panel) zuerst eine freie Zelle wählen und dort
+drei angeschlagene, festgehaltene Dachse setzen, dann eine freie Zelle etwa 300 px daneben wählen und die
+Kröte spawnen. Feste Grid-Koordinaten sind auf Map 0 nicht garantiert frei; ein blockiertes Ziel lehnt der
+Spawn ab.
 
 ```js
 await devScenario.whenReady();
-for (const gridX of [36, 37, 38]) await devScenario.run({ action: 'spawn', kind: 'zombie-badger', pinned: true, hp: 8, gridX, gridY: 40 });
-await devScenario.run({ action: 'spawn', kind: 'plague-medic', pinned: false, gridX: 30, gridY: 46 });
+// Ziel auf eine freie Zelle setzen, dann:
+for (let i = 0; i < 3; i++) await devScenario.run({ action: 'spawn', kind: 'zombie-badger', pinned: true, hp: 8 });
+// Ziel etwa 300 px weiter auf eine freie Zelle setzen, dann:
+await devScenario.run({ action: 'spawn', kind: 'plague-medic', pinned: false });
 ```
 
 Erwartung: Die Kröte läuft nicht, sondern hüpft (Ducken, Flug, Landung, Stillstand). Ohne Verletzte in

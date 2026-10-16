@@ -170,7 +170,7 @@ export const enContent = {
   "map.secondaryObjective.carry-beer-to-rear-base.reward": "TEAM BUFF AND ITEM CHANCE",
   "enemy.grave-titan.name": "Grave Titan",
   "enemy.spore-warden.name": "Spore Warden",
-  "enemy.plague-medic.name": "Plague Medic",
+  "enemy.plague-medic.name": "Quack Toad",
   "enemy.void-stalker.name": "Void Stalker",
   "enemy.stink-broodmother.name": "Stink Broodmother",
   "enemy.alien-badger.name": "Alien Badger",
