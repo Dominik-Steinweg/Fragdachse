@@ -40,6 +40,13 @@ Ohne ausdrückliche Aufforderung keinen Dev-Server, Browser oder Screenshot star
 - [`tools/capture-kit/`](../../tools/capture-kit/README.md) nimmt beschriftete Dev-Szenario-Bögen
   headless auf (nur auf Auftrag, Browser-Opt-in gilt); `npm run board -- <board.json | Bilder>` setzt
   vorhandene PNGs zu einem Kontaktbogen mit Ausschnitt und Zoom zusammen.
+- [`tools/latejoin/`](../../tools/latejoin/README.md) (`npm run latejoin`) prüft Replikation mit zwei
+  echten Browsern über PeerJS/WebRTC: Host-Einsatz, später Client-Beitritt, Vergleich der replizierten
+  Fakten und kein Nachspielen vergangener Effekte. Braucht Netz zum PeerJS-Broker. Neue
+  Netzwerk-Features ergänzen dort eine Phase.
+- [`tools/flight-recorder/`](../../tools/flight-recorder/README.md) (`npm run record:flight`) nimmt
+  Bewegungen als Video, 1:1-Ausschnitte und Bahnplots auf (aktuell Bomberstaffel). Es ist die Vorlage
+  für Bewegungsabnahmen, die sich an Standbildern nicht beurteilen lassen.
 
 ## Dokumentationsänderungen
 

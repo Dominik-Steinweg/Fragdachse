@@ -1,15 +1,16 @@
 #!/usr/bin/env node
-// check:release: the gate before a fast-forward to main. Always `check` (core, architecture, three
-// builds), integration and assets; stress, balance lab and campaign fingerprints only when the diff
-// against the base touches generator, map or balance paths (see FAMILIES in changes.mjs), their own
-// tests, or build infrastructure. Steps run serially and all of them run; the summary lists every red.
+// check:release: the gate before a fast-forward to main. Always the peer protocol guard, `check` (core,
+// architecture, three builds), integration and assets; stress, balance lab and campaign fingerprints only
+// when the diff against the base touches generator, map or balance paths (see FAMILIES in changes.mjs),
+// their own tests, or build infrastructure. Steps run serially and all run; the summary lists every red.
 //   npm run check:release [-- --base <ref>] [--all] [--bail] [--list] [--allow-fingerprint-changes]
+//                         [--allow-unbumped-wire]
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { changedFiles, classify, resolveBase, root, run, summary } from './changes.mjs';
 
 const argv = process.argv.slice(2);
-const FLAGS = ['--all', '--bail', '--list', '--allow-fingerprint-changes', '--help'];
+const FLAGS = ['--all', '--bail', '--list', '--allow-fingerprint-changes', '--allow-unbumped-wire', '--help'];
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--base') i++;
   else if (!FLAGS.includes(argv[i]) && !argv[i].startsWith('--base=')) throw Error(`Unknown flag ${argv[i]}`);
@@ -30,6 +31,8 @@ const because = (...reasons) => {
 };
 const fingerprintArgs = ['--base', base.mergeBase, ...(argv.includes('--allow-fingerprint-changes') ? ['--allow-changes'] : [])];
 const steps = [
+  { label: 'protocol', command: process.execPath, args: [join(root, 'scripts/check/protocol.mjs'), '--base', base.ref,
+    ...(argv.includes('--allow-unbumped-wire') ? ['--allow-unbumped-wire'] : [])], reason: 'always' },
   { label: 'check', command: 'npm', args: ['run', 'check'], reason: 'always' },
   { label: 'test:integration', command: 'npm', args: ['run', 'test:integration'], reason: 'always' },
   { label: 'test:assets', command: 'npm', args: ['run', 'test:assets'], reason: 'always' },

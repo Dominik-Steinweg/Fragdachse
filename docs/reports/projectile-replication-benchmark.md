@@ -1,8 +1,8 @@
 # Projektil-Replikation: Größen- und CPU-Vergleich
 
 Gemessen am 15.09.2026 unter Windows mit Node v24.14.0 und Vitest 3.2.7.
-[Rohwerte](projectile-replication-benchmark.json), [Lastszenario](../tests/stress/ProjectileReplicationLoad.test.ts),
-[CPU-Vergleich](../tests/stress/ProjectileReplicationCpu.test.ts).
+[Rohwerte](projectile-replication-benchmark.json), [Lastszenario](../../tests/stress/ProjectileReplicationLoad.test.ts),
+[CPU-Vergleich](../../tests/stress/ProjectileReplicationCpu.test.ts).
 
 ## Befund und Entscheidung
 

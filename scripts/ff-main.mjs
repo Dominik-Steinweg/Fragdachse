@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 // Guarded fast-forward of main in the main checkout. Never pushes.
 //   npm run ff-main -- <branch> --expect <main-hash> [--repo <main checkout>] [--dry-run] [--strict]
+//                      [--allow-unbumped-wire]
 // Checks, in order: the main checkout has main checked out, no merge/rebase in progress, no staged or
 // unstaged changes to tracked files (--strict: no untracked files either), main equals the expected
-// hash (so nobody moved it since your gates ran), and main is an ancestor of <branch>. Only then
-// `git merge --ff-only <branch>`; afterwards main must equal the branch tip.
+// hash (so nobody moved it since your gates ran), main is an ancestor of <branch>, and the branch's
+// peer protocol version fits main (check/protocol.mjs). Only then `git merge --ff-only <branch>`;
+// afterwards main must equal the branch tip.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { evaluateProtocol } from './check/protocol.mjs';
 
 // Expected refusals print one line; DEBUG=1 shows the stack.
 process.on('uncaughtException', error => { console.error(`✗ ${process.env.DEBUG ? error.stack : error.message}`); process.exit(1); });
@@ -16,7 +19,7 @@ const argv = process.argv.slice(2);
 const options = {}, positional = [];
 for (let i = 0; i < argv.length; i++) {
   if (['--expect', '--repo'].includes(argv[i])) options[argv[i].slice(2)] = argv[++i];
-  else if (['--dry-run', '--strict', '--help'].includes(argv[i])) options[argv[i].slice(2)] = true;
+  else if (['--dry-run', '--strict', '--allow-unbumped-wire', '--help'].includes(argv[i])) options[argv[i].slice(2)] = true;
   else if (argv[i].startsWith('--')) throw Error(`Unknown flag ${argv[i]}`);
   else positional.push(argv[i]);
 }
@@ -57,6 +60,15 @@ if (tip === main) fail(`${branch} is already at main (${main.slice(0, 8)}); noth
 if (!ok(repo, 'merge-base', '--is-ancestor', main, tip)) fail(`main ${main.slice(0, 8)} is not an ancestor of ${branch} ${tip.slice(0, 8)}: merge main into the branch and rerun the gates`);
 const count = git(repo, 'rev-list', '--count', `${main}..${tip}`);
 pass(`main is an ancestor of ${branch} (${count} new commit${count === '1' ? '' : 's'})`);
+
+const show = (ref, path) => spawnSync('git', ['-C', repo, 'show', `${ref}:${path}`], { encoding: 'utf8' }).stdout || null;
+const protocol = evaluateProtocol({
+  targetLabel: 'main', mergeBase: main, allowUnbumpedWire: !!options['allow-unbumped-wire'],
+  changed: git(repo, 'diff', '--name-only', '--no-renames', main, tip).split('\n').filter(Boolean),
+  read: (ref, path) => show(ref === 'target' ? main : ref, path), readHead: path => show(tip, path),
+});
+if (!protocol.ok) fail(`protocol: ${protocol.errors.join(' ')}`);
+pass(`protocol: ${protocol.notes.join('; ')}`);
 
 if (options['dry-run']) { console.log(`dry run: would fast-forward main ${main.slice(0, 8)} -> ${tip.slice(0, 8)}`); process.exit(0); }
 const merge = spawnSync('git', ['-C', repo, 'merge', '--ff-only', branch], { stdio: 'inherit' });

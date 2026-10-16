@@ -1,6 +1,6 @@
 # Performance-Lab: Abnahme und Grenzen
 
-Die ausführbaren Fälle und die Bedienung stehen in [performance-lab.md](performance-lab.md).
+Die ausführbaren Fälle und die Bedienung stehen in [performance-lab.md](../performance-lab.md).
 Diese Datei dokumentiert praktische Prüfungen; sie ist kein Vertrag der Projektarchitektur.
 
 ## Messzuordnung und Auswertung: Abnahme von Profil v6
@@ -16,8 +16,8 @@ Die beiden abschließenden Läufe verwenden denselben unveränderlichen Quellhas
 
 | Lauf | Beobachtung im erzeugten Bericht |
 |---|---|
-| [utility.smoke](../build/performance-results/2026-09-17T21-11-16.867Z-dddc9e96/cases/utility.smoke.md) | 199,9 ms Frame-Abstand; zugehöriger Callback 198 ms, davon 189 ms in `POST_UPDATE`. Sampling zeigt 186,59 ms in `_completeProgram`; die Aufrufkette enthält den archivierten Projektaufrufer `SmokeSystem.renderFrame`, Zeile 108. Host-/Render-Teilzeiten allein erklären diesen Hänger nicht. |
-| [combat.day](../build/performance-results/2026-09-17T21-09-27.355Z-f79e4093/cases/combat.day.md) | Vier Wellen. Erster/letzter Zeitabschnitt: 93,52 → 42,50 FPS, medianer Frame-Abstand 12,1 → 24,2 ms, medianer Gegnerbestand 42 → 151, medianer Projektilbestand 23 → 70. Einzelhänger, Verschlechterung und Dauerlast erscheinen gemeinsam im Kurzbericht. |
+| [utility.smoke](../../build/performance-results/2026-09-17T21-11-16.867Z-dddc9e96/cases/utility.smoke.md) | 199,9 ms Frame-Abstand; zugehöriger Callback 198 ms, davon 189 ms in `POST_UPDATE`. Sampling zeigt 186,59 ms in `_completeProgram`; die Aufrufkette enthält den archivierten Projektaufrufer `SmokeSystem.renderFrame`, Zeile 108. Host-/Render-Teilzeiten allein erklären diesen Hänger nicht. |
+| [combat.day](../../build/performance-results/2026-09-17T21-09-27.355Z-f79e4093/cases/combat.day.md) | Vier Wellen. Erster/letzter Zeitabschnitt: 93,52 → 42,50 FPS, medianer Frame-Abstand 12,1 → 24,2 ms, medianer Gegnerbestand 42 → 151, medianer Projektilbestand 23 → 70. Einzelhänger, Verschlechterung und Dauerlast erscheinen gemeinsam im Kurzbericht. |
 
 Der Smoke-Bericht hält das vorbereitungsübergreifende Intervall von 60,5 ms vollständig fest;
 nur 35,8 ms davon überlappen das aktive Fenster. Es geht nicht in dessen Frame-Percentile ein.
@@ -35,10 +35,10 @@ werden getrennt behandelt.
 Ein früherer Lauf derselben Instrumentierung,
 `2026-09-17T21-04-22.356Z-3f15bc45`, zeigte einen 260,5-ms-Smoke-Hänger mit 249 ms in
 `POST_UPDATE`. Danach wurden ausschließlich Darstellung und Abschnittsbildung nachgebessert.
-Der [CLI-Vergleich beider Smoke-Läufe](../build/performance-results/comparison-1789679636229/comparison.md)
+Der [CLI-Vergleich beider Smoke-Läufe](../../build/performance-results/comparison-1789679636229/comparison.md)
 erzeugte Zeit- und Zählerdifferenzen und wies die tatsächlichen Lastunterschiede aus.
 Die unterschiedliche Hängerdauer ist kein Optimierungsnachweis. Ein
-[Vergleich mit der älteren v5-Aufnahme](../build/performance-results/comparison-1789679636402/comparison.md)
+[Vergleich mit der älteren v5-Aufnahme](../../build/performance-results/comparison-1789679636402/comparison.md)
 kennzeichnete die inkompatible Messsemantik und berechnete dafür keine Messwertdifferenzen.
 
 Aktuelle automatisierte Prüfung:

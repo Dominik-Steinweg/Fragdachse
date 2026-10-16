@@ -88,11 +88,11 @@ F체r neue Wiederholungen ein neues Ausgabeverzeichnis w채hlen; abgeschlossene L�
 werden andernfalls wiederverwendet. Ein gesonderter Lauf mit `--profile on` dient
 der Funktionszuordnung und wird nicht mit unprofilierten Framezeiten vermischt.
 
-- [Messwert체bersicht und Einzelwerte](../build/map14-optimization/summary.json)
-- [Referenzl채ufe](../build/map14-optimization/baseline-suite.json)
-- [Optimierte L채ufe](../build/map14-optimization/current-suite.json)
-- [CPU-Profil vorher](../build/map14-optimization/profile-before-suite.json)
-- [CPU-Profil nachher](../build/map14-optimization/profile-after-suite.json)
+- [Messwert체bersicht und Einzelwerte](../../build/map14-optimization/summary.json)
+- [Referenzl채ufe](../../build/map14-optimization/baseline-suite.json)
+- [Optimierte L채ufe](../../build/map14-optimization/current-suite.json)
+- [CPU-Profil vorher](../../build/map14-optimization/profile-before-suite.json)
+- [CPU-Profil nachher](../../build/map14-optimization/profile-after-suite.json)
 
 Die Build-/Messartefakte sind lokal und nicht Teil der Versionsverwaltung.
 

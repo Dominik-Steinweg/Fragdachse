@@ -57,9 +57,9 @@ für Aktivierung und Recycling. Der aktuelle Vertrag bleibt intakt.
 
 Rohdaten (lokale, ignorierte Build-Artefakte):
 
-- [Referenz vor dem Review](../build/navigation-results/review-before.json)
-- [Korrigierter Stand](../build/navigation-results/review-after.json), mit Commit und Hash des Source-Diffs
-- [90 Bewegungsfälle](../build/navigation-results/movement.json), mit Quellhash, Seeds, Layouts und Konfiguration
+- [Referenz vor dem Review](../../build/navigation-results/review-before.json)
+- [Korrigierter Stand](../../build/navigation-results/review-after.json), mit Commit und Hash des Source-Diffs
+- [90 Bewegungsfälle](../../build/navigation-results/movement.json), mit Quellhash, Seeds, Layouts und Konfiguration
 
 ## Verifikation
 

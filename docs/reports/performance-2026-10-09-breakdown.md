@@ -132,7 +132,7 @@ Mögliche Änderungen sind kleinere gleichzeitig aktive Wellen, zeitlich stärke
 
 Im Tagkampf entfallen ungefähr 7,5 % auf klassische Partikel, 4,8 % auf Geschossbilder/Leuchtspuren und 2,2 % auf die CPU-Verwaltung der GPU-Effekte. Bei 300 Gegnern sind es etwa 10,8 %, 5,8 % und 2,7 %.
 
-Ein konkreter Kandidat sind Energiebälle: [EnergyBallRenderer](../src/effects/EnergyBallRenderer.ts) erzeugt pro Ball zwei klassische Partikelemitter. Der Kern emittiert zwei Teilchen alle 16 ms, die Hülle eines alle 28 ms, zusätzlich zu Bildern und weiteren Darstellungsbestandteilen. Weniger Partikel pro Ball, kürzere Nachleuchtzeiten oder eine einfachere Hülle könnten die Kosten reduzieren, während Geschosskern, Flugbahn und Gefahrenlesbarkeit erhalten bleiben. Nicht der gesamte gemessene Partikelanteil stammt von Energiebällen, und nicht die gesamten genannten Anteile wären dadurch einsparbar.
+Ein konkreter Kandidat sind Energiebälle: [EnergyBallRenderer](../../src/effects/EnergyBallRenderer.ts) erzeugt pro Ball zwei klassische Partikelemitter. Der Kern emittiert zwei Teilchen alle 16 ms, die Hülle eines alle 28 ms, zusätzlich zu Bildern und weiteren Darstellungsbestandteilen. Weniger Partikel pro Ball, kürzere Nachleuchtzeiten oder eine einfachere Hülle könnten die Kosten reduzieren, während Geschosskern, Flugbahn und Gefahrenlesbarkeit erhalten bleiben. Nicht der gesamte gemessene Partikelanteil stammt von Energiebällen, und nicht die gesamten genannten Anteile wären dadurch einsparbar.
 
 Das wäre mein erster Kandidat für eine gezielte optische Vereinfachung unter Kampflast. Technisches Bündeln oder eine andere Darstellung könnten ebenfalls helfen, müssten aber gegen die bestehende Darstellung gemessen werden.
 
@@ -154,7 +154,7 @@ Im frischen Vergleich wurde jeweils dieselbe Kampf-Fixture abwechselnd zweimal a
 
 Die mittlere CPU-Zeit sinkt in diesen Läufen um rund 13 bis 17 %. Die langsameren Kampf-Frames verbessern sich dabei kaum: Frame-p95 bleibt ungefähr 18,2 bis 18,3 ms. Weniger mittlere Arbeit beseitigt also noch nicht die Spitzen.
 
-Low verändert ein ganzes Paket: Partikeldichte, dynamische und Geschossschatten, Vegetationsbeleuchtung, Lichtauflösung, Glow, Bloom und weitere Bildfilter. [GraphicsQuality](../src/graphics/GraphicsQuality.ts) und [SunRenderQuality](../src/effects/sunlight/SunRenderQuality.ts) definieren die Unterschiede. Daraus lässt sich nicht ableiten, dass allein Schatten oder allein Bloom 13 bis 17 % sparen.
+Low verändert ein ganzes Paket: Partikeldichte, dynamische und Geschossschatten, Vegetationsbeleuchtung, Lichtauflösung, Glow, Bloom und weitere Bildfilter. [GraphicsQuality](../../src/graphics/GraphicsQuality.ts) und [SunRenderQuality](../../src/effects/sunlight/SunRenderQuality.ts) definieren die Unterschiede. Daraus lässt sich nicht ableiten, dass allein Schatten oder allein Bloom 13 bis 17 % sparen.
 
 Die vorgegebenen Spawns, das Layout, die Ausrüstung und die Messdauer sind gleich; Treffer sowie gleichzeitig lebende Gegner/Geschosse entwickeln sich während der Simulation unterschiedlich. Das ist ein Vergleich des gesamten Qualitätspakets im laufenden Szenario, kein Test identischer Einzelbilder. Die Wiederholungen zeigen einen konsistenten CPU-Vorteil, aber keinen isolierten kausalen Effekt jeder einzelnen Einstellung.
 
@@ -207,6 +207,6 @@ Alle neuen Rohdaten und Auswertungsskripte liegen in `build/perf-breakdown-20261
 - `timing-summary.json` und `timing-summary.mjs`: arithmetische Mittel und direkte CPU-Phasen, einschließlich der älteren Lastproben.
 - `audit.json`, `provenance.json`: Laufstatus, Lastmerkmale und Hashprüfung.
 
-Der bestehende [Performance-Vertrag](ai/performance.md), [RuntimeFrameProbe](../src/scenes/arena/RuntimeFrameProbe.ts), [ArenaRuntimeProfiler](../src/scenes/arena/ArenaRuntimeProfiler.ts) und die [Szenariodefinitionen](../src/debug/performanceLab/scenarios.ts) bestimmen Messgrenzen und Last. Diese Analyse erweitert keine dauerhaften Projektverträge.
+Der bestehende [Performance-Vertrag](../ai/performance.md), [RuntimeFrameProbe](../../src/scenes/arena/RuntimeFrameProbe.ts), [ArenaRuntimeProfiler](../../src/scenes/arena/ArenaRuntimeProfiler.ts) und die [Szenariodefinitionen](../../src/debug/performanceLab/scenarios.ts) bestimmen Messgrenzen und Last. Diese Analyse erweitert keine dauerhaften Projektverträge.
 
 Knowledge writeback: No durable project knowledge discovered.

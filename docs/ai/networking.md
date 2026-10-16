@@ -86,7 +86,18 @@ Participation wird host-authoritativ über den zuverlässigen World-Kanal veröf
 
 ## Channel- und Snapshot-Semantik
 
-[protocol.ts](../../src/network/peer/protocol.ts) definiert die Wire-Hülle und die Protokollversion. [PeerLink.ts](../../src/network/peer/PeerLink.ts) trennt:
+[protocol.ts](../../src/network/peer/protocol.ts) definiert die Wire-Hülle und die Protokollversion.
+
+Jede Änderung am Drahtformat hebt `PEER_PROTOCOL_VERSION` um genau eins über den Stand von `main`. Dazu
+zählen Codecs, Pflicht-Slices des Bootstraps, Nachrichtentypen sowie neue Felder, Slice-Schlüssel und
+Aktionscodes. Die Kommentarliste über der Konstante bekommt dabei eine Zeile.
+
+Parallele Branches dürfen nicht dieselbe Nummer belegen: Wer nach `main` integriert, nachdem `main`
+selbst angehoben hat, nimmt `main + 1`. [`scripts/check/protocol.mjs`](../../scripts/check/protocol.mjs)
+prüft das in `check:release` und `ff-main`. Codec- und Bootstrap-Änderungen ohne Anhebung gelten als
+Fehler, andere Netzwerkdateien nur als Hinweis.
+
+[PeerLink.ts](../../src/network/peer/PeerLink.ts) trennt:
 
 - reliable, geordnete Übertragung für Handshake, Roster, Befehle, Events und Ordnungsinformationen;
 - fast, verlustbehaftete Übertragung für Snapshots, Eingaben und Ping, mit newest-state-Semantik.

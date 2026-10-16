@@ -1,7 +1,7 @@
 # Bodennebel V1 – Prüfbericht
 
 Erstabnahme: 21. September 2026, Arbeitsstand auf Basis von `3356afb4`.
-Bedienung und Architektur: [Bodennebel-Lab](ground-fog-lab.md).
+Bedienung und Architektur: [Bodennebel-Lab](../ground-fog-lab.md).
 Einzelne Messläufe: [Benchmarkdaten](ground-fog-benchmark.json).
 
 Aktuelle Überarbeitung ab `f16aa9ed`: [Dauerfeuer, Strömungswaffen und Zug](ground-fog-load-validation.md).

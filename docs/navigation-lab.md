@@ -148,11 +148,11 @@ Remove-Item Env:NAVIGATION_REVIEW
 Das misst ausschließlich den aktuellen Stand und schreibt
 `build/navigation-results/review-after.json`. Keine Darstellung, keine
 Kampfeffekte, keine hardwareabhängigen Timing-Assertions. Die Messgrenzen und
-Ergebnisse stehen im [Navigationsreview](navigation-review.md).
+Ergebnisse stehen im [Navigationsreview](reports/navigation-review.md).
 
 Die bestehenden Suiten schützen Zielbindung, Köder, Rauch, Angriffe, Fähigkeiten,
 Fraktionen, Activity-Lifetime und Netzwerk. Navigationstests prüfen Körperfreiheit,
 Rasterausrichtung, Worker-Generationen, ausstehende Routen, Angriffserlaubnis,
 mehrteilige Öffnungen und Basisvorrang.
-Die [Gegnerprofile](navigation-enemy-migration.md) ordnen jede bestehende Art
+Die [Gegnerprofile](reports/navigation-enemy-migration.md) ordnen jede bestehende Art
 ihrem Primärziel, Fallback und erlaubten Nebenaktionen zu.

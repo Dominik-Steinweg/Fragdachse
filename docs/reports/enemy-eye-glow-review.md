@@ -80,9 +80,9 @@ sichtbare Augen oder Lichter wegen eines Budgets zu verwerfen.
 
 Lokale vollständige Belege:
 
-- [Ohne Augenlicht](../build/performance-results/2026-09-25T15-16-56.161Z-57c942a5/analysis.md)
-- [Mit Augenlicht](../build/performance-results/2026-09-25T15-14-49.689Z-7db27658/analysis.md)
-- [Vergleich](../build/performance-results/comparison-1790349503421/comparison.md)
+- [Ohne Augenlicht](../../build/performance-results/2026-09-25T15-16-56.161Z-57c942a5/analysis.md)
+- [Mit Augenlicht](../../build/performance-results/2026-09-25T15-14-49.689Z-7db27658/analysis.md)
+- [Vergleich](../../build/performance-results/comparison-1790349503421/comparison.md)
 
 Die vollständigen Chrome- und Spieltraces liegen in diesen Ergebnisordnern.
 Der erste sandboxierte Versuch scheiterte vor dem Szenario am Verbindungsserver;

@@ -7,6 +7,7 @@ Fragdachse ist ein browserbasierter 2D-Arena-Shooter mit Phaser 4 und direkten W
 - Mit `rg` nach Symbolen, Imports und Tests suchen und nur die betroffenen Ausschnitte lesen.
 - Einstiegspunkte: `src/main.ts` → `src/scenes/ArenaScene.ts`; Netzwerkgrenze `src/network/NetworkBridge.ts`; gemeinsame Verträge `src/types.ts` und `src/config.ts`.
 - Fachliche Wissensseiten stehen im [AI-Router](docs/ai/index.md). Nur die für die Aufgabe relevanten Seiten laden.
+- Feature-Konzepte: In der [GDD-Übersicht](docs/GDDs/README.md) stehen die aktuelle Version und der Umsetzungsstand je Thema. Bei neuen oder ersetzten GDDs die Zeile dort pflegen. Datierte Mess- und Prüfberichte gehören nach [`docs/reports/`](docs/reports/README.md).
 
 ## Architekturregeln
 
@@ -36,7 +37,7 @@ oder zufällige Implementierungsdetails. Bestehende passende Tests bevorzugt erw
 | Getestetes Modul | passender existierender Test, z. B. `npm test -- tests/PeerRoom.test.ts` |
 | Zwischenstand einer Lane über mehrere Module | `npm run check:quick` (Typecheck, betroffene Core-Tests, Architecture, Quelltext-Guardrails; keine Builds) |
 | Mehrere Module, Netzwerk, Lifecycle oder Build-Konfiguration | `npm run check` |
-| Vor einem Fast-Forward nach `main` oder einer Lane-Integration | `npm run check:release`, danach `npm run ff-main -- <branch> --expect <main-hash>` |
+| Vor einem Fast-Forward nach `main` oder einer Lane-Integration | `npm run check:release` (inklusive Protokollprüfung: Drahtformat geändert → `PEER_PROTOCOL_VERSION` = `main` + 1), danach `npm run ff-main -- <branch> --expect <main-hash>` |
 | Architecture-, World-, Activity-, Asset-, Stress- oder Balance-Lab-relevante Änderung | passende Spezialsuite gemäß [`docs/ai/testing.md`](docs/ai/testing.md) |
 | Sichtbare Phaser-/UI-Änderung | `npm run build` |
 

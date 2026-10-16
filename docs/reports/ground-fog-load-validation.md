@@ -1,7 +1,7 @@
 # Bodennebel – Dauerfeuer, Strömungswaffen und Zug
 
 22. September 2026, Ausgangsstand `f16aa9ed` (Fog 0.2).
-Bedienung: [Bodennebel-Lab](ground-fog-lab.md).
+Bedienung: [Bodennebel-Lab](../ground-fog-lab.md).
 
 ## Änderungen und Ursache
 

@@ -58,6 +58,8 @@
     "worktree:new": "node scripts/worktree-new.mjs",
     "worktree:remove": "node scripts/worktree-remove.mjs",
     "capture": "node tools/capture-kit/capture.mjs",
+    "latejoin": "node tools/latejoin/latejoin.mjs",
+    "record:flight": "node tools/flight-recorder/record.mjs",
     "board": "node scripts/board.mjs",
     "ff-main": "node scripts/ff-main.mjs",
     "preview": "vite preview",

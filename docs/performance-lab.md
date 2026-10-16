@@ -271,7 +271,7 @@ des 60-Sekunden-Gesamtfensters. Fehlende Bossphasen, Nuke, Meteore oder sichtbar
 ausgeweitetes Feuer lassen den Lauf scheitern. Der Fall ist ein Host-/Rendering-Benchmark
 mit festem Seed und ohne Spielerschüsse; er misst keine vollständige Kampagnenrunde oder
 WebRTC-Verbindung. Änderungen an Map 15 verändern auch diesen Fall.
-Messaufbau, Optimierung und Ergebnisse stehen im [Map-15-Bericht](performance-map15-2026-10-08.md).
+Messaufbau, Optimierung und Ergebnisse stehen im [Map-15-Bericht](reports/performance-map15-2026-10-08.md).
 
 Lastmengen, Ziel-HP und Mindestbestände stehen in `fixtures.ts`, die Karte in `referenceMap.ts`,
 Zeiten und Fallverträge in `scenarios.ts`. `build-presets.json` hält die erlaubten Upgrade-IDs
@@ -408,7 +408,7 @@ aus dem öffentlichen Build ausgeschlossen. Keine Szenarien im normalen Updatepf
 
 Die passenden Tests liegen in `PerformanceLab*.test.ts`, `GraphicsQualityAndPerformance.test.ts`,
 `WorldActivityAuthoring.test.ts` und `tests/integration/ArenaExitLifecycle.test.ts`.
-Praktische Nachweise und verbleibende Grenzen stehen in [performance-lab-validation.md](performance-lab-validation.md).
+Praktische Nachweise und verbleibende Grenzen stehen in [performance-lab-validation.md](reports/performance-lab-validation.md).
 Browserprüfungen erfolgen ausschließlich mit dem Lab-Runner. Die endgültige Lastkalibrierung
 erfordert zusätzlich eine menschlich gespielte Vergleichsrunde: Sind dieselben auffälligen
 Mechaniken betroffen, und sind Gegnerbestände, Ziel-HP und Zerstörungsgrößen praktisch relevant?
