@@ -1073,7 +1073,7 @@
       "attackScanIntervalMs": 200,
       "attackStopDurationMs": 100,
       "obstacleAttackDelayMs": 500,
-      "imageKey": "enemy_rabid_badger",
+      "imageKey": "mini_kraken",
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.8
       }
