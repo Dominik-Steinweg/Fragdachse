@@ -167,7 +167,7 @@ function makeCombatController() {
     teslaDome: { update: vi.fn() },
     turretAnimations: { update: vi.fn() },
     teslaNova: { update: vi.fn() },
-    healingAura: { syncEnemies: vi.fn(), update: vi.fn() },
+    healingAura: { syncEnemies: vi.fn() },
     miniTeslaDome: { syncEnemies: vi.fn(), update: vi.fn() },
     energyShield: { update: vi.fn() },
     guardianSpirit: { update: vi.fn() },

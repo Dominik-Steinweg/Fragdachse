@@ -114,14 +114,13 @@ const FALLBACK_SPRITES: readonly HeldItemSpriteSpec[] = [GENERIC_GUN, GENERIC_TH
 
 /**
  * Waffenarten, die in den Pfoten nichts Sichtbares halten. Nahkampf ist die Figur selbst, und
- * `energy_shield`, `tesla_dome` sowie `healing_aura` besitzen bereits eine eigene, deutlich
+ * `energy_shield` und `tesla_dome` besitzen bereits eine eigene, deutlich
  * groessere Weltdarstellung – ein zusaetzlicher Klotz in den Pfoten stuende nur davor.
  */
 const SLOTLESS_WEAPON_FIRE_TYPES: ReadonlySet<string> = new Set([
   'melee',
   'energy_shield',
   'tesla_dome',
-  'healing_aura',
 ]);
 
 /** Konstruktion ohne eigenes Handmodell; explizite Katalogmodelle haben Vorrang. */

@@ -412,7 +412,6 @@ export class PlayerWeaponActivationRuntime {
             : gameplayMuzzleOrigin,
         });
       case 'tesla_dome':
-      case 'healing_aura':
       case 'energy_shield':
         return false;
       default:

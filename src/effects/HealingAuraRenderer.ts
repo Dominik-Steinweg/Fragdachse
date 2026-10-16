@@ -1,44 +1,22 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
-import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
 import type { EnemyVisualSource } from '../entities/EnemyVisualSource';
-import { WEAPON_CONFIGS, type HealingAuraWeaponFireConfig } from '../loadout/LoadoutConfig';
-import { configureAdditiveImage, fillRadialGradientTexture, registerGraphicsObject } from './EffectUtils';
-import type { LightingSystem } from './LightingSystem';
+import { configureAdditiveImage, fillRadialGradientTexture } from './EffectUtils';
 
-const TEX_HEAL_FIELD = '__enemy_heal_aura_field';
 const TEX_HEAL_PARTICLE = '__enemy_heal_aura_particle';
 
-/** Aufgehelltes Aura-Grün: als Licht muss die Farbe alle drei Kanäle anheben. */
-const HEAL_AURA_LIGHT_COLOR = 0xc8ffd6;
-
-interface HealingAuraVisual {
-  field: Phaser.GameObjects.Image;
-  ring: Phaser.GameObjects.Ellipse;
-  radius: number;
-  phase: number;
-}
-
-/** Gruene, bewusst eigenstaendige Darstellung der gegnerischen Heil-Aura. */
+/**
+ * Rising green motes wherever a body regains health (enemy heal links, regeneration, player rocket
+ * heal). Healing is read from the observed HP rise, never invented; the heal source draws its own
+ * cause (tendrils, beams).
+ */
 export class HealingAuraRenderer {
-  private readonly visuals = new Map<string, HealingAuraVisual>();
   private readonly knownHp = new Map<string, number>();
   private readonly particles = new Set<Phaser.GameObjects.Image>();
-  private lighting: LightingSystem | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {}
 
-  setLightingSystem(lighting: LightingSystem | null): void {
-    this.lighting = lighting;
-  }
-
   generateTextures(): void {
-    fillRadialGradientTexture(this.scene.textures, TEX_HEAL_FIELD, 256, [
-      [0, 'rgba(210,255,220,0.26)'],
-      [0.38, 'rgba(84,255,132,0.18)'],
-      [0.72, 'rgba(24,190,88,0.11)'],
-      [1, 'rgba(0,90,40,0.0)'],
-    ]);
     fillRadialGradientTexture(this.scene.textures, TEX_HEAL_PARTICLE, 18, [
       [0, 'rgba(255,255,255,1.0)'],
       [0.28, 'rgba(150,255,175,0.95)'],
@@ -53,92 +31,28 @@ export class HealingAuraRenderer {
   }
 
   syncEnemies(enemies: readonly EnemyVisualSource[]): void {
-    const activeAuraIds = new Set<string>();
     const activeEnemyIds = new Set<string>();
-
     for (const enemy of enemies) {
       if (!enemy.sprite.active || enemy.getHp() <= 0) continue;
       activeEnemyIds.add(enemy.id);
-
       const previousHp = this.knownHp.get(enemy.id);
       if (previousHp !== undefined && enemy.getHp() > previousHp + 0.01) {
         this.spawnHealingBurst(enemy.sprite.x, enemy.sprite.y, Math.min(8, 3 + Math.ceil((enemy.getHp() - previousHp) / 10)));
       }
       this.knownHp.set(enemy.id, enemy.getHp());
-
-      const enemyConfig = getCoopDefenseEnemyConfig(enemy.kind);
-      if (!enemyConfig.weapons.some(weapon => weapon.weaponId === 'HEALING_AURA')) continue;
-      const weapon = WEAPON_CONFIGS.HEALING_AURA;
-      if (weapon.fire.type !== 'healing_aura') continue;
-
-      activeAuraIds.add(enemy.id);
-      this.syncAura(enemy, weapon.fire);
-    }
-
-    for (const [enemyId, visual] of this.visuals) {
-      if (activeAuraIds.has(enemyId)) continue;
-      this.lighting?.releaseLight(lightKey(enemyId));
-      visual.field.destroy();
-      visual.ring.destroy();
-      this.visuals.delete(enemyId);
     }
     for (const enemyId of this.knownHp.keys()) {
       if (!activeEnemyIds.has(enemyId)) this.knownHp.delete(enemyId);
     }
   }
 
-  update(_delta: number): void {
-    const now = this.scene.time.now;
-    for (const [enemyId, visual] of this.visuals) {
-      const pulse = 1 + Math.sin(now * 0.004 + visual.phase) * 0.035;
-      visual.field.setScale((visual.radius * 2 / 256) * pulse);
-      visual.field.setAlpha(0.72 + Math.sin(now * 0.005 + visual.phase) * 0.1);
-      visual.ring.setScale(pulse);
-      visual.ring.setAlpha(0.62 + Math.sin(now * 0.006 + visual.phase) * 0.18);
-
-      this.lighting?.setLight(lightKey(enemyId), 'arcaneField', visual.field.x, visual.field.y, {
-        radiusPx: Math.max(visual.radius * 1.3, 80),
-        color: HEAL_AURA_LIGHT_COLOR,
-      });
-    }
-  }
-
   destroyAll(): void {
-    for (const [enemyId, visual] of this.visuals) {
-      this.lighting?.releaseLight(lightKey(enemyId));
-      visual.field.destroy();
-      visual.ring.destroy();
-    }
     for (const particle of this.particles) {
       this.scene.tweens.killTweensOf(particle);
       particle.destroy();
     }
-    this.visuals.clear();
     this.knownHp.clear();
     this.particles.clear();
-  }
-
-  private syncAura(enemy: EnemyVisualSource, fire: HealingAuraWeaponFireConfig): void {
-    let visual = this.visuals.get(enemy.id);
-    if (!visual) {
-      const field = configureAdditiveImage(
-        this.scene.add.image(enemy.sprite.x, enemy.sprite.y, TEX_HEAL_FIELD),
-        DEPTH.PLAYERS - 0.18,
-        0.75,
-        0x66ff99,
-      );
-      const ring = this.scene.add.ellipse(enemy.sprite.x, enemy.sprite.y, fire.radius * 2, fire.radius * 2)
-        .setStrokeStyle(3, 0x73ff9f, 0.72)
-        .setFillStyle(0x20b85a, 0.035)
-        .setDepth(DEPTH.PLAYERS - 0.17);
-      registerGraphicsObject(this.scene, 'healingAura', ring);
-      visual = { field, ring, radius: fire.radius, phase: Phaser.Math.FloatBetween(0, Math.PI * 2) };
-      this.visuals.set(enemy.id, visual);
-    }
-
-    visual.radius = fire.radius;
-    visual.field.setPosition(enemy.sprite.x, enemy.sprite.y);
-    visual.ring.setPosition(enemy.sprite.x, enemy.sprite.y).setSize(fire.radius * 2, fire.radius * 2);
   }
 
   private spawnHealingBurst(x: number, y: number, count: number): void {
@@ -167,8 +81,4 @@ export class HealingAuraRenderer {
       });
     }
   }
-}
-
-function lightKey(enemyId: string): string {
-  return `healaura:${enemyId}`;
 }

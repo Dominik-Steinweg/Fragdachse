@@ -442,8 +442,67 @@ export interface CoopDefenseEnemyDeathBurstConfig {
   readonly structureDamageMult: number;
 }
 
+/** Upper bound of replicated heal links per hopping healer (wire cap). */
+export const MAX_HOP_HEAL_LINKS = 6;
+
+/** Heal channel of a resting hopper: links to the most injured allies in reach, ticking while it stands. */
+export interface CoopDefenseEnemyHopHealConfig {
+  readonly radiusPx: number;
+  readonly maxLinks: number;
+  readonly healPerTick: number;
+  readonly tickIntervalMs: number;
+}
+
+/** Splash at a landing point that a player stood near when the hop was decided. */
+export interface CoopDefenseEnemyLandingShockConfig {
+  readonly radiusPx: number;
+  readonly damage: number;
+  readonly knockbackSpeed: number;
+  readonly knockbackMs: number;
+  /** A player this close to the landing point at take-off arms (and telegraphs) the shock. */
+  readonly armRadiusPx: number;
+}
+
+/** Landing choice weights: route progress, heal value and penalties for turning away and crowding. */
+export interface CoopDefenseEnemyHopWeights {
+  readonly progress: number;
+  readonly heal: number;
+  readonly deviation: number;
+  readonly crowd: number;
+}
+
+/**
+ * Hop locomotion: crouch, airborne arc, landing, then an adaptive rest. Hop distance scales with the
+ * body's current move speed relative to the authored one; the rest is the only heal window.
+ */
+export interface CoopDefenseEnemyHopConfig {
+  readonly minHopPx: number;
+  readonly maxHopPx: number;
+  readonly crouchMs: number;
+  readonly airMs: number;
+  readonly landMs: number;
+  /** Rest without anything to heal or attack before the next hop. */
+  readonly breathMs: number;
+  /** Hard cap of one rest; the body must hop on afterwards. */
+  readonly restMaxMs: number;
+  /** Wait before retrying when no landing point was valid. */
+  readonly retryMs: number;
+  readonly fanHalfAngleDeg: number;
+  readonly fanSteps: number;
+  readonly weights: CoopDefenseEnemyHopWeights;
+  /** Without heal value a landing must reach this share of the best available progress. */
+  readonly minProgressShare: number;
+  /** With heal value a landing may lose at most this much route progress (ground pixels). */
+  readonly maxRegressPx: number;
+  readonly crouchDisplacementCancelPx: number;
+  readonly cancelLockoutMs: number;
+  readonly heal?: CoopDefenseEnemyHopHealConfig;
+  readonly landingShock?: CoopDefenseEnemyLandingShockConfig;
+}
+
 export interface CoopDefenseEnemyConfig {
   readonly flee?: CoopDefenseEnemyFleeConfig;
+  readonly hop?: CoopDefenseEnemyHopConfig;
   readonly amphibious?: CoopDefenseEnemyAmphibiousConfig;
   readonly engage?: CoopDefenseEnemyEngageConfig;
   readonly deathBurst?: CoopDefenseEnemyDeathBurstConfig;
@@ -636,6 +695,9 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         amphibious: config.amphibious ? { ...config.amphibious } : undefined,
         engage: config.engage ? { ...config.engage } : undefined,
         deathBurst: config.deathBurst ? { ...config.deathBurst } : undefined,
+        hop: config.hop ? { ...config.hop, weights: { ...config.hop.weights },
+          heal: config.hop.heal ? { ...config.hop.heal } : undefined,
+          landingShock: config.hop.landingShock ? { ...config.hop.landingShock } : undefined } : undefined,
         turnRateDegPerSec: config.turnRateDegPerSec,
         stinkAura: config.stinkAura,
         deathSpawns: config.deathSpawns,
@@ -730,6 +792,11 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
       `[coopDefenseEnemies] Regular enemy ${enemy.id} exceeds ${MAX_REGULAR_ENEMY_SIZE_PX}px: configured size ${enemy.size}px`,
     );
   }
+  // Hopping is exclusive locomotion: no second owner may move or hold the same body.
+  if (enemy.hop && (flee || krakenBoss || krakenEgg || enemy.shieldCharger || enemy.energyCone || enemy.firestarter
+    || enemy.mortar || enemy.timebomb || enemy.burrow || enemy.dodge || enemy.amphibious || enemy.combatPositioning)) {
+    throw new Error(`[coopDefenseEnemies] Hopping enemy has a second locomotion owner: ${enemy.id}`);
+  }
 
   return {
     maxHp: Math.max(1, Math.floor(enemy.maxHp)),
@@ -776,6 +843,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     amphibious: normalizeAmphibiousConfig(enemy.amphibious),
     engage: normalizeEngageConfig(enemy.engage),
     deathBurst: normalizeDeathBurstConfig(enemy.deathBurst),
+    hop: normalizeHopConfig(enemy.hop),
     turnRateDegPerSec: normalizeTurnRate(enemy.turnRateDegPerSec),
     stinkAura: normalizeStinkAuraConfig(enemy.stinkAura, enemy.id),
     deathSpawns: normalizeDeathSpawns(enemy.deathSpawns, enemy.id),
@@ -1280,6 +1348,34 @@ export function normalizeEngageConfig(config: CoopDefenseEnemyEngageConfig | und
   if ([config.enterPx, config.exitPx].some(v => !Number.isFinite(v) || v <= 0) || !Number.isFinite(config.minDwellMs) || config.minDwellMs < 0
     || config.enterPx >= config.exitPx) throw new Error('Invalid engage config');
   return { ...config };
+}
+
+/** Reject malformed hop timing, weights and inconsistent distances at the authored boundary. */
+export function normalizeHopConfig(config: CoopDefenseEnemyHopConfig | undefined): CoopDefenseEnemyHopConfig | undefined {
+  if (!config) return undefined;
+  const invalid = (positive: readonly number[], nonNegative: readonly number[]) =>
+    positive.some(v => !Number.isFinite(v) || v <= 0) || nonNegative.some(v => !Number.isFinite(v) || v < 0);
+  const weights = config.weights;
+  if (!weights || invalid([config.minHopPx, config.maxHopPx, config.crouchMs, config.airMs, config.landMs, config.breathMs,
+    config.restMaxMs, config.retryMs, config.fanHalfAngleDeg, config.crouchDisplacementCancelPx],
+  [config.maxRegressPx, config.cancelLockoutMs, config.minProgressShare, weights.progress, weights.heal, weights.deviation, weights.crowd])) {
+    throw new Error('Invalid hop value');
+  }
+  if (!Number.isInteger(config.fanSteps) || config.fanSteps < 3 || config.fanSteps % 2 === 0 || config.minHopPx > config.maxHopPx
+    || config.restMaxMs < config.breathMs || config.minProgressShare > 1 || config.fanHalfAngleDeg > 180) {
+    throw new Error('Invalid hop relation');
+  }
+  const heal = config.heal, shock = config.landingShock;
+  if (heal && (invalid([heal.radiusPx, heal.healPerTick, heal.tickIntervalMs], [])
+    || !Number.isInteger(heal.maxLinks) || heal.maxLinks < 1 || heal.maxLinks > MAX_HOP_HEAL_LINKS)) {
+    throw new Error('Invalid hop heal config');
+  }
+  if (shock && (invalid([shock.radiusPx, shock.armRadiusPx], [shock.damage, shock.knockbackSpeed, shock.knockbackMs])
+    || shock.armRadiusPx < shock.radiusPx)) {
+    throw new Error('Invalid hop landing shock config');
+  }
+  return { ...config, weights: { ...weights }, heal: heal ? { ...heal } : undefined,
+    landingShock: shock ? { ...shock } : undefined };
 }
 
 export function normalizeDeathBurstConfig(config: CoopDefenseEnemyDeathBurstConfig | undefined): CoopDefenseEnemyDeathBurstConfig | undefined {

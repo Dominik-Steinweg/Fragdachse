@@ -12,6 +12,7 @@ import { CoopDefenseEnemyDodgeSystem } from '../systems/CoopDefenseEnemyDodgeSys
 import { CoopDefenseEnemyTrainAwarenessSystem } from '../systems/CoopDefenseEnemyTrainAwarenessSystem';
 import { CoopDefenseShieldChargerSystem } from '../systems/CoopDefenseShieldChargerSystem';
 import { CoopDefenseEnergyConeSystem } from '../systems/CoopDefenseEnergyConeSystem';
+import { CoopDefenseEnemyHopSystem } from '../systems/CoopDefenseEnemyHopSystem';
 import { PLAYER_SIZE } from '../config';
 import { getFirestarterFactionTargets } from '../systems/firestarterAlliedTargeting';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
@@ -212,6 +213,35 @@ export class CoopMissionEnemyBehaviourComposition {
         strike: (targetId, chargerId, damage, x, y, now) => combat.resolveChargeContact?.(targetId, chargerId, damage, x, y, now) ?? false,
         knockback: (targetId, vx, vy, durationMs, sourceId) => this.options.hostPhysics.addRecoil(targetId, vx, vy, durationMs, sourceId),
         structureSweep: (enemy, ax, ay, bx, by, radius, damage, now) => this.options.enemyAreaEffects?.sweepBases(enemy.id, ax, ay, bx, by, radius, damage, now),
+      }));
+      runtime.setHop(new CoopDefenseEnemyHopSystem({
+        enemies: enemyManager,
+        combat,
+        readSteering: enemy => {
+          const intent = intents.get(enemy.id);
+          const field = intents.getField(enemy.id);
+          const costAt = (x: number, y: number) => {
+            const route = field?.queryNavigation(x, y);
+            return route?.status === 'ready' ? route.cost : null;
+          };
+          // Allies steer where necromancy would walk them (null = hold the follow place).
+          if (enemy.faction === 'allied') {
+            const point = runtime.necromancySystem?.getAllySteeringPoint(enemy.id) ?? null;
+            const navigation = intent?.navigation;
+            return point ? { point, originCost: navigation?.status === 'ready' ? navigation.cost : null, costAt } : null;
+          }
+          if (!intent) return null;
+          const navigation = intent.navigation;
+          const point = navigation.status === 'ready' ? navigation.waypoint
+            : navigation.status === 'pending' ? navigation.continuation ?? intent.point
+              : intents.getBreach(enemy.id)?.approach ?? intent.point;
+          return point ? { point, originCost: navigation.status === 'ready' ? navigation.cost : null, costAt } : null;
+        },
+        isFree: this.options.isFreeEnemyGroundAt,
+        canMove: this.options.hasWalkableEnemyCircleLine,
+        combatIntent: (enemy, now) => enemy.faction === 'hostile' ? attack.getCombatMovement(enemy, now) : null,
+        shockTargets: () => this.options.playerManager.getAllPlayers().filter(player => player.active)
+          .map(player => ({ x: player.x, y: player.y })),
       }));
       runtime.setEnergyCone(new CoopDefenseEnergyConeSystem({
         enemies: enemyManager,

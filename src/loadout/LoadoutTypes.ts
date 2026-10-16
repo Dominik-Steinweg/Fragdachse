@@ -141,13 +141,6 @@ export interface TeslaDomeWeaponFireConfig {
   readonly stormNovaKnockback?: number;
 }
 
-export interface HealingAuraWeaponFireConfig {
-  readonly type: 'healing_aura';
-  readonly radius: number;
-  readonly healPerTick: number;
-  readonly tickInterval: number;
-}
-
 export interface EnergyShieldWeaponFireConfig {
   readonly type: 'energy_shield';
   readonly blockArcDegrees: number;
@@ -214,7 +207,6 @@ export type WeaponFireConfig =
   | FlamethrowerWeaponFireConfig
   | LeafBlowerWeaponFireConfig
   | TeslaDomeWeaponFireConfig
-  | HealingAuraWeaponFireConfig
   | EnergyShieldWeaponFireConfig
   | ReinforcementMatrixWeaponFireConfig
   | EnergyInjectorWeaponFireConfig;

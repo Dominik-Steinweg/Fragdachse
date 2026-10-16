@@ -213,12 +213,43 @@
             "strikeMs": 80,
             "recoveryMs": 220
           }
-        },
-        {
-          "weaponId": "HEALING_AURA",
-          "targetMode": "all"
         }
       ],
+      "hop": {
+        "minHopPx": 60,
+        "maxHopPx": 104,
+        "crouchMs": 180,
+        "airMs": 420,
+        "landMs": 160,
+        "breathMs": 400,
+        "restMaxMs": 2500,
+        "retryMs": 300,
+        "fanHalfAngleDeg": 65,
+        "fanSteps": 7,
+        "weights": {
+          "progress": 1,
+          "heal": 1.4,
+          "deviation": 0.25,
+          "crowd": 0.3
+        },
+        "minProgressShare": 0.35,
+        "maxRegressPx": 24,
+        "crouchDisplacementCancelPx": 18,
+        "cancelLockoutMs": 600,
+        "heal": {
+          "radiusPx": 150,
+          "maxLinks": 4,
+          "healPerTick": 6,
+          "tickIntervalMs": 250
+        },
+        "landingShock": {
+          "radiusPx": 46,
+          "damage": 10,
+          "knockbackSpeed": 420,
+          "knockbackMs": 200,
+          "armRadiusPx": 140
+        }
+      },
       "attackScanIntervalMs": 180,
       "attackStopDurationMs": 220,
       "obstacleAttackDelayMs": 500,

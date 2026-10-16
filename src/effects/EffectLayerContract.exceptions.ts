@@ -271,8 +271,6 @@ export const DEPTH_LAYER_EXCEPTIONS: readonly LayerException[] = [
   {"id":"cpu:effects/GuardianSpiritRenderer.ts:createVisual/motes/createEmitter/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/GuardianSpiritRenderer.ts:playImpact/ring/configureAdditiveImage/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/GuardianSpiritRenderer.ts:playBurst/emitter/createEmitter/0","deviation":"emission-under-lightmap","finding":"D10"},
-  {"id":"cpu:effects/HealingAuraRenderer.ts:syncAura/field/configureAdditiveImage/0","deviation":"emission-under-lightmap","finding":"D10"},
-  {"id":"cpu:effects/HealingAuraRenderer.ts:syncAura/ring/setDepth/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/HealingAuraRenderer.ts:spawnHealingBurst/particle/configureAdditiveImage/0","deviation":"emission-under-lightmap","finding":"D10"},
   {"id":"cpu:effects/HolyExplosionRenderer.ts:spawnEmblem/layers/depth/0","deviation":"body-over-canopy","finding":"D02"},
   {"id":"cpu:effects/HolyExplosionRenderer.ts:spawnEmblem/layers/depth/0","deviation":"material-outside-sun","finding":"D06"},

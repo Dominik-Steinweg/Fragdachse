@@ -150,7 +150,6 @@ export class AutomatedWeaponExecutionAdapter implements AutomatedWeaponExecution
           sourceSlot: params.options?.sourceSlot,
         });
       case 'tesla_dome':
-      case 'healing_aura':
       case 'energy_shield':
         return false;
       default:

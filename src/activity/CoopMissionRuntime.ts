@@ -1,6 +1,7 @@
 import type { CoopDefenseFirestarterSystem } from '../systems/CoopDefenseFirestarterSystem';
 import type { CoopDefenseShieldChargerSystem } from '../systems/CoopDefenseShieldChargerSystem';
 import type { CoopDefenseEnergyConeSystem } from '../systems/CoopDefenseEnergyConeSystem';
+import type { CoopDefenseEnemyHopSystem } from '../systems/CoopDefenseEnemyHopSystem';
 import type { SyncedMortarStrike } from '../types';
 import type { CoopDefenseMortarSystem } from '../systems/CoopDefenseMortarSystem';
 import type { CoopDefenseMortarStrikeSystem } from '../systems/CoopDefenseMortarStrikeSystem';
@@ -246,10 +247,18 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     this.refreshSpecialMovementSource();
     this.publishBindings();
   }
+  private hopOwner: CoopDefenseEnemyHopSystem | null = null;
+  get coopDefenseEnemyHopSystem() { return this.hopOwner; }
+  setHop(system: CoopDefenseEnemyHopSystem): void {
+    this.claimEmptySlot('hop runtime', this.hopOwner);
+    this.hopOwner = system;
+    this.refreshSpecialMovementSource();
+    this.publishBindings();
+  }
   private refreshSpecialMovementSource(): void {
     this.specialMovementOwner = new CompositeEnemySpecialMovementSource([
       this.coopDefenseTimebombSystem, this.coopDefenseMortarSystem, this.firestarterOwner, this.shieldChargerOwner,
-      this.energyConeOwner,
+      this.energyConeOwner, this.hopOwner,
     ]);
   }
   private mortarOwner: { behavior: CoopDefenseMortarSystem; strikes: CoopDefenseMortarStrikeSystem } | null = null;
@@ -591,6 +600,8 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     this.shieldChargerOwner = null;
     this.energyConeOwner?.clear();
     this.energyConeOwner = null;
+    this.hopOwner?.clear();
+    this.hopOwner = null;
     this.mortarOwner?.behavior.clear();
     this.mortarOwner?.strikes.clear();
     this.mortarOwner = null;

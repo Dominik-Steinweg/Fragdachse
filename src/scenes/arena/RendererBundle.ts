@@ -422,7 +422,6 @@ export function* createRendererBundleSteps(
   reinforcementMatrix.setLightingSystem(lighting);
   energyInjector.setLightingSystem(lighting);
   remoteControl.setLightingSystem(lighting);
-  healingAura.setLightingSystem(lighting);
   repairDrone.setLightingSystem(lighting);
   objectiveRepairDrones.setLightingSystem(lighting);
   guardianSpirit.setLightingSystem(lighting);

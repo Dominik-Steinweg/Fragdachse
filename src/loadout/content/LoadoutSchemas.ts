@@ -83,7 +83,6 @@ const FIRE_REQUIRED: Readonly<Record<string, readonly string[]>> = {
     'visualIdleArcCount', 'visualBoltThicknessMin', 'visualBoltThicknessMax', 'visualJitter',
     'visualBranchChance', 'visualImpactBurstScale', 'visualWhiteness', 'visualPulseSpeed',
   ],
-  healing_aura: ['radius', 'healPerTick', 'tickInterval'],
   energy_shield: [
     'blockArcDegrees', 'anchorDistance', 'visualRadius', 'visualThickness',
     'adrenalineDrainPerSecond', 'movementSlowFactor', 'flashDurationMs', 'flashMaxAlpha',

@@ -33,7 +33,7 @@ describe('Getragene Loadout-Items: Bildvertrag', () => {
   });
 
   it('hat fuer jedes tragbare Katalog-Item ein eigenes Bild', () => {
-    const slotlessWeaponTypes = new Set(['melee', 'energy_shield', 'tesla_dome', 'healing_aura']);
+    const slotlessWeaponTypes = new Set(['melee', 'energy_shield', 'tesla_dome']);
 
     for (const entry of equipableCatalogEntries.filter((candidate) => candidate.kind !== 'ultimate')) {
       const weapon = findWeaponConfig(entry.id);

@@ -170,7 +170,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     for (const attackWeapon of enemy.getAttackWeapons()) {
       if (committedWeaponId && attackWeapon.weapon.config.id !== committedWeaponId) continue;
       const fire = attackWeapon.weapon.config.fire.type;
-      if (fire === 'healing_aura' || fire === 'tesla_dome') continue;
+      if (fire === 'tesla_dome') continue;
       const range = attackWeapon.weapon.config.range;
       const frozen = committedWeaponId ? salvo?.target ?? this.lastAttackTargets.get(enemy.id) : undefined;
       const obscured = frozen && this.isAttackTargetObscured(enemy, frozen, range);
@@ -505,7 +505,7 @@ export class CoopDefenseEnemyAttackSystem implements EnemyCombatMovementSource {
     let higherPriorityWeaponBusy = false;
     for (const attackWeapon of enemy.getAttackWeapons()) {
       const weapon = attackWeapon.weapon;
-      if (weapon.config.fire.type === 'healing_aura' || weapon.config.fire.type === 'tesla_dome') continue;
+      if (weapon.config.fire.type === 'tesla_dome') continue;
       const target = this.resolveWeaponTarget(enemy, attackWeapon, now);
       if (!target) continue;
       // Existiert ein Ziel fuer eine hoeher priorisierte Waffe, wartet der

@@ -90,7 +90,7 @@ describe('asset pipeline catalog contracts', () => {
     }
   });
   it('covers every equipable held weapon with explicit grip and muzzle coordinates', () => {
-    const slotless = new Set(['melee', 'energy_shield', 'tesla_dome', 'healing_aura']);
+    const slotless = new Set(['melee', 'energy_shield', 'tesla_dome']);
     const required = LOADOUT_CATALOG_ENTRIES.filter(entry => entry.kind === 'weapon')
       .filter(entry => { const weapon = findWeaponConfig(entry.id); return weapon && !slotless.has(weapon.fire.type); }).map(entry => entry.id);
     const weapons = assets.filter(asset => asset.category === 'weapon');

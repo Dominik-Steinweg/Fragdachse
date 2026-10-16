@@ -18,7 +18,6 @@ import type { FireSystem } from '../effects/FireSystem';
 import {
   UTILITY_CONFIGS,
   WEAPON_CONFIGS,
-  type HealingAuraWeaponFireConfig,
   type MolotovUtilityConfig,
   type StinkCloudUtilityConfig,
   type TeslaDomeWeaponFireConfig,
@@ -127,7 +126,6 @@ export class CoopDefenseEnemyAbilitySystem {
     const target = state && state.throwAt > 0 ? state.targetRef : undefined;
     return target && target.kind !== 'enemy' ? target as EnemyAiTargetRef : null;
   }
-  private readonly lastHealingTickAt = new Map<string, number>();
   private readonly lastMiniDomeTickAt = new Map<string, number>();
   private readonly teleportStates = new Map<string, EnemyTeleportState>();
   private readonly spawnThrowReadyAt = new Map<string, number>();
@@ -158,7 +156,7 @@ export class CoopDefenseEnemyAbilitySystem {
       if (!enemy.sprite.active || enemy.getHp() <= 0) continue;
       activeEnemyIds.add(enemy.id);
       if (this.combatSystem.isStunned?.(enemy.id, now)) {
-        this.lastHealingTickAt.set(enemy.id, now); this.lastMiniDomeTickAt.set(enemy.id, now);
+        this.lastMiniDomeTickAt.set(enemy.id, now);
         this.voidFireTrailStates.delete(enemy.id);
         const windup = this.voidMolotovStates.get(enemy.id);
         if (windup && windup.throwAt > 0) {
@@ -177,11 +175,6 @@ export class CoopDefenseEnemyAbilitySystem {
         this.voidFireTrailStates.delete(enemy.id);
         this.cancelVoidMolotovWindup(enemy);
         continue;
-      }
-
-      const healingAura = this.getWeaponConfig(enemy, 'HEALING_AURA');
-      if (healingAura?.fire.type === 'healing_aura') {
-        this.updateHealingAura(enemy, healingAura.fire, now);
       }
 
       const miniDome = this.getWeaponConfig(enemy, 'MINI_TESLA_DOME');
@@ -225,7 +218,6 @@ export class CoopDefenseEnemyAbilitySystem {
     for (const enemyId of this.voidMolotovStates.keys()) {
       this.enemyManager.getEnemy(enemyId)?.setSpecialAction('none');
     }
-    this.lastHealingTickAt.clear();
     this.lastMiniDomeTickAt.clear();
     this.teleportStates.clear();
     this.spawnThrowReadyAt.clear();
@@ -255,21 +247,6 @@ export class CoopDefenseEnemyAbilitySystem {
       now,
     );
     this.activeStinkAuraEnemyIds.add(enemy.id);
-  }
-
-  private updateHealingAura(enemy: EnemyEntity, fire: HealingAuraWeaponFireConfig, now: number): void {
-    const tickCount = this.consumeTicks(this.lastHealingTickAt, enemy.id, now, fire.tickInterval);
-    if (tickCount <= 0) return;
-    const healing = fire.healPerTick * tickCount;
-    const radiusSq = fire.radius * fire.radius;
-
-    for (const target of this.enemyManager.getAllEnemies()) {
-      if (target.faction !== enemy.faction) continue;
-      if (target === enemy || !target.sprite.active || target.getHp() <= 0 || target.getHp() >= target.getMaxHp()) continue;
-      const distanceSq = Phaser.Math.Distance.Squared(enemy.sprite.x, enemy.sprite.y, target.sprite.x, target.sprite.y);
-      if (distanceSq > radiusSq) continue;
-      this.enemyManager.applyHealing(target.id, healing);
-    }
   }
 
   private updateMiniDome(
@@ -909,9 +886,6 @@ export class CoopDefenseEnemyAbilitySystem {
   }
 
   private pruneInactiveEnemies(activeEnemyIds: ReadonlySet<string>): void {
-    for (const enemyId of this.lastHealingTickAt.keys()) {
-      if (!activeEnemyIds.has(enemyId)) this.lastHealingTickAt.delete(enemyId);
-    }
     for (const enemyId of this.lastMiniDomeTickAt.keys()) {
       if (!activeEnemyIds.has(enemyId)) this.lastMiniDomeTickAt.delete(enemyId);
     }

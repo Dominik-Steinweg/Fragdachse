@@ -164,13 +164,15 @@ export class CoopMissionEnemySupportComposition {
           || (runtime.coopDefenseFirestarterSystem?.blocksRegularAttacks(enemyId) ?? false)
           || (runtime.coopDefenseShieldChargerSystem?.blocksRegularAttacks(enemyId) ?? false)
           || (runtime.coopDefenseEnergyConeSystem?.blocksRegularAttacks(enemyId) ?? false)
+          || (runtime.coopDefenseEnemyHopSystem?.blocksRegularAttacks(enemyId) ?? false)
           || (runtime.coopDefenseEnemyAbilitySystem?.blocksRegularAttacks(enemyId) ?? false)
         ));
         runtime.coopDefenseEnemyDodgeSystem?.setBlockedChecker(enemyId =>
           (runtime.coopDefenseVoidHunterSystem?.blocksDodge(enemyId) ?? false)
           || (runtime.coopDefenseFirestarterSystem?.blocksDodge(enemyId) ?? false)
           || (runtime.coopDefenseShieldChargerSystem?.blocksDodge(enemyId) ?? false)
-          || (runtime.coopDefenseEnergyConeSystem?.blocksDodge(enemyId) ?? false));
+          || (runtime.coopDefenseEnergyConeSystem?.blocksDodge(enemyId) ?? false)
+          || (runtime.coopDefenseEnemyHopSystem?.blocksDodge(enemyId) ?? false));
         if (necromancy) {
           necromancy.setCorpseSink({
             onCorpseAdded: (corpseId, x, y, enemySize, lifetimeMs) => {

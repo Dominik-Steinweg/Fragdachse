@@ -106,7 +106,6 @@ export class ArenaCombatPresentationController {
     this.renderers.healthBars.update(frame.inArena);
     diagnosticsFrame?.end('visualEnemy');
     this.renderers.healingAura.syncEnemies(auraEnemies);
-    this.renderers.healingAura.update(frame.delta);
     this.renderers.miniTeslaDome.syncEnemies(auraEnemies);
     this.renderers.miniTeslaDome.update(frame.delta);
     this.renderers.energyShield.update(frame.delta);

@@ -7,6 +7,7 @@ import { airborneLift } from '../animations/leapPresentation';
 import { syncEnemyEnergyConeAnimation } from '../animations/EnemyEnergyConeAnimation';
 import { EMPTY_SHIELD_CHARGE_STATE, isShieldChargeState, type ShieldChargeState } from '../systems/ShieldChargeState';
 import { EMPTY_ENERGY_CONE_STATE, isEnergyConeState, type EnergyConeState } from '../systems/EnergyConeState';
+import { EMPTY_ENEMY_HOP_STATE, isEnemyHopState, type EnemyHopState } from '../systems/EnemyHopState';
 import { EnemyCastPlayback, syncEnemyCastAnimation } from '../animations/EnemyCastAnimation';
 import { getEnemyFootprintVariant } from '../config/movementEffects';
 import type { MovementVisualSample } from '../effects/MovementStepSampler';
@@ -204,6 +205,16 @@ export class EnemyEntity {
   applyShieldChargeState(state: ShieldChargeState): void {
     if (!isShieldChargeState(state) || state.revision <= this.shieldCharge.revision) return;
     this.shieldCharge = state;
+  }
+
+  private hopState: EnemyHopState = EMPTY_ENEMY_HOP_STATE;
+
+  getHopState(): EnemyHopState { return this.hopState; }
+
+  /** Host: publish a new hop state (revision must grow). Clients: apply a newer replicated state. */
+  applyHopState(state: EnemyHopState): void {
+    if (!isEnemyHopState(state) || state.revision <= this.hopState.revision) return;
+    this.hopState = state;
   }
 
   getEnergyConeState(): EnergyConeState { return this.energyCone; }

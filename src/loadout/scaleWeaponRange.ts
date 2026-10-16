@@ -9,7 +9,7 @@ export function scaleWeaponRange<T extends WeaponConfigShape>(config: T, factor:
   if (cached) return cached as T;
   const fire = config.fire;
   const scaled = { ...config, range: config.range * factor,
-    fire: fire.type === 'tesla_dome' || fire.type === 'healing_aura'
+    fire: fire.type === 'tesla_dome'
       ? { ...fire, radius: fire.radius * factor }
       : fire.type === 'energy_shield' ? { ...fire, domeRadius: fire.domeRadius * factor } : fire,
     ...(config.fireballFlameConfig ? { fireballFlameConfig: scaleWeaponRange(config.fireballFlameConfig, factor) } : {}),

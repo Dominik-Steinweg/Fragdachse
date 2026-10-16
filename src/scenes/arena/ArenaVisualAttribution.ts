@@ -90,7 +90,6 @@ export const GRAPHICS_FAMILIES = {
   powerUpEffects: ['PowerUpRenderer'],
   projectileShapes: ['ProjectilePresentationRuntime', 'TracerBounceDebugOverlay'],
   captureObjectiveEffects: ['CaptureTheBeerRenderer'],
-  healingAura: ['HealingAuraRenderer'],
   teleportEffects: ['TranslocatorTeleportRenderer'],
   rocketLifecycleGraphics: ['RocketRenderer'],
   stinkCloudGraphics: ['StinkCloudSystem', 'StinkCloudBody'],
