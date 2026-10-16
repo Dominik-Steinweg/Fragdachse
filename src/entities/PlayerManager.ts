@@ -93,6 +93,8 @@ interface SpawnContextSnapshot {
   readonly nukes: readonly SyncedNukeStrike[];
   readonly meteors: readonly SyncedMeteorStrike[];
   readonly turrets: readonly SpawnTurretSnapshot[];
+  /** Cells covered by runtime constructions (turrets, watchtowers, walls, pedestals); never a spawn cell. */
+  readonly occupiedCells?: readonly { readonly gridX: number; readonly gridY: number }[];
   readonly projectiles: readonly SpawnProjectileSnapshot[];
   /** Coop-Defense: aktive Feindbedrohungen mit Reichweite (leer in anderen Modi). */
   readonly enemyThreats?: readonly SpawnEnemyThreatSnapshot[];
@@ -348,12 +350,12 @@ export class PlayerManager implements OwnerVisualSource {
 
     if (worldGeometry.captureTheBeerBasesActive && requestingPlayerId) {
       const teamId = this.teamResolver?.(requestingPlayerId) ?? null;
-      const blockedForBaseSpawn = this.buildBlockedCells(requestingPlayerId);
+      const blockedForBaseSpawn = this.buildBlockedCells(requestingPlayerId, spawnContext);
       const baseSpawn = this.tryGetCaptureTheBeerSpawn(teamId, blockedForBaseSpawn, requestingPlayerId, spawnContext);
       if (baseSpawn) return baseSpawn;
     }
 
-    const blocked = this.buildBlockedCells(requestingPlayerId);
+    const blocked = this.buildBlockedCells(requestingPlayerId, spawnContext);
     const free = this.collectFreeCells(blocked);
 
     if (free.length === 0) {
@@ -487,8 +489,12 @@ export class PlayerManager implements OwnerVisualSource {
 
   private buildBlockedCells(
     requestingPlayerId: string | null,
+    spawnContext: SpawnContextSnapshot = EMPTY_SPAWN_CONTEXT,
   ): Set<string> {
     const blocked = new Set<string>();
+
+    // Gebaute Objekte belegen ihre ganze Grundflaeche (Wachturm 2x2); niemand spawnt darauf.
+    for (const cell of spawnContext.occupiedCells ?? []) blocked.add(`${cell.gridX}_${cell.gridY}`);
 
     // Felsen, Baumstümpfe und Gleise aus dem Layout blockieren
     if (this.layout) {

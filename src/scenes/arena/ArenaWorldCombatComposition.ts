@@ -1,4 +1,5 @@
 import { normalizeConstructionId } from '../../config/coopDefenseConstructions';
+import { getConstructionCells } from '../../systems/ConstructionGeometry';
 import { CombatProjectileQueryAdapter } from '../../combat/CombatProjectileQueryAdapter';
 import { bridge } from '../../network/bridge';
 import { EnergyShieldSystem } from '../../systems/EnergyShieldSystem';
@@ -201,6 +202,7 @@ export function composeWorldCombatGameplay(
         teslaDomes: latestState?.teslaDomes ?? [],
         nukes: latestState?.nukes ?? [],
         meteors: latestState?.meteors ?? [],
+        occupiedCells: runtimePlaceables.flatMap((placeable) => getConstructionCells(placeable)),
         turrets: runtimePlaceables
           .filter((placeable) => (
             placeable.kind === 'turret'

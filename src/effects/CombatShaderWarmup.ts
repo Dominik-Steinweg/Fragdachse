@@ -17,6 +17,7 @@ import {
 import { createTeslaStormShaderProbe } from './teslaStorm/TeslaStormBoltGpuLayer';
 import { createEnergyBallShaderProbe } from './energyBall/EnergyBallGpuLayer';
 import { createFireControlPortalShaderProbe } from './fireControl/FireControlPortalGpuLayer';
+import { PLASMA_BURNER_BEAM_FRAGMENT_SOURCE, PLASMA_BURNER_BEAM_SHADER_NAME } from './plasmaBurnerBeamShader';
 
 /** Lazy probes; their owner releases them on completion, failure and Scene teardown.
  * Phaser's program cache belongs to this renderer/context. No Activity or Round is created.
@@ -103,6 +104,8 @@ export function createCombatShaderWarmupProbes(scene: Phaser.Scene): ShaderWarmu
     shaderQuadProbe(scene, TESLA_DOME_SHADER_NAME, TESLA_DOME_FRAGMENT_SOURCE),
     shaderQuadProbe(scene, TESLA_BOLT_SHADER_NAME, TESLA_BOLT_FRAGMENT_SOURCE),
     shaderQuadProbe(scene, TESLA_NOVA_SHADER_NAME, TESLA_NOVA_FRAGMENT_SOURCE),
+    // The plasma burner beam linked on the first trigger pull, a visible hitch on the training ground.
+    shaderQuadProbe(scene, PLASMA_BURNER_BEAM_SHADER_NAME, PLASMA_BURNER_BEAM_FRAGMENT_SOURCE),
     createTeslaStormShaderProbe(scene),
     createEnergyBallShaderProbe(scene),
     createFireControlPortalShaderProbe(scene),
