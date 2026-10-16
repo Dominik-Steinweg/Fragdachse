@@ -14,6 +14,7 @@ import { KRAKEN_ASSET_REQUIREMENTS } from '../../src/config/krakenBoss';
 import { normalizePipelineAsset } from '../../src/config/pipelineAssetContracts';
 import { importRuntime, BOSS_TEXTURE_KEYS } from '../../scripts/asset-pipeline/import-runtime.mjs';
 import { readPipelineRegistry, writeDemandCatalog, writePipelineRegistry } from '../../scripts/asset-pipeline/pipeline-registry.mjs';
+import { validateEyeAnchors } from '../../scripts/asset-pipeline/eye-anchors.mjs';
 
 const roots: string[] = [];
 const hash = (data: Buffer | string) => createHash('sha256').update(data).digest('hex');
@@ -117,6 +118,38 @@ describe('V2 animated asset export contracts', () => {
     expect(result.copiedFiles).toBe(2);
   });
 
+  it('carries the extra eye pairs of a many-eyed enemy through export, import and the runtime schema', async () => {
+    const f = await fixture(), id = 'mini-kraken', asset = path.join(f.run, id);
+    await rename(f.asset, asset);
+    const folder = path.join(asset, 'calm');
+    const eye = { x: .45, y: .3, width: .03, height: .02, rotation: 0 };
+    const frame = { left: eye, right: { ...eye, x: .55 }, extra: [{ ...eye, x: .38, y: .36 }, { ...eye, x: .62, y: .36 }] };
+    const claw = { name: 'claw', motion: 'kraken_brood_spit', frameRate: 24, loop: false, frames: [0, 1, 2, 3], markers: { strike: 1, impact: 2 } };
+    const m = { ...f.manifest, id, category: 'enemy', gameIds: [id], requiredClips: ['move', 'claw'], clips: [...f.manifest.clips, claw],
+      eyeAnchors: { version: 1, frames: f.frames.map(() => frame) } };
+    await save(path.join(folder, 'render.json'), m);
+    await exportVariantV2(folder, f.root);
+    await selectVariantV2(asset, 'calm', 32, 'Approved four-eyed enemy.');
+    await mkdir(path.join(f.root, 'scripts/asset-pipeline'), { recursive: true });
+    await mkdir(path.join(f.root, 'src/config'), { recursive: true });
+    await writeDemandCatalog(f.root, { version: 2, assets: [m] });
+    await save(path.join(f.root, 'src/config/coopDefenseEnemies.json'), { enemies: [{ id, imageKey: 'mini_kraken' }] });
+    await writePipelineRegistry(f.root, { version: 2, assets: [] });
+    const result = await importRuntime({ root: f.root, revision: m.revision, requestedIds: [id], outputRoot: path.join(f.root, 'published') });
+    const imported = result.manifest.assets[0];
+    expect(imported.eyeAnchors.frames.every((e: typeof frame) => e.extra.length === 2)).toBe(true);
+    expect(normalizePipelineAsset(imported).eyeAnchors?.frames[0].extra).toEqual(frame.extra);
+    const frames = imported.eyeAnchors.frames.length;
+    for (const broken of [[frame.extra[0]], [...frame.extra, { ...eye, x: 1.2 }, eye]]) {
+      expect(() => validateEyeAnchors({ ...imported.eyeAnchors, frames: imported.eyeAnchors.frames.map(() => ({ ...frame, extra: broken })) }, frames)).toThrow();
+    }
+    // Every frame carries the same eyes: an extra pair may not vanish in one pose.
+    expect(() => validateEyeAnchors({ ...imported.eyeAnchors,
+      frames: imported.eyeAnchors.frames.map((e: typeof frame, i: number) => i ? { left: e.left, right: e.right } : e) }, frames)).toThrow(/same count/);
+    expect(() => normalizePipelineAsset({ ...imported, eyeAnchors: { ...imported.eyeAnchors,
+      frames: imported.eyeAnchors.frames.map(() => ({ ...frame, extra: [eye] })) } })).toThrow();
+  });
+
   it('permits idle-only unbound characters but keeps movement mandatory for the player', async () => {
     const { manifest } = await fixture();
     const npc = { ...manifest, category: 'character', gameIds: [], requiredClips: ['idle'],
@@ -150,7 +183,8 @@ describe('V2 animated asset export contracts', () => {
     for (const frames of [socketFrames.slice(1), socketFrames.map((f: object) => ({ ...f, egg6: undefined })),
       socketFrames.map((f: object) => ({ ...f, mouth: { x: 1.01, y: .5, z: 0 } })),
       socketFrames.map((f: object) => ({ ...f, mouth: { x: .5, y: .5, z: NaN } })),
-      socketFrames.map((f: object) => ({ ...f, eyeLeft: { x: .5, y: .5, z: 0 } }))]) {
+      socketFrames.map((f: object) => ({ ...f, eyeLeft: { x: .5, y: .5, z: 0 } })),
+      socketFrames.map((f: object) => ({ ...f, eyeExtra1Right: { x: .5, y: .5, z: 0 } }))]) {
       expect(() => validateSocketFrames(frames, socketFrames.length, requiredSockets(m.id))).toThrow(/socket/i);
     }
     expect(() => validateManifestV2({ ...m, socketFrames: undefined })).toThrow(/Socket/);

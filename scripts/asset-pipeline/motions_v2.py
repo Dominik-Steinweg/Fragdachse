@@ -122,6 +122,7 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
             ('kraken_tentacle_', 'kraken_tentacle_motion_v2', 'apply_kraken_tentacle'),
             ('kraken_egg_', 'kraken_egg_motion_v2', 'apply_kraken_egg'),
             ('kraken_spine_', 'kraken_egg_motion_v2', 'apply_kraken_spine'),
+            ('kraken_brood_', 'kraken_brood_motion_v2', 'apply_kraken_brood'),
             ('kraken_', 'kraken_motion_v2', 'apply_kraken'),
         ):
             if not motion.startswith(prefix):
@@ -134,6 +135,8 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
                 raise
             if prefix == 'kraken_' and motion not in getattr(implementation, 'SUPPORTED_MOTIONS', ('kraken_idle', 'kraken_swim', 'kraken_slam', 'kraken_emerge')):
                 raise ValueError(f'Unknown Kraken motion: {motion}')
+            if prefix == 'kraken_brood_' and motion not in implementation.SUPPORTED_MOTIONS:
+                raise ValueError(f'Unknown kraken brood motion: {motion}')
             getattr(implementation, function)(asset, motion, phase, frame, idle, p, pose, key)
             break
     elif motion.startswith('shield_'):

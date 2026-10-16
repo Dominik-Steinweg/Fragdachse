@@ -1,0 +1,89 @@
+{
+  "id": "mini-kraken",
+  "label": "Mini-Kraken",
+  "category": "enemy",
+  "gameIds": [
+    "mini-kraken"
+  ],
+  "reference": "public/assets/sprites/enemies/mini_kraken.png",
+  "targetSize": 24,
+  "sourceSizes": [
+    64,
+    128
+  ],
+  "displayScale": 2.4,
+  "collisionDiameter": 24,
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Jungtier des Abgrundkraken in Draufsicht: großer, weicher, nach Süden gerundeter Mantelsack hinter einem kurzen Kopf, acht kurze dicke Arme (vier je Seite) mit eingerollten Spitzen und Schwimmhäuten; vorn ein kleiner Mundkranz.",
+    "colors": "Dunkles Indigo-Violett des Bosses mit kühlen, blassen und leicht durchscheinenden Mantelrändern, dunkler Tintensack im Mantel, vier glutrote Augen und violett leuchtende Saugnapfreihen an den eingerollten Spitzen.",
+    "anatomy": "Eigener kurzer Mantel mit Kopf, vier übergroße nach vorn blickende Augen wie beim Boss (Hauptaugen eyeLeft/eyeRight, Nebenaugen als zusätzliches Augenpaar), Kranz aus acht Armketten mit Schwimmhäuten, Mantel-Knochen für Pumpen und Tintenstoß; claw = Tintenspucken, leap = Ansprung mit Marker launch/land.",
+    "materials": "Kraken-V8-Haut und -Augen (kraken_skin_v8, kraken_eye_parts) mit erhöhter Transluzenz, eingebrannte violette Emission der Saugnäpfe; keine Kameraneigung, kein Comic-Look.",
+    "stage": "Form- und Entwurfsphase (Gate GA ausstehend)."
+  },
+  "requiredClips": [
+    "move",
+    "claw",
+    "leap",
+    "idle"
+  ],
+  "production": "reference",
+  "recipe": "mini-kraken",
+  "model": {
+    "armReach": 1,
+    "eyeScale": 1
+  },
+  "orthoScale": 6.24,
+  "textures": {
+    "organic": "art/poc/kraken-v8/textures/kraken-scales-v8.png"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Durchscheinende Abgrundhaut, glutrote Augen und violette Saugnäpfe",
+      "textureStrength": 0.85,
+      "formShadowStrength": 0.88
+    }
+  },
+  "clips": [
+    {
+      "name": "move",
+      "motion": "kraken_brood_crawl",
+      "frameCount": 12,
+      "frameRate": 12,
+      "loop": true
+    },
+    {
+      "name": "claw",
+      "motion": "kraken_brood_spit",
+      "frameCount": 12,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 4,
+        "impact": 7
+      }
+    },
+    {
+      "name": "leap",
+      "motion": "kraken_brood_leap",
+      "frameCount": 22,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "launch": 11,
+        "land": 17
+      }
+    },
+    {
+      "name": "idle",
+      "motion": "kraken_brood_idle",
+      "frameCount": 16,
+      "frameRate": 12,
+      "loop": true
+    }
+  ]
+}

@@ -219,7 +219,7 @@ def sockets(scene, asset, warnings, label):
     result = {}
     deps = bpy.context.evaluated_depsgraph_get()
     for name, obj in asset['sockets'].items():
-        if name in ('eyeLeft', 'eyeRight'): continue
+        if name in ('eyeLeft', 'eyeRight') or name.startswith('eyeExtra'): continue
         world = obj.evaluated_get(deps).matrix_world.translation
         p = world_to_camera_view(scene, scene.camera, world)
         x, y, z = float(p.x), float(1 - p.y), float(world.z)

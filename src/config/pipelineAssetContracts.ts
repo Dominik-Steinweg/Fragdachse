@@ -30,7 +30,9 @@ export const PipelineNormalAssetSchema = v.object({ ...base, runtimeContract: v.
   hashes: v.object({ idle: hash, sheet: hash }),
   eyeAnchors: v.optional(v.object({ version: size, source: v.object({ revision: id, variant: id,
     blendSha256: hash, sheetSha256: hash, idleSha256: hash }),
-    frames: v.array(v.object({ left: eye, right: eye })) })),
+    /** Optional further eyes in complete left/right pairs: [left 1, right 1, left 2, ...]. */
+    frames: v.array(v.object({ left: eye, right: eye,
+      extra: v.optional(v.pipe(v.array(eye), v.check(e => e.length >= 2 && e.length % 2 === 0, 'Extra eyes come in pairs'))) })) })),
   heldItem: v.optional(v.object({ referenceSize: size, grip: pair, muzzle: pair, referenceGrip: v.optional(pair) })),
 });
 export type PipelineNormalAsset = v.InferOutput<typeof PipelineNormalAssetSchema>;

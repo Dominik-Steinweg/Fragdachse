@@ -2,6 +2,8 @@ const object = value => value !== null && typeof value === 'object' && !Array.is
 const bodySockets = ['mouth', ...Array.from({ length: 6 }, (_, i) => `egg${i + 1}`)];
 // The water body also carries the six detachable dorsal spines (base and tip per spine).
 const spineSockets = [...Array.from({ length: 6 }, (_, i) => `spine${i + 1}`), ...Array.from({ length: 6 }, (_, i) => `spine${i + 1}Tip`)];
+// Eye ellipses (main pair and extra pairs) have their own eyeAnchors contract.
+const EYE_SOCKET = /^eye(Left|Right|Extra[1-9](Left|Right))$/;
 export function requiredSockets(id) {
   return id === 'abyssal-kraken' ? [...bodySockets, ...spineSockets] : id === 'abyssal-kraken-land' ? bodySockets
     : id === 'abyssal-kraken-tentacle' ? ['waterEntry'] : id === 'abyssal-kraken-spine' ? ['base', 'tip'] : [];
@@ -10,7 +12,7 @@ export function requiredSockets(id) {
 export function validateSocketFrames(frames, count, required = []) {
   if (!Array.isArray(frames) || frames.length !== count || !frames.length || !object(frames[0])) throw new Error('Socket frame count mismatch');
   const names = Object.keys(frames[0]).sort();
-  if (required.some(name => !names.includes(name)) || names.some(name => !name || ['eyeLeft', 'eyeRight'].includes(name))) throw new Error('Missing required sockets or eye sockets in generic output');
+  if (required.some(name => !names.includes(name)) || names.some(name => !name || EYE_SOCKET.test(name))) throw new Error('Missing required sockets or eye sockets in generic output');
   for (const frame of frames) {
     if (!object(frame) || JSON.stringify(Object.keys(frame).sort()) !== JSON.stringify(names)) throw new Error('Socket names differ between frames');
     for (const point of Object.values(frame)) {

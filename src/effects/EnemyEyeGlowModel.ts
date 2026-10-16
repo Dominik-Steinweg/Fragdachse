@@ -23,9 +23,9 @@ export interface EnemyEyeLight {
 }
 export interface EnemyEyePose {
   x: number; y: number; width: number; height: number; rotation: number; alpha: number; color: number;
-  /** Diameter of the shared aura around both eyes; follows the enemy's size. */
+  /** Diameter of the shared aura around each left/right pair; follows the enemy's size. */
   glowPx: number;
-  /** Centre distance to the other eye. Eye-local glow stays below it so two eyes remain two. */
+  /** Centre distance to the nearest other eye. Eye-local glow stays below it so the eyes stay apart. */
   spacing: number;
   /** Stable per-enemy phase so neighbouring enemies never pulse in lockstep. */
   phase: number;
@@ -78,15 +78,27 @@ export class EnemyEyeGlowModel implements EnemyEyeLightFrame {
           || sprite.x - margin > view.x + view.width || sprite.y - margin > view.y + view.height) continue;
       const glow = Math.max(GLOW_MIN, Math.min(GLOW_MAX, size * GLOW_PER_SIZE));
       const phase = this.phaseOf(sprite);
-      const left = this.eye(this.eyeCount++);
-      const right = this.eye(this.eyeCount++);
-      writeEyePose(left, frame.left, sprite, style.color);
-      writeEyePose(right, frame.right, sprite, style.color);
-      left.glowPx = right.glowPx = glow; left.phase = right.phase = phase;
-      left.spacing = right.spacing = Math.hypot(left.x - right.x, left.y - right.y);
+      // Eyes are written as consecutive left/right pairs (the renderer's aura pairs them):
+      // the main pair, then any extra pairs of a many-eyed enemy.
+      const first = this.eyeCount;
+      writeEyePose(this.eye(this.eyeCount++), frame.left, sprite, style.color);
+      writeEyePose(this.eye(this.eyeCount++), frame.right, sprite, style.color);
+      for (const extra of frame.extra ?? []) writeEyePose(this.eye(this.eyeCount++), extra, sprite, style.color);
+      let eyeX = 0, eyeY = 0;
+      for (let i = first; i < this.eyeCount; i++) {
+        const eye = this.eyes[i];
+        eye.glowPx = glow; eye.phase = phase;
+        // Distance to the nearest other eye keeps each eye-local glow below it.
+        let spacing = Infinity;
+        for (let k = first; k < this.eyeCount; k++) {
+          if (k !== i) spacing = Math.min(spacing, Math.hypot(eye.x - this.eyes[k].x, eye.y - this.eyes[k].y));
+        }
+        eye.spacing = spacing;
+        eyeX += eye.x; eyeY += eye.y;
+      }
+      eyeX /= this.eyeCount - first; eyeY /= this.eyeCount - first;
       const light = this.lights[this.lightCount] ?? (this.lights[this.lightCount] = { x: 0, y: 0, color: 0, radiusPx: 0, intensity: 0 });
       this.lightCount++;
-      const eyeX = (left.x + right.x) * .5, eyeY = (left.y + right.y) * .5;
       light.x = eyeX + (sprite.x - eyeX) * LIGHT_BODY_PULL; light.y = eyeY + (sprite.y - eyeY) * LIGHT_BODY_PULL;
       light.color = style.color; light.radiusPx = radius; light.intensity = LIGHT_INTENSITY * sprite.alpha;
       light.innerRadiusPx = radius * INNER_RADIUS_RATIO; light.innerIntensity = INNER_INTENSITY * sprite.alpha;

@@ -11,7 +11,8 @@ export interface EyeAnchor {
   readonly height: number;
   readonly rotation: number;
 }
-export interface EyeAnchorFrame { readonly left: EyeAnchor; readonly right: EyeAnchor }
+/** `extra` holds further eyes as complete left/right pairs (the four-eyed kraken brood). */
+export interface EyeAnchorFrame { readonly left: EyeAnchor; readonly right: EyeAnchor; readonly extra?: readonly EyeAnchor[] }
 
 // One registry entry per file (scripts/asset-pipeline/pipeline-registry.mjs), ordered by asset id.
 const registryEntries = Object.values(import.meta.glob<{ id: string }>('./pipelineAssets/assets/*.json', { eager: true, import: 'default' }))

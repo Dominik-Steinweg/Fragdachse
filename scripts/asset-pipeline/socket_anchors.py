@@ -3,9 +3,10 @@ import math
 
 import bpy
 from bpy_extras.object_utils import world_to_camera_view
+from eye_anchors import is_eye_socket
 
 
-EYE_SOCKETS = {'eyeLeft', 'eyeRight'}
+EYE_SOCKETS = {'eyeLeft', 'eyeRight'}  # main pair; extra eye pairs are excluded via is_eye_socket
 
 
 def sample_sockets(scene, sockets):
@@ -15,7 +16,7 @@ def sample_sockets(scene, sockets):
     graph = bpy.context.evaluated_depsgraph_get()
     result = {}
     for name, obj in sockets.items():
-        if name in EYE_SOCKETS:
+        if is_eye_socket(name):
             continue
         world = obj.evaluated_get(graph).matrix_world.translation
         projected = world_to_camera_view(scene, camera, world)
@@ -30,7 +31,7 @@ def validate_socket_frames(frames, count, required=()):
     if not isinstance(frames, list) or len(frames) != count or not frames:
         raise ValueError('Socket frame count mismatch')
     names = set(frames[0])
-    if not set(required).issubset(names) or names & EYE_SOCKETS:
+    if not set(required).issubset(names) or any(is_eye_socket(name) for name in names):
         raise ValueError('Missing required sockets or eye sockets in generic output')
     for frame in frames:
         if set(frame) != names:

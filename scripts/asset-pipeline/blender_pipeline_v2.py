@@ -169,7 +169,7 @@ def prepare(root, spec, revision, fingerprint, sources, textures):
     # MCP keeps Python alive. Hashing current files must never label cached old code.
     importlib.invalidate_caches()
     for name in ('blender_pipeline', 'rigs_v2', 'claw_motion_v2', 'kraken_motion_v2', 'motions_v2', 'eye_anchors', 'socket_anchors',
-                 'kraken_motion_land_v2', 'kraken_tentacle_motion_v2', 'kraken_egg_motion_v2',
+                 'kraken_motion_land_v2', 'kraken_tentacle_motion_v2', 'kraken_egg_motion_v2', 'kraken_brood_motion_v2',
                  'contracts_v2', 'pose_validation_v2', 'elevation_v2',
                  'recipes.badger', 'recipes_v2.badger',
                  *([f'recipes.{spec["recipe"]}'] if spec['recipe'] in ('badger', 'rocket') else [])):
@@ -196,8 +196,11 @@ def prepare(root, spec, revision, fingerprint, sources, textures):
     if set(asset) != {'root', 'parts', 'rig', 'sockets'}:
         raise ValueError('Recipe must return root, parts, rig and sockets')
     asset['sockets'].update(ctx.eye_sockets)
-    if spec['category'] == 'enemy' and set(ctx.eye_sockets) != {'eyeLeft', 'eyeRight'}:
-        raise ValueError('Enemy recipes must supply both direct eye mesh sockets')
+    if spec['category'] == 'enemy':
+        # eyeLeft/eyeRight plus optional complete extra pairs (the four-eyed kraken brood).
+        if any(not eye_anchors.is_eye_socket(name) for name in ctx.eye_sockets):
+            raise ValueError('Unknown eye socket name')
+        eye_anchors.extra_pairs(ctx.eye_sockets)
     if spec['category'] == 'enemy':
         from rigs_v2 import control, attach
         children = list(asset['root'].children)
@@ -224,7 +227,7 @@ def prepare(root, spec, revision, fingerprint, sources, textures):
     bounds, bases, eyes, sockets = {}, {}, [], []
     # Persist explicit references for independent verification of the saved Blend.
     scene['asset_socket_objects'] = json.dumps({name: obj.name for name, obj in asset['sockets'].items()
-                                               if name not in socket_anchors.EYE_SOCKETS})
+                                               if not eye_anchors.is_eye_socket(name)})
     # Validate every evaluated pose before spending time rendering any frame.
     for sample in samples:
         set_frame(scene, sample['blenderFrame'])

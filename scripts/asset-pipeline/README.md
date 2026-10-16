@@ -118,8 +118,10 @@ Texturfamilie. Ein gespeichertes Rig, gewichtete und bewegte Meshes bleiben Pfli
 `enemy` verlangt weiterhin seine Augen-Sockets und einen loopenden `move`.
 
 Der Dispatch prüft zuerst `kraken_land_` → `kraken_motion_land_v2.apply_kraken_land`,
-`kraken_tentacle_` → `kraken_tentacle_motion_v2.apply_kraken_tentacle` und
-`kraken_egg_` → `kraken_egg_motion_v2.apply_kraken_egg`, danach `kraken_`.
+`kraken_tentacle_` → `kraken_tentacle_motion_v2.apply_kraken_tentacle`,
+`kraken_egg_` → `kraken_egg_motion_v2.apply_kraken_egg` und
+`kraken_brood_` → `kraken_brood_motion_v2.apply_kraken_brood` (normaler Gegner Mini-Kraken),
+danach `kraken_`.
 Alle Module werden erst beim jeweiligen Aufruf importiert. Land und Ei enthalten
 zunächst ausdrücklich fehlschlagende Platzhalter; das Tentakelmodul liefert die
 Modellierungs-Lane. Der Wasser-Dispatcher akzeptiert die vier bestehenden Motions;
@@ -563,7 +565,10 @@ Für einen exemplarischen unabhängigen Render `--render-frame 1 --render-output
 Gegner benötigen `eyeAnchors` Version 1 mit einer normalisierten Ellipse
 (`x`, `y`, `width`, `height`, `rotation` in Radiant; Y nach unten) je Auge und
 exportiertem Frame. Rezepte registrieren direkte Mesh-Referenzen als `eyeLeft` und
-`eyeRight` im Socket-Vertrag. Die Pipeline projiziert die ausgewertete Geometrie mit
+`eyeRight` im Socket-Vertrag. Weitere Augen (etwa die vier des Mini-Kraken) kommen als
+vollständige Paare über `register_eye(ctx, side, mesh, pair=k)` (`eyeExtra<k>Left/Right`,
+k = 1…3) und erscheinen je Frame als optionales `extra` = [links 1, rechts 1, …], in
+jedem Frame gleich viele. `EnemyEyeGlowModel` zeichnet alle Paare. Die Pipeline projiziert die ausgewertete Geometrie mit
 derselben Kamera und denselben Samples wie das Spritesheet. Der Runtime-Import ergänzt
 Revision, Variante sowie SHA-256 von Blend, Idle und Sheet und lehnt fehlende,
 unvollständige oder fremde Anker ab.
