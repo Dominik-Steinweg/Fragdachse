@@ -15,6 +15,11 @@ it('keeps every eye/light in mixed crowds and reuses storage across despawns', (
         flipX: false, flipY: false, alpha: 1, visible: true, active: true,
         texture: { key: a.sheetTextureKey }, frame: { name: String(i % a.layout.frameCount), realWidth: size, realHeight: size } } };
   });
+  // Each enemy shows its main pair plus any extra pairs its anchors author (the four-eyed kraken brood).
+  const expectedEyes = enemies.reduce((sum, _, i) => {
+    const a = assets[i % assets.length]!;
+    return sum + 2 + (a.eyeAnchors?.frames[i % a.layout.frameCount]?.extra?.length ?? 0);
+  }, 0);
   const view = { x: 0, y: 0, width: 1920, height: 1080 }, model = new EnemyEyeGlowModel();
   model.update(enemies, view);
   const eyes = [...model.eyes], lights = [...model.lights];
@@ -22,7 +27,7 @@ it('keeps every eye/light in mixed crowds and reuses storage across despawns', (
     model.update([], view);
     expect(model.eyeCount).toBe(0); expect(model.lightCount).toBe(0);
     model.update(enemies, view);
-    expect(model.eyeCount).toBe(enemies.length * 2); expect(model.lightCount).toBe(enemies.length);
+    expect(model.eyeCount).toBe(expectedEyes); expect(model.lightCount).toBe(enemies.length);
   }
   expect(model.eyes.length).toBe(eyes.length); expect(model.lights.length).toBe(lights.length);
   model.eyes.forEach((eye, i) => expect(eye).toBe(eyes[i]));

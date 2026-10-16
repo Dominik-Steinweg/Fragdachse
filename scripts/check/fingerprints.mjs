@@ -40,6 +40,8 @@ function fingerprint(label, makeSnapshot) {
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(join(dir, 'tests'), { recursive: true });
   makeSnapshot(dir);
+  // The Vite config derives its runtime asset URL table from public/assets; the generator needs no assets.
+  mkdirSync(join(dir, 'public/assets'), { recursive: true });
   writeFileSync(join(dir, 'tests/campaign-fingerprints.test.ts'), template);
   const out = join(work, `${label}.json`);
   rmSync(out, { force: true });

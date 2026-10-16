@@ -505,7 +505,10 @@ export function createFakePhaserModule(): Record<string, unknown> {
       Linear: (a: number, b: number, t: number) => a + (b - a) * t,
       Between: (min: number) => min,
       FloatBetween: () => 0.5,
-      Angle: { Between: (x1: number, y1: number, x2: number, y2: number) => Math.atan2(y2 - y1, x2 - x1) },
+      Angle: {
+        Between: (x1: number, y1: number, x2: number, y2: number) => Math.atan2(y2 - y1, x2 - x1),
+        Wrap: (angle: number) => ((angle + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI,
+      },
       Distance: { Between: (x1: number, y1: number, x2: number, y2: number) => Math.hypot(x2 - x1, y2 - y1) },
       RND: { pick: <T>(items: readonly T[]) => items[0] },
       Vector2: class { x = 0; y = 0; },
