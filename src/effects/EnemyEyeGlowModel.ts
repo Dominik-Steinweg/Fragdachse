@@ -49,6 +49,12 @@ for (const asset of PIPELINE_ASSETS) {
   anchorsByTexture.set(asset.sheetTextureKey, { frames: asset.eyeAnchors.frames, static: false });
 }
 
+/** Eye anchors of the frame a sprite currently shows, or null for textures without eye sockets. */
+export function readEyeAnchorFrame(sprite: Pick<EyeSpritePose, 'texture' | 'frame'>): EyeAnchorFrame | null {
+  const asset = anchorsByTexture.get(sprite.texture.key);
+  return asset?.frames[asset.static ? 0 : Number(sprite.frame.name)] ?? null;
+}
+
 /** A pure, reusable frame buffer: owns no entities, animation clocks or gameplay state. */
 export class EnemyEyeGlowModel implements EnemyEyeLightFrame {
   readonly eyes: EnemyEyePose[] = [];

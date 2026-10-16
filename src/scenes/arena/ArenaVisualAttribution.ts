@@ -92,6 +92,7 @@ export const GRAPHICS_FAMILIES = {
   captureObjectiveEffects: ['CaptureTheBeerRenderer'],
   teleportEffects: ['TranslocatorTeleportRenderer'],
   tongueLash: ['TongueLashRenderer'],
+  restHealTendrils: ['RestHealTendrilRenderer'],
   rocketLifecycleGraphics: ['RocketRenderer'],
   stinkCloudGraphics: ['StinkCloudSystem', 'StinkCloudBody'],
   flameRingEffects: ['FlamethrowerUpgradeRenderer'],

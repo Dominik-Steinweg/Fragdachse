@@ -450,6 +450,7 @@ export function* createRendererBundleSteps(
   cleanup.push(() => amphibiousEnemies.destroy());
   const enemyHops = new EnemyHopPresentation(scene);
   cleanup.push(() => enemyHops.destroy());
+  enemyHops.setLightingSystem(lighting);
   const enemyReadability = new EnemyReadabilityRenderer(scene);
   cleanup.push(() => enemyReadability.destroy());
   const interactions = new WorldInteractionRenderer(scene);

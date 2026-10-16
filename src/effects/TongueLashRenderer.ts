@@ -15,8 +15,8 @@ const HOLD_MS = 70;
 /** A swing without a seen windup (allied toads, late joiners) still lashes out and back. */
 const QUICK_LASH_MS = { extend: 70, hold: 40, retract: 120 } as const;
 const SPLAT_MS = 260;
-/** The tongue leaves the mouth this far in front of the body centre (share of the body radius). */
-const MOUTH_OFFSET = 0.8;
+/** The tongue leaves the mouth this far in front of the body centre (share of the body radius; GA1 mouth socket). */
+const MOUTH_OFFSET = 0.92;
 
 interface Lash {
   readonly attackId: string;
