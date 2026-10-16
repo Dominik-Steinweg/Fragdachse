@@ -21,7 +21,7 @@
     "colors": "Totes Grau-Oliv mit dunkler moosgrüner Rückenzeichnung und fahlem graugrünem Bauchrand; violett glühende Augen mit konzentrischen Iris-Ringen, blassbeinfarbenes Kreuz mit leichtem Minzschimmer, sparsame dunkle Pflaumen-Wunden; kein Gelb, kein Signalrot.",
     "anatomy": "Erhabenes, auf die Haut genähtes Knochen-/Bandagen-Kreuz auf dem Rücken (Bone cross), Ohrdrüsen hinter den Augen, Kehlsack unter dem Kinn (Bone throat), Unterkiefer und Zunge (Bones jaw, tongue, tongue_tip), Lid-Pivots je Auge, Knochenkette je Bein (front_left/front_right/rear_left/rear_right) und carriage-Control für echte Sprunghöhe; Sockets eyeLeft/eyeRight, mouth und cross.",
     "materials": "Matte warzige Krötenhaut auf Basis der Kraken-Hautschicht (Dermis-Falten, Pigmentzellen, gemalter Wertplan), feuchte dunkle Augäpfel mit schweren Lidern, schmutzige Bandagen mit Nähten, kühles Knochenweiß; Augen und Kreuz mit eingebrannter Emission, keine Kameraneigung, kein Comic-Look.",
-    "stage": "Phase A der Asset-Lane: Form (GA1) vor Draft-Clips (GA2) und Produktion (GA3); gameIds bleiben bis zum Cutover leer."
+    "stage": "Produktion: V2-Quelle qt-v1-r4 (standard, 128 px ausgewählt, archiviert), abgenommen an GA1 als Form form-d (violette Augen) und GA2 als Entwurf draft-b; 79 Posen mit Augenankern und Sockets mouth/cross; Schatten-Mesh enemy-mesh-qt-v1-r4-p3 versiegelt. gameIds bleiben bis zum Cutover leer."
   },
   "requiredClips": [
     "move",
