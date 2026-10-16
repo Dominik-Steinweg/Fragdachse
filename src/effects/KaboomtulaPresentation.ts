@@ -13,8 +13,8 @@ export type KaboomtulaTargetResolver = (target: KaboomtulaTargetRef) => { x: num
 const LAUNCH_STRIKE_LEAD_MS = 120;
 /** Lane and ring linger briefly after the launch so the flash reads as the lock. */
 const LAUNCH_LINGER_MS = 90;
-/** Ring around the hunted body, on top of its radius. */
-const TARGET_RING_RADIUS_PX = 24;
+/** Ring around the hunted body: outside the player's own status rings so it stays readable. */
+const TARGET_RING_RADIUS_PX = 38;
 
 /**
  * Always-on, light telegraph owner of the Kabummtula leap: while a spider pounces, a red lane in

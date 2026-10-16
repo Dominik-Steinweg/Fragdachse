@@ -338,7 +338,8 @@ export function createNavigationLabWorldPort(
           hp: enemy.getHp(), target: target ? `${target.kind}:${target.id}` : null,
           bodyFree: !geometry()?.isCircleBlocked(enemy.sprite.x, enemy.sprite.y, enemy.getCollisionRadius()),
           special: enemy.isBurrowed() || enemy.getDashPhase() > 0,
-          intent: navigation?.getNavigationIntent?.(enemy.id), movement: navigation?.getMovementFeedback?.(enemy.id) };
+          intent: navigation?.getNavigationIntent?.(enemy.id), movement: navigation?.getMovementFeedback?.(enemy.id),
+          ...(enemy.getKaboomtulaState().revision > 0 ? { kaboomtulaPhase: enemy.getKaboomtulaState().phase } : {}) };
       });
     },
     getPlayerPosition: () => {

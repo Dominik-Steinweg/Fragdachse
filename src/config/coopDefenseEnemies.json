@@ -637,7 +637,7 @@
       "pawCount": 4,
       "maxHp": 60,
       "xp": 10,
-      "size": 24,
+      "size": 26,
       "moveSpeed": 140,
       "knockbackFactor": 1.9,
       "movementTarget": "players",
@@ -655,14 +655,13 @@
       "attackScanIntervalMs": 120,
       "attackStopDurationMs": 100,
       "obstacleAttackDelayMs": 450,
-      "imageKey": "enemy_timebomb_badger",
-      "color": 12072191,
+      "imageKey": "enemy_kaboomtula",
       "glow": {
         "color": 12072191,
-        "sizeFactor": 1.55,
-        "alpha": 0.18,
-        "lightRadiusPx": 64,
-        "lightIntensity": 0.38
+        "sizeFactor": 2.1,
+        "alpha": 0.2,
+        "lightRadiusPx": 88,
+        "lightIntensity": 0.4
       },
       "kaboomtula": {
         "activationRadiusPx": 450,

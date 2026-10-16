@@ -44,13 +44,13 @@ describe('Coop marker adapters', () => {
     expect(held.filter(d => d.kind === 'carry')).toHaveLength(0);
     expect(held.find(d => d.kind === 'delivery')).toMatchObject({ glyph: 'flag', x: 324, y: 424, groundRing: { radiusPx: 64, tone: 'green' } });
   });
-  it('keeps bosses offscreen-only with vulnerability and timebombs triangular through their semantic kind', () => {
-    const targets = enemyMarkers([{ id: 'b', generation: 3, x: 1500, y: 500, size: 80, boss: true, vulnerable: true, kamikaze: false },
-      { id: 't', generation: 1, x: 400, y: 500, size: 32, boss: false, vulnerable: false, kamikaze: true, progress: .6 }]);
+  it('keeps bosses offscreen-only with vulnerability and leaves ordinary enemies unmarked', () => {
+    const targets = enemyMarkers([{ id: 'b', generation: 3, x: 1500, y: 500, size: 80, boss: true, vulnerable: true },
+      { id: 't', generation: 1, x: 400, y: 500, size: 32, boss: false, vulnerable: false }]);
+    expect(targets).toHaveLength(1);
     expect(targets[0]).toMatchObject({ visibility: 'edge-when-offscreen', vulnerable: true });
     const frame = new MarkerLayoutModel().layout({ ...layoutInput, descriptors: targets });
     expect(frame.edgeBadges[0]).toMatchObject({ glyph: 'boss', tone: 'purple', vulnerable: true });
-    expect(frame.worldBadges[0]).toMatchObject({ shape: 'triangle', glyph: 'timebomb', progress: .6 });
   });
   it('projects next/active/completed checkpoints, suppresses future ones and uses explicit world offsets', () => {
     const cp = { checkpoints: ['a', 'b', 'c'].map((id, i) => ({ id, gridX: i, gridY: 2, radiusCells: 3, setRespawn: true })), barriers: [], mandatoryDefenses: [] };

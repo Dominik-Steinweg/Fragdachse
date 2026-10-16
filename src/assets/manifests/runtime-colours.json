@@ -697,6 +697,18 @@
       "visiblePixelSha256": "9b3a3d741347ae6f5f2e84d67c8b46e38ebdb23beab2469f701a8bc67ccb59b4",
       "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
     },
+    "assets/sprites/pipeline-v2/kaboomtula/sheet.png": {
+      "file": "assets/sprites/pipeline-v2/kaboomtula/sheet.webp",
+      "source": "assets/sprites/pipeline-v2/kaboomtula/sheet.png",
+      "width": 528,
+      "height": 660,
+      "sourceBytes": 177337,
+      "downloadBytes": 122170,
+      "sourceSha256": "77b07087ade74c2293a97c276c31c43469e3d5d3806e1bfb9ab2c9a12d5cd543",
+      "sha256": "b6e17f0ad2c652399a1ecab038daead97a274c061663883febc2a4d04b76bff4",
+      "visiblePixelSha256": "11cbd3f72cf598af4b1255520cf8693e1c34ceffd91cebeac5dec11ef9fb101c",
+      "contract": "lossless; exact alpha and RGB at alpha > 0; premultiplied colour upload"
+    },
     "assets/sprites/pipeline-v2/mini-kraken/sheet.png": {
       "file": "assets/sprites/pipeline-v2/mini-kraken/sheet.webp",
       "source": "assets/sprites/pipeline-v2/mini-kraken/sheet.png",

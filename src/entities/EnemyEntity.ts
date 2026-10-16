@@ -17,7 +17,7 @@ import { getEnemyFootprintVariant } from '../config/movementEffects';
 import type { MovementVisualSample } from '../effects/MovementStepSampler';
 import { alliedEnemyHealthBarStyle, enemyHealthBarStyle } from '../effects/health/healthBarStyles';
 import { addPlayerGlow } from '../effects/PlayerGlow';
-import { removeInternalFx, type GlowHandle } from '../utils/phaserFx';
+import { addExternalGlow, removeExternalFx, removeInternalFx, type GlowHandle } from '../utils/phaserFx';
 import { resolveAlliedEnemyWeaponConfig } from '../systems/AlliedEnemyEffects';
 import type { DawnEliteAffixId } from '../dawn/contracts/DawnContentIds';
 import { dawnEliteSpeedMultiplier } from '../systems/DawnEliteRules';
@@ -178,6 +178,8 @@ export class EnemyEntity {
   private ownerRing: Phaser.GameObjects.Arc | null = null;
   /** Leuchtumriss verbündeter Gegner – dieselbe Silhouetten-Glow-Sprache wie Spieler und eigene Türme. */
   private allyGlow: GlowHandle | null = null;
+  /** Void silhouette glow of a hunting Kabummtula: its danger signal, there is no marker. */
+  private kaboomtulaAura: GlowHandle | null = null;
   private burnStacks = 0;
   private plasmaChargeStacks = 0;
   private burnVisualStyle: GroundFireVisualStyle = 'normal';
@@ -250,8 +252,6 @@ export class EnemyEntity {
   private kaboomtulaState: KaboomtulaState = EMPTY_KABOOMTULA_STATE;
   private kaboomtulaAnimating = false;
   private kaboomtulaAirborne = false;
-  /** Host-synchronized time of the last presented spider frame. */
-  private kaboomtulaPresentedAt = 0;
 
   getKaboomtulaState(): KaboomtulaState { return this.kaboomtulaState; }
 
@@ -268,7 +268,6 @@ export class EnemyEntity {
    */
   syncKaboomtulaPresentation(now: number): void {
     if (!this.config.kaboomtula) return;
-    this.kaboomtulaPresentedAt = now;
     const state = this.kaboomtulaState, leap = state.phase === 'leap' ? state.leap : null;
     const airborne = !!leap && now >= leap.takeoffAt && now < leap.landAt;
     const progress = airborne ? kaboomtulaLeapProgress(leap, now) : 0;
@@ -282,14 +281,6 @@ export class EnemyEntity {
     this.kaboomtulaAnimating = syncEnemyKaboomtulaAnimation(this.sprite, this.config.imageKey, state, now,
       this.clawAnimating || !this.sprite.visible || this.burrowed || this.currentHp <= 0);
     if (wasAnimating && !this.kaboomtulaAnimating) this.syncWalkingAnimation();
-  }
-
-  /** A hunting spider is an urgent hazard marker; the telegraph fills it towards the leap. */
-  getKaboomtulaHazard(): { kamikaze: boolean; progress?: number } {
-    const state = this.kaboomtulaState;
-    if (state.phase !== 'alert' && state.phase !== 'rush' && state.phase !== 'pounce' && state.phase !== 'leap') return { kamikaze: false };
-    return { kamikaze: true, progress: state.phase === 'pounce' ? kaboomtulaPhaseProgress(state, this.kaboomtulaPresentedAt)
-      : state.phase === 'leap' ? 1 : undefined };
   }
 
   getEnergyConeState(): EnergyConeState { return this.energyCone; }
@@ -1112,6 +1103,8 @@ export class EnemyEntity {
     this.ownerRing = null;
     removeInternalFx(this.sprite, this.allyGlow);
     this.allyGlow = null;
+    removeExternalFx(this.sprite, this.kaboomtulaAura);
+    this.kaboomtulaAura = null;
     if (this.glowHalo) {
       this.sprite.scene.tweens.killTweensOf(this.glowHalo);
       this.glowHalo.destroy();
@@ -1209,6 +1202,7 @@ export class EnemyEntity {
     );
     this.glowHalo?.setTint(glow.color);
     if (phaseTwo || spider) this.glowHalo?.setAlpha(emissiveAlpha(spider?.alpha ?? glow.alpha));
+    if (spider) this.syncKaboomtulaAura(glow.color, spider.aura, visible && this.sprite.visible);
 
     if (!this.lighting) return;
     if (!visible) {
@@ -1222,23 +1216,36 @@ export class EnemyEntity {
     });
   }
 
+  /** The silhouette glow follows the spider's menace; it is the only danger signal besides the leap telegraph. */
+  private syncKaboomtulaAura(color: number, strength: number, visible: boolean): void {
+    this.kaboomtulaAura ??= addExternalGlow(this.sprite, color, 0, 0, false, 0.2, 12, 'critical');
+    const aura = this.kaboomtulaAura;
+    if (!aura) return;
+    const on = visible && strength > 0.05;
+    aura.color = color;
+    aura.outerStrength = on ? strength : 0;
+    aura.setActive?.(on);
+  }
+
   /**
    * Void-violet menace of the spider by replicated phase: a dim breath while approaching, a swell
    * during the alert pose, a strong fast pulse while rushing and pouncing, fading while it recovers.
    * Red stays reserved for the leap telegraph.
    */
-  private kaboomtulaGlow(baseAlpha: number): { size: number; alpha: number; light: number } {
+  private kaboomtulaGlow(baseAlpha: number): { size: number; alpha: number; light: number; aura: number } {
     const now = this.sprite.scene.time.now, state = this.kaboomtulaState;
     const progress = kaboomtulaPhaseProgress(state, now);
     const pulseAt = (periodMs: number) => 0.5 + 0.5 * Math.sin(now * Math.PI * 2 / periodMs);
-    const calm = (pulse: number) => ({ size: 1 + pulse * 0.06, alpha: baseAlpha * (0.78 + pulse * 0.22), light: 1 });
-    const hunting = (pulse: number, heat: number) => ({ size: 1.18 + heat * 0.08 + pulse * 0.16,
-      alpha: 0.46 + heat * 0.12 + pulse * 0.3, light: 3 + heat * 1.2 });
+    // Shared glow alpha is 0.18 per strength unit: a hunting spider wears an opaque void rim.
+    const calm = (pulse: number) => ({ size: 1 + pulse * 0.06, alpha: baseAlpha * (0.78 + pulse * 0.22), light: 1,
+      aura: 1 + pulse * 0.4 });
+    const hunting = (pulse: number, heat: number) => ({ size: 1.22 + heat * 0.1 + pulse * 0.18,
+      alpha: 0.56 + heat * 0.14 + pulse * 0.3, light: 3.2 + heat * 1.4, aura: 4.2 + heat * 1.3 + pulse * 1.1 });
     switch (state.phase) {
       case 'alert': {
         const pulse = pulseAt(520), from = calm(pulse), to = hunting(pulse, 0);
         return { size: Phaser.Math.Linear(from.size, to.size, progress), alpha: Phaser.Math.Linear(from.alpha, to.alpha, progress),
-          light: Phaser.Math.Linear(from.light, to.light, progress) };
+          light: Phaser.Math.Linear(from.light, to.light, progress), aura: Phaser.Math.Linear(from.aura, to.aura, progress) };
       }
       case 'rush': return hunting(pulseAt(340), 0);
       case 'pounce': return hunting(pulseAt(Phaser.Math.Linear(300, 140, progress)), progress);
@@ -1246,11 +1253,12 @@ export class EnemyEntity {
       case 'recover': {
         const pulse = pulseAt(700), from = hunting(pulse, 0), to = calm(pulse);
         return { size: Phaser.Math.Linear(from.size, to.size, progress), alpha: Phaser.Math.Linear(from.alpha, to.alpha, progress),
-          light: Phaser.Math.Linear(from.light, to.light, progress) };
+          light: Phaser.Math.Linear(from.light, to.light, progress), aura: Phaser.Math.Linear(from.aura, to.aura, progress) };
       }
       case 'spit': {
         const pulse = pulseAt(420);
-        return { size: 1.08 + pulse * 0.1, alpha: baseAlpha + (0.36 - baseAlpha) * progress + pulse * 0.12, light: 1 + progress };
+        return { size: 1.08 + pulse * 0.1, alpha: baseAlpha + (0.36 - baseAlpha) * progress + pulse * 0.12, light: 1 + progress,
+          aura: 1.2 + progress };
       }
       default: return calm(pulseAt(1100));
     }

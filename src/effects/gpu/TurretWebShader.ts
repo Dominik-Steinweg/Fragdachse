@@ -68,6 +68,7 @@ uniform float uDetail;
 uniform float uAlpha;
 uniform float uTime;
 uniform float uEmissive;
+uniform float uZoom;
 varying vec2 vUV;
 varying float vLen;
 varying vec4 vShape;
@@ -80,8 +81,11 @@ float noise(vec2 v) {
   vec2 i = floor(v), f = fract(v); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + 1.0), f.x), f.y);
 }
-/** Anti-aliased thread of half width hw at distance d (pixels). */
-float thread(float d, float hw) { return 1.0 - smoothstep(hw, hw + 0.85, d); }
+/** Anti-aliased thread of half width hw in screen pixels at world distance d: crisp at every zoom. */
+float thread(float d, float hw) {
+  float px = 1.0 / max(uZoom, 0.1);
+  return 1.0 - smoothstep(hw * px, (hw + 0.9) * px, d);
+}
 float gauss(float x, float s) { return exp(-x * x / (s * s)); }
 
 float spokeCount() { return uDetail > 0.5 ? 13.0 : 9.0; }
@@ -108,22 +112,38 @@ vec4 web(vec2 p, float R, float seed, float sag, float tear) {
   vec2 light = normalize(vec2(-0.55, -0.83));
   float cover = 0.0, bead = 0.0, sheen = 0.0;
 
-  // Radial spokes (the two that bound this sector), each with its own reach and a frayed anchor.
+  // Radial spokes (the two that bound this sector), each with its own reach; a rare frayed anchor.
+  float reachLo = R * (0.84 + 0.16 * hash(vec2(mod(kLo, n), seed + 3.0)));
+  float reachHi = R * (0.84 + 0.16 * hash(vec2(mod(kLo + 1.0, n), seed + 3.0)));
   for (int s = 0; s < 2; s++) {
     float k = s == 0 ? kLo : kLo + 1.0;
     float th = s == 0 ? lo : hi;
-    float reach = R * (0.84 + 0.2 * hash(vec2(mod(k, n), seed + 3.0)));
-    float anchor = hash(vec2(mod(k, n), seed + 9.0)) > 0.62 ? R * 1.26 : reach;
+    float reach = s == 0 ? reachLo : reachHi;
+    float anchor = hash(vec2(mod(k, n), seed + 9.0)) > 0.86 ? R * 1.12 : reach;
     float along = r * cos(a - th);
-    float d = abs(r * sin(a - th));
-    float span = smoothstep(-1.0, 1.5, along) * (1.0 - smoothstep(anchor - 2.5, anchor, along));
-    float thin = along > reach ? 0.32 : 0.62;
+    // Spokes bow slightly; silk is never a ruler line.
+    float bow = sin(along / max(R, 1.0) * PI) * R * 0.03 * (hash(vec2(mod(k, n), seed + 4.0)) - 0.5);
+    float d = abs(r * sin(a - th) - bow);
+    float outside = smoothstep(reach - 1.0, anchor, along);
+    float span = smoothstep(-1.0, 1.5, along) * (1.0 - smoothstep(anchor - 3.0, anchor, along)) * (1.0 - 0.75 * outside);
+    float thin = along > reach ? 0.3 : 0.5;
     float broken = step(tear, hash(vec2(mod(k, n) * 7.1, seed + 11.0)) * 0.999 + 0.0005);
     float c = thread(d, thin) * span * broken;
     vec2 dir = vec2(cos(th), sin(th));
     sheen = max(sheen, c * pow(abs(dot(dir, light)), 6.0));
     cover = max(cover, c);
   }
+
+  // Frame thread: a sagging chord between neighbouring spoke ends closes the outline like a real orb web.
+  vec2 pLo = reachLo * vec2(cos(lo), sin(lo)), pHi = reachHi * vec2(cos(hi), sin(hi));
+  vec2 chord = pHi - pLo;
+  float h = clamp(dot(p - pLo, chord) / max(dot(chord, chord), 1e-3), 0.0, 1.0);
+  vec2 inward = -normalize(pLo + pHi + 1e-3);
+  vec2 onFrame = pLo + chord * h + inward * sin(PI * h) * R * (0.035 + sag);
+  float frameC = thread(length(p - onFrame), 0.48) * step(tear * 0.8, hash(vec2(mod(kLo, n) * 3.7, seed + 17.0)) * 0.999 + 0.0005);
+  vec2 frameDir = normalize(chord + 1e-3);
+  sheen = max(sheen, frameC * pow(abs(dot(frameDir, light)), 6.0));
+  cover = max(cover, frameC);
 
   // Capture spiral: one ring per turn, each segment sagging towards the hub between its spokes.
   float drop = 1.0 - (0.085 + sag) * sin(PI * f);
@@ -138,7 +158,7 @@ vec4 web(vec2 p, float R, float seed, float sag, float tear) {
   float cell = ring * 31.0 + mod(kLo, n);
   float gap = step(0.12, hash(vec2(cell, seed + 1.0)));
   float torn = step(tear, hash(vec2(cell, seed + 21.0)) * 0.999 + 0.0005);
-  float ringC = thread(ringD, 0.45) * inSpiral * gap * torn;
+  float ringC = thread(ringD, 0.38) * inSpiral * gap * torn * (0.8 + 0.2 * hash(vec2(cell, seed + 8.0)));
   vec2 tangent = vec2(-sin(a), cos(a));
   sheen = max(sheen, ringC * pow(abs(dot(tangent, light)), 6.0));
   cover = max(cover, ringC);
@@ -154,8 +174,8 @@ vec4 web(vec2 p, float R, float seed, float sag, float tear) {
   // Hub: a dense, irregular knot of silk where the spokes meet.
   float hubR = R * 0.17;
   float hub = (1.0 - smoothstep(hubR * 0.6, hubR, r)) * (0.35 + 0.65 * noise(p * 0.55 + seed));
-  float hubRings = thread(abs(fract(r / 2.6 + noise(p * 0.3 + seed) * 0.6) - 0.5) * 2.6, 0.38) * (1.0 - smoothstep(hubR - 1.0, hubR + 1.0, r));
-  cover = max(cover, max(hubRings * 0.85, hub * 0.55));
+  float hubRings = thread(abs(fract(r / 2.6 + noise(p * 0.3 + seed) * 0.6) - 0.5) * 2.6, 0.32) * (1.0 - smoothstep(hubR - 1.0, hubR + 1.0, r));
+  cover = max(cover, max(hubRings * 0.7, hub * 0.4));
   return vec4(cover, bead, sheen, hub);
 }
 
@@ -164,7 +184,7 @@ void main() {
   float u = vUV.x, v = vUV.y;
   vec3 rgb = vec3(0.0);
   float alpha = 0.0;
-  vec3 silk = vec3(0.86, 0.83, 0.95), sheenC = vec3(1.0, 0.98, 1.0), glue = vec3(0.70, 0.28, 1.0);
+  vec3 silk = vec3(0.80, 0.76, 0.92), sheenC = vec3(1.0, 0.97, 1.0), glue = vec3(0.70, 0.28, 1.0);
   vec3 shadowC = vec3(0.07, 0.03, 0.11);
 
   if (kind < 0.5) {
@@ -191,11 +211,12 @@ void main() {
       * (0.45 + 0.55 * noise(vec2(atan(vUV.y, vUV.x) * 4.0, seed))) : 0.0;
     float cover = silkW.x * shown, beads = silkW.y * shown;
     if (uPass < 0.5) {
-      float shade = clamp(shadowW.x * shown * 0.42 + shadowW.y * shown * 0.3, 0.0, 0.5);
+      float shade = clamp(shadowW.x * shown * 0.34 + shadowW.y * shown * 0.25, 0.0, 0.4);
       vec3 silkCol = mix(silk, sheenC, clamp(silkW.z * 1.4, 0.0, 1.0));
       silkCol = mix(silkCol, glue, 0.10 + 0.25 * silkW.w);
-      float silkA = clamp(cover * 0.9 + beads * 0.85 + splat * 0.7, 0.0, 1.0);
-      vec3 beadCol = mix(vec3(0.95, 0.9, 1.0), glue, 0.35);
+      // Translucent silk: the turret stays visible underneath, the sheen carries the threads.
+      float silkA = clamp(cover * (0.55 + 0.35 * silkW.z) + beads * 0.8 + splat * 0.6, 0.0, 1.0);
+      vec3 beadCol = mix(vec3(0.95, 0.92, 1.0), glue, 0.18);
       vec3 col = mix(silkCol, beadCol, clamp(beads, 0.0, 1.0));
       alpha = silkA + shade * (1.0 - silkA);
       rgb = col * silkA + shadowC * shade * (1.0 - silkA);
@@ -203,8 +224,8 @@ void main() {
     } else {
       // Glue glints and a quiet void shimmer over the disabled turret; readable at night.
       float r = length(vUV);
-      float halo = gauss(r, R * 0.9) * (0.10 + 0.04 * sin(uTime * 3.1 + seed * 5.0));
-      vec3 glow = glue * (beads * 0.75 + silkW.w * 0.25 + halo) + vec3(0.9, 0.75, 1.0) * splat * 0.35;
+      float halo = gauss(r, R * 0.9) * (0.045 + 0.02 * sin(uTime * 3.1 + seed * 5.0));
+      vec3 glow = glue * (beads * 0.28 + silkW.w * 0.12 + halo) + vec3(0.9, 0.75, 1.0) * splat * 0.3;
       rgb = glow * fade * uEmissive; alpha = 0.0;
     }
   } else {

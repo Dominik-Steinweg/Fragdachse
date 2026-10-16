@@ -115,7 +115,11 @@ interface SpiderState {
   /** Body position at the previous host step: the contact test sweeps from here. */
   lastX: number;
   lastY: number;
-  movedPx: number;
+  /** Cover hides the hunted body from the stalking spider: it heads back to a free line. */
+  laneBlocked: boolean;
+  /** Furthest progress along the locked leap lane and when it last grew (stall detection). */
+  leapAlong: number;
+  leapProgressAt: number;
   webTurret: AutomatedTurretId | null;
   webFired: boolean;
   webCooldownUntil: number;
@@ -128,12 +132,20 @@ const ARRIVAL_EPSILON_PX = 3;
 const LANE_CORRECTION_PER_S = 10;
 /** Host frames are ~16.7 ms; the last step is shortened so the body stops at the end point. */
 const NOMINAL_FRAME_S = 1 / 60;
+/** A leap that makes no progress along its lane for this long has hit something and ends. */
+const LEAP_STALL_MS = 100;
 /** Position jumps beyond this between two samples are teleports, not velocity. */
 const TRACK_TELEPORT_PX = 64;
 /** Web candidate scans are throttled per body. */
 const WEB_SCAN_INTERVAL_MS = 300;
 /** Share of the rush speed used while stalking inside the telegraph band. */
 const STALK_SPEED_FACTOR = 0.85;
+/** Sideways share of the stalk: a strafe around the prey, not a full circle into nearby cover. */
+const STALK_STRAFE = 0.4;
+/** A pounce whose lane is blocked at the launch retries this often ... */
+const POUNCE_RETRY_MS = 90;
+/** ... for at most this long beyond its telegraph before the spider gives up and hunts on. */
+const POUNCE_HOLD_MAX_MS = 360;
 /** Sight is kept during the rush up to this multiple of the activation radius. */
 const RUSH_SIGHT_FACTOR = 1.6;
 
@@ -231,7 +243,7 @@ export class CoopDefenseKaboomtulaSystem implements EnemySpecialMovementSource {
       enemy, phase: 'approach', revision: enemy.getKaboomtulaState().revision, startedAt: 0, endsAt: 0, target: null,
       leap: null, aimX: enemy.sprite.x, aimY: enemy.sprite.y, lastSeenAt: 0, segmentIndex: 0, segment: null,
       segmentEndsAt: 0, pounceLockoutUntil: 0, trackX: 0, trackY: 0, trackAt: 0, velocityX: 0, velocityY: 0,
-      orbitSide: (hash >>> 0) % 2 === 0 ? 1 : -1, lastX: enemy.sprite.x, lastY: enemy.sprite.y, movedPx: 0,
+      orbitSide: (hash >>> 0) % 2 === 0 ? 1 : -1, lastX: enemy.sprite.x, lastY: enemy.sprite.y, laneBlocked: false, leapAlong: 0, leapProgressAt: 0,
       webTurret: null, webFired: false, webCooldownUntil: 0, nextWebScanAt: 0,
     };
   }
@@ -239,7 +251,6 @@ export class CoopDefenseKaboomtulaSystem implements EnemySpecialMovementSource {
   /** Swept body contact since the previous step; the first touched target detonates the spider. */
   private checkContact(state: SpiderState, config: CoopDefenseEnemyKaboomtulaConfig, now: number): boolean {
     const enemy = state.enemy, ax = state.lastX, ay = state.lastY, bx = enemy.sprite.x, by = enemy.sprite.y;
-    state.movedPx = Math.hypot(bx - ax, by - ay);
     state.lastX = bx; state.lastY = by;
     const reach = enemy.getCollisionRadius() + config.contactMarginPx;
     let hit: KaboomtulaContact | null = null, best = Infinity;
@@ -319,7 +330,7 @@ export class CoopDefenseKaboomtulaSystem implements EnemySpecialMovementSource {
     const clear = this.ports.laneClearance(x, y, Math.atan2(target.y - y, target.x - x), distance, radius);
     if (clear < distance - radius - target.radius) return;
     state.trackX = target.x; state.trackY = target.y; state.trackAt = now;
-    state.velocityX = 0; state.velocityY = 0;
+    state.velocityX = 0; state.velocityY = 0; state.laneBlocked = false;
     this.publish(state, 'pounce', now, now + config.pounce.telegraphMs, target.ref, null);
   }
 
@@ -328,12 +339,21 @@ export class CoopDefenseKaboomtulaSystem implements EnemySpecialMovementSource {
     if (!target) { this.recover(state, config, now); return; }
     this.setAim(state, target);
     this.trackVelocity(state, target, now);
-    if (now < state.endsAt) return;
     const x = enemy.sprite.x, y = enemy.sprite.y, radius = enemy.getCollisionRadius();
+    const distance = Math.hypot(target.x - x, target.y - y);
+    // While stalking, the body returns to a free line whenever cover hides the target.
+    state.laneBlocked = this.ports.laneClearance(x, y, Math.atan2(target.y - y, target.x - x), distance, radius)
+      < distance - radius - target.radius;
+    if (now < state.endsAt) return;
     const lock = lockLeapLane({ x, y }, target, { x: state.velocityX, y: state.velocityY }, radius + target.radius,
       config.leap, (angle, length) => this.ports.laneClearance(x, y, angle, length, radius));
     if (!lock) {
-      // A blocked lane is no leap: keep hunting, retry after the lockout.
+      // No free lane at the launch: hold the announced leap a little longer (the telegraph keeps
+      // filling towards the new launch); only then give up and keep hunting.
+      if (now - state.startedAt < config.pounce.telegraphMs + POUNCE_HOLD_MAX_MS) {
+        this.publish(state, 'pounce', state.startedAt, now + POUNCE_RETRY_MS, target.ref, null);
+        return;
+      }
       state.pounceLockoutUntil = now + config.pounce.cancelLockoutMs;
       this.publish(state, 'rush', now, 0, target.ref, null);
       return;
@@ -342,6 +362,7 @@ export class CoopDefenseKaboomtulaSystem implements EnemySpecialMovementSource {
     const leap: LockedLeap = { originX: x, originY: y, endX: lock.endX, endY: lock.endY, takeoffAt,
       landAt: takeoffAt + config.leap.airMs, angle: lock.angle, length: lock.length };
     enemy.setKnockbackImmune(true);
+    state.leapAlong = 0; state.leapProgressAt = now;
     this.publish(state, 'leap', takeoffAt, leap.landAt, target.ref, leap);
     this.ports.sound?.('leap', enemy.id, x, y);
   }
@@ -351,8 +372,10 @@ export class CoopDefenseKaboomtulaSystem implements EnemySpecialMovementSource {
     if (!leap) { this.recover(state, config, now); return; }
     const along = (enemy.sprite.x - leap.originX) * Math.cos(leap.angle) + (enemy.sprite.y - leap.originY) * Math.sin(leap.angle);
     const arrived = along >= leap.length - ARRIVAL_EPSILON_PX;
-    // A body stopped by geometry the lane did not know about ends the leap early, never later.
-    const stalled = now > leap.takeoffAt + 80 && state.movedPx < 0.5;
+    if (along > state.leapAlong + 1) { state.leapAlong = along; state.leapProgressAt = now; }
+    // A body stopped by geometry the lane did not know about ends the leap early, never later. Host
+    // steps can outpace physics steps, so a stall is a lack of progress over a window, not one still frame.
+    const stalled = now - state.leapProgressAt > LEAP_STALL_MS;
     if (arrived || stalled || now >= leap.landAt + 150) this.recover(state, config, now);
   }
 
@@ -471,18 +494,27 @@ export class CoopDefenseKaboomtulaSystem implements EnemySpecialMovementSource {
     return { vx: direct.vx, vy: direct.vy, aimAngle: aim };
   }
 
-  /** Keeps running through the telegraph: circles the target inside the band, facing it. */
+  /** Keeps running through the telegraph: strafes around the target inside the band, facing it. */
   private stalkVelocity(state: SpiderState, config: CoopDefenseEnemyKaboomtulaConfig, aim: number): EnemyMovementOverride {
     const enemy = state.enemy, x = enemy.sprite.x, y = enemy.sprite.y;
     const dx = state.aimX - x, dy = state.aimY - y, distance = Math.hypot(dx, dy);
     if (distance < 1e-3) return { vx: 0, vy: 0, aimAngle: aim };
+    if (state.laneBlocked && state.target && distance > config.pounce.bandMinPx) {
+      // Cover between spider and prey: follow the ground route back to a free line.
+      const point = this.ports.route(enemy, `kaboomtula:${state.target.kind}:${state.target.id}`, { x: state.aimX, y: state.aimY },
+        Math.max(16, enemy.getCollisionRadius())) ?? { x: state.aimX, y: state.aimY };
+      const back = this.ports.moveNormally(enemy, point, config.rushSpeedPx * STALK_SPEED_FACTOR, aim);
+      return { vx: back.vx, vy: back.vy, aimAngle: aim };
+    }
     const ux = dx / distance, uy = dy / distance;
     const { bandMinPx, bandMaxPx } = config.pounce;
     const radial = Math.max(-1, Math.min(1, (distance - (bandMinPx + bandMaxPx) / 2) / Math.max(1, (bandMaxPx - bandMinPx) / 2)));
-    const mx = ux * radial - uy * state.orbitSide * 0.75, my = uy * radial + ux * state.orbitSide * 0.75;
+    const mx = ux * radial - uy * state.orbitSide * STALK_STRAFE, my = uy * radial + ux * state.orbitSide * STALK_STRAFE;
     const norm = Math.hypot(mx, my) || 1;
     const moved = this.ports.moveNormally(enemy, { x: x + mx / norm * config.skitter.probePx, y: y + my / norm * config.skitter.probePx },
       config.rushSpeedPx * STALK_SPEED_FACTOR, aim);
+    // A strafe into cover turns around.
+    if (moved.blocked) state.orbitSide = state.orbitSide === 1 ? -1 : 1;
     return { vx: moved.vx, vy: moved.vy, aimAngle: aim };
   }
 

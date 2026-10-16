@@ -1,9 +1,7 @@
 {
   "id": "timebomb-badger",
   "category": "enemy",
-  "gameIds": [
-    "kaboomtula"
-  ],
+  "gameIds": [],
   "revision": "enemy-mesh-r4-010",
   "variant": "standard",
   "sourceSize": 128,

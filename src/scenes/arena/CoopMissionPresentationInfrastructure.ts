@@ -356,7 +356,6 @@ export class CoopMissionPresentationInfrastructure {
             .map(e => ({ id: e.id, generation: manager?.getCombatTargetRef(e.id)?.instance.entityGeneration ?? 0,
               x: e.sprite.x, y: e.sprite.y, size: e.getSize(), vulnerable: e.isVulnerable(),
               boss: e.kind === mapConfig.boss?.enemyKind || !!e.getBossPresence(),
-              ...e.getKaboomtulaHazard(),
             }))), this.scene.time.now);
         },
         syncAbyssCameo: (config, elapsedMs) => {

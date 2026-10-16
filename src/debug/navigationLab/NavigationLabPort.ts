@@ -23,6 +23,8 @@ export interface NavigationLabEnemy {
   readonly special: boolean;
   readonly intent?: EnemyIntent | null;
   readonly movement?: MovementFeedback | null;
+  /** Replicated Kabummtula phase (alert, rush, pounce, leap, ...); absent for other kinds. */
+  readonly kaboomtulaPhase?: string;
 }
 
 /** Explicit scenario inputs and read models; no runtime owner escapes to the lab. */

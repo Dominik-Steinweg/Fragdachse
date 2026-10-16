@@ -116,6 +116,7 @@ function createTurretWebBatch(renderer: Phaser.Renderer.WebGL.WebGLRenderer, ima
         program.setUniform('uPass', pass); program.setUniform('uDetail', frame.detail);
         program.setUniform('uTime', frame.time); program.setUniform('uAlpha', image.alpha);
         program.setUniform('uEmissive', frame.emissive);
+        program.setUniform('uZoom', context.camera?.zoomX ?? 1);
         program.applyUniforms(suite.program);
         renderer.drawElements(context, [], suite.program, suite.vao, instances * VERTICES, 0, this.topology);
       }

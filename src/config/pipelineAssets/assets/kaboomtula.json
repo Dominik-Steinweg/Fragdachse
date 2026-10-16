@@ -1,0 +1,156 @@
+{
+  "id": "kaboomtula",
+  "category": "enemy",
+  "gameIds": [
+    "kaboomtula"
+  ],
+  "revision": "draft-c",
+  "variant": "standard",
+  "sourceSize": 62,
+  "textureKey": "enemy_kaboomtula",
+  "runtimeContract": "sheet",
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "displayScale": 2.4,
+  "idleFrame": 0,
+  "clips": [
+    {
+      "name": "move",
+      "frames": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "frameRate": 36,
+      "loop": true
+    },
+    {
+      "name": "claw",
+      "frames": [
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 6,
+        "impact": 9
+      }
+    },
+    {
+      "name": "alert",
+      "frames": [
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36
+      ],
+      "frameRate": 24,
+      "loop": false
+    },
+    {
+      "name": "leap",
+      "frames": [
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58
+      ],
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "launch": 5,
+        "land": 11
+      }
+    },
+    {
+      "name": "idle",
+      "frames": [
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74
+      ],
+      "frameRate": 12,
+      "loop": true
+    }
+  ],
+  "sheetTextureKey": "enemy_kaboomtula_walking",
+  "idlePath": "./assets/sprites/pipeline-v2/kaboomtula/idle.png",
+  "sheetPath": "./assets/sprites/pipeline-v2/kaboomtula/sheet.png",
+  "layout": {
+    "frameWidth": 62,
+    "frameHeight": 62,
+    "margin": 2,
+    "spacing": 4,
+    "columns": 8,
+    "rows": 10,
+    "frameCount": 75,
+    "width": 528,
+    "height": 660
+  },
+  "hashes": {
+    "idle": "911045a103b7044a37e0af74302413d6d8a8da88cad148100252d1f03c31b691",
+    "sheet": "77b07087ade74c2293a97c276c31c43469e3d5d3806e1bfb9ab2c9a12d5cd543"
+  }
+}
