@@ -1,4 +1,4 @@
-import { VOID_PALETTE } from '../../config';
+import { VOID_FIRE_COLOR, VOID_PALETTE } from '../../config';
 import type { GraphicsQuality } from '../../graphics/GraphicsQuality';
 import type { KrakenGlowLayer } from './KrakenGlowLayer';
 import { KRAKEN_GLOW, krakenSuckerWave, type KrakenEggGlow, type KrakenSuckerDrive } from './KrakenGlowTimeline';
@@ -9,7 +9,8 @@ import { KRAKEN_BROOD } from './submersionShader';
 /** Colours and sizes of the boss light. Ember eyes live above the light map; the violet of cups and brood also lights it. */
 export const KRAKEN_GLOW_LOOK = {
   eye: { color: 0xff3a1a, auraWidth: 1.9, auraHeight: .95, auraAlpha: .3, lightRadius: 110, lightIntensity: 1.6, lightMax: 4.5 },
-  sucker: { halo: VOID_PALETTE.bright, core: VOID_PALETTE.core, alpha: .9, underwaterFalloff: .6, lowCap: 64 },
+  /** Cups: a saturated violet halo around a lighter violet core (a white core read as pale dots, not bioluminescence). */
+  sucker: { halo: VOID_FIRE_COLOR, core: VOID_PALETTE.bright, alpha: 1, underwaterFalloff: .6, lowCap: 64 },
   /** One light where the arm leaves the water: it lights the pond around it, not the (pale) arm itself. */
   arm: { color: VOID_PALETTE.bright, radius: 78, rest: .35, peak: 1.5 },
   body: { color: VOID_PALETTE.primary, radius: 150, base: .5, perLevel: 2 },

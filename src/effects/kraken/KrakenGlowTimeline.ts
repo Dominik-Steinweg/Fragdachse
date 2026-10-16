@@ -24,7 +24,7 @@ export const KRAKEN_GLOW = {
     deepLeadMs: 900,
   },
   sucker: {
-    waterRest: .12, landRest: .25,
+    waterRest: .32, landRest: .45,
     riseLevel: .3, telegraphFrom: .35, telegraphTo: 1, hitFlash: 1.6, hitDecayMs: 500,
     restHz: .35, telegraphHz: 2.8,
     roarBurst: 1, roarWidthMs: 600,

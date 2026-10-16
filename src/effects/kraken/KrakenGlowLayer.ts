@@ -47,7 +47,7 @@ export class KrakenGlowLayer {
   sucker(x: number, y: number, radiusPx: number, halo: number, core: number, alpha: number): void {
     if (alpha <= .004) return;
     const h = Math.max(5, radiusPx * 4.2), c = Math.max(2.2, radiusPx * 1.5);
-    this.haloQuads.push({ x, y, w: h, h, rotation: 0, color: halo, alpha: alpha * .55 });
+    this.haloQuads.push({ x, y, w: h, h, rotation: 0, color: halo, alpha: alpha * .7 });
     this.coreQuads.push({ x, y, w: c, h: c, rotation: 0, color: core, alpha: Math.min(1, alpha) });
   }
 
