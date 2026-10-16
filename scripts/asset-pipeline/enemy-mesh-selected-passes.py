@@ -93,6 +93,21 @@ def main():
         # reject any remaining form lighting rather than silently flattening it.
         removed = []
         nodes, links = clone.node_tree.nodes, clone.node_tree.links
+        # Kraken V8 dermis (also the plague toad's hide) keeps its value plan, folds and pigment
+        # cells; its named form shade, grazing sheen and cavity tint pass their unlit input on.
+        if clone.get('FD_SurfaceKind') == 'kraken-dermis-v8':
+            for name, reason in (('Form shadow strength', 'dermis form and contact shade'),
+                                 ('Iridescent violet-teal sheen', 'dermis grazing sheen'),
+                                 ('MS cool recessed flesh', 'dermis cavity AO tint')):
+                node = nodes.get(name)
+                if node is None:
+                    continue
+                source, result = (node.inputs[6], node.outputs[2]) if node.type == 'MIX' else (node.inputs[1], node.outputs[0])
+                for link in list(result.links):
+                    target_socket = link.to_socket; links.remove(link)
+                    if source.is_linked: links.new(source.links[0].from_socket, target_socket)
+                    else: target_socket.default_value = source.default_value
+                removed.append(dict(node=name, reason=reason))
         for node in list(nodes):
             if node.type != 'MIX_RGB' or node.blend_type != 'MULTIPLY' or not node.inputs[2].is_linked:
                 continue
