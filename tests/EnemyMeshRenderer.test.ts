@@ -27,7 +27,7 @@ function fixture(){
   const scene:any={sys:{renderer:{shaderProgramFactory:{programs:{}}}},game:{loop:{get frame(){return state.frame}}},cameras:{main:{}},add:{existing(){}}};
   const receiver:any={destroy:vi.fn(),world:[0,0,1000,1000],texture:{}};
   const renderer=new EnemyMeshShadowRenderer(scene,{sunPath:{sun:[-1,0,.5],strength:1,elevation:.6}} as any,receiver,64);
-  const enemy=(x=500):any=>({kind:'zombie-badger',getHp:()=>1,isBurrowed:()=>false,sprite:{active:true,visible:true,alpha:.7,x,y:500,
+  const enemy=(x=500):any=>({kind:'zombie-badger',getHp:()=>1,isBurrowed:()=>false,getHopLiftScale:()=>1,sprite:{active:true,visible:true,alpha:.7,x,y:500,
     rotation:0,scaleX:67.2/128,scaleY:67.2/128,displayWidth:67.2,displayHeight:67.2,originX:.5,originY:.5,flipX:false,flipY:false,frame:{name:19,realWidth:128,realHeight:128}}});
   const sync=(enemies:any[],visible=true)=>{state.frame++;renderer.sync(enemies,visible)};
   return {renderer,receiver,enemy,sync};

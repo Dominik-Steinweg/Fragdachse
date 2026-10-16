@@ -221,6 +221,7 @@ export class MovementEffectsRenderer {
       this.spawnDust(s, x, y, heading, age, true, MOVEMENT_FX.dashDust.trailCount, 1);
       return;
     }
+    if (kind === 'land') this.spawnLandingPrints(s, x, y, facing, age);
     const dash = MOVEMENT_FX.dashDust;
     const count = kind === 'dashStart'
       ? (s.player ? dash.playerStartCount : dash.enemyStartCount)
@@ -229,6 +230,22 @@ export class MovementEffectsRenderer {
     if (scaled === 0) this.gpu.recordQualityDrop(GpuVfxEffectId.MovementDashDust);
     this.spawnDust(s, x, y, heading, age, true, scaled, kind === 'dashStart' ? 1.5 : kind === 'dashEnd' ? 0.8 : 1);
   };
+
+  /** A landing sets every paw at once, in the same body layout as a walking step. */
+  private spawnLandingPrints(s: MovementVisualSample, x: number, y: number, facing: number, age: number): void {
+    if (this.gpu.quality.getEmissionFactor(GpuVfxEffectId.MovementFootprint) <= 0) {
+      this.gpu.recordQualityDrop(GpuVfxEffectId.MovementFootprint);
+      return;
+    }
+    const nx = Math.cos(facing), ny = Math.sin(facing);
+    for (let paw = 0; paw < s.pawCount; paw++) {
+      const left = paw === 0 || (s.pawCount === 4 && paw === 3);
+      const front = s.pawCount === 4 && (paw === 0 || paw === 2);
+      const lateral = (left ? -1 : 1) * s.size * 0.2;
+      const forward = s.pawCount === 4 ? (front ? 1 : -1) * s.size * 0.18 : -s.size * 0.1;
+      this.spawnFootprint(s, x + nx * forward - ny * lateral, y + ny * forward + nx * lateral, facing, age);
+    }
+  }
 
   private spawnFootprint(s: MovementVisualSample, x: number, y: number, facing: number, age: number): void {
     if (!this.prints.canSpawn(s.player)) return;

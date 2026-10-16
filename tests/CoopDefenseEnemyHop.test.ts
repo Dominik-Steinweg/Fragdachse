@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
+vi.mock('phaser', async () => (await import('./fakeArenaRenderScene')).createFakePhaserModule());
 import * as enemyConfig from '../src/config/coopDefenseEnemies';
+import { decodeEnemyUpserts, encodeEnemyUpsert } from '../src/network/enemySnapshotCodec';
+import { EnemyManager } from '../src/entities/EnemyManager';
+import { hopClipFrame } from '../src/animations/EnemyHopAnimation';
+import { healthBarTestScene } from './healthBarTestScene';
 import { CoopDefenseEnemyHopSystem, type EnemyHopCombatIntent } from '../src/systems/CoopDefenseEnemyHopSystem';
 import { EMPTY_ENEMY_HOP_STATE, enemyHopPhaseAt, isEnemyHopState, type EnemyHopState } from '../src/systems/EnemyHopState';
 import type { EnemyEntity } from '../src/entities/EnemyEntity';
@@ -198,5 +203,79 @@ describe('hop config validation', () => {
     const charger = enemyConfig.getCoopDefenseEnemyConfig('shield-charger-badger');
     expect(() => enemyConfig.normalizeEnemyRegistry({ enemies: [{ ...toad, id: 'toad', shieldCharger: charger.shieldCharger }] } as never))
       .toThrow(/second locomotion owner/);
+  });
+});
+
+describe('hop replication and presentation', () => {
+  const state: EnemyHopState = { revision: 9, links: ['e3', 'e1z'], jump: { originX: 10, originY: -4, targetX: 112, targetY: 20,
+    crouchAt: 1000, takeoffAt: 1180, landAt: 1600, settleUntil: 1760, shock: true } };
+
+  it('round-trips the jump and its heal links, and keeps later entries aligned after an invalid hop', () => {
+    const wire: (number | string)[] = [];
+    encodeEnemyUpsert(wire, { id: 'e1', hop: state });
+    encodeEnemyUpsert(wire, { id: 'e2', hop: { ...state, jump: { ...state.jump!, landAt: 900 } } });
+    encodeEnemyUpsert(wire, { id: 'e4', hp: 5, maxHp: 10 });
+    const [first, invalid, last] = decodeEnemyUpserts(wire);
+    expect(first!.hop).toEqual(state);
+    expect(invalid).toEqual({ id: 'e2' });
+    expect(last).toEqual({ id: 'e4', hp: 5, maxHp: 10 });
+  });
+
+  it('replicates hop changes to existing remote enemies and ignores stale revisions', () => {
+    const configs = enemyConfig.resolveCoopDefenseEnemyConfigs(1);
+    configs['plague-medic'] = { ...configs['plague-medic'], glow: undefined, imageKey: 'test-enemy', deathSpawns: [] };
+    const host = new EnemyManager(healthBarTestScene().scene, configs);
+    const client = new EnemyManager(healthBarTestScene().scene, configs);
+    try {
+      const toad = host.hostSpawnAtWorld(100, 100, 'plague-medic', { originId: 'wave' });
+      host.requestFullNetSnapshot();
+      client.applySnapshot(JSON.parse(JSON.stringify(host.getNetSnapshot())));
+      expect(client.getEnemy(toad.id)!.getHopState().revision).toBe(0);
+      toad.applyHopState({ ...state, links: [] });
+      client.applySnapshot(JSON.parse(JSON.stringify(host.getNetSnapshot())));
+      expect(client.getEnemy(toad.id)!.getHopState().jump).toEqual(state.jump);
+      const stale: (number | string)[] = [];
+      encodeEnemyUpsert(stale, { id: toad.id, hop: { revision: 3, jump: null, links: [] } });
+      client.applySnapshot({ c: 1, u: stale, r: [] });
+      expect(client.getEnemy(toad.id)!.getHopState().revision).toBe(state.revision);
+    } finally { client.destroy(); host.destroy(); }
+  });
+
+  it('places a remote hopper on its flight line from the replicated timeline and lifts it mid-air', () => {
+    const configs = enemyConfig.resolveCoopDefenseEnemyConfigs(1);
+    configs['plague-medic'] = { ...configs['plague-medic'], glow: undefined, imageKey: 'test-enemy', deathSpawns: [] };
+    const host = new EnemyManager(healthBarTestScene().scene, configs);
+    const client = new EnemyManager(healthBarTestScene().scene, configs);
+    try {
+      const toad = host.hostSpawnAtWorld(10, -4, 'plague-medic', { originId: 'wave' });
+      toad.applyHopState(state);
+      host.requestFullNetSnapshot();
+      client.applySnapshot(JSON.parse(JSON.stringify(host.getNetSnapshot())));
+      const remote = client.getEnemy(toad.id)!;
+      const ground = remote.sprite.displayWidth;
+      client.updateClientInterpolation(0.1, 1390);
+      expect(remote.sprite.x).toBeCloseTo(61, 0);
+      expect(remote.sprite.y).toBeCloseTo(8, 0);
+      expect(remote.sprite.displayWidth).toBeGreaterThan(ground * 1.2);
+      expect(remote.getHopLiftScale()).toBeGreaterThan(1.2);
+      client.updateClientInterpolation(0.1, 1800);
+      expect(remote.sprite.displayWidth).toBeCloseTo(ground, 5);
+    } finally { client.destroy(); host.destroy(); }
+  });
+
+  it('maps crouch, flight and landing onto the hop clip and loops the channel clip while linked', () => {
+    const clips: Record<string, { frames: number[]; markers?: Record<string, number>; frameRate?: number }> = {
+      hop: { frames: Array.from({ length: 20 }, (_, i) => 100 + i), markers: { launch: 6, land: 14 } },
+      channel: { frames: [200, 201, 202, 203], frameRate: 10 },
+    };
+    const clip = (name: string) => clips[name];
+    const jump = state.jump!;
+    expect(hopClipFrame(state, jump.crouchAt, clip)).toBe(100);
+    expect(hopClipFrame(state, jump.takeoffAt, clip)).toBe(106);
+    expect(hopClipFrame(state, jump.landAt, clip)).toBe(114);
+    expect(hopClipFrame(state, jump.settleUntil - 1, clip)).toBe(119);
+    expect(hopClipFrame(state, jump.settleUntil + 250, clip)).toBe(202);
+    expect(hopClipFrame({ ...state, links: [] }, jump.settleUntil + 250, clip)).toBeNull();
+    expect(hopClipFrame(state, jump.takeoffAt, () => undefined)).toBeNull();
   });
 });

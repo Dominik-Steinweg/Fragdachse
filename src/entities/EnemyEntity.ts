@@ -7,7 +7,8 @@ import { airborneLift } from '../animations/leapPresentation';
 import { syncEnemyEnergyConeAnimation } from '../animations/EnemyEnergyConeAnimation';
 import { EMPTY_SHIELD_CHARGE_STATE, isShieldChargeState, type ShieldChargeState } from '../systems/ShieldChargeState';
 import { EMPTY_ENERGY_CONE_STATE, isEnergyConeState, type EnergyConeState } from '../systems/EnergyConeState';
-import { EMPTY_ENEMY_HOP_STATE, isEnemyHopState, type EnemyHopState } from '../systems/EnemyHopState';
+import { EMPTY_ENEMY_HOP_STATE, enemyHopAirProgress, enemyHopPhaseAt, isEnemyHopState, type EnemyHopState } from '../systems/EnemyHopState';
+import { syncEnemyHopAnimation } from '../animations/EnemyHopAnimation';
 import { EnemyCastPlayback, syncEnemyCastAnimation } from '../animations/EnemyCastAnimation';
 import { getEnemyFootprintVariant } from '../config/movementEffects';
 import type { MovementVisualSample } from '../effects/MovementStepSampler';
@@ -69,6 +70,8 @@ const TEX_ENEMY_GLOW = '_enemy_glow';
 const WALKING_INTERPOLATION_EPSILON_PX = 0.5;
 /** Apex growth of a charger leap towards the camera. */
 const LEAP_LIFT_AMPLITUDE = 0.32;
+/** Apex growth of a toad hop: short, low hops read lighter than the brood's pounce. */
+const HOP_LIFT_AMPLITUDE = 0.24;
 
 export type EnemyFaction = 'hostile' | 'allied';
 
@@ -215,6 +218,30 @@ export class EnemyEntity {
   applyHopState(state: EnemyHopState): void {
     if (!isEnemyHopState(state) || state.revision <= this.hopState.revision) return;
     this.hopState = state;
+  }
+
+  private hopAnimating = false;
+  private hopAirborne = false;
+
+  /**
+   * Hop presentation from the replicated timeline: clients place the body on its flight line
+   * (the network lerp would smear a fast hop), host and clients lift it and play the hop clips.
+   */
+  syncHopPresentation(now: number): void {
+    if (!this.config.hop) return;
+    const state = this.hopState, jump = state.jump;
+    const airborne = !!jump && enemyHopPhaseAt(state, now) === 'air';
+    const progress = airborne ? enemyHopAirProgress(jump, now) : 0;
+    if (airborne && !this.authoritative) {
+      this.sprite.x = Phaser.Math.Linear(jump.originX, jump.targetX, progress);
+      this.sprite.y = Phaser.Math.Linear(jump.originY, jump.targetY, progress);
+    }
+    this.hopAirborne = airborne;
+    this.setAirLiftScale(1 + HOP_LIFT_AMPLITUDE * airborneLift(progress), false);
+    const wasAnimating = this.hopAnimating;
+    this.hopAnimating = syncEnemyHopAnimation(this.sprite, this.config.imageKey, state, now,
+      this.clawAnimating || !this.sprite.visible || this.burrowed || this.currentHp <= 0);
+    if (wasAnimating && !this.hopAnimating) this.syncWalkingAnimation();
   }
 
   getEnergyConeState(): EnergyConeState { return this.energyCone; }
@@ -554,7 +581,8 @@ export class EnemyEntity {
    * eingebuddelt, unsichtbar oder tot ist; statische Gegnerarten ignorieren den Aufruf.
    */
   setWalking(walking: boolean): void {
-    if (this.stationary) walking = false;
+    // Hoppers never walk: flights are drawn from the hop timeline, knockback slides in the idle pose.
+    if (this.stationary || this.config.hop) walking = false;
     if (this.walkingRequested === walking) return;
     this.walkingRequested = walking;
     this.syncWalkingAnimation();
@@ -569,7 +597,7 @@ export class EnemyEntity {
     out.player = false;
     out.visible = this.sprite.visible && this.currentHp > 0 && !this.burrowed
       && this.movementCorrectionRemaining < this.config.size * 0.3;
-    out.mode = this.dashPhase === 1 ? 'dash' : this.dashPhase === 2 ? 'recovery'
+    out.mode = this.hopAirborne ? 'airborne' : this.dashPhase === 1 ? 'dash' : this.dashPhase === 2 ? 'recovery'
       : this.walkingRequested ? 'walk' : 'idle';
     out.isBurrowDash = false;
     out.revision = this.movementRevision;
@@ -587,7 +615,7 @@ export class EnemyEntity {
   }
 
   private syncWalkingAnimation(): void {
-    if (this.clawAnimating || this.castAnimating || this.shieldChargeAnimating || this.energyConeAnimating) return;
+    if (this.clawAnimating || this.castAnimating || this.shieldChargeAnimating || this.energyConeAnimating || this.hopAnimating) return;
     if (!this.walkingSheet) return;
     syncBadgerWalkingAnimation(
       this.sprite,
@@ -751,7 +779,9 @@ export class EnemyEntity {
   }
 
   private syncCollisionCircle(): void {
-    const diameter = this.sprite.frame.realWidth * this.getSize() / this.getVisualSize();
+    // The Arcade circle scales with the sprite; a presentation-only lift is divided back out.
+    const lift = this.airLiftMovesBody ? 1 : this.airLiftScale;
+    const diameter = this.sprite.frame.realWidth * this.getSize() / this.getVisualSize() / lift;
     const offset = (this.sprite.frame.realWidth - diameter) * 0.5;
     this.body.setCircle(diameter * 0.5, offset, offset);
   }
@@ -781,14 +811,18 @@ export class EnemyEntity {
 
   private dashScale = 1;
   private airLiftScale = 1;
+  /** A hop lift is pure presentation; the charger leap keeps its historical body growth. */
+  private airLiftMovesBody = true;
 
-  /** Display growth of an airborne body (1 on the ground); shadows divide it back out. */
-  getAirLiftScale(): number { return this.airLiftScale; }
+  /** Presentation-only display growth of a hopping body (1 on the ground); shadows divide it back out. */
+  getHopLiftScale(): number { return this.airLiftMovesBody ? 1 : this.airLiftScale; }
 
-  private setAirLiftScale(scale: number): void {
-    if (scale === this.airLiftScale) return;
+  private setAirLiftScale(scale: number, movesBody = true): void {
+    if (scale === this.airLiftScale && movesBody === this.airLiftMovesBody) return;
     this.airLiftScale = scale;
+    this.airLiftMovesBody = movesBody;
     this.applyDisplayScale();
+    if (!movesBody && this.authoritative && this.sprite.body) this.syncCollisionCircle();
   }
 
   /** Single writer of the sprite display size: dodge shrink and airborne lift combine here. */
@@ -991,6 +1025,7 @@ export class EnemyEntity {
     return {
       claw: this.clawState,
       ...(this.shieldCharge.revision > 0 ? { shieldCharge: this.shieldCharge } : {}),
+      ...(this.hopState.revision > 0 ? { hop: this.hopState } : {}),
       ...(this.energyCone.revision > 0 ? { energyCone: this.energyCone } : {}),
       positionRevision: this.movementRevision,
       id: this.id,

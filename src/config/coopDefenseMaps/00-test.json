@@ -437,6 +437,16 @@
         "spawnArea": { "gridX": 30, "gridY": 46, "widthCells": 4, "heightCells": 4 } }]
     },
     {
+      "id": "plague-toad-gate-1",
+      "start": { "type": "time", "atMs": 8000 },
+      "groups": [
+        { "enemyKind": "zombie-badger", "count": 6, "spawnStaggerMs": 200,
+          "spawnArea": { "gridX": 34, "gridY": 40, "widthCells": 4, "heightCells": 4 } },
+        { "enemyKind": "plague-medic", "count": 1,
+          "spawnArea": { "gridX": 30, "gridY": 46, "widthCells": 2, "heightCells": 2 } }
+      ]
+    },
+    {
       "id": "firestarter-gate-1",
       "start": { "type": "time", "atMs": 6000 },
       "groups": [{ "enemyKind": "firestarter-badger", "count": 2, "spawnStaggerMs": 1000,

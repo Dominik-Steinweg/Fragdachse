@@ -934,6 +934,28 @@ deutlicher Stoß während der Ankündigung brechen sie ab. Im Spiel: Karte 4 (Ad
 Headless-Nachweise: `tests/CoopDefenseShieldCharger.test.ts`, `tests/ShieldChargerRenderer.test.ts`,
 `tests/stress/CoopDefenseShieldChargerStress.test.ts`.
 
+### Quacksalber (Seuchenheiler-Kröte): Gate GC1
+
+Map `0` (`00-test`) enthält den Encounter `plague-toad-gate-1` (sechs Zombie-Dachse und eine Kröte).
+Für einen isolierten Versuch dasselbe Dev-Szenario mit festem Seed, `suppressWaves: true` und
+`freezeMission: true` verwenden, über `target` eine Gruppe angeschlagener, festgehaltener Dachse etwa
+300 px vor die Kröte setzen und dann die Kröte spawnen:
+
+```js
+await devScenario.whenReady();
+for (const gridX of [36, 37, 38]) await devScenario.run({ action: 'spawn', kind: 'zombie-badger', pinned: true, hp: 8, gridX, gridY: 40 });
+await devScenario.run({ action: 'spawn', kind: 'plague-medic', pinned: false, gridX: 30, gridY: 46 });
+```
+
+Erwartung: Die Kröte läuft nicht, sondern hüpft (Ducken, Flug, Landung, Stillstand). Ohne Verletzte in
+Reichweite atmet sie nur kurz durch und springt Richtung Basis weiter; mit der verletzten Gruppe in
+Reichweite springt sie zu ihr, bleibt bis zu 2,5 s stehen und heilt dabei bis zu vier Verbündete, dann
+springt sie zwingend weiter. Geheilt wird nie im Flug. Stun oder ein deutlicher Stoß beim Ducken brechen
+den Sprung ab. Im Spiel: Karte 7 (Medic).
+
+Headless-Nachweise: `tests/CoopDefenseEnemyHop.test.ts`, `tests/EnemyHopLanding.test.ts`,
+`tests/EnemyRestHeal.test.ts`.
+
 ### Alien-Energie-Fächer: Gate 1
 
 Map `0` (`00-test`) enthält den Encounter `alien-cone-gate-1` (ein Alien, Start nach 12 s).

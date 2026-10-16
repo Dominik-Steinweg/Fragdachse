@@ -7,12 +7,16 @@ export const ENEMY_SHADOW_COLUMNS = 32;
 export const ENEMY_SHADOW_DEPTH = 9.92;
 export const ENEMY_SHADOW_PAD = 5;
 
-/** No extra jump translation: source positions already contain the attack root's Z. */
-export function enemyMeshMatrix(sprite: MeshDisplayPose, canvas: number, out: Float32Array): void {
+/**
+ * No extra jump translation: source positions already contain the attack root's Z. A
+ * presentation-only lift (`liftScale`, the hop's growth towards the camera) is divided back out,
+ * so the shadow keeps the ground size of the body.
+ */
+export function enemyMeshMatrix(sprite: MeshDisplayPose, canvas: number, out: Float32Array, liftScale = 1): void {
   const c = Math.cos(sprite.rotation), s = Math.sin(sprite.rotation);
-  const sx = sprite.scaleX * sprite.frame.realWidth / canvas * (sprite.flipX ? -1 : 1);
-  const sy = sprite.scaleY * sprite.frame.realHeight / canvas * (sprite.flipY ? -1 : 1);
-  const px = (.5 - sprite.originX) * sprite.displayWidth, py = (.5 - sprite.originY) * sprite.displayHeight;
+  const sx = sprite.scaleX * sprite.frame.realWidth / canvas * (sprite.flipX ? -1 : 1) / liftScale;
+  const sy = sprite.scaleY * sprite.frame.realHeight / canvas * (sprite.flipY ? -1 : 1) / liftScale;
+  const px = (.5 - sprite.originX) * sprite.displayWidth / liftScale, py = (.5 - sprite.originY) * sprite.displayHeight / liftScale;
   out.fill(0); out[0] = c * sx; out[1] = s * sx; out[4] = -s * sy; out[5] = c * sy;
   out[10] = Math.sqrt(Math.abs(sx * sy)); out[12] = sprite.x + c * px - s * py;
   out[13] = sprite.y + s * px + c * py; out[15] = 1;

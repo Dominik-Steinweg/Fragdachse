@@ -27,7 +27,8 @@
 // Bomber flight: seeded curves, replicated aim offsets/angles and extended bq plan parameters.
 // Mini-Kraken: appended enemy kind (shifts the kraken boss/egg indices), submerged snapshot field
 // and leap style on the shared charge lane; amphibious flow-field profiles.
-export const PEER_PROTOCOL_VERSION = 37;
+// Quacksalber toad: appended hop snapshot field (jump timeline and heal links); the healing aura weapon is gone.
+export const PEER_PROTOCOL_VERSION = 38;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

@@ -285,15 +285,17 @@ export class CoopDefenseEnemyHopSystem implements EnemySpecialMovementSource {
     const length = Math.hypot(jump.targetX - jump.originX, jump.targetY - jump.originY);
     const travelled = Math.max(0, length - remaining);
     const planned = length * Math.min(1, (now - jump.takeoffAt) / Math.max(1, jump.landAt - jump.takeoffAt));
-    const lagging = planned - travelled > RETIME_LAG_PX && now - state.retimedAt >= RETIME_INTERVAL_MS;
-    // Just before the planned landing an unfinished flight is stretched, so clients never see it land short.
-    const endingShort = now >= jump.landAt - RETIME_END_GUARD_MS;
-    if (lagging || endingShort) {
+    const elapsed = Math.max(1, now - jump.takeoffAt);
+    const speed = Math.max(1e-3, travelled / elapsed);
+    const landAt = now + remaining / speed;
+    const due = now - state.retimedAt >= RETIME_INTERVAL_MS || now >= jump.landAt;
+    const lagging = planned - travelled > RETIME_LAG_PX;
+    // Near the planned landing a flight that will arrive late is stretched, so clients never see it land short.
+    const endingLate = now >= jump.landAt
+      || (now >= jump.landAt - RETIME_END_GUARD_MS && landAt > jump.landAt + RETIME_END_GUARD_MS);
+    if (due && (lagging || endingLate)) {
       // Slowed flight (time bubble, slow status): stretch the timeline around the current progress
       // so clients keep the body where it is and the arc continues without a jump.
-      const elapsed = Math.max(1, now - jump.takeoffAt);
-      const speed = Math.max(1e-3, travelled / elapsed);
-      const landAt = now + remaining / speed;
       const progress = Math.min(0.99, travelled / Math.max(1e-6, length));
       const takeoffAt = landAt - (landAt - now) / (1 - progress);
       state.jump = { ...jump, crouchAt: Math.min(jump.crouchAt, takeoffAt), takeoffAt, landAt, settleUntil: landAt + config.landMs };
@@ -354,6 +356,10 @@ export class CoopDefenseEnemyHopSystem implements EnemySpecialMovementSource {
   }
 
   private publish(state: HopperState): void {
+    // Whole host milliseconds keep the wire compact; rounding preserves the timeline order.
+    const jump = state.jump;
+    if (jump) state.jump = { ...jump, crouchAt: Math.round(jump.crouchAt), takeoffAt: Math.round(jump.takeoffAt),
+      landAt: Math.round(jump.landAt), settleUntil: Math.round(jump.settleUntil) };
     state.revision = Math.max(state.revision, state.enemy.getHopState().revision) + 1;
     state.enemy.applyHopState({ revision: state.revision, jump: state.jump, links: [...state.links] });
   }

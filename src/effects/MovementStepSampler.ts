@@ -1,6 +1,7 @@
 import { MOVEMENT_FX, type FootprintVariant, type PawCount } from '../config/movementEffects';
 
-export type MovementVisualMode = 'idle' | 'walk' | 'dash' | 'recovery';
+/** `airborne`: a hopping body in flight leaves no steps; its landing is one contact. */
+export type MovementVisualMode = 'idle' | 'walk' | 'dash' | 'recovery' | 'airborne';
 
 /** Caller-owned render projection. Never sent over the network or read by simulation. */
 export interface MovementVisualSample {
@@ -25,7 +26,7 @@ export interface MovementVisualSource {
   readMovementVisualSample(out: MovementVisualSample): void;
 }
 
-export type MovementContact = 'step' | 'dashStart' | 'dashTrail' | 'dashEnd';
+export type MovementContact = 'step' | 'dashStart' | 'dashTrail' | 'dashEnd' | 'land';
 export type MovementContactSink = (
   contact: MovementContact, x: number, y: number, heading: number, paw: number, ageMs: number, facing: number,
 ) => void;
@@ -67,7 +68,7 @@ export class MovementStepSampler {
     const distance = Math.hypot(dx, dy);
     const interrupted = !this.initialized || this.revision !== s.revision
       || !Number.isFinite(deltaMs) || deltaMs <= 0 || deltaMs > MOVEMENT_FX.maxFrameMs
-      || distance > Math.max(s.size * 4, (s.mode === 'dash' ? 2600 : 1000) * deltaMs / 1000);
+      || distance > Math.max(s.size * 4, (s.mode === 'dash' || s.mode === 'airborne' ? 2600 : 1000) * deltaMs / 1000);
     if (interrupted) {
       this.reset();
       this.initialized = true;
@@ -78,6 +79,9 @@ export class MovementStepSampler {
 
     if (s.mode !== this.mode) {
       this.remainder = 0;
+      // A hop kicks off with a puff and lands with every paw at once.
+      if (s.mode === 'airborne') emit('dashStart', this.x, this.y, s.facing, 0, deltaMs, this.facing);
+      if (this.mode === 'airborne') emit('land', s.x, s.y, this.heading, 0, 0, s.facing);
       if (s.mode === 'dash') this.pendingDashStart = true;
       if (this.mode === 'dash') {
         if (this.dashMoved) emit('dashEnd', s.x, s.y, this.heading, 0, 0, s.facing);
@@ -119,6 +123,7 @@ export class MovementStepSampler {
       }
       this.remainder = Math.max(0, spacing - (along - distance));
     }
+    if (s.mode === 'airborne' && distance > 0.05) this.heading = Math.atan2(dy, dx);
     if (s.mode === 'idle' || s.mode === 'recovery') this.remainder = 0;
     this.x = s.x; this.y = s.y; this.mode = s.mode; this.revision = s.revision;
     this.facing = s.facing;

@@ -2095,6 +2095,8 @@ export interface SyncedEnemyState {
   shieldCharge?: import('./systems/ShieldChargeState').ShieldChargeState;
   /** Host-fixed energy cone (sector, cover profile, phase timeline); absent until the first cone. */
   energyCone?: import('./systems/EnergyConeState').EnergyConeState;
+  /** Host-fixed hop (jump timeline and heal links); absent until the first hop decision. */
+  hop?: import('./systems/EnemyHopState').EnemyHopState;
   entityGeneration?: number;
   positionRevision?: number;
   id:     string;
@@ -2134,6 +2136,8 @@ export interface SyncedEnemyDeltaState {
   shieldCharge?: import('./systems/ShieldChargeState').ShieldChargeState;
   /** Host-fixed energy cone (sector, cover profile, phase timeline); absent until the first cone. */
   energyCone?: import('./systems/EnergyConeState').EnergyConeState;
+  /** Host-fixed hop (jump timeline and heal links); absent until the first hop decision. */
+  hop?: import('./systems/EnemyHopState').EnemyHopState;
   entityGeneration?: number;
   positionRevision?: number;
   id:     string;

@@ -164,7 +164,7 @@ export class EnemyMeshShadowRenderer {
       if (!this.eligible(enemy)) continue;
       const mesh = this.assets.ready.get(enemy.kind); if (!mesh || this.prepared.get(enemy.kind) !== mesh.asset.poses.length) continue;
       const s = enemy.sprite, pose = enemyMeshPose(s.frame.name, mesh); if (pose < 0) continue;
-      enemyMeshMatrix(s, mesh.asset.coordinates.canvasWorldPx, this.matrix);
+      enemyMeshMatrix(s, mesh.asset.coordinates.canvasWorldPx, this.matrix, enemy.getHopLiftScale());
       enemyShadowBounds(mesh, this.matrix, this.sun, this.tileSize, this.bounds);
       const b = this.bounds;
       if (b[0] > view.right || b[1] > view.bottom || b[0] + b[2] < view.x || b[1] + b[3] < view.y) {

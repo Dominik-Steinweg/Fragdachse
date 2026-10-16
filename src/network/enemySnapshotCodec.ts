@@ -3,6 +3,7 @@ import { isEnemyClawState } from '../systems/EnemyClawAttack';
 import { readAreaClawState } from './krakenSnapshotCodec';
 import { isShieldChargeState, SHIELD_CHARGE_PHASES } from '../systems/ShieldChargeState';
 import { ENERGY_CONE_CLIP_QUANT, ENERGY_CONE_CLIP_RAYS, ENERGY_CONE_PHASES, isEnergyConeState } from '../systems/EnergyConeState';
+import { isEnemyHopState } from '../systems/EnemyHopState';
 /**
  * Kompakte (De-)Serialisierung des Gegner-Upsert-Stroms für {@link SyncedEnemySnapshot}.
  *
@@ -36,6 +37,8 @@ const LANE_ANGLE_QUANT = 10000;
 const FIELD_ELITE_AFFIX = 65536;
 /** Amphibious enemy under water (0/1); absent in full states means surfaced. */
 const FIELD_SUBMERGED = 131072;
+/** Host-fixed hop: revision, optional jump timeline (origin, target, four timestamps, shock), heal link ids. */
+const FIELD_HOP = 262144;
 // Codes 0–6 are deployed legacy values; append new actions without renumbering them.
 const SPECIAL_ACTIONS = ['none', 'gauss-charge', 'phase-nuke', 'armageddon', 'timebomb-chase',
   'timebomb-fuse', 'void-molotov-windup', 'kraken-ink', 'kraken-eggs', 'kraken-dive',
@@ -90,6 +93,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
   if (entry.specialAction !== undefined) mask |= FIELD_SPECIAL;
   if (entry.plasmaChargeStacks !== undefined) mask |= FIELD_PLASMA_CHARGE;
   if (entry.submerged !== undefined) mask |= FIELD_SUBMERGED;
+  if (entry.hop !== undefined) mask |= FIELD_HOP;
 
   out.push(enemyIdToNum(entry.id), mask);
   if (mask & FIELD_POS) out.push(entry.x as number, entry.y as number);
@@ -141,6 +145,13 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
   }
   if (mask & FIELD_ELITE_AFFIX) out.push(entry.eliteAffixId!);
   if (mask & FIELD_SUBMERGED) out.push(entry.submerged ? 1 : 0);
+  if (mask & FIELD_HOP) {
+    const state = entry.hop!, jump = state.jump;
+    out.push(state.revision, jump ? 1 : 0);
+    if (jump) out.push(jump.originX, jump.originY, jump.targetX, jump.targetY, jump.crouchAt, jump.takeoffAt,
+      jump.landAt, jump.settleUntil, jump.shock ? 1 : 0);
+    out.push(state.links.length, ...state.links.map(enemyIdToNum));
+  }
 }
 
 /** Dekodiert den flachen Zahlenstrom zurück in Delta-Objekte für die clientseitige Anwendung. */
@@ -233,6 +244,20 @@ export function decodeEnemyUpserts(stream: readonly (number | string)[]): Synced
       if (DAWN_ELITE_AFFIX_IDS.some(id => id === affix)) entry.eliteAffixId = affix as SyncedEnemyDeltaState['eliteAffixId'];
     }
     if (mask & FIELD_SUBMERGED) entry.submerged = (stream[i++] as number) === 1;
+    if (mask & FIELD_HOP) {
+      // Every value is consumed even for an invalid state, so later entries stay aligned.
+      const revision = stream[i++] as number, hasJump = stream[i++] as number;
+      const jump = hasJump ? {
+        originX: stream[i++] as number, originY: stream[i++] as number, targetX: stream[i++] as number, targetY: stream[i++] as number,
+        crouchAt: stream[i++] as number, takeoffAt: stream[i++] as number, landAt: stream[i++] as number,
+        settleUntil: stream[i++] as number, shock: (stream[i++] as number) === 1,
+      } : null;
+      const count = Math.max(0, Math.floor(Number(stream[i++]) || 0));
+      const links: string[] = [];
+      for (let link = 0; link < count; link++) links.push(enemyNumToId(stream[i++] as number));
+      const state = { revision, jump, links };
+      if (isEnemyHopState(state)) entry.hop = state;
+    }
     result.push(entry);
   }
   return result;

@@ -122,6 +122,20 @@ describe('distance-driven movement contacts', () => {
     sampler.advance(s, 16, sink); s.x += 20; sampler.advance(s, 16, sink);
     expect(events).not.toContain('dashStart');
   });
+
+  it('leaves no steps in flight and lands a hop exactly once', () => {
+    const sampler = new MovementStepSampler();
+    const s = { ...createMovementVisualSample(), visible: true, pawCount: 4 as const };
+    const events: string[] = [];
+    const sink: MovementContactSink = k => events.push(k);
+    sampler.advance(s, 16, sink);
+    s.mode = 'airborne';
+    for (let i = 0; i < 25; i++) { s.x += 4; sampler.advance(s, 16, sink); }
+    s.mode = 'idle'; sampler.advance(s, 16, sink); sampler.advance(s, 16, sink);
+    expect(events).not.toContain('step');
+    expect(events.filter(k => k === 'land')).toHaveLength(1);
+    expect(events.filter(k => k === 'dashStart')).toHaveLength(1);
+  });
 });
 
 it('budgets varied expiries, preserves player reserve and clears without growing', () => {
