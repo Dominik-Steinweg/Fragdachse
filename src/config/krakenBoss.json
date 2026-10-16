@@ -27,7 +27,7 @@
     "throwDistancePx": 640, "minimumShoreDistancePx": 128, "releaseSpacingMs": 100, "throwConeDegrees": 85, "presentationPreset": "fur_ball",
     "releaseOffsets": [{ "x": 64, "y": -60 }, { "x": 88, "y": -36 }, { "x": 100, "y": -12 }, { "x": 100, "y": 12 }, { "x": 88, "y": 36 }, { "x": 64, "y": 60 }],
     "targetableInFlight": false, "drops": false, "xp": 0, "necromancy": false, "countsForEncounter": false,
-    "broodTable": { "id": "kraken-melee-brood", "entries": [{ "enemyKind": "rabid-badger", "weight": 1 }] }
+    "broodTable": { "id": "kraken-melee-brood", "entries": [{ "enemyKind": "mini-kraken", "weight": 1 }] }
   },
   "victory": "boss-defeated", "death": { "waterMs": 1200, "landMs": 2600 },
   "residency": { "waterBudgetMiB": 165, "landBudgetMiB": 150, "pixelsPerDisplayPixel": 1, "landPrefetchHpRatio": 0.65 }

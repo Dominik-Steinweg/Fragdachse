@@ -7,6 +7,7 @@
  * Zielmengen mit; ein vollstaendiger Resync ist die Ausnahme.
  */
 import {
+  CELL_CODE,
   FlowFieldMinHeap,
   buildCostByCode,
   buildNeighborLookups,
@@ -31,6 +32,7 @@ import {
 } from './FlowFieldKernel';
 import {
   FLOW_FIELD_PROTOCOL_VERSION,
+  SWIM_COST_SCALE,
   type FlowFieldFieldDescriptor,
   type FlowFieldInitMessage,
   type FlowFieldJobMessage,
@@ -46,6 +48,7 @@ interface EngineProfile {
   readonly profileId: string;
   readonly clearanceCells: number;
   readonly bodyRadius?: number;
+  readonly swimCostRatio?: number;
   graph?: NavigationGraph;
   readonly topology: FlowFieldTopology;
   counts: FlowFieldTopologyCounts;
@@ -67,6 +70,7 @@ export class FlowFieldEngine {
   private readonly heap = new FlowFieldMinHeap();
   private generationId = -1;
   private geometry: NavigationGeometry | null = null;
+  private swimGeometry: { source: NavigationGeometry; geometry: NavigationGeometry } | null = null;
   private density: Float32Array | undefined;
 
   init(message: FlowFieldInitMessage): void {
@@ -95,6 +99,7 @@ export class FlowFieldEngine {
         profileId: descriptor.profileId,
         clearanceCells: descriptor.clearanceCells,
         bodyRadius: descriptor.bodyRadius,
+        ...(descriptor.swimCostRatio ? { swimCostRatio: descriptor.swimCostRatio } : {}),
         topology: createTopology(totalCells),
         counts: { traversableCells: 0, blockedCells: totalCells, countsByKind: createEmptyCounts() },
         pendingCells: new Set<number>(),
@@ -306,6 +311,12 @@ export class FlowFieldEngine {
     }
   }
 
+  private waterFreeGeometry(geometry: NavigationGeometry): NavigationGeometry {
+    if (this.swimGeometry?.source !== geometry) this.swimGeometry = { source: geometry, geometry: new NavigationGeometry({ ...geometry.snapshot,
+      obstacles: geometry.snapshot.obstacles.filter(obstacle => obstacle.kind !== 'water') }) };
+    return this.swimGeometry.geometry;
+  }
+
   private refreshTopologies(): void {
     const metrics = this.metrics!;
     const tuning = this.tuning!;
@@ -322,8 +333,8 @@ export class FlowFieldEngine {
           this.geometry ? 0 : profile.clearanceCells,
         );
         if (this.geometry) {
-          profile.graph = buildNavigationGraph(metrics, this.geometry, profile.bodyRadius ?? 15,
-            lookups, profile.topology);
+          profile.graph = buildNavigationGraph(metrics, profile.swimCostRatio ? this.waterFreeGeometry(this.geometry) : this.geometry,
+            profile.bodyRadius ?? 15, lookups, profile.topology);
           let traversableCells = 0;
           for (const free of profile.graph.traversable) traversableCells += free;
           profile.counts = { ...profile.counts, traversableCells, blockedCells: totalCellsOf(metrics) - traversableCells };
@@ -331,6 +342,15 @@ export class FlowFieldEngine {
           for (let i = 0; i < profile.topology.costs.length; i++) {
             if (profile.graph.traversable[i] && profile.topology.costs[i] > tuning.trackCost + tuning.wallAdjacentCost) {
               profile.topology.costs[i] = tuning.groundCost;
+            }
+          }
+          // Amphibious bodies: scale land so water (traversable in this graph) can cost less than a ground step.
+          if (profile.swimCostRatio) {
+            const water = Math.max(1, Math.round(SWIM_COST_SCALE * tuning.groundCost / profile.swimCostRatio));
+            for (let i = 0; i < profile.topology.costs.length; i++) {
+              if (!profile.graph.traversable[i]) continue;
+              profile.topology.costs[i] = profile.topology.kindCodes[i] === CELL_CODE.water ? water
+                : profile.topology.costs[i] * SWIM_COST_SCALE;
             }
           }
         }

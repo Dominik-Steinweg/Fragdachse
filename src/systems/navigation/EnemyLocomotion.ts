@@ -65,7 +65,7 @@ export class EnemyLocomotion {
   }
 
   solve(request: LocomotionRequest): MovementFeedback {
-    const { x, y, radius, speed, waypoint } = request, geometry = this.geometry;
+    const { x, y, radius, speed, waypoint } = request, geometry = request.geometry ?? this.geometry;
     const result = (vx: number, vy: number, waitReason: MovementFeedback['waitReason'], progress = 0, neighborsVisited = 0): MovementFeedback =>
       ({ vx, vy, waitReason, progress, neighborsVisited });
     if (!geometry || request.priority !== 'ordinary' || !waypoint) this.previous.delete(request.id);

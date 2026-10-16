@@ -95,7 +95,16 @@ export class EnemyEntity {
   }
   isOrdinaryMovementEnabled(): boolean { return !this.stationary && (!this.krakenMovement || this.krakenMovement === 'land'); }
   /** Water/exit positions are validated by the habitat owner; ordinary water separation must not move them. */
-  usesLandWaterCollision(): boolean { return !this.krakenMovement || this.krakenMovement === 'land'; }
+  usesLandWaterCollision(): boolean { return !this.config.amphibious && (!this.krakenMovement || this.krakenMovement === 'land'); }
+  isAmphibious(): boolean { return !!this.config.amphibious; }
+  isSubmerged(): boolean { return this.submerged; }
+  /** Under water an amphibious enemy is hidden and untargetable like a burrowed one (no dirt). True on change. */
+  setSubmerged(submerged: boolean): boolean {
+    if (this.submerged === submerged) return false;
+    this.submerged = submerged;
+    this.applyHiddenState();
+    return true;
+  }
   isKrakenLandBody(): boolean { return !!this.config.krakenBoss && this.krakenMovement === 'land'; }
   setKrakenBodyTargetability(state: import('../systems/KrakenState').KrakenState['bodyTargetability']): void {
     if (this.krakenTargetability && state.revision <= this.krakenTargetability.revision) return;
@@ -166,6 +175,7 @@ export class EnemyEntity {
   private lighting: LightingSystem | null = null;
   private moveSpeedMultiplier = 1;
   private burrowed = false;
+  private submerged = false;
   private dashPhase: 0 | 1 | 2 = 0;
   private pathBlocked = false;
   private specialAction: SyncedEnemyState['specialAction'] = 'none';
@@ -241,8 +251,20 @@ export class EnemyEntity {
   private shieldChargeAnimating = false;
 
   /** Charge clips follow the replicated host-fixed charge timeline (windup, run, recover). */
+  /** A leaping body rises towards the camera mid-run (pure presentation of the replicated lane). */
+  private leapLifted = false;
+  private syncLeapLift(now: number): void {
+    const lane = this.shieldCharge.lane;
+    const lift = this.config.shieldCharger?.style === 'leap' && this.shieldCharge.phase === 'run' && lane
+      ? Math.sin(Math.PI * Phaser.Math.Clamp((now - lane.runAt) / Math.max(1, lane.runEndsAt - lane.runAt), 0, 1)) : 0;
+    if (lift <= 0 && !this.leapLifted) return;
+    this.leapLifted = lift > 0;
+    this.sprite.setDisplaySize(this.getVisualSize() * (1 + .32 * lift), this.getVisualSize() * (1 + .32 * lift));
+  }
+
   syncShieldChargeAnimation(now: number): void {
     if (!this.config.shieldCharger) return;
+    this.syncLeapLift(now);
     const wasAnimating = this.shieldChargeAnimating;
     this.shieldChargeAnimating = syncEnemyShieldChargeAnimation(this.sprite, this.config.imageKey, this.shieldCharge, now,
       this.clawAnimating || !this.sprite.visible || this.burrowed || this.currentHp <= 0);
@@ -762,8 +784,9 @@ export class EnemyEntity {
     }
   }
 
+  /** Hidden from combat and targeting: burrowed underground or submerged in water. */
   isBurrowed(): boolean {
-    return this.burrowed;
+    return this.burrowed || this.submerged;
   }
 
   /**
@@ -774,13 +797,18 @@ export class EnemyEntity {
   setBurrowed(burrowed: boolean): boolean {
     if (this.burrowed === burrowed) return false;
     this.burrowed = burrowed;
-    this.sprite.setVisible(!burrowed);
-    this.ownerRing?.setVisible(!burrowed);
-    this.glowHalo?.setVisible(!burrowed);
-    this.healthBars?.suppress(this.healthBar, burrowed);
+    this.applyHiddenState();
+    return true;
+  }
+
+  private applyHiddenState(): void {
+    const hidden = this.burrowed || this.submerged;
+    this.sprite.setVisible(!hidden);
+    this.ownerRing?.setVisible(!hidden);
+    this.glowHalo?.setVisible(!hidden);
+    this.healthBars?.suppress(this.healthBar, hidden);
     this.syncWalkingAnimation();
     this.syncBar();
-    return true;
   }
 
   isBoss(): boolean {
@@ -950,6 +978,7 @@ export class EnemyEntity {
       plasmaChargeStacks: this.plasmaChargeStacks > 0 ? this.plasmaChargeStacks : undefined,
       faction: this.faction,
       burrowed: this.burrowed,
+      ...(this.submerged ? { submerged: true } : {}),
       dashPhase: this.dashPhase,
       specialAction: this.specialAction,
       specialActionEndsAt: this.specialActionEndsAt,

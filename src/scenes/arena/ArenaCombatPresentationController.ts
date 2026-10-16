@@ -14,6 +14,7 @@ type CombatRenderers = Pick<RendererBundle,
   | 'healthBars'
   | 'enemyEyes'
   | 'enemyVulnerability'
+  | 'amphibiousEnemies'
   | 'eliteMarkers'
   | 'enemyReadability'
   | 'beer'
@@ -99,6 +100,7 @@ export class ArenaCombatPresentationController {
     const auraEnemies = frame.inArena ? this.sources.getEnemyVisuals() : [];
     this.renderers.enemyEyes.sync(auraEnemies);
     this.renderers.enemyVulnerability.sync(auraEnemies);
+    this.renderers.amphibiousEnemies.sync(auraEnemies, now);
     this.renderers.eliteMarkers.sync(auraEnemies);
     this.renderers.enemyReadability.sync(auraEnemies);
     this.renderers.healthBars.update(frame.inArena);

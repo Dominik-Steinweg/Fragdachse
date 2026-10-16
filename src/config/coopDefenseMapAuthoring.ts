@@ -176,6 +176,10 @@ export interface CoopDefenseMapSpawnAreaConfig {
   readonly gridY: number;
   readonly widthCells: number;
   readonly heightCells: number;
+  /** `water`: amphibious enemies rise from fully wet cells of the area (submerged) instead of walkable ground. */
+  readonly medium?: 'ground' | 'water';
+  /** The group spawns as a tight pack around one seed cell instead of spread over the area. */
+  readonly cluster?: boolean;
 }
 
 /** Eine endliche Gegnergruppe innerhalb eines Encounters. */
@@ -873,6 +877,8 @@ export interface CoopDefenseMapConfig {
    * das Fenster in der Arenamitte auf der bisherigen Hoehe.
    */
   readonly tutorialAnchor?: CoopDefenseMapTutorialAnchorConfig;
+  /** Cosmetic herald of the abyssal kraken: a giant shadow with ember eyes glides under the water once. */
+  readonly abyssCameo?: CoopDefenseMapAbyssCameoConfig;
   /**
    * Gemeinsame Tutorial-Hinweise entlang der Route. Sie besitzen keine Gameplay-Autoritaet;
    * ihre Sichtbarkeit leitet sich aus den replizierten Checkpoint-Aktivierungen ab.
@@ -1312,6 +1318,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     bodyRadiusCells: krakenConfig ? krakenConfig.bodyRadiusPx / CELL_SIZE : undefined,
   });
   if (boss?.habitatId && boss.habitatId !== krakenHabitat?.id) throw new Error('[coopDefenseMaps] Unknown boss habitat');
+  validateWaterSpawnAreas(mapConfig.mapId, encounters, water);
   const tutorialSteps = normalizeTutorialSteps(
     mapConfig.mapId,
     mapConfig.tutorialSteps,
@@ -1340,6 +1347,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     rockField: normalizeRockFieldConfig(mapConfig.mapId, mapConfig.rockField),
     rockWalls,
     tutorialAnchor,
+    ...(mapConfig.abyssCameo === undefined ? {} : { abyssCameo: normalizeAbyssCameo(mapConfig.mapId, mapConfig.abyssCameo, water ?? []) }),
     water,
     krakenHabitat,
     tutorialSteps,
@@ -2590,12 +2598,38 @@ function normalizeSpawnArea(
     || area.gridY + area.heightCells > context.arenaHeightCells) {
     throw new Error(`[coopDefenseMaps] ${mapId}:${ownerId} has an out-of-bounds spawnArea`);
   }
+  if (area.medium !== undefined && area.medium !== 'ground' && area.medium !== 'water') {
+    throw new Error(`[coopDefenseMaps] ${mapId}:${ownerId} has an unknown spawnArea medium`);
+  }
+  if (area.cluster !== undefined && typeof area.cluster !== 'boolean') {
+    throw new Error(`[coopDefenseMaps] ${mapId}:${ownerId} has an invalid spawnArea cluster flag`);
+  }
   return {
     gridX: area.gridX,
     gridY: area.gridY,
     widthCells: area.widthCells,
     heightCells: area.heightCells,
+    ...(area.medium === 'water' ? { medium: 'water' as const } : {}),
+    ...(area.cluster ? { cluster: true } : {}),
   };
+}
+
+/** Water spawn areas are checked once the water layout is known: only amphibious kinds, and the area must hold water. */
+function validateWaterSpawnAreas(mapId: string, encounters: readonly CoopDefenseMapEncounterConfig[] | undefined,
+  water: readonly { gridX: number; gridY: number }[] | undefined): void {
+  const wet = new Set((water ?? []).map(cell => `${cell.gridX},${cell.gridY}`));
+  for (const encounter of encounters ?? []) for (const group of encounter.groups) {
+    const area = group.spawnArea;
+    if (area?.medium !== 'water') continue;
+    if (!getCoopDefenseEnemyConfig(group.enemyKind).amphibious) {
+      throw new Error(`[coopDefenseMaps] ${mapId}:${encounter.id} spawns non-amphibious ${group.enemyKind} from water`);
+    }
+    let found = false;
+    for (let y = area.gridY; y < area.gridY + area.heightCells && !found; y++) {
+      for (let x = area.gridX; x < area.gridX + area.widthCells && !found; x++) found = wet.has(`${x},${y}`);
+    }
+    if (!found) throw new Error(`[coopDefenseMaps] ${mapId}:${encounter.id} has a water spawnArea without water`);
+  }
 }
 
 function normalizeSpawnFront(mapId: string, ownerId: string, value: SpawnFront | undefined): SpawnFront {
@@ -3621,6 +3655,25 @@ function normalizeRockWallConfigs(
       heightCells: wall.heightCells,
     };
   });
+}
+
+/** Mission-time cue (all peers derive it from the shared clock) along a straight path over water. */
+export interface CoopDefenseMapAbyssCameoConfig {
+  readonly atMs: number;
+  readonly durationMs: number;
+  readonly from: { readonly gridX: number; readonly gridY: number };
+  readonly to: { readonly gridX: number; readonly gridY: number };
+}
+
+function normalizeAbyssCameo(mapId: string, cameo: CoopDefenseMapAbyssCameoConfig,
+  water: readonly { gridX: number; gridY: number }[]): CoopDefenseMapAbyssCameoConfig {
+  const wet = new Set(water.map(cell => `${cell.gridX},${cell.gridY}`));
+  if (![cameo.atMs, cameo.durationMs].every(v => Number.isFinite(v) && v >= 0) || cameo.durationMs < 1000
+    || ![cameo.from, cameo.to].every(p => p && Number.isInteger(p.gridX) && Number.isInteger(p.gridY) && wet.has(`${p.gridX},${p.gridY}`))) {
+    throw new Error(`[coopDefenseMaps] ${mapId} has an invalid abyssCameo (path ends must lie in water)`);
+  }
+  return { atMs: Math.floor(cameo.atMs), durationMs: Math.floor(cameo.durationMs),
+    from: { gridX: cameo.from.gridX, gridY: cameo.from.gridY }, to: { gridX: cameo.to.gridX, gridY: cameo.to.gridY } };
 }
 
 function normalizeTutorialAnchor(

@@ -30,8 +30,16 @@ import type { TranslocatorProjectilePort } from '../projectile/ProjectileExterna
 import type { ProjectileThreatReadPort } from '../projectile/ProjectileReadPorts';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 
+/** Host damage of enemy abilities that outlive or sweep past their source. */
+export interface EnemyAreaEffectsPort {
+  deathBurst(enemyId: string, x: number, y: number, burst: import('../config/coopDefenseEnemies').CoopDefenseEnemyDeathBurstConfig, nowMs: number): void;
+  sweepBases(enemyId: string, ax: number, ay: number, bx: number, by: number, radius: number, damage: number, nowMs: number): void;
+}
+
 export interface CoopMissionEnemyBehaviourCompositionOptions {
   readonly playerManager: PlayerManager;
+  readonly enemyAreaEffects?: EnemyAreaEffectsPort;
+  readonly getNowMs?: () => number;
   readonly projectileSpawn: ProjectileSpawnPort;
   readonly projectileThreatReadPort: ProjectileThreatReadPort;
   readonly translocatorProjectilePort: TranslocatorProjectilePort;
@@ -203,6 +211,7 @@ export class CoopMissionEnemyBehaviourComposition {
         },
         strike: (targetId, chargerId, damage, x, y, now) => combat.resolveChargeContact?.(targetId, chargerId, damage, x, y, now) ?? false,
         knockback: (targetId, vx, vy, durationMs, sourceId) => this.options.hostPhysics.addRecoil(targetId, vx, vy, durationMs, sourceId),
+        structureSweep: (enemy, ax, ay, bx, by, radius, damage, now) => this.options.enemyAreaEffects?.sweepBases(enemy.id, ax, ay, bx, by, radius, damage, now),
       }));
       runtime.setEnergyCone(new CoopDefenseEnergyConeSystem({
         enemies: enemyManager,

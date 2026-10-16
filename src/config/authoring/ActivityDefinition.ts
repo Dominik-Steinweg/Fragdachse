@@ -79,6 +79,8 @@ export interface CoopMissionDefinition {
   readonly itemDrop?: CoopDefenseMapItemDropConfig;
   /** Rein visuelle kanonische Persistent-Base-Vorschau innerhalb dieser Activity. */
   readonly persistentBasePreview?: CoopDefenseMapPersistentBasePreviewConfig;
+  /** Cosmetic herald of the abyssal kraken (mission-time cue). */
+  readonly abyssCameo?: import('../coopDefenseMapAuthoring').CoopDefenseMapAbyssCameoConfig;
   /** Respawn-Verzoegerung nach Missionszeit (z. B. nachts laenger). */
   readonly respawnDelaySchedule?: readonly import('../coopDefenseMapAuthoring').CoopDefenseMapRespawnDelayStep[];
 

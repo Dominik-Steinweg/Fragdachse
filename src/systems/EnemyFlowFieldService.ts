@@ -275,7 +275,7 @@ export class EnemyFlowFieldService {
       if (!this.isInBounds(gx, gy)) continue;
       const index = this.toIndex(gx, gy), point = navigationPoint(this.view.metrics, index);
       if (!snapshot.profileTraversable?.[index]) continue;
-      const cost = snapshot.integrationField[index] + Math.hypot(x - point.x, y - point.y) * this.view.tuning.groundCost;
+      const cost = snapshot.integrationField[index] + Math.hypot(x - point.x, y - point.y) * this.view.tuning.groundCost * (this.view.costScale ?? 1);
       // Once a safe connection exists, a more expensive connection cannot improve the result.
       if (best >= 0 && cost >= bestCost) continue;
       if (!geometry.canMove(x, y, point.x, point.y, radius)) continue;

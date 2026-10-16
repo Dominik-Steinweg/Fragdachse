@@ -1013,6 +1013,70 @@
         "arrivalRadiusPx": 24,
         "scrapPickupDefId": "dawn_scrap_3"
       }
+    },
+    {
+      "id": "mini-kraken",
+      "eyeGlow": {
+        "color": 16730652
+      },
+      "pawCount": 4,
+      "maxHp": 45,
+      "xp": 4,
+      "size": 24,
+      "moveSpeed": 150,
+      "knockbackFactor": 1.2,
+      "turnRateDegPerSec": 420,
+      "movementTarget": "bases",
+      "amphibious": {
+        "swimSpeedFactor": 1.6
+      },
+      "engage": {
+        "enterPx": 260,
+        "exitPx": 380,
+        "minDwellMs": 1200
+      },
+      "weapons": [
+        {
+          "weaponId": "MINI_KRAKEN_INK",
+          "targetMode": "all",
+          "meleeTiming": {
+            "hitDelayMs": 350,
+            "strikeMs": 90,
+            "recoveryMs": 260
+          }
+        }
+      ],
+      "shieldCharger": {
+        "style": "leap",
+        "shieldArcDegrees": 0,
+        "structureDamageMult": 0.5,
+        "triggerMinDistancePx": 110,
+        "triggerMaxDistancePx": 280,
+        "alignToleranceDegrees": 30,
+        "windupMs": 450,
+        "runSpeedPx": 1100,
+        "overshootPx": 40,
+        "maxRunPx": 320,
+        "recoverMs": 420,
+        "cooldownMs": 3500,
+        "cancelLockoutMs": 1200,
+        "windupDisplacementCancelPx": 24,
+        "hitDamage": 18,
+        "hitKnockbackSpeed": 380,
+        "hitKnockbackMs": 180
+      },
+      "deathBurst": {
+        "radiusPx": 70,
+        "damage": 20,
+        "structureDamageMult": 0.5
+      },
+      "attackScanIntervalMs": 200,
+      "attackStopDurationMs": 100,
+      "obstacleAttackDelayMs": 500,
+      "imageKey": "enemy_rabid_badger",
+      "playerScaling": {
+        "maxHpFactorPerAdditionalPlayer": 0.8
+      }
     }
   ]
 }

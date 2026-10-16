@@ -2112,6 +2112,8 @@ export interface SyncedEnemyState {
   faction: 'hostile' | 'allied';
   /** True: Gegner ist eingebuddelt (unverwundbar, ohne Kollisionen, unsichtbar bis auf Buddel-Partikel). */
   burrowed: boolean;
+  /** Amphibious enemy under water: invisible and untargetable; only its wake and eyes show. */
+  submerged?: boolean;
   /** Ausweichschritt-Phase, identisch zum Spieler-Dash: 0 = keiner, 1 = Burst, 2 = Recovery. */
   dashPhase: 0 | 1 | 2;
   /** Replizierte Boss-Spezialaktion; `none` löscht einen zuvor sichtbaren Zustand. */
@@ -2146,6 +2148,7 @@ export interface SyncedEnemyDeltaState {
   plasmaChargeStacks?: number;
   faction?: 'hostile' | 'allied';
   burrowed?: boolean;
+  submerged?: boolean;
   dashPhase?: 0 | 1 | 2;
   specialAction?: SyncedEnemyState['specialAction'];
   specialActionEndsAt?: number;

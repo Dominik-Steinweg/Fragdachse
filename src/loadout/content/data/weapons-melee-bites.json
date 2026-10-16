@@ -100,6 +100,17 @@
       "baseId": "ZOMBIE_BADGER_BITE",
       "_notes": "Bewusst gekoppelte Variante der bereits zuvor gemeinsam erzeugten Gegnerbiss-Familie."
     },
+    "MINI_KRAKEN_INK": {
+      "id": "MINI_KRAKEN_INK",
+      "cooldown": 900,
+      "damage": 12,
+      "range": 70,
+      "fire": {
+        "hitArcDegrees": 70
+      },
+      "baseId": "ZOMBIE_BADGER_BITE",
+      "_notes": "Mini-Kraken: kurzer Tintenkegel im Nahkampf, trifft Spieler, Basis, Felsen und Zug."
+    },
     "ALIEN_BADGER_BITE": {
       "id": "ALIEN_BADGER_BITE",
       "cooldown": 500,

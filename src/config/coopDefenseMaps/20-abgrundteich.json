@@ -1960,10 +1960,17 @@
           "front": "west"
         },
         {
-          "enemyKind": "rabid-badger",
+          "enemyKind": "mini-kraken",
           "count": 3,
           "delayMs": 900,
-          "front": "east"
+          "spawnArea": {
+            "gridX": 40,
+            "gridY": 17,
+            "widthCells": 7,
+            "heightCells": 10,
+            "medium": "water",
+            "cluster": true
+          }
         }
       ]
     },
@@ -1980,10 +1987,17 @@
           "front": "west"
         },
         {
-          "enemyKind": "rabid-badger",
-          "count": 2,
+          "enemyKind": "mini-kraken",
+          "count": 3,
           "delayMs": 1200,
-          "front": "east"
+          "spawnArea": {
+            "gridX": 40,
+            "gridY": 17,
+            "widthCells": 7,
+            "heightCells": 10,
+            "medium": "water",
+            "cluster": true
+          }
         }
       ]
     },
@@ -2015,9 +2029,16 @@
       },
       "groups": [
         {
-          "enemyKind": "rabid-badger",
+          "enemyKind": "mini-kraken",
           "count": 4,
-          "front": "west"
+          "spawnArea": {
+            "gridX": 24,
+            "gridY": 17,
+            "widthCells": 7,
+            "heightCells": 10,
+            "medium": "water",
+            "cluster": true
+          }
         },
         {
           "enemyKind": "demon-badger",

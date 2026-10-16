@@ -1,4 +1,4 @@
-import type { NavigationPoint } from './NavigationGeometry';
+import type { NavigationGeometry, NavigationPoint } from './NavigationGeometry';
 import type { EnemyAiTargetRef } from '../EnemyAiTargetCatalog';
 
 export interface NavigationVersion { readonly generation: number; readonly topology: number; readonly goal: number; readonly profile: string }
@@ -23,6 +23,8 @@ export interface LocomotionRequest {
   readonly priority: 'ordinary' | 'attack' | 'exclusive';
   readonly previousVx: number; readonly previousVy: number;
   readonly routeCost?: number;
+  /** Geometry the body collides with when it differs from the shared frame geometry (amphibious bodies). */
+  readonly geometry?: NavigationGeometry;
 }
 export interface MovementFeedback {
   readonly vx: number; readonly vy: number;

@@ -28,6 +28,7 @@ import { AsmdPrimaryRenderer } from './AsmdPrimaryRenderer';
 import { PlasmaBurnerRenderer } from './PlasmaBurnerRenderer';
 import { BiteRenderer } from './BiteRenderer';
 import { EnemyClawRenderer } from './EnemyClawRenderer';
+import type { MiniKrakenInkRenderer } from './MiniKrakenInkRenderer';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { EnemyVisualSink } from '../entities/EnemyManager';
 import { SpawnEffectRenderer } from './SpawnEffectRenderer';
@@ -149,6 +150,8 @@ export class EffectSystem implements EnemyVisualSink {
   private plasmaBurnerRenderer: PlasmaBurnerRenderer | null = null;
   private biteRenderer: BiteRenderer | null = null;
   private enemyClawRenderer: EnemyClawRenderer | null = null;
+  private miniKrakenInk: MiniKrakenInkRenderer | null = null;
+  private miniKrakenInkState: 'idle' | 'loading' | 'destroyed' = 'idle';
 
   syncEnemyClaw(id: string, state: import('../systems/EnemyClawAttack').EnemyClawState, x: number, y: number, now: number, visible: boolean, alliedColor?: number): void {
     if (state.attack) this.enemyClawRenderer ??= new EnemyClawRenderer(this.scene);
@@ -295,6 +298,18 @@ export class EffectSystem implements EnemyVisualSink {
     this.playerDeathResolver = resolver;
   }
 
+  /** The kraken FX stack loads with the first ink spit; maps without Mini-Kraken never touch it. */
+  private spitMiniKrakenInk(x: number, y: number, angle: number, range: number, arc: number): void {
+    if (this.miniKrakenInk) { this.miniKrakenInk.spit(x, y, angle, range, arc); return; }
+    if (this.miniKrakenInkState !== 'idle') return;
+    this.miniKrakenInkState = 'loading';
+    void import('./MiniKrakenInkRenderer').then(({ MiniKrakenInkRenderer }) => {
+      if (this.miniKrakenInkState !== 'loading') return;
+      this.miniKrakenInk = new MiniKrakenInkRenderer(this.scene);
+      this.miniKrakenInk.spit(x, y, angle, range, arc);
+    });
+  }
+
   playLocalShotAudio(key: string | undefined): void {
     this.audioSystem?.playLocalSound(key);
   }
@@ -303,6 +318,7 @@ export class EffectSystem implements EnemyVisualSink {
     this.clearSpawnEffects();
     this.spawnEffectRenderer = null;
     this.enemyClawRenderer?.destroy(); this.enemyClawRenderer = null;
+    this.miniKrakenInk?.destroy(); this.miniKrakenInk = null; this.miniKrakenInkState = 'destroyed';
     this.xpTextRenderer?.destroy();
     this.xpTextRenderer = null;
     this.clearHolyExplosions();
@@ -1694,6 +1710,12 @@ export class EffectSystem implements EnemyVisualSink {
 
     this.audioSystem?.playSound(swing.shotAudioKey, swing.x, swing.y, swing.shooterId);
 
+    if (swing.visualPreset === 'enemy_claw' && swing.weaponSourceId === 'MINI_KRAKEN_INK') {
+      // A melee ink spit: a small version of the boss ink cloud instead of claw slashes.
+      this.spitMiniKrakenInk(swing.x, swing.y, swing.angle, swing.range * 1.35, swing.arcDegrees);
+      this.groundFogCombat?.melee(swing.x, swing.y, swing.angle, swing.arcDegrees, swing.range, swing.weaponSourceId);
+      return;
+    }
     if (swing.visualPreset === 'enemy_claw') {
       this.enemyClawRenderer ??= new EnemyClawRenderer(this.scene);
       this.enemyClawRenderer.confirm(swing);

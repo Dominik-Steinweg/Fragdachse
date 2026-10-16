@@ -14,6 +14,7 @@ import type { CameraFeedbackController } from '../../effects/camera/CameraFeedba
 import { KrakenEggFlightView, KrakenRenderer, KrakenSpineFlightView, type KrakenPresentationAssets } from '../../effects/kraken/KrakenRenderer';
 import { KrakenIntroRenderer } from '../../effects/kraken/KrakenIntroRenderer';
 import { KrakenPondVoid } from '../../effects/kraken/KrakenPondVoid';
+import { AbyssCameoRenderer } from '../../effects/kraken/AbyssCameoRenderer';
 import { KRAKEN_RISE_INTRO } from '../../config/bossIntros';
 import { KRAKEN_BOSS_DEFAULTS } from '../../config/krakenBoss';
 import * as Phaser from 'phaser';
@@ -79,6 +80,7 @@ export class CoopMissionPresentationInfrastructure {
   /** Abyss pond grade and glow driven by the kraken intro; transient presentation only. */
   private krakenPondVoid: KrakenPondVoid | null = null;
   private krakenStage = 0;
+  private abyssCameo: AbyssCameoRenderer | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.objectiveAnnouncements = new CoopDefenseObjectiveAnnouncement(scene);
@@ -355,6 +357,11 @@ export class CoopMissionPresentationInfrastructure {
               fuseProgress: e.getSpecialAction() === 'timebomb-fuse' ? e.getTimebombFuseProgress() : undefined,
             }))), this.scene.time.now);
         },
+        syncAbyssCameo: (config, elapsedMs) => {
+          if (this.destroyed) return;
+          if (config && !this.abyssCameo) this.abyssCameo = new AbyssCameoRenderer(this.scene);
+          this.abyssCameo?.sync(config, elapsedMs, input.getWorldMetrics?.() ?? null);
+        },
         syncBossIntro: (state, now) => {
           if (this.destroyed) return;
           if (state?.preset === 'kraken-rise' && now >= state.startedAtMs
@@ -451,6 +458,7 @@ export class CoopMissionPresentationInfrastructure {
     this.releaseKrakenProjectiles?.(); this.releaseKrakenProjectiles = null;
     this.kraken?.destroy(); this.kraken = null; this.krakenIntro?.destroy(); this.krakenIntro = null;
     this.krakenPondVoid?.destroy(); this.krakenPondVoid = null;
+    this.abyssCameo?.destroy(); this.abyssCameo = null;
     this.krakenResidency?.destroy(); this.krakenResidency = null;
     input.renderers.beer.syncCoopDefenseCarry([]);
     input.clientUpdate.resetEnemyDashVisuals();
@@ -474,7 +482,7 @@ export class CoopMissionPresentationInfrastructure {
     input.renderers.bossPresence.clear();
     input.renderers.voidHunterSparks.clear();
     input.renderers.voidRift.clear();
-    this.kraken?.clear(); this.krakenIntro?.clear(); this.krakenPondVoid?.clear(); this.krakenResidency?.setPhase('dead'); this.krakenStage = 0;
+    this.kraken?.clear(); this.krakenIntro?.clear(); this.krakenPondVoid?.clear(); this.krakenResidency?.setPhase('dead'); this.krakenStage = 0; this.abyssCameo?.hide();
     input.renderers.voidMeteorIntro.clear();
     this.announcedBossIntroKey = null;
     input.renderers.markers.releaseRound();

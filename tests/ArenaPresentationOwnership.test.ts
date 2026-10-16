@@ -153,6 +153,7 @@ function makeCombatController() {
     healthBars: { update: vi.fn() },
     enemyEyes: { sync: vi.fn() },
     enemyVulnerability: { sync: vi.fn() },
+    amphibiousEnemies: { sync: vi.fn() },
     enemyReadability: { sync: vi.fn() },
     eliteMarkers: { sync: vi.fn() },
     beer: { update: vi.fn() },

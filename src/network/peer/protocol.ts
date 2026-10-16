@@ -25,7 +25,9 @@
 // Inspector ultimates: holo deployments (fc kind 2), required bq bomber squadron slice and
 // per-frame batched fcfx burst arrays with World revision.
 // Bomber flight: seeded curves, replicated aim offsets/angles and extended bq plan parameters.
-export const PEER_PROTOCOL_VERSION = 36;
+// Mini-Kraken: appended enemy kind (shifts the kraken boss/egg indices), submerged snapshot field
+// and leap style on the shared charge lane; amphibious flow-field profiles.
+export const PEER_PROTOCOL_VERSION = 37;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

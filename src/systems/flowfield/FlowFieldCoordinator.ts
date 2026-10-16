@@ -38,6 +38,7 @@ import {
 import { FlowFieldEngine } from './FlowFieldEngine';
 import {
   FLOW_FIELD_PROTOCOL_VERSION,
+  SWIM_COST_SCALE,
   type FlowFieldFieldDescriptor,
   type FlowFieldGoalMode,
   type FlowFieldJobField,
@@ -86,7 +87,10 @@ export interface FlowFieldFieldView {
   readonly lookups: FlowFieldNeighborLookups;
   readonly profileId: string;
   readonly bodyRadius: number;
+  /** Integration costs per pixel of ground (amphibious profiles scale every cost). Default 1. */
+  readonly costScale?: number;
   version(): { generation: number; topology: number; goal: number; profile: string };
+  /** The geometry the body of this field collides with: an amphibious field ignores water. */
   geometry(): NavigationGeometry | null;
   /**
    * Topologie fuer dieses Feld. Basis sind immer die Spiegelarrays des Standardprofils; ein
@@ -124,6 +128,8 @@ export interface FlowFieldFieldOptions {
   readonly goalMode: FlowFieldGoalMode;
   readonly clearanceCells?: number;
   readonly bodyRadius?: number;
+  /** Amphibious body (exact geometry only): swims through water, costed land/ratio. */
+  readonly swimCostRatio?: number;
   /** Nav-Ticks zwischen zwei Dispatches dieses Feldes. 1 = jeder Tick. */
   readonly tickDivisor?: number;
 }
@@ -241,6 +247,8 @@ export class FlowFieldCoordinator {
   private readonly geometryProvider?: () => NavigationGeometrySnapshot;
   private geometryCache: NavigationGeometry | null = null;
   private geometryDirty = true;
+  private swimGeometrySource: NavigationGeometry | null = null;
+  private swimGeometryCache: NavigationGeometry | null = null;
   private readonly suppressedGoalIndexes = new Set<number>();
 
   private runner: FlowFieldRunner;
@@ -315,9 +323,11 @@ export class FlowFieldCoordinator {
     if (this.fields.has(fieldId)) throw new Error(`Duplicate navigation field: ${fieldId}`);
     const clearanceCells = Math.max(0, Math.floor(options.clearanceCells ?? 0));
     const bodyRadius = this.geometryProvider ? options.bodyRadius ?? 15 + clearanceCells * 32 : undefined;
-    const profileId = bodyRadius === undefined ? profileIdFor(clearanceCells) : `body:${bodyRadius}`;
+    const swimCostRatio = bodyRadius !== undefined && options.swimCostRatio ? options.swimCostRatio : undefined;
+    const profileId = bodyRadius === undefined ? profileIdFor(clearanceCells)
+      : swimCostRatio ? `body:${bodyRadius}:swim${swimCostRatio}` : `body:${bodyRadius}`;
     if (!this.profiles.has(profileId)) {
-      const profile = { profileId, clearanceCells, bodyRadius };
+      const profile = { profileId, clearanceCells, bodyRadius, ...(swimCostRatio ? { swimCostRatio } : {}) };
       this.profiles.set(profileId, profile);
       if (this.initialized) this.pendingPatches.push({ t: 'profile-add', profile });
     }
@@ -426,6 +436,18 @@ export class FlowFieldCoordinator {
       }
     }
     return this.geometryCache;
+  }
+
+  /** The same world without water: what an amphibious body collides with (cached per geometry snapshot). */
+  getSwimGeometry(): NavigationGeometry | null {
+    const geometry = this.getGeometry();
+    if (!geometry) return null;
+    if (this.swimGeometrySource !== geometry) {
+      this.swimGeometrySource = geometry;
+      this.swimGeometryCache = new NavigationGeometry({ ...geometry.snapshot,
+        obstacles: geometry.snapshot.obstacles.filter(obstacle => obstacle.kind !== 'water') });
+    }
+    return this.swimGeometryCache;
   }
 
   /** Einzelzellenereignis mit Koordinate: der haeufige Fall, O(9) im Spiegel. */
@@ -934,9 +956,10 @@ export class FlowFieldCoordinator {
       lookups: this.lookups,
       profileId: field.descriptor.profileId,
       bodyRadius: this.profiles.get(field.descriptor.profileId)?.bodyRadius ?? 0,
+      costScale: this.profiles.get(field.descriptor.profileId)?.swimCostRatio ? SWIM_COST_SCALE : 1,
       version: () => ({ generation: this.generationId, topology: this.topologyVersion,
         goal: field.goalVersion + (!sameIndexes(field.dispatchedGoals, field.rawGoals) ? 1 : 0), profile: field.descriptor.profileId }),
-      geometry: () => this.getGeometry(),
+      geometry: () => this.profiles.get(field.descriptor.profileId)?.swimCostRatio ? this.getSwimGeometry() : this.getGeometry(),
       topology: () => {
         const profileTraversable = field.activeSnapshot?.profileTraversable ?? null;
         if (profileTraversable === null) return this.topology;

@@ -180,6 +180,11 @@ export class EnemyManager {
   private dawnElites: DawnEliteSpawnContext | null = null;
   private eliteExplosion: ((id: string, x: number, y: number, effect: ProjectileExplosionConfig) => void) | null = null;
   private readonly eliteShields = new Set<EnemyEntity>();
+  private deathBurst: ((id: string, x: number, y: number, burst: import('../config/coopDefenseEnemies').CoopDefenseEnemyDeathBurstConfig) => void) | null = null;
+  /** Host: authored death bursts (area damage at the death position) are applied by the Activity owner. */
+  bindDeathBurst(apply: (id: string, x: number, y: number, burst: import('../config/coopDefenseEnemies').CoopDefenseEnemyDeathBurstConfig) => void): void {
+    this.deathBurst = apply;
+  }
 
   /** Bound only by the host's Dawn Activity composition, before its first spawn. */
   bindDawnElites(context: DawnEliteSpawnContext,
@@ -223,9 +228,11 @@ export class EnemyManager {
     aimAngle?: number, priority: 'ordinary' | 'attack' = 'ordinary'): MovementFeedback {
     const previous = enemy.getDesiredVelocity();
     const navigation = this.intents?.get(enemy.id)?.navigation;
+    // An amphibious body steers against the world without water (its intent field carries that geometry).
+    const geometry = enemy.isAmphibious() ? this.intents?.getField(enemy.id)?.getNavigationGeometry() ?? undefined : undefined;
     const result = this.locomotion.solve({ id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y,
       radius: enemy.getSize() / 2, speed, waypoint, priority, previousVx: previous.vx, previousVy: previous.vy,
-      routeCost: navigation?.status === 'ready' ? navigation.cost : undefined });
+      routeCost: navigation?.status === 'ready' ? navigation.cost : undefined, geometry });
     this.movementFeedback.set(enemy.id, result);
     enemy.setDesiredVelocity(result.vx, result.vy, this.movementNow, aimAngle,
       result.waitReason === 'none' ? 'locomotion' : 'immediate');
@@ -380,6 +387,7 @@ export class EnemyManager {
 
   private waterGeometry: WaterGeometry | null = null;
   setWaterGeometry(water: WaterGeometry | null): void { this.waterGeometry = water; }
+  getWaterGeometry(): WaterGeometry | null { return this.waterGeometry; }
 
   /** Reicht die scene-lifetime Beleuchtung an neue und bestehende Gegner durch. */
   setLightingSystem(lighting: LightingSystem | null): void {
@@ -434,6 +442,13 @@ export class EnemyManager {
     sink.playBurrowPhaseEffect(enemy.sprite.x, enemy.sprite.y, burrowed ? 'windup' : 'recovery');
     if (burrowed) sink.syncBurrowState(enemyId, 'underground', enemy.sprite);
     else sink.clearBurrowState(enemyId);
+  }
+
+  /** Host: an amphibious body dives once it is (almost) fully over water and surfaces once it is (almost) dry. */
+  private updateSubmerged(enemy: EnemyEntity): void {
+    const share = this.waterGeometry?.wetShare(enemy.sprite.x, enemy.sprite.y, enemy.getSize() / 2) ?? 0;
+    if (!enemy.isSubmerged() && share >= .8) enemy.setSubmerged(true);
+    else if (enemy.isSubmerged() && share <= .2) enemy.setSubmerged(false);
   }
 
   hostSpawnDummyAt(
@@ -506,7 +521,7 @@ export class EnemyManager {
     habitatPermit?: import('../systems/KrakenState').KrakenHabitatReservation,
   ): EnemyEntity {
     if (this.resolvedConfigs[kind].krakenBoss && !habitatPermit) throw new Error('Kraken requires a validated habitat spawn');
-    if (this.waterGeometry && !habitatPermit) {
+    if (this.waterGeometry && !habitatPermit && !this.resolvedConfigs[kind].amphibious) {
       const dry = this.waterGeometry.resolveDryPoint(x, y, this.resolvedConfigs[kind].size * .5);
       if (!dry) throw new Error('[EnemyManager] No dry ground available for enemy spawn');
       x = dry.x; y = dry.y;
@@ -531,6 +546,8 @@ export class EnemyManager {
     enemy.setEntityBurnGpuController(this.burnGpu);
     enemy.setHealthBarRenderer(this.healthBars);
     this.enemies.set(id, enemy);
+    // An amphibious unit spawned in water starts submerged, so the first replicated state already hides it.
+    if (this.resolvedConfigs[kind].amphibious && (this.waterGeometry?.wetShare(x, y, this.resolvedConfigs[kind].size / 2) ?? 0) >= .8) enemy.setSubmerged(true);
     if (enemy.eliteAffixId === 'shielding') this.eliteShields.add(enemy);
     this.registerCombatTarget(id, this.nextEnemyGeneration++);
     this.playSpawnEffect(enemy, options);
@@ -602,6 +619,7 @@ export class EnemyManager {
       // Observational only. Obstacle damage requires a separate, current breach authorization.
       enemy.setPathBlocked(false);
       const config = this.resolvedConfigs[enemy.kind];
+      if (config.amphibious) this.updateSubmerged(enemy);
       if (!enemy.isOrdinaryMovementEnabled()) {
         enemy.applyKrakenMovement(); enemy.stopMovement(); continue;
       }
@@ -755,7 +773,8 @@ export class EnemyManager {
       }
       // Embedded starts use overlap-reducing local recovery, never an arbitrary reachable-cell jump.
       if (route.status === 'invalid-start') waypoint = { x: enemy.sprite.x + 1, y: enemy.sprite.y };
-      const feedback = this.moveNormally(enemy, waypoint, enemy.getMoveSpeed() * burrowSpeedFactor * attackMovementFactor,
+      const swimFactor = enemy.isSubmerged() ? config.amphibious?.swimSpeedFactor ?? 1 : 1;
+      const feedback = this.moveNormally(enemy, waypoint, enemy.getMoveSpeed() * burrowSpeedFactor * attackMovementFactor * swimFactor,
         combatMovement?.aimAngle);
       const train = activeTrainAwareness?.resolveMovement(enemy, feedback.vx, feedback.vy, now);
       if (train?.override) enemy.setDesiredVelocity(train.vx, train.vy, now);
@@ -1275,6 +1294,11 @@ export class EnemyManager {
         this.eliteExplosion?.(id, deathX, deathY, eliteExplosion);
         if (!isCurrent()) return;
       }
+      const burst = this.resolvedConfigs[enemy.kind]?.deathBurst;
+      if (burst && enemy.faction === 'hostile') {
+        this.deathBurst?.(id, deathX, deathY, burst);
+        if (!isCurrent()) return;
+      }
       // A scavenger kill listener may also end the scope; ordinary deaths keep the authored spawn order.
       const scavenger = enemy.kind === DAWN_SCAVENGER_KIND && enemy.faction === 'hostile';
       this.publishScavengerOutcome(enemy, 'killed', deathX, deathY);
@@ -1404,7 +1428,7 @@ export class EnemyManager {
   }
 
   destroy(): void {
-    this.dawnElites = null; this.eliteExplosion = null; this.eliteShields.clear();
+    this.dawnElites = null; this.eliteExplosion = null; this.eliteShields.clear(); this.deathBurst = null;
     this.scavengerListeners.clear();
     this.pendingClawEvents.clear();
     this.pendingAreaClawEvents.clear(); this.krakenProjectionRevisions.clear();
@@ -1464,6 +1488,7 @@ export class EnemyManager {
       plasmaChargeStacks: snapshot.plasmaChargeStacks ?? 0,
       faction: snapshot.faction,
       burrowed: snapshot.burrowed,
+      submerged: snapshot.submerged ?? false,
       dashPhase: snapshot.dashPhase,
       specialAction: snapshot.specialAction,
       specialActionEndsAt: snapshot.specialActionEndsAt,
@@ -1532,6 +1557,7 @@ export class EnemyManager {
     if (current.burrowed !== previous.burrowed) {
       delta.burrowed = current.burrowed;
     }
+    if ((current.submerged ?? false) !== (previous.submerged ?? false)) delta.submerged = current.submerged ?? false;
 
     if (current.dashPhase !== previous.dashPhase) {
       delta.dashPhase = current.dashPhase;
@@ -1595,8 +1621,6 @@ export class EnemyManager {
       this.enemies.set(remote.id, enemy);
       this.registerCombatTarget(remote.id, remote.entityGeneration ?? this.nextEnemyGeneration++);
       if (remote.claw) enemy.applyClawAttackState(remote.claw);
-    if (remote.shieldCharge) enemy.applyShieldChargeState(remote.shieldCharge);
-    if (remote.energyCone) enemy.applyEnergyConeState(remote.energyCone);
       if (remote.shieldCharge) enemy.applyShieldChargeState(remote.shieldCharge);
       if (remote.energyCone) enemy.applyEnergyConeState(remote.energyCone);
       if (remote.areaClaw) enemy.applyAreaClawState(remote.areaClaw);
@@ -1604,7 +1628,8 @@ export class EnemyManager {
       if (pendingArea) { this.pendingAreaClawEvents.delete(remote.id); this.applyAreaClawEvent(pendingArea); }
       const pendingClaw = this.pendingClawEvents.get(remote.id);
       if (pendingClaw) { this.pendingClawEvents.delete(remote.id); this.applyClawEvent(pendingClaw); }
-      if (this.remoteSnapshotSeen && !remote.burrowed) this.playSpawnEffect(enemy, {});
+      if (remote.submerged) enemy.setSubmerged(true);
+      if (this.remoteSnapshotSeen && !remote.burrowed && !remote.submerged) this.playSpawnEffect(enemy, {});
       // Nach dem Registrieren, damit die Buddel-Visuals den Gegner bereits finden.
       if (remote.burrowed) this.setEnemyBurrowed(remote.id, true);
       return;
@@ -1614,6 +1639,10 @@ export class EnemyManager {
     if (remote.areaClaw) enemy.applyAreaClawState(remote.areaClaw);
     if (remote.claw) enemy.applyClawAttackState(remote.claw);
     if (remote.burrowed !== undefined) this.setEnemyBurrowed(remote.id, remote.burrowed);
+    if (remote.submerged !== undefined) enemy.setSubmerged(remote.submerged);
+    // Charge and cone states change on living enemies, not only at creation.
+    if (remote.shieldCharge) enemy.applyShieldChargeState(remote.shieldCharge);
+    if (remote.energyCone) enemy.applyEnergyConeState(remote.energyCone);
 
     if (remote.hp !== undefined || remote.maxHp !== undefined) {
       enemy.setHp(remote.hp ?? enemy.getHp(), remote.maxHp ?? enemy.getMaxHp(), wasBurrowed);

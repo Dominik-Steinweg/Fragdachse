@@ -22,6 +22,8 @@ export interface ShieldChargerPorts {
   /** Shield-aware melee contact; returns false when a shield blocked it. */
   readonly strike: (targetId: string, chargerId: string, damage: number, sourceX: number, sourceY: number, nowMs: number) => boolean;
   readonly knockback: (targetId: string, vx: number, vy: number, durationMs: number, sourceId: string) => void;
+  /** Hostile runs with structureDamageMult: damage friendly bases the whole travelled path touched (once per run). */
+  readonly structureSweep?: (enemy: EnemyEntity, ax: number, ay: number, bx: number, by: number, radius: number, damage: number, nowMs: number) => void;
 }
 
 interface ChargerState {
@@ -98,6 +100,7 @@ export class CoopDefenseShieldChargerSystem implements EnemySpecialMovementSourc
     const state = this.states.get(enemyId);
     if (!state || state.phase !== 'none' || state.enemy.isBurrowed()) return null;
     const config = getCoopDefenseEnemyConfig(state.enemy.kind).shieldCharger;
+    if (!config || config.shieldArcDegrees <= 0) return null;
     // The modelled tower shield carries the form; the arc is only a thin warm rim that flashes on blocks.
     return config ? { facing: state.enemy.getAimAngle(), arcDegrees: config.shieldArcDegrees,
       presentation: state.enemy.faction === 'allied' ? ALLIED_SHIELD_RIM : HOSTILE_SHIELD_RIM } : null;
@@ -198,6 +201,10 @@ export class CoopDefenseShieldChargerSystem implements EnemySpecialMovementSourc
       : { ...lane, runEndsAt: Math.min(lane.runEndsAt, now), recoverUntil: Math.min(lane.runEndsAt, now) + config.recoverMs };
     enemy.setKnockbackImmune(false);
     enemy.stopMovement();
+    const mult = config.structureDamageMult ?? 0;
+    if (mult > 0 && enemy.faction === 'hostile') this.ports.structureSweep?.(enemy, lane.originX, lane.originY,
+      lane.originX + Math.cos(lane.angle) * travelled, lane.originY + Math.sin(lane.angle) * travelled,
+      enemy.getCollisionRadius(), config.hitDamage * mult, now);
     this.publish(state, 'recover', ended);
   }
 

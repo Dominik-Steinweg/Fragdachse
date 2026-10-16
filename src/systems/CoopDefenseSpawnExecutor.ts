@@ -185,12 +185,17 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
     let candidates = candidatesAll.filter((cell) => !recentSet.has(this.key(cell.gridX, cell.gridY)));
     if (candidates.length === 0) candidates = candidatesAll;
 
+    let seed: SpawnCell | null = null;
     for (let index = 0; index < count; index += 1) {
       if (candidates.length === 0) {
         return { enemyIds: spawnedEnemyIds, deferred: true };
       }
 
-      const pick = Phaser.Math.RND.pick(candidates);
+      // A pack gathers around its first member; otherwise members spread over the band.
+      const pick: SpawnCell = seed ? candidates.reduce((best: SpawnCell, cell: SpawnCell) =>
+        (cell.gridX - seed!.gridX) ** 2 + (cell.gridY - seed!.gridY) ** 2 < (best.gridX - seed!.gridX) ** 2 + (best.gridY - seed!.gridY) ** 2 ? cell : best)
+        : Phaser.Math.RND.pick(candidates);
+      if (spawnArea?.cluster && !seed) seed = pick;
       // Selection and materialization use the same World point. Adding unchecked jitter here
       // would move a valid body back into neighboring geometry.
       const world = worldCellCenter(this.metrics, pick.gridX, pick.gridY);
@@ -199,7 +204,7 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
       this.pushRecent(this.key(pick.gridX, pick.gridY));
       const minimumDistance = getCoopDefenseEnemyConfig(kind).size * 0.5 + enemy.getCollisionRadius();
       candidates = candidates.filter((cell) => {
-        if (Math.abs(cell.gridX - pick.gridX) <= MIN_INTRA_GROUP_DISTANCE_CELLS
+        if (!spawnArea?.cluster && Math.abs(cell.gridX - pick.gridX) <= MIN_INTRA_GROUP_DISTANCE_CELLS
           && Math.abs(cell.gridY - pick.gridY) <= MIN_INTRA_GROUP_DISTANCE_CELLS) return false;
         const next = worldCellCenter(this.metrics, cell.gridX, cell.gridY);
         return Phaser.Math.Distance.Squared(world.x, world.y, next.x, next.y) >= minimumDistance ** 2;
@@ -224,6 +229,7 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
     const spawnRadius = getCoopDefenseEnemyConfig(kind).size * 0.5;
     const cells: SpawnCell[] = [];
     const edgeBand = spawnArea ? this.getAuthoredBand(spawnArea) : this.getEdgeBand(front);
+    if (spawnArea?.medium === 'water') return this.collectWaterCandidates(edgeBand, spawnRadius, enemies);
     const allowPlayerTargetWithoutGoals = (this.isPlayerTarget(kind) || flowFieldService === this.playerFlowFieldService)
       && (flowFieldService.getGoalCells?.().length ?? 0) === 0;
     for (let gridX = edgeBand.minGridX; gridX <= edgeBand.maxGridX; gridX += 1) {
@@ -235,6 +241,22 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
           this.waitingForSpace = true;
           continue;
         }
+        cells.push({ gridX, gridY });
+      }
+    }
+    return cells;
+  }
+
+  /** Amphibious units rise submerged from cells whose whole body lies over water; they swim to land on their own. */
+  private collectWaterCandidates(band: { minGridX: number; maxGridX: number; minGridY: number; maxGridY: number },
+    spawnRadius: number, enemies: ReturnType<EnemyManager['getAllEnemies']>): SpawnCell[] {
+    const water = this.enemyManager.getWaterGeometry(), cells: SpawnCell[] = [];
+    if (!water) return cells;
+    for (let gridX = band.minGridX; gridX <= band.maxGridX; gridX += 1) {
+      for (let gridY = band.minGridY; gridY <= band.maxGridY; gridY += 1) {
+        const world = worldCellCenter(this.metrics, gridX, gridY);
+        if (water.wetShare(world.x, world.y, spawnRadius) < 1 || water.wetShare(world.x, world.y, spawnRadius / .7) < 1) continue;
+        if (this.overlapsEnemy(world.x, world.y, spawnRadius, enemies)) { this.waitingForSpace = true; continue; }
         cells.push({ gridX, gridY });
       }
     }
