@@ -1,5 +1,5 @@
 import type { EnemyEntity } from '../../entities/EnemyEntity';
-import { getCoopDefenseEnemyConfig } from '../../config/coopDefenseEnemies';
+import { getCoopDefenseEnemyConfig, type CoopDefenseEnemyBasePreferenceConfig } from '../../config/coopDefenseEnemies';
 import type { EnemyAiTargetCatalog, EnemyAiTargetCandidate } from '../EnemyAiTargetCatalog';
 import type { DecoyTargetPort } from '../CoopDefenseDecoyTargetSystem';
 import { EnemyFlowFieldService } from '../EnemyFlowFieldService';
@@ -33,6 +33,8 @@ export class EnemyIntentSystem {
   private readonly lastSeen = new Map<string, Target>();
   /** Siege enemies with an engage block: the player they currently hunt and since when (hysteresis). */
   private readonly engaged = new Map<string, { target: Target; since: number }>();
+  /** Player hunters with a basePreference block: the base they currently commit to and since when. */
+  private readonly baseCommitted = new Map<string, { baseId: string; since: number }>();
   private perception: ((enemy: EnemyEntity, x: number, y: number, range: number) => boolean) | null = null;
   setPerception(perception: (enemy: EnemyEntity, x: number, y: number, range: number) => boolean): void { this.perception = perception; }
   private baseGeometry: NavigationGeometry | null = null;
@@ -148,6 +150,10 @@ export class EnemyIntentSystem {
       const engagedTarget = !decoy && config.engage && config.movementTarget === 'bases'
         ? this.resolveEngage(enemy, config.engage, visibilityRange, now) : null;
       if (engagedTarget) reason = 'player';
+      // A committed base preference keeps its reason, so the bound base does not force a rescan every frame.
+      const basePreference = !decoy && config.movementTarget === 'players' ? config.basePreference : undefined;
+      if (!basePreference) this.baseCommitted.delete(enemy.id);
+      else if (this.baseCommitted.has(enemy.id)) reason = 'fallback-base';
       const prior = this.decisions.get(enemy.id);
       // Cheap live validation precedes candidate construction. Blocked/pending routes still
       // refresh their bound target each frame without rescanning every strategic alternative.
@@ -182,6 +188,10 @@ export class EnemyIntentSystem {
         this.nextDecisionAt.set(enemy.id, now + 80 + phase * 8);
       }
       let chosen = this.choose(enemy, candidates, geometry, now, prior);
+      if (basePreference && scan) {
+        const base = this.resolveBasePreference(enemy, basePreference, chosen, baseTargets, geometry, now, prior, visibilityRange);
+        if (base) { chosen = base; reason = 'fallback-base'; } else if (reason === 'fallback-base') reason = 'player';
+      }
       if (!decoy && config.movementTarget !== 'bases'
         && !chosen) {
         const canAttackBase = enemy.getAttackWeapons().some(attack => attack.targetMode !== 'players' && attack.targetMode !== 'rocks'
@@ -226,6 +236,7 @@ export class EnemyIntentSystem {
     for (const id of this.decisions.keys()) if (!active.has(id)) { this.decisions.delete(id); this.nextDecisionAt.delete(id); this.lastSeen.delete(id); }
     for (const id of this.lastSeen.keys()) if (!active.has(id)) this.lastSeen.delete(id);
     for (const id of this.engaged.keys()) if (!active.has(id)) this.engaged.delete(id);
+    for (const id of this.baseCommitted.keys()) if (!active.has(id)) this.baseCommitted.delete(id);
     for (const id of this.nextDecisionAt.keys()) if (!active.has(id)) this.nextDecisionAt.delete(id);
     this.positions.retain(active, now);
     for (const [key, entry] of this.fields) if (entry.usedAt < this.frame - 120) {
@@ -264,6 +275,30 @@ export class EnemyIntentSystem {
     const target = this.catalogTarget(best);
     this.engaged.set(enemy.id, { target, since: now });
     return target;
+  }
+
+  /**
+   * Base preference of a player hunter: the base wins when every player route costs more than
+   * `playerCostRatio` times the base route (or none is reachable); once committed it is kept for
+   * `minDwellMs` and until players drop below `releaseCostRatio`. A visible nearby player always wins.
+   */
+  private resolveBasePreference(enemy: EnemyEntity, preference: CoopDefenseEnemyBasePreferenceConfig,
+    players: { target: Target; field: EnemyFlowFieldService; navigation: NavigationResult } | null,
+    baseTargets: readonly Target[], geometry: NavigationGeometry, now: number, prior: Decision | undefined,
+    visibilityRange: number): { target: Target; field: EnemyFlowFieldService; navigation: NavigationResult } | null {
+    const committed = this.baseCommitted.get(enemy.id), x = enemy.sprite.x, y = enemy.sprite.y;
+    const nearPlayer = this.catalog.getCandidates('player-threats').some(candidate =>
+      Math.hypot(candidate.x - x, candidate.y - y) <= preference.playerOverridePx
+      && (!this.perception || this.perception(enemy, candidate.x, candidate.y, visibilityRange)));
+    const base = nearPlayer || !baseTargets.length ? null : this.choose(enemy, baseTargets, geometry, now, prior);
+    if (!base || !this.hasFreeApproach(base.navigation)) { this.baseCommitted.delete(enemy.id); return null; }
+    const baseCost = base.navigation.status === 'ready' ? base.navigation.cost : Math.hypot(base.target.x - x, base.target.y - y);
+    const playerCost = players?.navigation.status === 'ready' ? players.navigation.cost : Infinity;
+    const keep = committed ? now - committed.since < preference.minDwellMs || playerCost > preference.releaseCostRatio * baseCost
+      : playerCost > preference.playerCostRatio * baseCost;
+    if (!keep) { this.baseCommitted.delete(enemy.id); return null; }
+    if (committed?.baseId !== base.target.id) this.baseCommitted.set(enemy.id, { baseId: base.target.id, since: committed?.since ?? now });
+    return base;
   }
 
   private catalogTarget(target: EnemyAiTargetCandidate): Target {

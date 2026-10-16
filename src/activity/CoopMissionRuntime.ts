@@ -2,7 +2,7 @@ import type { CoopDefenseFirestarterSystem } from '../systems/CoopDefenseFiresta
 import type { CoopDefenseShieldChargerSystem } from '../systems/CoopDefenseShieldChargerSystem';
 import type { CoopDefenseEnergyConeSystem } from '../systems/CoopDefenseEnergyConeSystem';
 import type { CoopDefenseEnemyHopSystem } from '../systems/CoopDefenseEnemyHopSystem';
-import type { SyncedMortarStrike } from '../types';
+import type { SyncedMortarStrike, SyncedTurretWebSnapshot } from '../types';
 import type { CoopDefenseMortarSystem } from '../systems/CoopDefenseMortarSystem';
 import type { CoopDefenseMortarStrikeSystem } from '../systems/CoopDefenseMortarStrikeSystem';
 import { CompositeEnemySpecialMovementSource } from '../systems/CompositeEnemySpecialMovementSource';
@@ -28,7 +28,8 @@ import type { CoopDefenseSecondaryObjectiveSystem } from '../systems/CoopDefense
 import type { CoopDefenseTeamBuffSystem } from '../systems/CoopDefenseTeamBuffSystem';
 import type { CoopDefensePersistentPressureSystem } from '../systems/CoopDefensePersistentPressureSystem';
 import type { CoopDefenseSpawnExecutor } from '../systems/CoopDefenseSpawnExecutor';
-import type { CoopDefenseTimebombSystem } from '../systems/CoopDefenseTimebombSystem';
+import type { CoopDefenseKaboomtulaSystem } from '../systems/CoopDefenseKaboomtulaSystem';
+import { EMPTY_TURRET_WEB_SNAPSHOT, type CoopDefenseTurretWebSystem } from '../systems/CoopDefenseTurretWebSystem';
 import type { CoopDefenseVoidHunterSystem } from '../systems/CoopDefenseVoidHunterSystem';
 import { EnemyFlowFieldService } from '../systems/EnemyFlowFieldService';
 import type { EnemyAiTargetCatalog } from '../systems/EnemyAiTargetCatalog';
@@ -81,7 +82,8 @@ export interface CoopMissionEnemyBehaviourRuntime {
 }
 
 export interface CoopMissionEnemySpecialRuntime {
-  readonly timebomb: CoopDefenseTimebombSystem | null;
+  readonly kaboomtula: CoopDefenseKaboomtulaSystem | null;
+  readonly turretWeb: CoopDefenseTurretWebSystem | null;
   readonly voidHunter: CoopDefenseVoidHunterSystem | null;
 }
 
@@ -127,6 +129,7 @@ export interface CoopMissionClientPresentationFrame {
   readonly newSnapshot: boolean;
   readonly enemySnapshot: SyncedEnemySnapshot | null;
   readonly mortarStrikes: readonly SyncedMortarStrike[];
+  readonly turretWebs?: SyncedTurretWebSnapshot;
   readonly carryItems: readonly SyncedCoopDefenseCarryItem[];
   readonly interpolationFactor: number;
 }
@@ -257,7 +260,7 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   }
   private refreshSpecialMovementSource(): void {
     this.specialMovementOwner = new CompositeEnemySpecialMovementSource([
-      this.coopDefenseTimebombSystem, this.coopDefenseMortarSystem, this.firestarterOwner, this.shieldChargerOwner,
+      this.coopDefenseKaboomtulaSystem, this.coopDefenseMortarSystem, this.firestarterOwner, this.shieldChargerOwner,
       this.energyConeOwner, this.hopOwner,
     ]);
   }
@@ -266,6 +269,9 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   get coopDefenseMortarSystem() { return this.mortarOwner?.behavior ?? null; }
   get coopDefenseMortarStrikeSystem() { return this.mortarOwner?.strikes ?? null; }
   get enemySpecialMovementSource() { return this.specialMovementOwner; }
+  getTurretWebSnapshot(): SyncedTurretWebSnapshot {
+    return this.enemySpecialOwner?.turretWeb?.getSnapshot() ?? EMPTY_TURRET_WEB_SNAPSHOT;
+  }
   getMortarSnapshot(): SyncedMortarStrike[] {
     return [...(this.mortarOwner?.behavior.getSnapshot() ?? []), ...(this.mortarOwner?.strikes.getSnapshot() ?? [])];
   }
@@ -340,8 +346,11 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   get coopDefenseEnemyAttackSystem(): CoopDefenseEnemyAttackSystem | null {
     return this.enemyBehaviourOwner?.attack ?? null;
   }
-  get coopDefenseTimebombSystem(): CoopDefenseTimebombSystem | null {
-    return this.enemySpecialOwner?.timebomb ?? null;
+  get coopDefenseKaboomtulaSystem(): CoopDefenseKaboomtulaSystem | null {
+    return this.enemySpecialOwner?.kaboomtula ?? null;
+  }
+  get coopDefenseTurretWebSystem(): CoopDefenseTurretWebSystem | null {
+    return this.enemySpecialOwner?.turretWeb ?? null;
   }
   get coopDefenseVoidHunterSystem(): CoopDefenseVoidHunterSystem | null {
     return this.enemySpecialOwner?.voidHunter ?? null;
@@ -609,7 +618,8 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     this.krakenOwner?.system.clear(); this.krakenOwner?.brood.clear(); this.krakenOwner?.habitat.clear();
     this.krakenOwner = null;
     this.enemySpecialOwner?.voidHunter?.clear();
-    this.enemySpecialOwner?.timebomb?.clear();
+    this.enemySpecialOwner?.kaboomtula?.clear();
+    this.enemySpecialOwner?.turretWeb?.clear();
     this.enemyBehaviourOwner?.decoyTargets?.destroy();
     this.enemyBehaviourOwner?.ability.clear();
     this.enemyBehaviourOwner?.burrow.clear();

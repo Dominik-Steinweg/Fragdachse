@@ -145,6 +145,8 @@ export interface EnemyMovementOverride {
   readonly vx: number;
   readonly vy: number;
   readonly keepsRouting?: boolean;
+  /** Body facing independent of the velocity (e.g. a spider skittering sideways while facing its prey). */
+  readonly aimAngle?: number;
 }
 
 export interface EnemySpecialMovementSource {
@@ -681,7 +683,7 @@ export class EnemyManager {
 
       const specialMovement = specialMovementSource?.getMovementOverride(enemy, now) ?? null;
       if (specialMovement) {
-        enemy.setDesiredVelocity(specialMovement.vx, specialMovement.vy, now);
+        enemy.setDesiredVelocity(specialMovement.vx, specialMovement.vy, now, specialMovement.aimAngle);
         continue;
       }
 
@@ -1394,6 +1396,7 @@ export class EnemyManager {
     enemy.syncShieldChargeAnimation(now);
     enemy.syncEnergyConeAnimation(now);
     enemy.syncHopPresentation(now);
+    enemy.syncKaboomtulaPresentation(now);
     enemy.syncCastAnimation();
     this.visualSink?.syncEnemyClaw?.(enemy.id, enemy.getClawAttackState(), enemy.sprite.x, enemy.sprite.y, now,
       enemy.sprite.visible && !enemy.isBurrowed() && enemy.getHp() > 0,
@@ -1517,6 +1520,7 @@ export class EnemyManager {
     }
     if (current.shieldCharge?.revision !== previous.shieldCharge?.revision) delta.shieldCharge = current.shieldCharge;
     if (current.hop?.revision !== previous.hop?.revision) delta.hop = current.hop;
+    if (current.kaboomtula?.revision !== previous.kaboomtula?.revision) delta.kaboomtula = current.kaboomtula;
     if (current.energyCone?.revision !== previous.energyCone?.revision) delta.energyCone = current.energyCone;
     if (current.claw?.revision !== previous.claw?.revision) {
       delta.claw = current.claw;
@@ -1636,6 +1640,7 @@ export class EnemyManager {
       if (remote.shieldCharge) enemy.applyShieldChargeState(remote.shieldCharge);
       if (remote.energyCone) enemy.applyEnergyConeState(remote.energyCone);
       if (remote.hop) enemy.applyHopState(remote.hop);
+      if (remote.kaboomtula) enemy.applyKaboomtulaState(remote.kaboomtula);
       if (remote.areaClaw) enemy.applyAreaClawState(remote.areaClaw);
       const pendingArea = this.pendingAreaClawEvents.get(remote.id);
       if (pendingArea) { this.pendingAreaClawEvents.delete(remote.id); this.applyAreaClawEvent(pendingArea); }
@@ -1653,10 +1658,11 @@ export class EnemyManager {
     if (remote.claw) enemy.applyClawAttackState(remote.claw);
     if (remote.burrowed !== undefined) this.setEnemyBurrowed(remote.id, remote.burrowed);
     if (remote.submerged !== undefined) enemy.setSubmerged(remote.submerged);
-    // Charge, cone and hop states change on living enemies, not only at creation.
+    // Charge, cone, hop and spider states change on living enemies, not only at creation.
     if (remote.shieldCharge) enemy.applyShieldChargeState(remote.shieldCharge);
     if (remote.energyCone) enemy.applyEnergyConeState(remote.energyCone);
     if (remote.hop) enemy.applyHopState(remote.hop);
+    if (remote.kaboomtula) enemy.applyKaboomtulaState(remote.kaboomtula);
 
     if (remote.hp !== undefined || remote.maxHp !== undefined) {
       enemy.setHp(remote.hp ?? enemy.getHp(), remote.maxHp ?? enemy.getMaxHp(), wasBurrowed);

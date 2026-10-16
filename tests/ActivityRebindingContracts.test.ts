@@ -138,7 +138,7 @@ function combatBindingHarness(
     getMissionBarrierObstacles: getMissionBarrierObstacles as WorldCombatGameplayBindingOptions['getMissionBarrierObstacles'],
     getRockTargets: () => [],
     getWorldTrain: () => null,
-    getTimebombSystem: () => null,
+    getKaboomtulaSystem: () => null,
     getNecromancySystem: () => null,
     hostUpdate: service(),
     createEnergyShieldSystem: () => { throw new Error('not needed in this harness'); },

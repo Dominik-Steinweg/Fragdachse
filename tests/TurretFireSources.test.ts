@@ -269,6 +269,26 @@ describe('turret fire sources', () => {
     expect(f.shooters().at(-1)).toBe(COPY_ID);
   });
 
+  it('ends the own salvo of a disabled (webbed) turret and keeps it silent, also manned, until it is active again', () => {
+    const f = fixture();
+    const turret = construction({ weaponId: 'TURRET_ROCKET_BURST' });
+    f.set([turret], [original(turret)]);
+    f.tick(0);
+    expect(f.fire).toHaveBeenCalledOnce();
+    f.set([turret], [original(turret, 'disabled')]);
+    for (let now = burst.intervalMs; now <= 3 * COOLDOWN; now += burst.intervalMs) f.tick(now);
+    expect(f.fire).toHaveBeenCalledOnce();
+    f.set([turret], [original(turret)]);
+    f.tick(3 * COOLDOWN + 16);
+    expect(f.fire).toHaveBeenCalledTimes(2);
+
+    const manned = fixture();
+    manned.system.setManualControlProvider(() => ({ playerId: 'pilot', revision: 1, targetX: 200, targetY: 0, fireHeld: true, fresh: true }));
+    manned.set([turret], [original(turret, 'disabled')]);
+    manned.tick(0); manned.tick(COOLDOWN);
+    expect(manned.fire).not.toHaveBeenCalled();
+  });
+
   it('starts a parallel copy sequence from the original cooldown and then fires independently', () => {
     const f = fixture();
     const turret = construction();

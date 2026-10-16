@@ -131,6 +131,8 @@ export interface CoopMissionCompositionOptions {
     radius: number,
   ) => boolean;
   readonly damageConstruction: (id: number, damage: number, attackerId: string) => void;
+  /** Friendly turrets a Kabummtula may web (player-built, persistent rewards, authored base turrets). */
+  readonly getTurretWebTargets: () => readonly import('../systems/CoopDefenseTurretWebSystem').TurretWebTarget[];
   readonly releaseMissionObjectives: (runtime: CoopMissionRuntime, playerId: string) => void;
   readonly publishMissionProgress: (state: CoopDefenseMissionProgressPresentationState | null) => void;
   readonly broadcastCarryDeliveredFx: (x: number, y: number) => void;
@@ -401,6 +403,8 @@ export class CoopMissionComposition {
       playerModifierReadPort: this.options.getPlayerModifierReadPort(),
       removeEnemyFromPlayerItems: this.options.removeEnemyFromPlayerItems,
       damageConstruction: this.options.damageConstruction,
+      hasWalkableEnemyCircleLine: this.options.hasWalkableEnemyCircleLine,
+      getTurretWebTargets: this.options.getTurretWebTargets,
       mortarImpact: this.options.mortarImpact,
       broadcastExplosion: this.options.broadcastExplosion,
       broadcastCorpseMarker: this.options.broadcastCorpseMarker,

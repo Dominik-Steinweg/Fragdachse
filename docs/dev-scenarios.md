@@ -960,6 +960,35 @@ den Sprung ab. Im Spiel: Karte 7 (Medic).
 Headless-Nachweise: `tests/CoopDefenseEnemyHop.test.ts`, `tests/EnemyHopLanding.test.ts`,
 `tests/EnemyRestHeal.test.ts`.
 
+### Kabummtula: Gate GC1 (Feel)
+
+Map `0` (`00-test`) enthält den Encounter `kaboomtula-gate-1` (drei Spinnen ab 14 s, je 2,5 s versetzt).
+Für einen isolierten Versuch mit Türmen dasselbe Szenario mit `suppressWaves: true` starten, ein paar
+Türme bauen und die Spinne gezielt spawnen. Feste Grid-Koordinaten sind auf Map 0 nicht garantiert frei;
+ein blockiertes Ziel lehnt der Spawn ab.
+
+```js
+const dev = window.devScenario;
+dev.run({ action: 'start', scenario: { version: 1, mapId: '0', seed: 12345, classId: 'inspector_gadachs',
+  suppressWaves: true, freezeMission: true, hideTutorial: true, player: { gridX: 12, gridY: 50 },
+  constructions: [{ id: 'spore_turret', gridX: 18, gridY: 47 }, { id: 'spore_turret', gridX: 18, gridY: 53 }] } });
+await dev.whenReady();
+// Ziel auf eine freie Zelle etwa 400 px vom Spieler entfernt setzen, dann:
+await dev.run({ action: 'spawn', kind: 'kaboomtula', pinned: false });
+```
+
+Erwartung: Sieht die Spinne einen Spieler (bis ca. 450 px), hält sie ca. 0,4 s drohend inne und
+glüht auf, dann rennt sie schneller als der Spieler im Zickzack heran (sie blickt dabei zur Beute).
+Ab ca. 120 px läuft sie weiter, umkreist den Spieler im Abstand und zeigt eine rote Bahn mit Zielring,
+die dem Spieler folgt und sich füllt; beim Blitz springt sie mit Vorhalt. Wer genau beim Blitz die
+Richtung wechselt oder dasht, weicht aus; dann rappelt sie sich kurz auf und beginnt von vorn.
+Jeder Körperkontakt (auch beim Anlaufen) löst sofort die große Explosion aus (ca. 70 Schaden, Radius
+ca. 130, Leerenfeuer). Abgeschossen verpufft sie nur klein. Ohne Spieler in Sicht spuckt sie aus bis zu
+380 px Netz auf Türme (bevorzugt unbesponnene); der Turm feuert ca. 4 s nicht. Im Spiel: Karte 16.
+
+Headless-Nachweise: `tests/CoopDefenseKaboomtula.test.ts`, `tests/EnemyIntentAndBreach.test.ts`
+(Basis-Präferenz), `tests/TurretFireSources.test.ts` (deaktivierte Türme).
+
 ### Alien-Energie-Fächer: Gate 1
 
 Map `0` (`00-test`) enthält den Encounter `alien-cone-gate-1` (ein Alien, Start nach 12 s).

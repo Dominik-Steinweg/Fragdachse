@@ -35,7 +35,7 @@ export const EXPLOSION_AUDIO = {
   'weapon.shotgun_lightning': 'sfx_explosion_shotgun_lightning',
   ENERGY_INJECTOR: 'sfx_explosion_energy_injector',
   TIME_BUBBLE: 'sfx_explosion_time_bubble',
-  'enemy.timebomb': 'sfx_explosion_timebomb',
+  'enemy.kaboomtula': 'sfx_explosion_timebomb',
   'environment.train': 'sfx_train_explode',
 } as const satisfies Record<string, AudioAssetKey>;
 

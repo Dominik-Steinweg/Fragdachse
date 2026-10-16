@@ -70,11 +70,11 @@
       "baseId": "ZOMBIE_BADGER_BITE",
       "_notes": "Bewusst gekoppelte Variante der bereits zuvor gemeinsam erzeugten Gegnerbiss-Familie."
     },
-    "TIMEBOMB_BADGER_BITE": {
-      "id": "TIMEBOMB_BADGER_BITE",
+    "KABOOMTULA_BITE": {
+      "id": "KABOOMTULA_BITE",
       "damage": 10,
       "baseId": "ZOMBIE_BADGER_BITE",
-      "_notes": "Felsenbiss des Zeitbomben-Dachses mit eigenem Schaden, unabhaengig vom Zombie-Dachs-Tuning."
+      "_notes": "Felsenbiss der Kabummtula (nur Hindernisse) mit eigenem Schaden, unabhaengig vom Zombie-Dachs-Tuning."
     },
     "SPORE_WARDEN_BITE": {
       "id": "SPORE_WARDEN_BITE",

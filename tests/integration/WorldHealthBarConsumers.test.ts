@@ -1112,8 +1112,8 @@ describe('World HP consumer boundaries', () => {
   });
 
   it.each([
-    { hook: 'timebomb', applyNewStatus: false },
-    { hook: 'timebomb', applyNewStatus: true },
+    { hook: 'kaboomtula', applyNewStatus: false },
+    { hook: 'kaboomtula', applyNewStatus: true },
     { hook: 'necromancy', applyNewStatus: false },
     { hook: 'necromancy', applyNewStatus: true },
     { hook: 'death-spawn', applyNewStatus: false },
@@ -1169,7 +1169,7 @@ describe('World HP consumer boundaries', () => {
       getTargetFootprint: () => null, getPowerUpSystem: () => null,
       getWorldGeometryBinding: () => null, getMissionBarrierObstacles: () => null,
       syncActiveBaseIds: () => {},
-      getFirestarterSystem: () => null, getMortarSystem: () => null, getTimebombSystem: () => ({ handleKilled: () => { if (hook === 'timebomb') replace(); return hook === 'timebomb'; } }),
+      getFirestarterSystem: () => null, getMortarSystem: () => null, getKaboomtulaSystem: () => ({ handleKilled: () => { if (hook === 'kaboomtula') replace(); return hook === 'kaboomtula'; }, isAirborne: () => false }),
       getNecromancySystem: () => ({ recordEnemyDeath: () => { if (hook === 'necromancy') replace(); } }),
       isCoopMission: () => false, isActivityActive: () => false, getSpawnContext: () => undefined,
       hostPhysics: inert, decoySystem: inert, fireSystem: inert, gameAudioSystem: inert, placementSystem: inert,

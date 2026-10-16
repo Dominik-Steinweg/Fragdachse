@@ -1,0 +1,131 @@
+{
+  "owner": "effects/TurretWebRenderer.ts",
+  "notes": [
+    "Kabummtula web: glob and strand in the material projectile band below the sun composite, the net over its turret below actors."
+  ],
+  "source": {
+    "blends": [],
+    "cameras": [],
+    "sites": [
+      {
+        "key": "syncShots/this.strands/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 0.65",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "syncShots/view/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 0.6",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "syncWebs/view/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.31",
+        "blends": [
+          "NORMAL"
+        ]
+      },
+      {
+        "key": "syncWebs/view/setDepth/1",
+        "expression": "DEPTH.PLAYERS - 0.3",
+        "blends": [
+          "NORMAL"
+        ]
+      }
+    ],
+    "bindings": {}
+  },
+  "cpuLayers": [
+    {
+      "id": "cpu:effects/TurretWebRenderer.ts:syncShots/this.strands/setDepth/0",
+      "owner": "effects/TurretWebRenderer.ts",
+      "component": "syncShots/this.strands/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        14.35
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncShots/this.strands/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 0.65"
+      }
+    },
+    {
+      "id": "cpu:effects/TurretWebRenderer.ts:syncShots/view/setDepth/0",
+      "owner": "effects/TurretWebRenderer.ts",
+      "component": "syncShots/view/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        14.4
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "K"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncShots/view/setDepth/0",
+        "expression": "DEPTH.PROJECTILES - 0.6"
+      }
+    },
+    {
+      "id": "cpu:effects/TurretWebRenderer.ts:syncWebs/view/setDepth/0",
+      "owner": "effects/TurretWebRenderer.ts",
+      "component": "syncWebs/view/setDepth/0",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.69
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncWebs/view/setDepth/0",
+        "expression": "DEPTH.PLAYERS - 0.31"
+      }
+    },
+    {
+      "id": "cpu:effects/TurretWebRenderer.ts:syncWebs/view/setDepth/1",
+      "owner": "effects/TurretWebRenderer.ts",
+      "component": "syncWebs/view/setDepth/1",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.7
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect",
+      "source": {
+        "selector": "syncWebs/view/setDepth/1",
+        "expression": "DEPTH.PLAYERS - 0.3"
+      }
+    }
+  ]
+}

@@ -207,7 +207,8 @@ export class CoopMissionHostUpdate {
     metrics: CoopMissionNavigationMetrics | null,
   ): void {
     let measuredAt = metrics ? performance.now() : 0;
-    if (!countdownActive) this.runtime.coopDefenseTimebombSystem?.hostUpdate(nowMs);
+    // Spider phases (alert, rush, telegraph, leap, spit) and contact blasts precede movement in this frame.
+    if (!countdownActive && !weaponBalanceLabActive) this.runtime.coopDefenseKaboomtulaSystem?.hostUpdate(nowMs);
     if (!countdownActive && !weaponBalanceLabActive) this.runtime.kraken?.system.preMovement(nowMs, deltaMs);
     // Vor der Bewegung: Wer hat freien Boden erreicht bzw. seine maximale Grabzeit erschöpft?
     if (!countdownActive) this.runtime.coopDefenseEnemyBurrowSystem?.hostUpdate(nowMs);
@@ -252,6 +253,7 @@ export class CoopMissionHostUpdate {
       this.runtime.coopDefenseVoidHunterSystem?.hostUpdate(nowMs);
       this.runtime.coopDefenseEnemyAbilitySystem?.hostUpdate(nowMs);
       this.runtime.coopDefenseMortarStrikeSystem?.hostUpdate(nowMs);
+      this.runtime.coopDefenseTurretWebSystem?.hostUpdate(nowMs);
       if (metrics) { metrics.enemyAbilitiesMs = performance.now() - measuredAt; measuredAt = performance.now(); }
       this.runtime.coopDefenseEnemyAttackSystem?.hostUpdate(deltaMs, nowMs);
       if (metrics) metrics.enemyAttacksMs = performance.now() - measuredAt;

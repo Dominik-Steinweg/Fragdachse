@@ -96,7 +96,7 @@ export function createFireControlWorldFixture(overrides: Partial<Extract<Utility
       ? { playerId: pilot, revision: 1, fresh, fireHeld: fresh, targetX: -200, targetY: 0 } : null,
     readConstructionSlotOrder: () => ['rocket_turret', 'machine_gun_turret'],
     getMissionBarrierObstacles: () => null, getRockTargets: () => [], getWorldTrain: () => null,
-    getTimebombSystem: () => null, getNecromancySystem: () => null, hostUpdate: bag(), createEnergyShieldSystem: () => bag(),
+    getKaboomtulaSystem: () => null, getNecromancySystem: () => null, hostUpdate: bag(), createEnergyShieldSystem: () => bag(),
     network: { authority: { isHost: () => true, isEnemyPair: () => false, getPlayerProfile: () => player, getConnectedPlayers: () => [player] },
       round: bag({ canPlayerReceiveRoundRewards: () => true }), stats: bag(), effects: bag() },
   }) as unknown as WorldCombatGameplayBindingOptions);

@@ -337,7 +337,7 @@ function createFixture(options: {
     getMissionBarrierObstacles: () => null,
     getRockTargets: () => options.rockTargets ?? [],
     getWorldTrain: options.getWorldTrain ?? (() => null),
-    getTimebombSystem: () => null,
+    getKaboomtulaSystem: () => null,
     getNecromancySystem: () => null,
     hostUpdate: methodBag({
       applyTeslaRockDamage: options.applyTeslaRockDamage ?? vi.fn(),

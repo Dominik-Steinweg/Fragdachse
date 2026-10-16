@@ -838,6 +838,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         return visual ? { ...visual, entityGeneration: manager?.getCombatTargetRef(id)?.instance.entityGeneration } : null;
       }, id => this.baseManager?.getBase(id)));
     const mortarStrikes = this.coopMissionRuntime?.getMortarSnapshot() ?? [];
+    const turretWebs = this.coopMissionRuntime?.getTurretWebSnapshot();
     const airstrikes  = this.supportSystems?.airstrike?.getSnapshot()        ?? [];
     const meteors     = this.supportSystems?.armageddon?.getSnapshot()       ?? [];
     const train     = this.trainManager?.getNetSnapshot()        ?? null;
@@ -853,6 +854,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     this.visuals?.nuke.sync(nukes);
     this.visuals?.airstrike.sync(airstrikes, syncedNow);
     this.visuals?.mortarStrike.sync(mortarStrikes, syncedNow);
+    this.visuals?.turretWeb.sync(turretWebs, syncedNow);
     this.visuals?.meteor.sync(meteors, syncedNow);
     if (!countdownActive) this.checkLocalPickup(powerups);
 
@@ -1221,6 +1223,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       pedestals: this.powerUpSystem?.getPedestalNetSnapshot() ?? null,
       nukes,
       mortarStrikes,
+      turretWebs,
       airstrikes,
       meteors,
       tunnels: [...playerSnapshot.tunnels],

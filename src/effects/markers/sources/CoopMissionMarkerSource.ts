@@ -13,7 +13,8 @@ export interface MarkerTargetBounds {
 export interface EnemyMarkerTarget {
   readonly id: string; readonly generation: number; readonly x: number; readonly y: number;
   readonly size: number; readonly boss: boolean; readonly vulnerable: boolean;
-  readonly timebomb: boolean; readonly fuseProgress?: number;
+  /** A kamikaze enemy is hunting (alert, rush, telegraph, leap); progress fills towards its strike. */
+  readonly kamikaze: boolean; readonly progress?: number;
 }
 type Origin = Pick<WorldMetrics, 'offsetX' | 'offsetY'>;
 const pose = (b: MarkerTargetBounds) => ({ x: b.x + b.width / 2, y: b.y + b.height / 2, targetHalfHeight: b.height / 2 });
@@ -29,8 +30,8 @@ export function enemyMarkers(enemies: readonly EnemyMarkerTarget[]): MarkerDescr
   return enemies.flatMap<MarkerDescriptor>(e => {
     const common = { x: e.x, y: e.y, targetHalfHeight: e.size / 2, state: 'active' as const };
     const key = `enemy:${e.id}:${e.generation}`;
-    if (e.timebomb) return [{ ...common, key: `hazard:${key}`, kind: 'hazard' as const, glyph: 'timebomb' as const,
-      visibility: 'world-and-edge' as const, urgent: true, progress: e.fuseProgress, bundleKey: 'hazard:timebomb' }];
+    if (e.kamikaze) return [{ ...common, key: `hazard:${key}`, kind: 'hazard' as const, glyph: 'timebomb' as const,
+      visibility: 'world-and-edge' as const, urgent: true, progress: e.progress, bundleKey: 'hazard:kamikaze' }];
     if (e.boss) return [{ ...common, key: `boss:${key}`, kind: 'boss' as const, glyph: 'boss' as const,
       visibility: 'edge-when-offscreen' as const, vulnerable: e.vulnerable }];
     return [];

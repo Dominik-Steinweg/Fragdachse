@@ -110,6 +110,7 @@ export interface CoopMissionPresentationUiPort {
       elapsedMs: number,
     ) => void;
     readonly syncMortarStrikes: (strikes: readonly import('../types').SyncedMortarStrike[], nowMs: number) => void;
+    readonly syncTurretWebs?: (webs: import('../types').SyncedTurretWebSnapshot | null, nowMs: number) => void;
     readonly syncCoopDefenseCarry: (items: readonly SyncedCoopDefenseCarryItem[]) => void;
     readonly syncEnemyDashVisual: (enemy: EnemyEntity) => void;
     readonly resetEnemyDashVisuals: () => void;
@@ -343,6 +344,7 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
 
     if (!frame.stateAvailable) return;
     this.ui.worldSpace.syncMortarStrikes(frame.mortarStrikes, this.reads.getSynchronizedNow());
+    this.ui.worldSpace.syncTurretWebs?.(frame.turretWebs ?? null, this.reads.getSynchronizedNow());
     // Der Gegner-Manager kann nach dem Attach neu entstehen; der Filter muss vor dem Snapshot sitzen.
     runtime.enemyManager?.setSpawnEffectSuppressor(this.spawnEffectSuppressor);
     if (frame.newSnapshot) {
@@ -412,6 +414,7 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     this.ui.mapEvents.reset();
     this.ui.secondaryObjectives.reset();
     this.ui.worldSpace.syncMortarStrikes([], this.reads.getSynchronizedNow());
+    this.ui.worldSpace.syncTurretWebs?.(null, this.reads.getSynchronizedNow());
     this.ui.worldSpace.reset();
   }
 

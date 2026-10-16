@@ -115,7 +115,8 @@ describe('CoopMissionRuntime – konkrete Activity-Ownership', () => {
     } as unknown as CoopMissionEnemyBehaviourRuntime);
 
     runtime.setEnemySpecials({
-      timebomb: clearable('special:timebomb', calls),
+      kaboomtula: clearable('special:kaboomtula', calls),
+      turretWeb: clearable('special:turret-web', calls),
       voidHunter: clearable('special:void-hunter', calls),
     } as unknown as CoopMissionEnemySpecialRuntime);
     runtime.setFirestarter(clearable('special:firestarter', calls) as unknown as import('../../src/systems/CoopDefenseFirestarterSystem').CoopDefenseFirestarterSystem);
@@ -138,7 +139,8 @@ describe('CoopMissionRuntime – konkrete Activity-Ownership', () => {
       'encounter:boss',
       'special:firestarter',
       'special:void-hunter',
-      'special:timebomb',
+      'special:kaboomtula',
+      'special:turret-web',
       'behaviour:ability',
       'behaviour:burrow',
       'behaviour:dodge',
@@ -271,7 +273,8 @@ describe('CoopMissionRuntime – konkrete Activity-Ownership', () => {
         attack: {},
       } as unknown as CoopMissionEnemyBehaviourRuntime);
       runtime.setEnemySpecials({
-        timebomb: clearable(`${label}:timebomb`, calls),
+        kaboomtula: clearable(`${label}:kaboomtula`, calls),
+        turretWeb: clearable(`${label}:turret-web`, calls),
         voidHunter: clearable(`${label}:void-hunter`, calls),
       } as unknown as CoopMissionEnemySpecialRuntime);
       runtime.setNecromancy({

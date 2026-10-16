@@ -1,4 +1,5 @@
 import { CoopDefenseDecoyTargetSystem } from '../systems/CoopDefenseDecoyTargetSystem';
+import { createEnemyLaneClearance } from '../systems/enemyLaneClearance';
 import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
 import { ENEMY_FLOW_FIELD_IDS } from '../systems/flowfield/FlowFieldCoordinator';
 import type { BaseManager } from '../entities/BaseManager';
@@ -161,7 +162,7 @@ export class CoopMissionEnemyBehaviourComposition {
         };
       }),
       getAttackTarget: enemyId => runtime.coopDefenseVoidHunterSystem?.getCurrentTarget(enemyId)
-        ?? runtime.coopDefenseTimebombSystem?.getCurrentTarget(enemyId)
+        ?? runtime.coopDefenseKaboomtulaSystem?.getCurrentTarget(enemyId)
         ?? ability.getCurrentTarget(enemyId)
         ?? attack.getCurrentTarget(enemyId),
       isEnemyOfOwner: (enemyId, ownerId) => this.options.combatSystem.canDamageTarget(enemyId, ownerId),
@@ -200,18 +201,7 @@ export class CoopMissionEnemyBehaviourComposition {
             .map(player => ({ id: player.id, x: player.x, y: player.y, radius: PLAYER_SIZE / 2 }));
           return [...players, ...opposing];
         },
-        laneClearance: (x, y, angle, length, radius) => {
-          let free = combat.measureChargeLane?.(x, y, angle, length, radius) ?? 0;
-          // Water and other walkability limits: shorten until the swept body path is walkable.
-          const walkable = (distance: number) => this.options.hasWalkableEnemyCircleLine(x, y,
-            x + Math.cos(angle) * distance, y + Math.sin(angle) * distance, radius);
-          if (free > 0 && !walkable(free)) {
-            let low = 0, high = free;
-            for (let i = 0; i < 10; i++) { const mid = (low + high) / 2; if (walkable(mid)) low = mid; else high = mid; }
-            free = low;
-          }
-          return free;
-        },
+        laneClearance: createEnemyLaneClearance(combat, this.options.hasWalkableEnemyCircleLine),
         strike: (targetId, chargerId, damage, x, y, now) => combat.resolveChargeContact?.(targetId, chargerId, damage, x, y, now) ?? false,
         knockback: (targetId, vx, vy, durationMs, sourceId) => this.options.hostPhysics.addRecoil(targetId, vx, vy, durationMs, sourceId),
         structureSweep: (enemy, ax, ay, bx, by, radius, damage, now) => this.options.enemyAreaEffects?.sweepBases(enemy.id, ax, ay, bx, by, radius, damage, now),

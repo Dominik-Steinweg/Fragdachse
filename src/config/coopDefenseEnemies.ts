@@ -263,7 +263,6 @@ export interface CoopDefenseEnemyVoidFireChunkConfig extends FireChunkBurstConfi
 /** Lila, nur fuer Spieler gefaehrliche Brandspur unter dem gesamten Boss-Koerper. */
 export interface CoopDefenseEnemyVoidFireTrailConfig extends GroundFireCellEffect {}
 
-/** Dreiphasige, zielgebundene Selbstzuendung des Zeitbombendachses. */
 export interface CoopDefenseEnemyMortarConfig {
   /** Forward distance from body center to muzzle, in world pixels; omitted means centered. */
   readonly muzzleForwardPx?: number;
@@ -316,18 +315,106 @@ export interface CoopDefenseEnemyMortarConfig {
   readonly reevaluateIntervalMs: number;
 }
 
-export interface CoopDefenseEnemyTimebombConfig {
-  readonly chaseSpeedMultiplier: number;
+/**
+ * Kabummtula: hunting kamikaze spider. On sight it holds a short threat pose, rushes faster than a
+ * player in a spider-like skitter, telegraphs a leap out of the run and explodes on any contact.
+ * Opportunistically it spits webs that disable nearby turrets for a few seconds.
+ */
+export interface CoopDefenseEnemyKaboomtulaConfig {
+  /** A visible target inside this distance starts the alert pose. */
   readonly activationRadiusPx: number;
-  readonly lineOfSightDurationMs: number;
-  readonly fuseDistancePx: number;
-  readonly fuseDurationMs: number;
-  readonly explosionRadiusPx: number;
-  readonly explosionDamage: number;
-  readonly explosionKnockback: number;
-  readonly fireChunks: FireChunkBurstConfig;
-  readonly killedPopRadiusPx: number;
-  readonly killedPopDamage: number;
+  /** Threat pause before the rush (the body stands still facing the target). */
+  readonly alertMs: number;
+  /** Rush speed in px/s; must beat the player's run speed on average, skitter included. */
+  readonly rushSpeedPx: number;
+  /** A rush that has not reached its target after this long gives up and recovers. */
+  readonly rushMaxMs: number;
+  /** The rush survives a target out of sight for this long (corners, smoke) before it recovers. */
+  readonly lostSightGraceMs: number;
+  readonly skitter: {
+    /** Each run segment lasts within [segmentMinMs, segmentMaxMs] (>= ~140 ms survives the 20 Hz tick). */
+    readonly segmentMinMs: number;
+    readonly segmentMaxMs: number;
+    /** Sideways segments angle off the route by [zigMinDegrees, zigMaxDegrees], alternating sides. */
+    readonly zigMinDegrees: number;
+    readonly zigMaxDegrees: number;
+    /** Share of straight darts and their speed factor. */
+    readonly dartChance: number;
+    readonly dartSpeedFactor: number;
+    /** Chance of a short freeze after a segment, and its duration range. */
+    readonly pauseChance: number;
+    readonly pauseMinMs: number;
+    readonly pauseMaxMs: number;
+    /** Within this distance of the target the zig amplitude fades so the spider closes in reliably. */
+    readonly calmWithinPx: number;
+    /** Distance of the steering point along a sideways segment. */
+    readonly probePx: number;
+  };
+  readonly pounce: {
+    /** The telegraph starts once the rushing spider is this close to a player or decoy. */
+    readonly triggerPx: number;
+    /** While telegraphing it keeps running but holds this distance band around the target. */
+    readonly bandMinPx: number;
+    readonly bandMaxPx: number;
+    readonly telegraphMs: number;
+    /** No new telegraph this long after a cancelled one. */
+    readonly cancelLockoutMs: number;
+  };
+  readonly leap: {
+    /** Fixed flight time of every leap; the lane length sets the speed. */
+    readonly airMs: number;
+    /** Share of the target's velocity x airMs the locked lane leads (0 = aim at the current position). */
+    readonly leadFactor: number;
+    /** The lane continues this far beyond the aim point ... */
+    readonly overshootPx: number;
+    /** ... but never longer than this (before world-geometry clipping). */
+    readonly maxLengthPx: number;
+  };
+  /** Stationary recovery after a missed leap; afterwards the hunt restarts with a new alert. */
+  readonly recoverMs: number;
+  /** Extra reach of the body contact on top of both radii (absorbs frame timing only). */
+  readonly contactMarginPx: number;
+  readonly blast: {
+    readonly radiusPx: number;
+    /** Full damage for the touched target; everything else in the radius takes a distance falloff. */
+    readonly damage: number;
+    /** Damage to a base the spider detonated against (kamikaze). */
+    readonly baseDamage: number;
+    readonly knockback: number;
+    readonly fireChunks?: FireChunkBurstConfig;
+  };
+  /** Small pop when the spider is killed: players and decoys only. */
+  readonly killedPop: { readonly radiusPx: number; readonly damage: number };
+  readonly web: {
+    readonly rangePx: number;
+    /** Stationary spit windup; the web leaves the fangs at its end. */
+    readonly windupMs: number;
+    /** Stationary follow-through after the spit. */
+    readonly tailMs: number;
+    readonly flightMs: number;
+    /** Disable time of a webbed turret; a new web refreshes it instead of stacking. */
+    readonly durationMs: number;
+    readonly cooldownMs: number;
+    /** A webbed turret is only re-webbed once less than this remains. */
+    readonly refreshWindowMs: number;
+    /** Retry lock after a cancelled spit. */
+    readonly lockoutMs: number;
+    /** Fang position ahead of the body centre in game px. */
+    readonly mouthForwardPx: number;
+  };
+}
+
+/**
+ * A player hunter that prefers the base when the base is much cheaper to reach than every player
+ * (or no player is reachable). Hysteresis keeps it from flip-flopping; a visible nearby player
+ * always wins.
+ */
+export interface CoopDefenseEnemyBasePreferenceConfig {
+  readonly playerCostRatio: number;
+  /** Committed to the base, it returns to players only once their cost drops below this ratio. */
+  readonly releaseCostRatio: number;
+  readonly minDwellMs: number;
+  readonly playerOverridePx: number;
 }
 
 export interface CoopDefenseEnemyPlayerScaling {
@@ -552,7 +639,8 @@ export interface CoopDefenseEnemyConfig {
   readonly voidFireChunks?: CoopDefenseEnemyVoidFireChunkConfig;
   readonly voidFireTrail?: CoopDefenseEnemyVoidFireTrailConfig;
   readonly voidMolotov?: CoopDefenseEnemyVoidMolotovConfig;
-  readonly timebomb?: CoopDefenseEnemyTimebombConfig;
+  readonly kaboomtula?: CoopDefenseEnemyKaboomtulaConfig;
+  readonly basePreference?: CoopDefenseEnemyBasePreferenceConfig;
   readonly mortar?: CoopDefenseEnemyMortarConfig;
   readonly stinkAura?: CoopDefenseEnemyStinkAuraConfig;
   readonly deathSpawns?: readonly CoopDefenseEnemyDeathSpawnConfig[];
@@ -689,7 +777,8 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         voidFireChunks: config.voidFireChunks,
         voidFireTrail: config.voidFireTrail,
         voidMolotov: config.voidMolotov,
-        timebomb: config.timebomb,
+        kaboomtula: config.kaboomtula,
+        basePreference: config.basePreference ? { ...config.basePreference } : undefined,
         mortar: config.mortar ? { ...config.mortar, targetWeights: { ...config.mortar.targetWeights } } : undefined,
         firestarter: config.firestarter ? { ...config.firestarter, charges: { ...config.firestarter.charges }, lance: { ...config.firestarter.lance } } : undefined,
         shieldCharger: config.shieldCharger ? { ...config.shieldCharger } : undefined,
@@ -772,7 +861,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
   const flee = normalizeEnemyFleeConfig(enemy.flee);
   if ((enemy.movementTarget === 'flee') !== !!flee
     || (flee && (enemy.weapons.length || enemy.isBoss || enemy.krakenBoss || enemy.krakenEgg
-      || enemy.firestarter || enemy.mortar || enemy.timebomb || enemy.voidHunterBoss || enemy.spawnThrow
+      || enemy.firestarter || enemy.mortar || enemy.kaboomtula || enemy.voidHunterBoss || enemy.spawnThrow
       || enemy.translocator || enemy.burrow || enemy.dodge || enemy.combatPositioning
       || enemy.voidFireChunks || enemy.voidFireTrail || enemy.voidMolotov || enemy.stinkAura || enemy.deathSpawns?.length))) {
     throw new Error(`[coopDefenseEnemies] Fleeing enemy must be non-combatant: ${enemy.id}`);
@@ -780,7 +869,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
   const isBoss = enemy.isBoss === true;
   const krakenBoss = enemy.krakenBoss === undefined ? undefined : normalizeKrakenBossConfig(enemy.krakenBoss);
   const krakenEgg = enemy.krakenEgg === undefined ? undefined : normalizeKrakenEggConfig(enemy.krakenEgg);
-  if ((krakenBoss || krakenEgg) && (enemy.voidHunterBoss || enemy.timebomb || enemy.spawnThrow
+  if ((krakenBoss || krakenEgg) && (enemy.voidHunterBoss || enemy.kaboomtula || enemy.spawnThrow
     || enemy.translocator || enemy.burrow || enemy.dodge || enemy.combatPositioning
     || enemy.voidFireChunks || enemy.voidFireTrail || enemy.voidMolotov || enemy.stinkAura || enemy.deathSpawns?.length)) {
     throw new Error(`[coopDefenseEnemies] Conflicting kraken ability owner: ${enemy.id}`);
@@ -796,8 +885,16 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
   }
   // Hopping is exclusive locomotion: no second owner may move or hold the same body.
   if (enemy.hop && (flee || krakenBoss || krakenEgg || enemy.shieldCharger || enemy.energyCone || enemy.firestarter
-    || enemy.mortar || enemy.timebomb || enemy.burrow || enemy.dodge || enemy.amphibious || enemy.combatPositioning)) {
+    || enemy.mortar || enemy.kaboomtula || enemy.burrow || enemy.dodge || enemy.amphibious || enemy.combatPositioning)) {
     throw new Error(`[coopDefenseEnemies] Hopping enemy has a second locomotion owner: ${enemy.id}`);
+  }
+  // The spider owns its whole body (alert, rush, leap, spit): no second movement or attack owner.
+  if (enemy.kaboomtula && (flee || krakenBoss || krakenEgg || enemy.shieldCharger || enemy.energyCone || enemy.firestarter
+    || enemy.mortar || enemy.burrow || enemy.dodge || enemy.amphibious || enemy.combatPositioning || enemy.engage)) {
+    throw new Error(`[coopDefenseEnemies] Kabummtula has a second movement owner: ${enemy.id}`);
+  }
+  if (enemy.basePreference && enemy.movementTarget !== 'players') {
+    throw new Error(`[coopDefenseEnemies] basePreference needs movementTarget players: ${enemy.id}`);
   }
 
   return {
@@ -837,7 +934,8 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     voidFireChunks: normalizeVoidFireChunkConfig(enemy.voidFireChunks),
     voidFireTrail: normalizeVoidFireTrailConfig(enemy.voidFireTrail),
     voidMolotov: normalizeVoidMolotovConfig(enemy.voidMolotov, enemy.id),
-    timebomb: normalizeTimebombConfig(enemy.timebomb),
+    kaboomtula: normalizeKaboomtulaConfig(enemy.kaboomtula, enemy.id),
+    basePreference: normalizeBasePreferenceConfig(enemy.basePreference, enemy.id),
     mortar: normalizeMortarConfig(enemy.mortar),
     firestarter: normalizeFirestarterConfig(enemy.firestarter),
     shieldCharger: normalizeShieldChargerConfig(enemy.shieldCharger),
@@ -1265,34 +1363,87 @@ export function normalizeMortarConfig(config: CoopDefenseEnemyMortarConfig | und
   return normalized;
 }
 
-function normalizeTimebombConfig(
-  config: CoopDefenseEnemyTimebombConfig | undefined,
-): CoopDefenseEnemyTimebombConfig | undefined {
+function normalizeKaboomtulaConfig(
+  config: CoopDefenseEnemyKaboomtulaConfig | undefined,
+  enemyId: string,
+): CoopDefenseEnemyKaboomtulaConfig | undefined {
   if (!config) return undefined;
-  return {
-    chaseSpeedMultiplier: Math.max(0.1, config.chaseSpeedMultiplier),
+  const ms = (value: number) => Math.max(0, Math.floor(value));
+  const { skitter, pounce, leap, blast, killedPop, web } = config;
+  const normalized: CoopDefenseEnemyKaboomtulaConfig = {
     activationRadiusPx: Math.max(1, config.activationRadiusPx),
-    lineOfSightDurationMs: Math.max(0, Math.floor(config.lineOfSightDurationMs)),
-    fuseDistancePx: Math.max(1, config.fuseDistancePx),
-    fuseDurationMs: Math.max(1, Math.floor(config.fuseDurationMs)),
-    explosionRadiusPx: Math.max(1, config.explosionRadiusPx),
-    explosionDamage: Math.max(0, config.explosionDamage),
-    explosionKnockback: Math.max(0, config.explosionKnockback),
-    fireChunks: {
-      ...config.fireChunks,
-      count: Math.max(0, Math.floor(config.fireChunks.count)),
-      searchRadius: Math.max(0, config.fireChunks.searchRadius),
-      flightMs: Math.max(1, Math.floor(config.fireChunks.flightMs)),
-      igniteCenter: config.fireChunks.igniteCenter === true,
-      durationMs: Math.max(0, Math.floor(config.fireChunks.durationMs)),
-      burnDurationMs: Math.max(0, Math.floor(config.fireChunks.burnDurationMs)),
-      burnDamagePerTick: Math.max(0, config.fireChunks.burnDamagePerTick),
-      visualStyle: 'void',
-      damageTarget: 'players',
+    alertMs: ms(config.alertMs),
+    rushSpeedPx: Math.max(1, config.rushSpeedPx),
+    rushMaxMs: Math.max(1, ms(config.rushMaxMs)),
+    lostSightGraceMs: ms(config.lostSightGraceMs),
+    skitter: {
+      segmentMinMs: Math.max(1, ms(skitter.segmentMinMs)),
+      segmentMaxMs: Math.max(1, ms(skitter.segmentMaxMs)),
+      zigMinDegrees: Math.max(0, skitter.zigMinDegrees),
+      zigMaxDegrees: Math.max(0, skitter.zigMaxDegrees),
+      dartChance: Math.max(0, Math.min(1, skitter.dartChance)),
+      dartSpeedFactor: Math.max(0.1, skitter.dartSpeedFactor),
+      pauseChance: Math.max(0, Math.min(1, skitter.pauseChance)),
+      pauseMinMs: ms(skitter.pauseMinMs),
+      pauseMaxMs: ms(skitter.pauseMaxMs),
+      calmWithinPx: Math.max(0, skitter.calmWithinPx),
+      probePx: Math.max(1, skitter.probePx),
     },
-    killedPopRadiusPx: Math.max(1, config.killedPopRadiusPx),
-    killedPopDamage: Math.max(0, config.killedPopDamage),
+    pounce: { triggerPx: Math.max(1, pounce.triggerPx), bandMinPx: Math.max(0, pounce.bandMinPx),
+      bandMaxPx: Math.max(0, pounce.bandMaxPx), telegraphMs: Math.max(1, ms(pounce.telegraphMs)),
+      cancelLockoutMs: ms(pounce.cancelLockoutMs) },
+    leap: { airMs: Math.max(1, ms(leap.airMs)), leadFactor: Math.max(0, leap.leadFactor),
+      overshootPx: Math.max(0, leap.overshootPx), maxLengthPx: Math.max(1, leap.maxLengthPx) },
+    recoverMs: ms(config.recoverMs),
+    contactMarginPx: Math.max(0, config.contactMarginPx),
+    blast: {
+      radiusPx: Math.max(1, blast.radiusPx), damage: Math.max(0, blast.damage), baseDamage: Math.max(0, blast.baseDamage),
+      knockback: Math.max(0, blast.knockback),
+      fireChunks: blast.fireChunks ? {
+        ...blast.fireChunks,
+        count: Math.max(0, Math.floor(blast.fireChunks.count)),
+        searchRadius: Math.max(0, blast.fireChunks.searchRadius),
+        flightMs: Math.max(1, ms(blast.fireChunks.flightMs)),
+        igniteCenter: blast.fireChunks.igniteCenter === true,
+        durationMs: ms(blast.fireChunks.durationMs),
+        burnDurationMs: ms(blast.fireChunks.burnDurationMs),
+        burnDamagePerTick: Math.max(0, blast.fireChunks.burnDamagePerTick),
+        visualStyle: 'void',
+        damageTarget: 'players',
+      } : undefined,
+    },
+    killedPop: { radiusPx: Math.max(1, killedPop.radiusPx), damage: Math.max(0, killedPop.damage) },
+    web: {
+      rangePx: Math.max(1, web.rangePx), windupMs: Math.max(1, ms(web.windupMs)), tailMs: ms(web.tailMs),
+      flightMs: Math.max(1, ms(web.flightMs)), durationMs: Math.max(1, ms(web.durationMs)),
+      cooldownMs: ms(web.cooldownMs), refreshWindowMs: ms(web.refreshWindowMs), lockoutMs: ms(web.lockoutMs),
+      mouthForwardPx: Math.max(0, web.mouthForwardPx),
+    },
   };
+  const n = normalized;
+  if (n.skitter.segmentMinMs > n.skitter.segmentMaxMs || n.skitter.zigMinDegrees > n.skitter.zigMaxDegrees
+    || n.skitter.zigMaxDegrees >= 90 || n.skitter.pauseMinMs > n.skitter.pauseMaxMs
+    || !(n.pounce.bandMinPx < n.pounce.triggerPx && n.pounce.triggerPx <= n.pounce.bandMaxPx)
+    || n.pounce.bandMaxPx >= n.activationRadiusPx
+    || n.leap.maxLengthPx < n.pounce.bandMaxPx + n.leap.overshootPx) {
+    throw new Error(`[coopDefenseEnemies] Invalid Kabummtula ranges or timing: ${enemyId}`);
+  }
+  return normalized;
+}
+
+function normalizeBasePreferenceConfig(
+  config: CoopDefenseEnemyBasePreferenceConfig | undefined,
+  enemyId: string,
+): CoopDefenseEnemyBasePreferenceConfig | undefined {
+  if (!config) return undefined;
+  const normalized = {
+    playerCostRatio: config.playerCostRatio, releaseCostRatio: config.releaseCostRatio,
+    minDwellMs: Math.max(0, Math.floor(config.minDwellMs)), playerOverridePx: Math.max(0, config.playerOverridePx),
+  };
+  if (!(normalized.releaseCostRatio >= 1 && normalized.releaseCostRatio <= normalized.playerCostRatio)) {
+    throw new Error(`[coopDefenseEnemies] basePreference needs 1 <= releaseCostRatio <= playerCostRatio: ${enemyId}`);
+  }
+  return normalized;
 }
 
 function normalizePlayerScaling(

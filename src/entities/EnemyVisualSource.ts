@@ -11,6 +11,8 @@ export interface EnemyVisualSource {
   readonly sprite: Phaser.GameObjects.Sprite;
   readonly getHp: () => number;
   readonly getNetSnapshot: () => SyncedEnemyState;
+  /** Replicated Kabummtula timeline (alert, rush, telegraph, leap); absent on non-spider views. */
+  readonly getKaboomtulaState?: () => import('../systems/KaboomtulaState').KaboomtulaState;
   /** Presented general vulnerability (host status or replicated snapshot), never a rule input. */
   readonly isVulnerable: () => boolean;
   /** Optional local gesture; placeholders and other enemy views need no cast clip. */

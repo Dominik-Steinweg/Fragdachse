@@ -368,7 +368,7 @@ describe('Enemy locomotion facing presentation', () => {
       walk: (angle: number) => unit.setDesiredVelocity(Math.cos(angle) * 100, Math.sin(angle) * 100, 0, undefined, 'locomotion') };
   }
 
-  it.each(['rabid-badger', 'timebomb-badger'] as const)('smooths only the displayed angle and shares that pose with movement effects (%s)', kind => {
+  it.each(['rabid-badger', 'kaboomtula'] as const)('smooths only the displayed angle and shares that pose with movement effects (%s)', kind => {
     const f = fixture(kind);
     try {
       f.walk(.4);

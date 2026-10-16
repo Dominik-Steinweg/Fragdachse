@@ -392,3 +392,38 @@ describe('Budgeted object-based opening search', () => {
     expect(search([rect('solid', 112, 0, 144, 256, 'barrier')]).status).toBe('no-solution');
   });
 });
+
+describe('Base preference of a player hunter', () => {
+  const baseWorld = () => navigationTestWorld([rect('base:main', 80, 80, 112, 112, 'base')],
+    [{ id: 'main', isGoalSource: true, cellCoords: Int32Array.of(6, 6) }]);
+
+  it('commits to a much cheaper base, keeps it for the dwell and then returns to a close player', () => {
+    const preference = getCoopDefenseEnemyConfig('kaboomtula').basePreference as { playerOverridePx: number; minDwellMs: number };
+    const override = preference.playerOverridePx;
+    preference.playerOverridePx = 0;
+    try {
+      const world = baseWorld(), unit = enemy('kaboomtula', 'spider', 40, 96);
+      // Decisions rescan on their own interval; a few settled frames let both routes resolve.
+      const settleAt = (...times: number[]) => { for (const time of times) settle(world, [unit], time); };
+      world.catalog.updateTargets([{ kind: 'player', id: 'far', x: 232, y: 232 }]);
+      settleAt(0, 200, 400);
+      expect(world.intents.get(unit.id)).toMatchObject({ reason: 'fallback-base', target: { kind: 'base', id: 'main' } });
+      world.catalog.updateTargets([{ kind: 'player', id: 'far', x: 40, y: 126 }]);
+      settleAt(1000, 1200);
+      expect(world.intents.get(unit.id)?.target).toEqual({ kind: 'base', id: 'main' });
+      settleAt(preference.minDwellMs + 2000, preference.minDwellMs + 2200);
+      expect(world.intents.get(unit.id)).toMatchObject({ reason: 'player', target: { kind: 'player', id: 'far' } });
+      world.destroy();
+    } finally {
+      preference.playerOverridePx = override;
+    }
+  });
+
+  it('lets a visible nearby player win over a cheaper base at once', () => {
+    const world = baseWorld(), unit = enemy('kaboomtula', 'spider', 40, 96);
+    world.catalog.updateTargets([{ kind: 'player', id: 'near', x: 232, y: 232 }]);
+    for (const time of [0, 200, 400]) settle(world, [unit], time);
+    expect(world.intents.get(unit.id)?.target).toEqual({ kind: 'player', id: 'near' });
+    world.destroy();
+  });
+});

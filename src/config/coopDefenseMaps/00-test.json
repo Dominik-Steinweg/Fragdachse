@@ -437,6 +437,12 @@
         "spawnArea": { "gridX": 30, "gridY": 46, "widthCells": 4, "heightCells": 4 } }]
     },
     {
+      "id": "kaboomtula-gate-1",
+      "start": { "type": "time", "atMs": 14000 },
+      "groups": [{ "enemyKind": "kaboomtula", "count": 3, "spawnStaggerMs": 2500,
+        "spawnArea": { "gridX": 30, "gridY": 46, "widthCells": 4, "heightCells": 4 } }]
+    },
+    {
       "id": "plague-toad-gate-1",
       "start": { "type": "time", "atMs": 8000 },
       "groups": [

@@ -171,7 +171,7 @@ describe('Enemy stuck in a rock', () => {
     expect(firedTargetPositions).toEqual([{ x: player.x, y: player.y }]);
   });
 
-  it.each([{ kind: 'timebomb-badger', intent: false }, { kind: 'rabid-badger', intent: false }, { kind: 'rabid-badger', intent: true }] as const)('lets $kind fire at an occupied tower surface (intent: $intent), but not an empty tower', ({ kind, intent }) => {
+  it.each([{ kind: 'rabid-badger', intent: false }, { kind: 'rabid-badger', intent: true }] as const)('lets $kind fire at an occupied tower surface (intent: $intent), but not an empty tower', ({ kind, intent }) => {
     const enemy = createStuckEnemy({ wantsToMove: true, pathBlocked: false }, 'all');
     Object.assign(enemy, { kind });
     const rangedWeapon = enemy.getAttackWeapons()[1];

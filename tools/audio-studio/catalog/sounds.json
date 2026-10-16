@@ -13917,7 +13917,7 @@
                 "path": "src/audio/ExplosionAudio.ts",
                 "line": 37,
                 "kind": "unknown",
-                "excerpt": "'enemy.timebomb': 'sfx_explosion_timebomb',"
+                "excerpt": "'enemy.kaboomtula': 'sfx_explosion_timebomb',"
               }
             ],
             "playback": "unknown",
@@ -13948,7 +13948,7 @@
             "path": "src/audio/ExplosionAudio.ts",
             "line": 37,
             "kind": "unknown",
-            "excerpt": "'enemy.timebomb': 'sfx_explosion_timebomb',"
+            "excerpt": "'enemy.kaboomtula': 'sfx_explosion_timebomb',"
           }
         ],
         "playback": "unknown",

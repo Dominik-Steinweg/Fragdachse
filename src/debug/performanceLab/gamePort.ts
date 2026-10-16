@@ -180,7 +180,7 @@ export function createPerformanceLabGamePort(scene: Phaser.Scene, flow: ArenaRun
     if (counters.siegeAttackers) return;
     for (const y of [70, 74]) {
       const p = point(73, y);
-      if (!flow.navigationLabPort.spawnEnemy(p.x, p.y, 'timebomb-badger', false)) throw new Error('Siege enemy spawn failed');
+      if (!flow.navigationLabPort.spawnEnemy(p.x, p.y, 'kaboomtula', false)) throw new Error('Siege enemy spawn failed');
     }
     counters.siegeAttackers = 2; add('spawnedEnemies', 2);
   };

@@ -41,7 +41,7 @@ import {
 } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, getCoopMissionTimeLimitSec, isDiagnosticMapId, resolveCoopDefenseMapPersistentSpawnConfigs, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
-import { ARENA_DURATION_SEC, COOP_DEFENSE_BASE_TURRET_OWNER_ID, applyArenaMetricsForMode } from '../../config';
+import { ARENA_DURATION_SEC, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, applyArenaMetricsForMode } from '../../config';
 import type { ArenaContext }          from './ArenaContext';
 import type { RendererBundle }        from './RendererBundle';
 import {
@@ -918,6 +918,10 @@ export class ArenaLifecycleCoordinator {
           'construction', id, resolvedDamage, attackerId, 'activity.construction_damage',
         );
       },
+      getTurretWebTargets: () => (this.worldCombatGameplayBinding?.getTurretDefinitions() ?? [])
+        .filter(turret => turret.ownerId !== COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID)
+        .map(turret => ({ id: turret.id, x: turret.x, y: turret.y, skipRockIndex: turret.skipRockIndex,
+          sourceCarrierBaseId: turret.sourceCarrierBaseId })),
       releaseMissionObjectives: (runtime, playerId) => {
         runtime.coopDefenseObjectivePlacementRewardSystem?.handlePlayerUnavailable(playerId);
         runtime.coopDefenseCarrySystem?.handlePlayerUnavailable(playerId);
@@ -946,7 +950,7 @@ export class ArenaLifecycleCoordinator {
         },
         sweepBases: (enemyId, ax, ay, bx, by, radius, damage, nowMs) => this.hostUpdate.applyEnemySweepBaseDamage(enemyId, ax, ay, bx, by, radius, damage, nowMs),
       },
-      broadcastExplosion: (x, y, radius, style, color) => bridge.broadcastExplosionEffect(x, y, radius, color ?? (style === 'mortar' ? VOID_PALETTE.primary : 0xb82fff), style, undefined, style === 'timebomb_pop' ? 'silent' : style === 'mortar' ? 'generic' : style === 'brood_hatch' ? 'brood_hatch' : 'enemy.timebomb'),
+      broadcastExplosion: (x, y, radius, style, color) => bridge.broadcastExplosionEffect(x, y, radius, color ?? (style === 'mortar' ? VOID_PALETTE.primary : 0xb82fff), style, undefined, style === 'timebomb_pop' ? 'silent' : style === 'mortar' ? 'generic' : style === 'brood_hatch' ? 'brood_hatch' : 'enemy.kaboomtula'),
       broadcastCorpseMarker: (corpseId, x, y, enemySize, lifetimeMs) => (
         bridge.broadcastCorpseMarker(corpseId, x, y, enemySize, lifetimeMs)
       ),

@@ -83,7 +83,8 @@ import type { TargetStatusTarget } from '../systems/TargetStatusSystem';
 import type { EnergyInjectorSystem } from '../systems/EnergyInjectorSystem';
 import type { TargetFootprint } from '../systems/ReinforcementMatrixSystem';
 import type { CoopDefenseSecondaryObjectiveState } from '../types';
-import type { CoopDefenseTimebombSystem } from '../systems/CoopDefenseTimebombSystem';
+import type { CoopDefenseKaboomtulaSystem } from '../systems/CoopDefenseKaboomtulaSystem';
+import type { CoopDefenseTurretWebSystem } from '../systems/CoopDefenseTurretWebSystem';
 import type { NecromancySystem } from '../systems/NecromancySystem';
 import type { AutomatedWeaponExecution } from './AutomatedWeaponExecutionAdapter';
 import type { TeslaDomeSystem } from '../systems/TeslaDomeSystem';
@@ -298,7 +299,9 @@ export interface WorldCombatGameplayBindingOptions {
   readonly getEnergyConeSystem?: () => import('../systems/CoopDefenseEnergyConeSystem').CoopDefenseEnergyConeSystem | null;
   readonly getHopSystem?: () => import('../systems/CoopDefenseEnemyHopSystem').CoopDefenseEnemyHopSystem | null;
   readonly getMortarSystem: () => import('../systems/CoopDefenseMortarSystem').CoopDefenseMortarSystem | null;
-  readonly getTimebombSystem: () => CoopDefenseTimebombSystem | null;
+  readonly getKaboomtulaSystem: () => CoopDefenseKaboomtulaSystem | null;
+  /** Activity-owned turret webs; a webbed turret neither aims nor fires. */
+  readonly getTurretWebSystem?: () => CoopDefenseTurretWebSystem | null;
   readonly getNecromancySystem: () => NecromancySystem | null;
   readonly hostUpdate: WorldCombatImpactPort;
   readonly createEnergyShieldSystem: (resourceSystem: PlayerCombatResourcePort, shieldBuffSystem: ShieldBuffSystem) => EnergyShieldSystem;
@@ -797,10 +800,11 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       o.getPlayerCombatIntegration()?.slimeTrail?.getEnemyMovementFactor(enemyId, now) ?? 1,
       combat.getEnemyMovementFactor(enemyId, now),
     ));
-    // A committed shield charge or a hop in flight is not halted by ordinary hit stagger.
+    // A committed shield charge, a hop or a spider leap in flight is not halted by ordinary hit stagger.
     hostPhysics.setEnemyHitStaggerResolver((enemyId, now) => combat.isEnemyHitStaggered(enemyId, now)
       && !(o.getShieldChargerSystem?.()?.isRunning(enemyId) ?? false)
-      && !(o.getHopSystem?.()?.isAirborne(enemyId, now) ?? false));
+      && !(o.getHopSystem?.()?.isAirborne(enemyId, now) ?? false)
+      && !(o.getKaboomtulaSystem()?.isAirborne(enemyId) ?? false));
     combat.setEnemyDeathCallback((enemyId, x, y, burnSources, death, _target, wildfire) => {
       const generation = this.activityGeneration;
       const current = () => !this.destroyed && generation === this.activityGeneration;
@@ -814,9 +818,10 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       if (death) o.getShieldChargerSystem?.()?.handleKilled(death);
       if (death) o.getEnergyConeSystem?.()?.handleKilled(death);
       if (death) o.getHopSystem?.()?.handleKilled(death);
-      const wasTimebomb = death ? (o.getTimebombSystem()?.handleKilled(death, combat.getHostTime()) ?? false) : false;
+      // A killed spider only pops: no generic death body, no slime bloom, never raised by necromancy.
+      const wasKaboomtula = death ? (o.getKaboomtulaSystem()?.handleKilled(death, combat.getHostTime()) ?? false) : false;
       if (!current()) return true;
-      if (wasTimebomb) {
+      if (wasKaboomtula) {
         return true;
       }
       const burst = o.getPlayerCombatIntegration()?.reactions.handleEnemyDeath(enemyId, x, y, burnSources, combat.getHostTime()) ?? null;
@@ -1653,7 +1658,11 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
   getTurretFireSources(definitions = this.getTurretDefinitions()): readonly TurretFireSource[] {
     const sources = this.fireControl?.deriveFireSources(definitions, this.fireControlNowMs,
       () => this.readFireControlConstructions(definitions)) ?? definitions.map(toLocalTurretFireSource);
-    return [...sources, ...(this.holoOffensive?.deriveFireSources(this.fireControlNowMs) ?? [])];
+    const all = [...sources, ...(this.holoOffensive?.deriveFireSources(this.fireControlNowMs) ?? [])];
+    // A webbed construction is disabled with all of its fire-control copies and leaves every portal.
+    const web = this.options.getTurretWebSystem?.() ?? null, now = this.fireControlNowMs;
+    return web ? all.map(source => web.isWebbed(source.identityId, now)
+      ? { ...source, fireState: 'disabled' as const, portal: undefined } : source) : all;
   }
 
   advanceFireControl(now: number): readonly TurretFireSource[] {
@@ -1771,9 +1780,12 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     const o = this.options;
     const playerCombat = o.getPlayerCombatIntegration();
     const turrets = this.getTurretDefinitions();
+    const web = o.getTurretWebSystem?.() ?? null, now = this.fireControlNowMs;
     return turrets.flatMap(turret => {
         const weapon = WEAPON_CONFIGS[turret.weaponId ?? 'SPORES'];
         if (weapon.fire.type !== 'tesla_dome') return [];
+        // A webbed Tesla turret drops its dome until the web is gone.
+        if (web?.isWebbed(turret.id, now)) return [];
         const { x, y, ownerId } = turret;
         const injectorMultiplier = o.getEnergyInjectorSystem()?.getTurretDamageMultiplierAt(x, y) ?? 1;
         const baseOwned = ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID || ownerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID;

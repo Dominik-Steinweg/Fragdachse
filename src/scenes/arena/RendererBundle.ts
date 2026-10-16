@@ -13,6 +13,8 @@ import { DroneNavLightRenderer } from '../../effects/droneNavLights/DroneNavLigh
 import { EliteMarkerRenderer } from '../../effects/dawn/EliteMarkerRenderer';
 import { EnemyVulnerabilityRenderer } from '../../effects/EnemyVulnerabilityRenderer';
 import { EnemyHopPresentation } from '../../effects/EnemyHopPresentation';
+import { KaboomtulaPresentation } from '../../effects/KaboomtulaPresentation';
+import { TurretWebRenderer } from '../../effects/TurretWebRenderer';
 import { AmphibiousEnemyPresentation } from '../../effects/AmphibiousEnemyPresentation';
 import { EnemyReadabilityRenderer } from '../../effects/EnemyReadabilityRenderer';
 import { createCombatShaderWarmupProbes } from '../../effects/CombatShaderWarmup';
@@ -102,6 +104,8 @@ export interface RendererBundle {
   enemyVulnerability: EnemyVulnerabilityRenderer;
   amphibiousEnemies: AmphibiousEnemyPresentation;
   enemyHops: EnemyHopPresentation;
+  kaboomtula: KaboomtulaPresentation;
+  turretWeb: TurretWebRenderer;
   eliteMarkers: EliteMarkerRenderer;
   enemyReadability: EnemyReadabilityRenderer;
   bullet:              BulletRenderer;
@@ -451,6 +455,10 @@ export function* createRendererBundleSteps(
   const enemyHops = new EnemyHopPresentation(scene);
   cleanup.push(() => enemyHops.destroy());
   enemyHops.setLightingSystem(lighting);
+  const kaboomtula = new KaboomtulaPresentation(scene);
+  cleanup.push(() => kaboomtula.destroy());
+  const turretWeb = new TurretWebRenderer(scene);
+  cleanup.push(() => turretWeb.destroy());
   const enemyReadability = new EnemyReadabilityRenderer(scene);
   cleanup.push(() => enemyReadability.destroy());
   const interactions = new WorldInteractionRenderer(scene);
@@ -505,6 +513,8 @@ export function* createRendererBundleSteps(
     enemyVulnerability,
     amphibiousEnemies,
     enemyHops,
+    kaboomtula,
+    turretWeb,
     eliteMarkers,
     enemyReadability,
     gpuVfx,
@@ -595,6 +605,9 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   bundle.shieldCharger.setLaneSink((id, attack, now, visible) => effectSystem.syncEnemyLane(`shield-charge:${id}`, attack, now, visible));
   bundle.alienCone.setSectorSink((id, attack, now, visible) => effectSystem.syncEnemySector(`energy-cone:${id}`, attack, now, visible));
   bundle.enemyHops.setZoneSink((id, attack, now, visible) => effectSystem.syncEnemyZone(`hop-landing:${id}`, attack, now, visible));
+  bundle.kaboomtula.setSinks(
+    (id, attack, now, visible) => effectSystem.syncEnemyLane(`kaboomtula-lane:${id}`, attack, now, visible, undefined, true),
+    (id, attack, now, visible) => effectSystem.syncEnemyZone(`kaboomtula-ring:${id}`, attack, now, visible, undefined, true));
 }
 
 /**

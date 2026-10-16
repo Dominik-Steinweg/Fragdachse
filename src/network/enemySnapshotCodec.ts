@@ -4,6 +4,7 @@ import { readAreaClawState } from './krakenSnapshotCodec';
 import { isShieldChargeState, SHIELD_CHARGE_PHASES } from '../systems/ShieldChargeState';
 import { ENERGY_CONE_CLIP_QUANT, ENERGY_CONE_CLIP_RAYS, ENERGY_CONE_PHASES, isEnergyConeState } from '../systems/EnergyConeState';
 import { isEnemyHopState } from '../systems/EnemyHopState';
+import { isKaboomtulaState, KABOOMTULA_PHASES, KABOOMTULA_TARGET_KINDS } from '../systems/KaboomtulaState';
 /**
  * Kompakte (De-)Serialisierung des Gegner-Upsert-Stroms für {@link SyncedEnemySnapshot}.
  *
@@ -39,7 +40,10 @@ const FIELD_ELITE_AFFIX = 65536;
 const FIELD_SUBMERGED = 131072;
 /** Host-fixed hop: revision, optional jump timeline (origin, target, four timestamps, shock), heal link ids. */
 const FIELD_HOP = 262144;
-// Codes 0–6 are deployed legacy values; append new actions without renumbering them.
+/** Kabummtula: revision, phase, phase window, optional target ref (kind, id), optional locked leap. */
+const FIELD_KABOOMTULA = 524288;
+// Codes 0–6 are deployed legacy values; append new actions without renumbering them. Codes 4/5
+// (`timebomb-chase`/`timebomb-fuse`) are retired with the timebomb badger and never emitted again.
 const SPECIAL_ACTIONS = ['none', 'gauss-charge', 'phase-nuke', 'armageddon', 'timebomb-chase',
   'timebomb-fuse', 'void-molotov-windup', 'kraken-ink', 'kraken-eggs', 'kraken-dive',
   'kraken-submerged', 'kraken-surface', 'kraken-ashore', 'kraken-slam', 'kraken-spines', 'fire-lance-charge'] as const;
@@ -94,6 +98,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
   if (entry.plasmaChargeStacks !== undefined) mask |= FIELD_PLASMA_CHARGE;
   if (entry.submerged !== undefined) mask |= FIELD_SUBMERGED;
   if (entry.hop !== undefined) mask |= FIELD_HOP;
+  if (entry.kaboomtula !== undefined) mask |= FIELD_KABOOMTULA;
 
   out.push(enemyIdToNum(entry.id), mask);
   if (mask & FIELD_POS) out.push(entry.x as number, entry.y as number);
@@ -151,6 +156,12 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
     if (jump) out.push(jump.originX, jump.originY, jump.targetX, jump.targetY, jump.crouchAt, jump.takeoffAt,
       jump.landAt, jump.settleUntil, jump.shock ? 1 : 0);
     out.push(state.links.length, ...state.links.map(enemyIdToNum));
+  }
+  if (mask & FIELD_KABOOMTULA) {
+    const state = entry.kaboomtula!, target = state.target, leap = state.leap;
+    out.push(state.revision, KABOOMTULA_PHASES.indexOf(state.phase), state.startedAt, state.endsAt,
+      target ? KABOOMTULA_TARGET_KINDS.indexOf(target.kind) : -1, target?.id ?? '', leap ? 1 : 0);
+    if (leap) out.push(leap.originX, leap.originY, leap.endX, leap.endY, leap.takeoffAt, leap.landAt);
   }
 }
 
@@ -257,6 +268,20 @@ export function decodeEnemyUpserts(stream: readonly (number | string)[]): Synced
       for (let link = 0; link < count; link++) links.push(enemyNumToId(stream[i++] as number));
       const state = { revision, jump, links };
       if (isEnemyHopState(state)) entry.hop = state;
+    }
+    if (mask & FIELD_KABOOMTULA) {
+      // Every value is consumed even for an invalid state, so later entries stay aligned.
+      const revision = stream[i++] as number, phase = KABOOMTULA_PHASES[stream[i++] as number];
+      const startedAt = stream[i++] as number, endsAt = stream[i++] as number;
+      const kind = KABOOMTULA_TARGET_KINDS[stream[i++] as number], id = stream[i++];
+      const hasLeap = stream[i++] as number;
+      const leap = hasLeap ? {
+        originX: stream[i++] as number, originY: stream[i++] as number, endX: stream[i++] as number,
+        endY: stream[i++] as number, takeoffAt: stream[i++] as number, landAt: stream[i++] as number,
+      } : null;
+      const target = kind && typeof id === 'string' && id.length ? { kind, id } : null;
+      const state = { revision, phase, startedAt, endsAt, target, leap };
+      if (isKaboomtulaState(state)) entry.kaboomtula = state;
     }
     result.push(entry);
   }

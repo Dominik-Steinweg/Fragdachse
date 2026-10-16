@@ -28,7 +28,9 @@
 // Mini-Kraken: appended enemy kind (shifts the kraken boss/egg indices), submerged snapshot field
 // and leap style on the shared charge lane; amphibious flow-field profiles.
 // Quacksalber toad: appended hop snapshot field (jump timeline and heal links); the healing aura weapon is gone.
-export const PEER_PROTOCOL_VERSION = 38;
+// Kabummtula: kind 12 renamed timebomb-badger -> kaboomtula, appended spider snapshot field (phase window,
+// target ref, locked leap), required tw slice (turret web shots and webs); timebomb special actions retired.
+export const PEER_PROTOCOL_VERSION = 39;
 
 /** Kanaltyp eines Links. 'rel' = geordnet+zuverlässig, 'fast' = ungeordnet+ohne Retransmit. */
 export type PeerChannelKind = 'rel' | 'fast';

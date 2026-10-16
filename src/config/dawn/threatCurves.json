@@ -5,7 +5,7 @@
     "rabid-badger": 2,
     "spore-warden": 5,
     "plague-medic": 6,
-    "timebomb-badger": 5,
+    "kaboomtula": 5,
     "void-stalker": 7,
     "alien-badger": 8,
     "thrower-badger": 8,
@@ -45,63 +45,63 @@
     {
       "threat": 2, "scheduleId": "standard", "nightBudget": 400, "dayPressureBudget": 65,
       "fronts": ["primary","secondary"], "siteCount": 2, "tierWeights": [85,15,0],
-      "enemyWeights": {"zombie-badger":4,"demon-badger":4,"rabid-badger":4,"spore-warden":4,"plague-medic":4,"thrower-badger":4,"pyro-badger":4,"mortar-badger":4,"firestarter-badger":4,"timebomb-badger":4},
+      "enemyWeights": {"zombie-badger":4,"demon-badger":4,"rabid-badger":4,"spore-warden":4,"plague-medic":4,"thrower-badger":4,"pyro-badger":4,"mortar-badger":4,"firestarter-badger":4,"kaboomtula":4},
       "itemLevel": 3, "scrapMultiplier": 1.3,
       "scrapDrops": {"dayChance":0.0186,"nightChance":0.0839,"pickupDefId":"dawn_scrap_1"}
     },
     {
       "threat": 3, "scheduleId": "standard", "nightBudget": 500, "dayPressureBudget": 80,
       "fronts": ["primary","secondary","flank"], "siteCount": 3, "tierWeights": [70,30,0],
-      "enemyWeights": {"zombie-badger":4,"demon-badger":4,"rabid-badger":4,"spore-warden":4,"plague-medic":4,"thrower-badger":4,"pyro-badger":4,"mortar-badger":4,"firestarter-badger":4,"timebomb-badger":4,"alien-badger":4,"void-stalker":4},
+      "enemyWeights": {"zombie-badger":4,"demon-badger":4,"rabid-badger":4,"spore-warden":4,"plague-medic":4,"thrower-badger":4,"pyro-badger":4,"mortar-badger":4,"firestarter-badger":4,"kaboomtula":4,"alien-badger":4,"void-stalker":4},
       "itemLevel": 4, "scrapMultiplier": 1.1,
       "scrapDrops": {"dayChance":0.0188,"nightChance":0.0848,"pickupDefId":"dawn_scrap_1"}
     },
     {
       "threat": 4, "scheduleId": "standard", "nightBudget": 620, "dayPressureBudget": 100,
       "fronts": ["primary","secondary","flank"], "siteCount": 3, "tierWeights": [55,40,5],
-      "enemyWeights": {"zombie-badger":4,"demon-badger":4,"rabid-badger":4,"spore-warden":4,"plague-medic":4,"thrower-badger":4,"pyro-badger":4,"mortar-badger":4,"firestarter-badger":4,"timebomb-badger":4,"alien-badger":4,"void-stalker":4,"stink-broodmother":4},
+      "enemyWeights": {"zombie-badger":4,"demon-badger":4,"rabid-badger":4,"spore-warden":4,"plague-medic":4,"thrower-badger":4,"pyro-badger":4,"mortar-badger":4,"firestarter-badger":4,"kaboomtula":4,"alien-badger":4,"void-stalker":4,"stink-broodmother":4},
       "itemLevel": 5, "scrapMultiplier": 1.15,
       "scrapDrops": {"dayChance":0.0219,"nightChance":0.0985,"pickupDefId":"dawn_scrap_1"}
     },
     {
       "threat": 5, "scheduleId": "standard", "nightBudget": 760, "dayPressureBudget": 120,
       "fronts": ["primary","secondary","flank"], "siteCount": 4, "tierWeights": [40,50,10],
-      "enemyWeights": {"zombie-badger":4,"demon-badger":4,"rabid-badger":4,"spore-warden":4,"plague-medic":4,"thrower-badger":4,"pyro-badger":4,"mortar-badger":4,"firestarter-badger":4,"timebomb-badger":4,"alien-badger":4,"void-stalker":4,"stink-broodmother":4},
+      "enemyWeights": {"zombie-badger":4,"demon-badger":4,"rabid-badger":4,"spore-warden":4,"plague-medic":4,"thrower-badger":4,"pyro-badger":4,"mortar-badger":4,"firestarter-badger":4,"kaboomtula":4,"alien-badger":4,"void-stalker":4,"stink-broodmother":4},
       "itemLevel": 6, "scrapMultiplier": 1.2,
       "scrapDrops": {"dayChance":0.0212,"nightChance":0.0954,"pickupDefId":"dawn_scrap_2"}
     },
     {
       "threat": 6, "scheduleId": "standard", "nightBudget": 920, "dayPressureBudget": 150,
       "fronts": ["primary","secondary","flank","flank"], "siteCount": 4, "tierWeights": [30,50,20],
-      "enemyWeights": {"zombie-badger":4,"demon-badger":4,"rabid-badger":4,"spore-warden":4,"plague-medic":4,"thrower-badger":4,"pyro-badger":4,"mortar-badger":4,"firestarter-badger":4,"timebomb-badger":4,"alien-badger":4,"void-stalker":4,"stink-broodmother":4},
+      "enemyWeights": {"zombie-badger":4,"demon-badger":4,"rabid-badger":4,"spore-warden":4,"plague-medic":4,"thrower-badger":4,"pyro-badger":4,"mortar-badger":4,"firestarter-badger":4,"kaboomtula":4,"alien-badger":4,"void-stalker":4,"stink-broodmother":4},
       "itemLevel": 7, "scrapMultiplier": 1.25,
       "scrapDrops": {"dayChance":0.0206,"nightChance":0.0926,"pickupDefId":"dawn_scrap_2"}
     },
     {
       "threat": 7, "scheduleId": "standard", "nightBudget": 1100, "dayPressureBudget": 175,
       "fronts": ["primary","secondary","flank","flank"], "siteCount": 5, "tierWeights": [20,50,30],
-      "enemyWeights": {"zombie-badger":4,"demon-badger":4,"rabid-badger":4,"spore-warden":4,"plague-medic":4,"thrower-badger":4,"pyro-badger":4,"mortar-badger":4,"firestarter-badger":4,"timebomb-badger":4,"alien-badger":4,"void-stalker":4,"stink-broodmother":4},
+      "enemyWeights": {"zombie-badger":4,"demon-badger":4,"rabid-badger":4,"spore-warden":4,"plague-medic":4,"thrower-badger":4,"pyro-badger":4,"mortar-badger":4,"firestarter-badger":4,"kaboomtula":4,"alien-badger":4,"void-stalker":4,"stink-broodmother":4},
       "itemLevel": 8, "scrapMultiplier": 1.28,
       "scrapDrops": {"dayChance":0.0194,"nightChance":0.0871,"pickupDefId":"dawn_scrap_2"}
     },
     {
       "threat": 8, "scheduleId": "standard", "nightBudget": 1300, "dayPressureBudget": 210,
       "fronts": ["primary","secondary","flank","flank"], "siteCount": 5, "tierWeights": [15,45,40],
-      "enemyWeights": {"zombie-badger":4,"demon-badger":4,"rabid-badger":4,"spore-warden":4,"plague-medic":4,"thrower-badger":4,"pyro-badger":4,"mortar-badger":4,"firestarter-badger":4,"timebomb-badger":4,"alien-badger":4,"void-stalker":4,"stink-broodmother":4},
+      "enemyWeights": {"zombie-badger":4,"demon-badger":4,"rabid-badger":4,"spore-warden":4,"plague-medic":4,"thrower-badger":4,"pyro-badger":4,"mortar-badger":4,"firestarter-badger":4,"kaboomtula":4,"alien-badger":4,"void-stalker":4,"stink-broodmother":4},
       "itemLevel": 9, "scrapMultiplier": 1.28,
       "scrapDrops": {"dayChance":0.0195,"nightChance":0.0877,"pickupDefId":"dawn_scrap_3"}
     },
     {
       "threat": 9, "scheduleId": "standard", "nightBudget": 1520, "dayPressureBudget": 245,
       "fronts": ["primary","secondary","flank","flank"], "siteCount": 6, "tierWeights": [10,40,50],
-      "enemyWeights": {"zombie-badger":4,"demon-badger":4,"rabid-badger":4,"spore-warden":4,"plague-medic":4,"thrower-badger":4,"pyro-badger":4,"mortar-badger":4,"firestarter-badger":4,"timebomb-badger":4,"alien-badger":4,"void-stalker":4,"stink-broodmother":4},
+      "enemyWeights": {"zombie-badger":4,"demon-badger":4,"rabid-badger":4,"spore-warden":4,"plague-medic":4,"thrower-badger":4,"pyro-badger":4,"mortar-badger":4,"firestarter-badger":4,"kaboomtula":4,"alien-badger":4,"void-stalker":4,"stink-broodmother":4},
       "itemLevel": 10, "scrapMultiplier": 1.28,
       "scrapDrops": {"dayChance":0.0181,"nightChance":0.0817,"pickupDefId":"dawn_scrap_3"}
     },
     {
       "threat": 10, "scheduleId": "standard", "nightBudget": 1760, "dayPressureBudget": 285,
       "fronts": ["primary","secondary","flank","flank"], "siteCount": 6, "tierWeights": [5,35,60],
-      "enemyWeights": {"zombie-badger":4,"demon-badger":4,"rabid-badger":4,"spore-warden":4,"plague-medic":4,"thrower-badger":4,"pyro-badger":4,"mortar-badger":4,"firestarter-badger":4,"timebomb-badger":4,"alien-badger":4,"void-stalker":4,"stink-broodmother":4},
+      "enemyWeights": {"zombie-badger":4,"demon-badger":4,"rabid-badger":4,"spore-warden":4,"plague-medic":4,"thrower-badger":4,"pyro-badger":4,"mortar-badger":4,"firestarter-badger":4,"kaboomtula":4,"alien-badger":4,"void-stalker":4,"stink-broodmother":4},
       "itemLevel": 11, "scrapMultiplier": 1.3,
       "scrapDrops": {"dayChance":0.0163,"nightChance":0.0732,"pickupDefId":"dawn_scrap_3"}
     }

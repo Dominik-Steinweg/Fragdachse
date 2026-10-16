@@ -300,6 +300,9 @@ export class CoopMissionPresentationInfrastructure {
         syncMortarStrikes: (strikes, nowMs) => {
           if (!this.destroyed) input.renderers.mortarStrike.sync(strikes, nowMs);
         },
+        syncTurretWebs: (webs, nowMs) => {
+          if (!this.destroyed) input.renderers.turretWeb.sync(webs, nowMs);
+        },
         syncCoopDefenseCarry: (items) => {
           if (this.destroyed) return;
           // Dawn supply sites carry crates; every other carry objective keeps the campaign bottle.
@@ -353,8 +356,7 @@ export class CoopMissionPresentationInfrastructure {
             .map(e => ({ id: e.id, generation: manager?.getCombatTargetRef(e.id)?.instance.entityGeneration ?? 0,
               x: e.sprite.x, y: e.sprite.y, size: e.getSize(), vulnerable: e.isVulnerable(),
               boss: e.kind === mapConfig.boss?.enemyKind || !!e.getBossPresence(),
-              timebomb: e.getSpecialAction() === 'timebomb-fuse' || e.getSpecialAction() === 'timebomb-chase',
-              fuseProgress: e.getSpecialAction() === 'timebomb-fuse' ? e.getTimebombFuseProgress() : undefined,
+              ...e.getKaboomtulaHazard(),
             }))), this.scene.time.now);
         },
         syncAbyssCameo: (config, elapsedMs) => {

@@ -75,7 +75,7 @@
       "cost": 19,
       "roles": ["secondary","flank"],
       "groups": [
-        {"enemyKind":"timebomb-badger","count":3,"spawnStaggerMs":2500},
+        {"enemyKind":"kaboomtula","count":3,"spawnStaggerMs":2500},
         {"enemyKind":"rabid-badger","count":2,"spawnStaggerMs":1500}
       ]
     },

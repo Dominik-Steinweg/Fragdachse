@@ -135,33 +135,46 @@ export class EnemyClawRenderer {
   /**
    * Host-fixed lane attack outside the claw state (e.g. a shield charge): the same red danger
    * family, charging from `startedAt` toward `hitAt`. `null` releases it; before the hit it vanishes.
+   * A `tracking` lane (a leap telegraph that follows its target) is reshaped on the same timeline
+   * every frame until the hit; afterwards its last geometry flashes and fades.
    */
   syncLane(id: string, attack: EnemyLaneAttack | null, now: number, visible: boolean,
-    color = ENEMY_CLAW_HOSTILE_COLOR): void {
+    color = ENEMY_CLAW_HOSTILE_COLOR, tracking = false): void {
     const clock = this.clock();
     this.retire(clock);
     if (!attack || !visible || now >= attack.endsAt) { this.release(id); return; }
-    if (this.active.get(id)?.attackId === attack.attackId) return;
+    if (this.active.get(id)?.attackId === attack.attackId) {
+      if (tracking && now < attack.hitAt) this.writeLane(attack, now, clock, color);
+      return;
+    }
     this.release(id);
     if (now >= attack.hitAt) { this.remember(this.struck, attack.attackId, clock); return; }
-    const offset = clock - now;
-    if (this.store.addAttack(attack.attackId, { x: attack.x, y: attack.y, angle: attack.angle, shape: 'lane',
-      length: attack.length, width: attack.width, startedAt: attack.startedAt + offset, strikeAt: attack.strikeAt + offset,
-      hitAt: attack.hitAt + offset, color }, clock)) {
-      this.active.set(id, { attackId: attack.attackId, hitClock: attack.hitAt + offset });
+    if (this.writeLane(attack, now, clock, color)) {
+      this.active.set(id, { attackId: attack.attackId, hitClock: attack.hitAt + clock - now });
     }
+  }
+
+  private writeLane(attack: EnemyLaneAttack, now: number, clock: number, color: number): boolean {
+    const offset = clock - now;
+    return this.store.addAttack(attack.attackId, { x: attack.x, y: attack.y, angle: attack.angle, shape: 'lane',
+      length: attack.length, width: attack.width, startedAt: attack.startedAt + offset, strikeAt: attack.strikeAt + offset,
+      hitAt: attack.hitAt + offset, color }, clock);
   }
 
   /**
    * Host-fixed round zone (an armed hop landing): the same red danger family as a claw, drawn as
-   * a full-circle sector around the landing point without rakes. `null` releases it.
+   * a full-circle sector around the landing point without rakes. `null` releases it. A `tracking`
+   * zone (a ring on a hunted body) follows its centre until the hit.
    */
   syncZone(id: string, attack: EnemyZoneAttack | null, now: number, visible: boolean,
-    color = ENEMY_CLAW_HOSTILE_COLOR): void {
+    color = ENEMY_CLAW_HOSTILE_COLOR, tracking = false): void {
     const clock = this.clock();
     this.retire(clock);
     if (!attack || !visible || now >= attack.endsAt) { this.release(id); return; }
-    if (this.active.get(id)?.attackId === attack.attackId) return;
+    if (this.active.get(id)?.attackId === attack.attackId) {
+      if (tracking && now < attack.hitAt) this.store.move(attack.attackId, attack.x, attack.y);
+      return;
+    }
     this.release(id);
     if (now >= attack.hitAt) { this.remember(this.struck, attack.attackId, clock); return; }
     const offset = clock - now;

@@ -27,7 +27,8 @@ export interface AutomatedTurret extends TurretAimConfig {
   /** Erzwingt die Laufzeit-Zielfraktion; ohne Wert bleibt das bisherige gemischte Verhalten. */
   readonly targetMode?: AutomatedTurretTargetMode;
 }
-export type TurretFireState = 'active' | 'paused';
+/** `paused` begins nothing new but finishes its own burst; `disabled` (webbed) ends it and neither aims nor fires. */
+export type TurretFireState = 'active' | 'paused' | 'disabled';
 /**
  * Eintrag des Turmfeuers. Eine Konstruktion ist ohne Feuerleitung genau eine Quelle, deren
  * Identitäts-, Folge- und Darstellungsschlüssel ihre eigene ID sind. Temporäre Quellen (Turmkopien)
@@ -40,7 +41,7 @@ export interface TurretFireSource extends AutomatedTurret {
   readonly sequenceKey: AutomatedTurretId;
   /** Startzustand einer noch unbekannten eigenen Folge (`nextFireAt` dieses Schlüssels). */
   readonly sequenceSeedKey?: AutomatedTurretId;
-  /** Pausierte Quellen beginnen nichts Neues, halten aber ihre Feuerfolge am Leben. */
+  /** Pausierte Quellen beginnen nichts Neues, halten aber ihre Feuerfolge am Leben; deaktivierte ruhen ganz. */
   readonly fireState: TurretFireState;
   /** Sprite, das Schussanimation und Rohrdrehung dieses Eintrags darstellt. */
   readonly visualId: AutomatedTurretId;

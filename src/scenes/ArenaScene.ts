@@ -1092,6 +1092,14 @@ export class ArenaScene extends Phaser.Scene {
     this.renderers.alienCone.setClock(() => bridge.getSynchronizedNow());
     this.renderers.enemyHops.setEnemySource(() => this.arenaRuntime?.getCombatEnemyVisuals() ?? []);
     this.renderers.enemyHops.setClock(() => bridge.getSynchronizedNow());
+    this.renderers.kaboomtula.setEnemySource(() => this.arenaRuntime?.getCombatEnemyVisuals() ?? []);
+    this.renderers.kaboomtula.setClock(() => bridge.getSynchronizedNow());
+    // Players are drawn where they are shown (the local player at its predicted position).
+    this.renderers.kaboomtula.setTargetResolver(target => {
+      if (target.kind !== 'player') return null;
+      const player = this.ctx.playerManager.getPlayer(target.id);
+      return player ? { x: player.x, y: player.y } : null;
+    });
 
     this.aimPresentation = new ArenaAimPresentationController(
       {

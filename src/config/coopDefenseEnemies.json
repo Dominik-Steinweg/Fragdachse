@@ -630,7 +630,7 @@
       }
     },
     {
-      "id": "timebomb-badger",
+      "id": "kaboomtula",
       "eyeGlow": {
         "color": 9395199
       },
@@ -640,10 +640,10 @@
       "size": 24,
       "moveSpeed": 140,
       "knockbackFactor": 1.9,
-      "movementTarget": "players-and-armed-constructs",
+      "movementTarget": "players",
       "weapons": [
         {
-          "weaponId": "TIMEBOMB_BADGER_BITE",
+          "weaponId": "KABOOMTULA_BITE",
           "targetMode": "rocks",
           "meleeTiming": {
             "hitDelayMs": 250,
@@ -664,27 +664,77 @@
         "lightRadiusPx": 64,
         "lightIntensity": 0.38
       },
-      "timebomb": {
-        "chaseSpeedMultiplier": 2,
+      "kaboomtula": {
         "activationRadiusPx": 450,
-        "lineOfSightDurationMs": 400,
-        "fuseDistancePx": 48,
-        "fuseDurationMs": 2000,
-        "explosionRadiusPx": 168,
-        "explosionDamage": 240,
-        "explosionKnockback": 520,
-        "fireChunks": {
-          "count": 7,
-          "searchRadius": 190,
-          "flightMs": 520,
-          "igniteCenter": false,
-          "durationMs": 2000,
-          "burnDurationMs": 2000,
-          "burnDamagePerTick": 1,
-          "sourceId": "enemy.timebomb.fire"
+        "alertMs": 400,
+        "rushSpeedPx": 370,
+        "rushMaxMs": 7000,
+        "lostSightGraceMs": 700,
+        "skitter": {
+          "segmentMinMs": 150,
+          "segmentMaxMs": 260,
+          "zigMinDegrees": 18,
+          "zigMaxDegrees": 46,
+          "dartChance": 0.3,
+          "dartSpeedFactor": 1.15,
+          "pauseChance": 0.22,
+          "pauseMinMs": 60,
+          "pauseMaxMs": 110,
+          "calmWithinPx": 170,
+          "probePx": 48
         },
-        "killedPopRadiusPx": 42,
-        "killedPopDamage": 2
+        "pounce": {
+          "triggerPx": 120,
+          "bandMinPx": 85,
+          "bandMaxPx": 135,
+          "telegraphMs": 420,
+          "cancelLockoutMs": 450
+        },
+        "leap": {
+          "airMs": 210,
+          "leadFactor": 0.7,
+          "overshootPx": 36,
+          "maxLengthPx": 215
+        },
+        "recoverMs": 650,
+        "contactMarginPx": 2,
+        "blast": {
+          "radiusPx": 130,
+          "damage": 70,
+          "baseDamage": 120,
+          "knockback": 420,
+          "fireChunks": {
+            "count": 5,
+            "searchRadius": 150,
+            "flightMs": 480,
+            "igniteCenter": false,
+            "durationMs": 2000,
+            "burnDurationMs": 2000,
+            "burnDamagePerTick": 1,
+            "sourceId": "enemy.kaboomtula.fire"
+          }
+        },
+        "killedPop": {
+          "radiusPx": 42,
+          "damage": 2
+        },
+        "web": {
+          "rangePx": 380,
+          "windupMs": 360,
+          "tailMs": 220,
+          "flightMs": 350,
+          "durationMs": 4000,
+          "cooldownMs": 7000,
+          "refreshWindowMs": 1000,
+          "lockoutMs": 1500,
+          "mouthForwardPx": 14
+        }
+      },
+      "basePreference": {
+        "playerCostRatio": 3,
+        "releaseCostRatio": 2,
+        "minDwellMs": 3000,
+        "playerOverridePx": 450
       },
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.8

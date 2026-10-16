@@ -99,6 +99,8 @@ import {
   type PersistentBaseMoveRequest,
 } from '../persistentBase/PersistentBaseMove';
 import type { SyncedAk47StrategicTarget } from '../types';
+import type { SyncedTurretWebSnapshot } from '../types';
+import { decodeTurretWebSnapshot } from './turretWebSnapshotCodec';
 import {
   NET_TICK_RATE_HZ,
   NET_DEBUG_PROJECTILE_SYNC_METRICS,
@@ -398,6 +400,8 @@ export interface GameState extends KrakenSnapshotPatch {
   pedestals:    SyncedPowerUpPedestal[]; // feste Power-Up-Podeste
   nukes:        SyncedNukeStrike[];
   mortarStrikes: SyncedMortarStrike[];
+  /** Kabummtula webs in flight and on turrets; always present after decode. */
+  turretWebs?: SyncedTurretWebSnapshot;
   airstrikes:   SyncedAirstrikeStrike[];  // Luftangriff-Strikes (Warn- + Einschlagsphase)
   meteors:      SyncedMeteorStrike[];     // Armageddon-Meteore (Warn- + Einschlagsphase)
   tunnels:      SyncedTunnel[];
@@ -447,6 +451,7 @@ interface OutboundGameState extends KrakenSnapshotPatch {
   pedestals:    SyncedPowerUpPedestalSnapshot | null;
   nukes:        SyncedNukeStrike[];
   mortarStrikes: SyncedMortarStrike[];
+  turretWebs?: SyncedTurretWebSnapshot;
   airstrikes:   SyncedAirstrikeStrike[];
   meteors:      SyncedMeteorStrike[];
   tunnels:      SyncedTunnel[];
@@ -504,6 +509,8 @@ function decodeSmokeTargets(raw: unknown): import('../types').SyncedSmokeTargetS
       confusionIntensity: Math.max(0, Math.min(1, entry[3] / 100)) }];
   });
 }
+
+const EMPTY_TURRET_WEBS: SyncedTurretWebSnapshot = Object.freeze({ shots: [], webs: [] }) as unknown as SyncedTurretWebSnapshot;
 
 function encodeTargetVulnerabilities(entries: readonly SyncedTargetVulnerability[]): EncodedTargetVulnerability[] {
   return entries.map(entry => [entry.targetType, entry.targetId, entry.expiresAt]);
@@ -3340,6 +3347,7 @@ export class NetworkBridge {
     if (state.pedestals)               payload.pd = state.pedestals;
     if (state.nukes.length > 0)        payload.n  = state.nukes;
     payload.mo = state.mortarStrikes; // Empty is meaningful; missing delta slices retain their previous value.
+    payload.tw = state.turretWebs ?? EMPTY_TURRET_WEBS; // Empty is meaningful, like `mo`.
     if (state.airstrikes.length > 0)   payload.ak = state.airstrikes;
     if (state.meteors.length > 0)      payload.mt = state.meteors;
     if (state.tunnels.length > 0)      payload.tn = state.tunnels;
@@ -3452,6 +3460,7 @@ export class NetworkBridge {
       pd: state.pedestals ?? { full: true, upserts: [], removals: [] } satisfies SyncedPowerUpPedestalSnapshot,
       n: state.nukes,
       mo: state.mortarStrikes,
+      tw: state.turretWebs ?? EMPTY_TURRET_WEBS,
       ak: state.airstrikes,
       mt: state.meteors,
       tn: state.tunnels,
@@ -3599,6 +3608,7 @@ export class NetworkBridge {
       pedestals:     nextPedestals,
       nukes:         (raw.n  as SyncedNukeStrike[]       | undefined) ?? [],
       mortarStrikes: (raw.mo as SyncedMortarStrike[] | undefined) ?? this.cachedGameState?.mortarStrikes ?? [],
+      turretWebs: decodeTurretWebSnapshot(raw.tw) ?? this.cachedGameState?.turretWebs ?? EMPTY_TURRET_WEBS,
       airstrikes:    (raw.ak as SyncedAirstrikeStrike[] | undefined) ?? [],
       meteors:       (raw.mt as SyncedMeteorStrike[]    | undefined) ?? [],
       tunnels:       (raw.tn as SyncedTunnel[]          | undefined) ?? [],

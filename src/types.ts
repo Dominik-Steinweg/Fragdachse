@@ -2098,6 +2098,8 @@ export interface SyncedEnemyState {
   energyCone?: import('./systems/EnergyConeState').EnergyConeState;
   /** Host-fixed hop (jump timeline and heal links); absent until the first hop decision. */
   hop?: import('./systems/EnemyHopState').EnemyHopState;
+  /** Host-decided Kabummtula phase timeline (target ref, locked leap); absent until its first transition. */
+  kaboomtula?: import('./systems/KaboomtulaState').KaboomtulaState;
   entityGeneration?: number;
   positionRevision?: number;
   id:     string;
@@ -2139,6 +2141,8 @@ export interface SyncedEnemyDeltaState {
   energyCone?: import('./systems/EnergyConeState').EnergyConeState;
   /** Host-fixed hop (jump timeline and heal links); absent until the first hop decision. */
   hop?: import('./systems/EnemyHopState').EnemyHopState;
+  /** Host-decided Kabummtula phase timeline (target ref, locked leap); absent until its first transition. */
+  kaboomtula?: import('./systems/KaboomtulaState').KaboomtulaState;
   entityGeneration?: number;
   positionRevision?: number;
   id:     string;
@@ -2275,6 +2279,33 @@ export interface SyncedNukeStrike {
   explodeAt:   number;   // Date.now()-Zeitpunkt der Explosion
   triggeredBy: string;
   variant: 'normal' | 'void';
+}
+
+/** Kabummtula web glob in flight towards a turret; it always lands (host-decided at the spit). */
+export interface SyncedWebShot {
+  id: number;
+  turretId: number | string;
+  sourceX: number;
+  sourceY: number;
+  targetX: number;
+  targetY: number;
+  launchAt: number;
+  impactAt: number;
+}
+
+/** Turret disabled by a Kabummtula web between `appliedAt` and `expiresAt` (host time). */
+export interface SyncedTurretWeb {
+  turretId: number | string;
+  x: number;
+  y: number;
+  appliedAt: number;
+  expiresAt: number;
+}
+
+/** Webs in flight and on turrets; empty lists are meaningful (always sent). */
+export interface SyncedTurretWebSnapshot {
+  shots: SyncedWebShot[];
+  webs: SyncedTurretWeb[];
 }
 
 /** Aktiver Luftangriff-Strike (Host → Clients via GameState) */

@@ -102,7 +102,7 @@
       "start": {"type": "after-checkpoint", "checkpointId": "advance-1"},
       "groups": [
         {
-          "enemyKind": "timebomb-badger",
+          "enemyKind": "kaboomtula",
           "count": 3,
           "spawnStaggerMs": 1000,
           "spawnArea": {"gridX": 73, "gridY": 6, "widthCells": 5, "heightCells": 3}
@@ -120,7 +120,7 @@
       "start": {"type": "after-checkpoint", "checkpointId": "advance-2"},
       "groups": [
         {
-          "enemyKind": "timebomb-badger",
+          "enemyKind": "kaboomtula",
           "count": 4,
           "spawnStaggerMs": 1000,
           "spawnArea": {"gridX": 57, "gridY": 0, "widthCells": 5, "heightCells": 3}
@@ -138,7 +138,7 @@
       "start": {"type": "after-checkpoint", "checkpointId": "advance-3"},
       "groups": [
         {
-          "enemyKind": "timebomb-badger",
+          "enemyKind": "kaboomtula",
           "count": 5,
           "spawnStaggerMs": 1000,
           "spawnArea": {"gridX": 41, "gridY": 14, "widthCells": 5, "heightCells": 3}
@@ -150,7 +150,7 @@
           "spawnArea": {"gridX": 41, "gridY": 37, "widthCells": 5, "heightCells": 3}
         },
         {
-          "enemyKind": "timebomb-badger",
+          "enemyKind": "kaboomtula",
           "count": 2,
           "delayMs": 2500,
           "spawnArea": {"gridX": 48, "gridY": 25, "widthCells": 5, "heightCells": 4}
@@ -162,7 +162,7 @@
       "start": {"type": "after-checkpoint", "checkpointId": "advance-4"},
       "groups": [
         {
-          "enemyKind": "timebomb-badger",
+          "enemyKind": "kaboomtula",
           "count": 6,
           "spawnStaggerMs": 1000,
           "spawnArea": {"gridX": 25, "gridY": 0, "widthCells": 5, "heightCells": 3}
@@ -174,7 +174,7 @@
           "spawnArea": {"gridX": 25, "gridY": 24, "widthCells": 5, "heightCells": 3}
         },
         {
-          "enemyKind": "timebomb-badger",
+          "enemyKind": "kaboomtula",
           "count": 2,
           "delayMs": 2500,
           "spawnArea": {"gridX": 32, "gridY": 11, "widthCells": 5, "heightCells": 4}
@@ -186,7 +186,7 @@
       "start": {"type": "after-checkpoint", "checkpointId": "advance-5"},
       "groups": [
         {
-          "enemyKind": "timebomb-badger",
+          "enemyKind": "kaboomtula",
           "count": 7,
           "spawnStaggerMs": 1000,
           "spawnArea": {"gridX": 10, "gridY": 7, "widthCells": 5, "heightCells": 3}
@@ -198,7 +198,7 @@
           "spawnArea": {"gridX": 10, "gridY": 31, "widthCells": 5, "heightCells": 3}
         },
         {
-          "enemyKind": "timebomb-badger",
+          "enemyKind": "kaboomtula",
           "count": 2,
           "delayMs": 2500,
           "spawnArea": {"gridX": 17, "gridY": 18, "widthCells": 5, "heightCells": 4}

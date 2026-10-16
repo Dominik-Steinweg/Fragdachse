@@ -190,9 +190,10 @@ export class EffectSystem implements EnemyVisualSink {
     return this.enemyClawRenderer.prepare();
   }
   /** Lane danger zone in the shared enemy-attack family (shield charge windup). */
-  syncEnemyLane(id: string, attack: import('./EnemyClawRenderer').EnemyLaneAttack | null, now: number, visible: boolean, color?: number): void {
+  syncEnemyLane(id: string, attack: import('./EnemyClawRenderer').EnemyLaneAttack | null, now: number, visible: boolean, color?: number,
+    tracking = false): void {
     if (attack) this.enemyClawRenderer ??= new EnemyClawRenderer(this.scene);
-    this.enemyClawRenderer?.syncLane(id, attack, now, visible, color);
+    this.enemyClawRenderer?.syncLane(id, attack, now, visible, color, tracking);
   }
   /** Fan danger zone in the shared enemy-attack family (energy cone windup, clipped by cover). */
   syncEnemySector(id: string, attack: import('./EnemyClawRenderer').EnemySectorAttack | null, now: number, visible: boolean, color?: number): void {
@@ -200,9 +201,10 @@ export class EffectSystem implements EnemyVisualSink {
     this.enemyClawRenderer?.syncSector(id, attack, now, visible, color);
   }
   /** Round danger zone in the shared enemy-attack family (armed hop landing). */
-  syncEnemyZone(id: string, attack: import('./EnemyClawRenderer').EnemyZoneAttack | null, now: number, visible: boolean, color?: number): void {
+  syncEnemyZone(id: string, attack: import('./EnemyClawRenderer').EnemyZoneAttack | null, now: number, visible: boolean, color?: number,
+    tracking = false): void {
     if (attack) this.enemyClawRenderer ??= new EnemyClawRenderer(this.scene);
-    this.enemyClawRenderer?.syncZone(id, attack, now, visible, color);
+    this.enemyClawRenderer?.syncZone(id, attack, now, visible, color, tracking);
   }
   clearEnemyClaw(id: string): void { this.enemyClawRenderer?.release(id); }
   clearEnemyClawEffects(): void { this.enemyClawRenderer?.clear(); this.tongueLash?.clear(); }

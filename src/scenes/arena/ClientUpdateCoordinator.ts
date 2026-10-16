@@ -639,6 +639,7 @@ export class ClientUpdateCoordinator {
       newSnapshot: isNewData,
       enemySnapshot: state.enemies,
       mortarStrikes: state.mortarStrikes,
+      turretWebs: state.turretWebs,
       carryItems: state.coopDefenseCarry ?? [],
       interpolationFactor: lerpFactor,
     });

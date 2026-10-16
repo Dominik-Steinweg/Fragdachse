@@ -41,7 +41,7 @@ describe('Map 16 - Zeitzünder', () => {
     expect(map.persistentSpawns ?? []).toEqual([]);
     expect(map.secondaryObjectives ?? []).toEqual([]);
     expect(map.encounters?.every(encounter => encounter.start.type === 'after-checkpoint'
-      && encounter.groups.some(group => group.enemyKind === 'timebomb-badger' && group.spawnArea))).toBe(true);
+      && encounter.groups.some(group => group.enemyKind === 'kaboomtula' && group.spawnArea))).toBe(true);
   });
 
   it('generates deterministic prebuilt void-fire fields and no train', () => {

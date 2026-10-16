@@ -9,6 +9,9 @@ import { EMPTY_SHIELD_CHARGE_STATE, isShieldChargeState, type ShieldChargeState 
 import { EMPTY_ENERGY_CONE_STATE, isEnergyConeState, type EnergyConeState } from '../systems/EnergyConeState';
 import { EMPTY_ENEMY_HOP_STATE, enemyHopAirProgress, enemyHopPhaseAt, isEnemyHopState, type EnemyHopState } from '../systems/EnemyHopState';
 import { syncEnemyHopAnimation } from '../animations/EnemyHopAnimation';
+import { syncEnemyKaboomtulaAnimation } from '../animations/EnemyKaboomtulaAnimation';
+import { EMPTY_KABOOMTULA_STATE, isKaboomtulaState, kaboomtulaLeapProgress, kaboomtulaPhaseProgress,
+  type KaboomtulaState } from '../systems/KaboomtulaState';
 import { EnemyCastPlayback, syncEnemyCastAnimation } from '../animations/EnemyCastAnimation';
 import { getEnemyFootprintVariant } from '../config/movementEffects';
 import type { MovementVisualSample } from '../effects/MovementStepSampler';
@@ -242,6 +245,51 @@ export class EnemyEntity {
     this.hopAnimating = syncEnemyHopAnimation(this.sprite, this.config.imageKey, state, now,
       this.clawAnimating || !this.sprite.visible || this.burrowed || this.currentHp <= 0);
     if (wasAnimating && !this.hopAnimating) this.syncWalkingAnimation();
+  }
+
+  private kaboomtulaState: KaboomtulaState = EMPTY_KABOOMTULA_STATE;
+  private kaboomtulaAnimating = false;
+  private kaboomtulaAirborne = false;
+  /** Host-synchronized time of the last presented spider frame. */
+  private kaboomtulaPresentedAt = 0;
+
+  getKaboomtulaState(): KaboomtulaState { return this.kaboomtulaState; }
+
+  /** Host: publish a new spider state (revision must grow). Clients: apply a newer replicated state. */
+  applyKaboomtulaState(state: KaboomtulaState): void {
+    if (!isKaboomtulaState(state) || state.revision <= this.kaboomtulaState.revision) return;
+    this.kaboomtulaState = state;
+  }
+
+  /**
+   * Spider presentation from the replicated timeline: clients place a leaping body on its locked
+   * flight line (the network lerp would smear the short flight), host and clients lift it and play
+   * the alert, leap and spit clips.
+   */
+  syncKaboomtulaPresentation(now: number): void {
+    if (!this.config.kaboomtula) return;
+    this.kaboomtulaPresentedAt = now;
+    const state = this.kaboomtulaState, leap = state.phase === 'leap' ? state.leap : null;
+    const airborne = !!leap && now >= leap.takeoffAt && now < leap.landAt;
+    const progress = airborne ? kaboomtulaLeapProgress(leap, now) : 0;
+    if (airborne && !this.authoritative) {
+      this.sprite.x = Phaser.Math.Linear(leap.originX, leap.endX, progress);
+      this.sprite.y = Phaser.Math.Linear(leap.originY, leap.endY, progress);
+    }
+    this.kaboomtulaAirborne = airborne;
+    this.setAirLiftScale(1 + LEAP_LIFT_AMPLITUDE * airborneLift(progress), false);
+    const wasAnimating = this.kaboomtulaAnimating;
+    this.kaboomtulaAnimating = syncEnemyKaboomtulaAnimation(this.sprite, this.config.imageKey, state, now,
+      this.clawAnimating || !this.sprite.visible || this.burrowed || this.currentHp <= 0);
+    if (wasAnimating && !this.kaboomtulaAnimating) this.syncWalkingAnimation();
+  }
+
+  /** A hunting spider is an urgent hazard marker; the telegraph fills it towards the leap. */
+  getKaboomtulaHazard(): { kamikaze: boolean; progress?: number } {
+    const state = this.kaboomtulaState;
+    if (state.phase !== 'alert' && state.phase !== 'rush' && state.phase !== 'pounce' && state.phase !== 'leap') return { kamikaze: false };
+    return { kamikaze: true, progress: state.phase === 'pounce' ? kaboomtulaPhaseProgress(state, this.kaboomtulaPresentedAt)
+      : state.phase === 'leap' ? 1 : undefined };
   }
 
   getEnergyConeState(): EnergyConeState { return this.energyCone; }
@@ -597,7 +645,7 @@ export class EnemyEntity {
     out.player = false;
     out.visible = this.sprite.visible && this.currentHp > 0 && !this.burrowed
       && this.movementCorrectionRemaining < this.config.size * 0.3;
-    out.mode = this.hopAirborne ? 'airborne' : this.dashPhase === 1 ? 'dash' : this.dashPhase === 2 ? 'recovery'
+    out.mode = this.hopAirborne || this.kaboomtulaAirborne ? 'airborne' : this.dashPhase === 1 ? 'dash' : this.dashPhase === 2 ? 'recovery'
       : this.walkingRequested ? 'walk' : 'idle';
     out.isBurrowDash = false;
     out.revision = this.movementRevision;
@@ -1012,7 +1060,6 @@ export class EnemyEntity {
   syncBar(): void {
     this.ownerRing?.setPosition(this.sprite.x, this.sprite.y);
     this.syncGlow();
-    this.syncTimebombFuseVisuals();
     this.syncVoidMolotovWindupVisuals();
     this.syncBurnEffect();
     this.syncPlasmaChargeEffect();
@@ -1026,6 +1073,7 @@ export class EnemyEntity {
       claw: this.clawState,
       ...(this.shieldCharge.revision > 0 ? { shieldCharge: this.shieldCharge } : {}),
       ...(this.hopState.revision > 0 ? { hop: this.hopState } : {}),
+      ...(this.kaboomtulaState.revision > 0 ? { kaboomtula: this.kaboomtulaState } : {}),
       ...(this.energyCone.revision > 0 ? { energyCone: this.energyCone } : {}),
       positionRevision: this.movementRevision,
       id: this.id,
@@ -1127,9 +1175,9 @@ export class EnemyEntity {
     this.glowHalo.setTint(glow.color);
     this.glowHalo.setAlpha(emissiveAlpha(glow.alpha));
 
-    // Der Zeitbombendachs wird zustandsgebunden pro Frame gepulst; ein paralleler Endlos-Tween
-    // wuerde dessen immer schneller werdende Zuendkurve ueberschreiben.
-    if (this.config.timebomb) return;
+    // Die Kabummtula wird phasengebunden pro Frame gepulst; ein paralleler Endlos-Tween wuerde
+    // das Anschwellen beim Drohen und das hektische Pulsieren im Sturmlauf ueberschreiben.
+    if (this.config.kaboomtula) return;
     // Leichtes Atmen, damit der Halo nicht als aufgeklebte Scheibe liest.
     scene.tweens.add({
       targets:  this.glowHalo,
@@ -1151,29 +1199,16 @@ export class EnemyEntity {
     if (!glow) return;
 
     const visible = !this.burrowed && this.currentHp > 0;
-    const isTimebombChase = this.specialAction === 'timebomb-chase';
-    const isTimebombFuse = this.specialAction === 'timebomb-fuse';
-    const timebombProgress = isTimebombFuse ? this.gaussChargeProgress : (isTimebombChase ? 0.34 : 0);
-    const pulsePeriodMs = isTimebombFuse
-      ? Phaser.Math.Linear(420, 105, timebombProgress)
-      : (isTimebombChase ? 360 : 1050);
-    const pulse = this.config.timebomb
-      ? 0.5 + 0.5 * Math.sin(this.sprite.scene.time.now * Math.PI * 2 / pulsePeriodMs)
-      : 0;
-    const timebombSizeMultiplier = this.config.timebomb
-      ? (isTimebombFuse ? 1.32 + pulse * 0.24 : (isTimebombChase ? 1.18 + pulse * 0.16 : 1 + pulse * 0.06))
-      : 1;
-    const timebombAlpha = this.config.timebomb
-      ? (isTimebombFuse ? 0.68 + pulse * 0.3 : (isTimebombChase ? 0.46 + pulse * 0.34 : glow.alpha * (0.78 + pulse * 0.22)))
-      : glow.alpha;
+    const spider = this.config.kaboomtula ? this.kaboomtulaGlow(glow.alpha) : null;
+    const sizeMultiplier = spider?.size ?? 1;
     this.glowHalo?.setVisible(visible);
     this.glowHalo?.setPosition(this.sprite.x, this.sprite.y);
     this.glowHalo?.setDisplaySize(
-      this.config.size * glow.sizeFactor * timebombSizeMultiplier,
-      this.config.size * glow.sizeFactor * timebombSizeMultiplier,
+      this.config.size * glow.sizeFactor * sizeMultiplier,
+      this.config.size * glow.sizeFactor * sizeMultiplier,
     );
     this.glowHalo?.setTint(glow.color);
-    if (phaseTwo || this.config.timebomb) this.glowHalo?.setAlpha(emissiveAlpha(timebombAlpha));
+    if (phaseTwo || spider) this.glowHalo?.setAlpha(emissiveAlpha(spider?.alpha ?? glow.alpha));
 
     if (!this.lighting) return;
     if (!visible) {
@@ -1182,39 +1217,49 @@ export class EnemyEntity {
     }
     this.lighting.setLight(this.glowLightKey(), 'entityGlow', this.sprite.x, this.sprite.y, {
       color:     glow.color,
-      radiusPx:  glow.lightRadiusPx * timebombSizeMultiplier,
-      intensity: this.config.timebomb
-        ? glow.lightIntensity * (isTimebombFuse ? 4.2 : (isTimebombChase ? 3 : 1))
-        : glow.lightIntensity,
+      radiusPx:  glow.lightRadiusPx * sizeMultiplier,
+      intensity: glow.lightIntensity * (spider?.light ?? 1),
     });
+  }
+
+  /**
+   * Void-violet menace of the spider by replicated phase: a dim breath while approaching, a swell
+   * during the alert pose, a strong fast pulse while rushing and pouncing, fading while it recovers.
+   * Red stays reserved for the leap telegraph.
+   */
+  private kaboomtulaGlow(baseAlpha: number): { size: number; alpha: number; light: number } {
+    const now = this.sprite.scene.time.now, state = this.kaboomtulaState;
+    const progress = kaboomtulaPhaseProgress(state, now);
+    const pulseAt = (periodMs: number) => 0.5 + 0.5 * Math.sin(now * Math.PI * 2 / periodMs);
+    const calm = (pulse: number) => ({ size: 1 + pulse * 0.06, alpha: baseAlpha * (0.78 + pulse * 0.22), light: 1 });
+    const hunting = (pulse: number, heat: number) => ({ size: 1.18 + heat * 0.08 + pulse * 0.16,
+      alpha: 0.46 + heat * 0.12 + pulse * 0.3, light: 3 + heat * 1.2 });
+    switch (state.phase) {
+      case 'alert': {
+        const pulse = pulseAt(520), from = calm(pulse), to = hunting(pulse, 0);
+        return { size: Phaser.Math.Linear(from.size, to.size, progress), alpha: Phaser.Math.Linear(from.alpha, to.alpha, progress),
+          light: Phaser.Math.Linear(from.light, to.light, progress) };
+      }
+      case 'rush': return hunting(pulseAt(340), 0);
+      case 'pounce': return hunting(pulseAt(Phaser.Math.Linear(300, 140, progress)), progress);
+      case 'leap': return hunting(pulseAt(140), 1);
+      case 'recover': {
+        const pulse = pulseAt(700), from = hunting(pulse, 0), to = calm(pulse);
+        return { size: Phaser.Math.Linear(from.size, to.size, progress), alpha: Phaser.Math.Linear(from.alpha, to.alpha, progress),
+          light: Phaser.Math.Linear(from.light, to.light, progress) };
+      }
+      case 'spit': {
+        const pulse = pulseAt(420);
+        return { size: 1.08 + pulse * 0.1, alpha: baseAlpha + (0.36 - baseAlpha) * progress + pulse * 0.12, light: 1 + progress };
+      }
+      default: return calm(pulseAt(1100));
+    }
   }
 
   private glowLightKey(): string {
     return `enemyglow:${this.id}`;
   }
 
-  private syncTimebombFuseVisuals(): void {
-    if (!this.config.timebomb) return;
-    const active = this.specialAction === 'timebomb-fuse'
-      && !this.burrowed
-      && this.currentHp > 0
-      && this.sprite.visible;
-    if (!active) {
-      this.sprite.setRotation(this.visualAimAngle + this.getSpriteRotationOffset());
-      return;
-    }
-
-    // Das zunehmend hektische Taumeln bleibt ein visueller Offset. Aim- und Netzwerkwinkel
-    // bleiben unveraendert, damit der Telegraph keine Gameplay- oder Snapshotdaten beeinflusst.
-    const progress = this.gaussChargeProgress;
-    const frequency = 0.01 + progress * 0.035;
-    const amplitude = 0.12 + progress * 0.42;
-    const wobble = Math.sin(this.sprite.scene.time.now * frequency) * amplitude;
-    this.sprite.setRotation(this.visualAimAngle + this.getSpriteRotationOffset() + wobble);
-  }
-
-  /** Existing replicated charge fraction; presentation does not advance the fuse. */
-  getTimebombFuseProgress(): number { return this.gaussChargeProgress; }
 
   /**
    * Telegraph des Void-Brandsatzes: ein heller lila Ring, der sich waehrend der Ausholzeit

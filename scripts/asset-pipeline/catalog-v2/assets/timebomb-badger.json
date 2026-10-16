@@ -3,7 +3,7 @@
   "label": "Zeitbomben-Dachs",
   "category": "enemy",
   "gameIds": [
-    "timebomb-badger"
+    "kaboomtula"
   ],
   "reference": "public/assets/sprites/enemies/enemy_timebomb_badger.png",
   "targetSize": 24,

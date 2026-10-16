@@ -308,6 +308,13 @@ export class TurretSystem {
           this.controlRevisions.set(turret.identityId, revision);
         }
       }
+      // Ein eingesponnener Turm ruht ganz: die eigene Salve endet, er zielt und feuert nicht, auch bemannt nicht.
+      if (turret.fireState === 'disabled') {
+        if (this.deleteOwnedBurst(turret)) {
+          this.nextFireAt.set(sequenceKey, Math.max(this.nextFireAt.get(sequenceKey) ?? 0, now + cooldownMs));
+        }
+        continue;
+      }
       // Tesla-Konstrukte werden vom TeslaDomeSystem als Feldwaffe verarbeitet und
       // duerfen hier nicht zusaetzlich den generischen Projektilpfad ausloesen.
       if (turretWeaponConfig.fire.type === 'tesla_dome') continue;

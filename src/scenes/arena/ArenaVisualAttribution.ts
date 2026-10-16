@@ -93,6 +93,7 @@ export const GRAPHICS_FAMILIES = {
   teleportEffects: ['TranslocatorTeleportRenderer'],
   tongueLash: ['TongueLashRenderer'],
   restHealTendrils: ['RestHealTendrilRenderer'],
+  turretWebs: ['TurretWebRenderer'],
   rocketLifecycleGraphics: ['RocketRenderer'],
   stinkCloudGraphics: ['StinkCloudSystem', 'StinkCloudBody'],
   flameRingEffects: ['FlamethrowerUpgradeRenderer'],

@@ -45,8 +45,8 @@ describe('Coop marker adapters', () => {
     expect(held.find(d => d.kind === 'delivery')).toMatchObject({ glyph: 'flag', x: 324, y: 424, groundRing: { radiusPx: 64, tone: 'green' } });
   });
   it('keeps bosses offscreen-only with vulnerability and timebombs triangular through their semantic kind', () => {
-    const targets = enemyMarkers([{ id: 'b', generation: 3, x: 1500, y: 500, size: 80, boss: true, vulnerable: true, timebomb: false },
-      { id: 't', generation: 1, x: 400, y: 500, size: 32, boss: false, vulnerable: false, timebomb: true, fuseProgress: .6 }]);
+    const targets = enemyMarkers([{ id: 'b', generation: 3, x: 1500, y: 500, size: 80, boss: true, vulnerable: true, kamikaze: false },
+      { id: 't', generation: 1, x: 400, y: 500, size: 32, boss: false, vulnerable: false, kamikaze: true, progress: .6 }]);
     expect(targets[0]).toMatchObject({ visibility: 'edge-when-offscreen', vulnerable: true });
     const frame = new MarkerLayoutModel().layout({ ...layoutInput, descriptors: targets });
     expect(frame.edgeBadges[0]).toMatchObject({ glyph: 'boss', tone: 'purple', vulnerable: true });

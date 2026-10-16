@@ -80,4 +80,6 @@ export function resetRenderersForWorldPresentationTeardown(
   bundle.shieldCharger.clear();
   bundle.alienCone.clear();
   bundle.enemyHops.clear();
+  bundle.kaboomtula.clear();
+  bundle.turretWeb.clear();
 }

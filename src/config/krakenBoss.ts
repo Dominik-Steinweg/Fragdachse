@@ -109,7 +109,7 @@ export function validateKrakenBroodRegistry(config: KrakenBossConfig,
   for (const entry of config.eggs.broodTable.entries) {
     const enemy = registry[entry.enemyKind];
     if (!enemy || enemy.isBoss || enemy.krakenBoss || enemy.krakenEgg || enemy.size > maxRegularSizePx
-      || enemy.deathSpawns?.length || enemy.spawnThrow || enemy.timebomb || enemy.voidHunterBoss
+      || enemy.deathSpawns?.length || enemy.spawnThrow || enemy.kaboomtula || enemy.voidHunterBoss
       || !enemy.weapons.length || !enemy.weapons.every(w => isMeleeWeapon(w.weaponId))) {
       throw new Error(`[krakenBoss] Invalid small melee brood kind: ${entry.enemyKind}`);
     }
