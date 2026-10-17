@@ -61,7 +61,8 @@ Beispiele:
 | Architecture | `npm run test:architecture` | wenige dauerhafte Source-/Dependency-Grenzen |
 | Integration | `npm run test:integration` | modulübergreifende World-, Activity- und Composition-Verträge |
 | Assets | `npm run test:assets` | Dateisystem-, Asset-, Pixel- und Maskenprüfungen |
-| Stress | `npm run test:stress` | große Inputs, Multi-Seed, Benchmarks und Belastungstests |
+| Stress | `npm run test:stress` | große Inputs, Multi-Seed, Benchmarks und Belastungstests (ohne Dawn-Arenen) |
+| Dawn-Arenen | `npm run test:stress:dawn` | Multi-Seed-Stichprobe aller Dawn-Templates in parallelen Shards; der volle Abnahme-Sweep (500 Seeds je Template) läuft nur über `npm run test:stress:dawn-sweep` |
 | Balance Lab | `npm run test:balance-lab` | Weapon-Balance-, Progression- und Benchmark-Parität zur aktuellen Config |
 | Voice-Werkstatt | `npm run test:voice-workshop` | lokaler Node-Test-Runner für Produktionsaufträge, Announcer-Regie und Audiobearbeitung, Paketexport und HTTP-Zugang; benötigt FFmpeg, verwendet synthetische Audiodaten ohne GPU |
 
@@ -79,7 +80,7 @@ Die Basis ist `main` (`--base <ref>` oder `CHECK_BASE`); verglichen wird ab der 
 |---|---|---|
 | `npm run check:quick` | während einer Lane, vor jedem Zwischen-Commit | Typecheck parallel zu einem Vitest-Lauf: Core-Tests, die über den Importgraphen mit dem Diff verbunden sind (`vitest related`) oder einen geänderten Pfad per Dateisystem lesen, die ganze Architecture-Suite und die Core-Tests, die `src/` selbst durchlaufen (Depth-Katalog). Geänderte Tests aus Integration/Stress/Balance-Lab laufen direkt mit. Bei geänderter Build-Infrastruktur (`package-lock.json`, Abhängigkeiten, `vite.config.ts`, `tsconfig`) die ganze Core-Suite. Keine Builds. |
 | `npm run check` | Abschluss einer Änderung über mehrere Module, Netzwerk, Lifecycle oder Build-Konfiguration | unverändert: Core, Architecture, drei Builds |
-| `npm run check:release` | vor einem Fast-Forward nach `main` oder einer Lane-Integration | `check`, `test:integration`, `test:assets`; `test:stress`, `test:balance-lab` und `check:fingerprints` nur, wenn der Diff Generator-, Map- oder Balance-Pfade, deren eigene Tests oder Build-Infrastruktur berührt (Pfadfamilien in [`scripts/check/changes.mjs`](../../scripts/check/changes.mjs)). Alle Schritte laufen; die Zusammenfassung nennt jeden roten Schritt mit Laufzeit. `--all` erzwingt alle Suiten, `--bail` stoppt beim ersten Fehler. |
+| `npm run check:release` | vor einem Fast-Forward nach `main` oder einer Lane-Integration | `check`, `test:integration`, `test:assets`; `test:stress`, `test:balance-lab` und `check:fingerprints` nur, wenn der Diff Generator-, Map- oder Balance-Pfade, deren eigene Tests oder Build-Infrastruktur berührt; `test:stress:dawn` nur bei Generator-, Dawn- oder Infrastrukturpfaden (Pfadfamilien in [`scripts/check/changes.mjs`](../../scripts/check/changes.mjs)). Alle Schritte laufen; die Zusammenfassung nennt jeden roten Schritt mit Laufzeit. `--all` erzwingt alle Suiten, `--bail` stoppt beim ersten Fehler. |
 
 `check:quick` ersetzt `check` nicht: Builds, Map-/Balance-Editor-Typen und nicht importierte
 Seiteneffekte prüft erst `check`. `check:fingerprints` vergleicht die Kampagnen-Fingerprints aller

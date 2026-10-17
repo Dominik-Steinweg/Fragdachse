@@ -54,6 +54,10 @@ export const FAMILIES = {
     /^src\/config\/dawn\/(?:arenaTemplates\/|site)/u,
     /^src\/dawn\/(?:composition|resolution)\//u,
   ],
+  dawn: [
+    /^src\/config\/dawn\//u,
+    /^src\/dawn\//u,
+  ],
   balance: [
     /^src\/config\.ts$/u,
     /^src\/config\/[^/]+\.json$/u,

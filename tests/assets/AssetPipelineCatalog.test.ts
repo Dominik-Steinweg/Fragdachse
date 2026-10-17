@@ -5,6 +5,9 @@ import { PLAYER_SIZE } from '../../src/config';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../../src/config/coopDefenseEnemies';
 import { TURRET_VISUALS } from '../../src/config/turretVisuals';
 import { WATCHTOWER_DISPLAY_SIZE } from '../../src/config/watchtower';
+import { getPipelineAssetForTexture } from '../../src/config/pipelineAssets';
+import { DAWN_M3_ASSET_KEYS } from '../../src/dawn/contracts/DawnContentIds';
+import { DAWN_SCAVENGER_KIND } from '../../src/dawn/runtime/DawnScavengerPort';
 import { LOADOUT_CATALOG_ENTRIES, findWeaponConfig, findUtilityConfig } from '../../src/loadout/LoadoutConfig';
 import { EQUIPABLE_LOADOUT_CATALOG_ENTRIES } from '../equipableLoadoutEntries';
 import { validateClipContracts, validateExtensions } from '../../scripts/asset-pipeline/contracts-v2.mjs';
@@ -132,9 +135,20 @@ describe('asset pipeline catalog contracts', () => {
 
   it('covers current enemies through their standard or boss asset contracts and the north-facing player', () => {
     const enemies = assets.filter((asset) => asset.category === 'enemy');
-    const standard = Object.entries(COOP_DEFENSE_ENEMY_CONFIGS).filter(([, config]) => !config.krakenBoss && !config.krakenEgg);
+    // Dawn binds its scavenger art explicitly (EnemyEntity); a gameIds binding would let a runtime
+    // import retexture it with the fallback imageKey, so the asset stays unbound but must exist.
+    const explicitAssets: Record<string, string> = { [DAWN_SCAVENGER_KIND]: DAWN_M3_ASSET_KEYS.scavenger };
+    const standard = Object.entries(COOP_DEFENSE_ENEMY_CONFIGS)
+      .filter(([id, config]) => !config.krakenBoss && !config.krakenEgg && !explicitAssets[id]);
     expect(sorted(enemies.flatMap((asset) => asset.gameIds))).toEqual(sorted(standard.map(([id]) => id)));
     for (const [enemyId, config] of Object.entries(COOP_DEFENSE_ENEMY_CONFIGS)) {
+      const explicitId = explicitAssets[enemyId];
+      if (explicitId) {
+        const asset = enemies.find(entry => entry.id === explicitId);
+        expect(asset, `${enemyId}/${explicitId}`).toMatchObject({ gameIds: [], targetSize: config.size, forward: 'north' });
+        expect(asset!.requiredClips).toEqual(expect.arrayContaining(config.weapons.length ? ['move', 'claw'] : ['move']));
+        continue;
+      }
       // Boss silhouettes and brood have explicit asset IDs and separate visual
       // sizes; their collision radius is not a regular enemy sprite size.
       const bossAssets = config.krakenBoss ? Object.values(config.krakenBoss.assets)
@@ -148,7 +162,10 @@ describe('asset pipeline catalog contracts', () => {
       expect(asset.targetSize, enemyId).toBe(config.size);
       expect(asset.forward).toBe('north');
       expect(asset.requiredClips).toEqual(expect.arrayContaining((asset as { runtimeContract?: string }).runtimeContract === 'boss' ? ['move'] : ['move', 'claw']));
-      expect(asset.reference).toBe(`public/assets/sprites/enemies/${config.imageKey}.png`);
+      // ArenaScene loads the pipeline idle frame first; only kinds without one fall back to the static
+      // sprite, which then is also the archived comparison artwork.
+      if (getPipelineAssetForTexture(config.imageKey)) expect(existsSync(path.join(root, asset.reference)), enemyId).toBe(true);
+      else expect(asset.reference).toBe(`public/assets/sprites/enemies/${config.imageKey}.png`);
       expect(config.spriteRotationOffsetDegrees ?? 0).toBe(0);
     }
     const characters = assets.filter((asset) => asset.category === 'character' && asset.gameIds.includes('player'));

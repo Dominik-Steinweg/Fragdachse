@@ -128,6 +128,30 @@ describe('light bleed lifecycle', () => {
     expect(targets).toHaveLength(targetCount);
   });
 
+  it('grows the screen-fixed lightmap to the visible world when the camera zooms out, and only then', () => {
+    const { scene, lighting, targets } = fixture();
+    const camera = scene.cameras.main as Record<string, number>;
+    Object.assign(camera, { width: 1920, height: 1080, originX: 0, originY: 0, zoom: 1, zoomX: 1, zoomY: 1 });
+    lighting.update();
+    const lightMap = () => targets.filter(target => target.texture.key === 'fake-lightmap').at(-1) as unknown as
+      { displayWidth: number; displayHeight: number };
+    const base = { width: lightMap().displayWidth, height: lightMap().displayHeight };
+    const count = targets.length;
+    Object.assign(camera, { zoom: 1.4, zoomX: 1.4, zoomY: 1.4 });
+    lighting.update();
+    expect(targets).toHaveLength(count);
+    Object.assign(camera, { zoom: 0.5, zoomX: 0.5, zoomY: 0.5 });
+    lighting.update();
+    expect(lightMap().displayWidth).toBeGreaterThanOrEqual(1920 / 0.5);
+    expect(lightMap().displayHeight).toBeGreaterThanOrEqual(1080 / 0.5);
+    const grown = targets.length;
+    lighting.update();
+    expect(targets).toHaveLength(grown);
+    Object.assign(camera, { zoom: 1, zoomX: 1, zoomY: 1 });
+    lighting.update();
+    expect(lightMap()).toMatchObject({ displayWidth: base.width, displayHeight: base.height });
+  });
+
   it('rebuilds restored explosion caches before reusing them at unchanged simulation time', () => {
     const { lighting, targets, renderer } = fixture();
     lighting.setOccluderIndex(new LightOccluderIndex({

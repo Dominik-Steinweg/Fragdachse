@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // check:release: the gate before a fast-forward to main. Always the peer protocol guard, `check` (core,
-// architecture, three builds), integration and assets; stress, balance lab and campaign fingerprints only
-// when the diff against the base touches generator, map or balance paths (see FAMILIES in changes.mjs),
-// their own tests, or build infrastructure. Steps run serially and all run; the summary lists every red.
+// architecture, three builds), integration and assets; stress, the sampled Dawn multi-seed run, balance lab
+// and campaign fingerprints only when the diff against the base touches generator, map, Dawn or balance
+// paths (see FAMILIES in changes.mjs), their own tests, or build infrastructure. Steps run serially and all
+// run; the summary lists every red. The full Dawn sweep stays opt-in: npm run test:stress:dawn-sweep.
 //   npm run check:release [-- --base <ref>] [--all] [--bail] [--list] [--allow-fingerprint-changes]
 //                         [--allow-unbumped-wire]
 import { readFileSync } from 'node:fs';
@@ -39,7 +40,11 @@ const steps = [
   { label: 'fingerprints', command: process.execPath, args: [join(root, 'scripts/check/fingerprints.mjs'), ...fingerprintArgs],
     reason: because(['generator', hits.generator], ['map', hits.map], ['infra', hits.infra], ['script', own('scripts/check/fingerprints')]) },
   { label: 'test:stress', command: 'npm', args: ['run', 'test:stress'],
-    reason: because(['generator', hits.generator], ['map', hits.map], ['infra', hits.infra], ['tests', own('tests/stress/')]) },
+    reason: because(['generator', hits.generator], ['map', hits.map], ['infra', hits.infra],
+      ['tests', own('tests/stress/').filter(path => !path.startsWith('tests/stress/dawn/'))]) },
+  // Dawn arenas do not read campaign maps: their sampled multi-seed run follows generator and Dawn paths only.
+  { label: 'test:stress:dawn', command: 'npm', args: ['run', 'test:stress:dawn'],
+    reason: because(['generator', hits.generator], ['dawn', hits.dawn], ['infra', hits.infra], ['tests', own('tests/stress/dawn/')]) },
   { label: 'test:balance-lab', command: 'npm', args: ['run', 'test:balance-lab'],
     reason: because(['balance', hits.balance], ['map', hits.map], ['infra', hits.infra], ['tests', own('tests/balance-lab/')]) },
 ];

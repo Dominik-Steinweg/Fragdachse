@@ -7,6 +7,7 @@ import {
   GAME_WIDTH,
 } from '../config';
 import { ensureCanvasTexture, fillRadialGradientTexture } from './EffectUtils';
+import { getVisibleWorldView } from '../graphics/CameraWorldView';
 import { EnemyEyeBatch } from './EnemyEyeBatch';
 import type { EnemyEyeLightFrame } from './EnemyEyeGlowModel';
 import type { EssenceLightFrame } from '../adrenalineEssence/AdrenalineEssenceLighting';
@@ -79,6 +80,8 @@ void main() {
  * etwa die 1,5-fache Füllrate. Der Rand hier ist nur noch die Ausrichtungsreserve.
  */
 const LIGHTMAP_OVERSCAN_ALIGNMENT_PX = 8;
+/** Wachstumsraster der Lightmap beim Herauszoomen: grob genug, dass ein Zoomverlauf selten neu anlegt. */
+const LIGHTMAP_VIEWPORT_GROWTH_STEP_PX = 256;
 
 /** Ausblendzeit, wenn ein Dauerlicht freigegeben wird – verhindert hartes Poppen. */
 const RELEASE_FADE_MS = 140;
@@ -300,8 +303,15 @@ export class LightingSystem {
   private quality: GraphicsQualityProfile;
   private unsubscribeQuality: (() => void) | null = null;
 
+  /**
+   * Logische Fläche der bildschirmfesten Lightmap. Sie startet beim Basis-Viewport und wächst nur,
+   * wenn die Kamera weiter herauszoomt, als dieser abdeckt; sonst bliebe rechts und unten unbeleuchtete Welt.
+   */
+  private viewport: { width: number; height: number };
+
   constructor(private readonly scene: Phaser.Scene,
-    private readonly viewport: { readonly width: number; readonly height: number } = { width: GAME_WIDTH, height: GAME_HEIGHT }) {
+    private readonly baseViewport: { readonly width: number; readonly height: number } = { width: GAME_WIDTH, height: GAME_HEIGHT }) {
+    this.viewport = { width: baseViewport.width, height: baseViewport.height };
     this.quality = getGraphicsQualityProfile(scene);
     this.unsubscribeQuality = getGraphicsQualityController(scene)?.subscribe((profile) => {
       this.setGraphicsQuality(profile);
@@ -817,6 +827,7 @@ export class LightingSystem {
       return;
     }
 
+    this.syncViewportToCamera();
     const overlay = this.ensureLightMap();
     const scrollX = this.scene.cameras.main.scrollX;
     const scrollY = this.scene.cameras.main.scrollY;
@@ -1804,6 +1815,24 @@ export class LightingSystem {
     this.lightMap = lightMap;
     this.syncOverlayVisibility();
     return lightMap;
+  }
+
+  /**
+   * Die Lightmap liegt bildschirmfest ab der Kamera-Scrollposition und skaliert mit dem Kamera-Zoom
+   * (Ursprung oben links). Zeigt die Kamera mehr Welt als der Basis-Viewport, wächst die Fläche in
+   * groben Schritten mit; die Render-Targets werden nur bei einer Größenänderung neu angelegt.
+   */
+  private syncViewportToCamera(): void {
+    const camera = this.scene.cameras?.main;
+    if (!camera) return;
+    const view = getVisibleWorldView(camera);
+    const cover = (base: number, extent: number) => !(extent > base) ? base
+      : Math.ceil(extent / LIGHTMAP_VIEWPORT_GROWTH_STEP_PX) * LIGHTMAP_VIEWPORT_GROWTH_STEP_PX;
+    const width = cover(this.baseViewport.width, view.right - camera.scrollX);
+    const height = cover(this.baseViewport.height, view.bottom - camera.scrollY);
+    if (width === this.viewport.width && height === this.viewport.height) return;
+    this.viewport = { width, height };
+    this.destroyRenderTargets();
   }
 
   private getLightMapOverscanPx(viewportSize: number): number {
