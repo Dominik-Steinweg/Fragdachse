@@ -643,6 +643,12 @@ export type CoopDefenseMapGroundHazardArea =
     readonly type: 'cells';
     readonly cells: readonly { readonly gridX: number; readonly gridY: number }[];
     readonly baseClearanceCells?: number;
+  }
+  | {
+    /** Organic authored outline: every cell whose centre lies inside the closed polygon (grid units). */
+    readonly type: 'polygon';
+    readonly points: readonly { readonly gridX: number; readonly gridY: number }[];
+    readonly baseClearanceCells?: number;
   };
 
 export interface CoopDefenseMapGroundHazardKeepClear {
@@ -667,11 +673,18 @@ export interface CoopDefenseMapGroundHazardEventConfig extends CoopDefenseMapEve
   readonly area: CoopDefenseMapGroundHazardArea;
   readonly effect: CoopDefenseMapGroundHazardEffectConfig;
   /**
-   * Monotone rectangular or radial expansion; reached cells stay active. Radial growth of
-   * `random-patches` runs from each patch centre and may end with a finite `durationMs`.
+   * Monotone rectangular, directional or radial expansion; reached cells stay active. Radial growth
+   * of `random-patches` runs from each patch centre and may end with a finite `durationMs`. A
+   * `sweep` front crosses a rectangle, polygon or cell list along `headingDeg` (0 = east, 90 = south).
    */
   readonly spread?: {
     readonly direction: 'left-to-right';
+    readonly durationMs: number;
+    readonly roughnessCells: number;
+    readonly warningLeadMs: number;
+  } | {
+    readonly direction: 'sweep';
+    readonly headingDeg: number;
     readonly durationMs: number;
     readonly roughnessCells: number;
     readonly warningLeadMs: number;
@@ -680,6 +693,30 @@ export interface CoopDefenseMapGroundHazardEventConfig extends CoopDefenseMapEve
     readonly durationMs: number;
     readonly warningLeadMs: number;
   };
+}
+
+/**
+ * Extent of an authored hazard area along and across a sweep heading, in grid units. Rectangle
+ * and cell corners and polygon vertices span it; patch areas have no authored extent.
+ */
+export function groundHazardSweepExtent(area: CoopDefenseMapGroundHazardArea, headingDeg: number):
+  { readonly alongMin: number; readonly alongMax: number; readonly acrossMin: number } | null {
+  const points = area.type === 'rectangle'
+    ? [{ gridX: area.gridX, gridY: area.gridY }, { gridX: area.gridX + area.widthCells, gridY: area.gridY },
+      { gridX: area.gridX, gridY: area.gridY + area.heightCells },
+      { gridX: area.gridX + area.widthCells, gridY: area.gridY + area.heightCells }]
+    : area.type === 'polygon' ? area.points
+      : area.type === 'cells' ? area.cells.flatMap(cell => [cell, { gridX: cell.gridX + 1, gridY: cell.gridY + 1 },
+        { gridX: cell.gridX + 1, gridY: cell.gridY }, { gridX: cell.gridX, gridY: cell.gridY + 1 }])
+        : null;
+  if (!points?.length) return null;
+  const angle = headingDeg * Math.PI / 180, cos = Math.cos(angle), sin = Math.sin(angle);
+  let alongMin = Infinity, alongMax = -Infinity, acrossMin = Infinity;
+  for (const point of points) {
+    const along = point.gridX * cos + point.gridY * sin, across = -point.gridX * sin + point.gridY * cos;
+    alongMin = Math.min(alongMin, along); alongMax = Math.max(alongMax, along); acrossMin = Math.min(acrossMin, across);
+  }
+  return { alongMin, alongMax, acrossMin };
 }
 
 export type ResolvedCoopDefenseMapGroundHazardEventConfig = CoopDefenseMapGroundHazardEventConfig;
@@ -2812,6 +2849,9 @@ function normalizeGroundHazardMapEvent(
     throw new Error(`[coopDefenseMaps] Expanded patches require radial spread on ${mapId}:${event.id}`);
   }
   const radialPatches = spread?.direction === 'radial' && area.type === 'random-patches';
+  // A sweep's roughness must stay below extent / pi so every line along the heading stays monotone.
+  const sweepExtent = spread?.direction === 'sweep' && Number.isFinite(spread.headingDeg)
+    ? groundHazardSweepExtent(area, spread.headingDeg) : null;
   if (spread !== undefined && (
     !spread || (!radialPatches && (effect.visualStyle !== 'void' || durationMs !== undefined))
     || !Number.isFinite(spread.durationMs) || spread.durationMs <= 0
@@ -2819,8 +2859,11 @@ function normalizeGroundHazardMapEvent(
     || (spread.direction === 'left-to-right'
       ? area.type !== 'rectangle' || !Number.isFinite(spread.roughnessCells) || spread.roughnessCells < 0
         || spread.roughnessCells >= area.widthCells / Math.PI
-      : spread.direction !== 'radial' || (area.type !== 'expanded-patches' && area.type !== 'random-patches')
-        || spread.warningLeadMs >= spread.durationMs)
+      : spread.direction === 'sweep'
+        ? !sweepExtent || !Number.isFinite(spread.roughnessCells) || spread.roughnessCells < 0
+          || spread.roughnessCells >= (sweepExtent.alongMax - sweepExtent.alongMin) / Math.PI
+        : spread.direction !== 'radial' || (area.type !== 'expanded-patches' && area.type !== 'random-patches')
+          || spread.warningLeadMs >= spread.durationMs)
   )) {
     throw new Error(`[coopDefenseMaps] Invalid ground hazard spread on ${mapId}:${event.id}`);
   }
@@ -2944,6 +2987,32 @@ function normalizeGroundHazardArea(
     return {
       type: 'cells',
       cells,
+      ...(baseClearanceCells === undefined ? {} : { baseClearanceCells }),
+    };
+  }
+  if (area.type === 'polygon') {
+    if (!Array.isArray(area.points) || area.points.length < 3) {
+      throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${eventId} needs at least three polygon points`);
+    }
+    const points = area.points.map((point) => {
+      if (
+        !point
+        || typeof point.gridX !== 'number'
+        || typeof point.gridY !== 'number'
+        || !Number.isFinite(point.gridX)
+        || !Number.isFinite(point.gridY)
+        || point.gridX < 0
+        || point.gridY < 0
+        || point.gridX > arenaWidthCells
+        || point.gridY > arenaHeightCells
+      ) {
+        throw new Error(`[coopDefenseMaps] Ground hazard event ${mapId}:${eventId} has a polygon point outside the arena`);
+      }
+      return { gridX: point.gridX, gridY: point.gridY };
+    });
+    return {
+      type: 'polygon',
+      points,
       ...(baseClearanceCells === undefined ? {} : { baseClearanceCells }),
     };
   }

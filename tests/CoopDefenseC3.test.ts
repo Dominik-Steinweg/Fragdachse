@@ -34,6 +34,7 @@ import { PlacementSystem } from '../src/systems/PlacementSystem';
 import type { ArenaLayout } from '../src/types';
 import { COOP_DEFENSE_MODE } from '../src/gameModes';
 import { CoopDefenseGroundHazardEventHandler } from '../src/systems/CoopDefenseGroundHazardEventHandler';
+import { groundHazardIgnitionDelay } from '../src/systems/GroundHazardSpread';
 import {
   CoopDefenseMapEventDirector,
   type CoopDefenseMapEventCycleFinished,
@@ -160,6 +161,35 @@ describe('Coop Defense C3 configuration', () => {
       { id: 'patches', type: 'ground-hazard', area: { type: 'random-patches', randomPatchCount: 2 } },
     ]);
     expect(normalized.mapEvents?.[1]).not.toHaveProperty('durationMs');
+  });
+
+  it('fills an authored polygon outline and sweeps it as one organic front along any heading', () => {
+    const points = [{ gridX: 6, gridY: 4 }, { gridX: 20, gridY: 6 }, { gridX: 18, gridY: 16 }, { gridX: 8, gridY: 14 }];
+    const front = makeEvent({ id: 'front', delayMs: 0, durationMs: undefined, area: { type: 'polygon', points },
+      spread: { direction: 'sweep', headingDeg: 90, durationMs: 12_000, roughnessCells: 1.5, warningLeadMs: 1_000 } });
+    const config = normalizeCoopDefenseMapConfig(makeMap({ mapEvents: [front] }));
+    const event = config.mapEvents![0]!;
+    if (event.type !== 'ground-hazard') throw new Error('Missing front');
+    const cells = (generateArenaWithActiveMetrics(902, config).groundHazardZones ?? []).flatMap(zone => zone.cells);
+    expect(cells).toContainEqual({ gridX: 12, gridY: 10 });
+    // Outside the outline: left of its west edge and above its north edge.
+    expect(cells).not.toContainEqual({ gridX: 6, gridY: 13 });
+    expect(cells).not.toContainEqual({ gridX: 19, gridY: 4 });
+    // Heading south: the northern rim ignites first, the southern rim last, never a retreat in between.
+    for (const gridX of [10, 12, 15]) {
+      let previous = -1;
+      for (let gridY = 6; gridY <= 14; gridY += 0.5) {
+        const delay = groundHazardIgnitionDelay(event, gridX, gridY, 902);
+        expect(delay).toBeGreaterThan(previous); previous = delay;
+      }
+    }
+    expect(groundHazardIgnitionDelay(event, 12, 4, 902)).toBe(0);
+    expect(groundHazardIgnitionDelay(event, 12, 15.5, 902)).toBe(12_000);
+    // Roughness beyond extent / pi would let the front retreat and is rejected.
+    expect(() => normalizeCoopDefenseMapConfig(makeMap({ mapEvents: [{ ...front,
+      spread: { direction: 'sweep', headingDeg: 90, durationMs: 12_000, roughnessCells: 4, warningLeadMs: 1_000 } }] }))).toThrow(/spread/);
+    expect(() => normalizeCoopDefenseMapConfig(makeMap({ mapEvents: [{ ...front,
+      area: { type: 'polygon', points: points.slice(0, 2) } }] }))).toThrow(/polygon/);
   });
 
   it('grows normal-fire random patches radially and keeps authored keep-clear capsules free (D-47)', () => {

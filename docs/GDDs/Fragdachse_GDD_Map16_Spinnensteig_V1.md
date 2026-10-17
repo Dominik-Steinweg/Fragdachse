@@ -59,13 +59,14 @@ Prototyp „Zeitzünder“ (104×40, fünf gleichförmige Hinterhalte). Playtest
 | 5 | Sumpfufer | Stinkmütter, Mini-Kraken aus der Bucht, heilende Quacksalber |
 | 6 | Seegabel | Alien-Dachse am Uferweg, Leerenpirscher am Außenweg, Dämonen vom Ufer, Mini-Kraken aus der Lagune zwischen beiden Wegen |
 | 7 | Bomberkamm | Bomberanflug entlang des Kamms, danach Sporenpanzer, Zombies und Kabummtulas |
-| 8 | Brandrodung | Void-Feuer schließt den Rückweg, Pyros und ein Werfer halten die Lichtung, Kabummtulas stürmen, Mini-Kraken aus dem Ostsee |
+| 8 | Brandrodung | Void-Feuer schließt in ~7 s den Rückweg (organisches Band vom Ostsee bis zum Kartenrand, vom Lichtungsrand nach Norden) und frisst sich danach in ~36 s in die Nordhälfte der Lichtung (2 Brandschaden je Tick), Pyros und ein Werfer kommen aus dem Feuer, Kabummtulas stürmen, Mini-Kraken aus dem Ostsee |
 | 9 | Brutgrube | Finale in drei Wellen: Kabummtula-Zange, Anstürmer plus Brutsee-Kraken plus Alien, Spinnenring plus Pirscher plus Stinkmutter plus Kraken-Nachschub |
 
 Mörser- und Brandstifter-Dachse werden erst auf Map 18 und 19 eingeführt und fehlen hier bewusst.
 
 ## 5. Authoring-Hinweise
 
+- Feuerflächen sind Polygone (`area.type: "polygon"`) mit gerichteter `sweep`-Front statt Rechtecken.
 - Überfälle werden über `after-checkpoint` gestartet. Wellen hängen per `after-encounter` aneinander.
   Checkpoints schließen über `completeOn: after-encounter` ab.
 - Wasser-Spawns (`medium: "water"`, `cluster: true`) liegen tief genug im Wasser.

@@ -114,6 +114,8 @@ export const GpuVfxEffectId = {
   VoidMeteorSpark: 100,
   VoidMeteorSmoke: 101,
   VoidMeteorFragment: 102,
+  RestHealMote: 103,
+  RestHealSpark: 104,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -739,6 +741,11 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     frame: GpuVfxFrameId.ExplosionSmoke, importance: 'standard', release: 'kill-with-source' },
   { id: GpuVfxEffectId.VoidMeteorFragment, label: 'boss.void-meteor-fragment', lane: GpuVfxLaneId.VoidMeteorMaterial,
     frame: GpuVfxFrameId.ExplosionChunk, importance: 'decorative', release: 'kill-with-source' },
+  // Quacksalber rest heal: spores and motes peeling off the stream, sparkles rising from healed allies.
+  { id: GpuVfxEffectId.RestHealMote, label: 'enemy.rest-heal-mote', lane: GpuVfxLaneId.ExplosionLowGlow,
+    frame: GpuVfxFrameId.DeathGlow, importance: 'decorative', release: 'linger' },
+  { id: GpuVfxEffectId.RestHealSpark, label: 'enemy.rest-heal-spark', lane: GpuVfxLaneId.ExplosionLowGlow,
+    frame: GpuVfxFrameId.DeathGlow, importance: 'standard', release: 'linger' },
 ];
 
 /** Definition-level routing. No particle chooses height by radius, random state or position. */

@@ -162,6 +162,16 @@ function isInsideKeepClear(gridX: number, gridY: number, capsules: readonly Coop
   return false;
 }
 
+/** Even-odd test of a point against a closed authored outline (grid units). */
+function isInsidePolygon(x: number, y: number, points: readonly { readonly gridX: number; readonly gridY: number }[]): boolean {
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const a = points[i]!, b = points[j]!;
+    if ((a.gridY > y) !== (b.gridY > y) && x < (b.gridX - a.gridX) * (y - a.gridY) / (b.gridY - a.gridY) + a.gridX) inside = !inside;
+  }
+  return inside;
+}
+
 /**
  * Prozeduraler Arena-Generator – keine Phaser-Abhängigkeit.
  * Generiert ein ArenaLayout mit Felsen und Bäumen auf dem 48px-Raster.
@@ -1901,6 +1911,19 @@ export class ArenaGenerator {
 
       if (area.type === 'cells') {
         const cells = area.cells.filter((cell) => isValidCell(cell.gridX, cell.gridY, baseClearanceCells, false, event.effect.visualStyle === 'void'));
+        if (cells.length > 0) zones.push(makeZone(event, event.id, cells));
+        continue;
+      }
+
+      if (area.type === 'polygon') {
+        const cells: ArenaGroundHazardZone['cells'] = [];
+        const xs = area.points.map(point => point.gridX), ys = area.points.map(point => point.gridY);
+        for (let gridY = Math.max(0, Math.floor(Math.min(...ys))); gridY < Math.min(this.metrics.gridRows, Math.ceil(Math.max(...ys))); gridY += 1) {
+          for (let gridX = Math.max(0, Math.floor(Math.min(...xs))); gridX < Math.min(this.metrics.gridCols, Math.ceil(Math.max(...xs))); gridX += 1) {
+            if (isInsidePolygon(gridX + 0.5, gridY + 0.5, area.points)
+              && isValidCell(gridX, gridY, baseClearanceCells, false, event.effect.visualStyle === 'void', !!event.spread)) cells.push({ gridX, gridY });
+          }
+        }
         if (cells.length > 0) zones.push(makeZone(event, event.id, cells));
         continue;
       }

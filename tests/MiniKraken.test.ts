@@ -34,6 +34,10 @@ describe('Mini-Kraken content', () => {
     expect(config.shieldCharger!.structureDamageMult).toBeGreaterThan(0);
     expect(config.deathBurst!.structureDamageMult).toBeGreaterThan(0);
     expect(WEAPON_CONFIGS[config.weapons[0]!.weaponId]!.fire.type).toBe('melee');
+    // No dead band: the melee ink reaches up to where the leap takes over, so close quarters always have an attack.
+    expect(WEAPON_CONFIGS[config.weapons[0]!.weaponId]!.range).toBeGreaterThanOrEqual(config.shieldCharger!.triggerMinDistancePx * 0.9);
+    // The engage radius reaches into the leap band, so the hunt can open with a leap.
+    expect(config.engage!.enterPx).toBeGreaterThan(config.shieldCharger!.triggerMinDistancePx);
     expect(KRAKEN_BOSS_DEFAULTS.eggs.broodTable.entries.map(entry => entry.enemyKind)).toEqual(['mini-kraken']);
   });
 

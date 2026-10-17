@@ -332,22 +332,18 @@ export interface CoopDefenseEnemyKaboomtulaConfig {
   /** The rush survives a target out of sight for this long (corners, smoke) before it recovers. */
   readonly lostSightGraceMs: number;
   readonly skitter: {
-    /** Each run segment lasts within [segmentMinMs, segmentMaxMs] (>= ~140 ms survives the 20 Hz tick). */
-    readonly segmentMinMs: number;
-    readonly segmentMaxMs: number;
-    /** Sideways segments angle off the route by [zigMinDegrees, zigMaxDegrees], alternating sides. */
-    readonly zigMinDegrees: number;
-    readonly zigMaxDegrees: number;
-    /** Share of straight darts and their speed factor. */
-    readonly dartChance: number;
-    readonly dartSpeedFactor: number;
-    /** Chance of a short freeze after a segment, and its duration range. */
-    readonly pauseChance: number;
-    readonly pauseMinMs: number;
-    readonly pauseMaxMs: number;
-    /** Within this distance of the target the zig amplitude fades so the spider closes in reliably. */
+    /** One full left-right weave lasts within [weavePeriodMinMs, weavePeriodMaxMs], fixed per body. */
+    readonly weavePeriodMinMs: number;
+    readonly weavePeriodMaxMs: number;
+    /** Peak offset of the weave from the route heading (< 90). */
+    readonly weaveDegrees: number;
+    /** Speed swing of the scurry rhythm: 1 ± surge, fastest while crossing the route. */
+    readonly surge: number;
+    /** Share of the weave the body turns into; the rest it keeps facing its prey. */
+    readonly facingLean: number;
+    /** Within this distance of the target the weave amplitude fades so the spider closes in reliably. */
     readonly calmWithinPx: number;
-    /** Distance of the steering point along a sideways segment. */
+    /** Distance of the steering point along the weave direction. */
     readonly probePx: number;
   };
   readonly pounce: {
@@ -1377,15 +1373,11 @@ function normalizeKaboomtulaConfig(
     rushMaxMs: Math.max(1, ms(config.rushMaxMs)),
     lostSightGraceMs: ms(config.lostSightGraceMs),
     skitter: {
-      segmentMinMs: Math.max(1, ms(skitter.segmentMinMs)),
-      segmentMaxMs: Math.max(1, ms(skitter.segmentMaxMs)),
-      zigMinDegrees: Math.max(0, skitter.zigMinDegrees),
-      zigMaxDegrees: Math.max(0, skitter.zigMaxDegrees),
-      dartChance: Math.max(0, Math.min(1, skitter.dartChance)),
-      dartSpeedFactor: Math.max(0.1, skitter.dartSpeedFactor),
-      pauseChance: Math.max(0, Math.min(1, skitter.pauseChance)),
-      pauseMinMs: ms(skitter.pauseMinMs),
-      pauseMaxMs: ms(skitter.pauseMaxMs),
+      weavePeriodMinMs: Math.max(1, ms(skitter.weavePeriodMinMs)),
+      weavePeriodMaxMs: Math.max(1, ms(skitter.weavePeriodMaxMs)),
+      weaveDegrees: Math.max(0, skitter.weaveDegrees),
+      surge: Math.max(0, Math.min(0.9, skitter.surge)),
+      facingLean: Math.max(0, Math.min(1, skitter.facingLean)),
       calmWithinPx: Math.max(0, skitter.calmWithinPx),
       probePx: Math.max(1, skitter.probePx),
     },
@@ -1421,8 +1413,7 @@ function normalizeKaboomtulaConfig(
     },
   };
   const n = normalized;
-  if (n.skitter.segmentMinMs > n.skitter.segmentMaxMs || n.skitter.zigMinDegrees > n.skitter.zigMaxDegrees
-    || n.skitter.zigMaxDegrees >= 90 || n.skitter.pauseMinMs > n.skitter.pauseMaxMs
+  if (n.skitter.weavePeriodMinMs > n.skitter.weavePeriodMaxMs || n.skitter.weaveDegrees >= 90
     || !(n.pounce.bandMinPx < n.pounce.triggerPx && n.pounce.triggerPx <= n.pounce.bandMaxPx)
     || n.pounce.bandMaxPx >= n.activationRadiusPx
     || n.leap.maxLengthPx < n.pounce.bandMaxPx + n.leap.overshootPx) {

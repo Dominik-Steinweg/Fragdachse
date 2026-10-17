@@ -1,31 +1,41 @@
 import * as Phaser from 'phaser';
-import { ALLIED_PALETTE, DEPTH, DEPTH_LIGHTING } from '../config';
+import { ALLIED_PALETTE } from '../config';
+import { getVisibleWorldView } from '../graphics/CameraWorldView';
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
 import { emissiveAlpha } from './EmissiveScale';
-import { registerGraphicsObject } from './EffectUtils';
+import { mixColors } from './EffectUtils';
+import { getGpuVfxFrame } from './gpu/GpuVfxAtlas';
+import { GpuVfxEase } from './gpu/GpuVfxEase';
+import { GpuVfxEffectId } from './gpu/GpuVfxEffects';
+import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
+import type { GpuVfxSystem } from './gpu/GpuVfxSystem';
+import { RestHealGpuLayer } from './gpu/RestHealGpuLayer';
+import { REST_HEAL_KIND } from './gpu/RestHealShader';
 import type { LightingSystem } from './LightingSystem';
 
 interface Point { readonly x: number; readonly y: number }
 
-/** One resting healer this frame: where its tendrils leave, whom they reach and when it ticks. */
+/** One resting healer this frame: where its stream leaves, whom it reaches and when it ticks. */
 export interface RestHealChannel {
   readonly id: string;
   readonly allied: boolean;
-  /** Back-cross point the tendrils leave from. */
+  /** Body centre and radius of the healer; the ground sigil circles it. */
+  readonly body: Point & { readonly radius: number };
+  /** Back-cross point the streams leave from. */
   readonly cross: Point;
   /** Body facing (world radians), used to orient the cross glyph. */
   readonly facing: number;
-  readonly targets: readonly (Point & { readonly id: string })[];
+  readonly targets: readonly (Point & { readonly id: string; readonly radius: number })[];
   /** Eyes of the healer for the hypnotic rings; empty without eye anchors. */
   readonly eyes: readonly Point[];
   /** Hostile rings take the eye glow colour; allied healers use the allied palette. */
   readonly eyeColor: number;
-  /** Host-synchronised rest start and heal tick interval; the cross pulses on the ticks. */
+  /** Host-synchronised rest start and heal tick interval; a dose lands at the ally on every tick. */
   readonly restAt: number;
   readonly tickMs: number;
 }
 
-interface TendrilTrack {
+interface LinkTrack {
   readonly key: string;
   readonly seed: number;
   /** Local presentation clock. */
@@ -33,93 +43,219 @@ interface TendrilTrack {
   retractAt: number | null;
   from: Point;
   to: Point;
+  toRadius: number;
   allied: boolean;
+  restAt: number;
+  tickMs: number;
+  reach: number;
 }
 
-/** Sickly jade-mint of the plague heal: reads as healing next to red telegraphs and violet danger. */
-const HEAL = { glow: 0x3dff8f, core: 0xc8ffd6, backing: 0x0f3a24 } as const;
-const ALLIED = { glow: ALLIED_PALETTE.primary, core: ALLIED_PALETTE.core, backing: ALLIED_PALETTE.shadow } as const;
-const GROW_MS = 220;
-const RETRACT_MS = 150;
-/** One droplet travels a tendril in this long. */
-const DROPLET_CYCLE_MS = 760;
-const RING_CYCLE_MS = 900;
-const LIGHT_RADIUS_PX = 120;
+interface HealerTrack {
+  readonly seed: number;
+  readonly bornAt: number;
+  endedAt: number | null;
+  channel: RestHealChannel;
+}
+
+/** Live emitters of this frame for the particle tick (geometry already resolved). */
+interface StreamEmitter { from: Point; to: Point; sag: number; allied: boolean }
+interface PointEmitter { x: number; y: number; radius: number; allied: boolean; phase: number; tickMs: number }
+
+const PLAGUE = { glow: 0x3dff8f, core: 0xd8ffe2 } as const;
+const ALLIED = { glow: ALLIED_PALETTE.primary, core: ALLIED_PALETTE.core } as const;
+const GROW_MS = 260;
+const RETRACT_MS = 180;
+const SIGIL_IN_MS = 220;
+const SIGIL_OUT_MS = 380;
+/** Ground sigil radius beyond the healer's body radius. */
+const SIGIL_MARGIN_PX = 11;
+/** The stream ends this share of the ally's radius before its centre: it reaches in, not over. */
+const RECEIVER_INSET_SHARE = 0.55;
+const RECEIVER_MARGIN_PX = 5;
+const VIEW_MARGIN_PX = 80;
+const LIGHT_RADIUS_PX = 130;
 const LIGHT_COLOR = 0xc8ffd6;
+/** Particle rates per second at full quality. */
+const MOTES_PER_LINK_S = 16;
+const SPARKS_PER_RECEIVER_S = 9;
+const SPORES_PER_HEALER_S = 7;
 
 /**
- * Presentation of rest heal links (Quacksalber toad): organic, wavering tendrils from the back cross
- * to each linked ally, growing when a link appears and withdrawing when it ends, with droplets
- * flowing to the target, a pulse of the cross on every heal tick and hypnotic rings in the eyes
- * while the toad channels. Observes replicated links only; the host decides who is healed.
+ * Presentation of rest heal links (Quacksalber toad) as one GPU layer plus GPU particles: a rune
+ * sigil breathes under the resting toad, braided streams of light flow from its back cross to each
+ * linked ally and carry one dose per heal tick into the ally's absorbing ring, the cross swells on
+ * every tick and the eyes ring hypnotically. Spores rise off the toad, motes peel off the streams
+ * and sparkles spiral into healed allies. Observes replicated links only; the host decides who is healed.
  */
 export class RestHealTendrilRenderer {
-  /** Day readability: a dark, lit backing just above the bodies. */
-  private readonly surface: Phaser.GameObjects.Graphics;
-  /** Self-lit core above the night lightmap, below the canopy. */
-  private readonly light: Phaser.GameObjects.Graphics;
-  private readonly tracks = new Map<string, TendrilTrack>();
+  private layer: RestHealGpuLayer | null = null;
+  private drawn = false;
+  private readonly links = new Map<string, LinkTrack>();
+  private readonly healers = new Map<string, HealerTrack>();
   private readonly litChannels = new Set<string>();
   private lighting: LightingSystem | null = null;
+  private gpu: GpuVfxSystem | null = null;
+  private moteSpec: GpuVfxSpawnSpec | null = null;
+  private sparkSpec: GpuVfxSpawnSpec | null = null;
+  private moteSource = -1;
+  private sparkSource = -1;
+  private unregisterEmission: (() => void) | null = null;
+  private generation = 0;
+  private hasParticles = false;
+  private readonly streams: StreamEmitter[] = [];
+  private readonly receivers: PointEmitter[] = [];
+  private readonly spores: PointEmitter[] = [];
+  private moteCarry = 0;
+  private sparkCarry = 0;
+  private sporeCarry = 0;
 
-  constructor(private readonly scene: Phaser.Scene) {
-    this.surface = scene.add.graphics().setDepth(DEPTH.PLAYERS + 0.04);
-    this.light = scene.add.graphics().setDepth(DEPTH_LIGHTING + 0.07).setBlendMode(Phaser.BlendModes.ADD);
-    registerGraphicsObject(scene, 'restHealTendrils', this.surface);
-    registerGraphicsObject(scene, 'restHealTendrils', this.light);
-  }
+  constructor(private readonly scene: Phaser.Scene) {}
 
   setLightingSystem(lighting: LightingSystem | null): void { this.lighting = lighting; }
+
+  /** The shared GPU particle backend of the scene; without it only the shader layer draws. */
+  setGpuVfx(gpu: GpuVfxSystem | null): void {
+    if (gpu === this.gpu) return;
+    this.releaseParticles();
+    this.gpu = gpu;
+    if (!gpu) return;
+    this.moteSpec = gpu.createSpec(GpuVfxEffectId.RestHealMote);
+    this.sparkSpec = gpu.createSpec(GpuVfxEffectId.RestHealSpark);
+    this.moteSource = gpu.createSource(GpuVfxEffectId.RestHealMote);
+    this.sparkSource = gpu.createSource(GpuVfxEffectId.RestHealSpark);
+    this.generation = gpu.emissionGeneration;
+    this.unregisterEmission = gpu.registerEmission(delta => this.emit(delta));
+  }
 
   /** `now` is the synchronized host clock of the channels' timestamps. */
   draw(channels: readonly RestHealChannel[], now: number): void {
     const local = this.scene.time.now;
-    const quality = getGraphicsQualityProfile(this.scene).level;
-    const strands = quality === 'high' ? 2 : 1;
-    const droplets = quality === 'low' ? 0 : quality === 'medium' ? 2 : 4;
-    const lightLimit = quality === 'low' ? 2 : 6;
-    const surface = this.surface, light = this.light;
-    surface.clear(); light.clear();
-    const glowAlpha = emissiveAlpha(1);
+    this.trackLinks(channels, local);
+    this.trackHealers(channels, local);
+    this.streams.length = 0; this.receivers.length = 0; this.spores.length = 0;
+    if (!this.links.size && !this.healers.size) {
+      if (this.drawn) { this.layer?.clear(); this.drawn = false; }
+      this.syncLights(channels);
+      return;
+    }
+    // The layer and its program load with the first channel; maps without healers never touch them.
+    const layer = this.layer ??= new RestHealGpuLayer(this.scene);
+    const view = getVisibleWorldView(this.scene.cameras.main);
+    const visible = (x: number, y: number, reach: number) => x + reach >= view.x && x - reach <= view.x + view.width
+      && y + reach >= view.y && y - reach <= view.y + view.height;
+    layer.begin(local);
 
+    for (const [id, track] of this.healers) {
+      const intensity = track.endedAt === null ? Math.min(1, (local - track.bornAt) / SIGIL_IN_MS)
+        : 1 - (local - track.endedAt) / SIGIL_OUT_MS;
+      // A sigil cast this frame has intensity 0 and appears next frame; only a faded one is dropped.
+      if (intensity <= 0) { if (track.endedAt !== null) this.healers.delete(id); continue; }
+      const channel = track.channel, body = channel.body, palette = channel.allied ? 1 : 0;
+      const radius = body.radius + SIGIL_MARGIN_PX;
+      if (!visible(body.x, body.y, radius + VIEW_MARGIN_PX)) continue;
+      const rest = Math.max(0, now - channel.restAt) / 1000, phase = tickPhase(now, channel.restAt, channel.tickMs);
+      layer.add({ ax: body.x, ay: body.y, bx: body.x, by: body.y, halfWidth: radius * 1.6, kind: REST_HEAL_KIND.sigil,
+        t: intensity, seed: track.seed, a1: radius, a2: rest, a3: palette });
+      // A sigil left behind fades on the ground; cross, eyes and spores belong to the channelling body.
+      if (track.endedAt !== null) continue;
+      layer.add({ ax: channel.cross.x, ay: channel.cross.y, bx: channel.cross.x, by: channel.cross.y, halfWidth: 16,
+        kind: REST_HEAL_KIND.cross, t: intensity, seed: track.seed, a1: 4.6, a2: phase, a3: palette, a4: channel.facing });
+      const ringColor = channel.allied ? ALLIED.core : channel.eyeColor;
+      for (const eye of channel.eyes) layer.add({ ax: eye.x, ay: eye.y, bx: eye.x, by: eye.y, halfWidth: 10,
+        kind: REST_HEAL_KIND.eyes, t: intensity, seed: track.seed, a1: 8, a2: rest, a3: ringColor });
+      this.spores.push({ x: channel.cross.x, y: channel.cross.y, radius: body.radius, allied: channel.allied, phase,
+        tickMs: channel.tickMs });
+    }
+
+    for (const [key, track] of this.links) {
+      const reach = track.retractAt === null ? Math.min(1, (local - track.bornAt) / GROW_MS)
+        : 1 - (local - track.retractAt) / RETRACT_MS;
+      // A link born this frame has reach 0 and starts growing next frame; only a withdrawn one is dropped.
+      if (reach <= 0) { if (track.retractAt !== null) this.links.delete(key); continue; }
+      track.reach = easeOut(Math.min(1, reach));
+      const { from, to } = track;
+      const dx = to.x - from.x, dy = to.y - from.y, distance = Math.hypot(dx, dy);
+      const inset = Math.min(distance - 4, track.toRadius * RECEIVER_INSET_SHARE);
+      if (distance < 8 || inset <= 0) continue;
+      const end = { x: to.x - dx / distance * inset, y: to.y - dy / distance * inset };
+      const length = distance - inset;
+      const sag = Math.min(26, length * 0.14) * (track.seed < 0.5 ? 1 : -1);
+      if (!visible((from.x + end.x) / 2, (from.y + end.y) / 2, length / 2 + Math.abs(sag) + VIEW_MARGIN_PX)) continue;
+      const palette = track.allied ? 1 : 0, phase = tickPhase(now, track.restAt, track.tickMs);
+      layer.add({ ax: from.x, ay: from.y, bx: end.x, by: end.y, halfWidth: Math.abs(sag) + 14, kind: REST_HEAL_KIND.link,
+        t: track.reach, seed: track.seed, a1: sag, a2: phase, a3: palette, a4: track.tickMs / 1000 });
+      const ring = track.toRadius + RECEIVER_MARGIN_PX;
+      layer.add({ ax: to.x, ay: to.y, bx: to.x, by: to.y, halfWidth: ring * 1.7, kind: REST_HEAL_KIND.receiver,
+        t: track.reach, seed: track.seed, a1: ring, a2: phase, a3: palette });
+      if (track.retractAt === null && track.reach >= 1) {
+        this.streams.push({ from, to: end, sag, allied: track.allied });
+        this.receivers.push({ x: to.x, y: to.y, radius: ring, allied: track.allied, phase, tickMs: track.tickMs });
+      }
+    }
+    layer.flush();
+    this.drawn = layer.size > 0;
+    this.syncLights(channels);
+  }
+
+  clear(): void {
+    this.links.clear(); this.healers.clear();
+    this.streams.length = 0; this.receivers.length = 0; this.spores.length = 0;
+    for (const id of this.litChannels) this.lighting?.releaseLight(lightKey(id), { immediate: true });
+    this.litChannels.clear();
+    this.layer?.clear(); this.drawn = false;
+    if (this.hasParticles && this.gpu) { this.gpu.clearSource(this.moteSource); this.gpu.clearSource(this.sparkSource); }
+    this.hasParticles = false;
+    this.moteCarry = this.sparkCarry = this.sporeCarry = 0;
+  }
+
+  destroy(): void {
+    this.clear();
+    this.releaseParticles();
+    this.layer?.destroy(); this.layer = null;
+  }
+
+  private trackLinks(channels: readonly RestHealChannel[], local: number): void {
     const seen = new Set<string>();
     for (const channel of channels) {
       for (const target of channel.targets) {
         const key = `${channel.id}>${target.id}`;
         seen.add(key);
-        let track = this.tracks.get(key);
+        let track = this.links.get(key);
         if (!track || track.retractAt !== null) {
-          track = { key, seed: hashSeed(key), bornAt: local, retractAt: null, from: channel.cross, to: target, allied: channel.allied };
-          this.tracks.set(key, track);
+          track = { key, seed: hashSeed(key), bornAt: local, retractAt: null, from: channel.cross, to: target,
+            toRadius: target.radius, allied: channel.allied, restAt: channel.restAt, tickMs: channel.tickMs, reach: 0 };
+          this.links.set(key, track);
         }
-        track.from = channel.cross; track.to = target; track.allied = channel.allied;
+        track.from = channel.cross; track.to = target; track.toRadius = target.radius; track.allied = channel.allied;
+        track.restAt = channel.restAt; track.tickMs = channel.tickMs;
       }
     }
-    for (const track of this.tracks.values()) if (!seen.has(track.key) && track.retractAt === null) track.retractAt = local;
+    for (const track of this.links.values()) if (!seen.has(track.key) && track.retractAt === null) track.retractAt = local;
+  }
 
-    for (const [key, track] of this.tracks) {
-      const reach = track.retractAt === null
-        ? Math.min(1, (local - track.bornAt) / GROW_MS)
-        : 1 - (local - track.retractAt) / RETRACT_MS;
-      // A link born this frame has reach 0 and starts growing next frame; only a withdrawn one is dropped.
-      if (reach <= 0) { if (track.retractAt !== null) this.tracks.delete(key); continue; }
-      this.drawTendril(surface, light, track, easeOut(Math.min(1, reach)), local, strands, droplets, glowAlpha);
-    }
-
-    let lights = 0;
-    const lit = new Set<string>();
+  private trackHealers(channels: readonly RestHealChannel[], local: number): void {
+    const seen = new Set<string>();
     for (const channel of channels) {
-      const palette = channel.allied ? ALLIED : HEAL;
-      const sincePulse = ((now - channel.restAt) % channel.tickMs + channel.tickMs) % channel.tickMs;
-      const pulse = Math.exp(-sincePulse / 120);
-      this.drawCross(surface, light, channel, palette, pulse, glowAlpha);
-      const ringColor = channel.allied ? ALLIED.core : channel.eyeColor;
-      for (const eye of channel.eyes) this.drawHypnoRings(light, eye, ringColor, now - channel.restAt, glowAlpha);
-      if (this.lighting && lights < lightLimit && channel.targets.length) {
-        lights++;
+      if (!channel.targets.length) continue;
+      seen.add(channel.id);
+      const track = this.healers.get(channel.id);
+      // A new rest re-casts the sigil; the old one was left behind on the ground and fades there.
+      if (!track || track.endedAt !== null || track.channel.restAt !== channel.restAt) {
+        this.healers.set(channel.id, { seed: hashSeed(channel.id), bornAt: local, endedAt: null, channel });
+      } else track.channel = channel;
+    }
+    for (const [id, track] of this.healers) if (!seen.has(id) && track.endedAt === null) track.endedAt = local;
+  }
+
+  private syncLights(channels: readonly RestHealChannel[]): void {
+    const lit = new Set<string>();
+    if (this.lighting) {
+      const limit = getGraphicsQualityProfile(this.scene).level === 'low' ? 2 : 6;
+      for (const channel of channels) {
+        if (lit.size >= limit || !channel.targets.length) continue;
         lit.add(channel.id);
-        this.lighting.setLight(lightKey(channel.id), 'arcaneField', channel.cross.x, channel.cross.y,
-          { radiusPx: LIGHT_RADIUS_PX, color: channel.allied ? palette.core : LIGHT_COLOR });
+        this.lighting.setLight(lightKey(channel.id), 'arcaneField', channel.body.x, channel.body.y,
+          { radiusPx: LIGHT_RADIUS_PX, color: channel.allied ? ALLIED.core : LIGHT_COLOR });
       }
     }
     for (const id of this.litChannels) if (!lit.has(id)) this.lighting?.releaseLight(lightKey(id));
@@ -127,92 +263,102 @@ export class RestHealTendrilRenderer {
     for (const id of lit) this.litChannels.add(id);
   }
 
-  clear(): void {
-    this.tracks.clear();
-    for (const id of this.litChannels) this.lighting?.releaseLight(lightKey(id), { immediate: true });
-    this.litChannels.clear();
-    this.surface.clear(); this.light.clear();
+  /** Particle tick of the GPU backend: rates carry over frames so low frame rates keep the density. */
+  private emit(deltaMs: number): void {
+    const gpu = this.gpu;
+    if (!gpu || !this.moteSpec || !this.sparkSpec) return;
+    if (this.generation !== gpu.emissionGeneration) { this.generation = gpu.emissionGeneration; this.hasParticles = false; }
+    if (gpu.isSuppressed() || (!this.streams.length && !this.receivers.length && !this.spores.length)) return;
+    const now = gpu.now(), dt = Math.min(0.1, Math.max(0, deltaMs) / 1000);
+    const moteFactor = gpu.quality.getEmissionFactor(GpuVfxEffectId.RestHealMote);
+    const sparkFactor = gpu.quality.getEmissionFactor(GpuVfxEffectId.RestHealSpark);
+    this.moteCarry += this.streams.length * MOTES_PER_LINK_S * moteFactor * dt;
+    for (; this.moteCarry >= 1; this.moteCarry--) this.spawnMote(this.streams[Math.floor(Math.random() * this.streams.length)]!, now);
+    if (!this.streams.length) this.moteCarry = 0;
+    this.sporeCarry += this.spores.length * SPORES_PER_HEALER_S * moteFactor * dt;
+    for (; this.sporeCarry >= 1; this.sporeCarry--) this.spawnSpore(this.spores[Math.floor(Math.random() * this.spores.length)]!, now);
+    if (!this.spores.length) this.sporeCarry = 0;
+    this.sparkCarry += this.receivers.length * SPARKS_PER_RECEIVER_S * sparkFactor * dt;
+    for (; this.sparkCarry >= 1; this.sparkCarry--) this.spawnSpark(this.receivers[Math.floor(Math.random() * this.receivers.length)]!, now);
+    if (!this.receivers.length) this.sparkCarry = 0;
   }
 
-  destroy(): void {
-    this.clear();
-    this.surface.destroy(); this.light.destroy();
+  /** A mote peels off the stream and drifts aside while it flows on towards the ally. */
+  private spawnMote(stream: StreamEmitter, now: number): void {
+    const spec = this.moteSpec!, palette = stream.allied ? ALLIED : PLAGUE;
+    const t = 0.1 + Math.random() * 0.8;
+    const dx = stream.to.x - stream.from.x, dy = stream.to.y - stream.from.y, length = Math.hypot(dx, dy) || 1;
+    const ux = dx / length, uy = dy / length, nx = -uy, ny = ux;
+    const offset = stream.sag * Math.sin(Math.PI * t) + (Math.random() - 0.5) * 5;
+    const drift = (Math.random() < 0.5 ? -1 : 1) * (8 + Math.random() * 14), flow = 22 + Math.random() * 30;
+    spec.x = stream.from.x + dx * t + nx * offset; spec.y = stream.from.y + dy * t + ny * offset;
+    spec.vx = ux * flow + nx * drift; spec.vy = uy * flow + ny * drift;
+    spec.positionEase = GpuVfxEase.QuadOut;
+    spec.lifeMs = 520 + Math.random() * 420;
+    spec.scaleStart = (2.2 + Math.random() * 2.2) / getGpuVfxFrame(spec.frame).width; spec.scaleEnd = spec.scaleStart * 0.25;
+    spec.scaleEase = GpuVfxEase.Linear; spec.stretchStart = 1; spec.stretchEnd = 1; spec.rotation = 0;
+    spec.alphaStart = emissiveAlpha(0.85); spec.alphaEnd = 0; spec.alphaEase = GpuVfxEase.Linear;
+    spec.tint = mixColors(palette.glow, palette.core, Math.random() * 0.5);
+    spec.tintBlendStart = 0.35; spec.tintBlendEnd = 1;
+    this.hasParticles = this.gpu!.spawn(spec, this.moteSource, now) || this.hasParticles;
   }
 
-  private drawTendril(surface: Phaser.GameObjects.Graphics, light: Phaser.GameObjects.Graphics, track: TendrilTrack,
-    reach: number, local: number, strands: number, droplets: number, glowAlpha: number): void {
-    const palette = track.allied ? ALLIED : HEAL;
-    const { from, to } = track;
-    const dx = to.x - from.x, dy = to.y - from.y, length = Math.hypot(dx, dy);
-    if (length < 4) return;
-    const nx = -dy / length, ny = dx / length;
-    const side = track.seed & 1 ? 1 : -1;
-    const segments = Math.max(6, Math.min(16, Math.round(length / 12)));
-    for (let strand = 0; strand < strands; strand++) {
-      const twist = strand === 0 ? 1 : -0.7;
-      const phase = track.seed * 0.37 + strand * 2.1;
-      const point = (t: number) => {
-        // A slack arc to one side plus a slow organic wave; both pinned at the ends.
-        const sag = Math.sin(Math.PI * t) * (length * 0.16 * side + Math.sin(local * 0.004 + phase + t * 5) * 5 * twist);
-        return { x: from.x + dx * t + nx * sag, y: from.y + dy * t + ny * sag };
-      };
-      let previous = point(0);
-      const last = Math.max(1, Math.round(segments * reach));
-      for (let i = 1; i <= last; i++) {
-        const t = Math.min(reach, i / segments), next = point(t);
-        const width = (strand === 0 ? 6.4 : 3.8) * (1 - 0.4 * t);
-        surface.lineStyle(width + 2.4, palette.backing, 0.6).lineBetween(previous.x, previous.y, next.x, next.y);
-        // A lit core on the surface keeps the link readable in daylight, where the emissive layer is faint.
-        surface.lineStyle(Math.max(1.4, width * 0.5), palette.glow, 0.75).lineBetween(previous.x, previous.y, next.x, next.y);
-        light.lineStyle(width * 2.8, palette.glow, 0.3 * glowAlpha).lineBetween(previous.x, previous.y, next.x, next.y);
-        light.lineStyle(Math.max(1.4, width * 0.6), palette.core, glowAlpha).lineBetween(previous.x, previous.y, next.x, next.y);
-        previous = next;
-      }
-      if (strand === 0 && reach >= 1) {
-        for (let d = 0; d < droplets; d++) {
-          const t = ((local / DROPLET_CYCLE_MS) + d / droplets + (track.seed % 97) / 97) % 1;
-          const p = point(t);
-          light.fillStyle(palette.core, glowAlpha).fillCircle(p.x, p.y, 3.2 + Math.sin(Math.PI * t) * 1.6);
-        }
-        // A modest bloom at the healed ally: it marks the receiver without covering its body.
-        surface.fillStyle(palette.glow, 0.16).fillCircle(to.x, to.y, 7);
-        light.fillStyle(palette.glow, 0.2 * glowAlpha).fillCircle(to.x, to.y, 10);
-        light.fillStyle(palette.core, 0.4 * glowAlpha).fillCircle(to.x, to.y, 4);
-      }
-    }
+  /** Slow spores breathing out of the back cross while the toad channels. */
+  private spawnSpore(healer: PointEmitter, now: number): void {
+    const spec = this.moteSpec!, palette = healer.allied ? ALLIED : PLAGUE;
+    const angle = Math.random() * Math.PI * 2, speed = 10 + Math.random() * 16;
+    spec.x = healer.x + Math.cos(angle) * 3; spec.y = healer.y + Math.sin(angle) * 3;
+    spec.vx = Math.cos(angle) * speed; spec.vy = Math.sin(angle) * speed;
+    spec.positionEase = GpuVfxEase.QuadOut;
+    spec.lifeMs = 750 + Math.random() * 300;
+    spec.scaleStart = (1.6 + Math.random() * 1.8) / getGpuVfxFrame(spec.frame).width; spec.scaleEnd = spec.scaleStart * 1.6;
+    spec.scaleEase = GpuVfxEase.QuadOut; spec.stretchStart = 1; spec.stretchEnd = 1; spec.rotation = 0;
+    spec.alphaStart = emissiveAlpha(0.7); spec.alphaEnd = 0; spec.alphaEase = GpuVfxEase.Linear;
+    spec.tint = palette.glow; spec.tintBlendStart = 0.5; spec.tintBlendEnd = 1;
+    this.hasParticles = this.gpu!.spawn(spec, this.moteSource, now) || this.hasParticles;
   }
 
-  /** A soft plus over the back cross that swells on every heal tick. */
-  private drawCross(surface: Phaser.GameObjects.Graphics, light: Phaser.GameObjects.Graphics, channel: RestHealChannel,
-    palette: typeof HEAL | typeof ALLIED, pulse: number, glowAlpha: number): void {
-    if (!channel.targets.length) return;
-    const { x, y } = channel.cross;
-    const arm = 5 + 2.5 * pulse, cos = Math.cos(channel.facing), sin = Math.sin(channel.facing);
-    const stroke = (g: Phaser.GameObjects.Graphics, width: number, color: number, alpha: number) => {
-      g.lineStyle(width, color, alpha);
-      g.lineBetween(x - cos * arm, y - sin * arm, x + cos * arm, y + sin * arm);
-      g.lineBetween(x + sin * arm, y - cos * arm, x - sin * arm, y + cos * arm);
-    };
-    stroke(surface, 3.4, palette.backing, 0.25 + 0.2 * pulse);
-    stroke(light, 5 + 3 * pulse, palette.glow, (0.12 + 0.3 * pulse) * glowAlpha);
-    stroke(light, 1.6, palette.core, (0.45 + 0.5 * pulse) * glowAlpha);
+  /** Sparkles spiral into the healed ally; right after a dose lands they burst out a little brighter. */
+  private spawnSpark(receiver: PointEmitter, now: number): void {
+    const spec = this.sparkSpec!, palette = receiver.allied ? ALLIED : PLAGUE;
+    const fresh = receiver.phase < 0.3;
+    const angle = Math.random() * Math.PI * 2, radius = receiver.radius * (fresh ? 0.3 : 1.05 + Math.random() * 0.3);
+    const inward = fresh ? -(46 + Math.random() * 30) : 30 + Math.random() * 18, swirl = 34 + Math.random() * 18;
+    const cx = Math.cos(angle), cy = Math.sin(angle);
+    spec.x = receiver.x + cx * radius; spec.y = receiver.y + cy * radius;
+    spec.vx = -cx * inward - cy * swirl; spec.vy = -cy * inward + cx * swirl;
+    spec.positionEase = fresh ? GpuVfxEase.QuadOut : GpuVfxEase.Linear;
+    spec.lifeMs = fresh ? 340 + Math.random() * 160 : 420 + Math.random() * 220;
+    spec.rotation = Math.atan2(spec.vy, spec.vx);
+    spec.scaleStart = (2.6 + Math.random() * 1.6) / getGpuVfxFrame(spec.frame).width; spec.scaleEnd = spec.scaleStart * 0.3;
+    spec.scaleEase = GpuVfxEase.Linear; spec.stretchStart = 2.4; spec.stretchEnd = 1;
+    spec.alphaStart = emissiveAlpha(fresh ? 1 : 0.8); spec.alphaEnd = 0; spec.alphaEase = GpuVfxEase.Linear;
+    spec.tint = palette.glow; spec.tintBlendStart = 0; spec.tintBlendEnd = 1;
+    this.hasParticles = this.gpu!.spawn(spec, this.sparkSource, now) || this.hasParticles;
   }
 
-  /** Concentric rings breathing out of each eye while the toad channels (a nod, not a copy). */
-  private drawHypnoRings(light: Phaser.GameObjects.Graphics, eye: Point, color: number, elapsed: number, glowAlpha: number): void {
-    for (let ring = 0; ring < 3; ring++) {
-      const t = ((Math.max(0, elapsed) / RING_CYCLE_MS) + ring / 3) % 1;
-      light.lineStyle(1.1, color, (1 - t) * 0.6 * glowAlpha).strokeCircle(eye.x, eye.y, 1.5 + t * 6.5);
-    }
+  private releaseParticles(): void {
+    this.unregisterEmission?.(); this.unregisterEmission = null;
+    if (this.gpu) { this.gpu.releaseSource(this.moteSource); this.gpu.releaseSource(this.sparkSource); }
+    this.moteSource = this.sparkSource = -1;
+    this.moteSpec = this.sparkSpec = null;
+    this.hasParticles = false;
   }
+}
+
+/** 0 when a heal tick applies, rising to 1 just before the next one. */
+function tickPhase(now: number, restAt: number, tickMs: number): number {
+  if (tickMs <= 0) return 0;
+  return (((now - restAt) % tickMs) + tickMs) % tickMs / tickMs;
 }
 
 function easeOut(t: number): number { return 1 - (1 - t) * (1 - t); }
 
+/** Deterministic seed in [0, 1) so neighbouring channels do not look stamped. */
 function hashSeed(key: string): number {
   let hash = 2166136261;
   for (let i = 0; i < key.length; i++) hash = Math.imul(hash ^ key.charCodeAt(i), 16777619);
-  return hash >>> 0;
+  return ((hash >>> 0) % 10007) / 10007;
 }
 
 function lightKey(id: string): string { return `rest-heal:${id}`; }

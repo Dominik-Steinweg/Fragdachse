@@ -179,8 +179,9 @@ Maßgeblich sind [PersistentBaseHealth.ts](../../src/persistentBase/PersistentBa
 
 ## Erweiterung einer Mission
 
-Fortschreitende Ground-Hazards beschreiben mit ihrem Rechteck die maximale Ausdehnung, nicht
-bereits brennenden Boden. Der Activity-gebundene `CoopDefenseGroundHazardEventHandler` aktiviert
+Fortschreitende Ground-Hazards beschreiben mit ihrem Rechteck oder Polygon die maximale Ausdehnung, nicht
+bereits brennenden Boden. Eine `sweep`-Front läuft entlang `headingDeg` durch Rechteck, Polygon oder
+Zellenliste; ihre Unregelmäßigkeit bleibt unter Ausdehnung/π, damit keine Linie zurückweicht. Der Activity-gebundene `CoopDefenseGroundHazardEventHandler` aktiviert
 die vorbereitete Zündreihenfolge hostseitig und hält blockierte, bereits erreichte Zellen zum
 Nachzünden vor. Platzierung und sichere Spawns lesen bei solchen Events dieselbe aktuelle
 Feuer-/Warnprojektion wie die Darstellung; sie dürfen nicht die gesamte zukünftige Fläche sperren.

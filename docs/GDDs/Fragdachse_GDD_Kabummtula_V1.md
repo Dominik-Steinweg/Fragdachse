@@ -10,7 +10,7 @@
 ## 1. Ziel und Spielerlebnis
 
 Eine leicht gruselige, schwarz-violette Vogelspinne mit prall leuchtendem „Bomben-Abdomen“. Sie jagt
-Spieler, kündigt sich kurz drohend an, rast dann schneller als ein Spieler im Zickzack heran und springt
+Spieler, kündigt sich kurz drohend an, rast dann schneller als ein Spieler in weichem Schlängelkurs heran und springt
 mit gut lesbarem Telegraph. Wer im richtigen Moment ausweicht, überlebt; wer berührt wird, fliegt in die
 Luft. Nebenbei spuckt sie Netze auf Türme und schaltet sie kurz ab. Spannung entsteht aus Reflexen und
 Positionierung, nicht aus einer langen Zündschnur.
@@ -37,7 +37,7 @@ Positionierung, nicht aus einer langen Zündschnur.
 |---|---|
 | Annäherung | normale Wegfindung zum Ziel; Felsbiss nur zum Durchbrechen |
 | Drohen (~0,4 s) | sieht sie das Ziel in ~450 px: stehen, Vorderbeine heben, Glühen schwillt an |
-| Sturmlauf | ~370 px/s im Zickzack (Darts, Haken 18–46°, kurze Stopps), Blick zur Beute |
+| Sturmlauf | ~370 px/s in weichem Spinnen-Schlängeln (±28°, ~0,64–0,88 s je Hin und Her, Tempo ±16 %, keine Stopps oder harten Haken), Blick zur Beute, leicht in die Bewegung geneigt; Spielbarkeit vor Realismus |
 | Telegraph (~0,42 s) | ab ~120 px: läuft weiter und pirscht seitlich im Abstand 85–135 px; verdeckt Deckung die Beute, kehrt sie auf eine freie Linie zurück. Rote Bahn mit Zielring folgt dem Spieler und füllt sich. Ist die Bahn beim Absprung blockiert, hält sie die Ankündigung bis zu ~0,36 s länger und versucht es erneut |
 | Sprung (~0,21 s) | Bahn rastet beim Blitz ein (Vorhalt 0,7 × Geschwindigkeit × Flugzeit, plus Überschuss); immun gegen Rückstoß |
 | Erholung (~0,65 s) | nach einem Fehlsprung; danach beginnt alles von vorn (erneutes Drohen) |

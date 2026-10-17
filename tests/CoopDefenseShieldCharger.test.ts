@@ -10,11 +10,13 @@ import type { EnemyEntity } from '../src/entities/EnemyEntity';
 const config = enemyConfig.getCoopDefenseEnemyConfig('shield-charger-badger').shieldCharger!;
 const RADIUS = 15;
 
-function fixture(options: { facing?: number; target?: { x: number; y: number }; clearance?: number } = {}) {
+function fixture(options: { facing?: number; target?: { x: number; y: number }; clearance?: number; kind?: string;
+  clawEndsAt?: () => number } = {}) {
   let charge: ShieldChargeState = EMPTY_SHIELD_CHARGE_STATE;
   const immune = vi.fn();
   const enemy = {
-    id: 'e1', kind: 'shield-charger-badger', faction: 'hostile', sprite: { active: true, x: 0, y: 0 },
+    id: 'e1', kind: options.kind ?? 'shield-charger-badger', faction: 'hostile', sprite: { active: true, x: 0, y: 0 },
+    getClawAttackState: () => ({ revision: 1, attack: options.clawEndsAt ? { endsAt: options.clawEndsAt() } : null }),
     getHp: () => 120, isBurrowed: () => false, isAttackMovementPaused: () => false,
     getAimAngle: () => options.facing ?? 0, getCollisionRadius: () => RADIUS, stopMovement: vi.fn(), faceAngle: vi.fn(),
     setKnockbackImmune: immune,
@@ -73,6 +75,34 @@ describe('shield charger host decisions', () => {
     expect(f.enemy.faceAngle).toHaveBeenCalledWith(0);
     for (let now = 0; now <= config.windupMs + 2000 && f.charge().phase !== 'recover'; now += 16) { f.system.hostUpdate(now); f.move(16); }
     expect(f.strike).toHaveBeenCalledWith('p1', 'e1', config.hitDamage, expect.any(Number), expect.any(Number), expect.any(Number));
+  });
+
+  it('keeps a shield charger exposed in recovery, while a leap may follow up with its melee strike on landing', () => {
+    const runToRecover = (f: ReturnType<typeof fixture>, windupMs: number) => {
+      f.system.hostUpdate(0);
+      for (let t = windupMs; t < windupMs + 3000 && f.charge().phase !== 'recover'; t += 16) { f.system.hostUpdate(t); f.move(16); }
+      expect(f.charge().phase).toBe('recover');
+    };
+    const shield = fixture();
+    runToRecover(shield, config.windupMs);
+    expect(shield.system.blocksRegularAttacks('e1')).toBe(true);
+    const leapConfig = enemyConfig.getCoopDefenseEnemyConfig('mini-kraken').shieldCharger!;
+    const leap = fixture({ kind: 'mini-kraken', target: { x: 200, y: 0 } });
+    leap.system.hostUpdate(0);
+    expect(leap.system.blocksRegularAttacks('e1')).toBe(true);
+    runToRecover(leap, leapConfig.windupMs);
+    expect(leap.system.blocksRegularAttacks('e1')).toBe(false);
+    expect(leap.system.blocksDodge('e1')).toBe(true);
+  });
+
+  it('never starts a charge into a running telegraphed melee strike', () => {
+    let clawEndsAt = 500;
+    const f = fixture({ kind: 'mini-kraken', target: { x: 200, y: 0 }, clawEndsAt: () => clawEndsAt });
+    f.system.hostUpdate(100);
+    expect(f.charge().phase).toBe('none');
+    clawEndsAt = 0;
+    f.system.hostUpdate(600);
+    expect(f.charge().phase).toBe('windup');
   });
 
   it('keeps the announced lane when the target moves, then runs past it and recovers', () => {

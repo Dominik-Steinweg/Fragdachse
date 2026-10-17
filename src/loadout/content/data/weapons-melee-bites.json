@@ -110,12 +110,13 @@
       "id": "MINI_KRAKEN_INK",
       "cooldown": 900,
       "damage": 12,
-      "range": 70,
+      "range": 105,
       "fire": {
-        "hitArcDegrees": 70
+        "hitArcDegrees": 70,
+        "visualPreset": "enemy_ink"
       },
       "baseId": "ZOMBIE_BADGER_BITE",
-      "_notes": "Mini-Kraken: kurzer Tintenkegel im Nahkampf, trifft Spieler, Basis, Felsen und Zug."
+      "_notes": "Mini-Kraken: Tintenkegel im Nahkampf bis knapp unter die Sprung-Mindestdistanz (110 px), auch direkt nach der Landung; trifft Spieler, Basis, Felsen und Zug."
     },
     "ALIEN_BADGER_BITE": {
       "id": "ALIEN_BADGER_BITE",

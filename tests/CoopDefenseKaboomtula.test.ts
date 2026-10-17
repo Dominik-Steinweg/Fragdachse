@@ -13,7 +13,7 @@ import {
   type KaboomtulaWebPort,
 } from '../src/systems/CoopDefenseKaboomtulaSystem';
 import { CoopDefenseTurretWebSystem, type TurretWebTarget } from '../src/systems/CoopDefenseTurretWebSystem';
-import { skitterAmplitude, skitterSegment } from '../src/systems/kaboomtulaMotion';
+import { skitterAmplitude, skitterWeave } from '../src/systems/kaboomtulaMotion';
 import { EMPTY_KABOOMTULA_STATE, type KaboomtulaState } from '../src/systems/KaboomtulaState';
 
 const KIND = 'kaboomtula';
@@ -120,19 +120,23 @@ describe('Kabummtula', () => {
     expect(blind.body.state().phase).toBe('approach');
   });
 
-  it('skitters faster than a running player on average', () => {
+  it('skitters faster than a running player on average in a smooth weave without freezes', () => {
     const skitter = config().skitter;
-    let forward = 0, time = 0;
-    for (let index = 0; index < 600; index++) {
-      const segment = skitterSegment('e-speed', index, skitter);
-      forward += Math.cos(segment.angle) * segment.speedFactor * segment.durationMs;
-      time += segment.durationMs + segment.pauseMs;
+    let forward = 0, sides = 0, previous = skitterWeave('e-speed', 0, skitter), sign = 0;
+    expect(Math.abs(previous.angle)).toBeLessThan(1e-9);
+    for (let elapsed = 10; elapsed <= 20000; elapsed += 10) {
+      const weave = skitterWeave('e-speed', elapsed, skitter);
+      forward += Math.cos(weave.angle) * weave.speedFactor;
+      // Gameplay before realism: no stop and no sudden turn between two host frames.
+      expect(weave.speedFactor).toBeGreaterThan(0.5);
+      expect(Math.abs(weave.angle - previous.angle)).toBeLessThan(4 * Math.PI / 180);
+      const side = Math.sign(weave.angle);
+      if (side !== 0 && side !== sign) { sides++; sign = side; }
+      previous = weave;
     }
-    expect(config().rushSpeedPx * forward / time).toBeGreaterThan(PLAYER_SPEED);
-    // Sideways segments alternate and survive the 20 Hz snapshot tick.
-    const first = skitterSegment('e-speed', 0, { ...skitter, dartChance: 0 }), second = skitterSegment('e-speed', 1, { ...skitter, dartChance: 0 });
-    expect(Math.sign(first.angle)).toBe(-Math.sign(second.angle));
-    expect(skitter.segmentMinMs).toBeGreaterThanOrEqual(1000 / 20 * 2);
+    expect(config().rushSpeedPx * forward / 2000).toBeGreaterThan(PLAYER_SPEED);
+    // Still a spider: it keeps weaving from side to side rather than running straight.
+    expect(sides).toBeGreaterThan(20);
     expect(skitterAmplitude(0, skitter)).toBeLessThan(1);
   });
 

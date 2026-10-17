@@ -114,9 +114,9 @@ export interface GroundFogCombatSink {
 /** Body radius used to place a tongue's mouth when the swing does not name its body. */
 const DEFAULT_TONGUE_BODY_RADIUS = 15;
 
-function isTongueWeapon(weaponId: string | undefined): boolean {
+function meleePresetOf(weaponId: string | undefined): string | undefined {
   const fire = weaponId ? WEAPON_CONFIGS[weaponId]?.fire : undefined;
-  return fire?.type === 'melee' && fire.visualPreset === 'enemy_tongue';
+  return fire?.type === 'melee' ? fire.visualPreset : undefined;
 }
 
 export class EffectSystem implements EnemyVisualSink {
@@ -167,8 +167,9 @@ export class EffectSystem implements EnemyVisualSink {
 
   syncEnemyClaw(id: string, state: import('../systems/EnemyClawAttack').EnemyClawState, x: number, y: number, now: number, visible: boolean, alliedColor?: number, bodyRadius = DEFAULT_TONGUE_BODY_RADIUS): void {
     if (state.attack) this.enemyClawRenderer ??= new EnemyClawRenderer(this.scene);
-    const tongue = isTongueWeapon(state.attack?.weaponId);
-    this.enemyClawRenderer?.sync(id, state, x, y, now, visible, alliedColor, tongue);
+    const preset = meleePresetOf(state.attack?.weaponId), tongue = preset === 'enemy_tongue';
+    // Tongue and ink announce only their red danger sector; their strike has its own visual, no rakes.
+    this.enemyClawRenderer?.sync(id, state, x, y, now, visible, alliedColor, tongue || preset === 'enemy_ink');
     if (tongue) this.withTongueLash(renderer => renderer.sync(id, state.attack, x, y, bodyRadius, now, visible));
     else this.tongueLash?.sync(id, null, x, y, bodyRadius, now, visible);
   }
@@ -1745,9 +1746,9 @@ export class EffectSystem implements EnemyVisualSink {
 
     this.audioSystem?.playSound(swing.shotAudioKey, swing.x, swing.y, swing.shooterId);
 
-    if (swing.visualPreset === 'enemy_claw' && swing.weaponSourceId === 'MINI_KRAKEN_INK') {
+    if (swing.visualPreset === 'enemy_ink') {
       // A melee ink spit: a small version of the boss ink cloud instead of claw slashes.
-      this.spitMiniKrakenInk(swing.x, swing.y, swing.angle, swing.range * 1.35, swing.arcDegrees);
+      this.spitMiniKrakenInk(swing.x, swing.y, swing.angle, swing.range * 1.2, swing.arcDegrees);
       this.groundFogCombat?.melee(swing.x, swing.y, swing.angle, swing.arcDegrees, swing.range, swing.weaponSourceId);
       return;
     }

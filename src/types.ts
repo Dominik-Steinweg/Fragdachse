@@ -418,8 +418,9 @@ export interface HitscanSupportEffect {
 }
 
 /** Visuelles Preset fuer Melee-Swings. */
-/** `enemy_tongue`: the claw windup telegraph without rakes; a runtime tongue carries the strike. */
-export type MeleeVisualPreset = 'default' | 'zeus_taser' | 'bite' | 'enemy_claw' | 'enemy_tongue';
+/** `enemy_tongue`: the claw windup telegraph without rakes; a runtime tongue carries the strike.
+ * `enemy_ink`: the same rake-free telegraph; a melee ink cloud carries the strike. */
+export type MeleeVisualPreset = 'default' | 'zeus_taser' | 'bite' | 'enemy_claw' | 'enemy_tongue' | 'enemy_ink';
 export type MeleeDamageTarget = 'players' | 'enemies' | 'decoys' | 'bases' | 'rocks' | 'train';
 
 /** Variant-Preset fuer Energy-Ball-Projektile. */

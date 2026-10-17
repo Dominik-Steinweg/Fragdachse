@@ -1015,23 +1015,242 @@
       },
       "delayMs": 1500,
       "area": {
-        "type": "rectangle",
-        "gridX": 232,
-        "gridY": 24,
-        "widthCells": 30,
-        "heightCells": 16,
-        "baseClearanceCells": 1
+        "type": "polygon",
+        "baseClearanceCells": 1,
+        "points": [
+          {
+            "gridX": 196,
+            "gridY": 32
+          },
+          {
+            "gridX": 203,
+            "gridY": 29
+          },
+          {
+            "gridX": 209,
+            "gridY": 30
+          },
+          {
+            "gridX": 215,
+            "gridY": 28
+          },
+          {
+            "gridX": 220,
+            "gridY": 31
+          },
+          {
+            "gridX": 225,
+            "gridY": 28
+          },
+          {
+            "gridX": 231,
+            "gridY": 27
+          },
+          {
+            "gridX": 236,
+            "gridY": 29
+          },
+          {
+            "gridX": 241,
+            "gridY": 26
+          },
+          {
+            "gridX": 246,
+            "gridY": 27
+          },
+          {
+            "gridX": 251,
+            "gridY": 29
+          },
+          {
+            "gridX": 256,
+            "gridY": 27
+          },
+          {
+            "gridX": 261,
+            "gridY": 30
+          },
+          {
+            "gridX": 264,
+            "gridY": 29
+          },
+          {
+            "gridX": 264,
+            "gridY": 44
+          },
+          {
+            "gridX": 259,
+            "gridY": 47
+          },
+          {
+            "gridX": 254,
+            "gridY": 45
+          },
+          {
+            "gridX": 249,
+            "gridY": 46
+          },
+          {
+            "gridX": 244,
+            "gridY": 46
+          },
+          {
+            "gridX": 239,
+            "gridY": 45
+          },
+          {
+            "gridX": 235,
+            "gridY": 43.5
+          },
+          {
+            "gridX": 230,
+            "gridY": 42.5
+          },
+          {
+            "gridX": 225,
+            "gridY": 43
+          },
+          {
+            "gridX": 221,
+            "gridY": 44.5
+          },
+          {
+            "gridX": 216,
+            "gridY": 46
+          },
+          {
+            "gridX": 211,
+            "gridY": 45
+          },
+          {
+            "gridX": 206,
+            "gridY": 44
+          },
+          {
+            "gridX": 200,
+            "gridY": 43.5
+          },
+          {
+            "gridX": 194,
+            "gridY": 43
+          },
+          {
+            "gridX": 193,
+            "gridY": 37
+          }
+        ]
       },
       "spread": {
-        "direction": "left-to-right",
-        "durationMs": 12000,
+        "direction": "sweep",
+        "headingDeg": 270,
+        "durationMs": 7000,
+        "roughnessCells": 2,
+        "warningLeadMs": 2500
+      },
+      "effect": {
+        "visualStyle": "void",
+        "burnDurationMs": 2000,
+        "burnDamagePerTick": 2,
+        "sourceId": "ground_fire.void_hunter"
+      }
+    },
+    {
+      "id": "burn-clearing-creep",
+      "type": "ground-hazard",
+      "start": {
+        "type": "after-checkpoint",
+        "checkpointId": "cp8-burn-clearing"
+      },
+      "delayMs": 8500,
+      "area": {
+        "type": "polygon",
+        "baseClearanceCells": 1,
+        "points": [
+          {
+            "gridX": 209,
+            "gridY": 44
+          },
+          {
+            "gridX": 216,
+            "gridY": 45
+          },
+          {
+            "gridX": 221,
+            "gridY": 43.5
+          },
+          {
+            "gridX": 225,
+            "gridY": 42
+          },
+          {
+            "gridX": 230,
+            "gridY": 41.5
+          },
+          {
+            "gridX": 235,
+            "gridY": 42.5
+          },
+          {
+            "gridX": 239,
+            "gridY": 44
+          },
+          {
+            "gridX": 244,
+            "gridY": 45
+          },
+          {
+            "gridX": 249,
+            "gridY": 45
+          },
+          {
+            "gridX": 247,
+            "gridY": 52
+          },
+          {
+            "gridX": 242,
+            "gridY": 55
+          },
+          {
+            "gridX": 238,
+            "gridY": 51
+          },
+          {
+            "gridX": 234,
+            "gridY": 49.5
+          },
+          {
+            "gridX": 229,
+            "gridY": 50
+          },
+          {
+            "gridX": 224,
+            "gridY": 49
+          },
+          {
+            "gridX": 220,
+            "gridY": 52
+          },
+          {
+            "gridX": 215,
+            "gridY": 55
+          },
+          {
+            "gridX": 211,
+            "gridY": 50
+          }
+        ]
+      },
+      "spread": {
+        "direction": "sweep",
+        "headingDeg": 90,
+        "durationMs": 36000,
         "roughnessCells": 2,
         "warningLeadMs": 3000
       },
       "effect": {
         "visualStyle": "void",
         "burnDurationMs": 2000,
-        "burnDamagePerTick": 0.5,
+        "burnDamagePerTick": 2,
         "sourceId": "ground_fire.void_hunter"
       }
     }

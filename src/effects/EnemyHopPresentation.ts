@@ -3,6 +3,7 @@ import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
 import type { EnemyVisualSource } from '../entities/EnemyVisualSource';
 import type { EnemyZoneAttack } from './EnemyClawRenderer';
 import { readEyeAnchorFrame, writeEyePose, type EnemyEyePose } from './EnemyEyeGlowModel';
+import type { GpuVfxSystem } from './gpu/GpuVfxSystem';
 import type { LightingSystem } from './LightingSystem';
 import type { RestHealChannel, RestHealTendrilRenderer } from './RestHealTendrilRenderer';
 
@@ -28,6 +29,7 @@ export class EnemyHopPresentation {
   private tendrils: RestHealTendrilRenderer | null = null;
   private tendrilState: 'idle' | 'loading' | 'destroyed' = 'idle';
   private lighting: LightingSystem | null = null;
+  private gpuVfx: GpuVfxSystem | null = null;
   private readonly eyePose = {} as EnemyEyePose;
 
   constructor(private readonly scene: Phaser.Scene) {
@@ -40,6 +42,8 @@ export class EnemyHopPresentation {
   /** Armed landings are drawn by the shared enemy danger-zone renderer. */
   setZoneSink(sink: EnemyHopZoneSink | null): void { this.zoneSink = sink; }
   setLightingSystem(lighting: LightingSystem | null): void { this.lighting = lighting; this.tendrils?.setLightingSystem(lighting); }
+  /** Heal particles run on the scene's shared GPU particle backend. */
+  setGpuVfx(gpu: GpuVfxSystem | null): void { this.gpuVfx = gpu; this.tendrils?.setGpuVfx(gpu); }
 
   clear(): void {
     for (const id of this.sunkZones) this.zoneSink?.(id, null, this.clock(), false);
@@ -69,10 +73,12 @@ export class EnemyHopPresentation {
         byId ??= new Map(enemies.map(other => [other.id, other]));
         const targets = state.links.flatMap(id => {
           const other = byId!.get(id);
-          return other?.sprite.active && other.sprite.visible ? [{ id, x: other.sprite.x, y: other.sprite.y }] : [];
+          return other?.sprite.active && other.sprite.visible
+            ? [{ id, x: other.sprite.x, y: other.sprite.y, radius: getCoopDefenseEnemyConfig(other.kind).size / 2 }] : [];
         });
         const facing = snapshot.rot ?? 0, behind = config.size / 2 * CROSS_BEHIND_SHARE;
         channels.push({ id: enemy.id, allied: enemy.faction === 'allied', facing, targets,
+          body: { x: enemy.sprite.x, y: enemy.sprite.y, radius: config.size / 2 },
           cross: { x: enemy.sprite.x - Math.cos(facing) * behind, y: enemy.sprite.y - Math.sin(facing) * behind },
           eyes: this.eyesOf(enemy), eyeColor: config.eyeGlow?.color ?? 0xb45cff,
           restAt: jump?.settleUntil ?? 0, tickMs: hop.heal.tickIntervalMs });
@@ -111,6 +117,7 @@ export class EnemyHopPresentation {
       if (this.tendrilState !== 'loading') return;
       this.tendrils = new RestHealTendrilRenderer(this.scene);
       this.tendrils.setLightingSystem(this.lighting);
+      this.tendrils.setGpuVfx(this.gpuVfx);
     });
   }
 }

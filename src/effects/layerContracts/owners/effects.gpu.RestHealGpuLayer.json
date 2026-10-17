@@ -1,0 +1,62 @@
+{
+  "owner": "effects/gpu/RestHealGpuLayer.ts",
+  "notes": [
+    "Quacksalber rest heal: rune sigil and receiver rings on the ground below actors, the stream's lit bed above the bodies, every glow in the emissive band."
+  ],
+  "gpuLayers": [
+    {
+      "id": "rest-heal:ground",
+      "owner": "effects/gpu/RestHealGpuLayer.ts",
+      "component": "ground",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        9.65
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect"
+    },
+    {
+      "id": "rest-heal:bed",
+      "owner": "effects/gpu/RestHealGpuLayer.ts",
+      "component": "bed",
+      "height": "body",
+      "lighting": "material",
+      "camera": "world",
+      "depths": [
+        10.04
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "M"
+      ],
+      "role": "effect"
+    },
+    {
+      "id": "rest-heal:glow",
+      "owner": "effects/gpu/RestHealGpuLayer.ts",
+      "component": "glow",
+      "height": "body",
+      "lighting": "emissive",
+      "camera": "world",
+      "depths": [
+        19.57
+      ],
+      "blends": [
+        "NORMAL"
+      ],
+      "profiles": [
+        "E"
+      ],
+      "role": "effect"
+    }
+  ]
+}

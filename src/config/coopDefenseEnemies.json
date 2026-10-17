@@ -670,15 +670,11 @@
         "rushMaxMs": 7000,
         "lostSightGraceMs": 700,
         "skitter": {
-          "segmentMinMs": 150,
-          "segmentMaxMs": 260,
-          "zigMinDegrees": 18,
-          "zigMaxDegrees": 46,
-          "dartChance": 0.3,
-          "dartSpeedFactor": 1.15,
-          "pauseChance": 0.22,
-          "pauseMinMs": 60,
-          "pauseMaxMs": 110,
+          "weavePeriodMinMs": 640,
+          "weavePeriodMaxMs": 880,
+          "weaveDegrees": 28,
+          "surge": 0.16,
+          "facingLean": 0.3,
           "calmWithinPx": 170,
           "probePx": 48
         },
@@ -1111,19 +1107,19 @@
         "color": 16730652
       },
       "pawCount": 4,
-      "maxHp": 45,
+      "maxHp": 90,
       "xp": 4,
       "size": 24,
-      "moveSpeed": 150,
+      "moveSpeed": 180,
       "knockbackFactor": 1.2,
       "turnRateDegPerSec": 420,
       "movementTarget": "bases",
       "amphibious": {
-        "swimSpeedFactor": 1.6
+        "swimSpeedFactor": 1.3333
       },
       "engage": {
-        "enterPx": 260,
-        "exitPx": 380,
+        "enterPx": 340,
+        "exitPx": 480,
         "minDwellMs": 1200
       },
       "weapons": [
@@ -1142,12 +1138,12 @@
         "shieldArcDegrees": 0,
         "structureDamageMult": 0.5,
         "triggerMinDistancePx": 110,
-        "triggerMaxDistancePx": 280,
+        "triggerMaxDistancePx": 364,
         "alignToleranceDegrees": 30,
         "windupMs": 450,
         "runSpeedPx": 1100,
         "overshootPx": 40,
-        "maxRunPx": 320,
+        "maxRunPx": 416,
         "recoverMs": 420,
         "cooldownMs": 3500,
         "cancelLockoutMs": 1200,

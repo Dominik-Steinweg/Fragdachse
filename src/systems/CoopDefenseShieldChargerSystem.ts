@@ -79,8 +79,16 @@ export class CoopDefenseShieldChargerSystem implements EnemySpecialMovementSourc
     for (const [id, state] of this.states) if (!live.has(id)) { this.release(state); this.states.delete(id); }
   }
 
-  blocksRegularAttacks(enemyId: string): boolean { return (this.states.get(enemyId)?.phase ?? 'none') !== 'none'; }
-  blocksDodge(enemyId: string): boolean { return this.blocksRegularAttacks(enemyId); }
+  /**
+   * Windup and run own the body. A shield charger's recovery stays an exposed opening; a leap's
+   * landing recovery permits the regular melee follow-up (the mini-kraken's ink).
+   */
+  blocksRegularAttacks(enemyId: string): boolean {
+    const state = this.states.get(enemyId);
+    if (!state || state.phase === 'none') return false;
+    return state.phase !== 'recover' || getCoopDefenseEnemyConfig(state.enemy.kind).shieldCharger?.style !== 'leap';
+  }
+  blocksDodge(enemyId: string): boolean { return (this.states.get(enemyId)?.phase ?? 'none') !== 'none'; }
   /** Hit stagger must not stop a committed run. */
   isRunning(enemyId: string): boolean { return this.states.get(enemyId)?.phase === 'run'; }
 
@@ -151,7 +159,7 @@ export class CoopDefenseShieldChargerSystem implements EnemySpecialMovementSourc
         this.publish(state, 'none', null);
       }
     } else if (!stunned && !enemy.isBurrowed() && now >= state.cooldownUntil && now >= state.lockoutUntil
-      && !enemy.isAttackMovementPaused(now)) {
+      && !enemy.isAttackMovementPaused(now) && !this.isMeleeWindingUp(enemy, now)) {
       this.tryStart(state, config, now);
     }
   }
@@ -252,6 +260,12 @@ export class CoopDefenseShieldChargerSystem implements EnemySpecialMovementSourc
   private release(state: ChargerState): void {
     state.enemy.setKnockbackImmune(false);
     if (state.phase !== 'none' && state.enemy.sprite.active) this.publish(state, 'none', null);
+  }
+
+  /** A telegraphed regular melee strike (e.g. the ink) finishes before the next charge may start. */
+  private isMeleeWindingUp(enemy: EnemyEntity, now: number): boolean {
+    const attack = enemy.getClawAttackState?.().attack;
+    return !!attack && now < attack.endsAt;
   }
 
   private runSpeed(enemy: EnemyEntity): number {

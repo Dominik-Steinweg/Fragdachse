@@ -3,7 +3,7 @@ vi.mock('phaser', () => ({ Scenes: { Events: { PRE_RENDER: 'prerender' } } }));
 const draws = vi.hoisted(() => [] as unknown[][]);
 vi.mock('../src/effects/RestHealTendrilRenderer', () => ({ RestHealTendrilRenderer: class {
   draw = (...args: unknown[]) => { draws.push(args); };
-  setLightingSystem = vi.fn(); clear = vi.fn(); destroy = vi.fn();
+  setLightingSystem = vi.fn(); setGpuVfx = vi.fn(); clear = vi.fn(); destroy = vi.fn();
 } }));
 import type * as Phaser from 'phaser';
 import { EnemyHopPresentation } from '../src/effects/EnemyHopPresentation';
@@ -49,7 +49,7 @@ describe('hop presentation', () => {
     f.render(1016);
     const [channels] = draws.at(-1)! as [{ id: string; targets: { id: string; x: number }[]; cross: { x: number } }[]];
     expect(channels).toHaveLength(1);
-    expect(channels[0]!.targets).toEqual([{ id: 'ally', x: 80, y: 0 }]);
+    expect(channels[0]!.targets).toEqual([{ id: 'ally', x: 80, y: 0, radius: expect.any(Number) }]);
     // The back cross sits behind the body centre, opposite the facing.
     expect(channels[0]!.cross.x).toBeLessThan(0);
   });

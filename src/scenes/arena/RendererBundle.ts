@@ -455,6 +455,7 @@ export function* createRendererBundleSteps(
   const enemyHops = new EnemyHopPresentation(scene);
   cleanup.push(() => enemyHops.destroy());
   enemyHops.setLightingSystem(lighting);
+  enemyHops.setGpuVfx(gpuVfx);
   const kaboomtula = new KaboomtulaPresentation(scene);
   cleanup.push(() => kaboomtula.destroy());
   const turretWeb = new TurretWebRenderer(scene);

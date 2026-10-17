@@ -3,13 +3,11 @@ import type { CoopDefenseEnemyKaboomtulaConfig } from '../config/coopDefenseEnem
 type SkitterConfig = CoopDefenseEnemyKaboomtulaConfig['skitter'];
 type LeapConfig = CoopDefenseEnemyKaboomtulaConfig['leap'];
 
-/** One leg of the spider's rush: a straight dart or an angled zig, optionally followed by a freeze. */
-export interface SkitterSegment {
-  readonly durationMs: number;
-  /** Signed offset from the route heading in radians (0 for a dart). */
+/** The spider's rush at one moment: a smooth sideways weave around the route heading. */
+export interface SkitterWeave {
+  /** Signed offset from the route heading in radians. */
   readonly angle: number;
   readonly speedFactor: number;
-  readonly pauseMs: number;
 }
 
 /** Deterministic value in [0, 1) per body, segment and salt (FNV-1a). */
@@ -22,20 +20,24 @@ function unitHash(id: string, index: number, salt: number): number {
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
+const TAU = Math.PI * 2;
+
 /**
- * Spider-like rush pattern: segments alternate sides, some are straight darts, some end in a short
- * freeze. Pure and deterministic per body so the host can replay a segment after any frame.
+ * Spider-like rush: a continuous sideways weave with a per-body rhythm and a faint second harmonic,
+ * plus a scurry surge that peaks while the body crosses its route. No hard turns and no freezes, so
+ * the run stays readable and dodgeable (gameplay before realism). Pure and deterministic per body
+ * and elapsed rush time.
  */
-export function skitterSegment(enemyId: string, index: number, config: SkitterConfig): SkitterSegment {
-  const dart = unitHash(enemyId, index, 2) < config.dartChance;
-  const side = index % 2 === 0 ? 1 : -1;
-  const degrees = lerp(config.zigMinDegrees, config.zigMaxDegrees, unitHash(enemyId, index, 3));
-  const pause = unitHash(enemyId, index, 4) < config.pauseChance;
+export function skitterWeave(enemyId: string, elapsedMs: number, config: SkitterConfig): SkitterWeave {
+  const period = lerp(config.weavePeriodMinMs, config.weavePeriodMaxMs, unitHash(enemyId, 0, 1));
+  const phase = TAU * Math.max(0, elapsedMs) / period;
+  const side = unitHash(enemyId, 0, 2) < 0.5 ? 1 : -1;
+  const accent = TAU * unitHash(enemyId, 0, 3);
+  // The harmonic is offset by its own start value so every rush leaves straight along its route.
+  const sway = 0.84 * Math.sin(phase) + 0.16 * (Math.sin(2.37 * phase + accent) - Math.sin(accent));
   return {
-    durationMs: Math.round(lerp(config.segmentMinMs, config.segmentMaxMs, unitHash(enemyId, index, 1))),
-    angle: dart ? 0 : side * degrees * Math.PI / 180,
-    speedFactor: dart ? config.dartSpeedFactor : 1,
-    pauseMs: pause ? Math.round(lerp(config.pauseMinMs, config.pauseMaxMs, unitHash(enemyId, index, 5))) : 0,
+    angle: side * config.weaveDegrees * Math.PI / 180 * sway,
+    speedFactor: 1 + config.surge * Math.cos(2 * phase),
   };
 }
 

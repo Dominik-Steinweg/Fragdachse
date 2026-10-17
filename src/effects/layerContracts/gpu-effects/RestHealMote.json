@@ -1,0 +1,24 @@
+{
+  "name": "RestHealMote",
+  "contract": {
+    "id": "gpu:RestHealMote",
+    "owner": "effects/gpu/GpuVfxEffects.ts",
+    "component": "RestHealMote",
+    "height": "body",
+    "lighting": "emissive",
+    "camera": "world",
+    "depths": [
+      19.6
+    ],
+    "blends": [
+      "ADD"
+    ],
+    "profiles": [
+      "E"
+    ],
+    "role": "effect",
+    "lanes": [
+      "ExplosionLowGlow"
+    ]
+  }
+}

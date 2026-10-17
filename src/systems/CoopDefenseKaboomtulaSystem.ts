@@ -2,7 +2,7 @@ import { getCoopDefenseEnemyConfig, type CoopDefenseEnemyKaboomtulaConfig } from
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyDeathInfo, EnemyMovementOverride, EnemySpecialMovementSource } from '../entities/EnemyManager';
 import type { EnemyAiTargetRef } from './EnemyAiTargetCatalog';
-import { closestOnSegment, lockLeapLane, skitterAmplitude, skitterSegment, type Point, type SkitterSegment } from './kaboomtulaMotion';
+import { closestOnSegment, lockLeapLane, skitterAmplitude, skitterWeave, type Point } from './kaboomtulaMotion';
 import type { KaboomtulaLeap, KaboomtulaPhase, KaboomtulaTargetRef } from './KaboomtulaState';
 import type { AutomatedTurretId } from './TurretFireSource';
 
@@ -102,9 +102,9 @@ interface SpiderState {
   aimX: number;
   aimY: number;
   lastSeenAt: number;
-  segmentIndex: number;
-  segment: SkitterSegment | null;
-  segmentEndsAt: number;
+  /** Share of the weave in use (0..1): eases out where the sideways probe is blocked, back in when free. */
+  weaveGain: number;
+  weaveAt: number;
   pounceLockoutUntil: number;
   trackX: number;
   trackY: number;
@@ -148,6 +148,9 @@ const POUNCE_RETRY_MS = 90;
 const POUNCE_HOLD_MAX_MS = 360;
 /** Sight is kept during the rush up to this multiple of the activation radius. */
 const RUSH_SIGHT_FACTOR = 1.6;
+/** Weave share lost per second while its sideways probe is blocked, and regained once free. */
+const WEAVE_FADE_PER_S = 6;
+const WEAVE_RECOVER_PER_S = 2.5;
 
 /**
  * Host decisions of the Kabummtula: alert pose on sight, a skittering rush faster than any player,
@@ -241,8 +244,8 @@ export class CoopDefenseKaboomtulaSystem implements EnemySpecialMovementSource {
     for (let i = 0; i < enemy.id.length; i++) hash = Math.imul(hash ^ enemy.id.charCodeAt(i), 16777619);
     return {
       enemy, phase: 'approach', revision: enemy.getKaboomtulaState().revision, startedAt: 0, endsAt: 0, target: null,
-      leap: null, aimX: enemy.sprite.x, aimY: enemy.sprite.y, lastSeenAt: 0, segmentIndex: 0, segment: null,
-      segmentEndsAt: 0, pounceLockoutUntil: 0, trackX: 0, trackY: 0, trackAt: 0, velocityX: 0, velocityY: 0,
+      leap: null, aimX: enemy.sprite.x, aimY: enemy.sprite.y, lastSeenAt: 0, weaveGain: 1, weaveAt: 0,
+      pounceLockoutUntil: 0, trackX: 0, trackY: 0, trackAt: 0, velocityX: 0, velocityY: 0,
       orbitSide: (hash >>> 0) % 2 === 0 ? 1 : -1, lastX: enemy.sprite.x, lastY: enemy.sprite.y, laneBlocked: false, leapAlong: 0, leapProgressAt: 0,
       webTurret: null, webFired: false, webCooldownUntil: 0, nextWebScanAt: 0,
     };
@@ -310,8 +313,8 @@ export class CoopDefenseKaboomtulaSystem implements EnemySpecialMovementSource {
     this.setAim(state, target);
     if (now < state.endsAt) return;
     state.lastSeenAt = now;
-    state.segment = null;
-    state.segmentEndsAt = 0;
+    state.weaveGain = 1;
+    state.weaveAt = now;
     this.ports.onCommit?.(state.enemy, target.ref);
     this.publish(state, 'rush', now, 0, target.ref, null);
   }
@@ -475,23 +478,26 @@ export class CoopDefenseKaboomtulaSystem implements EnemySpecialMovementSource {
     // Without a known route (e.g. a goal on a base edge) locomotion steers straight at the target.
     const waypoint = this.ports.route(enemy, `kaboomtula:${target.kind}:${target.id}`, { x: state.aimX, y: state.aimY },
       Math.max(16, enemy.getCollisionRadius())) ?? { x: state.aimX, y: state.aimY };
-    if (!state.segment || now >= state.segmentEndsAt) {
-      state.segment = skitterSegment(enemy.id, state.segmentIndex++, config.skitter);
-      state.segmentEndsAt = now + state.segment.durationMs + state.segment.pauseMs;
-    }
-    const segment = state.segment;
-    if (segment.pauseMs > 0 && now >= state.segmentEndsAt - segment.pauseMs) return { vx: 0, vy: 0, aimAngle: aim };
-    const speed = config.rushSpeedPx * segment.speedFactor;
+    const weave = skitterWeave(enemy.id, now - state.startedAt, config.skitter);
+    const elapsedS = Math.max(0, Math.min(0.1, (now - state.weaveAt) / 1000));
+    state.weaveAt = now;
+    const speed = config.rushSpeedPx * weave.speedFactor;
     const heading = Math.atan2(waypoint.y - y, waypoint.x - x);
-    const offset = segment.angle * skitterAmplitude(Math.hypot(state.aimX - x, state.aimY - y), config.skitter);
-    if (offset !== 0) {
+    const offset = weave.angle * skitterAmplitude(Math.hypot(state.aimX - x, state.aimY - y), config.skitter) * state.weaveGain;
+    const facing = aim + offset * config.skitter.facingLean;
+    if (Math.abs(offset) > 1e-3) {
       const angle = heading + offset;
       const steered = this.ports.moveNormally(enemy, { x: x + Math.cos(angle) * config.skitter.probePx,
-        y: y + Math.sin(angle) * config.skitter.probePx }, speed, aim);
-      if (!steered.blocked) return { vx: steered.vx, vy: steered.vy, aimAngle: aim };
-    }
-    const direct = this.ports.moveNormally(enemy, waypoint, speed, aim);
-    return { vx: direct.vx, vy: direct.vy, aimAngle: aim };
+        y: y + Math.sin(angle) * config.skitter.probePx }, speed, facing);
+      // A blocked side eases the weave out instead of flipping between weave and route every frame.
+      if (!steered.blocked) {
+        state.weaveGain = Math.min(1, state.weaveGain + elapsedS * WEAVE_RECOVER_PER_S);
+        return { vx: steered.vx, vy: steered.vy, aimAngle: facing };
+      }
+      state.weaveGain = Math.max(0, state.weaveGain - elapsedS * WEAVE_FADE_PER_S);
+    } else state.weaveGain = Math.min(1, state.weaveGain + elapsedS * WEAVE_RECOVER_PER_S);
+    const direct = this.ports.moveNormally(enemy, waypoint, speed, facing);
+    return { vx: direct.vx, vy: direct.vy, aimAngle: facing };
   }
 
   /** Keeps running through the telegraph: strafes around the target inside the band, facing it. */
