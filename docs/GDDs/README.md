@@ -43,7 +43,7 @@ gesetzt.
 |---|---|
 | [Alien-Kegelangriff V1](Fragdachse_GDD_Alien_Kegelangriff_V1.md) | umgesetzt (die Kopfzeile „keine Implementierung“ ist veraltet) |
 | [Brandstifter](Fragdachse_GDD_Brandstifter.md) | umgesetzt |
-| [Kabummtula V1](Fragdachse_GDD_Kabummtula_V1.md) | in Umsetzung (Branch `kaboomtula`; ersetzt den Zeitbomben-Dachs) |
+| [Kabummtula V1](Fragdachse_GDD_Kabummtula_V1.md) | umgesetzt (ersetzt den Zeitbomben-Dachs); Optimierungsphase mit Testfeedback offen |
 | [Mörser-Dachs V1](Fragdachse_GDD_Moerser_Dachs_V1.md) | umgesetzt |
 | [Schild-Anstürmer V1](Fragdachse_GDD_Schild_Anstuermer_V1.md) | umgesetzt (die Kopfzeile „keine Implementierung“ ist veraltet) |
 

@@ -240,6 +240,15 @@ Rückbau verwendet weiterhin den separaten Entfernungspfad. Diese Grenzen sicher
 [Träger- und Kontakttests](../../tests/ProjectilePhysicsBoundary.test.ts) und die
 [Mutation-Integration](../../tests/integration/WorldObjectMutationRuntime.test.ts).
 
+Zeitweise Turmsperren (etwa das Netz der Kabummtula) sind Activity-eigene Zustände, die über die
+Turm-ID (`AutomatedTurretId`, numerisch für Bauwerke, Zeichenkette für Basistürme) adressiert
+werden und nicht über Kollision. Das World-Turmfeuer liest sie nur an zwei Stellen:
+`WorldCombatGameplayBinding.getTurretFireSources` setzt betroffene Quellen per `identityId` auf
+`fireState: 'disabled'`, inklusive Feuerleit-Kopien und ohne Portal, und die Tesla-Quellenliste
+lässt sie aus. `disabled` beendet eine eigene Salve und unterbindet Zielen und manuelles Feuer;
+`paused` würde eine laufende Salve zu Ende schießen. Neue Sperren nutzen diesen Weg und verändern
+keine Bauwerke. Abgesichert in [TurretFireSources.test.ts](../../tests/TurretFireSources.test.ts).
+
 ## Eingaben und Aktionen
 
 Im Coop-Loadout ist `CoopDefenseUpgradeProfile.toolLoadout` die maßgebliche Utility-Auswahl für
