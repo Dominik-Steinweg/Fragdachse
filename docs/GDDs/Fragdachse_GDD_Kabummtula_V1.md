@@ -73,7 +73,7 @@ Netz: Reichweite 380, Dauer 4000 ms, Abklingzeit 7000 ms.
 
 ## 8. Begegnungen
 
-Karte 16 (Zeitzünder) mit allen Hinterhalten, Dawn-Block `timebomb-rush`, Blutmond-Gewichtung.
+Karte 16 (Spinnensteig) als Einführung in fast allen Überfällen, Dawn-Block `timebomb-rush`, Blutmond-Gewichtung.
 Testkarte 0: Encounter `kaboomtula-gate-1`.
 
 ## 9. Technische Leitplanken

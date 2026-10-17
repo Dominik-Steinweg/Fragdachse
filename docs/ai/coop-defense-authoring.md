@@ -50,6 +50,8 @@ Terrain-Erzeugung auf seedunabhängige Geometriekonflikte geprüft. Maßgeblich 
 
 Eine Basis ist zunächst World-Geometrie und World-Identität: Position, Form, Faction, Rolle, maximale Struktur, Turrets und Spawn-Zentrum gehören zur World. Startzustand, Spieler-Skalierung, Dormancy und missionsbezogene Pedestals sind Activity-Overlay.
 
+Ob Basen Ziel der Gegner sind, ist Activity-Inhalt (`enemyTargeting`). Die Politik wirkt ausschließlich über die Zielquellen der Navigation ([`applyEnemyTargetingToBaseDescriptors`](../../src/systems/flowfield/FlowFieldSources.ts)): Ohne Basisziel fallen Belagerer, Basis-Präferenzen und Spawn-Felder gemeinsam auf die Spielerjagd zurück. Einzelne Gegnersysteme bekommen dafür keine eigenen Sonderfälle.
+
 Die dauerhafte Base-Konfiguration ist nicht mit dem laufenden HP- oder Cooldown-Zustand gleichzusetzen. Solche Laufzeitwerte gehören zur Activity-Simulation oder zur Replikation, nicht zum authored PersistentBase-Zustand.
 
 ## Mission und Zeit

@@ -40,7 +40,7 @@ Nicht jede Map benötigt einen permanenten Unlock. Reine Zahlensteigerung bei Ge
 | 13 | Brutbomben | Destroy Hostile Bases, zerstörbare Spawnstrukturen, Thrower Badger | XP-Side-Mission-Reward |
 | 14 | Brandschneise | Survival 120 s, Pyro Badger, Void-Fire aktuell primär als Gleisersatz/Hazard | – |
 | 15 | Leerenjäger | Bossmap gegen Void Hunter, dynamische Void-Hazards | Item-System wird freigeschaltet |
-| 16 | Zeitzünder | Repel Assault, Timebomb Badger, Void-Hazards, Spawnstrukturen, Hold-Side-Mission | – |
+| 16 | Spinnensteig | Advance um einen See, Kabummtula-Überfälle, Mini-Kraken, Wachturm | Wachturm |
 | 17 | Bierrettung | Destroy Hostile Bases + Carry-Side-Mission | Item-Meta-Reward + temporärer Team-Buff |
 
 ---
@@ -64,7 +64,7 @@ Nicht jede Map benötigt einen permanenten Unlock. Reine Zahlensteigerung bei Ge
 | 13 | Produktionsnetz zerstören | Spawnstrukturen/Brutstätten aktiv ausschalten, Thrower Badger | XP-Side-Mission-Reward |
 | 14 | Environmental Survival | Pyro Badger + **Void-Fire breitet sich von links nach rechts aus und verkleinert die Arena** | – |
 | 15 | Boss + Meta-System | Void Hunter, eskalierende Void-Hazards | Item-System Unlock |
-| 16 | Advance / Hinterhalte | **Advance-Map** mit vielen **Timebomb-Badger-Hinterhalten** | – |
+| 16 | Advance / Überfälle | **Advance-Map** im Uhrzeigersinn um einen See mit neun **Kabummtula-geprägten Überfällen** | Wachturm |
 | 17 | Carry-Finale | Bier transportieren unter Feinddruck | Item-Meta-Reward + Team-Buff |
 
 ---
@@ -131,14 +131,12 @@ Nicht jede Map benötigt einen permanenten Unlock. Reine Zahlensteigerung bei Ge
   - Map 9 = Gegnerdruck überleben
   - Map 14 = Gegnerdruck + schrumpfende Arena überleben
 
-### Map 16 – Zeitzünder
-- Primärziel von Repel Assault auf **Advance** umbauen.
-- Lineare bzw. segmentierte Route mit bewusst gesetzten Timebomb-Hinterhalten.
-- Timebomb Badger als Kern der Encounter-Komposition.
-- Fünf checkpointgesteuerte Hinterhalte von der rechten Basis nach Westen, danach Extraktion. Seitliche Spawnflächen, in späteren Abschnitten auch Angriffe von hinten.
-- Alte Dauerproduktion, Hold-Mission und flächige Turmverteidigung entfallen; zwei kleine seitliche Void-Gefahren bleiben.
-- Startwert: zwei normale Respawns je Spieler. Checkpoints verlegen den Respawnpunkt und gewähren keine zusätzlichen Leben.
-- Ziel: „durch ein gefährliches Gebiet vorrücken, in dem jederzeit Timebomb-Hinterhalte ausgelöst werden können“.
+### Map 16 – Spinnensteig
+- Ersetzt den Prototyp „Zeitzünder“; Details im [Map-16-GDD](Fragdachse_GDD_Map16_Spinnensteig_V1.md).
+- Advance-Route im Uhrzeigersinn um einen zentralen See, Start im Südwesten an der persistenten Basis, Extraktion im Südosten.
+- Neun Überfälle mit eigener Identität; die Kabummtula ist das Leitmotiv, ergänzt durch Mini-Kraken, Anstürmer, Aliens, Pirscher, Pyros und einen Bomberanflug.
+- Drei Respawns je Spieler; alle Gegner jagen die Spieler (`enemyTargeting: "players"`).
+- Ziel: „ein gefährliches Seeufer umrunden, auf dem jeder Abschnitt anders überfällt“.
 
 ---
 
@@ -182,7 +180,7 @@ Erfolgreicher Hold-Abschluss gewährt den Unlock unmittelbar und idempotent. Er 
 - Bestehende Advance-/Checkpoint-/Trigger-Strukturen wiederverwenden.
 - Hinterhalte über vorhandene Encounter-Trigger oder räumliche Aktivierung realisieren.
 - Kein neues universelles Encounter-Framework entwickeln, sofern bestehende Systeme aus Map 1/anderen Advance-Strukturen ausreichen.
-- Maps 7 und 16 verwenden durchgehende Encounter-Barrieren zwischen den Abschnitten. Die finale Sperre öffnet nach Auflösung des letzten Encounters; erst dann ist die Extraktion erreichbar. Map-Abmessungen bleiben erhalten.
+- Maps 7 und 16 sperren ihre Abschnitte mit Wasser und kurzen Encounter-Barrieren (Map 16: Furten). Die finale Sperre öffnet nach Auflösung des letzten Encounters; erst dann ist die Extraktion erreichbar.
 
 ### 5.5 Allgemeiner Void-Fire-Basisbrand
 
@@ -253,7 +251,7 @@ Manuell abstimmen:
 - Schwierigkeit der Map-8-Side-Mission
 - Airstrike-Druck auf Map 11
 - Geschwindigkeit und Restfläche des Void-Fire auf Map 14
-- Anzahl, Richtung und Timing der Timebomb-Hinterhalte auf Map 16
+- Anzahl, Richtung und Timing der Kabummtula-Überfälle auf Map 16
 
 ---
 

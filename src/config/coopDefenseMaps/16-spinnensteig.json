@@ -1,8 +1,8 @@
 {
   "mapId": "16",
-  "arenaWidthCells": 192,
-  "arenaHeightCells": 112,
-  "timeOfDay": "05:50",
+  "arenaWidthCells": 264,
+  "arenaHeightCells": 150,
+  "timeOfDay": "06:00",
   "dynamicTimeOfDay": {
     "transitions": [
       {
@@ -10,15 +10,15 @@
           "type": "time",
           "atMs": 0
         },
-        "targetTimeOfDay": "07:15",
-        "durationMs": 1080000
+        "targetTimeOfDay": "07:30",
+        "durationMs": 1200000
       }
     ]
   },
   "fogStrength": 1.3,
   "tutorialAnchor": {
-    "gridX": 14,
-    "gridY": 82
+    "gridX": 19,
+    "gridY": 112
   },
   "trackMode": "none",
   "trackPosition": "center",
@@ -26,62 +26,67 @@
   "respawnsPerPlayer": 3,
   "enemyTargeting": "players",
   "balanceReferenceDurationSec": 900,
-  "rockFillRatio": 0.47,
-  "treeCount": 46,
+  "rockFillRatio": 0.38,
+  "treeCount": 70,
   "treeGroves": {
     "canopyClearanceCells": 2,
     "areas": [
       {
-        "gridX": 10,
-        "gridY": 72,
-        "radiusCells": 8
+        "gridX": 14,
+        "gridY": 64,
+        "radiusCells": 10
       },
       {
-        "gridX": 27,
-        "gridY": 16,
-        "radiusCells": 15
+        "gridX": 38,
+        "gridY": 20,
+        "radiusCells": 20
       },
       {
         "gridX": 8,
-        "gridY": 42,
-        "radiusCells": 9
+        "gridY": 46,
+        "radiusCells": 10
       },
       {
-        "gridX": 66,
+        "gridX": 92,
         "gridY": 6,
-        "radiusCells": 9
-      },
-      {
-        "gridX": 100,
-        "gridY": 3,
-        "radiusCells": 10
-      },
-      {
-        "gridX": 184,
-        "gridY": 44,
-        "radiusCells": 10
-      },
-      {
-        "gridX": 160,
-        "gridY": 26,
-        "radiusCells": 8
-      },
-      {
-        "gridX": 122,
-        "gridY": 104,
-        "radiusCells": 9
-      },
-      {
-        "gridX": 64,
-        "gridY": 100,
         "radiusCells": 12
+      },
+      {
+        "gridX": 138,
+        "gridY": 4,
+        "radiusCells": 14
+      },
+      {
+        "gridX": 250,
+        "gridY": 56,
+        "radiusCells": 14
+      },
+      {
+        "gridX": 214,
+        "gridY": 36,
+        "radiusCells": 10
+      },
+      {
+        "gridX": 166,
+        "gridY": 122,
+        "radiusCells": 12
+      },
+      {
+        "gridX": 88,
+        "gridY": 136,
+        "radiusCells": 16
+      },
+      {
+        "gridX": 222,
+        "gridY": 140,
+        "radiusCells": 10
       }
     ]
   },
   "rockField": {
     "fillMode": "organic",
-    "corridorRadiusCells": 3.2,
-    "corridorRadiusVarianceCells": 0.7,
+    "corridorRadiusCells": 4.5,
+    "corridorRadiusVarianceCells": 1,
     "corridorWanderCells": 0.6,
     "waypointJitterCells": 0.5,
     "rockDensityScale": 1,
@@ -90,80 +95,84 @@
         "id": "route-west",
         "points": [
           {
+            "gridX": 52,
+            "gridY": 126
+          },
+          {
+            "gridX": 64,
+            "gridY": 122
+          },
+          {
+            "gridX": 72,
+            "gridY": 112
+          },
+          {
+            "gridX": 68,
+            "gridY": 100
+          },
+          {
+            "gridX": 56,
+            "gridY": 96
+          },
+          {
             "gridX": 40,
             "gridY": 92
           },
           {
-            "gridX": 50,
-            "gridY": 91
+            "gridX": 38,
+            "gridY": 82
           },
           {
-            "gridX": 53,
-            "gridY": 86
+            "gridX": 38,
+            "gridY": 74
           },
           {
-            "gridX": 47,
-            "gridY": 80
+            "gridX": 12,
+            "gridY": 70
           },
           {
-            "gridX": 40,
-            "gridY": 73
+            "gridX": 12,
+            "gridY": 61
           },
           {
-            "gridX": 30,
-            "gridY": 68
+            "gridX": 54,
+            "gridY": 61
           },
           {
-            "gridX": 28,
-            "gridY": 62
-          },
-          {
-            "gridX": 28,
-            "gridY": 52
-          },
-          {
-            "gridX": 15,
-            "gridY": 48
-          },
-          {
-            "gridX": 36,
-            "gridY": 43
-          },
-          {
-            "gridX": 16,
-            "gridY": 39
-          },
-          {
-            "gridX": 24,
-            "gridY": 36
+            "gridX": 54,
+            "gridY": 54
           },
           {
             "gridX": 34,
-            "gridY": 28
+            "gridY": 52
           },
           {
-            "gridX": 28,
-            "gridY": 17
+            "gridX": 48,
+            "gridY": 36
           },
           {
-            "gridX": 42,
-            "gridY": 10
+            "gridX": 40,
+            "gridY": 18
           },
           {
-            "gridX": 55,
-            "gridY": 12
+            "gridX": 60,
+            "gridY": 14
           },
           {
-            "gridX": 63,
-            "gridY": 15
-          },
-          {
-            "gridX": 72,
-            "gridY": 20
-          },
-          {
-            "gridX": 84,
+            "gridX": 76,
             "gridY": 16
+          },
+          {
+            "gridX": 88,
+            "gridY": 14
+          },
+          {
+            "gridX": 98,
+            "gridY": 16
+          },
+          {
+            "gridX": 112,
+            "gridY": 18
           }
         ]
       },
@@ -171,20 +180,20 @@
         "id": "route-fork-north",
         "points": [
           {
-            "gridX": 84,
-            "gridY": 16
+            "gridX": 112,
+            "gridY": 18
           },
           {
-            "gridX": 92,
-            "gridY": 5
+            "gridX": 122,
+            "gridY": 6
           },
           {
-            "gridX": 108,
-            "gridY": 5
+            "gridX": 154,
+            "gridY": 6
           },
           {
-            "gridX": 116,
-            "gridY": 13
+            "gridX": 162,
+            "gridY": 18
           }
         ]
       },
@@ -192,20 +201,20 @@
         "id": "route-fork-south",
         "points": [
           {
-            "gridX": 84,
-            "gridY": 16
+            "gridX": 112,
+            "gridY": 18
           },
           {
-            "gridX": 92,
-            "gridY": 24
+            "gridX": 122,
+            "gridY": 31
           },
           {
-            "gridX": 108,
-            "gridY": 24
+            "gridX": 154,
+            "gridY": 31
           },
           {
-            "gridX": 116,
-            "gridY": 15
+            "gridX": 162,
+            "gridY": 21
           }
         ]
       },
@@ -213,576 +222,576 @@
         "id": "route-east",
         "points": [
           {
-            "gridX": 116,
-            "gridY": 14
-          },
-          {
-            "gridX": 120,
-            "gridY": 14
-          },
-          {
-            "gridX": 134,
-            "gridY": 12
-          },
-          {
-            "gridX": 144,
-            "gridY": 9
-          },
-          {
-            "gridX": 156,
-            "gridY": 10
-          },
-          {
-            "gridX": 176,
-            "gridY": 13
-          },
-          {
-            "gridX": 181,
-            "gridY": 28
+            "gridX": 162,
+            "gridY": 20
           },
           {
             "gridX": 166,
-            "gridY": 44
-          },
-          {
-            "gridX": 159,
-            "gridY": 52
-          },
-          {
-            "gridX": 159,
-            "gridY": 61
-          },
-          {
-            "gridX": 155,
-            "gridY": 70
-          },
-          {
-            "gridX": 143,
-            "gridY": 78
-          },
-          {
-            "gridX": 146,
-            "gridY": 90
-          },
-          {
-            "gridX": 164,
-            "gridY": 88
-          },
-          {
-            "gridX": 176,
-            "gridY": 86
-          },
-          {
-            "gridX": 184,
-            "gridY": 92
+            "gridY": 20
           },
           {
             "gridX": 186,
+            "gridY": 15
+          },
+          {
+            "gridX": 200,
+            "gridY": 10
+          },
+          {
+            "gridX": 214,
+            "gridY": 12
+          },
+          {
+            "gridX": 240,
+            "gridY": 16
+          },
+          {
+            "gridX": 248,
+            "gridY": 34
+          },
+          {
+            "gridX": 230,
+            "gridY": 56
+          },
+          {
+            "gridX": 220,
+            "gridY": 66
+          },
+          {
+            "gridX": 218,
+            "gridY": 82
+          },
+          {
+            "gridX": 212,
             "gridY": 96
+          },
+          {
+            "gridX": 204,
+            "gridY": 108
+          },
+          {
+            "gridX": 200,
+            "gridY": 122
+          },
+          {
+            "gridX": 226,
+            "gridY": 118
+          },
+          {
+            "gridX": 242,
+            "gridY": 116
+          },
+          {
+            "gridX": 250,
+            "gridY": 124
+          },
+          {
+            "gridX": 254,
+            "gridY": 132
           }
         ]
       },
       {
         "id": "approach-1",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 60,
-            "gridY": 76
+            "gridX": 88,
+            "gridY": 122
           },
           {
-            "gridX": 47,
-            "gridY": 80
+            "gridX": 68,
+            "gridY": 100
           }
         ]
       },
       {
         "id": "approach-2",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 63,
-            "gridY": 101
+            "gridX": 38,
+            "gridY": 126
           },
           {
-            "gridX": 47,
-            "gridY": 80
+            "gridX": 68,
+            "gridY": 100
           }
         ]
       },
       {
         "id": "approach-3",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 38,
-            "gridY": 72
+            "gridX": 40,
+            "gridY": 104
           },
           {
-            "gridX": 47,
-            "gridY": 80
+            "gridX": 68,
+            "gridY": 100
           }
         ]
       },
       {
         "id": "approach-4",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 58,
-            "gridY": 88
+            "gridX": 66,
+            "gridY": 130
           },
           {
-            "gridX": 47,
-            "gridY": 80
+            "gridX": 68,
+            "gridY": 100
           }
         ]
       },
       {
         "id": "approach-5",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 7,
-            "gridY": 73
+            "gridX": 14,
+            "gridY": 106
           },
           {
-            "gridX": 30,
-            "gridY": 68
+            "gridX": 40,
+            "gridY": 92
           }
         ]
       },
       {
         "id": "approach-6",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 38,
-            "gridY": 25
+            "gridX": 52,
+            "gridY": 28
           },
           {
-            "gridX": 24,
-            "gridY": 36
+            "gridX": 34,
+            "gridY": 52
           }
         ]
       },
       {
         "id": "approach-7",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 25,
-            "gridY": 52
+            "gridX": 8,
+            "gridY": 70
           },
           {
-            "gridX": 24,
-            "gridY": 36
+            "gridX": 34,
+            "gridY": 52
           }
         ]
       },
       {
         "id": "approach-8",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
             "gridX": 6,
-            "gridY": 35
+            "gridY": 42
           },
           {
-            "gridX": 24,
-            "gridY": 36
+            "gridX": 34,
+            "gridY": 52
           }
         ]
       },
       {
         "id": "approach-9",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 46,
-            "gridY": 38
+            "gridX": 62,
+            "gridY": 48
           },
           {
-            "gridX": 24,
-            "gridY": 36
+            "gridX": 34,
+            "gridY": 52
           }
         ]
       },
       {
         "id": "approach-10",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 6,
-            "gridY": 15
+            "gridX": 8,
+            "gridY": 12
           },
           {
-            "gridX": 28,
-            "gridY": 17
+            "gridX": 40,
+            "gridY": 18
           }
         ]
       },
       {
         "id": "approach-11",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 45,
-            "gridY": 19
+            "gridX": 66,
+            "gridY": 30
           },
           {
-            "gridX": 28,
-            "gridY": 17
+            "gridX": 40,
+            "gridY": 18
           }
         ]
       },
       {
         "id": "approach-12",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 28,
-            "gridY": 2
+            "gridX": 62,
+            "gridY": 3
           },
           {
-            "gridX": 28,
-            "gridY": 17
+            "gridX": 40,
+            "gridY": 18
           }
         ]
       },
       {
         "id": "approach-13",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 7,
-            "gridY": 26
+            "gridX": 8,
+            "gridY": 36
           },
           {
-            "gridX": 28,
-            "gridY": 17
+            "gridX": 40,
+            "gridY": 18
           }
         ]
       },
       {
         "id": "approach-14",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 44,
-            "gridY": 6
+            "gridX": 14,
+            "gridY": 3
           },
           {
-            "gridX": 28,
-            "gridY": 17
+            "gridX": 40,
+            "gridY": 18
           }
         ]
       },
       {
         "id": "approach-15",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 32,
-            "gridY": 29
+            "gridX": 42,
+            "gridY": 46
           },
           {
-            "gridX": 28,
-            "gridY": 17
+            "gridX": 40,
+            "gridY": 18
           }
         ]
       },
       {
         "id": "approach-16",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 71,
+            "gridX": 124,
             "gridY": 4
           },
           {
-            "gridX": 72,
-            "gridY": 20
+            "gridX": 98,
+            "gridY": 16
           }
         ]
       },
       {
         "id": "approach-17",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 90,
-            "gridY": 27
+            "gridX": 124,
+            "gridY": 32
           },
           {
-            "gridX": 72,
-            "gridY": 20
+            "gridX": 98,
+            "gridY": 16
           }
         ]
       },
       {
         "id": "approach-18",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 101,
-            "gridY": 25
+            "gridX": 138,
+            "gridY": 32
           },
           {
-            "gridX": 120,
-            "gridY": 14
+            "gridX": 166,
+            "gridY": 20
           }
         ]
       },
       {
         "id": "approach-19",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 101,
-            "gridY": 4
+            "gridX": 138,
+            "gridY": 5
           },
           {
-            "gridX": 120,
-            "gridY": 14
+            "gridX": 166,
+            "gridY": 20
           }
         ]
       },
       {
         "id": "approach-20",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 126,
-            "gridY": 22
+            "gridX": 150,
+            "gridY": 41
           },
           {
-            "gridX": 120,
-            "gridY": 14
+            "gridX": 166,
+            "gridY": 20
           }
         ]
       },
       {
         "id": "approach-21",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 171,
-            "gridY": 30
+            "gridX": 214,
+            "gridY": 42
           },
           {
-            "gridX": 156,
-            "gridY": 10
+            "gridX": 214,
+            "gridY": 12
           }
         ]
       },
       {
         "id": "approach-22",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 151,
-            "gridY": 26
+            "gridX": 238,
+            "gridY": 34
           },
           {
-            "gridX": 156,
-            "gridY": 10
+            "gridX": 214,
+            "gridY": 12
           }
         ]
       },
       {
         "id": "approach-23",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 184,
-            "gridY": 5
+            "gridX": 244,
+            "gridY": 6
           },
           {
-            "gridX": 156,
-            "gridY": 10
+            "gridX": 214,
+            "gridY": 12
           }
         ]
       },
       {
         "id": "approach-24",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 148,
-            "gridY": 48
+            "gridX": 202,
+            "gridY": 52
           },
           {
-            "gridX": 166,
-            "gridY": 44
+            "gridX": 230,
+            "gridY": 56
           }
         ]
       },
       {
         "id": "approach-25",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 152,
-            "gridY": 40
+            "gridX": 208,
+            "gridY": 38
           },
           {
-            "gridX": 166,
-            "gridY": 44
+            "gridX": 230,
+            "gridY": 56
           }
         ]
       },
       {
         "id": "approach-26",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 171,
-            "gridY": 52
+            "gridX": 254,
+            "gridY": 72
           },
           {
-            "gridX": 166,
-            "gridY": 44
+            "gridX": 230,
+            "gridY": 56
           }
         ]
       },
       {
         "id": "approach-27",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 120,
-            "gridY": 94
+            "gridX": 172,
+            "gridY": 120
           },
           {
-            "gridX": 146,
-            "gridY": 90
+            "gridX": 200,
+            "gridY": 122
           }
         ]
       },
       {
         "id": "approach-28",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 164,
-            "gridY": 102
+            "gridX": 226,
+            "gridY": 134
           },
           {
-            "gridX": 146,
-            "gridY": 90
+            "gridX": 200,
+            "gridY": 122
           }
         ]
       },
       {
         "id": "approach-29",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 145,
-            "gridY": 74
+            "gridX": 210,
+            "gridY": 95
           },
           {
-            "gridX": 146,
-            "gridY": 90
+            "gridX": 200,
+            "gridY": 122
           }
         ]
       },
       {
         "id": "approach-30",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 126,
-            "gridY": 82
+            "gridX": 176,
+            "gridY": 104
           },
           {
-            "gridX": 146,
-            "gridY": 90
+            "gridX": 200,
+            "gridY": 122
           }
         ]
       },
       {
         "id": "approach-31",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 166,
-            "gridY": 78
+            "gridX": 226,
+            "gridY": 104
           },
           {
-            "gridX": 146,
-            "gridY": 90
+            "gridX": 200,
+            "gridY": 122
           }
         ]
       },
       {
         "id": "approach-32",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 120,
-            "gridY": 88
+            "gridX": 172,
+            "gridY": 128
           },
           {
-            "gridX": 146,
-            "gridY": 90
+            "gridX": 200,
+            "gridY": 122
           }
         ]
       },
       {
         "id": "approach-33",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 164,
-            "gridY": 98
+            "gridX": 228,
+            "gridY": 118
           },
           {
-            "gridX": 146,
-            "gridY": 90
+            "gridX": 200,
+            "gridY": 122
           }
         ]
       },
       {
         "id": "approach-34",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 148,
-            "gridY": 106
+            "gridX": 188,
+            "gridY": 146
           },
           {
-            "gridX": 146,
-            "gridY": 90
+            "gridX": 200,
+            "gridY": 122
           }
         ]
       },
       {
         "id": "approach-35",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 152,
-            "gridY": 74
+            "gridX": 214,
+            "gridY": 96
           },
           {
-            "gridX": 146,
-            "gridY": 90
+            "gridX": 200,
+            "gridY": 122
           }
         ]
       },
       {
         "id": "approach-36",
-        "radiusCells": 2,
+        "radiusCells": 2.5,
         "points": [
           {
-            "gridX": 168,
-            "gridY": 82
+            "gridX": 226,
+            "gridY": 142
           },
           {
-            "gridX": 146,
-            "gridY": 90
+            "gridX": 200,
+            "gridY": 122
           }
         ]
       }
@@ -791,56 +800,80 @@
   "siteClearings": [
     {
       "id": "clearing-first-bite",
-      "gridX": 48,
-      "gridY": 79,
+      "gridX": 66,
+      "gridY": 106,
+      "radiusCells": 12
+    },
+    {
+      "id": "clearing-brood-ford",
+      "gridX": 38,
+      "gridY": 96,
       "radiusCells": 8
+    },
+    {
+      "id": "clearing-cliff",
+      "gridX": 34,
+      "gridY": 48,
+      "radiusCells": 7
     },
     {
       "id": "clearing-web-grove",
-      "gridX": 27,
-      "gridY": 16,
-      "radiusCells": 9
+      "gridX": 38,
+      "gridY": 20,
+      "radiusCells": 12
     },
     {
       "id": "clearing-marsh",
-      "gridX": 72,
-      "gridY": 18,
-      "radiusCells": 6
+      "gridX": 100,
+      "gridY": 20,
+      "radiusCells": 10
+    },
+    {
+      "id": "clearing-lake-fork",
+      "gridX": 168,
+      "gridY": 22,
+      "radiusCells": 9
+    },
+    {
+      "id": "clearing-ridge",
+      "gridX": 220,
+      "gridY": 14,
+      "radiusCells": 10
     },
     {
       "id": "clearing-burn",
-      "gridX": 166,
-      "gridY": 43,
-      "radiusCells": 8
+      "gridX": 228,
+      "gridY": 56,
+      "radiusCells": 12
     },
     {
       "id": "clearing-brood-pit",
-      "gridX": 145,
-      "gridY": 89,
-      "radiusCells": 11
+      "gridX": 200,
+      "gridY": 122,
+      "radiusCells": 12
     }
   ],
   "rockWalls": [
     {
       "id": "canyon-switchback-low",
-      "gridX": 21,
-      "gridY": 45,
-      "widthCells": 22,
+      "gridX": 18,
+      "gridY": 64,
+      "widthCells": 43,
       "heightCells": 2
     },
     {
       "id": "canyon-switchback-high",
-      "gridX": 6,
-      "gridY": 40,
-      "widthCells": 23,
+      "gridX": 8,
+      "gridY": 57,
+      "widthCells": 41,
       "heightCells": 2
     }
   ],
   "persistentBase": {
     "baseId": "coop-base-rear",
     "anchor": {
-      "gridX": 40,
-      "gridY": 92
+      "gridX": 52,
+      "gridY": 126
     },
     "orientation": "open-right"
   },
@@ -858,7 +891,7 @@
       "hpMax": 650,
       "anchor": {
         "kind": "grid",
-        "gridX": 36,
+        "gridX": 54,
         "gridY": 22
       },
       "shape": {
@@ -898,8 +931,8 @@
       "hpMax": 650,
       "anchor": {
         "kind": "grid",
-        "gridX": 86,
-        "gridY": 11
+        "gridX": 112,
+        "gridY": 10
       },
       "shape": {
         "kind": "cells",
@@ -938,7 +971,7 @@
       "hpMax": 650,
       "anchor": {
         "kind": "grid",
-        "gridX": 176,
+        "gridX": 232,
         "gridY": 20
       },
       "shape": {
@@ -984,17 +1017,17 @@
       },
       "delayMs": 2500,
       "pattern": "zone-barrage",
-      "strikeCount": 14,
+      "strikeCount": 16,
       "area": {
-        "gridX": 142,
+        "gridX": 192,
         "gridY": 3,
-        "widthCells": 40,
-        "heightCells": 14
+        "widthCells": 56,
+        "heightCells": 18
       },
       "run": {
         "headingDeg": 0,
         "offsetRatio": 0,
-        "speedPxPerSec": 520
+        "speedPxPerSec": 560
       }
     },
     {
@@ -1007,10 +1040,10 @@
       "delayMs": 1500,
       "area": {
         "type": "rectangle",
-        "gridX": 160,
-        "gridY": 23,
-        "widthCells": 28,
-        "heightCells": 11,
+        "gridX": 232,
+        "gridY": 24,
+        "widthCells": 30,
+        "heightCells": 16,
         "baseClearanceCells": 1
       },
       "spread": {
@@ -1041,8 +1074,8 @@
           "count": 1,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 58,
-            "gridY": 74,
+            "gridX": 86,
+            "gridY": 120,
             "widthCells": 4,
             "heightCells": 4
           }
@@ -1053,8 +1086,8 @@
           "delayMs": 2500,
           "spawnStaggerMs": 350,
           "spawnArea": {
-            "gridX": 60,
-            "gridY": 98,
+            "gridX": 35,
+            "gridY": 123,
             "widthCells": 6,
             "heightCells": 6
           }
@@ -1065,8 +1098,8 @@
           "delayMs": 6000,
           "spawnStaggerMs": 1800,
           "spawnArea": {
-            "gridX": 36,
-            "gridY": 70,
+            "gridX": 38,
+            "gridY": 102,
             "widthCells": 4,
             "heightCells": 4
           }
@@ -1077,10 +1110,10 @@
           "delayMs": 12000,
           "spawnStaggerMs": 1500,
           "spawnArea": {
-            "gridX": 56,
-            "gridY": 86,
+            "gridX": 64,
+            "gridY": 128,
             "widthCells": 5,
-            "heightCells": 5
+            "heightCells": 4
           }
         }
       ]
@@ -1097,10 +1130,10 @@
           "count": 5,
           "spawnStaggerMs": 700,
           "spawnArea": {
-            "gridX": 3,
-            "gridY": 59,
+            "gridX": 5,
+            "gridY": 81,
             "widthCells": 10,
-            "heightCells": 5,
+            "heightCells": 4,
             "medium": "water",
             "cluster": true
           }
@@ -1111,10 +1144,10 @@
           "delayMs": 2500,
           "spawnStaggerMs": 700,
           "spawnArea": {
-            "gridX": 50,
-            "gridY": 50,
+            "gridX": 66,
+            "gridY": 76,
             "widthCells": 8,
-            "heightCells": 7,
+            "heightCells": 4,
             "medium": "water",
             "cluster": true
           }
@@ -1125,8 +1158,8 @@
           "delayMs": 4500,
           "spawnStaggerMs": 250,
           "spawnArea": {
-            "gridX": 4,
-            "gridY": 70,
+            "gridX": 11,
+            "gridY": 103,
             "widthCells": 6,
             "heightCells": 6
           }
@@ -1145,8 +1178,8 @@
           "count": 3,
           "spawnStaggerMs": 1400,
           "spawnArea": {
-            "gridX": 36,
-            "gridY": 23,
+            "gridX": 50,
+            "gridY": 26,
             "widthCells": 5,
             "heightCells": 4
           }
@@ -1157,8 +1190,8 @@
           "delayMs": 2500,
           "spawnStaggerMs": 220,
           "spawnArea": {
-            "gridX": 22,
-            "gridY": 50,
+            "gridX": 5,
+            "gridY": 68,
             "widthCells": 6,
             "heightCells": 4
           }
@@ -1170,7 +1203,7 @@
           "spawnStaggerMs": 1600,
           "spawnArea": {
             "gridX": 4,
-            "gridY": 33,
+            "gridY": 40,
             "widthCells": 4,
             "heightCells": 4
           }
@@ -1181,8 +1214,8 @@
           "delayMs": 7500,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 44,
-            "gridY": 36,
+            "gridX": 60,
+            "gridY": 46,
             "widthCells": 4,
             "heightCells": 4
           }
@@ -1201,8 +1234,8 @@
           "count": 5,
           "spawnStaggerMs": 900,
           "spawnArea": {
-            "gridX": 4,
-            "gridY": 12,
+            "gridX": 6,
+            "gridY": 9,
             "widthCells": 5,
             "heightCells": 7
           }
@@ -1222,8 +1255,8 @@
           "count": 6,
           "spawnStaggerMs": 800,
           "spawnArea": {
-            "gridX": 43,
-            "gridY": 16,
+            "gridX": 64,
+            "gridY": 27,
             "widthCells": 5,
             "heightCells": 6
           }
@@ -1243,9 +1276,9 @@
           "count": 2,
           "spawnStaggerMs": 500,
           "spawnArea": {
-            "gridX": 25,
-            "gridY": 1,
-            "widthCells": 6,
+            "gridX": 60,
+            "gridY": 2,
+            "widthCells": 5,
             "heightCells": 3
           }
         },
@@ -1255,8 +1288,8 @@
           "delayMs": 400,
           "spawnStaggerMs": 500,
           "spawnArea": {
-            "gridX": 5,
-            "gridY": 24,
+            "gridX": 6,
+            "gridY": 34,
             "widthCells": 4,
             "heightCells": 4
           }
@@ -1267,10 +1300,10 @@
           "delayMs": 800,
           "spawnStaggerMs": 500,
           "spawnArea": {
-            "gridX": 42,
-            "gridY": 4,
-            "widthCells": 4,
-            "heightCells": 4
+            "gridX": 12,
+            "gridY": 2,
+            "widthCells": 5,
+            "heightCells": 3
           }
         },
         {
@@ -1279,8 +1312,8 @@
           "delayMs": 1200,
           "spawnStaggerMs": 500,
           "spawnArea": {
-            "gridX": 30,
-            "gridY": 28,
+            "gridX": 40,
+            "gridY": 45,
             "widthCells": 5,
             "heightCells": 3
           }
@@ -1299,9 +1332,9 @@
           "count": 2,
           "spawnStaggerMs": 2500,
           "spawnArea": {
-            "gridX": 68,
+            "gridX": 121,
             "gridY": 2,
-            "widthCells": 7,
+            "widthCells": 6,
             "heightCells": 4
           }
         },
@@ -1311,9 +1344,9 @@
           "delayMs": 2000,
           "spawnStaggerMs": 600,
           "spawnArea": {
-            "gridX": 72,
-            "gridY": 30,
-            "widthCells": 7,
+            "gridX": 100,
+            "gridY": 42,
+            "widthCells": 8,
             "heightCells": 5,
             "medium": "water",
             "cluster": true
@@ -1325,8 +1358,8 @@
           "delayMs": 3500,
           "spawnStaggerMs": 3000,
           "spawnArea": {
-            "gridX": 88,
-            "gridY": 26,
+            "gridX": 122,
+            "gridY": 31,
             "widthCells": 4,
             "heightCells": 3
           }
@@ -1345,8 +1378,8 @@
           "count": 2,
           "spawnStaggerMs": 2000,
           "spawnArea": {
-            "gridX": 98,
-            "gridY": 24,
+            "gridX": 135,
+            "gridY": 31,
             "widthCells": 6,
             "heightCells": 3
           }
@@ -1356,8 +1389,8 @@
           "count": 3,
           "spawnStaggerMs": 1500,
           "spawnArea": {
-            "gridX": 98,
-            "gridY": 2,
+            "gridX": 135,
+            "gridY": 3,
             "widthCells": 6,
             "heightCells": 4
           }
@@ -1368,10 +1401,10 @@
           "delayMs": 3500,
           "spawnStaggerMs": 250,
           "spawnArea": {
-            "gridX": 124,
-            "gridY": 20,
-            "widthCells": 5,
-            "heightCells": 4
+            "gridX": 147,
+            "gridY": 40,
+            "widthCells": 6,
+            "heightCells": 3
           }
         }
       ]
@@ -1389,8 +1422,8 @@
           "delayMs": 3000,
           "spawnStaggerMs": 1500,
           "spawnArea": {
-            "gridX": 168,
-            "gridY": 28,
+            "gridX": 211,
+            "gridY": 40,
             "widthCells": 6,
             "heightCells": 5
           }
@@ -1401,8 +1434,8 @@
           "delayMs": 4000,
           "spawnStaggerMs": 300,
           "spawnArea": {
-            "gridX": 148,
-            "gridY": 24,
+            "gridX": 235,
+            "gridY": 32,
             "widthCells": 6,
             "heightCells": 4
           }
@@ -1413,8 +1446,8 @@
           "delayMs": 10000,
           "spawnStaggerMs": 1100,
           "spawnArea": {
-            "gridX": 182,
-            "gridY": 3,
+            "gridX": 242,
+            "gridY": 4,
             "widthCells": 5,
             "heightCells": 5
           }
@@ -1434,8 +1467,8 @@
           "delayMs": 2000,
           "spawnStaggerMs": 2500,
           "spawnArea": {
-            "gridX": 146,
-            "gridY": 46,
+            "gridX": 200,
+            "gridY": 50,
             "widthCells": 5,
             "heightCells": 5
           }
@@ -1446,8 +1479,8 @@
           "delayMs": 3000,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 150,
-            "gridY": 38,
+            "gridX": 206,
+            "gridY": 36,
             "widthCells": 4,
             "heightCells": 4
           }
@@ -1458,8 +1491,8 @@
           "delayMs": 6000,
           "spawnStaggerMs": 900,
           "spawnArea": {
-            "gridX": 168,
-            "gridY": 51,
+            "gridX": 251,
+            "gridY": 71,
             "widthCells": 6,
             "heightCells": 3
           }
@@ -1478,8 +1511,8 @@
           "count": 4,
           "spawnStaggerMs": 900,
           "spawnArea": {
-            "gridX": 118,
-            "gridY": 92,
+            "gridX": 170,
+            "gridY": 118,
             "widthCells": 5,
             "heightCells": 5
           }
@@ -1490,8 +1523,8 @@
           "delayMs": 500,
           "spawnStaggerMs": 900,
           "spawnArea": {
-            "gridX": 162,
-            "gridY": 100,
+            "gridX": 224,
+            "gridY": 132,
             "widthCells": 5,
             "heightCells": 5
           }
@@ -1502,8 +1535,8 @@
           "delayMs": 2500,
           "spawnStaggerMs": 250,
           "spawnArea": {
-            "gridX": 142,
-            "gridY": 72,
+            "gridX": 207,
+            "gridY": 93,
             "widthCells": 6,
             "heightCells": 4
           }
@@ -1523,8 +1556,8 @@
           "count": 3,
           "spawnStaggerMs": 1200,
           "spawnArea": {
-            "gridX": 124,
-            "gridY": 80,
+            "gridX": 174,
+            "gridY": 102,
             "widthCells": 5,
             "heightCells": 4
           }
@@ -1535,9 +1568,9 @@
           "delayMs": 1500,
           "spawnStaggerMs": 500,
           "spawnArea": {
-            "gridX": 128,
-            "gridY": 99,
-            "widthCells": 8,
+            "gridX": 164,
+            "gridY": 137,
+            "widthCells": 9,
             "heightCells": 4,
             "medium": "water",
             "cluster": true
@@ -1549,8 +1582,8 @@
           "delayMs": 3000,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 164,
-            "gridY": 76,
+            "gridX": 224,
+            "gridY": 102,
             "widthCells": 4,
             "heightCells": 4
           }
@@ -1570,8 +1603,8 @@
           "count": 3,
           "spawnStaggerMs": 700,
           "spawnArea": {
-            "gridX": 118,
-            "gridY": 86,
+            "gridX": 170,
+            "gridY": 126,
             "widthCells": 5,
             "heightCells": 5
           }
@@ -1582,8 +1615,8 @@
           "delayMs": 300,
           "spawnStaggerMs": 700,
           "spawnArea": {
-            "gridX": 162,
-            "gridY": 96,
+            "gridX": 226,
+            "gridY": 116,
             "widthCells": 5,
             "heightCells": 5
           }
@@ -1594,10 +1627,10 @@
           "delayMs": 600,
           "spawnStaggerMs": 700,
           "spawnArea": {
-            "gridX": 146,
-            "gridY": 104,
+            "gridX": 186,
+            "gridY": 145,
             "widthCells": 5,
-            "heightCells": 4
+            "heightCells": 3
           }
         },
         {
@@ -1606,8 +1639,8 @@
           "delayMs": 1500,
           "spawnStaggerMs": 1500,
           "spawnArea": {
-            "gridX": 150,
-            "gridY": 72,
+            "gridX": 212,
+            "gridY": 94,
             "widthCells": 5,
             "heightCells": 4
           }
@@ -1618,8 +1651,8 @@
           "delayMs": 2500,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 166,
-            "gridY": 80,
+            "gridX": 224,
+            "gridY": 140,
             "widthCells": 5,
             "heightCells": 4
           }
@@ -1629,16 +1662,16 @@
   ],
   "missionProgress": {
     "startArea": {
-      "gridX": 40,
-      "gridY": 92,
+      "gridX": 52,
+      "gridY": 126,
       "radiusCells": 4
     },
     "checkpoints": [
       {
         "id": "cp1-first-bite",
-        "gridX": 47,
-        "gridY": 80,
-        "radiusCells": 3,
+        "gridX": 68,
+        "gridY": 100,
+        "radiusCells": 4,
         "setRespawn": false,
         "completeOn": {
           "type": "after-encounter",
@@ -1647,9 +1680,9 @@
       },
       {
         "id": "cp2-brood-ford",
-        "gridX": 30,
-        "gridY": 68,
-        "radiusCells": 3,
+        "gridX": 40,
+        "gridY": 92,
+        "radiusCells": 4,
         "setRespawn": true,
         "completeOn": {
           "type": "after-encounter",
@@ -1658,9 +1691,9 @@
       },
       {
         "id": "cp3-cliff-pincer",
-        "gridX": 24,
-        "gridY": 36,
-        "radiusCells": 3,
+        "gridX": 34,
+        "gridY": 52,
+        "radiusCells": 4,
         "setRespawn": false,
         "completeOn": {
           "type": "after-encounter",
@@ -1669,9 +1702,9 @@
       },
       {
         "id": "cp4-web-grove",
-        "gridX": 28,
-        "gridY": 17,
-        "radiusCells": 3,
+        "gridX": 40,
+        "gridY": 18,
+        "radiusCells": 4,
         "setRespawn": true,
         "completeOn": {
           "type": "after-encounter",
@@ -1680,9 +1713,9 @@
       },
       {
         "id": "cp5-marsh-shore",
-        "gridX": 72,
-        "gridY": 20,
-        "radiusCells": 3,
+        "gridX": 98,
+        "gridY": 16,
+        "radiusCells": 4,
         "setRespawn": false,
         "completeOn": {
           "type": "after-encounter",
@@ -1691,9 +1724,9 @@
       },
       {
         "id": "cp6-lake-fork",
-        "gridX": 120,
-        "gridY": 14,
-        "radiusCells": 3,
+        "gridX": 166,
+        "gridY": 20,
+        "radiusCells": 4,
         "setRespawn": true,
         "completeOn": {
           "type": "after-encounter",
@@ -1702,9 +1735,9 @@
       },
       {
         "id": "cp7-bomber-ridge",
-        "gridX": 156,
-        "gridY": 10,
-        "radiusCells": 3,
+        "gridX": 214,
+        "gridY": 12,
+        "radiusCells": 4,
         "setRespawn": false,
         "completeOn": {
           "type": "after-encounter",
@@ -1713,9 +1746,9 @@
       },
       {
         "id": "cp8-burn-clearing",
-        "gridX": 166,
-        "gridY": 44,
-        "radiusCells": 3,
+        "gridX": 230,
+        "gridY": 56,
+        "radiusCells": 4,
         "setRespawn": true,
         "completeOn": {
           "type": "after-encounter",
@@ -1724,9 +1757,9 @@
       },
       {
         "id": "cp9-brood-pit",
-        "gridX": 146,
-        "gridY": 90,
-        "radiusCells": 3,
+        "gridX": 200,
+        "gridY": 122,
+        "radiusCells": 4,
         "setRespawn": false,
         "completeOn": {
           "type": "after-encounter",
@@ -1735,8 +1768,8 @@
       },
       {
         "id": "final-extraction",
-        "gridX": 186,
-        "gridY": 96,
+        "gridX": 254,
+        "gridY": 132,
         "radiusCells": 1.5,
         "setRespawn": false
       }
@@ -1746,152 +1779,204 @@
         "id": "gate-west-ford",
         "cells": [
           {
-            "gridX": 29,
-            "gridY": 55
+            "gridX": 41,
+            "gridY": 75
           },
           {
-            "gridX": 30,
-            "gridY": 55
+            "gridX": 39,
+            "gridY": 76
           },
           {
-            "gridX": 31,
-            "gridY": 55
+            "gridX": 40,
+            "gridY": 76
           },
           {
-            "gridX": 27,
-            "gridY": 56
+            "gridX": 41,
+            "gridY": 76
           },
           {
-            "gridX": 28,
-            "gridY": 56
+            "gridX": 35,
+            "gridY": 77
           },
           {
-            "gridX": 29,
-            "gridY": 56
+            "gridX": 36,
+            "gridY": 77
           },
           {
-            "gridX": 30,
-            "gridY": 56
+            "gridX": 37,
+            "gridY": 77
           },
           {
-            "gridX": 31,
-            "gridY": 56
+            "gridX": 38,
+            "gridY": 77
           },
           {
-            "gridX": 25,
-            "gridY": 57
+            "gridX": 39,
+            "gridY": 77
           },
           {
-            "gridX": 26,
-            "gridY": 57
+            "gridX": 40,
+            "gridY": 77
           },
           {
-            "gridX": 27,
-            "gridY": 57
+            "gridX": 41,
+            "gridY": 77
           },
           {
-            "gridX": 28,
-            "gridY": 57
+            "gridX": 34,
+            "gridY": 78
           },
           {
-            "gridX": 29,
-            "gridY": 57
+            "gridX": 35,
+            "gridY": 78
           },
           {
-            "gridX": 30,
-            "gridY": 57
+            "gridX": 36,
+            "gridY": 78
           },
           {
-            "gridX": 31,
-            "gridY": 57
+            "gridX": 37,
+            "gridY": 78
           },
           {
-            "gridX": 25,
-            "gridY": 58
+            "gridX": 38,
+            "gridY": 78
           },
           {
-            "gridX": 26,
-            "gridY": 58
+            "gridX": 39,
+            "gridY": 78
           },
           {
-            "gridX": 27,
-            "gridY": 58
+            "gridX": 40,
+            "gridY": 78
           },
           {
-            "gridX": 28,
-            "gridY": 58
+            "gridX": 41,
+            "gridY": 78
           },
           {
-            "gridX": 29,
-            "gridY": 58
+            "gridX": 34,
+            "gridY": 79
           },
           {
-            "gridX": 30,
-            "gridY": 58
+            "gridX": 35,
+            "gridY": 79
           },
           {
-            "gridX": 31,
-            "gridY": 58
+            "gridX": 36,
+            "gridY": 79
           },
           {
-            "gridX": 25,
-            "gridY": 59
+            "gridX": 37,
+            "gridY": 79
           },
           {
-            "gridX": 26,
-            "gridY": 59
+            "gridX": 38,
+            "gridY": 79
           },
           {
-            "gridX": 27,
-            "gridY": 59
+            "gridX": 39,
+            "gridY": 79
           },
           {
-            "gridX": 28,
-            "gridY": 59
+            "gridX": 40,
+            "gridY": 79
           },
           {
-            "gridX": 29,
-            "gridY": 59
+            "gridX": 41,
+            "gridY": 79
           },
           {
-            "gridX": 30,
-            "gridY": 59
+            "gridX": 34,
+            "gridY": 80
           },
           {
-            "gridX": 31,
-            "gridY": 59
+            "gridX": 35,
+            "gridY": 80
           },
           {
-            "gridX": 25,
-            "gridY": 60
+            "gridX": 36,
+            "gridY": 80
           },
           {
-            "gridX": 26,
-            "gridY": 60
+            "gridX": 37,
+            "gridY": 80
           },
           {
-            "gridX": 27,
-            "gridY": 60
+            "gridX": 38,
+            "gridY": 80
           },
           {
-            "gridX": 28,
-            "gridY": 60
+            "gridX": 39,
+            "gridY": 80
           },
           {
-            "gridX": 29,
-            "gridY": 60
+            "gridX": 40,
+            "gridY": 80
           },
           {
-            "gridX": 25,
-            "gridY": 61
+            "gridX": 41,
+            "gridY": 80
           },
           {
-            "gridX": 26,
-            "gridY": 61
+            "gridX": 34,
+            "gridY": 81
           },
           {
-            "gridX": 27,
-            "gridY": 61
+            "gridX": 35,
+            "gridY": 81
+          },
+          {
+            "gridX": 36,
+            "gridY": 81
+          },
+          {
+            "gridX": 37,
+            "gridY": 81
+          },
+          {
+            "gridX": 38,
+            "gridY": 81
+          },
+          {
+            "gridX": 39,
+            "gridY": 81
+          },
+          {
+            "gridX": 40,
+            "gridY": 81
+          },
+          {
+            "gridX": 41,
+            "gridY": 81
+          },
+          {
+            "gridX": 34,
+            "gridY": 82
+          },
+          {
+            "gridX": 35,
+            "gridY": 82
+          },
+          {
+            "gridX": 36,
+            "gridY": 82
+          },
+          {
+            "gridX": 37,
+            "gridY": 82
+          },
+          {
+            "gridX": 38,
+            "gridY": 82
+          },
+          {
+            "gridX": 34,
+            "gridY": 83
+          },
+          {
+            "gridX": 35,
+            "gridY": 83
           }
         ],
         "openOn": {
@@ -1903,132 +1988,196 @@
         "id": "gate-northwest-ford",
         "cells": [
           {
-            "gridX": 52,
-            "gridY": 9
-          },
-          {
-            "gridX": 53,
-            "gridY": 9
-          },
-          {
-            "gridX": 54,
-            "gridY": 9
-          },
-          {
-            "gridX": 55,
-            "gridY": 9
-          },
-          {
-            "gridX": 56,
-            "gridY": 9
-          },
-          {
-            "gridX": 53,
-            "gridY": 10
-          },
-          {
-            "gridX": 54,
-            "gridY": 10
-          },
-          {
-            "gridX": 55,
-            "gridY": 10
-          },
-          {
-            "gridX": 56,
-            "gridY": 10
-          },
-          {
-            "gridX": 53,
-            "gridY": 11
-          },
-          {
-            "gridX": 54,
-            "gridY": 11
-          },
-          {
-            "gridX": 55,
-            "gridY": 11
-          },
-          {
-            "gridX": 56,
-            "gridY": 11
-          },
-          {
-            "gridX": 53,
-            "gridY": 12
-          },
-          {
-            "gridX": 54,
-            "gridY": 12
-          },
-          {
-            "gridX": 55,
-            "gridY": 12
-          },
-          {
-            "gridX": 56,
-            "gridY": 12
-          },
-          {
-            "gridX": 53,
+            "gridX": 72,
             "gridY": 13
           },
           {
-            "gridX": 54,
+            "gridX": 73,
             "gridY": 13
           },
           {
-            "gridX": 55,
+            "gridX": 74,
             "gridY": 13
           },
           {
-            "gridX": 56,
+            "gridX": 75,
             "gridY": 13
           },
           {
-            "gridX": 57,
+            "gridX": 76,
             "gridY": 13
           },
           {
-            "gridX": 53,
+            "gridX": 77,
+            "gridY": 13
+          },
+          {
+            "gridX": 78,
+            "gridY": 13
+          },
+          {
+            "gridX": 73,
             "gridY": 14
           },
           {
-            "gridX": 54,
+            "gridX": 74,
             "gridY": 14
           },
           {
-            "gridX": 55,
+            "gridX": 75,
             "gridY": 14
           },
           {
-            "gridX": 56,
+            "gridX": 76,
             "gridY": 14
           },
           {
-            "gridX": 57,
+            "gridX": 77,
             "gridY": 14
           },
           {
-            "gridX": 53,
+            "gridX": 78,
+            "gridY": 14
+          },
+          {
+            "gridX": 73,
             "gridY": 15
           },
           {
-            "gridX": 54,
+            "gridX": 74,
             "gridY": 15
           },
           {
-            "gridX": 55,
+            "gridX": 75,
             "gridY": 15
           },
           {
-            "gridX": 56,
+            "gridX": 76,
             "gridY": 15
           },
           {
-            "gridX": 57,
+            "gridX": 77,
             "gridY": 15
+          },
+          {
+            "gridX": 78,
+            "gridY": 15
+          },
+          {
+            "gridX": 73,
+            "gridY": 16
+          },
+          {
+            "gridX": 74,
+            "gridY": 16
+          },
+          {
+            "gridX": 75,
+            "gridY": 16
+          },
+          {
+            "gridX": 76,
+            "gridY": 16
+          },
+          {
+            "gridX": 77,
+            "gridY": 16
+          },
+          {
+            "gridX": 78,
+            "gridY": 16
+          },
+          {
+            "gridX": 74,
+            "gridY": 17
+          },
+          {
+            "gridX": 75,
+            "gridY": 17
+          },
+          {
+            "gridX": 76,
+            "gridY": 17
+          },
+          {
+            "gridX": 77,
+            "gridY": 17
+          },
+          {
+            "gridX": 78,
+            "gridY": 17
+          },
+          {
+            "gridX": 74,
+            "gridY": 18
+          },
+          {
+            "gridX": 75,
+            "gridY": 18
+          },
+          {
+            "gridX": 76,
+            "gridY": 18
+          },
+          {
+            "gridX": 77,
+            "gridY": 18
+          },
+          {
+            "gridX": 78,
+            "gridY": 18
+          },
+          {
+            "gridX": 79,
+            "gridY": 18
+          },
+          {
+            "gridX": 74,
+            "gridY": 19
+          },
+          {
+            "gridX": 75,
+            "gridY": 19
+          },
+          {
+            "gridX": 76,
+            "gridY": 19
+          },
+          {
+            "gridX": 77,
+            "gridY": 19
+          },
+          {
+            "gridX": 78,
+            "gridY": 19
+          },
+          {
+            "gridX": 79,
+            "gridY": 19
+          },
+          {
+            "gridX": 74,
+            "gridY": 20
+          },
+          {
+            "gridX": 75,
+            "gridY": 20
+          },
+          {
+            "gridX": 76,
+            "gridY": 20
+          },
+          {
+            "gridX": 77,
+            "gridY": 20
+          },
+          {
+            "gridX": 78,
+            "gridY": 20
+          },
+          {
+            "gridX": 79,
+            "gridY": 20
           }
         ],
         "openOn": {
@@ -2040,136 +2189,192 @@
         "id": "gate-northeast-ford",
         "cells": [
           {
-            "gridX": 132,
-            "gridY": 9
-          },
-          {
-            "gridX": 133,
-            "gridY": 9
-          },
-          {
-            "gridX": 134,
-            "gridY": 9
-          },
-          {
-            "gridX": 135,
-            "gridY": 9
-          },
-          {
-            "gridX": 136,
-            "gridY": 9
-          },
-          {
-            "gridX": 132,
-            "gridY": 10
-          },
-          {
-            "gridX": 133,
-            "gridY": 10
-          },
-          {
-            "gridX": 134,
-            "gridY": 10
-          },
-          {
-            "gridX": 135,
-            "gridY": 10
-          },
-          {
-            "gridX": 136,
-            "gridY": 10
-          },
-          {
-            "gridX": 132,
-            "gridY": 11
-          },
-          {
-            "gridX": 133,
-            "gridY": 11
-          },
-          {
-            "gridX": 134,
-            "gridY": 11
-          },
-          {
-            "gridX": 135,
-            "gridY": 11
-          },
-          {
-            "gridX": 136,
-            "gridY": 11
-          },
-          {
-            "gridX": 132,
+            "gridX": 183,
             "gridY": 12
           },
           {
-            "gridX": 133,
+            "gridX": 184,
             "gridY": 12
           },
           {
-            "gridX": 134,
+            "gridX": 185,
             "gridY": 12
           },
           {
-            "gridX": 135,
+            "gridX": 186,
             "gridY": 12
           },
           {
-            "gridX": 132,
+            "gridX": 187,
+            "gridY": 12
+          },
+          {
+            "gridX": 188,
+            "gridY": 12
+          },
+          {
+            "gridX": 183,
             "gridY": 13
           },
           {
-            "gridX": 133,
+            "gridX": 184,
             "gridY": 13
           },
           {
-            "gridX": 134,
+            "gridX": 185,
             "gridY": 13
           },
           {
-            "gridX": 135,
+            "gridX": 186,
             "gridY": 13
           },
           {
-            "gridX": 131,
+            "gridX": 187,
+            "gridY": 13
+          },
+          {
+            "gridX": 188,
+            "gridY": 13
+          },
+          {
+            "gridX": 183,
             "gridY": 14
           },
           {
-            "gridX": 132,
+            "gridX": 184,
             "gridY": 14
           },
           {
-            "gridX": 133,
+            "gridX": 185,
             "gridY": 14
           },
           {
-            "gridX": 134,
+            "gridX": 186,
             "gridY": 14
           },
           {
-            "gridX": 135,
+            "gridX": 187,
             "gridY": 14
           },
           {
-            "gridX": 131,
+            "gridX": 188,
+            "gridY": 14
+          },
+          {
+            "gridX": 183,
             "gridY": 15
           },
           {
-            "gridX": 132,
+            "gridX": 184,
             "gridY": 15
           },
           {
-            "gridX": 133,
+            "gridX": 185,
             "gridY": 15
           },
           {
-            "gridX": 134,
+            "gridX": 186,
             "gridY": 15
           },
           {
-            "gridX": 135,
+            "gridX": 187,
             "gridY": 15
+          },
+          {
+            "gridX": 183,
+            "gridY": 16
+          },
+          {
+            "gridX": 184,
+            "gridY": 16
+          },
+          {
+            "gridX": 185,
+            "gridY": 16
+          },
+          {
+            "gridX": 186,
+            "gridY": 16
+          },
+          {
+            "gridX": 187,
+            "gridY": 16
+          },
+          {
+            "gridX": 182,
+            "gridY": 17
+          },
+          {
+            "gridX": 183,
+            "gridY": 17
+          },
+          {
+            "gridX": 184,
+            "gridY": 17
+          },
+          {
+            "gridX": 185,
+            "gridY": 17
+          },
+          {
+            "gridX": 186,
+            "gridY": 17
+          },
+          {
+            "gridX": 187,
+            "gridY": 17
+          },
+          {
+            "gridX": 182,
+            "gridY": 18
+          },
+          {
+            "gridX": 183,
+            "gridY": 18
+          },
+          {
+            "gridX": 184,
+            "gridY": 18
+          },
+          {
+            "gridX": 185,
+            "gridY": 18
+          },
+          {
+            "gridX": 186,
+            "gridY": 18
+          },
+          {
+            "gridX": 187,
+            "gridY": 18
+          },
+          {
+            "gridX": 181,
+            "gridY": 19
+          },
+          {
+            "gridX": 182,
+            "gridY": 19
+          },
+          {
+            "gridX": 183,
+            "gridY": 19
+          },
+          {
+            "gridX": 184,
+            "gridY": 19
+          },
+          {
+            "gridX": 185,
+            "gridY": 19
+          },
+          {
+            "gridX": 186,
+            "gridY": 19
+          },
+          {
+            "gridX": 187,
+            "gridY": 19
           }
         ],
         "openOn": {
@@ -2181,152 +2386,200 @@
         "id": "gate-east-ford",
         "cells": [
           {
-            "gridX": 162,
-            "gridY": 56
+            "gridX": 218,
+            "gridY": 76
           },
           {
-            "gridX": 157,
-            "gridY": 57
+            "gridX": 219,
+            "gridY": 76
           },
           {
-            "gridX": 158,
-            "gridY": 57
+            "gridX": 220,
+            "gridY": 76
           },
           {
-            "gridX": 159,
-            "gridY": 57
+            "gridX": 221,
+            "gridY": 76
           },
           {
-            "gridX": 160,
-            "gridY": 57
+            "gridX": 222,
+            "gridY": 76
           },
           {
-            "gridX": 161,
-            "gridY": 57
+            "gridX": 215,
+            "gridY": 77
           },
           {
-            "gridX": 162,
-            "gridY": 57
+            "gridX": 216,
+            "gridY": 77
           },
           {
-            "gridX": 156,
-            "gridY": 58
+            "gridX": 217,
+            "gridY": 77
           },
           {
-            "gridX": 157,
-            "gridY": 58
+            "gridX": 218,
+            "gridY": 77
           },
           {
-            "gridX": 158,
-            "gridY": 58
+            "gridX": 219,
+            "gridY": 77
           },
           {
-            "gridX": 159,
-            "gridY": 58
+            "gridX": 220,
+            "gridY": 77
           },
           {
-            "gridX": 160,
-            "gridY": 58
+            "gridX": 221,
+            "gridY": 77
           },
           {
-            "gridX": 161,
-            "gridY": 58
+            "gridX": 222,
+            "gridY": 77
           },
           {
-            "gridX": 162,
-            "gridY": 58
+            "gridX": 215,
+            "gridY": 78
           },
           {
-            "gridX": 156,
-            "gridY": 59
+            "gridX": 216,
+            "gridY": 78
           },
           {
-            "gridX": 157,
-            "gridY": 59
+            "gridX": 217,
+            "gridY": 78
           },
           {
-            "gridX": 158,
-            "gridY": 59
+            "gridX": 218,
+            "gridY": 78
           },
           {
-            "gridX": 159,
-            "gridY": 59
+            "gridX": 219,
+            "gridY": 78
           },
           {
-            "gridX": 160,
-            "gridY": 59
+            "gridX": 220,
+            "gridY": 78
           },
           {
-            "gridX": 161,
-            "gridY": 59
+            "gridX": 221,
+            "gridY": 78
           },
           {
-            "gridX": 162,
-            "gridY": 59
+            "gridX": 222,
+            "gridY": 78
           },
           {
-            "gridX": 156,
-            "gridY": 60
+            "gridX": 215,
+            "gridY": 79
           },
           {
-            "gridX": 157,
-            "gridY": 60
+            "gridX": 216,
+            "gridY": 79
           },
           {
-            "gridX": 158,
-            "gridY": 60
+            "gridX": 217,
+            "gridY": 79
           },
           {
-            "gridX": 159,
-            "gridY": 60
+            "gridX": 218,
+            "gridY": 79
           },
           {
-            "gridX": 160,
-            "gridY": 60
+            "gridX": 219,
+            "gridY": 79
           },
           {
-            "gridX": 161,
-            "gridY": 60
+            "gridX": 220,
+            "gridY": 79
           },
           {
-            "gridX": 162,
-            "gridY": 60
+            "gridX": 221,
+            "gridY": 79
           },
           {
-            "gridX": 156,
-            "gridY": 61
+            "gridX": 222,
+            "gridY": 79
           },
           {
-            "gridX": 157,
-            "gridY": 61
+            "gridX": 215,
+            "gridY": 80
           },
           {
-            "gridX": 158,
-            "gridY": 61
+            "gridX": 216,
+            "gridY": 80
           },
           {
-            "gridX": 159,
-            "gridY": 61
+            "gridX": 217,
+            "gridY": 80
           },
           {
-            "gridX": 160,
-            "gridY": 61
+            "gridX": 218,
+            "gridY": 80
           },
           {
-            "gridX": 161,
-            "gridY": 61
+            "gridX": 219,
+            "gridY": 80
           },
           {
-            "gridX": 162,
-            "gridY": 61
+            "gridX": 220,
+            "gridY": 80
           },
           {
-            "gridX": 156,
-            "gridY": 62
+            "gridX": 221,
+            "gridY": 80
           },
           {
-            "gridX": 157,
-            "gridY": 62
+            "gridX": 222,
+            "gridY": 80
+          },
+          {
+            "gridX": 215,
+            "gridY": 81
+          },
+          {
+            "gridX": 216,
+            "gridY": 81
+          },
+          {
+            "gridX": 217,
+            "gridY": 81
+          },
+          {
+            "gridX": 218,
+            "gridY": 81
+          },
+          {
+            "gridX": 219,
+            "gridY": 81
+          },
+          {
+            "gridX": 220,
+            "gridY": 81
+          },
+          {
+            "gridX": 221,
+            "gridY": 81
+          },
+          {
+            "gridX": 222,
+            "gridY": 81
+          },
+          {
+            "gridX": 215,
+            "gridY": 82
+          },
+          {
+            "gridX": 216,
+            "gridY": 82
+          },
+          {
+            "gridX": 217,
+            "gridY": 82
+          },
+          {
+            "gridX": 218,
+            "gridY": 82
           }
         ],
         "openOn": {
@@ -2338,132 +2591,180 @@
         "id": "gate-extraction-ford",
         "cells": [
           {
-            "gridX": 174,
-            "gridY": 83
+            "gridX": 236,
+            "gridY": 113
           },
           {
-            "gridX": 175,
-            "gridY": 83
+            "gridX": 237,
+            "gridY": 113
           },
           {
-            "gridX": 176,
-            "gridY": 83
+            "gridX": 238,
+            "gridY": 113
           },
           {
-            "gridX": 177,
-            "gridY": 83
+            "gridX": 239,
+            "gridY": 113
           },
           {
-            "gridX": 173,
-            "gridY": 84
+            "gridX": 240,
+            "gridY": 113
           },
           {
-            "gridX": 174,
-            "gridY": 84
+            "gridX": 241,
+            "gridY": 113
           },
           {
-            "gridX": 175,
-            "gridY": 84
+            "gridX": 236,
+            "gridY": 114
           },
           {
-            "gridX": 176,
-            "gridY": 84
+            "gridX": 237,
+            "gridY": 114
           },
           {
-            "gridX": 177,
-            "gridY": 84
+            "gridX": 238,
+            "gridY": 114
           },
           {
-            "gridX": 173,
-            "gridY": 85
+            "gridX": 239,
+            "gridY": 114
           },
           {
-            "gridX": 174,
-            "gridY": 85
+            "gridX": 240,
+            "gridY": 114
           },
           {
-            "gridX": 175,
-            "gridY": 85
+            "gridX": 241,
+            "gridY": 114
           },
           {
-            "gridX": 176,
-            "gridY": 85
+            "gridX": 237,
+            "gridY": 115
           },
           {
-            "gridX": 177,
-            "gridY": 85
+            "gridX": 238,
+            "gridY": 115
           },
           {
-            "gridX": 173,
-            "gridY": 86
+            "gridX": 239,
+            "gridY": 115
           },
           {
-            "gridX": 174,
-            "gridY": 86
+            "gridX": 240,
+            "gridY": 115
           },
           {
-            "gridX": 175,
-            "gridY": 86
+            "gridX": 241,
+            "gridY": 115
           },
           {
-            "gridX": 176,
-            "gridY": 86
+            "gridX": 237,
+            "gridY": 116
           },
           {
-            "gridX": 177,
-            "gridY": 86
+            "gridX": 238,
+            "gridY": 116
           },
           {
-            "gridX": 173,
-            "gridY": 87
+            "gridX": 239,
+            "gridY": 116
           },
           {
-            "gridX": 174,
-            "gridY": 87
+            "gridX": 240,
+            "gridY": 116
           },
           {
-            "gridX": 175,
-            "gridY": 87
+            "gridX": 241,
+            "gridY": 116
           },
           {
-            "gridX": 176,
-            "gridY": 87
+            "gridX": 242,
+            "gridY": 116
           },
           {
-            "gridX": 173,
-            "gridY": 88
+            "gridX": 237,
+            "gridY": 117
           },
           {
-            "gridX": 174,
-            "gridY": 88
+            "gridX": 238,
+            "gridY": 117
           },
           {
-            "gridX": 175,
-            "gridY": 88
+            "gridX": 239,
+            "gridY": 117
           },
           {
-            "gridX": 176,
-            "gridY": 88
+            "gridX": 240,
+            "gridY": 117
           },
           {
-            "gridX": 173,
-            "gridY": 89
+            "gridX": 241,
+            "gridY": 117
           },
           {
-            "gridX": 174,
-            "gridY": 89
+            "gridX": 242,
+            "gridY": 117
           },
           {
-            "gridX": 175,
-            "gridY": 89
+            "gridX": 238,
+            "gridY": 118
           },
           {
-            "gridX": 176,
-            "gridY": 89
+            "gridX": 239,
+            "gridY": 118
           },
           {
-            "gridX": 177,
-            "gridY": 89
+            "gridX": 240,
+            "gridY": 118
+          },
+          {
+            "gridX": 241,
+            "gridY": 118
+          },
+          {
+            "gridX": 242,
+            "gridY": 118
+          },
+          {
+            "gridX": 238,
+            "gridY": 119
+          },
+          {
+            "gridX": 239,
+            "gridY": 119
+          },
+          {
+            "gridX": 240,
+            "gridY": 119
+          },
+          {
+            "gridX": 241,
+            "gridY": 119
+          },
+          {
+            "gridX": 242,
+            "gridY": 119
+          },
+          {
+            "gridX": 238,
+            "gridY": 120
+          },
+          {
+            "gridX": 239,
+            "gridY": 120
+          },
+          {
+            "gridX": 240,
+            "gridY": 120
+          },
+          {
+            "gridX": 241,
+            "gridY": 120
+          },
+          {
+            "gridX": 242,
+            "gridY": 120
           }
         ],
         "openOn": {
@@ -2475,964 +2776,1396 @@
   },
   "waterAreas": [
     {
-      "gridX": 51,
+      "gridX": 185,
       "gridY": 0,
-      "widthCells": 4,
-      "heightCells": 2
-    },
-    {
-      "gridX": 134,
-      "gridY": 0,
-      "widthCells": 4,
-      "heightCells": 3
-    },
-    {
-      "gridX": 51,
-      "gridY": 2,
-      "widthCells": 5,
+      "widthCells": 6,
       "heightCells": 4
     },
     {
-      "gridX": 52,
-      "gridY": 6,
-      "widthCells": 4,
-      "heightCells": 1
-    },
-    {
-      "gridX": 133,
-      "gridY": 3,
-      "widthCells": 5,
+      "gridX": 70,
+      "gridY": 0,
+      "widthCells": 6,
       "heightCells": 5
     },
     {
-      "gridX": 52,
-      "gridY": 7,
-      "widthCells": 5,
-      "heightCells": 2
-    },
-    {
-      "gridX": 132,
-      "gridY": 8,
+      "gridX": 185,
+      "gridY": 4,
       "widthCells": 5,
       "heightCells": 1
     },
     {
-      "gridX": 96,
-      "gridY": 9,
+      "gridX": 184,
+      "gridY": 5,
       "widthCells": 6,
-      "heightCells": 1
-    },
-    {
-      "gridX": 94,
-      "gridY": 10,
-      "widthCells": 13,
-      "heightCells": 1
-    },
-    {
-      "gridX": 92,
-      "gridY": 11,
-      "widthCells": 17,
-      "heightCells": 1
-    },
-    {
-      "gridX": 91,
-      "gridY": 12,
-      "widthCells": 19,
       "heightCells": 4
     },
     {
-      "gridX": 92,
-      "gridY": 16,
-      "widthCells": 16,
+      "gridX": 71,
+      "gridY": 5,
+      "widthCells": 6,
+      "heightCells": 5
+    },
+    {
+      "gridX": 183,
+      "gridY": 9,
+      "widthCells": 7,
       "heightCells": 1
     },
     {
-      "gridX": 131,
-      "gridY": 16,
-      "widthCells": 5,
+      "gridX": 71,
+      "gridY": 10,
+      "widthCells": 7,
       "heightCells": 1
     },
     {
-      "gridX": 54,
-      "gridY": 16,
-      "widthCells": 5,
-      "heightCells": 2
-    },
-    {
-      "gridX": 93,
-      "gridY": 17,
-      "widthCells": 14,
-      "heightCells": 1
-    },
-    {
-      "gridX": 130,
-      "gridY": 17,
+      "gridX": 72,
+      "gridY": 11,
       "widthCells": 6,
       "heightCells": 1
     },
     {
-      "gridX": 55,
-      "gridY": 18,
-      "widthCells": 5,
-      "heightCells": 3
-    },
-    {
-      "gridX": 130,
-      "gridY": 18,
-      "widthCells": 5,
-      "heightCells": 3
-    },
-    {
-      "gridX": 56,
-      "gridY": 21,
-      "widthCells": 4,
-      "heightCells": 1
-    },
-    {
-      "gridX": 130,
-      "gridY": 21,
-      "widthCells": 4,
-      "heightCells": 2
-    },
-    {
-      "gridX": 56,
-      "gridY": 22,
-      "widthCells": 5,
-      "heightCells": 2
-    },
-    {
-      "gridX": 129,
-      "gridY": 23,
-      "widthCells": 5,
-      "heightCells": 1
-    },
-    {
-      "gridX": 57,
-      "gridY": 24,
-      "widthCells": 4,
-      "heightCells": 1
-    },
-    {
-      "gridX": 129,
-      "gridY": 24,
-      "widthCells": 4,
-      "heightCells": 1
-    },
-    {
-      "gridX": 57,
-      "gridY": 25,
-      "widthCells": 5,
+      "gridX": 183,
+      "gridY": 10,
+      "widthCells": 6,
       "heightCells": 2
     },
     {
       "gridX": 72,
-      "gridY": 26,
-      "widthCells": 4,
+      "gridY": 12,
+      "widthCells": 7,
       "heightCells": 1
     },
     {
-      "gridX": 128,
-      "gridY": 25,
-      "widthCells": 5,
-      "heightCells": 2
-    },
-    {
-      "gridX": 57,
-      "gridY": 27,
-      "widthCells": 6,
-      "heightCells": 1
-    },
-    {
-      "gridX": 70,
-      "gridY": 27,
-      "widthCells": 9,
-      "heightCells": 1
-    },
-    {
-      "gridX": 127,
-      "gridY": 27,
-      "widthCells": 6,
-      "heightCells": 1
-    },
-    {
-      "gridX": 70,
-      "gridY": 28,
-      "widthCells": 11,
-      "heightCells": 1
-    },
-    {
-      "gridX": 95,
-      "gridY": 28,
+      "gridX": 135,
+      "gridY": 13,
       "widthCells": 8,
       "heightCells": 1
     },
     {
+      "gridX": 130,
+      "gridY": 14,
+      "widthCells": 18,
+      "heightCells": 1
+    },
+    {
       "gridX": 127,
-      "gridY": 28,
-      "widthCells": 5,
-      "heightCells": 1
-    },
-    {
-      "gridX": 58,
-      "gridY": 28,
-      "widthCells": 5,
-      "heightCells": 2
-    },
-    {
-      "gridX": 91,
-      "gridY": 29,
-      "widthCells": 15,
+      "gridY": 15,
+      "widthCells": 23,
       "heightCells": 1
     },
     {
       "gridX": 126,
-      "gridY": 29,
-      "widthCells": 6,
-      "heightCells": 1
-    },
-    {
-      "gridX": 69,
-      "gridY": 29,
-      "widthCells": 13,
-      "heightCells": 2
-    },
-    {
-      "gridX": 88,
-      "gridY": 30,
-      "widthCells": 19,
-      "heightCells": 1
-    },
-    {
-      "gridX": 126,
-      "gridY": 30,
-      "widthCells": 5,
-      "heightCells": 1
-    },
-    {
-      "gridX": 59,
-      "gridY": 30,
-      "widthCells": 5,
-      "heightCells": 2
-    },
-    {
-      "gridX": 68,
-      "gridY": 31,
-      "widthCells": 14,
-      "heightCells": 1
-    },
-    {
-      "gridX": 85,
-      "gridY": 31,
+      "gridY": 16,
       "widthCells": 24,
       "heightCells": 1
     },
     {
-      "gridX": 126,
-      "gridY": 31,
-      "widthCells": 4,
-      "heightCells": 1
-    },
-    {
-      "gridX": 149,
-      "gridY": 31,
-      "widthCells": 1,
-      "heightCells": 1
-    },
-    {
-      "gridX": 68,
-      "gridY": 32,
-      "widthCells": 42,
-      "heightCells": 1
-    },
-    {
       "gridX": 125,
-      "gridY": 32,
-      "widthCells": 5,
-      "heightCells": 1
-    },
-    {
-      "gridX": 147,
-      "gridY": 32,
-      "widthCells": 6,
-      "heightCells": 1
-    },
-    {
-      "gridX": 60,
-      "gridY": 32,
-      "widthCells": 5,
-      "heightCells": 2
-    },
-    {
-      "gridX": 69,
-      "gridY": 33,
-      "widthCells": 42,
-      "heightCells": 1
-    },
-    {
-      "gridX": 61,
-      "gridY": 34,
-      "widthCells": 4,
-      "heightCells": 1
-    },
-    {
-      "gridX": 69,
-      "gridY": 34,
-      "widthCells": 43,
-      "heightCells": 1
-    },
-    {
-      "gridX": 124,
-      "gridY": 33,
-      "widthCells": 5,
-      "heightCells": 2
-    },
-    {
-      "gridX": 146,
-      "gridY": 33,
-      "widthCells": 7,
-      "heightCells": 2
-    },
-    {
-      "gridX": 68,
-      "gridY": 35,
-      "widthCells": 44,
-      "heightCells": 1
-    },
-    {
-      "gridX": 123,
-      "gridY": 35,
-      "widthCells": 6,
-      "heightCells": 1
-    },
-    {
-      "gridX": 147,
-      "gridY": 35,
-      "widthCells": 6,
-      "heightCells": 1
-    },
-    {
-      "gridX": 61,
-      "gridY": 35,
-      "widthCells": 5,
-      "heightCells": 2
-    },
-    {
-      "gridX": 67,
-      "gridY": 36,
-      "widthCells": 46,
-      "heightCells": 1
-    },
-    {
-      "gridX": 123,
-      "gridY": 36,
-      "widthCells": 5,
-      "heightCells": 1
-    },
-    {
-      "gridX": 61,
-      "gridY": 37,
-      "widthCells": 53,
-      "heightCells": 1
-    },
-    {
-      "gridX": 124,
-      "gridY": 37,
-      "widthCells": 4,
-      "heightCells": 1
-    },
-    {
-      "gridX": 62,
-      "gridY": 38,
-      "widthCells": 53,
-      "heightCells": 1
-    },
-    {
-      "gridX": 62,
-      "gridY": 39,
-      "widthCells": 55,
-      "heightCells": 1
-    },
-    {
-      "gridX": 63,
-      "gridY": 40,
-      "widthCells": 57,
-      "heightCells": 1
-    },
-    {
-      "gridX": 63,
-      "gridY": 41,
-      "widthCells": 60,
-      "heightCells": 1
-    },
-    {
-      "gridX": 62,
-      "gridY": 42,
-      "widthCells": 64,
-      "heightCells": 1
-    },
-    {
-      "gridX": 62,
-      "gridY": 43,
-      "widthCells": 66,
-      "heightCells": 1
-    },
-    {
-      "gridX": 61,
-      "gridY": 44,
-      "widthCells": 69,
-      "heightCells": 1
-    },
-    {
-      "gridX": 61,
-      "gridY": 45,
-      "widthCells": 71,
-      "heightCells": 1
-    },
-    {
-      "gridX": 60,
-      "gridY": 46,
-      "widthCells": 73,
-      "heightCells": 1
-    },
-    {
-      "gridX": 60,
-      "gridY": 47,
-      "widthCells": 74,
-      "heightCells": 1
-    },
-    {
-      "gridX": 59,
-      "gridY": 48,
-      "widthCells": 77,
-      "heightCells": 1
-    },
-    {
-      "gridX": 59,
-      "gridY": 49,
-      "widthCells": 78,
-      "heightCells": 1
-    },
-    {
-      "gridX": 58,
-      "gridY": 50,
-      "widthCells": 80,
-      "heightCells": 1
-    },
-    {
-      "gridX": 58,
-      "gridY": 51,
-      "widthCells": 81,
-      "heightCells": 1
-    },
-    {
-      "gridX": 58,
-      "gridY": 52,
-      "widthCells": 82,
-      "heightCells": 1
-    },
-    {
-      "gridX": 59,
-      "gridY": 53,
-      "widthCells": 82,
-      "heightCells": 1
-    },
-    {
-      "gridX": 56,
-      "gridY": 54,
-      "widthCells": 86,
-      "heightCells": 1
-    },
-    {
-      "gridX": 32,
-      "gridY": 55,
-      "widthCells": 8,
-      "heightCells": 1
-    },
-    {
-      "gridX": 51,
-      "gridY": 55,
-      "widthCells": 92,
-      "heightCells": 1
-    },
-    {
-      "gridX": 24,
-      "gridY": 57,
-      "widthCells": 1,
-      "heightCells": 1
-    },
-    {
-      "gridX": 163,
-      "gridY": 57,
-      "widthCells": 4,
-      "heightCells": 1
-    },
-    {
-      "gridX": 189,
-      "gridY": 57,
-      "widthCells": 3,
-      "heightCells": 1
-    },
-    {
-      "gridX": 20,
-      "gridY": 58,
-      "widthCells": 5,
-      "heightCells": 1
-    },
-    {
-      "gridX": 32,
-      "gridY": 56,
-      "widthCells": 111,
+      "gridY": 17,
+      "widthCells": 26,
       "heightCells": 3
     },
     {
-      "gridX": 154,
-      "gridY": 58,
-      "widthCells": 2,
+      "gridX": 125,
+      "gridY": 20,
+      "widthCells": 25,
       "heightCells": 1
     },
     {
-      "gridX": 163,
-      "gridY": 58,
-      "widthCells": 9,
-      "heightCells": 1
-    },
-    {
-      "gridX": 185,
-      "gridY": 58,
+      "gridX": 181,
+      "gridY": 20,
       "widthCells": 7,
       "heightCells": 1
     },
     {
-      "gridX": 34,
-      "gridY": 59,
+      "gridX": 74,
+      "gridY": 21,
+      "widthCells": 7,
+      "heightCells": 1
+    },
+    {
+      "gridX": 126,
+      "gridY": 21,
+      "widthCells": 24,
+      "heightCells": 1
+    },
+    {
+      "gridX": 181,
+      "gridY": 21,
+      "widthCells": 6,
+      "heightCells": 1
+    },
+    {
+      "gridX": 127,
+      "gridY": 22,
       "widthCells": 22,
       "heightCells": 1
     },
     {
-      "gridX": 61,
-      "gridY": 59,
-      "widthCells": 82,
+      "gridX": 75,
+      "gridY": 22,
+      "widthCells": 7,
+      "heightCells": 2
+    },
+    {
+      "gridX": 130,
+      "gridY": 23,
+      "widthCells": 17,
       "heightCells": 1
     },
     {
-      "gridX": 152,
-      "gridY": 59,
-      "widthCells": 4,
-      "heightCells": 1
+      "gridX": 180,
+      "gridY": 22,
+      "widthCells": 7,
+      "heightCells": 2
     },
     {
-      "gridX": 163,
-      "gridY": 59,
-      "widthCells": 13,
-      "heightCells": 1
-    },
-    {
-      "gridX": 177,
-      "gridY": 59,
-      "widthCells": 15,
-      "heightCells": 1
-    },
-    {
-      "gridX": 41,
-      "gridY": 60,
+      "gridX": 133,
+      "gridY": 24,
       "widthCells": 11,
       "heightCells": 1
     },
     {
-      "gridX": 61,
-      "gridY": 60,
-      "widthCells": 95,
+      "gridX": 76,
+      "gridY": 24,
+      "widthCells": 7,
       "heightCells": 2
     },
     {
-      "gridX": 163,
-      "gridY": 60,
-      "widthCells": 29,
+      "gridX": 180,
+      "gridY": 24,
+      "widthCells": 6,
       "heightCells": 2
     },
     {
-      "gridX": 0,
+      "gridX": 77,
+      "gridY": 26,
+      "widthCells": 6,
+      "heightCells": 1
+    },
+    {
+      "gridX": 179,
+      "gridY": 26,
+      "widthCells": 7,
+      "heightCells": 1
+    },
+    {
+      "gridX": 20,
+      "gridY": 27,
+      "widthCells": 4,
+      "heightCells": 1
+    },
+    {
+      "gridX": 77,
+      "gridY": 27,
+      "widthCells": 7,
+      "heightCells": 1
+    },
+    {
+      "gridX": 179,
+      "gridY": 27,
+      "widthCells": 6,
+      "heightCells": 1
+    },
+    {
+      "gridX": 203,
+      "gridY": 27,
+      "widthCells": 4,
+      "heightCells": 1
+    },
+    {
+      "gridX": 19,
+      "gridY": 28,
+      "widthCells": 6,
+      "heightCells": 1
+    },
+    {
+      "gridX": 202,
+      "gridY": 28,
+      "widthCells": 6,
+      "heightCells": 1
+    },
+    {
+      "gridX": 78,
+      "gridY": 28,
+      "widthCells": 6,
+      "heightCells": 2
+    },
+    {
+      "gridX": 178,
+      "gridY": 28,
+      "widthCells": 7,
+      "heightCells": 2
+    },
+    {
+      "gridX": 18,
+      "gridY": 29,
+      "widthCells": 8,
+      "heightCells": 2
+    },
+    {
+      "gridX": 178,
+      "gridY": 30,
+      "widthCells": 6,
+      "heightCells": 1
+    },
+    {
+      "gridX": 18,
+      "gridY": 31,
+      "widthCells": 7,
+      "heightCells": 1
+    },
+    {
+      "gridX": 79,
+      "gridY": 30,
+      "widthCells": 6,
+      "heightCells": 2
+    },
+    {
+      "gridX": 201,
+      "gridY": 29,
+      "widthCells": 8,
+      "heightCells": 3
+    },
+    {
+      "gridX": 19,
+      "gridY": 32,
+      "widthCells": 5,
+      "heightCells": 1
+    },
+    {
+      "gridX": 79,
+      "gridY": 32,
+      "widthCells": 7,
+      "heightCells": 1
+    },
+    {
+      "gridX": 203,
+      "gridY": 32,
+      "widthCells": 4,
+      "heightCells": 1
+    },
+    {
+      "gridX": 80,
+      "gridY": 33,
+      "widthCells": 6,
+      "heightCells": 1
+    },
+    {
+      "gridX": 177,
+      "gridY": 31,
+      "widthCells": 7,
+      "heightCells": 3
+    },
+    {
+      "gridX": 80,
+      "gridY": 34,
+      "widthCells": 7,
+      "heightCells": 2
+    },
+    {
+      "gridX": 176,
+      "gridY": 34,
+      "widthCells": 7,
+      "heightCells": 2
+    },
+    {
+      "gridX": 175,
+      "gridY": 36,
+      "widthCells": 7,
+      "heightCells": 1
+    },
+    {
+      "gridX": 81,
+      "gridY": 36,
+      "widthCells": 7,
+      "heightCells": 2
+    },
+    {
+      "gridX": 100,
+      "gridY": 37,
+      "widthCells": 7,
+      "heightCells": 1
+    },
+    {
+      "gridX": 82,
+      "gridY": 38,
+      "widthCells": 6,
+      "heightCells": 1
+    },
+    {
+      "gridX": 99,
+      "gridY": 38,
+      "widthCells": 11,
+      "heightCells": 1
+    },
+    {
+      "gridX": 174,
+      "gridY": 37,
+      "widthCells": 7,
+      "heightCells": 2
+    },
+    {
+      "gridX": 82,
+      "gridY": 39,
+      "widthCells": 7,
+      "heightCells": 1
+    },
+    {
+      "gridX": 98,
+      "gridY": 39,
+      "widthCells": 14,
+      "heightCells": 1
+    },
+    {
+      "gridX": 132,
+      "gridY": 39,
+      "widthCells": 8,
+      "heightCells": 1
+    },
+    {
+      "gridX": 83,
+      "gridY": 40,
+      "widthCells": 6,
+      "heightCells": 1
+    },
+    {
+      "gridX": 97,
+      "gridY": 40,
+      "widthCells": 16,
+      "heightCells": 1
+    },
+    {
+      "gridX": 128,
+      "gridY": 40,
+      "widthCells": 16,
+      "heightCells": 1
+    },
+    {
+      "gridX": 173,
+      "gridY": 39,
+      "widthCells": 7,
+      "heightCells": 2
+    },
+    {
+      "gridX": 83,
+      "gridY": 41,
+      "widthCells": 7,
+      "heightCells": 1
+    },
+    {
+      "gridX": 124,
+      "gridY": 41,
+      "widthCells": 22,
+      "heightCells": 1
+    },
+    {
+      "gridX": 121,
+      "gridY": 42,
+      "widthCells": 26,
+      "heightCells": 1
+    },
+    {
+      "gridX": 172,
+      "gridY": 41,
+      "widthCells": 7,
+      "heightCells": 2
+    },
+    {
+      "gridX": 84,
+      "gridY": 42,
+      "widthCells": 6,
+      "heightCells": 2
+    },
+    {
+      "gridX": 96,
+      "gridY": 41,
+      "widthCells": 17,
+      "heightCells": 3
+    },
+    {
+      "gridX": 117,
+      "gridY": 43,
+      "widthCells": 32,
+      "heightCells": 1
+    },
+    {
+      "gridX": 171,
+      "gridY": 43,
+      "widthCells": 7,
+      "heightCells": 1
+    },
+    {
+      "gridX": 84,
+      "gridY": 44,
+      "widthCells": 7,
+      "heightCells": 1
+    },
+    {
+      "gridX": 95,
+      "gridY": 44,
+      "widthCells": 55,
+      "heightCells": 1
+    },
+    {
+      "gridX": 171,
+      "gridY": 44,
+      "widthCells": 6,
+      "heightCells": 1
+    },
+    {
+      "gridX": 85,
+      "gridY": 45,
+      "widthCells": 6,
+      "heightCells": 1
+    },
+    {
+      "gridX": 96,
+      "gridY": 45,
+      "widthCells": 55,
+      "heightCells": 1
+    },
+    {
+      "gridX": 170,
+      "gridY": 45,
+      "widthCells": 7,
+      "heightCells": 1
+    },
+    {
+      "gridX": 85,
+      "gridY": 46,
+      "widthCells": 7,
+      "heightCells": 1
+    },
+    {
+      "gridX": 96,
+      "gridY": 46,
+      "widthCells": 56,
+      "heightCells": 1
+    },
+    {
+      "gridX": 170,
+      "gridY": 46,
+      "widthCells": 6,
+      "heightCells": 1
+    },
+    {
+      "gridX": 86,
+      "gridY": 47,
+      "widthCells": 6,
+      "heightCells": 1
+    },
+    {
+      "gridX": 96,
+      "gridY": 47,
+      "widthCells": 57,
+      "heightCells": 1
+    },
+    {
+      "gridX": 169,
+      "gridY": 47,
+      "widthCells": 7,
+      "heightCells": 1
+    },
+    {
+      "gridX": 95,
+      "gridY": 48,
+      "widthCells": 59,
+      "heightCells": 1
+    },
+    {
+      "gridX": 86,
+      "gridY": 48,
+      "widthCells": 7,
+      "heightCells": 2
+    },
+    {
+      "gridX": 94,
+      "gridY": 49,
+      "widthCells": 60,
+      "heightCells": 1
+    },
+    {
+      "gridX": 169,
+      "gridY": 48,
+      "widthCells": 6,
+      "heightCells": 2
+    },
+    {
+      "gridX": 87,
+      "gridY": 50,
+      "widthCells": 68,
+      "heightCells": 1
+    },
+    {
+      "gridX": 170,
+      "gridY": 50,
+      "widthCells": 4,
+      "heightCells": 1
+    },
+    {
+      "gridX": 87,
+      "gridY": 51,
+      "widthCells": 69,
+      "heightCells": 1
+    },
+    {
+      "gridX": 88,
+      "gridY": 52,
+      "widthCells": 69,
+      "heightCells": 1
+    },
+    {
+      "gridX": 90,
+      "gridY": 53,
+      "widthCells": 69,
+      "heightCells": 1
+    },
+    {
+      "gridX": 89,
+      "gridY": 54,
+      "widthCells": 72,
+      "heightCells": 1
+    },
+    {
+      "gridX": 89,
+      "gridY": 55,
+      "widthCells": 75,
+      "heightCells": 1
+    },
+    {
+      "gridX": 88,
+      "gridY": 56,
+      "widthCells": 79,
+      "heightCells": 1
+    },
+    {
+      "gridX": 87,
+      "gridY": 57,
+      "widthCells": 84,
+      "heightCells": 1
+    },
+    {
+      "gridX": 87,
+      "gridY": 58,
+      "widthCells": 86,
+      "heightCells": 1
+    },
+    {
+      "gridX": 86,
       "gridY": 59,
-      "widthCells": 25,
-      "heightCells": 4
+      "widthCells": 89,
+      "heightCells": 1
     },
     {
-      "gridX": 60,
+      "gridX": 86,
+      "gridY": 60,
+      "widthCells": 91,
+      "heightCells": 1
+    },
+    {
+      "gridX": 85,
+      "gridY": 61,
+      "widthCells": 94,
+      "heightCells": 1
+    },
+    {
+      "gridX": 84,
       "gridY": 62,
       "widthCells": 96,
       "heightCells": 1
     },
     {
-      "gridX": 167,
-      "gridY": 62,
-      "widthCells": 23,
-      "heightCells": 1
-    },
-    {
-      "gridX": 0,
+      "gridX": 84,
       "gridY": 63,
-      "widthCells": 21,
+      "widthCells": 98,
       "heightCells": 1
     },
     {
-      "gridX": 60,
-      "gridY": 63,
-      "widthCells": 95,
-      "heightCells": 1
-    },
-    {
-      "gridX": 170,
-      "gridY": 63,
-      "widthCells": 14,
-      "heightCells": 1
-    },
-    {
-      "gridX": 59,
+      "gridX": 83,
       "gridY": 64,
-      "widthCells": 78,
+      "widthCells": 100,
       "heightCells": 1
     },
     {
-      "gridX": 143,
-      "gridY": 64,
-      "widthCells": 9,
-      "heightCells": 1
-    },
-    {
-      "gridX": 174,
-      "gridY": 64,
-      "widthCells": 5,
-      "heightCells": 1
-    },
-    {
-      "gridX": 59,
+      "gridX": 83,
       "gridY": 65,
-      "widthCells": 76,
-      "heightCells": 1
-    },
-    {
-      "gridX": 146,
-      "gridY": 65,
-      "widthCells": 3,
-      "heightCells": 1
-    },
-    {
-      "gridX": 58,
-      "gridY": 66,
-      "widthCells": 75,
-      "heightCells": 1
-    },
-    {
-      "gridX": 58,
-      "gridY": 67,
-      "widthCells": 73,
-      "heightCells": 1
-    },
-    {
-      "gridX": 57,
-      "gridY": 68,
-      "widthCells": 72,
-      "heightCells": 1
-    },
-    {
-      "gridX": 57,
-      "gridY": 69,
-      "widthCells": 71,
-      "heightCells": 1
-    },
-    {
-      "gridX": 175,
-      "gridY": 65,
-      "widthCells": 4,
-      "heightCells": 5
-    },
-    {
-      "gridX": 57,
-      "gridY": 70,
-      "widthCells": 70,
-      "heightCells": 1
-    },
-    {
-      "gridX": 57,
-      "gridY": 71,
-      "widthCells": 69,
-      "heightCells": 1
-    },
-    {
-      "gridX": 57,
-      "gridY": 72,
-      "widthCells": 68,
-      "heightCells": 1
-    },
-    {
-      "gridX": 175,
-      "gridY": 70,
-      "widthCells": 5,
-      "heightCells": 3
-    },
-    {
-      "gridX": 58,
-      "gridY": 73,
-      "widthCells": 66,
-      "heightCells": 1
-    },
-    {
-      "gridX": 58,
-      "gridY": 74,
-      "widthCells": 65,
-      "heightCells": 1
-    },
-    {
-      "gridX": 176,
-      "gridY": 73,
-      "widthCells": 4,
-      "heightCells": 2
-    },
-    {
-      "gridX": 60,
-      "gridY": 75,
-      "widthCells": 62,
-      "heightCells": 1
-    },
-    {
-      "gridX": 61,
-      "gridY": 76,
-      "widthCells": 59,
-      "heightCells": 1
-    },
-    {
-      "gridX": 65,
-      "gridY": 77,
-      "widthCells": 52,
-      "heightCells": 1
-    },
-    {
-      "gridX": 175,
-      "gridY": 75,
-      "widthCells": 5,
-      "heightCells": 3
-    },
-    {
-      "gridX": 72,
-      "gridY": 78,
-      "widthCells": 27,
+      "widthCells": 101,
       "heightCells": 1
     },
     {
       "gridX": 82,
+      "gridY": 66,
+      "widthCells": 104,
+      "heightCells": 1
+    },
+    {
+      "gridX": 82,
+      "gridY": 67,
+      "widthCells": 105,
+      "heightCells": 1
+    },
+    {
+      "gridX": 81,
+      "gridY": 68,
+      "widthCells": 107,
+      "heightCells": 1
+    },
+    {
+      "gridX": 81,
+      "gridY": 69,
+      "widthCells": 109,
+      "heightCells": 1
+    },
+    {
+      "gridX": 81,
+      "gridY": 70,
+      "widthCells": 110,
+      "heightCells": 1
+    },
+    {
+      "gridX": 81,
+      "gridY": 71,
+      "widthCells": 111,
+      "heightCells": 1
+    },
+    {
+      "gridX": 82,
+      "gridY": 72,
+      "widthCells": 111,
+      "heightCells": 1
+    },
+    {
+      "gridX": 82,
+      "gridY": 73,
+      "widthCells": 112,
+      "heightCells": 1
+    },
+    {
+      "gridX": 76,
+      "gridY": 74,
+      "widthCells": 5,
+      "heightCells": 1
+    },
+    {
+      "gridX": 83,
+      "gridY": 74,
+      "widthCells": 111,
+      "heightCells": 1
+    },
+    {
+      "gridX": 42,
+      "gridY": 75,
+      "widthCells": 5,
+      "heightCells": 1
+    },
+    {
+      "gridX": 69,
+      "gridY": 75,
+      "widthCells": 126,
+      "heightCells": 1
+    },
+    {
+      "gridX": 42,
+      "gridY": 76,
+      "widthCells": 13,
+      "heightCells": 1
+    },
+    {
+      "gridX": 65,
+      "gridY": 76,
+      "widthCells": 18,
+      "heightCells": 1
+    },
+    {
+      "gridX": 84,
+      "gridY": 76,
+      "widthCells": 111,
+      "heightCells": 1
+    },
+    {
+      "gridX": 84,
+      "gridY": 77,
+      "widthCells": 112,
+      "heightCells": 1
+    },
+    {
+      "gridX": 223,
+      "gridY": 77,
+      "widthCells": 6,
+      "heightCells": 1
+    },
+    {
+      "gridX": 259,
+      "gridY": 77,
+      "widthCells": 5,
+      "heightCells": 1
+    },
+    {
+      "gridX": 32,
+      "gridY": 78,
+      "widthCells": 2,
+      "heightCells": 1
+    },
+    {
+      "gridX": 42,
+      "gridY": 77,
+      "widthCells": 41,
+      "heightCells": 2
+    },
+    {
+      "gridX": 85,
+      "gridY": 78,
+      "widthCells": 111,
+      "heightCells": 1
+    },
+    {
+      "gridX": 211,
+      "gridY": 78,
+      "widthCells": 4,
+      "heightCells": 1
+    },
+    {
+      "gridX": 223,
+      "gridY": 78,
+      "widthCells": 10,
+      "heightCells": 1
+    },
+    {
+      "gridX": 252,
+      "gridY": 78,
+      "widthCells": 12,
+      "heightCells": 1
+    },
+    {
+      "gridX": 0,
+      "gridY": 79,
+      "widthCells": 9,
+      "heightCells": 1
+    },
+    {
+      "gridX": 30,
+      "gridY": 79,
+      "widthCells": 4,
+      "heightCells": 1
+    },
+    {
+      "gridX": 42,
+      "gridY": 79,
+      "widthCells": 40,
+      "heightCells": 1
+    },
+    {
+      "gridX": 85,
+      "gridY": 79,
+      "widthCells": 112,
+      "heightCells": 1
+    },
+    {
+      "gridX": 208,
+      "gridY": 79,
+      "widthCells": 7,
+      "heightCells": 1
+    },
+    {
+      "gridX": 223,
       "gridY": 79,
       "widthCells": 16,
       "heightCells": 1
     },
     {
-      "gridX": 175,
-      "gridY": 78,
-      "widthCells": 4,
+      "gridX": 244,
+      "gridY": 79,
+      "widthCells": 20,
+      "heightCells": 1
+    },
+    {
+      "gridX": 0,
+      "gridY": 80,
+      "widthCells": 19,
+      "heightCells": 1
+    },
+    {
+      "gridX": 25,
+      "gridY": 80,
+      "widthCells": 9,
+      "heightCells": 1
+    },
+    {
+      "gridX": 42,
+      "gridY": 80,
+      "widthCells": 35,
+      "heightCells": 1
+    },
+    {
+      "gridX": 85,
+      "gridY": 80,
+      "widthCells": 116,
+      "heightCells": 1
+    },
+    {
+      "gridX": 202,
+      "gridY": 80,
+      "widthCells": 13,
+      "heightCells": 1
+    },
+    {
+      "gridX": 42,
+      "gridY": 81,
+      "widthCells": 1,
+      "heightCells": 1
+    },
+    {
+      "gridX": 48,
+      "gridY": 81,
+      "widthCells": 22,
+      "heightCells": 1
+    },
+    {
+      "gridX": 223,
+      "gridY": 80,
+      "widthCells": 41,
+      "heightCells": 2
+    },
+    {
+      "gridX": 56,
+      "gridY": 82,
+      "widthCells": 11,
+      "heightCells": 1
+    },
+    {
+      "gridX": 224,
+      "gridY": 82,
+      "widthCells": 40,
+      "heightCells": 1
+    },
+    {
+      "gridX": 85,
+      "gridY": 81,
+      "widthCells": 130,
       "heightCells": 3
     },
     {
-      "gridX": 91,
-      "gridY": 80,
-      "widthCells": 7,
-      "heightCells": 2
+      "gridX": 227,
+      "gridY": 83,
+      "widthCells": 31,
+      "heightCells": 1
     },
     {
-      "gridX": 174,
+      "gridX": 0,
       "gridY": 81,
-      "widthCells": 5,
-      "heightCells": 2
+      "widthCells": 34,
+      "heightCells": 4
     },
     {
-      "gridX": 91,
-      "gridY": 82,
-      "widthCells": 6,
-      "heightCells": 2
-    },
-    {
-      "gridX": 90,
+      "gridX": 84,
       "gridY": 84,
+      "widthCells": 128,
+      "heightCells": 1
+    },
+    {
+      "gridX": 234,
+      "gridY": 84,
+      "widthCells": 20,
+      "heightCells": 1
+    },
+    {
+      "gridX": 5,
+      "gridY": 85,
+      "widthCells": 25,
+      "heightCells": 1
+    },
+    {
+      "gridX": 84,
+      "gridY": 85,
+      "widthCells": 106,
+      "heightCells": 1
+    },
+    {
+      "gridX": 196,
+      "gridY": 85,
+      "widthCells": 11,
+      "heightCells": 1
+    },
+    {
+      "gridX": 238,
+      "gridY": 85,
       "widthCells": 7,
       "heightCells": 1
     },
     {
-      "gridX": 90,
-      "gridY": 85,
-      "widthCells": 6,
-      "heightCells": 2
+      "gridX": 21,
+      "gridY": 86,
+      "widthCells": 5,
+      "heightCells": 1
     },
     {
-      "gridX": 89,
+      "gridX": 83,
+      "gridY": 86,
+      "widthCells": 106,
+      "heightCells": 1
+    },
+    {
+      "gridX": 200,
+      "gridY": 86,
+      "widthCells": 4,
+      "heightCells": 1
+    },
+    {
+      "gridX": 238,
+      "gridY": 86,
+      "widthCells": 5,
+      "heightCells": 1
+    },
+    {
+      "gridX": 82,
+      "gridY": 87,
+      "widthCells": 105,
+      "heightCells": 1
+    },
+    {
+      "gridX": 82,
+      "gridY": 88,
+      "widthCells": 102,
+      "heightCells": 1
+    },
+    {
+      "gridX": 238,
       "gridY": 87,
       "widthCells": 6,
       "heightCells": 2
     },
     {
-      "gridX": 89,
+      "gridX": 81,
       "gridY": 89,
-      "widthCells": 7,
+      "widthCells": 101,
       "heightCells": 1
+    },
+    {
+      "gridX": 81,
+      "gridY": 90,
+      "widthCells": 99,
+      "heightCells": 1
+    },
+    {
+      "gridX": 239,
+      "gridY": 89,
+      "widthCells": 5,
+      "heightCells": 2
+    },
+    {
+      "gridX": 80,
+      "gridY": 91,
+      "widthCells": 98,
+      "heightCells": 1
+    },
+    {
+      "gridX": 80,
+      "gridY": 92,
+      "widthCells": 96,
+      "heightCells": 1
+    },
+    {
+      "gridX": 80,
+      "gridY": 93,
+      "widthCells": 95,
+      "heightCells": 1
+    },
+    {
+      "gridX": 239,
+      "gridY": 91,
+      "widthCells": 6,
+      "heightCells": 3
+    },
+    {
+      "gridX": 79,
+      "gridY": 94,
+      "widthCells": 95,
+      "heightCells": 1
+    },
+    {
+      "gridX": 79,
+      "gridY": 95,
+      "widthCells": 94,
+      "heightCells": 1
+    },
+    {
+      "gridX": 79,
+      "gridY": 96,
+      "widthCells": 93,
+      "heightCells": 1
+    },
+    {
+      "gridX": 240,
+      "gridY": 94,
+      "widthCells": 5,
+      "heightCells": 3
+    },
+    {
+      "gridX": 80,
+      "gridY": 97,
+      "widthCells": 92,
+      "heightCells": 1
+    },
+    {
+      "gridX": 240,
+      "gridY": 97,
+      "widthCells": 6,
+      "heightCells": 1
+    },
+    {
+      "gridX": 80,
+      "gridY": 98,
+      "widthCells": 91,
+      "heightCells": 1
+    },
+    {
+      "gridX": 81,
+      "gridY": 99,
+      "widthCells": 89,
+      "heightCells": 1
+    },
+    {
+      "gridX": 82,
+      "gridY": 100,
+      "widthCells": 87,
+      "heightCells": 1
+    },
+    {
+      "gridX": 240,
+      "gridY": 98,
+      "widthCells": 5,
+      "heightCells": 3
+    },
+    {
+      "gridX": 83,
+      "gridY": 101,
+      "widthCells": 84,
+      "heightCells": 1
+    },
+    {
+      "gridX": 84,
+      "gridY": 102,
+      "widthCells": 82,
+      "heightCells": 1
+    },
+    {
+      "gridX": 87,
+      "gridY": 103,
+      "widthCells": 76,
+      "heightCells": 1
+    },
+    {
+      "gridX": 239,
+      "gridY": 101,
+      "widthCells": 6,
+      "heightCells": 3
     },
     {
       "gridX": 90,
-      "gridY": 90,
-      "widthCells": 7,
+      "gridY": 104,
+      "widthCells": 69,
+      "heightCells": 1
+    },
+    {
+      "gridX": 239,
+      "gridY": 104,
+      "widthCells": 5,
+      "heightCells": 1
+    },
+    {
+      "gridX": 97,
+      "gridY": 105,
+      "widthCells": 40,
+      "heightCells": 1
+    },
+    {
+      "gridX": 108,
+      "gridY": 106,
+      "widthCells": 27,
+      "heightCells": 1
+    },
+    {
+      "gridX": 238,
+      "gridY": 105,
+      "widthCells": 6,
       "heightCells": 2
     },
     {
-      "gridX": 91,
-      "gridY": 92,
+      "gridX": 117,
+      "gridY": 107,
+      "widthCells": 9,
+      "heightCells": 1
+    },
+    {
+      "gridX": 128,
+      "gridY": 107,
       "widthCells": 7,
       "heightCells": 1
     },
     {
-      "gridX": 174,
-      "gridY": 90,
-      "widthCells": 4,
-      "heightCells": 3
-    },
-    {
-      "gridX": 91,
-      "gridY": 93,
-      "widthCells": 8,
+      "gridX": 128,
+      "gridY": 108,
+      "widthCells": 6,
       "heightCells": 1
     },
     {
-      "gridX": 92,
-      "gridY": 94,
-      "widthCells": 7,
-      "heightCells": 1
-    },
-    {
-      "gridX": 93,
-      "gridY": 95,
-      "widthCells": 7,
-      "heightCells": 1
-    },
-    {
-      "gridX": 174,
-      "gridY": 93,
+      "gridX": 238,
+      "gridY": 107,
       "widthCells": 5,
       "heightCells": 3
-    },
-    {
-      "gridX": 94,
-      "gridY": 96,
-      "widthCells": 6,
-      "heightCells": 1
-    },
-    {
-      "gridX": 175,
-      "gridY": 96,
-      "widthCells": 4,
-      "heightCells": 1
-    },
-    {
-      "gridX": 94,
-      "gridY": 97,
-      "widthCells": 7,
-      "heightCells": 1
-    },
-    {
-      "gridX": 129,
-      "gridY": 97,
-      "widthCells": 6,
-      "heightCells": 1
     },
     {
       "gridX": 127,
-      "gridY": 98,
-      "widthCells": 10,
+      "gridY": 109,
+      "widthCells": 7,
+      "heightCells": 2
+    },
+    {
+      "gridX": 237,
+      "gridY": 110,
+      "widthCells": 6,
       "heightCells": 1
     },
     {
-      "gridX": 175,
-      "gridY": 97,
+      "gridX": 126,
+      "gridY": 111,
+      "widthCells": 7,
+      "heightCells": 1
+    },
+    {
+      "gridX": 237,
+      "gridY": 111,
       "widthCells": 5,
       "heightCells": 2
     },
     {
-      "gridX": 126,
-      "gridY": 99,
-      "widthCells": 12,
+      "gridX": 125,
+      "gridY": 112,
+      "widthCells": 8,
+      "heightCells": 2
+    },
+    {
+      "gridX": 125,
+      "gridY": 114,
+      "widthCells": 7,
       "heightCells": 1
     },
     {
-      "gridX": 95,
-      "gridY": 98,
-      "widthCells": 6,
+      "gridX": 124,
+      "gridY": 115,
+      "widthCells": 8,
+      "heightCells": 2
+    },
+    {
+      "gridX": 124,
+      "gridY": 117,
+      "widthCells": 7,
       "heightCells": 3
     },
     {
       "gridX": 125,
-      "gridY": 100,
-      "widthCells": 13,
+      "gridY": 120,
+      "widthCells": 7,
       "heightCells": 2
     },
     {
-      "gridX": 126,
-      "gridY": 102,
-      "widthCells": 12,
+      "gridX": 125,
+      "gridY": 122,
+      "widthCells": 8,
       "heightCells": 1
     },
     {
-      "gridX": 176,
-      "gridY": 99,
-      "widthCells": 4,
-      "heightCells": 4
+      "gridX": 238,
+      "gridY": 121,
+      "widthCells": 6,
+      "heightCells": 3
+    },
+    {
+      "gridX": 126,
+      "gridY": 123,
+      "widthCells": 8,
+      "heightCells": 2
+    },
+    {
+      "gridX": 239,
+      "gridY": 124,
+      "widthCells": 6,
+      "heightCells": 2
     },
     {
       "gridX": 127,
-      "gridY": 103,
+      "gridY": 125,
+      "widthCells": 8,
+      "heightCells": 2
+    },
+    {
+      "gridX": 239,
+      "gridY": 126,
+      "widthCells": 7,
+      "heightCells": 1
+    },
+    {
+      "gridX": 128,
+      "gridY": 127,
+      "widthCells": 8,
+      "heightCells": 2
+    },
+    {
+      "gridX": 240,
+      "gridY": 127,
+      "widthCells": 6,
+      "heightCells": 2
+    },
+    {
+      "gridX": 129,
+      "gridY": 129,
+      "widthCells": 8,
+      "heightCells": 2
+    },
+    {
+      "gridX": 241,
+      "gridY": 129,
+      "widthCells": 5,
+      "heightCells": 2
+    },
+    {
+      "gridX": 130,
+      "gridY": 131,
+      "widthCells": 7,
+      "heightCells": 4
+    },
+    {
+      "gridX": 166,
+      "gridY": 134,
+      "widthCells": 6,
+      "heightCells": 1
+    },
+    {
+      "gridX": 163,
+      "gridY": 135,
       "widthCells": 10,
       "heightCells": 1
     },
     {
-      "gridX": 94,
-      "gridY": 101,
-      "widthCells": 6,
-      "heightCells": 4
-    },
-    {
-      "gridX": 129,
-      "gridY": 104,
-      "widthCells": 7,
+      "gridX": 161,
+      "gridY": 136,
+      "widthCells": 13,
       "heightCells": 1
     },
     {
-      "gridX": 93,
-      "gridY": 105,
-      "widthCells": 7,
-      "heightCells": 1
-    },
-    {
-      "gridX": 93,
-      "gridY": 106,
+      "gridX": 241,
+      "gridY": 131,
       "widthCells": 6,
-      "heightCells": 3
-    },
-    {
-      "gridX": 175,
-      "gridY": 103,
-      "widthCells": 5,
       "heightCells": 6
     },
     {
-      "gridX": 93,
-      "gridY": 109,
-      "widthCells": 5,
+      "gridX": 129,
+      "gridY": 135,
+      "widthCells": 8,
+      "heightCells": 3
+    },
+    {
+      "gridX": 160,
+      "gridY": 137,
+      "widthCells": 15,
+      "heightCells": 2
+    },
+    {
+      "gridX": 160,
+      "gridY": 139,
+      "widthCells": 16,
       "heightCells": 1
     },
     {
-      "gridX": 92,
-      "gridY": 110,
+      "gridX": 129,
+      "gridY": 138,
+      "widthCells": 7,
+      "heightCells": 3
+    },
+    {
+      "gridX": 160,
+      "gridY": 140,
+      "widthCells": 15,
+      "heightCells": 1
+    },
+    {
+      "gridX": 241,
+      "gridY": 137,
+      "widthCells": 5,
+      "heightCells": 4
+    },
+    {
+      "gridX": 161,
+      "gridY": 141,
+      "widthCells": 14,
+      "heightCells": 1
+    },
+    {
+      "gridX": 162,
+      "gridY": 142,
+      "widthCells": 11,
+      "heightCells": 1
+    },
+    {
+      "gridX": 240,
+      "gridY": 141,
       "widthCells": 6,
       "heightCells": 2
     },
     {
-      "gridX": 175,
-      "gridY": 109,
-      "widthCells": 4,
+      "gridX": 128,
+      "gridY": 141,
+      "widthCells": 7,
       "heightCells": 3
+    },
+    {
+      "gridX": 164,
+      "gridY": 143,
+      "widthCells": 8,
+      "heightCells": 1
+    },
+    {
+      "gridX": 127,
+      "gridY": 144,
+      "widthCells": 8,
+      "heightCells": 2
+    },
+    {
+      "gridX": 240,
+      "gridY": 143,
+      "widthCells": 5,
+      "heightCells": 4
+    },
+    {
+      "gridX": 127,
+      "gridY": 146,
+      "widthCells": 7,
+      "heightCells": 2
+    },
+    {
+      "gridX": 126,
+      "gridY": 148,
+      "widthCells": 8,
+      "heightCells": 1
+    },
+    {
+      "gridX": 239,
+      "gridY": 147,
+      "widthCells": 6,
+      "heightCells": 2
+    },
+    {
+      "gridX": 127,
+      "gridY": 149,
+      "widthCells": 7,
+      "heightCells": 1
+    },
+    {
+      "gridX": 240,
+      "gridY": 149,
+      "widthCells": 5,
+      "heightCells": 1
     }
   ]
 }
