@@ -9,7 +9,7 @@ export const ENEMY_READABILITY_PLACEMENTS: readonly {
   { kind: 'demon-badger', gridX: 31, gridY: 23, background: 'soil path' },
   { kind: 'rabid-badger', gridX: 20, gridY: 27, background: 'ground foliage' },
   { kind: 'grave-titan', gridX: 23, gridY: 14, background: 'rock' },
-  { kind: 'spore-warden', gridX: 31, gridY: 19, background: 'canopy' },
+  { kind: 'spore-warden', gridX: 33, gridY: 19, background: 'canopy' },
   { kind: 'plague-medic', gridX: 28, gridY: 17, background: 'rock edge / shade' },
   { kind: 'void-stalker', gridX: 37, gridY: 18, background: 'open clearing' },
   { kind: 'stink-broodmother', gridX: 35, gridY: 25, background: 'mixed foliage / rock' },

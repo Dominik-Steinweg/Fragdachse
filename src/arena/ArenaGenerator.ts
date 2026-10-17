@@ -105,7 +105,15 @@ function updateJsonFingerprintHash(value: unknown, hash: number, inArray = false
 }
 
 /** Increment whenever deterministic generation changes in a wire-visible way. */
-export const ARENA_GENERATOR_VERSION = 13;
+export const ARENA_GENERATOR_VERSION = 14;
+
+/**
+ * Anteil einzelliger Felsdurchlaesse, die bewusst eng bleiben. Der Rest wird um eine Felszelle
+ * verbreitert: Engstellen bleiben moeglich, wirken aber nicht mehr wie ein Generierungsfehler.
+ */
+const NARROW_PASSAGE_KEEP_CHANCE = 0.15;
+/** Wie weit die Wanddicke beim Verbreitern hoechstens gemessen wird (duennere Seite gewinnt). */
+const NARROW_PASSAGE_WALL_PROBE_CELLS = 3;
 
 /** Garantiert freie Kreisflaeche: Missions-Checkpoint oder Salvage-Site-Lichtung. */
 type ProtectedClearing = Pick<CoopDefenseMapMissionCheckpointConfig, 'gridX' | 'gridY' | 'radiusCells'>;
@@ -368,6 +376,8 @@ export class ArenaGenerator {
         failedAttempt('Freie Flächen lassen sich nicht verbinden (Wasser oder geschützte Felsen)');
         continue;
       }
+      // Entfernt nur Felsen: Die eben gesicherte Konnektivitaet bleibt erhalten.
+      this.widenNarrowPassages(blocked, rocks, tutorialRockCoreCells, rng);
 
       // Bäume auf verbleibenden freien Zellen platzieren.
       // Mindestabstand zum Arena-Rand: ceil(CANOPY_RADIUS / CELL_SIZE) Zellen,
@@ -2189,6 +2199,60 @@ export class ArenaGenerator {
       }
     }
     return false;
+  }
+
+  /**
+   * Verbreitert einzellige Durchlaesse zwischen Felsen (frei, links und rechts bzw. oben und unten
+   * blockiert) um eine Felszelle auf der duenneren Seite. CA-Reste, Verbindungstunnel und
+   * Tutorial-Halos erzeugen solche Spalten sonst sehr haeufig. Wasser, Tutorial-Kerne und der
+   * Arenarand werden nie verschoben; ein kleiner Anteil bleibt bewusst eng.
+   */
+  private widenNarrowPassages(
+    blocked: boolean[][],
+    rocks: RockCell[],
+    protectedCells: ReadonlySet<number>,
+    rng: () => number,
+  ): void {
+    const rockIndexByKey = new Map<number, number>();
+    rocks.forEach((rock, index) => rockIndexByKey.set(this.cellKey(rock.gridX, rock.gridY), index));
+    const cols = this.metrics.gridCols, rows = this.metrics.gridRows;
+    const isBlocked = (gx: number, gy: number) => gx < 0 || gy < 0 || gx >= cols || gy >= rows || blocked[gy][gx];
+    const isRemovable = (gx: number, gy: number) => {
+      const key = this.cellKey(gx, gy);
+      return rockIndexByKey.has(key) && !protectedCells.has(key);
+    };
+    const wallThickness = (gx: number, gy: number, dx: number, dy: number) => {
+      let thickness = 0;
+      while (thickness < NARROW_PASSAGE_WALL_PROBE_CELLS && isBlocked(gx + dx * (thickness + 1), gy + dy * (thickness + 1))) thickness++;
+      return thickness;
+    };
+    const removeRock = (gx: number, gy: number) => {
+      const key = this.cellKey(gx, gy);
+      const index = rockIndexByKey.get(key)!;
+      const lastRock = rocks[rocks.length - 1];
+      rocks[index] = lastRock;
+      rockIndexByKey.set(this.cellKey(lastRock.gridX, lastRock.gridY), index);
+      rocks.pop();
+      rockIndexByKey.delete(key);
+      blocked[gy][gx] = false;
+    };
+    for (let gy = 0; gy < rows; gy++) {
+      for (let gx = 0; gx < cols; gx++) {
+        if (blocked[gy][gx] || this.waterKeys.has(this.cellKey(gx, gy))) continue;
+        const sides: Array<[number, number]> = [];
+        if (isBlocked(gx - 1, gy) && isBlocked(gx + 1, gy)) sides.push([-1, 0], [1, 0]);
+        if (isBlocked(gx, gy - 1) && isBlocked(gx, gy + 1)) sides.push([0, -1], [0, 1]);
+        if (sides.length === 0 || rng() < NARROW_PASSAGE_KEEP_CHANCE) continue;
+        let best: [number, number] | null = null;
+        let bestThickness = Infinity;
+        for (const [dx, dy] of sides) {
+          if (!isRemovable(gx + dx, gy + dy)) continue;
+          const thickness = wallThickness(gx, gy, dx, dy);
+          if (thickness < bestThickness) { best = [dx, dy]; bestThickness = thickness; }
+        }
+        if (best) removeRock(gx + best[0], gy + best[1]);
+      }
+    }
   }
 
   /** Alle zusammenhängenden Regionen freier (nicht blockierter) Zellen (4-connected). */

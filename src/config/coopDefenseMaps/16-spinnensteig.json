@@ -17,8 +17,8 @@
   },
   "fogStrength": 1.3,
   "tutorialAnchor": {
-    "gridX": 19,
-    "gridY": 112
+    "gridX": 20,
+    "gridY": 142
   },
   "trackMode": "none",
   "trackPosition": "center",
@@ -85,10 +85,10 @@
   },
   "rockField": {
     "fillMode": "organic",
-    "corridorRadiusCells": 4.5,
-    "corridorRadiusVarianceCells": 1,
-    "corridorWanderCells": 0.6,
-    "waypointJitterCells": 0.5,
+    "corridorRadiusCells": 5,
+    "corridorRadiusVarianceCells": 1.5,
+    "corridorWanderCells": 1.6,
+    "waypointJitterCells": 1.2,
     "rockDensityScale": 1,
     "corridors": [
       {
@@ -127,20 +127,12 @@
             "gridY": 74
           },
           {
-            "gridX": 12,
-            "gridY": 70
+            "gridX": 26,
+            "gridY": 66
           },
           {
-            "gridX": 12,
-            "gridY": 61
-          },
-          {
-            "gridX": 54,
-            "gridY": 61
-          },
-          {
-            "gridX": 54,
-            "gridY": 54
+            "gridX": 40,
+            "gridY": 58
           },
           {
             "gridX": 34,
@@ -293,11 +285,11 @@
       },
       {
         "id": "approach-1",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
-            "gridX": 88,
-            "gridY": 122
+            "gridX": 94,
+            "gridY": 110
           },
           {
             "gridX": 68,
@@ -307,7 +299,7 @@
       },
       {
         "id": "approach-2",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 38,
@@ -321,7 +313,7 @@
       },
       {
         "id": "approach-3",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 40,
@@ -335,7 +327,7 @@
       },
       {
         "id": "approach-4",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 66,
@@ -349,7 +341,7 @@
       },
       {
         "id": "approach-5",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 14,
@@ -363,7 +355,7 @@
       },
       {
         "id": "approach-6",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 52,
@@ -377,7 +369,7 @@
       },
       {
         "id": "approach-7",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 8,
@@ -391,7 +383,7 @@
       },
       {
         "id": "approach-8",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 6,
@@ -405,11 +397,11 @@
       },
       {
         "id": "approach-9",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
-            "gridX": 62,
-            "gridY": 48
+            "gridX": 50,
+            "gridY": 26
           },
           {
             "gridX": 34,
@@ -419,7 +411,7 @@
       },
       {
         "id": "approach-10",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 8,
@@ -433,7 +425,7 @@
       },
       {
         "id": "approach-11",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 66,
@@ -447,7 +439,7 @@
       },
       {
         "id": "approach-12",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 62,
@@ -461,7 +453,7 @@
       },
       {
         "id": "approach-13",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 8,
@@ -475,7 +467,7 @@
       },
       {
         "id": "approach-14",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 14,
@@ -489,7 +481,7 @@
       },
       {
         "id": "approach-15",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 42,
@@ -503,7 +495,7 @@
       },
       {
         "id": "approach-16",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 124,
@@ -517,7 +509,7 @@
       },
       {
         "id": "approach-17",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 124,
@@ -531,7 +523,7 @@
       },
       {
         "id": "approach-18",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 138,
@@ -545,7 +537,7 @@
       },
       {
         "id": "approach-19",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 138,
@@ -559,7 +551,7 @@
       },
       {
         "id": "approach-20",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 150,
@@ -573,11 +565,11 @@
       },
       {
         "id": "approach-21",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
-            "gridX": 214,
-            "gridY": 42
+            "gridX": 226,
+            "gridY": 40
           },
           {
             "gridX": 214,
@@ -587,7 +579,7 @@
       },
       {
         "id": "approach-22",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 238,
@@ -601,7 +593,7 @@
       },
       {
         "id": "approach-23",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 244,
@@ -615,11 +607,11 @@
       },
       {
         "id": "approach-24",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
-            "gridX": 202,
-            "gridY": 52
+            "gridX": 212,
+            "gridY": 32
           },
           {
             "gridX": 230,
@@ -629,11 +621,11 @@
       },
       {
         "id": "approach-25",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
-            "gridX": 208,
-            "gridY": 38
+            "gridX": 244,
+            "gridY": 32
           },
           {
             "gridX": 230,
@@ -643,7 +635,7 @@
       },
       {
         "id": "approach-26",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 254,
@@ -657,11 +649,11 @@
       },
       {
         "id": "approach-27",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
-            "gridX": 172,
-            "gridY": 120
+            "gridX": 184,
+            "gridY": 100
           },
           {
             "gridX": 200,
@@ -671,7 +663,7 @@
       },
       {
         "id": "approach-28",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 226,
@@ -685,7 +677,7 @@
       },
       {
         "id": "approach-29",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 210,
@@ -699,7 +691,7 @@
       },
       {
         "id": "approach-30",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 176,
@@ -713,7 +705,7 @@
       },
       {
         "id": "approach-31",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 226,
@@ -727,11 +719,11 @@
       },
       {
         "id": "approach-32",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
-            "gridX": 172,
-            "gridY": 128
+            "gridX": 186,
+            "gridY": 145
           },
           {
             "gridX": 200,
@@ -741,7 +733,7 @@
       },
       {
         "id": "approach-33",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 228,
@@ -755,11 +747,11 @@
       },
       {
         "id": "approach-34",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
-            "gridX": 188,
-            "gridY": 146
+            "gridX": 204,
+            "gridY": 147
           },
           {
             "gridX": 200,
@@ -769,7 +761,7 @@
       },
       {
         "id": "approach-35",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 214,
@@ -783,7 +775,7 @@
       },
       {
         "id": "approach-36",
-        "radiusCells": 2.5,
+        "radiusCells": 3,
         "points": [
           {
             "gridX": 226,
@@ -851,22 +843,6 @@
       "gridX": 200,
       "gridY": 122,
       "radiusCells": 12
-    }
-  ],
-  "rockWalls": [
-    {
-      "id": "canyon-switchback-low",
-      "gridX": 18,
-      "gridY": 64,
-      "widthCells": 43,
-      "heightCells": 2
-    },
-    {
-      "id": "canyon-switchback-high",
-      "gridX": 8,
-      "gridY": 57,
-      "widthCells": 41,
-      "heightCells": 2
     }
   ],
   "persistentBase": {
@@ -1074,8 +1050,8 @@
           "count": 1,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 86,
-            "gridY": 120,
+            "gridX": 92,
+            "gridY": 108,
             "widthCells": 4,
             "heightCells": 4
           }
@@ -1114,6 +1090,20 @@
             "gridY": 128,
             "widthCells": 5,
             "heightCells": 4
+          }
+        },
+        {
+          "enemyKind": "mini-kraken",
+          "count": 3,
+          "delayMs": 17000,
+          "spawnStaggerMs": 900,
+          "spawnArea": {
+            "gridX": 90,
+            "gridY": 122,
+            "widthCells": 8,
+            "heightCells": 4,
+            "medium": "water",
+            "cluster": true
           }
         }
       ]
@@ -1154,7 +1144,7 @@
         },
         {
           "enemyKind": "demon-badger",
-          "count": 12,
+          "count": 10,
           "delayMs": 4500,
           "spawnStaggerMs": 250,
           "spawnArea": {
@@ -1214,10 +1204,24 @@
           "delayMs": 7500,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 60,
-            "gridY": 46,
+            "gridX": 48,
+            "gridY": 24,
             "widthCells": 4,
             "heightCells": 4
+          }
+        },
+        {
+          "enemyKind": "mini-kraken",
+          "count": 5,
+          "delayMs": 4000,
+          "spawnStaggerMs": 600,
+          "spawnArea": {
+            "gridX": 58,
+            "gridY": 59,
+            "widthCells": 8,
+            "heightCells": 4,
+            "medium": "water",
+            "cluster": true
           }
         }
       ]
@@ -1386,7 +1390,7 @@
         },
         {
           "enemyKind": "void-stalker",
-          "count": 3,
+          "count": 2,
           "spawnStaggerMs": 1500,
           "spawnArea": {
             "gridX": 135,
@@ -1397,7 +1401,7 @@
         },
         {
           "enemyKind": "demon-badger",
-          "count": 12,
+          "count": 8,
           "delayMs": 3500,
           "spawnStaggerMs": 250,
           "spawnArea": {
@@ -1405,6 +1409,20 @@
             "gridY": 40,
             "widthCells": 6,
             "heightCells": 3
+          }
+        },
+        {
+          "enemyKind": "mini-kraken",
+          "count": 4,
+          "delayMs": 1500,
+          "spawnStaggerMs": 700,
+          "spawnArea": {
+            "gridX": 133,
+            "gridY": 17,
+            "widthCells": 10,
+            "heightCells": 4,
+            "medium": "water",
+            "cluster": true
           }
         }
       ]
@@ -1422,15 +1440,15 @@
           "delayMs": 3000,
           "spawnStaggerMs": 1500,
           "spawnArea": {
-            "gridX": 211,
-            "gridY": 40,
+            "gridX": 223,
+            "gridY": 38,
             "widthCells": 6,
             "heightCells": 5
           }
         },
         {
           "enemyKind": "zombie-badger",
-          "count": 16,
+          "count": 10,
           "delayMs": 4000,
           "spawnStaggerMs": 300,
           "spawnArea": {
@@ -1467,8 +1485,8 @@
           "delayMs": 2000,
           "spawnStaggerMs": 2500,
           "spawnArea": {
-            "gridX": 200,
-            "gridY": 50,
+            "gridX": 210,
+            "gridY": 30,
             "widthCells": 5,
             "heightCells": 5
           }
@@ -1479,10 +1497,24 @@
           "delayMs": 3000,
           "spawnStaggerMs": 0,
           "spawnArea": {
-            "gridX": 206,
-            "gridY": 36,
+            "gridX": 242,
+            "gridY": 30,
             "widthCells": 4,
             "heightCells": 4
+          }
+        },
+        {
+          "enemyKind": "mini-kraken",
+          "count": 5,
+          "delayMs": 4000,
+          "spawnStaggerMs": 600,
+          "spawnArea": {
+            "gridX": 198,
+            "gridY": 54,
+            "widthCells": 8,
+            "heightCells": 5,
+            "medium": "water",
+            "cluster": true
           }
         },
         {
@@ -1511,8 +1543,8 @@
           "count": 4,
           "spawnStaggerMs": 900,
           "spawnArea": {
-            "gridX": 170,
-            "gridY": 118,
+            "gridX": 182,
+            "gridY": 98,
             "widthCells": 5,
             "heightCells": 5
           }
@@ -1531,7 +1563,7 @@
         },
         {
           "enemyKind": "rabid-badger",
-          "count": 10,
+          "count": 8,
           "delayMs": 2500,
           "spawnStaggerMs": 250,
           "spawnArea": {
@@ -1568,10 +1600,10 @@
           "delayMs": 1500,
           "spawnStaggerMs": 500,
           "spawnArea": {
-            "gridX": 164,
-            "gridY": 137,
-            "widthCells": 9,
-            "heightCells": 4,
+            "gridX": 155,
+            "gridY": 126,
+            "widthCells": 10,
+            "heightCells": 5,
             "medium": "water",
             "cluster": true
           }
@@ -1603,10 +1635,24 @@
           "count": 3,
           "spawnStaggerMs": 700,
           "spawnArea": {
-            "gridX": 170,
-            "gridY": 126,
+            "gridX": 184,
+            "gridY": 143,
             "widthCells": 5,
             "heightCells": 5
+          }
+        },
+        {
+          "enemyKind": "mini-kraken",
+          "count": 4,
+          "delayMs": 800,
+          "spawnStaggerMs": 600,
+          "spawnArea": {
+            "gridX": 162,
+            "gridY": 120,
+            "widthCells": 8,
+            "heightCells": 4,
+            "medium": "water",
+            "cluster": true
           }
         },
         {
@@ -1627,8 +1673,8 @@
           "delayMs": 600,
           "spawnStaggerMs": 700,
           "spawnArea": {
-            "gridX": 186,
-            "gridY": 145,
+            "gridX": 202,
+            "gridY": 146,
             "widthCells": 5,
             "heightCells": 3
           }
@@ -1779,82 +1825,6 @@
         "id": "gate-west-ford",
         "cells": [
           {
-            "gridX": 41,
-            "gridY": 75
-          },
-          {
-            "gridX": 39,
-            "gridY": 76
-          },
-          {
-            "gridX": 40,
-            "gridY": 76
-          },
-          {
-            "gridX": 41,
-            "gridY": 76
-          },
-          {
-            "gridX": 35,
-            "gridY": 77
-          },
-          {
-            "gridX": 36,
-            "gridY": 77
-          },
-          {
-            "gridX": 37,
-            "gridY": 77
-          },
-          {
-            "gridX": 38,
-            "gridY": 77
-          },
-          {
-            "gridX": 39,
-            "gridY": 77
-          },
-          {
-            "gridX": 40,
-            "gridY": 77
-          },
-          {
-            "gridX": 41,
-            "gridY": 77
-          },
-          {
-            "gridX": 34,
-            "gridY": 78
-          },
-          {
-            "gridX": 35,
-            "gridY": 78
-          },
-          {
-            "gridX": 36,
-            "gridY": 78
-          },
-          {
-            "gridX": 37,
-            "gridY": 78
-          },
-          {
-            "gridX": 38,
-            "gridY": 78
-          },
-          {
-            "gridX": 39,
-            "gridY": 78
-          },
-          {
-            "gridX": 40,
-            "gridY": 78
-          },
-          {
-            "gridX": 41,
-            "gridY": 78
-          },
-          {
             "gridX": 34,
             "gridY": 79
           },
@@ -1885,98 +1855,6 @@
           {
             "gridX": 41,
             "gridY": 79
-          },
-          {
-            "gridX": 34,
-            "gridY": 80
-          },
-          {
-            "gridX": 35,
-            "gridY": 80
-          },
-          {
-            "gridX": 36,
-            "gridY": 80
-          },
-          {
-            "gridX": 37,
-            "gridY": 80
-          },
-          {
-            "gridX": 38,
-            "gridY": 80
-          },
-          {
-            "gridX": 39,
-            "gridY": 80
-          },
-          {
-            "gridX": 40,
-            "gridY": 80
-          },
-          {
-            "gridX": 41,
-            "gridY": 80
-          },
-          {
-            "gridX": 34,
-            "gridY": 81
-          },
-          {
-            "gridX": 35,
-            "gridY": 81
-          },
-          {
-            "gridX": 36,
-            "gridY": 81
-          },
-          {
-            "gridX": 37,
-            "gridY": 81
-          },
-          {
-            "gridX": 38,
-            "gridY": 81
-          },
-          {
-            "gridX": 39,
-            "gridY": 81
-          },
-          {
-            "gridX": 40,
-            "gridY": 81
-          },
-          {
-            "gridX": 41,
-            "gridY": 81
-          },
-          {
-            "gridX": 34,
-            "gridY": 82
-          },
-          {
-            "gridX": 35,
-            "gridY": 82
-          },
-          {
-            "gridX": 36,
-            "gridY": 82
-          },
-          {
-            "gridX": 37,
-            "gridY": 82
-          },
-          {
-            "gridX": 38,
-            "gridY": 82
-          },
-          {
-            "gridX": 34,
-            "gridY": 83
-          },
-          {
-            "gridX": 35,
-            "gridY": 83
           }
         ],
         "openOn": {
@@ -1988,195 +1866,35 @@
         "id": "gate-northwest-ford",
         "cells": [
           {
-            "gridX": 72,
-            "gridY": 13
-          },
-          {
-            "gridX": 73,
-            "gridY": 13
-          },
-          {
-            "gridX": 74,
-            "gridY": 13
-          },
-          {
             "gridX": 75,
             "gridY": 13
-          },
-          {
-            "gridX": 76,
-            "gridY": 13
-          },
-          {
-            "gridX": 77,
-            "gridY": 13
-          },
-          {
-            "gridX": 78,
-            "gridY": 13
-          },
-          {
-            "gridX": 73,
-            "gridY": 14
-          },
-          {
-            "gridX": 74,
-            "gridY": 14
           },
           {
             "gridX": 75,
             "gridY": 14
           },
           {
-            "gridX": 76,
-            "gridY": 14
-          },
-          {
-            "gridX": 77,
-            "gridY": 14
-          },
-          {
-            "gridX": 78,
-            "gridY": 14
-          },
-          {
-            "gridX": 73,
-            "gridY": 15
-          },
-          {
-            "gridX": 74,
-            "gridY": 15
-          },
-          {
             "gridX": 75,
             "gridY": 15
           },
           {
-            "gridX": 76,
-            "gridY": 15
-          },
-          {
-            "gridX": 77,
-            "gridY": 15
-          },
-          {
-            "gridX": 78,
-            "gridY": 15
-          },
-          {
-            "gridX": 73,
-            "gridY": 16
-          },
-          {
-            "gridX": 74,
-            "gridY": 16
-          },
-          {
             "gridX": 75,
             "gridY": 16
-          },
-          {
-            "gridX": 76,
-            "gridY": 16
-          },
-          {
-            "gridX": 77,
-            "gridY": 16
-          },
-          {
-            "gridX": 78,
-            "gridY": 16
-          },
-          {
-            "gridX": 74,
-            "gridY": 17
           },
           {
             "gridX": 75,
             "gridY": 17
           },
           {
-            "gridX": 76,
-            "gridY": 17
-          },
-          {
-            "gridX": 77,
-            "gridY": 17
-          },
-          {
-            "gridX": 78,
-            "gridY": 17
-          },
-          {
-            "gridX": 74,
-            "gridY": 18
-          },
-          {
             "gridX": 75,
             "gridY": 18
-          },
-          {
-            "gridX": 76,
-            "gridY": 18
-          },
-          {
-            "gridX": 77,
-            "gridY": 18
-          },
-          {
-            "gridX": 78,
-            "gridY": 18
-          },
-          {
-            "gridX": 79,
-            "gridY": 18
-          },
-          {
-            "gridX": 74,
-            "gridY": 19
           },
           {
             "gridX": 75,
             "gridY": 19
           },
           {
-            "gridX": 76,
-            "gridY": 19
-          },
-          {
-            "gridX": 77,
-            "gridY": 19
-          },
-          {
-            "gridX": 78,
-            "gridY": 19
-          },
-          {
-            "gridX": 79,
-            "gridY": 19
-          },
-          {
-            "gridX": 74,
-            "gridY": 20
-          },
-          {
             "gridX": 75,
-            "gridY": 20
-          },
-          {
-            "gridX": 76,
-            "gridY": 20
-          },
-          {
-            "gridX": 77,
-            "gridY": 20
-          },
-          {
-            "gridX": 78,
-            "gridY": 20
-          },
-          {
-            "gridX": 79,
             "gridY": 20
           }
         ],
@@ -2189,191 +1907,35 @@
         "id": "gate-northeast-ford",
         "cells": [
           {
-            "gridX": 183,
-            "gridY": 12
-          },
-          {
             "gridX": 184,
             "gridY": 12
-          },
-          {
-            "gridX": 185,
-            "gridY": 12
-          },
-          {
-            "gridX": 186,
-            "gridY": 12
-          },
-          {
-            "gridX": 187,
-            "gridY": 12
-          },
-          {
-            "gridX": 188,
-            "gridY": 12
-          },
-          {
-            "gridX": 183,
-            "gridY": 13
           },
           {
             "gridX": 184,
             "gridY": 13
           },
           {
-            "gridX": 185,
-            "gridY": 13
-          },
-          {
-            "gridX": 186,
-            "gridY": 13
-          },
-          {
-            "gridX": 187,
-            "gridY": 13
-          },
-          {
-            "gridX": 188,
-            "gridY": 13
-          },
-          {
-            "gridX": 183,
-            "gridY": 14
-          },
-          {
             "gridX": 184,
             "gridY": 14
-          },
-          {
-            "gridX": 185,
-            "gridY": 14
-          },
-          {
-            "gridX": 186,
-            "gridY": 14
-          },
-          {
-            "gridX": 187,
-            "gridY": 14
-          },
-          {
-            "gridX": 188,
-            "gridY": 14
-          },
-          {
-            "gridX": 183,
-            "gridY": 15
           },
           {
             "gridX": 184,
             "gridY": 15
           },
           {
-            "gridX": 185,
-            "gridY": 15
-          },
-          {
-            "gridX": 186,
-            "gridY": 15
-          },
-          {
-            "gridX": 187,
-            "gridY": 15
-          },
-          {
-            "gridX": 183,
-            "gridY": 16
-          },
-          {
             "gridX": 184,
             "gridY": 16
-          },
-          {
-            "gridX": 185,
-            "gridY": 16
-          },
-          {
-            "gridX": 186,
-            "gridY": 16
-          },
-          {
-            "gridX": 187,
-            "gridY": 16
-          },
-          {
-            "gridX": 182,
-            "gridY": 17
-          },
-          {
-            "gridX": 183,
-            "gridY": 17
           },
           {
             "gridX": 184,
             "gridY": 17
           },
           {
-            "gridX": 185,
-            "gridY": 17
-          },
-          {
-            "gridX": 186,
-            "gridY": 17
-          },
-          {
-            "gridX": 187,
-            "gridY": 17
-          },
-          {
-            "gridX": 182,
-            "gridY": 18
-          },
-          {
-            "gridX": 183,
-            "gridY": 18
-          },
-          {
             "gridX": 184,
             "gridY": 18
           },
           {
-            "gridX": 185,
-            "gridY": 18
-          },
-          {
-            "gridX": 186,
-            "gridY": 18
-          },
-          {
-            "gridX": 187,
-            "gridY": 18
-          },
-          {
-            "gridX": 181,
-            "gridY": 19
-          },
-          {
-            "gridX": 182,
-            "gridY": 19
-          },
-          {
-            "gridX": 183,
-            "gridY": 19
-          },
-          {
             "gridX": 184,
-            "gridY": 19
-          },
-          {
-            "gridX": 185,
-            "gridY": 19
-          },
-          {
-            "gridX": 186,
-            "gridY": 19
-          },
-          {
-            "gridX": 187,
             "gridY": 19
           }
         ],
@@ -2386,90 +1948,6 @@
         "id": "gate-east-ford",
         "cells": [
           {
-            "gridX": 218,
-            "gridY": 76
-          },
-          {
-            "gridX": 219,
-            "gridY": 76
-          },
-          {
-            "gridX": 220,
-            "gridY": 76
-          },
-          {
-            "gridX": 221,
-            "gridY": 76
-          },
-          {
-            "gridX": 222,
-            "gridY": 76
-          },
-          {
-            "gridX": 215,
-            "gridY": 77
-          },
-          {
-            "gridX": 216,
-            "gridY": 77
-          },
-          {
-            "gridX": 217,
-            "gridY": 77
-          },
-          {
-            "gridX": 218,
-            "gridY": 77
-          },
-          {
-            "gridX": 219,
-            "gridY": 77
-          },
-          {
-            "gridX": 220,
-            "gridY": 77
-          },
-          {
-            "gridX": 221,
-            "gridY": 77
-          },
-          {
-            "gridX": 222,
-            "gridY": 77
-          },
-          {
-            "gridX": 215,
-            "gridY": 78
-          },
-          {
-            "gridX": 216,
-            "gridY": 78
-          },
-          {
-            "gridX": 217,
-            "gridY": 78
-          },
-          {
-            "gridX": 218,
-            "gridY": 78
-          },
-          {
-            "gridX": 219,
-            "gridY": 78
-          },
-          {
-            "gridX": 220,
-            "gridY": 78
-          },
-          {
-            "gridX": 221,
-            "gridY": 78
-          },
-          {
-            "gridX": 222,
-            "gridY": 78
-          },
-          {
             "gridX": 215,
             "gridY": 79
           },
@@ -2500,86 +1978,6 @@
           {
             "gridX": 222,
             "gridY": 79
-          },
-          {
-            "gridX": 215,
-            "gridY": 80
-          },
-          {
-            "gridX": 216,
-            "gridY": 80
-          },
-          {
-            "gridX": 217,
-            "gridY": 80
-          },
-          {
-            "gridX": 218,
-            "gridY": 80
-          },
-          {
-            "gridX": 219,
-            "gridY": 80
-          },
-          {
-            "gridX": 220,
-            "gridY": 80
-          },
-          {
-            "gridX": 221,
-            "gridY": 80
-          },
-          {
-            "gridX": 222,
-            "gridY": 80
-          },
-          {
-            "gridX": 215,
-            "gridY": 81
-          },
-          {
-            "gridX": 216,
-            "gridY": 81
-          },
-          {
-            "gridX": 217,
-            "gridY": 81
-          },
-          {
-            "gridX": 218,
-            "gridY": 81
-          },
-          {
-            "gridX": 219,
-            "gridY": 81
-          },
-          {
-            "gridX": 220,
-            "gridY": 81
-          },
-          {
-            "gridX": 221,
-            "gridY": 81
-          },
-          {
-            "gridX": 222,
-            "gridY": 81
-          },
-          {
-            "gridX": 215,
-            "gridY": 82
-          },
-          {
-            "gridX": 216,
-            "gridY": 82
-          },
-          {
-            "gridX": 217,
-            "gridY": 82
-          },
-          {
-            "gridX": 218,
-            "gridY": 82
           }
         ],
         "openOn": {
@@ -2591,179 +1989,35 @@
         "id": "gate-extraction-ford",
         "cells": [
           {
-            "gridX": 236,
-            "gridY": 113
-          },
-          {
-            "gridX": 237,
-            "gridY": 113
-          },
-          {
-            "gridX": 238,
-            "gridY": 113
-          },
-          {
             "gridX": 239,
             "gridY": 113
           },
           {
-            "gridX": 240,
-            "gridY": 113
-          },
-          {
-            "gridX": 241,
-            "gridY": 113
-          },
-          {
-            "gridX": 236,
-            "gridY": 114
-          },
-          {
-            "gridX": 237,
-            "gridY": 114
-          },
-          {
-            "gridX": 238,
-            "gridY": 114
-          },
-          {
             "gridX": 239,
             "gridY": 114
-          },
-          {
-            "gridX": 240,
-            "gridY": 114
-          },
-          {
-            "gridX": 241,
-            "gridY": 114
-          },
-          {
-            "gridX": 237,
-            "gridY": 115
-          },
-          {
-            "gridX": 238,
-            "gridY": 115
           },
           {
             "gridX": 239,
             "gridY": 115
           },
           {
-            "gridX": 240,
-            "gridY": 115
-          },
-          {
-            "gridX": 241,
-            "gridY": 115
-          },
-          {
-            "gridX": 237,
-            "gridY": 116
-          },
-          {
-            "gridX": 238,
-            "gridY": 116
-          },
-          {
             "gridX": 239,
             "gridY": 116
-          },
-          {
-            "gridX": 240,
-            "gridY": 116
-          },
-          {
-            "gridX": 241,
-            "gridY": 116
-          },
-          {
-            "gridX": 242,
-            "gridY": 116
-          },
-          {
-            "gridX": 237,
-            "gridY": 117
-          },
-          {
-            "gridX": 238,
-            "gridY": 117
           },
           {
             "gridX": 239,
             "gridY": 117
           },
           {
-            "gridX": 240,
-            "gridY": 117
-          },
-          {
-            "gridX": 241,
-            "gridY": 117
-          },
-          {
-            "gridX": 242,
-            "gridY": 117
-          },
-          {
-            "gridX": 238,
-            "gridY": 118
-          },
-          {
             "gridX": 239,
             "gridY": 118
-          },
-          {
-            "gridX": 240,
-            "gridY": 118
-          },
-          {
-            "gridX": 241,
-            "gridY": 118
-          },
-          {
-            "gridX": 242,
-            "gridY": 118
-          },
-          {
-            "gridX": 238,
-            "gridY": 119
           },
           {
             "gridX": 239,
             "gridY": 119
           },
           {
-            "gridX": 240,
-            "gridY": 119
-          },
-          {
-            "gridX": 241,
-            "gridY": 119
-          },
-          {
-            "gridX": 242,
-            "gridY": 119
-          },
-          {
-            "gridX": 238,
-            "gridY": 120
-          },
-          {
             "gridX": 239,
-            "gridY": 120
-          },
-          {
-            "gridX": 240,
-            "gridY": 120
-          },
-          {
-            "gridX": 241,
-            "gridY": 120
-          },
-          {
-            "gridX": 242,
             "gridY": 120
           }
         ],
@@ -2968,19 +2222,7 @@
       "heightCells": 1
     },
     {
-      "gridX": 203,
-      "gridY": 27,
-      "widthCells": 4,
-      "heightCells": 1
-    },
-    {
       "gridX": 19,
-      "gridY": 28,
-      "widthCells": 6,
-      "heightCells": 1
-    },
-    {
-      "gridX": 202,
       "gridY": 28,
       "widthCells": 6,
       "heightCells": 1
@@ -3022,12 +2264,6 @@
       "heightCells": 2
     },
     {
-      "gridX": 201,
-      "gridY": 29,
-      "widthCells": 8,
-      "heightCells": 3
-    },
-    {
       "gridX": 19,
       "gridY": 32,
       "widthCells": 5,
@@ -3037,12 +2273,6 @@
       "gridX": 79,
       "gridY": 32,
       "widthCells": 7,
-      "heightCells": 1
-    },
-    {
-      "gridX": 203,
-      "gridY": 32,
-      "widthCells": 4,
       "heightCells": 1
     },
     {
@@ -3172,6 +2402,12 @@
       "heightCells": 2
     },
     {
+      "gridX": 196,
+      "gridY": 42,
+      "widthCells": 11,
+      "heightCells": 1
+    },
+    {
       "gridX": 84,
       "gridY": 42,
       "widthCells": 6,
@@ -3196,6 +2432,12 @@
       "heightCells": 1
     },
     {
+      "gridX": 195,
+      "gridY": 43,
+      "widthCells": 13,
+      "heightCells": 1
+    },
+    {
       "gridX": 84,
       "gridY": 44,
       "widthCells": 7,
@@ -3214,6 +2456,12 @@
       "heightCells": 1
     },
     {
+      "gridX": 194,
+      "gridY": 44,
+      "widthCells": 15,
+      "heightCells": 1
+    },
+    {
       "gridX": 85,
       "gridY": 45,
       "widthCells": 6,
@@ -3232,6 +2480,12 @@
       "heightCells": 1
     },
     {
+      "gridX": 194,
+      "gridY": 45,
+      "widthCells": 16,
+      "heightCells": 1
+    },
+    {
       "gridX": 85,
       "gridY": 46,
       "widthCells": 7,
@@ -3247,6 +2501,12 @@
       "gridX": 170,
       "gridY": 46,
       "widthCells": 6,
+      "heightCells": 1
+    },
+    {
+      "gridX": 193,
+      "gridY": 46,
+      "widthCells": 17,
       "heightCells": 1
     },
     {
@@ -3272,6 +2532,12 @@
       "gridY": 48,
       "widthCells": 59,
       "heightCells": 1
+    },
+    {
+      "gridX": 193,
+      "gridY": 47,
+      "widthCells": 18,
+      "heightCells": 2
     },
     {
       "gridX": 86,
@@ -3304,6 +2570,12 @@
       "heightCells": 1
     },
     {
+      "gridX": 193,
+      "gridY": 49,
+      "widthCells": 19,
+      "heightCells": 2
+    },
+    {
       "gridX": 87,
       "gridY": 51,
       "widthCells": 69,
@@ -3322,9 +2594,27 @@
       "heightCells": 1
     },
     {
+      "gridX": 192,
+      "gridY": 51,
+      "widthCells": 20,
+      "heightCells": 3
+    },
+    {
+      "gridX": 59,
+      "gridY": 54,
+      "widthCells": 8,
+      "heightCells": 1
+    },
+    {
       "gridX": 89,
       "gridY": 54,
       "widthCells": 72,
+      "heightCells": 1
+    },
+    {
+      "gridX": 56,
+      "gridY": 55,
+      "widthCells": 13,
       "heightCells": 1
     },
     {
@@ -3334,9 +2624,27 @@
       "heightCells": 1
     },
     {
+      "gridX": 54,
+      "gridY": 56,
+      "widthCells": 16,
+      "heightCells": 1
+    },
+    {
       "gridX": 88,
       "gridY": 56,
       "widthCells": 79,
+      "heightCells": 1
+    },
+    {
+      "gridX": 192,
+      "gridY": 54,
+      "widthCells": 19,
+      "heightCells": 3
+    },
+    {
+      "gridX": 53,
+      "gridY": 57,
+      "widthCells": 17,
       "heightCells": 1
     },
     {
@@ -3346,15 +2654,33 @@
       "heightCells": 1
     },
     {
+      "gridX": 53,
+      "gridY": 58,
+      "widthCells": 18,
+      "heightCells": 1
+    },
+    {
       "gridX": 87,
       "gridY": 58,
       "widthCells": 86,
       "heightCells": 1
     },
     {
+      "gridX": 192,
+      "gridY": 57,
+      "widthCells": 18,
+      "heightCells": 2
+    },
+    {
       "gridX": 86,
       "gridY": 59,
       "widthCells": 89,
+      "heightCells": 1
+    },
+    {
+      "gridX": 193,
+      "gridY": 59,
+      "widthCells": 17,
       "heightCells": 1
     },
     {
@@ -3364,15 +2690,45 @@
       "heightCells": 1
     },
     {
+      "gridX": 194,
+      "gridY": 60,
+      "widthCells": 15,
+      "heightCells": 1
+    },
+    {
       "gridX": 85,
       "gridY": 61,
       "widthCells": 94,
       "heightCells": 1
     },
     {
+      "gridX": 195,
+      "gridY": 61,
+      "widthCells": 14,
+      "heightCells": 1
+    },
+    {
+      "gridX": 52,
+      "gridY": 59,
+      "widthCells": 19,
+      "heightCells": 4
+    },
+    {
       "gridX": 84,
       "gridY": 62,
       "widthCells": 96,
+      "heightCells": 1
+    },
+    {
+      "gridX": 196,
+      "gridY": 62,
+      "widthCells": 12,
+      "heightCells": 1
+    },
+    {
+      "gridX": 53,
+      "gridY": 63,
+      "widthCells": 18,
       "heightCells": 1
     },
     {
@@ -3382,9 +2738,33 @@
       "heightCells": 1
     },
     {
+      "gridX": 198,
+      "gridY": 63,
+      "widthCells": 9,
+      "heightCells": 1
+    },
+    {
+      "gridX": 53,
+      "gridY": 64,
+      "widthCells": 17,
+      "heightCells": 1
+    },
+    {
       "gridX": 83,
       "gridY": 64,
       "widthCells": 100,
+      "heightCells": 1
+    },
+    {
+      "gridX": 200,
+      "gridY": 64,
+      "widthCells": 6,
+      "heightCells": 1
+    },
+    {
+      "gridX": 54,
+      "gridY": 65,
+      "widthCells": 16,
       "heightCells": 1
     },
     {
@@ -3394,9 +2774,21 @@
       "heightCells": 1
     },
     {
+      "gridX": 56,
+      "gridY": 66,
+      "widthCells": 13,
+      "heightCells": 1
+    },
+    {
       "gridX": 82,
       "gridY": 66,
       "widthCells": 104,
+      "heightCells": 1
+    },
+    {
+      "gridX": 60,
+      "gridY": 67,
+      "widthCells": 7,
       "heightCells": 1
     },
     {
@@ -3952,10 +3344,64 @@
       "heightCells": 1
     },
     {
+      "gridX": 96,
+      "gridY": 115,
+      "widthCells": 4,
+      "heightCells": 1
+    },
+    {
+      "gridX": 161,
+      "gridY": 115,
+      "widthCells": 3,
+      "heightCells": 1
+    },
+    {
+      "gridX": 93,
+      "gridY": 116,
+      "widthCells": 10,
+      "heightCells": 1
+    },
+    {
       "gridX": 124,
       "gridY": 115,
       "widthCells": 8,
       "heightCells": 2
+    },
+    {
+      "gridX": 159,
+      "gridY": 116,
+      "widthCells": 8,
+      "heightCells": 1
+    },
+    {
+      "gridX": 88,
+      "gridY": 117,
+      "widthCells": 21,
+      "heightCells": 1
+    },
+    {
+      "gridX": 157,
+      "gridY": 117,
+      "widthCells": 16,
+      "heightCells": 1
+    },
+    {
+      "gridX": 86,
+      "gridY": 118,
+      "widthCells": 24,
+      "heightCells": 1
+    },
+    {
+      "gridX": 151,
+      "gridY": 118,
+      "widthCells": 23,
+      "heightCells": 1
+    },
+    {
+      "gridX": 85,
+      "gridY": 119,
+      "widthCells": 26,
+      "heightCells": 1
     },
     {
       "gridX": 124,
@@ -3964,15 +3410,57 @@
       "heightCells": 3
     },
     {
+      "gridX": 149,
+      "gridY": 119,
+      "widthCells": 26,
+      "heightCells": 1
+    },
+    {
+      "gridX": 84,
+      "gridY": 120,
+      "widthCells": 29,
+      "heightCells": 1
+    },
+    {
+      "gridX": 148,
+      "gridY": 120,
+      "widthCells": 27,
+      "heightCells": 1
+    },
+    {
+      "gridX": 83,
+      "gridY": 121,
+      "widthCells": 31,
+      "heightCells": 1
+    },
+    {
       "gridX": 125,
       "gridY": 120,
       "widthCells": 7,
       "heightCells": 2
     },
     {
+      "gridX": 82,
+      "gridY": 122,
+      "widthCells": 33,
+      "heightCells": 1
+    },
+    {
       "gridX": 125,
       "gridY": 122,
       "widthCells": 8,
+      "heightCells": 1
+    },
+    {
+      "gridX": 147,
+      "gridY": 121,
+      "widthCells": 29,
+      "heightCells": 2
+    },
+    {
+      "gridX": 80,
+      "gridY": 123,
+      "widthCells": 37,
       "heightCells": 1
     },
     {
@@ -3982,15 +3470,33 @@
       "heightCells": 3
     },
     {
+      "gridX": 80,
+      "gridY": 124,
+      "widthCells": 38,
+      "heightCells": 1
+    },
+    {
       "gridX": 126,
       "gridY": 123,
       "widthCells": 8,
       "heightCells": 2
     },
     {
+      "gridX": 146,
+      "gridY": 123,
+      "widthCells": 31,
+      "heightCells": 3
+    },
+    {
       "gridX": 239,
       "gridY": 124,
       "widthCells": 6,
+      "heightCells": 2
+    },
+    {
+      "gridX": 79,
+      "gridY": 125,
+      "widthCells": 39,
       "heightCells": 2
     },
     {
@@ -4006,6 +3512,18 @@
       "heightCells": 1
     },
     {
+      "gridX": 80,
+      "gridY": 127,
+      "widthCells": 38,
+      "heightCells": 1
+    },
+    {
+      "gridX": 146,
+      "gridY": 126,
+      "widthCells": 32,
+      "heightCells": 2
+    },
+    {
       "gridX": 128,
       "gridY": 127,
       "widthCells": 8,
@@ -4016,6 +3534,18 @@
       "gridY": 127,
       "widthCells": 6,
       "heightCells": 2
+    },
+    {
+      "gridX": 80,
+      "gridY": 128,
+      "widthCells": 37,
+      "heightCells": 2
+    },
+    {
+      "gridX": 81,
+      "gridY": 130,
+      "widthCells": 36,
+      "heightCells": 1
     },
     {
       "gridX": 129,
@@ -4030,27 +3560,69 @@
       "heightCells": 2
     },
     {
+      "gridX": 81,
+      "gridY": 131,
+      "widthCells": 35,
+      "heightCells": 2
+    },
+    {
+      "gridX": 146,
+      "gridY": 128,
+      "widthCells": 33,
+      "heightCells": 5
+    },
+    {
+      "gridX": 82,
+      "gridY": 133,
+      "widthCells": 34,
+      "heightCells": 1
+    },
+    {
+      "gridX": 146,
+      "gridY": 133,
+      "widthCells": 32,
+      "heightCells": 1
+    },
+    {
+      "gridX": 82,
+      "gridY": 134,
+      "widthCells": 33,
+      "heightCells": 1
+    },
+    {
       "gridX": 130,
       "gridY": 131,
       "widthCells": 7,
       "heightCells": 4
     },
     {
-      "gridX": 166,
+      "gridX": 146,
       "gridY": 134,
-      "widthCells": 6,
+      "widthCells": 30,
       "heightCells": 1
     },
     {
-      "gridX": 163,
+      "gridX": 83,
       "gridY": 135,
-      "widthCells": 10,
+      "widthCells": 31,
       "heightCells": 1
     },
     {
-      "gridX": 161,
+      "gridX": 147,
+      "gridY": 135,
+      "widthCells": 27,
+      "heightCells": 1
+    },
+    {
+      "gridX": 83,
       "gridY": 136,
-      "widthCells": 13,
+      "widthCells": 28,
+      "heightCells": 1
+    },
+    {
+      "gridX": 148,
+      "gridY": 136,
+      "widthCells": 25,
       "heightCells": 1
     },
     {
@@ -4060,21 +3632,45 @@
       "heightCells": 6
     },
     {
+      "gridX": 85,
+      "gridY": 137,
+      "widthCells": 24,
+      "heightCells": 1
+    },
+    {
       "gridX": 129,
       "gridY": 135,
       "widthCells": 8,
       "heightCells": 3
     },
     {
-      "gridX": 160,
+      "gridX": 151,
       "gridY": 137,
-      "widthCells": 15,
-      "heightCells": 2
+      "widthCells": 20,
+      "heightCells": 1
     },
     {
-      "gridX": 160,
-      "gridY": 139,
+      "gridX": 90,
+      "gridY": 138,
+      "widthCells": 17,
+      "heightCells": 1
+    },
+    {
+      "gridX": 154,
+      "gridY": 138,
       "widthCells": 16,
+      "heightCells": 1
+    },
+    {
+      "gridX": 91,
+      "gridY": 139,
+      "widthCells": 7,
+      "heightCells": 1
+    },
+    {
+      "gridX": 155,
+      "gridY": 139,
+      "widthCells": 14,
       "heightCells": 1
     },
     {
@@ -4084,9 +3680,9 @@
       "heightCells": 3
     },
     {
-      "gridX": 160,
+      "gridX": 158,
       "gridY": 140,
-      "widthCells": 15,
+      "widthCells": 2,
       "heightCells": 1
     },
     {
@@ -4094,18 +3690,6 @@
       "gridY": 137,
       "widthCells": 5,
       "heightCells": 4
-    },
-    {
-      "gridX": 161,
-      "gridY": 141,
-      "widthCells": 14,
-      "heightCells": 1
-    },
-    {
-      "gridX": 162,
-      "gridY": 142,
-      "widthCells": 11,
-      "heightCells": 1
     },
     {
       "gridX": 240,
@@ -4118,12 +3702,6 @@
       "gridY": 141,
       "widthCells": 7,
       "heightCells": 3
-    },
-    {
-      "gridX": 164,
-      "gridY": 143,
-      "widthCells": 8,
-      "heightCells": 1
     },
     {
       "gridX": 127,

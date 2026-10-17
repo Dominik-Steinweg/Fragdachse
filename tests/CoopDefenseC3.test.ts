@@ -196,6 +196,8 @@ describe('Coop Defense C3 configuration', () => {
       effect: { visualStyle: 'normal', burnDurationMs: 2_000, burnDamagePerTick: 0.5, sourceId: 'test.night-fire' } });
     const config = normalizeCoopDefenseMapConfig(makeMap({ mapEvents: [fire],
       encounters: [{ id: 'west', start: { type: 'time', atMs: 0 }, groups: [{ enemyKind: 'zombie-badger', count: 1, front: 'west' }] }] }));
+    // Own arena metrics: generator and the base lookup below must see the same arena.
+    applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', config.arenaWidthCells, config.arenaHeightCells);
     for (const seed of [3, 41, 902, 1234, 7777]) {
       const layout = generateArenaWithActiveMetrics(seed, config);
       const { gridCols: cols, gridRows: rows } = resolveActiveArenaWorldMetrics();
