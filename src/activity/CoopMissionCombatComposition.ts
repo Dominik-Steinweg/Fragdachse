@@ -37,6 +37,7 @@ import {
 } from '../systems/flowfield/FlowFieldCoordinator';
 import { createFlowFieldRunner } from '../systems/flowfield/FlowFieldRunnerFactory';
 import {
+  applyEnemyTargetingToBaseDescriptors,
   buildBaseDescriptors,
   buildStaticKindRaster,
   createFlowFieldTuning,
@@ -160,7 +161,8 @@ export class CoopMissionCombatComposition {
       metrics,
       tuning: createFlowFieldTuning(),
       staticKind: terrain,
-      bases: buildBaseDescriptors(this.options.getBaseSpecs()).map(base => exact
+      bases: applyEnemyTargetingToBaseDescriptors(buildBaseDescriptors(this.options.getBaseSpecs()),
+        this.options.activity.mapConfig.enemyTargeting).map(base => exact
         ? { ...base, cellCoords: base.cellCoords.map(coordinate => coordinate * 2 + 1) } : base),
       activeBaseIds: this.options.getActiveBaseIds(),
       obstacleCellProvider: exact ? () => [] : this.options.obstacleCellProvider,

@@ -6,6 +6,7 @@ import { COOP_DEFENSE_ENEMY_KINDS, getCoopDefenseEnemyConfig } from '../src/conf
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { CoopDefenseEnemyKind as EnemyKind } from '../src/config/coopDefenseEnemies';
+import { applyEnemyTargetingToBaseDescriptors } from '../src/systems/flowfield/FlowFieldSources';
 
 function enemy(kind: EnemyKind = 'rabid-badger', id = 'enemy', x = 32, y = 128): EnemyEntity {
   const config = getCoopDefenseEnemyConfig(kind);
@@ -83,6 +84,18 @@ describe('Shared strategic intent and demolition permission', () => {
     }
     world.intents.clear();
     expect(world.intents.get(unit.id)).toBeNull();
+    expect(world.intents.allowsAttack(unit.id, 'base', 'main', 'all')).toBe(false);
+    world.destroy();
+  });
+
+  it.each(COOP_DEFENSE_ENEMY_KINDS)('hunts players instead of bases under the players targeting policy for %s', kind => {
+    const world = navigationTestWorld([rect('base:main', 176, 96, 208, 160, 'base')],
+      applyEnemyTargetingToBaseDescriptors([{ id: 'main', isGoalSource: true, cellCoords: Int32Array.of(12, 8) }], 'players'));
+    const unit = enemy(kind, kind, 64, 128), config = getCoopDefenseEnemyConfig(kind);
+    // Far from the spawn, so neither an engage block nor a base preference decides the target.
+    world.catalog.updateTargets([{ kind: 'player', id: 'player', x: 232, y: 232 }]);
+    for (const time of [0, 200, 400]) settle(world, [unit], time);
+    expect(world.intents.get(unit.id)?.target).toEqual(config.flee ? null : { kind: 'player', id: 'player' });
     expect(world.intents.allowsAttack(unit.id, 'base', 'main', 'all')).toBe(false);
     world.destroy();
   });

@@ -6,6 +6,7 @@
 import type { ArenaLayout } from '../../types';
 import type { BaseSpec } from '../../arena/BaseRegistry';
 import type { ArenaMapGridChangedEvent } from '../../scenes/arena/ArenaEvents';
+import type { CoopDefenseMapEnemyTargeting } from '../../config/coopDefenseMapAuthoring';
 import {
   COOP_DEFENSE_FLOW_FIELD_BASE_COST,
   COOP_DEFENSE_FLOW_FIELD_DIRT_COST,
@@ -146,6 +147,18 @@ export function buildBaseDescriptors(baseSpecs: readonly BaseSpec[]): FlowFieldB
       isGoalSource: isBaseGoalSource(spec),
     };
   });
+}
+
+/**
+ * Wendet die map-weite Gegner-Zielpolitik an. `players` nimmt jeder Basis die Zielrolle: Ohne
+ * Basisziel fallen Belagerer auf die Spielerjagd zurueck, Basis-Praeferenzen finden nichts und
+ * Basen bleiben nur noch Hindernis. Ohne Politik bleiben die Deskriptoren unveraendert.
+ */
+export function applyEnemyTargetingToBaseDescriptors(
+  bases: FlowFieldBaseDescriptor[],
+  enemyTargeting: CoopDefenseMapEnemyTargeting | undefined,
+): FlowFieldBaseDescriptor[] {
+  return enemyTargeting === 'players' ? bases.map(base => ({ ...base, isGoalSource: false })) : bases;
 }
 
 function isBaseGoalSource(spec: BaseSpec): boolean {

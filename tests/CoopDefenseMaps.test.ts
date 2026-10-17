@@ -232,6 +232,18 @@ describe('Coop defense map progression', () => {
       .toThrow(/Invalid trackPosition/);
   });
 
+  it('accepts only the players enemy targeting policy and keeps it optional', () => {
+    const base = {
+      mapId: 'enemy-targeting-test', displayName: 'Enemy targeting test', arenaWidthCells: 20,
+      balanceReferenceDurationSec: 60, objective: 'survive' as const, surviveDurationSec: 60,
+      respawnsPerPlayer: 0, bases: [], powerUps: [],
+    };
+    expect(normalizeCoopDefenseMapConfig(base).enemyTargeting).toBeUndefined();
+    expect(normalizeCoopDefenseMapConfig({ ...base, enemyTargeting: 'players' }).enemyTargeting).toBe('players');
+    expect(() => normalizeCoopDefenseMapConfig({ ...base, enemyTargeting: 'bases' as never }))
+      .toThrow(/enemyTargeting/);
+  });
+
   it('keeps configured item rewards valid through campaign progression', () => {
     for (const map of COOP_DEFENSE_MAP_CONFIGS) {
       if (!map.itemDrop) continue;

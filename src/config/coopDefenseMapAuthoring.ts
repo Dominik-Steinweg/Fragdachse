@@ -508,6 +508,9 @@ export type CoopDefenseMapObjective =
    */
   | 'defend-until-dawn';
 
+/** Map-weite Gegner-Zielpolitik; siehe {@link CoopDefenseMapConfig.enemyTargeting}. */
+export type CoopDefenseMapEnemyTargeting = 'players';
+
 /**
  * Belohnt einen Sieg auf dieser Map mit einem Item-Angebot. Bewusst pro Map konfigurierbar und
  * bewusst wiederholbar: anders als Boss-Punkte zaehlt jeder erneute Sieg erneut.
@@ -927,6 +930,12 @@ export interface CoopDefenseMapConfig {
   readonly objective: CoopDefenseMapObjective;
   /** Zwingend fuer jedes Ziel, das ueber den Team-Wipe verliert: begrenzte persoenliche Respawns. */
   readonly respawnsPerPlayer?: number;
+  /**
+   * Map-weite Zielpolitik der Gegner. `players`: Keine freundliche Basis ist Navigationsziel; auch
+   * Belagerer jagen die Spieler, Basen werden nur noch als Hindernis angegriffen. Ohne Angabe gilt
+   * das authored Verhalten der Gegnerart.
+   */
+  readonly enemyTargeting?: CoopDefenseMapEnemyTargeting;
   /** Gesetzt: Ein Sieg auf dieser Map bietet dem Spieler drei Items zur Auswahl an. */
   readonly itemDrop?: CoopDefenseMapItemDropConfig;
   /**
@@ -1373,6 +1382,9 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
       objective,
       mapConfig.respawnsPerPlayer,
     ),
+    ...(mapConfig.enemyTargeting === undefined
+      ? {}
+      : { enemyTargeting: normalizeEnemyTargeting(mapConfig.mapId, mapConfig.enemyTargeting) }),
     itemDrop,
     persistentBasePreview,
     persistentBase,
@@ -1381,6 +1393,11 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
       ? {}
       : { respawnDelaySchedule: normalizeRespawnDelaySchedule(mapConfig.mapId, mapConfig.respawnDelaySchedule) }),
   };
+}
+
+function normalizeEnemyTargeting(mapId: string, value: unknown): CoopDefenseMapEnemyTargeting {
+  if (value !== 'players') throw new Error(`[coopDefenseMaps] Map ${mapId} enemyTargeting must be "players"`);
+  return value;
 }
 
 function normalizeRespawnDelaySchedule(

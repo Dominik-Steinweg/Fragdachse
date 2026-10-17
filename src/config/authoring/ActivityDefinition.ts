@@ -59,6 +59,8 @@ export interface CoopMissionDefinition {
   /** Reine Balancing-Referenz fuer Druck-/Drop-Normalisierung. */
   readonly balanceReferenceDurationSec: number;
   readonly respawnsPerPlayer?: number;
+  /** Map-weite Gegner-Zielpolitik; `players` nimmt allen Basen die Rolle als Navigationsziel. */
+  readonly enemyTargeting?: import('../coopDefenseMapAuthoring').CoopDefenseMapEnemyTargeting;
 
   // ── Druck und Verlauf ─────────────────────────────────────────────────────
   readonly encounters?: readonly CoopDefenseMapEncounterConfig[];
