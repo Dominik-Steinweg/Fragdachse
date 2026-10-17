@@ -170,7 +170,7 @@ def prepare(root, spec, revision, fingerprint, sources, textures):
     importlib.invalidate_caches()
     for name in ('blender_pipeline', 'rigs_v2', 'claw_motion_v2', 'kraken_motion_v2', 'motions_v2', 'eye_anchors', 'socket_anchors',
                  'kraken_motion_land_v2', 'kraken_tentacle_motion_v2', 'kraken_egg_motion_v2', 'kraken_brood_motion_v2',
-                 'plague_toad_motion_v2',
+                 'plague_toad_motion_v2', 'kaboomtula_motion_v2',
                  'contracts_v2', 'pose_validation_v2', 'elevation_v2',
                  'recipes.badger', 'recipes_v2.badger',
                  *([f'recipes.{spec["recipe"]}'] if spec['recipe'] in ('badger', 'rocket') else [])):

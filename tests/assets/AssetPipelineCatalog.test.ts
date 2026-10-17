@@ -181,7 +181,8 @@ describe('asset pipeline catalog contracts', () => {
       'kraken_land_idle', 'kraken_land_move', 'kraken_land_ashore', 'kraken_land_slam', 'kraken_land_egg_throw', 'kraken_land_death', 'kraken_land_volley_spines',
       'kraken_tentacle_rise', 'kraken_tentacle_hover', 'kraken_tentacle_slam', 'kraken_tentacle_retract', 'kraken_egg_idle', 'kraken_egg_hatch',
       'kraken_brood_idle', 'kraken_brood_crawl', 'kraken_brood_spit', 'kraken_brood_leap',
-      'toad_idle', 'toad_shuffle', 'toad_hop', 'toad_channel', 'toad_tongue']) motions.add(motion);
+      'toad_idle', 'toad_shuffle', 'toad_hop', 'toad_channel', 'toad_tongue',
+      'kaboomtula_idle', 'kaboomtula_skitter', 'kaboomtula_spit', 'kaboomtula_alert', 'kaboomtula_leap']) motions.add(motion);
     for (const asset of assets) {
       if (asset.production === 'planned') {
         expect(asset.recipe).toBeUndefined();

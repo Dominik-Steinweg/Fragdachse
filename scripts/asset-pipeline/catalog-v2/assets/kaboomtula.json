@@ -1,0 +1,101 @@
+{
+  "id": "kaboomtula",
+  "label": "Kabummtula",
+  "category": "enemy",
+  "gameIds": [],
+  "reference": "public/assets/sprites/enemies/enemy_kaboomtula.png",
+  "targetSize": 26,
+  "sourceSizes": [
+    64,
+    128
+  ],
+  "displayScale": 2.4,
+  "collisionDiameter": 26,
+  "forward": "north",
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "description": {
+    "silhouette": "Kamikaze-Vogelspinne in Draufsicht: flacher runder Cephalothorax mit Augenhügel, davor zwei bauchige Cheliceren und kurze Pedipalpen, acht dicke, gegliederte Beine (vier je Seite) mit hoch gestellten Knien, die Paare I/II nach vorn, III/IV nach hinten gespreizt; hinter einem schmalen Stiel ein prall geschwollenes, rundes Bomben-Abdomen.",
+    "colors": "Schwarzviolette Behaarung mit fahlen Lila-Säumen und hellen Gelenkringen, matter Chitinpanzer mit dunklen Radialfurchen; das Abdomen dunkel mit leerenviolett glühenden Adern und Herzlinie als lebende Bombe; acht violett glimmende Augen; kein Rot (bleibt den Telegraphen), kein Gelb.",
+    "anatomy": "Cephalothorax (Bone body) mit Fovea, Augenhügel und acht Augen (eyeLeft/eyeRight = vordere Mittelaugen, drei Extra-Paare), Cheliceren mit Giftklauen (chelicera_l/r, fang_l/r), Pedipalpen (palp_<s>_femur/tibia), acht Beine mit je drei starren Segmenten (leg_<s><1..4>_femur/tibia/tarsus), Abdomen (Bone abdomen) mit Spinnwarzen und carriage-Control für echte Sprunghöhe; vier Eck-Kontaktmeshes `<corner> broad paw` verbinden die Tarsen der Beinpaare 1+2 bzw. 3+4; Socket mouth für das Netzspucken.",
+    "materials": "Matte Setae auf Basis der Kraken-Hautschicht (Wertplan, gerichtete Haar-Textur, gedämpfter violetter Streifglanz), straffe Abdomenhaut mit eingebrannter Adern-Emission (vein_glow), glänzend schwarze Klauen mit violetten Giftperlen, glänzende Augenkuppeln mit violetten Linsen; keine Kameraneigung, kein Comic-Look.",
+    "stage": "Produktion: V2-Quelle kt-v1-r1 (standard, 128 px ausgewählt, archiviert), abgenommen an GA1 als Form form-b-r2 (Bombenbauch, Palette void, Adern web) und an GA2 als Entwurf draft-c durch die Code-Lane; 75 Posen mit acht Augenankern (Hauptpaar + drei Extra-Paare) und Socket mouth; fliederfarbene Setae-Lichtkanten für dunklen Boden; Schatten-Mesh enemy-mesh-kt-v1-r1 versiegelt (IoU min. 0,966). gameIds bleiben bis zum Cutover leer."
+  },
+  "requiredClips": [
+    "move",
+    "claw",
+    "alert",
+    "leap",
+    "idle"
+  ],
+  "production": "reference",
+  "recipe": "kaboomtula",
+  "model": {
+    "abdomenScale": 1.32,
+    "legReach": 0.95,
+    "legThickness": 1.15,
+    "kneeHeight": 0.9,
+    "eyeScale": 1.5,
+    "palette": "void",
+    "veins": "web"
+  },
+  "orthoScale": 6.24,
+  "textures": {
+    "organic": "art/poc/pipeline-v2/textures/kaboomtula-setae-v1.jpg",
+    "veins": "art/poc/pipeline-v2/textures/kaboomtula-abdomen-v1.jpg"
+  },
+  "materialVariants": {
+    "standard": {
+      "label": "Schwarzviolette Setae, glühende Bombenadern und violette Augen",
+      "textureStrength": 0.7,
+      "formShadowStrength": 0.85
+    }
+  },
+  "clips": [
+    {
+      "name": "move",
+      "motion": "kaboomtula_skitter",
+      "frameCount": 12,
+      "frameRate": 36,
+      "loop": true
+    },
+    {
+      "name": "claw",
+      "motion": "kaboomtula_spit",
+      "frameCount": 14,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "strike": 6,
+        "impact": 9
+      }
+    },
+    {
+      "name": "alert",
+      "motion": "kaboomtula_alert",
+      "frameCount": 10,
+      "frameRate": 24,
+      "loop": false
+    },
+    {
+      "name": "leap",
+      "motion": "kaboomtula_leap",
+      "frameCount": 22,
+      "frameRate": 24,
+      "loop": false,
+      "markers": {
+        "launch": 5,
+        "land": 11
+      }
+    },
+    {
+      "name": "idle",
+      "motion": "kaboomtula_idle",
+      "frameCount": 16,
+      "frameRate": 12,
+      "loop": true
+    }
+  ]
+}

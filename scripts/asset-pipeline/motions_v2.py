@@ -141,6 +141,8 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
             break
     elif motion.startswith('toad_'):
         importlib.import_module('plague_toad_motion_v2').apply_plague_toad(asset, motion, phase, frame, idle, p, pose, key)
+    elif motion.startswith('kaboomtula_'):
+        importlib.import_module('kaboomtula_motion_v2').apply_kaboomtula(asset, motion, phase, frame, idle, p, pose, key)
     elif motion.startswith('shield_'):
         pose('left_arm')
         pose('right_arm')
