@@ -2,7 +2,9 @@
   "id": "kaboomtula",
   "label": "Kabummtula",
   "category": "enemy",
-  "gameIds": [],
+  "gameIds": [
+    "kaboomtula"
+  ],
   "reference": "public/assets/sprites/enemies/enemy_kaboomtula.png",
   "targetSize": 26,
   "sourceSizes": [

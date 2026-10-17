@@ -84,11 +84,13 @@ describe('selected runtime asset package', () => {
       };
       const idle = pose(asset.idleFrame), impact = pose(clip.frames[markers.impact]);
       // A claw pounce crouches back before the strike and follows through after the impact; a tongue
-      // lash announces itself with the open mouth and holds the lunge while the runtime tongue is out.
-      const tongue = asset.gameIds.some(id => COOP_DEFENSE_ENEMY_CONFIGS[id]?.weapons.some(w => {
-        const fire = WEAPON_CONFIGS[w.weaponId]?.fire;
-        return fire?.type === 'melee' && fire.visualPreset === 'enemy_tongue';
-      }));
+      // lash announces itself with the open mouth and holds the lunge while the runtime tongue is out,
+      // and a Kabummtula's web spit (its claw clip) holds its stretch while the glob leaves the fangs.
+      const tongue = asset.gameIds.some(id => COOP_DEFENSE_ENEMY_CONFIGS[id]?.kaboomtula
+        || COOP_DEFENSE_ENEMY_CONFIGS[id]?.weapons.some(w => {
+          const fire = WEAPON_CONFIGS[w.weaponId]?.fire;
+          return fire?.type === 'melee' && fire.visualPreset === 'enemy_tongue';
+        }));
       if (!tongue) expect(pose(clip.frames[markers.strike]).center, asset.id).toBeGreaterThan(idle.center);
       expect(impact.center, asset.id).toBeLessThan(idle.center);
       if (!tongue) expect(pose(clip.frames[markers.impact + 1]).center, asset.id).toBeLessThan(impact.center);
