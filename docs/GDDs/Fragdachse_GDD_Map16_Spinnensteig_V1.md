@@ -45,7 +45,7 @@ Prototyp „Zeitzünder“ (104×40, fünf gleichförmige Hinterhalte). Playtest
 - `enemyTargeting: "players"`: Keine Basis ist Navigationsziel. Belagerer (Zombies, Dämonen,
   Sporenpanzer, Quacksalber, Mini-Kraken) jagen die Spieler. Die Kabummtula sucht keine
   Basis-Kamikaze. Basen werden nur noch als Hindernis angegriffen.
-- Sonnenaufgang: 06:00 bis 07:30 über 20 Minuten Missionszeit, mit Bodennebel.
+- Sonnenaufgang: 07:00 bis 08:30 über 20 Minuten Missionszeit, mit Bodennebel (eine Stunde später als der erste Entwurf, damit Gegner besser lesbar sind).
 - Drei Versorgungsposten mit Health-Podesten.
 
 ## 4. Überfälle

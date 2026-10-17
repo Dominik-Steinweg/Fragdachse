@@ -163,6 +163,24 @@ describe('shield charger host decisions', () => {
     expect(stall.charge().lane!.length).toBeLessThan(30);
   });
 
+  it('keeps running through host frames without a physics step in between', () => {
+    for (const kind of ['shield-charger-badger', 'mini-kraken']) {
+      const f = fixture({ kind, target: { x: 200, y: 0 } });
+      const windupMs = enemyConfig.getCoopDefenseEnemyConfig(kind).shieldCharger!.windupMs;
+      f.system.hostUpdate(0); f.system.hostUpdate(windupMs);
+      const lane = f.charge().lane!;
+      // A faster display than the physics rate: every other host frame sees an unmoved body.
+      let frame = 0;
+      for (let t = windupMs; t < windupMs + 3000 && f.charge().phase === 'run'; t += 7) {
+        if (frame++ % 2 === 0) f.move(14);
+        f.system.hostUpdate(t + 7);
+      }
+      expect(f.charge().phase).toBe('recover');
+      expect(f.charge().lane!.length).toBeCloseTo(lane.length, 0);
+      expect(f.strike).toHaveBeenCalled();
+    }
+  });
+
   it('stun or displacement cancel a windup into recovery with a retry lockout; death and clear release everything', () => {
     const stun = fixture();
     stun.system.hostUpdate(0); stun.stunned.value = true; stun.system.hostUpdate(100);

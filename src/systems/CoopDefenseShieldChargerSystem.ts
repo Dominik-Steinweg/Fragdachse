@@ -37,6 +37,9 @@ interface ChargerState {
   readonly struck: Set<string>;
   lastX: number;
   lastY: number;
+  /** Furthest progress along the run lane and when it last grew (stall detection). */
+  runAlong: number;
+  runProgressAt: number;
 }
 
 // A clear void glow hugging the modelled tower shield (reach ~15 px): blocking is core gameplay, so the
@@ -49,6 +52,9 @@ const ARRIVAL_EPSILON_PX = 3;
 const LANE_CORRECTION_PER_S = 10;
 /** Host frames are ~16.7 ms; the last step is shortened so the body stops at the end point. */
 const NOMINAL_FRAME_S = 1 / 60;
+/** A run that makes no progress along its lane for this long has hit something and ends. Host
+ *  frames can outpace physics steps, so a single still frame is no stall. */
+const RUN_STALL_MS = 120;
 
 /**
  * Activity-owned host decisions of the Schild-Anstürmer: frontal shield while approaching, a
@@ -71,7 +77,8 @@ export class CoopDefenseShieldChargerSystem implements EnemySpecialMovementSourc
       let state = this.states.get(enemy.id);
       if (!state || state.enemy !== enemy) {
         state = { enemy, phase: 'none', lane: null, revision: enemy.getShieldChargeState().revision,
-          cooldownUntil: nowMs, lockoutUntil: nowMs, struck: new Set(), lastX: enemy.sprite.x, lastY: enemy.sprite.y };
+          cooldownUntil: nowMs, lockoutUntil: nowMs, struck: new Set(), lastX: enemy.sprite.x, lastY: enemy.sprite.y,
+          runAlong: 0, runProgressAt: nowMs };
         this.states.set(enemy.id, state);
       }
       this.step(state, config, nowMs);
@@ -148,6 +155,7 @@ export class CoopDefenseShieldChargerSystem implements EnemySpecialMovementSourc
       } else {
         state.struck.clear();
         state.lastX = enemy.sprite.x; state.lastY = enemy.sprite.y;
+        state.runAlong = 0; state.runProgressAt = now;
         state.cooldownUntil = lane.runAt + config.cooldownMs;
         enemy.setKnockbackImmune(true);
         this.publish(state, 'run', lane);
@@ -197,11 +205,11 @@ export class CoopDefenseShieldChargerSystem implements EnemySpecialMovementSourc
     this.strikeSwept(state, config, now);
     const cos = Math.cos(lane.angle), sin = Math.sin(lane.angle);
     const along = (enemy.sprite.x - lane.originX) * cos + (enemy.sprite.y - lane.originY) * sin;
-    const moved = Math.hypot(enemy.sprite.x - state.lastX, enemy.sprite.y - state.lastY);
     state.lastX = enemy.sprite.x; state.lastY = enemy.sprite.y;
     const arrived = along >= lane.length - ARRIVAL_EPSILON_PX;
+    if (along > state.runAlong + 0.5) { state.runAlong = along; state.runProgressAt = now; }
     // A body stopped by geometry the lane did not know about ends the run early, never later.
-    const stalled = now > lane.runAt + 120 && moved < 0.5;
+    const stalled = now - state.runProgressAt > RUN_STALL_MS;
     if (!arrived && !stalled && now < lane.runEndsAt + 250) return;
     const travelled = Math.max(0, Math.min(lane.length, along));
     const ended: ShieldChargeLane = travelled < lane.length - ARRIVAL_EPSILON_PX

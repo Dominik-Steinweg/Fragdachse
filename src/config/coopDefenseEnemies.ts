@@ -349,9 +349,6 @@ export interface CoopDefenseEnemyKaboomtulaConfig {
   readonly pounce: {
     /** The telegraph starts once the rushing spider is this close to a player or decoy. */
     readonly triggerPx: number;
-    /** While telegraphing it keeps running but holds this distance band around the target. */
-    readonly bandMinPx: number;
-    readonly bandMaxPx: number;
     readonly telegraphMs: number;
     /** No new telegraph this long after a cancelled one. */
     readonly cancelLockoutMs: number;
@@ -359,7 +356,7 @@ export interface CoopDefenseEnemyKaboomtulaConfig {
   readonly leap: {
     /** Fixed flight time of every leap; the lane length sets the speed. */
     readonly airMs: number;
-    /** Share of the target's velocity x airMs the locked lane leads (0 = aim at the current position). */
+    /** Share of the target's velocity x (telegraphMs + airMs) the lane committed at the telegraph start leads (0 = aim at the current position). */
     readonly leadFactor: number;
     /** The lane continues this far beyond the aim point ... */
     readonly overshootPx: number;
@@ -1381,8 +1378,7 @@ function normalizeKaboomtulaConfig(
       calmWithinPx: Math.max(0, skitter.calmWithinPx),
       probePx: Math.max(1, skitter.probePx),
     },
-    pounce: { triggerPx: Math.max(1, pounce.triggerPx), bandMinPx: Math.max(0, pounce.bandMinPx),
-      bandMaxPx: Math.max(0, pounce.bandMaxPx), telegraphMs: Math.max(1, ms(pounce.telegraphMs)),
+    pounce: { triggerPx: Math.max(1, pounce.triggerPx), telegraphMs: Math.max(1, ms(pounce.telegraphMs)),
       cancelLockoutMs: ms(pounce.cancelLockoutMs) },
     leap: { airMs: Math.max(1, ms(leap.airMs)), leadFactor: Math.max(0, leap.leadFactor),
       overshootPx: Math.max(0, leap.overshootPx), maxLengthPx: Math.max(1, leap.maxLengthPx) },
@@ -1414,9 +1410,8 @@ function normalizeKaboomtulaConfig(
   };
   const n = normalized;
   if (n.skitter.weavePeriodMinMs > n.skitter.weavePeriodMaxMs || n.skitter.weaveDegrees >= 90
-    || !(n.pounce.bandMinPx < n.pounce.triggerPx && n.pounce.triggerPx <= n.pounce.bandMaxPx)
-    || n.pounce.bandMaxPx >= n.activationRadiusPx
-    || n.leap.maxLengthPx < n.pounce.bandMaxPx + n.leap.overshootPx) {
+    || n.pounce.triggerPx >= n.activationRadiusPx
+    || n.leap.maxLengthPx < n.pounce.triggerPx + n.leap.overshootPx) {
     throw new Error(`[coopDefenseEnemies] Invalid Kabummtula ranges or timing: ${enemyId}`);
   }
   return normalized;

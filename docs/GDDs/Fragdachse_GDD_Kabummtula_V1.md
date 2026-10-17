@@ -28,7 +28,7 @@ Positionierung, nicht aus einer langen Zündschnur.
 - Hauptziel sind Spieler (`movementTarget: players`). Köder lenken sie wie andere Gegner ab.
 - **Basis-Kamikaze:** Ist die Basis sehr viel leichter erreichbar als jeder Spieler (Wegkosten
   aller Spieler > 3 × Basis, oder kein Spieler erreichbar), greift sie die Basis an. Hysterese:
-  Freigabe erst unter 2 × und nach 3 s. Ein sichtbarer Spieler in 450 px gewinnt immer.
+  Freigabe erst unter 2 × und nach 3 s. Ein sichtbarer Spieler in 700 px gewinnt immer.
 - Türme sind nie Ziel der Explosion, nur des Netzes (opportunistisch, ohne Umweg).
 
 ## 4. Verhaltensablauf
@@ -36,15 +36,15 @@ Positionierung, nicht aus einer langen Zündschnur.
 | Phase | Verhalten |
 |---|---|
 | Annäherung | normale Wegfindung zum Ziel; Felsbiss nur zum Durchbrechen |
-| Drohen (~0,4 s) | sieht sie das Ziel in ~450 px: stehen, Vorderbeine heben, Glühen schwillt an |
+| Drohen (~0,4 s) | sieht sie das Ziel in ~700 px: stehen, Vorderbeine heben, Glühen schwillt an |
 | Sturmlauf | ~370 px/s in weichem Spinnen-Schlängeln (±28°, ~0,64–0,88 s je Hin und Her, Tempo ±16 %, keine Stopps oder harten Haken), Blick zur Beute, leicht in die Bewegung geneigt; Spielbarkeit vor Realismus |
-| Telegraph (~0,42 s) | ab ~120 px: läuft weiter und pirscht seitlich im Abstand 85–135 px; verdeckt Deckung die Beute, kehrt sie auf eine freie Linie zurück. Rote Bahn mit Zielring folgt dem Spieler und füllt sich. Ist die Bahn beim Absprung blockiert, hält sie die Ankündigung bis zu ~0,36 s länger und versucht es erneut |
-| Sprung (~0,21 s) | Bahn rastet beim Blitz ein (Vorhalt 0,7 × Geschwindigkeit × Flugzeit, plus Überschuss); immun gegen Rückstoß |
+| Telegraph (~0,42 s) | ab ~144 px: legt sich sofort auf eine Richtung fest (Vorhalt 0,85 × Geschwindigkeit × (Telegraph + Flugzeit), plus Überschuss) und läuft mit ~70 % Tempo auf dieser Bahn weiter, höchstens bis ~90 px vor den Zielpunkt. Rote Bahn zeigt die festgelegte Richtung bis zum Endpunkt und füllt sich, der Zielring markiert die Beute. Ist die Bahn beim Absprung blockiert, bricht sie ab und jagt weiter |
+| Sprung (~0,21 s) | fliegt von der erreichten Position zum angekündigten Endpunkt, ohne neu zu zielen; immun gegen Rückstoß |
 | Erholung (~0,65 s) | nach einem Fehlsprung; danach beginnt alles von vorn (erneutes Drohen) |
 | Spucken (~0,36 s) | ohne Spieler in Sicht: Turm in 380 px, der sie sehen könnte; unbesponnene zuerst |
 
-Ausweichen: Wer genau beim Lock-Blitz die Richtung wechselt oder dasht, verlässt die fixierte Bahn.
-Bloßes Weiterlaufen in eine Richtung reicht wegen des Vorhalts nicht.
+Ausweichen: Wer während des Telegraphs die Richtung wechselt, stehen bleibt oder dasht, verlässt die
+festgelegte Bahn. Bloßes Weiterlaufen in eine Richtung reicht wegen des Vorhalts nicht.
 
 ## 5. Sonderfälle
 

@@ -196,7 +196,7 @@ export class EncounterView {
         area.append(numberField(env, label, [...path, 'spawnArea', key], { min: key === 'gridX' || key === 'gridY' ? 0 : 1 }));
       }
       row.append(area);
-      if (spawnsAtEdge(group)) row.append(element('p', 'muted', 'Dieser Gegnertyp gräbt sich am Kartenrand ein. Seine Spawn-Area ist im Spiel unwirksam; er verwendet die Standardfront Westen.'));
+      if (spawnsAtEdge(group)) row.append(element('p', 'muted', 'Dieser Gegnertyp taucht innerhalb der Spawn-Area eingegraben aus dem Boden auf. Ohne Spawn-Area gräbt er sich von seiner Front aus ein.'));
     }
     const actions = element('div', 'group-actions');
     actions.append(button(group.spawnArea ? 'Spawn-Area auf Karte bearbeiten' : 'Front auf Karte zeigen', () => env.openMap([...path, group.spawnArea ? 'spawnArea' : 'front'])),

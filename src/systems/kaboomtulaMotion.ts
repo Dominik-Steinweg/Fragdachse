@@ -60,13 +60,13 @@ export interface LeapLaneLock {
 }
 
 /**
- * Aim the leap where the target will be after `leadFactor` of the flight time, extend it by the
- * overshoot, cap it and clip it by world geometry. Null when the clipped lane cannot even reach
- * the target's body (a blocked leap is no leap).
+ * Aim the leap where the target will be after `leadFactor` of `untilImpactMs` (telegraph plus flight
+ * when the lane is committed at the telegraph start), extend it by the overshoot, cap it and clip it
+ * by world geometry. Null when the clipped lane cannot even reach the target's body (a blocked leap is no leap).
  */
 export function lockLeapLane(origin: Point, target: Point, velocity: Point, targetReachPx: number, config: LeapConfig,
-  clearance: (angle: number, length: number) => number): LeapLaneLock | null {
-  const leadS = config.airMs / 1000 * config.leadFactor;
+  clearance: (angle: number, length: number) => number, untilImpactMs = config.airMs): LeapLaneLock | null {
+  const leadS = untilImpactMs / 1000 * config.leadFactor;
   const aimX = target.x + velocity.x * leadS, aimY = target.y + velocity.y * leadS;
   const dx = aimX - origin.x, dy = aimY - origin.y;
   const aimDistance = Math.hypot(dx, dy);

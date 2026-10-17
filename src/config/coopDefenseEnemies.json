@@ -664,7 +664,7 @@
         "lightIntensity": 0.4
       },
       "kaboomtula": {
-        "activationRadiusPx": 450,
+        "activationRadiusPx": 702,
         "alertMs": 400,
         "rushSpeedPx": 370,
         "rushMaxMs": 7000,
@@ -679,17 +679,15 @@
           "probePx": 48
         },
         "pounce": {
-          "triggerPx": 120,
-          "bandMinPx": 85,
-          "bandMaxPx": 135,
+          "triggerPx": 144,
           "telegraphMs": 420,
           "cancelLockoutMs": 450
         },
         "leap": {
           "airMs": 210,
-          "leadFactor": 0.7,
+          "leadFactor": 0.85,
           "overshootPx": 36,
-          "maxLengthPx": 215
+          "maxLengthPx": 250
         },
         "recoverMs": 650,
         "contactMarginPx": 2,
@@ -729,7 +727,7 @@
         "playerCostRatio": 3,
         "releaseCostRatio": 2,
         "minDwellMs": 3000,
-        "playerOverridePx": 450
+        "playerOverridePx": 702
       },
       "playerScaling": {
         "maxHpFactorPerAdditionalPlayer": 0.8

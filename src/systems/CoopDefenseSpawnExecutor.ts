@@ -175,6 +175,10 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
   ): CoopDefenseSpawnResult {
     const spawnedEnemyIds: string[] = [];
     if (count <= 0) return { enemyIds: spawnedEnemyIds, deferred: false };
+    // Eine authored Spawn-Area hat Vorrang vor dem Randtunnel: Buddler tauchen dort an Ort und Stelle auf.
+    if (spawnArea && getCoopDefenseEnemyConfig(kind).burrow?.spawnBurrowedAtEdge) {
+      spawnOptions = { ...spawnOptions, spawnBurrowed: true };
+    }
     const candidatesAll = this.collectCandidates(kind, front, flowFieldService, spawnArea);
     if (candidatesAll.length === 0) {
       this.warnExhausted();
@@ -221,7 +225,7 @@ export class CoopDefenseSpawnExecutor implements KrakenBossSpawnPort {
   ): SpawnCell[] {
     this.waitingForNavigation = false;
     this.waitingForSpace = false;
-    if (getCoopDefenseEnemyConfig(kind).burrow?.spawnBurrowedAtEdge) {
+    if (!spawnArea && getCoopDefenseEnemyConfig(kind).burrow?.spawnBurrowedAtEdge) {
       return this.collectEdgeBurrowCandidates(kind, front, flowFieldService);
     }
 

@@ -37,9 +37,9 @@ describe('Spawn coordinates across World and navigation grids', () => {
     const world = navigationTestWorld();
     const metrics = { ...resolveCoopDefenseWorldMetrics(8, 8), gridCols: 8, gridRows: 8,
       widthPx: 256, heightPx: 256, offsetX: 0, offsetY: 0, maxX: 256, maxY: 256 };
-    const spawned: { x: number; y: number; radius: number; active: boolean }[] = [];
-    const spawn = (x: number, y: number, kind: Parameters<typeof getCoopDefenseEnemyConfig>[0]) => {
-      spawned.push({ x, y, radius: getCoopDefenseEnemyConfig(kind).size / 2, active: true });
+    const spawned: { x: number; y: number; radius: number; active: boolean; options?: EnemySpawnOptions }[] = [];
+    const spawn = (x: number, y: number, kind: Parameters<typeof getCoopDefenseEnemyConfig>[0], options?: EnemySpawnOptions) => {
+      spawned.push({ x, y, radius: getCoopDefenseEnemyConfig(kind).size / 2, active: true, options });
       return { id: `spawn-${spawned.length}`, getCollisionRadius: () => getCoopDefenseEnemyConfig(kind).size / 2 };
     };
     const manager = { getAllEnemies: () => spawned.filter(p => p.active)
@@ -166,6 +166,14 @@ describe('Spawn coordinates across World and navigation grids', () => {
     expect(world.geometry().isFree(boss.x, boss.y, boss.radius)).toBe(true);
     expect(world.executor.hostSpawnEncounterGroup('alien-badger', 1, 'burrow', 'east').enemyIds).toHaveLength(1);
     expect(world.spawned.at(-1)?.x).toBe(240);
+    world.destroy();
+  });
+
+  it('lets burrowing arrivals emerge inside an authored spawn area instead of tunnelling from the edge', () => {
+    const world = setup();
+    expect(world.executor.hostSpawnEncounterGroup('alien-badger', 1, 'area', 'west',
+      { gridX: 5, gridY: 5, widthCells: 1, heightCells: 1 }).enemyIds).toHaveLength(1);
+    expect(world.spawned[0]).toMatchObject({ x: 176, y: 176, options: { spawnBurrowed: true } });
     world.destroy();
   });
 });

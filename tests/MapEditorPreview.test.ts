@@ -127,11 +127,11 @@ describe('map editor geometry and real generator', () => {
     expect(activeSpawnFronts(session.draft).map(item => item.front)).toEqual(['west', 'east']);
     session.undo(); expect(activeSpawnFronts(session.draft).map(item => item.front)).toContain('south');
   });
-  it('accounts for edge-burrow enemies even when an ineffective spawn area is authored', () => {
+  it('lets an authored spawn area replace the edge front of burrowing enemies', () => {
     const kind = COOP_DEFENSE_ENEMY_KINDS.find(kind => getCoopDefenseEnemyConfig(kind).burrow?.spawnBurrowedAtEdge)!;
     expect(kind).toBeDefined();
     const document = contentMap(); document.encounters = [{ id: 'edge', groups: [{ enemyKind: kind, count: 1, spawnArea: { gridX: 5, gridY: 5, widthCells: 3, heightCells: 3 } }] }];
-    expect(activeSpawnFronts(document).map(item => item.front)).toEqual(['west']);
+    expect(activeSpawnFronts(document)).toEqual([]);
   });
   it('disables the entire railway reservation while retaining its position and rejecting train events', () => {
     const document = contentMap(); document.trackMode = 'none'; document.trackPosition = { kind: 'grid', gridX: 10 };

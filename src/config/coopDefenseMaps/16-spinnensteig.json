@@ -2,7 +2,7 @@
   "mapId": "16",
   "arenaWidthCells": 264,
   "arenaHeightCells": 150,
-  "timeOfDay": "06:00",
+  "timeOfDay": "07:00",
   "dynamicTimeOfDay": {
     "transitions": [
       {
@@ -10,7 +10,7 @@
           "type": "time",
           "atMs": 0
         },
-        "targetTimeOfDay": "07:30",
+        "targetTimeOfDay": "08:30",
         "durationMs": 1200000
       }
     ]

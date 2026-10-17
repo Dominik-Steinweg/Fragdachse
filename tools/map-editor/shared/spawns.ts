@@ -38,8 +38,8 @@ export function activeSpawnFronts(draft: JsonObject): ActiveSpawnFront[] {
     const entries = sources.get(front) ?? []; entries.push(source); sources.set(front, entries);
   };
   array(draft.encounters).forEach((encounter, i) => array(encounter.groups).forEach((group, j) => {
-    if (Number(group.count) <= 0 || group.spawnArea && !spawnsAtEdge(group)) return;
-    add(group.front, { path: ['encounters', i, 'groups', j, 'front'], label: `${encounter.id} · Gruppe ${j + 1} · ${getEnemyName(String(group.enemyKind), 'de')}${group.spawnArea ? ' (Randspawn; Spawn-Area unwirksam)' : ''}` });
+    if (Number(group.count) <= 0 || group.spawnArea) return;
+    add(group.front, { path: ['encounters', i, 'groups', j, 'front'], label: `${encounter.id} · Gruppe ${j + 1} · ${getEnemyName(String(group.enemyKind), 'de')}` });
   }));
   array(draft.persistentSpawns).forEach((spawn, i) => {
     if (object(spawn.source).type === 'map' && Number(spawn.countPerTick) > 0) add(spawn.front, { path: ['persistentSpawns', i, 'front'], label: `Permanente Quelle · ${spawn.id} · ${getEnemyName(String(spawn.enemyKind), 'de')}` });

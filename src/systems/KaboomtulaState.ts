@@ -1,10 +1,12 @@
 /**
  * Replicated, host-decided state of one Kabummtula (kamikaze spider). The host publishes every
- * transition with a growing `revision`; clients only draw the timeline (alert pose, tracking
- * telegraph towards `target`, the locked leap on its flight line, recovery, web spit).
+ * transition with a growing `revision`; clients only draw the timeline (alert pose, telegraph
+ * along the committed lane, the locked leap on its flight line, recovery, web spit).
  *
  * Timeline per phase (host time, ms): `startedAt` → `endsAt` (0 = open-ended). In `pounce`,
- * `endsAt` is the launch moment; in `leap` the flight runs `leap.takeoffAt` → `leap.landAt`.
+ * `endsAt` is the launch moment and `leap` carries the lane committed at the telegraph start (its end
+ * point is final; the body keeps running along it until the launch); in `leap` the flight runs
+ * `leap.takeoffAt` → `leap.landAt`.
  */
 // Append-only: the index is the wire code.
 export const KABOOMTULA_PHASES = ['approach', 'alert', 'rush', 'pounce', 'leap', 'recover', 'spit'] as const;

@@ -111,12 +111,9 @@ interface SpiderState {
   trackAt: number;
   velocityX: number;
   velocityY: number;
-  orbitSide: 1 | -1;
   /** Body position at the previous host step: the contact test sweeps from here. */
   lastX: number;
   lastY: number;
-  /** Cover hides the hunted body from the stalking spider: it heads back to a free line. */
-  laneBlocked: boolean;
   /** Furthest progress along the locked leap lane and when it last grew (stall detection). */
   leapAlong: number;
   leapProgressAt: number;
@@ -138,14 +135,12 @@ const LEAP_STALL_MS = 100;
 const TRACK_TELEPORT_PX = 64;
 /** Web candidate scans are throttled per body. */
 const WEB_SCAN_INTERVAL_MS = 300;
-/** Share of the rush speed used while stalking inside the telegraph band. */
-const STALK_SPEED_FACTOR = 0.85;
-/** Sideways share of the stalk: a strafe around the prey, not a full circle into nearby cover. */
-const STALK_STRAFE = 0.4;
-/** A pounce whose lane is blocked at the launch retries this often ... */
-const POUNCE_RETRY_MS = 90;
-/** ... for at most this long beyond its telegraph before the spider gives up and hunts on. */
-const POUNCE_HOLD_MAX_MS = 360;
+/** Share of the rush speed kept while running along the committed lane during the telegraph. */
+const COMMITTED_RUN_SPEED_FACTOR = 0.7;
+/** The run stops this far before the aim point (lane end minus overshoot), so the leap keeps its span. */
+const MIN_LEAP_SPAN_PX = 90;
+/** At the launch the lane from the reached position must still keep this share of its planned length. */
+const MIN_LAUNCH_LANE_SHARE = 0.5;
 /** Sight is kept during the rush up to this multiple of the activation radius. */
 const RUSH_SIGHT_FACTOR = 1.6;
 /** Weave share lost per second while its sideways probe is blocked, and regained once free. */
@@ -154,7 +149,7 @@ const WEAVE_RECOVER_PER_S = 2.5;
 
 /**
  * Host decisions of the Kabummtula: alert pose on sight, a skittering rush faster than any player,
- * a telegraphed leap out of the run with a host-locked lane, a recovery after a miss, opportunistic
+ * a telegraphed leap out of the run whose lane is committed at the telegraph start, a recovery after a miss, opportunistic
  * web spits at turrets, and an immediate blast on any contact. Each transition is published as a
  * replicated {@link KaboomtulaState}; clients only draw it.
  */
@@ -196,7 +191,7 @@ export class CoopDefenseKaboomtulaSystem implements EnemySpecialMovementSource {
       case 'rush':
         return this.rushVelocity(state, config, now, aim);
       case 'pounce':
-        return this.stalkVelocity(state, config, aim);
+        return this.committedRunVelocity(state, config);
       case 'leap':
         return state.leap ? this.leapVelocity(state, state.leap) : { vx: 0, vy: 0 };
       default:
@@ -240,13 +235,11 @@ export class CoopDefenseKaboomtulaSystem implements EnemySpecialMovementSource {
   }
 
   private createState(enemy: EnemyEntity): SpiderState {
-    let hash = 2166136261;
-    for (let i = 0; i < enemy.id.length; i++) hash = Math.imul(hash ^ enemy.id.charCodeAt(i), 16777619);
     return {
       enemy, phase: 'approach', revision: enemy.getKaboomtulaState().revision, startedAt: 0, endsAt: 0, target: null,
       leap: null, aimX: enemy.sprite.x, aimY: enemy.sprite.y, lastSeenAt: 0, weaveGain: 1, weaveAt: 0,
       pounceLockoutUntil: 0, trackX: 0, trackY: 0, trackAt: 0, velocityX: 0, velocityY: 0,
-      orbitSide: (hash >>> 0) % 2 === 0 ? 1 : -1, lastX: enemy.sprite.x, lastY: enemy.sprite.y, laneBlocked: false, leapAlong: 0, leapProgressAt: 0,
+      lastX: enemy.sprite.x, lastY: enemy.sprite.y, leapAlong: 0, leapProgressAt: 0,
       webTurret: null, webFired: false, webCooldownUntil: 0, nextWebScanAt: 0,
     };
   }
@@ -315,6 +308,8 @@ export class CoopDefenseKaboomtulaSystem implements EnemySpecialMovementSource {
     state.lastSeenAt = now;
     state.weaveGain = 1;
     state.weaveAt = now;
+    state.trackX = target.x; state.trackY = target.y; state.trackAt = now;
+    state.velocityX = 0; state.velocityY = 0;
     this.ports.onCommit?.(state.enemy, target.ref);
     this.publish(state, 'rush', now, 0, target.ref, null);
   }
@@ -323,6 +318,7 @@ export class CoopDefenseKaboomtulaSystem implements EnemySpecialMovementSource {
     const enemy = state.enemy, target = state.target ? this.ports.resolveTarget(enemy, state.target) : null;
     if (!target || now - state.startedAt > config.rushMaxMs) { this.recover(state, config, now); return; }
     this.setAim(state, target);
+    this.trackVelocity(state, target, now);
     const visible = this.ports.canSee(enemy, target, config.activationRadiusPx * RUSH_SIGHT_FACTOR);
     if (visible) state.lastSeenAt = now;
     else if (now - state.lastSeenAt > config.lostSightGraceMs) { this.recover(state, config, now); return; }
@@ -332,38 +328,42 @@ export class CoopDefenseKaboomtulaSystem implements EnemySpecialMovementSource {
     const radius = enemy.getCollisionRadius();
     const clear = this.ports.laneClearance(x, y, Math.atan2(target.y - y, target.x - x), distance, radius);
     if (clear < distance - radius - target.radius) return;
-    state.trackX = target.x; state.trackY = target.y; state.trackAt = now;
-    state.velocityX = 0; state.velocityY = 0; state.laneBlocked = false;
-    this.publish(state, 'pounce', now, now + config.pounce.telegraphMs, target.ref, null);
+    // The direction is committed now, leading the prey over telegraph and flight: whoever keeps
+    // running straight is met, whoever turns, stops or dashes during the telegraph leaves the lane.
+    // The run along the lane during the telegraph extends its reach beyond the leap itself.
+    const runPx = config.rushSpeedPx * COMMITTED_RUN_SPEED_FACTOR * config.pounce.telegraphMs / 1000;
+    const lock = lockLeapLane({ x, y }, target, { x: state.velocityX, y: state.velocityY }, radius + target.radius,
+      { ...config.leap, maxLengthPx: config.leap.maxLengthPx + runPx },
+      (angle, length) => this.ports.laneClearance(x, y, angle, length, radius),
+      config.pounce.telegraphMs + config.leap.airMs);
+    if (!lock) return;
+    const takeoffAt = Math.round(now + config.pounce.telegraphMs);
+    const planned: LockedLeap = { originX: x, originY: y, endX: lock.endX, endY: lock.endY, takeoffAt,
+      landAt: takeoffAt + config.leap.airMs, angle: lock.angle, length: lock.length };
+    this.publish(state, 'pounce', now, takeoffAt, target.ref, planned);
   }
 
   private stepPounce(state: SpiderState, config: CoopDefenseEnemyKaboomtulaConfig, now: number): void {
     const enemy = state.enemy, target = state.target ? this.ports.resolveTarget(enemy, state.target) : null;
-    if (!target) { this.recover(state, config, now); return; }
+    const planned = state.leap;
+    if (!target || !planned) { this.recover(state, config, now); return; }
     this.setAim(state, target);
-    this.trackVelocity(state, target, now);
-    const x = enemy.sprite.x, y = enemy.sprite.y, radius = enemy.getCollisionRadius();
-    const distance = Math.hypot(target.x - x, target.y - y);
-    // While stalking, the body returns to a free line whenever cover hides the target.
-    state.laneBlocked = this.ports.laneClearance(x, y, Math.atan2(target.y - y, target.x - x), distance, radius)
-      < distance - radius - target.radius;
     if (now < state.endsAt) return;
-    const lock = lockLeapLane({ x, y }, target, { x: state.velocityX, y: state.velocityY }, radius + target.radius,
-      config.leap, (angle, length) => this.ports.laneClearance(x, y, angle, length, radius));
-    if (!lock) {
-      // No free lane at the launch: hold the announced leap a little longer (the telegraph keeps
-      // filling towards the new launch); only then give up and keep hunting.
-      if (now - state.startedAt < config.pounce.telegraphMs + POUNCE_HOLD_MAX_MS) {
-        this.publish(state, 'pounce', state.startedAt, now + POUNCE_RETRY_MS, target.ref, null);
-        return;
-      }
+    // Take off from the reached position towards the announced end point; no re-aim at the prey.
+    const x = enemy.sprite.x, y = enemy.sprite.y, radius = enemy.getCollisionRadius();
+    const toEnd = Math.hypot(planned.endX - x, planned.endY - y);
+    const angle = toEnd > 1 ? Math.atan2(planned.endY - y, planned.endX - x) : planned.angle;
+    // A run held up by the ground leaves the far end out of reach: the leap still flies its maximum.
+    const wanted = Math.max(1, Math.min(toEnd, config.leap.maxLengthPx));
+    const length = Math.min(wanted, this.ports.laneClearance(x, y, angle, wanted, radius));
+    if (length < wanted * MIN_LAUNCH_LANE_SHARE) {
       state.pounceLockoutUntil = now + config.pounce.cancelLockoutMs;
       this.publish(state, 'rush', now, 0, target.ref, null);
       return;
     }
     const takeoffAt = Math.round(now);
-    const leap: LockedLeap = { originX: x, originY: y, endX: lock.endX, endY: lock.endY, takeoffAt,
-      landAt: takeoffAt + config.leap.airMs, angle: lock.angle, length: lock.length };
+    const leap: LockedLeap = { originX: x, originY: y, endX: x + Math.cos(angle) * length, endY: y + Math.sin(angle) * length,
+      takeoffAt, landAt: takeoffAt + config.leap.airMs, angle, length };
     enemy.setKnockbackImmune(true);
     state.leapAlong = 0; state.leapProgressAt = now;
     this.publish(state, 'leap', takeoffAt, leap.landAt, target.ref, leap);
@@ -500,28 +500,17 @@ export class CoopDefenseKaboomtulaSystem implements EnemySpecialMovementSource {
     return { vx: direct.vx, vy: direct.vy, aimAngle: facing };
   }
 
-  /** Keeps running through the telegraph: strafes around the target inside the band, facing it. */
-  private stalkVelocity(state: SpiderState, config: CoopDefenseEnemyKaboomtulaConfig, aim: number): EnemyMovementOverride {
-    const enemy = state.enemy, x = enemy.sprite.x, y = enemy.sprite.y;
-    const dx = state.aimX - x, dy = state.aimY - y, distance = Math.hypot(dx, dy);
-    if (distance < 1e-3) return { vx: 0, vy: 0, aimAngle: aim };
-    if (state.laneBlocked && state.target && distance > config.pounce.bandMinPx) {
-      // Cover between spider and prey: follow the ground route back to a free line.
-      const point = this.ports.route(enemy, `kaboomtula:${state.target.kind}:${state.target.id}`, { x: state.aimX, y: state.aimY },
-        Math.max(16, enemy.getCollisionRadius())) ?? { x: state.aimX, y: state.aimY };
-      const back = this.ports.moveNormally(enemy, point, config.rushSpeedPx * STALK_SPEED_FACTOR, aim);
-      return { vx: back.vx, vy: back.vy, aimAngle: aim };
+  /** Through the telegraph the spider keeps running along its committed lane, facing it; blocked ground holds it in place. */
+  private committedRunVelocity(state: SpiderState, config: CoopDefenseEnemyKaboomtulaConfig): EnemyMovementOverride {
+    const enemy = state.enemy, planned = state.leap;
+    if (!planned) return { vx: 0, vy: 0 };
+    const x = enemy.sprite.x, y = enemy.sprite.y;
+    if (Math.hypot(planned.endX - x, planned.endY - y) <= config.leap.overshootPx + MIN_LEAP_SPAN_PX) {
+      return { vx: 0, vy: 0, aimAngle: planned.angle };
     }
-    const ux = dx / distance, uy = dy / distance;
-    const { bandMinPx, bandMaxPx } = config.pounce;
-    const radial = Math.max(-1, Math.min(1, (distance - (bandMinPx + bandMaxPx) / 2) / Math.max(1, (bandMaxPx - bandMinPx) / 2)));
-    const mx = ux * radial - uy * state.orbitSide * STALK_STRAFE, my = uy * radial + ux * state.orbitSide * STALK_STRAFE;
-    const norm = Math.hypot(mx, my) || 1;
-    const moved = this.ports.moveNormally(enemy, { x: x + mx / norm * config.skitter.probePx, y: y + my / norm * config.skitter.probePx },
-      config.rushSpeedPx * STALK_SPEED_FACTOR, aim);
-    // A strafe into cover turns around.
-    if (moved.blocked) state.orbitSide = state.orbitSide === 1 ? -1 : 1;
-    return { vx: moved.vx, vy: moved.vy, aimAngle: aim };
+    const moved = this.ports.moveNormally(enemy, { x: x + Math.cos(planned.angle) * config.skitter.probePx,
+      y: y + Math.sin(planned.angle) * config.skitter.probePx }, config.rushSpeedPx * COMMITTED_RUN_SPEED_FACTOR, planned.angle);
+    return moved.blocked ? { vx: 0, vy: 0, aimAngle: planned.angle } : { vx: moved.vx, vy: moved.vy, aimAngle: planned.angle };
   }
 
   private leapVelocity(state: SpiderState, leap: LockedLeap): EnemyMovementOverride {

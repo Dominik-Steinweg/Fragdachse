@@ -155,11 +155,23 @@ describe('Kabummtula', () => {
   });
 
   it('leads a player who keeps running across the lane', () => {
-    const w = world({ players: [{ id: 'p1', x: 300, y: 0, vx: 0, vy: 0 }] });
-    w.runUntil(() => w.body.state().phase === 'pounce');
-    w.players[0].vy = PLAYER_SPEED;
-    w.runUntil(() => !w.alive(), 2000);
+    const w = world({ players: [{ id: 'p1', x: 300, y: 0, vx: 0, vy: PLAYER_SPEED }] });
+    w.runUntil(() => !w.alive(), 3000);
     expect(w.detonate).toHaveBeenCalledTimes(1);
+  });
+
+  it('commits its lane at the telegraph start, so turning around during the telegraph dodges', () => {
+    const w = world({ players: [{ id: 'p1', x: 300, y: 0, vx: 0, vy: PLAYER_SPEED }] });
+    w.runUntil(() => w.body.state().phase === 'pounce');
+    const planned = w.body.state().leap!;
+    expect(planned).not.toBeNull();
+    w.players[0].vy = -PLAYER_SPEED;
+    w.runUntil(() => w.body.state().phase === 'leap' || !w.alive(), 1000);
+    const leap = w.body.state().leap!;
+    expect(leap.endX).toBeCloseTo(planned.endX, 0);
+    expect(leap.endY).toBeCloseTo(planned.endY, 0);
+    w.runUntil(() => w.body.state().phase === 'recover' || !w.alive(), 1000);
+    expect(w.detonate).not.toHaveBeenCalled();
   });
 
   it('misses a sidestep at the lock, recovers and starts over with a new alert', () => {

@@ -5,7 +5,7 @@ import { leapClipFrame } from './leapPresentation';
 
 type ClipSource = (name: string) => Pick<PipelineClip, 'frames' | 'markers' | 'frameRate'> | undefined;
 
-/** The crouch before take-off: the spider keeps running through the telegraph and only dips at its end. */
+/** The crouch before take-off: the spider keeps running along its committed lane through the telegraph and only dips at its end. */
 const POUNCE_CROUCH_MS = 140;
 /** Follow-through of the spit after the web left the fangs (presentation only). */
 const SPIT_TAIL_MS = 220;

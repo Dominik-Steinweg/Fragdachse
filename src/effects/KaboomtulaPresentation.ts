@@ -18,8 +18,9 @@ const TARGET_RING_RADIUS_PX = 38;
 
 /**
  * Always-on, light telegraph owner of the Kabummtula leap: while a spider pounces, a red lane in
- * the shared danger family runs from the spider to the hunted body and a ring marks that body;
- * both follow the bodies every frame and flash at the launch. It only observes replicated state.
+ * the shared danger family runs from the spider along its committed direction to the announced end
+ * point and a ring marks the hunted body; both follow the bodies every frame and flash at the launch.
+ * It only observes replicated state.
  */
 export class KaboomtulaPresentation {
   private enemies: () => readonly EnemyVisualSource[] = () => [];
@@ -69,7 +70,9 @@ export class KaboomtulaPresentation {
       const facing = enemy.sprite.rotation;
       const tx = target?.x ?? x + Math.cos(facing) * config.kaboomtula.pounce.triggerPx;
       const ty = target?.y ?? y + Math.sin(facing) * config.kaboomtula.pounce.triggerPx;
-      const length = Math.hypot(tx - x, ty - y);
+      // The lane shows the committed direction to the announced end point; the ring keeps marking the prey.
+      const ex = state.leap?.endX ?? tx, ey = state.leap?.endY ?? ty;
+      const length = Math.hypot(ex - x, ey - y);
       // One identity per pounce: the leap phase keeps it, so the lane is not re-created at the launch.
       const startedAt = state.phase === 'pounce' ? state.startedAt : launchAt - config.kaboomtula.pounce.telegraphMs;
       const timing = { startedAt, strikeAt: Math.max(startedAt, launchAt - LAUNCH_STRIKE_LEAD_MS), hitAt: launchAt,
@@ -77,7 +80,7 @@ export class KaboomtulaPresentation {
       const attackId = `kaboomtula:${enemy.id}:${launchAt}`;
       live.add(enemy.id);
       this.sunk.add(enemy.id);
-      this.laneSink?.(enemy.id, length > 1 ? { attackId, x, y, angle: Math.atan2(ty - y, tx - x), length,
+      this.laneSink?.(enemy.id, length > 1 ? { attackId, x, y, angle: Math.atan2(ey - y, ex - x), length,
         width: config.size, ...timing } : null, now, enemy.sprite.visible);
       this.zoneSink?.(enemy.id, target ? { attackId: `${attackId}:ring`, x: tx, y: ty, radius: TARGET_RING_RADIUS_PX,
         ...timing } : null, now, enemy.sprite.visible);
