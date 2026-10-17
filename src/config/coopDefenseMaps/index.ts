@@ -14,7 +14,7 @@ import map12 from './12-gegenschlag.json';
 import map13 from './13-brutbomben.json';
 import map14 from './14-brandschneise.json';
 import map15 from './15-leerenjaeger.json';
-import map16 from './16-zeitzuender.json';
+import map16 from './16-spinnensteig.json';
 import map17 from './17-bierrettung.json';
 import map18 from './18-moerserstellung.json';
 import map19 from './19-brandherd.json';
@@ -31,7 +31,7 @@ const files: Record<string, unknown> = {
   '10-flammenkoloss.json': map10, '11-bombergeschwader.json': map11,
   '12-gegenschlag.json': map12, '13-brutbomben.json': map13,
   '14-brandschneise.json': map14, '15-leerenjaeger.json': map15,
-  '16-zeitzuender.json': map16, '17-bierrettung.json': map17,
+  '16-spinnensteig.json': map16, '17-bierrettung.json': map17,
   '18-moerserstellung.json': map18, '19-brandherd.json': map19,
   '20-abgrundteich.json': map20,
 };

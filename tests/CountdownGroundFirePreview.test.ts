@@ -13,13 +13,13 @@ describe('countdown ground-fire preview', () => {
       dirt: [],
       powerUpPedestals: [],
       groundHazardZones: [{
-        eventId: 'route-void-pocket-0',
-        id: 'route-void-pocket-0',
-        cells: [{ gridX: 29, gridY: 10 }],
+        eventId: 'beer-void-corridor',
+        id: 'beer-void-corridor',
+        cells: [{ gridX: 56, gridY: 10 }],
       }],
     };
 
-    const snapshot = buildCountdownGroundFirePreview(layout, getCoopDefenseMapConfig('16'));
+    const snapshot = buildCountdownGroundFirePreview(layout, getCoopDefenseMapConfig('17'));
 
     expect(snapshot.cells).toHaveLength(4);
     expect(new Set(snapshot.cells.map((cell) => cell.visualStyle))).toEqual(new Set(['void']));

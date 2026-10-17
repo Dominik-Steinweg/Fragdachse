@@ -1,5 +1,5 @@
 import { generateArenaWithActiveMetrics } from './ArenaGeneratorTestHelper';
-import authoredMap16 from '../src/config/coopDefenseMaps/16-zeitzuender.json';
+import authoredMap17 from '../src/config/coopDefenseMaps/17-bierrettung.json';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -14,7 +14,7 @@ vi.mock('phaser', () => ({
   },
 }));
 vi.mock('../src/network/bridge', () => ({
-  bridge: { getCoopDefenseMapId: () => '16' },
+  bridge: { getCoopDefenseMapId: () => '17' },
 }));
 
 import {
@@ -107,14 +107,14 @@ describe('Coop Defense C3 configuration', () => {
     expect(() => normalize({ ...expansion, announcement: 'popup' as 'none' })).toThrow(/announcement/);
   });
   it('lets void touch the actual base footprint while preserving explicitly positive clearance', () => {
-    const map = getCoopDefenseMapConfig('16');
+    const map = getCoopDefenseMapConfig('17');
     applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
     const cell = resolveCoopDefenseBases(map).find(base => base.id === map.persistentBase?.baseId)!.cells[0];
     const events = [
       makeEvent({ id: 'touch', area: { type: 'cells', cells: [cell], baseClearanceCells: 0 } }),
       makeEvent({ id: 'protected', area: { type: 'cells', cells: [cell], baseClearanceCells: 1 } }),
     ];
-    const config = normalizeCoopDefenseMapConfig({ ...authoredMap16 as unknown as CoopDefenseMapConfig, mapEvents: events });
+    const config = normalizeCoopDefenseMapConfig({ ...authoredMap17 as unknown as CoopDefenseMapConfig, mapEvents: events });
     const zones = generateArenaWithActiveMetrics(902, config).groundHazardZones ?? [];
     expect(zones.find(zone => zone.eventId === 'touch')?.cells).toContainEqual(cell);
     expect(zones.some(zone => zone.eventId === 'protected')).toBe(false);
@@ -276,15 +276,15 @@ describe('Coop Defense C3 configuration', () => {
   });
 
   it('drops an unresolvable authored footprint instead of failing the arena build', () => {
-    // Kampagnen-Map 16 statt Map 0: Die Testarena ist seit Block A eine loeschbare Stressarena
+    // Kampagnen-Map 17 statt Map 0: Die Testarena ist seit Block A eine loeschbare Stressarena
     // ohne authored Events und darf keine Regression mehr tragen.
-    const map = getCoopDefenseMapConfig('16');
+    const map = getCoopDefenseMapConfig('17');
     applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
     // Eine Zellenliste komplett auf reservierten Basiszellen ist konfigvalide, aber nicht
     // aufloesbar. Der Generator liefert dafuer keine Zone -- der Handler laesst das Event dann
     // dormant. Ein Layout-Retry bis zum Abbruch waere fuer einen Authoring-Fehler unverhaeltnismaessig.
     const withUnreachableHazard = normalizeCoopDefenseMapConfig({
-      ...authoredMap16 as unknown as CoopDefenseMapConfig,
+      ...authoredMap17 as unknown as CoopDefenseMapConfig,
       mapEvents: [
         ...(map.mapEvents ?? []),
         makeEvent({
@@ -300,7 +300,7 @@ describe('Coop Defense C3 configuration', () => {
   });
 
   it('prebuilds every authored hazard event from the selected arena seed', () => {
-    const map = getCoopDefenseMapConfig('16');
+    const map = getCoopDefenseMapConfig('17');
     applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
     const layout = generateArenaWithActiveMetrics(73_000, map);
     const eventIds = new Set(map.mapEvents?.map((event) => event.id));

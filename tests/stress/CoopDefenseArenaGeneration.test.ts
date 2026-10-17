@@ -115,6 +115,25 @@ describe('Coop defense arena generation', () => {
       const route = resolveCoopDefenseMapMissionProgress(campaign)!;
       const occupied = new Set([...layout.rocks, ...layout.trees, ...(layout.water ?? []),
         ...resolveCoopDefenseBases(campaign).flatMap(base => base.cells)].map(cell => `${cell.gridX}:${cell.gridY}`));
+      const waterCells = new Set((layout.water ?? []).map(cell => `${cell.gridX}:${cell.gridY}`));
+      // Amphibious groups rise from water: their water body must touch the reachable land.
+      const waterBodyTouches = (area: { gridX: number; gridY: number; widthCells: number; heightCells: number },
+        reachable: Set<string>) => {
+        const queue: string[] = [];
+        for (let y = area.gridY; y < area.gridY + area.heightCells; y++) for (let x = area.gridX; x < area.gridX + area.widthCells; x++) {
+          if (waterCells.has(`${x}:${y}`)) queue.push(`${x}:${y}`);
+        }
+        const seen = new Set(queue);
+        for (let i = 0; i < queue.length; i++) {
+          const [x, y] = queue[i].split(':').map(Number);
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const key = `${x + dx}:${y + dy}`;
+            if (reachable.has(key)) return true;
+            if (waterCells.has(key) && !seen.has(key)) { seen.add(key); queue.push(key); }
+          }
+        }
+        return false;
+      };
       const cleared = new Set<string>();
       const progress = new CoopDefenseMissionProgressSystem(route, { roundRevision: 1, worldMetrics: metrics,
         getDefenseObjectiveState: () => null, isEncounterCleared: encounter => cleared.has(encounter) });
@@ -157,6 +176,10 @@ describe('Coop defense arena generation', () => {
           expect(reachable.has(`${extraction.gridX}:${extraction.gridY}`)).toBe(false);
           for (const wave of waves) for (const group of wave.groups) {
             const area = group.spawnArea!;
+            if (area.medium === 'water') {
+              expect(waterBodyTouches(area, reachable), `${id}/${seed}/${wave.id} water spawn`).toBe(true);
+              continue;
+            }
             expect([...reachable].some(key => {
               const [x, y] = key.split(':').map(Number);
               return x >= area.gridX && x < area.gridX + area.widthCells && y >= area.gridY && y < area.gridY + area.heightCells;
