@@ -689,7 +689,7 @@
           "overshootPx": 36,
           "maxLengthPx": 250
         },
-        "recoverMs": 650,
+        "recoverMs": 325,
         "contactMarginPx": 2,
         "blast": {
           "radiusPx": 130,

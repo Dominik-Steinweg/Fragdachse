@@ -40,7 +40,7 @@ Positionierung, nicht aus einer langen Zündschnur.
 | Sturmlauf | ~370 px/s in weichem Spinnen-Schlängeln (±28°, ~0,64–0,88 s je Hin und Her, Tempo ±16 %, keine Stopps oder harten Haken), Blick zur Beute, leicht in die Bewegung geneigt; Spielbarkeit vor Realismus |
 | Telegraph (~0,42 s) | ab ~144 px: legt sich sofort auf eine Richtung fest (Vorhalt 0,85 × Geschwindigkeit × (Telegraph + Flugzeit), plus Überschuss) und läuft mit ~70 % Tempo auf dieser Bahn weiter, höchstens bis ~90 px vor den Zielpunkt. Rote Bahn zeigt die festgelegte Richtung bis zum Endpunkt und füllt sich, der Zielring markiert die Beute. Ist die Bahn beim Absprung blockiert, bricht sie ab und jagt weiter |
 | Sprung (~0,21 s) | fliegt von der erreichten Position zum angekündigten Endpunkt, ohne neu zu zielen; immun gegen Rückstoß |
-| Erholung (~0,65 s) | nach einem Fehlsprung; danach beginnt alles von vorn (erneutes Drohen) |
+| Erholung (~0,33 s) | nach einem Fehlsprung; danach beginnt alles von vorn (erneutes Drohen) |
 | Spucken (~0,36 s) | ohne Spieler in Sicht: Turm in 380 px, der sie sehen könnte; unbesponnene zuerst |
 
 Ausweichen: Wer während des Telegraphs die Richtung wechselt, stehen bleibt oder dasht, verlässt die
