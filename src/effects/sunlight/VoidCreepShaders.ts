@@ -13,7 +13,7 @@ export const VOID_CREEP_GLOW_SHADER_NAME = 'VoidCreepGlow';
  * than a screen pixel is faded out by the camera's pixel size instead of shimmering. Ground, rock
  * and the night glow evaluate the same haze, so the glow sits on the drawn dust.
  */
-const VOID_CREEP_GLSL = `
+export const VOID_CREEP_GLSL = `
 uniform sampler2D uCreep;
 uniform vec4 uCreepFrame;
 uniform float uCreepTime;
@@ -66,6 +66,8 @@ varying vec2 outTexCoord;
 // World rectangle this quad covers; world px per screen pixel.
 uniform vec4 uView;
 uniform float uPixelWorld;
+// 1 while the ground fog carries the airborne haze: the ground then keeps to settled dust.
+uniform float uAirborne;
 ${VOID_CREEP_GLSL}
 ${rock ? ROCK_COVERAGE_GLSL : ''}
 void main() {
@@ -83,7 +85,7 @@ void main() {
   float grain=creepGrain(world,uPixelWorld);
   // Dense veil: plum-grey in thin haze, paler lilac-grey where the clouds are thick; the grain
   // shades the veil itself instead of adding specks.
-  float veil=mist.x*${(haze * 0.50).toFixed(3)}*(.78+.50*grain);
+  float veil=mist.x*${(haze * 0.50).toFixed(3)}*(.78+.50*grain)*mix(1.0,.55,uAirborne);
   vec3 tone=mix(vec3(.24,.11,.31),vec3(.45,.33,.54),mist.y)*(1.0+.16*relief+.26*grain);
   vec3 color=vec3(.11,.035,.13)*bruise;
   float alpha=bruise;

@@ -5,6 +5,7 @@ import { createVisibleWorldView, getVisibleWorldView } from '../../graphics/Came
 import type { FormationCoverageBinding } from '../../arena/rocks/RockFormationLighting';
 import type { VoidCreepField } from '../../arena/VoidCreepField';
 import type { LightMapAmbientLayer } from '../LightingSystem';
+import type { FogVoidHaze } from '../groundFog/FogVoidHaze';
 import { SunRenderTarget } from './SunRenderTarget';
 import {
   VOID_CREEP_GLOW_FRAGMENT, VOID_CREEP_GLOW_SHADER_NAME, VOID_CREEP_GROUND_FRAGMENT, VOID_CREEP_GROUND_SHADER_NAME,
@@ -13,6 +14,8 @@ import {
 
 /** Light the creep adds at full night, per channel of the void's primary violet. */
 const GLOW_STRENGTH = 0.30;
+/** Strength of the airborne spore haze inside the ground fog. */
+const AIR_STRENGTH = 0.85;
 /** World margin around the camera so drifting rims never pop at the screen edge. */
 const VIEW_MARGIN_PX = 24;
 
@@ -73,6 +76,10 @@ export class VoidCreepPresentation {
   private rock: Phaser.GameObjects.Shader | null = null;
   private rockBinding: FormationCoverageBinding | null = null;
   private glow: VoidCreepGlow | null = null;
+  /** The airborne half of the haze, lent to the World's ground fog; null without creep. */
+  private fogHaze: { texture: Phaser.Textures.Texture; frame: Float32Array; time: number; strength: number } | null = null;
+  /** 1 while the fog carries the airborne haze; the ground layer then keeps to settled dust. */
+  private airborne = 0;
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -90,6 +97,7 @@ export class VoidCreepPresentation {
     texture.context.putImageData(pixels, 0, 0); texture.refresh();
     texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
     this.creep.frame.set([creep.offsetX, creep.offsetY, creep.width * creep.texelPx, creep.height * creep.texelPx]);
+    this.fogHaze = { texture, frame: this.creep.frame, time: 0, strength: AIR_STRENGTH };
     this.ground = this.makeQuad(VOID_CREEP_GROUND_SHADER_NAME, VOID_CREEP_GROUND_FRAGMENT, DEPTH.VOID_CREEP, [key], () => {});
   }
 
@@ -98,9 +106,11 @@ export class VoidCreepPresentation {
    * quality or without creep). `night` 0..1 follows the lamps' dusk curve.
    */
   update(camera: Phaser.Cameras.Scene2D.Camera, timeSec: number, night: number,
-    options: { rocks: boolean; glow: boolean }, coverage: FormationCoverageBinding | null): LightMapAmbientLayer | null {
+    options: { rocks: boolean; glow: boolean; airborne: boolean }, coverage: FormationCoverageBinding | null): LightMapAmbientLayer | null {
     if (!this.key || !this.ground) return null;
     this.creep.time = timeSec;
+    if (this.fogHaze) this.fogHaze.time = timeSec;
+    this.airborne = options.airborne ? 1 : 0;
     // The arena camera uses origin (0, 0); Phaser's cached worldView assumes 0.5.
     const view = getVisibleWorldView(camera, this.visible, VIEW_MARGIN_PX);
     this.view[0] = view.x; this.view[1] = view.y; this.view[2] = view.width; this.view[3] = view.height;
@@ -114,6 +124,9 @@ export class VoidCreepPresentation {
     this.glow.glow[0] = r * strength; this.glow.glow[1] = g * strength; this.glow.glow[2] = b * strength;
     return this.glow;
   }
+
+  /** The airborne haze for the World's fog, kept current by `update`; null without creep. */
+  get airHaze(): FogVoidHaze | null { return this.fogHaze; }
 
   destroy(): void { this.release(); }
 
@@ -143,7 +156,7 @@ export class VoidCreepPresentation {
       name, shaderName: name, fragmentSource,
       setupUniforms: (set: Set) => {
         set('uCreep', 0); set('uCreepFrame', this.creep.frame); set('uCreepTime', this.creep.time); set('uView', this.view);
-        set('uPixelWorld', this.pixelWorld);
+        set('uPixelWorld', this.pixelWorld); set('uAirborne', this.airborne);
         extra(set);
       },
     }, 0, 0, 1, 1, textures);
@@ -158,6 +171,7 @@ export class VoidCreepPresentation {
     this.ground?.destroy(); this.ground = null;
     this.rock?.destroy(); this.rock = null; this.rockBinding = null;
     this.glow?.destroy(); this.glow = null;
+    this.fogHaze = null;
     if (this.key) { this.scene.textures.remove(this.key); this.key = null; }
   }
 }

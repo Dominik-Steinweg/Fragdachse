@@ -230,7 +230,7 @@ export class WorldSunlightPresentation {
   {
     const artificial=targets.lighting.getArtificialLightFactor(),quality=getGraphicsQualityProfile(this.scene).sunlight;
     targets.lighting.setGlowLayer(this.voidCreep?.update(this.scene.cameras.main,targets.water?.getPresentationTime()??this.lastSceneTime/1000,
-      Math.max(0,Math.min(1,(artificial-.1)/.6)),{rocks:quality.voidCreepRocks,glow:quality.voidCreepGlow},
+      Math.max(0,Math.min(1,(artificial-.1)/.6)),{rocks:quality.voidCreepRocks,glow:quality.voidCreepGlow,airborne:!!targets.fog?.carriesVoidHaze},
       quality.voidCreepRocks?targets.rocks?.getFormationCoverage()??null:null)??null);
   }
   if(this.voidEmission){
@@ -291,7 +291,11 @@ export class WorldSunlightPresentation {
         const depth=water.distance(x-frame.offsetX,y-frame.offsetY);
         return depth<0?1:Math.max(0,1-depth/10);
       }):null;
+      // The airborne half rides in the ground fog: wakes cut it, stirred air blows it apart. The
+      // fog lets go of the old field before it is rebuilt.
+      targets.fog?.setVoidHaze(null);
       this.voidCreep?.setCreep(creep);
+      targets.fog?.setVoidHaze(this.voidCreep?.airHaze??null);
       targets.water?.setVoidStain(buildVoidWaterStain(placements,frame,creep));
       this.voidEmission?.setGroundSpores(creep?voidCreepSporePoints(creep,targets.layout.seed):[]);
       this.voidEmission?.setPondPlacements(placements);
@@ -315,7 +319,7 @@ export class WorldSunlightPresentation {
   t.rocks?.setFormationOptions(true,true);t.rocks?.setSurfaceLights(null);
   t.rockOverlays?.setVoidFlora(null);this.voidGlow?.destroy();this.voidGlow=null;
   this.voidEmission?.destroy();this.voidEmission=null;
-  t.lighting.setGlowLayer(null);this.voidCreep?.destroy();this.voidCreep=null;
+  t.fog?.setVoidHaze(null);t.lighting.setGlowLayer(null);this.voidCreep?.destroy();this.voidCreep=null;
   t.lighting.setRockCoverage(null);
   t.shadow.setCharacterSunlight(null);
   t.shadow.setSunPath(null);t.shadow.setCanopyShadows(null);t.shadow.setFormationShadows(null);

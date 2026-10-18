@@ -11,12 +11,15 @@ import { VOID_LILY_EMISSIVE_ATLAS, VOID_ROCK_EMISSIVE_ATLAS } from '../../arena/
 /** Self-lit veins and spores sit just above the light map and below canopies (band E). */
 const EMISSION_DEPTH = DEPTH_LIGHTING + .06;
 const VEIN_TINT = VOID_PALETTE.bright;
-const SPORE_TINTS = [VOID_PALETTE.bright, VOID_PALETTE.bright, VOID_PALETTE.primary] as const;
+/** Mostly bright lilac, a few nearly white glints. */
+const SPORE_TINTS = [VOID_PALETTE.bright, VOID_PALETTE.bright, 0xf0dcff, VOID_PALETTE.primary] as const;
+/** Motes stay in the air by day too, a little quieter than at night. */
+const SPORE_DAY_ALPHA = .72;
 const TIME_WRAP_MS = 3_600_000;
 /** Spores per colony: lily colonies drift over open water, moss sheds fewer, closer motes. */
 const POND_SPORES = 3;
 const ROCK_SPORES = 1;
-const MAX_SPORES = 1400;
+const MAX_SPORES = 2400;
 
 type Member = Phaser.Types.GameObjects.SpriteGPULayer.Member;
 const hash = (x: number, y: number, salt: number): number => {
@@ -35,7 +38,8 @@ const pulse = (base: number, amplitude: number, periodMs: number, phase: number)
  * Partikel"): fine self-lit veins on the plant and a few spores hovering over it. Both are static
  * GPU members animated by looping yoyo eases only, so a frame costs no per-member CPU work.
  * The light map already lights the surroundings (VoidFloraGlow); this layer is the plant itself.
- * Visible from dusk, fully at night; owned by the World's sunlight presentation.
+ * Veins show from dusk, fully at night; spore motes drift by day as well. Owned by the World's
+ * sunlight presentation.
  */
 export class VoidFloraEmission {
   private readonly layers: Phaser.GameObjects.SpriteGPULayer[] = [];
@@ -83,7 +87,9 @@ export class VoidFloraEmission {
     const timeMs = ((waterTimeSec * 1000) % TIME_WRAP_MS + TIME_WRAP_MS) % TIME_WRAP_MS;
     for (const layer of this.layers) {
       // All members animate on the pausable presentation clock, like the floating lilies below them.
-      layer.setVisible(alpha > .01 && layer.memberCount > 0).setAlpha(alpha);
+      // Veins glow only from dusk; the spore motes drift by day as well.
+      const shown = layer === this.sporeLayer ? Math.max(SPORE_DAY_ALPHA, alpha) : alpha;
+      layer.setVisible(shown > .01 && layer.memberCount > 0).setAlpha(shown);
       if (layer.visible) layer.resetTimer(timeMs);
     }
   }
@@ -163,7 +169,7 @@ export class VoidFloraEmission {
     }
     // Over the land creep fine motes hang low in small loose swarms.
     for (let i = 0; i + 2 < this.groundSpores.length; i += 3) {
-      if (smoothAmount(this.groundSpores[i + 2]) > 0) anchors.push({ x: this.groundSpores[i], y: this.groundSpores[i + 1], spread: 26, count: 3 });
+      if (smoothAmount(this.groundSpores[i + 2]) > 0) anchors.push({ x: this.groundSpores[i], y: this.groundSpores[i + 1], spread: 30, count: 4 });
     }
     if (!anchors.length) return;
     const key = ensureVoidSporeTexture(this.scene.textures);
@@ -178,15 +184,15 @@ export class VoidFloraEmission {
       // Slow hovering drift: each axis is its own looping sine, never a straight path.
       const driftX = 5 + h(3) * 10, driftY = 8 + h(4) * 14, periodX = 5200 + h(5) * 5200, periodY = 4300 + h(6) * 4700;
       const tint = SPORE_TINTS[Math.floor(h(7) * SPORE_TINTS.length)];
-      // Fine motes, a few pixels across: dust in the air, not bubbles.
-      const size = (3 + h(8) * 3) / 32;
+      // Fine glints: a pixel-sized core in a soft halo, dust in the air rather than bubbles.
+      const size = (8 + h(8) * 5) / 32;
       layer.addMember({ frame: '__BASE',
         x: { base: x - driftX, amplitude: driftX * 2, ease: 'Sine.easeInOut', duration: periodX / 2, delay: h(9) * periodX, yoyo: true, loop: true },
         y: { base: y - driftY, amplitude: driftY * 2, ease: 'Sine.easeInOut', duration: periodY / 2, delay: h(10) * periodY, yoyo: true, loop: true },
         scaleX: size, scaleY: size,
         tintBlend: 1, tintTopLeft: tint, tintTopRight: tint, tintBottomLeft: tint, tintBottomRight: tint,
         // Slow, gentle breathing; a mote never blinks out.
-        alpha: pulse(.12, .26, 7000 + h(11) * 6000, h(12)), creationTime: 0 });
+        alpha: pulse(.40, .45, 7000 + h(11) * 6000, h(12)), creationTime: 0 });
     }
   }
 

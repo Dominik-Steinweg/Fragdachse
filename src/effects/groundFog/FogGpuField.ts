@@ -12,6 +12,7 @@ import { FOG_DENSITY_FRAGMENT, FOG_DISPLAY_FRAGMENT, FOG_IMPULSE_FRAGMENT, FOG_M
 import { FogTrailSegments } from './FogTrailSegments';
 import { FogTrailRenderer } from './FogTrailRenderer';
 import type { FogWoodlandLight } from './FogWoodlandLight';
+import type { FogVoidHaze } from './FogVoidHaze';
 import { SUN_TUNING_DEFAULTS } from '../sunlight/SunTuning';
 import { setCloudUniforms } from '../sunlight/cloudShadow';
 import type { FormationCoverageBinding } from '../../arena/rocks/RockFormationLighting';
@@ -90,6 +91,9 @@ export class FogGpuField {
   private rockAerial: Phaser.GameObjects.Shader | null = null;
   private rockAerialStrength = 0;
   private woodlandLight: FogWoodlandLight | null = null;
+  private voidHaze: FogVoidHaze | null = null;
+  private readonly voidHazeUniform = new Float32Array(2);
+  private readonly fogOrigin = new Float32Array(2);
   private boundary: FogDataTexture | null = null;
   private boundaryBuilder: FogBankField | null = null;
   private boundaryFresh = false;
@@ -385,6 +389,13 @@ export class FogGpuField {
         set('uMaterial', 0); set('uTrails', 1); set('uHasTrails', this.trailMask && this.debug === 'normal' ? 1 : 0);
         set('uSurfaces', this.rockCoverage ? 2 : 0); set('uHasRockCoverage', this.rockCoverage && this.debug==='normal' ? 1 : 0);
         this.setLightingUniforms(set);
+        const haze=!aerial&&this.debug==='normal'?this.voidHaze:null;
+        this.voidHazeUniform[0]=haze?1:0;this.voidHazeUniform[1]=haze?.strength??0;
+        set('uVoidHaze',this.voidHazeUniform);set('uCreep',3);set('uFogVelocity',4);set('uFogLookup',5);set('uFogState',6);
+        set('uCreepFrame',haze?.frame??this.view4);set('uCreepTime',haze?.time??0);
+        this.fogOrigin[0]=this.terrain.frame.offsetX;this.fogOrigin[1]=this.terrain.frame.offsetY;
+        set('uFogOrigin',this.fogOrigin);set('uFogWorldSize',[this.terrain.frame.width,this.terrain.frame.height]);
+        set('uFogLookupSize',[this.lookup.width,this.lookup.height]);
       },
     }, 0, 0, width, height, ['__DEFAULT', '__DEFAULT']);
     ownFogShader(display);
@@ -475,8 +486,13 @@ export class FogGpuField {
       this.renderSurfacePass(surfaces.length>0);
     }
     this.draw(this.material, this.states[this.current], this.states[1 - this.current]);
-    const displayTextures=[this.material.texture!, this.trailMask?.texture ?? this.scene.textures.get('__DEFAULT')];
+    const fallback=this.scene.textures.get('__DEFAULT');
+    const displayTextures=[this.material.texture!, this.trailMask?.texture ?? fallback];
     if(this.rockCoverage)displayTextures.push(this.packedSurface!.texture!);
+    else if(this.voidHaze)displayTextures.push(fallback);
+    // Void spore haze on units 3-6: creep field, current air velocity, chunk lookup, density state.
+    if(this.voidHaze)displayTextures.push(this.voidHaze.texture,this.velocities[this.current].texture!,this.lookup.texture,
+      this.states[this.current].texture!);
     this.display!.setTextures(displayTextures);
     this.display!.setPosition(view.x, view.y).setDisplaySize(view.width, view.height).setVisible(true);
     const showAerial=this.rockAerialStrength>0&&!!this.rockCoverage&&debug==='normal';
@@ -500,6 +516,16 @@ export class FogGpuField {
   setRockCoverage(binding: FormationCoverageBinding | null): void {
     this.rockCoverage=binding;this.syncBoundary();
   }
+  /** Airborne void spore haze carried by this fog; null removes it. Borrowed, never destroyed here. */
+  setVoidHaze(haze: FogVoidHaze | null): void {
+    this.voidHaze = haze;
+    // The owner may destroy the texture right after this call: drop the borrowed samplers now,
+    // not at the next render, so the display never draws with a released texture.
+    if (!haze) for (const display of [this.display, this.rockAerial])
+      if (display && display.textures.length > 3) display.setTextures(display.textures.slice(0, 3));
+  }
+  private readonly view4 = new Float32Array(4);
+
   setWoodlandLight(binding: FogWoodlandLight | null): void {
     this.woodlandLight=binding;
     this.syncBoundary();

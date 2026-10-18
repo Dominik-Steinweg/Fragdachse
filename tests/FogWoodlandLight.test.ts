@@ -151,4 +151,27 @@ describe('optional fog woodland presentation',()=>{
     field.destroy();expect(display.destroy).toHaveBeenCalledOnce();expect(lit.destroy).toHaveBeenCalledOnce();expect(litDisplay.destroy).toHaveBeenCalledOnce();
     expect(remove.mock.calls.every(call=>String(call[0]).startsWith('__ground_fog_'))).toBe(true);
   });
+  it('carries a borrowed void spore haze on fixed units and lets go of it at once',()=>{
+    const gl={ZERO:0,ONE:1,ONE_MINUS_SRC_ALPHA:771,FUNC_ADD:32774,DITHER:1,MAX_TEXTURE_SIZE:2,MAX_TEXTURE_IMAGE_UNITS:3,FRAMEBUFFER_COMPLETE:4,
+      isEnabled:()=>false,getParameter:(key:number)=>key===2?8192:16,getShaderPrecisionFormat:()=>({precision:23}),
+      getProgramParameter:()=>true,checkFramebufferStatus:()=>4,texSubImage2D(){},disable(){},enable(){}};
+    const fallback={source:[{glTexture:{}}]},remove=vi.fn(),scene={sys:{renderer:{gl,blendModes:[],addBlendMode:vi.fn(),updateBlendMode:vi.fn(),createTexture2D:()=>({}),glTextureUnits:{bind(){}},glWrapper:{updateTexturing(){},update(){}}}},
+      textures:{addGLTexture:()=>({}),get:()=>fallback,remove},add:{existing:(value:unknown)=>value}};
+    const terrain=new FogTerrainModel({offsetX:100,offsetY:200,width:512,height:512},[]),tuning=fogTuning(1);
+    const field=new FogGpuField(scene as never,terrain,1,tuning,10),view={x:100,y:200,width:512,height:512};
+    const creep={key:'__void_creep_test'},haze={texture:creep as never,frame:new Float32Array([100,200,512,512]),time:3,strength:.8};
+    field.prepare(view,0);field.step([], [.3,.5],tuning,0);
+    field.setVoidHaze(haze);field.render(view,256,256,'normal',1,[],'low');
+    const display=fake.shaders.find(s=>s.config.name==='GroundFog_display');
+    const uniforms=(shader:any)=>{const values=new Map();shader.config.setupUniforms((name:string,value:unknown)=>values.set(name,value));return values;};
+    // Units 3-6 hold creep, air velocity, chunk lookup and density state, even without rock coverage.
+    expect(display.textures).toHaveLength(7);expect(display.textures[3]).toBe(creep);
+    expect(uniforms(display).get('uCreep')).toBe(3);expect(uniforms(display).get('uFogState')).toBe(6);
+    expect(Array.from(uniforms(display).get('uVoidHaze'))).toEqual([1,expect.closeTo(.8)]);
+    // The owner may destroy the creep texture right after unbinding: the samplers go with the call.
+    field.setVoidHaze(null);
+    expect(display.textures).toHaveLength(3);expect(display.textures).not.toContain(creep);
+    expect(uniforms(display).get('uVoidHaze')[0]).toBe(0);
+    field.destroy();expect(remove.mock.calls.some(call=>call[0]==='__void_creep_test')).toBe(false);
+  });
 });

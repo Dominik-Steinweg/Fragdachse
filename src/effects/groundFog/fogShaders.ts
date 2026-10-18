@@ -5,6 +5,7 @@ import { FOG_ROCK_LIGHTING } from './FogRockLighting';
 import { SUN_VISIBILITY_GLSL, SUN_COMPOSITE_FACTOR_GLSL } from '../sunlight/sunVisibility';
 import { FOG_VISIBILITY_BUDGET_GLSL } from '../sunlight/FogVisibilityBudget';
 import { FOG_PATCH_GLSL } from '../sunlight/FogPatchField';
+import { VOID_CREEP_GLSL } from '../sunlight/VoidCreepShaders';
 const cells = FOG.chunkSize / FOG.cellSize;
 const f = (value: number): string => value.toFixed(6);
 const cycle = (seconds: number): string => f(Math.PI * 2 / seconds);
@@ -501,10 +502,54 @@ uniform sampler2D uMaterial,uTrails,uSurfaces;
 uniform float uHasTrails,uFogPrelit,uHasRockCoverage;
 uniform float uRockAerialOnly,uRockAerialStrength;
 uniform vec4 uFogView;
+// Void spore haze (FogVoidHaze): on, strength; the fog velocity and density atlases, chunk lookup.
+uniform vec2 uVoidHaze;
+uniform sampler2D uFogVelocity,uFogLookup,uFogState;
+uniform vec2 uFogOrigin,uFogWorldSize,uFogLookupSize;
 ${CLOUD_SHADOW_GLSL}
 ${FOG_BANK_GLSL}
 ${ATMOSPHERE_DITHER_GLSL}
 ${FOG_LIGHT_GLSL}
+${VOID_CREEP_GLSL}
+const vec2 FOG_ATLAS=vec2(${FOG.atlasCols * cells}.0,${FOG.atlasRows * cells}.0);
+// Fog simulation at one cell: x,y air velocity in px/s, z disturbance (the density field's
+// inhibition: explosions and passing figures raise it, it fades over a few seconds). Zero outside
+// resident chunks.
+vec3 fogCell(vec2 local) {
+ if(any(lessThan(local,vec2(0)))||any(greaterThanEqual(local,uFogWorldSize)))return vec3(0.0);
+ float slot=floor(texture2D(uFogLookup,(floor(local/512.0)+.5)/uFogLookupSize).r*255.0-1.0+.5);
+ if(slot<0.0)return vec3(0.0);
+ vec2 uv=(vec2(mod(slot,${FOG.atlasCols}.0),floor(slot/${FOG.atlasCols}.0))*${cells}.0+floor(mod(local,512.0)/8.0)+.5)/FOG_ATLAS;
+ vec4 v=texture2D(uFogVelocity,vec2(uv.x,1.0-uv.y));
+ vec2 air=(vec2(dot(v.rg,vec2(65280.0,255.0)),dot(v.ba,vec2(65280.0,255.0)))/65535.0*2.0-1.0)*${FOG.maxSpeed}.0;
+ return vec3(air,texture2D(uFogState,vec2(uv.x,1.0-uv.y)).a);
+}
+vec3 fogAt(vec2 world) {
+ vec2 grid=(world-uFogOrigin)/8.0-.5,base=(floor(grid)+.5)*8.0,w=fract(grid);
+ return mix(mix(fogCell(base),fogCell(base+vec2(8,0)),w.x),mix(fogCell(base+vec2(0,8)),fogCell(base+vec2(8,8)),w.x),w.y);
+}
+// The spore haze in the air over the creep: the same drifting clouds as on the ground, swept along
+// by the fog's air and blown open where explosions and passing figures stir it, refilling as the
+// fog settles. Premultiplied.
+vec4 voidAir(vec2 world, float trace) {
+ if(uVoidHaze.x<.5||creepTexel(world).r<.006)return vec4(0.0);
+ vec3 fog=fogAt(world);
+ vec2 carried=world-fog.xy*.35;
+ vec2 texel=creepTexel(carried);
+ if(texel.r<.006)return vec4(0.0);
+ vec2 mist=creepHaze(carried,texel.r);
+ float stirred=1.0-.92*smoothstep(.03,.45,fog.z);
+ float amount=(mist.x*.50+mist.y*.22)*uVoidHaze.y*stirred*(1.0-trace);
+ return vec4(mix(vec3(.30,.19,.37),vec3(.52,.42,.60),mist.y)*amount,amount);
+}
+// The haze sits inside the fog: fog over it veils it, and the fog itself takes a faint violet cast
+// where the creep lies, so both read as one air.
+vec4 withVoidAir(vec4 fog, vec4 haze, vec2 world) {
+ if(uVoidHaze.x<.5)return fog;
+ float violet=smoothstep(.05,.8,creepTexel(world).r)*.35;
+ fog.rgb=mix(fog.rgb,fog.rgb*vec3(.90,.80,1.02),violet);
+ return fog+haze*(1.0-fog.a);
+}
 void main() {
  float trace=uHasTrails>.5?texture2D(uTrails,outTexCoord).r:0.0;
  vec4 fog=texture2D(uMaterial,outTexCoord)*(1.0-trace);
@@ -520,18 +565,20 @@ void main() {
    float visibleFog=smoothstep(${f(FOG_ROCK_LIGHTING.aerialHazeOpacity)},${f(FOG_ROCK_LIGHTING.aerialFullOpacity)},fog.a);
    gl_FragColor=fog*(mineral*uRockAerialStrength*visibleFog);return;
  }
+ vec4 haze=voidAir(world,trace);
  // Apply geometry after upsampling: even Low cannot spill fog over rock tops.
  float rockRetention=1.0;
  if(uHasRockCoverage>.5) {
    vec4 surface=texture2D(uSurfaces,outTexCoord);
-   fog*=1.0-smoothstep(.25,.75,surface.r);
+   float open=1.0-smoothstep(.25,.75,surface.r);
+   fog*=open;haze*=open;
    rockRetention=surface.b;
  }
  // Woodland radiance is already resolved at material resolution; preserve fine wakes.
- if(uFogPrelit>.5||fog.a<=0.0){gl_FragColor=vec4(fog.rgb*rockRetention,fog.a);return;}
+ if(uFogPrelit>.5||fog.a<=0.0){gl_FragColor=withVoidAir(vec4(fog.rgb*rockRetention,fog.a),haze,world);return;}
  fog=lightFog(fog,world);
  // Optical response after lighting on both paths. PMA alpha and fine wakes stay intact.
- gl_FragColor=vec4(fog.rgb*rockRetention,fog.a);
+ gl_FragColor=withVoidAir(vec4(fog.rgb*rockRetention,fog.a),haze,world);
 }
 `;
 

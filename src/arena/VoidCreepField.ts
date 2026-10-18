@@ -10,7 +10,7 @@ const BANK_INNER = 40, BANK_OUTER = 150, BANK_STRENGTH = 0.55;
  */
 const WARP_SCALE = 260, WARP_PX = 150;
 /** Land spores: one candidate per cell (world px), only on established creep, never more than this. */
-const SPORE_CELL_PX = 72, SPORE_FROM = 0.45, MAX_GROUND_SPORES = 260;
+const SPORE_CELL_PX = 56, SPORE_FROM = 0.40, MAX_GROUND_SPORES = 420;
 
 /**
  * Void creep over ground, rock and water (GDD Nachtsicht N-6), presentation only: where the void

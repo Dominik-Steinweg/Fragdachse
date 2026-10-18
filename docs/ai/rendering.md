@@ -429,6 +429,10 @@ bleibt bytegleich ([WaterSunlight.test.ts](../../tests/WaterSunlight.test.ts)).
   Mondschicht zählt sie als Licht über der Nacht und darf deshalb bluten. Das Geflecht erscheint als Sporendunst ohne
   eigene Kanten: Jeder Anteil blendet aus dem Nichts ein. Schwebende Sporen gehören zum Land, im Wasser wirkt es als
   Tinte mit treibendem Sporenfilm ([VoidCreepField.test.ts](../../tests/VoidCreepField.test.ts)).
+- Der Bodennebel trägt den Sporendunst in der Luft (`GroundFogSystem.setVoidHaze`, von der Sonnenlicht-Darstellung
+  geliehen). Im Display-Pass schneiden die Waffenspuren den Dunst wie den Nebel, die Hemmung im Dichtefeld des Nebels
+  (Explosionen, Bewegung) öffnet ihn, die Nebelluft trägt ihn mit. Ohne aktiven Nebel bleibt nur der Bodenschleier.
+  Der Nebel gibt die geliehenen Sampler beim Lösen sofort frei ([FogWoodlandLight.test.ts](../../tests/FogWoodlandLight.test.ts)).
 - Weltverankertes Detail feiner als ein Bildschirmpixel flimmert bei Kamerabewegung. Materialien blenden solche
   Oktaven über die Pixelgröße der Kamera aus. Die Lichtkarte ist gröber als der Bildschirm und trägt nur weiches Licht.
 - Weltflächen, die der Kamera folgen, leiten ihr Rechteck aus `getVisibleWorldView` ab. Die Arena-Kamera hat Origin

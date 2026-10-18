@@ -16,6 +16,7 @@ import { FogGpuField } from './FogGpuField';
 import { FogImpulses } from './FogImpulses';
 import { FogGpuTimer } from './FogGpuTimer';
 import type { FogWoodlandLight } from './FogWoodlandLight';
+import type { FogVoidHaze } from './FogVoidHaze';
 import type { FormationCoverageBinding } from '../../arena/rocks/RockFormationLighting';
 import { resolveFogRockLighting, resolveRockAerialPerspective, type FogRockLightingOptions } from './FogRockLighting';
 
@@ -171,6 +172,7 @@ export class GroundFogSystem {
         this.gpu = new FogGpuField(this.scene, this.terrain, this.seed, this.tuning, DEPTH.GROUND_FOG_COMPOSITE);
         this.gpu.setWoodlandLight(this.woodlandLight);
         this.gpu.setTint(this.tint);
+        this.gpu.setVoidHaze(this.voidHaze);
         loadingTimeline.end('fog/field-init', measuredAt);
       }
       if (this.measureGpu) { this.timer ??= new FogGpuTimer(renderer.gl); this.timer.begin(); }
@@ -244,6 +246,11 @@ export class GroundFogSystem {
   }
   /** Activity colour overlay of this World's fog (e.g. Dawn night modifiers); null = neutral. */
   setTint(tint: readonly [number, number, number] | null): void { this.tint = tint; this.gpu?.setTint(tint); }
+  /** Airborne void spore haze carried by the fog; borrowed from its World owner. Null removes it. */
+  setVoidHaze(haze: FogVoidHaze | null): void { this.voidHaze = haze; this.gpu?.setVoidHaze(haze); }
+  /** True while the fog draws: the borrowed void haze is then visible in the air. */
+  get carriesVoidHaze(): boolean { return this.active && !!this.voidHaze; }
+  private voidHaze: FogVoidHaze | null = null;
   prepare(minutes: number, view: FogRect): boolean {
     if (this.stats.status === 'preparing') { this.update(0, minutes, view); this.gpu?.hide(); }
     return this.stats.status !== 'preparing';
