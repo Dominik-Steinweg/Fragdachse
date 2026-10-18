@@ -396,9 +396,13 @@ flache Fläche oder ein Pixel ohne dominante Lampe behält exakt den Faktor 1
 ([SurfaceLocalLights](../../src/effects/SurfaceLocalLights.ts), Vertrag
 [SurfaceLocalLights.test.ts](../../tests/SurfaceLocalLights.test.ts)).
 
-**Lampen in Felsen.** Lampen mit `surfaceReach*` leuchten eine Felsfront entlang der echten V7-Kontur aus
-([RockPenetrationShader](../../src/effects/RockPenetrationShader.ts)). Hinter den abgewandten Kanten bleibt der exakte
-Schlagschatten; außerhalb des Felsens ist er identisch zur zugewandten Projektion
+**Lampen in Felsen.** Für Lampen mit `surfaceReach*` entsteht die Felsverdeckung aus einer polaren Felskarte pro Lampe
+([RockPenetrationShader](../../src/effects/RockPenetrationShader.ts)), sobald die V7-Coverage resident ist. Jeder Strahl
+kennt Ein- und Austritt seines ersten Felsens an der sichtbaren Kontur. Davor ist es hell, die Front des ersten Felsens
+ist bis zur Eindringtiefe beleuchtet, dahinter ist alles dunkel, Boden und weitere Felsen gleichermaßen. Licht und
+Schatten widersprechen sich deshalb nie ([RockLampShadow.test.ts](../../tests/RockLampShadow.test.ts)). Für diese
+Lampen erzeugen Felszellen mit residenter Coverage keine Schattenpolygone, denn Zellrechtecke weichen von der Kontur
+ab. Nur Felsen ohne Coverage und alle anderen Occluder bleiben polygonal
 ([LightShadowGeometry.test.ts](../../tests/LightShadowGeometry.test.ts)).
 
 **Wasser nachts.** Der Nachtteil des Wassermaterials setzt erst nach der fertigen Uferlinie an; der Shader-Teil davor

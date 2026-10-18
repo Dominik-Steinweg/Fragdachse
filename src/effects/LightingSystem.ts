@@ -28,8 +28,11 @@ import {
 } from './LightingConfig';
 import { MAX_SURFACE_LIGHTS, type SurfaceLightFrame } from './SurfaceLocalLights';
 import { OCCLUDER_GROUP_ROCK } from './LightOccluderIndex';
-import { ROCK_PENETRATION_FRAGMENT, ROCK_PENETRATION_SHADER_NAME } from './RockPenetrationShader';
-import { ownSunShader } from './sunlight/SunRenderTarget';
+import {
+  ROCK_PENETRATION_FRAGMENT, ROCK_PENETRATION_SHADER_NAME, ROCK_SHADOW_POLAR_FRAGMENT, ROCK_SHADOW_POLAR_SHADER_NAME,
+  ROCK_SHADOW_ROWS, ROCK_SHADOW_TEXELS, rockShadowSpan,
+} from './RockPenetrationShader';
+import { ownSunShader, SunRenderTarget } from './sunlight/SunRenderTarget';
 import type { FormationCoverageBinding } from '../arena/rocks/RockFormationLighting';
 import {
   DEFAULT_TIME_OF_DAY_MINUTES,
@@ -100,8 +103,6 @@ const LIGHTMAP_VIEWPORT_EPSILON_PX = 0.5;
 
 /** Anteil der Felsfront-Eindringtiefe, der voll beleuchtet bleibt; danach läuft der Verlauf. */
 const SURFACE_REACH_LIT_SHARE = 0.35;
-/** Soft start of the projected shadow behind a rock's back edges when the rock front is organic. */
-const BACK_EDGE_SOFT_PX = 14;
 const SCRATCH_SIZE_UNIFORM = new Float32Array([OCCLUDER_SCRATCH_SIZE, OCCLUDER_SCRATCH_SIZE]);
 /** Shader quads drawn into a render texture see their texture coordinates upside down. */
 const ROCK_PENETRATION_FLIP_Y = 1;
@@ -177,9 +178,13 @@ interface OccluderSlot {
   readonly renderTexture: Phaser.GameObjects.RenderTexture;
   readonly image: Phaser.GameObjects.Image;
   readonly graphics: Phaser.GameObjects.Graphics;
-  /** Organic rock penetration of this slot's lamp; own uniforms, the erase runs at render time. */
+  /**
+   * Organic rock light of this slot's lamp: the polar rock map is drawn at once, the erase that
+   * reads it runs at render time, so every slot keeps its own map and uniforms.
+   */
   penetration?: { readonly shader: Phaser.GameObjects.Shader; readonly lamp: Float32Array; readonly reach: Float32Array;
-    readonly frame: Float32Array; binding: FormationCoverageBinding | null };
+    readonly cone: Float32Array; readonly polar: SunRenderTarget; readonly polarLamp: Float32Array;
+    readonly frame: Float32Array; span: number; binding: FormationCoverageBinding | null };
 }
 
 interface OcclusionCache {
@@ -700,6 +705,7 @@ export class LightingSystem {
       slot.image.destroy();
       slot.graphics.destroy();
       slot.penetration?.shader.destroy();
+      slot.penetration?.polar.destroy();
     }
     this.slots.length = 0;
   }
@@ -1594,7 +1600,7 @@ export class LightingSystem {
     const coverage = preset.surfaceReachNearPx !== undefined && preset.surfaceReachFarPx !== undefined
       ? this.rockCoverage?.() ?? null : null;
     const geometryStartedAt = collectMetrics ? performance.now() : 0;
-    this.buildShadowGraphics(light, slot.graphics, center, collectCounts, coverage !== null);
+    this.buildShadowGraphics(light, slot.graphics, center, collectCounts, coverage);
     const durationMs = collectMetrics ? performance.now() - geometryStartedAt : 0;
     const shadowQuads = collectCounts ? this.shadowQuads.length : 0;
     const falloffQuads = collectCounts ? this.falloffQuads.length : 0;
@@ -1636,7 +1642,7 @@ export class LightingSystem {
     graphics: Phaser.GameObjects.Graphics,
     center: number,
     collectCounts: boolean,
-    organicRocks = false,
+    organicRocks: FormationCoverageBinding | null = null,
   ): void {
     graphics.clear();
     const core = this.shadowQuads;
@@ -1657,7 +1663,7 @@ export class LightingSystem {
     light: ActiveLight,
     core: ShadowQuadBuffer,
     falloff: ShadowQuadBuffer,
-    organicRocks = false,
+    organicRocks: FormationCoverageBinding | null = null,
   ): void {
     const extendPx = light.radiusPx * SHADOW_EXTEND_FACTOR;
     const falloffPx = OCCLUDER_SHADE_FALLOFF_PX;
@@ -1672,16 +1678,10 @@ export class LightingSystem {
       group?: number,
     ): void => {
       if (reaches && group === OCCLUDER_GROUP_ROCK) {
-        // Nachtsicht N-4: Die Lampe leuchtet die Felsfront bis zur Eindringtiefe aus, die
-        // abgewandten Kanten schließen den Schatten hinter dem Fels sofort.
-        // With resident coverage the penetration pass shapes the rock front along its real
-        // contour; only the exact shadow behind the back edges stays polygonal.
-        if (organicRocks) {
-          // A soft start keeps grazing back edges from drawing hard hairlines into the beam.
-          projectRectBackShadowQuads(falloff, light.x, light.y, left, top, right, bottom, 0, BACK_EDGE_SOFT_PX, exposedEdges);
-          projectRectBackShadowQuads(core, light.x, light.y, left, top, right, bottom, BACK_EDGE_SOFT_PX, extendPx, exposedEdges);
-          return;
-        }
+        // Nachtsicht N-4: Die Lampe leuchtet die Felsfront bis zur Eindringtiefe aus, dahinter
+        // bleibt alles dunkel. Resident coverage leaves the rock entirely to the polar rock map,
+        // so lit front and shadow share the real contour; cell rectangles would disagree with it.
+        if (organicRocks?.covers?.(left, top, right, bottom)) return;
         const distance = Math.hypot((left + right) * 0.5 - light.x, (top + bottom) * 0.5 - light.y);
         const reach = Math.max(falloffPx, resolveSurfaceReachPx(preset, distance, light.radiusPx));
         projectRectShadowQuads(falloff, light.x, light.y, left, top, right, bottom,
@@ -1997,34 +1997,50 @@ export class LightingSystem {
     return LIGHTMAP_OVERSCAN_ALIGNMENT_PX;
   }
 
-  /** Uniforms of a slot's penetration quad for this lamp; the quad itself is reused per slot. */
+  /**
+   * Draws the slot's polar rock map for this lamp now and returns the erase quad that reads it
+   * at render time; map, quad and uniforms are reused per slot.
+   */
   private preparePenetration(slot: OccluderSlot, light: ActiveLight, preset: LightPreset,
     coverage: FormationCoverageBinding, center: number): Phaser.GameObjects.Shader {
     if (!slot.penetration) {
-      const lamp = new Float32Array(4), reach = new Float32Array(4), frame = new Float32Array(4);
-      const shader = new Phaser.GameObjects.Shader(this.scene, {
-        name: ROCK_PENETRATION_SHADER_NAME, shaderName: ROCK_PENETRATION_SHADER_NAME, fragmentSource: ROCK_PENETRATION_FRAGMENT,
-        setupUniforms: (set: (name: string, value: unknown) => void) => {
-          set('uRockField', 0); set('uRockLookup', 1);
-          set('uLamp', lamp); set('uReach', reach); set('uRockFrame', frame);
-          set('uScratchSize', SCRATCH_SIZE_UNIFORM); set('uFlipY', ROCK_PENETRATION_FLIP_Y);
-        },
-      }, 0, 0, OCCLUDER_SCRATCH_SIZE, OCCLUDER_SCRATCH_SIZE, [coverage.field, coverage.lookup]);
+      const lamp = new Float32Array(4), reach = new Float32Array(4), cone = new Float32Array(3);
+      const polarLamp = new Float32Array(4), frame = new Float32Array(4);
+      const polar = new SunRenderTarget(this.scene, 'RockShadowPolar', ROCK_SHADOW_POLAR_FRAGMENT, set => {
+        set('uRockField', 0); set('uRockLookup', 1); set('uRockFrame', frame);
+        set('uLamp', polarLamp); set('uSpan', slot.penetration?.span ?? Math.PI * 2);
+      }, [coverage.field, coverage.lookup], ROCK_SHADOW_POLAR_SHADER_NAME);
+      let shader: Phaser.GameObjects.Shader;
+      try {
+        shader = new Phaser.GameObjects.Shader(this.scene, {
+          name: ROCK_PENETRATION_SHADER_NAME, shaderName: ROCK_PENETRATION_SHADER_NAME, fragmentSource: ROCK_PENETRATION_FRAGMENT,
+          setupUniforms: (set: (name: string, value: unknown) => void) => {
+            set('uRockShadow', 0); set('uLamp', lamp); set('uReach', reach); set('uCone', cone);
+            set('uScratchSize', SCRATCH_SIZE_UNIFORM); set('uFlipY', ROCK_PENETRATION_FLIP_Y);
+          },
+        }, 0, 0, OCCLUDER_SCRATCH_SIZE, OCCLUDER_SCRATCH_SIZE, [polar.shader.texture!]);
+      } catch (error) { polar.destroy(); throw error; }
       // Private VAO and buffer die with the slot; the program stays shared like other fixed keys.
       ownSunShader(shader, ROCK_PENETRATION_SHADER_NAME, true);
       shader.setOrigin(0, 0);
-      slot.penetration = { shader, lamp, reach, frame, binding: coverage };
+      slot.penetration = { shader, lamp, reach, cone, polar, polarLamp, frame, span: Math.PI * 2, binding: coverage };
     }
     const penetration = slot.penetration;
     if (penetration.binding !== coverage) {
-      penetration.shader.setTextures([coverage.field, coverage.lookup]);
+      penetration.polar.shader.setTextures([coverage.field, coverage.lookup]);
       penetration.binding = coverage;
     }
+    for (let i = 0; i < 4; i++) penetration.frame[i] = coverage.frame[i];
+    const span = rockShadowSpan(light.shape, light.coneAngle);
+    penetration.span = span;
+    penetration.polarLamp[0] = light.x; penetration.polarLamp[1] = light.y;
+    penetration.polarLamp[2] = light.radiusPx; penetration.polarLamp[3] = light.angle;
+    penetration.polar.draw(ROCK_SHADOW_TEXELS, ROCK_SHADOW_ROWS);
     penetration.lamp[0] = light.x; penetration.lamp[1] = light.y;
     penetration.lamp[2] = center; penetration.lamp[3] = 1 / this.quality.lightMapScale;
     penetration.reach[0] = preset.surfaceReachNearPx!; penetration.reach[1] = preset.surfaceReachFarPx!;
     penetration.reach[2] = light.radiusPx; penetration.reach[3] = SURFACE_REACH_LIT_SHARE;
-    for (let i = 0; i < 4; i++) penetration.frame[i] = coverage.frame[i];
+    penetration.cone[0] = light.angle; penetration.cone[1] = span; penetration.cone[2] = span >= Math.PI * 2 - 1e-6 ? 1 : 0;
     return penetration.shader;
   }
 

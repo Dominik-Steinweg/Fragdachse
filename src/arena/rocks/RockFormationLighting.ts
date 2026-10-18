@@ -29,6 +29,8 @@ export type FormationCoverageBinding = Pick<FormationReceiverBinding, 'field' | 
     strength: number;
     solarEnabled: boolean;
   };
+  /** True when every chunk under the world rectangle is resident and built in `field`. */
+  covers?: (left: number, top: number, right: number, bottom: number) => boolean;
 };
 
 let nextId = 0;
@@ -177,6 +179,7 @@ export class RockFormationLighting {
       mineralHeight:scene.textures.get(this.heightTextureKey),
       frame:[frame.offsetX,frame.offsetY,frame.width,frame.height],sun:state.sun,options:[0,0,1,1],
       fogShadows:{occlusion:this.occlusion.texture,horizonBlend:this.horizonBlend,sun:state.sun,strength:0,solarEnabled:false},
+      covers:(left,top,right,bottom)=>this.coversRect(left,top,right,bottom),
       };
     this.gpuRepair=RockFormationGpuRepair.create(scene.sys.renderer as Phaser.Renderer.WebGL.WebGLRenderer,
       frame.width,frame.height,states,{alpha,detail});
@@ -609,6 +612,14 @@ export class RockFormationLighting {
       repairLatencyFrames:this.repairLatencyFrames,repairPath:this.repairPath,
       gpuRepair:this.gpuRepair?.diagnostics??{available:false,reason:'WebGL float repair unavailable'},
       residentEvictions:this.residentEvictions,overflow:this.overflow,error:this.error};
+  }
+  /** Rock outside the field counts as uncovered, so its consumers keep their own fallback. */
+  private coversRect(left:number,top:number,right:number,bottom:number):boolean {
+    const x0=Math.floor((left-this.frame.offsetX)/FORMATION.chunk),x1=Math.floor((right-this.frame.offsetX-1e-3)/FORMATION.chunk);
+    const y0=Math.floor((top-this.frame.offsetY)/FORMATION.chunk),y1=Math.floor((bottom-this.frame.offsetY-1e-3)/FORMATION.chunk);
+    if(x0<0||y0<0||x1>=this.lookup.width||y1>=this.lookup.height)return false;
+    for(let cy=y0;cy<=y1;cy++)for(let cx=x0;cx<=x1;cx++)if(this.lookupData[(cy*this.lookup.width+cx)*4]===0)return false;
+    return true;
   }
   getCoverageBinding(): FormationCoverageBinding | null {
     if(this.disposed||this.error||this.overflow||this.state.material!=='mineral'||!this.receiver)return null;

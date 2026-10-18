@@ -5,7 +5,9 @@ import { VEGETATION_MATERIAL } from '../effects/sunlight/VegetationLighting';
 import { WATER_SHADER_NAME } from '../arena/waterSurfaceShader';
 import { WATER_SUN_FRAGMENT } from '../arena/WaterSunlight';
 import { MOON_SKY_FRAGMENT, MOON_SKY_SHADER_NAME } from '../effects/sunlight/MoonSkyLight';
-import { ROCK_PENETRATION_FRAGMENT, ROCK_PENETRATION_SHADER_NAME } from '../effects/RockPenetrationShader';
+import {
+  ROCK_PENETRATION_FRAGMENT, ROCK_PENETRATION_SHADER_NAME, ROCK_SHADOW_POLAR_FRAGMENT, ROCK_SHADOW_POLAR_SHADER_NAME,
+} from '../effects/RockPenetrationShader';
 import { addCharacterMaterialAddition } from '../effects/CharacterMaterialLighting';
 import { STATUS_RING_FILL_FRAGMENT_SOURCE, STATUS_RING_FILL_SHADER_NAME, STATUS_RING_FRAGMENT_SOURCE,
   STATUS_RING_SHADER_NAME } from '../effects/living/statusRingShader';
@@ -37,7 +39,7 @@ export function warmupWorldMaterials(scene: Phaser.Scene): () => void {
     // Night programs first link at dusk or at the first lamp on a rock; link them while loading.
     for(const [shaderName,fragmentSource] of [[name,WATER_SUN_FRAGMENT],[STATUS_RING_SHADER_NAME,STATUS_RING_FRAGMENT_SOURCE],
       [STATUS_RING_FILL_SHADER_NAME,STATUS_RING_FILL_FRAGMENT_SOURCE],[MOON_SKY_SHADER_NAME,MOON_SKY_FRAGMENT],
-      [ROCK_PENETRATION_SHADER_NAME,ROCK_PENETRATION_FRAGMENT]])
+      [ROCK_PENETRATION_SHADER_NAME,ROCK_PENETRATION_FRAGMENT],[ROCK_SHADOW_POLAR_SHADER_NAME,ROCK_SHADOW_POLAR_FRAGMENT]])
       quads.push(new Phaser.GameObjects.Shader(scene,{name:shaderName,shaderName,fragmentSource},0,0,1,1));
     const finish=beginShaderPrograms(renderer,[...batches.map(b=>b.programManager),...quads.map(q=>q.renderNode.programManager)]);
     return ()=>{
