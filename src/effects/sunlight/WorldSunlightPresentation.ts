@@ -12,7 +12,7 @@ import type { CameraPostFxController } from '../postfx/CameraPostFxController';
 import { CanopyLighting } from '../../arena/trees/CanopyLighting';
 import { buildWoodlandEcology, EcologyWaterField, markVoidPondColonies } from '../../arena/WoodlandEcologyField';
 import { buildVoidWaterStain } from '../../arena/VoidWaterStain';
-import { buildVoidCreepField, buildVoidCreepHaze, voidCreepSporePoints, voidCreepTexelRect, type VoidCreepField, type VoidCreepSource } from '../../arena/VoidCreepField';
+import { buildVoidCreepField, buildVoidCreepHaze, voidCreepTexelRect, type VoidCreepField, type VoidCreepSource } from '../../arena/VoidCreepField';
 import { VoidCreepPresentation } from './VoidCreepPresentation';
 import { VoidDangerField, resolveVoidDangerSources, type ActivityVoidDanger, type VoidDangerSource } from '../../arena/VoidDangerField';
 import { VoidFloraGlow } from './VoidFloraGlow';
@@ -32,6 +32,7 @@ import { createSunPath, resolveSunPath } from './SunPath';
 import type { SunCloudState } from './cloudShadow';
 import type { SurfaceLightFrame } from '../SurfaceLocalLights';
 import type { FogWoodlandLight } from '../groundFog/FogWoodlandLight';
+import type { FogAirBinding } from '../groundFog/FogAirBinding';
 import { getGraphicsQualityProfile } from '../../graphics/GraphicsQuality';
 import { type RockLightingState } from '../../arena/rocks/RockLightingState';
 import { CANOPY_ASSETS, canopyVariant } from '../../arena/trees/CanopyAssets';
@@ -138,6 +139,8 @@ export class WorldSunlightPresentation {
   if(moon)this.moon=moon;
   this.moonTarget=moon?1:0;
  }
+ /** The ground fog's air after this frame's step, lent to the void motes; null without simulating fog. */
+ setFogAir(air:FogAirBinding|null):void {if(!this.disposed)this.voidCreep?.setAir(air);}
  /** Activity overlay of the void danger (permanent hazards, presence), pulled once per frame. */
  setActivityVoidDanger(danger:ActivityVoidDanger|null):void {this.activityDanger=danger;}
  private moon:ActivityMoonlight|null=null;
@@ -244,7 +247,8 @@ export class WorldSunlightPresentation {
   {
     const artificial=targets.lighting.getArtificialLightFactor(),quality=getGraphicsQualityProfile(this.scene).sunlight;
     targets.lighting.setGlowLayer(this.voidCreep?.update(this.scene.cameras.main,targets.water?.getPresentationTime()??this.lastSceneTime/1000,
-      Math.max(0,Math.min(1,(artificial-.1)/.6)),{rocks:quality.voidCreepRocks,glow:quality.voidCreepGlow,airborne:!!targets.fog?.carriesVoidHaze},
+      Math.max(0,Math.min(1,(artificial-.1)/.6)),{rocks:quality.voidCreepRocks,glow:quality.voidCreepGlow,airborne:!!targets.fog?.carriesVoidHaze,
+       motes:{layers:quality.voidMoteLayers,gradient:quality.voidMoteGradient}},
       quality.voidCreepRocks?targets.rocks?.getFormationCoverage()??null:null)??null);
   }
   if(this.voidEmission){
@@ -345,7 +349,6 @@ export class WorldSunlightPresentation {
       this.voidCreep?.setCreep(creep);
       targets.fog?.setVoidHaze(this.voidCreep?.airHaze??null);
       targets.water?.setVoidStain(buildVoidWaterStain(placements,frame,creep));
-      this.voidEmission?.setGroundSpores(creep?voidCreepSporePoints(creep,targets.layout.seed):[]);
       this.voidEmission?.setPondPlacements(placements);
       this.woodland=new WoodlandEcologyRenderer(this.scene,placements);this.woodlandLayout=layout;
       loadingTimeline.end('ecology/woodland',measuredAt);

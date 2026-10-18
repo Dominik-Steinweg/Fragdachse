@@ -9,8 +9,6 @@ const BANK_INNER = 40, BANK_OUTER = 150, BANK_STRENGTH = 0.55;
  * contour lines inside its cells; warping by two smooth octaves turns them into creeping lobes.
  */
 const WARP_SCALE = 260, WARP_PX = 150;
-/** Land spores: one candidate per cell (world px), only on established creep, never more than this. */
-const SPORE_CELL_PX = 56, SPORE_FROM = 0.40, MAX_GROUND_SPORES = 420;
 
 /**
  * Void creep over ground, rock and water (GDD Nachtsicht N-6, Void-Gefahrenzonen V1), presentation
@@ -177,21 +175,3 @@ const hash = (x: number, y: number, salt: number): number => {
   n = Math.imul(n ^ (n >>> 13), 3266489909);
   return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
 };
-
-/**
- * Spore points over the land haze (x, y, haze triples): a jittered cell grid, denser where the
- * haze is thicker, capped for the GPU layer. Deterministic per World seed.
- */
-export function voidCreepSporePoints(creep: VoidCreepField, seed: number): number[] {
-  const points: number[] = [];
-  const right = creep.offsetX + creep.width * creep.texelPx, bottom = creep.offsetY + creep.height * creep.texelPx;
-  for (let cy = 0, y = creep.offsetY; y < bottom; cy++, y += SPORE_CELL_PX)
-    for (let cx = 0, x = creep.offsetX; x < right; cx++, x += SPORE_CELL_PX) {
-      const px = x + hash(cx, cy, seed ^ 0x51) * SPORE_CELL_PX, py = y + hash(cx, cy, seed ^ 0x52) * SPORE_CELL_PX;
-      const amount = voidCreepHazeAt(creep, px, py);
-      if (amount < SPORE_FROM || voidCreepLandAt(creep, px, py) < .9 || hash(cx, cy, seed ^ 0x53) > amount * .7) continue;
-      points.push(px, py, amount);
-      if (points.length >= MAX_GROUND_SPORES * 3) return points;
-    }
-  return points;
-}

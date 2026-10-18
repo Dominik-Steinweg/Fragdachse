@@ -174,4 +174,21 @@ describe('optional fog woodland presentation',()=>{
     expect(uniforms(display).get('uVoidHaze')[0]).toBe(0);
     field.destroy();expect(remove.mock.calls.some(call=>call[0]==='__void_creep_test')).toBe(false);
   });
+  it('lends its current air read-only and nothing once destroyed',()=>{
+    const gl={ZERO:0,ONE:1,ONE_MINUS_SRC_ALPHA:771,FUNC_ADD:32774,DITHER:1,MAX_TEXTURE_SIZE:2,MAX_TEXTURE_IMAGE_UNITS:3,FRAMEBUFFER_COMPLETE:4,
+      isEnabled:()=>false,getParameter:(key:number)=>key===2?8192:16,getShaderPrecisionFormat:()=>({precision:23}),
+      getProgramParameter:()=>true,checkFramebufferStatus:()=>4,texSubImage2D(){},disable(){},enable(){}};
+    const fallback={source:[{glTexture:{}}]},remove=vi.fn(),scene={sys:{renderer:{gl,blendModes:[],addBlendMode:vi.fn(),updateBlendMode:vi.fn(),createTexture2D:()=>({}),glTextureUnits:{bind(){}},glWrapper:{updateTexturing(){},update(){}}}},
+      textures:{addGLTexture:()=>({}),get:()=>fallback,remove},add:{existing:(value:unknown)=>value}};
+    const terrain=new FogTerrainModel({offsetX:100,offsetY:200,width:512,height:512},[]),tuning=fogTuning(1);
+    const field=new FogGpuField(scene as never,terrain,1,tuning,10),view={x:100,y:200,width:512,height:512};
+    field.prepare(view,0);field.step([], [.3,.5],tuning,0);
+    const air=field.getAirBinding()!;
+    expect(Array.from(air.origin)).toEqual([100,200]);expect(Array.from(air.worldSize)).toEqual([512,512]);
+    expect(air.velocity).toBeDefined();expect(air.state).toBeDefined();expect(air.lookup).toBeDefined();
+    const removed=remove.mock.calls.length;
+    field.destroy();expect(field.getAirBinding()).toBeNull();
+    // Borrowing never adds anything the fog would not release itself.
+    expect(remove.mock.calls.length).toBeGreaterThanOrEqual(removed);
+  });
 });

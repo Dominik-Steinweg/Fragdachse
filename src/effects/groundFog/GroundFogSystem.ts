@@ -17,6 +17,7 @@ import { FogImpulses } from './FogImpulses';
 import { FogGpuTimer } from './FogGpuTimer';
 import type { FogWoodlandLight } from './FogWoodlandLight';
 import type { FogVoidHaze } from './FogVoidHaze';
+import type { FogAirBinding } from './FogAirBinding';
 import type { FormationCoverageBinding } from '../../arena/rocks/RockFormationLighting';
 import { resolveFogRockLighting, resolveRockAerialPerspective, type FogRockLightingOptions } from './FogRockLighting';
 
@@ -250,6 +251,8 @@ export class GroundFogSystem {
   setVoidHaze(haze: FogVoidHaze | null): void { this.voidHaze = haze; this.gpu?.setVoidHaze(haze); }
   /** True while the fog draws: the borrowed void haze is then visible in the air. */
   get carriesVoidHaze(): boolean { return this.active && !!this.voidHaze; }
+  /** The fog's air after this frame's step, read-only; null while the fog does not simulate. */
+  getAirBinding(): FogAirBinding | null { return this.active && this.gpu ? this.gpu.getAirBinding() : null; }
   private voidHaze: FogVoidHaze | null = null;
   prepare(minutes: number, view: FogRect): boolean {
     if (this.stats.status === 'preparing') { this.update(0, minutes, view); this.gpu?.hide(); }

@@ -53,7 +53,7 @@ gezielt eingesetzt: Violett bedeutet Gefahr.
 |---|---|---|
 | 1 | Spawnzonen in Daten, Host, Generator und Map-Editor; Migration der Inline-Flächen (Maps 00, 01, 06, 07, 13, 16, 20) | fertig (Branch) |
 | 2 | Gefahrenfeld ersetzt das ambiente Void | fertig (Branch) |
-| 3 | GPU-Sporen; der Nebel leiht seine Luft | offen |
+| 3 | GPU-Sporen; der Nebel leiht seine Luft | fertig (Branch) |
 | 4 | Host-Warnungen und Drahtformat (Protokoll +1) | offen |
 | 5 | Gerichtete Randwarnung und HUD-Richtung | eigene Sitzung |
 | 6 | Umbau der Front-Karten | offen |
@@ -63,4 +63,6 @@ gezielt eingesetzt: Violett bedeutet Gefahr.
 
 - 2026-10-19: Präsenz-Überblendung per Teil-Upload des B-Kanals statt zweitem Kanal und Uniform. Ein Datenkanal im Alpha einer Canvas-Textur würde vormultipliziert und dabei zerstört. Ein zweiter Sampler passt nicht ins Budget des Nebel-Passes.
 - 2026-10-19: Eine Dawn-Stätte gilt als geschlossen, wenn ihr Ziel `completed` oder `failed` ist (Ende zur Dämmerung). Das ist replizierter Zustand, der Client braucht nichts Eigenes.
+- 2026-10-19: Die Sporen-Partikel sind ein GPU-Pass über dem Dunst (`VoidSporeMotes`) und ersetzen die Sprite-Sporen über Pflanzen. Sie gehören zum Dunst: Über einer Narbe ohne Präsenz gibt es keine.
+- 2026-10-19: Der Nebel verleiht seine Luft erst nach seinem Schritt im Frame (`GroundFogSystem.getAirBinding`). Er tauscht seine Texturen pro Schritt und kann sie freigeben.
 - 2026-10-19: Die Dawn-Angriffswellen behalten ihr intern erzeugtes Inline-Rechteck. Sie sind eine generierte Activity ohne authored Ort. Der Dunst über Dawn-Stätten kommt aus den feindlichen Stätten-Basen.

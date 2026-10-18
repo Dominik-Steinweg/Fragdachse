@@ -12,6 +12,7 @@ import {
   VOID_CREEP_GLOW_FRAGMENT, VOID_CREEP_GLOW_SHADER_NAME, VOID_CREEP_GROUND_FRAGMENT, VOID_CREEP_GROUND_SHADER_NAME,
   VOID_CREEP_ROCK_FRAGMENT, VOID_CREEP_ROCK_SHADER_NAME,
 } from '../effects/sunlight/VoidCreepShaders';
+import { VOID_SPORE_MOTES_FRAGMENT, VOID_SPORE_MOTES_SHADER_NAME } from '../effects/sunlight/VoidSporeMoteShaders';
 import { addCharacterMaterialAddition } from '../effects/CharacterMaterialLighting';
 import { STATUS_RING_FILL_FRAGMENT_SOURCE, STATUS_RING_FILL_SHADER_NAME, STATUS_RING_FRAGMENT_SOURCE,
   STATUS_RING_SHADER_NAME } from '../effects/living/statusRingShader';
@@ -45,7 +46,7 @@ export function warmupWorldMaterials(scene: Phaser.Scene): () => void {
       [STATUS_RING_FILL_SHADER_NAME,STATUS_RING_FILL_FRAGMENT_SOURCE],[MOON_SKY_SHADER_NAME,MOON_SKY_FRAGMENT],
       [ROCK_PENETRATION_SHADER_NAME,ROCK_PENETRATION_FRAGMENT],[ROCK_SHADOW_POLAR_SHADER_NAME,ROCK_SHADOW_POLAR_FRAGMENT],
       [VOID_CREEP_GROUND_SHADER_NAME,VOID_CREEP_GROUND_FRAGMENT],[VOID_CREEP_ROCK_SHADER_NAME,VOID_CREEP_ROCK_FRAGMENT],
-      [VOID_CREEP_GLOW_SHADER_NAME,VOID_CREEP_GLOW_FRAGMENT]])
+      [VOID_CREEP_GLOW_SHADER_NAME,VOID_CREEP_GLOW_FRAGMENT],[VOID_SPORE_MOTES_SHADER_NAME,VOID_SPORE_MOTES_FRAGMENT]])
       quads.push(new Phaser.GameObjects.Shader(scene,{name:shaderName,shaderName,fragmentSource},0,0,1,1));
     const finish=beginShaderPrograms(renderer,[...batches.map(b=>b.programManager),...quads.map(q=>q.renderNode.programManager)]);
     return ()=>{

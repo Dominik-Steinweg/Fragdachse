@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildVoidCreepField, buildVoidCreepHaze, voidCreepAt, voidCreepHazeAt, voidCreepLandAt, voidCreepSporePoints, voidCreepTexelRect } from '../src/arena/VoidCreepField';
+import { buildVoidCreepField, buildVoidCreepHaze, voidCreepAt, voidCreepHazeAt, voidCreepLandAt, voidCreepTexelRect } from '../src/arena/VoidCreepField';
 import { buildVoidWaterStain } from '../src/arena/VoidWaterStain';
 
 const FRAME = { offsetX: 64, offsetY: 32, width: 2048, height: 1280 };
@@ -48,15 +48,12 @@ describe('void creep field', () => {
     expect(voidCreepAt(weak, 1660, 300)).toBeLessThan(voidCreepAt(banks, 1660, 300));
   });
 
-  it('keeps strands and spores on land and is identical for every peer', () => {
+  it('records the land share and is identical for every peer', () => {
     const water = (x: number) => x > 760 ? 0 : 1;
     const creep = buildVoidCreepField(disc, FRAME, [], water)!;
     expect(voidCreepLandAt(creep, 600, 600)).toBe(1);
     expect(voidCreepLandAt(creep, 900, 600)).toBe(0);
-    const spores = voidCreepSporePoints(creep, 7);
-    expect(spores.length).toBeGreaterThan(0);
-    for (let i = 0; i < spores.length; i += 3) expect(voidCreepLandAt(creep, spores[i], spores[i + 1])).toBeGreaterThanOrEqual(.9);
-    expect(voidCreepSporePoints(buildVoidCreepField(disc, FRAME, [], water)!, 7)).toEqual(spores);
+    expect(buildVoidCreepField(disc, FRAME, [], water)).toEqual(creep);
   });
 
   it('inks larger stretches of water where it reaches a pond', () => {

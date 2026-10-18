@@ -6,6 +6,8 @@ import type { FormationCoverageBinding } from '../../arena/rocks/RockFormationLi
 import type { VoidCreepField, VoidCreepTexelRect } from '../../arena/VoidCreepField';
 import type { LightMapAmbientLayer } from '../LightingSystem';
 import type { FogVoidHaze } from '../groundFog/FogVoidHaze';
+import type { FogAirBinding } from '../groundFog/FogAirBinding';
+import { VoidSporeMotes, type VoidMoteQuality } from './VoidSporeMotes';
 import { SunRenderTarget } from './SunRenderTarget';
 import {
   VOID_CREEP_GLOW_FRAGMENT, VOID_CREEP_GLOW_SHADER_NAME, VOID_CREEP_GROUND_FRAGMENT, VOID_CREEP_GROUND_SHADER_NAME,
@@ -91,6 +93,7 @@ export class VoidCreepPresentation {
   private rock: Phaser.GameObjects.Shader | null = null;
   private rockBinding: FormationCoverageBinding | null = null;
   private glow: VoidCreepGlow | null = null;
+  private motes: VoidSporeMotes | null = null;
   /** The airborne half of the haze, lent to the World's ground fog; null without creep. */
   private fogHaze: { texture: Phaser.Textures.Texture; frame: Float32Array; time: number; strength: number } | null = null;
   /** 1 while the fog carries the airborne haze; the ground layer then keeps to settled dust. */
@@ -115,7 +118,11 @@ export class VoidCreepPresentation {
     this.creep.frame.set([creep.offsetX, creep.offsetY, creep.width * creep.texelPx, creep.height * creep.texelPx]);
     this.fogHaze = { texture, frame: this.creep.frame, time: 0, strength: AIR_STRENGTH };
     this.ground = this.makeQuad(VOID_CREEP_GROUND_SHADER_NAME, VOID_CREEP_GROUND_FRAGMENT, DEPTH.VOID_CREEP, [key], () => {});
+    this.motes = new VoidSporeMotes(this.scene, key, this.creep, this.view, () => this.pixelWorld);
   }
+
+  /** The fog's air after its step this frame, lent to the motes; null without simulating fog. */
+  setAir(air: FogAirBinding | null): void { this.motes?.setAir(air); }
 
   /**
    * Crossfades the haze of one texel region to `to` (region-sized, row-major) over a few seconds:
@@ -162,7 +169,7 @@ export class VoidCreepPresentation {
    * quality or without creep). `night` 0..1 follows the lamps' dusk curve.
    */
   update(camera: Phaser.Cameras.Scene2D.Camera, timeSec: number, night: number,
-    options: { rocks: boolean; glow: boolean; airborne: boolean }, coverage: FormationCoverageBinding | null): LightMapAmbientLayer | null {
+    options: { rocks: boolean; glow: boolean; airborne: boolean; motes: VoidMoteQuality }, coverage: FormationCoverageBinding | null): LightMapAmbientLayer | null {
     if (!this.key || !this.ground) return null;
     this.advanceFades(timeSec);
     this.creep.time = timeSec;
@@ -173,6 +180,7 @@ export class VoidCreepPresentation {
     this.view[0] = view.x; this.view[1] = view.y; this.view[2] = view.width; this.view[3] = view.height;
     this.pixelWorld = (view.width - VIEW_MARGIN_PX * 2) / Math.max(1, camera.width);
     this.place(this.ground);
+    this.motes?.update(this.view[0], this.view[1], this.view[2], this.view[3], night, options.motes);
     this.syncRock(options.rocks ? coverage : null);
     if (!options.glow || night <= .01) return null;
     this.glow ??= new VoidCreepGlow(this.scene, this.key, this.creep);
@@ -228,6 +236,7 @@ export class VoidCreepPresentation {
     this.ground?.destroy(); this.ground = null;
     this.rock?.destroy(); this.rock = null; this.rockBinding = null;
     this.glow?.destroy(); this.glow = null;
+    this.motes?.destroy(); this.motes = null;
     this.fogHaze = null;
     this.texture = null; this.pixels = null; this.field = null; this.haze = null; this.fades = []; this.lastTime = NaN; this.sinceUpload = 0;
     if (this.key) { this.scene.textures.remove(this.key); this.key = null; }

@@ -121,25 +121,3 @@ function boxBlur(source: Float32Array, width: number, height: number, radius: nu
   }
   return out;
 }
-
-/** Soft round mote for void spores; built once per texture manager. */
-export const VOID_SPORE_KEY = 'void-flora-spore-v2';
-export function ensureVoidSporeTexture(textures: Phaser.Textures.TextureManager): string | null {
-  if (textures.exists(VOID_SPORE_KEY)) return VOID_SPORE_KEY;
-  if (typeof document === 'undefined') return null;
-  const size = 32, canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const context = canvas.getContext('2d');
-  if (!context) return null;
-  // A luminous point: a tight bright core inside a faint wide halo, so a mote reads as a glint of
-  // light rather than a disc, even when drawn a dozen pixels wide.
-  const pixels = context.createImageData(size, size);
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const r = Math.hypot(x + .5 - size / 2, y + .5 - size / 2);
-    const core = Math.exp(-(r * r) / (2 * 1.6 * 1.6)), halo = Math.exp(-(r * r) / (2 * 6.5 * 6.5)) * .30;
-    const fade = Math.max(0, Math.min(1, (size / 2 - r) / 3));
-    pixels.data.set([255, 255, 255, Math.round(Math.min(1, core + halo) * fade * 255)], (y * size + x) * 4);
-  }
-  context.putImageData(pixels, 0, 0);
-  return textures.addCanvas(VOID_SPORE_KEY, canvas) ? VOID_SPORE_KEY : null;
-}

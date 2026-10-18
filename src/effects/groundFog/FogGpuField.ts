@@ -13,6 +13,7 @@ import { FogTrailSegments } from './FogTrailSegments';
 import { FogTrailRenderer } from './FogTrailRenderer';
 import type { FogWoodlandLight } from './FogWoodlandLight';
 import type { FogVoidHaze } from './FogVoidHaze';
+import type { FogAirBinding } from './FogAirBinding';
 import { SUN_TUNING_DEFAULTS } from '../sunlight/SunTuning';
 import { setCloudUniforms } from '../sunlight/cloudShadow';
 import type { FormationCoverageBinding } from '../../arena/rocks/RockFormationLighting';
@@ -525,6 +526,19 @@ export class FogGpuField {
       if (display && display.textures.length > 3) display.setTextures(display.textures.slice(0, 3));
   }
   private readonly view4 = new Float32Array(4);
+  private readonly air = { velocity: null as unknown as Phaser.Textures.Texture, state: null as unknown as Phaser.Textures.Texture,
+    lookup: null as unknown as Phaser.Textures.Texture, origin: new Float32Array(2), worldSize: new Float32Array(2), lookupSize: new Float32Array(2) };
+
+  /** This step's air for read-only borrowers; null once destroyed. Ask again every frame. */
+  getAirBinding(): FogAirBinding | null {
+    if (this.destroyed || !this.velocities.length) return null;
+    const air = this.air;
+    air.velocity = this.velocities[this.current].texture!; air.state = this.states[this.current].texture!; air.lookup = this.lookup.texture;
+    air.origin[0] = this.terrain.frame.offsetX; air.origin[1] = this.terrain.frame.offsetY;
+    air.worldSize[0] = this.terrain.frame.width; air.worldSize[1] = this.terrain.frame.height;
+    air.lookupSize[0] = this.lookup.width; air.lookupSize[1] = this.lookup.height;
+    return air;
+  }
 
   setWoodlandLight(binding: FogWoodlandLight | null): void {
     this.woodlandLight=binding;
