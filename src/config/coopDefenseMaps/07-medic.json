@@ -9,7 +9,6 @@
     { "id": "medic-4", "gridX": 237, "gridY": 6, "widthCells": 16, "heightCells": 10, "keepClear": false }
   ],
   "timeOfDay": "17:00",
-  "voidFlora": { "level": 0.05 },
   "tutorialPersistent": true,
   "tutorialAnchor": { "gridX": 15, "gridY": 18 },
   "rockFillRatio": 0.475,

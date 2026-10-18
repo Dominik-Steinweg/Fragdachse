@@ -8,7 +8,6 @@
     { "id": "spore-front-finale", "gridX": 27, "gridY": 9, "widthCells": 4, "heightCells": 4, "keepClear": false }
   ],
   "timeOfDay": "08:00",
-  "voidFlora": { "level": 0.05 },
   "rockFillRatio": 0.1,
   "trackPosition": {
     "kind": "grid",

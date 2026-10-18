@@ -2,7 +2,6 @@
   "mapId": "10",
   "arenaWidthCells": 96,
   "timeOfDay": "22:45",
-  "voidFlora": { "level": 0.06 },
   "rockFillRatio": 0.17,
   "trackPosition": {
     "kind": "grid",

@@ -5,7 +5,7 @@ import { generateRockEcology, ROCK_ECOLOGY_DEFAULTS, VOID_ROCK_KIND_WEIGHT,
 import { ensureVoidDraftTexture } from '../VoidFloraDraftTextures';
 import { VOID_ART_FROM, VOID_ROCK_ATLAS, voidRockFrame } from '../VoidFloraAssets';
 import { ecologyHash } from '../ecologyHash';
-import type { VoidFloraField } from '../VoidFloraField';
+import type { VoidDangerField } from '../VoidDangerField';
 import { rockColonyTint, stampRockColonyContact, ROCK_COLONY_CONTACT_REACH } from '../rocks/RockColonySurface';
 
 import * as Phaser from 'phaser';
@@ -133,7 +133,7 @@ export class RockOverlayStreamer {
   private readonly rockDecalCandidateIds: number[] = [];
   private readonly mossCandidates: RockMossPlacement[] = [];
   private ecology: EcologyColony[] = [];
-  private voidFlora: VoidFloraField | null = null;
+  private voidFlora: VoidDangerField | null = null;
   /** Rock id of each ecology anchor cell, for the live "does it still stand" question. */
   private readonly anchorRockIds = new Map<number, number>();
   private readonly ecologyIndex: ArenaPointBucketIndex<EcologyColony>;
@@ -333,8 +333,8 @@ export class RockOverlayStreamer {
     return out;
   }
 
-  /** Void botany of this World; a different field re-selects and rebakes once. Null clears it. */
-  setVoidFlora(field: VoidFloraField | null): void {
+  /** Void botany around this World's dangers; a different field re-selects and rebakes once. Null clears it. */
+  setVoidFlora(field: VoidDangerField | null): void {
     if ((this.voidFlora?.signature ?? null) === (field?.signature ?? null)) return;
     this.voidFlora = field;
     this.rebuildEcology();

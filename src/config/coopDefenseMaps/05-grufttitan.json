@@ -3,7 +3,6 @@
   "arenaWidthCells": 74,
   "arenaHeightCells": 37,
   "timeOfDay": "22:30",
-  "voidFlora": { "level": 0.05 },
   "objective": "defeat-boss",
   "rockFillRatio": 0.2,
   "trackPosition": "left",

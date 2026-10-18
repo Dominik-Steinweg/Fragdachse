@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildVoidCreepField, voidCreepAt, voidCreepLandAt, voidCreepSporePoints } from '../src/arena/VoidCreepField';
+import { buildVoidCreepField, buildVoidCreepHaze, voidCreepAt, voidCreepHazeAt, voidCreepLandAt, voidCreepSporePoints, voidCreepTexelRect } from '../src/arena/VoidCreepField';
 import { buildVoidWaterStain } from '../src/arena/VoidWaterStain';
 
 const FRAME = { offsetX: 64, offsetY: 32, width: 2048, height: 1280 };
-/** A round infested area around (700, 600); everything else untouched. */
-const disc = { intensityAt: (x: number, y: number) => Math.max(0, 1 - Math.hypot(x - 700, y - 600) / 500) };
+/** A round infested area around (700, 600) with haze over it; everything else untouched. */
+const falloff = (x: number, y: number) => Math.max(0, 1 - Math.hypot(x - 700, y - 600) / 500);
+const disc = { intensityAt: falloff, hazeAt: falloff };
 const none = { intensityAt: () => 0 };
 
 describe('void creep field', () => {
@@ -20,6 +21,22 @@ describe('void creep field', () => {
     // Intensity below about a third never creeps, whatever the warp does.
     expect(voidCreepAt(creep, 700 + 500 * .8, 600)).toBe(0);
     expect(voidCreepAt(creep, 700, 600)).toBeGreaterThan(voidCreepAt(creep, 700 + 500 * .45, 600));
+  });
+
+  it('keeps the haze apart from the soaked ground: a region rewritten without haze keeps its scar', () => {
+    const creep = buildVoidCreepField(disc, FRAME)!;
+    expect(voidCreepHazeAt(creep, 700, 600)).toBeGreaterThan(.6);
+    expect(voidCreepHazeAt(creep, 1900, 1200)).toBe(0);
+    const rect = voidCreepTexelRect(creep, { x: 200, y: 100, width: 1000, height: 1000 })!;
+    // The full build and a region build agree texel for texel.
+    const again = buildVoidCreepHaze(creep, disc, rect), width = rect.x1 - rect.x0 + 1;
+    for (let y = rect.y0; y <= rect.y1; y += 7) for (let x = rect.x0; x <= rect.x1; x += 7)
+      expect(again[(y - rect.y0) * width + x - rect.x0]).toBe(creep.haze[y * creep.width + x]);
+    const lifted = buildVoidCreepHaze(creep, { intensityAt: falloff }, rect);
+    expect(Math.max(...lifted)).toBe(0);
+    expect(voidCreepAt(creep, 700, 600)).toBeGreaterThan(.8);
+    // Haze alone still keeps a field, so a hazy place without plants is drawn.
+    expect(buildVoidCreepField({ intensityAt: () => 0, hazeAt: falloff }, FRAME)).not.toBeNull();
   });
 
   it('lets infested ponds seep up their banks with their own infestation', () => {

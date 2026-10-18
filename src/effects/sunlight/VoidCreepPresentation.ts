@@ -3,7 +3,7 @@ import { DEPTH, VOID_PALETTE } from '../../config';
 import { disposeShaderWarmupNode } from '../../graphics/disposeShaderWarmupNode';
 import { createVisibleWorldView, getVisibleWorldView } from '../../graphics/CameraWorldView';
 import type { FormationCoverageBinding } from '../../arena/rocks/RockFormationLighting';
-import type { VoidCreepField } from '../../arena/VoidCreepField';
+import type { VoidCreepField, VoidCreepTexelRect } from '../../arena/VoidCreepField';
 import type { LightMapAmbientLayer } from '../LightingSystem';
 import type { FogVoidHaze } from '../groundFog/FogVoidHaze';
 import { SunRenderTarget } from './SunRenderTarget';
@@ -18,6 +18,13 @@ const GLOW_STRENGTH = 0.30;
 const AIR_STRENGTH = 0.85;
 /** World margin around the camera so drifting rims never pop at the screen edge. */
 const VIEW_MARGIN_PX = 24;
+/** A haze region crossfades this long after its place lost or regained presence (E7). */
+const HAZE_FADE_SEC = 3;
+/** Haze crossfades re-upload the field at most this often; the haze drifts slowly anyway. */
+const HAZE_UPLOAD_SEC = 1 / 15;
+
+/** A running crossfade of one texel region of the haze channel. */
+interface HazeFade { readonly rect: VoidCreepTexelRect; readonly from: Uint8Array; readonly to: Uint8Array; elapsed: number }
 
 let nextCreepId = 0;
 type Set = (name: string, value: unknown) => void;
@@ -66,6 +73,14 @@ class VoidCreepGlow implements LightMapAmbientLayer {
 export class VoidCreepPresentation {
   private readonly id = nextCreepId++;
   private key: string | null = null;
+  private texture: Phaser.Textures.CanvasTexture | null = null;
+  private pixels: ImageData | null = null;
+  private field: VoidCreepField | null = null;
+  /** The haze as currently shown; crossfades write into it. */
+  private haze: Uint8Array | null = null;
+  private fades: HazeFade[] = [];
+  private lastTime = NaN;
+  private sinceUpload = 0;
   private readonly creep = { frame: new Float32Array(4), time: 0 };
   /** World px per screen pixel; the surface shaders fade detail finer than that. */
   private pixelWorld = 1;
@@ -92,13 +107,54 @@ export class VoidCreepPresentation {
     if (!texture) throw new Error('[VoidCreepPresentation] Cannot allocate the creep field');
     const pixels = texture.context.createImageData(creep.width, creep.height);
     for (let i = 0; i < creep.data.length; i++) {
-      pixels.data[i * 4] = creep.data[i]; pixels.data[i * 4 + 1] = creep.land[i]; pixels.data[i * 4 + 3] = 255;
+      pixels.data[i * 4] = creep.data[i]; pixels.data[i * 4 + 1] = creep.land[i]; pixels.data[i * 4 + 2] = creep.haze[i]; pixels.data[i * 4 + 3] = 255;
     }
     texture.context.putImageData(pixels, 0, 0); texture.refresh();
+    this.texture = texture; this.pixels = pixels; this.field = creep; this.haze = creep.haze.slice();
     texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
     this.creep.frame.set([creep.offsetX, creep.offsetY, creep.width * creep.texelPx, creep.height * creep.texelPx]);
     this.fogHaze = { texture, frame: this.creep.frame, time: 0, strength: AIR_STRENGTH };
     this.ground = this.makeQuad(VOID_CREEP_GROUND_SHADER_NAME, VOID_CREEP_GROUND_FRAGMENT, DEPTH.VOID_CREEP, [key], () => {});
+  }
+
+  /**
+   * Crossfades the haze of one texel region to `to` (region-sized, row-major) over a few seconds:
+   * a destroyed base or a closed site lets its haze lift while the soaked ground stays. A region
+   * that is still fading starts from what it shows now.
+   */
+  fadeHaze(rect: VoidCreepTexelRect, to: Uint8Array): void {
+    if (!this.haze || !this.field) return;
+    const width = rect.x1 - rect.x0 + 1, from = new Uint8Array(to.length);
+    for (let y = rect.y0; y <= rect.y1; y++) for (let x = rect.x0; x <= rect.x1; x++)
+      from[(y - rect.y0) * width + x - rect.x0] = this.haze[y * this.field.width + x];
+    this.fades.push({ rect, from, to, elapsed: 0 });
+  }
+
+  /** True while a haze crossfade is running. */
+  get fadingHaze(): boolean { return this.fades.length > 0; }
+
+  private advanceFades(timeSec: number): void {
+    const step = Number.isFinite(this.lastTime) ? Math.max(0, Math.min(.25, timeSec - this.lastTime)) : 0;
+    this.lastTime = timeSec;
+    if (!this.fades.length || !this.field || !this.haze || !this.pixels || !this.texture) return;
+    this.sinceUpload += step;
+    for (const fade of this.fades) fade.elapsed += step;
+    if (this.sinceUpload < HAZE_UPLOAD_SEC && this.fades.every(fade => fade.elapsed < HAZE_FADE_SEC)) return;
+    this.sinceUpload = 0;
+    const field = this.field, haze = this.haze, data = this.pixels.data;
+    let x0 = Infinity, y0 = Infinity, x1 = -1, y1 = -1;
+    // Later fades win where regions overlap; each starts from what the earlier ones showed.
+    for (const fade of this.fades) {
+      const t = Math.min(1, fade.elapsed / HAZE_FADE_SEC), k = t * t * (3 - 2 * t), { rect } = fade, width = rect.x1 - rect.x0 + 1;
+      for (let y = rect.y0; y <= rect.y1; y++) for (let x = rect.x0; x <= rect.x1; x++) {
+        const i = (y - rect.y0) * width + x - rect.x0, value = Math.round(fade.from[i] + (fade.to[i] - fade.from[i]) * k);
+        haze[y * field.width + x] = value; data[(y * field.width + x) * 4 + 2] = value;
+      }
+      x0 = Math.min(x0, rect.x0); y0 = Math.min(y0, rect.y0); x1 = Math.max(x1, rect.x1); y1 = Math.max(y1, rect.y1);
+    }
+    this.fades = this.fades.filter(fade => fade.elapsed < HAZE_FADE_SEC);
+    this.texture.context.putImageData(this.pixels, 0, 0, x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+    this.texture.refresh();
   }
 
   /**
@@ -108,6 +164,7 @@ export class VoidCreepPresentation {
   update(camera: Phaser.Cameras.Scene2D.Camera, timeSec: number, night: number,
     options: { rocks: boolean; glow: boolean; airborne: boolean }, coverage: FormationCoverageBinding | null): LightMapAmbientLayer | null {
     if (!this.key || !this.ground) return null;
+    this.advanceFades(timeSec);
     this.creep.time = timeSec;
     if (this.fogHaze) this.fogHaze.time = timeSec;
     this.airborne = options.airborne ? 1 : 0;
@@ -172,6 +229,7 @@ export class VoidCreepPresentation {
     this.rock?.destroy(); this.rock = null; this.rockBinding = null;
     this.glow?.destroy(); this.glow = null;
     this.fogHaze = null;
+    this.texture = null; this.pixels = null; this.field = null; this.haze = null; this.fades = []; this.lastTime = NaN; this.sinceUpload = 0;
     if (this.key) { this.scene.textures.remove(this.key); this.key = null; }
   }
 }

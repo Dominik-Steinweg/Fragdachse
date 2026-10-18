@@ -6,7 +6,6 @@
     { "id": "kraken-heralds-1", "gridX": 56, "gridY": 35, "widthCells": 12, "heightCells": 6, "medium": "water", "cluster": true, "keepClear": false }
   ],
   "timeOfDay": "18:45",
-  "voidFlora": { "level": 0.14 },
   "objective": "destroy-hostile-bases",
   "rockFillRatio": 0.4,
   "mapEvents": [],

@@ -3,7 +3,6 @@
   "arenaWidthCells": 112,
   "arenaHeightCells": 41,
   "timeOfDay": "19:30",
-  "voidFlora": { "level": 0.08 },
   "objective": "destroy-hostile-bases",
   "rockFillRatio": 0.3,
   "trackPosition": {

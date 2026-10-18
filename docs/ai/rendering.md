@@ -408,12 +408,17 @@ ab. Nur Felsen ohne Coverage und alle anderen Occluder bleiben polygonal
 **Wasser nachts.** Der Nachtteil des Wassermaterials setzt erst nach der fertigen Uferlinie an; der Shader-Teil davor
 bleibt bytegleich ([WaterSunlight.test.ts](../../tests/WaterSunlight.test.ts)).
 
-**Void-Botanik** ist reine Präsentation.
+**Void als Gefahrenmarker** ist reine Präsentation: Violett bedeutet Gefahr.
 
-- Der Befall ergibt sich aus dem World-Wert `voidFlora`, dem World-Seed und World-Hotspots: feindliche Basen und
-  Kraken-Habitat. Er verbraucht nie Zufall des Layouts, die Map-Fingerprints bleiben unverändert.
-- Der Befall ist zusammenhängend ([VoidFloraField](../../src/arena/VoidFloraField.ts)). Es gibt keinen Wurf je Pflanze,
-  der einzelne befallene Pflanzen neben unberührte setzt.
+- Void entsteht nur aus Gefahrenquellen ([VoidDangerField](../../src/arena/VoidDangerField.ts)). Ohne Quellen gibt es
+  kein Void, keine Textur und kein Quad, so bleiben PvP, Lobby und sicheres Gelände frei.
+  - Die World liefert feindliche Basen, Spawnzonen, den Kraken-Teich mit Ausgängen und `voidDanger.foci`.
+  - Die Activity liefert per Pull dauerhafte Void-Bodengefahren und die Präsenz jeder Quelle
+    ([CoopMissionVoidDanger](../../src/activity/CoopMissionVoidDanger.ts)).
+- Pflanzen und Dunst sind getrennt. Fehlt die Präsenz einer Quelle (Basis zerstört, Stätte geschlossen), verfliegt nur ihr
+  Dunst. Pflanzen und getränkter Boden bleiben als Narbe.
+- Das Feld verbraucht nie Zufall des Layouts, die Map-Fingerprints bleiben unverändert. Der Befall ist zusammenhängend:
+  Es gibt keinen Wurf je Pflanze, der einzelne befallene Pflanzen neben unberührte setzt.
 - Void-Frames tragen zwingend das Präfix `void-` und liegen in eigenen Atlanten mit deckungsgleichem Emissive-Atlas.
   Natürliche Familienfilter (`startsWith('lily-pad')` …) und ihre Auswahl bleiben so unberührt.
 - Ihr Leuchten läuft als dekoratives Bodenlicht durch die Lichtkarte. Es wird zuletzt gefüllt und verdrängt nie

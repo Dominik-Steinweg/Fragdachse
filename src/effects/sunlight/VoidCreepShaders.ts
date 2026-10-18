@@ -29,11 +29,12 @@ float creepNoise(vec2 p) {
   weight*=weight; weight*=weight;
   return .5+35.0*dot(weight,cos(angle)*vec3(v0.x,v1.x,v2.x)+sin(angle)*vec3(v0.y,v1.y,v2.y));
 }
-// Creep (r) and land share (g) at a world point.
-vec2 creepTexel(vec2 world) {
+// Soaked ground (r, a scar that stays), land share (g) and spore haze (b, follows the danger's
+// presence) at a world point.
+vec3 creepTexel(vec2 world) {
   vec2 uv=(world-uCreepFrame.xy)/uCreepFrame.zw;
-  if(any(lessThan(uv,vec2(0.0)))||any(greaterThan(uv,vec2(1.0)))) return vec2(0.0);
-  return texture2D(uCreep,vec2(uv.x,1.0-uv.y)).rg;
+  if(any(lessThan(uv,vec2(0.0)))||any(greaterThan(uv,vec2(1.0)))) return vec3(0.0);
+  return texture2D(uCreep,vec2(uv.x,1.0-uv.y)).rgb;
 }
 // Spore haze: x thickness 0..1, y the thick body of the clouds (where light gathers), from two
 // drifting layers. Clearings stay open even where the creep is complete.
@@ -72,15 +73,16 @@ ${VOID_CREEP_GLSL}
 ${rock ? ROCK_COVERAGE_GLSL : ''}
 void main() {
   vec2 world=uView.xy+vec2(outTexCoord.x,1.0-outTexCoord.y)*uView.zw;
-  float density=creepTexel(world).r;
-  if(density<.006) discard;
+  vec3 texel=creepTexel(world);
+  float density=texel.r, haze=texel.b;
+  if(max(density,haze)<.006) discard;
   ${rock ? '// A soft fade over the rock rim instead of a cut.\n  float surface=smoothstep(.25,.9,rockCoverage(world));\n  if(surface<.004) discard;' : 'float surface=1.0;'}
   // A faint, broad bruise under the haze, feathered from nothing: no contour of its own.
   float bruise=density*density*${bruise.toFixed(2)}*(.70+.60*creepNoise(world*.0062+5.0))*surface;
-  vec2 mist=creepHaze(world,density)*surface;
+  vec2 mist=creepHaze(world,haze)*surface;
   // Volume: the haze a few pixels towards the light is the lit top of a cloud, its far side the
   // shaded underside. Soft, so it reads as depth rather than an outline.
-  vec2 lit=creepHaze(world+vec2(-5.0,-7.0),density)*surface;
+  vec2 lit=creepHaze(world+vec2(-5.0,-7.0),haze)*surface;
   float relief=clamp((lit.x-mist.x)*2.2,-1.0,1.0);
   float grain=creepGrain(world,uPixelWorld);
   // Dense veil: plum-grey in thin haze, paler lilac-grey where the clouds are thick; the grain
@@ -114,9 +116,9 @@ uniform vec3 uGlow;
 ${VOID_CREEP_GLSL}
 void main() {
   vec2 world=uWorld.xy+vec2(outTexCoord.x,1.0-outTexCoord.y)*uWorld.zw;
-  vec2 texel=creepTexel(world);
-  if(texel.r<.006) { gl_FragColor=vec4(0.0,0.0,0.0,1.0); return; }
-  vec2 mist=creepHaze(world,texel.r);
+  vec3 texel=creepTexel(world);
+  if(texel.b<.006) { gl_FragColor=vec4(0.0,0.0,0.0,1.0); return; }
+  vec2 mist=creepHaze(world,texel.b);
   float breathe=.80+.20*sin(uCreepTime*.25+creepNoise(world*.0025)*6.2831853);
   gl_FragColor=vec4(uGlow*(mist.x*.34+mist.y*.30)*breathe,1.0);
 }`;

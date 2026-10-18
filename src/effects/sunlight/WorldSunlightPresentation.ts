@@ -12,9 +12,9 @@ import type { CameraPostFxController } from '../postfx/CameraPostFxController';
 import { CanopyLighting } from '../../arena/trees/CanopyLighting';
 import { buildWoodlandEcology, EcologyWaterField, markVoidPondColonies } from '../../arena/WoodlandEcologyField';
 import { buildVoidWaterStain } from '../../arena/VoidWaterStain';
-import { buildVoidCreepField, voidCreepSporePoints } from '../../arena/VoidCreepField';
+import { buildVoidCreepField, buildVoidCreepHaze, voidCreepSporePoints, voidCreepTexelRect, type VoidCreepField, type VoidCreepSource } from '../../arena/VoidCreepField';
 import { VoidCreepPresentation } from './VoidCreepPresentation';
-import { VoidFloraField, resolveVoidFloraHotspots } from '../../arena/VoidFloraField';
+import { VoidDangerField, resolveVoidDangerSources, type ActivityVoidDanger, type VoidDangerSource } from '../../arena/VoidDangerField';
 import { VoidFloraGlow } from './VoidFloraGlow';
 import { VoidFloraEmission } from './VoidFloraEmission';
 import { voidLilyFrame } from '../../arena/VoidFloraAssets';
@@ -118,11 +118,10 @@ export class WorldSunlightPresentation {
   // Lamps shape the rock front along the resident V7 contour (N-4).
   {const rocks=targets.rocks;targets.lighting.setRockCoverage(rocks?()=>rocks.getFormationCoverage():null);}
   {
+    // Void marks danger only (GDD Void-Gefahrenzonen V1): PvP, the lobby and safe ground have none.
     const world=targets.worldContext,definition=world.definition;
-    this.voidField=new VoidFloraField(definition?.voidFlora,targets.layout.seed,resolveVoidFloraHotspots({
-      config:definition?.voidFlora,offsetX:world.metrics.offsetX,offsetY:world.metrics.offsetY,
-      bases:world.bases,krakenHabitat:definition?.krakenHabitat}));
-    targets.rockOverlays?.setVoidFlora(this.voidField);
+    this.worldDanger=resolveVoidDangerSources({config:definition?.voidDanger,offsetX:world.metrics.offsetX,offsetY:world.metrics.offsetY,
+      bases:world.bases,spawnZones:definition?.spawnZones,krakenHabitat:definition?.krakenHabitat});
     this.voidGlow=new VoidFloraGlow(targets.lighting);
     this.voidEmission=new VoidFloraEmission(this.scene);
     this.voidCreep=new VoidCreepPresentation(this.scene);
@@ -139,6 +138,8 @@ export class WorldSunlightPresentation {
   if(moon)this.moon=moon;
   this.moonTarget=moon?1:0;
  }
+ /** Activity overlay of the void danger (permanent hazards, presence), pulled once per frame. */
+ setActivityVoidDanger(danger:ActivityVoidDanger|null):void {this.activityDanger=danger;}
  private moon:ActivityMoonlight|null=null;
  private moonLight:MoonSkyLight|null=null;
  private readonly moonSky=createMoonSky();
@@ -147,7 +148,18 @@ export class WorldSunlightPresentation {
  private readonly moonClouds:SunCloudState={tuning:createSunTuning(),timeSec:0,strength:1};
  private moonTarget=0;
  private moonWeight=0;
- private voidField:VoidFloraField|null=null;
+ private worldDanger:readonly VoidDangerSource[]=[];
+ private activityDanger:ActivityVoidDanger|null=null;
+ /** Activity sources the current field was built from; a new array rebuilds it. */
+ private activitySources:readonly VoidDangerSource[]|null=null;
+ private voidField:VoidDangerField|null=null;
+ /** Presence the shown haze was built with, per source id; absent = present. */
+ private readonly voidPresence=new Map<string,number>();
+ private voidCreepField:VoidCreepField|null=null;
+ private readonly voidHazeSource:VoidCreepSource={
+  intensityAt:(x,y)=>this.voidField?.intensityAt(x,y)??0,
+  hazeAt:(x,y)=>this.voidField?.hazeAt(x,y,id=>this.voidPresence.get(id)??1)??0,
+ };
  private voidGlow:VoidFloraGlow|null=null;
  private voidEmission:VoidFloraEmission|null=null;
  private voidCreep:VoidCreepPresentation|null=null;
@@ -224,7 +236,9 @@ export class WorldSunlightPresentation {
   this.canopyLighting!.update(this.sunState);
   targets.ground?.setVegetationLight(this.clouds);
   targets.water?.setSunlight(this.clouds);targets.wildlife?.setSunlight(this.clouds);
+  this.syncVoidField(targets);
   this.syncWoodland(targets);
+  this.syncVoidPresence();
   targets.rockOverlays?.collectVoidGlowPoints(this.voidRockPoints);
   this.voidGlow?.update(this.scene.cameras.main,this.voidPondPoints,this.voidRockPoints,this.lastSceneTime/1000);
   {
@@ -265,6 +279,35 @@ export class WorldSunlightPresentation {
  private ambientMoonWeight=0;
  private sunMinute=NaN;
  private azimuthOverride:number|null=null;
+  /** One danger field from the World and the running Activity; a changed one rebuilds the flora once. */
+  private syncVoidField(targets:Targets):void {
+    const sources=this.activityDanger?.sources??null;
+    if(this.voidField&&sources===this.activitySources)return;
+    this.activitySources=sources;
+    const field=new VoidDangerField([...this.worldDanger,...(sources??[])],targets.layout.seed);
+    if(field.signature===this.voidField?.signature)return;
+    this.voidField=field;
+    targets.rockOverlays?.setVoidFlora(field.empty?null:field);
+    // Ponds, creep, water ink and spores all derive from the field.
+    this.woodland?.destroy();this.woodland=null;this.woodlandLayout=null;
+  }
+  /** Presence of every hazy source as the Activity reports it now. */
+  private readPresence(id:string):number {
+    return Math.max(0,Math.min(1,this.activityDanger?.presenceOf(id)??1));
+  }
+  /** A place that lost or regained presence crossfades its haze; its plants stay (E7). */
+  private syncVoidPresence():void {
+    const field=this.voidField,creep=this.voidCreepField;
+    if(!field||!creep||!this.voidCreep)return;
+    for(const source of field.sources){
+      if(source.haze<=0)continue;
+      const present=this.readPresence(source.id);
+      if(Math.abs(present-(this.voidPresence.get(source.id)??1))<.01)continue;
+      this.voidPresence.set(source.id,present);
+      const reach=field.reachOf(source.id),rect=reach?voidCreepTexelRect(creep,reach):null;
+      if(rect)this.voidCreep.fadeHaze(rect,buildVoidCreepHaze(creep,this.voidHazeSource,rect));
+    }
+  }
   private syncWoodland(targets:Targets):void {
     const enabled=true;
     if(!enabled||targets.layout!==this.woodlandLayout) {
@@ -278,7 +321,8 @@ export class WorldSunlightPresentation {
         conifer:CANOPY_ASSETS[canopyVariant(c.worldX,c.worldY)].conifer}));
       const water=new EcologyWaterField(targets.water?.getPreparedMasks()??[]);
       const placements=buildWoodlandEcology(layout,frame,crowns,water,targets.worldContext!.bases.flatMap(b=>b.cells));
-      markVoidPondColonies(placements,this.voidField,voidLilyFrame);
+      const danger=this.voidField&&!this.voidField.empty?this.voidField:null;
+      markVoidPondColonies(placements,danger,voidLilyFrame);
       this.voidPondPoints.length=0;
       // One glow per colony at its first plant, with the colony's mean infestation.
       const colonies=new Map<number,{x:number;y:number;sum:number;n:number}>();
@@ -287,10 +331,14 @@ export class WorldSunlightPresentation {
       for(const c of colonies.values())this.voidPondPoints.push(c.x,c.y,c.sum/c.n);
       // One creep field joins ground, rock and water: the established takeover soaks the land,
       // infested ponds seep up their banks, and their pads and the creep ink the water.
-      const creep=this.voidField?buildVoidCreepField(this.voidField,frame,this.voidPondPoints,(x,y)=>{
+      // A late joiner sees a destroyed base without haze at once; only later changes crossfade.
+      this.voidPresence.clear();
+      for(const source of danger?.sources??[])if(source.haze>0)this.voidPresence.set(source.id,this.readPresence(source.id));
+      const creep=danger?buildVoidCreepField(this.voidHazeSource,frame,this.voidPondPoints,(x,y)=>{
         const depth=water.distance(x-frame.offsetX,y-frame.offsetY);
         return depth<0?1:Math.max(0,1-depth/10);
       }):null;
+      this.voidCreepField=creep;
       // The airborne half rides in the ground fog: wakes cut it, stirred air blows it apart. The
       // fog lets go of the old field before it is rebuilt.
       targets.fog?.setVoidHaze(null);
@@ -317,7 +365,7 @@ export class WorldSunlightPresentation {
   if(t.fog&&this.fogBase)Object.assign(t.fog.tuning,this.fogBase);
   t.rockOverlays?.setFormationReceiver(null);
   t.rocks?.setFormationOptions(true,true);t.rocks?.setSurfaceLights(null);
-  t.rockOverlays?.setVoidFlora(null);this.voidGlow?.destroy();this.voidGlow=null;
+  t.rockOverlays?.setVoidFlora(null);this.voidGlow?.destroy();this.voidGlow=null;this.voidCreepField=null;
   this.voidEmission?.destroy();this.voidEmission=null;
   t.fog?.setVoidHaze(null);t.lighting.setGlowLayer(null);this.voidCreep?.destroy();this.voidCreep=null;
   t.lighting.setRockCoverage(null);

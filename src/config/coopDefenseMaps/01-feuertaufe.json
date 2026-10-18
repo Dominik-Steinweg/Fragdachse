@@ -12,7 +12,6 @@
     { "id": "cp5-wave-2-b", "gridX": 172, "gridY": 14, "widthCells": 25, "heightCells": 9, "keepClear": false }
   ],
   "timeOfDay": "08:00",
-  "voidFlora": { "level": 0.03 },
   "tutorialShowControls": true,
   "tutorialPersistent": true,
   "tutorialAnchor": {

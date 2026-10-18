@@ -186,6 +186,8 @@ export interface WorldPresentationFrameBindingInput {
   };
   /** Activity moonlight for the World's sun owner (Dawn blood moon); undefined = the World sky. */
   readonly getActivityMoonlight?: () => import('../effects/sunlight/WorldSunlightPresentation').ActivityMoonlight | undefined;
+  /** Activity share of the void danger (permanent hazards, presence); null = the World's own. */
+  readonly getActivityVoidDanger?: () => import('../arena/VoidDangerField').ActivityVoidDanger | null;
   readonly constructionOwnership?: {
     readonly motes: Pick<ConstructionOwnershipMoteRenderer, 'openWorld' | 'closeWorld' | 'captureFrame'>;
     readonly getPlacement: () => Pick<PlacementSystem, 'getAllRuntimeRocks' | 'getOwnedConstructions' | 'getRuntimeRock'> | null;
@@ -347,6 +349,7 @@ export class WorldPresentationFrameBinding {
   }
   private syncSunlight():void {
     this.sunlightOwner?.setActivityMoonlight(this.input.getActivityMoonlight?.() ?? null);
+    this.sunlightOwner?.setActivityVoidDanger(this.input.getActivityVoidDanger?.() ?? null);
     this.sunlightOwner?.update(this.input.lighting.getTimeOfDayMinutes(),this.presentationTimeMs,this.input.getSynchronizedNow());
   }
   private fogBinding: WorldGroundFogBinding | null = null;

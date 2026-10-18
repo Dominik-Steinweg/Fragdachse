@@ -1,5 +1,6 @@
 import {describe,it,expect,vi} from 'vitest';
-const resources=vi.hoisted(()=>({canopies:new Set<object>(),fields:new Set<object>(),flora:new Set<object>(),moons:new Set<object>(),creeps:new Set<object>()}));
+const resources=vi.hoisted(()=>({canopies:new Set<object>(),fields:new Set<object>(),flora:new Set<object>(),moons:new Set<object>(),creeps:new Set<object>(),
+ creepFields:[] as unknown[],fades:[] as {to:Uint8Array}[]}));
 vi.mock('phaser',async()=>{const {createFakePhaserModule}=await import('../fakeArenaRenderScene');return {...createFakePhaserModule(),Filters:{ParallelFilters:class {},Displacement:class {}}};});
 vi.mock('../../src/arena/trees/CanopyLighting',()=>({CanopyLighting:class {
  constructor(){resources.canopies.add(this);}setClouds(){}setLighting(){}update(){}destroy(){resources.canopies.delete(this);}
@@ -11,12 +12,14 @@ vi.mock('../../src/effects/sunlight/MoonSkyLight',()=>({MoonSkyLight:class {
  constructor(){resources.moons.add(this);}update(){return null;}sampleAt(_x:number,_y:number,out:number[]){return out;}destroy(){resources.moons.delete(this);}
 }}));
 vi.mock('../../src/effects/sunlight/VoidCreepPresentation',()=>({VoidCreepPresentation:class {
- constructor(){resources.creeps.add(this);}setCreep(){}update(){return null;}destroy(){resources.creeps.delete(this);}
+ constructor(){resources.creeps.add(this);}setCreep(creep:unknown){resources.creepFields.push(creep);}fadeHaze(_rect:unknown,to:Uint8Array){resources.fades.push({to});}
+ update(){return null;}destroy(){resources.creeps.delete(this);}
 }}));
 vi.mock('../../src/arena/WoodlandEcologyRenderer',()=>({WoodlandEcologyRenderer:class {
  count=0;constructor(){resources.flora.add(this);}update(){}destroy(){resources.flora.delete(this);}
 }}));
 import {WorldSunlightPresentation} from '../../src/effects/sunlight/WorldSunlightPresentation';
+import {voidHazardSource} from '../../src/arena/VoidDangerField';
 import {WorldPresentationFrameBinding} from '../../src/world/WorldPresentationFrameBinding';
 import {WorldPresentationBinding} from '../../src/world/WorldPresentationBinding';
 import {WorldRuntime} from '../../src/world/WorldRuntime';
@@ -109,6 +112,34 @@ describe('Sonnenwald production World lifetime',()=>{
  });
 });
 
+
+it('carries void only around danger; a destroyed base loses its haze, not its plants (Void-Gefahrenzonen V1)',()=>{
+ resources.creepFields.length=0;resources.fades.length=0;
+ // Lobby and PvP: no hostile place, so no creep and no void flora.
+ const safe=fixture(),plain=new WorldSunlightPresentation(safe.scene as never,safe.targets as never);
+ plain.update(480,0);plain.update(480,16);
+ expect(resources.creepFields).toEqual([null]);
+ for(const [field] of safe.targets.rockOverlays.setVoidFlora.mock.calls)expect(field).toBeNull();
+ plain.destroy();safe.quality.destroy();
+ resources.creepFields.length=0;
+ const f=fixture();Object.assign(f.targets.worldContext,{bases:[{id:'hive',faction:'hostile',role:'main',cells:[{gridX:10,gridY:10},{gridX:11,gridY:10}]}]});
+ const owner=new WorldSunlightPresentation(f.scene as never,f.targets as never);
+ let present=1;const danger={sources:[] as ReturnType<typeof voidHazardSource>[],presenceOf:(id:string)=>id==='base:hive'?present:1};
+ owner.setActivityVoidDanger(danger);owner.update(480,0);
+ const creep=resources.creepFields.at(-1) as {haze:Uint8Array;data:Uint8Array}|null;
+ expect(creep).not.toBeNull();expect(creep!.haze.some(v=>v>0)).toBe(true);
+ present=0;owner.update(480,16);owner.update(480,32);
+ // One crossfade towards no haze; the woodland and its creep stay as they are.
+ expect(resources.fades).toHaveLength(1);expect(Math.max(...resources.fades[0].to)).toBe(0);
+ expect(resources.creepFields).toHaveLength(1);
+ // The Activity adds a permanent hazard: the flora is rebuilt exactly once, already without the hive's haze.
+ owner.setActivityVoidDanger({...danger,sources:[voidHazardSource('corridor',0,0,[{gridX:20,gridY:12},{gridX:21,gridY:12}])]});
+ owner.update(480,48);owner.update(480,64);
+ expect(resources.creepFields).toHaveLength(2);
+ const rebuilt=resources.creepFields[1] as {haze:Uint8Array};
+ expect(rebuilt.haze.some(v=>v>0)).toBe(true);
+ owner.destroy();expectEmpty();f.quality.destroy();
+});
 
 it('binds the production owner for all authored maps, modes, lobby and empty-feature worlds',async()=>{
  const {COOP_DEFENSE_MAP_CONFIGS}=await import('../../src/config/coopDefenseMaps');

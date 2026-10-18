@@ -1,7 +1,7 @@
 import { resolveEnemyLifecycleTotals } from './coopDefenseEnemyLifecycle';
 import { isBossIntroPresetId, type BossIntroPresetId } from './bossIntros';
 import { normalizeFogStrength } from './groundFog';
-import { normalizeWorldMoonlight, normalizeWorldVoidFlora, type WorldMoonlightConfig, type WorldVoidFloraConfig } from './nightWorld';
+import { normalizeWorldMoonlight, normalizeWorldVoidDanger, type WorldMoonlightConfig, type WorldVoidDangerConfig } from './nightWorld';
 import { normalizeCoopDefenseWater } from './coopDefenseWater';
 import { normalizeKrakenHabitat, type KrakenHabitatConfig } from './krakenHabitat';
 import { normalizeWorldSpawnZones, spawnZoneArea, type WorldSpawnZone } from './spawnZones';
@@ -742,6 +742,21 @@ export type CoopDefenseMapEventConfig =
 /** Nach der Normalisierung sind Werte runtime-seitig bereinigt; die Union bleibt authoring-kompatibel. */
 export type ResolvedCoopDefenseMapEventConfig = CoopDefenseMapEventConfig;
 
+/**
+ * A void ground hazard that lies from the very start and never spreads: Map 15's patches, Map
+ * 17's corridor. Its cells are shown during the countdown and carry the void as a danger marker.
+ */
+export function isPermanentVoidGroundHazard(
+  event: ResolvedCoopDefenseMapEventConfig,
+): event is CoopDefenseMapGroundHazardEventConfig {
+  return event.type === 'ground-hazard'
+    && event.spread === undefined
+    && event.effect.visualStyle === 'void'
+    && event.start.type === 'time'
+    && event.start.atMs <= 0
+    && (event.delayMs ?? 0) <= 0;
+}
+
 export interface CoopDefenseMapCorridorPoint {
   readonly gridX: number;
   readonly gridY: number;
@@ -962,8 +977,8 @@ export interface CoopDefenseMapConfig {
   readonly fogStrength?: number;
   /** Moon islands of this World at night; omitted = production moon (Nachtsicht N-1). */
   readonly moonlight?: WorldMoonlightConfig;
-  /** Share of void-taken flora and its foci; omitted = medium default (Nachtsicht N-7). */
-  readonly voidFlora?: WorldVoidFloraConfig;
+  /** Reach of the void around danger and authored foci; omitted = 1 (Void-Gefahrenzonen V1). */
+  readonly voidDanger?: WorldVoidDangerConfig;
   /** Optionale kontinuierliche bzw. gescriptete Laufzeitsteuerung; ohne Angabe bleibt die Map statisch. */
   readonly dynamicTimeOfDay?: CoopDefenseDynamicTimeOfDayConfig;
   /** Echte Rundendauer; nur fuer `survive` gesetzt und siegrelevant. */
@@ -1445,8 +1460,8 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapAuthoring
     timeOfDay: normalizeTimeOfDayValue(mapConfig.mapId, mapConfig.timeOfDay),
     fogStrength: normalizeFogStrength(mapConfig.fogStrength),
     ...(mapConfig.moonlight === undefined ? {} : { moonlight: normalizeWorldMoonlight(`coopDefenseMaps ${mapConfig.mapId}`, mapConfig.moonlight) }),
-    ...(mapConfig.voidFlora === undefined ? {} : { voidFlora: normalizeWorldVoidFlora(`coopDefenseMaps ${mapConfig.mapId}`,
-      mapConfig.voidFlora, arenaWidthCells, arenaHeightCells) }),
+    ...(mapConfig.voidDanger === undefined ? {} : { voidDanger: normalizeWorldVoidDanger(`coopDefenseMaps ${mapConfig.mapId}`,
+      mapConfig.voidDanger, arenaWidthCells, arenaHeightCells) }),
     dynamicTimeOfDay: normalizeDynamicTimeOfDayConfig(mapConfig.mapId, mapConfig.dynamicTimeOfDay, boss),
     surviveDurationSec,
     balanceReferenceDurationSec,

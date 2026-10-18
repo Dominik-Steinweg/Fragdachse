@@ -7,7 +7,7 @@ import type * as Phaser from 'phaser';
  * the fog only reads it. The fog's own wakes cut it and its stirred air blows it apart.
  */
 export interface FogVoidHaze {
-  /** Creep field: R creep, G land share, world-anchored over `frame`. */
+  /** Creep field: R soaked ground, G land share, B spore haze, world-anchored over `frame`. */
   readonly texture: Phaser.Textures.Texture;
   /** World rectangle the creep texture covers: x, y, width, height. */
   readonly frame: Float32Array;

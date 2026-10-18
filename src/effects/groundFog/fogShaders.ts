@@ -532,12 +532,12 @@ vec3 fogAt(vec2 world) {
 // by the fog's air and blown open where explosions and passing figures stir it, refilling as the
 // fog settles. Premultiplied.
 vec4 voidAir(vec2 world, float trace) {
- if(uVoidHaze.x<.5||creepTexel(world).r<.006)return vec4(0.0);
+ if(uVoidHaze.x<.5||creepTexel(world).b<.006)return vec4(0.0);
  vec3 fog=fogAt(world);
  vec2 carried=world-fog.xy*.35;
- vec2 texel=creepTexel(carried);
- if(texel.r<.006)return vec4(0.0);
- vec2 mist=creepHaze(carried,texel.r);
+ float haze=creepTexel(carried).b;
+ if(haze<.006)return vec4(0.0);
+ vec2 mist=creepHaze(carried,haze);
  float stirred=1.0-.92*smoothstep(.03,.45,fog.z);
  float amount=(mist.x*.50+mist.y*.22)*uVoidHaze.y*stirred*(1.0-trace);
  return vec4(mix(vec3(.30,.19,.37),vec3(.52,.42,.60),mist.y)*amount,amount);
@@ -546,7 +546,7 @@ vec4 voidAir(vec2 world, float trace) {
 // where the creep lies, so both read as one air.
 vec4 withVoidAir(vec4 fog, vec4 haze, vec2 world) {
  if(uVoidHaze.x<.5)return fog;
- float violet=smoothstep(.05,.8,creepTexel(world).r)*.35;
+ float violet=smoothstep(.05,.8,creepTexel(world).b)*.35;
  fog.rgb=mix(fog.rgb,fog.rgb*vec3(.90,.80,1.02),violet);
  return fog+haze*(1.0-fog.a);
 }

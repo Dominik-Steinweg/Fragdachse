@@ -7,7 +7,6 @@
     { "id": "abyss-tide-3", "gridX": 24, "gridY": 17, "widthCells": 7, "heightCells": 10, "medium": "water", "cluster": true, "keepClear": false }
   ],
   "timeOfDay": "18:30",
-  "voidFlora": { "level": 0.5 },
   "tutorialAnchor": {
     "gridX": 76,
     "gridY": 3

@@ -48,7 +48,7 @@ export const WORLD_SOURCE_FIELDS = [
   'timeOfDay',
   'fogStrength',
   'moonlight',
-  'voidFlora',
+  'voidDanger',
   'persistentBase',
   'siteClearings',
 ] as const satisfies readonly (keyof CoopDefenseMapConfig)[];
@@ -168,7 +168,7 @@ export function toWorldDefinition(
     initialTimeOfDay: resolved.timeOfDay,
     fogStrength: mapConfig.fogStrength,
     moonlight: mapConfig.moonlight,
-    voidFlora: mapConfig.voidFlora,
+    voidDanger: mapConfig.voidDanger,
   };
 }
 
@@ -198,7 +198,7 @@ export function toWorldGenerationConfig(world: WorldDefinition): ArenaGeneration
     bases: world.bases.map((base) => toCoopBaseConfig(base, undefined)),
     fogStrength: world.fogStrength,
     ...(world.moonlight === undefined ? {} : { moonlight: world.moonlight }),
-    ...(world.voidFlora === undefined ? {} : { voidFlora: world.voidFlora }),
+    ...(world.voidDanger === undefined ? {} : { voidDanger: world.voidDanger }),
     powerUps: [],
   };
 }
@@ -297,7 +297,7 @@ export function toCoopDefenseMapConfig(scenario: AuthoredScenario): CoopDefenseM
     timeOfDay: world.initialTimeOfDay,
     fogStrength: world.fogStrength,
     ...(world.moonlight === undefined ? {} : { moonlight: world.moonlight }),
-    ...(world.voidFlora === undefined ? {} : { voidFlora: world.voidFlora }),
+    ...(world.voidDanger === undefined ? {} : { voidDanger: world.voidDanger }),
     dynamicTimeOfDay: activity.dynamicTimeOfDay,
     surviveDurationSec: activity.surviveDurationSec,
     balanceReferenceDurationSec: activity.balanceReferenceDurationSec,

@@ -207,6 +207,7 @@ import {
   type WorldParameters,
 } from '../../world/WorldDescriptor';
 import type { ActivityDescriptor } from '../../world/ActivityDescriptor';
+import { CoopMissionVoidDanger } from '../../activity/CoopMissionVoidDanger';
 import type {
   PersistentBaseAnchor,
 } from '../../persistentBase/PersistentBaseTypes';
@@ -385,6 +386,17 @@ export class ArenaLifecycleCoordinator {
   }
   /** Activity-specific orchestration; focused composers remain behind this boundary. */
   private readonly coopMissionComposition: CoopMissionComposition;
+  /** The running mission's share of the void danger; a pure read of replicated state. */
+  private readonly coopMissionVoidDanger = new CoopMissionVoidDanger({
+    getMapConfig: () => {
+      const descriptor = bridge.getWorldDescriptor();
+      return descriptor && this.coopMissionRuntime ? resolveCoopDefenseMapConfig(descriptor, bridge.getActivityDescriptor()) : null;
+    },
+    getLayout: () => this.worldRuntime?.presentation?.layout ?? null,
+    getOffset: () => this.worldRuntime?.context.metrics ?? null,
+    getBase: (id) => this.worldRuntime?.materialization?.bases?.getBase(id),
+    getObjectives: () => bridge.getCoopDefenseSecondaryObjectivePresentationState(),
+  });
   /**
    * Die Fragen der Coop-Mission an World, Scene und Netz.
    *
@@ -429,6 +441,7 @@ export class ArenaLifecycleCoordinator {
           return candidate?.kind === 'lobby-menu' ? candidate.menu : null;
         },
         getActivityMoonlight: () => dawnNight()?.moonlight,
+        getActivityVoidDanger: () => this.coopMissionVoidDanger.read(),
         groundFog: {
           getSystem: () => this.worldRuntime?.presentation?.groundFog ?? null,
           getActivityStrength: () => dawnNight()?.fogStrength,

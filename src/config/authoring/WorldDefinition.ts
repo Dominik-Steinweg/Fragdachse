@@ -72,8 +72,8 @@ export interface WorldDefinition {
   readonly fogStrength?: number;
   /** Cosmetic moon islands at night; omitted = production moon. */
   readonly moonlight?: import('../nightWorld').WorldMoonlightConfig;
-  /** Cosmetic void botany; omitted = the medium default. */
-  readonly voidFlora?: import('../nightWorld').WorldVoidFloraConfig;
+  /** Reach of the void around danger and authored foci; omitted = 1. Presentation only. */
+  readonly voidDanger?: import('../nightWorld').WorldVoidDangerConfig;
 }
 
 /** Bevorzugte Startzelle einer World. */

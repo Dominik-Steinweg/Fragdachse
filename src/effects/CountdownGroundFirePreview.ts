@@ -3,11 +3,7 @@ import {
   ARENA_OFFSET_Y,
   CELL_SIZE,
 } from '../config';
-import type {
-  CoopDefenseMapConfig,
-  CoopDefenseMapGroundHazardEventConfig,
-  ResolvedCoopDefenseMapEventConfig,
-} from '../config/coopDefenseMaps';
+import { isPermanentVoidGroundHazard, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import type {
   ArenaLayout,
   ArenaGroundHazardZone,
@@ -45,7 +41,7 @@ export function buildCountdownGroundFirePreview(
 
   const cellsByKey = new Map<string, SyncedBurningGroundCell>();
   for (const event of mapConfig.mapEvents) {
-    if (!isCountdownGroundHazard(event)) continue;
+    if (!isPermanentVoidGroundHazard(event)) continue;
     for (const zone of zonesByEventId.get(event.id) ?? []) {
       for (const cell of zone.cells) {
         const cellLeft = ARENA_OFFSET_X + cell.gridX * CELL_SIZE;
@@ -78,17 +74,6 @@ export function buildCountdownGroundFirePreview(
   const cells = [...cellsByKey.values()];
   cells.sort((left, right) => left.gridY - right.gridY || left.gridX - right.gridX);
   return { cells };
-}
-
-function isCountdownGroundHazard(
-  event: ResolvedCoopDefenseMapEventConfig,
-): event is CoopDefenseMapGroundHazardEventConfig {
-  return event.type === 'ground-hazard'
-    && event.spread === undefined
-    && event.effect.visualStyle === 'void'
-    && event.start.type === 'time'
-    && event.start.atMs <= 0
-    && (event.delayMs ?? 0) <= 0;
 }
 
 function previewCellId(gridX: number, gridY: number): number {

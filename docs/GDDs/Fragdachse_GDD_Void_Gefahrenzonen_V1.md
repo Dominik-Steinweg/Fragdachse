@@ -35,16 +35,24 @@ gezielt eingesetzt: Violett bedeutet Gefahr.
   - Eine Wasserzone muss Wasser enthalten.
   - `front` und `spawnZoneId` schließen sich aus.
 - **Generator:** Er hält einen runden Kern jeder Boden-Zone frei, außer bei `keepClear: false`. Die migrierten Altflächen tragen `keepClear: false` und erzeugen dadurch bytegleiche Layouts.
-- **Gefahrenfeld (Präsentation):**
-  - Es wird nur aus Gefahrenquellen gebaut.
-  - Ohne Quellen entsteht kein Void, keine Textur und kein Quad.
+- **Gefahrenfeld (Präsentation, `src/arena/VoidDangerField.ts`):**
+  - Es wird nur aus Gefahrenquellen gebaut. Ohne Quellen entsteht kein Void, keine Textur und kein Quad.
+  - Quellen der World: feindliche Basen, alle Spawnzonen, der Kraken-Teich mit seinen Ausgängen und authored `voidDanger.foci`.
+  - Quellen der Activity: dauerhafte Void-Bodengefahren ab Start (`isPermanentVoidGroundHazard`). Die Activity liefert außerdem die Präsenz jeder Quelle (`src/activity/CoopMissionVoidDanger.ts`).
+  - Jede Quelle hat eine eigene Stärke für Pflanzen und Dunst. Ihr Rand ist durch Rauschen gebrochen, also nie ein Kreis.
+  - `voidDanger.intensity` (0,5–1,5) skaliert, wie weit das Void um die Gefahr reicht. Den ambienten Befall-Level (`voidFlora.level`) gibt es nicht mehr.
+- **Kanäle der Geflecht-Textur:**
+  - R: getränkter Boden (Narbe);
+  - G: Landanteil;
+  - B: Dunst.
+  - Fällt die Präsenz einer Quelle weg, wird nur B im Begrenzungsrahmen dieser Quelle neu berechnet und über 3 s überblendet. Pflanzen und R bleiben.
 
 ## 4. Phasen
 
 | Phase | Inhalt | Stand |
 |---|---|---|
 | 1 | Spawnzonen in Daten, Host, Generator und Map-Editor; Migration der Inline-Flächen (Maps 00, 01, 06, 07, 13, 16, 20) | fertig (Branch) |
-| 2 | Gefahrenfeld ersetzt das ambiente Void | in Arbeit |
+| 2 | Gefahrenfeld ersetzt das ambiente Void | fertig (Branch) |
 | 3 | GPU-Sporen; der Nebel leiht seine Luft | offen |
 | 4 | Host-Warnungen und Drahtformat (Protokoll +1) | offen |
 | 5 | Gerichtete Randwarnung und HUD-Richtung | eigene Sitzung |
@@ -53,4 +61,6 @@ gezielt eingesetzt: Violett bedeutet Gefahr.
 
 ## 5. Entscheidungslog
 
+- 2026-10-19: Präsenz-Überblendung per Teil-Upload des B-Kanals statt zweitem Kanal und Uniform. Ein Datenkanal im Alpha einer Canvas-Textur würde vormultipliziert und dabei zerstört. Ein zweiter Sampler passt nicht ins Budget des Nebel-Passes.
+- 2026-10-19: Eine Dawn-Stätte gilt als geschlossen, wenn ihr Ziel `completed` oder `failed` ist (Ende zur Dämmerung). Das ist replizierter Zustand, der Client braucht nichts Eigenes.
 - 2026-10-19: Die Dawn-Angriffswellen behalten ihr intern erzeugtes Inline-Rechteck. Sie sind eine generierte Activity ohne authored Ort. Der Dunst über Dawn-Stätten kommt aus den feindlichen Stätten-Basen.

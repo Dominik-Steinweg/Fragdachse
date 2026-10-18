@@ -50,7 +50,6 @@
     { "id": "brood-pit-3-f", "gridX": 224, "gridY": 140, "widthCells": 5, "heightCells": 4, "keepClear": false }
   ],
   "timeOfDay": "07:00",
-  "voidFlora": { "level": 0.25 },
   "dynamicTimeOfDay": {
     "transitions": [
       {
