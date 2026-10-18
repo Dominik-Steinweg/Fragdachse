@@ -12,6 +12,8 @@ import type { CameraPostFxController } from '../postfx/CameraPostFxController';
 import { CanopyLighting } from '../../arena/trees/CanopyLighting';
 import { buildWoodlandEcology, EcologyWaterField, markVoidPondColonies } from '../../arena/WoodlandEcologyField';
 import { buildVoidWaterStain } from '../../arena/VoidWaterStain';
+import { buildVoidCreepField, voidCreepSporePoints } from '../../arena/VoidCreepField';
+import { VoidCreepPresentation } from './VoidCreepPresentation';
 import { VoidFloraField, resolveVoidFloraHotspots } from '../../arena/VoidFloraField';
 import { VoidFloraGlow } from './VoidFloraGlow';
 import { VoidFloraEmission } from './VoidFloraEmission';
@@ -123,6 +125,7 @@ export class WorldSunlightPresentation {
     targets.rockOverlays?.setVoidFlora(this.voidField);
     this.voidGlow=new VoidFloraGlow(targets.lighting);
     this.voidEmission=new VoidFloraEmission(this.scene);
+    this.voidCreep=new VoidCreepPresentation(this.scene);
   }
   targets.rockOverlays?.setFormationReceiver(targets.rocks?.getFormationReceiver??null);
   targets.shadow.setFormationShadows(this.landscape);
@@ -147,6 +150,7 @@ export class WorldSunlightPresentation {
  private voidField:VoidFloraField|null=null;
  private voidGlow:VoidFloraGlow|null=null;
  private voidEmission:VoidFloraEmission|null=null;
+ private voidCreep:VoidCreepPresentation|null=null;
  private readonly voidRockColonies:EcologyColony[]=[];
  /** Flat x/y pairs of void lily colonies of the current woodland layout. */
  private readonly voidPondPoints:number[]=[];
@@ -223,6 +227,12 @@ export class WorldSunlightPresentation {
   this.syncWoodland(targets);
   targets.rockOverlays?.collectVoidGlowPoints(this.voidRockPoints);
   this.voidGlow?.update(this.scene.cameras.main,this.voidPondPoints,this.voidRockPoints,this.lastSceneTime/1000);
+  {
+    const artificial=targets.lighting.getArtificialLightFactor(),quality=getGraphicsQualityProfile(this.scene).sunlight;
+    targets.lighting.setGlowLayer(this.voidCreep?.update(this.scene.cameras.main,targets.water?.getPresentationTime()??this.lastSceneTime/1000,
+      Math.max(0,Math.min(1,(artificial-.1)/.6)),{rocks:quality.voidCreepRocks,glow:quality.voidCreepGlow},
+      quality.voidCreepRocks?targets.rocks?.getFormationCoverage()??null:null)??null);
+  }
   if(this.voidEmission){
     if(targets.rockOverlays){targets.rockOverlays.collectVoidColonies(this.voidRockColonies);this.voidEmission.setRockColonies(this.voidRockColonies);}
     // Veins and spores appear with the lamps' own dusk curve, fully at night.
@@ -269,14 +279,21 @@ export class WorldSunlightPresentation {
       const water=new EcologyWaterField(targets.water?.getPreparedMasks()??[]);
       const placements=buildWoodlandEcology(layout,frame,crowns,water,targets.worldContext!.bases.flatMap(b=>b.cells));
       markVoidPondColonies(placements,this.voidField,voidLilyFrame);
-      // The ink of infested pads seeps into their water; the water renderer owns the texture.
-      targets.water?.setVoidStain(buildVoidWaterStain(placements,frame));
       this.voidPondPoints.length=0;
       // One glow per colony at its first plant, with the colony's mean infestation.
       const colonies=new Map<number,{x:number;y:number;sum:number;n:number}>();
       for(const p of placements)if(p.void&&p.colony!==undefined){
         const c=colonies.get(p.colony)??{x:p.x,y:p.y,sum:0,n:0};c.sum+=p.voidAmount??1;c.n++;colonies.set(p.colony,c);}
       for(const c of colonies.values())this.voidPondPoints.push(c.x,c.y,c.sum/c.n);
+      // One creep field joins ground, rock and water: the established takeover soaks the land,
+      // infested ponds seep up their banks, and their pads and the creep ink the water.
+      const creep=this.voidField?buildVoidCreepField(this.voidField,frame,this.voidPondPoints,(x,y)=>{
+        const depth=water.distance(x-frame.offsetX,y-frame.offsetY);
+        return depth<0?1:Math.max(0,1-depth/10);
+      }):null;
+      this.voidCreep?.setCreep(creep);
+      targets.water?.setVoidStain(buildVoidWaterStain(placements,frame,creep));
+      this.voidEmission?.setGroundSpores(creep?voidCreepSporePoints(creep,targets.layout.seed):[]);
       this.voidEmission?.setPondPlacements(placements);
       this.woodland=new WoodlandEcologyRenderer(this.scene,placements);this.woodlandLayout=layout;
       loadingTimeline.end('ecology/woodland',measuredAt);
@@ -298,6 +315,7 @@ export class WorldSunlightPresentation {
   t.rocks?.setFormationOptions(true,true);t.rocks?.setSurfaceLights(null);
   t.rockOverlays?.setVoidFlora(null);this.voidGlow?.destroy();this.voidGlow=null;
   this.voidEmission?.destroy();this.voidEmission=null;
+  t.lighting.setGlowLayer(null);this.voidCreep?.destroy();this.voidCreep=null;
   t.lighting.setRockCoverage(null);
   t.shadow.setCharacterSunlight(null);
   t.shadow.setSunPath(null);t.shadow.setCanopyShadows(null);t.shadow.setFormationShadows(null);

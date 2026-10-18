@@ -1,5 +1,5 @@
 import {describe,it,expect,vi} from 'vitest';
-const resources=vi.hoisted(()=>({canopies:new Set<object>(),fields:new Set<object>(),flora:new Set<object>(),moons:new Set<object>()}));
+const resources=vi.hoisted(()=>({canopies:new Set<object>(),fields:new Set<object>(),flora:new Set<object>(),moons:new Set<object>(),creeps:new Set<object>()}));
 vi.mock('phaser',async()=>{const {createFakePhaserModule}=await import('../fakeArenaRenderScene');return {...createFakePhaserModule(),Filters:{ParallelFilters:class {},Displacement:class {}}};});
 vi.mock('../../src/arena/trees/CanopyLighting',()=>({CanopyLighting:class {
  constructor(){resources.canopies.add(this);}setClouds(){}setLighting(){}update(){}destroy(){resources.canopies.delete(this);}
@@ -9,6 +9,9 @@ vi.mock('../../src/effects/sunlight/WorldSunComposite',()=>({WorldSunComposite:c
 }}));
 vi.mock('../../src/effects/sunlight/MoonSkyLight',()=>({MoonSkyLight:class {
  constructor(){resources.moons.add(this);}update(){return null;}sampleAt(_x:number,_y:number,out:number[]){return out;}destroy(){resources.moons.delete(this);}
+}}));
+vi.mock('../../src/effects/sunlight/VoidCreepPresentation',()=>({VoidCreepPresentation:class {
+ constructor(){resources.creeps.add(this);}setCreep(){}update(){return null;}destroy(){resources.creeps.delete(this);}
 }}));
 vi.mock('../../src/arena/WoodlandEcologyRenderer',()=>({WoodlandEcologyRenderer:class {
  count=0;constructor(){resources.flora.add(this);}update(){}destroy(){resources.flora.delete(this);}
@@ -24,14 +27,14 @@ import {PersistentBaseEditorWorld} from '../../src/persistentBase/PersistentBase
 import {ArenaBuilder} from '../../src/arena/ArenaBuilder';
 
 function fixture(){
- const sharedTexture={};const scene={textures:{get:()=>sharedTexture,remove:vi.fn()},add:{particles:vi.fn()},
+ const sharedTexture={};const scene={textures:{get:()=>sharedTexture,exists:()=>false,remove:vi.fn()},add:{particles:vi.fn()},
   cameras:{main:{scrollX:0,scrollY:0,width:1280,height:720,zoom:1}},game:{loop:{delta:16}}};
  const lighting={setSunAmbient:vi.fn(),getTimeOfDayMinutes:()=>480,setDynamicOccluderSource:vi.fn(),clearDynamicOccluderSource:vi.fn(),
-  setAmbientLayer:vi.fn(),getArtificialLightFactor:()=>0,sampleSurfaceLights:vi.fn((_x:number,_y:number,_w:number,_h:number,out:unknown)=>out),
+  setAmbientLayer:vi.fn(),setGlowLayer:vi.fn(),getArtificialLightFactor:()=>0,sampleSurfaceLights:vi.fn((_x:number,_y:number,_w:number,_h:number,out:unknown)=>out),
   setGroundGlowLights:vi.fn(),setRockCoverage:vi.fn()};
  const shadow={setCharacterSunlight:vi.fn(),setCharacterShadowsSuppressed:vi.fn(),setSunPath:vi.fn(),setCanopyShadows:vi.fn(),setFormationShadows:vi.fn()};
  let vegetation:unknown;const ground={setVegetationLight:vi.fn((s:any)=>{vegetation=s?.quality?.vegetationForm?s:undefined;})};
- const targets={ground,rocks:{setFormationOptions:vi.fn(),setSunTime:vi.fn(),getFormationReceiver:()=>null,setSurfaceLights:vi.fn(),setMoonLight:vi.fn()},
+ const targets={ground,rocks:{setFormationOptions:vi.fn(),setSunTime:vi.fn(),getFormationReceiver:()=>null,getFormationCoverage:()=>null,setSurfaceLights:vi.fn(),setMoonLight:vi.fn()},
   rockOverlays:{setFormationReceiver:vi.fn(),setEcologyTuning:vi.fn(),setVoidFlora:vi.fn(),collectVoidGlowPoints:vi.fn((out:number[])=>{out.length=0;return 0;}),collectVoidColonies:vi.fn((out:unknown[])=>{out.length=0;return 0;})},canopies:[],
   water:{isPrepared:()=>true,getPreparedMasks:()=>[],setSunlight:vi.fn(),setNightLight:vi.fn(),setVoidStain:vi.fn(),getPresentationTime:()=>0},wildlife:{setSunlight:vi.fn(),clearLights:vi.fn()},
   lighting,shadow,postFx:{setSunGrade:vi.fn()},fog:{tuning:{opacity:.5,detail:.65},setWoodlandLight:vi.fn()},
@@ -41,7 +44,7 @@ function fixture(){
  const input={scene,lighting,getArenaResult:()=>({wildlife:targets.wildlife}),getWorldLayout:()=>null,getSynchronizedNow:()=>0};
  return {scene,targets,quality,input,vegetation:()=>vegetation};
 }
-function expectEmpty(){expect(resources.canopies.size+resources.fields.size+resources.flora.size+resources.moons.size).toBe(0);}
+function expectEmpty(){expect(resources.canopies.size+resources.fields.size+resources.flora.size+resources.moons.size+resources.creeps.size).toBe(0);}
 
 describe('Sonnenwald production World lifetime',()=>{
  it('publishes ecology only after water masks and revokes readiness on destruction',()=>{
@@ -72,6 +75,7 @@ describe('Sonnenwald production World lifetime',()=>{
    // Night receivers (water night, rock lamps, void flora) are released with the sun owner.
    expect(f.targets.water.setNightLight).toHaveBeenLastCalledWith(null);
    expect(f.targets.water.setVoidStain).toHaveBeenLastCalledWith(null);
+   expect(f.targets.lighting.setGlowLayer).toHaveBeenLastCalledWith(null);
    expect(f.targets.rocks.setSurfaceLights).toHaveBeenLastCalledWith(null);
    expect(f.targets.rockOverlays.setVoidFlora).toHaveBeenLastCalledWith(null);
    expect(f.targets.fog.tuning).toEqual({opacity:.5,detail:.65});

@@ -22,8 +22,8 @@ it('primes the real material and first-player keys, releases private probe resou
  renderer.renderNodes={renderer,off:vi.fn()};const scene={sys:{renderer}};
  const finish=warmupWorldMaterials(scene as never);
  expect(state.managers.map(m=>m.name)).toEqual(['CanopySunlightMaterialV9Batched','VegetationVolumeR18','RockFoliageSingleCoverage',
-  'CharacterMaterial21eV2','FragdachseWaterSurfaceSunlight','FragdachseStatusRing','FragdachseStatusRingFill','WorldMoonSky','RockPenetration','RockShadowPolar']);
- expect(renderer.deleteBuffer).toHaveBeenCalledTimes(14);expect(state.shaderDestroyed).toHaveBeenCalledTimes(6);
+  'CharacterMaterial21eV2','FragdachseWaterSurfaceSunlight','FragdachseStatusRing','FragdachseStatusRingFill','WorldMoonSky','RockPenetration','RockShadowPolar','VoidCreepGround','VoidCreepRock','VoidCreepGlow']);
+ expect(renderer.deleteBuffer).toHaveBeenCalledTimes(17);expect(state.shaderDestroyed).toHaveBeenCalledTimes(9);
  expect(renderer.off).toHaveBeenCalledTimes(4);expect(renderer.renderNodes.off).toHaveBeenCalledTimes(4);
  expect(state.finish).not.toHaveBeenCalled();finish();expect(state.finish).toHaveBeenCalledOnce();
 });

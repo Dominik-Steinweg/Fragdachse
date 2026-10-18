@@ -97,6 +97,11 @@ export const DEPTH = {
   GROUND_COVER: 2.5,
   /** Grossflaechige Multiply-Variation ueber Gras, Dirt und Ground Cover (GroundMaterialConfig). */
   GROUND_MACRO: 2.65,
+  /**
+   * Void-Geflecht am Boden (GDD Nachtsicht N-6): Tinte, Myzeladern und Sporenpunkte ueber dem
+   * Bodenmaterial, aber unter Basis-Dekor, Gleisen und Decals; Gameplay-Markierungen bleiben frei.
+   */
+  VOID_CREEP: 2.68,
   /** Aktueller Persistent-Base-Kies liegt ueber Dirt, aber unter seinen grossen Dekorstempeln. */
   PERSISTENT_BASE_GRAVEL: 2.04,
   PERSISTENT_BASE_GRAVEL_DECORATION: 2.7,
@@ -116,6 +121,8 @@ export const DEPTH = {
    * am Boden, wo Ground Cover unter den kleinen Decals liegt.
    */
   ROCK_MOSS: 9.08,
+  /** Void-Geflecht auf Felsdaechern, innerhalb der V7-Kontur; ueber dem Felsmoos, unter Rissen und Bewuchs. */
+  ROCK_VOID_CREEP: 9.085,
   /** Gebackene Riss-/Moos-Decals liegen knapp ueber den live-zerstoerbaren Felsen. */
   ROCK_DECALS: 9.1,
   /**

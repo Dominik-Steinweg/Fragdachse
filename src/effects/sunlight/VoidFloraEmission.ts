@@ -47,6 +47,8 @@ export class VoidFloraEmission {
   private pondArt: readonly EcologyPlacement[] = [];
   private rockSignature = '';
   private rockColonies: readonly EcologyColony[] = [];
+  /** Spore points over the World's land creep (x, y, creep triples). */
+  private groundSpores: readonly number[] = [];
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -55,6 +57,12 @@ export class VoidFloraEmission {
     this.pondPlacements = placements.filter(p => p.kind === 'pond' && p.void);
     this.pondArt = this.pondPlacements.filter(p => p.voidFrame);
     this.rebuildPond();
+    this.rebuildSpores();
+  }
+
+  /** Land spores over the World's void creep; set once per World with the creep field. */
+  setGroundSpores(points: readonly number[]): void {
+    this.groundSpores = points.slice();
     this.rebuildSpores();
   }
 
@@ -152,6 +160,10 @@ export class VoidFloraEmission {
     for (const c of rockAnchors.values()) {
       const count = Math.round(ROCK_SPORES * smoothAmount(c.voidAmount));
       if (count > 0) anchors.push({ x: c.worldX, y: c.worldY, spread: 22, count });
+    }
+    // Over the land creep single motes hang low and close, one per point.
+    for (let i = 0; i + 2 < this.groundSpores.length; i += 3) {
+      if (smoothAmount(this.groundSpores[i + 2]) > 0) anchors.push({ x: this.groundSpores[i], y: this.groundSpores[i + 1], spread: 10, count: 1 });
     }
     if (!anchors.length) return;
     const key = ensureVoidSporeTexture(this.scene.textures);

@@ -12,11 +12,14 @@ export interface SunRenderQuality {
   readonly ecologyDensity: number;
   /** Relief lamps a material below the light map evaluates per pixel (Nachtsicht N-4). */
   readonly surfaceLights: number;
+  /** Void creep on rock tops and its night glow in the light map; the ground ink always draws. */
+  readonly voidCreepRocks: boolean;
+  readonly voidCreepGlow: boolean;
 }
 export const SUN_RENDER_QUALITY = {
-  high: { vegetationForm: true, vegetationShadows: true, compositeScale: .5, cloudTexel: 10, cloudMaxPixels: 262144, cloudMaxAxis: 2048, horizonStep: 6, horizons: true, ecologyDensity: 1, surfaceLights: 4 },
-  medium: { vegetationForm: true, vegetationShadows: false, compositeScale: .5, cloudTexel: 20, cloudMaxPixels: 65536, cloudMaxAxis: 1024, horizonStep: 12, horizons: true, ecologyDensity: .8, surfaceLights: 2 },
-  low: { vegetationForm: false, vegetationShadows: false, compositeScale: .25, cloudTexel: 40, cloudMaxPixels: 16384, cloudMaxAxis: 512, horizonStep: 24, horizons: false, ecologyDensity: .5, surfaceLights: 1 },
+  high: { vegetationForm: true, vegetationShadows: true, compositeScale: .5, cloudTexel: 10, cloudMaxPixels: 262144, cloudMaxAxis: 2048, horizonStep: 6, horizons: true, ecologyDensity: 1, surfaceLights: 4, voidCreepRocks: true, voidCreepGlow: true },
+  medium: { vegetationForm: true, vegetationShadows: false, compositeScale: .5, cloudTexel: 20, cloudMaxPixels: 65536, cloudMaxAxis: 1024, horizonStep: 12, horizons: true, ecologyDensity: .8, surfaceLights: 2, voidCreepRocks: true, voidCreepGlow: true },
+  low: { vegetationForm: false, vegetationShadows: false, compositeScale: .25, cloudTexel: 40, cloudMaxPixels: 16384, cloudMaxAxis: 512, horizonStep: 24, horizons: false, ecologyDensity: .5, surfaceLights: 1, voidCreepRocks: false, voidCreepGlow: false },
 } as const satisfies Record<string, SunRenderQuality>;
 
 /** Same world rectangle for material and display, independent of backing scale.

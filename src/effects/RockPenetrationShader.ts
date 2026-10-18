@@ -67,7 +67,8 @@ export function rockLampShade(enter: number, exit: number, distance: number, rea
     smoothstep(exit - ROCK_BEHIND_SOFT_PX[0], exit + ROCK_BEHIND_SOFT_PX[1], distance));
 }
 
-const COVERAGE_GLSL = `
+/** V7 rock coverage at a world point; samplers uRockField, uRockLookup and uniform uRockFrame. */
+export const ROCK_COVERAGE_GLSL = `
 uniform sampler2D uRockField, uRockLookup;
 uniform vec4 uRockFrame;
 float rockCoverage(vec2 world) {
@@ -92,7 +93,7 @@ export const ROCK_SHADOW_POLAR_FRAGMENT = `
 #pragma phaserTemplate(shaderName)
 precision highp float;
 varying vec2 outTexCoord;
-${COVERAGE_GLSL}
+${ROCK_COVERAGE_GLSL}
 // Lamp world position, radius, central direction.
 uniform vec4 uLamp;
 uniform float uSpan;

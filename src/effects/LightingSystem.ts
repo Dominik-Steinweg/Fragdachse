@@ -418,6 +418,13 @@ export class LightingSystem {
    * World-anchored light added right after the ambient fill (Dawn blood moon through cloud openings).
    * Its owner is the same as the ambient's; lights are stamped on top unchanged. Null removes it.
    */
+  /**
+   * Decorative light drawn additively after the ambient layer, e.g. the void creep's night glow.
+   * Unlike the ambient layer it counts as light above the night, so the bleed lets it glow.
+   */
+  setGlowLayer(layer: LightMapAmbientLayer | null): void { this.glowLayer = layer; }
+  private glowLayer: LightMapAmbientLayer | null = null;
+
   setAmbientLayer(layer: LightMapAmbientLayer | null): void {
     if (this.ambientLayer === layer) return;
     this.ambientLayer = layer;
@@ -977,7 +984,7 @@ export class LightingSystem {
     const ambientIsNeutral = ambientColor === NEUTRAL_AMBIENT_COLOR;
     // A world-anchored ambient layer drifts with the camera and the clouds: never reuse last frame's map.
     const noLights = this.renderQueue.length === 0 && eyeLights === 0 && essenceLights === 0 && groundGlowLights === 0;
-    const queueEmpty = noLights && this.ambientLayer === null;
+    const queueEmpty = noLights && this.ambientLayer === null && this.glowLayer === null;
     this.syncLightBleed(overlay, !noLights);
 
     // Reihenfolge ist tragend: erst Sichtbarkeit entscheiden, dann erst Befehle erzeugen.
@@ -1040,6 +1047,9 @@ export class LightingSystem {
     const ambientLayer = this.ambientLayer?.update(scrollX - overscanX, scrollY - overscanY,
       this.viewport.width + overscanX * 2, this.viewport.height + overscanY * 2, overlay.width, overlay.height) ?? null;
     if (ambientLayer) overlay.draw(ambientLayer);
+    const glowLayer = this.glowLayer?.update(scrollX - overscanX, scrollY - overscanY,
+      this.viewport.width + overscanX * 2, this.viewport.height + overscanY * 2, overlay.width, overlay.height) ?? null;
+    if (glowLayer) overlay.draw(glowLayer);
     // One instanced draw for every visible eye light, independent of the ranked light budget.
     if (eyeLights > 0) overlay.draw(this.enemyEyeBatch!.layer);
     if (essenceLights > 0) overlay.draw(this.essenceBatch!.layer);

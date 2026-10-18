@@ -422,6 +422,14 @@ bleibt bytegleich ([WaterSunlight.test.ts](../../tests/WaterSunlight.test.ts)).
 - Befallene Seerosen färben ihr Wasser: Ein Fleckenfeld aus den Platzierungen ([VoidWaterStain](../../src/arena/VoidWaterStain.ts))
   färbt im Sonnenwasser-Programm nach dem Nachtteil nur den Wasserkörper. Uferfilm, Wellen und Alpha bleiben,
   um gesunde Pflanzen bleibt das Wasser natürlich ([VoidWaterStain.test.ts](../../tests/VoidWaterStain.test.ts)).
+- Wo der Befall etabliert ist, durchzieht ein gemeinsames Geflecht Boden, Felsdächer und Wasser
+  ([VoidCreepField](../../src/arena/VoidCreepField.ts)). Owner ist die World-Sonnenlicht-Darstellung, die Tinte liegt am
+  Boden unter Gleisen, Basen und Decals (`DEPTH.VOID_CREEP`) und auf Felsen innerhalb der V7-Kontur
+  (`DEPTH.ROCK_VOID_CREEP`). Ihr Nachtleuchten ist eine Glow-Schicht der Lichtkarte (`setGlowLayer`). Anders als die
+  Mondschicht zählt sie als Licht über der Nacht und darf deshalb bluten. Fäden, Leuchten und Sporen gehören zum Land,
+  im Wasser wirkt das Geflecht nur als Tinte ([VoidCreepField.test.ts](../../tests/VoidCreepField.test.ts)).
+- Weltflächen, die der Kamera folgen, leiten ihr Rechteck aus `getVisibleWorldView` ab. Die Arena-Kamera hat Origin
+  (0, 0), Phasers gecachtes `camera.worldView` setzt 0,5 voraus und verschiebt solche Flächen.
 
 ### Atmosphäre und fachliche Grade-Komposition
 
