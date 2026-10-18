@@ -77,9 +77,10 @@ describe('CoopDefenseMapDirector', () => {
     const director = new CoopDefenseMapDirector([
       announcedEncounter('silent', 0, false), announcedEncounter('wave', 2000),
     ], (_kind, _count, id) => [id!], { isEnemyActive: () => false });
-    director.hostUpdate(1000, false);
+    // Die Randwarnung öffnet 1 s vor dem Spawn der Welle bei 2 s.
+    director.hostUpdate(900, false);
     expect(director.getPresentationState()).toBeNull();
-    director.hostUpdate(100, false);
+    director.hostUpdate(200, false);
     expect(director.getPresentationState()).toMatchObject({ encounterId: 'wave', sequenceIndex: 1, sequenceCount: 1, phase: 'incoming' });
     director.hostUpdate(1700, false);
     director.hostUpdate(800, false);

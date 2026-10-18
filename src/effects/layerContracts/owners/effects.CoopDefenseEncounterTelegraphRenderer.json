@@ -14,28 +14,28 @@
         ]
       },
       {
-        "key": "generateTextures/edge/setDepth/0",
+        "key": "createPieceVisual/edge/setDepth/0",
         "expression": "DEPTH_FX - 0.1",
         "blends": [
           "ADD"
         ]
       },
       {
-        "key": "generateTextures/haze/setDepth/0",
+        "key": "createPieceVisual/haze/setDepth/0",
         "expression": "DEPTH_FX - 0.2",
         "blends": [
           "ADD"
         ]
       },
       {
-        "key": "generateTextures/drift/setDepth/0",
+        "key": "createPieceVisual/drift/setDepth/0",
         "expression": "DEPTH_FX + 0.1",
         "blends": [
           "ADD"
         ]
       },
       {
-        "key": "generateTextures/crest/setDepth/0",
+        "key": "createPieceVisual/crest/setDepth/0",
         "expression": "DEPTH_FX + 0.15",
         "blends": [
           "ADD"
@@ -68,9 +68,9 @@
       }
     },
     {
-      "id": "cpu:effects/CoopDefenseEncounterTelegraphRenderer.ts:generateTextures/edge/setDepth/0",
+      "id": "cpu:effects/CoopDefenseEncounterTelegraphRenderer.ts:createPieceVisual/edge/setDepth/0",
       "owner": "effects/CoopDefenseEncounterTelegraphRenderer.ts",
-      "component": "generateTextures/edge/setDepth/0",
+      "component": "createPieceVisual/edge/setDepth/0",
       "height": "body",
       "lighting": "emissive",
       "camera": "world",
@@ -85,14 +85,14 @@
       ],
       "role": "ui",
       "source": {
-        "selector": "generateTextures/edge/setDepth/0",
+        "selector": "createPieceVisual/edge/setDepth/0",
         "expression": "DEPTH_FX - 0.1"
       }
     },
     {
-      "id": "cpu:effects/CoopDefenseEncounterTelegraphRenderer.ts:generateTextures/haze/setDepth/0",
+      "id": "cpu:effects/CoopDefenseEncounterTelegraphRenderer.ts:createPieceVisual/haze/setDepth/0",
       "owner": "effects/CoopDefenseEncounterTelegraphRenderer.ts",
-      "component": "generateTextures/haze/setDepth/0",
+      "component": "createPieceVisual/haze/setDepth/0",
       "height": "body",
       "lighting": "emissive",
       "camera": "world",
@@ -107,14 +107,14 @@
       ],
       "role": "ui",
       "source": {
-        "selector": "generateTextures/haze/setDepth/0",
+        "selector": "createPieceVisual/haze/setDepth/0",
         "expression": "DEPTH_FX - 0.2"
       }
     },
     {
-      "id": "cpu:effects/CoopDefenseEncounterTelegraphRenderer.ts:generateTextures/drift/setDepth/0",
+      "id": "cpu:effects/CoopDefenseEncounterTelegraphRenderer.ts:createPieceVisual/drift/setDepth/0",
       "owner": "effects/CoopDefenseEncounterTelegraphRenderer.ts",
-      "component": "generateTextures/drift/setDepth/0",
+      "component": "createPieceVisual/drift/setDepth/0",
       "height": "body",
       "lighting": "emissive",
       "camera": "world",
@@ -129,14 +129,14 @@
       ],
       "role": "ui",
       "source": {
-        "selector": "generateTextures/drift/setDepth/0",
+        "selector": "createPieceVisual/drift/setDepth/0",
         "expression": "DEPTH_FX + 0.1"
       }
     },
     {
-      "id": "cpu:effects/CoopDefenseEncounterTelegraphRenderer.ts:generateTextures/crest/setDepth/0",
+      "id": "cpu:effects/CoopDefenseEncounterTelegraphRenderer.ts:createPieceVisual/crest/setDepth/0",
       "owner": "effects/CoopDefenseEncounterTelegraphRenderer.ts",
-      "component": "generateTextures/crest/setDepth/0",
+      "component": "createPieceVisual/crest/setDepth/0",
       "height": "body",
       "lighting": "emissive",
       "camera": "world",
@@ -151,7 +151,7 @@
       ],
       "role": "ui",
       "source": {
-        "selector": "generateTextures/crest/setDepth/0",
+        "selector": "createPieceVisual/crest/setDepth/0",
         "expression": "DEPTH_FX + 0.15"
       }
     }

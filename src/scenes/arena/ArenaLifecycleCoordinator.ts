@@ -796,6 +796,10 @@ export class ArenaLifecycleCoordinator {
         { targetType: 'enemy', targetId: enemyId },
         now,
       ) ?? false,
+      getVisibleWorldCentre: () => {
+        const view = getVisibleWorldView(this.scene.cameras.main);
+        return { x: view.centerX, y: view.centerY };
+      },
     });
     this.coopMissionComposition = new CoopMissionComposition({
       dawnNetwork: {

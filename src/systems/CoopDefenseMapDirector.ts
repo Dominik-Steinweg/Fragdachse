@@ -26,7 +26,7 @@ const DEFAULT_SPAWN_BACKSTOP_MS = 30_000;
 const SPAWN_RETRY_INTERVAL_MS = 150;
 const DEFAULT_TECHNICAL_STUCK_BACKSTOP_MS = 60_000;
 /** Reine Präsentationszeit; sie verschiebt weder Trigger noch Spawn-Zeitpunkte. */
-const ENCOUNTER_INCOMING_TELEGRAPH_MS = 900;
+const ENCOUNTER_INCOMING_TELEGRAPH_MS = 1000;
 const ENCOUNTER_CLEARED_HOLD_MS = 800;
 
 export type CoopDefenseMapDirectorMode = 'scheduled' | 'repel-assault';
